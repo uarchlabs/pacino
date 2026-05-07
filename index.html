@@ -339,7 +339,7 @@
   <!-- NAV -->
   <nav>
     <div class="nav-left">
-      <a class="nav-org" href="https://uarchlabs.github.io">uarchlabs</a>
+      <a class="nav-org" href="https://uarchlabs.com">uarchlabs</a>
       <span class="nav-sep">/</span>
       <span class="nav-project">pacino</span>
     </div>
@@ -378,7 +378,9 @@
       <text x="196" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">u</text>
       <text x="228" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#d96b3f">arch</text>
       <text x="376" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">labs</text>
-      <text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="400" letter-spacing="0.5" fill="#8a97a6">AI MICROPROCESSOR CO-DESIGN · OPEN SOURCE</text>
+      <!-- text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="400" letter-spacing="0.5" fill="#8a97a6">PACINO &middot; Open Source 8-issue OOO RISC-V Processor</text -->
+<text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="500" letter-spacing="0.5" fill="#d96b3f">PACINO</text>
+<text x="262" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="400" letter-spacing="0.5" fill="#8a97a6"> · Open Source 8-issue OOO RISC-V Processor</text>
       <line x1="196" y1="238" x2="580" y2="238" stroke="#353f4a" stroke-width="1"/>
       <g transform="translate(196, 260)">
         <circle cx="6" cy="6" r="3" fill="#b84c25"/>
@@ -442,13 +444,7 @@
       <div class="section-label">// overview</div>
       <div class="overview-quote">"I'm out of order? You're out of order!"</div>
       <p class="overview-text">
-        <strong>Pacino</strong> is an open source, AI co-designed
-        <strong>8-issue out-of-order RISC-V processor</strong> targeting the
-        <strong>RVA23 profile</strong>. RTL is written in SystemVerilog and simulated
-        with Verilator. The project documents not just the design itself, but the
-        full AI-assisted co-design methodology — prompts, experiment loops, and
-        architectural rationale — end to end.
-      </p>
+Pacino is an open source 8-issue out-of-order RISC-V processor targeting the RVA23S64 profile. RTL is written in SystemVerilog, simulated with Verilator, and verified with a combination of directed tests, functional coverage, formal analysis via SymbiYosys and riscv-formal, and spike-dasm as an independent oracle. Gate synthesis targets Yosys with FPGA mapping via Quartus and Vivado. Design decisions, AI-assisted co-design records, and architectural rationale are committed alongside the RTL. </p>
     </section>
 
     <!-- SPECS -->
@@ -457,7 +453,7 @@
       <div class="specs-grid">
         <div class="spec-card">
           <div class="spec-label">architecture</div>
-          <div class="spec-value">RISC-V RVA23</div>
+          <div class="spec-value">RISC-V RVA23S64</div>
         </div>
         <div class="spec-card">
           <div class="spec-label">issue width</div>
@@ -469,11 +465,11 @@
         </div>
         <div class="spec-card">
           <div class="spec-label">simulator</div>
-          <div class="spec-value">Verilator 5.020</div>
+          <div class="spec-value">Verilator 5.x</div>
         </div>
         <div class="spec-card">
           <div class="spec-label">compiler</div>
-          <div class="spec-value">Embecosm RISC-V</div>
+          <div class="spec-value">GCC 16.x, LLVM 22.x RISC-V</div>
         </div>
         <div class="spec-card">
           <div class="spec-label">status</div>
@@ -526,19 +522,13 @@
       <div class="section-label">// ai co-design methodology</div>
       <div class="method-block">
         <p>
-          Pacino is designed using a two-tool AI workflow. <strong>claude.ai</strong>
-          provides architectural guidance and generates structured experiment prompts.
-          <strong>Claude Code</strong> implements RTL and runs Verilator in the terminal.
-          Neither tool communicates directly — the engineer bridges them, maintaining
-          full control over every decision.
-        </p>
-        <p>
-          Every design decision is captured in an experiment file with a hypothesis,
-          session prompt, results, and graduation status. Confirmed decisions are
-          promoted to <strong>CLAUDE.md</strong>, the project baseline read by Claude
-          Code at the start of every session. The full methodology — prompts, handoffs,
-          and rationale — is committed alongside the RTL.
-        </p>
+  Pacino is designed using a structured AI co-design methodology — 
+  a domain expert directing a dual-agent workflow across architectural 
+  planning and RTL implementation. Prompts, iteration history, and 
+  design rationale are committed alongside the RTL as first-class artifacts.
+  Full methodology documentation is in the <a href="https://uarchlabs.com/faq.html" 
+  style="color:var(--accent-bright);text-decoration:none;">FAQ</a> and the repo.
+</p>
       </div>
     </section>
 
@@ -547,8 +537,11 @@
       <div class="section-label">// get started</div>
       <div class="cta-row">
         <a class="cta cta-primary" href="https://github.com/uarchlabs/pacino" target="_blank" rel="noopener">view on github ↗</a>
-        <a class="cta cta-secondary" href="https://github.com/uarchlabs/pacino/blob/main/README.md" target="_blank" rel="noopener">read the docs ↗</a>
-        <a class="cta cta-secondary" href="https://uarchlabs.github.io">← uarchlabs</a>
+
+<!-- a class="cta cta-secondary" href="https://github.com/uarchlabs/pacino/blob/main/README.md" target="_blank" rel="noopener">read the docs ↗</a -->
+<a class="cta cta-secondary" href="https://uarchlabs.com/faq.html" target="_blank" rel="noopener">read the FAQ</a>
+
+        <a class="cta cta-secondary" href="https://uarchlabs.com">← uarchlabs</a>
       </div>
     </section>
 
@@ -556,7 +549,7 @@
 
   <!-- FOOTER -->
   <footer>
-    <span class="footer-text">pacino · uarchlabs · open source hardware</span>
+    <span class="footer-text">pacino · uarchlabs · open source hardware &middot; &copy; 2026 </span>
     <a class="footer-link" href="https://github.com/uarchlabs/pacino" target="_blank" rel="noopener">github.com/uarchlabs/pacino ↗</a>
   </footer>
 
