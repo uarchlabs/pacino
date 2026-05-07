@@ -2,14 +2,15 @@
 
 > *"I'm out of order? You're out of order!"*
 
-Documentation, RTL, and verification for **Pacino** — a co-designed RISC-V RVA23
-8-issue out-of-order processor. This project also explores AI-assisted hardware
-co-design methodology alongside the processor design itself.
+Documentation, RTL, and verification for Pacino — an open source 8-issue
+out-of-order RISC-V RVA23S64 processor. The full co-design record — prompts,
+iteration history, and architectural rationale — is committed alongside the
+RTL.
 
-Pacino is the first project under [uarchlabs](https://uarchlabs.github.io), an open
-source hardware design organization. The design flow is currently tightly coupled to
-RVA23-based microarchitectures. As the uarchlabs portfolio grows, the flow will be
-abstracted into a standalone tool.
+Pacino is the first project under [uarchlabs](https://uarchlabs.com), an open
+source hardware design organization. The design flow is currently tightly
+coupled to RVA23-based microarchitectures. As the uarchlabs portfolio grows,
+the flow will be abstracted into a standalone tool.
 
 RTL is in SystemVerilog, simulation with Verilator 5.020.
 
@@ -18,17 +19,16 @@ RTL is in SystemVerilog, simulation with Verilator 5.020.
 ## Quick Start
 
 ```bash
-# clone with submodules
-git clone --recurse-submodules https://github.com/uarchlabs/pacino
-
-# or if already cloned without submodules
-cd pacino
-git submodule update --init --recursive
-
 # install system prerequisites
 bash prereqs.sh
 
-# one-time project setup (builds spike from submodule source)
+# clone with submodules
+git clone --recurse-submodules https://github.com/uarchlabs/pacino
+
+cd pacino
+export RVA_ROOT=`pwd`
+
+# one-time project setup (builds tools from submodule source)
 ./setup.sh
 ```
 
@@ -36,7 +36,17 @@ bash prereqs.sh
 
 ## Project Status
 
-See `planning/PROJECT_CORE.md` and `planning/PROJECT_STATUS.md` for detailed status tables.
+Summary:
+
+| Module   | Status   | Discussion  |
+|----------|----------|-------------|
+| Decoder  | Complete | Available   |
+| BPU      | Active   | In progress |
+| IFU/I$   | Planned  | n/a         |
+
+See [PROJECT_STATUS.md](planning/PROJECT_STATUS.md) for detailed status tables.
+
+Current discussions in article form are found in 
 
 ---
 
@@ -249,9 +259,7 @@ Two AI tools are used in parallel:
 - **claude.ai** — web interface, provides architectural guidance and writes experiment prompts
 - **Claude Code** — terminal interface, implements RTL and runs Verilator
 
-Jeff bridges the two tools — pasting prompts from claude.ai into Claude Code, and
-reporting Claude Code results back to claude.ai. Neither tool communicates directly
-with the other.
+A domain expert directs both agents - the PA for architectural planning, the IA for implementation — with enforced context isolation between sessions.
 
 ### Terminology
 
@@ -287,18 +295,38 @@ with the other.
 5. Start a fresh Claude Code session:
 
    ```bash
-   cd ~/pacino
-   claude --dangerously-skip-permissions
+   cd $RVA_ROOT
+   claude
    ```
 
-   Note: `--dangerously-skip-permissions` can be downgraded to `--auto-accept-edits`
-   or removed entirely depending on your preferred interaction/risk tradeoff.
+   Assumes `RVA_ROOT` has been set to the top of the pacino repo. 
+
+	 Note: protections can be relaxed using `--auto-accept-edits` or even
+`--dangerously-skip-permissions`. This choice depends on your preferred
+interaction/risk tradeoff.
+
+   **It has been shown that simply telling Claude not to do something is not sufficent to constrain its behavior.**
+
+	 **Security note:** Claude Code with relaxed permissions has broad filesystem
+and shell access. Regardless of permissions, consider running Claude Code in a
+restricted environment — a dedicated user account with limited sudo, a
+container, or a VM — particularly when using `--auto-accept-edits` or
+`--dangerously-skip-permissions`. 
+
 
 6. Tell Claude Code to read and execute the file:
 
    ```
-   Read .claude/tmp/current-prompt.md and execute it
+   /run <task id>
    ```
+
+  `/run` is a custom slash command defined in `.claude/commands/`. For
+   the specified task id, the command locates the task file, validates the 
+   format, extracts the prompt section, and executes the instructions 
+   in the prompt.
+
+	 If task id is BP-001, the run command looks in ./prompts for a task file
+   called BP-001.md.
 
 7. Let Claude Code run. Approve file writes and shell commands as prompted.
    Report results back to claude.ai when complete.
@@ -387,7 +415,7 @@ git push
 
 4. Paste the contents of the output file `ho` into claude.ai
 
-5. Optionally paste `bp_cluster.md` (changes depending on planning cycle)
+5. Optionally paste the current module planning document, e.g. bp_cluster.md.
 
 6. The new session now has full context and can begin
 
@@ -419,29 +447,30 @@ The handoff document adds:
 
 ## Naming Conventions
 
-| Item             | Convention                  | Example                    |
-|------------------|-----------------------------|----------------------------|
-| Experiment IDs   | `MODULE-NNN`                | `DECODE-001`, `BP-001`     |
-| RTL files        | `snake_case.sv`             | `instr_decoder.sv`         |
-| Testbench files  | `tb_` prefix                | `tb_instr_decoder.sv`      |
-| Parameters       | `ALL_CAPS`                  | `NUM_ISSUE_SLOTS`          |
-| Signals          | `snake_case`                | `instr_valid`              |
-| Experiment files | `<ID>.md`                   | `DECODE-001.md`            |
-| Handoff files    | `session_handoff-NNN.md`    | `session_handoff-001.md`   |
+| Item             | Convention               | Example                    |
+|:-----------------|:-------------------------|:---------------------------|
+| Task File IDs    | `MODULE-NNN`             | `DECODE-001`, `BP-001`     |
+| RTL files        | `snake_case.sv`          | `instr_decoder.sv`         |
+| Testbench files  | `tb_` prefix             | `tb_instr_decoder.sv`      |
+| Parameters       | `ALL_CAPS`               | `NUM_ISSUE_SLOTS`          |
+| Signals          | `snake_case`             | `instr_valid`              |
+| Experiment files | `<ID>.md`                | `DECODE-001.md`            |
+| Handoff files    | `session_handoff-NNN.md` | `session_handoff-001.md`   |
 
 ---
 
 ## Further Reading
 
-- `CLAUDE.md` — full project baseline and current scope
-- `handoffs/PROJECT_*.md` — implementation status
-- `handoffs/session_handoff-*.md` — claude.ai session handoff documents
-- `prompts/README.md` — experiment naming and workflow details
-- `prompts/REPORT_TEMPLATE.md` — experiment file format
-- `docs/observations/` — methodology notes (dated)
-- `docs/decision_guide.md` — next steps and design decision guide (dated)
+- [FAQ](https://uarchlabs.com/faq.html) - pacino focused uarchlabs FAQ
+- `CLAUDE.md` - full project baseline and current scope
+- `handoffs/PROJECT_*.md` - implementation status
+- `handoffs/session_handoff-*.md` - claude.ai session handoff documents
+- `prompts/README.md` - experiment naming and workflow details
+- `prompts/REPORT_TEMPLATE.md` - experiment file format
+- `docs/observations/` - methodology notes (dated)
+- `docs/decision_guide.md` - next steps and design decision guide (dated)
 
 ---
 
-*Part of the [uarchlabs](https://uarchlabs.github.io) open source hardware design organization.*
+*Part of the [uarchlabs](https://uarchlabs.com) open source hardware design organization.*
 
