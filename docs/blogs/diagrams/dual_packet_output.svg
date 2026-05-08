@@ -1,0 +1,171 @@
+<svg viewBox="0 0 740 380" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4a5568"/>
+    </marker>
+    <marker id="arrowhead-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1565c0"/>
+    </marker>
+    <marker id="arrowhead-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2e7d32"/>
+    </marker>
+    <marker id="arrowhead-purple" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#6a1b9a"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="740" height="380" fill="#ffffff"/>
+
+  <!-- ===== FETCH BUNDLE BOX ===== -->
+  <rect x="18" y="88" width="128" height="184" rx="5"
+        fill="#eef2f7" stroke="#3d5a80" stroke-width="1.5"/>
+  <text x="82" y="110" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="11" font-weight="bold" fill="#1a1a2e">fetch_bundle</text>
+  <text x="82" y="126" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#3d5a80">[7:0]  8 x 32b</text>
+
+  <!-- Slot rows inside fetch bundle -->
+  <rect x="30" y="136" width="104" height="17" rx="2"
+        fill="#c8d8ea" stroke="#3d5a80" stroke-width="1"/>
+  <text x="82" y="148" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1a1a2e">inst[7]</text>
+
+  <rect x="30" y="157" width="104" height="17" rx="2"
+        fill="#c8d8ea" stroke="#3d5a80" stroke-width="1"/>
+  <text x="82" y="169" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1a1a2e">inst[6]</text>
+
+  <text x="82" y="193" text-anchor="middle"
+        font-family="Georgia, serif" font-size="16" fill="#4a5568">. . .</text>
+
+  <rect x="30" y="203" width="104" height="17" rx="2"
+        fill="#c8d8ea" stroke="#3d5a80" stroke-width="1"/>
+  <text x="82" y="215" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1a1a2e">inst[0]</text>
+
+  <text x="82" y="256" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">post-RVC expand</text>
+
+  <!-- Arrow: fetch -> decoder -->
+  <line x1="146" y1="180" x2="196" y2="180"
+        stroke="#4a5568" stroke-width="1.5"
+        marker-end="url(#arrowhead)"/>
+
+  <!-- ===== DECODER BOX ===== -->
+  <rect x="196" y="60" width="156" height="240" rx="5"
+        fill="#eef2f7" stroke="#3d5a80" stroke-width="2"/>
+  <text x="274" y="84" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="12" font-weight="bold" fill="#1a1a2e">instr_decoder</text>
+
+  <!-- Divider line -->
+  <line x1="210" y1="92" x2="338" y2="92"
+        stroke="#3d5a80" stroke-width="0.75" stroke-dasharray="3,2"/>
+
+  <text x="274" y="112" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">8 independent</text>
+  <text x="274" y="126" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">combinational paths</text>
+  <text x="274" y="140" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">no inter-slot feedback</text>
+
+  <!-- Three output tap lines from right edge of decoder -->
+  <!-- Tap marks on right edge of decoder box at y=150, 185, 220 -->
+  <circle cx="352" cy="150" r="3" fill="#1565c0"/>
+  <circle cx="352" cy="185" r="3" fill="#2e7d32"/>
+  <circle cx="352" cy="220" r="3" fill="#6a1b9a"/>
+
+  <!-- ===== THREE OUTPUT WIRES ===== -->
+
+  <!-- Wire 1: decode_bundle (scalar) - blue -->
+  <line x1="352" y1="150" x2="500" y2="150"
+        stroke="#1565c0" stroke-width="2"
+        marker-end="url(#arrowhead-blue)"/>
+  <text x="426" y="141" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1565c0">decode_pkt_t</text>
+  <text x="426" y="163" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1a1a2e">decode_bundle[7:0]</text>
+
+  <!-- Wire 2: vec_decode_bundle (vector) - green -->
+  <line x1="352" y1="185" x2="500" y2="185"
+        stroke="#2e7d32" stroke-width="2"
+        marker-end="url(#arrowhead-green)"/>
+  <text x="426" y="176" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#2e7d32">vec_decode_pkt_t</text>
+  <text x="426" y="198" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1a1a2e">vec_decode_bundle[7:0]</text>
+
+  <!-- Wire 3: is_vector - purple -->
+  <line x1="352" y1="220" x2="500" y2="220"
+        stroke="#6a1b9a" stroke-width="2"
+        marker-end="url(#arrowhead-purple)"/>
+  <text x="426" y="211" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#6a1b9a">logic [7:0]</text>
+  <text x="426" y="233" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1a1a2e">is_vector[7:0]</text>
+
+  <!-- ===== RENAME / DISPATCH BOX ===== -->
+  <rect x="500" y="60" width="156" height="240" rx="5"
+        fill="#eef2f7" stroke="#3d5a80" stroke-width="2"/>
+  <text x="578" y="84" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="12" font-weight="bold" fill="#1a1a2e">rename /</text>
+  <text x="578" y="100" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="12" font-weight="bold" fill="#1a1a2e">dispatch</text>
+
+  <line x1="514" y1="108" x2="642" y2="108"
+        stroke="#3d5a80" stroke-width="0.75" stroke-dasharray="3,2"/>
+
+  <!-- Per-slot mux description -->
+  <text x="578" y="128" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">per slot i:</text>
+
+  <rect x="516" y="135" width="124" height="24" rx="3"
+        fill="#dce8f7" stroke="#1565c0" stroke-width="1"/>
+  <text x="578" y="149" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1565c0">is_vector[i]=0  scalar pkt</text>
+
+  <rect x="516" y="166" width="124" height="24" rx="3"
+        fill="#d4edda" stroke="#2e7d32" stroke-width="1"/>
+  <text x="578" y="180" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#2e7d32">is_vector[i]=1  vector pkt</text>
+
+  <text x="578" y="214" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">both bundles always</text>
+  <text x="578" y="228" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">populated; consumer</text>
+  <text x="578" y="242" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">reads one per slot</text>
+
+  <!-- ===== CAPTION ===== -->
+  <text x="370" y="328" text-anchor="middle"
+        font-family="Georgia, serif" font-size="10"
+        fill="#4a5568">Figure 1: Dual-packet decoder output. Every slot simultaneously populates the scalar and vector</text>
+  <text x="370" y="344" text-anchor="middle"
+        font-family="Georgia, serif" font-size="10"
+        fill="#4a5568">bundles. The is_vector[i] steering signal tells rename and dispatch which packet to consume.</text>
+</svg>
+

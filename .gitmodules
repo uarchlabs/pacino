@@ -1,0 +1,6 @@
+[submodule "tools/riscv-opcodes"]
+	path = tools/riscv-opcodes
+	url = https://github.com/riscv/riscv-opcodes.git
+[submodule "tools/spike"]
+	path = tools/spike
+	url = https://github.com/riscv-software-src/riscv-isa-sim.git

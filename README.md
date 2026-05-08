@@ -20,7 +20,7 @@ RTL is in SystemVerilog, simulation with Verilator 5.020.
 
 ```bash
 # install system prerequisites
-bash prereqs.sh
+bash tools/prereqs.sh
 
 # clone with submodules
 git clone --recurse-submodules https://github.com/uarchlabs/pacino
@@ -56,7 +56,13 @@ Current discussions in article form are found in
 
 ```
 $RVA_ROOT/
+|-- .claude
+|   |-- commands
+|   |   |-- run.md             execute prompt from task file
+|   |-- statusline.sh          Custom status line, captures context usage, etc
+|
 |-- CLAUDE.md                  project baseline for Claude Code sessions
+|
 |-- docs/
 |   |-- blogs/                 project discussion in blog form
 |   |-- misc/
@@ -237,8 +243,7 @@ opcodes and CSRs. Used as ground truth for coverage checking and decoder validat
 
 ### spike
 
-Git submodule at `tools/spike/`. Built locally to `tools/spike/install/` by running
-`./setup.sh` from the project root.
+Git submodule at `tools/spike/`. Functional simulator
 
 spike-dasm input format uses `DASM(hex)` tokens, not raw hex values.
 

@@ -1,0 +1,389 @@
+<svg viewBox="0 0 700 545" xmlns="http://www.w3.org/2000/svg">
+  <rect width="700" height="545" fill="#ffffff"/>
+
+  <!-- ===== TITLE ===== -->
+  <text x="350" y="16" text-anchor="middle"
+        font-family="Georgia,serif" font-size="13" font-weight="bold" fill="#1a1a2e">
+    RISC-V V Extension Instruction Formats
+  </text>
+
+  <!-- ================================================================ -->
+  <!-- SECTION 1: VECTOR ALU                                            -->
+  <!-- Field layout: funct6[31:26] | vm[25] | [24:20] | [19:15] |      -->
+  <!--               funct3[14:12] | [11:7] | opcode[6:0]              -->
+  <!-- x positions: 80, 192, 211, 305, 399, 455, 549, 680              -->
+  <!-- widths:      112,  19,  94,  94,  56,  94, 131                  -->
+  <!-- ================================================================ -->
+
+  <rect x="80" y="22" width="600" height="15" rx="2" fill="#3d5a80"/>
+  <text x="350" y="33" text-anchor="middle"
+        font-family="Georgia,serif" font-size="9" font-weight="bold" fill="#ffffff">
+    Vector ALU   opcode = 0x57 (0b1010111)   funct3 selects group   funct6 selects instruction within group
+  </text>
+
+  <!-- Bit position labels above header -->
+  <text x="81"  y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">31</text>
+  <text x="176" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">26</text>
+  <text x="193" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">25</text>
+  <text x="212" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">24</text>
+  <text x="291" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">20</text>
+  <text x="306" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">19</text>
+  <text x="385" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">15</text>
+  <text x="400" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">14</text>
+  <text x="445" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">12</text>
+  <text x="456" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">11</text>
+  <text x="539" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">7</text>
+  <text x="550" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">6</text>
+  <text x="674" y="45" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">0</text>
+
+  <!-- HEADER ROW y=48 -->
+  <rect x="80"  y="48" width="112" height="20" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="48" width="19"  height="20" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="48" width="94"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">[24:20]</text>
+  <rect x="305" y="48" width="94"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">[19:15]</text>
+  <rect x="399" y="48" width="56"  height="20" fill="#fff9c4" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#f57f17">funct3</text>
+  <rect x="455" y="48" width="94"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">[11:7]</text>
+  <rect x="549" y="48" width="131" height="20" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="62" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1565c0">opcode [6:0]</text>
+
+  <!-- ===== ALU DATA ROWS (row height=21, starting y=68) ===== -->
+  <!-- Macro: each row shares same cell x/w positions as header -->
+
+  <!-- OPIVV y=68 -->
+  <text x="77" y="82" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPIVV</text>
+  <rect x="80"  y="68" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="68" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="68" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="68" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs1</text>
+  <rect x="399" y="68" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">000</text>
+  <rect x="455" y="68" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="68" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="82" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- OPFVV y=89 -->
+  <text x="77" y="103" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPFVV</text>
+  <rect x="80"  y="89" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="89" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="89" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="89" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs1</text>
+  <rect x="399" y="89" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">001</text>
+  <rect x="455" y="89" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="89" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="103" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- OPMVV y=110 -->
+  <text x="77" y="124" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPMVV</text>
+  <rect x="80"  y="110" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="110" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="110" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="110" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs1</text>
+  <rect x="399" y="110" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">010</text>
+  <rect x="455" y="110" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="110" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="124" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- OPIVI y=131 -->
+  <text x="77" y="145" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPIVI</text>
+  <rect x="80"  y="131" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="131" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="131" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="131" width="94"  height="21" fill="#e8eaf6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#3949ab">imm5</text>
+  <rect x="399" y="131" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">011</text>
+  <rect x="455" y="131" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="131" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="145" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- OPIVX y=152 -->
+  <text x="77" y="166" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPIVX</text>
+  <rect x="80"  y="152" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="152" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="152" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="152" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="152" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">100</text>
+  <rect x="455" y="152" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="152" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="166" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- OPFVF y=173 -->
+  <text x="77" y="187" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPFVF</text>
+  <rect x="80"  y="173" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="173" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="173" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="173" width="94"  height="21" fill="#fff8e1" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">fs1</text>
+  <rect x="399" y="173" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">101</text>
+  <rect x="455" y="173" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="173" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="187" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- OPMVX y=194 -->
+  <text x="77" y="208" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">OPMVX</text>
+  <rect x="80"  y="194" width="112" height="21" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#6a1b9a">funct6</text>
+  <rect x="192" y="194" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="194" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2</text>
+  <rect x="305" y="194" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="194" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">110</text>
+  <rect x="455" y="194" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd</text>
+  <rect x="549" y="194" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="208" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <text x="350" y="225" text-anchor="middle"
+        font-family="Georgia,serif" font-size="8" font-style="italic" fill="#777">
+    funct3 = 111 is reserved for configuration instructions (see section below)
+  </text>
+
+  <!-- ================================================================ -->
+  <!-- SECTION 2: VECTOR CONFIGURATION                                  -->
+  <!-- ================================================================ -->
+  <rect x="80" y="230" width="600" height="15" rx="2" fill="#3d5a80"/>
+  <text x="350" y="241" text-anchor="middle"
+        font-family="Georgia,serif" font-size="9" font-weight="bold" fill="#ffffff">
+    Vector Configuration   opcode = 0x57, funct3 = 111   same bit positions as ALU section
+  </text>
+
+  <!-- vsetvl y=245 (R-type compatible: funct6=100000, vm/x=0, rs2, rs1, 111, rd) -->
+  <text x="77" y="259" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">vsetvl</text>
+  <rect x="80"  y="245" width="112" height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="136" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">1000000</text>
+  <rect x="192" y="245" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">0</text>
+  <rect x="211" y="245" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs2</text>
+  <rect x="305" y="245" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="245" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">111</text>
+  <rect x="455" y="245" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rd</text>
+  <rect x="549" y="245" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="259" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- vsetvli y=266: [31]=0 (19px) | zimm[10:0] bits[30:20] (206px) | rs1 | 111 | rd | 0x57 -->
+  <text x="77" y="280" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">vsetvli</text>
+  <rect x="80"  y="266" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="89"  y="280" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">0</text>
+  <rect x="99"  y="266" width="206" height="21" fill="#e8eaf6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="202" y="280" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#3949ab">zimm[10:0]</text>
+  <rect x="305" y="266" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="280" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="266" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="280" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">111</text>
+  <rect x="455" y="266" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="280" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rd</text>
+  <rect x="549" y="266" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="280" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- vsetivli y=287: [31:30]=11 (37px) | zimm[9:0] bits[29:20] (188px) | uimm[4:0] | 111 | rd | 0x57 -->
+  <text x="77" y="301" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1a1a2e">vsetivli</text>
+  <rect x="80"  y="287" width="37"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="98"  y="301" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">11</text>
+  <rect x="117" y="287" width="188" height="21" fill="#e8eaf6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="211" y="301" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#3949ab">zimm[9:0]</text>
+  <rect x="305" y="287" width="94"  height="21" fill="#e8eaf6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="301" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#3949ab">uimm[4:0]</text>
+  <rect x="399" y="287" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="301" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">111</text>
+  <rect x="455" y="287" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="301" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rd</text>
+  <rect x="549" y="287" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="301" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x57</text>
+
+  <!-- ================================================================ -->
+  <!-- SECTION 3: VECTOR MEMORY                                         -->
+  <!-- Field layout: nf[31:29] | mew[28] | mop[27:26] | vm[25] |       -->
+  <!--   [24:20] | rs1[19:15] | width[14:12] | vd/vs3[11:7] | op[6:0] -->
+  <!-- x:  80,     136,         155,            192,                    -->
+  <!--     211,     305,          399,            455,        549, 680  -->
+  <!-- w:   56,      19,           37,             19,                  -->
+  <!--      94,      94,           56,             94,        131       -->
+  <!-- ================================================================ -->
+
+  <rect x="80" y="315" width="600" height="15" rx="2" fill="#3d5a80"/>
+  <text x="350" y="326" text-anchor="middle"
+        font-family="Georgia,serif" font-size="9" font-weight="bold" fill="#ffffff">
+    Vector Memory   load opcode 0x07   store opcode 0x27   mop selects addressing mode
+  </text>
+
+  <!-- Memory bit position labels -->
+  <text x="81"  y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">31</text>
+  <text x="129" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">29</text>
+  <text x="137" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">28</text>
+  <text x="156" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">27</text>
+  <text x="182" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">26</text>
+  <text x="193" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">25</text>
+  <text x="212" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">24</text>
+  <text x="291" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">20</text>
+  <text x="306" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">19</text>
+  <text x="385" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">15</text>
+  <text x="400" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">14</text>
+  <text x="445" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">12</text>
+  <text x="456" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">11</text>
+  <text x="539" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">7</text>
+  <text x="550" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">6</text>
+  <text x="674" y="337" font-family="'Courier New',Courier,monospace" font-size="7" fill="#666">0</text>
+
+  <!-- Memory HEADER ROW y=340 -->
+  <rect x="80"  y="340" width="56"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="108" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">nf</text>
+  <rect x="136" y="340" width="19"  height="20" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="145" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="7" fill="#555">mew</text>
+  <rect x="155" y="340" width="37"  height="20" fill="#fff9c4" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="173" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#f57f17">mop</text>
+  <rect x="192" y="340" width="19"  height="20" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="340" width="94"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">[24:20]</text>
+  <rect x="305" y="340" width="94"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">rs1 base</text>
+  <rect x="399" y="340" width="56"  height="20" fill="#fff9c4" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" font-weight="bold" fill="#f57f17">width</text>
+  <rect x="455" y="340" width="94"  height="20" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">vd / vs3</text>
+  <rect x="549" y="340" width="131" height="20" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="354" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-weight="bold" fill="#1565c0">opcode [6:0]</text>
+
+  <!-- unit-stride y=360 (mop=00, lumop/sumop in [24:20]) -->
+  <text x="77" y="374" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1a1a2e">unit-stride</text>
+  <rect x="80"  y="360" width="56"  height="21" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="108" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">nf</text>
+  <rect x="136" y="360" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="145" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">0</text>
+  <rect x="155" y="360" width="37"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="173" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">00</text>
+  <rect x="192" y="360" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="360" width="94"  height="21" fill="#e8eaf6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#3949ab">lumop/sumop</text>
+  <rect x="305" y="360" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="360" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">width</text>
+  <rect x="455" y="360" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd / vs3</text>
+  <rect x="549" y="360" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="374" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x07 / 0x27</text>
+
+  <!-- strided y=381 (mop=10, rs2 in [24:20]) -->
+  <text x="77" y="395" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1a1a2e">strided</text>
+  <rect x="80"  y="381" width="56"  height="21" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="108" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">nf</text>
+  <rect x="136" y="381" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="145" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">0</text>
+  <rect x="155" y="381" width="37"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="173" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">10</text>
+  <rect x="192" y="381" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="381" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs2 stride</text>
+  <rect x="305" y="381" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="381" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">width</text>
+  <rect x="455" y="381" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd / vs3</text>
+  <rect x="549" y="381" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="395" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x07 / 0x27</text>
+
+  <!-- indexed y=402 (mop=01 unordered or 11 ordered, vs2 in [24:20]) -->
+  <text x="77" y="416" text-anchor="end" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1a1a2e">indexed</text>
+  <rect x="80"  y="402" width="56"  height="21" fill="#f0f4f8" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="108" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#444">nf</text>
+  <rect x="136" y="402" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="145" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" font-style="italic" fill="#555">0</text>
+  <rect x="155" y="402" width="37"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="173" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">x1</text>
+  <rect x="192" y="402" width="19"  height="21" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="201" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="8" fill="#555">vm</text>
+  <rect x="211" y="402" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="258" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vs2 index</text>
+  <rect x="305" y="402" width="94"  height="21" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="352" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#c62828">rs1</text>
+  <rect x="399" y="402" width="56"  height="21" fill="#fff3cd" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="427" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#e65100">width</text>
+  <rect x="455" y="402" width="94"  height="21" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="502" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#2e7d32">vd / vs3</text>
+  <rect x="549" y="402" width="131" height="21" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="614" y="416" text-anchor="middle" font-family="'Courier New',Courier,monospace" font-size="9" fill="#1565c0">0x07 / 0x27</text>
+
+  <!-- ===== LEGEND ===== -->
+  <!-- Left column -->
+  <rect x="80"  y="432" width="10" height="10" fill="#ede7f6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="94"  y="441" font-family="Georgia,serif" font-size="9" fill="#333">funct6 / funct3 / mop / width  key discriminator fields</text>
+  <rect x="80"  y="447" width="10" height="10" fill="#d4edda" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="94"  y="456" font-family="Georgia,serif" font-size="9" fill="#333">vector register (vs1, vs2, vd, vs3)</text>
+  <rect x="80"  y="462" width="10" height="10" fill="#dce8f7" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="94"  y="471" font-family="Georgia,serif" font-size="9" fill="#333">opcode</text>
+  <rect x="80"  y="477" width="10" height="10" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="94"  y="486" font-family="Georgia,serif" font-size="9" fill="#333">fixed / reserved value</text>
+  <!-- Right column -->
+  <rect x="370" y="432" width="10" height="10" fill="#fce4ec" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="384" y="441" font-family="Georgia,serif" font-size="9" fill="#333">scalar integer register (rs1, rs2, rd)</text>
+  <rect x="370" y="447" width="10" height="10" fill="#fff8e1" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="384" y="456" font-family="Georgia,serif" font-size="9" fill="#333">scalar FP register (fs1)</text>
+  <rect x="370" y="462" width="10" height="10" fill="#e8eaf6" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="384" y="471" font-family="Georgia,serif" font-size="9" fill="#333">immediate or configuration field</text>
+  <rect x="370" y="477" width="10" height="10" fill="#f0f0f0" stroke="#b0bec5" stroke-width="0.5"/>
+  <text x="384" y="486" font-family="Georgia,serif" font-size="9" fill="#333">mew, nf (segment field, 0 = non-segment)</text>
+
+  <!-- ===== CAPTION ===== -->
+  <text x="350" y="506" text-anchor="middle"
+        font-family="Georgia,serif" font-size="9" fill="#4a5568">
+    Figure N: All seven ALU groups share opcode 0x57. funct3 selects the group; funct6 selects the instruction within it.
+  </text>
+  <text x="350" y="520" text-anchor="middle"
+        font-family="Georgia,serif" font-size="9" fill="#4a5568">
+    Memory loads (0x07) and stores (0x27) share opcodes with scalar FP; the width field disambiguates (see Figure 2).
+  </text>
+  <text x="350" y="534" text-anchor="middle"
+        font-family="Georgia,serif" font-size="9" fill="#4a5568">
+    indexed mop=01 is unordered, mop=11 is ordered (x1 = either). zimm encodes vtypei; uimm encodes AVL for vsetivli.
+  </text>
+</svg>
+

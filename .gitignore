@@ -1,123 +1,58 @@
-# ── Verilator ──────────────────────────────────────────────────────────────────
-obj_dir/
-*.vcd
-*.fst
-*.lxt
-*.lxt2
-simv
-simv.daidir/
-
-# ── Spike build output ─────────────────────────────────────────────────────────
-tools/spike/install/
-tools/spike/build/
-
-# ── EDA tool outputs ───────────────────────────────────────────────────────────
-# Synopsys VCS
-*.csrc
-*.simv
-*.daidir/
-ucli.key
-vc_hdrs.h
-urgReport/
-novas.conf
-novas.rc
-*.fsdb
-verdiLog/
-inter.vpd
-DVEfiles/
-
-# Cadence Xcelium / SimVision
-xcelium.d/
-*.shm/
-*.trn
-*.dsn
-*.err
-waves.shm/
-*.diag
-
-# Cadence Genus / Innovus
-*.enc
-*.enc.dat
-fv/
-genus.log
-genus.cmd
-innovus.log
-innovus.cmd
-*.rpt
-
-# Synopsys DC / Fusion
-*.mr
-*.svf
-*.syn
-command.log
-default.svf
-mapped/
-unmapped/
-
-# Mentor Questa / ModelSim
-work/
-transcript
-vsim.wlf
-*.wlf
-modelsim.ini
-*.vstf
-
-# Xilinx / Vivado
-*.jou
-*.log
-*.str
-*.xpr
-*.runs/
-*.cache/
-*.hw/
-*.ip_user_files/
-*.sim/
-.Xil/
-
-# ── Python ─────────────────────────────────────────────────────────────────────
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-dist/
-build/
-.eggs/
-*.egg
-.venv/
-venv/
-env/
-
-# ── Claude Code ────────────────────────────────────────────────────────────────
-.claude/tmp/
-
-# ── Editor / OS ────────────────────────────────────────────────────────────────
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-Thumbs.db
-*.orig
-
-# ── Build artifacts ────────────────────────────────────────────────────────────
-*.o
-*.a
-*.so
+# Prerequisites
 *.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Linker files
+*.ilk
+
+# Debugger Files
+*.pdb
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
 *.out
-*.hex
-*.bin
-*.elf
-*.map
+*.app
 
-# ── Logs and reports ───────────────────────────────────────────────────────────
-*.log
-*.rpt
-*.txt.bak
+# debug information files
+*.dwo
+# --------------------------------------------------------------------
+# claude settings
+.claude/tmp
+.claude/settings.local.json
 
-# ── Keep spike submodule install marker ────────────────────────────────────────
-!tools/spike/.gitkeep
+# local temp copies - optional
+versions
 
+# spike paths
+tools/spike/build/
+tools/spike/install/
+tools/install/
+
+# decoder
+rtl/core/frontend/decode/obj_dir_dec
+rtl/core/frontend/decode/obj_dir_exp
+rtl/core/frontend/decode/obj_dir_pre

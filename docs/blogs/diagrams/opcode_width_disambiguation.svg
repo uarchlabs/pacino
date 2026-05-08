@@ -1,0 +1,247 @@
+<svg viewBox="0 0 700 440" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#4a5568"/>
+    </marker>
+    <marker id="arr-blue" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#1565c0"/>
+    </marker>
+    <marker id="arr-green" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#2e7d32"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#9e9e9e"/>
+    </marker>
+  </defs>
+
+  <rect width="700" height="440" fill="#ffffff"/>
+
+  <!-- ===== INSTRUCTION WORD (top) ===== -->
+  <text x="350" y="22" text-anchor="middle"
+        font-family="Georgia, serif" font-size="11"
+        font-style="italic" fill="#4a5568">32-bit instruction, opcode = 0x07 (LOAD_FP) or 0x27 (STORE_FP)</text>
+
+  <!-- Instruction word register diagram -->
+  <!-- Fields: [31:15] other | [14:12] width | [11:7] other | [6:0] opcode -->
+  <!-- Total width: 400, starting x=150 -->
+  <!-- opcode[6:0] = 7 bits = 70px, width[14:12] = 3 bits = 60px, rest = 270px -->
+
+  <!-- Bit field boxes -->
+  <rect x="150" y="30" width="270" height="30" rx="0"
+        fill="#f0f4f8" stroke="#3d5a80" stroke-width="1"/>
+  <text x="285" y="50" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#4a5568">[31:15]  other fields</text>
+
+  <!-- width field - highlighted -->
+  <rect x="420" y="30" width="60" height="30" rx="0"
+        fill="#fff3cd" stroke="#f57f17" stroke-width="2"/>
+  <text x="450" y="48" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" font-weight="bold" fill="#e65100">width</text>
+
+  <rect x="480" y="30" width="70" height="30" rx="0"
+        fill="#f0f4f8" stroke="#3d5a80" stroke-width="1"/>
+  <text x="515" y="50" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#4a5568">[11:7]</text>
+
+  <!-- opcode field - highlighted -->
+  <rect x="550" y="30" width="70" height="30" rx="0"
+        fill="#e8f4fd" stroke="#3d5a80" stroke-width="2"/>
+  <text x="585" y="48" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" font-weight="bold" fill="#1a1a2e">opcode</text>
+
+  <!-- Bit range labels below field boxes -->
+  <text x="285" y="72" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="8" fill="#4a5568">[31:15]</text>
+  <text x="450" y="72" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="8" fill="#e65100" font-weight="bold">[14:12]</text>
+  <text x="515" y="72" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="8" fill="#4a5568">[11:7]</text>
+  <text x="585" y="72" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="8" fill="#1a1a2e">[6:0]</text>
+
+  <!-- ===== DECISION BOX ===== -->
+  <!-- Arrow down from width field to decision box -->
+  <line x1="450" y1="72" x2="350" y2="108"
+        stroke="#f57f17" stroke-width="1.5"
+        marker-end="url(#arr)"/>
+
+  <!-- Decision diamond -->
+  <polygon points="350,108  440,138  350,168  260,138"
+           fill="#fff8e1" stroke="#f57f17" stroke-width="2"/>
+  <text x="350" y="133" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" font-weight="bold" fill="#e65100">width</text>
+  <text x="350" y="149" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" font-weight="bold" fill="#e65100">[14:12]</text>
+
+  <!-- Label: "inspect width field" callout -->
+  <text x="350" y="97" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">inspect before routing</text>
+
+  <!-- ===== LEFT BRANCH: VECTOR ===== -->
+  <!-- Arrow from diamond left to vector box -->
+  <line x1="260" y1="138" x2="170" y2="192"
+        stroke="#1565c0" stroke-width="1.5"
+        marker-end="url(#arr-blue)"/>
+  <text x="195" y="160" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#1565c0">vector EEW values</text>
+
+  <!-- Vector box -->
+  <rect x="20" y="192" width="240" height="180" rx="5"
+        fill="#e8f0fe" stroke="#1565c0" stroke-width="2"/>
+  <text x="140" y="213" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="11" font-weight="bold" fill="#1565c0">vector memory</text>
+
+  <line x1="34" y1="220" x2="246" y2="220"
+        stroke="#1565c0" stroke-width="0.75" stroke-dasharray="3,2"/>
+
+  <!-- Width value rows -->
+  <text x="55"  y="238" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b000</text>
+  <text x="120" y="238" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="185" y="238" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1565c0">EEW 8-bit</text>
+
+  <text x="55"  y="258" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b101</text>
+  <text x="120" y="258" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="185" y="258" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1565c0">EEW 16-bit</text>
+
+  <text x="55"  y="278" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b110</text>
+  <text x="120" y="278" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="185" y="278" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1565c0">EEW 32-bit</text>
+
+  <text x="55"  y="298" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b111</text>
+  <text x="120" y="298" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="185" y="298" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1565c0">EEW 64-bit</text>
+
+  <line x1="34" y1="310" x2="246" y2="310"
+        stroke="#1565c0" stroke-width="0.75" stroke-dasharray="3,2"/>
+
+  <text x="140" y="328" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#1565c0">decode_vec_mem_one()</text>
+  <text x="140" y="345" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">VLS/VLU/VSS/VSU variants</text>
+  <text x="140" y="360" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">5 addressing modes</text>
+
+  <!-- ===== RIGHT BRANCH: SCALAR FP ===== -->
+  <!-- Arrow from diamond right to scalar FP box -->
+  <line x1="440" y1="138" x2="534" y2="192"
+        stroke="#2e7d32" stroke-width="1.5"
+        marker-end="url(#arr-green)"/>
+  <text x="514" y="160" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#2e7d32">scalar FP values</text>
+
+  <!-- Scalar FP box -->
+  <rect x="440" y="192" width="240" height="180" rx="5"
+        fill="#e8f5e9" stroke="#2e7d32" stroke-width="2"/>
+  <text x="560" y="213" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="11" font-weight="bold" fill="#2e7d32">scalar FP memory</text>
+
+  <line x1="454" y1="220" x2="666" y2="220"
+        stroke="#2e7d32" stroke-width="0.75" stroke-dasharray="3,2"/>
+
+  <!-- Width value rows -->
+  <text x="475" y="238" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b010</text>
+  <text x="540" y="238" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="615" y="238" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#2e7d32">FLW / FSW  32b</text>
+
+  <text x="475" y="258" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b011</text>
+  <text x="540" y="258" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="615" y="258" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#2e7d32">FLD / FSD  64b</text>
+
+  <text x="475" y="278" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#1a1a2e">3'b100</text>
+  <text x="540" y="278" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        fill="#4a5568">-&gt;</text>
+  <text x="615" y="278" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="10" fill="#2e7d32">FLQ / FSQ  128b</text>
+
+  <line x1="454" y1="290" x2="666" y2="290"
+        stroke="#2e7d32" stroke-width="0.75" stroke-dasharray="3,2"/>
+
+  <text x="560" y="310" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#2e7d32">scalar FP path unchanged</text>
+  <text x="560" y="327" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">FLD / FSD regression tests</text>
+  <text x="560" y="343" text-anchor="middle"
+        font-family="Georgia, serif" font-size="9"
+        font-style="italic" fill="#4a5568">pass byte-for-byte identical</text>
+
+  <!-- ===== UNUSED NOTE (center, below diamond) ===== -->
+  <!-- Arrow down from diamond bottom -->
+  <line x1="350" y1="168" x2="350" y2="196"
+        stroke="#9e9e9e" stroke-width="1.2"
+        stroke-dasharray="4,3"
+        marker-end="url(#arr-gray)"/>
+  <rect x="286" y="196" width="128" height="24" rx="3"
+        fill="#f5f5f5" stroke="#9e9e9e" stroke-width="1"/>
+  <text x="350" y="212" text-anchor="middle"
+        font-family="'Courier New', Courier, monospace"
+        font-size="9" fill="#757575">3'b001  unused in both spaces</text>
+
+  <!-- ===== CAPTION ===== -->
+  <text x="350" y="400" text-anchor="middle"
+        font-family="Georgia, serif" font-size="10"
+        fill="#4a5568">Figure 2: Disambiguation of shared opcodes 0x07 / 0x27. The width field [14:12] is the sole</text>
+  <text x="350" y="416" text-anchor="middle"
+        font-family="Georgia, serif" font-size="10"
+        fill="#4a5568">routing criterion. Vector EEW values and scalar FP precisions occupy non-overlapping ranges.</text>
+</svg>
+
