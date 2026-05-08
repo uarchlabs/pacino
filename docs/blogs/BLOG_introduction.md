@@ -243,5 +243,4 @@ spanning performance modeling, RTL implementation, and architecture for
 high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,  TI C6x and RISC-V designs, and recently served as sole architect and full-stack implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in an 8-issue RVA23 RISC-V processor — from research through timing closure at 2.75 GHz. He holds +20 issued patents in processor design, architecture, and hardware 
 virtualization. He is the author of Pacino and the uarchlabs methodology documented here.*
 
-*Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926/).*
-
+*Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
