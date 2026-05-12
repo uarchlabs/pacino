@@ -56,3 +56,6 @@ tools/install/
 rtl/core/frontend/decode/obj_dir_dec
 rtl/core/frontend/decode/obj_dir_exp
 rtl/core/frontend/decode/obj_dir_pre
+# --------------------------------------------------------------------
+# docs
+site/

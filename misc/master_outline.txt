@@ -1,0 +1,161 @@
+1. Home
+
+2. Frontend
+   2.1 Overview
+   2.2 Instruction Cache (ICache)
+       2.2.1 Overview
+       2.2.2 Tags
+       2.2.3 Data Arrays
+       2.2.4 I-TLB
+       2.2.5 PLRU
+       2.2.6 Victim Buffer
+       2.2.7 MSHRs
+       2.2.8 Prefetcher
+       2.2.9 IL2 Interface
+   2.3 Instruction Fetch
+       2.3.1 Overview
+       2.3.2 Fetch Target Queue (FTQ)
+       2.3.3 Branch Detector
+       2.3.4 Pre-Fusion Detector
+   2.4 Branch Prediction Unit (BPU)
+       2.4.1 Overview
+       2.4.2 uBTB
+       2.4.3 TAGE
+       2.4.4 Statistical Corrector (SC)
+       2.4.5 Fetch Target Buffer (FTB)
+       2.4.6 Loop Predictor
+       2.4.7 ITTage
+       2.4.8 Return Address Stack (RAS)
+       2.4.9 History Module
+       2.4.10 Dual Prediction
+
+3. Backend
+   3.1 Overview
+   3.2 Decode
+       3.2.1 Overview
+       3.2.2 RVC Expander
+       3.2.3 Fusion Combiner
+       3.2.4 Integer Decode
+       3.2.5 Float Decode
+       3.2.6 Vector Decode
+   3.3 Rename
+       3.3.1 Overview
+       3.3.2 Register Alias Table (RAT)
+       3.3.3 Architectural Register Map Table (ARMT)
+       3.3.4 Free List
+   3.4 Dispatch and ROB
+       3.4.1 Overview
+       3.4.2 Dispatch
+       3.4.3 Reorder Buffer (ROB)
+           3.4.3.1 Organization
+           3.4.3.2 State
+           3.4.3.3 Commit Stage
+           3.4.3.4 Exceptions and Flushes
+           3.4.3.5 Point of No Return (PNR)
+   3.5 Scheduling and Issue
+       3.5.1 Overview
+       3.5.2 Scheduler
+       3.5.3 Scoreboard
+       3.5.4 Reservation Stations
+       3.5.5 Issue Queues (Integer / Float / Vector / Load-Store / Matrix)
+       3.5.6 Issue Select Logic
+       3.5.7 Speculative Issue
+       3.5.8 Wakeup
+   3.6 Register Files and Bypass Network
+       3.6.1 Physical Register Files (Integer / Float / Vector / Matrix)
+       3.6.2 Register Read
+       3.6.3 Bypass Network
+       3.6.4 Writeback Data Path
+   3.7 Execute
+       3.7.1 Overview
+       3.7.2 Integer Functional Units
+             note: select integer FUs are branch-capable,
+                   handling resolution and mispredict recovery
+       3.7.3 Float Functional Units
+       3.7.4 Vector Functional Units
+       3.7.5 Matrix Functional Units
+           3.7.5.1 Tile Register File
+
+4. Memory Subsystem
+   4.1 Load/Store Unit (LSU)
+       4.1.1 Overview
+       4.1.2 Address Generation Unit (AGU)
+       4.1.3 Load Unit
+       4.1.4 Store Address Unit
+       4.1.5 Store Data Unit
+       4.1.6 Atomic Operation Unit
+       4.1.7 Misaligned Unit
+       4.1.8 Uncached Access Unit
+   4.2 Load/Store Queue (LSQ)
+       4.2.1 Overview
+       4.2.2 Memory Ordering and Forwarding
+       4.2.3 Load Queue
+           4.2.3.1 Read-After-Read (RAR) Queue
+           4.2.3.2 Read-After-Write (RAW) Queue
+           4.2.3.3 Replay Queue
+       4.2.4 Store Queue
+       4.2.5 Store Buffer
+       4.2.6 Exception Buffer
+       4.2.7 Uncache Buffer
+   4.3 Vector Load/Store Unit (VLSU)
+       4.3.1 Overview
+       4.3.2 VSplit
+       4.3.3 VMerge
+       4.3.4 Vector Segment Unit
+       4.3.5 Misalign Buffer
+       4.3.6 Vector FOF Buffer
+
+5. Cache Subsystem
+   5.1 Data Cache (DCache)
+       5.1.1 Overview
+       5.1.2 Tags
+       5.1.3 Data Arrays
+       5.1.4 Load Pipeline
+       5.1.5 Main Pipeline
+       5.1.6 Miss Queue (MSHR)
+       5.1.7 Probe Queue
+       5.1.8 Writeback Queue
+       5.1.9 Victim Queue
+       5.1.10 Coherency Logic
+       5.1.11 Error Handling
+   5.2 L2 Cache
+       5.2.1 Overview
+       5.2.2 Channel A Request Buffer
+       5.2.3 Request Arbiter and Main Pipeline
+       5.2.4 Directory
+       5.2.5 Data SRAM
+       5.2.6 MSHR
+       5.2.7 Upstream TileLink Channels
+           5.2.7.1 SinkA
+           5.2.7.2 SinkC
+           5.2.7.3 GrantBuffer
+       5.2.8 Downstream CHI Channels
+           5.2.8.1 TXREQ
+           5.2.8.2 RXRSP
+           5.2.8.3 RXDAT
+           5.2.8.4 RXSNP
+           5.2.8.5 TXDAT
+           5.2.8.6 TXRSP
+           5.2.8.7 P-Credit Management
+           5.2.8.8 Link Layer Controller
+       5.2.9 MMIO Bridge
+       5.2.10 Error Handling
+
+6. MMU
+   6.1 Overview
+   6.2 L1 TLB
+   6.3 L2 TLB
+       6.3.1 Page Cache
+       6.3.2 Page Table Walker
+       6.3.3 Last Level Page Table Walker
+       6.3.4 Hypervisor Page Table Walker
+       6.3.5 Miss Queue
+       6.3.6 Prefetcher
+   6.4 PMP
+   6.5 PMA
+
+7. System
+   7.1 Control and Status Registers (CSR)
+   7.2 Exceptions and Traps
+   7.3 Hardware Performance Monitor (HPM)
+   7.4 Debug Module

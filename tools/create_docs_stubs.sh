@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# run from the root of the pacino repo
+# creates all docs/ directory structure and stub markdown files
+
+set -e
+
+DOCS=docs
+
+stub() {
+  local file="$DOCS/$1"
+  local title="$2"
+  mkdir -p "$(dirname "$file")"
+  if [ ! -f "$file" ]; then
+    echo "# $title" > "$file"
+  fi
+}
+
+# Root
+stub "index.md" "Pacino"
+
+# Frontend
+stub "frontend/overview.md"                       "Frontend Overview"
+stub "frontend/icache/overview.md"                "Instruction Cache"
+stub "frontend/icache/tags.md"                    "ICache Tags"
+stub "frontend/icache/data_arrays.md"             "ICache Data Arrays"
+stub "frontend/icache/itlb.md"                    "I-TLB"
+stub "frontend/icache/plru.md"                    "PLRU"
+stub "frontend/icache/victim_buffer.md"           "Victim Buffer"
+stub "frontend/icache/mshrs.md"                   "MSHRs"
+stub "frontend/icache/prefetcher.md"              "ICache Prefetcher"
+stub "frontend/icache/il2_interface.md"           "IL2 Interface"
+stub "frontend/fetch/overview.md"                 "Instruction Fetch"
+stub "frontend/fetch/ftq.md"                      "Fetch Target Queue"
+stub "frontend/fetch/branch_detector.md"          "Branch Detector"
+stub "frontend/fetch/prefusion_detector.md"       "Pre-Fusion Detector"
+stub "frontend/bpu/overview.md"                   "Branch Prediction Unit"
+stub "frontend/bpu/ubtb.md"                       "uBTB"
+stub "frontend/bpu/tage.md"                       "TAGE"
+stub "frontend/bpu/sc.md"                         "Statistical Corrector"
+stub "frontend/bpu/ftb.md"                        "Fetch Target Buffer"
+stub "frontend/bpu/loop_predictor.md"             "Loop Predictor"
+stub "frontend/bpu/ittage.md"                     "ITTage"
+stub "frontend/bpu/ras.md"                        "Return Address Stack"
+stub "frontend/bpu/history_module.md"             "History Module"
+stub "frontend/bpu/dual_prediction.md"            "Dual Prediction"
+
+# Backend
+stub "backend/overview.md"                        "Backend Overview"
+stub "backend/decode/overview.md"                 "Decode"
+stub "backend/decode/rvc_expander.md"             "RVC Expander"
+stub "backend/decode/fusion_combiner.md"          "Fusion Combiner"
+stub "backend/decode/integer_decode.md"           "Integer Decode"
+stub "backend/decode/float_decode.md"             "Float Decode"
+stub "backend/decode/vector_decode.md"            "Vector Decode"
+stub "backend/rename/overview.md"                 "Rename"
+stub "backend/rename/rat.md"                      "Register Alias Table"
+stub "backend/rename/armt.md"                     "Architectural Register Map Table"
+stub "backend/rename/free_list.md"                "Free List"
+stub "backend/dispatch_rob/overview.md"           "Dispatch and ROB"
+stub "backend/dispatch_rob/dispatch.md"           "Dispatch"
+stub "backend/dispatch_rob/rob.md"                "Reorder Buffer"
+stub "backend/issue/overview.md"                  "Scheduling and Issue"
+stub "backend/issue/scheduler.md"                 "Scheduler"
+stub "backend/issue/scoreboard.md"                "Scoreboard"
+stub "backend/issue/reservation_stations.md"      "Reservation Stations"
+stub "backend/issue/issue_queues.md"              "Issue Queues"
+stub "backend/issue/issue_select.md"              "Issue Select Logic"
+stub "backend/issue/speculative_issue.md"         "Speculative Issue"
+stub "backend/issue/wakeup.md"                    "Wakeup"
+stub "backend/regfile/physical_register_files.md" "Physical Register Files"
+stub "backend/regfile/register_read.md"           "Register Read"
+stub "backend/regfile/bypass_network.md"          "Bypass Network"
+stub "backend/regfile/writeback.md"               "Writeback Data Path"
+stub "backend/execute/overview.md"                "Execute"
+stub "backend/execute/integer_fu.md"              "Integer Functional Units"
+stub "backend/execute/float_fu.md"                "Float Functional Units"
+stub "backend/execute/vector_fu.md"               "Vector Functional Units"
+stub "backend/execute/matrix_fu.md"               "Matrix Functional Units"
+
+# Memory Subsystem
+stub "memory/lsu/overview.md"                     "Load/Store Unit"
+stub "memory/lsu/agu.md"                          "Address Generation Unit"
+stub "memory/lsu/load_unit.md"                    "Load Unit"
+stub "memory/lsu/store_address_unit.md"           "Store Address Unit"
+stub "memory/lsu/store_data_unit.md"              "Store Data Unit"
+stub "memory/lsu/atomic_unit.md"                  "Atomic Operation Unit"
+stub "memory/lsu/misaligned_unit.md"              "Misaligned Unit"
+stub "memory/lsu/uncached_access.md"              "Uncached Access Unit"
+stub "memory/lsq/overview.md"                     "Load/Store Queue"
+stub "memory/lsq/memory_ordering.md"              "Memory Ordering and Forwarding"
+stub "memory/lsq/load_queue.md"                   "Load Queue"
+stub "memory/lsq/store_queue.md"                  "Store Queue"
+stub "memory/lsq/store_buffer.md"                 "Store Buffer"
+stub "memory/lsq/exception_buffer.md"             "Exception Buffer"
+stub "memory/lsq/uncache_buffer.md"               "Uncache Buffer"
+stub "memory/vlsu/overview.md"                    "Vector Load/Store Unit"
+stub "memory/vlsu/vsplit.md"                      "VSplit"
+stub "memory/vlsu/vmerge.md"                      "VMerge"
+stub "memory/vlsu/segment_unit.md"                "Vector Segment Unit"
+stub "memory/vlsu/misalign_buffer.md"             "Misalign Buffer"
+stub "memory/vlsu/fof_buffer.md"                  "Vector FOF Buffer"
+
+# Cache Subsystem
+stub "cache/dcache/overview.md"                   "Data Cache"
+stub "cache/dcache/tags.md"                       "DCache Tags"
+stub "cache/dcache/data_arrays.md"                "DCache Data Arrays"
+stub "cache/dcache/load_pipeline.md"              "Load Pipeline"
+stub "cache/dcache/main_pipeline.md"              "Main Pipeline"
+stub "cache/dcache/mshr.md"                       "Miss Queue"
+stub "cache/dcache/probe_queue.md"                "Probe Queue"
+stub "cache/dcache/writeback_queue.md"            "Writeback Queue"
+stub "cache/dcache/victim_queue.md"               "Victim Queue"
+stub "cache/dcache/coherency.md"                  "Coherency Logic"
+stub "cache/dcache/error_handling.md"             "Error Handling"
+stub "cache/l2/overview.md"                       "L2 Cache"
+stub "cache/l2/request_buffer.md"                 "Channel A Request Buffer"
+stub "cache/l2/main_pipeline.md"                  "Request Arbiter and Main Pipeline"
+stub "cache/l2/directory.md"                      "Directory"
+stub "cache/l2/data_sram.md"                      "Data SRAM"
+stub "cache/l2/mshr.md"                           "MSHR"
+stub "cache/l2/tilelink.md"                       "Upstream TileLink Channels"
+stub "cache/l2/chi.md"                            "Downstream CHI Channels"
+stub "cache/l2/mmio_bridge.md"                    "MMIO Bridge"
+stub "cache/l2/error_handling.md"                 "Error Handling"
+
+# MMU
+stub "mmu/overview.md"                            "MMU Overview"
+stub "mmu/l1_tlb.md"                              "L1 TLB"
+stub "mmu/l2tlb/page_cache.md"                    "Page Cache"
+stub "mmu/l2tlb/ptw.md"                           "Page Table Walker"
+stub "mmu/l2tlb/ll_ptw.md"                        "Last Level Page Table Walker"
+stub "mmu/l2tlb/hypervisor_ptw.md"                "Hypervisor Page Table Walker"
+stub "mmu/l2tlb/miss_queue.md"                    "Miss Queue"
+stub "mmu/l2tlb/prefetcher.md"                    "L2 TLB Prefetcher"
+stub "mmu/pmp.md"                                 "PMP"
+stub "mmu/pma.md"                                 "PMA"
+
+# System
+stub "system/csr.md"                              "Control and Status Registers"
+stub "system/exceptions.md"                       "Exceptions and Traps"
+stub "system/hpm.md"                              "Hardware Performance Monitor"
+stub "system/debug.md"                            "Debug Module"
+
+echo "done: $(find $DOCS -name '*.md' | wc -l) stub files created"
+

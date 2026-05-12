@@ -61,44 +61,45 @@ $RVA_ROOT/
 |   |   |-- run.md             execute prompt from task file
 |   |-- statusline.sh          Custom status line, captures context usage, etc
 |
+|-- blogs/                     project discussion in blog form
+|
 |-- CLAUDE.md                  project baseline for Claude Code sessions
 |
-|-- docs/
-|   |-- blogs/                 project discussion in blog form
-|   |-- misc/
-|   |   |-- ai_pairings        alternatives to c.ai+c.code
-|   |   |-- observations.md    prompt detail risks
-|   |   |-- pa_session_map.md  named PA sessions linked to task files
-|   |-- pa_sessions/           downloaded Claude.ai sessions
-|   |-- pm_handoffs/           postmortem session handoffs
-|   |-- postmortem             analysis md files, deprecated for blogs
-|   |-- README.md
+|-- docs/                      mkdocs source
+|   |-- README.md              out of date merge with this readme
+
+|-- misc/
+|   |-- ai_pairings            alternatives to c.ai+c.code
+|   |-- observations.md        prompt detail risks
+|   |-- pa_session_map.md      named PA sessions linked to task files
 |
-|-- pa_handoffs                PA session handoffs
+|-- pa_handoffs/               PA (c.ai) session handoffs
+|
+|-- pa_sessions/               downloaded c.ai chat logs
+|
 |-- planning                   development planning and methodology files
+|   |-- ANTIPATTERNS.md
+|   |-- PROJECT_CORE.md        project principles
+|   |-- PROJECT_STATUS.md      upcoming tasks and status
+|   |-- TAGE_DECOMP_LOG.md
+|   |
 |   |-- arch                   architecture definitions in md
 |   |   |-- <various>
-|   |-- CORE.md                central planning, slow moving
 |   |-- interfaces             interface contracts in md
 |   |   |-- <various>
 |   |-- testbenches            testbench rules in md
+|   |   |-- <various>
+|   |-- verification           verification rules in md
 |       |-- <various>
 |
-|-- prereqs.sh                 dependencies needed by new repos
+|-- pm_handoffs/               postmortem session handoffs
+|
+|-- postmortem/                analysis md files, deprecated for blogs
 |
 |-- prompts/                   experiment/task prompts
-|   |-- bpu
-|   |-- components
-|   |-- decode
-|   |-- tools
 |
 |-- README.md                  this file
-|-- setup.sh                   one-time setup script (builds spike etc.)
-|-- prereqs.sh                 install system prerequisites
-|-- handoffs/                  claude.ai session handoff documents
-|   |-- PROJECT_CORE.md        project principles
-|   |-- PROJECT_STATUS.md      upcoming tasks and status
-|   |-- session_handoff-001.md handoff documents, multiple
+|
 |-- rtl
 |   |-- core
 |   |   |-- csr/
@@ -185,18 +186,20 @@ $RVA_ROOT/
 |-- tools/
 |   |-- check_rva23_coverage.py  verify against riscv-opcodes and spike-dasm
 |   |-- check_spike_decode.py
+|   |-- cov_table.py
 |   |-- gen_spike_oracle.py
 |   |-- handoff.sh
 |   |-- make_context.sh
 |   |-- Makefile
 |   |-- mk_pkg.sh
+|   |-- prereqs.sh               install system prerequisites
 |   |-- riscv-opcodes/           git submodule
 |   |-- rva23_ext_test.c
 |   |-- rva23_insn_ref.c
 |   |-- spike/                   git submodule (riscv-isa-sim)
 |   |   |-- install/             spike build output (not committed)
 |   |-- validate_and_extract.py
-|   |-- spike_oracle/            oracle comparison scripts (TOOLS-002)
+
 ```
 
 ---
@@ -478,4 +481,6 @@ The handoff document adds:
 ---
 
 *Part of the [uarchlabs](https://uarchlabs.com) open source hardware design organization.*
+
+
 

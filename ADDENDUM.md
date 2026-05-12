@@ -1,3 +1,6 @@
+
+This is out of date after the mkdocs changes
+
 # Dirs
 
 blogs           blog narratives for design phases

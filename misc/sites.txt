@@ -1,0 +1,8 @@
+
+https://uarchlabs.com/                        uA main web site
+https://github.com/uarchlabs                  uA github org
+https://uarchlabs.github.io/                  uA github page
+https://github.com/uarchlabs/uarchlabs.com    uA web site artifacts
+
+https://uarchlabs.github.io/pacino/           pacino github page
+https://github.com/uarchlabs/pacino           pacino repo
