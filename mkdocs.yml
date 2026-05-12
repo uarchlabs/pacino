@@ -1,0 +1,171 @@
+site_name: Pacino
+site_url: https://uarchlabs.github.io/pacino/
+site_description: Pacino RISC-V Processor Microarchitecture Documentation
+site_author: uarchlabs
+
+repo_name: uarchlabs/pacino
+repo_url: https://github.com/uarchlabs/pacino
+
+theme:
+  name: material
+  palette:
+    scheme: slate
+    primary: black
+    accent: deep orange
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - tables
+  - pymdownx.details
+  - pymdownx.superfences
+
+nav:
+  - Home: index.md
+
+  - Frontend:
+    - Overview: frontend/overview.md
+    - Instruction Cache:
+      - Overview: frontend/icache/overview.md
+      - Tags: frontend/icache/tags.md
+      - Data Arrays: frontend/icache/data_arrays.md
+      - I-TLB: frontend/icache/itlb.md
+      - PLRU: frontend/icache/plru.md
+      - Victim Buffer: frontend/icache/victim_buffer.md
+      - MSHRs: frontend/icache/mshrs.md
+      - Prefetcher: frontend/icache/prefetcher.md
+      - IL2 Interface: frontend/icache/il2_interface.md
+    - Instruction Fetch:
+      - Overview: frontend/fetch/overview.md
+      - Fetch Target Queue: frontend/fetch/ftq.md
+      - Branch Detector: frontend/fetch/branch_detector.md
+      - Pre-Fusion Detector: frontend/fetch/prefusion_detector.md
+    - Branch Prediction Unit:
+      - Overview: frontend/bpu/overview.md
+      - uBTB: frontend/bpu/ubtb.md
+      - TAGE: frontend/bpu/tage.md
+      - Statistical Corrector: frontend/bpu/sc.md
+      - Fetch Target Buffer: frontend/bpu/ftb.md
+      - Loop Predictor: frontend/bpu/loop_predictor.md
+      - ITTage: frontend/bpu/ittage.md
+      - Return Address Stack: frontend/bpu/ras.md
+      - History Module: frontend/bpu/history_module.md
+      - Dual Prediction: frontend/bpu/dual_prediction.md
+
+  - Backend:
+    - Overview: backend/overview.md
+    - Decode:
+      - Overview: backend/decode/overview.md
+      - RVC Expander: backend/decode/rvc_expander.md
+      - Fusion Combiner: backend/decode/fusion_combiner.md
+      - Integer Decode: backend/decode/integer_decode.md
+      - Float Decode: backend/decode/float_decode.md
+      - Vector Decode: backend/decode/vector_decode.md
+    - Rename:
+      - Overview: backend/rename/overview.md
+      - Register Alias Table: backend/rename/rat.md
+      - Architectural Register Map Table: backend/rename/armt.md
+      - Free List: backend/rename/free_list.md
+    - Dispatch and ROB:
+      - Overview: backend/dispatch_rob/overview.md
+      - Dispatch: backend/dispatch_rob/dispatch.md
+      - Reorder Buffer: backend/dispatch_rob/rob.md
+    - Scheduling and Issue:
+      - Overview: backend/issue/overview.md
+      - Scheduler: backend/issue/scheduler.md
+      - Scoreboard: backend/issue/scoreboard.md
+      - Reservation Stations: backend/issue/reservation_stations.md
+      - Issue Queues: backend/issue/issue_queues.md
+      - Issue Select Logic: backend/issue/issue_select.md
+      - Speculative Issue: backend/issue/speculative_issue.md
+      - Wakeup: backend/issue/wakeup.md
+    - Register Files and Bypass:
+      - Physical Register Files: backend/regfile/physical_register_files.md
+      - Register Read: backend/regfile/register_read.md
+      - Bypass Network: backend/regfile/bypass_network.md
+      - Writeback Data Path: backend/regfile/writeback.md
+    - Execute:
+      - Overview: backend/execute/overview.md
+      - Integer Functional Units: backend/execute/integer_fu.md
+      - Float Functional Units: backend/execute/float_fu.md
+      - Vector Functional Units: backend/execute/vector_fu.md
+      - Matrix Functional Units: backend/execute/matrix_fu.md
+
+  - Memory Subsystem:
+    - Load/Store Unit:
+      - Overview: memory/lsu/overview.md
+      - Address Generation Unit: memory/lsu/agu.md
+      - Load Unit: memory/lsu/load_unit.md
+      - Store Address Unit: memory/lsu/store_address_unit.md
+      - Store Data Unit: memory/lsu/store_data_unit.md
+      - Atomic Operation Unit: memory/lsu/atomic_unit.md
+      - Misaligned Unit: memory/lsu/misaligned_unit.md
+      - Uncached Access Unit: memory/lsu/uncached_access.md
+    - Load/Store Queue:
+      - Overview: memory/lsq/overview.md
+      - Memory Ordering and Forwarding: memory/lsq/memory_ordering.md
+      - Load Queue: memory/lsq/load_queue.md
+      - Store Queue: memory/lsq/store_queue.md
+      - Store Buffer: memory/lsq/store_buffer.md
+      - Exception Buffer: memory/lsq/exception_buffer.md
+      - Uncache Buffer: memory/lsq/uncache_buffer.md
+    - Vector Load/Store Unit:
+      - Overview: memory/vlsu/overview.md
+      - VSplit: memory/vlsu/vsplit.md
+      - VMerge: memory/vlsu/vmerge.md
+      - Vector Segment Unit: memory/vlsu/segment_unit.md
+      - Misalign Buffer: memory/vlsu/misalign_buffer.md
+      - Vector FOF Buffer: memory/vlsu/fof_buffer.md
+
+  - Cache Subsystem:
+    - Data Cache:
+      - Overview: cache/dcache/overview.md
+      - Tags: cache/dcache/tags.md
+      - Data Arrays: cache/dcache/data_arrays.md
+      - Load Pipeline: cache/dcache/load_pipeline.md
+      - Main Pipeline: cache/dcache/main_pipeline.md
+      - Miss Queue: cache/dcache/mshr.md
+      - Probe Queue: cache/dcache/probe_queue.md
+      - Writeback Queue: cache/dcache/writeback_queue.md
+      - Victim Queue: cache/dcache/victim_queue.md
+      - Coherency Logic: cache/dcache/coherency.md
+      - Error Handling: cache/dcache/error_handling.md
+    - L2 Cache:
+      - Overview: cache/l2/overview.md
+      - Channel A Request Buffer: cache/l2/request_buffer.md
+      - Request Arbiter and Main Pipeline: cache/l2/main_pipeline.md
+      - Directory: cache/l2/directory.md
+      - Data SRAM: cache/l2/data_sram.md
+      - MSHR: cache/l2/mshr.md
+      - Upstream TileLink Channels: cache/l2/tilelink.md
+      - Downstream CHI Channels: cache/l2/chi.md
+      - MMIO Bridge: cache/l2/mmio_bridge.md
+      - Error Handling: cache/l2/error_handling.md
+
+  - MMU:
+    - Overview: mmu/overview.md
+    - L1 TLB: mmu/l1_tlb.md
+    - L2 TLB:
+      - Page Cache: mmu/l2tlb/page_cache.md
+      - Page Table Walker: mmu/l2tlb/ptw.md
+      - Last Level Page Table Walker: mmu/l2tlb/ll_ptw.md
+      - Hypervisor Page Table Walker: mmu/l2tlb/hypervisor_ptw.md
+      - Miss Queue: mmu/l2tlb/miss_queue.md
+      - Prefetcher: mmu/l2tlb/prefetcher.md
+    - PMP: mmu/pmp.md
+    - PMA: mmu/pma.md
+
+  - System:
+    - CSR: system/csr.md
+    - Exceptions and Traps: system/exceptions.md
+    - Hardware Performance Monitor: system/hpm.md
+    - Debug Module: system/debug.md
+
