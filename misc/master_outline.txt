@@ -17,64 +17,64 @@
        2.3.2 Fetch Target Queue (FTQ)
        2.3.3 Branch Detector
        2.3.4 Pre-Fusion Detector
-   2.4 Branch Prediction Unit (BPU)
+   2.4 Decode
        2.4.1 Overview
-       2.4.2 uBTB
-       2.4.3 TAGE
-       2.4.4 Statistical Corrector (SC)
-       2.4.5 Fetch Target Buffer (FTB)
-       2.4.6 Loop Predictor
-       2.4.7 ITTage
-       2.4.8 Return Address Stack (RAS)
-       2.4.9 History Module
-       2.4.10 Dual Prediction
+       2.4.2 RVC Expander
+       2.4.3 Fusion Combiner
+       2.4.4 Integer Decode
+       2.4.5 Float Decode
+       2.4.6 Vector Decode
+   2.5 Branch Prediction Unit (BPU)
+       2.5.1 Overview
+       2.5.2 uBTB
+       2.5.3 TAGE
+       2.5.4 Statistical Corrector (SC)
+       2.5.5 Fetch Target Buffer (FTB)
+       2.5.6 Loop Predictor
+       2.5.7 ITTage
+       2.5.8 Return Address Stack (RAS)
+       2.5.9 History Module
+       2.5.10 Dual Prediction
 
 3. Backend
    3.1 Overview
-   3.2 Decode
+   3.2 Rename
        3.2.1 Overview
-       3.2.2 RVC Expander
-       3.2.3 Fusion Combiner
-       3.2.4 Integer Decode
-       3.2.5 Float Decode
-       3.2.6 Vector Decode
-   3.3 Rename
+       3.2.2 Register Alias Table (RAT)
+       3.2.3 Architectural Register Map Table (ARMT)
+       3.2.4 Free List
+   3.3 Dispatch and ROB
        3.3.1 Overview
-       3.3.2 Register Alias Table (RAT)
-       3.3.3 Architectural Register Map Table (ARMT)
-       3.3.4 Free List
-   3.4 Dispatch and ROB
+       3.3.2 Dispatch
+       3.3.3 Reorder Buffer (ROB)
+           3.3.3.1 Organization
+           3.3.3.2 State
+           3.3.3.3 Commit Stage
+           3.3.3.4 Exceptions and Flushes
+           3.3.3.5 Point of No Return (PNR)
+   3.4 Scheduling and Issue
        3.4.1 Overview
-       3.4.2 Dispatch
-       3.4.3 Reorder Buffer (ROB)
-           3.4.3.1 Organization
-           3.4.3.2 State
-           3.4.3.3 Commit Stage
-           3.4.3.4 Exceptions and Flushes
-           3.4.3.5 Point of No Return (PNR)
-   3.5 Scheduling and Issue
-       3.5.1 Overview
-       3.5.2 Scheduler
-       3.5.3 Scoreboard
-       3.5.4 Reservation Stations
-       3.5.5 Issue Queues (Integer / Float / Vector / Load-Store / Matrix)
-       3.5.6 Issue Select Logic
-       3.5.7 Speculative Issue
-       3.5.8 Wakeup
-   3.6 Register Files and Bypass Network
-       3.6.1 Physical Register Files (Integer / Float / Vector / Matrix)
-       3.6.2 Register Read
-       3.6.3 Bypass Network
-       3.6.4 Writeback Data Path
-   3.7 Execute
-       3.7.1 Overview
-       3.7.2 Integer Functional Units
+       3.4.2 Scheduler
+       3.4.3 Scoreboard
+       3.4.4 Reservation Stations
+       3.4.5 Issue Queues (Integer / Float / Vector / Load-Store / Matrix)
+       3.4.6 Issue Select Logic
+       3.4.7 Speculative Issue
+       3.4.8 Wakeup
+   3.5 Register Files and Bypass Network
+       3.5.1 Physical Register Files (Integer / Float / Vector / Matrix)
+       3.5.2 Register Read
+       3.5.3 Bypass Network
+       3.5.4 Writeback Data Path
+   3.6 Execute
+       3.6.1 Overview
+       3.6.2 Integer Functional Units
              note: select integer FUs are branch-capable,
                    handling resolution and mispredict recovery
-       3.7.3 Float Functional Units
-       3.7.4 Vector Functional Units
-       3.7.5 Matrix Functional Units
-           3.7.5.1 Tile Register File
+       3.6.3 Float Functional Units
+       3.6.4 Vector Functional Units
+       3.6.5 Matrix Functional Units
+           3.6.5.1 Tile Register File
 
 4. Memory Subsystem
    4.1 Load/Store Unit (LSU)

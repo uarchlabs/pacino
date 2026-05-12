@@ -16,7 +16,7 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.top
-    - navigation.instant
+    - navigation.indexes
     - search.suggest
     - search.highlight
 
@@ -30,7 +30,7 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-
+  - Overview: overview.md
   - Frontend:
     - Overview: frontend/overview.md
     - Instruction Cache:
@@ -48,6 +48,13 @@ nav:
       - Fetch Target Queue: frontend/fetch/ftq.md
       - Branch Detector: frontend/fetch/branch_detector.md
       - Pre-Fusion Detector: frontend/fetch/prefusion_detector.md
+    - Decode:
+      - Overview: frontend/decode/overview.md
+      - RVC Expander: frontend/decode/rvc_expander.md
+      - Fusion Combiner: frontend/decode/fusion_combiner.md
+      - Integer Decode: frontend/decode/integer_decode.md
+      - Float Decode: frontend/decode/float_decode.md
+      - Vector Decode: frontend/decode/vector_decode.md
     - Branch Prediction Unit:
       - Overview: frontend/bpu/overview.md
       - uBTB: frontend/bpu/ubtb.md
@@ -62,13 +69,6 @@ nav:
 
   - Backend:
     - Overview: backend/overview.md
-    - Decode:
-      - Overview: backend/decode/overview.md
-      - RVC Expander: backend/decode/rvc_expander.md
-      - Fusion Combiner: backend/decode/fusion_combiner.md
-      - Integer Decode: backend/decode/integer_decode.md
-      - Float Decode: backend/decode/float_decode.md
-      - Vector Decode: backend/decode/vector_decode.md
     - Rename:
       - Overview: backend/rename/overview.md
       - Register Alias Table: backend/rename/rat.md
