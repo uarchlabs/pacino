@@ -330,7 +330,7 @@ title: ""
 <div class="pacino-landing">
 
   <!-- NAV -->
-  <div class="p-nav">
+  <!-- div class="p-nav">
     <div class="nav-left">
       <a class="nav-org" href="https://uarchlabs.com">uarchlabs</a>
       <span class="nav-sep">/</span>
@@ -342,7 +342,7 @@ title: ""
       <a href="#methodology">methodology</a>
       <a href="https://github.com/uarchlabs/pacino" target="_blank" rel="noopener" class="nav-gh">github ↗</a>
     </div>
-  </div>
+  </div -->
 
   <!-- BANNER -->
   <div class="banner-wrap">
@@ -368,22 +368,31 @@ title: ""
         <line x1="8" y1="18" x2="56" y2="18" stroke="#8a97a6" stroke-width="2" stroke-linecap="round"/>
         <circle cx="32" cy="42" r="4" fill="#b84c25"/>
       </g>
+<!--
       <text x="196" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">u</text>
       <text x="228" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#d96b3f">arch</text>
       <text x="376" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">labs</text>
       <text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="500" letter-spacing="0.5" fill="#d96b3f">PACINO</text>
       <text x="262" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="400" letter-spacing="0.5" fill="#8a97a6"> · Open Source 8-issue OOO RISC-V Processor</text>
+-->
+      <!-- text x="196" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">u</text -->
+      <text x="228" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#d96b3f">Pacino</text>
+      <text x="435" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">Docs</text>
+      <!-- text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="500" letter-spacing="0.5" fill="#d96b3f">PACINO</text -->
+      <text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="400" letter-spacing="0.5" fill="#8a97a6"> · Open Source 8-issue OOO RISC-V Processor</text>
+
       <line x1="196" y1="238" x2="580" y2="238" stroke="#353f4a" stroke-width="1"/>
-      <g transform="translate(196, 260)">
+      <!-- g transform="translate(196, 260)">
         <circle cx="6" cy="6" r="3" fill="#b84c25"/>
         <text x="18" y="10" font-family="-apple-system,sans-serif" font-size="13" font-weight="500" fill="#e8ecf0">Open RTL</text>
         <text x="18" y="28" font-family="-apple-system,sans-serif" font-size="12" fill="#8a97a6">Synthesizable, forkable, yours</text>
-      </g>
-      <g transform="translate(196, 308)">
+      </g -->
+      <!-- g transform="translate(196, 308)">
         <circle cx="6" cy="6" r="3" fill="#b84c25"/>
         <text x="18" y="10" font-family="-apple-system,sans-serif" font-size="13" font-weight="500" fill="#e8ecf0">AI co-design methods</text>
         <text x="18" y="28" font-family="-apple-system,sans-serif" font-size="12" fill="#8a97a6">Prompts, loops, and rationale — documented</text>
-      </g>
+      </g -->
+
       <g transform="translate(740, 80)" opacity="0.85">
         <rect x="0" y="0" width="360" height="240" rx="6" fill="none" stroke="#353f4a" stroke-width="1.5"/>
         <rect x="100" y="60" width="160" height="120" rx="4" fill="#353f4a" stroke="#b84c25" stroke-width="1"/>

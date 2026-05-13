@@ -2,6 +2,10 @@ site_name: Pacino
 site_url: https://uarchlabs.github.io/pacino/
 site_description: Pacino RISC-V Processor Microarchitecture Documentation
 site_author: uarchlabs
+copyright: >
+  Copyright &copy; 2026 uarchlabs &mdash;
+  Documentation licensed under <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>,
+  RTL licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a>
 
 repo_name: uarchlabs/pacino
 repo_url: https://github.com/uarchlabs/pacino
