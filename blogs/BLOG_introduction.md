@@ -3,7 +3,7 @@
 ```
  FILE:    BLOG_introduction.md
  STATUS:  unpublished
- UPDATED: 2026-xx-xx
+ UPDATED: 2026-04-14
  CONTACT: uarchlabs@gmail.com
 ```
 # Project Rationale

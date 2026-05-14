@@ -3,7 +3,7 @@
 ```
  FILE:   BLOG_decoder_2_scalar_to_alu.md
  STATUS:  unpublished
- UPDATED: 2026-xx-xx
+ UPDATED: 2026.05.14
  CONTACT: uarchlabs@gmail.com
 ```
 
