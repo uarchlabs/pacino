@@ -1,0 +1,120 @@
+---
+
+## Technical Debt
+
+| # | Item                                   | Resolution path                 |
+|---|----------------------------------------|---------------------------------|
+| 8  | CLI-001: lp_hit missing from          | Closed BP-017a                  |
+|    | loop_pred_interfaces.md field list    |                                 |
+| 9  | CLI-002: idx/tag vs lp_set/lp_tag     | Closed BP-017a                  |
+|    | naming in loop_pred_interfaces.md     |                                 |
+| 10 | CLI-004: lp_set vs idx in             | Closed BP-017a                  |
+|    | bp_loop_meta_t (bp_structs_pkg.sv)    |                                 |
+| 11 | CLI-008: mixed prefix in              | Closed BP-017b                  |
+|    | lp_pred_t (bp_structs_pkg.sv)         |                                 |
+| 12 | CLI-011: port naming convention       | Closed BP-018                   |
+|    | not applied to loop_pred.sv           |                                 |
+| 13 | CLI-012: port naming convention       | Closed                          |
+|    | not applied to ubtb.sv                | Closed                          |
+| 14 | TI7: bp_tage_meta_t migration to      | Closed                          |
+|    | tage_pred_meta_t pending. Both        | Closed                          |
+|    | retained during transition.           |                                 |
+| 19 | uaon_ff logic in tage_cntrl.sv is incorrect.     | Closed in BP-008b    |
+|    | BP-008a-2 prompt erroneously specified decrement |                      |
+|    | unconditionally at predict time. UAON is update  |                      |
+|    | time only. See UAON Modification During Update   |                      |
+|    | in tage_cntrl_useful_update_rules.md.            |                      |
+| 20 | T1-T4 index and tag hashing incorrect in         | Closed BP-007e       |
+|    | tage_cntrl. tage_cntrl generates slot-independent|                      |
+|    | hashes from fld_hist_p0 and forwards to tables.  |                      |
+|    | This is wrong. Each table derives its own hashes |                      |
+|    | locally. tage_cntrl hash logic must be removed.  |                      |
+| 21 | tage_table does not derive its own index and tag | Closed in BP-007f.   |
+|    | hashes. fld_hist_p0 must be added as a direct    |                      |
+|    | input to tage_table. Each table must compute its |                      |
+|    | own hashes locally using table-specific history  |                      |
+|    | lengths. Hash functions must be defined as       |                      |
+|    | planning elements before re-running tage_table.  |                      |
+| 22 | T0 CTR stored in tage_pred_meta_t as 3b          | Closed in BP-008b.   |
+|    | zero-padded value when T0 is provider.           |                      |
+|    | tage_prm_ctr field is 3b but T0 CTR is 2b.       |                      |
+|    | Update path must not interpret tage_prm_ctr      |                      |
+|    | MSB as direction when tage_prm_comp == 0.        |                   .  |
+|    | Direction must be taken from tage_prm_pred_tkn   |                      |
+|    | not tage_prm_ctr[2].                             |                      |
+|    |                                                  |                      |
+| 23 | Modify prompt validation script to test for      | Closed               |
+|    | new Task-ID field                                |                      |
+| 24 | The TAGE_TBL_* vectors are now the authoritative | Closed               |
+|    | per-table parameter source. A cleanup pass is    |                      |
+|    | needed to remove or alias the redundant scalar   |                      |
+|    | parameters (TAGE_T0_WAYS, TAGE_T1_BANKS,         |                      |
+|    | TAGE_T1_ENTRIES, etc.) and fix the FIXME-flagged |                      |
+|    | consumers (tage_cntrl, tage_hash, bp_structs).   |                      |
+| 25 | Context Loaded paths for bp_defines_pkg.sv and | Closed, will-not-fix |
+|    | bp_structs_pkg.sv use short paths rtl/ in      |                      |
+|    | BP-007d through BP-008b. Correct to            |                      |
+|    | frontend/branch_predictor/rtl/ prefix.         |                      |
+| 26 | TBL_SEL_WIDTH default in tage_table.sv:            | Closed           |
+|    | Uses $clog2(TAGE_NUM_TABLES)+1 instead of          |                  |
+|    | TAGE_TBL_SEL_WIDTH. Not fixed in BP-009a-1 because |                  |
+|    | testbench implicitly relies on the wrong value.    |                  |
+|    | Resolve when testbench is updated for BP-010.      |                  |
+| 27 | bw_ram BANKS=2 hardcoded as magic number in     | Closed            |
+|    | RAM_ENTRIES and bw_ram instantiation in tage_bim.sv |               |
+|    | and tage_table.sv. Should be a local parameter  |                   |
+|    | Fix in cleanup pass after BP-010                |                   |
+| 28 | planning/arch/ and planning/interfaces/ have    | Closed            |
+|    | drifted. tage_interfaces.md is the current      | Manual fix        |
+|    | authoritative source for TAGE. Reconcile arch   |                   |
+|    | docs with interface docs before bp_cluster impl.|                   |
+| 29 | use_we and epc_we in tage_table.sv gated by     | Closed. HAND-FIX-001 applied  |
+|    | prm_match only. When using_primary=0, USE and   | directly to tage_table.sv.    |
+|    | EPC writes silently dropped for alt provider    | prm_alt_match_s0/s1 added.    |
+|    | table. Rules Table 7 rows 5,6 not implemented.  | Found BP-010c, fixed session  |
+|    | Both slots affected.                            | 022.                          |
+| 30 | tage_use_alt_on_na in tage_cntrl.sv set from        | Closed. HAND-FIX-002 applied   |
+|    | uaon_trig alone. Flag should reflect whether UAON   | to tage_cntrl.sv. Now gated    |
+|    | mux actually switched prediction source, not merely | on uaon_trig_p1[s] & uaon[s][3]|
+|    | whether trigger condition was met. Counter threshold| Found BP-010e, fixed           |
+|    | not checked. Both slots affected.                   | session-022.
+| 31 | Defect: t_idx_r1/t_tag_r1 undriven. Found BP-011                 | closed BP-012. |
+| 32 | Defect: T0 prm_ctr mis-extraction. Found BP-011                  | closed BP-012. |
+| 33 | Simultaneous prediction and update protocol undefined.           | closed |
+|    | No signals defined for same-cycle pred+upd to overlapping       |   |
+|    | entries. Read-during-write contract covers mutual exclusion     |   |
+|    | assumption but does not define arbitration, ordering, or stall  |   |
+|    | signaling when both are valid in the same cycle.Define protocol |   |
+|    | and additional signals before bp_cluster integration. Requires  |   |
+|    | interface doc update and new testbench coverage.                |   |
+| 34 | T0 CTR update in tage_cntrl.sv keys on pred_crtFix           | closed |
+|    | before bp_cluster(correct/wrong) instead of                  | bp-015 |
+|    | resolved_taken tointegration. Changedetermine                   |   |
+|    | increment or decrement direction.ctr_upd_comb to                |   |
+|    | usepred_crt=1 always adds 1, moving a correctly                 |   |
+|    | resolved_taken topredicted not-taken branch toward              |   |
+|    | the takenselect INC or DEC.side. Standard BIM                   |   |
+|    | behavior: resolved_taken=1Add a targeted-> INC,                 |   |
+|    | resolved_taken=0 -> DEC. Found BP-014d,regression               |   |
+|    | testTC-36. RTL not modified in BP-014d.covering row             |   |
+|    | 13a after fix applied.                                          |   |
+| 35 | No automated check that all expected test cases    | Superceded by coverage |
+|    | are present and executed in tb_tage.sv. Claude     | plan                   |
+|    | Code incorrectly reported BP-014f Results          |                        |
+|    | Capture as already written because it saw          |                        |
+|    | populated section markers. Risk: a session         |                        |
+|    | completes with fewer tests than specified and      |                        |
+|    | the shortfall goes undetected.                     |                        |
+| 36 | sim_tage_table TC6: USE field update not reflected | Closed                 |
+|    | in cntrl_bits_p1 after write. hit=1, cntrl=09,     | Verified session-028:  |
+|    |                                                    | TC6 passes with cntrl=39      |
+|    |                                                    | as expected                   |
+|    |                                                    | Defect resolved by HAND-FIX-001 |
+|    |                                                    | in session-022. No further    |
+|    |                                                    | action required.              |
+|    | expected cntrl=39. Pre-existing defect revealed    | tb_tage_table.sv TC6 expected |
+|    | when PINMISSING fix in BP-019a allowed             | value. Fix before bp_cluster. |
+|    | sim_tage_table to compile and run.                 |                               |
+
+---
+

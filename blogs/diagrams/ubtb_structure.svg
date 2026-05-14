@@ -1,0 +1,147 @@
+<svg viewBox="0 0 780 390" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5 Z" fill="#444"/>
+    </marker>
+    <marker id="arr-g" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5 Z" fill="#15803d"/>
+    </marker>
+    <marker id="arr-r" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5 Z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="390" y="16" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">uBTB: Prediction and Update Paths</text>
+  <text x="390" y="30" text-anchor="middle" font-family="monospace" font-size="10" fill="#666">256 entries  --  64 sets  --  4 ways  --  NUM_PRED_SLOTS parameterized</text>
+
+  <!-- Stage labels -->
+  <rect x="2" y="42" width="28" height="46" rx="3" fill="#e0e7ff" stroke="#6366f1" stroke-width="1"/>
+  <text x="16" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#4338ca">s0</text>
+  <text x="16" y="74" text-anchor="middle" font-family="monospace" font-size="8" fill="#6366f1">PC in</text>
+  <text x="16" y="84" text-anchor="middle" font-family="monospace" font-size="8" fill="#6366f1">addr</text>
+
+  <rect x="2" y="102" width="28" height="46" rx="3" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+  <text x="16" y="120" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">s1</text>
+  <text x="16" y="134" text-anchor="middle" font-family="monospace" font-size="8" fill="#059669">pred</text>
+  <text x="16" y="144" text-anchor="middle" font-family="monospace" font-size="8" fill="#059669">out</text>
+
+  <!-- ── PREDICTION PATH ── -->
+
+  <!-- pred_pc input -->
+  <text x="35" y="58" font-family="monospace" font-size="10" fill="#333">pred_pc</text>
+  <text x="35" y="70" font-family="monospace" font-size="9" fill="#888">[VA_WIDTH-1:0]</text>
+  <line x1="90" y1="62" x2="108" y2="62" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Index/Tag Derivation -->
+  <rect x="110" y="40" width="150" height="80" rx="3" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="185" y="59" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#3730a3">Index / Tag</text>
+  <text x="185" y="73" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#3730a3">Derivation</text>
+  <line x1="120" y1="79" x2="250" y2="79" stroke="#6366f1" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="185" y="93" text-anchor="middle" font-family="monospace" font-size="10" fill="#333">set_idx = PC[7:2]</text>
+  <text x="185" y="107" text-anchor="middle" font-family="monospace" font-size="10" fill="#333">tag     = PC[26:7]</text>
+
+  <!-- Arrow to SRAM -->
+  <line x1="260" y1="80" x2="278" y2="80" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- SRAM Array -->
+  <rect x="280" y="36" width="180" height="180" rx="3" fill="#f0fdf4" stroke="#15803d" stroke-width="2"/>
+  <text x="370" y="56" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#14532d">SRAM Array</text>
+  <text x="370" y="70" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">64 sets  x  4 ways</text>
+  <line x1="290" y1="77" x2="450" y2="77" stroke="#15803d" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="370" y="92" text-anchor="middle" font-family="monospace" font-size="10" fill="#333">66b per entry</text>
+  <text x="370" y="106" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">see entry field diagram</text>
+  <line x1="290" y1="113" x2="450" y2="113" stroke="#15803d" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="370" y="128" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">s0: address dispatch</text>
+  <text x="370" y="142" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">s1: data out (comb from</text>
+  <text x="370" y="155" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">     registered mem)</text>
+  <line x1="290" y1="162" x2="450" y2="162" stroke="#15803d" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="370" y="177" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">wr_ptr[64] per set</text>
+  <text x="370" y="190" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">$clog2(4) bits each</text>
+  <text x="370" y="205" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">advance on miss-write</text>
+
+  <!-- Arrow from SRAM to Tag Match -->
+  <line x1="460" y1="80" x2="478" y2="80" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Tag Match -->
+  <rect x="480" y="40" width="168" height="118" rx="3" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+  <text x="564" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">Tag Match  (s1)</text>
+  <line x1="490" y1="66" x2="638" y2="66" stroke="#059669" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="564" y="82" text-anchor="middle" font-family="monospace" font-size="10" fill="#333">search 4 ways:</text>
+  <text x="564" y="96" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">valid &amp;&amp; tag == lookup</text>
+  <line x1="490" y1="103" x2="638" y2="103" stroke="#059669" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="564" y="119" text-anchor="middle" font-family="monospace" font-size="10" fill="#166534">hit:  pred[s].valid = 1</text>
+  <text x="564" y="133" text-anchor="middle" font-family="monospace" font-size="10" fill="#c2410c">miss: pred[s].valid = 0</text>
+  <text x="564" y="147" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">no redirect on miss</text>
+
+  <!-- Arrow from Tag Match to output -->
+  <line x1="648" y1="90" x2="666" y2="90" stroke="#15803d" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+  <!-- pred[] output labels -->
+  <text x="670" y="50" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">pred[s]  (s1)</text>
+  <text x="670" y="65" font-family="monospace" font-size="10" fill="#333">.valid</text>
+  <text x="670" y="79" font-family="monospace" font-size="10" fill="#333">.target</text>
+  <text x="670" y="93" font-family="monospace" font-size="10" fill="#333">.br_type</text>
+  <text x="670" y="107" font-family="monospace" font-size="10" fill="#333">.br_taken</text>
+  <text x="670" y="121" font-family="monospace" font-size="10" fill="#333">.carry</text>
+  <text x="670" y="140" font-family="monospace" font-size="9" fill="#888">slot 0: pred_pc</text>
+  <text x="670" y="153" font-family="monospace" font-size="9" fill="#888">slot 1: pred_pc+32</text>
+
+  <!-- ── DIVIDER ── -->
+  <line x1="32" y1="232" x2="756" y2="232" stroke="#94a3b8" stroke-width="1" stroke-dasharray="6,4"/>
+  <rect x="110" y="237" width="548" height="28" rx="3" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+  <text x="384" y="249" text-anchor="middle" font-family="monospace" font-size="9" fill="#78350f">Read-during-write: upd and pred_pc same set same cycle -- pred reflects pre-update state.</text>
+  <text x="384" y="261" text-anchor="middle" font-family="monospace" font-size="9" fill="#78350f">New entry visible next cycle. No bypass.  (TC10)</text>
+
+  <!-- ── UPDATE PATH ── -->
+  <rect x="2" y="282" width="28" height="50" rx="3" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+  <text x="16" y="300" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#991b1b">upd</text>
+  <text x="16" y="314" text-anchor="middle" font-family="monospace" font-size="8" fill="#dc2626">post-</text>
+  <text x="16" y="325" text-anchor="middle" font-family="monospace" font-size="8" fill="#dc2626">exec</text>
+
+  <!-- upd signals -->
+  <text x="35" y="293" font-family="monospace" font-size="10" fill="#333">upd[u].valid</text>
+  <text x="35" y="307" font-family="monospace" font-size="10" fill="#333">upd[u].pc</text>
+  <text x="35" y="321" font-family="monospace" font-size="10" fill="#333">upd[u].br_type</text>
+  <text x="35" y="335" font-family="monospace" font-size="10" fill="#333">upd[u].target</text>
+  <text x="35" y="349" font-family="monospace" font-size="10" fill="#333">upd[u].br_taken</text>
+  <line x1="108" y1="318" x2="126" y2="318" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr-r)"/>
+
+  <!-- Update derivation -->
+  <rect x="128" y="276" width="150" height="72" rx="3" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="203" y="296" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#991b1b">Update Path</text>
+  <text x="203" y="310" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">synchronous (rising clk)</text>
+  <line x1="138" y1="316" x2="268" y2="316" stroke="#dc2626" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="203" y="330" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">derive idx, tag</text>
+  <text x="203" y="343" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">from upd[u].pc</text>
+
+  <!-- Arrow to hit/miss write -->
+  <line x1="278" y1="312" x2="296" y2="312" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr-r)"/>
+
+  <!-- Hit/Miss write block -->
+  <rect x="298" y="272" width="200" height="108" rx="3" fill="#fff1f2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="398" y="292" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#991b1b">Hit / Miss Write</text>
+  <line x1="308" y1="298" x2="488" y2="298" stroke="#dc2626" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="398" y="314" text-anchor="middle" font-family="monospace" font-size="10" fill="#166534">hit:  update entry in place</text>
+  <line x1="308" y1="321" x2="488" y2="321" stroke="#dc2626" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="398" y="337" text-anchor="middle" font-family="monospace" font-size="10" fill="#c2410c">miss: write to wr_ptr[set_idx]</text>
+  <text x="398" y="351" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">      advance wr_ptr</text>
+  <text x="398" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">write-pointer replacement -- no LRU</text>
+
+  <!-- write path back to SRAM (curved arrow up) -->
+  <line x1="398" y1="380" x2="398" y2="386" stroke="#dc2626" stroke-width="1" stroke-dasharray="2,2"/>
+  <line x1="398" y1="386" x2="370" y2="386" stroke="#dc2626" stroke-width="1" stroke-dasharray="2,2"/>
+  <line x1="370" y1="386" x2="370" y2="218" stroke="#dc2626" stroke-width="1" stroke-dasharray="2,2" marker-end="url(#arr-r)"/>
+  <text x="348" y="386" text-anchor="end" font-family="monospace" font-size="8" fill="#dc2626">write</text>
+
+  <!-- Update note -->
+  <rect x="514" y="272" width="248" height="108" rx="3" fill="#f8fafc" stroke="#94a3b8" stroke-width="1"/>
+  <text x="638" y="292" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#334155">Update Notes</text>
+  <line x1="524" y1="298" x2="752" y2="298" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="638" y="313" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">upd[u].valid may assert any cycle</text>
+  <text x="638" y="327" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">NUM_PRED_SLOTS=2: upd[0] and upd[1]</text>
+  <text x="638" y="341" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">are independent -- no ordering constraint</text>
+  <text x="638" y="358" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">carry = target[VA_WIDTH-1:5]</text>
+  <text x="638" y="371" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">       != pc[VA_WIDTH-1:5]</text>
+
+</svg>

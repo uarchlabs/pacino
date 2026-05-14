@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="680" height="480" viewBox="0 0 680 480" xmlns="http://www.w3.org/2000/svg">
+<title>RAS push and pop operations</title>
+<desc>Before and after states for push and pop on the speculative RAS. Push: TOSW advances to new slot, NOS records previous TOSR. Pop: TOSR follows NOS, slot data is preserved.</desc>
+<defs>
+  <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </marker>
+  <style>
+    text { font-family: system-ui, -apple-system, "Helvetica Neue", sans-serif; }
+  </style>
+</defs>
+
+<rect width="680" height="480" fill="white"/>
+
+<!-- ============================================================ -->
+<!-- PUSH SECTION                                                  -->
+<!-- ============================================================ -->
+
+<text x="340" y="18" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">Push</text>
+<text x="160" y="36" text-anchor="middle" font-size="12" fill="#5F5E5A">Before</text>
+<text x="520" y="36" text-anchor="middle" font-size="12" fill="#5F5E5A">After</text>
+
+<!-- Push: Before stack (3 entries, top to bottom: C, B, A) -->
+<!-- Entry C: stack top, TOSR/TOSW -->
+<rect x="80" y="48" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.5"/>
+<text x="96" y="64" font-size="12" fill="#3C3489" dominant-baseline="central">C</text>
+<text x="160" y="64" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry B -->
+<rect x="80" y="88" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="96" y="104" font-size="12" fill="#3C3489" dominant-baseline="central">B</text>
+<text x="160" y="104" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry A: BOS -->
+<rect x="80" y="128" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="96" y="144" font-size="12" fill="#3C3489" dominant-baseline="central">A</text>
+<text x="160" y="144" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Before push: NOS links (right side of stack, right edge x=240) -->
+<path d="M240,64 L256,64 L256,104 L240,104" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+<path d="M240,104 L265,104 L265,144 L240,144" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- Before push: pointer labels (left side) -->
+<text x="72" y="58" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSR</text>
+<line x1="74" y1="58" x2="78" y2="58" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="72" y="70" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSW</text>
+<line x1="74" y1="70" x2="78" y2="70" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="72" y="144" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">BOS</text>
+<line x1="74" y1="144" x2="78" y2="144" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+
+<!-- Push operation arrow -->
+<line x1="252" y1="112" x2="416" y2="112" stroke="#2C2C2A" stroke-width="1" marker-end="url(#arr)"/>
+<text x="334" y="101" text-anchor="middle" font-size="12" fill="#2C2C2A">push addr X</text>
+
+<!-- Push: After stack (4 entries, top to bottom: D, C, B, A) -->
+<!-- Entry D: new stack top (newly pushed) -->
+<rect x="428" y="48" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.5"/>
+<text x="444" y="64" font-size="12" fill="#3C3489" dominant-baseline="central">D</text>
+<text x="508" y="64" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489" dominant-baseline="central">addr X</text>
+
+<!-- Entry C -->
+<rect x="428" y="88" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="444" y="104" font-size="12" fill="#3C3489" dominant-baseline="central">C</text>
+<text x="508" y="104" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry B -->
+<rect x="428" y="128" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="444" y="144" font-size="12" fill="#3C3489" dominant-baseline="central">B</text>
+<text x="508" y="144" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry A: BOS -->
+<rect x="428" y="168" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="444" y="184" font-size="12" fill="#3C3489" dominant-baseline="central">A</text>
+<text x="508" y="184" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- After push: NOS links -->
+<!-- D->C: new link, highlighted -->
+<path d="M588,64 L606,64 L606,104 L588,104" fill="none" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arr)"/>
+<!-- C->B and B->A: existing links -->
+<path d="M588,104 L616,104 L616,144 L588,144" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+<path d="M588,144 L626,144 L626,184 L588,184" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- After push: pointer labels -->
+<text x="420" y="58" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSR</text>
+<line x1="422" y1="58" x2="426" y2="58" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="420" y="70" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSW</text>
+<line x1="422" y1="70" x2="426" y2="70" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="420" y="184" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">BOS</text>
+<line x1="422" y1="184" x2="426" y2="184" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+
+<!-- Push annotation -->
+<text x="334" y="208" text-anchor="middle" font-size="11" fill="#5F5E5A">TOSW advances · new slot allocated · NOS records prev TOSR</text>
+<!-- NOS new link label -->
+<text x="612" y="82" font-size="10" fill="#534AB7" dominant-baseline="central">new</text>
+
+<!-- Section divider -->
+<line x1="40" y1="226" x2="640" y2="226" stroke="#D3D1C7" stroke-width="0.5" stroke-dasharray="4 4"/>
+
+<!-- ============================================================ -->
+<!-- POP SECTION                                                   -->
+<!-- ============================================================ -->
+
+<text x="340" y="248" text-anchor="middle" font-size="14" font-weight="500" fill="#2C2C2A">Pop</text>
+<text x="160" y="266" text-anchor="middle" font-size="12" fill="#5F5E5A">Before</text>
+<text x="520" y="266" text-anchor="middle" font-size="12" fill="#5F5E5A">After</text>
+
+<!-- Pop: Before stack (same state as push-after: D, C, B, A) -->
+<!-- Entry D: stack top, TOSR/TOSW -->
+<rect x="80" y="278" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.5"/>
+<text x="96" y="294" font-size="12" fill="#3C3489" dominant-baseline="central">D</text>
+<text x="160" y="294" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489" dominant-baseline="central">addr X</text>
+
+<!-- Entry C -->
+<rect x="80" y="318" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="96" y="334" font-size="12" fill="#3C3489" dominant-baseline="central">C</text>
+<text x="160" y="334" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry B -->
+<rect x="80" y="358" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="96" y="374" font-size="12" fill="#3C3489" dominant-baseline="central">B</text>
+<text x="160" y="374" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry A: BOS -->
+<rect x="80" y="398" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="96" y="414" font-size="12" fill="#3C3489" dominant-baseline="central">A</text>
+<text x="160" y="414" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Pop before: NOS links -->
+<path d="M240,294 L256,294 L256,334 L240,334" fill="none" stroke="#534AB7" stroke-width="1.5" marker-end="url(#arr)"/>
+<path d="M240,334 L265,334 L265,374 L240,374" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+<path d="M240,374 L274,374 L274,414 L240,414" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- Pop before: pointer labels -->
+<text x="72" y="288" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSR</text>
+<line x1="74" y1="288" x2="78" y2="288" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="72" y="300" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSW</text>
+<line x1="74" y1="300" x2="78" y2="300" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="72" y="414" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">BOS</text>
+<line x1="74" y1="414" x2="78" y2="414" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+
+<!-- Pop operation arrow -->
+<line x1="252" y1="346" x2="416" y2="346" stroke="#2C2C2A" stroke-width="1" marker-end="url(#arr)"/>
+<text x="334" y="335" text-anchor="middle" font-size="12" fill="#2C2C2A">pop</text>
+
+<!-- Pop: After stack -->
+<!-- Entry D: preserved (gray, data intact, not on logical stack) -->
+<rect x="428" y="278" width="160" height="32" rx="4" fill="#F1EFE8" stroke="#B4B2A9" stroke-width="0.5"/>
+<text x="444" y="294" font-size="12" fill="#888780" dominant-baseline="central">D</text>
+<text x="508" y="294" text-anchor="middle" font-size="12" fill="#888780" dominant-baseline="central">addr X</text>
+
+<!-- Entry C: new stack top, TOSR/TOSW -->
+<rect x="428" y="318" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="1.5"/>
+<text x="444" y="334" font-size="12" fill="#3C3489" dominant-baseline="central">C</text>
+<text x="508" y="334" text-anchor="middle" font-size="14" font-weight="500" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry B -->
+<rect x="428" y="358" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="444" y="374" font-size="12" fill="#3C3489" dominant-baseline="central">B</text>
+<text x="508" y="374" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Entry A: BOS -->
+<rect x="428" y="398" width="160" height="32" rx="4" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+<text x="444" y="414" font-size="12" fill="#3C3489" dominant-baseline="central">A</text>
+<text x="508" y="414" text-anchor="middle" font-size="12" fill="#3C3489" dominant-baseline="central">ret_addr</text>
+
+<!-- Pop after: NOS links (D now gray, link shown muted) -->
+<path d="M588,294 L604,294 L604,334 L588,334" fill="none" stroke="#B4B2A9" stroke-width="0.5" marker-end="url(#arr)"/>
+<path d="M588,334 L614,334 L614,374 L588,374" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+<path d="M588,374 L624,374 L624,414 L588,414" fill="none" stroke="#AFA9EC" stroke-width="1" marker-end="url(#arr)"/>
+
+<!-- Pop after: pointer labels -->
+<text x="420" y="328" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSR</text>
+<line x1="422" y1="328" x2="426" y2="328" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="420" y="340" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">TOSW</text>
+<line x1="422" y1="340" x2="426" y2="340" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+<text x="420" y="414" text-anchor="end" font-size="12" fill="#2C2C2A" dominant-baseline="central">BOS</text>
+<line x1="422" y1="414" x2="426" y2="414" stroke="#BA7517" stroke-width="1.5" marker-end="url(#arr)"/>
+
+<!-- Pop annotation -->
+<text x="334" y="452" text-anchor="middle" font-size="11" fill="#5F5E5A">TOSR follows NOS · slot D data preserved · no overwrite</text>
+<!-- Preserved label -->
+<text x="630" y="294" font-size="10" fill="#888780" dominant-baseline="central">kept</text>
+
+</svg>

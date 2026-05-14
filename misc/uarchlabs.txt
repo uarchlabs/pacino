@@ -1,0 +1,41 @@
+Warm ink #181410
+Ink mid #2c2520
+Brass #9c7c38
+Brass light #c4a24e
+Warm white #f5f2ec
+
+Deep slate #21272e
+Mid slate #353f4a
+Cool light bg #e8ecf0
+Sienna #b84c25
+Sienna light #d96b3f
+
+
+The method angle (transparency / process-first)
+
+"Not just the chip. The conversation that built it."
+"RTL and the reasoning behind it."
+"Open source hardware, open source thinking."
+
+The co-design angle (human + AI collaboration)
+
+"Where architects meet AI."
+"Human intuition. Machine iteration."
+"The best microarchitectures are a conversation."
+
+The reproducibility angle (show your work)
+
+"Designs you can read. Methods you can repeat."
+"Forkable RTL. Forkable process."
+"Open silicon, open workflow."
+
+The research angle (academic / lab tone)
+
+"Exploring what AI can actually do for chip design."
+"Rigorous co-design, released to the wild."
+
+"Domain Skills + AI"
+
+"Where Experts meet AI"
+
+*** expertise+ai=production RTL

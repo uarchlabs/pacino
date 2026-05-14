@@ -1,0 +1,117 @@
+<svg viewBox="0 0 760 210" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Title -->
+  <text x="380" y="17" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">uBTB Entry Fields  (ubtb_entry_t,  66b total)</text>
+  <text x="380" y="31" text-anchor="middle" font-family="monospace" font-size="10" fill="#666">MSB                                                                                               LSB</text>
+
+  <!--
+    Field widths (proportional, with 1-bit fields given minimum display width):
+    valid:    1b  -> display 44px
+    tag:     20b  -> display 152px
+    br_type:  3b  -> display 56px
+    target:  40b  -> display 260px
+    br_taken: 1b  -> display 44px
+    carry:    1b  -> display 44px
+    Total displayed: 600px, starting at x=80
+  -->
+
+  <!-- valid field: x=80, w=44 -->
+  <rect x="80"  y="38" width="44"  height="52" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+  <text x="102" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">valid</text>
+  <text x="102" y="76" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">1b</text>
+
+  <!-- tag field: x=124, w=152 -->
+  <rect x="124" y="38" width="152" height="52" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5"/>
+  <text x="200" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#1e40af">tag</text>
+  <text x="200" y="76" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">20b  --  PC[26:7]</text>
+
+  <!-- br_type field: x=276, w=56 -->
+  <rect x="276" y="38" width="56"  height="52" fill="#ede9fe" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="304" y="58" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#4c1d95">br_type</text>
+  <text x="304" y="72" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">3b</text>
+  <text x="304" y="84" text-anchor="middle" font-family="monospace" font-size="8" fill="#7c3aed">enum</text>
+
+  <!-- target field: x=332, w=260 -->
+  <rect x="332" y="38" width="260" height="52" fill="#ffedd5" stroke="#ea580c" stroke-width="1.5"/>
+  <text x="462" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#9a3412">target</text>
+  <text x="462" y="76" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">40b  --  predicted next fetch PC  (VA_WIDTH)</text>
+
+  <!-- br_taken field: x=592, w=44 -->
+  <rect x="592" y="38" width="44"  height="52" fill="#fef9c3" stroke="#ca8a04" stroke-width="1.5"/>
+  <text x="614" y="57" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#713f12">br_</text>
+  <text x="614" y="69" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#713f12">taken</text>
+  <text x="614" y="82" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">1b</text>
+
+  <!-- carry field: x=636, w=44 -->
+  <rect x="636" y="38" width="44"  height="52" fill="#fce7f3" stroke="#be185d" stroke-width="1.5"/>
+  <text x="658" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#831843">carry</text>
+  <text x="658" y="76" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">1b</text>
+
+  <!-- Bit position tick marks and numbers below strip (y=90 line) -->
+  <!-- Left edge: bit 65 -->
+  <line x1="80"  y1="90" x2="80"  y2="100" stroke="#555" stroke-width="1"/>
+  <text x="80"  y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">65</text>
+
+  <!-- valid/tag boundary: bit 64 -->
+  <line x1="124" y1="90" x2="124" y2="100" stroke="#555" stroke-width="1"/>
+  <text x="124" y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">64</text>
+
+  <!-- tag/br_type boundary: bit 44 -->
+  <line x1="276" y1="90" x2="276" y2="100" stroke="#555" stroke-width="1"/>
+  <text x="276" y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">44</text>
+
+  <!-- br_type/target boundary: bit 41 -->
+  <line x1="332" y1="90" x2="332" y2="100" stroke="#555" stroke-width="1"/>
+  <text x="332" y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">41</text>
+
+  <!-- target/br_taken boundary: bit 1 -->
+  <line x1="592" y1="90" x2="592" y2="100" stroke="#555" stroke-width="1"/>
+  <text x="592" y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">2</text>
+
+  <!-- br_taken/carry boundary: bit 0 -->
+  <line x1="636" y1="90" x2="636" y2="100" stroke="#555" stroke-width="1"/>
+  <text x="636" y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">1</text>
+
+  <!-- Right edge: bit 0 -->
+  <line x1="680" y1="90" x2="680" y2="100" stroke="#555" stroke-width="1"/>
+  <text x="680" y="112" text-anchor="middle" font-family="monospace" font-size="9" fill="#444">0</text>
+
+  <!-- Field notes below bit numbers -->
+  <line x1="80" y1="120" x2="680" y2="120" stroke="#e2e8f0" stroke-width="1"/>
+
+  <!-- br_type note -->
+  <text x="304" y="136" text-anchor="middle" font-family="monospace" font-size="9" fill="#4c1d95">bp_br_type_e:</text>
+  <text x="304" y="149" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">NO_BRANCH COND DIRECT_UNC</text>
+  <text x="304" y="162" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">DIRECT_CALL INDIRECT_CALL</text>
+  <text x="304" y="175" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">INDIRECT_NONRET RETURN</text>
+
+  <!-- carry note -->
+  <text x="658" y="136" text-anchor="middle" font-family="monospace" font-size="9" fill="#831843">target[39:5]</text>
+  <text x="658" y="149" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">!=</text>
+  <text x="658" y="162" text-anchor="middle" font-family="monospace" font-size="9" fill="#831843">pc[39:5]</text>
+
+  <!-- br_taken note -->
+  <text x="614" y="136" text-anchor="middle" font-family="monospace" font-size="9" fill="#713f12">COND only;</text>
+  <text x="614" y="149" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">stored for</text>
+  <text x="614" y="162" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">all types</text>
+
+  <!-- tag note -->
+  <text x="200" y="136" text-anchor="middle" font-family="monospace" font-size="9" fill="#1e40af">20b partial tag;</text>
+  <text x="200" y="149" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">aliasing risk</text>
+  <text x="200" y="162" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">accepted</text>
+
+  <!-- reset note: valid only on reset -->
+  <text x="102" y="136" text-anchor="middle" font-family="monospace" font-size="9" fill="#065f46">cleared</text>
+  <text x="102" y="149" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">on reset</text>
+  <text x="102" y="162" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">only</text>
+
+  <!-- target note -->
+  <text x="462" y="136" text-anchor="middle" font-family="monospace" font-size="9" fill="#9a3412">direct VA storage  --  no base+offset LUT</text>
+
+  <!-- total width annotation -->
+  <line x1="80" y1="192" x2="680" y2="192" stroke="#aaa" stroke-width="1"/>
+  <line x1="80" y1="188" x2="80" y2="196" stroke="#aaa" stroke-width="1"/>
+  <line x1="680" y1="188" x2="680" y2="196" stroke="#aaa" stroke-width="1"/>
+  <text x="380" y="206" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">66b total per entry  (1 + 20 + 3 + 40 + 1 + 1)</text>
+
+</svg>
