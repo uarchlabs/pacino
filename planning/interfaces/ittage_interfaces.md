@@ -3,7 +3,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT, modified by hand
- UPDATED: 2026-04-29
+ UPDATED: 2026-05-16
  CONTACT: Jeff Nye
 ```
 
@@ -192,9 +192,19 @@ hitting table.
 The provider is either a) primary component b) alternative
 component c) none when no tagged table is hit.
 
-All tables are accessed in parallel. It is possible for there
-to be 0, 1, or many hits. When there are no hits ittage sets
-ittage_hit=0. Else ittage_hit=1.
+All tables are accessed in parallel. Each table returns a hit value,
+if those hit values are organized as a vector with the table with
+the longest history in the MSB then the primary and alternative
+components are the left most hit (primary) and next left most hit
+(alternative).
+
+It is possible for there to be 0, 1, or many hits. When there are 
+no hits ittage sets ittage_hit=0. Else ittage_hit=1.
+
+Normally the primary component is selected since by design it
+has the longest history length, but this selection is modified
+by the primary component's CTR and the current value of the
+UAON for that prediction slot.
 
 When the primary component's CTR is zero (null confidence) and
 the UAON counter is >= IT_UAON_THRES the alternative component
@@ -202,8 +212,8 @@ becomes the provider.
 
 For full provider selection scan logic see
 ittage_cntrl_decisions.md §Prediction Phase.
-Operation of the UAON is described in
-ittage_cntrl_uaon_update_rules.md.
+
+Operation of the UAON is described in ittage_cntrl_uaon_update_rules.md.
 
 ITTAGE processes up to two indirect branches, one for each
 prediction slot.

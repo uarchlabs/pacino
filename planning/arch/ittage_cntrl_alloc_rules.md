@@ -2,8 +2,8 @@
 ```
  FILE:    ittage_cntrl_alloc_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
- UPDATED: 2026-04-27
+ STATUS:  DRAFT
+ UPDATED: 2026-05-16
  CONTACT: Jeff Nye
 ```
 
@@ -85,7 +85,7 @@ THIS_TABLE to ittage_alc_comp (via alc_tbl_sel_u0). Only
 the selected candidate table performs the write.
 ---
 ## EPC Field
+```
 The current lcl_epoch value for the slot is written to the
 EPC field of the allocated entry at update time.
-See ittage_cntrl_useful_update_rules.md for aging rules.
-
+See ittage_cntrl_use_update_rules.md for aging rules.

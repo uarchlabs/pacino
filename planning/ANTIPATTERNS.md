@@ -1,9 +1,9 @@
 # Prompt Anti-Patterns
 ```
- FILE:    PROMPT_ANTIPATTERNS.md
+ FILE:    ANTIPATTERNS.md
  SOURCE:  various
  STATUS:  STABLE
- UPDATED: 2026-04-29
+ UPDATED: 2026-05-01
  CONTACT: Jeff Nye
 ```
 

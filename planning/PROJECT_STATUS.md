@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-04-29 (session_handoff-038)
+ UPDATED: 2026-05-12 (session_handoff-039)
  CONTACT: Jeff Nye
 ```
 
@@ -11,8 +11,6 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
-
-Last updated: 2026-04-29 (session_handoff-038)
 
 ---
 
@@ -68,7 +66,7 @@ Last updated: 2026-04-29 (session_handoff-038)
 | ittage_cntrl_alloc      | Complete    | --               | Created session-033.             |
 | _rules.md               |             |                  | session-036: verified.           |
 | ittage_cntrl_ctr_update | Draft       | --               | Created session-033.             |
-| _rules.md               |             |                  | TBDs remain.                     |
+| _rules.md               |             |                  |                                  |
 | ittage_cntrl_decisions  | Draft       | --               | session-036: corrections applied.|
 | .md                     |             |                  | session-037: open items closed.  |
 |                         |             |                  | session-038: redundancy collapse |
@@ -346,7 +344,7 @@ Key decisions for quick reference:
                                    collapse applied.
     ittage_cntrl_alloc_rules.md -- Complete, session-036
                                    verified.
-    ittage_cntrl_ctr_update_rules.md -- Draft, TBDs remain.
+    ittage_cntrl_ctr_update_rules.md -- Draft
     ittage_cntrl_decisions.md   -- Draft, session-036
                                    corrections applied.
                                    session-037: open items

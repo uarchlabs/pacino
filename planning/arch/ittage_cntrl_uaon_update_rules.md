@@ -2,8 +2,8 @@
 ```
  FILE:    ittage_cntrl_uaon_update_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
- UPDATED: 2026-04-29
+ STATUS:  DRAFT, modified by hand
+ UPDATED: 2026-05-16
  CONTACT: Jeff Nye
 ```
 

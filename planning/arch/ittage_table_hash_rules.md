@@ -2,8 +2,8 @@
 ```
  FILE:    ittage_table_hash_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
- UPDATED: 2026-04-27
+ STATUS:  DRAFT
+ UPDATED: 2026-05-16
  CONTACT: Jeff Nye
 ```
 
