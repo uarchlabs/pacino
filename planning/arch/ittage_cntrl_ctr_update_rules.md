@@ -34,7 +34,11 @@ misprediction. See ittage_cntrl_alloc_rules.md.
 ---
 
 ## CTR Update Table
-V = pred_src = PRED_ITTAGE && no_tagged_hit == 0
+The FTQ entry will examine the prediction src, pred_src and the
+control logic will issue an ITTAGE targeted update if the
+ftq entry pred_src == PRED_ITTAGE.
+
+V = pred_src = PRED_ITTAGE && ittage_hit == 0
 (at least one table hit)
 
 | #  | V | using_primary | indir_mispredict | prm_comp | alt_comp | Action(prm) | Action(alt) | Explanation     |
