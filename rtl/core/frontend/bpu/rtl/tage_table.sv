@@ -56,10 +56,8 @@ module tage_table #(
   output logic [NUM_PRED_SLOTS-1:0]   taken_p1,
   output logic [CNTRL_BITS_WIDTH-1:0] cntrl_bits_p1[0:NUM_PRED_SLOTS-1],
   // -- hash outputs (p0, combinational; registered in tage_cntrl)
-  output logic [THIS_INDEX_BITS-1:0]
-    idx_hash_p0[0:NUM_PRED_SLOTS-1],
-  output logic [TAGE_MAX_TAG_WIDTH-1:0]
-    tag_hash_p0[0:NUM_PRED_SLOTS-1],
+  output logic [THIS_INDEX_BITS-1:0] idx_hash_p0[0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_TAG_WIDTH-1:0] tag_hash_p0[0:NUM_PRED_SLOTS-1],
   // -- prediction inputs
   input  logic [NUM_PRED_SLOTS-1:0]   tage_pred_val_p0,
   input  tage_pred_inp_t              tage_pred_inp_p0[0:NUM_PRED_SLOTS-1],

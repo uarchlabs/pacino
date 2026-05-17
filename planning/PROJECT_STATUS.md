@@ -165,6 +165,35 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    | to   ittage_pred_strong -- provider ctr > 0 (NOT NULL) |
 |    |                    | Document change has been made (in session 040)         |
 |    |                    | Make sure #43 does not impact any testcases            |
+|    |                    |                                                        |
+| 45 | Revisit tage_cntrl | During update there are multiple tables that can be    |
+|    | and tage_table     | written and need the proper ports in the table and in  | 
+|    | Simplifications    | the control.                                           |
+|    | available.         |                                                        |
+|    |                    | - T0 always has CTR value updated, needs an index.     |
+|    |                    | - both primary and alt can have CTR updated            |
+|    |                    |   one of primary or alt may have useful updated        |
+|    |                    |     useful update can use the prm_idx or alt_idx       |
+|    |                    |                                                        |
+|    |                    | It is possible to also allocate an entry               |
+|    |                    |                                                        |
+|    |                    | Currently tage_cntrl supplies a 2D bus for update and  |
+|    |                    | allocation index. one D is prediction slot the other   |
+|    |                    | D is one for each table. This is wrong.                |
+|    |                    |                                                        |
+|    |                    | It should be one upd index port for the bim where      |
+|    |                    | the index is directly taken from tage_pred_meta.tage_bim_idx. |
+|    |                    |                                                        |
+|    |                    | Note tage_bim_idx is new, added for this fix. tage_bim_idx |
+|    |                    | is from the branch pc bits in the original prediction request |
+|    |                    | tage_bim_idx = PC[TAGE_MAX_IDX_WIDTH-1:1]              |
+|    |                    |                                                        |
+|    |                    | Changes: tage_table_interfaces.md                      |
+|    |                    |            specify upd_index_u0[s]                     |
+|    |                    |            specify alc_index_u0[s]                     |
+|    |                    |            specify bim_index_u0[s]                     |
+|    |                    |          test if alc_index_u0 is necessary likely not  |
+|    |                    |          add a tage_cntrl_interfaces.md doc            |
 
 ---
 

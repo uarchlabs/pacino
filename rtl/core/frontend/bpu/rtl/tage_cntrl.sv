@@ -58,22 +58,17 @@ module tage_cntrl #(
 
   // -- prediction inputs driven to tage_table instances
   // - pred val forwarded to all tables
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_pred_val_p0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0] t_pred_val_p0[0:TAGE_NUM_TABLES-1],
   // -- prediction outputs collected from tage_table instances
   // - T0 hit: NOT USED (T0 always hits); T1-T4: tag match
-  input  logic [NUM_PRED_SLOTS-1:0]
-    t_hit_p1[0:TAGE_NUM_TABLES-1],
+  input  logic [NUM_PRED_SLOTS-1:0] t_hit_p1[0:TAGE_NUM_TABLES-1],
   // - CTR MSB direction from each table
-  input  logic [NUM_PRED_SLOTS-1:0]
-    t_taken_p1[0:TAGE_NUM_TABLES-1],
+  input  logic [NUM_PRED_SLOTS-1:0] t_taken_p1[0:TAGE_NUM_TABLES-1],
   // - {EPC,USE,CTR,VAL} packed at MAX widths per tage_table
-  input  logic [CNTRL_BITS_WIDTH-1:0]
-    t_cntrl_bits_p1[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [CNTRL_BITS_WIDTH-1:0] t_cntrl_bits_p1[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
 
   // -- update enables forwarded to tage_table instances
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_upd_val_u0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0] t_upd_val_u0[0:TAGE_NUM_TABLES-1],
 
   // -- update write data (cntrl -> tables)
   output logic [TAGE_MAX_CTR_WIDTH-1:0]
@@ -109,11 +104,9 @@ module tage_cntrl #(
     t_alc_tbl_sel_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
 
   // -- update and alloc address buses (cntrl -> tables)
-  output logic [TAGE_MAX_IDX_WIDTH-1:0]
-    t_upd_index_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_upd_index_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   // - alc_index: tage_table.sv port absent until BP-007d
-  output logic [TAGE_MAX_IDX_WIDTH-1:0]
-    t_alc_index_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_alc_index_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
 
   // -- p0 index and tag hashes from table instances (-> r1)
   input  logic [TAGE_MAX_IDX_WIDTH-1:0]

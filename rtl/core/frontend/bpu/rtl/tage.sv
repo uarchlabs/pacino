@@ -32,15 +32,12 @@ module tage #(
   input  logic                             rstn,
   // -- prediction interface
   input  logic [NUM_PRED_SLOTS-1:0]        tage_pred_val_p0,
-  input  tage_pred_inp_t
-    tage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
+  input  tage_pred_inp_t                   tage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
   output logic [NUM_PRED_SLOTS-1:0]        tage_pred_rdy_p2,
-  output tage_pred_meta_t
-    tage_pred_meta_p2[0:NUM_PRED_SLOTS-1],
+  output tage_pred_meta_t                  tage_pred_meta_p2[0:NUM_PRED_SLOTS-1],
   // -- update interface
   input  logic [NUM_PRED_SLOTS-1:0]        tage_upd_val_u0,
-  input  tage_upd_inp_t
-    tage_upd_inp_u0[0:NUM_PRED_SLOTS-1],
+  input  tage_upd_inp_t                    tage_upd_inp_u0[0:NUM_PRED_SLOTS-1],
   output logic [NUM_PRED_SLOTS-1:0]        tage_upd_rdy_u1,
   // -- arbitration status outputs (BP-023b)
   output logic                             pq_not_full,
@@ -209,10 +206,8 @@ module tage #(
   logic [TAGE_TBL_CTR[0]-1:0]
     bim_cntrl_p1[0:NUM_PRED_SLOTS-1];
   // Update input slices: MAX_*-wide buses sliced to THIS_* widths.
-  logic [TAGE_TBL_IDX[0]-1:0]
-    bim_upd_idx_u0[0:NUM_PRED_SLOTS-1];
-  logic [TAGE_TBL_CTR[0]-1:0]
-    bim_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1];
+  logic [TAGE_TBL_IDX[0]-1:0] bim_upd_idx_u0[0:NUM_PRED_SLOTS-1];
+  logic [TAGE_TBL_CTR[0]-1:0] bim_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1];
 
   // T0 hit: T0 (tage_bim) has no tag match; always hits.
   // Drive constant 1 for all slots.
@@ -226,10 +221,8 @@ module tage #(
   assign w_cntrl_bits_p1[0][1] =
     {5'b0, bim_cntrl_p1[1], 1'b1};
   // Slice update index: MAX_IDX -> TAGE_TBL_IDX[0]=11 (same).
-  assign bim_upd_idx_u0[0] =
-    w_upd_index_u0[0][0][TAGE_TBL_IDX[0]-1:0];
-  assign bim_upd_idx_u0[1] =
-    w_upd_index_u0[0][1][TAGE_TBL_IDX[0]-1:0];
+  assign bim_upd_idx_u0[0] = w_upd_index_u0[0][0][TAGE_TBL_IDX[0]-1:0];
+  assign bim_upd_idx_u0[1] = w_upd_index_u0[0][1][TAGE_TBL_IDX[0]-1:0];
   // Slice CTR write data: MAX_CTR=3 -> TAGE_TBL_CTR[0]=2.
   assign bim_prm_ctr_wd_u0[0] =
     w_prm_ctr_wd_u0[0][0][TAGE_TBL_CTR[0]-1:0];
@@ -702,22 +695,14 @@ module tage #(
       logic [T_CTR_W-1:0] prm_ctr_w[0:NUM_PRED_SLOTS-1];
       logic [T_CTR_W-1:0] alt_ctr_w[0:NUM_PRED_SLOTS-1];
 
-      assign upd_idx_w[0] =
-        w_upd_index_u0[t][0][T_IDX_W-1:0];
-      assign upd_idx_w[1] =
-        w_upd_index_u0[t][1][T_IDX_W-1:0];
-      assign alc_idx_w[0] =
-        w_alc_index_u0[t][0][T_IDX_W-1:0];
-      assign alc_idx_w[1] =
-        w_alc_index_u0[t][1][T_IDX_W-1:0];
-      assign prm_ctr_w[0] =
-        w_prm_ctr_wd_u0[t][0][T_CTR_W-1:0];
-      assign prm_ctr_w[1] =
-        w_prm_ctr_wd_u0[t][1][T_CTR_W-1:0];
-      assign alt_ctr_w[0] =
-        w_alt_ctr_wd_u0[t][0][T_CTR_W-1:0];
-      assign alt_ctr_w[1] =
-        w_alt_ctr_wd_u0[t][1][T_CTR_W-1:0];
+      assign upd_idx_w[0] = w_upd_index_u0[t][0][T_IDX_W-1:0];
+      assign upd_idx_w[1] = w_upd_index_u0[t][1][T_IDX_W-1:0];
+      assign alc_idx_w[0] = w_alc_index_u0[t][0][T_IDX_W-1:0];
+      assign alc_idx_w[1] = w_alc_index_u0[t][1][T_IDX_W-1:0];
+      assign prm_ctr_w[0] = w_prm_ctr_wd_u0[t][0][T_CTR_W-1:0];
+      assign prm_ctr_w[1] = w_prm_ctr_wd_u0[t][1][T_CTR_W-1:0];
+      assign alt_ctr_w[0] = w_alt_ctr_wd_u0[t][0][T_CTR_W-1:0];
+      assign alt_ctr_w[1] = w_alt_ctr_wd_u0[t][1][T_CTR_W-1:0];
 
       tage_table #(
         .THIS_TABLE      (t),

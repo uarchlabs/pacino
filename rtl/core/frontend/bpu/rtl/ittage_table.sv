@@ -51,55 +51,39 @@ module ittage_table #(
   localparam int ALLOC_DATA_WIDTH = CNTRL_BITS_WIDTH + THIS_TAG_BITS
 ) (
   // -- prediction outputs
-  output logic [NUM_PRED_SLOTS-1:0]        hit_p1,
-  output logic [IT_MAX_TGT_WIDTH-1:0]
-    pred_tgt_p1[0:NUM_PRED_SLOTS-1],
-  output logic [CNTRL_BITS_WIDTH-1:0]
-    cntrl_bits_p1[0:NUM_PRED_SLOTS-1],
+  output logic [NUM_PRED_SLOTS-1:0]   hit_p1,
+  output logic [IT_MAX_TGT_WIDTH-1:0] pred_tgt_p1[0:NUM_PRED_SLOTS-1],
+  output logic [CNTRL_BITS_WIDTH-1:0] cntrl_bits_p1[0:NUM_PRED_SLOTS-1],
   // -- hash outputs (p0, combinational; registered in ittage_cntrl)
-  output logic [THIS_INDEX_BITS-1:0]
-    idx_hash_p0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_TAG_WIDTH-1:0]
-    tag_hash_p0[0:NUM_PRED_SLOTS-1],
+  output logic [THIS_INDEX_BITS-1:0]  idx_hash_p0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_TAG_WIDTH-1:0] tag_hash_p0[0:NUM_PRED_SLOTS-1],
   // -- prediction inputs
-  input  logic [NUM_PRED_SLOTS-1:0]        ittage_pred_val_p0,
-  input  ittage_pred_inp_t
-    ittage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
-  input  bp_folded_hist_t                  folded_hist,
+  input  logic [NUM_PRED_SLOTS-1:0]   ittage_pred_val_p0,
+  input  ittage_pred_inp_t            ittage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
+  input  bp_folded_hist_t             folded_hist,
   // -- update enables
-  input  logic [NUM_PRED_SLOTS-1:0]        ittage_upd_val_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   ittage_upd_val_u0,
   // -- update write data
-  input  logic [THIS_CTR_WIDTH-1:0]
-    prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [THIS_CTR_WIDTH-1:0]
-    alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [THIS_USE_WIDTH-1:0]
-    use_wd_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [THIS_EPC_WIDTH-1:0]
-    epc_wd_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [IT_MAX_TGT_WIDTH-1:0]
-    tgt_wd_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [ALLOC_DATA_WIDTH-1:0]
-    alc_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_CTR_WIDTH-1:0]   prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_CTR_WIDTH-1:0]   alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_USE_WIDTH-1:0]   use_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_EPC_WIDTH-1:0]   epc_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [IT_MAX_TGT_WIDTH-1:0] tgt_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [ALLOC_DATA_WIDTH-1:0] alc_wd_u0[0:NUM_PRED_SLOTS-1],
   // -- update write strobes
-  input  logic [NUM_PRED_SLOTS-1:0]        prm_ctr_wr_u0,
-  input  logic [NUM_PRED_SLOTS-1:0]        alt_ctr_wr_u0,
-  input  logic [NUM_PRED_SLOTS-1:0]        use_wr_u0,
-  input  logic [NUM_PRED_SLOTS-1:0]        epc_wr_u0,
-  input  logic [NUM_PRED_SLOTS-1:0]        tgt_wr_u0,
-  input  logic [NUM_PRED_SLOTS-1:0]        alc_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   prm_ctr_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   alt_ctr_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   use_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   epc_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   tgt_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   alc_wr_u0,
   // -- table selectors (gate write enables)
-  input  logic [TBL_SEL_WIDTH-1:0]
-    prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [TBL_SEL_WIDTH-1:0]
-    alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [TBL_SEL_WIDTH-1:0]
-    alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [TBL_SEL_WIDTH-1:0]    prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [TBL_SEL_WIDTH-1:0]    alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [TBL_SEL_WIDTH-1:0]    alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
   // -- update addresses
-  input  logic [THIS_INDEX_BITS-1:0]
-    upd_index_u0[0:NUM_PRED_SLOTS-1],
-  input  logic [THIS_INDEX_BITS-1:0]
-    alc_index_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_INDEX_BITS-1:0]  upd_index_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_INDEX_BITS-1:0]  alc_index_u0[0:NUM_PRED_SLOTS-1],
   // -- RAM initialization
   input  logic                             tbl_ri_active,
   input  logic                             tbl_ri_wr,

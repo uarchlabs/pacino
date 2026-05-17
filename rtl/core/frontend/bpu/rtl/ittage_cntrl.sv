@@ -26,67 +26,44 @@ module ittage_cntrl #(
   input  logic rstn,
   // prediction inputs
   input  logic [NUM_PRED_SLOTS-1:0] ittage_pred_val_p0,
-  input  ittage_pred_inp_t
-    ittage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
+  input  ittage_pred_inp_t          ittage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
   // prediction outputs
   output logic [NUM_PRED_SLOTS-1:0] ittage_pred_rdy_p2,
-  output ittage_pred_meta_t
-    ittage_pred_meta_p2[0:NUM_PRED_SLOTS-1],
+  output ittage_pred_meta_t         ittage_pred_meta_p2[0:NUM_PRED_SLOTS-1],
   // update inputs
   input  logic [NUM_PRED_SLOTS-1:0] ittage_upd_val_u0,
-  input  ittage_upd_inp_t
-    ittage_upd_inp_u0[0:NUM_PRED_SLOTS-1],
+  input  ittage_upd_inp_t           ittage_upd_inp_u0[0:NUM_PRED_SLOTS-1],
   // update output
   output logic [NUM_PRED_SLOTS-1:0] ittage_upd_rdy_u1,
   // aging control
   input  logic                      ittage_enable_aging,
   input  logic [31:0]               ittage_aging_interval,
   // per-table prediction inputs (index 0 unused)
-  input  logic [NUM_PRED_SLOTS-1:0]
-    tbl_hit_p1[0:IT_NUM_TABLES-1],
-  input  logic [IT_MAX_TGT_WIDTH-1:0]
-    tbl_pred_tgt_p1[0:IT_NUM_TABLES-1]
-      [0:NUM_PRED_SLOTS-1],
-  input  logic [CNTRL_BITS_WIDTH-1:0]
-    tbl_cntrl_bits_p1[0:IT_NUM_TABLES-1]
-      [0:NUM_PRED_SLOTS-1],
-  input  logic [IT_MAX_IDX_WIDTH-1:0]
-    tbl_idx_hash_p0[0:IT_NUM_TABLES-1]
-      [0:NUM_PRED_SLOTS-1],
-  input  logic [IT_MAX_TAG_WIDTH-1:0]
-    tbl_tag_hash_p0[0:IT_NUM_TABLES-1]
-      [0:NUM_PRED_SLOTS-1],
+  input  logic [NUM_PRED_SLOTS-1:0]   tbl_hit_p1[0:IT_NUM_TABLES-1],
+  input  logic [IT_MAX_TGT_WIDTH-1:0] tbl_pred_tgt_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [CNTRL_BITS_WIDTH-1:0] tbl_cntrl_bits_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [IT_MAX_IDX_WIDTH-1:0] tbl_idx_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [IT_MAX_TAG_WIDTH-1:0] tbl_tag_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   // update write data (fanned to all tables by ittage.sv)
-  output logic [IT_MAX_CTR_WIDTH-1:0]
-    prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_CTR_WIDTH-1:0]
-    alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_USE_WIDTH-1:0]
-    use_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_EPC_WIDTH-1:0]
-    epc_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_TGT_WIDTH-1:0]
-    tgt_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_ALLOC_DATA_WIDTH-1:0]
-    alc_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_CTR_WIDTH-1:0] prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_CTR_WIDTH-1:0] alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_USE_WIDTH-1:0] use_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_EPC_WIDTH-1:0] epc_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_TGT_WIDTH-1:0] tgt_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_ALLOC_DATA_WIDTH-1:0] alc_wd_u0[0:NUM_PRED_SLOTS-1],
   // update write strobes (fanned to all tables by ittage.sv)
-  output logic [NUM_PRED_SLOTS-1:0] prm_ctr_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0] alt_ctr_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0] use_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0] epc_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0] tgt_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0] alc_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   prm_ctr_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   alt_ctr_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   use_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   epc_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   tgt_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   alc_wr_u0,
   // update selectors and addresses (fanned by ittage.sv)
-  output logic [IT_TBL_SEL_WIDTH-1:0]
-    prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_TBL_SEL_WIDTH-1:0]
-    alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_TBL_SEL_WIDTH-1:0]
-    alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_IDX_WIDTH-1:0]
-    upd_index_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_IDX_WIDTH-1:0]
-    alc_index_u0[0:NUM_PRED_SLOTS-1]
+  output logic [IT_TBL_SEL_WIDTH-1:0] prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_TBL_SEL_WIDTH-1:0] alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_TBL_SEL_WIDTH-1:0] alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_IDX_WIDTH-1:0] upd_index_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_IDX_WIDTH-1:0] alc_index_u0[0:NUM_PRED_SLOTS-1]
 );
 
   // ================================================================

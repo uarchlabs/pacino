@@ -111,6 +111,7 @@ field layouts -- see bp_structs_pkg.sv.
 These parameters are defined in the br_defines_pkg.sv.  These parameters 
 define the limits, they are not table specific.
 
+```
 NUM_PRED_SLOTS    : int
 IT_MAX_IDX_WIDTH  : int
 IT_MAX_TAG_WIDTH  : int
@@ -119,6 +120,7 @@ IT_MAX_EPC_WIDTH  : int
 IT_MAX_USE_WIDTH  : int
 IT_MAX_CTR_WIDTH  : int
 IT_MAX_VAL_WIDTH  : int
+```
 
 Top level module parameters are vectored, the vector positions are
 aligned with the assumption that tables will be instantiated in a generate
@@ -130,6 +132,7 @@ explanation the values to use during design are found in bp_defines_pkg.sv.
 These parameters are shared across all tables. Note: position zero
 is a placeholder for the non-existent IT0.
 
+```
 IT_TBL_BANKS[0:5]     : int  this parameter is not currently used
 IT_TBL_ENTRIES[0:5]   : int  this describes the number of entries in each
                               bw_ram instance.
@@ -143,15 +146,18 @@ IT_TBL_USE[0:5]       : int  this is the width of the USE field
 IT_TBL_EPC[0:5]       : int  this is the width of the EPC field
 IT_TBL_IDX[0:5]       : int  this is the width of the index bus for tables 
 IT_TBL_TGT_WIDTH[0:5] : int  this is the width of the target bus 
+```
 
 ## Derived Parameters
 
 ### IT1-IT5
+```
 THIS_CNTRL_BITS_WIDTH : int  THIS_EPC_WIDTH + THIS_USE_WIDTH
                              + THIS_CTR_WIDTH + THIS_TGT_WIDTH
                              + THIS_VAL_WIDTH
 
 THIS_ALLOC_DATA_WIDTH : int  THIS_CNTRL_BITS_WIDTH + THIS_TAG_BITS
+```
 
 ---
 
@@ -163,6 +169,7 @@ instantiation.
 
 ### Common internal module parameters
 
+```
 THIS_TABLE         : int  this indicates which table IT0-IT5.
                           IT0 is a placeholder only and is never
                           instantiated. Valid range is IT1-IT5.
@@ -170,17 +177,20 @@ TBL_SEL_WIDTH      : int  this is the width of the table select bus,
                           typically tbl_sel or alc_sel buses.
 THIS_VAL_WIDTH     : int  = 1 this is a static value, the parameter is
                           only used for documentation.
+```
 
 ### Internal module parameters 
 
 These are assigned during instantiation.
 
+```
 THIS_INDEX_BITS    : int  this is the local width of the index bus
 THIS_TAG_BITS      : int  this is the local width of the TAG field
 THIS_EPC_WIDTH     : int  this is the local width of the EPC field
 THIS_USE_WIDTH     : int  this is the local width of the USE field
 THIS_CTR_WIDTH     : int  this is the local width of the CTR field
 THIS_TGT_WIDTH     : int  this is the local width of the TGT field
+```
 
 ---
 
@@ -197,7 +207,7 @@ a vector index 0/1.  These are two independent prediction slots.
 ```
 output [NUM_PRED_SLOTS-1:0]           hit_p1
 output [IT_MAX_TGT_WIDTH-1:0]         pred_tgt_p1[0:NUM_PRED_SLOTS-1]
-output [THIS_CNTRL_BITS_WIDTH-1:0]      cntrl_bits_p1[0:NUM_PRED_SLOTS-1]
+output [THIS_CNTRL_BITS_WIDTH-1:0]    cntrl_bits_p1[0:NUM_PRED_SLOTS-1]
 
 output logic [THIS_INDEX_BITS-1:0]    idx_hash_p0[0:NUM_PRED_SLOTS-1]
 output logic [IT_MAX_TAG_WIDTH-1:0]   tag_hash_p0[0:NUM_PRED_SLOTS-1]
