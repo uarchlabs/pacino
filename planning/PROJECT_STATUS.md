@@ -52,43 +52,46 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                  | idx_hash_p0 output added.        |
 | tage_cntrl.sv           | In progress | --               | BP-008a/b complete.              |
 |                         |             |                  | BP-012 complete.                 |
+|                         |             |                  | Was complete but BP-034/5 exposed|
+|                         |             |                  | issues, see tech debt #45        |
+
 |                         |             |                  | HAND-FIX-002 applied (debt #30). |
 | tage.sv                 | Complete    | tb_tage          | BP-010 through BP-030 complete.  |
 |                         |             |                  | 68 tests pass. All coverage      |
 |                         |             |                  | targets closed or deferred.      |
-| ittage_interfaces.md    | Draft       | --               | session-036: corrections applied.|
-|                         |             |                  | session-037: II6 resolved.       |
-|                         |             |                  | session-038: redundancy collapse |
-|                         |             |                  | applied.                         |
-| ittage_table_interfaces | Draft       | --               | Created session-036.             |
-| .md                     |             |                  | session-038: redundancy collapse |
-|                         |             |                  | applied.                         |
-| ittage_cntrl_alloc      | Complete    | --               | Created session-033.             |
-| _rules.md               |             |                  | session-036: verified.           |
-| ittage_cntrl_ctr_update | Draft       | --               | Created session-033.             |
-| _rules.md               |             |                  |                                  |
-| ittage_cntrl_decisions  | Draft       | --               | session-036: corrections applied.|
-| .md                     |             |                  | session-037: open items closed.  |
-|                         |             |                  | session-038: redundancy collapse |
-|                         |             |                  | applied.                         |
-| ittage_cntrl_uaon       | Draft       | --               | Created session-033.             |
-| _update_rules.md        |             |                  | session-036: user editing        |
-|                         |             |                  | manually.                        |
-| ittage_cntrl_use        | Draft       | --               | Created session-033.             |
-| _update_rules.md        |             |                  | session-036: content verified    |
-|                         |             |                  | clean.                           |
-| ittage_table_hash       | Complete    | --               | Created session-033.             |
-| _rules.md               |             |                  | session-036: verified.           |
-|                         |             |                  |                                  |
-| itage_table.sv          | Complete    | tb_ittage_table  | BP-033/033-FIX-1 complete.       |
-|                         |             |                  |                                  |
-| itage_cntrl.sv          | In progress | tb_ittage_cntrl  | Prediction path complete BP-034  |
-|                         |             |                  |                                  |
-| FTB, SC, RAS            | Not started | --               | Later BP sessions                |
-| ittage.sv               | Not started | --               | After planning docs complete     |
-| bp_cluster (top)        | Not started | --               | After predictors complete        |
-| fetch                   | Not started | --               | After BP cluster                 |
-|                         |             |                  |                                  |
+| ittage_interfaces.md              | Draft       | --              | session-036: corrections applied.|
+|                                   |             |                 | session-037: II6 resolved.       |
+|                                   |             |                 | session-038: redundancy collapse |
+|                                   |             |                 | applied.                         |
+| ittage_table_interfaces.md        | Draft       | --              | Created session-036.             |
+|                                   |             |                 | session-038: redundancy collapse |
+|                                   |             |                 | applied.                         |
+| ittage_cntrl_alloc_rules.md       | Complete    | --              | Created session-033.             |
+|                                   |             |                 | session-036: verified.           |
+| ittage_cntrl_ctr_update_rules.md  | Draft       | --              | Created session-033.             |
+| ittage_cntrl_decisions.md         | Draft       | --              | session-036: corrections applied.|
+|                                   |             |                 | session-037: open items closed.  |
+|                                   |             |                 | session-038: redundancy collapse |
+|                                   |             |                 | applied.                         |
+| ittage_cntrl_uaon_update_rules.md | Draft       | --              | Created session-033.             |
+|                                   |             |                 | session-036: user editing        |
+|                                   |             |                 | manually.                        |
+| ittage_cntrl_use_update_rules.md  | Draft       | --              | Created session-033.             |
+|                                   |             |                 | session-036: content verified    |
+|                                   |             |                 | clean.                           |
+| ittage_table_hash_rules.md        | Complete    | --              | Created session-033.             |
+|                                   |             |                 | session-036: verified.           |
+|                                   |             |                 |                                  |
+| itage_table.sv                    | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete.       |
+|                                   |             |                 |                                  |
+| itage_cntrl.sv                    | In progress | tb_ittage_cntrl | Prediction path complete BP-034  |
+|                                   |             |                 | Update path complete BP-035      |
+|                                   |             |                 |                                  |
+| FTB, SC, RAS     | Not started | --             | Later BP sessions                |
+| ittage.sv        | Not started | --             | After planning docs complete     |
+| bp_cluster (top) | Not started | --             | After predictors complete        |
+| fetch            | Not started | --             | After BP cluster                 |
+|                  |             |                |                                  |
 
 ---
 

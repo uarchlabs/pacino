@@ -3,7 +3,7 @@
  FILE:    ittage_cntrl_use_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-05-16
+ UPDATED: 2026-05-17
  CONTACT: Jeff Nye
 ```
 
@@ -116,24 +116,25 @@ Signals below are prefixed by:
 Prefix removed from column headers for brevity.
 
 V   = pred_src == PRED_ITTAGE
-NTH = no_tagged_hit (NTH==0 means at least 1 table hit)
+TTH = ittage_hit == 1
 TD  = ittage_pred_tgt != ittage_alt_tgt (tgt's differed)
 
-| # | V | NTH | TD | Using prm | Mispredict | Useful WR | Useful Action | Useful SEL      | Useful IDX      | Useful WD         |
+| # | V | TTH | TD | Using prm | Mispredict | Useful WR | Useful Action | Useful SEL      | Useful IDX      | Useful WD         |
 |---|---|-----|----|-----------|------------|-----------|---------------|-----------------|-----------------|-------------------|
 | 1 | 0 | x   | x  | x         | x          | 0         | x             | x               | x               | x                 |
-| 2 | 1 | 1   | x  | x         | x          | 0         | x             | x               | x               | x                 |
-| 3 | 1 | 0   | 0  | x         | x          | 0         | x             | x               | x               | x                 |
-| 4 | 1 | 0   | 1  | 1         | 0          | 1         | Inc u_eff     | ittage_prm_comp | ittage_prm_idx  | ittage_prm_useful |
-| 5 | 1 | 0   | 1  | 1         | 1          | 1         | Dec u_eff     | ittage_prm_comp | ittage_prm_idx  | ittage_prm_useful |
-| 6 | 1 | 0   | 1  | 0         | 0          | 1         | Inc u_eff     | ittage_alt_comp | ittage_alt_idx  | ittage_alt_useful |
-| 7 | 1 | 0   | 1  | 0         | 1          | 1         | Dec u_eff     | ittage_alt_comp | ittage_alt_idx  | ittage_alt_useful |
+| 2 | 1 | 0   | x  | x         | x          | 0         | x             | x               | x               | x                 |
+| 3 | 1 | 1   | 0  | x         | x          | 0         | x             | x               | x               | x                 |
+| 4 | 1 | 1   | 1  | 1         | 0          | 1         | Inc u_eff     | ittage_prm_comp | ittage_prm_idx  | ittage_prm_useful |
+| 5 | 1 | 1   | 1  | 1         | 1          | 1         | Dec u_eff     | ittage_prm_comp | ittage_prm_idx  | ittage_prm_useful |
+| 6 | 1 | 1   | 1  | 0         | 0          | 1         | Inc u_eff     | ittage_alt_comp | ittage_alt_idx  | ittage_alt_useful |
+| 7 | 1 | 1   | 1  | 0         | 1          | 1         | Dec u_eff     | ittage_alt_comp | ittage_alt_idx  | ittage_alt_useful |
 
 ### Column definitions
 
 V            : pred_src == PRED_ITTAGE
-NTH          : no_tagged_hit -- all IT1-IT5 tables missed
-             : or !ittage_hit
+TTH          : tagged table hit -- at least 1 table hit
+               this was more complicated before but now
+               table hits are directly indicated by ittage_hit
 TD           : ittage_pred_tgt != ittage_alt_tgt
                (primary and alternate predicted different targets)
 Using prm    : ittage_using_primary

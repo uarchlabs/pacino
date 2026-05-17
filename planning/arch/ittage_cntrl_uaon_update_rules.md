@@ -125,7 +125,9 @@ alt_wrong   = (resolved_target != ittage_alt_tgt)
 
 ### Update rules
 ```
-if (ittage_pred_strong)
+if (ittage_hit == 0)
+    -> do nothing
+else if (ittage_pred_strong)
     -> do nothing
 else if (prm_wrong && alt_correct)
     -> increment uaon_N (saturate at 4b max)

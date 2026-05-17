@@ -3,7 +3,7 @@
 // DATE:    2026-05-17
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
-// ITTAGE controller: prediction path (p0-p2). Update path stubbed.
+// ITTAGE controller: prediction path (p0-p2) and update path.
 // Testbench: BP-036.
 // ===================================================================
 `ifndef ITTAGE_CNTRL_SV
@@ -39,18 +39,24 @@ module ittage_cntrl #(
   input  logic                      ittage_enable_aging,
   input  logic [31:0]               ittage_aging_interval,
   // per-table prediction inputs (index 0 unused)
-  input  logic [NUM_PRED_SLOTS-1:0]   tbl_hit_p1[0:IT_NUM_TABLES-1],
-  input  logic [IT_MAX_TGT_WIDTH-1:0] tbl_pred_tgt_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  input  logic [CNTRL_BITS_WIDTH-1:0] tbl_cntrl_bits_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  input  logic [IT_MAX_IDX_WIDTH-1:0] tbl_idx_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  input  logic [IT_MAX_TAG_WIDTH-1:0] tbl_tag_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [NUM_PRED_SLOTS-1:0]
+    tbl_hit_p1[0:IT_NUM_TABLES-1],
+  input  logic [IT_MAX_TGT_WIDTH-1:0]
+    tbl_pred_tgt_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [CNTRL_BITS_WIDTH-1:0]
+    tbl_cntrl_bits_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [IT_MAX_IDX_WIDTH-1:0]
+    tbl_idx_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [IT_MAX_TAG_WIDTH-1:0]
+    tbl_tag_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   // update write data (fanned to all tables by ittage.sv)
   output logic [IT_MAX_CTR_WIDTH-1:0] prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_CTR_WIDTH-1:0] alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_USE_WIDTH-1:0] use_wd_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_EPC_WIDTH-1:0] epc_wd_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_TGT_WIDTH-1:0] tgt_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_ALLOC_DATA_WIDTH-1:0] alc_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_ALLOC_DATA_WIDTH-1:0]
+    alc_wd_u0[0:NUM_PRED_SLOTS-1],
   // update write strobes (fanned to all tables by ittage.sv)
   output logic [NUM_PRED_SLOTS-1:0]   prm_ctr_wr_u0,
   output logic [NUM_PRED_SLOTS-1:0]   alt_ctr_wr_u0,
@@ -81,7 +87,7 @@ module ittage_cntrl #(
   localparam int TSEL_W    = IT_TBL_SEL_WIDTH;
 
   // ================================================================
-  // p0->p1 pipeline registers (Step 5)
+  // p0->p1 pipeline registers
   // ================================================================
   logic [IT_MAX_IDX_WIDTH-1:0]
     tbl_idx_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
@@ -109,80 +115,73 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // Provider and alternate provider scan signals (Step 6)
+  // Provider and alternate provider scan signals
   // ================================================================
   logic [TSEL_W-1:0]           prm_comp[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_IDX_WIDTH-1:0] prm_idx[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_TGT_WIDTH-1:0] prm_tgt[0:NUM_PRED_SLOTS-1];
-  logic [IT_MAX_USE_WIDTH-1:0] prm_use[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_CTR_WIDTH-1:0] prm_ctr[0:NUM_PRED_SLOTS-1];
   logic                        prm_hit[0:NUM_PRED_SLOTS-1];
   logic [TSEL_W-1:0]           alt_comp[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_IDX_WIDTH-1:0] alt_idx[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_TGT_WIDTH-1:0] alt_tgt[0:NUM_PRED_SLOTS-1];
-  logic [IT_MAX_USE_WIDTH-1:0] alt_use[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_CTR_WIDTH-1:0] alt_ctr[0:NUM_PRED_SLOTS-1];
 
-  // Allocation candidate signals (Step 7)
+  // Allocation candidate signals
   logic [TSEL_W-1:0]           alc_comp[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_IDX_WIDTH-1:0] alc_idx[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_TAG_WIDTH-1:0] alc_tag[0:NUM_PRED_SLOTS-1];
 
+  // Effective useful bits per table per slot (aging-adjusted)
+  logic [IT_MAX_USE_WIDTH-1:0]
+    u_eff[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+  // u_eff muxed to primary and alternate providers
+  logic [IT_MAX_USE_WIDTH-1:0] prm_u_eff[0:NUM_PRED_SLOTS-1];
+  logic [IT_MAX_USE_WIDTH-1:0] alt_u_eff[0:NUM_PRED_SLOTS-1];
+
   // ================================================================
   // Provider + alternate priority scan, one always_comb per slot.
   // Scan IT5->IT4->IT3->IT2->IT1 (longest history first).
-  // No dynamic indexing per Verilator 5.020 guidance.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_prv
     always_comb begin : prv_alt_scan
       prm_comp[s] = TSEL_W'(0);
       prm_idx[s]  = '0;
       prm_tgt[s]  = '0;
-      prm_use[s]  = '0;
       prm_ctr[s]  = '0;
       prm_hit[s]  = 1'b0;
       alt_comp[s] = TSEL_W'(0);
       alt_idx[s]  = '0;
       alt_tgt[s]  = '0;
-      alt_use[s]  = '0;
       alt_ctr[s]  = '0;
       if (tbl_hit_p1[5][s]) begin
         prm_comp[s] = TSEL_W'(5);
         prm_idx[s]  = tbl_idx_p1[5][s];
         prm_tgt[s]  = tbl_pred_tgt_p1[5][s];
-        prm_use[s]  = tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO];
         prm_ctr[s]  = tbl_cntrl_bits_p1[5][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
         if (tbl_hit_p1[4][s]) begin
           alt_comp[s] = TSEL_W'(4);
           alt_idx[s]  = tbl_idx_p1[4][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[4][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[4][s][CB_CTR_HI:CB_CTR_LO];
         end else if (tbl_hit_p1[3][s]) begin
           alt_comp[s] = TSEL_W'(3);
           alt_idx[s]  = tbl_idx_p1[3][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[3][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
         end else if (tbl_hit_p1[2][s]) begin
           alt_comp[s] = TSEL_W'(2);
           alt_idx[s]  = tbl_idx_p1[2][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[2][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
         end else if (tbl_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
@@ -190,31 +189,24 @@ module ittage_cntrl #(
         prm_comp[s] = TSEL_W'(4);
         prm_idx[s]  = tbl_idx_p1[4][s];
         prm_tgt[s]  = tbl_pred_tgt_p1[4][s];
-        prm_use[s]  = tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO];
         prm_ctr[s]  = tbl_cntrl_bits_p1[4][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
         if (tbl_hit_p1[3][s]) begin
           alt_comp[s] = TSEL_W'(3);
           alt_idx[s]  = tbl_idx_p1[3][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[3][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
         end else if (tbl_hit_p1[2][s]) begin
           alt_comp[s] = TSEL_W'(2);
           alt_idx[s]  = tbl_idx_p1[2][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[2][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
         end else if (tbl_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
@@ -222,23 +214,18 @@ module ittage_cntrl #(
         prm_comp[s] = TSEL_W'(3);
         prm_idx[s]  = tbl_idx_p1[3][s];
         prm_tgt[s]  = tbl_pred_tgt_p1[3][s];
-        prm_use[s]  = tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO];
         prm_ctr[s]  = tbl_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
         if (tbl_hit_p1[2][s]) begin
           alt_comp[s] = TSEL_W'(2);
           alt_idx[s]  = tbl_idx_p1[2][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[2][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
         end else if (tbl_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
@@ -246,15 +233,12 @@ module ittage_cntrl #(
         prm_comp[s] = TSEL_W'(2);
         prm_idx[s]  = tbl_idx_p1[2][s];
         prm_tgt[s]  = tbl_pred_tgt_p1[2][s];
-        prm_use[s]  = tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
         prm_ctr[s]  = tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
         if (tbl_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
           alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
-          alt_use[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
           alt_ctr[s]  =
             tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
@@ -262,7 +246,6 @@ module ittage_cntrl #(
         prm_comp[s] = TSEL_W'(1);
         prm_idx[s]  = tbl_idx_p1[1][s];
         prm_tgt[s]  = tbl_pred_tgt_p1[1][s];
-        prm_use[s]  = tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
         prm_ctr[s]  = tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
         // primary is IT1: no alternate
@@ -271,56 +254,138 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // Allocation candidate selection (Step 7).
+  // u_eff computation: effective useful per table per slot.
+  // age = (lcl_epoch[s] - EPC) mod 4 (2b wrapping subtraction).
+  // age==0 -> u_eff = USE; age==1 -> u_eff = USE>>1; else 0.
+  // Explicit if-else per table index; no dynamic array indexing.
+  // ================================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_u_eff
+    always_comb begin : u_eff_cmp
+      u_eff[0][s] = '0;
+      // IT1
+      if ((lcl_epoch[s] -
+           tbl_cntrl_bits_p1[1][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[1][s] = tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
+      else if ((lcl_epoch[s] -
+                tbl_cntrl_bits_p1[1][s][CB_EPC_HI:CB_EPC_LO])
+               == 2'b01)
+        u_eff[1][s] =
+          IT_MAX_USE_WIDTH'(
+            tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO] >> 1);
+      else
+        u_eff[1][s] = '0;
+      // IT2
+      if ((lcl_epoch[s] -
+           tbl_cntrl_bits_p1[2][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[2][s] = tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
+      else if ((lcl_epoch[s] -
+                tbl_cntrl_bits_p1[2][s][CB_EPC_HI:CB_EPC_LO])
+               == 2'b01)
+        u_eff[2][s] =
+          IT_MAX_USE_WIDTH'(
+            tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO] >> 1);
+      else
+        u_eff[2][s] = '0;
+      // IT3
+      if ((lcl_epoch[s] -
+           tbl_cntrl_bits_p1[3][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[3][s] = tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO];
+      else if ((lcl_epoch[s] -
+                tbl_cntrl_bits_p1[3][s][CB_EPC_HI:CB_EPC_LO])
+               == 2'b01)
+        u_eff[3][s] =
+          IT_MAX_USE_WIDTH'(
+            tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO] >> 1);
+      else
+        u_eff[3][s] = '0;
+      // IT4
+      if ((lcl_epoch[s] -
+           tbl_cntrl_bits_p1[4][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[4][s] = tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO];
+      else if ((lcl_epoch[s] -
+                tbl_cntrl_bits_p1[4][s][CB_EPC_HI:CB_EPC_LO])
+               == 2'b01)
+        u_eff[4][s] =
+          IT_MAX_USE_WIDTH'(
+            tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] >> 1);
+      else
+        u_eff[4][s] = '0;
+      // IT5
+      if ((lcl_epoch[s] -
+           tbl_cntrl_bits_p1[5][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[5][s] = tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO];
+      else if ((lcl_epoch[s] -
+                tbl_cntrl_bits_p1[5][s][CB_EPC_HI:CB_EPC_LO])
+               == 2'b01)
+        u_eff[5][s] =
+          IT_MAX_USE_WIDTH'(
+            tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] >> 1);
+      else
+        u_eff[5][s] = '0;
+    end
+  end
+
+  // u_eff muxed to primary provider table
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_prm_u_eff
+    always_comb begin : prm_u_eff_mux
+      prm_u_eff[s] = '0;
+      case (prm_comp[s])
+        TSEL_W'(5): prm_u_eff[s] = u_eff[5][s];
+        TSEL_W'(4): prm_u_eff[s] = u_eff[4][s];
+        TSEL_W'(3): prm_u_eff[s] = u_eff[3][s];
+        TSEL_W'(2): prm_u_eff[s] = u_eff[2][s];
+        TSEL_W'(1): prm_u_eff[s] = u_eff[1][s];
+        default:    prm_u_eff[s] = '0;
+      endcase
+    end
+  end
+
+  // u_eff muxed to alternate provider table
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_alt_u_eff
+    always_comb begin : alt_u_eff_mux
+      alt_u_eff[s] = '0;
+      case (alt_comp[s])
+        TSEL_W'(5): alt_u_eff[s] = u_eff[5][s];
+        TSEL_W'(4): alt_u_eff[s] = u_eff[4][s];
+        TSEL_W'(3): alt_u_eff[s] = u_eff[3][s];
+        TSEL_W'(2): alt_u_eff[s] = u_eff[2][s];
+        TSEL_W'(1): alt_u_eff[s] = u_eff[1][s];
+        default:    alt_u_eff[s] = '0;
+      endcase
+    end
+  end
+
+  // ================================================================
+  // Allocation candidate selection.
   // Scan IT(prm_comp+1)..IT5 for u_eff==0 (shortest-history first).
-  // u_eff = raw USE field from cntrl_bits_p1 (stub, no aging adjust).
-  // No consecutive-table allocation (single-entry selection inherently
-  // satisfies this constraint).
-  // alc_idx and alc_tag selected by case on alc_comp.
+  // No consecutive-table allocation.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_alc
     always_comb begin : alc_scan
       alc_comp[s] = TSEL_W'(0);
       if (prm_comp[s] == TSEL_W'(5)) begin
-        // provider is IT5: no allocation
         alc_comp[s] = TSEL_W'(0);
       end else if (prm_comp[s] == TSEL_W'(4)) begin
-        if (tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(5);
+        if (u_eff[5][s] == '0) alc_comp[s] = TSEL_W'(5);
       end else if (prm_comp[s] == TSEL_W'(3)) begin
-        if (tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(4);
-        else if (tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(5);
+        if      (u_eff[4][s] == '0) alc_comp[s] = TSEL_W'(4);
+        else if (u_eff[5][s] == '0) alc_comp[s] = TSEL_W'(5);
       end else if (prm_comp[s] == TSEL_W'(2)) begin
-        if (tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(3);
-        else if (tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(4);
-        else if (tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(5);
+        if      (u_eff[3][s] == '0) alc_comp[s] = TSEL_W'(3);
+        else if (u_eff[4][s] == '0) alc_comp[s] = TSEL_W'(4);
+        else if (u_eff[5][s] == '0) alc_comp[s] = TSEL_W'(5);
       end else if (prm_comp[s] == TSEL_W'(1)) begin
-        // primary is IT1: scan IT2..IT5
-        if (tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(2);
-        else if (tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(3);
-        else if (tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(4);
-        else if (tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(5);
+        if      (u_eff[2][s] == '0) alc_comp[s] = TSEL_W'(2);
+        else if (u_eff[3][s] == '0) alc_comp[s] = TSEL_W'(3);
+        else if (u_eff[4][s] == '0) alc_comp[s] = TSEL_W'(4);
+        else if (u_eff[5][s] == '0) alc_comp[s] = TSEL_W'(5);
       end else begin
         // prm_comp==0 (no hit): scan IT1..IT5
-        if (tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(1);
-        else if (tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(2);
-        else if (tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(3);
-        else if (tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(4);
-        else if (tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] == '0)
-          alc_comp[s] = TSEL_W'(5);
+        if      (u_eff[1][s] == '0) alc_comp[s] = TSEL_W'(1);
+        else if (u_eff[2][s] == '0) alc_comp[s] = TSEL_W'(2);
+        else if (u_eff[3][s] == '0) alc_comp[s] = TSEL_W'(3);
+        else if (u_eff[4][s] == '0) alc_comp[s] = TSEL_W'(4);
+        else if (u_eff[5][s] == '0) alc_comp[s] = TSEL_W'(5);
       end
     end
 
@@ -357,8 +422,9 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // UAON registers (Step 8): 4b saturating counters, one per slot.
-  // Reset to IT_UAON_THRES. No update logic in BP-034.
+  // UAON registers: 4b saturating counters, one per slot.
+  // Reset to IT_UAON_THRES.
+  // Update: gate on upd_val and ittage_hit; skip when pred_strong.
   // ================================================================
   logic [IT_UAON_WIDTH-1:0] uaon[0:NUM_PRED_SLOTS-1];
 
@@ -366,11 +432,37 @@ module ittage_cntrl #(
     if (!rstn) begin
       for (int i = 0; i < NUM_PRED_SLOTS; i++)
         uaon[i] <= IT_UAON_WIDTH'(IT_UAON_THRES);
+    end else begin
+      for (int i = 0; i < NUM_PRED_SLOTS; i++) begin
+        if (ittage_upd_val_u0[i]
+            && ittage_upd_inp_u0[i].ittage_pred_meta.ittage_hit
+            && !ittage_upd_inp_u0[i].ittage_pred_meta.ittage_pred_strong)
+        begin
+          // prm_wrong && alt_correct -> INC
+          if ((ittage_upd_inp_u0[i].resolved_target
+               != ittage_upd_inp_u0[i].ittage_pred_meta.ittage_prm_tgt)
+              && (ittage_upd_inp_u0[i].resolved_target
+                  == ittage_upd_inp_u0[i].ittage_pred_meta.ittage_alt_tgt))
+          begin
+            if (uaon[i] != {IT_UAON_WIDTH{1'b1}})
+              uaon[i] <= uaon[i] + IT_UAON_WIDTH'(1);
+          // prm_correct && alt_wrong -> DEC
+          end else if ((ittage_upd_inp_u0[i].resolved_target
+                        == ittage_upd_inp_u0[i]
+                           .ittage_pred_meta.ittage_prm_tgt)
+                       && (ittage_upd_inp_u0[i].resolved_target
+                           != ittage_upd_inp_u0[i]
+                              .ittage_pred_meta.ittage_alt_tgt))
+          begin
+            if (uaon[i] != IT_UAON_WIDTH'(0))
+              uaon[i] <= uaon[i] - IT_UAON_WIDTH'(1);
+          end
+        end
+      end
     end
-    // update logic added in BP-035
   end
 
-  // UAON mux signals (Step 8)
+  // UAON mux signals
   logic                        not_null[0:NUM_PRED_SLOTS-1];
   logic                        use_alt[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_TGT_WIDTH-1:0] final_tgt[0:NUM_PRED_SLOTS-1];
@@ -404,8 +496,8 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // Meta assembly (Step 9): combinational at p1
-  // ittage_pred_strong = NOT NULL on the selected provider CTR.
+  // Meta assembly: combinational at p1.
+  // ittage_prm_useful and ittage_alt_useful use u_eff (not raw USE).
   // ================================================================
   ittage_pred_meta_t meta_p1[0:NUM_PRED_SLOTS-1];
 
@@ -413,11 +505,11 @@ module ittage_cntrl #(
     always_comb begin : meta_asm
       meta_p1[s].ittage_prm_idx       = prm_idx[s];
       meta_p1[s].ittage_prm_comp      = prm_comp[s];
-      meta_p1[s].ittage_prm_useful    = prm_use[s];
+      meta_p1[s].ittage_prm_useful    = prm_u_eff[s];
       meta_p1[s].ittage_prm_ctr       = prm_ctr[s];
       meta_p1[s].ittage_alt_idx       = alt_idx[s];
       meta_p1[s].ittage_alt_comp      = alt_comp[s];
-      meta_p1[s].ittage_alt_useful    = alt_use[s];
+      meta_p1[s].ittage_alt_useful    = alt_u_eff[s];
       meta_p1[s].ittage_alt_ctr       = alt_ctr[s];
       meta_p1[s].ittage_alc_comp      = alc_comp[s];
       meta_p1[s].ittage_alc_idx       = alc_idx[s];
@@ -435,10 +527,10 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // p2 flop (Step 10)
+  // p2 flop
   // ================================================================
-  ittage_pred_meta_t          meta_p2_r[0:NUM_PRED_SLOTS-1];
-  logic [NUM_PRED_SLOTS-1:0]  rdy_p2_r;
+  ittage_pred_meta_t         meta_p2_r[0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] rdy_p2_r;
 
   always_ff @(posedge clk) begin : meta_p2_reg
     if (!rstn) begin
@@ -458,7 +550,10 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // Aging stubs (Step 11): reset only; decrement added in BP-035.
+  // Aging interval and epoch registers, one per slot.
+  // Decrement lcl_aging_interval on each assertion of rdy_p2_r[s].
+  // On reaching zero: increment lcl_epoch (2b wrap), reload interval.
+  // Only active when ittage_enable_aging is asserted.
   // ================================================================
   logic [31:0] lcl_aging_interval[0:NUM_PRED_SLOTS-1];
   logic [1:0]  lcl_epoch[0:NUM_PRED_SLOTS-1];
@@ -469,58 +564,251 @@ module ittage_cntrl #(
         lcl_aging_interval[i] <= ittage_aging_interval;
         lcl_epoch[i]          <= 2'b00;
       end
+    end else if (ittage_enable_aging) begin
+      for (int i = 0; i < NUM_PRED_SLOTS; i++) begin
+        if (rdy_p2_r[i]) begin
+          if (lcl_aging_interval[i] == 32'b0) begin
+            lcl_epoch[i]          <= lcl_epoch[i] + 2'b01;
+            lcl_aging_interval[i] <= ittage_aging_interval;
+          end else begin
+            lcl_aging_interval[i] <=
+              lcl_aging_interval[i] - 32'b1;
+          end
+        end
+      end
     end
-    // aging logic added in BP-035
-  end
-
-  // Touch ittage_enable_aging to prevent unused-signal warnings.
-  logic age_en_nc;
-  always_comb begin : aging_en_stub
-    // aging logic added in BP-035
-    age_en_nc = ittage_enable_aging;
   end
 
   // ================================================================
-  // Update path stubs (Step 12). All write strobes tied 0.
-  // Selectors and addresses driven from prediction-phase meta.
+  // Update path: upd_rdy registered one cycle from upd_val.
   // ================================================================
-  assign ittage_upd_rdy_u1 = '0;
-  assign prm_ctr_wr_u0     = '0;
-  assign alt_ctr_wr_u0     = '0;
-  assign use_wr_u0         = '0;
-  assign epc_wr_u0         = '0;
-  assign tgt_wr_u0         = '0;
-  assign alc_wr_u0         = '0;
+  always_ff @(posedge clk) begin : upd_rdy_reg
+    if (!rstn) ittage_upd_rdy_u1 <= '0;
+    else       ittage_upd_rdy_u1 <= ittage_upd_val_u0;
+  end
 
-  always_comb begin : upd_data_stub
-    for (int i = 0; i < NUM_PRED_SLOTS; i++) begin
-      prm_ctr_wd_u0[i] = '0;
-      alt_ctr_wd_u0[i] = '0;
-      use_wd_u0[i]     = '0;
-      epc_wd_u0[i]     = '0;
-      tgt_wd_u0[i]     = '0;
-      alc_wd_u0[i]     = '0;
+  // ================================================================
+  // Update selectors and addresses.
+  // prm_tbl_sel_u0/alt_tbl_sel_u0: from prediction scan (BD5).
+  // alc_tbl_sel_u0: from update input meta alc_comp (BD5).
+  // upd_index_u0: provider index from update meta (BD1).
+  // alc_index_u0 = upd_index_u0 (BD1).
+  // ================================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_upd_sel
+    always_comb begin : upd_sel
+      prm_tbl_sel_u0[s] = prm_comp[s];
+      alt_tbl_sel_u0[s] = alt_comp[s];
+      alc_tbl_sel_u0[s] = TSEL_W'(
+        ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_comp);
+      if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
+        upd_index_u0[s] =
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx;
+      else
+        upd_index_u0[s] =
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
+      alc_index_u0[s] = upd_index_u0[s];
     end
   end
 
-  // Selectors/addresses from prediction phase (valid predict-time data)
-  always_comb begin : upd_sel_assign
-    for (int i = 0; i < NUM_PRED_SLOTS; i++) begin
-      prm_tbl_sel_u0[i] = prm_comp[i];
-      alt_tbl_sel_u0[i] = alt_comp[i];
-      alc_tbl_sel_u0[i] = alc_comp[i];
-      upd_index_u0[i]   = prm_idx[i];
-      alc_index_u0[i]   = alc_idx[i];
+  // ================================================================
+  // CTR update logic (per slot).
+  // When using_primary: update alt CTR (rows 2-5 of CTR table).
+  // When !using_primary: update prm CTR (rows 6-9 of CTR table).
+  // Saturating inc/dec per BD7.
+  // ================================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_ctr_upd
+    always_comb begin : ctr_upd
+      prm_ctr_wr_u0[s]  = 1'b0;
+      alt_ctr_wr_u0[s]  = 1'b0;
+      prm_ctr_wd_u0[s]  = '0;
+      alt_ctr_wd_u0[s]  = '0;
+      if (ittage_upd_val_u0[s]) begin
+        if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
+        begin
+          // alt CTR update (rows 3 and 5)
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
+              != TSEL_W'(0))
+          begin
+            alt_ctr_wr_u0[s] = 1'b1;
+            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+              // INC saturating
+              alt_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                 == {IT_MAX_CTR_WIDTH{1'b1}})
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_alt_ctr + 1'b1);
+            end else begin
+              // DEC saturating
+              alt_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                 == IT_MAX_CTR_WIDTH'(0))
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_alt_ctr - 1'b1);
+            end
+          end
+        end else begin
+          // prm CTR update (rows 7 and 9)
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
+              != TSEL_W'(0))
+          begin
+            prm_ctr_wr_u0[s] = 1'b1;
+            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+              // INC saturating
+              prm_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                 == {IT_MAX_CTR_WIDTH{1'b1}})
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_prm_ctr + 1'b1);
+            end else begin
+              // DEC saturating
+              prm_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                 == IT_MAX_CTR_WIDTH'(0))
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_prm_ctr - 1'b1);
+            end
+          end
+        end
+      end
     end
   end
 
-  // Touch update inputs to prevent unused-signal warnings.
-  logic upd_nc;
-  always_comb begin : upd_inp_stub
-    // update logic added in BP-035
-    upd_nc = (|ittage_upd_val_u0)
-           | ittage_upd_inp_u0[0].indir_mispredict
-           | ittage_upd_inp_u0[1].indir_mispredict;
+  // ================================================================
+  // USE and EPC update logic (per slot). Table 7.
+  // TD = prm_tgt != alt_tgt. NTH = !ittage_hit.
+  // EPC always written when USE is written (lcl_epoch[s]).
+  // Saturating inc/dec per BD8.
+  // ================================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_use_upd
+    always_comb begin : use_epc_upd
+      use_wr_u0[s] = 1'b0;
+      epc_wr_u0[s] = 1'b0;
+      use_wd_u0[s] = '0;
+      epc_wd_u0[s] = '0;
+      if (ittage_upd_val_u0[s]
+          && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit
+          && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_tgt
+              != ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_tgt))
+      begin
+        use_wr_u0[s] = 1'b1;
+        epc_wr_u0[s] = 1'b1;
+        epc_wd_u0[s] = lcl_epoch[s];
+        if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
+        begin
+          // rows 4-5: update prm_useful
+          if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+            // INC saturating
+            use_wd_u0[s] =
+              (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
+               == {IT_MAX_USE_WIDTH{1'b1}})
+              ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
+              : IT_MAX_USE_WIDTH'(
+                  ittage_upd_inp_u0[s]
+                    .ittage_pred_meta.ittage_prm_useful + 1'b1);
+          end else begin
+            // DEC saturating
+            use_wd_u0[s] =
+              (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
+               == IT_MAX_USE_WIDTH'(0))
+              ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
+              : IT_MAX_USE_WIDTH'(
+                  ittage_upd_inp_u0[s]
+                    .ittage_pred_meta.ittage_prm_useful - 1'b1);
+          end
+        end else begin
+          // rows 6-7: update alt_useful
+          if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+            // INC saturating
+            use_wd_u0[s] =
+              (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
+               == {IT_MAX_USE_WIDTH{1'b1}})
+              ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
+              : IT_MAX_USE_WIDTH'(
+                  ittage_upd_inp_u0[s]
+                    .ittage_pred_meta.ittage_alt_useful + 1'b1);
+          end else begin
+            // DEC saturating
+            use_wd_u0[s] =
+              (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
+               == IT_MAX_USE_WIDTH'(0))
+              ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
+              : IT_MAX_USE_WIDTH'(
+                  ittage_upd_inp_u0[s]
+                    .ittage_pred_meta.ittage_alt_useful - 1'b1);
+          end
+        end
+      end
+    end
+  end
+
+  // ================================================================
+  // TGT update logic (per slot).
+  // Gate: indir_mispredict AND provider CTR == 0.
+  // Mutually exclusive with active CTR write (null CTR -> no DEC).
+  // ================================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_tgt_upd
+    always_comb begin : tgt_upd
+      tgt_wr_u0[s] = 1'b0;
+      tgt_wd_u0[s] = '0;
+      if (ittage_upd_val_u0[s]
+          && ittage_upd_inp_u0[s].indir_mispredict)
+      begin
+        if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
+        begin
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+              == IT_MAX_CTR_WIDTH'(0))
+          begin
+            tgt_wr_u0[s] = 1'b1;
+            tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
+          end
+        end else begin
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+              == IT_MAX_CTR_WIDTH'(0))
+          begin
+            tgt_wr_u0[s] = 1'b1;
+            tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
+          end
+        end
+      end
+    end
+  end
+
+  // ================================================================
+  // Allocation write strobe and data (per slot).
+  // alc_wr_u0 fires on mispredict when provider != IT5 and
+  // a valid candidate was found.
+  // alc_wd_u0 = {alc_tag, resolved_tgt, lcl_epoch, 0, 0, 1b valid}.
+  // ================================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_alc_upd
+    always_comb begin : alc_upd
+      alc_wr_u0[s] = 1'b0;
+      alc_wd_u0[s] = '0;
+      if (ittage_upd_val_u0[s]
+          && ittage_upd_inp_u0[s].indir_mispredict
+          && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
+              < TSEL_W'(IT_NUM_TABLES - 1))
+          && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_comp
+              != TSEL_W'(0)))
+      begin
+        alc_wr_u0[s] = 1'b1;
+        alc_wd_u0[s] = {
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_tag,
+          ittage_upd_inp_u0[s].resolved_target,
+          lcl_epoch[s],
+          {IT_MAX_USE_WIDTH{1'b0}},
+          {IT_MAX_CTR_WIDTH{1'b0}},
+          1'b1
+        };
+      end
+    end
   end
 
 endmodule : ittage_cntrl
