@@ -17,6 +17,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 .PHONY: all lint sim sim_history sim_ubtb lint_loop_pred sim_loop_pred \
         lint_tage_table sim_tage_table \
         lint_ittage_table sim_ittage_table \
+        lint_ittage_cntrl \
         lint_tage_cntrl lint_tage \
         sim_tage sim_tage_fast clean
 
@@ -24,6 +25,7 @@ all: lint  \
      lint_loop_pred \
      lint_tage_table \
      lint_ittage_table \
+     lint_ittage_cntrl \
      lint_tage_cntrl \
      lint_tage \
      sim \
@@ -143,6 +145,18 @@ sim_ittage_table:
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(TB_DIR)/tb_ittage_table.sv
 	./$(VER_OUT)_ittage_table/Vtb +ITTAGE_FAST_INIT=1
+
+
+lint_ittage_cntrl:
+	verilator --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module ittage_cntrl \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/ittage_table.sv \
+	  $(RTL_DIR)/ittage_cntrl.sv
 
 
 lint_tage_cntrl:

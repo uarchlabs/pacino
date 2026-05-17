@@ -79,7 +79,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                  | clean.                           |
 | ittage_table_hash       | Complete    | --               | Created session-033.             |
 | _rules.md               |             |                  | session-036: verified.           |
+|                         |             |                  |                                  |
 | itage_table.sv          | Complete    | tb_ittage_table  | BP-033/033-FIX-1 complete.       |
+|                         |             |                  |                                  |
+| itage_cntrl.sv          | In progress | tb_ittage_cntrl  | Prediction path complete BP-034  |
+|                         |             |                  |                                  |
 | FTB, SC, RAS            | Not started | --               | Later BP sessions                |
 | ittage.sv               | Not started | --               | After planning docs complete     |
 | bp_cluster (top)        | Not started | --               | After predictors complete        |
@@ -152,6 +156,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | operating at s3, should be s2.        | Update diagram and discussions. |
 |    | ITTAGE operates alongside FTB and     |                                 |
 |    | TAGE at s2.                           |                                 |
+| 43 | Reduce the CTR with in | This impacts a number of files/designs/tbs         |
+|    | ITTAGE from 3b to 2b.  | as well as RTL, known so far bp_defines_pkg.sv     |
+|    |                        | ittage_table_interfaces.md as well RTL and         |
+|    |                        | testbenches.                                       |
+| 44 | Confirm change to  | in ittage_cntrl_decisions.md                           |
+|    | ittage_pred_strong | from ittage_pred_strong -- provider ctr was !=3 & !=4  | 
+|    |                    | to   ittage_pred_strong -- provider ctr > 0 (NOT NULL) |
+|    |                    | Document change has been made (in session 040)         |
+|    |                    | Make sure #43 does not impact any testcases            |
 
 ---
 

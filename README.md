@@ -25,11 +25,10 @@ bash tools/prereqs.sh
 # clone with submodules
 git clone --recurse-submodules https://github.com/uarchlabs/pacino
 
+# set the environment variables RVA_ROOT and CLAUDE_CODE_MAX_OUTPUT_TOKENS
 cd pacino
-export RVA_ROOT=`pwd`
+. tools/setup.sh
 
-# one-time project setup (builds tools from submodule source)
-./setup.sh
 ```
 
 ---
