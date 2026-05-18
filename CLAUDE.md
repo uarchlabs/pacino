@@ -132,6 +132,14 @@ important. It must be defines first then structs
 
 ---
 
+## Verilator work arounds
+
+- stl_sequent rule: always_comb blocks that must re-evaluate after FF updates
+  must read at least one FF output. Pure module-input-only always_comb blocks
+  are classified stl_sequent and will not see signal changes after simulation
+  start. Gate prediction scan blocks on a registered valid signal to force
+  nba_sequent.
+
 ## Verilator Makefile Conventions
 
 - Always include -Wno-DECLFILENAME in sim targets. The project naming

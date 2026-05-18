@@ -3,7 +3,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  Draft -- session-025
- UPDATED: 2026-04-28
+ UPDATED: 2026-05-18
  CONTACT: Jeff Nye
 ```
 

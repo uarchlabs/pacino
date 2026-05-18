@@ -17,7 +17,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 .PHONY: all lint sim sim_history sim_ubtb lint_loop_pred sim_loop_pred \
         lint_tage_table sim_tage_table \
         lint_ittage_table sim_ittage_table \
-        lint_ittage_cntrl \
+        lint_ittage_cntrl sim_ittage_cntrl \
         lint_tage_cntrl lint_tage \
         sim_tage sim_tage_fast clean
 
@@ -34,6 +34,7 @@ all: lint  \
      sim_loop_pred \
      sim_tage_table \
      sim_ittage_table \
+     sim_ittage_cntrl \
      sim_tage \
      sim_tage_fast
 
@@ -159,6 +160,19 @@ lint_ittage_cntrl:
 	  $(RTL_DIR)/ittage_cntrl.sv
 
 
+sim_ittage_cntrl:
+	verilator --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_ittage_cntrl \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(TB_DIR)/tb_ittage_cntrl.sv
+	./$(VER_OUT)_ittage_cntrl/Vtb
+
+
 lint_tage_cntrl:
 	verilator --lint-only \
 	  $(VER_FLAGS) \
@@ -236,6 +250,7 @@ clean:
 	  $(VER_OUT)_loop_pred \
 	  $(VER_OUT)_tage_table \
 	  $(VER_OUT)_ittage_table \
+	  $(VER_OUT)_ittage_cntrl \
     $(VER_OUT)_tage \
 	  $(VER_OUT)_tage_fast \
 	  obj_dir_cov_history \

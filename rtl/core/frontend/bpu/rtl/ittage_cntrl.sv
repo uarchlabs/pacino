@@ -154,6 +154,9 @@ module ittage_cntrl #(
       alt_idx[s]  = '0;
       alt_tgt[s]  = '0;
       alt_ctr[s]  = '0;
+      // Gate on pred_val_p1[s] (FF output) so Verilator places this
+      // block in the active evaluation region, not the settle region.
+      if (pred_val_p1[s]) begin
       if (tbl_hit_p1[5][s]) begin
         prm_comp[s] = TSEL_W'(5);
         prm_idx[s]  = tbl_idx_p1[5][s];
@@ -250,6 +253,7 @@ module ittage_cntrl #(
         prm_hit[s]  = 1'b1;
         // primary is IT1: no alternate
       end
+      end // if (pred_val_p1[s])
     end
   end
 
@@ -496,38 +500,10 @@ module ittage_cntrl #(
   end
 
   // ================================================================
-  // Meta assembly: combinational at p1.
-  // ittage_prm_useful and ittage_alt_useful use u_eff (not raw USE).
-  // ================================================================
-  ittage_pred_meta_t meta_p1[0:NUM_PRED_SLOTS-1];
-
-  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_meta
-    always_comb begin : meta_asm
-      meta_p1[s].ittage_prm_idx       = prm_idx[s];
-      meta_p1[s].ittage_prm_comp      = prm_comp[s];
-      meta_p1[s].ittage_prm_useful    = prm_u_eff[s];
-      meta_p1[s].ittage_prm_ctr       = prm_ctr[s];
-      meta_p1[s].ittage_alt_idx       = alt_idx[s];
-      meta_p1[s].ittage_alt_comp      = alt_comp[s];
-      meta_p1[s].ittage_alt_useful    = alt_u_eff[s];
-      meta_p1[s].ittage_alt_ctr       = alt_ctr[s];
-      meta_p1[s].ittage_alc_comp      = alc_comp[s];
-      meta_p1[s].ittage_alc_idx       = alc_idx[s];
-      meta_p1[s].ittage_alc_tag       = alc_tag[s];
-      meta_p1[s].ittage_prm_tgt       = prm_tgt[s];
-      meta_p1[s].ittage_alt_tgt       = alt_tgt[s];
-      meta_p1[s].ittage_hit           = prm_hit[s];
-      meta_p1[s].ittage_pred_strong   =
-        (final_ctr[s] != IT_MAX_CTR_WIDTH'(0));
-      meta_p1[s].ittage_use_alt_on_na = use_alt[s];
-      meta_p1[s].ittage_using_primary = using_prm[s];
-      meta_p1[s].branch_id =
-        ittage_pred_inp_p0[s].branch_id;
-    end
-  end
-
-  // ================================================================
-  // p2 flop
+  // p2 flop: directly capture scan outputs into meta_p2_r.
+  // No meta_p1 intermediate. Verilator's nba_sequent dependency
+  // DAG must schedule prv_alt_scan before this capture because
+  // meta_p2_r reads prm_hit, prm_comp, etc. directly.
   // ================================================================
   ittage_pred_meta_t         meta_p2_r[0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0] rdy_p2_r;
@@ -539,8 +515,31 @@ module ittage_cntrl #(
         meta_p2_r[i] <= '0;
     end else begin
       rdy_p2_r <= pred_val_p1;
-      for (int i = 0; i < NUM_PRED_SLOTS; i++)
-        meta_p2_r[i] <= meta_p1[i];
+      for (int i = 0; i < NUM_PRED_SLOTS; i++) begin
+        meta_p2_r[i] <= '0;
+        if (pred_val_p1[i]) begin
+          meta_p2_r[i].ittage_prm_idx       <= prm_idx[i];
+          meta_p2_r[i].ittage_prm_comp      <= prm_comp[i];
+          meta_p2_r[i].ittage_prm_useful    <= prm_u_eff[i];
+          meta_p2_r[i].ittage_prm_ctr       <= prm_ctr[i];
+          meta_p2_r[i].ittage_alt_idx       <= alt_idx[i];
+          meta_p2_r[i].ittage_alt_comp      <= alt_comp[i];
+          meta_p2_r[i].ittage_alt_useful    <= alt_u_eff[i];
+          meta_p2_r[i].ittage_alt_ctr       <= alt_ctr[i];
+          meta_p2_r[i].ittage_alc_comp      <= alc_comp[i];
+          meta_p2_r[i].ittage_alc_idx       <= alc_idx[i];
+          meta_p2_r[i].ittage_alc_tag       <= alc_tag[i];
+          meta_p2_r[i].ittage_prm_tgt       <= prm_tgt[i];
+          meta_p2_r[i].ittage_alt_tgt       <= alt_tgt[i];
+          meta_p2_r[i].ittage_hit           <= prm_hit[i];
+          meta_p2_r[i].ittage_pred_strong   <=
+            (final_ctr[i] != IT_MAX_CTR_WIDTH'(0));
+          meta_p2_r[i].ittage_use_alt_on_na <= use_alt[i];
+          meta_p2_r[i].ittage_using_primary <= using_prm[i];
+          meta_p2_r[i].branch_id <=
+            ittage_pred_inp_p0[i].branch_id;
+        end
+      end
     end
   end
 
@@ -589,24 +588,36 @@ module ittage_cntrl #(
 
   // ================================================================
   // Update selectors and addresses.
-  // prm_tbl_sel_u0/alt_tbl_sel_u0: from prediction scan (BD5).
-  // alc_tbl_sel_u0: from update input meta alc_comp (BD5).
-  // upd_index_u0: provider index from update meta (BD1).
-  // alc_index_u0 = upd_index_u0 (BD1).
+  // prm_tbl_sel_u0/alt_tbl_sel_u0: from update input meta.
+  // alc_tbl_sel_u0: from update input meta alc_comp.
+  // upd_index_u0: provider index from update meta.
+  // alc_index_u0 = upd_index_u0.
+  // Gate on ittage_upd_val_u0[s] (read by always_ff) so Verilator
+  // places this block in the active evaluation region.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_upd_sel
     always_comb begin : upd_sel
-      prm_tbl_sel_u0[s] = prm_comp[s];
-      alt_tbl_sel_u0[s] = alt_comp[s];
-      alc_tbl_sel_u0[s] = TSEL_W'(
-        ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_comp);
-      if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
+      prm_tbl_sel_u0[s] = '0;
+      alt_tbl_sel_u0[s] = '0;
+      alc_tbl_sel_u0[s] = '0;
+      upd_index_u0[s]   = '0;
+      alc_index_u0[s]   = '0;
+      if (ittage_upd_val_u0[s]) begin
+        prm_tbl_sel_u0[s] = TSEL_W'(
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp);
+        alt_tbl_sel_u0[s] = TSEL_W'(
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp);
+        alc_tbl_sel_u0[s] = TSEL_W'(
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_comp);
         upd_index_u0[s] =
-          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx;
-      else
-        upd_index_u0[s] =
-          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
-      alc_index_u0[s] = upd_index_u0[s];
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary
+          ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx
+          : ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
+        alc_index_u0[s] =
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary
+          ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx
+          : ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
+      end
     end
   end
 

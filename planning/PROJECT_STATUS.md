@@ -54,11 +54,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                  | BP-012 complete.                 |
 |                         |             |                  | Was complete but BP-034/5 exposed|
 |                         |             |                  | issues, see tech debt #45        |
-
 |                         |             |                  | HAND-FIX-002 applied (debt #30). |
+
 | tage.sv                 | Complete    | tb_tage          | BP-010 through BP-030 complete.  |
 |                         |             |                  | 68 tests pass. All coverage      |
 |                         |             |                  | targets closed or deferred.      |
+
 | ittage_interfaces.md              | Draft       | --              | session-036: corrections applied.|
 |                                   |             |                 | session-037: II6 resolved.       |
 |                                   |             |                 | session-038: redundancy collapse |
@@ -84,8 +85,14 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |                 |                                  |
 | itage_table.sv                    | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete.       |
 |                                   |             |                 |                                  |
-| itage_cntrl.sv                    | In progress | tb_ittage_cntrl | Prediction path complete BP-034  |
+| itage_cntrl.sv                    | Complete    | tb_ittage_cntrl | Prediction path complete BP-034  |
 |                                   |             |                 | Update path complete BP-035      |
+|                                   |             |                 | Testbench complete BP-036        |
+|                                   |             |                 | 76 tests passing                 |
+|                                   |             |                 |                                  |
+| itage.sv                          | In progress | tb_ittage       | |
+|                                   |             |                 | |
+|                                   |             |                 | |
 |                                   |             |                 |                                  |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | ittage.sv        | Not started | --             | After planning docs complete     |
