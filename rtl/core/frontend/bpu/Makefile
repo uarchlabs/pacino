@@ -18,6 +18,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_tage_table sim_tage_table \
         lint_ittage_table sim_ittage_table \
         lint_ittage_cntrl sim_ittage_cntrl \
+        lint_ittage sim_ittage \
         lint_tage_cntrl lint_tage \
         sim_tage sim_tage_fast clean
 
@@ -26,6 +27,7 @@ all: lint  \
      lint_tage_table \
      lint_ittage_table \
      lint_ittage_cntrl \
+     lint_ittage \
      lint_tage_cntrl \
      lint_tage \
      sim \
@@ -173,6 +175,25 @@ sim_ittage_cntrl:
 	./$(VER_OUT)_ittage_cntrl/Vtb
 
 
+lint_ittage:
+	verilator --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module ittage \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/ittage_table.sv \
+	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage.sv
+
+
+sim_ittage:
+	@echo "sim_ittage: no testbench yet (BP-038)"
+
+
 lint_tage_cntrl:
 	verilator --lint-only \
 	  $(VER_FLAGS) \
@@ -251,6 +272,7 @@ clean:
 	  $(VER_OUT)_tage_table \
 	  $(VER_OUT)_ittage_table \
 	  $(VER_OUT)_ittage_cntrl \
+	  $(VER_OUT)_ittage \
     $(VER_OUT)_tage \
 	  $(VER_OUT)_tage_fast \
 	  obj_dir_cov_history \

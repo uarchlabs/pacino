@@ -6,9 +6,6 @@
  UPDATED: 2026.05.14
  CONTACT: uarchlabs@gmail.com
 ```
-# Navigation
-
-TODO: add the before and after links
 
 # What RVA23 Actually Asks of a Decoder
 
