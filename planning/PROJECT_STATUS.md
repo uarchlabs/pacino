@@ -90,8 +90,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |                 | Testbench complete BP-036        |
 |                                   |             |                 | 76 tests passing                 |
 |                                   |             |                 |                                  |
-| itage.sv                          | In progress | tb_ittage       | |
-|                                   |             |                 | |
+| itage.sv                          | In progress | tb_ittage       | BP-034/035/35a/35b               |
+|                                   |             |                 | shell without arb cntrl complete |
 |                                   |             |                 | |
 |                                   |             |                 |                                  |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |

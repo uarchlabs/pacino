@@ -308,9 +308,8 @@ A domain expert directs both agents - the PA for architectural planning, the IA 
 
    Assumes `RVA_ROOT` has been set to the top of the pacino repo. 
 
-	 Note: protections can be relaxed using `--auto-accept-edits` or even
-`--dangerously-skip-permissions`. This choice depends on your preferred
-interaction/risk tradeoff.
+	 Note: protections can be relaxed using `--dangerously-skip-permissions`. 
+   This choice depends on your preferred interaction/risk tradeoff.
 
    **It has been shown that simply telling Claude not to do something is not sufficent to constrain its behavior.**
 

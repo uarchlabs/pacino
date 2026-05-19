@@ -215,6 +215,12 @@ module ittage (
       logic [TH_IDX-1:0]  alc_idx_s[0:NUM_PRED_SLOTS-1];
       // idx_hash at table width before extension to max.
       logic [TH_IDX-1:0]  idx_hash_local[0:NUM_PRED_SLOTS-1];
+      logic               tbl_ri_wr;
+      logic [TH_IDX-1:0]  tbl_ri_wa;
+      logic [TH_ALC-1:0]  tbl_ri_wd;
+      assign tbl_ri_wr = fast_init ? '0 : ri_wr;
+      assign tbl_ri_wa = fast_init ? '0 : ri_wa[TH_IDX-1:0];
+      assign tbl_ri_wd = fast_init ? '0 : ri_wd[TH_ALC-1:0];
 
       for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : gen_slot_signals
         assign alc_wd_s[s]  = cntrl_alc_wd[s][TH_ALC-1:0];
@@ -256,9 +262,9 @@ module ittage (
         .upd_index_u0       (upd_idx_s),
         .alc_index_u0       (alc_idx_s),
         .tbl_ri_active      (ri_active),
-        .tbl_ri_wr          (ri_wr),
-        .tbl_ri_wa          (ri_wa[TH_IDX-1:0]),
-        .tbl_ri_wd          (ri_wd[TH_ALC-1:0]),
+        .tbl_ri_wr          (tbl_ri_wr),
+        .tbl_ri_wa          (tbl_ri_wa),
+        .tbl_ri_wd          (tbl_ri_wd),
         .rstn               (rstn),
         .clk                (clk)
       );

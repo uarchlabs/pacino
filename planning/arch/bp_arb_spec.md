@@ -120,6 +120,7 @@ Redirect signal naming examples:
   ftb_redir_val_s2
   lp_redir_val_s2
   tage_redir_val_s2
+  itage_redir_val_s2
   sc_redir_val_s3
 
 
@@ -350,15 +351,14 @@ the fundamental ordering.
 
 ### 5.4  ITTAGE
 
-  Parameters:  ITTAGE_PQ_DEPTH, ITTAGE_UQ_DEPTH, etc.
-  Values:      TBD.  Smaller than TAGE -- indirect branch
-               rate is lower than conditional branch rate.
+  Parameters:  ITAGE_PQ_DEPTH=4, ITAGE_UQ_DEPTH=2,
+               ITAGE_UQ_WR_PORTS=2, ITAGE_RESP_BUF_DEPTH=2,
+               ITAGE_PRED_CREDITS=2, ITAGE_UPD_CREDITS=1,
+               ITAGE_STARVE_THRESH=2.
   Pred input:  ittage_pred_inp_t
   Upd input:   ittage_upd_inp_t
   Pred output: ittage_pred_meta_t
   Override:    s2.  ittage_redir_val_s2.  Indirect chain only.
-  Notes:       Deferred.  TAGE must be fully validated before
-               ITTAGE work begins.
 
 
 ## 6. Statistical Corrector (SC) -- Chained Predictor

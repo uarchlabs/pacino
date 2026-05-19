@@ -239,13 +239,14 @@ package bp_defines_pkg;
   // ----------------------------------------------------------------
   // ITTAGE arbitration parameters (TBD)
   // ----------------------------------------------------------------
-  localparam int ITTAGE_PQ_DEPTH       = 0; // TBD
-  localparam int ITTAGE_UQ_DEPTH       = 0; // TBD
-  localparam int ITTAGE_UQ_WR_PORTS    = 0; // TBD
-  localparam int ITTAGE_RESP_BUF_DEPTH = 0; // TBD
-  localparam int ITTAGE_PRED_CREDITS   = 0; // TBD
-  localparam int ITTAGE_UPD_CREDITS    = 0; // TBD
-  localparam int ITTAGE_STARVE_THRESH  = 0; // TBD
+  localparam int ITTAGE_PQ_DEPTH       = 4;
+  localparam int ITTAGE_UQ_DEPTH       = 2;
+  localparam int ITTAGE_UQ_WR_PORTS    = 2;
+  localparam int ITTAGE_RESP_BUF_DEPTH = 2;
+  localparam int ITTAGE_PRED_CREDITS   = 2;
+  localparam int ITTAGE_UPD_CREDITS    = 1;
+  localparam int ITTAGE_STARVE_THRESH  = 2;
+
 
   // ================================================================
   // :RAS parameters:
