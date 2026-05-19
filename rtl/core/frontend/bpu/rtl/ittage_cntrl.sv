@@ -38,6 +38,7 @@ module ittage_cntrl #(
   // aging control
   input  logic                      ittage_enable_aging,
   input  logic [31:0]               ittage_aging_interval,
+  input  logic                      trx_type,
   // per-table prediction inputs (index 0 unused)
   input  logic [NUM_PRED_SLOTS-1:0]
     tbl_hit_p1[0:IT_NUM_TABLES-1],
@@ -545,7 +546,7 @@ module ittage_cntrl #(
 
   always_comb begin : meta_out
     ittage_pred_meta_p2 = meta_p2_r;
-    ittage_pred_rdy_p2  = rdy_p2_r;
+    ittage_pred_rdy_p2  = trx_type ? '0 : rdy_p2_r;
   end
 
   // ================================================================
@@ -633,7 +634,7 @@ module ittage_cntrl #(
       alt_ctr_wr_u0[s]  = 1'b0;
       prm_ctr_wd_u0[s]  = '0;
       alt_ctr_wd_u0[s]  = '0;
-      if (ittage_upd_val_u0[s]) begin
+      if (trx_type && ittage_upd_val_u0[s]) begin
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
         begin
           // alt CTR update (rows 3 and 5)
@@ -704,7 +705,7 @@ module ittage_cntrl #(
       epc_wr_u0[s] = 1'b0;
       use_wd_u0[s] = '0;
       epc_wd_u0[s] = '0;
-      if (ittage_upd_val_u0[s]
+      if (trx_type && ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_tgt
               != ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_tgt))
@@ -769,7 +770,7 @@ module ittage_cntrl #(
     always_comb begin : tgt_upd
       tgt_wr_u0[s] = 1'b0;
       tgt_wd_u0[s] = '0;
-      if (ittage_upd_val_u0[s]
+      if (trx_type && ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict)
       begin
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
@@ -802,7 +803,7 @@ module ittage_cntrl #(
     always_comb begin : alc_upd
       alc_wr_u0[s] = 1'b0;
       alc_wd_u0[s] = '0;
-      if (ittage_upd_val_u0[s]
+      if (trx_type && ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
               < TSEL_W'(IT_NUM_TABLES - 1))

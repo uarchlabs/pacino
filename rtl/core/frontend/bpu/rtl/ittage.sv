@@ -8,9 +8,7 @@
 // BP-038: PQ, UQ, credit arbiter, response buffer added.
 // trx_type_comb forwarded combinationally (not registered).
 // consumer_ready tied to 1'b1 internally; not a port.
-// NOTE: ittage_cntrl does not yet have a trx_type port;
-//   trx_type_comb is declared but not connected to u_cntrl.
-//   This will be resolved when ittage_cntrl is updated.
+// BP-038a: trx_type_comb connected to ittage_cntrl trx_type port.
 // ===================================================================
 `ifndef ITTAGE_SV
 `define ITTAGE_SV
@@ -199,8 +197,6 @@ module ittage (
   logic arb_grant_pred, arb_grant_upd;
   logic trx_type_comb;
   // trx_type_comb: combinational from arbiter (not registered).
-  // Declared for structural completeness; connected to u_cntrl
-  // when ittage_cntrl gains trx_type port (deferred).
   assign trx_type_comb = arb_grant_upd;
 
   // -- pq_has_data / uq_has_data (include bypass candidates)
@@ -526,6 +522,7 @@ module ittage (
     .ittage_upd_rdy_u1    (cntrl_upd_rdy_u1_w),
     .ittage_enable_aging  (ittage_enable_aging),
     .ittage_aging_interval(ittage_aging_interval),
+    .trx_type             (trx_type_comb),
     .tbl_hit_p1           (tbl_hit_p1),
     .tbl_pred_tgt_p1      (tbl_pred_tgt_p1),
     .tbl_cntrl_bits_p1    (tbl_cntrl_bits_p1),
