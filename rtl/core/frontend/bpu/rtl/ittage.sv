@@ -21,26 +21,29 @@ import bp_structs_pkg::*;
 module ittage (
   input  logic                      clk,
   input  logic                      rstn,
+
   // prediction interface
   input  logic [NUM_PRED_SLOTS-1:0] ittage_pred_val_p0,
-  input  ittage_pred_inp_t
-    ittage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
+  input  ittage_pred_inp_t          ittage_pred_inp_p0[0:NUM_PRED_SLOTS-1],
   output logic [NUM_PRED_SLOTS-1:0] ittage_pred_rdy_p2,
-  output ittage_pred_meta_t
-    ittage_pred_meta_p2[0:NUM_PRED_SLOTS-1],
+  output ittage_pred_meta_t         ittage_pred_meta_p2[0:NUM_PRED_SLOTS-1],
+
   // update interface
   input  logic [NUM_PRED_SLOTS-1:0] ittage_upd_val_u0,
-  input  ittage_upd_inp_t
-    ittage_upd_inp_u0[0:NUM_PRED_SLOTS-1],
+  input  ittage_upd_inp_t           ittage_upd_inp_u0[0:NUM_PRED_SLOTS-1],
   output logic [NUM_PRED_SLOTS-1:0] ittage_upd_rdy_u1,
+
   // arbitration status outputs (BP-038)
   output logic                      pq_not_full,
   output logic [NUM_PRED_SLOTS-1:0] upd_rdy,
+
   // aging control (shared across slots)
   input  logic                      ittage_enable_aging,
   input  logic [31:0]               ittage_aging_interval,
+
   // folded history (shared across prediction slots)
   input  bp_folded_hist_t           folded_hist,
+
   // ram init ready
   output logic                      ittage_rdy
 );
@@ -118,8 +121,7 @@ module ittage (
   // Internal bus: ittage_table outputs -> ittage_cntrl inputs.
   // All arrays [0:IT_NUM_TABLES-1]. Index 0 tied to zero (no IT0).
   // ================================================================
-  logic [NUM_PRED_SLOTS-1:0]
-    tbl_hit_p1[0:IT_NUM_TABLES-1];
+  logic [NUM_PRED_SLOTS-1:0] tbl_hit_p1[0:IT_NUM_TABLES-1];
   logic [IT_MAX_TGT_WIDTH-1:0]
     tbl_pred_tgt_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
   logic [CNTRL_BITS_WIDTH-1:0]

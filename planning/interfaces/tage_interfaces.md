@@ -70,11 +70,19 @@ input  logic             [NUM_PRED_SLOTS-1:0] tage_upd_val_u0
 input  tage_upd_inp_t    tage_upd_inp_u0[0:NUM_PRED_SLOTS-1]
 output logic             [NUM_PRED_SLOTS-1:0] tage_upd_rdy_u1
 
+
+// arbitration status outputs
+// pending rename per TD #49:
+//   pq_not_full -> tage_pq_not_full
+//   upd_rdy     -> tage_uq_not_full
+output logic                      pq_not_full
+output logic [NUM_PRED_SLOTS-1:0] upd_rdy
+
 // aging control -- shared across both slots
 input  logic                                  tage_enable_aging
 input  logic             [31:0]               tage_aging_interval
 
-input  bp_folded_hist_t   folded_hist,
+input  bp_folded_hist_t   folded_hist
 
 // ram init interface
 output logic  tage_rdy
@@ -275,6 +283,26 @@ tage_upd_val_u0[s] = 1  -- resolved update for slot s.
                            All tage_upd_inp_u0[s] fields
                            valid.
 tage_upd_rdy_u1[s] = 1  -- update applied for slot s.
+
+ittage_upd_rdy_u1[s]  -- flopped version of ittage_upd_val_u0[s].
+                          All updates complete in one cycle.
+                          No backpressure is currently required.
+                          Consumer may ignore this signal.
+                          Retained as placeholder for future
+                          backpressure if required.
+
+pq_not_full           -- asserted when the prediction queue has
+                          room to accept a new prediction request.
+                          Consumer must gate tage_pred_val_p0
+                          on this signal. Pending rename to
+                          tage_uq_not_full per TD #49
+
+upd_rdy               -- asserted when the update queue is not
+                          full. Consumer must gate
+                          ittage_upd_val_u0 on this signal.
+                          Pending rename to tage_uq_not_full
+                          per TD #49.
+
 ```
 
 ### Update behavior

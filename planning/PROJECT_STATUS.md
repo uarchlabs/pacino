@@ -83,14 +83,14 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | ittage_table_hash_rules.md        | Complete    | --              | Created session-033.             |
 |                                   |             |                 | session-036: verified.           |
 |                                   |             |                 |                                  |
-| itage_table.sv                    | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete.       |
+| ittage_table.sv                    | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete.       |
 |                                   |             |                 |                                  |
-| itage_cntrl.sv                    | Complete    | tb_ittage_cntrl | Prediction path complete BP-034  |
+| ittage_cntrl.sv                    | Complete    | tb_ittage_cntrl | Prediction path complete BP-034  |
 |                                   |             |                 | Update path complete BP-035      |
 |                                   |             |                 | Testbench complete BP-036        |
 |                                   |             |                 | 76 tests passing                 |
 |                                   |             |                 |                                  |
-| itage.sv                          | In progress | tb_ittage       | BP-034/035/35a/35b               |
+| ittage.sv                          | In progress | tb_ittage       | BP-034/035/35a/35b               |
 |                                   |             |                 | shell without arb cntrl complete |
 |                                   |             |                 | |
 |                                   |             |                 |                                  |
@@ -210,16 +210,31 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | port               | ittage.sv. Same change tage_cntrl received in    |
 |    |                    | BP-023b. Resolve before bp_cluster integration.  |
 |    |                    |                                                  |
-| 47 | ittage_interfaces  | Add pq_not_full and upd_rdy to port list.        |
-|    | .md missing arb    | These ports are present in ittage.sv (added      |
-|    | ports              | BP-038) but not in the spec. Update before       |
+| 47 | ittage_interfaces  | CLOSED.                                          |
+|    | .md missing arb    | Add pq_not_full and upd_rdy to port list.        |
+|    | ports              | These ports are present in ittage.sv (added      |
+|    |                    | BP-038) but not in the spec. Update before       |
 |    |                    | bp_cluster integration.                          |
+|    |                    |                                                  |
+|    |                    | These are also missing in tage_interfaces.md     |
 |    |                    |                                                  |
 | 48 | ittage.sv RB       | consumer_ready=1'b1 means RB memory is never     |
 |    | bypass behavior    | written and results always bypass. Correct for   |
 |    |                    | ITTAGE with no SC consumer. Verify bypass        |
 |    |                    | behavior matches bp_cluster backpressure          |
 |    |                    | expectations at cluster integration.             |
+|    |                    |                                                  |
+| 49 | Arb queue status   | Tage and Ittage have arbitraion queue status     |
+|    | pin renaming       | flags, pq_not_full, upd_rdy, These ports should  |
+|    |                    | be renamed for standardization                   |
+|    |                    | Tage: pq_not_full ->  tage_pq_not_full           |
+|    |                    | Tage: upd_rdy     ->  tage_uq_not_full           |
+|    |                    | ITTage: pq_not_full ->  ittage_pq_not_full       |
+|    |                    | ITTage: upd_rdy     ->  ittage_uq_not_full       |
+|    |                    | This standardization should cover RTL,           |
+|    |                    | testbenches, and planning documents: bp_arb_spec.md |
+|    |                    | ttage_interfaces.md, ittage_interfaces.md        |
+
 ---
 
 ## Open Items
