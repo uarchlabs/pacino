@@ -218,7 +218,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    |                                                  |
 |    |                    | These are also missing in tage_interfaces.md     |
 |    |                    |                                                  |
-| 48 | ittage.sv RB       | consumer_ready=1'b1 means RB memory is never     |
+| 48 | ittage.sv RB       | CLOSED.                                          |
+|    |                    | consumer_ready=1'b1 means RB memory is never     |
 |    | bypass behavior    | written and results always bypass. Correct for   |
 |    |                    | ITTAGE with no SC consumer. Verify bypass        |
 |    |                    | behavior matches bp_cluster backpressure          |

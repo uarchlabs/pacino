@@ -9,6 +9,8 @@
 // trx_type_comb forwarded combinationally (not registered).
 // consumer_ready tied to 1'b1 internally; not a port.
 // BP-038a: trx_type_comb connected to ittage_cntrl trx_type port.
+// BP-038b: Response buffer removed; outputs driven directly from
+//          ittage_cntrl. Six active arbitration rules remain.
 // ===================================================================
 `ifndef ITTAGE_SV
 `define ITTAGE_SV
@@ -67,8 +69,6 @@ module ittage (
   localparam int PQ_PTR_W    = PQ_IDX_W + 1;
   localparam int UQ_IDX_W    = $clog2(ITTAGE_UQ_DEPTH);
   localparam int UQ_PTR_W    = UQ_IDX_W + 1;
-  localparam int RB_IDX_W    = $clog2(ITTAGE_RESP_BUF_DEPTH);
-  localparam int RB_PTR_W    = RB_IDX_W + 1;
   localparam int PRED_CRED_W =
     $clog2(ITTAGE_PRED_CREDITS + 1);
   localparam int UPD_CRED_W  =
@@ -210,9 +210,6 @@ module ittage (
 
   // consumer_ready = 1'b1 internally; no downstream SC chain.
 
-  // -- resp_buf_full: forwarded from RB (declared below)
-  logic resp_buf_full_w;
-
   // ----------------------------------------------------------------
   // Credit arbiter registers
   // ----------------------------------------------------------------
@@ -303,8 +300,7 @@ module ittage (
   // ----------------------------------------------------------------
   // Credit arbiter: combinational grant logic
   // Rules applied in priority order per bp_arb_spec.md section 4.5.
-  // Rule 1 (resp_buf_full blocks pred): encoded as guards on
-  // pred-granting rules 3 and 5.
+  // Six active rules (Rule 1 eliminated with RB removal).
   // ----------------------------------------------------------------
   always_comb begin : arb_comb
     arb_grant_pred = 1'b0;
@@ -318,18 +314,16 @@ module ittage (
     end
     // Rules 3/4: both queues have data
     else if (pq_has_data_w && uq_has_data_w) begin
-      if ((pred_credits_r > '0) && !resp_buf_full_w)
-        // Rule 3: pred has credits, RB not full
+      if (pred_credits_r > '0)
+        // Rule 3: pred has credits
         arb_grant_pred = 1'b1;
       else
-        // Rule 4: pred credits exhausted (or RB full)
+        // Rule 4: pred credits exhausted
         arb_grant_upd = 1'b1;
     end
     // Rule 5: PQ only (UQ empty)
     else if (pq_has_data_w && !uq_has_data_w) begin
-      if (!resp_buf_full_w)
-        arb_grant_pred = 1'b1;
-      // resp_buf_full: no grant (rule 1 blocks pred)
+      arb_grant_pred = 1'b1;
     end
     // Rule 6: UQ only
     else if (!pq_has_data_w && uq_has_data_w) begin
@@ -356,8 +350,7 @@ module ittage (
         starve_ctr_r  <= '0;
         upd_credits_r <= UPD_CRED_W'(ITTAGE_UPD_CREDITS);
       end else if (pq_has_data_w && uq_has_data_w) begin
-        if ((pred_credits_r > '0)
-            && !resp_buf_full_w) begin
+        if (pred_credits_r > '0) begin
           // Rule 3 fired: dec pred_credits, inc starve
           pred_credits_r <=
             pred_credits_r - PRED_CRED_W'(1);
@@ -445,66 +438,13 @@ module ittage (
     end
   end
 
-  // ----------------------------------------------------------------
-  // Prediction response buffer (RB)
-  // Depth ITTAGE_RESP_BUF_DEPTH. Entry: ittage_pred_meta_t per slot.
-  // consumer_ready tied to 1'b1 (no SC chain after ITTAGE).
-  // Bypass fires when rb_empty (consumer_ready always 1).
-  // ----------------------------------------------------------------
-  ittage_pred_meta_t
-    rb_meta_mem[ITTAGE_RESP_BUF_DEPTH][0:NUM_PRED_SLOTS-1];
-  logic [NUM_PRED_SLOTS-1:0]
-    rb_val_mem[ITTAGE_RESP_BUF_DEPTH];
-  logic [RB_PTR_W-1:0] rb_head_r, rb_tail_r;
-  logic rb_full, rb_empty;
+  // -- Output: ittage_cntrl prediction results connect directly
+  assign ittage_pred_rdy_p2 = cntrl_pred_rdy_p2;
 
-  assign rb_full  = (rb_tail_r[RB_IDX_W-1:0]
-                     == rb_head_r[RB_IDX_W-1:0])
-                 && (rb_tail_r[RB_IDX_W]
-                     != rb_head_r[RB_IDX_W]);
-  assign rb_empty       = (rb_head_r == rb_tail_r);
-  assign resp_buf_full_w = rb_full;
-
-  always_ff @(posedge clk) begin : rb_ff
-    if (!rstn) begin
-      rb_head_r <= '0;
-      rb_tail_r <= '0;
-    end else begin
-      // Dequeue: RB non-empty and consumer_ready (tied 1)
-      if (!rb_empty)
-        rb_head_r <= rb_head_r + RB_PTR_W'(1);
-      // Enqueue: cntrl produced result and bypass not active
-      // bypass fires when rb_empty (consumer_ready=1)
-      if (|cntrl_pred_rdy_p2) begin
-        if (!rb_empty) begin
-          for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-            rb_meta_mem[rb_tail_r[RB_IDX_W-1:0]][s]
-              <= cntrl_pred_meta_p2[s];
-          end
-          rb_val_mem[rb_tail_r[RB_IDX_W-1:0]]
-            <= cntrl_pred_rdy_p2;
-          rb_tail_r <= rb_tail_r + RB_PTR_W'(1);
-        end
-      end
-    end
-  end
-
-  // -- Response buffer output mux (bypass or RB head)
-  always_comb begin : rb_out_comb
-    if (rb_empty) begin
-      // Bypass: pass ittage_cntrl result directly
-      ittage_pred_rdy_p2 = cntrl_pred_rdy_p2;
-      for (int s = 0; s < NUM_PRED_SLOTS; s++)
-        ittage_pred_meta_p2[s] = cntrl_pred_meta_p2[s];
-    end else begin
-      // From RB head (consumer_ready=1, no masking needed)
-      ittage_pred_rdy_p2 =
-        rb_val_mem[rb_head_r[RB_IDX_W-1:0]];
-      for (int s = 0; s < NUM_PRED_SLOTS; s++)
-        ittage_pred_meta_p2[s] =
-          rb_meta_mem[rb_head_r[RB_IDX_W-1:0]][s];
-    end
-  end
+  for (genvar s = 0;
+       s < NUM_PRED_SLOTS; s++) begin : gen_pred_out
+    assign ittage_pred_meta_p2[s] = cntrl_pred_meta_p2[s];
+  end : gen_pred_out
 
   // ittage_upd_rdy_u1: from ittage_cntrl registered upd_val
   assign ittage_upd_rdy_u1 = cntrl_upd_rdy_u1_w;
