@@ -4,7 +4,7 @@
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // ITTAGE structural wrapper. Instantiates ittage_cntrl and five
-// ittage_table instances (IT1-IT5), each with one sram_init.
+// ittage_table instances (IT1-IT5) with one shared sram_init.
 // No arbitration logic -- added in BP-038.
 // ===================================================================
 `ifndef ITTAGE_SV
@@ -50,10 +50,13 @@ module ittage (
   localparam int IT_MAX_ALLOC_DATA_WIDTH =
     CNTRL_BITS_WIDTH + IT_MAX_TAG_WIDTH;  // 46+11 = 57
 
+  // Max entries: 2^IT_MAX_IDX_WIDTH covers the largest table (IT3-5).
+  localparam int IT_MAX_NUM_ENTRIES = 1 << IT_MAX_IDX_WIDTH;
+
   // ================================================================
   // Fast-init mode: plusarg +ITTAGE_FAST_INIT=1.
-  // When active: tbl_ri_* strapped to 0, ittage_rdy driven 1.
-  // sram_init elaborates but its outputs are ignored.
+  // When active: ittage_rdy driven high immediately.
+  // sram_init still elaborates and cycles normally.
   // ================================================================
   logic fast_init;
   initial begin
@@ -63,6 +66,33 @@ module ittage (
     void'($value$plusargs("ITTAGE_FAST_INIT=%d", fi));
     if (fi != 0) fast_init = 1'b1;
   end
+
+  // ================================================================
+  // Shared sram_init: single instance at top level; MAX parameters
+  // cover all five tables. All tables receive the same init signals.
+  // ================================================================
+  logic                               ri_cs;
+  logic                               ri_wr;
+  logic [IT_MAX_IDX_WIDTH-1:0]        ri_wa;
+  logic [IT_MAX_ALLOC_DATA_WIDTH-1:0] ri_wd;
+  logic                               ri_active;
+  logic                               ri_rdy;
+
+  sram_init #(
+    .NUM_ENTRIES(IT_MAX_NUM_ENTRIES),
+    .ADDR_BITS  (IT_MAX_IDX_WIDTH),
+    .DATA_WIDTH (IT_MAX_ALLOC_DATA_WIDTH),
+    .INIT_VAL   (IT_SRAM_INIT_VALUE)
+  ) u_sram_init (
+    .clk   (clk),
+    .rstn  (rstn),
+    .cs    (ri_cs),
+    .wr    (ri_wr),
+    .waddr (ri_wa),
+    .wdata (ri_wd),
+    .active(ri_active),
+    .ready (ri_rdy)
+  );
 
   // ================================================================
   // Internal bus: ittage_table outputs -> ittage_cntrl inputs.
@@ -125,10 +155,6 @@ module ittage (
   logic [IT_MAX_IDX_WIDTH-1:0]
     cntrl_alc_index[0:NUM_PRED_SLOTS-1];
 
-  // sram_init ready per table; index 0 placeholder held 1.
-  logic ri_rdy[0:IT_NUM_TABLES-1];
-  assign ri_rdy[0] = 1'b1;
-
   // ================================================================
   // ittage_cntrl instantiation. All ports connected.
   // ================================================================
@@ -169,11 +195,12 @@ module ittage (
   );
 
   // ================================================================
-  // IT1-IT5: ittage_table instances with sram_init.
+  // IT1-IT5: ittage_table instances.
   // t=0 skipped (no IT0 base table).
   // - alc_wd sliced to each table's ALLOC_DATA_WIDTH = 46+TH_TAG.
   // - upd_index and alc_index sliced to TH_IDX bits.
   // - idx_hash_p0 zero-extended from TH_IDX to IT_MAX_IDX_WIDTH.
+  // - tbl_ri_* driven from shared sram_init; wa/wd sliced per table.
   // ================================================================
   for (genvar t = 0; t < IT_NUM_TABLES; t++) begin : gen_ittage_tables
     if (t != 0) begin : gen_active
@@ -181,14 +208,6 @@ module ittage (
       localparam int TH_IDX = IT_TBL_IDX[t];
       localparam int TH_TAG = IT_TBL_TAG[t];
       localparam int TH_ALC = CNTRL_BITS_WIDTH + TH_TAG;
-
-      // sram_init output wires at table-specific widths.
-      logic                ri_cs_t;
-      logic                ri_wr_t;
-      logic [TH_IDX-1:0]  ri_wa_t;
-      logic [TH_ALC-1:0]  ri_wd_t;
-      logic                ri_active_t;
-      logic                ri_rdy_t;
 
       // Per-slot signals sliced to this table's widths.
       logic [TH_ALC-1:0]  alc_wd_s[0:NUM_PRED_SLOTS-1];
@@ -204,24 +223,6 @@ module ittage (
         assign tbl_idx_hash_p0[t][s] =
           IT_MAX_IDX_WIDTH'(idx_hash_local[s]);
       end : gen_slot_signals
-
-      sram_init #(
-        .NUM_ENTRIES(IT_TBL_ENTRIES[t]),
-        .ADDR_BITS  (TH_IDX),
-        .DATA_WIDTH (TH_ALC),
-        .INIT_VAL   (IT_SRAM_INIT_VALUE)
-      ) u_sram_init (
-        .clk   (clk),
-        .rstn  (rstn),
-        .cs    (ri_cs_t),
-        .wr    (ri_wr_t),
-        .waddr (ri_wa_t),
-        .wdata (ri_wd_t),
-        .active(ri_active_t),
-        .ready (ri_rdy_t)
-      );
-
-      assign ri_rdy[t] = fast_init ? 1'b1 : ri_rdy_t;
 
       ittage_table #(
         .THIS_TABLE     (t),
@@ -254,10 +255,10 @@ module ittage (
         .alc_tbl_sel_u0     (cntrl_alc_tbl_sel),
         .upd_index_u0       (upd_idx_s),
         .alc_index_u0       (alc_idx_s),
-        .tbl_ri_active      (fast_init ? 1'b0 : ri_active_t),
-        .tbl_ri_wr          (fast_init ? 1'b0 : ri_wr_t),
-        .tbl_ri_wa          (fast_init ? '0   : ri_wa_t),
-        .tbl_ri_wd          (fast_init ? '0   : ri_wd_t),
+        .tbl_ri_active      (ri_active),
+        .tbl_ri_wr          (ri_wr),
+        .tbl_ri_wa          (ri_wa[TH_IDX-1:0]),
+        .tbl_ri_wd          (ri_wd[TH_ALC-1:0]),
         .rstn               (rstn),
         .clk                (clk)
       );
@@ -266,12 +267,9 @@ module ittage (
   end : gen_ittage_tables
 
   // ================================================================
-  // ittage_rdy: asserted when all five tables complete init or when
-  // fast_init is active (tables initialized via hierarchical ref).
+  // ittage_rdy: sram_init complete or fast_init active.
   // ================================================================
-  assign ittage_rdy = fast_init
-    | (ri_rdy[1] & ri_rdy[2] & ri_rdy[3]
-       & ri_rdy[4] & ri_rdy[5]);
+  assign ittage_rdy = fast_init | ri_rdy;
 
 endmodule : ittage
 
