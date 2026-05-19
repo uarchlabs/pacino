@@ -204,7 +204,21 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    |            specify bim_index_u0[s]                     |
 |    |                    |          test if alc_index_u0 is necessary likely not  |
 |    |                    |          add a tage_cntrl_interfaces.md doc            |
-
+| 46 | ittage_cntrl.sv    | Add trx_type input port (logic type) to          |
+|    | missing trx_type   | ittage_cntrl.sv. Connect to trx_type_comb in     |
+|    | port               | ittage.sv. Same change tage_cntrl received in    |
+|    |                    | BP-023b. Resolve before bp_cluster integration.  |
+|    |                    |                                                  |
+| 47 | ittage_interfaces  | Add pq_not_full and upd_rdy to port list.        |
+|    | .md missing arb    | These ports are present in ittage.sv (added      |
+|    | ports              | BP-038) but not in the spec. Update before       |
+|    |                    | bp_cluster integration.                          |
+|    |                    |                                                  |
+| 48 | ittage.sv RB       | consumer_ready=1'b1 means RB memory is never     |
+|    | bypass behavior    | written and results always bypass. Correct for   |
+|    |                    | ITTAGE with no SC consumer. Verify bypass        |
+|    |                    | behavior matches bp_cluster backpressure          |
+|    |                    | expectations at cluster integration.             |
 ---
 
 ## Open Items

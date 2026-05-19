@@ -351,10 +351,10 @@ the fundamental ordering.
 
 ### 5.4  ITTAGE
 
-  Parameters:  ITAGE_PQ_DEPTH=4, ITAGE_UQ_DEPTH=2,
-               ITAGE_UQ_WR_PORTS=2, ITAGE_RESP_BUF_DEPTH=2,
-               ITAGE_PRED_CREDITS=2, ITAGE_UPD_CREDITS=1,
-               ITAGE_STARVE_THRESH=2.
+  Parameters:  ITTAGE_PQ_DEPTH=4, ITTAGE_UQ_DEPTH=2,
+               ITTAGE_UQ_WR_PORTS=2, ITTAGE_RESP_BUF_DEPTH=2,
+               ITTAGE_PRED_CREDITS=2, ITTAGE_UPD_CREDITS=1,
+               ITTAGE_STARVE_THRESH=2.
   Pred input:  ittage_pred_inp_t
   Upd input:   ittage_upd_inp_t
   Pred output: ittage_pred_meta_t
