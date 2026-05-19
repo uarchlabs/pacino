@@ -191,7 +191,21 @@ lint_ittage:
 
 
 sim_ittage:
-	@echo "sim_ittage: no testbench yet (BP-038)"
+	verilator --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_ittage \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/ittage_table.sv \
+	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage.sv \
+	  $(TB_DIR)/tb_ittage.sv
+	./$(VER_OUT)_ittage/Vtb +ITTAGE_FAST_INIT=1
 
 
 lint_tage_cntrl:

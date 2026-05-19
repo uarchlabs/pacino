@@ -271,7 +271,7 @@ module ittage_table #(
   assign ram_wen_n_s0 = ~(norm_we_s0 | ri_we);
 
   always_comb begin : addr_mux_s0
-    if (tbl_ri_active)
+    if (ri_we)
       ram_addr_s0 = tbl_ri_wa;
     else if (alc_we_s0)
       ram_addr_s0 = alc_index_u0[0];
@@ -283,7 +283,7 @@ module ittage_table #(
 
   always_comb begin : din_mux_s0
     ram_din_s0 = {ALLOC_DATA_WIDTH{1'b0}};
-    if (tbl_ri_active) begin
+    if (ri_we) begin
       ram_din_s0 = tbl_ri_wd;
     end else if (alc_we_s0) begin
       ram_din_s0 = alc_wd_u0[0];
@@ -405,7 +405,7 @@ module ittage_table #(
   assign ram_wen_n_s1 = ~(norm_we_s1 | ri_we);
 
   always_comb begin : addr_mux_s1
-    if (tbl_ri_active)
+    if (ri_we)
       ram_addr_s1 = tbl_ri_wa;
     else if (alc_we_s1)
       ram_addr_s1 = alc_index_u0[1];
@@ -417,7 +417,7 @@ module ittage_table #(
 
   always_comb begin : din_mux_s1
     ram_din_s1 = {ALLOC_DATA_WIDTH{1'b0}};
-    if (tbl_ri_active) begin
+    if (ri_we) begin
       ram_din_s1 = tbl_ri_wd;
     end else if (alc_we_s1) begin
       ram_din_s1 = alc_wd_u0[1];

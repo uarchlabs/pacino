@@ -204,7 +204,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    |            specify bim_index_u0[s]                     |
 |    |                    |          test if alc_index_u0 is necessary likely not  |
 |    |                    |          add a tage_cntrl_interfaces.md doc            |
-| 46 | ittage_cntrl.sv    | CLOSED. with BP-038a |
+| 46 | ittage_cntrl.sv    | NOT CLOSED,  BP-038a did not close this in the tb|
 |    |                    | Add trx_type input port (logic type) to          |
 |    | missing trx_type   | ittage_cntrl.sv. Connect to trx_type_comb in     |
 |    | port               | ittage.sv. Same change tage_cntrl received in    |

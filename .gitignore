@@ -75,6 +75,7 @@ rtl/core/frontend/bpu/obj_dir_cov_ubtb
 rtl/core/frontend/bpu/coverage/
 
 rtl/core/frontend/bpu/obj_ittage_cntrl/
+rtl/core/frontend/bpu/obj_ittage/
 # lib
 rtl/lib/obj_dir
 

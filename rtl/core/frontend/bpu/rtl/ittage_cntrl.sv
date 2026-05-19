@@ -94,7 +94,10 @@ module ittage_cntrl #(
     tbl_idx_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_TAG_WIDTH-1:0]
     tbl_tag_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
-  logic [NUM_PRED_SLOTS-1:0] pred_val_p1;
+  logic [NUM_PRED_SLOTS-1:0]   pred_val_p1;
+  // branch_id registered p0->p1 so meta_p2_reg reads stable value.
+  logic [FTQ_IDX_BITS-1:0]
+    branch_id_p1[0:NUM_PRED_SLOTS-1];
 
   for (genvar t = 0; t < IT_NUM_TABLES; t++) begin : g_t
     for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_s
@@ -111,8 +114,15 @@ module ittage_cntrl #(
   end
 
   always_ff @(posedge clk) begin : pred_val_reg
-    if (!rstn) pred_val_p1 <= '0;
-    else       pred_val_p1 <= ittage_pred_val_p0;
+    if (!rstn) begin
+      pred_val_p1 <= '0;
+      for (int i = 0; i < NUM_PRED_SLOTS; i++)
+        branch_id_p1[i] <= '0;
+    end else begin
+      pred_val_p1 <= ittage_pred_val_p0;
+      for (int i = 0; i < NUM_PRED_SLOTS; i++)
+        branch_id_p1[i] <= ittage_pred_inp_p0[i].branch_id;
+    end
   end
 
   // ================================================================
@@ -537,8 +547,7 @@ module ittage_cntrl #(
             (final_ctr[i] != IT_MAX_CTR_WIDTH'(0));
           meta_p2_r[i].ittage_use_alt_on_na <= use_alt[i];
           meta_p2_r[i].ittage_using_primary <= using_prm[i];
-          meta_p2_r[i].branch_id <=
-            ittage_pred_inp_p0[i].branch_id;
+          meta_p2_r[i].branch_id <= branch_id_p1[i];
         end
       end
     end
@@ -615,9 +624,7 @@ module ittage_cntrl #(
           ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx
           : ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
         alc_index_u0[s] =
-          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary
-          ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx
-          : ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_idx;
       end
     end
   end
@@ -637,33 +644,7 @@ module ittage_cntrl #(
       if (trx_type && ittage_upd_val_u0[s]) begin
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
         begin
-          // alt CTR update (rows 3 and 5)
-          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
-              != TSEL_W'(0))
-          begin
-            alt_ctr_wr_u0[s] = 1'b1;
-            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
-              // INC saturating
-              alt_ctr_wd_u0[s] =
-                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                 == {IT_MAX_CTR_WIDTH{1'b1}})
-                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                : IT_MAX_CTR_WIDTH'(
-                    ittage_upd_inp_u0[s]
-                      .ittage_pred_meta.ittage_alt_ctr + 1'b1);
-            end else begin
-              // DEC saturating
-              alt_ctr_wd_u0[s] =
-                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                 == IT_MAX_CTR_WIDTH'(0))
-                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                : IT_MAX_CTR_WIDTH'(
-                    ittage_upd_inp_u0[s]
-                      .ittage_pred_meta.ittage_alt_ctr - 1'b1);
-            end
-          end
-        end else begin
-          // prm CTR update (rows 7 and 9)
+          // prm CTR update: provider was primary
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
               != TSEL_W'(0))
           begin
@@ -686,6 +667,32 @@ module ittage_cntrl #(
                 : IT_MAX_CTR_WIDTH'(
                     ittage_upd_inp_u0[s]
                       .ittage_pred_meta.ittage_prm_ctr - 1'b1);
+            end
+          end
+        end else begin
+          // alt CTR update: provider was alternate
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
+              != TSEL_W'(0))
+          begin
+            alt_ctr_wr_u0[s] = 1'b1;
+            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+              // INC saturating
+              alt_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                 == {IT_MAX_CTR_WIDTH{1'b1}})
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_alt_ctr + 1'b1);
+            end else begin
+              // DEC saturating
+              alt_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                 == IT_MAX_CTR_WIDTH'(0))
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_alt_ctr - 1'b1);
             end
           end
         end
