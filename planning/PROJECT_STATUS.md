@@ -204,7 +204,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    |            specify bim_index_u0[s]                     |
 |    |                    |          test if alc_index_u0 is necessary likely not  |
 |    |                    |          add a tage_cntrl_interfaces.md doc            |
-| 46 | ittage_cntrl.sv    | NOT CLOSED,  BP-038a did not close this in the tb|
+| 46 | ittage_cntrl.sv    | REOPENED.  BP-038a did not close this in the tb  |
 |    |                    | Add trx_type input port (logic type) to          |
 |    | missing trx_type   | ittage_cntrl.sv. Connect to trx_type_comb in     |
 |    | port               | ittage.sv. Same change tage_cntrl received in    |
@@ -235,6 +235,31 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    | This standardization should cover RTL,           |
 |    |                    | testbenches, and planning documents: bp_arb_spec.md |
 |    |                    | ttage_interfaces.md, ittage_interfaces.md        |
+| 50 | sram_init FAST_INIT  | sram_init runs its full init sequence even    |
+|    | behavior             | when FAST_INIT=1. sram_init active signal     |
+|    |                      | remains high for IT_MAX_NUM_ENTRIES=512       |
+|    |                      | cycles, overriding normal write mux paths     |
+|    |                      | in ittage_table.sv (Bug 3, BP-039).           |
+|    |                      | When FAST_INIT=1, sram_init should not run    |
+|    |                      | its init sequence and active should not       |
+|    |                      | assert.                                       |
+|    |                      | Scope: sram_init.sv, ittage_table.sv.         |
+|    |                      | Audit tage_table.sv for same pattern.         |
+|    |                      | Resolve before next integration session.      |
+|    |                      |                                               |
+| 51 | CTR/USE/TGT update   | Bug 4 (BP-039) found using_primary condition  |
+|    | rule audit           | inverted in ittage_cntrl.sv ctr_upd block.    |
+|    |                      | Systematic risk: other update logic blocks    |
+|    |                      | (USE, TGT, allocation) may have similar       |
+|    |                      | errors not yet exercised by existing tests.   |
+|    |                      | Resolution: new round-trip test set in        |
+|    |                      | tb_ittage.sv exercising each CTR/USE/TGT      |
+|    |                      | update rule row explicitly. One test per      |
+|    |                      | rule row in ittage_cntrl_ctr_update_rules.md  |
+|    |                      | and ittage_cntrl_use_update_rules.md.         |
+|    |                      | Tests must be independent of each other       |
+|    |                      | and of TC-P01 through TC-UAON-01.             |
+
 
 ---
 
