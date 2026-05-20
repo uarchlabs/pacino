@@ -20,7 +20,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ittage_cntrl sim_ittage_cntrl \
         lint_ittage sim_ittage \
         lint_tage_cntrl lint_tage \
-        sim_tage sim_tage_fast clean
+        sim_tage sim_tage_fast sim_tage_tasks clean
 
 all: lint  \
      lint_loop_pred \
@@ -38,7 +38,8 @@ all: lint  \
      sim_ittage_table \
      sim_ittage_cntrl \
      sim_tage \
-     sim_tage_fast
+     sim_tage_fast \
+     sim_tage_tasks
 
 lint:
 	verilator --lint-only \
@@ -278,6 +279,26 @@ sim_tage_fast:
 	  $(TB_DIR)/tb_tage.sv
 	./$(VER_OUT)_tage_fast/Vtb +TAGE_FAST_INIT=1
 
+sim_tage_tasks:
+	verilator --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-UNDRIVEN \
+	  -Wno-SYNCASYNCNET \
+	  -Wno-WIDTHTRUNC \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_tage_tasks \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/tage_bim.sv \
+	  $(RTL_DIR)/tage_table.sv \
+	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tb_tage_tasks.sv
+	./$(VER_OUT)_tage_tasks/Vtb +TAGE_FAST_INIT=1
+
 clean:
 	rm -rf $(VER_OUT) \
     $(VER_OUT)_hist \
@@ -289,6 +310,7 @@ clean:
 	  $(VER_OUT)_ittage \
     $(VER_OUT)_tage \
 	  $(VER_OUT)_tage_fast \
+	  $(VER_OUT)_tage_tasks \
 	  obj_dir_cov_history \
     obj_dir_cov_loop_pred \
     obj_dir_cov_tage \

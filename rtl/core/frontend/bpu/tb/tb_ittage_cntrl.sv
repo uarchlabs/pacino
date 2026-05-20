@@ -37,6 +37,7 @@ module tb;
   logic [NPS-1:0]              ittage_upd_rdy_u1;
   logic                        ittage_enable_aging;
   logic [31:0]                 ittage_aging_interval;
+  logic                        trx_type_tb = 1'b0;
   logic [NPS-1:0]              tbl_hit_p1[0:NTS-1];
   logic [IT_MAX_TGT_WIDTH-1:0]
     tbl_pred_tgt_p1[0:NTS-1][0:NPS-1];
@@ -79,6 +80,7 @@ module tb;
     .ittage_upd_rdy_u1    (ittage_upd_rdy_u1),
     .ittage_enable_aging  (ittage_enable_aging),
     .ittage_aging_interval(ittage_aging_interval),
+    .trx_type             (trx_type_tb),
     .tbl_hit_p1           (tbl_hit_p1),
     .tbl_pred_tgt_p1      (tbl_pred_tgt_p1),
     .tbl_cntrl_bits_p1    (tbl_cntrl_bits_p1),

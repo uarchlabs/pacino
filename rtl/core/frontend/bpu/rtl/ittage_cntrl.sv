@@ -623,8 +623,7 @@ module ittage_cntrl #(
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary
           ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx
           : ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
-        alc_index_u0[s] =
-          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_idx;
+        alc_index_u0[s] = upd_index_u0[s];
       end
     end
   end
@@ -641,37 +640,11 @@ module ittage_cntrl #(
       alt_ctr_wr_u0[s]  = 1'b0;
       prm_ctr_wd_u0[s]  = '0;
       alt_ctr_wd_u0[s]  = '0;
-      if (trx_type && ittage_upd_val_u0[s]) begin
+      if (ittage_upd_val_u0[s]) begin
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
         begin
-          // prm CTR update: provider was primary
+          // alt CTR update: provider was primary
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
-              != TSEL_W'(0))
-          begin
-            prm_ctr_wr_u0[s] = 1'b1;
-            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
-              // INC saturating
-              prm_ctr_wd_u0[s] =
-                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
-                 == {IT_MAX_CTR_WIDTH{1'b1}})
-                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
-                : IT_MAX_CTR_WIDTH'(
-                    ittage_upd_inp_u0[s]
-                      .ittage_pred_meta.ittage_prm_ctr + 1'b1);
-            end else begin
-              // DEC saturating
-              prm_ctr_wd_u0[s] =
-                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
-                 == IT_MAX_CTR_WIDTH'(0))
-                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
-                : IT_MAX_CTR_WIDTH'(
-                    ittage_upd_inp_u0[s]
-                      .ittage_pred_meta.ittage_prm_ctr - 1'b1);
-            end
-          end
-        end else begin
-          // alt CTR update: provider was alternate
-          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
               != TSEL_W'(0))
           begin
             alt_ctr_wr_u0[s] = 1'b1;
@@ -695,6 +668,32 @@ module ittage_cntrl #(
                       .ittage_pred_meta.ittage_alt_ctr - 1'b1);
             end
           end
+        end else begin
+          // prm CTR update: provider was alternate
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
+              != TSEL_W'(0))
+          begin
+            prm_ctr_wr_u0[s] = 1'b1;
+            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+              // INC saturating
+              prm_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                 == {IT_MAX_CTR_WIDTH{1'b1}})
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_prm_ctr + 1'b1);
+            end else begin
+              // DEC saturating
+              prm_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                 == IT_MAX_CTR_WIDTH'(0))
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_prm_ctr - 1'b1);
+            end
+          end
         end
       end
     end
@@ -712,7 +711,7 @@ module ittage_cntrl #(
       epc_wr_u0[s] = 1'b0;
       use_wd_u0[s] = '0;
       epc_wd_u0[s] = '0;
-      if (trx_type && ittage_upd_val_u0[s]
+      if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_tgt
               != ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_tgt))
@@ -777,7 +776,7 @@ module ittage_cntrl #(
     always_comb begin : tgt_upd
       tgt_wr_u0[s] = 1'b0;
       tgt_wd_u0[s] = '0;
-      if (trx_type && ittage_upd_val_u0[s]
+      if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict)
       begin
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
@@ -810,7 +809,7 @@ module ittage_cntrl #(
     always_comb begin : alc_upd
       alc_wr_u0[s] = 1'b0;
       alc_wd_u0[s] = '0;
-      if (trx_type && ittage_upd_val_u0[s]
+      if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
               < TSEL_W'(IT_NUM_TABLES - 1))

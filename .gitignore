@@ -76,6 +76,9 @@ rtl/core/frontend/bpu/coverage/
 
 rtl/core/frontend/bpu/obj_ittage_cntrl/
 rtl/core/frontend/bpu/obj_ittage/
+
+rtl/core/frontend/bpu/obj_tage_tasks/
+
 # lib
 rtl/lib/obj_dir
 

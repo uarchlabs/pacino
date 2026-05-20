@@ -259,6 +259,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                      | and ittage_cntrl_use_update_rules.md.         |
 |    |                      | Tests must be independent of each other       |
 |    |                      | and of TC-P01 through TC-UAON-01.             |
+|    |                      |                                               |
+| 52 | move Arb logic into  | The top level modules should be structural    |
+|    | submodule out of top | only. Create a new module for tage and ittage |
+|    | in tage and ittage   | move the arb logic into this new module       |
 
 
 ---
