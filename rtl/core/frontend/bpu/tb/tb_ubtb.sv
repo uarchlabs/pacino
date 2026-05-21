@@ -1,9 +1,15 @@
-// tb_ubtb.sv
+// ===================================================================
+// FILE:    tb_ubtb.sv
+// DATE:    2026-05-21
+// CONTACT: Jeff Nye
+// -------------------------------------------------------------------
 // Self-checking testbench for ubtb.sv.
 // TC1-TC10 cover reset, hit, miss, aliasing, replacement,
 // br_type coverage, carry bit, update overwrite, dual-slot,
 // and read-during-write same set.
-// Date: 2026-03-28
+//
+// These results need to be checked against results from manual testbench
+// ===================================================================
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;

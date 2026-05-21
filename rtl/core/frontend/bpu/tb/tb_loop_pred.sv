@@ -1,8 +1,15 @@
-// tb_loop_pred.sv
+// ===================================================================
+// FILE:    tb_loop_pred.sv
+// DATE:    2026-05-21
+// CONTACT: Jeff Nye
+// -------------------------------------------------------------------
 // Self-checking testbench for loop_pred.sv.
 // TC1-TC7: cold miss, backward alloc, forward no-alloc,
 // low-conf hit, confidence build, trusted taken, trusted exit.
-// Date: 2026-03-31
+//
+// These results need to be checked against results from manual testbench
+// ===================================================================
+
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;

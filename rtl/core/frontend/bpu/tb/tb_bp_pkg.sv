@@ -1,8 +1,12 @@
-// tb_bp_pkg.sv
+// ===================================================================
+// FILE:    tb_bp_pkg.sv
+// DATE:    2026-05-21
+// CONTACT: Jeff Nye
+// -------------------------------------------------------------------
 // Testbench: bp_pkg type and parameter checks (BP-001).
 // No clock required -- purely combinational checks.
 // Self-checking: $fatal on any failure.
-// Date: 2026-03-27
+// ===================================================================
 
 module tb;
   import bp_defines_pkg::*;

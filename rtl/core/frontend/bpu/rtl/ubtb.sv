@@ -1,6 +1,6 @@
 // ===================================================================
 // FILE:    ubtb.sv
-// DATE:    2026-03-28
+// DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Micro Branch Target Buffer: 256-entry, 4-way set-associative.
@@ -13,6 +13,9 @@
 // s1: mem is registered. pred output is comb from mem.
 //     pred valid at start of s1 (one cycle after pred_pc_p0).
 // Update: synchronous write on clk posedge when upd.valid.
+//
+// This has not been validated
+//
 // ===================================================================
 
 `ifndef UBTB_SV

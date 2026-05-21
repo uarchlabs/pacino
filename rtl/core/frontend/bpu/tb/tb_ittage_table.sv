@@ -1,11 +1,13 @@
 // ===================================================================
 // FILE:    tb_ittage_table.sv
-// DATE:    2026-04-30
+// DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Self-checking testbench for ittage_table.
 // DUT parameters: IT1 (THIS_TABLE=1, IDX_BITS=8, TAG_BITS=8).
 // folded_hist=0 throughout; +ITTAGE_FAST_INIT=1 required.
+//
+// This needs to be crossed checked against the manual testbench results
 // ===================================================================
 
 `default_nettype none

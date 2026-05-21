@@ -223,3 +223,22 @@ RVA23 Co-Design Part N
 |    |                   | tage_coverage_plan.md written |
 |    |                   | new /run command, simple |
 |    |                   | new directory tree |
+
+GAP GAP GAP
+
+| 42 | ittage            | input session_handoff-042   |
+|    |                   | TD #47 completed            |
+|    |                   | RB removal from ittage      |
+|    |                   | BP-038b                     |
+|    |                   | BP-039                      |
+|    |                   | added TD 50/51              |
+|    |                   | reopen TD 46                |
+
+|    |                   |                             |
+|    |                   |                             |
+
+| 43 | sram init cleanup  | input session_handoff-043   |
+|    | ittage clean up    | TB-001/2                    |
+|    | manual testbenches | BP-040/1/                   |
+|    |                    | manual_tb_decisions.md      |
+|    |                    | sram_fast_init.md           |

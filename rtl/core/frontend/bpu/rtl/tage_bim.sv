@@ -1,6 +1,6 @@
 // ===================================================================
 // FILE:    tage_bim.sv
-// DATE:    2026-04-07
+// DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // TAGE base table (T0). Untagged bimodal predictor.
@@ -10,6 +10,8 @@
 // Prediction: inputs at p0, outputs at p1 (1-cycle latency).
 // Update: write gated by THIS_TABLE == prm_tbl_sel_u0.
 // tbl_ri_active + tbl_ri_wr: RAM-init overrides all writes.
+//
+// This requires manual validation checks
 // ===================================================================
 `ifndef TAGE_BIM_SV
 `define TAGE_BIM_SV

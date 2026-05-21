@@ -58,26 +58,27 @@ rtl/core/frontend/decode/obj_dir_exp
 rtl/core/frontend/decode/obj_dir_pre
 
 # bpu
+
+rtl/core/frontend/bpu/coverage/
 rtl/core/frontend/bpu/coverage_annot_bpu/
-rtl/core/frontend/bpu/obj_ittage_table/
+
 rtl/core/frontend/bpu/obj
-rtl/core/frontend/bpu/obj_hist
-rtl/core/frontend/bpu/obj_loop_pred
-rtl/core/frontend/bpu/obj_tage
-rtl/core/frontend/bpu/obj_tage_fast
-rtl/core/frontend/bpu/obj_tage_table
-rtl/core/frontend/bpu/obj_ubtb
 rtl/core/frontend/bpu/obj_dir_cov_history
 rtl/core/frontend/bpu/obj_dir_cov_loop_pred
 rtl/core/frontend/bpu/obj_dir_cov_tage
 rtl/core/frontend/bpu/obj_dir_cov_tage_table
 rtl/core/frontend/bpu/obj_dir_cov_ubtb
-rtl/core/frontend/bpu/coverage/
-
-rtl/core/frontend/bpu/obj_ittage_cntrl/
+rtl/core/frontend/bpu/obj_hist
 rtl/core/frontend/bpu/obj_ittage/
-
+rtl/core/frontend/bpu/obj_ittage_cntrl/
+rtl/core/frontend/bpu/obj_ittage_table/
+rtl/core/frontend/bpu/obj_loop_pred
+rtl/core/frontend/bpu/obj_tage
+rtl/core/frontend/bpu/obj_tage_fast
+rtl/core/frontend/bpu/obj_tage_manual/
+rtl/core/frontend/bpu/obj_tage_table
 rtl/core/frontend/bpu/obj_tage_tasks/
+rtl/core/frontend/bpu/obj_ubtb
 
 # lib
 rtl/lib/obj_dir

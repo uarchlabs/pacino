@@ -1,6 +1,6 @@
 // ===================================================================
 // FILE:    tage_table.sv
-// DATE:    2026-04-03
+// DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Parameterized TAGE predictor table. Wraps two bw_ram instances
@@ -21,6 +21,9 @@
 // Prediction pipeline: inputs at p0, outputs at p1 (1-cycle).
 // Update: write-enable gated by THIS_TABLE vs prm/alt_tbl_sel.
 // tbl_ri_active + tbl_ri_wr: RAM-init path overrides all writes.
+//
+// This requires manual verification checks
+//
 // ===================================================================
 
 `ifndef TAGE_TABLE_SV

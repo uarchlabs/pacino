@@ -1,4 +1,8 @@
-// tb_tage_table.sv
+// ===================================================================
+// FILE:    tb_tage_table.sv
+// DATE:    2026-05-21
+// CONTACT: Jeff Nye
+// -------------------------------------------------------------------
 // Self-checking testbench for tage_table.
 // DUT is T1-style (THIS_TABLE=1, 11b index, 8b tag,
 // 2b EPC, 2b USE, 3b CTR, 1b VAL, NUM_PRED_SLOTS=2).
@@ -28,8 +32,9 @@
 // TC14: slot 1 write paths -- norm_we_s1 asserted, RAM updated.
 // TC15: epc_we_s0 slot 0  -- EPC field updated via epc_wr path.
 // TC16: alt CTR slot 1    -- else-if alt_ctr_we_s1 branch covered.
-// Date: 2026-04-06
-
+//
+// These results need to be checked against results from manual testbench
+// ===================================================================
 `default_nettype none
 
 import bp_defines_pkg::*;

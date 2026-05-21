@@ -1,9 +1,15 @@
-// tb_bp_history.sv
+// ===================================================================
+// FILE:    tb_bp_history.sv
+// DATE:    2026-05-21
+// CONTACT: Jeff Nye
+// -------------------------------------------------------------
 // Testbench for bp_history module. Self-checking, 12 test cases.
 // Module name: tb (Verilator convention for testbenches).
 // Clock period: 10 ns.
-// Date: 2026-03-28
-
+//
+// The results from this need to be cross checked against the manual testbench
+// results.
+// ===================================================================
 module tb;
   import bp_defines_pkg::*;
   import bp_structs_pkg::*;

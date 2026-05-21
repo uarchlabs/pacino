@@ -1,6 +1,6 @@
 // ===================================================================
 // FILE:    loop_pred.sv
-// DATE:    2026-03-30
+// DATE:    2026-05-20
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Loop predictor: 256-entry 4-way set-associative, s1-stage.
@@ -9,6 +9,8 @@
 // pred_is_loop=1 only when conf==LP_CONF_LEVEL (max confidence).
 // Overriding uBTB at s1 is the cluster override control's job.
 // See loop_pred_interfaces.md for interface semantics.
+//
+// This needs further validation
 // ===================================================================
 
 `ifndef LOOP_PRED_SV

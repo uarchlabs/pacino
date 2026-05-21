@@ -1,6 +1,6 @@
 // ===================================================================
 // FILE:    tage_cntrl.sv
-// DATE:    2026-04-05
+// DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // TAGE predictor control module.
@@ -13,6 +13,8 @@
 //
 // NUM_PRED_SLOTS shadows bp_defines_pkg::NUM_PRED_SLOTS.
 // -Wno-VARHIDDEN required for this module.
+//
+// This requires manual verification checks
 // ===================================================================
 `ifndef TAGE_CNTRL_SV
 `define TAGE_CNTRL_SV

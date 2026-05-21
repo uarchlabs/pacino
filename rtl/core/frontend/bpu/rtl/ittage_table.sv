@@ -1,6 +1,6 @@
 // ===================================================================
 // FILE:    ittage_table.sv
-// DATE:    2026-04-30
+// DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Parameterized ITTAGE predictor table. Wraps two bw_ram instances
@@ -21,6 +21,8 @@
 // USE/EPC gated by prm_match only (not alt).
 // tgt_we gated by (prm_match | alt_match); included in norm_we.
 // tbl_ri_active + tbl_ri_wr: RAM-init path overrides all writes.
+//
+// This requires manual verification checks
 // ===================================================================
 
 `ifndef ITTAGE_TABLE_SV

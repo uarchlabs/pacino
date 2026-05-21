@@ -1,3 +1,8 @@
+// ===================================================================
+// FILE:    tb_tage.sv
+// DATE:    2026-05-21
+// CONTACT: Jeff Nye
+// -------------------------------------------------------------------
 // tb_tage.sv
 // Self-checking testbench for tage.sv.
 // BP-010b: tage_rdy_tst -- verifies SRAM initialization and
@@ -46,7 +51,7 @@
 // BP-016:  T0 DEC min saturation TC-46: t0_dec_min_sat_tst.
 //          CTR=2'b00 resolved_taken=0 -> stays 2'b00 (sat min).
 //          All 46 tests pass under sim_tage_fast.
-// Date: 2026-04-09
+// ===================================================================
 
 `default_nettype none
 
