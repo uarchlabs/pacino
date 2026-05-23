@@ -12,6 +12,7 @@ repo_url: https://github.com/uarchlabs/pacino
 
 theme:
   name: material
+  custom_dir: overrides
   palette:
     scheme: slate
     primary: black
