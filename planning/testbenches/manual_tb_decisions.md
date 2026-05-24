@@ -56,6 +56,7 @@ The sections of the testbench file appear in this order:
 <local parameters>
 <test enable integers>
 <dut port signal declarations>
+<dut port expansion signal declarations>
 <testbench variables>
 <dut signal logic and tieoffs>
 <master run_tests task>
@@ -108,6 +109,66 @@ int en_my_test = 1;
 One signal per DUT port. Names are identical to the DUT
 port names. All declared as logic so they can be driven
 by tasks.
+
+### DUT Port Expansion Signal Declarations
+
+Waveform viewers have limited support for displaying
+packed structs and multi-dimensional arrays. Expansion
+signals provide individual named wires for each field
+and slot so they are directly visible in the wave
+viewer without manual decoding.
+
+Expansion signals are continuous wire assigns derived
+from DUT port signals. They are read-only debug
+visibility aids and are never driven by tasks.
+
+Two categories of port require expansion:
+
+Category 1: Ports parameterized by NUM_PRED_SLOTS.
+  Any port declared as [NUM_PRED_SLOTS-1:0] is
+  expanded to one wire per slot.
+
+Category 2: Struct array ports.
+  Any port declared as a struct type with a slot
+  dimension is expanded to one wire per field per
+  slot. Field names and widths are derived from the
+  struct definition in bp_structs_pkg.sv.
+
+Naming convention:
+
+  d_<port_name>_<slot_name>
+  d_<port_name>_<field_name>_<slot_name>
+
+  Prefix: d_ (debug visibility)
+  Slot suffix: s0, s1, ... (matches slot index)
+
+Examples:
+
+```
+  // Category 1: scalar array port
+  logic [NUM_PRED_SLOTS-1:0] tage_pred_val_p0;
+  wire d_tage_pred_val_p0_s0 = tage_pred_val_p0[0];
+  wire d_tage_pred_val_p0_s1 = tage_pred_val_p0[1];
+
+  // Category 2: struct array port
+  tage_pred_inp_t tage_pred_inp_p0[0:NUM_PRED_SLOTS-1];
+  wire [VA_WIDTH-1:0] d_tage_pred_inp_p0_pc_s0 =
+    tage_pred_inp_p0[0].pc;
+  wire [VA_WIDTH-1:0] d_tage_pred_inp_p0_pc_s1 =
+    tage_pred_inp_p0[1].pc;
+  wire [FTQ_IDX_BITS-1:0] d_tage_pred_inp_p0_branch_id_s0 =
+    tage_pred_inp_p0[0].branch_id;
+  wire [FTQ_IDX_BITS-1:0] d_tage_pred_inp_p0_branch_id_s1 =
+    tage_pred_inp_p0[1].branch_id;
+```
+
+The unit-specific addendum identifies which ports are
+expanded. Claude Code derives the full expansion from
+the struct definitions in bp_structs_pkg.sv and the
+parameter values in bp_defines_pkg.sv. No explicit
+field enumeration is required in the addendum.
+
+---
 
 ### Testbench Variables
 
@@ -177,27 +238,52 @@ endtask
 
 ### Master Initial Statement
 
-The master initial block:
-  1. Sets default values for all DUT port signals.
-  2. Calls assert_reset to hold reset for 4 cycles.
-  3. Waits for DUT ready signal if present.
-  4. Enables FST waveform dump if +EN_FST is present.
-  5. Calls run_tests().
-  6. Calls terminate().
+The master initial block executes in this order:
 
-FST waveform control:
+  1. Enable FST waveform dump if +EN_FST is present.
+     This must be first so reset and initialization
+     cycles are captured.
+  2. Set default values for all DUT port signals.
+  3. Call assert_reset(4).
+  4. Wait for DUT ready signal if present.
+  5. Call run_tests().
+  6. Call terminate().
 
 ```
-initial begin
-  int en_fst;
-  en_fst = 0;
-  void'($value$plusargs("EN_FST=%d", en_fst));
-  if (en_fst) begin
-    $dumpfile("tb_<dut>_manual.fst");
-    $dumpvars(0, tb);
+  // ----------------------------------------------------------------
+  // Master initial statement
+  // ----------------------------------------------------------------
+  initial begin : tb_main
+    int    en_fst;
+    string fst_file;
+
+    en_fst   = 0;
+    fst_file = "waves.fst";
+
+    void'($value$plusargs("EN_FST=%d",   en_fst));
+    void'($value$plusargs("FST_FILE=%s", fst_file));
+
+    if (en_fst) begin
+      $dumpfile(fst_file);
+      $dumpvars(0, tb);
+    end
+
+    // default signal values here
+
+    assert_reset(4);
+
+    // wait for ready
+    while (!dut_rdy) @(posedge clk);
+    @(posedge clk);
+
+    run_tests();
+    terminate();
   end
-end
 ```
+
+Note: replace dut_rdy with the actual ready signal name
+for the unit under test. The unit-specific addendum
+identifies the ready signal.
 
 ### Testbench Logic
 
@@ -352,13 +438,15 @@ endtask
 ```
 
 ---
+
 ### Staging FF Pattern
 
-Verilator 5.020 requires that always_comb blocks re-evaluate
-after FF updates. Tasks that drive struct-array ports must
-use staging always_ff blocks to satisfy the nba_sequent
-requirement. Pure task-driven assigns to struct-array ports
-may not propagate correctly without this pattern.
+Verilator 5.020 requires that always_comb blocks
+re-evaluate after FF updates. Tasks that drive
+struct-array ports must use staging always_ff blocks
+to satisfy the nba_sequent requirement. Pure
+task-driven assigns to struct-array ports may not
+propagate correctly without this pattern.
 
 Declare staging signals alongside the DUT port signals:
 
@@ -368,33 +456,37 @@ Declare staging signals alongside the DUT port signals:
 Drive the staging signals from tasks. Connect staging
 signals to DUT ports in the instantiation.
 
-Staging always_ff blocks are placed in the Testbench Logic
-section, not in DUT Signal Logic and Tieoffs, since they
-are sequential blocks not combinatorial tieoffs.
+Staging always_ff blocks are placed in the Testbench
+Logic section, not in DUT Signal Logic and Tieoffs,
+since they are sequential blocks not combinatorial
+tieoffs.
 
 ---
 
 ## Simulation Controls
 
-| Control         | Mechanism         | Default | Notes              |
-|-----------------|-------------------|---------|--------------------|
-| Reset length    | assert_reset(n)   | n=4     | cycles             |
-| Waveform dump   | +EN_FST=1 plusarg | off     | FST format         |
-| Dump scope      | $dumpvars(0,tb)   | full    | all signals in tb  |
-| Clock period    | always #5         | 10ns    | 5ns half period    |
+| Control          | Mechanism          | Default   | Notes             |
+|------------------|--------------------|-----------|-------------------|
+| Reset length     | assert_reset(n)    | n=4       | cycles            |
+| Waveform dump    | +EN_FST=1 plusarg  | off       | FST format        |
+| Dump file        | +FST_FILE=f plusarg| waves.fst | optional override |
+| Dump scope       | $dumpvars(0,tb)    | full      | all signals in tb |
+| Clock period     | always #5          | 10ns      | 5ns half period   |
 
 ---
 
 ## Naming Conventions Summary
 
-| Item               | Convention                          |
-|--------------------|-------------------------------------|
-| Testbench module   | tb                                  |
-| DUT instance       | u_dut                               |
-| Test enable        | en_<test_name>                      |
-| Per-test errors    | err_<test_name>                     |
-| Current test name  | test_name (module scope string)     |
-| Tasks include      | tb_<dut>_manual_tasks.svh           |
-| Utils include      | utils.svh                           |
-| Waveform file      | tb_<dut>_manual.fst                 |
+| Item                  | Convention                          |
+|-----------------------|-------------------------------------|
+| Testbench module      | tb                                  |
+| DUT instance          | u_dut                               |
+| Test enable           | en_<test_name>                      |
+| Per-test errors       | err_<test_name>                     |
+| Current test name     | test_name (module scope string)     |
+| Tasks include         | tb_<dut>_manual_tasks.svh           |
+| Utils include         | utils.svh                           |
+| Waveform file         | waves.fst (default)                 |
+| Expansion wire prefix | d_                                  |
+| Expansion slot suffix | _s0, _s1, ...                       |
 

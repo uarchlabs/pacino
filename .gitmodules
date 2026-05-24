@@ -4,3 +4,6 @@
 [submodule "tools/spike"]
 	path = tools/spike
 	url = https://github.com/riscv-software-src/riscv-isa-sim.git
+[submodule "tools/surfer"]
+  path = tools/surfer
+  url = https://gitlab.com/surfer-project/surfer.git

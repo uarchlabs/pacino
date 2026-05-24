@@ -104,3 +104,49 @@ planning/testbenches/tage_mtb_decisions.md   (this file)
 planning/verification/tage_coverage_plan.md
 
 ```
+
+## DUT Ready Signal
+
+  tage_rdy
+
+## DUT Port Expansion Signals
+
+The following ports require expansion per
+manual_tb_decisions.md DUT Port Expansion Signal
+Declarations section.
+
+Ports not listed do not require expansion.
+
+### Category 1: NUM_PRED_SLOTS scalar array ports
+
+```
+  tage_pred_val_p0
+  tage_pred_rdy_p2
+  tage_upd_val_u0
+  tage_upd_rdy_u1
+  upd_rdy
+```
+
+Example expansion (Claude Code generates all):
+```
+  wire d_tage_pred_val_p0_s0 = tage_pred_val_p0[0];
+  wire d_tage_pred_val_p0_s1 = tage_pred_val_p0[1];
+```
+
+### Category 2: Struct array ports
+
+  tage_pred_inp_p0   -- type tage_pred_inp_t
+  tage_pred_meta_p2  -- type tage_pred_meta_t
+  tage_upd_inp_u0    -- type tage_upd_inp_t
+
+Claude Code derives all field names and widths from
+the struct definitions in bp_structs_pkg.sv and
+parameter values in bp_defines_pkg.sv.
+
+Example expansion for tage_pred_inp_p0 (Claude Code
+generates all fields for both slots):
+```
+  wire [VA_WIDTH-1:0] d_tage_pred_inp_p0_pc_s0 = tage_pred_inp_p0[0].pc;
+  wire [VA_WIDTH-1:0] d_tage_pred_inp_p0_pc_s1 = tage_pred_inp_p0[1].pc;
+```
+

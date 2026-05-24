@@ -46,7 +46,7 @@ endtask
 // -------------------------------------------------------------------
 task automatic stop_test(input string name, input int errs);
   tb_info({"STOP  ", name});
-  tb_pf(name, errs);
+//  tb_pf(name, errs);
   test_name = "";
 endtask
 

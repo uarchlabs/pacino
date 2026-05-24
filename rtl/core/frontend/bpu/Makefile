@@ -1,6 +1,9 @@
 # Makefile -- branch predictor cluster
 # Targets: lint, sim, all (default), clean
 
+#MAKE_JOBS := $(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS)))
+JOBS ?= 1
+
 .DEFAULT_GOAL := all
 
 RTL_DIR  := rtl
@@ -299,7 +302,13 @@ sim_tage_tasks:
 	  $(TB_DIR)/tb_tage_tasks.sv
 	./$(VER_OUT)_tage_tasks/Vtb +TAGE_FAST_INIT=1
 
+#	  $(TB_DIR)/tb_tage_manual.sv > /dev/null 2>&1
+
+#sim_tage_manual:
+#	@echo $(JOBS)
+
 sim_tage_manual:
+	@echo "[I] compiling sim_tage_manual"
 	verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
@@ -307,6 +316,8 @@ sim_tage_manual:
 	  -Wno-SYNCASYNCNET \
 	  -Wno-PINMISSING \
 	  -Wno-WIDTHTRUNC \
+	  --trace-fst \
+	  --build-jobs $(JOBS) \
 	  -I$(TB_DIR) \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_tage_manual \
@@ -319,7 +330,8 @@ sim_tage_manual:
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tb_tage_manual.sv
-	./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1
+	@echo "[I] simulating sim_tage_manual"
+	@./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=1
 
 clean:
 	rm -rf $(VER_OUT) \

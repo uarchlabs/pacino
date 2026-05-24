@@ -29,5 +29,27 @@ sudo apt-get install -y \
     bc \
     zlib1g-dev \
     libexpat-dev \
-    lcov
+    lcov \
+    libssl-dev \
+    libgtk-3-dev \
+    zenity
 
+CARGO_MIN_VERSION="1.70.0"
+
+if command -v cargo &> /dev/null; then
+    INSTALLED=$(cargo --version | awk '{print $2}')
+    echo "Cargo already installed: $INSTALLED"
+
+    # Compare versions
+    if printf '%s\n' "$CARGO_MIN_VERSION" "$INSTALLED" | sort -V -C; then
+        echo "Version is sufficient, skipping install."
+    else
+        echo "Warning: installed version $INSTALLED is older "
+        echo "   than required $CARGO_MIN_VERSION"
+        echo "Consider running: rustup update"
+    fi
+else
+    echo "Installing Rust..."
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    source ~/.cargo/env
+fi

@@ -22,6 +22,253 @@ typedef struct packed {
   logic [TAGE_MAX_CTR_WIDTH-1:0] ctr;    // bits [3:1]
   logic                          valid;  // bit  [0]
 } tage_ram_entry_t;
+// -------------------------------------------------------------------
+// This exercises each row of the CTR update table.
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActionP ActionA  ActionT0
+// 1   1  1    1    X   >0    >0    INC     —        — 
+// 2   1  0    0    X   >0    >0    INC     —        — 
+// 3   1  1    0    1   >0    >0    DEC     INC      — 
+// 4   1  0    1    1   >0    >0    DEC     INC      — 
+// 5   1  1    0    0   >0    >0    DEC     —        — 
+// 6   1  0    1    0   >0    >0    DEC     —        — 
+// 7   0  1    1    X   >0    >0    —       INC      — 
+// 8   0  0    0    X   >0    >0    —       INC      — 
+// 9   0  1    0    1   >0    >0    INC     DEC      — 
+// 10  0  0    1    1   >0    >0    INC     DEC      —
+// 11  0  1    0    0   >0    >0    —       DEC      —
+// 12  0  0    1    0   >0    >0    —       DEC      —
+// 13a X  0    0    X   0     0     —       —        INC
+// 13b X  0    1    X   0     0     —       —        DEC
+// 13c X  1    0    X   0     0     —       —        DEC
+// 13d X  1    1    X   0     0     —       —        INC
+// 14  1  1    0    X   >0    0     DEC     —        -
+// 15  1  0    1    X   >0    0     DEC     —        -
+// 16  1  1    1    X   >0    0     INC     —        -
+// 17  1  0    0    X   >0    0     INC     —        -
+// 18  x  x    x    X   0     >0    —       —        -
+// -------------------------------------------------------------------
+task automatic tage_ctr_test(
+  inout int tb_errs,
+  input int verb = 0,
+  input int toe  = 0
+);
+  string this_test;
+  int errs,v;
+  logic [VA_WIDTH-1:0] pc;
+  logic [FTQ_IDX_BITS-1:0]  bid;
+  int pidx,aidx;
+  int pcomp,acomp;
+  logic [TAGE_MAX_CTR_WIDTH-1:0] pctr,actr;
+  logic pred_diff; //this is just to make correlating to the table easier
+
+  tage_ram_entry_t pentry,aentry,rentry,pexp_entry,aexp_entry;
+  tage_pred_meta_t pred_meta; //attached to upd_data
+  tage_upd_inp_t   upd_data;  //sent during update
+
+  v = 1;
+  this_test = "tage_ctr_test";
+  errs = 0;
+
+  start_test(this_test);
+
+  //Set initial conditions
+  pc    = 40'h1000;
+  bid   = 3;
+
+  pidx  = int'(11'h100);
+  aidx  = int'(11'h0F0);
+  pcomp = 4;
+  acomp = 2;
+  pctr  = 3'b010;
+  actr  = 3'b001;
+
+  pentry.tag = 8'hEF;
+  aentry.tag = 8'hDF;
+  pentry.epc = 2'h0;
+  aentry.epc = 2'h0;
+  pentry.ctr = pctr;
+  aentry.ctr = actr;
+  pentry.valid = 1;
+  aentry.valid = 1;
+  // -----------------------------
+  // Set the initial ram entry values and verify them
+  // -----------------------------
+  tage_ram_write(pcomp,pidx,pentry);
+  tage_ram_write(acomp,aidx,aentry);
+
+  tage_ram_read(pcomp,pidx,rentry);
+  tage_cmp_ram_entry("PCOMP",pcomp,pidx,pentry,rentry,errs,0);
+
+  tage_ram_read(acomp,aidx,rentry);
+  tage_cmp_ram_entry("ACOMP",acomp,aidx,aentry,rentry,errs,0);
+  // -----------------------------
+  // Set the update data
+  // -----------------------------
+  // clear them first
+  pred_meta = '0;
+  upd_data  = '0;
+
+  // These are the constant or dont care fields
+  pred_meta.tage_prm_idx       = pidx;
+  pred_meta.tage_alt_idx       = aidx;
+  pred_meta.tage_prm_useful    = 0;
+  pred_meta.tage_alt_useful    = 0;
+  pred_meta.tage_alc_comp      = 0;
+  pred_meta.tage_alc_idx       = 0;
+  pred_meta.tage_alc_tag       = 0;
+  pred_meta.tage_pred_strong   = 0;
+  pred_meta.tage_use_alt_on_na = 0;
+  pred_meta.tage_high_conf     = 0;
+  pred_meta.branch_id          = bid;
+
+// -------------------------------------------------------------
+// ROW 1
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+// 1   1  1    1    X   >0    >0    INC  —    —     Prov=p tkn correct
+//
+// PCTR = 2 -> 3  PUSE = 0 -> 0
+// ACTR = 1 -> 1  AUSE = 0 -> 0 
+// -------------------------------------------------------------
+  tb_info("CTR ROW 1");
+  // reset the ram entry
+  tage_ram_write(pcomp,pidx,pentry); //this is redundant the 1st time
+  tage_ram_write(acomp,aidx,aentry); // but resets for the next rows
+
+  pred_meta.tage_using_primary = 1;
+  pred_meta.tage_pred_tkn      = 1;
+  upd_data.resolved_taken      = 1;
+
+  //pred diff calc
+  pred_meta.tage_prm_tkn   = 1; //keeping these the same avoids triggering
+  pred_meta.tage_alt_tkn   = 1; //useful updates, isolating CTR only changes
+  pred_diff = pred_meta.tage_prm_tkn !== pred_meta.tage_alt_tkn;
+
+  pred_meta.tage_prm_ctr   = pctr;
+  pred_meta.tage_alt_ctr   = actr;
+  
+  pred_meta.tage_prm_comp  = pcomp;
+  pred_meta.tage_alt_comp  = acomp;
+
+  upd_data.cond_mispredict = pred_meta.tage_pred_tkn != upd_data.resolved_taken;
+  upd_data.tage_pred_meta  = pred_meta;
+
+  //perform the update
+  tage_update({upd_data,upd_data},2'b01,errs);
+                 
+  //read and check the primary component results
+  tage_ram_read(pcomp,pidx,rentry);
+  pexp_entry        = pentry; //these are the expected ram contents for prm
+  pexp_entry.ctr    = 3;
+  pexp_entry.useful = 0;
+  tage_cmp_ram_entry("R1 PCOMP",pcomp,pidx,pexp_entry,rentry,errs,v);
+
+  //read and check the alternative component results
+  tage_ram_read(acomp,aidx,rentry);
+  aexp_entry        = aentry; //these are the expected ram contents for prm
+  aexp_entry.ctr    = 1;
+  aexp_entry.useful = 0;
+  tage_cmp_ram_entry("R1 ACOMP",acomp,aidx,aexp_entry,rentry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 2
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//  2  1  0    0    X   >0    >0    INC  -    -     Prov=p ntkn correct
+//
+// PCTR = 2 -> 3  PUSE 0 -> 0
+// ACTR = 1 -> 1  AUSE 0 -> 0
+// -------------------------------------------------------------
+  tb_info("CTR ROW 2");
+  // reset the ram entry
+  tage_ram_write(pcomp,pidx,pentry); 
+  tage_ram_write(acomp,aidx,aentry); 
+
+  pred_meta.tage_using_primary = 1;
+  pred_meta.tage_pred_tkn      = 0;
+  upd_data.resolved_taken      = 0;
+
+  //pred diff calc
+  pred_meta.tage_prm_tkn   = 0; //keeping these the same avoids triggering
+  pred_meta.tage_alt_tkn   = 0; //useful updates, isolating CTR only changes
+  pred_diff = pred_meta.tage_prm_tkn !== pred_meta.tage_alt_tkn;
+
+  pred_meta.tage_prm_ctr   = pctr;
+  pred_meta.tage_alt_ctr   = actr;
+  
+  pred_meta.tage_prm_comp  = pcomp;
+  pred_meta.tage_alt_comp  = acomp;
+
+  upd_data.cond_mispredict = pred_meta.tage_pred_tkn != upd_data.resolved_taken;
+  upd_data.tage_pred_meta  = pred_meta;
+
+  //perform the update
+  tage_update({upd_data,upd_data},2'b01,errs);
+                 
+  //read and check the primary component results
+  tage_ram_read(pcomp,pidx,rentry);
+  pexp_entry        = pentry; //these are the expected ram contents for prm
+  pexp_entry.ctr    = 3;
+  pexp_entry.useful = 0;
+  tage_cmp_ram_entry("R2 PCOMP",pcomp,pidx,pexp_entry,rentry,errs,v);
+
+  //read and check the alternative component results
+  tage_ram_read(acomp,aidx,rentry);
+  aexp_entry        = aentry; //these are the expected ram contents for prm
+  aexp_entry.ctr    = 1;
+  aexp_entry.useful = 0;
+  tage_cmp_ram_entry("R2 ACOMP",acomp,aidx,aexp_entry,rentry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 3
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//  3  1  1    0    1   >0    >0    DEC  INC  -     Prov=p wrong alt opposite
+//
+// PCTR = 2 -> PCTR = 1  PUSE = 0 -> 0
+// ACTR = 1 -> ACTR = 2  AUSE = 0 -> 0
+// -------------------------------------------------------------
+  tb_info("CTR ROW 3");
+  // reset the ram entry
+  tage_ram_write(pcomp,pidx,pentry); 
+  tage_ram_write(acomp,aidx,aentry); 
+
+  pred_meta.tage_using_primary = 1;
+  pred_meta.tage_pred_tkn      = 1;
+  upd_data.resolved_taken      = 0;
+
+  //pred diff calc
+  pred_meta.tage_prm_tkn       = 1;
+  pred_meta.tage_alt_tkn       = 0;
+  pred_diff = pred_meta.tage_prm_tkn !== pred_meta.tage_alt_tkn;
+
+  pred_meta.tage_prm_ctr   = pctr;
+  pred_meta.tage_alt_ctr   = actr;
+
+  pred_meta.tage_prm_comp  = pcomp;
+  pred_meta.tage_alt_comp  = acomp;
+
+  upd_data.cond_mispredict = pred_meta.tage_pred_tkn != upd_data.resolved_taken;
+  upd_data.tage_pred_meta  = pred_meta;
+
+  //perform the update
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  //read and check the primary component results
+  tage_ram_read(pcomp,pidx,rentry);
+  pexp_entry        = pentry; //these are the expected ram contents for prm
+  pexp_entry.ctr    = 1;
+  pexp_entry.useful = 0;
+  tage_cmp_ram_entry("R3 PCOMP",pcomp,pidx,pexp_entry,rentry,errs,v);
+
+  //read and check the alternative component results
+  tage_ram_read(acomp,aidx,rentry);
+  aexp_entry        = aentry; //these are the expected ram contents for prm
+  aexp_entry.ctr    = 2;
+  aexp_entry.useful = 0;
+  tage_cmp_ram_entry("R3 ACOMP",acomp,aidx,aexp_entry,rentry,errs,v);
+
+  stop_test(this_test,errs);
+  tb_pf(this_test,errs);
+  tb_errs += errs;
+endtask
 
 // -------------------------------------------------------------------
 // tage_ram_write: write one entry to a table RAM.
@@ -106,6 +353,77 @@ task automatic tage_ram_read(
     end
     default: ;
   endcase
+endtask
+
+// -------------------------------------------------------------------
+// tage_cmp_ram_entry: compare two ram entries
+// -------------------------------------------------------------------
+task automatic tage_cmp_ram_entry(
+  input string which,
+  input int tbl,
+  input int idx,
+  input tage_ram_entry_t exp,
+  input tage_ram_entry_t act,
+  inout int errs,
+  input int v=0
+);
+  int lerrs = 0;
+  if(exp.tag !== act.tag) begin
+    $write("-E: %s : TAG mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.tag);
+    $write(" act: %02x\n",act.tag);
+    ++lerrs;
+  end else if(v) begin
+    $write("-I: %s : TAG match, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.tag);
+    $write(" act: %02x\n",act.tag);
+  end
+
+  if(exp.epc !== act.epc) begin
+    $write("-E: %s : EPC mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.epc);
+    $write(" act: %02x\n",act.epc);
+    ++lerrs;
+  end else if(v) begin
+    $write("-I: %s : EPC match, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.epc);
+    $write(" act: %02x\n",act.epc);
+  end
+
+  if(exp.useful !== act.useful) begin
+    $write("-E: %s : USE mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.useful);
+    $write(" act: %02x\n",act.useful);
+    ++lerrs;
+  end else if(v) begin
+    $write("-I: %s : USE match, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.useful);
+    $write(" act: %02x\n",act.useful);
+  end
+
+  if(exp.ctr !== act.ctr) begin
+    $write("-E: %s : CTR mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.ctr);
+    $write(" act: %02x\n",act.ctr);
+    ++lerrs;
+  end else if(v) begin
+    $write("-I: %s : CTR match, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.ctr);
+    $write(" act: %02x\n",act.ctr);
+  end
+
+  if(exp.valid !== act.valid) begin
+    $write("-E: %s : VAL mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.valid);
+    $write(" act: %02x\n",act.valid);
+    ++lerrs;
+  end else if(v) begin
+    $write("-I: %s : VAL match, tbl %0d idx=0x%04x",which,tbl,idx);
+    $write(" exp: %02x",exp.valid);
+    $write(" act: %02x\n",act.valid);
+  end
+
+  errs += lerrs;
 endtask
 
 // -------------------------------------------------------------------
@@ -296,7 +614,12 @@ endtask
 //   T1 tag = PC[18:11] & 0xFF = 8'h02
 // This test must pass without any RTL modifications.
 // -------------------------------------------------------------------
-task automatic tage_round_trip_sanity(inout integer errs);
+task automatic tage_round_trip_sanity(
+  inout integer tb_errs,
+  input verb = 0,
+  input toe  = 0
+);
+
   localparam logic [VA_WIDTH-1:0] TEST_PC  = 40'h0000_1234;
   localparam int                  TEST_TBL = 1;
   localparam int                  TEST_IDX = 1165;
@@ -308,11 +631,13 @@ task automatic tage_round_trip_sanity(inout integer errs);
   tage_pred_meta_t meta2[0:1];
   tage_upd_inp_t   upd_inp[0:1];
   logic [1:0]      rdy;
-  int              local_errs;
-  int              pre_errs;
-
-  local_errs = 0;
-  start_test("round_trip_sanity");
+  int errs;
+  string this_test;
+  errs = 0;
+  this_test = "tage_round_trip_sanity";
+ 
+  start_test(this_test);
+  // Step 1: ?? this test was generated by IA, then modified
 
   // Step 2: write known T1 entry with valid=1, tag matching TEST_PC.
   wr_entry        = '0;
@@ -326,31 +651,34 @@ task automatic tage_round_trip_sanity(inout integer errs);
   // Step 3: read back and verify every field.
   // Do not proceed past this step if any field mismatches.
   tage_ram_read(TEST_TBL, TEST_IDX, rd_entry);
-  pre_errs = local_errs;
   if (rd_entry.valid !== wr_entry.valid) begin
-    tb_error("round_trip_sanity: valid mismatch");
-    local_errs++;
+    tb_error({this_test,": valid mismatch"});
+    errs++;
   end
   if (rd_entry.ctr !== wr_entry.ctr) begin
-    tb_error("round_trip_sanity: ctr mismatch");
-    local_errs++;
+    tb_error({this_test,": ctr mismatch"});
+    errs++;
   end
   if (rd_entry.useful !== wr_entry.useful) begin
-    tb_error("round_trip_sanity: useful mismatch");
-    local_errs++;
+    tb_error({this_test,": useful mismatch"});
+    errs++;
   end
   if (rd_entry.epc !== wr_entry.epc) begin
-    tb_error("round_trip_sanity: epc mismatch");
-    local_errs++;
+    tb_error({this_test,": epc mismatch"});
+    errs++;
   end
   if (rd_entry.tag !== wr_entry.tag) begin
-    tb_error("round_trip_sanity: tag mismatch");
-    local_errs++;
+    tb_error({this_test,": tag mismatch"});
+    errs++;
   end
-  if (local_errs > pre_errs) begin
-    stop_test("round_trip_sanity", local_errs);
-    errs = errs + local_errs;
-    return;
+
+  if (toe) begin
+    if (errs > 0) begin
+      stop_test(this_test, errs);
+      tb_pf(this_test, errs);
+      tb_errs += errs;
+      return;
+    end
   end
 
   // Step 4: predict slot 0 with TEST_PC.
@@ -358,12 +686,12 @@ task automatic tage_round_trip_sanity(inout integer errs);
   pred_inp[0].pc        = TEST_PC;
   pred_inp[0].branch_id = '0;
   pred_inp[1]           = '0;
-  tage_predict(pred_inp, 2'b01, meta1, rdy, local_errs);
+  tage_predict(pred_inp, 2'b01, meta1, rdy, errs);
 
   // Step 5: verify rdy[0] asserted.
   if (!rdy[0]) begin
     tb_error("round_trip_sanity: pred1 rdy[0] not asserted");
-    local_errs++;
+    errs++;
   end
 
   // Step 7: update using meta captured at step 4/6.
@@ -372,15 +700,16 @@ task automatic tage_round_trip_sanity(inout integer errs);
   upd_inp[0].resolved_taken  = 1'b1;
   upd_inp[0].cond_mispredict = 1'b0;
   upd_inp[1]                 = '0;
-  tage_update(upd_inp, 2'b01, local_errs);
+  tage_update(upd_inp, 2'b01, errs);
 
   // Steps 8-9: second prediction and verify rdy.
-  tage_predict(pred_inp, 2'b01, meta2, rdy, local_errs);
+  tage_predict(pred_inp, 2'b01, meta2, rdy, errs);
   if (!rdy[0]) begin
     tb_error("round_trip_sanity: pred2 rdy[0] not asserted");
-    local_errs++;
+    errs++;
   end
 
-  stop_test("round_trip_sanity", local_errs);
-  errs = errs + local_errs;
+  stop_test(this_test,errs);
+  tb_pf(this_test,errs);
+  tb_errs += errs;
 endtask

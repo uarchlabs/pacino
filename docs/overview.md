@@ -1,41 +1,47 @@
-# Pacino Documentation
+---
+hide:
+  - toc
+title: "Overview"
+---
 
-Overview of the Pacino microarchitecture documentation.
+# Pacino — microarchitecture overview
 
 Pacino is an open source 8-issue out-of-order RISC-V processor targeting the
-RVA23S64 profile, created in a co-design flow.
+RVA23S64 profile, designed using a structured AI co-design methodology.
+Click any block to explore the pipeline.
 
-Use the tabs and hamburger menu to navigate the documentation.
+<iframe
+  src="../microarchitecture.html"
+  title="Pacino microarchitecture block diagram"
+  style="width:100%; height:500px; border:none; display:block; margin: 24px 0;"
+></iframe>
 
-## More Information
+## Documentation
 
-|Description|Link|
-|:-----|:----|
-|Pacino Overview|This document.<br> <https://uarchlabs.github.io/pacino/overview/>|
-|Pacino Landing Page|<https://uarchlabs.github.io/pacino/> |
-|Pacino Repo        |<https://github.com/uarchlabs/pacino> |
-|uarchlabs Site     |<https://uarchlabs.com/> |
-|uarchlabs Blog |Includes Pacino.<br><https://uarchlabs.github.io/blog> |
-|uarchlabs Projects |<https://github.com/orgs/uarchlabs/repositories> |
+The documentation follows the RTL cluster organization.
 
-## Project Status
-
-Pacino is under active development. RTL and documentation are updated continuously.
-
-Current project status and open issues are tracked in the [GitHub repository](https://github.com/uarchlabs/pacino).
-
-## Pacino Documentation Summary
-
-The documentation loosely follows the RTL organization. This is for reference.
-
-Navigation uses the mkdocs convention: top of page tabs, hamburger menu, and
-side menus.
-
-|Unit|Description|
+| Unit | Description |
 |:---|:---|
-| Frontend | instruction fetch, branch prediction, decode pipeline|
-| Backend  | rename, dispatch, out-of-order execution engine|
-| Memory Subsystem | load/store queues, scalar and vector memory access|
-| Cache Subsystem | L1D, L2 with TileLink/CHI interfaces|
-| MMU | TLB hierarchy, page table walker, hypervisor support, PMP/PMA|
-| System | CSR, exceptions, performance monitoring, debug|
+| Frontend | instruction fetch, branch prediction, decode pipeline |
+| Backend | rename, dispatch, out-of-order execution engine |
+| Memory subsystem | load/store queues, scalar and vector memory access |
+| Cache subsystem | L1D, L2 with TileLink/CHI interfaces |
+| MMU | TLB hierarchy, page table walker, hypervisor support, PMP/PMA |
+| System | CSR, exceptions, performance monitoring, debug |
+
+## Project status
+
+Active development. RTL and documentation updated continuously.
+Open issues tracked in the [GitHub repository](https://github.com/uarchlabs/pacino).
+
+
+## More information
+
+| Description | Link |
+|:-----|:----|
+| Pacino overview | This document. <https://uarchlabs.github.io/pacino/overview/> |
+| Pacino landing page | <https://uarchlabs.github.io/pacino/> |
+| Pacino repo | <https://github.com/uarchlabs/pacino> |
+| uarchlabs site | <https://uarchlabs.com/> |
+| uarchlabs blog | Includes Pacino. <https://uarchlabs.github.io/blog> |
+| uarchlabs projects | <https://github.com/orgs/uarchlabs/repositories> |
