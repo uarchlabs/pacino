@@ -83,6 +83,8 @@ rtl/core/frontend/bpu/obj_ubtb
 # lib
 rtl/lib/obj_dir
 
+# fst files
+rtl/core/frontend/bpu/*.fst
 # --------------------------------------------------------------------
 # docs
 site/
