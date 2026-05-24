@@ -368,13 +368,6 @@ title: ""
         <line x1="8" y1="18" x2="56" y2="18" stroke="#8a97a6" stroke-width="2" stroke-linecap="round"/>
         <circle cx="32" cy="42" r="4" fill="#b84c25"/>
       </g>
-<!--
-      <text x="196" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">u</text>
-      <text x="228" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#d96b3f">arch</text>
-      <text x="376" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">labs</text>
-      <text x="196" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="500" letter-spacing="0.5" fill="#d96b3f">PACINO</text>
-      <text x="262" y="218" font-family="-apple-system,sans-serif" font-size="15" font-weight="400" letter-spacing="0.5" fill="#8a97a6"> · Open Source 8-issue OOO RISC-V Processor</text>
--->
       <!-- text x="196" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">u</text -->
       <text x="228" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#d96b3f">Pacino</text>
       <text x="435" y="186" font-family="-apple-system,sans-serif" font-size="56" font-weight="700" letter-spacing="-2" fill="#e8ecf0">Docs</text>
@@ -449,6 +442,23 @@ title: ""
       </p>
     </section>
 
+    <!-- RECENT -->
+    <section class="recent" style="margin-bottom:40px;">
+      <div class="section-label">// recent</div>
+      <div class="method-block" style="padding:14px 20px;">
+        <p style="font-family:monospace;font-size:12px;line-height:2;color:var(--muted);">
+   
+       <span style="color:var(--accent);">●</span>&nbsp; New: interactive uarch document, see Overview tab<br>
+       <span style="color:var(--accent);">●</span>&nbsp; New: IA session browser, see  Sessions tab<br>
+       <span style="color:var(--accent);">●</span>&nbsp; BP-040 complete &mdash; ITTAGE FAST_INIT audit, trx_type fix &middot; 2026.05.19<br>
+          <span style="color:var(--accent);">●</span>&nbsp; BP-039 complete &mdash; ittage_cntrl update path verification &middot; 2026.05.17<br>
+
+          <!-- span style="color:var(--accent);">●</span>&nbsp; 76 tests passing across TAGE / ITTAGE cluster-->
+
+        </p>
+      </div>
+    </section>
+
     <!-- SPECS -->
     <section id="specs">
       <div class="section-label">// specs</div>
@@ -462,18 +472,9 @@ title: ""
       </div>
     </section>
 
-    <!-- ARCHITECTURE -->
-    <section id="architecture">
-      <div class="section-label">// architecture</div>
-      <iframe
-        src="microarchitecture.html"
-        title="Pacino microarchitecture block diagram"
-        style="width:100%; height:520px; border:0.5px solid #353f4a; border-radius:6px; display:block;"
-        loading="lazy"
-      ></iframe>
-    </section>
 
-<!--
+    <!-- ARCHITECTURE -->
+
     <section id="architecture">
       <div class="section-label">// architecture</div>
       <div class="arch-grid">
@@ -487,7 +488,7 @@ title: ""
         <div class="arch-card"><div class="arch-name"><span class="arch-dot"></span>protection</div><div class="arch-detail">pma · pmp</div></div>
       </div>
     </section>
--->
+
     <!-- METHODOLOGY -->
     <section id="methodology">
       <div class="section-label">// ai co-design methodology</div>
