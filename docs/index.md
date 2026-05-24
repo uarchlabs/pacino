@@ -465,6 +465,17 @@ title: ""
     <!-- ARCHITECTURE -->
     <section id="architecture">
       <div class="section-label">// architecture</div>
+      <iframe
+        src="microarchitecture.html"
+        title="Pacino microarchitecture block diagram"
+        style="width:100%; height:520px; border:0.5px solid #353f4a; border-radius:6px; display:block;"
+        loading="lazy"
+      ></iframe>
+    </section>
+
+<!--
+    <section id="architecture">
+      <div class="section-label">// architecture</div>
       <div class="arch-grid">
         <div class="arch-card"><div class="arch-name"><span class="arch-dot"></span>frontend</div><div class="arch-detail">icache · ftq · ifu · ibuf · decode · bpu</div></div>
         <div class="arch-card"><div class="arch-name"><span class="arch-dot"></span>dispatch</div><div class="arch-detail">rename · prf (i/f/v/mm) · rob · reservation stations</div></div>
@@ -476,7 +487,7 @@ title: ""
         <div class="arch-card"><div class="arch-name"><span class="arch-dot"></span>protection</div><div class="arch-detail">pma · pmp</div></div>
       </div>
     </section>
-
+-->
     <!-- METHODOLOGY -->
     <section id="methodology">
       <div class="section-label">// ai co-design methodology</div>

@@ -45,7 +45,9 @@ Summary:
 
 See [PROJECT_STATUS.md](planning/PROJECT_STATUS.md) for detailed status tables.
 
-Current discussions in article form are found in 
+Interactive status is this [diagram](docs//pacino-microarchitecture.html).
+
+Current discussions in article form are found in [BLOGS](https://uarchlabs.github.io/blog/)
 
 ---
 
