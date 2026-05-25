@@ -204,12 +204,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    |            specify bim_index_u0[s]                     |
 |    |                    |          test if alc_index_u0 is necessary likely not  |
 |    |                    |          add a tage_cntrl_interfaces.md doc            |
-| 46 | ittage_cntrl.sv    | REOPENED.  BP-038a did not close this in the tb  |
+| 46 | ittage_cntrl.sv    | CLOSED.    BP-038a did not close this in the tb  |
 |    |                    | Add trx_type input port (logic type) to          |
 |    | missing trx_type   | ittage_cntrl.sv. Connect to trx_type_comb in     |
 |    | port               | ittage.sv. Same change tage_cntrl received in    |
 |    |                    | BP-023b. Resolve before bp_cluster integration.  |
-|    |                    |                                                  |
+|    |                    | BP-040 closed this item                          |
 | 47 | ittage_interfaces  | CLOSED.                                          |
 |    | .md missing arb    | Add pq_not_full and upd_rdy to port list.        |
 |    | ports              | These ports are present in ittage.sv (added      |
@@ -235,7 +235,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                    | This standardization should cover RTL,           |
 |    |                    | testbenches, and planning documents: bp_arb_spec.md |
 |    |                    | ttage_interfaces.md, ittage_interfaces.md        |
-| 50 | sram_init FAST_INIT  | sram_init runs its full init sequence even    |
+| 50 | sram_init FAST_INIT  | CLOSED. w. BP-040                             |
+|    |                      | sram_init runs its full init sequence even    |
 |    | behavior             | when FAST_INIT=1. sram_init active signal     |
 |    |                      | remains high for IT_MAX_NUM_ENTRIES=512       |
 |    |                      | cycles, overriding normal write mux paths     |
@@ -260,6 +261,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                      | Tests must be independent of each other       |
 |    |                      | and of TC-P01 through TC-UAON-01.             |
 |    |                      |                                               |
+|    |                      | The contraints section of prompts will |
+|    |                      | preclude IA from modifying RTL   |
+|    |                      | without citing the violation in the planning  |
+|    |                      | documents.                                    |
 | 52 | move Arb logic into  | The top level modules should be structural    |
 |    | submodule out of top | only. Create a new module for tage and ittage |
 |    | in tage and ittage   | move the arb logic into this new module       |

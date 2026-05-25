@@ -56,12 +56,12 @@ task automatic tage_ctr_test(
   int errs,v;
   logic [VA_WIDTH-1:0] pc;
   logic [FTQ_IDX_BITS-1:0]  bid;
-  int pidx,aidx;
+  int pidx,aidx,t0idx;
   int pcomp,acomp;
-  logic [TAGE_MAX_CTR_WIDTH-1:0] pctr,actr;
+  logic [TAGE_MAX_CTR_WIDTH-1:0] pctr,actr,t0ctr;
   logic pred_diff; //this is just to make correlating to the table easier
 
-  tage_ram_entry_t pentry,aentry,rentry,pexp_entry,aexp_entry;
+  tage_ram_entry_t pentry,aentry,t0entry,rentry,pexp_entry,aexp_entry,t0exp_entry;
   tage_pred_meta_t pred_meta; //attached to upd_data
   tage_upd_inp_t   upd_data;  //sent during update
 
@@ -77,19 +77,31 @@ task automatic tage_ctr_test(
 
   pidx  = int'(11'h100);
   aidx  = int'(11'h0F0);
+  t0idx = int'(11'h080);
+
   pcomp = 4;
   acomp = 2;
+ 
   pctr  = 3'b010;
   actr  = 3'b001;
+  t0ctr = 3'b010;  //this is a 2b field in the RAM
 
-  pentry.tag = 8'hEF;
-  aentry.tag = 8'hDF;
-  pentry.epc = 2'h0;
-  aentry.epc = 2'h0;
-  pentry.ctr = pctr;
-  aentry.ctr = actr;
-  pentry.valid = 1;
-  aentry.valid = 1;
+  pentry.tag    = 8'hEF;
+  aentry.tag    = 8'hDF;
+  t0entry.tag   = 8'hD0; //this is dont care
+
+  pentry.epc    = 2'h0;
+  aentry.epc    = 2'h0;
+  t0entry.epc   = 2'h0;  //this is dont care
+
+  pentry.ctr    = pctr;
+  aentry.ctr    = actr;
+  t0entry.ctr   = t0ctr; //this is a 2b field in the RAM
+
+  pentry.valid  = 1;
+  aentry.valid  = 1;
+  t0entry.valid = 1; //this is dont care
+
   // -----------------------------
   // Set the initial ram entry values and verify them
   // -----------------------------
@@ -121,155 +133,619 @@ task automatic tage_ctr_test(
   pred_meta.tage_high_conf     = 0;
   pred_meta.branch_id          = bid;
 
-// -------------------------------------------------------------
-// ROW 1
-// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
-// 1   1  1    1    X   >0    >0    INC  —    —     Prov=p tkn correct
-//
-// PCTR = 2 -> 3  PUSE = 0 -> 0
-// ACTR = 1 -> 1  AUSE = 0 -> 0 
-// -------------------------------------------------------------
-  tb_info("CTR ROW 1");
-  // reset the ram entry
-  tage_ram_write(pcomp,pidx,pentry); //this is redundant the 1st time
-  tage_ram_write(acomp,aidx,aentry); // but resets for the next rows
-
-  pred_meta.tage_using_primary = 1;
-  pred_meta.tage_pred_tkn      = 1;
-  upd_data.resolved_taken      = 1;
-
-  //pred diff calc
-  pred_meta.tage_prm_tkn   = 1; //keeping these the same avoids triggering
-  pred_meta.tage_alt_tkn   = 1; //useful updates, isolating CTR only changes
-  pred_diff = pred_meta.tage_prm_tkn !== pred_meta.tage_alt_tkn;
-
   pred_meta.tage_prm_ctr   = pctr;
   pred_meta.tage_alt_ctr   = actr;
   
   pred_meta.tage_prm_comp  = pcomp;
   pred_meta.tage_alt_comp  = acomp;
 
-  upd_data.cond_mispredict = pred_meta.tage_pred_tkn != upd_data.resolved_taken;
-  upd_data.tage_pred_meta  = pred_meta;
-
-  //perform the update
-  tage_update({upd_data,upd_data},2'b01,errs);
-                 
-  //read and check the primary component results
-  tage_ram_read(pcomp,pidx,rentry);
-  pexp_entry        = pentry; //these are the expected ram contents for prm
-  pexp_entry.ctr    = 3;
-  pexp_entry.useful = 0;
-  tage_cmp_ram_entry("R1 PCOMP",pcomp,pidx,pexp_entry,rentry,errs,v);
-
-  //read and check the alternative component results
-  tage_ram_read(acomp,aidx,rentry);
-  aexp_entry        = aentry; //these are the expected ram contents for prm
-  aexp_entry.ctr    = 1;
-  aexp_entry.useful = 0;
-  tage_cmp_ram_entry("R1 ACOMP",acomp,aidx,aexp_entry,rentry,errs,v);
-
-// -------------------------------------------------------------
-// ROW 2
-// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
-//  2  1  0    0    X   >0    >0    INC  -    -     Prov=p ntkn correct
+//// -------------------------------------------------------------
+//// ROW 1
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//// 1   1  1    1    X   >0    >0    INC  —    —     Prov=p tkn correct
+////
+//// PCTR = 2 -> 3  PUSE = 0 -> 0
+//// ACTR = 1 -> 1  AUSE = 0 -> 0 
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 1");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 1,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//                 
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row("R1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 //
-// PCTR = 2 -> 3  PUSE 0 -> 0
-// ACTR = 1 -> 1  AUSE 0 -> 0
-// -------------------------------------------------------------
-  tb_info("CTR ROW 2");
-  // reset the ram entry
-  tage_ram_write(pcomp,pidx,pentry); 
-  tage_ram_write(acomp,aidx,aentry); 
-
-  pred_meta.tage_using_primary = 1;
-  pred_meta.tage_pred_tkn      = 0;
-  upd_data.resolved_taken      = 0;
-
-  //pred diff calc
-  pred_meta.tage_prm_tkn   = 0; //keeping these the same avoids triggering
-  pred_meta.tage_alt_tkn   = 0; //useful updates, isolating CTR only changes
-  pred_diff = pred_meta.tage_prm_tkn !== pred_meta.tage_alt_tkn;
-
-  pred_meta.tage_prm_ctr   = pctr;
-  pred_meta.tage_alt_ctr   = actr;
-  
-  pred_meta.tage_prm_comp  = pcomp;
-  pred_meta.tage_alt_comp  = acomp;
-
-  upd_data.cond_mispredict = pred_meta.tage_pred_tkn != upd_data.resolved_taken;
-  upd_data.tage_pred_meta  = pred_meta;
-
-  //perform the update
-  tage_update({upd_data,upd_data},2'b01,errs);
-                 
-  //read and check the primary component results
-  tage_ram_read(pcomp,pidx,rentry);
-  pexp_entry        = pentry; //these are the expected ram contents for prm
-  pexp_entry.ctr    = 3;
-  pexp_entry.useful = 0;
-  tage_cmp_ram_entry("R2 PCOMP",pcomp,pidx,pexp_entry,rentry,errs,v);
-
-  //read and check the alternative component results
-  tage_ram_read(acomp,aidx,rentry);
-  aexp_entry        = aentry; //these are the expected ram contents for prm
-  aexp_entry.ctr    = 1;
-  aexp_entry.useful = 0;
-  tage_cmp_ram_entry("R2 ACOMP",acomp,aidx,aexp_entry,rentry,errs,v);
-
-// -------------------------------------------------------------
-// ROW 3
-// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
-//  3  1  1    0    1   >0    >0    DEC  INC  -     Prov=p wrong alt opposite
+//// -------------------------------------------------------------
+//// ROW 2
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  2  1  0    0    X   >0    >0    INC  -    -     Prov=p ntkn correct
+////
+//// PCTR = 2 -> 3  PUSE 0 -> 0
+//// ACTR = 1 -> 1  AUSE 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 2");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
 //
-// PCTR = 2 -> PCTR = 1  PUSE = 0 -> 0
-// ACTR = 1 -> ACTR = 2  AUSE = 0 -> 0
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row("R2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 3
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  3  1  1    0    1   >0    >0    DEC  INC  -     Prov=p wrong alt opposite
+////
+//// PCTR = 2 -> PCTR = 1  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 2  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 3");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 0,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 2; aexp_entry.useful = 0;
+//  check_ctr_row("R3",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 4
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  4  1  0    1    1   >0    >0    DEC  INC  —     Prov=p wrong, alt opposite
+////
+//// PCTR = 2 -> PCTR = 1  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 2  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 4");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 1,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 2; aexp_entry.useful = 0;
+//  check_ctr_row("R4",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 5
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////   5 1  1    0    0   >0    >0    DEC  —    —     Prov=p wrong, alt same or ignored
+////
+//// PCTR = 2 -> PCTR = 1  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 5");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 1,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row("R5",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 6
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////   6 1  0    1    0   >0    >0    DEC  —    —     Prov=p wrong, alt same or ignored
+////
+//// PCTR = 2 -> PCTR = 1  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 6");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 0,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row("R6",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 7
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////   7 0  1    1    X   >0    >0    —    INC  —     Prov=a correct
+////
+//// PCTR = 2 -> PCTR = 2  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 2  AUSE = 0 -> 1
+////
+//// Note: DIF=x and prm taken have impact on alt useful
+////
+//// pT  = primary taken
+//// aT  = alternative taken
+//// in this scenario aT = 1 and pT = 0, alt useful is incremented
+////                  aT = 1 and pT = 1, alt useful is not incremented
+//// in the 2nd case alt is no more useful than primary so do not increment
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 7");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,0, 1, 1, 0, 1,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 2; aexp_entry.useful = 1;
+//  check_ctr_row("R7",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 8
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////   8 0  0    0    X   >0    >0    —    INC  —      Prov=a, pred not-taken correctly 
+////
+//// PCTR = 2 -> PCTR = 2  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 2  AUSE = 0 -> 0
+////
+//// Note: DIF=x and prm taken have impact on alt useful
+////
+//// pT  = primary taken
+//// aT  = alternative taken
+//// in this scenario aT = 0 and pT = 0, alt useful is not incremented
+////                  aT = 0 and pT = 1, alt useful is incremented
+//// in the 1st case alt is no more useful than primary so do not increment
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 8");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,0, 0, 0, 1, 0,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 2; aexp_entry.useful = 1;
+//  check_ctr_row("R8",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 9
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////   9 0  1    0    1   >0    >0    INC  DEC  —     Prov=a, wrong, primary opposite 
+////
+//// PCTR = 2 -> PCTR = 3  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 0  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 9");
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,0, 1, 0, 0, 1,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 0; aexp_entry.useful = 0;
+//  check_ctr_row("R9",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 10
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  10 0  0    1    1   >0    >0    INC  DEC  —     Prov=a, wrong, primary opposite 
+////
+//// PCTR = 2 -> PCTR = 3  PUSE = 0 -> 0
+//// ACTR = 1 -> ACTR = 0  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 10");  
+//  // reset the ram entry
+//  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+//  //                             UP PT RT pT aT
+//  set_ctr_row(pred_meta,upd_data,0, 0, 1, 1, 0,pcomp,acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  pexp_entry        = pentry; //these are the expected ram contents for prm
+//  aexp_entry        = aentry; //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 0; aexp_entry.useful = 0;
+//  check_ctr_row("R10",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
 // -------------------------------------------------------------
-  tb_info("CTR ROW 3");
+// ROW 11
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//  11 0  1    0    0   >0    >0    —    DEC  —     Prov=a,wrong, pred_diff ignored 
+//
+// PCTR = 2 -> PCTR = 2  PUSE = 0 -> 0
+// ACTR = 1 -> ACTR = 0  AUSE = 0 -> 0
+// -------------------------------------------------------------
+  tb_info("CTR ROW 11");
   // reset the ram entry
-  tage_ram_write(pcomp,pidx,pentry); 
-  tage_ram_write(acomp,aidx,aentry); 
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT
+  set_ctr_row(pred_meta,upd_data,0, 1, 0, 1, 1,pcomp,acomp);
+  tage_update({upd_data,upd_data},2'b01,errs);   
 
-  pred_meta.tage_using_primary = 1;
-  pred_meta.tage_pred_tkn      = 1;
-  upd_data.resolved_taken      = 0;
+  pexp_entry        = pentry; //these are the expected ram contents for prm
+  aexp_entry        = aentry; //these are the expected ram contents for prm
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 0; aexp_entry.useful = 0;      
+  check_ctr_row("R11",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
-  //pred diff calc
-  pred_meta.tage_prm_tkn       = 1;
-  pred_meta.tage_alt_tkn       = 0;
-  pred_diff = pred_meta.tage_prm_tkn !== pred_meta.tage_alt_tkn;
-
-  pred_meta.tage_prm_ctr   = pctr;
-  pred_meta.tage_alt_ctr   = actr;
-
-  pred_meta.tage_prm_comp  = pcomp;
-  pred_meta.tage_alt_comp  = acomp;
-
-  upd_data.cond_mispredict = pred_meta.tage_pred_tkn != upd_data.resolved_taken;
-  upd_data.tage_pred_meta  = pred_meta;
-
-  //perform the update
+// -------------------------------------------------------------
+// ROW 12
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//  12 0  0    1    0   >0    >0    —    DEC  —     Prov=a,wrong, pred_diff ignored
+//
+// PCTR = 2 -> PCTR = 2  PUSE = 0 -> 0
+// ACTR = 1 -> ACTR = 0  AUSE = 0 -> 0
+// -------------------------------------------------------------
+  tb_info("CTR ROW 12");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT
+  set_ctr_row(pred_meta,upd_data,0, 0, 1, 0, 0,pcomp,acomp);
   tage_update({upd_data,upd_data},2'b01,errs);
 
-  //read and check the primary component results
-  tage_ram_read(pcomp,pidx,rentry);
   pexp_entry        = pentry; //these are the expected ram contents for prm
-  pexp_entry.ctr    = 1;
-  pexp_entry.useful = 0;
-  tage_cmp_ram_entry("R3 PCOMP",pcomp,pidx,pexp_entry,rentry,errs,v);
-
-  //read and check the alternative component results
-  tage_ram_read(acomp,aidx,rentry);
   aexp_entry        = aentry; //these are the expected ram contents for prm
-  aexp_entry.ctr    = 2;
-  aexp_entry.useful = 0;
-  tage_cmp_ram_entry("R3 ACOMP",acomp,aidx,aexp_entry,rentry,errs,v);
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 0; aexp_entry.useful = 0;
+  check_ctr_row("R12",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
+// -------------------------------------------------------------
+// ROW 13a
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+// 13a X  0    0    X   0     0     —    —    INC   Provider = bim, bim was correct
+//
+// T0CTR = 1 -> T0CTR = 2 
+// PCTR  = 2 -> PCTR  = 2  PUSE = 0 -> 0
+// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//
+// This is split into 4 tests, UP/DIF -> 00/01/10/11
+// -------------------------------------------------------------
+  tb_info("CTR ROW 13a.1 UP=0 DIF=0");
+  // reset the ram entry
+  reset_t0_entry(t0idx,t0entry);
+  //                             UP PT RT pT aT pcomp acomp
+  set_ctr_row(pred_meta,upd_data,0, 0, 0, 0, 0, 0,    0);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+  pexp_entry        = pentry;  //these are the expected ram contents for prm
+  aexp_entry        = aentry;  //these are the expected ram contents for prm
+  t0exp_entry.ctr   = 2; 
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+  check_ctr_row   ("R13a.1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row_t0("R13a.1",t0idx,t0exp_entry,errs,v);
+
+  tb_info("CTR ROW 13a.2 UP=0 DIF=1");
+  // reset the ram entry
+  reset_t0_entry(t0idx,t0entry);
+  //                             UP PT RT pT aT pcomp acomp
+  set_ctr_row(pred_meta,upd_data,0, 0, 0, 1, 0, 0,    0);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+  pexp_entry        = pentry;  //these are the expected ram contents for prm
+  aexp_entry        = aentry;  //these are the expected ram contents for prm
+  t0exp_entry.ctr   = 2; 
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+  check_ctr_row   ("R13a.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row_t0("R13a.2",t0idx,t0exp_entry,errs,v);
+
+  tb_info("CTR ROW 13a.3 UP=1 DIF=0");
+  // reset the ram entry
+  reset_t0_entry(t0idx,t0entry);
+  //                             UP PT RT pT aT pcomp acomp
+  set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0, 0,    0);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+  pexp_entry        = pentry;  //these are the expected ram contents for prm
+  aexp_entry        = aentry;  //these are the expected ram contents for prm
+  t0exp_entry.ctr   = 2;
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+  check_ctr_row   ("R13a.3",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row_t0("R13a.3",t0idx,t0exp_entry,errs,v);
+
+  tb_info("CTR ROW 13a.4 UP=1 DIF=1");
+  // reset the ram entry
+  reset_t0_entry(t0idx,t0entry);
+  //                             UP PT RT pT aT pcomp acomp
+  set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 1, 0,    0);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+  pexp_entry        = pentry;  //these are the expected ram contents for prm
+  aexp_entry        = aentry;  //these are the expected ram contents for prm
+  t0exp_entry.ctr   = 2;
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+  check_ctr_row   ("R13a.4",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row_t0("R13a.4",t0idx,t0exp_entry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 13b
+// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+// 13b X  0    1    X   0     0     —    —    DEC   Prov=bim, bim was wrong
+//
+// T0CTR = 1 -> T0CTR = 0 
+// PCTR  = 2 -> PCTR  = 2  PUSE = 0 -> 0
+// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//
+// This is split into 4 tests, UP/DIF -> 00/01/10/11
+// -------------------------------------------------------------
+  tb_info("CTR ROW 13b");
+  // reset the ram entry
+  reset_t0_entry(t0idx,t0entry);
+  //                             UP PT RT pT aT pcomp acomp
+  set_ctr_row(pred_meta,upd_data,0, 0, 1, 0, 0, 0,    0);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+  pexp_entry        = pentry;  //these are the expected ram contents for prm
+  aexp_entry        = aentry;  //these are the expected ram contents for prm
+  t0exp_entry.ctr   = 0;
+  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+  check_ctr_row   ("R13b",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row_t0("R13b",t0idx,t0exp_entry,errs,v);
+
+//// -------------------------------------------------------------
+//// ROW 13c
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//// 13c X  1    0    X   0     0     —    —    DEC   Provi=bim, bim was wrong
+////
+//// T0CTR = 1 -> T0CTR = 0 
+//// PCTR  = 2 -> PCTR  = 2  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 13c");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,0, 1, 0, 0, 0, 0,    0);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  t0exp_entry.ctr   = 0;
+//  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row   ("R13c",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//  check_ctr_row_t0("R13c",t0idx,t0exp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 13d
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//// 13d X  1    1    X   0     0     —    —    INC   Prov=bim, bim was correct
+////
+//// T0CTR = 1 -> T0CTR = 2 
+//// PCTR  = 2 -> PCTR  = 2  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 13d");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,0, 1, 1, 0, 0, 0,    0);
+//  tage_update({upd_data,upd_data},2'b01,errs); 
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  t0exp_entry.ctr   = 2;
+//  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row   ("R13d",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//  check_ctr_row_t0("R13d",t0idx,t0exp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 14
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  14 1  1    0    X   >0    0     DEC  —    -     Prov=p,wrong, Alt invalid (BIM)
+////
+//// PCTR  = 2 -> PCTR  = 1  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 14");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 0, pcomp,    0);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;      
+//  check_ctr_row   ("R14",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 15
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  15 1  0    1    X   >0    0     DEC  —    -     Prov=p,wrong,Alt invalid (BIM)
+////
+//// PCTR  = 2 -> PCTR  = 1  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 15");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 0, pcomp,    0);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row   ("R15",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 16
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+////  16 1  1    1    X   >0    0     INC  —    -     Prov=p,correct,Alt invalid (BIM)
+////
+//// PCTR  = 2 -> PCTR  = 3  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 16");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0, pcomp,    0);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row   ("R16",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 17
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//// 17  1  0    0    X   >0    0     INC  —    -     Prov=p,correct,Alt invalid (BIM)
+////
+//// PCTR  = 2 -> PCTR  = 3  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 17");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0, pcomp,    0);
+//  tage_update({upd_data,upd_data},2'b01,errs);
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row   ("R17",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+//
+//// -------------------------------------------------------------
+//// ROW 18
+//// ROW UP PTKN RTKN DIF PCOMP ACOMP ActP ActA ActT0 Exp
+//// 18  x  x    x    X   0     >0    —    —    -     Unreachable, invalid condition
+////
+//// PCTR  = 2 -> PCTR  = 2  PUSE = 0 -> 0
+//// ACTR  = 1 -> ACTR  = 1  AUSE = 0 -> 0
+//// -------------------------------------------------------------
+//  tb_info("CTR ROW 18");
+//  // reset the ram entry
+//  reset_t0_entry(t0idx,t0entry);
+//  //                             UP PT RT pT aT pcomp acomp
+//  set_ctr_row(pred_meta,upd_data,0, 0, 0, 0, 0, 0,    acomp);
+//  tage_update({upd_data,upd_data},2'b01,errs);     
+//
+//  t0exp_entry       = t0entry; //these are the expected ram contents for t0
+//  pexp_entry        = pentry;  //these are the expected ram contents for prm
+//  aexp_entry        = aentry;  //these are the expected ram contents for prm
+//  pexp_entry.ctr    = 2; pexp_entry.useful = 0;
+//  aexp_entry.ctr    = 1; aexp_entry.useful = 0;
+//  check_ctr_row   ("R18",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+
+  // END
   stop_test(this_test,errs);
   tb_pf(this_test,errs);
   tb_errs += errs;
 endtask
 
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+task automatic reset_t0_entry(
+  input int              t0idx,
+  input tage_ram_entry_t t0entry
+);
+  tage_ram_write(0, t0idx, t0entry);
+endtask
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+task automatic check_ctr_row_t0(
+  input string           label,
+  input int              t0idx,
+  input tage_ram_entry_t t0exp,
+  inout int              errs,
+  input int              v
+);
+  tage_ram_entry_t r;
+  tage_ram_read(0, t0idx, r);
+  tage_cmp_ram_entry_t0({label," T0   "}, t0idx, t0exp, r, errs, v);
+endtask
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+task automatic set_ctr_row(
+  inout tage_pred_meta_t meta,
+  inout tage_upd_inp_t   upd,
+  input logic using_primary,
+  input logic pred_tkn,
+  input logic resolved_taken,
+  input logic prm_tkn,
+  input logic alt_tkn,
+  input int   prm_comp,
+  input int   alt_comp,
+
+);
+  meta.tage_using_primary = using_primary;
+  meta.tage_pred_tkn      = pred_tkn;
+  meta.tage_prm_comp      = prm_comp;
+  meta.tage_alt_comp      = alt_comp;
+  upd.resolved_taken      = resolved_taken;
+  meta.tage_prm_tkn       = prm_tkn;
+  meta.tage_alt_tkn       = alt_tkn;
+  upd.cond_mispredict     = pred_tkn != resolved_taken;
+  upd.tage_pred_meta      = meta;
+endtask
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+task automatic check_ctr_row(
+  input string label,
+  input int    pcomp, pidx, acomp, aidx,
+  input tage_ram_entry_t pexp, aexp,
+  inout int    errs,
+  input int    v
+);
+  tage_ram_entry_t r;
+  tage_ram_read(pcomp, pidx, r);
+  tage_cmp_ram_entry({label," PCOMP"}, pcomp, pidx, pexp, r, errs, v);
+  tage_ram_read(acomp, aidx, r);
+  tage_cmp_ram_entry({label," ACOMP"}, acomp, aidx, aexp, r, errs, v);
+endtask
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+task automatic reset_ctr_entries(
+  input int pcomp, pidx, acomp, aidx,
+  input tage_ram_entry_t pentry, aentry
+);
+  tage_ram_write(pcomp, pidx, pentry);
+  tage_ram_write(acomp, aidx, aentry);
+endtask
 // -------------------------------------------------------------------
 // tage_ram_write: write one entry to a table RAM.
 // idx is the full THIS_INDEX_BITS-wide address.
@@ -355,6 +831,27 @@ task automatic tage_ram_read(
   endcase
 endtask
 
+// -------------------------------------------------------------------
+// -------------------------------------------------------------------
+task automatic tage_cmp_ram_entry_t0(
+  input string           which,
+  input int              idx,
+  input tage_ram_entry_t exp,
+  input tage_ram_entry_t act,
+  inout int              errs,
+  input int              v
+);
+  if(exp.ctr !== act.ctr) begin
+    $write("-E: %s : CTR mismatch, T0 idx=0x%04x",which,idx);
+    $write(" exp: %02x",exp.ctr);
+    $write(" act: %02x\n",act.ctr);
+    ++errs;
+  end else if(v) begin
+    $write("-I: %s : CTR match, T0 idx=0x%04x",which,idx);
+    $write(" exp: %02x",exp.ctr);
+    $write(" act: %02x\n",act.ctr);
+  end
+endtask
 // -------------------------------------------------------------------
 // tage_cmp_ram_entry: compare two ram entries
 // -------------------------------------------------------------------

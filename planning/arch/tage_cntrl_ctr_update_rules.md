@@ -48,3 +48,33 @@
 | 17  | 1                  | 0             | 0              | X         | >0            | 0             | **INC**         | —           | -          | Alt invalid (BIM), provider = primary, correct    |
 | 18  | x                  | x             | x              | X         | 0             | >0            | —               | —           | -          | Unreachable, invalid condition                    |
 
+## Notes:
+
+### Row 7
+
+The situration is alternative provided the prediction which was TAKEN, pred_diff is X in ROW 7 
+but primary taken has impact on alternative's useful counter
+```
+pT  = primary taken
+aT  = alternative taken
+in this scenario aT = 1 and pT = 0, alt useful is incremented
+                 aT = 1 and pT = 1, alt useful is not incremented
+
+- in the 1st case (where aT=1 pT=0) alternative is more useful than primary, so increment alt's useful
+- in the 2nd case (where aT=1 pT=1) alternative is no more useful than primary, so do not increment alt's useful
+
+```
+### Row 8
+
+This is a similar situation as Row 7. The alternative provided the prediction which was NOT TAKEN, pred_diff is X in ROW 8 
+but primary (not) taken has impact on alternative's useful counter
+```
+pT  = primary taken
+aT  = alternative taken
+in this scenario aT = 0 and pT = 0, alt useful is not incremented
+                 aT = 0 and pT = 1, alt useful is incremented
+
+- in the 1st case (where aT=0 pT=0) alternative is no more useful than primary, so do not increment alt's useful
+- in the 2nd case (where aT=0 pT=1) alternative is more useful than primary, so increment alt's useful
+
+```
