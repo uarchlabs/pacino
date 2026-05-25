@@ -55,11 +55,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                  | Was complete but BP-034/5 exposed|
 |                         |             |                  | issues, see tech debt #45        |
 |                         |             |                  | HAND-FIX-002 applied (debt #30). |
-
+| |  | | |
 | tage.sv                 | Complete    | tb_tage          | BP-010 through BP-030 complete.  |
 |                         |             |                  | 68 tests pass. All coverage      |
 |                         |             |                  | targets closed or deferred.      |
-
+| |  | | |
 | ittage_interfaces.md              | Draft       | --              | session-036: corrections applied.|
 |                                   |             |                 | session-037: II6 resolved.       |
 |                                   |             |                 | session-038: redundancy collapse |
