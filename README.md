@@ -15,25 +15,88 @@ the flow will be abstracted into a standalone tool.
 RTL is in SystemVerilog, simulation with Verilator 5.020.
 
 ---
+# TOC
 
-## Quick Start
-
-```bash
-# install system prerequisites
-bash tools/prereqs.sh
-
-# clone with submodules
-git clone --recurse-submodules https://github.com/uarchlabs/pacino
-
-# set the environment variables RVA_ROOT and CLAUDE_CODE_MAX_OUTPUT_TOKENS
-cd pacino
-. tools/setup.sh
-
-```
+1. [Quick start](quick-start)
+1. [Optional tools](optional-tools)
+1. [Directory Structure](directory-structure)
+1. [Constants](constants)
+1. [Tools](tools)
+1. [Workflow](workflow)
+1. [Naming Conventions](naming-conventions)
+1. [Further Reading](further-reading)
 
 ---
+# Quick start
 
-## Project Status
+- Clone pacino
+- Install the Ubuntu prereqs
+- Set the Pacino environment variables
+- Compile the submodules
+- Run basic checks
+- Run code coverage
+
+## Clone pacino
+Clone with submodules
+```bash
+git clone --recurse-submodules https://github.com/uarchlabs/pacino
+```
+Or init submodules after clone
+```bash
+git clone https://github.com/uarchlabs/pacino
+cd pacino
+git submodule update --init --recursive
+```
+
+## Install system prerequisites
+
+```bash
+cd pacino 
+bash tools/prereqs.sh
+```
+
+## Set the environment 
+This sets variables `RVA_ROOT` and `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+
+```bash
+cd pacino
+. tools/setup.sh
+```
+
+## Compile the submodules
+
+Compile and install spike
+
+```bash
+cd $RVA_ROOT/tools/spike
+mkdir -p install build
+cd build
+../configure --prefix=$RVA_ROOT/tools/spike/install
+make -j4
+make install
+```
+
+## Run basic checks
+
+```bash
+make -C $RVA_ROOT/rtl all
+```
+
+## Run code coverage
+
+To measure code coverage
+
+```bash
+make -C $RVA_ROOT/rtl cov
+```
+
+To view BPU coverage reports
+
+```bash
+firefox $RVA_ROOT/rtl/core/frontend/bpu/coverage/bpu/html/index.html
+```
+
+# Project Status
 
 Summary:
 
@@ -45,13 +108,49 @@ Summary:
 
 See [PROJECT_STATUS.md](planning/PROJECT_STATUS.md) for detailed status tables.
 
-Interactive status is this [diagram](docs//pacino-microarchitecture.html).
-
 Current discussions in article form are found in [BLOGS](https://uarchlabs.github.io/blog/)
 
----
+Interactive status is this [diagram](https://uarchlabs.github.io/pacino/overview/).
 
-## Directory Structure
+See also uarchlabs [FAQ](https://uarchlabs.com/faq.html)
+
+---
+# Optional tools
+I have started using surfer to replace Gtkwaves.
+
+## Surfer - Install Rust
+
+NOTE: This install modifies your .bashrc.
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
+source $HOME/.cargo/env
+```
+
+## Surfer - Install system dependencies
+```
+sudo apt update
+sudo apt install -y build-essential pkg-config libssl-dev \
+  libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
+```
+
+## Surfer - Clone and build 
+
+Note: This has rust's characteristic long link times. It can be lengthy.
+
+```bash
+# presumes you have run pacino/tools/setup.sh
+cd $RVA_ROOT/tools
+
+git clone https://gitlab.com/surfer-project/surfer.git
+cd surfer
+git submodule update --init --recursive
+cargo build --release
+cargo install --path surfer
+surfer --version # verify
+```
+
+# Directory Structure
 
 `$RVA_ROOT` is an environment variable pointing to the current top of the tree.
 
@@ -205,7 +304,7 @@ $RVA_ROOT/
 
 ---
 
-## Constants
+# Constants
 
 | Property          | Value                                              |
 |-------------------|----------------------------------------------------|
@@ -217,7 +316,7 @@ $RVA_ROOT/
 
 ---
 
-## Tools
+# Tools
 
 | Name                    | Location             | Purpose                                 |
 |-------------------------|----------------------|-----------------------------------------|
@@ -225,7 +324,7 @@ $RVA_ROOT/
 | riscv-opcodes           | tools/riscv-opcodes/ | Machine-readable RISC-V opcode database |
 | spike (riscv-isa-sim)   | tools/spike/         | RISC-V ISA simulator and disassembler   |
 
-### check_rva23_coverage.py
+## check_rva23_coverage.py
 
 Parses `tools/riscv-opcodes/` extension files and checks coverage against the RTL in
 `frontend/decoder/rtl/`. Produces a per-extension report with COVERED, ROUTED, and
@@ -240,12 +339,12 @@ make sim_all     # runs all testbenches then coverage
 Known limitations are documented in the script's `KNOWN_SHARED_ENCODINGS` and
 `KNOWN_OPCODES_FILE_GAPS` tables.
 
-### riscv-opcodes
+## riscv-opcodes
 
 Git submodule at `tools/riscv-opcodes/`. Enumerates standard RISC-V instruction
 opcodes and CSRs. Used as ground truth for coverage checking and decoder validation.
 
-### spike
+## spike
 
 Git submodule at `tools/spike/`. Functional simulator
 
@@ -261,7 +360,7 @@ echo "DASM(00000057)" | tools/spike/install/bin/spike-dasm --isa rv64gcv
 
 ---
 
-## Workflow
+# Workflow
 
 Two AI tools are used in parallel:
 
@@ -270,7 +369,7 @@ Two AI tools are used in parallel:
 
 A domain expert directs both agents - the PA for architectural planning, the IA for implementation — with enforced context isolation between sessions.
 
-### Terminology
+## Terminology
 
 | Term             | Meaning |
 |------------------|---------|
@@ -282,7 +381,7 @@ A domain expert directs both agents - the PA for architectural planning, the IA 
 | PROJECT_CORE     | Handoff document describing workflow, roles, structures, and files used in the methodology. Not supplied during handoff unless there has been a methodology change. |
 | PROJECT_STATUS   | Handoff document supplied during handoff giving a task list (completed and planned), module status, technical debt, and open items. Used during task planning and next-experiment file generation. |
 
-### Step by Step
+## Step by Step
 
 1. In claude.ai: discuss the next experiment, agree on hypothesis and scope
 
@@ -361,7 +460,7 @@ container, or a VM — particularly when using `--auto-accept-edits` or
     git push
     ```
 
-### Key Discipline Rules
+## Key Discipline Rules
 
 - One experiment = one fresh Claude Code session. Never resume between experiments.
 - Claude Code reads the prompt from the experiment file — this also verifies file format.
@@ -453,7 +552,7 @@ The handoff document adds:
 
 ---
 
-## Naming Conventions
+# Naming Conventions
 
 | Item             | Convention               | Example                    |
 |:-----------------|:-------------------------|:---------------------------|
@@ -467,7 +566,7 @@ The handoff document adds:
 
 ---
 
-## Further Reading
+# Further Reading
 
 - [FAQ](https://uarchlabs.com/faq.html) - pacino focused uarchlabs FAQ
 - `CLAUDE.md` - full project baseline and current scope

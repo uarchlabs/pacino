@@ -1,20 +1,30 @@
 # Makefile -- branch predictor cluster
 # Targets: lint, sim, all (default), clean
 
-#MAKE_JOBS := $(patsubst -j%,%,$(filter -j%,$(MAKEFLAGS)))
+VERILATOR := $(shell which verilator 2>/dev/null)
+ifeq ($(VERILATOR),)
+  $(error [error] verilator not found. Install verilator before running make)
+endif
+
+ifeq ($(VERBOSE),1)
+  Q        :=
+  VSILENCE :=
+else
+  Q        := @
+  VSILENCE := > /dev/null
+  MAKEFLAGS := -s --no-print-directory
+endif
+
 JOBS ?= 1
 
 .DEFAULT_GOAL := all
 
 RTL_DIR  := rtl
 TB_DIR   := tb
-#COMP_DIR := $(RVA_ROOT)/rtl/lib/rtl
 COMP_DIR := ../../../lib/rtl
-#VER_OUT  := verilator_out
 VER_OUT  := obj
 
-VER_FLAGS     := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
-# DECLFILENAME: tb module name must differ from tb_<dut>.sv filename
+VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
 SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 
 .PHONY: all lint sim sim_history sim_ubtb lint_loop_pred sim_loop_pred \
@@ -45,37 +55,41 @@ all: lint  \
      sim_tage_tasks
 
 lint:
-	verilator --lint-only \
+	@echo "[linting]    bp_history"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
-	  $(RTL_DIR)/bp_history.sv
+	  $(RTL_DIR)/bp_history.sv $(VSILENCE)
 
 sim:
-	verilator --binary \
+	@echo "[compiling]  tb_bp_pkg"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
 	  --Mdir $(VER_OUT) \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
-	  $(TB_DIR)/tb_bp_pkg.sv
-	./$(VER_OUT)/Vtb
-
+	  $(TB_DIR)/tb_bp_pkg.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)/Vtb"
+	$(Q)./$(VER_OUT)/Vtb
 
 sim_history:
-	verilator --binary \
+	@echo "[compiling]  tb_bp_history"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_hist \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/bp_history.sv \
-	  $(TB_DIR)/tb_bp_history.sv
-	./$(VER_OUT)_hist/Vtb
-
+	  $(TB_DIR)/tb_bp_history.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_hist/Vtb"
+	$(Q)./$(VER_OUT)_hist/Vtb
 
 sim_ubtb:
-	verilator --binary \
+	@echo "[compiling]  tb_ubtb"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -83,20 +97,22 @@ sim_ubtb:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/ubtb.sv \
-	  $(TB_DIR)/tb_ubtb.sv
-	./$(VER_OUT)_ubtb/Vtb
+	  $(TB_DIR)/tb_ubtb.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ubtb/Vtb"
+	$(Q)./$(VER_OUT)_ubtb/Vtb
 
 lint_loop_pred:
-	verilator --lint-only \
+	@echo "[linting]    loop_pred"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
-	  $(RTL_DIR)/loop_pred.sv
-
+	  $(RTL_DIR)/loop_pred.sv $(VSILENCE)
 
 sim_loop_pred:
-	verilator --binary \
+	@echo "[compiling]  tb_loop_pred"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -104,21 +120,23 @@ sim_loop_pred:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/loop_pred.sv \
-	  $(TB_DIR)/tb_loop_pred.sv
-	./$(VER_OUT)_loop_pred/Vtb
+	  $(TB_DIR)/tb_loop_pred.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_loop_pred/Vtb"
+	$(Q)./$(VER_OUT)_loop_pred/Vtb
 
 lint_tage_table:
-	verilator --lint-only \
+	@echo "[linting]    tage_table"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
-	  $(RTL_DIR)/tage_table.sv
-
+	  $(RTL_DIR)/tage_table.sv $(VSILENCE)
 
 sim_tage_table:
-	verilator --binary \
+	@echo "[compiling]  tb_tage_table"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -127,21 +145,23 @@ sim_tage_table:
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
 	  $(RTL_DIR)/tage_table.sv \
-	  $(TB_DIR)/tb_tage_table.sv
-	./$(VER_OUT)_tage_table/Vtb
+	  $(TB_DIR)/tb_tage_table.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_tage_table/Vtb"
+	$(Q)./$(VER_OUT)_tage_table/Vtb
 
 lint_ittage_table:
-	verilator --lint-only \
+	@echo "[linting]    ittage_table"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
-	  $(RTL_DIR)/ittage_table.sv
-
+	  $(RTL_DIR)/ittage_table.sv $(VSILENCE)
 
 sim_ittage_table:
-	verilator --binary \
+	@echo "[compiling]  tb_ittage_table"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -150,12 +170,13 @@ sim_ittage_table:
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
 	  $(RTL_DIR)/ittage_table.sv \
-	  $(TB_DIR)/tb_ittage_table.sv
-	./$(VER_OUT)_ittage_table/Vtb +ITTAGE_FAST_INIT=1
-
+	  $(TB_DIR)/tb_ittage_table.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ittage_table/Vtb"
+	$(Q)./$(VER_OUT)_ittage_table/Vtb +ITTAGE_FAST_INIT=1
 
 lint_ittage_cntrl:
-	verilator --lint-only \
+	@echo "[linting]    ittage_cntrl"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module ittage_cntrl \
@@ -163,11 +184,11 @@ lint_ittage_cntrl:
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
 	  $(RTL_DIR)/ittage_table.sv \
-	  $(RTL_DIR)/ittage_cntrl.sv
-
+	  $(RTL_DIR)/ittage_cntrl.sv $(VSILENCE)
 
 sim_ittage_cntrl:
-	verilator --binary \
+	@echo "[compiling]  tb_ittage_cntrl"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -175,12 +196,13 @@ sim_ittage_cntrl:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
-	  $(TB_DIR)/tb_ittage_cntrl.sv
-	./$(VER_OUT)_ittage_cntrl/Vtb
-
+	  $(TB_DIR)/tb_ittage_cntrl.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ittage_cntrl/Vtb"
+	$(Q)./$(VER_OUT)_ittage_cntrl/Vtb
 
 lint_ittage:
-	verilator --lint-only \
+	@echo "[linting]    ittage"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
@@ -191,11 +213,11 @@ lint_ittage:
 	  $(COMP_DIR)/sram_init.sv \
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
-	  $(RTL_DIR)/ittage.sv
-
+	  $(RTL_DIR)/ittage.sv $(VSILENCE)
 
 sim_ittage:
-	verilator --binary \
+	@echo "[compiling]  tb_ittage"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
@@ -208,21 +230,23 @@ sim_ittage:
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
 	  $(RTL_DIR)/ittage.sv \
-	  $(TB_DIR)/tb_ittage.sv
-	./$(VER_OUT)_ittage/Vtb +ITTAGE_FAST_INIT=1
-
+	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ittage/Vtb"
+	$(Q)./$(VER_OUT)_ittage/Vtb +ITTAGE_FAST_INIT=1
 
 lint_tage_cntrl:
-	verilator --lint-only \
+	@echo "[linting]    tage_cntrl"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
-	  $(RTL_DIR)/tage_cntrl.sv
+	  $(RTL_DIR)/tage_cntrl.sv $(VSILENCE)
 
 lint_tage:
-	verilator --lint-only \
+	@echo "[linting]    tage"
+	$(Q)verilator --lint-only \
 	  $(VER_FLAGS) \
 	  $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
@@ -238,11 +262,11 @@ lint_tage:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
-	  $(TB_DIR)/tb_tage.sv
-
+	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 
 sim_tage:
-	verilator --binary \
+	@echo "[compiling]  tb_tage"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -258,12 +282,13 @@ sim_tage:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
-	  $(TB_DIR)/tb_tage.sv
-	./$(VER_OUT)_tage/Vtb
-
+	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_tage/Vtb"
+	$(Q)./$(VER_OUT)_tage/Vtb
 
 sim_tage_fast:
-	verilator --binary \
+	@echo "[compiling]  tb_tage (fast init)"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -279,11 +304,13 @@ sim_tage_fast:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
-	  $(TB_DIR)/tb_tage.sv
-	./$(VER_OUT)_tage_fast/Vtb +TAGE_FAST_INIT=1
+	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_tage_fast/Vtb"
+	$(Q)./$(VER_OUT)_tage_fast/Vtb +TAGE_FAST_INIT=1
 
 sim_tage_tasks:
-	verilator --binary \
+	@echo "[compiling]  tb_tage_tasks"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -299,17 +326,13 @@ sim_tage_tasks:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
-	  $(TB_DIR)/tb_tage_tasks.sv
-	./$(VER_OUT)_tage_tasks/Vtb +TAGE_FAST_INIT=1
-
-#	  $(TB_DIR)/tb_tage_manual.sv > /dev/null 2>&1
-
-#sim_tage_manual:
-#	@echo $(JOBS)
+	  $(TB_DIR)/tb_tage_tasks.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_tage_tasks/Vtb"
+	$(Q)./$(VER_OUT)_tage_tasks/Vtb +TAGE_FAST_INIT=1
 
 sim_tage_manual:
-	@echo "[I] compiling sim_tage_manual"
-	verilator --binary \
+	@echo "[compiling]  tb_tage_manual"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -329,33 +352,30 @@ sim_tage_manual:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
-	  $(TB_DIR)/tb_tage_manual.sv
-	@echo "[I] simulating sim_tage_manual"
-	@./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=1
+	  $(TB_DIR)/tb_tage_manual.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_tage_manual/Vtb"
+	$(Q)./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=1
 
 clean:
-	rm -rf $(VER_OUT) \
-    $(VER_OUT)_hist \
-    $(VER_OUT)_ubtb \
+	$(Q)rm -rf $(VER_OUT) \
+	  $(VER_OUT)_hist \
+	  $(VER_OUT)_ubtb \
 	  $(VER_OUT)_loop_pred \
 	  $(VER_OUT)_tage_table \
 	  $(VER_OUT)_ittage_table \
 	  $(VER_OUT)_ittage_cntrl \
 	  $(VER_OUT)_ittage \
-    $(VER_OUT)_tage \
+	  $(VER_OUT)_tage \
 	  $(VER_OUT)_tage_fast \
 	  $(VER_OUT)_tage_tasks \
 	  $(VER_OUT)_tage_manual \
 	  obj_dir_cov_history \
-    obj_dir_cov_loop_pred \
-    obj_dir_cov_tage \
-    obj_dir_cov_tage_table \
-    obj_dir_cov_ubtb
+	  obj_dir_cov_loop_pred \
+	  obj_dir_cov_tage \
+	  obj_dir_cov_tage_table \
+	  obj_dir_cov_ubtb
 
 # -- Coverage infrastructure ----------------------------------------
-# cov_* targets: coverage-instrumented builds in separate obj_dirs.
-# Do not reuse existing sim obj_dirs -- parallel dirs prevent stomping.
-
 COV_DIR := coverage
 
 .PHONY: cov_tage cov_tage_table cov_loop_pred cov_history cov_ubtb \
@@ -364,7 +384,8 @@ COV_DIR := coverage
         clean_cov_history clean_cov_ubtb clean_cov_bpu clean_cov
 
 cov_history:
-	verilator --binary \
+	@echo "[compiling]  cov tb_bp_history"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --coverage-line \
 	  --top-module tb \
@@ -372,22 +393,24 @@ cov_history:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/bp_history.sv \
-	  $(TB_DIR)/tb_bp_history.sv
-	sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
+	  $(TB_DIR)/tb_bp_history.sv $(VSILENCE)
+	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_history/Vtb__main.cpp
-	make -C obj_dir_cov_history -f Vtb.mk
-	mkdir -p $(COV_DIR)/history/html
-	cd $(COV_DIR)/history && $(CURDIR)/obj_dir_cov_history/Vtb
-	verilator_coverage \
+	$(Q)make -C obj_dir_cov_history -f Vtb.mk
+	$(Q)mkdir -p $(COV_DIR)/history/html
+	@echo "[simulating] cov_history"
+	$(Q)cd $(COV_DIR)/history && $(CURDIR)/obj_dir_cov_history/Vtb
+	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/history/coverage.info \
 	  $(COV_DIR)/history/coverage.dat
-	genhtml --prefix $(RVA_ROOT) \
+	$(Q)genhtml --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/history/html \
 	  $(COV_DIR)/history/coverage.info
-	@echo "cov_history: HTML at $(COV_DIR)/history/html/index.html"
+	@echo "[coverage]   history HTML at $(COV_DIR)/history/html/index.html"
 
 cov_ubtb:
-	verilator --binary \
+	@echo "[compiling]  cov tb_ubtb"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
@@ -396,22 +419,24 @@ cov_ubtb:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/ubtb.sv \
-	  $(TB_DIR)/tb_ubtb.sv
-	sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
+	  $(TB_DIR)/tb_ubtb.sv $(VSILENCE)
+	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_ubtb/Vtb__main.cpp
-	make -C obj_dir_cov_ubtb -f Vtb.mk
-	mkdir -p $(COV_DIR)/ubtb/html
-	cd $(COV_DIR)/ubtb && $(CURDIR)/obj_dir_cov_ubtb/Vtb
-	verilator_coverage \
+	$(Q)make -C obj_dir_cov_ubtb -f Vtb.mk
+	$(Q)mkdir -p $(COV_DIR)/ubtb/html
+	@echo "[simulating] cov_ubtb"
+	$(Q)cd $(COV_DIR)/ubtb && $(CURDIR)/obj_dir_cov_ubtb/Vtb
+	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/ubtb/coverage.info \
 	  $(COV_DIR)/ubtb/coverage.dat
-	genhtml --prefix $(RVA_ROOT) \
+	$(Q)genhtml --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/ubtb/html \
 	  $(COV_DIR)/ubtb/coverage.info
-	@echo "cov_ubtb: HTML at $(COV_DIR)/ubtb/html/index.html"
+	@echo "[coverage]   ubtb HTML at $(COV_DIR)/ubtb/html/index.html"
 
 cov_loop_pred:
-	verilator --binary \
+	@echo "[compiling]  cov tb_loop_pred"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
@@ -420,22 +445,24 @@ cov_loop_pred:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/loop_pred.sv \
-	  $(TB_DIR)/tb_loop_pred.sv
-	sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
+	  $(TB_DIR)/tb_loop_pred.sv $(VSILENCE)
+	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_loop_pred/Vtb__main.cpp
-	make -C obj_dir_cov_loop_pred -f Vtb.mk
-	mkdir -p $(COV_DIR)/loop_pred/html
-	cd $(COV_DIR)/loop_pred && $(CURDIR)/obj_dir_cov_loop_pred/Vtb
-	verilator_coverage \
+	$(Q)make -C obj_dir_cov_loop_pred -f Vtb.mk
+	$(Q)mkdir -p $(COV_DIR)/loop_pred/html
+	@echo "[simulating] cov_loop_pred"
+	$(Q)cd $(COV_DIR)/loop_pred && $(CURDIR)/obj_dir_cov_loop_pred/Vtb
+	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/loop_pred/coverage.info \
 	  $(COV_DIR)/loop_pred/coverage.dat
-	genhtml --prefix $(RVA_ROOT) \
+	$(Q)genhtml --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/loop_pred/html \
 	  $(COV_DIR)/loop_pred/coverage.info
-	@echo "cov_loop_pred: HTML at $(COV_DIR)/loop_pred/html/index.html"
+	@echo "[coverage]   loop_pred HTML at $(COV_DIR)/loop_pred/html/index.html"
 
 cov_tage_table:
-	verilator --binary \
+	@echo "[compiling]  cov tb_tage_table"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
@@ -445,23 +472,25 @@ cov_tage_table:
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
 	  $(RTL_DIR)/tage_table.sv \
-	  $(TB_DIR)/tb_tage_table.sv
-	sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
+	  $(TB_DIR)/tb_tage_table.sv $(VSILENCE)
+	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_tage_table/Vtb__main.cpp
-	make -C obj_dir_cov_tage_table -f Vtb.mk
-	mkdir -p $(COV_DIR)/tage_table/html
-	cd $(COV_DIR)/tage_table && \
+	$(Q)make -C obj_dir_cov_tage_table -f Vtb.mk
+	$(Q)mkdir -p $(COV_DIR)/tage_table/html
+	@echo "[simulating] cov_tage_table"
+	$(Q)cd $(COV_DIR)/tage_table && \
 	  $(CURDIR)/obj_dir_cov_tage_table/Vtb +TAGE_FAST_INIT=1
-	verilator_coverage \
+	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/tage_table/coverage.info \
 	  $(COV_DIR)/tage_table/coverage.dat
-	genhtml --prefix $(RVA_ROOT) \
+	$(Q)genhtml --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/tage_table/html \
 	  $(COV_DIR)/tage_table/coverage.info
-	@echo "cov_tage_table: HTML at $(COV_DIR)/tage_table/html/index.html"
+	@echo "[coverage]   tage_table HTML at $(COV_DIR)/tage_table/html/index.html"
 
 cov_tage:
-	verilator --binary \
+	@echo "[compiling]  cov tb_tage"
+	$(Q)verilator --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -478,54 +507,55 @@ cov_tage:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
-	  $(TB_DIR)/tb_tage.sv
-	sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
+	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
+	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_tage/Vtb__main.cpp
-	make -C obj_dir_cov_tage -f Vtb.mk
-	mkdir -p $(COV_DIR)/tage/html
-	cd $(COV_DIR)/tage && $(CURDIR)/obj_dir_cov_tage/Vtb
-	verilator_coverage \
+	$(Q)make -C obj_dir_cov_tage -f Vtb.mk
+	$(Q)mkdir -p $(COV_DIR)/tage/html
+	@echo "[simulating] cov_tage"
+	$(Q)cd $(COV_DIR)/tage && $(CURDIR)/obj_dir_cov_tage/Vtb
+	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/tage/coverage.info \
 	  $(COV_DIR)/tage/coverage.dat
-	genhtml --prefix $(RVA_ROOT) \
+	$(Q)genhtml --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/tage/html \
 	  $(COV_DIR)/tage/coverage.info
-	@echo "cov_tage: HTML at $(COV_DIR)/tage/html/index.html"
+	@echo "[coverage]   tage HTML at $(COV_DIR)/tage/html/index.html"
 
 cov_bpu: cov_tage cov_tage_table cov_loop_pred cov_history cov_ubtb
-	mkdir -p $(COV_DIR)/bpu/html
-	verilator_coverage \
+	$(Q)mkdir -p $(COV_DIR)/bpu/html
+	$(Q)verilator_coverage \
 	  --write $(COV_DIR)/bpu/coverage.dat \
 	  $(COV_DIR)/tage/coverage.dat \
 	  $(COV_DIR)/tage_table/coverage.dat \
 	  $(COV_DIR)/loop_pred/coverage.dat \
 	  $(COV_DIR)/history/coverage.dat \
 	  $(COV_DIR)/ubtb/coverage.dat
-	verilator_coverage \
+	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/bpu/coverage.info \
 	  $(COV_DIR)/bpu/coverage.dat
-	genhtml --prefix $(RVA_ROOT) \
+	$(Q)genhtml --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/bpu/html \
 	  $(COV_DIR)/bpu/coverage.info
-	@echo "cov_bpu: merged HTML at $(COV_DIR)/bpu/html/index.html"
+	@echo "[coverage]   bpu merged HTML at $(COV_DIR)/bpu/html/index.html"
 
 clean_cov_tage:
-	rm -rf obj_dir_cov_tage $(COV_DIR)/tage
+	$(Q)rm -rf obj_dir_cov_tage $(COV_DIR)/tage
 
 clean_cov_tage_table:
-	rm -rf obj_dir_cov_tage_table $(COV_DIR)/tage_table
+	$(Q)rm -rf obj_dir_cov_tage_table $(COV_DIR)/tage_table
 
 clean_cov_loop_pred:
-	rm -rf obj_dir_cov_loop_pred $(COV_DIR)/loop_pred
+	$(Q)rm -rf obj_dir_cov_loop_pred $(COV_DIR)/loop_pred
 
 clean_cov_history:
-	rm -rf obj_dir_cov_history $(COV_DIR)/history
+	$(Q)rm -rf obj_dir_cov_history $(COV_DIR)/history
 
 clean_cov_ubtb:
-	rm -rf obj_dir_cov_ubtb $(COV_DIR)/ubtb
+	$(Q)rm -rf obj_dir_cov_ubtb $(COV_DIR)/ubtb
 
 clean_cov_bpu:
-	rm -rf $(COV_DIR)/bpu
+	$(Q)rm -rf $(COV_DIR)/bpu
 
 clean_cov: clean_cov_tage clean_cov_tage_table \
   clean_cov_loop_pred clean_cov_history \

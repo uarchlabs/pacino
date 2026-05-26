@@ -45,8 +45,8 @@
 .claude/settings.local.json
 
 # spike paths
-tools/spike/build/
-tools/spike/install/
+tools/spike/
+tools/surfer/
 tools/install/
 
 # local temp copies - optional
