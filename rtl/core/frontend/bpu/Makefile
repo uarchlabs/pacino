@@ -1,10 +1,9 @@
 # Makefile -- branch predictor cluster
 # Targets: lint, sim, all (default), clean
+include $(RVA_ROOT)/rtl/Vars.mk
 
-VERILATOR := $(shell which verilator 2>/dev/null)
-ifeq ($(VERILATOR),)
-  $(error [error] verilator not found. Install verilator before running make)
-endif
+##VERILATOR=/usr/local/bin/verilator
+#VERILATOR=/home/jeff/Development/jeffnye-gh/pacino/tools/bin/verilator
 
 ifeq ($(VERBOSE),1)
   Q        :=
@@ -56,7 +55,7 @@ all: lint  \
 
 lint:
 	@echo "[linting]    bp_history"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
@@ -64,7 +63,7 @@ lint:
 
 sim:
 	@echo "[compiling]  tb_bp_pkg"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
 	  --Mdir $(VER_OUT) \
@@ -76,7 +75,7 @@ sim:
 
 sim_history:
 	@echo "[compiling]  tb_bp_history"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_hist \
@@ -89,7 +88,7 @@ sim_history:
 
 sim_ubtb:
 	@echo "[compiling]  tb_ubtb"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -103,7 +102,7 @@ sim_ubtb:
 
 lint_loop_pred:
 	@echo "[linting]    loop_pred"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -112,7 +111,7 @@ lint_loop_pred:
 
 sim_loop_pred:
 	@echo "[compiling]  tb_loop_pred"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -126,7 +125,7 @@ sim_loop_pred:
 
 lint_tage_table:
 	@echo "[linting]    tage_table"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -136,7 +135,7 @@ lint_tage_table:
 
 sim_tage_table:
 	@echo "[compiling]  tb_tage_table"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -151,7 +150,7 @@ sim_tage_table:
 
 lint_ittage_table:
 	@echo "[linting]    ittage_table"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -161,7 +160,7 @@ lint_ittage_table:
 
 sim_ittage_table:
 	@echo "[compiling]  tb_ittage_table"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -176,7 +175,7 @@ sim_ittage_table:
 
 lint_ittage_cntrl:
 	@echo "[linting]    ittage_cntrl"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module ittage_cntrl \
@@ -188,7 +187,7 @@ lint_ittage_cntrl:
 
 sim_ittage_cntrl:
 	@echo "[compiling]  tb_ittage_cntrl"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
@@ -202,7 +201,7 @@ sim_ittage_cntrl:
 
 lint_ittage:
 	@echo "[linting]    ittage"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
@@ -217,7 +216,7 @@ lint_ittage:
 
 sim_ittage:
 	@echo "[compiling]  tb_ittage"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
@@ -236,7 +235,7 @@ sim_ittage:
 
 lint_tage_cntrl:
 	@echo "[linting]    tage_cntrl"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -246,7 +245,7 @@ lint_tage_cntrl:
 
 lint_tage:
 	@echo "[linting]    tage"
-	$(Q)verilator --lint-only \
+	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
@@ -266,7 +265,7 @@ lint_tage:
 
 sim_tage:
 	@echo "[compiling]  tb_tage"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -288,7 +287,7 @@ sim_tage:
 
 sim_tage_fast:
 	@echo "[compiling]  tb_tage (fast init)"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -310,7 +309,7 @@ sim_tage_fast:
 
 sim_tage_tasks:
 	@echo "[compiling]  tb_tage_tasks"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -332,7 +331,7 @@ sim_tage_tasks:
 
 sim_tage_manual:
 	@echo "[compiling]  tb_tage_manual"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
@@ -352,6 +351,8 @@ sim_tage_manual:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tage_assert.sv \
+	  $(TB_DIR)/tage_assert_bind.sv \
 	  $(TB_DIR)/tb_tage_manual.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_manual/Vtb"
 	$(Q)./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=1
@@ -385,7 +386,7 @@ COV_DIR := coverage
 
 cov_history:
 	@echo "[compiling]  cov tb_bp_history"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --coverage-line \
 	  --top-module tb \
@@ -410,7 +411,7 @@ cov_history:
 
 cov_ubtb:
 	@echo "[compiling]  cov tb_ubtb"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
@@ -436,7 +437,7 @@ cov_ubtb:
 
 cov_loop_pred:
 	@echo "[compiling]  cov tb_loop_pred"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
@@ -462,7 +463,7 @@ cov_loop_pred:
 
 cov_tage_table:
 	@echo "[compiling]  cov tb_tage_table"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
@@ -490,7 +491,7 @@ cov_tage_table:
 
 cov_tage:
 	@echo "[compiling]  cov tb_tage"
-	$(Q)verilator --binary \
+	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \

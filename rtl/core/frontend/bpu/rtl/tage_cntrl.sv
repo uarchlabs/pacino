@@ -654,7 +654,8 @@ module tage_cntrl #(
         if (u_both_t0[s]) begin
           // Both providers T0: update T0 2b CTR (rows 13a-d)
           u_t0_ctr_wr[s] = 1'b1;
-          if (u_resolved[s]) begin
+//HAND-FIX-001
+          if (!u_mispredict[s]) begin
             // INC T0 CTR (resolved_taken=1), sat 2'b11, 0-pad
             u_t0_ctr_nxt[s] =
               (u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0] == 2'b11)

@@ -4,3 +4,7 @@
 [submodule "tools/spike"]
 	path = tools/spike
 	url = https://github.com/riscv-software-src/riscv-isa-sim.git
+[submodule "tools/verilator"]
+	path = tools/verilator
+	url = https://github.com/verilator/verilator.git
+  branch = v5.048

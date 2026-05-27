@@ -6,7 +6,7 @@ echo "which is part of RISC-V RVA23 Design"              >> ho
 
 echo "" >> ho
 echo "I have attached the following "      >> ho
-echo "- planning/ANTIPATTERNS.md"          >> ho
+#echo "- planning/ANTIPATTERNS.md"          >> ho
 echo "- planning/PROJECT_CORE.md"          >> ho
 echo "- planning/PROJECT_STATUS.md"        >> ho
 echo "" >> ho
@@ -21,7 +21,7 @@ echo "" >> ho
 echo "Process this and suggest the next steps when you are ready" >> ho
 echo "" >> ho
 
-cat planning/ANTIPATTERNS.md                        >> ho
+#cat planning/ANTIPATTERNS.md                        >> ho
 cat planning/PROJECT_CORE.md                        >> ho
 cat planning/PROJECT_STATUS.md                      >> ho
 cat templates/TASK_TEMPLATE.md                       >> ho

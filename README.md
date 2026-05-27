@@ -65,16 +65,57 @@ cd pacino
 
 ## Compile the submodules
 
-Compile and install spike
+### Compile and install spike
 
 ```bash
 cd $RVA_ROOT/tools/spike
 mkdir -p install build
 cd build
-../configure --prefix=$RVA_ROOT/tools/spike/install
+../configure --prefix=$RVA_ROOT/tools
 make -j4
 make install
 ```
+
+### Compile and install verilator
+
+```bash
+cd $RVA_ROOT/tools/verilator
+autoconf
+./configure --prefix=$RVA_ROOT/tools
+make -j4
+make install
+```
+
+```bash
+cd $RVA_ROOT/tools/spike
+mkdir -p install build
+cd build
+../configure --prefix=$RVA_ROOT/tools
+make -j4
+make install
+```
+
+## Run basic checks
+
+```bash
+make -C $RVA_ROOT/rtl all
+```
+
+## Run code coverage
+
+To measure code coverage
+
+```bash
+make -C $RVA_ROOT/rtl cov
+```
+
+To view BPU coverage reports
+
+```bash
+firefox $RVA_ROOT/rtl/core/frontend/bpu/coverage/bpu/html/index.html
+```
+
+# Project Status
 
 ## Run basic checks
 

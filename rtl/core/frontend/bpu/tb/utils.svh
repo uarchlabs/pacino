@@ -31,10 +31,13 @@ endtask
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
 task automatic tb_pf(input string testname, input int errs);
-  if (errs > 0)
+  if (errs > 0) begin
     tb_error({testname, " : FAIL"});
-  else
+//$display("DBG: errors %0d",errs);
+  end else begin
     tb_info({testname, " : PASS"});
+//$display("DBG: errors %0d",errs);
+  end
 endtask
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
