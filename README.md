@@ -69,7 +69,7 @@ cd pacino
 
 ```bash
 cd $RVA_ROOT/tools/spike
-mkdir -p install build
+mkdir build
 cd build
 ../configure --prefix=$RVA_ROOT/tools
 make -j4
@@ -82,15 +82,6 @@ make install
 cd $RVA_ROOT/tools/verilator
 autoconf
 ./configure --prefix=$RVA_ROOT/tools
-make -j4
-make install
-```
-
-```bash
-cd $RVA_ROOT/tools/spike
-mkdir -p install build
-cd build
-../configure --prefix=$RVA_ROOT/tools
 make -j4
 make install
 ```

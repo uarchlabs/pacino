@@ -24,57 +24,79 @@
 
 ## CTR Update Table
 
-| #   | tage_using_primary | tage_pred_tkn | resolved_taken | pred_diff | tage_prm_comp | tage_alt_comp | Action(primary) | Action(alt) | Action(T0) | Explanation                                       |
-|-----|--------------------|---------------|----------------|-----------|---------------|---------------|-----------------|-------------|------------|---------------------------------------------------|
-| 1   | 1                  | 1             | 1              | X         | >0            | >0            | **INC**         | —           | —          | Provider = primary, predicted taken correctly     |
-| 2   | 1                  | 0             | 0              | X         | >0            | >0            | **INC**         | —           | —          | Provider = primary, predicted not-taken correctly |
-| 3   | 1                  | 1             | 0              | 1         | >0            | >0            | **DEC**         | **INC**     | —          | Provider = primary wrong, alt opposite prediction |
-| 4   | 1                  | 0             | 1              | 1         | >0            | >0            | **DEC**         | **INC**     | —          | Provider = primary wrong, alt opposite prediction |
-| 5   | 1                  | 1             | 0              | 0         | >0            | >0            | **DEC**         | —           | —          | Provider = primary wrong, alt same or ignored     |
-| 6   | 1                  | 0             | 1              | 0         | >0            | >0            | **DEC**         | —           | —          | Provider = primary wrong, alt same or ignored     |
-| 7   | 0                  | 1             | 1              | X         | >0            | >0            | —               | **INC**     | —          | Provider = alt, predicted taken correctly         |
-| 8   | 0                  | 0             | 0              | X         | >0            | >0            | —               | **INC**     | —          | Provider = alt, predicted not-taken correctly     |
-| 9   | 0                  | 1             | 0              | 1         | >0            | >0            | **INC**         | **DEC**     | —          | Provider = alt wrong, primary opposite prediction |
-| 10  | 0                  | 0             | 1              | 1         | >0            | >0            | **INC**         | **DEC**     | —          | Provider = alt wrong, primary opposite prediction |
-| 11  | 0                  | 1             | 0              | 0         | >0            | >0            | —               | **DEC**     | —          | Provider = alt wrong, pred_diff ignored           |
-| 12  | 0                  | 0             | 1              | 0         | >0            | >0            | —               | **DEC**     | —          | Provider = alt wrong, pred_diff ignored           |
-| 13a | X                  | 0             | 0              | X         | 0             | 0             | —               | —           | **INC**    | Provider = bim, bim was correct                   |
-| 13b | X                  | 0             | 1              | X         | 0             | 0             | —               | —           | **DEC**    | Provider = bim, bim was wrong                     |
-| 13c | X                  | 1             | 0              | X         | 0             | 0             | —               | —           | **DEC**    | Provider = bim, bim was wrong                     |
-| 13d | X                  | 1             | 1              | X         | 0             | 0             | —               | —           | **INC**    | Provider = bim, bim was correct                   |
-| 14  | 1                  | 1             | 0              | X         | >0            | 0             | **DEC**         | —           | -          | Alt invalid (BIM), provider = primary, wrong      |
-| 15  | 1                  | 0             | 1              | X         | >0            | 0             | **DEC**         | —           | -          | Alt invalid (BIM), provider = primary, wrong      |
-| 16  | 1                  | 1             | 1              | X         | >0            | 0             | **INC**         | —           | -          | Alt invalid (BIM), provider = primary, correct    |
-| 17  | 1                  | 0             | 0              | X         | >0            | 0             | **INC**         | —           | -          | Alt invalid (BIM), provider = primary, correct    |
-| 18  | x                  | x             | x              | X         | 0             | >0            | —               | —           | -          | Unreachable, invalid condition                    |
+Legend:
 
-## Notes:
-
-### Row 7
-
-The situration is alternative provided the prediction which was TAKEN, pred_diff is X in ROW 7 
-but primary taken has impact on alternative's useful counter
-```
-pT  = primary taken
-aT  = alternative taken
-in this scenario aT = 1 and pT = 0, alt useful is incremented
-                 aT = 1 and pT = 1, alt useful is not incremented
-
-- in the 1st case (where aT=1 pT=0) alternative is more useful than primary, so increment alt's useful
-- in the 2nd case (where aT=1 pT=1) alternative is no more useful than primary, so do not increment alt's useful
+UP    = `tage_using_primary`
+PT    = `tage_pred_tkn`
+RT    = `resolved_taken`
+pT    = `tage_prm_taken`
+aT    = `tage_alt_taken`
+pCMP  = `tage_prm_comp`
+aCMP  = `tage_alt_comp`
+pACT  =  action for primary CTR
+aACT  =  action for alternative CTR
+t0ACT =  action for T0 (bim) CTR
 
 ```
-### Row 8
-
-This is a similar situation as Row 7. The alternative provided the prediction which was NOT TAKEN, pred_diff is X in ROW 8 
-but primary (not) taken has impact on alternative's useful counter
+diff  = `tage_prm_taken` != `tage_alt_taken`
+         diff is for reference, diff is not a signal 
+         in the prediction meta data
 ```
-pT  = primary taken
-aT  = alternative taken
-in this scenario aT = 0 and pT = 0, alt useful is not incremented
-                 aT = 0 and pT = 1, alt useful is incremented
 
-- in the 1st case (where aT=0 pT=0) alternative is no more useful than primary, so do not increment alt's useful
-- in the 2nd case (where aT=0 pT=1) alternative is more useful than primary, so increment alt's useful
+| #     | UP | PT | RT | diff | pT | aT | pCMP | aCMP | pACT | aACT | t0ACT | Explanation                                       |
+|-------|----|----|----|------|----|----|------|------|------|------|-------|---------------------------------------------------|
+| 1.1   | 1  | 1  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted taken correctly     |
+| 1.2   | 1  | 1  | 1  | 0    | 1  | 1  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted taken correctly     |
+| 2.1   | 1  | 0  | 0  | 0    | 0  | 0  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted not-taken correctly |
+| 2.2   | 1  | 0  | 0  | 1    | 0  | 1  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted not-taken correctly |
+| 3     | 1  | 1  | 0  | 1    | 1  | 0  | >0   | >0   | DEC  | INC  | —     | Provider = primary wrong, alt opposite prediction |
+| 4     | 1  | 0  | 1  | 1    | 0  | 1  | >0   | >0   | DEC  | INC  | —     | Provider = primary wrong, alt opposite prediction |
+| 5     | 1  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | DEC  | —    | —     | Provider = primary wrong, alt same or ignored     |
+| 6     | 1  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | DEC  | —    | —     | Provider = primary wrong, alt same or ignored     |
+| 7.1   | 0  | 1  | 1  | 1    | 0  | 1  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted taken correctly         |
+| 7.2   | 0  | 1  | 1  | 0    | 1  | 1  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted taken correctly         |
+| 8.1   | 0  | 0  | 0  | 0    | 0  | 0  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted not-taken correctly     |
+| 8.2   | 0  | 0  | 0  | 1    | 1  | 0  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted not-taken correctly     |
+| 9     | 0  | 1  | 0  | 1    | 0  | 1  | >0   | >0   | INC  | DEC  | —     | Provider = alt wrong, primary opposite prediction |
+| 10    | 0  | 0  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | DEC  | —     | Provider = alt wrong, primary opposite prediction |
+| 11    | 0  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | —    | DEC  | —     | Provider = alt wrong, pred_diff ignored           |
+| 12    | 0  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | —    | DEC  | —     | Provider = alt wrong, pred_diff ignored           |
+| 13a   | 1  | 0  | 0  | 0    | 0  | 0  | 0    | 0    | —    | —    | INC   | BIM predicted NT, resolved NT, correct |
+| 13b   | 1  | 0  | 1  | 0    | 0  | 0  | 0    | 0    | —    | —    | DEC   | BIM predicted NT, resolved T, wrong |
+| 13c   | 1  | 1  | 0  | 0    | 1  | 1  | 0    | 0    | —    | —    | DEC   | BIM predicted T, resolved NT, wrong |
+| 13d   | 1  | 1  | 1  | 0    | 1  | 1  | 0    | 0    | —    | —    | INC   | BIM predicted T, resolved T, correct |
+| 13e   | 0  | x  | x  | x    | x  | x  | 0    | 0    |ASSERT|ASSERT|ASSERT | Invalid: UP=0 when pCMP=aCMP=0. ADR-001 violation. tage_assert.sv fires. No RTL action. |
+| 14.1  | 1  | 1  | 0  | 0    | 1  | 1  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary wrong, alt same |
+| 14.2  | 1  | 1  | 0  | 1    | 1  | 0  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary wrong, alt opposite |       
+| 15.1  | 1  | 0  | 1  | 0    | 0  | 0  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary predicted NT, resolved T, wrong |
+| 15.2  | 1  | 0  | 1  | 1    | 0  | 1  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary predicted NT, resolved T, wrong, alt opposite |
+| 16.1  | 1  | 1  | 1  | 0    | 1  | 1  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted T, resolved T, correct, alt same |
+| 16.2  | 1  | 1  | 1  | 1    | 1  | 0  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted T, resolved T, correct, alt opposite |
+| 17.1  | 1  | 0  | 0  | 0    | 0  | 0  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted NT, resolved NT, correct, alt same |
+| 17.2  | 1  | 0  | 0  | 1    | 0  | 1  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted NT, resolved NT, correct, alt opposite |
+| 18    | x  | x  | x  | x    | x  | x  | 0    | >0   |ASSERT|ASSERT|ASSERT | invalid condition pCMP=0 aCMP>0, handled by assert|
 
-```
+
+## ADR
+
+### ADR-001
+
+ADR: tage_using_primary when BIM is sole provider
+
+When tage_prm_comp=0 and tage_alt_comp=0 at prediction
+time, tage_using_primary shall be 1.
+
+Rationale: when no tagged table hits, BIM is the sole
+provider. The concept of primary vs alternate does not
+apply. BIM is defined as the primary provider in this
+case. using_primary=0 would be architecturally
+meaningless and is disallowed.
+
+RTL: tage_cntrl.sv pred_logic block sets using_prm_p1
+to 1'b1 by default. The UAON override that sets it to
+0 is gated on prm_comp != 0 and therefore cannot fire
+in the BIM case.
+
+Enforcement: tage_assert.sv assertion on tage_pred_rdy_p2 and tage_upd_val_u0.
+
+Status: ACTIVE. RTL verified. Assertion implemented.

@@ -44,10 +44,11 @@
 .claude/tmp
 .claude/settings.local.json
 
-# spike paths
-tools/spike/
-tools/surfer/
-tools/install/
+# tools build paths
+tools/bin/
+tools/include/
+tools/lib/
+tools/share/
 
 # local temp copies - optional
 versions
