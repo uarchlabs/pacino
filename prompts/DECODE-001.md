@@ -1,13 +1,69 @@
-# DECODE-001 - Pre-decode expansion approach for mixed 16b/32b fetch bundle
+=============================================================
+# Task Header 
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-001                                   |   |
+| Date        | 2026-03-22                                   |   |
+| Module      | pre decode                                   |   |
+| Run time    | 51m.14s                                      |   |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | f0ed975b-4d79-4550-91c2-154433d41093         |   |
 
-Date: 2026.03.22
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
+
+Not captured at time, this task is one of the first.
+
+2026-05-30: Manually adding overview: This task creates a predecode 
+module that takes advantage of the RISC-V ISA natural expansion of
+all compressed instructions to their 32b equivalent. There is some
+operand encoding matchins and opcode expansion. The purpose of this
+module is to simplify downstream logic.
+
+Additionally this task file has been retro-fitted with the now standard
+section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+Not captured, this task predates the fully standardized prompting
+scheme.
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+Nothing required
+## Follow-on Actions
+- [x] Run Verilator and confirm clean compile
+- [ ] Compare against DECODE-002 when available
+- [x] Update CLAUDE.md if interface decisions confirmed
+- [ ] Update README.md status table
+- [ ] Define DECODE-002 to implement an independent verification method using
+      riscv-opcodes
+
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-001
 
 ## SESSION PROMPT
-
----
 
 Module: Instruction Decoder
 
@@ -16,13 +72,13 @@ bundle
 
 ---
 
-Hypothesis to test:
+## Hypothesis 
 Expand all 16b (RVC) instructions to 32b immediately after fetch, before the
 main decode stage. The fetch bundle presents as 8x32b to the decoder,
 accompanied by a boundary mask that identifies valid instruction starts and
 original instruction widths.
 
----
+## Specific Requirements
 
 Specific requirements for this experiment:
 - Fetch bundle input: 8x32b words plus a boundary mask
@@ -32,14 +88,14 @@ Specific requirements for this experiment:
 - Output bundle: up to 8 decoded instructions, each with full decode fields
   sized for 8-issue OOO dispatch
 
----
+## Constraints
 
 Constraints for this experiment:
 - Pre-decode expansion must be fully combinational - no latency
 - Use a parallel expansion approach, not iterative or loop-based
 - All 8 slots must be expandable simultaneously
 
----
+## Deliverables
 
 Deliverables:
 1. Pre-decode expansion module (RTL + testbench)
@@ -47,15 +103,17 @@ Deliverables:
 3. Brief note on any RVA23 compliance assumptions made
 4. Flag any interface decisions that will affect downstream rename/dispatch
 
----
-
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Experiment Header
 
 | Field          | Value               |
 |----------------|---------------------|
-| Experiment ID  | DECODE-001          |
+| Task ID        | DECODE-001          |
 | Date           | 2026.03.22          |
 | Module         | Instruction Decoder |
 | Run time       | 51m.14s             |
@@ -163,3 +221,5 @@ early to tell but:
 ### Graduated to CLAUDE.md
 
 {date} - {what was added, or "nothing" if no decisions confirmed}
+
+:: RESULTS:END ::

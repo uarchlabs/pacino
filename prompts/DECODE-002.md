@@ -1,25 +1,75 @@
-# DECODE-002 - RVA23 coverage gap analysis
+=============================================================
+# Task Header 
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-002                                   |   |
+| Date        | 2026-03-22                                   |   |
+| Module      | decoder                                      |   |
+| Run time    | 5m.51s                                       |   |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | c21bc124-7d79-4705-bf16-bf38aaeabcd7         |   |
 
-Date: 2026.03.22
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
+
+RVA23 coverage gap analysis
+
+2026.05.30: This file was retrofit to conform to the current section
+marker syntax for automated processing.
+
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+Not captured, this task predates the fully standardized prompting
+scheme.
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+Nothing required
+
+## Follow-on actions
+- [ ] {e.g. retry with different constraint}
+- [ ] {e.g. carry interface decision forward to next module}
+- [ ] {e.g. update CLAUDE.md with confirmed decision}
+- [ ] {e.g. update README.md status table}
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-002
 
 ## SESSION PROMPT
-
 
 Module: Instruction Decoder
 
 Experiment: DECODE-002 - RVA23 extension coverage gap analysis
 
----
+## Hypothesis 
 
-Hypothesis to test:
 Use the official riscv-opcodes repository as a reference to determine which
 RVA23 mandatory instructions are missing or incomplete in the current
 DECODE-001 RTL output.
 
 ---
+## Specific Requirements
 
 Specific requirements for this experiment:
 
@@ -59,6 +109,20 @@ RTL to check against:
 - any other .sv files generated in DECODE-001
 
 ---
+## Constraints
+
+- The gap analysis script must run with standard Python 3, no extra packages
+- Script output must be ASCII only - no Unicode characters
+- Script must be re-runnable as RTL improves in future experiments
+- Add tools/riscv-opcodes/ to .gitignore
+
+Note on Vector and Hypervisor:
+These are the most likely to be completely absent. If they are missing entirely,
+note this clearly in the gap summary but do not attempt to implement them in
+this experiment - that is scope for DECODE-003 and beyond.
+
+---
+## Deliverables
 
 Deliverables:
 1. A Python script at tools/check_rva23_coverage.py that:
@@ -79,28 +143,17 @@ Deliverables:
 
 4. Do not modify any existing RTL in this experiment - analysis only
 
----
-
-Constraints:
-- The gap analysis script must run with standard Python 3, no extra packages
-- Script output must be ASCII only - no Unicode characters
-- Script must be re-runnable as RTL improves in future experiments
-- Add tools/riscv-opcodes/ to .gitignore
-
----
-
-Note on Vector and Hypervisor:
-These are the most likely to be completely absent. If they are missing entirely,
-note this clearly in the gap summary but do not attempt to implement them in
-this experiment - that is scope for DECODE-003 and beyond.
-
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Experiment Header
 
 | Field         | Value |
 |---------------|-------|
-| Experiment ID | DECODE-002 |
+| Task ID | DECODE-002 |
 | Date          | 2026.03.26 |
 | Module        | Decoder    |
 | Run time      | 5m.51s     |
@@ -287,13 +340,8 @@ DECODE-002 RVA23 Coverage Gap Summary
   Zihpm is effectively covered: all HPM counter reads are CSRRS pseudo-ops, and 
   the SYSTEM opcode handler already dispatches those correctly. No RTL change
   needed.                                                                       
-                                                            
-
 END_SESSION_PARTIAL_OUTPUT
-
-
----
-
+                                                            
 ### Interface decisions made - downstream impact
 
 n/a for this prompt
@@ -311,15 +359,7 @@ no
 
 ---
 
-### Follow-on actions
-
-- [ ] {e.g. retry with different constraint}
-- [ ] {e.g. carry interface decision forward to next module}
-- [ ] {e.g. update CLAUDE.md with confirmed decision}
-- [ ] {e.g. update README.md status table}
-
----
-
 ### Graduated to CLAUDE.md
 
 {date} - {what was added, or "nothing" if no decisions confirmed}
+:: RESULTS:END ::

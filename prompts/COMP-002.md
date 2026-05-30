@@ -50,6 +50,9 @@ All 5 existing tb_dual_lm1 test cases must pass.
   Results: make lint and make sim exit zero, zero warnings. 21/21 tests pass    
   (8/8 dual_lm1, 5/5 bw_ram, 8/8 sat_alu).
 
+## My Assessment
+Nothing required
+
 ## Claude.ai Assessment
 None, completed as expected.
 
@@ -65,6 +68,9 @@ None
 # Claude.code Prompt
 =============================================================
 :: PROMPT:START ::
+## Task ID
+COMP-002
+
 ## Context Loaded
 @components/rtl/dual_lm1.sv
 @components/tb/tb_components.sv

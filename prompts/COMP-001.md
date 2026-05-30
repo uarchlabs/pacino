@@ -59,6 +59,11 @@ context use is not complete.
   BLKSEQ */ local pragma around clock generator.                                
   - sat_alu.sv, dual_lm1.sv — correct as-is, no changes.
 
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+Nothing required
+
 ## Follow-on Actions
 - none
 ## CLAUDE.md Updates
@@ -70,6 +75,9 @@ none
 # Claude.code Prompt 
 =============================================================
 :: PROMPT:START ::
+## Task ID
+COMP-001
+
 ## Context Loaded
 none.
 

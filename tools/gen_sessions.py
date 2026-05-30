@@ -28,22 +28,33 @@ STATUS_OPTS = ["in-progress", "complete", "abandoned"]
 # ── Warning codes ─────────────────────────────────────────────────────────────
 
 class W:
-    NO_MARKERS          = "W001"   # No :: HEADER:START :: found — markdown fallback
-    DUPLICATE_PA        = "W002"   # Duplicate ## Claude.ai Assessment — blocks merged
+    NO_MARKERS          = "W001"   # No :: HEADER:START :: found — 
+                                   # markdown fallback
+    DUPLICATE_PA        = "W002"   # Duplicate ## Claude.ai Assessment -
+                                   # blocks, merged
     EMPTY_ASSESSMENT    = "W003"   # ## My Assessment is empty or TBD
-    ABANDONED_WITH_PASS = "W004"   # status=abandoned but PASS counts found in results
+    ABANDONED_WITH_PASS = "W004"   # status=abandoned but PASS counts found 
+                                   # in results
     MISSING_DISCUSSION  = "W005"   # No :: DISCUSSION:START/END :: section
     MISSING_RESULTS     = "W006"   # No :: RESULTS:START/END :: section
     MISSING_PROMPT      = "W007"   # No :: PROMPT:START/END :: section
-    ID_MISMATCH         = "W008"   # Task ID in header or prompt != filename stem
-    ORPHAN_SUBSESSION   = "W009"   # Sub-session with no parent in dir
+    ID_MISMATCH         = "W008"   # Task ID in header or 
+                                   # prompt != filename stem
+
+# W009 is not longer used
+#    ORPHAN_SUBSESSION   = "W009"   # Sub-session with no parent in dir
+
     MISSING_FIELD       = "W010"   # Expected header field absent or empty
-    VOICES_MERGED       = "W011"   # Discussion voices could not be cleanly separated
+    VOICES_MERGED       = "W011"   # Discussion voices could not be cleanly
+                                   # separated
     UNKNOWN_CATEGORY    = "W012"   # Task ID prefix not in KNOWN_CATEGORIES
     BAD_TASK_ID         = "W013"   # Task ID doesn't match expected pattern
-    FIELD_ALIAS_USED    = "W014"   # Non-canonical field name used (e.g. 'ID' not 'Task ID')
-    PROMPT_ID_MISMATCH  = "W015"   # Task ID in ## Task ID prompt block != header/filename
-    MISSING_END_MARKER  = "W016"   # Section START marker found but END marker absent
+    FIELD_ALIAS_USED    = "W014"   # Non-canonical field name used (e.g. 'ID'
+                                   # not 'Task ID')
+    PROMPT_ID_MISMATCH  = "W015"   # Task ID in ## Task ID
+                                   # prompt block != header/filename
+    MISSING_END_MARKER  = "W016"   # Section START marker found but
+                                   # END marker absent
 
 # ── Task ID parsing ───────────────────────────────────────────────────────────
 
@@ -489,28 +500,28 @@ def parse_session_file(path):
 
 # ── Cross-file validation ─────────────────────────────────────────────────────
 
-def validate_clusters(sessions):
-    """Warn about sub-sessions whose parent doesn't exist in the directory."""
-    all_ids  = {normalise_id(s['id']) for s in sessions}
-    warnings = []
-
-    for s in sessions:
-        parsed = parse_task_id(s['id'])
-        if not parsed:
-            continue
-        cat, num, sl, sn, cluster = parsed
-        is_sub = bool(sl) or bool(sn)
-        if is_sub:
-            parent_id = f"{cat}-{num}"
-            if normalise_id(parent_id) not in all_ids:
-                warnings.append({
-                    "code": W.ORPHAN_SUBSESSION,
-                    "file": s['path'],
-                    "msg":  (f"Sub-session '{s['id']}' has no parent '{parent_id}' "
-                             f"in {PROMPTS_DIR}/. If the parent was renamed, "
-                             f"update the Task ID or add the parent file."),
-                })
-    return warnings
+#def validate_clusters(sessions):
+#    """Warn about sub-sessions whose parent doesn't exist in the directory."""
+#    all_ids  = {normalise_id(s['id']) for s in sessions}
+#    warnings = []
+#
+#    for s in sessions:
+#        parsed = parse_task_id(s['id'])
+#        if not parsed:
+#            continue
+#        cat, num, sl, sn, cluster = parsed
+#        is_sub = bool(sl) or bool(sn)
+#        if is_sub:
+#            parent_id = f"{cat}-{num}"
+#            if normalise_id(parent_id) not in all_ids:
+#                warnings.append({
+#                    "code": W.ORPHAN_SUBSESSION,
+#                    "file": s['path'],
+#                    "msg":  (f"Sub-session '{s['id']}' has no parent '{parent_id}' "
+#                             f"in {PROMPTS_DIR}/. If the parent was renamed, "
+#                             f"update the Task ID or add the parent file."),
+#                })
+#    return warnings
 
 # ── Sort key ──────────────────────────────────────────────────────────────────
 
@@ -542,7 +553,7 @@ def main():
         sessions.append(session)
         all_warnings.extend(file_warns)
 
-    all_warnings.extend(validate_clusters(sessions))
+    #all_warnings.extend(validate_clusters(sessions))
     sessions.sort(key=sort_key)
 
     # ── Print warnings ────────────────────────────────────────────────────────

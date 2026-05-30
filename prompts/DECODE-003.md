@@ -1,26 +1,78 @@
-# DECODE-003 - Add Zcb
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
 
-Date: 2026.03.22
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+| Field        | Value                   | Notes                    |
+|--------------|-------------------------|--------------------------|
+| Task ID      | DECODE-003              |                          |
+| Date         | 2026.03.22              |                          |
+| Module       | rvc_expander.sv         |                          |
+| Run time     | ??????                  |                          |
+| Run time     | 12m.56s                 |                          |
+| Ctx %        | ??????                  |                          |
+| Model        | Sonnet 4.6 medium       |                          |
+| Resume sha   | 69f41938-8393-4172-920e-060d99af94d5 |             |
 
----
+Task:   [ ] experiment  [x] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [x] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
-## SESSION PROMPT
+# Overview of task
+DECODE-003 - Add Zcb
 
+2026.05.30: Zcb support was missing from the rvc expander implementation.
+This task rectifies the missing 13 instructions. This file was also 
+retrofit for section markers.
+
+:: HEADER:END ::
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+Nothing captured
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+Nothing required
+
+### Follow-on actions
+- [ ] Update check_rva23_coverage.py to handle shared encodings
+      e.g. c.sext.w / C.ADDIW shared path reports as missing
+      fix: add known-shared encoding exceptions table to script
+
+- [ ] update README.md status table
+
+## Other Planning File Updates
+Nothing required
+## CLAUDE.md Updates
+Minor: no tabs
+
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-003
+
+## Context Loaded
+Nothing explicitly supplied
+
+## Hypothesis
 Module: Instruction Decoder
 
 Experiment: DECODE-003 - Add Zcb compressed instructions to rvc_expander.sv
 
----
-
-Hypothesis to test:
 The 13 missing Zcb instructions identified in DECODE-002 can be added to
 rvc_expander.sv without changes to any other RTL file. After this experiment
 the scalar decoder should be 100% complete at the opcode-dispatch level.
 
----
+## Background
 
-Background:
 DECODE-002 gap analysis identified the following as the only missing scalar
 instructions. All 13 are Zcb extension encodings that belong in rvc_expander.sv.
 All expand to instructions already handled by instr_decoder.sv.
@@ -48,8 +100,7 @@ Reference:
   Verify each encoding against that file before implementing.
 
 ---
-
-Specific requirements for this experiment:
+## Specific Requirements
 
 1. Read tools/riscv-opcodes/extensions/rv_zcb before writing any RTL
    to confirm exact encodings. Do not rely on memory of the spec.
@@ -75,8 +126,7 @@ Specific requirements for this experiment:
    is considered complete.
 
 ---
-
-Constraints:
+## Constraints
 - ASCII only in all comments - no Unicode characters
 - Changes confined to rvc_expander.sv and testbench files only
 - decode_pkg.sv must not be modified
@@ -85,6 +135,7 @@ Constraints:
   no special casing for Zcb vs base C
 
 ---
+## Deliverables
 
 Deliverables:
 1. Updated rvc_expander.sv with all 13 Zcb instructions
@@ -100,7 +151,11 @@ Note on sext.w:
 c.sext.w may already be present in rvc_expander.sv as part of the base
 C extension. Verify before adding - do not duplicate.
 
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Tool Text Output
 
@@ -227,16 +282,6 @@ Was anything ambiguous or missing?
 
 ---
 
-### Follow-on actions
 
-- [ ] Update check_rva23_coverage.py to handle shared encodings
-      e.g. c.sext.w / C.ADDIW shared path reports as missing
-      fix: add known-shared encoding exceptions table to script
+:: RESULTS:END ::
 
-- [x] update README.md status table
-
----
-
-### Graduated to CLAUDE.md
-
-Minor: no tabs
