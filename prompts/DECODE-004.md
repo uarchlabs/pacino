@@ -1,11 +1,139 @@
-# DECODER-004 - Vector support part 1
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-004                                   |   |
+| Date        | 2026-03-22                                   |   |
+| Module      | decoder                                      |   |
+| Run time    | 10m.56s    | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 75e0b260-97fc-40e1-8dae-0347f8d06d08 | |
 
-Date:
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
+Experiment: DECODE-004 - Vector decode foundation, decode_pkg.sv and
+opcode handler
 
-## SESSION PROMPT
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+  ---
+  DECODE-004 Results
+
+  Verilator lint: Clean (both modules, no warnings).
+  Simulation: 284 PASS / 0 FAIL.
+  Coverage: V extension now shows [ROUTED] — 375 instructions, 0 missing.
+
+  ---
+  What was delivered
+
+  1. decode_pkg.sv — added v_op_class_t enum (8 classes, 4 bits) and
+  vec_decode_pkt_t struct with all required fields: is_vector, is_vsetvl,
+  needs_vtype, vsew/vlmul/vta/vma, vd/vs1/vs2/vs3/vm, nf/eew, v_op_class.
+
+  2. instr_decoder.sv — OP_VECTOR = 7'b1010111 added; OP_VECTOR case in
+  decode_one() returns a non-illegal scalar packet; new decode_vec_one()
+  function decodes all OP_VECTOR (0x57) instructions into vec_decode_pkt_t; new
+  outputs vec_decode_bundle[7:0] and is_vector[7:0] added to module interface;
+  generate block drives all three outputs per slot.
+
+  3. tb_instr_decoder.sv — added CHECK_VEC macro, vector opcode constant, 5
+  encoding functions (enc_vsetvli, enc_vsetivli, enc_vsetvl, enc_vadd_vv,
+  enc_vle32v), and tests T24–T30 covering: vsetvli e32m1ta, vsetvli e16m4,
+  vsetivli e8m2, vsetvl (register form), vadd.vv, vle32.v misidentification
+  (documented), 8-slot scalar/vector mix.
+
+  4. check_rva23_coverage.py — added 0x15: 'OP_VECTOR' to HANDLED_OPGROUPS.
+
+  ---
+  Architectural assumptions made
+
+  - decode_vec_one() only handles opcode 0x57. Vector memory ops (vle*/vse* via
+  0x07/0x27) are not touched — they remain misrouted through
+  OP_LOAD_FP/OP_STORE_FP.
+  - v_op_class is coarse: funct3 001/101 → VALU_FP; all others → VALU_INT. Finer
+   classification deferred to DECODE-005 through DECODE-007.
+  - For vsetvl (register form): vsew/vlmul/vta/vma fields left at zero — vtype
+  is in rs2 at runtime, resolved by the vector unit.
+  - Scalar decode_pkt_t for OP_VECTOR sets uses_rd/rs1/rs2 = 1 conservatively;
+  rename uses is_vector to steer to the vector unit and handles register fields
+  from vec_decode_pkt_t.
+
+  ---
+  Deferred to DECODE-005 through DECODE-009
+
+  ┌────────────┬─────────────────────────────────────────────────────────────┐
+  │ Experiment │                            Scope                            │
+  ├────────────┼─────────────────────────────────────────────────────────────┤
+  │ DECODE-005 │ OPIVV/OPIVX/OPIVI integer ALU disambiguation (funct6        │
+  │            │ decode)                                                     │
+  ├────────────┼─────────────────────────────────────────────────────────────┤
+  │ DECODE-006 │ OPFVV/OPFVF floating-point ALU disambiguation               │
+  ├────────────┼─────────────────────────────────────────────────────────────┤
+  │ DECODE-007 │ OPMVV/OPMVX mask/reduce/permute disambiguation              │
+  ├────────────┼─────────────────────────────────────────────────────────────┤
+  │ DECODE-008 │ Vector memory ops: reclassify opcodes 0x07/0x27 as vector   │
+  │            │ loads/stores                                                │
+  ├────────────┼─────────────────────────────────────────────────────────────┤
+  │ DECODE-009 │ Segment loads/stores (nf > 0), whole-register moves         │
+  └────────────┴─────────────────────────────────────────────────────────────┘
+
+## My Assessment
+Nothing required
+
+## Claude.ai Assessment
+
+What Claude got right
+
+The dual packet output (decode_bundle + vec_decode_bundle + is_vector) is considered a good choice at this point in the design.
+
+The conservative uses_rd/rs1/rs2=1 on the scalar packet for OP_VECTOR is a reasonable placeholder — rename can use is_vector to steer correctly.
+
+The vsetvl register form decision is correct — leaving vsew/vlmul/vta/vma at zero when vtype comes from rs2 at runtime is the right stateless decoder behavior.  This matches the decision expressed in CLAUDE.md.
+
+The vle32.v misidentification test being documented rather than fixed is good experiment discipline — scope of this experiment was honored.
+
+Claude collapsed the config instructions (vsetvl/vsetvli/vsetivli) into DECODE-004 — they're already handled at the coarse level. That is reasonable since the config instructions are decoded correctly at the opcode level already.
+
+What Claude got wrong or missed
+
+Not wrong but a shift in focus by adding vsetvl to this experiment, 
+and collapsing DECODE-005 into 004.
+
+## Follow-on Actions
+- [x] update README.md status table
+- [x] Add support for disabling extensions
+- [x] add this to DECODE-006
+      Zvfhmin closure: vfwcvt.f.f.v and vfncvt.f.f.w are OPFVV instructions.
+      When OPFVV disambiguation is complete these are covered. Confirm closure
+      by re-running check_rva23_coverage.py and verifying Zvfhmin shows full
+      coverage.
+
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-004
+
 
 Module: Instruction Decoder
 
@@ -13,8 +141,7 @@ Experiment: DECODE-004 - Vector decode foundation, decode_pkg.sv and
 opcode handler
 
 ---
-
-Hypothesis to test:
+## Hypothesis 
 Establish the vector decode foundation by adding OP_VECTOR opcode handler
 (0x57) to instr_decoder.sv and a separate vec_decode_t struct to
 decode_pkg.sv. After this experiment the decoder should recognize all
@@ -22,9 +149,7 @@ vector instructions at the opcode level and produce a correctly structured
 vector decode packet. No instruction-level disambiguation is required in
 this experiment - that is scope for DECODE-005 through DECODE-009.
 
----
-
-Background:
+## Background
 DECODE-002 gap analysis confirmed opcode 0x57 (OP_VECTOR) is completely
 absent from instr_decoder.sv. DECODE-003 closed the scalar gap (Zcb).
 The scalar decoder is now complete. This experiment begins the vector
@@ -49,8 +174,7 @@ Architectural decisions already made - do not deviate from these:
    this is unresolved at the decode stage.
 
 ---
-
-Specific requirements for this experiment:
+## Specific Requirements
 
 Step 1 - Read existing RTL before writing anything:
 - Read frontend/decoder/rtl/decode_pkg.sv
@@ -132,8 +256,7 @@ Step 6 - Run tools/check_rva23_coverage.py:
 Step 7 - Verilator lint and simulation must be clean.
 
 ---
-
-Constraints:
+## Constraints
 - ASCII only in all comments - no Unicode characters
 - vec_decode_t must be in decode_pkg.sv - not a separate file
 - Do not modify the existing decode_t struct
@@ -144,7 +267,8 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
+
 1. Updated decode_pkg.sv with vec_decode_t struct
 2. Updated instr_decoder.sv with OP_VECTOR handler
 3. Updated decoder top level with dual packet output
@@ -153,6 +277,12 @@ Deliverables:
 6. Coverage script output showing OP_VECTOR routed
 7. Explicit statement of what is deferred to DECODE-005 through
    DECODE-009 and what architectural assumptions were made
+
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ## RESULTS CAPTURE
 
@@ -226,7 +356,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-004 |
+| Task ID  | DECODE-004 |
 | Date           | 2026.03.22 |
 | Module         | decode     |
 | Run time       | 10m.56s    |
@@ -320,3 +450,5 @@ Was anything ambiguous or missing?
 ### Graduated to CLAUDE.md
 
 nothing added to CLAUDE.md
+:: RESULTS:END ::
+

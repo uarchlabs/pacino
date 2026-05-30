@@ -1,21 +1,98 @@
-# DECODE-11 - Ext enable/disable and coverage
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-011                                   |   |
+| Date        | 2026-03-23                                   |   |
+| Module      | decode                                       |   |
+| Run time       | 38m.55s and 8m.5s | 2 sessions (context limit hit mid-session) |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 52baabbe-5dd9-4976-b403-df98cfad9aa0 | |
 
-Date: 2026.03.23
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
+Ext enable/disable and coverage. Adding a extension enable disable
+feature to support bring up. This is not required by RVA23S64.
 
-## SESSION PROMPT
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
 
----
-Module: Instruction Decoder
+# Results Discussion
 
-Experiment: DECODE-011 - Extension enable/disable mechanism and
-make coverage target
+## Claude.code Console Output
 
----
+  Deliverables completed:
 
-Hypothesis to test:
+  1. decode_pkg.sv — ext_enable_t struct (18 extension bits) + RVA23_ENABLE
+  parameter added before predecode_pkt_t
+  2. predecode.sv — ext_enable_t ext_enable input added; all 8 slots'
+  w_is_vsetvl and w_needs_vtype gated on ext_enable.en_v
+  3. instr_decoder.sv — ext_enable input added to module and both decode
+  functions; ILLEGAL gating added for: M, A, F (FLW), D (FLD), C (16-bit), Zcb,
+  V (OP_VECTOR + vector LD/ST), Zicsr, Zicbom, Zicboz, Zicbop (prefetch hints),
+  Zba (sh1add), H (HFENCE.VVMA)
+  4. tb_predecode.sv — TC14–TC18: en_v=0 suppresses
+  is_vsetvl/needs_vtype/vtype_hazard; regression confirms en_v=1 restores normal
+   behavior. 476 passed, 0 failed
+  5. tb_instr_decoder.sv — T61–T72: 12 extension disable tests + per-test
+  regressions with RVA23_ENABLE. 567 passed, 0 failed
+  6. Makefile — coverage target added; sim_all now runs sim_predecode + sim_dec
+  + coverage
+  7. check_rva23_coverage.py — --strict flag added; exit 0 when no MISSING, exit
+   1 when MISSING found (ROUTED does not trigger exit 1)
+  8. make coverage — exit 0, no MISSING instructions; V extension shows ROUTED
+  as expected
+
+(continued in RESULTS CAPTURE section)
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+
+- All 18 extension bits correctly gated at appropriate
+  granularity -- none at opcode level where finer check needed.
+- ECALL/EBREAK correctly excluded from en_zicsr gating.
+- prefetch hint detection via rd==0 correct per spec.
+- FLD vs FLW correctly separated by funct3 within OP_LOAD_FP.
+- make coverage exit code correctly gates on MISSING only,
+  not ROUTED -- V extension does not trigger failure.
+- 476 + 567 tests passing with RVA23_ENABLE baseline unchanged.
+
+### What Claude got wrong or missed
+- Nothing significant. All boundary cases identified and
+  resolved correctly.
+
+## Follow-on Actions
+- [ ] Connect ext_enable from CSR unit when pipeline stages are added
+- [ ] Add per-instruction Zbb/Zbs/Zfhmin/Zfa ILLEGAL gating when those
+      instructions are decoded at per-instruction level
+- [ ] Update README.md status table with DECODE-011 complete
+- [ ] Carry ext_enable_t type forward to rename/dispatch interface spec
+
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-011
+
+## Hypothesis
 A static ext_enable_t input to both predecode.sv and instr_decoder.sv
 allows individual RVA23 extensions to be disabled at the decoder level.
 Disabled extension instructions are flagged as ILLEGAL in the decode
@@ -23,9 +100,7 @@ packet. The decoder assumes only valid extension combinations will be
 presented -- no dependency enforcement needed. A make coverage target
 formalizes the coverage script as a gated build step.
 
----
-
-Background:
+## Background
 misa is read-only in production. ext_enable_t is driven from misa
 fields by the CSR unit. The decoder sees only the current enable state.
 Dependency enforcement (D requires F etc.) is a software/driver
@@ -42,9 +117,8 @@ For RVA23 all bits are 1 at reset. ext_enable_t is provided for
 bring-up, debug, and verification use -- allowing specific extensions
 to be disabled without recompilation.
 
----
 
-Specific requirements for this experiment:
+## Specific requirements
 
 Step 1 - Read before writing (targeted):
 - Read decode_pkg.sv: full file -- ext_enable_t is a new top-level
@@ -198,7 +272,7 @@ Step 10 - Run make coverage and confirm:
 
 ---
 
-Constraints:
+## Constraints
 - Changes confined to decode_pkg.sv, predecode.sv,
   instr_decoder.sv, both testbenches, Makefile, and
   check_rva23_coverage.py only
@@ -212,7 +286,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated decode_pkg.sv with ext_enable_t struct and
    RVA23_ENABLE parameter
 2. Updated predecode.sv with ext_enable input and
@@ -234,7 +308,11 @@ Deliverables:
     detection required finer than opcode-level granularity
 ---
 
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 
@@ -278,7 +356,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-011 |
+| Task ID  | DECODE-011 |
 | Date           | 2026.03.23 |
 | Module         | decoder    |
 | Run time       | 2 sessions (context limit hit mid-session) 
@@ -410,3 +488,5 @@ to the console only.
 -  Illegal instructions: set ILLEGAL flag at decode, pass through rename, handle at ROB commit head per RISC-V spec convention.  ROB redirects to mtvec, writes mepc and mcause=2.
 
 -  RVV micro-op expansion: segment loads/stores (nf>0) and whole-register ops are candidates for micro-op expansion.  Policy TBD at vector execution unit design stage. nf field in decode packet provides expansion count.
+
+:: RESULTS:END ::

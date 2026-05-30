@@ -1,9 +1,124 @@
-# DECODE-007 - Vector mask, permute, reduce
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-007                                   |   |
+| Date        | 2026-03-22                                   |   |
+| Module      | decoder                                      |   |
+| Run time    | 15m.40s    | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 493f45af-6613-4fc2-827b-9cedbba8f845 | |
 
-Date: 2026.03.22
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
+
+DECODE-007 - Vector mask, permute, reduce
+
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+DECODE-007 completed successfully in a single session (Claude Code, claude-sonnet-4-6).
+
+All 10 deliverables completed:
+
+1. decode_pkg.sv: v_op_class_t widened to logic [7:0] (8-bit), 168 entries
+   total (0-167). VALU_INT removed. 44 new VOP_* entries added:
+   VOP_VFMV_FS=124 through VOP_VSLIDE1DOWN_X=167.
+
+2. instr_decoder.sv: Full funct6 decode added for OPMVV (3'b010) and
+   OPMVX (3'b110) in decode_vec_one(). OPFVV 0x10 updated to VOP_VFMV_FS.
+   OPIVI 0x27 updated to VOP_VMVNR.
+
+3. Testbench: Tests T46-T54 added. T36, T38, T45 updated for new VOP_*
+   values.
+
+4. Verilator lint: clean, no warnings.
+   Simulation: PASS=453, FAIL=0.
+
+5. Coverage: V extension ROUTED, 375 instrs, 0 missing. No regressions.
+
+6. Encoding complexities found in rv_v for OPMVV/OPMVX:
+   - OPMVV funct6=0x10 requires subfunct decode on inst[19:15]:
+     0x00=vmv.x.s, 0x10=vcpop.m, 0x11=vfirst.m
+   - OPMVV funct6=0x12 requires subfunct: 2/4/6=vzext, 3/5/7=vsext
+   - OPMVV funct6=0x14 requires subfunct: 1=vmsbf, 2=vmsof, 3=vmsif,
+     0x10=viota, 0x11=vid
+   - OPMVX has no instructions at funct6=0x00-0x07 or 0x18-0x1f
+     (these fall to VOTHER)
+   - funct6=0x3e (vwmaccus.vx) is OPMVX only; OPMVV 0x3e falls to VOTHER
+   - vmvNr.v (OPIVI funct6=0x27 vm=1) was previously aliased to VOP_VMV;
+     resolved with dedicated VOP_VMVNR entry
+
+7. VOP_* entries added in DECODE-007: 44
+   (VOP_VFMV_FS, VOP_VMVNR, VOP_VREDSUM through VOP_VSLIDE1DOWN_X)
+
+8. Final total VOP_* entries across DECODE-004 through DECODE-007: 168
+   (enum values 0-167; values 1 and 2 reserved, VALU_INT removed)
+
+9. VALU_INT placeholder removed. Value 8'd1 marked reserved in comment.
+
+10. OPMVX scalar GPR source cases requiring special handling by dispatch:
+    - vmv.s.x (VOP_VMV_SX): writes scalar GPR from vector element 0.
+      Destination is a vector register, source is GPR rs1.
+    - vmv.x.s (VOP_VMV_XS): reads scalar GPR from vector element 0.
+      Source is vector vs2, destination is GPR rd.
+    - vslide1up.vx (VOP_VSLIDE1UP_X): GPR rs1 fills element 0 slot.
+    - vslide1down.vx (VOP_VSLIDE1DOWN_X): GPR rs1 fills last element.
+    - All OPMVX: pkt.vs1 = 5'b0; GPR in scalar decode_pkt_t.rs1.
+    Dispatch must inspect funct3=OPMVX or check v_op_class to route
+    the scalar GPR operand to the correct functional unit port.
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+
+- Correctly identified enum width overflow (7-bit insufficient for 168
+  entries) and widened to 8-bit without prompting.
+- Correctly resolved vfmv.f.s / vfmv.s.f ambiguity with VOP_VFMV_FS.
+- Correctly resolved vmvNr.v aliasing with VOP_VMVNR.
+- All subfunct decode cases matched rv_v ground truth.
+- Correctly zeroed pkt.vs1 for all OPMVX and noted GPR in scalar pkt.rs1.
+- No errors on first lint and simulation run (PASS=453, FAIL=0).
+
+### What Claude got wrong or missed
+
+Nothing reported by claude
+
+## Follow-on Actions
+- [x] Fill in Output Quality ratings after review
+- [x] DECODE-008: vector memory disambiguation (opcodes 0x07/0x27)
+- [x] Update README.md status table for DECODE-007 complete
+
+## CLAUDE.md Updates
+
+2026.03.22 - nothing (no new policy decisions; interface contract for
+OPMVX scalar GPR source is captured in instr_decoder.sv comments)
+
+## Other Planning File Updates
+Nothing required
+
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-007
 
 ## SESSION PROMPT
 
@@ -14,7 +129,7 @@ multiply-accumulate disambiguation (OPMVV/OPMVX)
 
 ---
 
-Hypothesis to test:
+## Hypothesis
 All OPMVV (funct3=3'b010) and OPMVX (funct3=3'b110) instructions can be
 fully disambiguated using funct6 decoding within decode_vec_one() following
 the same nested case pattern established in DECODE-005 and DECODE-006.
@@ -26,7 +141,7 @@ resolved by adding a dedicated VOP_VFMV_FS enum entry.
 
 ---
 
-Background:
+## Background
 DECODE-005 completed OPIVV/OPIVX/OPIVI (63 entries).
 DECODE-006 completed OPFVV/OPFVF (53 entries).
 OPMVV (funct3=3'b010) and OPMVX (funct3=3'b110) remain at coarse
@@ -42,7 +157,7 @@ must be populated correctly for OPMVX instructions.
 
 ---
 
-Specific requirements for this experiment:
+## Specific requirements
 
 Step 1 - Read before writing:
 - Read frontend/decoder/rtl/decode_pkg.sv in full
@@ -125,7 +240,7 @@ Step 7 - Run tools/check_rva23_coverage.py and confirm:
 
 ---
 
-Constraints:
+## Constraints
 - Changes confined to decode_pkg.sv and instr_decoder.sv only
 - Do not modify rvc_expander.sv or any other RTL file
 - Do not attempt vector memory disambiguation -- deferred to
@@ -138,7 +253,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated decode_pkg.sv with full OPMVV/OPMVX VOP_* enum entries
    and VOP_VFMV_FS addition
 2. Updated instr_decoder.sv with funct6 decode for OPMVV/OPMVX
@@ -154,10 +269,11 @@ Deliverables:
 9. Explicit confirmation that VALU_INT placeholder has been removed
 10. Note any OPMVX scalar GPR source cases that require special
     handling by downstream dispatch
-
----
-
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 NOTE: This was reported by claude directly
@@ -218,7 +334,7 @@ All 10 deliverables completed:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-007 |
+| Task ID  | DECODE-007 |
 | Date           | 2026.03.22 |
 | Module         | decoder    |
 | Run time       | 15m.40s    |
@@ -315,4 +431,4 @@ NOTE: This was reported by claude directly
 2026.03.22 - nothing (no new policy decisions; interface contract for
 OPMVX scalar GPR source is captured in instr_decoder.sv comments)
 
-
+:: RESULTS:END ::

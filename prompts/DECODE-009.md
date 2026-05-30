@@ -1,21 +1,89 @@
-# DECODE-009 - Vector segment ld/sts, whole-register move disambiguation
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-009                                   |   |
+| Date        | 2026-03-23                                   |   |
+| Module      | decoder                                      |   |
+| Run time    | 5m.26s     | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | ff8292c2-f844-4226-9254-ed54ba6a6bcb | |
 
-Date: 2026.03.23
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
+
+# Overview of task
+
+Vector segment ld/sts, whole-register move disambiguation
+
+2026-05-30: This task file has been retrofit with the 
+now standard section markers.
+
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+  Deliverables
+
+  1. Updated instr_decoder.sv
+  - Segment comment updated: replaced "placeholder routing; full decode deferred
+   to DECODE-009" with the nf encoding explanation (nf=0=non-segment, nf=1=2
+  fields, nf stored as nfields-1)
+  - needs_vtype=0 fix added after the MOP decode for VOP_VLWHOLE/VOP_VSWHOLE
+  (lines 224-230)
+  - Segment routing to VOP_*SEG was already functionally correct from DECODE-008
+   — only the comment needed updating
+
+(continued in the RESULTS CAPTURE section)
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+
+- Correctly identified that segment routing was already functional
+  from DECODE-008 -- no unnecessary RTL changes made.
+- needs_vtype=0 fix applied correctly and precisely for
+  VOP_VLWHOLE/VOP_VSWHOLE only. Segment ops correctly retain
+  needs_vtype=1.
+- nf encoding (nfields-1) correctly documented in RTL comment.
+- All four vmv*r.v whole-register move variants verified as
+  VOP_VMVNR with no regression.
+- inst[28] reserved bit noted -- good spec reading discipline.
+- 543 tests clean on first pass.
 
 ---
 
-## SESSION PROMPT
+### What Claude got wrong or missed
 
----
-Module: Instruction Decoder
+- Nothing significant. Segment routing was already correct.
+  This experiment was primarily verification and debt cleanup.
 
-Experiment: DECODE-009 - Vector segment loads/stores and whole-register
-move disambiguation
 
----
+## Follow-on Actions
+Nothing required
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
 
-Hypothesis to test:
+## Task ID
+DECODE-009
+
+## Hypothesis
 Segment load/store instructions (nf>0) and whole-register move instructions
 can be fully decoded by extending decode_vec_mem_one() to inspect the nf
 field and route to the correct VOP_*SEG entries already stubbed in
@@ -24,7 +92,7 @@ routed via VOP_VMVNR from DECODE-007 and require only verification.
 
 ---
 
-Background:
+## Background
 DECODE-008 added segment stub entries VOP_VLSEG through VOP_VSOXSEG
 (enum values 181-188) and noted nf>0 detection as deferred. The nf
 field sits in inst[31:29] and is already extracted in
@@ -41,8 +109,7 @@ Technical debt from DECODE-008: needs_vtype=1 is incorrectly set
 for whole-register loads/stores. This experiment fixes that.
 
 ---
-
-Specific requirements for this experiment:
+## Specific Requirements
 
 Step 1 - Read before writing (targeted):
 - Read ONLY the following sections:
@@ -111,7 +178,7 @@ Step 7 - Run tools/check_rva23_coverage.py and confirm:
 
 ---
 
-Constraints:
+## Constraints
 - Changes confined to decode_pkg.sv and instr_decoder.sv only
 - Do not modify rvc_expander.sv or any other RTL file
 - No new enum entries expected -- segment stubs already in place
@@ -121,7 +188,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated instr_decoder.sv with segment nf routing and
    needs_vtype fix for whole-register ops
 2. Updated testbench with segment and whole-register move tests
@@ -134,7 +201,11 @@ Deliverables:
 9. Explicit statement of what remains for DECODE-010
 ---
 
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 
@@ -193,7 +264,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-009 |
+| Task ID  | DECODE-009 |
 | Date           | 2026.03.23 |
 | Module         | decoder    |
 | Run time       | 5m.26s     |
@@ -268,3 +339,5 @@ no
 ### Graduated to CLAUDE.md
 
 Nothing
+
+:: RESULTS:END ::

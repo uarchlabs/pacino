@@ -1,22 +1,105 @@
-# DECODE-008 - Vector memory instructions
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-008                                   |   |
+| Date        | 2026-03-23                                   |   |
+| Module      | decoder                                      |   |
+| Run time       | 10m.49s    | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | a1d0612e-12be-4156-8cd9-e2e4c252a87d | |
 
-Date: 2026.03.23
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
+
+# Overview of task
+
+Not captured at time, this task is one of the first.
+Vector memory instruction disambiguation (opcodes 0x07/0x27)
+
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+  DECODE-008 Complete                                                           
+
+  Deliverables                                                                  
+
+  1. Updated decode_pkg.sv — 21 VOP_* entries added:
+  - VOP_VLE=168 through VOP_VSOXSEG=188
+  - 13 non-segment entries (168-180), 8 segment stubs deferred to DECODE-009
+  (181-188)
+  - All in VMEM class
+
+  2. Updated instr_decoder.sv — Two changes:
+  - New decode_vec_mem_one() function (before decode_vec_one)
+  - decode_vec_one(): redirects OP_LOAD_FP/OP_STORE_FP with vector widths to the
+   new function
+  - decode_one() OP_LOAD_FP and OP_STORE_FP branches: scalar FP paths completely
+   unchanged; vector path added as outer if guard
+
+(continued in the RESULTS CAPTURE section)
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+### What Claude got right
+
+- Width field disambiguation was correct and clean on first pass.
+  No ambiguities found -- the 3'b000/101/110/111 vs 3'b010/011/100
+  split is unambiguous and Claude identified this correctly from rv_v.
+- Scalar FP load/store path confirmed byte-for-byte unchanged.
+  The outer if guard approach was the right surgical choice.
+- Strided vs indexed addressing mode distinction handled correctly --
+  rs1/rs2 GPR for strided, rs1 GPR + vs2 vector for indexed.
+- fault-only-first, mask load/store, and whole-register edge cases
+  all correctly identified and documented for downstream stages.
+- Indexed ordered vs unordered memory ordering distinction flagged
+  proactively -- not required by the prompt.
+- 525 tests passing on first Verilator run -- no iteration needed.
 
 ---
+
+### What Claude got wrong or missed
+
+- Whole-register loads/stores: needs_vtype=1 set in decode packet
+  but vtype is not actually consumed by these instructions. This
+  creates a false dependency in rename. Noted as technical debt --
+  fix options are: clear needs_vtype for VOP_VLWHOLE/VOP_VSWHOLE,
+  or handle in rename by suppressing the dependency for these
+  v_op_class values.
+
+
+## Follow-on Actions
+Nothing required
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-008
 
 ## SESSION PROMPT
-
----
-
 Module: Instruction Decoder
 
 Experiment: DECODE-008 - Vector memory instruction disambiguation
 (opcodes 0x07/0x27)
 
----
-
-Hypothesis to test:
+## Hypothesi
 Vector load and store instructions that currently share opcodes 0x07
 and 0x27 with scalar FP loads and stores can be correctly identified
 and routed as vector memory operations by inspecting bit [25] (mew)
@@ -45,7 +128,7 @@ Disambiguation rule from RVV spec:
 
 ---
 
-Specific requirements for this experiment:
+## Specific Requirements
 
 Step 1 - Read before writing (targeted):
 - Read ONLY the following sections -- do not read full files:
@@ -131,7 +214,8 @@ Step 6 - Run tools/check_rva23_coverage.py and confirm:
 
 ---
 
-Constraints:
+## Constraints
+
 - Changes confined to decode_pkg.sv and instr_decoder.sv only
 - Scalar FP load/store path must not be modified in any way
 - Segment memory ops (nf>0) recognized and routed to VOP_*SEG
@@ -142,7 +226,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated decode_pkg.sv with vector memory VOP_* entries
 2. Updated instr_decoder.sv with vector memory detection and
    decode_vec_mem_one() function
@@ -157,9 +241,11 @@ Deliverables:
 9. Note any memory addressing mode cases requiring special
    handling by downstream LSU
 
----
-
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 
@@ -224,7 +310,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-008 |
+| Task ID  | DECODE-008 |
 | Date           | 2026.03.23 |
 | Module         | decoder    |
 | Run time       | 10m.49s    |
@@ -319,3 +405,5 @@ no
 ### Graduated to CLAUDE.md
 
 Nothing
+
+:: RESULTS:END ::

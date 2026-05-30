@@ -1,21 +1,93 @@
-# DECODE-010 - Vector pre-decode module (vtype)
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-010                                   |   |
+| Date        | 2026-03-23                                   |   |
+| Module      | decoder                                      |   |
+| Run time    | 39m.14s    | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 102ea1cc-21d4-4d38-971f-bd5f4fd253fd | |
 
-Date: 2026.03.23
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
+
+# Overview of task
+Vector pre-decode module (vtype annotation)
+
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+
+  Deliverables completed
+
+  1. decode_pkg.sv — predecode_pkt_t struct added before vec_decode_pkt_t:
+  - valid, instr[31:0], is_vsetvl, needs_vtype, vtype_hazard, may_be_branch
+
+  2. predecode.sv — new purely combinational module:
+  - 8 slots decoded in parallel via unrolled continuous assigns
+  - Prefix-OR chain computes w_prior_vsetvl[i] for intra-bundle hazard detection
+  - clk/rstn ports present for pipeline interface consistency, unused internally
+  - UNOPTFLAT suppressed at declaration site with explanation
+
+(continued in the RESULTS CAPTURE section)
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+
+- Prefix-OR chain for vtype_hazard computed correctly in parallel
+  across all 8 slots -- no loops, purely combinational.
+- clk/rstn ports present for pipeline consistency even though
+  unused -- correct forward-looking interface decision.
+- UNOPTFLAT suppression documented at declaration site with
+  explanation -- good practice.
+- Verilator 5.020 variable-indexed array write quirk identified
+  and worked around independently -- not in the prompt.
+- 543 existing tests pass unchanged -- interface migration clean.
+- may_be_branch false positive cases documented explicitly.
+
+- isolated a quirk of Verilator, without additional prompts
+  see docs/observations/verilator_5020_notes.md
 
 ---
 
-## SESSION PROMPT
+### What Claude got wrong or missed
 
----
+- Nothing significant. The Verilator quirk workaround was found
+  and resolved without prompting. All deliverables complete.
 
-Module: Instruction Decoder
+## Follow-on Actions
+- [ ] {e.g. retry with different constraint}
+- [ ] {e.g. carry interface decision forward to next module}
+- [ ] {e.g. update CLAUDE.md with confirmed decision}
+- [ ] {e.g. update README.md status table}
+## CLAUDE.md Updates
+Nothing required
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
 
-Experiment: DECODE-010 - Vector pre-decode module (vtype annotation)
+## Task ID
+DECODE-010
 
----
-
-Hypothesis to test:
+## Hypothesis
 A dedicated pre-decode module sitting between fetch and decode can
 identify vsetvl/vsetvli/vsetivli instructions in the fetch bundle
 and annotate each slot with vtype dependency information before the
@@ -23,9 +95,7 @@ main decoder runs. This keeps the main decoder stateless and provides
 a clean interface for rename to track vtype as a producer/consumer
 dependency.
 
----
-
-Background:
+## Background
 The CLAUDE.md baseline states:
 - vtype dependency policy for intra-bundle vsetvl is TBD
 - Decoder marks is_vsetvl and needs_vtype in vec_decode_pkt_t
@@ -45,7 +115,7 @@ keep downstream stages stateless.
 
 ---
 
-Specific requirements for this experiment:
+## Specific Requirements
 
 Step 1 - Read before writing (targeted):
 - Read decode_pkg.sv: vec_decode_pkt_t struct and is_vsetvl,
@@ -169,7 +239,7 @@ Step 9 - Run tools/check_rva23_coverage.py and confirm:
 
 ---
 
-Constraints:
+## Constraints
 - predecode.sv must be purely combinational -- no registered state
 - All 8 slots processed in parallel -- no loops or sequential logic
 - Do not restructure rvc_expander.sv or move RVC expansion --
@@ -182,7 +252,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated decode_pkg.sv with predecode_pkt_t struct
 2. New frontend/decoder/rtl/predecode.sv module
 3. Updated frontend/decoder/rtl/instr_decoder.sv interface
@@ -198,9 +268,11 @@ Deliverables:
 10. Note any cases where may_be_branch conservative detection
     produces false positives -- these are expected and acceptable
 
----
-
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 
@@ -272,7 +344,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-010 |
+| Task ID  | DECODE-010 |
 | Date           | 2026.03.23 |
 | Module         | decoder    |
 | Run time       | 39m.14s    |
@@ -365,3 +437,4 @@ Hit usage limits. wait 2.5hr. Exited, restarted after timeout.
 ### Graduated to CLAUDE.md
 
 {date} - {what was added, or "nothing" if no decisions confirmed}
+:: RESULTS:END ::

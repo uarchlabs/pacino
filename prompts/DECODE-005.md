@@ -1,20 +1,113 @@
-# DECODE-005 - Vector integer ALU(func6 dcd)
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-005                                   |   |
+| Date        | 2026-03-22                                   |   |
+| Module      | decoder                                      |   |
+| Run time       | 9m.39s     | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 21accb7f-7b47-47c7-8226-71417350a2e4 | |
 
-Date: 2026.03.22
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
+Vector integer ALU decode disambiguation (funct6 decode)
 
-## SESSION PROMPT
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
 
+# Results Discussion
+
+## Claude.code Console Output
+  DECODE-005 complete. Here is the summary of deliverables:
+
+  ---
+  1. decode_pkg.sv — v_op_class_t expanded from logic[3:0] (8 entries) to
+  logic[6:0] (71 entries). VALU_INT retained for OPMVV/OPMVX placeholder.
+
+  2. instr_decoder.sv — decode_vec_one() now performs nested funct6 decode for
+  OPIVV (funct3=3'b000), OPIVX (funct3=3'b100), and OPIVI (funct3=3'b011).
+  OPFVV/OPFVF unchanged (VALU_FP). OPMVV/OPMVX unchanged (VALU_INT).
+
+  3. Testbench — T28 updated to expect VOP_VADD. Tests T31–T40 added: 10 test
+  groups covering OPIVV, OPIVX, OPIVI per-funct6, vmerge/vmv disambiguation,
+  saturation, narrowing, widening reduction, VALU_FP regression, VALU_INT
+  regression, VOTHER for unknown funct6, and the key asymmetry (OPIVV
+  funct6=0x0e is vrgatherei16; OPIVX/OPIVI 0x0e is vslideup).
+
+  4. Lint and simulation — clean. 351 tests, 0 failures.
+
+  5. Coverage — V extension still ROUTED, 0 missing. No regressions.
+
+  6. Ambiguous/overlapping encodings found:
+  - funct6=0x17 in all three groups encodes both vmerge (vm=0) and vmv.v.*
+  (vm=1) — resolved by checking inst[25] inside the funct6 case                 
+  - funct6=0x11 encodes both vmadc.*.m (vm=0) and vmadc.* (vm=1) — both map to
+  VOP_VMADC; distinction deferred to rename                                     
+  - funct6=0x13: same pattern for vmsbc variants — both map to VOP_VMSBC        
+  - funct6=0x27 in OPIVV/OPIVX is vsmul; in OPIVI it is vmv1r/2r/4r/8r — no
+  conflict since outer case is on funct3                                        
+
+  7. VOP_* enum entries added: 63 (7'd8 through 7'd70).
+
+  8. Deferred:
+  - DECODE-006: OPFVV/OPFVF funct6 decode (vfadd, vfsub, …). Currently VALU_FP
+  coarse class.
+  - DECODE-007: OPMVV/OPMVX funct6 decode (vmacc, vwaddu, vwmul, …). Currently
+  VALU_INT coarse class. Enum stubs VOP_VWADDU..VOP_VNMSUB are defined and
+  ready.
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+
+The funct6=0x17 vmerge/vmv.v.* disambiguation via inst[25] is a spec subtlety.
+
+Claude caught it, resolved it correctly, and deferred the vmadc/vmsbc
+mask-bit distinction to rename appropriately. This shows good judgement
+in segmentation. The decoder should not make architectural state decisions.
 ```
-Module: Instruction Decoder
-
-Experiment: DECODE-005 - Vector integer ALU disambiguation (funct6 decode)
 
 ---
 
-Hypothesis to test:
+### What Claude got wrong or missed
+
+minor: Claude did not maintain the 80 column style limit specified in CLAUDE.md
+       re-wrote as a requirement not a suggestion
+
+
+## Follow-on Actions
+- [x] Update STATE.md table
+## CLAUDE.md Updates
+- Line width: 80 column maximum. No exceptions. This will be
+  checked by style scripts.
+
+- No tabs are permitted. No exceptions. This will be checked by
+  style scripts
+
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-005
+
+## Hypothesis 
 All vector integer ALU instructions (funct3 = OPIVV/OPIVX/OPIVI) can be
 fully disambiguated using funct6 decoding within decode_vec_one() without
 changes to any other part of the decoder. After this experiment v_op_class
@@ -24,7 +117,7 @@ than the coarse VALU_INT placeholder from DECODE-004.
 
 ---
 
-Background:
+## Background:
 DECODE-004 established the vector decode foundation. All OP_VECTOR (0x57)
 instructions are routed correctly. v_op_class is currently set at coarse
 level only:
@@ -37,7 +130,7 @@ Mask/reduce/permute (OPMVV/OPMVX) disambiguation is deferred to DECODE-007.
 
 ---
 
-Specific requirements for this experiment:
+# Specific requirements
 
 Step 1 - Read before writing:
 - Read frontend/decoder/rtl/decode_pkg.sv in full
@@ -105,7 +198,7 @@ Step 6 - Run tools/check_rva23_coverage.py:
 
 ---
 
-Constraints:
+## Constraints
 - ASCII only in all comments
 - Changes confined to decode_pkg.sv and instr_decoder.sv only
 - Do not modify rvc_expander.sv or any other RTL file
@@ -116,7 +209,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated decode_pkg.sv with expanded v_op_class_t enum
 2. Updated instr_decoder.sv with funct6 decode for OPIVV/OPIVX/OPIVI
 3. Updated testbench with directed tests per funct3/funct6 group
@@ -129,8 +222,11 @@ Deliverables:
    and DECODE-007
 
 ```
-
----
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ## RESULTS CAPTURE
 
@@ -181,7 +277,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-005 |
+| Task ID  | DECODE-005 |
 | Date           | 2026.03.22 |
 | Module         | decoder    |
 | Run time       | 9m.39s     |
@@ -267,4 +363,6 @@ with less detail and comparing the results.
 
 - No tabs are permitted. No exceptions. This will be checked by
   style scripts
+
+:: RESULTS:END ::
 

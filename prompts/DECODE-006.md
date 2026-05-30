@@ -1,9 +1,107 @@
-# DECODE-006 - Vector FP ops + Zvfhmin
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | DECODE-006                                   |   |
+| Date        | 2026-03-22                                   |   |
+| Module      | decoder                                      |   |
+| Run time    | 10m.43s    |
+| Resume sha  | 644aa7b1-4cba-4647-acf2-0e96d83bba62 | |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
 
-Date: 2026.03.22
-Status: [ ] in-progress  [x] complete  [ ] abandoned
+Task:   [x] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [ ] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
+
+# Overview of task
+Vector FP ALU disambiguation (OPFVV/OPFVF) and Zvfhmin closure
+
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+  1. decode_pkg.sv — 53 new VOP_ enum entries added (7'd71 to 7'd123)*          
+
+  ┌─────────┬────────────────────────────────────────────────────────┬───────┐  
+  │  Range  │                         Group                          │ Count │
+  ├─────────┼────────────────────────────────────────────────────────┼───────┤
+  │ 71-84   │ OPFVV/OPFVF shared: vfadd, vfsub, vfmin, vfmax,        │ 14    │
+  │         │ vfsgnj/n/x, vfslide1up/down, vfmv                      │       │
+  ├─────────┼────────────────────────────────────────────────────────┼───────┤  
+  │ 85-90   │ vfmerge, vfcvt, vfwcvt, VOP_VFWCVT_FF, vfncvt,         │ 6     │
+  │         │ VOP_VFNCVT_FF                                          │       │  
+  ├─────────┼────────────────────────────────────────────────────────┼───────┤
+  │ 91-94   │ vfsqrt, vfrsqrt7, vfrec7, vfclass                      │ 4     │  
+  ├─────────┼────────────────────────────────────────────────────────┼───────┤  
+  │ 95-100  │ vmfeq, vmfle, vmflt, vmfne, vmfgt, vmfge               │ 6     │
+  ├─────────┼────────────────────────────────────────────────────────┼───────┤  
+  │ 101-112 │ vfdiv, vfrdiv, vfmul, vfrsub, FMA group x8             │ 12    │
+  ├─────────┼────────────────────────────────────────────────────────┼───────┤  
+  │ 113-123 │ Widening: vfwadd, vfwredusum, vfwsub, vfwredosum,      │ 11    │
+  │         │ vfwadd_w, vfwsub_w, vfwmul, vfwmacc/nmacc/msac/nmsac   │       │  
+  └─────────┴────────────────────────────────────────────────────────┴───────┘
+
+  Total: 53 new VOP_ entries*
+
+(more continued in RESULTS CAPTURE section)
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+
+Spec discipline - the read/before/write directive is being followed.
+
+Ambiguity identification Claude surfaced real spec subtleties that matter downstream:
+
+  cvt group subfunct encoding (DECODE-006)
+  vfmv.f.s vs vfmv.s.f scalar destination issue (DECODE-006)
+
+The testbenches are/remain self-checking
 
 ---
+
+### What Claude got wrong or missed
+
+vfmv.f.s downstream risk: scalar destination case identified but not
+resolved at decode stage. Dispatch cannot use v_op_class alone --
+must inspect funct3 as well. Cleaner solution would be a dedicated
+VOP_VFMV_FS enum entry. Noted as technical debt.
+
+It is having trouble sticking with the formatting requirements. I think
+the solution is to add a format check-script and require it to pass that
+script.
+
+## Follow-on Actions
+- [x] update CLAUDE.md with style selections
+- [x] update README.md status table
+- [ ] Consider adding VOP_VFMV_FS as dedicated enum entry to make
+      vfmv.f.s unambiguous for dispatch -- either in DECODE-007
+      or as a standalone fix (choosing standalone now)
+
+## CLAUDE.md Updates
+- Use 2 spaces for indent. No exceptions. This will be checked by
+  style scripts
+## Other Planning File Updates
+Nothing required
+
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
+
+## Task ID
+DECODE-006
 
 ## SESSION PROMPT
 
@@ -14,7 +112,7 @@ and Zvfhmin closure
 
 ---
 
-Hypothesis to test:
+## Hypothesis
 All vector floating point ALU instructions (funct3 = OPFVV/OPFVF) can be
 fully disambiguated using funct6 decoding within decode_vec_one() following
 the same nested case pattern established in DECODE-005. Zvfhmin closes
@@ -23,7 +121,7 @@ as OPFVV instructions.
 
 ---
 
-Background:
+## Background
 DECODE-005 fully disambiguated OPIVV/OPIVX/OPIVI (63 VOP_* entries added).
 OPFVV (funct3=3'b001) and OPFVF (funct3=3'b101) remain at coarse VALU_FP
 placeholder. This experiment resolves both groups.
@@ -36,7 +134,7 @@ when OPFVV is fully decoded.
 
 ---
 
-Specific requirements for this experiment:
+# Specific requirements 
 
 Step 1 - Read before writing:
 - Read frontend/decoder/rtl/decode_pkg.sv in full
@@ -101,7 +199,7 @@ Step 6 - Run tools/check_rva23_coverage.py and confirm:
 
 ---
 
-Constraints:
+## Constraints
 - Changes confined to decode_pkg.sv and instr_decoder.sv only
 - Do not modify rvc_expander.sv or any other RTL file
 - Do not attempt OPMVV/OPMVX disambiguation -- deferred to DECODE-007
@@ -113,7 +211,7 @@ Constraints:
 
 ---
 
-Deliverables:
+## Deliverables
 1. Updated decode_pkg.sv with full OPFVV/OPFVF VOP_* enum entries
 2. Updated instr_decoder.sv with funct6 decode for OPFVV/OPFVF
 3. Updated testbench with directed tests including Zvfhmin closure
@@ -125,8 +223,11 @@ Deliverables:
 8. Explicit confirmation that VALU_FP placeholder has been removed
 9. Explicit statement of what remains deferred to DECODE-007
 
-
+:: PROMPT:END ::
+=============================================================
 ## RESULTS CAPTURE
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 
@@ -214,7 +315,7 @@ Deliverables:
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | DECODE-006 |
+| Task ID  | DECODE-006 |
 | Date           | 2026.03.22 |
 | Module         | decoder    |
 | Run time       | 10m.43s    |
@@ -309,4 +410,6 @@ no
 
 - Use 2 spaces for indent. No exceptions. This will be checked by
   style scripts
+
+:: RESULTS:END ::
 

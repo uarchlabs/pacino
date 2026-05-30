@@ -1,18 +1,92 @@
-# TOOLS-002 - spike-dasm Oracle Regression
+=============================================================
+# Task Header
+=============================================================
+:: HEADER:START ::
+| Field       | Value                                        |   |
+|-------------|----------------------------------------------|---|
+| Task ID     | TOOLS-002                                    |   |
+| Date        | 2026-XX-XX                                   |   |
+| Module      | tools                                        |   |
+| Run time    | 1m.40s                                       |   |
+| Ctx%        | not recorded                                 |   |
+| Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 5f754086-690f-45ad-a5fa-7dc6f109e3ac         |   |
 
-Date: j
-Status: [ ] in-progress  [ ] complete  [ ] abandoned
+Task:   [ ] experiment  [ ] implementation  [ ] debug
+        [ ] cleanup     [x] testbench       [ ] verification
+Status: [ ] in-progress [x] complete        [ ] abandoned
 
----
+# Overview of task
 
-## SESSION PROMPT
+Prove spike-dasm can be used as an oracle regression tool for
+ISA implementation verification
+
+2026-05-30: This task file has been retro-fitted with the 
+now standard section markers.
+:: HEADER:END :
+=============================================================
+:: DISCUSSION:START ::
+
+# Results Discussion
+
+## Claude.code Console Output
+  Results                                                                       
+
+  make spike_oracle - Generated 50 rows, matching the 50 disassembly lines in   
+  rva23_insn_ref.disasm.                                                        
+
+  make spike_check - Exit code: 1 (failure)                                     
+
+  Summary: total=50 decoded=49 unknown=1 skipped=0 errors=0                     
+   
+  ---                                                                           
+  UNKNOWN result                                                             
+
+  ┌─────────┬──────────┬─────────────────────┐
+  │ address │ encoding │    mnemonic_hint    │                                  
+  ├─────────┼──────────┼─────────────────────┤
+  │ 0x0068  │ 840140f3 │ .insn 4, 0x840140f3 │                                  
+  └─────────┴──────────┴─────────────────────┘                               
+
+## My Assessment
+Nothing required
+## Claude.ai Assessment
+
+### What Claude got right
+- gen_spike_oracle.py and check_spike_decode.py delivered on first run.
+- skip mechanism works - skipped rows run and report but do not fail.
+- Makefile integration clean, existing targets untouched.
+- 49/50 instructions decoded confirming ISA string correct for all
+  extensions except Zimop.
+
+### What Claude got wrong or missed
+- Suggested rv64gc ISA string during debug despite being told spike
+  does not accept the G shortcut. Careless error.
+- Zcmop encoding failure not caught until after results reported.
+  Should have been flagged as skip=1 in the prompt alongside Zimop.
 
 
----
+## Follow-on Actions
+- [ ] Determine correct inline asm for mop.r.0 (Zimop) and c.mop.1 (Zcmop)
+- [ ] Update rva23_insn_ref.c with correct encodings for both
+- [ ] Set skip=1 for 0x0068 and 0x006c in spike_oracle.csv
+- [ ] Add zimop and zcmop to ISA string in check_spike_decode.py
+- [ ] Re-run make spike_check after CSV edits, confirm exit 0
+- [ ] Begin TOOLS-003 decoder regression against spike oracle
+## CLAUDE.md Updates
+2026-03-24 - spike-dasm ISA string confirmed for RVA23. Zimop spike
+disassembler gap documented. Console only output rule established
+for all Claude Code prompts.
+## Other Planning File Updates
+Nothing required
+:: DISCUSSION:END ::
+=============================================================
+# Claude.code Prompt
+=============================================================
+:: PROMPT:START ::
 
-Module: Tools
-
-#TOOLS-002 - spike-dasm Oracle Regression
+## Task ID
+TOOLS-002
 
 ## Hypothesis
 
@@ -36,8 +110,6 @@ Do not modify any RTL files. Do not modify any existing testbenches.
 Do not modify rva23_insn_ref.c or rva23_ext_test.c.
 Do not write results to any .md file. Report all results to the console only.
 
----
-
 ## ISA String
 
 The spike-dasm ISA string to use in all invocations is exactly:
@@ -55,15 +127,16 @@ Note: hex digits only, no 0x prefix, inside DASM().
 
 ---
 
-## Deliverable 1: tools/check_spike_decode.py
+## Deliverables
+### Deliverable 1: tools/check_spike_decode.py
 
-### Purpose
+#### Purpose
 
 Read tools/spike_oracle.csv and for each row pipe the encoding through
 spike-dasm. Classify each result. Report a summary. Exit non-zero if
 any non-skipped instruction returns UNKNOWN.
 
-### CSV format
+#### CSV format
 
 The CSV file has a header row and these columns (in order):
 
@@ -75,7 +148,7 @@ The CSV file has a header row and these columns (in order):
 - skip:          integer, 0 = include in pass/fail, 1 = exclude from
                  pass/fail (still runs, still reported, never fails)
 
-### Algorithm
+#### Algorithm
 
 For each row in the CSV:
 1. Format the encoding as DASM(<encoding>) with no 0x prefix.
@@ -94,7 +167,7 @@ After all rows:
 - If any non-skipped row has result UNKNOWN or ERROR: exit 1
 - Otherwise: exit 0
 
-### Implementation notes
+#### Implementation notes
 
 - spike-dasm binary path: tools/spike/install/bin/spike-dasm
   Use a path relative to the script location so it works from any
@@ -109,7 +182,7 @@ After all rows:
 
 ---
 
-## Deliverable 2: tools/spike_oracle.csv (generated by make target)
+### Deliverable 2: tools/spike_oracle.csv (generated by make target)
 
 This file is generated by parsing tools/rva23_insn_ref.disasm.
 It is not hand-authored. See Makefile target spike_oracle below.
@@ -147,7 +220,7 @@ tools/rva23_insn_ref.disasm and writes tools/spike_oracle.csv.
 
 ---
 
-## Deliverable 3: Makefile additions to tools/Makefile
+### Deliverable 3: Makefile additions to tools/Makefile
 
 Add to the existing tools/Makefile. Do not remove or modify any
 existing targets or variables. Add after the existing targets:
@@ -198,11 +271,11 @@ Do not attempt to fix UNKNOWN results during this session.
 Do not modify spike_oracle.csv manually during this session.
 Report results as-is.
 
-
-
----
-
-## RESULTS CAPTURE
+:: PROMPT:END ::
+=============================================================
+# Results Capture
+=============================================================
+:: RESULTS:START ::
 
 ### Claude Text Output
 
@@ -238,7 +311,7 @@ Report results as-is.
 
 | Field          | Value |
 |----------------|-------|
-| Experiment ID  | TOOLS-002 |
+| Task ID  | TOOLS-002 |
 | Date           | 2026-03-24 |
 | Module         | tools/ |
 | Run time       | 1m.40s |
@@ -305,3 +378,4 @@ prompts as a standing instruction.
 2026-03-24 - spike-dasm ISA string confirmed for RVA23. Zimop spike
 disassembler gap documented. Console only output rule established
 for all Claude Code prompts.
+:: RESULTS:END ::
