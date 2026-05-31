@@ -14,6 +14,7 @@
 | Resume sha   | 533bc7ba-00bf-4454-bb69-078ff6a06e09 |             |
 
 Task:   [ ] experiment  [x] implementation  [ ] debug       [ ] cleanup
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task  - manual/c.ai
@@ -397,5 +398,9 @@ N/A
   tb_dual_lm1 as named begin-end blocks) is designed to be extended:
   add a new DUT instance, counter pair, helper tasks, and a named
   begin block without restructuring the existing blocks.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

@@ -14,6 +14,7 @@
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task
@@ -363,6 +364,9 @@ with less detail and comparing the results.
 
 - No tabs are permitted. No exceptions. This will be checked by
   style scripts
+
+## Files Modified
+Not captured
 
 :: RESULTS:END ::
 

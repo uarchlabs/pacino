@@ -13,6 +13,7 @@
 | Resume sha   | 32f33c0f-7746-4452-a39b-30fe02b9cbd7 |             |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [x] cleanup     [ ] testbench
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 # Overview of task
 # Verify directory structure matches README, scrub stale paths
@@ -391,5 +392,9 @@ Step 3 runs. COMP_DIR in bpu/Makefile uses a relative path
 (../../../lib/rtl) for the active line; the relative reference is
 correct when make is invoked from the bpu/ directory and is within
 $RVA_ROOT so no RVA_ROOT prefix is required there.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

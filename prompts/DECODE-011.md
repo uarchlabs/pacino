@@ -14,6 +14,7 @@
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task
@@ -488,5 +489,8 @@ to the console only.
 -  Illegal instructions: set ILLEGAL flag at decode, pass through rename, handle at ROB commit head per RISC-V spec convention.  ROB redirects to mtvec, writes mepc and mcause=2.
 
 -  RVV micro-op expansion: segment loads/stores (nf>0) and whole-register ops are candidates for micro-op expansion.  Policy TBD at vector execution unit design stage. nf field in decode packet provides expansion count.
+
+## Files Modified
+Not captured
 
 :: RESULTS:END ::

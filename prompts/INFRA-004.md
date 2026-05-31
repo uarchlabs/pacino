@@ -13,6 +13,7 @@
 | Resume sha   | dd3422cc-4180-4dee-9338-03dd6f29473c               |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [x] cleanup     [ ] testbench
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 # Overview of task
 # Fix genhtml writing annotation HTML outside the coverage/
@@ -343,5 +344,9 @@ The stray lib/rtl/ directory now exists but is empty. It can be
 removed with rmdir if desired. No automated cleanup is required
 since it will not accumulate new files with the --prefix fix in
 place.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

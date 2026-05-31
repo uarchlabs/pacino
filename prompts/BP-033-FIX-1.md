@@ -13,6 +13,7 @@
 | Resume sha | cdc3901b-6ef5-4e72-84be-2d3b76bc87e6 |   |
 Task:   [ ] experiment  [x] implementation  [ ] debug
         [ ] cleanup     [x] testbench       [ ] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task
@@ -657,5 +658,9 @@ not in scope for this experiment.
 CNTRL_BITS_WIDTH = 46 (1+3+2+2+38). For IT1-IT5 all tables
 share the same CTR/USE/EPC/TGT widths (IT_MAX_ values), so
 TAG_LSB = CNTRL_BITS_WIDTH = 46 is consistent across all instances.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

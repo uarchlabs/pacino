@@ -14,6 +14,7 @@
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task
@@ -437,4 +438,8 @@ Hit usage limits. wait 2.5hr. Exited, restarted after timeout.
 ### Graduated to CLAUDE.md
 
 {date} - {what was added, or "nothing" if no decisions confirmed}
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::

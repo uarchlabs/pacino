@@ -13,6 +13,7 @@
 | Resume sha   | 1f15c7dc-166a-46ea-a1fb-7c8d2c849aab |             |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [x] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 # Overview of task
 # Re-run verilator_coverage --annotate on current cov_tage
@@ -431,5 +432,9 @@ coverage deficiencies, not RTL compliance issues.
   in the current testbench." The investigation item in
   the Conflicts table (determine if TC-23/TB-ARB-05
   correctly drove upd_val1) remains valid.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

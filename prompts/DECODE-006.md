@@ -14,6 +14,7 @@
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task
@@ -410,6 +411,9 @@ no
 
 - Use 2 spaces for indent. No exceptions. This will be checked by
   style scripts
+
+## Files Modified
+Not captured
 
 :: RESULTS:END ::
 

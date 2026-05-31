@@ -13,6 +13,7 @@
 | Resume sha   | 745a5a80-d772-4092-b2a2-ddcff6ca54d7 |             |
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug       [x] cleanup
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task  - manual/c.ai
@@ -202,4 +203,8 @@ flagged UNOPTFLAT because it traced: lm1_w -> lm1 -> lm2_w ->
 lm2_w. The single-pass f0/f1 state design eliminates this by
 computing lm2 purely from the f1 state bit, with no reference
 to lm1's value anywhere in the carry chain logic.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::

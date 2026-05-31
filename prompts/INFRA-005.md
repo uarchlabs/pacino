@@ -13,6 +13,7 @@
 | Resume sha   | ~/Development/jeffnye-gh/atemp |                   |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [x] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 # Overview of task
   Run verilator_coverage --annotate on cov_tage coverage
@@ -396,5 +397,9 @@ any write). The reason ueff was never 0 at scan time needs
 investigation -- possibly entries were updated (USEFUL written
 nonzero) before the first mispredict, or the provider was always
 T4 (TAGE_MAX_TBL) making no higher table available for alloc.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

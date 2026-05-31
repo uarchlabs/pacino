@@ -14,6 +14,7 @@
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug         [x] manual
         [ ] cleanup     [ ] testbench       [ ] verification
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task
@@ -62,4 +63,8 @@ n/a
 
 This was a manual task, automated results capture is not used
 for manual tasks.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::

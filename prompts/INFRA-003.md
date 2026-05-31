@@ -13,6 +13,7 @@
 | Resume sha   | 4dcb0943-6555-4476-bd5b-92916e2f7d7e |             |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [x] cleanup     [ ] testbench
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 # Overview of task
 # Wire --coverage-line into the bpu Makefile. Add per-module
@@ -438,5 +439,9 @@ None in this infrastructure session.
   not implemented.  The documented way to set the output path is to
   run the binary from the desired output directory, which is what
   the cd $(COV_DIR)/xxx && $(CURDIR)/... pattern does.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
 

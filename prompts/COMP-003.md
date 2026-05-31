@@ -12,6 +12,7 @@
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 15d40762-3f61-4878-9f32-3bad4afe8c46 |             |
 Task:   [ ] experiment  [x] implementation  [ ] debug       [ ] cleanup
+Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Overview of task  - manual/c.ai
@@ -255,4 +256,8 @@ None identified for this module.
   on the LAST_ADDR localparam. Plain NUM_ENTRIES-1 triggers
   WIDTHTRUNC (32-bit SUB result vs ADDR_BITS-wide target).
   No project-wide suppression added; the cast is the fix.
+
+## Files Modified
+Not captured
+
 :: RESULTS:END ::
