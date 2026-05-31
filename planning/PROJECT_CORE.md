@@ -212,28 +212,37 @@ prediction pipeline. P-stage notation used elsewhere.
 
 ## Tools Status
 
-### check_rva23_coverage.py
-- Location: tools/check_rva23_coverage.py
-- Uses submodule: tools/riscv-opcodes
-- make coverage: exits non-zero on MISSING
-- --strict flag: treats ROUTED as MISSING (off by default)
+## Tools Status
 
-### Spike ISS
-- Built at: tools/spike/install/bin/spike-dasm
-- Input format: DASM(hex) -- NOT 0xhex
-- Vector disassembly: --isa rv64gcv works
-- Zba/Zbb/Zbs ISA string: unresolved -- TOOLS-002 deferred
+| Tool       | Version                        | Location                          | Notes                         |
+|------------|--------------------------------|-----------------------------------|-------------------------------|
+| Verilator  | 5.048 2026-04-26 rev v5.048    | $(RVA_ROOT)/tools/bin/verilator   | Upgraded session-044.         |
+|            |                                |                                   | inout optimizer bug fixed.    |
+|            |                                |                                   | TD #38 partially addressed.   |
+|            |                                |                                   | Covergroup #7099 re-check     |
+|            |                                |                                   | still pending.                |
+| Spike      | --                             | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
+|            |                                |                                   | issue.                        |
+| Surfer     | --                             | $(USER)/.cargo/bin/surfer         |                               |
+| Var.mk     | --                             | $(RVA_ROOT)/rtl/Var.mk            | Common Makefile variables.    |
+|            |                                |                                   | VERILATOR, SPIKE, SURFER      |
+|            |                                |                                   | paths. All RTL Makefiles      |
+|            |                                |                                   | include this file.            |
+|check_rva23_coverage.py | --    | ./tools                  | Uses submodule: tools/riscv-opcodes |
+|                        |       |                          | make coverage: exits non-zero on MISSING |
+|                        |       |                          | --strict flag: treats ROUTED as MISSING (off by default) |
+| IA status line         | --    | ./claude/statusline.sh   | Two-line display:                             |
+|                        |       |                          |  Total: <tokens> \| Ctx: <k used> \| Ctx: <%> |
+|                        |       |                          |  Reset: <Hh MMm>                              |
+|                        |       |                          |  Requires jq. Ctx% uses used_percentage (accurate field). |
+|                        |       |                          |  Reset countdown derived from |
+|                        |       |                          |  rate_limits.five_hour.resets_at. |
+|                        |       |                          |  Note: display lost on terminal scroll. Run script directly |
+|                        |       |                          |  to restore: ~/.claude/statusline.sh |
 
-### Claude Code status line
-Script at ~/.claude/statusline.sh (global, not in repo).
-Two-line display:
-  Total: <tokens> | Ctx: <k used> | Ctx: <%>
-  Reset: <Hh MMm>
-Requires jq. Ctx% uses used_percentage (accurate field).
-Reset countdown derived from
-rate_limits.five_hour.resets_at.
-Note: display lost on terminal scroll. Run script directly
-to restore: ~/.claude/statusline.sh
+### Common
+tools/bin: $(RVA_ROOT)/tools/bin is the common install directory for all submodule tools.
+README.md updated to show build instructions for Verilator and Spike.
 
 ### make targets (frontend/decoder/)
 - make lint          -- Verilator lint only
@@ -249,5 +258,6 @@ After bp_pkg split:
 - make sim           -- tb_bp_packages
 - make sim_history   -- tb_bp_history
 - make sim_ubtb      -- tb_ubtb
+- make sim_tage_manual -- tb_tage_manual + tage_assert
 - make all           -- lint + all sim targets
 

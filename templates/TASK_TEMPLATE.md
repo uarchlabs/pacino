@@ -15,15 +15,16 @@
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
+Mode:   [ ] automated   [ ] manual
 Status: [ ] in-progress [ ] complete        [ ] abandoned
 
 # Overview of task
 
 :: HEADER:END ::
-=============================================================
-# Paste c.code console output and c.ai discussion
+
 =============================================================
 :: DISCUSSION:START ::
+=============================================================
 
 # Results Discussion 
 
@@ -37,15 +38,16 @@ Status: [ ] in-progress [ ] complete        [ ] abandoned
 - [ ] As needed document here
 
 ## CLAUDE.md Updates
-TBD as needed document here
+Nothing required
 
 ## Other Planning File Updates
-TBD as needed document here
+Nothing required
+
 :: DISCUSSION:END ::
-=============================================================
-# Claude.code Prompt 
+
 =============================================================
 :: PROMPT:START ::
+=============================================================
 
 ## Task ID
 Replace this with the task ID
@@ -68,10 +70,10 @@ Note: If a new module is to be created ensure that claude.code is allowed
 or told to modify the Makefile for lint checking at the minimum.
 
 :: PROMPT:END ::
-=============================================================
-# Results Capture
+
 =============================================================
 :: RESULTS:START ::
+=============================================================
 
 ## Summary
 RESULTS NOT YET WRITTEN -- replace this line when filling in.
@@ -98,5 +100,7 @@ For each test case document:
 ## Deferred Work
 
 ## Other Notes
+
+## Files modified
 
 :: RESULTS:END ::

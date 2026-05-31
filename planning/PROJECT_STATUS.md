@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-05-12 (session_handoff-039)
+ UPDATED: 2026-05-31 (session_handoff-044)
  CONTACT: Jeff Nye
 ```
 
@@ -16,89 +16,96 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ## Module Status
 
-| Module                  | Status      | Tests            | Notes                            |
-|-------------------------|-------------|------------------|----------------------------------|
-| predecode.sv            | Complete    | tb_predecode     | clk/rstn unused (debt #4)        |
-| instr_decoder.sv        | Complete    | tb_instr_decoder | 1043 passing                     |
-| rvc_expander.sv         | Complete    | tb_rvc_expander  |                                  |
-| decode_pkg.sv           | Complete    | --               | All decode structs               |
-| bp_defines_pkg.sv       | Complete    | tb_bp_pkg        | TAGE and ITTAGE parameters       |
-|                         |             |                  | complete. IT_TBL_TGT_WIDTH added.|
-| bp_structs_pkg.sv       | Complete    | tb_bp_pkg        | TAGE and ITTAGE structs complete.|
-|                         |             |                  | IT5 fold fields pending (II1).   |
-| bp_pkg.sv               | Deprecated  | --               | Deleted.                         |
-| bp_history.sv           | Complete    | tb_bp_history    | 12 passing                       |
-| ubtb.sv                 | Complete    | tb_ubtb          | TC1-TC10 passing.                |
-|                         |             |                  | Port naming retrofit pending     |
-|                         |             |                  | (CLI-012)                        |
-| loop_pred.sv            | Complete    | tb_loop_pred     | BP-004c-f complete.              |
-|                         |             |                  | Port naming retrofit pending     |
-|                         |             |                  | (CLI-011)                        |
-| tage_interfaces.md      | Complete    | --               | session-036: 6 corrections       |
-|                         |             |                  | applied.                         |
-| tage_table_interfaces.md| Draft       | --               | Created session-016.             |
-|                         |             |                  | Updates pending.                 |
-| tage_cntrl_use          | Complete    | --               | session-037: complete.           |
-| _update_rules.md        |             |                  | Debt #43 closed.                 |
-| tage_cntrl_uaon         | Draft       | --               | session-036: verified.           |
-| _update_rules.md        |             |                  | Debt #45 closed BP-032.          |
-| bw_ram / sat_alu        | Complete    | tb_components    | COMP-001 PASS                    |
-| dual_lm1                | Complete    | tb_components    | COMP-002 now uses generate       |
-| sram_init               | Complete    | tb_components    | COMP-003                         |
-| tage_hash.sv            | Complete    | tb_tage_hash     | BP-006 abandoned.                |
-| tage_table.sv           | Complete    | tb_tage_table    | BP-007 through BP-012 complete.  |
-|                         |             |                  | Signal naming debt #17 pending.  |
-| tage_bim.sv             | Complete    | --               | BP-009b complete.                |
-|                         |             |                  | idx_hash_p0 output added.        |
-| tage_cntrl.sv           | In progress | --               | BP-008a/b complete.              |
-|                         |             |                  | BP-012 complete.                 |
-|                         |             |                  | Was complete but BP-034/5 exposed|
-|                         |             |                  | issues, see tech debt #45        |
-|                         |             |                  | HAND-FIX-002 applied (debt #30). |
-| |  | | |
-| tage.sv                 | Complete    | tb_tage          | BP-010 through BP-030 complete.  |
-|                         |             |                  | 68 tests pass. All coverage      |
-|                         |             |                  | targets closed or deferred.      |
-| |  | | |
-| ittage_interfaces.md              | Draft       | --              | session-036: corrections applied.|
-|                                   |             |                 | session-037: II6 resolved.       |
-|                                   |             |                 | session-038: redundancy collapse |
-|                                   |             |                 | applied.                         |
-| ittage_table_interfaces.md        | Draft       | --              | Created session-036.             |
-|                                   |             |                 | session-038: redundancy collapse |
-|                                   |             |                 | applied.                         |
-| ittage_cntrl_alloc_rules.md       | Complete    | --              | Created session-033.             |
-|                                   |             |                 | session-036: verified.           |
-| ittage_cntrl_ctr_update_rules.md  | Draft       | --              | Created session-033.             |
-| ittage_cntrl_decisions.md         | Draft       | --              | session-036: corrections applied.|
-|                                   |             |                 | session-037: open items closed.  |
-|                                   |             |                 | session-038: redundancy collapse |
-|                                   |             |                 | applied.                         |
-| ittage_cntrl_uaon_update_rules.md | Draft       | --              | Created session-033.             |
-|                                   |             |                 | session-036: user editing        |
-|                                   |             |                 | manually.                        |
-| ittage_cntrl_use_update_rules.md  | Draft       | --              | Created session-033.             |
-|                                   |             |                 | session-036: content verified    |
-|                                   |             |                 | clean.                           |
-| ittage_table_hash_rules.md        | Complete    | --              | Created session-033.             |
-|                                   |             |                 | session-036: verified.           |
-|                                   |             |                 |                                  |
-| ittage_table.sv                    | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete.       |
-|                                   |             |                 |                                  |
-| ittage_cntrl.sv                    | Complete    | tb_ittage_cntrl | Prediction path complete BP-034  |
-|                                   |             |                 | Update path complete BP-035      |
-|                                   |             |                 | Testbench complete BP-036        |
-|                                   |             |                 | 76 tests passing                 |
-|                                   |             |                 |                                  |
-| ittage.sv                          | In progress | tb_ittage       | BP-034/035/35a/35b               |
-|                                   |             |                 | shell without arb cntrl complete |
-|                                   |             |                 | |
-|                                   |             |                 |                                  |
+| Module                  | Status      | Tests             | Notes                            |
+|-------------------------|-------------|-------------------|----------------------------------|
+| predecode.sv            | Complete    | tb_predecode      | clk/rstn unused (debt #4)        |
+| instr_decoder.sv        | Complete    | tb_instr_decoder  | 1043 passing                     |
+| rvc_expander.sv         | Complete    | tb_rvc_expander   |                                  |
+| decode_pkg.sv           | Complete    | --                | All decode structs               |
+| bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
+|                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
+| bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
+|                         |             |                   | IT5 fold fields pending (II1).   |
+| bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
+| bp_history.sv           | Complete    | tb_bp_history     | 12 passing                       |
+| ubtb.sv                 | Complete    | tb_ubtb           | TC1-TC10 passing.                |
+|                         |             |                   | Port naming retrofit pending     |
+|                         |             |                   | (CLI-012)                        |
+| loop_pred.sv            | Complete    | tb_loop_pred      | BP-004c-f complete.              |
+|                         |             |                   | Port naming retrofit pending     |
+|                         |             |                   | (CLI-011)                        |
+| tage_interfaces.md      | Complete    | --                | session-036: 6 corrections       |
+|                         |             |                   | applied.                         |
+| tage_table_interfaces.md| Draft       | --                | Created session-016.             |
+|                         |             |                   | Updates pending.                 |
+| tage_cntrl_use          | Complete    | --                | session-037: complete.           |
+| _update_rules.md        |             |                   | Debt #43 closed.                 |
+| tage_cntrl_uaon         | Draft       | --                | session-036: verified.           |
+| _update_rules.md        |             |                   | Debt #45 closed BP-032.          |
+| tage_cntrl              | Complete    | --                | session-044: X entries expanded. |
+| _ctr_update_rules.md    |             |                   | Unreachable rows removed.        |
+|                         |             |                   | ADR-001 added.                   |
+|                         |             |                   | Status: NEEDS RE-VERIFICATION    |
+|                         |             |                   | updated to reflect corrections.  |
+| bw_ram / sat_alu        | Complete    | tb_components     | COMP-001 PASS                    |
+| dual_lm1                | Complete    | tb_components     | COMP-002 now uses generate       |
+| sram_init               | Complete    | tb_components     | COMP-003                         |
+| tage_hash.sv            | Complete    | tb_tage_hash      | BP-006 abandoned.                |
+| tage_table.sv           | Complete    | tb_tage_table     | BP-007 through BP-012 complete.  |
+|                         |             |                   | Signal naming debt #17 pending.  |
+|                         |             |                   | HAND-FIX-001 applied.            |
+| tage_bim.sv             | Complete    | --                | BP-009b complete.                |
+|                         |             |                   | idx_hash_p0 output added.        |
+| tage_cntrl.sv           | In progress | --                | BP-008a/b complete.              |
+|                         |             |                   | BP-012 complete.                 |
+|                         |             |                   | Was complete but BP-034/5 exposed|
+|                         |             |                   | issues, see tech debt #45.       |
+|                         |             |                   | HAND-FIX-002 applied (debt #30). |
+|                         |             |                   | HAND-FIX-003 applied (BP-041).   |
+|                         |             |                   | T0 CTR u_both_t0 path corrected. |
+| tage.sv                 | Complete    | tb_tage           | BP-010 through BP-030 complete.  |
+|                         |             |                   | 68 tests pass. All coverage      |
+|                         |             |                   | targets closed or deferred.      |
+|                         |             |                   | tage_assert.sv bound via bind.   |
+| tage_assert.sv          | Complete    | sim_tage_manual   | ADR-001 and row 18 assertions.   |
+|                         |             |                   | Bound to tage.sv via bind.       |
+|                         |             |                   | sim-only, not synthesized.       |
+| tb_tage_manual.sv       | In progress | sim_tage_manual   | tage_ctr_test rows 1-17 pass.    |
+|                         |             |                   | Row 18 covered by assertion.     |
+|                         |             |                   | Rows 14-17 RTL issue pending     |
+|                         |             |                   | (new TD #53).                    |
+| ittage_interfaces.md              | Draft       | --    | session-036: corrections applied.|
+|                                   |             |       | session-037: II6 resolved.       |
+|                                   |             |       | session-038: redundancy collapse |
+|                                   |             |       | applied.                         |
+| ittage_table_interfaces.md        | Draft       | --    | Created session-036.             |
+|                                   |             |       | session-038: redundancy collapse |
+|                                   |             |       | applied.                         |
+| ittage_cntrl_alloc_rules.md       | Complete    | --    | Created session-033.             |
+|                                   |             |       | session-036: verified.           |
+| ittage_cntrl_ctr_update_rules.md  | Draft       | --    | Created session-033.             |
+| ittage_cntrl_decisions.md         | Draft       | --    | session-036: corrections applied.|
+|                                   |             |       | session-037: open items closed.  |
+|                                   |             |       | session-038: redundancy collapse |
+|                                   |             |       | applied.                         |
+| ittage_cntrl_uaon_update_rules.md | Draft       | --    | Created session-033.             |
+|                                   |             |       | session-036: user editing        |
+|                                   |             |       | manually.                        |
+| ittage_cntrl_use_update_rules.md  | Draft       | --    | Created session-033.             |
+|                                   |             |       | session-036: content verified    |
+|                                   |             |       | clean.                           |
+| ittage_table_hash_rules.md        | Complete    | --    | Created session-033.             |
+|                                   |             |       | session-036: verified.           |
+| ittage_table.sv                   | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete. |
+| ittage_cntrl.sv                   | Complete    | tb_ittage_cntrl | Prediction path complete BP-034|
+|                                   |             |       | Update path complete BP-035      |
+|                                   |             |       | Testbench complete BP-036        |
+|                                   |             |       | 76 tests passing                 |
+| ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
+|                                   |             |       | shell without arb cntrl complete |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
-| ittage.sv        | Not started | --             | After planning docs complete     |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
-|                  |             |                |                                  |
 
 ---
 
@@ -140,13 +147,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | grant signal stability through        | If unstable, promote            |
 |    | tage_cntrl pipeline is maintained.    | arb_trx_r.trx_type and adjust   |
 |    |                                       | write-enable timing.            |
-| 38 | Verilator pinned to 5.020. Upgrade    | Evaluate when covergroup/       |
-|    | path needed. Key blocker:             | coverpoint support lands in a   |
-|    | covergroup/coverpoint support         | stable release. Before          |
-|    | (issue #7099) not yet merged.         | upgrading: audit Makefile       |
-|    | Expression coverage added in 5.034    | flags and suppressions, run     |
-|    | is available but not sufficient       | full regression, update         |
-|    | justification to upgrade mid-project. | CLAUDE.md and prereqs.sh.       |
+| 38 | Verilator upgraded to 5.048.          | Covergroup/coverpoint issue     |
+|    | inout optimizer bug resolved.         | #7099 status in 5.048 release   |
+|    | Covergroup/coverpoint support         | notes still needs re-check      |
+|    | (issue #7099) status in 5.048         | before fully closing TD #38.    |
+|    | not yet verified.                     |                                 |
 | 39 | TB-ARB-08 Rule 2 starvation override  | Verify at design finalization   |
 |    | is untestable with current params.    | that PRED_CREDITS <             |
 |    | TAGE_PRED_CREDITS=4 <                 | STARVE_THRESH is intentional.   |
@@ -166,88 +171,73 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | operating at s3, should be s2.        | Update diagram and discussions. |
 |    | ITTAGE operates alongside FTB and     |                                 |
 |    | TAGE at s2.                           |                                 |
-| 43 | Reduce the CTR with in | This impacts a number of files/designs/tbs         |
-|    | ITTAGE from 3b to 2b.  | as well as RTL, known so far bp_defines_pkg.sv     |
-|    |                        | ittage_table_interfaces.md as well RTL and         |
-|    |                        | testbenches.                                       |
-| 44 | Confirm change to  | in ittage_cntrl_decisions.md                           |
-|    | ittage_pred_strong | from ittage_pred_strong -- provider ctr was !=3 & !=4  | 
-|    |                    | to   ittage_pred_strong -- provider ctr > 0 (NOT NULL) |
-|    |                    | Document change has been made (in session 040)         |
-|    |                    | Make sure #43 does not impact any testcases            |
-|    |                    |                                                        |
-| 45 | Revisit tage_cntrl | During update there are multiple tables that can be    |
-|    | and tage_table     | written and need the proper ports in the table and in  | 
-|    | Simplifications    | the control.                                           |
-|    | available.         |                                                        |
-|    |                    | - T0 always has CTR value updated, needs an index.     |
-|    |                    | - both primary and alt can have CTR updated            |
-|    |                    |   one of primary or alt may have useful updated        |
-|    |                    |     useful update can use the prm_idx or alt_idx       |
-|    |                    |                                                        |
-|    |                    | It is possible to also allocate an entry               |
-|    |                    |                                                        |
-|    |                    | Currently tage_cntrl supplies a 2D bus for update and  |
-|    |                    | allocation index. one D is prediction slot the other   |
-|    |                    | D is one for each table. This is wrong.                |
-|    |                    |                                                        |
-|    |                    | It should be one upd index port for the bim where      |
-|    |                    | the index is directly taken from tage_pred_meta.tage_bim_idx. |
-|    |                    |                                                        |
-|    |                    | Note tage_bim_idx is new, added for this fix. tage_bim_idx |
-|    |                    | is from the branch pc bits in the original prediction request |
-|    |                    | tage_bim_idx = PC[TAGE_MAX_IDX_WIDTH-1:1]              |
-|    |                    |                                                        |
-|    |                    | Changes: tage_table_interfaces.md                      |
-|    |                    |            specify upd_index_u0[s]                     |
-|    |                    |            specify alc_index_u0[s]                     |
-|    |                    |            specify bim_index_u0[s]                     |
-|    |                    |          test if alc_index_u0 is necessary likely not  |
-|    |                    |          add a tage_cntrl_interfaces.md doc            |
-| 46 | ittage_cntrl.sv    | CLOSED.    BP-038a did not close this in the tb  |
-|    |                    | Add trx_type input port (logic type) to          |
-|    | missing trx_type   | ittage_cntrl.sv. Connect to trx_type_comb in     |
-|    | port               | ittage.sv. Same change tage_cntrl received in    |
-|    |                    | BP-023b. Resolve before bp_cluster integration.  |
-|    |                    | BP-040 closed this item                          |
+| 43 | Reduce the CTR width in    | This impacts a number of files/designs/tbs      |
+|    | ITTAGE from 3b to 2b.      | as well as RTL, known so far bp_defines_pkg.sv  |
+|    |                            | ittage_table_interfaces.md as well RTL and      |
+|    |                            | testbenches.                                    |
+| 44 | Confirm change to  | in ittage_cntrl_decisions.md                        |
+|    | ittage_pred_strong | from ittage_pred_strong -- provider ctr was !=3 & !=4|
+|    |                    | to   ittage_pred_strong -- provider ctr > 0 (NOT NULL)|
+|    |                    | Document change has been made (in session 040)       |
+|    |                    | Make sure #43 does not impact any testcases          |
+| 45 | Revisit tage_cntrl | During update there are multiple tables that can be  |
+|    | and tage_table     | written and need the proper ports in the table and   |
+|    | Simplifications    | in the control.                                      |
+|    | available.         |                                                      |
+|    |                    | - T0 always has CTR value updated, needs an index.   |
+|    |                    | - both primary and alt can have CTR updated          |
+|    |                    |   one of primary or alt may have useful updated      |
+|    |                    |     useful update can use the prm_idx or alt_idx     |
+|    |                    |                                                      |
+|    |                    | It is possible to also allocate an entry             |
+|    |                    |                                                      |
+|    |                    | Currently tage_cntrl supplies a 2D bus for update    |
+|    |                    | and allocation index. one D is prediction slot the   |
+|    |                    | other D is one for each table. This is wrong.        |
+|    |                    |                                                      |
+|    |                    | It should be one upd index port for the bim where    |
+|    |                    | the index is directly taken from                     |
+|    |                    | tage_pred_meta.tage_bim_idx.                         |
+|    |                    |                                                      |
+|    |                    | Note tage_bim_idx is new, added for this fix.        |
+|    |                    | tage_bim_idx is from the branch pc bits in the       |
+|    |                    | original prediction request                          |
+|    |                    | tage_bim_idx = PC[TAGE_MAX_IDX_WIDTH-1:1]            |
+|    |                    |                                                      |
+|    |                    | Changes: tage_table_interfaces.md                    |
+|    |                    |            specify upd_index_u0[s]                   |
+|    |                    |            specify alc_index_u0[s]                   |
+|    |                    |            specify bim_index_u0[s]                   |
+|    |                    |          test if alc_index_u0 is necessary likely not|
+|    |                    |          add a tage_cntrl_interfaces.md doc          |
+| 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
+|    | missing trx_type   | Add trx_type input port (logic type) to          |
+|    | port               | ittage_cntrl.sv. Connect to trx_type_comb in     |
+|    |                    | ittage.sv. BP-040 closed this item.              |
 | 47 | ittage_interfaces  | CLOSED.                                          |
 |    | .md missing arb    | Add pq_not_full and upd_rdy to port list.        |
 |    | ports              | These ports are present in ittage.sv (added      |
 |    |                    | BP-038) but not in the spec. Update before       |
 |    |                    | bp_cluster integration.                          |
-|    |                    |                                                  |
 |    |                    | These are also missing in tage_interfaces.md     |
-|    |                    |                                                  |
 | 48 | ittage.sv RB       | CLOSED.                                          |
-|    |                    | consumer_ready=1'b1 means RB memory is never     |
-|    | bypass behavior    | written and results always bypass. Correct for   |
+|    | bypass behavior    | consumer_ready=1'b1 means RB memory is never     |
+|    |                    | written and results always bypass. Correct for   |
 |    |                    | ITTAGE with no SC consumer. Verify bypass        |
-|    |                    | behavior matches bp_cluster backpressure          |
+|    |                    | behavior matches bp_cluster backpressure         |
 |    |                    | expectations at cluster integration.             |
-|    |                    |                                                  |
-| 49 | Arb queue status   | Tage and Ittage have arbitraion queue status     |
-|    | pin renaming       | flags, pq_not_full, upd_rdy, These ports should  |
-|    |                    | be renamed for standardization                   |
+| 49 | Arb queue status   | Tage and Ittage have arbitration queue status    |
+|    | pin renaming       | flags, pq_not_full, upd_rdy. These ports should  |
+|    |                    | be renamed for standardization:                  |
 |    |                    | Tage: pq_not_full ->  tage_pq_not_full           |
 |    |                    | Tage: upd_rdy     ->  tage_uq_not_full           |
-|    |                    | ITTage: pq_not_full ->  ittage_pq_not_full       |
-|    |                    | ITTage: upd_rdy     ->  ittage_uq_not_full       |
-|    |                    | This standardization should cover RTL,           |
-|    |                    | testbenches, and planning documents: bp_arb_spec.md |
-|    |                    | ttage_interfaces.md, ittage_interfaces.md        |
-| 50 | sram_init FAST_INIT  | CLOSED. w. BP-040                             |
-|    |                      | sram_init runs its full init sequence even    |
-|    | behavior             | when FAST_INIT=1. sram_init active signal     |
-|    |                      | remains high for IT_MAX_NUM_ENTRIES=512       |
-|    |                      | cycles, overriding normal write mux paths     |
-|    |                      | in ittage_table.sv (Bug 3, BP-039).           |
-|    |                      | When FAST_INIT=1, sram_init should not run    |
-|    |                      | its init sequence and active should not       |
-|    |                      | assert.                                       |
-|    |                      | Scope: sram_init.sv, ittage_table.sv.         |
-|    |                      | Audit tage_table.sv for same pattern.         |
-|    |                      | Resolve before next integration session.      |
-|    |                      |                                               |
+|    |                    | ITTage: pq_not_full -> ittage_pq_not_full        |
+|    |                    | ITTage: upd_rdy    -> ittage_uq_not_full         |
+|    |                    | Scope: RTL, testbenches, bp_arb_spec.md,         |
+|    |                    | tage_interfaces.md, ittage_interfaces.md         |
+| 50 | sram_init FAST_INIT  | CLOSED. w. BP-040.                            |
+|    | behavior             | ittage.sv nonconformance fixed.               |
+|    |                      | All modules audited.                          |
 | 51 | CTR/USE/TGT update   | Bug 4 (BP-039) found using_primary condition  |
 |    | rule audit           | inverted in ittage_cntrl.sv ctr_upd block.    |
 |    |                      | Systematic risk: other update logic blocks    |
@@ -260,15 +250,25 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                      | and ittage_cntrl_use_update_rules.md.         |
 |    |                      | Tests must be independent of each other       |
 |    |                      | and of TC-P01 through TC-UAON-01.             |
-|    |                      |                                               |
-|    |                      | The contraints section of prompts will |
-|    |                      | preclude IA from modifying RTL   |
-|    |                      | without citing the violation in the planning  |
-|    |                      | documents.                                    |
-| 52 | move Arb logic into  | The top level modules should be structural    |
-|    | submodule out of top | only. Create a new module for tage and ittage |
-|    | in tage and ittage   | move the arb logic into this new module       |
-
+|    |                      | Constraints section of prompts will preclude  |
+|    |                      | IA from modifying RTL without citing the      |
+|    |                      | violation in the planning documents.          |
+| 52 | move Arb logic into  | The top level modules should be structural   |
+|    | submodule out of top | only. Create a new module for tage and       |
+|    | in tage and ittage   | ittage, move the arb logic into this new     |
+|    |                      | module.                                      |
+| 53 | tage_ctr_test rows   | CLOSED with BP-041.md                        |
+|    | 14-17 failing        | pcomp CTR write not landing in T4 RAM for    |
+|    |                      | rows 14-17. tage_cntrl shows prm_wr=1        |
+|    |                      | trx=1 but T4 RAM unchanged after             |
+|    |                      | reset_ctr_entries. Root cause not yet        |
+|    |                      | determined. Requires tage_table.sv           |
+|    |                      | diagnostic. Priority: next session.          |
+| 54 | tage ctr tests       | Planning document tage_cntrl_ctr_update_rules.md |
+|    |                      | was updated and confirmed with BP-041 manual |
+|    |                      | tests. The new table is more explicit on X   |
+|    |                      | handling and backed by new assertions.       |
+|    |                      | Existing tests need to be run and retrofit.  |
 
 ---
 
@@ -283,11 +283,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 5        | TAGE full validation plan               | Complete            |
 | 6        | BP code coverage plan: CE-01            | Complete            |
 |          | through CE-06 all closed                |                     |
-| 7        | Verilator upgrade to post-covergroup    | When issue #7099 merges |
-|          | release                                 | into a stable release   |
+| 7        | Verilator upgrade to post-covergroup    | Upgraded to 5.048.  |
+|          | release                                 | Covergroup #7099    |
+|          |                                         | re-check pending.   |
 | 8        | Investigate mutation testing            | Planned             |
 | 9        | Research verible-verilog-format for SV  | Planned             |
 |          | formatting.                             |                     |
+| 10       | README update: document tools/bin       | Pending             |
+|          | layout and build instructions for       |                     |
+|          | Verilator and Spike.                    |                     |
 
 ---
 
@@ -333,32 +337,7 @@ Import order is mandatory in every file:
 ---
 
 ## BP Cluster Key Parameters
-
-  VA_WIDTH           = 40
-  GHR_WIDTH          = 256
-  PHR_WIDTH          = 32
-  GHIST_PTR_BITS     = 8
-  PHIST_PTR_BITS     = 5
-  FTQ_DEPTH          = 64
-  FTQ_IDX_BITS       = 6
-  FETCH_BLOCK_BYTES  = 64
-  FTQ_CONF_BITS      = 4
-  SC_T1_HIST         = 4
-  SC_T2_HIST         = 10
-  SC_T3_HIST         = 16
-  UBTB_ENTRIES       = 256
-  UBTB_WAYS          = 4
-  UBTB_SETS          = 64
-  UBTB_IDX_BITS      = 6
-  UBTB_TAG_BITS      = 20
-  TAGE_MAX_AWIDTH    = 11
-  TAGE_TBL_SEL_WIDTH = 3
-  TAGE_MAX_DWIDTH    = 8
-  TAGE_CTR_BITS      = 3
-  SC_NUM_MAIN_TBLS   = 4
-  SC_NUM_ALL_TBLS    = 5
-  INST_OFFSET        = 2
-
+See bp_defines_pkg.sv. Do not duplicate here.
 num_branches valid range: 0-2. Value 3 is undefined.
 
 ---
@@ -432,51 +411,113 @@ Key decisions for quick reference:
 - Added tage_table_hash_rules.md as planning document.
 - Added ittage_table_hash_rules.md as planning document.
 
+### Shared planning documents
+    - planning/arch/bp_arb_spec.md                    In progress
+        - Dynamic prediction/training arbitration balancing
+    - planning/arch/bp_cluster.md                     In progress
+        - Branch prediction cluster summary data
+    - planning/arch/sram_init.md                      Complete
+        - Post reset RAM initialization operation
+    - planning/testbenches/manual_tb_decisions.md     Complete
+        - General rules for manual testbench creation
+
 ### TAGE decomposition
-  BP-006 through BP-030: complete. Signal naming cleanup
-  pending in tage_table.sv (debt #17). All coverage
-  targets closed or deferred. TAGE_DECOMP_LOG.md
+- RTL is available
+    - Unit testbenches written
+    - Manual testbench written
+    - Line coverage > 90%
+    - Directed validation in progress
+    - Formal validation not started
+- BP-006 through BP-032: complete.
+- BP-040 manual checks for tage CTR complete
+    - tage_cntrl_ctr_update_rules.md -- updated and verified
+      needs cross check against IA generated tests
+- Tage planning documents
+    - planning/arch/tage_cntrl_alloc_rules.md         Draft
+        - Table entry allocation rules
+    - planning/arch/tage_cntrl_ctr_update_rules.md    Complete
+        - CTR field update rules
+    - planning/arch/tage_cntrl_decisions.md           Complete
+        - TAGE control behavior, conventions and rules
+    - planning/arch/tage_cntrl_uaon_update_rules.md   Draft
+        - UAON (Use ALT on newly allocated)  trigger rules
+    - planning/arch/tage_cntrl_use_update_rules.md    Draft
+        - USE(ful) field update rules
+    - planning/arch/tage_table_hash_rules.md          Complete
+        - Address and tag generation hashing
+    - planning/interfaces/tage_interfaces.md          Complete
+        - TAGE module interface contracts
+    - planning/interfaces/tage_table_interfaces.md    Complete
+        - TAGE table module interface contracts
 
 ### ITTAGE decomposition
-  Research phase complete -- session-033.
+- RTL is available
+    - Unit testbenches written
+    - Line coverage < 90% in progress
+    - Directed validation no started
+    - Formal validation not started
+- BP-034 - BP-040 complete (BP-033 abandoned)
+- ITTage planning documents
+    - planning/arch/ittage_cntrl_alloc_rules.md         Draft
+        - Table entry allocation rules
+    - planning/arch/ittage_cntrl_ctr_update_rules.md    Draft
+        - CTR field update rules
+    - planning/arch/ittage_cntrl_decisions.md           Complete
+        - ITTAGE control behavior, conventions and rules
+    - planning/arch/ittage_cntrl_uaon_update_rules.md   Draft
+        - UAON (Use ALT on newly allocated)  trigger rules
+    - planning/arch/ittage_cntrl_use_update_rules.md    Draft
+        - USE(ful) field update rules
+    - planning/arch/ittage_table_hash_rules.md          Complete
+        - Address and tag generation hashing
+    - planning/interfaces/ittage_interfaces.md          Complete
+        - ITTAGE module interface contracts
+    - planning/interfaces/ittage_table_interfaces.md    Complete
+        - ITTAGE table module interface contracts
 
-  Parameters settled:
-    IT1-IT5 active tables. IT0 placeholder only.
-    History lengths: 4, 8, 13, 16, 32.
-    Tag widths: 8, 8, 9, 9, 11.
-    Target width: 38b (IT_TBL_TGT_WIDTH).
-    CTR: 3b confidence counter, not direction.
-    UAON: 4b counter, threshold=8.
-    No base table. No-hit falls through to FTB.
-    ITTAGE at s2, not s3 (debt #42).
-
-  Planning documents:
-    ittage_interfaces.md        -- Draft, session-036
-                                   corrections applied.
-                                   session-037: II6 resolved.
-                                   session-038: redundancy
-                                   collapse applied.
-    ittage_table_interfaces.md  -- Draft, created session-036.
-                                   session-038: redundancy
-                                   collapse applied.
-    ittage_cntrl_alloc_rules.md -- Complete, session-036
-                                   verified.
-    ittage_cntrl_ctr_update_rules.md -- Draft
-    ittage_cntrl_decisions.md   -- Draft, session-036
-                                   corrections applied.
-                                   session-037: open items
-                                   closed.
-                                   session-038: redundancy
-                                   collapse applied.
-    ittage_cntrl_uaon_update_rules.md -- Draft, session-036
-                                   user editing manually.
-    ittage_cntrl_use_update_rules.md  -- Draft, session-036
-                                   content verified clean.
-    ittage_table_hash_rules.md  -- Complete, session-036
-                                   verified.
-
-### Components track
-
-- New prompts/components and components directory
+### Shared components track
 - components/rtl  components/tb
+
+---
+
+# HAND-FIX Records
+
+- HAND-FIX-001 applied to tage_table.sv:
+    - Signals use_we_s0/s1 and epc_we_s0/s1 now gate on
+      prm_alt_match (prm_match | alt_match) instead of
+      prm_match alone. prm_alt_match_s0 and
+      prm_alt_match_s1 signals added.
+    - Debt #29 added and immediately closed.
+    - Applied after BP-010c.
+    - Recorded in session-handoff-023.
+
+- HAND-FIX-002 applied to tage_cntrl.sv:
+    - Signal tage_use_alt_on_na now set only when
+      uaon_trig AND counter MSB both set:
+      meta_p1[s].tage_use_alt_on_na =
+        uaon_trig_p1[s] & uaon[s][3];
+    - Debt #30 added and immediately closed.
+    - Applied after BP-010c.
+    - Recorded in session-handoff-023.
+
+- HAND-FIX-003 applied to tage_cntrl.sv:
+    - T0 CTR update condition corrected in
+      ctr_upd_comb u_both_t0 path.
+      u_resolved replaced with !u_mispredict.
+      BIM prediction correctness
+      (pred_tkn == resolved_taken) is the correct
+      INC/DEC gate, not branch outcome alone.
+    - Citeable: tage_cntrl_ctr_update_rules.md
+      rows 13a-d.
+    - Applied as part of BP-041.
+    - Recorded in session-handoff-045.
+
+---
+
+# BUG Records
+
+- BUG-001: HAND-FIX-003. T0 CTR INC/DEC condition
+  wrong in tage_cntrl.sv. Found by tage_ctr_test
+  row 13a. Fixed BP-041. See session-handoff-045.
+
 
