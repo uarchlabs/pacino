@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gen_sessions.py — parse prompts/*.md and emit docs/sessions.json
+gen_sessions.py -- parse prompts/*.md and emit docs/sessions.json
 
 Run from the repo root:
     python3 tools/gen_sessions.py
@@ -15,60 +15,64 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-# ── Configuration ─────────────────────────────────────────────────────────────
+# -- Configuration -------------------------------------------------------------
 
 PROMPTS_DIR = Path("prompts")
 OUTPUT_FILE  = Path("docs/sessions.json")
 
 KNOWN_CATEGORIES = {"BP", "COMP", "DECODE", "INFRA", "TB", "TOOLS"}
 
-TASK_TYPES  = ["experiment", "implementation", "debug", "cleanup", "testbench", "verification"]
+TASK_TYPES  = ["experiment", "implementation", "debug",
+               "cleanup", "testbench", "verification"]
 STATUS_OPTS = ["in-progress", "complete", "abandoned"]
+MODE_OPTS   = ["automated", "manual"]
 
-# ── Warning codes ─────────────────────────────────────────────────────────────
+# -- Warning codes -------------------------------------------------------------
 
 class W:
-    NO_MARKERS          = "W001"   # No :: HEADER:START :: found — 
+    NO_MARKERS          = "W001"   # No :: HEADER:START :: found --
                                    # markdown fallback
-    DUPLICATE_PA        = "W002"   # Duplicate ## Claude.ai Assessment -
+    DUPLICATE_PA        = "W002"   # Duplicate ## Claude.ai Assessment
                                    # blocks, merged
     EMPTY_ASSESSMENT    = "W003"   # ## My Assessment is empty or TBD
-    ABANDONED_WITH_PASS = "W004"   # status=abandoned but PASS counts found 
-                                   # in results
+    ABANDONED_WITH_PASS = "W004"   # status=abandoned but PASS counts
+                                   # found in results
     MISSING_DISCUSSION  = "W005"   # No :: DISCUSSION:START/END :: section
     MISSING_RESULTS     = "W006"   # No :: RESULTS:START/END :: section
     MISSING_PROMPT      = "W007"   # No :: PROMPT:START/END :: section
-    ID_MISMATCH         = "W008"   # Task ID in header or 
+    ID_MISMATCH         = "W008"   # Task ID in header or
                                    # prompt != filename stem
 
-# W009 is not longer used
-#    ORPHAN_SUBSESSION   = "W009"   # Sub-session with no parent in dir
+# W009 is no longer used
+#   ORPHAN_SUBSESSION   = "W009"   # Sub-session with no parent in dir
 
     MISSING_FIELD       = "W010"   # Expected header field absent or empty
     VOICES_MERGED       = "W011"   # Discussion voices could not be cleanly
                                    # separated
     UNKNOWN_CATEGORY    = "W012"   # Task ID prefix not in KNOWN_CATEGORIES
     BAD_TASK_ID         = "W013"   # Task ID doesn't match expected pattern
-    FIELD_ALIAS_USED    = "W014"   # Non-canonical field name used (e.g. 'ID'
-                                   # not 'Task ID')
-    PROMPT_ID_MISMATCH  = "W015"   # Task ID in ## Task ID
-                                   # prompt block != header/filename
+    FIELD_ALIAS_USED    = "W014"   # Non-canonical field name used (e.g.
+                                   # 'ID' not 'Task ID')
+    PROMPT_ID_MISMATCH  = "W015"   # Task ID in ## Task ID prompt block
+                                   # != header/filename
     MISSING_END_MARKER  = "W016"   # Section START marker found but
                                    # END marker absent
+    MISSING_MODE        = "W017"   # Mode: field absent or no box checked
 
-# ── Task ID parsing ───────────────────────────────────────────────────────────
+# -- Task ID parsing -----------------------------------------------------------
 
 # Matches: BP-040, BP-008a, BP-008a-1, BP-014d, BP-009a-1, DECODE-001
-# Category is uppercase letters; optional lowercase letter suffix (a/b/c/d...);
+# Category is uppercase letters; optional lowercase letter suffix (a/b/c/d);
 # optional -N sub-session number.
-# NOTE: do NOT call .upper() before matching — that converts 'BP-014d' to
+# NOTE: do NOT call .upper() before matching -- that converts 'BP-014d' to
 # 'BP-014D' which fails the [a-z] group.
 TASK_ID_RE = re.compile(r'^([A-Za-z]+)-(\d+)([a-z]?)(-\d+)?$')
 
 def parse_task_id(task_id):
     """
-    Return (category, number, suffix_letter, suffix_number, cluster_key) or None.
-    cluster_key groups sub-sessions: BP-008a, BP-008a-1, BP-008b, BP-014d -> BP-008 / BP-014
+    Return (category, number, suffix_letter, suffix_number, cluster_key)
+    or None.
+    cluster_key groups sub-sessions: BP-008a, BP-008a-1, BP-008b -> BP-008
     Category is normalised to uppercase in the return value.
     """
     m = TASK_ID_RE.match(task_id.strip())
@@ -80,12 +84,13 @@ def parse_task_id(task_id):
     sn  = m.group(4) or ""
     return cat, num, sl, sn, f"{cat}-{num}"
 
-# ── Text utilities ────────────────────────────────────────────────────────────
+# -- Text utilities ------------------------------------------------------------
 
 def extract_between(text, start_marker, end_marker):
     """Return text between markers, stripped. None if start not found.
-    If end marker is missing, returns everything after start (silent fallback).
-    Use extract_section when a missing end marker should produce a warning."""
+    If end marker is missing, returns everything after start (silent
+    fallback). Use extract_section when a missing end marker should
+    produce a warning."""
     s = text.find(start_marker)
     if s == -1:
         return None
@@ -93,7 +98,8 @@ def extract_between(text, start_marker, end_marker):
     e = text.find(end_marker, s)
     return (text[s:e] if e != -1 else text[s:]).strip()
 
-def extract_section(text, start_marker, end_marker, warn_fn, warn_code, section_name):
+def extract_section(text, start_marker, end_marker,
+                    warn_fn, warn_code, section_name):
     """
     Like extract_between but warns (W016) when the start marker is present
     without a matching end marker. Use this for all major document sections
@@ -109,10 +115,12 @@ def extract_section(text, start_marker, end_marker, warn_fn, warn_code, section_
     e = text.find(end_marker, s)
     if e == -1:
         warn_fn(warn_code,
-                f"'{start_marker.strip()}' found but '{end_marker.strip()}' is missing "
-                f"in {section_name} section — file may be truncated or markers were "
-                f"accidentally deleted. Content after start marker will be used as-is, "
-                f"but subsequent sections may not parse correctly.")
+                f"'{start_marker.strip()}' found but "
+                f"'{end_marker.strip()}' is missing "
+                f"in {section_name} section -- file may be truncated "
+                f"or markers were accidentally deleted. Content after "
+                f"start marker will be used as-is, but subsequent "
+                f"sections may not parse correctly.")
         return text[s:].strip()
     return text[s:e].strip()
 
@@ -123,7 +131,8 @@ def is_empty_or_tbd(text):
     return t in ('', 'TBD', 'NA', 'NONE', 'ASNEEDEDDDOCUMENTHERE')
 
 def has_pass_count(text):
-    """True if text contains patterns like '76 PASS', 'PASS=24', 'ALL TESTS PASSED'."""
+    """True if text contains patterns like '76 PASS', 'PASS=24',
+    'ALL TESTS PASSED'."""
     return bool(re.search(
         r'\b\d+\s+PASS\b|\bPASS\s*=\s*\d+|\bALL\s+TESTS\s+PASSED\b',
         text, re.IGNORECASE
@@ -133,10 +142,11 @@ def normalise_id(task_id):
     """Uppercase for comparison purposes, stripping whitespace."""
     return task_id.strip().upper()
 
-# ── Header parsing ────────────────────────────────────────────────────────────
+# -- Header parsing ------------------------------------------------------------
 
 # Canonical field name -> internal key.
-# Also used to detect non-canonical aliases (e.g. 'id' instead of 'task id').
+# Also used to detect non-canonical aliases (e.g. 'id' instead of
+# 'task id').
 FIELD_ALIASES = {
     'task_id':    'task_id',
     'task id':    'task_id',
@@ -150,7 +160,7 @@ FIELD_ALIASES = {
     'model':      'model',
     'resume_sha': 'resume_sha',
     'resume sha': 'resume_sha',
-    # Non-canonical aliases — recognised but trigger W014
+    # Non-canonical aliases -- recognised but trigger W014
     'id':            'task_id',
     'task':          'task_id',
     'experiment id': 'task_id',
@@ -166,10 +176,12 @@ NON_CANONICAL = {
 def parse_header_table(header_text):
     """
     Parse the markdown table inside the header section.
-    Handles multi-row field values (continuation rows have empty first cell).
+    Handles multi-row field values (continuation rows have empty first
+    cell).
     Returns (fields_dict, alias_warnings_list).
     fields_dict: canonical_key -> value_string
-    alias_warnings_list: list of (raw_key, canonical_name) for non-canonical fields found
+    alias_warnings_list: list of (raw_key, canonical_name) for
+    non-canonical fields found
     """
     fields   = {}
     aliases  = []
@@ -193,8 +205,9 @@ def parse_header_table(header_text):
 
         if raw_key:
             raw_lower = raw_key.lower().replace('_', ' ')
-            canonical = FIELD_ALIASES.get(raw_lower,
-                         FIELD_ALIASES.get(raw_key.lower(), raw_key.lower()))
+            canonical = FIELD_ALIASES.get(
+                raw_lower,
+                FIELD_ALIASES.get(raw_key.lower(), raw_key.lower()))
             if raw_val:
                 fields[canonical] = raw_val
                 last_key = canonical
@@ -202,12 +215,14 @@ def parse_header_table(header_text):
                 aliases.append((raw_key, NON_CANONICAL[raw_lower]))
         elif not raw_key and last_key and raw_val:
             # Continuation row
-            fields[last_key] = fields[last_key].rstrip(',').strip() + ', ' + raw_val
+            fields[last_key] = (
+                fields[last_key].rstrip(',').strip() + ', ' + raw_val)
 
     return fields, aliases
 
 def parse_checkboxes(text, options):
-    """Return list of option names where [x] is found before the option text."""
+    """Return list of option names where [x] is found before the option
+    text."""
     checked = []
     for opt in options:
         if re.search(r'\[x\]\s+' + re.escape(opt), text, re.IGNORECASE):
@@ -215,17 +230,19 @@ def parse_checkboxes(text, options):
     return checked
 
 def parse_ctx_pct(raw):
-    """Extract integer percentage from strings like '23%', '23', '75%'."""
+    """Extract integer percentage from strings like '23%', '23',
+    '75%'."""
     if not raw:
         return None
     m = re.search(r'(\d+)', raw)
     return int(m.group(1)) if m else None
 
-# ── Prompt Task ID extraction ─────────────────────────────────────────────────
+# -- Prompt Task ID extraction -------------------------------------------------
 
 def extract_prompt_task_id(prompt_text):
     """
-    Extract the Task ID from the '## Task ID' block at the top of the prompt.
+    Extract the Task ID from the '## Task ID' block at the top of the
+    prompt.
     Looks for:
         ## Task ID
         BP-040
@@ -239,13 +256,56 @@ def extract_prompt_task_id(prompt_text):
     )
     return m.group(1).strip() if m else None
 
-# ── Discussion voice splitting ────────────────────────────────────────────────
+# -- Files Modified parsing ----------------------------------------------------
 
-IA_HEADINGS   = {"claude.code console output", "claude code console output"}
+def parse_files_modified(results_text):
+    """
+    Find the ## Files Modified section inside the results block.
+    Parses bullet list lines (lines starting with '-' or '*').
+    Returns a list of file path strings, stripped of leading bullet
+    characters and whitespace.
+    Returns [] if the section is absent or contains no bullet lines.
+    """
+    if not results_text:
+        return []
+
+    # Find ## Files Modified heading (case-insensitive)
+    m = re.search(
+        r'##\s+Files\s+Modified\s*\n(.*?)(?=\n##\s|\Z)',
+        results_text,
+        re.IGNORECASE | re.DOTALL
+    )
+    if not m:
+        return []
+
+    section_body = m.group(1)
+    files = []
+    for line in section_body.splitlines():
+        line = line.strip()
+        # Accept lines starting with - or *
+        if line.startswith('-') or line.startswith('*'):
+            entry = line.lstrip('-*').strip()
+            # Skip blank entries and placeholder/instruction lines
+            if not entry:
+                continue
+            lower = entry.lower()
+            if lower.startswith('list every') or \
+               lower.startswith('no prose') or \
+               lower.startswith('file paths') or \
+               lower.startswith('example'):
+                continue
+            files.append(entry)
+    return files
+
+# -- Discussion voice splitting ------------------------------------------------
+
+IA_HEADINGS   = {"claude.code console output",
+                 "claude code console output"}
 MY_HEADINGS   = {"my assessment"}
 PA_HEADINGS   = {"claude.ai assessment", "claude ai assessment"}
-TAIL_HEADINGS = {"follow-on actions", "follow on actions", "claude.md updates",
-                 "other planning file updates", "other notes"}
+TAIL_HEADINGS = {"follow-on actions", "follow on actions",
+                 "claude.md updates", "other planning file updates",
+                 "other notes"}
 
 def split_discussion_voices(discussion_text):
     """
@@ -264,7 +324,9 @@ def split_discussion_voices(discussion_text):
     for i, m in enumerate(headings):
         heading = m.group(1).strip()
         start   = m.end()
-        end     = headings[i + 1].start() if i + 1 < len(headings) else len(discussion_text)
+        end     = (headings[i + 1].start()
+                   if i + 1 < len(headings)
+                   else len(discussion_text))
         content = discussion_text[start:end].strip()
         blocks.append((heading, content))
 
@@ -283,8 +345,8 @@ def split_discussion_voices(discussion_text):
             pa_count += 1
             if pa_count > 1:
                 warnings.append((W.DUPLICATE_PA,
-                    f"Duplicate '## {heading}' heading — blocks merged. "
-                    f"Review and consolidate manually."))
+                    f"Duplicate '## {heading}' heading -- blocks merged."
+                    f" Review and consolidate manually."))
             pa_parts.append(content)
         elif h in TAIL_HEADINGS:
             pass
@@ -295,12 +357,12 @@ def split_discussion_voices(discussion_text):
 
     if my and len(my) > 2500:
         warnings.append((W.VOICES_MERGED,
-            "## My Assessment is unusually long (>2500 chars) — may contain "
-            "interleaved PA voice. Review and split manually."))
+            "## My Assessment is unusually long (>2500 chars) -- may "
+            "contain interleaved PA voice. Review and split manually."))
 
     return ia, my, pa, warnings
 
-# ── Per-file parser ───────────────────────────────────────────────────────────
+# -- Per-file parser -----------------------------------------------------------
 
 def parse_session_file(path):
     """
@@ -317,7 +379,8 @@ def parse_session_file(path):
 
     def wsection(text, start, end, section_name):
         """extract_section with warn pre-bound to this file."""
-        return extract_section(text, start, end, warn, W.MISSING_END_MARKER, section_name)
+        return extract_section(
+            text, start, end, warn, W.MISSING_END_MARKER, section_name)
 
     session = {
         "filename":       filename,
@@ -333,6 +396,7 @@ def parse_session_file(path):
         "model":          None,
         "resume_sha":     None,
         "task_types":     [],
+        "modes":          [],
         "status":         None,
         "overview":       None,
         "ia_output":      None,
@@ -341,45 +405,52 @@ def parse_session_file(path):
         "discussion_raw": None,
         "prompt_raw":     None,
         "results_raw":    None,
+        "files_modified": [],
         "warnings":       [],
     }
 
-    # ── Marker check ─────────────────────────────────────────────────────────
+    # -- Marker check ----------------------------------------------------------
     has_markers = ':: HEADER:START ::' in text
     session['has_markers'] = has_markers
 
     if not has_markers:
         warn(W.NO_MARKERS,
-             "No ':: HEADER:START ::' marker found — rendering as raw markdown. "
-             "Add markers to enable structured parsing.")
+             "No ':: HEADER:START ::' marker found -- rendering as raw "
+             "markdown. Add markers to enable structured parsing.")
         parsed = parse_task_id(filename)
         if parsed:
             cat, num, sl, sn, cluster = parsed
             session['category'] = cat
             session['cluster']  = cluster
             if cat not in KNOWN_CATEGORIES:
-                warn(W.UNKNOWN_CATEGORY, f"Category '{cat}' not in {sorted(KNOWN_CATEGORIES)}")
+                warn(W.UNKNOWN_CATEGORY,
+                     f"Category '{cat}' not in "
+                     f"{sorted(KNOWN_CATEGORIES)}")
         else:
-            warn(W.BAD_TASK_ID, f"Filename '{filename}' doesn't match pattern e.g. BP-040")
+            warn(W.BAD_TASK_ID,
+                 f"Filename '{filename}' doesn't match pattern "
+                 f"e.g. BP-040")
         session['discussion_raw'] = text
         session['warnings'] = warnings
         return session, warnings
 
-    # ── Header ───────────────────────────────────────────────────────────────
-    # Header uses extract_between (not wsection) — a missing HEADER:END is
-    # caught implicitly: the overview extraction and discussion extraction will
-    # both fail, producing their own warnings.
-    header_text = extract_between(text, ':: HEADER:START ::', ':: HEADER:END ::')
+    # -- Header ----------------------------------------------------------------
+    # Header uses extract_between (not wsection) -- a missing HEADER:END
+    # is caught implicitly: overview and discussion extraction will both
+    # fail, producing their own warnings.
+    header_text = extract_between(
+        text, ':: HEADER:START ::', ':: HEADER:END ::')
     if not header_text:
-        warn(W.MISSING_FIELD, "Header markers found but header content is empty.")
+        warn(W.MISSING_FIELD,
+             "Header markers found but header content is empty.")
     else:
         fields, field_aliases = parse_header_table(header_text)
 
         # Warn about non-canonical field names
         for raw_key, correct_name in field_aliases:
             warn(W.FIELD_ALIAS_USED,
-                 f"Header field '{raw_key}' should be '{correct_name}' — "
-                 f"update the first column of the header table.")
+                 f"Header field '{raw_key}' should be '{correct_name}'"
+                 f" -- update the first column of the header table.")
 
         # Task ID
         task_id = fields.get('task_id', filename).strip()
@@ -388,7 +459,7 @@ def parse_session_file(path):
         if normalise_id(task_id) != normalise_id(filename):
             warn(W.ID_MISMATCH,
                  f"Task ID '{task_id}' in header table doesn't match "
-                 f"filename '{filename}' — update one to match the other.")
+                 f"filename '{filename}' -- update one to match.")
 
         parsed = parse_task_id(task_id)
         if parsed:
@@ -397,8 +468,10 @@ def parse_session_file(path):
             session['cluster']  = cluster
             if cat not in KNOWN_CATEGORIES:
                 warn(W.UNKNOWN_CATEGORY,
-                     f"Category '{cat}' not in known set {sorted(KNOWN_CATEGORIES)}. "
-                     f"Add it to KNOWN_CATEGORIES in gen_sessions.py if intentional.")
+                     f"Category '{cat}' not in known set "
+                     f"{sorted(KNOWN_CATEGORIES)}. Add it to "
+                     f"KNOWN_CATEGORIES in gen_sessions.py if "
+                     f"intentional.")
         else:
             warn(W.BAD_TASK_ID,
                  f"Task ID '{task_id}' doesn't match expected pattern "
@@ -419,29 +492,50 @@ def parse_session_file(path):
 
         for req in ['task_id', 'date', 'model']:
             if not fields.get(req):
-                warn(W.MISSING_FIELD, f"Required header field '{req}' is absent or empty.")
+                warn(W.MISSING_FIELD,
+                     f"Required header field '{req}' is absent or "
+                     f"empty.")
 
         session['task_types'] = parse_checkboxes(header_text, TASK_TYPES)
+
+        # Mode checkboxes
+        modes = parse_checkboxes(header_text, MODE_OPTS)
+        session['modes'] = modes
+        if not modes:
+            warn(W.MISSING_MODE,
+                 "Mode: field absent or no box is checked -- add "
+                 "'Mode: [x] automated' or '[x] manual' to the header "
+                 "block. Backfill is acceptable; warn only, not fail.")
+
         statuses = parse_checkboxes(header_text, STATUS_OPTS)
         session['status'] = statuses[0] if statuses else 'unknown'
 
-        overview_raw = extract_between(text, ':: HEADER:END ::', ':: DISCUSSION:START ::')
-        if overview_raw:
-            ov = re.sub(r'^=+$', '', overview_raw, flags=re.MULTILINE)
-            ov = re.sub(r'^#+\s+Overview of task\s*$', '', ov, flags=re.MULTILINE)
-            ov = re.sub(r'^#+\s+Paste c\.code console output.*$', '', ov,
-                        flags=re.MULTILINE | re.IGNORECASE)
+        # Overview lives inside the header block, after the
+        # '# Overview of task' heading and before :: HEADER:END ::
+        ov_m = re.search(
+            r'#\s+Overview of task\s*\n(.*)',
+            header_text,
+            re.IGNORECASE | re.DOTALL
+        )
+        if ov_m:
+            ov = ov_m.group(1).strip()
+            ov = re.sub(r'^=+$', '', ov, flags=re.MULTILINE)
+            ov = re.sub(
+                r'^#+\s+Paste c\.code console output.*$', '', ov,
+                flags=re.MULTILINE | re.IGNORECASE)
             ov = re.sub(r'^#+\s+Paste\s+.*$', '', ov,
                         flags=re.MULTILINE | re.IGNORECASE)
             ov = ov.strip()
             session['overview'] = ov if ov else None
 
-    # ── Discussion ────────────────────────────────────────────────────────────
-    discussion_text = wsection(text,
-                               ':: DISCUSSION:START ::', ':: DISCUSSION:END ::',
-                               'DISCUSSION')
+    # -- Discussion ------------------------------------------------------------
+    discussion_text = wsection(
+        text,
+        ':: DISCUSSION:START ::', ':: DISCUSSION:END ::',
+        'DISCUSSION')
     if discussion_text is None:
-        warn(W.MISSING_DISCUSSION, "No ':: DISCUSSION:START ::' marker found.")
+        warn(W.MISSING_DISCUSSION,
+             "No ':: DISCUSSION:START ::' marker found.")
     else:
         session['discussion_raw'] = discussion_text
         ia, my, pa, voice_warns = split_discussion_voices(discussion_text)
@@ -454,24 +548,30 @@ def parse_session_file(path):
 
         if is_empty_or_tbd(my):
             warn(W.EMPTY_ASSESSMENT,
-                 "## My Assessment is empty or TBD — add assessment before publishing.")
+                 "## My Assessment is empty or TBD -- add assessment "
+                 "before publishing.")
             session['my_assessment'] = None
 
-    # ── Abandoned + PASS inconsistency ────────────────────────────────────────
+    # -- Abandoned + PASS inconsistency ----------------------------------------
     if session.get('status') == 'abandoned':
-        results_check = extract_between(text, ':: RESULTS:START ::', ':: RESULTS:END ::') or ''
-        disc_check    = discussion_text or ''
+        results_check = (
+            extract_between(
+                text, ':: RESULTS:START ::', ':: RESULTS:END ::') or '')
+        disc_check = discussion_text or ''
         if has_pass_count(results_check) or has_pass_count(disc_check):
             warn(W.ABANDONED_WITH_PASS,
-                 "Status is 'abandoned' but PASS counts detected in results or discussion. "
-                 "Is the status correct? Review and update.")
+                 "Status is 'abandoned' but PASS counts detected in "
+                 "results or discussion. Is the status correct? "
+                 "Review and update.")
 
-    # ── Prompt ────────────────────────────────────────────────────────────────
-    prompt_text = wsection(text,
-                           ':: PROMPT:START ::', ':: PROMPT:END ::',
-                           'PROMPT')
+    # -- Prompt ----------------------------------------------------------------
+    prompt_text = wsection(
+        text,
+        ':: PROMPT:START ::', ':: PROMPT:END ::',
+        'PROMPT')
     if prompt_text is None:
-        warn(W.MISSING_PROMPT, "No ':: PROMPT:START ::' marker found.")
+        warn(W.MISSING_PROMPT,
+             "No ':: PROMPT:START ::' marker found.")
     else:
         session['prompt_raw'] = prompt_text
 
@@ -480,50 +580,57 @@ def parse_session_file(path):
             header_id = session.get('id', filename)
             if normalise_id(prompt_id) != normalise_id(header_id):
                 warn(W.PROMPT_ID_MISMATCH,
-                     f"Task ID '{prompt_id}' in '## Task ID' prompt block doesn't match "
-                     f"header/filename '{header_id}' — update to match.")
+                     f"Task ID '{prompt_id}' in '## Task ID' prompt "
+                     f"block doesn't match header/filename "
+                     f"'{header_id}' -- update to match.")
         else:
             warn(W.PROMPT_ID_MISMATCH,
-                 "No '## Task ID' block found in prompt section — add one at the top.")
+                 "No '## Task ID' block found in prompt section -- "
+                 "add one at the top.")
 
-    # ── Results ───────────────────────────────────────────────────────────────
-    results_text = wsection(text,
-                            ':: RESULTS:START ::', ':: RESULTS:END ::',
-                            'RESULTS')
+    # -- Results ---------------------------------------------------------------
+    results_text = wsection(
+        text,
+        ':: RESULTS:START ::', ':: RESULTS:END ::',
+        'RESULTS')
     if results_text is None:
-        warn(W.MISSING_RESULTS, "No ':: RESULTS:START ::' marker found.")
+        warn(W.MISSING_RESULTS,
+             "No ':: RESULTS:START ::' marker found.")
     else:
-        session['results_raw'] = results_text
+        session['results_raw']    = results_text
+        session['files_modified'] = parse_files_modified(results_text)
 
     session['warnings'] = warnings
     return session, warnings
 
-# ── Cross-file validation ─────────────────────────────────────────────────────
+# -- Cross-file validation -----------------------------------------------------
 
-#def validate_clusters(sessions):
-#    """Warn about sub-sessions whose parent doesn't exist in the directory."""
-#    all_ids  = {normalise_id(s['id']) for s in sessions}
-#    warnings = []
+# def validate_clusters(sessions):
+#     """Warn about sub-sessions whose parent doesn't exist in the
+#     directory."""
+#     all_ids  = {normalise_id(s['id']) for s in sessions}
+#     warnings = []
 #
-#    for s in sessions:
-#        parsed = parse_task_id(s['id'])
-#        if not parsed:
-#            continue
-#        cat, num, sl, sn, cluster = parsed
-#        is_sub = bool(sl) or bool(sn)
-#        if is_sub:
-#            parent_id = f"{cat}-{num}"
-#            if normalise_id(parent_id) not in all_ids:
-#                warnings.append({
-#                    "code": W.ORPHAN_SUBSESSION,
-#                    "file": s['path'],
-#                    "msg":  (f"Sub-session '{s['id']}' has no parent '{parent_id}' "
-#                             f"in {PROMPTS_DIR}/. If the parent was renamed, "
-#                             f"update the Task ID or add the parent file."),
-#                })
-#    return warnings
+#     for s in sessions:
+#         parsed = parse_task_id(s['id'])
+#         if not parsed:
+#             continue
+#         cat, num, sl, sn, cluster = parsed
+#         is_sub = bool(sl) or bool(sn)
+#         if is_sub:
+#             parent_id = f"{cat}-{num}"
+#             if normalise_id(parent_id) not in all_ids:
+#                 warnings.append({
+#                     "code": W.ORPHAN_SUBSESSION,
+#                     "file": s['path'],
+#                     "msg":  (f"Sub-session '{s['id']}' has no parent "
+#                              f"'{parent_id}' in {PROMPTS_DIR}/. If "
+#                              f"the parent was renamed, update the "
+#                              f"Task ID or add the parent file."),
+#                 })
+#     return warnings
 
-# ── Sort key ──────────────────────────────────────────────────────────────────
+# -- Sort key ------------------------------------------------------------------
 
 def sort_key(session):
     parsed = parse_task_id(session.get('id', ''))
@@ -532,18 +639,23 @@ def sort_key(session):
     cat, num, sl, sn, _ = parsed
     return (cat, int(num), sl, sn)
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 
 def main():
     if not PROMPTS_DIR.exists():
-        print(f"ERROR: '{PROMPTS_DIR}' not found. Run from the repo root.", file=sys.stderr)
+        print(
+            f"ERROR: '{PROMPTS_DIR}' not found. "
+            f"Run from the repo root.",
+            file=sys.stderr)
         sys.exit(1)
 
     OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     md_files = sorted(PROMPTS_DIR.glob("*.md"))
     if not md_files:
-        print(f"WARNING: No .md files found in '{PROMPTS_DIR}'.", file=sys.stderr)
+        print(
+            f"WARNING: No .md files found in '{PROMPTS_DIR}'.",
+            file=sys.stderr)
 
     sessions     = []
     all_warnings = []
@@ -553,24 +665,29 @@ def main():
         sessions.append(session)
         all_warnings.extend(file_warns)
 
-    #all_warnings.extend(validate_clusters(sessions))
+    # all_warnings.extend(validate_clusters(sessions))
     sessions.sort(key=sort_key)
 
-    # ── Print warnings ────────────────────────────────────────────────────────
+    # -- Print warnings --------------------------------------------------------
     if all_warnings:
         print(f"\n{'='*64}", file=sys.stderr)
-        print(f"  gen_sessions.py — {len(all_warnings)} warning(s)", file=sys.stderr)
+        print(
+            f"  gen_sessions.py -- {len(all_warnings)} warning(s)",
+            file=sys.stderr)
         print(f"{'='*64}", file=sys.stderr)
         by_file = {}
         for w in all_warnings:
-            by_file.setdefault(Path(w['file']).name, []).append(w)
+            by_file.setdefault(
+                Path(w['file']).name, []).append(w)
         for fname in sorted(by_file):
             print(f"\n  {fname}", file=sys.stderr)
             for w in by_file[fname]:
-                print(f"    [{w['code']}] {w['msg']}", file=sys.stderr)
+                print(
+                    f"    [{w['code']}] {w['msg']}",
+                    file=sys.stderr)
         print(f"\n{'='*64}\n", file=sys.stderr)
 
-    # ── Write JSON ────────────────────────────────────────────────────────────
+    # -- Write JSON ------------------------------------------------------------
     output = {
         "generated":     datetime.now(timezone.utc).isoformat(),
         "session_count": len(sessions),
@@ -584,9 +701,12 @@ def main():
         encoding='utf-8'
     )
 
-    print(f"gen_sessions.py: {len(sessions)} sessions -> {OUTPUT_FILE}")
+    print(
+        f"gen_sessions.py: {len(sessions)} sessions -> {OUTPUT_FILE}")
     if all_warnings:
-        print(f"  {len(all_warnings)} warning(s) printed above — fix then re-run.")
+        print(
+            f"  {len(all_warnings)} warning(s) printed above "
+            f"-- fix then re-run.")
 
 if __name__ == "__main__":
     main()

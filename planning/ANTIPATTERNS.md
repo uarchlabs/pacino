@@ -137,3 +137,37 @@ struct.
 state the uncertainty explicitly and ask before writing it
 into any deliverable.
 
+
+### Anti-pattern: PA Behavior Failure — Session-045 Step 1
+**Failure ID:** PG-006
+
+**Symptom:** During the Step 1 tooling task, the PA introduced 
+a bug in the overview extraction logic of gen_sessions.py. The
+parser looked for overview content between
+:: HEADER:END :: and :: DISCUSSION:START ::, but the
+template places # Overview of task and its content inside
+the header block, before :: HEADER:END ::. This was
+visible in the template provided at session start.
+
+When Jeff reported overview: null in the JSON output, the
+PA incorrectly diagnosed a template structure problem and
+proposed moving the heading outside the header block — a
+change to Jeff's input data — rather than reading the
+template correctly and fixing the parser.
+
+Jeff rejected the diagnosis. The PA then read the template
+correctly and fixed the parser: overview is now extracted
+from within header_text using a regex search for
+
+\# Overview of task, taking all content following that
+heading to the end of the header block.
+
+**Failure mode to watch for:**
+When a parser produces null or missing output, the PA must
+verify its own extraction logic against the actual template
+structure before suggesting changes to prompt files or
+planning documents. Blaming input data is the wrong first
+move.
+**Resolution:** gen_sessions.py corrected and verified.
+overview field now populates correctly from existing prompt
+files without any template or backfill changes required.

@@ -1,4 +1,3 @@
-=============================================================
 # Task Header 
 =============================================================
 :: HEADER:START ::
@@ -78,7 +77,7 @@ or told to modify the Makefile for lint checking at the minimum.
 ## Summary
 RESULTS NOT YET WRITTEN -- replace this line when filling in.
 
-## Test Matrix (testbench sessions only, omit otherwise
+## Test Matrix (testbench sessions only, omit otherwise)
 For each test case document:
 - Test name
 - Rule or rules exercised (reference rule doc and row/table)
@@ -101,6 +100,10 @@ For each test case document:
 
 ## Other Notes
 
-## Files modified
+## Files Modified
+- List every file changed, one file per line, as a bullet.
+- No prose. File paths only. Example:
+- rtl/core/frontend/bpu/rtl/tage_cntrl.sv
 
 :: RESULTS:END ::
+
