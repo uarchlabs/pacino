@@ -17,6 +17,9 @@ block, the extension enable mechanism, and what running a large decoder
 project with an AI co-design methodology looks like when context limits
 become a real operational constraint.
 
+This is the last article in the decoder series, subsequent articles will
+cover other elements of the decoupled front end.
+
 ## The Opcode Overlap Problem (DECODE-008)
 
 The first post mentioned this in passing. It deserves a more detailed
