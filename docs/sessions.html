@@ -825,6 +825,8 @@ function renderDetail(s) {
     s.ctx_pct != null && `ctx: ${s.ctx_pct}%`,
     s.model      && `model: ${s.model}`,
     s.resume_sha && `sha: ${s.resume_sha.slice(0,8)}&hellip;`,
+    s.pa_session && s.pa_session !== '???' &&
+      `pa_session: ${s.pa_session}`,
   ].filter(Boolean).join('  &middot;  ');
 
   // Manual badge for detail header

@@ -58,6 +58,11 @@ class W:
     MISSING_END_MARKER  = "W016"   # Section START marker found but
                                    # END marker absent
     MISSING_MODE        = "W017"   # Mode: field absent or no box checked
+    MISSING_OVERVIEW    = "W018"   # No '# Task Overview' heading found,
+                                   # or overview section is empty/TBD
+    MISSING_PA_SESSION  = "W019"   # No 'PA session' value in header table
+                                   # (row absent, empty, or '???')
+    BAD_PA_SESSION      = "W020"   # PA session value is not 3 or 4 digits
 
 # -- Task ID parsing -----------------------------------------------------------
 
@@ -160,6 +165,8 @@ FIELD_ALIASES = {
     'model':      'model',
     'resume_sha': 'resume_sha',
     'resume sha': 'resume_sha',
+    'pa_session': 'pa_session',
+    'pa session': 'pa_session',
     # Non-canonical aliases -- recognised but trigger W014
     'id':            'task_id',
     'task':          'task_id',
@@ -395,6 +402,7 @@ def parse_session_file(path):
         "ctx_pct":        None,
         "model":          None,
         "resume_sha":     None,
+        "pa_session":     "???",
         "task_types":     [],
         "modes":          [],
         "status":         None,
@@ -490,6 +498,27 @@ def parse_session_file(path):
         session['model']      = fields.get('model')
         session['resume_sha'] = fields.get('resume_sha')
 
+        # PA session -- expected to be a 3 or 4 digit number.
+        # A missing row, an empty value, or the '???' placeholder all
+        # map to the '???' sentinel and raise W019. Any other value
+        # that is not 3-4 digits raises W020.
+        pa_raw = fields.get('pa_session')
+        if (pa_raw is None
+                or is_empty_or_tbd(pa_raw)
+                or pa_raw.strip() == '???'):
+            session['pa_session'] = '???'
+            warn(W.MISSING_PA_SESSION,
+                 "No 'PA session' value found in header table -- add a "
+                 "'| PA session | NNNN |' row with the 3-4 digit "
+                 "session number.")
+        else:
+            pa_val = pa_raw.strip()
+            session['pa_session'] = pa_val
+            if not re.fullmatch(r'\d{3,4}', pa_val):
+                warn(W.BAD_PA_SESSION,
+                     f"PA session '{pa_val}' is not 3 or 4 digits -- "
+                     f"expected something like '405' or '1234'.")
+
         for req in ['task_id', 'date', 'model']:
             if not fields.get(req):
                 warn(W.MISSING_FIELD,
@@ -513,7 +542,8 @@ def parse_session_file(path):
         # Overview lives inside the header block, after the
         # '# Overview of task' heading and before :: HEADER:END ::
         ov_m = re.search(
-            r'#\s+Overview of task\s*\n(.*)',
+#            r'#\s+Overview of task\s*\n(.*)',
+            r'#\s+Task Overview\s*\n(.*)',
             header_text,
             re.IGNORECASE | re.DOTALL
         )
@@ -527,6 +557,15 @@ def parse_session_file(path):
                         flags=re.MULTILINE | re.IGNORECASE)
             ov = ov.strip()
             session['overview'] = ov if ov else None
+            if is_empty_or_tbd(session['overview']):
+                warn(W.MISSING_OVERVIEW,
+                     "'# Task Overview' heading found but the section "
+                     "is empty or TBD -- add a short task overview.")
+        else:
+            warn(W.MISSING_OVERVIEW,
+                 "No '# Task Overview' heading found in the header "
+                 "block -- add a '# Task Overview' section with a short "
+                 "description of the task.")
 
     # -- Discussion ------------------------------------------------------------
     discussion_text = wsection(

@@ -51,7 +51,7 @@ tools/lib/
 tools/share/
 
 # local temp copies - optional
-versions
+versions/
 
 # decoder
 rtl/core/frontend/decode/obj_dir_dec
