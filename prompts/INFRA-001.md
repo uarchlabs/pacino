@@ -11,11 +11,12 @@
 | Ctx %        | 50%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 32f33c0f-7746-4452-a39b-30fe02b9cbd7 |             |
+| PA session  | 029 | |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [x] cleanup     [ ] testbench
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
-# Overview of task
+# Task Overview
 # Verify directory structure matches README, scrub stale paths
 # from Makefiles and tools, wire RVA_ROOT throughout, confirm
 # all lint and sim targets exit zero.

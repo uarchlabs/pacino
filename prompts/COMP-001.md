@@ -12,12 +12,13 @@
 | Ctx %        | 41%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 533bc7ba-00bf-4454-bb69-078ff6a06e09 |             |
+| PA session  | 012 | |
 
 Task:   [ ] experiment  [x] implementation  [ ] debug       [ ] cleanup
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task  - manual/c.ai
+# Task Overview
 Create three parameterized library primitives used by TAGE and
 other BP cluster components, plus a single extensible testbench.
 New top-level directory: components/

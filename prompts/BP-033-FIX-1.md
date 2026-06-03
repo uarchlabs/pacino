@@ -11,12 +11,13 @@
 | Ctx %      | 83% w/ compaction   |                    |
 | Model      | Sonnet 4.6 medium   |                    |
 | Resume sha | cdc3901b-6ef5-4e72-84be-2d3b76bc87e6 |   |
+| PA session  | 039 | |
 Task:   [ ] experiment  [x] implementation  [ ] debug
         [ ] cleanup     [x] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 Re-implementation of BP-033. Prior attempt produced correlated
 RTL and testbench errors: ittage_pred_val_p0[s] was used to

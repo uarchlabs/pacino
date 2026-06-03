@@ -11,13 +11,14 @@
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | ff8292c2-f844-4226-9254-ed54ba6a6bcb | |
+| PA session  | 001 | |
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 Vector segment ld/sts, whole-register move disambiguation
 

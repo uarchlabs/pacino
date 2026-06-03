@@ -11,11 +11,12 @@
 | Ctx %        | 23%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | dd3422cc-4180-4dee-9338-03dd6f29473c               |
+| PA session  | 029 | |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [x] cleanup     [ ] testbench
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
-# Overview of task
+# Task Overview
 # Fix genhtml writing annotation HTML outside the coverage/
 # tree into rtl/core/frontend/bpu/lib/rtl/. All genhtml
 # output must be confined to coverage/*/html/.

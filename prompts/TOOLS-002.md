@@ -11,13 +11,14 @@
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | 5f754086-690f-45ad-a5fa-7dc6f109e3ac         |   |
+| PA session  | 001 | |
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [x] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 Prove spike-dasm can be used as an oracle regression tool for
 ISA implementation verification

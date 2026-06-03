@@ -11,13 +11,13 @@
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | 4d86f334-bd1f-4bc9-b278-db243f0e4a92 | |
-
+| PA session  | 001 | |
 Task:   [ ] experiment  [x] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 Fix check_rva23_coverage.py shared encoding false negatives
 

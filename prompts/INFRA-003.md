@@ -11,11 +11,12 @@
 | Ctx %        | 69%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 4dcb0943-6555-4476-bd5b-92916e2f7d7e |             |
+| PA session  | 029 | |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [x] cleanup     [ ] testbench
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
-# Overview of task
+# Task Overview
 # Wire --coverage-line into the bpu Makefile. Add per-module
 # cov_* targets and a cov_bpu unit-level merge target.
 # Output lands in rtl/core/frontend/bpu/coverage/.

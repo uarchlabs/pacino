@@ -7,17 +7,18 @@
 | Task ID     | DECODE-011                                   |   |
 | Date        | 2026-03-23                                   |   |
 | Module      | decode                                       |   |
-| Run time       | 38m.55s and 8m.5s | 2 sessions (context limit hit mid-session) |
+| Run time    | 38m.55s and 8m.5s | 2 sessions (context limit hit mid-session) |
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | 52baabbe-5dd9-4976-b403-df98cfad9aa0 | |
+| PA session  | 001 | |
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 Ext enable/disable and coverage. Adding a extension enable disable
 feature to support bring up. This is not required by RVA23S64.
 

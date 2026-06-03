@@ -13,7 +13,7 @@ RVA23 Co-Design Part N
 |                                | main README.md                            |
 |                                | session_handoff-001.md                    |
 | 2  | Spike as oracle           | TOOL2.md, trouble with ISA string         |
-
+|    |                   |  |
 | 3  | BP cluster architecture   | bp_cluster.md                             |
 |    | A planning session for BPU| xiangshan_ras_design.md                   |
 |    | BP element parameters     | BP-001 executed                           |
@@ -24,16 +24,16 @@ RVA23 Co-Design Part N
 |    |                           | BP-002 emitted not run                    |
 |    |                           | session_handoff-004                       |
 |    | ? two handoffs in 1 session  | seems sh-003 not used                  |
-
+|    |                   |  |
 | 4  | bp_history        | BP-002 run                                |
 |    |                   | session_handoff-005                       |
-
+|    |                   |  |
 | 5  | uBTB              | BP-003 run                                |
 |    |                   | BP-003-fix run                            |
 |    |                   | ubtb_interfaces.md                        |
 |    |                   | bp_history_interfaces.md                  |
 |    |                   | session_handoff-006                       |
-
+|    |                   |  |
 | 6  | loop_pred         | BP-004 run                                |
 |    |                   | loop_pred_interfaces.md                   |
 |    |                   | hit  response output token limits         |
@@ -44,7 +44,7 @@ RVA23 Co-Design Part N
 |    |                   | CLAUDE.md exact prompt name added to rules|
 |    |                   | REPORT_TEMPLATE same thing                |
 |    |                   | session_handoff-007                       |
-
+|    |                   |  |
 | 7  | loop_pred         | BP-004b failed to run context limit       |
 |    |                   | Decision to split into c/d/e              |
 |    |                   | BP-004c: loop_pred.sv RTL only
@@ -56,12 +56,12 @@ RVA23 Co-Design Part N
 |    |                   | PROJECT_STATE.md repartitioned            |
 |    |                   | package and defines restructure           |
 |    |                   | session_handoff-008                       |
-
+|    |                   |  |
 | 8  | loop_pred         | BP-004c run                               |
 |    |                   | BP-004d run ?                             |
 |    |                   | Issues with context in PA                 |
 |    |                   | session_handoff-009                       |
-
+|    |                   |  |
 | 9  | loop_pred         | BP-004e run                               |
 |    |                   | BP-004f emitted                           |
 |    |                   | attempted slash command run-prompt        |
@@ -69,7 +69,7 @@ RVA23 Co-Design Part N
 |    |                   | validate_and_extract.py written to pull   |
 |    |                   |   prompt from task file                   |
 |    |                   | session_handoff-010                       |
-
+|    |                   |  |
 | 10 | loop_pred         | BP-004f run attempted finally run         |
 |    |                   |  The response generation timed out after  |
 |    |                   |  reading all context files                |
@@ -223,9 +223,42 @@ RVA23 Co-Design Part N
 |    |                   | tage_coverage_plan.md written |
 |    |                   | new /run command, simple |
 |    |                   | new directory tree |
-
-GAP GAP GAP
-
+| 30 | ???               | BP-026 BP-027 BP-028(emitted)|
+|    |                   |  |
+| 31 | ???               | BP-028(run)     |
+|    |                   | BP-029(emitted) |
+|    |                   | BP-030(emitted) |
+|    |                   |  |
+| 32 | ???               | BP-029(run)     |
+|    |                   | BP-030(run)     |
+|    |                   | session_handoff-033 |
+| 33 | ???               | planning only  |
+|    |                   | session_handoff-034 |
+| 34 | ???               | planning only  |
+|    |                   | session_handoff-035 |
+| 35 | ???               | planning only  |
+|    |                   | session_handoff-036 |
+| 36 | ???               | planning only  |
+|    |                   | session_handoff-037 |
+| 37 | ???               | BP-031         |
+|    |                   | BP-032         |
+|    |                   | session_handoff-038 |
+| 38 | ???               | planning       |
+|    |                   | session_handoff-039 |
+| 39 | ???               | BP-033         |
+|    |                   | BP-033-fix-1        |
+|    |                   | session_handoff-040 |
+| 40 | ???               | BP-034 |
+|    |                   | BP-034a  ???|
+|    |                   | BP-035 |
+|    |                   | BP-036 |
+|    |                   | session_handoff-041 |
+| 41 | ???               | BP-037  |
+|    |                   | BP-037a |
+|    |                   | BP-037b |
+|    |                   | BP-038  |
+|    |                   | BP-038a |
+|    |                   | session_handoff-042 |
 | 42 | ittage            | input session_handoff-042   |
 |    |                   | TD #47 completed            |
 |    |                   | RB removal from ittage      |
@@ -233,12 +266,19 @@ GAP GAP GAP
 |    |                   | BP-039                      |
 |    |                   | added TD 50/51              |
 |    |                   | reopen TD 46                |
-
+|    |                   | session_handoff-043 |
 |    |                   |                             |
-|    |                   |                             |
+| 43 | sram init cleanup | input session_handoff-043   |
+|    | ittage clean up   | TB-001/2                    |
+|    | manual testbenches| BP-040                      |
+|    |                   | BP-041 partially written    |
+|    |                   | manual_tb_decisions.md      |
+|    |                   | sram_fast_init.md           |
+|    |                   | session_handoff-044 |
+| 44 | ???               | BP-041 manually generated and run |
+|    |                   | HAND-FIX-003 (mislabled as 001)
+|    |                   | asserts and 1st ADR |
+|    |                   | session_handoff-045 |
+| 45 | ???               | web/session management |
+|    |                   | IN PROJGRESS        |
 
-| 43 | sram init cleanup  | input session_handoff-043   |
-|    | ittage clean up    | TB-001/2                    |
-|    | manual testbenches | BP-040/1/                   |
-|    |                    | manual_tb_decisions.md      |
-|    |                    | sram_fast_init.md           |

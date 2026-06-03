@@ -11,13 +11,14 @@
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | a1d0612e-12be-4156-8cd9-e2e4c252a87d | |
+| PA session  | 001 | |
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 Not captured at time, this task is one of the first.
 Vector memory instruction disambiguation (opcodes 0x07/0x27)

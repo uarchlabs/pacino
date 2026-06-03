@@ -10,12 +10,13 @@
 | Run time     | 11m.44s                 |                          |
 | Ctx %        | 60%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
-| Resume sha   | ~/Development/jeffnye-gh/atemp |                   |
+| Resume sha   | not recorded |                   |
+| PA session  | 029 | |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [x] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
-# Overview of task
+# Task Overview
   Run verilator_coverage --annotate on cov_tage coverage
   data. Read annotated source files. Produce a gap report
   with two sections: raw uncovered lines with context, and

@@ -11,13 +11,14 @@
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | c21bc124-7d79-4705-bf16-bf38aaeabcd7         |   |
+| PA session  | 001 | |
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 RVA23 coverage gap analysis
 

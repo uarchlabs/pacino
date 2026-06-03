@@ -11,13 +11,14 @@
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
 | Resume sha  | 493f45af-6613-4fc2-827b-9cedbba8f845 | |
+| PA session  | 001 | |
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 DECODE-007 - Vector mask, permute, reduce
 

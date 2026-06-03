@@ -13,13 +13,14 @@
 | Ctx %        | ??????                  |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 69f41938-8393-4172-920e-060d99af94d5 |             |
+| PA session  | 001 | |
 
 Task:   [ ] experiment  [x] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [x] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 DECODE-003 - Add Zcb
 
 2026.05.30: Zcb support was missing from the rvc expander implementation.

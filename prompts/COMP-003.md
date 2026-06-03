@@ -11,11 +11,12 @@
 | Ctx %        | 40%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 15d40762-3f61-4878-9f32-3bad4afe8c46 |             |
+| PA session  | 013 | |
 Task:   [ ] experiment  [x] implementation  [ ] debug       [ ] cleanup
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task  - manual/c.ai
+# Task Overview
 Implement sram_init.sv, a parameterized SRAM initialization
 component. On de-assertion of rstn it optionally waits a
 start delay then walks all SRAM entries writing a fixed init

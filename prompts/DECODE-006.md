@@ -8,16 +8,17 @@
 | Date        | 2026-03-22                                   |   |
 | Module      | decoder                                      |   |
 | Run time    | 10m.43s    |
-| Resume sha  | 644aa7b1-4cba-4647-acf2-0e96d83bba62 | |
 | Ctx%        | not recorded                                 |   |
 | Model       | Sonnet 4.6 normal                            |   |
+| Resume sha  | 644aa7b1-4cba-4647-acf2-0e96d83bba62 | |
+| PA session  | 001 | |
 
 Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 Vector FP ALU disambiguation (OPFVV/OPFVF) and Zvfhmin closure
 
 2026-05-30: This task file has been retro-fitted with the 

@@ -11,11 +11,12 @@
 | Ctx %        | 34%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 1f15c7dc-166a-46ea-a1fb-7c8d2c849aab |             |
+| PA session  | 029 | |
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [x] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
-# Overview of task
+# Task Overview
 # Re-run verilator_coverage --annotate on current cov_tage
 # coverage data. Read annotated tage_table.sv only.
 # Produce a gap report scoped to tage_table with raw gaps

@@ -11,12 +11,13 @@
 | Ctx %        | 32%                     |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | 745a5a80-d772-4092-b2a2-ddcff6ca54d7 |             |
+| PA session  | 013 | |
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug       [x] cleanup
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task  - manual/c.ai
+# Task Overview
 Eliminate for loops in dual_lm1.sv using a generate-based
 priority chain. Behavior must be identical to the original.
 All 5 existing tb_dual_lm1 test cases must pass.

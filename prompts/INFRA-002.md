@@ -11,13 +11,14 @@
 | Ctx%        | n/a                                          |   |
 | Model       | n/a                                          |   |
 | Resume sha  | n/a                                          |   |
+| PA session  | 029 | |
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug         [x] manual
         [ ] cleanup     [ ] testbench       [ ] verification
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 The task intended for INFRA-002 was turned into a manual task
 

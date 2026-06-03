@@ -19,10 +19,18 @@ Changes made per file (only when the field is absent):
   1. Insert 'Mode:   [x] automated   [ ] manual' on the line
      immediately before the 'Status:' checkbox line in the
      header block.
-  2. Insert '## Files Modified\nNo captured\n' immediately
+  2. Insert '## Files Modified\nNot captured\n' immediately
      before the ':: RESULTS:END ::' marker.
+  3. Insert '| PA session  | NNN | |' immediately after the
+     '| Resume sha | ... |' row, inside the header block. Files
+     whose header has no 'Resume sha' row are FLAGGED (the PA row
+     is not inserted, since there is no anchor) and listed at the
+     end so they can be fixed manually.
+  4. Rename any heading line beginning with '# Overview of task'
+     to '# Task Overview'.
 
-Files that already contain the field are left untouched.
+Files that already contain a given fix are left untouched for that
+fix (all operations are idempotent).
 A summary is printed to stdout on completion.
 """
 
@@ -43,24 +51,54 @@ MODE_PRESENT_RE = re.compile(r'^Mode:\s+\[', re.MULTILINE)
 RESULTS_END = ":: RESULTS:END ::"
 FILES_PRESENT = "## Files Modified"
 
+HEADER_START = ":: HEADER:START ::"
+HEADER_END   = ":: HEADER:END ::"
+
+# Row inserted after the Resume sha row (placeholder value 'NNN').
+PA_ROW = "| PA session  | NNN | |"
+
+# Matches an existing PA session row (so we don't add a duplicate).
+PA_PRESENT_RE = re.compile(
+    r'^[ \t]*\|\s*pa[ _]session\s*\|', re.MULTILINE | re.IGNORECASE)
+
+# Matches the Resume sha row; captures leading indentation. '[^\n]*'
+# consumes the rest of the line so m.end() lands just before the
+# newline -- the insertion point for the PA row.
+RESUME_ROW_RE = re.compile(
+    r'^(?P<indent>[ \t]*)\|\s*resume[ _]sha\s*\|[^\n]*',
+    re.MULTILINE | re.IGNORECASE)
+
+# Matches a heading line that begins with '# Overview of task'. The
+# whole line is replaced with the canonical '# Task Overview'.
+OVERVIEW_RE = re.compile(
+    r'^#[ \t]+Overview of task[^\n]*$', re.MULTILINE | re.IGNORECASE)
+
 
 def backfill_file(path, dry_run=False):
     """
     Apply missing backfills to a single file.
-    Returns (mode_added, files_added, skipped_reason).
-    skipped_reason is None if the file was processed normally.
+    Returns a result dict with keys:
+        mode_added, files_added, pa_added, overview_renamed (bool),
+        resume_missing (bool -- flagged, PA row not inserted),
+        skip (str or None -- reason the file was skipped entirely).
     """
+    def result(**kw):
+        base = {"mode_added": False, "files_added": False,
+                "pa_added": False, "overview_renamed": False,
+                "resume_missing": False, "skip": None}
+        base.update(kw)
+        return base
+
     try:
         text = path.read_text(encoding='utf-8')
     except Exception as e:
-        return False, False, f"read error: {e}"
+        return result(skip=f"read error: {e}")
 
-    if ':: HEADER:START ::' not in text:
-        return False, False, "no header markers -- skipping"
+    if HEADER_START not in text:
+        return result(skip="no header markers -- skipping")
 
     original = text
-    mode_added  = False
-    files_added = False
+    res = result()
 
     # -- Insert Mode: line before Status: --------------------------------
     if not MODE_PRESENT_RE.search(text):
@@ -70,7 +108,7 @@ def backfill_file(path, dry_run=False):
             text = (text[:insert_at] +
                     MODE_LINE + "\n" +
                     text[insert_at:])
-            mode_added = True
+            res["mode_added"] = True
         else:
             # Status line absent -- append Mode after last Task: block
             pass
@@ -87,13 +125,35 @@ def backfill_file(path, dry_run=False):
                 else:
                     prefix += '\n\n'
             text = prefix + FILES_SECTION + '\n' + text[idx:]
-            files_added = True
+            res["files_added"] = True
 
-    if text != original:
-        if not dry_run:
-            path.write_text(text, encoding='utf-8')
+    # -- Rename '# Overview of task' -> '# Task Overview' (file-wide) -----
+    text, n_overview = OVERVIEW_RE.subn('# Task Overview', text)
+    if n_overview:
+        res["overview_renamed"] = True
 
-    return mode_added, files_added, None
+    # -- Insert PA session row after Resume sha (header block only) -------
+    hs = text.find(HEADER_START)
+    he = text.find(HEADER_END)
+    if hs != -1 and he != -1 and he > hs:
+        header_region = text[hs:he]
+        if not PA_PRESENT_RE.search(header_region):
+            m = RESUME_ROW_RE.search(header_region)
+            if m:
+                indent     = m.group('indent')
+                abs_insert = hs + m.end()   # just before the line's \n
+                text = (text[:abs_insert] +
+                        "\n" + indent + PA_ROW +
+                        text[abs_insert:])
+                res["pa_added"] = True
+            else:
+                # No Resume sha row to anchor to -- flag for manual fix.
+                res["resume_missing"] = True
+
+    if text != original and not dry_run:
+        path.write_text(text, encoding='utf-8')
+
+    return res
 
 
 def main():
@@ -117,37 +177,60 @@ def main():
     if dry_run:
         print("-- DRY RUN -- no files will be written\n")
 
-    mode_count  = 0
-    files_count = 0
-    skip_count  = 0
+    mode_count     = 0
+    files_count    = 0
+    pa_count       = 0
+    overview_count = 0
+    skip_count     = 0
+    flagged        = []
 
     for path in paths:
-        mode_added, files_added, reason = backfill_file(
-            path, dry_run=dry_run)
+        r = backfill_file(path, dry_run=dry_run)
 
-        if reason:
-            print(f"  SKIP  {path.name}: {reason}")
+        if r["skip"]:
+            print(f"  SKIP  {path.name}: {r['skip']}")
             skip_count += 1
             continue
 
         changes = []
-        if mode_added:
+        if r["mode_added"]:
             changes.append("Mode:")
             mode_count += 1
-        if files_added:
+        if r["files_added"]:
             changes.append("## Files Modified")
             files_count += 1
+        if r["pa_added"]:
+            changes.append("PA session row")
+            pa_count += 1
+        if r["overview_renamed"]:
+            changes.append("# Task Overview rename")
+            overview_count += 1
 
         if changes:
             tag = "[dry]" if dry_run else "  OK "
-            print(f"{tag}  {path.name}: added {', '.join(changes)}")
-        else:
+            print(f"{tag}  {path.name}: {', '.join(changes)}")
+
+        if r["resume_missing"]:
+            flagged.append(path.name)
+            print(f"  FLAG  {path.name}: no 'Resume sha' row in header "
+                  f"block -- PA session row NOT added (fix manually)")
+
+        if not changes and not r["resume_missing"]:
             print(f"  --   {path.name}: nothing to do")
 
     print(f"\n{'DRY RUN -- ' if dry_run else ''}"
-          f"Mode: added to {mode_count} file(s), "
-          f"## Files Modified added to {files_count} file(s), "
-          f"{skip_count} skipped.")
+          f"Mode: {mode_count}, "
+          f"## Files Modified: {files_count}, "
+          f"PA session: {pa_count}, "
+          f"# Task Overview renames: {overview_count}, "
+          f"{skip_count} skipped, "
+          f"{len(flagged)} flagged.")
+
+    if flagged:
+        print("\nFlagged -- no 'Resume sha' row in header, so the PA "
+              "session row could not be anchored. Add it manually:")
+        for name in flagged:
+            print(f"  - {name}")
 
 
 if __name__ == "__main__":
