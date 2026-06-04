@@ -63,14 +63,27 @@ production-quality outputs.
   scope appears necessary, stop and report it before
   making the change.
 - Write Results Capture into ./prompts/<TASK-ID>.md
-  Fill in every section completely.  Do not leave any 
+  Fill in every section completely.  Do not leave any
   section as TBD if information is available.
 - When writing Results Capture, write only within the
   :: RESULTS:START :: :: RESULTS:END :: markers. Do not
   modify any content outside these markers.
 - Results Capture content must be ASCII only. No Unicode.
-- Final console output should avoid non-ASCII if possible. 
+- Final console output should avoid non-ASCII if possible.
   This is a preference but not a hard requirement.
+
+## Model Reporting in Task Files
+- When the prompt context contains :: HEADER:START :: the
+  session is running a project task file. In this case,
+  before writing Results Capture, populate the Model
+  header field with the running model name and effort
+  level in this format:
+    | Model | <model-name> <effort-level> |
+  Example: claude-sonnet-4-6 normal
+- Ctx % is captured manually by Jeff. Do not attempt to
+  populate it programmatically.
+- Model reporting applies to both automated and manual
+  task sessions.
 
 ## Package imports
 Import at file scope, before the module declaration. Do not place
@@ -134,11 +147,11 @@ important. It must be defines first then structs
 
 ## Verilator work arounds
 
-- stl_sequent rule: always_comb blocks that must re-evaluate after FF updates
-  must read at least one FF output. Pure module-input-only always_comb blocks
-  are classified stl_sequent and will not see signal changes after simulation
-  start. Gate prediction scan blocks on a registered valid signal to force
-  nba_sequent.
+- stl_sequent rule: always_comb blocks that must re-evaluate after FF
+  updates must read at least one FF output. Pure module-input-only
+  always_comb blocks are classified stl_sequent and will not see
+  signal changes after simulation start. Gate prediction scan blocks
+  on a registered valid signal to force nba_sequent.
 
 ## Verilator Makefile Conventions
 
@@ -158,12 +171,14 @@ important. It must be defines first then structs
   suppressed project-wide.
 - -Wno-VARHIDDEN: add to individual sim or lint targets only when
   a module parameter intentionally shadows a bp_pkg parameter
-  (e.g. NUM_PRED_SLOTS). Do not add to VER_FLAGS.- 
+  (e.g. NUM_PRED_SLOTS). Do not add to VER_FLAGS.
 - Always include -Wno-UNUSED in VER_FLAGS. Package-only
   files and structs not yet consumed by any module will
   trigger unused warnings. This is structural and
   suppressed project-wide.
-- add --timing to VER_FLAGS in Makefiles (required by Verilator 5.020 for @(posedge clk)
+- add --timing to VER_FLAGS in Makefiles (required by Verilator
+  5.020 for @(posedge clk))
+
 ---
 
 - Each chat is a fresh experiment. Do not assume anything from prior

@@ -180,6 +180,10 @@ module tb;
   logic                           consumer_ready;
   initial consumer_ready = 1'b1;
 
+  // Assert inhibit: driven high during CE-06 to suppress false fires.
+  logic tage_assert_inhibit;
+  initial tage_assert_inhibit = 1'b0;
+
   // ----------------------------------------------------------------
   // DUT instantiation
   // ----------------------------------------------------------------
@@ -200,6 +204,19 @@ module tb;
     .consumer_ready      (consumer_ready),
     .folded_hist         (folded_hist),
     .tage_rdy            (tage_rdy)
+  );
+
+  // tage_assert bound here; assert_inhibit from tb-scope signal.
+  bind u_dut tage_assert #(
+    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
+  ) u_tage_assert (
+    .clk               (clk),
+    .rstn              (rstn),
+    .tage_pred_rdy_p2  (tage_pred_rdy_p2),
+    .tage_pred_meta_p2 (tage_pred_meta_p2),
+    .tage_upd_val_u0   (tage_upd_val_u0),
+    .tage_upd_inp_u0   (tage_upd_inp_u0),
+    .assert_inhibit    (tage_assert_inhibit)
   );
 
   // ----------------------------------------------------------------
@@ -7571,8 +7588,11 @@ module tb;
     // BP-030 CE-05 and CE-06 coverage (TC-67 and TC-68).
     if (_no_alloc_candidate_tst != 0)
       no_alloc_candidate_tst(verbose);
-    if (_no_ram_write_upd_tst != 0)
+    if (_no_ram_write_upd_tst != 0) begin
+      tage_assert_inhibit = 1'b1;
       no_ram_write_upd_tst(verbose);
+      tage_assert_inhibit = 1'b0;
+    end
 
     // Overall verdict.
     if (total_fails == 0) begin

@@ -358,7 +358,6 @@ sim_tage_manual:
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
-	  $(TB_DIR)/tage_assert_bind.sv \
 	  $(TB_DIR)/tb_tage_manual.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_manual/Vtb"
 	$(Q)./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=1

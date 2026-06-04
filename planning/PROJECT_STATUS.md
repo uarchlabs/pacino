@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-05-31 (session_handoff-044)
+ UPDATED: 2026-06-04 (session_handoff-045)
  CONTACT: Jeff Nye
 ```
 
@@ -39,14 +39,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | tage_table_interfaces.md| Draft       | --                | Created session-016.             |
 |                         |             |                   | Updates pending.                 |
 | tage_cntrl_use          | Complete    | --                | session-037: complete.           |
-| _update_rules.md        |             |                   | Debt #43 closed.                 |
+| _update_rules.md        |             |                   | session-045: DIFF corrected.     |
+|                         |             |                   | TTM row added. Notes corrected.  |
+|                         |             |                   | Aging disabled section added.    |
 | tage_cntrl_uaon         | Draft       | --                | session-036: verified.           |
 | _update_rules.md        |             |                   | Debt #45 closed BP-032.          |
 | tage_cntrl              | Complete    | --                | session-044: X entries expanded. |
 | _ctr_update_rules.md    |             |                   | Unreachable rows removed.        |
 |                         |             |                   | ADR-001 added.                   |
-|                         |             |                   | Status: NEEDS RE-VERIFICATION    |
-|                         |             |                   | updated to reflect corrections.  |
+|                         |             |                   | Verified session-045 via         |
+|                         |             |                   | tage_use_test all 6 rows pass.   |
 | bw_ram / sat_alu        | Complete    | tb_components     | COMP-001 PASS                    |
 | dual_lm1                | Complete    | tb_components     | COMP-002 now uses generate       |
 | sram_init               | Complete    | tb_components     | COMP-003                         |
@@ -67,13 +69,24 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | 68 tests pass. All coverage      |
 |                         |             |                   | targets closed or deferred.      |
 |                         |             |                   | tage_assert.sv bound via bind.   |
-| tage_assert.sv          | Complete    | sim_tage_manual   | ADR-001 and row 18 assertions.   |
-|                         |             |                   | Bound to tage.sv via bind.       |
-|                         |             |                   | sim-only, not synthesized.       |
-| tb_tage_manual.sv       | In progress | sim_tage_manual   | tage_ctr_test rows 1-17 pass.    |
+| tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
+|                         |             | sim_tage_fast     | assert_inhibit port added        |
+|                         |             | sim_tage_tasks    | (BP-042a). CE-06 gated.          |
+|                         |             | sim_tage_manual   | Bound in tb_tage.sv,             |
+|                         |             |                   | tb_tage_manual.sv,               |
+|                         |             |                   | tage_assert_bind.sv removed from |
+|                         |             |                   | sim_tage_manual (BP-042b).       |
+| ittage_assert.sv        | Complete    | sim_ittage        | New session-045 (BP-042/042a/b). |
+|                         |             |                   | Three assertions: hit+comp,      |
+|                         |             |                   | using_primary+prm_comp,          |
+|                         |             |                   | using_primary+alt_comp.          |
+|                         |             |                   | ittage_hit guard on assertion 2  |
+|                         |             |                   | added BP-042b.                   |
+|                         |             |                   | Located in tb/ directory.        |
+| tb_tage_manual.sv       | Complete    | sim_tage_manual   | tage_ctr_test rows 1-17 pass.    |
 |                         |             |                   | Row 18 covered by assertion.     |
-|                         |             |                   | Rows 14-17 RTL issue pending     |
-|                         |             |                   | (new TD #53).                    |
+|                         |             |                   | tage_use_test rows 1-6 pass.     |
+|                         |             |                   | session-045.                     |
 | ittage_interfaces.md              | Draft       | --    | session-036: corrections applied.|
 |                                   |             |       | session-037: II6 resolved.       |
 |                                   |             |       | session-038: redundancy collapse |
@@ -83,17 +96,23 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | applied.                         |
 | ittage_cntrl_alloc_rules.md       | Complete    | --    | Created session-033.             |
 |                                   |             |       | session-036: verified.           |
-| ittage_cntrl_ctr_update_rules.md  | Draft       | --    | Created session-033.             |
-| ittage_cntrl_decisions.md         | Draft       | --    | session-036: corrections applied.|
+| ittage_cntrl_ctr_update_rules.md  | Complete    | --    | session-045: TBD draft replaced  |
+|                                   |             |       | with fully specified 33-row      |
+|                                   |             |       | table. Assert rows A1/A2/A3      |
+|                                   |             |       | added citing ittage_assert.sv.   |
+|                                   |             |       | MIS, pACT, aACT all populated.   |
+| ittage_cntrl_decisions.md         | Complete    | --    | session-036: corrections applied.|
 |                                   |             |       | session-037: open items closed.  |
 |                                   |             |       | session-038: redundancy collapse |
 |                                   |             |       | applied.                         |
 | ittage_cntrl_uaon_update_rules.md | Draft       | --    | Created session-033.             |
 |                                   |             |       | session-036: user editing        |
 |                                   |             |       | manually.                        |
-| ittage_cntrl_use_update_rules.md  | Draft       | --    | Created session-033.             |
-|                                   |             |       | session-036: content verified    |
-|                                   |             |       | clean.                           |
+| ittage_cntrl_use_update_rules.md  | Draft       | --    | session-045: DIFF corrected      |
+|                                   |             |       | (prm_tgt != alt_tgt).            |
+|                                   |             |       | HIT=0 row added.                 |
+|                                   |             |       | Notes corrected and aligned.     |
+|                                   |             |       | Aging disabled section added.    |
 | ittage_table_hash_rules.md        | Complete    | --    | Created session-033.             |
 |                                   |             |       | session-036: verified.           |
 | ittage_table.sv                   | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete. |
@@ -101,8 +120,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | Update path complete BP-035      |
 |                                   |             |       | Testbench complete BP-036        |
 |                                   |             |       | 76 tests passing                 |
+|                                   |             |       | BP-040 Bug B/C/D unverified.     |
 | ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
 |                                   |             |       | shell without arb cntrl complete |
+|                                   |             |       | sim_ittage 32 pass / 3 fail      |
+|                                   |             |       | (pre-existing, BP-042b).         |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
@@ -259,16 +281,14 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                      | module.                                      |
 | 53 | tage_ctr_test rows   | CLOSED with BP-041.md                        |
 |    | 14-17 failing        | pcomp CTR write not landing in T4 RAM for    |
-|    |                      | rows 14-17. tage_cntrl shows prm_wr=1        |
-|    |                      | trx=1 but T4 RAM unchanged after             |
-|    |                      | reset_ctr_entries. Root cause not yet        |
-|    |                      | determined. Requires tage_table.sv           |
-|    |                      | diagnostic. Priority: next session.          |
+|    |                      | rows 14-17. Root cause was test state        |
+|    |                      | contamination from rows 13 into rows 14-17.  |
 | 54 | tage ctr tests       | Planning document tage_cntrl_ctr_update_rules.md |
 |    |                      | was updated and confirmed with BP-041 manual |
 |    |                      | tests. The new table is more explicit on X   |
 |    |                      | handling and backed by new assertions.       |
-|    |                      | Existing tests need to be run and retrofit.  |
+|    |                      | Existing IA tests need audit and retrofit.   |
+|    |                      | BP-043 will address this.                    |
 
 ---
 
@@ -429,9 +449,10 @@ Key decisions for quick reference:
     - Directed validation in progress
     - Formal validation not started
 - BP-006 through BP-032: complete.
-- BP-040 manual checks for tage CTR complete
+- BP-041 manual checks for tage CTR and USE complete
     - tage_cntrl_ctr_update_rules.md -- updated and verified
-      needs cross check against IA generated tests
+    - tage_cntrl_use_update_rules.md -- corrected and verified
+      session-045. All 6 USE rows pass.
 - Tage planning documents
     - planning/arch/tage_cntrl_alloc_rules.md         Draft
         - Table entry allocation rules
@@ -441,8 +462,8 @@ Key decisions for quick reference:
         - TAGE control behavior, conventions and rules
     - planning/arch/tage_cntrl_uaon_update_rules.md   Draft
         - UAON (Use ALT on newly allocated)  trigger rules
-    - planning/arch/tage_cntrl_use_update_rules.md    Draft
-        - USE(ful) field update rules
+    - planning/arch/tage_cntrl_use_update_rules.md    Complete
+        - USE(ful) field update rules. Corrected session-045.
     - planning/arch/tage_table_hash_rules.md          Complete
         - Address and tag generation hashing
     - planning/interfaces/tage_interfaces.md          Complete
@@ -454,20 +475,20 @@ Key decisions for quick reference:
 - RTL is available
     - Unit testbenches written
     - Line coverage < 90% in progress
-    - Directed validation no started
+    - Directed validation not started
     - Formal validation not started
-- BP-034 - BP-040 complete (BP-033 abandoned)
+- BP-034 - BP-042 complete (BP-033 abandoned)
 - ITTage planning documents
     - planning/arch/ittage_cntrl_alloc_rules.md         Draft
         - Table entry allocation rules
-    - planning/arch/ittage_cntrl_ctr_update_rules.md    Draft
-        - CTR field update rules
+    - planning/arch/ittage_cntrl_ctr_update_rules.md    Complete
+        - CTR field update rules. 33-row table. session-045.
     - planning/arch/ittage_cntrl_decisions.md           Complete
         - ITTAGE control behavior, conventions and rules
     - planning/arch/ittage_cntrl_uaon_update_rules.md   Draft
         - UAON (Use ALT on newly allocated)  trigger rules
     - planning/arch/ittage_cntrl_use_update_rules.md    Draft
-        - USE(ful) field update rules
+        - USE(ful) field update rules. Corrected session-045.
     - planning/arch/ittage_table_hash_rules.md          Complete
         - Address and tag generation hashing
     - planning/interfaces/ittage_interfaces.md          Complete
@@ -519,5 +540,4 @@ Key decisions for quick reference:
 - BUG-001: HAND-FIX-003. T0 CTR INC/DEC condition
   wrong in tage_cntrl.sv. Found by tage_ctr_test
   row 13a. Fixed BP-041. See session-handoff-045.
-
 

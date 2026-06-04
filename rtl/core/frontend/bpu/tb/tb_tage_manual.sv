@@ -319,6 +319,19 @@ module tb;
     .tage_rdy            (tage_rdy)
   );
 
+  // tage_assert bind: assert_inhibit tied off, always active.
+  bind u_dut tage_assert #(
+    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
+  ) u_tage_assert_tb (
+    .clk               (clk),
+    .rstn              (rstn),
+    .tage_pred_rdy_p2  (tage_pred_rdy_p2),
+    .tage_pred_meta_p2 (tage_pred_meta_p2),
+    .tage_upd_val_u0   (tage_upd_val_u0),
+    .tage_upd_inp_u0   (tage_upd_inp_u0),
+    .assert_inhibit    (1'b0)
+  );
+
 endmodule : tb
 
 `default_nettype wire

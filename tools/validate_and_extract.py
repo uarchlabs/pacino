@@ -41,6 +41,7 @@ HEADER_FIELDS = [
     "Ctx %",
     "Model",
     "Resume sha",
+    "PA session",
     "Task:",
     "Status:",
 ]
@@ -299,16 +300,52 @@ def check_task_id(header_lines, prompt_lines):
     return errors
 
 
+def check_pa_session(header_lines):
+    """
+    Check that PA session field is present in the header
+    table and is not empty or the placeholder value 'NNN'.
+    Returns list of warning strings (empty if all good).
+    Warns but does not fail -- PA session may be absent in
+    pre-backfill files.
+    """
+    errors = []
+    found = False
+    for line in header_lines:
+        stripped = line.strip()
+        if not stripped.startswith('|'):
+            continue
+        cols = [c.strip() for c in stripped.split('|')]
+        if len(cols) >= 3 and cols[1].lower() == "pa session":
+            found = True
+            val = cols[2]
+            if not val or val.upper() == 'NNN':
+                errors.append(
+                    "  [PA session] PA session field is "
+                    "empty or placeholder -- fill in the "
+                    "PA session number before submitting."
+                )
+            break
+    if not found:
+        errors.append(
+            "  [PA session] PA session field absent from "
+            "header table -- add '| PA session | NNN |' "
+            "and fill in the session number."
+        )
+    return errors
+
+
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
 
 def validate(lines):
     """
-    Run all validation checks. Returns a list of error strings.
-    Empty list means validation passed.
+    Run all validation checks. Returns (errors, warnings).
+    errors: list of strings that cause non-zero exit.
+    warnings: list of strings printed but do not fail.
     """
     errors = []
+    warnings = []
     text = "".join(lines)
 
     # -- 1. Block markers present and in order --
@@ -329,7 +366,7 @@ def validate(lines):
     # Abort further checks if block markers are broken --
     # section extraction will be unreliable.
     if errors:
-        return errors
+        return errors, warnings
 
     # -- 2. HEADER fields --
     header_lines = extract_between(
@@ -339,7 +376,10 @@ def validate(lines):
         header_lines, HEADER_FIELDS, "Header"
     )
 
-    # -- 3. PROMPT subsections --
+    # -- 3. PA session (warn, not fail) --
+    errors += check_pa_session(header_lines)
+
+    # -- 4. PROMPT subsections --
     prompt_lines = extract_between(
         lines, ":: PROMPT:START ::", ":: PROMPT:END ::"
     )
@@ -347,13 +387,13 @@ def validate(lines):
         prompt_lines, PROMPT_SECTIONS_ORDERED, "Prompt"
     )
 
-    # -- 4. Context Loaded @ prefix and format --
+    # -- 5. Context Loaded @ prefix and format --
     errors += check_context_loaded(prompt_lines)
 
-    # -- 5. Context Loaded files exist on disk --
+    # -- 6. Context Loaded files exist on disk --
     errors += check_context_files_exist(prompt_lines)
 
-    # -- 6. RESULTS subsections --
+    # -- 7. RESULTS subsections --
     results_lines = extract_between(
         lines, ":: RESULTS:START ::", ":: RESULTS:END ::"
     )
@@ -361,7 +401,7 @@ def validate(lines):
         results_lines, RESULTS_SECTIONS_ORDERED, "Results"
     )
 
-    # -- 7. DISCUSSION subsections --
+    # -- 8. DISCUSSION subsections --
     discussion_lines = extract_between(
         lines, ":: DISCUSSION:START ::", ":: DISCUSSION:END ::"
     )
@@ -371,10 +411,10 @@ def validate(lines):
         "Discussion"
     )
 
-    # -- 8. Task ID populated and consistent --
+    # -- 9. Task ID populated and consistent --
     errors += check_task_id(header_lines, prompt_lines)
 
-    return errors
+    return errors, warnings
 
 
 # ---------------------------------------------------------------------------
@@ -400,7 +440,12 @@ def main():
 
     print(f"Validating: {experiment_file}")
 
-    errors = validate(lines)
+    errors, warnings = validate(lines)
+
+    if warnings:
+        print("\nWARNINGS:")
+        for w in warnings:
+            print(w)
 
     if errors:
         print("\nVALIDATION FAILED:")

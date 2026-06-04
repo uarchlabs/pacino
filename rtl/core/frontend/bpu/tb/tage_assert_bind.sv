@@ -8,5 +8,6 @@ bind tage tage_assert #(
   .tage_pred_rdy_p2  (tage_pred_rdy_p2),
   .tage_pred_meta_p2 (tage_pred_meta_p2),
   .tage_upd_val_u0   (tage_upd_val_u0),
-  .tage_upd_inp_u0   (tage_upd_inp_u0)
+  .tage_upd_inp_u0   (tage_upd_inp_u0),
+  .assert_inhibit    (1'b0)
 );

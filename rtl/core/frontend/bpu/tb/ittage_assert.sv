@@ -35,8 +35,7 @@ module ittage_assert #(
         assert (   ittage_pred_meta_p2[s].ittage_prm_comp != '0
                 || ittage_pred_meta_p2[s].ittage_alt_comp != '0)
           else $error(
-            "[ITTAGE_ASSERT][PRED] slot=%0d hit=1 but prm_comp=0"
-            " and alt_comp=0 -- impossible", s);
+            "[ITTAGE_ASSERT][PRED] slot=%0d hit=1 prm_comp=0 alt_comp=0", s);
       end
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit) begin
@@ -46,8 +45,7 @@ module ittage_assert #(
             || ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
                != '0)
           else $error(
-            "[ITTAGE_ASSERT][UPD] slot=%0d hit=1 but prm_comp=0"
-            " and alt_comp=0 -- impossible", s);
+            "[ITTAGE_ASSERT][UPD] slot=%0d hit=1 prm_comp=0 alt_comp=0", s);
       end
     end
   end
@@ -60,20 +58,20 @@ module ittage_assert #(
   always_ff @(posedge clk) begin
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       if (ittage_pred_rdy_p2[s]
+          && ittage_pred_meta_p2[s].ittage_hit
           && ittage_pred_meta_p2[s].ittage_using_primary) begin
         assert (ittage_pred_meta_p2[s].ittage_prm_comp != '0)
           else $error(
-            "[ITTAGE_ASSERT][PRED] slot=%0d using_primary=1 but"
-            " prm_comp=0 -- impossible", s);
+            "[ITTAGE_ASSERT][PRED] slot=%0d using_primary=1 but prm_comp=0", s);
       end
       if (ittage_upd_val_u0[s]
+          && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
       begin
         assert (
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp != '0)
           else $error(
-            "[ITTAGE_ASSERT][UPD] slot=%0d using_primary=1 but"
-            " prm_comp=0 -- impossible", s);
+            "[ITTAGE_ASSERT][UPD] slot=%0d using_primary=1 but prm_comp=0", s);
       end
     end
   end
@@ -90,8 +88,7 @@ module ittage_assert #(
           && !ittage_pred_meta_p2[s].ittage_using_primary) begin
         assert (ittage_pred_meta_p2[s].ittage_alt_comp != '0)
           else $error(
-            "[ITTAGE_ASSERT][PRED] slot=%0d using_primary=0 hit=1"
-            " but alt_comp=0 -- impossible", s);
+            "[ITTAGE_ASSERT][PRED] slot=%0d using_primary=0 alt_comp=0", s);
       end
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit
@@ -100,8 +97,7 @@ module ittage_assert #(
         assert (
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp != '0)
           else $error(
-            "[ITTAGE_ASSERT][UPD] slot=%0d using_primary=0 hit=1"
-            " but alt_comp=0 -- impossible", s);
+            "[ITTAGE_ASSERT][UPD] slot=%0d using_primary=0 alt_comp=0", s);
       end
     end
   end

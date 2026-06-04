@@ -4,14 +4,14 @@
 
 | Field        | Value                   | Notes                    |
 |--------------|-------------------------|--------------------------|
-| Task ID      | <BLOCK-NUMBER>          | as needed                |
+| Task ID      | <BLOCK-NUMBER>          |                          |
 | Date         | YYYY.MM.DD              |                          |
 | Module       | <module>                |                          |
 | Run time     |                         |                          |
 | Ctx %        |                         |                          |
-| Model        | Sonnet 4.6 medium       |                          |
+| Model        | <model> <effort>        |                          |
 | Resume sha   | <sha>                   |                          |
-| Pa session   | NNN                     |                          |
+| PA session   | NNN                     |                          |
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
