@@ -3,9 +3,37 @@
  FILE:    ittage_cntrl_use_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-05-17
+ UPDATED: 2026-06-03
  CONTACT: Jeff Nye
 ```
+
+---
+
+## Background
+
+Each tagged ITTAGE table entry (IT1-IT5) contains a 2-bit USEFUL
+counter field. The USEFUL field records whether an entry has recently
+provided a correct prediction that disagreed with the alternative
+provider. An entry with a non-zero USEFUL value has demonstrated
+recent predictive value and is protected from eviction during
+allocation. An entry whose USEFUL value has decayed to zero is a
+candidate for replacement.
+
+The epoch-based aging mechanism described below allows this
+protection to decay over time without requiring explicit per-entry
+writes: as the lcl_epoch counter advances, the effective USEFUL
+value (u_eff) seen by the allocation logic decreases for entries
+that have not been recently updated, making them eligible for
+eviction even if their raw USEFUL field is non-zero.
+
+USEFUL is updated only when the primary and alternate providers
+predict different targets -- when they agree, no information about
+relative provider quality is available and no update is performed.
+
+Note: Seznec's original ITTAGE uses a 1-bit U field with a global
+TICK-based reset. This implementation extends U to 2 bits with
+INC/DEC semantics, consistent with the TAGE useful counter
+extension used in this project.
 
 ---
 
@@ -22,13 +50,14 @@ Aging is a two-phase process that fits within the existing
 prediction request/update request process. During prediction
 requests, the EFFECTIVE useful bits are used to determine
 which entry across the tables is the target for
-replacement/allocation. The "EFFECTIVE useful bits" are the
+replacement/allocation. The EFFECTIVE useful bits are the
 aged view of the USEFUL bits across the entries.
 
 The EFFECTIVE USEFUL values are returned in the prediction
 response and used in the subsequent update phase.
 
 ---
+
 There is an enable bit, ittage_enable_aging, as a primary
 input to ittage and ittage_cntrl.
 
@@ -70,16 +99,32 @@ Aging is only active when ittage_enable_aging is asserted.
 
 ---
 
+## Aging Disabled
+
+When ittage_enable_aging=0 the epoch mechanism is inactive.
+The effective USEFUL value is always equal to the raw USEFUL
+field:
+
+    u_eff = USEFUL  (aging disabled, equivalent to age==0 path)
+
+Manual tests are expected to run with ittage_enable_aging=0.
+A test failure under this condition indicates a table rule
+violation, not an aging interaction.
+
+---
+
 ## Effective Useful Computation
 
 At predict time, ittage_cntrl computes u_eff for the primary
 and alternative components using the slot's lcl_epoch register.
 
-  age = (IT_AGE_EPOCH - EPOCH) mod 4
+```
+age = (IT_AGE_EPOCH - EPOCH) mod 4
 
-  if (age == 0) u_eff = USEFUL
-  if (age == 1) u_eff = USEFUL >> 1
-  else          u_eff = 0
+if (age == 0) u_eff = USEFUL
+if (age == 1) u_eff = USEFUL >> 1
+else          u_eff = 0
+```
 
 Where:
   IT_AGE_EPOCH = lcl_epoch_0 or lcl_epoch_1 for the slot
@@ -92,65 +137,80 @@ The provider component's modified u_eff is returned in the
 prediction response (ittage_pred_meta) on ittage_prm_useful
 and ittage_alt_useful.
 
-On the subsequent update, u_eff is written back to 
-the USEFUL field of the entry. 
+On the subsequent update, u_eff is written back to the USEFUL
+field of the entry. The values are carried in the update data:
 
-Since u_eff has already been provided during the
-prediction response, during update the values in 
-each slots update data
-ittage_upd_inp[0/1].ittage_pred_meta.ittage_prm_useful or
-ittage_upd_inp[0/1].ittage_pred_meta.ittage_alt_useful 
-are written to the entry. Which value, prm or alt is
-shown in the table.
+  ittage_upd_inp[s].ittage_pred_meta.ittage_prm_useful
+  ittage_upd_inp[s].ittage_pred_meta.ittage_alt_useful
 
-The current lcl_epoch value is written to the EPC
-field of the entry at the same time.
+Which field is written (prm or alt) is determined by the
+table below. The current lcl_epoch value is written to the
+EPC field of the entry at the same time.
+
+Theory: since lcl_epoch_0/1 is used to form u_eff, the
+simple action of incrementing IT_AGE_EPOCH effectively ages
+all entries in all tables without the need to update each
+entry individually.
 
 ---
 
-## Useful Counter Update -- Table 7
+## Useful Counter Update Table
 
-Signals below are prefixed by:
-  ittage_upd_inp_u0[s].ittage_pred_meta
+This table is entered when pred_src == PRED_ITTAGE. Signals
+are prefixed by ittage_upd_inp_u0[s].ittage_pred_meta unless
+otherwise noted. Prefix removed from column headers for
+brevity.
 
-Prefix removed from column headers for brevity.
+### Legend
 
-V   = pred_src == PRED_ITTAGE
-TTH = ittage_hit == 1
-TD  = ittage_pred_tgt != ittage_alt_tgt (tgt's differed)
+```
+DIFF  = ittage_prm_tgt != ittage_alt_tgt (stored targets differ)
+HIT   = ittage_hit (at least one tagged table hit)
+UP    = ittage_using_primary
+MISP  = indir_mispredict (from ittage_upd_inp_t, not pred_meta)
+uWR   = useful write enable
+uACT  = useful action (Inc/Dec u_eff)
+uSEL  = useful component select
+          PRM = ittage_prm_comp
+          ALT = ittage_alt_comp
+uIDX  = useful index select
+          PRM = ittage_prm_idx
+          ALT = ittage_alt_idx
+uWD   = useful write data select
+          PRM = ittage_prm_useful
+          ALT = ittage_alt_useful
+x     = don't care
+-     = not applicable
+```
 
-| # | V | TTH | TD | Using prm | Mispredict | Useful WR | Useful Action | Useful SEL      | Useful IDX      | Useful WD         |
-|---|---|-----|----|-----------|------------|-----------|---------------|-----------------|-----------------|-------------------|
-| 1 | 0 | x   | x  | x         | x          | 0         | x             | x               | x               | x                 |
-| 2 | 1 | 0   | x  | x         | x          | 0         | x             | x               | x               | x                 |
-| 3 | 1 | 1   | 0  | x         | x          | 0         | x             | x               | x               | x                 |
-| 4 | 1 | 1   | 1  | 1         | 0          | 1         | Inc u_eff     | ittage_prm_comp | ittage_prm_idx  | ittage_prm_useful |
-| 5 | 1 | 1   | 1  | 1         | 1          | 1         | Dec u_eff     | ittage_prm_comp | ittage_prm_idx  | ittage_prm_useful |
-| 6 | 1 | 1   | 1  | 0         | 0          | 1         | Inc u_eff     | ittage_alt_comp | ittage_alt_idx  | ittage_alt_useful |
-| 7 | 1 | 1   | 1  | 0         | 1          | 1         | Dec u_eff     | ittage_alt_comp | ittage_alt_idx  | ittage_alt_useful |
+### Table 7 - USEFUL modification truth table
 
-### Column definitions
+| # | DIFF | HIT | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+|---|------|-----|----|------|-----|------|------|------|-----|
+| 1 | 0    | x   | x  | x    | 0   | -    | x    | x    | x   |
+| 2 | x    | 0   | x  | x    | 0   | -    | x    | x    | x   |
+| 3 | 1    | 1   | 1  | 0    | 1   | INC  | PRM  | PRM  | PRM |
+| 4 | 1    | 1   | 1  | 1    | 1   | DEC  | PRM  | PRM  | PRM |
+| 5 | 1    | 1   | 0  | 0    | 1   | INC  | ALT  | ALT  | ALT |
+| 6 | 1    | 1   | 0  | 1    | 1   | DEC  | ALT  | ALT  | ALT |
 
-V            : pred_src == PRED_ITTAGE
-TTH          : tagged table hit -- at least 1 table hit
-               this was more complicated before but now
-               table hits are directly indicated by ittage_hit
-TD           : ittage_pred_tgt != ittage_alt_tgt
-               (primary and alternate predicted different targets)
-Using prm    : ittage_using_primary
-Mispredict   : indir_mispredict (from ittage_upd_inp_t, not meta)
-Useful WR    : write enable output to RAM
-Useful Action: Inc u_eff or Dec u_eff, saturating on 2b range
-Useful SEL   : component selected for useful update
-Useful IDX   : index into component for useful update
-Useful WD    : source value for saturating inc/dec
+### Row suppression notes
 
-### Notes
+Rows 1 and 2 both independently suppress the useful write
+(uWR=0). They have no priority relationship between them.
+If both conditions are true simultaneously (DIFF=0 and HIT=0)
+the outcome is the same: uWR=0. No ordering is required and
+no priority encoding should be inferred. Rows 3-6 are only
+reachable when both row 1 and row 2 conditions are false
+(DIFF=1 and HIT=1).
 
-- Operations are performed on u_eff, not raw USEFUL.
-- u_eff written back as USEFUL field in RAM entry.
-- lcl_epoch written to EPC field on every useful update.
-- Row 1: pred_src is not PRED_ITTAGE -- not an ITTAGE prediction.
-- Row 2: no_tagged_hit -- no tagged table entry to update.
-- Row 3: primary and alternate predicted the same target --
-  no useful information gained regardless of outcome.
+Row 1: predictions agreed -- primary and alternate stored
+the same target. No useful information about relative
+provider quality is available regardless of outcome.
+
+Row 2: no tagged table hit. There is no entry to update.
+HIT=0 with DIFF=1 is structurally impossible -- if no
+table hit occurred then neither prm_tgt nor alt_tgt holds
+a valid stored value and DIFF is a don't care. The uWR=0
+outcome is the same.
+

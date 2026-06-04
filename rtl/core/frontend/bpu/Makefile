@@ -229,6 +229,7 @@ sim_ittage:
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
 	  $(RTL_DIR)/ittage.sv \
+	  $(TB_DIR)/ittage_assert.sv \
 	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ittage/Vtb"
 	$(Q)./$(VER_OUT)_ittage/Vtb +ITTAGE_FAST_INIT=1
@@ -261,6 +262,7 @@ lint_tage:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 
 sim_tage:
@@ -281,6 +283,7 @@ sim_tage:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage/Vtb"
 	$(Q)./$(VER_OUT)_tage/Vtb
@@ -303,6 +306,7 @@ sim_tage_fast:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_fast/Vtb"
 	$(Q)./$(VER_OUT)_tage_fast/Vtb +TAGE_FAST_INIT=1
@@ -325,6 +329,8 @@ sim_tage_tasks:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tage_assert.sv \
+	  $(TB_DIR)/tage_assert_bind.sv \
 	  $(TB_DIR)/tb_tage_tasks.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_tasks/Vtb"
 	$(Q)./$(VER_OUT)_tage_tasks/Vtb +TAGE_FAST_INIT=1

@@ -658,4 +658,15 @@ module tb;
 
 endmodule : tb
 
+bind ittage ittage_assert #(
+    .NUM_PRED_SLOTS(NUM_PRED_SLOTS)
+  ) u_ittage_assert (
+    .clk                  (clk),
+    .rstn                 (rstn),
+    .ittage_pred_rdy_p2   (ittage_pred_rdy_p2),
+    .ittage_pred_meta_p2  (ittage_pred_meta_p2),
+    .ittage_upd_val_u0    (ittage_upd_val_u0),
+    .ittage_upd_inp_u0    (ittage_upd_inp_u0)
+  );
+
 `default_nettype wire

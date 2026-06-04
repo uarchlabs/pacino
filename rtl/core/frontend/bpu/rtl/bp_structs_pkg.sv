@@ -155,10 +155,10 @@ package bp_structs_pkg;
     logic [TAGE_TBL_SEL_WIDTH-1:0] tage_prm_comp;   // primary tbl
     logic [TAGE_TBL_SEL_WIDTH-1:0] tage_alt_comp;   // alt-prov tbl
     // Usefulness and counter snapshots
-    logic [TAGE_MAX_USE_WIDTH-1:0]      tage_prm_useful; // primary useful
-    logic [TAGE_MAX_USE_WIDTH-1:0]      tage_alt_useful; // alt useful
-    logic [TAGE_MAX_CTR_WIDTH-1:0]      tage_prm_ctr;    // primary ctr
-    logic [TAGE_MAX_CTR_WIDTH-1:0]      tage_alt_ctr;    // alt ctr
+    logic [TAGE_MAX_USE_WIDTH-1:0] tage_prm_useful; // primary useful
+    logic [TAGE_MAX_USE_WIDTH-1:0] tage_alt_useful; // alt useful
+    logic [TAGE_MAX_CTR_WIDTH-1:0] tage_prm_ctr;    // primary ctr
+    logic [TAGE_MAX_CTR_WIDTH-1:0] tage_alt_ctr;    // alt ctr
     // Allocation target (new entry on miss)
     logic [TAGE_TBL_SEL_WIDTH-1:0] tage_alc_comp;   // alloc tbl
     logic [TAGE_MAX_AWIDTH-1:0]    tage_alc_idx;    // alloc idx

@@ -21,6 +21,258 @@ typedef struct packed {
   logic [TAGE_MAX_CTR_WIDTH-1:0] ctr;    // bits [3:1]
   logic                          valid;  // bit  [0]
 } tage_ram_entry_t;
+// ---------------------------------------------------------------
+// TAGE useful table manual checks 
+// ---------------------------------------------------------------
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// |---|------|-----|----|------|-----|------|------|------|-----|
+// | 1 | 0    |  x  | x  | x    | 0   | -    | x    | x    | x   |
+// | 2 | x    |  1  | x  | x    | 0   | -    | x    | x    | x   |
+// | 3 | 1    |  0  | 1  | 0    | 1   | INC  | PRM  | PRM  | PRM |
+// | 4 | 1    |  0  | 1  | 1    | 1   | DEC  | PRM  | PRM  | PRM |
+// | 5 | 1    |  0  | 0  | 0    | 1   | INC  | ALT  | ALT  | ALT |
+// | 6 | 1    |  0  | 0  | 1    | 1   | DEC  | ALT  | ALT  | ALT |
+// ---------------------------------------------------------------
+task automatic tage_use_test(
+  inout int tb_errs,
+  input int verb = 0,
+  input int toe  = 0
+);
+
+  string this_test;
+  int errs,v;
+  logic [VA_WIDTH-1:0]     pc;
+  logic [FTQ_IDX_BITS-1:0] bid;
+  int pidx,aidx,pcomp,acomp,puse,ause;
+  logic [TAGE_MAX_CTR_WIDTH-1:0] pctr,actr;
+  logic pred_diff; //this is just to make correlating to the table easier
+
+  tage_ram_entry_t pentry,aentry,rentry,pexp_entry,aexp_entry;
+  tage_pred_meta_t pred_meta; //attached to upd_data
+  tage_upd_inp_t   upd_data;  //sent during update
+
+  v = 1;
+  this_test = "tage_use_test";
+  errs = 0;
+
+  start_test(this_test);
+
+  //Set initial conditions
+  pc    = 40'h1000;
+  bid   = 3;
+
+  pidx  = int'(11'h100);
+  aidx  = int'(11'h0F0);
+
+  pcomp = 4;
+  acomp = 2;
+
+  pctr  = 3'b010;
+  actr  = 3'b001;
+
+  puse  = 1;
+  ause  = 2;
+
+  pentry.tag    = 8'hEF;
+  aentry.tag    = 8'hDF;
+
+  pentry.epc    = 2'h0;
+  aentry.epc    = 2'h0;
+
+  pentry.useful = puse;
+  aentry.useful = ause;
+
+  pentry.ctr    = pctr;
+  aentry.ctr    = actr;
+
+  pentry.valid  = 1;
+  aentry.valid  = 1;
+
+  // -----------------------------
+  // Set the initial ram entry values and verify them
+  // -----------------------------
+  tage_ram_write(pcomp,pidx,pentry);
+  tage_ram_write(acomp,aidx,aentry);
+
+  tage_ram_read(pcomp,pidx,rentry);
+  tage_cmp_ram_entry("PCOMP",pcomp,pidx,pentry,rentry,errs,0);
+
+  tage_ram_read(acomp,aidx,rentry);
+  tage_cmp_ram_entry("ACOMP",acomp,aidx,aentry,rentry,errs,0);
+  // -----------------------------
+  // Set the update data
+  // -----------------------------
+  // clear them first
+  pred_meta = '0;
+  upd_data  = '0;
+
+  pred_meta.tage_prm_idx       = pidx;
+  pred_meta.tage_alt_idx       = aidx;
+  pred_meta.tage_prm_useful    = puse;
+  pred_meta.tage_alt_useful    = ause;
+  pred_meta.tage_alc_comp      = 0;
+  pred_meta.tage_alc_idx       = 0;
+  pred_meta.tage_alc_tag       = 0;
+  pred_meta.tage_pred_strong   = 0;
+  pred_meta.tage_use_alt_on_na = 0;
+  pred_meta.tage_high_conf     = 0;
+  pred_meta.branch_id          = bid;
+
+  pred_meta.tage_prm_ctr   = pctr;
+  pred_meta.tage_alt_ctr   = actr;
+
+  pred_meta.tage_prm_comp  = pcomp;
+  pred_meta.tage_alt_comp  = acomp;
+
+// -------------------------------------------------------------
+// ROW 1 - USEFUL
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// | 1 | 0    |  x  | x  | x    | 0   | -    | x    | x    | x   |
+// ---------------------------------------------------------------
+// PCTR = 2 -> 2  PUSE = 1 -> 1
+// ACTR = 1 -> 1  AUSE = 2 -> 2 
+//
+// This case is using ROW 1.2 CTR, ++pCTR
+// -------------------------------------------------------------
+  tb_info("USE ROW 1");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+
+  // This is ROW 1.2 CTR
+  // ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT 
+  // 1.2  1  1  1  0   1  1  >0   >0   INC  —    —     
+  // --------------------------------------------------
+  //                             UP PT RT pT aT
+  set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 1,pcomp,acomp,puse,ause);
+  tage_update({upd_data,upd_data},2'b01,errs);
+                 
+  pexp_entry        = pentry;
+  aexp_entry        = aentry;
+  pexp_entry.ctr    = 3; pexp_entry.useful = 1;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 2;
+  check_ctr_row("UR1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 2 - USEFUL
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// | 2 | x    |  1  | x  | x    | 0   | -    | x    | x    | x   |
+// ---------------------------------------------------------------
+// PCTR = 2 -> 2  PUSE = 1 -> 1
+// ACTR = 1 -> 1  AUSE = 2 -> 2 
+// -------------------------------------------------------------
+  tb_info("USE ROW 2");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT pCMP aCMP pUSE aUSE
+  set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0, 0,   0,   puse,ause);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  pexp_entry        = pentry;
+  aexp_entry        = aentry;
+  pexp_entry.ctr    = 2; pexp_entry.useful = 1;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 2;
+  check_ctr_row("UR2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 3 - USEFUL
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// | 3 | 1    |  0  | 1  | 0    | 1   | INC  | PRM  | PRM  | PRM |
+// ---------------------------------------------------------------
+// PCTR = 2 -> 2  PUSE = 1 -> 2
+// ACTR = 1 -> 1  AUSE = 2 -> 2 
+//
+// ROW 3 USEFUL is ROW 16.2 CTR so ++pCTR
+// -------------------------------------------------------------
+  tb_info("USE ROW 3");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
+  set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0, pcomp,acomp,puse,ause);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  pexp_entry        = pentry;
+  aexp_entry        = aentry;
+  pexp_entry.ctr    = 3; pexp_entry.useful = 2;
+  aexp_entry.ctr    = 1; aexp_entry.useful = 2;
+  check_ctr_row("UR3",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 4 - USEFUL
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// | 4 | 1    |  0  | 1  | 1    | 1   | DEC  | PRM  | PRM  | PRM |
+// ---------------------------------------------------------------
+// PCTR = 2 -> 1  PUSE = 1 -> 0
+// ACTR = 1 -> 2  AUSE = 2 -> 2 
+//
+// ROW 4 USEFUL is ROW 3 CTR so --pCTR ++aCTR
+// -------------------------------------------------------------
+  tb_info("USE ROW 4");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
+  set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 1, pcomp,acomp,puse,ause);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  pexp_entry        = pentry;
+  aexp_entry        = aentry;
+  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+  aexp_entry.ctr    = 2; aexp_entry.useful = 2;
+  check_ctr_row("UR4",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 5 - USEFUL
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// | 5 | 1    |  0  | 0  | 0    | 1   | INC  | ALT  | ALT  | ALT |
+// ---------------------------------------------------------------
+// PCTR = 2 -> 2  PUSE = 1 -> 1
+// ACTR = 1 -> 2  AUSE = 2 -> 3 
+//
+// ROW 5 USEFUL is ROW 7.1 CTR so ++pALT
+// -------------------------------------------------------------
+  tb_info("USE ROW 5");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
+  set_ctr_row(pred_meta,upd_data,0, 1, 1, 0, 1, pcomp,acomp,puse,ause);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  pexp_entry        = pentry;
+  aexp_entry        = aentry;
+  pexp_entry.ctr    = 2; pexp_entry.useful = 1;
+  aexp_entry.ctr    = 2; aexp_entry.useful = 3;
+  check_ctr_row("UR5",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+// -------------------------------------------------------------
+// ROW 6 - USEFUL
+// | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
+// | 6 | 1    |  0  | 0  | 1    | 1   | DEC  | ALT  | ALT  | ALT |
+// ---------------------------------------------------------------
+// PCTR = 2 -> 3  PUSE = 1 -> 1
+// ACTR = 1 -> 0  AUSE = 2 -> 1 
+//
+// ROW 6 USEFUL is ROW 9 CTR so ++pCTR --aCTR
+// -------------------------------------------------------------
+  tb_info("USE ROW 6");
+  // reset the ram entry
+  reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
+  //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
+  set_ctr_row(pred_meta,upd_data,0, 1, 0, 0, 1, pcomp,acomp,puse,ause);
+  tage_update({upd_data,upd_data},2'b01,errs);
+
+  pexp_entry        = pentry;
+  aexp_entry        = aentry;
+  pexp_entry.ctr    = 3; pexp_entry.useful = 1;
+  aexp_entry.ctr    = 0; aexp_entry.useful = 1;
+  check_ctr_row("UR6",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+  // END
+  stop_test(this_test,errs);
+  tb_pf(this_test,errs);
+  tb_errs += errs;
+endtask
+
+// ---------------------------------------------------------------
+// TAGE CTR table manual checks 
 // -------------------------------------------------------------------
 // This exercises each row of the CTR update table.
 // ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT Comments
@@ -40,20 +292,20 @@ typedef struct packed {
 // 10   0  0  1  1   1  0  >0   >0   INC  DEC  —     Provider = alt wrong, primary opposite prediction |
 // 11   0  1  0  0   1  1  >0   >0   —    DEC  —     Provider = alt wrong, pred_diff ignored           |
 // 12   0  0  1  0   0  0  >0   >0   —    DEC  —     Provider = alt wrong, pred_diff ignored           |
-// 13a  1  0  0  0   0  0  0    0    —    —    INC   BIM predicted NT, resolved NT, correct |
-// 13b  1  0  1  0   0  0  0    0    —    —    DEC   BIM predicted NT, resolved T, wrong |
-// 13c  1  1  0  0   1  1  0    0    —    —    DEC   BIM predicted T, resolved NT, wrong |
-// 13d  1  1  1  0   1  1  0    0    —    —    INC   BIM predicted T, resolved T, correct |
+// 13a  1  0  0  0   0  0  0    0    —    —    INC   BIM predicted NT, resolved NT, correct            |
+// 13b  1  0  1  0   0  0  0    0    —    —    DEC   BIM predicted NT, resolved T, wrong               |
+// 13c  1  1  0  0   1  1  0    0    —    —    DEC   BIM predicted T, resolved NT, wrong               |
+// 13d  1  1  1  0   1  1  0    0    —    —    INC   BIM predicted T, resolved T, correct              |
 // 13e  0  x  x  x   x  x  0    0    ASRT ASTR ASTR  Invalid: UP=0 when pCMP=aCMP=0. ADR-001 violation |
-// 14.1 1  1  0  0   1  1  >0   0    DEC  —    -     Alt=BIM, primary wrong, alt same |
-// 14.2 1  1  0  1   1  0  >0   0    DEC  —    -     Alt=BIM, primary wrong, alt opposite |       
-// 15.1 1  0  1  0   0  0  >0   0    DEC  —    -     Alt=BIM, primary predicted NT, resolved T, wrong |
-// 15.2 1  0  1  1   0  1  >0   0    DEC  —    -     Alt=BIM, primary predicted NT, resolved T, wrong, alt opposite |
-// 16.1 1  1  1  0   1  1  >0   0    INC  —    -     Alt=BIM, primary predicted T, resolved T, correct, alt same |
-// 16.2 1  1  1  1   1  0  >0   0    INC  —    -     Alt=BIM, primary predicted T, resolved T, correct, alt opposite |
-// 17.1 1  0  0  0   0  0  >0   0    INC  —    -     Alt=BIM, primary predicted NT, resolved NT, correct, alt same |
+// 14.1 1  1  0  0   1  1  >0   0    DEC  —    -     Alt=BIM, primary wrong, alt same                  |
+// 14.2 1  1  0  1   1  0  >0   0    DEC  —    -     Alt=BIM, primary wrong, alt opposite              |
+// 15.1 1  0  1  0   0  0  >0   0    DEC  —    -     Alt=BIM, primary predicted NT, resolved T, wrong  |
+// 15.2 1  0  1  1   0  1  >0   0    DEC  —    -     Alt=BIM, primary predicted NT, resolved T, wrong, alt opposite    |
+// 16.1 1  1  1  0   1  1  >0   0    INC  —    -     Alt=BIM, primary predicted T, resolved T, correct, alt same       |
+// 16.2 1  1  1  1   1  0  >0   0    INC  —    -     Alt=BIM, primary predicted T, resolved T, correct, alt opposite   |
+// 17.1 1  0  0  0   0  0  >0   0    INC  —    -     Alt=BIM, primary predicted NT, resolved NT, correct, alt same     |
 // 17.2 1  0  0  1   0  1  >0   0    INC  —    -     Alt=BIM, primary predicted NT, resolved NT, correct, alt opposite |
-// 18   x  x  x  x   x  x  0    >0   ASTR ASTR ASTR  Invalid condition pCMP=0 aCMP>0, handled by assert|
+// 18   x  x  x  x   x  x  0    >0   ASTR ASTR ASTR  Invalid condition pCMP=0 aCMP>0, handled by assert                |
 // -------------------------------------------------------------------
 task automatic tage_ctr_test(
   inout int tb_errs,
@@ -785,25 +1037,49 @@ task automatic check_ctr_row_t0(
 endtask
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
+//task automatic set_use_row(
+//  inout tage_pred_meta_t meta,
+//  inout tage_upd_inp_t   upd,
+//  input logic prm_use,
+//  input logic alt_use
+//);
+//  meta.tage_prm_useful = prm_use;
+//  meta.tage_alt_useful = prm_use;
+//  upd.tage_pred_meta   = meta;
+//endtask
+
 task automatic set_ctr_row(
   inout tage_pred_meta_t meta,
   inout tage_upd_inp_t   upd,
+
   input logic using_primary,
+
   input logic pred_tkn,
   input logic resolved_taken,
+
   input logic prm_tkn,
   input logic alt_tkn,
+
   input int   prm_comp,
   input int   alt_comp,
+
+  input int   prm_use=0,
+  input int   alt_use=0
 
 );
   meta.tage_using_primary = using_primary;
   meta.tage_pred_tkn      = pred_tkn;
+
   meta.tage_prm_comp      = prm_comp;
   meta.tage_alt_comp      = alt_comp;
-  upd.resolved_taken      = resolved_taken;
+
   meta.tage_prm_tkn       = prm_tkn;
   meta.tage_alt_tkn       = alt_tkn;
+
+  meta.tage_prm_useful    = prm_use;
+  meta.tage_alt_useful    = alt_use;
+
+  upd.resolved_taken      = resolved_taken;
   upd.cond_mispredict     = pred_tkn != resolved_taken;
   upd.tage_pred_meta      = meta;
 endtask

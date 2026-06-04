@@ -11,6 +11,7 @@
 | Ctx %        |                         |                          |
 | Model        | Sonnet 4.6 medium       |                          |
 | Resume sha   | <sha>                   |                          |
+| Pa session   | NNN                     |                          |
 
 Task:   [ ] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification

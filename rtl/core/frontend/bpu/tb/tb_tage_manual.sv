@@ -26,16 +26,19 @@ module tb;
   localparam int NUM_PRED_SLOTS = 2;
 
   // ----------------------------------------------------------------
-  // Test enable integers (1 = enabled)
+  // Test enable integers
   // ----------------------------------------------------------------
-  int en_round_trip = 0;
-  int en_ctr_test = 1;
+  int en_round_trip = 1;
+  int en_ctr_test   = 1;
+  int en_use_test   = 1;
 
   // ----------------------------------------------------------------
   // Per-test error counters
+  // FIXME - currently not used, use or delete
   // ----------------------------------------------------------------
   int err_round_trip = 0;
   int err_ctr_test   = 0;
+  int err_use_test   = 0;
 
   // ----------------------------------------------------------------
   // DUT port signal declarations
@@ -223,6 +226,10 @@ module tb;
 
   task automatic run_tests();
     if (en_ctr_test)   tage_ctr_test(.tb_errs(tb_errs),
+                                     .verb(VERB),
+                                     .toe(TOE));
+
+    if (en_use_test)   tage_use_test(.tb_errs(tb_errs),
                                      .verb(VERB),
                                      .toe(TOE));
 
