@@ -292,8 +292,8 @@ endtask
 // 10   0  0  1  1   1  0  >0   >0   INC  DEC  —     Provider = alt wrong, primary opposite prediction |
 // 11   0  1  0  0   1  1  >0   >0   —    DEC  —     Provider = alt wrong, pred_diff ignored           |
 // 12   0  0  1  0   0  0  >0   >0   —    DEC  —     Provider = alt wrong, pred_diff ignored           |
-// 13a  1  0  0  0   0  0  0    0    —    —    INC   BIM predicted NT, resolved NT, correct            |
-// 13b  1  0  1  0   0  0  0    0    —    —    DEC   BIM predicted NT, resolved T, wrong               |
+// 13a  1  0  0  0   0  0  0    0    —    —    DEC   BIM predicted NT, resolved NT, correct            |
+// 13b  1  0  1  0   0  0  0    0    —    —    INC   BIM predicted NT, resolved T, wrong               |
 // 13c  1  1  0  0   1  1  0    0    —    —    DEC   BIM predicted T, resolved NT, wrong               |
 // 13d  1  1  1  0   1  1  0    0    —    —    INC   BIM predicted T, resolved T, correct              |
 // 13e  0  x  x  x   x  x  0    0    ASRT ASTR ASTR  Invalid: UP=0 when pCMP=aCMP=0. ADR-001 violation |
@@ -738,9 +738,9 @@ task automatic tage_ctr_test(
 // -------------------------------------------------------------
 // ROW 13a
 // ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT Comments
-// 13a  1  0  0  0   0  0  0    0    —    —    INC   BIM predicted NT, resolved NT, correct |
+// 13a  1  0  0  0   0  0  0    0    —    —    DEC   BIM predicted NT, resolved NT, correct |
 //
-// T0CTR = 2 -> 3
+// T0CTR = 2 -> 1
 // PCTR  = 2 -> 2  PUSE  = 0 -> 0
 // ACTR  = 1 -> 1  AUSE  = 0 -> 0 
 // -------------------------------------------------------------
@@ -755,7 +755,7 @@ task automatic tage_ctr_test(
   t0exp_entry       = t0entry;
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  t0exp_entry.ctr   = 3; 
+  t0exp_entry.ctr   = 1; 
   pexp_entry.ctr    = 2; pexp_entry.useful = 0;
   aexp_entry.ctr    = 1; aexp_entry.useful = 0;
   check_ctr_row   ("R13a",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
@@ -764,9 +764,9 @@ task automatic tage_ctr_test(
 // -------------------------------------------------------------
 // ROW 13b
 // ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT Comments
-// 13b  1  0  1  0   0  0  0    0    —    —    DEC   BIM predicted NT, resolved T, wrong |
+// 13b  1  0  1  0   0  0  0    0    —    —    INC   BIM predicted NT, resolved T, wrong |
 //
-// T0CTR = 2 -> 1
+// T0CTR = 2 -> 3
 // PCTR  = 2 -> 2  PUSE = 0 -> 0
 // ACTR  = 1 -> 1  AUSE = 0 -> 0 
 // -------------------------------------------------------------
@@ -781,7 +781,7 @@ task automatic tage_ctr_test(
   t0exp_entry       = t0entry;
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  t0exp_entry.ctr   = 1; 
+  t0exp_entry.ctr   = 3; 
   pexp_entry.ctr    = 2; pexp_entry.useful = 0;
   aexp_entry.ctr    = 1; aexp_entry.useful = 0;
   check_ctr_row   ("R13b",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);

@@ -1640,11 +1640,11 @@ module tb;
   //   Expected: T1 s0 mem[0][42] = 16'h0001 (no change).
   // Part 2 (T0): Pre-load T0 s0 mem[0][42] = 2'b00 (CTR=00).
   //   Struct: prm_comp=0 alt_comp=0 prm_idx=11'h02A
-  //           prm_tkn=0 resolved_taken=1 mispredict=1.
-  //   CTR row 13b: INC T0 (resolved_taken=1): 00->01.
-  //   BP-015: Was pred_crt=0 -> DEC sats at 00. Fixed:
-  //   resolved_taken=1 -> INC: 00->01. Debt #34 closed.
-  //   Expected: T0 s0 mem[0][42] = 2'b01.
+  //           prm_tkn=0 resolved_taken=0 mispredict=0.
+  //   CTR row 13a: DEC T0 (resolved_taken=0): 00 sats at 00.
+  //   Direction-probability: u_resolved=0 -> DEC. Sats at 00.
+  //   Retargeted from row 13b (INC; cannot test min sat).
+  //   Expected: T0 s0 mem[0][42] = 2'b00.
   // ----------------------------------------------------------------
   task automatic upd_ctr_min_sat_tst(int verbose);
     int                          local_fails;
@@ -1713,8 +1713,8 @@ module tb;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
-    upd_inp.resolved_taken  = 1'b1;
-    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
@@ -1725,11 +1725,11 @@ module tb;
 
     rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[0][42];
 
-    if (rd_t0 !== 2'b01) begin
+    if (rd_t0 !== 2'b00) begin
       local_fails++;
       if (verbose != 0)
         $display(
-          "[FAIL] upd_ctr_min_sat_tst: T0[0][42]=0x%0h exp=1",
+          "[FAIL] upd_ctr_min_sat_tst: T0[0][42]=0x%0h exp=0",
           rd_t0);
     end else if (verbose != 0) begin
       $display(
@@ -4373,9 +4373,7 @@ module tb;
   // CTR rule: tage_cntrl_ctr_update_rules.md row 13b
   //           (prm_comp=0, alt_comp=0, pred_tkn=0,
   //            resolved_taken=1: T0 INC 01->10).
-  // BP-015: Fixed T0 CTR direction. Was pred_crt-driven
-  //   (DEC when mispredicted: 01->00). Now resolved_taken:
-  //   INC when taken: 01->10. Debt #34 closed.
+  // Direction-probability: u_resolved=1 -> INC. 01->10.
   // PC=40'h190: T0 idx=100 bank=0 row=100.
   // Pre-load: T0 mem[0][100]=2'b01 (weakly not-taken).
   //           T1-T4 mem[0][100]=16'h0010 (USE=01, VALID=0):
@@ -4466,8 +4464,8 @@ module tb;
     end
 
     // Step 4: Update: resolved_taken=1, cond_mispredict=1.
-    // Row 13b: T0 INC (01->10). Allocation suppressed
-    // (alc_comp=0 sentinel from predict: T1-T4 ueff!=0).
+    // Row 13b: T0 INC (01->10). u_resolved=1 -> INC.
+    // Allocation suppressed (alc_comp=0: T1-T4 ueff!=0).
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta1;
     upd_inp.resolved_taken  = 1'b1;
@@ -4480,7 +4478,7 @@ module tb;
     @(posedge clk);
 
     // Step 5: Verify T0 BIM RAM.
-    // resolved_taken=1 -> INC: 01->10. mem[0][100]=2'b10.
+    // u_resolved=1 -> INC: 01->10. mem[0][100]=2'b10.
     rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][100];
     if (verbose != 0)
       $display(
@@ -4704,16 +4702,14 @@ module tb;
   // CTR rule: tage_cntrl_ctr_update_rules.md row 13a
   //           (prm_comp=0, alt_comp=0, pred_tkn=0,
   //            resolved_taken=0: T0 DEC 01->00).
-  // BP-015: Fixed T0 CTR direction. Was pred_crt-driven
-  //   (INC when correct: 01->10). Now resolved_taken-driven
-  //   (DEC when not-taken: 01->00). Debt #34 closed.
+  // Direction-probability: u_resolved=0 -> DEC. 01->00.
   // PC=40'h480: T0 idx=288 bank=0 row=288.
   // Pre-load: T0 mem[0][288]=2'b01 (weakly not-taken).
   //           T1-T4 not pre-loaded. FAST_INIT ensures
   //           VALID=0 (no tag hits). Allocation suppressed
   //           because cond_mispredict=0.
-  // After update (RTL): T0 CTR 01->10 (add 1, pred_crt=1).
-  // Re-predict: prm_comp=0, prm_ctr=3'b010.
+  // After update: T0 CTR 01->00 (DEC, resolved_taken=0).
+  // Re-predict: prm_comp=0, prm_ctr=3'b000.
   // ----------------------------------------------------------------
   task automatic rt_ctr_row13a_tst(int verbose);
     int              local_fails;
@@ -4789,7 +4785,7 @@ module tb;
     end
 
     // Step 4: Update: resolved_taken=0, cond_mispredict=0.
-    // Row 13a: T0 INC (01->00). Correct prediction.
+    // Row 13a: T0 DEC (01->00). u_resolved=0 -> DEC.
     // Allocation does not fire (cond_mispredict=0).
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta1;
@@ -4803,7 +4799,7 @@ module tb;
     @(posedge clk);
 
     // Step 5: Verify T0 BIM RAM.
-    // resolved_taken=0 -> DEC: 01->00. mem[0][288]=2'b00.
+    // u_resolved=0 -> DEC: 01->00. mem[0][288]=2'b00.
     rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][288];
     if (verbose != 0)
       $display(
@@ -6781,7 +6777,7 @@ module tb;
     meta.tage_alt_comp      = 3'd0;
     meta.tage_prm_ctr       = 3'b000;
     meta.tage_prm_tkn       = 1'b1;
-    meta.tage_alt_tkn       = 1'b0;
+    meta.tage_alt_tkn       = 1'b1;
     meta.tage_using_primary = 1'b1;
 
     upd_inp                 = '0;
@@ -7072,7 +7068,7 @@ module tb;
       $display("[FAIL] arb_concurrent_upd_wins_tst: upd_rdy=%0b",
         tage_upd_rdy_u1[0]);
     end
-    // Upd: INC from 10 -> 11 expected.
+    // Upd: INC from 10 -> 11 expected (resolved_taken=1).
     if (rd_t0 !== 2'b11) begin
       local_fails++;
       $display(

@@ -654,9 +654,11 @@ module tage_cntrl #(
         if (u_both_t0[s]) begin
           // Both providers T0: update T0 2b CTR (rows 13a-d)
           u_t0_ctr_wr[s] = 1'b1;
-//HAND-FIX-003
-          if (!u_mispredict[s]) begin
-            // INC T0 CTR (resolved_taken=1), sat 2'b11, 0-pad
+          // Rows 13a-d: CTR moves toward resolved direction.
+          // INC toward 2'b11 when resolved_taken=1 (rows 13b,13d).
+          // DEC toward 2'b00 when resolved_taken=0 (rows 13a,13c).
+          if (u_resolved[s]) begin
+            // INC T0 CTR toward taken (rows 13b,13d)
             u_t0_ctr_nxt[s] =
               (u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0] == 2'b11)
                 ? TAGE_MAX_CTR_WIDTH'(2'b11)
@@ -664,7 +666,7 @@ module tage_cntrl #(
                     u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0]
                     + 2'b01);
           end else begin
-            // DEC T0 CTR, saturate at 2'b00
+            // DEC T0 CTR toward not-taken (rows 13a,13c)
             u_t0_ctr_nxt[s] =
               (u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0] == 2'b00)
                 ? TAGE_MAX_CTR_WIDTH'(2'b00)

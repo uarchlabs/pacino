@@ -51,6 +51,10 @@ All 18 rows of tage_cntrl_ctr_update_rules.md covered:
 
 ### HAND-FIX-003 (complete)
 
+NOTE: HAND-FIX-003 was later reverted in BP-043a. The fix
+was a false fail caused by an error in the planning document 
+for T0 CTR updates.
+
 RTL bug found by manual test row 13a.
 tage_cntrl.sv ctr_upd_comb u_both_t0 path:
   - u_resolved replaced with !u_mispredict.

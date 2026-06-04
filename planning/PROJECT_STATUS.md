@@ -533,6 +533,10 @@ Key decisions for quick reference:
     - Applied as part of BP-041.
     - Recorded in session-handoff-045.
 
+  NOTE: HAND-FIX-003 was later reverted in BP-043a. The fix
+  was a false fail caused by an error in the planning document
+  for T0 CTR update
+
 ---
 
 # BUG Records

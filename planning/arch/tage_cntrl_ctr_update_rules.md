@@ -61,8 +61,8 @@ diff  = `tage_prm_taken` != `tage_alt_taken`
 | 10    | 0  | 0  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | DEC  | —     | Provider = alt wrong, primary opposite prediction |
 | 11    | 0  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | —    | DEC  | —     | Provider = alt wrong, pred_diff ignored           |
 | 12    | 0  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | —    | DEC  | —     | Provider = alt wrong, pred_diff ignored           |
-| 13a   | 1  | 0  | 0  | 0    | 0  | 0  | 0    | 0    | —    | —    | INC   | BIM predicted NT, resolved NT, correct |
-| 13b   | 1  | 0  | 1  | 0    | 0  | 0  | 0    | 0    | —    | —    | DEC   | BIM predicted NT, resolved T, wrong |
+| 13a   | 1  | 0  | 0  | 0    | 0  | 0  | 0    | 0    | —    | —    | DEC   | BIM predicted NT, resolved NT, correct |
+| 13b   | 1  | 0  | 1  | 0    | 0  | 0  | 0    | 0    | —    | —    | INC   | BIM predicted NT, resolved T, wrong |
 | 13c   | 1  | 1  | 0  | 0    | 1  | 1  | 0    | 0    | —    | —    | DEC   | BIM predicted T, resolved NT, wrong |
 | 13d   | 1  | 1  | 1  | 0    | 1  | 1  | 0    | 0    | —    | —    | INC   | BIM predicted T, resolved T, correct |
 | 13e   | 0  | x  | x  | x    | x  | x  | 0    | 0    |ASSERT|ASSERT|ASSERT | Invalid: UP=0 when pCMP=aCMP=0. ADR-001 violation. tage_assert.sv fires. No RTL action. |
