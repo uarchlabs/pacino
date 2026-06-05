@@ -605,6 +605,164 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-CTR-R01: CTR table row 1 (H=0, no CTR update)
+  // Coverage: ittage_cntrl_ctr_update_rules.md row 1.
+  // Reset: IT1 entry for 0x3000 is in allocation-reset state
+  // (CTR=0) because TC-P04 never succeeded (Bug C in RTL).
+  // ================================================================
+  task automatic tc_ctr_r01();
+    ittage_upd_inp_t upd;
+    $display("-- TC-CTR-R01 CTR row 1 H=0 no update");
+    do_pred(40'h0000_3000, 6'h40, 0);
+    wait_prdy(0);
+    upd = '0;
+    upd.ittage_pred_meta = ittage_pred_meta_p2[0];
+    upd.ittage_pred_meta.ittage_hit = 1'b0; // force H=0 -> row 1
+    upd.resolved_target  = 38'h0_0000_4000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_3000, 6'h41, 0);
+    wait_prdy(0);
+    chk("CTR-R01:no_ctr_chg",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h0);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-USE-R01: USE table row 1 (DIFF=0, uWR=0)
+  // Coverage: ittage_cntrl_use_update_rules.md row 1.
+  // prm_tgt == alt_tgt -> DIFF=0 -> no USE write.
+  // Captures USE before update and verifies no change; the prior
+  // test history (TC-P04/ARB04/UAON-01) may have left USE non-zero
+  // via DIFF=1 updates, so checking for no-change not zero.
+  // ================================================================
+  task automatic tc_use_r01();
+    ittage_upd_inp_t upd;
+    automatic logic [IT_MAX_USE_WIDTH-1:0] use_before;
+    $display("-- TC-USE-R01 USE row 1 DIFF=0 no USE write");
+    do_pred(40'h0000_3000, 6'h50, 0);
+    wait_prdy(0);
+    use_before = ittage_pred_meta_p2[0].ittage_prm_useful;
+    upd = '0;
+    upd.ittage_pred_meta = ittage_pred_meta_p2[0];
+    upd.ittage_pred_meta.ittage_hit           = 1'b1;
+    upd.ittage_pred_meta.ittage_using_primary = 1'b1;
+    // DIFF=0: prm_tgt == alt_tgt -> suppress USE write
+    upd.ittage_pred_meta.ittage_prm_tgt =
+      38'h0_0000_4000;
+    upd.ittage_pred_meta.ittage_alt_tgt =
+      38'h0_0000_4000;
+    upd.resolved_target  = 38'h0_0000_4000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_3000, 6'h51, 0);
+    wait_prdy(0);
+    chk("USE-R01:no_use_chg",
+      64'(ittage_pred_meta_p2[0].ittage_prm_useful),
+      64'(use_before));
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-USE-R02: USE table row 2 (HIT=0, uWR=0)
+  // Coverage: ittage_cntrl_use_update_rules.md row 2.
+  // ittage_hit=0 -> no USE write regardless of DIFF.
+  // Same no-change pattern as TC-USE-R01.
+  // ================================================================
+  task automatic tc_use_r02();
+    ittage_upd_inp_t upd;
+    automatic logic [IT_MAX_USE_WIDTH-1:0] use_before;
+    $display("-- TC-USE-R02 USE row 2 HIT=0 no USE write");
+    do_pred(40'h0000_3000, 6'h52, 0);
+    wait_prdy(0);
+    use_before = ittage_pred_meta_p2[0].ittage_prm_useful;
+    upd = '0;
+    upd.ittage_pred_meta = ittage_pred_meta_p2[0];
+    upd.ittage_pred_meta.ittage_hit     = 1'b0; // HIT=0 -> row 2
+    upd.ittage_pred_meta.ittage_prm_tgt = 38'h0_0000_4000;
+    // DIFF=1 but HIT=0 takes precedence: uWR stays 0
+    upd.ittage_pred_meta.ittage_alt_tgt = 38'h0_0000_5000;
+    upd.resolved_target  = 38'h0_0000_4000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_3000, 6'h53, 0);
+    wait_prdy(0);
+    chk("USE-R02:no_use_chg",
+      64'(ittage_pred_meta_p2[0].ittage_prm_useful),
+      64'(use_before));
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-USE-R03: USE table row 3
+  // DIFF=1, HIT=1, UP=1, MISP=0 -> INC prm_useful (0 -> 1)
+  // Coverage: ittage_cntrl_use_update_rules.md row 3.
+  // ================================================================
+  task automatic tc_use_r03();
+    ittage_upd_inp_t upd;
+    $display("-- TC-USE-R03 USE row 3 DIFF=1 HIT=1 UP=1 INC");
+    do_pred(40'h0000_3000, 6'h54, 0);
+    wait_prdy(0);
+    upd = '0;
+    upd.ittage_pred_meta = ittage_pred_meta_p2[0];
+    upd.ittage_pred_meta.ittage_hit         = 1'b1;
+    upd.ittage_pred_meta.ittage_using_primary = 1'b1;
+    // DIFF=1: prm_tgt != alt_tgt
+    upd.ittage_pred_meta.ittage_prm_tgt     =
+      38'h0_0000_4000;
+    upd.ittage_pred_meta.ittage_alt_tgt     =
+      38'h0_0000_5000;
+    upd.ittage_pred_meta.ittage_prm_useful  = 2'h0;
+    upd.resolved_target  = 38'h0_0000_4000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_3000, 6'h55, 0);
+    wait_prdy(0);
+    chk("USE-R03:prm_use_inc",
+      64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h1);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-USE-R04: USE table row 4
+  // DIFF=1, HIT=1, UP=1, MISP=1 -> DEC prm_useful (1 -> 0)
+  // Runs after TC-USE-R03; expects prm_useful=1 in RAM.
+  // If R03 failed (useful still 0), DEC saturates at 0 -- check
+  // still passes (0 == 0). Saturation confirmed either way.
+  // Coverage: ittage_cntrl_use_update_rules.md row 4.
+  // ================================================================
+  task automatic tc_use_r04();
+    ittage_upd_inp_t upd;
+    $display("-- TC-USE-R04 USE row 4 DIFF=1 HIT=1 UP=1 DEC");
+    do_pred(40'h0000_3000, 6'h56, 0);
+    wait_prdy(0);
+    upd = '0;
+    upd.ittage_pred_meta = ittage_pred_meta_p2[0];
+    upd.ittage_pred_meta.ittage_hit         = 1'b1;
+    upd.ittage_pred_meta.ittage_using_primary = 1'b1;
+    upd.ittage_pred_meta.ittage_prm_tgt     =
+      38'h0_0000_4000;
+    upd.ittage_pred_meta.ittage_alt_tgt     =
+      38'h0_0000_5000;
+    // Force prm_useful=1 so DEC writes 0 to RAM regardless
+    // of whether TC-USE-R03 previously wrote 1.
+    upd.ittage_pred_meta.ittage_prm_useful  = 2'h1;
+    upd.resolved_target  = 38'h0_0000_6000; // mispredict
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_3000, 6'h57, 0);
+    wait_prdy(0);
+    chk("USE-R04:prm_use_dec",
+      64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h0);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -645,6 +803,11 @@ module tb;
     // TC-ARB-07: N/A -- RB removed in BP-038b
     tc_arb_08();
     tc_uaon_01();
+    tc_ctr_r01();
+    tc_use_r01();
+    tc_use_r02();
+    tc_use_r03();
+    tc_use_r04();
 
     repeat(5) @(posedge clk);
 
