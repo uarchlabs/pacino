@@ -61,7 +61,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | tage_cntrl.sv           | In progress | --                | BP-008a/b complete.              |
 |                         |             |                   | BP-012 complete.                 |
 |                         |             |                   | Was complete but BP-034/5 exposed|
-|                         |             |                   | issues, see tech debt #45.       |
+|                         |             |                   | issues, see tech debt #66.       |
 |                         |             |                   | HAND-FIX-002 applied (debt #30). |
 |                         |             |                   | HAND-FIX-003 applied (BP-041).   |
 |                         |             |                   | T0 CTR u_both_t0 path corrected. |
@@ -119,8 +119,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | ittage_cntrl.sv                   | Complete    | tb_ittage_cntrl | Prediction path complete BP-034|
 |                                   |             |       | Update path complete BP-035      |
 |                                   |             |       | Testbench complete BP-036        |
-|                                   |             |       | 76 tests passing                 |
-|                                   |             |       | BP-040 Bug B/C/D unverified.     |
+|                                   |             |       | CTR/USE tests complete BP-044/a/b/c |
+|                                   |             |       | 81 tests passing                 |
 | ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
 |                                   |             |       | shell without arb cntrl complete |
 |                                   |             |       | sim_ittage 32 pass / 3 fail      |
@@ -190,16 +190,6 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | ittage_cntrl_decisions.md.            | ctr was !=3 & !=4, now > 0 (NOT |
 |    |                                       | NULL). Ensure #43 does not      |
 |    |                                       | impact any testcase.            |
-| 45 | tage_cntrl / tage_table update-index  | 2D update/alloc index bus is    |
-|    | simplification.                       | wrong: should be per-table      |
-|    | (Structural rework, see #66.)         | ports. T0 CTR always updated    |
-|    |                                       | needs an index; prm and alt CTR |
-|    |                                       | both updatable; useful uses     |
-|    |                                       | prm_idx or alt_idx. Specify     |
-|    |                                       | upd_index_u0[s], alc_index_u0[s]|
-|    |                                       | bim_index_u0[s]=PC[MAX_IDX-1:1].|
-|    |                                       | Test if alc_index needed. Add   |
-|    |                                       | tage_cntrl_interfaces.md.       |
 | 49 | Arb queue status pin renaming.        | pq_not_full/upd_rdy ->          |
 |    |                                       | tage_pq_not_full/tage_uq_not_   |
 |    |                                       | full and ittage_ equivalents.   |
@@ -269,11 +259,29 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Not directed-tested.                   | Resolves #42 test aspect:       |
 |    |                                        | verify provider/using_primary/  |
 |    |                                        | target operate at s2 not s3.    |
-| 66 | TAGE structural rework (implements     | tage_cntrl 2D index bus ->      |
-|    | #45). Sequence before TAGE alloc #62.  | per-table ports: upd_index_u0[s]|
-|    |                                        | bim_index_u0[s]=PC[MAX_IDX-1:1],|
-|    |                                        | test if alc_index_u0 needed.    |
-|    |                                        | Add tage_cntrl_interfaces.md.   |
+| 66 | TAGE structural rework                 | CLOSED BP-045                   |
+|    | Sequence before TAGE alloc #62.        | collapsed to shared per-slot buses; |
+|    |                                        | t_alt_upd_index_u0 added for the |
+|    |                                        | dual-CTR case; BP-045, session-047 |
+|    | | Currently TAGE has 2d buses for alc and upd index, there is one bus for each |
+|    | | table, this is incorrect, the connection should be shared buses across |
+|    | | these signals, the only multi-dimension is the width of the bus and the prediction slot, |
+|    | | so this:
+|    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1]|
+|    | | should be this
+|    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1] |
+|    | | same thing for each of these: |
+|    | |   t_prm_ctr_wd_u0 |
+|    | |   t_alt_ctr_wd_u0 |
+|    | |   t_use_wd_u0 |
+|    | |   t_epc_wd_u0 |
+|    | |   t_alc_wd_u0 |
+|    | |   t_prm_tbl_sel_u0 |
+|    | |   t_alt_tbl_sel_u0 |
+|    | |   t_alc_tbl_sel_u0 |
+|    | |   t_upd_index_u0 |
+|    | |   t_alc_index_u0 |
+|    | | |
 | 67 | tage sram_init non-fast path.          | All tests used +FAST_INIT,      |
 |    | Untested here; confirm not elsewhere.  | bypassing real sram_init        |
 |    |                                        | cycling. sram_init.md Complete  |
@@ -316,6 +324,20 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | G20 (bp_history dual-slot       |
 |    |                                        | update undefined). Defer until  |
 |    |                                        | after arb #73 and full BPU.     |
+| 75 | ittage there are no fast versions of   | The equivalent TAGE target is   |
+|    | the ittage sim targets.                | sim_tage_fast. There is no similar|
+|    |                                        | target for ittage, create one   |
+|    |                                        | called sim_ittage_fast          |
+| 76 | ittage should have independent index   | |
+|    | buses for primary and alternative      | |
+|    | table updates.                         | |
+|    | | Since there are different history lengths, and the indexes are |
+|    | | hashed based on history length we do in fact need an index bus |
+|    | | for primary and alternative. |
+|    | | the names should be t_prm_upd_index_u0 and t_alt_upd_index |
+|    | | Secondly the names of the ports of ittage_cntrl that touch the tables |
+|    | | should use the same convention as tage_cntrl, and begin with t_ |
+
 
 ---
 

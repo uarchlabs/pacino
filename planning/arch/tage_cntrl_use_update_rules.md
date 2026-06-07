@@ -2,7 +2,7 @@
 ```
  FILE:    tage_cntrl_use_update_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  COMPLETE
  UPDATED: 2026-06-02
  CONTACT: Jeff Nye
 ```
@@ -212,9 +212,9 @@ The formula below uses these terms:
 ```
 age = (TG_AGE_EPOCH - EPOCH) mod 4
 
-if (age == 0) u_eff = USEFUL;
-if (age == 1) u_eff = USEFUL >> 1;
-else          u_eff = 0;
+     if (age == 0) u_eff = USEFUL;
+else if (age == 1) u_eff = USEFUL >> 1;
+else               u_eff = 0;
 ```
 
 On a prediction request the u_eff values for the primary and

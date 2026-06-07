@@ -17,21 +17,15 @@ echo "" >> ho
 echo "- pa_handoffs/session_handoff-$1.md" >> ho
 echo "- CLAUDE.md"                         >> ho
 
-#echo "" >> ho
-#echo "Also adding additinoal context for 1st task"           >> ho
-#echo "" >> ho
-#echo "- tools/gen_sessions.py"               >> ho
-#echo "- docs/sessions.html"                 >> ho
-
+echo "" >> ho
+echo "Also adding additinoal context for epc/aging task" >> ho
+echo "- planning/arch/tage_cntrl_use_update_rules.md"    >> ho
 echo "" >> ho
 echo "Process this and suggest the next steps when you are ready" >> ho
 echo "" >> ho
-
-#cat planning/ANTIPATTERNS.md                        >> ho
 cat planning/PROJECT_CORE.md                        >> ho
 cat planning/PROJECT_STATUS.md                      >> ho
-cat templates/TASK_TEMPLATE.md                       >> ho
+cat templates/TASK_TEMPLATE.md                      >> ho
 cat pa_handoffs/session_handoff-$1.md               >> ho
 cat CLAUDE.md                                       >> ho
-#cat tools/gen_sessions.py >> ho
-#cat docs/sessions.html >> ho
+cat planning/arch/tage_cntrl_use_update_rules.md    >> ho

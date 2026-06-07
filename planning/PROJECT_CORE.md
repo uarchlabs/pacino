@@ -133,7 +133,11 @@ Prompt section structure:
   via the manifest.
 - Constraints section: experiment-specific items only.
   Global style rules live in CLAUDE.md and must not be
-  repeated in prompts.
+  repeated in prompts. Suite-gating waiver lists ARE
+  experiment-specific (which tests, which TD numbers, this
+  task) and belong here -- they are not the global-rule
+  restatement this bans. See PROJECT_CORE prompt generation
+  rules.
 
 ### Prompt generation rules
 - Do not add CLAUDE.md to the context in generated prompts.
@@ -159,6 +163,14 @@ Prompt section structure:
   Do not use short paths -- these will fail the file
   existence check in validate_and_extract.py.
 - For known prompt failure modes see ANTIPATTERNS.md.
+- Suite-gating waivers: CLAUDE.md requires the IA to run each
+  in-scope module's complete suite and blocks completion on any
+  non-waived failure. When writing a verification, testbench,
+  debug, or cleanup prompt for a unit that has known/open suite
+  failures, the Constraints section MUST enumerate the waived
+  tests and cite each one's tech-debt number. A failure not on
+  that list will (correctly) block completion. Omitting the
+  waiver list will strand legitimate work as in-progress.
 
 ### Results capture
 - Claude Code writes its summary directly into the experiment
@@ -210,9 +222,7 @@ prediction pipeline. P-stage notation used elsewhere.
 
 ---
 
-## Tools Status
-
-## Tools Status
+e# Tools Status
 
 | Tool       | Version                        | Location                          | Notes                         |
 |------------|--------------------------------|-----------------------------------|-------------------------------|

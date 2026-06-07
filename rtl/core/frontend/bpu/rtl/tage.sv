@@ -103,22 +103,17 @@ module tage #(
   logic [NUM_PRED_SLOTS-1:0]
     w_upd_val_u0[0:TAGE_NUM_TABLES-1];
 
-  // -- update write data
+  // -- update write data: shared per slot (collapsed)
   logic [TAGE_MAX_CTR_WIDTH-1:0]
-    w_prm_ctr_wd_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1];
   logic [TAGE_MAX_CTR_WIDTH-1:0]
-    w_alt_ctr_wd_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1];
   logic [TAGE_MAX_USE_WIDTH-1:0]
-    w_use_wd_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_use_wd_u0[0:NUM_PRED_SLOTS-1];
   logic [TAGE_MAX_EPC_WIDTH-1:0]
-    w_epc_wd_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_epc_wd_u0[0:NUM_PRED_SLOTS-1];
   logic [ALLOC_DATA_W-1:0]
-    w_alc_wd_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_alc_wd_u0[0:NUM_PRED_SLOTS-1];
 
   // -- update write strobes
   logic [NUM_PRED_SLOTS-1:0]
@@ -132,24 +127,22 @@ module tage #(
   logic [NUM_PRED_SLOTS-1:0]
     w_alc_wr_u0[0:TAGE_NUM_TABLES-1];
 
-  // -- table selector buses (TBL_SEL_W matches tage_cntrl)
+  // -- table selector buses: shared per slot (collapsed)
   logic [TBL_SEL_W-1:0]
-    w_prm_tbl_sel_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1];
   logic [TBL_SEL_W-1:0]
-    w_alt_tbl_sel_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1];
   logic [TBL_SEL_W-1:0]
-    w_alc_tbl_sel_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1];
 
-  // -- update and allocation address buses
+  // -- update and allocation address buses: shared per slot
+  // w_upd_index_u0: prm address; w_alt_upd_index_u0: alt address
   logic [TAGE_MAX_IDX_WIDTH-1:0]
-    w_upd_index_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_upd_index_u0[0:NUM_PRED_SLOTS-1];
   logic [TAGE_MAX_IDX_WIDTH-1:0]
-    w_alc_index_u0
-      [0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
+    w_alt_upd_index_u0[0:NUM_PRED_SLOTS-1];
+  logic [TAGE_MAX_IDX_WIDTH-1:0]
+    w_alc_index_u0[0:NUM_PRED_SLOTS-1];
 
   // -- p0 index and tag hashes collected from table instances
   // w_idx_p0[0]: from tage_bim.idx_hash_p0
@@ -221,13 +214,13 @@ module tage #(
   assign w_cntrl_bits_p1[0][1] =
     {5'b0, bim_cntrl_p1[1], 1'b1};
   // Slice update index: MAX_IDX -> TAGE_TBL_IDX[0]=11 (same).
-  assign bim_upd_idx_u0[0] = w_upd_index_u0[0][0][TAGE_TBL_IDX[0]-1:0];
-  assign bim_upd_idx_u0[1] = w_upd_index_u0[0][1][TAGE_TBL_IDX[0]-1:0];
+  assign bim_upd_idx_u0[0] = w_upd_index_u0[0][TAGE_TBL_IDX[0]-1:0];
+  assign bim_upd_idx_u0[1] = w_upd_index_u0[1][TAGE_TBL_IDX[0]-1:0];
   // Slice CTR write data: MAX_CTR=3 -> TAGE_TBL_CTR[0]=2.
   assign bim_prm_ctr_wd_u0[0] =
-    w_prm_ctr_wd_u0[0][0][TAGE_TBL_CTR[0]-1:0];
+    w_prm_ctr_wd_u0[0][TAGE_TBL_CTR[0]-1:0];
   assign bim_prm_ctr_wd_u0[1] =
-    w_prm_ctr_wd_u0[0][1][TAGE_TBL_CTR[0]-1:0];
+    w_prm_ctr_wd_u0[1][TAGE_TBL_CTR[0]-1:0];
 
   // T0 has no tag. Drive w_tag_p0[0] to zero for both slots.
   assign w_tag_p0[0][0] = '0;
@@ -607,6 +600,7 @@ module tage #(
     .t_alt_tbl_sel_u0    (w_alt_tbl_sel_u0),
     .t_alc_tbl_sel_u0    (w_alc_tbl_sel_u0),
     .t_upd_index_u0      (w_upd_index_u0),
+    .t_alt_upd_index_u0  (w_alt_upd_index_u0),
     .t_alc_index_u0      (w_alc_index_u0),
     .t_idx_p0            (w_idx_p0),
     .t_tag_p0            (w_tag_p0)
@@ -661,7 +655,7 @@ module tage #(
     .tage_upd_val_u0  (w_upd_val_u0[0]),
     .prm_ctr_wd_u0    (bim_prm_ctr_wd_u0),
     .prm_ctr_wr_u0    (w_prm_ctr_wr_u0[0]),
-    .prm_tbl_sel_u0   (w_prm_tbl_sel_u0[0]),
+    .prm_tbl_sel_u0   (w_prm_tbl_sel_u0),
     .upd_index_u0     (bim_upd_idx_u0),
     .tbl_ri_active    (tbl_ri_active),
     .tbl_ri_wr        (tbl_ri_wr),
@@ -695,14 +689,19 @@ module tage #(
       logic [T_CTR_W-1:0] prm_ctr_w[0:NUM_PRED_SLOTS-1];
       logic [T_CTR_W-1:0] alt_ctr_w[0:NUM_PRED_SLOTS-1];
 
-      assign upd_idx_w[0] = w_upd_index_u0[t][0][T_IDX_W-1:0];
-      assign upd_idx_w[1] = w_upd_index_u0[t][1][T_IDX_W-1:0];
-      assign alc_idx_w[0] = w_alc_index_u0[t][0][T_IDX_W-1:0];
-      assign alc_idx_w[1] = w_alc_index_u0[t][1][T_IDX_W-1:0];
-      assign prm_ctr_w[0] = w_prm_ctr_wd_u0[t][0][T_CTR_W-1:0];
-      assign prm_ctr_w[1] = w_prm_ctr_wd_u0[t][1][T_CTR_W-1:0];
-      assign alt_ctr_w[0] = w_alt_ctr_wd_u0[t][0][T_CTR_W-1:0];
-      assign alt_ctr_w[1] = w_alt_ctr_wd_u0[t][1][T_CTR_W-1:0];
+      // prm index when this table is the prm target; else alt index.
+      assign upd_idx_w[0] = (TBL_SEL_W'(t) == w_prm_tbl_sel_u0[0])
+        ? w_upd_index_u0[0][T_IDX_W-1:0]
+        : w_alt_upd_index_u0[0][T_IDX_W-1:0];
+      assign upd_idx_w[1] = (TBL_SEL_W'(t) == w_prm_tbl_sel_u0[1])
+        ? w_upd_index_u0[1][T_IDX_W-1:0]
+        : w_alt_upd_index_u0[1][T_IDX_W-1:0];
+      assign alc_idx_w[0] = w_alc_index_u0[0][T_IDX_W-1:0];
+      assign alc_idx_w[1] = w_alc_index_u0[1][T_IDX_W-1:0];
+      assign prm_ctr_w[0] = w_prm_ctr_wd_u0[0][T_CTR_W-1:0];
+      assign prm_ctr_w[1] = w_prm_ctr_wd_u0[1][T_CTR_W-1:0];
+      assign alt_ctr_w[0] = w_alt_ctr_wd_u0[0][T_CTR_W-1:0];
+      assign alt_ctr_w[1] = w_alt_ctr_wd_u0[1][T_CTR_W-1:0];
 
       tage_table #(
         .THIS_TABLE      (t),
@@ -725,17 +724,17 @@ module tage #(
         .tage_upd_val_u0  (w_upd_val_u0[t]),
         .prm_ctr_wd_u0    (prm_ctr_w),
         .alt_ctr_wd_u0    (alt_ctr_w),
-        .use_wd_u0        (w_use_wd_u0[t]),
-        .epc_wd_u0        (w_epc_wd_u0[t]),
-        .alc_wd_u0        (w_alc_wd_u0[t]),
+        .use_wd_u0        (w_use_wd_u0),
+        .epc_wd_u0        (w_epc_wd_u0),
+        .alc_wd_u0        (w_alc_wd_u0),
         .prm_ctr_wr_u0    (w_prm_ctr_wr_u0[t]),
         .alt_ctr_wr_u0    (w_alt_ctr_wr_u0[t]),
         .use_wr_u0        (w_use_wr_u0[t]),
         .epc_wr_u0        (w_epc_wr_u0[t]),
         .alc_wr_u0        (w_alc_wr_u0[t]),
-        .prm_tbl_sel_u0   (w_prm_tbl_sel_u0[t]),
-        .alt_tbl_sel_u0   (w_alt_tbl_sel_u0[t]),
-        .alc_tbl_sel_u0   (w_alc_tbl_sel_u0[t]),
+        .prm_tbl_sel_u0   (w_prm_tbl_sel_u0),
+        .alt_tbl_sel_u0   (w_alt_tbl_sel_u0),
+        .alc_tbl_sel_u0   (w_alc_tbl_sel_u0),
         .upd_index_u0     (upd_idx_w),
         .alc_index_u0     (alc_idx_w),
         .tbl_ri_active    (tbl_ri_active),

@@ -12,11 +12,11 @@ production-quality outputs.
                      decisions must be consistent with this target,
                      even when working on front-end stages.
 - RTL:               SystemVerilog only. No VHDL, no Verilog-2001.
-                     Fully compatible with Verilator 5.020.
+                     Fully compatible with Verilator v5.048.
                      One module per file. File name must match module
                      name. Exception: testbenches.
 - Testbenches:       SystemVerilog, fully compatible with Verilator
-                     5.020. File name: tb_<name of dut>.sv.
+                     v5.048. File name: tb_<name of dut>.sv.
                      The module name inside the testbench is always tb.
 - Deliverables:      Always provide both the RTL file and the
                      testbench unless explicitly told otherwise.
@@ -44,7 +44,7 @@ production-quality outputs.
 
 - Prefer always_comb blocks over cascaded continuous
   assign statements when signals form a dependency
-  chain (A depends on B depends on C). Verilator 5.020
+  chain (A depends on B depends on C). Verilator v5.048
   evaluates assign statements using an internal
   dependency DAG and may read stale values when a
   chain is evaluated out of order. always_comb blocks
@@ -132,6 +132,19 @@ important. It must be defines first then structs
 - Include directed tests for boundary conditions and known edge cases.
 - Include a basic sanity check that runs in under 10 seconds with
   Verilator.
+- A verification, testbench, debug, or cleanup task must run the
+  COMPLETE existing test suite for every module named in the task
+  header or Deliverables, not only the directed tests the task
+  adds. Report the full pass/fail count for each suite run.
+- A non-green suite for an in-scope module blocks Status: complete.
+  Mark the task in-progress or abandoned and report the failures.
+- Exception: failures explicitly listed in the task Constraints as
+  known/waived, each citing a tech-debt number, do not block
+  completion. Any failure NOT on that waiver list blocks.
+- Status counts written to PROJECT_STATUS must come from a run in
+  the current session. Do not carry a prior session's count.
+- Scope is the named module's suite only. Do not gate on unrelated
+  units' failures (e.g. a TAGE task does not gate on ITTAGE).
 
 ---
 
@@ -166,7 +179,7 @@ important. It must be defines first then structs
   must not be added to CLAUDE.md.
 - Always include -Wno-IMPORTSTAR in VER_FLAGS. The project
   mandates file-scope wildcard import (import bp_pkg::*;
-  before the module declaration). Verilator 5.020 warns on
+  before the module declaration). Verilator v5.048 warns on
   wildcard imports in $unit scope. This is structural and
   suppressed project-wide.
 - -Wno-VARHIDDEN: add to individual sim or lint targets only when
@@ -177,7 +190,7 @@ important. It must be defines first then structs
   trigger unused warnings. This is structural and
   suppressed project-wide.
 - add --timing to VER_FLAGS in Makefiles (required by Verilator
-  5.020 for @(posedge clk))
+  v5.048 for @(posedge clk))
 
 ---
 

@@ -173,7 +173,7 @@ Carried, unchanged:
   - TD #43: ITTAGE CTR width 3b->2b (will churn any CTR tests
     written before it lands -- sequence consideration).
   - TD #44: ittage_pred_strong definition.
-  - TD #45/#66: tage_cntrl per-table index rework.
+  - TD #66: tage_cntrl per-table index rework.
   - TD #49: arb queue status port renaming.
   - TD #52/#73: arb logic submodule + arb behavioral test.
 
@@ -195,6 +195,11 @@ RTL fixes authorized where a genuine bug is found and cited
 against the planning doc rows; the TGT/allocation/USE blocks
 are TD #51 suspects so expect possible provider-gating
 defects analogous to CTR/USE.
+
+**Step 0 -- TD #66: Tage port dimensions**
+
+See the description in PROJECT_STATUS.md for tech
+debt #66.
 
 **Step 1 -- TD #55: TAGE EPC write proof**
 

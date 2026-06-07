@@ -115,6 +115,18 @@
 |    | expected cntrl=39. Pre-existing defect revealed    | tb_tage_table.sv TC6 expected |
 |    | when PINMISSING fix in BP-019a allowed             | value. Fix before bp_cluster. |
 |    | sim_tage_table to compile and run.                 |                               |
+| 45 | tage_cntrl / tage_table update-index  | THIS IS INVALID DESCRIPTION IS WRONG |
+|    | simplification                        | 2D update/alloc index bus is    |
+|    |                                       | wrong: should be per-table      |
+|    | (Structural rework, see #xx.)         | ports. T0 CTR always updated    |
+|    |                                       | needs an index; prm and alt CTR |
+|    |                                       | both updatable; useful uses     |
+|    | Real fix moved to #66                 | prm_idx or alt_idx. Specify     |
+|    |                                       | upd_index_u0[s], alc_index_u0[s]|
+|    |                                       | bim_index_u0[s]=PC[MAX_IDX-1:1].|
+|    |                                       | Test if alc_index needed. Add   |
+|    |                                       | tage_cntrl_interfaces.md.       |
+
 | 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
 |    | missing trx_type   | Add trx_type input port (logic type) to          |
 |    | port               | ittage_cntrl.sv. Connect to trx_type_comb in     |

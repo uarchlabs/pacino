@@ -72,49 +72,34 @@ module tage_cntrl #(
   // -- update enables forwarded to tage_table instances
   output logic [NUM_PRED_SLOTS-1:0] t_upd_val_u0[0:TAGE_NUM_TABLES-1],
 
-  // -- update write data (cntrl -> tables)
-  output logic [TAGE_MAX_CTR_WIDTH-1:0]
-    t_prm_ctr_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  output logic [TAGE_MAX_CTR_WIDTH-1:0]
-    t_alt_ctr_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  output logic [TAGE_MAX_USE_WIDTH-1:0]
-    t_use_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  output logic [TAGE_MAX_EPC_WIDTH-1:0]
-    t_epc_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  output logic [ALLOC_DATA_WIDTH-1:0]
-    t_alc_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  // -- update write data (cntrl -> tables): shared bus per slot
+  output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_CTR_WIDTH-1:0] t_alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_USE_WIDTH-1:0] t_use_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_EPC_WIDTH-1:0] t_epc_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [ALLOC_DATA_WIDTH-1:0]   t_alc_wd_u0[0:NUM_PRED_SLOTS-1],
 
   // -- update write strobes (cntrl -> tables)
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_prm_ctr_wr_u0[0:TAGE_NUM_TABLES-1],
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_alt_ctr_wr_u0[0:TAGE_NUM_TABLES-1],
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_use_wr_u0[0:TAGE_NUM_TABLES-1],
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_epc_wr_u0[0:TAGE_NUM_TABLES-1],
-  output logic [NUM_PRED_SLOTS-1:0]
-    t_alc_wr_u0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0]     t_prm_ctr_wr_u0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0]     t_alt_ctr_wr_u0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0]     t_use_wr_u0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0]     t_epc_wr_u0[0:TAGE_NUM_TABLES-1],
+  output logic [NUM_PRED_SLOTS-1:0]     t_alc_wr_u0[0:TAGE_NUM_TABLES-1],
 
-  // -- table selector buses (cntrl -> tables)
-  output logic [TBL_SEL_WIDTH-1:0]
-    t_prm_tbl_sel_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  output logic [TBL_SEL_WIDTH-1:0]
-    t_alt_tbl_sel_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  // - alc_tbl_sel: tage_table.sv port absent until BP-007d
-  output logic [TBL_SEL_WIDTH-1:0]
-    t_alc_tbl_sel_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  // -- table selector buses: shared per slot, all tables receive
+  output logic [TBL_SEL_WIDTH-1:0]      t_prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TBL_SEL_WIDTH-1:0]      t_alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TBL_SEL_WIDTH-1:0]      t_alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
 
-  // -- update and alloc address buses (cntrl -> tables)
-  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_upd_index_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  // - alc_index: tage_table.sv port absent until BP-007d
-  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_alc_index_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  // -- update and alloc address buses: shared per slot
+  // t_upd_index_u0: prm address; t_alt_upd_index_u0: alt address
+  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_upd_index_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_alt_upd_index_u0[0:NUM_PRED_SLOTS-1],
+  output logic [TAGE_MAX_IDX_WIDTH-1:0] t_alc_index_u0[0:NUM_PRED_SLOTS-1],
 
   // -- p0 index and tag hashes from table instances (-> r1)
-  input  logic [TAGE_MAX_IDX_WIDTH-1:0]
-    t_idx_p0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
-  input  logic [TAGE_MAX_TAG_WIDTH-1:0]
-    t_tag_p0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1]
+  input  logic [TAGE_MAX_IDX_WIDTH-1:0] t_idx_p0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+  input  logic [TAGE_MAX_TAG_WIDTH-1:0] t_tag_p0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1]
 );
 
   // ----------------------------------------------------------------
@@ -838,23 +823,8 @@ module tage_cntrl #(
       assign t_upd_val_u0[t]  = tage_upd_val_u0;
 
       for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : gen_tbl_s
-        // -- Table selector broadcast: same comp value to all tables
-        assign t_prm_tbl_sel_u0[t][s] =
-          TBL_SEL_WIDTH'(u_prm_comp[s]);
-        assign t_alt_tbl_sel_u0[t][s] =
-          TBL_SEL_WIDTH'(u_alt_comp[s]);
-        assign t_alc_tbl_sel_u0[t][s] =
-          TBL_SEL_WIDTH'(u_alc_comp[s]);
-
-        // -- CTR write data
-        // T0 path uses u_t0_ctr_nxt; tagged tables use prm/alt.
-        assign t_prm_ctr_wd_u0[t][s] =
-          (t == 0) ? u_t0_ctr_nxt[s] : u_prm_ctr_nxt[s];
-        assign t_alt_ctr_wd_u0[t][s] = u_alt_ctr_nxt[s];
-
-        // -- CTR write strobes (gated: trx_type==1 = UPD only)
-        // T0 uses the prm_ctr_wr path (T0 is never an alt).
-        // Tagged tables: strobe asserted only for target table.
+        // CTR write strobes: per-table, gated by trx_type and match.
+        // T0 uses the prm_ctr_wr path; T0 is never an alt provider.
         assign t_prm_ctr_wr_u0[t][s] =
           trx_type &&
           ((t == 0)
@@ -868,9 +838,7 @@ module tage_cntrl #(
             : (u_alt_ctr_wr[s] &&
                (TAGE_TBL_SEL_WIDTH'(t) == u_alt_comp[s])));
 
-        // -- USE/EPC write data and strobes
-        assign t_use_wd_u0[t][s] = u_use_nxt[s];
-        assign t_epc_wd_u0[t][s] = u_epc_nxt[s];
+        // USE/EPC write strobes
         assign t_use_wr_u0[t][s] =
           trx_type &&
           u_use_wr[s] &&
@@ -880,27 +848,35 @@ module tage_cntrl #(
           u_use_wr[s] &&
           (TAGE_TBL_SEL_WIDTH'(t) == u_use_comp[s]);
 
-        // -- Allocation write data and strobe
-        assign t_alc_wd_u0[t][s] = u_alc_wd[s];
+        // Allocation write strobe
         assign t_alc_wr_u0[t][s] =
           trx_type &&
           u_alc_wr[s] &&
           (TAGE_TBL_SEL_WIDTH'(t) == u_alc_comp[s]);
-
-        // -- Update address: prm index for prm table,
-        //    alt index for alt table. USE addr covered by same.
-        assign t_upd_index_u0[t][s] =
-          (TAGE_TBL_SEL_WIDTH'(t) == u_prm_comp[s])
-            ? u_prm_idx[s]
-            : (TAGE_TBL_SEL_WIDTH'(t) == u_alt_comp[s])
-              ? u_alt_idx[s]
-              : '0;
-
-        // -- Allocation address
-        assign t_alc_index_u0[t][s] =
-          (TAGE_TBL_SEL_WIDTH'(t) == u_alc_comp[s])
-            ? u_alc_idx[s] : '0;
       end
+    end
+  endgenerate
+
+  // -- Shared per-slot update buses: collapsed from [table][slot].
+  // Table routing is carried by the *_tbl_sel_u0 selects; each
+  // table self-gates its write on THIS_TABLE == tbl_sel.
+  generate
+    for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : gen_upd_bus
+      assign t_prm_tbl_sel_u0[s]   = TBL_SEL_WIDTH'(u_prm_comp[s]);
+      assign t_alt_tbl_sel_u0[s]   = TBL_SEL_WIDTH'(u_alt_comp[s]);
+      assign t_alc_tbl_sel_u0[s]   = TBL_SEL_WIDTH'(u_alc_comp[s]);
+      // T0 (both_t0) uses u_t0_ctr_nxt; tagged tables use prm_ctr.
+      assign t_prm_ctr_wd_u0[s]    =
+        u_both_t0[s] ? u_t0_ctr_nxt[s] : u_prm_ctr_nxt[s];
+      assign t_alt_ctr_wd_u0[s]    = u_alt_ctr_nxt[s];
+      assign t_use_wd_u0[s]        = u_use_nxt[s];
+      assign t_epc_wd_u0[s]        = u_epc_nxt[s];
+      assign t_alc_wd_u0[s]        = u_alc_wd[s];
+      // prm and alt index exposed separately; tage.sv selects per
+      // table instance using prm_tbl_sel comparison.
+      assign t_upd_index_u0[s]     = u_prm_idx[s];
+      assign t_alt_upd_index_u0[s] = u_alt_idx[s];
+      assign t_alc_index_u0[s]     = u_alc_idx[s];
     end
   endgenerate
 
