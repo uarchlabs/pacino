@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-04 (session_handoff-045)
+ UPDATED: 2026-06-07 (pa session 046)
  CONTACT: Jeff Nye
 ```
 
@@ -135,9 +135,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 
 | # | Item                                   | Resolution path                 |
 |---|----------------------------------------|---------------------------------|
-| 1  | NUM_PRED_SLOTS=2 default. Generate    | Cleanup session after TAGE      |
-|    | removal and NUM_PRED_SLOTS=1 tests    | complete                        |
-|    | pending.                              |                                 |
+| 1  | NUM_PRED_SLOTS=1 reduction.           | Cleanup session after TAGE      |
+|    | Generate removal and NUM_PRED_SLOTS=1 | complete. Dual-slot *testing*   |
+|    | tests pending.                        | tracked separately in #74.      |
 | 2  | Instruction fusion                    | Deferred to rename/dispatch     |
 | 3  | UOP expansion for RVV segments        | Policy TBD at vector execution  |
 | 4  | predecode.sv clk/rstn unused          | Resolve at pipeline stage assign|
@@ -145,11 +145,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 6  | vtype_hazard intra-bundle policy      | TBD at rename/dispatch          |
 | 7  | curs/curs_v rollback undefined.       | Resolve at bp_cluster impl or   |
 |    | Seznec uses SLIM structure. Inline    | migrate to SLIM-style external  |
-|    | fields have no defined                | structure.                      |
-|    | checkpoint/rollback path.             |                                 |
-|    | retained during transition.           |                                 |
-| 15 | EPC field semantics not yet           | Define before BP-008            |
-|    | documented.                           |                                 |
+|    | fields have no defined                | structure. See rollback test    |
+|    | checkpoint/rollback path.             | items #69/#70.                  |
+| 15 | CLOSED. EPC field semantics now       | Field implemented; write path   |
+|    | implemented and documented.           | modified BP-044c. Live work is  |
+|    |                                       | EPC write proof, see #55/#56.   |
 | 16 | ALLOC_DATA_WIDTH padding when         | Resolve at T0 implementation    |
 |    | THIS_ < MAX_ -- unused bits between   |                                 |
 |    | EPC and TAG fields.                   |                                 |
@@ -161,134 +161,161 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 18 | Definition of T0 fields/behavior      | Prediction side closed          |
 |    |                                       | Update side pending T0          |
 |    |                                       | implementation                  |
-| 37 | trx_type forwarded combinationally    | Investigate in BP-023c          |
-|    | from arb_grant_upd instead of from    | before closing. When concurrent |
-|    | registered arb_trx_r.trx_type.        | pred+upd tests are added,       |
-|    | When concurrent pred+upd tests are    | verify grant signal stability   |
-|    | added (TB-ARB-03, TB-ARB-04), verify  | through tage_cntrl pipeline.    |
-|    | grant signal stability through        | If unstable, promote            |
-|    | tage_cntrl pipeline is maintained.    | arb_trx_r.trx_type and adjust   |
-|    |                                       | write-enable timing.            |
-| 38 | Verilator upgraded to 5.048.          | Covergroup/coverpoint issue     |
-|    | inout optimizer bug resolved.         | #7099 status in 5.048 release   |
-|    | Covergroup/coverpoint support         | notes still needs re-check      |
-|    | (issue #7099) status in 5.048         | before fully closing TD #38.    |
-|    | not yet verified.                     |                                 |
-| 39 | TB-ARB-08 Rule 2 starvation override  | Verify at design finalization   |
-|    | is untestable with current params.    | that PRED_CREDITS <             |
-|    | TAGE_PRED_CREDITS=4 <                 | STARVE_THRESH is intentional.   |
-|    | TAGE_STARVE_THRESH=8 means            | If Rule 2 must be testable,     |
+| 37 | trx_type forwarded combinationally    | Investigate before closing.     |
+|    | from arb_grant_upd instead of from    | When concurrent pred+upd tests  |
+|    | registered arb_trx_r.trx_type.        | are added (arb item #73),       |
+|    | Verify grant signal stability through | verify grant stability through  |
+|    | tage_cntrl pipeline under concurrent  | the pipeline. If unstable,      |
+|    | pred+upd.                             | promote arb_trx_r.trx_type and  |
+|    |                                       | adjust write-enable timing.     |
+| 38 | Verilator 5.048 covergroup #7099      | Re-check #7099 status in 5.048  |
+|    | status not yet verified.              | release notes before closing.   |
+| 39 | TB-ARB-08 Rule 2 starvation override  | Verify PRED_CREDITS <           |
+|    | untestable at current params.         | STARVE_THRESH is intentional.   |
+|    | PRED_CREDITS=4 < STARVE_THRESH=8 so   | If Rule 2 must be testable,     |
 |    | starve_ctr never reaches threshold.   | adjust params before bp_cluster |
-|    | Rule 4 is the effective ceiling.      | integration.                    |
-| 40 | TB-ARB-05 spec discrepancy.           | Update bp_arb_spec.md           |
-|    | bp_arb_spec.md section 10.1           | section 10.1 to match           |
-|    | describes "backpressure for 2 cycles" | TAGE_UQ_DEPTH=8 before          |
-|    | which does not match TAGE_UQ_DEPTH=8. | bp_cluster integration.         |
-|    | No RTL risk.                          | No RTL change required.         |
-| 41 | CU-08/CU-09 aging paths deferred.     | Revisit at bp_cluster aging     |
-|    | tage_enable_aging never driven high   | integration when                |
-|    | in TC-44/TC-45. Accepted gap per      | tage_enable_aging control is    |
-|    | session-031 decision.                 | defined at cluster interface.   |
-| 42 | Pipeline diagram shows ITTAGE         | Revisit after SC definition.    |
-|    | operating at s3, should be s2.        | Update diagram and discussions. |
-|    | ITTAGE operates alongside FTB and     |                                 |
-|    | TAGE at s2.                           |                                 |
-| 43 | Reduce the CTR width in    | This impacts a number of files/designs/tbs      |
-|    | ITTAGE from 3b to 2b.      | as well as RTL, known so far bp_defines_pkg.sv  |
-|    |                            | ittage_table_interfaces.md as well RTL and      |
-|    |                            | testbenches.                                    |
-| 44 | Confirm change to  | in ittage_cntrl_decisions.md                        |
-|    | ittage_pred_strong | from ittage_pred_strong -- provider ctr was !=3 & !=4|
-|    |                    | to   ittage_pred_strong -- provider ctr > 0 (NOT NULL)|
-|    |                    | Document change has been made (in session 040)       |
-|    |                    | Make sure #43 does not impact any testcases          |
-| 45 | Revisit tage_cntrl | During update there are multiple tables that can be  |
-|    | and tage_table     | written and need the proper ports in the table and   |
-|    | Simplifications    | in the control.                                      |
-|    | available.         |                                                      |
-|    |                    | - T0 always has CTR value updated, needs an index.   |
-|    |                    | - both primary and alt can have CTR updated          |
-|    |                    |   one of primary or alt may have useful updated      |
-|    |                    |     useful update can use the prm_idx or alt_idx     |
-|    |                    |                                                      |
-|    |                    | It is possible to also allocate an entry             |
-|    |                    |                                                      |
-|    |                    | Currently tage_cntrl supplies a 2D bus for update    |
-|    |                    | and allocation index. one D is prediction slot the   |
-|    |                    | other D is one for each table. This is wrong.        |
-|    |                    |                                                      |
-|    |                    | It should be one upd index port for the bim where    |
-|    |                    | the index is directly taken from                     |
-|    |                    | tage_pred_meta.tage_bim_idx.                         |
-|    |                    |                                                      |
-|    |                    | Note tage_bim_idx is new, added for this fix.        |
-|    |                    | tage_bim_idx is from the branch pc bits in the       |
-|    |                    | original prediction request                          |
-|    |                    | tage_bim_idx = PC[TAGE_MAX_IDX_WIDTH-1:1]            |
-|    |                    |                                                      |
-|    |                    | Changes: tage_table_interfaces.md                    |
-|    |                    |            specify upd_index_u0[s]                   |
-|    |                    |            specify alc_index_u0[s]                   |
-|    |                    |            specify bim_index_u0[s]                   |
-|    |                    |          test if alc_index_u0 is necessary likely not|
-|    |                    |          add a tage_cntrl_interfaces.md doc          |
-| 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
-|    | missing trx_type   | Add trx_type input port (logic type) to          |
-|    | port               | ittage_cntrl.sv. Connect to trx_type_comb in     |
-|    |                    | ittage.sv. BP-040 closed this item.              |
-| 47 | ittage_interfaces  | CLOSED.                                          |
-|    | .md missing arb    | Add pq_not_full and upd_rdy to port list.        |
-|    | ports              | These ports are present in ittage.sv (added      |
-|    |                    | BP-038) but not in the spec. Update before       |
-|    |                    | bp_cluster integration.                          |
-|    |                    | These are also missing in tage_interfaces.md     |
-| 48 | ittage.sv RB       | CLOSED.                                          |
-|    | bypass behavior    | consumer_ready=1'b1 means RB memory is never     |
-|    |                    | written and results always bypass. Correct for   |
-|    |                    | ITTAGE with no SC consumer. Verify bypass        |
-|    |                    | behavior matches bp_cluster backpressure         |
-|    |                    | expectations at cluster integration.             |
-| 49 | Arb queue status   | Tage and Ittage have arbitration queue status    |
-|    | pin renaming       | flags, pq_not_full, upd_rdy. These ports should  |
-|    |                    | be renamed for standardization:                  |
-|    |                    | Tage: pq_not_full ->  tage_pq_not_full           |
-|    |                    | Tage: upd_rdy     ->  tage_uq_not_full           |
-|    |                    | ITTage: pq_not_full -> ittage_pq_not_full        |
-|    |                    | ITTage: upd_rdy    -> ittage_uq_not_full         |
-|    |                    | Scope: RTL, testbenches, bp_arb_spec.md,         |
-|    |                    | tage_interfaces.md, ittage_interfaces.md         |
-| 50 | sram_init FAST_INIT  | CLOSED. w. BP-040.                            |
-|    | behavior             | ittage.sv nonconformance fixed.               |
-|    |                      | All modules audited.                          |
-| 51 | CTR/USE/TGT update   | Bug 4 (BP-039) found using_primary condition  |
-|    | rule audit           | inverted in ittage_cntrl.sv ctr_upd block.    |
-|    |                      | Systematic risk: other update logic blocks    |
-|    |                      | (USE, TGT, allocation) may have similar       |
-|    |                      | errors not yet exercised by existing tests.   |
-|    |                      | Resolution: new round-trip test set in        |
-|    |                      | tb_ittage.sv exercising each CTR/USE/TGT      |
-|    |                      | update rule row explicitly. One test per      |
-|    |                      | rule row in ittage_cntrl_ctr_update_rules.md  |
-|    |                      | and ittage_cntrl_use_update_rules.md.         |
-|    |                      | Tests must be independent of each other       |
-|    |                      | and of TC-P01 through TC-UAON-01.             |
-|    |                      | Constraints section of prompts will preclude  |
-|    |                      | IA from modifying RTL without citing the      |
-|    |                      | violation in the planning documents.          |
-| 52 | move Arb logic into  | The top level modules should be structural   |
-|    | submodule out of top | only. Create a new module for tage and       |
-|    | in tage and ittage   | ittage, move the arb logic into this new     |
-|    |                      | module.                                      |
-| 53 | tage_ctr_test rows   | CLOSED with BP-041.md                        |
-|    | 14-17 failing        | pcomp CTR write not landing in T4 RAM for    |
-|    |                      | rows 14-17. Root cause was test state        |
-|    |                      | contamination from rows 13 into rows 14-17.  |
-| 54 | tage ctr tests       | Planning document tage_cntrl_ctr_update_rules.md |
-|    |                      | was updated and confirmed with BP-041 manual |
-|    |                      | tests. The new table is more explicit on X   |
-|    |                      | handling and backed by new assertions.       |
-|    |                      | Existing IA tests need audit and retrofit.   |
-|    |                      | BP-043 will address this.                    |
+|    | Rule 4 is the effective ceiling.      | integration. See arb item #73.  |
+| 40 | TB-ARB-05 spec discrepancy.           | Update bp_arb_spec.md 10.1 to   |
+|    | bp_arb_spec.md 10.1 "backpressure 2   | match TAGE_UQ_DEPTH=8 before    |
+|    | cycles" does not match UQ_DEPTH=8.    | bp_cluster integration. No RTL  |
+|    | No RTL risk.                          | change required.                |
+| 42 | Pipeline diagram shows ITTAGE at s3,  | Revisit after SC definition.    |
+|    | should be s2 (alongside FTB, TAGE).   | Update diagram and discussions. |
+|    |                                       | See prediction-side item #65.   |
+| 43 | Reduce ITTAGE CTR width 3b -> 2b.     | Impacts bp_defines_pkg.sv,      |
+|    |                                       | ittage_table_interfaces.md, RTL |
+|    |                                       | and testbenches. Confirm no     |
+|    |                                       | testcase impact (see #44).      |
+| 44 | Confirm ittage_pred_strong change in  | Changed session-040: provider   |
+|    | ittage_cntrl_decisions.md.            | ctr was !=3 & !=4, now > 0 (NOT |
+|    |                                       | NULL). Ensure #43 does not      |
+|    |                                       | impact any testcase.            |
+| 45 | tage_cntrl / tage_table update-index  | 2D update/alloc index bus is    |
+|    | simplification.                       | wrong: should be per-table      |
+|    | (Structural rework, see #66.)         | ports. T0 CTR always updated    |
+|    |                                       | needs an index; prm and alt CTR |
+|    |                                       | both updatable; useful uses     |
+|    |                                       | prm_idx or alt_idx. Specify     |
+|    |                                       | upd_index_u0[s], alc_index_u0[s]|
+|    |                                       | bim_index_u0[s]=PC[MAX_IDX-1:1].|
+|    |                                       | Test if alc_index needed. Add   |
+|    |                                       | tage_cntrl_interfaces.md.       |
+| 49 | Arb queue status pin renaming.        | pq_not_full/upd_rdy ->          |
+|    |                                       | tage_pq_not_full/tage_uq_not_   |
+|    |                                       | full and ittage_ equivalents.   |
+|    |                                       | Scope: RTL, tb, bp_arb_spec.md, |
+|    |                                       | tage_interfaces.md,             |
+|    |                                       | ittage_interfaces.md.           |
+| 51 | CLOSED. CTR/USE/TGT update audit.     | CTR fixed BP-044b, USE fixed    |
+|    | Parent audit item.                    | BP-044c (both were provider-    |
+|    |                                       | gating inversions). Survivors   |
+|    |                                       | broken out: TGT #57,            |
+|    |                                       | allocation #62/#63.             |
+| 52 | Move arb logic into submodule out of  | Top modules should be           |
+|    | top in tage and ittage.               | structural only. New arb module |
+|    | (Refactor; pairs with #73 test.)      | for tage and ittage. Co-        |
+|    |                                       | sequence with arb test #73.     |
+| 55 | tage EPC write proof.                  | epc_we gate changed BP-044c     |
+|    | Changed RTL, never proven by readback. | (USE rider). Seed entry, drive  |
+|    |                                        | EPC-writing update, read EPC    |
+|    |                                        | back via prediction, confirm    |
+|    |                                        | landing. Use bw_write backdoor. |
+| 56 | ittage EPC write proof.                | Same as #55 for ittage.         |
+|    | Changed RTL, never proven by readback. | epc_we_s0/s1 fixed BP-044c      |
+|    |                                        | alongside use_we. No positive   |
+|    |                                        | test. Readback-verify per       |
+|    |                                        | provider, UP=1 and UP=0.        |
+| 57 | ittage TGT target replacement.         | TGT write path not audited.     |
+|    | Untested. Successor to #51.            | #51 suspect for same provider-  |
+|    |                                        | gating defect as CTR/USE.       |
+|    |                                        | Target written on mispredict    |
+|    |                                        | when CTR null only. Trace path, |
+|    |                                        | readback-verify reachable rows. |
+|    |                                        | ittage only (no TAGE tgt).      |
+| 58 | tage UAON trigger rules.               | tage_cntrl_uaon_update_rules.md |
+|    | Tested only as setup, never as DUT.    | is Draft. Promote to authority, |
+|    |                                        | directed test per row, prove    |
+|    |                                        | use_alt_on_na fires/clears.     |
+| 59 | ittage UAON trigger rules.             | ittage_cntrl_uaon_update_rules. |
+|    | Tested only as setup, never as DUT.    | md is Draft. Same as #58. USE   |
+|    |                                        | tests relied on UAON firing as  |
+|    |                                        | precondition; never verified.   |
+| 60 | tage aging / epoch path. Entire path   | Supersedes #41. All tests run   |
+|    | dark.                                  | tage_enable_aging=0. Drive      |
+|    |                                        | aging high, exercise EPC-vs-    |
+|    |                                        | epoch compare and USE decrement |
+|    |                                        | over interval. Confirm interval |
+|    |                                        | reachable at current params     |
+|    |                                        | first (cf #39).                 |
+| 61 | ittage aging / epoch path. Entire      | Same as #60 for ittage.         |
+|    | path dark.                             | Consumes the EPC field whose    |
+|    |                                        | write changed BP-044c (see #56).|
+| 62 | tage allocation policy + write gating. | Allocation treated as residue   |
+|    | Never the feature under test.          | to invalidate, never verified.  |
+|    | Successor to #51.                      | Test which table allocates,     |
+|    |                                        | alloc write-enable gating,      |
+|    |                                        | alloc index. Do #66 first.      |
+| 63 | ittage allocation policy + gating.     | Same as #62. Alloc on           |
+|    | Never the feature under test.          | mispredict, CTR-null condition, |
+|    | Successor to #51.                      | alloc_we gating. Readback-      |
+|    |                                        | verify allocated entry state.   |
+| 64 | tage prediction-side correctness.      | Prediction path exercised only  |
+|    | Not directed-tested.                   | as setup for update tests.      |
+|    |                                        | Directed-test provider          |
+|    |                                        | selection, using_primary,       |
+|    |                                        | pred_strong, target mux given   |
+|    |                                        | seeded entries.                 |
+| 65 | ittage prediction-side correctness.    | Same as #64 for ittage.         |
+|    | Not directed-tested.                   | Resolves #42 test aspect:       |
+|    |                                        | verify provider/using_primary/  |
+|    |                                        | target operate at s2 not s3.    |
+| 66 | TAGE structural rework (implements     | tage_cntrl 2D index bus ->      |
+|    | #45). Sequence before TAGE alloc #62.  | per-table ports: upd_index_u0[s]|
+|    |                                        | bim_index_u0[s]=PC[MAX_IDX-1:1],|
+|    |                                        | test if alc_index_u0 needed.    |
+|    |                                        | Add tage_cntrl_interfaces.md.   |
+| 67 | tage sram_init non-fast path.          | All tests used +FAST_INIT,      |
+|    | Untested here; confirm not elsewhere.  | bypassing real sram_init        |
+|    |                                        | cycling. sram_init.md Complete  |
+|    |                                        | with COMP tests -- confirm they |
+|    |                                        | cover non-fast path; do not     |
+|    |                                        | assume.                         |
+| 68 | ittage sram_init non-fast path.        | Same as #67. Fast-init initial  |
+|    | Untested here; confirm not elsewhere.  | block in ittage_table.sv writes |
+|    |                                        | RAM directly; real post-reset   |
+|    |                                        | init sequence never exercised.  |
+| 69 | tage rollback / history recompute.     | Test item for G15/G21/G22 and   |
+|    | Dark; tracks arch TBDs.                | TD #7. GHR/PHR fold recompute   |
+|    |                                        | on rollback unexercised. Likely |
+|    |                                        | defer to bp_cluster; resolve    |
+|    |                                        | the G-TBDs before testing.      |
+| 70 | ittage rollback / history recompute.   | Same as #69 for ittage. Shared  |
+|    | Dark; tracks arch TBDs.                | GHR/PHR fold logic, G21/G22.    |
+|    |                                        | Defer to bp_cluster.            |
+| 71 | tage round-trip (capstone).            | Mixed ctr/use/alloc/epc in one  |
+|    | Capstone, not vehicle.                 | flow. Run ONLY after            |
+|    |                                        | #55,58,60,62,64 each proven     |
+|    |                                        | alone -- mixing before          |
+|    |                                        | isolation reproduces the multi- |
+|    |                                        | cause ambiguity that stalled    |
+|    |                                        | BP-044.                         |
+| 72 | ittage round-trip (capstone).          | Mixed ctr/use/alloc/epc/tgt in  |
+|    | Capstone, not vehicle.                 | one flow. Run ONLY after        |
+|    |                                        | #56,57,59,61,63,65 each proven  |
+|    |                                        | alone. Same isolation-first     |
+|    |                                        | rule as #71.                    |
+| 73 | Arbitration layer behavioral test.     | PQ/UQ FIFOs + credit arbiter.   |
+|    | Deferred. Pairs with refactor #52.     | Folds in #37, #39, #40. Defer   |
+|    |                                        | until uBTB, loop, tage, ittage  |
+|    |                                        | units tested. Concurrent        |
+|    |                                        | pred+upd is the untested        |
+|    |                                        | interaction of interest.        |
+| 74 | Dual-slot (NUM_PRED_SLOTS=2) test.     | Slot 1 update path and both     |
+|    | Deferred. Reduction work in #1.        | slots together unexercised; all |
+|    |                                        | tests effectively single-slot.  |
+|    |                                        | G20 (bp_history dual-slot       |
+|    |                                        | update undefined). Defer until  |
+|    |                                        | after arb #73 and full BPU.     |
 
 ---
 

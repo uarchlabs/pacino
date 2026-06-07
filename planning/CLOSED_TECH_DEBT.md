@@ -115,6 +115,54 @@
 |    | expected cntrl=39. Pre-existing defect revealed    | tb_tage_table.sv TC6 expected |
 |    | when PINMISSING fix in BP-019a allowed             | value. Fix before bp_cluster. |
 |    | sim_tage_table to compile and run.                 |                               |
+| 46 | ittage_cntrl.sv    | CLOSED. BP-038a did not close this in the tb.    |
+|    | missing trx_type   | Add trx_type input port (logic type) to          |
+|    | port               | ittage_cntrl.sv. Connect to trx_type_comb in     |
+|    |                    | ittage.sv. BP-040 closed this item.              |
+| 47 | ittage_interfaces  | CLOSED.                                          |
+|    | .md missing arb    | Add pq_not_full and upd_rdy to port list.        |
+|    | ports              | These ports are present in ittage.sv (added      |
+|    |                    | BP-038) but not in the spec. Update before       |
+|    |                    | bp_cluster integration.                          |
+|    |                    | These are also missing in tage_interfaces.md     |
+| 48 | ittage.sv RB       | CLOSED.                                          |
+|    | bypass behavior    | consumer_ready=1'b1 means RB memory is never     |
+|    |                    | written and results always bypass. Correct for   |
+|    |                    | ITTAGE with no SC consumer. Verify bypass        |
+|    |                    | behavior matches bp_cluster backpressure         |
+|    |                    | expectations at cluster integration.             |
+| 50 | sram_init FAST_INIT  | CLOSED. w. BP-040.                            |
+|    | behavior             | ittage.sv nonconformance fixed.               |
+|    |                      | All modules audited.                          |
+| 51 | CTR/USE/TGT update   | CLOSED BP-044b/c. |
+|    | rule audit           | Bug 4 (BP-039) found using_primary condition  |
+|    |                      | inverted in ittage_cntrl.sv ctr_upd block.    |
+|    |                      | Systematic risk: other update logic blocks    |
+|    |                      | (USE, TGT, allocation) may have similar       |
+|    |                      | errors not yet exercised by existing tests.   |
+|    |                      | Resolution: new round-trip test set in        |
+|    |                      | tb_ittage.sv exercising each CTR/USE/TGT      |
+|    |                      | update rule row explicitly. One test per      |
+|    |                      | rule row in ittage_cntrl_ctr_update_rules.md  |
+|    |                      | and ittage_cntrl_use_update_rules.md.         |
+|    |                      | Tests must be independent of each other       |
+|    |                      | and of TC-P01 through TC-UAON-01.             |
+|    |                      | Constraints section of prompts will preclude  |
+|    |                      | IA from modifying RTL without citing the      |
+|    |                      | violation in the planning documents.          |
+| 53 | tage_ctr_test rows   | CLOSED with BP-041.md                        |
+|    | 14-17 failing        | pcomp CTR write not landing in T4 RAM for    |
+|    |                      | rows 14-17. Root cause was test state        |
+|    |                      | contamination from rows 13 into rows 14-17.  |
+| 54 | tage ctr tests       | CLOSED.                                          |
+|    |                      | Planning document tage_cntrl_ctr_update_rules.md |
+|    |                      | was updated and confirmed with BP-041 manual |
+|    |                      | tests. The new table is more explicit on X   |
+|    |                      | handling and backed by new assertions.       |
+|    |                      | Existing IA tests need audit and retrofit.   |
+|    |                      | BP-043 will address this.                    |
+
+
 
 ---
 

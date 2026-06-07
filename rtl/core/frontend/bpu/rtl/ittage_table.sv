@@ -18,7 +18,8 @@
 //
 // Prediction pipeline: inputs at p0, outputs at p1 (1-cycle).
 // Update: write-enable gated by THIS_TABLE vs prm/alt_tbl_sel.
-// USE/EPC gated by prm_match only (not alt).
+// USE/EPC: prm_ctr_wr+prm_match (UP=1) or alt_ctr_wr+alt_match
+// (UP=0). See ittage_cntrl_use_update_rules.md Table 7 uSEL.
 // tgt_we gated by (prm_match | alt_match); included in norm_we.
 // tbl_ri_active + tbl_ri_wr: RAM-init path overrides all writes.
 //
@@ -245,7 +246,8 @@ module ittage_table #(
 
   // All write-enables in one always_comb to avoid evaluation-order
   // ambiguity (HAND-FIX-001 pattern from tage_table).
-  // USE/EPC: prm_match only (ITTAGE spec, not prm|alt).
+  // USE/EPC: prm_ctr_wr+prm_match (UP=1, rows 3-4) or
+  //          alt_ctr_wr+alt_match (UP=0, rows 5-6). Table 7 uSEL.
   // tgt_we: (prm_match | alt_match).
   always_comb begin : we_s0
     prm_match_s0  = (prm_tbl_sel_u0[0] == THIS_TBL_SEL);
@@ -256,10 +258,12 @@ module ittage_table #(
                   & prm_ctr_wr_u0[0] & prm_match_s0;
     alt_ctr_we_s0 = ittage_upd_val_u0[0]
                   & alt_ctr_wr_u0[0] & alt_match_s0;
-    use_we_s0     = ittage_upd_val_u0[0]
-                  & use_wr_u0[0] & prm_match_s0;
-    epc_we_s0     = ittage_upd_val_u0[0]
-                  & epc_wr_u0[0] & prm_match_s0;
+    use_we_s0     = ittage_upd_val_u0[0] & use_wr_u0[0]
+                  & (prm_ctr_wr_u0[0] & prm_match_s0
+                   | alt_ctr_wr_u0[0] & alt_match_s0);
+    epc_we_s0     = ittage_upd_val_u0[0] & epc_wr_u0[0]
+                  & (prm_ctr_wr_u0[0] & prm_match_s0
+                   | alt_ctr_wr_u0[0] & alt_match_s0);
     tgt_we_s0     = ittage_upd_val_u0[0]
                   & tgt_wr_u0[0]
                   & (prm_match_s0 | alt_match_s0);
@@ -390,10 +394,12 @@ module ittage_table #(
                   & prm_ctr_wr_u0[1] & prm_match_s1;
     alt_ctr_we_s1 = ittage_upd_val_u0[1]
                   & alt_ctr_wr_u0[1] & alt_match_s1;
-    use_we_s1     = ittage_upd_val_u0[1]
-                  & use_wr_u0[1] & prm_match_s1;
-    epc_we_s1     = ittage_upd_val_u0[1]
-                  & epc_wr_u0[1] & prm_match_s1;
+    use_we_s1     = ittage_upd_val_u0[1] & use_wr_u0[1]
+                  & (prm_ctr_wr_u0[1] & prm_match_s1
+                   | alt_ctr_wr_u0[1] & alt_match_s1);
+    epc_we_s1     = ittage_upd_val_u0[1] & epc_wr_u0[1]
+                  & (prm_ctr_wr_u0[1] & prm_match_s1
+                   | alt_ctr_wr_u0[1] & alt_match_s1);
     tgt_we_s1     = ittage_upd_val_u0[1]
                   & tgt_wr_u0[1]
                   & (prm_match_s1 | alt_match_s1);

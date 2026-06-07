@@ -1093,6 +1093,194 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-USE-R05: USE table row 5
+  // DIFF=1, HIT=1, UP=0, MISP=0 -> INC alt_useful (1 -> 2).
+  // IT2=prm(CTR=0)->UAON fires use_alt; IT1=alt(CTR=1,USE=1).
+  // Coverage: ittage_cntrl_use_update_rules.md row 5.
+  // ================================================================
+  task automatic tc_use_r05();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-USE-R05 USE row 5 DIFF=1 HIT=1 UP=0 INC");
+    clr();
+    // PC=40'h0000_0300: IT1/IT2 idx=8'hC0 bank=1 ent=64 tag=8'h03.
+    // IT2 prm: CTR=0 -> not_null=0 -> UAON use_alt fires.
+    bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
+             38'h0_0000_A000, 11'h003);
+    // IT1 alt: CTR=1, USE=1, TGT!=IT2.TGT -> DIFF=1.
+    bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h1, 2'h0,
+             38'h0_0000_B000, 11'h003);
+    do_pred(40'h0000_0300, 6'h70, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("USE-R05:hit",
+      64'(m.ittage_hit),             64'h1);
+    chk("USE-R05:using_prm",
+      64'(m.ittage_using_primary),   64'h0);
+    chk("USE-R05:alt_use_pre",
+      64'(m.ittage_alt_useful),      64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_B000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0300, 6'h71, 0);
+    wait_prdy(0);
+    chk("USE-R05:alt_use_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h2);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-USE-R06: USE table row 6
+  // DIFF=1, HIT=1, UP=0, MISP=1 -> DEC alt_useful (2 -> 1).
+  // IT2=prm(CTR=0)->use_alt fires; IT1=alt(CTR=1,USE=2).
+  // Coverage: ittage_cntrl_use_update_rules.md row 6.
+  // ================================================================
+  task automatic tc_use_r06();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-USE-R06 USE row 6 DIFF=1 HIT=1 UP=0 DEC");
+    clr();
+    // Reseed PC=0x0300 entries. IT1 USE=2 for DEC -> 1.
+    bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
+             38'h0_0000_A000, 11'h003);
+    bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h2, 2'h0,
+             38'h0_0000_B000, 11'h003);
+    do_pred(40'h0000_0300, 6'h72, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("USE-R06:using_prm",
+      64'(m.ittage_using_primary),   64'h0);
+    chk("USE-R06:alt_use_pre",
+      64'(m.ittage_alt_useful),      64'h2);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_1234_5678;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // MISP=1, prm_comp=IT2=2<5: alloc fires to IT3.
+    // IT3 at PC=0x300: 9-bit idx=9'hC0 -> bank=0 ent=192. Invalidate.
+    bw_write(3, 0, 0, 192, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    do_pred(40'h0000_0300, 6'h73, 0);
+    wait_prdy(0);
+    chk("USE-R06:alt_use_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h1);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-USE-SAT: USE saturation: INC at max(2'b11) holds;
+  //             DEC at 0 holds. Covers UP=1 prm and UP=0 alt.
+  // Collapsed rows: alt INC -> row 5 path; alt DEC -> row 6 path;
+  //                 prm INC -> row 3 path; prm DEC -> row 4 path.
+  // ================================================================
+  task automatic tc_use_sat();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-USE-SAT USE saturation prm and alt");
+
+    // alt INC at max (USE=3 -> 3, UP=0)
+    clr();
+    bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
+             38'h0_0000_A000, 11'h003);
+    bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h3, 2'h0,
+             38'h0_0000_B000, 11'h003);
+    do_pred(40'h0000_0300, 6'h74, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("USE-SAT:alt_max_pre",
+      64'(m.ittage_alt_useful),      64'h3);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_B000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0300, 6'h75, 0);
+    wait_prdy(0);
+    chk("USE-SAT:alt_max_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h3);
+
+    // alt DEC at 0 (USE=0 -> 0, UP=0)
+    clr();
+    bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
+             38'h0_0000_A000, 11'h003);
+    bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h0, 2'h0,
+             38'h0_0000_B000, 11'h003);
+    do_pred(40'h0000_0300, 6'h76, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("USE-SAT:alt_zero_pre",
+      64'(m.ittage_alt_useful),      64'h0);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_1234_5678;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // MISP=1: alloc to IT3 at PC=0x300. Invalidate.
+    bw_write(3, 0, 0, 192, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    do_pred(40'h0000_0300, 6'h77, 0);
+    wait_prdy(0);
+    chk("USE-SAT:alt_zero_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h0);
+
+    // prm INC at max (USE=3 -> 3, UP=1)
+    // PC=40'h0000_0500: IT1 idx=8'h40 bank=0 ent=64 tag=8'h05.
+    clr();
+    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(1, 0, 0, 64, 1'b1, 3'h3, 2'h3, 2'h0,
+             38'h0_0000_C000, 11'h005);
+    do_pred(40'h0000_0500, 6'h78, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("USE-SAT:prm_max_pre",
+      64'(m.ittage_prm_useful),      64'h3);
+    chk("USE-SAT:prm_max_prm",
+      64'(m.ittage_using_primary),   64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_C000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0500, 6'h79, 0);
+    wait_prdy(0);
+    chk("USE-SAT:prm_max_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h3);
+
+    // prm DEC at 0 (USE=0 -> 0, UP=1)
+    clr();
+    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(1, 0, 0, 64, 1'b1, 3'h1, 2'h0, 2'h0,
+             38'h0_0000_C000, 11'h005);
+    do_pred(40'h0000_0500, 6'h7A, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("USE-SAT:prm_zero_pre",
+      64'(m.ittage_prm_useful),      64'h0);
+    chk("USE-SAT:prm_zero_prm",
+      64'(m.ittage_using_primary),   64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_1234_5678;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // MISP=1, prm_comp=IT1=1<5: alloc to IT2 at PC=0x500
+    // IT2 idx=8'h40 -> bank=0 ent=64. Invalidate.
+    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    do_pred(40'h0000_0500, 6'h7B, 0);
+    wait_prdy(0);
+    chk("USE-SAT:prm_zero_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h0);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -1147,6 +1335,11 @@ module tb;
     tc_ctr_up0_inc();
     tc_ctr_up0_dec();
     tc_ctr_sat();
+
+    do_reset();
+    tc_use_r05();
+    tc_use_r06();
+    tc_use_sat();
 
     repeat(5) @(posedge clk);
 
