@@ -173,7 +173,9 @@ module ittage (
     cntrl_alc_tbl_sel[0:NUM_PRED_SLOTS-1];
   // Update and allocation addresses (max width; sliced per table).
   logic [IT_MAX_IDX_WIDTH-1:0]
-    cntrl_upd_index[0:NUM_PRED_SLOTS-1];
+    cntrl_prm_upd_index[0:NUM_PRED_SLOTS-1];
+  logic [IT_MAX_IDX_WIDTH-1:0]
+    cntrl_alt_upd_index[0:NUM_PRED_SLOTS-1];
   logic [IT_MAX_IDX_WIDTH-1:0]
     cntrl_alc_index[0:NUM_PRED_SLOTS-1];
 
@@ -465,28 +467,29 @@ module ittage (
     .ittage_enable_aging  (ittage_enable_aging),
     .ittage_aging_interval(ittage_aging_interval),
     .trx_type             (trx_type_comb),
-    .tbl_hit_p1           (tbl_hit_p1),
-    .tbl_pred_tgt_p1      (tbl_pred_tgt_p1),
-    .tbl_cntrl_bits_p1    (tbl_cntrl_bits_p1),
-    .tbl_idx_hash_p0      (tbl_idx_hash_p0),
-    .tbl_tag_hash_p0      (tbl_tag_hash_p0),
-    .prm_ctr_wd_u0        (cntrl_prm_ctr_wd),
-    .alt_ctr_wd_u0        (cntrl_alt_ctr_wd),
-    .use_wd_u0            (cntrl_use_wd),
-    .epc_wd_u0            (cntrl_epc_wd),
-    .tgt_wd_u0            (cntrl_tgt_wd),
-    .alc_wd_u0            (cntrl_alc_wd),
-    .prm_ctr_wr_u0        (cntrl_prm_ctr_wr),
-    .alt_ctr_wr_u0        (cntrl_alt_ctr_wr),
-    .use_wr_u0            (cntrl_use_wr),
-    .epc_wr_u0            (cntrl_epc_wr),
-    .tgt_wr_u0            (cntrl_tgt_wr),
-    .alc_wr_u0            (cntrl_alc_wr),
-    .prm_tbl_sel_u0       (cntrl_prm_tbl_sel),
-    .alt_tbl_sel_u0       (cntrl_alt_tbl_sel),
-    .alc_tbl_sel_u0       (cntrl_alc_tbl_sel),
-    .upd_index_u0         (cntrl_upd_index),
-    .alc_index_u0         (cntrl_alc_index)
+    .t_hit_p1             (tbl_hit_p1),
+    .t_pred_tgt_p1        (tbl_pred_tgt_p1),
+    .t_cntrl_bits_p1      (tbl_cntrl_bits_p1),
+    .t_idx_hash_p0        (tbl_idx_hash_p0),
+    .t_tag_hash_p0        (tbl_tag_hash_p0),
+    .t_prm_ctr_wd_u0      (cntrl_prm_ctr_wd),
+    .t_alt_ctr_wd_u0      (cntrl_alt_ctr_wd),
+    .t_use_wd_u0          (cntrl_use_wd),
+    .t_epc_wd_u0          (cntrl_epc_wd),
+    .t_tgt_wd_u0          (cntrl_tgt_wd),
+    .t_alc_wd_u0          (cntrl_alc_wd),
+    .t_prm_ctr_wr_u0      (cntrl_prm_ctr_wr),
+    .t_alt_ctr_wr_u0      (cntrl_alt_ctr_wr),
+    .t_use_wr_u0          (cntrl_use_wr),
+    .t_epc_wr_u0          (cntrl_epc_wr),
+    .t_tgt_wr_u0          (cntrl_tgt_wr),
+    .t_alc_wr_u0          (cntrl_alc_wr),
+    .t_prm_tbl_sel_u0     (cntrl_prm_tbl_sel),
+    .t_alt_tbl_sel_u0     (cntrl_alt_tbl_sel),
+    .t_alc_tbl_sel_u0     (cntrl_alc_tbl_sel),
+    .t_prm_upd_index_u0   (cntrl_prm_upd_index),
+    .t_alt_upd_index_u0   (cntrl_alt_upd_index),
+    .t_alc_index_u0       (cntrl_alc_index)
   );
 
   // ================================================================
@@ -524,7 +527,13 @@ module ittage (
       for (genvar s = 0;
            s < NUM_PRED_SLOTS; s++) begin : gen_slot_signals
         assign alc_wd_s[s]  = cntrl_alc_wd[s][TH_ALC-1:0];
-        assign upd_idx_s[s] = cntrl_upd_index[s][TH_IDX-1:0];
+        // Route prm or alt update index: prm if this table is the
+        // primary provider, alt otherwise. Prm and alt are always
+        // different tables so the comparison is exclusive.
+        assign upd_idx_s[s] =
+          (cntrl_prm_tbl_sel[s] == IT_TBL_SEL_WIDTH'(t))
+          ? TH_IDX'(cntrl_prm_upd_index[s])
+          : TH_IDX'(cntrl_alt_upd_index[s]);
         assign alc_idx_s[s] = cntrl_alc_index[s][TH_IDX-1:0];
         assign tbl_idx_hash_p0[t][s] =
           IT_MAX_IDX_WIDTH'(idx_hash_local[s]);

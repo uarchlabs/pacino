@@ -41,36 +41,37 @@ module ittage_cntrl #(
   input  logic                      trx_type,
   // per-table prediction inputs (index 0 unused)
   input  logic [NUM_PRED_SLOTS-1:0]
-    tbl_hit_p1[0:IT_NUM_TABLES-1],
+    t_hit_p1[0:IT_NUM_TABLES-1],
   input  logic [IT_MAX_TGT_WIDTH-1:0]
-    tbl_pred_tgt_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+    t_pred_tgt_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   input  logic [CNTRL_BITS_WIDTH-1:0]
-    tbl_cntrl_bits_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+    t_cntrl_bits_p1[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   input  logic [IT_MAX_IDX_WIDTH-1:0]
-    tbl_idx_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+    t_idx_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   input  logic [IT_MAX_TAG_WIDTH-1:0]
-    tbl_tag_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
+    t_tag_hash_p0[0:IT_NUM_TABLES-1][0:NUM_PRED_SLOTS-1],
   // update write data (fanned to all tables by ittage.sv)
-  output logic [IT_MAX_CTR_WIDTH-1:0] prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_CTR_WIDTH-1:0] alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_USE_WIDTH-1:0] use_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_EPC_WIDTH-1:0] epc_wd_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_TGT_WIDTH-1:0] tgt_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_CTR_WIDTH-1:0] t_alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_USE_WIDTH-1:0] t_use_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_EPC_WIDTH-1:0] t_epc_wd_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_TGT_WIDTH-1:0] t_tgt_wd_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_ALLOC_DATA_WIDTH-1:0]
-    alc_wd_u0[0:NUM_PRED_SLOTS-1],
+    t_alc_wd_u0[0:NUM_PRED_SLOTS-1],
   // update write strobes (fanned to all tables by ittage.sv)
-  output logic [NUM_PRED_SLOTS-1:0]   prm_ctr_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0]   alt_ctr_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0]   use_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0]   epc_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0]   tgt_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0]   alc_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_prm_ctr_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_alt_ctr_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_use_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_epc_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_tgt_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_alc_wr_u0,
   // update selectors and addresses (fanned by ittage.sv)
-  output logic [IT_TBL_SEL_WIDTH-1:0] prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_TBL_SEL_WIDTH-1:0] alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_TBL_SEL_WIDTH-1:0] alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_IDX_WIDTH-1:0] upd_index_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_IDX_WIDTH-1:0] alc_index_u0[0:NUM_PRED_SLOTS-1]
+  output logic [IT_TBL_SEL_WIDTH-1:0] t_prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_TBL_SEL_WIDTH-1:0] t_alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_TBL_SEL_WIDTH-1:0] t_alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_IDX_WIDTH-1:0] t_prm_upd_index_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_IDX_WIDTH-1:0] t_alt_upd_index_u0[0:NUM_PRED_SLOTS-1],
+  output logic [IT_MAX_IDX_WIDTH-1:0] t_alc_index_u0[0:NUM_PRED_SLOTS-1]
 );
 
   // ================================================================
@@ -106,8 +107,8 @@ module ittage_cntrl #(
           tbl_idx_p1[t][s] <= '0;
           tbl_tag_p1[t][s] <= '0;
         end else begin
-          tbl_idx_p1[t][s] <= tbl_idx_hash_p0[t][s];
-          tbl_tag_p1[t][s] <= tbl_tag_hash_p0[t][s];
+          tbl_idx_p1[t][s] <= t_idx_hash_p0[t][s];
+          tbl_tag_p1[t][s] <= t_tag_hash_p0[t][s];
         end
       end
     end
@@ -168,99 +169,99 @@ module ittage_cntrl #(
       // Gate on pred_val_p1[s] (FF output) so Verilator places this
       // block in the active evaluation region, not the settle region.
       if (pred_val_p1[s]) begin
-      if (tbl_hit_p1[5][s]) begin
+      if (t_hit_p1[5][s]) begin
         prm_comp[s] = TSEL_W'(5);
         prm_idx[s]  = tbl_idx_p1[5][s];
-        prm_tgt[s]  = tbl_pred_tgt_p1[5][s];
-        prm_ctr[s]  = tbl_cntrl_bits_p1[5][s][CB_CTR_HI:CB_CTR_LO];
+        prm_tgt[s]  = t_pred_tgt_p1[5][s];
+        prm_ctr[s]  = t_cntrl_bits_p1[5][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
-        if (tbl_hit_p1[4][s]) begin
+        if (t_hit_p1[4][s]) begin
           alt_comp[s] = TSEL_W'(4);
           alt_idx[s]  = tbl_idx_p1[4][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[4][s];
+          alt_tgt[s]  = t_pred_tgt_p1[4][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[4][s][CB_CTR_HI:CB_CTR_LO];
-        end else if (tbl_hit_p1[3][s]) begin
+            t_cntrl_bits_p1[4][s][CB_CTR_HI:CB_CTR_LO];
+        end else if (t_hit_p1[3][s]) begin
           alt_comp[s] = TSEL_W'(3);
           alt_idx[s]  = tbl_idx_p1[3][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[3][s];
+          alt_tgt[s]  = t_pred_tgt_p1[3][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
-        end else if (tbl_hit_p1[2][s]) begin
+            t_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
+        end else if (t_hit_p1[2][s]) begin
           alt_comp[s] = TSEL_W'(2);
           alt_idx[s]  = tbl_idx_p1[2][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[2][s];
+          alt_tgt[s]  = t_pred_tgt_p1[2][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
-        end else if (tbl_hit_p1[1][s]) begin
+            t_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
+        end else if (t_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
+          alt_tgt[s]  = t_pred_tgt_p1[1][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
+            t_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
-      end else if (tbl_hit_p1[4][s]) begin
+      end else if (t_hit_p1[4][s]) begin
         prm_comp[s] = TSEL_W'(4);
         prm_idx[s]  = tbl_idx_p1[4][s];
-        prm_tgt[s]  = tbl_pred_tgt_p1[4][s];
-        prm_ctr[s]  = tbl_cntrl_bits_p1[4][s][CB_CTR_HI:CB_CTR_LO];
+        prm_tgt[s]  = t_pred_tgt_p1[4][s];
+        prm_ctr[s]  = t_cntrl_bits_p1[4][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
-        if (tbl_hit_p1[3][s]) begin
+        if (t_hit_p1[3][s]) begin
           alt_comp[s] = TSEL_W'(3);
           alt_idx[s]  = tbl_idx_p1[3][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[3][s];
+          alt_tgt[s]  = t_pred_tgt_p1[3][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
-        end else if (tbl_hit_p1[2][s]) begin
+            t_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
+        end else if (t_hit_p1[2][s]) begin
           alt_comp[s] = TSEL_W'(2);
           alt_idx[s]  = tbl_idx_p1[2][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[2][s];
+          alt_tgt[s]  = t_pred_tgt_p1[2][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
-        end else if (tbl_hit_p1[1][s]) begin
+            t_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
+        end else if (t_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
+          alt_tgt[s]  = t_pred_tgt_p1[1][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
+            t_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
-      end else if (tbl_hit_p1[3][s]) begin
+      end else if (t_hit_p1[3][s]) begin
         prm_comp[s] = TSEL_W'(3);
         prm_idx[s]  = tbl_idx_p1[3][s];
-        prm_tgt[s]  = tbl_pred_tgt_p1[3][s];
-        prm_ctr[s]  = tbl_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
+        prm_tgt[s]  = t_pred_tgt_p1[3][s];
+        prm_ctr[s]  = t_cntrl_bits_p1[3][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
-        if (tbl_hit_p1[2][s]) begin
+        if (t_hit_p1[2][s]) begin
           alt_comp[s] = TSEL_W'(2);
           alt_idx[s]  = tbl_idx_p1[2][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[2][s];
+          alt_tgt[s]  = t_pred_tgt_p1[2][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
-        end else if (tbl_hit_p1[1][s]) begin
+            t_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
+        end else if (t_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
+          alt_tgt[s]  = t_pred_tgt_p1[1][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
+            t_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
-      end else if (tbl_hit_p1[2][s]) begin
+      end else if (t_hit_p1[2][s]) begin
         prm_comp[s] = TSEL_W'(2);
         prm_idx[s]  = tbl_idx_p1[2][s];
-        prm_tgt[s]  = tbl_pred_tgt_p1[2][s];
-        prm_ctr[s]  = tbl_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
+        prm_tgt[s]  = t_pred_tgt_p1[2][s];
+        prm_ctr[s]  = t_cntrl_bits_p1[2][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
-        if (tbl_hit_p1[1][s]) begin
+        if (t_hit_p1[1][s]) begin
           alt_comp[s] = TSEL_W'(1);
           alt_idx[s]  = tbl_idx_p1[1][s];
-          alt_tgt[s]  = tbl_pred_tgt_p1[1][s];
+          alt_tgt[s]  = t_pred_tgt_p1[1][s];
           alt_ctr[s]  =
-            tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
+            t_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         end
-      end else if (tbl_hit_p1[1][s]) begin
+      end else if (t_hit_p1[1][s]) begin
         prm_comp[s] = TSEL_W'(1);
         prm_idx[s]  = tbl_idx_p1[1][s];
-        prm_tgt[s]  = tbl_pred_tgt_p1[1][s];
-        prm_ctr[s]  = tbl_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
+        prm_tgt[s]  = t_pred_tgt_p1[1][s];
+        prm_ctr[s]  = t_cntrl_bits_p1[1][s][CB_CTR_HI:CB_CTR_LO];
         prm_hit[s]  = 1'b1;
         // primary is IT1: no alternate
       end
@@ -279,62 +280,62 @@ module ittage_cntrl #(
       u_eff[0][s] = '0;
       // IT1
       if ((lcl_epoch[s] -
-           tbl_cntrl_bits_p1[1][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
-        u_eff[1][s] = tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
+           t_cntrl_bits_p1[1][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[1][s] = t_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO];
       else if ((lcl_epoch[s] -
-                tbl_cntrl_bits_p1[1][s][CB_EPC_HI:CB_EPC_LO])
+                t_cntrl_bits_p1[1][s][CB_EPC_HI:CB_EPC_LO])
                == 2'b01)
         u_eff[1][s] =
           IT_MAX_USE_WIDTH'(
-            tbl_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO] >> 1);
+            t_cntrl_bits_p1[1][s][CB_USE_HI:CB_USE_LO] >> 1);
       else
         u_eff[1][s] = '0;
       // IT2
       if ((lcl_epoch[s] -
-           tbl_cntrl_bits_p1[2][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
-        u_eff[2][s] = tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
+           t_cntrl_bits_p1[2][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[2][s] = t_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO];
       else if ((lcl_epoch[s] -
-                tbl_cntrl_bits_p1[2][s][CB_EPC_HI:CB_EPC_LO])
+                t_cntrl_bits_p1[2][s][CB_EPC_HI:CB_EPC_LO])
                == 2'b01)
         u_eff[2][s] =
           IT_MAX_USE_WIDTH'(
-            tbl_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO] >> 1);
+            t_cntrl_bits_p1[2][s][CB_USE_HI:CB_USE_LO] >> 1);
       else
         u_eff[2][s] = '0;
       // IT3
       if ((lcl_epoch[s] -
-           tbl_cntrl_bits_p1[3][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
-        u_eff[3][s] = tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO];
+           t_cntrl_bits_p1[3][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[3][s] = t_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO];
       else if ((lcl_epoch[s] -
-                tbl_cntrl_bits_p1[3][s][CB_EPC_HI:CB_EPC_LO])
+                t_cntrl_bits_p1[3][s][CB_EPC_HI:CB_EPC_LO])
                == 2'b01)
         u_eff[3][s] =
           IT_MAX_USE_WIDTH'(
-            tbl_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO] >> 1);
+            t_cntrl_bits_p1[3][s][CB_USE_HI:CB_USE_LO] >> 1);
       else
         u_eff[3][s] = '0;
       // IT4
       if ((lcl_epoch[s] -
-           tbl_cntrl_bits_p1[4][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
-        u_eff[4][s] = tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO];
+           t_cntrl_bits_p1[4][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[4][s] = t_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO];
       else if ((lcl_epoch[s] -
-                tbl_cntrl_bits_p1[4][s][CB_EPC_HI:CB_EPC_LO])
+                t_cntrl_bits_p1[4][s][CB_EPC_HI:CB_EPC_LO])
                == 2'b01)
         u_eff[4][s] =
           IT_MAX_USE_WIDTH'(
-            tbl_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] >> 1);
+            t_cntrl_bits_p1[4][s][CB_USE_HI:CB_USE_LO] >> 1);
       else
         u_eff[4][s] = '0;
       // IT5
       if ((lcl_epoch[s] -
-           tbl_cntrl_bits_p1[5][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
-        u_eff[5][s] = tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO];
+           t_cntrl_bits_p1[5][s][CB_EPC_HI:CB_EPC_LO]) == 2'b00)
+        u_eff[5][s] = t_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO];
       else if ((lcl_epoch[s] -
-                tbl_cntrl_bits_p1[5][s][CB_EPC_HI:CB_EPC_LO])
+                t_cntrl_bits_p1[5][s][CB_EPC_HI:CB_EPC_LO])
                == 2'b01)
         u_eff[5][s] =
           IT_MAX_USE_WIDTH'(
-            tbl_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] >> 1);
+            t_cntrl_bits_p1[5][s][CB_USE_HI:CB_USE_LO] >> 1);
       else
         u_eff[5][s] = '0;
     end
@@ -598,32 +599,34 @@ module ittage_cntrl #(
 
   // ================================================================
   // Update selectors and addresses.
-  // prm_tbl_sel_u0/alt_tbl_sel_u0: from update input meta.
-  // alc_tbl_sel_u0: from update input meta alc_comp.
-  // upd_index_u0: provider index from update meta.
-  // alc_index_u0 = upd_index_u0.
+  // t_prm_tbl_sel_u0/t_alt_tbl_sel_u0: from update input meta.
+  // t_alc_tbl_sel_u0: from update input meta alc_comp.
+  // t_prm_upd_index_u0: primary provider index from meta.
+  // t_alt_upd_index_u0: alternate provider index from meta.
+  // t_alc_index_u0 = t_prm_upd_index_u0 (pre-existing, TD #76).
   // Gate on ittage_upd_val_u0[s] (read by always_ff) so Verilator
   // places this block in the active evaluation region.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_upd_sel
     always_comb begin : upd_sel
-      prm_tbl_sel_u0[s] = '0;
-      alt_tbl_sel_u0[s] = '0;
-      alc_tbl_sel_u0[s] = '0;
-      upd_index_u0[s]   = '0;
-      alc_index_u0[s]   = '0;
+      t_prm_tbl_sel_u0[s]   = '0;
+      t_alt_tbl_sel_u0[s]   = '0;
+      t_alc_tbl_sel_u0[s]   = '0;
+      t_prm_upd_index_u0[s] = '0;
+      t_alt_upd_index_u0[s] = '0;
+      t_alc_index_u0[s]     = '0;
       if (ittage_upd_val_u0[s]) begin
-        prm_tbl_sel_u0[s] = TSEL_W'(
+        t_prm_tbl_sel_u0[s] = TSEL_W'(
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp);
-        alt_tbl_sel_u0[s] = TSEL_W'(
+        t_alt_tbl_sel_u0[s] = TSEL_W'(
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp);
-        alc_tbl_sel_u0[s] = TSEL_W'(
+        t_alc_tbl_sel_u0[s] = TSEL_W'(
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_comp);
-        upd_index_u0[s] =
-          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary
-          ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx
-          : ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
-        alc_index_u0[s] = upd_index_u0[s];
+        t_prm_upd_index_u0[s] =
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx;
+        t_alt_upd_index_u0[s] =
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
+        t_alc_index_u0[s] = t_prm_upd_index_u0[s];
       end
     end
   end
@@ -637,10 +640,10 @@ module ittage_cntrl #(
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_ctr_upd
     always_comb begin : ctr_upd
-      prm_ctr_wr_u0[s]  = 1'b0;
-      alt_ctr_wr_u0[s]  = 1'b0;
-      prm_ctr_wd_u0[s]  = '0;
-      alt_ctr_wd_u0[s]  = '0;
+      t_prm_ctr_wr_u0[s]  = 1'b0;
+      t_alt_ctr_wr_u0[s]  = 1'b0;
+      t_prm_ctr_wd_u0[s]  = '0;
+      t_alt_ctr_wd_u0[s]  = '0;
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit)
       begin
@@ -650,10 +653,10 @@ module ittage_cntrl #(
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
               != TSEL_W'(0))
           begin
-            prm_ctr_wr_u0[s] = 1'b1;
+            t_prm_ctr_wr_u0[s] = 1'b1;
             if (!ittage_upd_inp_u0[s].indir_mispredict) begin
               // INC saturating
-              prm_ctr_wd_u0[s] =
+              t_prm_ctr_wd_u0[s] =
                 (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
                  == {IT_MAX_CTR_WIDTH{1'b1}})
                 ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
@@ -662,7 +665,7 @@ module ittage_cntrl #(
                       .ittage_pred_meta.ittage_prm_ctr + 1'b1);
             end else begin
               // DEC saturating
-              prm_ctr_wd_u0[s] =
+              t_prm_ctr_wd_u0[s] =
                 (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
                  == IT_MAX_CTR_WIDTH'(0))
                 ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
@@ -676,10 +679,10 @@ module ittage_cntrl #(
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
               != TSEL_W'(0))
           begin
-            alt_ctr_wr_u0[s] = 1'b1;
+            t_alt_ctr_wr_u0[s] = 1'b1;
             if (!ittage_upd_inp_u0[s].indir_mispredict) begin
               // INC saturating
-              alt_ctr_wd_u0[s] =
+              t_alt_ctr_wd_u0[s] =
                 (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
                  == {IT_MAX_CTR_WIDTH{1'b1}})
                 ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
@@ -688,7 +691,7 @@ module ittage_cntrl #(
                       .ittage_pred_meta.ittage_alt_ctr + 1'b1);
             end else begin
               // DEC saturating
-              alt_ctr_wd_u0[s] =
+              t_alt_ctr_wd_u0[s] =
                 (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
                  == IT_MAX_CTR_WIDTH'(0))
                 ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
@@ -710,24 +713,24 @@ module ittage_cntrl #(
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_use_upd
     always_comb begin : use_epc_upd
-      use_wr_u0[s] = 1'b0;
-      epc_wr_u0[s] = 1'b0;
-      use_wd_u0[s] = '0;
-      epc_wd_u0[s] = '0;
+      t_use_wr_u0[s] = 1'b0;
+      t_epc_wr_u0[s] = 1'b0;
+      t_use_wd_u0[s] = '0;
+      t_epc_wd_u0[s] = '0;
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_tgt
               != ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_tgt))
       begin
-        use_wr_u0[s] = 1'b1;
-        epc_wr_u0[s] = 1'b1;
-        epc_wd_u0[s] = lcl_epoch[s];
+        t_use_wr_u0[s] = 1'b1;
+        t_epc_wr_u0[s] = 1'b1;
+        t_epc_wd_u0[s] = lcl_epoch[s];
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
         begin
           // rows 4-5: update prm_useful
           if (!ittage_upd_inp_u0[s].indir_mispredict) begin
             // INC saturating
-            use_wd_u0[s] =
+            t_use_wd_u0[s] =
               (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
                == {IT_MAX_USE_WIDTH{1'b1}})
               ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
@@ -736,7 +739,7 @@ module ittage_cntrl #(
                     .ittage_pred_meta.ittage_prm_useful + 1'b1);
           end else begin
             // DEC saturating
-            use_wd_u0[s] =
+            t_use_wd_u0[s] =
               (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
                == IT_MAX_USE_WIDTH'(0))
               ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
@@ -748,7 +751,7 @@ module ittage_cntrl #(
           // rows 6-7: update alt_useful
           if (!ittage_upd_inp_u0[s].indir_mispredict) begin
             // INC saturating
-            use_wd_u0[s] =
+            t_use_wd_u0[s] =
               (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
                == {IT_MAX_USE_WIDTH{1'b1}})
               ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
@@ -757,7 +760,7 @@ module ittage_cntrl #(
                     .ittage_pred_meta.ittage_alt_useful + 1'b1);
           end else begin
             // DEC saturating
-            use_wd_u0[s] =
+            t_use_wd_u0[s] =
               (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
                == IT_MAX_USE_WIDTH'(0))
               ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
@@ -777,8 +780,8 @@ module ittage_cntrl #(
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_tgt_upd
     always_comb begin : tgt_upd
-      tgt_wr_u0[s] = 1'b0;
-      tgt_wd_u0[s] = '0;
+      t_tgt_wr_u0[s] = 1'b0;
+      t_tgt_wd_u0[s] = '0;
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict)
       begin
@@ -787,15 +790,15 @@ module ittage_cntrl #(
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
               == IT_MAX_CTR_WIDTH'(0))
           begin
-            tgt_wr_u0[s] = 1'b1;
-            tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
+            t_tgt_wr_u0[s] = 1'b1;
+            t_tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
           end
         end else begin
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
               == IT_MAX_CTR_WIDTH'(0))
           begin
-            tgt_wr_u0[s] = 1'b1;
-            tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
+            t_tgt_wr_u0[s] = 1'b1;
+            t_tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
           end
         end
       end
@@ -804,14 +807,14 @@ module ittage_cntrl #(
 
   // ================================================================
   // Allocation write strobe and data (per slot).
-  // alc_wr_u0 fires on mispredict when provider != IT5 and
+  // alc_wr fires on mispredict when provider != IT5 and
   // a valid candidate was found.
-  // alc_wd_u0 = {alc_tag, resolved_tgt, lcl_epoch, 0, 0, 1b valid}.
+  // t_alc_wd_u0 = {alc_tag, resolved_tgt, lcl_epoch, 0, 0, 1b valid}.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_alc_upd
     always_comb begin : alc_upd
-      alc_wr_u0[s] = 1'b0;
-      alc_wd_u0[s] = '0;
+      t_alc_wr_u0[s] = 1'b0;
+      t_alc_wd_u0[s] = '0;
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
@@ -819,8 +822,8 @@ module ittage_cntrl #(
           && (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_comp
               != TSEL_W'(0)))
       begin
-        alc_wr_u0[s] = 1'b1;
-        alc_wd_u0[s] = {
+        t_alc_wr_u0[s] = 1'b1;
+        t_alc_wd_u0[s] = {
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_tag,
           ittage_upd_inp_u0[s].resolved_target,
           lcl_epoch[s],

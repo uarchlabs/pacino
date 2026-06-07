@@ -63,6 +63,7 @@ module tb;
   logic [TSW-1:0]              alt_tbl_sel_u0[0:NPS-1];
   logic [TSW-1:0]              alc_tbl_sel_u0[0:NPS-1];
   logic [IT_MAX_IDX_WIDTH-1:0] upd_index_u0[0:NPS-1];
+  logic [IT_MAX_IDX_WIDTH-1:0] alt_upd_index_u0[0:NPS-1];
   logic [IT_MAX_IDX_WIDTH-1:0] alc_index_u0[0:NPS-1];
 
   // ----------------------------------------------------------------
@@ -81,28 +82,29 @@ module tb;
     .ittage_enable_aging  (ittage_enable_aging),
     .ittage_aging_interval(ittage_aging_interval),
     .trx_type             (trx_type_tb),
-    .tbl_hit_p1           (tbl_hit_p1),
-    .tbl_pred_tgt_p1      (tbl_pred_tgt_p1),
-    .tbl_cntrl_bits_p1    (tbl_cntrl_bits_p1),
-    .tbl_idx_hash_p0      (tbl_idx_hash_p0),
-    .tbl_tag_hash_p0      (tbl_tag_hash_p0),
-    .prm_ctr_wd_u0        (prm_ctr_wd_u0),
-    .alt_ctr_wd_u0        (alt_ctr_wd_u0),
-    .use_wd_u0            (use_wd_u0),
-    .epc_wd_u0            (epc_wd_u0),
-    .tgt_wd_u0            (tgt_wd_u0),
-    .alc_wd_u0            (alc_wd_u0),
-    .prm_ctr_wr_u0        (prm_ctr_wr_u0),
-    .alt_ctr_wr_u0        (alt_ctr_wr_u0),
-    .use_wr_u0            (use_wr_u0),
-    .epc_wr_u0            (epc_wr_u0),
-    .tgt_wr_u0            (tgt_wr_u0),
-    .alc_wr_u0            (alc_wr_u0),
-    .prm_tbl_sel_u0       (prm_tbl_sel_u0),
-    .alt_tbl_sel_u0       (alt_tbl_sel_u0),
-    .alc_tbl_sel_u0       (alc_tbl_sel_u0),
-    .upd_index_u0         (upd_index_u0),
-    .alc_index_u0         (alc_index_u0)
+    .t_hit_p1             (tbl_hit_p1),
+    .t_pred_tgt_p1        (tbl_pred_tgt_p1),
+    .t_cntrl_bits_p1      (tbl_cntrl_bits_p1),
+    .t_idx_hash_p0        (tbl_idx_hash_p0),
+    .t_tag_hash_p0        (tbl_tag_hash_p0),
+    .t_prm_ctr_wd_u0      (prm_ctr_wd_u0),
+    .t_alt_ctr_wd_u0      (alt_ctr_wd_u0),
+    .t_use_wd_u0          (use_wd_u0),
+    .t_epc_wd_u0          (epc_wd_u0),
+    .t_tgt_wd_u0          (tgt_wd_u0),
+    .t_alc_wd_u0          (alc_wd_u0),
+    .t_prm_ctr_wr_u0      (prm_ctr_wr_u0),
+    .t_alt_ctr_wr_u0      (alt_ctr_wr_u0),
+    .t_use_wr_u0          (use_wr_u0),
+    .t_epc_wr_u0          (epc_wr_u0),
+    .t_tgt_wr_u0          (tgt_wr_u0),
+    .t_alc_wr_u0          (alc_wr_u0),
+    .t_prm_tbl_sel_u0     (prm_tbl_sel_u0),
+    .t_alt_tbl_sel_u0     (alt_tbl_sel_u0),
+    .t_alc_tbl_sel_u0     (alc_tbl_sel_u0),
+    .t_prm_upd_index_u0   (upd_index_u0),
+    .t_alt_upd_index_u0   (alt_upd_index_u0),
+    .t_alc_index_u0       (alc_index_u0)
   );
 
   // ----------------------------------------------------------------

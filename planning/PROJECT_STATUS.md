@@ -328,7 +328,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | the ittage sim targets.                | sim_tage_fast. There is no similar|
 |    |                                        | target for ittage, create one   |
 |    |                                        | called sim_ittage_fast          |
-| 76 | ittage should have independent index   | |
+| 76 | ittage should have independent index   | CLOSED with BP-046 |
 |    | buses for primary and alternative      | |
 |    | table updates.                         | |
 |    | | Since there are different history lengths, and the indexes are |
