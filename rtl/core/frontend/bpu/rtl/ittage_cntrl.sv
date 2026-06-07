@@ -630,8 +630,9 @@ module ittage_cntrl #(
 
   // ================================================================
   // CTR update logic (per slot).
-  // When using_primary: update alt CTR (rows 2-5 of CTR table).
-  // When !using_primary: update prm CTR (rows 6-9 of CTR table).
+  // H gates all rows: when H=0 no CTR write (rule doc row 1).
+  // When using_primary: update prm CTR (rows 18-33 of CTR table).
+  // When !using_primary: update alt CTR (rows 2-17 of CTR table).
   // Saturating inc/dec per BD7.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_ctr_upd
@@ -640,37 +641,13 @@ module ittage_cntrl #(
       alt_ctr_wr_u0[s]  = 1'b0;
       prm_ctr_wd_u0[s]  = '0;
       alt_ctr_wd_u0[s]  = '0;
-      if (ittage_upd_val_u0[s]) begin
+      if (ittage_upd_val_u0[s]
+          && ittage_upd_inp_u0[s].ittage_pred_meta.ittage_hit)
+      begin
         if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_using_primary)
         begin
-          // alt CTR update: provider was primary
+          // prm CTR update: provider was primary (rows 18-33)
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_comp
-              != TSEL_W'(0))
-          begin
-            alt_ctr_wr_u0[s] = 1'b1;
-            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
-              // INC saturating
-              alt_ctr_wd_u0[s] =
-                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                 == {IT_MAX_CTR_WIDTH{1'b1}})
-                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                : IT_MAX_CTR_WIDTH'(
-                    ittage_upd_inp_u0[s]
-                      .ittage_pred_meta.ittage_alt_ctr + 1'b1);
-            end else begin
-              // DEC saturating
-              alt_ctr_wd_u0[s] =
-                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                 == IT_MAX_CTR_WIDTH'(0))
-                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
-                : IT_MAX_CTR_WIDTH'(
-                    ittage_upd_inp_u0[s]
-                      .ittage_pred_meta.ittage_alt_ctr - 1'b1);
-            end
-          end
-        end else begin
-          // prm CTR update: provider was alternate
-          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
               != TSEL_W'(0))
           begin
             prm_ctr_wr_u0[s] = 1'b1;
@@ -692,6 +669,32 @@ module ittage_cntrl #(
                 : IT_MAX_CTR_WIDTH'(
                     ittage_upd_inp_u0[s]
                       .ittage_pred_meta.ittage_prm_ctr - 1'b1);
+            end
+          end
+        end else begin
+          // alt CTR update: provider was alternate (rows 2-17)
+          if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_comp
+              != TSEL_W'(0))
+          begin
+            alt_ctr_wr_u0[s] = 1'b1;
+            if (!ittage_upd_inp_u0[s].indir_mispredict) begin
+              // INC saturating
+              alt_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                 == {IT_MAX_CTR_WIDTH{1'b1}})
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_alt_ctr + 1'b1);
+            end else begin
+              // DEC saturating
+              alt_ctr_wd_u0[s] =
+                (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                 == IT_MAX_CTR_WIDTH'(0))
+                ? ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
+                : IT_MAX_CTR_WIDTH'(
+                    ittage_upd_inp_u0[s]
+                      .ittage_pred_meta.ittage_alt_ctr - 1'b1);
             end
           end
         end

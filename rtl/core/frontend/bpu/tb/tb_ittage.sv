@@ -198,6 +198,79 @@ module tb;
   endtask
 
   // ================================================================
+  // bw_write: backdoor write to ittage_table RAM.
+  // tbl : 1-5 (IT1-IT5).
+  // slot: 0 -> u_ram_s0 (pred slot 0), 1 -> u_ram_s1 (pred slot 1).
+  // bank: MSB of full index hash (0 or 1).
+  // ent : remaining index bits (0..RAM_ENTRIES-1).
+  // Entry packing: VAL[0],CTR[3:1],USE[5:4],EPC[7:6],TGT[45:8],
+  //   TAG[ALLOC_DATA_WIDTH-1:46]. Max ALLOC_DATA_WIDTH=57 (IT5).
+  // Tag is stored at d[56:46]; write truncates to table width.
+  // Backdoor path: dut.gen_ittage_tables[T].gen_active.u_table
+  //   .u_ram_s{slot}.mem[bank][ent].
+  // ================================================================
+  task automatic bw_write(
+    input int tbl, input int slot,
+    input int bank, input int ent,
+    input logic                        val,
+    input logic [IT_MAX_CTR_WIDTH-1:0] ctr,
+    input logic [IT_MAX_USE_WIDTH-1:0] use_fld,
+    input logic [IT_MAX_EPC_WIDTH-1:0] epc,
+    input logic [IT_MAX_TGT_WIDTH-1:0] tgt,
+    input logic [IT_MAX_TAG_WIDTH-1:0] tag
+  );
+    automatic logic [56:0] d;
+    d        = '0;
+    d[0]     = val;
+    d[3:1]   = ctr;
+    d[5:4]   = use_fld;
+    d[7:6]   = epc;
+    d[45:8]  = tgt;
+    d[56:46] = IT_MAX_TAG_WIDTH'(tag);
+    if (slot == 0) begin
+      case (tbl)
+        // IT1/IT2: ALLOC_DATA_WIDTH=54, TAG=8b -> d[53:0]
+        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[53:0];
+        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[53:0];
+        // IT3/IT4: ALLOC_DATA_WIDTH=55, TAG=9b -> d[54:0]
+        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[54:0];
+        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[54:0];
+        // IT5: ALLOC_DATA_WIDTH=57, TAG=11b -> d[56:0]
+        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[56:0];
+        default:
+          $display("  WARN: bw_write: invalid tbl %0d", tbl);
+      endcase
+    end else begin
+      case (tbl)
+        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[53:0];
+        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[53:0];
+        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[54:0];
+        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[54:0];
+        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[56:0];
+        default:
+          $display("  WARN: bw_write: invalid tbl %0d", tbl);
+      endcase
+    end
+  endtask
+
+  // do_reset: apply reset pulse; wait for ittage_rdy.
+  // RAM contents are preserved (fast_init runs at time 0 only).
+  // UAON registers reset to IT_UAON_THRES; monitor counters reset.
+  task automatic do_reset();
+    automatic int t;
+    clr();
+    rstn = 1'b0;
+    repeat(3) @(posedge clk);
+    rstn = 1'b1;
+    t    = 0;
+    @(posedge clk);
+    while (!ittage_rdy && t < 200) begin
+      @(posedge clk); t++;
+    end
+    repeat(2) @(posedge clk);
+  endtask
+
+  // ================================================================
   // TC-P01: No-hit, slot 0 only
   // ================================================================
   task automatic tc_p01();
@@ -607,14 +680,15 @@ module tb;
   // ================================================================
   // TC-CTR-R01: CTR table row 1 (H=0, no CTR update)
   // Coverage: ittage_cntrl_ctr_update_rules.md row 1.
-  // Reset: IT1 entry for 0x3000 is in allocation-reset state
-  // (CTR=0) because TC-P04 never succeeded (Bug C in RTL).
+  // Captures CTR before the H=0 update and verifies no change.
   // ================================================================
   task automatic tc_ctr_r01();
     ittage_upd_inp_t upd;
+    automatic logic [IT_MAX_CTR_WIDTH-1:0] ctr_pre;
     $display("-- TC-CTR-R01 CTR row 1 H=0 no update");
     do_pred(40'h0000_3000, 6'h40, 0);
     wait_prdy(0);
+    ctr_pre = ittage_pred_meta_p2[0].ittage_prm_ctr;
     upd = '0;
     upd.ittage_pred_meta = ittage_pred_meta_p2[0];
     upd.ittage_pred_meta.ittage_hit = 1'b0; // force H=0 -> row 1
@@ -625,7 +699,8 @@ module tb;
     do_pred(40'h0000_3000, 6'h41, 0);
     wait_prdy(0);
     chk("CTR-R01:no_ctr_chg",
-      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h0);
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr),
+      64'(ctr_pre));
     @(posedge clk);
   endtask
 
@@ -763,6 +838,261 @@ module tb;
   endtask
 
   // ================================================================
+  // CTR backdoor tests: use PC=40'h0000_0200, folded_hist=0.
+  // IT1 and IT2 at this PC (both idx=8'h80, tag=8'h02):
+  //   bank = idx[7] = 1, entry = idx[6:0] = 0, tag_ext = 11'h002.
+  // Seeded TGT = 38'h0_0000_5000 throughout.
+  // ================================================================
+
+  // ================================================================
+  // TC-CTR-UP1-INC: primary CTR INC observed via readback.
+  // Representative for rows 18,19,20,21,30,31,32,33 (UP=1 correct).
+  // All share the same RTL path: prm_ctr_wr + prm_ctr_wd = ctr+1.
+  // ================================================================
+  task automatic tc_ctr_up1_inc();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-CTR-UP1-INC rows 18-33 representative");
+    clr();
+    // IT1 slot-0: CTR=1, USE=1, VAL=1. No IT2+ entry at this idx.
+    bw_write(1, 0, 1, 0, 1'b1, 3'h1, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h60, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-UP1-INC:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("CTR-UP1-INC:using_prm",
+      64'(m.ittage_using_primary), 64'h1);
+    chk("CTR-UP1-INC:ctr_pre",
+      64'(m.ittage_prm_ctr),       64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_5000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0200, 6'h61, 0);
+    wait_prdy(0);
+    chk("CTR-UP1-INC:ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h2);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-CTR-UP1-DEC: primary CTR DEC observed via readback.
+  // Representative for rows 22,23,24,25,26,27,28,29 (UP=1 mis).
+  // ================================================================
+  task automatic tc_ctr_up1_dec();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-CTR-UP1-DEC rows 22-29 representative");
+    clr();
+    bw_write(1, 0, 1, 0, 1'b1, 3'h3, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h62, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-UP1-DEC:ctr_pre",
+      64'(m.ittage_prm_ctr),       64'h3);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_6000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Mispredict triggers alloc to IT2 at {1,0}. Invalidate so IT2
+    // does not preempt IT1 as primary in the readback prediction.
+    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    do_pred(40'h0000_0200, 6'h63, 0);
+    wait_prdy(0);
+    chk("CTR-UP1-DEC:ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h2);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-CTR-UP0-INC: alternate CTR INC observed via readback.
+  // Representative for rows 2,3,4,5,14,15,16,17 (UP=0 correct).
+  // IT2=primary(CTR=0) -> not_null=0, UAON=8>=8 -> use_alt=1.
+  // IT1=alternate(CTR=1) -> alt_ctr_wr fires, wd=2.
+  // ================================================================
+  task automatic tc_ctr_up0_inc();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-CTR-UP0-INC rows 2-17 representative");
+    clr();
+    // IT2 primary: CTR=0 triggers UAON use_alt.
+    bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    // IT1 alternate: CTR=1.
+    bw_write(1, 0, 1, 0, 1'b1, 3'h1, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h64, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-UP0-INC:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("CTR-UP0-INC:using_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    chk("CTR-UP0-INC:alt_ctr_pre",
+      64'(m.ittage_alt_ctr),       64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_5000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0200, 6'h65, 0);
+    wait_prdy(0);
+    chk("CTR-UP0-INC:alt_ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h2);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-CTR-UP0-DEC: alternate CTR DEC observed via readback.
+  // Representative for rows 6,7,8,9,10,11,12,13 (UP=0 mis).
+  // ================================================================
+  task automatic tc_ctr_up0_dec();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-CTR-UP0-DEC rows 6-13 representative");
+    clr();
+    bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    bw_write(1, 0, 1, 0, 1'b1, 3'h3, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h66, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-UP0-DEC:using_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    chk("CTR-UP0-DEC:alt_ctr_pre",
+      64'(m.ittage_alt_ctr),       64'h3);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_6000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Mispredict (prm=IT2) triggers alloc to IT3 at {bank=0,ent=128}.
+    // Invalidate so IT3 does not preempt as primary in the readback.
+    bw_write(3, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    do_pred(40'h0000_0200, 6'h67, 0);
+    wait_prdy(0);
+    chk("CTR-UP0-DEC:alt_ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h2);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-CTR-SAT: saturation holds for primary and alternate CTR.
+  // - prm INC at max (CTR=7): held at 7.
+  // - prm DEC at 0  (CTR=0, no alt): held at 0.
+  // - alt INC at max (CTR=7): held at 7.
+  // - alt DEC at 0  (CTR=0): held at 0.
+  // ================================================================
+  task automatic tc_ctr_sat();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-CTR-SAT saturation");
+
+    // prm INC at max
+    // Clear alloc residues from prior DEC tests at the two PC=0x200
+    // addresses: IT2 at {1,0}, IT3-IT5 at {0,128} (9-bit idx=0x080).
+    clr();
+    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(3, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(1, 0, 1, 0, 1'b1, 3'h7, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h68, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-SAT:prm_max_pre",  64'(m.ittage_prm_ctr), 64'h7);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_5000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0200, 6'h69, 0);
+    wait_prdy(0);
+    chk("CTR-SAT:prm_max_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h7);
+
+    // prm DEC at 0; invalidate IT2 so no alternate fires
+    clr();
+    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(1, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h6A, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-SAT:prm_zero_pre", 64'(m.ittage_prm_ctr),       64'h0);
+    chk("CTR-SAT:prm_zero_prm", 64'(m.ittage_using_primary), 64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_6000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0200, 6'h6B, 0);
+    wait_prdy(0);
+    chk("CTR-SAT:prm_zero_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h0);
+
+    // alt INC at max
+    clr();
+    bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    bw_write(1, 0, 1, 0, 1'b1, 3'h7, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h6C, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-SAT:alt_max_pre",  64'(m.ittage_alt_ctr), 64'h7);
+    chk("CTR-SAT:alt_max_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_5000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0200, 6'h6D, 0);
+    wait_prdy(0);
+    chk("CTR-SAT:alt_max_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h7);
+
+    // alt DEC at 0
+    clr();
+    bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    bw_write(1, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_5000, 11'h002);
+    do_pred(40'h0000_0200, 6'h6E, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("CTR-SAT:alt_zero_pre", 64'(m.ittage_alt_ctr), 64'h0);
+    chk("CTR-SAT:alt_zero_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_6000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    do_pred(40'h0000_0200, 6'h6F, 0);
+    wait_prdy(0);
+    chk("CTR-SAT:alt_zero_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h0);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -808,6 +1138,15 @@ module tb;
     tc_use_r02();
     tc_use_r03();
     tc_use_r04();
+
+    // CTR fix proof: reset DUT (RAM preserved), then backdoor tests.
+    // UAON resets to IT_UAON_THRES=8 so use_alt fires on prm_ctr=0.
+    do_reset();
+    tc_ctr_up1_inc();
+    tc_ctr_up1_dec();
+    tc_ctr_up0_inc();
+    tc_ctr_up0_dec();
+    tc_ctr_sat();
 
     repeat(5) @(posedge clk);
 
