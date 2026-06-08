@@ -300,16 +300,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 70 | ittage rollback / history recompute.   | Same as #69 for ittage. Shared  |
 |    | Dark; tracks arch TBDs.                | GHR/PHR fold logic, G21/G22.    |
 |    |                                        | Defer to bp_cluster.            |
-| 71 | tage round-trip (capstone).            | Mixed ctr/use/alloc/epc in one  |
-|    | Capstone, not vehicle.                 | flow. Run ONLY after            |
-|    |                                        | #55,58,60,62,64 each proven     |
+| 71 | tage round-trip                        | Mixed ctr/use/alloc/epc in one  |
+|    | Combined test, run only after          | flow. Run ONLY after            |
+|    | individual tests pass                  | #55,58,60,62,64 each proven     |
 |    |                                        | alone -- mixing before          |
 |    |                                        | isolation reproduces the multi- |
 |    |                                        | cause ambiguity that stalled    |
 |    |                                        | BP-044.                         |
 | 72 | ittage round-trip (capstone).          | Mixed ctr/use/alloc/epc/tgt in  |
-|    | Capstone, not vehicle.                 | one flow. Run ONLY after        |
-|    |                                        | #56,57,59,61,63,65 each proven  |
+|    | Combined test, run only after          | one flow. Run ONLY after        |
+|    | individual tests pass                  | #56,57,59,61,63,65 each proven  |
 |    |                                        | alone. Same isolation-first     |
 |    |                                        | rule as #71.                    |
 | 73 | Arbitration layer behavioral test.     | PQ/UQ FIFOs + credit arbiter.   |
@@ -328,7 +328,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | the ittage sim targets.                | sim_tage_fast. There is no similar|
 |    |                                        | target for ittage, create one   |
 |    |                                        | called sim_ittage_fast          |
-| 76 | ittage should have independent index   | CLOSED with BP-046 |
+| 76 | ittage should have independent index   | CLOSED with BP-048 |
 |    | buses for primary and alternative      | |
 |    | table updates.                         | |
 |    | | Since there are different history lengths, and the indexes are |

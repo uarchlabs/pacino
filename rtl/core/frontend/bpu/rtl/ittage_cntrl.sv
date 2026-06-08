@@ -603,7 +603,9 @@ module ittage_cntrl #(
   // t_alc_tbl_sel_u0: from update input meta alc_comp.
   // t_prm_upd_index_u0: primary provider index from meta.
   // t_alt_upd_index_u0: alternate provider index from meta.
-  // t_alc_index_u0 = t_prm_upd_index_u0 (pre-existing, TD #76).
+  // t_alc_index_u0: allocation RAM index, sourced from
+  // ittage_alc_idx in meta (pre-hashed at predict time per
+  // ittage_cntrl_alloc_rules.md). Not the prm update index.
   // Gate on ittage_upd_val_u0[s] (read by always_ff) so Verilator
   // places this block in the active evaluation region.
   // ================================================================
@@ -626,7 +628,8 @@ module ittage_cntrl #(
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_idx;
         t_alt_upd_index_u0[s] =
           ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_idx;
-        t_alc_index_u0[s] = t_prm_upd_index_u0[s];
+        t_alc_index_u0[s] =
+          ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alc_idx;
       end
     end
   end

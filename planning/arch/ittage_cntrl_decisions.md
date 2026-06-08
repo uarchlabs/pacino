@@ -217,12 +217,15 @@ aligned data. ittage_table performs the merged write.
 
 ## Concurrent CTR and TGT Writes
 
-CTR and TGT writes on misprediction are mutually exclusive.
-From Seznec: if CTR is non-null on misprediction, decrement
-CTR -- no target write. If CTR is null on misprediction,
-replace target -- CTR stays at null, no CTR write.
-tgt_wr_u0 and prm_ctr_wr_u0 (or alt_ctr_wr_u0) are never
-asserted in the same cycle for the same entry.
+It is the intent expressed by Seznec that the target field is only
+replaced during a misprediction if the corresponding CTR is 0. 
+
+On misprediction if the CTR is 0 the target field is written;
+if the CTR is non-zero, the CTR is decremented, the target
+field is not written.
+
+Previously, the CTR and TGT writes were required to be mutually
+exclusive. This is unnecessarily restrictive. 
 
 ---
 

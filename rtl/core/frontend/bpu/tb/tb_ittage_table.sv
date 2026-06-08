@@ -299,10 +299,15 @@ module tb;
 
     // --------------------------------------------------------
     // TC-USE-EPC: use_wr and epc_wr via prm path, read back
+    // USE/EPC gate in ittage_table requires co-assertion of
+    // prm_ctr_wr+prm_match or alt_ctr_wr+alt_match. Without
+    // the CTR strobe the gate is closed and nothing writes.
     // --------------------------------------------------------
     ittage_upd_val_u0[0] = 1;
     use_wr_u0[0]         = 1;
     epc_wr_u0[0]         = 1;
+    prm_ctr_wr_u0[0]     = 1;
+    prm_ctr_wd_u0[0]     = 3'b111;
     prm_tbl_sel_u0[0]    = TBL_SEL_W'(1);
     use_wd_u0[0]         = 2'b11;
     epc_wd_u0[0]         = 2'b01;
@@ -312,6 +317,7 @@ module tb;
     ittage_upd_val_u0[0] = 0;
     use_wr_u0[0]         = 0;
     epc_wr_u0[0]         = 0;
+    prm_ctr_wr_u0[0]     = 0;
     @(posedge clk); #1;
     check("TC-USE-EPC hit_p1[0]", hit_p1[0], 1'b1);
     check_w("TC-USE-EPC cntrl_bits[0][5:4]",

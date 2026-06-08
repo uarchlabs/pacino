@@ -281,12 +281,15 @@ module tb;
     end
     @(posedge clk); #1;
     ittage_pred_val_p0 = '0;
+    // Hold tbl_hit_p1/cntrl_bits/pred_tgt stable through p1
+    // period so prv_alt_scan sees correct inputs when
+    // meta_p2_reg latches at the p1->p2 posedge.
+    @(posedge clk); #1;
     for (int t = 0; t < NTS; t++) begin
       tbl_hit_p1[t][0]        = 1'b0;
       tbl_cntrl_bits_p1[t][0] = '0;
       tbl_pred_tgt_p1[t][0]   = '0;
     end
-    @(posedge clk); #1;
     m   = ittage_pred_meta_p2[0];
     rdy = ittage_pred_rdy_p2[0];
   endtask
@@ -461,17 +464,18 @@ module tb;
     tbl_pred_tgt_p1[2][1]   = 38'h0000_0000_DDDD;
     @(posedge clk); #1;
     ittage_pred_val_p0      = '0;
+    // Hold hit/cntrl/tgt stable until meta_p2_reg latches.
+    @(posedge clk); #1;
+    m0 = ittage_pred_meta_p2[0];
+    m1 = ittage_pred_meta_p2[1];
+    r0 = ittage_pred_rdy_p2[0];
+    r1 = ittage_pred_rdy_p2[1];
     tbl_hit_p1[5][0]        = 1'b0;
     tbl_hit_p1[2][1]        = 1'b0;
     tbl_cntrl_bits_p1[5][0] = '0;
     tbl_pred_tgt_p1[5][0]   = '0;
     tbl_cntrl_bits_p1[2][1] = '0;
     tbl_pred_tgt_p1[2][1]   = '0;
-    @(posedge clk); #1;
-    m0 = ittage_pred_meta_p2[0];
-    m1 = ittage_pred_meta_p2[1];
-    r0 = ittage_pred_rdy_p2[0];
-    r1 = ittage_pred_rdy_p2[1];
     clr();
     chk3("PRED06 s0 prm_comp", m0.ittage_prm_comp,   3'(5));
     chk1("PRED06 s0 hit",      m0.ittage_hit,         1'b1);
@@ -494,9 +498,12 @@ module tb;
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
     #1;
-    chk1("UPD01 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b1);
-    chk1("UPD01 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
-    chk3("UPD01 alt_ctr_wd", alt_ctr_wd_u0[0], 3'b011);
+    // UP=1 -> provider is primary (rows 18-33 of CTR rules table).
+    // prm_ctr_wr fires; alt_ctr_wr stays low.
+    // prm_ctr=3'b101, no_mispredict: INC -> 3'b110.
+    chk1("UPD01 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
+    chk1("UPD01 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
+    chk3("UPD01 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b110);
     chk1("UPD01 use_wr",     use_wr_u0[0],     1'b1);
     chk2("UPD01 use_wd",     use_wd_u0[0],     2'b10);
     chk1("UPD01 epc_wr",     epc_wr_u0[0],     1'b1);
@@ -518,9 +525,11 @@ module tb;
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
     #1;
-    chk1("UPD02 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b1);
-    chk3("UPD02 alt_ctr_wd", alt_ctr_wd_u0[0], 3'b001);
-    chk1("UPD02 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
+    // UP=1 -> prm_ctr_wr fires (rows 22-29 of CTR rules table).
+    // prm_ctr=3'b101, mispredict: DEC -> 3'b100.
+    chk1("UPD02 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
+    chk3("UPD02 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b100);
+    chk1("UPD02 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
     chk1("UPD02 tgt_wr",     tgt_wr_u0[0],     1'b0);
     chk1("UPD02 alc_wr",     alc_wr_u0[0],     1'b1);
     @(posedge clk); #1;
@@ -540,9 +549,12 @@ module tb;
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
     #1;
-    chk1("UPD03 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
-    chk3("UPD03 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b100);
-    chk1("UPD03 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
+    // UP=0 -> provider is alternate (rows 2-17 of CTR rules table).
+    // alt_ctr_wr fires; prm_ctr_wr stays low.
+    // alt_ctr=3'b010, no_mispredict: INC -> 3'b011.
+    chk1("UPD03 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b1);
+    chk3("UPD03 alt_ctr_wd", alt_ctr_wd_u0[0], 3'b011);
+    chk1("UPD03 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
     @(posedge clk); #1;
     clr();
   endtask
@@ -562,8 +574,11 @@ module tb;
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
     #1;
-    chk1("UPD04 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
-    chk3("UPD04 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b010);
+    // UP=0 -> alt_ctr_wr fires (rows 6-13 of CTR rules table).
+    // alt_ctr=3'b010, mispredict: DEC -> 3'b001.
+    chk1("UPD04 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b1);
+    chk3("UPD04 alt_ctr_wd", alt_ctr_wd_u0[0], 3'b001);
+    chk1("UPD04 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
     chk1("UPD04 tgt_wr",     tgt_wr_u0[0],     1'b0);
     chk1("UPD04 alc_wr",     alc_wr_u0[0],     1'b1);
     @(posedge clk); #1;
@@ -584,11 +599,14 @@ module tb;
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
     #1;
+    // UP=1 -> prm_ctr_wr fires (rows 22-29 of CTR rules table).
+    // prm_ctr=3'b000, mispredict: DEC saturates at 3'b000.
+    // tgt_wr fires independently: mispredict + UP=1 + prm_ctr==0.
     chk1("UPD05 tgt_wr",     tgt_wr_u0[0],     1'b1);
     chk38("UPD05 tgt_wd",    tgt_wd_u0[0],     38'hBEEF);
-    chk1("UPD05 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
-    chk1("UPD05 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b1);
-    chk3("UPD05 alt_ctr_wd", alt_ctr_wd_u0[0], 3'b001);
+    chk1("UPD05 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
+    chk1("UPD05 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
+    chk3("UPD05 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b000);
     @(posedge clk); #1;
     clr();
   endtask
@@ -614,12 +632,17 @@ module tb;
     // lcl_epoch=0 (reset, aging disabled)
     exp_alc = {11'h555, 38'hBEEF,
                2'b00, 2'b00, 3'b000, 1'b1};
+    // alc_index must come from ittage_alc_idx (9'h044), not
+    // ittage_prm_idx (9'h033). ittage_alc_idx != ittage_prm_idx
+    // here, so this check is discriminating: pre-fix RTL sources
+    // t_prm_upd_index_u0 (9'h033) and FAILS; post-fix RTL
+    // sources ittage_alc_idx (9'h044) and PASSES.
     chk1("UPD06 alc_wr",
          alc_wr_u0[0],      1'b1);
     chk3("UPD06 alc_tbl_sel",
          alc_tbl_sel_u0[0], 3'(4));
     chk9("UPD06 alc_index",
-         alc_index_u0[0],   9'h033);
+         alc_index_u0[0],   9'h044);
     chk57("UPD06 alc_wd",
           alc_wd_u0[0],     exp_alc);
     @(posedge clk); #1;
