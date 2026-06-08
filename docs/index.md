@@ -452,6 +452,7 @@ title: ""
        <span style="color:var(--accent);">●</span>&nbsp; New: interactive uarch document, see Overview tab<br>
        <span style="color:var(--accent);">●</span>&nbsp; New: IA session browser, see  Sessions tab<br>
        <span style="color:var(--accent);">●</span>&nbsp; BP-041 complete &mdash; TAGE CTR update testing &middot; 2026.05.30<br>
+       <span style="color:var(--accent);">●</span>&nbsp; BP-042-048 complete &mdash; TAGE/ITTAGE audits and design improvements; 2026.06.08<br>
 
 <!--span style="color:var(--accent);">●</span>&nbsp; BP-039 complete &mdash; ittage_cntrl update path verification &middot; 2026.05.17<br -->
 

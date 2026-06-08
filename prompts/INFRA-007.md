@@ -17,7 +17,8 @@ Task:   [ ] experiment  [ ] implementation  [ ] debug
 Mode:   [x] automated   [ ] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
+
 Smoke test for context and model capture in Results Capture.
 Run make lint from the branch predictor directory and report
 results. Primary purpose is to verify that Ctx %, Model, and

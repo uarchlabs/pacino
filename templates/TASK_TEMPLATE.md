@@ -18,7 +18,7 @@ Task:   [ ] experiment  [ ] implementation  [ ] debug
 Mode:   [ ] automated   [ ] manual
 Status: [ ] in-progress [ ] complete        [ ] abandoned
 
-# Overview of task
+# Task Overview
 
 :: HEADER:END ::
 
