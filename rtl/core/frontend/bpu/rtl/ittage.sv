@@ -162,7 +162,9 @@ module ittage (
   logic [NUM_PRED_SLOTS-1:0] cntrl_alt_ctr_wr;
   logic [NUM_PRED_SLOTS-1:0] cntrl_use_wr;
   logic [NUM_PRED_SLOTS-1:0] cntrl_epc_wr;
-  logic [NUM_PRED_SLOTS-1:0] cntrl_tgt_wr;
+  // Split tgt write strobes: prm fires UP=1, alt fires UP=0.
+  logic [NUM_PRED_SLOTS-1:0] cntrl_prm_tgt_wr;
+  logic [NUM_PRED_SLOTS-1:0] cntrl_alt_tgt_wr;
   logic [NUM_PRED_SLOTS-1:0] cntrl_alc_wr;
   // Table selectors.
   logic [IT_TBL_SEL_WIDTH-1:0]
@@ -482,7 +484,8 @@ module ittage (
     .t_alt_ctr_wr_u0      (cntrl_alt_ctr_wr),
     .t_use_wr_u0          (cntrl_use_wr),
     .t_epc_wr_u0          (cntrl_epc_wr),
-    .t_tgt_wr_u0          (cntrl_tgt_wr),
+    .t_prm_tgt_wr_u0      (cntrl_prm_tgt_wr),
+    .t_alt_tgt_wr_u0      (cntrl_alt_tgt_wr),
     .t_alc_wr_u0          (cntrl_alc_wr),
     .t_prm_tbl_sel_u0     (cntrl_prm_tbl_sel),
     .t_alt_tbl_sel_u0     (cntrl_alt_tbl_sel),
@@ -563,7 +566,8 @@ module ittage (
         .alt_ctr_wr_u0      (cntrl_alt_ctr_wr),
         .use_wr_u0          (cntrl_use_wr),
         .epc_wr_u0          (cntrl_epc_wr),
-        .tgt_wr_u0          (cntrl_tgt_wr),
+        .prm_tgt_wr_u0      (cntrl_prm_tgt_wr),
+        .alt_tgt_wr_u0      (cntrl_alt_tgt_wr),
         .alc_wr_u0          (cntrl_alc_wr),
         .prm_tbl_sel_u0     (cntrl_prm_tbl_sel),
         .alt_tbl_sel_u0     (cntrl_alt_tbl_sel),

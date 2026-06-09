@@ -63,7 +63,6 @@ module ittage_cntrl #(
   output logic [NUM_PRED_SLOTS-1:0]   t_alt_ctr_wr_u0,
   output logic [NUM_PRED_SLOTS-1:0]   t_use_wr_u0,
   output logic [NUM_PRED_SLOTS-1:0]   t_epc_wr_u0,
-  output logic [NUM_PRED_SLOTS-1:0]   t_tgt_wr_u0,
   output logic [NUM_PRED_SLOTS-1:0]   t_alc_wr_u0,
   // update selectors and addresses (fanned by ittage.sv)
   output logic [IT_TBL_SEL_WIDTH-1:0] t_prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
@@ -71,7 +70,10 @@ module ittage_cntrl #(
   output logic [IT_TBL_SEL_WIDTH-1:0] t_alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_IDX_WIDTH-1:0] t_prm_upd_index_u0[0:NUM_PRED_SLOTS-1],
   output logic [IT_MAX_IDX_WIDTH-1:0] t_alt_upd_index_u0[0:NUM_PRED_SLOTS-1],
-  output logic [IT_MAX_IDX_WIDTH-1:0] t_alc_index_u0[0:NUM_PRED_SLOTS-1]
+  output logic [IT_MAX_IDX_WIDTH-1:0] t_alc_index_u0[0:NUM_PRED_SLOTS-1],
+  // separate tgt write strobes: prm fires UP=1, alt fires UP=0
+  output logic [NUM_PRED_SLOTS-1:0]   t_prm_tgt_wr_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   t_alt_tgt_wr_u0
 );
 
   // ================================================================
@@ -634,6 +636,7 @@ module ittage_cntrl #(
     end
   end
 
+
   // ================================================================
   // CTR update logic (per slot).
   // H gates all rows: when H=0 no CTR write (rule doc row 1).
@@ -778,13 +781,16 @@ module ittage_cntrl #(
 
   // ================================================================
   // TGT update logic (per slot).
-  // Gate: indir_mispredict AND provider CTR == 0.
-  // Mutually exclusive with active CTR write (null CTR -> no DEC).
+  // Split strobes: t_prm_tgt_wr fires UP=1 (primary provider,
+  // prm_ctr=0, mispredict); t_alt_tgt_wr fires UP=0 (alternate
+  // provider, alt_ctr=0, mispredict). Mutually exclusive per slot.
+  // ittage_interfaces.md Target Write Gating: only provider written.
   // ================================================================
   for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_tgt_upd
     always_comb begin : tgt_upd
-      t_tgt_wr_u0[s] = 1'b0;
-      t_tgt_wd_u0[s] = '0;
+      t_prm_tgt_wr_u0[s] = 1'b0;
+      t_alt_tgt_wr_u0[s] = 1'b0;
+      t_tgt_wd_u0[s]     = '0;
       if (ittage_upd_val_u0[s]
           && ittage_upd_inp_u0[s].indir_mispredict)
       begin
@@ -793,14 +799,14 @@ module ittage_cntrl #(
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_ctr
               == IT_MAX_CTR_WIDTH'(0))
           begin
-            t_tgt_wr_u0[s] = 1'b1;
+            t_prm_tgt_wr_u0[s] = 1'b1;
             t_tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
           end
         end else begin
           if (ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_ctr
               == IT_MAX_CTR_WIDTH'(0))
           begin
-            t_tgt_wr_u0[s] = 1'b1;
+            t_alt_tgt_wr_u0[s] = 1'b1;
             t_tgt_wd_u0[s] = ittage_upd_inp_u0[s].resolved_target;
           end
         end

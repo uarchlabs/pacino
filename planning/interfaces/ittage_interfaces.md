@@ -363,6 +363,10 @@ If CTR is null on misprediction, replace target -- CTR stays
 at null, no CTR write. Both strobes are never asserted in the
 same cycle for the same entry.
 
+Explicitly: Even when the gating conditions are satisfied for 
+both the primary and the alternate hitting tables, only the 
+component that provided the prediction has its target field modified.
+
 ### Read-during-Write Contract
 
 Prediction and update paths are mutually exclusive by design.

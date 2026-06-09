@@ -1281,6 +1281,274 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-TGT-A: UP=1, primary CTR non-zero, misprediction.
+  // Spec: CTR decremented by 1. Target field unchanged.
+  // PC=0x0700: IT1/IT2 bank=1 ent=64 tag=11'h007.
+  // TGT_SEED=0xA000 and TGT_NEW=0xB000 differ: missed write fails.
+  // ================================================================
+  task automatic tc_tgt_a();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display(
+      "-- TC-TGT-A UP=1 CTR nonzero mispredict no tgt write");
+    clr();
+    // IT2 invalid: IT1 is the only primary at PC=0x0700.
+    bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    bw_write(1, 0, 1, 64, 1'b1, 3'h2, 2'h1, 2'h0,
+             38'h0_0000_A000, 11'h007);
+    do_pred(40'h0000_0700, 6'h01, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT-A:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("TGT-A:using_prm",
+      64'(m.ittage_using_primary), 64'h1);
+    chk("TGT-A:ctr_pre",
+      64'(m.ittage_prm_ctr),       64'h2);
+    chk("TGT-A:tgt_pre",
+      64'(m.ittage_prm_tgt),       64'h0_0000_A000);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_B000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Alloc committed to IT2 at (1,64). Invalidate for readback.
+    bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    do_pred(40'h0000_0700, 6'h02, 0);
+    wait_prdy(0);
+    chk("TGT-A:ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h1);
+    chk("TGT-A:tgt_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_tgt),
+      64'h0_0000_A000);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-TGT-B: UP=1, primary CTR zero, misprediction.
+  // Spec: CTR stays at zero (zero-to-zero write). Target replaced.
+  // PC=0x0700: IT1/IT2 bank=1 ent=64 tag=11'h007.
+  // TGT_SEED=0xA000 and TGT_NEW=0xB000 differ: missed write fails.
+  // ================================================================
+  task automatic tc_tgt_b();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-TGT-B UP=1 CTR zero mispredict: tgt replaced");
+    clr();
+    bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    bw_write(1, 0, 1, 64, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_A000, 11'h007);
+    do_pred(40'h0000_0700, 6'h03, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT-B:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("TGT-B:using_prm",
+      64'(m.ittage_using_primary), 64'h1);
+    chk("TGT-B:ctr_pre",
+      64'(m.ittage_prm_ctr),       64'h0);
+    chk("TGT-B:tgt_pre",
+      64'(m.ittage_prm_tgt),       64'h0_0000_A000);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_B000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    do_pred(40'h0000_0700, 6'h04, 0);
+    wait_prdy(0);
+    chk("TGT-B:ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h0);
+    chk("TGT-B:tgt_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_tgt),
+      64'h0_0000_B000);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-TGT-C: UP=0, alternate CTR non-zero, misprediction.
+  // Spec: alt CTR decremented by 1. Alternate target unchanged.
+  // PC=0x0900: IT2=prm(CTR=0) IT1=alt(CTR=2).
+  // IT1/IT2 bank=0 ent=64 tag=11'h009. IT3 alloc bank=0 ent=64.
+  // TGT_SEED=0xD000 and TGT_NEW=0xE000 differ: missed write fails.
+  // ================================================================
+  task automatic tc_tgt_c();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display(
+      "-- TC-TGT-C UP=0 alt CTR nonzero mispredict no tgt write");
+    clr();
+    // Pre-invalidate IT3 alloc slot so alc_comp selects IT3.
+    bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    // IT2 primary: CTR=0 -> UAON use_alt fires (UAON=8>=8).
+    bw_write(2, 0, 0, 64, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_C000, 11'h009);
+    // IT1 alternate: CTR=2 (non-zero). TGT distinct from resolved.
+    bw_write(1, 0, 0, 64, 1'b1, 3'h2, 2'h1, 2'h0,
+             38'h0_0000_D000, 11'h009);
+    do_pred(40'h0000_0900, 6'h05, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT-C:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("TGT-C:using_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    chk("TGT-C:alt_ctr_pre",
+      64'(m.ittage_alt_ctr),       64'h2);
+    chk("TGT-C:alt_tgt_pre",
+      64'(m.ittage_alt_tgt),       64'h0_0000_D000);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_E000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // IT3 alloc committed at (0,64). Invalidate to expose IT2/IT1.
+    bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    do_pred(40'h0000_0900, 6'h06, 0);
+    wait_prdy(0);
+    chk("TGT-C:alt_ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h1);
+    chk("TGT-C:alt_tgt_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_tgt),
+      64'h0_0000_D000);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-TGT-D: UP=0, alternate CTR zero, misprediction.
+  // Spec: alt CTR stays at zero. Alternate target replaced.
+  // PC=0x0900: IT2=prm(CTR=0) IT1=alt(CTR=0).
+  // TGT_SEED=0xD000 and TGT_NEW=0xE000 differ: missed write fails.
+  // ================================================================
+  task automatic tc_tgt_d();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display(
+      "-- TC-TGT-D UP=0 alt CTR zero mispredict: tgt replaced");
+    clr();
+    bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    // IT2 primary: CTR=0 -> UAON use_alt fires.
+    bw_write(2, 0, 0, 64, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_C000, 11'h009);
+    // IT1 alternate: CTR=0. TGT distinct from resolved.
+    bw_write(1, 0, 0, 64, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_D000, 11'h009);
+    do_pred(40'h0000_0900, 6'h07, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT-D:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("TGT-D:using_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    chk("TGT-D:alt_ctr_pre",
+      64'(m.ittage_alt_ctr),       64'h0);
+    chk("TGT-D:alt_tgt_pre",
+      64'(m.ittage_alt_tgt),       64'h0_0000_D000);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_E000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
+             38'h0, 11'h0);
+    do_pred(40'h0000_0900, 6'h08, 0);
+    wait_prdy(0);
+    chk("TGT-D:alt_ctr_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h0);
+    chk("TGT-D:alt_tgt_post",
+      64'(ittage_pred_meta_p2[0].ittage_alt_tgt),
+      64'h0_0000_E000);
+    // Non-provider (IT2/primary, seeded 0xC000) must be unchanged.
+    chk("TGT-D:prm_tgt_post",
+      64'(ittage_pred_meta_p2[0].ittage_prm_tgt),
+      64'h0_0000_C000);
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-TGT-B-ext: UP=1 CTR zero mispredict. Non-provider (alternate)
+  // target must be unchanged.
+  // UAON decremented 8->7 via a correct prediction so that use_alt
+  // stays 0 with alt present (uaon=7 < IT_UAON_THRES=8).
+  // IT2=prm (CTR=0, TGT=0xA000), IT1=alt (CTR=1, TGT=0xC000),
+  // both at PC=0x0700 bank=1 ent=64 tag=0x007.
+  // Resolved=0xB000. After fix: prm_tgt->0xB000; alt_tgt unchanged.
+  // ================================================================
+  task automatic tc_tgt_b_ext();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display(
+      "-- TC-TGT-B-ext UP=1 CTR zero: non-provider alt tgt unchanged");
+    clr();
+    // UAON decrement: IT1 sole provider at PC=0x1000 (bank=0 ent=0
+    // tag=0x010). Correct prediction: prm_correct, alt_wrong(0) ->
+    // DEC. uaon 8->7.
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(1, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_F000, 11'h010);
+    do_pred(40'h0000_1000, 6'h10, 0);
+    wait_prdy(0);
+    m   = ittage_pred_meta_p2[0];
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_F000;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // uaon[0]=7 < 8: use_alt will not fire even with alt present.
+    // IT2=prm (CTR=0, TGT=0xA000), IT1=alt (CTR=1, TGT=0xC000).
+    bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0_0000_A000, 11'h007);
+    bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h1, 2'h0,
+             38'h0_0000_C000, 11'h007);
+    do_pred(40'h0000_0700, 6'h11, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT-B-ext:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("TGT-B-ext:using_prm",
+      64'(m.ittage_using_primary), 64'h1);
+    chk("TGT-B-ext:prm_ctr_pre",
+      64'(m.ittage_prm_ctr),       64'h0);
+    chk("TGT-B-ext:prm_tgt_pre",
+      64'(m.ittage_prm_tgt),       64'h0_0000_A000);
+    chk("TGT-B-ext:alt_tgt_pre",
+      64'(m.ittage_alt_tgt),       64'h0_0000_C000);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_B000;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Direct RAM readback avoids alloc interference. Entry packing:
+    // TGT = d[45:8]. IT2 prm_tgt must update; IT1 alt_tgt unchanged.
+    begin
+      automatic logic [53:0] it2_ent, it1_ent;
+      automatic logic [37:0] it2_tgt, it1_tgt;
+      it2_ent = dut.gen_ittage_tables[2].gen_active
+                  .u_table.u_ram_s0.mem[1][64];
+      it1_ent = dut.gen_ittage_tables[1].gen_active
+                  .u_table.u_ram_s0.mem[1][64];
+      it2_tgt = it2_ent[45:8];
+      it1_tgt = it1_ent[45:8];
+      chk("TGT-B-ext:prm_tgt_post", 64'(it2_tgt), 64'h0_0000_B000);
+      chk("TGT-B-ext:alt_tgt_post", 64'(it1_tgt), 64'h0_0000_C000);
+    end
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -1340,6 +1608,13 @@ module tb;
     tc_use_r05();
     tc_use_r06();
     tc_use_sat();
+
+    do_reset();
+    tc_tgt_a();
+    tc_tgt_b();
+    tc_tgt_c();
+    tc_tgt_d();
+    tc_tgt_b_ext();
 
     repeat(5) @(posedge clk);
 

@@ -20,7 +20,8 @@
 // Update: write-enable gated by THIS_TABLE vs prm/alt_tbl_sel.
 // USE/EPC: prm_ctr_wr+prm_match (UP=1) or alt_ctr_wr+alt_match
 // (UP=0). See ittage_cntrl_use_update_rules.md Table 7 uSEL.
-// tgt_we gated by (prm_match | alt_match); included in norm_we.
+// tgt_we: prm_tgt_wr&prm_match (UP=1) | alt_tgt_wr&alt_match (UP=0).
+// Split strobes from ittage_cntrl enforce provider-only writes.
 // tbl_ri_active + tbl_ri_wr: RAM-init path overrides all writes.
 //
 // This requires manual verification checks
@@ -78,7 +79,9 @@ module ittage_table #(
   input  logic [NUM_PRED_SLOTS-1:0]   alt_ctr_wr_u0,
   input  logic [NUM_PRED_SLOTS-1:0]   use_wr_u0,
   input  logic [NUM_PRED_SLOTS-1:0]   epc_wr_u0,
-  input  logic [NUM_PRED_SLOTS-1:0]   tgt_wr_u0,
+  // prm_tgt fires UP=1, alt_tgt fires UP=0 (split tgt_wr strobes)
+  input  logic [NUM_PRED_SLOTS-1:0]   prm_tgt_wr_u0,
+  input  logic [NUM_PRED_SLOTS-1:0]   alt_tgt_wr_u0,
   input  logic [NUM_PRED_SLOTS-1:0]   alc_wr_u0,
   // -- table selectors (gate write enables)
   input  logic [TBL_SEL_WIDTH-1:0]    prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
@@ -248,7 +251,7 @@ module ittage_table #(
   // ambiguity (HAND-FIX-001 pattern from tage_table).
   // USE/EPC: prm_ctr_wr+prm_match (UP=1, rows 3-4) or
   //          alt_ctr_wr+alt_match (UP=0, rows 5-6). Table 7 uSEL.
-  // tgt_we: (prm_match | alt_match).
+  // tgt_we: prm_tgt_wr+prm_match (UP=1), alt_tgt_wr+alt_match (UP=0).
   always_comb begin : we_s0
     prm_match_s0  = (prm_tbl_sel_u0[0] == THIS_TBL_SEL);
     alt_match_s0  = (alt_tbl_sel_u0[0] == THIS_TBL_SEL);
@@ -264,9 +267,12 @@ module ittage_table #(
     epc_we_s0     = ittage_upd_val_u0[0] & epc_wr_u0[0]
                   & (prm_ctr_wr_u0[0] & prm_match_s0
                    | alt_ctr_wr_u0[0] & alt_match_s0);
+    // Spec: only provider table written (ittage_interfaces.md
+    // Target Write Gating). prm_tgt_wr gates on prm_match (UP=1);
+    // alt_tgt_wr gates on alt_match (UP=0). Mutually exclusive.
     tgt_we_s0     = ittage_upd_val_u0[0]
-                  & tgt_wr_u0[0]
-                  & (prm_match_s0 | alt_match_s0);
+                  & (prm_tgt_wr_u0[0] & prm_match_s0
+                   | alt_tgt_wr_u0[0] & alt_match_s0);
     alc_we_s0     = ittage_upd_val_u0[0]
                   & alc_wr_u0[0] & alc_match_s0;
     norm_we_s0    = prm_ctr_we_s0 | alt_ctr_we_s0
@@ -400,9 +406,12 @@ module ittage_table #(
     epc_we_s1     = ittage_upd_val_u0[1] & epc_wr_u0[1]
                   & (prm_ctr_wr_u0[1] & prm_match_s1
                    | alt_ctr_wr_u0[1] & alt_match_s1);
+    // Spec: only provider table written (ittage_interfaces.md
+    // Target Write Gating). prm_tgt_wr gates on prm_match (UP=1);
+    // alt_tgt_wr gates on alt_match (UP=0). Mutually exclusive.
     tgt_we_s1     = ittage_upd_val_u0[1]
-                  & tgt_wr_u0[1]
-                  & (prm_match_s1 | alt_match_s1);
+                  & (prm_tgt_wr_u0[1] & prm_match_s1
+                   | alt_tgt_wr_u0[1] & alt_match_s1);
     alc_we_s1     = ittage_upd_val_u0[1]
                   & alc_wr_u0[1] & alc_match_s1;
     norm_we_s1    = prm_ctr_we_s1 | alt_ctr_we_s1

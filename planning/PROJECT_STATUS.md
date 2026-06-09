@@ -215,7 +215,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | alongside use_we. No positive   |
 |    |                                        | test. Readback-verify per       |
 |    |                                        | provider, UP=1 and UP=0.        |
-| 57 | ittage TGT target replacement.         | TGT write path not audited.     |
+| 57 | ittage TGT target replacement.         | CLOSED. BP-049a
+|    |                                        | TGT write path not audited.     |
 |    | Untested. Successor to #51.            | #51 suspect for same provider-  |
 |    |                                        | gating defect as CTR/USE.       |
 |    |                                        | Target written on mispredict    |
@@ -336,7 +337,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | | for primary and alternative. |
 |    | | the names should be t_prm_upd_index_u0 and t_alt_upd_index |
 |    | | Secondly the names of the ports of ittage_cntrl that touch the tables |
-|    | | should use the same convention as tage_cntrl, and begin with t_ |
+|    | | should use the same convention as tage_cntrl, and begin with t_      |
+| 77 | scrub prompts and redact any absolute path | This is not a design TD   | 
+|    | information not using the RVA_ROOT env var | more of a tools and infra |
+|    |                                            | task, possibly manual     |
 
 
 ---
