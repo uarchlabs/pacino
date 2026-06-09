@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-07 (pa session 046)
+ UPDATED: 2026-06-09 (pa session 047)
  CONTACT: Jeff Nye
 ```
 
@@ -120,11 +120,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | Update path complete BP-035      |
 |                                   |             |       | Testbench complete BP-036        |
 |                                   |             |       | CTR/USE tests complete BP-044/a/b/c |
-|                                   |             |       | 81 tests passing                 |
+|                                   |             |       | 77 tests passing w/ BP-048       |
 | ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
 |                                   |             |       | shell without arb cntrl complete |
-|                                   |             |       | sim_ittage 32 pass / 3 fail      |
-|                                   |             |       | (pre-existing, BP-042b).         |
+|                                   |             |       | sim_ittage 113 pass / 0 fail      |
+|                                   |             |       | (fixed in BP-049a).              |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
