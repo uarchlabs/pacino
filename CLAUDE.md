@@ -143,8 +143,19 @@ important. It must be defines first then structs
   completion. Any failure NOT on that waiver list blocks.
 - Status counts written to PROJECT_STATUS must come from a run in
   the current session. Do not carry a prior session's count.
-- Scope is the named module's suite only. Do not gate on unrelated
-  units' failures (e.g. a TAGE task does not gate on ITTAGE).
+- ALL TARGETS MUST RUN. Every generated prompt's run step
+  invokes every sim and lint target defined in the unit's
+  Makefile, whether or not that target is a dependency of
+  `all`. `make all` is not sufficient -- a target omitted
+  from `all` is still run. Enumerate the Makefile's targets
+  and run each one. Report the pass count and fail count for
+  every target, from a run in the current session. No prompt
+  scopes the run to a subset. A port rename, a one-line fix,
+  a comment change -- every target runs regardless. Any sim
+  target with a non-zero fail count, or any lint target with
+  a non-zero warning or error count, blocks Status: complete,
+  unless that specific failure is listed in Constraints with
+  a TD number.
 
 ---
 

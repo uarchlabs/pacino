@@ -57,7 +57,8 @@ module tb;
   logic [NPS-1:0]              alt_ctr_wr_u0;
   logic [NPS-1:0]              use_wr_u0;
   logic [NPS-1:0]              epc_wr_u0;
-  logic [NPS-1:0]              tgt_wr_u0;
+  logic [NPS-1:0]              prm_tgt_wr_u0;
+  logic [NPS-1:0]              alt_tgt_wr_u0;
   logic [NPS-1:0]              alc_wr_u0;
   logic [TSW-1:0]              prm_tbl_sel_u0[0:NPS-1];
   logic [TSW-1:0]              alt_tbl_sel_u0[0:NPS-1];
@@ -97,14 +98,15 @@ module tb;
     .t_alt_ctr_wr_u0      (alt_ctr_wr_u0),
     .t_use_wr_u0          (use_wr_u0),
     .t_epc_wr_u0          (epc_wr_u0),
-    .t_tgt_wr_u0          (tgt_wr_u0),
     .t_alc_wr_u0          (alc_wr_u0),
     .t_prm_tbl_sel_u0     (prm_tbl_sel_u0),
     .t_alt_tbl_sel_u0     (alt_tbl_sel_u0),
     .t_alc_tbl_sel_u0     (alc_tbl_sel_u0),
     .t_prm_upd_index_u0   (upd_index_u0),
     .t_alt_upd_index_u0   (alt_upd_index_u0),
-    .t_alc_index_u0       (alc_index_u0)
+    .t_alc_index_u0       (alc_index_u0),
+    .t_prm_tgt_wr_u0      (prm_tgt_wr_u0),
+    .t_alt_tgt_wr_u0      (alt_tgt_wr_u0)
   );
 
   // ----------------------------------------------------------------
@@ -507,7 +509,7 @@ module tb;
     chk1("UPD01 use_wr",     use_wr_u0[0],     1'b1);
     chk2("UPD01 use_wd",     use_wd_u0[0],     2'b10);
     chk1("UPD01 epc_wr",     epc_wr_u0[0],     1'b1);
-    chk1("UPD01 tgt_wr",     tgt_wr_u0[0],     1'b0);
+    chk1("UPD01 prm_tgt_wr", prm_tgt_wr_u0[0], 1'b0);
     chk1("UPD01 alc_wr",     alc_wr_u0[0],     1'b0);
     @(posedge clk); #1;
     clr();
@@ -530,7 +532,7 @@ module tb;
     chk1("UPD02 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
     chk3("UPD02 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b100);
     chk1("UPD02 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
-    chk1("UPD02 tgt_wr",     tgt_wr_u0[0],     1'b0);
+    chk1("UPD02 prm_tgt_wr", prm_tgt_wr_u0[0], 1'b0);
     chk1("UPD02 alc_wr",     alc_wr_u0[0],     1'b1);
     @(posedge clk); #1;
     clr();
@@ -579,7 +581,7 @@ module tb;
     chk1("UPD04 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b1);
     chk3("UPD04 alt_ctr_wd", alt_ctr_wd_u0[0], 3'b001);
     chk1("UPD04 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
-    chk1("UPD04 tgt_wr",     tgt_wr_u0[0],     1'b0);
+    chk1("UPD04 alt_tgt_wr", alt_tgt_wr_u0[0], 1'b0);
     chk1("UPD04 alc_wr",     alc_wr_u0[0],     1'b1);
     @(posedge clk); #1;
     clr();
@@ -602,7 +604,7 @@ module tb;
     // UP=1 -> prm_ctr_wr fires (rows 22-29 of CTR rules table).
     // prm_ctr=3'b000, mispredict: DEC saturates at 3'b000.
     // tgt_wr fires independently: mispredict + UP=1 + prm_ctr==0.
-    chk1("UPD05 tgt_wr",     tgt_wr_u0[0],     1'b1);
+    chk1("UPD05 prm_tgt_wr", prm_tgt_wr_u0[0], 1'b1);
     chk38("UPD05 tgt_wd",    tgt_wd_u0[0],     38'hBEEF);
     chk1("UPD05 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
     chk1("UPD05 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
@@ -715,7 +717,7 @@ module tb;
     chk1("UPD09 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b0);
     chk1("UPD09 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
     chk1("UPD09 use_wr",     use_wr_u0[0],     1'b0);
-    chk1("UPD09 tgt_wr",     tgt_wr_u0[0],     1'b0);
+    chk1("UPD09 prm_tgt_wr", prm_tgt_wr_u0[0], 1'b0);
     chk1("UPD09 alc_wr",     alc_wr_u0[0],     1'b0);
   endtask
 

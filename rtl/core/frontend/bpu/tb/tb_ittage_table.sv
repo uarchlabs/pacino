@@ -65,7 +65,8 @@ module tb;
   logic [1:0]                  alt_ctr_wr_u0;
   logic [1:0]                  use_wr_u0;
   logic [1:0]                  epc_wr_u0;
-  logic [1:0]                  tgt_wr_u0;
+  logic [1:0]                  prm_tgt_wr_u0;
+  logic [1:0]                  alt_tgt_wr_u0;
   logic [1:0]                  alc_wr_u0;
   logic [TBL_SEL_W-1:0]        prm_tbl_sel_u0[0:1];
   logic [TBL_SEL_W-1:0]        alt_tbl_sel_u0[0:1];
@@ -101,7 +102,8 @@ module tb;
     .alt_ctr_wr_u0      (alt_ctr_wr_u0),
     .use_wr_u0          (use_wr_u0),
     .epc_wr_u0          (epc_wr_u0),
-    .tgt_wr_u0          (tgt_wr_u0),
+    .prm_tgt_wr_u0      (prm_tgt_wr_u0),
+    .alt_tgt_wr_u0      (alt_tgt_wr_u0),
     .alc_wr_u0          (alc_wr_u0),
     .prm_tbl_sel_u0     (prm_tbl_sel_u0),
     .alt_tbl_sel_u0     (alt_tbl_sel_u0),
@@ -160,7 +162,8 @@ module tb;
     alt_ctr_wr_u0               = 0;
     use_wr_u0                   = 0;
     epc_wr_u0                   = 0;
-    tgt_wr_u0                   = 0;
+    prm_tgt_wr_u0               = 0;
+    alt_tgt_wr_u0               = 0;
     alc_wr_u0                   = 0;
     tbl_ri_active               = 0;
     tbl_ri_wr                   = 0;
@@ -329,14 +332,14 @@ module tb;
     // TC-TGT-WR: tgt_wr target replacement, read back
     // --------------------------------------------------------
     ittage_upd_val_u0[0] = 1;
-    tgt_wr_u0[0]         = 1;
+    prm_tgt_wr_u0[0]     = 1;
     prm_tbl_sel_u0[0]    = TBL_SEL_W'(1);
     tgt_wd_u0[0]         = 38'h1234;
     upd_index_u0[0]      = 8'h10;
     ittage_pred_inp_p0[0].pc = PC_A;
     @(posedge clk); #1;
     ittage_upd_val_u0[0] = 0;
-    tgt_wr_u0[0]         = 0;
+    prm_tgt_wr_u0[0]     = 0;
     @(posedge clk); #1;
     check("TC-TGT-WR hit_p1[0]", hit_p1[0], 1'b1);
     check_w("TC-TGT-WR pred_tgt_p1[0]",

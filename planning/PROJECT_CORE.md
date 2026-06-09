@@ -254,20 +254,14 @@ e# Tools Status
 tools/bin: $(RVA_ROOT)/tools/bin is the common install directory for all submodule tools.
 README.md updated to show build instructions for Verilator and Spike.
 
-### make targets (frontend/decoder/)
-- make lint          -- Verilator lint only
-- make sim           -- tb_instr_decoder
-- make sim_predecode -- tb_predecode
-- make sim_all       -- all testbenches + coverage
-- make coverage      -- check_rva23_coverage.py
+### make targets 
+Make targets are discoverable by analysis of the Makefile
 
-### make targets (frontend/branch_predictor/)
-After bp_pkg split:
-- make lint          -- Verilator lint only on bp_defines_pkg.sv
-                        and bp_structs_pkg.sv
-- make sim           -- tb_bp_packages
-- make sim_history   -- tb_bp_history
-- make sim_ubtb      -- tb_ubtb
-- make sim_tage_manual -- tb_tage_manual + tage_assert
-- make all           -- lint + all sim targets
+The known RTL make files are:
+```
+./rtl/Makefile
+./rtl/lib/Makefile
+./rtl/core/frontend/decode/Makefile
+./rtl/core/frontend/bpu/Makefile
+```
 
