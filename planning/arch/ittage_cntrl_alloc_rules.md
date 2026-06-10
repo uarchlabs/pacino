@@ -2,8 +2,8 @@
 ```
  FILE:    ittage_cntrl_alloc_rules.md
  SOURCE:  various
- STATUS:  DRAFT
- UPDATED: 2026-05-16
+ STATUS:  COMPLETE
+ UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```
 

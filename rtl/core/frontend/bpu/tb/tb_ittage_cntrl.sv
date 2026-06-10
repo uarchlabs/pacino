@@ -239,6 +239,19 @@ module tb;
     end
   endtask
 
+  task automatic chk32(
+    input string nm, input logic [31:0] act, exp
+  );
+    if (act === exp) begin
+      pass_cnt++;
+      $display("  PASS %s", nm);
+    end else begin
+      fail_cnt++;
+      $display("  FAIL %s: exp=%0d(0x%08h) act=%0d(0x%08h)",
+               nm, exp, exp, act, act);
+    end
+  endtask
+
   // ----------------------------------------------------------------
   // mk_upd: build default update input bundle
   // ----------------------------------------------------------------
@@ -377,6 +390,276 @@ module tb;
     tbl_pred_tgt_p1[1][0]   = '0;
     @(posedge clk); #1;
     clr();
+  endtask
+
+  // ----------------------------------------------------------------
+  // age_reset: reset with specific aging interval and enable.
+  // Sets ittage_aging_interval before asserting reset so the
+  // interval FF captures the correct value on the reset edges.
+  // ----------------------------------------------------------------
+  task automatic age_reset(
+    input logic [31:0] interval,
+    input logic        enable
+  );
+    clr();
+    ittage_aging_interval = interval;
+    ittage_enable_aging   = enable;
+    rstn = 1'b0;
+    repeat(2) @(posedge clk);
+    @(negedge clk);
+    rstn = 1'b1;
+    repeat(2) @(posedge clk);
+    #1;
+  endtask
+
+  // ----------------------------------------------------------------
+  // age_tick_s0: drive one prediction through slot 0 to advance
+  // the aging counter. Does NOT call clr(); preserves aging
+  // settings. Requires 3 posedges: posedge 1 captures pred_val
+  // into pred_val_p1; posedge 2 captures into rdy_p2_r; posedge 3
+  // is when aging_reg reads rdy_p2_r=1 and updates the counters.
+  // ----------------------------------------------------------------
+  task automatic age_tick_s0();
+    ittage_pred_val_p0[0] = 1'b1;
+    @(posedge clk); #1;  // posedge 1: pred_val_p1[0] <- 1
+    ittage_pred_val_p0[0] = 1'b0;
+    @(posedge clk); #1;  // posedge 2: rdy_p2_r[0] <- 1
+    @(posedge clk); #1;  // posedge 3: aging_reg reads rdy_p2_r=1
+  endtask
+
+  // ================================================================
+  // TC-AGE-01: Reset values -- both slots
+  // Verifies lcl_aging_interval loads from input and epoch resets
+  // to 0 for both prediction slots.
+  // ================================================================
+  task automatic tc_age_01();
+    $display("--- TC-AGE-01 ---");
+    age_reset(32'd100, 1'b0);
+    chk32("AGE01 interval[0] reset",
+          dut.lcl_aging_interval[0], 32'd100);
+    chk32("AGE01 interval[1] reset",
+          dut.lcl_aging_interval[1], 32'd100);
+    chk2("AGE01 epoch[0] reset",
+         dut.lcl_epoch[0], 2'b00);
+    chk2("AGE01 epoch[1] reset",
+         dut.lcl_epoch[1], 2'b00);
+  endtask
+
+  // ================================================================
+  // TC-AGE-02: Interval decrement on pred_rdy (slot 0)
+  // One prediction with interval=50: interval must decrement to 49.
+  // Epoch must not advance.
+  // ================================================================
+  task automatic tc_age_02();
+    $display("--- TC-AGE-02 ---");
+    age_reset(32'd50, 1'b1);
+    age_tick_s0();
+    chk32("AGE02 interval[0] dec",
+          dut.lcl_aging_interval[0], 32'd49);
+    chk2("AGE02 epoch[0] no-adv",
+         dut.lcl_epoch[0], 2'b00);
+  endtask
+
+  // ================================================================
+  // TC-AGE-03: Epoch advance and interval reload
+  // interval=1: first tick decrements 1->0; second tick sees
+  // interval==0, epoch fires (0->1) and interval reloads to 1.
+  // RTL semantics: fires when interval IS 0, then reloads.
+  // ================================================================
+  task automatic tc_age_03();
+    $display("--- TC-AGE-03 ---");
+    age_reset(32'd1, 1'b1);
+    // Tick 1: interval 1->0 (decrement only)
+    age_tick_s0();
+    chk32("AGE03 interval[0] at_0",
+          dut.lcl_aging_interval[0], 32'd0);
+    chk2("AGE03 epoch[0] no-adv-yet",
+         dut.lcl_epoch[0], 2'b00);
+    // Tick 2: interval==0, epoch fires and interval reloads
+    age_tick_s0();
+    chk2("AGE03 epoch[0] adv",
+         dut.lcl_epoch[0], 2'b01);
+    chk32("AGE03 interval[0] reload",
+          dut.lcl_aging_interval[0], 32'd1);
+  endtask
+
+  // ================================================================
+  // TC-AGE-04: Epoch wrap at 2b max (3->0)
+  // interval=0: every tick fires epoch. 4 ticks: 0->1->2->3->0.
+  // ================================================================
+  task automatic tc_age_04();
+    $display("--- TC-AGE-04 ---");
+    age_reset(32'd0, 1'b1);
+    age_tick_s0();  // epoch -> 1
+    age_tick_s0();  // epoch -> 2
+    age_tick_s0();  // epoch -> 3
+    chk2("AGE04 epoch[0] at_3",
+         dut.lcl_epoch[0], 2'b11);
+    age_tick_s0();  // epoch -> 0 (2b wrap)
+    chk2("AGE04 epoch[0] wrap_0",
+         dut.lcl_epoch[0], 2'b00);
+  endtask
+
+  // ================================================================
+  // TC-AGE-05: age==0 -- u_eff equals raw USEFUL (non-triggering)
+  // epoch=0, EPC=0: age=(0-0) mod 4 = 0 -> u_eff = USEFUL.
+  // Confirms USE holds when delta does not trigger decay.
+  // ================================================================
+  task automatic tc_age_05();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-AGE-05 ---");
+    // epoch=0, aging disabled for stable measurement
+    age_reset(32'd0, 1'b0);
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    // IT3 hit, USE=2'b11, EPC=2'b00 (age = epoch-EPC = 0-0 = 0)
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, 38'hAAAA);
+    ptgt[3] = 38'hAAAA;
+    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    // age=0: u_eff = USEFUL = 2'b11 (non-triggering, USE holds)
+    chk2("AGE05 u_eff age0 hold",
+         m.ittage_prm_useful, 2'b11);
+  endtask
+
+  // ================================================================
+  // TC-AGE-06: age==1 -- USE decremented by right-shift
+  // epoch=1, EPC=0: age=1 -> u_eff = USEFUL>>1.
+  // Triggering delta. Discriminating power:
+  //   pre-state USE=2'b10 (what a no-op would return).
+  //   expected u_eff=2'b01 (PASS). Would FAIL if no decrement (2'b10).
+  // ================================================================
+  task automatic tc_age_06();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-AGE-06 ---");
+    age_reset(32'd0, 1'b1);  // interval=0, aging enabled
+    age_tick_s0();            // epoch[0] -> 1
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    // IT3 hit, USE=2'b10, EPC=2'b00 (age=epoch-EPC=1-0=1)
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, 38'hAAAA);
+    ptgt[3] = 38'hAAAA;
+    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    // Failing value (no-op): 2'b10  Passing value (decremented): 2'b01
+    chk2("AGE06 u_eff age1 dec",
+         m.ittage_prm_useful, 2'b01);
+  endtask
+
+  // ================================================================
+  // TC-AGE-07: age>=2 -- u_eff zeroed completely
+  // epoch=2, EPC=0: age=2 >= 2 -> u_eff = 0.
+  // ================================================================
+  task automatic tc_age_07();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-AGE-07 ---");
+    age_reset(32'd0, 1'b1);
+    age_tick_s0();  // epoch -> 1
+    age_tick_s0();  // epoch -> 2
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    // IT3 hit, USE=2'b11, EPC=2'b00 (age=2)
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, 38'hAAAA);
+    ptgt[3] = 38'hAAAA;
+    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    // age=2 >= 2: u_eff = 0
+    chk2("AGE07 u_eff age2 zero",
+         m.ittage_prm_useful, 2'b00);
+  endtask
+
+  // ================================================================
+  // TC-AGE-08: Discriminating power (step 6) -- triggering and
+  // non-triggering cases use the same pre-state USE=2'b10.
+  // Case A (age=1, triggering): u_eff=2'b01. A no-op returns 2'b10,
+  //   which is observably distinct -- the test would FAIL.
+  // Case B (age=0, non-triggering): u_eff=2'b10 (USE holds).
+  // ================================================================
+  task automatic tc_age_08();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-AGE-08 ---");
+    // Case A: triggering (age=1, epoch=1, EPC=0, USE=2'b10)
+    // failing=2'b10 (no-op), passing=2'b01 (decremented)
+    age_reset(32'd0, 1'b1);
+    age_tick_s0();  // epoch -> 1
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, 38'hAAAA);
+    ptgt[3] = 38'hAAAA;
+    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    chk2("AGE08 trigger_pass 2b01",
+         m.ittage_prm_useful, 2'b01);
+    // Case B: non-triggering (age=0, epoch=0, EPC=0, USE=2'b10)
+    age_reset(32'd0, 1'b0);
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, 38'hAAAA);
+    ptgt[3] = 38'hAAAA;
+    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    chk2("AGE08 no_trigger_hold 2b10",
+         m.ittage_prm_useful, 2'b10);
+  endtask
+
+  // ================================================================
+  // TC-AGE-09: Enable gating -- no epoch advance, no USE decrement
+  // interval=0 (trigger-ready), aging disabled: trigger condition
+  // present but epoch must not advance and interval must not reload.
+  // u_eff = USEFUL confirmed because age stays at 0 (epoch held).
+  // ================================================================
+  task automatic tc_age_09();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-AGE-09 ---");
+    // Reset: interval=0 (would fire epoch if enabled), aging off
+    age_reset(32'd0, 1'b0);
+    // Drive prediction tick; enable_aging=0 so epoch must hold
+    ittage_pred_val_p0[0] = 1'b1;
+    @(posedge clk); #1;
+    ittage_pred_val_p0[0] = 1'b0;
+    @(posedge clk); #1;
+    @(posedge clk); #1;
+    // Epoch must NOT advance (aging disabled)
+    chk2("AGE09 epoch[0] no_adv",
+         dut.lcl_epoch[0], 2'b00);
+    // Interval must NOT reload (no aging action)
+    chk32("AGE09 interval[0] no_reload",
+          dut.lcl_aging_interval[0], 32'd0);
+    // u_eff = USEFUL: epoch=0, EPC=0 -> age=0 -> no decay
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, 38'hAAAA);
+    ptgt[3] = 38'hAAAA;
+    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    chk2("AGE09 u_eff no_dec",
+         m.ittage_prm_useful, 2'b11);
   endtask
 
   // ================================================================
@@ -977,6 +1260,16 @@ module tb;
     tc_uaon_07();
     tc_uaon_08();
     tc_uaon_09();
+
+    tc_age_01();
+    tc_age_02();
+    tc_age_03();
+    tc_age_04();
+    tc_age_05();
+    tc_age_06();
+    tc_age_07();
+    tc_age_08();
+    tc_age_09();
 
     $display("RESULTS: %0d PASS, %0d FAIL", pass_cnt, fail_cnt);
     if (fail_cnt != 0) $finish(1);
