@@ -1549,6 +1549,127 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-EPC-UP1: EPC write provider-only proof, UP=1.
+  // PC=40'h0000_2800: IT1/IT2 idx=8'h00 bank=0 ent=0 tag=11'h028.
+  // IT2 primary (CTR=1 not-null -> UP=1, EPC=2'h03, TGT=0x30000).
+  // IT1 alt (CTR=1, EPC=2'h02, TGT=0x50000). DIFF=1. MISP=0.
+  // After update: IT2 EPC <- lcl_epoch[0]=0; IT1 EPC unchanged(0x02).
+  // IT3-IT5 at bank=0 ent=0 invalidated. No alloc with MISP=0.
+  // ================================================================
+  task automatic tc_epc_up1();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-EPC-UP1 EPC provider-only UP=1");
+    clr();
+    // Invalidate IT3-IT5 at bank=0 ent=0 (same idx as PC=0x2800).
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    // IT2 primary: CTR=1 not-null->UP=1. EPC=2'h03. TGT=0x30000.
+    bw_write(2, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h03,
+             38'h0_0003_0000, 11'h028);
+    // IT1 alt: EPC=2'h02. TGT=0x50000. DIFF=1 vs IT2.TGT.
+    bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h02,
+             38'h0_0005_0000, 11'h028);
+    do_pred(40'h0000_2800, 6'hB0, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("EPC-UP1:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("EPC-UP1:using_prm",
+      64'(m.ittage_using_primary), 64'h1);
+    chk("EPC-UP1:prm_comp",
+      64'(m.ittage_prm_comp),      64'h2);
+    chk("EPC-UP1:alt_comp",
+      64'(m.ittage_alt_comp),      64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0003_0000; // correct -> MISP=0
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Direct RAM read. IT2=provider: EPC->lcl_epoch[0]=0.
+    // IT1=non-provider: EPC stays 2'h02.
+    begin
+      automatic logic [53:0] it2_ent, it1_ent;
+      automatic logic [1:0]  it2_epc, it1_epc;
+      it2_ent = dut.gen_ittage_tables[2].gen_active
+                  .u_table.u_ram_s0.mem[0][0];
+      it1_ent = dut.gen_ittage_tables[1].gen_active
+                  .u_table.u_ram_s0.mem[0][0];
+      it2_epc = it2_ent[7:6];
+      it1_epc = it1_ent[7:6];
+      chk("EPC-UP1:prv_epc_written",
+        64'(it2_epc), 64'h0);
+      chk("EPC-UP1:np_epc_unchanged",
+        64'(it1_epc), 64'h2);
+    end
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-EPC-UP0: EPC write provider-only proof, UP=0.
+  // Requires do_reset() before call (UAON must be 8). Self-contained.
+  // PC=40'h0000_3C00: IT1/IT2 idx=8'h00 bank=0 ent=0 tag=11'h03C.
+  // IT2 primary (CTR=0->UAON=8>=8->use_alt=1->UP=0, EPC=2'h02,
+  //   TGT=0x40000). IT1 alt (CTR=1, EPC=2'h03, TGT=0x60000).
+  // DIFF=1. MISP=0.
+  // After update: IT1 EPC <- lcl_epoch[0]=0; IT2 EPC unchanged(0x02).
+  // IT3-IT5 at bank=0 ent=0 invalidated. No alloc with MISP=0.
+  // ================================================================
+  task automatic tc_epc_up0();
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-EPC-UP0 EPC provider-only UP=0");
+    clr();
+    // Invalidate IT3-IT5 at bank=0 ent=0 (same idx as PC=0x3C00).
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    // IT2 primary: CTR=0->UAON=8>=8->use_alt=1->UP=0.
+    //   EPC=2'h02 TGT=0x40000.
+    bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h02,
+             38'h0_0004_0000, 11'h03C);
+    // IT1 alt: CTR=1, EPC=2'h03, TGT=0x60000. DIFF=1 vs IT2.TGT.
+    bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h03,
+             38'h0_0006_0000, 11'h03C);
+    do_pred(40'h0000_3C00, 6'hB1, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("EPC-UP0:hit",
+      64'(m.ittage_hit),           64'h1);
+    chk("EPC-UP0:using_prm",
+      64'(m.ittage_using_primary), 64'h0);
+    chk("EPC-UP0:prm_comp",
+      64'(m.ittage_prm_comp),      64'h2);
+    chk("EPC-UP0:alt_comp",
+      64'(m.ittage_alt_comp),      64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0006_0000; // correct -> MISP=0
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Direct RAM read. IT1=provider(alt when UP=0): EPC->0.
+    // IT2=non-provider: EPC stays 2'h02.
+    begin
+      automatic logic [53:0] it2_ent, it1_ent;
+      automatic logic [1:0]  it2_epc, it1_epc;
+      it2_ent = dut.gen_ittage_tables[2].gen_active
+                  .u_table.u_ram_s0.mem[0][0];
+      it1_ent = dut.gen_ittage_tables[1].gen_active
+                  .u_table.u_ram_s0.mem[0][0];
+      it2_epc = it2_ent[7:6];
+      it1_epc = it1_ent[7:6];
+      chk("EPC-UP0:prv_epc_written",
+        64'(it1_epc), 64'h0);
+      chk("EPC-UP0:np_epc_unchanged",
+        64'(it2_epc), 64'h2);
+    end
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -1615,6 +1736,11 @@ module tb;
     tc_tgt_c();
     tc_tgt_d();
     tc_tgt_b_ext();
+
+    do_reset();
+    tc_epc_up1();
+    do_reset();
+    tc_epc_up0();
 
     repeat(5) @(posedge clk);
 

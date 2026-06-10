@@ -210,7 +210,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | EPC-writing update, read EPC    |
 |    |                                        | back via prediction, confirm    |
 |    |                                        | landing. Use bw_write backdoor. |
-| 56 | ittage EPC write proof.                | Same as #55 for ittage.         |
+| 56 | ittage EPC write proof.                | CLOSED with BP-050b |
+|    |                                        | Same as #55 for ittage.         |
 |    | Changed RTL, never proven by readback. | epc_we_s0/s1 fixed BP-044c      |
 |    |                                        | alongside use_we. No positive   |
 |    |                                        | test. Readback-verify per       |
