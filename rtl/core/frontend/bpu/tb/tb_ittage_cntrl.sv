@@ -227,6 +227,18 @@ module tb;
     end
   endtask
 
+  task automatic chk4(
+    input string nm, input logic [3:0] act, exp
+  );
+    if (act === exp) begin
+      pass_cnt++;
+      $display("  PASS %s", nm);
+    end else begin
+      fail_cnt++;
+      $display("  FAIL %s: exp=%h act=%h", nm, exp, act);
+    end
+  endtask
+
   // ----------------------------------------------------------------
   // mk_upd: build default update input bundle
   // ----------------------------------------------------------------
@@ -294,6 +306,77 @@ module tb;
     end
     m   = ittage_pred_meta_p2[0];
     rdy = ittage_pred_rdy_p2[0];
+  endtask
+
+  // ----------------------------------------------------------------
+  // do_reset: local reset to establish clean UAON start state.
+  // After return: all FFs at reset values, uaon[i]=IT_UAON_THRES.
+  // ----------------------------------------------------------------
+  task automatic do_reset();
+    clr();
+    rstn = 1'b0;
+    repeat(2) @(posedge clk);
+    @(negedge clk);
+    rstn = 1'b1;
+    repeat(2) @(posedge clk);
+    #1;
+  endtask
+
+  // ----------------------------------------------------------------
+  // uaon_upd: one update cycle targeting slot 0 for UAON testing.
+  // ----------------------------------------------------------------
+  task automatic uaon_upd(
+    input logic                         hit,
+    input logic                         pred_strong,
+    input logic [TSW-1:0]               prm_c,
+    input logic [TSW-1:0]               alt_c,
+    input logic [IT_MAX_TGT_WIDTH-1:0]  prm_t,
+    input logic [IT_MAX_TGT_WIDTH-1:0]  alt_t,
+    input logic [IT_MAX_TGT_WIDTH-1:0]  res
+  );
+    ittage_upd_inp_t ui;
+    ui = '0;
+    ui.ittage_pred_meta.ittage_hit         = hit;
+    ui.ittage_pred_meta.ittage_pred_strong = pred_strong;
+    ui.ittage_pred_meta.ittage_prm_comp    = prm_c;
+    ui.ittage_pred_meta.ittage_alt_comp    = alt_c;
+    ui.ittage_pred_meta.ittage_prm_tgt     = prm_t;
+    ui.ittage_pred_meta.ittage_alt_tgt     = alt_t;
+    ui.resolved_target                     = res;
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ----------------------------------------------------------------
+  // obs_use_alt: observe use_alt[0] via hierarchical reference.
+  // Drives null-CTR IT3 primary, non-null IT1 alt for slot 0.
+  // After one posedge pred_val_p1[0]=1 and use_alt[0] is valid.
+  // ----------------------------------------------------------------
+  task automatic obs_use_alt(output logic ua);
+    clr();
+    ittage_pred_val_p0[0]   = 1'b1;
+    tbl_hit_p1[3][0]        = 1'b1;
+    tbl_cntrl_bits_p1[3][0] =
+      mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'hAAAA);
+    tbl_pred_tgt_p1[3][0]   = 38'hAAAA;
+    tbl_hit_p1[1][0]        = 1'b1;
+    tbl_cntrl_bits_p1[1][0] =
+      mk_cb(1'b1, 3'b011, 2'b00, 2'b00, 38'hBBBB);
+    tbl_pred_tgt_p1[1][0]   = 38'hBBBB;
+    @(posedge clk); #1;
+    ua = dut.use_alt[0];
+    ittage_pred_val_p0[0]   = 1'b0;
+    tbl_hit_p1[3][0]        = 1'b0;
+    tbl_cntrl_bits_p1[3][0] = '0;
+    tbl_pred_tgt_p1[3][0]   = '0;
+    tbl_hit_p1[1][0]        = 1'b0;
+    tbl_cntrl_bits_p1[1][0] = '0;
+    tbl_pred_tgt_p1[1][0]   = '0;
+    @(posedge clk); #1;
+    clr();
   endtask
 
   // ================================================================
@@ -722,6 +805,139 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-UAON-01: Reset value -- both slots at IT_UAON_THRES
+  // ================================================================
+  task automatic tc_uaon_01();
+    $display("--- TC-UAON-01 ---");
+    do_reset();
+    chk4("UAON01 uaon[0] reset",
+         dut.uaon[0], 4'(IT_UAON_THRES));
+    chk4("UAON01 uaon[1] reset",
+         dut.uaon[1], 4'(IT_UAON_THRES));
+  endtask
+
+  // ================================================================
+  // TC-UAON-02: Increment -- prm_wrong && alt_correct -> INC
+  // ================================================================
+  task automatic tc_uaon_02();
+    $display("--- TC-UAON-02 ---");
+    do_reset();
+    // resolved==alt_tgt (alt_correct), resolved!=prm_tgt (prm_wrong)
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hBBBB);
+    chk4("UAON02 uaon[0] inc", dut.uaon[0], 4'(9));
+  endtask
+
+  // ================================================================
+  // TC-UAON-03: Decrement -- prm_correct && alt_wrong -> DEC
+  // ================================================================
+  task automatic tc_uaon_03();
+    $display("--- TC-UAON-03 ---");
+    do_reset();
+    // resolved==prm_tgt (prm_correct), resolved!=alt_tgt (alt_wrong)
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hAAAA);
+    chk4("UAON03 uaon[0] dec", dut.uaon[0], 4'(7));
+  endtask
+
+  // ================================================================
+  // TC-UAON-04: Both-wrong hold -- neither correct -> no change
+  // ================================================================
+  task automatic tc_uaon_04();
+    $display("--- TC-UAON-04 ---");
+    do_reset();
+    // resolved differs from both targets -> both wrong -> hold
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hCCCC);
+    chk4("UAON04 uaon[0] both_wrong", dut.uaon[0], 4'(8));
+  endtask
+
+  // ================================================================
+  // TC-UAON-05: Both-right hold -- both match -> no change
+  // ================================================================
+  task automatic tc_uaon_05();
+    $display("--- TC-UAON-05 ---");
+    do_reset();
+    // resolved==prm_tgt==alt_tgt -> both correct -> hold
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hAAAA, 38'hAAAA);
+    chk4("UAON05 uaon[0] both_right", dut.uaon[0], 4'(8));
+  endtask
+
+  // ================================================================
+  // TC-UAON-06: Pred_strong hold -- no change when pred_strong=1
+  // ================================================================
+  task automatic tc_uaon_06();
+    $display("--- TC-UAON-06 ---");
+    do_reset();
+    // pred_strong=1 blocks update even if prm_wrong && alt_correct
+    uaon_upd(1'b1, 1'b1, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hBBBB);
+    chk4("UAON06 uaon[0] pred_strong", dut.uaon[0], 4'(8));
+  endtask
+
+  // ================================================================
+  // TC-UAON-07: Hit==0 hold -- no change when ittage_hit=0
+  // ================================================================
+  task automatic tc_uaon_07();
+    $display("--- TC-UAON-07 ---");
+    do_reset();
+    // hit=0 blocks update even if prm_wrong && alt_correct
+    uaon_upd(1'b0, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hBBBB);
+    chk4("UAON07 uaon[0] hit0", dut.uaon[0], 4'(8));
+  endtask
+
+  // ================================================================
+  // TC-UAON-08: Single-hit guard -- alt_comp==0 (sentinel)
+  // Stale alt_tgt=0xDEAD matches resolved: without the guard the
+  // prm_wrong&&alt_correct condition would fire and increment.
+  // With the guard (alt_comp==0 check) the counter must hold.
+  // ================================================================
+  task automatic tc_uaon_08();
+    $display("--- TC-UAON-08 ---");
+    do_reset();
+    // alt_comp=0 (no alternate); stale alt_tgt==resolved -> blocked
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(0),
+             38'hBEEF, 38'hDEAD, 38'hDEAD);
+    chk4("UAON08 uaon[0] sgl_hit_guard",
+         dut.uaon[0], 4'(8));
+  endtask
+
+  // ================================================================
+  // TC-UAON-09: Threshold boundary
+  // Drive counter to THRES-1; confirm alt not selected (use_alt=0).
+  // Advance to THRES; confirm alt selected (use_alt=1).
+  // Step back; confirm alt not selected (use_alt=0).
+  // ================================================================
+  task automatic tc_uaon_09();
+    logic ua;
+    $display("--- TC-UAON-09 ---");
+    do_reset();  // uaon[0] = 8
+    // DEC to 7: prm_correct && alt_wrong
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hAAAA);
+    chk4("UAON09 uaon[0] at_7", dut.uaon[0], 4'(7));
+    // uaon=7 < THRES -> alt not selected
+    obs_use_alt(ua);
+    chk1("UAON09 use_alt=0 at_7", ua, 1'b0);
+    // INC to 8: prm_wrong && alt_correct
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hBBBB);
+    chk4("UAON09 uaon[0] at_8", dut.uaon[0], 4'(8));
+    // uaon=8 >= THRES -> alt selected
+    obs_use_alt(ua);
+    chk1("UAON09 use_alt=1 at_8", ua, 1'b1);
+    // DEC back to 7
+    uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
+             38'hAAAA, 38'hBBBB, 38'hAAAA);
+    chk4("UAON09 uaon[0] back_7", dut.uaon[0], 4'(7));
+    // uaon=7 < THRES -> alt not selected
+    obs_use_alt(ua);
+    chk1("UAON09 use_alt=0 back_7", ua, 1'b0);
+  endtask
+
+  // ================================================================
   // Main test sequence
   // ================================================================
   initial begin
@@ -751,6 +967,16 @@ module tb;
     tc_upd_07();
     tc_upd_08();
     tc_upd_09();
+
+    tc_uaon_01();
+    tc_uaon_02();
+    tc_uaon_03();
+    tc_uaon_04();
+    tc_uaon_05();
+    tc_uaon_06();
+    tc_uaon_07();
+    tc_uaon_08();
+    tc_uaon_09();
 
     $display("RESULTS: %0d PASS, %0d FAIL", pass_cnt, fail_cnt);
     if (fail_cnt != 0) $finish(1);

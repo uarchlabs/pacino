@@ -2,8 +2,8 @@
 ```
  FILE:    ittage_cntrl_uaon_update_rules.md
  SOURCE:  various
- STATUS:  DRAFT, modified by hand
- UPDATED: 2026-05-16
+ STATUS:  Complete
+ UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```
 
@@ -12,7 +12,7 @@
 ## USE_ALT_ON_NA (UAON) Background
 
 In TAGE like predictors, including Indirect Target TAGE (ITTAGE)
-a set of register(s) is used to possibly prefer the alternative
+a set of register(s) are used to possibly prefer the alternative
 component's predictions over the primary component's prediction.
 
 USE_ALT_ON_NA (Use Alternate Prediction on Newly Allocated, aka
@@ -27,7 +27,7 @@ predictor must decide:
 - Use the tagged component's prediction anyway, or
 - Fall back to the alternate (next-longest-history) prediction
 
-USE_ALT_ON_NA is a small saturating counter that tracks whether
+USE_ALT_ON_NA is a saturating counter that tracks whether
 trusting newly allocated entries or deferring to the alternate
 has been more accurate recently. If it is biased toward "use
 alternate," the predictor ignores null-CTR entries and falls
@@ -125,9 +125,13 @@ alt_wrong   = (resolved_target != ittage_alt_tgt)
 
 ### Update rules
 ```
-if (ittage_hit == 0)
+if (!rstn)   (rstn aka reset, is active low)
+    -> set uaon registers to IT_UAON_THRES
+else if (ittage_hit == 0)
     -> do nothing
 else if (ittage_pred_strong)
+    -> do nothing
+else if (ittage_prm_comp == 0 || ittage_alt_comp == 0)
     -> do nothing
 else if (prm_wrong && alt_correct)
     -> increment uaon_N (saturate at 4b max)

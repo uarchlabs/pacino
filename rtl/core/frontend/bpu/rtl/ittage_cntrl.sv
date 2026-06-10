@@ -452,9 +452,14 @@ module ittage_cntrl #(
         uaon[i] <= IT_UAON_WIDTH'(IT_UAON_THRES);
     end else begin
       for (int i = 0; i < NUM_PRED_SLOTS; i++) begin
+        // guard: comp==0 is the no-component sentinel (single hit)
         if (ittage_upd_val_u0[i]
             && ittage_upd_inp_u0[i].ittage_pred_meta.ittage_hit
-            && !ittage_upd_inp_u0[i].ittage_pred_meta.ittage_pred_strong)
+            && !ittage_upd_inp_u0[i].ittage_pred_meta.ittage_pred_strong
+            && (ittage_upd_inp_u0[i].ittage_pred_meta.ittage_prm_comp
+                != TSEL_W'(0))
+            && (ittage_upd_inp_u0[i].ittage_pred_meta.ittage_alt_comp
+                != TSEL_W'(0)))
         begin
           // prm_wrong && alt_correct -> INC
           if ((ittage_upd_inp_u0[i].resolved_target

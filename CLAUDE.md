@@ -157,6 +157,20 @@ important. It must be defines first then structs
   unless that specific failure is listed in Constraints with
   a TD number.
 
+## Verification - self-contained tests (no test debt)
+
+- A test must not depend on unverified behavior or on test order.
+- Within the run, before claiming a path proven:
+  - Enumerate every mechanism the test stimulus relies on (e.g.
+    reset values, sentinels, selection/threshold, allocation
+    residue, index/tag hashes). Verify each, or seed it
+    explicitly. Do not assume a hash/tag value -- derive it.
+  - Invalidate unrelated table entries that could alias the
+    index/bank under test. Do not rely on absence of residue.
+  - Establish start state by reset plus a known driven sequence.
+    Do not carry state across test cases.
+- Report any dependency found unproven and prove it in this run.
+
 ---
 
 ## Project Structure

@@ -1479,8 +1479,9 @@ module tb;
   // ================================================================
   // TC-TGT-B-ext: UP=1 CTR zero mispredict. Non-provider (alternate)
   // target must be unchanged.
-  // UAON decremented 8->7 via a correct prediction so that use_alt
-  // stays 0 with alt present (uaon=7 < IT_UAON_THRES=8).
+  // UAON decremented 8->7: IT2=prm(CTR=0,TGT=0xF000)
+  // IT1=alt(CTR=0,TGT=0) at PC=0x1000. prm_correct&&alt_wrong->DEC.
+  // use_alt stays 0 with alt present (uaon=7 < IT_UAON_THRES=8).
   // IT2=prm (CTR=0, TGT=0xA000), IT1=alt (CTR=1, TGT=0xC000),
   // both at PC=0x0700 bank=1 ent=64 tag=0x007.
   // Resolved=0xB000. After fix: prm_tgt->0xB000; alt_tgt unchanged.
@@ -1491,12 +1492,13 @@ module tb;
     $display(
       "-- TC-TGT-B-ext UP=1 CTR zero: non-provider alt tgt unchanged");
     clr();
-    // UAON decrement: IT1 sole provider at PC=0x1000 (bank=0 ent=0
-    // tag=0x010). Correct prediction: prm_correct, alt_wrong(0) ->
-    // DEC. uaon 8->7.
-    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(1, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+    // UAON decrement: IT2=prm(CTR=0,TGT=0xF000) IT1=alt(CTR=0,
+    // TGT=0) at PC=0x1000 bank=0 ent=0 tag=0x010. UAON=8 fires
+    // use_alt=1 -> pred_strong=0. prm_correct&&alt_wrong -> DEC.
+    bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
              38'h0_0000_F000, 11'h010);
+    bw_write(1, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             38'h0, 11'h010);
     do_pred(40'h0000_1000, 6'h10, 0);
     wait_prdy(0);
     m   = ittage_pred_meta_p2[0];
