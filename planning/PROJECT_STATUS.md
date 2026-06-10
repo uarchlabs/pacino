@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-09 (pa session 047)
+ UPDATED: 2026-06-10 (pa session 048)
  CONTACT: Jeff Nye
 ```
 
@@ -120,10 +120,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | Update path complete BP-035      |
 |                                   |             |       | Testbench complete BP-036        |
 |                                   |             |       | CTR/USE tests complete BP-044/a/b/c |
-|                                   |             |       | 77 tests passing w/ BP-048       |
+|                                   |             |       | 147 tests passing w/ BP-048       |
 | ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
 |                                   |             |       | shell without arb cntrl complete |
-|                                   |             |       | sim_ittage 113 pass / 0 fail      |
+|                                   |             |       | sim_ittage 125 pass / 0 fail      |
 |                                   |             |       | (fixed in BP-049a).              |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
@@ -190,21 +190,22 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | ittage_cntrl_decisions.md.            | ctr was !=3 & !=4, now > 0 (NOT |
 |    |                                       | NULL). Ensure #43 does not      |
 |    |                                       | impact any testcase.            |
-| 49 | Arb queue status pin renaming.        | pq_not_full/upd_rdy ->          |
-|    |                                       | tage_pq_not_full/tage_uq_not_   |
-|    |                                       | full and ittage_ equivalents.   |
-|    |                                       | Scope: RTL, tb, bp_arb_spec.md, |
-|    |                                       | tage_interfaces.md,             |
-|    |                                       | ittage_interfaces.md.           |
-| 51 | CLOSED. CTR/USE/TGT update audit.     | CTR fixed BP-044b, USE fixed    |
-|    | Parent audit item.                    | BP-044c (both were provider-    |
-|    |                                       | gating inversions). Survivors   |
-|    |                                       | broken out: TGT #57,            |
-|    |                                       | allocation #62/#63.             |
-| 52 | Move arb logic into submodule out of  | Top modules should be           |
-|    | top in tage and ittage.               | structural only. New arb module |
-|    | (Refactor; pairs with #73 test.)      | for tage and ittage. Co-        |
-|    |                                       | sequence with arb test #73.     |
+| 49 | Arb queue status pin renaming.         | pq_not_full/upd_rdy ->          |
+|    |                                        | tage_pq_not_full/tage_uq_not_   |
+|    |                                        | full and ittage_ equivalents.   |
+|    |                                        | Scope: RTL, tb, bp_arb_spec.md, |
+|    |                                        | tage_interfaces.md,             |
+|    |                                        | ittage_interfaces.md.           |
+| 51 | CTR/USE/TGT update audit.              | CLOSED.                         |
+|    |                                        | CTR fixed BP-044b, USE fixed    |
+|    | Parent audit item.                     | BP-044c (both were provider-    |
+|    |                                        | gating inversions). Survivors   |
+|    |                                        | broken out: TGT #57,            |
+|    |                                        | allocation #62/#63.             |
+| 52 | Move arb logic into submodule out of   | Top modules should be           |
+|    | top in tage and ittage.                | structural only. New arb module |
+|    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
+|    |                                        | sequence with arb test #73.     |
 | 55 | tage EPC write proof.                  | epc_we gate changed BP-044c     |
 |    | Changed RTL, never proven by readback. | (USE rider). Seed entry, drive  |
 |    |                                        | EPC-writing update, read EPC    |
@@ -228,7 +229,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Tested only as setup, never as DUT.    | is Draft. Promote to authority, |
 |    |                                        | directed test per row, prove    |
 |    |                                        | use_alt_on_na fires/clears.     |
-| 59 | ittage UAON trigger rules.             | ittage_cntrl_uaon_update_rules. |
+| 59 | ittage UAON trigger rules.             | CLOSED BP-051 |
+|    |                                        | ittage_cntrl_uaon_update_rules. |
 |    | Tested only as setup, never as DUT.    | md is Draft. Same as #58. USE   |
 |    |                                        | tests relied on UAON firing as  |
 |    |                                        | precondition; never verified.   |
@@ -239,7 +241,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | over interval. Confirm interval |
 |    |                                        | reachable at current params     |
 |    |                                        | first (cf #39).                 |
-| 61 | ittage aging / epoch path. Entire      | Same as #60 for ittage.         |
+| 61 | ittage aging / epoch path. Entire      | CLOSED. BP-052                  |
+|    |                                        | Same as #60 for ittage.         |
 |    | path dark.                             | Consumes the EPC field whose    |
 |    |                                        | write changed BP-044c (see #56).|
 | 62 | tage allocation policy + write gating. | Allocation treated as residue   |
@@ -247,7 +250,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Successor to #51.                      | Test which table allocates,     |
 |    |                                        | alloc write-enable gating,      |
 |    |                                        | alloc index. Do #66 first.      |
-| 63 | ittage allocation policy + gating.     | Same as #62. Alloc on           |
+| 63 | ittage allocation policy + gating.     | CLOSED with BP-053              |
+|    |                                        | Same as #62. Alloc on           |
 |    | Never the feature under test.          | mispredict, CTR-null condition, |
 |    | Successor to #51.                      | alloc_we gating. Readback-      |
 |    |                                        | verify allocated entry state.   |
@@ -273,16 +277,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | | should be this
 |    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1] |
 |    | | same thing for each of these: |
-|    | |   t_prm_ctr_wd_u0 |
-|    | |   t_alt_ctr_wd_u0 |
-|    | |   t_use_wd_u0 |
-|    | |   t_epc_wd_u0 |
-|    | |   t_alc_wd_u0 |
-|    | |   t_prm_tbl_sel_u0 |
-|    | |   t_alt_tbl_sel_u0 |
-|    | |   t_alc_tbl_sel_u0 |
-|    | |   t_upd_index_u0 |
-|    | |   t_alc_index_u0 |
+|    | |   `t_prm_ctr_wd_u0` |
+|    | |   `t_alt_ctr_wd_u0` |
+|    | |   `t_use_wd_u0` |
+|    | |   `t_epc_wd_u0` |
+|    | |   `t_alc_wd_u0` |
+|    | |   `t_prm_tbl_sel_u0` |
+|    | |   `t_alt_tbl_sel_u0` |
+|    | |   `t_alc_tbl_sel_u0` |
+|    | |   `t_upd_index_u0` |
+|    | |   `t_alc_index_u0` |
 |    | | |
 | 67 | tage sram_init non-fast path.          | All tests used +FAST_INIT,      |
 |    | Untested here; confirm not elsewhere.  | bypassing real sram_init        |
@@ -520,6 +524,8 @@ Key decisions for quick reference:
         - USE(ful) field update rules. Corrected session-045.
     - planning/arch/tage_table_hash_rules.md          Complete
         - Address and tag generation hashing
+    - planning/arch/tage_table_entry_formats.md       Complete
+        - Central specification of table entry fields and ordering
     - planning/interfaces/tage_interfaces.md          Complete
         - TAGE module interface contracts
     - planning/interfaces/tage_table_interfaces.md    Complete
@@ -528,21 +534,23 @@ Key decisions for quick reference:
 ### ITTAGE decomposition
 - RTL is available
     - Unit testbenches written
-    - Line coverage < 90% in progress
-    - Directed validation not started
+    - Line coverage > 90% in progress
+    - Directed validation in progress
     - Formal validation not started
 - BP-034 - BP-042 complete (BP-033 abandoned)
 - ITTage planning documents
-    - planning/arch/ittage_cntrl_alloc_rules.md         Draft
+    - planning/arch/ittage_cntrl_alloc_rules.md         Complete
         - Table entry allocation rules
     - planning/arch/ittage_cntrl_ctr_update_rules.md    Complete
         - CTR field update rules. 33-row table. session-045.
     - planning/arch/ittage_cntrl_decisions.md           Complete
         - ITTAGE control behavior, conventions and rules
-    - planning/arch/ittage_cntrl_uaon_update_rules.md   Draft
+    - planning/arch/ittage_cntrl_uaon_update_rules.md   Complete
         - UAON (Use ALT on newly allocated)  trigger rules
-    - planning/arch/ittage_cntrl_use_update_rules.md    Draft
+    - planning/arch/ittage_cntrl_use_update_rules.md    Complete
         - USE(ful) field update rules. Corrected session-045.
+    - planning/arch/ittage_table_entry_formats.md       Complete
+        - Central specification of table entry fields and ordering
     - planning/arch/ittage_table_hash_rules.md          Complete
         - Address and tag generation hashing
     - planning/interfaces/ittage_interfaces.md          Complete
