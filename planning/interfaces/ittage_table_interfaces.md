@@ -45,25 +45,37 @@ Tables are also known as components (unrelated to this projects library
 of components). The term components is often used in the literature.
 
 There is only one table type in ITTAGE, tagged.
-There are five tables, IT1-IT5.
+There are five tagged tables, IT1-IT5.
 
-Tagged tables use module ittage_table,
-the file is rtl/core/frontend/bpu/rtl/ittage_table.sv
+Tagged tables use module ittage_table, the file is 
+rtl/core/frontend/bpu/rtl/ittage_table.sv
 
 The tagged tables are IT1-IT5, and entry in a tagged table include
-a tag field of table specific width, a target address field (TGT) of 
-parameterized width, an EPC field of parameterized width, 
-a USE field of parameterized width, a CTR field of parameterized width 
-and a 1b VALID bit. 
+a valid bit, an CTR field (confidence counter), a USE (usefulness counter),
+an EPC (epoch field used for usefulness aging), a TGT field (target address),
+and TAG ( a compare tag based on the PC and a hashing function.).
 
-By default:
-the EPC field is 2b
-the USE field is 2b
-the CTR field is 3b.
-the TGT field is 38b.
+The widths of these fields are parameterized. The valid is not parameterized
+it is alway 1 bit wide.
 
-The tables have an associated history
-length of (4b, 8b, 13b, 16b, 32b) respectively.
+The widths are specified in parameter array's allowing per table specialization
+of the widths.
+
+The maximum range for each field is stored in a parameter. These parameters
+are found in `bp_defines_pkg.sv`
+
+`IT_MAX_TAG_WIDTH`
+`IT_MAX_TGT_WIDTH`
+`IT_MAX_EPC_WIDTH`
+`IT_MAX_USE_WIDTH`
+`IT_MAX_CTR_WIDTH`
+`IT_MAX_VAL_WIDTH`
+
+
+### ITTAGE Tagged Table Entry Format
+
+The field formats for tables IT1-IT5 are defined
+in `planning/arch/ittage_table_entry_formats.md`
 
 ## Bank Address Assignment
 
@@ -399,34 +411,3 @@ alc_index_u0[s]        RAM address for allocation write.
                        Produced by ittage_cntrl.
 
 ---
-
-## Entry Format
-
-### IT1-IT5 Table Entry
-
-```
-MSB                                            LSB
-<tag>  TGT[37:0] EPC[1:0]  USE[1:0]  CTR[2:0]  VALID
-```
-
-Field widths for EPC, USE, CTR, TGT, and
-VALID are uniform across IT1-IT5. The tag field varies.
-
-```
-VALID  : 1 bit
-CTR    : 3 bits (confidence counter, not direction)
-USE    : 2 bits
-EPC    : 2 bits
-TGT    : 38 bits (IT_TBL_TGT_WIDTH -- upper 38 bits of Sv39 VA.
-                  Bit 0 always zero for instruction alignment
-                  and is not stored.)
-TAG    : 8 bits (IT1-IT2), 9 bits (IT3-IT4), 11 bits (IT5)
-```
-
-CTR encodes confidence in the stored target. CTR is incremented
-on correct prediction and decremented on misprediction. When CTR
-reaches null on misprediction, the target field is replaced with
-the resolved target. CTR is not a direction predictor.
-
-There is no IT0 entry format. ITTAGE has no base table.
-

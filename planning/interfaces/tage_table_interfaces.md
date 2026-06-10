@@ -3,7 +3,7 @@
  FILE:    tage_table_interfaces.md
  SOURCE:  various
  STATUS:  COMPLETE
- UPDATED: 2026-04-03
+ UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```
  
@@ -64,6 +64,10 @@ width, a USE field of parameterized width, a CTR field of parameterized
 width and a 1b VALID bit. By default the EPC field is 2b, the USE field is
 2b, the CTR field is 3b. The tagged tables have an associated history 
 length of (8b, 13b, 32b, 119b) respectively.
+
+The definitive specification of the field widths is found in
+`bp_defines_pkg.sv`
+
 
 ## Bank Address Assignment
 
@@ -179,16 +183,19 @@ instantiation.
 
 ### Common internal module parameters
 
+```
 THIS_TABLE         : int this indicates which table T0-T4
 TBL_SEL_WIDTH      : int this is the width of the table select bus, typically
                          tbl_sel or alc_set buses
 THIS_VAL_WIDTH     : int = 1 this is a static value, the parameter is only
-                             used for documentation
+                         used for documentation
+```
 
 ### Internal module parameters 
 
 These are assigned during instantiation.
 
+```
 THIS_INDEX_BITS    : int this is the local width of the index bus
 
 THIS_TAG_BITS      : int this is the local width of the TAG field
@@ -198,6 +205,7 @@ THIS_EPC_WIDTH     : int this is the local width of the EPC field
 THIS_USE_WIDTH     : int this is the local width of the USE field
                          this is not used by T0
 THIS_CTR_WIDTH     : int this is the local width of the CTR field
+```
 
 ---
 
@@ -211,33 +219,41 @@ a vector index 0/1.  These are two independent prediction slots.
 
 #### T0 prediction ports
 
+```
 output [NUM_PRED_SLOTS-1:0]  taken_p1  // this is bit [1] of the entry.
 output [THIS_CTR_WIDTH-1:0]  cntrl_bits_p1[0:NUM_PRED_SLOTS-1]
 
 input  [NUM_PRED_SLOTS-1:0]  tage_pred_val_p0
 input  tage_pred_inp_t       tage_pred_inp_p0[0:NUM_PRED_SLOTS-1]
+```
 
 #### T0 update ports
 
+```
 input [NUM_PRED_SLOTS-1:0]     tage_upd_val_u0
 input [THIS_CTR_WIDTH-1:0]     prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1]
 input [NUM_PRED_SLOTS-1:0]     prm_ctr_wr_u0
 input [TBL_SEL_WIDTH-1:0]      prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1]
 input [THIS_INDEX_BITS-1:0]    upd_index_u0[0:NUM_PRED_SLOTS-1]
+```
 
 #### T0 misc ports
 
+```
 input                          tbl_ri_active
 input                          tbl_ri_wr
 input [THIS_INDEX_BITS-1:0]    tbl_ri_wa
 input [ALLOC_DATA_WIDTH-1:0]   tbl_ri_wd
 input rstn
 input clk
+```
 
 
 ### T1-TN Port List, tage_table
 
 #### T1-TN prediction ports
+
+```
 output [NUM_PRED_SLOTS-1:0]    hit_p1
 output [NUM_PRED_SLOTS-1:0]    taken_p1
 
@@ -250,6 +266,7 @@ output logic [MAX_TAG_WIDTH-1:0]
 
 input [NUM_PRED_SLOTS-1:0]     tage_pred_val_p0
 input tage_pred_inp_t          tage_pred_inp_p0[0:NUM_PRED_SLOTS-1]
+```
 
 #### T1-TN update ports
 
@@ -271,10 +288,12 @@ input [THIS_INDEX_BITS-1:0]    upd_index_u0[0:NUM_PRED_SLOTS-1]
 
 input [TBL_SEL_WIDTH-1:0]      alc_tbl_sel_u0[0:NUM_PRED_SLOTS-1]
 input [THIS_INDEX_BITS-1:0]    alc_index_u0[0:NUM_PRED_SLOTS-1]
+```
 
 
 #### T1-TN misc ports
 
+```
 input                          tbl_ri_active
 input                          tbl_ri_wr
 input [THIS_INDEX_BITS-1:0]    tbl_ri_wa
@@ -283,6 +302,7 @@ input bp_folded_hist_t         folded_hist
 
 input rstn
 input clk
+```
 
 
 ## Misc Interface
@@ -309,8 +329,6 @@ tbl_ri_wa      ram address signal. When tbl_ri_active is asserted, tbl_ri_wa
 tbl_ri_wd      ram write data signal When tbl_ri_active is asserted, tbl_ri_wd
                overrides all other ram data input signals.
 
-```
-
 ---
 ## Prediction Interface
 
@@ -319,7 +337,7 @@ tbl_ri_wd      ram write data signal When tbl_ri_active is asserted, tbl_ri_wd
 There are two effective copies of these signals for each prediction slot.
 
 The unused signals are not documented here.
-```
+
 taken_p1            this is the MSB of the T0 entry
 
 cntrl_bits_p1       this is a THIS_CTR_WIDTH (default 2b) wide bus that 
@@ -334,9 +352,7 @@ index_hash_p0       is the PC-derived index which accesses the SRAM for
                     hashed it is directly taken from the PC input.
                     This is not routed through tage_hash
 
-```
 ### T1-TN Semantics:
-```
 
 tage_pred_val_p0[s]  is the trigger that enables the SRAM read.
                      Produced by tage top level.
@@ -462,28 +478,7 @@ alc_index_u0[s] this is allocation index used to access the ram entry for
 
 ## Entry Formats
 
-### T0 table entry
+The table entry formats for TAGE are found in
+`planning/arch/tage_table_entry_formats.md`
 
-T0 entry format: [1:0] CTR only. No valid, no tag, no useful, no EPC.
-
-```
-1      0
-CTR[1] CTR[0]
-```
-
-### T1-TN table entry
-```
-N:8    7      6       5      4      3      2      1      0
-<tag>  EPC[1] EPC[0]  USE[1] USE[0] CTR[2] CTR[1] CTR[0] VALID
-```
-
----
-
-## Known Gaps and Deferred Items
-
-There are no current gaps or deferred items for tage_table_interfaces.
-
-| ID  | Item                                      | Status          |
-|-----|-------------------------------------------|-----------------|
-| n/a | n/a                                       | n/a             |
 

@@ -227,6 +227,18 @@ module tb;
     end
   endtask
 
+  task automatic chk11(
+    input string nm, input logic [10:0] act, exp
+  );
+    if (act === exp) begin
+      pass_cnt++;
+      $display("  PASS %s", nm);
+    end else begin
+      fail_cnt++;
+      $display("  FAIL %s: exp=%h act=%h", nm, exp, act);
+    end
+  endtask
+
   task automatic chk4(
     input string nm, input logic [3:0] act, exp
   );
@@ -1221,6 +1233,363 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-ALC-01: Candidate from IT4; provider=IT3, IT4 u_eff=0,
+  //            IT5 u_eff != 0. Confirms alc_comp=4 and alc_wr fires.
+  //            Rules: candidate scan range, shortest-history
+  //            selection, write strobe trigger.
+  // ================================================================
+  task automatic tc_alc_01();
+    ittage_pred_meta_t m; logic rdy;
+    ittage_upd_inp_t   ui;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-ALC-01 ---");
+    do_reset();
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[3]   = mk_cb(1'b1, 3'b001, 2'b01, 2'b00, 38'h100);
+    ptgt[3] = 38'h100;
+    idx[3]  = 9'h033;
+    // IT4: USE=00, EPC=00 -> age=0, u_eff=0 (qualifies)
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h200);
+    idx[4]  = 9'h044;
+    tag[4]  = 11'h4BB;
+    // IT5: USE=11, EPC=00 -> age=0, u_eff=11 (does not qualify)
+    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h300);
+    pred_s0(40'h0, 6'b001000, cb, ptgt, idx, tag, m, rdy);
+    chk3("ALC01 prm_comp", m.ittage_prm_comp, 3'(3));
+    chk3("ALC01 alc_comp", m.ittage_alc_comp, 3'(4));
+    chk9("ALC01 alc_idx",  m.ittage_alc_idx,  9'h044);
+    chk11("ALC01 alc_tag", m.ittage_alc_tag,  11'h4BB);
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(3);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(4);
+    ui.ittage_pred_meta.ittage_alc_idx  = 9'h044;
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC01 alc_wr",    alc_wr_u0[0],      1'b1);
+    chk3("ALC01 alc_tbl",   alc_tbl_sel_u0[0], 3'(4));
+    chk9("ALC01 alc_index", alc_index_u0[0],   9'h044);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-02: Candidate from IT3; provider=IT1, IT2 u_eff != 0
+  //            (USE=2b10), IT3 u_eff=0. Scan skips IT2.
+  //            Rule: candidate scan skips non-qualifying tables.
+  // ================================================================
+  task automatic tc_alc_02();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-ALC-02 ---");
+    do_reset();
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, 38'hAA);
+    ptgt[1] = 38'hAA;
+    idx[1]  = 9'h011;
+    // IT2: USE=10, EPC=00 -> u_eff=10 (does not qualify)
+    cb[2]   = mk_cb(1'b1, 3'b000, 2'b10, 2'b00, 38'h0);
+    // IT3: USE=00, EPC=00 -> u_eff=0 (qualifies)
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    idx[3]  = 9'h033;
+    tag[3]  = 11'h3AA;
+    pred_s0(40'h0, 6'b000010, cb, ptgt, idx, tag, m, rdy);
+    chk3("ALC02 prm_comp", m.ittage_prm_comp, 3'(1));
+    chk3("ALC02 alc_comp", m.ittage_alc_comp, 3'(3));
+    chk9("ALC02 alc_idx",  m.ittage_alc_idx,  9'h033);
+    chk11("ALC02 alc_tag", m.ittage_alc_tag,  11'h3AA);
+  endtask
+
+  // ================================================================
+  // TC-ALC-03: No-consecutive table; provider=IT2, IT3 and IT4
+  //            both u_eff=0. Expect alc_comp=3 (IT4 skipped by
+  //            if-else chain; IT3 selected as shortest history).
+  //            Rule: no-consecutive-table constraint.
+  // ================================================================
+  task automatic tc_alc_03();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-ALC-03 ---");
+    do_reset();
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[2]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, 38'hBB);
+    ptgt[2] = 38'hBB;
+    // IT3: USE=00, EPC=00 -> u_eff=0 (qualifies first)
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    idx[3]  = 9'h033;
+    // IT4: USE=00, EPC=00 -> u_eff=0 (also qualifies, but
+    //   consecutive to IT3; skipped by if-else chain)
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    idx[4]  = 9'h044;
+    pred_s0(40'h0, 6'b000100, cb, ptgt, idx, tag, m, rdy);
+    chk3("ALC03 prm_comp", m.ittage_prm_comp, 3'(2));
+    chk3("ALC03 alc_comp", m.ittage_alc_comp, 3'(3));
+    chk9("ALC03 alc_idx",  m.ittage_alc_idx,  9'h033);
+  endtask
+
+  // ================================================================
+  // TC-ALC-04: Provider=IT5: alc_comp=0 (sentinel) at predict
+  //            time; mispredict -> alc_wr=0 at update time.
+  //            Rules: sentinel, trigger (prm_comp must be < M=5).
+  // ================================================================
+  task automatic tc_alc_04();
+    ittage_pred_meta_t m; logic rdy;
+    ittage_upd_inp_t   ui;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-ALC-04 ---");
+    do_reset();
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[5]   = mk_cb(1'b1, 3'b101, 2'b01, 2'b00, 38'h5555);
+    ptgt[5] = 38'h5555;
+    idx[5]  = 9'h055;
+    pred_s0(40'h0, 6'b100000, cb, ptgt, idx, tag, m, rdy);
+    chk3("ALC04 prm_comp", m.ittage_prm_comp, 3'(5));
+    chk3("ALC04 alc_comp", m.ittage_alc_comp, 3'(0));
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(5);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(0);
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC04 alc_wr", alc_wr_u0[0], 1'b0);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-05: No qualifying candidate; provider=IT1, IT2-IT5
+  //            all u_eff != 0. alc_comp=0 (sentinel) -> alc_wr=0.
+  //            Rules: no-candidate sentinel, write suppression.
+  // ================================================================
+  task automatic tc_alc_05();
+    ittage_pred_meta_t m; logic rdy;
+    ittage_upd_inp_t   ui;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-ALC-05 ---");
+    do_reset();
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, 38'hCC);
+    ptgt[1] = 38'hCC;
+    // IT2-IT5: USE=11, EPC=00 -> u_eff=11 (none qualify)
+    cb[2]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    pred_s0(40'h0, 6'b000010, cb, ptgt, idx, tag, m, rdy);
+    chk3("ALC05 prm_comp", m.ittage_prm_comp, 3'(1));
+    chk3("ALC05 alc_comp", m.ittage_alc_comp, 3'(0));
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(1);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(0);
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC05 alc_wr", alc_wr_u0[0], 1'b0);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-06: Trigger gating: indir_mispredict=0 -> alc_wr=0.
+  //            Rule: trigger requires indir_mispredict=1.
+  // ================================================================
+  task automatic tc_alc_06();
+    ittage_upd_inp_t ui;
+    $display("--- TC-ALC-06 ---");
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b0;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(3);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(4);
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC06 alc_wr", alc_wr_u0[0], 1'b0);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-07: Trigger gating: prm_comp=5 (IT5 provider),
+  //            mispredict=1 -> alc_wr=0.
+  //            Rule: trigger requires prm_comp < M (M=IT_NUM_TABLES-1=5).
+  // ================================================================
+  task automatic tc_alc_07();
+    ittage_upd_inp_t ui;
+    $display("--- TC-ALC-07 ---");
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(5);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(4);
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC07 alc_wr", alc_wr_u0[0], 1'b0);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-08: No-hit allocation; no table hits (prm_comp=0),
+  //            IT1 u_eff=0. Scan starts at IT1.
+  //            Rules: no-hit scan from IT1, no-consecutive applies.
+  // ================================================================
+  task automatic tc_alc_08();
+    ittage_pred_meta_t m; logic rdy;
+    logic [CBW-1:0]              cb  [0:NTS-1];
+    logic [IT_MAX_TGT_WIDTH-1:0] ptgt[0:NTS-1];
+    logic [IT_MAX_IDX_WIDTH-1:0] idx [0:NTS-1];
+    logic [IT_MAX_TAG_WIDTH-1:0] tag [0:NTS-1];
+    $display("--- TC-ALC-08 ---");
+    do_reset();
+    for (int t = 0; t < NTS; t++) begin
+      cb[t] = '0; ptgt[t] = '0;
+      idx[t] = '0; tag[t] = '0;
+    end
+    // IT1: USE=00, EPC=00 -> u_eff=0 (qualifies first)
+    cb[1]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    idx[1]  = 9'h011;
+    tag[1]  = 11'h1AA;
+    // IT2-IT5: USE=11 -> u_eff != 0 (ensure IT1 is chosen)
+    cb[2]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
+    pred_s0(40'h0, 6'b000000, cb, ptgt, idx, tag, m, rdy);
+    chk1("ALC08 hit",      m.ittage_hit,      1'b0);
+    chk3("ALC08 prm_comp", m.ittage_prm_comp, 3'(0));
+    chk3("ALC08 alc_comp", m.ittage_alc_comp, 3'(1));
+    chk9("ALC08 alc_idx",  m.ittage_alc_idx,  9'h011);
+    chk11("ALC08 alc_tag", m.ittage_alc_tag,  11'h1AA);
+  endtask
+
+  // ================================================================
+  // TC-ALC-09: Discriminating: alc_index comes from ittage_alc_idx
+  //            (pre-hashed at predict time), not ittage_prm_idx.
+  //            prm_idx=9'h022, alc_idx=9'h033 (distinct values).
+  //            Rule: alc_idx pre-hashed, no rehash at update time.
+  // ================================================================
+  task automatic tc_alc_09();
+    ittage_upd_inp_t ui;
+    $display("--- TC-ALC-09 ---");
+    do_reset();
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(2);
+    ui.ittage_pred_meta.ittage_prm_idx  = 9'h022;
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(3);
+    ui.ittage_pred_meta.ittage_alc_idx  = 9'h033;
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC09 alc_wr",    alc_wr_u0[0],      1'b1);
+    chk3("ALC09 alc_tbl",   alc_tbl_sel_u0[0], 3'(3));
+    // Must be 9'h033 (alc_idx), not 9'h022 (prm_idx)
+    chk9("ALC09 alc_index", alc_index_u0[0],   9'h033);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-10: Allocated entry contents: CTR=0, USE=0,
+  //            EPC=lcl_epoch=2, TAG=alc_tag, TGT=resolved_target,
+  //            VALID=1. Epoch advanced to 2 before update.
+  //            Rule: entry initialization fields, EPC=lcl_epoch.
+  // ================================================================
+  task automatic tc_alc_10();
+    ittage_upd_inp_t ui;
+    logic [MADW-1:0] exp_wd;
+    $display("--- TC-ALC-10 ---");
+    // Advance epoch to 2: interval=0, every tick fires epoch
+    age_reset(32'd0, 1'b1);
+    age_tick_s0();   // epoch 0 -> 1
+    age_tick_s0();   // epoch 1 -> 2
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(2);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(3);
+    ui.ittage_pred_meta.ittage_alc_idx  = 9'h033;
+    ui.ittage_pred_meta.ittage_alc_tag  = 11'h4AB;
+    ui.resolved_target                  = 38'h3CAFE;
+    // Expected: {TAG, TGT, EPC, USE, CTR, VALID}
+    exp_wd = {11'h4AB, 38'h3CAFE, 2'b10, 2'b00, 3'b000, 1'b1};
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC10 alc_wr",  alc_wr_u0[0],  1'b1);
+    chk57("ALC10 alc_wd", alc_wd_u0[0],  exp_wd);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
+  // TC-ALC-11: Per-table gating: alc_comp=3 -> alc_tbl_sel=3.
+  //            prm_comp=2, alc_comp=3: only IT3 receives the write.
+  //            Discriminating: wrong alc_comp would yield wrong
+  //            tbl_sel, misdirecting the write to another table.
+  //            Rule: per-table strobe gating via alc_tbl_sel.
+  // ================================================================
+  task automatic tc_alc_11();
+    ittage_upd_inp_t ui;
+    $display("--- TC-ALC-11 ---");
+    do_reset();
+    mk_upd(ui);
+    ui.indir_mispredict                 = 1'b1;
+    ui.ittage_pred_meta.ittage_prm_comp = TSW'(2);
+    ui.ittage_pred_meta.ittage_alc_comp = TSW'(3);
+    ui.ittage_pred_meta.ittage_alc_idx  = 9'h033;
+    clr();
+    ittage_upd_val_u0[0] = 1'b1;
+    ittage_upd_inp_u0[0] = ui;
+    #1;
+    chk1("ALC11 alc_wr",    alc_wr_u0[0],      1'b1);
+    // alc_tbl_sel=3 directs write to IT3 only (not IT4)
+    chk3("ALC11 alc_tbl",   alc_tbl_sel_u0[0], 3'(3));
+    chk9("ALC11 alc_index", alc_index_u0[0],   9'h033);
+    @(posedge clk); #1;
+    clr();
+  endtask
+
+  // ================================================================
   // Main test sequence
   // ================================================================
   initial begin
@@ -1260,6 +1629,18 @@ module tb;
     tc_uaon_07();
     tc_uaon_08();
     tc_uaon_09();
+
+    tc_alc_01();
+    tc_alc_02();
+    tc_alc_03();
+    tc_alc_04();
+    tc_alc_05();
+    tc_alc_06();
+    tc_alc_07();
+    tc_alc_08();
+    tc_alc_09();
+    tc_alc_10();
+    tc_alc_11();
 
     tc_age_01();
     tc_age_02();
