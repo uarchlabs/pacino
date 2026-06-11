@@ -152,6 +152,12 @@ simple action of incrementing IT_AGE_EPOCH effectively ages
 all entries in all tables without the need to update each
 entry individually.
 
+NOTE: USE write-back value is u_eff (aged), not raw USE: 
+on update the field is written u_eff+1 (INC) / u_eff-1 (DEC)
+and EPC is refreshed to lcl_epoch in the same write, 
+resetting age to 0. When seeded EPC != lcl_epoch, raw USE 
+may show no delta (e.g. u_eff=0, INC writes 1).
+
 ---
 
 ## Useful Counter Update Table

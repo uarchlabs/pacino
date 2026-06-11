@@ -122,11 +122,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |                 | CTR/USE tests complete BP-044/a/b/c |
 |                                   |             |                 | 147 tests passing w/ BP-048       |
 |                                   |             |                 |  UAON/aging/alloc verified BP-051/2/3 |
-|                                   |             |                 |  ittage_cntrl is complete |
-| ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
-|                                   |             |           | shell without arb cntrl complete |
-|                                   |             |           | sim_ittage 164 pass / 0 fail     |
-|                                   |             |           | (tests added BP-054).            |
+|                                   |             |                 |  ittage_cntrl is complete   |
+| ittage.sv                         | Complete    | tb_ittage | BP-034/035/35a/35b                |
+|                                   |             |           | shell without arb cntrl complete  |
+|                                   |             |           | sim_ittage 211 pass / 0 fail      |
+|                                   |             |           | tests added BP-054.               |
+|                                   |             |           | round trip tests added in BP-055. |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
@@ -318,11 +319,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | isolation reproduces the multi- |
 |    |                                        | cause ambiguity that stalled    |
 |    |                                        | BP-044.                         |
-| 72 | ittage round-trip (capstone).          | Mixed ctr/use/alloc/epc/tgt in  |
+| 72 | ittage round-trip (capstone).          | CLOSED BP-055                   |
+|    |                                        | Mixed ctr/use/alloc/epc/tgt in  |
 |    | Combined test, run only after          | one flow. Run ONLY after        |
 |    | individual tests pass                  | #56,57,59,61,63,65 each proven  |
 |    |                                        | alone. Same isolation-first     |
 |    |                                        | rule as #71.                    |
+|    |                                        | Allocation RAM-level write      |
+|    |                                        | isolation verified, selected    |
+|    |                                        | table written, other tables     |
+|    |                                        | shown unchanged                 |             
 | 73 | Arbitration layer behavioral test.     | PQ/UQ FIFOs + credit arbiter.   |
 |    | Deferred. Pairs with refactor #52.     | Folds in #37, #39, #40. Defer   |
 |    |                                        | until uBTB, loop, tage, ittage  |
@@ -540,7 +546,12 @@ Key decisions for quick reference:
 - RTL is available
     - Unit testbenches written
     - Line coverage > 90% in progress
-    - Directed validation in progress, only round-trip remains
+    - Directed validation complete
+    - remaining items deferred
+        - #69/#70 rollback -> bp_cluster
+        - #43 CTR width
+        - #75 sim_ittage_fast
+        - #68 sram_init non-fast
     - Formal validation not started
 - BP-034 - BP-042 complete (BP-033 abandoned)
 - ITTage planning documents

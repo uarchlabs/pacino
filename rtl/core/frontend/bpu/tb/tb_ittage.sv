@@ -2035,6 +2035,320 @@ module tb;
   endtask
 
   // ================================================================
+  // TC-RT01: Capstone round-trip test (BP-055).
+  // PC_RT=40'h0000_6000, folded_hist=0.
+  // Hash (INST_OFFSET=2):
+  //   IT1/IT2: idx8=(PC>>2)&0xFF=0x00 bank=0 ent=0 tag8=(PC>>8)&0xFF
+  //            =0x60 -> stored as 11'h060.
+  //   IT3/IT4: idx9=(PC>>2)&0x1FF=0x000 bank=0 ent=0
+  //            tag9=(PC>>9)&0x1FF=0x30 -> stored as 11'h030.
+  //   IT5:     idx9=0x000 bank=0 ent=0
+  //            tag11=(PC>>9)&0x7FF=0x030 -> stored as 11'h030.
+  //
+  // Phase 1: Seed IT1(alt) IT3(prm) IT5(isolation ref non-match).
+  //          Lookup confirms IT3=primary(prm_comp=3), IT1=alt.
+  // Phase 2: Correct update (MISP=0, UP=1) ->
+  //          IT3 CTR INC(2->3), EPC written(3->0 epoch),
+  //          USE INC(1->2, DIFF=1). IT1 EPC unchanged.
+  // Phase 3: Mispredict (MISP=1, UP=1, CTR non-null) ->
+  //          IT3 CTR DEC(3->2), USE DEC(2->1). TGT unchanged.
+  // Phase 4: Reseed IT3 CTR=0, force UAON=7 (<thres=8) to keep
+  //          UP=1. Mispredict -> CTR-null path:
+  //          IT3 TGT replaced(0xCC00->0xFF00), allocation to IT4.
+  //          Check(a): IT4 allocated per alloc_rules.
+  //          Check(b): IT5 isolation ref unchanged (TC-ALC-11).
+  // Phase 5A: Reseed IT3 CTR=2, MISP=1 -> TGT unchanged.
+  // Phase 5B: Reseed IT3 CTR=0, force UAON=7, MISP=1 -> TGT wr.
+  // Phase 6: Final decode of IT1 and IT3 fields. IT1 unchanged
+  //          throughout (UP=1 in all phases -> alt never written).
+  // ================================================================
+  task automatic tc_rt01_capstone();
+    localparam logic [VA_WIDTH-1:0]         PC_RT  = 40'h0000_6000;
+    // IT1 seed values (alternate, shorter history)
+    localparam logic [IT_MAX_CTR_WIDTH-1:0] S1_CTR = 3'h2;
+    localparam logic [IT_MAX_USE_WIDTH-1:0] S1_USE = 2'h1;
+    localparam logic [IT_MAX_EPC_WIDTH-1:0] S1_EPC = 2'h2;
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] S1_TGT = 38'h0_0000_AA00;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] S1_TAG = 11'h060;
+    // IT3 seed values (provider, longer history)
+    localparam logic [IT_MAX_CTR_WIDTH-1:0] S3_CTR = 3'h2;
+    localparam logic [IT_MAX_USE_WIDTH-1:0] S3_USE = 2'h1;
+    localparam logic [IT_MAX_EPC_WIDTH-1:0] S3_EPC = 2'h3;
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] S3_TGT = 38'h0_0000_CC00;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] S3_TAG = 11'h030;
+    // IT5 isolation reference (non-matching tag -> never hits)
+    localparam logic [IT_MAX_CTR_WIDTH-1:0] R5_CTR = 3'h5;
+    localparam logic [IT_MAX_USE_WIDTH-1:0] R5_USE = 2'h3;
+    localparam logic [IT_MAX_EPC_WIDTH-1:0] R5_EPC = 2'h1;
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] R5_TGT = 38'h0_0000_D000;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] R5_TAG = 11'h1FF;
+
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-RT01 Capstone round-trip (BP-055)");
+    do_reset();
+
+    // ---- Phase 1: Seed + lookup --------------------------------
+    // Invalidate IT2 and IT4 at PC_RT index to prevent aliasing.
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    // IT1: alternate (shorter history, tag=8'h60).
+    bw_write(1, 0, 0, 0, 1'b1, S1_CTR, S1_USE, S1_EPC, S1_TGT, S1_TAG);
+    // IT3: provider (longer history, tag=9'h030).
+    bw_write(3, 0, 0, 0, 1'b1, S3_CTR, S3_USE, S3_EPC, S3_TGT, S3_TAG);
+    // IT5: isolation reference (tag=11'h1FF never matches PC_RT).
+    bw_write(5, 0, 0, 0, 1'b1, R5_CTR, R5_USE, R5_EPC, R5_TGT, R5_TAG);
+    do_pred(PC_RT, 6'hD0, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("RT01-P1:hit",
+      64'(m.ittage_hit),             64'h1);
+    chk("RT01-P1:prm_comp",
+      64'(m.ittage_prm_comp),        64'h3);
+    chk("RT01-P1:alt_comp",
+      64'(m.ittage_alt_comp),        64'h1);
+    chk("RT01-P1:prm_tgt",
+      64'(m.ittage_prm_tgt),         64'h0_0000_CC00);
+    chk("RT01-P1:alt_tgt",
+      64'(m.ittage_alt_tgt),         64'h0_0000_AA00);
+    chk("RT01-P1:usingprm",
+      64'(m.ittage_using_primary),   64'h1);
+    @(posedge clk);
+
+    // ---- Phase 2: CTR + EPC + USE (correct, MISP=0, UP=1) -----
+    // prm_tgt(0xCC00)!=alt_tgt(0xAA00) -> DIFF=1 -> USE INC.
+    // EPC write is a strict subset of CTR write (BP-050b).
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = S3_TGT; // correct -> MISP=0
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // IT3 (provider): CTR 2->3(INC), EPC 3->0(epoch=0).
+    // USE: u_eff=0 (age=1 from EPC=3 vs epoch=0), INC writes 0+1=1
+    // (raw USE stays 1; EPC write resets age so next u_eff=1).
+    begin
+      automatic logic [54:0] e3;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P2:it3_ctr",
+        64'(e3[3:1]),  64'h3);
+      chk("RT01-P2:it3_epc",
+        64'(e3[7:6]),  64'h0);
+      chk("RT01-P2:it3_use",
+        64'(e3[5:4]),  64'h1);
+    end
+    // IT1 (non-provider): EPC must remain at seed value (S1_EPC=2).
+    begin
+      automatic logic [53:0] e1;
+      e1 = dut.gen_ittage_tables[1].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P2:it1_epc_nc",
+        64'(e1[7:6]),  64'(S1_EPC));
+    end
+    @(posedge clk);
+
+    // ---- Phase 3: USE step (MISP=1, CTR non-null -> DEC) -------
+    // Confirms USE DEC independently; also confirms TGT unchanged.
+    do_pred(PC_RT, 6'hD1, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("RT01-P3:ctr_pre",
+      64'(m.ittage_prm_ctr),    64'h3);
+    chk("RT01-P3:use_pre",
+      64'(m.ittage_prm_useful), 64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_EE00; // mispredict
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Alloc fires to IT4 (prm_comp=3<5, IT4 u_eff=0); invalidate.
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    // IT3: CTR 3->2(DEC), USE 1->0(DEC). TGT unchanged (CTR!=null).
+    begin
+      automatic logic [54:0] e3;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P3:ctr_post",
+        64'(e3[3:1]),  64'h2);
+      chk("RT01-P3:use_post",
+        64'(e3[5:4]),  64'h0);
+      chk("RT01-P3:tgt_nc",
+        64'(e3[45:8]), 64'h0_0000_CC00);
+    end
+    @(posedge clk);
+
+    // ---- Phase 4: Allocation + write-isolation (TC-ALC-11) -----
+    // Reseed IT3 CTR=0 (null). Force UAON=7 < threshold=8 to
+    // keep using_primary=1 (UAON=8 fires use_alt when CTR=null).
+    // IT4 already invalidated (u_eff=0 -> alloc candidate).
+    // IT5 USE=R5_USE=3 (u_eff!=0 -> not allocated).
+    // Adjacency: IT4 selected -> IT5 skipped (no-consecutive rule).
+    bw_write(3, 0, 0, 0, 1'b1, 3'h0, S3_USE, 2'h0, S3_TGT, S3_TAG);
+    force_uaon(0, IT_UAON_WIDTH'(7));
+    do_pred(PC_RT, 6'hD2, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("RT01-P4:ctr_null",
+      64'(m.ittage_prm_ctr),      64'h0);
+    chk("RT01-P4:usingprm",
+      64'(m.ittage_using_primary), 64'h1);
+    chk("RT01-P4:alc_comp",
+      64'(m.ittage_alc_comp),     64'h4);
+    // Mispredict: CTR-null -> TGT replaced + allocation fires to IT4.
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_FF00;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Check (a): IT4 allocated entry matches alloc_rules spec.
+    // alloc_rules: CTR=0, USE=0, EPC=lcl_epoch=0, TGT=resolved,
+    //   TAG=alc_tag=(PC_RT>>9)&0x1FF=0x30, VAL=1.
+    begin
+      automatic logic [54:0] e4;
+      automatic logic [8:0]  t4;
+      e4 = dut.gen_ittage_tables[4].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      t4 = e4[54:46];
+      chk("RT01-P4:alc_val",
+        64'(e4[0]),    64'h1);
+      chk("RT01-P4:alc_ctr",
+        64'(e4[3:1]),  64'h0);
+      chk("RT01-P4:alc_use",
+        64'(e4[5:4]),  64'h0);
+      chk("RT01-P4:alc_epc",
+        64'(e4[7:6]),  64'h0);
+      chk("RT01-P4:alc_tgt",
+        64'(e4[45:8]), 64'h0_0000_FF00);
+      chk("RT01-P4:alc_tag",
+        64'(t4),       64'h030);
+    end
+    // Check (b): IT5 isolation ref unchanged (TC-ALC-11 closure).
+    // A spurious write to IT5 would change at least one field below.
+    begin
+      automatic logic [56:0] e5;
+      e5 = dut.gen_ittage_tables[5].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P4:ref_ctr",
+        64'(e5[3:1]),   64'(R5_CTR));
+      chk("RT01-P4:ref_use",
+        64'(e5[5:4]),   64'(R5_USE));
+      chk("RT01-P4:ref_epc",
+        64'(e5[7:6]),   64'(R5_EPC));
+      chk("RT01-P4:ref_tgt",
+        64'(e5[45:8]),  64'(R5_TGT));
+      chk("RT01-P4:ref_tag",
+        64'(e5[56:46]), 64'(R5_TAG));
+    end
+    // IT3: CTR stays null(0); TGT replaced with resolved(0xFF00).
+    begin
+      automatic logic [54:0] e3;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P4:it3_ctr_null",
+        64'(e3[3:1]),  64'h0);
+      chk("RT01-P4:it3_tgt_wr",
+        64'(e3[45:8]), 64'h0_0000_FF00);
+    end
+    @(posedge clk);
+
+    // ---- Phase 5A: TGT unchanged (CTR non-null, MISP=1) --------
+    // Confirms target field is NOT replaced when CTR != null.
+    bw_write(3, 0, 0, 0, 1'b1, 3'h2, S3_USE, 2'h0, S3_TGT, S3_TAG);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    force_uaon(0, IT_UAON_WIDTH'(8)); // restore; CTR!=null -> UP=1 anyway
+    do_pred(PC_RT, 6'hD3, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("RT01-P5A:ctr_pre",
+      64'(m.ittage_prm_ctr), 64'h2);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_EE00; // mispredict
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    // Alloc fires to IT4; invalidate for Phase 5B.
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    begin
+      automatic logic [54:0] e3;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P5A:ctr_post",
+        64'(e3[3:1]),  64'h1);           // DEC 2->1
+      chk("RT01-P5A:tgt_nc",
+        64'(e3[45:8]), 64'h0_0000_CC00); // unchanged
+    end
+    @(posedge clk);
+
+    // ---- Phase 5B: TGT replaced (CTR null, MISP=1) -------------
+    // Confirms target field IS replaced when stored CTR == null.
+    bw_write(3, 0, 0, 0, 1'b1, 3'h0, S3_USE, 2'h0, S3_TGT, S3_TAG);
+    force_uaon(0, IT_UAON_WIDTH'(7)); // keep UP=1 with CTR=null
+    do_pred(PC_RT, 6'hD4, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("RT01-P5B:ctr_pre",
+      64'(m.ittage_prm_ctr),       64'h0);
+    chk("RT01-P5B:usingprm",
+      64'(m.ittage_using_primary), 64'h1);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = 38'h0_0000_EE00; // new target
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    begin
+      automatic logic [54:0] e3;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P5B:tgt_wr",
+        64'(e3[45:8]), 64'h0_0000_EE00); // replaced with resolved
+    end
+    @(posedge clk);
+
+    // ---- Phase 6: Final readback (all touched entries) ----------
+    // IT1: UP=1 in all phases -> alternate path never written.
+    // Expected final state: unchanged from initial seed.
+    begin
+      automatic logic [53:0] e1;
+      e1 = dut.gen_ittage_tables[1].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P6:it1_val",
+        64'(e1[0]),     64'h1);
+      chk("RT01-P6:it1_ctr",
+        64'(e1[3:1]),   64'(S1_CTR));
+      chk("RT01-P6:it1_use",
+        64'(e1[5:4]),   64'(S1_USE));
+      chk("RT01-P6:it1_epc",
+        64'(e1[7:6]),   64'(S1_EPC));
+      chk("RT01-P6:it1_tgt",
+        64'(e1[45:8]),  64'(S1_TGT));
+      chk("RT01-P6:it1_tag",
+        64'(e1[53:46]), 64'h60);
+    end
+    // IT3 after Phase 5B: val=1, CTR=0, TGT=0xEE00, TAG=9'h030.
+    // CTR=0 (null at reseed, stays null on CTR-null MISP).
+    // TGT=0xEE00 (replaced in Phase 5B).
+    begin
+      automatic logic [54:0] e3;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      chk("RT01-P6:it3_val",
+        64'(e3[0]),     64'h1);
+      chk("RT01-P6:it3_ctr",
+        64'(e3[3:1]),   64'h0);
+      chk("RT01-P6:it3_tgt",
+        64'(e3[45:8]),  64'h0_0000_EE00);
+      chk("RT01-P6:it3_tag",
+        64'(e3[54:46]), 64'h030);
+    end
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -2117,6 +2431,9 @@ module tb;
     tc_pred07_pred_strong();
     tc_pred08_target_output();
     tc_pred09_s2_timing();
+
+    // BP-055: capstone round-trip test (self-contained).
+    tc_rt01_capstone();
 
     repeat(5) @(posedge clk);
 
