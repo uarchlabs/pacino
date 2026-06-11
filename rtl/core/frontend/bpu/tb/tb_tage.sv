@@ -62,6 +62,12 @@
 //          alc_pre_hashed_idx_tst, alc_contents_tst,
 //          alc_we_gate_tst, alc_ram_isolate_tst.
 //          All 95 tests pass under sim_tage_fast.
+// BP-060:  Prediction-side directed tests TC-96 through TC-102.
+//          pred_prm_longest_tst, pred_alt_t0_fallback_tst,
+//          pred_no_hit_tst, pred_using_primary_tst,
+//          pred_strong_tst, pred_dir_mux_tst,
+//          pred_pipeline_tst.
+//          All 102 tests pass under sim_tage_fast.
 // ===================================================================
 
 `default_nettype none
@@ -178,6 +184,15 @@ module tb;
   int _alc_contents_tst       = 1;
   int _alc_we_gate_tst        = 1;
   int _alc_ram_isolate_tst    = 1;
+
+  // -- BP-060 prediction-side directed tests (TC-96 through TC-102) --
+  int _pred_prm_longest_tst     = 1;
+  int _pred_alt_t0_fallback_tst = 1;
+  int _pred_no_hit_tst          = 1;
+  int _pred_using_primary_tst   = 1;
+  int _pred_strong_tst          = 1;
+  int _pred_dir_mux_tst         = 1;
+  int _pred_pipeline_tst        = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -7697,12 +7712,28 @@ module tb;
     if (_alc_ram_isolate_tst != 0)
       alc_ram_isolate_tst(verbose);
 
+    // BP-060 prediction-side tests (TC-96 through TC-102).
+    if (_pred_prm_longest_tst != 0)
+      pred_prm_longest_tst(verbose);
+    if (_pred_alt_t0_fallback_tst != 0)
+      pred_alt_t0_fallback_tst(verbose);
+    if (_pred_no_hit_tst != 0)
+      pred_no_hit_tst(verbose);
+    if (_pred_using_primary_tst != 0)
+      pred_using_primary_tst(verbose);
+    if (_pred_strong_tst != 0)
+      pred_strong_tst(verbose);
+    if (_pred_dir_mux_tst != 0)
+      pred_dir_mux_tst(verbose);
+    if (_pred_pipeline_tst != 0)
+      pred_pipeline_tst(verbose);
+
     // Overall verdict.
     if (total_fails == 0) begin
-      $display("[PASS] BP-059: all tests passed");
+      $display("[PASS] BP-060: all tests passed");
       $finish(0);
     end else begin
-      $display("[FAIL] BP-059: %0d total failures",
+      $display("[FAIL] BP-060: %0d total failures",
         total_fails);
       $finish(1);
     end
@@ -11422,6 +11453,623 @@ module tb;
       $display(
         "[FAIL] alc_ram_isolate_tst: %0d failures",
         local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-96  pred_prm_longest_tst: provider is longest matching table.
+  // PC=0x100C8: tag=0x20 idx=50 bank=0 row=50.
+  // T4[0][50]=0x200F (TAG=0x20 CTR=111 taken strong).
+  // T2[0][50]=0x2007 (TAG=0x20 CTR=011 not-taken boundary).
+  // T1[0][50]=0x200B (TAG=0x20 CTR=101 taken strong).
+  // T3[0][50]=0x0000 (VAL=0, no hit).
+  // Rule (tage_cntrl_decisions.md Provider selection):
+  //   Longest history hit wins as primary provider.
+  //   Alt scan: T1->T(prm-1), last hit wins; T2 is next-longest.
+  // Expected: prm_comp=4 alt_comp=2 prm_ctr=111 alt_ctr=011
+  //           pred_tkn=1 pred_strong=1 using_primary=1.
+  // ---------------------------------------------------------------
+  task automatic pred_prm_longest_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][50]
+      = 16'h200F;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][50]
+      = 16'h2007;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][50]
+      = 16'h200B;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][50]
+      = 16'h0000;
+    inp    = '0;
+    inp.pc = 40'h100C8;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] pred_prm_longest_tst: prm=%0d alt=%0d",
+        meta.tage_prm_comp, meta.tage_alt_comp);
+      $display(
+        "[INFO] pred_prm_longest_tst: pctr=%03b actr=%03b",
+        meta.tage_prm_ctr, meta.tage_alt_ctr);
+      $display(
+        "[INFO] pred_prm_longest_tst: tkn=%0b str=%0b up=%0b",
+        meta.tage_pred_tkn, meta.tage_pred_strong,
+        meta.tage_using_primary);
+    end
+    if (meta.tage_prm_comp !== 3'd4) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: prm_comp=%0d exp=4",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd2) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: alt_comp=%0d exp=2",
+        meta.tage_alt_comp);
+    end
+    if (meta.tage_prm_ctr !== 3'b111) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: prm_ctr=%03b exp=111",
+        meta.tage_prm_ctr);
+    end
+    if (meta.tage_alt_ctr !== 3'b011) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: alt_ctr=%03b exp=011",
+        meta.tage_alt_ctr);
+    end
+    if (meta.tage_pred_tkn !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: pred_tkn=%0b exp=1",
+        meta.tage_pred_tkn);
+    end
+    if (meta.tage_pred_strong !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: pred_strong=%0b exp=1",
+        meta.tage_pred_strong);
+    end
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_prm_longest_tst: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    if (local_fails == 0)
+      $display("[PASS] pred_prm_longest_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_prm_longest_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-97  pred_alt_t0_fallback_tst: alt is T0 when only one hit.
+  // PC=0x1212C: tag=0x24 idx=75 bank=0 row=75.
+  // T1[0][75]=0x240B (TAG=0x24 CTR=101 taken strong).
+  // T2/T3/T4[0][75]=0x0000 (no hit).
+  // Rule (tage_cntrl_decisions.md Alternate provider):
+  //   If primary is T1, alternate is T0 (no lower tagged table).
+  // Expected: prm_comp=1 alt_comp=0 pred_tkn=1 pred_strong=1
+  //           using_primary=1.
+  // ---------------------------------------------------------------
+  task automatic pred_alt_t0_fallback_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][75]
+      = 16'h240B;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][75]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][75]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][75]
+      = 16'h0000;
+    inp    = '0;
+    inp.pc = 40'h1212C;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] pred_alt_t0_fallback_tst: prm=%0d alt=%0d",
+        meta.tage_prm_comp, meta.tage_alt_comp);
+      $display(
+        "[INFO] pred_alt_t0_fallback_tst: pctr=%03b tkn=%0b",
+        meta.tage_prm_ctr, meta.tage_pred_tkn);
+    end
+    if (meta.tage_prm_comp !== 3'd1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: prm_comp=%0d exp=1",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: alt_comp=%0d exp=0",
+        meta.tage_alt_comp);
+    end
+    if (meta.tage_pred_tkn !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: pred_tkn=%0b exp=1",
+        meta.tage_pred_tkn);
+    end
+    if (meta.tage_pred_strong !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: pred_strong=%0b exp=1",
+        meta.tage_pred_strong);
+    end
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    if (local_fails == 0)
+      $display("[PASS] pred_alt_t0_fallback_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-98  pred_no_hit_tst: no tagged table hits; T0 is provider.
+  // PC=0x141F4: tag=0x28 idx=125 bank=0 row=125.
+  // T0 bim[0][125]=2b10 (CTR=10 weakest-taken dir=1).
+  // T1-T4[0][125]=0x0000 (VAL=0, no tagged hit).
+  // Rule (tage_cntrl_decisions.md T0 Behavior):
+  //   T0 always hits; prm_comp=0 when no tagged table matches.
+  //   Direction from T0 CTR MSB (bit 1 of 2b CTR).
+  // Expected: prm_comp=0 alt_comp=0 pred_tkn=1 using_primary=1.
+  // ---------------------------------------------------------------
+  task automatic pred_no_hit_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.u_tage_bim.u_ram_s0.mem[0][125] = 2'b10;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][125]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][125]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][125]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][125]
+      = 16'h0000;
+    inp    = '0;
+    inp.pc = 40'h141F4;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] pred_no_hit_tst: prm=%0d alt=%0d tkn=%0b up=%0b",
+        meta.tage_prm_comp, meta.tage_alt_comp,
+        meta.tage_pred_tkn, meta.tage_using_primary);
+    end
+    if (meta.tage_prm_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_no_hit_tst: prm_comp=%0d exp=0",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_no_hit_tst: alt_comp=%0d exp=0",
+        meta.tage_alt_comp);
+    end
+    if (meta.tage_pred_tkn !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_no_hit_tst: pred_tkn=%0b exp=1 (T0 CTR=10)",
+        meta.tage_pred_tkn);
+    end
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_no_hit_tst: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    if (local_fails == 0)
+      $display("[PASS] pred_no_hit_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_no_hit_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-99  pred_using_primary_tst: UAON counter selects provider.
+  // PC=0x16258: tag=0x2C idx=150 bank=0 row=150.
+  // T2[0][150]=0x2C09 (CTR=100 taken boundary, primary).
+  // T1[0][150]=0x2C01 (CTR=000 not-taken, alternate).
+  // UAON forced directly: do not train. (Rule: BP-057 #58).
+  // Sub-A: uaon[0]=4h0 (bit3=0) -> UAON trigger but no fire
+  //        -> using_primary=1 pred_tkn=1 (prm CTR[2]=1).
+  // Sub-B: uaon[0]=4hF (bit3=1) -> UAON trigger fires
+  //        -> using_primary=0 pred_tkn=0 (alt CTR[2]=0).
+  // Rule (tage_cntrl_decisions.md UAON mux):
+  //   trigger && uaon[3] -> using_primary=0 (use alt direction).
+  // ---------------------------------------------------------------
+  task automatic pred_using_primary_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][150]
+      = 16'h2C09;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][150]
+      = 16'h2C01;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][150]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][150]
+      = 16'h0000;
+    // Sub-test A: uaon below threshold -> using_primary=1.
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    inp    = '0;
+    inp.pc = 40'h16258;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_using_primary_tst A: up=%0b tkn=%0b exp up=1 tkn=1",
+        meta.tage_using_primary, meta.tage_pred_tkn);
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_using_primary_tst A: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    if (meta.tage_pred_tkn !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_using_primary_tst A: pred_tkn=%0b exp=1",
+        meta.tage_pred_tkn);
+    end
+    @(posedge clk);
+    // Sub-test B: uaon at/above threshold -> using_primary=0.
+    u_dut.u_tage_cntrl.uaon[0] = 4'hF;
+    inp    = '0;
+    inp.pc = 40'h16258;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_using_primary_tst B: up=%0b tkn=%0b exp up=0 tkn=0",
+        meta.tage_using_primary, meta.tage_pred_tkn);
+    if (meta.tage_using_primary !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_using_primary_tst B: using_primary=%0b exp=0",
+        meta.tage_using_primary);
+    end
+    if (meta.tage_pred_tkn !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_using_primary_tst B: pred_tkn=%0b exp=0",
+        meta.tage_pred_tkn);
+    end
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    if (local_fails == 0)
+      $display("[PASS] pred_using_primary_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_using_primary_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-100  pred_strong_tst: pred_strong tracks selected provider.
+  // PC=0x182BC: tag=0x30 idx=175 bank=0 row=175.
+  // T1[0][175] seeded per sub-test. T2-T4[0][175]=0 (no hit).
+  // uaon[0]=4h0 for both sub-tests (no UAON override).
+  // BUG-001 check: doc says "CTR != 3 and != 4"; RTL:
+  //   (ctr != 3b011) && (ctr != 3b100). These agree. No discrepancy.
+  // Sub-A: T1 CTR=111 (strong taken) -> pred_strong=1.
+  // Sub-B: T1 CTR=100 (weakest taken, newly allocated) -> pred_strong=0.
+  // Rule (tage_cntrl_decisions.md Decoration flags):
+  //   pred_strong = provider CTR != 3b011 AND != 3b100.
+  // ---------------------------------------------------------------
+  task automatic pred_strong_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][175]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][175]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][175]
+      = 16'h0000;
+    // Sub-test A: CTR=111 (strong) -> pred_strong=1.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175]
+      = 16'h300F;
+    inp    = '0;
+    inp.pc = 40'h182BC;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_strong_tst A: ctr=%03b str=%0b exp str=1",
+        meta.tage_prm_ctr, meta.tage_pred_strong);
+    if (meta.tage_pred_strong !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_strong_tst A: pred_strong=%0b exp=1 (ctr=111)",
+        meta.tage_pred_strong);
+    end
+    @(posedge clk);
+    // Sub-test B: CTR=100 (weakest taken, boundary) -> pred_strong=0.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175]
+      = 16'h3009;
+    inp    = '0;
+    inp.pc = 40'h182BC;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_strong_tst B: ctr=%03b str=%0b exp str=0",
+        meta.tage_prm_ctr, meta.tage_pred_strong);
+    if (meta.tage_pred_strong !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_strong_tst B: pred_strong=%0b exp=0 (ctr=100)",
+        meta.tage_pred_strong);
+    end
+    if (local_fails == 0)
+      $display("[PASS] pred_strong_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_strong_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-101  pred_dir_mux_tst: direction follows selected provider CTR MSB.
+  // PC=0x1A320: tag=0x34 idx=200 bank=0 row=200.
+  // T2[0][200]=0x3409 (CTR=100 prm_tkn=1, primary, boundary).
+  // T1[0][200]=0x3407 (CTR=011 alt_tkn=0, alternate, boundary).
+  // T3/T4[0][200]=0 (no hit).
+  // Sub-A: uaon[0]=4h0 -> using_primary=1 -> pred_tkn=prm_tkn=1.
+  // Sub-B: uaon[0]=4hF -> using_primary=0 -> pred_tkn=alt_tkn=0.
+  // Rule (tage_cntrl_decisions.md Final direction):
+  //   Normally: tage_prm_tkn. When UAON fires: tage_alt_tkn.
+  // ---------------------------------------------------------------
+  task automatic pred_dir_mux_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][200]
+      = 16'h3409;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][200]
+      = 16'h3407;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][200]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][200]
+      = 16'h0000;
+    // Sub-test A: using_primary=1 -> pred_tkn follows prm CTR MSB.
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    inp    = '0;
+    inp.pc = 40'h1A320;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_dir_mux_tst A: up=%0b tkn=%0b exp tkn=1",
+        meta.tage_using_primary, meta.tage_pred_tkn);
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_dir_mux_tst A: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    if (meta.tage_pred_tkn !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_dir_mux_tst A: pred_tkn=%0b exp=1 (prm)",
+        meta.tage_pred_tkn);
+    end
+    @(posedge clk);
+    // Sub-test B: using_primary=0 -> pred_tkn follows alt CTR MSB.
+    u_dut.u_tage_cntrl.uaon[0] = 4'hF;
+    inp    = '0;
+    inp.pc = 40'h1A320;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_dir_mux_tst B: up=%0b tkn=%0b exp tkn=0",
+        meta.tage_using_primary, meta.tage_pred_tkn);
+    if (meta.tage_using_primary !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_dir_mux_tst B: using_primary=%0b exp=0",
+        meta.tage_using_primary);
+    end
+    if (meta.tage_pred_tkn !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_dir_mux_tst B: pred_tkn=%0b exp=0 (alt)",
+        meta.tage_pred_tkn);
+    end
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    if (local_fails == 0)
+      $display("[PASS] pred_dir_mux_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_dir_mux_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-102  pred_pipeline_tst: all prediction outputs valid at p2.
+  // PC=0x1E384: tag=0x3C idx=225 bank=0 row=225.
+  // T1[0][225]=0x3C0F (CTR=111 strong taken). T2-T4=0 (no hit).
+  // uaon[0]=4h0 (no UAON interference).
+  // Stage report: prm_comp/using_primary/pred_strong/pred_tkn valid
+  //   at p2, 2 posedges after tage_pred_val_p0.
+  //   tage_pred_rdy_p2=1 at that cycle confirms the stage.
+  // ---------------------------------------------------------------
+  task automatic pred_pipeline_tst(int verbose);
+    int              local_fails;
+    logic            rdy_at_p1;
+    logic            rdy_at_p2;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta_p2;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][225]
+      = 16'h3C0F;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][225]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][225]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][225]
+      = 16'h0000;
+    inp    = '0;
+    inp.pc = 40'h1E384;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    // N+1: val=0 via NBA; pred_val_p1=1; p2 not yet latched.
+    rdy_at_p1 = tage_pred_rdy_p2[0];
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    // N+2: pred_val_p2=1; all meta fields valid.
+    @(posedge clk);
+    rdy_at_p2 = tage_pred_rdy_p2[0];
+    meta_p2   = tage_pred_meta_p2[0];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] pred_pipeline_tst: rdy_p1=%0b rdy_p2=%0b",
+        rdy_at_p1, rdy_at_p2);
+      $display(
+        "[INFO] pred_pipeline_tst: prm=%0d up=%0b str=%0b tkn=%0b",
+        meta_p2.tage_prm_comp, meta_p2.tage_using_primary,
+        meta_p2.tage_pred_strong, meta_p2.tage_pred_tkn);
+      $display(
+        "[INFO] pred_pipeline_tst: stage=p2 (2 cycles after val)");
+    end
+    if (rdy_at_p1 !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_pipeline_tst: rdy at p1=%0b exp=0",
+        rdy_at_p1);
+    end
+    if (rdy_at_p2 !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_pipeline_tst: rdy at p2=%0b exp=1",
+        rdy_at_p2);
+    end
+    if (meta_p2.tage_prm_comp !== 3'd1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_pipeline_tst: prm_comp=%0d exp=1 at p2",
+        meta_p2.tage_prm_comp);
+    end
+    if (meta_p2.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_pipeline_tst: using_primary=%0b exp=1 at p2",
+        meta_p2.tage_using_primary);
+    end
+    if (meta_p2.tage_pred_strong !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_pipeline_tst: pred_strong=%0b exp=1 at p2",
+        meta_p2.tage_pred_strong);
+    end
+    if (meta_p2.tage_pred_tkn !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_pipeline_tst: pred_tkn=%0b exp=1 at p2",
+        meta_p2.tage_pred_tkn);
+    end
+    if (local_fails == 0)
+      $display("[PASS] pred_pipeline_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_pipeline_tst: %0d failures", local_fails);
     total_fails += local_fails;
   endtask
 

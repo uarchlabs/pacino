@@ -79,6 +79,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | sim_tage_manual (BP-042b).       |
 |                         |             |                   | sim_tage 81 tests as of BP-057   |
 |                         |             |                   | sim_tage 87 tests as of BP-058   |
+|                         |             |                   | sim_tage 102 tests as of BP-060   |
 | ittage_assert.sv        | Complete    | sim_ittage        | New session-045 (BP-042/042a/b). |
 |                         |             |                   | Three assertions: hit+comp,      |
 |                         |             |                   | using_primary+prm_comp,          |
@@ -267,7 +268,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Never the feature under test.          | mispredict, CTR-null condition, |
 |    | Successor to #51.                      | alloc_we gating. Readback-      |
 |    |                                        | verify allocated entry state.   |
-| 64 | tage prediction-side correctness.      | Prediction path exercised only  |
+| 64 | tage prediction-side correctness.      | CLOSE BP-060                    |
+|    |                                        | Prediction path exercised only  |
 |    | Not directed-tested.                   | as setup for update tests.      |
 |    |                                        | Directed-test provider          |
 |    |                                        | selection, using_primary,       |
