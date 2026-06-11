@@ -2,7 +2,7 @@
 ```
  FILE:    tage_cntrl_alloc_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  Complete
  UPDATED: 2026-04-05
  CONTACT: Jeff Nye
 ```

@@ -256,7 +256,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | Same as #60 for ittage.         |
 |    | path dark.                             | Consumes the EPC field whose    |
 |    |                                        | write changed BP-044c (see #56).|
-| 62 | tage allocation policy + write gating. | Allocation treated as residue   |
+| 62 | tage allocation policy + write gating. | CLOSED BP-059                   |
+|    |                                        | Allocation treated as residue   |
 |    | Never the feature under test.          | to invalidate, never verified.  |
 |    | Successor to #51.                      | Test which table allocates,     |
 |    |                                        | alloc write-enable gating,      |

@@ -56,6 +56,12 @@
 //          aging_epoch_wrap_tst, aging_age_compare_tst,
 //          aging_use_reduce_tst, aging_enable_gate_tst.
 //          All 87 tests pass under sim_tage_fast.
+// BP-059:  Alloc directed tests TC-88 through TC-95.
+//          alc_trigger_gating_tst, alc_which_table_tst,
+//          alc_consec_skip_tst, alc_no_cand_tst,
+//          alc_pre_hashed_idx_tst, alc_contents_tst,
+//          alc_we_gate_tst, alc_ram_isolate_tst.
+//          All 95 tests pass under sim_tage_fast.
 // ===================================================================
 
 `default_nettype none
@@ -162,6 +168,16 @@ module tb;
   int _aging_age_compare_tst  = 1;
   int _aging_use_reduce_tst   = 1;
   int _aging_enable_gate_tst  = 1;
+
+  // -- BP-059 alloc directed tests (TC-88 through TC-95) --
+  int _alc_trigger_gating_tst = 1;
+  int _alc_which_table_tst    = 1;
+  int _alc_consec_skip_tst    = 1;
+  int _alc_no_cand_tst        = 1;
+  int _alc_pre_hashed_idx_tst = 1;
+  int _alc_contents_tst       = 1;
+  int _alc_we_gate_tst        = 1;
+  int _alc_ram_isolate_tst    = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -7663,12 +7679,30 @@ module tb;
     if (_aging_enable_gate_tst != 0)
       aging_enable_gate_tst(verbose);
 
+    // BP-059 alloc directed tests (TC-88 through TC-95).
+    if (_alc_trigger_gating_tst != 0)
+      alc_trigger_gating_tst(verbose);
+    if (_alc_which_table_tst != 0)
+      alc_which_table_tst(verbose);
+    if (_alc_consec_skip_tst != 0)
+      alc_consec_skip_tst(verbose);
+    if (_alc_no_cand_tst != 0)
+      alc_no_cand_tst(verbose);
+    if (_alc_pre_hashed_idx_tst != 0)
+      alc_pre_hashed_idx_tst(verbose);
+    if (_alc_contents_tst != 0)
+      alc_contents_tst(verbose);
+    if (_alc_we_gate_tst != 0)
+      alc_we_gate_tst(verbose);
+    if (_alc_ram_isolate_tst != 0)
+      alc_ram_isolate_tst(verbose);
+
     // Overall verdict.
     if (total_fails == 0) begin
-      $display("[PASS] BP-058: all tests passed");
+      $display("[PASS] BP-059: all tests passed");
       $finish(0);
     end else begin
-      $display("[FAIL] BP-058: %0d total failures",
+      $display("[FAIL] BP-059: %0d total failures",
         total_fails);
       $finish(1);
     end
@@ -10534,6 +10568,859 @@ module tb;
     else
       $display(
         "[FAIL] aging_enable_gate_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-88  alc_trigger_gating_tst: alloc trigger gating.
+  // PC=40'h828: idx=0x20A=522 bank=0 row=522 tag=0x01.
+  // T1[0][522]=0x0000 (VAL=0, USE=0 -> alloc candidate).
+  // T2-T4[0][522]=0x0000. T0 prm. prm_comp=0 < TAGE_MAX_TBL=4.
+  // Sub-test A: cond_mispredict=1 -> alloc fires -> T1 = 0x0109.
+  // Sub-test B: cond_mispredict=0 -> alloc suppressed -> T1=0x0000.
+  // Sub-test C: prm_comp=T4=4 (longest table) ->
+  //   prm_comp < TAGE_MAX_TBL fails -> alloc suppressed.
+  // Rules: tage_cntrl_alloc_rules.md trigger row (mispredict AND
+  //   prm_comp < TAGE_MAX_TBL AND alc_comp != 0).
+  // ---------------------------------------------------------------
+  task automatic alc_trigger_gating_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    // Sub-test A: mispredict -> allocation fires.
+    // T1-T4 all-zero; prm=T0. alc_comp=T1 (USE=0).
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][522]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][522]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][522]
+      = 16'h0000;
+    inp           = '0;
+    inp.pc        = 40'h828;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta                    = tage_pred_meta_p2[0];
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_trigger_gating_tst A: T1[0][522]=0x%04h",
+        rd_t1);
+    if (rd_t1 !== 16'h0109) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_trig_gating_tst A: T1[0][522]=0x%04h exp=0x0109",
+        rd_t1);
+    end
+    @(posedge clk);
+    // Sub-test B: correct prediction -> no allocation.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
+      = 16'h0000;
+    inp           = '0;
+    inp.pc        = 40'h828;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta                    = tage_pred_meta_p2[0];
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b0;
+    upd_inp.resolved_taken  = 1'b1;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_trig_gating_tst B: T1[0][522]=0x%04h exp=0x0000",
+        rd_t1);
+    if (rd_t1 !== 16'h0000) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_trig_gating_tst B: T1[0][522]=0x%04h exp=0x0000",
+        rd_t1);
+    end
+    @(posedge clk);
+    // Sub-test C: prm_comp=T4 (max table) -> prm<TAGE_MAX_TBL fails.
+    // Force meta with prm_comp=4 to bypass prediction.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
+      = 16'h0000;
+    meta                    = '0;
+    meta.tage_prm_comp      = 3'd4;
+    meta.tage_alt_comp      = 3'd0;
+    meta.tage_alc_comp      = 3'd1;
+    meta.tage_alc_idx       = 11'h20A;
+    meta.tage_alc_tag       = 8'h01;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_trig_gating_tst C: T1[0][522]=0x%04h exp=0x0000",
+        rd_t1);
+    if (rd_t1 !== 16'h0000) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_trig_gating_tst C: T1[0][522]=0x%04h exp=0x0000",
+        rd_t1);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_trigger_gating_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_trigger_gating_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-89  alc_which_table_tst: table selection correctness.
+  // PC=40'h20A0: idx=0x028=40 bank=0 row=40 tag=0x04.
+  // T1[0][40]=0x0039: TAG=00 EPC=00 USE=11 CTR=100 VAL=1.
+  //   T1 is a miss (TAG=0x00 != 0x04) and USE=3 (non-alloc).
+  // T2[0][40]=0x0000: VAL=0 USE=0 -> first allocatable above T0.
+  // T3-T4[0][40]=0x0000. prm=T0 (T1-T4 miss).
+  // Alloc scan: T1 ueff=USE=3 skip; T2 ueff=0 select -> alc=2.
+  // After mispredict: T2 row=40 = 0x0409. T1 row=40 unchanged.
+  // Confirms T0 never selected; shortest eligible (T2) wins.
+  // ---------------------------------------------------------------
+  task automatic alc_which_table_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    // T1 USE=3 (non-alloc), miss. T2-T4 VAL=0 (alloc candidate).
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][40]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][40]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][40]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][40]
+      = 16'h0000;
+    inp           = '0;
+    inp.pc        = 40'h20A0;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_which_table_tst: prm=%0d alc=%0d tag=0x%02h",
+        meta.tage_prm_comp, meta.tage_alc_comp, meta.tage_alc_tag);
+    if (meta.tage_prm_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_which_table_tst: prm=%0d exp=0",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alc_comp !== 3'd2) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_which_table_tst: alc=%0d exp=2",
+        meta.tage_alc_comp);
+    end
+    // Mispredict: allocate to T2.
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][40];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][40];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] alc_which_table_tst: T1[0][40]=0x%04h",rd_t1);
+      $display(
+        "[INFO] alc_which_table_tst: T2[0][40]=0x%04h",rd_t2);
+    end
+    if (rd_t1 !== 16'h0039) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_which_table_tst: T1 chgd 0x%04h exp=0x0039",
+        rd_t1);
+    end
+    if (rd_t2 !== 16'h0409) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_which_table_tst: T2[0][40]=0x%04h exp=0x0409",
+        rd_t2);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_which_table_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_which_table_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-90  alc_consec_skip_tst: no-consecutive-skip policy.
+  // PC=40'h3918: idx=0x646=1606 bank=1 row=582 tag=0x07.
+  // T1[1][582]=0x0039: USE=3 non-alloc miss.
+  // T2[1][582]=0x0000: VAL=0 USE=0 -> first candidate. alc=T2.
+  // T3[1][582]=0x000E: USE=0 VAL=0 CTR=3b111 (non-zero distinct).
+  //   Would be next candidate but T2 selected -> alc_comp becomes
+  //   non-zero -> T3 scan is blocked (alc_comp==0 guard fails).
+  // After mispredict: T2 allocated 0x0709. T3 unchanged 0x000E.
+  // Rule: alloc scan stops at first t > prm with u_eff=0 (RTL
+  //   alc_comp==0 guard in gen_alloc_comb).
+  // ---------------------------------------------------------------
+  task automatic alc_consec_skip_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t2, rd_t3;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][582]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][582]
+      = 16'h0000;
+    // T3 seeded to a distinct value to detect spurious write.
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][582]
+      = 16'h000E;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][582]
+      = 16'h0000;
+    inp           = '0;
+    inp.pc        = 40'h3918;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_consec_skip_tst: prm=%0d alc=%0d",
+        meta.tage_prm_comp, meta.tage_alc_comp);
+    if (meta.tage_alc_comp !== 3'd2) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_consec_skip_tst: alc=%0d exp=2",
+        meta.tage_alc_comp);
+    end
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][582];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][582];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] alc_consec_skip_tst: T2[1][582]=0x%04h",rd_t2);
+      $display(
+        "[INFO] alc_consec_skip_tst: T3[1][582]=0x%04h",rd_t3);
+    end
+    if (rd_t2 !== 16'h0709) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_consec_skip_tst: T2[1][582]=0x%04h exp=0x0709",
+        rd_t2);
+    end
+    if (rd_t3 !== 16'h000E) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_consec_skip_tst: T3[1][582]=0x%04h exp=0x000E",
+        rd_t3);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_consec_skip_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_consec_skip_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-91  alc_no_cand_tst: no-candidate sentinel.
+  // PC=40'h5800: idx=0x600=1536 bank=1 row=512 tag=0x0B.
+  // T1-T4[1][512]=0x0039: USE=3 -> u_eff=3 != 0 (no candidate).
+  // alc_comp must be 0 after prediction. After mispredict update
+  // no table RAM changes (all remain 0x0039).
+  // Rule: "alc_comp==0 is the no-candidate sentinel; the alloc
+  //   write is suppressed when alc_comp==0."
+  // ---------------------------------------------------------------
+  task automatic alc_no_cand_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3, rd_t4;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    // T1-T4 USE=3 non-alloc (no candidate above T0).
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0039;
+    inp           = '0;
+    inp.pc        = 40'h5800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_no_cand_tst: alc_comp=%0d exp=0",
+        meta.tage_alc_comp);
+    if (meta.tage_alc_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_no_cand_tst: alc_comp=%0d exp=0",
+        meta.tage_alc_comp);
+    end
+    // Mispredict with alc_comp=0 -> no write.
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t4 =
+      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] alc_no_cand_tst: T1=%04h T2=%04h T3=%04h T4=%04h",
+        rd_t1, rd_t2, rd_t3, rd_t4);
+    end
+    if (rd_t1 !== 16'h0039 || rd_t2 !== 16'h0039
+        || rd_t3 !== 16'h0039 || rd_t4 !== 16'h0039) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_no_cand_tst: T1=%04h T2=%04h T3=%04h T4=%04h",
+        rd_t1, rd_t2, rd_t3, rd_t4);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_no_cand_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_no_cand_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-92  alc_pre_hashed_idx_tst: allocation at pre-hashed idx.
+  // PC=40'h4140: idx=0x050=80 bank=0 row=80 tag=0x08.
+  // T1[0][80]=0x0000: alloc target (USE=0 VAL=0).
+  // T1[0][81]=0x003F: decoy row (TAG=00 EPC=00 USE=3 CTR=7 VAL=1).
+  //   Adjacent row seeded to non-zero to detect off-by-one.
+  // Predict -> capture meta (alc_idx must be 0x050=80).
+  // Mispredict -> T1[0][80]=0x0809. T1[0][81] unchanged (0x003F).
+  // Rule: alc_idx from prediction-time hash; write lands at row=80.
+  // ---------------------------------------------------------------
+  task automatic alc_pre_hashed_idx_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1_tgt, rd_t1_dec;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][80]
+      = 16'h0000;
+    // Decoy at adjacent row 81.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][81]
+      = 16'h003F;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][80]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][80]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][80]
+      = 16'h0039;
+    inp           = '0;
+    inp.pc        = 40'h4140;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_pre_hashed_idx_tst: idx=0x%03h exp=0x050 alc=%0d",
+        meta.tage_alc_idx, meta.tage_alc_comp);
+    if (meta.tage_alc_idx !== 11'h050) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_pre_hashed_idx_tst: alc_idx=0x%03h exp=0x050",
+        meta.tage_alc_idx);
+    end
+    if (meta.tage_alc_comp !== 3'd1) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_pre_hashed_idx_tst: alc=%0d exp=1",
+        meta.tage_alc_comp);
+    end
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1_tgt =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][80];
+    rd_t1_dec =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][81];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] alc_pre_hashed_idx_tst: T1[0][80]=0x%04h",
+        rd_t1_tgt);
+      $display(
+        "[INFO] alc_pre_hashed_idx_tst: T1[0][81]=0x%04h",
+        rd_t1_dec);
+    end
+    if (rd_t1_tgt !== 16'h0809) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_pre_hashed_idx_tst: T1[0][80]=0x%04h exp=0x0809",
+        rd_t1_tgt);
+    end
+    if (rd_t1_dec !== 16'h003F) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_pre_hashed_idx_tst: T1[0][81]=0x%04h exp=0x003F",
+        rd_t1_dec);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_pre_hashed_idx_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_pre_hashed_idx_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-93  alc_contents_tst: allocated-entry field decode.
+  // PC=40'h1878: idx=0x61E=1566 bank=1 row=542 tag=0x03.
+  // T1[1][542]=0x0000 (alloc target). T2-T4[1][542]=0x0039.
+  // Sub-test A: epoch=0 -> alloc = {TAG=03,EPC=00,USE=00,
+  //   CTR=100,VAL=1} = 0x0309.
+  //   Decode: VAL=1 CTR=100 USE=00 EPC=00 TAG=0x03.
+  // Sub-test B: epoch=2 -> EPC=10 -> alloc = 0x0389.
+  //   Decode: VAL=1 CTR=100 USE=00 EPC=10 TAG=0x03.
+  // Confirms: write-data field order matches entry format doc.
+  // Rule: init = {alc_tag, lcl_epoch, 2b00, 3b100, 1b1}.
+  // ---------------------------------------------------------------
+  task automatic alc_contents_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    // Sub-test A: epoch=0.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][542]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][542]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][542]
+      = 16'h0039;
+    inp           = '0;
+    inp.pc        = 40'h1878;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta                    = tage_pred_meta_p2[0];
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_contents_tst A (ep=0): T1[1][542]=0x%04h",
+        rd_t1);
+    if (rd_t1 !== 16'h0309) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_contents_tst A: T1[1][542]=0x%04h exp=0x0309",
+        rd_t1);
+    end
+    @(posedge clk);
+    // Sub-test B: epoch=2 -> EPC=2'b10 in allocated entry.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542]
+      = 16'h0000;
+    inp           = '0;
+    inp.pc        = 40'h1878;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta                    = tage_pred_meta_p2[0];
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_contents_tst B (ep=2): T1[1][542]=0x%04h",
+        rd_t1);
+    if (rd_t1 !== 16'h0389) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_contents_tst B: T1[1][542]=0x%04h exp=0x0389",
+        rd_t1);
+    end
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    if (local_fails == 0)
+      $display("[PASS] alc_contents_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_contents_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-94  alc_we_gate_tst: alc_we_s0 assertion conditions.
+  // PC=40'h1050: idx=0x414=1044 bank=1 row=20 tag=0x02.
+  // T1[1][20]=0x0000 (alloc candidate). T2-T4[1][20]=0x0039.
+  // Sub-test A: mispredict + alc_comp=T1 -> alc_we_s0[T1]=1.
+  // Sub-test B: correct prediction -> alc_we_s0[T1]=0.
+  // Sub-test C: mispredict + alc_comp=0 -> alc_we_s0[T1]=0.
+  // Rule: alc_we_s0 = tage_upd_val & alc_wr & alc_match_s0.
+  // ---------------------------------------------------------------
+  task automatic alc_we_gate_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic            we_seen;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][20]
+      = 16'h0000;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][20]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][20]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][20]
+      = 16'h0039;
+    // Sub-test A: mispredict -> alc_we_s0=1 for T1.
+    inp           = '0;
+    inp.pc        = 40'h1050;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta                    = tage_pred_meta_p2[0];
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    we_seen =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_we_gate_tst A: alc_we_s0=%0b exp=1",
+        we_seen);
+    if (we_seen !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_we_gate_tst A: alc_we_s0=%0b exp=1",
+        we_seen);
+    end
+    @(posedge clk);
+    // Sub-test B: correct prediction -> alc_we_s0=0.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][20]
+      = 16'h0000;
+    inp           = '0;
+    inp.pc        = 40'h1050;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta                    = tage_pred_meta_p2[0];
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b0;
+    upd_inp.resolved_taken  = 1'b1;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    we_seen =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_we_gate_tst B: alc_we_s0=%0b exp=0",
+        we_seen);
+    if (we_seen !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_we_gate_tst B: alc_we_s0=%0b exp=0",
+        we_seen);
+    end
+    @(posedge clk);
+    // Sub-test C: mispredict with alc_comp=0 -> alc_we_s0=0.
+    meta                    = '0;
+    meta.tage_prm_comp      = 3'd0;
+    meta.tage_alt_comp      = 3'd0;
+    meta.tage_alc_comp      = 3'd0;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    we_seen =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_we_gate_tst C: alc_we_s0=%0b exp=0",
+        we_seen);
+    if (we_seen !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_we_gate_tst C: alc_we_s0=%0b exp=0",
+        we_seen);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_we_gate_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_we_gate_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-95  alc_ram_isolate_tst: RAM-level write isolation.
+  // PC=40'h28C8: idx=0x232=562 bank=0 row=562 tag=0x05.
+  // T1[0][562]=0x0000: alloc target (USE=0 VAL=0). alc=T1.
+  // T2[0][562]=0x003F: USE=3 (non-alloc). T2 skipped.
+  //   0x003F = TAG=00 EPC=00 USE=11 CTR=111 VAL=1.
+  //   Seeded to a distinctive non-zero value to detect spurious
+  //   writes: if T2 is written the mismatch is visible.
+  // T3-T4[0][562]=0x0039. prm=T0 (all T1-T4 miss: TAG=0 != 0x05).
+  // After mispredict: T1[0][562]=0x0509 (allocated). T2 unchanged.
+  // Rule: only alc_comp table written; all others unchanged.
+  // ---------------------------------------------------------------
+  task automatic alc_ram_isolate_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2;
+    local_fails = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][562]
+      = 16'h0000;
+    // T2 seeded to distinctive value to catch spurious write.
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][562]
+      = 16'h003F;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][562]
+      = 16'h0039;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][562]
+      = 16'h0039;
+    inp           = '0;
+    inp.pc        = 40'h28C8;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] alc_ram_isolate_tst: prm=%0d alc=%0d tag=0x%02h",
+        meta.tage_prm_comp, meta.tage_alc_comp, meta.tage_alc_tag);
+    if (meta.tage_prm_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_ram_isolate_tst: prm=%0d exp=0",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alc_comp !== 3'd1) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_ram_isolate_tst: alc=%0d exp=1",
+        meta.tage_alc_comp);
+    end
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    stg_upd_inp0            = upd_inp;
+    stg_upd_val0            = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][562];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][562];
+    if (verbose != 0) begin
+      $display(
+        "[INFO] alc_ram_isolate_tst: T1[0][562]=0x%04h",rd_t1);
+      $display(
+        "[INFO] alc_ram_isolate_tst: T2[0][562]=0x%04h",rd_t2);
+    end
+    if (rd_t1 !== 16'h0509) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_ram_isolate_tst: T1[0][562]=0x%04h exp=0x0509",
+        rd_t1);
+    end
+    if (rd_t2 !== 16'h003F) begin
+      local_fails++;
+      $display(
+        "[FAIL] alc_ram_isolate_tst: T2[0][562]=0x%04h exp=0x003F",
+        rd_t2);
+    end
+    if (local_fails == 0)
+      $display("[PASS] alc_ram_isolate_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] alc_ram_isolate_tst: %0d failures",
         local_fails);
     total_fails += local_fails;
   endtask
