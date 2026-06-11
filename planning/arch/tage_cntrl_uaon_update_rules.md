@@ -2,7 +2,7 @@
 ```
  FILE:    tage_cntrl_uaon_update_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  COMPLETE
  UPDATED: 2026-04-27
  CONTACT: Jeff Nye
 ```

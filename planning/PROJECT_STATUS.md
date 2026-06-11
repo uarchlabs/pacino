@@ -77,6 +77,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | tb_tage_manual.sv,               |
 |                         |             |                   | tage_assert_bind.sv removed from |
 |                         |             |                   | sim_tage_manual (BP-042b).       |
+|                         |             |                   | sim_tage 81 tests as of BP-057   |
 | ittage_assert.sv        | Complete    | sim_ittage        | New session-045 (BP-042/042a/b). |
 |                         |             |                   | Three assertions: hit+comp,      |
 |                         |             |                   | using_primary+prm_comp,          |
@@ -232,7 +233,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | when CTR null only. Trace path, |
 |    |                                        | readback-verify reachable rows. |
 |    |                                        | ittage only (no TAGE tgt).      |
-| 58 | tage UAON trigger rules.               | tage_cntrl_uaon_update_rules.md |
+| 58 | tage UAON trigger rules.               | CLOSED with BP-057              |
+|    |                                        | tage_cntrl_uaon_update_rules.md |
 |    | Tested only as setup, never as DUT.    | is Draft. Promote to authority, |
 |    |                                        | directed test per row, prove    |
 |    |                                        | use_alt_on_na fires/clears.     |
@@ -630,3 +632,8 @@ Key decisions for quick reference:
   32/0 counts carried in handoff-048 were stale (not from a
   run). Found and repaired BP-050a. Cause of the all-targets-
   must-run rule.
+- BUG-003: tage_cntrl.sv uaon_upd_ff gate missing && u_alt_tagged[s]. UAON
+  counter moved on single-hit transactions (provider tagged T1-T4 hit,
+  alternate fell through to untagged T0/BIM) where the prm-vs-alt comparison
+  carries no training signal. Found by TC-81, fixed BP-057. Same class as BUG
+  (ITTAGE #59, BP-051).

@@ -339,7 +339,8 @@ module tage_cntrl #(
       always_ff @(posedge clk) begin : uaon_upd_ff
         if (!rstn) begin
           uaon[s] <= 4'h0;
-        end else if (tage_upd_val_u0[s] && u_prm_tagged[s]) begin
+        end else if (tage_upd_val_u0[s] && u_prm_tagged[s]
+                     && u_alt_tagged[s]) begin
           if (!u_pred_str[s]) begin
             if (!u_prm_crt[s] && u_alt_crt[s]) begin
               uaon[s] <= (uaon[s] == 4'hF)

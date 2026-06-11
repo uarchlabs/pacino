@@ -140,6 +140,16 @@ module tb;
   int _epc_alt_misp_tst              = 1;
   int _epc_neg_tst                   = 1;
 
+  // -- BP-057 UAON directed tests (TC-74 through TC-81) --
+  int _uaon_reset_val_tst      = 1;
+  int _uaon_row1_tst           = 1;
+  int _uaon_row2_tst           = 1;
+  int _uaon_row3_tst           = 1;
+  int _uaon_row4_tst           = 1;
+  int _uaon_row5_tst           = 1;
+  int _uaon_threshold_tst      = 1;
+  int _uaon_single_hit_prm_tst = 1;
+
   // ----------------------------------------------------------------
   // Module-level failure accumulator
   // ----------------------------------------------------------------
@@ -7608,6 +7618,24 @@ module tb;
     if (_epc_neg_tst != 0)
       epc_neg_tst(verbose);
 
+    // BP-057 UAON directed tests (TC-74 through TC-81).
+    if (_uaon_reset_val_tst != 0)
+      uaon_reset_val_tst(verbose);
+    if (_uaon_row1_tst != 0)
+      uaon_row1_tst(verbose);
+    if (_uaon_row2_tst != 0)
+      uaon_row2_tst(verbose);
+    if (_uaon_row3_tst != 0)
+      uaon_row3_tst(verbose);
+    if (_uaon_row4_tst != 0)
+      uaon_row4_tst(verbose);
+    if (_uaon_row5_tst != 0)
+      uaon_row5_tst(verbose);
+    if (_uaon_threshold_tst != 0)
+      uaon_threshold_tst(verbose);
+    if (_uaon_single_hit_prm_tst != 0)
+      uaon_single_hit_prm_tst(verbose);
+
     // Overall verdict.
     if (total_fails == 0) begin
       $display("[PASS] BP-023c: all tests passed");
@@ -9423,6 +9451,602 @@ module tb;
       $display("[PASS] epc_neg_tst: 0 failures");
     else
       $display("[FAIL] epc_neg_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-74 uaon_reset_val_tst
+  // Verify uaon[0] resets to 4'h0 and use_alt_on_na deasserts.
+  // Preset uaon[0]=4'hA, assert rstn 4 cycles, read after reset,
+  // expect 4'h0. Then predict at PC=0x22800 with T2 CTR=100
+  // (boundary -> uaon_trig=1) and uaon[3]=0 -> use_alt_on_na=0.
+  // Ref: tage_cntrl_uaon_update_rules.md reset row.
+  // ----------------------------------------------------------------
+  task automatic uaon_reset_val_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post_rst;
+
+    local_fails = 0;
+
+    u_dut.u_tage_cntrl.uaon[0] = 4'hA;
+    rstn = 1'b0;
+    repeat(4) @(posedge clk);
+    #1;
+    uaon_post_rst = u_dut.u_tage_cntrl.uaon[0];
+    rstn = 1'b1;
+    // Wait for SRAM init: fast_init -> 1 cycle; slow init -> ~2048.
+    while (!tage_rdy) @(posedge clk);
+    @(posedge clk);
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_reset_val_tst: post-rst uaon=0x%0h",
+        uaon_post_rst);
+    if (uaon_post_rst !== 4'h0) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_reset_val_tst: uaon=0x%0h exp=0",
+        uaon_post_rst);
+    end
+
+    // Seed T2 CTR=100 boundary, T1 as alt. Predict with uaon=0.
+    // TAG=0x45 EPC=0 USE=0 CTR=100 VAL=1 = 0x4509.
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h4509;
+    // T1 alt: TAG=0x45 EPC=0 USE=0 CTR=011 VAL=1 = 0x4507.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h4507;
+
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    inp.branch_id = 6'h0;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+
+    meta = tage_pred_meta_p2[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_reset_val_tst: use_alt=%0b exp=0",
+        meta.tage_use_alt_on_na);
+    if (meta.tage_use_alt_on_na !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_reset_val_tst: use_alt=%0b exp=0",
+        meta.tage_use_alt_on_na);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_reset_val_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_reset_val_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-75 uaon_row1_tst
+  // UAON row 1: pred_strong=1 -> hold (no update regardless).
+  // Start: uaon[0]=4'h5. prm_comp=1(tagged) alt_comp=2(tagged)
+  // pred_strong=1. Expect hold at 4'h5.
+  // Ref: tage_cntrl_uaon_update_rules.md row 1.
+  // ----------------------------------------------------------------
+  task automatic uaon_row1_tst(int verbose);
+    int              local_fails;
+    tage_upd_inp_t   upd_inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post;
+
+    local_fails = 0;
+
+    u_dut.u_tage_cntrl.uaon[0] = 4'h5;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd2;
+    meta.tage_prm_ctr       = 3'b100;
+    meta.tage_alt_ctr       = 3'b011;
+    meta.tage_prm_tkn       = 1'b1;
+    meta.tage_alt_tkn       = 1'b0;
+    meta.tage_using_primary = 1'b1;
+    meta.tage_pred_strong   = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b1;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_row1_tst: uaon=0x%0h exp=5", uaon_post);
+    if (uaon_post !== 4'h5) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_row1_tst: uaon=0x%0h exp=5", uaon_post);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_row1_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_row1_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-76 uaon_row2_tst
+  // UAON row 2: pred_strong=0, prm_wrong, alt_correct -> INC.
+  // Start: uaon[0]=4'h3. prm_comp=1 alt_comp=2 prm_tkn=1
+  // alt_tkn=0 resolved=0 -> prm wrong alt correct. Expect 4'h4.
+  // Ref: tage_cntrl_uaon_update_rules.md row 2.
+  // ----------------------------------------------------------------
+  task automatic uaon_row2_tst(int verbose);
+    int              local_fails;
+    tage_upd_inp_t   upd_inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post;
+
+    local_fails = 0;
+
+    u_dut.u_tage_cntrl.uaon[0] = 4'h3;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd2;
+    meta.tage_prm_ctr       = 3'b100;
+    meta.tage_alt_ctr       = 3'b011;
+    meta.tage_prm_tkn       = 1'b1;
+    meta.tage_alt_tkn       = 1'b0;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b1;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_row2_tst: uaon=0x%0h exp=4", uaon_post);
+    if (uaon_post !== 4'h4) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_row2_tst: uaon=0x%0h exp=4", uaon_post);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_row2_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_row2_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-77 uaon_row3_tst
+  // UAON row 3: pred_strong=0, prm_correct, alt_wrong -> DEC.
+  // Start: uaon[0]=4'h3. prm_comp=1 alt_comp=2 prm_tkn=0
+  // alt_tkn=1 resolved=0 -> prm correct alt wrong. Expect 4'h2.
+  // Ref: tage_cntrl_uaon_update_rules.md row 3.
+  // ----------------------------------------------------------------
+  task automatic uaon_row3_tst(int verbose);
+    int              local_fails;
+    tage_upd_inp_t   upd_inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post;
+
+    local_fails = 0;
+
+    u_dut.u_tage_cntrl.uaon[0] = 4'h3;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd2;
+    meta.tage_prm_ctr       = 3'b100;
+    meta.tage_alt_ctr       = 3'b100;
+    meta.tage_prm_tkn       = 1'b0;
+    meta.tage_alt_tkn       = 1'b1;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_row3_tst: uaon=0x%0h exp=2", uaon_post);
+    if (uaon_post !== 4'h2) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_row3_tst: uaon=0x%0h exp=2", uaon_post);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_row3_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_row3_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-78 uaon_row4_tst
+  // UAON row 4: pred_strong=0, both_wrong -> hold.
+  // Start: uaon[0]=4'h4. prm_comp=1 alt_comp=2 prm_tkn=1
+  // alt_tkn=1 resolved=0 -> both wrong. Expect hold at 4'h4.
+  // Ref: tage_cntrl_uaon_update_rules.md row 4.
+  // ----------------------------------------------------------------
+  task automatic uaon_row4_tst(int verbose);
+    int              local_fails;
+    tage_upd_inp_t   upd_inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post;
+
+    local_fails = 0;
+
+    u_dut.u_tage_cntrl.uaon[0] = 4'h4;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd2;
+    meta.tage_prm_ctr       = 3'b100;
+    meta.tage_alt_ctr       = 3'b100;
+    meta.tage_prm_tkn       = 1'b1;
+    meta.tage_alt_tkn       = 1'b1;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b1;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_row4_tst: uaon=0x%0h exp=4", uaon_post);
+    if (uaon_post !== 4'h4) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_row4_tst: uaon=0x%0h exp=4", uaon_post);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_row4_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_row4_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-79 uaon_row5_tst
+  // UAON row 5: pred_strong=0, both_right -> hold.
+  // Start: uaon[0]=4'h4. prm_comp=1 alt_comp=2 prm_tkn=0
+  // alt_tkn=0 resolved=0 -> both right. Expect hold at 4'h4.
+  // Ref: tage_cntrl_uaon_update_rules.md row 5.
+  // ----------------------------------------------------------------
+  task automatic uaon_row5_tst(int verbose);
+    int              local_fails;
+    tage_upd_inp_t   upd_inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post;
+
+    local_fails = 0;
+
+    u_dut.u_tage_cntrl.uaon[0] = 4'h4;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd2;
+    meta.tage_prm_ctr       = 3'b011;
+    meta.tage_alt_ctr       = 3'b011;
+    meta.tage_prm_tkn       = 1'b0;
+    meta.tage_alt_tkn       = 1'b0;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_row5_tst: uaon=0x%0h exp=4", uaon_post);
+    if (uaon_post !== 4'h4) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_row5_tst: uaon=0x%0h exp=4", uaon_post);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_row5_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_row5_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-80 uaon_threshold_tst
+  // HAND-FIX-002: use_alt_on_na = uaon_trig & uaon[s][3].
+  // Part A: uaon[0]=7 (0111 bit[3]=0), T2 CTR=100 boundary
+  //   -> uaon_trig=1 but uaon[3]=0 -> use_alt_on_na=0.
+  // Part B: uaon[0]=8 (1000 bit[3]=1), T2 CTR=100 boundary
+  //   -> uaon_trig=1 and uaon[3]=1 -> use_alt_on_na=1.
+  // Part C: uaon[0]=0xF, T2 CTR=111 (strong, not boundary)
+  //   -> uaon_trig=0 -> use_alt_on_na=0.
+  // PC=0x22800: bank=0 row=512 T2/T1 TAG=0x45.
+  // ----------------------------------------------------------------
+  task automatic uaon_threshold_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+
+    local_fails = 0;
+
+    // Part A: uaon=7 below threshold, CTR=100 boundary entry.
+    // TAG=0x45 EPC=0 USE=0 CTR=100 VAL=1 = 0x4509.
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h4509;
+    // T1 alt: TAG=0x45 EPC=0 USE=0 CTR=011 VAL=1 = 0x4507.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h4507;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h7;
+
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    inp.branch_id = 6'h0;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_threshold_tst A: use_alt=%0b exp=0",
+        meta.tage_use_alt_on_na);
+    if (meta.tage_use_alt_on_na !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_threshold_tst A: use_alt=%0b exp=0",
+        meta.tage_use_alt_on_na);
+    end
+
+    // Part B: uaon=8 at threshold, same CTR=100 boundary entry.
+    u_dut.u_tage_cntrl.uaon[0] = 4'h8;
+
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    inp.branch_id = 6'h0;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_threshold_tst B: use_alt=%0b exp=1",
+        meta.tage_use_alt_on_na);
+    if (meta.tage_use_alt_on_na !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_threshold_tst B: use_alt=%0b exp=1",
+        meta.tage_use_alt_on_na);
+    end
+
+    // Part C: uaon=0xF, CTR=111 strong (not boundary).
+    // uaon_trig=0 so use_alt_on_na=0 despite uaon[3]=1.
+    // TAG=0x45 EPC=0 USE=0 CTR=111 VAL=1 = 0x450F.
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h450F;
+    u_dut.u_tage_cntrl.uaon[0] = 4'hF;
+
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    inp.branch_id = 6'h0;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_threshold_tst C: use_alt=%0b exp=0",
+        meta.tage_use_alt_on_na);
+    if (meta.tage_use_alt_on_na !== 1'b0) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_threshold_tst C: use_alt=%0b exp=0",
+        meta.tage_use_alt_on_na);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_threshold_tst: 0 failures");
+    else
+      $display("[FAIL] uaon_threshold_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-81 uaon_single_hit_prm_tst
+  // Single-hit guard: prm tagged (comp=1), alt is T0 (comp=0).
+  // UAON must NOT update when alt_comp=0 (not a tagged table).
+  // INC sub-test: prm_wrong + T0_alt_correct -> guard blocks INC.
+  // DEC sub-test: prm_correct + T0_alt_wrong -> guard blocks DEC.
+  // Missing guard defect: counter moves (4'h5->6 or 4'h5->4).
+  // Correct guard: counter holds at 4'h5 in both sub-tests.
+  // Ref: analogous to ITTAGE defect #59 BP-051.
+  // Fix: add && u_alt_tagged[s] to uaon_upd_ff gate in
+  //      tage_cntrl.sv.
+  // ----------------------------------------------------------------
+  task automatic uaon_single_hit_prm_tst(int verbose);
+    int              local_fails;
+    tage_upd_inp_t   upd_inp;
+    tage_pred_meta_t meta;
+    logic [3:0]      uaon_post;
+
+    local_fails = 0;
+
+    // INC sub-test: prm wrong, T0 alt correct (alt_comp=0).
+    // Without guard: INC 5->6. With guard: hold at 5.
+    u_dut.u_tage_cntrl.uaon[0] = 4'h5;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd0;
+    meta.tage_prm_ctr       = 3'b100;
+    meta.tage_alt_ctr       = 3'b000;
+    meta.tage_prm_tkn       = 1'b1;
+    meta.tage_alt_tkn       = 1'b0;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b1;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_single_hit_prm_tst INC: uaon=0x%0h exp=5",
+        uaon_post);
+    if (uaon_post !== 4'h5) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_single_hit_prm_tst INC: uaon=0x%0h exp=5",
+        uaon_post);
+    end
+
+    // DEC sub-test: prm correct, T0 alt wrong (alt_comp=0).
+    // Without guard: DEC 5->4. With guard: hold at 5.
+    u_dut.u_tage_cntrl.uaon[0] = 4'h5;
+
+    meta                    = '0;
+    meta.tage_prm_idx       = 11'h096;
+    meta.tage_alt_idx       = 11'h096;
+    meta.tage_prm_comp      = 3'd1;
+    meta.tage_alt_comp      = 3'd0;
+    meta.tage_prm_ctr       = 3'b100;
+    meta.tage_alt_ctr       = 3'b000;
+    meta.tage_prm_tkn       = 1'b0;
+    meta.tage_alt_tkn       = 1'b1;
+    meta.tage_using_primary = 1'b1;
+
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
+
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+
+    uaon_post = u_dut.u_tage_cntrl.uaon[0];
+
+    if (verbose != 0)
+      $display(
+        "[INFO] uaon_single_hit_prm_tst DEC: uaon=0x%0h exp=5",
+        uaon_post);
+    if (uaon_post !== 4'h5) begin
+      local_fails++;
+      $display(
+        "[FAIL] uaon_single_hit_prm_tst DEC: uaon=0x%0h exp=5",
+        uaon_post);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] uaon_single_hit_prm_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] uaon_single_hit_prm_tst: %0d failures",
         local_fails);
     total_fails += local_fails;
   endtask
