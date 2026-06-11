@@ -78,6 +78,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | tage_assert_bind.sv removed from |
 |                         |             |                   | sim_tage_manual (BP-042b).       |
 |                         |             |                   | sim_tage 81 tests as of BP-057   |
+|                         |             |                   | sim_tage 87 tests as of BP-058   |
 | ittage_assert.sv        | Complete    | sim_ittage        | New session-045 (BP-042/042a/b). |
 |                         |             |                   | Three assertions: hit+comp,      |
 |                         |             |                   | using_primary+prm_comp,          |
@@ -243,7 +244,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Tested only as setup, never as DUT.    | md is Draft. Same as #58. USE   |
 |    |                                        | tests relied on UAON firing as  |
 |    |                                        | precondition; never verified.   |
-| 60 | tage aging / epoch path. Entire path   | Supersedes #41. All tests run   |
+| 60 | tage aging / epoch path. Entire path   | CLOSED with BP-058              |
+|    |                                        | Supersedes #41. All tests run   |
 |    | dark.                                  | tage_enable_aging=0. Drive      |
 |    |                                        | aging high, exercise EPC-vs-    |
 |    |                                        | epoch compare and USE decrement |

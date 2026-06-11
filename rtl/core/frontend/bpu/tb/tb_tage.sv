@@ -51,6 +51,11 @@
 // BP-016:  T0 DEC min saturation TC-46: t0_dec_min_sat_tst.
 //          CTR=2'b00 resolved_taken=0 -> stays 2'b00 (sat min).
 //          All 46 tests pass under sim_tage_fast.
+// BP-058:  Aging directed tests TC-82 through TC-87.
+//          aging_reset_vals_tst, aging_interval_adv_tst,
+//          aging_epoch_wrap_tst, aging_age_compare_tst,
+//          aging_use_reduce_tst, aging_enable_gate_tst.
+//          All 87 tests pass under sim_tage_fast.
 // ===================================================================
 
 `default_nettype none
@@ -149,6 +154,14 @@ module tb;
   int _uaon_row5_tst           = 1;
   int _uaon_threshold_tst      = 1;
   int _uaon_single_hit_prm_tst = 1;
+
+  // -- BP-058 aging directed tests (TC-82 through TC-87) --
+  int _aging_reset_vals_tst   = 1;
+  int _aging_interval_adv_tst = 1;
+  int _aging_epoch_wrap_tst   = 1;
+  int _aging_age_compare_tst  = 1;
+  int _aging_use_reduce_tst   = 1;
+  int _aging_enable_gate_tst  = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -7636,12 +7649,26 @@ module tb;
     if (_uaon_single_hit_prm_tst != 0)
       uaon_single_hit_prm_tst(verbose);
 
+    // BP-058 aging directed tests (TC-82 through TC-87).
+    if (_aging_reset_vals_tst != 0)
+      aging_reset_vals_tst(verbose);
+    if (_aging_interval_adv_tst != 0)
+      aging_interval_adv_tst(verbose);
+    if (_aging_epoch_wrap_tst != 0)
+      aging_epoch_wrap_tst(verbose);
+    if (_aging_age_compare_tst != 0)
+      aging_age_compare_tst(verbose);
+    if (_aging_use_reduce_tst != 0)
+      aging_use_reduce_tst(verbose);
+    if (_aging_enable_gate_tst != 0)
+      aging_enable_gate_tst(verbose);
+
     // Overall verdict.
     if (total_fails == 0) begin
-      $display("[PASS] BP-023c: all tests passed");
+      $display("[PASS] BP-058: all tests passed");
       $finish(0);
     end else begin
-      $display("[FAIL] BP-023c: %0d total failures",
+      $display("[FAIL] BP-058: %0d total failures",
         total_fails);
       $finish(1);
     end
@@ -10047,6 +10074,466 @@ module tb;
     else
       $display(
         "[FAIL] uaon_single_hit_prm_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-82  aging_reset_vals_tst: step 2 reset values.
+  // Re-assert rstn with tage_aging_interval=32'h5A. After 2
+  // synchronous reset posedges: lcl_aging_interval[0] loaded from
+  // tage_aging_interval; lcl_epoch[0] reset to 0.
+  // Rule: tage_cntrl_use_update_rules.md "TAGE Aging Epoch and
+  // Interval Operation": "On the rising edge of reset
+  // lcl_aging_interval_0...loaded with the current value of
+  // tage_aging_interval." lcl_epoch reset to 0 per aging_ff RTL.
+  // Reachability note (step 1): tage_aging_interval is a 32-bit
+  // input port, no static threshold parameter. Boundary condition
+  // is lcl_aging_interval==0. Natural walking feasible at
+  // tage_aging_interval=0 (1 pred per epoch advance). Forcing
+  // lcl_aging_interval=0 matches the natural post-reset state
+  // when tage_aging_interval=0. No #39-class untestable path.
+  // ---------------------------------------------------------------
+  task automatic aging_reset_vals_tst(int verbose);
+    int local_fails;
+    local_fails         = 0;
+    stg_pred_val0       = 1'b0;
+    stg_pred_inp0       = '0;
+    stg_upd_val0        = 1'b0;
+    stg_upd_inp0        = '0;
+    tage_enable_aging   = 1'b1;
+    tage_aging_interval = 32'h0000_005A;
+    rstn                = 1'b0;
+    repeat(2) @(posedge clk);
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_reset_vals_tst: interval=%0h epoch=%0d",
+        u_dut.u_tage_cntrl.lcl_aging_interval[0],
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    if (u_dut.u_tage_cntrl.lcl_aging_interval[0]
+        !== 32'h0000_005A) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_reset_vals_tst: interval=%0h exp=5A",
+        u_dut.u_tage_cntrl.lcl_aging_interval[0]);
+    end
+    if (u_dut.u_tage_cntrl.lcl_epoch[0] !== 2'b00) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_reset_vals_tst: epoch=%0d exp=0",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    end
+    rstn                = 1'b1;
+    tage_enable_aging   = 1'b0;
+    tage_aging_interval = 32'h0;
+    // Wait for sram_init (noop on fast-init path, ~2048 cycles
+    // on slow path). Ensures TC-83+ backdoor writes are not
+    // overwritten by the restarted sram_init.
+    while (!tage_rdy) @(posedge clk);
+    repeat(4) @(posedge clk);
+    if (local_fails == 0)
+      $display("[PASS] aging_reset_vals_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] aging_reset_vals_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-83  aging_interval_adv_tst: step 3 interval decrement and
+  // epoch advance.
+  // Force lcl_aging_interval[0]=0 (boundary). Force lcl_epoch=0.
+  // Enable aging. Trigger prediction to PC=40'h320 (T0 hit, T1-T4
+  // idx=200 bank=0 all invalid after fast-init). Confirm:
+  //   - At posedge C (pred_rdy_p2 fires) epoch is still 0.
+  //   - At posedge D (N+1) epoch advances to 1.
+  // N+1 timing: aging_ff and pred_val_p2_ff both clocked at
+  // posedge. aging_ff at posedge C samples OLD pred_val_p2=0.
+  // At posedge D it samples pred_val_p2=1 and fires.
+  // Rule: tage_cntrl_use_update_rules.md "When
+  // lcl_aging_interval_0 reaches zero, lcl_epoch_0 is incremented
+  // and lcl_aging_interval_0 is reloaded."
+  // ---------------------------------------------------------------
+  task automatic aging_interval_adv_tst(int verbose);
+    int             local_fails;
+    tage_pred_inp_t inp;
+    local_fails = 0;
+    u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
+    u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b00;
+    tage_enable_aging   = 1'b1;
+    tage_aging_interval = 32'h0;
+    inp           = '0;
+    inp.pc        = 40'h320;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);           // posedge A: stager drives p0
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);           // posedge B: pred_val_p1
+    @(posedge clk);           // posedge C: pred_val_p2, rdy_p2=1
+    // Epoch must NOT advance at posedge C (N+1 timing proof).
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_interval_adv_tst: epoch pre=%0d exp=0",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    if (u_dut.u_tage_cntrl.lcl_epoch[0] !== 2'b00) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_interval_adv_tst: N+1 viol epoch=%0d",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    end
+    @(posedge clk);           // posedge D: aging_ff fires
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_interval_adv_tst: epoch post=%0d exp=1",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    if (u_dut.u_tage_cntrl.lcl_epoch[0] !== 2'b01) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_interval_adv_tst: epoch=%0d exp=1",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    end
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    if (local_fails == 0)
+      $display("[PASS] aging_interval_adv_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] aging_interval_adv_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-84  aging_epoch_wrap_tst: step 4 epoch wrap.
+  // Force lcl_epoch[0]=2'b11 (max 2-bit value). Force interval=0.
+  // Enable aging. Trigger prediction. Epoch wraps 11->00 at N+1.
+  // No explicit wrap rule in tage_cntrl_use_update_rules.md.
+  // Gap: 2-bit modular wrap is implied by RTL:
+  //   lcl_epoch[s] + 2'b01 in 2-bit arithmetic wraps at 11->00.
+  // ---------------------------------------------------------------
+  task automatic aging_epoch_wrap_tst(int verbose);
+    int             local_fails;
+    tage_pred_inp_t inp;
+    local_fails = 0;
+    u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
+    u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b11;
+    tage_enable_aging   = 1'b1;
+    tage_aging_interval = 32'h0;
+    inp           = '0;
+    inp.pc        = 40'h324;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);           // pred_rdy_p2 fires; epoch still 11
+    @(posedge clk);           // aging_ff fires: 11+01=00 (2-bit)
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_epoch_wrap_tst: epoch=%0d exp=0",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    if (u_dut.u_tage_cntrl.lcl_epoch[0] !== 2'b00) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_epoch_wrap_tst: epoch=%0d exp=0",
+        u_dut.u_tage_cntrl.lcl_epoch[0]);
+    end
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    if (local_fails == 0)
+      $display("[PASS] aging_epoch_wrap_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] aging_epoch_wrap_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-85  aging_age_compare_tst: step 5 age compare.
+  // T1 s0 mem[0][202]=0x003B: TAG=00 EPC=00 USE=11 CTR=101 VAL=1.
+  // PC=40'h328: T1 idx=(0x328>>2)=202 bank=0 tag=(0x328>>11)=0.
+  // tage_enable_aging=0; lcl_epoch forced per sub-test.
+  // age=(lcl_epoch-EPC) mod 4; EPC=00.
+  // Formula (tage_cntrl_use_update_rules.md "Effective USEFUL"):
+  //   age=0 -> u_eff=USE=11; age=1 -> u_eff=USE>>1=01;
+  //   age>=2 -> u_eff=00.
+  // tage_prm_useful in meta = u_eff of T1 (primary provider).
+  // ---------------------------------------------------------------
+  task automatic aging_age_compare_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    // Seed T1 s0 row=202 bank=0: USE=11 EPC=00 CTR=101 VAL=1.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][202]
+      = 16'h003B;
+    tage_enable_aging = 1'b0;
+    inp               = '0;
+    inp.pc            = 40'h328;
+    // Sub-test age=0: u_eff must equal USE=11.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_age_compare_tst age=0: useful=%02b exp=11",
+        meta.tage_prm_useful);
+    if (meta.tage_prm_useful !== 2'b11) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_age_compare_tst age=0: useful=%02b exp=11",
+        meta.tage_prm_useful);
+    end
+    @(posedge clk);
+    // Sub-test age=1: u_eff must equal USE>>1=01.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b01;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_age_compare_tst age=1: useful=%02b exp=01",
+        meta.tage_prm_useful);
+    if (meta.tage_prm_useful !== 2'b01) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_age_compare_tst age=1: useful=%02b exp=01",
+        meta.tage_prm_useful);
+    end
+    @(posedge clk);
+    // Sub-test age=2: u_eff must be 0 (else branch, age>=2).
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_age_compare_tst age=2: useful=%02b exp=00",
+        meta.tage_prm_useful);
+    if (meta.tage_prm_useful !== 2'b00) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_age_compare_tst age=2: useful=%02b exp=00",
+        meta.tage_prm_useful);
+    end
+    @(posedge clk);
+    // Sub-test age=3: u_eff must be 0 (else branch, age>=2).
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b11;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_age_compare_tst age=3: useful=%02b exp=00",
+        meta.tage_prm_useful);
+    if (meta.tage_prm_useful !== 2'b00) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_age_compare_tst age=3: useful=%02b exp=00",
+        meta.tage_prm_useful);
+    end
+    @(posedge clk);
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    if (local_fails == 0)
+      $display("[PASS] aging_age_compare_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] aging_age_compare_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-86  aging_use_reduce_tst: step 6 USE reduction effect.
+  // T1 s0[0][203]=0x000F: TAG=00 EPC=00 USE=00 CTR=111 VAL=1.
+  //   Provider for PC=40'h32C (idx=203 bank=0 tag=0).
+  // T2-T4 s0[0][203]=0x0030: TAG=00 EPC=00 USE=11 CTR=000 VAL=0.
+  //   Not a tag hit (VAL=0). EPC/USE still read for u_eff scan.
+  // tage_enable_aging=0; lcl_epoch forced per sub-test.
+  // Sub-test A fresh (epoch=0): T2 age=0 u_eff=USE=11 != 0.
+  //   T3/T4 same. alc_comp=0 (no candidate above T1=prm).
+  // Sub-test B aged  (epoch=2): T2 age=2 u_eff=0.
+  //   T2 first above T1 with u_eff=0. alc_comp=2.
+  // Proves: USE=11 entry is non-allocatable fresh, allocatable
+  //   when aged to u_eff=0 by the "else u_eff=0" branch.
+  // Rule: tage_cntrl_use_update_rules.md "Effective USEFUL" +
+  //   RTL alloc scan (tage_cntrl.sv gen_alloc, ueff_p1 check).
+  // ---------------------------------------------------------------
+  task automatic aging_use_reduce_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    local_fails = 0;
+    // T1: valid provider with USE=00 (T1 won't block alloc scan).
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][203]
+      = 16'h000F;
+    // T2-T4: USE=11 EPC=00 VAL=0 (drives u_eff in alloc scan).
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][203]
+      = 16'h0030;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][203]
+      = 16'h0030;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][203]
+      = 16'h0030;
+    tage_enable_aging = 1'b0;
+    inp               = '0;
+    inp.pc            = 40'h32C;
+    // Sub-test A: epoch=0, T2 u_eff=11, no candidate above T1.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_use_reduce_tst fresh: alc=%0d exp=0",
+        meta.tage_alc_comp);
+    if (meta.tage_alc_comp !== 3'd0) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_use_reduce_tst fresh: alc=%0d exp=0",
+        meta.tage_alc_comp);
+    end
+    @(posedge clk);
+    // Sub-test B: epoch=2, T2 age=2 u_eff=0, T2 selected.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_use_reduce_tst aged: alc=%0d exp=2",
+        meta.tage_alc_comp);
+    if (meta.tage_alc_comp !== 3'd2) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_use_reduce_tst aged: alc=%0d exp=2",
+        meta.tage_alc_comp);
+    end
+    @(posedge clk);
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    if (local_fails == 0)
+      $display("[PASS] aging_use_reduce_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] aging_use_reduce_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-87  aging_enable_gate_tst: step 7 enable gating.
+  // With tage_enable_aging=0 the epoch is frozen and u_eff=USE.
+  // Sub-test A: T1 s0[0][204]=0x002B: TAG=00 EPC=00 USE=10
+  //   CTR=101 VAL=1. PC=40'h330 (idx=204 bank=0 tag=0).
+  //   lcl_epoch=0. Predict. tage_prm_useful must equal USE=10.
+  //   (u_eff=USE when aging disabled; doc: "u_eff=USEFUL (aging
+  //   disabled, equivalent to age==0 path)")
+  // Sub-test B: force lcl_epoch=1, lcl_aging_interval=0,
+  //   tage_aging_interval=0. tage_enable_aging=0. Issue 3
+  //   predictions. lcl_epoch must remain 1 after all three.
+  //   Rule: "When tage_enable_aging=0 the epoch mechanism is
+  //   inactive." tage_cntrl_use_update_rules.md Aging Disabled.
+  // ---------------------------------------------------------------
+  task automatic aging_enable_gate_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    logic [1:0]      epoch_post;
+    int              k;
+    local_fails = 0;
+    // Seed T1 s0 row=204: TAG=00 EPC=00 USE=10 CTR=101 VAL=1.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][204]
+      = 16'h002B;
+    tage_enable_aging = 1'b0;
+    inp               = '0;
+    inp.pc            = 40'h330;
+    // Sub-test A: lcl_epoch=0. u_eff=USE=10 (aging disabled).
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_enable_gate_tst A: useful=%02b exp=10",
+        meta.tage_prm_useful);
+    if (meta.tage_prm_useful !== 2'b10) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_enable_gate_tst A: useful=%02b exp=10",
+        meta.tage_prm_useful);
+    end
+    @(posedge clk);
+    // Sub-test B: epoch frozen at 1 across 3 predictions.
+    u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b01;
+    u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
+    tage_aging_interval                       = 32'h0;
+    for (k = 0; k < 3; k++) begin
+      stg_pred_inp0 = inp;
+      stg_pred_val0 = 1'b1;
+      @(posedge clk);
+      stg_pred_val0 = 1'b0;
+      stg_pred_inp0 = '0;
+      @(posedge clk);
+      @(posedge clk);
+      @(posedge clk);
+    end
+    epoch_post = u_dut.u_tage_cntrl.lcl_epoch[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] aging_enable_gate_tst B: epoch=%0d exp=1",
+        epoch_post);
+    if (epoch_post !== 2'b01) begin
+      local_fails++;
+      $display(
+        "[FAIL] aging_enable_gate_tst B: epoch=%0d exp=1",
+        epoch_post);
+    end
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    tage_aging_interval              = 32'h0;
+    if (local_fails == 0)
+      $display("[PASS] aging_enable_gate_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] aging_enable_gate_tst: %0d failures",
         local_fails);
     total_fails += local_fails;
   endtask

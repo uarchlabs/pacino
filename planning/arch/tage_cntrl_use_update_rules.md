@@ -9,7 +9,7 @@
 
 ---
 
-### Background
+# Background
 
 Each tagged TAGE table entry (T1-T4) contains a 2-bit USEFUL counter
 field. The USEFUL field records whether an entry has recently provided
@@ -28,7 +28,7 @@ provider quality is available and no update is performed.
 
 ---
 
-### TAGE USEFUL Counter Aging
+# TAGE USEFUL Counter Aging
 
 The TAGE predictor periodically ages the USEFUL counters in table
 entries. Useful aging gradually removes replacement protection from
@@ -59,7 +59,7 @@ There are local 2b registers in tage_cntrl that hold the running epoch
 count called lcl_epoch_0 and lcl_epoch_1. Each register serves one of
 the two prediction requests.
 
-### TAGE Aging Epoch and Interval Operation
+# TAGE Aging Epoch and Interval Operation
 
 With TAGE aging enabled:
 
@@ -85,7 +85,7 @@ The value of the respective lcl_epoch_0/1 determines how a given
 entry's USEFUL counter is interpreted during prediction, allocation,
 and updates. USEFUL counter updates are described in the next section.
 
-### Aging Disabled
+## Aging Disabled
 
 When tage_enable_aging=0 the epoch mechanism is inactive. The
 effective USEFUL value is always equal to the raw USEFUL field:
@@ -96,11 +96,20 @@ Manual tests are expected to run with tage_enable_aging=0. A test
 failure under this condition indicates a table rule violation, not
 an aging interaction.
 
+## Epoch Advance Timing:
+
+  lcl_epoch_0 increments one clock after pred_rdy_0_p2 first
+  asserts (N+1). The aging_ff and the valid pipeline register
+  are separate always_ff blocks; the aging_ff samples the
+  previous value of pred_rdy_p2 on the boundary posedge and
+  fires on the next. The new epoch value is visible to
+  prediction logic starting at posedge N+1.
+
 ---
 
-### TAGE USEFUL Counter Updates
+# TAGE USEFUL Counter Updates
 
-#### Signals
+## Signals
 
 The signals are found in the tage_pred_meta entry within
 tage_upd_inp_t, with the exception of cond_mispredict which is
@@ -108,7 +117,7 @@ found in tage_upd_inp_t.
 
 The truth table for USEFUL counter updates is shown in Table 7.
 
-#### Columns
+## Columns
 
 The signals referenced are presumed to have
 tage_upd_inp.tage_pred_meta prefixed. The prefix was removed in
@@ -151,7 +160,7 @@ the column header to limit table column width.
     -   Control flag to the effective useful add/sub
     -   See epoch aging description above
 
-#### Legend
+### Legend
 
 ```
 DIFF  = preds differed (tage_prm_tkn != tage_alt_tkn)
@@ -173,7 +182,7 @@ x     = don't care
 -     = not applicable
 ```
 
-#### Table 7 - USEFUL modification truth table
+### Table 7 - USEFUL modification truth table
 
 | # | DIFF | TTM | UP | MISP | uWR | uACT | uSEL | uIDX | uWD |
 |---|------|-----|----|------|-----|------|------|------|-----|
@@ -184,7 +193,7 @@ x     = don't care
 | 5 | 1    |  0  | 0  | 0    | 1   | INC  | ALT  | ALT  | ALT |
 | 6 | 1    |  0  | 0  | 1    | 1   | DEC  | ALT  | ALT  | ALT |
 
-#### Row priority note
+### Row priority note
 
 Rows 1 and 2 both independently suppress the useful write (uWR=0).
 They have no priority relationship between them. If both conditions
@@ -200,7 +209,7 @@ irrelevant because the condition cannot arise in practice.
 
 ---
 
-### Effective USEFUL Calculation
+## Effective USEFUL Calculation
 
 The formula below uses these terms:
 
