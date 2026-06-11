@@ -133,6 +133,12 @@ module tb;
   int _use_t1_min_sat_tst           = 1;
   int _no_alloc_candidate_tst        = 1;
   int _no_ram_write_upd_tst          = 1;
+  // -- BP-056 EPC write tests (TC-69 through TC-73) --
+  int _epc_prm_match_tst             = 1;
+  int _epc_prm_misp_tst              = 1;
+  int _epc_alt_match_tst             = 1;
+  int _epc_alt_misp_tst              = 1;
+  int _epc_neg_tst                   = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -7590,6 +7596,18 @@ module tb;
       tage_assert_inhibit = 1'b0;
     end
 
+    // BP-056 EPC write tests (TC-69 through TC-73).
+    if (_epc_prm_match_tst != 0)
+      epc_prm_match_tst(verbose);
+    if (_epc_prm_misp_tst != 0)
+      epc_prm_misp_tst(verbose);
+    if (_epc_alt_match_tst != 0)
+      epc_alt_match_tst(verbose);
+    if (_epc_alt_misp_tst != 0)
+      epc_alt_misp_tst(verbose);
+    if (_epc_neg_tst != 0)
+      epc_neg_tst(verbose);
+
     // Overall verdict.
     if (total_fails == 0) begin
       $display("[PASS] BP-023c: all tests passed");
@@ -8959,6 +8977,452 @@ module tb;
     else
       $display(
         "[FAIL] no_ram_write_upd_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-69 epc_prm_match_tst
+  // Table 7 row 3: DIFF=1 TTM=0 UP=1 MISP=0 -> uWR=1 INC PRM.
+  // Proves: prm_match arm of epc_we_s0 writes EPC to lcl_epoch.
+  // PC=40'h3800 -> idx=0x600 bank=1 row=512 tag=0x07.
+  // T2 seed: 0x071B TAG=07 EPC=00 USE=01 CTR=101 VAL=1.
+  // T1 seed: 0x0717 TAG=07 EPC=00 USE=01 CTR=011 VAL=1.
+  // T3 iso:  0x07D8 TAG=07 EPC=11 USE=01 CTR=100 VAL=0.
+  // lcl_epoch=10. Seeded EPC=00 -> age=2 -> u_eff=0.
+  // prm=T2(tkn=1) alt=T1(tkn=0) pred_diff=1.
+  // Expected T2: 0x079D EPC=10 USE=01 CTR=110 VAL=1.
+  // Expected T1: 0x0717 unchanged.
+  // Expected T3: 0x07D8 unchanged.
+  // ---------------------------------------------------------------
+  task automatic epc_prm_match_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3;
+    local_fails = 0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0717;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h071B;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h07D8;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0000;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
+    inp           = '0;
+    inp.pc        = 40'h3800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (meta.tage_prm_comp !== 3'd2) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_match_tst: prm=%0d exp=2",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd1) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_match_tst: alt=%0d exp=1",
+        meta.tage_alt_comp);
+    end
+    meta.tage_alc_comp      = 3'd0;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b1;
+    upd_inp.cond_mispredict = 1'b0;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+    if (verbose != 0)
+      $display("[INFO] epc_prm_match_tst:  T2=0x%04h T1=0x%04h T3=0x%04h",
+        rd_t2, rd_t1, rd_t3);
+    if (rd_t2 !== 16'h079D) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_match_tst:  T2=0x%04h exp=0x079D", rd_t2);
+    end
+    if (rd_t1 !== 16'h0717) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_match_tst:  T1=0x%04h exp=0x0717", rd_t1);
+    end
+    if (rd_t3 !== 16'h07D8) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_match_tst:  T3=0x%04h exp=0x07D8", rd_t3);
+    end
+    if (local_fails == 0)
+      $display("[PASS] epc_prm_match_tst: 0 failures");
+    else
+      $display("[FAIL] epc_prm_match_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-70 epc_prm_misp_tst
+  // Table 7 row 4: DIFF=1 TTM=0 UP=1 MISP=1 -> uWR=1 DEC PRM.
+  // EPC write fires on mispredict: proves write is not gated on
+  // correctness, only on pred_diff and prm_match.
+  // Same seed layout as TC-69. resolved=0 -> prm wrong.
+  // Note: ctr_upd_comb INCs alt CTR when pred_diff=1 and
+  // alt_crt=1 (alt_tkn=0==resolved=0), even when using_prm=1.
+  // Expected T2: 0x0789 EPC=10 USE=00 CTR=100 VAL=1.
+  // Expected T1: 0x0719 alt INC CTR(011->100) EPC=00 USE=01.
+  // Expected T3: 0x07D8 unchanged.
+  // ---------------------------------------------------------------
+  task automatic epc_prm_misp_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3;
+    local_fails = 0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0717;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h071B;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h07D8;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0000;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
+    inp           = '0;
+    inp.pc        = 40'h3800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (meta.tage_prm_comp !== 3'd2) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_misp_tst: prm=%0d exp=2",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd1) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_misp_tst: alt=%0d exp=1",
+        meta.tage_alt_comp);
+    end
+    meta.tage_alc_comp      = 3'd0;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b1;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+    if (verbose != 0)
+      $display("[INFO] epc_prm_misp_tst:  T2=0x%04h T1=0x%04h T3=0x%04h",
+        rd_t2, rd_t1, rd_t3);
+    if (rd_t2 !== 16'h0789) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_misp_tst:  T2=0x%04h exp=0x0789", rd_t2);
+    end
+    if (rd_t1 !== 16'h0719) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_misp_tst:  T1=0x%04h exp=0x0719", rd_t1);
+    end
+    if (rd_t3 !== 16'h07D8) begin
+      local_fails++;
+      $display("[FAIL] epc_prm_misp_tst:  T3=0x%04h exp=0x07D8", rd_t3);
+    end
+    if (local_fails == 0)
+      $display("[PASS] epc_prm_misp_tst: 0 failures");
+    else
+      $display("[FAIL] epc_prm_misp_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-71 epc_alt_match_tst
+  // Table 7 row 5: DIFF=1 TTM=0 UP=0 MISP=0 -> uWR=1 INC ALT.
+  // Proves: alt_match arm of epc_we_s0 (HAND-FIX-001 path) writes
+  // EPC to lcl_epoch. using_primary forced 0 after capture.
+  // Same seeds as TC-69. resolved=0 -> alt correct (alt_tkn=0).
+  // Expected T1: 0x0799 EPC=10 USE=01 CTR=100 VAL=1.
+  // Expected T2: 0x071B unchanged (prm_crt=0 blocks prm CTR write).
+  // Expected T3: 0x07D8 unchanged.
+  // ---------------------------------------------------------------
+  task automatic epc_alt_match_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3;
+    local_fails = 0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0717;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h071B;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h07D8;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0000;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
+    inp           = '0;
+    inp.pc        = 40'h3800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (meta.tage_prm_comp !== 3'd2) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_match_tst: prm=%0d exp=2",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd1) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_match_tst: alt=%0d exp=1",
+        meta.tage_alt_comp);
+    end
+    // Force alt path to exercise HAND-FIX-001 alt_match gate.
+    meta.tage_using_primary = 1'b0;
+    meta.tage_alc_comp      = 3'd0;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+    if (verbose != 0)
+      $display("[INFO] epc_alt_match_tst:  T1=0x%04h T2=0x%04h T3=0x%04h",
+        rd_t1, rd_t2, rd_t3);
+    if (rd_t1 !== 16'h0799) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_match_tst:  T1=0x%04h exp=0x0799", rd_t1);
+    end
+    if (rd_t2 !== 16'h071B) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_match_tst:  T2=0x%04h exp=0x071B", rd_t2);
+    end
+    if (rd_t3 !== 16'h07D8) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_match_tst:  T3=0x%04h exp=0x07D8", rd_t3);
+    end
+    if (local_fails == 0)
+      $display("[PASS] epc_alt_match_tst: 0 failures");
+    else
+      $display("[FAIL] epc_alt_match_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-72 epc_alt_misp_tst
+  // Table 7 row 6: DIFF=1 TTM=0 UP=0 MISP=1 -> uWR=1 DEC ALT.
+  // alt_match path, alt wrong. resolved=1 (alt_tkn=0 -> wrong).
+  // ctr_upd_comb DECs alt CTR when !using_prm (both INC and DEC).
+  // Expected T1: 0x0785 EPC=10 USE=00 CTR=010 VAL=1.
+  // Expected T2: 0x071D prm correct INC CTR(101->110) EPC=00.
+  // Expected T3: 0x07D8 unchanged.
+  // ---------------------------------------------------------------
+  task automatic epc_alt_misp_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3;
+    local_fails = 0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0717;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h071B;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h07D8;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0000;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
+    inp           = '0;
+    inp.pc        = 40'h3800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (meta.tage_prm_comp !== 3'd2) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_misp_tst: prm=%0d exp=2",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd1) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_misp_tst: alt=%0d exp=1",
+        meta.tage_alt_comp);
+    end
+    // Force alt path; alt wrong -> USE DEC, EPC still written.
+    meta.tage_using_primary = 1'b0;
+    meta.tage_alc_comp      = 3'd0;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b1;
+    upd_inp.cond_mispredict = 1'b1;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+    if (verbose != 0)
+      $display("[INFO] epc_alt_misp_tst:  T1=0x%04h T2=0x%04h T3=0x%04h",
+        rd_t1, rd_t2, rd_t3);
+    if (rd_t1 !== 16'h0785) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_misp_tst:  T1=0x%04h exp=0x0785", rd_t1);
+    end
+    if (rd_t2 !== 16'h071D) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_misp_tst:  T2=0x%04h exp=0x071D", rd_t2);
+    end
+    if (rd_t3 !== 16'h07D8) begin
+      local_fails++;
+      $display("[FAIL] epc_alt_misp_tst:  T3=0x%04h exp=0x07D8", rd_t3);
+    end
+    if (local_fails == 0)
+      $display("[PASS] epc_alt_misp_tst: 0 failures");
+    else
+      $display("[FAIL] epc_alt_misp_tst: %0d failures",
+        local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // TC-73 epc_neg_tst
+  // Table 7 row 1: DIFF=0 -> uWR=0. No EPC write.
+  // T1 and T2 seeded with CTR=101 (both taken) -> pred_diff=0.
+  // prm CTR write fires (prm always written when prm_tagged=1).
+  // T2 seed: 0x071B TAG=07 EPC=00 USE=01 CTR=101 VAL=1.
+  // T1 seed: 0x071B TAG=07 EPC=00 USE=01 CTR=101 VAL=1.
+  // T3 iso:  0x07D8 TAG=07 EPC=11 USE=01 CTR=100 VAL=0.
+  // resolved=1 -> prm correct INC CTR(101->110) no EPC write.
+  // Expected T2: 0x071D CTR=110 EPC=00 USE=01 VAL=1.
+  // Expected T1: 0x071B unchanged (no write at all).
+  // Expected T3: 0x07D8 unchanged.
+  // ---------------------------------------------------------------
+  task automatic epc_neg_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3;
+    local_fails = 0;
+    // both T1 and T2 taken (CTR=101) to force pred_diff=0
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h071B;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h071B;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h07D8;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+      = 16'h0000;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
+    u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
+    inp           = '0;
+    inp.pc        = 40'h3800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (meta.tage_prm_comp !== 3'd2) begin
+      local_fails++;
+      $display("[FAIL] epc_neg_tst: prm=%0d exp=2",
+        meta.tage_prm_comp);
+    end
+    meta.tage_alc_comp      = 3'd0;
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b1;
+    upd_inp.cond_mispredict = 1'b0;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+    if (verbose != 0)
+      $display("[INFO] epc_neg_tst:  T2=0x%04h T1=0x%04h T3=0x%04h",
+        rd_t2, rd_t1, rd_t3);
+    // T2 CTR INC only; EPC must stay 00
+    if (rd_t2 !== 16'h071D) begin
+      local_fails++;
+      $display("[FAIL] epc_neg_tst:  T2=0x%04h exp=0x071D", rd_t2);
+    end
+    // T1 completely unchanged (pred_diff=0 -> no write)
+    if (rd_t1 !== 16'h071B) begin
+      local_fails++;
+      $display("[FAIL] epc_neg_tst:  T1=0x%04h exp=0x071B", rd_t1);
+    end
+    // T3 isolation reference must be unchanged
+    if (rd_t3 !== 16'h07D8) begin
+      local_fails++;
+      $display("[FAIL] epc_neg_tst:  T3=0x%04h exp=0x07D8", rd_t3);
+    end
+    if (local_fails == 0)
+      $display("[PASS] epc_neg_tst: 0 failures");
+    else
+      $display("[FAIL] epc_neg_tst: %0d failures",
         local_fails);
     total_fails += local_fails;
   endtask

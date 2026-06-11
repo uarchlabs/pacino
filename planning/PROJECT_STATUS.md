@@ -65,8 +65,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | HAND-FIX-002 applied (debt #30). |
 |                         |             |                   | HAND-FIX-003 applied (BP-041).   |
 |                         |             |                   | T0 CTR u_both_t0 path corrected. |
-| tage.sv                 | Complete    | tb_tage           | BP-010 through BP-030 complete.  |
-|                         |             |                   | 68 tests pass. All coverage      |
+| tage.sv                 | Complete    | tb_tage           | BP-056 complete.
+|                         |             |                   | BP-010 through BP-030 complete.  |
+|                         |             |                   | 73 tests pass. All coverage      |
 |                         |             |                   | targets closed or deferred.      |
 |                         |             |                   | tage_assert.sv bound via bind.   |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
@@ -211,7 +212,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | top in tage and ittage.                | structural only. New arb module |
 |    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
 |    |                                        | sequence with arb test #73.     |
-| 55 | tage EPC write proof.                  | epc_we gate changed BP-044c     |
+| 55 | tage EPC write proof.                  | CLOSED BP-056 |
+|    |                                        | epc_we gate changed BP-044c     |
 |    | Changed RTL, never proven by readback. | (USE rider). Seed entry, drive  |
 |    |                                        | EPC-writing update, read EPC    |
 |    |                                        | back via prediction, confirm    |
