@@ -448,15 +448,10 @@ title: ""
       <div class="method-block" style="padding:14px 20px;">
         <p style="font-family:monospace;font-size:12px;line-height:2;color:var(--muted);">
    
-       <span style="color:var(--accent);">●</span>&nbsp; New: RVA decoder final design <a href="https://uarchlabs.github.io/blog/memory-disambiguation-and-pre-decode/" style="color:#d96b3f;text-decoration:none;">article</a> &middot; 2026.06.01 <br>
-       <span style="color:var(--accent);">●</span>&nbsp; New: interactive uarch document, see Overview tab<br>
        <span style="color:var(--accent);">●</span>&nbsp; New: IA session browser, see  Sessions tab<br>
        <span style="color:var(--accent);">●</span>&nbsp; BP-041 complete &mdash; TAGE CTR update testing &middot; 2026.05.30<br>
        <span style="color:var(--accent);">●</span>&nbsp; BP-042-048 complete &mdash; TAGE/ITTAGE audits and design improvements; 2026.06.08<br>
-
-<!--span style="color:var(--accent);">●</span>&nbsp; BP-039 complete &mdash; ittage_cntrl update path verification &middot; 2026.05.17<br -->
-
-<!-- span style="color:var(--accent);">●</span>&nbsp; 76 tests passing across TAGE / ITTAGE cluster-->
+       <span style="color:var(--accent);">●</span>&nbsp; BP-055 complete &mdash; ITTAGE unit testing complete; 2026.06.10<br>
 
         </p>
       </div>
