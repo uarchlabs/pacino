@@ -68,6 +68,11 @@
 //          pred_strong_tst, pred_dir_mux_tst,
 //          pred_pipeline_tst.
 //          All 102 tests pass under sim_tage_fast.
+// BP-061:  Capstone round-trip test TC-103.
+//          capstone_rt_tst: CTR+EPC, USE, alloc, interference
+//          reference all exercised together on overlapping
+//          entries at PC=40'h22800 (idx=512 bank=0 row=512).
+//          All 103 tests pass under sim_tage_fast.
 // ===================================================================
 
 `default_nettype none
@@ -193,6 +198,8 @@ module tb;
   int _pred_strong_tst          = 1;
   int _pred_dir_mux_tst         = 1;
   int _pred_pipeline_tst        = 1;
+  // -- BP-061 capstone round-trip test (TC-103) --
+  int _capstone_rt_tst          = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -7727,13 +7734,16 @@ module tb;
       pred_dir_mux_tst(verbose);
     if (_pred_pipeline_tst != 0)
       pred_pipeline_tst(verbose);
+    // BP-061 capstone round-trip test (TC-103).
+    if (_capstone_rt_tst != 0)
+      capstone_rt_tst(verbose);
 
     // Overall verdict.
     if (total_fails == 0) begin
-      $display("[PASS] BP-060: all tests passed");
+      $display("[PASS] BP-061: all tests passed");
       $finish(0);
     end else begin
-      $display("[FAIL] BP-060: %0d total failures",
+      $display("[FAIL] BP-061: %0d total failures",
         total_fails);
       $finish(1);
     end
@@ -12070,6 +12080,284 @@ module tb;
     else
       $display(
         "[FAIL] pred_pipeline_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TC-103  capstone_rt_tst: round-trip CTR+EPC, USE, alloc.
+  // Four write paths exercised together on overlapping entries
+  // with no cross-path interference.
+  //
+  // PC=40'h22800: all T1-T4 idx=0x200=512 bank=0 row=512
+  //               tag_hash=0x45 (fh=0)
+  //
+  // Seeds (mem[0][512]):
+  //   T2 provider: CTR=010 USE=01 EPC=00 TAG=0x45 v=1 -> 0x4515
+  //   T1 alternate: CTR=101 USE=10 EPC=00 TAG=0x45 v=1 -> 0x452B
+  //   T3 alloc tgt: 0x0000 (invalid USE=0 u_eff=0 candidate)
+  //   T4 ref: CTR=101 USE=11 EPC=01 TAG=0x12 v=1 -> 0x127B
+  //           TAG=0x12 != 0x45 so T4 never hits; interference ref.
+  //
+  // Step 1: seed + predict. Verify T2=prm T1=alt T3=alc_cand.
+  // Step 2: CTR+EPC+USE update (rule 2.1 CTR, Table7 row3 USE).
+  //   resolved=0 correct -> T2 CTR 010->011, USE 01->10.
+  //   EPC written as lcl_epoch=0 (unchanged). T2=0x4527.
+  // Step 3: USE update via UAON (Table7 row5, CTR row8.2).
+  //   uaon[0]=0xF, T2 CTR=011 boundary -> UAON fires using_prm=0.
+  //   resolved=1 misp=0: T1 USE 10->11, T1 CTR 101->110.
+  //   T2 CTR/EPC intact (prm_crt=0 blocks prm CTR; USE->T1 only).
+  //   T1=0x453D. T2=0x4527 (unchanged).
+  // Step 4: alloc mispredict. prm_comp(T2)<T4 -> alloc T3.
+  //   uaon[0]=0: UAON suppressed, using_prm=1. resolved=1 misp=1.
+  //   T3 alloc CTR=100 USE=00 EPC=00 TAG=0x45 v=1 -> 0x4509.
+  //   T2 CTR DEC 011->010, USE DEC 10->01 (rule4 pACT=DEC).
+  //   T1 CTR INC 110->111 (rule4 aACT=INC).
+  //   T4 interference ref unchanged -> 0x127B.
+  // Step 5: final readback: T1=0x453F T2=0x4515 T3=0x4509
+  //         T4=0x127B. No cross-path corruption.
+  // ----------------------------------------------------------------
+  task automatic capstone_rt_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    tage_upd_inp_t   upd_inp;
+    logic [15:0]     rd_t1, rd_t2, rd_t3, rd_t4;
+    local_fails        = 0;
+    tage_enable_aging  = 1'b0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
+    u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
+    // -- Step 1: seed all entries at bank=0 row=512 ----------
+    // T2: CTR=010 USE=01 EPC=00 TAG=0x45 valid=1 -> 0x4515
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h4515;
+    // T1: CTR=101 USE=10 EPC=00 TAG=0x45 valid=1 -> 0x452B
+    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h452B;
+    // T3: invalid USE=0 -> u_eff=0 alloc candidate -> 0x0000
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h0000;
+    // T4: TAG=0x12 (wrong tag, no hit) interference ref
+    // CTR=101 USE=11 EPC=01 TAG=0x12 valid=1 -> 0x127B
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512]
+      = 16'h127B;
+    // Predict at PC=40'h22800 (fh=0 -> idx=0x200 tag=0x45).
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] capstone_rt_tst step1: prm=%0d alt=%0d alc=%0d up=%0b",
+        meta.tage_prm_comp, meta.tage_alt_comp,
+        meta.tage_alc_comp, meta.tage_using_primary);
+    if (meta.tage_prm_comp !== 3'd2) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step1: prm_comp=%0d exp=2",
+        meta.tage_prm_comp);
+    end
+    if (meta.tage_alt_comp !== 3'd1) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step1: alt_comp=%0d exp=1",
+        meta.tage_alt_comp);
+    end
+    if (meta.tage_alc_comp !== 3'd3) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step1: alc_comp=%0d exp=3",
+        meta.tage_alc_comp);
+    end
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step1: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    @(posedge clk);
+    // -- Step 2: CTR+EPC+USE update (rule 2.1, Table7 row3) --
+    // T2 prm_tkn=0 (CTR=010 MSB=0), alt_tkn=1. DIFF=1.
+    // resolved=0: correct. pACT=INC aACT=-. USE INC prm (row3).
+    // T2 CTR 010->011, USE 01->10. EPC=lcl_epoch=0 (unchanged).
+    // Expected T2=0x4527.
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
+    if (verbose != 0)
+      $display("[INFO] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4527"
+        , rd_t2);
+    // T2: CTR=011 USE=10 EPC=00 TAG=0x45 v=1 -> 0x4527
+    if (rd_t2 !== 16'h4527) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4527"
+        , rd_t2);
+    end
+    @(posedge clk);
+    // -- Step 3: USE update via UAON (Table7 row5, row8.2) ---
+    // T2 CTR=011 boundary. Force uaon[0]=0xF -> UAON fires.
+    // Prediction: using_primary=0 (alt=T1 active provider).
+    // resolved=1 misp=0: alt correct (T1 CTR=101 MSB=1=taken).
+    // T1 USE INC 10->11 (row5), T1 CTR INC 101->110 (row8.2).
+    // T2: prm_crt=0 blocks prm CTR; USE/EPC targets T1 only.
+    // Expected T1=0x453D, T2=0x4527 (unchanged).
+    u_dut.u_tage_cntrl.uaon[0] = 4'hF;
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] capstone_rt_tst step3 pred: up=%0b prm_tkn=%0b alt_tkn=%0b",
+        meta.tage_using_primary,
+        meta.tage_prm_tkn, meta.tage_alt_tkn);
+    if (meta.tage_using_primary !== 1'b0) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step3: using_primary=%0b exp=0",
+        meta.tage_using_primary);
+    end
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b1;
+    upd_inp.cond_mispredict = 1'b0;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
+    if (verbose != 0) begin
+      $display("[INFO] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x453D"
+        , rd_t1);
+      $display(
+        "[INFO] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4527 (intact)",
+        rd_t2);
+    end
+    // T1: CTR=110 USE=11 EPC=00 TAG=0x45 v=1 -> 0x453D
+    if (rd_t1 !== 16'h453D) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x453D"
+        , rd_t1);
+    end
+    // T2 must be unchanged from step 2 (no cross-path write)
+    if (rd_t2 !== 16'h4527) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4527"
+        , rd_t2);
+    end
+    @(posedge clk);
+    // -- Step 4: alloc mispredict; prm_comp(T2)<T4 -> T3 alloc
+    // uaon[0]=0: UAON suppressed -> using_prm=1.
+    // T2 CTR=011 prm_tkn=0. resolved=1 -> misp=1.
+    // Alloc T3: CTR=100 USE=00 EPC=00 TAG=0x45 v=1 -> 0x4509.
+    // T2 CTR DEC 011->010, USE DEC 10->01, EPC=0 (rule4 pACT).
+    // T1 CTR INC 110->111 (rule4 aACT; alt_crt=1).
+    // T4 interference ref unchanged -> 0x127B.
+    // Expected: T1=0x453F T2=0x4515 T3=0x4509 T4=0x127B.
+    inp           = '0;
+    inp.pc        = 40'h22800;
+    stg_pred_inp0 = inp;
+    stg_pred_val0 = 1'b1;
+    @(posedge clk);
+    stg_pred_val0 = 1'b0;
+    stg_pred_inp0 = '0;
+    @(posedge clk);
+    @(posedge clk);
+    meta = tage_pred_meta_p2[0];
+    if (verbose != 0)
+      $display(
+        "[INFO] capstone_rt_tst step4 pred: prm=%0d alc=%0d up=%0b",
+        meta.tage_prm_comp, meta.tage_alc_comp,
+        meta.tage_using_primary);
+    if (meta.tage_alc_comp !== 3'd3) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step4: alc_comp=%0d exp=3",
+        meta.tage_alc_comp);
+    end
+    if (meta.tage_using_primary !== 1'b1) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step4: using_primary=%0b exp=1",
+        meta.tage_using_primary);
+    end
+    upd_inp                 = '0;
+    upd_inp.tage_pred_meta  = meta;
+    upd_inp.resolved_taken  = 1'b1;
+    upd_inp.cond_mispredict = 1'b1;
+    stg_upd_inp0 = upd_inp;
+    stg_upd_val0 = 1'b1;
+    @(posedge clk);
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    @(posedge clk);
+    // -- Step 5: final readback all touched entries ----------
+    rd_t1 =
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512];
+    rd_t2 =
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
+    rd_t3 =
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][512];
+    rd_t4 =
+      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512];
+    if (verbose != 0) begin
+      $display("[INFO] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x453F"
+        , rd_t1);
+      $display("[INFO] capstone_rt_tst step5: T2[0][512]=0x%04h exp=0x4515"
+        , rd_t2);
+      $display("[INFO] capstone_rt_tst step5: T3[0][512]=0x%04h exp=0x4509"
+        , rd_t3);
+      $display("[INFO] capstone_rt_tst step5: T4[0][512]=0x%04h exp=0x127B"
+        , rd_t4);
+    end
+    // T1: CTR=111 USE=11 EPC=00 TAG=0x45 v=1 -> 0x453F
+    if (rd_t1 !== 16'h453F) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x453F"
+        , rd_t1);
+    end
+    // T2: CTR=010 USE=01 EPC=00 TAG=0x45 v=1 -> 0x4515 (seed)
+    if (rd_t2 !== 16'h4515) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step5: T2[0][512]=0x%04h exp=0x4515"
+        , rd_t2);
+    end
+    // T3: alloc CTR=100 USE=00 EPC=00 TAG=0x45 v=1 -> 0x4509
+    if (rd_t3 !== 16'h4509) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step5: T3[0][512]=0x%04h exp=0x4509"
+        , rd_t3);
+    end
+    // T4: interference ref must be unchanged -> 0x127B
+    if (rd_t4 !== 16'h127B) begin
+      local_fails++;
+      $display("[FAIL] capstone_rt_tst step5: T4[0][512]=0x%04h exp=0x127B"
+        , rd_t4);
+    end
+    if (local_fails == 0)
+      $display("[PASS] capstone_rt_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] capstone_rt_tst: %0d failures", local_fails);
     total_fails += local_fails;
   endtask
 

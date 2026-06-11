@@ -3,7 +3,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-10 (pa session 048)
+ UPDATED: 2026-06-11 (pa session 049)
  CONTACT: Jeff Nye
 ```
 
@@ -42,8 +42,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | _update_rules.md        |             |                   | session-045: DIFF corrected.     |
 |                         |             |                   | TTM row added. Notes corrected.  |
 |                         |             |                   | Aging disabled section added.    |
-| tage_cntrl_uaon         | Draft       | --                | session-036: verified.           |
+| tage_cntrl_uaon         | Complete    | --                | session-036: verified.           |
 | _update_rules.md        |             |                   | Debt #45 closed BP-032.          |
+|                         |             |                   | Promoted Complete BP-057.        |
 | tage_cntrl              | Complete    | --                | session-044: X entries expanded. |
 | _ctr_update_rules.md    |             |                   | Unreachable rows removed.        |
 |                         |             |                   | ADR-001 added.                   |
@@ -58,17 +59,21 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | HAND-FIX-001 applied.            |
 | tage_bim.sv             | Complete    | --                | BP-009b complete.                |
 |                         |             |                   | idx_hash_p0 output added.        |
-| tage_cntrl.sv           | In progress | --                | BP-008a/b complete.              |
+| tage_cntrl.sv           | Complete    | --                | BP-008a/b complete.              |
 |                         |             |                   | BP-012 complete.                 |
-|                         |             |                   | Was complete but BP-034/5 exposed|
-|                         |             |                   | issues, see tech debt #66.       |
+|                         |             |                   | BP-034/5 issues (#66) closed     |
+|                         |             |                   | BP-045.                          |
 |                         |             |                   | HAND-FIX-002 applied (debt #30). |
 |                         |             |                   | HAND-FIX-003 applied (BP-041).   |
 |                         |             |                   | T0 CTR u_both_t0 path corrected. |
-| tage.sv                 | Complete    | tb_tage           | BP-056 complete.
+|                         |             |                   | BUG-003 UAON single-hit guard    |
+|                         |             |                   | fixed BP-057.                    |
+| tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | BP-010 through BP-030 complete.  |
-|                         |             |                   | 73 tests pass. All coverage      |
-|                         |             |                   | targets closed or deferred.      |
+|                         |             |                   | 103 tests pass. Directed         |
+|                         |             |                   | validation complete. All         |
+|                         |             |                   | coverage targets closed or       |
+|                         |             |                   | deferred.                        |
 |                         |             |                   | tage_assert.sv bound via bind.   |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
 |                         |             | sim_tage_fast     | assert_inhibit port added        |
@@ -79,7 +84,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | sim_tage_manual (BP-042b).       |
 |                         |             |                   | sim_tage 81 tests as of BP-057   |
 |                         |             |                   | sim_tage 87 tests as of BP-058   |
-|                         |             |                   | sim_tage 102 tests as of BP-060   |
+|                         |             |                   | sim_tage 95 tests as of BP-059   |
+|                         |             |                   | sim_tage 102 tests as of BP-060  |
+|                         |             |                   | sim_tage 103 tests as of BP-061  |
 | ittage_assert.sv        | Complete    | sim_ittage        | New session-045 (BP-042/042a/b). |
 |                         |             |                   | Three assertions: hit+comp,      |
 |                         |             |                   | using_primary+prm_comp,          |
@@ -109,14 +116,14 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | session-037: open items closed.  |
 |                                   |             |       | session-038: redundancy collapse |
 |                                   |             |       | applied.                         |
-| ittage_cntrl_uaon_update_rules.md | Draft       | --    | Created session-033.             |
-|                                   |             |       | session-036: user editing        |
-|                                   |             |       | manually.                        |
-| ittage_cntrl_use_update_rules.md  | Draft       | --    | session-045: DIFF corrected      |
+| ittage_cntrl_uaon_update_rules.md | Complete    | --    | Created session-033.             |
+|                                   |             |       | Promoted Complete BP-051.        |
+| ittage_cntrl_use_update_rules.md  | Complete    | --    | session-045: DIFF corrected      |
 |                                   |             |       | (prm_tgt != alt_tgt).            |
 |                                   |             |       | HIT=0 row added.                 |
 |                                   |             |       | Notes corrected and aligned.     |
 |                                   |             |       | Aging disabled section added.    |
+|                                   |             |       | Promoted Complete BP-051.        |
 | ittage_table_hash_rules.md        | Complete    | --    | Created session-033.             |
 |                                   |             |       | session-036: verified.           |
 | ittage_table.sv                   | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete. |
@@ -240,6 +247,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Tested only as setup, never as DUT.    | is Draft. Promote to authority, |
 |    |                                        | directed test per row, prove    |
 |    |                                        | use_alt_on_na fires/clears.     |
+|    |                                        | BUG-003 found and fixed.        |
 | 59 | ittage UAON trigger rules.             | CLOSED BP-051 |
 |    |                                        | ittage_cntrl_uaon_update_rules. |
 |    | Tested only as setup, never as DUT.    | md is Draft. Same as #58. USE   |
@@ -263,12 +271,14 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Successor to #51.                      | Test which table allocates,     |
 |    |                                        | alloc write-enable gating,      |
 |    |                                        | alloc index. Do #66 first.      |
+|    |                                        | RAM-level write isolation       |
+|    |                                        | verified (TC-95).               |
 | 63 | ittage allocation policy + gating.     | CLOSED with BP-053              |
 |    |                                        | Same as #62. Alloc on           |
 |    | Never the feature under test.          | mispredict, CTR-null condition, |
 |    | Successor to #51.                      | alloc_we gating. Readback-      |
 |    |                                        | verify allocated entry state.   |
-| 64 | tage prediction-side correctness.      | CLOSE BP-060                    |
+| 64 | tage prediction-side correctness.      | CLOSED BP-060                   |
 |    |                                        | Prediction path exercised only  |
 |    | Not directed-tested.                   | as setup for update tests.      |
 |    |                                        | Directed-test provider          |
@@ -321,7 +331,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 70 | ittage rollback / history recompute.   | Same as #69 for ittage. Shared  |
 |    | Dark; tracks arch TBDs.                | GHR/PHR fold logic, G21/G22.    |
 |    |                                        | Defer to bp_cluster.            |
-| 71 | tage round-trip                        | Mixed ctr/use/alloc/epc in one  |
+| 71 | tage round-trip                        | CLOSED BP-061                   |
+|    |                                        | Mixed ctr/use/alloc/epc in one  |
 |    | Combined test, run only after          | flow. Run ONLY after            |
 |    | individual tests pass                  | #55,58,60,62,64 each proven     |
 |    |                                        | alone -- mixing before          |
@@ -524,21 +535,32 @@ Key decisions for quick reference:
     - Unit testbenches written
     - Manual testbench written
     - Line coverage > 90%
-    - Directed validation in progress
+    - Directed validation complete
+    - remaining items deferred
+        - #69 rollback -> bp_cluster
+        - #67 sram_init non-fast
+        - #74 dual-slot
     - Formal validation not started
 - BP-006 through BP-032: complete.
 - BP-041 manual checks for tage CTR and USE complete
     - tage_cntrl_ctr_update_rules.md -- updated and verified
     - tage_cntrl_use_update_rules.md -- corrected and verified
       session-045. All 6 USE rows pass.
+- BP-056 through BP-061: TAGE directed validation
+    - BP-056 EPC write proof (#55)
+    - BP-057 UAON trigger rules (#58), BUG-003 fixed
+    - BP-058 aging / epoch path (#60)
+    - BP-059 allocation + write gating (#62)
+    - BP-060 prediction-side correctness (#64)
+    - BP-061 round-trip capstone (#71)
 - Tage planning documents
-    - planning/arch/tage_cntrl_alloc_rules.md         Draft
+    - planning/arch/tage_cntrl_alloc_rules.md         Complete
         - Table entry allocation rules
     - planning/arch/tage_cntrl_ctr_update_rules.md    Complete
         - CTR field update rules
     - planning/arch/tage_cntrl_decisions.md           Complete
         - TAGE control behavior, conventions and rules
-    - planning/arch/tage_cntrl_uaon_update_rules.md   Draft
+    - planning/arch/tage_cntrl_uaon_update_rules.md   Complete
         - UAON (Use ALT on newly allocated)  trigger rules
     - planning/arch/tage_cntrl_use_update_rules.md    Complete
         - USE(ful) field update rules. Corrected session-045.
@@ -642,3 +664,4 @@ Key decisions for quick reference:
   alternate fell through to untagged T0/BIM) where the prm-vs-alt comparison
   carries no training signal. Found by TC-81, fixed BP-057. Same class as BUG
   (ITTAGE #59, BP-051).
+
