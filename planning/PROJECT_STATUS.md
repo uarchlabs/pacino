@@ -117,14 +117,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | session-036: verified.           |
 | ittage_table.sv                   | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete. |
 | ittage_cntrl.sv                   | Complete    | tb_ittage_cntrl | Prediction path complete BP-034|
-|                                   |             |       | Update path complete BP-035      |
-|                                   |             |       | Testbench complete BP-036        |
-|                                   |             |       | CTR/USE tests complete BP-044/a/b/c |
-|                                   |             |       | 147 tests passing w/ BP-048       |
+|                                   |             |                 | Update path complete BP-035      |
+|                                   |             |                 | Testbench complete BP-036        |
+|                                   |             |                 | CTR/USE tests complete BP-044/a/b/c |
+|                                   |             |                 | 147 tests passing w/ BP-048       |
+|                                   |             |                 |  UAON/aging/alloc verified BP-051/2/3 |
+|                                   |             |                 |  ittage_cntrl is complete |
 | ittage.sv                         | In progress | tb_ittage | BP-034/035/35a/35b           |
-|                                   |             |       | shell without arb cntrl complete |
-|                                   |             |       | sim_ittage 125 pass / 0 fail      |
-|                                   |             |       | (fixed in BP-049a).              |
+|                                   |             |           | shell without arb cntrl complete |
+|                                   |             |           | sim_ittage 164 pass / 0 fail     |
+|                                   |             |           | (tests added BP-054).            |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
@@ -182,11 +184,13 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 42 | Pipeline diagram shows ITTAGE at s3,  | Revisit after SC definition.    |
 |    | should be s2 (alongside FTB, TAGE).   | Update diagram and discussions. |
 |    |                                       | See prediction-side item #65.   |
+|    |                                       | #65 is now CLOSED, BP-054       |
 | 43 | Reduce ITTAGE CTR width 3b -> 2b.     | Impacts bp_defines_pkg.sv,      |
 |    |                                       | ittage_table_interfaces.md, RTL |
 |    |                                       | and testbenches. Confirm no     |
 |    |                                       | testcase impact (see #44).      |
-| 44 | Confirm ittage_pred_strong change in  | Changed session-040: provider   |
+| 44 | Confirm ittage_pred_strong change in  | CLOSED                          |
+|    |                                       | Changed session-040: provider   |
 |    | ittage_cntrl_decisions.md.            | ctr was !=3 & !=4, now > 0 (NOT |
 |    |                                       | NULL). Ensure #43 does not      |
 |    |                                       | impact any testcase.            |
@@ -261,7 +265,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | selection, using_primary,       |
 |    |                                        | pred_strong, target mux given   |
 |    |                                        | seeded entries.                 |
-| 65 | ittage prediction-side correctness.    | Same as #64 for ittage.         |
+| 65 | ittage prediction-side correctness.    | CLOSED BP-054/054a              |
+|    |                                        | Same as #64 for ittage.         |
 |    | Not directed-tested.                   | Resolves #42 test aspect:       |
 |    |                                        | verify provider/using_primary/  |
 |    |                                        | target operate at s2 not s3.    |
@@ -535,7 +540,7 @@ Key decisions for quick reference:
 - RTL is available
     - Unit testbenches written
     - Line coverage > 90% in progress
-    - Directed validation in progress
+    - Directed validation in progress, only round-trip remains
     - Formal validation not started
 - BP-034 - BP-042 complete (BP-033 abandoned)
 - ITTage planning documents
@@ -606,4 +611,9 @@ Key decisions for quick reference:
 - BUG-001: HAND-FIX-003. T0 CTR INC/DEC condition
   wrong in tage_cntrl.sv. Found by tage_ctr_test
   row 13a. Fixed BP-041. See session-handoff-045.
-
+- BUG-002: BP-049a renamed t_tgt_wr_u0 to t_prm/t_alt in
+  ittage_cntrl.sv and ran only sim_ittage. tb_ittage_cntrl
+  and tb_ittage_table were left uncompilable; their 77/0 and
+  32/0 counts carried in handoff-048 were stale (not from a
+  run). Found and repaired BP-050a. Cause of the all-targets-
+  must-run rule.
