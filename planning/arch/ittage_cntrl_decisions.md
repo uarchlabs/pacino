@@ -103,7 +103,7 @@ Captures into meta:
   ittage_prm_comp    -- table index of primary provider
   ittage_prm_useful  -- useful field of primary provider entry
   ittage_prm_ctr     -- CTR field of primary provider entry
-  ittage_pred_tgt    -- target from primary provider entry
+  ittage_prm_tgt    -- target from primary provider entry
 
 ### Alternate provider (p1, combinational)
 
@@ -134,7 +134,7 @@ Captures into meta:
 
 ### Decoration flags (p1, combinational)
 
-  ittage_pred_strong   -- provider ctr was !=3 and !=4
+  ittage_pred_strong   -- provider ctr was != 0
   ittage_use_alt_on_na -- use_alt_on_na was used to select
   ittage_using_primary -- provider was primary, else alternate
   ittage_hit           -- at least one IT1-IT5 table hit
@@ -142,13 +142,29 @@ Captures into meta:
 
 ### Final target (p1, combinational)
 
-Normally: ittage_pred_tgt from primary provider.
-When use_alt_on_na fires (trigger condition met and UAON
-counter >= IT_UAON_THRES): ittage_alt_tgt from alternate
-provider.
-When ittage_hit == 0: consumer uses FTB target.
-ittage_pred_rdy_p2 still asserts.
-Result -> ittage_pred_tgt in output meta.
+ittage_cntrl does not pick a single predicted target. It
+captures both candidate targets and the selector into meta and
+leaves the choice to the consumer:
+
+ittage_prm_tgt       -- target from primary provider entry
+ittage_alt_tgt       -- target from alternate provider entry
+ittage_using_primary -- selector: 1 = primary, 0 = alternate
+
+The consumer selects:
+ittage_using_primary == 1 -> ittage_prm_tgt
+ittage_using_primary == 0 -> ittage_alt_tgt
+
+ittage_using_primary is set during provider selection (p1):
+primary when ittage_prm_ctr != 3'b000; on null primary CTR,
+alternate when use_alt_on_na fired (UAON counter >=
+IT_UAON_THRES), else primary. See ittage_cntrl_uaon_update_rules.md
+for the mux rule.
+
+When ittage_hit == 0 there is no provider target; the consumer
+uses the FTB target. ittage_pred_rdy_p2 still asserts.
+
+All meta fields are flopped at p2 (see p2 flop). The selection
+above is performed by the consumer on the p2 meta.
 
 ### p2 flop
 

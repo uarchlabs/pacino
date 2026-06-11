@@ -188,8 +188,19 @@ ITTAGE has no base table (no IT0). When no IT1-IT5 table hits,
 ittage_hit is de-asserted in ittage_pred_meta_p2[s] and the
 consumer uses the FTB target. ittage_pred_rdy_p2[s] still
 asserts -- the response is valid regardless of hit status.
-ittage_pred_meta_p2[s].ittage_pred_tgt carries the predicted
-target address when ittage_hit is asserted.
+
+ittage_pred_meta_p2[s].ittage_prm_tgt and 
+ittage_pred_meta_p2[s].ittage_alt_tgt carry the predicted
+target address from the primary and alternate components
+when ittage_hit is asserted.
+
+The consumer uses ittage_pred_meta_p2[s].ittage_using_primary
+to select the actual prediction.
+
+For the purposes of description we define a virtual signal called
+VIRT_ittage_pred_tgt which is either ittage_prm_tgt or ittage_alt_tgt
+depending on the value of ittage_using_primary.
+VIRT_ittage_pred_tgt is not a physical signal.
 
 The primary component is the longest-history tagged table with
 a matching entry. The alternate component is the next-longest
@@ -235,7 +246,9 @@ The hash operations are defined in ittage_table_hash_rules.md.
 
 ### Consumer Obligations
 
-- Must not consume ittage_pred_tgt when ittage_hit is not
+Note: VIRT_ittage_pred_tgt is a virtual signal described above.
+
+- Must not consume VIRT_ittage_pred_tgt when ittage_hit is not
   asserted.
 - Must use FTB target when ittage_hit is not asserted.
 - Must write ittage_pred_meta_p2[s] into FTQ meta path when
@@ -244,7 +257,7 @@ The hash operations are defined in ittage_table_hash_rules.md.
 - Must set pred_src in bp_ftq_entry_t to PRED_ITTAGE when
   ITTAGE overrides FTB target.
 - Must assert s2_redirect when ittage_hit is asserted and
-  ittage_pred_tgt disagrees with FTB target.
+  VIRT_ittage_pred_tgt disagrees with FTB target.
 - Must gate ITTAGE prediction on indirect branch type only.
   CALL and RETURN are handled by RAS exclusively.
 
