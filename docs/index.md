@@ -451,7 +451,7 @@ title: ""
        <span style="color:var(--accent);">●</span>&nbsp; New: IA session browser, see  Sessions tab<br>
        <span style="color:var(--accent);">●</span>&nbsp; BP-041 complete &mdash; TAGE CTR update testing &middot; 2026.05.30<br>
        <span style="color:var(--accent);">●</span>&nbsp; BP-042-048 complete &mdash; TAGE/ITTAGE audits and design improvements; 2026.06.08<br>
-       <span style="color:var(--accent);">●</span>&nbsp; BP-055 complete &mdash; ITTAGE unit testing complete; 2026.06.10<br>
+       <span style="color:var(--accent);">●</span>&nbsp; TAGE/ITTAGE &mdash; unit testing complete; 2026.06.11<br>
 
         </p>
       </div>
