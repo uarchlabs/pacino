@@ -1,9 +1,19 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ---------------------------------------------------------------------------
 // decode_pkg.sv
 // Shared types for the 8-issue OOO decoder pipeline.
 // RVA23 / RV64GC compliant.
 //
 // Instruction format and per-slot decode packet definitions.
 // Imported by rvc_expander and instr_decoder.
+// ===================================================================
 
 package decode_pkg;
 

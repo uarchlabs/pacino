@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 # Project Rationale
 
 The primary objective of this project is to determine if it is practical to use AI to fully develop a world-class, out-of-order superscalar microprocessor.

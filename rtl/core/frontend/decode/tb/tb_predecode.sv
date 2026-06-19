@@ -1,3 +1,8 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
 // tb_predecode.sv
 // Self-checking testbench for predecode.sv.
 // Drives raw fetch bundles and verifies predecode_pkt_t annotations.
@@ -17,6 +22,7 @@
 //   TC11 - Vector load vle32.v -- needs_vtype[0]=1, not is_vsetvl
 //   TC12 - vsetvli then vse32.v -- vtype_hazard[1]=1
 //   TC13 - All slots invalid -- all flags clear
+// ===================================================================
 
 `default_nettype none
 `timescale 1ns/1ps

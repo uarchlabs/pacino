@@ -1,3 +1,8 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
 // tb_instr_decoder.sv
 // Self-checking testbench for instr_decoder.
 // Drives predecode_pkt_t bundles (wrapping raw instructions) and
@@ -7,7 +12,8 @@
 //   make_predecode_pkt() wraps a raw 32-bit instruction into a
 //   predecode_pkt_t with is_vsetvl/needs_vtype computed correctly.
 //   All 543 existing tests pass unchanged via the updated drive() task.
-
+// ---------------------------------------------------------------------------
+// ===================================================================
 `default_nettype none
 `timescale 1ns/1ps
 

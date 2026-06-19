@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 # Session Handoff 036
 Written by Claude.ai at end of session-035.
 Date: 2026-04-28

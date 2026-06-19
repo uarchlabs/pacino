@@ -1,3 +1,7 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
+
 # SystemVerilog Verification — Research Session Notes
 
 **Date:** 2026.05.14

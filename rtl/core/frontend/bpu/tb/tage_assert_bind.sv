@@ -1,5 +1,11 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
 // FILE: tage_assert_bind.sv
 // Include in sim Makefile only. Not for synthesis.
+// ===================================================================
 bind tage tage_assert #(
   .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
 ) u_tage_assert (

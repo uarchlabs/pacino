@@ -1,3 +1,8 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
 // instr_decoder.sv
 // 8-wide parallel instruction decoder for RVA23 / RV64GC.
 //
@@ -18,6 +23,7 @@
 //   - predecode_out[8] passes pre-decode annotations to rename
 //   - Slots with valid=0 carry zeroed decode packets; rename should skip
 //   - is_illegal=1 slots should cause a precise exception in dispatch
+// ===================================================================
 
 `default_nettype none
 

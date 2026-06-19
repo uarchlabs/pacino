@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 
 VERT: A SystemVerilog Assertion Dataset to Improve Hardware Verification with LLMs
 https://openreview.net/forum?id=rZmQ2z7MPA

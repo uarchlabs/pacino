@@ -1,3 +1,12 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ---------------------------------------------------------------------------
 // tb_rvc_expander.sv
 // Self-checking testbench for rvc_expander.
 // Uses a free-running clock to drive eval cycles in Verilator 5.020
@@ -6,6 +15,7 @@
 // logic to settle.
 //
 // Tests all three quadrants of RVC expansion plus 32-bit passthrough.
+// ===================================================================
 
 `default_nettype none
 `timescale 1ns/1ps

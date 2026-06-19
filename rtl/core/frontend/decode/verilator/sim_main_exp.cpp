@@ -1,7 +1,12 @@
+// ==============================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ==============================================================
 // sim_main_exp.cpp - Verilator wrapper for rvc_expander testbench
 // Compatible with Verilator 5.020 with --timing
 // Testbench module is named 'tb' (Verilator class: Vtb)
-
+// ==============================================================
 #include "Vtb.h"
 #include "verilated.h"
 #include <iostream>

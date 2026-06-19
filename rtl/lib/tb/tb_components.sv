@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+
 // tb_components.sv
 // Combined testbench for bw_ram, sat_alu, and dual_lm1.
 // Module name is tb per project convention.

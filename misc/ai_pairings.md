@@ -1,3 +1,7 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
+
 # AI Assistant Pairings: Strategy vs. Implementation (v3)
 
 This document evaluates the "Two-Actor" model for complex technical projects, specifically separating high-level planning (Web) from terminal-based execution (Linux CLI) across three distinct tiers of AI capability.

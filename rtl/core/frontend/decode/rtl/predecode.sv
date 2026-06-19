@@ -1,3 +1,8 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
 // predecode.sv
 // 8-slot pre-decode module for RVA23 / RV64GC fetch bundles.
 //
@@ -25,6 +30,7 @@
 // All 8 slots are decoded in parallel using generate blocks.
 // No sequential inter-slot dependency except the prefix-OR used to
 // propagate vtype_hazard forward through the bundle.
+// ===================================================================
 
 `default_nettype none
 

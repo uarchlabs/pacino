@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+
 // dual_lm1.sv
 // Dual leftmost-1 finder: reports positions of the two highest-index
 // set bits in the input vector.

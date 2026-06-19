@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+
 # Makefile -- branch predictor cluster
 # Targets: lint, sim, all (default), clean
 include $(RVA_ROOT)/rtl/Vars.mk

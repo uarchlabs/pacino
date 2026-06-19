@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 # tage_cntrl UAON Update Rules
 ```
  FILE:    tage_cntrl_uaon_update_rules.md

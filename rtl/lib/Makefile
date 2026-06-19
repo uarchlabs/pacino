@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+
 # rtl/lib/Makefile
 VERILATOR := $(shell which verilator 2>/dev/null)
 ifeq ($(VERILATOR),)

@@ -1,3 +1,8 @@
+// ===================================================================
+// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) 2026 Jeff Nye, uarchlabs.com
+// SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+// ===================================================================
 // rvc_expander.sv
 // Pre-decode RVC (16-bit compressed) to 32-bit instruction expander.
 // RVA23 / RV64GC compliant.
@@ -13,6 +18,7 @@
 // Downstream interface note:
 //   exp_bundle and exp_valid are consumed by instr_decoder, which has
 //   no knowledge of original instruction widths.
+// ===================================================================
 
 `default_nettype none
 

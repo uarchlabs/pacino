@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 ---
 title: "Iteration Counting at s1: The Loop Predictor"
 author: Jeff Nye

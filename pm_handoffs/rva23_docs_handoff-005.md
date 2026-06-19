@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 # Session Handoff: RVA23 Co-Design Documentation Project
 
 This is the documentation sub-project for the RVA23 Co-design project.
