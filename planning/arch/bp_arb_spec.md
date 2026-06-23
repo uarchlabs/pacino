@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  Draft -- session-025
- UPDATED: 2026-05-18
+ UPDATED: 2026-06-23
  CONTACT: Jeff Nye
 ```
 
@@ -43,8 +43,14 @@ This spec defines:
   Predictor   RAM-based   Pred stage   Override stage   Update timing
   ---------   ---------   ----------   --------------   -------------
   uFTB        No          s0           s0               Immediate
-  RAS         No          s0           s0               Speculative push /
-                                                        snapshot restore
+  RAS         No          s0/s2        s2               Speculative push /
+                                                        snapshot restore.
+                                                        s0: TOS read for
+                                                        initial prediction.
+                                                        s2: push/pop executes,
+                                                        redirect participation.
+                                                        See section 7.2 and
+                                                        ras_decisions.md s1.
   FTB         Yes         s1/s2        s1/s2            u0/u1
   LP          Yes         s1/s2        s1/s2            u0/u1
   TAGE        Yes         s2           s2               u0/u1
@@ -78,9 +84,9 @@ chain.
 
 ### 3.2  Predictor stage assignments
 
-  s0:     uFTB, RAS
+  s0:     uFTB, RAS (TOS read only)
   s1/s2:  FTB, LP
-  s2:     TAGE, ITTAGE
+  s2:     TAGE, ITTAGE, RAS (push/pop, redirect participation)
   s3:     SC (chained from TAGE s2 output)
 
 ### 3.3  Override chain
@@ -118,6 +124,8 @@ Each RAM-based predictor that can redirect exposes:
 
 uFTB and RAS drive the FTQ directly at s0 without a redirect
 interface -- they are the initial prediction, not a correction.
+RAS push/pop and redirect participation occurs at s2; the s0
+output is a TOS read only.
 
 Redirect signal naming examples:
   ftb_redir_val_s2
@@ -482,24 +490,30 @@ which is combinational.  A return instruction detected at s0
 causes the RAS to present the TOS value as the predicted
 target.  This is the initial s0 prediction, not a redirect.
 
+RAS push/pop executes at s2 when FTB structural prediction
+confirms the branch type.  The s2 result participates in
+s2_redirect when FTB/TAGE/RAS disagrees with the uBTB s1
+prediction.  See planning/arch/ras_decisions.md section 1.
+
 #### Push (call)
 
-A call instruction is detected at predecode/decode before
-commit.  The return address is pushed onto the RAS
-speculatively at that point.  Because predecode is speculative,
-the push may be on a mispredicted path.
+A call instruction is detected via FTB structural prediction
+at s2.  The return address is pushed onto the RAS speculatively
+at s2.  Because the prediction is speculative, the push may be
+on a mispredicted path.
 
 #### Snapshot and restore
 
 RAS state (TOSR, TOSW, BOS -- defined in bp_ras_snapshot_t in
-bp_structs_pkg.sv) must be checkpointed into the FTQ entry at
-the time of the prediction that consumed or produced the RAS
-state.  On mispredict or flush the RAS is restored from the
-FTQ snapshot of the last known-good entry.
+bp_structs_pkg.sv, each RAS_PTR_BITS=4b wide) must be
+checkpointed into the FTQ entry at the time of the prediction
+that consumed or produced the RAS state.  On mispredict or
+flush the RAS is restored from the FTQ snapshot of the last
+known-good entry.
 
-The bp_ftq_entry_t struct must include a bp_ras_snapshot_t
-field.  This is the RAS update mechanism -- not a RAM write
-but snapshot retirement.
+The bp_ftq_entry_t struct includes a bp_ras_snapshot_t field.
+This is the RAS update mechanism -- not a RAM write but
+snapshot retirement.  See ras_decisions.md section 4.
 
 #### Commit
 
@@ -509,15 +523,17 @@ speculative state is confirmed.
 
 #### Open items
 
-  RAS-1: Push timing.  Confirm whether push occurs at
-         predecode or decode.  This affects how many cycles
-         the return address is available before the
-         corresponding fetch.
-  RAS-2: Stack depth and register file size.  Not yet
-         defined in bp_defines_pkg.sv.
+  RAS-1: Push timing.  PARTIALLY RESOLVED session-050.
+         Push at s2 gated on FTB branch type. Predecode
+         early hint deferred. Close when RTL confirms s2
+         timing sufficient. See ras_decisions.md section 7.
+  RAS-2: Stack depth.  RESOLVED session-050.
+         16 speculative + 32 commit, static partition.
+         See ras_decisions.md section 3.
   RAS-3: Recovery on flush.  Flush (_px signals) is not
          yet defined.  RAS restore on flush must be
          revisited when flush is specified.
+         See ras_decisions.md section 4.4.
 
 
 ## 8. Prediction Request Distribution
@@ -598,8 +614,9 @@ being driven from either a shared or independent source.
     sc_valid, resolved_taken, cond_mispredict.
   - Add sc_pred_meta_t stub when SC is implemented.
   - Add sc_upd_inp_t stub when SC is implemented.
-  - Confirm bp_ras_snapshot_t is present (session-003
-    records it as defined -- verify fields match section 7.2).
+  - Confirm bp_ras_snapshot_t is present with tosr/tosw/bos
+    fields at RAS_PTR_BITS each (session-050: confirmed,
+    comment updated to remove linked-array reference).
   - tage_upd_inp_t and tage_pred_meta_t are retained as
     sub-struct definitions.  They are no longer used as
     top-level port types on tage.sv.
@@ -607,7 +624,8 @@ being driven from either a shared or independent source.
 ### 9.7  bp_defines_pkg.sv
   - Add TAGE arbitration parameters (section 4.2).
   - Add FTB, LP, SC, ITTAGE parameter stubs with TBD values.
-  - Add RAS stack depth parameters when RAS is specced.
+  - Add RAS stack depth parameters when RAS RTL task is
+    written. RAS_PTR_BITS already present.
 
 ### 9.8  tage_interfaces.md
   - Add section: same-entry conflict resolution (section 4.8).
@@ -720,7 +738,15 @@ being driven from either a shared or independent source.
      Confirm when LP is sized.
 
   G. RAS open items RAS-1, RAS-2, RAS-3.
-     See section 7.2.
+     See section 7.2 and planning/arch/ras_decisions.md.
+     RAS-2 (stack depth): CLOSED session-050.
+       16 speculative + 32 commit, static partition.
+       See ras_decisions.md section 3.
+     RAS-1 (push timing): PARTIALLY RESOLVED session-050.
+       Push at s2 gated on FTB branch type.
+       See ras_decisions.md section 7.
+     RAS-3 (flush recovery): OPEN. Pending flush protocol.
+       See ras_decisions.md section 4.4.
 
   H. FTB, LP, SC, ITTAGE parameter values.
      All marked TBD.  Assign before each module's
@@ -745,4 +771,21 @@ being driven from either a shared or independent source.
               TAGE section ready for RTL planning.
               Other predictors: architecture settled,
               parameters TBD.
+
+  2026-06-23  Session-050. Consistency pass.
+              Section 2 predictor inventory: RAS row updated
+              to clarify s0=TOS read only, s2=push/pop and
+              redirect participation. Override stage column
+              updated to s2.
+              Section 3.2 stage assignments: RAS entry
+              expanded to note both s0 and s2 roles.
+              Section 3.4: note added clarifying RAS s0
+              output is TOS read; push/pop at s2.
+              Section 7.2: push timing updated to s2 gated
+              on FTB branch type (RAS-1 partially resolved).
+              Snapshot field widths corrected to RAS_PTR_BITS
+              = 4b (was unstated; old linked-array reference
+              removed from struct comment in bp_structs_pkg).
+              Open item G: RAS-1/RAS-2/RAS-3 status updated.
+              References to ras_decisions.md added throughout.
 

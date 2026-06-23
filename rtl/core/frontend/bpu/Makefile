@@ -36,6 +36,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ittage_cntrl sim_ittage_cntrl \
         lint_ittage sim_ittage \
         lint_tage_cntrl lint_tage \
+        lint_ras \
         sim_tage sim_tage_fast sim_tage_tasks sim_tage_manual clean
 
 all: lint  \
@@ -46,6 +47,7 @@ all: lint  \
      lint_ittage \
      lint_tage_cntrl \
      lint_tage \
+     lint_ras \
      sim \
      sim_history \
      sim_ubtb \
@@ -268,6 +270,14 @@ lint_tage:
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
+
+lint_ras:
+	@echo "[linting]    ras"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/ras.sv $(VSILENCE)
 
 sim_tage:
 	@echo "[compiling]  tb_tage"

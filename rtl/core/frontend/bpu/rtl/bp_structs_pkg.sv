@@ -101,9 +101,11 @@ package bp_structs_pkg;
   // ----------------------------------------------------------------
 
   // RAS speculative pointer snapshot stored in FTQ fast path.
-  // Restored on mispredict flush to recover speculative stack state.
-  // No individual push/pop replay needed: full history preserved in
-  // the linked array; restoring these three pointers is sufficient.
+  // Restored on mispredict flush to recover speculative stack
+  // state. Simple circular buffer: restoring these three
+  // pointers is sufficient. No push/pop replay needed.
+  // RAS_PTR_BITS = $clog2(16) = 4b. Total snapshot = 12b.
+  // See planning/arch/ras_decisions.md section 4.
   typedef struct packed {
     logic [RAS_PTR_BITS-1:0] tosr; // top-of-stack read pointer
     logic [RAS_PTR_BITS-1:0] tosw; // top-of-stack write pointer

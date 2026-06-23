@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-11 (pa session 049)
+ UPDATED: 2026-06-23 (pa session 050)
  CONTACT: Jeff Nye
 ```
 
@@ -27,8 +27,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | decode_pkg.sv           | Complete    | --                | All decode structs               |
 | bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
 |                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
+|                         |             |                   | RAS parameters pending (session  |
+|                         |             |                   | 050 decisions; add at RTL task). |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields pending (II1).   |
+|                         |             |                   | bp_ras_snapshot_t comment        |
+|                         |             |                   | updated session-050.             |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | 12 passing                       |
 | ubtb.sv                 | Complete    | tb_ubtb           | TC1-TC10 passing.                |
@@ -142,6 +146,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |           | sim_ittage 211 pass / 0 fail      |
 |                                   |             |           | tests added BP-054.               |
 |                                   |             |           | round trip tests added in BP-055. |
+| ras_decisions.md | Draft       | --             | Created session-050.             |
+|                  |             |                | G5/G6/G8/G17 decisions recorded. |
+|                  |             |                | See BP Cluster Open TBDs.        |
 | FTB, SC, RAS     | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
@@ -351,7 +358,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | Allocation RAM-level write      |
 |    |                                        | isolation verified, selected    |
 |    |                                        | table written, other tables     |
-|    |                                        | shown unchanged                 |             
+|    |                                        | shown unchanged                 |
 | 73 | Arbitration layer behavioral test.     | PQ/UQ FIFOs + credit arbiter.   |
 |    | Deferred. Pairs with refactor #52.     | Folds in #37, #39, #40. Defer   |
 |    |                                        | until uBTB, loop, tage, ittage  |
@@ -377,7 +384,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | | the names should be t_prm_upd_index_u0 and t_alt_upd_index |
 |    | | Secondly the names of the ports of ittage_cntrl that touch the tables |
 |    | | should use the same convention as tage_cntrl, and begin with t_      |
-| 77 | scrub prompts and redact any absolute path | This is not a design TD   | 
+| 77 | scrub prompts and redact any absolute path | This is not a design TD   |
 |    | information not using the RVA_ROOT env var | more of a tools and infra |
 |    |                                            | task, possibly manual     |
 
@@ -411,16 +418,29 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 
 | ID  | Item                                  | Status                 |
 |-----|---------------------------------------|------------------------|
-| G5  | RAS commit stack entry count          | TBD at implementation  |
-| G6  | RAS recursion counter width           | TBD at implementation  |
+| G5  | RAS commit stack entry count          | RESOLVED session-050.  |
+|     |                                       | 16 spec + 32 commit,   |
+|     |                                       | static partition.      |
+|     |                                       | ras_decisions.md s3.   |
+| G6  | RAS recursion counter width           | RESOLVED session-050.  |
+|     |                                       | 4b per entry.          |
+|     |                                       | ras_decisions.md s5.   |
 | G7  | SC threshold value                    | TBD, fixed at impl     |
-| G8  | Dual pred bundle split point          | TBD at fetch interface |
+| G8  | Dual pred bundle split point          | RESOLVED session-050.  |
+|     |                                       | Fixed boundary split.  |
+|     |                                       | Slot 0: pred_pc+0:31.  |
+|     |                                       | Slot 1: pred_pc+32:63. |
+|     |                                       | ras_decisions.md s6.1. |
 | G9  | Update channel arbitration            | TBD                    |
 | G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation  |
 | G14 | Confidence counter purpose            | Reserved, 4b           |
 | G15 | Fold recompute timing concern         | Deferred               |
 | G16 | ignored labeling gap                  |                        |
-| G17 | Slot 1 PC derivation (pred_pc+32)     | TBD at fetch interface |
+| G17 | Slot 1 PC derivation (pred_pc+32)     | RESOLVED session-050.  |
+|     |                                       | Always pred_pc+32.     |
+|     |                                       | Static, not dependent  |
+|     |                                       | on slot 0 prediction.  |
+|     |                                       | ras_decisions.md s6.1. |
 | G18 | carry field consumer in cluster       | TBD at bp_cluster impl |
 | G19 | NO_BRANCH target on hit:              | TBD                    |
 |     | fall-through PC or zero?              |                        |
@@ -491,7 +511,10 @@ Key decisions for quick reference:
   mutually exclusive by branch type resolved upstream.
 - Loop overrides uBTB at s1 when trusted
 - Update policy: post-execute, not retire
-- RAS: Dual-stack, 48 entries
+- RAS: Dual-stack, static partition, 16 speculative +
+  32 commit entries. Simple circular buffer speculative
+  stack, pointer-only snapshot recovery.
+  See planning/arch/ras_decisions.md.
 - BPU is decoupled frontend, self-generates next PC
 - FTQ depth 64, split fast/slow SRAMs
 - History: GHR 256b, PHR 32b, folds recomputed on rollback
@@ -522,12 +545,17 @@ Key decisions for quick reference:
   hashes locally. Same approach adopted for ITTAGE.
 - Added tage_table_hash_rules.md as planning document.
 - Added ittage_table_hash_rules.md as planning document.
+- Dual pred bundle split: fixed boundary. Slot 0 covers
+  pred_pc+0:31, slot 1 covers pred_pc+32:63. Slot 1 PC
+  always pred_pc+32. G8/G17 RESOLVED session-050.
 
 ### Shared planning documents
     - planning/arch/bp_arb_spec.md                    In progress
         - Dynamic prediction/training arbitration balancing
     - planning/arch/bp_cluster.md                     In progress
         - Branch prediction cluster summary data
+    - planning/arch/ras_decisions.md                  Draft
+        - RAS micro-architectural decisions (session-050)
     - planning/arch/sram_init.md                      Complete
         - Post reset RAM initialization operation
     - planning/testbenches/manual_tb_decisions.md     Complete
@@ -607,6 +635,18 @@ Key decisions for quick reference:
         - ITTAGE module interface contracts
     - planning/interfaces/ittage_table_interfaces.md    Complete
         - ITTAGE table module interface contracts
+
+### RAS decomposition
+- Planning document created session-050.
+    - planning/arch/ras_decisions.md                  Draft
+        - RAS micro-architectural decisions
+- RTL not started.
+- Key decisions session-050:
+    - G5: 16 speculative + 32 commit, static partition
+    - G6: 4b recursion counter, in scope for initial design
+    - G8: fixed boundary bundle split
+    - G17: slot 1 PC always pred_pc+32
+    - Internal structure: simple circular buffer
 
 ### Shared components track
 - components/rtl  components/tb

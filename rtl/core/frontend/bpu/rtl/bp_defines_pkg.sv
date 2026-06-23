@@ -252,17 +252,21 @@ package bp_defines_pkg;
   localparam int ITTAGE_STARVE_THRESH  = 2;
 
 
-  // ================================================================
+  // ============================================================
   // :RAS parameters:
-  // ================================================================
-  // Dual-stack RAS micro-architecture.
-  // Speculative stack: persistent linked circular array.
-  // Commit stack: conventional circular stack (size TBD at impl).
-  parameter int RAS_SPEC_ENTRIES  = 48; // speculative stack depth
-  parameter int RAS_RET_ADDR_BITS = 41; // return address field width
+  // ============================================================
+  // Dual-stack RAS. Static partition: 16 speculative entries,
+  // 32 commit entries. Simple circular buffer. No linked list.
+  // See planning/arch/ras_decisions.md section 3.
+  parameter int RAS_SPEC_ENTRIES    = 16;
+  parameter int RAS_COMMIT_ENTRIES  = 32;
+  parameter int RAS_RCTR_WIDTH      = 4;
+  parameter int RAS_ADDR_WIDTH      = VA_WIDTH;
 
-  // Pointer width: $clog2(48) = 6 (2^5=32 < 48 <= 64=2^6)
-  localparam int RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES); // = 6
+  // RAS_PTR_BITS: $clog2(16) = 4
+  localparam int RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES);
+  // RAS_COMMIT_PTR_BITS: $clog2(32) = 5
+  localparam int RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES);
 
 endpackage : bp_defines_pkg
 

@@ -19,8 +19,8 @@ echo "This is the session hand off file "  >> ho
 echo "- pa_handoffs/session_handoff-$1.md" >> ho
 # -------------------------------------------------------------
 echo "" >> ho
-echo "This is CLAUDE.md" >> ho
-echo "- CLAUDE.md"       >> ho
+echo "Lastly:"     >> ho
+echo "- CLAUDE.md" >> ho
 
 echo "" >> ho
 cat planning/PROJECT_CORE.md                        >> ho

@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  UPDATED
- UPDATED: 2026-05-18
+ UPDATED: 2026-06-23
  CONTACT: Jeff Nye
 ```
 ---
@@ -121,39 +121,38 @@ Override chain (conditional branch direction and target):
          BrIMLI table. No folded history.
 
 ### RAS (Return Address Stack)
-Xiangshan Kunminghu dual-stack micro-architecture.
+Dual-stack, static partition. 16 speculative + 32 commit entries.
+See planning/arch/ras_decisions.md for full decision rationale.
 
 #### Speculative stack
-- Structure: persistent linked circular array (never overwrites entries)
-- Entries:   48
+- Structure: simple circular buffer, pointer-only snapshot recovery.
+             Linked circular array considered and rejected session-050.
+             See planning/arch/ras_decisions.md section 3.2.
+- Entries:   16
 - Entry fields:
-    ret_addr  : 41b  -- PC+2 or PC+4 of instruction after call
-                        (FTB fallThroughAddr, +2 correction for full-
-                        width RVI call truncated at prediction block end)
-    nos       : 6b   -- index of previous entry (linked chain pointer)
-    rctr      : TBD  -- recursion counter (suppresses duplicate pushes
-                        for recursive calls)
+    ret_addr  : VA_WIDTH bits -- PC+2 or PC+4 of instruction after call
+    rctr      : 4b            -- recursion counter, see ras_decisions.md
+                                 section 5
 - Pointers:
     TOSR  -- Top Of Stack Read: current top for predictions
     TOSW  -- Top Of Stack Write: next free allocation slot
     BOS   -- Bottom Of Stack: boundary of committed state
-- Push:  TOSW advances, TOSR moves to new slot, NOS set to old TOSR
-- Pop:   TOSR follows NOS of current top. No data overwritten.
-- Redirect recovery: restore (TOSR, TOSW, BOS) snapshot stored in
-  FTQ prediction metadata. Full speculative history preserved in
-  linked array -- no replay of individual operations needed.
+- Push:  write to TOSW slot, TOSR = TOSW, TOSW advances
+- Pop:   present TOSR entry as prediction, TOSR decrements.
+         No data overwritten.
+- Redirect recovery: restore (TOSR, TOSW, BOS) from FTQ snapshot.
+  Pointer-only restore; no push/pop replay needed.
 - Empty fallback: when speculative stack empty during pop, commit
-  stack top is used as prediction result without consuming the entry.
+  stack top used as prediction result without consuming the entry.
 
 #### Commit stack
 - Structure: conventional circular stack
-- Entries:   TBD (smaller than speculative stack, not fully documented
-             in Xiangshan sources -- to be determined at implementation)
-- Entry fields: ret_addr (41b), rctr
-- Pointers: ssp (stack pointer), nsp (next stack pointer)
-- Update:   when a call-containing prediction block commits from FTQ,
-            BOS in speculative stack updates to current TOSW, and
-            return address is written to commit stack top.
+- Entries:   32
+- Entry fields: ret_addr (VA_WIDTH bits), rctr (4b)
+- Pointer: CSP -- Commit Stack Pointer, points to current top
+- Update:  on call commit from FTQ, push return address, CSP
+           advances, BOS in speculative stack updated.
+           On return commit, CSP decrements.
 
 #### Pipeline stages
 - s2: reads FTB structural prediction; executes push (call) or pop
@@ -171,7 +170,7 @@ Xiangshan Kunminghu dual-stack micro-architecture.
 #### Call and return detection (RISC-V register conventions)
 - Call:   JAL, JALR, C.JALR  where rd = x1 or x5
 - Return: JALR, C.JR, C.JALR where rs1 = x1 or x5
-          (C.JALR with x5 excluded from return classification)
+          (C.JALR with rs1=x5 excluded from return classification)
 
 #### Role in JALR prediction (three-way split with FTB and ITTAGE)
 - FTB:    JALR with fixed stable target (most direct calls)
@@ -372,7 +371,8 @@ Fields:
                                    (purpose TBD)
   branch_id     : 6b            -- FTQ slot index (FTQ depth=64),
                                    serves as branch ID
-  ras           : bp_ras_snapshot_t -- TOSR, TOSW, BOS (6b each)
+  ras           : bp_ras_snapshot_t -- TOSR, TOSW, BOS (4b each,
+                                   RAS_PTR_BITS=$clog2(16))
   ghist_ptr     : 8b            -- GHR circular buffer pointer snapshot
   phist_ptr     : 5b            -- PHR circular buffer pointer snapshot
   valid         : 1b
@@ -461,6 +461,8 @@ SC index array split (BP-001):
 
 RAS snapshot bundled as bp_ras_snapshot_t sub-struct within
 bp_ftq_entry_t. Access pattern: entry.ras.tosr, .tosw, .bos.
+Pointer width: RAS_PTR_BITS = $clog2(16) = 4b each field.
+See planning/arch/ras_decisions.md section 4.
 
 FTQ entry history checkpoint (BP-002):
   ghr_snapshot (256b) removed from bp_ftq_entry_t.
@@ -495,4 +497,18 @@ writeup. Complexity drivers vs. the decoder track:
     plus cluster top, all sharing bp_pkg.sv structs)
   - Timing budget spans 3 cycles with conditional redirect paths
 Raw observations to be captured in docs/observations/ during BP work.
+
+---
+
+## Document History
+
+  2026-05-18  Session-025 baseline.
+  2026-06-23  Session-050. RAS section updated: static partition
+              decision recorded (16 spec + 32 commit). Linked-list
+              structure retained in section for reference alongside
+              new decisions; full rationale in ras_decisions.md.
+              ftq_entry_t ras field comment corrected: 6b -> 4b
+              (RAS_PTR_BITS = $clog2(16) = 4b). Settled
+              implementation details: RAS snapshot pointer width
+              noted.
 

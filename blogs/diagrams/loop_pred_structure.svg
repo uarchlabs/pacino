@@ -1,0 +1,176 @@
+<svg viewBox="0 0 780 500" xmlns="http://www.w3.org/2000/svg" style="background:#fff">
+  <defs>
+    <marker id="arr" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5 Z" fill="#444"/>
+    </marker>
+    <marker id="arr-g" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5 Z" fill="#15803d"/>
+    </marker>
+    <marker id="arr-r" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <path d="M0,0 L7,2.5 L0,5 Z" fill="#dc2626"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="390" y="16" text-anchor="middle" font-family="monospace" font-size="13" font-weight="bold" fill="#111">Loop Predictor: Prediction and Update Paths</text>
+  <text x="390" y="30" text-anchor="middle" font-family="monospace" font-size="10" fill="#666">256 entries -- 64 sets -- 4 ways -- NUM_PRED_SLOTS parameterized</text>
+
+  <!-- Stage labels (prediction) -->
+  <rect x="2" y="42" width="28" height="46" rx="3" fill="#e0e7ff" stroke="#6366f1" stroke-width="1"/>
+  <text x="16" y="60" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#4338ca">s0</text>
+  <text x="16" y="74" text-anchor="middle" font-family="monospace" font-size="8" fill="#6366f1">PC in</text>
+  <text x="16" y="84" text-anchor="middle" font-family="monospace" font-size="8" fill="#6366f1">addr</text>
+
+  <rect x="2" y="102" width="28" height="46" rx="3" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+  <text x="16" y="120" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">s1</text>
+  <text x="16" y="134" text-anchor="middle" font-family="monospace" font-size="8" fill="#059669">pred</text>
+  <text x="16" y="144" text-anchor="middle" font-family="monospace" font-size="8" fill="#059669">out</text>
+
+  <!-- ── PREDICTION PATH ── -->
+
+  <!-- pred_pc input label -->
+  <text x="35" y="58" font-family="monospace" font-size="10" fill="#333">pred_pc_p0</text>
+  <text x="35" y="70" font-family="monospace" font-size="9" fill="#888">[VA_WIDTH-1:0]</text>
+  <text x="35" y="80" font-family="monospace" font-size="9" fill="#888">pred_valid_p0</text>
+  <line x1="100" y1="65" x2="118" y2="65" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Index / Tag Derivation -->
+  <rect x="120" y="40" width="152" height="80" rx="3" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="196" y="59" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#3730a3">Index / Tag</text>
+  <text x="196" y="73" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#3730a3">Derivation</text>
+  <line x1="130" y1="79" x2="262" y2="79" stroke="#6366f1" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="196" y="93" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">idx = hash(PC)[5:0]</text>
+  <text x="196" y="107" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">tag = hash(PC)[13:0]</text>
+
+  <!-- Arrow from Idx/Tag to SRAM -->
+  <line x1="272" y1="80" x2="290" y2="80" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- SRAM Array: y=36, h=192, bottom=228 -->
+  <rect x="292" y="36" width="180" height="192" rx="3" fill="#f0fdf4" stroke="#15803d" stroke-width="2"/>
+  <text x="382" y="56" text-anchor="middle" font-family="monospace" font-size="11" font-weight="bold" fill="#14532d">SRAM Array</text>
+  <text x="382" y="70" text-anchor="middle" font-family="monospace" font-size="10" fill="#555">64 sets x 4 ways</text>
+  <line x1="302" y1="77" x2="462" y2="77" stroke="#15803d" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="382" y="92" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">lp_entry_t per slot</text>
+  <text x="382" y="106" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">see entry field diagram</text>
+  <line x1="302" y1="113" x2="462" y2="113" stroke="#15803d" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="382" y="128" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">s0: idx presented</text>
+  <text x="382" y="142" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">s1: all 4 ways read out</text>
+  <text x="382" y="156" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">    (combinational from</text>
+  <text x="382" y="170" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">     registered mem[])</text>
+  <line x1="302" y1="177" x2="462" y2="177" stroke="#15803d" stroke-width="0.8" stroke-dasharray="4,3"/>
+  <text x="382" y="191" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">sync write; comb read</text>
+  <text x="382" y="205" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">no bypass on rdw conflict</text>
+  <text x="382" y="218" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">pre-upd state seen at s1</text>
+
+  <!-- Arrow from SRAM to Hit Detect -->
+  <line x1="472" y1="80" x2="490" y2="80" stroke="#444" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- Hit Detection / Victim block: y=36, h=192, bottom=228 -->
+  <rect x="492" y="36" width="188" height="192" rx="3" fill="#d1fae5" stroke="#059669" stroke-width="1.5"/>
+  <text x="586" y="55" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#065f46">Hit Detect + Victim (s1)</text>
+  <line x1="502" y1="61" x2="670" y2="61" stroke="#059669" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="586" y="75" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">scan 4 ways high->low</text>
+  <text x="586" y="89" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">v &amp;&amp; tag==req_tag</text>
+  <line x1="502" y1="97" x2="670" y2="97" stroke="#059669" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="586" y="111" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">hit: any_hit=1, hit_way</text>
+  <text x="586" y="125" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">     capture hit_entry</text>
+  <text x="586" y="139" text-anchor="middle" font-family="monospace" font-size="9" fill="#c2410c">miss: any_hit=0</text>
+  <line x1="502" y1="147" x2="670" y2="147" stroke="#059669" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="586" y="161" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">victim priority:</text>
+  <text x="586" y="175" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">1. lowest invalid way</text>
+  <text x="586" y="189" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">2. lowest zero-age way</text>
+  <text x="586" y="203" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">3. way with age &lt; way[0]</text>
+  <text x="586" y="216" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">   (else way 0)</text>
+
+  <!-- pred_p0 output register: y=238, h=120, bottom=358 -->
+  <rect x="492" y="238" width="188" height="120" rx="3" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5"/>
+  <text x="586" y="257" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#14532d">pred_p0 output reg</text>
+  <text x="586" y="271" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">(clocked s0->s1)</text>
+  <line x1="502" y1="277" x2="670" y2="277" stroke="#16a34a" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="586" y="291" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">lp_idx, lp_tag, lp_way</text>
+  <text x="586" y="305" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">lp_hit, lp_pred_is_loop</text>
+  <text x="586" y="319" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">lp_pred_taken</text>
+  <text x="586" y="333" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">age, conf, past_itr</text>
+  <text x="586" y="347" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">curr_itr, curs, curs_v</text>
+  <text x="586" y="358" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">lp_victim (alloc target)</text>
+
+  <!-- Arrow: hit detect -> pred_p0 reg -->
+  <line x1="586" y1="228" x2="586" y2="236" stroke="#15803d" stroke-width="1.5" marker-end="url(#arr-g)"/>
+
+  <!-- pred_is_loop note box: y=36, h=90, bottom=126 -->
+  <rect x="690" y="36" width="84" height="90" rx="3" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="732" y="54" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#065f46">pred_is_loop</text>
+  <text x="732" y="68" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">1 when:</text>
+  <text x="732" y="82" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">any_hit &amp;&amp;</text>
+  <text x="732" y="96" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">conf==max &amp;&amp;</text>
+  <text x="732" y="110" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">pred_valid</text>
+  <line x1="680" y1="80" x2="688" y2="80" stroke="#15803d" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- pred_taken note box: y=140, h=76, bottom=216 -->
+  <rect x="690" y="140" width="84" height="76" rx="3" fill="#f0fdf4" stroke="#86efac" stroke-width="1"/>
+  <text x="732" y="157" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#065f46">pred_taken</text>
+  <text x="732" y="172" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">1 when:</text>
+  <text x="732" y="186" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">pred_is_loop &amp;&amp;</text>
+  <text x="732" y="200" text-anchor="middle" font-family="monospace" font-size="9" fill="#333">curr_itr &lt; past_itr</text>
+  <line x1="680" y1="165" x2="688" y2="165" stroke="#15803d" stroke-width="1" stroke-dasharray="3,2"/>
+
+  <!-- ── DIVIDER: y=370 (below green box bottom=358 + 12 gap) ── -->
+  <line x1="32" y1="370" x2="756" y2="370" stroke="#94a3b8" stroke-width="1" stroke-dasharray="6,4"/>
+  <rect x="120" y="375" width="548" height="28" rx="3" fill="#fef3c7" stroke="#d97706" stroke-width="1"/>
+  <text x="394" y="387" text-anchor="middle" font-family="monospace" font-size="9" fill="#78350f">Read-during-write: upd_p0.pc and pred_pc_p0 index same set same cycle -- pred reflects pre-update state.</text>
+  <text x="394" y="399" text-anchor="middle" font-family="monospace" font-size="9" fill="#78350f">New entry visible next cycle. No bypass. (loop_pred_interfaces.md: Read-during-write contract)</text>
+
+  <!-- ── UPDATE PATH: top at y=413 ── -->
+  <rect x="2" y="413" width="28" height="56" rx="3" fill="#fee2e2" stroke="#dc2626" stroke-width="1"/>
+  <text x="16" y="431" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#991b1b">upd</text>
+  <text x="16" y="445" text-anchor="middle" font-family="monospace" font-size="8" fill="#dc2626">post-</text>
+  <text x="16" y="456" text-anchor="middle" font-family="monospace" font-size="8" fill="#dc2626">exec</text>
+  <text x="16" y="467" text-anchor="middle" font-family="monospace" font-size="8" fill="#dc2626">async</text>
+
+  <!-- upd signals -->
+  <text x="35" y="416" font-family="monospace" font-size="10" fill="#333">upd_valid_p0</text>
+  <text x="35" y="430" font-family="monospace" font-size="10" fill="#333">upd_p0.pc</text>
+  <text x="35" y="444" font-family="monospace" font-size="10" fill="#333">upd_p0.target</text>
+  <text x="35" y="458" font-family="monospace" font-size="10" fill="#333">upd_p0.actual_taken</text>
+  <text x="35" y="472" font-family="monospace" font-size="10" fill="#333">upd_p0.lp_pred_is_loop</text>
+  <text x="35" y="484" font-family="monospace" font-size="9" fill="#888">(+ all lp_pred_t fields)</text>
+  <line x1="115" y1="452" x2="133" y2="452" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr-r)"/>
+
+  <!-- Update Entry Compute: y=408, h=88, bottom=496 -->
+  <rect x="135" y="408" width="152" height="88" rx="3" fill="#fee2e2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="211" y="425" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#991b1b">Update Entry</text>
+  <text x="211" y="439" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#991b1b">Compute (comb)</text>
+  <line x1="145" y1="445" x2="277" y2="445" stroke="#dc2626" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="211" y="459" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">upd_entry_hit or</text>
+  <text x="211" y="473" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">upd_entry_alloc</text>
+  <text x="211" y="487" text-anchor="middle" font-family="monospace" font-size="9" fill="#888">(see cond table)</text>
+
+  <!-- Arrow to Synchronous Write -->
+  <line x1="287" y1="452" x2="305" y2="452" stroke="#dc2626" stroke-width="1.5" marker-end="url(#arr-r)"/>
+
+  <!-- Synchronous Write: y=408, h=88, bottom=496 -->
+  <rect x="307" y="408" width="202" height="88" rx="3" fill="#fff1f2" stroke="#dc2626" stroke-width="1.5"/>
+  <text x="408" y="425" text-anchor="middle" font-family="monospace" font-size="10" font-weight="bold" fill="#991b1b">Synchronous Write</text>
+  <line x1="317" y1="431" x2="499" y2="431" stroke="#dc2626" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="408" y="446" text-anchor="middle" font-family="monospace" font-size="9" fill="#166534">hit (pred_is_loop or lp_hit):</text>
+  <text x="408" y="460" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">  write upd_entry_hit to mem[idx][way]</text>
+  <line x1="317" y1="467" x2="499" y2="467" stroke="#dc2626" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="408" y="482" text-anchor="middle" font-family="monospace" font-size="9" fill="#c2410c">miss + backward branch:</text>
+  <text x="408" y="492" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">  write upd_entry_alloc to mem[idx][victim]</text>
+
+  <!-- write feedback arrow to SRAM -->
+  <line x1="382" y1="496" x2="382" y2="228" stroke="#dc2626" stroke-width="1" stroke-dasharray="2,2" marker-end="url(#arr-r)"/>
+  <text x="378" y="480" text-anchor="end" font-family="monospace" font-size="8" fill="#dc2626">write</text>
+
+  <!-- Condition table: y=408, h=88, bottom=496 -->
+  <rect x="519" y="408" width="234" height="88" rx="3" fill="#f8fafc" stroke="#94a3b8" stroke-width="1"/>
+  <text x="636" y="424" text-anchor="middle" font-family="monospace" font-size="9" font-weight="bold" fill="#334155">Update conditions (priority order)</text>
+  <line x1="529" y1="430" x2="743" y2="430" stroke="#94a3b8" stroke-width="0.8" stroke-dasharray="3,2"/>
+  <text x="636" y="443" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">1. mispredict exit: reset conf, curr_itr</text>
+  <text x="636" y="455" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">2. taken + hit: incr curr_itr [, curs]</text>
+  <text x="636" y="467" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">3. hit, not trusted, taken: incr curr_itr</text>
+  <text x="636" y="479" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">4. correct exit (curr==past): incr conf</text>
+  <text x="636" y="491" text-anchor="middle" font-family="monospace" font-size="9" fill="#555">5. wrong exit (curr!=past): reset conf</text>
+
+</svg>
+
