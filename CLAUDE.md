@@ -71,6 +71,9 @@ production-quality outputs.
 - When writing Results Capture, write only within the
   :: RESULTS:START :: :: RESULTS:END :: markers. Do not
   modify any content outside these markers.
+  The sole exception is the Model header field, 
+  which the IA populates per "Model Reporting in Task Files" below.
+
 - Results Capture content must be ASCII only. No Unicode.
 - Final console output should avoid non-ASCII if possible.
   This is a preference but not a hard requirement.

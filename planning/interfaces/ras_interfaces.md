@@ -367,6 +367,17 @@ push->pop and pop->push within one p2/p3 pair cannot occur.
 Repair applies to the speculative stack only.
 See ras_decisions.md section 1 (s2/s3 repair table).
 
+Repair semantics: the push/pop labels denote stack-height
+restoration of resident entries, not fresh allocation or array
+clear. Undo-pop (p2=pop, p3=no-op) and undo-push (p2=push,
+p3=no-op) move TOSR over still-resident entries with no array
+write (undo-push decrements an in-place recursion count when
+present). Only the missed-push case (p2=no-op, p3=push)
+allocates and writes a new frontier entry. Undo-pop does NOT
+reverse a recursion-decrement pop (TOSR held, rctr decremented):
+the re-expose moves TOSR by a slot and the decremented count is
+not recovered. See TD #78 and tb_ras TC-21.
+
 ### IC-RAS-12: Producer obligations (bp_cluster / FTQ)
 
 - Must gate ras_pred_val_p2[s] on FTB result valid.

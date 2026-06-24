@@ -7,11 +7,12 @@
 // DATE:    2026-06-23
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
-// Self-checking testbench for ras.sv (BP-063).
+// Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-20 from the BP-063 prompt. Each case is
-// self-contained: it resets, seeds any required state explicitly, and
-// does not rely on state left by a prior case.
+// Directed cases TC-01 .. TC-21. TC-01 .. TC-20 from BP-063; TC-21
+// (BP-064) pins TD #78 (undo-pop does not reverse a recursion pop).
+// Each case is self-contained: it resets, seeds any required state
+// explicitly, and does not rely on state left by a prior case.
 //
 // Pointer model (post BP-063 fix): the BOS index is a sentinel. A
 // push that would allocate on BOS (cold-start, or full wrap) skips to
@@ -536,6 +537,51 @@ module tb;
     commit_op(RETURN, '0, 4'd0);            // clear commit
     #1;
     check("TC-20 deasserted when both empty", tos_valid_p0[0] == 1'b0);
+
+    // =============================================================
+    // TC-21: TD #78 pin -- undo-pop does NOT reverse a recursion
+    // pop. Seed a recursion entry so the p2 pop is a recursion-
+    // decrement (TOSR held, rctr decremented) rather than a TOSR-
+    // moving pop. The p3 undo-pop re-expose then moves TOSR up a
+    // slot (re-exposing a stale/empty frontier slot) instead of
+    // restoring the lost recursion count at the held slot. This
+    // pins the CURRENT non-reversing behavior; it is not a fix.
+    // Modeled on TC-17 but with a recursion-decrement pop in p2.
+    // See ras_decisions.md section 1.2 and PROJECT_STATUS TD #78.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_A);                       // idx1, rctr=0, tosw=2
+    // Second push of ADDR_A -> recursion: rctr[1] 0->1, TOSR holds.
+    drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-21 pins TD #78: seeded recursion rctr[1]==1",
+          dut.spec_rctr[1] == 4'd1);
+    check("TC-21 pins TD #78: seeded tosr==1 (recursion holds top)",
+          dut.tosr == 4'd1);
+    // p2 RETURN with p3 agreeing (drive) -> recursion-decrement pop:
+    // rctr[1] 1->0, TOSR holds at 1 (TOSR not moved by this pop).
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-21 pins TD #78: recursion pop decremented rctr[1] 1->0",
+          dut.spec_rctr[1] == 4'd0);
+    check("TC-21 pins TD #78: recursion pop held tosr at 1",
+          dut.tosr == 4'd1);
+    // Repair cycle: p2 idle, p3 forced no-op so it disagrees with the
+    // registered OP_POP -> undo-pop re-expose fires.
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    // NON-reversing outcome: the pre-pop recursion state is NOT
+    // recovered. The re-expose moves TOSR up a slot (1 -> 2) and does
+    // not restore the decremented recursion count at the held slot.
+    check("TC-21 pins TD #78: rctr[1] NOT restored, stays 0 (count lost)",
+          dut.spec_rctr[1] == 4'd0);
+    check("TC-21 pins TD #78: undo-pop moved tosr to 2, not restored to 1",
+          dut.tosr == 4'd2);
+    check("TC-21 pins TD #78: tosw held at 2 (no allocation on re-expose)",
+          dut.tosw == 4'd2);
+    check("TC-21 pins TD #78: re-exposed top idx2 is empty (0), not ADDR_A",
+          dut.spec_ret_addr[2] == '0);
 
     // -------------------------------------------------------------
     $display("=================================================");

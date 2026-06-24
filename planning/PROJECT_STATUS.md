@@ -27,12 +27,17 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | decode_pkg.sv           | Complete    | --                | All decode structs               |
 | bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
 |                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
-|                         |             |                   | RAS parameters pending (session  |
-|                         |             |                   | 050 decisions; add at RTL task). |
+|                         |             |                   | RAS params added BP-062:         |
+|                         |             |                   | RAS_SPEC_ENTRIES=16,             |
+|                         |             |                   | RAS_COMMIT_ENTRIES=32,           |
+|                         |             |                   | RAS_RCTR_WIDTH=4, RAS_PTR_BITS=4,|
+|                         |             |                   | RAS_COMMIT_PTR_BITS=5.           |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields pending (II1).   |
 |                         |             |                   | bp_ras_snapshot_t comment        |
 |                         |             |                   | updated session-050.             |
+|                         |             |                   | tb_bp_pkg.sv 6->4b literal fix   |
+|                         |             |                   | (BP-062, authorized).            |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | 12 passing                       |
 | ubtb.sv                 | Complete    | tb_ubtb           | TC1-TC10 passing.                |
@@ -148,8 +153,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |           | round trip tests added in BP-055. |
 | ras_decisions.md | Draft       | --             | Created session-050.             |
 |                  |             |                | G5/G6/G8/G17 decisions recorded. |
+|                  |             |                | Reconciled to RTL BP-064         |
+|                  |             |                | (sec 1/1.2, 3.2, 3.3/4.5).       |
 |                  |             |                | See BP Cluster Open TBDs.        |
-| FTB, SC, RAS     | Not started | --             | Later BP sessions                |
+| ras_interfaces.md| Draft       | --             | Created session-050. IC-RAS-11   |
+|                  |             |                | repair semantics appended BP-064.|
+| ras.sv           | Complete    | tb_ras         | RTL BP-062, tb BP-063. sim_ras   |
+|                  |             |                | 87/0 this session (BP-064).      |
+|                  |             |                | TD #78 pinned (TC-21); TD #79    |
+|                  |             |                | (commit_rctr) deferred.          |
+| FTB, SC          | Not started | --             | Later BP sessions                |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
 
@@ -670,7 +683,14 @@ Key decisions for quick reference:
 - Planning document created session-050.
     - planning/arch/ras_decisions.md                  Draft
         - RAS micro-architectural decisions
-- RTL not started.
+    - planning/interfaces/ras_interfaces.md           Draft
+        - RAS module interface contracts
+- RTL available:
+    - rtl/ras.sv                   complete (BP-062)
+    - tb/tb_ras.sv                 complete (BP-063)
+    - sim_ras 87/0 (BP-064 this session)
+    - TD #78 pinned (tb_ras TC-21), TD #79 (commit_rctr)
+      deferred -- see PROJECT_STATUS Technical Debt.
 - Key decisions session-050:
     - G5: 16 speculative + 32 commit, static partition
     - G6: 4b recursion counter, in scope for initial design

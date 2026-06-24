@@ -39,6 +39,29 @@ s2/s3 repair table:
   s2=no-op, s3=push  -> repair: push
 Note: push->pop and pop->push within one s2/s3 pair cannot occur.
 
+Repair label semantics: the push/pop labels above denote
+stack-height restoration of resident entries, not fresh
+allocation or array clear.
+  - s2=push, s3=no-op (undo-push): TOSR retract of the
+    still-resident frontier slot. If that slot carried a
+    recursion count the count is decremented in place;
+    otherwise TOSR moves back one slot. The array entry is
+    not cleared.
+  - s2=pop, s3=no-op (undo-pop): TOSR re-expose. TOSR moves
+    back up one slot to re-expose the still-resident entry the
+    pop uncovered. No array write, TOSW held.
+  - s2=no-op, s3=pop (missed pop): same TOSR retract as
+    undo-push.
+  - s2=no-op, s3=push (missed push): the only case that
+    allocates and writes. The registered fallthrough is
+    written at the frontier and TOSW advances.
+
+Limitation (TD #78): undo-pop re-expose does NOT reverse a
+recursion-decrement pop. A pop that only decremented the
+recursion counter (TOSR held) leaves no recoverable pre-pop
+count; the re-expose moves TOSR by a slot instead. Pinned by
+tb_ras TC-21. See PROJECT_STATUS TD #78.
+
 RAS does not generate a redirect signal in the same sense as
 TAGE or SC. It provides the initial s0 prediction (TOS read)
 and participates in the s2 redirect when FTB disagrees with
@@ -62,7 +85,11 @@ s2_redirect: fires when FTB/TAGE/RAS result disagrees with
 
 s3_redirect: RAS s3 = s2 registered. Stack repair applied at
   s3 if s3 structural prediction disagrees with s2 (see repair
-  table above).
+  table above). The repair restores stack height of resident
+  entries; it does not allocate (except the missed-push case)
+  or clear the array. Undo-pop does not reverse a recursion-
+  decrement pop (TD #78). See the repair label semantics in
+  section 1.
 
 ---
 
@@ -147,13 +174,21 @@ Pointers (all RAS_PTR_BITS wide, $clog2(RAS_SPEC_ENTRIES)=4b):
   BOS   -- Bottom Of Stack: boundary of committed state
 
 Push: write ret_addr and rctr to TOSW slot. TOSR = TOSW.
-      TOSW advances to next slot.
+      TOSW advances to next slot. The BOS index is a permanent
+      sentinel: a push that would land TOSW on BOS allocates at
+      BOS+1 instead. This occurs at cold-start after reset, or on
+      a full circular wrap. The sentinel keeps a single live
+      entry distinguishable from empty.
 Pop:  present TOSR entry as prediction. TOSR decrements.
       No data overwritten on pop.
 
 Empty condition: TOSR == BOS. On pop when empty, fall through
 to commit stack top as prediction result. Commit stack entry
 is not consumed (read-only fallback).
+
+Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
+(16 physical). One slot is always reserved as the BOS sentinel
+so that empty (TOSR == BOS) is never aliased by a full stack.
 
 Overflow condition: TOSW + 1 == BOS (mod 16). On overflow,
 oldest speculative entry is silently dropped (circular wrap).
@@ -175,11 +210,14 @@ Pointer:
 
 Update: when a call-containing prediction block commits from
 the FTQ, the return address is pushed onto the commit stack
-and CSP advances. BOS in the speculative stack is updated to
-reflect the new committed boundary.
+and CSP advances. BOS in the speculative stack advances to the
+committing entry's post-op TOSR (ras_commit_snapshot.tosr),
+marking the new committed boundary. A mispredict restore in the
+same cycle wins over commit for BOS (restore > commit > hold).
 
 On commit of a return: CSP decrements. The commit stack entry
-is consumed.
+is consumed. BOS likewise advances to the committing entry's
+post-op TOSR (ras_commit_snapshot.tosr).
 
 Overflow condition: CSP + 1 == CSP_base (mod 32). Oldest
 committed entry silently dropped. Same graceful degradation
@@ -235,8 +273,11 @@ See bp_arb_spec.md section 11 item G.
 ### 4.5  Commit
 
 On FTQ entry commit: the speculative entry is confirmed. BOS
-advances to match the committed boundary. No RAM write occurs.
-Commit stack is updated as described in section 3.3.
+advances to the committing entry's post-op TOSR
+(ras_commit_snapshot.tosr). No speculative RAM write occurs.
+A mispredict restore in the same cycle wins over commit for BOS
+(restore > commit > hold). Commit stack is updated as described
+in section 3.3.
 
 ---
 
