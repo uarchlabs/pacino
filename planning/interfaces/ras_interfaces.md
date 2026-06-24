@@ -16,6 +16,13 @@ and planning/arch/bp_arb_spec.md section 7.2 (arbitration role).
 Claude Code loads this file when implementing or modifying ras.sv
 or tb_ras.sv.
 
+Note on stage notation: planning documents use s-stage notation
+(s0/s1/s2/s3). RTL and port names use p-stage notation
+(p0/p1/p2/p3). They are equivalent: s0=p0, s1=p1, s2=p2, s3=p3.
+Port names in this document use p-stage notation to match RTL.
+Narrative text uses s-stage notation to match planning documents.
+Cleanup of this inconsistency is a future documentation task.
+
 ---
 
 ## 1. Module Overview
@@ -23,12 +30,14 @@ or tb_ras.sv.
 Single module ras.sv owns:
 - Speculative stack (16 entries, simple circular buffer)
 - Commit stack (32 entries, conventional circular stack)
-- Push/pop logic for both slots in a single cycle
+- Push/pop logic for both prediction slots in a single cycle
 - Same-cycle bypass for slot0=call, slot1=return case
 - Recursion counter management
+- p0/s0 TOS read for initial prediction
 - Snapshot output per prediction for FTQ storage
 - Restore input from FTQ on mispredict
 - Commit stack update on FTQ commit
+- p3/s3 repair logic
 
 No PQ, UQ, or credit arbiter. No synchronous SRAMs.
 Both stacks are register files.
@@ -36,7 +45,9 @@ Both stacks are register files.
 RAS is outside the conditional branch override chain. It is
 type-gated: push fires when br_type==DIRECT_CALL or
 INDIRECT_CALL; pop fires when br_type==RETURN. All other
-branch types produce no RAS action.
+branch types produce no RAS action. Branch type classification
+is the responsibility of FTB; RAS does not classify
+instructions independently.
 
 ---
 
@@ -58,145 +69,181 @@ widths, or counter widths.
 
 ---
 
-## 3. Port List
+## 3. Port Naming Convention
 
-Module declaration:
+Signal names follow the pattern:
+  <signal>_<pipestage>
 
-  module ras (
-    input  logic clk,
-    input  logic rstn,
-    ...
-  );
+  pipestage: p0, p1, p2 for prediction path.
+             p3 for s3 repair.
+             u0, u1 for update/commit path.
+             px for flush signals (not yet defined).
 
-### 3.1  Prediction inputs (s2, one per slot)
+Prediction slot dimension uses array index [0:NUM_PRED_SLOTS-1]
+on the signal, not a suffix. Example:
 
-These arrive at s2 when FTB structural prediction is valid.
-Branch type is provided by FTB; RAS does not classify
-instructions independently.
+  input  logic  ras_pred_val_p2[0:NUM_PRED_SLOTS-1]
 
-  // Slot 0
-  input  logic                     s2_pred_val_p0,
-  input  bp_br_type_e              s2_br_type_p0,
-  input  logic [VA_WIDTH-1:0]      s2_pc_p0,
-
-  // Slot 1
-  input  logic                     s2_pred_val_p1,
-  input  bp_br_type_e              s2_br_type_p1,
-  input  logic [VA_WIDTH-1:0]      s2_pc_p1,
-
-s2_pred_val: asserted when the FTB result for this slot is
-valid and should be acted on. RAS push/pop is gated on this.
-
-s2_pc: PC of the call or return instruction. Used to compute
-ret_addr = s2_pc + 2 (RVC) or s2_pc + 4 (RVI). The RAS
-uses the FTB fallThroughAddr rather than computing this
-independently; see section 5.1.
-
-### 3.2  Return address inputs (s2, one per slot)
-
-FTB provides the fallthrough address (PC+2 or PC+4) for
-each slot. RAS pushes this value directly without
-independent computation.
-
-  input  logic [VA_WIDTH-1:0]      s2_fall_through_p0,
-  input  logic [VA_WIDTH-1:0]      s2_fall_through_p1,
-
-### 3.3  Prediction outputs (s2, one per slot)
-
-  // Slot 0 pop result (return target prediction)
-  output logic [VA_WIDTH-1:0]      s2_pop_addr_p0,
-  output logic                     s2_pop_valid_p0,
-
-  // Slot 1 pop result (return target prediction)
-  output logic [VA_WIDTH-1:0]      s2_pop_addr_p1,
-  output logic                     s2_pop_valid_p1,
-
-s2_pop_addr: the predicted return target. Valid when
-s2_pop_valid is asserted. Used by the s2_redirect logic
-when br_type==RETURN and FTB/uBTB target disagrees.
-
-s2_pop_valid: asserted when a valid return address is
-available. Deasserted when the speculative stack is empty
-and the commit stack fallback is also empty.
-
-### 3.4  Snapshot output (s2, one per slot)
-
-Written into the FTQ entry at prediction time. One snapshot
-per slot per prediction cycle.
-
-  output bp_ras_snapshot_t         s2_snapshot_p0,
-  output bp_ras_snapshot_t         s2_snapshot_p1,
-
-bp_ras_snapshot_t carries post-operation pointer state
-(post-push for calls, post-pop for returns, unchanged for
-neither). See ras_decisions.md section 4.2.
-
-Snapshot fields (from bp_structs_pkg.sv):
-  tosr : RAS_PTR_BITS  -- post-op speculative TOS read
-  tosw : RAS_PTR_BITS  -- post-op speculative TOS write
-  bos  : RAS_PTR_BITS  -- committed boundary (unchanged
-                          until commit)
-
-### 3.5  Mispredict restore input
-
-Driven by the FTQ when a mispredict redirect is processed.
-Restores the speculative stack to the state captured at the
-mispredicted entry's prediction time.
-
-  input  logic                     restore_val,
-  input  bp_ras_snapshot_t         restore_snapshot,
-
-restore_val: asserted for one cycle when a mispredict
-restore is required. RAS latches the snapshot on this cycle.
-
-restore_snapshot: the bp_ras_snapshot_t from the FTQ entry
-of the mispredicted prediction. Provides tosr, tosw, bos.
-
-Only pointer state is restored. Circular buffer data is not
-cleared. See ras_decisions.md section 4.3.
-
-### 3.6  Commit inputs
-
-Driven by the FTQ when a prediction block commits.
-
-  input  logic                     commit_val,
-  input  bp_br_type_e              commit_br_type,
-  input  logic [VA_WIDTH-1:0]      commit_ret_addr,
-  input  bp_ras_snapshot_t         commit_snapshot,
-
-commit_val: asserted when a committed FTQ entry contains
-a call or return. Ignored for all other branch types.
-
-commit_br_type: branch type of the committing instruction.
-RAS acts on DIRECT_CALL, INDIRECT_CALL (push commit stack),
-and RETURN (pop commit stack).
-
-commit_ret_addr: return address to push onto commit stack
-on a call commit. Sourced from the FTQ entry's stored
-fallthrough address.
-
-commit_snapshot: the snapshot from the committing FTQ
-entry. Used to advance BOS in the speculative stack to
-reflect the new committed boundary.
-
-### 3.7  Flush input
-
-Not yet defined. Placeholder port reserved.
-
-  input  logic                     flush_val,
-  input  bp_ras_snapshot_t         flush_snapshot,
-
-See ras_decisions.md section 4.4 (RAS-3 OPEN).
+clk and rstn carry no pipe stage suffix.
 
 ---
 
-## 4. Interface Contracts
+## 4. Port List
+
+```systemverilog
+module ras (
+  input  logic clk,
+  input  logic rstn,
+
+  // ----------------------------------------------------------
+  // p0/s0: TOS read -- initial prediction before FTB result.
+  // Combinational read of current TOSR entry per slot.
+  // Driven to the FTQ/uBTB path as the earliest available
+  // return target. No push or pop at p0.
+  // ----------------------------------------------------------
+  output logic [VA_WIDTH-1:0] ras_tos_addr_p0[0:NUM_PRED_SLOTS-1],
+  output logic                ras_tos_valid_p0[0:NUM_PRED_SLOTS-1],
+
+  // ----------------------------------------------------------
+  // p2/s2: Prediction inputs
+  // FTB structural prediction valid. Push/pop gates on these.
+  // ----------------------------------------------------------
+  input  logic          ras_pred_val_p2[0:NUM_PRED_SLOTS-1],
+  input  bp_br_type_e   ras_br_type_p2[0:NUM_PRED_SLOTS-1],
+
+  // FTB fallthrough address per slot.
+  // Pushed as ret_addr on call. RAS does not compute PC+2/+4.
+  input  logic [VA_WIDTH-1:0] ras_fall_through_p2[0:NUM_PRED_SLOTS-1],
+
+  // ----------------------------------------------------------
+  // p2/s2: Prediction outputs
+  // ----------------------------------------------------------
+  // Pop address (return target prediction) per slot.
+  output logic [VA_WIDTH-1:0] ras_pop_addr_p2[0:NUM_PRED_SLOTS-1],
+  // Asserted when a valid pop address is available.
+  // Deasserted when both speculative and commit stacks empty.
+  output logic                ras_pop_valid_p2[0:NUM_PRED_SLOTS-1],
+
+  // RAS snapshot per slot for FTQ fast-path write.
+  // Post-operation pointer state (see IC-RAS-08).
+  output bp_ras_snapshot_t    ras_snapshot_p2[0:NUM_PRED_SLOTS-1],
+
+  // ----------------------------------------------------------
+  // p3/s3: Repair inputs
+  // Registered FTB prediction, one cycle after p2.
+  // Used to detect and undo incorrect p2 push/pop.
+  // See IC-RAS-11 and ras_decisions.md section 1.
+  // ----------------------------------------------------------
+  input  logic          ras_pred_val_p3[0:NUM_PRED_SLOTS-1],
+  input  bp_br_type_e   ras_br_type_p3[0:NUM_PRED_SLOTS-1],
+
+  // ----------------------------------------------------------
+  // Mispredict restore (driven by FTQ)
+  // ----------------------------------------------------------
+  input  logic             ras_restore_val,
+  input  bp_ras_snapshot_t ras_restore_snapshot,
+
+  // ----------------------------------------------------------
+  // Commit inputs (driven by FTQ at retire)
+  // One commit event per cycle. FTQ retires one entry per
+  // cycle; dual-slot commit is not required.
+  // ----------------------------------------------------------
+  input  logic                ras_commit_val,
+  input  bp_br_type_e         ras_commit_br_type,
+  input  logic [VA_WIDTH-1:0] ras_commit_ret_addr,
+  input  bp_ras_snapshot_t    ras_commit_snapshot,
+
+  // ----------------------------------------------------------
+  // Flush (reserved, behavior TBD)
+  // ----------------------------------------------------------
+  input  logic             ras_flush_val,
+  input  bp_ras_snapshot_t ras_flush_snapshot
+);
+```
+
+---
+
+## 5. Struct Definitions
+
+All structs defined in bp_structs_pkg.sv.
+
+### bp_br_type_e
+
+Branch type enum. RAS acts on:
+  DIRECT_CALL, INDIRECT_CALL -- push trigger
+  RETURN                     -- pop trigger
+  All other values: no RAS action.
+
+### bp_ras_snapshot_t
+
+Packed struct, 3 * RAS_PTR_BITS wide:
+  tosr : RAS_PTR_BITS  -- speculative TOS read pointer
+  tosw : RAS_PTR_BITS  -- speculative TOS write pointer
+  bos  : RAS_PTR_BITS  -- committed boundary pointer
+
+With RAS_PTR_BITS=4: total 12b per snapshot.
+Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos
+
+---
+
+## 6. Prediction Interface
+
+### Producer: FTB (branch type and fallthrough address)
+### Consumer: RAS
+
+### Timing
+
+```
+p0/s0: Combinational TOS read. ras_tos_addr_p0 and
+       ras_tos_valid_p0 are valid combinationally from
+       current TOSR. No push or pop at p0.
+
+p2/s2: ras_pred_val_p2 and ras_br_type_p2 valid.
+       Push or pop executes combinationally.
+       ras_pop_addr_p2, ras_pop_valid_p2, ras_snapshot_p2
+       all valid combinationally in p2.
+
+p3/s3: ras_pred_val_p3 and ras_br_type_p3 are the
+       registered p2 inputs. Repair logic compares p3
+       FTB prediction against the p2 operation applied
+       and executes the inverse if they disagree.
+```
+
+### Semantics
+
+```
+ras_pred_val_p2[s] = 1  -- valid FTB result for slot s.
+                           RAS evaluates br_type and executes
+                           push or pop as appropriate.
+ras_pred_val_p2[s] = 0  -- no valid FTB result for slot s.
+                           No push or pop for slot s.
+
+ras_pop_valid_p2[s] = 1 -- ras_pop_addr_p2[s] is valid.
+                           Used by s2_redirect logic when
+                           br_type==RETURN.
+ras_pop_valid_p2[s] = 0 -- both stacks empty; no valid
+                           return address available.
+
+ras_tos_valid_p0[s] = 1 -- ras_tos_addr_p0[s] holds the
+                           current TOS return address.
+                           Valid before FTB result at p2.
+ras_tos_valid_p0[s] = 0 -- speculative and commit stacks
+                           both empty.
+```
+
+Both slots may have ras_pred_val_p2 asserted in the same
+cycle. Slot 0 is processed before slot 1. Slot 1 sees the
+post-slot-0 pointer state.
+
+---
+
+## 7. Interface Contracts
 
 ### IC-RAS-01: Push gating
 
 Push fires if and only if:
-  s2_pred_val_pN == 1
-  AND s2_br_type_pN == DIRECT_CALL or INDIRECT_CALL
+  ras_pred_val_p2[s] == 1
+  AND ras_br_type_p2[s] == DIRECT_CALL or INDIRECT_CALL
 
 No push on any other branch type. RAS does not make its
 own call/return classification.
@@ -204,8 +251,8 @@ own call/return classification.
 ### IC-RAS-02: Pop gating
 
 Pop fires if and only if:
-  s2_pred_val_pN == 1
-  AND s2_br_type_pN == RETURN
+  ras_pred_val_p2[s] == 1
+  AND ras_br_type_p2[s] == RETURN
 
 No pop on any other branch type.
 
@@ -213,235 +260,219 @@ No pop on any other branch type.
 
 When both slots are active in the same cycle, slot 0
 is processed before slot 1. The slot 1 operation sees
-the post-slot-0 pointer state.
-
-This applies to all five same-cycle combinations:
-call/call, return/return, call/return, return/call,
-neither/neither. See ras_decisions.md section 6.2.
+the post-slot-0 pointer state. This applies to all five
+same-cycle combinations. See ras_decisions.md section 6.2.
 
 ### IC-RAS-04: Same-cycle bypass
 
-When slot 0 is a call and slot 1 is a return in the
-same cycle, slot 1's pop target is forwarded
-combinationally from slot 0's push data without reading
-back from the speculative stack array.
+When slot 0 is DIRECT_CALL or INDIRECT_CALL and slot 1
+is RETURN in the same cycle, slot 1's pop target is
+forwarded combinationally from slot 0's push data without
+reading back from the speculative stack array.
 
-s2_pop_addr_p1 receives the forwarded value in this case.
-The bypass is always present in the RTL; its activation
-is combinationally determined from s2_br_type_p0 and
-s2_br_type_p1. See ras_decisions.md section 6.3.
+ras_pop_addr_p2[1] receives the forwarded value in this
+case. The bypass is always present in the RTL; its
+activation is combinationally determined from
+ras_br_type_p2[0] and ras_br_type_p2[1].
+See ras_decisions.md section 6.3.
 
 ### IC-RAS-05: Recursion counter
 
-On push: if s2_fall_through_pN equals ret_addr at TOSR
-and the speculative stack is not empty (TOSR != BOS),
+On push: if ras_fall_through_p2[s] equals ret_addr at
+TOSR and the speculative stack is not empty (TOSR != BOS),
 increment rctr at TOSR rather than allocating a new entry.
 TOSW does not advance.
 
-On pop: if rctr at TOSR > 0, decrement rctr without
-moving TOSR. If rctr == 0, pop normally (TOSR decrements).
+On pop: if rctr at TOSR > 0, decrement rctr without moving
+TOSR. If rctr == 0, pop normally (TOSR decrements).
 
 Saturation: rctr saturates at (2^RAS_RCTR_WIDTH - 1) = 15.
-Additional pushes beyond saturation are suppressed without
-corrupting the stack.
+Additional pushes beyond saturation are suppressed.
 
-See ras_decisions.md section 5 and 6.4 for two-slot
+See ras_decisions.md sections 5 and 6.4 for two-slot
 simultaneous push behavior.
 
 ### IC-RAS-06: Speculative stack overflow
 
 When TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES), the oldest
 speculative entry is silently dropped on the next push
-(circular wrap). Prediction accuracy degrades gracefully.
-No error signal is asserted.
+(circular wrap). No error signal is asserted.
 
 ### IC-RAS-07: Speculative stack empty fallback
 
 When TOSR == BOS (speculative stack empty) and a pop is
-requested, s2_pop_addr_pN is driven from the commit stack
-top (CSP entry). s2_pop_valid_pN remains asserted.
-The commit stack entry is NOT consumed.
+requested, ras_pop_addr_p2[s] is driven from the commit
+stack top (CSP entry). ras_pop_valid_p2[s] remains
+asserted. The commit stack entry is NOT consumed.
+
+The same fallback applies to ras_tos_addr_p0[s] at p0:
+when the speculative stack is empty, the commit stack top
+is presented as the TOS value.
 
 If both speculative and commit stacks are empty,
-s2_pop_valid_pN deasserts.
+ras_pop_valid_p2[s] and ras_tos_valid_p0[s] deassert.
 
 ### IC-RAS-08: Snapshot timing
 
-s2_snapshot_pN reflects post-operation pointer state
-in the same cycle as the push or pop. It is combinational
-from the push/pop logic output, not registered.
+ras_snapshot_p2[s] reflects post-operation pointer state
+combinationally in p2. It is not registered before output.
 
-The FTQ captures s2_snapshot at the end of s2 (on the
-rising edge that closes the s2 cycle). The snapshot
-written for slot 0 reflects the state after slot 0's
-operation. The snapshot written for slot 1 reflects the
-state after both slot 0 and slot 1 operations.
+Slot 0 snapshot reflects the state after slot 0's operation
+only. Slot 1 snapshot reflects the state after both slot 0
+and slot 1 operations have been applied.
+
+The FTQ captures ras_snapshot_p2 on the rising edge closing
+p2. See ras_decisions.md section 4.2.
 
 ### IC-RAS-09: Restore priority
 
-restore_val takes priority over any s2 push or pop in
-the same cycle. When restore_val is asserted, pointer
-state is loaded from restore_snapshot and no s2
+ras_restore_val takes priority over any p2 push or pop in
+the same cycle. When ras_restore_val is asserted, pointer
+state is loaded from ras_restore_snapshot and no p2
 push/pop is applied.
 
-Rationale: a mispredict redirect invalidates all
-speculative state including the current s2 prediction.
+Only pointer state is restored. Circular buffer data is
+not cleared. See ras_decisions.md section 4.3.
 
 ### IC-RAS-10: Commit stack update
 
-On commit_val with DIRECT_CALL or INDIRECT_CALL:
-  - Push commit_ret_addr onto commit stack.
+On ras_commit_val with DIRECT_CALL or INDIRECT_CALL:
+  - Push ras_commit_ret_addr onto commit stack.
   - CSP advances.
-  - BOS in speculative stack updated to reflect new
-    committed boundary.
+  - BOS in speculative stack updated from ras_commit_snapshot.
 
-On commit_val with RETURN:
+On ras_commit_val with RETURN:
   - CSP decrements.
   - BOS updated accordingly.
 
 Commit is registered (takes effect the cycle after
-commit_val is asserted). Commit does not interact with
-s2 push/pop combinationally.
+ras_commit_val is asserted). Commit does not interact with
+p2 push/pop combinationally.
 
-### IC-RAS-11: s3 repair
+One commit event per cycle. The FTQ retires one entry per
+cycle; dual-slot simultaneous commit does not occur.
 
-At s3 (s2 registered), if the s3 structural prediction
-from FTB disagrees with the s2 operation, an inverse
-repair is applied:
+### IC-RAS-11: p3/s3 repair
 
-  s2=push, s3=no-op  -> pop  (undo the push)
-  s2=no-op, s3=pop   -> pop  (apply the missed pop)
-  s2=pop,  s3=no-op  -> push (undo the pop)
-  s2=no-op, s3=push  -> push (apply the missed push)
+At p3 (p2 registered), if ras_br_type_p3[s] disagrees with
+the p2 operation that was applied, an inverse repair is
+applied to the speculative stack:
 
-push->pop and pop->push within one s2/s3 pair cannot
-occur. The repair applies to the speculative stack only.
-See ras_decisions.md section 1.
+  p2=push, p3=no-op  -> repair: pop  (undo the push)
+  p2=no-op, p3=pop   -> repair: pop  (apply missed pop)
+  p2=pop,  p3=no-op  -> repair: push (undo the pop)
+  p2=no-op, p3=push  -> repair: push (apply missed push)
 
-Repair inputs (s3):
-  input  logic          s3_pred_val_p0,
-  input  bp_br_type_e   s3_br_type_p0,
-  input  logic          s3_pred_val_p1,
-  input  bp_br_type_e   s3_br_type_p1,
+push->pop and pop->push within one p2/p3 pair cannot occur.
+Repair applies to the speculative stack only.
+See ras_decisions.md section 1 (s2/s3 repair table).
 
-These are registered versions of the s2 FTB prediction
-inputs, provided to the RAS at s3 for repair comparison.
+### IC-RAS-12: Producer obligations (bp_cluster / FTQ)
+
+- Must gate ras_pred_val_p2[s] on FTB result valid.
+- Must present ras_br_type_p2[s] from FTB structural
+  prediction, not from predecode or decode.
+- Must present ras_br_type_p3[s] as the registered version
+  of ras_br_type_p2[s] from the previous cycle.
+- Must write ras_snapshot_p2[s] into bp_ftq_entry_t.ras
+  when ras_pred_val_p2[s] was asserted.
+- Must assert ras_restore_val for one cycle on mispredict
+  and present the FTQ snapshot of the mispredicted entry.
+- Must assert ras_commit_val when a call- or return-
+  containing FTQ entry commits.
+- Must set pred_src = PRED_RAS in bp_ftq_entry_t when RAS
+  provides the return target at p2.
+- Must gate RAS override on br_type==RETURN only.
 
 ---
 
-## 5. Timing Notes
+## 8. Override Chain Position
 
-### 5.1  Return address sourcing
+RAS sits outside the conditional branch override chain:
+  SC > TAGE > FTB > uBTB
+
+RAS is type-gated alongside TAGE and ITTAGE at p2/s2:
+  p1/s1: uBTB + Loop
+  p2/s2: FTB + TAGE + ITTAGE + RAS
+  p3/s3: SC
+
+RAS provides the return target at p2 when FTB identifies
+the branch type as RETURN. RAS overrides FTB target for
+return branches only. It does not participate in direction
+prediction.
+
+The p0/s0 TOS read (ras_tos_addr_p0) provides an earlier
+prediction before FTB is available. This is the initial
+prediction the FTQ acts on; it may be corrected by the p2
+result.
+
+---
+
+## 9. Timing Notes
+
+### 9.1  Return address sourcing
 
 ret_addr pushed to the speculative stack comes from
-s2_fall_through_pN (FTB-provided fallthrough address).
-The RAS does not independently compute PC+2 or PC+4.
+ras_fall_through_p2[s] (FTB-provided fallthrough address).
+RAS does not independently compute PC+2 or PC+4.
+See ras_decisions.md section 8.
 
-For full-width RVI calls truncated at a prediction block
-boundary, FTB applies the +2 correction before presenting
-fallThroughAddr. The RAS is not aware of this correction.
+### 9.2  Combinational paths in p2
 
-### 5.2  Pipeline position
+The following signals are combinational in p2:
 
-  s0: TOS read. s2_pop_addr driven combinationally from
-      current TOSR for use as initial uBTB-miss fallback.
-      No push or pop at s0.
+  ras_br_type_p2[0]  ->  push/pop decision slot 0
+                     ->  TOSR/TOSW update (slot 0)
+                     ->  bypass detect
+  ras_br_type_p2[1]  ->  push/pop decision slot 1
+                     ->  TOSR/TOSW update (slot 1, uses
+                         post-slot-0 pointer state)
+                     ->  ras_pop_addr_p2[1] (bypass or array)
+  post-slot-1 state  ->  ras_snapshot_p2[0], ras_snapshot_p2[1]
 
-  s2: FTB structural prediction valid. Push/pop executes.
-      s2_pop_addr_pN, s2_pop_valid_pN, s2_snapshot_pN
-      all valid combinationally in s2.
-
-  s3: s2 registered. Repair logic compares s3 FTB
-      prediction against s2 operation and applies
-      inverse if needed.
-
-  commit: Registered. Commit stack updated one cycle
-          after commit_val asserted.
-
-### 5.3  Combinational paths in s2
-
-The following signals are combinational in s2 and must
-not create timing loops:
-
-  s2_br_type_p0  ->  push/pop decision slot 0
-                 ->  TOSR/TOSW update (slot 0)
-                 ->  bypass detect
-  s2_br_type_p1  ->  push/pop decision slot 1
-                 ->  TOSR/TOSW update (slot 1, uses
-                     post-slot-0 pointers)
-                 ->  s2_pop_addr_p1 (bypass or array)
-  post-slot-1 pointers -> s2_snapshot_p0, s2_snapshot_p1
-
-Verilator stl_sequent note: always_comb blocks that
-evaluate pointer state after FF updates must read at
-least one FF output to be classified nba_sequent. Gate
-the scan on a registered valid signal. See CLAUDE.md.
+Verilator stl_sequent note: always_comb blocks that must
+re-evaluate after FF updates must read at least one FF
+output. Gate the scan on a registered valid signal to
+force nba_sequent classification. See CLAUDE.md.
 
 ---
 
-## 6. Reset Behavior
+## 10. Reset Behavior
 
 On rstn deassert (active low, synchronous):
   - TOSR, TOSW, BOS all reset to 0.
   - CSP resets to 0.
   - All rctr fields reset to 0.
   - All ret_addr fields in both stacks reset to 0.
-  - s2_pop_valid_p0, s2_pop_valid_p1 deassert.
+  - ras_pop_valid_p2 and ras_tos_valid_p0 deassert on
+    the first cycle after reset.
 
 ---
 
-## 7. Struct Reference
+## 11. Known Gaps and Deferred Items
 
-Structs used at the RAS boundary. All defined in
-bp_structs_pkg.sv.
-
-  bp_br_type_e       -- branch type enum. RAS acts on:
-                        DIRECT_CALL, INDIRECT_CALL (push)
-                        RETURN (pop)
-                        All others: no action.
-
-  bp_ras_snapshot_t  -- packed struct, 3 * RAS_PTR_BITS:
-                        tosr : RAS_PTR_BITS
-                        tosw : RAS_PTR_BITS
-                        bos  : RAS_PTR_BITS
-
----
-
-## 8. Open Items
-
-  RI-1: s0 TOS read port. The s0 prediction path needs
-        a combinational TOS read output for the initial
-        uBTB-miss fallback before s2 push/pop executes.
-        Port name and connection to the uBTB/FTQ path
-        TBD at bp_cluster integration. Not required for
-        unit-level ras.sv RTL or testbench.
-
-  RI-2: Flush port behavior. flush_val and flush_snapshot
-        are reserved (section 3.7). Behavior undefined
-        until flush protocol is specified.
-        Tracks ras_decisions.md RAS-3.
-
-  RI-3: Dual-slot commit. Current commit interface
-        handles one commit event per cycle (commit_val
-        single signal). If two call/return slots can
-        commit simultaneously, the interface requires
-        a second commit channel. Confirm at bp_cluster
-        integration. Likely single-commit is sufficient
-        given FTQ entry granularity.
-
-  RI-4: s3 repair port inclusion. The s3 repair inputs
-        listed in IC-RAS-11 are not yet in the port list
-        (section 3). Add when s3 repair RTL is scoped.
-        Listed here to avoid omission at RTL task time.
+| ID     | Item                                  | Status             |
+|--------|---------------------------------------|--------------------|
+| RI-1   | Flush port behavior. ras_flush_val    | Tracks RAS-3 in    |
+|        | and ras_flush_snapshot reserved.      | ras_decisions.md   |
+|        | Behavior undefined until flush        | section 4.4.       |
+|        | protocol specified.                   |                    |
+| RI-2   | s/p stage notation inconsistency.     | Future doc         |
+|        | Planning docs use s0-s3; RTL uses     | cleanup task.      |
+|        | p0-p3. This document uses p-notation  | RTL is             |
+|        | in port names and s-notation in       | authoritative.     |
+|        | narrative to match existing practice. |                    |
+| RI-3   | PHR/GHR contribution to RAS.          | N/A. RAS does      |
+|        |                                       | not use folded     |
+|        |                                       | history. No action.|
 
 ---
 
-## 9. Interactions With Other Planning Documents
+## 12. Interactions With Other Planning Documents
 
   ras_decisions.md     -- canonical decision record.
                           All micro-architectural decisions
-                          cited by section number above
-                          live there.
+                          cited by IC number above live there.
 
   bp_arb_spec.md       -- section 7.2: RAS non-RAM status,
                           snapshot/restore protocol overview.
@@ -459,11 +490,19 @@ bp_structs_pkg.sv.
 
 ---
 
-## 10. Document History
+## 13. Document History
 
   2026-06-23  session-050. Initial draft.
-              Port list, interface contracts, timing notes,
-              reset behavior, struct reference, open items.
-              Based on ras_decisions.md session-050 and
-              bp_arb_spec.md section 7.2.
+              Port list corrected: slot dimension uses
+              [0:NUM_PRED_SLOTS-1] array index, not _p0/_p1
+              suffix. p-stage suffix denotes pipeline stage.
+              s/p notation equivalence documented (RI-2).
+              p0/s0 TOS read ports added (ras_tos_addr_p0,
+              ras_tos_valid_p0). p3/s3 repair ports and
+              IC-RAS-11 in scope for initial design.
+              Dual-slot commit closed: one commit per cycle
+              by FTQ design, no second channel needed.
+              IC-RAS-07 extended to cover p0 TOS empty
+              fallback. Open items reduced to RI-1 through
+              RI-3.
 

@@ -189,10 +189,12 @@ module ras (
     logic                      rep_pop;
     logic                      is_push;
     logic                      is_pop;
+    logic [RAS_PTR_BITS-1:0]   w_alloc;
 
     // Defaults.
-    w_tosr = tosr;
-    w_tosw = tosw;
+    w_tosr  = tosr;
+    w_tosw  = tosw;
+    w_alloc = tosw;
     if (tosr != bos) begin
       w_top_addr = spec_ret_addr[tosr];
       w_top_rctr = spec_rctr[tosr];
@@ -257,16 +259,35 @@ module ras (
           end
         end
       end else if (rep_push) begin
-        // Re-push the registered fallthrough address.
-        sp_we[s]      = 1'b1;
-        sp_waddr[s]   = w_tosw;
-        sp_wdata_a[s] = p3_fallthr_q[s];
-        sp_wdata_r[s] = '0;
-        w_tosr        = w_tosw;
-        w_tosw        = w_tosw + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
-        w_top_addr    = p3_fallthr_q[s];
-        w_top_rctr    = '0;
-        w_valid       = 1'b1;
+        // rep_push covers two distinct repairs that need different
+        // handling:
+        if (p3_op_q[s] == OP_POP) begin
+          // Undo an erroneous p2 pop. The popped entry is still
+          // resident (pop does not overwrite the array), so re-expose
+          // it by moving TOSR back up one slot and reloading its
+          // address/rctr. TOSR-only: no array write, TOSW unchanged
+          // (stays monotonic). This restores the pre-pop top.
+          w_tosr     = w_tosr + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
+          w_top_addr = spec_ret_addr[w_tosr];
+          w_top_rctr = spec_rctr[w_tosr];
+          w_valid    = 1'b1;
+        end else begin
+          // Apply a missed push: allocate the registered fallthrough
+          // at the frontier. Skip the BOS sentinel slot so a single
+          // live entry stays distinct from empty (TOSR==BOS).
+          w_alloc       = (w_tosw == bos)
+                          ? (w_tosw + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1})
+                          : w_tosw;
+          sp_we[s]      = 1'b1;
+          sp_waddr[s]   = w_alloc;
+          sp_wdata_a[s] = p3_fallthr_q[s];
+          sp_wdata_r[s] = '0;
+          w_tosr        = w_alloc;
+          w_tosw        = w_alloc + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
+          w_top_addr    = p3_fallthr_q[s];
+          w_top_rctr    = '0;
+          w_valid       = 1'b1;
+        end
       end
     end
 
@@ -290,13 +311,22 @@ module ras (
               : w_top_rctr + {{(RAS_RCTR_WIDTH-1){1'b0}}, 1'b1};
           w_top_rctr = sp_wdata_r[NUM_PRED_SLOTS + s];
         end else begin
-          // Normal push: write at TOSW, TOSR=TOSW, TOSW advances.
+          // Normal push: allocate at TOSW, TOSR=alloc, TOSW advances.
+          // The BOS index is a sentinel: when the write pointer would
+          // land on BOS (only at cold-start after reset, or on a full
+          // circular wrap), allocate at BOS+1 instead. This keeps a
+          // single live entry distinguishable from empty, since empty
+          // is detected as TOSR==BOS. TOSW stays monotonic so popped
+          // entries remain intact for pointer-only mispredict restore.
+          w_alloc = (w_tosw == bos)
+                    ? (w_tosw + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1})
+                    : w_tosw;
           sp_we[NUM_PRED_SLOTS + s]      = 1'b1;
-          sp_waddr[NUM_PRED_SLOTS + s]   = w_tosw;
+          sp_waddr[NUM_PRED_SLOTS + s]   = w_alloc;
           sp_wdata_a[NUM_PRED_SLOTS + s] = ras_fall_through_p2[s];
           sp_wdata_r[NUM_PRED_SLOTS + s] = '0;
-          w_tosr     = w_tosw;
-          w_tosw     = w_tosw + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
+          w_tosr     = w_alloc;
+          w_tosw     = w_alloc + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
           w_top_addr = ras_fall_through_p2[s];
           w_top_rctr = '0;
           w_valid    = 1'b1;

@@ -387,7 +387,37 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 77 | scrub prompts and redact any absolute path | This is not a design TD   |
 |    | information not using the RVA_ROOT env var | more of a tools and infra |
 |    |                                            | task, possibly manual     |
-
+| 78 | RAS p3 undo-pop does not reverse a   | LEAVE AS-IS. The undo-pop      |
+|    | recursion pop. The p3 repair re-     | re-expose moves TOSR back and  |
+|    | expose reverses a TOSR-moving pop    | reloads addr/rctr; a pop that  |
+|    | only. A pop that only decremented a  | only decremented rctr (TOSR    |
+|    | recursion counter (TOSR held) is not | held) leaves no recoverable    |
+|    | reversible from post-pop state.      | pre-pop rctr. BP-064 adds a    |
+|    |                                      | directed test pinning the      |
+|    |                                      | current non-reversing          |
+|    |                                      | behavior. Revisit at           |
+|    |                                      | bp_cluster integration if an   |
+|    |                                      | s2/s3 repair over a recursion  |
+|    |                                      | pop is ever required. Related: |
+|    |                                      | #79 (commit-side recursion     |
+|    |                                      | depth).                        |
+| 79 | RAS commit-stack recursion depth not | DEFER (was: fix, reversed      |
+|    | preserved. ras.sv writes             | session-051 after evidence).   |
+|    | commit_rctr[csp] <= 0 on every       | The field is write-only: it is |
+|    | commit push; the field is never      | never read by any output path  |
+|    | read. A recursive call that commits  | (pop fallback uses             |
+|    | reads back from the commit-stack     | commit_top_addr/valid only),   |
+|    | fallback as a single entry, not at   | so a wrong value cannot cause a |
+|    | its true recursion depth.            | functional break -- only a     |
+|    |                                      | degraded fallback prediction.  |
+|    | Root cause: the commit interface     | Real fix needs a recursion-    |
+|    | carries no recursion count           | count source on the commit     |
+|    | (ras_commit_ret_addr is a bare       | interface (snapshot/struct      |
+|    | address; bp_ras_snapshot_t is        | change) or local commit-stack  |
+|    | pointers only), so there is no       | detection -- decide at          |
+|    | value at the port to carry.          | bp_cluster/FTQ integration when |
+|    |                                      | the commit interface is built. |
+|    |                                      | Related: #78.                  |
 
 ---
 

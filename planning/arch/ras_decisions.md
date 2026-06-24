@@ -260,9 +260,14 @@ pop normally (TOSR decrements).
 Match condition: incoming push address equals ret_addr at TOSR
 and the speculative stack is not empty (TOSR != BOS).
 
-Recursion detection applies to the speculative stack only.
-The commit stack rctr field is updated when a recursive call
-commits.
+Recursion detection applies to the speculative stack only. The commit stack
+rctr field is reserved and is currently written zero on every commit push; it
+is not read by any output path. Commit-stack recursion depth is therefore not
+preserved: a recursive call that commits reads back from the commit-stack
+fallback as a single entry, not at its true depth. This is a documented
+limitation, not a functional defect (the field is write-only). See TD #79.
+Resolution deferred to bp_cluster/FTQ integration, when a recursion-count
+source on the commit interface can be decided.
 
 ---
 
