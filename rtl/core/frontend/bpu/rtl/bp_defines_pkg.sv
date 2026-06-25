@@ -84,13 +84,21 @@ package bp_defines_pkg;
   // ================================================================
   // :FTB parameters:
   // ================================================================
-  // Size: 2048 entries, 8-way associative.
+  // Size: 2048 entries by 4 ways by 2 (one per prediction slot)
   // Stage: s2 output. Authoritative target for direct branches.
   parameter int FTB_ENTRIES = 2048;
-  parameter int FTB_WAYS    = 8;
+  parameter int FTB_WAYS    = 4;
 
-  localparam int FTB_SETS     = FTB_ENTRIES / FTB_WAYS; // = 256
-  localparam int FTB_IDX_BITS = $clog2(FTB_SETS);       // = 8
+  localparam int FTB_SETS          = FTB_ENTRIES / FTB_WAYS; // = 512
+  localparam int FTB_IDX_BITS      = $clog2(FTB_SETS);       // = 9
+  localparam int FETCH_BLOCK_BYTES = 64
+  localparam int FTB_BLOCK_BITS    = $clog2(FETCH_BLOCK_BYTES)
+  localparam int FTB_TAG_BITS      = VA_WIDTH-FTB_IDX_BITS-FTB_BLOCK_BITS
+  localparam int FTB_PLRU_BITS     = 3
+  localparam int FTB_ENTRY_WIDTH   = 1            //valid
+                                   + FTB_TAG_BITS
+                                   + FTB_IDX_BITS  //branch 0
+                                   + FTB_IDX_BITS  //branch 1
 
   // ----------------------------------------------------------------
   // FTB arbitration parameters (TBD)

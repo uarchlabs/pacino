@@ -10,6 +10,9 @@
  CONTACT: Jeff Nye
 ```
 
+THIS DOCUMENT IS SUSPECT SESSION 052 WAS PROBLEMATIC AND RESTARTED
+TWICE MORE. (3 in total). 
+
 Complete architectural decision record for the FTB (Fetch Target
 Buffer). Prediction side decided session-051 (F1-F12), update/evict
 side decided session-052 (F13-F20, F19a). This is the full decision
@@ -45,10 +48,12 @@ FTB must obey these, settled earlier:
   fallthrough address. The three-way JALR split (FTB / RAS / ITTAGE)
   is resolved by FTB structural prediction before s2.
 - FTB owns the fallthrough address RAS pushes (ras_fall_through_p2).
-- NUM_PRED_SLOTS = 2. Fixed bundle split (G8): slot 0 = pred_pc+0:31,
-  slot 1 = pred_pc+32:63. Slot 1 PC always pred_pc+32 (G17, static).
-- TI6: banks are per-slot RAMs. RAM0 serves slot 0, RAM1 serves
-  slot 1. Selection is structural.
+- NUM_PRED_SLOTS = 2: the cluster predicts two branches per cycle.
+  "Slot" is the name for one of the two predictions, for lack of a
+  better term. It does NOT mean FTB has two arrays -- one FTB entry
+  supplies both branches (F1). G8/G17's pred_pc+32 split and TI6's
+  per-slot RAMs are TAGE/ITTAGE conventions; they do not dictate FTB
+  structure. FTB is a single array (F1).
 - pacino expands RVC instructions to 32b equivalents upstream. This
   changes the instruction granularity the FTB addresses (see F12).
 - ITTAGE has no IT0 base table (bp_cluster.md). Load-bearing for the
@@ -61,23 +66,33 @@ FTB must obey these, settled earlier:
 
 ## 1. Structural Decisions
 
-### F1 -- Per-slot RAMs, no second read port
-FTB follows TI6. Two FTB RAMs, RAM0 -> slot 0, RAM1 -> slot 1, one
-read each. No second read port. Two independent block lookups per
-cycle, one per slot-RAM. (Update adds a write port -- see F19. "No
-dual-port" here means no second READ port.)
-Rationale: matches TAGE/ITTAGE convention; avoids a 2-read array;
-cost is area (two RAMs) not port complexity.
+### F1 -- Single FTB array, one lookup per cycle
+ONE FTB array. One PC indexes one entry per cycle. That entry
+describes the whole prediction block, including both of its
+conditional branches and its jump. One read port for prediction;
+update adds a write port (F19).
 
-### F2 -- Independent-blocks model
-Each slot is its own FTB lookup producing its own prediction. Slot 1
-always reads at pred_pc+32 (static per G17), regardless of slot 0.
-Cross-slot taken-priority (if slot 0 has an earlier taken branch,
-slot 1's block is not executed) is resolved downstream, not in FTB.
-Slot 1 work is computed then discarded on slot-0-taken cycles.
-Rationale: consistent with the fixed-boundary G8/G17 decision, which
-already rejected a data-dependent slot-1 start. Accepts the wasted
-slot-1 work as the cost of no serial dependency.
+CORRECTION (session-052): an earlier draft applied TI6 (per-slot
+RAMs) to FTB and used two arrays, one per "slot". That was wrong.
+TI6 is a TAGE/ITTAGE convention where two slots are two independent
+table lookups. FTB is not structured that way: one FTB entry already
+covers the whole block and names both branches, so a single lookup
+produces everything the two-wide predictors need. Two arrays gave
+four conditional branches per cycle against a two-prediction budget.
+Corrected to one array. Xiangshan confirms: one FTB entry per block,
+up to two branches in it, one lookup.
+
+### F2 -- Block model: one entry covers one prediction block
+One FTB entry describes one prediction block: its start address, its
+end address (fallthrough), its branches (up to two conditional, one
+jump), their types, and their basic directions. The block runs from
+the lookup PC to the fallthrough. Intra-block branching (a taken
+branch targeting an address inside the same block) is handled by the
+next cycle's lookup re-indexing at the branch target -- not by
+predicting two blocks in one cycle.
+The FTB prediction block is 32 bytes (FTB_BLOCK_BYTES), 8 expanded
+instructions, matched to 8-wide issue and within the two-branch
+budget. This is distinct from fetch width (see F4a).
 
 ### F3 -- Associativity: 4-way, parameterized
 FTB_WAYS = 4 baseline. Parameterized so 8-way is a synthesis
@@ -90,24 +105,34 @@ Commercial designs engineer around high associativity, which signals
 it is expensive, not free. 8-way was an unmeasured belief. Circle
 back with own SPEC numbers if time allows.
 
-### F4 -- Capacity: 2048 entries/slot baseline, parameterized
-FTB_SETS parameterized. Baseline 2048 entries/slot = 512 sets x
-4-way, per slot (4096 entries total across both slots). Relief lever:
-1024 entries/slot = 256 sets x 4-way, pre-authorized as the
-area/timing fallback.
-"2048" is per slot, not total. State this explicitly -- per-slot RAMs
-make "2048 entries" ambiguous and a silent mis-read causes a
-doc-vs-RTL gap.
+### F4 -- Capacity: 2048 entries, single array
+FTB_ENTRIES = 2048, total, in the one array (F1). FTB_SETS = 512
+(2048 / 4-way). Parameterized via FTB_SETS.
+We are not building a 4096-entry FTB at this time (the two-array
+draft implied 4096; that is gone with the single-array correction).
+Relief lever if needed: 1024 entries = 256 sets x 4-way.
 Rationale: commercial fast single-level BTBs cluster at 512-2048
 total (Zen 2/3/4 = 512/1024/1536; Apple M2 ~2048; Xiangshan = 2048).
-2048/slot is generous, slightly aggressive; 1024/slot lands in the
-proven range. The Zen 5 16K "L1 BTB" is not a counter-example -- it
-is the fast tier of a decoupled multi-level design (16K L1 + 8K L2
-victim), not one flat array. Bigger designs go multi-level, not
-fatter-flat.
+2048 is in the proven range. The Zen 5 16K "L1 BTB" is not a
+counter-example -- it is the fast tier of a decoupled multi-level
+design (16K L1 + 8K L2 victim), not one flat array. Bigger designs
+go multi-level, not fatter-flat (F5).
+
+### F4a -- FTB block width vs fetch width are separate
+FTB prediction block = 32 bytes (8 expanded instructions), matched to
+8-wide issue and the two-branch-per-cycle budget. FTB predicts one
+32-byte block per cycle.
+Fetch delivers 64 bytes (16 expanded instructions) into the FTQ per
+cycle, decoupled from FTB by the queue. The wider fetch gives
+decode/fusion a larger window; it does NOT raise the prediction rate.
+Prediction rate is two branches per cycle.
+Keep these two numbers separate. FTB_BLOCK_BYTES (32) is an FTB
+parameter; FETCH_BLOCK_BYTES (64) is a fetch-unit parameter and does
+not belong in the FTB parameter set. Collapsing them re-invites the
+two-block-per-cycle error.
 
 ### F5 -- Growth path is multi-level, not fatter-flat
-If 2048/slot proves short under SPEC, the growth path is a second FTB
+If 2048 proves short under SPEC, the growth path is a second FTB
 level (L2 FTB, victim style), consistent with the decoupled frontend
 -- not a larger flat L1. Matches how Zen scales BTB reach.
 
@@ -270,11 +295,12 @@ training gate.
 
 ### C9 -- Training counts only resolved branches
 "Train always" means train every time the branch is resolved at
-execute, not every cycle the entry is read. On a slot-0-taken cycle,
-slot 1's block is never executed (F2), so there is no resolved
-direction for slot 1 and nothing to train. Falls out of "train on
-resolution" rather than "train on read." State it so the counter does
-not train on discarded slot-1 reads.
+execute, not every cycle the entry is read. A branch that is read in
+a prediction but does not end up on the executed path (control left
+the block before reaching it) is never resolved, so there is nothing
+to train. Falls out of "train on resolution" rather than "train on
+read." State it so the counter does not train on branches that were
+read but not executed.
 
 ===================================================================
 # UPDATE / EVICT SIDE (session-052)
@@ -352,25 +378,25 @@ branches in one block, which is rare.
     must stay current. Do not gate this write on "ITTAGE missed" --
     write it whenever the jump resolves.
 
-### F19 -- RAM ports: one read, one write per slot-RAM
-Each slot-RAM has one read port (prediction) and one write port
+### F19 -- Array ports: one read, one write
+The FTB array has one read port (prediction) and one write port
 (update), with independent read and write addresses used in the same
 cycle. This is a register file with separate read/write address
-ports, or a 1R1W SRAM. F1's "no dual-port" meant no second read port;
-the write port was always required.
+ports, or a 1R1W SRAM. F1's single read port stands; the write port
+was always required.
 Same-cycle read and write to the same entry: the read returns the old
 value.
 1R1W is assumed for now. True dual-port arrays are available on the
 target but cost area and power, so the design avoids needing a second
 read port where it reasonably can; 1R1W keeps that benefit.
-The arrays are a discrete RTL module, separate from FTB control logic,
+The array is a discrete RTL module, separate from FTB control logic,
 so a register file or a 1R1W SRAM can be substituted with no change to
 surrounding logic. The substitution must be possible without touching
 control.
 
 ### F19a -- FTB module boundary
 FTB is a structural top module containing:
-  - the array module(s) (the per-slot 1R1W RAMs, F19)
+  - the array module (the single 1R1W FTB array, F19)
   - a separate control module (read, branch-type classification,
     block-boundary and fallthrough computation, allocate/evict, update
     field writes, confidence training and suppression)
@@ -380,35 +406,68 @@ used. The array/control split is what makes the F19 array swap clean.
 Outside FTB: FTQ-level update scheduling (F20); cluster-wide override
 resolution at s2.
 
-### F20 -- One update port per slot-RAM; FTQ feeds it
-FTB exposes one update port per slot-RAM. When several branches
-resolve at once, the FTQ routes each to the correct slot-RAM by the
-branch's position (pred_pc+0:31 to slot 0, pred_pc+32:63 to slot 1)
-and serializes if there are more branches than ports. FTB does not
+### F20 -- One update port; FTQ feeds it
+FTB exposes one update port. When several branches resolve at once,
+the FTQ routes updates to the single FTB array and serializes if more
+branches resolve than the port can take in a cycle. FTB does not
 schedule updates itself.
 This is the FTB/FTQ boundary, not an open decision. The multi-branch
 scheduling links to G9 (update channel arbitration), resolved at
 bp_cluster integration.
 
 ===================================================================
-# OPEN ITEMS (deferred with a home, not blanks)
+# PARAMETERS
 ===================================================================
 
-These belong to bp_cluster integration or to doc-crafting, not to the
-FTB decision set. Listed so they are not mistaken for undecided FTB
-architecture.
+For bp_defines_pkg.sv. Single-array values (session-052 correction).
 
-- Exact index, tag, offset, pftAddr, and carry bit widths: computed at
-  doc-crafting from FTB_SETS and the expanded-instruction layout. The
-  last_may_be_rvi_call straddle correction is part of this fallthrough
-  arithmetic (F12).
+Already in package (verify / fix):
+  VA_WIDTH          = 40      correct as-is.
+  FTB_WAYS          = 4       PACKAGE CURRENTLY 8 -- FIX TO 4 (F3).
+  FETCH_BLOCK_BYTES = 64      PACKAGE is correct
+
+Single-array sizing (F4):
+  FTB_ENTRIES       = 2048    total, single array.
+  FTB_SETS          = 512     FTB_ENTRIES / FTB_WAYS.
+  FTB_IDX_BITS      = 9       $clog2(FTB_SETS).
+
+Block / offset (F4a):
+  FTB_BLOCK_BYTES   = 32      FTB prediction block (8 expanded instr).
+  FTB_OFFSET_BITS   = 5       $clog2(FTB_BLOCK_BYTES).
+
+Tag (F8):
+  FTB_TAG_BITS      = 26      Full upper-VA tag, no aliasing:
+                              VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS
+                              = 40 - 9 - 5 = 26. Full tag chosen so
+                              two PCs can never alias to one entry.
+
+Replacement (F15):
+  PLRU_BITS         = 3       FTB_WAYS - 1 (tree-PLRU, 4-way).
+
+Confidence (C7/C8) -- not yet in package, add at RTL task:
+  FTB_CONF_SUPPRESS_THRESH = 6        default.
+  FTB_CONF_INIT            = 3'b011   default.
+  Invariant (assert): FTB_CONF_INIT < FTB_CONF_SUPPRESS_THRESH (C8).
+
+Widths still to derive at doc-crafting (depend on the expanded-
+instruction layout): conditional offset width, jump offset width,
+pftAddr width, carry. The last_may_be_rvi_call straddle correction is
+part of this fallthrough arithmetic (F12), not a separate width. The
+bit itself is 1 bit.
+
+===================================================================
+# OPEN ITEMS
+===================================================================
+
+- Offset/pftAddr/carry widths: computed at doc-crafting from the
+  expanded-instruction layout. Straddle correction folds in here (F12).
 - G9 update channel arbitration (linked from F20): cluster-level.
 - Confidence-override interaction with the TAGE update/meta path:
   flagged, not yet analyzed. bp_cluster integration.
-- Parameters to add to bp_defines_pkg.sv at RTL task time: FTB_WAYS,
-  FTB_SETS, FTB_CONF_SUPPRESS_THRESH, FTB_CONF_INIT, plus the widths
-  above. (Mirror the RAS pattern: named here, added to the package at
-  RTL task.)
+- Parameters to add to bp_defines_pkg.sv at RTL task time:
+  FTB_CONF_SUPPRESS_THRESH, FTB_CONF_INIT, plus the derived widths
+  above. FTB_WAYS is a FIX (8->4), not an add. (Mirror the RAS
+  pattern: named here, added to the package at RTL task.)
 
 ===================================================================
 # Document History
@@ -418,9 +477,18 @@ architecture.
               session-052: update/evict side (F13-F20, F19a).
               F12 ruled keep-the-bit; straddle correction folded into
               fallthrough arithmetic, not a separate width.
-              Merged into this single record. All decisions ruled.
+              session-052 CORRECTION: the two-array / per-slot-RAM
+              structure (old F1/F2, TI6 applied to FTB) was wrong --
+              it produced four conditional branches per cycle against
+              a two-prediction budget. Corrected to a SINGLE FTB array,
+              one lookup per cycle, one entry per block holding two
+              conditionals + one jump (matches Xiangshan). F1, F2, F4,
+              F19, F19a, F20 rewritten. F4a added (FTB block 32B vs
+              fetch 64B, decoupled by FTQ). PARAMETERS section added.
+              All decisions ruled. FTB_TAG_BITS = 26, full tag, no
+              aliasing.
               Next: expand into ftb_decisions.md, ftb_interfaces.md,
               ftb_confidence_override_rules.md. Once expanded, this
-              record is frozen history -- the three docs are
-              authority; do not maintain all four.
+              record is frozen history -- the three docs are authority;
+              do not maintain all four.
 
