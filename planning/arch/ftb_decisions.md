@@ -196,22 +196,25 @@ Each entry holds two conditional branch fields and one jump field
 (2+1). No Xiangshan-style field sharing. Two conditional branches with
 no jump fill both conditional fields directly.
 
-Entry fields (logical entry, FTB_ENTRY_WIDTH = 108 bits/way):
+Entry fields (logical entry, FTB_ENTRY_WIDTH = 106 bits/way):
 
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
   tag                    -- FTB_TAG_BITS, full upper-VA tag (2.x)
-  conditional branch 0   -- valid, offset, target, always_taken,
-                            conf[2:0]
-  conditional branch 1   -- valid, offset, target, always_taken,
-                            conf[2:0]
+  conditional branch 0   -- valid, offset, target, conf[2:0]
+  conditional branch 1   -- valid, offset, target, conf[2:0]
   jump field             -- valid, offset, target (reconstructed full
                             VA_WIDTH from a stored displacement, 4.2),
                             isCall, isRet, isJalr
   fallthrough            -- pftAddr + carry
 
+conf is a bimodal DIRECTION counter, not a separate confidence-only
+field: its MSB is FTB's predicted direction for that conditional. There
+is no always_taken bit -- it was removed (session-053); conf is the sole
+per-branch direction state. See ftb_confidence_override_rules.md.
+
 Storage partition. The entry-level valid bit (1 per way) is the only
-field physically relocated to ftb_plru. The remaining 107 bits -- tag,
+field physically relocated to ftb_plru. The remaining 105 bits -- tag,
 both conditional fields, the jump field, and the fallthrough -- are
 stored in ftb_array (FTB_RAM_ENTRY_WIDTH, section 8). The per-field
 valid bits of br0/br1/jump stay in the RAM entry; they are don't-care
@@ -275,13 +278,18 @@ expanded, so FTB_JMP_TGT_BITS = 21. Both pair with TAR_STAT_BITS = 2.
 The position field (which instruction in the block) is separate and is
 FTB_BR_POS_BITS = 3 ($clog2(8)), in-block granularity.
 
-### 4.3  always_taken
+### 4.3  conf: bimodal direction
 
-One bit per conditional branch. Meaning: this branch has been taken
-every time, so the direction predictor can be skipped. Subsequent
-predictors may adopt the FTB direction directly. always_taken has
-priority over the confidence counter (see
-ftb_confidence_override_rules.md). Init and clear rules in section 5.
+One 3-bit saturating bimodal counter per conditional branch
+(FTB_CONF_WIDTH = 3). Its MSB is FTB's predicted direction for that
+branch (1 = taken, 0 = not-taken); its magnitude is the strength. FTB
+always submits a direction for a valid conditional:
+ftb_brI_taken_p2 = ftb_brI_valid_p2 & conf_brI[MSB]. The two saturated
+states (111 strongly taken, 000 strongly not-taken) are the only states
+eligible for the fast-path (section 7). conf replaces the removed
+always_taken bit as the sole per-branch direction state. Training,
+fast-path, init, and self-correction rules are in
+ftb_confidence_override_rules.md (summarized in section 7).
 
 ### 4.4  Offset and fallthrough widths
 
@@ -339,34 +347,6 @@ substitute a fetch-width fallthrough and re-commit the block-vs-fetch
 collapse banned by 2.3. Adopt the semantics (start + one prediction
 block), never the literal.
 
-### 4.6  Basic direction: present implies taken
-
-The conditional fields store no explicit taken/not-taken bit (4) --
-only always_taken and conf. FTB's basic direction for a valid
-conditional is TAKEN: ftb_brI_taken_p2 = ftb_brI_valid_p2 (classic BTB
-presence semantics). conf is the confidence in that taken call;
-always_taken (4.3) is the stronger bypass hint. Neither is a separate
-direction state -- "not taken" is encoded as FTB deferring to TAGE, not
-as a stored value.
-
-Because FTB tracks not-taken branches too (5.2), a reliably-not-taken
-branch keeps always_taken=0 and trains conf DOWN (its taken call was
-wrong). conf then stays below FTB_CONF_SUPPRESS_THRESH, suppression
-never fires (ftb_confidence_override_rules.md 4.1), and TAGE supplies
-the direction. FTB can only ever assert direction toward TAKEN;
-everything not reliably-taken defers to TAGE. The confidence training
-comparison (ftb_upd_ftb_dir_u0 vs the resolved outcome) uses this basic
-direction.
-
-Consequence: the confidence bubble-save (4.1 / 1.1) applies to
-confident-TAKEN branches only. A confident not-taken branch still pays
-the TAGE override bubble; FTB carries no encoding to confidently
-predict not-taken. This is the accepted BTB/Xiangshan-lineage tradeoff
--- the hot branches a BTB retains skew taken. No stored direction bit
-is added; the logical entry stays 108 (FTB-1 closed). If bidirectional
-FTB confidence is ever wanted, that is a stored direction/bimodal bit
-per conditional and a width reopen -- not done here.
-
 ---
 
 ## 5. Allocation and Update
@@ -377,10 +357,10 @@ Update happens post-execute, not at retire.
 
 When a branch resolves at execute:
   - Tag hit (entry for this block already in the set): update in
-    place. Write the resolved branch's target, always_taken, and conf
-    to ftb_array.
+    place. Write the resolved branch's target and conf to ftb_array.
   - Tag hit, this branch not yet stored, a branch field free: write it
-    into the free field. conf for that field starts at FTB_CONF_INIT.
+    into the free field. conf for that field starts weak in the
+    resolved direction (FTB_CONF_INIT_TKN / FTB_CONF_INIT_NTK, 5.4).
   - Tag miss (no entry for this block): allocate a new entry. The
     evicted way is chosen by the replacement policy (5.3). ftb_cntrl
     writes the entry data to ftb_array and sets the entry-valid for the
@@ -452,9 +432,11 @@ vector from ftb_plru to implement it; it is not specified now.)
   field valid:  1 for a filled branch field, 0 for an unused one
                 (stored in the ftb_array entry).
   tag:          the block tag.
-  conf:         FTB_CONF_INIT (each conditional).
-  always_taken: the branch's resolved direction at allocate -- 1 if
-                allocated taken, 0 if not-taken. Cleared later by 5.5.
+  conf:         weak in the resolved direction --
+                FTB_CONF_INIT_TKN (3'b100) if allocated taken,
+                FTB_CONF_INIT_NTK (3'b011) if not-taken. Unsaturated, so
+                a fresh entry never fast-paths on first use
+                (ftb_confidence_override_rules.md 7).
   target (cond): the resolved taken target, as an offset with
                 fit/overflow/underflow status.
   target (jump): the resolved jump target, as a 21-bit displacement
@@ -465,18 +447,11 @@ vector from ftb_plru to implement it; it is not specified now.)
 
 ### 5.5  Field writes when an existing branch resolves
 
-  conf:         per ftb_confidence_override_rules.md (up if FTB would
-                have been correct, down if wrong).
-  always_taken: the first time the branch resolves not-taken, set it
-                to 0. Once 0, it stays 0 for the life of the entry. It
-                is set to 1 again only if the entry is evicted and
-                reallocated to a taken branch.
-                Reason: always_taken=1 means the branch has been taken
-                every time. One not-taken outcome makes that false. It
-                is not set back to 1 on the next taken, because an
-                alternating branch would otherwise flip the bit back
-                and forth and the claim would be wrong. One not-taken
-                ends it.
+  conf:         bimodal step on the resolved OUTCOME
+                (ftb_confidence_override_rules.md 3.2): taken outcome
+                increments toward 111, not-taken decrements toward 000,
+                saturating. Outcome-driven, not FTB-correctness-driven;
+                this also carries the direction (conf MSB).
   conditional target: rewrite if the resolved taken target differs
                 from the stored offset.
   jump target:  rewrite on EVERY resolve of that jump, including when
@@ -533,21 +508,36 @@ added storage.
 
 ---
 
-## 7. Confidence Override
+## 7. Confidence Direction and Fast-Path
 
-FTB carries a 3-bit saturating confidence counter per conditional
-branch that can suppress a TAGE/SC direction override when FTB has
-been reliably correct for that branch. This is a multi-predictor
+FTB carries a 3-bit saturating BIMODAL DIRECTION counter (conf) per
+conditional branch. Its MSB is FTB's predicted direction; FTB always
+submits a direction for a valid conditional. This is a multi-predictor
 interaction and is specified separately in
 ftb_confidence_override_rules.md. Summary:
 
-- Trains at execute on FTB direction correctness, unconditionally.
-- Acts at s2 to suppress a TAGE/SC DIRECTION override only, when the
-  counter is at or above FTB_CONF_SUPPRESS_THRESH.
-- Target overrides (ITTAGE/RAS) are never suppressed.
-- A chicken bit disables suppression while training continues.
+- conf MSB = FTB direction: ftb_brI_taken_p2 = ftb_brI_valid_p2 &
+  conf_brI[MSB].
+- Trains bimodally at execute on the resolved OUTCOME (taken ->
+  increment, not-taken -> decrement, saturating), per field br0/br1.
+- Fast-path (ftb_fastpath_en = 1 AND conf saturated, i.e. 111 or 000):
+  FTB commits its direction at s2 and skips the TAGE/SC wait, ignoring
+  the TAGE/SC direction override for that branch -- saving the s3 SC
+  wait cycle (1.1). Output is ftb_fastpath_p2 (2-bit, bit0 br0,
+  bit1 br1).
+- Otherwise (en=0 or conf unsaturated): FTB waits for TAGE/SC and is
+  overridden as normal -- ordinary BTB behavior under the longer-history
+  predictors.
+- Target overrides (ITTAGE/RAS) are never affected by conf.
+- A wrong fast-path commit steps conf out of saturation, disabling the
+  fast-path until it re-saturates (self-correcting).
+- TAGE/SC are still requested and trained under fast-path; the
+  fast-path suppresses USE, not training (a bp_cluster obligation,
+  FTB-2).
 
-See ftb_confidence_override_rules.md for the full policy.
+There is no suppression threshold and no always_taken bit; both were
+removed (session-053). See ftb_confidence_override_rules.md for the full
+policy.
 
 ---
 
@@ -581,34 +571,41 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
 
-  FTB_ENTRY_WIDTH (logical, per way) = 108 bits:
+  FTB_ENTRY_WIDTH (logical, per way) = 106 bits:
     1   valid          -- held in ftb_plru (flops), not ftb_array
   + 26  tag
-  + 2 * (1 + 3 + 13 + 2 + 1 + 3)   = 46   br0 + br1
+  + 2 * (1 + 3 + 13 + 2 + 3)       = 44   br0 + br1 (valid,pos,tgt,
+                                          stat,conf -- no always_taken)
   + (1 + 3 + 21 + 2 + 3)           = 30   jump (valid,pos,tgt,stat,type)
   + (4 + 1)                        =  5   pftAddr + carry
-    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 432 bits (logical).
+    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 424 bits (logical).
 
 RAM entry width (what ftb_array actually stores -- the logical entry
 minus the relocated entry-valid):
 
-  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 107 bits/way.
+  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 105 bits/way.
     The br0/br1/jump FIELD-valid bits remain in the RAM entry; only the
     ENTRY-level valid moves to ftb_plru.
-  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 428 bits.
+  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 420 bits.
 
 ftb_array is sized at FTB_RAM_* (data only). ftb_plru holds, per set,
 FTB_WAYS entry-valid bits + PLRU_BITS tree-PLRU bits = 7 bits
 (512 sets x 7 = 3584 flops). FTB_ENTRY_WIDTH / FTB_SET_WIDTH remain the
-LOGICAL widths; FTB-1 / IC-FTB-08 stay closed -- the logical width is
-unchanged, only its physical partition across the two storage modules.
+LOGICAL widths; FTB-1 / IC-FTB-08 reconcile to the new width
+(always_taken removed, session-053) -- the width is settled, not open.
 
 Confidence parameters (see ftb_confidence_override_rules.md):
 
-  FTB_CONF_WIDTH           = 3
-  FTB_CONF_SUPPRESS_THRESH = 6
-  FTB_CONF_INIT            = 3'b011
-  Invariant: FTB_CONF_INIT < FTB_CONF_SUPPRESS_THRESH.
+  FTB_CONF_WIDTH      = 3       bimodal direction counter; MSB = dir.
+  FTB_CONF_INIT_TKN   = 3'b100  allocate value, branch resolved taken
+                               (weakly taken, MSB=1, unsaturated).
+  FTB_CONF_INIT_NTK   = 3'b011  allocate value, branch resolved
+                               not-taken (weakly not-taken, MSB=0,
+                               unsaturated).
+  Invariant: both init values unsaturated (TKN != '1, NTK != '0) with
+  MSB matching the direction. A fresh entry cannot fast-path on first
+  use. (FTB_CONF_SUPPRESS_THRESH removed -- fast-path eligibility is the
+  saturated endpoints, not a threshold.)
 
 FETCH_BLOCK_BYTES = 64 is a global / fetch-unit parameter, already in
 bp_defines_pkg.sv. It is NOT an FTB parameter; it is the fetch width,
@@ -632,15 +629,15 @@ applied on reconstruction; see 4.5.
 
 ## 9. Open Items
 
-  FTB-1: CLOSED (session-052). All offset, target, pftAddr, and carry
-         widths ruled and listed in section 8. Position FTB_BR_POS_BITS
-         =3; conditional FTB_BR_TGT_BITS=13; jump FTB_JMP_TGT_BITS=21;
-         TAR_STAT_BITS=2; PFTADDR_BITS=4; carry=1. ENTRY_WIDTH=108.
-         The session-053 storage split (8) does not reopen this: the
-         logical entry is unchanged, only partitioned into
-         FTB_RAM_ENTRY_WIDTH=107 (ftb_array) + 1 valid (ftb_plru).
-         (Historical: last_may_be_rvi_call was eliminated; no straddle
-         correction exists.)
+  FTB-1: CLOSED (session-052; reconciled session-053). All offset,
+         target, pftAddr, and carry widths ruled and listed in section
+         8. Position FTB_BR_POS_BITS=3; conditional FTB_BR_TGT_BITS=13;
+         jump FTB_JMP_TGT_BITS=21; TAR_STAT_BITS=2; PFTADDR_BITS=4;
+         carry=1. Logical ENTRY_WIDTH=106 after always_taken removal
+         (session-053). The storage split partitions it into
+         FTB_RAM_ENTRY_WIDTH=105 (ftb_array) + 1 valid (ftb_plru). The
+         width is settled, not open. (Historical: last_may_be_rvi_call
+         was eliminated; no straddle correction exists.)
 
   FTB-2: Confidence-override interaction with the TAGE update/meta
          path. Flagged, not yet analyzed. Resolve at bp_cluster
@@ -661,8 +658,9 @@ applied on reconstruction; see 4.5.
                          the storage-split invariants.
 
   ftb_confidence_override_rules.md
-                      -- the 3-bit confidence counter, training and
-                         suppression policy, chicken bit.
+                      -- conf as a bimodal direction counter, bimodal
+                         training, the saturated-endpoint fast-path, and
+                         ftb_fastpath_en.
 
   bp_cluster.md       -- pipeline staging, override chain, FTQ entry
                          contents, decoupled frontend.
@@ -679,7 +677,8 @@ applied on reconstruction; see 4.5.
                          FTB_TAG_BITS, PLRU_BITS, FTB_ENTRY_WIDTH and
                          FTB_SET_WIDTH (logical), FTB_RAM_ENTRY_WIDTH
                          and FTB_RAM_SET_WIDTH (ftb_array),
-                         FTB_CONF_SUPPRESS_THRESH, FTB_CONF_INIT.
+                         FTB_CONF_WIDTH, FTB_CONF_INIT_TKN,
+                         FTB_CONF_INIT_NTK.
 
 ---
 
@@ -742,10 +741,31 @@ applied on reconstruction; see 4.5.
               sections 3/3a and IC-FTB-12/13/14. RTL finalized in
               BP-065a.
 
-  2026-06-25  session-053. Basic-direction policy ratified as 4.6:
-              present implies taken; conf carries the direction sense;
-              not-taken defers to TAGE. No stored direction bit, entry
-              stays 108, FTB-1 stays closed. Confirms the BP-066
-              ftb_cntrl implementation (ftb_brI_taken_p2 =
-              ftb_brI_valid_p2).
+  2026-06-25  session-053 (confidence redefine). conf is now a BIMODAL
+              DIRECTION counter (MSB = direction); FTB always submits a
+              direction. always_taken bit REMOVED (conf is the sole
+              direction state): each conditional field drops 1 bit, so
+              logical entry 108 -> 106, FTB_RAM_ENTRY_WIDTH 107 -> 105,
+              FTB_RAM_SET_WIDTH 428 -> 420. Threshold suppression
+              replaced by a saturated-endpoint FAST-PATH gated by
+              ftb_fastpath_en (renamed from the chicken bit; 1 enables
+              the bypass): at conf 111/000 with en=1, FTB commits its
+              direction at s2 and skips the TAGE/SC wait/override for
+              that branch (saves the s3 SC cycle). conf trains bimodally
+              on the resolved outcome (FTB_CONF_SUPPRESS_THRESH and the
+              ftb_upd_ftb_dir_u0 input removed). Allocate sets conf weak
+              in the observed direction (FTB_CONF_INIT_TKN=3'b100 /
+              FTB_CONF_INIT_NTK=3'b011). Output ftb_suppress_dir_p2
+              renamed ftb_fastpath_p2; ftb_brI_always_taken_p2 output
+              removed. Edits: 4 (entry), 4.3 (now conf direction), 4.6
+              deleted, 5.1, 5.4, 5.5, 7, 8, 9, 10. Companion:
+              ftb_confidence_override_rules.md rewritten;
+              ftb_interfaces.md port/width deltas. RTL fix: BP-066a.
+
+  2026-06-25  session-053 (superseded note). An interim 4.6
+              "present implies taken" ratification was entered earlier
+              this session and then REVERSED: conf is a bimodal
+              direction counter (both directions), not taken-only, so
+              4.6 was deleted and the confidence mechanism redefined per
+              the entry above. Recorded so the reversal is not lost.
 

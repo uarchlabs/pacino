@@ -114,39 +114,47 @@ package bp_defines_pkg;
   parameter int FTB_BR_TGT_BITS  = 13; // conditional target displ.
   parameter int FTB_JMP_TGT_BITS = 21; // jump target displacement
 
-  // Confidence counter (ftb_confidence_override_rules.md)
-  parameter int FTB_CONF_WIDTH           = 3;
-  parameter int FTB_CONF_SUPPRESS_THRESH = 6;
-  // Invariant: FTB_CONF_INIT < FTB_CONF_SUPPRESS_THRESH (IC-FTB-06)
-  localparam logic [FTB_CONF_WIDTH-1:0] FTB_CONF_INIT = 3'b011;
+  // Confidence counter (ftb_confidence_override_rules.md). conf is a
+  // bimodal DIRECTION counter; the MSB is the predicted direction.
+  // Fast-path eligibility is the two saturated states only -- there is
+  // no suppression threshold (session-053).
+  parameter int FTB_CONF_WIDTH = 3;
+  // Allocate values: weak in the OBSERVED direction (MSB matches the
+  // resolved outcome, unsaturated so a fresh entry cannot fast-path on
+  // first use). Invariant IC-FTB-06: TKN unsaturated MSB=1, NTK
+  // unsaturated MSB=0.
+  localparam logic [FTB_CONF_WIDTH-1:0] FTB_CONF_INIT_TKN = 3'b100;
+  localparam logic [FTB_CONF_WIDTH-1:0] FTB_CONF_INIT_NTK = 3'b011;
 
   // Per-way entry layout (ftb_decisions.md 8, ftb_interfaces.md 3):
   //   1                      valid
   // + FTB_TAG_BITS           tag                            (26)
-  // + 2 * (1 + pos + tgt + stat + 1 + conf)  br0 + br1      (46)
+  // + 2 * (1 + pos + tgt + stat + conf)      br0 + br1      (44)
   // + (1 + pos + jmp_tgt + stat + 3)         jump field     (30)
   // + (PFTADDR_BITS + 1)                     pftAddr + carry ( 5)
+  // always_taken removed (session-053): each conditional field is now
+  // 22 bits (was 23). conf is the sole per-branch direction state.
   localparam int FTB_ENTRY_WIDTH =
         1                                                // valid
       + FTB_TAG_BITS                                     // tag
       + 2 * (1 + FTB_BR_POS_BITS + FTB_BR_TGT_BITS
-               + TAR_STAT_BITS + 1 + FTB_CONF_WIDTH)     // br0 + br1
+               + TAR_STAT_BITS + FTB_CONF_WIDTH)         // br0 + br1
       + (1 + FTB_BR_POS_BITS + FTB_JMP_TGT_BITS
                + TAR_STAT_BITS + 3)                      // jump
       + (PFTADDR_BITS + 1);                              // pft + carry
-  // = 108 bits per way
-  // FTB_ENTRY_WIDTH (108) and FTB_SET_WIDTH (432) are the LOGICAL
-  // entry/set widths (1 entry-valid + 107 data per way). The data
-  // array ftb_array stores only the 107 data bits per way (FTB_RAM_*
+  // = 106 bits per way
+  // FTB_ENTRY_WIDTH (106) and FTB_SET_WIDTH (424) are the LOGICAL
+  // entry/set widths (1 entry-valid + 105 data per way). The data
+  // array ftb_array stores only the 105 data bits per way (FTB_RAM_*
   // below); the entry-valid bit lives in ftb_plru (IC-FTB-12).
-  localparam int FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH; // = 432
+  localparam int FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH; // = 424
 
   // ftb_array physical storage widths: the logical entry minus the
   // entry-valid bit relocated to ftb_plru (ftb_interfaces.md 5,
   // IC-FTB-12).
-  localparam int FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1;  // = 107
+  localparam int FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1;  // = 105
   localparam int FTB_RAM_SET_WIDTH   = FTB_WAYS
-                                     * FTB_RAM_ENTRY_WIDTH;   // = 428
+                                     * FTB_RAM_ENTRY_WIDTH;   // = 420
 
   // ----------------------------------------------------------------
   // FTB arbitration parameters (TBD)

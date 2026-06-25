@@ -10,7 +10,7 @@
 // FTB control logic (BP-066).
 //
 // ftb_cntrl is the ONLY logic in the FTB. It drives two storage peers:
-//   - ftb_array : pure 1R1W DATA RAM (FTB_RAM_ENTRY_WIDTH = 107/way)
+//   - ftb_array : pure 1R1W DATA RAM (FTB_RAM_ENTRY_WIDTH = 105/way)
 //   - ftb_plru  : per-set entry-valid bits + tree-PLRU state (flops)
 // It instantiates neither; the FTB top (BP-067) wires array_* to
 // ftb_array and plru_* to ftb_plru. The two storage-facing port groups
@@ -25,23 +25,24 @@
 //   - target encode/reconstruct (displacement-from-block-start)
 //   - fallthrough reduce/reconstruct (pftAddr + carry, no error check)
 //   - carried-writeWay allocate/evict with tree-PLRU
-//   - update field writes (target / always_taken / conf / pft)
-//   - confidence training and direction-suppression
+//   - update field writes (target / conf / pft)
+//   - confidence training and saturated-endpoint fast-path
 //
-// 107-bit RAM entry layout (ftb_entry_t below, private to ftb_cntrl;
-// section 8 order minus the relocated entry-valid):
+// 105-bit RAM entry layout (ftb_entry_t below, private to ftb_cntrl;
+// section 8 order minus the relocated entry-valid). always_taken was
+// removed (session-053); each conditional field is now 22 bits:
 //   tag(26)
-//   br0{valid,pos,tgt,stat,always_taken,conf} = 1+3+13+2+1+3 = 23
-//   br1{...}                                   =               23
+//   br0{valid,pos,tgt,stat,conf}               = 1+3+13+2+3  = 22
+//   br1{...}                                   =               22
 //   jmp{valid,pos,tgt,stat,isCall,isRet,isJalr}= 1+3+21+2+3  = 30
 //   pftAddr(4) + carry(1)                      =                5
-//   total                                      =              107
+//   total                                      =              105
 // The entry-valid bit is NOT in this layout; it lives in ftb_plru.
 //
 // Read-port arbitration (assumption, documented in Results Capture):
 // ftb_array/ftb_plru each expose ONE read port. Prediction uses it in
 // p1. The update path needs the carried way's current entry to
-// read-modify-write conf / always_taken / target / pft, and the set's
+// read-modify-write conf / target / pft, and the set's
 // current PLRU to mark-used -- so an active update BORROWS both read
 // ports (addressed by the carried set, NOT a tag re-lookup: IC-FTB-10).
 // Update borrows have priority; a prediction in the same cycle is
@@ -86,13 +87,11 @@ module ftb_cntrl (
 
   output logic                          ftb_br0_valid_p2,
   output logic                          ftb_br0_taken_p2,
-  output logic                          ftb_br0_always_taken_p2,
   output logic [FTB_CONF_WIDTH-1:0]     ftb_br0_conf_p2,
   output logic [VA_WIDTH-1:0]           ftb_br0_target_p2,
 
   output logic                          ftb_br1_valid_p2,
   output logic                          ftb_br1_taken_p2,
-  output logic                          ftb_br1_always_taken_p2,
   output logic [FTB_CONF_WIDTH-1:0]     ftb_br1_conf_p2,
   output logic [VA_WIDTH-1:0]           ftb_br1_target_p2,
 
@@ -104,11 +103,12 @@ module ftb_cntrl (
 
   output logic [VA_WIDTH-1:0]           ftb_pft_addr_p2,
 
-  // -- confidence suppression (2.4); bit0 br0, bit1 br1
-  output logic [1:0]                    ftb_suppress_dir_p2,
+  // -- confidence fast-path (2.4); bit0 br0, bit1 br1
+  output logic [1:0]                    ftb_fastpath_p2,
 
-  // -- global chicken bit for suppression (confidence section 5/10)
-  input  logic                          chicken_bit_enable,
+  // -- global fast-path enable (confidence section 5; 1 enables the
+  //    bypass, inverse-sense of a classic chicken bit, source TBD)
+  input  logic                          ftb_fastpath_en,
 
   // -- update port (2.5; post-execute, single port)
   input  logic                          ftb_upd_valid_u0,
@@ -119,7 +119,6 @@ module ftb_cntrl (
   input  logic                          ftb_upd_br_idx_u0,
   input  logic                          ftb_upd_taken_u0,
   input  logic [VA_WIDTH-1:0]           ftb_upd_target_u0,
-  input  logic                          ftb_upd_ftb_dir_u0,
   input  logic                          ftb_upd_is_jmp_u0,
   input  logic [VA_WIDTH-1:0]           ftb_upd_jmp_target_u0,
   input  logic                          ftb_upd_is_call_u0,
@@ -168,9 +167,8 @@ module ftb_cntrl (
     logic [FTB_BR_POS_BITS-1:0]    pos;          // in-block position
     logic [FTB_BR_TGT_BITS-1:0]    tgt;          // target displacement
     logic [TAR_STAT_BITS-1:0]      stat;         // fit/ovf/udf
-    logic                          always_taken; // 5.5 set/clear
-    logic [FTB_CONF_WIDTH-1:0]     conf;         // saturating conf
-  } ftb_cond_t;                                  // 1+3+13+2+1+3 = 23
+    logic [FTB_CONF_WIDTH-1:0]     conf;         // bimodal direction
+  } ftb_cond_t;                                  // 1+3+13+2+3 = 22
 
   typedef struct packed {
     logic                          valid;        // field valid
@@ -184,12 +182,12 @@ module ftb_cntrl (
 
   typedef struct packed {
     logic [FTB_TAG_BITS-1:0]       tag;          // 26
-    ftb_cond_t                     br0;          // 23
-    ftb_cond_t                     br1;          // 23
+    ftb_cond_t                     br0;          // 22
+    ftb_cond_t                     br1;          // 22
     ftb_jmp_t                      jmp;          // 30
     logic [PFTADDR_BITS-1:0]       pft;          // 4
     logic                          carry;        // 1
-  } ftb_entry_t;                                 // total 107
+  } ftb_entry_t;                                 // total 105
 
   // ----------------------------------------------------------------
   // Functions (combinational helpers). Declared before first use.
@@ -251,7 +249,8 @@ module ftb_cntrl (
     else                                                 jmp_stat = 2'b01;
   endfunction
 
-  // Saturating confidence step (3-bit, 0..7). up -> increment.
+  // Saturating bimodal step (3-bit, 0..7). up = resolved taken ->
+  // increment toward 111; down -> decrement toward 000.
   function automatic logic [FTB_CONF_WIDTH-1:0] conf_step(
       input logic [FTB_CONF_WIDTH-1:0] cur, input logic up);
     if (up) conf_step = (cur == {FTB_CONF_WIDTH{1'b1}})
@@ -305,8 +304,8 @@ module ftb_cntrl (
   // ----------------------------------------------------------------
   // Update-side combinational decode (u0). Produces the write-back
   // entry, the update set index/tag/base, and the readback of the
-  // carried way (for read-modify-write of conf / always_taken /
-  // target / pft on a hit). No tag re-lookup (IC-FTB-10).
+  // carried way (for read-modify-write of conf / target / pft on a
+  // hit). No tag re-lookup (IC-FTB-10).
   // ----------------------------------------------------------------
   logic [FTB_IDX_BITS-1:0]  upd_set_idx;
   logic [FTB_TAG_BITS-1:0]  upd_tag;
@@ -351,22 +350,21 @@ module ftb_cntrl (
     upd_new.carry = |upd_off[VA_WIDTH-1:FTB_OFFSET_BITS];
 
     // Conditional field RMW. A hit with the field already valid trains
-    // (conf inc/dec, always_taken clear-on-not-taken). A hit with the
-    // field free, or a miss-allocate, fills fresh (conf = INIT,
-    // always_taken = resolved direction).
+    // the bimodal conf toward the resolved outcome. A hit with the
+    // field free, or a miss-allocate, fills fresh with the weak init in
+    // the observed direction (TKN -> 100, NTK -> 011) (5.4, conf
+    // section 3.2 / 7).
     fld_old = (ftb_upd_br_idx_u0 == 1'b0) ? upd_old.br0 : upd_old.br1;
     fresh   = ~ftb_upd_hit_u0 | ~fld_old.valid;
 
-    fld_new.valid        = 1'b1;
-    fld_new.pos          = '0;  // no in-block position on the upd port
-    fld_new.tgt          = enc_br_disp(ftb_upd_target_u0, upd_base);
-    fld_new.stat         = br_stat(ftb_upd_target_u0, upd_base);
-    fld_new.always_taken = fresh ? ftb_upd_taken_u0
-                         : (ftb_upd_taken_u0 ? fld_old.always_taken
-                                             : 1'b0);
-    fld_new.conf         = fresh ? FTB_CONF_INIT
-                         : conf_step(fld_old.conf,
-                             ftb_upd_ftb_dir_u0 == ftb_upd_taken_u0);
+    fld_new.valid = 1'b1;
+    fld_new.pos   = '0;  // no in-block position on the upd port
+    fld_new.tgt   = enc_br_disp(ftb_upd_target_u0, upd_base);
+    fld_new.stat  = br_stat(ftb_upd_target_u0, upd_base);
+    fld_new.conf  = fresh
+                  ? (ftb_upd_taken_u0 ? FTB_CONF_INIT_TKN
+                                      : FTB_CONF_INIT_NTK)
+                  : conf_step(fld_old.conf, ftb_upd_taken_u0);
 
     if (ftb_upd_is_br_u0) begin
       if (ftb_upd_br_idx_u0 == 1'b0) upd_new.br0 = fld_new;
@@ -424,10 +422,10 @@ module ftb_cntrl (
   logic                      n_valid_p2;
   logic                      n_hit_p2;
   logic [FTB_WAY_BITS-1:0]   n_way_p2;
-  logic                      n_br0_valid, n_br0_taken, n_br0_at;
+  logic                      n_br0_valid, n_br0_taken;
   logic [FTB_CONF_WIDTH-1:0] n_br0_conf;
   logic [VA_WIDTH-1:0]       n_br0_tgt;
-  logic                      n_br1_valid, n_br1_taken, n_br1_at;
+  logic                      n_br1_valid, n_br1_taken;
   logic [FTB_CONF_WIDTH-1:0] n_br1_conf;
   logic [VA_WIDTH-1:0]       n_br1_tgt;
   logic                      n_jmp_valid, n_is_call, n_is_ret, n_is_jalr;
@@ -458,19 +456,16 @@ module ftb_cntrl (
     n_hit_p2   = pred_grant_p1 & hit_any;
     n_way_p2   = sel_way;             // hit way, or tree-PLRU victim
 
-    // br0 / br1. FTB basic direction model: a present (valid)
-    // conditional field is predicted taken (BTB presence semantics);
-    // always_taken is the stronger bypass hint and conf measures how
-    // reliably that taken prediction holds.
+    // br0 / br1. FTB direction is the bimodal conf MSB, qualified by
+    // field valid (conf section 3.1): a valid conditional is predicted
+    // taken when its conf MSB is 1, not-taken when 0.
     n_br0_valid = n_valid_p2 & sel_entry.br0.valid;
-    n_br0_taken = n_br0_valid;
-    n_br0_at    = n_br0_valid & sel_entry.br0.always_taken;
+    n_br0_taken = n_br0_valid & sel_entry.br0.conf[FTB_CONF_WIDTH-1];
     n_br0_conf  = sel_entry.br0.conf;
     n_br0_tgt   = recon_br(sel_entry.br0.tgt, base_p1);
 
     n_br1_valid = n_valid_p2 & sel_entry.br1.valid;
-    n_br1_taken = n_br1_valid;
-    n_br1_at    = n_br1_valid & sel_entry.br1.always_taken;
+    n_br1_taken = n_br1_valid & sel_entry.br1.conf[FTB_CONF_WIDTH-1];
     n_br1_conf  = sel_entry.br1.conf;
     n_br1_tgt   = recon_br(sel_entry.br1.tgt, base_p1);
 
@@ -492,10 +487,10 @@ module ftb_cntrl (
   // ----------------------------------------------------------------
   logic                      q_valid_p2, q_hit_p2;
   logic [FTB_WAY_BITS-1:0]   q_way_p2;
-  logic                      q_br0_valid, q_br0_taken, q_br0_at;
+  logic                      q_br0_valid, q_br0_taken;
   logic [FTB_CONF_WIDTH-1:0] q_br0_conf;
   logic [VA_WIDTH-1:0]       q_br0_tgt;
-  logic                      q_br1_valid, q_br1_taken, q_br1_at;
+  logic                      q_br1_valid, q_br1_taken;
   logic [FTB_CONF_WIDTH-1:0] q_br1_conf;
   logic [VA_WIDTH-1:0]       q_br1_tgt;
   logic                      q_jmp_valid, q_is_call, q_is_ret, q_is_jalr;
@@ -509,12 +504,10 @@ module ftb_cntrl (
       q_way_p2    <= '0;
       q_br0_valid <= 1'b0;
       q_br0_taken <= 1'b0;
-      q_br0_at    <= 1'b0;
       q_br0_conf  <= '0;
       q_br0_tgt   <= '0;
       q_br1_valid <= 1'b0;
       q_br1_taken <= 1'b0;
-      q_br1_at    <= 1'b0;
       q_br1_conf  <= '0;
       q_br1_tgt   <= '0;
       q_jmp_valid <= 1'b0;
@@ -529,12 +522,10 @@ module ftb_cntrl (
       q_way_p2    <= n_way_p2;
       q_br0_valid <= n_br0_valid;
       q_br0_taken <= n_br0_taken;
-      q_br0_at    <= n_br0_at;
       q_br0_conf  <= n_br0_conf;
       q_br0_tgt   <= n_br0_tgt;
       q_br1_valid <= n_br1_valid;
       q_br1_taken <= n_br1_taken;
-      q_br1_at    <= n_br1_at;
       q_br1_conf  <= n_br1_conf;
       q_br1_tgt   <= n_br1_tgt;
       q_jmp_valid <= n_jmp_valid;
@@ -561,13 +552,11 @@ module ftb_cntrl (
 
   assign ftb_br0_valid_p2        = q_br0_valid & flush_clr;
   assign ftb_br0_taken_p2        = q_br0_taken & flush_clr;
-  assign ftb_br0_always_taken_p2 = q_br0_at    & flush_clr;
   assign ftb_br0_conf_p2         = q_br0_conf;
   assign ftb_br0_target_p2       = q_br0_tgt;
 
   assign ftb_br1_valid_p2        = q_br1_valid & flush_clr;
   assign ftb_br1_taken_p2        = q_br1_taken & flush_clr;
-  assign ftb_br1_always_taken_p2 = q_br1_at    & flush_clr;
   assign ftb_br1_conf_p2         = q_br1_conf;
   assign ftb_br1_target_p2       = q_br1_tgt;
 
@@ -579,18 +568,16 @@ module ftb_cntrl (
 
   assign ftb_pft_addr_p2         = q_pft;
 
-  // Confidence direction suppression (confidence section 4/5,
-  // IC-FTB-02). Per branch: valid, field present, not always_taken,
-  // conf at/above threshold, chicken bit enabled. Not asserted under
-  // flush.
-  assign ftb_suppress_dir_p2[0] =
-      q_valid_p2 & q_br0_valid & ~q_br0_at
-    & (q_br0_conf >= FTB_CONF_WIDTH'(FTB_CONF_SUPPRESS_THRESH))
-    & chicken_bit_enable & flush_clr;
-  assign ftb_suppress_dir_p2[1] =
-      q_valid_p2 & q_br1_valid & ~q_br1_at
-    & (q_br1_conf >= FTB_CONF_WIDTH'(FTB_CONF_SUPPRESS_THRESH))
-    & chicken_bit_enable & flush_clr;
+  // Confidence fast-path (confidence section 4, IC-FTB-08). Per branch:
+  // valid entry, field present, fast-path enabled, conf saturated (all
+  // -ones or all-zeros). Direction only -- never a target override. Not
+  // asserted under flush.
+  assign ftb_fastpath_p2[0] =
+      q_valid_p2 & q_br0_valid & ftb_fastpath_en & flush_clr
+    & ((q_br0_conf == '1) | (q_br0_conf == '0));
+  assign ftb_fastpath_p2[1] =
+      q_valid_p2 & q_br1_valid & ftb_fastpath_en & flush_clr
+    & ((q_br1_conf == '1) | (q_br1_conf == '0));
 
   // ----------------------------------------------------------------
   // ftb_array write port. Write on any valid update (hit overwrite or
@@ -657,12 +644,17 @@ module ftb_cntrl (
   end
 
   // ----------------------------------------------------------------
-  // Invariant assertion (IC-FTB-06 / confidence section 6): a fresh
-  // entry must start below the suppression threshold.
+  // Invariant assertion (IC-FTB-06 / confidence section 7): the weak
+  // allocate values must be unsaturated with the MSB matching their
+  // direction, so a fresh entry cannot fast-path on first use.
   // ----------------------------------------------------------------
   initial begin
-    if (FTB_CONF_INIT >= FTB_CONF_WIDTH'(FTB_CONF_SUPPRESS_THRESH))
-      $error("FTB_CONF_INIT must be < FTB_CONF_SUPPRESS_THRESH");
+    if (FTB_CONF_INIT_TKN == {FTB_CONF_WIDTH{1'b1}}
+        || FTB_CONF_INIT_TKN[FTB_CONF_WIDTH-1] != 1'b1)
+      $error("FTB_CONF_INIT_TKN must be unsaturated with MSB=1");
+    if (FTB_CONF_INIT_NTK == {FTB_CONF_WIDTH{1'b0}}
+        || FTB_CONF_INIT_NTK[FTB_CONF_WIDTH-1] != 1'b0)
+      $error("FTB_CONF_INIT_NTK must be unsaturated with MSB=0");
   end
 
 endmodule : ftb_cntrl
