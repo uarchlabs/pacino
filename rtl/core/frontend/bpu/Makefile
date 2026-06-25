@@ -41,6 +41,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ftb_plru \
         lint_ftb_cntrl \
         lint_ftb \
+        sim_ftb \
         sim_tage sim_tage_fast sim_tage_tasks sim_tage_manual clean
 
 all: lint  \
@@ -66,7 +67,8 @@ all: lint  \
      sim_tage \
      sim_tage_fast \
      sim_tage_tasks \
-     sim_ras
+     sim_ras \
+     sim_ftb
 
 lint:
 	@echo "[linting]    bp_history"
@@ -338,6 +340,22 @@ sim_ras:
 	@echo "[simulating] $(VER_OUT)_ras/Vtb"
 	$(Q)./$(VER_OUT)_ras/Vtb
 
+sim_ftb:
+	@echo "[compiling]  tb_ftb"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_ftb \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/ftb_array.sv \
+	  $(RTL_DIR)/ftb_plru.sv \
+	  $(RTL_DIR)/ftb_cntrl.sv \
+	  $(RTL_DIR)/ftb.sv \
+	  $(TB_DIR)/tb_ftb.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ftb/Vtb"
+	$(Q)./$(VER_OUT)_ftb/Vtb
+
 sim_tage:
 	@echo "[compiling]  tb_tage"
 	$(Q)$(VERILATOR) --binary \
@@ -449,6 +467,7 @@ clean:
 	  $(VER_OUT)_tage_tasks \
 	  $(VER_OUT)_tage_manual \
 	  $(VER_OUT)_ras \
+	  $(VER_OUT)_ftb \
 	  obj_dir_cov_history \
 	  obj_dir_cov_loop_pred \
 	  obj_dir_cov_tage \

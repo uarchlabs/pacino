@@ -81,6 +81,7 @@ rtl/core/frontend/bpu/obj_tage_table
 rtl/core/frontend/bpu/obj_tage_tasks/
 rtl/core/frontend/bpu/obj_ubtb
 rtl/core/frontend/bpu/obj_ras/
+rtl/core/frontend/bpu/obj_ftb/
 # lib
 rtl/lib/obj_dir
 
