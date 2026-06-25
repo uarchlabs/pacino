@@ -84,21 +84,69 @@ package bp_defines_pkg;
   // ================================================================
   // :FTB parameters:
   // ================================================================
-  // Size: 2048 entries by 4 ways by 2 (one per prediction slot)
-  // Stage: s2 output. Authoritative target for direct branches.
-  parameter int FTB_ENTRIES = 2048;
-  parameter int FTB_WAYS    = 4;
+  // Single FTB array. One PC indexes one set per cycle; the indexed
+  // entry describes the whole 32-byte prediction block (2 conditional
+  // fields + 1 jump field). Stage: s2 output. Authoritative target for
+  // direct branches. See ftb_decisions.md / ftb_interfaces.md.
+  //
+  // FTB_BLOCK_BYTES (32) is the FTB prediction block. It is distinct
+  // from the global FETCH_BLOCK_BYTES (64) fetch width and must not be
+  // collapsed with it (ftb_decisions.md 2.3).
+  parameter int FTB_ENTRIES     = 2048; // total entries, single array
+  parameter int FTB_WAYS        = 4;    // set associativity
+  parameter int FTB_BLOCK_BYTES = 32;   // FTB prediction block, 8 instr
 
-  localparam int FTB_SETS          = FTB_ENTRIES / FTB_WAYS; // = 512
-  localparam int FTB_IDX_BITS      = $clog2(FTB_SETS);       // = 9
-  localparam int FETCH_BLOCK_BYTES = 64
-  localparam int FTB_BLOCK_BITS    = $clog2(FETCH_BLOCK_BYTES)
-  localparam int FTB_TAG_BITS      = VA_WIDTH-FTB_IDX_BITS-FTB_BLOCK_BITS
-  localparam int FTB_PLRU_BITS     = 3
-  localparam int FTB_ENTRY_WIDTH   = 1            //valid
-                                   + FTB_TAG_BITS
-                                   + FTB_IDX_BITS  //branch 0
-                                   + FTB_IDX_BITS  //branch 1
+  localparam int FTB_SETS        = FTB_ENTRIES / FTB_WAYS; // = 512
+  localparam int FTB_IDX_BITS    = $clog2(FTB_SETS);       // = 9
+  localparam int FTB_WAY_BITS    = $clog2(FTB_WAYS);       // = 2
+  localparam int FTB_OFFSET_BITS = $clog2(FTB_BLOCK_BYTES);// = 5
+  // Full upper-VA tag, no partial-tag aliasing (ftb_decisions.md 4.1)
+  localparam int FTB_TAG_BITS    = VA_WIDTH - FTB_IDX_BITS
+                                            - FTB_OFFSET_BITS; // = 26
+  localparam int PLRU_BITS       = FTB_WAYS - 1; // tree-PLRU,     = 3
+  // In-block instruction position, expanded-instruction granularity
+  localparam int FTB_BR_POS_BITS = $clog2(FTB_BLOCK_BYTES / 4); // = 3
+  // Partial fall-through address index (ftb_decisions.md 8.1)
+  localparam int PFTADDR_BITS    = $clog2(FTB_BLOCK_BYTES / 4) + 1; // 4
+
+  // Target displacement / status widths (ftb_decisions.md 4.2, 8)
+  parameter int TAR_STAT_BITS    = 2;  // fit / overflow / underflow
+  parameter int FTB_BR_TGT_BITS  = 13; // conditional target displ.
+  parameter int FTB_JMP_TGT_BITS = 21; // jump target displacement
+
+  // Confidence counter (ftb_confidence_override_rules.md)
+  parameter int FTB_CONF_WIDTH           = 3;
+  parameter int FTB_CONF_SUPPRESS_THRESH = 6;
+  // Invariant: FTB_CONF_INIT < FTB_CONF_SUPPRESS_THRESH (IC-FTB-06)
+  localparam logic [FTB_CONF_WIDTH-1:0] FTB_CONF_INIT = 3'b011;
+
+  // Per-way entry layout (ftb_decisions.md 8, ftb_interfaces.md 3):
+  //   1                      valid
+  // + FTB_TAG_BITS           tag                            (26)
+  // + 2 * (1 + pos + tgt + stat + 1 + conf)  br0 + br1      (46)
+  // + (1 + pos + jmp_tgt + stat + 3)         jump field     (30)
+  // + (PFTADDR_BITS + 1)                     pftAddr + carry ( 5)
+  localparam int FTB_ENTRY_WIDTH =
+        1                                                // valid
+      + FTB_TAG_BITS                                     // tag
+      + 2 * (1 + FTB_BR_POS_BITS + FTB_BR_TGT_BITS
+               + TAR_STAT_BITS + 1 + FTB_CONF_WIDTH)     // br0 + br1
+      + (1 + FTB_BR_POS_BITS + FTB_JMP_TGT_BITS
+               + TAR_STAT_BITS + 3)                      // jump
+      + (PFTADDR_BITS + 1);                              // pft + carry
+  // = 108 bits per way
+  // FTB_ENTRY_WIDTH (108) and FTB_SET_WIDTH (432) are the LOGICAL
+  // entry/set widths (1 entry-valid + 107 data per way). The data
+  // array ftb_array stores only the 107 data bits per way (FTB_RAM_*
+  // below); the entry-valid bit lives in ftb_plru (IC-FTB-12).
+  localparam int FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH; // = 432
+
+  // ftb_array physical storage widths: the logical entry minus the
+  // entry-valid bit relocated to ftb_plru (ftb_interfaces.md 5,
+  // IC-FTB-12).
+  localparam int FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1;  // = 107
+  localparam int FTB_RAM_SET_WIDTH   = FTB_WAYS
+                                     * FTB_RAM_ENTRY_WIDTH;   // = 428
 
   // ----------------------------------------------------------------
   // FTB arbitration parameters (TBD)

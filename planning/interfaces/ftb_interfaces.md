@@ -33,14 +33,21 @@ Conventions:
 ## 1. Module Hierarchy
 
 ftb (top, structural only)
-  ftb_array (single 1R1W array; one instance)
-  ftb_cntrl (read, branch-type classify, block-boundary and
-             fallthrough compute, allocate/evict, update field
-             writes, confidence training and suppression)
+  ftb_array (single 1R1W DATA array; one instance; pure RAM)
+  ftb_plru  (valid bits + tree-PLRU state; flops; resettable)
+  ftb_cntrl (read, branch-type classify, way-match using ftb_plru
+             valid AND ftb_array tag, block-boundary and fallthrough
+             compute, allocate/evict including PLRU victim and
+             next-state compute, valid set/clear, update field writes,
+             confidence training and suppression)
 
-See ftb_decisions.md section 2.4. The top is structural only. The
-array is a discrete module so a register file or a 1R1W SRAM can be
-substituted without touching ftb_cntrl (ftb_decisions.md 2.4).
+See ftb_decisions.md section 2.4. The top is structural only. The two
+storage modules are discrete so a 1R1W SRAM macro can replace ftb_array
+without touching ftb_cntrl, and so all resettable state (valid, PLRU)
+lives in flops in ftb_plru. ftb_cntrl is the only logic; ftb_array and
+ftb_plru are storage peers. The PLRU victim selection and next-state
+compute, and the way-match, live in ftb_cntrl, not in the storage
+modules (IC-FTB-12).
 
 ---
 
@@ -228,44 +235,41 @@ instruction straddles a block boundary in this design
 
 ## 3. ftb_array Module Ports
 
-One instance. Single 1R1W array. Read port for prediction, write port
-for update, independent read and write addresses usable in the same
-cycle.
+One instance. Single 1R1W DATA array. Read port for prediction, write
+port for update, independent read and write addresses usable in the
+same cycle. ftb_array holds NO entry-valid bit and NO PLRU state --
+those live in ftb_plru. It is pure data RAM so a 1R1W SRAM macro can
+substitute it directly. Enables are ACTIVE LOW, matching the BPU array
+convention (IC-FTB-13).
 
   clk               -- rising-edge clock
-  rstn              -- active-low synchronous reset
 
   -- read port (prediction)
-  rd_en             -- 1 = read this cycle
-  rd_addr           -- [FTB_IDX_BITS-1:0]   set index
-  rd_data           -- [SET_WIDTH-1:0]      all ways of the set;
-                       way match and select in ftb_cntrl
+  rd_en_n           -- active low; 0 = read this cycle
+  rd_addr           -- [FTB_IDX_BITS-1:0]    set index
+  rd_data           -- [FTB_RAM_SET_WIDTH-1:0] all ways of the set
+                       (data only, no valid); way match and select in
+                       ftb_cntrl, qualified by ftb_plru valid
 
   -- write port (update / allocate)
-  wr_en             -- 1 = write this cycle
-  wr_addr           -- [FTB_IDX_BITS-1:0]   set index
-  wr_way            -- [FTB_WAYS-1:0]       one-hot way select
+  wr_en_n           -- active low; 0 = write this cycle
+  wr_addr           -- [FTB_IDX_BITS-1:0]    set index
+  wr_way            -- [FTB_WAYS-1:0]        one-hot way select
                        (ftb_cntrl decodes the carried encoded way,
                         ftb_upd_way_u0, to one-hot here)
-  wr_data           -- [ENTRY_WIDTH-1:0]    one way's entry
+  wr_data           -- [FTB_RAM_ENTRY_WIDTH-1:0] one way's entry data
+                       (no entry-valid; that is set in ftb_plru)
 
-  -- tree-PLRU state, per set (read-modify-write in ftb_cntrl)
-  plru_rd_addr      -- [FTB_IDX_BITS-1:0]
-  plru_rd_data      -- [PLRU_BITS-1:0]
-  plru_wr_en        -- write enable
-  plru_wr_addr      -- [FTB_IDX_BITS-1:0]
-  plru_wr_data      -- [PLRU_BITS-1:0]
+There is NO clk reset of the data array (pure SRAM-style storage; a
+real SRAM cannot be reset). Cold validity is owned entirely by ftb_plru
+(IC-FTB-12). Do not rely on array power-up contents -- ftb_cntrl never
+reads a way as valid until ftb_plru reports it valid.
 
-PLRU updates on two events (ftb_decisions.md 5.3): prediction hit
-(mark the hit way used) and update/allocate write (mark the written
-way used). The victim way is selected at the prediction read and
-carried to update (IC-FTB-10).
+  FTB_RAM_SET_WIDTH   = FTB_WAYS * FTB_RAM_ENTRY_WIDTH   (= 428)
 
-  SET_WIDTH   = FTB_WAYS * ENTRY_WIDTH
-
-  ENTRY_WIDTH per way = 108 bits (all widths ruled, session-052):
-                  1                       valid
-                + FTB_TAG_BITS            tag                  (26)
+  FTB_RAM_ENTRY_WIDTH per way = 107 bits (the 108-bit logical entry
+  minus the relocated entry-valid):
+                  FTB_TAG_BITS            tag                  (26)
                 + 2 * (                   br0 + br1 = 46:
                         1                   field valid
                       + FTB_BR_POS_BITS     in-block position    (3)
@@ -281,15 +285,73 @@ carried to update (IC-FTB-10).
                 + PFTADDR_BITS            partial fallthrough    (4)
                 + 1                       carry
 
-  SET_WIDTH = FTB_WAYS * ENTRY_WIDTH = 4 * 108 = 432 bits.
+  The br0/br1/jump FIELD-valid bits stay in the RAM entry. Only the
+  ENTRY-level valid (1 bit/way) is relocated to ftb_plru, because the
+  entry-valid gates the whole entry and the field-valids are
+  don't-care while entry-valid is 0.
 
-All field widths are settled (ftb_decisions.md 8). Jump target is
-stored as a 21-bit displacement + status (was full-width in an earlier
-draft), reconstructed to full VA at read.
+Way-slice packing: way w occupies rd_data/wr_data
+[w*FTB_RAM_ENTRY_WIDTH +: FTB_RAM_ENTRY_WIDTH]; wr_way[w] selects
+way w. ftb_cntrl uses the same convention.
 
 Same-cycle read and write to the same set/way: the read returns the
-OLD value (F19). Substitution invariant: any 1R1W array primitive may
-replace ftb_array without changing ftb_cntrl port connections.
+OLD value (F19, IC-FTB-14). Substitution invariant: any 1R1W array
+primitive (register file or SRAM macro) may replace ftb_array without
+changing ftb_cntrl port connections.
+
+## 3a. ftb_plru Module Ports
+
+One instance. Flop storage, parallel to ftb_array. Holds, per set, the
+FTB_WAYS entry-valid bits and the PLRU_BITS tree-PLRU state. Storage
+only: ftb_plru does NOT compute the victim, the next PLRU state, or the
+way-match -- those are in ftb_cntrl (IC-FTB-12). Enables are ACTIVE LOW
+(IC-FTB-13). Reset clears all entry-valid bits; this is the FTB cold
+init -- there is no sram_init for the FTB.
+
+  clk               -- rising-edge clock
+  rstn              -- active-low reset; clears all entry-valid bits to
+                       0 and resets all PLRU state to 0
+
+  -- read port (prediction; combinational)
+  rd_en_n           -- active low; 0 = read this cycle
+  rd_addr           -- [FTB_IDX_BITS-1:0]    set index
+  rd_valid          -- [FTB_WAYS-1:0]        per-way entry-valid for the
+                       set (ftb_cntrl ANDs with tag-match for the hit)
+  rd_plru           -- [PLRU_BITS-1:0]       tree-PLRU state for the set
+                       (ftb_cntrl computes the victim and the
+                        next-state from this)
+
+  -- valid write port (synchronous): set or clear one way's valid
+  val_we_n          -- active low; 0 = valid write this cycle
+  val_addr          -- [FTB_IDX_BITS-1:0]    set index
+  val_way           -- [FTB_WAYS-1:0]        one-hot way (mirrors
+                       ftb_array wr_way)
+  val_set           -- 1 = set the selected way's valid (allocate);
+                       0 = clear it (reserved for flush, deferred,
+                       IC-FTB-07)
+
+  -- PLRU write port (synchronous): replace a set's tree-PLRU state
+  plru_we_n         -- active low; 0 = PLRU write this cycle
+  plru_addr         -- [FTB_IDX_BITS-1:0]    set index
+  plru_wdata        -- [PLRU_BITS-1:0]       next PLRU state, computed
+                       by ftb_cntrl (mark-used on prediction hit and on
+                       update/allocate write, ftb_decisions.md 5.3)
+
+The valid and PLRU write ports are separate so an allocate -- which
+both sets a way's valid and marks it used -- can do both in the same
+cycle to the same set. ftb_cntrl funnels the two PLRU-touch events of
+ftb_decisions.md 5.3 (prediction-hit mark-used, update/allocate write
+mark-used) onto plru_we_n; if both target the same set in one cycle,
+update/allocate write wins and the prediction-hit touch is dropped --
+a dropped touch costs PLRU accuracy, never correctness (same tolerance
+as the carried-victim staleness, IC-FTB-10).
+
+Same-cycle read vs same-set valid/PLRU write returns the OLD value, so
+the prediction read of ftb_array and ftb_plru together yields a
+coherent pre-update snapshot of the set (IC-FTB-14).
+
+  Per-set storage: FTB_WAYS valid bits + PLRU_BITS = (4 + 3) = 7 bits.
+  Total flops: FTB_SETS * 7 = 512 * 7 = 3584.
 
 ---
 
@@ -373,6 +435,32 @@ IC-FTB-11 (resolved, session-052):
   guard (any reinstated fallback is start + FTB_BLOCK_BYTES, never
   start + FetchWidth*4).
 
+IC-FTB-12 (session-053):
+  Storage split. ftb_array is pure 1R1W DATA RAM: no entry-valid, no
+  PLRU state, no compute. The entry-valid bits and the tree-PLRU state
+  live in ftb_plru, in resettable flops. Reset clears the valid bits;
+  this is the FTB cold init -- the FTB has NO sram_init mechanism
+  (unlike the TAGE/ITTAGE tables). Way-match, PLRU victim selection,
+  PLRU next-state, and valid set/clear are all computed in ftb_cntrl,
+  which drives both storage modules. The logical 108-bit entry is
+  partitioned: 1 valid bit/way in ftb_plru, 107 in ftb_array
+  (FTB_RAM_ENTRY_WIDTH). FTB-1 / IC-FTB-08 remain closed -- the logical
+  width is unchanged, only its physical partition.
+
+IC-FTB-13 (session-053):
+  Active-low controls. All enables on ftb_array and ftb_plru are active
+  low (rd_en_n, wr_en_n, val_we_n, plru_we_n), matching the BPU array
+  convention. Reset is rstn (active low) project-wide. ftb_array has no
+  reset (pure RAM); ftb_plru reset clears valid + PLRU state.
+
+IC-FTB-14 (session-053):
+  Coherent snapshot on collision. Both storage modules return the OLD
+  contents on a same-cycle read vs same-set write (F19 extended to
+  ftb_plru). A prediction that reads a set in the same cycle an update
+  writes that set therefore sees a coherent pre-update view of both the
+  data (ftb_array) and the validity/replacement state (ftb_plru). No
+  partial/torn snapshot across the two modules.
+
 ---
 
 ## 5. Parameters
@@ -407,6 +495,17 @@ FETCH_BLOCK_BYTES = 64 is a global / fetch-unit parameter, already in
 the package. It is NOT an FTB parameter. The FTB prediction block is
 FTB_BLOCK_BYTES (32), decoupled from fetch width by the FTQ. Do not
 collapse the two (ftb_decisions.md 2.3).
+
+
+  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1        (= 107)
+                        -- the 108-bit logical entry minus the
+                           entry-valid bit relocated to ftb_plru.
+  FTB_RAM_SET_WIDTH   = FTB_WAYS * FTB_RAM_ENTRY_WIDTH (= 428)
+                        -- ftb_array data width per set.
+
+  FTB_ENTRY_WIDTH (108) and FTB_SET_WIDTH (432) remain defined as the
+  LOGICAL entry/set widths (1 valid + 107 data per way). ftb_array uses
+  the FTB_RAM_* widths; ftb_plru holds the valid bit per way.
 
 ---
 
@@ -464,4 +563,14 @@ collapse the two (ftb_decisions.md 2.3).
               output reconstructed from a 21-bit displacement+status
               (was full-width). Only IC-FTB-07 (flush) remains open,
               deferred to bp_cluster.
+
+  2026-06-25  session-053. Storage split for SRAM migration: entry-
+              valid and tree-PLRU state moved out of ftb_array into a
+              new ftb_plru flop module (resettable; clears valid as the
+              FTB cold init -- no sram_init). ftb_array reduced to pure
+              1R1W data RAM, FTB_RAM_ENTRY_WIDTH=107 / FTB_RAM_SET_WIDTH
+              =428, active-low enables, no reset. ftb_plru section 3a
+              added. IC-FTB-12/13/14 added. Logical entry unchanged at
+              108 (FTB-1 stays closed); only its physical partition
+              changed. Finalized in BP-065a.
 
