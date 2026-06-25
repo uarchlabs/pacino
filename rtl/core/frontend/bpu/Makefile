@@ -39,6 +39,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ras sim_ras \
         lint_ftb_array \
         lint_ftb_plru \
+        lint_ftb_cntrl \
         sim_tage sim_tage_fast sim_tage_tasks sim_tage_manual clean
 
 all: lint  \
@@ -52,6 +53,7 @@ all: lint  \
      lint_ras \
      lint_ftb_array \
      lint_ftb_plru \
+     lint_ftb_cntrl \
      sim \
      sim_history \
      sim_ubtb \
@@ -299,6 +301,15 @@ lint_ftb_plru:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/ftb_plru.sv $(VSILENCE)
+
+lint_ftb_cntrl:
+	@echo "[linting]    ftb_cntrl"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  --top-module ftb_cntrl \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/ftb_cntrl.sv $(VSILENCE)
 
 sim_ras:
 	@echo "[compiling]  tb_ras"

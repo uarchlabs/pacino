@@ -431,6 +431,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | value at the port to carry.          | bp_cluster/FTQ integration when |
 |    |                                      | the commit interface is built. |
 |    |                                      | Related: #78.                  |
+| 80 | FTB confidence hysteresis tuning.    | FTB conf is a saturating counter|
+| | |  (FTB_CONF_WIDTH=3) giving strongly/weakly-taken; high conf lets FTB |
+| | | suppress the TAGE/SC direction override (§4.1, saves the s2 bubble). |
+| | | If perf analysis shows the hysteresis is wrong, FTB_CONF_WIDTH is the |
+| | | knob (a parameter sweep, moves FTB_RAM_ENTRY_WIDTH; conf appears in both|
+| | |  br0/br1). Options if it degrades: widen FTB_CONF_WIDTH, or disable |
+| | | suppression via the chicken bit / remove the feature. We are not a |
+| | | adding an explicit direction-bit add this is just pure width/policy |
+| | | sweep. Revisit at bp_cluster SPEC numbers. |
 
 ---
 

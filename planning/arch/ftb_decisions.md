@@ -339,6 +339,34 @@ substitute a fetch-width fallthrough and re-commit the block-vs-fetch
 collapse banned by 2.3. Adopt the semantics (start + one prediction
 block), never the literal.
 
+### 4.6  Basic direction: present implies taken
+
+The conditional fields store no explicit taken/not-taken bit (4) --
+only always_taken and conf. FTB's basic direction for a valid
+conditional is TAKEN: ftb_brI_taken_p2 = ftb_brI_valid_p2 (classic BTB
+presence semantics). conf is the confidence in that taken call;
+always_taken (4.3) is the stronger bypass hint. Neither is a separate
+direction state -- "not taken" is encoded as FTB deferring to TAGE, not
+as a stored value.
+
+Because FTB tracks not-taken branches too (5.2), a reliably-not-taken
+branch keeps always_taken=0 and trains conf DOWN (its taken call was
+wrong). conf then stays below FTB_CONF_SUPPRESS_THRESH, suppression
+never fires (ftb_confidence_override_rules.md 4.1), and TAGE supplies
+the direction. FTB can only ever assert direction toward TAKEN;
+everything not reliably-taken defers to TAGE. The confidence training
+comparison (ftb_upd_ftb_dir_u0 vs the resolved outcome) uses this basic
+direction.
+
+Consequence: the confidence bubble-save (4.1 / 1.1) applies to
+confident-TAKEN branches only. A confident not-taken branch still pays
+the TAGE override bubble; FTB carries no encoding to confidently
+predict not-taken. This is the accepted BTB/Xiangshan-lineage tradeoff
+-- the hot branches a BTB retains skew taken. No stored direction bit
+is added; the logical entry stays 108 (FTB-1 closed). If bidirectional
+FTB confidence is ever wanted, that is a stored direction/bimodal bit
+per conditional and a width reopen -- not done here.
+
 ---
 
 ## 5. Allocation and Update
@@ -713,4 +741,11 @@ applied on reconstruction; see 4.5.
               confirmed 4 in BP-065). Companion: ftb_interfaces.md
               sections 3/3a and IC-FTB-12/13/14. RTL finalized in
               BP-065a.
+
+  2026-06-25  session-053. Basic-direction policy ratified as 4.6:
+              present implies taken; conf carries the direction sense;
+              not-taken defers to TAGE. No stored direction bit, entry
+              stays 108, FTB-1 stays closed. Confirms the BP-066
+              ftb_cntrl implementation (ftb_brI_taken_p2 =
+              ftb_brI_valid_p2).
 
