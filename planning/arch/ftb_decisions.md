@@ -201,12 +201,20 @@ Entry fields (logical entry, FTB_ENTRY_WIDTH = 106 bits/way):
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
   tag                    -- FTB_TAG_BITS, full upper-VA tag (2.x)
-  conditional branch 0   -- valid, offset, target, conf[2:0]
-  conditional branch 1   -- valid, offset, target, conf[2:0]
-  jump field             -- valid, offset, target (reconstructed full
+  conditional branch 0   -- valid, position, target, conf[2:0]
+  conditional branch 1   -- valid, position, target, conf[2:0]
+  jump field             -- valid, position, target (reconstructed full
                             VA_WIDTH from a stored displacement, 4.2),
                             isCall, isRet, isJalr
   fallthrough            -- pftAddr + carry
+
+position (FTB_BR_POS_BITS, 3 bits) is the in-block instruction slot
+(0..7) the branch occupies, distinct from the TARGET offset of 4.2 (an
+earlier draft called this field "offset", which collided with the
+target-offset term -- it is renamed "position" here). It is sourced
+from ftb_upd_pos_u0 and read out on ftb_brI_pos_p2 / ftb_jmp_pos_p2
+(ftb_interfaces.md 2.3/2.5, IC-FTB-15); the cluster/FTQ uses it to
+order br0 vs br1 and to locate the taken branch in the fetch bundle.
 
 conf is a bimodal DIRECTION counter, not a separate confidence-only
 field: its MSB is FTB's predicted direction for that conditional. There
@@ -432,6 +440,8 @@ vector from ftb_plru to implement it; it is not specified now.)
   field valid:  1 for a filled branch field, 0 for an unused one
                 (stored in the ftb_array entry).
   tag:          the block tag.
+  position:     the resolving branch's in-block slot, from
+                ftb_upd_pos_u0 (each filled conditional and the jump).
   conf:         weak in the resolved direction --
                 FTB_CONF_INIT_TKN (3'b100) if allocated taken,
                 FTB_CONF_INIT_NTK (3'b011) if not-taken. Unsaturated, so
@@ -452,6 +462,10 @@ vector from ftb_plru to implement it; it is not specified now.)
                 increments toward 111, not-taken decrements toward 000,
                 saturating. Outcome-driven, not FTB-correctness-driven;
                 this also carries the direction (conf MSB).
+  position:     NOT rewritten on an in-place resolve -- it is static for
+                a filled field (the branch does not move). Written only
+                when the field is first filled (allocate / free-field,
+                5.4) from ftb_upd_pos_u0, and reset by reallocation.
   conditional target: rewrite if the resolved taken target differs
                 from the stored offset.
   jump target:  rewrite on EVERY resolve of that jump, including when
@@ -647,6 +661,17 @@ applied on reconstruction; see 4.5.
          port; how multiple resolved branches are scheduled onto it is
          a cluster/FTQ concern, resolved at bp_cluster integration.
 
+  FTB-4: CLOSED (session-053). The in-block position field
+         (FTB_BR_POS_BITS per branch) was stored but had no producer or
+         consumer -- a spec omission carried since the entry format was
+         written and missed by the session-052 width close (which
+         audited stored bits, not field-to-port linkage). BP-066
+         surfaced it by storing pos=0. Resolved by adding ftb_upd_pos_u0
+         (producer) and ftb_brI_pos_p2 / ftb_jmp_pos_p2 (consumers); see
+         IC-FTB-15. No width change. RTL wired in BP-066b. Standing rule
+         from this: a stored field is not settled until it has a named
+         producer and consumer, not just a width.
+
 ---
 
 ## 10. Interactions With Other Planning Documents
@@ -768,4 +793,15 @@ applied on reconstruction; see 4.5.
               direction counter (both directions), not taken-only, so
               4.6 was deleted and the confidence mechanism redefined per
               the entry above. Recorded so the reversal is not lost.
+
+  2026-06-25  session-053 (position fix, FTB-4). In-block position
+              (FTB_BR_POS_BITS per branch) was a stored field with no
+              producer or consumer -- BP-066 stored it as 0. Sourced via
+              ftb_upd_pos_u0 and sunk via ftb_brI_pos_p2 / ftb_jmp_pos_p2
+              (ftb_interfaces.md 2.3/2.5, IC-FTB-15). The entry-format
+              field name "offset" (which collided with the target-offset
+              term) renamed "position" in 4. Position is static per
+              filled field (written at allocate/free-field, not on
+              in-place update). No width change. FTB-4 closed. RTL:
+              BP-066b.
 

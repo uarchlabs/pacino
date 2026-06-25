@@ -86,16 +86,19 @@ module ftb_cntrl (
   output logic [FTB_WAY_BITS-1:0]       ftb_way_p2,
 
   output logic                          ftb_br0_valid_p2,
+  output logic [FTB_BR_POS_BITS-1:0]    ftb_br0_pos_p2,
   output logic                          ftb_br0_taken_p2,
   output logic [FTB_CONF_WIDTH-1:0]     ftb_br0_conf_p2,
   output logic [VA_WIDTH-1:0]           ftb_br0_target_p2,
 
   output logic                          ftb_br1_valid_p2,
+  output logic [FTB_BR_POS_BITS-1:0]    ftb_br1_pos_p2,
   output logic                          ftb_br1_taken_p2,
   output logic [FTB_CONF_WIDTH-1:0]     ftb_br1_conf_p2,
   output logic [VA_WIDTH-1:0]           ftb_br1_target_p2,
 
   output logic                          ftb_jmp_valid_p2,
+  output logic [FTB_BR_POS_BITS-1:0]    ftb_jmp_pos_p2,
   output logic [VA_WIDTH-1:0]           ftb_jmp_target_p2,
   output logic                          ftb_is_call_p2,
   output logic                          ftb_is_ret_p2,
@@ -119,6 +122,7 @@ module ftb_cntrl (
   input  logic                          ftb_upd_br_idx_u0,
   input  logic                          ftb_upd_taken_u0,
   input  logic [VA_WIDTH-1:0]           ftb_upd_target_u0,
+  input  logic [FTB_BR_POS_BITS-1:0]    ftb_upd_pos_u0,
   input  logic                          ftb_upd_is_jmp_u0,
   input  logic [VA_WIDTH-1:0]           ftb_upd_jmp_target_u0,
   input  logic                          ftb_upd_is_call_u0,
@@ -316,6 +320,7 @@ module ftb_cntrl (
   ftb_cond_t                fld_old;
   ftb_cond_t                fld_new;
   logic                     fresh;
+  logic                     jmp_fresh;
   logic                     upd_active;
 
   assign upd_active = ftb_upd_valid_u0;
@@ -354,11 +359,16 @@ module ftb_cntrl (
     // field free, or a miss-allocate, fills fresh with the weak init in
     // the observed direction (TKN -> 100, NTK -> 011) (5.4, conf
     // section 3.2 / 7).
-    fld_old = (ftb_upd_br_idx_u0 == 1'b0) ? upd_old.br0 : upd_old.br1;
-    fresh   = ~ftb_upd_hit_u0 | ~fld_old.valid;
+    fld_old   = (ftb_upd_br_idx_u0 == 1'b0) ? upd_old.br0 : upd_old.br1;
+    fresh     = ~ftb_upd_hit_u0 | ~fld_old.valid;
+    jmp_fresh = ~ftb_upd_hit_u0 | ~upd_old.jmp.valid;
 
     fld_new.valid = 1'b1;
-    fld_new.pos   = '0;  // no in-block position on the upd port
+    // Position is static per filled field (5.4 / 5.5): write the
+    // resolving branch's in-block slot only when the field is first
+    // filled (allocate or free-field), keep the stored slot on an
+    // in-place conf/target update. fresh covers both fill cases.
+    fld_new.pos   = fresh ? ftb_upd_pos_u0 : fld_old.pos;
     fld_new.tgt   = enc_br_disp(ftb_upd_target_u0, upd_base);
     fld_new.stat  = br_stat(ftb_upd_target_u0, upd_base);
     fld_new.conf  = fresh
@@ -375,7 +385,11 @@ module ftb_cntrl (
     // resolve (5.5, IC-FTB-01); type bits from the resolved jump.
     if (ftb_upd_is_jmp_u0) begin
       upd_new.jmp.valid   = 1'b1;
-      upd_new.jmp.pos     = '0;
+      // Static jump position: written from ftb_upd_pos_u0 only when the
+      // jump field is first filled (allocate / free-field); preserved on
+      // an in-place jump-target rewrite. jmp_fresh mirrors the cond fresh
+      // test against the jump field's prior validity.
+      upd_new.jmp.pos     = jmp_fresh ? ftb_upd_pos_u0 : upd_old.jmp.pos;
       upd_new.jmp.tgt     = enc_jmp_disp(ftb_upd_jmp_target_u0, upd_base);
       upd_new.jmp.stat    = jmp_stat(ftb_upd_jmp_target_u0, upd_base);
       upd_new.jmp.is_call = ftb_upd_is_call_u0;
@@ -423,12 +437,15 @@ module ftb_cntrl (
   logic                      n_hit_p2;
   logic [FTB_WAY_BITS-1:0]   n_way_p2;
   logic                      n_br0_valid, n_br0_taken;
+  logic [FTB_BR_POS_BITS-1:0] n_br0_pos;
   logic [FTB_CONF_WIDTH-1:0] n_br0_conf;
   logic [VA_WIDTH-1:0]       n_br0_tgt;
   logic                      n_br1_valid, n_br1_taken;
+  logic [FTB_BR_POS_BITS-1:0] n_br1_pos;
   logic [FTB_CONF_WIDTH-1:0] n_br1_conf;
   logic [VA_WIDTH-1:0]       n_br1_tgt;
   logic                      n_jmp_valid, n_is_call, n_is_ret, n_is_jalr;
+  logic [FTB_BR_POS_BITS-1:0] n_jmp_pos;
   logic [VA_WIDTH-1:0]       n_jmp_tgt;
   logic [VA_WIDTH-1:0]       n_pft;
 
@@ -461,16 +478,19 @@ module ftb_cntrl (
     // taken when its conf MSB is 1, not-taken when 0.
     n_br0_valid = n_valid_p2 & sel_entry.br0.valid;
     n_br0_taken = n_br0_valid & sel_entry.br0.conf[FTB_CONF_WIDTH-1];
+    n_br0_pos   = sel_entry.br0.pos;
     n_br0_conf  = sel_entry.br0.conf;
     n_br0_tgt   = recon_br(sel_entry.br0.tgt, base_p1);
 
     n_br1_valid = n_valid_p2 & sel_entry.br1.valid;
     n_br1_taken = n_br1_valid & sel_entry.br1.conf[FTB_CONF_WIDTH-1];
+    n_br1_pos   = sel_entry.br1.pos;
     n_br1_conf  = sel_entry.br1.conf;
     n_br1_tgt   = recon_br(sel_entry.br1.tgt, base_p1);
 
     // jump field + branch-type classification (3-way JALR split).
     n_jmp_valid = n_valid_p2 & sel_entry.jmp.valid;
+    n_jmp_pos   = sel_entry.jmp.pos;
     n_jmp_tgt   = recon_jmp(sel_entry.jmp.tgt, base_p1);
     n_is_call   = n_jmp_valid & sel_entry.jmp.is_call;
     n_is_ret    = n_jmp_valid & sel_entry.jmp.is_ret;
@@ -488,12 +508,15 @@ module ftb_cntrl (
   logic                      q_valid_p2, q_hit_p2;
   logic [FTB_WAY_BITS-1:0]   q_way_p2;
   logic                      q_br0_valid, q_br0_taken;
+  logic [FTB_BR_POS_BITS-1:0] q_br0_pos;
   logic [FTB_CONF_WIDTH-1:0] q_br0_conf;
   logic [VA_WIDTH-1:0]       q_br0_tgt;
   logic                      q_br1_valid, q_br1_taken;
+  logic [FTB_BR_POS_BITS-1:0] q_br1_pos;
   logic [FTB_CONF_WIDTH-1:0] q_br1_conf;
   logic [VA_WIDTH-1:0]       q_br1_tgt;
   logic                      q_jmp_valid, q_is_call, q_is_ret, q_is_jalr;
+  logic [FTB_BR_POS_BITS-1:0] q_jmp_pos;
   logic [VA_WIDTH-1:0]       q_jmp_tgt;
   logic [VA_WIDTH-1:0]       q_pft;
 
@@ -504,13 +527,16 @@ module ftb_cntrl (
       q_way_p2    <= '0;
       q_br0_valid <= 1'b0;
       q_br0_taken <= 1'b0;
+      q_br0_pos   <= '0;
       q_br0_conf  <= '0;
       q_br0_tgt   <= '0;
       q_br1_valid <= 1'b0;
       q_br1_taken <= 1'b0;
+      q_br1_pos   <= '0;
       q_br1_conf  <= '0;
       q_br1_tgt   <= '0;
       q_jmp_valid <= 1'b0;
+      q_jmp_pos   <= '0;
       q_jmp_tgt   <= '0;
       q_is_call   <= 1'b0;
       q_is_ret    <= 1'b0;
@@ -522,13 +548,16 @@ module ftb_cntrl (
       q_way_p2    <= n_way_p2;
       q_br0_valid <= n_br0_valid;
       q_br0_taken <= n_br0_taken;
+      q_br0_pos   <= n_br0_pos;
       q_br0_conf  <= n_br0_conf;
       q_br0_tgt   <= n_br0_tgt;
       q_br1_valid <= n_br1_valid;
       q_br1_taken <= n_br1_taken;
+      q_br1_pos   <= n_br1_pos;
       q_br1_conf  <= n_br1_conf;
       q_br1_tgt   <= n_br1_tgt;
       q_jmp_valid <= n_jmp_valid;
+      q_jmp_pos   <= n_jmp_pos;
       q_jmp_tgt   <= n_jmp_tgt;
       q_is_call   <= n_is_call;
       q_is_ret    <= n_is_ret;
@@ -551,16 +580,19 @@ module ftb_cntrl (
   assign ftb_way_p2             = q_way_p2;
 
   assign ftb_br0_valid_p2        = q_br0_valid & flush_clr;
+  assign ftb_br0_pos_p2          = q_br0_pos;
   assign ftb_br0_taken_p2        = q_br0_taken & flush_clr;
   assign ftb_br0_conf_p2         = q_br0_conf;
   assign ftb_br0_target_p2       = q_br0_tgt;
 
   assign ftb_br1_valid_p2        = q_br1_valid & flush_clr;
+  assign ftb_br1_pos_p2          = q_br1_pos;
   assign ftb_br1_taken_p2        = q_br1_taken & flush_clr;
   assign ftb_br1_conf_p2         = q_br1_conf;
   assign ftb_br1_target_p2       = q_br1_tgt;
 
   assign ftb_jmp_valid_p2        = q_jmp_valid & flush_clr;
+  assign ftb_jmp_pos_p2          = q_jmp_pos;
   assign ftb_jmp_target_p2       = q_jmp_tgt;
   assign ftb_is_call_p2          = q_is_call & flush_clr;
   assign ftb_is_ret_p2           = q_is_ret  & flush_clr;

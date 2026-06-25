@@ -92,6 +92,14 @@ fields of the one indexed entry, not two slots.
   -- conditional branch 0
   output logic                  ftb_br0_valid_p2
                         -- 1 = conditional field 0 is occupied.
+  output logic [FTB_BR_POS_BITS-1:0] ftb_br0_pos_p2
+                        -- br0 in-block position: which expanded-
+                           instruction slot (0..7) within the 32-byte
+                           block this branch occupies. Needed by the
+                           cluster/FTQ to order br0 vs br1 and locate
+                           the taken branch in the bundle. Written at
+                           allocate/free-field from ftb_upd_pos_u0
+                           (2.5); static for the life of the field.
   output logic                  ftb_br0_taken_p2
                         -- FTB direction for br0 = conf MSB, qualified
                            by valid: ftb_br0_taken_p2 =
@@ -107,6 +115,7 @@ fields of the one indexed entry, not two slots.
 
   -- conditional branch 1 (same fields as br0)
   output logic                  ftb_br1_valid_p2
+  output logic [FTB_BR_POS_BITS-1:0] ftb_br1_pos_p2
   output logic                  ftb_br1_taken_p2
   output logic [FTB_CONF_WIDTH-1:0] ftb_br1_conf_p2
   output logic [VA_WIDTH-1:0]   ftb_br1_target_p2
@@ -117,6 +126,10 @@ fields of the one indexed entry, not two slots.
   -- jump field (terminal: uncond jump / call / return)
   output logic                  ftb_jmp_valid_p2
                         -- 1 = jump field occupied.
+  output logic [FTB_BR_POS_BITS-1:0] ftb_jmp_pos_p2
+                        -- jump in-block position (0..7), same meaning
+                           as the conditional positions. Written at
+                           allocate from ftb_upd_pos_u0 (2.5).
   output logic [VA_WIDTH-1:0]   ftb_jmp_target_p2
                         -- jump target, reconstructed full width by
                            ftb_cntrl from the stored 21-bit
@@ -204,6 +217,16 @@ IC-FTB-05).
                            ftb_cntrl converts to the stored
                            displacement form for conditional storage
                            (4.2).
+  input  logic [FTB_BR_POS_BITS-1:0] ftb_upd_pos_u0
+                        -- in-block position of the resolving branch
+                           (0..7), = (branch_pc - block_start) >>
+                           INST_OFFSET, supplied by the FTQ/resolve
+                           side. Written to the selected field's pos at
+                           allocate / free-field fill (the conditional
+                           chosen by ftb_upd_br_idx_u0, or the jump when
+                           ftb_upd_is_jmp_u0). Static for the life of a
+                           filled field; not rewritten on an in-place
+                           conf/target update (ftb_decisions.md 5.4/5.5).
 
   (No ftb_upd_ftb_dir_u0 -- conf trains bimodally on the resolved
    OUTCOME, not on FTB-prediction correctness, so FTB's original
@@ -444,6 +467,17 @@ IC-FTB-14 (session-053):
   writes that set sees a coherent pre-update view of both the data
   (ftb_array) and the validity/replacement state (ftb_plru).
 
+IC-FTB-15 (session-053, FTB-4 resolved):
+  In-block position is sourced and sunk. Each stored position field
+  (br0, br1, jump; FTB_BR_POS_BITS each) has a producer and a consumer:
+  written from ftb_upd_pos_u0 (2.5) at allocate / free-field fill,
+  routed to the field selected by ftb_upd_br_idx_u0 or ftb_upd_is_jmp_u0;
+  read out on ftb_br0_pos_p2 / ftb_br1_pos_p2 / ftb_jmp_pos_p2 (2.3).
+  Position is static for the life of a filled field -- not rewritten on
+  an in-place conf/target update; reset only by reallocation. No stored
+  field may be left write-only (0-stuffed) or read-only: a field is not
+  "settled" until it has a named producer and consumer.
+
 ---
 
 ## 5. Parameters
@@ -542,4 +576,13 @@ collapse the two (ftb_decisions.md 2.3).
               RMW is permitted (only the associative re-lookup is
               barred). IC-FTB-09 extended to cover the pred-vs-update
               read-port sharing surfaced in BP-066.
+
+  2026-06-25  session-053 (position fix, FTB-4). The in-block position
+              field (FTB_BR_POS_BITS per branch) was stored but had no
+              producer or consumer (BP-066 stored it as 0). Added
+              ftb_upd_pos_u0 (2.5) as the producer and ftb_br0_pos_p2 /
+              ftb_br1_pos_p2 / ftb_jmp_pos_p2 (2.3) as the consumers;
+              IC-FTB-15 added (every stored field must have a named
+              producer and consumer). No width change -- pos already
+              occupied bits in the 105-bit entry. RTL wired in BP-066b.
 
