@@ -5,7 +5,7 @@
 ```
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
- STATUS:  DRAFT
+ STATUS:  COMPLETE
  UPDATED: 2026-06-25
  CONTACT: Jeff Nye
 ```
@@ -804,4 +804,17 @@ applied on reconstruction; see 4.5.
               filled field (written at allocate/free-field, not on
               in-place update). No width change. FTB-4 closed. RTL:
               BP-066b.
+
+  2026-06-25  session-053 (RTL + verification complete). FTB built and
+              verified; STATUS promoted DRAFT -> COMPLETE. Bringup:
+              ftb_array (BP-065), storage split finalize + ftb_plru
+              (BP-065a), ftb_cntrl (BP-066), ftb structural top
+              (BP-067), conf/fast-path redefine RTL fix (BP-066a),
+              position source/sink (BP-066b), tb_ftb + sim_ftb (BP-068).
+              sim_ftb 99/0; full bpu suite green, no TAGE/ITTAGE/RAS
+              regression. Open items FTB-2 (conf x TAGE meta) and FTB-3
+              (update-channel arbitration / G9) remain deferred to
+              bp_cluster, consistent with the TAGE/ITTAGE pattern; they
+              do not block COMPLETE. Decisions are settled; remaining FTB
+              work is downstream at cluster integration.
 

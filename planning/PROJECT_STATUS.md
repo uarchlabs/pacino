@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-23 (pa session 050)
+ UPDATED: 2026-06-25 (pa session 053)
  CONTACT: Jeff Nye
 ```
 
@@ -32,6 +32,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | RAS_COMMIT_ENTRIES=32,           |
 |                         |             |                   | RAS_RCTR_WIDTH=4, RAS_PTR_BITS=4,|
 |                         |             |                   | RAS_COMMIT_PTR_BITS=5.           |
+|                         |             |                   | FTB params added/fixed BP-065/   |
+|                         |             |                   | 065a/066a (FTB_WAYS=4, widths,   |
+|                         |             |                   | conf init, FTB_RAM_*).           |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields pending (II1).   |
 |                         |             |                   | bp_ras_snapshot_t comment        |
@@ -162,7 +165,26 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |             |                | 87/0 this session (BP-064).      |
 |                  |             |                | TD #78 pinned (TC-21); TD #79    |
 |                  |             |                | (commit_rctr) deferred.          |
-| FTB, SC          | Not started | --             | Later BP sessions                |
+| ftb_decisions.md | Complete    | --             | Created session-051. Storage     |
+|                  |             |                | split, bimodal conf, fast-path,  |
+|                  |             |                | position fix (session-053).      |
+|                  |             |                | Promoted Complete session-053.   |
+| ftb_interfaces.md| Complete    | --             | Created session-052. Storage     |
+|                  |             |                | ports (3/3a) + IC-FTB-12..15     |
+|                  |             |                | session-053.                     |
+| ftb_confidence   | Complete    | --             | conf = bimodal direction,        |
+| _override        |             |                | fast-path, ftb_fastpath_en       |
+| _rules.md        |             |                | (session-053).                   |
+| ftb_array.sv     | Complete    | sim_ftb        | 1R1W data RAM, no reset.         |
+|                  |             |                | BP-065 / BP-065a.                |
+| ftb_plru.sv      | Complete    | sim_ftb        | entry-valid + tree-PLRU flops,   |
+|                  |             |                | cold init. BP-065a.              |
+| ftb_cntrl.sv     | Complete    | sim_ftb        | All FTB logic. BP-066 /          |
+|                  |             |                | BP-066a (conf/fast-path) /       |
+|                  |             |                | BP-066b (position).              |
+| ftb.sv           | Complete    | tb_ftb         | Structural top. BP-067.          |
+|                  |             | sim_ftb        | sim_ftb 99/0 (BP-068).           |
+| SC               | Not started | --             | Last unbuilt predictor           |
 | bp_cluster (top) | Not started | --             | After predictors complete        |
 | fetch            | Not started | --             | After BP cluster                 |
 
@@ -422,24 +444,33 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | reads back from the commit-stack     | commit_top_addr/valid only),   |
 |    | fallback as a single entry, not at   | so a wrong value cannot cause a |
 |    | its true recursion depth.            | functional break -- only a     |
-|    |                                      | degraded fallback prediction.  |
-|    | Root cause: the commit interface     | Real fix needs a recursion-    |
-|    | carries no recursion count           | count source on the commit     |
-|    | (ras_commit_ret_addr is a bare       | interface (snapshot/struct      |
-|    | address; bp_ras_snapshot_t is        | change) or local commit-stack  |
-|    | pointers only), so there is no       | detection -- decide at          |
-|    | value at the port to carry.          | bp_cluster/FTQ integration when |
+|    | Root cause: the commit interface     | degraded fallback prediction.  |
+|    | carries no recursion count           | Real fix needs a recursion-    |
+|    | (ras_commit_ret_addr is a bare       | count source on the commit     |
+|    | address; bp_ras_snapshot_t is        | interface (snapshot/struct      |
+|    | pointers only), so there is no       | change) or local commit-stack  |
+|    | value at the port to carry.          | detection -- decide at          |
+|    |                                      | bp_cluster/FTQ integration when |
 |    |                                      | the commit interface is built. |
 |    |                                      | Related: #78.                  |
-| 80 | FTB confidence hysteresis tuning.    | FTB conf is a saturating counter|
-| | |  (FTB_CONF_WIDTH=3) giving strongly/weakly-taken; high conf lets FTB |
-| | | suppress the TAGE/SC direction override (§4.1, saves the s2 bubble). |
-| | | If perf analysis shows the hysteresis is wrong, FTB_CONF_WIDTH is the |
-| | | knob (a parameter sweep, moves FTB_RAM_ENTRY_WIDTH; conf appears in both|
-| | |  br0/br1). Options if it degrades: widen FTB_CONF_WIDTH, or disable |
-| | | suppression via the chicken bit / remove the feature. We are not a |
-| | | adding an explicit direction-bit add this is just pure width/policy |
-| | | sweep. Revisit at bp_cluster SPEC numbers. |
+| 80 | FTB confidence hysteresis tuning.    | FTB conf is a 3-bit bimodal     |
+| | | direction counter (FTB_CONF_WIDTH=3); the MSB is the predicted       |
+| | | direction. At a saturated endpoint (111/000) with ftb_fastpath_en=1, |
+| | | FTB commits its direction at s2 and skips the TAGE/SC override for   |
+| | | that branch (the fast-path; saves the s3 SC wait). If perf analysis  |
+| | | shows the hysteresis is wrong, FTB_CONF_WIDTH is the knob (a         |
+| | | parameter sweep; moves FTB_RAM_ENTRY_WIDTH; conf appears in both     |
+| | | br0/br1). Options if it degrades: widen FTB_CONF_WIDTH, or disable   |
+| | | the fast-path via ftb_fastpath_en. Pure width/policy sweep, not a    |
+| | | format change; no explicit direction bit is added (the conf MSB is  |
+| | | the direction). Revisit at bp_cluster SPEC numbers. |
+| 81 | tb_ftb coverage skews to br0.        | br1 direction/conf-init is     |
+| | | exercised once (free-field write); ftb_fastpath_p2[1] and a br1       |
+| | | saturation->fast-path path are not directly exercised. The fast-path |
+| | | is generated per-field in a loop (shared logic with the tested       |
+| | | bit0), so risk is low, but untested. Optional: a small symmetric br1 |
+| | | augment to tb_ftb. Not a blocker; the unit is verified green         |
+| | | (sim_ftb 99/0, BP-068). |
 
 ---
 
@@ -483,8 +514,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |     |                                       | Slot 0: pred_pc+0:31.  |
 |     |                                       | Slot 1: pred_pc+32:63. |
 |     |                                       | ras_decisions.md s6.1. |
-| G9  | Update channel arbitration            | TBD                    |
-| G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation  |
+| G9  | Update channel arbitration            | TBD. FTB-3 / IC-FTB-09 |
+|     |                                       | also fold in here.     |
+| G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation. |
+|     |                                       | FTB-2 (conf x TAGE     |
+|     |                                       | meta) folds in here.   |
 | G14 | Confidence counter purpose            | Reserved, 4b           |
 | G15 | Fold recompute timing concern         | Deferred               |
 | G16 | ignored labeling gap                  |                        |
@@ -505,6 +539,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | G22 | One-cycle folded output invalid       | Tied to G15            |
 |     | window after rollback                 |                        |
 | G23 | Checkpoint slot reclaim protocol      | TBD at FTQ impl        |
+| G24 | FTB flush protocol (ftb_flush_px)     | TBD at bp_cluster.     |
+|     |                                       | IC-FTB-07. Port        |
+|     |                                       | reserved, no behavior. |
+| G25 | FTB fast-path enable source           | TBD at bp_cluster.     |
+|     | (ftb_fastpath_en: CSR / tie /         | confidence doc s10.    |
+|     | runtime)                              |                        |
 
 ---
 
@@ -567,6 +607,13 @@ Key decisions for quick reference:
   32 commit entries. Simple circular buffer speculative
   stack, pointer-only snapshot recovery.
   See planning/arch/ras_decisions.md.
+- FTB: single set-associative array (4-way / 2048 / 512
+  sets), 26-bit full tag, tree-PLRU, 2 conditional + 1 jump
+  per entry. Storage split: ftb_array (pure 1R1W RAM) +
+  ftb_plru (valid + PLRU flops) + ftb_cntrl (logic). conf
+  is a bimodal DIRECTION counter; saturated-endpoint
+  fast-path (ftb_fastpath_en). FTB target is the ITTAGE-miss
+  / RAS-empty fallback. See planning/arch/ftb_decisions.md.
 - BPU is decoupled frontend, self-generates next PC
 - FTQ depth 64, split fast/slow SRAMs
 - History: GHR 256b, PHR 32b, folds recomputed on rollback
@@ -587,6 +634,8 @@ Key decisions for quick reference:
   Each table contains two independent RAMs. RAM0 serves
   slot 0, RAM1 serves slot 1. Selection is structural.
   Unrelated to bw_ram BANKS parameter or sram_init scheme.
+  TI6 is a TAGE/ITTAGE convention; it does NOT apply to FTB
+  (FTB is a single array, both branches from one entry).
 - CNTRL_BITS_WIDTH = MAX_EPC_WIDTH+MAX_USE_WIDTH
                    + MAX_CTR_WIDTH+MAX_VAL_WIDTH
   ALLOC_DATA_WIDTH = CNTRL_BITS_WIDTH+THIS_TAG_BITS
@@ -706,6 +755,41 @@ Key decisions for quick reference:
     - G8: fixed boundary bundle split
     - G17: slot 1 PC always pred_pc+32
     - Internal structure: simple circular buffer
+
+### FTB decomposition
+- RTL available and verified (session-053):
+    - rtl/core/frontend/bpu/rtl/ftb_array.sv   complete (BP-065/065a)
+    - rtl/core/frontend/bpu/rtl/ftb_plru.sv    complete (BP-065a)
+    - rtl/core/frontend/bpu/rtl/ftb_cntrl.sv   complete (BP-066/066a/066b)
+    - rtl/core/frontend/bpu/rtl/ftb.sv         complete (BP-067)
+    - rtl/core/frontend/bpu/tb/tb_ftb.sv       complete (BP-068)
+    - sim_ftb 99/0 (BP-068). Full bpu suite green, no regression.
+- Structure:
+    - ftb_array: 1R1W DATA RAM, FTB_RAM_SET_WIDTH=420, no reset
+    - ftb_plru:  entry-valid + tree-PLRU, resettable flops (cold
+                 init; FTB has no sram_init)
+    - ftb_cntrl: all logic (read / classify / way-match / allocate /
+                 update / conf bimodal direction + fast-path)
+    - ftb:       structural top
+- Key decisions session-053:
+    - Storage split for eventual SRAM migration (ftb_array pure RAM;
+      ftb_plru holds resettable valid + PLRU; IC-FTB-12/13/14)
+    - conf = 3-bit bimodal DIRECTION counter (MSB = direction); no
+      always_taken bit; ftb_brI_taken_p2 = valid & conf[MSB]
+    - Saturated-endpoint fast-path (ftb_fastpath_en / ftb_fastpath_p2);
+      self-correcting; TAGE/SC still trained under fast-path
+    - Position field sourced/sunk (FTB-4 closed; IC-FTB-15)
+    - Final widths: logical 106/424, RAM 105/420
+- Deferred to bp_cluster: flush (IC-FTB-07 / G24), conf x TAGE meta
+  (FTB-2 / G10), update arbitration (FTB-3 / IC-FTB-09 / G9), FTQ
+  round-trip (IC-FTB-10), ftb_fastpath_en source (G25)
+- FTB planning documents
+    - planning/arch/ftb_decisions.md                   Complete
+        - FTB micro-architectural decisions (canonical authority)
+    - planning/interfaces/ftb_interfaces.md            Complete
+        - FTB module interface contracts
+    - planning/arch/ftb_confidence_override_rules.md   Complete
+        - conf bimodal direction + saturated-endpoint fast-path policy
 
 ### Shared components track
 - components/rtl  components/tb
