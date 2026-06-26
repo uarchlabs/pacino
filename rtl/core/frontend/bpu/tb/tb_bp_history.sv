@@ -12,6 +12,13 @@
 // Module name: tb (Verilator convention for testbenches).
 // Clock period: 10 ns.
 //
+// BP-073 adds external-anchor tests (TC14-TC16): three DUT folds are
+// tied to hand-derived literal constants and to xs_fold_ref, a from-
+// the-spec Xiangshan FoldedHistory reference that is independent of the
+// DUT GEOMETRY (age-indexed history; no ghr_buf, no DUT anchor, no
+// fold_step/fold_ghr, not the BP-072 fold_ref). See xs_fold_ref below
+// for the source-of-truth / documentation-gap note.
+//
 // Golden model (the single, DUT-independent reference, TD #74):
 //   fold_ref(mem, anchor, H, W) folds H GHR bits, walked DOWNWARD
 //   from anchor (offset i -> bit mem[anchor - i]), into W bits with
@@ -89,6 +96,7 @@ module tb;
   // ----------------------------------------------------------------
   int pass_count;    // directed test cases passed
   int fold_checks;   // individual golden fold comparisons passed
+  int anchor_checks; // BP-073 external-reference anchor comparisons
 
   // ----------------------------------------------------------------
   // Helpers
@@ -137,6 +145,84 @@ module tb;
     end
     return acc;
   endfunction
+
+  // ----------------------------------------------------------------
+  // BP-073 EXTERNAL reference (table-side / Xiangshan anchor).
+  //
+  // Independence from the DUT GEOMETRY (BP-073 requirement, beyond
+  // BP-072's independence from DUT INTERNALS):
+  //   - xs_fold_ref takes an AGE-INDEXED known history (khist[i] = the
+  //     history bit at age i, age 0 = newest) -- NOT the GHR circular
+  //     buffer and NOT a DUT anchor. It never reads ghr_buf, never
+  //     reconstructs the (anchor - i) circular index, never calls
+  //     fold_step / fold_ghr, and is NOT the BP-072 fold_ref above.
+  //   - It folds H age-ordered bits into W bits by the Xiangshan
+  //     FoldedHistory definition: the newest bit folds into the W-wide
+  //     register and the bit leaving the H-deep window is removed at
+  //     (H-1) % W. For a fully-known H-bit window this reduces to
+  //     position(i) = (i + W - 1) % W (newest at the high end).
+  //
+  // Source-of-truth note (flagged documentation gap):
+  //   tage_table_hash_rules.md and ittage_table_hash_rules.md define
+  //   only how the fold is CONSUMED -- tmpA = (PC >> INST_OFFSET) ^ fh
+  //   (index) and tmpB = (PC >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1)
+  //   (tag). Neither doc defines how fh / fh1 / fh2 are COMPUTED from
+  //   the global history. They therefore do NOT supply a table-side
+  //   fold definition independent of bp_history. Per BP-073 Binding
+  //   Decision 3, the external reference falls back to the Xiangshan
+  //   FoldedHistory definition (newest folded in, leaving bit at
+  //   (H-1) % W). The three committed literal anchors below are the
+  //   real external tie: hand-derived fixed constants that a future
+  //   shared-geometry drift cannot co-move with.
+  // ----------------------------------------------------------------
+  function automatic logic [63:0] xs_fold_ref(
+    input logic [GHR_WIDTH-1:0] khist, // khist[i] = history bit at age i
+    input int                   H,
+    input int                   W
+  );
+    logic [63:0] acc;
+    int          i, pos;
+    acc = 64'b0;
+    for (i = 0; i < H; i++) begin
+      pos = (i + W - 1) % W;
+      if (khist[i]) acc[pos] = acc[pos] ^ 1'b1;
+    end
+    return acc;
+  endfunction
+
+  // Check one DUT fold field against BOTH the external Xiangshan
+  // reference (over the age-indexed known history) AND the committed
+  // hand-derived literal. $fatal on any mismatch (self-checking).
+  // A DUT-vs-literal mismatch is the BP-073 requirement-4 finding.
+  task automatic chk_anchor(
+    input logic [63:0]          dv,
+    input logic [GHR_WIDTH-1:0] khist,
+    input int                   H,
+    input int                   W,
+    input logic [63:0]          lit,
+    input string                nm
+  );
+    logic [63:0] ref_val, got, m;
+    m       = (64'b1 << W) - 64'b1;
+    ref_val = xs_fold_ref(khist, H, W) & m;
+    got     = dv & m;
+    anchor_checks++;
+    // the external reference must reproduce the hand-derived literal
+    if (ref_val !== (lit & m))
+      $fatal(1,
+        "%s FAIL: xs_fold_ref %h != literal %h (H=%0d W=%0d)",
+        nm, ref_val, lit & m, H, W);
+    // DUT folded must equal the committed literal (req 3) ...
+    if (got !== (lit & m))
+      $fatal(1,
+        "%s FAIL: DUT fold %h != external literal %h (H=%0d W=%0d)",
+        nm, got, lit & m, H, W);
+    // ... and the external reference (req 3)
+    if (got !== ref_val)
+      $fatal(1,
+        "%s FAIL: DUT fold %h != xs_fold_ref %h (H=%0d W=%0d)",
+        nm, got, ref_val, H, W);
+  endtask
 
   // Compare one DUT fold field against the golden at the current
   // anchor (ghist_ptr - 1). $fatal on mismatch (self-checking).
@@ -249,9 +335,10 @@ module tb;
   // Test body
   // ----------------------------------------------------------------
   initial begin
-    pass_count  = 0;
-    fold_checks = 0;
-    lfsr        = 32'hACE1_2345;
+    pass_count    = 0;
+    fold_checks   = 0;
+    anchor_checks = 0;
+    lfsr          = 32'hACE1_2345;
     drive_idle();
     rstn = 1'b0;
 
@@ -602,10 +689,111 @@ module tb;
     pass_count++;
     $display("TC13 pass (unrelated checkpoint preserved)");
 
+    // ================================================================
+    // BP-073 external-anchor tests (TC14-TC16).
+    // Each anchors a DUT fold to a hand-derived literal computed from
+    // the Xiangshan FoldedHistory definition over an age-indexed known
+    // history, AND to xs_fold_ref (which is independent of the GHR
+    // buffer, the DUT anchor, fold_step/fold_ghr, and the BP-072
+    // fold_ref). Histories are DRIVEN (reset + directed pred_taken),
+    // and ghr_buf is confirmed before the fold is checked.
+    // ================================================================
+
+    // ---- TC14: TAGE T1 idx, FULL 8-bit window (req 2, req 3) -----
+    // Driven single-slot pushes, p0 first(oldest)..p7 newest:
+    //   p = 1 1 0 0 1 0 1 1  -> ghr_buf[7:0] = 0xD3, ghist_ptr = 8.
+    // Age-indexed history (age0 newest = p7): ages with 1 = {0,1,3,6,7}.
+    // H = W = TAGE_TBL_HIST[1] = TAGE_TBL_FH[1] = 8, posmap(i)=(i+7)%8:
+    //   age0->b7 age1->b0 age3->b2 age6->b5 age7->b6
+    //   -> fold bits {7,6,5,2,0} = 1110_0101 = 0xE5.
+    do_reset();
+    begin
+      logic [GHR_WIDTH-1:0] kh;
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p0 = 1 (oldest)
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p1 = 1
+      upd(1, 1'b0, 1'b0, 40'h0, 40'h0); // p2 = 0
+      upd(1, 1'b0, 1'b0, 40'h0, 40'h0); // p3 = 0
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p4 = 1
+      upd(1, 1'b0, 1'b0, 40'h0, 40'h0); // p5 = 0
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p6 = 1
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p7 = 1 (newest)
+      if (ghr_buf[7:0] !== 8'hD3)
+        $fatal(1, "TC14 FAIL: ghr_buf[7:0]=%h exp D3", ghr_buf[7:0]);
+      if (ghist_ptr !== 8'd8)
+        $fatal(1, "TC14 FAIL: ghist_ptr=%0d exp 8", ghist_ptr);
+      kh = '0;
+      kh[0] = 1'b1; kh[1] = 1'b1; kh[3] = 1'b1; kh[6] = 1'b1; kh[7] = 1'b1;
+      chk_anchor(64'(folded.tage_t1_idx_fh), kh,
+                 TAGE_TBL_HIST[1], TAGE_TBL_FH[1],
+                 64'h0000_0000_0000_00E5, "TC14.tage_t1_idx_FULL8");
+    end
+    pass_count++;
+    $display("TC14 pass (BP-073 anchor: TAGE T1 idx, full 8b = 0xE5)");
+
+    // ---- TC15: ITTAGE IT1 idx, SHORT sub-window (req 2, req 3) ---
+    // Drive only 2 single-slot pushes into a H=4 window (2 bits filled,
+    // 2 reset zeros): p0=1, p1=1 -> ghr_buf[1:0]=0x3, ghist_ptr=2.
+    // Age history age0=p1=1, age1=p0=1, age2=age3=0.
+    // H = W = IT_TBL_HIST[1] = IT_TBL_FH[1] = 4, posmap(i)=(i+3)%4:
+    //   age0->b3 age1->b0 -> fold bits {3,0} = 1001 = 0x9.
+    do_reset();
+    begin
+      logic [GHR_WIDTH-1:0] kh;
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p0 = 1 (oldest in window)
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p1 = 1 (newest)
+      if (ghr_buf[1:0] !== 2'b11)
+        $fatal(1, "TC15 FAIL: ghr_buf[1:0]=%b exp 11", ghr_buf[1:0]);
+      if (ghist_ptr !== 8'd2)
+        $fatal(1, "TC15 FAIL: ghist_ptr=%0d exp 2", ghist_ptr);
+      kh = '0;
+      kh[0] = 1'b1; kh[1] = 1'b1;
+      chk_anchor(64'(folded.it_t1_idx_fh), kh,
+                 IT_TBL_HIST[1], IT_TBL_FH[1],
+                 64'h0000_0000_0000_0009, "TC15.it_t1_idx_SHORT2");
+    end
+    pass_count++;
+    $display("TC15 pass (BP-073 anchor: ITTAGE IT1 idx, short 2b = 0x9)");
+
+    // ---- TC16: SC ST3 idx, FULL + WRAPPED 64-bit window ----------
+    // (req 2 SC ST3 boundary, req 3 full/wrapped). H = W = 64, the
+    // case that forced the 64b helpers and cannot be held at 32b.
+    // Advance the pointer to 250 with zero pushes (GHR stays zero),
+    // then drive a 64-bit window that wraps 255->0: first push = 1
+    // (lands at pos 250, becomes age63), 62 zero pushes, last push = 1
+    // (pos 57, age0). Final ghist_ptr = (250+64) % 256 = 58.
+    // Age history: age0=1, age63=1, rest 0. posmap(i)=(i+63)%64:
+    //   age0 ->(63)%64=63, age63->(126)%64=62 -> fold bits {63,62}
+    //   = 0xC000_0000_0000_0000 (the literal cannot fit in 32b).
+    do_reset();
+    begin
+      int                   k;
+      logic [GHR_WIDTH-1:0] kh;
+      for (k = 0; k < 250; k++) upd(1, 1'b0, 1'b0, 40'h0, 40'h0);
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0);                 // pos 250 = 1
+      for (k = 0; k < 62; k++) upd(1, 1'b0, 1'b0, 40'h0, 40'h0);
+      upd(1, 1'b1, 1'b0, 40'h0, 40'h0);                 // pos 57  = 1
+      if (ghist_ptr !== 8'd58)
+        $fatal(1, "TC16 FAIL: ghist_ptr=%0d exp 58", ghist_ptr);
+      if (ghr_buf[250] !== 1'b1 || ghr_buf[57] !== 1'b1)
+        $fatal(1, "TC16 FAIL: wrapped window endpoints not set");
+      if ($countones(ghr_buf) !== 2)
+        $fatal(1, "TC16 FAIL: ghr has %0d ones exp 2",
+               $countones(ghr_buf));
+      kh = '0;
+      kh[0] = 1'b1; kh[63] = 1'b1;
+      chk_anchor(64'(folded.sc_t3_idx_fh), kh,
+                 SC_TBL_HIST[3], SC_TBL_HIST[3],
+                 64'hC000_0000_0000_0000, "TC16.sc_t3_idx_WRAP64");
+    end
+    pass_count++;
+    $display("TC16 pass (BP-073 anchor: SC ST3 idx, wrap 64b = 0xC..0)");
+
     $display("----------------------------------------------------");
     $display("BP-072: %0d directed test cases passed", pass_count);
     $display("BP-072: %0d golden fold comparisons passed", fold_checks);
+    $display("BP-073: %0d external anchor checks passed", anchor_checks);
     $display("BP-072: ALL TESTS PASSED");
+    $display("BP-073: ALL EXTERNAL ANCHORS MATCH (TAGE T1, IT1, SC ST3)");
     $finish;
   end
 
