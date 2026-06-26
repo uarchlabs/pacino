@@ -5,8 +5,8 @@
 ```
  FILE:    bp_history_interfaces.md
  SOURCE:  various
- STATUS:  DRAFT, reflects BP-002 PASS state
- UPDATED: 2026-03-28
+ STATUS:  DRAFT, target state (session-054)
+ UPDATED: 2026-06-25
  CONTACT: Jeff Nye
 ```
 
@@ -16,13 +16,20 @@
 
 bp_history owns all branch history state for the BP cluster:
 the GHR (Global History Register), the PHR (Path History
-Register), and all folded histories consumed by TAGE, ITTAGE,
-and SC. It is owned by BPC (branch predictor cluster), not by
-rename or dispatch. It contains no SRAM -- purely registered
-state.
+Register), the GHR/PHR pointers, the per-slot checkpoint array,
+and all folded histories consumed by TAGE, ITTAGE, and SC. It is
+owned by BPC (branch predictor cluster), not by rename or
+dispatch. It contains no SRAM -- purely registered state.
 
 All types defined in bp_pkg.sv. This document describes port
 semantics, timing contracts, and consumer/producer obligations.
+
+This is the TARGET-STATE interface. The G20/G21/G22 resolutions
+and the module-owned pointer decision (bp_history_decisions.md)
+are reflected here. The as-built RTL (bp_history.sv, 2026-05-21)
+is caller-owned-pointer and single-rollback-pointer; it changes
+to match this document. Where this doc and current RTL differ,
+this doc is the target the implementation task closes to.
 
 ---
 
@@ -36,6 +43,7 @@ None. All widths and depths are localparams from bp_pkg.sv.
   PHIST_PTR_BITS = 5     -- pointer into PHR buffer
   FTQ_DEPTH      = 64    -- number of checkpoint slots
   FTQ_IDX_BITS   = 6     -- index into checkpoint array
+  NUM_PRED_SLOTS = 2     -- branches updated per cycle (0,1,2)
 
 ---
 
@@ -44,137 +52,196 @@ None. All widths and depths are localparams from bp_pkg.sv.
   clk          : input  logic                       -- rising edge
   rstn         : input  logic                       -- active low
 
-  -- Prediction update (speculative, one per active slot)
-  pred_valid   : input  logic                       -- slot 0 active
-  pred_taken   : input  logic                       -- slot 0 direction
-  pred_pc      : input  logic [VA_WIDTH-1:0]        -- slot 0 fetch PC
+  -- Prediction update (dual slot, one bundle per cycle)
+  num_branches : input  logic [1:0]                 -- 0, 1, or 2
+  pred_taken   : input  logic [1:0]                 -- bit s = slot s
+  pred_pc      : input  logic [VA_WIDTH-1:0] [2]    -- per-slot PC
 
   -- Checkpoint write
   ckpt_wr_en   : input  logic                       -- write enable
-  ckpt_idx     : input  logic [FTQ_IDX_BITS-1:0]   -- FTQ slot index
+  ckpt_wr_idx  : input  logic [FTQ_IDX_BITS-1:0]    -- FTQ slot index
 
-  -- Rollback (redirect recovery)
-  rollback_en  : input  logic                       -- restore enable
-  rollback_ghist_ptr : input logic [GHIST_PTR_BITS-1:0]
-  rollback_phist_ptr : input logic [PHIST_PTR_BITS-1:0]
+  -- Rollback (redirect recovery, by checkpoint index)
+  rollback_valid    : input  logic                  -- restore enable
+  rollback_ckpt_idx : input  logic [FTQ_IDX_BITS-1:0]
 
-  -- Current pointer outputs (for checkpoint write)
+  -- Current pointer outputs (module-owned, for FTQ construction)
   ghist_ptr    : output logic [GHIST_PTR_BITS-1:0]
   phist_ptr    : output logic [PHIST_PTR_BITS-1:0]
+
+  -- Checkpoint snapshot outputs (value written this cycle)
+  ckpt_ghist_ptr : output logic [GHIST_PTR_BITS-1:0]
+  ckpt_phist_ptr : output logic [PHIST_PTR_BITS-1:0]
+
+  -- Raw buffer outputs
+  ghr_buf      : output logic [GHR_WIDTH-1:0]
+  phr_buf      : output logic [PHR_WIDTH-1:0]
 
   -- Folded history output (consumed by TAGE, ITTAGE, SC)
   folded       : output bp_folded_hist_t
 
-Note: the port list above reflects the BP-002 implementation.
-NUM_PRED_SLOTS extension (dual slot prediction update) is
-deferred -- see Known Gaps.
+Note: ghist_ptr / phist_ptr are OUTPUTS. The pointer is owned and
+advanced inside bp_history (module-owned pointer,
+bp_history_decisions.md section 2). No pointer value is driven
+into the module; rollback supplies an INDEX, not a pointer.
+
+---
+
+## Pointer Ownership
+
+bp_history owns the live GHR and PHR pointers as internal
+registers and advances them itself. The pointer advances by
+num_branches each cycle (0, 1, or 2), modulo buffer width. The
+advance is sequential only: reset and checkpoint-restore are the
+only events that load a non-incremented value. There is no
+external pointer-load path.
+
+The current pointer is exposed as a registered output
+(ghist_ptr / phist_ptr) for FTQ entry construction. The cluster
+reads it; it does not drive it.
+
+See bp_history_decisions.md section 2 for rationale (sequential-
+only advance, rollback by index, FTQ visibility vs ownership).
 
 ---
 
 ## Prediction Update Interface
 
-### Producer: BP cluster (one call per active prediction slot)
-### Consumer: bp_history (GHR and PHR advance, folds update)
+### Producer: BP cluster (one bundle per cycle, up to two slots)
+### Consumer: bp_history (GHR/PHR advance, folds update)
 
 ### Timing
 
-  pred_valid, pred_taken, pred_pc are sampled on rising clk.
-  GHR and PHR advance synchronously.
-  Folded history outputs update on the same rising edge.
+  num_branches, pred_taken, pred_pc are sampled on rising clk.
+  GHR, PHR, the pointer, and the folds advance synchronously.
   Updated folds are available at the start of the next cycle.
 
 ### Semantics
 
-  pred_valid = 0  -- no prediction this cycle. GHR, PHR, and
-                     folds do not advance.
-  pred_valid = 1  -- a prediction was made. Advance history.
+  num_branches = 0  -- no branch this cycle. GHR, PHR, pointer,
+                       and folds HOLD. No write, no advance.
+  num_branches = 1  -- slot 0 only. One bit into GHR at the
+                       pointer, one path bit into PHR, one
+                       incremental fold step per table. Pointer
+                       advances by 1.
+  num_branches = 2  -- slot 0 then slot 1. Slot 0 writes at the
+                       pointer, slot 1 writes at pointer+1 (modulo
+                       width). Each fold takes two incremental
+                       steps, slot 0 first. Pointer advances by 2.
 
-  GHR update:
-    ghr_mem[ghist_ptr] <= pred_taken
-    ghist_ptr advances by 1 (modulo GHR_WIDTH).
+  num_branches = 3 is undefined (valid range 0-2).
 
-  PHR update:
-    phr_mem[phist_ptr] <= pred_pc[2] ^ pred_pc[3]
-    phist_ptr advances by 1 (modulo PHR_WIDTH).
+  GHR write (per active slot s):
+    ghr_mem[ptr_s] <= pred_taken[s]
+    where ptr_s is the GHR pointer for slot 0, pointer+1 for
+    slot 1.
 
-  Fold update (incremental, one fold per tagged table):
-    bit_out  = ghr_mem[(ghist_ptr + H) % GHR_WIDTH]
-    new_fold = (fold << 1) | pred_taken ^ fold[W-1] ^ bit_out
-    where H is the history depth for that fold, W is fold width.
+  PHR write (per active slot s):
+    phr_mem[pptr_s] <= pred_pc[s][2] ^ pred_pc[s][3]
+
+  Fold update (incremental, slot 0 then slot 1, per tagged table):
+    each active slot applies one fold step in slot order. The
+    two-step result for num_branches=2 must equal the full
+    recompute over the same two new bits walked linearly from the
+    bundle-start pointer. Slot-0-first is that order. This
+    equivalence is the dual-slot correctness property (proven by
+    the dual-slot directed test, TD #74).
 
 ### Producer obligations
 
-  - Must assert pred_valid exactly once per accepted prediction.
-  - Must not assert pred_valid when no prediction is being made
-    (e.g. on a stall or bubble cycle).
-  - pred_pc must be the fetch block PC, not the branch PC.
+  - Drive num_branches to the count of branches in the bundle
+    (0, 1, or 2). Do not drive 3.
+  - pred_taken[s] / pred_pc[s] valid for each slot s < num_branches.
+  - pred_pc is the fetch block PC, not the branch PC.
+  - Do not drive a pointer; the module owns it.
 
 ---
 
 ## Checkpoint Interface
 
-### Producer: BP cluster (writes on each accepted prediction)
+### Producer: BP cluster (writes on each accepted bundle)
 ### Consumer: bp_history (stores pointer snapshot per FTQ slot)
 
 ### Timing
 
-  ckpt_wr_en and ckpt_idx are sampled on rising clk.
-  The checkpoint captures the post-update pointer values
-  (ghist_ptr and phist_ptr after the prediction advance).
+  ckpt_wr_en and ckpt_wr_idx are sampled on rising clk.
+  The checkpoint captures the post-advance pointer values for the
+  bundle (the pointer after this cycle's prediction advance).
 
 ### Semantics
 
   ckpt_wr_en = 0  -- no checkpoint write this cycle.
-  ckpt_wr_en = 1  -- write current ghist_ptr and phist_ptr
-                     into checkpoint slot ckpt_idx.
+  ckpt_wr_en = 1  -- write the current ghist_ptr and phist_ptr
+                     into checkpoint slot ckpt_wr_idx, and expose
+                     them on ckpt_ghist_ptr / ckpt_phist_ptr.
 
-  Checkpoint stores: ghist_ptr (8b) + phist_ptr (5b) only.
-  Folded histories are NOT stored per checkpoint slot.
-  On rollback, folds are recomputed from buffer contents
-  at the restored pointer (G15).
+  Checkpoint stores: GHR pointer (8b) + PHR pointer (5b) only.
+  Folded histories are NOT stored per checkpoint slot. On
+  rollback, folds are recomputed from buffer contents at the
+  restored pointer (G15).
+
+  Granularity is the bundle: one checkpoint per accepted
+  prediction bundle, not per branch. There is no checkpoint
+  position between slot 0 and slot 1 of one bundle.
 
 ### Producer obligations
 
-  - ckpt_idx must be a valid FTQ slot index (0 to FTQ_DEPTH-1).
-  - ckpt_wr_en should be asserted in the same cycle as the
-    prediction update (pred_valid=1) for the same slot.
-  - Producer must not write the same ckpt_idx twice without
-    an intervening rollback or FTQ slot reclaim.
+  - ckpt_wr_idx must be a valid FTQ slot index (0 to FTQ_DEPTH-1).
+  - ckpt_wr_en should be asserted in the same cycle as the bundle
+    prediction update (num_branches > 0) it checkpoints.
+  - Producer must not write the same ckpt_wr_idx twice without an
+    intervening rollback or FTQ slot reclaim.
 
 ---
 
 ## Rollback Interface
 
-### Producer: BP cluster redirect/flush logic
-### Consumer: bp_history (restores pointer, recomputes folds)
+### Producer: BP cluster redirect logic (branch mispredict)
+### Consumer: bp_history (restore pointer by index, recompute folds)
 
 ### Timing
 
-  rollback_en, rollback_ghist_ptr, rollback_phist_ptr are
-  sampled on rising clk.
+  rollback_valid and rollback_ckpt_idx are sampled on rising clk.
   Pointer restore and fold recompute are synchronous.
   Restored folds are available at the start of the next cycle.
 
 ### Semantics
 
-  rollback_en = 0  -- no rollback this cycle.
-  rollback_en = 1  -- restore ghist_ptr and phist_ptr to the
-                     provided values. Recompute all folds from
-                     current ghr_mem and phr_mem contents at
-                     the restored pointer positions.
+  rollback_valid = 0  -- no rollback this cycle.
+  rollback_valid = 1  -- read the checkpoint at rollback_ckpt_idx,
+                        load the live pointer from it (ckpt_gptr /
+                        ckpt_pptr), and recompute all folds from
+                        ghr_mem and phr_mem at the restored
+                        pointer positions.
 
-  ghr_mem and phr_mem are NOT cleared on rollback.
-  Entries written after the checkpoint remain in the buffer
-  but are unreachable via the restored pointer. This is the
-  accepted contamination model (see BP-002 TC8 confirmation).
+  Rollback supplies an INDEX, not a pointer. The module restores
+  the pointer from its own checkpoint array.
+
+  Scope: rollback (checkpoint-restore) applies only to branch-
+  mispredict redirects. A mispredict target is the mispredicted
+  branch's bundle, which always carries a checkpoint, so the index
+  always resolves. Exceptions and interrupts do NOT use this path;
+  they reinitialize history on a new context and do not read a
+  checkpoint. See bp_history_decisions.md section 3.4.
+
+  ghr_mem and phr_mem are NOT cleared on rollback. Entries written
+  after the checkpoint remain in the buffer but are unreachable via
+  the restored pointer. This is the accepted contamination model
+  (BP-002 TC8).
+
+  Priority: if rollback_valid and num_branches > 0 are asserted in
+  the same cycle, ROLLBACK WINS. The prediction update (both slots
+  and the checkpoint write) is dropped for that cycle. The two are
+  mutually exclusive in the update logic; no merge occurs. (This
+  relaxes the BP-002 obligation "producer must not assert both" --
+  the module now defines the outcome.)
 
 ### Producer obligations
 
-  - rollback_ghist_ptr and rollback_phist_ptr must come from
-    a previously written checkpoint slot (read from FTQ entry
-    ghist_ptr and phist_ptr fields).
-  - Producer must not assert rollback_en and pred_valid in
-    the same cycle. Priority is undefined if both are asserted.
+  - rollback_ckpt_idx must be a previously written checkpoint slot.
+  - Use this path for branch-mispredict redirects only. Route
+    exception/interrupt redirects through the history reinit path,
+    not rollback_valid.
 
 ---
 
@@ -191,13 +258,15 @@ deferred -- see Known Gaps.
   Valid one cycle after the prediction update that caused the
   advance (same timing as ghist_ptr output).
   On rollback: folded reflects the recomputed state one cycle
-  after rollback_en is asserted.
+  after rollback_valid is asserted. During the rollback cycle the
+  fold outputs hold their prior (pre-rollback) values -- see
+  staleness note below.
 
 ### Semantics
 
   folded is a bp_folded_hist_t packed struct. All fields are
-  GHR-derived. PHR does not contribute to any fold in the
-  current implementation (deferred -- see Known Gaps).
+  GHR-derived. PHR does not contribute to any fold in the current
+  implementation (deferred -- see Known Gaps).
 
   TAGE folds (one set of three per tagged table T1-T4):
     tage_t<N>_idx_fh  -- index fold for T<N>
@@ -216,31 +285,52 @@ deferred -- see Known Gaps.
     sc_t3_idx_fh  -- width = SC_T3_HIST = 16b
     ST0 (hist=0) and ST4 (IMLI) have no folds.
 
+### Staleness on rollback (stale, not invalid)
+
+  The fold registers are NOT cleared or driven X on rollback. They
+  hold their current (pre-rollback, wrong-path) values during the
+  rollback cycle and present the recomputed values from the next
+  cycle. The value visible in the rollback cycle is stale, not
+  undefined.
+
+  Predictions are NOT blocked during the one-cycle recompute. The
+  cluster may issue a prediction that cycle; it reads the stale
+  folds and produces a lower-quality prediction for that one fetch.
+  This is an accepted performance cost, taken to avoid the control
+  complexity of a stall or handshake. It never corrupts
+  architectural state: a stale fold yields a weak/wrong prediction
+  a later redirect corrects, and because rollback and update are
+  mutually exclusive, the stale value is never fed back into an
+  incremental fold step.
+
+  Cost to be quantified at detailed performance analysis (G15).
+
 ### Consumer obligations
 
   - Consumers must not cache or register folded outputs
-    independently. They must read folded directly each cycle.
-  - Consumers must treat folded as invalid in the cycle
-    immediately following rollback_en (recompute is in
-    progress). This is a one-cycle window. Producer (cluster)
-    must ensure no prediction fires in that cycle.
-    (Timing impact TBD -- G15.)
+    independently. Read folded directly each cycle.
+  - No must-not-fire obligation in the rollback cycle. Stale folds
+    are a permitted, lossy input, not an error condition. (This
+    withdraws the BP-002 "must treat folded as invalid / must not
+    fire" obligation.)
 
 ---
 
 ## Pointer Output Interface
 
 ### Producer: bp_history
-### Consumer: BP cluster (checkpoint write path)
+### Consumer: BP cluster (FTQ entry construction)
 
-  ghist_ptr : current GHR circular buffer pointer.
-              Post-update value: reflects the advance from
-              the most recent pred_valid=1.
-  phist_ptr : current PHR circular buffer pointer.
-              Same timing as ghist_ptr.
+  ghist_ptr : current GHR pointer (module-owned, registered
+              output). Post-advance value: reflects the advance
+              from the most recent num_branches > 0.
+  phist_ptr : current PHR pointer. Same timing as ghist_ptr.
 
-  These are the values the cluster writes into the FTQ entry
-  (bp_ftq_entry_t.ghist_ptr and .phist_ptr) for checkpoint.
+  ckpt_ghist_ptr / ckpt_phist_ptr : the pointer pair written into
+              the checkpoint array on the most recent ckpt_wr_en.
+
+  The cluster reads these to build the FTQ entry. It does not drive
+  any pointer into bp_history.
 
 ---
 
@@ -248,21 +338,23 @@ deferred -- see Known Gaps.
 
 | ID  | Item                                      | Status           |
 |-----|-------------------------------------------|------------------|
-| HI1 | NUM_PRED_SLOTS extension -- dual slot     | Deferred. Current|
-|     | prediction update uses single pred_valid/ | impl is single   |
-|     | pred_taken/pred_pc. Slot 1 update path    | slot only.       |
-|     | not yet defined.                          | Resolve before   |
-|     | See also G20 of PROJECT_STATUS            | bp_cluster impl. |
+| HI1 | Dual-slot prediction update               | RESOLVED         |
+|     | (NUM_PRED_SLOTS=2). Combined slot-0-      | session-054.     |
+|     | then-slot-1, bundle-granularity           | bp_history_      |
+|     | checkpoint. = G20.                        | decisions.md s3. |
 | HI2 | PHR contribution to fold index and tag    | Deferred to TAGE |
 |     | hashing. Currently all folds are GHR-     | and ITTAGE impl  |
 |     | derived only. PHR mixing TBD.             | sessions.        |
-| HI3 | rollback_en + pred_valid same-cycle       | Priority undef.  |
-|     | priority. Currently undefined behavior.   | Resolve before   |
-|     |                                           | bp_cluster impl. |
-| HI4 | One-cycle folded output invalid window    | G15 -- timing    |
-|     | after rollback. Consumer must not fire    | impact TBD.      |
-|     | prediction in that cycle. Enforcement     |                  |
-|     | mechanism TBD.                            |                  |
+| HI3 | rollback_valid + prediction same-cycle    | RESOLVED         |
+|     | priority. Rollback wins; mutually         | session-054.     |
+|     | exclusive with update. = G21.             | decisions.md s4. |
+| HI4 | Folded output stale (not invalid) in the  | RESOLVED         |
+|     | rollback cycle. Predictions permitted on  | session-054.     |
+|     | stale folds; cost deferred to perf        | decisions.md s5. |
+|     | analysis (G15). = G22.                    |                  |
 | HI5 | Checkpoint slot reclaim protocol.         | TBD at FTQ impl. |
 |     | When is a checkpoint slot safe to reuse?  |                  |
+
+See bp_history_decisions.md for the full resolution of HI1/HI3/HI4
+and the module-owned pointer decision.
 
