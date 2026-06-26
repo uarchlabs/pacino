@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-06-25
+ UPDATED: 2026-06-26
  CONTACT: Jeff Nye
 ```
 
@@ -20,8 +20,14 @@ priority, stale-fold handling) ratify behavior already in the
 as-built RTL (bp_history.sv, dated 2026-05-21). The pointer-
 ownership decision (section 2) does NOT: it rules module-owned
 where the RTL is caller-owned, and so changes both the RTL and the
-interface port list. Section 8 separates the doc-only
+interface port list. Section 9 separates the doc-only
 reconciliation from the RTL changes.
+
+Section 6 is the canonical fold definition: the bit-exact geometry
+of every folded history this module produces, stated in the
+project's own terms so the RTL, the testbench reference, and any
+downstream check derive expected fold values from this document
+rather than from an external source.
 
 The interface DRAFT (BP-002, dated 2026-03-28) predates the RTL
 and is stale on several ports.
@@ -60,7 +66,7 @@ rollback_phist_ptr as inputs. The interface DRAFT (BP-002)
 specified module-owned and outputs; the RTL flipped to caller-owned
 without a recorded rationale. This document rules module-owned as
 the decision. The RTL and interface port list change to match
-(section 8).
+(section 9).
 
 ### 2.1  Advance
 
@@ -87,35 +93,22 @@ the decision. The RTL and interface port list change to match
   BP-072 reconciliation (pointer-walk addressing; geometry UNCHANGED).
   The fold geometry -- position mapping posmap(i) = (i+W-1)%W, newest
   bit inserted at the high end (W-1), leaving bit removed at (H-1)%W --
-  is the BP-071 Xiangshan convention and did NOT change. What BP-072
-  set is the buffer-walk ADDRESSING that feeds that geometry under the
-  module-owned incrementing pointer (section 2.1): the newest bit sits
-  just below the live pointer, so the recompute walks the GHR DOWNWARD
-  (offset i -> ghr_mem[anchor - i]) and the incremental fold_step
-  fetches its leaving bit at write_addr - H. The recompute anchors at
-  ckpt - 1 because the checkpoint stores the post-advance pointer
-  (section 6) and the newest bit of the bundle is one position behind
-  it. fold_step is the exact incremental form of fold_ghr for this
-  mapping, so the rollback recompute reproduces the incremental fold;
-  TD #74 (tb_bp_history) confirms it in simulation for single-slot,
-  dual-slot, GHR-boundary wrap, and SC ST3 (H=W=64). No fold value
-  consumed by the TAGE/ITTAGE/SC tables changed -- only the recompute
-  walk direction and the checkpoint anchor were fixed to match the
-  incrementing pointer.
-
-<!--
-  BP-072 resolution (increment-oriented geometry): because the live
-  pointer INCREMENTS and the checkpoint stores the POST-advance
-  pointer (the next-write address, section 6), the newest history bit
-  is one position behind it. The fold recompute therefore anchors at
-  ckpt - 1 and walks the GHR DOWNWARD into older bits, and the
-  incremental fold_step evicts its leaving bit at write_addr - H.
-  This is the only orientation under which the rollback recompute
-  reproduces the incremental fold for both single-slot and dual-slot
-  bundles (proven in simulation by TD #74, tb_bp_history). The BP-071
-  position mapping posmap(i) = (i+W-1)%W and high-end newest insertion
-  are retained unchanged.
--->
+  is defined canonically in section 6 (origin: BP-071 Xiangshan
+  convention) and did NOT change. What BP-072 set is the buffer-walk
+  ADDRESSING that feeds that geometry under the module-owned
+  incrementing pointer (section 2.1): the newest bit sits just below
+  the live pointer, so the recompute walks the GHR DOWNWARD (offset
+  i -> ghr_mem[anchor - i]) and the incremental fold_step fetches its
+  leaving bit at write_addr - H. The recompute anchors at ckpt - 1
+  because the checkpoint stores the post-advance pointer (section 7)
+  and the newest bit of the bundle is one position behind it.
+  fold_step is the exact incremental form of fold_ghr for this
+  mapping (section 6.4), so the rollback recompute reproduces the
+  incremental fold; TD #74 (tb_bp_history) confirms it in simulation
+  for single-slot, dual-slot, GHR-boundary wrap, and SC ST3 (H=W=64).
+  No fold value consumed by the TAGE/ITTAGE/SC tables changed -- only
+  the recompute walk direction and the checkpoint anchor were fixed
+  to match the incrementing pointer.
 
   Holding both an internal checkpoint array and an external
   rollback pointer input -- as the current RTL does -- is
@@ -170,7 +163,7 @@ range 0-2, per PROJECT_STATUS).
   pred_pc is the fetch-block PC, not the branch PC.
 
 PHR does not currently contribute to any fold; all folds are
-GHR-derived (HI2, deferred -- section 8).
+GHR-derived (HI2, deferred -- section 9).
 
 ### 3.3  Combined fold: ordering is load-bearing
 
@@ -180,14 +173,15 @@ is not equal to the reverse order. The ordering invariant is:
 
   The incremental two-step fold (slot 0 at ptr, slot 1 at ptr+1)
   must equal the full recompute over the same two new bits walked
-  linearly from ptr (fold_ghr order). The rollback recompute
-  walks the buffer linearly from the restored pointer, so the two
-  paths agree only if the incremental order matches the linear
-  walk. Slot 0 first, slot 1 second is that order.
+  by age from the newest (section 6.4). The rollback recompute
+  walks the buffer by age from the restored pointer, so the two
+  paths agree only if the incremental order matches the age walk.
+  Slot 0 first, slot 1 second is that order.
 
 This equivalence is the core correctness property of the dual-slot
-path. It is the obligation TD #74's directed test proves against a
-golden linear-fold model (section 8). It is not yet proven.
+path. It is the obligation TD #74's directed test proves against
+the canonical fold definition (section 6, section 9). Proven in
+simulation (TD #74, tb_bp_history).
 
 ### 3.4  Checkpoint granularity
 
@@ -224,7 +218,7 @@ overwritten by the dual assignment, correct only by nonblocking
 last-write-wins. Convert to if / else-if (num_branches==2 else
 num_branches==1) so each case assigns the registers once. No
 behavior change; removes the dead assignment and the coverage
-skew. Apply when TD #74 touches the file (section 8).
+skew. Apply when TD #74 touches the file (section 9).
 
 ---
 
@@ -247,7 +241,7 @@ exclusive by construction, so no priority encoder is needed. Under
 the module-owned decision (section 2) the rollback branch reads the
 internal checkpoint by index and loads the pointer from it; the
 current RTL instead consumes an external rollback pointer, which
-changes with the port edit (section 8). The priority structure is
+changes with the port edit (section 9). The priority structure is
 unaffected by that change.
 
 This places the complexity in isolation: rollback is its own
@@ -259,7 +253,7 @@ is understood to be discarded. The cluster is not required to
 suppress the prediction inputs, because the RTL ignores them
 under rollback_valid. (The interface DRAFT's stricter "producer
 must not assert both" obligation is relaxed to "rollback wins if
-both are asserted." See section 8.)
+both are asserted." See section 9.)
 
 ---
 
@@ -318,7 +312,137 @@ Revisit only if it is material.
 
 ---
 
-## 6. Checkpoint
+## 6. Fold Definition (Canonical)
+
+This section is the authoritative definition of every folded
+history bp_history produces. It is stated in the project's own
+terms so that the RTL (fold_ghr / fold_step), the testbench
+reference, and any downstream producer/consumer check derive
+expected fold values from THIS document, not from an external
+source. Origin is recorded in section 6.6; the definition here is
+the contract.
+
+A folded history compresses an H-bit window of the global history
+register (GHR) into a W-bit value by XOR. Each consuming table
+selects its own (H, W): H = history length, W = folded width. The
+per-table (H, W) values are package localparams (section 8:
+TAGE_TBL_HIST/FH/FH1/FH2, IT_TBL_HIST/FH/FH1/FH2, SC_TBL_HIST).
+This section defines the mapping, not the values.
+
+### 6.1  Age indexing
+
+  Index the H in-window history bits by AGE, not by buffer
+  position. Age i = 0 is the NEWEST bit (the most recently written
+  branch outcome); age i = H-1 is the OLDEST bit still in the
+  window. Aging is independent of how the GHR buffer is addressed:
+  the buffer-walk that maps age to a physical ghr_mem index is a
+  pointer-model concern (section 2.2), not part of this definition.
+  The fold is a function of the H-bit age-ordered history alone.
+
+### 6.2  Position mapping (full recompute)
+
+  The bit of age i contributes, by XOR, to folded output position
+
+      posmap(i) = (i + W - 1) mod W
+
+  Equivalently:
+    - The newest bit (age 0) lands at the high end, position W-1.
+    - Each older bit sits one position lower, modulo W (a left
+      rotate per age step).
+    - Ages that reach or exceed W wrap and XOR-overlap onto lower
+      positions; this overlap is the compression.
+
+  The folded value is
+
+      fold = XOR over i in [0, H-1] of
+               ( history_bit(age i) << posmap(i) )
+
+  with all arithmetic in W bits. A history bit of 0 contributes
+  nothing; a bit of 1 toggles its mapped position. This is the
+  full recompute; bp_history uses it on rollback (fold_ghr).
+
+### 6.3  Window eviction (incremental form)
+
+  The incremental form advances the fold by one new bit per branch
+  without rescanning the window (fold_step). One step:
+
+    1. Left-rotate the W-bit fold by 1 (each occupied position p
+       moves to (p+1) mod W).
+    2. XOR the new (age-0) bit in at position W-1.
+    3. XOR OUT the bit that has just left the H-deep window -- the
+       bit now at age H -- at position
+
+           posmap(H) = (H - 1) mod W.
+
+  Step 3 removes the contribution the departing bit made when it
+  entered: after H-1 rotations that contribution now sits at
+  (H-1) mod W. Without step 3 the fold would accumulate bits older
+  than the window. The departing bit is read from the GHR at the
+  age-H position (RTL: ghr_mem[write_addr - H], section 2.2).
+
+### 6.4  Equivalence invariant
+
+  The full recompute (6.2) and the incremental form (6.3) MUST
+  produce the same fold for the same H-bit history:
+
+      recompute(history) == incremental(history)
+
+  for every history and every (H, W) in use -- including H = W (no
+  compression; SC ST1-ST3) and H > W (compression; the TAGE/ITTAGE
+  tag folds fh1/fh2). bp_history uses the incremental form on the
+  prediction path and the full recompute on rollback (section 2.2);
+  this invariant is what makes the two paths interchangeable. For
+  a dual-slot bundle the incremental form is applied twice, slot 0
+  then slot 1 (section 3.3), and must still equal the recompute
+  over both new bits. TD #74 proves the invariant in simulation
+  (tb_bp_history).
+
+### 6.5  Worked example (checkable)
+
+  TAGE T1 index fold, H = W = 8 (TAGE_TBL_HIST[1] = TAGE_TBL_FH[1]
+  = 8). This is the BP-073 TC14 anchor; the result below is the
+  committed test literal, so this example and tb_bp_history agree
+  by construction.
+
+  Drive eight single-slot branches, oldest first, taken pattern
+  p0..p7 = 1,1,0,0,1,0,1,1. p0 is written first (oldest), p7 last
+  (newest), giving ghr[7:0] = 0xD3 and the age-ordered history:
+
+      age i:  0 1 2 3 4 5 6 7
+      bit:    1 1 0 1 0 0 1 1      (age 0 = p7, newest)
+
+  posmap(i) = (i + 7) mod 8, taking only the set bits:
+
+      age 0 (1) -> pos 7
+      age 1 (1) -> pos 0
+      age 3 (1) -> pos 2
+      age 6 (1) -> pos 5
+      age 7 (1) -> pos 6
+
+  Set positions {7, 6, 5, 2, 0} -> 1110_0101 = 0xE5.
+
+  So bp_history.folded.tage_t1_idx_fh == 0xE5 for this history,
+  matching tb_bp_history TC14. The ITTAGE IT1 anchor (0x9, H=W=4,
+  sub-window) and the SC ST3 anchor (0xC000_0000_0000_0000,
+  H=W=64, wrapped) in TC15/TC16 follow the same definition at
+  their (H, W).
+
+### 6.6  Origin
+
+  The geometry above originates in the Xiangshan FoldedHistory
+  implementation (newest bit folded in at the high end, leaving
+  bit removed at (H-1) mod W, one definition shared by update and
+  recompute). It was captured into this section as the project's
+  own contract from commit <XS-COMMIT-SHA> (<XS-CAPTURE-DATE>) so
+  the definition does not depend on an external, mutable source.
+  Xiangshan is cited as ORIGIN only; this section is the AUTHORITY.
+  If a discrepancy with the upstream implementation is ever found,
+  this document and the RTL it governs are corrected together by a
+  tracked task -- the citation is not a live dependency.
+
+---
+
+## 7. Checkpoint
 
 The checkpoint array (ckpt_gptr / ckpt_pptr, internal) stores the
 GHR pointer (8b) + PHR pointer (5b) per FTQ slot. Folds are NOT
@@ -339,16 +463,6 @@ snapshot would require also storing the slot count to locate the
 newest bit. This supersedes the earlier pre-advance wording in this
 section and matches bp_history_interfaces.md (Checkpoint Timing).
 
-<!--
-Write: ckpt_wr_en writes the POST-advance internal pointer pair (the
-next-write pointer for the cycle after this bundle) into ckpt_wr_idx,
-and exposes it on ckpt_ghist_ptr / ckpt_phist_ptr for FTQ entry
-construction. BP-072 changed this from the earlier pre-advance
-snapshot to align with bp_history_interfaces.md (Checkpoint Timing)
-and to make the dual-slot rollback recompute equal the incremental
-fold (section 2.2).
--->
-
 Read (rollback): the rollback index selects ckpt_gptr[idx] /
 ckpt_pptr[idx]; the module loads the live pointer from it and
 recomputes folds (section 2.2, section 5). No pointer value is
@@ -361,11 +475,11 @@ restored pointer. This is accepted.
 
 Checkpoint slot reclaim (when a slot is safe to reuse) and the
 no-branch-flush target case (section 3.4) are FTQ concerns,
-deferred (HI5, section 8).
+deferred (HI5, section 9).
 
 ---
 
-## 7. Parameters
+## 8. Parameters
 
 Defined in bp_defines_pkg.sv / bp_structs_pkg.sv. Do not use
 numeric literals.
@@ -380,8 +494,8 @@ numeric literals.
 Fold widths and per-table history lengths (TAGE_TBL_HIST,
 TAGE_TBL_FH/FH1/FH2, IT_TBL_HIST, IT_TBL_FH/FH1/FH2, SC_TBL_HIST,
 and the *_MAX_FH cast widths) are package localparams consumed by
-the fold functions. They are not restated here; bp_history.sv
-reads them from the package.
+the fold functions (section 6). They are not restated here;
+bp_history.sv reads them from the package.
 
 The folded output is bp_folded_hist_t (bp_structs_pkg.sv): one
 idx + two tag folds per TAGE T1-T4 and ITTAGE IT1-IT4, one idx
@@ -390,7 +504,7 @@ fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
 
 ---
 
-## 8. Open Items
+## 9. Open Items
 
   HI1: RESOLVED (this document, section 3). Dual-slot update is
        combined slot-0-then-slot-1 in one cycle, bundle-
@@ -444,31 +558,44 @@ fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
 
   Downstream tasks (not doc edits, sequenced after this doc):
     - TD #74: dual-slot directed test. Proves the section 3.3
-      incremental-vs-recompute equivalence against a golden
-      linear-fold model. Currently dark.
+      incremental-vs-recompute equivalence against the canonical
+      fold definition (section 6). Proven (BP-072).
     - TD #69 / #70: TAGE / ITTAGE rollback + history-recompute
       test. Was blocked on G20/G21/G22; this document unblocks
       it. Still gated on the cluster providing the rollback
       stimulus path.
+    - Producer/consumer fold check: drive a known GHR, take the
+      bp_history fold output, run it through the actual TAGE/
+      ITTAGE table index hash, confirm the resulting index against
+      an independently-known value. End-to-end format agreement
+      between bp_history and its consumers; needs cluster stimulus.
+      Distinct from the BP-073 unit anchor (which proves the fold
+      value against section 6, not the index the table derives).
     - Performance item (section 5.4): stale-fold cost at SPEC.
 
 ---
 
-## 9. Interactions With Other Planning Documents
+## 10. Interactions With Other Planning Documents
 
   bp_history_interfaces.md
                   -- bp_history interface contract: port list,
                      timing, producer/consumer obligations. Carries
-                     the port reconciliation listed in section 8.
+                     the port reconciliation listed in section 9.
 
-  bp_cluster.md   -- pointer ownership (the cluster is the pointer
-                     authority, section 2), rollback stimulus,
-                     FTQ entry contents, GHR 256b / PHR 32b,
-                     folds recomputed on rollback.
+  bp_cluster.md   -- the cluster reads the exposed pointer for FTQ
+                     entry construction and supplies rollback
+                     stimulus (the checkpoint index); it does NOT
+                     own or drive the pointer. Pointer ownership is
+                     module-internal (section 2). Also: rollback
+                     stimulus path, FTQ entry contents, GHR 256b /
+                     PHR 32b, folds recomputed on rollback.
 
   tage_table_hash_rules.md / ittage_table_hash_rules.md
                   -- consume the folded outputs for index/tag
-                     hashing. HI2 (PHR mixing) lands here.
+                     hashing. They define fold CONSUMPTION (the
+                     index/tag hash given fh/fh1/fh2); the fold
+                     COMPUTATION is defined here (section 6). HI2
+                     (PHR mixing) lands in the hash docs.
 
   bp_defines_pkg.sv / bp_structs_pkg.sv
                   -- GHR_WIDTH, PHR_WIDTH, pointer/FTQ widths,
@@ -477,9 +604,25 @@ fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
 
 ---
 
-## 10. Document History
+## 11. Document History
 
-2026-06-26  session-055 (BP-072). Root cause found: session-054 left
+  2026-06-26  session-055 (fold-definition capture). Added section
+              6, the canonical Fold Definition: age indexing,
+              position mapping posmap(i) = (i+W-1)%W, window
+              eviction, the recompute == incremental invariant, and
+              a checkable worked example tied to the BP-073 TC14
+              anchor (history 0xD3 -> fold 0xE5). Xiangshan demoted
+              to an origin footnote (section 6.6) with a captured
+              commit/date placeholder. Section 2.2 now cites section
+              6 as the geometry authority rather than "the BP-071
+              Xiangshan convention." Old sections 6-10 renumbered to
+              7-11; all "section N>=6" cross-references updated. No
+              RTL or behavior change -- this captures the frozen,
+              externally-anchored (BP-073) geometry in the project's
+              own terms. A verification pass confirming the RTL still
+              matches the reworded authority is the follow-on task.
+
+  2026-06-26  session-055 (BP-072). Root cause found: session-054 left
               BP-069 (module-owned pointer interface) and BP-071 (fold
               geometry) in SEPARATE files -- BP-069 only in
               versions/bp_history.sv, BP-071 only in the active rtl/
@@ -497,35 +640,16 @@ fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
               reconciliation, not a geometry change, and no table-
               consumed fold value moved. While writing it, the
               checkpoint-timing inconsistency between this doc (section
-              6, pre-advance) and bp_history_interfaces.md (post-
+              7, pre-advance) and bp_history_interfaces.md (post-
               advance) surfaced; resolved to POST-advance (ratified)
               for the num_branches-independent anchor reason in section
-              6. recompute == incremental proven in simulation (TD #74,
+              7. recompute == incremental proven in simulation (TD #74,
               tb_bp_history): 13 directed cases, 19224 golden
               comparisons, incl. single-slot, dual-slot, GHR-boundary
-              wrap, SC ST3 (H=W=64). Open: external fold-value anchor
-              against the table hash-rule docs (the suite proves
-              recompute == incremental but not that the fold value
-              matches the table-consumption contract -- BP-073).
-
-<!--
-  2026-06-26  session-055 (BP-072). Landed the module-owned-pointer
-              RTL (BP-069) into rtl/ and reconciled it with the
-              BP-071 fold geometry. Found that BP-071's geometry
-              (newest at ptr, older at ptr+i, leaving bit at ptr+H)
-              assumes a DECREMENTING pointer and is inconsistent with
-              the ratified incrementing pointer (section 2.1): the
-              incremental fold diverged from the rollback recompute.
-              Resolution: increment-oriented geometry (fold_ghr walks
-              downward ptr-i; fold_step evicts at write_addr-H) plus a
-              POST-advance checkpoint with recompute anchor ckpt-1
-              (section 2.2, section 6). incremental == recompute is
-              now proven in simulation (TD #74, tb_bp_history): 13
-              directed cases, 19224 golden fold comparisons, including
-              single-slot, dual-slot, GHR-boundary wrap, and SC ST3
-              (H=W=64). This supersedes the section-6 pre-advance
-              checkpoint wording and aligns with the interface doc.
--->
+              wrap, SC ST3 (H=W=64). External fold-value anchor against
+              the canonical definition added in BP-073 (TC14-TC16);
+              the hash-rule docs were found to define fold consumption
+              only, which motivated the section 6 capture above.
 
   2026-06-25  session-054. Created. Resolves G20/G21/G22
               (= HI1/HI3/HI4). Decisions: dual-slot combined
@@ -538,12 +662,12 @@ fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
               checkpoint, rollback by index (section 2). This
               diverges from the as-built RTL (caller-owned input
               pointer) and changes both bp_history.sv and the
-              interface port list (section 8). Sequential-only
+              interface port list (section 9). Sequential-only
               advance confirmed against Alpha 21264 and IBM GHV
               recovery practice; no surveyed design needs a
               non-sequential pointer. Mispredict-only restore
               (section 3.4): exceptions/interrupts reinitialize
               history, so no no-branch-flush restore case exists.
               Open: the module-owned RTL/port edit and
-              TD #74 / #69 / #70 sequencing (section 8).
+              TD #74 / #69 / #70 sequencing (section 9).
 
