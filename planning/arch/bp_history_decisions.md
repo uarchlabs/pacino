@@ -84,6 +84,39 @@ the decision. The RTL and interface port list change to match
   loads the live pointer from it, and recomputes the folds from
   ghr_mem/phr_mem at that restored position (section 5).
 
+  BP-072 reconciliation (pointer-walk addressing; geometry UNCHANGED).
+  The fold geometry -- position mapping posmap(i) = (i+W-1)%W, newest
+  bit inserted at the high end (W-1), leaving bit removed at (H-1)%W --
+  is the BP-071 Xiangshan convention and did NOT change. What BP-072
+  set is the buffer-walk ADDRESSING that feeds that geometry under the
+  module-owned incrementing pointer (section 2.1): the newest bit sits
+  just below the live pointer, so the recompute walks the GHR DOWNWARD
+  (offset i -> ghr_mem[anchor - i]) and the incremental fold_step
+  fetches its leaving bit at write_addr - H. The recompute anchors at
+  ckpt - 1 because the checkpoint stores the post-advance pointer
+  (section 6) and the newest bit of the bundle is one position behind
+  it. fold_step is the exact incremental form of fold_ghr for this
+  mapping, so the rollback recompute reproduces the incremental fold;
+  TD #74 (tb_bp_history) confirms it in simulation for single-slot,
+  dual-slot, GHR-boundary wrap, and SC ST3 (H=W=64). No fold value
+  consumed by the TAGE/ITTAGE/SC tables changed -- only the recompute
+  walk direction and the checkpoint anchor were fixed to match the
+  incrementing pointer.
+
+<!--
+  BP-072 resolution (increment-oriented geometry): because the live
+  pointer INCREMENTS and the checkpoint stores the POST-advance
+  pointer (the next-write address, section 6), the newest history bit
+  is one position behind it. The fold recompute therefore anchors at
+  ckpt - 1 and walks the GHR DOWNWARD into older bits, and the
+  incremental fold_step evicts its leaving bit at write_addr - H.
+  This is the only orientation under which the rollback recompute
+  reproduces the incremental fold for both single-slot and dual-slot
+  bundles (proven in simulation by TD #74, tb_bp_history). The BP-071
+  position mapping posmap(i) = (i+W-1)%W and high-end newest insertion
+  are retained unchanged.
+-->
+
   Holding both an internal checkpoint array and an external
   rollback pointer input -- as the current RTL does -- is
   redundant. With the checkpoint internal, the index is sufficient.
@@ -292,9 +325,29 @@ GHR pointer (8b) + PHR pointer (5b) per FTQ slot. Folds are NOT
 stored per slot; they are recomputed on rollback from buffer
 contents at the restored pointer (section 5, G15 framing).
 
-Write: ckpt_wr_en writes the current internal pointer pair into
-ckpt_wr_idx, and exposes it on ckpt_ghist_ptr / ckpt_phist_ptr for
-FTQ entry construction.
+Write: ckpt_wr_en writes the POST-advance internal pointer pair (the
+next-write address for the cycle after this bundle) into ckpt_wr_idx,
+and exposes it on ckpt_ghist_ptr / ckpt_phist_ptr for FTQ entry
+construction.
+
+Checkpoint timing is POST-advance (ratified -- see History 2026-06-26).
+The checkpoint carries a pointer only, not num_branches. Storing the
+post-advance pointer puts the newest history bit of the bundle at
+ckpt - 1 whether the bundle held one branch or two, so the rollback
+recompute anchors uniformly at ckpt - 1 (section 2.2). A pre-advance
+snapshot would require also storing the slot count to locate the
+newest bit. This supersedes the earlier pre-advance wording in this
+section and matches bp_history_interfaces.md (Checkpoint Timing).
+
+<!--
+Write: ckpt_wr_en writes the POST-advance internal pointer pair (the
+next-write pointer for the cycle after this bundle) into ckpt_wr_idx,
+and exposes it on ckpt_ghist_ptr / ckpt_phist_ptr for FTQ entry
+construction. BP-072 changed this from the earlier pre-advance
+snapshot to align with bp_history_interfaces.md (Checkpoint Timing)
+and to make the dual-slot rollback recompute equal the incremental
+fold (section 2.2).
+-->
 
 Read (rollback): the rollback index selects ckpt_gptr[idx] /
 ckpt_pptr[idx]; the module loads the live pointer from it and
@@ -425,6 +478,54 @@ fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
 ---
 
 ## 10. Document History
+
+2026-06-26  session-055 (BP-072). Root cause found: session-054 left
+              BP-069 (module-owned pointer interface) and BP-071 (fold
+              geometry) in SEPARATE files -- BP-069 only in
+              versions/bp_history.sv, BP-071 only in the active rtl/
+              file -- so no single file held both, and the pointer-to-
+              fold addressing for an incrementing module-owned pointer
+              was never written or tested. handoff-054 and
+              PROJECT_STATUS recorded both as landed and lint-clean;
+              that was inaccurate. BP-072 merged the two into the
+              active rtl/ file and wrote that addressing for the first
+              time: with the pointer INCREMENTING (section 2.1) the
+              recompute walks the GHR downward (anchor - i) and
+              fold_step fetches its leaving bit at write_addr - H. The
+              BP-071 geometry (posmap, high-end insertion, (H-1)%W
+              eviction) is UNCHANGED; this was an addressing
+              reconciliation, not a geometry change, and no table-
+              consumed fold value moved. While writing it, the
+              checkpoint-timing inconsistency between this doc (section
+              6, pre-advance) and bp_history_interfaces.md (post-
+              advance) surfaced; resolved to POST-advance (ratified)
+              for the num_branches-independent anchor reason in section
+              6. recompute == incremental proven in simulation (TD #74,
+              tb_bp_history): 13 directed cases, 19224 golden
+              comparisons, incl. single-slot, dual-slot, GHR-boundary
+              wrap, SC ST3 (H=W=64). Open: external fold-value anchor
+              against the table hash-rule docs (the suite proves
+              recompute == incremental but not that the fold value
+              matches the table-consumption contract -- BP-073).
+
+<!--
+  2026-06-26  session-055 (BP-072). Landed the module-owned-pointer
+              RTL (BP-069) into rtl/ and reconciled it with the
+              BP-071 fold geometry. Found that BP-071's geometry
+              (newest at ptr, older at ptr+i, leaving bit at ptr+H)
+              assumes a DECREMENTING pointer and is inconsistent with
+              the ratified incrementing pointer (section 2.1): the
+              incremental fold diverged from the rollback recompute.
+              Resolution: increment-oriented geometry (fold_ghr walks
+              downward ptr-i; fold_step evicts at write_addr-H) plus a
+              POST-advance checkpoint with recompute anchor ckpt-1
+              (section 2.2, section 6). incremental == recompute is
+              now proven in simulation (TD #74, tb_bp_history): 13
+              directed cases, 19224 golden fold comparisons, including
+              single-slot, dual-slot, GHR-boundary wrap, and SC ST3
+              (H=W=64). This supersedes the section-6 pre-advance
+              checkpoint wording and aligns with the interface doc.
+-->
 
   2026-06-25  session-054. Created. Resolves G20/G21/G22
               (= HI1/HI3/HI4). Decisions: dual-slot combined
