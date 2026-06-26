@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-25 (pa session 054)
+ UPDATED: 2026-06-26 (pa session 055)
  CONTACT: Jeff Nye
 ```
 
@@ -42,24 +42,42 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | tb_bp_pkg.sv 6->4b literal fix   |
 |                         |             |                   | (BP-062, authorized).            |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
-| bp_history.sv           | In progress | tb_bp_history     | Module-owned pointer rework      |
-|                         |             |                   | (BP-069). Fold geometry fixed to |
-|                         |             |                   | Xiangshan convention, 64b        |
-|                         |             |                   | helpers (BP-071). Lint clean, no |
-|                         |             |                   | bpu regression. NOT re-verified: |
-|                         |             |                   | tb stale, sim_history/cov_history|
-|                         |             |                   | WAIVED. BP-072 (written, not run)|
-|                         |             |                   | rewires tb + proves dual-slot    |
-|                         |             |                   | fold equivalence (TD #74).       |
-|                         |             |                   | Prior "12 passing" count void    |
-|                         |             |                   | (old ports + old fold geometry). |
+| bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
+|                         |             |                   | Fold geometry corrected to       |
+|                         |             |                   | Xiangshan, 64b helpers (BP-071); |
+|                         |             |                   | increment-oriented walk +        |
+|                         |             |                   | post-advance ckpt reconciled     |
+|                         |             |                   | (BP-072). Dual-slot fold         |
+|                         |             |                   | equivalence proven in-sim        |
+|                         |             |                   | (TD #74, BP-072): 16 TCs,        |
+|                         |             |                   | 19224 golden comparisons.        |
+|                         |             |                   | External fold anchor TC14-16     |
+|                         |             |                   | (BP-073). Canonical fold def     |
+|                         |             |                   | captured in decisions.md s6;     |
+|                         |             |                   | doc-RTL consistency verified     |
+|                         |             |                   | (BP-074). Full bpu 33/33 green.  |
+|                         |             |                   | See BUG-004 / BUG-005.           |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22; rules pointer       |
 |                         |             |                   | module-owned, rollback by index. |
+|                         |             |                   | s6 canonical Fold Definition     |
+|                         |             |                   | added session-055 (native        |
+|                         |             |                   | geometry; Xiangshan demoted to   |
+|                         |             |                   | origin footnote s6.6, sha TBD).  |
+|                         |             |                   | s7 checkpoint POST-advance       |
+|                         |             |                   | ratified. s10 pointer-authority  |
+|                         |             |                   | wording corrected. Doc-RTL       |
+|                         |             |                   | consistency verified BP-074.     |
+|                         |             |                   | Functionally authoritative;      |
+|                         |             |                   | header still DRAFT pending s6.6  |
+|                         |             |                   | sha + HI2/HI5.                   |
 | bp_history_interfaces.md| Draft       | --                | Rewritten session-054 from the   |
 |                         |             |                   | BP-002 draft to target interface |
 |                         |             |                   | (module-owned ptr, dual-slot,    |
 |                         |             |                   | rollback by index, stale folds). |
+|                         |             |                   | Checkpoint Timing (post-advance) |
+|                         |             |                   | confirmed consistent with        |
+|                         |             |                   | decisions.md s7 (BP-074).        |
 | ubtb.sv                 | Complete    | tb_ubtb           | TC1-TC10 passing.                |
 |                         |             |                   | Port naming retrofit pending     |
 |                         |             |                   | (CLI-012)                        |
@@ -158,6 +176,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | Promoted Complete BP-051.        |
 | ittage_table_hash_rules.md        | Complete    | --    | Created session-033.             |
 |                                   |             |       | session-036: verified.           |
+|                                   |             |       | Defines fold CONSUMPTION only;   |
+|                                   |             |       | fold COMPUTATION is in           |
+|                                   |             |       | bp_history_decisions.md s6.      |
 | ittage_table.sv                   | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete. |
 | ittage_cntrl.sv                   | Complete    | tb_ittage_cntrl | Prediction path complete BP-034|
 |                                   |             |                 | Update path complete BP-035      |
@@ -388,15 +409,17 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 69 | tage rollback / history recompute.     | G20/G21/G22 RESOLVED            |
 |    | Dark; tracks arch TBDs.                | session-054 (the blocker).      |
 |    |                                        | bp_history GHR/PHR fold         |
-|    |                                        | recompute on rollback now       |
-|    |                                        | correct (BP-071, Xiangshan      |
-|    |                                        | geometry). Still deferred to    |
-|    |                                        | bp_cluster for rollback         |
-|    |                                        | stimulus. See TD #7.            |
+|    |                                        | recompute on rollback proven    |
+|    |                                        | in-sim (BP-072; canonical fold  |
+|    |                                        | def decisions.md s6). Still     |
+|    |                                        | deferred to bp_cluster for      |
+|    |                                        | rollback stimulus. See TD #7.   |
 | 70 | ittage rollback / history recompute.   | Same as #69 for ittage. Shared  |
 |    | Dark; tracks arch TBDs.                | GHR/PHR fold logic. G20/G21/G22 |
-|    |                                        | RESOLVED session-054. Defer to  |
-|    |                                        | bp_cluster for stimulus.        |
+|    |                                        | RESOLVED session-054; fold      |
+|    |                                        | recompute proven in-sim BP-072. |
+|    |                                        | Defer to bp_cluster for         |
+|    |                                        | stimulus.                       |
 | 71 | tage round-trip                        | CLOSED BP-061                   |
 |    |                                        | Mixed ctr/use/alloc/epc in one  |
 |    | Combined test, run only after          | flow. Run ONLY after            |
@@ -421,14 +444,19 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | units tested. Concurrent        |
 |    |                                        | pred+upd is the untested        |
 |    |                                        | interaction of interest.        |
-| 74 | Dual-slot (NUM_PRED_SLOTS=2) test.     | G20 RESOLVED session-054        |
-|    | bp_history dual-slot fold equivalence: | (bp_history_decisions.md s3).   |
-|    | BP-072 (written, not run).             | bp_history dual-slot fold       |
+| 74 | Dual-slot (NUM_PRED_SLOTS=2) test.     | bp_history part CLOSED          |
+|    | bp_history dual-slot fold equivalence  | (BP-072). G20 RESOLVED          |
+|    | proven; broader cluster dual-slot      | session-054 (decisions.md s3).  |
+|    | still deferred.                        | bp_history dual-slot fold       |
 |    |                                        | equivalence (incremental vs     |
-|    |                                        | recompute) is the BP-072        |
-|    |                                        | centerpiece. Broader cluster    |
-|    |                                        | dual-slot (slot 1 update path   |
-|    |                                        | across TAGE/ITTAGE, both slots  |
+|    |                                        | recompute) proven in-sim        |
+|    |                                        | BP-072 (19224 golden            |
+|    |                                        | comparisons; single-slot,       |
+|    |                                        | dual-slot, GHR-wrap, SC ST3).   |
+|    |                                        | Externally anchored BP-073.     |
+|    |                                        | Broader cluster dual-slot       |
+|    |                                        | (slot 1 update path across      |
+|    |                                        | TAGE/ITTAGE, both slots         |
 |    |                                        | together) still deferred until  |
 |    |                                        | after arb #73 and full BPU.     |
 |    |                                        | Reduction work in #1.           |
@@ -501,8 +529,21 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | | | the num_branches>=1 and ==2 cases are two separate if blocks that     |
 | | | both assign the fold registers (correct by NBA last-write-wins, dead  |
 | | | slot-0 assignment on the ==2 path). Convert to if/else-if. NOT done   |
-| | | in BP-071 (scoped to fold arithmetic). Fold into the next bp_history  |
-| | | RTL touch or a small cleanup task. No behavior change.                |
+| | | in BP-071/072/073/074 (each scoped narrowly). Fold into the next      |
+| | | bp_history RTL touch or a small cleanup task. No behavior change.     |
+| 83 | bp_history decisions.md s6.6 origin  | Fill <XS-COMMIT-SHA> /         |
+| | | citation placeholders. The Xiangshan FoldedHistory origin commit and  |
+| | | capture date are unset in s6.6. Informational only -- s6 is the       |
+| | | authority, not a live dependency -- but the citation should pin a     |
+| | | real commit/date so the origin is archivable. Manual, low priority.   |
+| 84 | Producer/consumer end-to-end fold    | bp_history fold output proven  |
+| | | check. BP-073 proved the bp_history fold VALUE against the canonical  |
+| | | definition (decisions.md s6); it did NOT run that fold through the    |
+| | | actual TAGE/ITTAGE table index hash to confirm the derived index.     |
+| | | Drive a known GHR, take the bp_history fold, hash it in the table,    |
+| | | confirm the index against an independently-known value. End-to-end    |
+| | | format agreement between producer and consumers. Needs cluster        |
+| | | stimulus; resolve at bp_cluster integration. (decisions.md s9.)       |
 
 ---
 
@@ -573,11 +614,13 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |     | not defined for NUM_PRED_SLOTS=2      | Combined slot-0-then-  |
 |     | See HI1 in bp_history_interfaces      | slot-1, bundle ckpt.   |
 |     |                                       | decisions.md s3.       |
+|     |                                       | Proven in-sim BP-072.  |
 |     |                                       | (= HI1)                |
 | G21 | rollback_en + pred_valid same-cycle   | RESOLVED session-054.  |
 |     | priority undefined                    | Rollback wins, mutually|
 |     |                                       | exclusive with update. |
 |     |                                       | decisions.md s4.       |
+|     |                                       | Proven in-sim BP-072.  |
 |     |                                       | (= HI3)                |
 | G22 | One-cycle folded output invalid       | RESOLVED session-054.  |
 |     | window after rollback                 | Folds STALE not        |
@@ -585,6 +628,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |     |                                       | allowed on stale folds.|
 |     |                                       | Decoupled from G15.    |
 |     |                                       | decisions.md s5.       |
+|     |                                       | Proven in-sim BP-072.  |
 |     |                                       | (= HI4)                |
 | G23 | Checkpoint slot reclaim protocol      | TBD at FTQ impl.       |
 |     |                                       | (= bp_history HI5)     |
@@ -667,10 +711,13 @@ Key decisions for quick reference:
 - FTQ depth 64, split fast/slow SRAMs
 - History: GHR 256b, PHR 32b, folds recomputed on rollback.
   Pointer module-owned (bp_history holds it, advances by
-  num_branches, rollback by checkpoint INDEX). Fold uses the
-  Xiangshan FoldedHistory geometry (one definition for update
-  and recompute). See planning/arch/bp_history_decisions.md.
-  (session-054)
+  num_branches, rollback by checkpoint INDEX). Fold geometry
+  is canonical in bp_history_decisions.md s6 (project-owned;
+  Xiangshan FoldedHistory cited as origin only). One fold
+  definition for update and recompute; increment-oriented
+  walk, post-advance checkpoint. Proven in-sim BP-072,
+  externally anchored BP-073, doc-RTL verified BP-074.
+  (session-055)
 - TAGE entry: T0 2b CTR only, T1-T4 valid+tag+CTR+useful
 - ITTAGE entry: IT1-IT5 valid+tag+EPC+USE+CTR(3b)+TGT(38b).
   No IT0 base table. CTR is confidence not direction.
@@ -725,7 +772,8 @@ Key decisions for quick reference:
     - remaining items deferred
         - #69 rollback -> bp_cluster
         - #67 sram_init non-fast
-        - #74 dual-slot
+        - #74 dual-slot (bp_history part closed BP-072;
+          TAGE/cluster dual-slot still deferred)
     - Formal validation not started
 - BP-006 through BP-032: complete.
 - BP-041 manual checks for tage CTR and USE complete
@@ -751,7 +799,8 @@ Key decisions for quick reference:
     - planning/arch/tage_cntrl_use_update_rules.md    Complete
         - USE(ful) field update rules. Corrected session-045.
     - planning/arch/tage_table_hash_rules.md          Complete
-        - Address and tag generation hashing
+        - Address and tag generation hashing. Consumes folds
+          per bp_history_decisions.md s6 (computation there).
     - planning/arch/tage_table_entry_formats.md       Complete
         - Central specification of table entry fields and ordering
     - planning/interfaces/tage_interfaces.md          Complete
@@ -785,7 +834,8 @@ Key decisions for quick reference:
     - planning/arch/ittage_table_entry_formats.md       Complete
         - Central specification of table entry fields and ordering
     - planning/arch/ittage_table_hash_rules.md          Complete
-        - Address and tag generation hashing
+        - Address and tag generation hashing. Consumes folds
+          per bp_history_decisions.md s6 (computation there).
     - planning/interfaces/ittage_interfaces.md          Complete
         - ITTAGE module interface contracts
     - planning/interfaces/ittage_table_interfaces.md    Complete
@@ -846,26 +896,45 @@ Key decisions for quick reference:
         - conf bimodal direction + saturated-endpoint fast-path policy
 
 ### bp_history decomposition
-- Planning documents created / rewritten session-054:
+- COMPLETE at unit level (session-055). Module-owned pointer,
+  corrected/increment-oriented fold geometry, canonical fold
+  definition captured natively, suite green.
+- Planning documents (session-054, extended session-055):
     - planning/arch/bp_history_decisions.md           Draft
         - G20/G21/G22 resolution + module-owned pointer
+        - s6 canonical Fold Definition (session-055): age
+          indexing, posmap(i)=(i+W-1)%W, eviction at (H-1)%W,
+          recompute==incremental invariant, worked example
+          (0xD3 -> 0xE5). Xiangshan demoted to origin footnote
+          s6.6 (sha TBD, #83).
+        - s7 checkpoint POST-advance ratified; s10 pointer-
+          authority wording corrected.
     - planning/interfaces/bp_history_interfaces.md    Draft
         - Target interface (module-owned ptr, dual-slot,
-          rollback by index, stale folds)
+          rollback by index, stale folds). Checkpoint Timing
+          (post-advance) consistent with decisions.md s7
+          (confirmed BP-074).
 - RTL:
-    - rtl/core/frontend/bpu/rtl/bp_history.sv
-        - Module-owned pointer rework (BP-069)
-        - Fold geometry fixed to Xiangshan convention,
-          64b helpers (BP-071); see BUG-004
-        - Lint clean; no bpu regression
-        - NOT re-verified: tb_bp_history stale, sim_history /
-          cov_history WAIVED
+    - rtl/core/frontend/bpu/rtl/bp_history.sv         Complete
+        - Module-owned pointer (BP-069)
+        - Fold geometry corrected to Xiangshan, 64b helpers
+          (BP-071); increment-oriented walk + post-advance
+          checkpoint reconciled with the incrementing pointer
+          (BP-072). See BUG-004 / BUG-005.
+        - Lint clean; no bpu regression.
 - Verification:
-    - BP-072 (written, not run): rewire tb to new ports, correct
-      the golden to Xiangshan geometry, prove single-slot and
-      dual-slot (TD #74) incremental-vs-recompute fold
-      equivalence, restore sim_history / cov_history / cov_bpu
-      green. bp_history is NOT Complete until BP-072 passes.
+    - BP-072: dual-slot fold equivalence (TD #74) proven in-sim;
+      16 directed TCs, 19224 golden fold comparisons; single-slot,
+      dual-slot, GHR-boundary wrap, SC ST3 (H=W=64). sim_history /
+      cov_history / cov_bpu restored green.
+    - BP-073: external fold-value anchor (TC14-16) against the
+      canonical definition (TAGE T1 0xE5, ITTAGE IT1 0x9, SC ST3
+      0xC000_0000_0000_0000). Hash-rule docs found to define fold
+      CONSUMPTION only -> motivated the s6 capture.
+    - BP-074: doc-RTL consistency audit of s6; repo drift isolated;
+      cross-references resolve; s6 matches fold_ghr/fold_step;
+      worked examples re-derived from s6 reproduce the committed
+      literals and DUT output; full bpu 33/33 green.
 - Key decisions session-054:
     - G20: combined slot-0-then-slot-1 dual-slot update, bundle
       checkpoint granularity
@@ -876,11 +945,20 @@ Key decisions for quick reference:
       by checkpoint index. Mispredict-only restore (exceptions /
       interrupts reinitialize history, do not use the checkpoint
       path)
+- Key decisions session-055:
+    - Fold geometry captured natively (decisions.md s6); the
+      definition no longer depends on the external Xiangshan source
+    - Checkpoint timing ratified POST-advance (s7); recompute
+      anchor ckpt-1, num_branches-independent
 - Open / deferred:
     - HI2 (PHR fold mixing) -> TAGE/ITTAGE hashing
     - HI5 (checkpoint slot reclaim) -> FTQ (= G23)
-    - #82 if/else-if slot cleanup (decisions 3.5; not done BP-071)
+    - #82 if/else-if slot cleanup (decisions 3.5; not done)
+    - #83 s6.6 Xiangshan origin sha/date fill (manual)
+    - #84 producer/consumer end-to-end fold check -> bp_cluster
     - #69/#70 rollback stimulus -> bp_cluster
+    - versions/bp_history.sv (stale BP-069 copy) superseded by the
+      merged rtl/ file; retire it (BUG-005)
 
 ### Shared components track
 - components/rtl  components/tb
@@ -954,6 +1032,33 @@ Key decisions for quick reference:
   full-window region. Fixed BP-071 (single Xiangshan-geometry fold:
   newest at high end, wrap-out at (H-1) % W, recompute posmap(i) =
   (i+W-1) % W; 64b helpers). Single-slide equivalence proven offline
-  in BP-071; in-sim proof (single + dual-slot) is BP-072. BP-070
-  abandoned.
+  in BP-071. In-sim proof (single + dual-slot) completed BP-072
+  (19224 golden comparisons); externally anchored BP-073; geometry
+  captured natively in bp_history_decisions.md s6, doc-RTL verified
+  BP-074. CLOSED. BP-070 abandoned. See also BUG-005 (the
+  increment-oriented integration defect found while landing this
+  fix).
+- BUG-005: bp_history BP-069/BP-071 never co-resident; the merged
+  module-owned-pointer + fold geometry was never integrated or
+  tested in session-054. Root cause: session-054 left the BP-069
+  module-owned-pointer RTL only in versions/bp_history.sv and the
+  BP-071 fold-geometry fix only in the active rtl/ file; no single
+  file held both, so the pointer-to-fold addressing for an
+  incrementing module-owned pointer was never written or run.
+  handoff-054 and PROJECT_STATUS recorded both BP-069 and BP-071 as
+  landed and lint-clean -- inaccurate (the records were corrected
+  session-055). Surfaced in BP-072: merging the two produced an
+  incremental fold that diverged from the rollback recompute
+  (rolling back to an un-diverged checkpoint corrupted folded,
+  0x92 -> 0x00), because BP-071's geometry walk and BP-069's
+  incrementing pointer disagreed on direction. Fixed BP-072
+  (authorized scope expansion): increment-oriented walk (fold_ghr
+  ptr-i; fold_step evicts the leaving bit at write_addr-H) plus a
+  POST-advance checkpoint with recompute anchor ckpt-1. The BP-071
+  posmap and high-end insertion are unchanged; this is an addressing
+  reconciliation, not a geometry change, and no table-consumed fold
+  value moved. recompute == incremental proven in-sim BP-072;
+  externally anchored BP-073; geometry made native in
+  bp_history_decisions.md s6 (BP-074). versions/bp_history.sv is
+  superseded by the merged rtl/ file and should be retired. CLOSED.
 
