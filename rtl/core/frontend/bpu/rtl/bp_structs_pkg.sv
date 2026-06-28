@@ -65,6 +65,9 @@ package bp_structs_pkg;
     logic [SC_MAX_FH-1:0]    sc_t1_idx_fh;
     logic [SC_MAX_FH-1:0]    sc_t2_idx_fh;
     logic [SC_MAX_FH-1:0]    sc_t3_idx_fh;
+    // -- PHR 
+    logic [PHR_WIDTH-1:0]    tage_phr;
+
   } bp_folded_hist_t;
 
   // ----------------------------------------------------------------
@@ -96,6 +99,22 @@ package bp_structs_pkg;
     PRED_NONE   = 3'b111  // no prediction (uBTB miss, loop absent)
   } bp_pred_src_e;
 
+  // SC range based chooser:
+  // Recorded in sc_pred_meta_t at prediction 
+  typedef enum logic [1:0] {
+    CHOOSE_NONE  = 2'b00,
+    CHOOSE_MED   = 2'b01,
+    CHOOSE_HIGH  = 2'b10,
+    CHOOSE_RSRVD = 2'b11,
+  } bp_sc_chooser_e;
+
+  // BrIMLI modes, for perf analysis, 2'b00 is default
+  typedef enum logic [1:0] {
+    IDX_IMLI_PHR  = 2'b00, // baseline: IMLI, fall back to PHR when cold
+    IDX_PHR_ONLY  = 2'b01, // force PHR always  (baseline: no IMLI at all)
+    IDX_IMLI_ONLY = 2'b10, // IMLI always, no PHR substitution
+    IDX_IMLI_RSRV = 2'b11  // not used
+  } br_imli_mode_e;
   // ----------------------------------------------------------------
   // Sub-structs
   // ----------------------------------------------------------------
@@ -112,19 +131,19 @@ package bp_structs_pkg;
     logic [RAS_PTR_BITS-1:0] bos;  // bottom-of-stack pointer
   } bp_ras_snapshot_t;
 
-  // SC (Statistical Corrector) predictor metadata.
-  // sc_upd_idx[3:0]: ST0-ST3 indices (4 tables, SC_MAX_IDX_WIDTH each).
-  // sc_imli_idx: ST4 (IMLI) index (SC_IMLI_INDEX_BITS = 10b).
-  // sc_upd_ctr[SC_NUM_ALL_TBLS-1:0]: counter snapshots ST0-ST4
-  //   (SC_TBL_DATA_BITS = 24b each; ST4 uses lower
-  //   SC_ST4_DATA_BITS bits only).
-  typedef struct packed {
-    logic                             sc_pred_tkn;
-    logic                             sc_override;
-    logic [3:0][SC_MAX_IDX_WIDTH-1:0] sc_upd_idx;
-    logic [SC_MAX_IDX_WIDTH-1:0]      sc_imli_idx;
-    logic [SC_NUM_ALL_TBLS-1:0][SC_MAX_DATA_WIDTH-1:0] sc_upd_ctr;
-  } bp_sc_meta_t;
+//  // SC (Statistical Corrector) predictor metadata.
+//  // sc_upd_idx[3:0]: ST0-ST3 indices (4 tables, SC_MAX_IDX_WIDTH each).
+//  // sc_imli_idx: ST4 (IMLI) index (SC_IMLI_INDEX_BITS = 10b).
+//  // sc_upd_ctr[SC_NUM_ALL_TBLS-1:0]: counter snapshots ST0-ST4
+//  //   (SC_TBL_DATA_BITS = 24b each; ST4 uses lower
+//  //   SC_ST4_DATA_BITS bits only).
+//  typedef struct packed {
+//    logic                             sc_pred_tkn;
+//    logic                             sc_override;
+//    logic [3:0][SC_MAX_IDX_WIDTH-1:0] sc_upd_idx;
+//    logic [SC_MAX_IDX_WIDTH-1:0]      sc_imli_idx;
+//    logic [SC_NUM_ALL_TBLS-1:0][SC_MAX_DATA_WIDTH-1:0] sc_upd_ctr;
+//  } bp_sc_meta_t;
 
   // Loop predictor metadata.
   // Captures state needed to update the loop predictor after
@@ -153,7 +172,6 @@ package bp_structs_pkg;
   } tage_pred_inp_t;
 
   // TAGE prediction metadata.
-  // Rename of tage_pred_meta_t with branch_id appended.
   typedef struct packed {
     // Provider and alt-provider table indices and selectors
     logic [TAGE_MAX_AWIDTH-1:0]    tage_prm_idx;    // primary idx
@@ -178,8 +196,16 @@ package bp_structs_pkg;
                                    //indicate NOT WEAK, CTR != 3 or 4
     logic                          tage_use_alt_on_na; // USE_ALT_ON_NA hit
     logic                          tage_using_primary; // primary supplied
-    logic                          tage_high_conf;     // ctr was 11 or 00
+
+    logic                          tage_high_conf;
+    logic                          tage_pred_weak;
+    logic                          tage_pred_medium;
+
     logic                          tage_pred_tkn;      // TAGE direction
+    // Derived and convenience signals
+    logic unsigned [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;
+    logic signed   [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;
+
     // FTQ slot index appended to tage_pred_meta_t fields
     logic [FTQ_IDX_BITS-1:0]       branch_id;
   } tage_pred_meta_t;
@@ -232,12 +258,12 @@ package bp_structs_pkg;
     logic [IT_MAX_TGT_WIDTH-1:0]   ittage_prm_tgt;       // primary target
     logic [IT_MAX_TGT_WIDTH-1:0]   ittage_alt_tgt;       // alt target
     // Prediction flags
-    logic                           ittage_hit;           // any tbl hit
-    logic                           ittage_pred_strong;   // NOT WEAK
-    logic                           ittage_use_alt_on_na; // USE_ALT_ON_NA
-    logic                           ittage_using_primary; // primary supplied
+    logic                          ittage_hit;           // any tbl hit
+    logic                          ittage_pred_strong;   // NOT WEAK
+    logic                          ittage_use_alt_on_na; // USE_ALT_ON_NA
+    logic                          ittage_using_primary; // primary supplied
     // FTQ slot index
-    logic [FTQ_IDX_BITS-1:0]        branch_id;
+    logic [FTQ_IDX_BITS-1:0]       branch_id;
   } ittage_pred_meta_t;
 
   // ITTAGE update input bundle.
@@ -256,41 +282,90 @@ package bp_structs_pkg;
   // Travels with pipeline stage from p0/u0 to p1/u1.
   // trx_type encoding: 0 = PRED, 1 = UPD.
   typedef struct packed {
-    logic                    trx_type;
+    logic                     trx_type;
     logic [TRX_SLOT_BITS-1:0] trx_slot;
   } bp_arb_trx_t;
 
   // ----------------------------------------------------------------
-  // SC placeholder structs
+  // SC structs
   // ----------------------------------------------------------------
-  // SC prediction metadata. Placeholder.
-  // Fields to be defined when SC RTL is implemented.
+  // SC prediction metadata.
+  // ----------------------------------------------------------------
   typedef struct packed {
-    logic [7:0] reserved;
+
+    //SC supplied prediction
+    logic sc_pred_tkn;     //This is SC+TAGE blocks final prediction
+    logic sc_lcl_pred_tkn; //This is SC's prediction only, no override
+
+    logic sc_tage_pred_tkn; //copy of tage_pred_meta.tage_pred_tkn
+
+    //The SC over-rode the TAGE prediction
+    logic sc_override;
+
+    //ST0-ST3 table indexes captured during prediction used during update.
+    //ST0 index is not hashed. This index can be used directly during update.
+    //ST1-ST3 indexes are the hashed versions and can be used directly,
+    //in update (i.e. no re-hash should be done).
+    //ST4 index is derived from the BrIMLI register
+
+    //SC tables index values used during prediction request, these
+    //should be used directly in update (no additional hashing)
+    logic [SC_MAX_IDX_WIDTH-1:0] sc_upd_idx[0:SC_NUM_TABLES-1];
+
+    //SC tables ctr values at prediction request
+    logic [SC_MAX_DATA_WIDTH-1:0] sc_upd_ctr[0:SC_NUM_TABLES-1];
+
+    //The value of all entry outputs, includes ST0-ST4 and tage contribution
+    logic signed   [SC_LSUM_BITS-1:0] sc_sum;
+    logic unsigned [SC_LSUM_BITS-1:0] sc_abs_sum;
+
+    //This range selector is calculated are prediction used during update
+    bp_sc_chooser_e          sc_chooser;
+
+    logic [9:0]               pc_range;
+    logic [FTQ_IDX_BITS-1:0]  branch_id;
+    logic [9:0]               captured_phr;
+
   } sc_pred_meta_t;
 
-  // SC update input. Placeholder.
-  // Fields to be defined when SC RTL is implemented.
+  // ----------------------------------------------------------------
+  // SC update input.
+  // ----------------------------------------------------------------
   typedef struct packed {
-    logic [7:0] reserved;
+
+    //The meta data returned by SC during prediction
+    sc_pred_meta_t  sc_pred_meta;
+
+    //The execute resolved taken/not taken flag
+    logic        resolved_taken;
+
+    //Conditional branch mispredict
+    logic        cond_mispredict;
+
+    //FTB or BPU control logic sets this bit to indicate the branch being
+    //predicted is a backwards branch (branch target < PC)
+    logic        backwards_branch;
+
+    logic [15:6] branch_range;
+
   } sc_upd_inp_t;
 
-  // ----------------------------------------------------------------
-  // Merged TAGE+SC prediction and update structs
-  // ----------------------------------------------------------------
-  typedef struct packed {
-    tage_pred_meta_t tage;
-    sc_pred_meta_t   sc;
-    logic            sc_valid;
-  } cond_pred_meta_t;
-
-  typedef struct packed {
-    tage_upd_inp_t  tage;
-    sc_upd_inp_t    sc;
-    logic           sc_valid;
-    logic           resolved_taken;
-    logic           cond_mispredict;
-  } cond_pred_upd_inp_t;
+//  // ----------------------------------------------------------------
+//  // Merged TAGE+SC prediction and update structs
+//  // ----------------------------------------------------------------
+//  typedef struct packed {
+//    tage_pred_meta_t tage;
+//    sc_pred_meta_t   sc;
+//    logic            sc_valid;
+//  } cond_pred_meta_t;
+//
+//  typedef struct packed {
+//    tage_upd_inp_t  tage;
+//    sc_upd_inp_t    sc;
+//    logic           sc_valid;
+//    logic           resolved_taken;
+//    logic           cond_mispredict;
+//  } cond_pred_upd_inp_t;
 
   // ----------------------------------------------------------------
   // Top-level structs
@@ -319,7 +394,7 @@ package bp_structs_pkg;
   // overload scheme is TBD at implementation.
   typedef struct packed {
     tage_pred_meta_t   tage;   // TAGE predictor state
-    bp_sc_meta_t       sc;     // SC predictor state
+    sc_pred_meta_t     sc;     // SC predictor state
     bp_loop_meta_t     lp;     // loop predictor state
     ittage_pred_meta_t ittage; // ITTAGE predictor state
   } bp_ftq_meta_t;
@@ -335,12 +410,12 @@ package bp_structs_pkg;
   // is declared at instantiation, not inside this struct.
   typedef struct packed {
     logic [FTQ_IDX_BITS-1:0] branch_id;     // FTQ slot (branch ID)
-    logic [VA_WIDTH-1:0]      pc;            // fetch PC of branch
-    logic                     actual_taken;  // resolved direction
-    logic [VA_WIDTH-1:0]      actual_target; // resolved target
-    bp_br_type_e              br_type;       // branch type
-    logic                     mispredicted;  // was a misprediction
-    logic                     valid;
+    logic [VA_WIDTH-1:0]     pc;            // fetch PC of branch
+    logic                    actual_taken;  // resolved direction
+    logic [VA_WIDTH-1:0]     actual_target; // resolved target
+    bp_br_type_e             br_type;       // branch type
+    logic                    mispredicted;  // was a misprediction
+    logic                    valid;
   } bp_update_t;
 
   // ----------------------------------------------------------------

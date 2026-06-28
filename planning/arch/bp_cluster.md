@@ -89,7 +89,7 @@ Override chain (conditional branch direction and target):
         ctr    : 3b
         useful : 2b
 
-### SC (Statistical Corrector)
+#design## SC (Statistical Corrector)
 - Stage:   s3 output (s0 index, s1 counter read, s2 accumulate, s3 final)
 - Role:    Corrects TAGE when TAGE is systematically biased. Requires
            TAGE output to proceed (TAGE must be valid before SC can

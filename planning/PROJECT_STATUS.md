@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-26 (pa session 055)
+ UPDATED: 2026-06-28 (pa session 056)
  CONTACT: Jeff Nye
 ```
 
@@ -35,12 +35,29 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | FTB params added/fixed BP-065/   |
 |                         |             |                   | 065a/066a (FTB_WAYS=4, widths,   |
 |                         |             |                   | conf init, FTB_RAM_*).           |
+|                         |             |                   | SC params session-056:           |
+|                         |             |                   | SC_NUM_TABLES=5 (SC_NUM_ALL_TBLS |
+|                         |             |                   | removed); dynamic threshold      |
+|                         |             |                   | SC_THRSH_BITS/MIN/MID/MAX,        |
+|                         |             |                   | SC_TC_BITS, SC_LSUM_BITS,         |
+|                         |             |                   | SC_CHOOSER_*; SC_LO/HI_THRESHOLD  |
+|                         |             |                   | removed (now dynamic).           |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields pending (II1).   |
 |                         |             |                   | bp_ras_snapshot_t comment        |
 |                         |             |                   | updated session-050.             |
 |                         |             |                   | tb_bp_pkg.sv 6->4b literal fix   |
 |                         |             |                   | (BP-062, authorized).            |
+|                         |             |                   | SC structs session-056:          |
+|                         |             |                   | sc_pred_meta_t, sc_upd_inp_t      |
+|                         |             |                   | populated; bp_sc_meta_t and       |
+|                         |             |                   | cond_pred_meta_t/cond_pred_upd_   |
+|                         |             |                   | inp_t commented out (superseded); |
+|                         |             |                   | bp_sc_chooser_e, br_imli_mode_e   |
+|                         |             |                   | added; tage_pred_meta_t gains     |
+|                         |             |                   | tage_provider_ctr/tage_extd_ctr   |
+|                         |             |                   | fields (TAGE generation is        |
+|                         |             |                   | TD#87/#88).                       |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected to       |
@@ -179,52 +196,64 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | Defines fold CONSUMPTION only;   |
 |                                   |             |       | fold COMPUTATION is in           |
 |                                   |             |       | bp_history_decisions.md s6.      |
-| ittage_table.sv                   | Complete    | tb_ittage_table | BP-033/033-FIX-1 complete. |
-| ittage_cntrl.sv                   | Complete    | tb_ittage_cntrl | Prediction path complete BP-034|
-|                                   |             |                 | Update path complete BP-035      |
-|                                   |             |                 | Testbench complete BP-036        |
-|                                   |             |                 | CTR/USE tests complete BP-044/a/b/c |
-|                                   |             |                 | 147 tests passing w/ BP-048       |
-|                                   |             |                 |  UAON/aging/alloc verified BP-051/2/3 |
-|                                   |             |                 |  ittage_cntrl is complete   |
-| ittage.sv                         | Complete    | tb_ittage | BP-034/035/35a/35b                |
-|                                   |             |           | shell without arb cntrl complete  |
-|                                   |             |           | sim_ittage 211 pass / 0 fail      |
-|                                   |             |           | tests added BP-054.               |
-|                                   |             |           | round trip tests added in BP-055. |
-| ras_decisions.md | Draft       | --             | Created session-050.             |
-|                  |             |                | G5/G6/G8/G17 decisions recorded. |
-|                  |             |                | Reconciled to RTL BP-064         |
-|                  |             |                | (sec 1/1.2, 3.2, 3.3/4.5).       |
-|                  |             |                | See BP Cluster Open TBDs.        |
-| ras_interfaces.md| Draft       | --             | Created session-050. IC-RAS-11   |
-|                  |             |                | repair semantics appended BP-064.|
-| ras.sv           | Complete    | tb_ras         | RTL BP-062, tb BP-063. sim_ras   |
-|                  |             |                | 87/0 this session (BP-064).      |
-|                  |             |                | TD #78 pinned (TC-21); TD #79    |
-|                  |             |                | (commit_rctr) deferred.          |
-| ftb_decisions.md | Complete    | --             | Created session-051. Storage     |
-|                  |             |                | split, bimodal conf, fast-path,  |
-|                  |             |                | position fix (session-053).      |
-|                  |             |                | Promoted Complete session-053.   |
-| ftb_interfaces.md| Complete    | --             | Created session-052. Storage     |
-|                  |             |                | ports (3/3a) + IC-FTB-12..15     |
-|                  |             |                | session-053.                     |
-| ftb_confidence   | Complete    | --             | conf = bimodal direction,        |
-| _override        |             |                | fast-path, ftb_fastpath_en       |
-| _rules.md        |             |                | (session-053).                   |
-| ftb_array.sv     | Complete    | sim_ftb        | 1R1W data RAM, no reset.         |
-|                  |             |                | BP-065 / BP-065a.                |
-| ftb_plru.sv      | Complete    | sim_ftb        | entry-valid + tree-PLRU flops,   |
-|                  |             |                | cold init. BP-065a.              |
-| ftb_cntrl.sv     | Complete    | sim_ftb        | All FTB logic. BP-066 /          |
-|                  |             |                | BP-066a (conf/fast-path) /       |
-|                  |             |                | BP-066b (position).              |
-| ftb.sv           | Complete    | tb_ftb         | Structural top. BP-067.          |
-|                  |             | sim_ftb        | sim_ftb 99/0 (BP-068).           |
-| SC               | Not started | --             | Last unbuilt predictor           |
-| bp_cluster (top) | Not started | --             | After predictors complete        |
-| fetch            | Not started | --             | After BP cluster                 |
+| ittage_table.sv  | Complete       | tb_ittage_table | BP-033/033-FIX-1 complete. |
+| ittage_cntrl.sv  | Complete       | tb_ittage_cntrl | Prediction path complete BP-034|
+|                  |                |                 | Update path complete BP-035      |
+|                  |                |                 | Testbench complete BP-036        |
+|                  |                |                 | CTR/USE tests complete BP-044/a/b/c |
+|                  |                |                 | 147 tests passing w/ BP-048       |
+|                  |                |                 |  UAON/aging/alloc verified BP-051/2/3 |
+|                  |                |                 |  ittage_cntrl is complete   |
+| ittage.sv        | Complete       | tb_ittage | BP-034/035/35a/35b                |
+|                  |                |           | shell without arb cntrl complete  |
+|                  |                |           | sim_ittage 211 pass / 0 fail      |
+|                  |                |           | tests added BP-054.               |
+|                  |                |           | round trip tests added in BP-055. |
+| ras_decisions.md | Draft          | --             | Created session-050.             |
+|                  |                |                | G5/G6/G8/G17 decisions recorded. |
+|                  |                |                | Reconciled to RTL BP-064         |
+|                  |                |                | (sec 1/1.2, 3.2, 3.3/4.5).       |
+|                  |                |                | See BP Cluster Open TBDs.        |
+| ras_interfaces.md| Draft          | --             | Created session-050. IC-RAS-11   |
+|                  |                |                | repair semantics appended BP-064.|
+| ras.sv           | Complete       | tb_ras         | RTL BP-062, tb BP-063. sim_ras   |
+|                  |                |                | 87/0 this session (BP-064).      |
+|                  |                |                | TD #78 pinned (TC-21); TD #79    |
+|                  |                |                | (commit_rctr) deferred.          |
+| ftb_decisions.md | Complete       | --             | Created session-051. Storage     |
+|                  |                |                | split, bimodal conf, fast-path,  |
+|                  |                |                | position fix (session-053).      |
+|                  |                |                | Promoted Complete session-053.   |
+| ftb_interfaces.md| Complete       | --             | Created session-052. Storage     |
+|                  |                |                | ports (3/3a) + IC-FTB-12..15     |
+|                  |                |                | session-053.                     |
+| ftb_confidence   | Complete       | --             | conf = bimodal direction,        |
+| _override        |                |                | fast-path, ftb_fastpath_en       |
+| _rules.md        |                |                | (session-053).                   |
+| ftb_array.sv     | Complete       | sim_ftb        | 1R1W data RAM, no reset.         |
+|                  |                |                | BP-065 / BP-065a.                |
+| ftb_plru.sv      | Complete       | sim_ftb        | entry-valid + tree-PLRU flops,   |
+|                  |                |                | cold init. BP-065a.              |
+| ftb_cntrl.sv     | Complete       | sim_ftb        | All FTB logic. BP-066 /          |
+|                  |                |                | BP-066a (conf/fast-path) /       |
+|                  |                |                | BP-066b (position).              |
+| ftb.sv           | Complete       | tb_ftb         | Structural top. BP-067.          |
+|                  |                | sim_ftb        | sim_ftb 99/0 (BP-068).           |
+| sc_decisions.md  | Draft          | --             | Created session-056. Five pure-  |
+|                  |                |                | counter tables ST0-ST4, no tags, |
+|                  |                |                | ST4=BrIMLI. Dynamic threshold    |
+|                  |                |                | (O-GEHL). Two-corner chooser.    |
+|                  |                |                | BrIMLI register/update/index from|
+|                  |                |                | cookbook predictor.h. Update gate|
+|                  |                |                | verified vs gem5 SC / Jimenez-Lin|
+|                  |                |                | perceptron / 2011 MICRO. Open    |
+|                  |                |                | items for 057 fresh analysis     |
+|                  |                |                | (see handoff-057).               |
+| SC               | Planning       | --             | Decisions doc draft (056). RTL   |
+|                  |                |                | not started. Other SC docs not   |
+|                  |                |                | written.                         |
+| bp_cluster (top) | Not started    | --             | After predictors complete        |
+| fetch            | Not started    | --             | After BP cluster                 |
 
 ---
 
@@ -244,9 +273,6 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | Seznec uses SLIM structure. Inline    | migrate to SLIM-style external  |
 |    | fields have no defined                | structure. See rollback test    |
 |    | checkpoint/rollback path.             | items #69/#70.                  |
-| 15 | CLOSED. EPC field semantics now       | Field implemented; write path   |
-|    | implemented and documented.           | modified BP-044c. Live work is  |
-|    |                                       | EPC write proof, see #55/#56.   |
 | 16 | ALLOC_DATA_WIDTH padding when         | Resolve at T0 implementation    |
 |    | THIS_ < MAX_ -- unused bits between   |                                 |
 |    | EPC and TAG fields.                   |                                 |
@@ -284,118 +310,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                       | ittage_table_interfaces.md, RTL |
 |    |                                       | and testbenches. Confirm no     |
 |    |                                       | testcase impact (see #44).      |
-| 44 | Confirm ittage_pred_strong change in  | CLOSED                          |
-|    |                                       | Changed session-040: provider   |
-|    | ittage_cntrl_decisions.md.            | ctr was !=3 & !=4, now > 0 (NOT |
-|    |                                       | NULL). Ensure #43 does not      |
-|    |                                       | impact any testcase.            |
 | 49 | Arb queue status pin renaming.         | pq_not_full/upd_rdy ->          |
 |    |                                        | tage_pq_not_full/tage_uq_not_   |
 |    |                                        | full and ittage_ equivalents.   |
 |    |                                        | Scope: RTL, tb, bp_arb_spec.md, |
 |    |                                        | tage_interfaces.md,             |
 |    |                                        | ittage_interfaces.md.           |
-| 51 | CTR/USE/TGT update audit.              | CLOSED.                         |
-|    |                                        | CTR fixed BP-044b, USE fixed    |
-|    | Parent audit item.                     | BP-044c (both were provider-    |
-|    |                                        | gating inversions). Survivors   |
-|    |                                        | broken out: TGT #57,            |
-|    |                                        | allocation #62/#63.             |
 | 52 | Move arb logic into submodule out of   | Top modules should be           |
 |    | top in tage and ittage.                | structural only. New arb module |
 |    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
 |    |                                        | sequence with arb test #73.     |
-| 55 | tage EPC write proof.                  | CLOSED BP-056 |
-|    |                                        | epc_we gate changed BP-044c     |
-|    | Changed RTL, never proven by readback. | (USE rider). Seed entry, drive  |
-|    |                                        | EPC-writing update, read EPC    |
-|    |                                        | back via prediction, confirm    |
-|    |                                        | landing. Use bw_write backdoor. |
-| 56 | ittage EPC write proof.                | CLOSED with BP-050b |
-|    |                                        | Same as #55 for ittage.         |
-|    | Changed RTL, never proven by readback. | epc_we_s0/s1 fixed BP-044c      |
-|    |                                        | alongside use_we. No positive   |
-|    |                                        | test. Readback-verify per       |
-|    |                                        | provider, UP=1 and UP=0.        |
-| 57 | ittage TGT target replacement.         | CLOSED. BP-049a
-|    |                                        | TGT write path not audited.     |
-|    | Untested. Successor to #51.            | #51 suspect for same provider-  |
-|    |                                        | gating defect as CTR/USE.       |
-|    |                                        | Target written on mispredict    |
-|    |                                        | when CTR null only. Trace path, |
-|    |                                        | readback-verify reachable rows. |
-|    |                                        | ittage only (no TAGE tgt).      |
-| 58 | tage UAON trigger rules.               | CLOSED with BP-057              |
-|    |                                        | tage_cntrl_uaon_update_rules.md |
-|    | Tested only as setup, never as DUT.    | is Draft. Promote to authority, |
-|    |                                        | directed test per row, prove    |
-|    |                                        | use_alt_on_na fires/clears.     |
-|    |                                        | BUG-003 found and fixed.        |
-| 59 | ittage UAON trigger rules.             | CLOSED BP-051 |
-|    |                                        | ittage_cntrl_uaon_update_rules. |
-|    | Tested only as setup, never as DUT.    | md is Draft. Same as #58. USE   |
-|    |                                        | tests relied on UAON firing as  |
-|    |                                        | precondition; never verified.   |
-| 60 | tage aging / epoch path. Entire path   | CLOSED with BP-058              |
-|    |                                        | Supersedes #41. All tests run   |
-|    | dark.                                  | tage_enable_aging=0. Drive      |
-|    |                                        | aging high, exercise EPC-vs-    |
-|    |                                        | epoch compare and USE decrement |
-|    |                                        | over interval. Confirm interval |
-|    |                                        | reachable at current params     |
-|    |                                        | first (cf #39).                 |
-| 61 | ittage aging / epoch path. Entire      | CLOSED. BP-052                  |
-|    |                                        | Same as #60 for ittage.         |
-|    | path dark.                             | Consumes the EPC field whose    |
-|    |                                        | write changed BP-044c (see #56).|
-| 62 | tage allocation policy + write gating. | CLOSED BP-059                   |
-|    |                                        | Allocation treated as residue   |
-|    | Never the feature under test.          | to invalidate, never verified.  |
-|    | Successor to #51.                      | Test which table allocates,     |
-|    |                                        | alloc write-enable gating,      |
-|    |                                        | alloc index. Do #66 first.      |
-|    |                                        | RAM-level write isolation       |
-|    |                                        | verified (TC-95).               |
-| 63 | ittage allocation policy + gating.     | CLOSED with BP-053              |
-|    |                                        | Same as #62. Alloc on           |
-|    | Never the feature under test.          | mispredict, CTR-null condition, |
-|    | Successor to #51.                      | alloc_we gating. Readback-      |
-|    |                                        | verify allocated entry state.   |
-| 64 | tage prediction-side correctness.      | CLOSED BP-060                   |
-|    |                                        | Prediction path exercised only  |
-|    | Not directed-tested.                   | as setup for update tests.      |
-|    |                                        | Directed-test provider          |
-|    |                                        | selection, using_primary,       |
-|    |                                        | pred_strong, target mux given   |
-|    |                                        | seeded entries.                 |
-| 65 | ittage prediction-side correctness.    | CLOSED BP-054/054a              |
-|    |                                        | Same as #64 for ittage.         |
-|    | Not directed-tested.                   | Resolves #42 test aspect:       |
-|    |                                        | verify provider/using_primary/  |
-|    |                                        | target operate at s2 not s3.    |
-| 66 | TAGE structural rework                 | CLOSED BP-045                   |
-|    | Sequence before TAGE alloc #62.        | collapsed to shared per-slot buses; |
-|    |                                        | t_alt_upd_index_u0 added for the |
-|    |                                        | dual-CTR case; BP-045, session-047 |
-|    | | Currently TAGE has 2d buses for alc and upd index, there is one bus for each |
-|    | | table, this is incorrect, the connection should be shared buses across |
-|    | | these signals, the only multi-dimension is the width of the bus and the prediction slot, |
-|    | | so this:
-|    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1]|
-|    | | should be this
-|    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1] |
-|    | | same thing for each of these: |
-|    | |   `t_prm_ctr_wd_u0` |
-|    | |   `t_alt_ctr_wd_u0` |
-|    | |   `t_use_wd_u0` |
-|    | |   `t_epc_wd_u0` |
-|    | |   `t_alc_wd_u0` |
-|    | |   `t_prm_tbl_sel_u0` |
-|    | |   `t_alt_tbl_sel_u0` |
-|    | |   `t_alc_tbl_sel_u0` |
-|    | |   `t_upd_index_u0` |
-|    | |   `t_alc_index_u0` |
-|    | | |
 | 67 | tage sram_init non-fast path.          | All tests used +FAST_INIT,      |
 |    | Untested here; confirm not elsewhere.  | bypassing real sram_init        |
 |    |                                        | cycling. sram_init.md Complete  |
@@ -420,24 +344,6 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |                                        | recompute proven in-sim BP-072. |
 |    |                                        | Defer to bp_cluster for         |
 |    |                                        | stimulus.                       |
-| 71 | tage round-trip                        | CLOSED BP-061                   |
-|    |                                        | Mixed ctr/use/alloc/epc in one  |
-|    | Combined test, run only after          | flow. Run ONLY after            |
-|    | individual tests pass                  | #55,58,60,62,64 each proven     |
-|    |                                        | alone -- mixing before          |
-|    |                                        | isolation reproduces the multi- |
-|    |                                        | cause ambiguity that stalled    |
-|    |                                        | BP-044.                         |
-| 72 | ittage round-trip (capstone).          | CLOSED BP-055                   |
-|    |                                        | Mixed ctr/use/alloc/epc/tgt in  |
-|    | Combined test, run only after          | one flow. Run ONLY after        |
-|    | individual tests pass                  | #56,57,59,61,63,65 each proven  |
-|    |                                        | alone. Same isolation-first     |
-|    |                                        | rule as #71.                    |
-|    |                                        | Allocation RAM-level write      |
-|    |                                        | isolation verified, selected    |
-|    |                                        | table written, other tables     |
-|    |                                        | shown unchanged                 |
 | 73 | Arbitration layer behavioral test.     | PQ/UQ FIFOs + credit arbiter.   |
 |    | Deferred. Pairs with refactor #52.     | Folds in #37, #39, #40. Defer   |
 |    |                                        | until uBTB, loop, tage, ittage  |
@@ -464,15 +370,6 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | the ittage sim targets.                | sim_tage_fast. There is no similar|
 |    |                                        | target for ittage, create one   |
 |    |                                        | called sim_ittage_fast          |
-| 76 | ittage should have independent index   | CLOSED with BP-048 |
-|    | buses for primary and alternative      | |
-|    | table updates.                         | |
-|    | | Since there are different history lengths, and the indexes are |
-|    | | hashed based on history length we do in fact need an index bus |
-|    | | for primary and alternative. |
-|    | | the names should be t_prm_upd_index_u0 and t_alt_upd_index |
-|    | | Secondly the names of the ports of ittage_cntrl that touch the tables |
-|    | | should use the same convention as tage_cntrl, and begin with t_      |
 | 77 | scrub prompts and redact any absolute path | This is not a design TD   |
 |    | information not using the RVA_ROOT env var | more of a tools and infra |
 |    |                                            | task, possibly manual     |
@@ -544,6 +441,78 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | | | confirm the index against an independently-known value. End-to-end    |
 | | | format agreement between producer and consumers. Needs cluster        |
 | | | stimulus; resolve at bp_cluster integration. (decisions.md s9.)       |
+| | | SC ST1-ST3 are additional consumers of the same folds -- fold this    |
+| | | into the SC end-to-end check (handoff-057).                           |
+| 85 | bp_structs_pkg.sv    | review BPU structures for opportunities to    |
+|    |                      | combine/share fields and potential storage/flops     |
+| 86 | sc_cntrl  | choosing not to add the scaled tage ctr into the SC sum  |
+|    |           | calculation, concerns about timing.                      |
+|    |           |                                                          |
+|    |           | The current sum (sc_decisions.md s8) includes            |
+|    |           | tage_extd_ctr at weight 1. This TD is the 8x-weighted     |
+|    |           | variant, deferred.                                       |
+|    |           |                                                          |
+|    |           | Consider this equation once PD and perf are in progress  |
+|    |           |                                                          |
+|    |           | sum = (2 * ST0[st0_idx].ctr + 1)                         |
+|    |           |     + (2 * ST1[st1_idx].ctr + 1)                         |
+|    |           |     + (2 * ST2[st2_idx].ctr + 1)                         |
+|    |           |     + (2 * ST3[st3_idx].ctr + 1)                         |
+|    |           |     + (2 * ST4[st4_idx].ctr + 1)                         |
+|    |           |     + 8 * (2 * tage_provider_ctr + 1)                    |
+|    |           |                                                          |
+|    |           | (of course no multiplies would be used.                  |
+|    |           |                                                          |
+| 87 | tage      | verify TAGE tage_pred_strong maps to this                |
+|    |           | decodings and add tage_pred_medium and                   |
+|    |           | tage_pred_weak signals to tage_pred_meta                 |
+|    |           |                                                          |
+|    |           | tage_pred_strong = 1'b0; //high confidence               |
+|    |           | tage_pred_medium = 1'b0; //...                           |
+|    |           | tage_pred_weak   = 1'b0; //...                           |
+|    |           |                                                          | 
+|    |           | 000  strongly not taken  tage_pred_strong = 1'b1         |
+|    |           | 001  medium   not taken  tage_pred_medium = 1'b1         |
+|    |           | 010  medium   not taken  tage_pred_medium = 1'b1         |
+|    |           | 011  weak     not taken  tage_pred_weak   = 1'b1         |
+|    |           | 100  weak     taken      tage_pred_weak   = 1'b1         |
+|    |           | 101  medium   taken      tage_pred_medium = 1'b1         |
+|    |           | 110  medium   taken      tage_pred_medium = 1'b1         |
+|    |           | 111  strongly taken      tage_pred_strong = 1'b1         |
+|    |           |                                                          |
+|    |           | SC prediction (sc_decisions.md s8) consumes              |
+|    |           | tage_pred_medium; prerequisite for SC RTL.               |
+| 88 | tage      | create two new tage_pred_meta_t signals                  |
+|    |           | and add logic to generate them in TAGE                   |
+|    |           |                                                          |
+|    |           | This signal is for convenience/timing                    |
+|    |           |                                                          |
+|    |           | logic [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;        |
+|    |           | tage_provider_ctr = tage_using_primary                   |
+|    |           |                   ? tage_prm_ctr : tage_alt_ctr;         |
+|    |           |                                                          |
+|    |           | This signal is signed (extended CTR)                     |
+|    |           |                                                          |
+|    |           | logic signed [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;     |
+|    |     | tage_extd_ctr = $signed({2'b00, provider_ctr, 1'b0}) - 5'sd7;  |
+|    |           |                                                          |
+|    |           | Struct fields added to tage_pred_meta_t session-056;     |
+|    |           | TAGE generation logic still to be written. SC sum        |
+|    |           | (sc_decisions.md s8) consumes tage_extd_ctr.             |
+| 89 | ftb       | FTB needs to store the bits [15:6] of the branch target  |
+|    |           | this is placed into sc_upd_inp.sc_branch_range           |
+|    |           |                                                          | 
+| 90 | ftb   | FTB needs to store the sign of the offset of this branch and |
+|    |           | this is placed into sc_upd_inp.sc_backwards_branch       |
+|    |           |                                                          | 
+| 91 | bpc       | TD#91 Top level bpc needs to route tage_pred_inp.pc to   |
+|    |           | the ports of the SC, this must be staged from p0 to p2.  |
+|    |           | SC will get additional port(s) pc[0:NUM_PRED_SLOTS-1];   |
+|    |           | There are two of these, one for each prediction slot     |
+|    |           |                                                          | 
+| 92 | bpc/sc    | TD#92 add SC port that captures bits [9:0] of            |
+|    |           | bp_folded_hist.tage_phr internally SC pipes this to p2,  |
+|    |           | signal is called sc_phr_p2                               |
 
 ---
 
@@ -581,7 +550,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | G6  | RAS recursion counter width           | RESOLVED session-050.  |
 |     |                                       | 4b per entry.          |
 |     |                                       | ras_decisions.md s5.   |
-| G7  | SC threshold value                    | TBD, fixed at impl     |
+| G7  | SC threshold value                    | REFRAMED session-056.  |
+|     |                                       | Threshold is DYNAMIC   |
+|     |                                       | (O-GEHL), not a single |
+|     |                                       | fixed value. Seed      |
+|     |                                       | SC_THRSH_MID=2048,     |
+|     |                                       | bounds SC_THRSH_MIN/   |
+|     |                                       | MAX, adapts via TC     |
+|     |                                       | counter. sc_decisions  |
+|     |                                       | .md s8.                |
 | G8  | Dual pred bundle split point          | RESOLVED session-050.  |
 |     |                                       | Fixed boundary split.  |
 |     |                                       | Slot 0: pred_pc+0:31.  |
@@ -592,7 +569,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation. |
 |     |                                       | FTB-2 (conf x TAGE     |
 |     |                                       | meta) folds in here.   |
-| G14 | Confidence counter purpose            | Reserved, 4b           |
+| G14 | Confidence counter purpose            | Reserved, 4b. SC       |
+|     |                                       | (session-056) uses its |
+|     |                                       | own chooser counters;  |
+|     |                                       | does not consume this  |
+|     |                                       | field.                 |
 | G15 | Fold recompute timing concern         | REFRAMED session-054.  |
 |     |                                       | No longer a correctness|
 |     |                                       | gate; now a perf       |
@@ -722,9 +703,18 @@ Key decisions for quick reference:
 - ITTAGE entry: IT1-IT5 valid+tag+EPC+USE+CTR(3b)+TGT(38b).
   No IT0 base table. CTR is confidence not direction.
   Target written on misprediction when CTR is null only.
-- SC index split: sc_upd_idx[MAIN_TBLS], sc_imli_idx
+- SC index: sc_upd_idx[0:SC_NUM_TABLES-1] uniform 5-entry
+  array (ST4/BrIMLI index folded into the array; the earlier
+  sc_imli_idx split retired session-056). sc_upd_ctr likewise
+  a uniform 5-entry array.
 - SC has no tag bits. All 5 tables are pure counter arrays.
   BrIMLI table (ST4) is SC only -- not ITTAGE.
+- SC threshold dynamic (O-GEHL); two-corner chooser
+  (TAGE-hi/SC-vlo, TAGE-med/SC-vvlo) with separate saturating
+  counters. SC counter-update gate: SC-wrong OR |sum| <
+  threshold, train toward resolved. BrIMLI (ST4) per cookbook
+  predictor.h. See planning/arch/sc_decisions.md (session-056,
+  draft).
 - NUM_PRED_SLOTS=2 is the default for all current design
   work. Both slot 0 and slot 1 logic always present
   unconditionally. Reduction to 1 is deferred (debt #1).
@@ -737,6 +727,7 @@ Key decisions for quick reference:
   Unrelated to bw_ram BANKS parameter or sram_init scheme.
   TI6 is a TAGE/ITTAGE convention; it does NOT apply to FTB
   (FTB is a single array, both branches from one entry).
+  SC follows TI6 (two RAMs per table, one per slot).
 - CNTRL_BITS_WIDTH = MAX_EPC_WIDTH+MAX_USE_WIDTH
                    + MAX_CTR_WIDTH+MAX_VAL_WIDTH
   ALLOC_DATA_WIDTH = CNTRL_BITS_WIDTH+THIS_TAG_BITS
@@ -754,6 +745,11 @@ Key decisions for quick reference:
 ### Shared planning documents
     - planning/arch/bp_arb_spec.md                    In progress
         - Dynamic prediction/training arbitration balancing
+        - NOTE (session-056): the §6 merged TAGE+SC metadata /
+          shared-UQ model is superseded for SC. SC uses its own
+          sc_pred_meta_t / sc_upd_inp_t (cond_pred_meta_t and
+          cond_pred_upd_inp_t are commented out). Reconcile §6
+          when SC interfaces are written.
     - planning/arch/bp_cluster.md                     In progress
         - Branch prediction cluster summary data
     - planning/arch/ras_decisions.md                  Draft
@@ -774,6 +770,9 @@ Key decisions for quick reference:
         - #67 sram_init non-fast
         - #74 dual-slot (bp_history part closed BP-072;
           TAGE/cluster dual-slot still deferred)
+        - #87/#88 SC-facing signals (tage_pred_medium/weak,
+          tage_provider_ctr, tage_extd_ctr) -- generation
+          logic to be added in TAGE; struct fields added 056
     - Formal validation not started
 - BP-006 through BP-032: complete.
 - BP-041 manual checks for tage CTR and USE complete
@@ -887,6 +886,9 @@ Key decisions for quick reference:
 - Deferred to bp_cluster: flush (IC-FTB-07 / G24), conf x TAGE meta
   (FTB-2 / G10), update arbitration (FTB-3 / IC-FTB-09 / G9), FTQ
   round-trip (IC-FTB-10), ftb_fastpath_en source (G25)
+- SC-facing additions deferred (session-056): FTB stores branch
+  target [15:6] (TD#89, sc_branch_range) and the branch offset sign
+  (TD#90, sc_backwards_branch) for SC BrIMLI maintenance.
 - FTB planning documents
     - planning/arch/ftb_decisions.md                   Complete
         - FTB micro-architectural decisions (canonical authority)
@@ -894,6 +896,58 @@ Key decisions for quick reference:
         - FTB module interface contracts
     - planning/arch/ftb_confidence_override_rules.md   Complete
         - conf bimodal direction + saturated-endpoint fast-path policy
+
+### SC decomposition
+- Planning (session-056): sc_decisions.md drafted (Jeff-authored,
+  PA-reviewed). SC is greenfield; RTL not started.
+    - planning/arch/sc_decisions.md                   Draft
+        - Five pure-counter tables ST0-ST4, no tags. ST4 = BrIMLI.
+        - SC index: sc_upd_idx[0:SC_NUM_TABLES-1] uniform 5-entry
+          array (sc_imli_idx split retired). ST0 unhashed PC slice;
+          ST1-ST3 PC hashed with folds (bp_history_decisions.md s6);
+          ST4 BrIMLI index.
+        - Dynamic threshold (O-GEHL). Seed SC_THRSH_MID, TC
+          adaptation. References: Storage-Free Confidence (HPCA
+          2011), O-GEHL (ISCA 2005).
+        - Two-corner chooser (TAGE-hi/SC-vlo, TAGE-med/SC-vvlo),
+          separate saturating counters (choose_hi_vlo,
+          choose_med_vvlo).
+        - SC counter-update gate: (SC-wrong) OR (|sum| < threshold),
+          train toward resolved. Verified vs gem5 SC source,
+          Jimenez-Lin perceptron paper (TOCS 2002), Seznec 2011
+          MICRO; BrIMLI from cookbook predictor.h.
+        - BrIMLI register/update/index defined (last_back_pc[15:6]
+          region, br_imli saturating count, bb_hist on region
+          change, f_brimli = (br_imli==0)?phr:br_imli, index =
+          pc ^ f_idx ^ (pc>>4)). br_imli_mode_e selects
+          IMLI/PHR/IMLI-only for perf eval.
+    - planning/arch/sc_table_hash_rules.md            NOT WRITTEN
+        - sc_idx_hash, get_br_imli_idx to be documented here.
+    - planning/arch/sc_cntrl_decisions.md             NOT WRITTEN
+    - planning/arch/sc_cntrl_ctr_update_rules.md      NOT WRITTEN
+    - planning/arch/sc_table_entry_formats.md         NOT WRITTEN
+    - planning/interfaces/sc_interfaces.md            NOT WRITTEN
+    - planning/interfaces/sc_table_interfaces.md      NOT WRITTEN
+    - planning/testbenches/sc_tb_decisions.md         NOT WRITTEN
+    - verification/sc_coverage_plan.md                NOT WRITTEN
+- Package changes (session-056):
+    - bp_defines_pkg.sv: SC params (SC_NUM_TABLES=5; dynamic
+      threshold SC_THRSH_*; SC_TC_BITS; SC_LSUM_BITS; SC_CHOOSER_*;
+      SC_LO/HI_THRESHOLD and SC_NUM_ALL_TBLS removed).
+    - bp_structs_pkg.sv: sc_pred_meta_t, sc_upd_inp_t populated;
+      bp_sc_meta_t and cond_pred_meta_t/cond_pred_upd_inp_t commented
+      out; bp_sc_chooser_e and br_imli_mode_e added; tage_pred_meta_t
+      gains tage_provider_ctr/tage_extd_ctr.
+- Prerequisites for SC RTL (TD):
+    - #87 (tage_pred_medium/weak + strong-mapping verify), #88
+      (tage_provider_ctr / tage_extd_ctr generation in TAGE):
+      SC prediction sum and chooser consume these.
+    - #89 / #90 (FTB stores branch_range[15:6] and backwards sign).
+    - #91 (route PC p0->p2 to SC), #92 (capture phr[9:0] -> sc_phr_p2).
+    - sc_idx_hash / get_br_imli_idx documented in
+      sc_table_hash_rules.md (not written).
+    - #84 end-to-end fold check extends to SC ST1-ST3 consumers.
+- RTL: not started.
 
 ### bp_history decomposition
 - COMPLETE at unit level (session-055). Module-owned pointer,
@@ -956,6 +1010,7 @@ Key decisions for quick reference:
     - #82 if/else-if slot cleanup (decisions 3.5; not done)
     - #83 s6.6 Xiangshan origin sha/date fill (manual)
     - #84 producer/consumer end-to-end fold check -> bp_cluster
+      (now also covers SC ST1-ST3 consumers)
     - #69/#70 rollback stimulus -> bp_cluster
     - versions/bp_history.sv (stale BP-069 copy) superseded by the
       merged rtl/ file; retire it (BUG-005)

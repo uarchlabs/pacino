@@ -18,4 +18,5 @@
 |2026-07-13|BLOG_bpu_6_tage_impl.md        | :::::::::::::::::: | 2026-07-13_bpu_6_tage_impl.md       
 |2026-07-20|BLOG_bpu_7_tage_validation.md  | :::::::::::::::::: | 2026-07-20_bpu_7_tage_validation.md 
 |2026-07-27|BLOG_bpu_8_tage_arbitration.md | :::::::::::::::::: | 2026-07-27_bpu_8_tage_arbitration.md
+|2026-08-03|BLOG_bpu_9_ras_theory_of_op.md | :::::::::::::::::: | 2026-08-03_bpu_9_ras_theory_of_op.md
 

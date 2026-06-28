@@ -22,6 +22,9 @@
 | 14 | TI7: bp_tage_meta_t migration to      | Closed                          |
 |    | tage_pred_meta_t pending. Both        | Closed                          |
 |    | retained during transition.           |                                 |
+| 15 | CLOSED. EPC field semantics now       | Field implemented; write path   |
+|    | implemented and documented.           | modified BP-044c. Live work is  |
+|    |                                       | EPC write proof, see #55/#56.   |
 | 19 | uaon_ff logic in tage_cntrl.sv is incorrect.     | Closed in BP-008b    |
 |    | BP-008a-2 prompt erroneously specified decrement |                      |
 |    | unconditionally at predict time. UAON is update  |                      |
@@ -118,6 +121,11 @@
 |    | expected cntrl=39. Pre-existing defect revealed    | tb_tage_table.sv TC6 expected |
 |    | when PINMISSING fix in BP-019a allowed             | value. Fix before bp_cluster. |
 |    | sim_tage_table to compile and run.                 |                               |
+| 44 | Confirm ittage_pred_strong change in  | CLOSED                          |
+|    |                                       | Changed session-040: provider   |
+|    | ittage_cntrl_decisions.md.            | ctr was !=3 & !=4, now > 0 (NOT |
+|    |                                       | NULL). Ensure #43 does not      |
+|    |                                       | impact any testcase.            |
 | 45 | tage_cntrl / tage_table update-index  | THIS IS INVALID DESCRIPTION IS WRONG |
 |    | simplification                        | 2D update/alloc index bus is    |
 |    |                                       | wrong: should be per-table      |
@@ -176,6 +184,124 @@
 |    |                      | handling and backed by new assertions.       |
 |    |                      | Existing IA tests need audit and retrofit.   |
 |    |                      | BP-043 will address this.                    |
+| 55 | tage EPC write proof.                  | CLOSED BP-056 |
+|    |                                        | epc_we gate changed BP-044c     |
+|    | Changed RTL, never proven by readback. | (USE rider). Seed entry, drive  |
+|    |                                        | EPC-writing update, read EPC    |
+|    |                                        | back via prediction, confirm    |
+|    |                                        | landing. Use bw_write backdoor. |
+| 56 | ittage EPC write proof.                | CLOSED with BP-050b |
+|    |                                        | Same as #55 for ittage.         |
+|    | Changed RTL, never proven by readback. | epc_we_s0/s1 fixed BP-044c      |
+|    |                                        | alongside use_we. No positive   |
+|    |                                        | test. Readback-verify per       |
+|    |                                        | provider, UP=1 and UP=0.        |
+| 57 | ittage TGT target replacement.         | CLOSED. BP-049a
+|    |                                        | TGT write path not audited.     |
+|    | Untested. Successor to #51.            | #51 suspect for same provider-  |
+|    |                                        | gating defect as CTR/USE.       |
+|    |                                        | Target written on mispredict    |
+|    |                                        | when CTR null only. Trace path, |
+|    |                                        | readback-verify reachable rows. |
+|    |                                        | ittage only (no TAGE tgt).      |
+| 58 | tage UAON trigger rules.               | CLOSED with BP-057              |
+|    |                                        | tage_cntrl_uaon_update_rules.md |
+|    | Tested only as setup, never as DUT.    | is Draft. Promote to authority, |
+|    |                                        | directed test per row, prove    |
+|    |                                        | use_alt_on_na fires/clears.     |
+|    |                                        | BUG-003 found and fixed.        |
+| 59 | ittage UAON trigger rules.             | CLOSED BP-051 |
+|    |                                        | ittage_cntrl_uaon_update_rules. |
+|    | Tested only as setup, never as DUT.    | md is Draft. Same as #58. USE   |
+|    |                                        | tests relied on UAON firing as  |
+|    |                                        | precondition; never verified.   |
+| 60 | tage aging / epoch path. Entire path   | CLOSED with BP-058              |
+|    |                                        | Supersedes #41. All tests run   |
+|    | dark.                                  | tage_enable_aging=0. Drive      |
+|    |                                        | aging high, exercise EPC-vs-    |
+|    |                                        | epoch compare and USE decrement |
+|    |                                        | over interval. Confirm interval |
+|    |                                        | reachable at current params     |
+|    |                                        | first (cf #39).                 |
+| 61 | ittage aging / epoch path. Entire      | CLOSED. BP-052                  |
+|    |                                        | Same as #60 for ittage.         |
+|    | path dark.                             | Consumes the EPC field whose    |
+|    |                                        | write changed BP-044c (see #56).|
+| 62 | tage allocation policy + write gating. | CLOSED BP-059                   |
+|    |                                        | Allocation treated as residue   |
+|    | Never the feature under test.          | to invalidate, never verified.  |
+|    | Successor to #51.                      | Test which table allocates,     |
+|    |                                        | alloc write-enable gating,      |
+|    |                                        | alloc index. Do #66 first.      |
+|    |                                        | RAM-level write isolation       |
+|    |                                        | verified (TC-95).               |
+| 63 | ittage allocation policy + gating.     | CLOSED with BP-053              |
+|    |                                        | Same as #62. Alloc on           |
+|    | Never the feature under test.          | mispredict, CTR-null condition, |
+|    | Successor to #51.                      | alloc_we gating. Readback-      |
+|    |                                        | verify allocated entry state.   |
+| 64 | tage prediction-side correctness.      | CLOSED BP-060                   |
+|    |                                        | Prediction path exercised only  |
+|    | Not directed-tested.                   | as setup for update tests.      |
+|    |                                        | Directed-test provider          |
+|    |                                        | selection, using_primary,       |
+|    |                                        | pred_strong, target mux given   |
+|    |                                        | seeded entries.                 |
+| 65 | ittage prediction-side correctness.    | CLOSED BP-054/054a              |
+|    |                                        | Same as #64 for ittage.         |
+|    | Not directed-tested.                   | Resolves #42 test aspect:       |
+|    |                                        | verify provider/using_primary/  |
+|    |                                        | target operate at s2 not s3.    |
+| 66 | TAGE structural rework                 | CLOSED BP-045                   |
+|    | Sequence before TAGE alloc #62.        | collapsed to shared per-slot buses; |
+|    |                                        | t_alt_upd_index_u0 added for the |
+|    |                                        | dual-CTR case; BP-045, session-047 |
+|    | | Currently TAGE has 2d buses for alc and upd index, there is one bus for each |
+|    | | table, this is incorrect, the connection should be shared buses across |
+|    | | these signals, the only multi-dimension is the width of the bus and the prediction slot, |
+|    | | so this:
+|    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1]|
+|    | | should be this
+|    | |   output logic [TAGE_MAX_CTR_WIDTH-1:0] t_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1] |
+|    | | same thing for each of these: |
+|    | |   `t_prm_ctr_wd_u0` |
+|    | |   `t_alt_ctr_wd_u0` |
+|    | |   `t_use_wd_u0` |
+|    | |   `t_epc_wd_u0` |
+|    | |   `t_alc_wd_u0` |
+|    | |   `t_prm_tbl_sel_u0` |
+|    | |   `t_alt_tbl_sel_u0` |
+|    | |   `t_alc_tbl_sel_u0` |
+|    | |   `t_upd_index_u0` |
+|    | |   `t_alc_index_u0` |
+|    | | |
+| 71 | tage round-trip                        | CLOSED BP-061                   |
+|    |                                        | Mixed ctr/use/alloc/epc in one  |
+|    | Combined test, run only after          | flow. Run ONLY after            |
+|    | individual tests pass                  | #55,58,60,62,64 each proven     |
+|    |                                        | alone -- mixing before          |
+|    |                                        | isolation reproduces the multi- |
+|    |                                        | cause ambiguity that stalled    |
+|    |                                        | BP-044.                         |
+| 72 | ittage round-trip (capstone).          | CLOSED BP-055                   |
+|    |                                        | Mixed ctr/use/alloc/epc/tgt in  |
+|    | Combined test, run only after          | one flow. Run ONLY after        |
+|    | individual tests pass                  | #56,57,59,61,63,65 each proven  |
+|    |                                        | alone. Same isolation-first     |
+|    |                                        | rule as #71.                    |
+|    |                                        | Allocation RAM-level write      |
+|    |                                        | isolation verified, selected    |
+|    |                                        | table written, other tables     |
+|    |                                        | shown unchanged                 |
+| 76 | ittage should have independent index   | CLOSED with BP-048 |
+|    | buses for primary and alternative      | |
+|    | table updates.                         | |
+|    | | Since there are different history lengths, and the indexes are |
+|    | | hashed based on history length we do in fact need an index bus |
+|    | | for primary and alternative. |
+|    | | the names should be t_prm_upd_index_u0 and t_alt_upd_index |
+|    | | Secondly the names of the ports of ittage_cntrl that touch the tables |
+|    | | should use the same convention as tage_cntrl, and begin with t_      |
 
 
 
