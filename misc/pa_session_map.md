@@ -262,26 +262,139 @@ RVA23 Co-Design Part N
 |    |                   | BP-038  |
 |    |                   | BP-038a |
 |    |                   | session_handoff-042 |
-| 42 | ittage            | input session_handoff-042   |
-|    |                   | TD #47 completed            |
-|    |                   | RB removal from ittage      |
-|    |                   | BP-038b                     |
-|    |                   | BP-039                      |
-|    |                   | added TD 50/51              |
-|    |                   | reopen TD 46                |
-|    |                   | session_handoff-043 |
-|    |                   |                             |
-| 43 | sram init cleanup | input session_handoff-043   |
-|    | ittage clean up   | TB-001/2                    |
-|    | manual testbenches| BP-040                      |
-|    |                   | BP-041 partially written    |
-|    |                   | manual_tb_decisions.md      |
-|    |                   | sram_fast_init.md           |
-|    |                   | session_handoff-044 |
-| 44 | ???               | BP-041 manually generated and run |
-|    |                   | HAND-FIX-003 (mislabled as 001)
-|    |                   | asserts and 1st ADR |
-|    |                   | session_handoff-045 |
-| 45 | ???               | web/session management |
-|    |                   | IN PROJGRESS        |
+| 42 | ittage            | input session_handoff-042    |
+|    |                   | TD #47 completed             |
+|    |                   | RB removal from ittage       |
+|    |                   | BP-038b                      |
+|    |                   | BP-039                       |
+|    |                   | added TD 50/51               |
+|    |                   | reopen TD 46                 |
+|    |                   | session_handoff-043          |
+|    |                   |                              |
+| 43 | sram init cleanup | input session_handoff-043    |
+|    | ittage clean up   | TB-001/2                     |
+|    | manual testbenches| BP-040                       |
+|    |                   | BP-041 partially written     |
+|    |                   | manual_tb_decisions.md       |
+|    |                   | sram_fast_init.md            |
+|    |                   | session_handoff-044          |
+| 44 | ???          | BP-041 manually generated and run    |
+|    |              | HAND-FIX-003 (mislabled as 001)      |
+|    |              | asserts and 1st ADR                  |
+|    |              | session_handoff-045                  |
+| 45 | web/sessions | input session_handoff-045            |
+|    |              | web/session management               |
+|    |              | tage/ittage asserts                  |
+|    |              | ittage ctr update rules              |
+|    |              | BP-042    run                        |
+|    |              | BP-042a   run                        |
+|    |              | BP-042b   run                        |
+|    |              | INFRA-007 run                        |
+|    |              | BP-043    written                    |
+|    |              | BP-044    written                    |
+|    |              | BP-045    written                    |
+|    |              | mis-named output session_handofl-047 |
+|    |              | corrected output session_handoff-046 |
+| 46 | tage/ittage  | input session_handoff-046            |
+|    |              | human mistake in tage ctr rules      |
+|    |              | BP-043                               |
+|    |              | BP-043a                              |
+|    |              | BP-044                               |
+|    |              | BP-044a                              |
+|    |              | BP-044b                              |
+|    |              | BP-044c                              |
+|    |              | output session_handoff-047           |
+| 47 | tage         | input session_handoff-047            |
+|    |              | BP-045                               |
+|    |              | BP-046                               |
+|    |              | BP-047                               |
+|    |              | BP-048                               |
+|    |              | BP-049                               |
+|    |              | BP-049a                              |
+|    |              | PROJECT_STATUS/CORE changes          |
+|    |              | output session_handoff-048           |
+| 48 | ittage       | input session_handoff-048            |
+|    |              | Claude.md changes                    |
+|    |              | BP-050                               |
+|    |              | BP-050a                              |
+|    |              | BP-050b                              |
+|    |              | BP-051                               |
+|    |              | BP-052                               |
+|    |              | BP-053                               |
+|    |              | BP-054                               |
+|    |              | BP-054a                              |
+|    |              | output session_handoff-049           |
+| 49 | tage cleanup | input session_handoff-049            |
+|    |              | BP-055                               |
+|    |              | BP-056                               |
+|    |              | BP-057                               |
+|    |              | BP-058                               |
+|    |              | BP-059                               |
+|    |              | BP-060                               |
+|    |              | BP-061                               |
+|    |              | output session_handoff-050           |
+| 50 | ras planning | input session_handoff-050            |
+|    | ras impl     | bp_arb_spec for ras                  |
+|    |              | ras_decisions                        |
+|    |              | ras_interfaces                       |
+|    |              | resolve for consistency              |
+|    |              |   ras_decisions                      |
+|    |              |   bp_cluster_decisions               |
+|    |              |   bp_arb_spec                        |
+|    |              |   bp_defines                         |
+|    |              | BP-062                               |
+|    |              | BP-063                               |
+|    |              | outtage and login issues             |
+|    |              | PA compaction occurred               |
+|    |              | PA process failures                  |
+|    |              | output session_handoff-051           |
+| 51 | ras/ftb      | input session_handoff-051            |
+|    |              | BP-064                               |
+|    |              | ras_decisions cleanup                |
+|    |              | ftb_decisions                        |
+|    |              | ftb_interfaces                       |
+|    |              | ftb_conf_override_rules              |
+|    |              | output session_handoff-052           |
+| 52 | ftb plan     | input session_handoff-052            |
+|    |              | recovery efforts for 51 problems     |
+|    |              | ftb_decisions clean up               |
+|    |              | ftb_interfaces clean up              |
+|    |              | ftb_conf_override_rules clean up     |
+|    |              | output session_handoff-053           |
+| 53 | ftb impl     | input session_handoff-053            |
+|    |              | ftb_decisions                        |
+|    |              | ftb_interfaces                       |
+|    |              | ftb_confidence_override_rules.md     |
+|    |              | BP-065                               |
+|    |              | BP-065a                              |
+|    |              | BP-066                               |
+|    |              | BP-066a                              |
+|    |              | BP-066b                              |
+|    |              | BP-067                               |
+|    |              | BP-068                               |
+|    |              | output session_handoff-053           |
+| 54 | bp_history   | input session_handoff-053            |
+|    |              | bp_history_decisions                 |
+|    |              | bp_history_interfaces                |
+|    |              | BP-069                               |
+|    |              | BP-070                               |
+|    |              | BP-071                               |
+|    |              | BP-072 written                       |
+|    |              | output session_handoff-055           |
+| 55 | bp_history   | input session_handoff-055            |
+|    |              | bp_history_decisions                 |
+|    |              | BP-072 re-written then run           |
+|    |              | BP-073                               |
+|    |              | BP-074                               |
+|    |              | output session_handoff-056           |
+| 56 | sc planning  | input session_handoff-056            |
+|    |              | misc/sc_design_survey.md             |
+|    |              | sc_decisions                         |
+|    |              | sc_interfaces                        |
+|    |              | output session_handoff-056           |
+| 57 | sc planning  | input session_handoff-057            |
+|    | bp_arb_spec  | decide how sc fits the arb scheme    |
+|    |              | this was left open previously        |
+|    |              | bp_arb_spec                          |
+|    |              | IN PROGRESS                          |
 
