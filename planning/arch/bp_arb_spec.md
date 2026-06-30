@@ -5,18 +5,22 @@
 ```
  FILE:    bp_arb_spec.md
  SOURCE:  various
- STATUS:  Draft -- session-025
- UPDATED: 2026-06-23
+ STATUS:  Draft -- session-057
+ UPDATED: 2026-06-28
  CONTACT: Jeff Nye
 ```
+## 0. Caveat
 
-## Status
-Draft -- session-025.  Supersedes tage_pred_upd_arb_spec.md.
-Resolves debt #33.
+- There is a plan for a SC csr bit which enables the SC. PA will help
+  insert the right phrasing in the right locations. When the SC is
+  disabled the FTB/control logic does not issue updates to the SC, it
+  does not process the SC prediction response queue and otherwise does
+  not wait for any responses from the SC. The FTB buffers and storage of
+  SC related signals continues as normal. 
 
 ## 1. Problem Statement
 
-The branch predictor complex contains multiple synchronous RAM-based
+The branch predictor cluster contains multiple synchronous RAM-based
 predictors.  Each predictor has a prediction path (read) and an
 update path (write) that compete for the same RAM access stage.  No
 protocol exists in the current design to manage that competition or
@@ -31,36 +35,21 @@ This spec defines:
   b. The pipeline stage model for all predictors and how later
      stages override earlier ones via a redirect mechanism.
 
-  c. The update synchronization constraints between predictors
-     that share a commit event (SC and TAGE).
-
-  d. The RAS snapshot model, which does not fit the RAM
+  c. The RAS snapshot model, which does not fit the RAM
      arbitration pattern.
 
 
 ## 2. Predictor Inventory
 
-  Predictor   RAM-based   Pred stage   Override stage   Update timing
-  ---------   ---------   ----------   --------------   -------------
-  uFTB        No          s0           s0               Immediate
-  RAS         No          s0/s2        s2               Speculative push /
-                                                        snapshot restore.
-                                                        s0: TOS read for
-                                                        initial prediction.
-                                                        s2: push/pop executes,
-                                                        redirect participation.
-                                                        See section 7.2 and
-                                                        ras_decisions.md s1.
-  FTB         Yes         s1/s2        s1/s2            u0/u1
-  LP          Yes         s1/s2        s1/s2            u0/u1
-  TAGE        Yes         s2           s2               u0/u1
-  SC          Yes         s3           s3               u0/u1 lockstep
-                                                        with TAGE
-  ITTAGE      Yes         s2           s2               u0/u1
-
-SC does not have an independent prediction request path.  Its p0
-is fed from the TAGE s2 response, not from fetch directly.  See
-section 6.
+|Predictor|RAM-based|Pred stage|Override stage|Update timing          |
+|---------|---------|----------|--------------|-----------------------|
+| uFTB    |No       |p0        |p0            |Immediate              |
+| RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read for       initial prediction. p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md p1.   |
+| FTB     |Yes      |p1/p2     |p1/p2         |u0/u1                  |
+| LP      |Yes      |p1/p2     |p1/p2         |u0/u1                  |
+| TAGE    |Yes      |p2        |p2            |u0/u1                  |
+| SC      |Yes      |p3        |p3            |u0/u1 (separate UQ)    |
+| ITTAGE  |Yes      |p2        |p2            |u0/u1                  |
 
 The indirect predictor chain (RAS + ITTAGE) shares the stage timing
 of its direct counterparts but has different update and correction
@@ -68,26 +57,25 @@ semantics.  It is deferred to a later spec.  Placeholders are
 included here where the indirect chain interacts with the direct
 chain.
 
-
 ## 3. Pipeline Stage Model and Override Chain
 
 ### 3.1  Stage definitions
 
-  s0   Inputs presented to RAMs (flopped).  PC hash, folded
+  p0   Inputs presented to RAMs (flopped).  PC hash, folded
        history available.
-  s1   RAM outputs available.  Tag match, hit processing.
-  s2   Result formation.  Provider selection, meta capture.
-  s3   Statistical corrector threshold decision.
+  p1   RAM outputs available.  Tag match, hit processing.
+  p2   Result formation.  Provider selection, meta capture.
+  p3   Statistical corrector threshold decision.
 
   u0   Update address and write data presented to RAMs.
   u1   RAM write completes.
 
 ### 3.2  Predictor stage assignments
 
-  s0:     uFTB, RAS (TOS read only)
-  s1/s2:  FTB, LP
-  s2:     TAGE, ITTAGE, RAS (push/pop, redirect participation)
-  s3:     SC (chained from TAGE s2 output)
+  p0:     uFTB, RAS (TOS read only)
+  p1/p2:  FTB, LP
+  p2:     TAGE, ITTAGE, RAS (push/pop, redirect participation)
+  p3:     SC (chained from TAGE p2 output)
 
 ### 3.3  Override chain
 
@@ -98,41 +86,44 @@ holds for that fetch block.  If they differ it asserts a redirect
 with the corrected target PC and the FTQ index of the fetch being
 corrected.
 
-The FTQ acts on the earliest available prediction (uFTB/RAS at s0)
+The FTQ acts on the earliest available prediction (uFTB/RAS at p0)
 and issues a fetch immediately.  It does not wait for later
 predictors.  Later predictors issue redirects independently when
 their results are ready.
 
 Override priority (highest to lowest):
-  SC (s3) > TAGE (s2) > FTB/LP (s1/s2) > uFTB/RAS (s0)
+  SC (p3) > TAGE (p2) > FTB/LP (p1/p2) > uFTB/RAS (p0)
 
 For indirect branches:
-  ITTAGE (s2) > RAS (s0)  [indirect chain, deferred]
+  ITTAGE (p2) > RAS (p0)  [indirect chain, deferred]
 
 A redirect from a later stage supersedes any earlier redirect
 for the same FTQ entry.  The FTQ must track which redirects are
-stale.  This is a FTQ design responsibility, not a predictor
-responsibility.
+stale.
 
 ### 3.4  Redirect interface (per predictor, per stage)
 
 Each RAM-based predictor that can redirect exposes:
 
-  output logic                    <pred>_redir_val_<sN>
-  output logic [VA_WIDTH-1:0]     <pred>_redir_tgt_<sN>
-  output logic [FTQ_IDX_BITS-1:0] <pred>_redir_ftq_idx_<sN>
+```
+  output logic                    <pred>_redir_val_<pN>
+  output logic [VA_WIDTH-1:0]     <pred>_redir_tgt_<pN>
+  output logic [FTQ_IDX_BITS-1:0] <pred>_redir_ftq_idx_<pN>
+```
 
-uFTB and RAS drive the FTQ directly at s0 without a redirect
-interface -- they are the initial prediction, not a correction.
-RAS push/pop and redirect participation occurs at s2; the s0
-output is a TOS read only.
+uFTB and RAS drive the FTQ directly at p0 without a redirect
+interface. They are the initial prediction.  RAS push/pop 
+and redirect participation occurs at p2; the p0 output is 
+a TOS read only.
 
 Redirect signal naming examples:
-  ftb_redir_val_s2
-  lp_redir_val_s2
-  tage_redir_val_s2
-  itage_redir_val_s2
-  sc_redir_val_s3
+```
+  ftb_redir_val_p2
+  lp_redir_val_p2
+  tage_redir_val_p2
+  itage_redir_val_p2
+  sc_redir_val_p3
+```
 
 
 ## 4. RAM Arbitration Model
@@ -155,6 +146,7 @@ Each RAM-based predictor has its own parameter set.  Names are
 prefixed with the predictor identifier.  TAGE is shown as the
 reference instance.
 
+```
   // Queue depths
   localparam int TAGE_PQ_DEPTH        = 8;
   localparam int TAGE_UQ_DEPTH        = 8;
@@ -170,10 +162,10 @@ reference instance.
   localparam int TAGE_PRED_CREDITS    = 4;
   localparam int TAGE_UPD_CREDITS     = 1;
   localparam int TAGE_STARVE_THRESH   = 8;
+```
 
 FTB, LP, and ITTAGE have analogous parameter sets with their own
-prefix and independently chosen values.  SC shares TAGE's UQ
-(see section 6).
+prefix and independently chosen values.
 
 ### 4.3  Prediction Queue (PQ)
 
@@ -227,8 +219,8 @@ Initialization:
 
 Per-cycle grant logic (priority order):
 
-  1. resp_buf_full asserted: no grant.  (Prediction path
-     blocked; no point issuing a new prediction.)
+  1. resp_buf_full asserted: no grant.  Prediction path
+     blocked; do not issue a new prediction.
      Note: rule 1 does not block update grants.
 
   2. Starvation override: UQ non-empty AND
@@ -261,14 +253,16 @@ Per-cycle grant logic (priority order):
 The arbiter output is captured in a transaction register that
 travels with the pipeline from p0/u0 to p1/u1:
 
+```
   typedef struct packed {
     logic                              trx_type; // 0=PRED 1=UPD
     logic [$clog2(NUM_PRED_SLOTS)-1:0] trx_slot;
   } bp_arb_trx_t;
+```
 
-The full input data (pred_inp or upd_inp) is held stable at the
-queue head until the grant is de-asserted.  The transaction
-register carries only type and slot.  This avoids a wide
+The full input data (<PRED>_pred_inp or <PRED>_upd_inp) is held 
+stable at the queue head until the grant is de-asserted.  The 
+transaction register carries only type and slot.  This avoids a wide
 registered copy of the full input struct.
 
 At p1/u1:
@@ -283,7 +277,7 @@ Structure:
   - Entry: prediction metadata struct + valid flag.
 
 Handshake:
-  - s2 result formation asserts s2_valid.  Result enters buffer.
+  - p2 result formation asserts p2_valid.  Result enters buffer.
   - Consumer (FTQ or SC for TAGE) presents consumer_ready.
   - Buffer asserts pred_rdy when head is valid.
   - When buffer full and consumer not ready, resp_buf_full
@@ -295,12 +289,6 @@ When a prediction and an update targeting the same RAM entry
 are both pending, prediction is granted first per the credit
 rules (section 4.5, rule 3).  The prediction reads pre-update
 state.  The update is granted in a subsequent cycle.
-
-This is defined behavior.  No address comparison is performed
-at the arbiter.  The prediction was originally issued before
-the branch resolved; it would have seen pre-update state in a
-non-buffered design as well.  The buffering does not change
-the fundamental ordering.
 
 
 ## 5. Per-Predictor Arbitration Instances
@@ -316,7 +304,7 @@ the fundamental ordering.
   Upd input:   ftb_upd_inp_t   (resolved fetch block metadata)
   Pred output: ftb_pred_meta_t (branch targets, block end PC,
                taken map)
-  Override:    s1/s2.  ftb_redir_val_s2.
+  Override:    p1/p2.  ftb_redir_val_p2.
   Notes:       FTB updates on every resolved fetch block, not
                only on mispredictions.  UQ drain rate may be
                higher than TAGE.  Size UQ_DEPTH accordingly.
@@ -331,14 +319,14 @@ the fundamental ordering.
   Pred input:  lp_pred_inp_t  (PC + branch_id -- narrow)
   Upd input:   lp_upd_inp_t
   Pred output: lp_pred_meta_t
-  Override:    s1/s2.  lp_redir_val_s2.
+  Override:    p1/p2.  lp_redir_val_p2.
   Request:     Fetch presents prediction request to LP PQ
                independently (Option B).  Same PC as TAGE
                but separate queue instance.  No shared
                upstream PQ at this time.
   Notes:       LP planned to complete at p2.  If LP tables
                are small enough to complete at p1, the
-               response stage is s1 and the override fires
+               response stage is p1 and the override fires
                one cycle earlier.  Decision deferred until
                LP is sized.
 
@@ -349,16 +337,13 @@ the fundamental ordering.
                TAGE_PRED_CREDITS=4, TAGE_UPD_CREDITS=1,
                TAGE_STARVE_THRESH=8.
   Pred input:  tage_pred_inp_t
-  Upd input:   cond_pred_upd_inp_t  (contains tage and sc
-               sub-structs as fields -- see section 6.2)
-  Pred output: cond_pred_meta_t     (contains tage and sc
-               sub-structs as fields -- see section 6.1)
-  Override:    s2.  tage_redir_val_s2.
-  Notes:       TAGE response buffer holds cond_pred_meta_t.
+  Upd input:   tage_upd_inp_t  
+  Pred output: tage_pred_meta_t 
+  Override:    p2.  tage_redir_val_p2.
+  Notes:       TAGE response buffer holds tage_pred_meta_t.
                SC prediction chains from that buffer (section 6).
-               Single UQ entry covers both TAGE and SC update
-               (section 6.2).  Full arbitration spec in section
-               4 was developed with TAGE as the reference instance.
+               TAGE and SC have separate UQ buffers. This is a change
+               from the previous where the UQ entry was shared.
 
 ### 5.4  ITTAGE
 
@@ -369,101 +354,102 @@ the fundamental ordering.
   Pred input:  ittage_pred_inp_t
   Upd input:   ittage_upd_inp_t
   Pred output: ittage_pred_meta_t
-  Override:    s2.  ittage_redir_val_s2.  Indirect chain only.
+  Override:    p2.  ittage_redir_val_p2.  Indirect chain only.
 
+### 5.5  SC
+
+  Parameters:  SC_UQ_DEPTH=8, SC_UQ_WR_PORTS=2,
+               SC_RESP_BUF_DEPTH=2, SC_PRED_CREDITS=4,
+               SC_UPD_CREDITS=1, SC_STARVE_THRESH=8.
+  Pred input:  tage_pred_meta_t
+               tage_pred_inp_t  - staged version p0->p2 See section 6.1
+  Upd input:   sc_upd_inp_t  
+  Pred output: sc_pred_meta_t
+  Override:    p3.  sc_redir_val_p3.
+  Notes:       SC has no SC_PQ_DEPTH. SC does not instantiate its
+               own prediction FIFO; the TAGE response buffer
+               (TAGE_RESP_BUF_DEPTH) is the prediction-side storage
+               and acts as SC's PQ for arbitration (section 6.1).
+               SC response buffer holds sc_pred_meta_t.
+               TAGE and SC have separate update queues and 
+               prediction response queues. This is a change
+               from the previous version.
 
 ## 6. Statistical Corrector (SC) -- Chained Predictor
 
 SC is a Seznec-style statistical corrector.  It has its own RAM
 tables of signed counters and a thresholding process.  It adds
-one pipeline stage (s3) after TAGE s2.
+one pipeline stage (p3) after TAGE p2.
 
-### 6.1  Merged metadata structs
+SC tables are single-port RAMs. SC prediction (read, p2->p3) and SC
+update (write, u0/u1) compete for the one RAM port. The section 4.5
+credit arbiter governs that contention unchanged. SC's prediction
+transactions are drawn from the TAGE response buffer (acting as SC's
+PQ); SC's update transactions are drawn from the SC UQ. SC does not
+instantiate an independent prediction FIFO.
 
-TAGE and SC metadata are merged into two top-level structs that
-carry per-predictor sub-structs as named fields.  This unifies
-the prediction response and the update request into a single
-object per branch, eliminating any cross-module synchronization
-requirement.
+### 6.1  TAGE/SC Prediction Request Communication
 
-Prediction metadata (captured at predict time, carried in FTQ):
+TAGE prediction response meta data is used by the SC. The SC accepts the
+tage_pred_meta_t and a staged version of the tage_pred_inp structures as
+prediction request inputs but SC only queues a sub-set of the information 
+provided. 
 
-  typedef struct packed {
-    tage_pred_meta_t  tage;       // TAGE provider, CTR, etc.
-    sc_pred_meta_t    sc;         // SC counter indices, sum
-    logic             sc_valid;   // sc field populated this branch
-  } cond_pred_meta_t;
+tage_pred_inp is staged from p0 to p2. P2 is the start of the SC
+prediction pipeline.
 
-Update input (presented at commit, enqueued in single UQ):
+The SC has discrete ports for the p2 versions of the prediction pc and
+a snapshot of the lower 10 bits of the PHR.
 
-  typedef struct packed {
-    tage_upd_inp_t  tage;         // tage_pred_meta_t + resolution
-    sc_upd_inp_t    sc;           // sc_pred_meta_t + resolution
-    logic           sc_valid;     // sc field valid for this update
-    logic           resolved_taken;
-    logic           cond_mispredict;
-  } cond_pred_upd_inp_t;
+These signals are captured at p0/p1
+```
+tage_pred_inp_p0[slot].pc[VA_WIDTH-1:1]
+folded_hist.tage_phr[9:0] 
+```
 
-sc_valid is a runtime bit.  It is asserted when SC participated
-in the prediction for this branch (SC RAM was accessed and
-counters were read).  A CSR-based enable mechanism may gate SC
-participation; sc_valid reflects the actual runtime state
-regardless of how it is driven.  The CSR mechanism is not
-defined in this spec.
+They are staged to p2 and applied as inputs to SC
 
-Both tage_upd_inp_t and sc_upd_inp_t retain their existing
-definitions as sub-struct types.  cond_pred_meta_t and
-cond_pred_upd_inp_t are new top-level wrappers.
+```
+logic [VA_WIDTH-1:1] inp_pc_p2[0:NUM_PRED_SLOTS-1]; //tage_pred_inp_p0[s].pc
+logic [9:0]          sc_phr_p2;  // folded_hist.tage_phr[9:0]
+```
 
-### 6.2  Prediction path
+The TAGE prediction response is a port on the SC along with the ready signal
+indicating the prediction response is valid.
 
-SC does not have an independent fetch-facing PQ.  Its prediction
-input is the TAGE response buffer output, which now carries
-cond_pred_meta_t.  When the TAGE response buffer presents a
-valid entry, SC begins its own RAM access at p0 (which is s3
-from the fetch perspective).
+```
+tage_pred_meta_p2[0:NUM_PRED_SLOTS-1];
+tage_pred_rdy_p2
+```
 
-  TAGE resp buffer output (s2)  -->  SC p0 (RAM addr, using
-                                      tage sub-field as index)
-                                 -->  SC p1 (RAM out, counter read)
-                                 -->  SC s3 (threshold decision,
-                                      updates sc sub-field)
-                                 -->  sc_redir_val_s3 if result
-                                      differs from tage.tage_pred_tkn
+Of the tage_pred_meta_p2, these signals are used. These ports hold the
+signals for the two prediction slots, indicated by (s).
 
-The TAGE response buffer entry (cond_pred_meta_t) is held stable
-while SC processes it.  SC writes its results into the sc field
-of the same struct before passing it downstream.  The final
-cond_pred_meta_t with both fields populated exits SC's response
-buffer at s3.
+```
+tage_pred_meta_p2[s].tage_pred_strong
+tage_pred_meta_p2[s].tage_pred_medium
+tage_pred_meta_p2[s].tage_pred_tkn   
+tage_pred_meta_p2[s].tage_extd_ctr   
+```
 
-SC has its own response buffer (SC_RESP_BUF_DEPTH) after s3.
-Backpressure from the SC response buffer propagates to the TAGE
-response buffer consumer_ready input -- if SC cannot accept a
-new entry, TAGE's response buffer stalls.
+These are p2 signals and do not require staging.
 
-SC has no independent credit arbiter for prediction.  Its
-prediction rate is gated entirely by TAGE's prediction rate.
+The SC prediction-side credit arbiter draws its prediction
+transactions from the TAGE response buffer (which acts as SC's PQ)
+and its update transactions from the SC UQ. Section 4.5 arbitration
+applies unchanged. When the arbiter grants an SC update and stalls an
+SC prediction, the TAGE response buffer head is held, which
+backpressures TAGE (see section 11 item C).
 
-### 6.3  Update path
+### 6.2  SC Update Request Communication
 
-TAGE and SC share a single UQ.  The UQ entry type is
-cond_pred_upd_inp_t.  A single commit event enqueues one entry
-covering both TAGE and SC.  A single arbiter grant drains one
-entry per cycle.  At u0 the entry fans internally:
-  - tage sub-field drives TAGE RAM update logic
-  - sc sub-field drives SC RAM update logic (gated on sc_valid)
+SC has a separate UQ. The UQ entry type is sc_upd_inp_t.
 
-Both TAGE and SC RAM writes complete at u1 from the same grant.
-No cross-module grant synchronization is required.  The lockstep
-constraint is structurally enforced by the shared queue.
+Note: A single conditional branch commit event must enqueue one entry
+in the TAGE UQ and one in the SC UQ. Each of these entries can contain
+two branches, since Pacino BPC is dual prediction capable.
 
-### 6.4  SC parameters
-
-  SC_RESP_BUF_DEPTH.  Values: TBD.
-  No separate UQ parameters -- SC shares the TAGE UQ.
-  UQ sizing is driven by TAGE parameters (section 4.2).
-
+The SC and TAGE UQ's are separate.
 
 ## 7. Non-RAM Predictors
 
@@ -471,7 +457,7 @@ constraint is structurally enforced by the shared queue.
 
 uFTB is fully combinational.  No internal SRAMs.  No PQ, UQ,
 or arbiter required.  Output is presented directly to the FTQ
-at s0.  uFTB result is the initial prediction that fetch acts
+at p0.  uFTB result is the initial prediction that fetch acts
 on; it is not a redirect.
 
 If the FTQ cannot accept the uFTB output (FTQ full), uFTB
@@ -486,20 +472,20 @@ arbiter required.
 #### Prediction
 
 RAS prediction is a read of the top-of-stack (TOS) register,
-which is combinational.  A return instruction detected at s0
+which is combinational.  A return instruction detected at p0
 causes the RAS to present the TOS value as the predicted
-target.  This is the initial s0 prediction, not a redirect.
+target.  This is the initial p0 prediction, not a redirect.
 
-RAS push/pop executes at s2 when FTB structural prediction
-confirms the branch type.  The s2 result participates in
-s2_redirect when FTB/TAGE/RAS disagrees with the uBTB s1
+RAS push/pop executes at p2 when FTB structural prediction
+confirms the branch type.  The p2 result participates in
+p2_redirect when FTB/TAGE/RAS disagrees with the uBTB p1
 prediction.  See planning/arch/ras_decisions.md section 1.
 
 #### Push (call)
 
 A call instruction is detected via FTB structural prediction
-at s2.  The return address is pushed onto the RAS speculatively
-at s2.  Because the prediction is speculative, the push may be
+at p2.  The return address is pushed onto the RAS speculatively
+at p2.  Because the prediction is speculative, the push may be
 on a mispredicted path.
 
 #### Snapshot and restore
@@ -523,22 +509,11 @@ speculative state is confirmed.
 
 #### Open items
 
-  RAS-1: Push timing.  PARTIALLY RESOLVED session-050.
-         Push at s2 gated on FTB branch type. Predecode
-         early hint deferred. Close when RTL confirms s2
-         timing sufficient. See ras_decisions.md section 7.
-  RAS-2: Stack depth.  RESOLVED session-050.
-         16 speculative + 32 commit, static partition.
-         See ras_decisions.md section 3.
-  RAS-3: Recovery on flush.  Flush (_px signals) is not
-         yet defined.  RAS restore on flush must be
-         revisited when flush is specified.
-         See ras_decisions.md section 4.4.
-
+  Flush behavior will be added later. See TD #96.
 
 ## 8. Prediction Request Distribution
 
-### 8.1  Current approach (Option B)
+### 8.1  Current approach 
 
 Fetch presents prediction requests independently to each
 predictor's PQ.  The same PC fans out to FTB PQ, LP PQ,
@@ -552,158 +527,20 @@ sizing of each predictor.
 
 ### 8.2  Future: shared upstream PQ
 
-A shared upstream PQ broadcasting to all predictor PQs may
-be introduced later if the independent PQ approach creates
-fan-out or timing problems.  This is deferred.  The per-
-predictor PQ interfaces defined here are compatible with
-being driven from either a shared or independent source.
+This is now recorded as TD #97.
 
+## 9. RTL changes
 
-## 9. RTL Change Summary
-
-### 9.1  tage.sv
-  - Add PQ, UQ instances.
-  - UQ entry type: cond_pred_upd_inp_t (not tage_upd_inp_t).
-  - Add credit arbiter.
-  - Add competing-stage mux and bp_arb_trx_t register.
-  - Add prediction response buffer.
-  - Response buffer entry type: cond_pred_meta_t.
-  - Re-route existing port connections through queue inputs.
-  - tage_pred_rdy_p2 driven from response buffer head valid.
-  - tage_upd_rdy_u1 driven from UQ not_full.
-  - At u0: fan cond_pred_upd_inp_t.tage to TAGE update logic,
-    cond_pred_upd_inp_t.sc to SC update logic (gated sc_valid).
-
-### 9.2  tage_cntrl.sv
-  - Add trx_type input from competing-stage register.
-  - Gate RAM write enables on trx_type==UPD at u1.
-  - Gate RAM read result routing on trx_type==PRED at p1.
-  - No change to prediction or update logic.
-
-### 9.3  sc.sv  (new module)
-  - SC RAM tables, counter read/write logic.
-  - Prediction input: cond_pred_meta_t from TAGE response
-    buffer.  SC reads tage sub-field for indexing; writes
-    sc sub-field with counter results.
-  - No independent UQ.  Update input is sc sub-field of
-    cond_pred_upd_inp_t, gated on sc_valid, driven from
-    tage.sv at u0.
-  - Thresholding logic at s3.
-  - sc_redir_val_s3 output.
-  - SC response buffer (SC_RESP_BUF_DEPTH).
-  - Backpressure output to TAGE response buffer
-    consumer_ready.
-
-### 9.4  ftb.sv  (arbitration additions)
-  - Add PQ, UQ, credit arbiter, response buffer.
-  - Same pattern as TAGE.  Own parameter set.
-
-### 9.5  loop_pred.sv  (arbitration additions)
-  - Add PQ, UQ, credit arbiter, response buffer.
-  - Same pattern as TAGE.  Own parameter set.
-  - Prediction request input from fetch (Option B, not
-    from shared upstream PQ).
-
-### 9.6  bp_structs_pkg.sv
-  - Add bp_arb_trx_t (section 4.6).
-  - Add cond_pred_meta_t (section 6.1).  Contains
-    tage_pred_meta_t and sc_pred_meta_t as fields plus
-    sc_valid.
-  - Add cond_pred_upd_inp_t (section 6.1).  Contains
-    tage_upd_inp_t and sc_upd_inp_t as fields plus
-    sc_valid, resolved_taken, cond_mispredict.
-  - Add sc_pred_meta_t stub when SC is implemented.
-  - Add sc_upd_inp_t stub when SC is implemented.
-  - Confirm bp_ras_snapshot_t is present with tosr/tosw/bos
-    fields at RAS_PTR_BITS each (session-050: confirmed,
-    comment updated to remove linked-array reference).
-  - tage_upd_inp_t and tage_pred_meta_t are retained as
-    sub-struct definitions.  They are no longer used as
-    top-level port types on tage.sv.
-
-### 9.7  bp_defines_pkg.sv
-  - Add TAGE arbitration parameters (section 4.2).
-  - Add FTB, LP, SC, ITTAGE parameter stubs with TBD values.
-  - Add RAS stack depth parameters when RAS RTL task is
-    written. RAS_PTR_BITS already present.
-
-### 9.8  tage_interfaces.md
-  - Add section: same-entry conflict resolution (section 4.8).
-  - Add section: SC chaining -- TAGE response buffer output
-    feeds SC p0.  cond_pred_meta_t replaces tage_pred_meta_t
-    as the response buffer entry type.
-  - Update tage_upd_rdy_u1 semantics (section 5.3 / 9.1).
-  - Update UQ entry type to cond_pred_upd_inp_t.
-  - Note: tage_upd_inp_t is now a sub-struct field, not the
-    top-level update port type.
-
+Section removed.
 
 ## 10. Testbench Requirements
 
-### 10.1  TAGE arbitration tests (tb_tage.sv)
-
-  TB-ARB-01: Prediction only, no updates in flight.
-    Verify: prediction completes in p0+p1+p2, pred_rdy asserts.
-
-  TB-ARB-02: Update only, no predictions in flight.
-    Verify: update completes in u0+u1, upd_rdy asserts.
-
-  TB-ARB-03: Simultaneous prediction and update, different
-    entries.
-    Verify: both complete.  Prediction wins arbitration first.
-    Update completes next cycle.  No data corruption.
-
-  TB-ARB-04: Simultaneous prediction and update, same entry.
-    Verify: prediction granted first, reads pre-update state.
-    Update writes next cycle.  Both complete successfully.
-    Defined behavior per section 4.8.
-
-  TB-ARB-05: Update burst of 4 in one cycle.
-    Verify: first 2 accepted immediately, second 2 accepted
-    after 2 cycles.  Backpressure asserted for 2 cycles.
-
-  TB-ARB-06: PQ fills to TAGE_PQ_DEPTH.
-    Verify: not_full deasserts.  All predictions eventually
-    complete after queue drains.  No drops.
-
-  TB-ARB-07: Response buffer full.
-    Verify: arbiter does not issue new prediction.  Update
-    may still issue during this window.
-
-  TB-ARB-08: Starvation prevention.
-    Issue TAGE_PRED_CREDITS predictions with updates pending.
-    Verify: after TAGE_STARVE_THRESH starvation cycles, one
-    update is granted.  starve_ctr resets.
-
-### 10.2  SC/TAGE merged update tests  (tb_tage_sc.sv -- future)
-
-  TB-SC-01: Update with sc_valid asserted.
-    Verify: single UQ entry enqueued.  Single grant drains it.
-    Both TAGE and SC RAM writes complete at u1.
-
-  TB-SC-02: Update with sc_valid deasserted.
-    Verify: single UQ entry enqueued.  SC update logic gated.
-    Only TAGE RAM write completes at u1.  SC tables unchanged.
-
-  TB-SC-03: SC response buffer full, TAGE producing results.
-    Verify: TAGE response buffer stalls (consumer_ready low).
-    TAGE arbiter does not issue new predictions.  System
-    resumes when SC response buffer drains.
-
-### 10.3  Per-predictor arbitration tests
-
-  FTB, LP, ITTAGE each require TB-ARB-01 through TB-ARB-08
-  equivalents in their own testbenches.  Naming convention:
-    TB-FTB-ARB-01 through TB-FTB-ARB-08
-    TB-LP-ARB-01  through TB-LP-ARB-08
-  Test logic is structurally identical to the TAGE set.
-
+Section removed. Testbench requirements derive from the section 4.5
+arbitration rules, section 4.8 same-entry ordering, and the section
+11 item C backpressure chain. They are enumerated in the implementing
+task file, not here.
 
 ## 11. Open Items
-
-  A. Same-entry conflict ordering.  CLOSED 2026-04-09.
-     Prediction goes first.  Reads pre-update state.  No
-     address comparison at arbiter.  See section 4.8.
 
   B. bp_arb_trx_t width.
      The transaction register carries only trx_type and
@@ -711,8 +548,12 @@ being driven from either a shared or independent source.
      Evaluate whether hold-stable is synthesizable cleanly
      in the target flow before committing to RTL.
 
-  C. SC response buffer placement and backpressure chain.
-     SC response buffer sits after s3.  SC backpressures
+  C. CLOSED.  SC response buffer is a separate queue with
+     it's own back pressure chain eventually tied into the TAGE
+     p2 inputs, and ties into TAGE's response back pressure.
+
+     OLD: SC response buffer placement and backpressure chain.
+     SC response buffer sits after p3.  SC backpressures
      TAGE response buffer consumer_ready when full.  The
      TAGE response buffer then backpressures the TAGE
      arbiter (resp_buf_full, rule 1).  This is a two-deep
@@ -720,12 +561,18 @@ being driven from either a shared or independent source.
      create unacceptable prediction stalls.
 
   D. Shared upstream PQ.
-     Deferred.  Option B (independent PQs) used initially.
+
+     This is TD #97.
+
+     OLD: Deferred.  Option B (independent PQs) used initially.
      Revisit before LP integration if timing or fan-out
      is a problem.
 
   E. Flush protocol interaction.
-     _px signals not yet defined.  On flush:
+
+     This is TD# 96
+
+     OLD: _px signals not yet defined.  On flush:
        PQ entries: discardable (speculative).
        UQ entries: must not be discarded (post-commit).
        In-flight competing-stage transaction: if PRED,
@@ -738,12 +585,12 @@ being driven from either a shared or independent source.
      Confirm when LP is sized.
 
   G. RAS open items RAS-1, RAS-2, RAS-3.
-     See section 7.2 and planning/arch/ras_decisions.md.
+     See section 7.2 and planning/arch/ras_decisions.md section 10.
      RAS-2 (stack depth): CLOSED session-050.
        16 speculative + 32 commit, static partition.
        See ras_decisions.md section 3.
      RAS-1 (push timing): PARTIALLY RESOLVED session-050.
-       Push at s2 gated on FTB branch type.
+       Push at p2 gated on FTB branch type.
        See ras_decisions.md section 7.
      RAS-3 (flush recovery): OPEN. Pending flush protocol.
        See ras_decisions.md section 4.4.
@@ -753,8 +600,12 @@ being driven from either a shared or independent source.
      arbitration RTL is written.
 
   I. ITTAGE arbitration spec.
+
+     CLOSED. Confirm with PA.
+
+     OLD:
      Deferred until TAGE is fully validated.
-     Placeholder in section 5.4.
+     Placeholder in section 5.4.6
 
 
 ## 12. Document History
@@ -774,18 +625,32 @@ being driven from either a shared or independent source.
 
   2026-06-23  Session-050. Consistency pass.
               Section 2 predictor inventory: RAS row updated
-              to clarify s0=TOS read only, s2=push/pop and
+              to clarify p0=TOS read only, p2=push/pop and
               redirect participation. Override stage column
-              updated to s2.
+              updated to p2.
               Section 3.2 stage assignments: RAS entry
-              expanded to note both s0 and s2 roles.
-              Section 3.4: note added clarifying RAS s0
-              output is TOS read; push/pop at s2.
-              Section 7.2: push timing updated to s2 gated
+              expanded to note both p0 and p2 roles.
+              Section 3.4: note added clarifying RAS p0
+              output is TOS read; push/pop at p2.
+              Section 7.2: push timing updated to p2 gated
               on FTB branch type (RAS-1 partially resolved).
               Snapshot field widths corrected to RAS_PTR_BITS
               = 4b (was unstated; old linked-array reference
               removed from struct comment in bp_structs_pkg).
               Open item G: RAS-1/RAS-2/RAS-3 status updated.
               References to ras_decisions.md added throughout.
+
+  2026-06-28  Session-057. Manual edits
+              SC semantics defined.
+              PA consistency pass: section 2 SC update timing
+              "lockstep w/ TAGE" replaced with "separate UQ";
+              section 5.5 SC params reconciled (SC_PQ_DEPTH
+              removed; TAGE response buffer is SC's PQ; six
+              arbiter params retained for single-port RAM
+              predict-vs-update contention); section 6 lead-in
+              and 6.1 closing added to state the SC arbiter
+              draws predictions from the TAGE response buffer
+              and updates from the SC UQ. Typo fixes (responses,
+              prediction, These signals). Section 6.1 cross-ref
+              "section 61" corrected to 6.1.
 

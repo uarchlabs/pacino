@@ -23,36 +23,36 @@ when working on ras.sv or related testbenches.
 RAS predicts the target of return-type indirect branches
 (JALR/C.JR/C.JALR matching return register convention).
 
-Pipeline stage: s2 push/pop, s3 registered.
+Pipeline stage: p2 push/pop, p3 registered.
 Override chain: outside the conditional branch override chain
 (SC > TAGE > FTB > uBTB). RAS is type-gated -- active only
 when FTB identifies the branch type as return.
 
-At s2: RAS overrides FTB target for return branches.
-At s3: s3 repair applied if s3 structural prediction differs
-from s2.
+At p2: RAS overrides FTB target for return branches.
+At p3: p3 repair applied if p3 structural prediction differs
+from p2.
 
-s2/s3 repair table:
-  s2=push, s3=no-op  -> repair: pop
-  s2=no-op, s3=pop   -> repair: pop
-  s2=pop,  s3=no-op  -> repair: push
-  s2=no-op, s3=push  -> repair: push
-Note: push->pop and pop->push within one s2/s3 pair cannot occur.
+p2/p3 repair table:
+  p2=push, p3=no-op  -> repair: pop
+  p2=no-op, p3=pop   -> repair: pop
+  p2=pop,  p3=no-op  -> repair: push
+  p2=no-op, p3=push  -> repair: push
+Note: push->pop and pop->push within one p2/p3 pair cannot occur.
 
 Repair label semantics: the push/pop labels above denote
 stack-height restoration of resident entries, not fresh
 allocation or array clear.
-  - s2=push, s3=no-op (undo-push): TOSR retract of the
+  - p2=push, p3=no-op (undo-push): TOSR retract of the
     still-resident frontier slot. If that slot carried a
     recursion count the count is decremented in place;
     otherwise TOSR moves back one slot. The array entry is
     not cleared.
-  - s2=pop, s3=no-op (undo-pop): TOSR re-expose. TOSR moves
+  - p2=pop, p3=no-op (undo-pop): TOSR re-expose. TOSR moves
     back up one slot to re-expose the still-resident entry the
     pop uncovered. No array write, TOSW held.
-  - s2=no-op, s3=pop (missed pop): same TOSR retract as
+  - p2=no-op, p3=pop (missed pop): same TOSR retract as
     undo-push.
-  - s2=no-op, s3=push (missed push): the only case that
+  - p2=no-op, p3=push (missed push): the only case that
     allocates and writes. The registered fallthrough is
     written at the frontier and TOSW advances.
 
@@ -63,28 +63,28 @@ count; the re-expose moves TOSR by a slot instead. Pinned by
 tb_ras TC-21. See PROJECT_STATUS TD #78.
 
 RAS does not generate a redirect signal in the same sense as
-TAGE or SC. It provides the initial s0 prediction (TOS read)
-and participates in the s2 redirect when FTB disagrees with
-the uBTB s0 result.
+TAGE or SC. It provides the initial p0 prediction (TOS read)
+and participates in the p2 redirect when FTB disagrees with
+the uBTB p0 result.
 
 No PQ, UQ, or credit arbiter. RAS does not have synchronous
 SRAMs. See bp_arb_spec.md section 7.2.
 
 ### 1.1  Stage and update notes
 
-- Stage:  s2 push/pop + spec_pop_addr; s3 = s2 registered.
-- Update: speculative at s2 (separate from main update channels).
+- Stage:  p2 push/pop + spec_pop_addr; p3 = p2 registered.
+- Update: speculative at p2 (separate from main update channels).
           Commit stack updated at retire/commit, not post-execute.
 - Outside the conditional branch override chain.
 
 ### 1.2  Role in redirect architecture
 
-s2_redirect: fires when FTB/TAGE/RAS result disagrees with
-  uBTB s1. For return branches, RAS spec_pop_addr is the
+p2_redirect: fires when FTB/TAGE/RAS result disagrees with
+  uBTB p1. For return branches, RAS spec_pop_addr is the
   redirect target.
 
-s3_redirect: RAS s3 = s2 registered. Stack repair applied at
-  s3 if s3 structural prediction disagrees with s2 (see repair
+p3_redirect: RAS p3 = p2 registered. Stack repair applied at
+  p3 if p3 structural prediction disagrees with p2 (see repair
   table above). The repair restores stack height of resident
   entries; it does not allocate (except the missed-push case)
   or clear the array. Undo-pop does not reverse a recursion-
@@ -114,7 +114,7 @@ Three-way JALR split with FTB and ITTAGE:
   ITTAGE: remaining indirect JALR, history-dependent targets
 
 These are mutually exclusive by branch type, resolved by FTB
-structural prediction before s2.
+structural prediction before p2.
 
 ---
 
@@ -390,24 +390,24 @@ If slot0 and slot1 push different addresses:
 
 OPEN ITEM RAS-1 from bp_arb_spec.md.
 
-Push occurs at s2, when FTB structural prediction confirms the
+Push occurs at p2, when FTB structural prediction confirms the
 branch type as call. Predecode provides an early hint that may
 allow the push to be initiated before FTB confirms, but the
-authoritative push is gated on FTB branch type at s2.
+authoritative push is gated on FTB branch type at p2.
 
 This is consistent with bp_cluster.md: RAS push/pop executes
-at s2, spec_pop_addr valid at s2, s3 = s2 registered.
+at p2, spec_pop_addr valid at p2, p3 = p2 registered.
 
 Implication: the return address is available one cycle after
-the call instruction enters the prediction pipeline (s2). The
+the call instruction enters the prediction pipeline (p2). The
 corresponding return will not appear until several cycles later
 at minimum. No timing hazard from push latency under normal
 conditions.
 
-PARTIAL RESOLUTION: push occurs at s2 gated on FTB branch type.
+PARTIAL RESOLUTION: push occurs at p2 gated on FTB branch type.
 Predecode early hint is an optimization deferred to RTL
 implementation phase. RAS-1 may be closed when RTL confirms
-the s2 push timing is sufficient for all call/return
+the p2 push timing is sufficient for all call/return
 interleavings.
 
 ---
@@ -453,9 +453,9 @@ Commit stack pointer width:
 
 ## 10. Open Items
 
-  RAS-1: Push timing. PARTIALLY RESOLVED. Push at s2 gated
+  RAS-1: Push timing. PARTIALLY RESOLVED. Push at p2 gated
          on FTB branch type. Predecode early hint deferred.
-         Close when RTL confirms s2 timing is sufficient.
+         Close when RTL confirms p2 timing is sufficient.
 
   RAS-2: Stack depth. RESOLVED session-050.
          16 speculative + 32 commit. See section 3.
@@ -481,8 +481,8 @@ Commit stack pointer width:
                           item RAS-2 now closed. RAS-1
                           partially resolved. RAS-3 open.
                           Section 2 predictor inventory RAS
-                          row: s0 is TOS read only; push/pop
-                          and redirect participation is at s2.
+                          row: p0 is TOS read only; push/pop
+                          and redirect participation is at p2.
 
   bp_defines_pkg.sv    -- RAS_PTR_BITS already present.
                           RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES,
@@ -513,7 +513,7 @@ Commit stack pointer width:
               (G8), slot1 PC = pred_pc+32 (G17), simple
               circular buffer (internal structure).
               Full bp_cluster.md RAS content folded in:
-              s2/s3 repair table, return address value
+              p2/p3 repair table, return address value
               (section 8), stage and update notes (section
               1.1), redirect architecture role (section 1.2).
               Dual-slot interaction cases enumerated.

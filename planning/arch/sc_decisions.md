@@ -5,8 +5,8 @@
 ```
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
- STATUS:  Draft -- session-056
- UPDATED: 2026-06-26
+ STATUS:  Draft -- session-057
+ UPDATED: 2026-06-28
  CONTACT: Jeff Nye
 ```
 
@@ -19,55 +19,6 @@ of this definition.
 a.) Document sc_idx_hash in sc_table_hash_rules.md
 b.) Document get_br_imli_idx in sc_table_hash_rules.md
 
-c.) TD#87 verify TAGE tage_pred_strong maps to this
-    decodings and add tage_pred_medium and
-    tage_pred_weak signals to tage_pred_meta
-
-  tage_pred_strong = 1'b0; //high confidence
-  tage_pred_medium = 1'b0; //...
-  tage_pred_weak   = 1'b0; //...
-
-  000  strongly not taken  tage_pred_strong = 1'b1
-  001  medium   not taken  tage_pred_medium = 1'b1
-  010  medium   not taken  tage_pred_medium = 1'b1
-  011  weak     not taken  tage_pred_weak   = 1'b1
-  100  weak     taken      tage_pred_weak   = 1'b1
-  101  medium   taken      tage_pred_medium = 1'b1
-  110  medium   taken      tage_pred_medium = 1'b1
-  111  strongly taken      tage_pred_strong = 1'b1
-
-d.) TD#88 create two new tage_pred_meta_t signals
-    and add logic to generate them in TAGE
-
-    This signal is for convenience/timing
-
-    logic [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;
-    tage_provider_ctr = tage_using_primary
-                      ? tage_prm_ctr : tage_alt_ctr;
-
-    This signal is signed (extended CTR)
-
-    logic signed [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;
-    tage_extd_ctr = $signed({2'b00, provider_ctr, 1'b0}) - 5'sd7;
-
-e.) Ask PA to summarize this dynamic threshold design, have the
-    references added.  Known:
-
-Storage Free Confidence Estimation for the TAGE Branch Predictor, HPCA 2011
-A. Seznec, "Analysis of the O-GEHL Branch Predictor," ISCA 2005
-
-f.) TD#89 FTB needs to store the bits [15:6] of the branch target
-    this is placed into sc_upd_inp.sc_branch_range
-g.) TD#90 FTB needs to store the sign of the offset of this branch and
-    this is placed into sc_upd_inp.sc_backwards_branch
-h.) TD#91 Top level bpc needs to route tage_pred_inp.pc to the ports
-    of the SC, this must be staged from p0 to p2.
-    SC will get additional port(s) pc[0:NUM_PRED_SLOTS-1];
-    There are two of these, one for each prediction slot
-i.) TD#92 add SC port that captures bits [9:0] of bp_folded_hist.tage_phr
-    internally SC pipes this to p2, signal is called sc_phr_p2. 
-
-
 ```
 
 ## 1. Context
@@ -76,56 +27,52 @@ Not all of this context will be necessary for all tasks.
 
 ### SC Planning context:
 
-```
+
 - SC top level decisions (this document)
-    - planning/arch/sc_decisions.md
+    - `planning/arch/sc_decisions.md`
 
 - SC table index creation  [NOT WRITTEN]
-    - planning/arch/sc_table_hash_rules.md
-
-- SC control logic description  [NOT WRITTEN, NEEDED ?]
-    - planning/arch/sc_cntrl_decisions.md
+    - `planning/arch/sc_table_hash_rules.md`
 
 - SC confidence counter operation  [NOT WRITTEN]
-    - planning/arch/sc_cntrl_ctr_update_rules.md
+    - `planning/arch/sc_cntrl_ctr_update_rules.md`
 
 - SC table entry format reference  [NOT WRITTEN]
-    - planning/arch/sc_table_entry_formats.md
+    - `planning/arch/sc_table_entry_formats.md`
 
 - SC line coverage plan   [NOT WRITTEN]
-    - verification/sc_coverage_plan.md
+    - `verification/sc_coverage_plan.md`
 
 - SC table module IO ports and semantics  [NOT WRITTEN]
-    - planning/interfaces/sc_table_interfaces.md
+    - `planning/interfaces/sc_table_interfaces.md`
 
 - SC top level IO ports and semantics  [NOT WRITTEN]
-    - planning/interfaces/sc_interfaces.md
+    - `planning/interfaces/sc_interfaces.md`
 
 - SC testbench requirements  [NOT WRITTEN]
-    - planning/testbenches/sc_tb_decisions.md
+    - `planning/testbenches/sc_tb_decisions.md`
 
-- SC SRAM reset triggered initialization semantics  [NOT WRITTEN]
-    - planning/arch/sram_init.md
+- SC SRAM reset triggered initialization semantics
+    - `planning/arch/sram_init.md`
 
-```
 ### BPU Planning context:
 
 ```
 - Decisions related to the branch prediction unit
-    - planning/arch/bp_decisions.md
+    - `planning/arch/bp_decisions.md`
 
 - Decisions related to the load balanced prediction/update interface
-    - planning/arch/bp_arb_spec.md
+    - `planning/arch/bp_arb_spec.md`
 ```
 
 ### SC RTL configuration context:
 
 ```
 - Structures and meta data used to communicate in the BPU
-    - rtl/core/frontend/bpu/rtl/bp_structs_pkg.sv
+    - `rtl/core/frontend/bpu/rtl/bp_structs_pkg.sv`
 
 - RTL design parameters for configuration of units in the BPU
-    - rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv
+    - `rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv`
 ```
 
 ### RTL library components:
@@ -134,11 +81,11 @@ There is a library of common/shared modules.
 
 ```
 - Banked RAM module 
-    - rtl/lib/rtl/bw_ram.sv
+    - `rtl/lib/rtl/bw_ram.sv`
     - This is the basis of the SC tables
  
 - RAM init module
-    - rtl/lib/rtl/sram_init.sv
+    - `rtl/lib/rtl/sram_init.sv`
     - This is the module that performs post reset table initization.
 ```
 
@@ -153,9 +100,11 @@ determine whether to reverse the TAGE prediction.
 
 The SC is table based. The tables contain the confidence counters.  The tables
 are indexed through a hashing scheme based on the PC. The tables are read in
-parallel, their outputs are summed. If the magnitude of this sum falls within a
-specified range the SC will invert the TAGE prediction. The range is specified
-by parameters `SC_LO_THRESHOLD` and `SC_HI_THRESHOLD`. 
+parallel, their outputs are summed. The magnitude of this sum, compared against
+a dynamically adapted threshold, decides whether the SC inverts the TAGE
+prediction. The threshold mechanism and the override-corner logic are specified
+in sections 9 (prediction) and 10 (update); the SC does not use a fixed
+LO/HI threshold pair.
 
 The TAGE s2 output is supplied to the SC, the SC operation is one cycle and the
 SC outputs its results in s3.
@@ -227,9 +176,11 @@ SC -> `(sc_pred_meta_t) sc_pred_meta` to TOP
 
 `(sc_upd_inp_t) sc_upd_inp` -> to SC
 
-### Update Phase SC structure outputs:
 
+FIXME: this is wrong should be removed, kept for communication with PA
+### Update Phase SC structure outputs:
 SC -> `(sc_pred_meta_t) sc_pred_meta` to TOP
+end FIXME
 
 The details of the SC top level ports and the SC table ports are found in
 `sc_interfaces.md` and `sc_table_interfaces.md`.
@@ -275,15 +226,16 @@ use BANK(2) for their module parameter. This is also their default.
 
 ## 7. SC Table Parameters and Structures
 
-In future this section can be just a reference to the two package files,
-`bp_defines_pkg.sv` and `bp_structs_pkg.sv`. Do this once the discussion
-has been reviewed and validated.
+The SC and `sc_table` parameters are defined in `bp_defines_pkg.sv` and the SC
+enums/structs in `bp_structs_pkg.sv`. THOSE FILES ARE AUTHORITATIVE. This
+section gives only the meaning of each parameter array; it does not restate
+values. Read the package for current values -- do not copy numbers from this
+document.
 
-### Parameter reference
+### Parameter meaning 
 
-SC and `sc_table` parameters are defined in `bp_defines_pkg.sv`. That file is
-the reference, this section is a brief summary. Some parameters are defined to
-be consistent with TAGE and ITTAGE table parameters but do not apply to the SC.
+The values are declared in `bp_defines_pkg.sv1`. That document is the reference
+this info is provided to assist the discussion.
 
 ```
 SC_TBL_BANKS[n]  : this parameter is not currently used.
@@ -297,40 +249,36 @@ SC_TBL_EPC[n]    : table N epoch field width, SC entries do not have EPC field
 SC_TBL_IDX[n]    : table N number of bits in the index.
 ```
 
-There are also a number of MAX width parameters which are used to define a
-common signal widths for port definitions etc.
+A number of MAX width parameters define common signal widths for port:
+```
+SC_MAX_IDX_WIDTH
+SC_MAX_CTR_WIDTH,
+SC_MAX_DATA_WIDTH
+SC_MAX_FH
+etc.
+```
 
-These parameters support the prediction and up date phases. Their use is
-explicitly shown in the following sections.
+The dynamic-threshold, TC-counter, sum, and chooser widths are likewise in the
+package.
 
 ```
-int SC_THRSH_BITS   =   12;
-int SC_THRSH_MIN    =    2;
-int SC_THRSH_MID    = 2048;
-int SC_THRSH_MAX    = 4096;
-int SC_TC_BITS      =   10;
-int SC_LSUM_BITS    =   10;
-int SC_CHOOSER_BITS =    6;
-int SC_CHOOSER_MAX  =   32;
-int SC_CHOOSER_MIN  =  -32;
+SC_THRSH_*
+SC_TC_BITS
+SC_LSUM_BITS
+SC_CHOOSER_*
 ```
 
 ### SC Enum Structures Reference
 
-SC enums and structures are defined in `bp_structs_pkg.sv`.
-That file is the reference, this is a brief summary supporting the discussion.
-
-this section is a brief summary. Some parameters are defined to
-be consistent with TAGE and ITTAGE table parameters but do not apply to the SC.
-
-This enum supports range selection for the override logic
+SC enums and structures are defined in `bp_structs_pkg.sv`. That file
+is the refernce, this info is provided to assist the discussion.
 
 ```
 typedef enum logic [1:0] {
   CHOOSE_NONE  = 2'b00,
   CHOOSE_MED   = 2'b01,
   CHOOSE_HIGH  = 2'b10,
-  CHOOSE_RSRVD = 2'b11,
+  CHOOSE_RSRVD = 2'b11
 } bp_sc_chooser_e;
 ```
 
@@ -338,7 +286,7 @@ typedef enum logic [1:0] {
 
 ## 8. SC Control Local State and Controls
 
-There are local registers in `sc_cntrl.sv`. They are define here:
+There are local registers in `sc_cntrl.sv`. They are defined here:
 
 ```
 //Unsigned dynamic threshold
@@ -391,32 +339,56 @@ if(!rstn) {
 
 ```
 
-## 8. SC Prediction Phase Operation
+## 9. SC Prediction Phase Operation
 
 The inputs to the prediction phase are the PC, table histories, tage 
 results. The outputs populate an `sc_pred_meta_t` structure.
+
 ```
 // Read the SC tables
 
-// inp_pc is an SC input port, one for each prediction slot, it is 
+// inp_pc_p2 is an SC input port, one for each prediction slot, it is 
 // staged from the tage input 
 
 // sc_phr_p2 is an SC input port, it is staged from the p0 version of the
-// bp_folded_hist.phr[9:0] input of tage and staged to p2.
+// folded_history.phr[9:0] input of tage and staged to p2.
 
-logic [SC_MAX_IDX_WIDTH-1:0] st0_index = sc_idx_hash(inp_pc,SC_TBL_FH[0]);
-logic [SC_MAX_IDX_WIDTH-1:0] st1_index = sc_idx_hash(inp_pc,SC_TBL_FH[1]);
-logic [SC_MAX_IDX_WIDTH-1:0] st2_index = sc_idx_hash(inp_pc,SC_TBL_FH[2]);
-logic [SC_MAX_IDX_WIDTH-1:0] st3_index = sc_idx_hash(inp_pc,SC_TBL_FH[3]);
+logic [SC_MAX_IDX_WIDTH-1:0] st0_index
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[0],0);
+
+logic [SC_MAX_IDX_WIDTH-1:0] st1_index
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[1],bp_folded_hist.sc_t1_idx_fh);
+
+logic [SC_MAX_IDX_WIDTH-1:0] st2_index
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[2],bp_folded_hist.sc_t2_idx_fh);
+
+logic [SC_MAX_IDX_WIDTH-1:0] st3_index
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[3],bp_folded_hist.sc_t3_idx_fh);
+
 logic [SC_MAX_IDX_WIDTH-1:0] st4_index
-  = get_br_imli_idx(inp_pc,sc_phr_p2,br_imli);
+  = get_br_imli_idx(inp_pc_p2,sc_phr_p2,br_imli);
 
-logic [SC_MAX_CTR_WIDTH+1:0] value0 = (ST0[st0_index].ctr << 1) + 1;
-logic [SC_MAX_CTR_WIDTH+1:0] value1 = (ST1[st1_index].ctr << 1) + 1;
-logic [SC_MAX_CTR_WIDTH+1:0] value2 = (ST2[st2_index].ctr << 1) + 1;
-logic [SC_MAX_CTR_WIDTH+1:0] value3 = (ST3[st3_index].ctr << 1) + 1;
-logic [SC_MAX_CTR_WIDTH+1:0] value4 = (ST4[st4_index].ctr << 1) + 1;
+// IA NOTE: ctr\* are read SIGNED. The raw ctr is what is captured into
+// sc_upd_ctr below (the update path saturate-steps the raw counter).
+// value\* is the 2\*ctr+1 perceptron contribution and is LOCAL TO THE SUM
+// ONLY -- do not capture value\* into the meta.
+logic signed [SC_MAX_CTR_WIDTH-1:0] ctr0 = signed'(ST0[st0_index].ctr);
+logic signed [SC_MAX_CTR_WIDTH-1:0] ctr1 = signed'(ST1[st1_index].ctr);
+logic signed [SC_MAX_CTR_WIDTH-1:0] ctr2 = signed'(ST2[st2_index].ctr);
+logic signed [SC_MAX_CTR_WIDTH-1:0] ctr3 = signed'(ST3[st3_index].ctr);
+logic signed [SC_MAX_CTR_WIDTH-1:0] ctr4 = signed'(ST4[st4_index].ctr);
 
+logic signed [SC_MAX_CTR_WIDTH+1:0] value0 = (ctr0 <<< 1) + 1;
+logic signed [SC_MAX_CTR_WIDTH+1:0] value1 = (ctr1 <<< 1) + 1;
+logic signed [SC_MAX_CTR_WIDTH+1:0] value2 = (ctr2 <<< 1) + 1;
+logic signed [SC_MAX_CTR_WIDTH+1:0] value3 = (ctr3 <<< 1) + 1;
+logic signed [SC_MAX_CTR_WIDTH+1:0] value4 = (ctr4 <<< 1) + 1;
+
+// IA NOTE: sum width is deliberate. Five value\* terms (each +/-63) plus
+// tage_extd_ctr (+/-7) bound |sc_sum| at ~322, which fits signed
+// SC_LSUM_BITS (10b, +/-511). Do NOT widen SC_LSUM_BITS to "fix" a
+// perceived overflow -- there is none at the declared geometry.
+//
 // Calculate the local sum, include the TAGE contribution
 logic signed [SC_LSUM_BITS-1:0] sc_sum = value0
                                        + value1
@@ -429,9 +401,14 @@ logic lcl_sc_pred_tkn = sc_sum >= 0;
 
 // Create confidence bands
 
+// SC confidence magnitude
 logic [SC_LSUM_BITS-1:0] abs_sum;
-abs_sum = abs(sc_sum); // SC confidence magnitude
+abs_sum = sc_sum[SC_LSUM_BITS-1] ? (~sc_sum + 1'b1) : sc_sum;
 
+// IA NOTE: the vlo/vvlo band construction (threshold>>1, threshold>>2)
+// is a LOCAL design choice, not from O-GEHL (single threshold there).
+// Band geometry and the threshold seed/bounds are tuning-deferred --
+// see TD#93. Implement as written; do not re-derive the band split.
 logic sc_vlo  = (abs_sum < (threshold >> 1));  // "very low"
 logic sc_vvlo = (abs_sum < (threshold >> 2));  // "very very low"
 
@@ -479,22 +456,22 @@ sc_pred_meta.sc_sum           = sc_sum;
 sc_pred_meta.sc_abs_sum       = abs_sum;
 sc_pred_meta.sc_pred_tkn      = final_pred;
 sc_pred_meta.sc_lcl_pred_tkn  = lcl_sc_pred_tkn;
-sc_pred_meta.sc_tage_pred_tkn = tage_pred_tkn;
+sc_pred_meta.sc_tage_pred_tkn = tage_pred_meta.tage_pred_tkn;
+sc_pred_meta.sc_override      = sc_override;
 sc_pred_meta.sc_chooser       = use_chooser;
 sc_pred_meta.sc_upd_idx[0]    = st0_index;
 sc_pred_meta.sc_upd_idx[1]    = st1_index;
 sc_pred_meta.sc_upd_idx[2]    = st2_index;
 sc_pred_meta.sc_upd_idx[3]    = st3_index;
 sc_pred_meta.sc_upd_idx[4]    = st4_index;
-sc_pred_meta.sc_upd_ctr[0]    = value0;
-sc_pred_meta.sc_upd_ctr[1]    = value1;
-sc_pred_meta.sc_upd_ctr[2]    = value2;
-sc_pred_meta.sc_upd_ctr[3]    = value3;
-sc_pred_meta.sc_upd_ctr[4]    = value4;
-sc_pred_meta.pc_range         = pc[15:6];
+sc_pred_meta.sc_upd_ctr[0]    = ctr0;
+sc_pred_meta.sc_upd_ctr[1]    = ctr1;
+sc_pred_meta.sc_upd_ctr[2]    = ctr2;
+sc_pred_meta.sc_upd_ctr[3]    = ctr3;
+sc_pred_meta.sc_upd_ctr[4]    = ctr4;
 ```
 
-## 8. SC Update Phase Operation
+## 10. SC Update Phase Operation
 
 Inputs to the update phase are taken from `sc_upd_inp` and the local
 dynamic registers.
@@ -572,7 +549,7 @@ if(sc_upd_inp.sc_pred_meta.sc_chooser == CHOOSE_HIGH) {
 ```
 
 ---
-## 8. SC Helper Functions
+## 11. SC Helper Functions
 
 Documenting the helper functions used above.
 
@@ -617,7 +594,7 @@ Documenting the helper functions used above.
 
 ```
 
-## 9. BrIMLI Register and Semantics
+## 12. BrIMLI Register and Semantics
 
 ### BrIMLI Update
 
@@ -627,22 +604,32 @@ last backward conditional branch seen by the SC.
 `br_imli` is the backwards branch counter, cleared on reset
 `bb_hist` is the backwards branch path register, cleared on reset
 
+sc_upd_inp.branch_range[9:0] is PC[15:6] of the branch being 
+predicted/updated.  This value is populated by the FTB or other external logic.
+
+sc_upd_inp.branch_range is the BrIMLI `region` of the predicted branch.
+
+sc_upd_inp.backwards_branch is a flag populated by the FTB or other external
+logic indicating the PC target of this branch is less than the PC of the
+branch, i.e. it is a backward branch. 
+
 ```
 logic [9:0]  br_imli;
 logic [10:0] last_back_pc; //bit [10] is the valid bit; 
 logic [9:0]  bb_hist;
 
-logic [9:0] branch_range = sc_upd_inp.sc_pred_meta.branch_range;
-logic is_backwards       = sc_upd_inp.sc_pred_meta.backwards_branch;
+logic [9:0]  branch_range = sc_upd_inp.branch_range;
+logic        is_backwards = sc_upd_inp.backwards_branch
 
 // conditional branch is implied, sc only sees conditional branches
+// and only receives updates for conditional branches
+
 if (conditional branch)
 {
     if (sc_upd_inp.resolved_taken)
     {
         if (is_backwards)  // backward branch
         {
-            branch_range = sc_upd_inp.sc_pred_meta.pc[15:6]
             if (last_back_pc[10] && branch_range == last_back_pc[9:0] )
             {
               br_imli++; //this is a saturating add
@@ -656,6 +643,7 @@ if (conditional branch)
         }
     }
 }
+
 ```
 
 ### BrIMLI index calculation
@@ -669,15 +657,15 @@ logic [9:0] get_br_imli_idx (input [9:0] pc,
   logic [9:0] f_idx;
 
   case (mode)
-    // Case 1 — your current behavior. IMLI when active, PHR when cold.
+    // Case 1 - current behavior. IMLI when active, PHR when cold.
     IDX_IMLI_PHR:  f_idx = (br_imli == 0) ? phr : br_imli;
 
-    // Case 2 — PHR-only baseline. Same table, IMLI never used.
+    // Case 2 - PHR-only baseline. Same table, IMLI never used.
     //          This is the control: whatever this scores is the
     //          "free" PHR contribution with no IMLI involved.
     IDX_PHR_ONLY:  f_idx = phr;
 
-    // Case 3 — IMLI-only. No PHR substitution. When the counter is
+    // Case 3 - IMLI-only. No PHR substitution. When the counter is
     //          cold (0), f_idx contributes nothing and the index is a
     //          pure PC hash; only real IMLI streaks stir the index.
     IDX_IMLI_ONLY: f_idx = br_imli;
@@ -707,7 +695,11 @@ logic [9:0] get_br_imli_idx (input [9:0] pc,
 }
 -->
 
-## 4. Reset initialization
+## 13. Reset initialization
+
+Details of the operation of the sram_init module are found in
+planning/arch/sram_init.md. What follows is discussion of its
+operation in the SC context.
 
 Entries in the SC tables do not require a valid bit.
 
@@ -760,8 +752,9 @@ the number of index bits or number of entries in this table instance.
 
 ---
 
-## Document History
+## 14. Document History
 
   2026-06-26  Session-056. Initial draft. Manually created then refined.
   2026-06-28  Session-056. Completed draft, manually edited
+  2026-06-28  Session-057. PA edits: section renumber settled, manual edits
 

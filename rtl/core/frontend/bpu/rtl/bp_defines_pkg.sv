@@ -266,23 +266,16 @@ package bp_defines_pkg;
   localparam int SC_CTR_MAX      =  31;
   localparam int SC_CTR_MIN      = -32;
 
-  localparam int SC_THRSH_BITS   = 12;
-  localparam int SC_THRSH_MIN    =  2;
-  localparam int SC_THRSH_MID    = 2048;
-  localparam int SC_THRSH_MAX    = 4096;
+  localparam int SC_THRSH_BITS   =  10;
+  localparam int SC_THRSH_MIN    =   1;
+  localparam int SC_THRSH_MID    =  10;
+  localparam int SC_THRSH_MAX    = 512;
 
-  localparam int SC_TC_BITS      = 10;
+  localparam int SC_TC_BITS      =  7;
   localparam int SC_CHOOSER_BITS =  6;
 
   localparam int SC_CHOOSER_MAX  =  31;
   localparam int SC_CHOOSER_MIN  = -32;
-
-//  localparam [SC_TC_BITS-1:0] SC_TC_MAX = {1'b0,{(TC_BITS-1){1'b1}}};
-//  localparam [SC_TC_BITS-1:0] SC_TC_MIN = {1'b1,{(TC_BITS-1){1'b0}}};
-
-//  localparam int SC_LO_THRESHOLD    = 25;
-//  localparam int SC_HI_THRESHOLD    = 35;
-  localparam int SC_IMLI_INDEX_BITS = 10; //SC_TBL_IDX[4]
 
   parameter int SC_MAX_DATA_WIDTH = SC_MAX_CTR_WIDTH; 
   // ----------------------------------------------------------------

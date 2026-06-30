@@ -105,7 +105,7 @@ package bp_structs_pkg;
     CHOOSE_NONE  = 2'b00,
     CHOOSE_MED   = 2'b01,
     CHOOSE_HIGH  = 2'b10,
-    CHOOSE_RSRVD = 2'b11,
+    CHOOSE_RSRVD = 2'b11
   } bp_sc_chooser_e;
 
   // BrIMLI modes, for perf analysis, 2'b00 is default
@@ -197,13 +197,16 @@ package bp_structs_pkg;
     logic                          tage_use_alt_on_na; // USE_ALT_ON_NA hit
     logic                          tage_using_primary; // primary supplied
 
-    logic                          tage_high_conf;
-    logic                          tage_pred_weak;
-    logic                          tage_pred_medium;
+//  logic  tage_high_conf;    candidate for removal
+//  logic  tage_pred_weak;    candidate for removal
+    logic  tage_pred_medium;
 
     logic                          tage_pred_tkn;      // TAGE direction
+
     // Derived and convenience signals
-    logic unsigned [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;
+
+//  candidate for removal
+//  logic unsigned [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;
     logic signed   [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;
 
     // FTQ slot index appended to tage_pred_meta_t fields
@@ -322,9 +325,9 @@ package bp_structs_pkg;
     //This range selector is calculated are prediction used during update
     bp_sc_chooser_e          sc_chooser;
 
-    logic [9:0]               pc_range;
+    logic [9:0]               branch_range;
     logic [FTQ_IDX_BITS-1:0]  branch_id;
-    logic [9:0]               captured_phr;
+    //logic [9:0]               captured_phr;
 
   } sc_pred_meta_t;
 
@@ -345,8 +348,7 @@ package bp_structs_pkg;
     //FTB or BPU control logic sets this bit to indicate the branch being
     //predicted is a backwards branch (branch target < PC)
     logic        backwards_branch;
-
-    logic [15:6] branch_range;
+    logic [9:0]  branch_range; //bits 15:6 of the branch's PC
 
   } sc_upd_inp_t;
 

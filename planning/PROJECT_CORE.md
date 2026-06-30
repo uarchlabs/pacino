@@ -225,7 +225,7 @@ prediction pipeline. P-stage notation used elsewhere.
 
 ---
 
-e# Tools Status
+# Tools Status
 
 | Tool       | Version                        | Location                          | Notes                         |
 |------------|--------------------------------|-----------------------------------|-------------------------------|

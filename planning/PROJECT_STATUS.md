@@ -499,12 +499,17 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |           | Struct fields added to tage_pred_meta_t session-056;     |
 |    |           | TAGE generation logic still to be written. SC sum        |
 |    |           | (sc_decisions.md s8) consumes tage_extd_ctr.             |
-| 89 | ftb       | FTB needs to store the bits [15:6] of the branch target  |
-|    |           | this is placed into sc_upd_inp.sc_branch_range           |
 |    |           |                                                          | 
-| 90 | ftb   | FTB needs to store the sign of the offset of this branch and |
-|    |           | this is placed into sc_upd_inp.sc_backwards_branch       |
+| 89 | ftb       | Change the FTB definition to store 20 additional bits.   |
+|    |           | These are PC bits [15:6] of branch location              |
+|    |           | These will be supplied to sc_upd_inp.branch_range
 |    |           |                                                          | 
+| 90 | ftb       | Change the FTB to store 2 additional bits. the signs of  |
+|    |           | the branch targets for conditional branch 0/1 should be  |
+|    |           | stored as backwards_branch0/1.                           |
+|    |           | These will be supplied to sc_upd_inp.backwards_branch    |
+|    |           | There are two bits, one for each prediction slot         |
+|    |           | |
 | 91 | bpc       | TD#91 Top level bpc needs to route tage_pred_inp.pc to   |
 |    |           | the ports of the SC, this must be staged from p0 to p2.  |
 |    |           | SC will get additional port(s) pc[0:NUM_PRED_SLOTS-1];   |
@@ -513,6 +518,42 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 92 | bpc/sc    | TD#92 add SC port that captures bits [9:0] of            |
 |    |           | bp_folded_hist.tage_phr internally SC pipes this to p2,  |
 |    |           | signal is called sc_phr_p2                               |
+| 93 | sc    | SC efficacy and threshold/band tuning -- deferred         |
+|    |       | investigation. Prior (non-reusable) analysis showed       |
+|    |       | marginal-to-no benefit from a baseline SC over TAGE       |
+|    |       | alone. This design pulls later-literature mechanisms      |
+|    |       | (O-GEHL dynamic threshold, two-corner chooser, BrIMLI)    |
+|    |       | specifically to test whether they recover gains the       |
+|    |       | baseline SC did not. Open questions to settle at PD/perf: |
+|    |       | (1) does SC earn its area/power here at all; (2) seed     |
+|    |       | SC_THRSH_MID=10 (Seznec: ~num_tables; 2x for the          |
+|    |       | 2 * ctr+1 weighting) and SC_THRSH_MAX=512 vs achievable   |
+|    |       | |sum|~322 -- confirm under real traces; (3) the vlo/vvlo  |
+|    |       | band split (threshold>>1, >>2) is NOT from O-GEHL         |
+|    |       | (single-threshold there) -- it is local; validate or      |
+|    |       | replace; (4) 8x-weighted TAGE term (TD#86) interacts      |
+|    |       | with threshold scale. Refs: O-GEHL ISCA 2005 (Seznec);    |
+|    |       | Storage-Free Confidence HPCA 2011; TAGE-LSC (Seznec       |
+|    |       | 2011 MICRO). Gate any SC die-area commitment on this.     |
+| 94 | bp_arb_spec | This document is stale, it uses old structure names |
+|    |       | when referring to SC.                                     |
+| 95 | tage  | The tage prediction response structure tage_pred_meta_t   |
+|    |       | was changed in bp_structs_pkg. This task is to add support|
+|    |       | for any additions, remove support for any deletions and   |
+|    |       | reverify all tests and planning documents. The current    |
+|    |       | bp_structs_pkg.sv has the updates                         |
+| 96 | bpc   | flush operation has scattered mention across documents    |
+|    |       | this task will define flush behavior, implement it, and   |
+|    |       | update all references to flush operation                  | 
+|    |       | this can not be done until bpc is completed               | 
+| 97 | bp_arb| To determine is this feature will be implemented          |
+|    |       | Future: shared upstream PQ                                |
+|    |       |                                                           |
+|    |       | A shared upstream PQ broadcasting to all predictor PQs may|
+|    |       | be introduced later if the independent PQ approach creates|
+|    |       | fan-out or timing problems.  This is deferred.  The per-  |
+|    |       | predictor PQ interfaces defined here are compatible with  |
+|    |       | being driven from either a shared or independent source.  |
 
 ---
 

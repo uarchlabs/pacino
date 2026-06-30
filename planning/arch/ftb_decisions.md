@@ -83,11 +83,13 @@ bundle split are TAGE/ITTAGE conventions and do not apply to FTB
 structure. A single FTB lookup supplies both predictions.
 
 ### 2.2  Associativity and capacity
-
+```
   FTB_WAYS    = 4       set-associative, parameterized.
   FTB_ENTRIES = 2048    total, single array.
   FTB_SETS    = 512     FTB_ENTRIES / FTB_WAYS.
+```
 
+```
 4-way is the Xiangshan choice at the same 2048-entry capacity. 8-way
 was an unmeasured belief; FTB_WAYS is parameterized so 8-way is a
 synthesis experiment, not a redesign. Revisit with SPEC numbers if
