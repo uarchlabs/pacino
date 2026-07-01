@@ -313,10 +313,10 @@ package bp_structs_pkg;
 
     //SC tables index values used during prediction request, these
     //should be used directly in update (no additional hashing)
-    logic [SC_MAX_IDX_WIDTH-1:0] sc_upd_idx[0:SC_NUM_TABLES-1];
+    logic [SC_NUM_TABLES-1:0][SC_MAX_IDX_WIDTH-1:0] sc_upd_idx;
 
     //SC tables ctr values at prediction request
-    logic [SC_MAX_DATA_WIDTH-1:0] sc_upd_ctr[0:SC_NUM_TABLES-1];
+    logic [SC_NUM_TABLES-1:0][SC_MAX_DATA_WIDTH-1:0] sc_upd_ctr;
 
     //The value of all entry outputs, includes ST0-ST4 and tage contribution
     logic signed   [SC_LSUM_BITS-1:0] sc_sum;
@@ -325,8 +325,8 @@ package bp_structs_pkg;
     //This range selector is calculated are prediction used during update
     bp_sc_chooser_e          sc_chooser;
 
-    logic [9:0]               branch_range;
     logic [FTQ_IDX_BITS-1:0]  branch_id;
+    //logic [9:0]               branch_range;
     //logic [9:0]               captured_phr;
 
   } sc_pred_meta_t;

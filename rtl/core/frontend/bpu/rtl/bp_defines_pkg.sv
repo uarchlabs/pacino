@@ -280,9 +280,14 @@ package bp_defines_pkg;
   parameter int SC_MAX_DATA_WIDTH = SC_MAX_CTR_WIDTH; 
   // ----------------------------------------------------------------
   // SC arbitration parameters
-  // SC shares the TAGE UQ; no PQ or UQ parameters here.
   // ----------------------------------------------------------------
-  localparam int SC_RESP_BUF_DEPTH = 0; // TBD
+  localparam int SC_PQ_DEPTH       = 0; //not used
+  localparam int SC_UQ_DEPTH       = 8;
+  localparam int SC_UQ_WR_PORTS    = 2;
+  localparam int SC_RESP_BUF_DEPTH = 2;
+  localparam int SC_PRED_CREDITS   = 4;
+  localparam int SC_UPD_CREDITS    = 1;
+  localparam int SC_STARVE_THRESH  = 8;
 
   // ================================================================
   // :ITTAGE parameters:

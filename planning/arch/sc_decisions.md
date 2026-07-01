@@ -10,17 +10,6 @@
  CONTACT: Jeff Nye
 ```
 
-## 0. New Technical Debt 
-
-Technical debt additions or new actions discovered as a result 
-of this definition.
-
-```
-a.) Document sc_idx_hash in sc_table_hash_rules.md
-b.) Document get_br_imli_idx in sc_table_hash_rules.md
-
-```
-
 ## 1. Context
 
 Not all of this context will be necessary for all tasks.
@@ -205,7 +194,9 @@ Tables ST0-ST3 contain confidence counters.  Table ST4 is the BrIMLI table.
 BrIMLI is described later.
 
 ST1-ST3 are indexed using the PC hashed with the history inputs.  The history
-inputs are an SC top level port, `(bp_folded_hist_t) bp_folded_hist`.
+inputs are SC top level ports, `sc_t1_idx_fh_p2`, `sc_t2_idx_fh_p2`,
+`sc_t3_idx_fh_p2`. These ports are extract from the primary `bp_folded_hist_t`
+input and staged two cycles.
 
 ST0 uss a portion of the PC directly without a hash.
 
@@ -353,17 +344,20 @@ results. The outputs populate an `sc_pred_meta_t` structure.
 // sc_phr_p2 is an SC input port, it is staged from the p0 version of the
 // folded_history.phr[9:0] input of tage and staged to p2.
 
+// the sc_tX_idx_fh_p2 signals are SC input ports, they are staged 
+// from the p0 version of bp_history.
+
 logic [SC_MAX_IDX_WIDTH-1:0] st0_index
   = sc_idx_hash(inp_pc_p2,SC_TBL_FH[0],0);
 
 logic [SC_MAX_IDX_WIDTH-1:0] st1_index
-  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[1],bp_folded_hist.sc_t1_idx_fh);
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[1],sc_t1_idx_fh_p2);
 
 logic [SC_MAX_IDX_WIDTH-1:0] st2_index
-  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[2],bp_folded_hist.sc_t2_idx_fh);
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[2],sc_t2_idx_fh_p2);
 
 logic [SC_MAX_IDX_WIDTH-1:0] st3_index
-  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[3],bp_folded_hist.sc_t3_idx_fh);
+  = sc_idx_hash(inp_pc_p2,SC_TBL_FH[3],sc_t3_idx_fh_p2);
 
 logic [SC_MAX_IDX_WIDTH-1:0] st4_index
   = get_br_imli_idx(inp_pc_p2,sc_phr_p2,br_imli);
