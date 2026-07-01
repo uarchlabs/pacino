@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-28 (pa session 056)
+ UPDATED: 2026-06-28 (pa session 057)
  CONTACT: Jeff Nye
 ```
 
@@ -42,6 +42,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | SC_TC_BITS, SC_LSUM_BITS,         |
 |                         |             |                   | SC_CHOOSER_*; SC_LO/HI_THRESHOLD  |
 |                         |             |                   | removed (now dynamic).           |
+|                         |             |                   | Threshold values corrected       |
+|                         |             |                   | session-057: SC_THRSH_BITS=10,   |
+|                         |             |                   | SC_THRSH_MID=10, SC_THRSH_MAX=   |
+|                         |             |                   | 512, SC_TC_BITS=7 (O-GEHL).      |
+|                         |             |                   | SC arb params: SC_UQ_DEPTH,      |
+|                         |             |                   | SC_UQ_WR_PORTS, SC_RESP_BUF_     |
+|                         |             |                   | DEPTH, SC_PRED_CREDITS, SC_UPD_  |
+|                         |             |                   | CREDITS, SC_STARVE_THRESH; no    |
+|                         |             |                   | SC_PQ_DEPTH.                     |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields pending (II1).   |
 |                         |             |                   | bp_ras_snapshot_t comment        |
@@ -57,7 +66,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | added; tage_pred_meta_t gains     |
 |                         |             |                   | tage_provider_ctr/tage_extd_ctr   |
 |                         |             |                   | fields (TAGE generation is        |
-|                         |             |                   | TD#87/#88).                       |
+|                         |             |                   | TD#87/#88). SC session-057:       |
+|                         |             |                   | sc_pred_meta_t.pc_range removed;  |
+|                         |             |                   | captured_phr commented out.       |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected to       |
@@ -213,6 +224,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |                |                | G5/G6/G8/G17 decisions recorded. |
 |                  |                |                | Reconciled to RTL BP-064         |
 |                  |                |                | (sec 1/1.2, 3.2, 3.3/4.5).       |
+|                  |                |                | Renamed to p-naming session-057. |
 |                  |                |                | See BP Cluster Open TBDs.        |
 | ras_interfaces.md| Draft          | --             | Created session-050. IC-RAS-11   |
 |                  |                |                | repair semantics appended BP-064.|
@@ -246,12 +258,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |                |                | BrIMLI register/update/index from|
 |                  |                |                | cookbook predictor.h. Update gate|
 |                  |                |                | verified vs gem5 SC / Jimenez-Lin|
-|                  |                |                | perceptron / 2011 MICRO. Open    |
-|                  |                |                | items for 057 fresh analysis     |
-|                  |                |                | (see handoff-057).               |
-| SC               | Planning       | --             | Decisions doc draft (056). RTL   |
-|                  |                |                | not started. Other SC docs not   |
-|                  |                |                | written.                         |
+|                  |                |                | perceptron / 2011 MICRO.         |
+|                  |                |                | Session-057: 056 open items      |
+|                  |                |                | closed; counter capture/sign/    |
+|                  |                |                | override fixed; pc_range removed;|
+|                  |                |                | threshold params corrected;      |
+|                  |                |                | TD#93 added. At rest.            |
+| SC               | Planning       | --             | Decisions + arb settled (057).   |
+|                  |                |                | RTL not started. sc_interfaces   |
+|                  |                |                | next write.                      |
 | bp_cluster (top) | Not started    | --             | After predictors complete        |
 | fetch            | Not started    | --             | After BP cluster                 |
 
@@ -298,10 +313,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    | PRED_CREDITS=4 < STARVE_THRESH=8 so   | If Rule 2 must be testable,     |
 |    | starve_ctr never reaches threshold.   | adjust params before bp_cluster |
 |    | Rule 4 is the effective ceiling.      | integration. See arb item #73.  |
-| 40 | TB-ARB-05 spec discrepancy.           | Update bp_arb_spec.md 10.1 to   |
-|    | bp_arb_spec.md 10.1 "backpressure 2   | match TAGE_UQ_DEPTH=8 before    |
-|    | cycles" does not match UQ_DEPTH=8.    | bp_cluster integration. No RTL  |
-|    | No RTL risk.                          | change required.                |
+| 40 | TB-ARB-05 spec discrepancy.           | bp_arb_spec.md testbench section|
+|    | Old "backpressure 2 cycles" note did  | (was 10.1) removed session-057; |
+|    | not match TAGE_UQ_DEPTH=8.            | tb requirements now live in the |
+|    | No RTL risk.                          | implementing task file. Verify  |
+|    |                                       | UQ_DEPTH there before bp_cluster|
+|    |                                       | integration. No RTL change.     |
 | 42 | Pipeline diagram shows ITTAGE at s3,  | Revisit after SC definition.    |
 |    | should be s2 (alongside FTB, TAGE).   | Update diagram and discussions. |
 |    |                                       | See prediction-side item #65.   |
@@ -535,8 +552,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | with threshold scale. Refs: O-GEHL ISCA 2005 (Seznec);    |
 |    |       | Storage-Free Confidence HPCA 2011; TAGE-LSC (Seznec       |
 |    |       | 2011 MICRO). Gate any SC die-area commitment on this.     |
-| 94 | bp_arb_spec | This document is stale, it uses old structure names |
-|    |       | when referring to SC.                                     |
+| 94 | bp_arb_spec | Reconciled session-057. bp_arb_spec.md rewritten to |
+|    |       | the standalone-SC model: cond_pred_* retired, separate SC |
+|    |       | UQ, TAGE response buffer as SC PQ, CSR enable. Residual:  |
+|    |       | confirm no downstream doc still references cond_pred_* or |
+|    |       | a shared SC/TAGE UQ; sections 9/10 reduced to stubs (tb   |
+|    |       | reqs move to the implementing task file).                 |
 | 95 | tage  | The tage prediction response structure tage_pred_meta_t   |
 |    |       | was changed in bp_structs_pkg. This task is to add support|
 |    |       | for any additions, remove support for any deletions and   |
@@ -591,15 +612,20 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | G6  | RAS recursion counter width           | RESOLVED session-050.  |
 |     |                                       | 4b per entry.          |
 |     |                                       | ras_decisions.md s5.   |
-| G7  | SC threshold value                    | REFRAMED session-056.  |
+| G7  | SC threshold value                    | REFRAMED session-056,  |
+|     |                                       | values corrected 057.  |
 |     |                                       | Threshold is DYNAMIC   |
 |     |                                       | (O-GEHL), not a single |
 |     |                                       | fixed value. Seed      |
-|     |                                       | SC_THRSH_MID=2048,     |
-|     |                                       | bounds SC_THRSH_MIN/   |
-|     |                                       | MAX, adapts via TC     |
-|     |                                       | counter. sc_decisions  |
-|     |                                       | .md s8.                |
+|     |                                       | SC_THRSH_MID=10        |
+|     |                                       | (Seznec: ~num_tables), |
+|     |                                       | SC_THRSH_MAX=512,      |
+|     |                                       | SC_THRSH_BITS=10,      |
+|     |                                       | SC_TC_BITS=7; bounds   |
+|     |                                       | SC_THRSH_MIN, adapts   |
+|     |                                       | via TC counter. Tuning |
+|     |                                       | deferred TD#93.        |
+|     |                                       | sc_decisions.md s9/s10.|
 | G8  | Dual pred bundle split point          | RESOLVED session-050.  |
 |     |                                       | Fixed boundary split.  |
 |     |                                       | Slot 0: pred_pc+0:31.  |
@@ -754,8 +780,13 @@ Key decisions for quick reference:
   (TAGE-hi/SC-vlo, TAGE-med/SC-vvlo) with separate saturating
   counters. SC counter-update gate: SC-wrong OR |sum| <
   threshold, train toward resolved. BrIMLI (ST4) per cookbook
-  predictor.h. See planning/arch/sc_decisions.md (session-056,
+  predictor.h. See planning/arch/sc_decisions.md (session-057,
   draft).
+- SC arbitration: single-port RAM predict-vs-update contention
+  via the section 4.5 credit arbiter; SC has no independent
+  prediction FIFO (TAGE response buffer is SC's PQ); separate
+  SC update queue; CSR sc_enable gates SC participation. See
+  planning/arch/bp_arb_spec.md (session-057).
 - NUM_PRED_SLOTS=2 is the default for all current design
   work. Both slot 0 and slot 1 logic always present
   unconditionally. Reduction to 1 is deferred (debt #1).
@@ -786,15 +817,18 @@ Key decisions for quick reference:
 ### Shared planning documents
     - planning/arch/bp_arb_spec.md                    In progress
         - Dynamic prediction/training arbitration balancing
-        - NOTE (session-056): the §6 merged TAGE+SC metadata /
-          shared-UQ model is superseded for SC. SC uses its own
+        - RECONCILED session-057: the merged TAGE+SC metadata /
+          shared-UQ model is retired. SC uses its own
           sc_pred_meta_t / sc_upd_inp_t (cond_pred_meta_t and
-          cond_pred_upd_inp_t are commented out). Reconcile §6
-          when SC interfaces are written.
+          cond_pred_upd_inp_t commented out). arb_spec rewritten
+          to the standalone-SC model (separate SC UQ, TAGE
+          response buffer as SC PQ, CSR enable). Residual in
+          TD#94.
     - planning/arch/bp_cluster.md                     In progress
         - Branch prediction cluster summary data
     - planning/arch/ras_decisions.md                  Draft
-        - RAS micro-architectural decisions (session-050)
+        - RAS micro-architectural decisions (session-050;
+          p-naming session-057)
     - planning/arch/sram_init.md                      Complete
         - Post reset RAM initialization operation
     - planning/testbenches/manual_tb_decisions.md     Complete
@@ -927,9 +961,10 @@ Key decisions for quick reference:
 - Deferred to bp_cluster: flush (IC-FTB-07 / G24), conf x TAGE meta
   (FTB-2 / G10), update arbitration (FTB-3 / IC-FTB-09 / G9), FTQ
   round-trip (IC-FTB-10), ftb_fastpath_en source (G25)
-- SC-facing additions deferred (session-056): FTB stores branch
-  target [15:6] (TD#89, sc_branch_range) and the branch offset sign
-  (TD#90, sc_backwards_branch) for SC BrIMLI maintenance.
+- SC-facing additions deferred (session-056; revised session-057):
+  FTB stores branch PC[15:6] (TD#89, supplied to sc_upd_inp.branch_
+  range) and the per-slot backwards-branch sign (TD#90, supplied to
+  sc_upd_inp.backwards_branch) for SC BrIMLI maintenance.
 - FTB planning documents
     - planning/arch/ftb_decisions.md                   Complete
         - FTB micro-architectural decisions (canonical authority)
@@ -939,43 +974,66 @@ Key decisions for quick reference:
         - conf bimodal direction + saturated-endpoint fast-path policy
 
 ### SC decomposition
-- Planning (session-056): sc_decisions.md drafted (Jeff-authored,
-  PA-reviewed). SC is greenfield; RTL not started.
+- Planning (session-056; extended session-057): sc_decisions.md and
+  bp_arb_spec.md at rest and consistent with the packages. SC is
+  greenfield; RTL not started.
     - planning/arch/sc_decisions.md                   Draft
         - Five pure-counter tables ST0-ST4, no tags. ST4 = BrIMLI.
         - SC index: sc_upd_idx[0:SC_NUM_TABLES-1] uniform 5-entry
           array (sc_imli_idx split retired). ST0 unhashed PC slice;
           ST1-ST3 PC hashed with folds (bp_history_decisions.md s6);
           ST4 BrIMLI index.
-        - Dynamic threshold (O-GEHL). Seed SC_THRSH_MID, TC
-          adaptation. References: Storage-Free Confidence (HPCA
-          2011), O-GEHL (ISCA 2005).
+        - Dynamic threshold (O-GEHL). SC_THRSH_MID=10 seed (corrected
+          session-057 from 2048), SC_THRSH_MAX=512, SC_TC_BITS=7. TC
+          adaptation. References: O-GEHL (ISCA 2005), Storage-Free
+          Confidence (HPCA 2011).
         - Two-corner chooser (TAGE-hi/SC-vlo, TAGE-med/SC-vvlo),
           separate saturating counters (choose_hi_vlo,
-          choose_med_vvlo).
+          choose_med_vvlo). vlo/vvlo band split is local, not O-GEHL
+          (tuning deferred TD#93).
         - SC counter-update gate: (SC-wrong) OR (|sum| < threshold),
           train toward resolved. Verified vs gem5 SC source,
           Jimenez-Lin perceptron paper (TOCS 2002), Seznec 2011
           MICRO; BrIMLI from cookbook predictor.h.
+        - Prediction phase counter capture fixed session-057: ctr
+          read signed, value*=(ctr<<<1)+1 local to sum, raw ctr
+          captured; sc_override captured. pc_range removed; BrIMLI
+          reads sc_upd_inp.branch_range / backwards_branch.
         - BrIMLI register/update/index defined (last_back_pc[15:6]
           region, br_imli saturating count, bb_hist on region
           change, f_brimli = (br_imli==0)?phr:br_imli, index =
           pc ^ f_idx ^ (pc>>4)). br_imli_mode_e selects
           IMLI/PHR/IMLI-only for perf eval.
+    - planning/interfaces/sc_interfaces.md            NOT WRITTEN
+        - NEXT WRITE. Unblocked: standalone structs, separate SC UQ,
+          TAGE-response-buffer-as-PQ, pc_range removed. Port list
+          transcribes from bp_arb_spec.md 5.5/6.1. One open item:
+          ST4 PC width (get_br_imli_idx [9:0] vs BrIMLI PC[15:6]) --
+          mark as IC-SC gap.
     - planning/arch/sc_table_hash_rules.md            NOT WRITTEN
         - sc_idx_hash, get_br_imli_idx to be documented here.
-    - planning/arch/sc_cntrl_decisions.md             NOT WRITTEN
+          Resolves the ST4 PC-width question.
     - planning/arch/sc_cntrl_ctr_update_rules.md      NOT WRITTEN
-    - planning/arch/sc_table_entry_formats.md         NOT WRITTEN
-    - planning/interfaces/sc_interfaces.md            NOT WRITTEN
+        - Write at tb time; verification rule table citing
+          sc_decisions.md s10.
     - planning/interfaces/sc_table_interfaces.md      NOT WRITTEN
     - planning/testbenches/sc_tb_decisions.md         NOT WRITTEN
     - verification/sc_coverage_plan.md                NOT WRITTEN
-- Package changes (session-056):
+    - DROPPED session-057 (do not write):
+      sc_cntrl_decisions.md (no content independent of sc_decisions
+      s8-s10); sc_table_entry_formats.md (SC entry is a single signed
+      counter).
+    - sram_init.md: shared standalone file; SC fast-init inline in
+      sc_decisions s13.
+- Package changes (session-056; corrected session-057):
     - bp_defines_pkg.sv: SC params (SC_NUM_TABLES=5; dynamic
-      threshold SC_THRSH_*; SC_TC_BITS; SC_LSUM_BITS; SC_CHOOSER_*;
-      SC_LO/HI_THRESHOLD and SC_NUM_ALL_TBLS removed).
+      threshold SC_THRSH_BITS=10/MIN/MID=10/MAX=512; SC_TC_BITS=7;
+      SC_LSUM_BITS; SC_CHOOSER_*; SC_CTR_MIN/MAX; SC_LO/HI_THRESHOLD,
+      SC_NUM_ALL_TBLS, SC_IMLI_INDEX_BITS removed). SC arb params:
+      SC_UQ_DEPTH, SC_UQ_WR_PORTS, SC_RESP_BUF_DEPTH, SC_PRED_CREDITS,
+      SC_UPD_CREDITS, SC_STARVE_THRESH; no SC_PQ_DEPTH.
     - bp_structs_pkg.sv: sc_pred_meta_t, sc_upd_inp_t populated;
+      pc_range removed, captured_phr commented out (session-057);
       bp_sc_meta_t and cond_pred_meta_t/cond_pred_upd_inp_t commented
       out; bp_sc_chooser_e and br_imli_mode_e added; tage_pred_meta_t
       gains tage_provider_ctr/tage_extd_ctr.
@@ -983,7 +1041,8 @@ Key decisions for quick reference:
     - #87 (tage_pred_medium/weak + strong-mapping verify), #88
       (tage_provider_ctr / tage_extd_ctr generation in TAGE):
       SC prediction sum and chooser consume these.
-    - #89 / #90 (FTB stores branch_range[15:6] and backwards sign).
+    - #89 / #90 (FTB stores branch PC[15:6] and per-slot backwards
+      sign).
     - #91 (route PC p0->p2 to SC), #92 (capture phr[9:0] -> sc_phr_p2).
     - sc_idx_hash / get_br_imli_idx documented in
       sc_table_hash_rules.md (not written).
