@@ -32,6 +32,9 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 
 .PHONY: all lint sim sim_history sim_ubtb lint_loop_pred sim_loop_pred \
         lint_tage_table sim_tage_table \
+        lint_sc_table sim_sc_table sim_sc_table_fast \
+        lint_sc_brimli sim_sc_brimli sim_sc_brimli_fast \
+        lint_sc_cntrl sim_sc_cntrl \
         lint_ittage_table sim_ittage_table \
         lint_ittage_cntrl sim_ittage_cntrl \
         lint_ittage sim_ittage \
@@ -47,6 +50,14 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 all: lint  \
      lint_loop_pred \
      lint_tage_table \
+     lint_sc_table \
+     sim_sc_table \
+     sim_sc_table_fast \
+     lint_sc_brimli \
+     sim_sc_brimli \
+     sim_sc_brimli_fast \
+     lint_sc_cntrl \
+     sim_sc_cntrl \
      lint_ittage_table \
      lint_ittage_cntrl \
      lint_ittage \
@@ -164,6 +175,109 @@ sim_tage_table:
 	  $(TB_DIR)/tb_tage_table.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_table/Vtb"
 	$(Q)./$(VER_OUT)_tage_table/Vtb
+
+lint_sc_table:
+	@echo "[linting]    sc_table"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/sc_table.sv $(VSILENCE)
+
+sim_sc_table:
+	@echo "[compiling]  tb_sc_table"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc_table \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/sc_table.sv \
+	  $(TB_DIR)/tb_sc_table.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc_table/Vtb"
+	$(Q)./$(VER_OUT)_sc_table/Vtb
+
+sim_sc_table_fast:
+	@echo "[compiling]  tb_sc_table (fast init)"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc_table_fast \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/sc_table.sv \
+	  $(TB_DIR)/tb_sc_table.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc_table_fast/Vtb"
+	$(Q)./$(VER_OUT)_sc_table_fast/Vtb +SC_FAST_INIT=1
+
+lint_sc_brimli:
+	@echo "[linting]    sc_brimli"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/sc_brimli.sv $(VSILENCE)
+
+sim_sc_brimli:
+	@echo "[compiling]  tb_sc_brimli"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc_brimli \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/sc_brimli.sv \
+	  $(TB_DIR)/tb_sc_brimli.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc_brimli/Vtb"
+	$(Q)./$(VER_OUT)_sc_brimli/Vtb
+
+sim_sc_brimli_fast:
+	@echo "[compiling]  tb_sc_brimli (fast init)"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc_brimli_fast \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(RTL_DIR)/sc_brimli.sv \
+	  $(TB_DIR)/tb_sc_brimli.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc_brimli_fast/Vtb"
+	$(Q)./$(VER_OUT)_sc_brimli_fast/Vtb +SC_FAST_INIT=1
+
+lint_sc_cntrl:
+	@echo "[linting]    sc_cntrl"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/sc_cntrl.sv $(VSILENCE)
+
+sim_sc_cntrl:
+	@echo "[compiling]  tb_sc_cntrl"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc_cntrl \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/sc_cntrl.sv \
+	  $(TB_DIR)/tb_sc_cntrl.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc_cntrl/Vtb"
+	$(Q)./$(VER_OUT)_sc_cntrl/Vtb
 
 lint_ittage_table:
 	@echo "[linting]    ittage_table"
@@ -459,6 +573,11 @@ clean:
 	  $(VER_OUT)_ubtb \
 	  $(VER_OUT)_loop_pred \
 	  $(VER_OUT)_tage_table \
+	  $(VER_OUT)_sc_table \
+	  $(VER_OUT)_sc_table_fast \
+	  $(VER_OUT)_sc_brimli \
+	  $(VER_OUT)_sc_brimli_fast \
+	  $(VER_OUT)_sc_cntrl \
 	  $(VER_OUT)_ittage_table \
 	  $(VER_OUT)_ittage_cntrl \
 	  $(VER_OUT)_ittage \

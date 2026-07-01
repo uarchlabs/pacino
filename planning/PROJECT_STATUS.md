@@ -575,6 +575,27 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | fan-out or timing problems.  This is deferred.  The per-  |
 |    |       | predictor PQ interfaces defined here are compatible with  |
 |    |       | being driven from either a shared or independent source.  |
+| 98 |sc_cntrl| sc_cntrl shared scalar state under dual-slot update.        |
+|    |       | threshold, TC, choose_hi_vlo, choose_med_vvlo, br_imli,     |
+|    |       | bb_hist, last_back_pc are scalar (sc_decisions.md s8), one  |
+|    |       | copy shared across both prediction slots. sc_decisions.md   |
+|    |       | does not define adaptation when both slots carry a valid    |
+|    |       | update in the same cycle. Two contention scopes: the        |
+|    |       | threshold/TC/chooser counters contend whenever both slots   |
+|    |       | update (do_update gate, s10); the BrIMLI registers contend  |
+|    |       | only when both slots are resolved-taken backward branches   |
+|    |       | (backwards_branch=1 in both sc_upd_inp copies, s12).        |
+|    |       | TEMPORARY (BP-077): lowest-indexed valid update slot drives |
+|    |       | the shared threshold/TC/chooser/BrIMLI adaptation; per-slot |
+|    |       | counter writes proceed independently for every valid slot   |
+|    |       | (each slot owns its per-slot table RAM, no write conflict). |
+|    |       | Recorded in the sc_cntrl module header.                     |
+|    |       | Resolution path: evaluate at PD/perf the benefit of         |
+|    |       | (a) duplicating the shared state per slot, (b) sharing with |
+|    |       | a defined merge of the two slots' contributions, or         |
+|    |       | (c) keeping the single-slot-drives rule. Gate any area/     |
+|    |       | correctness commitment on that evaluation. Related: TD#93   |
+|    |       | (SC efficacy/threshold tuning), TD#86 (8x TAGE term).       |
 
 ---
 

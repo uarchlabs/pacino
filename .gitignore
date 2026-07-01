@@ -82,6 +82,12 @@ rtl/core/frontend/bpu/obj_tage_tasks/
 rtl/core/frontend/bpu/obj_ubtb
 rtl/core/frontend/bpu/obj_ras/
 rtl/core/frontend/bpu/obj_ftb/
+rtl/core/frontend/bpu/obj_sc_brimli/
+rtl/core/frontend/bpu/obj_sc_brimli_fast/
+rtl/core/frontend/bpu/obj_sc_cntrl/
+rtl/core/frontend/bpu/obj_sc_table/
+rtl/core/frontend/bpu/obj_sc_table_fast/
+
 # lib
 rtl/lib/obj_dir
 
