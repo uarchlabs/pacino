@@ -391,10 +391,28 @@ RVA23 Co-Design Part N
 |    |              | misc/sc_design_survey.md             |
 |    |              | sc_decisions                         |
 |    |              | sc_interfaces                        |
-|    |              | output session_handoff-056           |
+|    |              | output session_handoff-057           |
 | 57 | sc planning  | input session_handoff-057            |
 |    | bp_arb_spec  | decide how sc fits the arb scheme    |
 |    |              | this was left open previously        |
 |    |              | bp_arb_spec                          |
-|    |              | IN PROGRESS                          |
-
+|    |              | ???????????????                      |
+|    |              | output session_handoff-058           |
+| 58 | sc_table     | input session_handoff-058            |
+|    | sc_brimli    | sc_interfaces                        |
+|    |              | sc_table_interfaces                  |
+|    |              | sc_table_hash_rules                  |
+|    |              | sc_tb_decisions                      |
+|    |              | BP-075 (was named SC-001, changed)   |
+|    |              | BP-075a                              |
+|    |              | BP-076                               |
+|    |              | BP-077                               |
+|    |              | output session_handoff-059           |
+| 59 | sc top level | input session_handoff-059            |
+|    | tage lint    | sc_decisions.md                      |
+|    |              | discovered tage structure compatibility issues |
+|    |              | these will be fixed in next session  |
+|    |              | BP-078                               |
+|    |              | BP-079 (was named 079a, changed)     |
+|    |              | BP-080                               |
+|    |              | output session_handoff-060           |

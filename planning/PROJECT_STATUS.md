@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-06-28 (pa session 057)
+ UPDATED: 2026-07-02 (pa session 059)
  CONTACT: Jeff Nye
 ```
 
@@ -69,6 +69,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | TD#87/#88). SC session-057:       |
 |                         |             |                   | sc_pred_meta_t.pc_range removed;  |
 |                         |             |                   | captured_phr commented out.       |
+|                         |             |                   | Session-058: sc_pred_meta_t       |
+|                         |             |                   | sc_upd_idx/sc_upd_ctr -> packed   |
+|                         |             |                   | 2D arrays (Verilator).            |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected to       |
@@ -146,6 +149,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | T0 CTR u_both_t0 path corrected. |
 |                         |             |                   | BUG-003 UAON single-hit guard    |
 |                         |             |                   | fixed BP-057.                    |
+|                         |             |                   | Session-059: refs removed field  |
+|                         |             |                   | tage_high_conf; fails lint_tage_ |
+|                         |             |                   | cntrl on baseline. Fix scoped    |
+|                         |             |                   | BP-080, fix pending (TD#95).     |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | BP-010 through BP-030 complete.  |
 |                         |             |                   | 103 tests pass. Directed         |
@@ -153,6 +160,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | coverage targets closed or       |
 |                         |             |                   | deferred.                        |
 |                         |             |                   | tage_assert.sv bound via bind.   |
+|                         |             |                   | Session-059: uq_data_mem/rb_meta_|
+|                         |             |                   | mem still typed cond_pred_*      |
+|                         |             |                   | (retired TD#94); fails lint_tage/|
+|                         |             |                   | sim_tage on baseline. Retype-not-|
+|                         |             |                   | delete scoped BP-080; pending.   |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
 |                         |             | sim_tage_fast     | assert_inhibit port added        |
 |                         |             | sim_tage_tasks    | (BP-042a). CE-06 gated.          |
@@ -175,7 +187,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | tb_tage_manual.sv       | Complete    | sim_tage_manual   | tage_ctr_test rows 1-17 pass.    |
 |                         |             |                   | Row 18 covered by assertion.     |
 |                         |             |                   | tage_use_test rows 1-6 pass.     |
-|                         |             |                   | session-045.                     |
+|                         |             |                   | session-045. 4 tage_high_conf    |
+|                         |             |                   | taps to remove; pending.         |
 | ittage_interfaces.md              | Draft       | --    | session-036: corrections applied.|
 |                                   |             |       | session-037: II6 resolved.       |
 |                                   |             |       | session-038: redundancy collapse |
@@ -263,10 +276,31 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |                |                | closed; counter capture/sign/    |
 |                  |                |                | override fixed; pc_range removed;|
 |                  |                |                | threshold params corrected;      |
-|                  |                |                | TD#93 added. At rest.            |
-| SC               | Planning       | --             | Decisions + arb settled (057).   |
-|                  |                |                | RTL not started. sc_interfaces   |
-|                  |                |                | next write.                      |
+|                  |                |                | TD#93 added. Session-057 at rest.|
+|                  |                |                | Session-059: s12 br_imli_mode    |
+|                  |                |                | specified compile-time parameter |
+|                  |                |                | (BP-079); s9 st4 note.           |
+| sc_table.sv      | Complete       | tb_sc_table    | ST0-ST3 counter tables. BP-075/  |
+|                  |                | sim_sc_table   | 075a. sim_sc_table 6/0 (+fast).  |
+|                  |                |                | Two bw_ram per slot (TI6).       |
+| sc_brimli.sv     | Complete       | tb_sc_brimli   | ST4 BrIMLI table. BP-076.        |
+|                  |                | sim_sc_brimli  | sim_sc_brimli 7/0 (+fast).       |
+|                  |                |                | BR_IMLI_MODE compile-time param  |
+|                  |                |                | (BP-079).                        |
+| sc_cntrl.sv      | Complete       | tb_sc_cntrl    | SC control layer. BP-077.        |
+|                  |                | sim_sc_cntrl   | sim_sc_cntrl 98/0. br_imli_mode  |
+|                  |                |                | + t_br_imli_mode ports removed   |
+|                  |                |                | (BP-079).                        |
+| sc.sv            | Complete       | tb_sc          | SC structural top. BP-078.       |
+|                  |                | sim_sc         | sim_sc 55/0, sim_sc_fast 52/0.   |
+|                  |                |                | Index-width adapters; single     |
+|                  |                |                | sram_init sized to ST4; arb      |
+|                  |                |                | ports stubbed (TD#73/#94);       |
+|                  |                |                | SC_BR_IMLI_MODE param (BP-079).  |
+| SC (unit)        | Complete       | --             | Tables+control+top green         |
+|                  |                |                | (BP-075..079). Remaining unit    |
+|                  |                |                | item: sc_coverage_plan.md.       |
+|                  |                |                | Cluster prereqs #87-#92 open.    |
 | bp_cluster (top) | Not started    | --             | After predictors complete        |
 | fetch            | Not started    | --             | After BP cluster                 |
 
@@ -476,9 +510,13 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |           |     + (2 * ST2[st2_idx].ctr + 1)                         |
 |    |           |     + (2 * ST3[st3_idx].ctr + 1)                         |
 |    |           |     + (2 * ST4[st4_idx].ctr + 1)                         |
-|    |           |     + 8 * (2 * tage_provider_ctr + 1)                    |
+|    |           |     + 8 * (2 * tage_provider_ctr + 1) (see below)        | 
 |    |           |                                                          |
-|    |           | (of course no multiplies would be used.                  |
+|    |           | (of course no multiplies would be used.)                 |
+|    |           | NOTE: this has changed, tage_provider_ctr is now called  |
+|    |           | tage_extd_ctr. The tage term in the equation above has   |
+|    |           | changed to:                                              |
+|    |           |     + tage_extd_ctr
 |    |           |                                                          |
 | 87 | tage      | verify TAGE tage_pred_strong maps to this                |
 |    |           | decodings and add tage_pred_medium and                   |
@@ -499,6 +537,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |           |                                                          |
 |    |           | SC prediction (sc_decisions.md s8) consumes              |
 |    |           | tage_pred_medium; prerequisite for SC RTL.               |
+|    |           |                                                          |
+|    |           | Session-059: the pending tage reconciliation ties        |
+|    |           | tage_pred_medium (and tage_pred_weak if re-added)        |
+|    |           | to zero as an interim; the real strong/medium/weak       |
+|    |           | generation is this TD. Still open.                       |
 | 88 | tage      | create two new tage_pred_meta_t signals                  |
 |    |           | and add logic to generate them in TAGE                   |
 |    |           |                                                          |
@@ -510,12 +553,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |           |                                                          |
 |    |           | This signal is signed (extended CTR)                     |
 |    |           |                                                          |
-|    |           | logic signed [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;     |
+|    |     | logic signed [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;           |
 |    |     | tage_extd_ctr = $signed({2'b00, provider_ctr, 1'b0}) - 5'sd7;  |
 |    |           |                                                          |
 |    |           | Struct fields added to tage_pred_meta_t session-056;     |
 |    |           | TAGE generation logic still to be written. SC sum        |
 |    |           | (sc_decisions.md s8) consumes tage_extd_ctr.             |
+|    |           |                                                          |
+|    |           | Session-059: the pending tage reconciliation ties        |
+|    |           | tage_provider_ctr/tage_extd_ctr to zero as an            |
+|    |           | interim; the real generation is this TD. Open.           |
 |    |           |                                                          | 
 | 89 | ftb       | Change the FTB definition to store 20 additional bits.   |
 |    |           | These are PC bits [15:6] of branch location              |
@@ -535,6 +582,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | 92 | bpc/sc    | TD#92 add SC port that captures bits [9:0] of            |
 |    |           | bp_folded_hist.tage_phr internally SC pipes this to p2,  |
 |    |           | signal is called sc_phr_p2                               |
+|    |           |                                                          | 
 | 93 | sc    | SC efficacy and threshold/band tuning -- deferred         |
 |    |       | investigation. Prior (non-reusable) analysis showed       |
 |    |       | marginal-to-no benefit from a baseline SC over TAGE       |
@@ -558,11 +606,34 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | confirm no downstream doc still references cond_pred_* or |
 |    |       | a shared SC/TAGE UQ; sections 9/10 reduced to stubs (tb   |
 |    |       | reqs move to the implementing task file).                 |
+|    |       |                                                           |
+|    |       | Session-059 (BP-080): tage.sv still TYPES two live FIFOs  |
+|    |       | (uq_data_mem, rb_meta_mem) on the retired cond_pred_*     |
+|    |       | wrappers -> tage does not elaborate. RTL-side reconcile   |
+|    |       | is unwritten (retype to tage_upd_inp_t/tage_pred_meta_t). |
 | 95 | tage  | The tage prediction response structure tage_pred_meta_t   |
 |    |       | was changed in bp_structs_pkg. This task is to add support|
 |    |       | for any additions, remove support for any deletions and   |
 |    |       | reverify all tests and planning documents. The current    |
-|    |       | bp_structs_pkg.sv has the updates                         |
+|    |       | bp_structs_pkg.sv has the updates.                        |
+|    |       |                                                           |
+|    |       | Scoped BP-080 (session-059, report-first). Findings:      |
+|    |       | - tage.sv uq_data_mem/rb_meta_mem are LIVE FIFOs still    |
+|    |       |   typed cond_pred_upd_inp_t/cond_pred_meta_t (retired,    |
+|    |       |   TD#94). Fix is RETYPE to tage_upd_inp_t/tage_pred_meta_t|
+|    |       |   and collapse subfield writes -- NOT delete. Behavior    |
+|    |       |   bit-identical (dead .sc/.sc_valid/.resolved_taken/      |
+|    |       |   .cond_mispredict were write-only).                      |
+|    |       | - tage_cntrl.sv tage_high_conf write + high_conf_p1 are   |
+|    |       |   genuinely dead -> delete.                               |
+|    |       | - Ungenerated SC-facing fields (tage_pred_medium,         |
+|    |       |   tage_provider_ctr, tage_extd_ctr; tage_pred_weak is     |
+|    |       |   commented out) TIE TO ZERO and report as owed; real     |
+|    |       |   generation is TD#87/#88, not this task.                 |
+|    |       | - tb_tage_manual.sv has 4 tage_high_conf taps to remove.  |
+|    |       | Fix task unwritten. Decision (session-059): tie-off, not  |
+|    |       | generate. Open: tage_pred_weak re-add (pkg touch) vs      |
+|    |       | defer -- recommend defer to the TD#87 task.               |
 | 96 | bpc   | flush operation has scattered mention across documents    |
 |    |       | this task will define flush behavior, implement it, and   |
 |    |       | update all references to flush operation                  | 
@@ -834,6 +905,11 @@ Key decisions for quick reference:
 - Dual pred bundle split: fixed boundary. Slot 0 covers
   pred_pc+0:31, slot 1 covers pred_pc+32:63. Slot 1 PC
   always pred_pc+32. G8/G17 RESOLVED session-050.
+- SC br_imli_mode is a COMPILE-TIME MODULE PARAMETER
+  (sc_brimli BR_IMLI_MODE, default IDX_IMLI_PHR; propagated
+  from sc.sv SC_BR_IMLI_MODE), not a runtime port. bp_cluster
+  sets it at the sc.sv instantiation for a non-default perf
+  build. (session-059, BP-079.)
 
 ### Shared planning documents
     - planning/arch/bp_arb_spec.md                    In progress
@@ -856,6 +932,13 @@ Key decisions for quick reference:
         - General rules for manual testbench creation
 
 ### TAGE decomposition
+- Session-059: tage.sv / tage_cntrl.sv FAIL to elaborate on the
+  committed baseline -- they reference the retired cond_pred_* types
+  (TD#94) and the removed tage_high_conf field (TD#95). Reconciliation
+  scoped by BP-080 (retype-not-delete for the live FIFOs; delete dead
+  tage_high_conf; tie ungenerated SC-facing fields to zero). Fix
+  pending an unwritten fix task. Tie-off (not TD#87/#88 generation) decided
+  session-059.
 - RTL is available
     - Unit testbenches written
     - Manual testbench written
@@ -868,7 +951,8 @@ Key decisions for quick reference:
           TAGE/cluster dual-slot still deferred)
         - #87/#88 SC-facing signals (tage_pred_medium/weak,
           tage_provider_ctr, tage_extd_ctr) -- generation
-          logic to be added in TAGE; struct fields added 056
+          logic to be added in TAGE; struct fields added 056.
+          the fix task ties these to zero as an interim (session-059).
     - Formal validation not started
 - BP-006 through BP-032: complete.
 - BP-041 manual checks for tage CTR and USE complete
@@ -995,9 +1079,10 @@ Key decisions for quick reference:
         - conf bimodal direction + saturated-endpoint fast-path policy
 
 ### SC decomposition
-- Planning (session-056; extended session-057): sc_decisions.md and
-  bp_arb_spec.md at rest and consistent with the packages. SC is
-  greenfield; RTL not started.
+- Planning COMPLETE and RTL COMPLETE at unit level (session-058/059).
+  sc_decisions.md and bp_arb_spec.md at rest and consistent with the
+  packages. The SC unit (tables + control + structural top) is written
+  and green; remaining unit item is sc_coverage_plan.md.
     - planning/arch/sc_decisions.md                   Draft
         - Five pure-counter tables ST0-ST4, no tags. ST4 = BrIMLI.
         - SC index: sc_upd_idx[0:SC_NUM_TABLES-1] uniform 5-entry
@@ -1023,29 +1108,48 @@ Key decisions for quick reference:
         - BrIMLI register/update/index defined (last_back_pc[15:6]
           region, br_imli saturating count, bb_hist on region
           change, f_brimli = (br_imli==0)?phr:br_imli, index =
-          pc ^ f_idx ^ (pc>>4)). br_imli_mode_e selects
-          IMLI/PHR/IMLI-only for perf eval.
-    - planning/interfaces/sc_interfaces.md            NOT WRITTEN
-        - NEXT WRITE. Unblocked: standalone structs, separate SC UQ,
-          TAGE-response-buffer-as-PQ, pc_range removed. Port list
-          transcribes from bp_arb_spec.md 5.5/6.1. One open item:
-          ST4 PC width (get_br_imli_idx [9:0] vs BrIMLI PC[15:6]) --
-          mark as IC-SC gap.
-    - planning/arch/sc_table_hash_rules.md            NOT WRITTEN
-        - sc_idx_hash, get_br_imli_idx to be documented here.
-          Resolves the ST4 PC-width question.
+          pc ^ f_idx ^ (pc>>4)).
+        - Session-059 (s12): br_imli_mode is a COMPILE-TIME MODULE
+          PARAMETER (sc_brimli BR_IMLI_MODE, propagated from sc.sv
+          SC_BR_IMLI_MODE), not a runtime port. Default IDX_IMLI_PHR.
+          Implemented BP-079.
+    - planning/interfaces/sc_interfaces.md            Written (058)
+        - SC top-level ports. ST4 PC width resolved to inp_pc_p2[15:6]
+          (IC-SC-03). br_imli_mode later made a parameter (059), no
+          longer a port.
+    - planning/arch/sc_table_hash_rules.md            Written (058)
+        - sc_idx_hash (ST0-ST3), get_br_imli_idx (ST4).
+    - planning/interfaces/sc_table_interfaces.md      Written (058)
+        - sc_table (ST0-ST3), sc_brimli (ST4). Counter-only entry.
+    - planning/testbenches/sc_tb_decisions.md         Written (058)
+        - Unit-tb conventions (SC_FAST_INIT, mem[b][i] paths).
     - planning/arch/sc_cntrl_ctr_update_rules.md      NOT WRITTEN
-        - Write at tb time; verification rule table citing
-          sc_decisions.md s10.
-    - planning/interfaces/sc_table_interfaces.md      NOT WRITTEN
-    - planning/testbenches/sc_tb_decisions.md         NOT WRITTEN
+        - Optional; write at coverage/tb time citing sc_decisions s10.
     - verification/sc_coverage_plan.md                NOT WRITTEN
+        - Remaining SC unit item.
     - DROPPED session-057 (do not write):
       sc_cntrl_decisions.md (no content independent of sc_decisions
       s8-s10); sc_table_entry_formats.md (SC entry is a single signed
       counter).
     - sram_init.md: shared standalone file; SC fast-init inline in
       sc_decisions s13.
+- RTL COMPLETE at unit level (BP-075 through BP-079):
+    - rtl/core/frontend/bpu/rtl/sc_table.sv    ST0-ST3 (BP-075/075a)
+    - rtl/core/frontend/bpu/rtl/sc_brimli.sv   ST4 BrIMLI (BP-076)
+    - rtl/core/frontend/bpu/rtl/sc_cntrl.sv    control (BP-077)
+    - rtl/core/frontend/bpu/rtl/sc.sv          structural top (BP-078)
+    - tb: tb_sc_table / tb_sc_brimli / tb_sc_cntrl / tb_sc
+    - Green: sim_sc 55/0, sim_sc_fast 52/0, sim_sc_cntrl 98/0,
+      sim_sc_table 6/0 (+fast), sim_sc_brimli 7/0 (+fast); all lints
+      0/0. Default-mode equivalence held across BP-079.
+    - sc.sv notes: 9b ST0-ST3 index buses adapted to the 10b
+      SC_MAX_IDX_WIDTH controller buses (zero-extend up / slice down);
+      one sram_init sized to ST4 (1024x6); arb-status ports stubbed
+      (sc_uq_not_full=1; SC UQ / credit arbiter deferred to bp_cluster
+      TD#73/#94); -Wno-SYNCASYNCNET added (sram_init async reset).
+    - BP-079: br_imli_mode runtime port -> compile-time parameter
+      across sc_brimli / sc_cntrl / sc.sv; tb_sc_brimli covers all
+      three modes via parameter-override instances.
 - Package changes (session-056; corrected session-057):
     - bp_defines_pkg.sv: SC params (SC_NUM_TABLES=5; dynamic
       threshold SC_THRSH_BITS=10/MIN/MID=10/MAX=512; SC_TC_BITS=7;
@@ -1057,18 +1161,19 @@ Key decisions for quick reference:
       pc_range removed, captured_phr commented out (session-057);
       bp_sc_meta_t and cond_pred_meta_t/cond_pred_upd_inp_t commented
       out; bp_sc_chooser_e and br_imli_mode_e added; tage_pred_meta_t
-      gains tage_provider_ctr/tage_extd_ctr.
-- Prerequisites for SC RTL (TD):
+      gains tage_provider_ctr/tage_extd_ctr. Session-058:
+      sc_pred_meta_t.sc_upd_idx / sc_upd_ctr converted to packed 2D
+      arrays (Verilator rejected unpacked-in-packed).
+- Prerequisites for cluster integration (TD; not sc.sv unit work):
     - #87 (tage_pred_medium/weak + strong-mapping verify), #88
       (tage_provider_ctr / tage_extd_ctr generation in TAGE):
-      SC prediction sum and chooser consume these.
+      SC prediction sum and chooser consume these. TAGE ties these to
+      zero in the (unwritten) tage reconciliation; real generation is #87/#88.
     - #89 / #90 (FTB stores branch PC[15:6] and per-slot backwards
       sign).
     - #91 (route PC p0->p2 to SC), #92 (capture phr[9:0] -> sc_phr_p2).
-    - sc_idx_hash / get_br_imli_idx documented in
-      sc_table_hash_rules.md (not written).
     - #84 end-to-end fold check extends to SC ST1-ST3 consumers.
-- RTL: not started.
+- RTL: COMPLETE at unit level; sc_coverage_plan.md remaining.
 
 ### bp_history decomposition
 - COMPLETE at unit level (session-055). Module-owned pointer,
