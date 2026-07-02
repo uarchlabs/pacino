@@ -66,7 +66,6 @@ module tb;
   logic [SC_MAX_FH-1:0]        sc_t1_idx_fh_p2;
   logic [SC_MAX_FH-1:0]        sc_t2_idx_fh_p2;
   logic [SC_MAX_FH-1:0]        sc_t3_idx_fh_p2;
-  br_imli_mode_e               br_imli_mode;
   logic [P_SLOTS-1:0]          sc_pred_rdy_p3;
   sc_pred_meta_t               sc_pred_meta_p3[0:P_SLOTS-1];
 
@@ -79,7 +78,6 @@ module tb;
   logic [SC_MAX_FH-1:0]        t_idx_fh_p2[0:NT-1];
   logic [9:0]                  t_sc_phr_p2;
   logic [9:0]                  t_br_imli;
-  br_imli_mode_e               t_br_imli_mode;
 
   logic [SC_MAX_CTR_WIDTH-1:0] t_ctr_p3[0:NT-1][0:P_SLOTS-1];
   logic [SC_MAX_IDX_WIDTH-1:0] t_idx_hash_p2[0:NT-1][0:P_SLOTS-1];
@@ -104,7 +102,6 @@ module tb;
     .sc_t1_idx_fh_p2 (sc_t1_idx_fh_p2),
     .sc_t2_idx_fh_p2 (sc_t2_idx_fh_p2),
     .sc_t3_idx_fh_p2 (sc_t3_idx_fh_p2),
-    .br_imli_mode    (br_imli_mode),
     .sc_pred_rdy_p3  (sc_pred_rdy_p3),
     .sc_pred_meta_p3 (sc_pred_meta_p3),
     .sc_upd_val_u0   (sc_upd_val_u0),
@@ -115,7 +112,6 @@ module tb;
     .t_idx_fh_p2     (t_idx_fh_p2),
     .t_sc_phr_p2     (t_sc_phr_p2),
     .t_br_imli       (t_br_imli),
-    .t_br_imli_mode  (t_br_imli_mode),
     .t_ctr_p3        (t_ctr_p3),
     .t_idx_hash_p2   (t_idx_hash_p2),
     .t_sc_upd_val_u0 (t_sc_upd_val_u0),
@@ -236,7 +232,6 @@ module tb;
     sc_t1_idx_fh_p2 = '0;
     sc_t2_idx_fh_p2 = '0;
     sc_t3_idx_fh_p2 = '0;
-    br_imli_mode    = IDX_IMLI_PHR;
     for (int t = 0; t < NT; t++)
       for (int s = 0; s < P_SLOTS; s++) begin
         t_ctr_p3[t][s]      = '0;

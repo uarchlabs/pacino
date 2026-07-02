@@ -35,6 +35,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_sc_table sim_sc_table sim_sc_table_fast \
         lint_sc_brimli sim_sc_brimli sim_sc_brimli_fast \
         lint_sc_cntrl sim_sc_cntrl \
+        lint_sc sim_sc sim_sc_fast \
         lint_ittage_table sim_ittage_table \
         lint_ittage_cntrl sim_ittage_cntrl \
         lint_ittage sim_ittage \
@@ -58,6 +59,9 @@ all: lint  \
      sim_sc_brimli_fast \
      lint_sc_cntrl \
      sim_sc_cntrl \
+     lint_sc \
+     sim_sc \
+     sim_sc_fast \
      lint_ittage_table \
      lint_ittage_cntrl \
      lint_ittage \
@@ -278,6 +282,64 @@ sim_sc_cntrl:
 	  $(TB_DIR)/tb_sc_cntrl.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_sc_cntrl/Vtb"
 	$(Q)./$(VER_OUT)_sc_cntrl/Vtb
+
+# -- SC structural top (sc.sv). VARHIDDEN: table THIS_* params shadow
+#    package params. SYNCASYNCNET: sram_init async reset + sync flops.
+lint_sc:
+	@echo "[linting]    sc"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module sc \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/sc_table.sv \
+	  $(RTL_DIR)/sc_brimli.sv \
+	  $(RTL_DIR)/sc_cntrl.sv \
+	  $(RTL_DIR)/sc.sv $(VSILENCE)
+
+sim_sc:
+	@echo "[compiling]  tb_sc"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/sc_table.sv \
+	  $(RTL_DIR)/sc_brimli.sv \
+	  $(RTL_DIR)/sc_cntrl.sv \
+	  $(RTL_DIR)/sc.sv \
+	  $(TB_DIR)/tb_sc.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc/Vtb"
+	$(Q)./$(VER_OUT)_sc/Vtb
+
+sim_sc_fast:
+	@echo "[compiling]  tb_sc (fast init)"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_sc_fast \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/sc_table.sv \
+	  $(RTL_DIR)/sc_brimli.sv \
+	  $(RTL_DIR)/sc_cntrl.sv \
+	  $(RTL_DIR)/sc.sv \
+	  $(TB_DIR)/tb_sc.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_sc_fast/Vtb"
+	$(Q)./$(VER_OUT)_sc_fast/Vtb +SC_FAST_INIT=1
 
 lint_ittage_table:
 	@echo "[linting]    ittage_table"
@@ -578,6 +640,8 @@ clean:
 	  $(VER_OUT)_sc_brimli \
 	  $(VER_OUT)_sc_brimli_fast \
 	  $(VER_OUT)_sc_cntrl \
+	  $(VER_OUT)_sc \
+	  $(VER_OUT)_sc_fast \
 	  $(VER_OUT)_ittage_table \
 	  $(VER_OUT)_ittage_cntrl \
 	  $(VER_OUT)_ittage \

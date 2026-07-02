@@ -19,12 +19,14 @@
 // no valid bit, no allocation.
 //
 // The index is get_br_imli_idx over PC[15:6] (inp_pc_p2[s][15:6]),
-// sc_phr_p2, br_imli, and br_imli_mode:
-//   f_idx = case(mode) IDX_IMLI_PHR : (imli==0)?phr:imli
-//                      IDX_PHR_ONLY : phr
-//                      IDX_IMLI_ONLY: imli
+// sc_phr_p2, br_imli, and the compile-time BR_IMLI_MODE parameter:
+//   f_idx = case(BR_IMLI_MODE) IDX_IMLI_PHR : (imli==0)?phr:imli
+//                              IDX_PHR_ONLY : phr
+//                              IDX_IMLI_ONLY: imli
 //   index = pc ^ f_idx ^ (pc >> 4)
 // br_imli is an input port; sc_brimli does no register maintenance.
+// The mode is a parameter (BP-079), so TC3 uses one DUT instance per
+// mode (u_dut = IDX_IMLI_PHR, u_dut_phr, u_dut_imli).
 //
 // Fast init: +SC_FAST_INIT=1 lets the sc_brimli initial block seed the
 // RAMs at time zero; the tb skips the tbl_ri init sequence. Without the
@@ -97,7 +99,6 @@ module tb;
   logic [VA_WIDTH-1:1]       inp_pc_p2[0:P_NUM_SLOTS-1];
   logic [9:0]                sc_phr_p2;
   logic [9:0]                br_imli;
-  br_imli_mode_e             br_imli_mode;
 
   logic [P_NUM_SLOTS-1:0]    sc_upd_val_u0;
   logic [P_CTR_WIDTH-1:0]    ctr_wd_u0[0:P_NUM_SLOTS-1];
@@ -112,14 +113,20 @@ module tb;
   logic                      rstn;
 
   // ----------------------------------------------------------------
-  // DUT instantiation (ST4)
+  // DUT instantiation (ST4). BR_IMLI_MODE is now a compile-time
+  // parameter (BP-079). u_dut uses the default IDX_IMLI_PHR and carries
+  // the RAM read/write/init tests (TC1-2, TC4-7). The two extra
+  // instances below cover the non-default index modes for TC3; they
+  // share all input stimulus with u_dut and only their idx_hash_p2 is
+  // sampled (their ctr_p3 / RAM contents are unused).
   // ----------------------------------------------------------------
   sc_brimli #(
     .THIS_TABLE     (P_THIS_TABLE),
     .THIS_INDEX_BITS(P_INDEX_BITS),
     .THIS_CTR_WIDTH (P_CTR_WIDTH),
     .THIS_ENTRIES   (P_ENTRIES),
-    .NUM_PRED_SLOTS (P_NUM_SLOTS)
+    .NUM_PRED_SLOTS (P_NUM_SLOTS),
+    .BR_IMLI_MODE   (IDX_IMLI_PHR)
   ) u_dut (
     .ctr_p3        (ctr_p3),
     .idx_hash_p2   (idx_hash_p2),
@@ -127,15 +134,72 @@ module tb;
     .inp_pc_p2     (inp_pc_p2),
     .sc_phr_p2     (sc_phr_p2),
     .br_imli       (br_imli),
-    .br_imli_mode  (br_imli_mode),
     .sc_upd_val_u0 (sc_upd_val_u0),
     .ctr_wd_u0     (ctr_wd_u0),
     .ctr_wr_u0     (ctr_wr_u0),
     .upd_index_u0  (upd_index_u0),
     .tbl_ri_active (tbl_ri_active),
     .tbl_ri_wr     (tbl_ri_wr),
-    .tbl_ri_wa     (tbl_ri_wa),
     .tbl_ri_wd     (tbl_ri_wd),
+    .tbl_ri_wa     (tbl_ri_wa),
+    .rstn          (rstn),
+    .clk           (clk)
+  );
+
+  // -- IDX_PHR_ONLY mode instance (TC3 coverage). idx_hash_p2 only.
+  logic [P_CTR_WIDTH-1:0]    ctr_p3_phr[0:P_NUM_SLOTS-1];
+  logic [P_INDEX_BITS-1:0]   idx_hash_p2_phr[0:P_NUM_SLOTS-1];
+  sc_brimli #(
+    .THIS_TABLE     (P_THIS_TABLE),
+    .THIS_INDEX_BITS(P_INDEX_BITS),
+    .THIS_CTR_WIDTH (P_CTR_WIDTH),
+    .THIS_ENTRIES   (P_ENTRIES),
+    .NUM_PRED_SLOTS (P_NUM_SLOTS),
+    .BR_IMLI_MODE   (IDX_PHR_ONLY)
+  ) u_dut_phr (
+    .ctr_p3        (ctr_p3_phr),
+    .idx_hash_p2   (idx_hash_p2_phr),
+    .sc_pred_val_p2(sc_pred_val_p2),
+    .inp_pc_p2     (inp_pc_p2),
+    .sc_phr_p2     (sc_phr_p2),
+    .br_imli       (br_imli),
+    .sc_upd_val_u0 (sc_upd_val_u0),
+    .ctr_wd_u0     (ctr_wd_u0),
+    .ctr_wr_u0     (ctr_wr_u0),
+    .upd_index_u0  (upd_index_u0),
+    .tbl_ri_active (tbl_ri_active),
+    .tbl_ri_wr     (tbl_ri_wr),
+    .tbl_ri_wd     (tbl_ri_wd),
+    .tbl_ri_wa     (tbl_ri_wa),
+    .rstn          (rstn),
+    .clk           (clk)
+  );
+
+  // -- IDX_IMLI_ONLY mode instance (TC3 coverage). idx_hash_p2 only.
+  logic [P_CTR_WIDTH-1:0]    ctr_p3_imli[0:P_NUM_SLOTS-1];
+  logic [P_INDEX_BITS-1:0]   idx_hash_p2_imli[0:P_NUM_SLOTS-1];
+  sc_brimli #(
+    .THIS_TABLE     (P_THIS_TABLE),
+    .THIS_INDEX_BITS(P_INDEX_BITS),
+    .THIS_CTR_WIDTH (P_CTR_WIDTH),
+    .THIS_ENTRIES   (P_ENTRIES),
+    .NUM_PRED_SLOTS (P_NUM_SLOTS),
+    .BR_IMLI_MODE   (IDX_IMLI_ONLY)
+  ) u_dut_imli (
+    .ctr_p3        (ctr_p3_imli),
+    .idx_hash_p2   (idx_hash_p2_imli),
+    .sc_pred_val_p2(sc_pred_val_p2),
+    .inp_pc_p2     (inp_pc_p2),
+    .sc_phr_p2     (sc_phr_p2),
+    .br_imli       (br_imli),
+    .sc_upd_val_u0 (sc_upd_val_u0),
+    .ctr_wd_u0     (ctr_wd_u0),
+    .ctr_wr_u0     (ctr_wr_u0),
+    .upd_index_u0  (upd_index_u0),
+    .tbl_ri_active (tbl_ri_active),
+    .tbl_ri_wr     (tbl_ri_wr),
+    .tbl_ri_wd     (tbl_ri_wd),
+    .tbl_ri_wa     (tbl_ri_wa),
     .rstn          (rstn),
     .clk           (clk)
   );
@@ -209,9 +273,8 @@ module tb;
 
   task automatic clr_pred();
     for (int s = 0; s < P_NUM_SLOTS; s++) inp_pc_p2[s] = '0;
-    sc_phr_p2    = '0;
-    br_imli      = '0;
-    br_imli_mode = IDX_IMLI_PHR;
+    sc_phr_p2 = '0;
+    br_imli   = '0;
   endtask
 
   task automatic clr_ri();
@@ -222,20 +285,21 @@ module tb;
   endtask
 
   // Drive both slots' prediction inputs; deassert update and RI so
-  // the address mux selects the prediction (read) path.
+  // the address mux selects the prediction (read) path. The index mode
+  // is a compile-time parameter (BP-079); to sample a given mode read
+  // idx_hash_p2 (IDX_IMLI_PHR, u_dut), idx_hash_p2_phr (u_dut_phr), or
+  // idx_hash_p2_imli (u_dut_imli).
   task automatic drive_pred(
       input logic [VA_WIDTH-1:1] pc0,
       input logic [VA_WIDTH-1:1] pc1,
       input logic [9:0]          phr,
-      input logic [9:0]          imli,
-      input br_imli_mode_e       mode);
+      input logic [9:0]          imli);
     clr_upd();
     clr_ri();
     inp_pc_p2[0] = pc0;
     inp_pc_p2[1] = pc1;
     sc_phr_p2    = phr;
     br_imli      = imli;
-    br_imli_mode = mode;
   endtask
 
   // Single-slot whole-word write at idx (one cycle).
@@ -330,31 +394,30 @@ module tb;
   task automatic test_pred_read(input int vb);
     logic [VA_WIDTH-1:1]     pc0, pc1;
     logic [9:0]              phr, imli;
-    br_imli_mode_e           mode;
     logic [P_INDEX_BITS-1:0] eidx0, eidx1;
     logic [P_CTR_WIDTH-1:0]  seed0, seed1;
     logic ihok, rdok;
     // inp_pc_p2 is [VA_WIDTH-1:1]; the DUT slices [15:6] for the
     // BrIMLI pc argument. Distinct PCs -> distinct indices per slot.
+    // u_dut uses the default IDX_IMLI_PHR mode.
     pc0   = 39'h0000_1240;
     pc1   = 39'h0000_2E80;
     phr   = 10'h155;
     imli  = 10'h0AA;         // nonzero -> IDX_IMLI_PHR uses imli
-    mode  = IDX_IMLI_PHR;
-    eidx0 = calc_idx(pc0, phr, imli, mode);
-    eidx1 = calc_idx(pc1, phr, imli, mode);
+    eidx0 = calc_idx(pc0, phr, imli, IDX_IMLI_PHR);
+    eidx1 = calc_idx(pc1, phr, imli, IDX_IMLI_PHR);
     seed0 = 6'h2A;
     seed1 = 6'h15;
 
     // Index check (combinational at p2).
-    drive_pred(pc0, pc1, phr, imli, mode);
+    drive_pred(pc0, pc1, phr, imli);
     #1;
     ihok = (idx_hash_p2[0] === eidx0) &&
            (idx_hash_p2[1] === eidx1);
 
     // Seed both entries, then read back on the prediction path.
     wr_entry2(eidx0, seed0, eidx1, seed1);
-    drive_pred(pc0, pc1, phr, imli, mode);
+    drive_pred(pc0, pc1, phr, imli);
     @(posedge clk); #1;
     rdok = (ctr_p3[0] === seed0) &&
            (ctr_p3[1] === seed1);
@@ -373,15 +436,19 @@ module tb;
   endtask
 
   // ----------------------------------------------------------------
-  // TC3: br_imli_mode coverage. For fixed pc/phr/imli, verify the
-  // index tracks the mode-selected f_idx:
-  //   IDX_IMLI_PHR, imli==0  -> f_idx = phr
-  //   IDX_IMLI_PHR, imli!=0  -> f_idx = imli
-  //   IDX_PHR_ONLY, imli!=0  -> f_idx = phr (imli ignored)
-  //   IDX_IMLI_ONLY, imli==0 -> f_idx = 0  (no PHR substitution)
-  //   IDX_IMLI_ONLY, imli!=0 -> f_idx = imli
-  // phr and imli are chosen distinct and nonzero so the modes yield
-  // different indices; the check catches a DUT that ignores mode.
+  // TC3: BR_IMLI_MODE coverage. The mode is now a compile-time
+  // parameter (BP-079); each mode is a separate DUT instance driven by
+  // the same input stimulus. For fixed pc/phr/imli, verify each
+  // instance's index tracks the mode-selected f_idx:
+  //   IDX_IMLI_PHR (u_dut),      imli==0 -> f_idx = phr
+  //   IDX_IMLI_PHR (u_dut),      imli!=0 -> f_idx = imli
+  //   IDX_PHR_ONLY (u_dut_phr),  imli!=0 -> f_idx = phr (imli ignored)
+  //   IDX_IMLI_ONLY (u_dut_imli),imli==0 -> f_idx = 0  (no PHR subst)
+  //   IDX_IMLI_ONLY (u_dut_imli),imli!=0 -> f_idx = imli
+  // Expected indices are re-derived per mode from calc_idx (mirror of
+  // get_br_imli_idx; self-contained-test rule). phr and imli are chosen
+  // distinct and nonzero so the modes yield different indices; the
+  // cross-checks catch a DUT that ignores the mode parameter.
   // ----------------------------------------------------------------
   task automatic test_mode_cov(input int vb);
     logic [VA_WIDTH-1:1]     pc;
@@ -393,19 +460,25 @@ module tb;
     phr     = 10'h2D3;
     imli_nz = 10'h11C;
 
-    // Expected indices (reference).
+    // Expected indices (reference), per mode.
     e0 = calc_idx(pc, phr, 10'd0,    IDX_IMLI_PHR);
     e1 = calc_idx(pc, phr, imli_nz,  IDX_IMLI_PHR);
     e2 = calc_idx(pc, phr, imli_nz,  IDX_PHR_ONLY);
     e3 = calc_idx(pc, phr, 10'd0,    IDX_IMLI_ONLY);
     e4 = calc_idx(pc, phr, imli_nz,  IDX_IMLI_ONLY);
 
-    // Drive each case, sample idx_hash_p2[0] combinationally.
-    drive_pred(pc, pc, phr, 10'd0,   IDX_IMLI_PHR);  #1; a0 = idx_hash_p2[0];
-    drive_pred(pc, pc, phr, imli_nz, IDX_IMLI_PHR);  #1; a1 = idx_hash_p2[0];
-    drive_pred(pc, pc, phr, imli_nz, IDX_PHR_ONLY);  #1; a2 = idx_hash_p2[0];
-    drive_pred(pc, pc, phr, 10'd0,   IDX_IMLI_ONLY); #1; a3 = idx_hash_p2[0];
-    drive_pred(pc, pc, phr, imli_nz, IDX_IMLI_ONLY); #1; a4 = idx_hash_p2[0];
+    // Drive the shared inputs; sample each instance's idx_hash_p2[0]
+    // combinationally. All three instances see the same stimulus.
+    // imli == 0 covers IMLI_PHR-cold (u_dut) and IMLI_ONLY-cold
+    //   (u_dut_imli) at once.
+    drive_pred(pc, pc, phr, 10'd0);   #1;
+    a0 = idx_hash_p2[0];        // IDX_IMLI_PHR,  cold -> phr
+    a3 = idx_hash_p2_imli[0];   // IDX_IMLI_ONLY, cold -> 0
+    // imli != 0 covers IMLI_PHR-hot, PHR_ONLY, IMLI_ONLY-hot at once.
+    drive_pred(pc, pc, phr, imli_nz); #1;
+    a1 = idx_hash_p2[0];        // IDX_IMLI_PHR,  hot  -> imli
+    a2 = idx_hash_p2_phr[0];    // IDX_PHR_ONLY        -> phr
+    a4 = idx_hash_p2_imli[0];   // IDX_IMLI_ONLY, hot  -> imli
     clr_pred();
 
     ok = (a0 === e0) && (a1 === e1) && (a2 === e2) &&

@@ -5,8 +5,8 @@
 ```
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
- STATUS:  Draft -- session-057
- UPDATED: 2026-06-28
+ STATUS:  Draft -- session-059
+ UPDATED: 2026-07-01
  CONTACT: Jeff Nye
 ```
 
@@ -359,6 +359,9 @@ logic [SC_MAX_IDX_WIDTH-1:0] st2_index
 logic [SC_MAX_IDX_WIDTH-1:0] st3_index
   = sc_idx_hash(inp_pc_p2,SC_TBL_FH[3],sc_t3_idx_fh_p2);
 
+// The get_br_imli_idx mode argument is the sc_brimli BR_IMLI_MODE
+// compile-time parameter (section 12), not a port. The call below
+// takes the parameter default.
 logic [SC_MAX_IDX_WIDTH-1:0] st4_index
   = get_br_imli_idx(inp_pc_p2,sc_phr_p2,br_imli);
 
@@ -640,9 +643,46 @@ if (conditional branch)
 
 ```
 
+### BrIMLI index mode -- compile-time parameter
+
+The BrIMLI index mode (type `br_imli_mode_e`) is a COMPILE-TIME MODULE
+PARAMETER, not a runtime port. It selects the `get_br_imli_idx` fold
+source -- IMLI-with-PHR-fallback, PHR-only, or IMLI-only -- for
+performance evaluation. The mode is fixed for a run; there is no
+runtime `br_imli_mode` signal anywhere in the SC.
+
+- The parameter is declared on `sc_brimli` (ST4), the only module that
+  consumes the mode. `get_br_imli_idx` reads it directly:
+
+      parameter br_imli_mode_e BR_IMLI_MODE = IDX_IMLI_PHR
+
+  Default is `IDX_IMLI_PHR` (current behavior).
+
+- `sc.sv` exposes a matching parameter and passes it to the ST4 instance
+  so the mode can be set at elaboration from above without editing
+  `sc.sv`:
+
+      parameter br_imli_mode_e SC_BR_IMLI_MODE = IDX_IMLI_PHR
+      ...
+      sc_brimli #(.BR_IMLI_MODE(SC_BR_IMLI_MODE)) u_st4 ( ... );
+
+  `bp_cluster` sets `SC_BR_IMLI_MODE` at the `sc.sv` instantiation when a
+  non-default mode is wanted for a perf run.
+
+- `sc_cntrl` does NOT carry the mode. It neither consumes nor routes it.
+  The earlier `br_imli_mode` input and `t_br_imli_mode` passthrough ports
+  on `sc_cntrl` are removed; likewise the `br_imli_mode` port on
+  `sc_brimli` and the top-level `br_imli_mode` port on `sc.sv`.
+
+- The default is `IDX_IMLI_PHR`, set on the module and propagated by
+  parameter from `sc.sv` down.
+
 ### BrIMLI index calculation
 
 ```
+// The mode argument below is bound to the sc_brimli BR_IMLI_MODE
+// compile-time parameter (see "BrIMLI index mode" above); it is not a
+// port. It is shown as a function argument here only for readability.
 logic [9:0] get_br_imli_idx (input [9:0] pc,
                              input [9:0] phr,
                              input [9:0] br_imli,
@@ -751,4 +791,9 @@ the number of index bits or number of entries in this table instance.
   2026-06-26  Session-056. Initial draft. Manually created then refined.
   2026-06-28  Session-056. Completed draft, manually edited
   2026-06-28  Session-057. PA edits: section renumber settled, manual edits
+  2026-07-01  Session-059. br_imli_mode specified as a compile-time module
+              parameter (sc_brimli BR_IMLI_MODE, propagated from sc.sv
+              SC_BR_IMLI_MODE); no runtime br_imli_mode port on sc_brimli,
+              sc_cntrl, or sc.sv. Section 12 subsection added; section 9
+              st4_index note added. Implemented by BP-079a.
 

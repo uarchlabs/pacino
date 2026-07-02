@@ -87,6 +87,8 @@ rtl/core/frontend/bpu/obj_sc_brimli_fast/
 rtl/core/frontend/bpu/obj_sc_cntrl/
 rtl/core/frontend/bpu/obj_sc_table/
 rtl/core/frontend/bpu/obj_sc_table_fast/
+rtl/core/frontend/bpu/obj_sc/
+rtl/core/frontend/bpu/obj_sc_fast/
 
 # lib
 rtl/lib/obj_dir

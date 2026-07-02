@@ -1,3 +1,8 @@
+FILE:    sites.txt
+SOURCE:  various
+STATUS:  Draft 
+UPDATED: 2026-06-01
+CONTACT: Jeff Nye
 
 https://uarchlabs.com/                        uA main web site
 https://github.com/uarchlabs                  uA github org

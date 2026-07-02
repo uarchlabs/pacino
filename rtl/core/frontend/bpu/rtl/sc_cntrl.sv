@@ -47,7 +47,6 @@
 //   in  inp_pc_p2        [slot]      staged branch PC
 //   in  sc_phr_p2                    staged path history low 10b
 //   in  sc_t1_idx_fh_p2 / _t2_ / _t3_  staged per-table folds
-//   in  br_imli_mode                (br_imli_mode_e, ST4 index mode)
 //   out sc_pred_rdy_p3   [slot]
 //   out sc_pred_meta_p3  [slot]      (sc_pred_meta_t)
 //   -- update, SC top facing --
@@ -60,7 +59,6 @@
 //   out t_idx_fh_p2      [table]     fold: ST0=0, ST1-3 folds, ST4=0
 //   out t_sc_phr_p2                  PHR to ST4
 //   out t_br_imli                    BrIMLI counter to ST4
-//   out t_br_imli_mode               ST4 index mode
 //   in  t_ctr_p3         [table][slot]  signed counter read at p3
 //   in  t_idx_hash_p2    [table][slot]  table index computed at p2
 //   -- update, table facing --
@@ -94,7 +92,6 @@ module sc_cntrl #(
   input  logic [SC_MAX_FH-1:0]        sc_t1_idx_fh_p2,
   input  logic [SC_MAX_FH-1:0]        sc_t2_idx_fh_p2,
   input  logic [SC_MAX_FH-1:0]        sc_t3_idx_fh_p2,
-  input  br_imli_mode_e               br_imli_mode,
   output logic [NUM_PRED_SLOTS-1:0]   sc_pred_rdy_p3,
   output sc_pred_meta_t               sc_pred_meta_p3[0:NUM_PRED_SLOTS-1],
 
@@ -109,7 +106,6 @@ module sc_cntrl #(
   output logic [SC_MAX_FH-1:0]        t_idx_fh_p2[0:SC_NUM_TABLES-1],
   output logic [9:0]                  t_sc_phr_p2,
   output logic [9:0]                  t_br_imli,
-  output br_imli_mode_e               t_br_imli_mode,
 
   // -- prediction inputs collected from the SC table instances (p3/p2)
   input  logic [SC_MAX_CTR_WIDTH-1:0]
@@ -243,7 +239,6 @@ module sc_cntrl #(
   assign t_sc_pred_val_p2 = tage_pred_rdy_p2;
   assign t_sc_phr_p2      = sc_phr_p2;
   assign t_br_imli        = br_imli;
-  assign t_br_imli_mode   = br_imli_mode;
 
   generate
     for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : gen_pc_fanout

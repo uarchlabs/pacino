@@ -1,3 +1,10 @@
+ FILE:    master_outline.txt
+ SOURCE:  various
+ STATUS:  Draft 
+ UPDATED: 2026-06-01
+ CONTACT: Jeff Nye
+
+
 1. Home
 
 2. Frontend

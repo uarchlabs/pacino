@@ -1,6 +1,13 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
+```
+ FILE:    block_org.md
+ SOURCE:  various
+ STATUS:  Draft 
+ UPDATED: 2026-06-01
+ CONTACT: Jeff Nye
+```
 
 frontend
   I$/ITLB/IPrefetcher

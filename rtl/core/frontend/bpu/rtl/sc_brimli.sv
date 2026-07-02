@@ -29,8 +29,9 @@
 // Index hash: get_br_imli_idx (planning/arch/sc_table_hash_rules.md,
 //   sc_decisions.md section 12). Inputs are PC[15:6] (from
 //   inp_pc_p2[s][15:6]), the low 10 path-history bits sc_phr_p2, the
-//   BrIMLI counter br_imli, and the mode selector br_imli_mode:
-//     f_idx = case(br_imli_mode)
+//   BrIMLI counter br_imli, and the compile-time mode selector
+//   BR_IMLI_MODE (a module parameter, not a port, per section 12):
+//     f_idx = case(BR_IMLI_MODE)
 //               IDX_IMLI_PHR : (br_imli==0) ? phr : br_imli
 //               IDX_PHR_ONLY : phr
 //               IDX_IMLI_ONLY: br_imli
@@ -54,6 +55,9 @@ module sc_brimli #(
   parameter  int THIS_CTR_WIDTH  = SC_TBL_CTR[4],
   parameter  int THIS_ENTRIES    = SC_TBL_ENTRIES[4],
   parameter  int NUM_PRED_SLOTS  = bp_defines_pkg::NUM_PRED_SLOTS,
+  // BrIMLI index mode is a compile-time selector (sc_decisions.md
+  // section 12), propagated from sc.sv. Not a runtime port.
+  parameter  br_imli_mode_e BR_IMLI_MODE = IDX_IMLI_PHR,
   // Derived - do not override
   // The SC entry holds the counter only; no tag/USE/EPC/valid.
   // CNTRL_BITS_WIDTH and ALLOC_DATA_WIDTH both equal the counter
@@ -73,7 +77,6 @@ module sc_brimli #(
   input  logic [VA_WIDTH-1:1]         inp_pc_p2[0:NUM_PRED_SLOTS-1],
   input  logic [9:0]                  sc_phr_p2,
   input  logic [9:0]                  br_imli,
-  input  br_imli_mode_e               br_imli_mode,
   // -- update inputs
   input  logic [NUM_PRED_SLOTS-1:0]   sc_upd_val_u0,
   input  logic [THIS_CTR_WIDTH-1:0]   ctr_wd_u0[0:NUM_PRED_SLOTS-1],
@@ -110,7 +113,7 @@ module sc_brimli #(
   //   f_idx = mode-selected IMLI/PHR contribution
   //   index = THIS_INDEX_BITS'(pc ^ f_idx ^ (pc >> 4))
   // Slot 0 and slot 1 are independent (separate pc inputs). br_imli
-  // and br_imli_mode are shared inputs from sc_cntrl.
+  // is a shared input from sc_cntrl; BR_IMLI_MODE is a parameter.
   // ============================================================
   logic [THIS_INDEX_BITS-1:0] idx_hash[0:NUM_PRED_SLOTS-1];
 
@@ -124,7 +127,7 @@ module sc_brimli #(
       // Mode-selected fold. IDX_IMLI_PHR substitutes PHR when the
       // BrIMLI counter is cold (br_imli == 0); IDX_PHR_ONLY forces
       // PHR; IDX_IMLI_ONLY uses the raw counter with no substitution.
-      case (br_imli_mode)
+      case (BR_IMLI_MODE)
         IDX_IMLI_PHR:  f_idx = (br_imli == '0) ? sc_phr_p2 : br_imli;
         IDX_PHR_ONLY:  f_idx = sc_phr_p2;
         IDX_IMLI_ONLY: f_idx = br_imli;
