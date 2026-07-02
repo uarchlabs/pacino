@@ -133,12 +133,12 @@ The reconciliation task will:
     delete them (they are live storage -- see below).
   - Delete the genuinely-dead tage_high_conf logic.
   - For every tage_pred_meta_t field TAGE does not yet generate
-    (tage_pred_medium, tage_provider_ctr, tage_extd_ctr, and
-    tage_pred_weak if re-added): INSTANTIATE AND TIE TO A ZERO
-    CONSTANT, and report each as owed real generation logic.
-    tage_pred_strong is already generated and is kept.
+    (tage_pred_medium, tage_provider_ctr, tage_extd_ctr):
+    INSTANTIATE AND TIE TO A ZERO CONSTANT, and report each as 
+    owed real generation logic.  tage_pred_strong is already generated 
+    and is kept.
 
-Real generation (the strong/medium/weak decode of TD#87 and the
+Real generation (the strong/medium decode of TD#87 and the
 provider_ctr/extd_ctr of TD#88) is NOT implemented in this task. The
 tie-off is only to make tage elaborate/green and drive the outputs to
 a defined value; the real logic is deferred to the TD#87/#88 tasks.
@@ -189,24 +189,13 @@ TB -- tb_tage_manual.sv:
   - Remove the 4 tage_high_conf debug taps (the field is gone).
   - tb_tage.sv and tage_assert*.sv had 0 references (no edit).
 
-OPEN SUB-QUESTION for the task (decide before writing it):
-  tage_pred_weak is COMMENTED OUT of bp_structs_pkg.sv, so tying it to
-  zero requires re-adding the field first (a package edit). sc_cntrl
-  consumes only tage_pred_strong and tage_pred_medium -- NOT weak. So
-  either (i) re-add tage_pred_weak and tie it to zero (package touch,
-  keeps TD#87's field set whole), or (ii) leave tage_pred_weak out of
-  scope until the TD#87 generation task. This determines whether the
-  reconciliation task touches the package. Recommend (ii) -- keep the
-  task tage-RTL-only and no package churn, add tage_pred_weak with its
-  generation in the TD#87 task -- but it is Jeff's call.
-
 Verify (task success = tage GREEN, not waived):
   lint_tage_cntrl, lint_tage, sim_tage, sim_tage_fast, sim_tage_tasks,
   sim_tage_manual all green; full bpu regression shows no NEW breakage;
   SC targets green as a cross-check (must be unaffected). sim_tage_
   manual is not in `all` -- run it explicitly.
 
-Then the real TD#87 (strong/medium/weak generation; SC consumes
+Then the real TD#87 (strong/medium generation; SC consumes
 medium) and TD#88 (provider_ctr/extd_ctr generation; SC consumes
 extd_ctr) remain as their own follow-on tasks -- the tie-off only
 unblocks elaboration.
@@ -280,8 +269,7 @@ At session start Jeff will paste:
   rtl/.../Makefile
   (the BP-080 Phase-1 report, for the line-level fix map)
 
-Start by settling the OPEN SUB-QUESTION (tage_pred_weak: re-add+tie vs
-defer) -- one decision -- then generate the tage reconciliation task
+Start by generating the tage reconciliation task
 (BP-081): retype the two live FIFOs off cond_pred_*, delete dead
 tage_high_conf logic, tie the ungenerated SC-facing fields to zero and
 report them, remove the 4 tb taps, prove the tage suite green. The
