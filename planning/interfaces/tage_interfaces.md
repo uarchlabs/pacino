@@ -85,6 +85,9 @@ output logic [NUM_PRED_SLOTS-1:0] upd_rdy
 input  logic                                  tage_enable_aging
 input  logic             [31:0]               tage_aging_interval
 
+//SC is able to accept tage pred data
+input  logic                                  consumer_ready
+
 input  bp_folded_hist_t   folded_hist
 
 // ram init interface
@@ -313,10 +316,15 @@ upd_rdy               -- asserted when the update queue is not
 CTR is a direction strength counter. It tracks 
 the confidence in the prediction for the provider entry.
 
-tage_pred_strong reflects NOT WEAK on the final provider
-CTR after UAON mux selection. It is not strictly the
-primary provider CTR. See tage_pred_meta_t in
-bp_structs_pkg.sv.
+tage_pred_strong, tage_pred_medium, and tage_pred_weak are a
+one-hot decode of the final provider CTR (post-UAON-mux
+selection), per TD#87 (BP-081, session-060):
+  tage_pred_strong = 1 when ctr is 3'b000 or 3'b111
+  tage_pred_weak   = 1 when ctr is 3'b011 or 3'b100
+  tage_pred_medium = 1 otherwise (001, 010, 101, 110)
+tage_extd_ctr (TD#88) is a signed extended-range version of
+the same post-mux provider CTR, consumed by SC. See
+tage_pred_meta_t in bp_structs_pkg.sv.
 
 The definitive operation of CTR updates is found in
 tage_cntrl_ctr_update_rules.md.

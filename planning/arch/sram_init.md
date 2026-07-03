@@ -152,11 +152,13 @@ Confirmed consumers
   ittage.sv        -- ITTAGE top (parent module) 
   ittage_table.sv  -- ITTAGE table module
 
+ittage_table.sv  -- ITTAGE table module
+  sc.sv            -- SC top (parent module)
+  sc_table.sv      -- SC table module
+  sc_brimli.sv     -- SC BrIMLI table module (ST4)
 
 Future consumers requiring same treatment at implementation:
 
-  sc.sv            -- SC top (parent module)
-  sc_table.sv      -- SC table module
   ubtb.sv          -- uBTB, design is TBD.
 
 Modules confirmed NOT to instantiate sram_init:
@@ -171,8 +173,9 @@ Modules confirmed NOT to instantiate sram_init:
   tage.sv:          +TAGE_FAST_INIT=1   (same as table)
   ittage_table.sv:  +ITTAGE_FAST_INIT=1 
   ittage.sv:        +ITTAGE_FAST_INIT=1 (same as table)
-  sc.sv:            +TAGE_FAST_INIT=1   uses TAGE fast init
-  sc_table.sv:      +TAGE_FAST_INIT=1   (same as table)
+  sc.sv:            +SC_FAST_INIT=1   uses TAGE fast init
+  sc_table.sv:      +SC_FAST_INIT=1   (same as table)
+  sc_brimli.sv:     +SC_FAST_INIT=1   (same as table)
 
 Note: sram_init.sv has no need to read a plusarg. 
 

@@ -95,15 +95,18 @@ Override chain (conditional branch direction and target):
            TAGE output to proceed (TAGE must be valid before SC can
            finalize). Overrides TAGE direction when combined counter
            magnitude exceeds threshold. s3_redirect fires on override.
-           Threshold: fixed at design time (not CSR-configurable).
+           Threshold: dynamically adapted at runtime (O-GEHL scheme,
+           TC counter), not a fixed design-time value and not CSR-
+           configurable. See sc_decisions.md sections 9-10, G7.
+
 - Tables:
-    ST0: 256 entries, direct mapped, 24b wide, hist=0b
+    ST0: 512 entries, direct mapped, 6b wide, hist=0b
          No folded history (hist=0).
-    ST1: 256 entries, direct mapped, 24b wide, hist=4b
-    ST2: 256 entries, direct mapped, 24b wide, hist=10b
-    ST3: 256 entries, direct mapped, 24b wide, hist=16b
-    ST4: 1024 entries, direct mapped, 6b wide,  hist=none
-         No folded history.
+    ST1: 512 entries, direct mapped, 6b wide, hist=4b
+    ST2: 512 entries, direct mapped, 6b wide, hist=16b
+    ST3: 512 entries, direct mapped, 6b wide, hist=64b
+    ST4: 1024 entries, direct mapped, 6b wide, hist=none
+         No folded history (BrIMLI index, not a hashed fold).
 
 ### ITTAGE (Indirect Target TAGE)
 - Stage:   s3 output (s0 index, s1 SRAM read, s2 raw prediction, s3 final)
@@ -310,10 +313,9 @@ One set of three folds per ITTAGE table (IT1-IT4):
   IT5 is BrIMLI -- no folded history.
 
 One index fold per SC table with history (ST1-ST3):
-  sc_t1_idx_fh  -- width = SC_T1_HIST = 4b
-  sc_t2_idx_fh  -- width = SC_T2_HIST = 10b
-  sc_t3_idx_fh  -- width = SC_T3_HIST = 16b
-  ST0 (hist=0) and ST4 (IMLI) have no folded history.
+  sc_t1_idx_fh  -- width = SC_TBL_HIST[1] = 4b
+  sc_t2_idx_fh  -- width = SC_TBL_HIST[2] = 16b
+  sc_t3_idx_fh  -- width = SC_TBL_HIST[3] = 64b
 
 Incremental fold update rule for fold of width W, history H:
   bit_out  = ghr_mem[(ghist_ptr + H) % GHR_WIDTH]
@@ -398,18 +400,27 @@ implementation. Current known fields:
   tage_alloc_comp  : TBL_SEL_WIDTH -- allocation target component
   tage_alloc_idx   : MAX_AWIDTH    -- allocation target index
   tage_alloc_tag   : MAX_DWIDTH    -- allocation target tag
-  tage_pred_strong : 1b            -- provider ctr was strongly T/NT
+  tage_pred_strong : 1b            -- post-mux provider ctr in
+                                       {000,111}          (TD#87)
+  tage_pred_medium : 1b            -- post-mux provider ctr in
+                                       {001,010,101,110}  (TD#87)
   tage_use_alt_on_na : 1b          -- USE_ALT_ON_NA modified prediction
   tage_using_primary : 1b          -- primary component supplied pred
-  tage_high_conf   : 1b            -- provider ctr was 11 or 00
+  tage_extd_ctr    : signed, extended-range post-mux provider ctr,
+                                       consumed by SC sum (TD#88)
   tage_pred_tkn    : 1b            -- TAGE prediction (used by SC upd)
+
+  Note: tage_high_conf removed (TD#95, BP-081, session-060).
 
   -- SC meta
   sc_pred_tkn      : 1b                -- SC final direction
   sc_override      : 1b                -- SC overrode TAGE
-  sc_upd_idx[0:3]  : SC_TBL_INDEX_BITS -- ST0-ST3 update indices
-  sc_upd_idx[4]    : SC_IMLI_INDEX_BITS -- ST4 (IMLI) update index
-  sc_upd_ctr[0:4]  : SC_TBL_DATA_BITS  -- counter snapshots ST0-ST4
+  sc_upd_idx[0:4]  : uniform 5-entry array, SC_MAX_IDX_WIDTH wide
+                      -- ST0-ST4 update indices (ST4/BrIMLI folded
+                      in; sc_imli_idx split retired session-056)
+  sc_upd_ctr[0:4]  : uniform 5-entry array, SC_MAX_CTR_WIDTH wide
+                      -- counter snapshots ST0-ST4
+
 
   -- Loop predictor meta
   lp_hit           : 1b                    -- table hit at predict time
@@ -452,12 +463,14 @@ Parameter values derived in bp_defines_pkg.sv:
   SC_NUM_ALL_TBLS    = 5                  (ST0-ST4 including IMLI)
   FTQ_CONF_BITS      = 4                  (confidence placeholder)
 
-SC index array split (BP-001):
-  sc_upd_idx  [SC_NUM_MAIN_TBLS-1:0][SC_TBL_INDEX_BITS-1:0]
-  sc_imli_idx [SC_IMLI_INDEX_BITS-1:0]
-  Separate fields required -- ST0-ST3 and ST4 have different index
-  widths and cannot form a uniform packed array.
-  sc_upd_ctr is uniform 24b per slot; ST4 uses lower 6b only.
+SC index array (superseded session-056; sc_imli_idx split retired):
+  sc_upd_idx [0:SC_NUM_TABLES-1][SC_MAX_IDX_WIDTH-1:0]
+  sc_upd_ctr [0:SC_NUM_TABLES-1][SC_MAX_CTR_WIDTH-1:0]
+  Uniform 5-entry arrays (ST0-ST4). The original BP-001 rationale
+  (ST4 index width differs, cannot form a uniform array) no longer
+  applies -- indices/counters are packed 2D arrays sized to the max
+  width across tables (session-058), zero-extended per table as
+  needed. See sc_decisions.md section 9, bp_structs_pkg.sv.
 
 RAS snapshot bundled as bp_ras_snapshot_t sub-struct within
 bp_ftq_entry_t. Access pattern: entry.ras.tosr, .tosw, .bos.

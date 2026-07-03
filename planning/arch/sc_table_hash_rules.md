@@ -95,7 +95,11 @@ phr        [9:0]  low 10 bits of path history, sc_phr_p2
 br_imli    [9:0]  BrIMLI counter, held in sc_cntrl, presented to
                   sc_brimli as an input (sc_decisions.md sections
                   8, 12).
-mode       br_imli_mode_e, default IDX_IMLI_PHR (bp_structs_pkg.sv).
+mode       br_imli_mode_e, BR_IMLI_MODE compile-time module
+                  parameter on sc_brimli (default IDX_IMLI_PHR),
+                  propagated from sc.sv SC_BR_IMLI_MODE
+                  (sc_decisions.md section 12, BP-079,
+                  session-059). Not a runtime port.
 ```
 
 The pc argument is PC[15:6]. sc_decisions.md section 12 declares the
@@ -133,9 +137,11 @@ IDX_IMLI_ONLY (2'b10) IMLI always; no PHR substitution.
 IDX_IMLI_RSRV (2'b11) not used.
 ```
 
-The mode is a perf-evaluation selector. Source of the mode value
-(CSR, tie, or register) is a bp_cluster decision; sc_brimli takes it
-as an input port (sc_table_interfaces.md).
+The mode is a perf-evaluation selector, fixed at elaboration time via the
+BR_IMLI_MODE parameter (sc_brimli), set from sc.sv's SC_BR_IMLI_MODE parameter.
+bp_cluster sets SC_BR_IMLI_MODE at the sc.sv instantiation for a non-default
+perf build (sc_decisions.md section 12, BP-079). Not a runtime input; see
+sc_table_interfaces.md.
 
 ---
 ## Update-path index

@@ -229,7 +229,6 @@ input  logic [NUM_PRED_SLOTS-1:0]   sc_pred_val_p2
 input  logic [VA_WIDTH-1:1]         inp_pc_p2[0:NUM_PRED_SLOTS-1]
 input  logic [9:0]                  sc_phr_p2
 input  logic [9:0]                  br_imli
-input  br_imli_mode_e               br_imli_mode
 ```
 
 #### sc_brimli update ports
@@ -322,9 +321,6 @@ br_imli            the BrIMLI counter. Held in sc_cntrl
                    (sc_decisions.md sections 8, 12), presented to
                    sc_brimli as an input. get_br_imli_idx IMLI
                    input.
-br_imli_mode       BrIMLI index mode selector (br_imli_mode_e).
-                   Selects IMLI/PHR/IMLI-only index behavior for
-                   perf evaluation (sc_decisions.md section 12).
 ctr_p3[s]          the signed counter read from the entry. Raw
                    SC_TBL_CTR-wide value.
 idx_hash_p2[s]     the index computed at p2 via get_br_imli_idx.
@@ -333,10 +329,10 @@ idx_hash_p2[s]     the index computed at p2 via get_br_imli_idx.
                    Rules in sc_table_hash_rules.md.
 ```
 
-The two module types have disjoint prediction-index input sets.
-sc_table takes idx_fh_p2 and does not take sc_phr_p2, br_imli, or
-br_imli_mode. sc_brimli takes sc_phr_p2, br_imli, and br_imli_mode
-and does not take a fold.
+The two module types have disjoint prediction-index input sets.  sc_table takes
+idx_fh_p2 and does not take sc_phr_p2, br_imli, or br_imli_mode. sc_brimli
+takes sc_phr_p2 and br_imli as ports (BR_IMLI_MODE is a compile-time parameter,
+not a port) and does not take a fold.
 
 ---
 ## Update Interface

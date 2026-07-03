@@ -694,6 +694,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | coverage-accounting artifact. Review the cov report; add   |
 |    |       | directed coverage if the new logic is under-covered, or    |
 |    |       | correct the accounting. Gate the ">90%" claim on this.     |
+|101 | tage  | tage logic now initializes T0 to 00 (strongly not taken)   \
+|    |       | this is not intended, T0 entries should be initialized as  |
+|    |       | weakly taken. This impacts how TAGE_SRAM_INIT_VALUE is used|
+|    |       | with sram_init. Init value should be b10 (2) weakly taken. |
+
 
 ---
 

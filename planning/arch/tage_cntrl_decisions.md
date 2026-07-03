@@ -52,7 +52,7 @@ Provider selection, alternate provider selection, UAON mux, and
 tage_pred_meta population are replicated per slot. Slot 1 PC is
 supplied by the fetch unit via tage_pred_inp_p0[1].pc. No offset
 derivation is performed in tage_cntrl. tage_cntrl consumes
-tage_pred_inp_p0[slot].pc[11:1] as the T0 RAM index for each slot
+tage_pred_inp_p0[slot].pc[12:2] as the T0 RAM index for each slot
 directly.
 
 ---
@@ -63,8 +63,7 @@ T0 is the base table. It has no valid bit, no tag, no useful bit.
 tage_cntrl treats T0 output as always-hit. T0 taken_p1 is
 unconditionally valid as the fallback direction.
 
-T0 uses a 2b saturating counter. Weak states are 01 and 10.
-T0 initializes to 10 (weakest taken).
+T0 uses a 2b saturating counter. Weak states are 01 and 10. T0 initializes to 00 (strongly not taken), per TAGE_SRAM_INIT_VALUE=0 in bp_defines_pkg.sv.
 
 T0 is never the alternate provider -- it is always the fallback.
 use_alt_on_na does not apply when T0 is the provider.
@@ -183,10 +182,12 @@ Captures into meta:
 
 ### Decoration flags (p1, combinational)
 
-  tage_pred_strong;   -- provider ctr was !=3 and !=4
+  tage_pred_strong;   -- post-mux provider ctr in {3'b000, 3'b111}
+  tage_pred_medium;   -- post-mux provider ctr in {001,010,101,110}
+  tage_pred_weak;     -- post-mux provider ctr in {3'b011, 3'b100}
+  tage_extd_ctr;      -- signed extended-range provider ctr, SC sum
   tage_use_alt_on_na; -- use_alt_on_na was used to select provider
   tage_using_primary; -- provider was primary component, else alternative
-  tage_high_conf;     -- provider was 3'b111 or 3'b000
   branch_id           -- copied from tage_pred_inp_t
 
 ### Final direction (p1, combinational)
@@ -214,6 +215,7 @@ pred_diff is recomputed at update from tage_prm_tkn and
 tage_alt_tkn stored in meta.
 
 Summary:
+```
 - prm_comp > 0 and alt_comp > 0: both providers are tagged
   tables. CTR actions per rows 1-12.
 - prm_comp == 0 and alt_comp == 0: both are T0. T0 CTR
@@ -221,9 +223,10 @@ Summary:
 - prm_comp > 0 and alt_comp == 0: primary is tagged, alt
   is T0. Only primary CTR updated per rows 14-17.
   T0 not updated in these cases.
-- prm_comp == 0 and alt_comp > 0: primary is T0, alt is
-  tagged. Only alt CTR updated per rows 18-21.
-  T0 not updated in these cases.
+- prm_comp == 0 and alt_comp > 0: architecturally impossible
+  (T0 as primary is the unconditional fallback; row 18 in
+  tage_cntrl_ctr_update_rules.md is an ASSERT/invalid case,
+  not a live update path). T0 not updated.
 
 ---
 

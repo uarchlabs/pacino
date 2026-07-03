@@ -23,10 +23,12 @@ testbench.
   parameters (THIS_TABLE, THIS_INDEX_BITS, THIS_CTR_WIDTH,
   THIS_ENTRIES, THIS_FH) at instantiation from the SC_TBL_* arrays
   in bp_defines_pkg.sv.
-- ST0-ST3 share one RTL module. A parameterized tb instance covers
-  any of the four. Default instance: ST1 (hashed index, non-zero
-  fold). ST0 (unhashed, fold tied zero) covered by a separate
-  instance or a parameter override.
+- ST0-ST3 share one RTL module; the tb parameterization supports
+  targeting any of the four. tb_sc_table.sv instantiates only ST1
+  (hashed index, non-zero fold; P_THIS_TABLE=1). ST0 (unhashed,
+  fold tied zero) is NOT currently instantiated -- no ST0 instance
+  or parameter-override run exists. Coverage gap: ST0's zero-fold
+  path is untested at the unit level.
 - tbl_ri_* are DUT input ports. The unit tb drives them directly.
   There is no sram_init instance and no sc_ready at this level;
   those live in sc.sv.

@@ -316,7 +316,11 @@ prediction rate is gated by TAGE's.
 SC has a separate update queue, entry type sc_upd_inp_t. TAGE and SC
 UQs are separate. A single conditional-branch commit enqueues one
 TAGE UQ entry and one SC UQ entry; each entry covers both slots
-(bp_arb_spec.md section 6.2).
+(bp_arb_spec.md section 6.2). This is the target arbitration model.
+At the unit level (sc.sv, as shipped) the UQ/credit arbiter is not
+yet implemented: sc_uq_not_full is tied to 1'b1 and sc_upd_rdy is
+tied to all-ones. The real arbiter is deferred to bp_cluster
+integration (TD#73, TD#94).
 
 When the SC arbiter grants an update and stalls a prediction, the
 TAGE response buffer head is held, backpressuring TAGE
