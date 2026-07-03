@@ -54,7 +54,8 @@ TAG    : `IT_TBL_TAG[t]`
 
 ### TAG field construction
 
-The TAG width is specified by `IT_TBL_TGT_WIDTH`. This is extracted
+### TAG field construction
+The TAG width is specified by `IT_TBL_TAG[t]`. This is extracted
 from the virtual address beginning with bit 1. Bit 0 is not used
 and not stored.
 

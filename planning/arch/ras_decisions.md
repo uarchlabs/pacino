@@ -446,8 +446,8 @@ bp_ras_snapshot_t uses RAS_PTR_BITS for tosr, tosw, bos.
 Total snapshot width = 3 * RAS_PTR_BITS = 12b per FTQ entry.
 
 Commit stack pointer width:
-  RAS_COMMIT_PTR_WIDTH = $clog2(RAS_COMMIT_ENTRIES) = 5b
-  (local use only; not yet in bp_defines_pkg.sv)
+  RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES) = 5b
+  Already present in bp_defines_pkg.sv.
 
 ---
 
@@ -484,11 +484,10 @@ Commit stack pointer width:
                           row: p0 is TOS read only; push/pop
                           and redirect participation is at p2.
 
-  bp_defines_pkg.sv    -- RAS_PTR_BITS already present.
-                          RAS_SPEC_ENTRIES, RAS_COMMIT_ENTRIES,
-                          RAS_RCTR_WIDTH, RAS_ADDR_WIDTH,
-                          RAS_COMMIT_PTR_WIDTH to be added at
-                          RTL task time.
+  bp_defines_pkg.sv    -- RAS_PTR_BITS, RAS_SPEC_ENTRIES,
+                          RAS_COMMIT_ENTRIES, RAS_RCTR_WIDTH,
+                          RAS_ADDR_WIDTH, RAS_COMMIT_PTR_BITS
+                          all present.
 
   bp_structs_pkg.sv    -- bp_ras_snapshot_t confirmed present
                           with tosr/tosw/bos fields at

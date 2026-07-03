@@ -120,8 +120,7 @@ Override chain (conditional branch direction and target):
     IT2: 2 banks x 256 entries, FH=8b,  FH1=8b,  FH2=8b,  hist=8b
     IT3: 2 banks x 512 entries, FH=9b,  FH1=9b,  FH2=8b,  hist=13b
     IT4: 2 banks x 512 entries, FH=9b,  FH1=9b,  FH2=8b,  hist=16b
-    IT5: 2 banks x 512 entries, FH=none, FH1=none, FH2=none, hist=none
-         BrIMLI table. No folded history.
+    IT5: 2 banks x 512 entries, FH=9b, FH1=9b, FH2=8b, hist=32b
 
 ### RAS (Return Address Stack)
 Dual-stack, static partition. 16 speculative + 32 commit entries.
@@ -306,11 +305,10 @@ One set of three folds per tagged TAGE table (T1-T4):
   tage_t<N>_tag_fh1 -- tag fold 1, width = FH1 for T<N>
   tage_t<N>_tag_fh2 -- tag fold 2, width = FH2 for T<N>
 
-One set of three folds per ITTAGE table (IT1-IT4):
+One set of three folds per ITTAGE table (IT1-IT5):
   it_t<N>_idx_fh    -- index fold, width = FH for IT<N>
   it_t<N>_tag_fh1   -- tag fold 1, width = FH1 for IT<N>
   it_t<N>_tag_fh2   -- tag fold 2, width = FH2 for IT<N>
-  IT5 is BrIMLI -- no folded history.
 
 One index fold per SC table with history (ST1-ST3):
   sc_t1_idx_fh  -- width = SC_TBL_HIST[1] = 4b

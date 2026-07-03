@@ -32,11 +32,12 @@ target RAMs exclusively. Slot 0 and slot 1 may perform any combination of read, 
 ITTAGE is comprised only tagged components, also know as tables. There
 are no untagged components in ITTAGE.
 
-Upto 2 components can be updated in a single update cycle, in
-the literature these are called the primary and alternative
-components. This means there can be 4 total writes during an update.
-This is true only for the ctr field. Only the ctr field can
-be updated in two components.
+Up to 2 components (primary and alternative) may supply CTR-field
+provenance during an update, but only one CTR write actually
+occurs per slot: prm_ctr_wr_u0 and alt_ctr_wr_u0 are mutually
+exclusive, never both asserted in the same cycle for the same
+slot. Unlike TAGE, ITTAGE never writes both provider CTRs in the
+same update.
 
 ---
 ## Table description
@@ -245,7 +246,9 @@ input  [NUM_PRED_SLOTS-1:0]      prm_ctr_wr_u0
 input  [NUM_PRED_SLOTS-1:0]      alt_ctr_wr_u0
 input  [NUM_PRED_SLOTS-1:0]      use_wr_u0
 input  [NUM_PRED_SLOTS-1:0]      epc_wr_u0
-input  [NUM_PRED_SLOTS-1:0]      tgt_wr_u0
+input  [NUM_PRED_SLOTS-1:0]      prm_tgt_wr_u0
+input  [NUM_PRED_SLOTS-1:0]      alt_tgt_wr_u0
+
 input  [NUM_PRED_SLOTS-1:0]      alc_wr_u0
 input  [TBL_SEL_WIDTH-1:0]       prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1]
 input  [TBL_SEL_WIDTH-1:0]       alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1]
@@ -259,11 +262,12 @@ never both asserted in the same cycle for the same slot. Both are
 real write paths -- the distinction from TAGE is that TAGE may
 assert both simultaneously; ITTAGE never does.
 
-tgt_wr_u0 is asserted only on misprediction AND provider CTR was
-null at predict time. It is gated by THIS_TABLE vs prm_tbl_sel_u0
-or alt_tbl_sel_u0 depending on ittage_using_primary. See
-ittage_interfaces.md §Target Write Gating for full gating
-conditions and mutual exclusion with CTR writes.
+prm_tgt_wr_u0 / alt_tgt_wr_u0 are asserted only on misprediction
+AND provider CTR was null at predict time. The active strobe is
+selected by ittage_using_primary: prm_tgt_wr_u0 gated by
+THIS_TABLE vs prm_tbl_sel_u0, alt_tgt_wr_u0 gated by THIS_TABLE
+vs alt_tbl_sel_u0. See ittage_interfaces.md §Target Write Gating
+for full gating conditions and mutual exclusion with CTR writes.
 
 ### Misc Ports
 
@@ -389,9 +393,15 @@ use_wr_u0[s]           write enable for USE field. Gated by
 epc_wr_u0[s]           write enable for EPC field. Gated by
                        THIS_TABLE vs prm_tbl_sel_u0.
 
-tgt_wr_u0[s]           write enable for target field. Asserted
-                       only on misprediction when provider CTR
-                       was null at predict time.
+prm_tgt_wr_u0[s]       write enable for target field via the
+                       primary provider. Asserted only on
+                       misprediction when provider CTR was null
+                       at predict time and ittage_using_primary=1.
+
+alt_tgt_wr_u0[s]       write enable for target field via the
+                       alternate provider. Asserted only on
+                       misprediction when provider CTR was null
+                       at predict time and ittage_using_primary=0.
 
 alc_wr_u0[s]           write enable for allocation. Gated by
                        THIS_TABLE vs alc_tbl_sel_u0.

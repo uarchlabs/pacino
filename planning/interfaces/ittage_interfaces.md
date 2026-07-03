@@ -27,10 +27,13 @@ When no IT1-IT5 entry matches, ittage_hit is de-asserted in the
 response and the consumer falls through to the FTB target.
 
 Branch type partitioning is resolved upstream by the decoder and
-carried in the FTB entry. ITTAGE operates exclusively on indirect
-branches that are neither CALL nor RETURN. RAS handles CALL and
-RETURN. No dynamic arbitration between ITTAGE and RAS is required
-at p2.
+carried in the FTB entry. ITTAGE operates on indirect branches
+that are not RETURN, including indirect CALL with a history-
+dependent target. RAS handles RETURN only. RAS also tracks CALL
+for its own speculative-stack push (return-address bookkeeping);
+this is unrelated to target prediction. FTB provides the target
+for indirect CALL with a fixed stable target. No dynamic
+arbitration between ITTAGE and RAS is required at p2.
 
 Alternate provider and USE_ALT_ON_NA (UAON) are implemented,
 following the same principles as TAGE. IT_UAON_WIDTH=4,
@@ -261,8 +264,10 @@ Note: VIRT_ittage_pred_tgt is a virtual signal described above.
   ITTAGE overrides FTB target.
 - Must assert s2_redirect when ittage_hit is asserted and
   VIRT_ittage_pred_tgt disagrees with FTB target.
-- Must gate ITTAGE prediction on indirect branch type only.
-  CALL and RETURN are handled by RAS exclusively.
+- Must gate ITTAGE prediction on indirect branch type, excluding
+  RETURN. Indirect CALL is in scope for both ITTAGE and RAS. ITTAGE
+  predicts the target, RAS pushes the return address.
+  RETURN is handled by RAS exclusively.
 
 ### ITTAGE Simulation Support
 - ITTAGE_FAST_INIT: runtime plusarg (+ITTAGE_FAST_INIT=1).
@@ -276,7 +281,8 @@ Note: VIRT_ittage_pred_tgt is a virtual signal described above.
   ittage_rdy follows tbl_ri_rdy from sram_init.
   Simulation-only mechanism. No synthesis impact.
   bw_ram.sv is not modified.
-- ITTAGE_SRAM_INIT_VALUE: localparam int in
+
+- IT_SRAM_INIT_VALUE: localparam int in
   bp_defines_pkg.sv, default 0. Used by sram_init
   (.INIT_VAL) and ittage_table initial blocks.
 

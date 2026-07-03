@@ -38,7 +38,7 @@ and is stale on several ports.
 
 bp_history owns all branch history state for the BP cluster: the
 GHR (256b), the PHR (32b), and every folded history consumed by
-TAGE (T1-T4), ITTAGE (IT1-IT4), and SC (ST1-ST3). It is owned by
+TAGE (T1-T4), ITTAGE (IT1-IT5), and SC (ST1-ST3). It is owned by
 the BP cluster, not by rename or dispatch. It contains no SRAM;
 all state is registered flops.
 
@@ -498,9 +498,10 @@ the fold functions (section 6). They are not restated here;
 bp_history.sv reads them from the package.
 
 The folded output is bp_folded_hist_t (bp_structs_pkg.sv): one
-idx + two tag folds per TAGE T1-T4 and ITTAGE IT1-IT4, one idx
-fold per SC ST1-ST3. ST0 (hist=0), ST4 (IMLI), and ITTAGE IT5
-(BrIMLI) have no folds.
+idx + two tag folds per TAGE T1-T4 and ITTAGE IT1-IT5, one idx
+fold per SC ST1-ST3. SC ST0 (hist=0) and SC ST4 (BrIMLI index,
+not a hashed fold) have no folds.
+
 
 ---
 

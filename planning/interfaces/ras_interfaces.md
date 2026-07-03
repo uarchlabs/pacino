@@ -115,6 +115,9 @@ module ras (
   // Pushed as ret_addr on call. RAS does not compute PC+2/+4.
   input  logic [VA_WIDTH-1:0] ras_fall_through_p2[0:NUM_PRED_SLOTS-1],
 
+  // Branch PC per slot. Declared in ras.sv, not read. See TD #101.
+  input  logic [VA_WIDTH-1:0] ras_pc_p2 [0:NUM_PRED_SLOTS-1],
+
   // ----------------------------------------------------------
   // p2/s2: Prediction outputs
   // ----------------------------------------------------------

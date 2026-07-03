@@ -358,10 +358,16 @@ state.  The update is granted in a subsequent cycle.
                ITTAGE_UQ_WR_PORTS=2, ITTAGE_RESP_BUF_DEPTH=2,
                ITTAGE_PRED_CREDITS=2, ITTAGE_UPD_CREDITS=1,
                ITTAGE_STARVE_THRESH=2.
+  Note: ITTAGE_RESP_BUF_DEPTH is vestigial -- the response buffer
+  was removed (BP-038b, ittage.sv). ITTAGE has no independent
+  prediction response FIFO at the unit level.
   Pred input:  ittage_pred_inp_t
   Upd input:   ittage_upd_inp_t
   Pred output: ittage_pred_meta_t
-  Override:    p2.  ittage_redir_val_p2.  Indirect chain only.
+  Override:    p2. No dedicated redirect port on ittage.sv; the
+  consumer (bp_cluster) derives the redirect by comparing
+  ittage_pred_meta_p2 against the FTQ-held prediction, per section
+  3.4. Indirect chain only.
 
 ### 5.5  SC
 

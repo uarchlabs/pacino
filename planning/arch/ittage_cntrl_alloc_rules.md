@@ -71,9 +71,10 @@ VALID  = 1'b1
 ---
 ## Allocation Write Data Assembly
 The allocation write data is constructed per the entry layout
-in ittage_table_interfaces.md. TAG bits are the MSBs:
-  [TAG, EPC, USE, CTR, TGT, VALID]
+in ittage_table_entry_formats.md. TAG bits are the MSBs:
+  [TAG, TGT, EPC, USE, CTR, VALID]
 This maps directly to alc_wd_u0[IT_ALLOC_DATA_WIDTH-1:0].
+
 ---
 ## Write Strobe Generation
 alc_wr_u0[slot] is asserted at update time when:

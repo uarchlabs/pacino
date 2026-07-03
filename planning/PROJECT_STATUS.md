@@ -685,20 +685,29 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | targets. CLAUDE.md already mandates every target run, but   |
 |    |       | no single command enforces it. The CI process must run the  |
 |    |       | complete target set, not `make all`.                        |
-|100 | tage  | tage line coverage below the previously-stated >90%.       |
-|    |       | Session-060 BP-081 measured cov_tage 73.7% (6242/8468),    |
-|    |       | cov_tage_table 79.5% (399/502). The TAGE decomposition     |
-|    |       | section previously asserted ">90%"; that figure is stale   |
-|    |       | vs this run. UNRESOLVED whether the drop is genuine under- |
-|    |       | coverage of the new TD#87/#88 decode+extd_ctr logic or a   |
-|    |       | coverage-accounting artifact. Review the cov report; add   |
-|    |       | directed coverage if the new logic is under-covered, or    |
-|    |       | correct the accounting. Gate the ">90%" claim on this.     |
-|101 | tage  | tage logic now initializes T0 to 00 (strongly not taken)   \
-|    |       | this is not intended, T0 entries should be initialized as  |
-|    |       | weakly taken. This impacts how TAGE_SRAM_INIT_VALUE is used|
-|    |       | with sram_init. Init value should be b10 (2) weakly taken. |
-
+| 100 | tage  | tage line coverage below the previously-stated >90%.       |
+|     |       | Session-060 BP-081 measured cov_tage 73.7% (6242/8468),    |
+|     |       | cov_tage_table 79.5% (399/502). The TAGE decomposition     |
+|     |       | section previously asserted ">90%"; that figure is stale   |
+|     |       | vs this run. UNRESOLVED whether the drop is genuine under- |
+|     |       | coverage of the new TD#87/#88 decode+extd_ctr logic or a   |
+|     |       | coverage-accounting artifact. Review the cov report; add   |
+|     |       | directed coverage if the new logic is under-covered, or    |
+|     |       | correct the accounting. Gate the ">90%" claim on this.     |
+| 101 | ras.sv | declares input ras_pc_p2, unread in the module.       |
+|     |        | Undocumented in ras_interfaces.md prior to this fix. Confirm |
+|     |        | at RAS cleanup whether needed; if not, remove from ras.sv    |
+|     |        | and tb_ras.sv.                                               |
+| 102 | bp_history.sv | does not generate IT5 folds. ittage.sv wires  |
+|     |       | it_t5_idx_fh/tag_fh1/tag_fh2 to bp_history.sv outputs that   |
+|     |       | are never driven -- permanently 0. IT5 has real history      |
+|     |       | (IT_TBL_HIST[5]=32, IT_TBL_FH[5]=9, FH1[5]=9, FH2[5]=8, per  |
+|     |       | bp_defines_pkg.sv). Add IT5 fold generation to bp_history.sv |
+|     |       | (same pattern as IT1-IT4).                                    |
+| 103 | tage  | tage logic now initializes T0 to 00 (strongly not taken)   \
+|     |       | this is not intended, T0 entries should be initialized as  |
+|     |       | weakly taken. This impacts how TAGE_SRAM_INIT_VALUE is used|
+|     |       | with sram_init. Init value should be b10 (2) weakly taken. |
 
 ---
 
