@@ -5,7 +5,7 @@
 ```
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-06-26
  CONTACT: Jeff Nye
 ```

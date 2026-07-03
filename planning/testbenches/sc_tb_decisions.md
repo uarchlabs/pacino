@@ -5,7 +5,7 @@
 ```
  FILE:    sc_tb_decisions.md
  SOURCE:  session-058
- STATUS:  DRAFT
+ STATUS:  COMPLETE
  UPDATED: 2026-07-01
  CONTACT: Jeff Nye
 ```

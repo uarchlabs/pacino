@@ -5,7 +5,7 @@
 ```
  FILE:    tage_cntrl_decisions.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  COMPLETE
  UPDATED: 2026-04-05
  CONTACT: Jeff Nye
 ```

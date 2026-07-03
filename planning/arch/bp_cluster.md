@@ -6,7 +6,7 @@
 ```
  FILE:    bp_cluster.md
  SOURCE:  various
- STATUS:  UPDATED
+ STATUS:  STABLE (rev 1.0)
  UPDATED: 2026-06-23
  CONTACT: Jeff Nye
 ```

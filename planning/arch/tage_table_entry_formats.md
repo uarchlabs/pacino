@@ -5,8 +5,8 @@
 # TAGE table entry formats
 ```
  FILE:    tage_table_entry_formats.md
- SOURCE:  
- STATUS:  COMPLETE
+ SOURCE:  various
+ STATUS:  LOCKED
  UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```

@@ -5,7 +5,7 @@
 ```
  FILE:    planning/arch/sram_init.md
  SOURCE:  session-043
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-05-19
  CONTACT: Jeff Nye
 ```

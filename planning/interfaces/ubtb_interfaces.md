@@ -5,7 +5,7 @@
 ```
  FILE:    ubtb_interfaces.md
  SOURCE:  various
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-03-28
  CONTACT: Jeff Nye
 ```

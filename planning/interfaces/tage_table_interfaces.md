@@ -5,7 +5,7 @@
 ```
  FILE:    tage_table_interfaces.md
  SOURCE:  various
- STATUS:  COMPLETE
+ STATUS:  LOCKED
  UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```

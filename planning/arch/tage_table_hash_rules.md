@@ -5,7 +5,7 @@
 ```
  FILE:    tage_table_hash_rules.md 
  SOURCE:  various
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-04-06
  CONTACT: Jeff Nye
 ```

@@ -5,7 +5,7 @@
 ```
  FILE:    tage_cntrl_ctr_update_rules.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  LOCKED
  UPDATED: 2026-04-04
  CONTACT: Jeff Nye
 ```

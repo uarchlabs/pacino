@@ -5,7 +5,7 @@
 ```
  FILE:    bp_history_interfaces.md
  SOURCE:  various
- STATUS:  DRAFT, target state (session-054)
+ STATUS:  LOCKED
  UPDATED: 2026-06-25
  CONTACT: Jeff Nye
 ```

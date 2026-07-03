@@ -5,7 +5,7 @@
 ```
  FILE:    bp_arb_spec.md
  SOURCE:  various
- STATUS:  Draft -- session-057
+ STATUS:  STABLE (rev 1.0)
  UPDATED: 2026-06-28
  CONTACT: Jeff Nye
 ```

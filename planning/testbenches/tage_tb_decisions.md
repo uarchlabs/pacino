@@ -5,7 +5,7 @@
 ```
  FILE:    tage_tb_decisions.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  COMPLETE
  UPDATED: 2026-04-07
  CONTACT: Jeff Nye
 ```

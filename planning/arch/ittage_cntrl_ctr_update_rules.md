@@ -5,7 +5,7 @@
 ```
  FILE:    ittage_cntrl_ctr_update_rules.md
  SOURCE:  various
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-06-03
  CONTACT: Jeff Nye
 ```

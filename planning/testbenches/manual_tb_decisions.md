@@ -5,7 +5,7 @@
 ```
  FILE:    planning/manual_tb_decisions.md
  SOURCE:  manual edit
- STATUS:  DRAFT
+ STATUS:  COMPLETE
  UPDATED: 2026-05-20
  CONTACT: Jeff Nye
 ```

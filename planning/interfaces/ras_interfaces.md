@@ -5,7 +5,7 @@
 ```
  FILE:    ras_interfaces.md
  SOURCE:  session-050
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-06-23
  CONTACT: Jeff Nye
 ```

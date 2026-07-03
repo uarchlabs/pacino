@@ -5,7 +5,7 @@
 ```
  FILE:    sc_interfaces.md
  SOURCE:  various
- STATUS:  Draft -- session-058
+ STATUS:  LOCKED
  UPDATED: 2026-06-30
  CONTACT: Jeff Nye
 ```

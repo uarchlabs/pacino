@@ -5,7 +5,7 @@
 ```
  FILE:    planning/arch/ftb_confidence_override_rules.md
  SOURCE:  session-051/052/053
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-06-25
  CONTACT: Jeff Nye
 ```

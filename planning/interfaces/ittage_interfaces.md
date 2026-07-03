@@ -5,7 +5,7 @@
 ```
  FILE:    ittage_interfaces.md
  SOURCE:  various
- STATUS:  DRAFT, modified by hand
+ STATUS:  LOCKED
  UPDATED: 2026-05-16
  CONTACT: Jeff Nye
 ```

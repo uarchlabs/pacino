@@ -5,7 +5,7 @@
 ```
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
- STATUS:  DRAFT
+ STATUS:  LOCKED
  UPDATED: 2026-06-25
  CONTACT: Jeff Nye
 ```

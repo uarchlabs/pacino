@@ -5,7 +5,7 @@
 ```
  FILE:    tage_interfaces.md
  SOURCE:  various
- STATUS:  NEEDS RE-VERIFICATION
+ STATUS:  LOCKED
  UPDATED: 2026-04-27
  CONTACT: Jeff Nye
 ```

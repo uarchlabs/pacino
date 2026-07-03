@@ -5,8 +5,7 @@
 ```
  FILE:    tage_tmp_uaon_update_rules.md
  SOURCE:  various
- STATUS:  DRAFT (proposed TD#87 reconciliation of
-          tage_cntrl_uaon_update_rules.md)
+ STATUS:  LOCKED
  UPDATED: 2026-07-02
  CONTACT: Jeff Nye
 ```

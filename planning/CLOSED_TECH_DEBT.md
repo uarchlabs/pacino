@@ -303,6 +303,44 @@
 |    | | Secondly the names of the ports of ittage_cntrl that touch the tables |
 |    | | should use the same convention as tage_cntrl, and begin with t_      |
 
+---
+
+# HAND-FIX Records
+
+- HAND-FIX-001 applied to tage_table.sv:
+    - Signals use_we_s0/s1 and epc_we_s0/s1 now gate on
+      prm_alt_match (prm_match | alt_match) instead of
+      prm_match alone. prm_alt_match_s0 and
+      prm_alt_match_s1 signals added.
+    - Debt #29 added and immediately closed.
+    - Applied after BP-010c.
+    - Recorded in session-handoff-023.
+
+- HAND-FIX-002 applied to tage_cntrl.sv:
+    - Signal tage_use_alt_on_na now set only when
+      uaon_trig AND counter MSB both set:
+      meta_p1[s].tage_use_alt_on_na =
+        uaon_trig_p1[s] & uaon[s][3];
+    - Debt #30 added and immediately closed.
+    - Applied after BP-010c.
+    - Recorded in session-handoff-023.
+
+- HAND-FIX-003 applied to tage_cntrl.sv:
+    - T0 CTR update condition corrected in
+      ctr_upd_comb u_both_t0 path.
+      u_resolved replaced with !u_mispredict.
+      BIM prediction correctness
+      (pred_tkn == resolved_taken) is the correct
+      INC/DEC gate, not branch outcome alone.
+    - Citeable: tage_cntrl_ctr_update_rules.md
+      rows 13a-d.
+    - Applied as part of BP-041.
+    - Recorded in session-handoff-045.
+
+  NOTE: HAND-FIX-003 was later reverted in BP-043a. The fix
+  was a false fail caused by an error in the planning document
+  for T0 CTR update
+
 
 # BUG Records
 
