@@ -190,23 +190,24 @@ package bp_structs_pkg;
     // Prediction flags
     logic                          tage_prm_tkn;    // primary T/NT
     logic                          tage_alt_tkn;    // alt T/NT
-    // Prediction decision flags
-    logic                          tage_pred_strong;   // ctr strongly T/NT
-                                   //With a 3b CTR strong is inverted to 
-                                   //indicate NOT WEAK, CTR != 3 or 4
+    // Prediction confidence decode on the provider (post-mux) CTR.
+    // TD#87 one-hot decode by 3b CTR:
+    //   000 strong / 001 medium / 010 medium / 011 weak /
+    //   100 weak   / 101 medium / 110 medium / 111 strong.
+    logic                          tage_pred_strong;   // ctr 000 or 111
     logic                          tage_use_alt_on_na; // USE_ALT_ON_NA hit
     logic                          tage_using_primary; // primary supplied
 
-//  logic  tage_high_conf;    candidate for removal
-//  logic  tage_pred_weak;    candidate for removal
-    logic  tage_pred_medium;
+    // tage_high_conf removed (TD#95); do not re-add.
+    logic                          tage_pred_weak;     // ctr 011 or 100
+    logic                          tage_pred_medium;   // ctr 001/010/101/110
 
     logic                          tage_pred_tkn;      // TAGE direction
 
     // Derived and convenience signals
 
-//  candidate for removal
-//  logic unsigned [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;
+    // tage_provider_ctr is an internal convenience only (TD#88); it is
+    // not a struct field. Only tage_extd_ctr is exposed to SC.
     logic signed   [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;
 
     // FTQ slot index appended to tage_pred_meta_t fields

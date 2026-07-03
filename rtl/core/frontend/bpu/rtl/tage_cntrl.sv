@@ -154,10 +154,16 @@ module tage_cntrl #(
   logic uaon_trig_p1  [NUM_PRED_SLOTS-1:0];
   logic using_prm_p1  [NUM_PRED_SLOTS-1:0];
 
-  // Final direction and confidence flags (p1, combinational)
+  // Final direction and confidence flags (p1, combinational).
+  // TD#87 one-hot confidence decode on the post-mux (provider) CTR.
   logic pred_tkn_p1   [NUM_PRED_SLOTS-1:0];
   logic pred_strong_p1[NUM_PRED_SLOTS-1:0];
-  logic high_conf_p1  [NUM_PRED_SLOTS-1:0];
+  logic pred_medium_p1[NUM_PRED_SLOTS-1:0];
+  logic pred_weak_p1  [NUM_PRED_SLOTS-1:0];
+
+  // Extended CTR (TD#88), signed, one per slot.
+  logic signed [TAGE_MAX_CTR_WIDTH+1:0]
+    extd_ctr_p1[NUM_PRED_SLOTS-1:0];
 
   // Pre-mux (primary) and post-mux (final) CTR values
   logic [TAGE_MAX_CTR_WIDTH-1:0]
@@ -231,7 +237,7 @@ module tage_cntrl #(
   logic u_prm_tkn    [NUM_PRED_SLOTS-1:0];
   logic u_alt_tkn    [NUM_PRED_SLOTS-1:0];
   logic u_using_prm  [NUM_PRED_SLOTS-1:0];
-  logic u_pred_str   [NUM_PRED_SLOTS-1:0];
+  logic u_pred_weak  [NUM_PRED_SLOTS-1:0];
   logic u_resolved   [NUM_PRED_SLOTS-1:0];
   logic u_mispredict [NUM_PRED_SLOTS-1:0];
 
@@ -337,7 +343,10 @@ module tage_cntrl #(
       // -- UAON saturating counter: 4b, updated at update time (u0).
       // Rules: tage_cntrl_uaon_update_rules.md.
       // Only fires when prm is a tagged table (prm_comp != 0).
-      // pred_strong -> no action.
+      // Adapt only when the prediction was weak (boundary CTR); a
+      // non-weak (strong or medium) prediction takes no action. This
+      // is the reconciled TD#87 form of the prior "not pred_strong"
+      // gate (old strong meant NOT WEAK, so old !strong == weak).
       // prm wrong && alt correct -> INC (saturate at 4'hF).
       // prm correct && alt wrong -> DEC (saturate at 4'h0).
       always_ff @(posedge clk) begin : uaon_upd_ff
@@ -345,7 +354,7 @@ module tage_cntrl #(
           uaon[s] <= 4'h0;
         end else if (tage_upd_val_u0[s] && u_prm_tagged[s]
                      && u_alt_tagged[s]) begin
-          if (!u_pred_str[s]) begin
+          if (u_pred_weak[s]) begin
             if (!u_prm_crt[s] && u_alt_crt[s]) begin
               uaon[s] <= (uaon[s] == 4'hF)
                            ? 4'hF : uaon[s] + 4'h1;
@@ -448,7 +457,9 @@ module tage_cntrl #(
         using_prm_p1[s]    = 1'b1;
         pred_tkn_p1[s]     = 1'b0;
         pred_strong_p1[s]  = 1'b0;
-        high_conf_p1[s]    = 1'b0;
+        pred_medium_p1[s]  = 1'b0;
+        pred_weak_p1[s]    = 1'b0;
+        extd_ctr_p1[s]     = '0;
         pre_mux_ctr_p1[s]  = '0;
         post_mux_ctr_p1[s] = '0;
 
@@ -502,15 +513,27 @@ module tage_cntrl #(
           pred_tkn_p1[s]      = prm_tkn_p1[s];
         end
 
-        // -- Confidence flags on post-mux CTR.
-        // pred_strong: NOT WEAK -- CTR not in {011, 100}.
-        // high_conf: strongly NT (000) or strongly T (111).
+        // -- Confidence decode on post-mux (provider) CTR (TD#87).
+        // One-hot: strong = 000/111, weak = 011/100, medium = rest
+        // (001/010/101/110).
         pred_strong_p1[s] =
-          (post_mux_ctr_p1[s] != 3'b011) &&
-          (post_mux_ctr_p1[s] != 3'b100);
-        high_conf_p1[s] =
           (post_mux_ctr_p1[s] == 3'b000) ||
           (post_mux_ctr_p1[s] == 3'b111);
+        pred_weak_p1[s] =
+          (post_mux_ctr_p1[s] == 3'b011) ||
+          (post_mux_ctr_p1[s] == 3'b100);
+        pred_medium_p1[s] =
+          !pred_strong_p1[s] && !pred_weak_p1[s];
+
+        // -- Extended CTR (TD#88). provider_ctr is the post-mux CTR
+        // (tage_using_primary ? prm_ctr : alt_ctr); reuse it directly.
+        // The 6b concat's top bit is redundant sign extension given the
+        // value range [-7, +7]; the assignment matches the signed 5b
+        // struct field width [TAGE_MAX_CTR_WIDTH+1:0].
+        /* verilator lint_off WIDTHTRUNC */
+        extd_ctr_p1[s] =
+          $signed({2'b00, post_mux_ctr_p1[s], 1'b0}) - 5'sd7;
+        /* verilator lint_on WIDTHTRUNC */
 
         // -- Allocation candidate: scan T(prm+1)->T4.
         // Select first (shortest) table with ueff==0.
@@ -550,12 +573,14 @@ module tage_cntrl #(
         meta_p1[s].tage_prm_tkn       = prm_tkn_p1[s];
         meta_p1[s].tage_alt_tkn       = alt_tkn_p1[s];
         meta_p1[s].tage_pred_strong   = pred_strong_p1[s];
+        meta_p1[s].tage_pred_medium   = pred_medium_p1[s];
+        meta_p1[s].tage_pred_weak     = pred_weak_p1[s];
 
         //HAND-FIX-002 set tage_use_alt_on_na when it had impact on source
         //             of prediction
         meta_p1[s].tage_use_alt_on_na = uaon_trig_p1[s] & uaon[s][3];
         meta_p1[s].tage_using_primary = using_prm_p1[s];
-        meta_p1[s].tage_high_conf     = high_conf_p1[s];
+        meta_p1[s].tage_extd_ctr      = extd_ctr_p1[s];
         meta_p1[s].tage_pred_tkn      = pred_tkn_p1[s];
         meta_p1[s].branch_id          =
           tage_pred_inp_p0[s].branch_id;
@@ -597,8 +622,8 @@ module tage_cntrl #(
         tage_upd_inp_u0[s].tage_pred_meta.tage_alt_tkn;
       assign u_using_prm[s] =
         tage_upd_inp_u0[s].tage_pred_meta.tage_using_primary;
-      assign u_pred_str[s] =
-        tage_upd_inp_u0[s].tage_pred_meta.tage_pred_strong;
+      assign u_pred_weak[s] =
+        tage_upd_inp_u0[s].tage_pred_meta.tage_pred_weak;
       assign u_resolved[s]   =
         tage_upd_inp_u0[s].resolved_taken;
       assign u_mispredict[s] =

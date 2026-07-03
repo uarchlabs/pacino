@@ -304,6 +304,81 @@
 |    | | should use the same convention as tage_cntrl, and begin with t_      |
 
 
+# BUG Records
+
+- BUG-001: HAND-FIX-003. T0 CTR INC/DEC condition
+  wrong in tage_cntrl.sv. Found by tage_ctr_test
+  row 13a. Fixed BP-041. See session-handoff-045.
+- BUG-002: BP-049a renamed t_tgt_wr_u0 to t_prm/t_alt in
+  ittage_cntrl.sv and ran only sim_ittage. tb_ittage_cntrl
+  and tb_ittage_table were left uncompilable; their 77/0 and
+  32/0 counts carried in handoff-048 were stale (not from a
+  run). Found and repaired BP-050a. Cause of the all-targets-
+  must-run rule.
+- BUG-003: tage_cntrl.sv uaon_upd_ff gate missing && u_alt_tagged[s]. UAON
+  counter moved on single-hit transactions (provider tagged T1-T4 hit,
+  alternate fell through to untagged T0/BIM) where the prm-vs-alt comparison
+  carries no training signal. Found by TC-81, fixed BP-057. Same class as BUG
+  (ITTAGE #59, BP-051).
+- BUG-004: bp_history.sv folded-history geometry wrong vs the
+  Xiangshan FoldedHistory it mimics. Four defects:
+  (1) incremental insert at fold bit 0, not the high end;
+  (2) wrap-out bit removed at position 0, not (H-1) % W;
+  (3) rollback recompute (fold_ghr) used a separate, inequivalent
+  fold definition (forward walk i->i) vs the incremental path;
+  (4) 32b fold helpers truncate SC ST3 (H=W=64), making ST3
+  unrepresentable. Surfaced during BP-070 dual-slot test planning
+  (session-054). The old 12-test tb_bp_history passed only because
+  the fold window never filled past TC7 -- the bug lived in the
+  full-window region. Fixed BP-071 (single Xiangshan-geometry fold:
+  newest at high end, wrap-out at (H-1) % W, recompute posmap(i) =
+  (i+W-1) % W; 64b helpers). Single-slide equivalence proven offline
+  in BP-071. In-sim proof (single + dual-slot) completed BP-072
+  (19224 golden comparisons); externally anchored BP-073; geometry
+  captured natively in bp_history_decisions.md s6, doc-RTL verified
+  BP-074. CLOSED. BP-070 abandoned. See also BUG-005 (the
+  increment-oriented integration defect found while landing this
+  fix).
+- BUG-005: bp_history BP-069/BP-071 never co-resident; the merged
+  module-owned-pointer + fold geometry was never integrated or
+  tested in session-054. Root cause: session-054 left the BP-069
+  module-owned-pointer RTL only in versions/bp_history.sv and the
+  BP-071 fold-geometry fix only in the active rtl/ file; no single
+  file held both, so the pointer-to-fold addressing for an
+  incrementing module-owned pointer was never written or run.
+  handoff-054 and PROJECT_STATUS recorded both BP-069 and BP-071 as
+  landed and lint-clean -- inaccurate (the records were corrected
+  session-055). Surfaced in BP-072: merging the two produced an
+  incremental fold that diverged from the rollback recompute
+  (rolling back to an un-diverged checkpoint corrupted folded,
+  0x92 -> 0x00), because BP-071's geometry walk and BP-069's
+  incrementing pointer disagreed on direction. Fixed BP-072
+  (authorized scope expansion): increment-oriented walk (fold_ghr
+  ptr-i; fold_step evicts the leaving bit at write_addr-H) plus a
+  POST-advance checkpoint with recompute anchor ckpt-1. The BP-071
+  posmap and high-end insertion are unchanged; this is an addressing
+  reconciliation, not a geometry change, and no table-consumed fold
+  value moved. recompute == incremental proven in-sim BP-072;
+  externally anchored BP-073; geometry made native in
+  bp_history_decisions.md s6 (BP-074). versions/bp_history.sv is
+  superseded by the merged rtl/ file and should be retired. CLOSED.
+- BUG-006: BP-081 manifest omission. The BP-081 task Context Loaded /
+  Deliverables listed the tage testbenches from the BP-080 Phase-1
+  reference list, which was itself scoped to the Phase-1 manifest and
+  did NOT enumerate every file referencing tage_high_conf.
+  tb_tage_tasks.sv (not in the manifest) referenced the removed field
+  at two lines and blocked sim_tage_tasks compilation. The IA halted
+  and requested authorization; the user authorized the out-of-scope
+  edit and it was made. Root cause: task manifest built from a prior
+  investigation's file list rather than a grep of the symbol across
+  the unit tree -- the same class as BUG-002 (all-targets) and the
+  session-059 "manifest by inference" postmortem. Corrective rule:
+  any task that deletes or renames a struct field must grep the symbol
+  across the unit and repair the full reference set in-scope, reporting
+  the found set, rather than relying on a hand-listed manifest.
+  Proposed for ANTIPATTERNS.md. CLOSED (edit made; rule pending).
+
+
 
 ---
 

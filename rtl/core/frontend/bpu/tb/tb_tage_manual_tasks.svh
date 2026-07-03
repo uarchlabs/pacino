@@ -120,7 +120,6 @@ task automatic tage_use_test(
   pred_meta.tage_alc_tag       = 0;
   pred_meta.tage_pred_strong   = 0;
   pred_meta.tage_use_alt_on_na = 0;
-  pred_meta.tage_high_conf     = 0;
   pred_meta.branch_id          = bid;
 
   pred_meta.tage_prm_ctr   = pctr;
@@ -395,7 +394,6 @@ task automatic tage_ctr_test(
   pred_meta.tage_alc_tag       = 0;
   pred_meta.tage_pred_strong   = 0;
   pred_meta.tage_use_alt_on_na = 0;
-  pred_meta.tage_high_conf     = 0;
   pred_meta.branch_id          = bid;
 
   pred_meta.tage_prm_ctr   = pctr;
@@ -1458,10 +1456,6 @@ task automatic tage_check_pred_meta(
     end
     if (got[s].tage_using_primary !== exp[s].tage_using_primary) begin
       tb_error($sformatf("%s s%0d: using_primary", label, s));
-      errs++;
-    end
-    if (got[s].tage_high_conf !== exp[s].tage_high_conf) begin
-      tb_error($sformatf("%s s%0d: high_conf", label, s));
       errs++;
     end
     if (got[s].tage_pred_tkn !== exp[s].tage_pred_tkn) begin

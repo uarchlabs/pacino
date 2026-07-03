@@ -316,7 +316,7 @@ module tage #(
   // ----------------------------------------------------------------
   // Update Queue (UQ) FIFO
   // ----------------------------------------------------------------
-  cond_pred_upd_inp_t
+  tage_upd_inp_t
     uq_data_mem[TAGE_UQ_DEPTH][0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0]
     uq_val_mem[TAGE_UQ_DEPTH];
@@ -343,16 +343,9 @@ module tage #(
       if ((|tage_upd_val_u0) && !uq_full
           && (!uq_empty || !arb_grant_upd)) begin
         for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-          uq_data_mem[uq_tail_r[UQ_IDX_W-1:0]][s].tage
+          // Whole-struct write: UQ element is the live tage_upd_inp_t.
+          uq_data_mem[uq_tail_r[UQ_IDX_W-1:0]][s]
             <= tage_upd_inp_u0[s];
-          uq_data_mem[uq_tail_r[UQ_IDX_W-1:0]][s].sc
-            <= '0;
-          uq_data_mem[uq_tail_r[UQ_IDX_W-1:0]][s].sc_valid
-            <= 1'b0;
-          uq_data_mem[uq_tail_r[UQ_IDX_W-1:0]][s].resolved_taken
-            <= tage_upd_inp_u0[s].resolved_taken;
-          uq_data_mem[uq_tail_r[UQ_IDX_W-1:0]][s].cond_mispredict
-            <= tage_upd_inp_u0[s].cond_mispredict;
         end
         uq_val_mem[uq_tail_r[UQ_IDX_W-1:0]]
           <= tage_upd_val_u0;
@@ -461,12 +454,12 @@ module tage #(
         for (int s = 0; s < NUM_PRED_SLOTS; s++)
           cntrl_upd_inp_u0[s] = tage_upd_inp_u0[s];
       end else begin
-        // From UQ head: extract .tage sub-field
+        // From UQ head: whole-struct read (tage_upd_inp_t)
         cntrl_upd_val_u0 =
           uq_val_mem[uq_head_r[UQ_IDX_W-1:0]];
         for (int s = 0; s < NUM_PRED_SLOTS; s++)
           cntrl_upd_inp_u0[s] =
-            uq_data_mem[uq_head_r[UQ_IDX_W-1:0]][s].tage;
+            uq_data_mem[uq_head_r[UQ_IDX_W-1:0]][s];
       end
     end
   end
@@ -501,10 +494,10 @@ module tage #(
 
   // ----------------------------------------------------------------
   // Prediction response buffer (RB)
-  // Depth TAGE_RESP_BUF_DEPTH. Entry: cond_pred_meta_t per slot.
+  // Depth TAGE_RESP_BUF_DEPTH. Entry: tage_pred_meta_t per slot.
   // Bypass when RB empty and consumer_ready (consumer_ready=1).
   // ----------------------------------------------------------------
-  cond_pred_meta_t
+  tage_pred_meta_t
     rb_meta_mem[TAGE_RESP_BUF_DEPTH][0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0]
     rb_val_mem[TAGE_RESP_BUF_DEPTH];
@@ -531,12 +524,9 @@ module tage #(
       if (|cntrl_pred_rdy_p2) begin
         if (!rb_empty || !consumer_ready) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-            rb_meta_mem[rb_tail_r[RB_IDX_W-1:0]][s].tage
+            // Whole-struct write: RB element is tage_pred_meta_t.
+            rb_meta_mem[rb_tail_r[RB_IDX_W-1:0]][s]
               <= cntrl_pred_meta_p2[s];
-            rb_meta_mem[rb_tail_r[RB_IDX_W-1:0]][s].sc
-              <= '0;
-            rb_meta_mem[rb_tail_r[RB_IDX_W-1:0]][s].sc_valid
-              <= 1'b0;
           end
           rb_val_mem[rb_tail_r[RB_IDX_W-1:0]]
             <= cntrl_pred_rdy_p2;
@@ -554,13 +544,13 @@ module tage #(
       for (int s = 0; s < NUM_PRED_SLOTS; s++)
         tage_pred_meta_p2[s] = cntrl_pred_meta_p2[s];
     end else begin
-      // From RB head (extract .tage sub-field)
+      // From RB head (whole-struct read, tage_pred_meta_t)
       tage_pred_rdy_p2 =
         rb_val_mem[rb_head_r[RB_IDX_W-1:0]]
         & {NUM_PRED_SLOTS{consumer_ready}};
       for (int s = 0; s < NUM_PRED_SLOTS; s++)
         tage_pred_meta_p2[s] =
-          rb_meta_mem[rb_head_r[RB_IDX_W-1:0]][s].tage;
+          rb_meta_mem[rb_head_r[RB_IDX_W-1:0]][s];
     end
   end
 

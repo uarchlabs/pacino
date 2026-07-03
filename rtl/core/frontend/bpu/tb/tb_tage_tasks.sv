@@ -363,8 +363,6 @@ module tb;
         tb_error($sformatf("%s s%0d: use_alt_on_na",label,s),errs);
       if (got[s].tage_using_primary !== exp[s].tage_using_primary)
         tb_error($sformatf("%s s%0d: using_primary",label,s),errs);
-      if (got[s].tage_high_conf !== exp[s].tage_high_conf)
-        tb_error($sformatf("%s s%0d: high_conf",label,s),errs);
       if (got[s].tage_pred_tkn !== exp[s].tage_pred_tkn)
         tb_error($sformatf("%s s%0d: pred_tkn",label,s),errs);
       if (got[s].branch_id !== exp[s].branch_id)

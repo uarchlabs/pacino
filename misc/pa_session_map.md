@@ -416,3 +416,7 @@ RVA23 Co-Design Part N
 |    |              | BP-079 (was named 079a, changed)     |
 |    |              | BP-080                               |
 |    |              | output session_handoff-060           |
+| 60 | tage clenaup | input session_handoff-060            |
+|    |              | tage_cntrl_uaon_update_rules.md      |
+|    |              | BP-081                               |
+|    |              | output session_handoff-061           |

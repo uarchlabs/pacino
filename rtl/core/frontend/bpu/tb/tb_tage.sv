@@ -204,6 +204,8 @@ module tb;
   int _pred_pipeline_tst        = 1;
   // -- BP-061 capstone round-trip test (TC-103) --
   int _capstone_rt_tst          = 1;
+  // -- BP-081 TD#87/#88 confidence decode + extended CTR coverage --
+  int _pred_conf_decode_tst     = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -1415,6 +1417,8 @@ module tb;
     meta.tage_prm_tkn       = 1'b1;
     meta.tage_alt_tkn       = 1'b0;
     meta.tage_using_primary = 1'b1;
+    // Weak (boundary) prediction gates the UAON update (TD#87).
+    meta.tage_pred_weak     = 1'b1;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -1529,6 +1533,8 @@ module tb;
     meta.tage_prm_tkn       = 1'b0;
     meta.tage_alt_tkn       = 1'b1;
     meta.tage_using_primary = 1'b1;
+    // Weak (boundary) prediction gates the UAON update (TD#87).
+    meta.tage_pred_weak     = 1'b1;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -7741,6 +7747,9 @@ module tb;
     // BP-061 capstone round-trip test (TC-103).
     if (_capstone_rt_tst != 0)
       capstone_rt_tst(verbose);
+    // BP-081 TD#87/#88 confidence decode + extended CTR coverage.
+    if (_pred_conf_decode_tst != 0)
+      pred_conf_decode_tst(verbose);
 
     // Overall verdict.
     if (total_fails == 0) begin
@@ -9725,6 +9734,8 @@ module tb;
     meta.tage_prm_tkn       = 1'b1;
     meta.tage_alt_tkn       = 1'b0;
     meta.tage_using_primary = 1'b1;
+    // Weak (boundary) prediction gates the UAON update (TD#87).
+    meta.tage_pred_weak     = 1'b1;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -9784,6 +9795,8 @@ module tb;
     meta.tage_prm_tkn       = 1'b0;
     meta.tage_alt_tkn       = 1'b1;
     meta.tage_using_primary = 1'b1;
+    // Weak (boundary) prediction gates the UAON update (TD#87).
+    meta.tage_pred_weak     = 1'b1;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -9843,6 +9856,8 @@ module tb;
     meta.tage_prm_tkn       = 1'b1;
     meta.tage_alt_tkn       = 1'b1;
     meta.tage_using_primary = 1'b1;
+    // Weak (boundary) prediction; UAON body enters, both-wrong holds.
+    meta.tage_pred_weak     = 1'b1;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -9902,6 +9917,8 @@ module tb;
     meta.tage_prm_tkn       = 1'b0;
     meta.tage_alt_tkn       = 1'b0;
     meta.tage_using_primary = 1'b1;
+    // Weak (boundary) prediction; UAON body enters, both-right holds.
+    meta.tage_pred_weak     = 1'b1;
 
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11578,8 +11595,8 @@ module tb;
   // T2/T3/T4[0][75]=0x0000 (no hit).
   // Rule (tage_cntrl_decisions.md Alternate provider):
   //   If primary is T1, alternate is T0 (no lower tagged table).
-  // Expected: prm_comp=1 alt_comp=0 pred_tkn=1 pred_strong=1
-  //           using_primary=1.
+  // Expected: prm_comp=1 alt_comp=0 pred_tkn=1 (CTR=101 -> medium,
+  //           so pred_strong=0 pred_medium=1) using_primary=1.
   // ---------------------------------------------------------------
   task automatic pred_alt_t0_fallback_tst(int verbose);
     int              local_fails;
@@ -11632,11 +11649,18 @@ module tb;
         "[FAIL] pred_alt_t0_fallback_tst: pred_tkn=%0b exp=1",
         meta.tage_pred_tkn);
     end
-    if (meta.tage_pred_strong !== 1'b1) begin
+    // Provider CTR=101 -> medium under TD#87 (strong=0, medium=1).
+    if (meta.tage_pred_strong !== 1'b0) begin
       local_fails++;
       $display(
-        "[FAIL] pred_alt_t0_fallback_tst: pred_strong=%0b exp=1",
+        "[FAIL] pred_alt_t0_fallback_tst: pred_strong=%0b exp=0",
         meta.tage_pred_strong);
+    end
+    if (meta.tage_pred_medium !== 1'b1) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_alt_t0_fallback_tst: pred_medium=%0b exp=1",
+        meta.tage_pred_medium);
     end
     if (meta.tage_using_primary !== 1'b1) begin
       local_fails++;
@@ -11826,12 +11850,10 @@ module tb;
   // PC=0x182BC: tag=0x30 idx=175 bank=0 row=175.
   // T1[0][175] seeded per sub-test. T2-T4[0][175]=0 (no hit).
   // uaon[0]=4h0 for both sub-tests (no UAON override).
-  // BUG-001 check: doc says "CTR != 3 and != 4"; RTL:
-  //   (ctr != 3b011) && (ctr != 3b100). These agree. No discrepancy.
   // Sub-A: T1 CTR=111 (strong taken) -> pred_strong=1.
-  // Sub-B: T1 CTR=100 (weakest taken, newly allocated) -> pred_strong=0.
-  // Rule (tage_cntrl_decisions.md Decoration flags):
-  //   pred_strong = provider CTR != 3b011 AND != 3b100.
+  // Sub-B: T1 CTR=100 (weak boundary) -> pred_strong=0.
+  // Rule (TD#87 confidence decode): pred_strong = provider CTR in
+  //   {3b000, 3b111}. CTR 011/100 are weak; 001/010/101/110 medium.
   // ---------------------------------------------------------------
   task automatic pred_strong_tst(int verbose);
     int              local_fails;
@@ -12362,6 +12384,164 @@ module tb;
     else
       $display(
         "[FAIL] capstone_rt_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // BP-081  pred_conf_decode_tst: TD#87 confidence decode + TD#88
+  // extended CTR, swept over all eight provider CTR values, both
+  // prediction slots.
+  // PC=0x182BC: T1 is the sole tagged provider at row 175 (tag 0x30);
+  // T2-T4 invalidated so alt falls back to T0 and using_primary=1.
+  // uaon[0]/uaon[1]=0 so no UAON override -> post-mux CTR = prm CTR.
+  // Start state per iteration is fully driven (RAM + uaon), so the
+  // test does not depend on residue or iteration order.
+  // TD#87 decode (post-mux CTR): 000 strong / 001 medium /
+  //   010 medium / 011 weak / 100 weak / 101 medium / 110 medium /
+  //   111 strong. TD#88 extended CTR = 2*CTR - 7 (signed).
+  // ---------------------------------------------------------------
+  task automatic pred_conf_decode_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta0;
+    tage_pred_meta_t meta1;
+    logic [2:0]      cval;
+    logic [15:0]     entry;
+    logic            es;   // expected pred_strong
+    logic            em;   // expected pred_medium
+    logic            ew;   // expected pred_weak
+    logic signed [TAGE_MAX_CTR_WIDTH+1:0] ee; // expected extd_ctr
+    int              gx0;  // got extd_ctr s0, sign-extended for display
+    int              gx1;  // got extd_ctr s1, sign-extended for display
+    int              eei;  // expected extd_ctr, sign-extended
+
+    local_fails       = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.u_tage_cntrl.uaon[1] = 4'h0;
+
+    for (int ci = 0; ci < 8; ci++) begin
+      cval  = 3'(ci);
+      // Entry: {TAG=0x30, EPC=00, USE=00, CTR=cval, VAL=1}.
+      entry = {8'h30, 2'b00, 2'b00, cval, 1'b1};
+
+      // Drive start state for both slots: T1 sole provider, T2-T4
+      // invalidated at the index under test.
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175] = entry;
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][175] = entry;
+      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[0][175] = 16'h0000;
+
+      // Expected TD#87 one-hot decode and TD#88 extended CTR, per row.
+      // Sized signed literals keep the assignment width-clean.
+      case (ci)
+        0: begin es=1'b1; em=1'b0; ew=1'b0; ee=-5'sd7; end
+        1: begin es=1'b0; em=1'b1; ew=1'b0; ee=-5'sd5; end
+        2: begin es=1'b0; em=1'b1; ew=1'b0; ee=-5'sd3; end
+        3: begin es=1'b0; em=1'b0; ew=1'b1; ee=-5'sd1; end
+        4: begin es=1'b0; em=1'b0; ew=1'b1; ee= 5'sd1; end
+        5: begin es=1'b0; em=1'b1; ew=1'b0; ee= 5'sd3; end
+        6: begin es=1'b0; em=1'b1; ew=1'b0; ee= 5'sd5; end
+        7: begin es=1'b1; em=1'b0; ew=1'b0; ee= 5'sd7; end
+        default: begin es=1'b0; em=1'b0; ew=1'b0; ee=5'sd0; end
+      endcase
+
+      // Issue prediction on both slots with the same PC.
+      inp           = '0;
+      inp.pc        = 40'h182BC;
+      stg_pred_inp0 = inp;
+      stg_pred_inp1 = inp;
+      stg_pred_val0 = 1'b1;
+      stg_pred_val1 = 1'b1;
+      @(posedge clk);
+      stg_pred_val0 = 1'b0;
+      stg_pred_val1 = 1'b0;
+      stg_pred_inp0 = '0;
+      stg_pred_inp1 = '0;
+      @(posedge clk);
+      @(posedge clk);
+      meta0 = tage_pred_meta_p2[0];
+      meta1 = tage_pred_meta_p2[1];
+
+      // Sign-extend the 5b signed extd_ctr into int for clean %0d.
+      gx0 = 32'(signed'(meta0.tage_extd_ctr));
+      gx1 = 32'(signed'(meta1.tage_extd_ctr));
+      eei = 32'(signed'(ee));
+
+      if (verbose != 0) begin
+        $display(
+          "[INFO] pred_conf_decode_tst: ctr=%03b s0 s/m/w=%0b%0b%0b extd=%0d",
+          cval, meta0.tage_pred_strong, meta0.tage_pred_medium,
+          meta0.tage_pred_weak, gx0);
+        $display(
+          "[INFO] pred_conf_decode_tst: ctr=%03b s1 s/m/w=%0b%0b%0b extd=%0d",
+          cval, meta1.tage_pred_strong, meta1.tage_pred_medium,
+          meta1.tage_pred_weak, gx1);
+      end
+
+      // Sanity: T1 must be the provider with the swept CTR.
+      if (meta0.tage_prm_comp !== 3'd1
+          || meta0.tage_prm_ctr !== cval) begin
+        local_fails++;
+        $display(
+          "[FAIL] pred_conf_decode_tst: s0 ctr=%03b prm=%0d pctr=%03b exp1",
+          cval, meta0.tage_prm_comp, meta0.tage_prm_ctr);
+      end
+
+      // Slot 0 decode + extended CTR.
+      if (meta0.tage_pred_strong !== es
+          || meta0.tage_pred_medium !== em
+          || meta0.tage_pred_weak !== ew) begin
+        local_fails++;
+        $display(
+          "[FAIL] pred_conf_decode_tst: s0 ctr=%03b smw=%0b%0b%0b e=%0b%0b%0b",
+          cval, meta0.tage_pred_strong, meta0.tage_pred_medium,
+          meta0.tage_pred_weak, es, em, ew);
+      end
+      if (gx0 !== eei) begin
+        local_fails++;
+        $display(
+          "[FAIL] pred_conf_decode_tst: s0 ctr=%03b extd=%0d exp=%0d",
+          cval, gx0, eei);
+      end
+
+      // Slot 1 decode + extended CTR.
+      if (meta1.tage_prm_comp !== 3'd1
+          || meta1.tage_prm_ctr !== cval) begin
+        local_fails++;
+        $display(
+          "[FAIL] pred_conf_decode_tst: s1 ctr=%03b prm=%0d pctr=%03b exp1",
+          cval, meta1.tage_prm_comp, meta1.tage_prm_ctr);
+      end
+      if (meta1.tage_pred_strong !== es
+          || meta1.tage_pred_medium !== em
+          || meta1.tage_pred_weak !== ew) begin
+        local_fails++;
+        $display(
+          "[FAIL] pred_conf_decode_tst: s1 ctr=%03b smw=%0b%0b%0b e=%0b%0b%0b",
+          cval, meta1.tage_pred_strong, meta1.tage_pred_medium,
+          meta1.tage_pred_weak, es, em, ew);
+      end
+      if (gx1 !== eei) begin
+        local_fails++;
+        $display(
+          "[FAIL] pred_conf_decode_tst: s1 ctr=%03b extd=%0d exp=%0d",
+          cval, gx1, eei);
+      end
+
+      // Drain before next iteration.
+      @(posedge clk);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] pred_conf_decode_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_conf_decode_tst: %0d failures", local_fails);
     total_fails += local_fails;
   endtask
 

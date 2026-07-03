@@ -109,7 +109,6 @@ module tb;
   wire d_pred_meta_p2_pred_strong_s0   = tage_pred_meta_p2[0].tage_pred_strong;
   wire d_pred_meta_p2_use_alt_on_na_s0 = tage_pred_meta_p2[0].tage_use_alt_on_na;
   wire d_pred_meta_p2_using_primary_s0 = tage_pred_meta_p2[0].tage_using_primary;
-  wire d_pred_meta_p2_high_conf_s0     = tage_pred_meta_p2[0].tage_high_conf;
   wire d_pred_meta_p2_pred_tkn_s0      = tage_pred_meta_p2[0].tage_pred_tkn;
   wire [`FTQ_RNG] d_pred_meta_p2_branch_id_s0 = tage_pred_meta_p2[0].branch_id;
   // --------------------------------------------------------------------------------
@@ -133,7 +132,6 @@ module tb;
   wire d_pred_meta_p2_pred_strong_s1   = tage_pred_meta_p2[1].tage_pred_strong;
   wire d_pred_meta_p2_use_alt_on_na_s1 = tage_pred_meta_p2[1].tage_use_alt_on_na;
   wire d_pred_meta_p2_using_primary_s1 = tage_pred_meta_p2[1].tage_using_primary;
-  wire d_pred_meta_p2_high_conf_s1     = tage_pred_meta_p2[1].tage_high_conf;
   wire d_pred_meta_p2_pred_tkn_s1      = tage_pred_meta_p2[1].tage_pred_tkn;
   wire [`FTQ_RNG] d_pred_meta_p2_branch_id_s1 = tage_pred_meta_p2[1].branch_id;
   // --------------------------------------------------------------------------------
@@ -180,8 +178,6 @@ module tb;
   wire d_tage_upd_inp_u0_tage_use_alt_on_na_s1 = `UIN[1].`TPM.tage_use_alt_on_na;
   wire d_tage_upd_inp_u0_tage_using_primary_s0 = `UIN[0].`TPM.tage_using_primary;
   wire d_tage_upd_inp_u0_tage_using_primary_s1 = `UIN[1].`TPM.tage_using_primary;
-  wire d_tage_upd_inp_u0_tage_high_conf_s0     = `UIN[0].`TPM.tage_high_conf;
-  wire d_tage_upd_inp_u0_tage_high_conf_s1     = `UIN[1].`TPM.tage_high_conf;
   wire d_tage_upd_inp_u0_tage_pred_tkn_s0      = `UIN[0].`TPM.tage_pred_tkn;
   wire d_tage_upd_inp_u0_tage_pred_tkn_s1      = `UIN[1].`TPM.tage_pred_tkn;
 

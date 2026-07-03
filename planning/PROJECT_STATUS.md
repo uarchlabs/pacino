@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-07-02 (pa session 059)
+ UPDATED: 2026-07-02 (pa session 060)
  CONTACT: Jeff Nye
 ```
 
@@ -64,14 +64,17 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | inp_t commented out (superseded); |
 |                         |             |                   | bp_sc_chooser_e, br_imli_mode_e   |
 |                         |             |                   | added; tage_pred_meta_t gains     |
-|                         |             |                   | tage_provider_ctr/tage_extd_ctr   |
-|                         |             |                   | fields (TAGE generation is        |
+|                         |             |                   | tage_extd_ctr field (TAGE gen     |
 |                         |             |                   | TD#87/#88). SC session-057:       |
 |                         |             |                   | sc_pred_meta_t.pc_range removed;  |
 |                         |             |                   | captured_phr commented out.       |
 |                         |             |                   | Session-058: sc_pred_meta_t       |
 |                         |             |                   | sc_upd_idx/sc_upd_ctr -> packed   |
-|                         |             |                   | 2D arrays (Verilator).            |
+|                         |             |                   | 2D arrays (Verilator).           |
+|                         |             |                   | Session-060 BP-081: tage_pred_    |
+|                         |             |                   | weak re-added to tage_pred_meta_t;|
+|                         |             |                   | tage_high_conf/tage_provider_ctr  |
+|                         |             |                   | confirmed absent (internal only). |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected to       |
@@ -126,6 +129,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | tage_cntrl_uaon         | Complete    | --                | session-036: verified.           |
 | _update_rules.md        |             |                   | Debt #45 closed BP-032.          |
 |                         |             |                   | Promoted Complete BP-057.        |
+|                         |             |                   | Session-060: reconciled to TD#87 |
+|                         |             |                   | (UAON gate on tage_pred_weak;    |
+|                         |             |                   | strong redefined {000,111}) via  |
+|                         |             |                   | tage_tmp_uaon_update_rules.md,   |
+|                         |             |                   | folded into canonical doc.       |
 | tage_cntrl              | Complete    | --                | session-044: X entries expanded. |
 | _ctr_update_rules.md    |             |                   | Unreachable rows removed.        |
 |                         |             |                   | ADR-001 added.                   |
@@ -149,22 +157,26 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | T0 CTR u_both_t0 path corrected. |
 |                         |             |                   | BUG-003 UAON single-hit guard    |
 |                         |             |                   | fixed BP-057.                    |
-|                         |             |                   | Session-059: refs removed field  |
-|                         |             |                   | tage_high_conf; fails lint_tage_ |
-|                         |             |                   | cntrl on baseline. Fix scoped    |
-|                         |             |                   | BP-080, fix pending (TD#95).     |
+|                         |             |                   | Session-060 BP-081: tage_high_   |
+|                         |             |                   | conf deleted; TD#87 strong/med/  |
+|                         |             |                   | weak decode + TD#88 extd_ctr     |
+|                         |             |                   | generated; UAON gate moved to    |
+|                         |             |                   | tage_pred_weak (behavior-        |
+|                         |             |                   | preserving). Elaborates, lints   |
+|                         |             |                   | clean.                           |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | BP-010 through BP-030 complete.  |
-|                         |             |                   | 103 tests pass. Directed         |
-|                         |             |                   | validation complete. All         |
-|                         |             |                   | coverage targets closed or       |
+|                         |             |                   | Directed validation complete.    |
+|                         |             |                   | All coverage targets closed or   |
 |                         |             |                   | deferred.                        |
 |                         |             |                   | tage_assert.sv bound via bind.   |
-|                         |             |                   | Session-059: uq_data_mem/rb_meta_|
-|                         |             |                   | mem still typed cond_pred_*      |
-|                         |             |                   | (retired TD#94); fails lint_tage/|
-|                         |             |                   | sim_tage on baseline. Retype-not-|
-|                         |             |                   | delete scoped BP-080; pending.   |
+|                         |             |                   | Session-060 BP-081: uq_data_mem/ |
+|                         |             |                   | rb_meta_mem retyped off cond_    |
+|                         |             |                   | pred_* to tage_upd_inp_t/tage_   |
+|                         |             |                   | pred_meta_t (whole-struct        |
+|                         |             |                   | writes). Elaborates green.       |
+|                         |             |                   | sim_tage 105/0, sim_tage_fast    |
+|                         |             |                   | 105/0.                           |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
 |                         |             | sim_tage_fast     | assert_inhibit port added        |
 |                         |             | sim_tage_tasks    | (BP-042a). CE-06 gated.          |
@@ -177,6 +189,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | sim_tage 95 tests as of BP-059   |
 |                         |             |                   | sim_tage 102 tests as of BP-060  |
 |                         |             |                   | sim_tage 103 tests as of BP-061  |
+|                         |             |                   | sim_tage 105 tests as of BP-081  |
 | ittage_assert.sv        | Complete    | sim_ittage        | New session-045 (BP-042/042a/b). |
 |                         |             |                   | Three assertions: hit+comp,      |
 |                         |             |                   | using_primary+prm_comp,          |
@@ -187,8 +200,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | tb_tage_manual.sv       | Complete    | sim_tage_manual   | tage_ctr_test rows 1-17 pass.    |
 |                         |             |                   | Row 18 covered by assertion.     |
 |                         |             |                   | tage_use_test rows 1-6 pass.     |
-|                         |             |                   | session-045. 4 tage_high_conf    |
-|                         |             |                   | taps to remove; pending.         |
+|                         |             |                   | session-045. Session-060 BP-081: |
+|                         |             |                   | 4 tage_high_conf taps removed    |
+|                         |             |                   | (incl tb_tage_manual_tasks.svh); |
+|                         |             |                   | sim_tage_manual 3/3.             |
 | ittage_interfaces.md              | Draft       | --    | session-036: corrections applied.|
 |                                   |             |       | session-037: II6 resolved.       |
 |                                   |             |       | session-038: redundancy collapse |
@@ -300,7 +315,8 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | SC (unit)        | Complete       | --             | Tables+control+top green         |
 |                  |                |                | (BP-075..079). Remaining unit    |
 |                  |                |                | item: sc_coverage_plan.md.       |
-|                  |                |                | Cluster prereqs #87-#92 open.    |
+|                  |                |                | Cluster prereqs #89-#92 open     |
+|                  |                |                | (#87/#88 CLOSED BP-081).         |
 | bp_cluster (top) | Not started    | --             | After predictors complete        |
 | fetch            | Not started    | --             | After BP cluster                 |
 
@@ -518,14 +534,15 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |           | changed to:                                              |
 |    |           |     + tage_extd_ctr
 |    |           |                                                          |
-| 87 | tage      | verify TAGE tage_pred_strong maps to this                |
-|    |           | decodings and add tage_pred_medium and                   |
-|    |           | tage_pred_weak signals to tage_pred_meta                 |
+| 87 | tage      | CLOSED BP-081 (session-060). Strong/medium/weak decode   |
+|    |           | generated in tage_cntrl on the post-mux provider CTR per |
+|    |           | the table below; tage_pred_weak re-added to              |
+|    |           | tage_pred_meta_t; tage_pred_strong redefined to strictly |
+|    |           | {000,111} (was NOT WEAK). Functional coverage added in   |
+|    |           | tb_tage (pred_conf_decode_tst, all 8 CTR values x both   |
+|    |           | slots). UAON gate moved to tage_pred_weak (behavior-     |
+|    |           | preserving); tage_cntrl_uaon_update_rules.md reconciled. |
 |    |           |                                                          |
-|    |           | tage_pred_strong = 1'b0; //high confidence               |
-|    |           | tage_pred_medium = 1'b0; //...                           |
-|    |           | tage_pred_weak   = 1'b0; //...                           |
-|    |           |                                                          | 
 |    |           | 000  strongly not taken  tage_pred_strong = 1'b1         |
 |    |           | 001  medium   not taken  tage_pred_medium = 1'b1         |
 |    |           | 010  medium   not taken  tage_pred_medium = 1'b1         |
@@ -536,34 +553,28 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |           | 111  strongly taken      tage_pred_strong = 1'b1         |
 |    |           |                                                          |
 |    |           | SC prediction (sc_decisions.md s8) consumes              |
-|    |           | tage_pred_medium; prerequisite for SC RTL.               |
+|    |           | tage_pred_medium; now generated for real (was interim    |
+|    |           | tie-off plan; superseded).                               |
+| 88 | tage      | CLOSED BP-081 (session-060). tage_extd_ctr generated in  |
+|    |           | tage_cntrl from the post-mux provider CTR:               |
 |    |           |                                                          |
-|    |           | Session-059: the pending tage reconciliation ties        |
-|    |           | tage_pred_medium (and tage_pred_weak if re-added)        |
-|    |           | to zero as an interim; the real strong/medium/weak       |
-|    |           | generation is this TD. Still open.                       |
-| 88 | tage      | create two new tage_pred_meta_t signals                  |
-|    |           | and add logic to generate them in TAGE                   |
-|    |           |                                                          |
-|    |           | This signal is for convenience/timing                    |
-|    |           |                                                          |
-|    |           | logic [TAGE_MAX_CTR_WIDTH-1:0] tage_provider_ctr;        |
-|    |           | tage_provider_ctr = tage_using_primary                   |
-|    |           |                   ? tage_prm_ctr : tage_alt_ctr;         |
-|    |           |                                                          |
-|    |           | This signal is signed (extended CTR)                     |
+|    |           | provider_ctr = tage_using_primary                        |
+|    |           |              ? tage_prm_ctr : tage_alt_ctr               |
+|    |           |   (equals the existing post-mux CTR; reused, no new mux) |
 |    |           |                                                          |
 |    |     | logic signed [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;           |
 |    |     | tage_extd_ctr = $signed({2'b00, provider_ctr, 1'b0}) - 5'sd7;  |
 |    |           |                                                          |
-|    |           | Struct fields added to tage_pred_meta_t session-056;     |
-|    |           | TAGE generation logic still to be written. SC sum        |
-|    |           | (sc_decisions.md s8) consumes tage_extd_ctr.             |
+|    |           | Observed extd_ctr sweep -7,-5,-3,-1,+1,+3,+5,+7 verified |
+|    |           | in tb_tage. provider_ctr stays an internal convenience   |
+|    |           | signal, NOT a struct field. SC sum (sc_decisions.md s8)  |
+|    |           | consumes tage_extd_ctr; now generated for real.          |
 |    |           |                                                          |
-|    |           | Session-059: the pending tage reconciliation ties        |
-|    |           | tage_provider_ctr/tage_extd_ctr to zero as an            |
-|    |           | interim; the real generation is this TD. Open.           |
-|    |           |                                                          | 
+|    |           | NOTE: BP-081 wraps the concat->signed-5b assignment in   |
+|    |           | an inline lint_off/on WIDTHTRUNC bracket (lint_tage_     |
+|    |           | cntrl/lint_tage carry no project WIDTHTRUNC suppress).   |
+|    |           | Range [-7,+7] fits; top concat bit is redundant sign     |
+|    |           | extension. Review the bracket is minimal next touch.     |
 | 89 | ftb       | Change the FTB definition to store 20 additional bits.   |
 |    |           | These are PC bits [15:6] of branch location              |
 |    |           | These will be supplied to sc_upd_inp.branch_range
@@ -609,31 +620,30 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       |                                                           |
 |    |       | Session-059 (BP-080): tage.sv still TYPES two live FIFOs  |
 |    |       | (uq_data_mem, rb_meta_mem) on the retired cond_pred_*     |
-|    |       | wrappers -> tage does not elaborate. RTL-side reconcile   |
-|    |       | is unwritten (retype to tage_upd_inp_t/tage_pred_meta_t). |
-| 95 | tage  | The tage prediction response structure tage_pred_meta_t   |
-|    |       | was changed in bp_structs_pkg. This task is to add support|
-|    |       | for any additions, remove support for any deletions and   |
-|    |       | reverify all tests and planning documents. The current    |
-|    |       | bp_structs_pkg.sv has the updates.                        |
+|    |       | wrappers -> tage does not elaborate.                      |
 |    |       |                                                           |
-|    |       | Scoped BP-080 (session-059, report-first). Findings:      |
-|    |       | - tage.sv uq_data_mem/rb_meta_mem are LIVE FIFOs still    |
-|    |       |   typed cond_pred_upd_inp_t/cond_pred_meta_t (retired,    |
-|    |       |   TD#94). Fix is RETYPE to tage_upd_inp_t/tage_pred_meta_t|
-|    |       |   and collapse subfield writes -- NOT delete. Behavior    |
-|    |       |   bit-identical (dead .sc/.sc_valid/.resolved_taken/      |
-|    |       |   .cond_mispredict were write-only).                      |
-|    |       | - tage_cntrl.sv tage_high_conf write + high_conf_p1 are   |
-|    |       |   genuinely dead -> delete.                               |
-|    |       | - Ungenerated SC-facing fields (tage_pred_medium,         |
-|    |       |   tage_provider_ctr, tage_extd_ctr; tage_pred_weak is     |
-|    |       |   commented out) TIE TO ZERO and report as owed; real     |
-|    |       |   generation is TD#87/#88, not this task.                 |
-|    |       | - tb_tage_manual.sv has 4 tage_high_conf taps to remove.  |
-|    |       | Fix task unwritten. Decision (session-059): tie-off, not  |
-|    |       | generate. Open: tage_pred_weak re-add (pkg touch) vs      |
-|    |       | defer -- recommend defer to the TD#87 task.               |
+|    |       | CLOSED BP-081 (session-060): uq_data_mem/rb_meta_mem      |
+|    |       | retyped to tage_upd_inp_t/tage_pred_meta_t, per-subfield  |
+|    |       | writes collapsed to whole-struct (dead .sc/.sc_valid/     |
+|    |       | .resolved_taken/.cond_mispredict dropped). tage           |
+|    |       | elaborates green. No cond_pred_* type remains referenced. |
+| 95 | tage  | The tage prediction response structure tage_pred_meta_t   |
+|    |       | was changed in bp_structs_pkg. Add support for additions, |
+|    |       | remove deletions, reverify tests and planning docs.       |
+|    |       |                                                           |
+|    |       | CLOSED BP-081 (session-060). tage_high_conf deleted from  |
+|    |       | tage_cntrl.sv (write + high_conf_p1 decl/reset/compute);  |
+|    |       | 4 tb taps removed (tb_tage_manual.sv +                    |
+|    |       | tb_tage_manual_tasks.svh); an additional dead reference   |
+|    |       | in tb_tage_tasks.sv removed (authorized out-of-scope --   |
+|    |       | it blocked sim_tage_tasks compile; see BUG-006). SC-      |
+|    |       | facing fields now GENERATED (not tied off) -- see         |
+|    |       | TD#87/#88. All tage targets green this session:           |
+|    |       | lint_tage_cntrl/lint_tage/lint_tage_table 0/0;            |
+|    |       | sim_tage 105/0; sim_tage_fast 105/0; sim_tage_tasks 0     |
+|    |       | fail; sim_tage_manual 3/3; sim_tage_table 15/0. Full bpu  |
+|    |       | (make all) exit 0, sim_ittage 211/211 confirmed          |
+|    |       | separately; SC targets green as cross-check.              |
 | 96 | bpc   | flush operation has scattered mention across documents    |
 |    |       | this task will define flush behavior, implement it, and   |
 |    |       | update all references to flush operation                  | 
@@ -667,6 +677,23 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | (c) keeping the single-slot-drives rule. Gate any area/     |
 |    |       | correctness commitment on that evaluation. Related: TD#93   |
 |    |       | (SC efficacy/threshold tuning), TD#86 (8x TAGE term).       |
+| 99 | bpu   | Create a process for PR/CI/CD the pipeline                  |
+|    |       | This will be enforced once top level bpu is created         |
+|    |       |                                                            |
+|    |       | Motivating evidence (session-060, BP-081): `make all`      |
+|    |       | silently omits sim_ittage, sim_tage_manual, and the cov_*  |
+|    |       | targets. CLAUDE.md already mandates every target run, but   |
+|    |       | no single command enforces it. The CI process must run the  |
+|    |       | complete target set, not `make all`.                        |
+|100 | tage  | tage line coverage below the previously-stated >90%.       |
+|    |       | Session-060 BP-081 measured cov_tage 73.7% (6242/8468),    |
+|    |       | cov_tage_table 79.5% (399/502). The TAGE decomposition     |
+|    |       | section previously asserted ">90%"; that figure is stale   |
+|    |       | vs this run. UNRESOLVED whether the drop is genuine under- |
+|    |       | coverage of the new TD#87/#88 decode+extd_ctr logic or a   |
+|    |       | coverage-accounting artifact. Review the cov report; add   |
+|    |       | directed coverage if the new logic is under-covered, or    |
+|    |       | correct the accounting. Gate the ">90%" claim on this.     |
 
 ---
 
@@ -910,6 +937,13 @@ Key decisions for quick reference:
   from sc.sv SC_BR_IMLI_MODE), not a runtime port. bp_cluster
   sets it at the sc.sv instantiation for a non-default perf
   build. (session-059, BP-079.)
+- TAGE confidence outputs GENERATED (session-060, BP-081):
+  tage_pred_strong = provider CTR in {000,111}; tage_pred_weak
+  = {011,100}; tage_pred_medium = the remainder; one-hot on
+  the post-mux provider CTR (TD#87). tage_extd_ctr = signed
+  ({2'b00, provider_ctr, 1'b0}) - 5'sd7 (TD#88). strong is
+  now STRICTLY {000,111} (previously NOT WEAK); the UAON
+  update gate keys on tage_pred_weak to preserve behavior.
 
 ### Shared planning documents
     - planning/arch/bp_arb_spec.md                    In progress
@@ -919,8 +953,8 @@ Key decisions for quick reference:
           sc_pred_meta_t / sc_upd_inp_t (cond_pred_meta_t and
           cond_pred_upd_inp_t commented out). arb_spec rewritten
           to the standalone-SC model (separate SC UQ, TAGE
-          response buffer as SC PQ, CSR enable). Residual in
-          TD#94.
+          response buffer as SC PQ, CSR enable). TD#94 CLOSED
+          BP-081 (tage FIFOs retyped; no cond_pred_* remains).
     - planning/arch/bp_cluster.md                     In progress
         - Branch prediction cluster summary data
     - planning/arch/ras_decisions.md                  Draft
@@ -932,27 +966,30 @@ Key decisions for quick reference:
         - General rules for manual testbench creation
 
 ### TAGE decomposition
-- Session-059: tage.sv / tage_cntrl.sv FAIL to elaborate on the
-  committed baseline -- they reference the retired cond_pred_* types
-  (TD#94) and the removed tage_high_conf field (TD#95). Reconciliation
-  scoped by BP-080 (retype-not-delete for the live FIFOs; delete dead
-  tage_high_conf; tie ungenerated SC-facing fields to zero). Fix
-  pending an unwritten fix task. Tie-off (not TD#87/#88 generation) decided
-  session-059.
+- Session-060 (BP-081): tage RECONCILED and GREEN. The retired
+  cond_pred_* FIFO element types (TD#94) were retyped to
+  tage_upd_inp_t/tage_pred_meta_t; dead tage_high_conf deleted
+  (TD#95); TD#87 strong/medium/weak decode and TD#88 tage_extd_ctr
+  GENERATED on the post-mux provider CTR (no longer tie-off);
+  tage_pred_weak re-added to the package; UAON gate moved to
+  tage_pred_weak (behavior-preserving). tage elaborates, all tage
+  targets green this session (sim_tage 105/0).
 - RTL is available
     - Unit testbenches written
     - Manual testbench written
-    - Line coverage > 90%
+    - Line coverage: cov_tage 73.7% / cov_tage_table 79.5%
+      (session-060). NOTE: previously stated ">90%"; that claim is
+      stale vs the BP-081 run. TD#100 tracks whether the new
+      TD#87/#88 logic is under-covered or the accounting drifted.
     - Directed validation complete
     - remaining items deferred
         - #69 rollback -> bp_cluster
         - #67 sram_init non-fast
         - #74 dual-slot (bp_history part closed BP-072;
           TAGE/cluster dual-slot still deferred)
-        - #87/#88 SC-facing signals (tage_pred_medium/weak,
-          tage_provider_ctr, tage_extd_ctr) -- generation
-          logic to be added in TAGE; struct fields added 056.
-          the fix task ties these to zero as an interim (session-059).
+        - #100 coverage review (cov_tage vs prior >90% claim)
+    - #87/#88 SC-facing signals (tage_pred_strong/medium/weak,
+      tage_extd_ctr): CLOSED BP-081 -- generated for real in TAGE.
     - Formal validation not started
 - BP-006 through BP-032: complete.
 - BP-041 manual checks for tage CTR and USE complete
@@ -966,6 +1003,11 @@ Key decisions for quick reference:
     - BP-059 allocation + write gating (#62)
     - BP-060 prediction-side correctness (#64)
     - BP-061 round-trip capstone (#71)
+- BP-081: struct reconciliation + TD#87/#88 generation
+    - cond_pred_* FIFO retype (TD#94), tage_high_conf delete
+      (TD#95), strong/medium/weak decode (TD#87), tage_extd_ctr
+      (TD#88), pred_conf_decode_tst coverage, UAON gate on
+      tage_pred_weak, uaon_update_rules.md doc reconciliation.
 - Tage planning documents
     - planning/arch/tage_cntrl_alloc_rules.md         Complete
         - Table entry allocation rules
@@ -974,7 +1016,9 @@ Key decisions for quick reference:
     - planning/arch/tage_cntrl_decisions.md           Complete
         - TAGE control behavior, conventions and rules
     - planning/arch/tage_cntrl_uaon_update_rules.md   Complete
-        - UAON (Use ALT on newly allocated)  trigger rules
+        - UAON (Use ALT on newly allocated)  trigger rules.
+          Reconciled to TD#87 session-060 (gate on tage_pred_weak;
+          strong = strictly {000,111}).
     - planning/arch/tage_cntrl_use_update_rules.md    Complete
         - USE(ful) field update rules. Corrected session-045.
     - planning/arch/tage_table_hash_rules.md          Complete
@@ -1161,14 +1205,14 @@ Key decisions for quick reference:
       pc_range removed, captured_phr commented out (session-057);
       bp_sc_meta_t and cond_pred_meta_t/cond_pred_upd_inp_t commented
       out; bp_sc_chooser_e and br_imli_mode_e added; tage_pred_meta_t
-      gains tage_provider_ctr/tage_extd_ctr. Session-058:
-      sc_pred_meta_t.sc_upd_idx / sc_upd_ctr converted to packed 2D
-      arrays (Verilator rejected unpacked-in-packed).
+      gains tage_extd_ctr. Session-058: sc_pred_meta_t.sc_upd_idx /
+      sc_upd_ctr converted to packed 2D arrays. Session-060 (BP-081):
+      tage_pred_weak re-added; provider_ctr stays internal (not a
+      field); tage_high_conf confirmed absent.
 - Prerequisites for cluster integration (TD; not sc.sv unit work):
-    - #87 (tage_pred_medium/weak + strong-mapping verify), #88
-      (tage_provider_ctr / tage_extd_ctr generation in TAGE):
-      SC prediction sum and chooser consume these. TAGE ties these to
-      zero in the (unwritten) tage reconciliation; real generation is #87/#88.
+    - #87 (tage_pred_medium/strong/weak) and #88 (tage_extd_ctr):
+      CLOSED BP-081 -- SC prediction sum and chooser now have real
+      generated values from TAGE (were interim tie-off; superseded).
     - #89 / #90 (FTB stores branch PC[15:6] and per-slot backwards
       sign).
     - #91 (route PC p0->p2 to SC), #92 (capture phr[9:0] -> sc_phr_p2).
@@ -1244,102 +1288,4 @@ Key decisions for quick reference:
 ### Shared components track
 - components/rtl  components/tb
 
----
-
-# HAND-FIX Records
-
-- HAND-FIX-001 applied to tage_table.sv:
-    - Signals use_we_s0/s1 and epc_we_s0/s1 now gate on
-      prm_alt_match (prm_match | alt_match) instead of
-      prm_match alone. prm_alt_match_s0 and
-      prm_alt_match_s1 signals added.
-    - Debt #29 added and immediately closed.
-    - Applied after BP-010c.
-    - Recorded in session-handoff-023.
-
-- HAND-FIX-002 applied to tage_cntrl.sv:
-    - Signal tage_use_alt_on_na now set only when
-      uaon_trig AND counter MSB both set:
-      meta_p1[s].tage_use_alt_on_na =
-        uaon_trig_p1[s] & uaon[s][3];
-    - Debt #30 added and immediately closed.
-    - Applied after BP-010c.
-    - Recorded in session-handoff-023.
-
-- HAND-FIX-003 applied to tage_cntrl.sv:
-    - T0 CTR update condition corrected in
-      ctr_upd_comb u_both_t0 path.
-      u_resolved replaced with !u_mispredict.
-      BIM prediction correctness
-      (pred_tkn == resolved_taken) is the correct
-      INC/DEC gate, not branch outcome alone.
-    - Citeable: tage_cntrl_ctr_update_rules.md
-      rows 13a-d.
-    - Applied as part of BP-041.
-    - Recorded in session-handoff-045.
-
-  NOTE: HAND-FIX-003 was later reverted in BP-043a. The fix
-  was a false fail caused by an error in the planning document
-  for T0 CTR update
-
----
-
-# BUG Records
-
-- BUG-001: HAND-FIX-003. T0 CTR INC/DEC condition
-  wrong in tage_cntrl.sv. Found by tage_ctr_test
-  row 13a. Fixed BP-041. See session-handoff-045.
-- BUG-002: BP-049a renamed t_tgt_wr_u0 to t_prm/t_alt in
-  ittage_cntrl.sv and ran only sim_ittage. tb_ittage_cntrl
-  and tb_ittage_table were left uncompilable; their 77/0 and
-  32/0 counts carried in handoff-048 were stale (not from a
-  run). Found and repaired BP-050a. Cause of the all-targets-
-  must-run rule.
-- BUG-003: tage_cntrl.sv uaon_upd_ff gate missing && u_alt_tagged[s]. UAON
-  counter moved on single-hit transactions (provider tagged T1-T4 hit,
-  alternate fell through to untagged T0/BIM) where the prm-vs-alt comparison
-  carries no training signal. Found by TC-81, fixed BP-057. Same class as BUG
-  (ITTAGE #59, BP-051).
-- BUG-004: bp_history.sv folded-history geometry wrong vs the
-  Xiangshan FoldedHistory it mimics. Four defects:
-  (1) incremental insert at fold bit 0, not the high end;
-  (2) wrap-out bit removed at position 0, not (H-1) % W;
-  (3) rollback recompute (fold_ghr) used a separate, inequivalent
-  fold definition (forward walk i->i) vs the incremental path;
-  (4) 32b fold helpers truncate SC ST3 (H=W=64), making ST3
-  unrepresentable. Surfaced during BP-070 dual-slot test planning
-  (session-054). The old 12-test tb_bp_history passed only because
-  the fold window never filled past TC7 -- the bug lived in the
-  full-window region. Fixed BP-071 (single Xiangshan-geometry fold:
-  newest at high end, wrap-out at (H-1) % W, recompute posmap(i) =
-  (i+W-1) % W; 64b helpers). Single-slide equivalence proven offline
-  in BP-071. In-sim proof (single + dual-slot) completed BP-072
-  (19224 golden comparisons); externally anchored BP-073; geometry
-  captured natively in bp_history_decisions.md s6, doc-RTL verified
-  BP-074. CLOSED. BP-070 abandoned. See also BUG-005 (the
-  increment-oriented integration defect found while landing this
-  fix).
-- BUG-005: bp_history BP-069/BP-071 never co-resident; the merged
-  module-owned-pointer + fold geometry was never integrated or
-  tested in session-054. Root cause: session-054 left the BP-069
-  module-owned-pointer RTL only in versions/bp_history.sv and the
-  BP-071 fold-geometry fix only in the active rtl/ file; no single
-  file held both, so the pointer-to-fold addressing for an
-  incrementing module-owned pointer was never written or run.
-  handoff-054 and PROJECT_STATUS recorded both BP-069 and BP-071 as
-  landed and lint-clean -- inaccurate (the records were corrected
-  session-055). Surfaced in BP-072: merging the two produced an
-  incremental fold that diverged from the rollback recompute
-  (rolling back to an un-diverged checkpoint corrupted folded,
-  0x92 -> 0x00), because BP-071's geometry walk and BP-069's
-  incrementing pointer disagreed on direction. Fixed BP-072
-  (authorized scope expansion): increment-oriented walk (fold_ghr
-  ptr-i; fold_step evicts the leaving bit at write_addr-H) plus a
-  POST-advance checkpoint with recompute anchor ckpt-1. The BP-071
-  posmap and high-end insertion are unchanged; this is an addressing
-  reconciliation, not a geometry change, and no table-consumed fold
-  value moved. recompute == incremental proven in-sim BP-072;
-  externally anchored BP-073; geometry made native in
-  bp_history_decisions.md s6 (BP-074). versions/bp_history.sv is
-  superseded by the merged rtl/ file and should be retired. CLOSED.
 
