@@ -447,12 +447,10 @@ title: ""
       <div class="section-label">// recent</div>
       <div class="method-block" style="padding:14px 20px;">
         <p style="font-family:monospace;font-size:12px;line-height:2;color:var(--muted);">
-   
-       <span style="color:var(--accent);">●</span>&nbsp; New: IA session browser, see  Sessions tab<br>
-       <span style="color:var(--accent);">●</span>&nbsp; BP-041 complete &mdash; TAGE CTR update testing &middot; 2026.05.30<br>
-       <span style="color:var(--accent);">●</span>&nbsp; BP-042-048 complete &mdash; TAGE/ITTAGE audits and design improvements; 2026.06.08<br>
-       <span style="color:var(--accent);">●</span>&nbsp; TAGE/ITTAGE &mdash; unit testing complete; 2026.06.11<br>
-
+          <span style="color:var(--accent);">●</span>&nbsp; BP-079: dynamic BrIMLI indexing, see  Sessions tab<br>
+          <span style="color:var(--accent);">●</span>&nbsp; BP-078: stat corrector complete<br>
+          <span style="color:var(--accent);">●</span>&nbsp; BP-074: history consistency<br>
+          <span style="color:var(--accent);">●</span>&nbsp; BP-064: RAS complete<br>
         </p>
       </div>
     </section>

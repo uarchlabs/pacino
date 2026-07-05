@@ -592,6 +592,26 @@ The handoff document adds:
 
 ---
 
+# Periodically 
+
+## Publish sessions
+
+```
+./tools/gen_sessions.py
+
+correct any issues
+
+commit docs/sessions.json
+```
+
+## Update news
+
+```
+edit docs/index.html RECENT section
+```
+
+---
+
 # Naming Conventions
 
 | Item             | Convention               | Example                    |
