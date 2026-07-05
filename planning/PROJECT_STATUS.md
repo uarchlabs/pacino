@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-07-02 (pa session 060)
+ UPDATED: 2026-07-03 (pa session 061)
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,54 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+
+## Session-061: Planning Document Audit (INFRA-008/009/010)
+
+Before starting bp_cluster top-level design, three read-only IA
+audits checked the FTB, TAGE/SC, and ITTAGE/RAS planning documents
+against the shipped RTL/tb/Makefile for each group:
+
+  INFRA-008 (ftb):        clean, no issues found.
+  INFRA-009 (tage, sc):   12 findings, all doc drift, all fixed.
+  INFRA-010 (ittage, ras): 10 findings -- 8 doc drift (fixed) plus
+                            2 real design/RTL gaps, each resolved by
+                            a Jeff ruling (doc fixed this session,
+                            RTL-side gap opened as a new TD):
+    - Indirect-CALL ownership: ITTAGE predicts the target, RAS
+      separately pushes the return address. Both are in scope for
+      indirect CALL, each for a different job. ittage_interfaces.md
+      corrected (previously said RAS "exclusively").
+    - ITTAGE IT5: NOT a BrIMLI table. The "BrIMLI, no folds" framing
+      in bp_history_decisions.md and bp_cluster.md was a copy-paste
+      artifact from SC's real BrIMLI table (ST4). IT5 has real
+      folded history (FH=9b, FH1=9b, FH2=8b, hist=32b, per
+      bp_defines_pkg.sv, which was already correct). Docs corrected.
+      RTL gap (bp_history.sv never generates the IT5 folds it's
+      wired to) opened as TD #102.
+
+New TDs opened this session: #101 (ras.sv ras_pc_p2 dead/undocumented
+port), #102 (bp_history.sv missing IT5 fold generation), #104 (two
+stale RTL comments found during INFRA-008, see Technical Debt table).
+
+CONFLICT TO RESOLVE: TD#103 (added by Jeff, tage T0 init value) states
+T0 should initialize to weakly-taken (2'b10) and that the current
+00 (strongly-not-taken) init is a bug. INFRA-009 this same session
+corrected tage_cntrl_decisions.md's T0 init description FROM "10" TO
+"00" -- that correction was made to match CURRENT RTL/package behavior
+(TAGE_SRAM_INIT_VALUE=0 in bp_defines_pkg.sv), not to assert 00 is the
+intended value. The doc now accurately describes what the RTL does
+today, which TD#103 says is wrong. When TD#103 is resolved (RTL and/or
+TAGE_SRAM_INIT_VALUE changed to 2), tage_cntrl_decisions.md's T0 init
+line must be updated again to match. Do not treat the session-061 doc
+correction as having settled the "what should T0 init to" question --
+it only documented current behavior.
+
+FTB/TAGE-SC/ITTAGE-RAS planning docs are current as of this audit
+(module the TD#103 conflict above, which is an open RTL question, not
+a doc-vs-doc conflict). Safe to treat as interface authority for
+bp_cluster top-level design.
 
 ---
 
@@ -52,7 +100,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | CREDITS, SC_STARVE_THRESH; no    |
 |                         |             |                   | SC_PQ_DEPTH.                     |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
-|                         |             |                   | IT5 fold fields pending (II1).   |
+|                         |             |                   | IT5 fold fields present in       |
+|                         |             |                   | struct (II1); generation gap in  |
+|                         |             |                   | bp_history.sv tracked TD#102.    |
 |                         |             |                   | bp_ras_snapshot_t comment        |
 |                         |             |                   | updated session-050.             |
 |                         |             |                   | tb_bp_pkg.sv 6->4b literal fix   |
@@ -91,6 +141,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | doc-RTL consistency verified     |
 |                         |             |                   | (BP-074). Full bpu 33/33 green.  |
 |                         |             |                   | See BUG-004 / BUG-005.           |
+|                         |             |                   | Session-061 (INFRA-010): IT5     |
+|                         |             |                   | fold generation confirmed MISSING|
+|                         |             |                   | -- ittage.sv wires it_t5_* to    |
+|                         |             |                   | outputs this module never drives.|
+|                         |             |                   | TD#102.                          |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22; rules pointer       |
 |                         |             |                   | module-owned, rollback by index. |
@@ -102,6 +157,10 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | ratified. s10 pointer-authority  |
 |                         |             |                   | wording corrected. Doc-RTL       |
 |                         |             |                   | consistency verified BP-074.     |
+|                         |             |                   | Session-061 (INFRA-010): removed |
+|                         |             |                   | incorrect "IT5 (BrIMLI), no      |
+|                         |             |                   | folds" claim (s1, s8); IT5 has   |
+|                         |             |                   | real folded history, not BrIMLI. |
 |                         |             |                   | Functionally authoritative;      |
 |                         |             |                   | header still DRAFT pending s6.6  |
 |                         |             |                   | sha + HI2/HI5.                   |
@@ -119,7 +178,12 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | Port naming retrofit pending     |
 |                         |             |                   | (CLI-011)                        |
 | tage_interfaces.md      | Complete    | --                | session-036: 6 corrections       |
-|                         |             |                   | applied.                         |
+|                         |             |                   | applied. Session-061 (INFRA-009):|
+|                         |             |                   | tage_pred_strong corrected from  |
+|                         |             |                   | "NOT WEAK" to the actual TD#87   |
+|                         |             |                   | one-hot decode; tage_extd_ctr    |
+|                         |             |                   | added; dead tage_high_conf ref   |
+|                         |             |                   | removed.                         |
 | tage_table_interfaces.md| Draft       | --                | Created session-016.             |
 |                         |             |                   | Updates pending.                 |
 | tage_cntrl_use          | Complete    | --                | session-037: complete.           |
@@ -139,6 +203,18 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | ADR-001 added.                   |
 |                         |             |                   | Verified session-045 via         |
 |                         |             |                   | tage_use_test all 6 rows pass.   |
+| tage_cntrl_decisions.md | Complete    | --                | Session-061 (INFRA-009): T0 RAM  |
+|                         |             |                   | index corrected pc[11:1] ->      |
+|                         |             |                   | pc[12:2]; T0 init value corrected|
+|                         |             |                   | to 00 to MATCH CURRENT RTL (see  |
+|                         |             |                   | TD#103 conflict, top of file --  |
+|                         |             |                   | this doc now describes current   |
+|                         |             |                   | behavior, not necessarily correct|
+|                         |             |                   | behavior); "decoration flags"    |
+|                         |             |                   | list updated for TD#87/#88;      |
+|                         |             |                   | CTR-update summary "rows 18-21"  |
+|                         |             |                   | corrected to note that case is   |
+|                         |             |                   | architecturally impossible.      |
 | bw_ram / sat_alu        | Complete    | tb_components     | COMP-001 PASS                    |
 | dual_lm1                | Complete    | tb_components     | COMP-002 now uses generate       |
 | sram_init               | Complete    | tb_components     | COMP-003                         |
@@ -163,7 +239,9 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                         |             |                   | generated; UAON gate moved to    |
 |                         |             |                   | tage_pred_weak (behavior-        |
 |                         |             |                   | preserving). Elaborates, lints   |
-|                         |             |                   | clean.                           |
+|                         |             |                   | clean. TD#103 OPEN: T0 init      |
+|                         |             |                   | value under review (00 vs        |
+|                         |             |                   | intended weakly-taken 10).       |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | BP-010 through BP-030 complete.  |
 |                         |             |                   | Directed validation complete.    |
@@ -207,12 +285,31 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 | ittage_interfaces.md              | Draft       | --    | session-036: corrections applied.|
 |                                   |             |       | session-037: II6 resolved.       |
 |                                   |             |       | session-038: redundancy collapse |
-|                                   |             |       | applied.                         |
+|                                   |             |       | applied. Session-061 (INFRA-010):|
+|                                   |             |       | indirect-CALL ownership corrected|
+|                                   |             |       | (ITTAGE + RAS both in scope, not |
+|                                   |             |       | "RAS exclusively"); IT5 BrIMLI/  |
+|                                   |             |       | no-folds language removed (II1); |
+|                                   |             |       | IT_SRAM_INIT_VALUE name corrected|
+|                                   |             |       | (was ITTAGE_SRAM_INIT_VALUE).    |
 | ittage_table_interfaces.md        | Draft       | --    | Created session-036.             |
 |                                   |             |       | session-038: redundancy collapse |
-|                                   |             |       | applied.                         |
+|                                   |             |       | applied. Session-061 (INFRA-010):|
+|                                   |             |       | "4 total writes" claim corrected |
+|                                   |             |       | (ITTAGE writes one CTR per slot  |
+|                                   |             |       | per update, unlike TAGE); single |
+|                                   |             |       | tgt_wr_u0 port split into        |
+|                                   |             |       | prm_tgt_wr_u0/alt_tgt_wr_u0 to   |
+|                                   |             |       | match RTL.                       |
 | ittage_cntrl_alloc_rules.md       | Complete    | --    | Created session-033.             |
-|                                   |             |       | session-036: verified.           |
+|                                   |             |       | session-036: verified. Session-  |
+|                                   |             |       | 061 (INFRA-010): allocation      |
+|                                   |             |       | write-data field order corrected |
+|                                   |             |       | [TAG,EPC,USE,CTR,TGT,VALID] ->   |
+|                                   |             |       | [TAG,TGT,EPC,USE,CTR,VALID]      |
+|                                   |             |       | (was building a corrupt entry if |
+|                                   |             |       | followed literally); doc         |
+|                                   |             |       | cross-reference corrected.       |
 | ittage_cntrl_ctr_update_rules.md  | Complete    | --    | session-045: TBD draft replaced  |
 |                                   |             |       | with fully specified 33-row      |
 |                                   |             |       | table. Assert rows A1/A2/A3      |
@@ -235,6 +332,11 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                                   |             |       | Defines fold CONSUMPTION only;   |
 |                                   |             |       | fold COMPUTATION is in           |
 |                                   |             |       | bp_history_decisions.md s6.      |
+| ittage_table_entry_formats.md     | Complete    | --    | Session-061 (INFRA-010): TAG     |
+|                                   |             |       | field width parameter corrected  |
+|                                   |             |       | IT_TBL_TGT_WIDTH -> IT_TBL_TAG[t]|
+|                                   |             |       | (was citing the target-width     |
+|                                   |             |       | parameter for the tag field).    |
 | ittage_table.sv  | Complete       | tb_ittage_table | BP-033/033-FIX-1 complete. |
 | ittage_cntrl.sv  | Complete       | tb_ittage_cntrl | Prediction path complete BP-034|
 |                  |                |                 | Update path complete BP-035      |
@@ -248,18 +350,35 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |                |           | sim_ittage 211 pass / 0 fail      |
 |                  |                |           | tests added BP-054.               |
 |                  |                |           | round trip tests added in BP-055. |
+|                  |                |           | Session-061: IT5 fold ports       |
+|                  |                |           | confirmed wired to bp_history.sv  |
+|                  |                |           | outputs that are never driven     |
+|                  |                |           | (permanently 0). TD#102.          |
 | ras_decisions.md | Draft          | --             | Created session-050.             |
 |                  |                |                | G5/G6/G8/G17 decisions recorded. |
 |                  |                |                | Reconciled to RTL BP-064         |
 |                  |                |                | (sec 1/1.2, 3.2, 3.3/4.5).       |
 |                  |                |                | Renamed to p-naming session-057. |
 |                  |                |                | See BP Cluster Open TBDs.        |
+|                  |                |                | Session-061 (INFRA-010):         |
+|                  |                |                | RAS_COMMIT_PTR_WIDTH corrected to|
+|                  |                |                | RAS_COMMIT_PTR_BITS (param       |
+|                  |                |                | already exists, doc wrongly said |
+|                  |                |                | "not yet added"), sections 9/11. |
 | ras_interfaces.md| Draft          | --             | Created session-050. IC-RAS-11   |
 |                  |                |                | repair semantics appended BP-064.|
+|                  |                |                | Session-061 (INFRA-010): added   |
+|                  |                |                | previously-undocumented port     |
+|                  |                |                | ras_pc_p2 to the port list        |
+|                  |                |                | (present in ras.sv, unread; see  |
+|                  |                |                | TD#101).                          |
 | ras.sv           | Complete       | tb_ras         | RTL BP-062, tb BP-063. sim_ras   |
 |                  |                |                | 87/0 this session (BP-064).      |
 |                  |                |                | TD #78 pinned (TC-21); TD #79    |
-|                  |                |                | (commit_rctr) deferred.          |
+|                  |                |                | (commit_rctr) deferred. TD#101   |
+|                  |                |                | OPEN: ras_pc_p2 input declared,  |
+|                  |                |                | unread -- confirm needed or      |
+|                  |                |                | remove.                          |
 | ftb_decisions.md | Complete       | --             | Created session-051. Storage     |
 |                  |                |                | split, bimodal conf, fast-path,  |
 |                  |                |                | position fix (session-053).      |
@@ -276,9 +395,19 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |                |                | cold init. BP-065a.              |
 | ftb_cntrl.sv     | Complete       | sim_ftb        | All FTB logic. BP-066 /          |
 |                  |                |                | BP-066a (conf/fast-path) /       |
-|                  |                |                | BP-066b (position).              |
+|                  |                |                | BP-066b (position). Session-061  |
+|                  |                |                | (INFRA-008): stale header comment|
+|                  |                |                | "107 bits/way" noted, actual 105.|
+|                  |                |                | Comment-only, not fixed this     |
+|                  |                |                | session; see TD#104.             |
 | ftb.sv           | Complete       | tb_ftb         | Structural top. BP-067.          |
-|                  |                | sim_ftb        | sim_ftb 99/0 (BP-068).           |
+|                  |                | sim_ftb        | sim_ftb 99/0 (BP-068). Session-  |
+|                  |                |                | 061 (INFRA-008): stale comment   |
+|                  |                |                | noted -- says ftb_fastpath_en is |
+|                  |                |                | "beyond the interface draft";    |
+|                  |                |                | it's a documented port now.      |
+|                  |                |                | Comment-only, not fixed this     |
+|                  |                |                | session; see TD#104.             |
 | sc_decisions.md  | Draft          | --             | Created session-056. Five pure-  |
 |                  |                |                | counter tables ST0-ST4, no tags, |
 |                  |                |                | ST4=BrIMLI. Dynamic threshold    |
@@ -312,12 +441,39 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |                  |                |                | sram_init sized to ST4; arb      |
 |                  |                |                | ports stubbed (TD#73/#94);       |
 |                  |                |                | SC_BR_IMLI_MODE param (BP-079).  |
+| sc_interfaces.md | Complete       | --             | Written session-058. Session-061 |
+|                  |                |                | (INFRA-009): Arbitration Model   |
+|                  |                |                | section corrected -- SC update   |
+|                  |                |                | queue is currently STUBBED at    |
+|                  |                |                | unit level (was documented as    |
+|                  |                |                | functional), real arbiter        |
+|                  |                |                | deferred to bp_cluster (TD#73/   |
+|                  |                |                | #94).                            |
+| sc_table_interfaces.md | Complete  | --             | Written session-058. Session-061 |
+|                  |                |                | (INFRA-009): br_imli_mode        |
+|                  |                |                | corrected from documented runtime|
+|                  |                |                | port to actual compile-time      |
+|                  |                |                | parameter (BR_IMLI_MODE,         |
+|                  |                |                | BP-079).                          |
+| sc_table_hash_rules.md | Complete  | --             | Written session-058. Session-061 |
+|                  |                |                | (INFRA-009): br_imli_mode param  |
+|                  |                |                | status corrected, same as above. |
+| sc_tb_decisions.md | Complete     | --             | Session-061 (INFRA-009): ST0 tb  |
+|                  |                |                | coverage claim corrected --      |
+|                  |                |                | tb_sc_table.sv only instantiates |
+|                  |                |                | ST1; ST0's zero-fold path is     |
+|                  |                |                | untested at unit level. Coverage |
+|                  |                |                | gap noted, no TD assigned.       |
 | SC (unit)        | Complete       | --             | Tables+control+top green         |
 |                  |                |                | (BP-075..079). Remaining unit    |
 |                  |                |                | item: sc_coverage_plan.md.       |
 |                  |                |                | Cluster prereqs #89-#92 open     |
 |                  |                |                | (#87/#88 CLOSED BP-081).         |
-| bp_cluster (top) | Not started    | --             | After predictors complete        |
+| bp_cluster (top) | Not started    | --             | After predictors complete. Doc-  |
+|                  |                |                | audit (INFRA-008/009/010)        |
+|                  |                |                | complete session-061; planning   |
+|                  |                |                | docs current (TD#103 excepted,   |
+|                  |                |                | see note at top of file).        |
 | fetch            | Not started    | --             | After BP cluster                 |
 
 ---
@@ -627,6 +783,14 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |    |       | writes collapsed to whole-struct (dead .sc/.sc_valid/     |
 |    |       | .resolved_taken/.cond_mispredict dropped). tage           |
 |    |       | elaborates green. No cond_pred_* type remains referenced. |
+|    |       |                                                           |
+|    |       | Session-061 (INFRA-009/010): section 3.4 (TAGE/SC/ITTAGE  |
+|    |       | redirect ports) and section 5.4 (ITTAGE_RESP_BUF_DEPTH)   |
+|    |       | annotated -- these describe bp_cluster-level signals not  |
+|    |       | present on any current unit-level RTL; the response       |
+|    |       | buffer named in 5.4 was removed BP-038b. Clarification,   |
+|    |       | not a correction (doc wasn't factually wrong, just         |
+|    |       | readable as describing an existing unit port).            |
 | 95 | tage  | The tage prediction response structure tage_pred_meta_t   |
 |    |       | was changed in bp_structs_pkg. Add support for additions, |
 |    |       | remove deletions, reverify tests and planning docs.       |
@@ -695,19 +859,46 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 |     |       | directed coverage if the new logic is under-covered, or    |
 |     |       | correct the accounting. Gate the ">90%" claim on this.     |
 | 101 | ras.sv | declares input ras_pc_p2, unread in the module.       |
-|     |        | Undocumented in ras_interfaces.md prior to this fix. Confirm |
-|     |        | at RAS cleanup whether needed; if not, remove from ras.sv    |
-|     |        | and tb_ras.sv.                                               |
+|     |        | Undocumented in ras_interfaces.md prior to session-061    |
+|     |        | (INFRA-010; doc now documents the port and cites this TD). |
+|     |        | Confirm at RAS cleanup whether needed; if not, remove from |
+|     |        | ras.sv and tb_ras.sv.                                       |
 | 102 | bp_history.sv | does not generate IT5 folds. ittage.sv wires  |
 |     |       | it_t5_idx_fh/tag_fh1/tag_fh2 to bp_history.sv outputs that   |
 |     |       | are never driven -- permanently 0. IT5 has real history      |
 |     |       | (IT_TBL_HIST[5]=32, IT_TBL_FH[5]=9, FH1[5]=9, FH2[5]=8, per  |
 |     |       | bp_defines_pkg.sv). Add IT5 fold generation to bp_history.sv |
-|     |       | (same pattern as IT1-IT4).                                    |
+|     |       | (same pattern as IT1-IT4). Found session-061 (INFRA-010);   |
+|     |       | IT5 is NOT BrIMLI -- that framing in bp_history_decisions.md |
+|     |       | and bp_cluster.md was a copy-paste error from SC's real      |
+|     |       | BrIMLI table (ST4), corrected same session.                  |
 | 103 | tage  | tage logic now initializes T0 to 00 (strongly not taken)   \
 |     |       | this is not intended, T0 entries should be initialized as  |
 |     |       | weakly taken. This impacts how TAGE_SRAM_INIT_VALUE is used|
 |     |       | with sram_init. Init value should be b10 (2) weakly taken. |
+|     |       | NOTE (session-061): tage_cntrl_decisions.md's T0 init line |
+|     |       | was corrected this session to describe the CURRENT (00)    |
+|     |       | behavior, matching TAGE_SRAM_INIT_VALUE=0 as it stands      |
+|     |       | today -- this is documenting the bug this TD tracks, not    |
+|     |       | resolving it. When this TD closes (RTL and/or               |
+|     |       | TAGE_SRAM_INIT_VALUE changed to 2), update                  |
+|     |       | tage_cntrl_decisions.md's T0 init line again.               |
+| 104 | ftb   | Two stale RTL header comments found during the session-061  |
+|     |       | planning-doc audit (INFRA-008). Not doc errors -- the docs   |
+|     |       | and actual behavior are correct; only the comments in the   |
+|     |       | RTL are stale. Comment-only, no behavior change:             |
+|     |       |   - ftb_cntrl.sv (~line 163): header comment says "Private   |
+|     |       |     RAM entry layout (107 bits/way)". Actual struct/package  |
+|     |       |     value is 105 bits (FTB_RAM_ENTRY_WIDTH). 107 predates    |
+|     |       |     the session-053 always_taken removal.                    |
+|     |       |   - ftb.sv (~lines 33-35, 80-82): comment states             |
+|     |       |     ftb_fastpath_en is "a top port beyond the current        |
+|     |       |     ftb_interfaces.md draft". Stale -- ftb_interfaces.md 2.4 |
+|     |       |     lists it as a documented top input (renamed from         |
+|     |       |     chicken_bit_enable, session-053). Only the "source TBD"  |
+|     |       |     clause in the comment is still accurate.                 |
+|     |       | Fold into the first FTB-touching RTL task, or a dedicated    |
+|     |       | comment-cleanup task if none is scheduled soon.               |
 
 ---
 
@@ -872,9 +1063,11 @@ Key decisions for quick reference:
 - Pipeline: s0 index, s1 uBTB+Loop, s2 FTB+TAGE+ITTAGE+RAS,
   s3 SC
 - Override chain: SC > TAGE > FTB > uBTB
-- ITTAGE overrides FTB target at s2 for indirect branches.
-  RAS overrides FTB target at s2 for returns. Both are
-  mutually exclusive by branch type resolved upstream.
+- ITTAGE overrides FTB target at s2 for indirect branches
+  (including indirect CALL -- see indirect-CALL ownership note,
+  session-061, top of file). RAS overrides FTB target at s2 for
+  returns and separately pushes the return address on indirect/
+  direct CALL for its own stack bookkeeping.
 - Loop overrides uBTB at s1 when trusted
 - Update policy: post-execute, not retire
 - RAS: Dual-stack, static partition, 16 speculative +
@@ -898,8 +1091,14 @@ Key decisions for quick reference:
   definition for update and recompute; increment-oriented
   walk, post-advance checkpoint. Proven in-sim BP-072,
   externally anchored BP-073, doc-RTL verified BP-074.
-  (session-055)
-- TAGE entry: T0 2b CTR only, T1-T4 valid+tag+CTR+useful
+  (session-055). ITTAGE IT5 has real folded history (FH=9b,
+  FH1=9b, FH2=8b, hist=32b) -- it is NOT a BrIMLI table; that
+  framing was a copy-paste error corrected session-061. RTL
+  generation of the IT5 fold in bp_history.sv is TD#102, open.
+- TAGE entry: T0 2b CTR only, T1-T4 valid+tag+CTR+useful.
+  T0 init value under review, TD#103 open (RTL currently
+  initializes 00/strongly-not-taken; TD#103 argues for
+  10/weakly-taken).
 - ITTAGE entry: IT1-IT5 valid+tag+EPC+USE+CTR(3b)+TGT(38b).
   No IT0 base table. CTR is confidence not direction.
   Target written on misprediction when CTR is null only.
@@ -918,8 +1117,11 @@ Key decisions for quick reference:
 - SC arbitration: single-port RAM predict-vs-update contention
   via the section 4.5 credit arbiter; SC has no independent
   prediction FIFO (TAGE response buffer is SC's PQ); separate
-  SC update queue; CSR sc_enable gates SC participation. See
-  planning/arch/bp_arb_spec.md (session-057).
+  SC update queue -- currently STUBBED at the unit level
+  (sc_uq_not_full tied 1, sc_upd_rdy tied all-ones), real
+  arbiter deferred to bp_cluster (TD#73/#94); CSR sc_enable
+  gates SC participation. See planning/arch/bp_arb_spec.md
+  (session-057).
 - NUM_PRED_SLOTS=2 is the default for all current design
   work. Both slot 0 and slot 1 logic always present
   unconditionally. Reduction to 1 is deferred (debt #1).
@@ -969,15 +1171,49 @@ Key decisions for quick reference:
           to the standalone-SC model (separate SC UQ, TAGE
           response buffer as SC PQ, CSR enable). TD#94 CLOSED
           BP-081 (tage FIFOs retyped; no cond_pred_* remains).
+          Session-061: sections 3.4/5.4 annotated as describing
+          bp_cluster-level signals, not current unit ports.
     - planning/arch/bp_cluster.md                     In progress
-        - Branch prediction cluster summary data
+        - Branch prediction cluster summary data. Session-061
+          (INFRA-010): indirect-CALL ownership and ITTAGE IT5
+          BrIMLI/no-folds claim corrected -- see top of file.
     - planning/arch/ras_decisions.md                  Draft
         - RAS micro-architectural decisions (session-050;
-          p-naming session-057)
+          p-naming session-057). Session-061: RAS_COMMIT_PTR_
+          WIDTH -> RAS_COMMIT_PTR_BITS corrected.
     - planning/arch/sram_init.md                      Complete
         - Post reset RAM initialization operation
     - planning/testbenches/manual_tb_decisions.md     Complete
         - General rules for manual testbench creation
+
+### Session-061 planning document audit (INFRA-008/009/010)
+
+Read-only audit of the FTB, TAGE/SC, and ITTAGE/RAS planning
+documents against shipped RTL/tb/Makefile, run ahead of bp_cluster
+top-level design so the docs can be trusted as interface authority
+when the cluster instantiates all seven predictors at once.
+
+  - INFRA-008 (ftb): clean. Two stale RTL comments noted, tracked
+    TD#104 (comment-only, not fixed this session).
+  - INFRA-009 (tage, sc): 12 findings, all doc drift, all fixed this
+    session. See per-file notes in Module Status above.
+  - INFRA-010 (ittage, ras): 10 findings. 8 doc drift, fixed. 2 real
+    design/RTL gaps, each resolved by a Jeff ruling with the doc
+    fixed this session and the RTL-side gap opened as a TD:
+    indirect-CALL ownership (ITTAGE predicts target + RAS pushes
+    return address, both in scope) and ITTAGE IT5 (real folded
+    history, NOT BrIMLI -- TD#102 tracks the missing bp_history.sv
+    fold generation).
+
+New TDs from this session: #101 (ras_pc_p2 dead/undocumented port),
+#102 (IT5 fold generation missing), #104 (FTB stale RTL comments).
+
+Open conflict surfaced (not created) this session: TD#103 (tage T0
+init value) vs. the tage_cntrl_decisions.md correction made during
+INFRA-009 -- see the note at the top of this file. The doc now
+describes current (00) RTL behavior; TD#103 argues that behavior is
+wrong. Not contradictory once read together, but flagged so the next
+reader doesn't mistake the doc correction for a resolution of TD#103.
 
 ### TAGE decomposition
 - Session-060 (BP-081): tage RECONCILED and GREEN. The retired
@@ -988,6 +1224,10 @@ Key decisions for quick reference:
   tage_pred_weak re-added to the package; UAON gate moved to
   tage_pred_weak (behavior-preserving). tage elaborates, all tage
   targets green this session (sim_tage 105/0).
+- Session-061: planning docs (tage_interfaces.md,
+  tage_cntrl_decisions.md) reconciled to the TD#87/#88 decode and
+  T0 index/init corrections. See INFRA-009 note above. TD#103 open
+  on T0 init value -- see conflict note at top of file.
 - RTL is available
     - Unit testbenches written
     - Manual testbench written
@@ -1002,6 +1242,8 @@ Key decisions for quick reference:
         - #74 dual-slot (bp_history part closed BP-072;
           TAGE/cluster dual-slot still deferred)
         - #100 coverage review (cov_tage vs prior >90% claim)
+        - #103 T0 init value (open, session-061 flagged conflict
+          with the planning-doc correction -- see top of file)
     - #87/#88 SC-facing signals (tage_pred_strong/medium/weak,
       tage_extd_ctr): CLOSED BP-081 -- generated for real in TAGE.
     - Formal validation not started
@@ -1028,7 +1270,9 @@ Key decisions for quick reference:
     - planning/arch/tage_cntrl_ctr_update_rules.md    Complete
         - CTR field update rules
     - planning/arch/tage_cntrl_decisions.md           Complete
-        - TAGE control behavior, conventions and rules
+        - TAGE control behavior, conventions and rules. Session-061:
+          T0 index/init and CTR-update summary corrections -- see
+          Module Status.
     - planning/arch/tage_cntrl_uaon_update_rules.md   Complete
         - UAON (Use ALT on newly allocated)  trigger rules.
           Reconciled to TD#87 session-060 (gate on tage_pred_weak;
@@ -1041,7 +1285,8 @@ Key decisions for quick reference:
     - planning/arch/tage_table_entry_formats.md       Complete
         - Central specification of table entry fields and ordering
     - planning/interfaces/tage_interfaces.md          Complete
-        - TAGE module interface contracts
+        - TAGE module interface contracts. Session-061: strong/
+          medium/weak/extd_ctr corrections -- see Module Status.
     - planning/interfaces/tage_table_interfaces.md    Complete
         - TAGE table module interface contracts
 
@@ -1055,8 +1300,17 @@ Key decisions for quick reference:
         - #43 CTR width
         - #75 sim_ittage_fast
         - #68 sram_init non-fast
+        - #102 IT5 fold generation missing in bp_history.sv (new,
+          session-061)
     - Formal validation not started
 - BP-034 - BP-042 complete (BP-033 abandoned)
+- Session-061 (INFRA-010): indirect-CALL ownership and IT5 BrIMLI/
+  no-folds claim corrected across ittage_interfaces.md,
+  bp_history_decisions.md, bp_cluster.md; ittage_cntrl_alloc_rules.md
+  write-data field order corrected; ittage_table_interfaces.md
+  tgt_wr_u0 split and "4 total writes" claim corrected;
+  ittage_table_entry_formats.md TAG width param corrected. See
+  Module Status for per-file detail.
 - ITTage planning documents
     - planning/arch/ittage_cntrl_alloc_rules.md         Complete
         - Table entry allocation rules
@@ -1083,13 +1337,15 @@ Key decisions for quick reference:
     - planning/arch/ras_decisions.md                  Draft
         - RAS micro-architectural decisions
     - planning/interfaces/ras_interfaces.md           Draft
-        - RAS module interface contracts
+        - RAS module interface contracts. Session-061: ras_pc_p2
+          port added (was undocumented; TD#101).
 - RTL available:
     - rtl/ras.sv                   complete (BP-062)
     - tb/tb_ras.sv                 complete (BP-063)
     - sim_ras 87/0 (BP-064 this session)
     - TD #78 pinned (tb_ras TC-21), TD #79 (commit_rctr)
       deferred -- see PROJECT_STATUS Technical Debt.
+    - TD #101 open (ras_pc_p2 declared, unread; session-061)
 - Key decisions session-050:
     - G5: 16 speculative + 32 commit, static partition
     - G6: 4b recursion counter, in scope for initial design
@@ -1128,6 +1384,10 @@ Key decisions for quick reference:
   FTB stores branch PC[15:6] (TD#89, supplied to sc_upd_inp.branch_
   range) and the per-slot backwards-branch sign (TD#90, supplied to
   sc_upd_inp.backwards_branch) for SC BrIMLI maintenance.
+- Session-061 (INFRA-008): audit clean, no doc-vs-RTL discrepancy.
+  Two stale RTL header comments found (107 bits/way in ftb_cntrl.sv;
+  fastpath_en "beyond interface draft" in ftb.sv) -- tracked TD#104,
+  not fixed this session (comment-only, deferred to next FTB touch).
 - FTB planning documents
     - planning/arch/ftb_decisions.md                   Complete
         - FTB micro-architectural decisions (canonical authority)
@@ -1174,13 +1434,18 @@ Key decisions for quick reference:
     - planning/interfaces/sc_interfaces.md            Written (058)
         - SC top-level ports. ST4 PC width resolved to inp_pc_p2[15:6]
           (IC-SC-03). br_imli_mode later made a parameter (059), no
-          longer a port.
+          longer a port. Session-061: Arbitration Model section
+          corrected (SC UQ is stubbed at unit level, not functional).
     - planning/arch/sc_table_hash_rules.md            Written (058)
-        - sc_idx_hash (ST0-ST3), get_br_imli_idx (ST4).
+        - sc_idx_hash (ST0-ST3), get_br_imli_idx (ST4). Session-061:
+          br_imli_mode parameter status corrected.
     - planning/interfaces/sc_table_interfaces.md      Written (058)
         - sc_table (ST0-ST3), sc_brimli (ST4). Counter-only entry.
+          Session-061: br_imli_mode parameter status corrected.
     - planning/testbenches/sc_tb_decisions.md         Written (058)
         - Unit-tb conventions (SC_FAST_INIT, mem[b][i] paths).
+          Session-061: ST0 tb-coverage claim corrected (no ST0
+          instance exists; coverage gap noted, no TD).
     - planning/arch/sc_cntrl_ctr_update_rules.md      NOT WRITTEN
         - Optional; write at coverage/tb time citing sc_decisions s10.
     - verification/sc_coverage_plan.md                NOT WRITTEN
@@ -1190,7 +1455,9 @@ Key decisions for quick reference:
       s8-s10); sc_table_entry_formats.md (SC entry is a single signed
       counter).
     - sram_init.md: shared standalone file; SC fast-init inline in
-      sc_decisions s13.
+      sc_decisions s13. Session-061: SC moved from "future consumer"
+      to confirmed consumer; plusarg name corrected +TAGE_FAST_INIT
+      -> +SC_FAST_INIT.
 - RTL COMPLETE at unit level (BP-075 through BP-079):
     - rtl/core/frontend/bpu/rtl/sc_table.sv    ST0-ST3 (BP-075/075a)
     - rtl/core/frontend/bpu/rtl/sc_brimli.sv   ST4 BrIMLI (BP-076)
@@ -1237,6 +1504,12 @@ Key decisions for quick reference:
 - COMPLETE at unit level (session-055). Module-owned pointer,
   corrected/increment-oriented fold geometry, canonical fold
   definition captured natively, suite green.
+- Session-061 (INFRA-010): incorrect "IT5 is BrIMLI, no folds" claim
+  removed from bp_history_decisions.md sections 1 and 8, and from
+  bp_cluster.md. IT5 has real folded history (FH=9b, FH1=9b, FH2=8b,
+  hist=32b per bp_defines_pkg.sv, which was already correct). RTL gap
+  (bp_history.sv does not generate the IT5 fold it's wired to in
+  ittage.sv) opened as TD#102.
 - Planning documents (session-054, extended session-055):
     - planning/arch/bp_history_decisions.md           Draft
         - G20/G21/G22 resolution + module-owned pointer
@@ -1247,6 +1520,8 @@ Key decisions for quick reference:
           s6.6 (sha TBD, #83).
         - s7 checkpoint POST-advance ratified; s10 pointer-
           authority wording corrected.
+        - Session-061: IT5 BrIMLI/no-folds claim corrected -- IT5
+          is a real folded-history table.
     - planning/interfaces/bp_history_interfaces.md    Draft
         - Target interface (module-owned ptr, dual-slot,
           rollback by index, stale folds). Checkpoint Timing
@@ -1260,6 +1535,7 @@ Key decisions for quick reference:
           checkpoint reconciled with the incrementing pointer
           (BP-072). See BUG-004 / BUG-005.
         - Lint clean; no bpu regression.
+        - TD#102 open: IT5 fold generation missing (session-061).
 - Verification:
     - BP-072: dual-slot fold equivalence (TD #74) proven in-sim;
       16 directed TCs, 19224 golden fold comparisons; single-slot,
@@ -1296,10 +1572,10 @@ Key decisions for quick reference:
     - #84 producer/consumer end-to-end fold check -> bp_cluster
       (now also covers SC ST1-ST3 consumers)
     - #69/#70 rollback stimulus -> bp_cluster
+    - #102 IT5 fold generation missing (new, session-061)
     - versions/bp_history.sv (stale BP-069 copy) superseded by the
       merged rtl/ file; retire it (BUG-005)
 
 ### Shared components track
 - components/rtl  components/tb
-
 
