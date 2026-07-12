@@ -8,6 +8,15 @@ date: 2026-03-28
 copyright: "Copyright 2026 Jeff Nye"
 ---
 
+---
+
+*This is one of a series of articles on the branch predictor
+co-design.*
+
+[Part 1: Cluster Architecture](BLOG_bpu_1_cluster_arch.md)<br>
+
+---
+
 *This is part 2 of a series on branch predictor co-design.
 [Part 1: Cluster Architecture](BLOG_bpu_1_cluster_arch.md) |
 [Part 2: History and uBTB](BLOG_bpu_2_history_ubtb.md) |

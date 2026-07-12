@@ -8,16 +8,7 @@ date: 2026-04-22
 copyright: "Copyright 2026 Jeff Nye"
 ---
 
-*This is part 5 of a series on branch predictor co-design.
-[Part 1: Cluster Architecture](BLOG_bpu_1_cluster_arch.md) |
-[Part 2: History and uBTB](BLOG_bpu_2_history_ubtb.md) |
-[Part 3: Loop Predictor](BLOG_bpu_3_loop_pred.md) |
-[Part 4: When the Tools Fail](BLOG_bpu_4_limits.md) |
-[Part 5: TAGE -- Architecture and the Decomposition Problem](BLOG_bpu_5_tage_arch.md)*
-
----
-
-## A Different Kind of Failure
+## A Different Kind of Success
 
 The previous post documented what happens when the generation tooling reaches
 its ceiling on a task that is not especially large by hardware design standards.

@@ -6,11 +6,11 @@
 
 ```
  FILE:    BLOG_bpu_1_cluster_arch
- STATUS:  unpublished
+ STATUS:  COMPLETE
  UPDATED: 2026-xx-xx
  CONTACT: uarchlabs@gmail.com
-```
 
+```
 <!--
 ---
 title: "Building a Seven-Predictor Branch Prediction Cluster for RVA23"
@@ -20,11 +20,13 @@ copyright: "Copyright 2026 Jeff Nye"
 
 ---
 
-*This is part 1 of a series on branch predictor co-design.*
-- [Part 1: Cluster Architecture](BLOG_bpu_1_cluster_arch.md)
-- [Part 2: History and uBTB](BLOG_bpu_2_history_ubtb.md)
-- [Part 3: Loop Predictor](BLOG_bpu_3_loop_pred.md)
-- [Part 4: When the Tools Fail](BLOG_bpu_4_limits.md)
+*This is one of a series of articles on the branch predictor
+co-design.*
+
+[Part 1: Cluster Architecture](BLOG_bpu_1_cluster_arch.md)<br>
+[Part 2: History and uBTB](BLOG_bpu_2_history_ubtb.md)<br>
+[Part 3: Loop Predictor](BLOG_bpu_3_loop_pred.md)<br>
+[Part 4: When the Tools Fail](BLOG_bpu_4_limits.md)<br>
 
 ---
 -->

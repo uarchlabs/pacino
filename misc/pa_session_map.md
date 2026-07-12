@@ -2,7 +2,11 @@
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 
-RVA23 Co-Design Part N
+- The 'Part' column indicates a PA session named in this format: J
+    - RVA23 Co-Design Part N
+- The experiment files are indicated by alpha dash three digit number
+    - Examples BP-023,  COMP-001, etc
+
 ```
 |Part|Description                | Documents
 |----|---------------------------|-------------------------------------------|
@@ -20,7 +24,7 @@ RVA23 Co-Design Part N
 | 3  | BP cluster architecture   | bp_cluster.md                             |
 |    | A planning session for BPU| xiangshan_ras_design.md                   |
 |    | BP element parameters     | BP-001 executed                           |
-|    |                           | CLAUDE.md updated                         |
+|    | BLOG_bpu_1                | CLAUDE.md updated                         |
 |    |                           | session_handoff-003                       |
 |    |                           | PROJECT_STATE.md emitted                  |
 |    |                           | STATUS.md        emitted                  |
@@ -29,16 +33,16 @@ RVA23 Co-Design Part N
 |    | ? two handoffs in 1 session  | seems sh-003 not used                  |
 |    |                   |  |
 | 4  | bp_history        | BP-002 run                                |
-|    |                   | session_handoff-005                       |
+|    | BLOG_bpu_2        | session_handoff-005                       |
 |    |                   |  |
 | 5  | uBTB              | BP-003 run                                |
-|    |                   | BP-003-fix run                            |
+|    | BLOG_bpu_2        | BP-003-fix run                            |
 |    |                   | ubtb_interfaces.md                        |
 |    |                   | bp_history_interfaces.md                  |
 |    |                   | session_handoff-006                       |
 |    |                   |  |
 | 6  | loop_pred         | BP-004 run                                |
-|    |                   | loop_pred_interfaces.md                   |
+|    | BLOG_bpu_3        | loop_pred_interfaces.md                   |
 |    |                   | hit  response output token limits         |
 |    |                   | hit  usage limits, c.code off the rails   |
 |    |                   | BP-004 split into a and b                 |
@@ -49,7 +53,7 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-007                       |
 |    |                   |  |
 | 7  | loop_pred         | BP-004b failed to run context limit       |
-|    |                   | Decision to split into c/d/e              |
+|    | BLOG_bpu_3        | Decision to split into c/d/e              |
 |    |                   | BP-004c: loop_pred.sv RTL only
 |    |                   | BP-004d: tb_loop_pred.sv TC1-TC7          |
 |    |                   |              + Makefile sim_loop target   |
@@ -61,12 +65,12 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-008                       |
 |    |                   |  |
 | 8  | loop_pred         | BP-004c run                               |
-|    |                   | BP-004d run ?                             |
+|    | BLOG_bpu_3        | BP-004d run ?                             |
 |    |                   | Issues with context in PA                 |
 |    |                   | session_handoff-009                       |
 |    |                   |  |
 | 9  | loop_pred         | BP-004e run                               |
-|    |                   | BP-004f emitted                           |
+|    | BLOG_bpu_4        | BP-004f emitted                           |
 |    |                   | attempted slash command run-prompt        |
 |    |                   |   slash command eventually abandoned      |
 |    |                   | validate_and_extract.py written to pull   |
@@ -74,7 +78,7 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-010                       |
 |    |                   |  |
 | 10 | loop_pred         | BP-004f run attempted finally run         |
-|    |                   |  The response generation timed out after  |
+|    | BLOG_???          |  The response generation timed out after  |
 |    |                   |  reading all context files                |
 |    |                   | split 004f into 004f-1 thru N             |
 |    |                   | Very frustrating session with PA due to   |
@@ -84,7 +88,7 @@ RVA23 Co-Design Part N
 |    |                   | This session probably needs it's own blog |
 |    |                   | session_handoff-011                       |
 | 11 | tage              | BP-005  |
-|    |                   | input bp_cluster.md |
+|    | BLOG_???          | input bp_cluster.md |
 |    |                   | created tage_interfaces.md |
 |    |                   | updated bp_defines_pkg.sv |
 |    |                   | updated bp_structs_pkg.sv |
@@ -92,7 +96,7 @@ RVA23 Co-Design Part N
 |    |                   | output session_handoff-012 |
 |    |                   |  |
 | 12 | tage components   | this session implemented components      |
-|    |                   | needed by tage |
+|    | BLOG_bpu_5        | needed by tage |
 |    |                   |  |
 |    |                   | COMP-001 |
 |    |                   |  |
@@ -102,7 +106,7 @@ RVA23 Co-Design Part N
 |    |                   |  |
 |    |                   |  |
 | 13 | tage components   | COMP-002 |
-|    |                   | COMP-003 |
+|    | BLOG_???          | COMP-003 |
 |    |                   | output session_handoff-013 |
 |    |                   | i think the numbering for the session  |
 |    |                   | handoffs may have been incorrect |
@@ -111,32 +115,32 @@ RVA23 Co-Design Part N
 |    |                   | where the off by one error was introduced |
 |    |                   |  |
 | 14 | tage              | BP-006 tage_hash    completed |
-|    |                   | BP-007 tage_table  adandoned draft |
+|    | BLOG_bpu_5        | BP-007 tage_table  adandoned draft |
 |    |                   | BP-008 tage        adandoned draft |
 |    |                   | BP-009             adandoned draft |
 |    |                   | hashing functions |
 |    |                   | session_handoff-015 |
 |    |                   |  |
 | 15 | tage              | BP-007a unknown |
-|    |                   | BP-007b emitted |
+|    | BLOG_bpu_5        | BP-007b emitted |
 |    |                   | session_handoff-016 |
 |    |                   | un clear what was accomplished |
 |    |                   |  |
 | 16 | tage              | largely clean up session ? |
-|    |                   | tech debt table udpated |
+|    | BLOG_bpu_5        | tech debt table udpated |
 |    |                   | merged PROJECT_STATE into PROJECT_STATUS |
 |    |                   | PROJECT_STATUS |
 |    |                   | session_handoff-017 |
 |    |                   |  |
 | 17 | tage              | |
-|    |                   | tage_cntrl_decisions.md |
+|    | BLOG_bpu_5        | tage_cntrl_decisions.md |
 |    |                   | tage_cntrl_ctr_update_rules.md |
 |    |                   | tage_cntrl_useful_update_rules |
 |    |                   | tage_cntrl_alloc_rules.md  |
 |    |                   | session_handoff-018 |
 |    |                   |  |
 | 18 | tage              | |
-|    |                   | BP-008a.md hit limit split into a1/a2 |
+|    | BLOG_bpu_6        | BP-008a.md hit limit split into a1/a2 |
 |    |                   | BP-008a-1.md tage shell ran |
 |    |                   | BP-008a-2.md prediction logic ran |
 |    |                   | BP-008b.md update logic emitted  |
@@ -145,21 +149,21 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-019 |
 |    |                   |  |
 | 19 | tage              | BP-007d ran |
-|    |                   | BP-007e ran  |
+|    | BLOG_bpu_6        | BP-007e ran  |
 |    |                   | BP-007f ran |
 |    |                   | BP-008b emitted |
 |    |                   | BP-007c number skipped i think? |
 |    |                   | session_handoff-019 |
 |    |                   |  |
 | 20 | tage              | BP-008b ran |
-|    |                   | validate_and_extract.py modified   |
+|    | BLOG_bpu_6        | validate_and_extract.py modified   |
 |    |                   | BP-009 ran |
 |    |                   | BP-009a ran |
 |    |                   | BP-009a-1 emitted |
 |    |                   | session_handoff-021 note numbering change |
 |    |                   |  |
 | 21 | tage              | BP-09a-1 ran |
-|    |                   | BP-09b ran |
+|    | BLOG_bpu_6        | BP-09b ran |
 |    |                   | BP-010 ran testbench |
 |    |                   | BP-010a ran |
 |    |                   | BP-010b ran |
@@ -169,21 +173,22 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-022 |
 |    |                   |  |
 | 22 | tage              | BP-010c ran |
-|    |                   | tage_cntrl_use_update_rules.md |
+|    | BLOG_bpu_7        | tage_cntrl_use_update_rules.md |
 |    |                   | BP-010d ran  |
 |    |                   | BP-010e ran  |
 |    |                   | BP-010f emitted |
+|    |                   | BLOG_bpu_8                     |
 |    |                   | session_handoff-023 |
 |    |                   |  |
 | 23 | tage              | BP-010f ran |
-|    |                   | BP-011  ran  testbench |
+|    | BLOG_bpu_7        | BP-011  ran  testbench |
 |    |                   | BP-012  ran  |
 |    |                   | BP-013  ran |
 |    |                   | BP-014a emitted testbench |
 |    |                   | session_handoff-024 |
 |    |                   |  |
 | 24 | tage              | BP-014a ran  |
-|    |                   | BP-014b ran   |
+|    | BLOG_bpu_7        | BP-014b ran   |
 |    |                   | BP-014c ran  |
 |    |                   | BP-014d ran |
 |    |                   | BP-014e ran |
@@ -193,7 +198,7 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-025 |
 |    |                   |  |
 | 25 | tage              | BP-015  ran |
-|    |                   | BP-016  ran |
+|    | BLOG_bpu_7        | BP-016  ran |
 |    |                   | BP-017a ran |
 |    |                   | BP-017b ran |
 |    |                   | BP-018  ran |
@@ -203,60 +208,75 @@ RVA23 Co-Design Part N
 |    |                   | session_handoff-026 |
 |    |                   |  |
 | 26 | tage              | |
-|    |                   | confusion user in chat says : "019b was a  |
+|    | BLOG_bpu_8        | confusion user in chat says : "019b was a  |
 |    |                   | context mistake, it does not exist" |
 |    |                   | BP-020  ran |
 |    |                   | BP-021  ran |
 |    |                   | session_handoff-027 |
 |    |                   |  |
 | 27 | tage              | BP-022  ran |
-|    |                   | BP-022a ran |
+|    | BLOG_bpu_8        | BP-022a ran |
 |    |                   | BP-022b ran |
 |    |                   | session_handoff-028 |
 |    |                   |  |
 | 28 | tage              | BP-022c ran |
-|    |                   | BP-023a ran |
+|    | BLOG_bpu_8        | BP-023a ran |
 |    |                   | BP-023b ran |
 |    |                   | session_handoff-029 |
-|    |                   |  |
-| 29 | clean up          | INFRA-001-006 complete |
-|    | coverage          | BP-023c complete 54 tests |
-|    | tage              | BP-024 allocation root cause |
-|    |                   | BP-025 written not executed |
+|    |                   |                               |
+| 29 | clean up          | INFRA-001-006 complete        |
+|    | tage coverage plan| BP-023c complete 54 tests     |
+|    | BLOG_bpu_9        | BP-024 allocation root cause  |
+|    |                   | BP-025 written not executed   |
 |    |                   | tage_coverage_plan.md written |
-|    |                   | new /run command, simple |
-|    |                   | new directory tree |
-| 30 | ???               | BP-026 BP-027 BP-028(emitted)|
-|    |                   |  |
-| 31 | ???               | BP-028(run)     |
-|    |                   | BP-029(emitted) |
-|    |                   | BP-030(emitted) |
-|    |                   |  |
-| 32 | ???               | BP-029(run)     |
-|    |                   | BP-030(run)     |
-|    |                   | session_handoff-033 |
-| 33 | ???               | planning only  |
-|    |                   | session_handoff-034 |
-| 34 | ???               | planning only  |
-|    |                   | session_handoff-035 |
-| 35 | ???               | planning only  |
-|    |                   | session_handoff-036 |
-| 36 | ???               | planning only  |
-|    |                   | session_handoff-037 |
-| 37 | ???               | BP-031         |
-|    |                   | BP-032         |
-|    |                   | session_handoff-038 |
-| 38 | ???               | planning       |
+|    |                   | new /run command, simple      |
+|    |                   | new directory tree            |
+|    |                   | output session_handoff-030    |
+| 30 | tage coverage     | BP-025                        |
+|    | BLOG_bpu_9        | BP-026                        |
+|    |                   | BP-027                        |
+|    |                   | BP-028(emitted)               |
+|    |                   | tage coverage closure         |
+|    |                   |                               |
+|    |                   | output session_handoff-031    |
+| 31 | tage pred tests   | BP-028(run)                   |
+|    | tage coverage     | BP-029(emitted)               |
+|    | BLOG_bpu_9        | BP-030(emitted)               |
+|    |                   | output session_handoff-032    |
+|    |                   |                               |
+| 32 | tage coverage     | BP-029(run)                   |
+|    | BLOG_bpu_9        | BP-030(run)                   |
+|    |                   | session_handoff-033           |
+
+| 33 | ittage planning   | planning only                 |
+|    | BLOG_bpu_10       | output session_handoff-034    |
+
+| 34 | ittage planning   | planning only                 |
+|    | BLOG_bpu_10       | output session_handoff-035    |
+
+| 35 | ittage planning   | planning only                 |
+|    | BLOG_bpu_10       | output session_handoff-036    |
+
+| 36 | ittage planning   | planning only                 |
+|    | BLOG_bpu_10       | output session_handoff-037    |
+
+| 37 | tage USE          | BP-031                        |
+|    | tage UAON         | BP-032                        |
+|    |                   | session_handoff-038           |
+
+| 38 | ittage planning   | planning       |
 |    |                   | session_handoff-039 |
-| 39 | ???               | BP-033         |
+
+| 39 | ittage sv         | BP-033         |
 |    |                   | BP-033-fix-1        |
 |    |                   | session_handoff-040 |
-| 40 | ???               | BP-034 |
+
+| 40 | ittage sv         | BP-034 |
 |    |                   | BP-034a  ???|
 |    |                   | BP-035 |
 |    |                   | BP-036 |
 |    |                   | session_handoff-041 |
-| 41 | ???               | BP-037  |
+| 41 | ittage sv         | BP-037  |
 |    |                   | BP-037a |
 |    |                   | BP-037b |
 |    |                   | BP-038  |
@@ -416,7 +436,19 @@ RVA23 Co-Design Part N
 |    |              | BP-079 (was named 079a, changed)     |
 |    |              | BP-080                               |
 |    |              | output session_handoff-060           |
-| 60 | tage clenaup | input session_handoff-060            |
+| 60 | tage cleanup | input session_handoff-060            |
 |    |              | tage_cntrl_uaon_update_rules.md      |
 |    |              | BP-081                               |
 |    |              | output session_handoff-061           |
+|    |              | output session_handoff-060           |
+| 61 | ?            | input session_handoff-061            |
+|    |              | verify planning docs against design  |
+|    |              | INFRA-008                            |
+|    |              | INFRA-009                            |
+|    |              | INFRA-010                            |
+|    |              | output session_handoff-062           |
+| 62 | ?            | input session_handoff-062            |
+|    |              | architecture design for FE           |
+|    |              | a very fraught session               |
+|    |              | switched to IA for direct files access |
+|    |              | output session_handoff-???           |
