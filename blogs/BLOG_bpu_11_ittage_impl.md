@@ -31,7 +31,7 @@ co-design.*
 [Part 7: TAGE -- Validation](BLOG_bpu_7_tage_validation.md)<br>
 [Part 8: TAGE -- Arbitration and Integration](BLOG_bpu_8_tage_arbitration.md)<br>
 [Part 9: TAGE -- Coverage Methodology and Closure](BLOG_bpu_9_tage_coverage.md)<br>
-[Part 10: ITTAGE -- Design and Planning Documents](BLOG_bpu_10_ittage_planning.md)<br>
+[Part 10: ITTAGE -- Design and Planning Documents](BLOG_bpu_10_ittage_planning.md)
 
 ---
 

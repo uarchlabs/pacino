@@ -247,43 +247,38 @@
 | 32 | tage coverage     | BP-029(run)                   |
 |    | BLOG_bpu_9        | BP-030(run)                   |
 |    |                   | session_handoff-033           |
-
 | 33 | ittage planning   | planning only                 |
 |    | BLOG_bpu_10       | output session_handoff-034    |
-
 | 34 | ittage planning   | planning only                 |
 |    | BLOG_bpu_10       | output session_handoff-035    |
-
 | 35 | ittage planning   | planning only                 |
 |    | BLOG_bpu_10       | output session_handoff-036    |
-
 | 36 | ittage planning   | planning only                 |
 |    | BLOG_bpu_10       | output session_handoff-037    |
-
 | 37 | tage USE          | BP-031                        |
 |    | tage UAON         | BP-032                        |
-|    |                   | session_handoff-038           |
+|    | BLOG_bpu_11       | session_handoff-038           |
 
 | 38 | ittage planning   | planning       |
-|    |                   | session_handoff-039 |
+|    | BLOG_bpu_11       | session_handoff-039 |
 
 | 39 | ittage sv         | BP-033         |
-|    |                   | BP-033-fix-1        |
+|    | BLOG_bpu_11       | BP-033-fix-1        |
 |    |                   | session_handoff-040 |
 
 | 40 | ittage sv         | BP-034 |
-|    |                   | BP-034a  ???|
+|    | BLOG_bpu_11       | BP-034a  ???|
 |    |                   | BP-035 |
 |    |                   | BP-036 |
 |    |                   | session_handoff-041 |
 | 41 | ittage sv         | BP-037  |
-|    |                   | BP-037a |
+|    | BLOG_bpu_11       | BP-037a |
 |    |                   | BP-037b |
 |    |                   | BP-038  |
 |    |                   | BP-038a |
 |    |                   | session_handoff-042 |
 | 42 | ittage            | input session_handoff-042    |
-|    |                   | TD #47 completed             |
+|    | BLOG_bpu_11       | TD #47 completed             |
 |    |                   | RB removal from ittage       |
 |    |                   | BP-038b                      |
 |    |                   | BP-039                       |
@@ -294,16 +289,16 @@
 | 43 | sram init cleanup | input session_handoff-043    |
 |    | ittage clean up   | TB-001/2                     |
 |    | manual testbenches| BP-040                       |
-|    |                   | BP-041 partially written     |
+|    | BLOG_bpu_12       | BP-041 partially written     |
 |    |                   | manual_tb_decisions.md       |
 |    |                   | sram_fast_init.md            |
 |    |                   | session_handoff-044          |
 | 44 | ???          | BP-041 manually generated and run    |
-|    |              | HAND-FIX-003 (mislabled as 001)      |
+|    | BLOG_bpu_12  | HAND-FIX-003 (mislabled as 001)      |
 |    |              | asserts and 1st ADR                  |
 |    |              | session_handoff-045                  |
 | 45 | web/sessions | input session_handoff-045            |
-|    |              | web/session management               |
+|    | BLOG_bpu_12  | web/session management               |
 |    |              | tage/ittage asserts                  |
 |    |              | ittage ctr update rules              |
 |    |              | BP-042    run                        |
