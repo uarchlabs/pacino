@@ -408,10 +408,8 @@ these posts drift into vague "AI helped with X" language.
 
 ### 8. Draft the generalization
 
-One closing paragraph naming the pattern that recurs across the clusters. This
-requires looking backward across the series, not just at the current range, so
-re-read the prior post's own generalization before writing this one — avoid
-repeating the same claim in different words two posts running.
+Provide a summary or generalization of any impacts or results with the 
+IA/PA/User methodology.
 
 ### 9. Assemble in the template (below)
 
@@ -433,12 +431,16 @@ The desired length is 2500 words or greater. Maximum 5000 words.
 These are guideline, if exceeded consult user.
 
 
-## Frontmatter additions
+## File metadata fields
 
-- Existing `title`, `author`, `date`, `copyright` fields are
-  already sufficient for attribution and dating; no change
-  needed there.
-- `file` is added for local file management
+The metadata block is a fenced code block at the top of the file (see File meta
+data, above). That is the only metadata mechanism; do not add YAML frontmatter,
+and do not add fields to the metadata block.
+
+The block is closed: TITLE, FILE, AUTHOR, DATE, STATUS, COPYRIGHT.  The
+publishing pipeline errors on unrecognized fields (DESCRIPTION was attempted
+and rejected). TITLE, AUTHOR, DATE, and COPYRIGHT carry attribution and dating;
+FILE is for local file management.
 
 ## Heading structure
 

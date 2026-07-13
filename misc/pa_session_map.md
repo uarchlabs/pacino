@@ -311,7 +311,7 @@
 |    |              | mis-named output session_handofl-047 |
 |    |              | corrected output session_handoff-046 |
 | 46 | tage/ittage  | input session_handoff-046            |
-|    |              | human mistake in tage ctr rules      |
+|    | BLOG_bpu_13  | human mistake in tage ctr rules      |
 |    |              | BP-043                               |
 |    |              | BP-043a                              |
 |    |              | BP-044                               |
