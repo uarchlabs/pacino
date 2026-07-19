@@ -447,9 +447,10 @@ title: ""
       <div class="section-label">// recent</div>
       <div class="method-block" style="padding:14px 20px;">
         <p style="font-family:monospace;font-size:12px;line-height:2;color:var(--muted);">
+          <span style="color:var(--accent);">●</span>&nbsp; August travel hiatus<br>
+          <span style="color:var(--accent);">●</span>&nbsp; BP-080: TAGE-SC interface complete, see  Sessions tab<br>
           <span style="color:var(--accent);">●</span>&nbsp; BP-079: dynamic BrIMLI indexing, see  Sessions tab<br>
           <span style="color:var(--accent);">●</span>&nbsp; BP-078: stat corrector complete<br>
-          <span style="color:var(--accent);">●</span>&nbsp; BP-074: history consistency<br>
           <span style="color:var(--accent);">●</span>&nbsp; BP-064: RAS complete<br>
         </p>
       </div>
