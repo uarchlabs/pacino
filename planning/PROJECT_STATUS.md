@@ -897,8 +897,22 @@ bp_cluster top-level design.
 |     |       |     lists it as a documented top input (renamed from         |
 |     |       |     chicken_bit_enable, session-053). Only the "source TBD"  |
 |     |       |     clause in the comment is still accurate.                 |
-|     |       | Fold into the first FTB-touching RTL task, or a dedicated    |
-|     |       | comment-cleanup task if none is scheduled soon.               |
+
+| 105 |loop_pred| loop_pred dual-slot retrofit. loop_pred.sv is single-slot; |
+|     |         | modify loop_pred to support dual prediction modify         |
+|     |         | RTL, test cases, testbenches. |
+|     |         | rename pred_p0 to pred_p1     |
+|     |         | correct loop_pred_interfaces.md to match RTL |
+
+
+on. fe_decisions.md 2.1 and ftq_bpu_interfaces.md
+describe both LP and uBTB presenting NUM_PRED_SLOTS predictions per cycle.
+Retrofit loop_pred to dual prediction: slot dimension on pred_pc_p0,
+pred_valid_p0, pred_p0, upd_p0, upd_valid_p0, and the internal tables per TI6.
+Touches loop_pred.sv, tb_loop_pred.sv, and loop_pred_interfaces.md. Fold in the
+pred_p0 to pred_p1 rename while the testbenches are already being touched.
+Found INFRA-011 / session-063.|     |       | comment-cleanup task if none is
+scheduled soon.               |
 
 ---
 

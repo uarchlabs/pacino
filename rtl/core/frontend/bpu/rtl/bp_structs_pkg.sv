@@ -75,7 +75,7 @@ package bp_structs_pkg;
   // ----------------------------------------------------------------
 
   // Branch type encoding, 3b.
-  // Used in bp_ftq_entry_t.br_type and bp_update_t.br_type.
+  // Used in bp_ftq_slot_t.br_type and bp_update_t.br_type.
   typedef enum logic [2:0] {
     COND            = 3'b000, // conditional branch (JAL/B-type)
     DIRECT_CALL     = 3'b001, // direct call: JAL rd=x1 or x5
@@ -87,7 +87,7 @@ package bp_structs_pkg;
   } bp_br_type_e;
 
   // Prediction source: which predictor supplied the final result.
-  // Recorded in bp_ftq_entry_t.pred_src at prediction commit time.
+  // Recorded in bp_ftq_slot_t.pred_src at prediction commit time.
   typedef enum logic [2:0] {
     PRED_UBTB   = 3'b000, // uBTB supplied prediction (s1)
     PRED_LOOP   = 3'b001, // loop predictor overrode uBTB (s1)
@@ -210,7 +210,7 @@ package bp_structs_pkg;
     // not a struct field. Only tage_extd_ctr is exposed to SC.
     logic signed   [TAGE_MAX_CTR_WIDTH+1:0] tage_extd_ctr;
 
-    // FTQ slot index appended to tage_pred_meta_t fields
+    // FTQ entry index appended to tage_pred_meta_t fields
     logic [FTQ_IDX_BITS-1:0]       branch_id;
   } tage_pred_meta_t;
 
@@ -266,7 +266,7 @@ package bp_structs_pkg;
     logic                          ittage_pred_strong;   // NOT WEAK
     logic                          ittage_use_alt_on_na; // USE_ALT_ON_NA
     logic                          ittage_using_primary; // primary supplied
-    // FTQ slot index
+    // FTQ entry index
     logic [FTQ_IDX_BITS-1:0]       branch_id;
   } ittage_pred_meta_t;
 
@@ -326,6 +326,7 @@ package bp_structs_pkg;
     //This range selector is calculated are prediction used during update
     bp_sc_chooser_e          sc_chooser;
 
+    //FTQ entry index
     logic [FTQ_IDX_BITS-1:0]  branch_id;
     //logic [9:0]               branch_range;
     //logic [9:0]               captured_phr;
@@ -374,25 +375,41 @@ package bp_structs_pkg;
   // Top-level structs
   // ----------------------------------------------------------------
 
-  // bp_ftq_entry_t: fast-path FTQ entry.
-  // Stored in a fast SRAM read every cycle by the front-end.
-  // The RAS snapshot is stored here for O(1) redirect recovery.
+  // bp_ftq_slot_t: one prediction slot of one fetch block.
+  // The slots are the branch fields of one 32-byte FTB block, not
+  // two PC ranges. See planning/arch/ftb_decisions.md 2.1, 2.3.
+  // Carried as an array inside bp_ftq_entry_t.
   typedef struct packed {
-    logic [VA_WIDTH-1:0]       pc;         // fetch block start PC
-    logic [VA_WIDTH-1:0]       target;     // predicted next PC
+    logic                      slot_valid; // slot carries a branch
+    logic [VA_WIDTH-1:0]       target;     // predicted target
     bp_br_type_e               br_type;    // branch type
     logic                      taken;      // predicted taken/not-taken
     bp_pred_src_e              pred_src;   // predictor that won
     logic [FTQ_CONF_BITS-1:0]  confidence; // saturating confidence (TBD)
-    logic [FTQ_IDX_BITS-1:0]   branch_id;  // FTQ slot index
+  } bp_ftq_slot_t;
+
+  // bp_ftq_entry_t: fast-path FTQ entry.
+  // Stored in a fast SRAM read every cycle by the front-end.
+  // One entry holds one fetch block and all NUM_PRED_SLOTS
+  // predictions for it.
+  // The RAS snapshot is stored here for O(1) redirect recovery.
+  // ghist_ptr and phist_ptr are this entry's history checkpoint.
+  typedef struct packed {
+    logic [VA_WIDTH-1:0]       pc;         // fetch block start PC
+    logic [FTQ_IDX_BITS-1:0]   branch_id;  // FTQ entry index
     bp_ras_snapshot_t          ras;        // RAS pointer snapshot
     logic [GHIST_PTR_BITS-1:0] ghist_ptr;  // GHR circular buf pointer
     logic [PHIST_PTR_BITS-1:0] phist_ptr;  // PHR circular buf pointer
     logic                      valid;
+    // Per-slot prediction fields. Packed-struct dimension descends.
+    bp_ftq_slot_t [NUM_PRED_SLOTS-1:0] slot;
   } bp_ftq_entry_t;
 
   // bp_ftq_meta_t: slow-path FTQ metadata.
   // Stored in a separate wide SRAM. Read only on post-execute update.
+  // Carried per prediction slot. The array
+  //   bp_ftq_meta_t [NUM_PRED_SLOTS-1:0]
+  // is declared at instantiation, not inside this struct.
   // Fields are logically union-overloaded by branch type; full
   // overload scheme is TBD at implementation.
   typedef struct packed {
@@ -412,7 +429,7 @@ package bp_structs_pkg;
   //   bp_update_t [NUM_PRED_SLOTS-1:0]
   // is declared at instantiation, not inside this struct.
   typedef struct packed {
-    logic [FTQ_IDX_BITS-1:0] branch_id;     // FTQ slot (branch ID)
+    logic [FTQ_IDX_BITS-1:0] branch_id;     // FTQ entry index
     logic [VA_WIDTH-1:0]     pc;            // fetch PC of branch
     logic                    actual_taken;  // resolved direction
     logic [VA_WIDTH-1:0]     actual_target; // resolved target
@@ -426,12 +443,17 @@ package bp_structs_pkg;
   // ----------------------------------------------------------------
 
   // bp_redirect_t: pipeline redirect signal.
-  // Used for both s2_redirect and s3_redirect outputs.
-  // s2: fires when FTB/TAGE/ITTAGE/RAS disagrees with uBTB s1.
-  // s3: fires when SC overrides TAGE direction from s2.
+  // Per-slot payload. The array
+  //   bp_redirect_t [0:NUM_PRED_SLOTS-1]
+  // is declared at the port, with a scalar FTQ entry index
+  // alongside it: both slots occupy one FTQ entry.
+  // Used for both p2_redirect and p3_redirect outputs.
+  // p2: fires when FTB/TAGE/ITTAGE/RAS disagrees with the entry.
+  // p3: fires when SC overrides TAGE direction from p2.
+  // ftq_idx;  removed from struct since it is shared across slots
   typedef struct packed {
     logic [VA_WIDTH-1:0]      target_pc; // redirect target address
-    logic [FTQ_IDX_BITS-1:0]  ftq_idx;   // FTQ entry being squashed
+    //logic [FTQ_IDX_BITS-1:0]  ftq_idx;   // FTQ entry being squashed
     logic                     valid;
   } bp_redirect_t;
 
