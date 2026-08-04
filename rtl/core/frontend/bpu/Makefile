@@ -46,6 +46,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ftb_cntrl \
         lint_ftb \
         sim_ftb \
+        lint_bp_cluster \
         sim_tage sim_tage_fast sim_tage_tasks sim_tage_manual clean
 
 all: lint  \
@@ -72,6 +73,7 @@ all: lint  \
      lint_ftb_plru \
      lint_ftb_cntrl \
      lint_ftb \
+     lint_bp_cluster \
      sim \
      sim_history \
      sim_ubtb \
@@ -502,6 +504,49 @@ lint_ftb:
 	  $(RTL_DIR)/ftb_plru.sv \
 	  $(RTL_DIR)/ftb_cntrl.sv \
 	  $(RTL_DIR)/ftb.sv $(VSILENCE)
+
+# -- BP cluster structural top (bp_cluster.sv, BP-084).
+#    VARHIDDEN:    tage/sc/ubtb NUM_PRED_SLOTS shadows the package
+#                  parameter of the same name.
+#    SYNCASYNCNET: sram_init async reset + sync flops in the tage,
+#                  ittage and sc leaf logic (same as lint_tage).
+#    UNDRIVEN:     the section 6 redirect outputs and the section 4
+#                  p1 prediction outputs are declared and left
+#                  undriven by design (BP-084 binding decisions);
+#                  redirect derivation and the p1 selection mux are
+#                  later tasks.
+lint_bp_cluster:
+	@echo "[linting]    bp_cluster"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  -Wno-UNDRIVEN \
+	  --top-module bp_cluster \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/bp_history.sv \
+	  $(RTL_DIR)/ubtb.sv \
+	  $(RTL_DIR)/loop_pred.sv \
+	  $(RTL_DIR)/ftb_array.sv \
+	  $(RTL_DIR)/ftb_plru.sv \
+	  $(RTL_DIR)/ftb_cntrl.sv \
+	  $(RTL_DIR)/ftb.sv \
+	  $(RTL_DIR)/tage_bim.sv \
+	  $(RTL_DIR)/tage_table.sv \
+	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage.sv \
+	  $(RTL_DIR)/ittage_table.sv \
+	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage.sv \
+	  $(RTL_DIR)/sc_table.sv \
+	  $(RTL_DIR)/sc_brimli.sv \
+	  $(RTL_DIR)/sc_cntrl.sv \
+	  $(RTL_DIR)/sc.sv \
+	  $(RTL_DIR)/ras.sv \
+	  $(RTL_DIR)/bp_cluster.sv $(VSILENCE)
 
 sim_ras:
 	@echo "[compiling]  tb_ras"
