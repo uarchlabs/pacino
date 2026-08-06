@@ -7,12 +7,36 @@
 // DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
-// Self-checking testbench for ubtb.sv.
-// TC1-TC10 cover reset, hit, miss, aliasing, replacement,
-// br_type coverage, carry bit, update overwrite, dual-slot,
-// and read-during-write same set.
+// Self-checking testbench for ubtb.sv (BP-086 entry format).
 //
-// These results need to be checked against results from manual testbench
+// The uBTB now performs ONE lookup per cycle against a reshaped entry
+// that describes ONE UBTB_BLOCK_BYTES block: two conditional fields
+// (br0, br1), one block-terminating jump field, and a partial
+// fall-through plus carry. Prediction slot 0 comes from br0, slot 1
+// from br1, and the jump is reported in the lowest slot carrying no
+// valid conditional field.
+//
+// Every test establishes its own start state with a reset plus a
+// known driven sequence; no test carries state from another, and no
+// test relies on residue in an unrelated way. Addressing stimulus
+// (same-set / distinct-tag) is DERIVED and asserted before use rather
+// than assumed.
+//
+// TC01 reset state and lookup miss
+// TC02 one entry supplying both conditional slots
+// TC03 hit with only br0 occupied
+// TC04 hit with no field occupied -- successor is the fall-through
+// TC05 miss: same set, different tag; and a different set
+// TC06 jump field reported in a slot, all five jump types
+// TC07 jump placed in the lowest slot with no conditional field
+// TC08 conf trained to both saturation points; position held
+// TC09 target reconstruction, conditional and jump displacements
+// TC10 fall-through reconstruction, carry in both states
+// TC11 both update channels writing one entry in the same cycle
+// TC12 NUM_PRED_SLOTS=1 reports br0 only
+// TC13 two distinct tags coexisting in one set
+// TC14 round-robin replacement across UBTB_WAYS
+// TC15 read-during-write: prediction sees the pre-update state
 // ===================================================================
 
 import bp_defines_pkg::*;
@@ -20,39 +44,44 @@ import bp_structs_pkg::*;
 module tb;
 
   // ----------------------------------------------------------------
-  // DUT signals: NUM_PRED_SLOTS=1
+  // DUT: NUM_PRED_SLOTS=2 (primary)
   // ----------------------------------------------------------------
-  logic                          clk;
-  logic                          rstn;
-  logic [VA_WIDTH-1:0]           pred_pc;
-  ubtb_pred_t [0:0]              pred1;
-  ubtb_upd_t  [0:0]              upd1;
+  logic                clk;
+  logic                rstn;
 
-  ubtb #(.NUM_PRED_SLOTS(1)) dut1 (
-    .clk        (clk),
-    .rstn       (rstn),
-    .pred_pc_p0 (pred_pc),
-    .pred_p1    (pred1),
-    .upd_u0     (upd1)
-  );
-
-  // ----------------------------------------------------------------
-  // DUT signals: NUM_PRED_SLOTS=2 (TC9)
-  // ----------------------------------------------------------------
-  logic [VA_WIDTH-1:0]           pred_pc2;
-  ubtb_pred_t [1:0]              pred2;
-  ubtb_upd_t  [1:0]              upd2;
+  logic [VA_WIDTH-1:0] pred_pc2;
+  ubtb_pred_t [1:0]    pred2;
+  ubtb_blk_t           blk2;
+  ubtb_upd_t  [1:0]    upd2;
 
   ubtb #(.NUM_PRED_SLOTS(2)) dut2 (
     .clk        (clk),
     .rstn       (rstn),
     .pred_pc_p0 (pred_pc2),
     .pred_p1    (pred2),
+    .blk_p1     (blk2),
     .upd_u0     (upd2)
   );
 
   // ----------------------------------------------------------------
-  // Clock generation: 10ns period
+  // DUT: NUM_PRED_SLOTS=1 (TC12)
+  // ----------------------------------------------------------------
+  logic [VA_WIDTH-1:0] pred_pc1;
+  ubtb_pred_t [0:0]    pred1;
+  ubtb_blk_t           blk1;
+  ubtb_upd_t  [0:0]    upd1;
+
+  ubtb #(.NUM_PRED_SLOTS(1)) dut1 (
+    .clk        (clk),
+    .rstn       (rstn),
+    .pred_pc_p0 (pred_pc1),
+    .pred_p1    (pred1),
+    .blk_p1     (blk1),
+    .upd_u0     (upd1)
+  );
+
+  // ----------------------------------------------------------------
+  // Clock: 10ns period
   // ----------------------------------------------------------------
   initial clk = 0;
   /* verilator lint_off BLKSEQ */
@@ -60,342 +89,863 @@ module tb;
   /* verilator lint_on BLKSEQ */
 
   // ----------------------------------------------------------------
-  // Test infrastructure
+  // Scoreboard
   // ----------------------------------------------------------------
-  int fail_count;
+  int pass_cnt;
+  int fail_cnt;
+  int tc_mark;
 
-  task automatic check(
-    input string  tc,
-    input logic   cond,
-    input string  msg
-  );
-    if (!cond) begin
-      $display("FAIL [%s]: %s", tc, msg);
-      fail_count++;
+  task automatic check(input string nm, input logic cond);
+    if (cond) begin
+      pass_cnt++;
+    end else begin
+      fail_cnt++;
+      $display("FAIL: %s", nm);
     end
   endtask
 
-  // Pulse reset for 2 cycles
+  task automatic tc_open(input string nm);
+    tc_mark = fail_cnt;
+    $display("---- %s", nm);
+  endtask
+
+  task automatic tc_close(input string nm);
+    $display("%s: %s", nm, (fail_cnt == tc_mark) ? "PASS" : "FAIL");
+  endtask
+
+  // ----------------------------------------------------------------
+  // Address construction. Build a block PC from an explicit set index
+  // and tag value so index/tag relationships are derived, never
+  // assumed. TAG_BASE is chosen high enough that the largest negative
+  // jump displacement under test does not wrap the VA.
+  // ----------------------------------------------------------------
+  localparam int unsigned TAG_BASE = 'h400;
+
+  function automatic logic [VA_WIDTH-1:0] mk_pc(
+      input int unsigned setn, input int unsigned tagv);
+    mk_pc = (VA_WIDTH'(tagv) << (UBTB_OFFSET_BITS + UBTB_IDX_BITS))
+          | (VA_WIDTH'(setn) << UBTB_OFFSET_BITS);
+  endfunction
+
+  // Independent restatement of the module's index/tag/base split
+  // (ubtb_interfaces.md, Lookup).
+  function automatic logic [UBTB_IDX_BITS-1:0] pc_idx(
+      input logic [VA_WIDTH-1:0] pc);
+    pc_idx = pc[UBTB_OFFSET_BITS +: UBTB_IDX_BITS];
+  endfunction
+
+  function automatic logic [UBTB_TAG_BITS-1:0] pc_tag(
+      input logic [VA_WIDTH-1:0] pc);
+    pc_tag = pc[UBTB_OFFSET_BITS+UBTB_IDX_BITS +: UBTB_TAG_BITS];
+  endfunction
+
+  function automatic logic [VA_WIDTH-1:0] pc_base(
+      input logic [VA_WIDTH-1:0] pc);
+    pc_base = {pc[VA_WIDTH-1:UBTB_OFFSET_BITS],
+               {UBTB_OFFSET_BITS{1'b0}}};
+  endfunction
+
+  // Golden saturating bimodal step, independent of the DUT function.
+  function automatic logic [UBTB_CONF_WIDTH-1:0] gold_step(
+      input logic [UBTB_CONF_WIDTH-1:0] c, input logic up);
+    if (up) gold_step = (c == {UBTB_CONF_WIDTH{1'b1}}) ? c : c + 1'b1;
+    else    gold_step = (c == '0)                      ? c : c - 1'b1;
+  endfunction
+
+  // ----------------------------------------------------------------
+  // Update bundle constructors. Building the whole struct and
+  // assigning it in one shot keeps every unrelated field at a known
+  // zero, so no test depends on a stale field left by a prior task.
+  // ----------------------------------------------------------------
+
+  // Conditional resolve into field br_idx.
+  function automatic ubtb_upd_t mk_cond(
+      input logic [VA_WIDTH-1:0]         pc,
+      input logic                        br_idx,
+      input logic                        taken,
+      input logic [VA_WIDTH-1:0]         target,
+      input logic [UBTB_BR_POS_BITS-1:0] pos,
+      input logic [VA_WIDTH-1:0]         pft);
+    ubtb_upd_t u;
+    u            = '0;
+    u.valid      = 1'b1;
+    u.pc         = pc;
+    u.is_br      = 1'b1;
+    u.br_idx     = br_idx;
+    u.br_taken   = taken;
+    u.target     = target;
+    u.pos        = pos;
+    u.pft_addr   = pft;
+    mk_cond      = u;
+  endfunction
+
+  // Jump resolve. The type bits are supplied verbatim.
+  function automatic ubtb_upd_t mk_jmp(
+      input logic [VA_WIDTH-1:0]         pc,
+      input logic                        is_call,
+      input logic                        is_ret,
+      input logic                        is_jalr,
+      input logic [VA_WIDTH-1:0]         jtgt,
+      input logic [UBTB_BR_POS_BITS-1:0] pos,
+      input logic [VA_WIDTH-1:0]         pft);
+    ubtb_upd_t u;
+    u            = '0;
+    u.valid      = 1'b1;
+    u.pc         = pc;
+    u.is_jmp     = 1'b1;
+    u.jmp_target = jtgt;
+    u.is_call    = is_call;
+    u.is_ret     = is_ret;
+    u.is_jalr    = is_jalr;
+    u.pos        = pos;
+    u.pft_addr   = pft;
+    mk_jmp       = u;
+  endfunction
+
+  // Boundary-only resolve: the block is known but holds no branch the
+  // uBTB records. Allocates a field-less entry.
+  function automatic ubtb_upd_t mk_blk(
+      input logic [VA_WIDTH-1:0] pc,
+      input logic [VA_WIDTH-1:0] pft);
+    ubtb_upd_t u;
+    u          = '0;
+    u.valid    = 1'b1;
+    u.pc       = pc;
+    u.pft_addr = pft;
+    mk_blk     = u;
+  endfunction
+
+  // ----------------------------------------------------------------
+  // Stimulus tasks
+  // ----------------------------------------------------------------
+
+  // Reset both DUTs and drive every input to a known zero.
   task automatic do_reset;
-    rstn = 0;
-    pred_pc  = '0;
+    rstn     = 1'b0;
     pred_pc2 = '0;
-    upd1[0]  = '0;
-    upd2[0]  = '0;
-    upd2[1]  = '0;
+    pred_pc1 = '0;
+    upd2     = '0;
+    upd1     = '0;
     @(posedge clk); #1;
     @(posedge clk); #1;
-    rstn = 1;
+    rstn = 1'b1;
     @(posedge clk); #1;
   endtask
 
-  // Write one entry via upd1 (slot 0), then deassert
-  task automatic write_entry(
-    input logic [VA_WIDTH-1:0] pc,
-    input bp_br_type_e         br_type,
-    input logic [VA_WIDTH-1:0] target,
-    input logic                br_taken,
-    input logic                carry
-  );
-    upd1[0].valid    = 1'b1;
-    upd1[0].pc       = pc;
-    upd1[0].br_type  = br_type;
-    upd1[0].target   = target;
-    upd1[0].br_taken = br_taken;
-    upd1[0].carry    = carry;
+  // Commit whatever update bundles are currently driven, then release
+  // both update ports so no write repeats.
+  task automatic commit;
     @(posedge clk); #1;
-    upd1[0].valid = 1'b0;
+    upd2 = '0;
+    upd1 = '0;
+  endtask
+
+  // Present a lookup PC and let the combinational prediction settle
+  // past a clock edge before sampling.
+  task automatic look2(input logic [VA_WIDTH-1:0] pc);
+    pred_pc2 = pc;
+    @(posedge clk); #1;
+  endtask
+
+  task automatic look1(input logic [VA_WIDTH-1:0] pc);
+    pred_pc1 = pc;
+    @(posedge clk); #1;
+  endtask
+
+  // Single-shot conditional / jump / boundary write on channel 0.
+  task automatic wr_cond(
+      input logic [VA_WIDTH-1:0]         pc,
+      input logic                        br_idx,
+      input logic                        taken,
+      input logic [VA_WIDTH-1:0]         target,
+      input logic [UBTB_BR_POS_BITS-1:0] pos,
+      input logic [VA_WIDTH-1:0]         pft);
+    upd2[0] = mk_cond(pc, br_idx, taken, target, pos, pft);
+    commit();
+  endtask
+
+  task automatic wr_jmp(
+      input logic [VA_WIDTH-1:0]         pc,
+      input logic                        is_call,
+      input logic                        is_ret,
+      input logic                        is_jalr,
+      input logic [VA_WIDTH-1:0]         jtgt,
+      input logic [UBTB_BR_POS_BITS-1:0] pos,
+      input logic [VA_WIDTH-1:0]         pft);
+    upd2[0] = mk_jmp(pc, is_call, is_ret, is_jalr, jtgt, pos, pft);
+    commit();
+  endtask
+
+  // Assert that a lookup returned nothing at all.
+  task automatic expect_miss(input string nm);
+    check({nm, ": blk hit must be 0"},  blk2.hit == 1'b0);
+    check({nm, ": slot0 must be zero"}, pred2[0] == '0);
+    check({nm, ": slot1 must be zero"}, pred2[1] == '0);
   endtask
 
   // ----------------------------------------------------------------
   // Test body
   // ----------------------------------------------------------------
+  logic [VA_WIDTH-1:0] blk_a, blk_b, blk_c;
+  logic [VA_WIDTH-1:0] tgt_a, tgt_b;
+
   initial begin
-    fail_count = 0;
+    pass_cnt = 0;
+    fail_cnt = 0;
+    tc_mark  = 0;
 
-    // ----------------------------------------------------------------
-    // TC1 -- Reset state: no spurious hits after reset
-    // ----------------------------------------------------------------
-    do_reset();
-    pred_pc = 40'h0000_1000;
-    @(posedge clk); #1;  // wait one cycle for pred to settle
-    check("TC1", pred1[0].valid == 1'b0,
-          "Expected pred[0].valid=0 after reset");
-    $display("TC1 -- Reset state: %s",
-             (pred1[0].valid == 0) ? "PASS" : "FAIL");
-
-    // ----------------------------------------------------------------
-    // TC2 -- Single write, single hit
-    // ----------------------------------------------------------------
+    // ==============================================================
+    // TC01 -- reset state and lookup miss
+    // ==============================================================
+    tc_open("TC01 reset state / miss");
     begin
-      logic [VA_WIDTH-1:0] pc_a, tgt_a;
-      pc_a  = 40'h0000_2000;
-      tgt_a = 40'h0000_3000;
-      write_entry(pc_a, COND, tgt_a, 1'b1, 1'b0);
-      pred_pc = pc_a;
-      @(posedge clk); #1;
-      check("TC2a", pred1[0].valid    == 1'b1,  "valid should be 1");
-      check("TC2b", pred1[0].target   == tgt_a, "target mismatch");
-      check("TC2c", pred1[0].br_type  == COND,  "br_type mismatch");
-      check("TC2d", pred1[0].br_taken == 1'b1,  "br_taken mismatch");
-      $display("TC2 -- Single write/hit: %s",
-               (pred1[0].valid && pred1[0].target == tgt_a &&
-                pred1[0].br_type == COND &&
-                pred1[0].br_taken) ? "PASS" : "FAIL");
+      do_reset();
+      blk_a = mk_pc(0, TAG_BASE);
+      look2(blk_a);
+      expect_miss("TC01");
+      // pft_addr carries nothing on a miss.
+      check("TC01: pft_addr zero on miss", blk2.pft_addr == '0);
     end
+    tc_close("TC01");
 
-    // ----------------------------------------------------------------
-    // TC3 -- Miss: different PC not written
-    // ----------------------------------------------------------------
+    // ==============================================================
+    // TC02 -- one entry supplies both conditional slots
+    // ==============================================================
+    tc_open("TC02 both conditional fields of one entry");
     begin
-      logic [VA_WIDTH-1:0] miss_pc;
-      miss_pc = 40'h0000_ABCD; // tag will differ
-      pred_pc = miss_pc;
-      @(posedge clk); #1;
-      check("TC3", pred1[0].valid == 1'b0, "Expected miss, got hit");
-      $display("TC3 -- Miss: %s",
-               (pred1[0].valid == 0) ? "PASS" : "FAIL");
+      do_reset();
+      blk_a = mk_pc(0, TAG_BASE);
+      tgt_a = blk_a + 40'd64;    // forward, in 13-bit reach
+      tgt_b = blk_a - 40'd128;   // backward, in 13-bit reach
+      // br0: taken at position 1. br1: not-taken at position 5.
+      // Block ends at the next block start, so carry must be set.
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b1, 1'b0, tgt_b, 3'd5, blk_a + 40'd32);
+      look2(blk_a);
+
+      check("TC02: hit",       blk2.hit == 1'b1);
+      check("TC02: pft_addr",  blk2.pft_addr == blk_a + 40'd32);
+
+      check("TC02: s0 valid",  pred2[0].valid    == 1'b1);
+      check("TC02: s0 COND",   pred2[0].br_type  == COND);
+      check("TC02: s0 target", pred2[0].target   == tgt_a);
+      check("TC02: s0 pos",    pred2[0].pos      == 3'd1);
+      check("TC02: s0 conf",   pred2[0].conf     == UBTB_CONF_INIT_TKN);
+      check("TC02: s0 taken",  pred2[0].br_taken == 1'b1);
+      check("TC02: s0 carry",  pred2[0].carry    == 1'b1);
+
+      check("TC02: s1 valid",  pred2[1].valid    == 1'b1);
+      check("TC02: s1 COND",   pred2[1].br_type  == COND);
+      check("TC02: s1 target", pred2[1].target   == tgt_b);
+      check("TC02: s1 pos",    pred2[1].pos      == 3'd5);
+      check("TC02: s1 conf",   pred2[1].conf     == UBTB_CONF_INIT_NTK);
+      check("TC02: s1 taken",  pred2[1].br_taken == 1'b0);
+      check("TC02: s1 carry",  pred2[1].carry    == 1'b1);
+
+      // The direction reported IS the conf most significant bit.
+      check("TC02: s0 taken is conf MSB",
+            pred2[0].br_taken == pred2[0].conf[UBTB_CONF_WIDTH-1]);
+      check("TC02: s1 taken is conf MSB",
+            pred2[1].br_taken == pred2[1].conf[UBTB_CONF_WIDTH-1]);
     end
+    tc_close("TC02");
 
-    // ----------------------------------------------------------------
-    // TC4 -- Tag collision (aliasing):
-    //   Two PCs mapping to the same set, different tags.
-    //   Construct by keeping PC[7:2] equal but differing PC[26:7].
-    // ----------------------------------------------------------------
+    // ==============================================================
+    // TC03 -- hit with only br0 occupied
+    // ==============================================================
+    tc_open("TC03 only br0 occupied");
     begin
-      // PC[7:2]=6'h01 for both; differ at bit 8
-      logic [VA_WIDTH-1:0] pc_x, pc_y, tgt_x, tgt_y;
-      pc_x  = 40'h0000_0004; // idx=1, tag from [26:7]
-      pc_y  = 40'h0000_0104; // idx=1, tag differs (bit 8 set)
-      tgt_x = 40'h0000_4000;
-      tgt_y = 40'h0000_5000;
-      write_entry(pc_x, DIRECT_UNC, tgt_x, 1'b0, 1'b0);
-      write_entry(pc_y, DIRECT_UNC, tgt_y, 1'b0, 1'b0);
-      // Check pc_x hits own target
-      pred_pc = pc_x;
-      @(posedge clk); #1;
-      check("TC4a", pred1[0].valid  == 1'b1,  "TC4a: x miss unexpected");
-      check("TC4b", pred1[0].target == tgt_x, "TC4b: x target wrong");
-      // Check pc_y hits own target
-      pred_pc = pc_y;
-      @(posedge clk); #1;
-      check("TC4c", pred1[0].valid  == 1'b1,  "TC4c: y miss unexpected");
-      check("TC4d", pred1[0].target == tgt_y, "TC4d: y target wrong");
-      $display("TC4 -- Tag collision: %s",
-               (fail_count == 0) ? "PASS" : "FAIL");
+      do_reset();
+      blk_a = mk_pc(3, TAG_BASE);
+      tgt_a = blk_a + 40'd16;
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd2, blk_a + 40'd12);
+      look2(blk_a);
+
+      check("TC03: hit",       blk2.hit == 1'b1);
+      check("TC03: pft_addr",  blk2.pft_addr == blk_a + 40'd12);
+      check("TC03: s0 valid",  pred2[0].valid  == 1'b1);
+      check("TC03: s0 target", pred2[0].target == tgt_a);
+      check("TC03: s0 pos",    pred2[0].pos    == 3'd2);
+      check("TC03: s0 carry",  pred2[0].carry  == 1'b0);
+      // br1 free and no jump present -> slot 1 fully zero.
+      check("TC03: s1 zero",   pred2[1] == '0);
     end
+    tc_close("TC03");
 
-    // ----------------------------------------------------------------
-    // TC5 -- Way replacement:
-    //   Write UBTB_WAYS+1 entries to same set. Oldest should evict.
-    // ----------------------------------------------------------------
+    // ==============================================================
+    // TC04 -- hit with no field occupied; fall-through is the
+    //         successor
+    // ==============================================================
+    tc_open("TC04 hit, no field occupied");
     begin
-      // Use set index 2 (pc[7:2]=2 -> pc[7:0]=8 -> pc=0x...008 + tag)
-      // Keep [7:2]=6'd2, vary bits [26:8] for distinct tags.
-      logic [VA_WIDTH-1:0] pcs[5];
-      logic [VA_WIDTH-1:0] tgts[5];
-      int tc5_fail;
-      tc5_fail = 0;
+      do_reset();
+      blk_a = mk_pc(5, TAG_BASE);
+      upd2[0] = mk_blk(blk_a, blk_a + 40'd20);
+      commit();
+      look2(blk_a);
+
+      check("TC04: hit",      blk2.hit == 1'b1);
+      check("TC04: pft_addr", blk2.pft_addr == blk_a + 40'd20);
+      check("TC04: s0 zero",  pred2[0] == '0);
+      check("TC04: s1 zero",  pred2[1] == '0);
+    end
+    tc_close("TC04");
+
+    // ==============================================================
+    // TC05 -- miss: same set different tag, and a different set
+    // ==============================================================
+    tc_open("TC05 miss");
+    begin
+      do_reset();
+      blk_a = mk_pc(7, TAG_BASE);
+      blk_b = mk_pc(7, TAG_BASE + 1);   // same set, other tag
+      blk_c = mk_pc(8, TAG_BASE);       // other set, same tag value
+
+      // Prove the stimulus really is same-set / distinct-tag before
+      // relying on it.
+      check("TC05: alias shares the set",
+            pc_idx(blk_b) == pc_idx(blk_a));
+      check("TC05: alias differs in tag",
+            pc_tag(blk_b) != pc_tag(blk_a));
+      check("TC05: other block differs in set",
+            pc_idx(blk_c) != pc_idx(blk_a));
+
+      wr_cond(blk_a, 1'b0, 1'b1, blk_a + 40'd32, 3'd0,
+              blk_a + 40'd32);
+
+      look2(blk_b);
+      expect_miss("TC05 same-set-other-tag");
+      look2(blk_c);
+      expect_miss("TC05 other-set");
+      // The written block still hits, so the misses above are not a
+      // failed write.
+      look2(blk_a);
+      check("TC05: written block still hits", blk2.hit == 1'b1);
+    end
+    tc_close("TC05");
+
+    // ==============================================================
+    // TC06 -- jump field reported in a slot, all five jump types
+    // ==============================================================
+    tc_open("TC06 jump types");
+    begin
+      // {is_call, is_ret, is_jalr} -> expected bp_br_type_e
+      bp_br_type_e exp_ty [5];
+      logic [2:0]  ty_bits[5];
+      ty_bits[0] = 3'b100; exp_ty[0] = DIRECT_CALL;     // call
+      ty_bits[1] = 3'b101; exp_ty[1] = INDIRECT_CALL;   // call+jalr
+      ty_bits[2] = 3'b011; exp_ty[2] = RETURN;          // ret+jalr
+      ty_bits[3] = 3'b001; exp_ty[3] = INDIRECT_NONRET; // jalr
+      ty_bits[4] = 3'b000; exp_ty[4] = DIRECT_UNC;      // direct jmp
+
       for (int i = 0; i < 5; i++) begin
-        // bits [7:2] = 2, bits [26:8] vary by i*256 -> tag differs
-        pcs[i]  = 40'h0000_0008 | (VA_WIDTH'(i) << 8);
-        tgts[i] = 40'h0001_0000 + VA_WIDTH'(i);
-        write_entry(pcs[i], COND, tgts[i], 1'b0, 1'b0);
-      end
-      // Oldest entry (pcs[0]) should have been evicted (way 0 reused)
-      pred_pc = pcs[0];
-      @(posedge clk); #1;
-      if (pred1[0].valid && pred1[0].target == tgts[0])
-        tc5_fail++;
-      // Newest entry (pcs[4]) should hit
-      pred_pc = pcs[4];
-      @(posedge clk); #1;
-      if (!pred1[0].valid || pred1[0].target != tgts[4])
-        tc5_fail++;
-      check("TC5", tc5_fail == 0, "Way replacement incorrect");
-      $display("TC5 -- Way replacement: %s",
-               (tc5_fail == 0) ? "PASS" : "FAIL");
-    end
+        do_reset();
+        blk_a = mk_pc(11, TAG_BASE);
+        tgt_a = blk_a + 40'h400;
+        wr_jmp(blk_a, ty_bits[i][2], ty_bits[i][1], ty_bits[i][0],
+               tgt_a, 3'd7, blk_a + 40'd32);
+        look2(blk_a);
 
-    // ----------------------------------------------------------------
-    // TC6 -- br_type encoding coverage (all 7 bp_br_type_e values)
-    // ----------------------------------------------------------------
-    begin
-      bp_br_type_e types[7];
-      logic [VA_WIDTH-1:0] pc_base;
-      int tc6_fail;
-      tc6_fail = 0;
-      types[0] = NO_BRANCH;
-      types[1] = COND;
-      types[2] = DIRECT_UNC;
-      types[3] = DIRECT_CALL;
-      types[4] = INDIRECT_CALL;
-      types[5] = INDIRECT_NONRET;
-      types[6] = RETURN;
-      // Use distinct set indices (bits [7:2] vary): sets 10-16
-      for (int i = 0; i < 7; i++) begin
-        // Place each in a unique set: set = 10+i
-        pc_base = (VA_WIDTH'(10) + VA_WIDTH'(i)) << 2;
-        write_entry(pc_base, types[i],
-                    40'h0002_0000 + VA_WIDTH'(i), 1'b0, 1'b0);
-      end
-      for (int i = 0; i < 7; i++) begin
-        pc_base = (VA_WIDTH'(10) + VA_WIDTH'(i)) << 2;
-        pred_pc = pc_base;
-        @(posedge clk); #1;
-        if (!pred1[0].valid || pred1[0].br_type != types[i])
-          tc6_fail++;
-      end
-      check("TC6", tc6_fail == 0, "br_type encoding mismatch");
-      $display("TC6 -- br_type coverage: %s",
-               (tc6_fail == 0) ? "PASS" : "FAIL");
-    end
-
-    // ----------------------------------------------------------------
-    // TC7 -- carry bit
-    // ----------------------------------------------------------------
-    begin
-      // same-block: pc and target share bits [39:5]
-      logic [VA_WIDTH-1:0] pc_same, tgt_same;
-      logic [VA_WIDTH-1:0] pc_diff, tgt_diff;
-      pc_same  = 40'h0000_5000; // set=(0x5000>>2)&63
-      tgt_same = 40'h0000_5010; // same 32B block ([39:5] equal)
-      pc_diff  = 40'h0000_5040; // different set to avoid collision
-      tgt_diff = 40'h0000_6000; // different 32B block
-      write_entry(pc_same, DIRECT_UNC, tgt_same, 1'b0, 1'b0);
-      write_entry(pc_diff, DIRECT_UNC, tgt_diff, 1'b0, 1'b1);
-      pred_pc = pc_same;
-      @(posedge clk); #1;
-      check("TC7a", pred1[0].valid == 1'b1,   "TC7a: same-block miss");
-      check("TC7b", pred1[0].carry == 1'b0,   "TC7b: carry should be 0");
-      pred_pc = pc_diff;
-      @(posedge clk); #1;
-      check("TC7c", pred1[0].valid == 1'b1,   "TC7c: diff-block miss");
-      check("TC7d", pred1[0].carry == 1'b1,   "TC7d: carry should be 1");
-      $display("TC7 -- carry bit: %s",
-               (fail_count == 0) ? "PASS" : "FAIL");
-    end
-
-    // ----------------------------------------------------------------
-    // TC8 -- Update to existing entry (overwrite)
-    // ----------------------------------------------------------------
-    begin
-      logic [VA_WIDTH-1:0] pc_u, tgt1_u, tgt2_u;
-      pc_u   = 40'h0000_7000;
-      tgt1_u = 40'h0000_8000;
-      tgt2_u = 40'h0000_9000;
-      write_entry(pc_u, COND, tgt1_u, 1'b1, 1'b0);
-      write_entry(pc_u, DIRECT_UNC, tgt2_u, 1'b0, 1'b0);
-      pred_pc = pc_u;
-      @(posedge clk); #1;
-      check("TC8a", pred1[0].valid   == 1'b1,       "TC8a: miss");
-      check("TC8b", pred1[0].target  == tgt2_u,     "TC8b: target wrong");
-      check("TC8c", pred1[0].br_type == DIRECT_UNC, "TC8c: type wrong");
-      check("TC8d", pred1[0].br_taken == 1'b0,       "TC8d: taken wrong");
-      $display("TC8 -- Overwrite: %s",
-               (fail_count == 0) ? "PASS" : "FAIL");
-    end
-
-    // ----------------------------------------------------------------
-    // TC9 -- NUM_PRED_SLOTS=2 dual prediction
-    //   Use dut2. Reset dut2 by toggling rstn briefly.
-    // ----------------------------------------------------------------
-    begin
-      logic [VA_WIDTH-1:0] pc_a9, pc_b9, tgt_a9, tgt_b9;
-      int tc9_fail;
-      tc9_fail = 0;
-      // Reset dut2 (rstn is shared)
-      rstn = 0;
-      @(posedge clk); #1;
-      rstn = 1;
-      @(posedge clk); #1;
-
-      // pc_a9 in one 32B block, pc_b9 = pc_a9 + 32 (next block)
-      pc_a9  = 40'h0000_A000;
-      pc_b9  = pc_a9 + 40'd32;
-      tgt_a9 = 40'h0000_B000;
-      tgt_b9 = 40'h0000_C000;
-
-      // Write via dut2 upd[0] and upd[1]
-      upd2[0].valid    = 1'b1;
-      upd2[0].pc       = pc_a9;
-      upd2[0].br_type  = COND;
-      upd2[0].target   = tgt_a9;
-      upd2[0].br_taken = 1'b1;
-      upd2[0].carry    = 1'b0;
-      upd2[1].valid    = 1'b1;
-      upd2[1].pc       = pc_b9;
-      upd2[1].br_type  = DIRECT_UNC;
-      upd2[1].target   = tgt_b9;
-      upd2[1].br_taken = 1'b0;
-      upd2[1].carry    = 1'b0;
-      @(posedge clk); #1;
-      upd2[0].valid = 1'b0;
-      upd2[1].valid = 1'b0;
-
-      // Present pred_pc=pc_a9; slot 0 -> pc_a9, slot 1 -> pc_a9+32
-      pred_pc2 = pc_a9;
-      @(posedge clk); #1;
-      if (!pred2[0].valid || pred2[0].target != tgt_a9) tc9_fail++;
-      if (!pred2[1].valid || pred2[1].target != tgt_b9) tc9_fail++;
-      check("TC9", tc9_fail == 0, "Dual-slot prediction mismatch");
-      $display("TC9 -- Dual prediction: %s",
-               (tc9_fail == 0) ? "PASS" : "FAIL");
-    end
-
-    // ----------------------------------------------------------------
-    // TC10 -- Read-during-write same set
-    //   Cycle N: issue upd for new PC in set S; pred_pc also maps S.
-    //   Expect pred[0] in cycle N is pre-update (no bypass).
-    //   Expect new entry visible in cycle N+1.
-    // ----------------------------------------------------------------
-    begin
-      // Re-assert reset to get a clean dut1 state
-      rstn = 0;
-      @(posedge clk); #1;
-      rstn = 1;
-      @(posedge clk); #1;
-
-      begin
-        logic [VA_WIDTH-1:0] pc_rdw, tgt_rdw;
-        // Place in set 3: pc[7:2]=3 -> pc=0x00C
-        pc_rdw  = 40'h0000_000C;
-        tgt_rdw = 40'h0000_F000;
-        // Cycle N: assert pred_pc and upd simultaneously.
-        // Check pred BEFORE posedge: reflects pre-update mem (miss).
-        // After posedge: write is committed; pred sees new entry.
-        pred_pc          = pc_rdw;
-        upd1[0].valid    = 1'b1;
-        upd1[0].pc       = pc_rdw;
-        upd1[0].br_type  = COND;
-        upd1[0].target   = tgt_rdw;
-        upd1[0].br_taken = 1'b1;
-        upd1[0].carry    = 1'b0;
-        // TC10a: combinational pred reads pre-update registered mem.
-        // We are between clock edges; mem has not been written yet.
-        check("TC10a", pred1[0].valid == 1'b0,
-              "TC10a: pre-update bypass occurred unexpectedly");
-        // Let posedge fire: write committed to mem.
-        @(posedge clk); #1;
-        upd1[0].valid = 1'b0;
-        // TC10b/TC10c: combinational pred reads updated mem (cycle N+1).
-        check("TC10b", pred1[0].valid  == 1'b1,  "TC10b: miss after write");
-        check("TC10c", pred1[0].target == tgt_rdw,"TC10c: target wrong");
-        $display("TC10 -- Read-during-write: %s",
-                 (fail_count == 0) ? "PASS" : "FAIL");
+        check($sformatf("TC06[%0d]: hit", i),  blk2.hit == 1'b1);
+        // br0 is free, so the jump lands in slot 0.
+        check($sformatf("TC06[%0d]: s0 valid", i),
+              pred2[0].valid == 1'b1);
+        check($sformatf("TC06[%0d]: s0 br_type", i),
+              pred2[0].br_type == exp_ty[i]);
+        check($sformatf("TC06[%0d]: s0 target", i),
+              pred2[0].target == tgt_a);
+        check($sformatf("TC06[%0d]: s0 pos", i),
+              pred2[0].pos == 3'd7);
+        // br_taken and conf are not meaningful for a jump.
+        check($sformatf("TC06[%0d]: s0 br_taken 0", i),
+              pred2[0].br_taken == 1'b0);
+        check($sformatf("TC06[%0d]: s0 conf 0", i),
+              pred2[0].conf == '0);
+        // The jump is reported once, not in every free slot.
+        check($sformatf("TC06[%0d]: s1 zero", i), pred2[1] == '0);
       end
     end
+    tc_close("TC06");
 
-    // ----------------------------------------------------------------
-    // Final verdict
-    // ----------------------------------------------------------------
-    if (fail_count == 0) begin
-      $display("ALL TESTS PASSED");
-      $finish(0);
+    // ==============================================================
+    // TC07 -- jump goes in the LOWEST slot with no conditional field
+    // ==============================================================
+    tc_open("TC07 jump slot placement");
+    begin
+      // (a) br0 occupied, br1 free -> jump reported in slot 1.
+      do_reset();
+      blk_a = mk_pc(13, TAG_BASE);
+      tgt_a = blk_a + 40'd32;
+      tgt_b = blk_a + 40'h800;
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd0, blk_a + 40'd32);
+      wr_jmp (blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 3'd6, blk_a + 40'd32);
+      look2(blk_a);
+
+      check("TC07a: hit",        blk2.hit == 1'b1);
+      check("TC07a: s0 is COND", pred2[0].br_type == COND);
+      check("TC07a: s0 target",  pred2[0].target  == tgt_a);
+      check("TC07a: s1 valid",   pred2[1].valid   == 1'b1);
+      check("TC07a: s1 is jump", pred2[1].br_type == RETURN);
+      check("TC07a: s1 target",  pred2[1].target  == tgt_b);
+      check("TC07a: s1 pos",     pred2[1].pos     == 3'd6);
+
+      // (b) both conditionals occupied -> no free slot, jump is not
+      //     reported at NUM_PRED_SLOTS=2.
+      do_reset();
+      blk_a = mk_pc(14, TAG_BASE);
+      tgt_a = blk_a + 40'd32;
+      tgt_b = blk_a - 40'd64;
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd0, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b1, 1'b1, tgt_b, 3'd3, blk_a + 40'd32);
+      wr_jmp (blk_a, 1'b1, 1'b0, 1'b0, blk_a + 40'h800, 3'd7,
+              blk_a + 40'd32);
+      look2(blk_a);
+
+      check("TC07b: hit",        blk2.hit == 1'b1);
+      check("TC07b: s0 is COND", pred2[0].br_type == COND);
+      check("TC07b: s1 is COND", pred2[1].br_type == COND);
+      check("TC07b: s0 target",  pred2[0].target  == tgt_a);
+      check("TC07b: s1 target",  pred2[1].target  == tgt_b);
+    end
+    tc_close("TC07");
+
+    // ==============================================================
+    // TC08 -- conf trained to both saturation points; position held
+    // ==============================================================
+    tc_open("TC08 conf saturation and position hold");
+    begin
+      logic [UBTB_CONF_WIDTH-1:0] gold;
+      do_reset();
+      blk_a = mk_pc(17, TAG_BASE);
+      tgt_a = blk_a + 40'd48;
+
+      // Fill br0 taken at position 3. conf starts at the weak taken
+      // init, which must be unsaturated with MSB 1.
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd3, blk_a + 40'd32);
+      look2(blk_a);
+      gold = UBTB_CONF_INIT_TKN;
+      check("TC08: fill conf is weak taken", pred2[0].conf == gold);
+      check("TC08: init unsaturated",
+            gold != {UBTB_CONF_WIDTH{1'b1}});
+      check("TC08: fill pos", pred2[0].pos == 3'd3);
+
+      // Train taken past the top. Each update carries a DIFFERENT
+      // position: the stored position must not move once filled.
+      for (int i = 0; i < 6; i++) begin
+        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd6, blk_a + 40'd32);
+        look2(blk_a);
+        gold = gold_step(gold, 1'b1);
+        check($sformatf("TC08: taken step %0d conf", i),
+              pred2[0].conf == gold);
+        check($sformatf("TC08: taken step %0d taken", i),
+              pred2[0].br_taken == gold[UBTB_CONF_WIDTH-1]);
+        check($sformatf("TC08: taken step %0d pos held", i),
+              pred2[0].pos == 3'd3);
+      end
+      check("TC08: saturated all-ones",
+            pred2[0].conf == {UBTB_CONF_WIDTH{1'b1}});
+      check("TC08: saturated predicts taken",
+            pred2[0].br_taken == 1'b1);
+
+      // Train not-taken down to the bottom, crossing the MSB flip.
+      for (int i = 0; i < 10; i++) begin
+        wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 3'd6, blk_a + 40'd32);
+        look2(blk_a);
+        gold = gold_step(gold, 1'b0);
+        check($sformatf("TC08: ntk step %0d conf", i),
+              pred2[0].conf == gold);
+        check($sformatf("TC08: ntk step %0d taken", i),
+              pred2[0].br_taken == gold[UBTB_CONF_WIDTH-1]);
+        check($sformatf("TC08: ntk step %0d pos held", i),
+              pred2[0].pos == 3'd3);
+      end
+      check("TC08: saturated all-zeros", pred2[0].conf == '0);
+      check("TC08: saturated predicts not-taken",
+            pred2[0].br_taken == 1'b0);
+
+      // A freshly filled field in the other direction takes the weak
+      // not-taken init, which must be unsaturated with MSB 0.
+      do_reset();
+      wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 3'd2, blk_a + 40'd32);
+      look2(blk_a);
+      check("TC08: fill conf is weak not-taken",
+            pred2[0].conf == UBTB_CONF_INIT_NTK);
+      check("TC08: weak ntk unsaturated", UBTB_CONF_INIT_NTK != '0);
+      check("TC08: weak ntk predicts not-taken",
+            pred2[0].br_taken == 1'b0);
+    end
+    tc_close("TC08");
+
+    // ==============================================================
+    // TC09 -- target reconstruction returns the original full-width
+    //         target
+    // ==============================================================
+    tc_open("TC09 target reconstruction");
+    begin
+      // Conditional displacements, all inside the 13-bit signed reach
+      // (-4096 .. +4095).
+      logic signed [VA_WIDTH-1:0] cd [5];
+      logic signed [VA_WIDTH-1:0] jd [4];
+      cd[0] =  40'sd0;
+      cd[1] =  40'sd4;
+      cd[2] = -40'sd4;
+      cd[3] =  40'sd4092;
+      cd[4] = -40'sd4096;
+
+      for (int i = 0; i < 5; i++) begin
+        do_reset();
+        blk_a = mk_pc(21, TAG_BASE);
+        tgt_a = blk_a + VA_WIDTH'(cd[i]);
+        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
+        look2(blk_a);
+        check($sformatf("TC09: cond disp %0d valid", i),
+              pred2[0].valid == 1'b1);
+        check($sformatf("TC09: cond disp %0d reconstructs", i),
+              pred2[0].target == tgt_a);
+      end
+
+      // Jump displacements, inside the 21-bit signed reach
+      // (-1048576 .. +1048575).
+      jd[0] =  40'sd256;
+      jd[1] = -40'sd256;
+      jd[2] =  40'sd1048572;
+      jd[3] = -40'sd1048576;
+
+      for (int i = 0; i < 4; i++) begin
+        do_reset();
+        blk_a = mk_pc(22, TAG_BASE);
+        tgt_a = blk_a + VA_WIDTH'(jd[i]);
+        wr_jmp(blk_a, 1'b0, 1'b0, 1'b0, tgt_a, 3'd4,
+               blk_a + 40'd32);
+        look2(blk_a);
+        check($sformatf("TC09: jmp disp %0d valid", i),
+              pred2[0].valid == 1'b1);
+        check($sformatf("TC09: jmp disp %0d reconstructs", i),
+              pred2[0].target == tgt_a);
+      end
+
+      // A resolved target that moves is rewritten in place: the entry
+      // already exists and the field is already occupied.
+      do_reset();
+      blk_a = mk_pc(23, TAG_BASE);
+      tgt_a = blk_a + 40'd64;
+      tgt_b = blk_a - 40'd2048;
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
+      look2(blk_a);
+      check("TC09: first target", pred2[0].target == tgt_a);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_b, 3'd1, blk_a + 40'd32);
+      look2(blk_a);
+      check("TC09: moved target rewritten",
+            pred2[0].target == tgt_b);
+    end
+    tc_close("TC09");
+
+    // ==============================================================
+    // TC10 -- fall-through reconstruction, carry in both states
+    // ==============================================================
+    tc_open("TC10 fall-through and carry");
+    begin
+      do_reset();
+      blk_a = mk_pc(25, TAG_BASE);   // ends inside its own block
+      blk_b = mk_pc(26, TAG_BASE);   // ends at the next block start
+      blk_c = mk_pc(27, TAG_BASE);   // ends past the boundary
+
+      check("TC10: three distinct sets",
+            (pc_idx(blk_a) != pc_idx(blk_b))
+            && (pc_idx(blk_b) != pc_idx(blk_c)));
+
+      // carry 0: end is 28 bytes into the block.
+      wr_cond(blk_a, 1'b0, 1'b1, blk_a + 40'd16, 3'd6,
+              blk_a + 40'd28);
+      // carry 1: end is exactly the next block start; the partial
+      // index is 0 and only the carry bit carries the boundary.
+      wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd16, 3'd7,
+              blk_b + 40'd32);
+      // carry 1 with a non-zero partial index as well.
+      wr_cond(blk_c, 1'b0, 1'b1, blk_c + 40'd16, 3'd2,
+              blk_c + 40'd40);
+
+      look2(blk_a);
+      check("TC10a: hit",       blk2.hit == 1'b1);
+      check("TC10a: pft_addr",  blk2.pft_addr == blk_a + 40'd28);
+      check("TC10a: carry 0",   pred2[0].carry == 1'b0);
+      check("TC10a: end stays in block",
+            pc_idx(blk2.pft_addr) == pc_idx(blk_a));
+
+      look2(blk_b);
+      check("TC10b: hit",       blk2.hit == 1'b1);
+      check("TC10b: pft_addr",  blk2.pft_addr == blk_b + 40'd32);
+      check("TC10b: carry 1",   pred2[0].carry == 1'b1);
+      check("TC10b: end crosses the boundary",
+            pc_idx(blk2.pft_addr) != pc_idx(blk_b));
+      check("TC10b: end is the next block base",
+            pc_base(blk2.pft_addr) == blk_b + 40'd32);
+
+      look2(blk_c);
+      check("TC10c: hit",       blk2.hit == 1'b1);
+      check("TC10c: pft_addr",  blk2.pft_addr == blk_c + 40'd40);
+      check("TC10c: carry 1",   pred2[0].carry == 1'b1);
+      check("TC10c: end crosses the boundary",
+            pc_idx(blk2.pft_addr) != pc_idx(blk_c));
+
+      // The block boundary is rewritten on a later update.
+      wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd16, 3'd7,
+              blk_b + 40'd8);
+      look2(blk_b);
+      check("TC10d: boundary moved back into the block",
+            blk2.pft_addr == blk_b + 40'd8);
+      check("TC10d: carry cleared", pred2[0].carry == 1'b0);
+    end
+    tc_close("TC10");
+
+    // ==============================================================
+    // TC11 -- both update channels writing one entry in one cycle
+    // ==============================================================
+    tc_open("TC11 dual-channel single-entry update");
+    begin
+      // (a) fresh allocate: channel 0 fills br0, channel 1 fills br1.
+      do_reset();
+      blk_a = mk_pc(31, TAG_BASE);
+      tgt_a = blk_a + 40'd64;
+      tgt_b = blk_a - 40'd256;
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1,
+                        blk_a + 40'd32);
+      upd2[1] = mk_cond(blk_a, 1'b1, 1'b0, tgt_b, 3'd4,
+                        blk_a + 40'd32);
+      commit();
+      look2(blk_a);
+
+      check("TC11a: hit",       blk2.hit == 1'b1);
+      check("TC11a: s0 valid",  pred2[0].valid  == 1'b1);
+      check("TC11a: s0 target", pred2[0].target == tgt_a);
+      check("TC11a: s0 pos",    pred2[0].pos    == 3'd1);
+      check("TC11a: s0 conf",   pred2[0].conf   == UBTB_CONF_INIT_TKN);
+      check("TC11a: s1 valid",  pred2[1].valid  == 1'b1);
+      check("TC11a: s1 target", pred2[1].target == tgt_b);
+      check("TC11a: s1 pos",    pred2[1].pos    == 3'd4);
+      check("TC11a: s1 conf",   pred2[1].conf   == UBTB_CONF_INIT_NTK);
+
+      // Both channels landed on ONE way, not two. Fill the remaining
+      // UBTB_WAYS-1 ways with distinct tags; if the dual-channel
+      // allocate had burned two ways the original would now be gone.
+      for (int i = 1; i < UBTB_WAYS; i++) begin
+        blk_b = mk_pc(31, TAG_BASE + i);
+        check($sformatf("TC11a: filler %0d shares the set", i),
+              pc_idx(blk_b) == pc_idx(blk_a));
+        check($sformatf("TC11a: filler %0d has its own tag", i),
+              pc_tag(blk_b) != pc_tag(blk_a));
+        wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd32, 3'd0,
+                blk_b + 40'd32);
+      end
+      look2(blk_a);
+      check("TC11a: one way consumed, entry survives UBTB_WAYS-1 fills",
+            blk2.hit == 1'b1);
+      check("TC11a: survivor keeps s0 target",
+            pred2[0].target == tgt_a);
+      check("TC11a: survivor keeps s1 target",
+            pred2[1].target == tgt_b);
+
+      // (b) existing entry: channel 0 trains br0, channel 1 writes
+      //     the jump field, in the same cycle.
+      do_reset();
+      blk_a = mk_pc(33, TAG_BASE);
+      tgt_a = blk_a + 40'd32;
+      tgt_b = blk_a + 40'h1000;
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd2, blk_a + 40'd32);
+      look2(blk_a);
+      check("TC11b: seeded conf",
+            pred2[0].conf == UBTB_CONF_INIT_TKN);
+
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd5,
+                        blk_a + 40'd32);
+      upd2[1] = mk_jmp (blk_a, 1'b1, 1'b0, 1'b0, tgt_b, 3'd7,
+                        blk_a + 40'd32);
+      commit();
+      look2(blk_a);
+
+      check("TC11b: hit",         blk2.hit == 1'b1);
+      check("TC11b: s0 is COND",  pred2[0].br_type == COND);
+      check("TC11b: s0 conf stepped",
+            pred2[0].conf == gold_step(UBTB_CONF_INIT_TKN, 1'b1));
+      check("TC11b: s0 pos held", pred2[0].pos == 3'd2);
+      check("TC11b: s1 carries the jump",
+            pred2[1].valid == 1'b1);
+      check("TC11b: s1 jump type",
+            pred2[1].br_type == DIRECT_CALL);
+      check("TC11b: s1 jump target", pred2[1].target == tgt_b);
+      check("TC11b: s1 jump pos",    pred2[1].pos    == 3'd7);
+    end
+    tc_close("TC11");
+
+    // ==============================================================
+    // TC12 -- NUM_PRED_SLOTS=1 reports br0 only
+    // ==============================================================
+    tc_open("TC12 NUM_PRED_SLOTS=1");
+    begin
+      do_reset();
+      blk_a = mk_pc(35, TAG_BASE);
+      tgt_a = blk_a + 40'd64;
+      tgt_b = blk_a - 40'd64;
+
+      // Both conditional fields written through the single channel.
+      upd1[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1,
+                        blk_a + 40'd32);
+      commit();
+      upd1[0] = mk_cond(blk_a, 1'b1, 1'b0, tgt_b, 3'd5,
+                        blk_a + 40'd32);
+      commit();
+      look1(blk_a);
+
+      check("TC12a: hit",       blk1.hit == 1'b1);
+      check("TC12a: pft_addr",  blk1.pft_addr == blk_a + 40'd32);
+      check("TC12a: slot valid",  pred1[0].valid   == 1'b1);
+      check("TC12a: slot is br0", pred1[0].target  == tgt_a);
+      check("TC12a: slot pos",    pred1[0].pos     == 3'd1);
+      check("TC12a: slot COND",   pred1[0].br_type == COND);
+      check("TC12a: slot conf",
+            pred1[0].conf == UBTB_CONF_INIT_TKN);
+
+      // br0 free -> the single slot carries the jump.
+      do_reset();
+      blk_a = mk_pc(36, TAG_BASE);
+      tgt_b = blk_a + 40'h400;
+      upd1[0] = mk_jmp(blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 3'd6,
+                       blk_a + 40'd32);
+      commit();
+      look1(blk_a);
+
+      check("TC12b: hit",         blk1.hit == 1'b1);
+      check("TC12b: slot valid",  pred1[0].valid   == 1'b1);
+      check("TC12b: slot RETURN", pred1[0].br_type == RETURN);
+      check("TC12b: slot target", pred1[0].target  == tgt_b);
+      check("TC12b: slot pos",    pred1[0].pos     == 3'd6);
+
+      // Miss behaviour at one slot.
+      look1(mk_pc(37, TAG_BASE));
+      check("TC12c: miss hit=0", blk1.hit == 1'b0);
+      check("TC12c: miss slot zero", pred1[0] == '0);
+    end
+    tc_close("TC12");
+
+    // ==============================================================
+    // TC13 -- two distinct tags coexist in one set
+    // ==============================================================
+    tc_open("TC13 tag coexistence in one set");
+    begin
+      do_reset();
+      blk_a = mk_pc(41, TAG_BASE);
+      blk_b = mk_pc(41, TAG_BASE + 1);
+      tgt_a = blk_a + 40'd64;
+      tgt_b = blk_b - 40'd64;
+
+      check("TC13: same set", pc_idx(blk_a) == pc_idx(blk_b));
+      check("TC13: different tag", pc_tag(blk_a) != pc_tag(blk_b));
+
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
+      wr_cond(blk_b, 1'b0, 1'b1, tgt_b, 3'd2, blk_b + 40'd32);
+
+      look2(blk_a);
+      check("TC13: a hits",      blk2.hit == 1'b1);
+      check("TC13: a target",    pred2[0].target == tgt_a);
+      check("TC13: a pos",       pred2[0].pos    == 3'd1);
+      look2(blk_b);
+      check("TC13: b hits",      blk2.hit == 1'b1);
+      check("TC13: b target",    pred2[0].target == tgt_b);
+      check("TC13: b pos",       pred2[0].pos    == 3'd2);
+    end
+    tc_close("TC13");
+
+    // ==============================================================
+    // TC14 -- round-robin replacement across UBTB_WAYS
+    // ==============================================================
+    tc_open("TC14 round-robin replacement");
+    begin
+      logic [VA_WIDTH-1:0] pcs [UBTB_WAYS+1];
+      logic [VA_WIDTH-1:0] tgs [UBTB_WAYS+1];
+      do_reset();
+
+      for (int i = 0; i <= UBTB_WAYS; i++) begin
+        pcs[i] = mk_pc(45, TAG_BASE + i);
+        tgs[i] = pcs[i] + 40'd64;
+        if (i > 0) begin
+          check($sformatf("TC14: pc %0d shares the set", i),
+                pc_idx(pcs[i]) == pc_idx(pcs[0]));
+          check($sformatf("TC14: pc %0d has its own tag", i),
+                pc_tag(pcs[i]) != pc_tag(pcs[0]));
+        end
+      end
+
+      // Fill all UBTB_WAYS ways.
+      for (int i = 0; i < UBTB_WAYS; i++) begin
+        wr_cond(pcs[i], 1'b0, 1'b1, tgs[i], 3'd1, pcs[i] + 40'd32);
+      end
+      for (int i = 0; i < UBTB_WAYS; i++) begin
+        look2(pcs[i]);
+        check($sformatf("TC14: way %0d present before evict", i),
+              blk2.hit == 1'b1 && pred2[0].target == tgs[i]);
+      end
+
+      // One more distinct tag evicts the round-robin victim, way 0.
+      wr_cond(pcs[UBTB_WAYS], 1'b0, 1'b1, tgs[UBTB_WAYS], 3'd1,
+              pcs[UBTB_WAYS] + 40'd32);
+
+      look2(pcs[0]);
+      check("TC14: oldest evicted", blk2.hit == 1'b0);
+      look2(pcs[UBTB_WAYS]);
+      check("TC14: newest present",
+            blk2.hit == 1'b1
+            && pred2[0].target == tgs[UBTB_WAYS]);
+      for (int i = 1; i < UBTB_WAYS; i++) begin
+        look2(pcs[i]);
+        check($sformatf("TC14: way %0d untouched by evict", i),
+              blk2.hit == 1'b1 && pred2[0].target == tgs[i]);
+      end
+    end
+    tc_close("TC14");
+
+    // ==============================================================
+    // TC15 -- read-during-write: prediction sees the pre-update state
+    // ==============================================================
+    tc_open("TC15 read-during-write");
+    begin
+      do_reset();
+      blk_a = mk_pc(49, TAG_BASE);
+      tgt_a = blk_a + 40'd96;
+
+      // Present the lookup and the update in the same cycle. Before
+      // the edge the array still holds the pre-update contents.
+      pred_pc2 = blk_a;
+      upd2[0]  = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1,
+                         blk_a + 40'd32);
+      #1;
+      check("TC15: no same-cycle bypass", blk2.hit == 1'b0);
+      check("TC15: slot0 still zero",     pred2[0] == '0);
+
+      commit();   // edge commits the write
+      check("TC15: visible on the next cycle", blk2.hit == 1'b1);
+      check("TC15: target visible", pred2[0].target == tgt_a);
+    end
+    tc_close("TC15");
+
+    // ==============================================================
+    // Verdict
+    // ==============================================================
+    $display("=================================================");
+    $display("tb_ubtb: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
+    $display("=================================================");
+    if (fail_cnt != 0) begin
+      $fatal(1, "tb_ubtb: %0d checks failed", fail_cnt);
     end else begin
-      $display("FAILURES DETECTED: %0d", fail_count);
-      $finish(1);
+      $display("ALL TESTS PASSED");
+      $finish;
     end
+  end
+
+  // Watchdog
+  initial begin
+    #500000;
+    $display("FAIL: watchdog timeout");
+    $fatal(1, "tb_ubtb: timeout");
   end
 
 endmodule : tb

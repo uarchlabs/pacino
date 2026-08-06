@@ -505,23 +505,19 @@ lint_ftb:
 	  $(RTL_DIR)/ftb_cntrl.sv \
 	  $(RTL_DIR)/ftb.sv $(VSILENCE)
 
-# -- BP cluster structural top (bp_cluster.sv, BP-084).
+# -- BP cluster top (bp_cluster.sv, BP-085).
 #    VARHIDDEN:    tage/sc/ubtb NUM_PRED_SLOTS shadows the package
 #                  parameter of the same name.
 #    SYNCASYNCNET: sram_init async reset + sync flops in the tage,
 #                  ittage and sc leaf logic (same as lint_tage).
-#    UNDRIVEN:     the section 6 redirect outputs and the section 4
-#                  p1 prediction outputs are declared and left
-#                  undriven by design (BP-084 binding decisions);
-#                  redirect derivation and the p1 selection mux are
-#                  later tasks.
+#    UNDRIVEN removed in BP-085: the section 4 p1 prediction outputs
+#    and the section 6 redirect outputs now have producers.
 lint_bp_cluster:
 	@echo "[linting]    bp_cluster"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
-	  -Wno-UNDRIVEN \
 	  --top-module bp_cluster \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \

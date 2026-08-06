@@ -460,37 +460,94 @@ package bp_structs_pkg;
   // ----------------------------------------------------------------
   // uBTB structs
   // ----------------------------------------------------------------
+  // The uBTB entry mirrors the FTB entry (ftb_decisions.md 4): two
+  // conditional fields, one jump field, and a partial fallthrough,
+  // describing one UBTB_BLOCK_BYTES block. One lookup supplies both
+  // prediction slots.
+  //
+  // Targets are stored as displacements from block start with a
+  // fit/overflow/underflow status (ftb_decisions.md 4.2). The
+  // encoding is lossless when the branch is in reach.
+
+  // One conditional branch field. 1+3+13+2+3 = 22 bits.
+  typedef struct packed {
+    logic                          valid;  // field occupied
+    logic [UBTB_BR_POS_BITS-1:0]   pos;    // in-block position 0..7
+    logic [UBTB_BR_TGT_BITS-1:0]   tgt;    // target displacement
+    logic [TAR_STAT_BITS-1:0]      stat;   // fit / ovf / udf
+    logic [UBTB_CONF_WIDTH-1:0]    conf;   // bimodal direction; MSB
+                                           // is the direction
+  } ubtb_cond_t;
+
+  // The block-terminating jump field. 1+3+21+2+3 = 30 bits.
+  typedef struct packed {
+    logic                          valid;    // field occupied
+    logic [UBTB_BR_POS_BITS-1:0]   pos;      // in-block position
+    logic [UBTB_JMP_TGT_BITS-1:0]  tgt;      // jump displacement
+    logic [TAR_STAT_BITS-1:0]      stat;     // fit / ovf / udf
+    logic                          is_call;
+    logic                          is_ret;
+    logic                          is_jalr;
+  } ubtb_jmp_t;
 
   // One uBTB storage entry (one way of one set).
-  // Total: 1 + 20 + 3 + 40 + 1 + 1 = 66b
+  // 1 + 20 + 22 + 22 + 30 + 4 + 1 = 100 bits.
   typedef struct packed {
-    logic                     valid;
-    logic [UBTB_TAG_BITS-1:0] tag;      // PC[26:7]
-    bp_br_type_e              br_type;  // branch type encoding
-    logic [VA_WIDTH-1:0]      target;   // predicted next fetch PC
-    logic                     br_taken; // direction (COND only)
-    logic                     carry;    // target in different
-                                        // 32B block than pc
+    logic                          valid;  // entry valid
+    logic [UBTB_TAG_BITS-1:0]      tag;    // PC[26:7]
+    ubtb_cond_t                    br0;    // conditional field 0
+    ubtb_cond_t                    br1;    // conditional field 1
+    ubtb_jmp_t                     jmp;    // terminal jump field
+    logic [UBTB_PFTADDR_BITS-1:0]  pft;    // partial fallthrough
+    logic                          carry;  // fallthrough crosses the
+                                           // block boundary
   } ubtb_entry_t;
 
-  // Prediction output for one prediction slot.
+  // Prediction output for one prediction slot. Slot 0 is built from
+  // the entry br0 field, slot 1 from br1. A slot carrying the
+  // block-terminating jump reports that jump type and target.
+  // Targets are reconstructed to full width by ubtb.sv.
   typedef struct packed {
-    logic                     valid;
-    logic [VA_WIDTH-1:0]      target;
-    bp_br_type_e              br_type;
-    logic                     br_taken;
-    logic                     carry;
+    logic                          valid;    // slot carries a branch
+    logic [VA_WIDTH-1:0]           target;   // reconstructed target
+    bp_br_type_e                   br_type;  // branch type
+    logic                          br_taken; // direction, COND only
+    logic [UBTB_BR_POS_BITS-1:0]   pos;      // in-block position
+    logic [UBTB_CONF_WIDTH-1:0]    conf;     // bimodal direction ctr
+    logic                          carry;    // target lies outside
+                                             // this block
   } ubtb_pred_t;
 
-  // Update bundle for one prediction slot.
-  // Driven post-execute by the resolution path.
+  // Entry-scoped prediction sidebands, one set per lookup. Both slots
+  // come from one entry, so the hit and the block end are reported
+  // once rather than per slot.
   typedef struct packed {
-    logic                     valid;
-    logic [VA_WIDTH-1:0]      pc;
-    bp_br_type_e              br_type;
-    logic [VA_WIDTH-1:0]      target;
-    logic                     br_taken;
-    logic                     carry;
+    logic                          hit;      // entry valid and tag
+                                             // matched
+    logic [VA_WIDTH-1:0]           pft_addr; // reconstructed
+                                             // fallthrough
+  } ubtb_blk_t;
+
+  // Update bundle for one prediction slot. Driven post-execute by the
+  // resolution path. The field set mirrors the FTB update port, so
+  // one set of resolved facts forms both updates.
+  typedef struct packed {
+    logic                          valid;      // update active
+    logic [VA_WIDTH-1:0]           pc;         // block start PC
+    logic                          is_br;      // conditional resolve
+    logic                          br_idx;     // which conditional
+                                               // field, 0 or 1
+    logic                          br_taken;   // resolved direction
+    logic [VA_WIDTH-1:0]           target;     // resolved taken
+                                               // target, full width
+    logic [UBTB_BR_POS_BITS-1:0]   pos;        // in-block position
+    logic                          is_jmp;     // jump resolve
+    logic [VA_WIDTH-1:0]           jmp_target; // resolved jump target
+    logic                          is_call;
+    logic                          is_ret;
+    logic                          is_jalr;
+    logic [VA_WIDTH-1:0]           pft_addr;   // resolved block end,
+                                               // full width
   } ubtb_upd_t;
 
   // ----------------------------------------------------------------

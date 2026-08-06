@@ -42,18 +42,6 @@ package bp_defines_pkg;
   localparam int FTQ_IDX_BITS = $clog2(FTQ_DEPTH);
 
   // ================================================================
-  // :uBTB parameters:
-  // ================================================================
-  // Size: 256 entries, 4-way associative.
-  // Stage: s1 output. First prediction; no redirect generated.
-  parameter int UBTB_ENTRIES = 256;
-  parameter int UBTB_WAYS    = 4;
-
-  localparam int UBTB_SETS     = UBTB_ENTRIES / UBTB_WAYS; // = 64
-  localparam int UBTB_IDX_BITS = $clog2(UBTB_SETS);        // = 6
-  localparam int UBTB_TAG_BITS = 20;                        // PC[26:7]
-
-  // ================================================================
   // :Loop predictor parameters:
   // ================================================================
   // Size: 256 entries, 4-way associative (64 sets).
@@ -166,6 +154,63 @@ package bp_defines_pkg;
   localparam int FTB_PRED_CREDITS   = 0; // TBD
   localparam int FTB_UPD_CREDITS    = 0; // TBD
   localparam int FTB_STARVE_THRESH  = 0; // TBD
+
+  // ================================================================
+  // :uBTB parameters:
+  // ================================================================
+  // Size: 256 entries, 4-way associative.
+  // Stage: s1 output. First prediction; no redirect generated.
+  //
+  // The uBTB entry mirrors the FTB entry: 2 conditional fields + 1
+  // jump field + partial fallthrough, describing one block. One
+  // lookup supplies both prediction slots.
+  //
+  // Declared after the FTB section: the widths below derive from the
+  // FTB parameters so the two entry formats cannot drift apart.
+  parameter int UBTB_ENTRIES     = 256;
+  parameter int UBTB_WAYS        = 4;
+  // Same block size as the FTB, so a uBTB prediction and an FTB
+  // prediction describe the same block and compare directly at the
+  // cluster boundary.
+  parameter int UBTB_BLOCK_BYTES = FTB_BLOCK_BYTES; // = 32
+
+  localparam int UBTB_SETS     = UBTB_ENTRIES / UBTB_WAYS; // = 64
+  localparam int UBTB_IDX_BITS = $clog2(UBTB_SETS);        // = 6
+  localparam int UBTB_TAG_BITS = 20;                       // PC[26:7]
+
+  localparam int UBTB_OFFSET_BITS = $clog2(UBTB_BLOCK_BYTES); // = 5
+  // In-block instruction position, expanded-instruction granularity
+  localparam int UBTB_BR_POS_BITS = $clog2(UBTB_BLOCK_BYTES / 4); // 3
+  // Partial fall-through address index
+  localparam int UBTB_PFTADDR_BITS =
+                                 $clog2(UBTB_BLOCK_BYTES / 4) + 1; // 4
+
+  // Target displacement widths. Same ISA reach as the FTB
+  // (ftb_decisions.md 4.2). TAR_STAT_BITS is shared.
+  localparam int UBTB_BR_TGT_BITS  = FTB_BR_TGT_BITS;  // = 13
+  localparam int UBTB_JMP_TGT_BITS = FTB_JMP_TGT_BITS; // = 21
+
+  // Bimodal direction counter; the MSB is the predicted direction.
+  localparam int UBTB_CONF_WIDTH = FTB_CONF_WIDTH; // = 3
+  localparam logic [UBTB_CONF_WIDTH-1:0] UBTB_CONF_INIT_TKN = 3'b100;
+  localparam logic [UBTB_CONF_WIDTH-1:0] UBTB_CONF_INIT_NTK = 3'b011;
+
+  // Per-way entry layout, mirroring the FTB entry with the uBTB tag:
+  //   1                      entry valid
+  // + UBTB_TAG_BITS          tag                            (20)
+  // + 2 * (1 + pos + tgt + stat + conf)      br0 + br1      (44)
+  // + (1 + pos + jmp_tgt + stat + 3)         jump field     (30)
+  // + (UBTB_PFTADDR_BITS + 1)                pft + carry    ( 5)
+  localparam int UBTB_ENTRY_WIDTH =
+        1                                                // valid
+      + UBTB_TAG_BITS                                    // tag
+      + 2 * (1 + UBTB_BR_POS_BITS + UBTB_BR_TGT_BITS
+               + TAR_STAT_BITS + UBTB_CONF_WIDTH)        // br0 + br1
+      + (1 + UBTB_BR_POS_BITS + UBTB_JMP_TGT_BITS
+               + TAR_STAT_BITS + 3)                      // jump
+      + (UBTB_PFTADDR_BITS + 1);                         // pft+carry
+  // = 100 bits per way
+  localparam int UBTB_SET_WIDTH = UBTB_WAYS * UBTB_ENTRY_WIDTH; // 400
 
   // ================================================================
   // :TAGE parameters:
@@ -354,3 +399,4 @@ package bp_defines_pkg;
 endpackage : bp_defines_pkg
 
 `endif // BP_DEFINES_PKG_SV
+
