@@ -384,6 +384,7 @@ package bp_structs_pkg;
     logic [VA_WIDTH-1:0]       target;     // predicted target
     bp_br_type_e               br_type;    // branch type
     logic                      taken;      // predicted taken/not-taken
+    logic [FTB_BR_POS_BITS-1:0] pos;       // in-block position 0..7
     bp_pred_src_e              pred_src;   // predictor that won
     logic [FTQ_CONF_BITS-1:0]  confidence; // saturating confidence (TBD)
   } bp_ftq_slot_t;
@@ -405,6 +406,17 @@ package bp_structs_pkg;
     bp_ftq_slot_t [NUM_PRED_SLOTS-1:0] slot;
   } bp_ftq_entry_t;
 
+  // ftb_pred_meta_t: FTB state captured at the prediction read and
+  // returned on the update port. The FTB does not re-look-up the tag
+  // at update; the hit result and the write way are carried
+  // (IC-FTB-10). Scalar within the entry: the FTB indexes one entry
+  // per lookup and both slots come from it.
+  typedef struct packed {
+    logic                       hit;     // tag hit at predict
+    logic [FTB_WAY_BITS-1:0]    way;     // hit way, or PLRU victim
+    logic [FTB_BR_POS_BITS-1:0] jmp_pos; // jump in-block position
+  } ftb_pred_meta_t;
+
   // bp_ftq_meta_t: slow-path FTQ metadata.
   // Stored in a separate wide SRAM. Read only on post-execute update.
   // Carried per prediction slot. The array
@@ -417,6 +429,7 @@ package bp_structs_pkg;
     sc_pred_meta_t     sc;     // SC predictor state
     bp_loop_meta_t     lp;     // loop predictor state
     ittage_pred_meta_t ittage; // ITTAGE predictor state
+    ftb_pred_meta_t    ftb;    // FTB carried hit / way / jmp pos
   } bp_ftq_meta_t;
 
   // ----------------------------------------------------------------
