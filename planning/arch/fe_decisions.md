@@ -2,7 +2,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-08-01
+ UPDATED: 2026-08-09
  CONTACT: Jeff Nye
 ```
 
@@ -38,7 +38,7 @@ branch fields of one FTB block; see section 10.
 
 ```
   p0   Indices and addresses presented to the RAMs. PC hash and
-       folded history available.
+       folded history available. RAS top of stack read.
   p1   RAM outputs available. The initial prediction is formed. The
        FTQ allocates an entry and issues a fetch.
   p2   FTB result valid; branch type available. TAGE final. ITTAGE.
@@ -52,8 +52,9 @@ branch fields of one FTB block; see section 10.
 Predictor stage assignments:
 
 ```
+  p0   RAS top of stack read
   p1   uBTB, LP
-  p2   FTB, TAGE, ITTAGE, RAS
+  p2   FTB, TAGE, ITTAGE, RAS push/pop
   p3   SC
 ```
 
@@ -69,6 +70,11 @@ stage after p1 is a redirect source.
 The LP and uBTB are one-cycle predictors, current implementations use two single port RAMs in each predictor. The indexes are driven at p0 and its outputs are valid at p1. 
 
 Both LP and uBTB support dual prediction, they will present two predictions per cycle when requested. Dual prediction is implemented as two independent prediction `slots`. The slots share no resources and operate fully independently.
+
+The loop predictor was retrofitted to NUM_PRED_SLOTS in BP-091: every
+prediction and update port carries a slot dimension and the internal
+tables are per-slot banks (TI6). Its prediction output is named
+`pred_p1`.
 
 The remaining discussion focuses on a single slot for clarity, the decisions and operation of the 2nd slot are identical.
 
@@ -90,7 +96,10 @@ The successor PC for that case is defined in section 2.4.
 ### 2.2 Returns
 
 RAS is only active for return branch types. The RAS presents its
-top-of-stack entry as the predicted target, at p1.
+top-of-stack entry as the predicted target. THE TOP OF STACK IS READ
+AT p0: ras.sv declares `ras_tos_addr_p0` and `ras_tos_valid_p0`. The
+cluster registers that value and applies it when the p1 selection mux
+forms a RETURN slot.
 
 The RAS does not participate in the uBTB/LP selection. It supplies the
 target for one branch type, the return, taken from its stack rather
@@ -133,6 +142,12 @@ priority-ordered top to bottom:
   otherwise                ->  fall-through address
 ```
 
+The fall-through address for the not-taken case arrives on the p1
+output group as `bpu_pred_pft_p1`, one value per prediction, qualified
+by `bpu_pred_val_p1` (TD#108, BP-092). Before that port existed the
+block end stayed inside the cluster and the FTQ had no source for it
+on a not-taken block.
+
 Both slots are predicted at p1. The selection chooses which slot's
 target is the successor; it does not gate whether a slot is predicted.
 
@@ -142,19 +157,53 @@ The selection is re-evaluated whenever a redirect rewrites a slot.
 
 ## 3. BPU to FTQ: Redirects
 
-Correction and redirect are synonymous terms. A later-stage predictor may change — correct — the prediction currently held in the FTQ entry. Every correction after p1 is a redirect. A redirect identifies one FTQ entry index and carries a corrected target per slot.
+Correction and redirect are synonymous terms. A later-stage predictor may change -- correct -- the prediction currently held in the FTQ entry. Every correction after p1 is a redirect. A redirect identifies one FTQ entry index and carries a corrected target per slot.
 
 ### 3.1 Interface
 
-Each redirecting predictor exposes these signals at its stage (<pN> is p2 or p3, per section 3.2):
+NO PREDICTOR DECLARES A REDIRECT PORT. INFRA-011 confirmed this across
+all 140 ports of the eight top-level BPU modules. A prior revision of
+this section named `<pred>_redir_val_<pN>`, `<pred>_redir_tgt_<pN>` and
+`<pred>_redir_ftq_idx_<pN>` as a per-predictor port group. No such
+ports exist and none is planned.
 
-  \<pred\>\_redir_val_<pN>  [0:NUM_PRED_SLOTS-1]  redirect asserted, per slot
-  \<pred\>\_redir_tgt_<pN>  [0:NUM_PRED_SLOTS-1]  corrected target, per slot
-  \<pred\>\_redir_ftq_idx_<pN>                    FTQ entry index corrected
+The redirect is DERIVED at the bp_cluster boundary. The cluster
+compares a predictor's stage output against the prediction it formed at
+p1 and carried forward in its own stage registers (FE-4). bp_cluster
+does not read the FTQ.
 
-val and tgt are per-slot arrays; the slot is the array index. A predictor drives both slots in one cycle, so it can correct a branch in each slot of one block at once. ftq_idx is scalar: both slots are in one fetch block, which is one FTQ entry.
+The groups are named by STAGE, not by predictor:
 
-The comparison that raises a redirect is made at the bp_cluster boundary, between the predictor's stage output and the entry the FTQ holds for that index. A predictor in isolation does not carry these signals; they exist only at the cluster boundary.
+```
+  bpu_redir_p2      bp_redirect_t [0:NUM_PRED_SLOTS-1]
+  bpu_redir_idx_p2  [FTQ_IDX_BITS-1:0]
+  bpu_redir_p3      bp_redirect_t [0:NUM_PRED_SLOTS-1]
+  bpu_redir_idx_p3  [FTQ_IDX_BITS-1:0]
+```
+
+`bp_redirect_t` is the per-slot payload and carries `target_pc` and
+`valid`. The array is per slot; the index is scalar alongside it,
+because both slots occupy one fetch block, which is one FTQ entry.
+
+p2 carries the FTB, TAGE, ITTAGE and RAS corrections. p3 carries the SC
+correction.
+
+The comparison reduces both views of a slot to ONE quantity, the
+address fetched after that slot. Two not-taken views therefore compare
+equal and raise no redirect. The p1 operand is formed at p1 from the p1
+view only: the slot target when taken, the uBTB fall-through on a hit,
+the block-aligned PC plus FTB_BLOCK_BYTES on a miss.
+
+The p3 comparison is against the p2-corrected value, not the raw p1
+prediction, so a p3 redirect fires only when SC changes what the cluster
+published at p2.
+
+Every p2 and p3 comparison is qualified by `branch_id` equal to the FTQ
+index held in the matching stage register, so a queued or
+back-pressured response cannot be compared against the wrong entry. The
+redirect logic assumes no fixed predictor latency.
+
+The port specification is ftq_bpu_interfaces.md section 6.
 
 ### 3.2 Sources
 
@@ -249,6 +298,7 @@ slot_valid     1     this slot carries a predicted branch
 target        40     predicted target for this slot, VA_WIDTH
 br_type        3     bp_br_type_e
 taken          1     predicted direction
+pos            3     in-block branch position, FTB_BR_POS_BITS
 pred_src       3     predictor that supplied this slot
                      not currently used, see TD-FE-4
 confidence     4     saturating counter, FTQ_CONF_BITS
@@ -259,13 +309,23 @@ one fetch block and all its slots.
 
 `br_type` is per slot and selects the predictor update set at resolution (section 7.2).
 
+`pos` locates the branch inside the fetch bundle. It addresses
+four-byte expanded-instruction positions, so a 32-byte block has eight
+of them. The cluster also uses it to form the branch PC reported to
+bp_history: block base plus position times four (BP-092a).
+
 The history pointers and RAS snapshot are block scalar (sections 6.1, 9).
 
 ### 4.2 Slow path: bp_ftq_meta_t
 
 `bp_ftq_meta_t` is stored in a separate, wider SRAM, read only on post-execute update and never on the prediction path.
 
-It holds the state each predictor needs to train and cannot recompute at resolution. The field list is maintained in `bp_structs_pkg.sv` and described in `bp_cluster.md`, FTQ Entry Split. The struct nests one metadata block per predictor: `tage_pred_meta_t`, `sc_pred_meta_t`, `bp_loop_meta_t`, and `ittage_pred_meta_t`.
+It holds the state each predictor needs to train and cannot recompute at resolution. The field list is maintained in `bp_structs_pkg.sv` and described in `bp_cluster.md`, FTQ Entry Split. The struct nests one metadata block per predictor: `tage_pred_meta_t`, `sc_pred_meta_t`, `lp_pred_t`, `ittage_pred_meta_t`, and `ftb_pred_meta_t`.
+
+The loop member is `lp_pred_t`, the same type loop_pred outputs. TD#106
+retired `bp_loop_meta_t`, which carried the same thirteen fields in a
+different declaration order with two spelled differently; the cluster's
+field-by-field map went with it (BP-092).
 
 The metadata is per slot, carried `[NUM_PRED_SLOTS-1:0]`. Each slot produces its own provider indices, counter snapshots, and allocation targets.
 
@@ -419,9 +479,10 @@ The RAS is register-file based. It has no prediction queue, no update
 queue, and no arbiter.
 
 ```
-  p1   top-of-stack presented as the predicted target for a return
-       (section 2.2). This is spec_pop_addr in the section 3.3 target
-       table.
+  p0   top-of-stack read. ras.sv declares ras_tos_addr_p0 and
+       ras_tos_valid_p0. The cluster registers the value and applies
+       it at p1 as the predicted target for a return (section 2.2).
+       This is spec_pop_addr in the section 3.3 target table.
   p2   push or pop executes once the FTB branch type confirms a call
        or a return. Participates in the p2 redirect.
 ```
@@ -434,7 +495,8 @@ One snapshot per FTQ entry is sufficient under dual slot. A RAS
 operation is a call or a return, both taken branches, so a RAS
 operation in slot 0 ends the block before slot 1 is reached. At most
 one RAS operation therefore occurs per block, and one snapshot covers
-it.
+it. The cluster enforces this by gating p2 RAS operations on
+reachability across slots (FE-11).
 
 RAS flush behavior is open; see TD #96.
 
@@ -451,6 +513,10 @@ A fetch block is one 32-byte FTB block (FTB_BLOCK_BYTES). Both slots
 are predicted from one FTB lookup: slot 0 is the block's first branch
 field, slot 1 the second. The slots are not two PC ranges; they are
 the two branch fields of one block (ftb_decisions.md 2.1, 2.3).
+
+The uBTB follows the same model. BP-086 rewrote ubtb.sv to a single
+lookup returning one entry that describes one block and supplies both
+slots; the `pred_pc_p0 + 32` slot-1 lookup is retired.
 
 `dual_pred_en`, when clear, gates the second prediction slot off at
 runtime. It does not change the structure: the slots and the channels
@@ -477,8 +543,10 @@ Proposed numbering. Stated here for the first time; not carried from
          it. Supersession does not cross slots.
 
   FE-4   The redirect comparison is made at the cluster boundary,
-         between a predictor's stage output and the entry the FTQ
-         holds. No predictor is compared against another predictor.
+         between a predictor's stage output and the prediction the
+         cluster formed at p1 and holds in its own stage registers.
+         No predictor is compared against another predictor, and the
+         cluster does not read the FTQ.
 
   FE-5   No prediction and no update is dropped. A full prediction
          path stalls fetch. A full update queue stalls the update
@@ -507,6 +575,9 @@ Proposed numbering. Stated here for the first time; not carried from
          is a taken branch, so a RAS operation in slot 0 ends the
          block before slot 1. One RAS snapshot per FTQ entry is
          therefore sufficient.
+
+  FE-12  No predictor declares a redirect port. Redirects exist only
+         as cluster-derived, stage-named groups (section 3.1).
 ```
 
 ---
@@ -529,7 +600,7 @@ it does so deliberately:
   2, 3.4   LP listed as a redirect source (lp_redir_val_p2).
            RESOLUTION: the LP is not a redirect source. It is selected
            against the uBTB by mux at p1. lp_redir_val_p2 does not
-           exist.
+           exist. No predictor declares any redirect port (FE-12).
 
   3.3      "SC > TAGE > FTB/LP > uFTB/RAS" presented as an override
            priority.
@@ -562,7 +633,8 @@ and G17. That is the TAGE/ITTAGE bundle split and does not apply to the
 FTB. The FTB prediction block is one 32-byte block and one FTB lookup
 supplies both predictions (ftb_decisions.md 2.1, 2.3); the two slots
 are the block's two branch fields, not two PC ranges. Section 10 now
-follows ftb_decisions.md.
+follows ftb_decisions.md, and BP-086 removed the retired model from
+ubtb.sv.
 
 ---
 
@@ -585,7 +657,7 @@ follows ftb_decisions.md.
            block always begins on an FTB_BLOCK_BYTES boundary, pc
            needs 35. Held at 40 until the design is working; revisit
            at the optimization step, together with the width of
-           <pred>_redir_tgt_<pN>, which carries the same quantity.
+           bp_redirect_t.target_pc, which carries the same quantity.
            The per-slot target is now replicated NUM_PRED_SLOTS
            times, so the saving scales with the slot count.
            To be merged into the project tech debt list.
@@ -622,15 +694,17 @@ follows ftb_decisions.md.
 ```
   FE-U1  Return identification before p1. The RAS presents its
          top-of-stack as the initial predicted target for a return,
-         but the FTB branch type does not exist until p2. What
-         identifies the return at p1 is stated nowhere.
+         but the FTB branch type does not exist until p2. The uBTB
+         entry's br_type is what identifies the return at p1
+         (section 2.2); the residual question is what happens when
+         the uBTB misses and the block contains a return.
 
   FE-U2  Flush handling. How a backend mispredict flush reaches the
          FTQ is open. RAS flush behavior is TD #96.
 
   FE-U3  bp_ftq_slot_t.confidence, 4 bits. bp_cluster.md marks the
          purpose TBD and FTQ_CONF_BITS a placeholder. Nothing in
-         either path reads it.
+         either path reads it; the cluster drives it to zero.
 
   FE-U4  PHR contribution to index and tag hashing. bp_cluster.md
          defers it to the TAGE and ITTAGE implementation sessions.
@@ -659,7 +733,8 @@ follows ftb_decisions.md.
          DIRECT_CALL, INDIRECT_CALL, and NO_BRANCH have no row. Both
          call encodings push the RAS, and per the session-061 ruling
          INDIRECT_CALL updates ITTAGE for the target and RAS for the
-         return address. Independent of the slot count.
+         return address. NO_BRANCH forms no update. Independent of
+         the slot count.
 ```
 
 ---
@@ -693,4 +768,28 @@ follows ftb_decisions.md.
               FTB (ftb_decisions.md 2.1, 2.3). Intro line, FE-10, and
               FE-11 propagated to the branch-field model; FE-11
               restated to the RAS-operation basis.
+
+  2026-08-09  INFRA-012 / session-064. Three corrections carried from
+              ftq_bpu_interfaces.md section 10.
+              Section 2.2 and section 9: the RAS top of stack is read
+              at p0, not p1. ras.sv declares ras_tos_addr_p0 and
+              ras_tos_valid_p0; the cluster registers the value and
+              applies it at p1. Section 1 stage list updated to match.
+              Section 3.1: the per-predictor redirect port group was
+              removed. No predictor declares a redirect port
+              (INFRA-011, all 140 ports). Rewritten to the
+              cluster-derived, stage-named groups bpu_redir_p2 and
+              bpu_redir_p3, with the one-quantity comparison, the p1
+              operand definition, the p3 comparison basis and the
+              branch_id qualification. FE-4 restated and FE-12 added.
+              Section 4.2: bp_loop_meta_t replaced by lp_pred_t
+              (TD#106, BP-092); ftb_pred_meta_t added to the nested
+              member list. TD-FE-3 reference to <pred>_redir_tgt_<pN>
+              retargeted to bp_redirect_t.target_pc.
+              Also updated: section 2.1 for the BP-091 loop_pred
+              dual-slot retrofit; section 2.4 and 4.1 for
+              bpu_pred_pft_p1 and bp_ftq_slot_t.pos; section 10 for
+              the BP-086 uBTB block model; FE-U1, FE-U3 and FE-U9
+              sharpened.
 ```
+

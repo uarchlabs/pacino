@@ -89,6 +89,8 @@ rtl/core/frontend/bpu/obj_sc_table/
 rtl/core/frontend/bpu/obj_sc_table_fast/
 rtl/core/frontend/bpu/obj_sc/
 rtl/core/frontend/bpu/obj_sc_fast/
+rtl/core/frontend/bpu/obj_bp_cluster/
+rtl/core/frontend/bpu/obj_dir_cov_bp_cluster/
 
 # lib
 rtl/lib/obj_dir

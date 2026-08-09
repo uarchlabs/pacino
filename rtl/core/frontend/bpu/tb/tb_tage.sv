@@ -206,6 +206,8 @@ module tb;
   int _capstone_rt_tst          = 1;
   // -- BP-081 TD#87/#88 confidence decode + extended CTR coverage --
   int _pred_conf_decode_tst     = 1;
+  // -- BP-094 branch_id staged p0 -> p1 with the rest of meta_p1 --
+  int _pred_branch_id_stage_tst = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -430,10 +432,12 @@ module tb;
     while (!tage_rdy) begin
       @(posedge clk);
       if ((cycle_cnt - start_cycle) > watchdog_lim) begin
+        // BP-094: $finish(1) exits 0 under Verilator v5.048, so a
+        // watchdog trip used to report green. $fatal(1) does not.
         $display(
           "[FAIL] tage_rdy_tst: watchdog at %0d cycles",
           cycle_cnt - start_cycle);
-        $finish(1);
+        $fatal(1, "tb_tage: tage_rdy watchdog");
       end
     end
 
@@ -7750,15 +7754,22 @@ module tb;
     // BP-081 TD#87/#88 confidence decode + extended CTR coverage.
     if (_pred_conf_decode_tst != 0)
       pred_conf_decode_tst(verbose);
+    // BP-094 branch_id staging across a varying-branch_id stream.
+    if (_pred_branch_id_stage_tst != 0)
+      pred_branch_id_stage_tst(verbose);
 
     // Overall verdict.
+    // BP-094: the failing exit was $finish(1), which Verilator
+    // v5.048 reports as exit 0, so a red run of this suite came back
+    // GREEN to make. $fatal(1) is the only accepted failure exit
+    // (same finding as BP-086 in tb_ubtb).
     if (total_fails == 0) begin
       $display("[PASS] BP-061: all tests passed");
       $finish(0);
     end else begin
       $display("[FAIL] BP-061: %0d total failures",
         total_fails);
-      $finish(1);
+      $fatal(1, "tb_tage: %0d total failures", total_fails);
     end
   end
 
@@ -12542,6 +12553,362 @@ module tb;
     else
       $display(
         "[FAIL] pred_conf_decode_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // BP-094  pred_branch_id_stage_tst
+  //
+  // tage_pred_meta_t.branch_id must describe the request that
+  // produced the rest of the metadata. Every other prediction test in
+  // this file drives one request at a time with branch_id held at a
+  // single value, so a branch_id read LIVE off the p0 input is
+  // indistinguishable from one staged p0 -> p1 with the rest of
+  // meta_p1. That is the hole that let the skew ship. This test
+  // VARIES branch_id across CONSECUTIVE requests, which separates the
+  // two: at the cycle a request is at p2, the p0 input already
+  // carries the NEXT request.
+  //
+  // Mechanisms the stimulus relies on. Each is driven or read out of
+  // the DUT here rather than assumed (CLAUDE.md, self-contained
+  // tests):
+  //   - aging disabled and uaon cleared on both slots, so neither the
+  //     epoch compare nor the UAON mux can move under the stream;
+  //   - T1..T4 invalidated in every row of both banks of both slot
+  //     RAMs, so T0 is the sole provider for any PC and no residue
+  //     from an earlier test can alias either index under test;
+  //   - the two T0 rows are located by READING the DUT's own
+  //     tage_bim address (u_ram_s0/s1 addr mux), never by replicating
+  //     the index hash, and the test FAILS if the two PCs collide on
+  //     one row;
+  //   - the pipeline is drained before each phase, so the response
+  //     under test cannot be a leftover.
+  //
+  // The two T0 rows carry DIFFERENT counters, so each response also
+  // carries a CTR and a direction that identify which request
+  // produced it. The check is therefore not "branch_id is plausible"
+  // but "branch_id and the rest of the struct name the SAME request".
+  // Both slots run concurrently with DISJOINT branch_id ranges, so a
+  // crossed-slot stage is caught as well.
+  // ---------------------------------------------------------------
+  task automatic pred_branch_id_stage_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp0;
+    tage_pred_inp_t  inp1;
+    tage_pred_meta_t meta0;
+    tage_pred_meta_t meta1;
+    int              re;
+    logic [TAGE_TBL_IDX[0]-1:0] ix_a;
+    logic [TAGE_TBL_IDX[0]-1:0] ix_b;
+    logic [VA_WIDTH-1:0]        pc_i;
+    logic [FTQ_IDX_BITS-1:0]    e_id0;
+    logic [FTQ_IDX_BITS-1:0]    e_id1;
+    logic [TAGE_MAX_CTR_WIDTH-1:0] e_ctr;
+    logic                          e_tkn;
+    int              n_resp;
+
+    // Two PCs that differ inside the T0 index field rather than above
+    // it -- two addresses a whole number of table spans apart share a
+    // row. The separation is CHECKED below against the DUT's own
+    // registered index, not assumed.
+    localparam logic [VA_WIDTH-1:0] PC_A = 40'h0_0003_0040;
+    localparam logic [VA_WIDTH-1:0] PC_B = 40'h0_0003_0800;
+    // T0 counters: PC_A strongly taken, PC_B strongly not taken.
+    // T0 is 2b and zero-extends into the 3b meta CTR field, so
+    // 2'b11 -> 3'b011 taken and 2'b00 -> 3'b000 not taken.
+    localparam logic [TAGE_TBL_CTR[0]-1:0] BIM_A = 2'b11;
+    localparam logic [TAGE_TBL_CTR[0]-1:0] BIM_B = 2'b00;
+    localparam logic [TAGE_MAX_CTR_WIDTH-1:0] CTR_A = 3'b011;
+    localparam logic [TAGE_MAX_CTR_WIDTH-1:0] CTR_B = 3'b000;
+    // Disjoint branch_id ranges, one per slot. FTQ_IDX_BITS is 6, so
+    // every value below is representable without truncation.
+    localparam int ID_A0 = 'h05;   // phase 1, slot 0, request A
+    localparam int ID_B0 = 'h1A;   // phase 1, slot 0, request B
+    localparam int ID_A1 = 'h0B;   // phase 1, slot 1, request A
+    localparam int ID_B1 = 'h27;   // phase 1, slot 1, request B
+    localparam int STR0  = 'h10;   // phase 2, slot 0 base
+    localparam int STR1  = 'h20;   // phase 2, slot 1 base
+    localparam int STR_N = 8;      // phase 2, stream length
+
+    local_fails       = 0;
+    n_resp            = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h0;
+    u_dut.u_tage_cntrl.uaon[1] = 4'h0;
+
+    // -- Start state. Invalidate T1..T4 completely so T0 is the sole
+    //    provider for any PC and no earlier test's residue can alias
+    //    the rows under test. RAM_ENTRIES is per bank.
+    re = (1 << TAGE_TBL_IDX[1]) / 2;
+    for (int b = 0; b < 2; b++) begin
+      for (int i = 0; i < re; i++) begin
+        u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+      end
+    end
+
+    // -- Locate the T0 row for each PC by reading the DUT's OWN
+    //    registered p0 index, t_idx_r1[0][s]. That register is loaded
+    //    unconditionally from the index the tables were addressed
+    //    with, so it names the row this request actually read; no
+    //    hash is replicated here.
+    inp0          = '0;
+    inp0.pc       = PC_A;
+    inp1          = '0;
+    inp1.pc       = PC_A;
+    stg_pred_inp0 = inp0;
+    stg_pred_inp1 = inp1;
+    stg_pred_val0 = 1'b1;
+    stg_pred_val1 = 1'b1;
+    @(posedge clk);                     // PC_A on p0
+    #1;
+    inp0.pc       = PC_B;
+    inp1.pc       = PC_B;
+    stg_pred_inp0 = inp0;
+    stg_pred_inp1 = inp1;
+    @(posedge clk);                     // PC_B on p0, A's index in r1
+    #1;
+    ix_a = u_dut.u_tage_cntrl.t_idx_r1[0][0];
+
+    stg_pred_val0 = 1'b0;
+    stg_pred_val1 = 1'b0;
+    stg_pred_inp0 = '0;
+    stg_pred_inp1 = '0;
+    @(posedge clk);                     // B's index in r1
+    #1;
+    ix_b = u_dut.u_tage_cntrl.t_idx_r1[0][0];
+
+    stg_pred_val0 = 1'b0;
+    stg_pred_val1 = 1'b0;
+    stg_pred_inp0 = '0;
+    stg_pred_inp1 = '0;
+    repeat (4) @(posedge clk);          // drain the two probe requests
+    #1;
+
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_branch_id_stage_tst: T0 idx A=%0d B=%0d",
+        ix_a, ix_b);
+
+    // The whole coupling check depends on the two PCs landing on
+    // different T0 rows. Prove it here rather than assuming it.
+    if (ix_a === ix_b || ix_a === '0 || ix_b === '0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: PC_A and PC_B share T0 idx %0d",
+        ix_a);
+    end
+
+    // -- Seed the two rows, both slot RAMs. bank = index MSB,
+    //    row = the remaining bits, matching tage_bim's bw_ram map.
+    u_dut.u_tage_bim.u_ram_s0
+      .mem[ix_a[TAGE_TBL_IDX[0]-1]][ix_a[TAGE_TBL_IDX[0]-2:0]] = BIM_A;
+    u_dut.u_tage_bim.u_ram_s1
+      .mem[ix_a[TAGE_TBL_IDX[0]-1]][ix_a[TAGE_TBL_IDX[0]-2:0]] = BIM_A;
+    u_dut.u_tage_bim.u_ram_s0
+      .mem[ix_b[TAGE_TBL_IDX[0]-1]][ix_b[TAGE_TBL_IDX[0]-2:0]] = BIM_B;
+    u_dut.u_tage_bim.u_ram_s1
+      .mem[ix_b[TAGE_TBL_IDX[0]-1]][ix_b[TAGE_TBL_IDX[0]-2:0]] = BIM_B;
+
+    // ==============================================================
+    // Phase 1: two back-to-back requests, DIFFERENT branch_ids.
+    // Request A reaches p2 two posedges after the posedge that put it
+    // on p0. At that posedge request B is on p0, so a live p0 read
+    // reports B's branch_id for A's metadata.
+    // ==============================================================
+    inp0           = '0;
+    inp0.pc        = PC_A;
+    inp0.branch_id = FTQ_IDX_BITS'(ID_A0);
+    inp1           = '0;
+    inp1.pc        = PC_A;
+    inp1.branch_id = FTQ_IDX_BITS'(ID_A1);
+    stg_pred_inp0  = inp0;
+    stg_pred_inp1  = inp1;
+    stg_pred_val0  = 1'b1;
+    stg_pred_val1  = 1'b1;
+    @(posedge clk);                     // A on p0
+    #1;
+    inp0.pc        = PC_B;
+    inp0.branch_id = FTQ_IDX_BITS'(ID_B0);
+    inp1.pc        = PC_B;
+    inp1.branch_id = FTQ_IDX_BITS'(ID_B1);
+    stg_pred_inp0  = inp0;
+    stg_pred_inp1  = inp1;
+    @(posedge clk);                     // B on p0, A on p1
+    #1;
+    stg_pred_val0  = 1'b0;
+    stg_pred_val1  = 1'b0;
+    stg_pred_inp0  = '0;
+    stg_pred_inp1  = '0;
+    @(posedge clk);                     // A on p2
+    #1;
+
+    meta0 = tage_pred_meta_p2[0];
+    meta1 = tage_pred_meta_p2[1];
+    if (verbose != 0)
+      $display(
+        "[INFO] pred_branch_id_stage_tst: A s0 id=%0h ctr=%03b tkn=%0b",
+        meta0.branch_id, meta0.tage_prm_ctr, meta0.tage_pred_tkn);
+
+    if (tage_pred_rdy_p2[0] !== 1'b1 || tage_pred_rdy_p2[1] !== 1'b1)
+    begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: A rdy=%0b%0b exp=11",
+        tage_pred_rdy_p2[1], tage_pred_rdy_p2[0]);
+    end
+    if (meta0.branch_id !== FTQ_IDX_BITS'(ID_A0)) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: A s0 branch_id=%0h exp=%0h",
+        meta0.branch_id, FTQ_IDX_BITS'(ID_A0));
+    end
+    if (meta1.branch_id !== FTQ_IDX_BITS'(ID_A1)) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: A s1 branch_id=%0h exp=%0h",
+        meta1.branch_id, FTQ_IDX_BITS'(ID_A1));
+    end
+    // The rest of the struct must name the same request.
+    if (meta0.tage_prm_ctr !== CTR_A || meta0.tage_pred_tkn !== 1'b1
+        || meta0.tage_prm_comp !== '0) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: A s0 ctr=%03b tkn=%0b cmp=%0d",
+        meta0.tage_prm_ctr, meta0.tage_pred_tkn, meta0.tage_prm_comp);
+    end
+    if (meta1.tage_prm_ctr !== CTR_A || meta1.tage_pred_tkn !== 1'b1)
+    begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: A s1 ctr=%03b tkn=%0b",
+        meta1.tage_prm_ctr, meta1.tage_pred_tkn);
+    end
+
+    @(posedge clk);                     // B on p2
+    #1;
+    meta0 = tage_pred_meta_p2[0];
+    meta1 = tage_pred_meta_p2[1];
+    if (meta0.branch_id !== FTQ_IDX_BITS'(ID_B0)) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: B s0 branch_id=%0h exp=%0h",
+        meta0.branch_id, FTQ_IDX_BITS'(ID_B0));
+    end
+    if (meta1.branch_id !== FTQ_IDX_BITS'(ID_B1)) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: B s1 branch_id=%0h exp=%0h",
+        meta1.branch_id, FTQ_IDX_BITS'(ID_B1));
+    end
+    if (meta0.tage_prm_ctr !== CTR_B || meta0.tage_pred_tkn !== 1'b0)
+    begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: B s0 ctr=%03b tkn=%0b",
+        meta0.tage_prm_ctr, meta0.tage_pred_tkn);
+    end
+
+    repeat (3) @(posedge clk);          // drain before phase 2
+    #1;
+
+    // ==============================================================
+    // Phase 2: a back-to-back stream of STR_N requests, branch_id
+    // incrementing on both slots from DISJOINT bases, PC alternating
+    // so the CTR and the direction alternate with it. Every response
+    // is checked against the request that produced it.
+    // ==============================================================
+    for (int i = 0; i < STR_N + 2; i++) begin
+      if (i < STR_N) begin
+        pc_i           = (i[0] == 1'b0) ? PC_A : PC_B;
+        inp0           = '0;
+        inp0.pc        = pc_i;
+        inp0.branch_id = FTQ_IDX_BITS'(STR0 + i);
+        inp1           = '0;
+        inp1.pc        = pc_i;
+        inp1.branch_id = FTQ_IDX_BITS'(STR1 + i);
+        stg_pred_inp0  = inp0;
+        stg_pred_inp1  = inp1;
+        stg_pred_val0  = 1'b1;
+        stg_pred_val1  = 1'b1;
+      end else begin
+        stg_pred_inp0  = '0;
+        stg_pred_inp1  = '0;
+        stg_pred_val0  = 1'b0;
+        stg_pred_val1  = 1'b0;
+      end
+      @(posedge clk);
+      #1;
+
+      // Request (i-2) is at p2 now.
+      if (i >= 2) begin
+        e_id0 = FTQ_IDX_BITS'(STR0 + i - 2);
+        e_id1 = FTQ_IDX_BITS'(STR1 + i - 2);
+        e_ctr = ((i - 2) % 2 == 0) ? CTR_A : CTR_B;
+        e_tkn = ((i - 2) % 2 == 0) ? 1'b1  : 1'b0;
+        meta0 = tage_pred_meta_p2[0];
+        meta1 = tage_pred_meta_p2[1];
+        n_resp++;
+
+        if (tage_pred_rdy_p2[0] !== 1'b1) begin
+          local_fails++;
+          $display(
+            "[FAIL] pred_branch_id_stage_tst: stream %0d s0 rdy=%0b",
+            i - 2, tage_pred_rdy_p2[0]);
+        end
+        if (meta0.branch_id !== e_id0) begin
+          local_fails++;
+          $display(
+            "[FAIL] pred_branch_id_stage_tst: stream %0d s0 id=%0h exp=%0h",
+            i - 2, meta0.branch_id, e_id0);
+        end
+        if (meta1.branch_id !== e_id1) begin
+          local_fails++;
+          $display(
+            "[FAIL] pred_branch_id_stage_tst: stream %0d s1 id=%0h exp=%0h",
+            i - 2, meta1.branch_id, e_id1);
+        end
+        // Coupling: the direction and CTR must belong to the SAME
+        // request as the branch_id above.
+        if (meta0.tage_prm_ctr !== e_ctr
+            || meta0.tage_pred_tkn !== e_tkn) begin
+          local_fails++;
+          $display(
+            "[FAIL] branch_id_stage: str %0d s0 ctr=%03b/%03b t=%0b/%0b",
+            i - 2, meta0.tage_prm_ctr, e_ctr,
+            meta0.tage_pred_tkn, e_tkn);
+        end
+        if (meta1.tage_prm_ctr !== e_ctr
+            || meta1.tage_pred_tkn !== e_tkn) begin
+          local_fails++;
+          $display(
+            "[FAIL] branch_id_stage: str %0d s1 ctr=%03b/%03b t=%0b/%0b",
+            i - 2, meta1.tage_prm_ctr, e_ctr,
+            meta1.tage_pred_tkn, e_tkn);
+        end
+      end
+    end
+
+    // The stream must actually have produced STR_N responses; a
+    // silently short stream would make the checks above vacuous.
+    if (n_resp != STR_N) begin
+      local_fails++;
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: %0d responses checked exp=%0d",
+        n_resp, STR_N);
+    end
+
+    if (local_fails == 0)
+      $display("[PASS] pred_branch_id_stage_tst: 0 failures");
+    else
+      $display(
+        "[FAIL] pred_branch_id_stage_tst: %0d failures", local_fails);
     total_fails += local_fails;
   endtask
 

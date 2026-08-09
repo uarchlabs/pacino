@@ -152,6 +152,27 @@ p2: Final target flopped out. ittage_pred_meta_p2[s]
     and ittage_pred_rdy_p2[s] are valid at p2.
 ```
 
+### Metadata timing (BP-094)
+
+Every member of ittage_pred_meta_t, branch_id INCLUDED,
+describes the request that produced it, and the whole
+struct is staged to p2 together. No member is read live
+from the p0 input at p1.
+
+ITTAGE was inspected in BP-094 for the staging defect
+found in tage_cntrl and does NOT have it. ittage_cntrl
+registers branch_id p0 -> p1 into branch_id_p1[] in its
+pred_val_reg block and the p2 metadata register takes it
+from there, alongside the index and tag hashes, so the
+struct has always been on one request. The statement is
+recorded here so the property is specified rather than
+merely true.
+
+Consumers may rely on this: ittage_pred_meta_p2[s].branch_id
+is the FTQ index a consumer must compare its own stage
+index against, and a mismatch means the response is stale
+or delayed, never merely skewed.
+
 ### Folded History Input
 
 `folded_hist` is the `bp_folded_hist_t` output of

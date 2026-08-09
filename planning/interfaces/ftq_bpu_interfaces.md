@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-08-02
+ UPDATED: 2026-08-09
  CONTACT: Jeff Nye
 ```
 
@@ -56,7 +56,8 @@ not surprised by it:
   ras                  same form, no queue-status ports
   ubtb                 slot as packed [NUM_PRED_SLOTS-1:0] on the
                        type
-  loop_pred            single slot today, dual-slot retrofit TD#105
+  loop_pred            per-slot since BP-091; prediction output
+                       named pred_p1, update ports keep a p0 suffix
   ftb                  flat ports, no structs, no slot dimension
   bp_history           no stage suffixes, literal [1:0] and [2]
                        dimensions
@@ -100,8 +101,8 @@ Cluster routing of the request:
 | Destination      | Port                | Notes                    |
 |------------------|---------------------|--------------------------|
 | ubtb             | pred_pc_p0          | scalar PC                |
-| loop_pred        | pred_pc_p0          | per slot, TD#105         |
-| loop_pred        | pred_valid_p0       | per slot, TD#105         |
+| loop_pred        | pred_pc_p0          | per slot                 |
+| loop_pred        | pred_valid_p0       | per slot                 |
 | ftb              | pred_pc_p0          | scalar PC                |
 | ftb              | pred_valid_p0       | request valid            |
 | tage             | tage_pred_val_p0    | per-slot bit vector      |
@@ -111,6 +112,11 @@ Cluster routing of the request:
 
 `tage_pred_inp_t` and `ittage_pred_inp_t` each carry `pc` and
 `branch_id`. The cluster builds one per slot from the request.
+
+Every slot of `loop_pred.pred_pc_p0` is driven from the one request
+PC. There is no slot-1 PC at p0; the per-slot dimension is a shape,
+the same way the cluster drives `sc.inp_pc_p2` per slot from a single
+staged p2 copy.
 
 ubtb has no request-valid port. It presents an output every cycle.
 
@@ -141,9 +147,8 @@ lp_pred_is_loop, and lp_pred_taken. It carries no target: the loop
 predictor supplies a direction only, and the target comes from the
 uBTB entry when the loop predictor wins.
 
-loop_pred is single-slot in the shipped RTL and its output port is
-named `pred_p0`. This file describes the retrofitted form: per-slot
-output, renamed `pred_p1`. TD#105.
+loop_pred is per-slot as of BP-091 and its prediction output is named
+`pred_p1`. TD#105 is closed.
 
 The p1 selection mux is cluster logic, per slot:
 
@@ -152,6 +157,8 @@ The p1 selection mux is cluster logic, per slot:
   else ubtb slot valid  ->  ubtb supplies the slot
   else                  ->  slot carries no prediction
 ```
+
+There is no slot-0 exception to this rule.
 
 A uBTB RETURN takes its target from the registered RAS top of stack
 rather than from the uBTB entry.
@@ -282,9 +289,13 @@ sc does not take `bp_folded_hist_t`. The cluster slices the three SC
 folds and the low 10 bits of `tage_phr` out of the struct and drives
 them as separate ports.
 
-`inp_pc_p2` and `sc_phr_p2` are staged p0 to p2 by the cluster. The
-three fold ports are connected live to bp_history; see section 10,
-item 8.
+ALL FIVE are staged p0 to p2 by the cluster. The three folds were
+connected live to bp_history until BP-090; because bp_history
+advances whenever a branch is predicted, the live folds at p2
+described history newer than the block SC was indexing. Same class of
+signal as the PC and the phr, same staging. TAGE and ITTAGE take
+`bp_folded_hist_t` whole at their own p0 request and stage
+internally; only SC takes sliced folds.
 
 sc p3 output:
 
@@ -354,9 +365,14 @@ TAGE, ITTAGE, and RAS corrections; p3 carries the SC correction.
 
 The comparison is expressed as one quantity, the slot successor
 address, rather than as a taken/target pair. Both the p1 and the p2
-view are reduced to the address fetched after that slot, using the
-FTB fall-through for a not-taken slot, so two not-taken views
-compare equal and raise no redirect.
+view are reduced to the address fetched after that slot, so two
+not-taken views compare equal and raise no redirect.
+
+The p1 operand is formed at p1 from the p1 view only: the slot
+target when taken, the uBTB fall-through on a hit, the
+block-aligned PC plus FTB_BLOCK_BYTES on a miss. A stale uBTB block
+boundary therefore redirects at p2 rather than letting the front end
+fetch past a boundary the FTB had already contradicted.
 
 The p3 comparison is against the p2-corrected value, not the raw p1
 prediction, so a p3 redirect fires only when SC changes the value
@@ -413,6 +429,10 @@ retired `bp_loop_meta_t`, which carried the same thirteen fields in
 a different order; the cluster's field-by-field map went with it.
 See section 10, item 9.
 
+Every slot carries its own loop snapshot. The zero drive that
+covered slots above 0 before the loop predictor was per-slot is gone
+(BP-091).
+
 ### 7.2 p3 write
 
 ```
@@ -468,6 +488,12 @@ The uBTB also produces a position on `ubtb_pred_t.pos`, so the p1
 prediction can fill `bp_ftq_slot_t.pos` before the FTB result
 arrives.
 
+The position addresses four-byte expanded-instruction slots:
+FTB_BR_POS_BITS is `$clog2(FTB_BLOCK_BYTES/4)`, so a 32-byte block
+has eight positions. The cluster also uses the position to form the
+branch PC it reports to bp_history, block base plus position times
+four (BP-092a, section 9).
+
 ### 7.5 Fields with no consumer
 
 `ftb_br0_conf_p2`, `ftb_br1_conf_p2` and `ftb_fastpath_p2` are FTB
@@ -497,8 +523,9 @@ payloads from `bp_update_t`, the resolved-branch record.
 Notes:
 - ubtb carries the valid inside `ubtb_upd_t.valid`; it has no
   separate valid port.
-- loop_pred update ports carry a p0 suffix, not u0. Per-slot after
-  the TD#105 retrofit.
+- loop_pred update ports carry a p0 suffix, not u0. They are
+  per-slot as of BP-091, at both the module and the cluster
+  boundary (`lp_upd_valid_p0`, `lp_upd_p0`).
 - ftb update is 14 flat ports: ftb_upd_pc_u0, ftb_upd_hit_u0,
   ftb_upd_way_u0, ftb_upd_is_br_u0, ftb_upd_br_idx_u0,
   ftb_upd_taken_u0, ftb_upd_target_u0, ftb_upd_pos_u0,
@@ -510,6 +537,14 @@ Notes:
 
 The uBTB and FTB update field sets mirror each other, so one set of
 resolved facts forms both.
+
+`ubtb_upd_t` carries no `br_type` field. The cluster rederives the
+resolved type from the payload's own is_br / is_jmp / is_call /
+is_ret / is_jalr bits, in the same arm order as ubtb.sv and the FTB
+classification, with is_br outranking is_jmp. A missing br_type read
+resolves to zero, which decodes as COND, so restoring the field
+instead of rederiving the type would silently classify every update
+as conditional and stop ITTAGE ever being updated.
 
 Update fan-out by resolved br_type is fe_decisions.md 7.2. The three
 encodings that table does not list follow from what each predictor
@@ -557,13 +592,22 @@ bp_history carries no stage suffix on any port.
 Driven by the cluster at p1, from the formed prediction:
 
 ```
-  pred_taken    [1:0]              bit 0 slot 0, bit 1 slot 1
-  pred_pc       [VA_WIDTH-1:0] [2] one per slot
+  pred_taken    [1:0]              bit n = branch n
+  pred_pc       [VA_WIDTH-1:0] [2] one per branch, after compaction
   num_branches  [1:0]              count, 0 to 2
 ```
 
-bp_history indexes these by branch number, not by slot number, so
-the cluster compacts the valid slots down before presenting them.
+bp_history indexes these by BRANCH NUMBER, not by slot number, so
+the cluster compacts the valid slots down before presenting them. A
+bundle whose only branch sits in slot 1 presents that branch at
+index 0.
+
+`pred_pc` is the BRANCH PC, not the fetch block PC: the block base
+plus that branch's in-block position, four bytes per position
+(section 7.4). bp_history folds bits [3] and [2] of it into the PHR
+path bit, and a block-aligned PC has those bits hard zero, so the
+block PC would make the path bit a constant. See
+bp_history_interfaces.md, Producer obligations, and BP-092a.
 
 Checkpoint write, at allocation:
 
@@ -628,23 +672,26 @@ match it and to match this specification.
 
 ### fe_decisions.md
 
-6. Section 2.2 and section 9 place the RAS top of stack at p1.
-   ras.sv declares `ras_tos_addr_p0` and `ras_tos_valid_p0`, at p0.
-   Correct both to p0.
+6. CLOSED, INFRA-012, session-064. Section 2.2 and section 9 placed
+   the RAS top of stack at p1. ras.sv declares `ras_tos_addr_p0` and
+   `ras_tos_valid_p0`, at p0. Both corrected, and the section 1
+   stage list updated to match.
 
-7. Section 3.1 names redirect signals `<pred>_redir_val_<pN>` and
-   `<pred>_redir_tgt_<pN>`, reading as a per-predictor port group.
-   No predictor declares a redirect port. Rewrite to the
-   cluster-derived, stage-named group of section 6.
+7. CLOSED, INFRA-012, session-064. Section 3.1 named redirect
+   signals `<pred>_redir_val_<pN>` and `<pred>_redir_tgt_<pN>`,
+   reading as a per-predictor port group. No predictor declares a
+   redirect port. Rewritten to the cluster-derived, stage-named
+   group of section 6, with FE-4 restated and FE-12 added.
 
 ### Open items
 
-8. SC index fold staging. `inp_pc_p2` and `sc_phr_p2` are staged p0
-   to p2, but the three SC index folds are connected live to
-   bp_history, which advances whenever a branch is predicted. At p2
-   the live folds are two requests newer than the block SC is
-   indexing. Either stage the three folds, or record in
-   bp_arb_spec.md 6.1 why the live folds are correct.
+8. CLOSED, TD#92, BP-090. SC index fold staging. `inp_pc_p2` and
+   `sc_phr_p2` were staged p0 to p2 while the three SC index folds
+   were connected live to bp_history, which advances whenever a
+   branch is predicted, so at p2 the live folds described a later
+   block than the one SC was indexing. All three folds are now
+   staged the same way as the PC and the phr. Section 5.3 records
+   it; bp_arb_spec.md 6.1 names them among the staged inputs.
 
 9. CLOSED, TD#106, BP-092. `lp_pred_t` and `bp_loop_meta_t` carried
    the same field set under two spellings (`lp_past_itr` against
@@ -667,15 +714,24 @@ match it and to match this specification.
 
 ### loop_pred
 
-12. loop_pred.sv is single-slot; no port carries a slot dimension.
-    Section 4 of this file and fe_decisions.md 2.1 describe dual
-    prediction. TD#105 covers the retrofit, the `pred_p0` to
-    `pred_p1` rename, and the loop_pred_interfaces.md correction.
+12. CLOSED, TD#105, BP-091. loop_pred.sv was single-slot; no port
+    carried a slot dimension. It is now per-slot on
+    `pred_pc_p0`, `pred_valid_p0`, `pred_p1`, `upd_p0` and
+    `upd_valid_p0`, with per-slot table banks (TI6), and the
+    `pred_p0` to `pred_p1` rename is applied. loop_pred.sv,
+    tb_loop_pred.sv, loop_pred_interfaces.md and the bp_cluster
+    instantiation were all updated. The cluster boundary ports
+    `lp_upd_valid_p0` and `lp_upd_p0` gained the slot dimension in
+    the same task.
 
 ### bp_history
 
 13. bp_history uses literal `[1:0]` and `[2]` where other modules
     use NUM_PRED_SLOTS. Deferred. Recorded INFRA-011.
+
+14. bp_history does not generate the ITTAGE IT5 folds. ittage.sv
+    wires `it_t5_idx_fh`, `tag_fh1` and `tag_fh2` to outputs that
+    are never driven, so IT5 indexes on PC alone. TD#102.
 
 ---
 
@@ -701,5 +757,21 @@ match it and to match this specification.
               the RAS reachability rule. Section 6 updated with the
               successor-address comparison and the p3 comparison
               basis. Corrections 8 through 11 opened.
+
+  2026-08-09  INFRA-012 / session-064. Section 9 pred_pc corrected:
+              it is one value per BRANCH after compaction, not one
+              per slot, and it is the branch PC rather than the
+              fetch block PC (BP-092a). Section 10 items 6, 7, 8 and
+              12 closed: the fe_decisions.md RAS-stage and
+              redirect-port corrections were applied by this task,
+              the SC index folds were staged by BP-090, and the
+              loop_pred dual-slot retrofit landed in BP-091. Item 14
+              opened for the IT5 fold gap (TD#102). Section 2, 3, 4,
+              5.3, 7.1, 7.4 and 8 updated to the post-BP-091,
+              post-BP-092 RTL: loop_pred per-slot throughout, the
+              slot-0 exception removed from the p1 mux, the SC folds
+              described as staged, the uBTB update br_type rederived
+              rather than carried, and the position granularity
+              stated.
 ```
 

@@ -198,6 +198,15 @@ module tage_cntrl #(
   logic [TAGE_MAX_TAG_WIDTH-1:0]
     t_tag_r1[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
 
+  // Registered branch_id (p0 -> p1), one per slot (BP-094).
+  // Every other meta_p1 member is built from p1 state; branch_id was
+  // read live off tage_pred_inp_p0, so the branch_id arriving at p2
+  // named the request presented one cycle LATER than the one the rest
+  // of the metadata describes. Staging it here puts the whole struct
+  // on one request.
+  logic [FTQ_IDX_BITS-1:0]
+    branch_id_r1[0:NUM_PRED_SLOTS-1];
+
   // Entry field extracts and u_eff per table per slot (p1)
   logic [TAGE_MAX_EPC_WIDTH-1:0]
     t_epc_p1[0:TAGE_NUM_TABLES-1][0:NUM_PRED_SLOTS-1];
@@ -310,6 +319,18 @@ module tage_cntrl #(
           t_tag_r1[t][s] <= t_tag_p0[t][s];
         end
       end
+    end
+  end
+
+  // Register branch_id p0 -> p1 alongside the index and tag hashes,
+  // so meta_p1 describes one request end to end (BP-094).
+  always_ff @(posedge clk) begin : branch_id_pipe_ff
+    if (!rstn) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++)
+        branch_id_r1[s] <= '0;
+    end else begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++)
+        branch_id_r1[s] <= tage_pred_inp_p0[s].branch_id;
     end
   end
 
@@ -582,8 +603,9 @@ module tage_cntrl #(
         meta_p1[s].tage_using_primary = using_prm_p1[s];
         meta_p1[s].tage_extd_ctr      = extd_ctr_p1[s];
         meta_p1[s].tage_pred_tkn      = pred_tkn_p1[s];
-        meta_p1[s].branch_id          =
-          tage_pred_inp_p0[s].branch_id;
+        // BP-094: staged p0 -> p1 with the rest of meta_p1 rather
+        // than read live off the p0 input.
+        meta_p1[s].branch_id          = branch_id_r1[s];
       end
     end
   endgenerate

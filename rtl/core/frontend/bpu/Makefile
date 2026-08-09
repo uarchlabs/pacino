@@ -47,6 +47,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ftb \
         sim_ftb \
         lint_bp_cluster \
+        sim_bp_cluster \
         sim_tage sim_tage_fast sim_tage_tasks sim_tage_manual clean
 
 all: lint  \
@@ -74,6 +75,7 @@ all: lint  \
      lint_ftb_cntrl \
      lint_ftb \
      lint_bp_cluster \
+     sim_bp_cluster \
      sim \
      sim_history \
      sim_ubtb \
@@ -544,6 +546,53 @@ lint_bp_cluster:
 	  $(RTL_DIR)/ras.sv \
 	  $(RTL_DIR)/bp_cluster.sv $(VSILENCE)
 
+# -- BP cluster testbench (tb_bp_cluster.sv, BP-093).
+#    Same suppression set as lint_bp_cluster. The three fast-init
+#    plusargs strap the tage, ittage and sc RAM init so the run stays
+#    inside the CLAUDE.md sanity-time budget; the init walk itself is
+#    covered by the per-predictor suites.
+BP_CLUSTER_SRCS := \
+  $(RTL_DIR)/bp_defines_pkg.sv \
+  $(RTL_DIR)/bp_structs_pkg.sv \
+  $(COMP_DIR)/bw_ram.sv \
+  $(COMP_DIR)/sram_init.sv \
+  $(RTL_DIR)/bp_history.sv \
+  $(RTL_DIR)/ubtb.sv \
+  $(RTL_DIR)/loop_pred.sv \
+  $(RTL_DIR)/ftb_array.sv \
+  $(RTL_DIR)/ftb_plru.sv \
+  $(RTL_DIR)/ftb_cntrl.sv \
+  $(RTL_DIR)/ftb.sv \
+  $(RTL_DIR)/tage_bim.sv \
+  $(RTL_DIR)/tage_table.sv \
+  $(RTL_DIR)/tage_cntrl.sv \
+  $(RTL_DIR)/tage.sv \
+  $(RTL_DIR)/ittage_table.sv \
+  $(RTL_DIR)/ittage_cntrl.sv \
+  $(RTL_DIR)/ittage.sv \
+  $(RTL_DIR)/sc_table.sv \
+  $(RTL_DIR)/sc_brimli.sv \
+  $(RTL_DIR)/sc_cntrl.sv \
+  $(RTL_DIR)/sc.sv \
+  $(RTL_DIR)/ras.sv \
+  $(RTL_DIR)/bp_cluster.sv
+
+BP_CLUSTER_PLUSARGS := \
+  +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
+
+sim_bp_cluster:
+	@echo "[compiling]  tb_bp_cluster"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_bp_cluster \
+	  $(BP_CLUSTER_SRCS) \
+	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_bp_cluster/Vtb"
+	$(Q)./$(VER_OUT)_bp_cluster/Vtb $(BP_CLUSTER_PLUSARGS)
+
 sim_ras:
 	@echo "[compiling]  tb_ras"
 	$(Q)$(VERILATOR) --binary \
@@ -692,7 +741,9 @@ clean:
 	  $(VER_OUT)_tage_manual \
 	  $(VER_OUT)_ras \
 	  $(VER_OUT)_ftb \
+	  $(VER_OUT)_bp_cluster \
 	  obj_dir_cov_history \
+	  obj_dir_cov_bp_cluster \
 	  obj_dir_cov_loop_pred \
 	  obj_dir_cov_tage \
 	  obj_dir_cov_tage_table \
@@ -702,9 +753,11 @@ clean:
 COV_DIR := coverage
 
 .PHONY: cov_tage cov_tage_table cov_loop_pred cov_history cov_ubtb \
+        cov_bp_cluster \
         cov_bpu \
         clean_cov_tage clean_cov_tage_table clean_cov_loop_pred \
-        clean_cov_history clean_cov_ubtb clean_cov_bpu clean_cov
+        clean_cov_history clean_cov_ubtb clean_cov_bp_cluster \
+        clean_cov_bpu clean_cov
 
 cov_history:
 	@echo "[compiling]  cov tb_bp_history"
@@ -845,6 +898,32 @@ cov_tage:
 	  $(COV_DIR)/tage/coverage.info
 	@echo "[coverage]   tage HTML at $(COV_DIR)/tage/html/index.html"
 
+cov_bp_cluster:
+	@echo "[compiling]  cov tb_bp_cluster"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --coverage-line \
+	  --top-module tb \
+	  --Mdir obj_dir_cov_bp_cluster \
+	  $(BP_CLUSTER_SRCS) \
+	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
+	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
+	  obj_dir_cov_bp_cluster/Vtb__main.cpp
+	$(Q)make -C obj_dir_cov_bp_cluster -f Vtb.mk
+	$(Q)mkdir -p $(COV_DIR)/bp_cluster/html
+	@echo "[simulating] cov_bp_cluster"
+	$(Q)cd $(COV_DIR)/bp_cluster && \
+	  $(CURDIR)/obj_dir_cov_bp_cluster/Vtb $(BP_CLUSTER_PLUSARGS)
+	$(Q)verilator_coverage \
+	  --write-info $(COV_DIR)/bp_cluster/coverage.info \
+	  $(COV_DIR)/bp_cluster/coverage.dat
+	$(Q)genhtml --prefix $(RVA_ROOT) \
+	  --output-directory $(COV_DIR)/bp_cluster/html \
+	  $(COV_DIR)/bp_cluster/coverage.info
+	@echo "[coverage]   bp_cluster HTML at $(COV_DIR)/bp_cluster/html/index.html"
+
 cov_bpu: cov_tage cov_tage_table cov_loop_pred cov_history cov_ubtb
 	$(Q)mkdir -p $(COV_DIR)/bpu/html
 	$(Q)verilator_coverage \
@@ -877,9 +956,12 @@ clean_cov_history:
 clean_cov_ubtb:
 	$(Q)rm -rf obj_dir_cov_ubtb $(COV_DIR)/ubtb
 
+clean_cov_bp_cluster:
+	$(Q)rm -rf obj_dir_cov_bp_cluster $(COV_DIR)/bp_cluster
+
 clean_cov_bpu:
 	$(Q)rm -rf $(COV_DIR)/bpu
 
 clean_cov: clean_cov_tage clean_cov_tage_table \
   clean_cov_loop_pred clean_cov_history \
-  clean_cov_ubtb clean_cov_bpu
+  clean_cov_ubtb clean_cov_bp_cluster clean_cov_bpu

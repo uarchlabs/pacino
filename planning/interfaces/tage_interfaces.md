@@ -141,6 +141,30 @@ p2: Final prediction flopped out. tage_pred_meta_p2[s]
     and tage_pred_rdy_p2[s] are valid at p2.
 ```
 
+### Metadata timing (BP-094)
+
+Every member of tage_pred_meta_t, branch_id INCLUDED,
+describes the request that produced it, and the whole
+struct is staged to p2 together. No member is read live
+from the p0 input at p1.
+
+branch_id is called out because it was the exception.
+Until BP-094 tage_cntrl built meta_p1 at p1 but read
+branch_id straight off tage_pred_inp_p0, so the branch_id
+arriving at p2 named the request presented one cycle
+LATER than the one the rest of the metadata described.
+The consequences at the BP cluster boundary were that the
+branch_id qualification never matched in an unstalled
+request stream, so the TAGE direction never reached the
+FTQ, and that in a stalled stream it matched for the
+WRONG entry. See prompts/BP-093.md tests C0 and D2 for
+the evidence and prompts/BP-094.md for the fix.
+
+Consumers may rely on this: tage_pred_meta_p2[s].branch_id
+is the FTQ index a consumer must compare its own stage
+index against, and a mismatch means the response is stale
+or delayed, never merely skewed.
+
 ### Folded History Input
 
 `folded_hist` is the `bp_folded_hist_t` output of
