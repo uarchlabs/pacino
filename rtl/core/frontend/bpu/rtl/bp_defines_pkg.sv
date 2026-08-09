@@ -176,7 +176,14 @@ package bp_defines_pkg;
 
   localparam int UBTB_SETS     = UBTB_ENTRIES / UBTB_WAYS; // = 64
   localparam int UBTB_IDX_BITS = $clog2(UBTB_SETS);        // = 6
-  localparam int UBTB_TAG_BITS = 20;                       // PC[26:7]
+  // The uBTB indexes at BLOCK granularity, the same way the FTB does,
+  // not at retired-instruction granularity:
+  //   index = pc[UBTB_IDX_BITS+UBTB_OFFSET_BITS-1 : UBTB_OFFSET_BITS]
+  //   tag   = the UBTB_TAG_BITS bits immediately above the index
+  // Resolved at the values below (VA_WIDTH 40, block 32B):
+  //   UBTB_OFFSET_BITS 5, UBTB_IDX_BITS 6, UBTB_TAG_BITS 20
+  //   index = pc[10:5]     tag = pc[30:11]
+  localparam int UBTB_TAG_BITS = 20;                       // pc[30:11]
 
   localparam int UBTB_OFFSET_BITS = $clog2(UBTB_BLOCK_BYTES); // = 5
   // In-block instruction position, expanded-instruction granularity

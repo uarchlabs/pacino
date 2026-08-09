@@ -89,11 +89,11 @@ package bp_structs_pkg;
   // Prediction source: which predictor supplied the final result.
   // Recorded in bp_ftq_slot_t.pred_src at prediction commit time.
   typedef enum logic [2:0] {
-    PRED_UBTB   = 3'b000, // uBTB supplied prediction (s1)
-    PRED_LOOP   = 3'b001, // loop predictor overrode uBTB (s1)
-    PRED_FTB    = 3'b010, // FTB supplied prediction (s2)
-    PRED_TAGE   = 3'b011, // TAGE overrode FTB direction (s2)
-    PRED_SC     = 3'b100, // SC overrode TAGE direction (s3)
+    PRED_UBTB   = 3'b000, // uBTB supplied prediction (p1)
+    PRED_LOOP   = 3'b001, // loop predictor overrode uBTB (p1)
+    PRED_FTB    = 3'b010, // FTB supplied prediction (p2)
+    PRED_TAGE   = 3'b011, // TAGE overrode FTB direction (p2)
+    PRED_SC     = 3'b100, // SC overrode TAGE direction (p3)
     PRED_ITTAGE = 3'b101, // ITTAGE supplied indirect target
     PRED_RAS    = 3'b110, // RAS supplied return target
     PRED_NONE   = 3'b111  // no prediction (uBTB miss, loop absent)
@@ -145,24 +145,29 @@ package bp_structs_pkg;
 //    logic [SC_NUM_ALL_TBLS-1:0][SC_MAX_DATA_WIDTH-1:0] sc_upd_ctr;
 //  } bp_sc_meta_t;
 
-  // Loop predictor metadata.
-  // Captures state needed to update the loop predictor after
-  // a branch resolves (way, tag, iteration counters, age).
+  // lp_pred_t: prediction output for one loop predictor lookup.
+  // Carried in the FTQ slow path; supplies the update path without
+  // re-reading the table. It is also the loop predictor member of
+  // bp_ftq_meta_t, so it is declared here, ahead of that struct,
+  // rather than with the other loop predictor structs further down.
+  // TD#106: this type replaced bp_loop_meta_t, which carried the
+  // same thirteen fields in a different order and spelled two of
+  // them lp_pst_itr and lp_cur_itr. Both names retired with the type.
   typedef struct packed {
-    logic                        lp_hit;         // table hit at predict
-    logic [LP_IDX_BITS-1:0]      lp_idx;         // set index
-    logic [LP_TAG_BITS-1:0]      lp_tag;         // tag
-    logic [LP_WAY_BITS-1:0]      lp_way;         // selected way
-    logic                        lp_pred_is_loop; // loop pred trusted
-    logic                        lp_pred_taken;   // direction used
-    logic [LP_AGE_BITS-1:0]      lp_age;         // age counter
-    logic [LP_CNF_BITS-1:0]      lp_conf;        // confidence counter
-    logic [LP_ITR_BITS-1:0]      lp_pst_itr;     // past iter count
-    logic [LP_ITR_BITS-1:0]      lp_cur_itr;     // current iter count
-    logic [LP_ITR_BITS-1:0]      lp_curs;        // speculative progress
-    logic                        lp_curs_v;      // curs is valid
-    logic [LP_WAY_BITS-1:0]      lp_victim;      // allocation target way
-  } bp_loop_meta_t;
+    logic [LP_IDX_BITS-1:0]  lp_idx;          // set index at predict time
+    logic [LP_TAG_BITS-1:0]  lp_tag;          // tag at predict time
+    logic [LP_WAY_BITS-1:0]  lp_way;          // way that hit
+    logic                    lp_hit;          // tag match (any confidence)
+    logic                    lp_pred_is_loop; // loop predictor trusted
+    logic                    lp_pred_taken;   // direction used
+    logic [LP_AGE_BITS-1:0]  lp_age;          // age counter snapshot
+    logic [LP_CNF_BITS-1:0]  lp_conf;         // confidence counter snapshot
+    logic [LP_ITR_BITS-1:0]  lp_past_itr;     // past iteration count
+    logic [LP_ITR_BITS-1:0]  lp_curr_itr;     // current iteration count
+    logic [LP_ITR_BITS-1:0]  lp_curs;         // speculative cursor
+    logic                    lp_curs_v;       // cursor valid
+    logic [LP_WAY_BITS-1:0]  lp_victim;       // allocation target way
+  } lp_pred_t;
 
   // TAGE prediction input bundle.
   // Carries PC and branch_id into the TAGE predictor at predict time.
@@ -427,7 +432,7 @@ package bp_structs_pkg;
   typedef struct packed {
     tage_pred_meta_t   tage;   // TAGE predictor state
     sc_pred_meta_t     sc;     // SC predictor state
-    bp_loop_meta_t     lp;     // loop predictor state
+    lp_pred_t          lp;     // loop predictor state
     ittage_pred_meta_t ittage; // ITTAGE predictor state
     ftb_pred_meta_t    ftb;    // FTB carried hit / way / jmp pos
   } bp_ftq_meta_t;
@@ -505,9 +510,13 @@ package bp_structs_pkg;
 
   // One uBTB storage entry (one way of one set).
   // 1 + 20 + 22 + 22 + 30 + 4 + 1 = 100 bits.
+  // The tag is the UBTB_TAG_BITS VA bits immediately above the
+  // block-granularity index, not a retired-instruction-granularity
+  // field: index = pc[10:5], tag = pc[30:11] at VA_WIDTH 40 with a
+  // 32-byte block. See bp_defines_pkg.sv, UBTB_TAG_BITS.
   typedef struct packed {
     logic                          valid;  // entry valid
-    logic [UBTB_TAG_BITS-1:0]      tag;    // PC[26:7]
+    logic [UBTB_TAG_BITS-1:0]      tag;    // pc[30:11]
     ubtb_cond_t                    br0;    // conditional field 0
     ubtb_cond_t                    br1;    // conditional field 1
     ubtb_jmp_t                     jmp;    // terminal jump field
@@ -527,8 +536,15 @@ package bp_structs_pkg;
     logic                          br_taken; // direction, COND only
     logic [UBTB_BR_POS_BITS-1:0]   pos;      // in-block position
     logic [UBTB_CONF_WIDTH-1:0]    conf;     // bimodal direction ctr
-    logic                          carry;    // target lies outside
-                                             // this block
+    logic                          carry;    // entry fall-through
+                                             // carry, copied from the
+                                             // stored entry carry
+                                             // bit: the block end
+                                             // crosses the block
+                                             // boundary. Entry
+                                             // scoped, not a
+                                             // property of this
+                                             // slot's target.
   } ubtb_pred_t;
 
   // Entry-scoped prediction sidebands, one set per lookup. Both slots
@@ -582,24 +598,8 @@ package bp_structs_pkg;
     logic                   v;        // valid
   } lp_entry_t;
 
-  // lp_pred_t: prediction output for one loop predictor lookup.
-  // Carried in the FTQ slow path; supplies the update path without
-  // re-reading the table.
-  typedef struct packed {
-    logic [LP_IDX_BITS-1:0]  lp_idx;          // set index at predict time
-    logic [LP_TAG_BITS-1:0]  lp_tag;          // tag at predict time
-    logic [LP_WAY_BITS-1:0]  lp_way;          // way that hit
-    logic                    lp_hit;          // tag match (any confidence)
-    logic                    lp_pred_is_loop; // loop predictor trusted
-    logic                    lp_pred_taken;   // direction used
-    logic [LP_AGE_BITS-1:0]  lp_age;          // age counter snapshot
-    logic [LP_CNF_BITS-1:0]  lp_conf;         // confidence counter snapshot
-    logic [LP_ITR_BITS-1:0]  lp_past_itr;     // past iteration count
-    logic [LP_ITR_BITS-1:0]  lp_curr_itr;     // current iteration count
-    logic [LP_ITR_BITS-1:0]  lp_curs;         // speculative cursor
-    logic                    lp_curs_v;       // cursor valid
-    logic [LP_WAY_BITS-1:0]  lp_victim;       // allocation target way
-  } lp_pred_t;
+  // lp_pred_t is declared in the Sub-structs section above, ahead of
+  // bp_ftq_meta_t, which embeds it as its lp member (TD#106).
 
   // lp_upd_t: update bundle for the loop predictor.
   // All lp_pred_t fields repeated flat (no sub-struct embedding)

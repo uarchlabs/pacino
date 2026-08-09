@@ -21,6 +21,9 @@ module tb;
   bp_ftq_entry_t  entry_a;
   bp_ftq_entry_t  entry_b;
   bp_ftq_meta_t   meta;
+  bp_ftq_meta_t   meta_b;
+  ftb_pred_meta_t fmeta_a;
+  ftb_pred_meta_t fmeta_b;
   bp_update_t     upd;
   bp_redirect_t   redir;
 
@@ -28,12 +31,28 @@ module tb;
   // A field added to or removed from either struct changes these and
   // the width checks below catch it.
   localparam int SLOT_BITS  = 1 + VA_WIDTH + $bits(bp_br_type_e) +
-                              1 + $bits(bp_pred_src_e) +
+                              1 + FTB_BR_POS_BITS +
+                              $bits(bp_pred_src_e) +
                               FTQ_CONF_BITS;
   localparam int ENTRY_BITS = VA_WIDTH + FTQ_IDX_BITS +
                               (3 * RAS_PTR_BITS) + GHIST_PTR_BITS +
                               PHIST_PTR_BITS + 1 +
                               (NUM_PRED_SLOTS * SLOT_BITS);
+
+  // ftb_pred_meta_t, summed from its own field widths so any change
+  // to the struct fails both this check and the META_BITS check.
+  localparam int FTB_META_BITS = 1 + FTB_WAY_BITS + FTB_BR_POS_BITS;
+
+  // bp_ftq_meta_t. The four predictor members are summed by $bits of
+  // their own types -- each of those types has its own field-level
+  // checks elsewhere in this file -- and the ftb member by its field
+  // widths. A member added to or removed from bp_ftq_meta_t, and any
+  // change to ftb_pred_meta_t, both fail this check.
+  localparam int META_BITS  = $bits(tage_pred_meta_t) +
+                              $bits(sc_pred_meta_t) +
+                              $bits(lp_pred_t) +
+                              $bits(ittage_pred_meta_t) +
+                              FTB_META_BITS;
 
   // Slot 1 stimulus. Chosen distinct from the slot 0 pattern so a
   // cross-slot aliasing defect cannot pass unnoticed.
@@ -41,10 +60,32 @@ module tb;
                                          VA_WIDTH'('h12_3456_789A);
   localparam logic [FTQ_CONF_BITS-1:0] SLOT1_CONF =
                                          FTQ_CONF_BITS'('h5);
+  localparam logic [FTB_BR_POS_BITS-1:0] SLOT0_POS =
+                                         FTB_BR_POS_BITS'('h2);
+  localparam logic [FTB_BR_POS_BITS-1:0] SLOT1_POS =
+                                         FTB_BR_POS_BITS'('h5);
 
   // Second slot 0 pattern, written by the slot independence check.
   localparam logic [VA_WIDTH-1:0]      SLOT0_TGT2 =
                                          VA_WIDTH'('hA5_A5A5_A5A5);
+  // Second pos values, so each pos field is written twice and the
+  // second write is proven to land.
+  localparam logic [FTB_BR_POS_BITS-1:0] SLOT0_POS2 =
+                                         FTB_BR_POS_BITS'('h7);
+  localparam logic [FTB_BR_POS_BITS-1:0] SLOT1_POS2 =
+                                         FTB_BR_POS_BITS'('h1);
+
+  // ftb_pred_meta_t stimulus: distinct non-zero values per field.
+  localparam logic [FTB_WAY_BITS-1:0]    FMETA_WAY =
+                                         FTB_WAY_BITS'('h2);
+  localparam logic [FTB_BR_POS_BITS-1:0] FMETA_JPOS =
+                                         FTB_BR_POS_BITS'('h6);
+  // Distinct again for the bp_ftq_meta_t.ftb member, so the two
+  // packing tests cannot pass on each other's residue.
+  localparam logic [FTB_WAY_BITS-1:0]    MMETA_WAY =
+                                         FTB_WAY_BITS'('h1);
+  localparam logic [FTB_BR_POS_BITS-1:0] MMETA_JPOS =
+                                         FTB_BR_POS_BITS'('h3);
 
   int pass_count;
 
@@ -117,10 +158,11 @@ module tb;
     end
     pass_count++;
 
-    // lp_pst_itr must be LP_ITR_BITS wide
-    if ($bits(meta.lp.lp_pst_itr) !== LP_ITR_BITS) begin
-      $fatal(1, "FAIL lp_pst_itr: got %0d, want %0d",
-             $bits(meta.lp.lp_pst_itr), LP_ITR_BITS);
+    // lp_past_itr must be LP_ITR_BITS wide. Named lp_pst_itr until
+    // TD#106 retired bp_loop_meta_t; the lp member is lp_pred_t now.
+    if ($bits(meta.lp.lp_past_itr) !== LP_ITR_BITS) begin
+      $fatal(1, "FAIL lp_past_itr: got %0d, want %0d",
+             $bits(meta.lp.lp_past_itr), LP_ITR_BITS);
     end
     pass_count++;
 
@@ -156,6 +198,20 @@ module tb;
     if ($bits(entry_a) !== ENTRY_BITS) begin
       $fatal(1, "FAIL bp_ftq_entry_t: got %0d, want %0d",
              $bits(entry_a), ENTRY_BITS);
+    end
+    pass_count++;
+
+    // ftb_pred_meta_t must be FTB_META_BITS wide
+    if ($bits(fmeta_a) !== FTB_META_BITS) begin
+      $fatal(1, "FAIL ftb_pred_meta_t: got %0d, want %0d",
+             $bits(fmeta_a), FTB_META_BITS);
+    end
+    pass_count++;
+
+    // bp_ftq_meta_t must be META_BITS wide
+    if ($bits(meta) !== META_BITS) begin
+      $fatal(1, "FAIL bp_ftq_meta_t: got %0d, want %0d",
+             $bits(meta), META_BITS);
     end
     pass_count++;
 
@@ -244,6 +300,7 @@ module tb;
     entry_a.slot[0].target     = {VA_WIDTH{1'b1}};
     entry_a.slot[0].br_type    = COND;
     entry_a.slot[0].taken      = 1'b1;
+    entry_a.slot[0].pos        = SLOT0_POS;
     entry_a.slot[0].pred_src   = PRED_TAGE;
     entry_a.slot[0].confidence = {FTQ_CONF_BITS{1'b1}};
 
@@ -252,6 +309,7 @@ module tb;
     entry_a.slot[1].target     = SLOT1_TGT;
     entry_a.slot[1].br_type    = RETURN;
     entry_a.slot[1].taken      = 1'b0;
+    entry_a.slot[1].pos        = SLOT1_POS;
     entry_a.slot[1].pred_src   = PRED_RAS;
     entry_a.slot[1].confidence = SLOT1_CONF;
 
@@ -270,6 +328,7 @@ module tb;
         entry_a.slot[0].target     !== {VA_WIDTH{1'b1}} ||
         entry_a.slot[0].br_type    !== COND ||
         entry_a.slot[0].taken      !== 1'b1 ||
+        entry_a.slot[0].pos        !== SLOT0_POS ||
         entry_a.slot[0].pred_src   !== PRED_TAGE ||
         entry_a.slot[0].confidence !== {FTQ_CONF_BITS{1'b1}}) begin
       $fatal(1, "FAIL slot[0] read-back: written values not returned");
@@ -280,6 +339,7 @@ module tb;
         entry_a.slot[1].target     !== SLOT1_TGT ||
         entry_a.slot[1].br_type    !== RETURN ||
         entry_a.slot[1].taken      !== 1'b0 ||
+        entry_a.slot[1].pos        !== SLOT1_POS ||
         entry_a.slot[1].pred_src   !== PRED_RAS ||
         entry_a.slot[1].confidence !== SLOT1_CONF) begin
       $fatal(1, "FAIL slot[1] read-back: written values not returned");
@@ -295,6 +355,7 @@ module tb;
     entry_a.slot[0].target     = SLOT0_TGT2;
     entry_a.slot[0].br_type    = DIRECT_UNC;
     entry_a.slot[0].taken      = 1'b0;
+    entry_a.slot[0].pos        = SLOT0_POS2;
     entry_a.slot[0].pred_src   = PRED_FTB;
     entry_a.slot[0].confidence = {FTQ_CONF_BITS{1'b0}};
 
@@ -307,6 +368,7 @@ module tb;
     entry_a.slot[1].target     = {VA_WIDTH{1'b0}};
     entry_a.slot[1].br_type    = NO_BRANCH;
     entry_a.slot[1].taken      = 1'b0;
+    entry_a.slot[1].pos        = SLOT1_POS2;
     entry_a.slot[1].pred_src   = PRED_NONE;
     entry_a.slot[1].confidence = {FTQ_CONF_BITS{1'b0}};
 
@@ -314,9 +376,19 @@ module tb;
         entry_a.slot[0].target     !== SLOT0_TGT2 ||
         entry_a.slot[0].br_type    !== DIRECT_UNC ||
         entry_a.slot[0].taken      !== 1'b0 ||
+        entry_a.slot[0].pos        !== SLOT0_POS2 ||
         entry_a.slot[0].pred_src   !== PRED_FTB ||
         entry_a.slot[0].confidence !== {FTQ_CONF_BITS{1'b0}}) begin
       $fatal(1, "FAIL independence: slot[1] write disturbed slot[0]");
+    end
+    pass_count++;
+
+    // Slot 1's second pos write must also land. The check above
+    // proves the slot 0 rewrite; this proves the slot 1 rewrite, so
+    // neither second write is taken on faith.
+    if (entry_a.slot[1].pos !== SLOT1_POS2) begin
+      $fatal(1, "FAIL slot[1].pos rewrite: got %0d, want %0d",
+             entry_a.slot[1].pos, SLOT1_POS2);
     end
     pass_count++;
 
@@ -327,6 +399,54 @@ module tb;
         entry_a.phist_ptr !== entry_b.phist_ptr ||
         entry_a.valid     !== entry_b.valid) begin
       $fatal(1, "FAIL independence: slot writes disturbed scalars");
+    end
+    pass_count++;
+
+    // --------------------------------------------------------------
+    // Struct packing check: ftb_pred_meta_t. Drive every field with a
+    // distinct non-zero value, copy the struct whole, read each field
+    // back. The FTB carries hit and way from predict to update
+    // (IC-FTB-10), so a packing defect here would silently retarget
+    // an FTB write.
+    // --------------------------------------------------------------
+    fmeta_a.hit     = 1'b1;
+    fmeta_a.way     = FMETA_WAY;
+    fmeta_a.jmp_pos = FMETA_JPOS;
+
+    fmeta_b = fmeta_a;
+
+    if (fmeta_b.hit     !== 1'b1 ||
+        fmeta_b.way     !== FMETA_WAY ||
+        fmeta_b.jmp_pos !== FMETA_JPOS) begin
+      $fatal(1, "FAIL ftb_pred_meta_t packing: read-back mismatch");
+    end
+    pass_count++;
+
+    // --------------------------------------------------------------
+    // Struct packing check: bp_ftq_meta_t, ftb member. Drive its
+    // three fields, copy the struct whole, read them back.
+    //
+    // The four predictor members (tage, sc, lp, ittage) are
+    // deliberately NOT re-driven here: each is exercised where its
+    // own type is checked, and the META_BITS width check above
+    // already binds their contribution to this struct. The omission
+    // is intentional, not an oversight.
+    // --------------------------------------------------------------
+    // Establish a known start state for the whole struct, so the
+    // read-back below cannot pass on residue and the four members
+    // this test does not drive still carry a defined value.
+    meta = '0;
+
+    meta.ftb.hit     = 1'b1;
+    meta.ftb.way     = MMETA_WAY;
+    meta.ftb.jmp_pos = MMETA_JPOS;
+
+    meta_b = meta;
+
+    if (meta_b.ftb.hit     !== 1'b1 ||
+        meta_b.ftb.way     !== MMETA_WAY ||
+        meta_b.ftb.jmp_pos !== MMETA_JPOS) begin
+      $fatal(1, "FAIL bp_ftq_meta_t.ftb packing: read-back mismatch");
     end
     pass_count++;
 

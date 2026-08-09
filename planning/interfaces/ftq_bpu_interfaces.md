@@ -170,12 +170,25 @@ Cluster output to the FTQ at p1:
   bpu_pred_slot_p1 bp_ftq_slot_t
                      [0:NUM_PRED_SLOTS-1]         NEW
   bpu_pred_ras_p1  bp_ras_snapshot_t              NEW
+  bpu_pred_pft_p1  [VA_WIDTH-1:0]                 NEW
 ```
 
 The FTQ writes these into the entry it allocates at p1. Allocation
 is unconditional: an entry is allocated for every prediction block,
 including one the p1 predictors miss, so a later stage has an entry
 to correct.
+
+`bpu_pred_pft_p1` is the block fall-through: the address the front
+end fetches after this block when no slot in the block is taken.
+One value per prediction, not one per slot, and qualified by
+`bpu_pred_val_p1` -- it carries no valid of its own. TD#108.
+
+It is the p1 view of the fall-through and is exactly the not-taken
+term the cluster already uses when it forms each slot's p1
+successor for the section 6 redirect comparison: `blk_p1.pft_addr`
+on a uBTB hit, and the block-aligned request PC plus
+FTB_BLOCK_BYTES on a miss, where `blk_p1.pft_addr` reads zero. It
+is not the FTB `pftAddr` of section 5.1, which arrives at p2.
 
 ---
 
@@ -379,7 +392,7 @@ never has to merge.
                         [0:NUM_PRED_SLOTS-1]           NEW
   bpu_meta_ittage_p2  ittage_pred_meta_t
                         [0:NUM_PRED_SLOTS-1]           NEW
-  bpu_meta_lp_p2      bp_loop_meta_t
+  bpu_meta_lp_p2      lp_pred_t
                         [0:NUM_PRED_SLOTS-1]           NEW
   bpu_meta_ftb_p2     ftb_pred_meta_t
                         [0:NUM_PRED_SLOTS-1]           NEW
@@ -393,9 +406,12 @@ through unchanged.
 
 The loop predictor finalizes at p1, not p2. The cluster registers
 its p1 result and presents it in the p2 group so the FTQ performs
-one slow-path write per entry rather than two. `lp_pred_t` and
-`bp_loop_meta_t` carry the same field set under two spellings; the
-cluster maps between them. See section 10, item 9.
+one slow-path write per entry rather than two. The `lp` member of
+`bp_ftq_meta_t` is `lp_pred_t`, the same type loop_pred outputs, so
+the cluster passes the registered result through unchanged. TD#106
+retired `bp_loop_meta_t`, which carried the same thirteen fields in
+a different order; the cluster's field-by-field map went with it.
+See section 10, item 9.
 
 ### 7.2 p3 write
 
@@ -630,10 +646,15 @@ match it and to match this specification.
    indexing. Either stage the three folds, or record in
    bp_arb_spec.md 6.1 why the live folds are correct.
 
-9. `lp_pred_t` and `bp_loop_meta_t` carry the same field set under
-   two spellings (`lp_past_itr` against `lp_pst_itr`, `lp_curr_itr`
-   against `lp_cur_itr`). The cluster maps between them for the
-   section 7.1 write. One of the two should be retired.
+9. CLOSED, TD#106, BP-092. `lp_pred_t` and `bp_loop_meta_t` carried
+   the same field set under two spellings (`lp_past_itr` against
+   `lp_pst_itr`, `lp_curr_itr` against `lp_cur_itr`) and the cluster
+   mapped between them for the section 7.1 write. `lp_pred_t`
+   survives, for consistency with the other predictor prediction
+   types. `bp_loop_meta_t` is deleted from bp_structs_pkg.sv, the
+   `lp` member of `bp_ftq_meta_t` is `lp_pred_t`, and the cluster's
+   `lp_to_meta()` is deleted rather than rewritten. The two retired
+   spellings disappear with the type.
 
 10. `bp_ftq_meta_t` gains an `ftb` member of a new type
     `ftb_pred_meta_t` (hit, way, jmp_pos), so the FTB carried

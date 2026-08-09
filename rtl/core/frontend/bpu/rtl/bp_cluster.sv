@@ -9,19 +9,48 @@
 // -------------------------------------------------------------------
 // Branch predictor cluster top.
 //
-// BP-084 built this module as instantiation and wiring only. BP-085
-// adds the six behavioral pieces that BP-084 deferred, without
-// changing the port list and without changing any instantiated
-// module:
-//   1. stage registers p0 -> p1 -> p2 -> p3
-//   2. the p1 uBTB / loop_pred selection mux and the p1 outputs
-//   3. the RAS branch-type decode at p2 and p3
-//   4. redirect derivation at p2 and p3
-//   5. update fan-out by resolved branch type
-//   6. the SC credit arbiter and the queue-status consumption
+// The cluster instantiates every branch predictor, drives one shared
+// request down a four-stage pipeline, forms the FTQ-facing prediction
+// from the results as they arrive, and fans the FTQ update channels
+// back out to the predictors that own each branch type.
 //
-// Instances (unchanged from BP-084):
+// Instances:
 //   ubtb, loop_pred, ftb, tage, ittage, sc, ras, bp_history
+//
+// What the module produces at its boundary:
+//   1. the p1 prediction group -- one bp_ftq_slot_t per slot, formed
+//      by the uBTB / loop_pred selection mux, plus the RAS snapshot
+//   2. the p2 and p3 redirect groups, each derived by reducing the
+//      earlier and the later view of a slot to one quantity, the
+//      address fetched after that slot, and comparing them
+//   3. the two prediction-metadata write groups that fill the FTQ
+//      slow path (bp_ftq_meta_t). The p2 group writes the tage,
+//      ittage, lp and ftb members; the p3 group writes the sc member.
+//      The sets are disjoint, so the FTQ never merges. Without this
+//      group the update path cannot work at all: tage_upd_inp_t,
+//      ittage_upd_inp_t and sc_upd_inp_t each embed the matching
+//      predict-time metadata, and those values exist only at predict
+//      time. The loop predictor finalizes at p1; its result is
+//      registered and presented in the p2 group unchanged -- the lp
+//      member of bp_ftq_meta_t is lp_pred_t itself, so no field map
+//      stands between the two (TD#106). The FTB metadata is scalar
+//      within the entry and the same values are written into every
+//      slot's copy.
+//   4. the update fan-out. The resolved branch type of a channel is
+//      rederived from the structural bits of that channel's uBTB
+//      update payload (is_br, is_jmp, is_ret, is_call, is_jalr) --
+//      the same facts the FTB update fan-out reads, so the two
+//      cannot diverge. ubtb_upd_t carries no branch-type field.
+//   5. the SC credit arbiter and the queue-status consumption
+//
+// uBTB interface. ubtb.sv reports one entry per lookup: pred_p1 is
+// the per-slot view and blk_p1 is the entry-scoped sideband carrying
+// the hit and the reconstructed block fall-through. A pred_p1 slot
+// valid bit says only that the slot carries a branch; the entry hit
+// is blk_p1.hit. blk_p1.pft_addr is authoritative for the cluster
+// when no slot is taken and is the p1 operand of the p2 redirect
+// comparison; on a miss it reads zero and the block-aligned start PC
+// plus one block stands in.
 //
 // Pipeline stage assignment:
 //   p0  indices and addresses to the RAMs; RAS top-of-stack read
@@ -31,13 +60,16 @@
 //   u0  update address and write data to the RAMs
 //   u1  RAM write completes
 //
-// Producer alignment. ubtb.pred_p1 is combinational from pred_pc_p0
-// and is therefore valid in the p0 cycle; loop_pred.pred_p0 is a
-// registered output and is valid in the p1 cycle. The cluster
-// registers the uBTB result once (r_ubtb_pred_p1) so both describe
-// the same request when the p1 selection mux reads them. ftb, tage
-// and ittage are two cycles from p0 and align with the r_*_p2 stage
-// registers; sc is one further and aligns with r_*_p3.
+// Producer alignment. ubtb.pred_p1 and ubtb.blk_p1 are both
+// combinational from pred_pc_p0 and are therefore valid in the p0
+// cycle; loop_pred.pred_p1 is a registered output and is valid in the
+// p1 cycle. The cluster registers the two uBTB results together
+// (r_ubtb_pred_p1, r_ubtb_blk_p1) so all three describe the same
+// request when the p1 selection mux reads them. ftb, tage and ittage
+// are two cycles from p0 and align with the r_*_p2 stage registers;
+// sc is one further and aligns with r_*_p3. SC indexes at p2 the
+// block requested at p0, so its PC, its phr slice and its three index
+// folds are all staged p0 -> p2 rather than connected live.
 //
 // Late-result matching. tage, ittage and sc carry branch_id in their
 // metadata. Every p2/p3 comparison is qualified by branch_id equal to
@@ -85,6 +117,10 @@ module bp_cluster (
   output bp_ftq_slot_t                    bpu_pred_slot_p1
                                             [0:NUM_PRED_SLOTS-1],
   output bp_ras_snapshot_t                bpu_pred_ras_p1,
+  // Block fall-through: the address fetched after this block when no
+  // slot in it is taken. One value per prediction, not per slot.
+  // Qualified by bpu_pred_val_p1; it carries no valid of its own.
+  output logic [VA_WIDTH-1:0]             bpu_pred_pft_p1,
 
   // ---- section 6: redirects, named by stage -----------------------
   output bp_redirect_t                    bpu_redir_p2
@@ -94,13 +130,37 @@ module bp_cluster (
                                             [0:NUM_PRED_SLOTS-1],
   output logic [FTQ_IDX_BITS-1:0]         bpu_redir_idx_p3,
 
-  // ---- section 7: update channel, FTQ -> BPU (u0) -----------------
+  // ---- metadata write, BPU -> FTQ slow path (interfaces 7.1) ------
+  // bp_ftq_meta_t is carried per slot; the array is declared here, at
+  // the port, not inside the struct. This group writes its tage,
+  // ittage, lp and ftb members.
+  output logic                            bpu_meta_val_p2,
+  output logic [FTQ_IDX_BITS-1:0]         bpu_meta_idx_p2,
+  output tage_pred_meta_t                 bpu_meta_tage_p2
+                                            [0:NUM_PRED_SLOTS-1],
+  output ittage_pred_meta_t               bpu_meta_ittage_p2
+                                            [0:NUM_PRED_SLOTS-1],
+  output lp_pred_t                        bpu_meta_lp_p2
+                                            [0:NUM_PRED_SLOTS-1],
+  output ftb_pred_meta_t                  bpu_meta_ftb_p2
+                                            [0:NUM_PRED_SLOTS-1],
+
+  // ---- metadata write, BPU -> FTQ slow path (interfaces 7.2) ------
+  // Writes the sc member. Disjoint from the p2 group above.
+  output logic                            bpu_meta_val_p3,
+  output logic [FTQ_IDX_BITS-1:0]         bpu_meta_idx_p3,
+  output sc_pred_meta_t                   bpu_meta_sc_p3
+                                            [0:NUM_PRED_SLOTS-1],
+
+  // ---- section 8: update channel, FTQ -> BPU (u0) -----------------
   // uBTB carries its valid inside ubtb_upd_t.valid; no valid port.
   input  ubtb_upd_t [NUM_PRED_SLOTS-1:0]  ubtb_upd_u0,
 
-  // loop_pred update is single slot today; suffix is p0, not u0.
-  input  logic                            lp_upd_valid_p0,
-  input  lp_upd_t                         lp_upd_p0,
+  // loop_pred update is per slot after the TD#105 retrofit. The
+  // suffix stays p0, not u0 (interfaces section 8).
+  input  logic [NUM_PRED_SLOTS-1:0]       lp_upd_valid_p0,
+  input  lp_upd_t                         lp_upd_p0
+                                            [0:NUM_PRED_SLOTS-1],
 
   // FTB update: 14 flat payload ports plus the valid.
   input  logic                            ftb_upd_valid_u0,
@@ -188,6 +248,11 @@ module bp_cluster (
   localparam int SC_UPD_CRED_W  = $clog2(SC_UPD_CREDITS  + 1);
   localparam int SC_STARVE_W    = $clog2(SC_STARVE_THRESH + 1);
 
+  // Prediction-block alignment. The uBTB and the FTB describe the
+  // same FTB_BLOCK_BYTES block, so one offset width serves both. Used
+  // only by the p1 fall-through default on a uBTB miss.
+  localparam int BLK_OFF_BITS   = $clog2(FTB_BLOCK_BYTES);
+
   // ----------------------------------------------------------------
   // Internal nets: bp_history -> TAGE, ITTAGE, SC
   // ----------------------------------------------------------------
@@ -205,7 +270,15 @@ module bp_cluster (
   // Internal nets: uBTB and loop_pred p1 results
   // ----------------------------------------------------------------
   ubtb_pred_t [NUM_PRED_SLOTS-1:0] w_ubtb_pred_p1;
-  lp_pred_t                        w_lp_pred_p0;
+  // Entry-scoped uBTB sideband: the lookup hit and the reconstructed
+  // block fall-through. One set per lookup, not per slot.
+  ubtb_blk_t                       w_ubtb_blk_p1;
+  // loop_pred is per slot (TD#105). Its request PC is the single p0
+  // request PC replicated: there is no per-slot PC at p0, and the
+  // loop index and tag hashes take no slot discriminator.
+  logic [VA_WIDTH-1:0]             w_lp_pred_pc_p0 [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0]       w_lp_pred_val_p0;
+  lp_pred_t                        w_lp_pred_p1    [0:NUM_PRED_SLOTS-1];
 
   // ----------------------------------------------------------------
   // Internal nets: FTB p2 results
@@ -287,8 +360,16 @@ module bp_cluster (
   logic [FTQ_IDX_BITS-1:0]         r_idx_p1;
   logic [9:0]                      r_phr_p1;
   ubtb_pred_t [NUM_PRED_SLOTS-1:0] r_ubtb_pred_p1;
+  ubtb_blk_t                       r_ubtb_blk_p1;
   logic [VA_WIDTH-1:0]             r_ras_tos_addr_p1 [0:NUM_PRED_SLOTS-1];
   logic                            r_ras_tos_val_p1  [0:NUM_PRED_SLOTS-1];
+  // SC index folds, staged p0 -> p1 -> p2 with the phr slice. SC
+  // indexes at p2 the block requested at p0, and bp_history advances
+  // whenever a branch is predicted, so the live folds would describe
+  // newer history than the block SC is indexing (TD#91, TD#92).
+  logic [SC_MAX_FH-1:0]            r_sc_t1_fh_p1;
+  logic [SC_MAX_FH-1:0]            r_sc_t2_fh_p1;
+  logic [SC_MAX_FH-1:0]            r_sc_t3_fh_p1;
 
   // p1 -> p2
   logic                    r_val_p2;
@@ -296,6 +377,16 @@ module bp_cluster (
   logic [FTQ_IDX_BITS-1:0] r_idx_p2;
   logic [9:0]              r_phr_p2;
   bp_ftq_slot_t            r_slot_p2 [0:NUM_PRED_SLOTS-1];
+  logic [SC_MAX_FH-1:0]    r_sc_t1_fh_p2;
+  logic [SC_MAX_FH-1:0]    r_sc_t2_fh_p2;
+  logic [SC_MAX_FH-1:0]    r_sc_t3_fh_p2;
+  // The p1 view of the address fetched after each slot, carried
+  // forward as the p1 operand of the p2 redirect comparison.
+  logic [VA_WIDTH-1:0]     r_succ_p1_p2 [0:NUM_PRED_SLOTS-1];
+  // The loop predictor finalizes at p1. Its result is registered here
+  // and presented in the p2 metadata group so the FTQ performs one
+  // slow-path write per entry rather than two.
+  lp_pred_t                r_lp_pred_p2 [0:NUM_PRED_SLOTS-1];
 
   // p2 -> p3
   logic                    r_val_p3;
@@ -314,6 +405,10 @@ module bp_cluster (
 
   bp_ftq_slot_t        w_slot_p1    [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_slot_pc_p1 [0:NUM_PRED_SLOTS-1];
+  // p1 block fall-through, and the per-slot p1 successor built from
+  // it. Both are the p1 view only; nothing here reads an FTB result.
+  logic [VA_WIDTH-1:0] w_pft_p1;
+  logic [VA_WIDTH-1:0] w_succ_p1    [0:NUM_PRED_SLOTS-1];
 
   bp_br_type_e         w_br_type_p2 [0:NUM_PRED_SLOTS-1];
   logic                w_br_val_p2  [0:NUM_PRED_SLOTS-1];
@@ -343,7 +438,7 @@ module bp_cluster (
   logic [NUM_PRED_SLOTS-1:0]      w_tage_upd_val_u0;
   logic [NUM_PRED_SLOTS-1:0]      w_ittage_upd_val_u0;
   logic [NUM_PRED_SLOTS-1:0]      w_sc_upd_val_u0;
-  logic                           w_lp_upd_val_p0;
+  logic [NUM_PRED_SLOTS-1:0]      w_lp_upd_val_p0;
   logic                           w_ftb_upd_val_u0;
   logic                           w_ras_commit_val;
 
@@ -377,6 +472,7 @@ module bp_cluster (
   // FTB block, not of the request.
   assign w_tage_pred_val_p0   = {NUM_PRED_SLOTS{w_req_val_p0}};
   assign w_ittage_pred_val_p0 = {NUM_PRED_SLOTS{w_req_val_p0}};
+  assign w_lp_pred_val_p0     = {NUM_PRED_SLOTS{w_req_val_p0}};
 
   // ================================================================
   // Stage registers p0 -> p1 -> p2 -> p3
@@ -388,10 +484,17 @@ module bp_cluster (
       r_idx_p1  <= '0;
       r_phr_p1  <= '0;
       r_ubtb_pred_p1 <= '0;
+      r_ubtb_blk_p1  <= '0;
+      r_sc_t1_fh_p1  <= '0;
+      r_sc_t2_fh_p1  <= '0;
+      r_sc_t3_fh_p1  <= '0;
       r_val_p2  <= 1'b0;
       r_pc_p2   <= '0;
       r_idx_p2  <= '0;
       r_phr_p2  <= '0;
+      r_sc_t1_fh_p2  <= '0;
+      r_sc_t2_fh_p2  <= '0;
+      r_sc_t3_fh_p2  <= '0;
       r_val_p3  <= 1'b0;
       r_idx_p3  <= '0;
       r_pft_p3  <= '0;
@@ -399,34 +502,53 @@ module bp_cluster (
         r_ras_tos_addr_p1[s] <= '0;
         r_ras_tos_val_p1[s]  <= 1'b0;
         r_slot_p2[s]         <= '0;
+        r_succ_p1_p2[s]      <= '0;
+        r_lp_pred_p2[s]      <= '0;
         r_br_type_p3[s]      <= NO_BRANCH;
         r_ras_val_p3[s]      <= 1'b0;
         r_taken_p3[s]        <= 1'b0;
         r_tkn_tgt_p3[s]      <= '0;
       end
     end else begin
-      // -- p0 -> p1. The uBTB result is combinational from the p0 PC
-      //    and is registered here so it aligns with the registered
-      //    loop_pred output. The RAS top of stack is a p0 read and is
-      //    registered for the same reason.
+      // -- p0 -> p1. The uBTB results are combinational from the p0 PC
+      //    and are registered here so they align with the registered
+      //    loop_pred output. pred_p1 and blk_p1 cross the boundary
+      //    together so both describe the same request when the p1
+      //    selection mux reads them. The RAS top of stack is a p0 read
+      //    and is registered for the same reason. The SC index folds
+      //    are sampled in the cycle the request is presented.
       r_val_p1       <= w_req_val_p0;
       r_pc_p1        <= ftq_pred_pc_p0;
       r_idx_p1       <= ftq_pred_idx_p0;
       r_phr_p1       <= w_folded.tage_phr[9:0];
       r_ubtb_pred_p1 <= w_ubtb_pred_p1;
+      r_ubtb_blk_p1  <= w_ubtb_blk_p1;
+      r_sc_t1_fh_p1  <= w_folded.sc_t1_idx_fh;
+      r_sc_t2_fh_p1  <= w_folded.sc_t2_idx_fh;
+      r_sc_t3_fh_p1  <= w_folded.sc_t3_idx_fh;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_ras_tos_addr_p1[s] <= w_ras_tos_addr_p0[s];
         r_ras_tos_val_p1[s]  <= w_ras_tos_valid_p0[s];
       end
 
       // -- p1 -> p2. Carries the formed p1 prediction forward; it is
-      //    the value every p2 redirect compares against (FE-4).
+      //    the value every p2 redirect compares against (FE-4). The
+      //    per-slot p1 successor travels with it: it is the reduced
+      //    form of that prediction and must describe the same block.
+      //    The loop result is registered here for the p2 metadata
+      //    group; loop_pred.pred_p1 is valid in the p1 cycle. It is
+      //    carried per slot: every slot has a loop producer.
       r_val_p2 <= r_val_p1;
       r_pc_p2  <= r_pc_p1;
       r_idx_p2 <= r_idx_p1;
       r_phr_p2 <= r_phr_p1;
+      r_sc_t1_fh_p2 <= r_sc_t1_fh_p1;
+      r_sc_t2_fh_p2 <= r_sc_t2_fh_p1;
+      r_sc_t3_fh_p2 <= r_sc_t3_fh_p1;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        r_slot_p2[s] <= w_slot_p1[s];
+        r_slot_p2[s]    <= w_slot_p1[s];
+        r_succ_p1_p2[s] <= w_succ_p1[s];
+        r_lp_pred_p2[s] <= w_lp_pred_p1[s];
       end
 
       // -- p2 -> p3. ras_pred_val_p3 and ras_br_type_p3 are the
@@ -450,8 +572,9 @@ module bp_cluster (
   // p1: selection mux and prediction formation
   // ================================================================
   // Gating signal: r_val_p1. The block reads the p1 stage registers
-  // (r_val_p1, r_pc_p1, r_ubtb_pred_p1, r_ras_tos_*_p1), so it is
-  // classified nba_sequent (CLAUDE.md stl_sequent rule).
+  // (r_val_p1, r_pc_p1, r_ubtb_pred_p1, r_ubtb_blk_p1,
+  // r_ras_tos_*_p1), so it is classified nba_sequent (CLAUDE.md
+  // stl_sequent rule).
   //
   // Selection per slot, fe_decisions.md 2.1:
   //   lp_pred_is_loop set -> loop_pred supplies the direction
@@ -460,14 +583,20 @@ module bp_cluster (
   //
   // lp_pred_t carries no target: the loop predictor supplies a
   // direction only. When it wins, the target is still the uBTB entry
-  // target. Slot 1 has no loop_pred producer (single slot, TD#105)
-  // and takes the uBTB prediction.
+  // target. Every slot has its own loop_pred producer after the
+  // TD#105 retrofit, so the same trust rule applies to every slot.
   //
   // A uBTB RETURN uses the RAS top of stack as the target
   // (fe_decisions.md 2.2); the uBTB entry supplies the branch type at
   // p1 so the RAS is engaged without waiting for the FTB.
+  //
+  // The uBTB hit is r_ubtb_blk_p1.hit, reported once per lookup. A
+  // pred_p1 slot valid bit says only whether that slot carries a
+  // branch, so the two terms are ANDed where the entry must have hit
+  // AND the slot must describe a branch.
   always_comb begin : p1_form_comb
-    int nb;
+    int  nb;
+    logic ubtb_slot_hit;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_slot_p1[s]            = '0;
@@ -475,20 +604,31 @@ module bp_cluster (
       w_slot_p1[s].pred_src   = PRED_NONE;
       w_slot_p1[s].confidence = '0; // FE-U3: no consumer
 
+      // The uBTB describes slot s only when the entry hit and that
+      // slot of the entry carries a branch.
+      ubtb_slot_hit = r_ubtb_blk_p1.hit & r_ubtb_pred_p1[s].valid;
+
       if (r_val_p1) begin
-        // Slot 0 is the only slot with a loop_pred producer.
-        if ((s == 0) && w_lp_pred_p0.lp_pred_is_loop) begin
+        // Every slot has its own loop_pred producer and its own
+        // trust bit; the rule below is the one slot 0 has always
+        // used, applied per slot (TD#105).
+        if (w_lp_pred_p1[s].lp_pred_is_loop) begin
           w_slot_p1[s].slot_valid = 1'b1;
-          w_slot_p1[s].taken      = w_lp_pred_p0.lp_pred_taken;
+          w_slot_p1[s].taken      = w_lp_pred_p1[s].lp_pred_taken;
           w_slot_p1[s].br_type    = COND;
           w_slot_p1[s].pred_src   = PRED_LOOP;
           // Target only matters when taken; it comes from the uBTB.
-          w_slot_p1[s].target     = r_ubtb_pred_p1[s].valid
+          // The position is gated identically: a slot the uBTB does
+          // not describe has no position to report.
+          w_slot_p1[s].target     = ubtb_slot_hit
                                       ? r_ubtb_pred_p1[s].target : '0;
+          w_slot_p1[s].pos        = ubtb_slot_hit
+                                      ? r_ubtb_pred_p1[s].pos : '0;
         end else if (r_ubtb_pred_p1[s].valid) begin
           w_slot_p1[s].slot_valid = 1'b1;
           w_slot_p1[s].taken      = r_ubtb_pred_p1[s].br_taken;
           w_slot_p1[s].br_type    = r_ubtb_pred_p1[s].br_type;
+          w_slot_p1[s].pos        = r_ubtb_pred_p1[s].pos;
           if ((r_ubtb_pred_p1[s].br_type == RETURN)
               && r_ras_tos_val_p1[s]) begin
             w_slot_p1[s].target   = r_ras_tos_addr_p1[s];
@@ -500,6 +640,22 @@ module bp_cluster (
           end
         end
       end
+    end
+
+    // -- p1 successor of each slot: the address fetched after that
+    //    slot, formed from the p1 view only. blk_p1.pft_addr is the
+    //    uBTB block fall-through and is authoritative for the cluster
+    //    when no slot is taken (ubtb_interfaces.md, blk_p1 field
+    //    semantics). It reads zero on a miss, so the block-aligned
+    //    start PC plus one block stands in.
+    w_pft_p1 = r_ubtb_blk_p1.hit
+                 ? r_ubtb_blk_p1.pft_addr
+                 : ({r_pc_p1[VA_WIDTH-1:BLK_OFF_BITS],
+                     {BLK_OFF_BITS{1'b0}}} + VA_WIDTH'(FTB_BLOCK_BYTES));
+
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      w_succ_p1[s] = w_slot_p1[s].taken ? w_slot_p1[s].target
+                                        : w_pft_p1;
     end
 
     // -- bp_history prediction update, from the formed prediction.
@@ -527,6 +683,13 @@ module bp_cluster (
   //    predictors miss (interfaces section 4).
   assign bpu_pred_val_p1 = r_val_p1;
   assign bpu_pred_idx_p1 = r_idx_p1;
+
+  // -- Block fall-through, exposed for the FTQ (TD#108). This is the
+  //    same w_pft_p1 the per-slot p1 successor above uses as its
+  //    not-taken term, driven out unchanged: one value per
+  //    prediction, qualified by bpu_pred_val_p1. Exposing it does not
+  //    change how it is computed.
+  assign bpu_pred_pft_p1 = w_pft_p1;
 
   // -- The RAS snapshot written into the entry allocated at p1 is the
   //    pointer state that block will start from at p2. In the cycle
@@ -677,8 +840,11 @@ module bp_cluster (
 
       // The p1 prediction carried in the stage register, expressed as
       // the same quantity so the comparison is target against target.
-      p1_succ = r_slot_p2[s].taken ? r_slot_p2[s].target
-                                   : w_ftb_pft_addr_p2;
+      // The p1 side uses the p1 fall-through, not the FTB one: taking
+      // the FTB value on both sides would mask the case this
+      // comparison exists to catch, a block whose boundary the FTB
+      // places somewhere the uBTB did not.
+      p1_succ = r_succ_p1_p2[s];
 
       w_redir_p2[s].valid     = r_val_p2 & w_ftb_valid_p2
                               & (w_succ_p2[s] != p1_succ);
@@ -841,6 +1007,43 @@ module bp_cluster (
                         & {NUM_PRED_SLOTS{w_sc_grant_upd}};
 
   // ================================================================
+  // Helper functions
+  // ================================================================
+  // Resolved branch type of one update channel, rederived from the
+  // structural bits of its own uBTB update payload. ubtb_upd_t
+  // carries no branch-type field: the type is a function of the
+  // resolved facts, and rederiving it here keeps the uBTB fan-out and
+  // the FTB fan-out reading the SAME facts, so the two cannot
+  // diverge. Arm order matches ubtb.sv jmp_br_type and the p2 FTB
+  // classification above, with is_br outranking is_jmp.
+  function automatic bp_br_type_e upd_br_type(input ubtb_upd_t u);
+    if      (u.is_br)    upd_br_type = COND;
+    else if (!u.is_jmp)  upd_br_type = NO_BRANCH;
+    else if (u.is_ret)   upd_br_type = RETURN;
+    else if (u.is_call)  upd_br_type = u.is_jalr ? INDIRECT_CALL
+                                                 : DIRECT_CALL;
+    else if (u.is_jalr)  upd_br_type = INDIRECT_NONRET;
+    else                 upd_br_type = DIRECT_UNC;
+  endfunction
+
+  // lp_to_meta() lived here. TD#106 retired bp_loop_meta_t in favour
+  // of lp_pred_t, so the p2 metadata member and the loop predictor
+  // output are now the same type and the field-by-field map has no
+  // work left to do. The p1 loop result is carried through unchanged.
+
+  // ================================================================
+  // Prediction metadata write groups (interfaces 7.1, 7.2)
+  // ================================================================
+  // The p2 group follows the p2 stage valid and index; the p3 group
+  // follows the p3 pair. bpu_meta_val_p3 asserts whether or not SC is
+  // enabled, so the entry's slow path is always complete; when SC is
+  // disabled the written value simply carries no prediction.
+  assign bpu_meta_val_p2 = r_val_p2;
+  assign bpu_meta_idx_p2 = r_idx_p2;
+  assign bpu_meta_val_p3 = r_val_p3;
+  assign bpu_meta_idx_p3 = r_idx_p3;
+
+  // ================================================================
   // Update fan-out, scalar channels (fe_decisions.md 7.2)
   // ================================================================
   // The FTB update channel carries its own structural classification,
@@ -848,10 +1051,6 @@ module bp_cluster (
   // prediction slot. NO_BRANCH forms no update.
   assign w_ftb_upd_val_u0 = ftb_upd_valid_u0
                           & (ftb_upd_is_br_u0 | ftb_upd_is_jmp_u0);
-
-  // loop_pred is updated for conditional branches only. Its single
-  // update channel is channel 0 until the TD#105 retrofit.
-  assign w_lp_upd_val_p0 = lp_upd_valid_p0 & w_upd_cond_u0[0];
 
   // RAS commit carries its own resolved branch type. Both call
   // encodings push and RETURN pops; every other type is a no-op.
@@ -876,6 +1075,16 @@ module bp_cluster (
       assign w_ittage_pred_inp_p0[gs].pc        = ftq_pred_pc_p0;
       assign w_ittage_pred_inp_p0[gs].branch_id = ftq_pred_idx_p0;
 
+      // -- loop_pred request PC. Every slot indexes from the single
+      //    p0 request PC: there is no per-slot PC at p0 and the loop
+      //    index and tag hashes carry no slot discriminator, so the
+      //    banks diverge only through their own updates (TD#105).
+      assign w_lp_pred_pc_p0[gs] = ftq_pred_pc_p0;
+
+      // -- loop_pred update, conditional branches only, per slot.
+      assign w_lp_upd_val_p0[gs] = lp_upd_valid_p0[gs]
+                                 & w_upd_cond_u0[gs];
+
       // -- Per-slot view of the FTB conditional fields (5.1).
       assign w_ftb_br_valid_p2[gs]  = (gs == 0) ? w_ftb_br0_valid_p2
                                                 : w_ftb_br1_valid_p2;
@@ -884,9 +1093,16 @@ module bp_cluster (
       assign w_ftb_br_target_p2[gs] = (gs == 0) ? w_ftb_br0_target_p2
                                                 : w_ftb_br1_target_p2;
 
-      // -- Branch PC of each p1 slot. ubtb.sv derives its slot 1
-      //    lookup from pred_pc_p0 + FTB_BLOCK_BYTES, so the slot 1
-      //    prediction describes that block.
+      // -- Branch PC of each p1 slot, reported to bp_history as that
+      //    branch's pred_pc. Its only consumer.
+      //    BP-086 retired the model this expression was written for.
+      //    ubtb.sv no longer derives a slot 1 lookup from pred_pc_p0
+      //    plus FTB_BLOCK_BYTES: one lookup returns one entry and
+      //    both slots describe branches inside that same block, with
+      //    the entry hit reported once in blk_p1. The per-slot block
+      //    stride below therefore outlives its rationale. Correcting
+      //    it changes what bp_history is told and is out of scope
+      //    here (BP-092 constraint 4); see the Results Capture.
       assign w_slot_pc_p1[gs] = r_pc_p1
                               + (VA_WIDTH'(gs)
                                  * VA_WIDTH'(FTB_BLOCK_BYTES));
@@ -914,27 +1130,55 @@ module bp_cluster (
       assign w_ras_br_type_p3[gs]      = r_br_type_p3[gs];
 
       // -- Update fan-out by resolved branch type (7.2, FE-U9).
-      //    The resolved type of update channel gs is the br_type
-      //    field of that channel's uBTB payload: it is the only
-      //    per-slot update payload that carries the type, and uBTB
-      //    appears in every row of the 7.2 table. The field is read
-      //    independently of ubtb_upd_u0[gs].valid so a channel that
-      //    updates only the table predictors still classifies.
-      assign w_upd_type_u0[gs]  = ubtb_upd_u0[gs].br_type;
+      //    The resolved type of update channel gs is rederived from
+      //    the structural bits of that channel's uBTB payload, which
+      //    is the only per-slot update payload carrying them, and
+      //    uBTB appears in every row of the 7.2 table. The bits are
+      //    read independently of ubtb_upd_u0[gs].valid so a channel
+      //    that updates only the table predictors still classifies.
+      assign w_upd_type_u0[gs]  = upd_br_type(ubtb_upd_u0[gs]);
       assign w_upd_any_u0[gs]   = (w_upd_type_u0[gs] != NO_BRANCH);
       assign w_upd_cond_u0[gs]  = (w_upd_type_u0[gs] == COND);
       assign w_upd_ind_u0[gs]   =
                      (w_upd_type_u0[gs] == INDIRECT_NONRET)
                    | (w_upd_type_u0[gs] == INDIRECT_CALL);
 
-      // uBTB: every row of 7.2 except NO_BRANCH.
-      assign w_ubtb_upd_u0[gs].valid    = ubtb_upd_u0[gs].valid
-                                        & w_upd_any_u0[gs];
-      assign w_ubtb_upd_u0[gs].pc       = ubtb_upd_u0[gs].pc;
-      assign w_ubtb_upd_u0[gs].br_type  = ubtb_upd_u0[gs].br_type;
-      assign w_ubtb_upd_u0[gs].target   = ubtb_upd_u0[gs].target;
-      assign w_ubtb_upd_u0[gs].br_taken = ubtb_upd_u0[gs].br_taken;
-      assign w_ubtb_upd_u0[gs].carry    = ubtb_upd_u0[gs].carry;
+      // uBTB: every row of 7.2 except NO_BRANCH. The uBTB update
+      // carries no valid port of its own, so the NO_BRANCH
+      // qualification lands on the struct's valid field. Every other
+      // member is forwarded unchanged.
+      assign w_ubtb_upd_u0[gs].valid      = ubtb_upd_u0[gs].valid
+                                          & w_upd_any_u0[gs];
+      assign w_ubtb_upd_u0[gs].pc         = ubtb_upd_u0[gs].pc;
+      assign w_ubtb_upd_u0[gs].is_br      = ubtb_upd_u0[gs].is_br;
+      assign w_ubtb_upd_u0[gs].br_idx     = ubtb_upd_u0[gs].br_idx;
+      assign w_ubtb_upd_u0[gs].br_taken   = ubtb_upd_u0[gs].br_taken;
+      assign w_ubtb_upd_u0[gs].target     = ubtb_upd_u0[gs].target;
+      assign w_ubtb_upd_u0[gs].pos        = ubtb_upd_u0[gs].pos;
+      assign w_ubtb_upd_u0[gs].is_jmp     = ubtb_upd_u0[gs].is_jmp;
+      assign w_ubtb_upd_u0[gs].jmp_target = ubtb_upd_u0[gs].jmp_target;
+      assign w_ubtb_upd_u0[gs].is_call    = ubtb_upd_u0[gs].is_call;
+      assign w_ubtb_upd_u0[gs].is_ret     = ubtb_upd_u0[gs].is_ret;
+      assign w_ubtb_upd_u0[gs].is_jalr    = ubtb_upd_u0[gs].is_jalr;
+      assign w_ubtb_upd_u0[gs].pft_addr   = ubtb_upd_u0[gs].pft_addr;
+
+      // -- Prediction metadata, p2 group (interfaces 7.1). TAGE and
+      //    ITTAGE are the predictor outputs passed through. The FTB
+      //    values are scalar within the entry, so the same three go
+      //    into every slot's copy (7.3). The loop metadata is that
+      //    slot's own registered p1 loop result: after the TD#105
+      //    retrofit every slot has a loop producer and a bank of its
+      //    own, so each slot carries its own table coordinates.
+      assign bpu_meta_tage_p2[gs]        = w_tage_pred_meta_p2[gs];
+      assign bpu_meta_ittage_p2[gs]      = w_ittage_pred_meta_p2[gs];
+      assign bpu_meta_ftb_p2[gs].hit     = w_ftb_hit_p2;
+      assign bpu_meta_ftb_p2[gs].way     = w_ftb_way_p2;
+      assign bpu_meta_ftb_p2[gs].jmp_pos = w_ftb_jmp_pos_p2;
+      assign bpu_meta_lp_p2[gs]          = r_lp_pred_p2[gs];
+
+      // -- Prediction metadata, p3 group (interfaces 7.2). The SC
+      //    predictor output passed through.
+      assign bpu_meta_sc_p3[gs]          = w_sc_pred_meta_p3[gs];
 
       // TAGE and SC: conditional branches only. ITTAGE: indirect
       // only, which per the session-061 ruling includes the indirect
@@ -981,6 +1225,8 @@ module bp_cluster (
   // ----------------------------------------------------------------
   // uBTB (p1). No request-valid port: it predicts every cycle.
   // NUM_PRED_SLOTS defaults to 1 in ubtb.sv and is overridden here.
+  // pred_p1 is the per-slot view of the matched entry; blk_p1 is the
+  // entry-scoped sideband. Both are registered p0 -> p1 together.
   // ----------------------------------------------------------------
   ubtb #(
     .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
@@ -989,20 +1235,25 @@ module bp_cluster (
     .rstn       (rstn),
     .pred_pc_p0 (ftq_pred_pc_p0),
     .pred_p1    (w_ubtb_pred_p1),
+    .blk_p1     (w_ubtb_blk_p1),
     .upd_u0     (w_ubtb_upd_u0)
   );
 
   // ----------------------------------------------------------------
-  // loop_pred (p1). Single slot in the shipped RTL; the dual-slot
-  // retrofit and the pred_p0 -> pred_p1 rename are TD#105. Slot 1
-  // takes the uBTB prediction.
+  // loop_pred (p1). Per slot after the TD#105 retrofit: one table
+  // bank per slot, one prediction and one update channel per slot,
+  // and the output renamed pred_p1 for the stage at which it is
+  // valid. NUM_PRED_SLOTS defaults to 1 in loop_pred.sv and is
+  // overridden here, the same way it is for ubtb.
   // ----------------------------------------------------------------
-  loop_pred u_loop_pred (
+  loop_pred #(
+    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
+  ) u_loop_pred (
     .clk           (clk),
     .rstn          (rstn),
-    .pred_pc_p0    (ftq_pred_pc_p0),
-    .pred_valid_p0 (w_req_val_p0),
-    .pred_p0       (w_lp_pred_p0),
+    .pred_pc_p0    (w_lp_pred_pc_p0),
+    .pred_valid_p0 (w_lp_pred_val_p0),
+    .pred_p1       (w_lp_pred_p1),
     .upd_p0        (lp_upd_p0),
     .upd_valid_p0  (w_lp_upd_val_p0)
   );
@@ -1106,8 +1357,11 @@ module bp_cluster (
   // ----------------------------------------------------------------
   // SC (p3). Consumes the TAGE p2 result directly; the same result
   // also feeds the cluster p2 redirect derivation. SC takes sliced
-  // folds, not the bp_folded_hist_t struct (interfaces 5.3). inp_pc
-  // and sc_phr are staged p0 -> p2 by this module (TD#91, TD#92).
+  // folds, not the bp_folded_hist_t struct (interfaces 5.3). inp_pc,
+  // sc_phr and the three index folds are all staged p0 -> p2 by this
+  // module (TD#91, TD#92): SC indexes at p2 the block requested at
+  // p0, and bp_history advances whenever a branch is predicted, so
+  // the live folds would describe newer history than that block.
   // ----------------------------------------------------------------
   sc #(
     .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
@@ -1118,9 +1372,9 @@ module bp_cluster (
     .tage_pred_meta_p2 (w_tage_pred_meta_p2),
     .inp_pc_p2         (w_sc_inp_pc_p2),
     .sc_phr_p2         (r_phr_p2),
-    .sc_t1_idx_fh_p2   (w_folded.sc_t1_idx_fh),
-    .sc_t2_idx_fh_p2   (w_folded.sc_t2_idx_fh),
-    .sc_t3_idx_fh_p2   (w_folded.sc_t3_idx_fh),
+    .sc_t1_idx_fh_p2   (r_sc_t1_fh_p2),
+    .sc_t2_idx_fh_p2   (r_sc_t2_fh_p2),
+    .sc_t3_idx_fh_p2   (r_sc_t3_fh_p2),
     .sc_pred_rdy_p3    (w_sc_pred_rdy_p3),
     .sc_pred_meta_p3   (w_sc_pred_meta_p3),
     .sc_upd_val_u0     (w_sc_upd_val_u0),
