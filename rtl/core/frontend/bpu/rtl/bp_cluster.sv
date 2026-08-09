@@ -202,7 +202,7 @@ module bp_cluster (
   input  logic                            ras_flush_val,
   input  bp_ras_snapshot_t                ras_flush_snapshot,
 
-  // ---- section 8: history pointer and buffer outputs --------------
+  // ---- section 9: history pointer and buffer outputs --------------
   output logic [GHIST_PTR_BITS-1:0]       ghist_ptr,
   output logic [PHIST_PTR_BITS-1:0]       phist_ptr,
   output logic [GHIST_PTR_BITS-1:0]       ckpt_ghist_ptr,
@@ -249,9 +249,19 @@ module bp_cluster (
   localparam int SC_STARVE_W    = $clog2(SC_STARVE_THRESH + 1);
 
   // Prediction-block alignment. The uBTB and the FTB describe the
-  // same FTB_BLOCK_BYTES block, so one offset width serves both. Used
-  // only by the p1 fall-through default on a uBTB miss.
+  // same FTB_BLOCK_BYTES block, so one offset width serves both. It
+  // forms w_blk_base_p1, which is the p1 fall-through default on a
+  // uBTB miss and the base of the per-slot branch PC.
   localparam int BLK_OFF_BITS   = $clog2(FTB_BLOCK_BYTES);
+
+  // Scaling from an in-block position to a byte offset. pos counts
+  // expanded-instruction slots, not bytes: bp_defines_pkg sizes it as
+  // $clog2(FTB_BLOCK_BYTES / 4), so 2**FTB_BR_POS_BITS positions cover
+  // the 2**BLK_OFF_BITS bytes of one block. Each position is therefore
+  // 2**(BLK_OFF_BITS - FTB_BR_POS_BITS) bytes. Derived, not assumed,
+  // so a block-size or position-width change rescales with it.
+  //   Resolved here: BLK_OFF_BITS 5, FTB_BR_POS_BITS 3 -> shift 2
+  localparam int BR_POS_SHIFT   = BLK_OFF_BITS - FTB_BR_POS_BITS;
 
   // ----------------------------------------------------------------
   // Internal nets: bp_history -> TAGE, ITTAGE, SC
@@ -405,8 +415,10 @@ module bp_cluster (
 
   bp_ftq_slot_t        w_slot_p1    [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_slot_pc_p1 [0:NUM_PRED_SLOTS-1];
-  // p1 block fall-through, and the per-slot p1 successor built from
-  // it. Both are the p1 view only; nothing here reads an FTB result.
+  // p1 block base, block fall-through, and the per-slot p1 successor
+  // built from them. All are the p1 view only; nothing here reads an
+  // FTB result.
+  logic [VA_WIDTH-1:0] w_blk_base_p1;
   logic [VA_WIDTH-1:0] w_pft_p1;
   logic [VA_WIDTH-1:0] w_succ_p1    [0:NUM_PRED_SLOTS-1];
 
@@ -642,6 +654,12 @@ module bp_cluster (
       end
     end
 
+    // -- Block base: the block-aligned start of the single block this
+    //    p1 view describes. One alignment expression, shared by the
+    //    fall-through default below and by the per-slot branch PC.
+    w_blk_base_p1 = {r_pc_p1[VA_WIDTH-1:BLK_OFF_BITS],
+                     {BLK_OFF_BITS{1'b0}}};
+
     // -- p1 successor of each slot: the address fetched after that
     //    slot, formed from the p1 view only. blk_p1.pft_addr is the
     //    uBTB block fall-through and is authoritative for the cluster
@@ -650,12 +668,32 @@ module bp_cluster (
     //    start PC plus one block stands in.
     w_pft_p1 = r_ubtb_blk_p1.hit
                  ? r_ubtb_blk_p1.pft_addr
-                 : ({r_pc_p1[VA_WIDTH-1:BLK_OFF_BITS],
-                     {BLK_OFF_BITS{1'b0}}} + VA_WIDTH'(FTB_BLOCK_BYTES));
+                 : (w_blk_base_p1 + VA_WIDTH'(FTB_BLOCK_BYTES));
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_succ_p1[s] = w_slot_p1[s].taken ? w_slot_p1[s].target
                                         : w_pft_p1;
+    end
+
+    // -- Branch PC of each p1 slot, reported to bp_history as that
+    //    branch's pred_pc. Its only consumer.
+    //    One uBTB lookup returns one entry describing one block, and
+    //    both slots are conditional fields of that entry, so the two
+    //    branches sit inside the SAME block at different in-block
+    //    positions. The PC is therefore the block base plus that
+    //    slot's scaled position, never a per-slot block stride.
+    //    pos is taken from the FORMED slot, not from the uBTB
+    //    directly: when loop_pred wins the selection mux the reported
+    //    PC must still describe the branch actually predicted.
+    //    A slot carrying no branch has no branch PC. The history
+    //    compaction below admits a slot on slot_valid, so the same
+    //    bit qualifies the PC.
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      w_slot_pc_p1[s] = w_slot_p1[s].slot_valid
+                          ? (w_blk_base_p1
+                             + (VA_WIDTH'(w_slot_p1[s].pos)
+                                << BR_POS_SHIFT))
+                          : '0;
     end
 
     // -- bp_history prediction update, from the formed prediction.
@@ -699,7 +737,7 @@ module bp_cluster (
   //    to p2. One snapshot per entry is sufficient (FE-11).
   assign bpu_pred_ras_p1 = w_ras_snapshot_p2[NUM_PRED_SLOTS-1];
 
-  // -- Checkpoint write at allocation (interfaces section 8).
+  // -- Checkpoint write at allocation (interfaces section 9).
   assign w_ckpt_wr_en  = r_val_p1;
   assign w_ckpt_wr_idx = r_idx_p1;
 
@@ -888,7 +926,7 @@ module bp_cluster (
   assign bpu_redir_idx_p3 = r_idx_p3;
 
   // ================================================================
-  // History rollback, driven from the redirect (interfaces 8)
+  // History rollback, driven from the redirect (interfaces section 9)
   // ================================================================
   // A redirect discards the fetch stream started from the entry, so
   // the history pointers are restored from that entry's checkpoint.
@@ -1093,19 +1131,12 @@ module bp_cluster (
       assign w_ftb_br_target_p2[gs] = (gs == 0) ? w_ftb_br0_target_p2
                                                 : w_ftb_br1_target_p2;
 
-      // -- Branch PC of each p1 slot, reported to bp_history as that
-      //    branch's pred_pc. Its only consumer.
-      //    BP-086 retired the model this expression was written for.
-      //    ubtb.sv no longer derives a slot 1 lookup from pred_pc_p0
-      //    plus FTB_BLOCK_BYTES: one lookup returns one entry and
-      //    both slots describe branches inside that same block, with
-      //    the entry hit reported once in blk_p1. The per-slot block
-      //    stride below therefore outlives its rationale. Correcting
-      //    it changes what bp_history is told and is out of scope
-      //    here (BP-092 constraint 4); see the Results Capture.
-      assign w_slot_pc_p1[gs] = r_pc_p1
-                              + (VA_WIDTH'(gs)
-                                 * VA_WIDTH'(FTB_BLOCK_BYTES));
+      // -- w_slot_pc_p1[gs] is not driven here. It reads the formed
+      //    slot (w_slot_p1[gs].pos, .slot_valid), which p1_form_comb
+      //    produces, and p1_form_comb reads w_slot_pc_p1 back for the
+      //    bp_history compaction. Driving it from this generate block
+      //    would close that loop at block granularity (UNOPTFLAT), so
+      //    it is driven inside p1_form_comb after the slot is formed.
 
       // -- p1 prediction output array.
       assign bpu_pred_slot_p1[gs] = w_slot_p1[gs];
@@ -1201,7 +1232,7 @@ module bp_cluster (
   endgenerate
 
   // ----------------------------------------------------------------
-  // bp_history (interfaces section 8)
+  // bp_history (interfaces section 9)
   // ----------------------------------------------------------------
   bp_history u_bp_history (
     .clk               (clk),
