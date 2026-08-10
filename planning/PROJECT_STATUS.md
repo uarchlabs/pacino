@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-09 (pa session 064)
+ UPDATED: 2026-08-10 (pa session 066)
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,63 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+
+## Session-066: BP-097. Record repair, watchdog class reopened.
+
+One task: BP-097. No RTL changed. 47 of 47 bpu targets green in
+baseline and final, both from this session.
+
+Two defects, both counted-or-armed but inert:
+
+1. tb_bp_cluster D2 checked !$isunknown of three queue-status bits.
+   Two-state model, so the condition was constant and the check
+   could not fail. Same defect BP-094 removed from A3. All 450
+   check sites enumerated; this was the only survivor. Replaced
+   with the required value, sampled every cycle. Count unchanged
+   at 973, proven to fail when mutated.
+
+2. TD#111 was closed on the four files it named. A sweep of all 18
+   found three with no watchdog (tb_tage, tb_loop_pred,
+   tb_bp_history) and one, tb_bp_cluster, whose watchdog could not
+   fire: repeat (200000) @(posedge clk). Measured -- clock frozen,
+   run hung, make never returned. Four repaired time-based, each
+   proven both directions.
+
+RULE: a watchdog is a TIME delay, never a cycle count.
+
+Record corrections: `all` names 38 of 47, not 37; TD#100 figures
+re-measured; TD#109 second paragraph (tage_assert_inhibit WAS
+declared -- the fault was bind scope resolution); TD#109 and TD#110
+recorded closed by BP-096; CLI-011 confirmed; sim_tage_manual "3/3"
+withdrawn.
+
+Negative results: no planning document carries 407; no document
+describes the tree as containing bp_loop_meta_t; BP-094.md already
+accounted for the 278-check growth in groups A-F, per group.
+
+CLOSED this session: TD#111. TD#109 and TD#110 closed BP-096.
+
+Next free BP number is BP-098. Next free INFRA number is INFRA-012.
+
+---
+
+## Session-065: BP-096. Bind sweep, 407 vs 973.
+
+Not recorded at the time. Summarised from handoff-066 and verified
+against the tree by BP-097.
+
+One task: BP-096. Swept every bind in the unit -- five across 46
+files, four already correct -- and repaired tb_tage.sv (TD#109). The
+dead-bind class is BOUNDED at two instances, that one and
+tb_tage_manual.sv (BP-095). Added four watchdogs (TD#111,
+incompletely -- see session-066), added tage_assert.sv to the
+cov_tage compile, fixed a concealed stimulus defect in tb_tage.sv
+sub-test C, and deleted ittage_assert_bind.sv (TD#110; the deletion
+was ordered by the prompt and never authorised by Jeff). Settled 407
+vs 973: one run of one binary, 407 printed PASS lines, 973 checks.
+All 47 targets green.
 
 ---
 
@@ -52,8 +109,6 @@ Tasks run: BP-091 (loop_pred dual-slot retrofit), BP-092 (retire
 bp_loop_meta_t, add p1 fall-through), BP-092a (per-slot branch PC
 fix), BP-093 (tb_bp_cluster, groups A-F), BP-094 (branch_id staging
 fix, groups G and H), BP-095 (failure-exit sweep).
-
-Next free BP number is BP-096. Next free INFRA number is INFRA-012.
 
 Four planning documents were corrected directly by the PA and pasted
 by Jeff rather than through an IA task: bp_history_interfaces.md,
@@ -264,6 +319,7 @@ it only documented current behavior.
 |                         |             |                   | BP-093 TC-A..TC-G. A block-      |
 |                         |             |                   | aligned PC would make the PHR    |
 |                         |             |                   | path bit a constant.             |
+|                         |             |                   | Watchdog added BP-097.           |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -325,9 +381,14 @@ it only documented current behavior.
 |                         |             |                   | sim_loop_pred 9342/0 (TC1-TC18); |
 |                         |             |                   | 8 mutants, all caught after two  |
 |                         |             |                   | coverage holes were closed.      |
-|                         |             |                   | CLI-011 is believed satisfied by |
-|                         |             |                   | the rename -- confirm and update |
-|                         |             |                   | Open Items row 4.                |
+|                         |             |                   | CLI-011 CONFIRMED SATISFIED      |
+|                         |             |                   | BP-097 against loop_pred.sv      |
+|                         |             |                   | 51-57: every port carries a      |
+|                         |             |                   | _<pipestage> suffix and no       |
+|                         |             |                   | pred_p0 remains in the bpu RTL.  |
+|                         |             |                   | CLOSED_TECH_DEBT row 12 credits  |
+|                         |             |                   | BP-018, not BP-091. Nothing      |
+|                         |             |                   | pending. Watchdog added BP-097.  |
 | loop_pred_interfaces.md | Draft       | --                | SESSION-064 BP-091: corrected to |
 |                         |             |                   | the delivered ports. 17 doc-vs-  |
 |                         |             |                   | RTL findings recorded before any |
@@ -342,7 +403,7 @@ it only documented current behavior.
 |                         |             |                   | Session-061 (INFRA-009): strong/ |
 |                         |             |                   | medium/weak and extd_ctr         |
 |                         |             |                   | corrections. SESSION-064 BP-094: |
-|                         |             |                   | Metadata timing section ADDED --  |
+|                         |             |                   | Metadata timing section ADDED -- |
 |                         |             |                   | every tage_pred_meta_t member,   |
 |                         |             |                   | branch_id included, describes the|
 |                         |             |                   | request that produced it and is  |
@@ -385,38 +446,45 @@ it only documented current behavior.
 |                         |             |                   | SESSION-064: sim_tage 106/0,     |
 |                         |             |                   | sim_tage_fast 106/0, from a      |
 |                         |             |                   | harness that can now fail.       |
-| tage_assert.sv          | Complete    | sim_tage_tasks    | ADR-001 and row 18 assertions.   |
-|                         | NOT BOUND   | sim_tage_manual   | SESSION-064 TD#109: tb_tage.sv   |
-|                         | in sim_tage |                   | binds it to an INSTANCE name     |
-|                         |             |                   | (bind u_dut), which instantiates |
-|                         |             |                   | nothing and warns about nothing. |
-|                         |             |                   | NOT evaluated in sim_tage,       |
-|                         |             |                   | sim_tage_fast, lint_tage or      |
-|                         |             |                   | cov_tage. The same defect in     |
-|                         |             |                   | tb_tage_manual.sv was FIXED      |
-|                         |             |                   | BP-095. A failing assertion DOES |
-|                         |             |                   | exit non-zero where the bind      |
-|                         |             |                   | takes effect (measured BP-095).  |
+| tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
+|                         | BOUND, LIVE | sim_tage_fast     | TD#109 CLOSED BP-096: the bind   |
+|                         |             | sim_tage_tasks    | named an INSTANCE (bind u_dut)   |
+|                         |             | sim_tage_manual   | and instantiated nothing. Now    |
+|                         |             |                   | "bind tage", with                |
+|                         |             |                   | tb.tage_assert_inhibit on the    |
+|                         |             |                   | port. BP-096 also added the file |
+|                         |             |                   | to the cov_tage compile.         |
+|                         |             |                   | BP-097: 10/10 lines in cov_tage; |
+|                         |             |                   | a firing assert...else $error    |
+|                         |             |                   | exits non-zero, measured.        |
 | ittage_assert.sv        | Complete    | sim_ittage        | New session-045. Bound inline in |
-|                         |             |                   | tb_ittage.sv and LIVE; the       |
-|                         |             |                   | separate ittage_assert_bind.sv is|
-|                         |             |                   | compiled by no target (TD#110).  |
+|                         |             |                   | tb_ittage.sv and LIVE. The       |
+|                         |             |                   | separate ittage_assert_bind.sv   |
+|                         |             |                   | (TD#110) was deleted BP-096.     |
 | tb_tage.sv              | Complete    | sim_tage          | SESSION-064 BP-094: failure exits|
 |                         |             | sim_tage_fast     | $finish(1) -> $fatal(1). Before  |
 |                         |             |                   | that the whole file was ungated. |
 |                         |             |                   | Varying-branch_id test added,    |
 |                         |             |                   | proven to fail against unfixed   |
-|                         |             |                   | RTL. TD#109 OPEN on its assert   |
-|                         |             |                   | bind, plus an undeclared         |
-|                         |             |                   | tage_assert_inhibit at line 294. |
+|                         |             |                   | RTL. TD#109 CLOSED BP-096: the   |
+|                         |             |                   | bind now names the MODULE. The   |
+|                         |             |                   | claim that tage_assert_inhibit   |
+|                         |             |                   | was undeclared is FALSE -- it is |
+|                         |             |                   | at line 259 and predates BP-096  |
+|                         |             |                   | (BP-097, verified to ea6e917).   |
+|                         |             |                   | Watchdog added BP-097.           |
 | tb_tage_manual.sv       | Complete    | sim_tage_manual   | ctr rows 1-17, use rows 1-6.     |
 |                         |             |                   | SESSION-064 BP-095: printed NO   |
 |                         |             |                   | verdict at all before this task; |
 |                         |             |                   | one was added and it now gates.  |
 |                         |             |                   | Assert bind repaired to the      |
-|                         |             |                   | module name and proven live. The |
-|                         |             |                   | prior "3/3" was never produced by|
-|                         |             |                   | the harness.                     |
+|                         |             |                   | module name and proven live.     |
+|                         |             |                   | The prior "3/3" is WITHDRAWN --  |
+|                         |             |                   | never produced by the harness.   |
+|                         |             |                   | MEASURED BP-097: the only figure |
+|                         |             |                   | it reports is "RESULTS: 0        |
+|                         |             |                   | error(s)". It counts errors, not |
+|                         |             |                   | checks. Watchdog #5000 BP-096.   |
 | ittage_interfaces.md    | Draft       | --                | Session-061 (INFRA-010):         |
 |                         |             |                   | indirect-CALL ownership and IT5  |
 |                         |             |                   | corrections. SESSION-064 BP-094: |
@@ -525,7 +593,8 @@ it only documented current behavior.
 |                         |             |                   | 28 checks. 13 mutations, all     |
 |                         |             |                   | fired. BP-092: lp checks         |
 |                         |             |                   | retargeted onto lp_pred_t, count |
-|                         |             |                   | unchanged at 28.                 |
+|                         |             |                   | unchanged at 28. No watchdog     |
+|                         |             |                   | needed: no clock, cannot hang.   |
 | bp_cluster.sv           | Complete    | tb_bp_cluster     | SESSION-063. BP-084 structural,  |
 |                         | SIMULATED   | sim_bp_cluster    | BP-085 behavioural, BP-090       |
 |                         |             | cov_bp_cluster    | rewire + metadata + closure.     |
@@ -544,6 +613,12 @@ it only documented current behavior.
 |                         |             |                   | LINE COVERAGE 258/258. 20        |
 |                         |             |                   | mutants, all died. NO DEFECT WAS |
 |                         |             |                   | FOUND IN bp_cluster itself.      |
+|                         |             |                   | SESSION-066 BP-097: D2's         |
+|                         |             |                   | $isunknown check could not fail  |
+|                         |             |                   | and was replaced; the watchdog   |
+|                         |             |                   | was cycle-based and could not    |
+|                         |             |                   | fire, now #200000. Count         |
+|                         |             |                   | unchanged at 973.                |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports across the  |
 |                         |             |                   | eight top-level modules, read    |
 |                         |             |                   | from RTL and compared to the     |
@@ -781,18 +856,38 @@ it only documented current behavior.
 |    |           | drives the shared threshold/TC/chooser/BrIMLI            |
 |    |           | adaptation. Evaluate at PD/perf. Related: #93, #86.      |
 | 99 | bpu       | Create a PR/CI/CD process. Motivating evidence           |
-|    |           | (session-060): `make all` silently omits targets. As of  |
-|    |           | session-064 `all` names 37 of 47. CI must run the        |
-|    |           | COMPLETE target set -- 47 targets -- not `make all`.     |
-|    |           | SESSION-064 ADDS A SECOND MOTIVE: seven testbenches      |
-|    |           | reported green regardless of what they found. Any CI     |
-|    |           | must verify that each suite CAN fail, not merely that it |
-|    |           | passes.                                                  |
+|    |           | (session-060): `make all` silently omits targets.        |
+|    |           | `all` names 38 of 47, enumerated from the Makefile       |
+|    |           | BP-097. The 37 recorded through session-064 was wrong.   |
+|    |           | Omitted: sim_ittage, sim_tage_manual, the seven cov      |
+|    |           | targets. CI must run all 47, not `make all`.             |
+|    |           | SESSION-064 SECOND MOTIVE: seven testbenches reported    |
+|    |           | green regardless of what they found. CI must verify      |
+|    |           | that each suite CAN fail, not merely that it passes.     |
+|    |           | Scope note: the validator checks that a manifest path    |
+|    |           | exists TODAY. 60 of 184 prompt files fail that on        |
+|    |           | historical manifests. CI must validate only the file     |
+|    |           | being run, not the prompts tree.                         |
 | 100 | tage     | tage line coverage below the previously-stated >90%.     |
-|     |          | cov_tage 73.7% (6242/8468), cov_tage_table 79.5%         |
-|     |          | (399/502). UNRESOLVED whether this is genuine under-     |
-|     |          | coverage or an accounting artifact. Note TD#109: the     |
-|     |          | tage assertions are not even bound in cov_tage.          |
+|     |          | MEASURED BP-097: cov_tage 73.8% (6418/8700),             |
+|     |          | cov_tage_table 79.5% (399/502), cov_bpu 79.1%            |
+|     |          | (9032/11419). The cov_tage denominator moved 8468 ->     |
+|     |          | 8700 when BP-096 added tage_assert.sv to that compile,   |
+|     |          | so 73.7 -> 73.8 is a new baseline, not a coverage        |
+|     |          | change. The prior 6242/8468 predates that.               |
+|     |          | The TD#109 caveat is retired: the assertions ARE bound   |
+|     |          | in cov_tage and tage_assert.sv is 10/10 there.           |
+|     |          | STILL UNRESOLVED: genuine under-coverage or accounting   |
+|     |          | artifact. Data, not a resolution: 8043 of cov_tage's     |
+|     |          | 8700 lines are tb_tage.sv, so the headline is dominated  |
+|     |          | by testbench lines; DUT-only is near 90%. In             |
+|     |          | cov_tage_table, tage_table.sv alone is 155/172 = 90.1%,  |
+|     |          | so the 90.1% in TAGE_DECOMP_LOG.md and                   |
+|     |          | tage_coverage_plan.md is the DUT-only figure, not a      |
+|     |          | stale one. Any conclusion must state its denominator.    |
+|     |          | CAUTION: BP-097's per-file table does not sum to 8700    |
+|     |          | and its RTL-only subtotal excludes a file it lists.      |
+|     |          | Re-derive per-file numbers before using them.            |
 | 101 | ras.sv   | Declares input ras_pc_p2, unread in the module.          |
 |     |          | bp_cluster drives it from the staged p2 PC. Confirm      |
 |     |          | needed or remove from ras.sv and tb_ras.sv.              |
@@ -832,34 +927,51 @@ it only documented current behavior.
 |     |          | value per prediction, qualified by bpu_pred_val_p1,      |
 |     |          | driven from the existing p1 not-taken term. Also closes  |
 |     |          | the observability hole handoff-064 Part 3 item 4.        |
-| 109 | tb_tage  | DEAD ASSERTION BIND. tb_tage.sv:285 reads                |
-|     |          | "bind u_dut tage_assert", an INSTANCE name. Verilator    |
-|     |          | 5.048 accepts it, instantiates nothing, and warns about  |
-|     |          | nothing under -Wall. tage_assert is NOT evaluated in     |
-|     |          | sim_tage, sim_tage_fast, lint_tage or cov_tage.          |
-|     |          | Line 294 compounds it: the port list connects            |
-|     |          | assert_inhibit to tage_assert_inhibit, which is not      |
-|     |          | declared anywhere in tb_tage.sv. It compiles only        |
-|     |          | because the dead bind means the port list is never       |
-|     |          | elaborated -- changing line 285 alone makes sim_tage     |
-|     |          | fail to compile (proven BP-095).                         |
-|     |          | FIX: declare tage_assert_inhibit at tb scope, drive it   |
-|     |          | (tie 1'b0 unless a test needs masking), change the bind  |
-|     |          | to the module name. The identical defect in              |
-|     |          | tb_tage_manual.sv was fixed BP-095.                      |
-|     |          | SWEEP EVERY BIND IN THE UNIT. The simulator gives no     |
-|     |          | diagnostic; two were found in the two files that         |
-|     |          | happened to be opened.                                   |
-| 110 | tb       | ittage_assert_bind.sv is compiled by NO Makefile target. |
-|     |          | tb_ittage.sv carries an equivalent inline bind that does |
-|     |          | work, so sim_ittage is correct. Either wire the file in  |
-|     |          | and delete the inline bind, or delete the file. Found    |
-|     |          | BP-095.                                                  |
-| 111 | tb       | NO WATCHDOG in tb_ittage_cntrl, tb_ittage, tb_tage_tasks |
-|     |          | or tb_tage_manual. A DUT that never asserts ready hangs  |
-|     |          | make rather than failing it. Not a false green, so       |
-|     |          | BP-095 left it out of scope. tb_ittage_table has one and |
-|     |          | it is now fatal. Uniform watchdog task.                  |
+| 109 | tb_tage  | CLOSED BP-096. The bind read "bind u_dut tage_assert",   |
+|     |          | an INSTANCE name. v5.048 accepts it, instantiates        |
+|     |          | nothing and warns about nothing under -Wall, so          |
+|     |          | tage_assert was NOT evaluated in sim_tage,               |
+|     |          | sim_tage_fast, lint_tage or cov_tage. Repaired to        |
+|     |          | "bind tage tage_assert".                                 |
+|     |          | CORRECTED BP-097. The claim that tage_assert_inhibit     |
+|     |          | "is not declared anywhere in tb_tage.sv" is FALSE. It is |
+|     |          | declared at :259, initialised at :260, driven at         |
+|     |          | :7669/:7671, and was present before BP-096 (verified     |
+|     |          | against ea6e917). The compile failure was SCOPE          |
+|     |          | RESOLUTION: a bind naming a MODULE resolves its port     |
+|     |          | expressions in the bound-into module's scope, where      |
+|     |          | that tb signal does not exist. Fix was the hierarchical  |
+|     |          | reference tb.tage_assert_inhibit, not a declaration.     |
+|     |          | Same defect in tb_tage_manual.sv fixed BP-095. BP-096    |
+|     |          | swept all five binds across 46 files; class BOUNDED at   |
+|     |          | these two, both repaired and proven live.                |
+| 110 | tb       | CLOSED BP-096 by deletion. ittage_assert_bind.sv was     |
+|     |          | compiled by no target; tb_ittage.sv's inline bind works, |
+|     |          | so sim_ittage was always correct. The deletion was       |
+|     |          | ordered by the BP-096 prompt and never authorised by     |
+|     |          | Jeff -- recorded as a fact of the tree, not a precedent. |
+|     |          | It left BP-096.md's manifest naming a missing path,      |
+|     |          | corrected BP-097.                                        |
+| 111 | tb       | CLOSED BP-097. Was: no watchdog in tb_ittage_cntrl,      |
+|     |          | tb_ittage, tb_tage_tasks or tb_tage_manual. BP-096       |
+|     |          | added those four. BP-097 swept all 18 testbenches:       |
+|     |          |   - tb_tage, tb_loop_pred and tb_bp_history had none.    |
+|     |          |     Added, time-based, proven both directions.           |
+|     |          |   - tb_bp_cluster had one that could not fire:           |
+|     |          |     repeat (200000) @(posedge clk). Clock frozen -> run  |
+|     |          |     hung, make never returned. Converted to #200000.     |
+|     |          |   - tb_bp_pkg needs none: no clock, cannot hang.         |
+|     |          | RULE: a watchdog must be a TIME delay (#N), never a      |
+|     |          | cycle count -- the hang it catches can stop the clock.   |
+|     |          | 17 watchdogs now; tb_bp_cluster was the only cycle-based |
+|     |          | one.                                                     |
+|     |          | Residual, reported not fixed: magnitudes are not         |
+|     |          | uniform. BP-096's four sit at 4.3x-6.1x of measured      |
+|     |          | completion, the ten older ones at 20x-439x. No rule      |
+|     |          | specifies a ratio and a late watchdog still fails        |
+|     |          | correctly, so the older limits were left. The            |
+|     |          | completion figures behind those ratios are coarse and    |
+|     |          | strap-dependent; re-measure before setting a ratio rule. |
 
 ---
 
@@ -870,11 +982,11 @@ it only documented current behavior.
 | 1        | TOOLS-002 spike ISA string              | Deferred            |
 | 2        | DECODE-012 pre-decode restructure       | Defer to fetch unit |
 | 3        | Whisper ISS lock-step validation        | Post-pipeline       |
-| 4        | Cleanup CLI-001,002,004,008,011,012,TI7 | Complete. CONFIRM   |
-|          |                                         | CLI-011: BP-091's   |
-|          |                                         | pred_p0 -> pred_p1  |
-|          |                                         | rename is most      |
-|          |                                         | likely that item.   |
+| 4        | Cleanup CLI-001,002,004,008,011,012,TI7 | Complete.           |
+|          |                                         | CLI-011 confirmed   |
+|          |                                         | BP-097; closed by   |
+|          |                                         | BP-018, not BP-091. |
+|          |                                         | Nothing pending.    |
 | 5        | TAGE full validation plan               | Complete            |
 | 6        | BP code coverage plan: CE-01            | Complete            |
 |          | through CE-06 all closed                |                     |
@@ -903,18 +1015,30 @@ it only documented current behavior.
 | 11       | tb_bp_cluster and its tests             | DONE session-064.   |
 |          |                                         | 973 checks, groups  |
 |          |                                         | A-H, 258/258 lines. |
-| 12       | Every new testbench must demonstrate    | NEW session-064.    |
-|          | a NON-ZERO EXIT on a deliberately       | $fatal(1) only;     |
-|          | broken check, as part of bring-up.      | $finish and         |
-|          |                                         | $finish(1) both     |
-|          |                                         | exit 0 under        |
-|          |                                         | v5.048. Seven files |
-|          |                                         | shipped without it. |
+| 12       | Every new testbench must demonstrate    | session-064, plus   |
+|          | a NON-ZERO EXIT on a deliberately       | the watchdog half   |
+|          | broken check, AND carry a TIME-BASED    | BP-097.             |
+|          | watchdog exiting $fatal(1). A cycle-    | $finish and         |
+|          | count watchdog does NOT satisfy this.   | $finish(1) both     |
+|          | Prove a watchdog by STOPPING THE CLOCK, | exit 0 under        |
+|          | not by shortening the limit.            | v5.048. See TD#111. |
 | 13       | sc_ready is strapped constant under     | NEW session-064.    |
 |          | +SC_FAST_INIT, so the SC arbiter        | A plusarg running a |
 |          | rule-1 guard is unreachable from the    | SHORT init walk     |
 |          | ports. BP-094 H2b clears the strap      | would fix this and  |
 |          | for one case.                           | help TD#67/#68.     |
+| 14       | terminate() in tb/utils.svh is a bare   | NEW session-066.    |
+|          | $finish, reached only on the clean      | Not a false green   |
+|          | path of tb_tage_manual.sv. Invisible    | today. Any new      |
+|          | to a per-file grep for exit primitives. | caller must         |
+|          |                                         | preserve the split. |
+| 15       | tb_pf() in tb/utils.svh prints a        | NEW session-066.    |
+|          | PASS/FAIL string and does not gate.     | No testbench relies |
+|          |                                         | on it for a verdict.|
+| 16       | +ITTAGE_FAST_INIT is INERT for          | NEW session-066.    |
+|          | sim_ittage_table: that target compiles  | Harmless; the       |
+|          | ittage_table.sv without sram_init.sv.   | Makefile line       |
+|          | Completion 266 units with and without.  | implies otherwise.  |
 
 ---
 
@@ -1178,13 +1302,21 @@ unless noted.
     - planning/arch/sram_init.md                      Complete
     - planning/testbenches/manual_tb_decisions.md     Complete
 
-### bp_cluster decomposition (sessions 063-064)
+### bp_cluster decomposition (sessions 063-066)
 
 - RTL COMPLETE AND SIMULATED.
     - rtl/core/frontend/bpu/rtl/bp_cluster.sv
     - rtl/core/frontend/bpu/tb/tb_bp_cluster.sv
     - lint_bp_cluster, sim_bp_cluster, cov_bp_cluster.
-    - sim_bp_cluster 973/0. Line coverage 258/258.
+    - sim_bp_cluster 973/0, cov_bp_cluster 973/0, measured
+      BP-097. bp_cluster.sv line coverage 258/258. The whole-
+      compile figure for cov_bp_cluster is 85.1% (4501/5289
+      after BP-097); it includes every leaf predictor, covered
+      separately by the per-predictor suites.
+    - Of the 973, 407 print as PASS: lines and 566 are quiet
+      sweep checks. One run of one binary. 973 is the
+      authoritative count; 407 is a grep artifact and is not a
+      group subtotal (settled BP-096, re-measured BP-097).
 - Built session-063 in three tasks (BP-084 structural, BP-085
   behavioural, BP-090 rewire and metadata), then corrected and
   verified session-064:
@@ -1194,6 +1326,8 @@ unless noted.
     - BP-092a per-slot branch PC from in-block position.
     - BP-093 first simulation, groups A-F, 530 checks.
     - BP-094 groups G and H, 973 checks, 100% lines.
+- Session-066 BP-097: D2 $isunknown check replaced, watchdog
+  converted from cycle-based to time-based. Count unchanged.
 - Test groups in tb_bp_cluster:
     A bring-up (reset-value conformance, non-zero exit proof)
     B p1 prediction        C p2 redirect
@@ -1201,6 +1335,10 @@ unless noted.
     F metadata             G closed predict-then-update loop,
                              all seven predictors
     H SC credit arbiter, all seven grant rules
+  Cumulative subtotals measured BP-097: A 55, B 98, C 321,
+  D 403, E 763, F 808, G 893, H 973. BP-093's A-F figure of
+  530 is the pre-BP-094 state; BP-094.md accounts for the
+  +278 per group.
 - Known state at the boundary:
     - The nine metadata outputs have no consumer in this
       repository: the FTQ is not built.
@@ -1214,12 +1352,15 @@ unless noted.
 - Session-064 (BP-094): branch_id staging defect FIXED. This
   was a real functional defect that no unit suite could see.
 - RTL available; unit and manual testbenches written.
-    - Line coverage: cov_tage 73.7% / cov_tage_table 79.5%.
-      TD#100. Note TD#109: the assertions are not bound in
-      cov_tage, so that number covers less than it appears to.
+    - Line coverage MEASURED BP-097: cov_tage 73.8%
+      (6418/8700), cov_tage_table 79.5% (399/502). TD#100.
+      The cov_tage denominator moved when BP-096 added
+      tage_assert.sv to that compile: new baseline, not a
+      coverage change. The assertions ARE bound in cov_tage
+      now and tage_assert.sv is 10/10 there.
     - Directed validation complete. sim_tage 106/0.
     - Remaining deferred: #69 rollback, #67 sram_init non-fast,
-      #74 dual-slot, #100 coverage, #103 T0 init, #109 bind.
+      #74 dual-slot, #100 coverage, #103 T0 init.
     - Formal validation not started.
 - Tage planning documents all Complete; tage_interfaces.md
   gained a Metadata timing section session-064.
@@ -1234,7 +1375,7 @@ unless noted.
   it.
 - Remaining deferred: #69/#70 rollback, #43 CTR width, #75
   sim_ittage_fast, #68 sram_init non-fast, #102 IT5 fold
-  generation, #110 dead bind file, #111 watchdog.
+  generation.
 
 ### RAS decomposition
 - RTL: ras.sv complete (BP-062), tb_ras.sv complete (BP-063),
