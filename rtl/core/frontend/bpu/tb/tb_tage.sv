@@ -282,7 +282,21 @@ module tb;
   );
 
   // tage_assert bound here; assert_inhibit from tb-scope signal.
-  bind u_dut tage_assert #(
+  // BP-096: the target was "u_dut", the tb-scope instance name.
+  // v5.048 accepts that form, instantiates nothing and warns about
+  // nothing, so tage_assert never ran in sim_tage, sim_tage_fast,
+  // lint_tage or cov_tage. Binding on the module name "tage"
+  // instantiates it. Same form as tb_tage_manual.sv.
+  //
+  // assert_inhibit is qualified as tb.tage_assert_inhibit. A bind
+  // on a MODULE name resolves its port expressions in the scope of
+  // the bound-into module (tage), not in the scope holding the bind
+  // statement. Every other port name here is also a tage port and
+  // resolves either way; tage_assert_inhibit exists only at tb
+  // scope, so it needs the explicit hierarchical path. Only
+  // no_ram_write_upd_tst (CE-06, TC-68) raises it -- that test
+  // drives a deliberately invalid update packet.
+  bind tage tage_assert #(
     .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
   ) u_tage_assert (
     .clk               (clk),
@@ -291,7 +305,7 @@ module tb;
     .tage_pred_meta_p2 (tage_pred_meta_p2),
     .tage_upd_val_u0   (tage_upd_val_u0),
     .tage_upd_inp_u0   (tage_upd_inp_u0),
-    .assert_inhibit    (tage_assert_inhibit)
+    .assert_inhibit    (tb.tage_assert_inhibit)
   );
 
   // ----------------------------------------------------------------
@@ -11366,10 +11380,18 @@ module tb;
     end
     @(posedge clk);
     // Sub-test C: mispredict with alc_comp=0 -> alc_we_s0=0.
+    // BP-096: using_primary must be 1 here. ADR-001 requires it
+    // whenever prm_comp=0 and alt_comp=0, and ctr_update_rules row
+    // 13e records UP=0 in that state as invalid input the RTL does
+    // not act on. The '0 default left it at 0, which tage_assert
+    // reports once the bind is live. alc_we_s0 does not depend on
+    // using_primary, so this does not change what sub-test C
+    // measures -- alc_comp=0 gating the allocate write.
     meta                    = '0;
     meta.tage_prm_comp      = 3'd0;
     meta.tage_alt_comp      = 3'd0;
     meta.tage_alc_comp      = 3'd0;
+    meta.tage_using_primary = 1'b1;
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
     upd_inp.cond_mispredict = 1'b1;

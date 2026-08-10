@@ -118,6 +118,17 @@ module tb;
   // ----------------------------------------------------------------
   initial begin clk = 1'b0; forever #5 clk = ~clk; end
 
+  // Timeout watchdog
+  // BP-096 (TD#111): a DUT that never asserts ready hung make rather
+  // than failing it. Same form as tb_ittage_table.sv: a give-up path
+  // that exits through $fatal(1), never $finish.
+  // Limit: normal completion measured at 2306 time units (230 cycles
+  // at the 10-unit period) in this session. 4x rounded up -> 10000.
+  initial begin
+    #10000;
+    $fatal(1, "tb_ittage_cntrl: TIMEOUT watchdog expired");
+  end
+
   int pass_cnt, fail_cnt;
 
   // ----------------------------------------------------------------
@@ -1656,9 +1667,15 @@ module tb;
     tc_age_08();
     tc_age_09();
 
+    // BP-095: a failing run must exit non-zero. Verilator v5.048
+    // maps $finish(1) onto exit status 0, so the failure exit is
+    // $fatal(1). $finish(0) remains the clean-run exit.
     $display("RESULTS: %0d PASS, %0d FAIL", pass_cnt, fail_cnt);
-    if (fail_cnt != 0) $finish(1);
-    $finish(0);
+    if (fail_cnt != 0)
+      $fatal(1, "tb_ittage_cntrl: %0d of %0d checks failed",
+             fail_cnt, pass_cnt + fail_cnt);
+    else
+      $finish(0);
   end
 
 endmodule : tb

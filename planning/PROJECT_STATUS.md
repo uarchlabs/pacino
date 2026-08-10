@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-08 (pa session 063)
+ UPDATED: 2026-08-09 (pa session 064)
  CONTACT: Jeff Nye
 ```
 
@@ -17,6 +17,54 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
 
+## Session-064: bp_cluster simulated. Three defects found by running.
+
+tb_bp_cluster.sv exists. 973 self-checking assertions, groups A
+through H. bp_cluster.sv is at 258/258 line coverage. All 47 bpu
+Makefile targets are green: 18 lint, 22 sim, 7 cov.
+
+Three defects were found by running things that had never been run.
+
+1. tage_cntrl.sv read branch_id LIVE off its p0 input while building
+   p1 metadata, so the branch_id arriving at p2 named the request one
+   cycle later than the rest of the metadata described. At the cluster
+   boundary this defeated the branch_id qualification: in an unstalled
+   stream the TAGE direction and the SC correction never reached the
+   FTQ at all; in a stalled stream the guard matched the WRONG entry.
+   FIXED BP-094. Invisible to every unit suite because none varied
+   branch_id across requests.
+
+2. SEVEN TESTBENCHES COULD NOT FAIL. $finish and $finish(1) both
+   produce exit 0 under Verilator v5.048, so a failing run reported a
+   passing target. BP-086 found this in tb_ubtb, BP-094 in tb_tage,
+   BP-095 swept the remaining five. Every count turned out correct --
+   none changed -- but none had ever been ENFORCED. All fixed to
+   $fatal(1) and proven in both directions by measurement.
+
+3. tb_tage.sv binds tage_assert to an INSTANCE name (bind u_dut)
+   rather than a module name. Verilator accepts it, instantiates
+   nothing, warns about nothing under -Wall. tage_assert is not
+   evaluated in sim_tage, sim_tage_fast, lint_tage or cov_tage. The
+   identical defect in tb_tage_manual.sv was fixed by BP-095. THIS ONE
+   IS OPEN and is the first item of session-065.
+
+Tasks run: BP-091 (loop_pred dual-slot retrofit), BP-092 (retire
+bp_loop_meta_t, add p1 fall-through), BP-092a (per-slot branch PC
+fix), BP-093 (tb_bp_cluster, groups A-F), BP-094 (branch_id staging
+fix, groups G and H), BP-095 (failure-exit sweep).
+
+Next free BP number is BP-096. Next free INFRA number is INFRA-012.
+
+Four planning documents were corrected directly by the PA and pasted
+by Jeff rather than through an IA task: bp_history_interfaces.md,
+ftq_bpu_interfaces.md, fe_decisions.md, bp_arb_spec.md.
+
+CLOSED this session: TD#105, TD#106, TD#107, TD#108.
+NEW: TD#109 (dead assertion bind), TD#110 (ittage_assert_bind.sv
+compiled by no target), TD#111 (four testbenches have no watchdog).
+
+---
+
 ## Session-063: bp_cluster built. BPU green, cluster unverified.
 
 bp_cluster.sv now instantiates all eight modules (seven predictors
@@ -24,12 +72,8 @@ plus bp_history), wires p0 through p3, and carries the full
 prediction and update behaviour. All 45 bpu Makefile targets pass:
 18 lint, 21 sim, 6 cov.
 
-NOTHING IN bp_cluster HAS EVER BEEN SIMULATED. There is no
-tb_bp_cluster and no sim target for it. lint_bp_cluster is the only
-target that touches the module. Every claim about cluster behaviour
-comes from reading RTL and from elaboration, not from a run. This is
-the largest verification gap in the unit and it is the next session's
-work.
+NOTHING IN bp_cluster HAS EVER BEEN SIMULATED at the time this
+section was written. Superseded by session-064: it is simulated now.
 
 Tasks run: INFRA-011 (port inventory), BP-082 (package dual-slot
 entry, found already applied), BP-083 (tb_bp_pkg retrofit), BP-084
@@ -143,6 +187,11 @@ it only documented current behavior.
 |                         |             |                   | UBTB_SET_WIDTH=400. Index/tag    |
 |                         |             |                   | comment corrected off PC[26:7]   |
 |                         |             |                   | to block granularity (BP-090).   |
+|                         |             |                   | SESSION-064: FTB_BR_POS_BITS =   |
+|                         |             |                   | $clog2(FTB_BLOCK_BYTES/4), i.e.  |
+|                         |             |                   | positions are 4-byte expanded-   |
+|                         |             |                   | instruction slots, 8 per block.  |
+|                         |             |                   | Confirmed BP-092a, not changed.  |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -179,6 +228,16 @@ it only documented current behavior.
 |                         |             |                   | "FTQ entry index" (TD-FE-5);     |
 |                         |             |                   | bp_pred_src_e stage labels to    |
 |                         |             |                   | p1/p2/p3.                        |
+|                         |             |                   | SESSION-064 BP-092: TD#106       |
+|                         |             |                   | closed. bp_loop_meta_t DELETED;  |
+|                         |             |                   | bp_ftq_meta_t's lp member is now |
+|                         |             |                   | lp_pred_t. Both types were 80    |
+|                         |             |                   | bits, 13 fields, identical       |
+|                         |             |                   | widths -- the map was pure       |
+|                         |             |                   | reorder and rename. lp_pred_t's  |
+|                         |             |                   | typedef MOVED up the file (SV    |
+|                         |             |                   | declare-before-use); fields      |
+|                         |             |                   | unchanged.                       |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected (BP-071);|
@@ -198,6 +257,13 @@ it only documented current behavior.
 |                         |             |                   | cluster's formed p1 prediction;  |
 |                         |             |                   | pred_taken/pred_pc compacted by  |
 |                         |             |                   | branch number, not slot number.  |
+|                         |             |                   | SESSION-064: pred_pc is the      |
+|                         |             |                   | BRANCH PC (block base + pos*4),  |
+|                         |             |                   | not the fetch block PC -- BP-092a|
+|                         |             |                   | fixed the cluster side, proven   |
+|                         |             |                   | BP-093 TC-A..TC-G. A block-      |
+|                         |             |                   | aligned PC would make the PHR    |
+|                         |             |                   | path bit a constant.             |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -207,7 +273,15 @@ it only documented current behavior.
 |                         |             |                   | DRAFT pending s6.6 sha + HI2/HI5.|
 | bp_history_interfaces.md| Draft       | --                | Rewritten session-054. Checkpoint|
 |                         |             |                   | Timing consistent with s7        |
-|                         |             |                   | (BP-074).                        |
+|                         |             |                   | (BP-074). SESSION-064: pred_pc   |
+|                         |             |                   | producer obligation CORRECTED to |
+|                         |             |                   | branch PC; ports restated per    |
+|                         |             |                   | BRANCH not per slot; bp_pkg.sv   |
+|                         |             |                   | refs fixed; caller-owned-pointer |
+|                         |             |                   | target-state note retired; IT5   |
+|                         |             |                   | "no folds" claim replaced with   |
+|                         |             |                   | real geometry + TD#102. HI6, HI7 |
+|                         |             |                   | opened.                          |
 | ubtb.sv                 | Complete    | tb_ubtb           | SESSION-063 BP-086: REWRITTEN to |
 |                         |             | sim_ubtb          | the single-lookup block          |
 |                         |             |                   | descriptor model. One index, one |
@@ -239,15 +313,40 @@ it only documented current behavior.
 |                         |             |                   | UI2 (carry consumer) and UI3     |
 |                         |             |                   | (both channels one entry) remain.|
 | loop_pred.sv            | Complete    | tb_loop_pred      | BP-004c-f complete.              |
-|                         |             |                   | SINGLE SLOT. Dual-slot retrofit  |
-|                         |             |                   | and the pred_p0 -> pred_p1       |
-|                         |             |                   | rename are TD#105 (session-063). |
-|                         |             |                   | Port naming retrofit pending     |
-|                         |             |                   | (CLI-011)                        |
+|                         |             |                   | SESSION-064 BP-091: TD#105       |
+|                         |             |                   | CLOSED. Per-slot on pred_pc_p0,  |
+|                         |             |                   | pred_valid_p0, pred_p1, upd_p0   |
+|                         |             |                   | and upd_valid_p0; tables are     |
+|                         |             |                   | per-slot banks (TI6) in one      |
+|                         |             |                   | one-level generate loop; pred_p0 |
+|                         |             |                   | RENAMED pred_p1. Algorithm and   |
+|                         |             |                   | lp_pred_t unchanged. Elaborates  |
+|                         |             |                   | at NUM_PRED_SLOTS 1 and 2.       |
+|                         |             |                   | sim_loop_pred 9342/0 (TC1-TC18); |
+|                         |             |                   | 8 mutants, all caught after two  |
+|                         |             |                   | coverage holes were closed.      |
+|                         |             |                   | CLI-011 is believed satisfied by |
+|                         |             |                   | the rename -- confirm and update |
+|                         |             |                   | Open Items row 4.                |
+| loop_pred_interfaces.md | Draft       | --                | SESSION-064 BP-091: corrected to |
+|                         |             |                   | the delivered ports. 17 doc-vs-  |
+|                         |             |                   | RTL findings recorded before any |
+|                         |             |                   | change. LI1, LI2, LI3 CLOSED.    |
+|                         |             |                   | Reset State and Victim Selection |
+|                         |             |                   | sections added (neither existed).|
+|                         |             |                   | LI6 opened then CLOSED BP-092.   |
+|                         |             |                   | The retired pred_pc+32 model was |
+|                         |             |                   | still described here -- the third|
+|                         |             |                   | document found carrying it.      |
 | tage_interfaces.md      | Complete    | --                | session-036: 6 corrections.      |
 |                         |             |                   | Session-061 (INFRA-009): strong/ |
 |                         |             |                   | medium/weak and extd_ctr         |
-|                         |             |                   | corrections.                     |
+|                         |             |                   | corrections. SESSION-064 BP-094: |
+|                         |             |                   | Metadata timing section ADDED --  |
+|                         |             |                   | every tage_pred_meta_t member,   |
+|                         |             |                   | branch_id included, describes the|
+|                         |             |                   | request that produced it and is  |
+|                         |             |                   | staged to p2 together.           |
 | tage_table_interfaces.md| Draft       | --                | Created session-016.             |
 |                         |             |                   | Updates pending.                 |
 | tage_cntrl_use          | Complete    | --                | session-037/045.                 |
@@ -273,19 +372,59 @@ it only documented current behavior.
 |                         |             |                   | Session-060 BP-081: TD#87 decode |
 |                         |             |                   | + TD#88 extd_ctr generated.      |
 |                         |             |                   | TD#103 OPEN: T0 init value.      |
+|                         |             |                   | SESSION-064 BP-094: branch_id    |
+|                         |             |                   | now STAGED p0->p1 into           |
+|                         |             |                   | branch_id_r1[] alongside the     |
+|                         |             |                   | index/tag hashes. It was the ONLY|
+|                         |             |                   | meta_p1 member read live off p0. |
+|                         |             |                   | No port, struct or other member  |
+|                         |             |                   | timing changed.                  |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | Session-060 BP-081: FIFOs retyped|
 |                         |             |                   | off cond_pred_*.                 |
-|                         |             |                   | sim_tage 105/0, sim_tage_fast    |
-|                         |             |                   | 105/0.                           |
-| tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
-|                         |             | sim_tage_fast     | sim_tage 105 tests as of BP-081. |
-| ittage_assert.sv        | Complete    | sim_ittage        | New session-045.                 |
+|                         |             |                   | SESSION-064: sim_tage 106/0,     |
+|                         |             |                   | sim_tage_fast 106/0, from a      |
+|                         |             |                   | harness that can now fail.       |
+| tage_assert.sv          | Complete    | sim_tage_tasks    | ADR-001 and row 18 assertions.   |
+|                         | NOT BOUND   | sim_tage_manual   | SESSION-064 TD#109: tb_tage.sv   |
+|                         | in sim_tage |                   | binds it to an INSTANCE name     |
+|                         |             |                   | (bind u_dut), which instantiates |
+|                         |             |                   | nothing and warns about nothing. |
+|                         |             |                   | NOT evaluated in sim_tage,       |
+|                         |             |                   | sim_tage_fast, lint_tage or      |
+|                         |             |                   | cov_tage. The same defect in     |
+|                         |             |                   | tb_tage_manual.sv was FIXED      |
+|                         |             |                   | BP-095. A failing assertion DOES |
+|                         |             |                   | exit non-zero where the bind      |
+|                         |             |                   | takes effect (measured BP-095).  |
+| ittage_assert.sv        | Complete    | sim_ittage        | New session-045. Bound inline in |
+|                         |             |                   | tb_ittage.sv and LIVE; the       |
+|                         |             |                   | separate ittage_assert_bind.sv is|
+|                         |             |                   | compiled by no target (TD#110).  |
+| tb_tage.sv              | Complete    | sim_tage          | SESSION-064 BP-094: failure exits|
+|                         |             | sim_tage_fast     | $finish(1) -> $fatal(1). Before  |
+|                         |             |                   | that the whole file was ungated. |
+|                         |             |                   | Varying-branch_id test added,    |
+|                         |             |                   | proven to fail against unfixed   |
+|                         |             |                   | RTL. TD#109 OPEN on its assert   |
+|                         |             |                   | bind, plus an undeclared         |
+|                         |             |                   | tage_assert_inhibit at line 294. |
 | tb_tage_manual.sv       | Complete    | sim_tage_manual   | ctr rows 1-17, use rows 1-6.     |
-|                         |             |                   | sim_tage_manual 3/3.             |
+|                         |             |                   | SESSION-064 BP-095: printed NO   |
+|                         |             |                   | verdict at all before this task; |
+|                         |             |                   | one was added and it now gates.  |
+|                         |             |                   | Assert bind repaired to the      |
+|                         |             |                   | module name and proven live. The |
+|                         |             |                   | prior "3/3" was never produced by|
+|                         |             |                   | the harness.                     |
 | ittage_interfaces.md    | Draft       | --                | Session-061 (INFRA-010):         |
 |                         |             |                   | indirect-CALL ownership and IT5  |
-|                         |             |                   | corrections.                     |
+|                         |             |                   | corrections. SESSION-064 BP-094: |
+|                         |             |                   | Metadata timing section added;   |
+|                         |             |                   | ITTAGE was INSPECTED for the     |
+|                         |             |                   | branch_id defect and does not    |
+|                         |             |                   | have it -- the property is now   |
+|                         |             |                   | specified rather than accidental.|
 | ittage_table_interfaces.md| Draft     | --                | Session-061 (INFRA-010): "4 total|
 |                         |             |                   | writes" and tgt_wr_u0 split      |
 |                         |             |                   | corrections.                     |
@@ -299,9 +438,18 @@ it only documented current behavior.
 | ittage_table_entry_formats.md| Complete| --               | Session-061: TAG width param     |
 |                         |             |                   | corrected.                       |
 | ittage_table.sv         | Complete    | tb_ittage_table   | BP-033/033-FIX-1 complete.       |
+|                         |             |                   | sim_ittage_table 32/0, ENFORCED  |
+|                         |             |                   | from BP-095 (harness fixed and   |
+|                         |             |                   | watchdog now fatal).             |
 | ittage_cntrl.sv         | Complete    | tb_ittage_cntrl   | BP-034/035/036/044/048/051-053.  |
-|                         |             |                   | 147 tests passing.               |
-| ittage.sv               | Complete    | tb_ittage         | sim_ittage 211/0.                |
+|                         |             |                   | 147 tests passing, ENFORCED from |
+|                         |             |                   | BP-095. Confirmed BP-094 to      |
+|                         |             |                   | already stage branch_id p0->p1;  |
+|                         |             |                   | it does NOT have the tage defect.|
+| ittage.sv               | Complete    | tb_ittage         | sim_ittage 211/0, ENFORCED from  |
+|                         |             |                   | BP-095. Two wait-loop timeouts   |
+|                         |             |                   | converted from WARN-and-continue |
+|                         |             |                   | to counted failures.             |
 |                         |             |                   | Session-061: IT5 fold ports wired|
 |                         |             |                   | to bp_history outputs never      |
 |                         |             |                   | driven (permanently 0). TD#102.  |
@@ -317,6 +465,11 @@ it only documented current behavior.
 |                         |             |                   | unread. Session-063: the cluster |
 |                         |             |                   | now DRIVES it from the staged p2 |
 |                         |             |                   | PC; still unread inside ras.sv.  |
+|                         |             |                   | SESSION-064: FE-11 proven end to |
+|                         |             |                   | end in tb_bp_cluster E4 -- the p1|
+|                         |             |                   | snapshot IS the p2 start state,  |
+|                         |             |                   | checked one cycle apart against  |
+|                         |             |                   | the RAS pointer registers.       |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -333,11 +486,20 @@ it only documented current behavior.
 |                         |             |                   | (059).                           |
 | sc_table.sv             | Complete    | tb_sc_table       | ST0-ST3. sim_sc_table 6/0.       |
 | sc_brimli.sv            | Complete    | tb_sc_brimli      | ST4 BrIMLI. sim_sc_brimli 7/0.   |
-| sc_cntrl.sv             | Complete    | tb_sc_cntrl       | sim_sc_cntrl 98/0.               |
+| sc_cntrl.sv             | Complete    | tb_sc_cntrl       | sim_sc_cntrl 98/0. SESSION-064:  |
+|                         |             |                   | READ and CONFIRMED (BP-094) that |
+|                         |             |                   | sc_pred_meta_p3.branch_id is     |
+|                         |             |                   | copied from the staged TAGE meta,|
+|                         |             |                   | so fixing TAGE fixed SC. No SC   |
+|                         |             |                   | change was needed.               |
 | sc.sv                   | Complete    | tb_sc             | sim_sc 55/0, sim_sc_fast 52/0.   |
 |                         |             |                   | Arb ports stubbed at unit level; |
 |                         |             |                   | the real credit arbiter now lives|
-|                         |             |                   | in bp_cluster (session-063).     |
+|                         |             |                   | in bp_cluster (session-063) and  |
+|                         |             |                   | is TESTED as of BP-094 group H.  |
+|                         |             |                   | sc_ready is strapped constant    |
+|                         |             |                   | under +SC_FAST_INIT -- see the   |
+|                         |             |                   | Open Items note.                 |
 | sc_interfaces.md        | Complete    | --                | Written session-058. Session-061:|
 |                         |             |                   | Arbitration Model corrected.     |
 | sc_table_interfaces.md  | Complete    | --                | Written session-058.             |
@@ -361,39 +523,53 @@ it only documented current behavior.
 |                         |             |                   | tests added for ftb_pred_meta_t  |
 |                         |             |                   | and the bp_ftq_meta_t ftb member.|
 |                         |             |                   | 28 checks. 13 mutations, all     |
-|                         |             |                   | fired.                           |
-| bp_cluster.sv           | Complete    | lint_bp_cluster   | SESSION-063. BP-084 structural,  |
-|                         | RTL only    | (no sim yet)      | BP-085 behavioural, BP-090       |
-|                         |             |                   | rewire + metadata + closure.     |
-|                         |             |                   | Eight instances, p0-p3 wiring,   |
-|                         |             |                   | stage registers, p1 selection    |
-|                         |             |                   | mux, RAS branch-type decode,     |
-|                         |             |                   | redirect derivation at p2 and p3,|
-|                         |             |                   | update fan-out by resolved type, |
-|                         |             |                   | SC credit arbiter, and the p2/p3 |
-|                         |             |                   | prediction metadata write groups.|
-|                         |             |                   | Every boundary output driven; no |
-|                         |             |                   | -Wno-UNDRIVEN. lint clean.       |
-|                         |             |                   | NOT SIMULATED -- no tb_bp_cluster|
-|                         |             |                   | exists. This is the next task.   |
+|                         |             |                   | fired. BP-092: lp checks         |
+|                         |             |                   | retargeted onto lp_pred_t, count |
+|                         |             |                   | unchanged at 28.                 |
+| bp_cluster.sv           | Complete    | tb_bp_cluster     | SESSION-063. BP-084 structural,  |
+|                         | SIMULATED   | sim_bp_cluster    | BP-085 behavioural, BP-090       |
+|                         |             | cov_bp_cluster    | rewire + metadata + closure.     |
+|                         |             |                   | SESSION-064: BP-091 loop_pred    |
+|                         |             |                   | rewire (the slot-0 exception in  |
+|                         |             |                   | the p1 mux and the zero-driven   |
+|                         |             |                   | loop metadata above slot 0 are   |
+|                         |             |                   | GONE); BP-092 lp_pred_t retype + |
+|                         |             |                   | bpu_pred_pft_p1 added + TD#107   |
+|                         |             |                   | comments; BP-092a per-slot branch|
+|                         |             |                   | PC derived from in-block pos     |
+|                         |             |                   | instead of a block stride.       |
+|                         |             |                   | FIRST SIMULATED BP-093.          |
+|                         |             |                   | sim_bp_cluster 973/0 after       |
+|                         |             |                   | BP-094 groups G and H.           |
+|                         |             |                   | LINE COVERAGE 258/258. 20        |
+|                         |             |                   | mutants, all died. NO DEFECT WAS |
+|                         |             |                   | FOUND IN bp_cluster itself.      |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports across the  |
 |                         |             |                   | eight top-level modules, read    |
 |                         |             |                   | from RTL and compared to the     |
 |                         |             |                   | eight interface docs. 4 findings,|
 |                         |             |                   | all in ubtb and bp_history.      |
+|                         |             |                   | STALE on loop_pred after BP-091. |
 | ftq_bpu_interfaces.md   | Draft       | --                | SESSION-063. FTQ/BPU port        |
 |                         |             |                   | specification: request, p1       |
 |                         |             |                   | prediction, late predictions,    |
 |                         |             |                   | redirects, prediction metadata,  |
 |                         |             |                   | updates, history checkpoint.     |
-|                         |             |                   | Section 10 lists the corrections |
-|                         |             |                   | other files still need.          |
+|                         |             |                   | SESSION-064: section 4 gains     |
+|                         |             |                   | bpu_pred_pft_p1; section 9       |
+|                         |             |                   | pred_pc corrected to per-BRANCH  |
+|                         |             |                   | and to the branch PC; section 10 |
+|                         |             |                   | items 6, 7, 8, 9, 12 CLOSED;     |
+|                         |             |                   | item 14 opened for TD#102.       |
 | fe_decisions.md         | Draft       | --                | Created session-062. Front-end   |
-|                         |             |                   | theory of operation. Two         |
-|                         |             |                   | corrections outstanding: RAS top |
-|                         |             |                   | of stack is p0 not p1 (2.2, 9),  |
-|                         |             |                   | and 3.1 names per-predictor      |
-|                         |             |                   | redirect ports that do not exist.|
+|                         |             |                   | theory of operation. SESSION-064:|
+|                         |             |                   | RAS top of stack corrected to p0 |
+|                         |             |                   | (2.2, 9, and the section 1 stage |
+|                         |             |                   | list); section 3.1 rewritten to  |
+|                         |             |                   | the cluster-derived, stage-named |
+|                         |             |                   | redirect groups; bp_loop_meta_t  |
+|                         |             |                   | replaced by lp_pred_t in 4.2;    |
+|                         |             |                   | FE-12 added.                     |
 | fetch                   | Not started | --                | After BP cluster                 |
 
 ---
@@ -405,6 +581,13 @@ it only documented current behavior.
 | 1  | NUM_PRED_SLOTS=1 reduction.           | Cleanup session after TAGE      |
 |    | Generate removal and NUM_PRED_SLOTS=1 | complete. Dual-slot *testing*   |
 |    | tests pending.                        | tracked separately in #74.      |
+|    | SESSION-064: NEW BLOCKER.             | tb_bp_cluster indexes generate  |
+|    |                                       | blocks by literal and $fatal(1)s|
+|    |                                       | at elaboration if the package   |
+|    |                                       | value is not 2. Reduction now   |
+|    |                                       | requires reworking that tb.     |
+|    |                                       | loop_pred and tb_loop_pred DO   |
+|    |                                       | elaborate at 1 (BP-091).        |
 | 2  | Instruction fusion                    | Deferred to rename/dispatch     |
 | 3  | UOP expansion for RVV segments        | Policy TBD at vector execution  |
 | 4  | predecode.sv clk/rstn unused          | Resolve at pipeline stage assign|
@@ -434,19 +617,27 @@ it only documented current behavior.
 |    |                                       | adjust write-enable timing.     |
 | 38 | Verilator 5.048 covergroup #7099      | Re-check #7099 status in 5.048  |
 |    | status not yet verified.              | release notes before closing.   |
-| 39 | TB-ARB-08 Rule 2 starvation override  | Verify PRED_CREDITS <           |
-|    | untestable at current params.         | STARVE_THRESH is intentional.   |
-|    | PRED_CREDITS=4 < STARVE_THRESH=8 so   | The bp_cluster SC arbiter       |
-|    | starve_ctr never reaches threshold.   | (session-063) implements Rule 2;|
-|    | Rule 4 is the effective ceiling.      | testability of it in            |
-|    |                                       | tb_bp_cluster depends on the    |
-|    |                                       | same parameter relationship.    |
-|    |                                       | Resolve before that testbench.  |
+| 39 | Rule 2 starvation override            | ANSWERED BP-094, needs a        |
+|    | reachability.                         | DECISION. Measured: SC_PRED_    |
+|    | SC_PRED_CREDITS=4 <                   | CREDITS=4 and rule 4 resets the |
+|    | SC_STARVE_THRESH=8.                   | starve counter after 4 grants,  |
+|    |                                       | so starve_ctr tops out at 4 and |
+|    |                                       | NEVER reaches 8. The override is|
+|    |                                       | unreachable in traffic. Group H |
+|    |                                       | test H6 seeds the counter and   |
+|    |                                       | proves the implemented arm obeys|
+|    |                                       | 4.5 rule 2; it does not prove   |
+|    |                                       | reachability, and says so.      |
+|    |                                       | Either raise PRED_CREDITS above |
+|    |                                       | STARVE_THRESH, lower the        |
+|    |                                       | threshold, or record the arm as |
+|    |                                       | dead code kept for parameter    |
+|    |                                       | flexibility. Parameter choice,  |
+|    |                                       | not a testbench problem.        |
 | 40 | TB-ARB-05 spec discrepancy.           | bp_arb_spec.md testbench section|
 |    | Old "backpressure 2 cycles" note did  | (was 10.1) removed session-057; |
 |    | not match TAGE_UQ_DEPTH=8.            | tb requirements now live in the |
-|    | No RTL risk.                          | implementing task file. Verify  |
-|    |                                       | UQ_DEPTH there at tb_bp_cluster.|
+|    | No RTL risk.                          | implementing task file.         |
 | 42 | Pipeline diagram shows ITTAGE at s3,  | Revisit after SC definition.    |
 |    | should be s2 (alongside FTB, TAGE).   | Update diagram and discussions. |
 |    |                                       | #65 is CLOSED, BP-054           |
@@ -460,49 +651,51 @@ it only documented current behavior.
 |    |                                        | tage_interfaces.md,             |
 |    |                                        | ittage_interfaces.md.           |
 |    |                                        | Session-063: bp_cluster ALREADY |
-|    |                                        | prefixes these at its boundary  |
-|    |                                        | (two modules cannot both export |
-|    |                                        | an unprefixed pq_not_full), so  |
-|    |                                        | the rename inside tage.sv and   |
-|    |                                        | ittage.sv is now cosmetic       |
-|    |                                        | alignment, not a blocker.       |
+|    |                                        | prefixes these at its boundary, |
+|    |                                        | so the rename inside tage.sv and|
+|    |                                        | ittage.sv is cosmetic alignment,|
+|    |                                        | not a blocker.                  |
 | 52 | Move arb logic into submodule out of   | Top modules should be           |
 |    | top in tage and ittage.                | structural only. New arb module |
 |    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
 |    |                                        | sequence with arb test #73.     |
 | 67 | tage sram_init non-fast path.          | All tests used +FAST_INIT,      |
 |    | Untested here; confirm not elsewhere.  | bypassing real sram_init        |
-|    |                                        | cycling. Confirm the COMP tests |
-|    |                                        | cover the non-fast path; do not |
-|    |                                        | assume.                         |
+|    | SESSION-064: now extends to the        | cycling. Confirm the COMP tests |
+|    | CLUSTER -- sim_bp_cluster and          | cover the non-fast path; do not |
+|    | cov_bp_cluster pass all three          | assume. A plusarg running a     |
+|    | fast-init plusargs.                    | SHORT init walk rather than none|
+|    |                                        | would also make the SC arbiter  |
+|    |                                        | rule-1 guard reachable from the |
+|    |                                        | ports (see BP-094 H2b).         |
 | 68 | ittage sram_init non-fast path.        | Same as #67.                    |
 | 69 | tage rollback / history recompute.     | G20/G21/G22 RESOLVED            |
 |    | Dark; tracks arch TBDs.                | session-054. Fold recompute     |
 |    |                                        | proven in-sim BP-072. Rollback  |
-|    |                                        | STIMULUS is now available: the  |
-|    |                                        | cluster drives bp_history        |
-|    |                                        | rollback from a derived redirect|
-|    |                                        | (session-063). Exercise it in   |
-|    |                                        | tb_bp_cluster. See TD #7.       |
+|    |                                        | STIMULUS now exists AND is      |
+|    |                                        | exercised: tb_bp_cluster E1/E2  |
+|    |                                        | drive checkpoint and rollback   |
+|    |                                        | through the cluster. The tage-  |
+|    |                                        | side recompute is still not     |
+|    |                                        | checked end to end. See TD #7.  |
 | 70 | ittage rollback / history recompute.   | Same as #69 for ittage.         |
-| 73 | Arbitration layer behavioral test.     | The SC credit arbiter is now    |
-|    | Pairs with refactor #52.               | IMPLEMENTED in bp_cluster       |
-|    |                                        | (session-063, bp_arb_spec 4.5   |
-|    |                                        | grant rules, credits and starve |
-|    |                                        | counter). It is UNTESTED. Fold  |
-|    |                                        | the grant-rule tests into       |
-|    |                                        | tb_bp_cluster. Folds in #37,    |
-|    |                                        | #39, #40. Concurrent pred+upd   |
-|    |                                        | remains the interaction of      |
-|    |                                        | interest.                       |
+| 73 | Arbitration layer behavioral test.     | CLOSED BP-094 group H. All      |
+|    | Pairs with refactor #52.               | seven bp_arb_spec 4.5 grant     |
+|    |                                        | rules plus tage consumer_ready  |
+|    |                                        | tested, hierarchically. Folds in|
+|    |                                        | #37, #39, #40. Residual: #39 is |
+|    |                                        | a parameter decision, and       |
+|    |                                        | concurrent pred+upd for TAGE and|
+|    |                                        | ITTAGE (not SC) is untouched.   |
 | 74 | Dual-slot (NUM_PRED_SLOTS=2) test.     | bp_history part CLOSED          |
 |    | bp_history dual-slot fold equivalence  | (BP-072), externally anchored   |
-|    | proven; broader cluster dual-slot      | BP-073. Broader cluster         |
-|    | still deferred.                        | dual-slot (slot 1 update path   |
-|    |                                        | across TAGE/ITTAGE, both slots  |
-|    |                                        | together) is now reachable in   |
-|    |                                        | tb_bp_cluster. Reduction work   |
-|    |                                        | in #1.                          |
+|    | proven; broader cluster dual-slot      | BP-073. SESSION-064: both slots |
+|    | still partly deferred.                 | are now exercised together in   |
+|    |                                        | tb_bp_cluster groups B, E, F and|
+|    |                                        | G. The slot-1 UPDATE path across|
+|    |                                        | TAGE/ITTAGE is covered by group |
+|    |                                        | G only for the loop it drives.  |
+|    |                                        | Reduction work in #1.           |
 | 75 | ittage has no fast versions of the     | The equivalent TAGE target is   |
 |    | ittage sim targets.                    | sim_tage_fast. Create           |
 |    |                                        | sim_ittage_fast.                |
@@ -511,7 +704,7 @@ it only documented current behavior.
 | 78 | RAS p3 undo-pop does not reverse a   | LEAVE AS-IS. BP-064 pins the   |
 |    | recursion pop.                       | current non-reversing behavior. |
 |    |                                      | Revisit at bp_cluster           |
-|    |                                      | integration if an s2/s3 repair  |
+|    |                                      | integration if a p2/p3 repair   |
 |    |                                      | over a recursion pop is ever    |
 |    |                                      | required. Related: #79.         |
 | 79 | RAS commit-stack recursion depth not | DEFER. The field is write-only  |
@@ -536,9 +729,11 @@ it only documented current behavior.
 |    |                                      | definition; it did NOT run that |
 |    |                                      | fold through the TAGE/ITTAGE    |
 |    |                                      | table index hash. Cluster       |
-|    |                                      | stimulus now exists -- do this  |
-|    |                                      | in tb_bp_cluster. SC ST1-ST3    |
-|    |                                      | are additional consumers.       |
+|    |                                      | stimulus now exists and         |
+|    |                                      | tb_bp_cluster group G drives a  |
+|    |                                      | closed loop, but the FOLD is    |
+|    |                                      | still not traced through the    |
+|    |                                      | hash. SC ST1-ST3 additional.    |
 | 85 | bp_structs_pkg.sv                    | Review BPU structures for       |
 |    |                                      | field sharing and storage/flop  |
 |    |                                      | opportunities.                  |
@@ -556,22 +751,10 @@ it only documented current behavior.
 |    |           | stored as backwards_branch0/1.                           |
 |    |           | These will be supplied to sc_upd_inp.backwards_branch.   |
 |    |           | Two bits, one per prediction slot.                       |
-| 91 | bpc       | CLOSED session-063. bp_cluster stages the request PC     |
-|    |           | p0 -> p2 and drives sc.inp_pc_p2[VA_WIDTH-1:1] per slot  |
-|    |           | from the p2 copy. TAGE does not return the PC --         |
-|    |           | tage_pred_meta_t has no pc field -- so the cluster keeps |
-|    |           | its own staged copy. ras_pc_p2 is driven from the same   |
-|    |           | staged value.                                            |
-| 92 | bpc/sc    | CLOSED session-063. bp_cluster captures                  |
-|    |           | bp_folded_hist.tage_phr[9:0] at p0 and stages it to p2   |
-|    |           | as sc_phr_p2.                                            |
-|    |           | RELATED, STILL OPEN: the three SC index folds            |
-|    |           | (sc_t1/t2/t3_idx_fh_p2) are now staged the same way      |
-|    |           | (BP-090), because bp_history advances whenever a branch  |
-|    |           | is predicted and the live folds at p2 belonged to a      |
-|    |           | later block. bp_arb_spec.md 6.1 lists only the PC and    |
-|    |           | phr as staged inputs and should be updated to name the   |
-|    |           | folds.                                                   |
+| 91 | bpc       | CLOSED session-063.                                      |
+| 92 | bpc/sc    | CLOSED session-063 for the PC and phr; the three SC      |
+|    |           | index folds were staged BP-090 and bp_arb_spec.md 6.1    |
+|    |           | now names them (session-064). FULLY CLOSED.              |
 | 93 | sc        | SC efficacy and threshold/band tuning -- deferred        |
 |    |           | investigation. Open questions at PD/perf: does SC earn   |
 |    |           | its area/power; the SC_THRSH_MID=10 / SC_THRSH_MAX=512   |
@@ -580,39 +763,39 @@ it only documented current behavior.
 |    |           | Refs: O-GEHL ISCA 2005; Storage-Free Confidence HPCA     |
 |    |           | 2011; TAGE-LSC MICRO 2011. Gate any SC die-area          |
 |    |           | commitment on this.                                      |
-| 94 | bp_arb_spec | CLOSED BP-081 (session-060). Residual doc item:        |
-|    |           | sections 9/10 are stubs and section 6.1 should now name  |
-|    |           | the SC index folds as staged inputs (see #92).           |
+| 94 | bp_arb_spec | CLOSED BP-081. Session-064: 6.1 now names the SC       |
+|    |           | index folds; 3.4 and 5.x annotated so the                |
+|    |           | <pred>_redir_* names are not read as ports. Sections     |
+|    |           | 9/10 remain stubs.                                       |
 | 95 | tage      | CLOSED BP-081 (session-060).                             |
 | 96 | bpc       | Flush operation has scattered mention across documents.  |
 |    |           | Define flush behavior, implement it, and update all      |
-|    |           | references. bp_cluster now exists and passes             |
-|    |           | ftb_flush_px and the RAS flush group straight through    |
-|    |           | with no flush behaviour of its own. G24 is the FTB half. |
+|    |           | references. bp_cluster passes ftb_flush_px and the RAS   |
+|    |           | flush group straight through with no flush behaviour of  |
+|    |           | its own. G24 is the FTB half. NOT exercised by           |
+|    |           | tb_bp_cluster.                                           |
 | 97 | bp_arb    | To determine whether a shared upstream PQ broadcasting   |
-|    |           | to all predictor PQs is implemented. Deferred. The       |
-|    |           | per-predictor PQ interfaces are compatible with either.  |
+|    |           | to all predictor PQs is implemented. Deferred.           |
 | 98 | sc_cntrl  | sc_cntrl shared scalar state under dual-slot update.     |
 |    |           | TEMPORARY (BP-077): lowest-indexed valid update slot     |
 |    |           | drives the shared threshold/TC/chooser/BrIMLI            |
-|    |           | adaptation. Evaluate at PD/perf: duplicate per slot,     |
-|    |           | share with a defined merge, or keep the current rule.    |
-|    |           | Related: #93, #86.                                       |
+|    |           | adaptation. Evaluate at PD/perf. Related: #93, #86.      |
 | 99 | bpu       | Create a PR/CI/CD process. Motivating evidence           |
-|    |           | (session-060): `make all` silently omits sim_ittage,     |
-|    |           | sim_tage_manual and the cov_* targets. The CI process    |
-|    |           | must run the complete target set -- 45 targets as of     |
-|    |           | session-063 -- not `make all`.                           |
+|    |           | (session-060): `make all` silently omits targets. As of  |
+|    |           | session-064 `all` names 37 of 47. CI must run the        |
+|    |           | COMPLETE target set -- 47 targets -- not `make all`.     |
+|    |           | SESSION-064 ADDS A SECOND MOTIVE: seven testbenches      |
+|    |           | reported green regardless of what they found. Any CI     |
+|    |           | must verify that each suite CAN fail, not merely that it |
+|    |           | passes.                                                  |
 | 100 | tage     | tage line coverage below the previously-stated >90%.     |
 |     |          | cov_tage 73.7% (6242/8468), cov_tage_table 79.5%         |
-|     |          | (399/502), unchanged session-063. UNRESOLVED whether     |
-|     |          | this is genuine under-coverage of the TD#87/#88 logic or |
-|     |          | an accounting artifact. cov_bpu is 78.6% (8605/10942).   |
+|     |          | (399/502). UNRESOLVED whether this is genuine under-     |
+|     |          | coverage or an accounting artifact. Note TD#109: the     |
+|     |          | tage assertions are not even bound in cov_tage.          |
 | 101 | ras.sv   | Declares input ras_pc_p2, unread in the module.          |
-|     |          | Session-063: bp_cluster drives it from the correctly     |
-|     |          | staged p2 PC, so the port is no longer dangling at the   |
-|     |          | cluster level, but ras.sv still does not read it.        |
-|     |          | Confirm needed or remove from ras.sv and tb_ras.sv.      |
+|     |          | bp_cluster drives it from the staged p2 PC. Confirm      |
+|     |          | needed or remove from ras.sv and tb_ras.sv.              |
 | 102 | bp_history.sv | Does not generate IT5 folds. ittage.sv wires        |
 |     |          | it_t5_idx_fh/tag_fh1/tag_fh2 to bp_history outputs that  |
 |     |          | are never driven -- permanently 0. IT5 has real history  |
@@ -621,7 +804,8 @@ it only documented current behavior.
 |     |          | table contributes no history and duplicates a short-     |
 |     |          | history table. Prediction accuracy loss, not a           |
 |     |          | correctness break. Add IT5 fold generation (same pattern |
-|     |          | as IT1-IT4).                                             |
+|     |          | as IT1-IT4). Recorded in bp_history_interfaces.md as HI6 |
+|     |          | and ftq_bpu_interfaces.md section 10 item 14.            |
 | 103 | tage     | tage initializes T0 to 00 (strongly not taken). Intended |
 |     |          | is weakly taken, b10. Impacts TAGE_SRAM_INIT_VALUE use   |
 |     |          | with sram_init. When this closes, update                 |
@@ -632,46 +816,50 @@ it only documented current behavior.
 |     |          |   - ftb.sv: ftb_fastpath_en "beyond the interface draft",|
 |     |          |     it is a documented top input.                        |
 |     |          | Fold into the first FTB-touching RTL task.               |
-| 105 | loop_pred| CLOSED BP-091                                            |
-|     |          | loop_pred dual-slot retrofit. loop_pred.sv is single     |
-|     |          | slot; no port carries a slot dimension. fe_decisions.md  |
-|     |          | 2.1 and ftq_bpu_interfaces.md section 4 describe both LP |
-|     |          | and uBTB presenting NUM_PRED_SLOTS predictions per       |
-|     |          | cycle. Retrofit to dual prediction: slot dimension on    |
-|     |          | pred_pc_p0, pred_valid_p0, pred_p0, upd_p0,              |
-|     |          | upd_valid_p0, and the internal tables per TI6. Fold in   |
-|     |          | the pred_p0 -> pred_p1 rename while the testbenches are  |
-|     |          | already being touched. Touches loop_pred.sv,             |
-|     |          | tb_loop_pred.sv, loop_pred_interfaces.md.                |
-|     |          | CONSEQUENCE TODAY: bp_cluster gives slot 1 the uBTB      |
-|     |          | prediction unconditionally, and the p2 loop metadata for |
-|     |          | slots above 0 is driven to zero rather than a real       |
-|     |          | per-slot snapshot. Found INFRA-011 / session-063.        |
-| 106 | bp_structs_pkg | lp_pred_t and bp_loop_meta_t carry the SAME        |
-|     |          | thirteen fields in DIFFERENT declaration order, and two  |
-|     |          | are spelled differently (lp_past_itr / lp_pst_itr,       |
-|     |          | lp_curr_itr / lp_cur_itr). bp_cluster maps between them  |
-|     |          | field by field in lp_to_meta(); a bit-level recast would |
-|     |          | compile and scramble every field. Retire one of the two  |
-|     |          | types. Found session-063.                                |
-| 107 | bp_cluster | Two stale comments in bp_cluster.sv, comment-only:     |
-|     |          |   - the port-list comment reads "section 7: update       |
-|     |          |     channel"; ftq_bpu_interfaces.md numbers the update   |
-|     |          |     channel as section 8, and 7 is the prediction        |
-|     |          |     metadata added session-063.                          |
-|     |          |   - the w_slot_pc_p1 comment still says ubtb.sv derives  |
-|     |          |     its slot 1 lookup from pred_pc_p0 + FTB_BLOCK_BYTES. |
-|     |          |     BP-086 retired that model.                           |
-|     |          | Fold into the next bp_cluster touch. Found BP-090.       |
-| 108 | bp_cluster | No p1 output carries the block successor or the       |
-|     |          | fall-through. ftq_bpu_interfaces.md section 4 lists      |
-|     |          | bpu_pred_val_p1, bpu_pred_idx_p1, bpu_pred_slot_p1 and   |
-|     |          | bpu_pred_ras_p1. The FTQ derives the successor from the  |
-|     |          | slot array (fe_decisions.md 2.4), but on a not-taken     |
-|     |          | block it needs the block end, and blk_p1.pft_addr stays  |
-|     |          | inside the cluster. DECIDE whether a fall-through        |
-|     |          | belongs on the p1 output group. Raised session-063,      |
-|     |          | not decided.                                             |
+| 105 | loop_pred| CLOSED BP-091 (session-064). Dual-slot retrofit,         |
+|     |          | per-slot banks, pred_p0 -> pred_p1 rename, bp_cluster    |
+|     |          | rewired. The cluster boundary ports lp_upd_valid_p0 and  |
+|     |          | lp_upd_p0 gained the slot dimension in the same task.    |
+| 106 | bp_structs_pkg | CLOSED BP-092 (session-064). bp_loop_meta_t        |
+|     |          | deleted; lp_pred_t survives; lp_to_meta() deleted rather |
+|     |          | than rewritten -- it did nothing but reorder and rename. |
+| 107 | bp_cluster | CLOSED BP-092 (session-064). Both stale comments      |
+|     |          | corrected. BP-092a found and corrected two more of the   |
+|     |          | same class (stale interfaces section numbers) plus a     |
+|     |          | fourth BP-092 missed because it read "(interfaces 8)".   |
+| 108 | bp_cluster | CLOSED BP-092 (session-064). bpu_pred_pft_p1 added   |
+|     |          | to the p1 output group: the block fall-through, one      |
+|     |          | value per prediction, qualified by bpu_pred_val_p1,      |
+|     |          | driven from the existing p1 not-taken term. Also closes  |
+|     |          | the observability hole handoff-064 Part 3 item 4.        |
+| 109 | tb_tage  | DEAD ASSERTION BIND. tb_tage.sv:285 reads                |
+|     |          | "bind u_dut tage_assert", an INSTANCE name. Verilator    |
+|     |          | 5.048 accepts it, instantiates nothing, and warns about  |
+|     |          | nothing under -Wall. tage_assert is NOT evaluated in     |
+|     |          | sim_tage, sim_tage_fast, lint_tage or cov_tage.          |
+|     |          | Line 294 compounds it: the port list connects            |
+|     |          | assert_inhibit to tage_assert_inhibit, which is not      |
+|     |          | declared anywhere in tb_tage.sv. It compiles only        |
+|     |          | because the dead bind means the port list is never       |
+|     |          | elaborated -- changing line 285 alone makes sim_tage     |
+|     |          | fail to compile (proven BP-095).                         |
+|     |          | FIX: declare tage_assert_inhibit at tb scope, drive it   |
+|     |          | (tie 1'b0 unless a test needs masking), change the bind  |
+|     |          | to the module name. The identical defect in              |
+|     |          | tb_tage_manual.sv was fixed BP-095.                      |
+|     |          | SWEEP EVERY BIND IN THE UNIT. The simulator gives no     |
+|     |          | diagnostic; two were found in the two files that         |
+|     |          | happened to be opened.                                   |
+| 110 | tb       | ittage_assert_bind.sv is compiled by NO Makefile target. |
+|     |          | tb_ittage.sv carries an equivalent inline bind that does |
+|     |          | work, so sim_ittage is correct. Either wire the file in  |
+|     |          | and delete the inline bind, or delete the file. Found    |
+|     |          | BP-095.                                                  |
+| 111 | tb       | NO WATCHDOG in tb_ittage_cntrl, tb_ittage, tb_tage_tasks |
+|     |          | or tb_tage_manual. A DUT that never asserts ready hangs  |
+|     |          | make rather than failing it. Not a false green, so       |
+|     |          | BP-095 left it out of scope. tb_ittage_table has one and |
+|     |          | it is now fatal. Uniform watchdog task.                  |
 
 ---
 
@@ -682,32 +870,51 @@ it only documented current behavior.
 | 1        | TOOLS-002 spike ISA string              | Deferred            |
 | 2        | DECODE-012 pre-decode restructure       | Defer to fetch unit |
 | 3        | Whisper ISS lock-step validation        | Post-pipeline       |
-| 4        | Cleanup CLI-001,002,004,008,011,012,TI7 | Complete            |
+| 4        | Cleanup CLI-001,002,004,008,011,012,TI7 | Complete. CONFIRM   |
+|          |                                         | CLI-011: BP-091's   |
+|          |                                         | pred_p0 -> pred_p1  |
+|          |                                         | rename is most      |
+|          |                                         | likely that item.   |
 | 5        | TAGE full validation plan               | Complete            |
 | 6        | BP code coverage plan: CE-01            | Complete            |
 |          | through CE-06 all closed                |                     |
 | 7        | Verilator upgrade to post-covergroup    | Upgraded to 5.048.  |
 |          | release                                 | Covergroup #7099    |
 |          |                                         | re-check pending.   |
-| 8        | Investigate mutation testing            | IN PRACTICE. BP-083,|
-|          |                                         | BP-086 and BP-090   |
-|          |                                         | each mutation-tested|
-|          |                                         | their testbenches   |
-|          |                                         | against injected    |
-|          |                                         | defects on scratch  |
-|          |                                         | copies outside the  |
-|          |                                         | tree. Every         |
-|          |                                         | mutation fired.     |
-|          |                                         | Consider making it  |
-|          |                                         | a standing testbench|
+| 8        | Investigate mutation testing            | STANDING PRACTICE.  |
+|          |                                         | BP-083, BP-086,     |
+|          |                                         | BP-090, BP-091,     |
+|          |                                         | BP-093 and BP-094   |
+|          |                                         | all mutation-tested |
+|          |                                         | their testbenches.  |
+|          |                                         | BP-094 ran 20       |
+|          |                                         | mutants, all died.  |
+|          |                                         | Survivors were      |
+|          |                                         | genuine coverage    |
+|          |                                         | holes each time and |
+|          |                                         | were closed. Make it|
+|          |                                         | a written testbench |
 |          |                                         | requirement.        |
 | 9        | Research verible-verilog-format for SV  | Planned             |
 |          | formatting.                             |                     |
 | 10       | README update: document tools/bin       | Pending             |
 |          | layout and build instructions for       |                     |
 |          | Verilator and Spike.                    |                     |
-| 11       | tb_bp_cluster and its tests             | NEXT SESSION (064). |
-|          |                                         | See handoff-064.    |
+| 11       | tb_bp_cluster and its tests             | DONE session-064.   |
+|          |                                         | 973 checks, groups  |
+|          |                                         | A-H, 258/258 lines. |
+| 12       | Every new testbench must demonstrate    | NEW session-064.    |
+|          | a NON-ZERO EXIT on a deliberately       | $fatal(1) only;     |
+|          | broken check, as part of bring-up.      | $finish and         |
+|          |                                         | $finish(1) both     |
+|          |                                         | exit 0 under        |
+|          |                                         | v5.048. Seven files |
+|          |                                         | shipped without it. |
+| 13       | sc_ready is strapped constant under     | NEW session-064.    |
+|          | +SC_FAST_INIT, so the SC arbiter        | A plusarg running a |
+|          | rule-1 guard is unreachable from the    | SHORT init walk     |
+|          | ports. BP-094 H2b clears the strap      | would fix this and  |
+|          | for one case.                           | help TD#67/#68.     |
 
 ---
 
@@ -716,8 +923,7 @@ it only documented current behavior.
 | ID  | Item                                  | Status                 |
 |-----|---------------------------------------|------------------------|
 | G5  | RAS commit stack entry count          | RESOLVED session-050.  |
-|     |                                       | 16 spec + 32 commit,   |
-|     |                                       | static partition.      |
+|     |                                       | 16 spec + 32 commit.   |
 | G6  | RAS recursion counter width           | RESOLVED session-050.  |
 |     |                                       | 4b per entry.          |
 | G7  | SC threshold value                    | REFRAMED session-056,  |
@@ -725,48 +931,32 @@ it only documented current behavior.
 |     |                                       | Threshold is DYNAMIC   |
 |     |                                       | (O-GEHL). Tuning       |
 |     |                                       | deferred TD#93.        |
-| G8  | Dual pred bundle split point          | RESOLVED session-050,  |
-|     |                                       | STALE session-062,     |
-|     |                                       | SUPERSEDED session-063.|
-|     |                                       | The "slot 0 pred_pc+   |
-|     |                                       | 0:31 / slot 1 pred_pc+ |
-|     |                                       | 32:63" split is the    |
+| G8  | Dual pred bundle split point          | SUPERSEDED session-063.|
+|     |                                       | The pred_pc+0:31 /     |
+|     |                                       | +32:63 split is the    |
 |     |                                       | TAGE/ITTAGE bundle     |
 |     |                                       | convention and does    |
 |     |                                       | NOT govern block       |
-|     |                                       | prediction. The two    |
-|     |                                       | slots are the two      |
-|     |                                       | conditional fields of  |
-|     |                                       | ONE 32-byte block from |
-|     |                                       | ONE lookup             |
-|     |                                       | (ftb_decisions.md 2.1/ |
-|     |                                       | 2.3, fe_decisions.md   |
-|     |                                       | 10). ubtb.sv was       |
+|     |                                       | prediction. ubtb.sv    |
 |     |                                       | rewritten to match     |
-|     |                                       | (BP-086); the +32      |
-|     |                                       | lookup is gone from    |
-|     |                                       | the RTL.               |
+|     |                                       | (BP-086).              |
 | G9  | Update channel arbitration            | PARTIAL. The SC credit |
 |     |                                       | arbiter is implemented |
-|     |                                       | in bp_cluster          |
-|     |                                       | (session-063) and      |
-|     |                                       | untested. The FTB      |
+|     |                                       | AND TESTED (BP-094     |
+|     |                                       | group H). The FTB      |
 |     |                                       | single update port     |
 |     |                                       | (FTB-3 / IC-FTB-09)    |
 |     |                                       | still has no FTQ-side  |
-|     |                                       | scheduler. TD#73.      |
+|     |                                       | scheduler.             |
 | G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation. |
-|     |                                       | FTB-2 folds in here.   |
-|     |                                       | Session-063: the       |
-|     |                                       | metadata now has a     |
-|     |                                       | real write path        |
-|     |                                       | (ftq_bpu_interfaces 7),|
-|     |                                       | so the overload scheme |
-|     |                                       | is the remaining half. |
+|     |                                       | The metadata write path|
+|     |                                       | exists and is verified |
+|     |                                       | field by field (BP-093 |
+|     |                                       | group F), so the       |
+|     |                                       | overload scheme is the |
+|     |                                       | remaining half.        |
 |     |                                       | See TD-FE-2.           |
-| G14 | Confidence counter purpose            | Reserved, 4b.          |
-|     |                                       | bp_ftq_slot_t          |
-|     |                                       | .confidence is driven  |
+| G14 | Confidence counter purpose            | Reserved, 4b. Driven   |
 |     |                                       | to zero by the cluster;|
 |     |                                       | nothing reads it       |
 |     |                                       | (FE-U3).               |
@@ -774,35 +964,28 @@ it only documented current behavior.
 |     |                                       | Perf measurement, not  |
 |     |                                       | a correctness gate.    |
 | G16 | ignored labeling gap                  |                        |
-| G17 | Slot 1 PC derivation (pred_pc+32)     | RESOLVED session-050,  |
-|     |                                       | SUPERSEDED session-063.|
-|     |                                       | Same as G8: this is    |
-|     |                                       | the TAGE/ITTAGE bundle |
-|     |                                       | convention only. There |
-|     |                                       | is no slot-1 PC in the |
+| G17 | Slot 1 PC derivation (pred_pc+32)     | SUPERSEDED session-063.|
+|     |                                       | Same as G8. There is   |
+|     |                                       | no slot-1 PC in the    |
 |     |                                       | uBTB or the FTB.       |
+|     |                                       | SESSION-064: the       |
+|     |                                       | cluster's own residual |
+|     |                                       | block stride on        |
+|     |                                       | w_slot_pc_p1 was found |
+|     |                                       | and fixed (BP-092a).   |
 | G18 | carry field consumer in cluster       | STILL TBD. ubtb_pred_t |
-|     |                                       | .carry has no consumer |
-|     |                                       | in bp_cluster. Its     |
-|     |                                       | meaning changed        |
-|     |                                       | session-063: it is the |
-|     |                                       | entry fall-through     |
-|     |                                       | carry, not a property  |
-|     |                                       | of the slot target.    |
-|     |                                       | (= UI2)                |
-| G19 | NO_BRANCH target on hit:              | RESOLVED session-063.  |
-|     | fall-through PC or zero?              | A uBTB hit with no     |
-|     |                                       | valid slot IS the      |
-|     |                                       | no-branch state; the   |
+|     |                                       | .carry has no consumer.|
+|     |                                       | It is the entry fall-  |
+|     |                                       | through carry, not a   |
+|     |                                       | property of the slot   |
+|     |                                       | target. (= UI2)        |
+| G19 | NO_BRANCH target on hit               | RESOLVED session-063.  |
+|     |                                       | Verified BP-093 B2:    |
+|     |                                       | a hit with no valid    |
+|     |                                       | slot is legal and the  |
 |     |                                       | successor is           |
-|     |                                       | blk_p1.pft_addr. No    |
-|     |                                       | sentinel target value  |
-|     |                                       | is needed and          |
-|     |                                       | NO_BRANCH is no longer |
-|     |                                       | producible on pred_p1. |
-|     |                                       | (= UI4)                |
+|     |                                       | blk_p1.pft_addr.       |
 | G20 | bp_history dual slot update path      | RESOLVED session-054.  |
-|     |                                       | Proven in-sim BP-072.  |
 | G21 | rollback_en + pred_valid same-cycle   | RESOLVED session-054.  |
 |     | priority undefined                    | Rollback wins.         |
 | G22 | One-cycle folded output invalid       | RESOLVED session-054.  |
@@ -810,24 +993,18 @@ it only documented current behavior.
 |     |                                       | invalid.               |
 | G23 | Checkpoint slot reclaim protocol      | TBD at FTQ impl.       |
 |     |                                       | (= bp_history HI5)     |
-| G24 | FTB flush protocol (ftb_flush_px)     | TBD at bp_cluster.     |
-|     |                                       | Session-063: the port  |
-|     |                                       | is a cluster input and |
-|     |                                       | passes straight to     |
-|     |                                       | ftb.sv. No flush       |
-|     |                                       | behaviour exists at    |
-|     |                                       | the cluster. TD#96.    |
-| G25 | FTB fast-path enable source           | TBD. Session-063:      |
-|     | (ftb_fastpath_en: CSR / tie /         | ftb_fastpath_en is a   |
-|     | runtime)                              | bp_cluster input port  |
-|     |                                       | and passes through to  |
-|     |                                       | ftb.sv. The SOURCE is  |
-|     |                                       | still undecided.       |
+| G24 | FTB flush protocol (ftb_flush_px)     | TBD. The port passes   |
+|     |                                       | straight to ftb.sv; no |
+|     |                                       | flush behaviour at the |
+|     |                                       | cluster and none       |
+|     |                                       | exercised by           |
+|     |                                       | tb_bp_cluster. TD#96.  |
+| G25 | FTB fast-path enable source           | TBD. ftb_fastpath_en   |
+|     | (ftb_fastpath_en: CSR / tie /         | is a cluster input and |
+|     | runtime)                              | passes through.        |
 |     |                                       | ftb_fastpath_p2 has no |
-|     |                                       | consumer in the        |
-|     |                                       | cluster -- the         |
-|     |                                       | fast-path bypass is    |
-|     |                                       | not built.             |
+|     |                                       | consumer -- the bypass |
+|     |                                       | is not built.          |
 
 ---
 
@@ -880,16 +1057,18 @@ planning/interfaces/ftq_bpu_interfaces.md (port specification).
 
 Key decisions for quick reference:
 - Seven predictors: uBTB, Loop, FTB, TAGE, SC, ITTAGE, RAS
-- Pipeline: p0 index, p1 uBTB+Loop, p2 FTB+TAGE+ITTAGE+RAS,
-  p3 SC
+- Pipeline: p0 index + RAS TOS read, p1 uBTB+Loop,
+  p2 FTB+TAGE+ITTAGE+RAS push/pop, p3 SC
 - ITTAGE overrides FTB target at p2 for indirect branches
   (including indirect CALL). RAS overrides FTB target at p2
   for returns and separately pushes the return address on
   indirect/direct CALL.
-- Loop overrides uBTB at p1 when trusted
+- Loop overrides uBTB at p1 when trusted, PER SLOT. There is
+  no slot-0 exception (BP-091).
 - Update policy: post-execute, not retire
 - RAS: dual-stack, static partition, 16 speculative +
-  32 commit entries. Pointer-only snapshot recovery.
+  32 commit entries. Pointer-only snapshot recovery. The top
+  of stack is read at p0 (ras_tos_addr_p0).
 - FTB: single set-associative array (4-way / 2048 / 512
   sets), 26-bit full tag, tree-PLRU, 2 conditional + 1 jump
   per entry. Storage split ftb_array / ftb_plru / ftb_cntrl.
@@ -897,260 +1076,214 @@ Key decisions for quick reference:
   fast-path (ftb_fastpath_en). FTB target is the ITTAGE-miss
   / RAS-empty fallback.
 - uBTB: ONE lookup per cycle. The entry mirrors the FTB
-  entry -- two conditional fields, one jump field, partial
-  fall-through with carry, displacement targets with a
-  fit/overflow/underflow status. One entry describes one
-  32-byte block and supplies both prediction slots. The
-  pred_pc+32 slot-1 lookup is retired (session-063, BP-086).
-  Entry hit is reported once per lookup on blk_p1.hit; a slot
-  valid bit means only that the slot carries a branch.
+  entry. One entry describes one 32-byte block and supplies
+  both prediction slots. The pred_pc+32 slot-1 lookup is
+  retired (session-063, BP-086). Entry hit is reported once
+  per lookup on blk_p1.hit; a slot valid bit means only that
+  the slot carries a branch.
+- In-block position: FTB_BR_POS_BITS = $clog2(BLOCK/4), so a
+  position is a 4-byte expanded-instruction slot, 8 per
+  block. The branch PC is block base + pos*4.
 - BPU is decoupled frontend, self-generates next PC
 - FTQ depth 64, split fast/slow SRAMs
 - History: GHR 256b, PHR 32b, folds recomputed on rollback.
-  Pointer module-owned. Fold geometry canonical in
-  bp_history_decisions.md s6. ITTAGE IT5 has real folded
-  history but bp_history does not generate it -- TD#102 open,
-  so IT5 currently indexes on PC alone.
+  Pointer module-owned. pred_pc into bp_history is the BRANCH
+  PC, indexed by BRANCH NUMBER after compaction. Fold
+  geometry canonical in bp_history_decisions.md s6. ITTAGE
+  IT5 has real folded history but bp_history does not
+  generate it -- TD#102 open.
 - TAGE entry: T0 2b CTR only, T1-T4 valid+tag+CTR+useful.
   T0 init value under review, TD#103 open.
+- Predictor metadata: every member of tage_pred_meta_t,
+  branch_id included, describes the request that produced it
+  and is staged to p2 together (BP-094). ITTAGE was inspected
+  and already correct.
 - ITTAGE entry: IT1-IT5 valid+tag+EPC+USE+CTR(3b)+TGT(38b).
   No IT0 base table.
 - SC index: uniform 5-entry arrays. No tag bits. ST4 is
   BrIMLI, SC only. Dynamic threshold (O-GEHL), two-corner
   chooser. br_imli_mode is a compile-time parameter.
-- SC arbitration: the section 4.5 credit arbiter is now
-  IMPLEMENTED IN bp_cluster (session-063), not stubbed. SC
-  has no independent prediction FIFO; the cluster presents no
-  update FIFO either, since the producer holds valid until
-  accepted and the FTQ is the holding element. CSR sc_enable
-  gates SC participation and the cluster does not wait on SC
-  when it is disabled.
+- SC arbitration: the section 4.5 credit arbiter is
+  IMPLEMENTED IN bp_cluster and TESTED (BP-094 group H). CSR
+  sc_enable gates SC participation and the cluster does not
+  wait on SC when it is disabled.
 - NUM_PRED_SLOTS=2 is the default. Reduction to 1 deferred
   (debt #1).
 - Port naming convention: <signal>_<pipestage>. The eight
-  modules do NOT all follow it; the actual variance is
-  recorded in bpu_port_inventory.md and ftq_bpu_interfaces.md
-  section 2. Ports are used as declared; no renaming was done.
-- TI6: banks are per-slot RAMs. TAGE/ITTAGE/SC convention;
-  does NOT apply to FTB or, since session-063, to the uBTB.
+  modules do NOT all follow it; variance recorded in
+  bpu_port_inventory.md and ftq_bpu_interfaces.md section 2.
+- TI6: banks are per-slot RAMs. TAGE/ITTAGE/SC/loop_pred
+  convention; does NOT apply to FTB or the uBTB.
 
-### bp_cluster boundary decisions (session-063)
+### bp_cluster boundary decisions (session-063, verified 064)
 
-- Predictors declare NO redirect ports -- confirmed across all
-  140 ports. The cluster derives the redirect by comparing a
-  predictor's stage output against the prediction it formed at
-  p1 and carried in its own stage registers. bp_cluster does
-  not read the FTQ. The groups are named by STAGE:
-  bpu_redir_p2 and bpu_redir_p3, each a bp_redirect_t array
-  with a scalar index alongside.
+Every item below was verified in simulation by tb_bp_cluster
+unless noted.
+
+- Predictors declare NO redirect ports. The cluster derives
+  the redirect by comparing a predictor's stage output
+  against the prediction it formed at p1. The groups are
+  named by STAGE: bpu_redir_p2 and bpu_redir_p3.
 - The redirect comparison reduces both views to ONE quantity,
   the address fetched after that slot. Two not-taken views
-  compare equal. The p1 operand is formed at p1 from the p1
-  view only: the slot target when taken, the uBTB
-  fall-through on a hit, the block-aligned PC plus
-  FTB_BLOCK_BYTES on a miss. Consequence: a stale uBTB block
-  boundary now redirects at p2 instead of the front end
-  fetching past a boundary the FTB had already contradicted.
-- The p3 comparison is against the p2-corrected value, not the
-  raw p1 prediction, so a p3 redirect fires only when SC
-  changes what the cluster published at p2.
+  compare equal (BP-093 C2). The p1 operand is formed from
+  the p1 view only, so a stale uBTB block boundary redirects
+  at p2 (BP-093 C3).
+- The p3 comparison is against the p2-corrected value, so a
+  p3 redirect fires only when SC changes what was published
+  at p2 (BP-093 D1a/D1b).
 - Every p2 and p3 comparison is qualified by branch_id equal
-  to the FTQ index in the matching stage register, so a queued
-  or back-pressured response cannot be compared against the
-  wrong entry. The redirect logic assumes no fixed predictor
-  latency.
+  to the FTQ index in the matching stage register. This
+  DEPENDS on the predictor staging branch_id with the rest of
+  its metadata -- tage_cntrl did not, and the guard was
+  defeated until BP-094.
 - The FTQ slow path is written by TWO groups with disjoint
-  members so the FTQ never merges: p2 writes tage, ittage, lp
-  and ftb; p3 writes sc. The loop predictor finalizes at p1
-  and its result is registered forward into the p2 group.
+  members, shown constructively in BP-093 group F.
 - The uBTB update branch type is REDERIVED from the payload's
-  own is_br / is_jmp / is_call / is_ret / is_jalr bits, never
-  restored as a field. Verilator resolves a missing br_type
-  read to zero, which decodes as COND; restoring the field
-  instead would silently classify every update as conditional
-  and stop ITTAGE ever being updated.
+  own is_br / is_jmp / is_call / is_ret / is_jalr bits.
+  Verified BP-094 G0 across all seven encodings, including
+  the three fe_decisions 7.2 does not tabulate.
 - The jump field is reported in the lowest prediction slot
-  carrying no valid conditional field. The jump is the
-  block-terminating branch, so lowest-free-slot placement is
-  program order.
-- RAS p2 operations are gated by reachability across slots: a
-  taken branch ends the block, so a later slot must not push
-  or pop (FE-11).
+  carrying no valid conditional field.
+- RAS p2 operations are gated by reachability across slots
+  (FE-11), and the p1 snapshot IS the p2 start state
+  (BP-094 E4).
 - The SC prediction PC, phr[9:0] and the three SC index folds
-  are all staged p0 to p2 by the cluster. TAGE and ITTAGE take
-  bp_folded_hist_t whole at their own p0 request.
+  are all staged p0 to p2 by the cluster.
+- The p1 output group carries the block fall-through on
+  bpu_pred_pft_p1 (TD#108, BP-092).
 
 ### Shared planning documents
     - planning/arch/bp_arb_spec.md                    In progress
-        - RECONCILED session-057 to the standalone-SC model.
-          TD#94 CLOSED BP-081. Session-063: section 6.1 should
-          name the SC index folds as staged inputs (TD#92).
+        - RECONCILED session-057. Session-064: 6.1 names the SC
+          index folds; a caveat at section 0 and a rewritten
+          3.4 status note record that no <pred>_redir_* port
+          exists; Override lines in 5.x retargeted to the
+          stage-named groups; open item J added for TD#39.
     - planning/arch/bp_cluster.md                     In progress
-        - Branch prediction cluster summary data.
+        - Branch prediction cluster summary data. The
+          session-063 decisions still are NOT promoted here;
+          they live in handoff-064 and ftq_bpu_interfaces.md.
     - planning/arch/fe_decisions.md                   Draft
-        - Front-end FTQ<->BPU theory of operation (session-062).
-          Two corrections outstanding: RAS top of stack is p0
-          not p1 (2.2, 9); section 3.1 names per-predictor
-          redirect ports that do not exist.
+        - Front-end FTQ<->BPU theory of operation. Session-064
+          corrections applied; see Module Status.
     - planning/interfaces/ftq_bpu_interfaces.md       Draft
-        - FTQ/BPU port specification (session-063). Section 10
-          lists the corrections other files still need.
+        - FTQ/BPU port specification. Section 10 items 6, 7, 8,
+          9 and 12 CLOSED session-064; item 14 opened.
     - planning/interfaces/bpu_port_inventory.md       Working
-        - 140-port inventory of the eight top-level modules
-          (INFRA-011).
+        - 140-port inventory. STALE on loop_pred after BP-091.
+    - planning/interfaces/loop_pred_interfaces.md     Draft
+        - Corrected to the delivered ports BP-091.
     - planning/arch/ras_decisions.md                  Draft
     - planning/arch/sram_init.md                      Complete
     - planning/testbenches/manual_tb_decisions.md     Complete
 
-### bp_cluster decomposition (session-063)
+### bp_cluster decomposition (sessions 063-064)
 
-- RTL COMPLETE, NOT SIMULATED.
+- RTL COMPLETE AND SIMULATED.
     - rtl/core/frontend/bpu/rtl/bp_cluster.sv
-    - lint_bp_cluster clean, zero warnings, zero errors.
-    - No tb_bp_cluster, no sim_bp_cluster, no cov_bp_cluster.
-- Built in three tasks:
-    - BP-084 structural: eight instances, p0-p3 wiring,
-      tie-offs, elaborate-only. Reported every tie-off and
-      every unconsumed output with its reason; that table was
-      the work definition for BP-085.
-    - BP-085 behavioural: stage registers, p1 selection mux,
-      RAS branch-type decode, redirect derivation at p2 and
-      p3, update fan-out by resolved branch type, SC credit
-      arbiter. -Wno-UNDRIVEN removed from lint_bp_cluster.
-    - BP-090: uBTB rewire (blk_p1, entry hit, slot pos,
-      update fan-out rebuild), the p2 and p3 metadata write
-      groups, the p1 fall-through consumer, SC index fold
-      staging, tb_bp_pkg width and stimulus fixes, package
-      comment corrections, header refresh.
-- Ports: the request group, the p1 prediction group, the two
-  redirect groups, the two metadata groups, the seven
-  predictors' update channels, the RAS restore/commit/flush
-  groups, the history outputs, the configuration sidebands
-  and the queue-status sidebands.
+    - rtl/core/frontend/bpu/tb/tb_bp_cluster.sv
+    - lint_bp_cluster, sim_bp_cluster, cov_bp_cluster.
+    - sim_bp_cluster 973/0. Line coverage 258/258.
+- Built session-063 in three tasks (BP-084 structural, BP-085
+  behavioural, BP-090 rewire and metadata), then corrected and
+  verified session-064:
+    - BP-091 loop_pred rewire: per-slot p1 mux with no slot-0
+      exception, real per-slot p2 loop metadata.
+    - BP-092 lp_pred_t retype, bpu_pred_pft_p1, TD#107.
+    - BP-092a per-slot branch PC from in-block position.
+    - BP-093 first simulation, groups A-F, 530 checks.
+    - BP-094 groups G and H, 973 checks, 100% lines.
+- Test groups in tb_bp_cluster:
+    A bring-up (reset-value conformance, non-zero exit proof)
+    B p1 prediction        C p2 redirect
+    D p3 and supersession  E history (incl. BP-092a TC-A..TC-G)
+    F metadata             G closed predict-then-update loop,
+                             all seven predictors
+    H SC credit arbiter, all seven grant rules
 - Known state at the boundary:
-    - Every boundary output has a producer.
     - The nine metadata outputs have no consumer in this
-      repository: the FTQ is not built. Their specified
-      consumer is ftq_bpu_interfaces.md 7.1 and 7.2.
-    - ftb_fastpath_p2 has no consumer; the fast-path bypass
-      is not built (G25).
-    - ubtb_pred_t.carry and .conf have no consumer (G18,
-      FE-U3).
-- Deferred to tb_bp_cluster (session-064): everything. See
-  session_handoff-064.md for the test list.
+      repository: the FTQ is not built.
+    - ftb_fastpath_p2 has no consumer (G25).
+    - ubtb_pred_t.carry and .conf have no consumer (G18, FE-U3).
+    - ftb_flush_px and the RAS flush group pass through
+      untested (G24, TD#96).
 
 ### TAGE decomposition
 - Session-060 (BP-081): tage RECONCILED and GREEN.
-- Session-061: planning docs reconciled to TD#87/#88 and the
-  T0 index/init corrections. TD#103 open on T0 init value.
+- Session-064 (BP-094): branch_id staging defect FIXED. This
+  was a real functional defect that no unit suite could see.
 - RTL available; unit and manual testbenches written.
     - Line coverage: cov_tage 73.7% / cov_tage_table 79.5%.
-      TD#100 tracks whether this is under-coverage or drift.
-    - Directed validation complete.
-    - Remaining deferred: #69 rollback (stimulus now available
-      in the cluster), #67 sram_init non-fast, #74 dual-slot,
-      #100 coverage review, #103 T0 init value.
+      TD#100. Note TD#109: the assertions are not bound in
+      cov_tage, so that number covers less than it appears to.
+    - Directed validation complete. sim_tage 106/0.
+    - Remaining deferred: #69 rollback, #67 sram_init non-fast,
+      #74 dual-slot, #100 coverage, #103 T0 init, #109 bind.
     - Formal validation not started.
-- BP-006 through BP-032, BP-041, BP-056 through BP-061,
-  BP-081: complete.
-- Tage planning documents: alloc / ctr / decisions / uaon /
-  use rules, table hash rules, table entry formats, and the
-  two interface documents. All Complete.
+- Tage planning documents all Complete; tage_interfaces.md
+  gained a Metadata timing section session-064.
 
 ### ITTAGE decomposition
 - RTL available; unit testbenches written; directed validation
   complete; formal validation not started.
+- Session-064: all three ITTAGE suites were confirmed
+  UNENFORCED and then enforced (BP-095). No count changed --
+  147, 211 and 32 reproduce exactly. ittage_cntrl was
+  inspected for the tage branch_id defect and does NOT have
+  it.
 - Remaining deferred: #69/#70 rollback, #43 CTR width, #75
   sim_ittage_fast, #68 sram_init non-fast, #102 IT5 fold
-  generation.
-- BP-034 through BP-042 complete (BP-033 abandoned).
-- Session-061 (INFRA-010) corrections applied across the
-  ITTAGE planning set.
-- ITTAGE planning documents: alloc / ctr / decisions / uaon /
-  use rules, table entry formats, table hash rules, and the
-  two interface documents. All Complete.
+  generation, #110 dead bind file, #111 watchdog.
 
 ### RAS decomposition
-- planning/arch/ras_decisions.md            Draft
-- planning/interfaces/ras_interfaces.md     Draft
-- RTL: rtl/ras.sv complete (BP-062), tb/tb_ras.sv complete
-  (BP-063), sim_ras 87/0.
+- RTL: ras.sv complete (BP-062), tb_ras.sv complete (BP-063),
+  sim_ras 87/0.
 - TD #78 pinned, TD #79 deferred, TD #101 open.
-- Key decisions session-050: G5, G6, G8, G17; simple circular
-  buffer internal structure.
-- Session-063: the cluster drives the p2 classification and
-  the p3 repair pair from the registered p2 values, gates p2
-  operations by reachability across slots, and drives
-  ras_pc_p2 from the staged p2 PC.
+- Session-064: FE-11 proven end to end in tb_bp_cluster E4.
+  The p1 snapshot is the state that block starts from at p2,
+  checked one cycle apart against the RAS pointer registers.
+  The closed commit-update loop is BP-094 G7.
 
 ### FTB decomposition
 - RTL available and verified (session-053). sim_ftb 99/0.
-- Structure: ftb_array (1R1W data RAM), ftb_plru (valid +
-  tree-PLRU flops), ftb_cntrl (all logic), ftb (structural
-  top).
-- Key decisions session-053: storage split, conf as a bimodal
-  direction counter, saturated-endpoint fast-path, position
-  sourced and sunk, final widths logical 106/424 and RAM
-  105/420.
-- Deferred to bp_cluster: flush (IC-FTB-07 / G24), conf x TAGE
-  meta (FTB-2 / G10), update arbitration (FTB-3 / IC-FTB-09 /
-  G9), FTQ round-trip (IC-FTB-10), ftb_fastpath_en source
-  (G25).
+- Deferred to bp_cluster: flush (IC-FTB-07 / G24, still not
+  exercised), conf x TAGE meta (FTB-2 / G10), update
+  arbitration (FTB-3 / IC-FTB-09 / G9), ftb_fastpath_en
+  source (G25).
 - SC-facing additions deferred: TD#89 branch PC[15:6], TD#90
   per-slot backwards-branch sign.
-- Session-063: the cluster consumes the FTB p2 outputs for
-  branch classification, the redirect target sources and the
-  fall-through, and carries ftb_hit_p2 / ftb_way_p2 /
-  ftb_jmp_pos_p2 into the p2 metadata group -- closing the
-  IC-FTB-10 carried-writeWay path at the cluster boundary.
-  ftb_br0/br1_conf_p2 and ftb_fastpath_p2 remain unconsumed.
-- FTB planning documents: ftb_decisions.md,
-  ftb_interfaces.md, ftb_confidence_override_rules.md. All
-  Complete.
+- Session-064: the carried writeWay path (IC-FTB-10) is
+  verified end to end -- BP-093 F1 checks hit, way and
+  jmp_pos in the p2 metadata, and BP-094 G5 drives a closed
+  install-then-hit loop through the FTB update channel.
 
 ### SC decomposition
-- Planning COMPLETE and RTL COMPLETE at unit level
-  (session-058/059). Remaining unit item:
-  sc_coverage_plan.md.
-- RTL: sc_table.sv, sc_brimli.sv, sc_cntrl.sv, sc.sv, with
-  tb_sc_table / tb_sc_brimli / tb_sc_cntrl / tb_sc. All green.
-- Package changes session-056/057/058/060 as recorded above.
+- Planning COMPLETE and RTL COMPLETE at unit level. Remaining
+  unit item: sc_coverage_plan.md.
 - Prerequisites for cluster integration:
     - #87 / #88 CLOSED BP-081.
-    - #91 / #92 CLOSED session-063 (PC and phr staged p0->p2
-      by bp_cluster).
-    - #89 / #90 still open (FTB stores branch PC[15:6] and the
-      per-slot backwards sign).
-    - #84 end-to-end fold check extends to SC ST1-ST3; the
-      cluster stimulus for it now exists.
-- Session-063: the SC credit arbiter moved from stubbed to
-  implemented, in bp_cluster. The three SC index folds are
-  staged p0 to p2 with the PC and phr.
+    - #91 / #92 CLOSED (PC, phr and the three index folds all
+      staged p0->p2).
+    - #89 / #90 still open.
+    - #84 end-to-end fold check still open -- group G drives a
+      closed SC loop but does not trace a fold through the
+      index hash.
+- Session-064: the SC credit arbiter is tested (group H), the
+  SC closed update loop is tested (G3), and sc_cntrl was
+  confirmed to inherit its branch_id from the staged TAGE
+  metadata rather than reading p0 itself.
 
 ### bp_history decomposition
 - COMPLETE at unit level (session-055).
-- Session-061 (INFRA-010): the "IT5 is BrIMLI, no folds" claim
-  was removed from bp_history_decisions.md and bp_cluster.md.
-  RTL gap opened as TD#102.
-- Planning: bp_history_decisions.md (Draft, s6 canonical fold
-  definition, s7 post-advance checkpoint),
-  bp_history_interfaces.md (Draft).
-- RTL: bp_history.sv complete. Lint clean, no bpu regression.
-  TD#102 open.
-- Verification: BP-072 dual-slot fold equivalence (19224
-  golden comparisons), BP-073 external anchor, BP-074 doc-RTL
-  consistency audit.
-- Key decisions session-054: G20, G21, G22, module-owned
-  pointer with mispredict-only restore.
-- Key decisions session-055: fold geometry captured natively;
-  checkpoint timing ratified post-advance.
-- Open / deferred: HI2, HI5 (= G23), #82, #83, #84, #69/#70,
-  #102.
-- Session-063: the cluster drives pred_taken, pred_pc and
-  num_branches from the formed p1 prediction, compacted by
-  branch number rather than slot number, writes the checkpoint
-  at allocation, and drives rollback from the derived
-  redirect with the p3 index winning.
+- Session-064: pred_pc is the BRANCH PC and is indexed by
+  BRANCH NUMBER; bp_history_interfaces.md corrected on both
+  points and on three stale claims besides. The cluster side
+  was fixed by BP-092a and proven by BP-093 TC-A..TC-G,
+  including a 64-pair position sweep and the identity
+  path_bit = pos[1] ^ pos[0].
+- Open / deferred: HI2, HI5 (= G23), HI6 (= TD#102), HI7,
+  #82, #83, #84, #69/#70.
 
 ### Shared components track
 - components/rtl  components/tb

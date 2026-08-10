@@ -265,7 +265,17 @@ module tb;
     @(posedge clk);
 
     run_tests();
-    terminate();
+
+    // BP-095: this testbench used to end on terminate() ($finish)
+    // with no verdict at all, so an errored run reported a passing
+    // target. A clean run still ends on terminate(); a failing run
+    // exits through $fatal(1), the only non-zero exit under the
+    // v5.048 simulator.
+    $display("RESULTS: %0d error(s)", tb_errs);
+    if (tb_errs != 0)
+      $fatal(1, "tb_tage_manual: %0d error(s)", tb_errs);
+    else
+      terminate();
   end
 
   // ----------------------------------------------------------------
@@ -275,6 +285,17 @@ module tb;
   /* verilator lint_off BLKSEQ */
   always #5 clk = ~clk;
   /* verilator lint_on BLKSEQ */
+
+  // Timeout watchdog
+  // BP-096 (TD#111): a DUT that never asserts ready hung make rather
+  // than failing it. Same form as tb_ittage_table.sv: a give-up path
+  // that exits through $fatal(1), never $finish.
+  // Limit: normal completion measured at 1175 time units (117 cycles
+  // at the 10-unit period) in this session. 4x rounded up -> 5000.
+  initial begin
+    #5000;
+    $fatal(1, "tb_tage_manual: TIMEOUT watchdog expired");
+  end
 
   initial cycle_cnt = 0;
   /* verilator lint_off BLKSEQ */
@@ -320,7 +341,12 @@ module tb;
   );
 
   // tage_assert bind: assert_inhibit tied off, always active.
-  bind u_dut tage_assert #(
+  // BP-095: the target was "u_dut", the tb-scope instance name.
+  // The v5.048 simulator accepts that form and silently binds
+  // nothing, so tage_assert was never instantiated in this target.
+  // Binding on the module name "tage" instantiates it, proven by
+  // forcing an assertion to fail and observing exit 1.
+  bind tage tage_assert #(
     .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
   ) u_tage_assert_tb (
     .clk               (clk),

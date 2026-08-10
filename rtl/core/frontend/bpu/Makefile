@@ -883,6 +883,7 @@ cov_tage:
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
 	  $(RTL_DIR)/tage.sv \
+	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_tage/Vtb__main.cpp

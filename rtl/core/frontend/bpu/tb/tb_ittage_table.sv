@@ -123,10 +123,12 @@ module tb;
   );
 
   // Timeout watchdog
+  // BP-095: the watchdog is a give-up path. $finish exits 0 under
+  // the v5.048 simulator, so a hung run reported a passing target.
+  // It now exits through $fatal(1).
   initial begin
     #100000;
-    $display("TIMEOUT: watchdog expired");
-    $finish;
+    $fatal(1, "tb_ittage_table: TIMEOUT watchdog expired");
   end
 
   int pass_cnt, fail_cnt;
@@ -432,8 +434,15 @@ module tb;
     check_w("TC-DUAL pred_tgt_p1[1]",
             64'(pred_tgt_p1[1]), 64'hBB);
 
+    // BP-095: a failing run must exit non-zero. Verilator v5.048
+    // maps $finish(1) onto exit status 0, so the failure exit is
+    // $fatal(1). The clean run keeps $finish.
     $display("PASS: %0d  FAIL: %0d", pass_cnt, fail_cnt);
-    $finish;
+    if (fail_cnt != 0)
+      $fatal(1, "tb_ittage_table: %0d of %0d checks failed",
+             fail_cnt, pass_cnt + fail_cnt);
+    else
+      $finish;
   end
 
 endmodule : tb

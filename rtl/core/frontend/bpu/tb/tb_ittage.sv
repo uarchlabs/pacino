@@ -63,6 +63,17 @@ module tb;
   // ----------------------------------------------------------------
   initial begin clk = 1'b0; forever #5 clk = ~clk; end
 
+  // Timeout watchdog
+  // BP-096 (TD#111): a DUT that never asserts ready hung make rather
+  // than failing it. Same form as tb_ittage_table.sv: a give-up path
+  // that exits through $fatal(1), never $finish.
+  // Limit: normal completion measured at 7415 time units (741 cycles
+  // at the 10-unit period) in this session. 4x rounded up -> 30000.
+  initial begin
+    #30000;
+    $fatal(1, "tb_ittage: TIMEOUT watchdog expired");
+  end
+
   // ----------------------------------------------------------------
   // Monitors -- always_ff reads DUT FF outputs (nba_sequent per
   // CLAUDE.md stl_sequent rule).
@@ -149,24 +160,32 @@ module tb;
   endtask
 
   // wait_prdy: poll pred_rdy_p2[slot], timeout 20 cycles
+  // BP-095: a timeout is a give-up path. It used to print WARN and
+  // let the caller read stale outputs, so the run stayed green. It
+  // now counts as a failure and reaches the $fatal(1) verdict.
   task automatic wait_prdy(input int slot);
     automatic int n = 0;
     @(posedge clk);
     while (!ittage_pred_rdy_p2[slot] && n < 20) begin
       @(posedge clk); n++;
     end
-    if (n >= 20)
-      $display("  WARN: wait_prdy[%0d] timeout", slot);
+    if (n >= 20) begin
+      fail_cnt++;
+      $display("  FAIL wait_prdy[%0d] timeout", slot);
+    end
   endtask
 
   // wait_u1: poll upd_rdy_u1[slot], timeout 20 cycles
+  // BP-095: same treatment as wait_prdy above.
   task automatic wait_u1(input int slot);
     automatic int n = 0;
     while (!ittage_upd_rdy_u1[slot] && n < 20) begin
       @(posedge clk); n++;
     end
-    if (n >= 20)
-      $display("  WARN: wait_u1[%0d] timeout", slot);
+    if (n >= 20) begin
+      fail_cnt++;
+      $display("  FAIL wait_u1[%0d] timeout", slot);
+    end
   endtask
 
   // do_pred: gate on pq_not_full, drive 1-cycle pred on slot
@@ -2373,10 +2392,9 @@ module tb;
         @(posedge clk); tout++;
       end
     end
-    if (!ittage_rdy) begin
-      $display("FATAL: ittage_rdy never asserted");
-      $finish;
-    end
+    // BP-095: give-up path. Must exit non-zero, not $finish.
+    if (!ittage_rdy)
+      $fatal(1, "tb_ittage: ittage_rdy never asserted");
     $display("ittage_rdy asserted -- starting tests");
     repeat(2) @(posedge clk);
 
@@ -2441,12 +2459,19 @@ module tb;
 
     repeat(5) @(posedge clk);
 
-    if (fail_cnt == 0)
+    // BP-095: a failing run must exit non-zero. Verilator v5.048
+    // maps $finish(1) onto exit status 0, so the failure exit is
+    // $fatal(1). The clean run keeps $finish.
+    // $finish is deferred to the end of the time step, so the two
+    // exits must sit in mutually exclusive branches.
+    if (fail_cnt == 0) begin
       $display("PASS: all %0d checks passed", pass_cnt);
-    else
+      $finish;
+    end else begin
       $display("FAIL: %0d passed, %0d failed", pass_cnt, fail_cnt);
-
-    $finish;
+      $fatal(1, "tb_ittage: %0d of %0d checks failed",
+             fail_cnt, pass_cnt + fail_cnt);
+    end
   end
 
 endmodule : tb

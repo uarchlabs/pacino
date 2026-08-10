@@ -92,6 +92,17 @@ module tb;
   always #5 clk = ~clk;
   /* verilator lint_on BLKSEQ */
 
+  // Timeout watchdog
+  // BP-096 (TD#111): a DUT that never asserts ready hung make rather
+  // than failing it. Same form as tb_ittage_table.sv: a give-up path
+  // that exits through $fatal(1), never $finish.
+  // Limit: normal completion measured at 165 time units (16 cycles
+  // at the 10-unit period) in this session. 4x rounded up -> 1000.
+  initial begin
+    #1000;
+    $fatal(1, "tb_tage_tasks: TIMEOUT watchdog expired");
+  end
+
   // ----------------------------------------------------------------
   // Cycle counter
   // ----------------------------------------------------------------
@@ -469,13 +480,19 @@ module tb;
     end
 
     // -- Final pass/fail report
+    // BP-095: a failing run must exit non-zero. Verilator v5.048
+    // maps $finish(1) onto exit status 0, so the failure exit is
+    // $fatal(1). The clean run keeps $finish.
+    // $finish is deferred to the end of the time step, so the two
+    // exits must sit in mutually exclusive branches.
     @(posedge clk);
-    if (total_errors == 0)
+    if (total_errors == 0) begin
       $display("[PASS] TB-001: all tests passed");
-    else
+      $finish;
+    end else begin
       $display("[FAIL] TB-001: %0d error(s)", total_errors);
-
-    $finish;
+      $fatal(1, "tb_tage_tasks: %0d error(s)", total_errors);
+    end
   end
 
 endmodule : tb
