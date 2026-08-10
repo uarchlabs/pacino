@@ -57,7 +57,12 @@ Nothing required
 Replace this with the task ID
 
 ## Context Loaded
-@File-Name replace with any files needed, duplicate as needed or delete
+@File-Name replace with any files needed, duplicate as needed or delete,
+no prose is permitted in this section, only context files
+
+## Context Comments
+Replace with any discussion of the context files, all prose related to
+context should be placed her.
 
 ## Hypothesis
 
@@ -112,3 +117,6 @@ For each test case document:
 
 :: RESULTS:END ::
 
+:: CONTEXT:START ::
+
+:: CONTEXT:END ::

@@ -317,6 +317,23 @@ module tb;
   /* verilator lint_on BLKSEQ */
 
   // ----------------------------------------------------------------
+  // Timeout watchdog (BP-097, TD#111)
+  // ----------------------------------------------------------------
+  // TD#111 was closed at four files. This one was missed: tb_tage had
+  // no GLOBAL watchdog. The tage_rdy spin at line 446 has a local
+  // cycle-count give-up, but a hang anywhere else in the file hung
+  // make rather than failing it. Time-based, not cycle-based, so it
+  // fires even when the hang stops the clock.
+  // Limit: normal completion measured this session at 68000 time
+  // units without +TAGE_FAST_INIT and 7000 with it. The bound must
+  // cover the slower configuration; 500000 is 7.4x that and matches
+  // the #500000 bound tb_ftb, tb_ras and tb_ubtb carry.
+  initial begin
+    #500000;
+    $fatal(1, "tb_tage: TIMEOUT watchdog expired");
+  end
+
+  // ----------------------------------------------------------------
   // Cycle counter (increments on every posedge clk)
   // ----------------------------------------------------------------
   int cycle_cnt;

@@ -1605,6 +1605,7 @@ module tb;
     logic [VA_WIDTH-1:0] pft;
     int                  mismatch_seen;
     int                  match_seen;
+    int                  qstat_bad;
     logic [FTQ_IDX_BITS-1:0] idx_q;
 
     $display("---- GROUP D: p3 and supersession ----");
@@ -1739,11 +1740,20 @@ module tb;
 
     mismatch_seen = 0;
     match_seen    = 0;
+    qstat_bad     = 0;
     idx_q         = 6'h00;
     for (int i = 0; i < 40; i++) begin
       req(40'h00_0300_0000 + VA_WIDTH'(i * 32), idx_q);
       idx_q = idx_q + 6'd1;
       tick();
+      // BP-097. Sampled EVERY cycle of the stream, not once at the
+      // end. No queue in this fixture can fill: the tage and ittage
+      // prediction queues are drained by the cluster every cycle, and
+      // the single standing SC update request is granted by the credit
+      // arbiter, so the SC update queue never backs up. A zero here is
+      // a real failure, not an unknown-value probe.
+      if ({tage_pq_not_full, ittage_pq_not_full, sc_uq_not_full}
+          !== 3'b111) qstat_bad++;
       if (dut.r_val_p2 === 1'b1 && dut.w_tage_pred_rdy_p2[0] === 1'b1)
       begin
         if (dut.w_tage_pred_meta_p2[0].branch_id !== dut.r_idx_p2) begin
@@ -1783,9 +1793,16 @@ module tb;
                match_seen, mismatch_seen);
     end
     // The queue status the FTQ observes must stay legal throughout.
-    chk("D2 queue status readable at the boundary",
-        !$isunknown({tage_pq_not_full, ittage_pq_not_full,
-                     sc_uq_not_full}));
+    //
+    // BP-097. This check was !$isunknown of the three status bits. The
+    // two-state value model this simulator uses cannot produce an
+    // unknown, so $isunknown was constant 0 and the check was counted
+    // but could never fail -- the same defect BP-094 removed from A3,
+    // left behind here. It now asserts the SPECIFIC value each bit
+    // must hold, on every cycle of the D2 stream, and fails if any
+    // cycle reports a full queue. Measured: 3'b111 on all 40 cycles.
+    chk("D2 queue status stayed not-full on every cycle",
+        qstat_bad == 0);
 
     sc_enable = 1'b0;
     $display("---- GROUP D done (pass %0d fail %0d) ----",
@@ -3546,8 +3563,17 @@ module tb;
 
   // Watchdog. $fatal(1) so a hang is a non-zero exit like any other
   // failure.
+  //
+  // BP-097. This was "repeat (200000) @(posedge clk)". A cycle-based
+  // watchdog waits on the very clock a hang can stop, so it cannot
+  // fire in the TD#111 failure shape: measured, with the clock frozen
+  // the run hung indefinitely and make never returned. A time-based
+  // delay is independent of the clock and fires either way. Limit:
+  // normal completion measured at 13000 time units in this session;
+  // 200000 keeps the numeral the cycle form used and matches the
+  // #200000 bound the sc and tage_table testbenches carry.
   initial begin
-    repeat (200000) @(posedge clk);
+    #200000;
     $fatal(1, "tb_bp_cluster: timeout");
   end
 

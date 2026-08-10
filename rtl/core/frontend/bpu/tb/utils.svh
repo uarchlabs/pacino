@@ -64,6 +64,21 @@ task automatic assert_reset(input int n);
   rstn = 1'b1;
 endtask
 
+// -------------------------------------------------------------------
+// CLEAN-PATH EXIT ONLY. Do not call this on a failure path.
+//
+// BP-097. $finish and $finish(1) both produce exit status 0 under the
+// v5.048 simulator, so a failing run that leaves through here reports
+// a PASSING target. $fatal(1) is the only accepted failure exit --
+// see PROJECT_STATUS Open Items row 12.
+//
+// This is an INDIRECT exit: it is invisible to a grep for $finish in
+// the testbench file itself, which is how BP-095 and BP-096 both
+// missed it. The one caller today, tb_tage_manual.sv, calls it in the
+// tb_errs == 0 else-arm only and takes $fatal(1) when tb_errs != 0,
+// so nothing is falsely green. BP-097 inventoried every exit path in
+// the unit and found no other indirect exit and no false green.
+// Any new caller must preserve that split.
 task automatic terminate();
   $finish;
 endtask

@@ -51,6 +51,21 @@ module tb;
   // verilator lint_on BLKSEQ
 
   // ----------------------------------------------------------------
+  // Timeout watchdog (BP-097, TD#111)
+  // ----------------------------------------------------------------
+  // TD#111 was closed at four files; this one was missed.
+  // tb_bp_history had no watchdog at all, so a hang here hung make
+  // rather than failing it. Time-based, not cycle-based, so it fires
+  // even when the hang stops the clock.
+  // Limit: normal completion measured at 15000 time units this
+  // session. 200000 is 13x that and matches the #200000 bound the sc
+  // and tage_table testbenches carry.
+  initial begin
+    #200000;
+    $fatal(1, "tb_bp_history: TIMEOUT watchdog expired");
+  end
+
+  // ----------------------------------------------------------------
   // DUT signals (BP-069 interface: pointer is a module OUTPUT, the
   // testbench drives NO pointer; rollback supplies an index)
   // ----------------------------------------------------------------

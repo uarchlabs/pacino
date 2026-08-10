@@ -7,12 +7,32 @@
 | Field        | Value                        |
 |--------------|------------------------------|
 | Created      | 2026.04.24                   |
-| Last updated | 2026.04.26 (BP-028)          |
+| Last updated | 2026.08.10 (BP-097)          |
 | Baseline     | INFRA-003/INFRA-004          |
-| tage         | 97.2% line/branch            |
-| tage_table   | 90.1% line/branch            |
-| tage_cntrl   | included in tage             |
-| tage_bim     | included in tage             |
+|              | BP-028 figures below were    |
+|              | NOT re-measured after that   |
+|              | task and the metric was      |
+|              | line/branch: tage 97.2%,     |
+|              | tage_table 90.1%.            |
+|              | MEASURED BP-097 with         |
+|              | --coverage-line, per DUT     |
+|              | file, in cov_tage:           |
+| tage.sv      | 137/144   95.1%              |
+| tage_cntrl   | 253/258   98.1%              |
+| tage_bim     | 35/41     85.4%              |
+| tage_table   | 131/172   76.2%              |
+| RTL only     | 556/615   90.4%              |
+|              | In cov_tage_table:           |
+| tage_table   | 155/172   90.1%              |
+|              | Whole-compile: cov_tage      |
+|              | 6418/8700 73.8%,             |
+|              | cov_tage_table 399/502       |
+|              | 79.5%. Both include the      |
+|              | testbench -- 8043 of         |
+|              | cov_tage's 8700 lines are    |
+|              | tb_tage.sv. Quote the        |
+|              | denominator with the         |
+|              | number. See TD#100.          |
 | Target       | 90% line/branch before       |
 |              | bp_cluster integration       |
 

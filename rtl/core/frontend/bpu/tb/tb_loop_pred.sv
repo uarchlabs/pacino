@@ -75,6 +75,21 @@ module tb;
   /* verilator lint_on BLKSEQ */
 
   // ----------------------------------------------------------------
+  // Timeout watchdog (BP-097, TD#111)
+  // ----------------------------------------------------------------
+  // TD#111 was closed at four files; this one was missed. tb_loop_pred
+  // had no watchdog at all, so a DUT that never responds hung make
+  // rather than failing it. Time-based, not cycle-based, so it fires
+  // even when the hang stops the clock.
+  // Limit: normal completion measured at 8000 time units this
+  // session. 200000 is 25x that and matches the #200000 bound the sc
+  // and tage_table testbenches carry.
+  initial begin
+    #200000;
+    $fatal(1, "tb_loop_pred: TIMEOUT watchdog expired");
+  end
+
+  // ----------------------------------------------------------------
   // Index and tag helpers (mirror loop_pred.sv hash functions).
   // Neither takes a slot argument: the slot is not part of the hash,
   // so the same PC selects the same set and tag in every bank.
