@@ -49,6 +49,7 @@ tools/bin/
 tools/include/
 tools/lib/
 tools/share/
+tools/__pycache__/
 
 # local temp copies - optional
 versions/

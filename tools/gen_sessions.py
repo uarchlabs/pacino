@@ -3,7 +3,10 @@
 gen_sessions.py -- parse prompts/*.md and emit docs/sessions.json
 
 Run from the repo root:
-    python3 tools/gen_sessions.py
+    python3 tools/gen_sessions.py [--show-waived] [--no-waivers]
+
+    --show-waived   list warnings suppressed by the WAIVERS table
+    --no-waivers    ignore the WAIVERS table, report every warning
 
 Warnings are printed to stderr. sessions.json is written to docs/.
 """
@@ -63,6 +66,148 @@ class W:
     MISSING_PA_SESSION  = "W019"   # No 'PA session' value in header table
                                    # (row absent, empty, or '???')
     BAD_PA_SESSION      = "W020"   # PA session value is not 3 or 4 digits
+
+# -- Waivers -------------------------------------------------------------------
+#
+# Per-file suppression of a single warning. Edit this table to silence a
+# warning that has been reviewed and accepted. A waived warning is dropped
+# from stderr and from the per-session 'warnings' list in sessions.json,
+# and recorded in a parallel 'waived' list instead, so the audit trail
+# survives. Run with --show-waived to print them.
+#
+#   Key    the .md filename, with or without the extension -- both
+#          'BP-042' and 'BP-042.md' work. The special key '*' applies
+#          to every file.
+#   Value  one of:
+#            a bare code            W.BAD_TASK_ID
+#            a list of codes        [W.BAD_TASK_ID, W.VOICES_MERGED]
+#            a dict code -> reason  {W.BAD_TASK_ID: "why"}
+#          The reason is optional. It is only documentation -- it is
+#          echoed by --show-waived and carried into sessions.json.
+#          The special code '*' waives every warning for that file.
+#
+# Stale entries -- a waiver whose warning no longer fires -- are reported
+# at the end of the run so this table does not rot.
+#
+WAIVERS = {
+  "BP-090" : [W.VOICES_MERGED],
+  "BP-089" : [W.ABANDONED_WITH_PASS],
+  "BP-087" : [W.ABANDONED_WITH_PASS],
+  "BP-086" : [W.EMPTY_ASSESSMENT],
+  "BP-081" : [W.VOICES_MERGED],
+  "BP-079" : [W.VOICES_MERGED],
+  "BP-072" : [W.VOICES_MERGED],
+  "BP-062" : [W.VOICES_MERGED],
+  "BP-033" : [W.ABANDONED_WITH_PASS],
+  "BP-033-FIX-1" : [W.BAD_TASK_ID],
+
+
+    # "BP-033-FIX-1": W.BAD_TASK_ID,
+    # "BP-042":       [W.VOICES_MERGED, W.EMPTY_ASSESSMENT],
+    # "BP-050":       {W.ABANDONED_WITH_PASS: "reviewed 2026-08-17"},
+    # "*":            W.MISSING_PA_SESSION,
+}
+
+# All warning codes defined on W, used to reject typos in WAIVERS.
+VALID_CODES = {v for k, v in vars(W).items() if k.isupper()}
+
+# (waiver_key, code_key) pairs that actually suppressed a warning this run.
+_WAIVERS_USED = set()
+
+# Set by --no-waivers. When true the WAIVERS table is ignored entirely and
+# every warning is reported, so a full audit can be run without editing
+# the table.
+_WAIVERS_DISABLED = False
+
+def norm_waiver_key(key):
+    """
+    Normalise a WAIVERS key to a bare file stem. Both 'BP-090' and
+    'BP-090.md' are accepted; the '*' key passes through unchanged.
+    """
+    key = key.strip()
+    return key[:-3] if key.lower().endswith('.md') else key
+
+def waiver_table():
+    """WAIVERS with its keys normalised to bare file stems."""
+    return {norm_waiver_key(k): v for k, v in WAIVERS.items()}
+
+def normalise_waiver(entry):
+    """
+    Accept any of the three WAIVERS value forms and return a dict of
+    code -> reason. Codes given without a reason map to ''. Returns None
+    when the entry is malformed.
+    """
+    if isinstance(entry, str):
+        return {entry: ''}
+    if isinstance(entry, (list, tuple, set)):
+        if not all(isinstance(c, str) for c in entry):
+            return None
+        return {c: '' for c in entry}
+    if isinstance(entry, dict):
+        return {c: (r or '') for c, r in entry.items()}
+    return None
+
+def waiver_reason(file_stem, code):
+    """
+    Return the waiver reason for (file_stem, code), or None when the
+    warning is not waived. A waiver with no reason returns '' -- which
+    is still a hit, so callers must test 'is not None', not truthiness.
+    Exact file stem wins over the '*' key, exact code over the '*' code.
+    Records the hit so stale waivers can be reported.
+    """
+    if _WAIVERS_DISABLED:
+        return None
+    table = waiver_table()
+    for fkey in (file_stem, '*'):
+        entry = normalise_waiver(table.get(fkey))
+        if not entry:
+            continue
+        for ckey in (code, '*'):
+            if ckey in entry:
+                _WAIVERS_USED.add((fkey, ckey))
+                return entry[ckey]
+    return None
+
+def check_waiver_table():
+    """
+    Validate the WAIVERS table itself -- unknown file stems, unknown
+    warning codes, malformed entries. Returns a list of message strings
+    (empty when the table is clean).
+    """
+    problems = []
+    seen = {}
+    for raw_key in WAIVERS:
+        fkey = norm_waiver_key(raw_key)
+        if fkey in seen:
+            problems.append(
+                f"'{raw_key}' and '{seen[fkey]}' are the same file -- "
+                f"merge them into one entry")
+        seen[fkey] = raw_key
+
+    for fkey, raw in waiver_table().items():
+        if fkey != '*' and not (PROMPTS_DIR / f"{fkey}.md").exists():
+            problems.append(
+                f"'{fkey}' -- no such file {PROMPTS_DIR}/{fkey}.md")
+        entry = normalise_waiver(raw)
+        if entry is None:
+            problems.append(
+                f"'{fkey}' -- value must be a code, a list of codes, "
+                f"or a dict of code -> reason")
+            continue
+        for code in entry:
+            if code != '*' and code not in VALID_CODES:
+                problems.append(
+                    f"'{fkey}' -- unknown warning code '{code}'")
+    return problems
+
+def stale_waivers():
+    """Declared (file_stem, code) waivers that suppressed nothing."""
+    declared = set()
+    for fkey, raw in waiver_table().items():
+        entry = normalise_waiver(raw)
+        if entry:
+            declared.update((fkey, c) for c in entry)
+    return sorted(declared - _WAIVERS_USED)
 
 # -- Task ID parsing -----------------------------------------------------------
 
@@ -374,14 +519,24 @@ def split_discussion_voices(discussion_text):
 def parse_session_file(path):
     """
     Parse a single session .md file.
-    Returns (session_dict, warnings_list).
+    Returns (session_dict, warnings_list, waived_list).
+    Warnings matched by the WAIVERS table go to waived_list instead of
+    warnings_list.
     """
     text     = path.read_text(encoding='utf-8')
     filename = path.stem
     file_str = str(path)
     warnings = []
+    waived   = []
 
     def warn(code, msg):
+        reason = waiver_reason(filename, code)
+        if reason is not None:
+            waived.append({"code":   code,
+                           "file":   file_str,
+                           "msg":    msg,
+                           "reason": reason})
+            return
         warnings.append({"code": code, "file": file_str, "msg": msg})
 
     def wsection(text, start, end, section_name):
@@ -415,6 +570,7 @@ def parse_session_file(path):
         "results_raw":    None,
         "files_modified": [],
         "warnings":       [],
+        "waived":         [],
     }
 
     # -- Marker check ----------------------------------------------------------
@@ -440,7 +596,8 @@ def parse_session_file(path):
                  f"e.g. BP-040")
         session['discussion_raw'] = text
         session['warnings'] = warnings
-        return session, warnings
+        session['waived']   = waived
+        return session, warnings, waived
 
     # -- Header ----------------------------------------------------------------
     # Header uses extract_between (not wsection) -- a missing HEADER:END
@@ -640,7 +797,8 @@ def parse_session_file(path):
         session['files_modified'] = parse_files_modified(results_text)
 
     session['warnings'] = warnings
-    return session, warnings
+    session['waived']   = waived
+    return session, warnings, waived
 
 # -- Cross-file validation -----------------------------------------------------
 
@@ -681,6 +839,17 @@ def sort_key(session):
 # -- Main ----------------------------------------------------------------------
 
 def main():
+    global _WAIVERS_DISABLED
+
+    show_waived = '--show-waived' in sys.argv[1:]
+    _WAIVERS_DISABLED = '--no-waivers' in sys.argv[1:]
+    for arg in sys.argv[1:]:
+        if arg not in ('--show-waived', '--no-waivers'):
+            print(f"ERROR: unknown option '{arg}'. Usage: "
+                  f"gen_sessions.py [--show-waived] [--no-waivers]",
+                  file=sys.stderr)
+            sys.exit(2)
+
     if not PROMPTS_DIR.exists():
         print(
             f"ERROR: '{PROMPTS_DIR}' not found. "
@@ -696,13 +865,24 @@ def main():
             f"WARNING: No .md files found in '{PROMPTS_DIR}'.",
             file=sys.stderr)
 
+    # Validate the waiver table before it is used, so a typo in a code
+    # or a stem does not silently fail to waive anything.
+    table_problems = [] if _WAIVERS_DISABLED else check_waiver_table()
+    if table_problems:
+        print("\nWAIVER TABLE PROBLEMS (WAIVERS in gen_sessions.py):",
+              file=sys.stderr)
+        for msg in table_problems:
+            print(f"    {msg}", file=sys.stderr)
+
     sessions     = []
     all_warnings = []
+    all_waived   = []
 
     for path in md_files:
-        session, file_warns = parse_session_file(path)
+        session, file_warns, file_waived = parse_session_file(path)
         sessions.append(session)
         all_warnings.extend(file_warns)
+        all_waived.extend(file_waived)
 
     # all_warnings.extend(validate_clusters(sessions))
     sessions.sort(key=sort_key)
@@ -726,12 +906,39 @@ def main():
                     file=sys.stderr)
         print(f"\n{'='*64}\n", file=sys.stderr)
 
+    # -- Waived warnings -------------------------------------------------------
+    if all_waived and show_waived:
+        print(f"\n{'='*64}", file=sys.stderr)
+        print(f"  gen_sessions.py -- {len(all_waived)} waived warning(s)",
+              file=sys.stderr)
+        print(f"{'='*64}", file=sys.stderr)
+        by_file = {}
+        for w in all_waived:
+            by_file.setdefault(Path(w['file']).name, []).append(w)
+        for fname in sorted(by_file):
+            print(f"\n  {fname}", file=sys.stderr)
+            for w in by_file[fname]:
+                reason = w['reason'] or '(no reason given)'
+                print(f"    [{w['code']}] WAIVED: {reason}",
+                      file=sys.stderr)
+        print(f"\n{'='*64}\n", file=sys.stderr)
+
+    stale = [] if _WAIVERS_DISABLED else stale_waivers()
+    if stale:
+        print("\nSTALE WAIVERS (nothing to suppress -- delete these "
+              "from WAIVERS in gen_sessions.py):", file=sys.stderr)
+        for fkey, code in stale:
+            print(f"    {fkey} / {code}", file=sys.stderr)
+        print("", file=sys.stderr)
+
     # -- Write JSON ------------------------------------------------------------
     output = {
         "generated":     datetime.now(timezone.utc).isoformat(),
         "session_count": len(sessions),
         "warning_count": len(all_warnings),
         "warnings":      all_warnings,
+        "waived_count":  len(all_waived),
+        "waived":        all_waived,
         "sessions":      sessions,
     }
 
@@ -746,6 +953,12 @@ def main():
         print(
             f"  {len(all_warnings)} warning(s) printed above "
             f"-- fix then re-run.")
+    if _WAIVERS_DISABLED and WAIVERS:
+        print(f"  --no-waivers: {len(WAIVERS)} waiver entr(y/ies) "
+              f"ignored, all warnings reported.")
+    if all_waived:
+        suffix = "" if show_waived else " (--show-waived to list)"
+        print(f"  {len(all_waived)} warning(s) waived{suffix}.")
 
 if __name__ == "__main__":
     main()
