@@ -28,8 +28,8 @@ what it holds for restore.
 ```
 
 Registries stay in `fe_decisions.md` and are NOT duplicated here.
-Front-end invariants are FE-1 through FE-13, technical debt is
-TD-FE-1 through TD-FE-6, and open items are FE-U1 through FE-U9, all
+Front-end invariants are FE-1 through FE-14, technical debt is
+TD-FE-1 through TD-FE-8, and open items are FE-U1 through FE-U9, all
 in `fe_decisions.md` sections 11, 13 and 14. This file cites them by
 number.
 
@@ -56,7 +56,6 @@ from the start.
 `bp_ftq_entry_t` is read every cycle by fetch. The FTQ reads it again
 on redirect, to rewrite the named slot, to re-derive the block
 successor across the slots (fe_decisions.md 2.4), and to present
-checkpoint and the RAS snapshot of the entry being corrected
 the checkpoint and the RAS snapshot of the entry being corrected
 (section 3.2 and fe_decisions.md 9). It is read a third time at
 resolution, for `pc` and the slot's `br_type` (fe_decisions.md 7.2).
@@ -121,10 +120,33 @@ redirect (section 3.2):
 
 ### 3.2 Restore
 
-On redirect the FTQ presents the `ghist_ptr` and `phist_ptr` from the
-checkpoint of the entry being corrected.
+On redirect the FTQ presents the INDEX of the entry being corrected,
+on `ftq_rollback_val` / `ftq_rollback_idx`, and `bp_cluster` restores
+`ghist_ptr` and `phist_ptr` from its own copy of that entry's
+checkpoint.
 
-RAS restoration is discussed in Section 9.
+THIS SECTION PREVIOUSLY SPECIFIED THE VALUE FORM -- the FTQ
+presenting the two pointers themselves. BP-102 settled it as the
+index form and this wording follows. The checkpoint array inside
+bp_history and the checkpoint field of the FTQ entry are written from
+the same p1 allocation and are one to one against an `FTQ_IDX_BITS`
+index, so the index selects the same pointer pair at 7 bits rather
+than 14, and bp_history needs no change. The entry still CARRIES the
+pointer pair (section 2); nothing reads it across this interface.
+
+The index names the entry whose END-of-block pointer state is to be
+restored. On `RC_MISPREDICT` with `bkend_ftq_redir_self` clear that
+is the redirecting entry itself; with `_self` set the naming entry is
+squashed too and the index is the one before it. That derivation is
+the FTQ's work -- `bp_cluster` applies the index it is given and does
+not validate it.
+
+The FTQ arm outranks both of the cluster's own redirect arms
+unconditionally (`ftq_backend_interfaces.md` 8).
+
+RAS restoration is `ras_decisions.md` 4.3 and 4.4, and
+`fe_decisions.md` 9. It is the same pointer restore on every
+redirect cause and needs nothing from this section.
 
 ---
 
@@ -393,6 +415,11 @@ today; this would more than double it.
 
 ### 5.7 The FTB update scheduler (G9 / IC-FTB-09, resolved)
 
+BUILT by BP-100 as `rtl/core/frontend/ftq/rtl/ftq_ftb_sched.sv`,
+the first module of the FTQ unit. The rule below is implemented
+as written; the properties of 5.7.4 are bound to it by module
+name and run in its sim target.
+
 The same class of problem as 5.4 and the reason it sits here: a
 SCALAR predictor port fed by more than one source.
 
@@ -512,11 +539,18 @@ Signal names below are the contract for the unbuilt scheduler.
       (skid_val && skid_wr) |-> skid_issue;
   endproperty
 
-  // P4  An occupied skid always issues, so the older update goes
-  //     first and resolution order is preserved (FE-6).
+  // P4  An occupied skid always issues NEXT, so the older update
+  //     goes first and resolution order is preserved (FE-6).
+  //
+  //     CORRECTED BY BP-100, from |-> to |=>. As first written this
+  //     property and P1 could not both hold in any implementation:
+  //     P1 asserts ftb_upd_valid_u0 with |=>, which requires a
+  //     REGISTERED output, and P4 asserted the same signal with
+  //     |->, which requires a combinational one. The registered
+  //     form was built. The intent is unchanged.
   property p_ftb_skid_first;
     @(posedge clk) disable iff (!rstn)
-      skid_val |-> (ftb_upd_valid_u0 && ftb_upd_from_skid);
+      skid_val |=> (ftb_upd_valid_u0 && ftb_upd_from_skid);
   endproperty
 
   // P5  Resolution is never stalled when every pending FTB update
@@ -527,6 +561,14 @@ Signal names below are the contract for the unbuilt scheduler.
       (n_pend_ftb > 0 && !any_pend_high) |-> (&ftq_bkend_rsv_rdy);
   endproperty
 ```
+
+The signal names above are the scheduler's PORT LIST, not internal
+nets. ftq_ftb_sched carries skid_val, skid_wr, skid_issue, drop_val,
+drop_is_high and the two pending counts as outputs so the bind reads
+only ports and makes no hierarchical reference into the module
+(TD#109). ftq_bkend_rsv_rdy appears on the scheduler as upd_rdy: the
+scheduler owns only the FTB reason for deasserting it, and the FTQ
+ANDs that with its others.
 
 P2 and P5 are the two that carry the design intent. P2 bounds the
 accuracy cost; P5 bounds the throughput cost. P1, P3 and P4 are the
@@ -578,10 +620,10 @@ simulator to measure with.
 
 The three IFU-facing entry fields deferred by
 ftq_ifu_interfaces.md 8 item 3 -- request-issued,
-writeback-received, fault -- are now decidable. request-issued is
-redundant: fetch_ptr already says which entries have been issued.
-The other two are per-entry status and still need adding to
-ftq_entry_formats.md.
+writeback-received, fault -- are now decidable, and were decided.
+request-issued is redundant: fetch_ptr already says which entries
+have been issued. The other two are per-entry status and are
+ftq_entry_formats.md 4, held in flops outside both SRAMs.
 
 ---
 
@@ -593,14 +635,23 @@ Collected for navigation. Each is recorded in `fe_decisions.md` or
 ```
   FE-U7    RESOLVED. Section 5.
   FE-U2    Flush handling. The FTQ side is answered by
-           ftq_backend_interfaces.md 5. The RAS flush behaviour
-           behind D3 there is still TD#96; FTB flush is G24.
+           ftq_backend_interfaces.md 5. The RAS behaviour behind D3
+           is CLOSED -- it is D2 and nothing more,
+           ras_decisions.md 4.4. The flush EVENT and the FTB half
+           are CLOSED too, BP-105: there is no flush event, a
+           flush is a redirect (fe_decisions.md FE-14). TD#96,
+           G24 and IC-FTB-07 all closed.
   FE-U3    bp_ftq_slot_t.confidence has no consumer.
-  TD-FE-1  CLOSED. The IFU interface is ftq_ifu_interfaces.md.
-           Three entry fields it needs -- request-issued,
-           writeback-received, fault -- are NOT yet in
-           ftq_entry_formats.md, because the policy that reads them
-           is FE-U7. See ftq_ifu_interfaces.md 8 item 3.
+  TD-FE-1  CLOSED, in full. The IFU interface is
+           ftq_ifu_interfaces.md; the entry fields it needs are
+           ftq_entry_formats.md 4. Two were added, wb_rcvd and
+           fault; request-issued was rejected as a second encoding
+           of fetch_ptr.
+  TD-FE-8  CLOSED. A predecode writeback in flight when its entry
+           was squashed and its index reallocated set the status
+           bits on the wrong use of that index. One generation bit
+           on the IFU path, toggled per allocation.
+           ftq_entry_formats.md 4.4, ftq_ifu_interfaces.md 6.1.
   TD-FE-2  The slow-path overload is defined and DEFERRED. See
            ftq_entry_formats.md 3.1.
   TD-FE-3  bp_ftq_entry_t.pc and the per-slot target are 40 bits;
@@ -613,9 +664,9 @@ Collected for navigation. Each is recorded in `fe_decisions.md` or
   RESETVEC RESOLVED. bp_defines_pkg::RESET_VECTOR. Section 4.7.
   PREFETCH Instruction prefetch is DEFERRED and the deferral has a
            structural cost. Section 6.1.
-  TD-FE-7  bp_cluster has no history-rollback input, so a backend
-           mispredict cannot restore the GHR and PHR pointers.
-           ftq_backend_interfaces.md 8.
+  TD-FE-7  CLOSED by BP-102. bp_cluster gained ftq_rollback_val
+           and ftq_rollback_idx, with priority over its own p2/p3
+           arms. ftq_backend_interfaces.md 8, section 3.2.
 ```
 
 Next-PC selection was on this list and is now section 4. What
@@ -668,9 +719,114 @@ insurance taken here.
 
 ---
 
-## 7. Document History
+## 7. Module decomposition
+
+The FTQ is SEVERAL MODULES. `ftq.sv` is the top and is PURELY
+STRUCTURAL: instantiation and wiring, no logic of its own, no
+always block, no state. Anything that needs a decision made in it
+belongs in a leaf instead.
+
+### 7.1 The partition rule
+
+EVERY PIECE OF STATE HAS EXACTLY ONE OWNER MODULE. Everything else
+reads it through a port. The partition below is derived from that
+rule and from nothing else, which is why it does not follow the
+section order of this document: two sections that touch the same
+register belong in one module, and one section that owns two
+unrelated registers splits.
 
 ```
+  ftq.sv             structural top, no state, no logic
+  ftq_ptr.sv         alloc_ptr, fetch_ptr           5.1 5.2 5.5
+  ftq_commit.sv      commit_ptr, the commit walk    5.3 5.4
+  ftq_npc.sv         the next-PC register, and the
+                     redirect arbitration that
+                     feeds it                       4
+  ftq_entry.sv       the fast-path array            1 2
+  ftq_meta.sv        the slow-path array            3
+  ftq_status.sv      wb_rcvd, fault, gen            entry_formats 4
+  ftq_shadow.sv      the four-deep response shadow  5.6
+  ftq_ifu.sv         request, flush, writeback,
+                     predecode redirect             ftq_ifu_ifs
+  ftq_resolve.sv     resolution intake and update
+                     fan-out                        backend_ifs 4
+  ftq_ftb_sched.sv   BUILT, BP-100                  5.7
+```
+
+`ftq.sv` does NOT instantiate `bp_cluster`. The BPU is a separate
+unit; a front-end top above both wires them together.
+
+### 7.2 Why the pointers split
+
+`ftq_ptr` owns alloc_ptr and fetch_ptr. `ftq_commit` owns
+commit_ptr. Section 5.1 presents all three together and the
+partition rule splits them anyway, because commit_ptr is the only
+one whose advance is not a local decision: 5.4 rate-limits it to one
+entry per cycle against the scalar RAS commit port, reads
+`bp_ras_snapshot_t` out of the entry to form the commit payload, and
+SUPPRESSES the advance in any cycle a redirect restore fires. That
+is a different job from allocating and issuing.
+
+`ftq_ptr` reads commit_ptr as an input to compute full. One writer,
+one reader, no shared state.
+
+### 7.3 Why redirect arbitration is in ftq_npc
+
+Four redirect sources reach the FTQ -- backend, p2, p3, and
+predecode -- and 4.3 orders them by AGE, not by an axiom. That
+ordering exists to answer one question: what does fetch do next.
+The winner is therefore the next-PC source, and putting the arbiter
+anywhere else would mean exporting the priority result to the module
+that already has to consume it.
+
+`ftq_npc` publishes the winning redirect to `ftq_ptr` for the rewind
+of 5.5 and to `ftq_status` for the masked clear of
+`ftq_entry_formats.md` 4.2 W4. Those two act on it; neither decides
+it.
+
+### 7.4 Why status is not inside ftq_entry
+
+Different storage class. `ftq_entry` is an SRAM read every cycle;
+`ftq_status` is 192 flops with a masked range clear. Keeping them
+apart makes the storage class STRUCTURAL rather than a comment, and
+`ftq_entry_formats.md` 4.1 is the argument for why they cannot share
+one.
+
+---
+
+## 8. Document History
+
+```
+  2026-08-20  TD-FE-8 CLOSED by one generation bit on the IFU
+              path. Section 6 registry updated.
+
+  2026-08-20  Section 7 added: module decomposition. The FTQ is
+              several modules with a purely structural ftq.sv top,
+              partitioned by ONE rule -- every piece of state has
+              exactly one owner. Document History renumbered 7 to
+              8; nothing referenced 7.
+
+  2026-08-20  The last two open entry fields decided and placed
+              in ftq_entry_formats.md 4, closing TD-FE-1 in full.
+              Section 6 registry updated; TD-FE-8 opened for the
+              in-flight writeback race.
+
+  2026-08-20  Section 5.7.4 P4 CORRECTED, |-> to |=>. P1 and P4
+              as written could not both hold in any implementation:
+              one required a registered output and the other a
+              combinational one, on the same signal. Found by
+              building the scheduler (BP-100). 5.7.4 also gains a
+              note that the property signal names are the module's
+              port list, which is what BP-100 delivered.
+
+  2026-08-20  Section 3.2 CORRECTED. It specified the value form,
+              the FTQ presenting ghist_ptr and phist_ptr; BP-102
+              built the index form and closed TD-FE-7, so the FTQ
+              presents ftq_rollback_idx and the cluster reads its own
+              checkpoint copy. The conflict was between this document
+              and fe_decisions.md 13, which had recorded the choice
+              as open; building it settled the choice.
+
   2026-08-19  Created. Sections 4.3, 5 and 6 moved here whole from
               fe_decisions.md; no content changed in the move.
               Numbering: fe_decisions 4.3 -> section 1, 5 ->

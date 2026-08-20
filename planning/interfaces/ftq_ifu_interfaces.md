@@ -12,9 +12,10 @@
 ```
 
 The second of the FTQ's four interfaces. Every port here is NEW:
-neither the FTQ nor the IFU exists in the tree, so nothing in this
-file names a declared port. `rtl/core/frontend/ifu/rtl` holds only a
-.gitkeep.
+no module on either side of it exists, so nothing in this file names
+a declared port. `rtl/core/frontend/ifu/rtl` holds only a .gitkeep.
+The FTQ unit is no longer empty -- BP-100 built ftq_ftb_sched -- but
+that module is on the update path and touches nothing here.
 
 Where this file departs from the XiangShan Kunminghu contract
 translated in `ia_context/background/xs_ifu_ftq.md`, section 9 says
@@ -107,6 +108,7 @@ stage is free and the ICache can take the access.
   ftq_ifu_idx         [FTQ_IDX_BITS-1:0]       NEW
   ftq_ifu_taken_val                            NEW
   ftq_ifu_taken_pos   [FTB_BR_POS_BITS-1:0]    NEW
+  ftq_ifu_gen                                  NEW   TD-FE-8
 ```
 
 `ftq_ifu_start_pc` is `bp_ftq_entry_t.pc`, the block start.
@@ -120,6 +122,11 @@ reading the prediction, and so a prefetcher can walk ahead.
 `ftq_ifu_taken_val` and `ftq_ifu_taken_pos` name the predicted taken
 branch, so the IFU truncates the bundle there and does not present
 instructions after it. Not valid means fetch the whole block.
+
+`ftq_ifu_gen` is an OPAQUE TAG. The IFU stores it with the request
+and returns it unchanged on the writeback; it has no meaning inside
+the IFU and must not be decoded there. It closes TD-FE-8; the rule
+is section 6.1.
 
 `ftq_ifu_idx` accompanies every request and returns on the writeback.
 It is the entry's own index, the same value carried in `branch_id`.
@@ -178,6 +185,7 @@ fetched bytes.
 ```
   ifu_ftq_pdwb_val                                  NEW
   ifu_ftq_pdwb_idx     [FTQ_IDX_BITS-1:0]           NEW
+  ifu_ftq_pdwb_gen                                  NEW   TD-FE-8
   ifu_ftq_pd           ftq_pd_info_t
                          [FTQ_PD_WIDTH-1:0]         NEW
   ifu_ftq_pd_range     [FTQ_PD_WIDTH-1:0]           NEW
@@ -236,6 +244,48 @@ architectural exception travels with the instruction stream to the
 backend, which is where it is taken. The FTQ needs only to know that
 the block ended early so it stops requesting and stops predicting
 past it.
+
+### 6.1 Stale writeback rejection -- TD-FE-8, closed
+
+A writeback in flight when its entry is squashed and its index
+REALLOCATED would otherwise arrive after the new allocation cleared
+the status bits and set them on the wrong use of that index
+(`ftq_entry_formats.md` 4.4).
+
+```
+  X1  The FTQ holds one generation bit per entry, gen[FTQ_DEPTH-1:0],
+      in flops beside wb_rcvd and fault (ftq_entry_formats.md 4).
+  X2  Allocating entry i TOGGLES gen[i]. The fetch request for that
+      entry carries the NEW value on ftq_ifu_gen.
+  X3  A writeback is accepted only if ifu_ftq_pdwb_gen equals
+      gen[ifu_ftq_pdwb_idx]. Otherwise it is DROPPED ENTIRELY: no
+      status bit set, no predecode redirect derived, no field
+      rewritten.
+  X4  The IFU returns the tag unchanged and never decodes it.
+```
+
+A TOGGLE, not the pointer's wrap bit. A rewind can reallocate an
+index WITHIN one wrap, so a wrap-derived generation would not
+discriminate; toggling on every allocation discriminates on any
+reallocation, rewind or wrap.
+
+ONE BIT IS SUFFICIENT, AND THE REASON IS A BOUND, NOT ARITHMETIC. A
+single bit fails if the same index is reallocated TWICE while one
+writeback is still outstanding, because the second toggle restores
+the original value. That cannot happen here: section 5 has the IFU
+discard everything it holds for flushed entries, so the only stale
+writeback that survives a redirect is one already presented in the
+flush cycle, and it arrives immediately -- not after two further
+reallocations of its index.
+
+IF THE IFU FLUSH CONTRACT CHANGES so that a writeback can survive
+arbitrarily long after a flush, this width must be revisited. The
+bound is what makes one bit enough; the encoding does not.
+
+The 5.6 rejection of carried wrap bits does not apply. That was
+rejected for widening FTQ_IDX_BITS at every bp_cluster port and in
+tage_pred_meta_t, sc_pred_meta_t and ittage_pred_meta_t. This bit is
+on the IFU path and touches none of them.
 
 There is NO separate IFU to FTQ redirect port. The FTQ derives the
 redirect from the writeback, exactly as XiangShan does. A second path
@@ -322,12 +372,22 @@ FE-U7 and remains open.
      access, and what that does to ftq_ifu_req_rdy backpressure,
      is an IFU decision this file deliberately does not take.
 
-  3. Entry fields. bp_ftq_entry_t carries no fetch state: no
-     request-issued bit, no writeback-received bit, no fault bit.
-     All three become necessary once this interface is built. They
-     are NOT added to ftq_entry_formats.md yet, because the FTQ
-     allocation and deallocation policy that would read them is
-     still FE-U7.
+  3. Entry fields. RESOLVED, ftq_entry_formats.md 4. FE-U7 is
+     resolved (ftq_decisions.md 5), so the policy that reads them
+     is settled and the fields are decidable.
+
+     TWO of the three were added, not three. wb_rcvd and fault are
+     per-entry status, held in FLOPS outside both SRAMs rather than
+     as members of bp_ftq_entry_t; ftq_entry_formats.md 4.1 gives
+     the reasons, of which the decisive one is that a redirect
+     rewind must clear them for a RANGE of entries in one cycle.
+     request-issued is NOT added: fetch_ptr already says which
+     entries have been issued, and a per-entry bit would be a
+     second encoding of one pointer.
+
+     TD-FE-8 was opened against this interface and is CLOSED by
+     section 6.1: one generation bit, ftq_ifu_gen out and
+     ifu_ftq_pdwb_gen back, toggled per allocation.
 
   4. ifu_ftq_pd is 16 x 6 bits per writeback, 96 bits, plus the
      range vector. Whether the FTQ stores any of it or consumes it
@@ -404,6 +464,15 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 ## 11. Document History
 
 ```
+  2026-08-20  Section 8 item 3 CLOSED: the entry fields are
+              ftq_entry_formats.md 4, two added and one rejected.
+              Section 6.1 added, closing TD-FE-8 with one
+              generation bit -- ftq_ifu_gen out, ifu_ftq_pdwb_gen
+              back, toggled per allocation. One bit is sufficient
+              because the flush of section 5 BOUNDS the number of
+              stale writebacks in flight to one per flush; if that
+              contract changes the width must be revisited.
+
   2026-08-19  Created. Closes TD-FE-1. Fetch request, flush and
               predecode writeback defined against the 32-byte
               prediction block. Departures from the XiangShan

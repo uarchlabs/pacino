@@ -221,6 +221,18 @@ module bp_cluster (
   input  logic                            ras_flush_val,
   input  bp_ras_snapshot_t                ras_flush_snapshot,
 
+  // FTQ-requested history rollback (TD-FE-7). Driven by the FTQ on a
+  // backend redirect, which can restore the RAS through the group
+  // above but had no way to restore the GHR and PHR pointers. The
+  // checkpoint state is already inside bp_history, FTQ_DEPTH deep and
+  // indexed by FTQ index; only the trigger was missing. The index
+  // form rather than the pointer values: the two copies are written
+  // from the same p1 allocation and are one to one, so this selects
+  // the same pair at 7 bits instead of 14 and leaves bp_history
+  // unchanged (ftq_backend_interfaces.md 8).
+  input  logic                            ftq_rollback_val,
+  input  logic [FTQ_IDX_BITS-1:0]         ftq_rollback_idx,
+
   // ---- section 9: history pointer and buffer outputs --------------
   output logic [GHIST_PTR_BITS-1:0]       ghist_ptr,
   output logic [PHIST_PTR_BITS-1:0]       phist_ptr,
@@ -1049,8 +1061,16 @@ module bp_cluster (
     end
   end
 
-  assign w_rollback_valid    = w_any_redir_p2 | w_any_redir_p3;
-  assign w_rollback_ckpt_idx = w_any_redir_p3 ? r_idx_p3 : r_idx_p2;
+  // The FTQ arm outranks both cluster arms unconditionally and
+  // without comparison. A p2 or p3 redirect is a speculative
+  // correction; an FTQ rollback carries an architectural one, so the
+  // stage-order rule of FE-3 does not decide this winner
+  // (ftq_backend_interfaces.md 5). FE-3 still orders p3 over p2
+  // between themselves.
+  assign w_rollback_valid    = ftq_rollback_val
+                             | w_any_redir_p2 | w_any_redir_p3;
+  assign w_rollback_ckpt_idx = ftq_rollback_val ? ftq_rollback_idx
+                             : (w_any_redir_p3 ? r_idx_p3 : r_idx_p2);
 
   // ================================================================
   // SC credit arbiter (bp_arb_spec.md 4.5, 5.5, 6.1)

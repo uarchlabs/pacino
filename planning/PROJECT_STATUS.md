@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-19 (during ia interactive sessions)
+ UPDATED: 2026-08-20 (during ia interactive sessions)
  CONTACT: Jeff Nye
 ```
 
@@ -17,7 +17,7 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
 
-## IA interactive sessions: FTQ definition. Two RTL tasks, four interfaces.
+## IA interactive sessions: FTQ definition. Seven tasks, four interfaces.
 
 The FTQ is specified end to end. Three of its four interfaces are
 written; the fourth is deliberately not.
@@ -25,8 +25,17 @@ written; the fourth is deliberately not.
 ```
   BP-098  INST_OFFSET split -> PC_HASH_SHIFT + POS_OFFSET_BITS
   BP-099  FTB_BR_POS_BITS 3 -> 4, closing an RVA23 C-extension gap
-  BP-100  FTB update scheduler. SPEC ONLY, no RTL written
+  BP-100  FTB update scheduler. BUILT. First FTQ module,
+          first concurrent SVA in the project
   BP-101  pft_addr, the TD-FE-6 slot groups, RESET_VECTOR
+  BP-102  the TD-FE-7 rollback input, closing the FTQ definition
+  BP-103  the last two entry fields, TD-FE-8, and the module
+          decomposition. Specification only, no RTL
+  BP-104  RAS-3 closed. Documentation only, no RTL, no port
+          removed. A label fix, not a decision
+  BP-105  FLUSH CLOSED. FE-14: a flush is a redirect. TD#96, G24,
+          IC-FTB-07, IC-SC-06, IC-SCT-03 all closed by decision.
+          RC_RESERVED -> RC_UNSPEC, defined
 ```
 
 New: ftq_decisions.md, ftq_entry_formats.md, ftq_ifu_interfaces.md,
@@ -42,9 +51,13 @@ drive:
            reached no FTQ-facing port, so update fan-out read
            NO_BRANCH for any block the uBTB missed -- the case
            where training matters most.
-  TD-FE-7  OPEN. bp_cluster has no rollback TRIGGER input. The
-           checkpoints are all inside bp_history; only the index
-           is missing on a backend redirect. Seven bits.
+  TD-FE-7  CLOSED by BP-102. bp_cluster had no rollback TRIGGER
+           input. The checkpoints were all inside bp_history; only
+           the index was missing on a backend redirect. Seven bits,
+           priority over the cluster's own p2/p3 arms, bp_history
+           unchanged. The INDEX form was taken over the pointer-value
+           form; ftq_decisions.md 3.2 had specified the value form
+           and was corrected.
 ```
 
 RULE: a predictor training path must not be able to stall the
@@ -56,7 +69,9 @@ Counts, 47 of 47 green throughout:
 
 ```
   sim_bp_cluster   973 -> 997 (BP-101) -> 1765 (BP-099)
+                       -> 1795 (BP-102)
   sim               28 ->  29 (BP-101)
+  sim_ftq_ftb_sched      67 (BP-100, new unit)
   all others            unchanged
 ```
 
@@ -65,11 +80,70 @@ phase can undo it. Instruction prefetch is functional and PD cannot:
 it needs the FTQ run-ahead, which the IFU is behind by construction
 (ftq_decisions.md 6.1).
 
-CLOSED: TD-FE-1, TD-FE-2, TD-FE-6, FE-U2, FE-U7, G9, G23,
-IC-FTB-09, RESETVEC.
-NEW: TD-FE-7, FE-5a, FE-13, IC-FTB-16, PREFETCH.
+CLOSED: TD-FE-1 (in full), TD-FE-2, TD-FE-6, TD-FE-7, FE-U2,
+FE-U7, G9, G23, IC-FTB-09, RESETVEC.
+NEW: FE-5a, FE-13, IC-FTB-16, PREFETCH.
+TD-FE-8 opened and closed the same day; counted in neither list.
 
-Next free BP number is BP-102. Next free INFRA number is INFRA-013.
+TD-FE-7 was opened and closed within this series: opened by writing
+ftq_backend_interfaces.md, closed by BP-102 one session later.
+
+BP-100 found a THIRD defect, in the specification rather than the
+RTL: properties P1 and P4 of ftq_decisions.md 5.7.4 could not both
+hold in any implementation, one requiring a registered output and
+the other a combinational one on the same signal. P4 corrected.
+
+The last two open FTQ entry fields are decided:
+ftq_entry_formats.md 4 adds wb_rcvd and fault as FLOP vectors
+outside both SRAMs, and rejects request-issued as a second encoding
+of fetch_ptr. TD-FE-1 is closed in full. TD-FE-8 opened and CLOSED the same day:
+a predecode writeback in flight when its entry is squashed set
+status on the wrong use of that index, and the 5.6 shadow cannot
+cover it because IFU latency is unbounded. Fixed with one generation
+bit on the IFU path, toggled per allocation; one bit suffices only
+because the IFU flush bounds stale writebacks to one per flush.
+
+FTQ MODULE DECOMPOSITION DECIDED, ftq_decisions.md 7. Eleven
+modules, ftq.sv purely structural, partitioned by one rule: every
+piece of state has exactly one owner module. ftq_ftb_sched is the
+first of the eleven and is built.
+
+All three are BP-103, written retrospectively: the work was done
+interactively and the task file captures it afterwards. The file
+says so in its header.
+
+FTQ RTL IS UNBLOCKED. What remains open blocks finishing, not
+starting: nothing. BP-105 closed the last of it.
+
+FLUSH IS CLOSED, FE-14: there is no flush event. A flush is a
+redirect, and a predictor is cleared by withholding its stage valid
+rather than by being told. XiangShan corroborates -- no predictor
+there has a flush port at all. TD#96, G24 and IC-FTB-07 close by
+DECISION, not by writing a protocol. The _px and ras_flush_* ports
+are redundant and retained.
+
+RC_RESERVED renamed RC_UNSPEC and defined: the redirect that names
+no instruction, for reset and debug entry. ftq_backend_interfaces.md
+5.1.
+
+RAS-3 / the RAS half of flush is CLOSED by BP-104,
+ras_decisions.md 4.4, which had specified it since session-050 while
+the registry label said OPEN. A flush restores the RAS by the same pointer restore as any
+redirect: ras_restore_val, built and tested. The unread ras_flush_*
+ports are redundant and are intentionally left in place. 4.4.2
+records why this kept being re-raised, so it stops.
+
+RULE: a task's Status checkbox is not evidence that it ran. BP-100
+carried Status: complete while its own Summary read NOT RUN, its
+Date and Model fields were empty and no RTL existed. Its
+requirement 0 now checks the TREE before writing anything, and
+stops on a partial state rather than overwriting it.
+
+The IA handoff for this session is
+ia_context/ia_handoffs/ia_session_handoff-005.md. It is NOT in the
+PA read set; its section 8 lists what wants PA attention.
+
+Next free BP number is BP-106. Next free INFRA number is INFRA-013.
 
 ---
 
@@ -899,12 +973,13 @@ it only documented current behavior.
 |    |           | <pred>_redir_* names are not read as ports. Sections     |
 |    |           | 9/10 remain stubs.                                       |
 | 95 | tage      | CLOSED BP-081 (session-060).                             |
-| 96 | bpc       | Flush operation has scattered mention across documents.  |
-|    |           | Define flush behavior, implement it, and update all      |
-|    |           | references. bp_cluster passes ftb_flush_px and the RAS   |
-|    |           | flush group straight through with no flush behaviour of  |
-|    |           | its own. G24 is the FTB half. NOT exercised by           |
-|    |           | tb_bp_cluster.                                           |
+| 96 | bpc       | CLOSED BP-105. THERE IS NO FLUSH EVENT. A flush is a     |
+|    |           | redirect: fe_decisions.md FE-14. A predictor is cleared  |
+|    |           | by withholding its stage valid, which bp_cluster already |
+|    |           | does. Corroborated by XiangShan, which has no flush port |
+|    |           | on any predictor. The _px and ras_flush_* ports are      |
+|    |           | REDUNDANT and retained; read ras_decisions.md 4.4.2      |
+|    |           | before re-raising this.                                  |
 | 97 | bp_arb    | To determine whether a shared upstream PQ broadcasting   |
 |    |           | to all predictor PQs is implemented. Deferred.           |
 | 98 | sc_cntrl  | sc_cntrl shared scalar state under dual-slot update.     |
@@ -1129,7 +1204,9 @@ it only documented current behavior.
 |     |                                       | 5.7: slot 0 first into |
 |     |                                       | a one-deep skid, with  |
 |     |                                       | resolution backpressure|
-|     |                                       | bounding it.           |
+|     |                                       | bounding it. BUILT as  |
+|     |                                       | ftq_ftb_sched, BP-100. |
+|     |                                       | Both halves done.      |
 | G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation. |
 |     |                                       | The metadata write path|
 |     |                                       | exists and is verified |
@@ -1173,14 +1250,20 @@ it only documented current behavior.
 | G22 | One-cycle folded output invalid       | RESOLVED session-054.  |
 |     | window after rollback                 | Folds STALE not        |
 |     |                                       | invalid.               |
-| G23 | Checkpoint slot reclaim protocol      | TBD at FTQ impl.       |
-|     |                                       | (= bp_history HI5)     |
-| G24 | FTB flush protocol (ftb_flush_px)     | TBD. The port passes   |
-|     |                                       | straight to ftb.sv; no |
-|     |                                       | flush behaviour at the |
-|     |                                       | cluster and none       |
-|     |                                       | exercised by           |
-|     |                                       | tb_bp_cluster. TD#96.  |
+| G23 | Checkpoint slot reclaim protocol      | RESOLVED. The          |
+|     | (= bp_history HI5)                    | checkpoint is a FIELD  |
+|     |                                       | of the FTQ entry, so   |
+|     |                                       | it is reclaimed with   |
+|     |                                       | the entry at commit.   |
+|     |                                       | No separate protocol.  |
+|     |                                       | ftq_decisions.md 5.8.  |
+| G24 | FTB flush protocol (ftb_flush_px)     | CLOSED BP-105 by       |
+|     |                                       | decision: no flush     |
+|     |                                       | event exists, FE-14.   |
+|     |                                       | ftb_cntrl's existing   |
+|     |                                       | output gate is         |
+|     |                                       | RATIFIED as harmless.  |
+|     |                                       | Port never driven.     |
 | G25 | FTB fast-path enable source           | TBD. ftb_fastpath_en   |
 |     | (ftb_fastpath_en: CSR / tie /         | is a cluster input and |
 |     | runtime)                              | passes through.        |
@@ -1419,11 +1502,15 @@ unless noted.
   +278 per group.
 - Known state at the boundary:
     - The nine metadata outputs have no consumer in this
-      repository: the FTQ is not built.
+      repository. The FTQ unit now holds one module,
+      ftq_ftb_sched (BP-100), but it is on the update path and
+      reads none of them. Still true as written.
     - ftb_fastpath_p2 has no consumer (G25).
     - ubtb_pred_t.carry and .conf have no consumer (G18, FE-U3).
     - ftb_flush_px and the RAS flush group pass through
-      untested (G24, TD#96).
+      untested. CLOSED BP-105: both are REDUNDANT, not
+      unfinished. No flush event exists (FE-14), so there is
+      nothing to test. Ports retained.
 
 ### TAGE decomposition
 - Session-060 (BP-081): tage RECONCILED and GREEN.
@@ -1466,9 +1553,11 @@ unless noted.
 
 ### FTB decomposition
 - RTL available and verified (session-053). sim_ftb 99/0.
-- Deferred to bp_cluster: flush (IC-FTB-07 / G24, still not
-  exercised), conf x TAGE meta (FTB-2 / G10), update
-  arbitration (FTB-3 / IC-FTB-09 / G9), ftb_fastpath_en
+- Deferred to bp_cluster: flush (IC-FTB-07 / G24) CLOSED BP-105,
+  no flush event exists (FE-14); update arbitration
+  (FTB-3 / IC-FTB-09 / G9) RESOLVED and built as ftq_ftb_sched
+  (BP-100); conf x TAGE meta (FTB-2 / G10) still open;
+  ftb_fastpath_en
   source (G25).
 - SC-facing additions deferred: TD#89 branch PC[15:6], TD#90
   per-slot backwards-branch sign.

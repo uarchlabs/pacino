@@ -467,10 +467,12 @@ On rstn deassert (active low, synchronous):
 
 | ID     | Item                                  | Status             |
 |--------|---------------------------------------|--------------------|
-| RI-1   | Flush port behavior. ras_flush_val    | Tracks RAS-3 in    |
-|        | and ras_flush_snapshot reserved.      | ras_decisions.md   |
-|        | Behavior undefined until flush        | section 4.4.       |
-|        | protocol specified.                   |                    |
+| RI-1   | Flush port behavior. CLOSED. The RAS  | ras_decisions.md   |
+|        | response to a flush is the pointer    | 4.4. Do not        |
+|        | restore of 4.3, built as              | reopen from the    |
+|        | ras_restore_val. ras_flush_val and    | unread ports;      |
+|        | ras_flush_snapshot are redundant and  | see 4.4.2.         |
+|        | intentionally left unread.            |                    |
 | RI-2   | s/p stage notation inconsistency.     | Future doc         |
 |        | Planning docs use s0-s3; RTL uses     | cleanup task.      |
 |        | p0-p3. This document uses p-notation  | RTL is             |

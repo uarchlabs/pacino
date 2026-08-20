@@ -634,6 +634,36 @@ package bp_structs_pkg;
     logic [LP_WAY_BITS-1:0]  lp_victim;       // allocation target way
   } lp_upd_t;
 
+  // ------------------------------------------------------------------
+  // ftb_upd_t: the FTB update payload as one struct (BP-100).
+  //
+  // The cluster boundary declares these same 14 fields FLAT, with no
+  // slot dimension and no ready (ftq_bpu_interfaces.md 8). The FTQ
+  // has two update channels and the FTB has one port, so
+  // ftq_ftb_sched carries two of these and flattens the winner back
+  // onto the cluster's flat group. The flat ports are NOT replaced:
+  // this struct exists so the scheduler can move a whole update as
+  // one object, which the flat form cannot express.
+  //
+  // ftb_upd_valid_u0 is NOT a member. Validity qualifies a channel,
+  // not a payload, and the scheduler carries it per channel.
+  typedef struct packed {
+    logic [VA_WIDTH-1:0]        pc;         // fetch PC of the block
+    logic                       hit;        // FTB hit at predict time
+    logic [FTB_WAY_BITS-1:0]    way;        // way that hit, or victim
+    logic                       is_br;      // carries a conditional
+    logic                       br_idx;     // which conditional field
+    logic                       taken;      // resolved direction
+    logic [VA_WIDTH-1:0]        target;     // resolved branch target
+    logic [FTB_BR_POS_BITS-1:0] pos;        // in-block position
+    logic                       is_jmp;     // carries the jump field
+    logic [VA_WIDTH-1:0]        jmp_target; // resolved jump target
+    logic                       is_call;    // jump is a call
+    logic                       is_ret;     // jump is a return
+    logic                       is_jalr;    // jump is indirect
+    logic [VA_WIDTH-1:0]        pft_addr;   // block fall-through
+  } ftb_upd_t;
+
 endpackage : bp_structs_pkg
 
 `endif // BP_STRUCTS_PKG_SV

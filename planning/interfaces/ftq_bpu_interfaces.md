@@ -647,7 +647,10 @@ corrected:
 ```
 
 RAS flush ports `ras_flush_val` and `ras_flush_snapshot` are
-declared. Flush behavior is TD#96.
+declared and READ BY NOTHING. They are redundant with the restore
+group above, which is the RAS response to a flush and to every other
+redirect (`ras_decisions.md` 4.4, CLOSED). Their presence is not an
+open design question; see 4.4.2 before raising one.
 
 ---
 
@@ -686,15 +689,46 @@ Checkpoint write, at allocation:
   ckpt_wr_idx  [FTQ_IDX_BITS-1:0]     FTQ index
 ```
 
-Rollback, on redirect:
+Rollback, on redirect. These are bp_history's own ports, inside the
+cluster:
 
 ```
   rollback_valid
   rollback_ckpt_idx  [FTQ_IDX_BITS-1:0]
 ```
 
-Driven from the derived redirect. When both stages redirect in the
-same cycle the p3 index wins, matching the supersession rule.
+Driven from the derived redirect and from the FTQ. When both stages
+redirect in the same cycle the p3 index wins, matching the
+supersession rule.
+
+At the CLUSTER BOUNDARY the FTQ drives the rollback directly
+(TD-FE-7, added by BP-102):
+
+```
+  ftq_rollback_val
+  ftq_rollback_idx   [FTQ_IDX_BITS-1:0]
+```
+
+```
+  w_rollback_valid    = ftq_rollback_val
+                      | w_any_redir_p2 | w_any_redir_p3;
+  w_rollback_ckpt_idx = ftq_rollback_val ? ftq_rollback_idx
+                      : (w_any_redir_p3 ? r_idx_p3 : r_idx_p2);
+```
+
+The FTQ arm outranks both cluster arms unconditionally: an
+architectural correction outranks a speculative one, so FE-3 does
+not decide this winner. FE-3 still orders p3 over p2 between
+themselves. The FTQ presents the INDEX of the entry whose
+end-of-block pointer state is to be restored, not the pointer values
+(ftq_decisions.md 3.2, ftq_backend_interfaces.md 8).
+
+A rollback SUPPRESSES the checkpoint write in the same cycle:
+bp_history writes the checkpoint from its normal-update branch,
+which the rollback branch replaces. An FTQ rollback landing in the
+same cycle as a p1 allocation therefore drops that allocation's
+checkpoint write, which is consistent -- the redirect discards that
+block anyway.
 
 Outputs:
 
@@ -857,6 +891,14 @@ match it and to match this specification.
               redirect fires. Section 7.4 was describing a path no
               port provided; it is now buildable. Item 16 closed,
               item 17 opened and deferred (TD-FE-6, TD-FE-2).
+
+  2026-08-20  Section 9 gains the CLUSTER BOUNDARY rollback group,
+              ftq_rollback_val / ftq_rollback_idx, added by BP-102
+              and closing TD-FE-7. The priority rule and the
+              same-cycle checkpoint-write suppression are recorded
+              with it. The ports already listed in section 9 were
+              bp_history's own, inside the cluster; that is now
+              stated rather than implied.
 
   2026-08-19  Section 4 records that the FTQ stores the p1
               fall-through in bp_ftq_entry_t.pft_addr; section 10

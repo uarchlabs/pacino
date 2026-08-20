@@ -390,6 +390,8 @@ There is no separate entry-format document (sc_decisions.md section
 | IC-SCT-02| get_br_imli_idx not yet defined.        | TBD.           |
 |          | Referenced by sc_brimli idx_hash_p2.    | sc_table_      |
 |          | Definition in sc_table_hash_rules.md.    | hash_rules.md  |
-| IC-SCT-03| Flush port definitions (_px signals)    | TBD. TD #96.   |
-|          | not yet defined.                        |                |
+| IC-SCT-03| Flush port definitions (_px signals).   | CLOSED BP-105. |
+|          | NO FLUSH EVENT EXISTS: a flush is a     | fe_decisions   |
+|          | redirect. sc_table needs no flush port  | FE-14.         |
+|          | and none is added.                      |                |
 

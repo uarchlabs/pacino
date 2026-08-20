@@ -259,16 +259,74 @@ only. Subsequent pushes and pops write into slots above the
 restored TOSR, which may overwrite stale speculative data from
 the wrong path. This is correct behavior.
 
-### 4.4  Restore on flush
+### 4.4  Restore on flush -- DECIDED, RAS-3 CLOSED
 
-Flush (_px signals) not yet defined. When flush is specified,
-RAS restore on flush must follow the same pointer-restore
-protocol as mispredict recovery. The FTQ snapshot of the
-youngest valid entry before the flush point provides the
-restore state.
+THIS SECTION IS THE SINGLE SOURCE FOR THE RAS RESPONSE TO A FLUSH.
+Every other document points here. Do not restate it elsewhere and do
+not re-derive it.
 
-OPEN ITEM RAS-3: revisit when flush protocol is defined.
-See bp_arb_spec.md section 11 item G.
+THE DECISION. RAS restore on flush is the same pointer-restore
+protocol as mispredict recovery, section 4.3: TOSR, TOSW and BOS are
+restored from the FTQ snapshot of the youngest valid entry before the
+flush point. The circular data is not cleared. There is NO
+flush-specific RAS behaviour, no separate flush protocol, and nothing
+for a flush to do to the RAS that a redirect does not already do.
+
+THE MECHANISM IS BUILT AND TESTED. It is `ras_restore_val` /
+`ras_restore_snapshot`, D2 of ftq_backend_interfaces.md 5, wired
+through bp_cluster and implemented in ras.sv: the three pointers are
+restored under `restore > commit > hold` priority, and tb_ras drives
+it. This is not a plan. It is working RTL with coverage.
+
+A backend redirect carries mispredict, trap and replay on ONE port
+set (ftq_backend_interfaces.md 5), so the trap case reaches the RAS
+through the same restore as any other redirect. That is why no
+additional path is needed.
+
+Even the residual case is bounded. Speculative RAS corruption is
+self-correcting from both ends: TOSR unwinds toward BOS as the
+program returns, and on a pop when TOSR == BOS the prediction falls
+through to the commit stack (section 3.2), which is architectural
+state; and BOS advances toward TOSR on every commit (section 3.3).
+Corruption is squeezed, not merely drained.
+
+### 4.4.1  What is still open, and what it is not
+
+NOTHING. BP-105 closed the last piece: THERE IS NO FLUSH EVENT. A
+flush is a redirect (fe_decisions.md FE-14), the front end has no
+separate flush protocol, and a predictor is cleared by withholding
+its stage valid rather than by being told anything.
+
+This subsection previously said the `_px` signalling was an open
+front-end-wide question tracked as G24 / IC-FTB-07. Both are now
+closed by decision. The `_px` ports are redundant and retained.
+
+So the RAS response to a flush is the pointer restore of 4.3,
+because a flush IS a redirect and that is what a redirect does.
+
+### 4.4.2  Do not reopen this -- read this first
+
+RAS-3 was carried as OPEN from session-050 to 2026-08-20 while this
+section already specified the answer. It was re-raised repeatedly.
+Three artifacts caused that, and all three are still present by
+design:
+
+- `ras_flush_val` and `ras_flush_snapshot` are DECLARED ON ras.sv AND
+  READ BY NOTHING. They are redundant with the restore group above.
+  They are deliberately LEFT IN PLACE; removing them is not worth
+  touching a green module for. A DECLARED PORT WITH NO BEHAVIOUR IS
+  NOT EVIDENCE OF AN OPEN DESIGN QUESTION. Here it is evidence of a
+  redundant port, and that is all.
+- This section previously OPENED with "Flush (_px signals) not yet
+  defined", so a reader met the gap before the decision and stopped
+  there. The decision now comes first.
+- The registry entry said "Recovery on flush. OPEN" while this
+  section said what recovery on flush is. The registry contradicted
+  the section it pointed to.
+
+If you have arrived here because something looked unfinished: it is
+not. The RAS half of flush is closed. If you are defining the flush
+EVENT, see 4.4.1 -- that work does not touch this section.
 
 ### 4.5  Commit
 
@@ -460,9 +518,15 @@ Commit stack pointer width:
   RAS-2: Stack depth. RESOLVED session-050.
          16 speculative + 32 commit. See section 3.
 
-  RAS-3: Recovery on flush. OPEN. Flush (_px signals) not
-         yet defined. Revisit when flush protocol is specified.
-         See section 4.4.
+  RAS-3: Recovery on flush. CLOSED 2026-08-20 -- and it was
+         ALREADY ANSWERED by section 4.4 long before that date;
+         only this label said otherwise. The RAS response to a
+         flush is the pointer restore of 4.3, which is built and
+         tested as ras_restore_val. BP-105 then closed the flush
+         EVENT too: there is none, a flush is a redirect
+         (fe_decisions.md FE-14). See 4.4.1.
+         Do not re-raise from the unread ras_flush_* ports; see
+         4.4.2.
 
 ---
 

@@ -167,6 +167,9 @@ module tb;
   logic                ras_flush_val;
   bp_ras_snapshot_t    ras_flush_snapshot;
 
+  logic                     ftq_rollback_val;
+  logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx;
+
   logic [GHIST_PTR_BITS-1:0] ghist_ptr;
   logic [PHIST_PTR_BITS-1:0] phist_ptr;
   logic [GHIST_PTR_BITS-1:0] ckpt_ghist_ptr;
@@ -260,6 +263,8 @@ module tb;
     .ras_commit_snapshot   (ras_commit_snapshot),
     .ras_flush_val         (ras_flush_val),
     .ras_flush_snapshot    (ras_flush_snapshot),
+    .ftq_rollback_val      (ftq_rollback_val),
+    .ftq_rollback_idx      (ftq_rollback_idx),
     .ghist_ptr             (ghist_ptr),
     .phist_ptr             (phist_ptr),
     .ckpt_ghist_ptr        (ckpt_ghist_ptr),
@@ -505,6 +510,8 @@ module tb;
     ras_commit_snapshot   = '0;
     ras_flush_val         = 1'b0;
     ras_flush_snapshot    = '0;
+    ftq_rollback_val      = 1'b0;
+    ftq_rollback_idx      = '0;
     tage_enable_aging     = 1'b0;
     tage_aging_interval   = 32'd0;
     ittage_enable_aging   = 1'b0;
@@ -2689,6 +2696,279 @@ module tb;
              pass_cnt, fail_cnt);
   endtask
 
+  // The TAGE tagged tables live in bw_ram, which has no reset, and
+  // do_reset() does NOT clear them (unlike ittage_clear_all above).
+  // Any group placed after G or H therefore inherits their
+  // allocations. Group J needs a TAGE direction it controls, so it
+  // clears all four tagged tables the same way. A tagged entry hits
+  // only when its VAL bit is set (tage_table.sv 360, 488), so zero
+  // is a clean invalidate. Tables are unrolled because a
+  // hierarchical reference needs a constant instance index.
+  task automatic tage_clear_all();
+    for (int b = 0; b < 2; b++) begin
+      for (int i = 0; i < (1 << (TAGE_TBL_IDX[1] - 1)); i++) begin
+        dut.u_tage.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+      end
+    end
+  endtask
+
+  // Group J reset: do_reset() plus the TAGE clear, so the group
+  // starts from a state established by reset and a known driven
+  // sequence rather than from whatever G, H and I left behind.
+  task automatic j_reset();
+    do_reset();
+    tage_clear_all();
+    tage_bim_fill(2'b00);
+    sc_enable = 1'b0;
+  endtask
+
+  // Allocate one FTQ entry carrying nbr conditional branches, in a
+  // way that cannot raise a redirect at either p2 or p3, so the
+  // checkpoint sequence group J builds is not disturbed while it is
+  // being built. Both the FTB branch target and the FTB block end
+  // are the fall-through, so the p2 successor is that one address
+  // whichever direction the predictors pick, and the uBTB block end
+  // is the same address, so p1 agrees with it (the I1 construction).
+  // The pointer still advances by nbr: bp_cluster counts VALID p1
+  // slots into num_branches, taken or not.
+  task automatic j_alloc(input logic [VA_WIDTH-1:0] pc,
+                         input logic [FTQ_IDX_BITS-1:0] idx,
+                         input int nbr);
+    ubtb_entry_t         e;
+    logic [VA_WIDTH-1:0] base;
+    logic [VA_WIDTH-1:0] pft;
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pft, 4'd1, pft, 1'b0);
+    e       = '0;
+    e.br0   = mk_cond(1'b1, 4'd1, pft, base, 1'b0);
+    if (nbr > 1) begin
+      e.br1 = mk_cond(1'b1, 4'd2, pft, base, 1'b0);
+    end
+    e.pft   = ub_pft_field(pft, base);
+    e.carry = ub_pft_carry(pft, base);
+    ubtb_install(pc, e);
+    lp_clear_both(pc);
+    req(pc, idx);
+    tick();
+    norq();
+    tick();
+  endtask
+
+  // =================================================================
+  // GROUP J -- FTQ-requested history rollback, TD-FE-7
+  // =================================================================
+  task automatic group_j();
+    ubtb_entry_t               e;
+    logic [VA_WIDTH-1:0]       pc;
+    logic [VA_WIDTH-1:0]       base;
+    logic [VA_WIDTH-1:0]       pft;
+    logic [GHIST_PTR_BITS-1:0] g_before;
+    logic [GHIST_PTR_BITS-1:0] c_ref;
+
+    $display("---- GROUP J: FTQ history rollback, TD-FE-7 ----");
+
+    // -- J1. The rollback the cluster could not previously be asked
+    //    for: no p2 redirect, no p3 redirect, the FTQ alone. Three
+    //    entries are allocated with DIFFERENT branch counts so their
+    //    checkpoints hold three different pointer values and naming
+    //    the wrong one fails.
+    j_reset();
+    j_alloc(40'h00_0900_0000, 6'h10, 2);
+    j_alloc(40'h00_0910_0000, 6'h11, 1);
+    j_alloc(40'h00_0920_0000, 6'h12, 2);
+
+    chk("J1 the three checkpoints hold three different values",
+        (dut.u_bp_history.ckpt_gptr[6'h10] !==
+         dut.u_bp_history.ckpt_gptr[6'h11]) &&
+        (dut.u_bp_history.ckpt_gptr[6'h11] !==
+         dut.u_bp_history.ckpt_gptr[6'h12]));
+    chk("J1 setup raised no p2 redirect",
+        dut.w_any_redir_p2 === 1'b0);
+    chk("J1 setup raised no p3 redirect",
+        dut.w_any_redir_p3 === 1'b0);
+    chk("J1 the rollback is idle before the FTQ asks",
+        dut.w_rollback_valid === 1'b0);
+
+    g_before         = ghist_ptr;
+    ftq_rollback_val = 1'b1;
+    ftq_rollback_idx = 6'h10;
+    #1;
+    chk("J1 the FTQ alone raises the rollback",
+        dut.w_rollback_valid === 1'b1);
+    chk("J1 the rollback index is the FTQ index",
+        dut.w_rollback_ckpt_idx === 6'h10);
+    tick();
+    ftq_rollback_val = 1'b0;
+    chk("J1 ghist restored from the named checkpoint",
+        ghist_ptr === dut.u_bp_history.ckpt_gptr[6'h10]);
+    chk("J1 phist restored from the named checkpoint",
+        phist_ptr === dut.u_bp_history.ckpt_pptr[6'h10]);
+    chk("J1 the pointer genuinely moved",
+        ghist_ptr !== g_before);
+
+    // -- J2. Priority over a p2 redirect, then the same construction
+    //    with the FTQ input dropped, which must hand the mux back to
+    //    the cluster. The A and B halves differ in one input only.
+    //
+    //    The p2 redirect is raised by a STALE uBTB BLOCK END: the
+    //    uBTB ends the block early while the FTB ends it at the true
+    //    fall-through. The FTB branch target is the fall-through too,
+    //    so the p2 successor is the same address whichever direction
+    //    the predictors pick and the redirect does not depend on
+    //    TAGE at all.
+    j_reset();
+    j_alloc(40'h00_0930_0000, 6'h0A, 2);      // reference checkpoint
+    c_ref = dut.u_bp_history.ckpt_gptr[6'h0A];
+
+    pc   = 40'h00_0940_0000;
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pft, 4'd1, pft, 1'b0);
+    e       = '0;
+    e.br0   = mk_cond(1'b1, 4'd1, pft, base, 1'b0);
+    e.pft   = ub_pft_field(base + 40'h0C, base);   // stale block end
+    e.carry = ub_pft_carry(base + 40'h0C, base);
+    ubtb_install(pc, e);
+    lp_clear_both(pc);
+    req(pc, 6'h3C);
+    tick();
+    req(pc, 6'h1C);                 // a DIFFERENT index behind it
+    tick();
+    norq();
+
+    chk("J2 a p2 redirect is present", dut.w_any_redir_p2 === 1'b1);
+    chk("J2 no p3 redirect this cycle",
+        dut.w_any_redir_p3 === 1'b0);
+    chk("J2 the FTQ index differs from the p2 index",
+        dut.r_idx_p2 !== 6'h0A);
+    chk("J2 the two checkpoints differ, so the choice is visible",
+        dut.u_bp_history.ckpt_gptr[6'h0A] !==
+        dut.u_bp_history.ckpt_gptr[dut.r_idx_p2]);
+
+    ftq_rollback_val = 1'b1;
+    ftq_rollback_idx = 6'h0A;
+    #1;
+    chk("J2a the FTQ index wins over the p2 index",
+        dut.w_rollback_ckpt_idx === 6'h0A);
+    ftq_rollback_val = 1'b0;
+    #1;
+    chk("J2b dropping the FTQ input returns the p2 index",
+        dut.w_rollback_ckpt_idx === dut.r_idx_p2);
+    chk("J2b the cluster still raises the rollback on its own",
+        dut.w_rollback_valid === 1'b1);
+
+    // -- J3. Priority over the p2/p3 same-cycle tie, which FE-3
+    //    resolves in favour of p3. The FTQ input outranks the winner
+    //    of that rule, not merely the loser. Two consecutive
+    //    requests on one block put the first at p3 raising an SC
+    //    direction change and the second at p2 raising the stale
+    //    block end, so the tie is reached with distinct indices
+    //    (the BP-094 construction used by E2a).
+    j_reset();
+    j_alloc(40'h00_0950_0000, 6'h0B, 2);      // reference checkpoint
+
+    tage_bim_fill(2'b11);           // TAGE taken
+    sc_fill(6'b100000);             // SC reverses it at p3
+    sc_enable = 1'b1;
+
+    pc   = 40'h00_0960_0000;
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+                   1'b0);
+    e       = '0;
+    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
+    e.pft   = ub_pft_field(base + 40'h0C, base);   // stale block end
+    e.carry = ub_pft_carry(base + 40'h0C, base);
+    ubtb_install(pc, e);
+    lp_clear_both(pc);
+    req(pc, 6'h3A);
+    tick();
+    req(pc, 6'h3B);
+    tick();
+    norq();
+    tick();                         // 0x3A at p3, 0x3B at p2
+
+    chk("J3 a p2 redirect is present", dut.w_any_redir_p2 === 1'b1);
+    chk("J3 a p3 redirect is present", dut.w_any_redir_p3 === 1'b1);
+    chk("J3 the two stage indices are distinct",
+        dut.r_idx_p2 !== dut.r_idx_p3);
+    chk("J3 the FTQ index differs from both stage indices",
+        (dut.r_idx_p2 !== 6'h0B) && (dut.r_idx_p3 !== 6'h0B));
+    chk("J3 the FTQ checkpoint differs from the p3 checkpoint",
+        dut.u_bp_history.ckpt_gptr[6'h0B] !==
+        dut.u_bp_history.ckpt_gptr[dut.r_idx_p3]);
+
+    ftq_rollback_val = 1'b1;
+    ftq_rollback_idx = 6'h0B;
+    #1;
+    chk("J3a the FTQ index wins over the p3 tie winner",
+        dut.w_rollback_ckpt_idx === 6'h0B);
+    ftq_rollback_val = 1'b0;
+    #1;
+    chk("J3b dropping the FTQ input returns the p3 index",
+        dut.w_rollback_ckpt_idx === dut.r_idx_p3);
+
+    ftq_rollback_val = 1'b1;
+    ftq_rollback_idx = 6'h0B;
+    tick();
+    ftq_rollback_val = 1'b0;
+    sc_enable        = 1'b0;
+    chk("J3 ghist restored from the FTQ checkpoint, not the p3 one",
+        ghist_ptr === dut.u_bp_history.ckpt_gptr[6'h0B]);
+
+    // -- J4. What the FTQ may assume about a rollback that lands in
+    //    the same cycle as an allocation. bp_history writes the
+    //    checkpoint from its normal-update branch, which a rollback
+    //    replaces, so the write is SUPPRESSED. Here entry 0x0A is
+    //    re-requested while the FTQ rolls back to 0x0B: the
+    //    checkpoint write is asked for and does not happen, and the
+    //    pointer takes the rollback value instead. E1 is the
+    //    contrast case, where the same request does write it.
+    j_reset();
+    j_alloc(40'h00_0970_0000, 6'h0A, 2);
+    j_alloc(40'h00_0980_0000, 6'h0B, 1);
+    j_alloc(40'h00_0990_0000, 6'h0C, 2);
+    c_ref = dut.u_bp_history.ckpt_gptr[6'h0A];
+
+    chk("J4 the live pointer has moved past the 0x0A checkpoint",
+        ghist_ptr !== c_ref);
+
+    //    ckpt_wr_en is r_val_p1, a REGISTERED valid, so it rises one
+    //    tick after the request is presented. The rollback is
+    //    asserted in that cycle, the cycle whose posedge would carry
+    //    out the checkpoint write.
+    req(40'h00_0970_0000, 6'h0A);   // re-request the same entry
+    tick();
+    norq();
+    ftq_rollback_val = 1'b1;
+    ftq_rollback_idx = 6'h0B;
+    #1;
+    chk("J4 the checkpoint write is requested",
+        dut.w_ckpt_wr_en === 1'b1);
+    chk("J4 it names the re-requested entry",
+        dut.w_ckpt_wr_idx === 6'h0A);
+    chk("J4 the rollback is asserted in the same cycle",
+        dut.w_rollback_valid === 1'b1);
+    tick();
+    ftq_rollback_val = 1'b0;
+    chk("J4 the checkpoint write was suppressed",
+        dut.u_bp_history.ckpt_gptr[6'h0A] === c_ref);
+    chk("J4 the pointer took the rollback value instead",
+        ghist_ptr === dut.u_bp_history.ckpt_gptr[6'h0B]);
+
+    $display("---- GROUP J done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
   // =================================================================
   // FTQ model -- the testbench acts as the FTQ for groups G and H
   // =================================================================
@@ -3727,6 +4007,7 @@ module tb;
     group_g();
     group_h();
     group_i();
+    group_j();
 
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

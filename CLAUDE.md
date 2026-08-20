@@ -235,6 +235,15 @@ important. It must be defines first then structs
 
 ---
 
+## Guidance during interactive sessions
+
+- Before raising a topic the user did not ask about, check whether it is 
+  already closed. If it is, do not raise it. If you think a closed item is 
+  wrong, say so in one sentence and wait — do not re-argue it.
+
+- Do not use unnecessary jargon, and picturesque phrasing, "That was an excuse wearing a diagnosis costume." That is one example of many, not the entire example set.
+
+ 
 ## Current Scope
 
 Updated at the start of each experiment session. See the experiment

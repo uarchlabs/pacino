@@ -608,7 +608,9 @@ speculative state is confirmed.
 
 #### Open items
 
-  Flush behavior will be added later. See TD #96.
+  Flush behavior: the RAS half is CLOSED, ras_decisions.md 4.4.
+  The flush EVENT is CLOSED too, BP-105: there is none. A flush is
+  a redirect, fe_decisions.md FE-14. TD #96 is closed.
 
 ## 8. Prediction Request Distribution
 
@@ -669,14 +671,23 @@ task file, not here.
 
   E. Flush protocol interaction.
 
-     This is TD# 96
+     CLOSED, BP-105. There is no flush event to interact with: a
+     flush is a redirect (fe_decisions.md FE-14). The queues need
+     no flush behaviour, and the OLD analysis below is CORRECT and
+     is already how the design works without one -- a redirect
+     clears stage valids, so PQ entries are naturally discarded,
+     while the update path is not gated by the redirect at all and
+     UQ entries simply proceed.
+
+     Corroborated by XiangShan: its predictors take `update`
+     independently of the redirect path and no queue is flushed,
+     because nothing flushes them.
 
      OLD: _px signals not yet defined.  On flush:
        PQ entries: discardable (speculative).
        UQ entries: must not be discarded (post-commit).
        In-flight competing-stage transaction: if PRED,
          discard result.  If UPD, must complete.
-     Revisit when flush is specified.
 
   F. LP response stage.
      CLOSED. The LP completes at p1. Its output is pred_p1 and it
@@ -691,8 +702,13 @@ task file, not here.
      RAS-1 (push timing): PARTIALLY RESOLVED session-050.
        Push at p2 gated on FTB branch type.
        See ras_decisions.md section 7.
-     RAS-3 (flush recovery): OPEN. Pending flush protocol.
-       See ras_decisions.md section 4.4.
+     RAS-3 (flush recovery): CLOSED 2026-08-20, and answered by
+       ras_decisions.md 4.4 well before that date -- only the
+       label said otherwise. The RAS response to a flush is the
+       pointer restore of 4.3, built and tested as
+       ras_restore_val. BP-105 then closed the flush EVENT as
+       well: there is none (fe_decisions.md FE-14). Do not re-raise from the
+       unread ras_flush_* ports (4.4.2).
 
   H. FTB, LP, SC, ITTAGE parameter values.
      All marked TBD.  Assign before each module's

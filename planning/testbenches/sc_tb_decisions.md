@@ -158,7 +158,9 @@ THIS_TABLE-range assert (unreachable for a valid instantiation).
 ## Deferred
 
 - sc_brimli (ST4) testbench: separate task.
-- Flush (_px) behavior: TD #96, not defined.
+- Flush (_px) behavior: CLOSED BP-105, nothing to test. There is
+  no flush event; a flush is a redirect (fe_decisions.md FE-14).
+  sc has no flush port.
 - sc.sv-level sram_init sequencing and sc_ready: tested at the
   sc.sv task, not here.
 

@@ -448,7 +448,9 @@ one RAS operation therefore occurs per block, and one snapshot covers
 it. The cluster enforces this by gating p2 RAS operations on
 reachability across slots (FE-11).
 
-RAS flush behavior is open; see TD #96.
+RAS flush behavior is CLOSED: a flush restores the RAS by the same
+pointer restore as any redirect (ras_decisions.md 4.4). There is no
+flush event at all -- FE-14. TD #96, G24 and IC-FTB-07 are closed.
 
 ---
 
@@ -544,6 +546,27 @@ Proposed numbering. Stated here for the first time; not carried from
   FE-12  No predictor declares a redirect port. Redirects exist only
          as cluster-derived, stage-named groups (section 3.1).
 
+  FE-14  A FLUSH IS A REDIRECT. The front end has no flush event
+         distinct from a redirect and no flush protocol. Clearing a
+         predictor is done by WITHHOLDING ITS STAGE VALID, not by
+         asserting a flush: a stage whose valid is low does not
+         advance, so nothing downstream of it acts. bp_cluster
+         already works this way -- w_any_redir_p2 / w_any_redir_p3
+         and the FTQ arm of BP-102 clear the stage valids, and no
+         predictor is told anything.
+
+         Corroborated by XiangShan, which has NO flush port on ANY
+         predictor: BasePredictorIO carries s0_fire..s3_fire,
+         s2_redirect, s3_redirect, update and redirect, and nothing
+         else. BPU.scala 383 derives its stage flushes from
+         redirect_req.valid and they never leave the BPU.
+
+         CONSEQUENCE. ftb_flush_px and ras_flush_val/_snapshot are
+         redundant. They are LEFT IN PLACE, unread or nearly so,
+         and are not evidence of unfinished work. See
+         ras_decisions.md 4.4.2 for the RAS half and
+         ftb_interfaces.md 2.6 for the FTB half.
+
   FE-13  The cluster publishes its view of every slot on every
          prediction, at p2 and again at p3, not only when a redirect
          fires. A redirect says fetch must be resteered; the slot
@@ -621,6 +644,50 @@ ubtb.sv.
            writeback is the third correction of a slot, after the p2
            and p3 slot correction groups.
 
+           The three entry fields it left open are now decided:
+           ftq_entry_formats.md 4 adds wb_rcvd and fault as flop
+           vectors outside both SRAMs, and rejects request-issued
+           as a second encoding of fetch_ptr. Nothing of TD-FE-1
+           remains.
+
+  TD-FE-8  CLOSED. A predecode writeback in flight when its entry
+           is squashed and its index reallocated arrived after the
+           new allocation cleared the status bits, and set them on
+           the WRONG use of that index.
+
+           ftq_decisions.md 5.6 solves the same problem for cluster
+           responses with a four-deep in-flight shadow, and that
+           mechanism does not transfer: it works because the
+           cluster's stage registers advance unconditionally, so
+           the shadow shifts in lockstep. IFU latency is neither
+           fixed nor bounded -- an ICache miss makes it arbitrary
+           -- so there is no stage count to shadow.
+
+           ftq_ifu_interfaces.md 5 has the IFU discard what it
+           holds for flushed entries, which covers everything
+           except a writeback already presented in the flush cycle.
+           Whether that race is real depends on the IFU's flush
+           timing, which is not specified.
+
+           THE FIX, as taken: one generation bit, ftq_ifu_gen out
+           with the request and ifu_ftq_pdwb_gen back on the
+           writeback, TOGGLED on each allocation, held in a third
+           flop vector beside wb_rcvd and fault. A writeback whose
+           tag does not match is dropped entirely.
+
+           A toggle rather than the pointer's wrap bit: a rewind can
+           reallocate an index within one wrap, where a wrap-derived
+           value does not discriminate. ONE bit is sufficient
+           because the IFU flush BOUNDS the stale writebacks in
+           flight to one per flush, not because of the encoding --
+           if that contract changes the width must be revisited.
+
+           The 5.6 rejection of carried wrap bits does not apply --
+           it was rejected for widening FTQ_IDX_BITS at every
+           bp_cluster port and in three predictor metadata structs,
+           and the IFU path touches none of those.
+           ftq_entry_formats.md 4.4, ftq_ifu_interfaces.md 6.1.
+
   TD-FE-2  CLOSED. bp_ftq_meta_t field overloading. Resolved in
            ftq_entry_formats.md 3.1: a two-arm packed union, u.cond
            holding
@@ -659,34 +726,48 @@ ubtb.sv.
 
            To be merged into the project tech debt list.
 
-  TD-FE-7  bp_cluster derives its bp_history rollback entirely from
-           its own p2 and p3 redirects (bp_cluster.sv 944-945) and
-           declares no input by which the FTQ can request one. The
-RAS can be restored on a backend mispredict, because
+  TD-FE-7  CLOSED by BP-102. bp_cluster derived its bp_history
+           rollback entirely from its own p2 and p3 redirects and
+           declared no input by which the FTQ could request one. The
+           RAS could be restored on a backend mispredict, because
            ras_restore_val is an input, but the history rollback
-           cannot be triggered at all.
+           could not be triggered at all.
 
-           THE STATE IS NOT MISSING. bp_history.sv holds the full
+           THE STATE WAS NOT MISSING. bp_history.sv holds the full
            checkpoint array, ckpt_gptr and ckpt_pptr of FTQ_DEPTH
            entries indexed by FTQ index, and rolls back by reading
-           it. Every checkpoint the machine needs is already inside
-           the cluster. What is missing is the TRIGGER: for a p2 or
-           p3 redirect the cluster knows the index from its own
+           it. Every checkpoint the machine needs was already inside
+           the cluster. What was missing was the TRIGGER: for a p2
+           or p3 redirect the cluster knows the index from its own
            stage registers, but for a backend redirect the index is
-           known only to the FTQ and no port carries it in.
+           known only to the FTQ and no port carried it in.
 
-           The fix is two input ports, ftq_rollback_val and
+           The fix, as built: two input ports, ftq_rollback_val and
            ftq_rollback_idx -- seven bits, a valid and an index, no
            history data -- ORed into the existing rollback with
            priority over the cluster's own, since an architectural
-           correction outranks a speculative one. Whether the FTQ
-           instead presents the pointer VALUES from its entry is an
-           implementation choice to settle when this is built; the
-           index form is cheaper and matches the cluster's internal
-           path. Blocks
-           ftq_backend_interfaces.md section 5 D1. Same class as
-           TD-FE-6 and found the same way, by writing down what the
-           FTQ would have to drive.
+           correction outranks a speculative one. bp_history is
+           unchanged.
+
+           THE INDEX FORM WAS TAKEN, and the alternative is now
+           closed. The two copies of a checkpoint -- the array
+           inside bp_history and the field in the FTQ entry -- are
+           written from the same p1 allocation and are one to one
+           against an FTQ_IDX_BITS index, so presenting the index
+           selects the same pointer pair the values would have, at
+           7 bits rather than 14, and leaves bp_history untouched.
+           ftq_decisions.md 3.2 was worded for the value form and
+           was corrected to match.
+
+           The FTQ arm is a flat override, NOT a new level in the
+           FE-3 stage order. FE-3 orders speculative corrections
+           among themselves; an architectural correction is not a
+           later stage, it is a different kind of thing. FE-3 still
+           orders p3 over p2 between themselves.
+
+           Unblocks ftq_backend_interfaces.md section 5 D1. Same
+           class as TD-FE-6 and found the same way, by writing down
+           what the FTQ would have to drive.
 
   TD-FE-6  CLOSED. bp_ftq_slot_t.br_type and .pos held the p1 uBTB
            values for the entry's whole life. bp_cluster formed the
@@ -735,9 +816,17 @@ RAS can be restored on a backend mispredict, because
   FE-U2  CLOSED for the FTQ side, 2026-08-19. A backend mispredict
          flush reaches the FTQ on the redirect group of
          ftq_backend_interfaces.md section 5, which serves
-         mispredict, trap and replay from one port set. The RAS
-         flush behaviour behind D3 there remains TD #96, and FTB
-         flush remains G24.
+         mispredict, trap and replay from one port set.
+
+         The RAS behaviour behind D3 is CLOSED TOO, 2026-08-20, and
+         was answered by ras_decisions.md 4.4 long before that: a
+         flush restores the RAS by the same pointer restore as any
+         redirect, which is D2 and is built. The unread
+         ras_flush_* ports are redundant, not unfinished (4.4.2).
+
+         NOTHING REMAINS. BP-105 closed the flush EVENT and the
+         FTB half by decision: there is no flush event, a flush is
+         a redirect, FE-14. TD #96, G24 and IC-FTB-07 all closed.
 
   FE-U3  bp_ftq_slot_t.confidence, 4 bits. bp_cluster.md marks the
          purpose TBD and FTQ_CONF_BITS a placeholder. Nothing in
@@ -887,6 +976,26 @@ RAS can be restored on a backend mispredict, because
               slow path 35,456b, FTQ 49,664b. tb_bp_cluster group I,
               24 checks, sim_bp_cluster 973 -> 997, all 47 targets
               green in this session.
+
+  2026-08-20  TD-FE-8 CLOSED, one generation bit on the IFU path,
+              toggled per allocation. FTQ module decomposition
+              recorded in ftq_decisions.md 7: several modules, a
+              purely structural ftq.sv top, partitioned by the rule
+              that every piece of state has exactly one owner.
+
+  2026-08-20  TD-FE-1 closed in full: its three deferred entry
+              fields decided in ftq_entry_formats.md 4, two added
+              as flop vectors and one rejected. TD-FE-8 opened for
+              the in-flight predecode writeback race.
+
+  2026-08-20  TD-FE-7 CLOSED by BP-102. bp_cluster gains
+              ftq_rollback_val and ftq_rollback_idx with priority
+              over its own p2/p3 arms; bp_history unchanged. The
+              index form was taken over the pointer-value form and
+              ftq_decisions.md 3.2, which was written for the value
+              form, was corrected. tb_bp_cluster group J, 30 checks,
+              sim_bp_cluster 1765 -> 1795, all 47 targets green in
+              that session.
 
   2026-08-19  ftq_backend_interfaces.md written: resolution,
               redirect and commit. FE-U2 closed for the FTQ side.

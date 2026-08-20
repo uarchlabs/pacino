@@ -391,6 +391,8 @@ conditional branches.
 |          | section 0). Whether the SC module         |                 |
 |          | internally qualifies on `sc_enable` is    |                 |
 |          | left to the implementing task.            |                 |
-| IC-SC-06 | Flush port definitions (`_px signals`)    | TBD. TD #96.    |
-|          | not yet defined.                          |                 |
+| IC-SC-06 | Flush port definitions (`_px signals`).   | CLOSED BP-105.  |
+|          | NO FLUSH EVENT EXISTS: a flush is a       | fe_decisions    |
+|          | redirect. sc needs no flush port and      | FE-14.          |
+|          | none is added.                            |                 |
 

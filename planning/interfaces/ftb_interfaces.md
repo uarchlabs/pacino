@@ -256,10 +256,17 @@ There is no last_may_be_rvi_call port. The bit was eliminated
 ### 2.6 Flush input
 
   input  logic                  ftb_flush_px
-                        -- flush. Protocol TBD at bp_cluster
-                           integration (IC-FTB-07). On flush,
-                           prediction outputs clear. Update-queue
-                           drain behavior is owned by the FTQ.
+                        -- flush. REDUNDANT, and retained rather
+                           than removed. A flush is a redirect
+                           (fe_decisions.md FE-14); the FTB is
+                           cleared by withholding its stage valid,
+                           which bp_cluster already does. The port
+                           is not driven. ftb_cntrl.sv gates the
+                           combinational prediction outputs while
+                           it is asserted; that behaviour is
+                           RATIFIED as harmless and is not a flush
+                           protocol. Update-queue drain is owned by
+                           the FTQ and is not a flush question.
 
 ---
 
@@ -350,8 +357,10 @@ init -- there is no sram_init for the FTB.
   val_way           -- [FTB_WAYS-1:0]        one-hot way (mirrors
                        ftb_array wr_way)
   val_set           -- 1 = set the selected way's valid (allocate);
-                       0 = clear it (reserved for flush, deferred,
-                       IC-FTB-07)
+                       0 = clear it. Reserved. NOT a flush
+                       mechanism: there is no flush event
+                       (fe_decisions.md FE-14, IC-FTB-07 closed).
+                       Retained for invalidate-on-allocate use.
 
   -- PLRU write port (synchronous): replace a set's tree-PLRU state
   plru_we_n         -- active low; 0 = PLRU write this cycle
@@ -406,9 +415,16 @@ IC-FTB-06 (session-053):
   and tb_ftb. (Replaces the former INIT < SUPPRESS_THRESH invariant;
   there is no threshold.)
 
-IC-FTB-07 (open):
-  Flush protocol (ftb_flush_px). Port reserved; behavior TBD at
-  bp_cluster integration. Do not implement flush logic until specified.
+IC-FTB-07 (CLOSED, BP-105):
+  Flush protocol (ftb_flush_px). CLOSED BY DECISION, not by writing a
+  protocol: there is no flush event to define. A flush is a redirect
+  (fe_decisions.md FE-14). The port is redundant and retained.
+
+  This item previously read "Do not implement flush logic until
+  specified" while ftb_cntrl.sv already gated prediction outputs on
+  ftb_flush_px. The document and the tree disagreed. Resolved by
+  RATIFYING the existing gate: it is harmless, the port is never
+  driven, and removing it would touch a green module for no gain.
 
 IC-FTB-08 (resolved, session-052; reconciled session-053):
   Field widths ruled (ftb_decisions.md 8). FTB_BR_POS_BITS = 3,
@@ -563,10 +579,11 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
   FTB_RAM_ENTRY_WIDTH = 105 / FTB_RAM_SET_WIDTH = 420   (ftb_array data)
 
 ftb_array uses the FTB_RAM_* widths; ftb_plru holds the valid bit per
-way and the PLRU state. All FTB field widths are settled; the only open
-items are the flush protocol (IC-FTB-07) and the update-channel
-arbitration / read-port sharing (IC-FTB-09), both deferred to
-bp_cluster.
+way and the PLRU state. All FTB field widths are settled.
+IC-FTB-07, the flush protocol, is CLOSED by decision -- no flush
+event exists, FE-14. IC-FTB-09, update-channel arbitration, is
+resolved by ftq_decisions.md 5.7 and built as ftq_ftb_sched
+(BP-100).
 
 FETCH_BLOCK_BYTES = 64 is a global / fetch-unit parameter, already in
 the package. It is NOT an FTB parameter. The FTB prediction block is

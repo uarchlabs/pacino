@@ -161,7 +161,7 @@ been squashed; see section 7 rule R3.
     RC_MISPREDICT = 2'b00, // branch resolved against prediction
     RC_TRAP       = 2'b01, // exception or interrupt
     RC_REPLAY     = 2'b10, // pipeline replay, memory ordering
-    RC_RESERVED   = 2'b11
+    RC_UNSPEC     = 2'b11  // no naming instruction; see below
   } ftq_redir_cause_e;
 ```
 
@@ -185,22 +185,33 @@ The FTQ's response:
 
 ```
   D1  restore the history pointers from the checkpoint held in the
-      entry named by _idx (ftq_decisions.md 3.2), and drive the
-      bp_cluster rollback input. THAT INPUT DOES NOT EXIST; see
-      section 8, TD-FE-7.
+      entry named by _idx (ftq_decisions.md 3.2) by driving
+      ftq_rollback_val / ftq_rollback_idx on bp_cluster. The FTQ
+      presents the INDEX; the cluster reads its own copy of that
+      entry's checkpoint. Added by BP-102; see section 8.
   D2  restore the RAS from bp_ras_snapshot_t in that entry, on
       ras_restore_val / ras_restore_snapshot, which do exist.
-  D3  on RC_TRAP, additionally drive the RAS flush group
-      ras_flush_val / ras_flush_snapshot. Those ports exist,
-      pass straight through bp_cluster, and have never been
-      exercised. Behaviour is TD#96 / G24 and is NOT settled here.
+  D3  NOTHING ADDITIONAL FOR THE RAS. D2 is the whole of it on
+      every cause, RC_TRAP included: this group carries mispredict,
+      trap and replay on one port set, so a trap restores the RAS
+      through the same path as any other redirect
+      (ras_decisions.md 4.4).
+      The ras_flush_val / ras_flush_snapshot ports exist, pass
+      through bp_cluster and are read by nothing. They are
+      REDUNDANT with D2, not unfinished. Do not drive them and do
+      not re-open the question from their presence
+      (ras_decisions.md 4.4.2).
   D4  free every squashed entry and restart allocation at the
       corrected stream.
   D5  drive the IFU flush group of ftq_ifu_interfaces.md 5.
 ```
 
-The history restore is the same on all three causes. A trap does not
-un-execute the branches that already resolved in the naming block, so
+D1, D2 and D4 apply to RC_MISPREDICT, RC_TRAP and RC_REPLAY. They
+are SKIPPED on RC_UNSPEC, which names no entry to repair from; see
+5.1.
+
+The history restore is the same on all three instruction-naming
+causes. A trap does not un-execute the branches that already resolved in the naming block, so
 the checkpoint of the entry being corrected is the right state to
 resume from, and the trap vector is then fetched against it.
 
@@ -210,6 +221,40 @@ speculative corrections; this is architectural fact. This is the one
 place the stage-order rule of FE-3 does not decide the winner, and it
 is why the backend group is separate rather than folded into
 `bp_redirect_t`.
+
+### 5.1 RC_UNSPEC -- the flush with no naming instruction
+
+Was `RC_RESERVED`. DEFINED BY BP-105 rather than left spare, because
+it is the one redirect shape the other three causes cannot express.
+
+`RC_MISPREDICT`, `RC_TRAP` and `RC_REPLAY` all name an instruction,
+so `_idx` and `_pos` locate it and `_self` says whether it survives.
+Some events that must restart fetch name NO instruction the FTQ
+tracks: reset and debug-mode entry, and any future external agent
+that forces a refetch.
+
+```
+  U1  `_idx` and `_pos` are MEANINGLESS and must not be read.
+  U2  `_self` is meaningless and must not be read. RC_UNSPEC is
+      unconditional: there is no naming instruction to keep.
+  U3  The FTQ squashes EVERY entry, not entries after an index,
+      and restarts allocation at `_pc`.
+  U4  `_pc` is the next fetch address, as for every other cause.
+      It is the only field RC_UNSPEC carries meaning in.
+  U5  NO history or RAS restore is performed. There is no entry to
+      restore from. Both structures are self-correcting from the
+      committed state, so the correct behaviour is to squash and
+      refetch, not to repair.
+```
+
+U5 is the substantive difference from D1 and D2. Every other cause
+repairs from an entry snapshot; this one has no snapshot and does
+not need one.
+
+A CSR write or a fence that changes translation is NOT this cause.
+Those are instructions, they name an entry, and they redirect after
+themselves -- `RC_REPLAY` with `_self` clear. RC_UNSPEC is only for
+events outside the instruction stream.
 
 ---
 
@@ -283,28 +328,46 @@ cycle where section 5 D2 fires.
 
 ---
 
-## 8. What bp_cluster still lacks -- TD-FE-7
+## 8. The bp_cluster rollback input -- TD-FE-7, CLOSED
 
-`bp_cluster.sv` lines 944-945 derive the bp_history rollback entirely
-from its OWN p2 and p3 redirects:
+Until BP-102, `bp_cluster.sv` derived the bp_history rollback
+entirely from its OWN p2 and p3 redirects and offered no input by
+which the FTQ could request one. Section 5 D1 could not be built: a
+backend mispredict could restore the RAS, because `ras_restore_val`
+is an input, but NOT the GHR and PHR pointers. Every branch
+predicted after a backend mispredict would have indexed on history
+from the squashed path.
+
+BP-102 added the two inputs and gave them priority:
 
 ```
-  assign w_rollback_valid    = w_any_redir_p2 | w_any_redir_p3;
-  assign w_rollback_ckpt_idx = w_any_redir_p3 ? r_idx_p3 : r_idx_p2;
+  input logic                     ftq_rollback_val
+  input logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx
+
+  w_rollback_valid    = ftq_rollback_val
+                      | w_any_redir_p2 | w_any_redir_p3;
+  w_rollback_ckpt_idx = ftq_rollback_val ? ftq_rollback_idx
+                      : (w_any_redir_p3 ? r_idx_p3 : r_idx_p2);
 ```
 
-There is no input port by which the FTQ can request a rollback. So
-section 5 D1 cannot be built: a backend mispredict can restore the
-RAS, because `ras_restore_val` is an input, but CANNOT restore the
-GHR and PHR pointers. Every branch predicted after a backend
-mispredict would index on history from the squashed path.
+The FTQ arm outranks both cluster arms unconditionally and without
+comparison: an architectural correction outranks a speculative one.
+FE-3 still orders p3 over p2 between themselves.
 
-The fix is two input ports, `ftq_rollback_val` and
-`ftq_rollback_idx`, ORed into the existing rollback with priority
-over the cluster's own: an architectural correction outranks a
-speculative one. Recorded as TD-FE-7 in `fe_decisions.md` 13.
+THE INDEX FORM, not the pointer values. The checkpoint array inside
+bp_history and the checkpoint field of the FTQ entry are written
+from the same p1 allocation and are one to one against an
+`FTQ_IDX_BITS` index, so the index selects the same pair at 7 bits
+rather than 14 and bp_history needs no change at all.
 
-This is the same class of defect as TD-FE-6 and was found the same
+The FTQ presents the index of the entry whose END-of-block pointer
+state is to be restored, which is what the cluster's own arms do
+with `r_idx_p2` / `r_idx_p3`. Deriving that index from
+`bkend_ftq_redir_idx` and `bkend_ftq_redir_self` is the FTQ's work.
+The cluster does not validate the index against any queue state and
+cannot: it does not read the FTQ.
+
+This was the same class of defect as TD-FE-6 and was found the same
 way, by writing down what the FTQ would have to drive.
 
 ---
@@ -327,7 +390,10 @@ they were waiting on.
          update port with no slot dimension. The FTQ needs the
          scheduler; this interface fixes its input rate at two.
   FE-U2  Flush handling. Section 5 is the answer for the FTQ side.
-         The RAS flush behaviour behind D3 remains TD#96.
+         The RAS behaviour behind D3 is CLOSED, ras_decisions.md
+         4.4: it is D2, and nothing more. BP-105 then closed the
+         flush EVENT and the FTB half as well -- there is no flush
+         event, FE-14. TD#96, G24 and IC-FTB-07 all closed.
 ```
 
 ---
@@ -398,6 +464,12 @@ Every one of these is unverifiable today. The backend does not exist.
               and PHR pointers. Six backend assumptions recorded in
               section 10; none is verifiable, the backend does not
               exist.
+
+  2026-08-20  TD-FE-7 CLOSED by BP-102. Section 8 rewritten from
+              a defect report to the built interface; section 5 D1
+              no longer says the input does not exist. The index
+              form was taken over the pointer-value form.
+              tb_bp_cluster group J, 30 checks.
 
   2026-08-19  A1 CONFIRMED: 9 bits per in-flight instruction.
               Section 4 records that the position-to-slot mapping is
