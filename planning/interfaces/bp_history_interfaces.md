@@ -186,10 +186,10 @@ only advance, rollback by index, FTQ visibility vs ownership).
     w_slot_pc_p1 (BP-092a).
 
     Granularity note: the in-block position field addresses
-    four-byte expanded-instruction slots. Two RVC branches inside
-    one four-byte slot therefore share a position and contribute
-    the same path bit. This is a property of the position field
-    width, not of this interface.
+    two-byte slots (FTB_BR_POS_BITS = 4), so every RVC branch has
+    its own position and its own path bit. Until 2026-08-19 the
+    field was four-byte granular and two RVC branches in one
+    aligned word shared a position; that aliasing is gone.
 
   - Do not drive a pointer; the module owns it.
 

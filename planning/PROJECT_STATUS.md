@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-10 (pa session 066)
+ UPDATED: 2026-08-19 (during ia interactive sessions)
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,62 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+
+## IA interactive sessions: FTQ definition. Two RTL tasks, four interfaces.
+
+The FTQ is specified end to end. Three of its four interfaces are
+written; the fourth is deliberately not.
+
+```
+  BP-098  INST_OFFSET split -> PC_HASH_SHIFT + POS_OFFSET_BITS
+  BP-099  FTB_BR_POS_BITS 3 -> 4, closing an RVA23 C-extension gap
+  BP-100  FTB update scheduler. SPEC ONLY, no RTL written
+  BP-101  pft_addr, the TD-FE-6 slot groups, RESET_VECTOR
+```
+
+New: ftq_decisions.md, ftq_entry_formats.md, ftq_ifu_interfaces.md,
+ftq_backend_interfaces.md. The FTQ entry had been described in three
+places and edited in lockstep; fe_decisions sections 4, 5 and 6 moved
+out and are RETIRED, not reused, so cross-references still resolve.
+
+Two defects, both found by writing down what the FTQ would have to
+drive:
+
+```
+  TD-FE-6  CLOSED. The FTB classification and in-block positions
+           reached no FTQ-facing port, so update fan-out read
+           NO_BRANCH for any block the uBTB missed -- the case
+           where training matters most.
+  TD-FE-7  OPEN. bp_cluster has no rollback TRIGGER input. The
+           checkpoints are all inside bp_history; only the index
+           is missing on a backend redirect. Seven bits.
+```
+
+RULE: a predictor training path must not be able to stall the
+machine. FE-5 promised updates like architectural state; FE-5a
+narrows it to permit dropping low-value FTB updates (G9,
+IC-FTB-09, ftq_decisions.md 5.7).
+
+Counts, 47 of 47 green throughout:
+
+```
+  sim_bp_cluster   973 -> 997 (BP-101) -> 1765 (BP-099)
+  sim               28 ->  29 (BP-101)
+  all others            unchanged
+```
+
+Two deferrals, NOT the same kind. ftq_icache is physical and the PD
+phase can undo it. Instruction prefetch is functional and PD cannot:
+it needs the FTQ run-ahead, which the IFU is behind by construction
+(ftq_decisions.md 6.1).
+
+CLOSED: TD-FE-1, TD-FE-2, TD-FE-6, FE-U2, FE-U7, G9, G23,
+IC-FTB-09, RESETVEC.
+NEW: TD-FE-7, FE-5a, FE-13, IC-FTB-16, PREFETCH.
+
+Next free BP number is BP-102. Next free INFRA number is INFRA-013.
 
 ---
 
@@ -1064,14 +1120,16 @@ it only documented current behavior.
 |     |                                       | prediction. ubtb.sv    |
 |     |                                       | rewritten to match     |
 |     |                                       | (BP-086).              |
-| G9  | Update channel arbitration            | PARTIAL. The SC credit |
-|     |                                       | arbiter is implemented |
-|     |                                       | AND TESTED (BP-094     |
-|     |                                       | group H). The FTB      |
-|     |                                       | single update port     |
-|     |                                       | (FTB-3 / IC-FTB-09)    |
-|     |                                       | still has no FTQ-side  |
-|     |                                       | scheduler.             |
+| G9  | Update channel arbitration            | RESOLVED session-067.  |
+|     |                                       | SC credit arbiter done |
+|     |                                       | and tested BP-094 grp  |
+|     |                                       | H. The FTB single      |
+|     |                                       | update port scheduler  |
+|     |                                       | is ftq_decisions.md    |
+|     |                                       | 5.7: slot 0 first into |
+|     |                                       | a one-deep skid, with  |
+|     |                                       | resolution backpressure|
+|     |                                       | bounding it.           |
 | G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation. |
 |     |                                       | The metadata write path|
 |     |                                       | exists and is verified |
@@ -1208,7 +1266,11 @@ Key decisions for quick reference:
 - In-block position: FTB_BR_POS_BITS = $clog2(BLOCK/4), so a
   position is a 4-byte expanded-instruction slot, 8 per
   block. The branch PC is block base + pos*4.
-- BPU is decoupled frontend, self-generates next PC
+- BPU is decoupled frontend. The FTQ is the REQUESTER and owns
+  next-PC selection: bp_cluster takes ftq_pred_pc_p0 as an input
+  and does not self-steer. Corrected session-067; the previous
+  wording, "self-generates next PC", described the XiangShan model
+  rather than this one. Selection is ftq_decisions.md 4.
 - FTQ depth 64, split fast/slow SRAMs
 - History: GHR 256b, PHR 32b, folds recomputed on rollback.
   Pointer module-owned. pred_pc into bp_history is the BRANCH
@@ -1293,7 +1355,23 @@ unless noted.
           corrections applied; see Module Status.
     - planning/interfaces/ftq_bpu_interfaces.md       Draft
         - FTQ/BPU port specification. Section 10 items 6, 7, 8,
-          9 and 12 CLOSED session-064; item 14 opened.
+          9 and 12 CLOSED session-064; item 14 opened. Session-067
+          added section 4a, the slot correction groups, and closed
+          items 15 and 16.
+    - planning/arch/ftq_decisions.md                  Draft
+        - FTQ-owned behaviour, session-067. Entry storage,
+          lifetime, checkpoint, and the open-policy list.
+    - planning/arch/ftq_entry_formats.md              Draft
+        - SOLE prose home for bp_ftq_entry_t / bp_ftq_meta_t,
+          session-067. bp_cluster.md and fe_decisions.md each
+          carried a copy until then.
+    - planning/interfaces/ftq_ifu_interfaces.md       Draft
+        - FTQ/IFU port specification, session-067. Closes TD-FE-1.
+    - planning/interfaces/ftq_backend_interfaces.md   Draft
+        - Backend/FTQ resolution, redirect and commit,
+          session-067. Closes FE-U2 for the FTQ side; opens
+          TD-FE-7. Six backend assumptions recorded, none
+          verifiable -- the backend does not exist.
     - planning/interfaces/bpu_port_inventory.md       Working
         - 140-port inventory. STALE on loop_pred after BP-091.
     - planning/interfaces/loop_pred_interfaces.md     Draft

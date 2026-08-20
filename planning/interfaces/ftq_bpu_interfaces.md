@@ -197,6 +197,65 @@ on a uBTB hit, and the block-aligned request PC plus
 FTB_BLOCK_BYTES on a miss, where `blk_p1.pft_addr` reads zero. It
 is not the FTB `pftAddr` of section 5.1, which arrives at p2.
 
+The FTQ writes it into the allocated entry as
+`bp_ftq_entry_t.pft_addr`. The port is present only in the p1 cycle
+and the FTQ re-evaluates the block successor on every redirect
+(fe_decisions.md 2.4), so the not-taken arm is read back from the
+entry rather than resampled from the cluster.
+
+---
+
+## 4a. Slot correction: p2 and p3
+
+The p1 group of section 4 is the uBTB and loop-predictor view. The
+FTB classifies the block at p2 and supplies each branch field's
+in-block position. The cluster republishes its view of every slot at
+p2, and again at p3 with the SC direction applied.
+
+```
+  bpu_slot_val_p2                                 NEW
+  bpu_slot_idx_p2  [FTQ_IDX_BITS-1:0]             NEW
+  bpu_slot_p2      bp_ftq_slot_t
+                     [0:NUM_PRED_SLOTS-1]         NEW
+  bpu_slot_val_p3                                 NEW
+  bpu_slot_idx_p3  [FTQ_IDX_BITS-1:0]             NEW
+  bpu_slot_p3      bp_ftq_slot_t
+                     [0:NUM_PRED_SLOTS-1]         NEW
+```
+
+Same type as `bpu_pred_slot_p1`. The FTQ overwrites the slot
+description of the named entry with the latest group received.
+
+`bpu_slot_val_p2` is `r_val_p2 & ftb_valid_p2`: the cluster has a
+corrected view only when the FTB answered. `bpu_slot_val_p3` is
+`r_val_p3`.
+
+THIS IS NOT A REDIRECT AND IS NOT GATED ON ONE. A redirect fires only
+when the p2 successor differs from the p1 successor. The case that
+matters most does not qualify: a conditional the uBTB missed and the
+FTB found, predicted not taken. Both views end the block at the same
+address, no redirect fires, and the entry would otherwise keep
+`br_type` NO_BRANCH and `pos` zero -- so section 7.2 would form no
+update and no predictor would ever be trained on that branch.
+TD-FE-6, FE-13.
+
+Field sources at p2:
+
+| Field        | Source                                          |
+|--------------|-------------------------------------------------|
+| `slot_valid` | FTB conditional field valid, or jump placement  |
+| `br_type`    | FTB classification, `w_br_type_p2`              |
+| `taken`      | TAGE when its branch_id matches, else FTB       |
+| `target`     | section 3.3 target table by branch type         |
+| `pos`        | `ftb_br0_pos_p2` / `ftb_br1_pos_p2`, or         |
+|              | `ftb_jmp_pos_p2` for the jump slot              |
+| `pred_src`   | the arm that supplied the target                |
+| `confidence` | zero, FE-U3                                     |
+
+p3 changes `taken`, and `pred_src` to PRED_SC when SC actually moved
+the direction. SC corrects direction, not branch type, so `br_type`,
+`pos` and `target` pass through the p2 to p3 register unchanged.
+
 ---
 
 ## 5. Late predictions: p2 and p3
@@ -216,7 +275,10 @@ ftb declares 42 flat ports. The p2 outputs the cluster consumes:
   ftb_pft_addr_p2    ftb_fastpath_p2 [1:0]
 ```
 
-br0 maps to slot 0 and br1 to slot 1 at the cluster boundary. The
+br0 maps to slot 0 and br1 to slot 1 at the cluster boundary. That
+mapping is PROGRAM ORDERED as of IC-FTB-16: the update path fills br0
+with the earlier branch, so slot 0 is the block's first branch and
+slot 1 its second. The
 FTB is not internally slot-split: one lookup supplies both branch
 fields of one 32-byte block (ftb_decisions.md 2.1, 2.3).
 `ftb_fastpath_p2` is already a per-slot vector, bit 0 for br0 and
@@ -414,6 +476,10 @@ never has to merge.
                         [0:NUM_PRED_SLOTS-1]           NEW
 ```
 
+The FTB classification is NOT carried here. It travels on the slot
+correction group of section 4a, which writes it into the fast-path
+entry where section 7.2 reads it.
+
 Writes the `tage`, `ittage`, `lp` and `ftb` members of
 `bp_ftq_meta_t` for the entry named by `bpu_meta_idx_p2`.
 
@@ -475,7 +541,10 @@ slot's copy.
 
 The per-branch in-block position lives in `bp_ftq_slot_t.pos`, in
 the fast-path entry, sourced from `ftb_br0_pos_p2` and
-`ftb_br1_pos_p2`. The FTQ uses it to order br0 against br1 and to
+`ftb_br1_pos_p2` and delivered on the section 4a slot correction
+group. Until that group existed no port carried either signal out of
+the cluster and this paragraph described something unbuildable
+(TD-FE-6). The FTQ uses it to order br0 against br1 and to
 locate the taken branch in the fetch bundle (IC-FTB-15), and returns
 the resolving branch's position on `ftb_upd_pos_u0`.
 
@@ -488,11 +557,12 @@ The uBTB also produces a position on `ubtb_pred_t.pos`, so the p1
 prediction can fill `bp_ftq_slot_t.pos` before the FTB result
 arrives.
 
-The position addresses four-byte expanded-instruction slots:
-FTB_BR_POS_BITS is `$clog2(FTB_BLOCK_BYTES/4)`, so a 32-byte block
-has eight positions. The cluster also uses the position to form the
-branch PC it reports to bp_history, block base plus position times
-four (BP-092a, section 9).
+The position addresses two-byte slots: FTB_BR_POS_BITS is
+`$clog2(FTB_BLOCK_BYTES/2)`, so a 32-byte block has sixteen
+positions. RVA23 mandates the C extension, so a branch may begin at
+any 2-byte boundary and the position must resolve that. The cluster
+also uses the position to form the branch PC it reports to
+bp_history, block base plus position times two (BP-092a, section 9).
 
 ### 7.5 Fields with no consumer
 
@@ -712,6 +782,28 @@ match it and to match this specification.
     in-block instruction position of that slot's branch
     (section 7.4).
 
+15. CLOSED, 2026-08-19. `bp_ftq_entry_t` gains a `pft_addr` field of
+    VA_WIDTH, block scalar, holding the value delivered on
+    `bpu_pred_pft_p1`. Applied to bp_structs_pkg.sv and checked in
+    tb_bp_pkg.sv. Entry width 182b -> 222b.
+
+16. CLOSED, 2026-08-19. bp_cluster.sv gains the section 4a slot
+    correction group, six ports, driven from the p2 classification,
+    the FTB positions and the p2 target selection, plus a p3 stage
+    register carrying the slot with the SC direction applied.
+    tb_bp_cluster group I, 24 checks. sim_bp_cluster 973 -> 997, all
+    47 targets green. An earlier draft of this item proposed a
+    narrower `bpu_meta_brtype_p2`; it carried the type but not the
+    position, and left section 7.4 unbuildable.
+
+17. DEFERRED, not blocking. `bp_ftq_meta_t` becomes the two-arm
+    packed union of ftq_entry_formats.md 3.1. It is a storage
+    optimization only, 420b -> 277b per slot. tb_bp_cluster group F3
+    proves that the p2 and p3 write groups touch DISJOINT members of
+    the struct; under the union that holds only within `u.cond`,
+    since `sc` and `ittage` alias, so F3 must be restated per arm
+    when the union lands.
+
 ### loop_pred
 
 12. CLOSED, TD#105, BP-091. loop_pred.sv was single-slot; no port
@@ -757,6 +849,18 @@ match it and to match this specification.
               the RAS reachability rule. Section 6 updated with the
               successor-address comparison and the p3 comparison
               basis. Corrections 8 through 11 opened.
+
+  2026-08-19  Section 4a added: the p2 and p3 slot correction
+              groups, delivered in bp_cluster.sv. They carry the FTB
+              classification and the in-block positions into the
+              fast-path entry on every prediction, not only when a
+              redirect fires. Section 7.4 was describing a path no
+              port provided; it is now buildable. Item 16 closed,
+              item 17 opened and deferred (TD-FE-6, TD-FE-2).
+
+  2026-08-19  Section 4 records that the FTQ stores the p1
+              fall-through in bp_ftq_entry_t.pft_addr; section 10
+              item 15 opened and closed for the field addition.
 
   2026-08-09  INFRA-012 / session-064. Section 9 pred_pc corrected:
               it is one value per BRANCH after compaction, not one

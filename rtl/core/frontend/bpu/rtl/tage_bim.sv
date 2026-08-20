@@ -122,7 +122,7 @@ module tage_bim #(
       ram_addr_s0 = upd_index_u0[0];
     else
       ram_addr_s0 =
-        tage_pred_inp_p0[0].pc[INST_OFFSET +: THIS_INDEX_BITS];
+        tage_pred_inp_p0[0].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS];
   end
 
   always_comb begin : din_mux_s0
@@ -179,7 +179,7 @@ module tage_bim #(
       ram_addr_s1 = upd_index_u0[1];
     else
       ram_addr_s1 =
-        tage_pred_inp_p0[1].pc[INST_OFFSET +: THIS_INDEX_BITS];
+        tage_pred_inp_p0[1].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS];
   end
 
   always_comb begin : din_mux_s1
@@ -208,11 +208,11 @@ module tage_bim #(
   assign cntrl_bits_p1[1] = ram_dout_s1;
 
   // Expose T0 index hash (combinational, p0).
-  // Formula: pc[INST_OFFSET +: THIS_INDEX_BITS] per slot.
+  // Formula: pc[PC_HASH_SHIFT +: THIS_INDEX_BITS] per slot.
   assign idx_hash_p0[0] =
-    tage_pred_inp_p0[0].pc[INST_OFFSET +: THIS_INDEX_BITS];
+    tage_pred_inp_p0[0].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS];
   assign idx_hash_p0[1] =
-    tage_pred_inp_p0[1].pc[INST_OFFSET +: THIS_INDEX_BITS];
+    tage_pred_inp_p0[1].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS];
 
 endmodule : tage_bim
 

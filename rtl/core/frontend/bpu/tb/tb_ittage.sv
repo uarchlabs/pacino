@@ -2060,7 +2060,7 @@ module tb;
   // ================================================================
   // TC-RT01: Capstone round-trip test (BP-055).
   // PC_RT=40'h0000_6000, folded_hist=0.
-  // Hash (INST_OFFSET=2):
+  // Hash (PC_HASH_SHIFT=2):
   //   IT1/IT2: idx8=(PC>>2)&0xFF=0x00 bank=0 ent=0 tag8=(PC>>8)&0xFF
   //            =0x60 -> stored as 11'h060.
   //   IT3/IT4: idx9=(PC>>2)&0x1FF=0x000 bank=0 ent=0

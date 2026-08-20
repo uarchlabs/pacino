@@ -107,7 +107,7 @@ fatter-flat.
 
 ### 2.3  Block width vs fetch width
 
-FTB prediction block = 32 bytes (FTB_BLOCK_BYTES), 8 expanded
+FTB prediction block = 32 bytes (FTB_BLOCK_BYTES), 16 two-byte
 instructions, matched to 8-wide issue and to the two-branch-per-cycle
 budget. FTB predicts one 32-byte block per cycle.
 
@@ -198,7 +198,7 @@ Each entry holds two conditional branch fields and one jump field
 (2+1). No Xiangshan-style field sharing. Two conditional branches with
 no jump fill both conditional fields directly.
 
-Entry fields (logical entry, FTB_ENTRY_WIDTH = 106 bits/way):
+Entry fields (logical entry, FTB_ENTRY_WIDTH = 110 bits/way):
 
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
@@ -211,12 +211,15 @@ Entry fields (logical entry, FTB_ENTRY_WIDTH = 106 bits/way):
   fallthrough            -- pftAddr + carry
 
 position (FTB_BR_POS_BITS, 3 bits) is the in-block instruction slot
-(0..7) the branch occupies, distinct from the TARGET offset of 4.2 (an
+(0..15) the branch occupies, distinct from the TARGET offset of 4.2 (an
 earlier draft called this field "offset", which collided with the
 target-offset term -- it is renamed "position" here). It is sourced
 from ftb_upd_pos_u0 and read out on ftb_brI_pos_p2 / ftb_jmp_pos_p2
 (ftb_interfaces.md 2.3/2.5, IC-FTB-15); the cluster/FTQ uses it to
-order br0 vs br1 and to locate the taken branch in the fetch bundle.
+locate the taken branch in the fetch bundle. It NO LONGER orders br0
+against br1: IC-FTB-16 (2026-08-19) requires the update path to fill
+the conditional fields in program order, so br0 is by construction
+the earlier branch.
 
 conf is a bimodal DIRECTION counter, not a separate confidence-only
 field: its MSB is FTB's predicted direction for that conditional. There
@@ -307,13 +310,23 @@ pacino expands RVC instructions to 32b before the FTB. The FTB
 addresses instructions at the expanded granularity, NOT 2-byte RVC
 granularity.
 
+PARAMETER NOTE, 2026-08-19. The shift that reduces and reconstructs
+the partial fall-through address is POS_OFFSET_BITS, derived as
+FTB_OFFSET_BITS - FTB_BR_POS_BITS so it cannot disagree with the
+position width. It was INST_OFFSET, a parameter that also carried an
+unrelated meaning: the low PC bits dropped before a predictor index
+hash, now PC_HASH_SHIFT. The two were split because they are not the
+same quantity and would have to move independently if the position
+granularity ever changed. Both are 2 today and the split changed no
+behaviour.
+
 Two different quantities must not be conflated here:
 
   - IN-BLOCK quantities (position offset, pftAddr) ARE granularity-
     dependent. Do NOT inherit Xiangshan's log2(PredictWidth)=4 position
     or its pftAddr sizing -- those address 16 RVC instructions at
-    2-byte granularity. This design has 8 expanded instructions per
-    32-byte block: FTB_BR_POS_BITS = 3, PFTADDR_BITS per 8.1.
+    2-byte granularity. This design now matches it: 16 positions per
+    32-byte block, FTB_BR_POS_BITS = 4, PFTADDR_BITS per 8.1.
 
   - TARGET DISPLACEMENT widths are set by ISA branch/jump REACH, not by
     in-block granularity. Xiangshan's BR_OFFSET_LEN=12 / JMP_OFFSET_LEN
@@ -457,6 +470,18 @@ vector from ftb_plru to implement it; it is not specified now.)
   fallthrough (pftAddr + carry): reduced by ftb_cntrl from the
                 resolved block end address relative to block start.
 
+### 5.4a  Which conditional field a branch fills
+
+IC-FTB-16. The conditional fields are filled in PROGRAM ORDER: br0
+holds the branch at the lower in-block position, br1 the higher, and a
+block with one conditional always fills br0. The FTQ forms
+ftb_upd_br_idx_u0 and owns this; the FTB neither reorders nor checks.
+
+This makes the prediction slot array program-ordered, so slot 0 is the
+first branch of the block, and it makes the jump field's
+lowest-free-slot placement program order in every case rather than
+only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
+
 ### 5.5  Field writes when an existing branch resolves
 
   conf:         bimodal step on the resolved OUTCOME
@@ -570,7 +595,7 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
   FTB_IDX_BITS      = 9       $clog2(FTB_SETS).
   FTB_WAY_BITS      = 2       $clog2(FTB_WAYS). Encoded carried
                               writeWay (5.1).
-  FTB_BLOCK_BYTES   = 32      FTB prediction block (8 expanded instr).
+  FTB_BLOCK_BYTES   = 32      FTB prediction block (16 positions).
   FTB_OFFSET_BITS   = 5       $clog2(FTB_BLOCK_BYTES).
   FTB_TAG_BITS      = 26      VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS.
   PLRU_BITS         = 3       FTB_WAYS - 1 (tree-PLRU). Stored in
@@ -587,7 +612,7 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
 
-  FTB_ENTRY_WIDTH (logical, per way) = 106 bits:
+  FTB_ENTRY_WIDTH (logical, per way) = 110 bits:
     1   valid          -- held in ftb_plru (flops), not ftb_array
   + 26  tag
   + 2 * (1 + 3 + 13 + 2 + 3)       = 44   br0 + br1 (valid,pos,tgt,
@@ -639,7 +664,7 @@ overflow bit when the end crosses a boundary. The full fall-through
 reconstructs from block-start + pftAddr + carry. No fallthrough error check is
 applied on reconstruction; see 4.5.
 
-  PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES / 4) + 1
+  PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES / 2) + 1
 
 ---
 
@@ -710,6 +735,20 @@ applied on reconstruction; see 4.5.
 ---
 
 ## 11. Document History
+
+  2026-08-19  FTB_BR_POS_BITS 3 -> 4 and PFTADDR_BITS 4 -> 5:
+              in-block positions are now 2-byte granular, sixteen
+              per 32-byte block, so a branch at any RVA23 C-extension
+              boundary has its own position. Entry 106 -> 110 bits
+              per way, set 424 -> 440, array 217,088 -> 225,280.
+              Nothing was restructured: every width derives from
+              $clog2(FTB_BLOCK_BYTES / N), and BP-098 had already
+              split the granularity shift out of INST_OFFSET so
+              POS_OFFSET_BITS rescaled 2 -> 1 on its own. Section
+              4.4's "8 expanded instructions" model is retired.
+              All 47 bpu targets green; only sim_bp_cluster's count
+              moved, 997 -> 1765, because its position sweep now
+              covers 16x16 pairs instead of 8x8.
 
   2026-06-24  session-051/052. Initial draft, expanded from
               ftb_decision_record.md. Single-array structure

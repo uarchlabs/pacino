@@ -389,7 +389,7 @@ package bp_structs_pkg;
     logic [VA_WIDTH-1:0]       target;     // predicted target
     bp_br_type_e               br_type;    // branch type
     logic                      taken;      // predicted taken/not-taken
-    logic [FTB_BR_POS_BITS-1:0] pos;       // in-block position 0..7
+    logic [FTB_BR_POS_BITS-1:0] pos;       // in-block position 0..15
     bp_pred_src_e              pred_src;   // predictor that won
     logic [FTQ_CONF_BITS-1:0]  confidence; // saturating confidence (TBD)
   } bp_ftq_slot_t;
@@ -400,8 +400,17 @@ package bp_structs_pkg;
   // predictions for it.
   // The RAS snapshot is stored here for O(1) redirect recovery.
   // ghist_ptr and phist_ptr are this entry's history checkpoint.
+  //
+  // pft_addr is the block fall-through: the address fetched after
+  // this block when no slot in it is taken. It is the third arm of
+  // the successor selection of fe_decisions.md 2.4, written at p1
+  // from bpu_pred_pft_p1 (TD#108). It is stored rather than re-
+  // derived because the selection is re-evaluated whenever a
+  // redirect rewrites a slot, so the not-taken term is needed after
+  // p1 and cannot be recovered from the rest of the entry.
   typedef struct packed {
     logic [VA_WIDTH-1:0]       pc;         // fetch block start PC
+    logic [VA_WIDTH-1:0]       pft_addr;   // block fall-through addr
     logic [FTQ_IDX_BITS-1:0]   branch_id;  // FTQ entry index
     bp_ras_snapshot_t          ras;        // RAS pointer snapshot
     logic [GHIST_PTR_BITS-1:0] ghist_ptr;  // GHR circular buf pointer
@@ -490,7 +499,7 @@ package bp_structs_pkg;
   // One conditional branch field. 1+3+13+2+3 = 22 bits.
   typedef struct packed {
     logic                          valid;  // field occupied
-    logic [UBTB_BR_POS_BITS-1:0]   pos;    // in-block position 0..7
+    logic [UBTB_BR_POS_BITS-1:0]   pos;    // in-block position 0..15
     logic [UBTB_BR_TGT_BITS-1:0]   tgt;    // target displacement
     logic [TAR_STAT_BITS-1:0]      stat;   // fit / ovf / udf
     logic [UBTB_CONF_WIDTH-1:0]    conf;   // bimodal direction; MSB
@@ -509,7 +518,7 @@ package bp_structs_pkg;
   } ubtb_jmp_t;
 
   // One uBTB storage entry (one way of one set).
-  // 1 + 20 + 22 + 22 + 30 + 4 + 1 = 100 bits.
+  // 1 + 20 + 23 + 23 + 31 + 5 + 1 = 104 bits.
   // The tag is the UBTB_TAG_BITS VA bits immediately above the
   // block-granularity index, not a retired-instruction-granularity
   // field: index = pc[10:5], tag = pc[30:11] at VA_WIDTH 40 with a

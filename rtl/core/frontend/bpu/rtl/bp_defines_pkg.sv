@@ -24,8 +24,27 @@ package bp_defines_pkg;
   parameter int GHIST_PTR_BITS    = $clog2(GHR_WIDTH); // = 8
   parameter int PHIST_PTR_BITS    = $clog2(PHR_WIDTH);  // = 5
   parameter int FTQ_DEPTH         = 64;  // fetch target queue depth
+
+  // RESET_VECTOR: the PC the FTQ issues its first prediction request
+  // from. The privileged specification leaves the reset PC
+  // implementation defined; 0x8000_0000 is the RISC-V convention for
+  // the base of main memory and the target of the Spike boot ROM.
+  // Override at elaboration for a different memory map.
+  // Must be FTB_BLOCK_BYTES aligned: an unaligned value makes the
+  // first fetch a partial block, and the FTB and uBTB both index on
+  // the block-aligned PC. 0x8000_0000 satisfies this.
+  parameter logic [VA_WIDTH-1:0] RESET_VECTOR = 40'h00_8000_0000;
   parameter int FETCH_BLOCK_BYTES = 64;  // fetch block size in bytes
-  parameter int INST_OFFSET       =  2;  // right shift for PC 
+  // PC_HASH_SHIFT: the low PC bits dropped before a predictor index
+  // or tag hash. TAGE, ITTAGE and SC all form (pc >> PC_HASH_SHIFT).
+  // This is a HASH parameter. Changing it rehashes every table and
+  // invalidates all stored state and all tuning, so it is not a free
+  // knob. It is NOT the in-block position granularity; that is
+  // POS_OFFSET_BITS, declared with the FTB parameters below.
+  // Held at 2. Under RVA23 the C extension makes PC bit 1
+  // significant, so a shift of 2 discards a bit that distinguishes
+  // two RVC instructions. Whether 1 predicts better is unmeasured.
+  parameter int PC_HASH_SHIFT     =  2;
   // NUM_PRED_SLOTS: 1 = single prediction, 2 = dual 
   // Elaboration-time parameter; not a runtime signal.
   // Update channel array bp_update_t [NUM_PRED_SLOTS-1:0] is declared
@@ -92,10 +111,22 @@ package bp_defines_pkg;
   localparam int FTB_TAG_BITS    = VA_WIDTH - FTB_IDX_BITS
                                             - FTB_OFFSET_BITS; // = 26
   localparam int PLRU_BITS       = FTB_WAYS - 1; // tree-PLRU,     = 3
-  // In-block instruction position, expanded-instruction granularity
-  localparam int FTB_BR_POS_BITS = $clog2(FTB_BLOCK_BYTES / 4); // = 3
+  // In-block instruction position. 2-BYTE granularity: RVA23 mandates
+  // the C extension, so a branch may begin at any 2-byte boundary and
+  // a 4-byte position could not tell two RVC branches in one aligned
+  // word apart. 16 positions per 32-byte block.
+  localparam int FTB_BR_POS_BITS = $clog2(FTB_BLOCK_BYTES / 2); // = 4
   // Partial fall-through address index (ftb_decisions.md 8.1)
-  localparam int PFTADDR_BITS    = $clog2(FTB_BLOCK_BYTES / 4) + 1; // 4
+  localparam int PFTADDR_BITS    = $clog2(FTB_BLOCK_BYTES / 2) + 1; // 5
+
+  // POS_OFFSET_BITS: log2 of the byte size of ONE in-block position
+  // slot. Derived, so it can never disagree with the position width:
+  // 2**FTB_BR_POS_BITS positions cover 2**FTB_OFFSET_BITS bytes.
+  // Used to reduce a byte offset to the stored partial fall-through
+  // index and to reconstruct the address from it.
+  // This is a GRANULARITY parameter, distinct from PC_HASH_SHIFT.
+  //   Resolved here: 5 - 3 = 2, so one position is 4 bytes.
+  localparam int POS_OFFSET_BITS = FTB_OFFSET_BITS - FTB_BR_POS_BITS;
 
   // Target displacement / status widths (ftb_decisions.md 4.2, 8)
   parameter int TAR_STAT_BITS    = 2;  // fit / overflow / underflow
@@ -117,9 +148,9 @@ package bp_defines_pkg;
   // Per-way entry layout (ftb_decisions.md 8, ftb_interfaces.md 3):
   //   1                      valid
   // + FTB_TAG_BITS           tag                            (26)
-  // + 2 * (1 + pos + tgt + stat + conf)      br0 + br1      (44)
-  // + (1 + pos + jmp_tgt + stat + 3)         jump field     (30)
-  // + (PFTADDR_BITS + 1)                     pftAddr + carry ( 5)
+  // + 2 * (1 + pos + tgt + stat + conf)      br0 + br1      (46)
+  // + (1 + pos + jmp_tgt + stat + 3)         jump field     (31)
+  // + (PFTADDR_BITS + 1)                     pftAddr + carry ( 6)
   // always_taken removed (session-053): each conditional field is now
   // 22 bits (was 23). conf is the sole per-branch direction state.
   localparam int FTB_ENTRY_WIDTH =
@@ -130,19 +161,19 @@ package bp_defines_pkg;
       + (1 + FTB_BR_POS_BITS + FTB_JMP_TGT_BITS
                + TAR_STAT_BITS + 3)                      // jump
       + (PFTADDR_BITS + 1);                              // pft + carry
-  // = 106 bits per way
-  // FTB_ENTRY_WIDTH (106) and FTB_SET_WIDTH (424) are the LOGICAL
-  // entry/set widths (1 entry-valid + 105 data per way). The data
-  // array ftb_array stores only the 105 data bits per way (FTB_RAM_*
+  // = 110 bits per way
+  // FTB_ENTRY_WIDTH (110) and FTB_SET_WIDTH (440) are the LOGICAL
+  // entry/set widths (1 entry-valid + 109 data per way). The data
+  // array ftb_array stores only the 109 data bits per way (FTB_RAM_*
   // below); the entry-valid bit lives in ftb_plru (IC-FTB-12).
-  localparam int FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH; // = 424
+  localparam int FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH; // = 440
 
   // ftb_array physical storage widths: the logical entry minus the
   // entry-valid bit relocated to ftb_plru (ftb_interfaces.md 5,
   // IC-FTB-12).
-  localparam int FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1;  // = 105
+  localparam int FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1;  // = 109
   localparam int FTB_RAM_SET_WIDTH   = FTB_WAYS
-                                     * FTB_RAM_ENTRY_WIDTH;   // = 420
+                                     * FTB_RAM_ENTRY_WIDTH;   // = 436
 
   // ----------------------------------------------------------------
   // FTB arbitration parameters (TBD)
@@ -186,11 +217,16 @@ package bp_defines_pkg;
   localparam int UBTB_TAG_BITS = 20;                       // pc[30:11]
 
   localparam int UBTB_OFFSET_BITS = $clog2(UBTB_BLOCK_BYTES); // = 5
-  // In-block instruction position, expanded-instruction granularity
-  localparam int UBTB_BR_POS_BITS = $clog2(UBTB_BLOCK_BYTES / 4); // 3
+  // In-block instruction position, 2-byte granularity. Mirrors
+  // FTB_BR_POS_BITS; the uBTB entry mirrors the FTB entry.
+  localparam int UBTB_BR_POS_BITS = $clog2(UBTB_BLOCK_BYTES / 2); // 4
   // Partial fall-through address index
   localparam int UBTB_PFTADDR_BITS =
-                                 $clog2(UBTB_BLOCK_BYTES / 4) + 1; // 4
+                                 $clog2(UBTB_BLOCK_BYTES / 2) + 1; // 5
+
+  // uBTB position slot size, same derivation as POS_OFFSET_BITS.
+  localparam int UBTB_POS_OFFSET_BITS =
+                             UBTB_OFFSET_BITS - UBTB_BR_POS_BITS; // 2
 
   // Target displacement widths. Same ISA reach as the FTB
   // (ftb_decisions.md 4.2). TAR_STAT_BITS is shared.
@@ -205,9 +241,9 @@ package bp_defines_pkg;
   // Per-way entry layout, mirroring the FTB entry with the uBTB tag:
   //   1                      entry valid
   // + UBTB_TAG_BITS          tag                            (20)
-  // + 2 * (1 + pos + tgt + stat + conf)      br0 + br1      (44)
-  // + (1 + pos + jmp_tgt + stat + 3)         jump field     (30)
-  // + (UBTB_PFTADDR_BITS + 1)                pft + carry    ( 5)
+  // + 2 * (1 + pos + tgt + stat + conf)      br0 + br1      (46)
+  // + (1 + pos + jmp_tgt + stat + 3)         jump field     (31)
+  // + (UBTB_PFTADDR_BITS + 1)                pft + carry    ( 6)
   localparam int UBTB_ENTRY_WIDTH =
         1                                                // valid
       + UBTB_TAG_BITS                                    // tag
@@ -216,8 +252,8 @@ package bp_defines_pkg;
       + (1 + UBTB_BR_POS_BITS + UBTB_JMP_TGT_BITS
                + TAR_STAT_BITS + 3)                      // jump
       + (UBTB_PFTADDR_BITS + 1);                         // pft+carry
-  // = 100 bits per way
-  localparam int UBTB_SET_WIDTH = UBTB_WAYS * UBTB_ENTRY_WIDTH; // 400
+  // = 104 bits per way
+  localparam int UBTB_SET_WIDTH = UBTB_WAYS * UBTB_ENTRY_WIDTH; // 416
 
   // ================================================================
   // :TAGE parameters:

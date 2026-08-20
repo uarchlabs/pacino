@@ -132,7 +132,7 @@ module ittage_table #(
 
   // ============================================================
   // Local index and tag hash (combinational, p0).
-  // IT1-IT5: index = (pc >> INST_OFFSET) ^ fh,
+  // IT1-IT5: index = (pc >> PC_HASH_SHIFT) ^ fh,
   //           lower THIS_INDEX_BITS.
   //           tag  = (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
   //           lower THIS_TAG_BITS.
@@ -188,11 +188,11 @@ module ittage_table #(
     endcase
   end
 
-  // Index hash: (pc >> INST_OFFSET) ^ fh, truncated to THIS_INDEX_BITS.
+  // Index hash: (pc >> PC_HASH_SHIFT) ^ fh, truncated to THIS_INDEX_BITS.
   assign idx_hash[0] = THIS_INDEX_BITS'(
-      (ittage_pred_inp_p0[0].pc >> INST_OFFSET) ^ fh_idx_ext);
+      (ittage_pred_inp_p0[0].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
   assign idx_hash[1] = THIS_INDEX_BITS'(
-      (ittage_pred_inp_p0[1].pc >> INST_OFFSET) ^ fh_idx_ext);
+      (ittage_pred_inp_p0[1].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
 
   // Tag hash: (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
   // truncated to THIS_TAG_BITS, zero-extended to IT_MAX_TAG_WIDTH.

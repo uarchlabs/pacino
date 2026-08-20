@@ -177,7 +177,7 @@ module ubtb #(
       input logic                         carry,
       input logic [VA_WIDTH-1:0]          base);
     recon_pft = base
-      + ({{(VA_WIDTH-UBTB_PFTADDR_BITS){1'b0}}, pft} << INST_OFFSET)
+      + ({{(VA_WIDTH-UBTB_PFTADDR_BITS){1'b0}}, pft} << UBTB_POS_OFFSET_BITS)
       + (carry ? VA_WIDTH'(UBTB_BLOCK_BYTES) : VA_WIDTH'(0));
   endfunction
 
@@ -235,8 +235,8 @@ module ubtb #(
     // Fall-through reduce: pft is the in-block instruction index of
     // the block end at expanded granularity, carry is set when the
     // end crosses the block boundary.
-    e.pft   = {{(UBTB_PFTADDR_BITS-(UBTB_OFFSET_BITS-INST_OFFSET))
-                {1'b0}}, off[UBTB_OFFSET_BITS-1:INST_OFFSET]};
+    e.pft   = {{(UBTB_PFTADDR_BITS-(UBTB_OFFSET_BITS-UBTB_POS_OFFSET_BITS))
+                {1'b0}}, off[UBTB_OFFSET_BITS-1:UBTB_POS_OFFSET_BITS]};
     e.carry = |off[VA_WIDTH-1:UBTB_OFFSET_BITS];
 
     fld_old = (up.br_idx == 1'b0) ? e.br0 : e.br1;

@@ -110,7 +110,7 @@ THIS_TABLE-range assert (unreachable for a valid instantiation).
 - Rule source: sc_table_hash_rules.md (sc_idx_hash).
 - Drive inp_pc_p2[s] and idx_fh_p2. Compute the expected index
   independently in the tb:
-    exp_idx = THIS_INDEX_BITS'((pc >> INST_OFFSET) ^ fh_idx_ext)
+    exp_idx = THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_idx_ext)
   where fh_idx_ext = 0 for ST0, idx_fh_p2 for ST1-ST3.
 - Verify idx_hash_p2[s] == exp_idx.
 - Seed a known counter at exp_idx, deassert the write, read at p2

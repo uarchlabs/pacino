@@ -94,7 +94,7 @@ fields of the one indexed entry, not two slots.
                         -- 1 = conditional field 0 is occupied.
   output logic [FTB_BR_POS_BITS-1:0] ftb_br0_pos_p2
                         -- br0 in-block position: which expanded-
-                           instruction slot (0..7) within the 32-byte
+                           instruction slot (0..15) within the 32-byte
                            block this branch occupies. Needed by the
                            cluster/FTQ to order br0 vs br1 and locate
                            the taken branch in the bundle. Written at
@@ -127,7 +127,7 @@ fields of the one indexed entry, not two slots.
   output logic                  ftb_jmp_valid_p2
                         -- 1 = jump field occupied.
   output logic [FTB_BR_POS_BITS-1:0] ftb_jmp_pos_p2
-                        -- jump in-block position (0..7), same meaning
+                        -- jump in-block position (0..15), same meaning
                            as the conditional positions. Written at
                            allocate from ftb_upd_pos_u0 (2.5).
   output logic [VA_WIDTH-1:0]   ftb_jmp_target_p2
@@ -219,8 +219,8 @@ IC-FTB-05).
                            (4.2).
   input  logic [FTB_BR_POS_BITS-1:0] ftb_upd_pos_u0
                         -- in-block position of the resolving branch
-                           (0..7), = (branch_pc - block_start) >>
-                           INST_OFFSET, supplied by the FTQ/resolve
+                           (0..15), = (branch_pc - block_start) >>
+                           POS_OFFSET_BITS, supplied by the FTQ/resolve
                            side. Written to the selected field's pos at
                            allocate / free-field fill (the conditional
                            chosen by ftb_upd_br_idx_u0, or the jump when
@@ -415,14 +415,38 @@ IC-FTB-08 (resolved, session-052; reconciled session-053):
   FTB_BR_TGT_BITS = 13, FTB_JMP_TGT_BITS = 21, TAR_STAT_BITS = 2.
   always_taken removed: each conditional field is 22 bits, so
   FTB_RAM_ENTRY_WIDTH = 105, FTB_RAM_SET_WIDTH = 420; logical
-  FTB_ENTRY_WIDTH = 106 (1 valid in ftb_plru + 105 in ftb_array). The
+  FTB_ENTRY_WIDTH = 110 (1 valid in ftb_plru + 109 in ftb_array). The
   width is settled.
 
-IC-FTB-09 (open):
+IC-FTB-09 (resolved, 2026-08-19):
   G9 update channel arbitration. Multi-branch update scheduling onto
-  the single FTB update port is an FTQ/cluster concern, resolved at
-  bp_cluster integration. (Also covers the prediction-vs-update read
-  port sharing surfaced in BP-066.)
+  the single FTB update port is an FTQ concern and is
+  ftq_decisions.md 5.7. This item was OPEN, not decided: the single
+  port was never analysed against a target update rate.
+
+  The analysis: at the 8-issue target, with 15 to 20 percent branch
+  density, 1.2 to 1.6 branches resolve per cycle in steady state and
+  every one writes the FTB (5.5 steps conf on every resolve). One
+  write per cycle is below the target rate, and under FE-5 as
+  originally written the deficit backpressured resolution and stalled
+  the backend -- a training limit becoming a throughput limit.
+
+  The resolution: the FTQ schedules onto the port with a one-deep
+  skid and MAY DROP an update, but only a LOW-value one, meaning the
+  FTB hit at predict and the branch was predicted correctly. An
+  update that allocates an entry (predict-time miss) or corrects a
+  mispredict is never dropped; if accepting one would force such a
+  drop the FTQ backpressures instead. FE-5 is amended to match, and
+  only for this path.
+
+  The FTB itself is UNCHANGED. No second write port, no banking, no
+  wider payload. Two escalations are recorded in ftq_decisions.md
+  5.7.5 should measurement ever show the drop rate matters: merging
+  two same-entry updates into one ftb_array write, which needs no
+  extra port, and banking ftb_array by index.
+
+  (This item also covered the prediction-vs-update read port sharing
+  surfaced in BP-066; that half is unaffected.)
 
 IC-FTB-10 (resolved, session-052):
   Update-side way selection. ftb_cntrl does NOT re-look-up the tag on
@@ -478,6 +502,36 @@ IC-FTB-15 (session-053, FTB-4 resolved):
   field may be left write-only (0-stuffed) or read-only: a field is not
   "settled" until it has a named producer and consumer.
 
+IC-FTB-16 (2026-08-19):
+  br0 holds the earlier branch. The conditional fields are filled in
+  PROGRAM ORDER: for a block carrying two conditional branches, br0
+  holds the one at the lower in-block position and br1 the higher. A
+  block carrying one conditional always fills br0, never br1. The
+  producer of ftb_upd_br_idx_u0 -- the FTQ -- is responsible; the FTB
+  does not reorder and does not check.
+
+  Two consequences follow.
+
+  The prediction slot array becomes program-ordered. br0 maps to slot
+  0 and br1 to slot 1 (ftq_bpu_interfaces.md 5.1), so slot 0 is the
+  first branch of the block and slot 1 the second. fe_decisions.md
+  FE-10 already states that the slot is the array index and carries no
+  identifier; it is now an ORDERED index.
+
+  The jump field's lowest-free-slot placement is program order in
+  every case, not merely the common one. A jump terminates the block,
+  so no conditional follows it; and because conditionals fill from br0
+  upward, the free slot the jump takes is always above every filled
+  conditional slot. Without this invariant a block whose only
+  conditional sat in br1 would place the jump in slot 0, ahead of an
+  earlier branch.
+
+  Position is still required. It locates the branch in the fetch
+  bundle (IC-FTB-15), forms the branch PC reported to bp_history
+  (BP-092a), and is the key the backend returns at resolution
+  (ftq_backend_interfaces.md 4). This invariant removes its ORDERING
+  role, not the field.
+
 ---
 
 ## 5. Parameters
@@ -505,7 +559,7 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
   Invariant: both init values unsaturated, MSB matches direction
   (IC-FTB-06). There is no FTB_CONF_SUPPRESS_THRESH.
 
-  FTB_ENTRY_WIDTH = 106 / FTB_SET_WIDTH = 424   (logical, incl. valid)
+  FTB_ENTRY_WIDTH = 110 / FTB_SET_WIDTH = 440   (logical, incl. valid)
   FTB_RAM_ENTRY_WIDTH = 105 / FTB_RAM_SET_WIDTH = 420   (ftb_array data)
 
 ftb_array uses the FTB_RAM_* widths; ftb_plru holds the valid bit per

@@ -50,7 +50,7 @@ where N is the value of THIS_TABLE (1 through 5).
 
 ## Relevant Parameters
 
-INST_OFFSET is a global parameter which defines the right shift
+PC_HASH_SHIFT is a global parameter which defines the right shift
 of the PC address. This shift is 2 at present.
 
 THIS_INDEX_BITS is a module level parameter that defines the
@@ -81,7 +81,7 @@ fh input width: IT_TBL_FH[THIS_TABLE].
 The hashing operation is:
 
 ```
-tmpA   = (PC >> INST_OFFSET) ^ fh
+tmpA   = (PC >> PC_HASH_SHIFT) ^ fh
 output = tmpA[THIS_INDEX_BITS-1:0]
 ```
 

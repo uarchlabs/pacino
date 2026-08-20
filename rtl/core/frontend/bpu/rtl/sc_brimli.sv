@@ -121,7 +121,7 @@ module sc_brimli #(
     logic [BRIMLI_W-1:0] bpc;
     logic [BRIMLI_W-1:0] f_idx;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      // PC[15:6] is the get_br_imli_idx pc argument (not INST_OFFSET
+      // PC[15:6] is the get_br_imli_idx pc argument (not PC_HASH_SHIFT
       // shifted; the >>4 fold is applied below per the hash rule).
       bpc = inp_pc_p2[s][15:6];
       // Mode-selected fold. IDX_IMLI_PHR substitutes PHR when the

@@ -30,7 +30,7 @@ All widths are in bp_defines_pkg.sv. That file is authoritative.
 ## Parameter references
 
 ```
-INST_OFFSET      = 2         (bp_defines_pkg.sv)
+PC_HASH_SHIFT      = 2         (bp_defines_pkg.sv)
 VA_WIDTH         = 40        (bp_defines_pkg.sv)
 SC_TBL_IDX[0:4]  = {9,9,9,9,10}  (bp_defines_pkg.sv)
 SC_MAX_IDX_WIDTH = 10        (bp_defines_pkg.sv)
@@ -76,10 +76,10 @@ defensive.
 
 ```
 logic [THIS_INDEX_BITS-1:0] hashed_index =
-  THIS_INDEX_BITS'((inp_pc_p2[s] >> INST_OFFSET) ^ fh_idx_ext);
+  THIS_INDEX_BITS'((inp_pc_p2[s] >> PC_HASH_SHIFT) ^ fh_idx_ext);
 ```
 
-The PC is right-shifted by INST_OFFSET (2) to drop the instruction
+The PC is right-shifted by PC_HASH_SHIFT (2) to drop the instruction
 offset. The shifted PC is XORed with the fold. The result is
 truncated to THIS_INDEX_BITS by the cast.
 

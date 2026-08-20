@@ -143,14 +143,14 @@ module tb;
 
   // ----------------------------------------------------------------
   // Index hash reference. Mirrors sc_idx_hash for ST1:
-  //   idx = THIS_INDEX_BITS'((SC_MAX_FH'(pc) >> INST_OFFSET) ^ fh)
+  //   idx = THIS_INDEX_BITS'((SC_MAX_FH'(pc) >> PC_HASH_SHIFT) ^ fh)
   // fh_ext = idx_fh_p2 for ST1-ST3.
   // ----------------------------------------------------------------
   function automatic logic [P_INDEX_BITS-1:0] calc_idx(
       input logic [VA_WIDTH-1:1]  pc,
       input logic [SC_MAX_FH-1:0] fh);
     calc_idx = P_INDEX_BITS'(
-      (SC_MAX_FH'(pc) >> INST_OFFSET) ^ fh);
+      (SC_MAX_FH'(pc) >> PC_HASH_SHIFT) ^ fh);
   endfunction
 
   // ----------------------------------------------------------------

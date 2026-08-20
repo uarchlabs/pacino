@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  STABLE (rev 1.0)
- UPDATED: 2026-06-23
+ UPDATED: 2026-08-19
  CONTACT: Jeff Nye
 ```
 ---
@@ -355,93 +355,15 @@ stored meta-data rather than recomputing on resolution.
 
 ## FTQ Entry Split
 
-Two parallel SRAMs indexed by the same FTQ slot. Fast path read every
-cycle; meta path read only on update (post-execute).
+MOVED 2026-08-19. This section carried a copy of the FTQ entry
+layout. The sole prose home is now planning/arch/ftq_entry_formats.md;
+bp_structs_pkg.sv remains the reference declaration.
 
-### ftq_entry_t  (fast path)
-Fields:
-  pc            : 40b           -- fetch block start PC (VA_WIDTH)
-  target        : 40b           -- predicted next PC
-  br_type       : 3b            -- branch type (conditional, indirect,
-                                   return, direct-unc, none, ...)
-  taken         : 1b            -- predicted taken/not-taken
-  pred_src      : 3b            -- which predictor won (uBTB, loop,
-                                   FTB, TAGE, SC, ITTAGE, RAS)
-  confidence    : 4b            -- saturating confidence counter
-                                   (purpose TBD)
-  branch_id     : 6b            -- FTQ slot index (FTQ depth=64),
-                                   serves as branch ID
-  ras           : bp_ras_snapshot_t -- TOSR, TOSW, BOS (4b each,
-                                   RAS_PTR_BITS=$clog2(16))
-  ghist_ptr     : 8b            -- GHR circular buffer pointer snapshot
-  phist_ptr     : 5b            -- PHR circular buffer pointer snapshot
-  valid         : 1b
-
-Note: ghr_snapshot (256b raw register) removed from FTQ entry.
-Checkpoint is pointer-only (ghist_ptr + phist_ptr). Folds
-recomputed from circular buffer on rollback (G15).
-
-### ftq_meta_t  (slow path -- update use only)
-Stored in a separate wider SRAM. Read on post-execute update only.
-Fields are a union/overload by branch type -- details TBD at
-implementation. Current known fields:
-
-  -- TAGE meta
-  tage_pred_idx    : MAX_AWIDTH    -- provider table index
-  tage_alt_idx     : MAX_AWIDTH    -- alt-provider table index
-  tage_pred_comp   : TBL_SEL_WIDTH -- provider component selector
-  tage_alt_comp    : TBL_SEL_WIDTH -- alt-provider component selector
-  tage_pred_useful : USEFUL_WIDTH  -- provider usefulness bits
-  tage_alt_useful  : USEFUL_WIDTH  -- alt-provider usefulness bits
-  tage_pred_ctr    : CTR_WIDTH     -- provider counter value
-  tage_alt_ctr     : CTR_WIDTH     -- alt-provider counter value
-  tage_alloc_comp  : TBL_SEL_WIDTH -- allocation target component
-  tage_alloc_idx   : MAX_AWIDTH    -- allocation target index
-  tage_alloc_tag   : MAX_DWIDTH    -- allocation target tag
-  tage_pred_strong : 1b            -- post-mux provider ctr in
-                                       {000,111}          (TD#87)
-  tage_pred_medium : 1b            -- post-mux provider ctr in
-                                       {001,010,101,110}  (TD#87)
-  tage_use_alt_on_na : 1b          -- USE_ALT_ON_NA modified prediction
-  tage_using_primary : 1b          -- primary component supplied pred
-  tage_extd_ctr    : signed, extended-range post-mux provider ctr,
-                                       consumed by SC sum (TD#88)
-  tage_pred_tkn    : 1b            -- TAGE prediction (used by SC upd)
-
-  Note: tage_high_conf removed (TD#95, BP-081, session-060).
-
-  -- SC meta
-  sc_pred_tkn      : 1b                -- SC final direction
-  sc_override      : 1b                -- SC overrode TAGE
-  sc_upd_idx[0:4]  : uniform 5-entry array, SC_MAX_IDX_WIDTH wide
-                      -- ST0-ST4 update indices (ST4/BrIMLI folded
-                      in; sc_imli_idx split retired session-056)
-  sc_upd_ctr[0:4]  : uniform 5-entry array, SC_MAX_CTR_WIDTH wide
-                      -- counter snapshots ST0-ST4
-
-
-  -- Loop predictor meta
-  lp_hit           : 1b                    -- table hit at predict time
-  lp_idx           : LP_IDX_BITS           -- index of PC
-  lp_tag           : LP_TAG_BITS           -- tag of PC
-  lp_way           : $clog2(LP_TBL_WAYS)  -- selected way
-  lp_pred_is_loop  : 1b                    -- loop pred trusted/selected
-  lp_pred_taken    : 1b                    -- loop pred direction used
-  lp_age           : LP_AGE_BITS           -- age counter
-  lp_conf          : LP_CNF_BITS           -- confidence counter
-  lp_pst_itr       : LP_ITR_BITS           -- past iteration count
-  lp_cur_itr       : LP_ITR_BITS           -- iteration count used
-  lp_curs          : LP_ITR_BITS           -- speculative iter progress
-  lp_curs_v        : 1b                    -- curs is valid
-  lp_victim        : $clog2(LP_TBL_WAYS)  -- allocation target way
-
-  -- ITTAGE meta (shares TAGE index fields, adds:)
-  it_indirect_br   : 1b  -- was indirect non-return branch
-  it_indirect_call : 1b  -- was indirect call
-
-Note: overloading scheme for TAGE/ITTAGE shared fields TBD at
-implementation. ftq_meta_t will grow as additional predictors are
-integrated. Width is not a timing concern on this path.
+The FTQ entry is two structures in two SRAMs, both indexed by the FTQ
+entry index: bp_ftq_entry_t on the fast path, read every cycle, and
+bp_ftq_meta_t on the slow path, carried per prediction slot and read
+only at post-execute update. What the cluster contributes to each is
+ftq_bpu_interfaces.md sections 4, 4a, 7.1 and 7.2.
 
 ---
 
@@ -522,4 +444,47 @@ Raw observations to be captured in docs/observations/ during BP work.
               (RAS_PTR_BITS = $clog2(16) = 4b). Settled
               implementation details: RAS snapshot pointer width
               noted.
+  2026-08-19  FTQ Entry Split rewritten to match bp_structs_pkg.sv.
+              The rev 1.0 entry was pre-dual-slot: target, br_type,
+              taken, pred_src and confidence were block-scalar and
+              there was no pos field. They are now per slot in
+              bp_ftq_slot_t [NUM_PRED_SLOTS-1:0], declared inside
+              bp_ftq_entry_t, and pos is added. Type names corrected
+              to bp_ftq_entry_t / bp_ftq_meta_t. branch_id restated
+              as the FTQ ENTRY index (TD-FE-5). Slow path restated
+              as five nested predictor metadata types rather than a
+              flattened field list; the lp member is lp_pred_t and
+              the retired bp_loop_meta_t spellings lp_pst_itr and
+              lp_cur_itr are gone (TD#106, BP-092); ftb_pred_meta_t
+              added (IC-FTB-10). Per-slot carry of bp_ftq_meta_t and
+              the disjoint p2/p3 write groups recorded. Widths
+              stated: slot 55b, entry 182b at NUM_PRED_SLOTS = 2.
+
+  2026-08-19  bp_ftq_entry_t gains pft_addr, the block fall-through,
+              VA_WIDTH wide and block scalar. Successor selection is
+              re-evaluated on every redirect (fe_decisions.md 2.4)
+              and the not-taken arm is bpu_pred_pft_p1, which arrives
+              only at p1, so the value must be stored. Entry width
+              182b -> 222b, block-scalar subtotal 72b -> 112b.
+              Applied to bp_structs_pkg.sv and checked in
+              tb_bp_pkg.sv (ENTRY_BITS, a field width check and the
+              block-scalar preservation check). All 47 bpu targets
+              green.
+
+  2026-08-19  Slow path restated as the TD-FE-2 overload scheme: a
+              two-arm packed union, u.cond {tage, sc, lp} against
+              u.ind {ittage}, with ftb outside it. 420b -> 277b per
+              slot. Defined and deferred: a storage optimization
+              only. The arm is decoded from the fast-path
+              bp_ftq_slot_t.br_type, which carries the FTB
+              classification once the slot correction group of
+              fe_decisions.md 2.5 writes it (TD-FE-6). Definition
+              and the write/read rules are ftq_entry_formats.md 3.1;
+              this section carries the layout and the widths only.
+
+  2026-08-19  FTQ Entry Split reduced to a pointer. The layout it
+              carried moved to planning/arch/ftq_entry_formats.md,
+              which is now the only prose copy. This document had
+              held a third copy alongside fe_decisions.md and the
+              package, and all three were being edited in lockstep.
 

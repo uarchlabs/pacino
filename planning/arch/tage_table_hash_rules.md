@@ -49,7 +49,7 @@ TAGE_TN_FH TAGE_TN_FH1 TAGE_TN_FH2, again TN is T1, T2, T3, T4
 
 ## Relevant parameters
 
-INST_OFFSET is a global parameter which defines the left shift of
+PC_HASH_SHIFT is a global parameter which defines the left shift of
 the pc address, this shift is 2 at present.
 
 THIS_INDEX_BITS is a module level parameter that defines the table
@@ -79,7 +79,7 @@ TAGE_TN_FH, where N is determined by the value of module parameter THIS_TABLE
 
 The hashing operation is 
 
-tmpA = (PC >> INST_OFFSET) ^ fh
+tmpA = (PC >> PC_HASH_SHIFT) ^ fh
 output = tmpA[THIS_INDEX_BITS-1:0]
 
 There are two instances of this function, creating two indexes, one

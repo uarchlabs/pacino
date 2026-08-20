@@ -34,7 +34,8 @@ module tb;
                               1 + FTB_BR_POS_BITS +
                               $bits(bp_pred_src_e) +
                               FTQ_CONF_BITS;
-  localparam int ENTRY_BITS = VA_WIDTH + FTQ_IDX_BITS +
+  // Two VA_WIDTH terms: pc and pft_addr, the block fall-through.
+  localparam int ENTRY_BITS = VA_WIDTH + VA_WIDTH + FTQ_IDX_BITS +
                               (3 * RAS_PTR_BITS) + GHIST_PTR_BITS +
                               PHIST_PTR_BITS + 1 +
                               (NUM_PRED_SLOTS * SLOT_BITS);
@@ -53,6 +54,12 @@ module tb;
                               $bits(lp_pred_t) +
                               $bits(ittage_pred_meta_t) +
                               FTB_META_BITS;
+
+  // Block fall-through stimulus. entry_a.pc is driven all-zero, so
+  // pft_addr takes a distinct non-zero pattern: an alias between the
+  // two VA_WIDTH block-scalar fields cannot pass unnoticed.
+  localparam logic [VA_WIDTH-1:0]      ENTRY_PFT =
+                                         VA_WIDTH'('h3C_9E17_50B6);
 
   // Slot 1 stimulus. Chosen distinct from the slot 0 pattern so a
   // cross-slot aliasing defect cannot pass unnoticed.
@@ -115,6 +122,12 @@ module tb;
     if ($bits(entry_a.pc) !== VA_WIDTH) begin
       $fatal(1, "FAIL entry_a.pc: got %0d, want %0d",
              $bits(entry_a.pc), VA_WIDTH);
+    end
+    pass_count++;
+
+    if ($bits(entry_a.pft_addr) !== VA_WIDTH) begin
+      $fatal(1, "FAIL entry_a.pft_addr: got %0d, want %0d",
+             $bits(entry_a.pft_addr), VA_WIDTH);
     end
     pass_count++;
 
@@ -286,6 +299,7 @@ module tb;
     // entry_b, verify equality with ===.
     // --------------------------------------------------------------
     entry_a.pc           = {VA_WIDTH{1'b0}};
+    entry_a.pft_addr     = ENTRY_PFT;
     entry_a.branch_id    = {FTQ_IDX_BITS{1'b1}};
     entry_a.ras.tosr     = RAS_PTR_BITS'('h5);
     entry_a.ras.tosw     = RAS_PTR_BITS'('hA);
@@ -393,6 +407,7 @@ module tb;
     pass_count++;
 
     if (entry_a.pc        !== entry_b.pc        ||
+        entry_a.pft_addr  !== entry_b.pft_addr  ||
         entry_a.branch_id !== entry_b.branch_id ||
         entry_a.ras       !== entry_b.ras       ||
         entry_a.ghist_ptr !== entry_b.ghist_ptr ||

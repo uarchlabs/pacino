@@ -168,7 +168,7 @@ module tb;
     logic [SC_TBL_IDX[0]-1:0] idx9;   // ST0-ST3 are 9-bit
     fh_ext = (t == 0) ? '0 : fh;      // ST0 unhashed (SC_TBL_FH[0]=0)
     idx9   = SC_TBL_IDX[0]'(
-               (SC_MAX_FH'(pc) >> INST_OFFSET) ^ fh_ext);
+               (SC_MAX_FH'(pc) >> PC_HASH_SHIFT) ^ fh_ext);
     calc_sc_idx = SC_MAX_IDX_WIDTH'(idx9);   // zero-extend to the bus
   endfunction
 

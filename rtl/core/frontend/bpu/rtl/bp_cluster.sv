@@ -130,6 +130,25 @@ module bp_cluster (
                                             [0:NUM_PRED_SLOTS-1],
   output logic [FTQ_IDX_BITS-1:0]         bpu_redir_idx_p3,
 
+  // ---- slot correction, BPU -> FTQ fast path (TD-FE-6) ----------
+  // The p2 view of each slot, valid on EVERY prediction the FTB
+  // answers, not only when a redirect fires. A redirect says fetch
+  // must be resteered; this group says what the entry should record.
+  // The two are different questions and fire at different rates: a
+  // block the uBTB missed and the FTB found raises no redirect when
+  // both views agree on the successor address, yet its br_type and
+  // pos are wrong in the entry until this group corrects them.
+  output logic                            bpu_slot_val_p2,
+  output logic [FTQ_IDX_BITS-1:0]         bpu_slot_idx_p2,
+  output bp_ftq_slot_t                    bpu_slot_p2
+                                            [0:NUM_PRED_SLOTS-1],
+  // p3 repeats the group with the SC direction applied. SC changes
+  // direction only, so br_type, pos and target are carried through.
+  output logic                            bpu_slot_val_p3,
+  output logic [FTQ_IDX_BITS-1:0]         bpu_slot_idx_p3,
+  output bp_ftq_slot_t                    bpu_slot_p3
+                                            [0:NUM_PRED_SLOTS-1],
+
   // ---- metadata write, BPU -> FTQ slow path (interfaces 7.1) ------
   // bp_ftq_meta_t is carried per slot; the array is declared here, at
   // the port, not inside the struct. This group writes its tage,
@@ -255,12 +274,12 @@ module bp_cluster (
   localparam int BLK_OFF_BITS   = $clog2(FTB_BLOCK_BYTES);
 
   // Scaling from an in-block position to a byte offset. pos counts
-  // expanded-instruction slots, not bytes: bp_defines_pkg sizes it as
-  // $clog2(FTB_BLOCK_BYTES / 4), so 2**FTB_BR_POS_BITS positions cover
+  // two-byte slots, not bytes: bp_defines_pkg sizes it as
+  // $clog2(FTB_BLOCK_BYTES / 2), so 2**FTB_BR_POS_BITS positions cover
   // the 2**BLK_OFF_BITS bytes of one block. Each position is therefore
   // 2**(BLK_OFF_BITS - FTB_BR_POS_BITS) bytes. Derived, not assumed,
   // so a block-size or position-width change rescales with it.
-  //   Resolved here: BLK_OFF_BITS 5, FTB_BR_POS_BITS 3 -> shift 2
+  //   Resolved here: BLK_OFF_BITS 5, FTB_BR_POS_BITS 4 -> shift 1
   localparam int BR_POS_SHIFT   = BLK_OFF_BITS - FTB_BR_POS_BITS;
 
   // ----------------------------------------------------------------
@@ -406,6 +425,9 @@ module bp_cluster (
   logic                    r_taken_p3   [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0]     r_tkn_tgt_p3 [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0]     r_pft_p3;
+  // The p2 slot description carried to p3 so the SC direction can be
+  // applied to it without rebuilding the slot (TD-FE-6).
+  bp_ftq_slot_t            r_slot_p3    [0:NUM_PRED_SLOTS-1];
 
   // ----------------------------------------------------------------
   // Derived per-stage nets
@@ -424,6 +446,13 @@ module bp_cluster (
 
   bp_br_type_e         w_br_type_p2 [0:NUM_PRED_SLOTS-1];
   logic                w_br_val_p2  [0:NUM_PRED_SLOTS-1];
+  // Per-slot FTB in-block position, and the position finally recorded
+  // for the slot: the conditional field's own position, or the jump
+  // field's when this slot holds the block's jump (TD-FE-6).
+  logic [FTB_BR_POS_BITS-1:0] w_ftb_br_pos_p2 [0:NUM_PRED_SLOTS-1];
+  logic [FTB_BR_POS_BITS-1:0] w_pos_p2        [0:NUM_PRED_SLOTS-1];
+  bp_pred_src_e        w_pred_src_p2[0:NUM_PRED_SLOTS-1];
+  bp_ftq_slot_t        w_slot_p2    [0:NUM_PRED_SLOTS-1];
   logic                w_taken_p2   [0:NUM_PRED_SLOTS-1];
   logic                w_reach_p2   [0:NUM_PRED_SLOTS-1];
   logic                w_tage_hit_p2[0:NUM_PRED_SLOTS-1];
@@ -431,6 +460,7 @@ module bp_cluster (
   logic [VA_WIDTH-1:0] w_succ_p2    [0:NUM_PRED_SLOTS-1];
   bp_redirect_t        w_redir_p2   [0:NUM_PRED_SLOTS-1];
 
+  bp_ftq_slot_t        w_slot_p3    [0:NUM_PRED_SLOTS-1];
   logic                w_sc_hit_p3  [0:NUM_PRED_SLOTS-1];
   logic                w_taken_p3   [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_succ_p3    [0:NUM_PRED_SLOTS-1];
@@ -520,6 +550,7 @@ module bp_cluster (
         r_ras_val_p3[s]      <= 1'b0;
         r_taken_p3[s]        <= 1'b0;
         r_tkn_tgt_p3[s]      <= '0;
+        r_slot_p3[s]         <= '0;
       end
     end else begin
       // -- p0 -> p1. The uBTB results are combinational from the p0 PC
@@ -576,6 +607,7 @@ module bp_cluster (
         r_ras_val_p3[s] <= w_ras_pred_val_p2[s];
         r_taken_p3[s]   <= w_taken_p2[s];
         r_tkn_tgt_p3[s] <= w_tkn_tgt_p2[s];
+        r_slot_p3[s]    <= w_slot_p2[s];
       end
     end
   end
@@ -782,6 +814,7 @@ module bp_cluster (
       w_br_type_p2[s]  = NO_BRANCH;
       w_br_val_p2[s]   = 1'b0;
       w_taken_p2[s]    = 1'b0;
+      w_pos_p2[s]      = '0;
       w_tage_hit_p2[s] = w_tage_pred_rdy_p2[s]
                        & (w_tage_pred_meta_p2[s].branch_id == r_idx_p2);
 
@@ -791,6 +824,7 @@ module bp_cluster (
         // otherwise (fe_decisions.md 3.3).
         w_br_type_p2[s] = COND;
         w_br_val_p2[s]  = 1'b1;
+        w_pos_p2[s]     = w_ftb_br_pos_p2[s];
         w_taken_p2[s]   = w_tage_hit_p2[s]
                             ? w_tage_pred_meta_p2[s].tage_pred_tkn
                             : w_ftb_br_taken_p2[s];
@@ -798,6 +832,9 @@ module bp_cluster (
         jmp_placed      = 1'b1;
         w_br_type_p2[s] = jmp_type;
         w_br_val_p2[s]  = 1'b1;
+        // The jump field carries its own in-block position, not the
+        // conditional field's (interfaces 5.1, 7.3).
+        w_pos_p2[s]     = w_ftb_jmp_pos_p2;
         w_taken_p2[s]   = 1'b1; // unconditional
       end
     end
@@ -851,23 +888,32 @@ module bp_cluster (
                       .ittage_alt_tgt[IT_MAX_TGT_WIDTH-1],
                     w_ittage_pred_meta_p2[s].ittage_alt_tgt, 1'b0};
 
+      // The predictor that supplied the slot is recorded alongside
+      // the target it supplied. Diagnostic only (TD-FE-4), but it is
+      // free here: the arm that picks the target names the source.
       case (w_br_type_p2[s])
         COND: begin
-          w_tkn_tgt_p2[s] = w_ftb_br_target_p2[s];
+          w_tkn_tgt_p2[s]  = w_ftb_br_target_p2[s];
+          w_pred_src_p2[s] = w_tage_hit_p2[s] ? PRED_TAGE : PRED_FTB;
         end
         RETURN: begin
           w_tkn_tgt_p2[s] = w_ras_pop_valid_p2[s]
                               ? w_ras_pop_addr_p2[s]
                               : w_ftb_jmp_target_p2;
+          w_pred_src_p2[s] = w_ras_pop_valid_p2[s] ? PRED_RAS
+                                                   : PRED_FTB;
         end
         INDIRECT_NONRET, INDIRECT_CALL: begin
-          w_tkn_tgt_p2[s] = it_hit ? it_tgt : w_ftb_jmp_target_p2;
+          w_tkn_tgt_p2[s]  = it_hit ? it_tgt : w_ftb_jmp_target_p2;
+          w_pred_src_p2[s] = it_hit ? PRED_ITTAGE : PRED_FTB;
         end
         DIRECT_CALL, DIRECT_UNC: begin
-          w_tkn_tgt_p2[s] = w_ftb_jmp_target_p2;
+          w_tkn_tgt_p2[s]  = w_ftb_jmp_target_p2;
+          w_pred_src_p2[s] = PRED_FTB;
         end
         default: begin // NO_BRANCH
-          w_tkn_tgt_p2[s] = w_ftb_pft_addr_p2;
+          w_tkn_tgt_p2[s]  = w_ftb_pft_addr_p2;
+          w_pred_src_p2[s] = PRED_NONE;
         end
       endcase
 
@@ -891,6 +937,42 @@ module bp_cluster (
   end
 
   assign bpu_redir_idx_p2 = r_idx_p2;
+
+  // ================================================================
+  // p2: slot correction (TD-FE-6)
+  // ================================================================
+  // Gating signal: r_val_p2. Reads the p2 stage registers, so the
+  // block is nba_sequent.
+  //
+  // The FTB view of each slot, assembled as the same bp_ftq_slot_t
+  // the p1 group delivers. The FTQ overwrites the slot description of
+  // the named entry with it. This is NOT gated on a redirect: a slot
+  // whose p1 and p2 successor addresses agree still needs its
+  // br_type and pos corrected, and that is exactly the uBTB-miss
+  // FTB-hit case in which no redirect fires and the branch would
+  // otherwise never be trained (fe_decisions.md 7.2, TD-FE-6).
+  always_comb begin : p2_slot_comb
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      w_slot_p2[s]            = '0;
+      w_slot_p2[s].br_type    = NO_BRANCH;
+      w_slot_p2[s].pred_src   = PRED_NONE;
+      w_slot_p2[s].confidence = '0; // FE-U3: no consumer
+
+      // w_br_val_p2 already carries r_val_p2 and w_ftb_valid_p2; the
+      // explicit r_val_p2 term keeps a flop in this block's read set.
+      if (r_val_p2 & w_br_val_p2[s]) begin
+        w_slot_p2[s].slot_valid = 1'b1;
+        w_slot_p2[s].target     = w_tkn_tgt_p2[s];
+        w_slot_p2[s].br_type    = w_br_type_p2[s];
+        w_slot_p2[s].taken      = w_taken_p2[s];
+        w_slot_p2[s].pos        = w_pos_p2[s];
+        w_slot_p2[s].pred_src   = w_pred_src_p2[s];
+      end
+    end
+  end
+
+  assign bpu_slot_val_p2 = r_val_p2 & w_ftb_valid_p2;
+  assign bpu_slot_idx_p2 = r_idx_p2;
 
   // ================================================================
   // p3: SC redirect derivation
@@ -924,6 +1006,32 @@ module bp_cluster (
   end
 
   assign bpu_redir_idx_p3 = r_idx_p3;
+
+  // ================================================================
+  // p3: slot correction (TD-FE-6)
+  // ================================================================
+  // Gating signal: r_val_p3. Reads the p3 stage registers, so the
+  // block is nba_sequent.
+  //
+  // The registered p2 slot with the SC direction applied. SC corrects
+  // the direction of a conditional slot only, so br_type, pos and
+  // target are carried through unchanged; only taken can move, and
+  // pred_src records SC when it actually changed the value.
+  always_comb begin : p3_slot_comb
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      w_slot_p3[s] = r_slot_p3[s];
+
+      if (r_val_p3 & r_slot_p3[s].slot_valid
+          & (r_slot_p3[s].br_type == COND) & w_sc_hit_p3[s]) begin
+        w_slot_p3[s].taken = w_sc_pred_meta_p3[s].sc_pred_tkn;
+        if (w_sc_pred_meta_p3[s].sc_pred_tkn != r_slot_p3[s].taken)
+          w_slot_p3[s].pred_src = PRED_SC;
+      end
+    end
+  end
+
+  assign bpu_slot_val_p3 = r_val_p3;
+  assign bpu_slot_idx_p3 = r_idx_p3;
 
   // ================================================================
   // History rollback, driven from the redirect (interfaces section 9)
@@ -1126,6 +1234,8 @@ module bp_cluster (
       // -- Per-slot view of the FTB conditional fields (5.1).
       assign w_ftb_br_valid_p2[gs]  = (gs == 0) ? w_ftb_br0_valid_p2
                                                 : w_ftb_br1_valid_p2;
+      assign w_ftb_br_pos_p2[gs]    = (gs == 0) ? w_ftb_br0_pos_p2
+                                                : w_ftb_br1_pos_p2;
       assign w_ftb_br_taken_p2[gs]  = (gs == 0) ? w_ftb_br0_taken_p2
                                                 : w_ftb_br1_taken_p2;
       assign w_ftb_br_target_p2[gs] = (gs == 0) ? w_ftb_br0_target_p2
@@ -1144,6 +1254,9 @@ module bp_cluster (
       // -- Redirect output arrays (interfaces section 6).
       assign bpu_redir_p2[gs] = w_redir_p2[gs];
       assign bpu_redir_p3[gs] = w_redir_p3[gs];
+      // Slot correction, published every prediction (TD-FE-6).
+      assign bpu_slot_p2[gs]  = w_slot_p2[gs];
+      assign bpu_slot_p3[gs]  = w_slot_p3[gs];
 
       // -- SC staged PC, bit 0 not carried (interfaces 5.3, TD#91).
       //    Staged p0 -> p2 by the cluster stage registers.

@@ -118,16 +118,19 @@ module tage_table #(
 
   // ============================================================
   // Local index and tag hash (combinational, p0).
-  // T0: index = pc[INST_OFFSET +: THIS_INDEX_BITS]. No tag.
-  // T1-T4: index = (pc >> INST_OFFSET) ^ fh,
+  // T0: index = pc[PC_HASH_SHIFT +: THIS_INDEX_BITS]. No tag.
+  // T1-T4: index = (pc >> PC_HASH_SHIFT) ^ fh,
   //         lower THIS_INDEX_BITS.
   //         tag  = (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
   //         lower THIS_TAG_BITS.
   // folded_hist is //NOT USED on T0 per interface convention.
   // Slot 0 and slot 1 are independent (separate pc inputs).
   // ============================================================
-  // Byte offset for instruction address (RISC-V: 4-byte insns).
-  localparam int INST_OFFSET = 2;
+  // The index hash shift is bp_defines_pkg::PC_HASH_SHIFT. It was a
+  // hardcoded local of 2 here, shadowing the package and commented
+  // "RISC-V: 4-byte insns" -- wrong under RVA23, which mandates C.
+  // A change to the package value would silently have missed this
+  // file. The local is removed; the package value is used.
 
   // Zero-extended folded history selected by THIS_TABLE.
   logic [VA_WIDTH-1:0] fh_idx_ext; // idx folded hist, extended
@@ -173,17 +176,17 @@ module tage_table #(
     endcase
   end
 
-  // Index hash: T0 uses pc[INST_OFFSET +: THIS_INDEX_BITS].
-  // T1-T4: (pc >> INST_OFFSET) ^ fh_idx_ext,
+  // Index hash: T0 uses pc[PC_HASH_SHIFT +: THIS_INDEX_BITS].
+  // T1-T4: (pc >> PC_HASH_SHIFT) ^ fh_idx_ext,
   //         truncated to THIS_INDEX_BITS.
   assign idx_hash[0] = (THIS_TABLE == 0)
-    ? tage_pred_inp_p0[0].pc[INST_OFFSET +: THIS_INDEX_BITS]
+    ? tage_pred_inp_p0[0].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS]
     : THIS_INDEX_BITS'(
-        (tage_pred_inp_p0[0].pc >> INST_OFFSET) ^ fh_idx_ext);
+        (tage_pred_inp_p0[0].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
   assign idx_hash[1] = (THIS_TABLE == 0)
-    ? tage_pred_inp_p0[1].pc[INST_OFFSET +: THIS_INDEX_BITS]
+    ? tage_pred_inp_p0[1].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS]
     : THIS_INDEX_BITS'(
-        (tage_pred_inp_p0[1].pc >> INST_OFFSET) ^ fh_idx_ext);
+        (tage_pred_inp_p0[1].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
 
   // Tag hash: (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
   // truncated to THIS_TAG_BITS, zero-extended to TAGE_MAX_TAG_WIDTH.

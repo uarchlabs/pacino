@@ -350,8 +350,8 @@ module ftb_cntrl (
     // above block start. Rewritten on every update; rewriting an
     // unchanged boundary stores the same value (harmless).
     upd_new.pft   =
-      {{(PFTADDR_BITS-(FTB_OFFSET_BITS-INST_OFFSET)){1'b0}},
-       upd_off[FTB_OFFSET_BITS-1:INST_OFFSET]};
+      {{(PFTADDR_BITS-(FTB_OFFSET_BITS-POS_OFFSET_BITS)){1'b0}},
+       upd_off[FTB_OFFSET_BITS-1:POS_OFFSET_BITS]};
     upd_new.carry = |upd_off[VA_WIDTH-1:FTB_OFFSET_BITS];
 
     // Conditional field RMW. A hit with the field already valid trains
@@ -498,7 +498,7 @@ module ftb_cntrl (
 
     // Fallthrough reconstruct (unconditional, no error check; 4.5).
     n_pft = base_p1
-      + ({{(VA_WIDTH-PFTADDR_BITS){1'b0}}, sel_entry.pft} << INST_OFFSET)
+      + ({{(VA_WIDTH-PFTADDR_BITS){1'b0}}, sel_entry.pft} << POS_OFFSET_BITS)
       + (sel_entry.carry ? VA_WIDTH'(FTB_BLOCK_BYTES) : VA_WIDTH'(0));
   end
 

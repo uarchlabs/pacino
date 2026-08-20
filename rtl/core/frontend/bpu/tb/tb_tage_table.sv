@@ -12,7 +12,7 @@
 // 2b EPC, 2b USE, 3b CTR, 1b VAL, NUM_PRED_SLOTS=2).
 //
 // Hash inputs: tage_pred_inp_p0 + folded_hist. Local hash:
-//   idx  = (pc >> INST_OFFSET) ^ fh_idx, [THIS_INDEX_BITS-1:0]
+//   idx  = (pc >> PC_HASH_SHIFT) ^ fh_idx, [THIS_INDEX_BITS-1:0]
 //   tag  = (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2<<1),
 //          [THIS_TAG_BITS-1:0]
 //

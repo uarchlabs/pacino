@@ -208,11 +208,11 @@ module tb;
     logic [PFTADDR_BITS-1:0] pidx;
     logic                   carry;
     off   = pft_in - base;
-    pidx  = {{(PFTADDR_BITS-(FTB_OFFSET_BITS-INST_OFFSET)){1'b0}},
-             off[FTB_OFFSET_BITS-1:INST_OFFSET]};
+    pidx  = {{(PFTADDR_BITS-(FTB_OFFSET_BITS-POS_OFFSET_BITS)){1'b0}},
+             off[FTB_OFFSET_BITS-1:POS_OFFSET_BITS]};
     carry = |off[VA_WIDTH-1:FTB_OFFSET_BITS];
     exp_pft = base
-      + ({{(VA_WIDTH-PFTADDR_BITS){1'b0}}, pidx} << INST_OFFSET)
+      + ({{(VA_WIDTH-PFTADDR_BITS){1'b0}}, pidx} << POS_OFFSET_BITS)
       + (carry ? VA_WIDTH'(FTB_BLOCK_BYTES) : VA_WIDTH'(0));
   endfunction
 
@@ -375,7 +375,7 @@ module tb;
     do_reset();
     pc  = make_pc(26'h0000A1, 9'd5);
     tgt = pc + 40'h100;
-    upd_br(pc, 1'b0, 2'd2, 1'b0, 1'b1, tgt, 3'd1, pc); // alloc way2 br0 tkn
+    upd_br(pc, 1'b0, 2'd2, 1'b0, 1'b1, tgt, 4'd1, pc); // alloc way2 br0 tkn
     predict(pc);
     check("S2 valid on hit",        ftb_valid_p2 == 1'b1);
     check("S2 hit asserted",        ftb_hit_p2  == 1'b1);
@@ -391,10 +391,10 @@ module tb;
     do_reset();
     pc  = make_pc(26'h0000B2, 9'd9);
     tgt = pc + 40'h80;
-    upd_br(pc, 1'b0, 2'd1, 1'b0, 1'b1, tgt, 3'd0, pc); // alloc way1 conf=4
+    upd_br(pc, 1'b0, 2'd1, 1'b0, 1'b1, tgt, 4'd0, pc); // alloc way1 conf=4
     predict(pc);
     check("S3 alloc conf==INIT_TKN", ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
-    upd_br(pc, 1'b1, 2'd1, 1'b0, 1'b1, tgt, 3'd0, pc); // in-place tkn ->5
+    upd_br(pc, 1'b1, 2'd1, 1'b0, 1'b1, tgt, 4'd0, pc); // in-place tkn ->5
     predict(pc);
     check("S3 in-place hit way unchanged", ftb_way_p2 == 2'd1);
     check("S3 still valid (no realloc)",   ftb_valid_p2 == 1'b1);
@@ -407,8 +407,8 @@ module tb;
     do_reset();
     pc  = make_pc(26'h0000C3, 9'd11);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd2, pc); // alloc br0 tkn
-    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b0, tgt, 3'd4, pc); // free br1 ntkn
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd2, pc); // alloc br0 tkn
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b0, tgt, 4'd4, pc); // free br1 ntkn
     predict(pc);
     check("S4 br0 still valid",  ftb_br0_valid_p2 == 1'b1);
     check("S4 br1 now valid",    ftb_br1_valid_p2 == 1'b1);
@@ -422,7 +422,7 @@ module tb;
     do_reset();
     pc  = make_pc(26'h0000D4, 9'd13);
     tgt = pc + 40'h60;
-    upd_br(pc, 1'b0, 2'd3, 1'b0, 1'b0, tgt, 3'd1, pc); // alloc ntkn
+    upd_br(pc, 1'b0, 2'd3, 1'b0, 1'b0, tgt, 4'd1, pc); // alloc ntkn
     predict(pc);
     check("S5 not-taken branch tracked (valid)",
           ftb_br0_valid_p2 == 1'b1);
@@ -440,7 +440,7 @@ module tb;
       s6_pc[w] = make_pc(26'h000100 + FTB_TAG_BITS'(w), 9'd21);
     for (int w = 0; w < 4; w++)
       upd_br(s6_pc[w], 1'b0, w[FTB_WAY_BITS-1:0], 1'b0, 1'b1,
-             s6_pc[w] + 40'h20, 3'd0, s6_pc[w]); // alloc way w
+             s6_pc[w] + 40'h20, 4'd0, s6_pc[w]); // alloc way w
     // Read the victim off the clean allocate sequence first (a miss
     // prediction does not touch PLRU, so this does not perturb state).
     // Touch order 0,1,2,3 leaves PLRU state 000 -> victim way0.
@@ -454,7 +454,7 @@ module tb;
             ftb_valid_p2 && (ftb_way_p2 == w[FTB_WAY_BITS-1:0]));
     end
     // Allocate the carried victim; way0's old tag (s6_pc[0]) is evicted.
-    upd_br(s6_pc[4], 1'b0, 2'd0, 1'b0, 1'b1, s6_pc[4] + 40'h20, 3'd0,
+    upd_br(s6_pc[4], 1'b0, 2'd0, 1'b0, 1'b1, s6_pc[4] + 40'h20, 4'd0,
            s6_pc[4]);
     predict(s6_pc[4]);
     check("S6 new tag now hits way0",
@@ -471,11 +471,11 @@ module tb;
     pc = make_pc(26'h0000E5, 9'd33);
     j1 = pc + 40'h200;
     j2 = pc + 40'h2C0;
-    upd_jmp(pc, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 3'd6, pc); // alloc jalr
+    upd_jmp(pc, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd6, pc); // alloc jalr
     predict(pc);
     check("S7 jmp valid",            ftb_jmp_valid_p2 == 1'b1);
     check("S7 jmp target == first",  ftb_jmp_target_p2 == exp_jmp_tgt(j1, pc));
-    upd_jmp(pc, 1'b1, 2'd0, j2, 1'b0, 1'b0, 1'b1, 3'd6, pc); // rewrite
+    upd_jmp(pc, 1'b1, 2'd0, j2, 1'b0, 1'b0, 1'b1, 4'd6, pc); // rewrite
     predict(pc);
     check("S7 jmp target == latest", ftb_jmp_target_p2 == exp_jmp_tgt(j2, pc));
 
@@ -487,19 +487,19 @@ module tb;
     do_reset();
     pc   = make_pc(26'h000040, 9'd1);   // base 0x100020, room below
     base = pc;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, base + 40'h400, 3'd0, pc);
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, base + 40'h400, 4'd0, pc);
     predict(pc);
     check("S8 in-range +0x400 lossless",
           ftb_br0_target_p2 == base + 40'h400);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + 40'h0FFF, 3'd0, pc);
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + 40'h0FFF, 4'd0, pc);
     predict(pc);
     check("S8 max in-range +0xFFF lossless (fit boundary)",
           ftb_br0_target_p2 == base + 40'h0FFF);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base - 40'h400, 3'd0, pc);
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base - 40'h400, 4'd0, pc);
     predict(pc);
     check("S8 negative in-range -0x400 lossless",
           ftb_br0_target_p2 == base - 40'h400);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + 40'h1000, 3'd0, pc);
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + 40'h1000, 4'd0, pc);
     predict(pc);
     check("S8 overflow +0x1000 wraps per encode (status=overflow)",
           ftb_br0_target_p2 == exp_br_tgt(base + 40'h1000, base));
@@ -512,15 +512,15 @@ module tb;
     do_reset();
     pc   = make_pc(26'h000080, 9'd2);   // base 0x200040
     base = pc;
-    upd_jmp(pc, 1'b0, 2'd0, base + 40'h1000, 1'b1, 1'b0, 1'b0, 3'd0, pc);
+    upd_jmp(pc, 1'b0, 2'd0, base + 40'h1000, 1'b1, 1'b0, 1'b0, 4'd0, pc);
     predict(pc);
     check("S9 jmp in-range +0x1000 lossless",
           ftb_jmp_target_p2 == base + 40'h1000);
-    upd_jmp(pc, 1'b1, 2'd0, base + 40'hF_FFFF, 1'b1, 1'b0, 1'b0, 3'd0, pc);
+    upd_jmp(pc, 1'b1, 2'd0, base + 40'hF_FFFF, 1'b1, 1'b0, 1'b0, 4'd0, pc);
     predict(pc);
     check("S9 jmp max in-range +0xFFFFF lossless (fit boundary)",
           ftb_jmp_target_p2 == base + 40'hF_FFFF);
-    upd_jmp(pc, 1'b1, 2'd0, base + 40'h10_0000, 1'b1, 1'b0, 1'b0, 3'd0, pc);
+    upd_jmp(pc, 1'b1, 2'd0, base + 40'h10_0000, 1'b1, 1'b0, 1'b0, 4'd0, pc);
     predict(pc);
     check("S9 jmp overflow +0x100000 wraps per encode",
           ftb_jmp_target_p2 == exp_jmp_tgt(base + 40'h10_0000, base));
@@ -534,19 +534,19 @@ module tb;
     base = pc;
     tgt  = base + 40'h10;
     // in-block end at instruction index 3 (offset 12).
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, base + 40'd12);
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + 40'd12);
     predict(pc);
     check("S10 in-block end +12 lossless",
           ftb_pft_addr_p2 == base + 40'd12);
     check("S10 in-block end +12 == model",
           ftb_pft_addr_p2 == exp_pft(base + 40'd12, base));
     // in-block end at index 7 (offset 28), last in-block position.
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 3'd0, base + 40'd28);
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + 40'd28);
     predict(pc);
     check("S10 in-block end +28 lossless",
           ftb_pft_addr_p2 == base + 40'd28);
     // cross-block end at next block start (offset 32) -> carry.
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 3'd0, base + 40'd32);
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + 40'd32);
     predict(pc);
     check("S10 cross-block end +32 carries",
           ftb_pft_addr_p2 == base + 40'd32);
@@ -560,17 +560,17 @@ module tb;
     do_reset();
     pc = make_pc(26'h000111, 9'd55);
     j1 = pc + 40'h100;
-    upd_jmp(pc, 1'b0, 2'd0, j1, 1'b1, 1'b0, 1'b0, 3'd0, pc); // call
+    upd_jmp(pc, 1'b0, 2'd0, j1, 1'b1, 1'b0, 1'b0, 4'd0, pc); // call
     predict(pc);
     check("S11 call: is_call",  ftb_is_call_p2 == 1'b1);
     check("S11 call: !is_ret",  ftb_is_ret_p2  == 1'b0);
     check("S11 call: !is_jalr", ftb_is_jalr_p2 == 1'b0);
-    upd_jmp(pc, 1'b1, 2'd0, j1, 1'b0, 1'b1, 1'b0, 3'd0, pc); // ret
+    upd_jmp(pc, 1'b1, 2'd0, j1, 1'b0, 1'b1, 1'b0, 4'd0, pc); // ret
     predict(pc);
     check("S11 ret: is_ret",   ftb_is_ret_p2  == 1'b1);
     check("S11 ret: !is_call", ftb_is_call_p2 == 1'b0);
     check("S11 ret: !is_jalr", ftb_is_jalr_p2 == 1'b0);
-    upd_jmp(pc, 1'b1, 2'd0, j1, 1'b0, 1'b0, 1'b1, 3'd0, pc); // jalr
+    upd_jmp(pc, 1'b1, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd0, pc); // jalr
     predict(pc);
     check("S11 jalr: is_jalr",  ftb_is_jalr_p2 == 1'b1);
     check("S11 jalr: !is_call", ftb_is_call_p2 == 1'b0);
@@ -584,13 +584,13 @@ module tb;
     do_reset();
     pc  = make_pc(26'h000221, 9'd64);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc); // conf=4, MSB=1
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4, MSB=1
     predict(pc);
     check("D1 MSB=1 -> taken", ftb_br0_taken_p2 == 1'b1);
     check("D1 taken == valid & conf MSB",
           ftb_br0_taken_p2 ==
             (ftb_br0_valid_p2 & ftb_br0_conf_p2[FTB_CONF_WIDTH-1]));
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b0, tgt, 3'd0, pc); // 4->3, MSB=0
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b0, tgt, 4'd0, pc); // 4->3, MSB=0
     predict(pc);
     check("D1 MSB=0 -> not-taken", ftb_br0_taken_p2 == 1'b0);
     check("D1 not-taken == valid & conf MSB",
@@ -604,21 +604,21 @@ module tb;
     do_reset();
     pc  = make_pc(26'h000222, 9'd65);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc); // conf=4
-    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 3'd0, pc);  // ->7
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4
+    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     predict(pc);
     check("D2 taken saturates at 111", ftb_br0_conf_p2 == CONF_SAT_T);
-    train_br(pc, 2'd0, 1'b0, 1'b1, 1, tgt, 3'd0, pc);  // extra taken
+    train_br(pc, 2'd0, 1'b0, 1'b1, 1, tgt, 4'd0, pc);  // extra taken
     predict(pc);
     check("D2 taken no wrap (stays 111)", ftb_br0_conf_p2 == CONF_SAT_T);
     do_reset();
     pc  = make_pc(26'h000223, 9'd66);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b0, tgt, 3'd0, pc); // conf=3
-    train_br(pc, 2'd0, 1'b0, 1'b0, 3, tgt, 3'd0, pc);  // ->0
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b0, tgt, 4'd0, pc); // conf=3
+    train_br(pc, 2'd0, 1'b0, 1'b0, 3, tgt, 4'd0, pc);  // ->0
     predict(pc);
     check("D2 not-taken saturates at 000", ftb_br0_conf_p2 == CONF_SAT_N);
-    train_br(pc, 2'd0, 1'b0, 1'b0, 1, tgt, 3'd0, pc);  // extra not-taken
+    train_br(pc, 2'd0, 1'b0, 1'b0, 1, tgt, 4'd0, pc);  // extra not-taken
     predict(pc);
     check("D2 not-taken no wrap (stays 000)", ftb_br0_conf_p2 == CONF_SAT_N);
 
@@ -631,7 +631,7 @@ module tb;
     ftb_fastpath_en = 1'b1;
     pc  = make_pc(26'h000224, 9'd70);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc); // taken alloc
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // taken alloc
     predict(pc);
     check("D3 taken init conf==3'b100", ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
     check("D3 taken init MSB=1",
@@ -639,7 +639,7 @@ module tb;
     check("D3 fresh taken does NOT fast-path", ftb_fastpath_p2[0] == 1'b0);
     pc  = make_pc(26'h000225, 9'd71);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b0, tgt, 3'd0, pc); // not-taken alloc
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b0, tgt, 4'd0, pc); // not-taken alloc
     predict(pc);
     check("D3 ntkn init conf==3'b011", ftb_br0_conf_p2 == FTB_CONF_INIT_NTK);
     check("D3 ntkn init MSB=0",
@@ -655,17 +655,17 @@ module tb;
     do_reset();
     pc  = make_pc(26'h000226, 9'd80);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc);
-    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 3'd0, pc);  // ->7
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
+    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     ftb_fastpath_en = 1'b1;
     predict(pc);
     check("D4 saturated conf==111", ftb_br0_conf_p2 == CONF_SAT_T);
     check("D4 fast-path fires at 111", ftb_fastpath_p2[0] == 1'b1);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b0, tgt, 3'd0, pc); // 7->6
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b0, tgt, 4'd0, pc); // 7->6
     predict(pc);
     check("D4 mispredict steps 111->110", ftb_br0_conf_p2 == 3'd6);
     check("D4 fast-path stops at 110", ftb_fastpath_p2[0] == 1'b0);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc); // 6->7
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // 6->7
     predict(pc);
     check("D4 re-saturates to 111", ftb_br0_conf_p2 == CONF_SAT_T);
     check("D4 fast-path fires again", ftb_fastpath_p2[0] == 1'b1);
@@ -680,11 +680,11 @@ module tb;
     pcA = make_pc(26'h00030A, 9'd90);
     pcB = make_pc(26'h00030B, 9'd90);   // same set, different tag
     tgt = pcA + 40'h40;
-    upd_br(pcA, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pcA); // alloc tkn
-    train_br(pcA, 2'd0, 1'b0, 1'b1, 3, tgt, 3'd0, pcA);  // ->7
+    upd_br(pcA, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pcA); // alloc tkn
+    train_br(pcA, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pcA);  // ->7
     predict(pcA);
     check("D5 A saturated 111 before realloc", ftb_br0_conf_p2 == CONF_SAT_T);
-    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b0, pcB + 40'h40, 3'd0, pcB); // realloc
+    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b0, pcB + 40'h40, 4'd0, pcB); // realloc
     predict(pcB);
     check("D5 B hits after realloc",   ftb_valid_p2 == 1'b1);
     check("D5 B conf == new weak init (011)",
@@ -700,8 +700,8 @@ module tb;
     do_reset();
     pc  = make_pc(26'h000401, 9'd100);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc);
-    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 3'd0, pc);  // ->7
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
+    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     ftb_fastpath_en = 1'b1;
     predict(pc);
     check("FP1 valid+br0_valid+sat+en", ftb_valid_p2 && ftb_br0_valid_p2 &&
@@ -722,7 +722,7 @@ module tb;
     do_reset();
     pc  = make_pc(26'h000402, 9'd101);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc); // conf=4 (unsat)
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4 (unsat)
     ftb_fastpath_en = 1'b1;
     predict(pc);
     check("FP3 conf unsaturated (==4)", ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
@@ -738,7 +738,7 @@ module tb;
     check("FP4 miss: not valid",       ftb_valid_p2 == 1'b0);
     check("FP4 miss: no fast-path",    ftb_fastpath_p2 == 2'b00);
     pc = make_pc(26'h000403, 9'd103);
-    upd_jmp(pc, 1'b0, 2'd0, pc + 40'h80, 1'b1, 1'b0, 1'b0, 3'd0, pc);
+    upd_jmp(pc, 1'b0, 2'd0, pc + 40'h80, 1'b1, 1'b0, 1'b0, 4'd0, pc);
     predict(pc);                                     // jmp only, no br0
     check("FP4 empty br0 field invalid", ftb_br0_valid_p2 == 1'b0);
     check("FP4 empty field: br0 no fast-path", ftb_fastpath_p2[0] == 1'b0);
@@ -753,8 +753,8 @@ module tb;
     pc   = make_pc(26'h000404, 9'd104);
     base = pc;
     tgt  = base + 40'h300;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd0, pc);
-    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 3'd0, pc);  // ->7
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
+    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     ftb_fastpath_en = 1'b1;
     predict(pc);
     check("FP5 fast-path fires", ftb_fastpath_p2[0] == 1'b1);
@@ -772,31 +772,31 @@ module tb;
     do_reset();
     pc  = make_pc(26'h000501, 9'd120);
     tgt = pc + 40'h40;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 3'd3, pc);            // br0 pos3
-    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, tgt, 3'd5, pc);            // br1 pos5
-    upd_jmp(pc, 1'b1, 2'd0, pc + 40'h80, 1'b1, 1'b0, 1'b0, 3'd7, pc); // jmp7
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd3, pc);            // br0 pos3
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, tgt, 4'd5, pc);            // br1 pos5
+    upd_jmp(pc, 1'b1, 2'd0, pc + 40'h80, 1'b1, 1'b0, 1'b0, 4'd7, pc); // jmp7
     predict(pc);
-    check("P1 br0 pos round-trip ==3", ftb_br0_pos_p2 == 3'd3);
-    check("P1 br1 pos round-trip ==5", ftb_br1_pos_p2 == 3'd5);
-    check("P1 jmp pos round-trip ==7", ftb_jmp_pos_p2 == 3'd7);
+    check("P1 br0 pos round-trip ==3", ftb_br0_pos_p2 == 4'd3);
+    check("P1 br1 pos round-trip ==5", ftb_br1_pos_p2 == 4'd5);
+    check("P1 jmp pos round-trip ==7", ftb_jmp_pos_p2 == 4'd7);
 
     // =============================================================
     // P2: position static on in-place update -- resolve the same
     // branch again with a DIFFERENT pos; stored position unchanged
     // (5.5).
     // =============================================================
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 3'd2, pc); // br0 in-place pos2
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd2, pc); // br0 in-place pos2
     predict(pc);
-    check("P2 br0 pos static on in-place (still 3)", ftb_br0_pos_p2 == 3'd3);
+    check("P2 br0 pos static on in-place (still 3)", ftb_br0_pos_p2 == 4'd3);
 
     // =============================================================
     // P3: reallocation overwrites position -- reallocate the field to
     // a new branch with a new position; the new position is stored.
     // =============================================================
     pcB = make_pc(26'h000502, 9'd120);  // same set, different tag
-    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b1, pcB + 40'h40, 3'd4, pcB); // realloc
+    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b1, pcB + 40'h40, 4'd4, pcB); // realloc
     predict(pcB);
-    check("P3 realloc stores new pos ==4", ftb_br0_pos_p2 == 3'd4);
+    check("P3 realloc stores new pos ==4", ftb_br0_pos_p2 == 4'd4);
 
     // -------------------------------------------------------------
     $display("=================================================");

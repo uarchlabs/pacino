@@ -179,7 +179,7 @@ module tb;
   //
   // Source-of-truth note (flagged documentation gap):
   //   tage_table_hash_rules.md and ittage_table_hash_rules.md define
-  //   only how the fold is CONSUMED -- tmpA = (PC >> INST_OFFSET) ^ fh
+  //   only how the fold is CONSUMED -- tmpA = (PC >> PC_HASH_SHIFT) ^ fh
   //   (index) and tmpB = (PC >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1)
   //   (tag). Neither doc defines how fh / fh1 / fh2 are COMPUTED from
   //   the global history. They therefore do NOT supply a table-side

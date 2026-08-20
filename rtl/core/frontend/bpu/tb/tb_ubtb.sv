@@ -319,8 +319,8 @@ module tb;
       tgt_b = blk_a - 40'd128;   // backward, in 13-bit reach
       // br0: taken at position 1. br1: not-taken at position 5.
       // Block ends at the next block start, so carry must be set.
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
-      wr_cond(blk_a, 1'b1, 1'b0, tgt_b, 3'd5, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b1, 1'b0, tgt_b, 4'd5, blk_a + 40'd32);
       look2(blk_a);
 
       check("TC02: hit",       blk2.hit == 1'b1);
@@ -329,7 +329,7 @@ module tb;
       check("TC02: s0 valid",  pred2[0].valid    == 1'b1);
       check("TC02: s0 COND",   pred2[0].br_type  == COND);
       check("TC02: s0 target", pred2[0].target   == tgt_a);
-      check("TC02: s0 pos",    pred2[0].pos      == 3'd1);
+      check("TC02: s0 pos",    pred2[0].pos      == 4'd1);
       check("TC02: s0 conf",   pred2[0].conf     == UBTB_CONF_INIT_TKN);
       check("TC02: s0 taken",  pred2[0].br_taken == 1'b1);
       check("TC02: s0 carry",  pred2[0].carry    == 1'b1);
@@ -337,7 +337,7 @@ module tb;
       check("TC02: s1 valid",  pred2[1].valid    == 1'b1);
       check("TC02: s1 COND",   pred2[1].br_type  == COND);
       check("TC02: s1 target", pred2[1].target   == tgt_b);
-      check("TC02: s1 pos",    pred2[1].pos      == 3'd5);
+      check("TC02: s1 pos",    pred2[1].pos      == 4'd5);
       check("TC02: s1 conf",   pred2[1].conf     == UBTB_CONF_INIT_NTK);
       check("TC02: s1 taken",  pred2[1].br_taken == 1'b0);
       check("TC02: s1 carry",  pred2[1].carry    == 1'b1);
@@ -358,14 +358,14 @@ module tb;
       do_reset();
       blk_a = mk_pc(3, TAG_BASE);
       tgt_a = blk_a + 40'd16;
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd2, blk_a + 40'd12);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd2, blk_a + 40'd12);
       look2(blk_a);
 
       check("TC03: hit",       blk2.hit == 1'b1);
       check("TC03: pft_addr",  blk2.pft_addr == blk_a + 40'd12);
       check("TC03: s0 valid",  pred2[0].valid  == 1'b1);
       check("TC03: s0 target", pred2[0].target == tgt_a);
-      check("TC03: s0 pos",    pred2[0].pos    == 3'd2);
+      check("TC03: s0 pos",    pred2[0].pos    == 4'd2);
       check("TC03: s0 carry",  pred2[0].carry  == 1'b0);
       // br1 free and no jump present -> slot 1 fully zero.
       check("TC03: s1 zero",   pred2[1] == '0);
@@ -410,7 +410,7 @@ module tb;
       check("TC05: other block differs in set",
             pc_idx(blk_c) != pc_idx(blk_a));
 
-      wr_cond(blk_a, 1'b0, 1'b1, blk_a + 40'd32, 3'd0,
+      wr_cond(blk_a, 1'b0, 1'b1, blk_a + 40'd32, 4'd0,
               blk_a + 40'd32);
 
       look2(blk_b);
@@ -443,7 +443,7 @@ module tb;
         blk_a = mk_pc(11, TAG_BASE);
         tgt_a = blk_a + 40'h400;
         wr_jmp(blk_a, ty_bits[i][2], ty_bits[i][1], ty_bits[i][0],
-               tgt_a, 3'd7, blk_a + 40'd32);
+               tgt_a, 4'd7, blk_a + 40'd32);
         look2(blk_a);
 
         check($sformatf("TC06[%0d]: hit", i),  blk2.hit == 1'b1);
@@ -455,7 +455,7 @@ module tb;
         check($sformatf("TC06[%0d]: s0 target", i),
               pred2[0].target == tgt_a);
         check($sformatf("TC06[%0d]: s0 pos", i),
-              pred2[0].pos == 3'd7);
+              pred2[0].pos == 4'd7);
         // br_taken and conf are not meaningful for a jump.
         check($sformatf("TC06[%0d]: s0 br_taken 0", i),
               pred2[0].br_taken == 1'b0);
@@ -477,8 +477,8 @@ module tb;
       blk_a = mk_pc(13, TAG_BASE);
       tgt_a = blk_a + 40'd32;
       tgt_b = blk_a + 40'h800;
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd0, blk_a + 40'd32);
-      wr_jmp (blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 3'd6, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd0, blk_a + 40'd32);
+      wr_jmp (blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 4'd6, blk_a + 40'd32);
       look2(blk_a);
 
       check("TC07a: hit",        blk2.hit == 1'b1);
@@ -487,7 +487,7 @@ module tb;
       check("TC07a: s1 valid",   pred2[1].valid   == 1'b1);
       check("TC07a: s1 is jump", pred2[1].br_type == RETURN);
       check("TC07a: s1 target",  pred2[1].target  == tgt_b);
-      check("TC07a: s1 pos",     pred2[1].pos     == 3'd6);
+      check("TC07a: s1 pos",     pred2[1].pos     == 4'd6);
 
       // (b) both conditionals occupied -> no free slot, jump is not
       //     reported at NUM_PRED_SLOTS=2.
@@ -495,9 +495,9 @@ module tb;
       blk_a = mk_pc(14, TAG_BASE);
       tgt_a = blk_a + 40'd32;
       tgt_b = blk_a - 40'd64;
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd0, blk_a + 40'd32);
-      wr_cond(blk_a, 1'b1, 1'b1, tgt_b, 3'd3, blk_a + 40'd32);
-      wr_jmp (blk_a, 1'b1, 1'b0, 1'b0, blk_a + 40'h800, 3'd7,
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd0, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b1, 1'b1, tgt_b, 4'd3, blk_a + 40'd32);
+      wr_jmp (blk_a, 1'b1, 1'b0, 1'b0, blk_a + 40'h800, 4'd7,
               blk_a + 40'd32);
       look2(blk_a);
 
@@ -521,18 +521,18 @@ module tb;
 
       // Fill br0 taken at position 3. conf starts at the weak taken
       // init, which must be unsaturated with MSB 1.
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd3, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd3, blk_a + 40'd32);
       look2(blk_a);
       gold = UBTB_CONF_INIT_TKN;
       check("TC08: fill conf is weak taken", pred2[0].conf == gold);
       check("TC08: init unsaturated",
             gold != {UBTB_CONF_WIDTH{1'b1}});
-      check("TC08: fill pos", pred2[0].pos == 3'd3);
+      check("TC08: fill pos", pred2[0].pos == 4'd3);
 
       // Train taken past the top. Each update carries a DIFFERENT
       // position: the stored position must not move once filled.
       for (int i = 0; i < 6; i++) begin
-        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd6, blk_a + 40'd32);
+        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd6, blk_a + 40'd32);
         look2(blk_a);
         gold = gold_step(gold, 1'b1);
         check($sformatf("TC08: taken step %0d conf", i),
@@ -540,7 +540,7 @@ module tb;
         check($sformatf("TC08: taken step %0d taken", i),
               pred2[0].br_taken == gold[UBTB_CONF_WIDTH-1]);
         check($sformatf("TC08: taken step %0d pos held", i),
-              pred2[0].pos == 3'd3);
+              pred2[0].pos == 4'd3);
       end
       check("TC08: saturated all-ones",
             pred2[0].conf == {UBTB_CONF_WIDTH{1'b1}});
@@ -549,7 +549,7 @@ module tb;
 
       // Train not-taken down to the bottom, crossing the MSB flip.
       for (int i = 0; i < 10; i++) begin
-        wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 3'd6, blk_a + 40'd32);
+        wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 4'd6, blk_a + 40'd32);
         look2(blk_a);
         gold = gold_step(gold, 1'b0);
         check($sformatf("TC08: ntk step %0d conf", i),
@@ -557,7 +557,7 @@ module tb;
         check($sformatf("TC08: ntk step %0d taken", i),
               pred2[0].br_taken == gold[UBTB_CONF_WIDTH-1]);
         check($sformatf("TC08: ntk step %0d pos held", i),
-              pred2[0].pos == 3'd3);
+              pred2[0].pos == 4'd3);
       end
       check("TC08: saturated all-zeros", pred2[0].conf == '0);
       check("TC08: saturated predicts not-taken",
@@ -566,7 +566,7 @@ module tb;
       // A freshly filled field in the other direction takes the weak
       // not-taken init, which must be unsaturated with MSB 0.
       do_reset();
-      wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 3'd2, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 4'd2, blk_a + 40'd32);
       look2(blk_a);
       check("TC08: fill conf is weak not-taken",
             pred2[0].conf == UBTB_CONF_INIT_NTK);
@@ -596,7 +596,7 @@ module tb;
         do_reset();
         blk_a = mk_pc(21, TAG_BASE);
         tgt_a = blk_a + VA_WIDTH'(cd[i]);
-        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
+        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1, blk_a + 40'd32);
         look2(blk_a);
         check($sformatf("TC09: cond disp %0d valid", i),
               pred2[0].valid == 1'b1);
@@ -615,7 +615,7 @@ module tb;
         do_reset();
         blk_a = mk_pc(22, TAG_BASE);
         tgt_a = blk_a + VA_WIDTH'(jd[i]);
-        wr_jmp(blk_a, 1'b0, 1'b0, 1'b0, tgt_a, 3'd4,
+        wr_jmp(blk_a, 1'b0, 1'b0, 1'b0, tgt_a, 4'd4,
                blk_a + 40'd32);
         look2(blk_a);
         check($sformatf("TC09: jmp disp %0d valid", i),
@@ -630,10 +630,10 @@ module tb;
       blk_a = mk_pc(23, TAG_BASE);
       tgt_a = blk_a + 40'd64;
       tgt_b = blk_a - 40'd2048;
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1, blk_a + 40'd32);
       look2(blk_a);
       check("TC09: first target", pred2[0].target == tgt_a);
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_b, 3'd1, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_b, 4'd1, blk_a + 40'd32);
       look2(blk_a);
       check("TC09: moved target rewritten",
             pred2[0].target == tgt_b);
@@ -655,14 +655,14 @@ module tb;
             && (pc_idx(blk_b) != pc_idx(blk_c)));
 
       // carry 0: end is 28 bytes into the block.
-      wr_cond(blk_a, 1'b0, 1'b1, blk_a + 40'd16, 3'd6,
+      wr_cond(blk_a, 1'b0, 1'b1, blk_a + 40'd16, 4'd6,
               blk_a + 40'd28);
       // carry 1: end is exactly the next block start; the partial
       // index is 0 and only the carry bit carries the boundary.
-      wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd16, 3'd7,
+      wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd16, 4'd7,
               blk_b + 40'd32);
       // carry 1 with a non-zero partial index as well.
-      wr_cond(blk_c, 1'b0, 1'b1, blk_c + 40'd16, 3'd2,
+      wr_cond(blk_c, 1'b0, 1'b1, blk_c + 40'd16, 4'd2,
               blk_c + 40'd40);
 
       look2(blk_a);
@@ -689,7 +689,7 @@ module tb;
             pc_idx(blk2.pft_addr) != pc_idx(blk_c));
 
       // The block boundary is rewritten on a later update.
-      wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd16, 3'd7,
+      wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd16, 4'd7,
               blk_b + 40'd8);
       look2(blk_b);
       check("TC10d: boundary moved back into the block",
@@ -708,9 +708,9 @@ module tb;
       blk_a = mk_pc(31, TAG_BASE);
       tgt_a = blk_a + 40'd64;
       tgt_b = blk_a - 40'd256;
-      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1,
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1,
                         blk_a + 40'd32);
-      upd2[1] = mk_cond(blk_a, 1'b1, 1'b0, tgt_b, 3'd4,
+      upd2[1] = mk_cond(blk_a, 1'b1, 1'b0, tgt_b, 4'd4,
                         blk_a + 40'd32);
       commit();
       look2(blk_a);
@@ -718,11 +718,11 @@ module tb;
       check("TC11a: hit",       blk2.hit == 1'b1);
       check("TC11a: s0 valid",  pred2[0].valid  == 1'b1);
       check("TC11a: s0 target", pred2[0].target == tgt_a);
-      check("TC11a: s0 pos",    pred2[0].pos    == 3'd1);
+      check("TC11a: s0 pos",    pred2[0].pos    == 4'd1);
       check("TC11a: s0 conf",   pred2[0].conf   == UBTB_CONF_INIT_TKN);
       check("TC11a: s1 valid",  pred2[1].valid  == 1'b1);
       check("TC11a: s1 target", pred2[1].target == tgt_b);
-      check("TC11a: s1 pos",    pred2[1].pos    == 3'd4);
+      check("TC11a: s1 pos",    pred2[1].pos    == 4'd4);
       check("TC11a: s1 conf",   pred2[1].conf   == UBTB_CONF_INIT_NTK);
 
       // Both channels landed on ONE way, not two. Fill the remaining
@@ -734,7 +734,7 @@ module tb;
               pc_idx(blk_b) == pc_idx(blk_a));
         check($sformatf("TC11a: filler %0d has its own tag", i),
               pc_tag(blk_b) != pc_tag(blk_a));
-        wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd32, 3'd0,
+        wr_cond(blk_b, 1'b0, 1'b1, blk_b + 40'd32, 4'd0,
                 blk_b + 40'd32);
       end
       look2(blk_a);
@@ -751,14 +751,14 @@ module tb;
       blk_a = mk_pc(33, TAG_BASE);
       tgt_a = blk_a + 40'd32;
       tgt_b = blk_a + 40'h1000;
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd2, blk_a + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd2, blk_a + 40'd32);
       look2(blk_a);
       check("TC11b: seeded conf",
             pred2[0].conf == UBTB_CONF_INIT_TKN);
 
-      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd5,
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd5,
                         blk_a + 40'd32);
-      upd2[1] = mk_jmp (blk_a, 1'b1, 1'b0, 1'b0, tgt_b, 3'd7,
+      upd2[1] = mk_jmp (blk_a, 1'b1, 1'b0, 1'b0, tgt_b, 4'd7,
                         blk_a + 40'd32);
       commit();
       look2(blk_a);
@@ -767,13 +767,13 @@ module tb;
       check("TC11b: s0 is COND",  pred2[0].br_type == COND);
       check("TC11b: s0 conf stepped",
             pred2[0].conf == gold_step(UBTB_CONF_INIT_TKN, 1'b1));
-      check("TC11b: s0 pos held", pred2[0].pos == 3'd2);
+      check("TC11b: s0 pos held", pred2[0].pos == 4'd2);
       check("TC11b: s1 carries the jump",
             pred2[1].valid == 1'b1);
       check("TC11b: s1 jump type",
             pred2[1].br_type == DIRECT_CALL);
       check("TC11b: s1 jump target", pred2[1].target == tgt_b);
-      check("TC11b: s1 jump pos",    pred2[1].pos    == 3'd7);
+      check("TC11b: s1 jump pos",    pred2[1].pos    == 4'd7);
     end
     tc_close("TC11");
 
@@ -788,10 +788,10 @@ module tb;
       tgt_b = blk_a - 40'd64;
 
       // Both conditional fields written through the single channel.
-      upd1[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1,
+      upd1[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1,
                         blk_a + 40'd32);
       commit();
-      upd1[0] = mk_cond(blk_a, 1'b1, 1'b0, tgt_b, 3'd5,
+      upd1[0] = mk_cond(blk_a, 1'b1, 1'b0, tgt_b, 4'd5,
                         blk_a + 40'd32);
       commit();
       look1(blk_a);
@@ -800,7 +800,7 @@ module tb;
       check("TC12a: pft_addr",  blk1.pft_addr == blk_a + 40'd32);
       check("TC12a: slot valid",  pred1[0].valid   == 1'b1);
       check("TC12a: slot is br0", pred1[0].target  == tgt_a);
-      check("TC12a: slot pos",    pred1[0].pos     == 3'd1);
+      check("TC12a: slot pos",    pred1[0].pos     == 4'd1);
       check("TC12a: slot COND",   pred1[0].br_type == COND);
       check("TC12a: slot conf",
             pred1[0].conf == UBTB_CONF_INIT_TKN);
@@ -809,7 +809,7 @@ module tb;
       do_reset();
       blk_a = mk_pc(36, TAG_BASE);
       tgt_b = blk_a + 40'h400;
-      upd1[0] = mk_jmp(blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 3'd6,
+      upd1[0] = mk_jmp(blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 4'd6,
                        blk_a + 40'd32);
       commit();
       look1(blk_a);
@@ -818,7 +818,7 @@ module tb;
       check("TC12b: slot valid",  pred1[0].valid   == 1'b1);
       check("TC12b: slot RETURN", pred1[0].br_type == RETURN);
       check("TC12b: slot target", pred1[0].target  == tgt_b);
-      check("TC12b: slot pos",    pred1[0].pos     == 3'd6);
+      check("TC12b: slot pos",    pred1[0].pos     == 4'd6);
 
       // Miss behaviour at one slot.
       look1(mk_pc(37, TAG_BASE));
@@ -841,17 +841,17 @@ module tb;
       check("TC13: same set", pc_idx(blk_a) == pc_idx(blk_b));
       check("TC13: different tag", pc_tag(blk_a) != pc_tag(blk_b));
 
-      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1, blk_a + 40'd32);
-      wr_cond(blk_b, 1'b0, 1'b1, tgt_b, 3'd2, blk_b + 40'd32);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1, blk_a + 40'd32);
+      wr_cond(blk_b, 1'b0, 1'b1, tgt_b, 4'd2, blk_b + 40'd32);
 
       look2(blk_a);
       check("TC13: a hits",      blk2.hit == 1'b1);
       check("TC13: a target",    pred2[0].target == tgt_a);
-      check("TC13: a pos",       pred2[0].pos    == 3'd1);
+      check("TC13: a pos",       pred2[0].pos    == 4'd1);
       look2(blk_b);
       check("TC13: b hits",      blk2.hit == 1'b1);
       check("TC13: b target",    pred2[0].target == tgt_b);
-      check("TC13: b pos",       pred2[0].pos    == 3'd2);
+      check("TC13: b pos",       pred2[0].pos    == 4'd2);
     end
     tc_close("TC13");
 
@@ -877,7 +877,7 @@ module tb;
 
       // Fill all UBTB_WAYS ways.
       for (int i = 0; i < UBTB_WAYS; i++) begin
-        wr_cond(pcs[i], 1'b0, 1'b1, tgs[i], 3'd1, pcs[i] + 40'd32);
+        wr_cond(pcs[i], 1'b0, 1'b1, tgs[i], 4'd1, pcs[i] + 40'd32);
       end
       for (int i = 0; i < UBTB_WAYS; i++) begin
         look2(pcs[i]);
@@ -886,7 +886,7 @@ module tb;
       end
 
       // One more distinct tag evicts the round-robin victim, way 0.
-      wr_cond(pcs[UBTB_WAYS], 1'b0, 1'b1, tgs[UBTB_WAYS], 3'd1,
+      wr_cond(pcs[UBTB_WAYS], 1'b0, 1'b1, tgs[UBTB_WAYS], 4'd1,
               pcs[UBTB_WAYS] + 40'd32);
 
       look2(pcs[0]);
@@ -915,7 +915,7 @@ module tb;
       // Present the lookup and the update in the same cycle. Before
       // the edge the array still holds the pre-update contents.
       pred_pc2 = blk_a;
-      upd2[0]  = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 3'd1,
+      upd2[0]  = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd1,
                          blk_a + 40'd32);
       #1;
       check("TC15: no same-cycle bypass", blk2.hit == 1'b0);

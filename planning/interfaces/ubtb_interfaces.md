@@ -117,7 +117,7 @@ uBTB asserts no redirect and no stall.
              br_type==COND. Present in the struct for all types but
              the consumer must ignore it for non-COND.
 
-  pos      : in-block instruction position, 0..7, of this branch.
+  pos      : in-block instruction position, 0..15, of this branch.
              The cluster uses it to order br0 against br1 and to
              locate the taken branch in the fetch bundle.
 
@@ -179,7 +179,7 @@ same entry; they write different fields of it.
                at fill the weak conf init direction.
   target     : resolved taken target, full width. ubtb.sv converts
                to the stored displacement form.
-  pos        : in-block position of the resolving branch, 0..7.
+  pos        : in-block position of the resolving branch, 0..15.
                Written at fill; static for the life of a filled
                field.
   is_jmp     : this resolve is a jump.

@@ -27,7 +27,7 @@
 // tbl_ri_active + tbl_ri_wr: RAM-init path overrides all writes.
 //
 // Index hash: sc_idx_hash (planning/arch/sc_table_hash_rules.md).
-//   hashed_index = THIS_INDEX_BITS'((pc >> INST_OFFSET) ^ fh_idx_ext)
+//   hashed_index = THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_idx_ext)
 //   fh_idx_ext is idx_fh_p2 for ST1-ST3; ST0 ties idx_fh_p2 to zero
 //   at the instance. No re-hash on the update path.
 //
@@ -81,8 +81,10 @@ module sc_table #(
   input  logic                        clk
 );
 
-  // Byte offset for instruction address (RISC-V: right-shift PC).
-  localparam int INST_OFFSET = bp_defines_pkg::INST_OFFSET;
+  // The index hash shift is bp_defines_pkg::PC_HASH_SHIFT, visible
+  // through the file-scope wildcard import. The explicit local alias
+  // that stood here is removed: it shadowed the package name with
+  // the same value and served no purpose.
 
   // Two banks per RAM; index MSB selects bank, lower bits the row.
   localparam int NUM_BANKS   = 2;
@@ -98,7 +100,7 @@ module sc_table #(
   //   fh_idx_ext selected by THIS_TABLE:
   //     ST0 -> 0 (SC_TBL_FH[0]=0, unhashed PC slice)
   //     ST1-ST3 -> idx_fh_p2 (per-table fold selected in sc.sv)
-  //   hashed_index = THIS_INDEX_BITS'((pc >> INST_OFFSET) ^ fh_ext)
+  //   hashed_index = THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_ext)
   // Slot 0 and slot 1 are independent (separate pc inputs).
   // ============================================================
   logic [SC_MAX_FH-1:0]       fh_idx_ext;
@@ -126,7 +128,7 @@ module sc_table #(
       // both operands share the SC_MAX_FH context. Result truncated
       // to THIS_INDEX_BITS by the cast.
       idx_hash[s] = THIS_INDEX_BITS'(
-        (SC_MAX_FH'(inp_pc_p2[s]) >> INST_OFFSET) ^ fh_idx_ext);
+        (SC_MAX_FH'(inp_pc_p2[s]) >> PC_HASH_SHIFT) ^ fh_idx_ext);
     end
   end
 
