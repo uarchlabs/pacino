@@ -776,16 +776,11 @@ match it and to match this specification.
 
 ### fe_decisions.md
 
-6. CLOSED, INFRA-012, session-064. Section 2.2 and section 9 placed
-   the RAS top of stack at p1. ras.sv declares `ras_tos_addr_p0` and
-   `ras_tos_valid_p0`, at p0. Both corrected, and the section 1
-   stage list updated to match.
+6. CLOSED, PA-direct correction, session-064. Section 2.2 and
+   section 9 placed the RAS top of stack at p1.
 
-7. CLOSED, INFRA-012, session-064. Section 3.1 named redirect
-   signals `<pred>_redir_val_<pN>` and `<pred>_redir_tgt_<pN>`,
-   reading as a per-predictor port group. No predictor declares a
-   redirect port. Rewritten to the cluster-derived, stage-named
-   group of section 6, with FE-4 restated and FE-12 added.
+7. CLOSED, PA-direct correction, session-064. Section 3.1 named
+   redirect signals `<pred>_redir_val_<pN>` and
 
 ### Open items
 
@@ -904,7 +899,7 @@ match it and to match this specification.
               fall-through in bp_ftq_entry_t.pft_addr; section 10
               item 15 opened and closed for the field addition.
 
-  2026-08-09  INFRA-012 / session-064. Section 9 pred_pc corrected:
+  2026-08-09  session-064. Section 9 pred_pc corrected:
               it is one value per BRANCH after compaction, not one
               per slot, and it is the branch PC rather than the
               fetch block PC (BP-092a). Section 10 items 6, 7, 8 and

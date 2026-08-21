@@ -32,7 +32,19 @@ production-quality outputs.
                      The module name inside the testbench is always tb.
 - Deliverables:      Always provide both the RTL file and the
                      testbench unless explicitly told otherwise.
-
+- Planning docs:     Planning documents are never modified by the IA.
+                     Files under planning/, pa_handoffs/ and docs/ are
+                     READ-ONLY in every task. The IA reports what a
+                     planning document should say; the PA drafts it and
+                     Jeff applies it.
+                     This is NOT overridable by a task file. A planning
+                     path in Deliverables, or in a "Files expected to
+                     change" list, does not grant write permission.
+                     WAIVER: only an explicit statement from Jeff in the
+                     task file, naming the files and the task ID, permits
+                     an IA write. A waiver covers that task only. It is
+                     never precedent and never propagates to the next
+                     task, even one continuing the same work.
 ---
 
 ## Style Rules - enforced by style scripts, no exceptions
@@ -86,6 +98,12 @@ production-quality outputs.
 - Results Capture content must be ASCII only. No Unicode.
 - Final console output should avoid non-ASCII if possible.
   This is a preference but not a hard requirement.
+
+- EXCEPTION to the rule above: planning documents. A path
+  under planning/, pa_handoffs/ or docs/ in Context Loaded
+  is read-only, and the same path in Deliverables does not
+  make it writable. Report the change you would have made
+  in Results Capture instead. See Fixed Constants.
 
 ## Model Reporting in Task Files
 - When the prompt context contains :: HEADER:START :: the

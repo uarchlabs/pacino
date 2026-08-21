@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-20 (during ia interactive sessions)
+ UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```
 
@@ -18,6 +18,16 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 ---
 
 ## IA interactive sessions: FTQ definition. Seven tasks, four interfaces.
+
+WAIVER, BP-098 THROUGH BP-105 ONLY. The IA wrote the FTQ planning
+documents directly in these interactive sessions under a one-time
+waiver from Jeff, granted to work around repeated PA failures to
+produce usable task specifications. It is NOT propagated, NOT
+precedent, and expired with BP-105. The standing rule -- planning
+documents are IA-read-only -- is CLAUDE.md Fixed Constants and
+applies from BP-106 forward. Do not cite this series as authority
+for an IA write to any file under planning/, and do not read the
+"Files expected to change" list of any task file as a grant.
 
 The FTQ is specified end to end. Three of its four interfaces are
 written; the fourth is deliberately not.
@@ -143,7 +153,11 @@ The IA handoff for this session is
 ia_context/ia_handoffs/ia_session_handoff-005.md. It is NOT in the
 PA read set; its section 8 lists what wants PA attention.
 
-Next free BP number is BP-106. Next free INFRA number is INFRA-013.
+Next free BP number is BP-106. Next free INFRA number is INFRA-012.
+INFRA-012 has never been generated or run. Three citations of it in
+ftq_bpu_interfaces.md were a label attached retroactively to the
+session-064 PA-direct document corrections, and are corrected there.
+Do not skip to 013.
 
 ---
 
@@ -764,6 +778,23 @@ it only documented current behavior.
 |                         |             |                   | and to the branch PC; section 10 |
 |                         |             |                   | items 6, 7, 8, 9, 12 CLOSED;     |
 |                         |             |                   | item 14 opened for TD#102.       |
+|                         |             |                   | SESSION-067: section 4a added,   |
+|                         |             |                   | the p2/p3 slot correction groups,|
+|                         |             |                   | six ports, driven from the p2    |
+|                         |             |                   | classification, the FTB positions|
+|                         |             |                   | and the p2 target selection.     |
+|                         |             |                   | Section 10 item 16 CLOSED (group |
+|                         |             |                   | I, 24 checks, 973 -> 997); item  |
+|                         |             |                   | 15 CLOSED (pft_addr, entry 182 ->|
+|                         |             |                   | 222b); item 17 opened and        |
+|                         |             |                   | DEFERRED (the bp_ftq_meta_t      |
+|                         |             |                   | union). Section 9 gains the      |
+|                         |             |                   | cluster-boundary rollback group, |
+|                         |             |                   | ftq_rollback_val and             |
+|                         |             |                   | ftq_rollback_idx, BP-102.        |
+|                         |             |                   | Three INFRA-012 citations are a  |
+|                         |             |                   | label for PA-direct session-064  |
+|                         |             |                   | corrections; no such task ran.   |
 | fe_decisions.md         | Draft       | --                | Created session-062. Front-end   |
 |                         |             |                   | theory of operation. SESSION-064:|
 |                         |             |                   | RAS top of stack corrected to p0 |
@@ -773,7 +804,176 @@ it only documented current behavior.
 |                         |             |                   | redirect groups; bp_loop_meta_t  |
 |                         |             |                   | replaced by lp_pred_t in 4.2;    |
 |                         |             |                   | FE-12 added.                     |
-| fetch                   | Not started | --                | After BP cluster                 |
+| bp_cluster.md           | Working     | --                | BP cluster summary data. The     |
+|                         |             |                   | LOCKED annotation is RETIRED --  |
+|                         |             |                   | it was never a Module Status     |
+|                         |             |                   | value and permission is settled  |
+|                         |             |                   | once by CLAUDE.md Fixed          |
+|                         |             |                   | Constants, not per file.         |
+|                         |             |                   | Session-063 decisions still NOT  |
+|                         |             |                   | promoted here: block-descriptor  |
+|                         |             |                   | uBTB, stage-named redirects, the |
+|                         |             |                   | one-quantity comparison, the     |
+|                         |             |                   | branch_id qualification, the     |
+|                         |             |                   | two-group metadata write. They   |
+|                         |             |                   | live in handoff-064 and          |
+|                         |             |                   | ftq_bpu_interfaces.md.           |
+|                         |             |                   | SESSION-067: its bp_ftq_entry_t  |
+|                         |             |                   | copy deleted; ftq_entry_formats  |
+|                         |             |                   | .md is now the sole prose home.  |
+| ftq_decisions.md        | Draft       | --                | Created session-067. FTQ-owned   |
+|                         |             |                   | behaviour: entry storage (1),    |
+|                         |             |                   | lifetime (2), checkpoint and     |
+|                         |             |                   | restore (3), next-PC selection   |
+|                         |             |                   | (4), queue management (5), the   |
+|                         |             |                   | FTB update scheduler (5.7),      |
+|                         |             |                   | module decomposition (7).        |
+|                         |             |                   | fe_decisions 4.3, 5 and 6 moved  |
+|                         |             |                   | here WHOLE; those sections are   |
+|                         |             |                   | RETIRED, not reused, so old      |
+|                         |             |                   | cross-references still resolve.  |
+|                         |             |                   | RESOLVES FE-U7, G9, G23,         |
+|                         |             |                   | RESETVEC. PREFETCH deferred with |
+|                         |             |                   | its structural cost recorded     |
+|                         |             |                   | (6.1). FTQ_DEPTH 64, pointers 7b |
+|                         |             |                   | with a wrap bit. 3.2 CORRECTED   |
+|                         |             |                   | to the INDEX form by BP-102.     |
+| ftq_entry_formats.md    | Draft       | --                | Created session-067. SOLE prose  |
+|                         |             |                   | home for bp_ftq_entry_t and      |
+|                         |             |                   | bp_ftq_meta_t. bp_cluster.md and |
+|                         |             |                   | fe_decisions.md each carried a   |
+|                         |             |                   | copy until then; both now point  |
+|                         |             |                   | here. Fast path 224b x 64 =      |
+|                         |             |                   | 14,336b; slow path 421b x 2      |
+|                         |             |                   | slots x 64 = 53,888b; 68,224b    |
+|                         |             |                   | together. Section 3.1 defines the|
+|                         |             |                   | two-arm union, 278b per slot and |
+|                         |             |                   | 49,920b, DEFINED and DEFERRED    |
+|                         |             |                   | (TD-FE-2). Section 4 adds        |
+|                         |             |                   | wb_rcvd, fault and gen as three  |
+|                         |             |                   | flop vectors, 192b, OUTSIDE both |
+|                         |             |                   | SRAMs. TD-FE-1 CLOSED in full.   |
+|                         |             |                   | TD-FE-8 opened and closed 4.4.   |
+| ftq_ifu_interfaces.md   | Draft       | --                | Created session-067. Closes      |
+|                         |             |                   | TD-FE-1. Fetch request, flush,   |
+|                         |             |                   | predecode writeback. EVERY PORT  |
+|                         |             |                   | IS NEW -- neither side exists;   |
+|                         |             |                   | rtl/core/frontend/ifu/rtl holds  |
+|                         |             |                   | only a .gitkeep. Section 6.1     |
+|                         |             |                   | closes TD-FE-8: one generation   |
+|                         |             |                   | bit, ftq_ifu_gen out and         |
+|                         |             |                   | ifu_ftq_pdwb_gen back, toggled   |
+|                         |             |                   | per allocation. ONE bit suffices |
+|                         |             |                   | only because the section 5 flush |
+|                         |             |                   | BOUNDS stale writebacks to one   |
+|                         |             |                   | per flush; revisit the width if  |
+|                         |             |                   | that contract changes. No        |
+|                         |             |                   | predictor update is formed from  |
+|                         |             |                   | predecode (FE-8).                |
+| ftq_backend             | Draft       | --                | Created session-067. Resolution, |
+| _interfaces.md          |             |                   | redirect and commit as THREE     |
+|                         |             |                   | separate events, many cycles     |
+|                         |             |                   | apart. The backend names an      |
+|                         |             |                   | in-block POSITION, not a slot;   |
+|                         |             |                   | the FTQ maps position to slot.   |
+|                         |             |                   | Commit is an idempotent          |
+|                         |             |                   | watermark, rate limited to one   |
+|                         |             |                   | entry per cycle by the SCALAR    |
+|                         |             |                   | ras_commit_* port. RC_RESERVED   |
+|                         |             |                   | renamed RC_UNSPEC and DEFINED    |
+|                         |             |                   | (5.1): the redirect naming no    |
+|                         |             |                   | instruction, for reset and debug |
+|                         |             |                   | entry. Opened TD-FE-7, CLOSED by |
+|                         |             |                   | BP-102. Six backend assumptions  |
+|                         |             |                   | in section 10, NONE verifiable   |
+|                         |             |                   | -- the backend does not exist.   |
+| ftq_ftb_sched.sv        | Complete    | tb_ftq_ftb_sched  | BP-100. FIRST FTQ MODULE and the |
+|                         |             |                   | project's first CONCURRENT SVA.  |
+|                         |             |                   | Implements ftq_decisions.md 5.7: |
+|                         |             |                   | one-deep skid, skid issues first |
+|                         |             |                   | to preserve resolution order,    |
+|                         |             |                   | highest-value new update         |
+|                         |             |                   | otherwise, slot 0 breaking a tie.|
+|                         |             |                   | LOW updates may be dropped, HIGH |
+|                         |             |                   | never; backpressure only to      |
+|                         |             |                   | protect a HIGH. P1-P5 bound by   |
+|                         |             |                   | MODULE name, not instance        |
+|                         |             |                   | (TD#109), and run in the sim     |
+|                         |             |                   | target. sim_ftq_ftb_sched 67/0.  |
+|                         |             |                   | P4 CORRECTED |-> to |=> : P1 and |
+|                         |             |                   | P4 as specified could not both   |
+|                         |             |                   | hold, one needing a registered   |
+|                         |             |                   | output and the other a           |
+|                         |             |                   | combinational one. Registered    |
+|                         |             |                   | form built; intent unchanged.    |
+|                         |             |                   | Scheduler exposes skid_val,      |
+|                         |             |                   | skid_wr, skid_issue, drop_val,   |
+|                         |             |                   | drop_is_high and the two pending |
+|                         |             |                   | counts as PORTS so the bind makes|
+|                         |             |                   | no hierarchical reference.       |
+|                         |             |                   | ITS TARGETS ARE NOT IN THE BPU   |
+|                         |             |                   | 47. Counted separately.          |
+| ftq.sv                  | Not started | --                | Structural top: no state, no     |
+|                         |             |                   | logic, no always block. Does NOT |
+|                         |             |                   | instantiate bp_cluster; a front- |
+|                         |             |                   | end top above both wires them.   |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+| ftq_ptr.sv              | Not started | --                | alloc_ptr and fetch_ptr. Reads   |
+|                         |             |                   | commit_ptr to compute full.      |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: ftq_decisions.md 5.1, |
+|                         |             |                   | 5.2, 5.5.                        |
+| ftq_commit.sv           | Not started | --                | commit_ptr and the commit walk.  |
+|                         |             |                   | Split from ftq_ptr because its   |
+|                         |             |                   | advance is not a local decision. |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: ftq_decisions.md 5.3, |
+|                         |             |                   | 5.4.                             |
+| ftq_npc.sv              | Not started | --                | Next-PC register and the         |
+|                         |             |                   | redirect arbitration feeding it. |
+|                         |             |                   | The p1 successor path must be    |
+|                         |             |                   | COMBINATIONAL -- it is the zero- |
+|                         |             |                   | bubble loop.                     |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: ftq_decisions.md 4.   |
+| ftq_entry.sv            | Not started | --                | Fast-path array, read every      |
+|                         |             |                   | cycle.                           |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: ftq_decisions.md 1,   |
+|                         |             |                   | 2.                               |
+| ftq_meta.sv             | Not started | --                | Slow-path array, read once at    |
+|                         |             |                   | resolution.                      |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: ftq_decisions.md 3.   |
+| ftq_status.sv           | Not started | --                | wb_rcvd, fault, gen. 192 flops   |
+|                         |             |                   | with a masked range clear -- a   |
+|                         |             |                   | different storage class from     |
+|                         |             |                   | ftq_entry.                       |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: entry_formats 4.      |
+| ftq_shadow.sv           | Not started | --                | Four-deep in-flight response     |
+|                         |             |                   | shadow, 4 x 7 bits. Drops        |
+|                         |             |                   | cluster responses naming         |
+|                         |             |                   | squashed entries.                |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour: ftq_decisions.md 5.6. |
+| ftq_ifu.sv              | Not started | --                | Request, flush, writeback,       |
+|                         |             |                   | predecode redirect.              |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour:                       |
+|                         |             |                   | ftq_ifu_interfaces.md.           |
+| ftq_resolve.sv          | Not started | --                | Resolution intake and update     |
+|                         |             |                   | fan-out.                         |
+|                         |             |                   | ftq_decisions.md 7.1.            |
+|                         |             |                   | Behaviour:                       |
+|                         |             |                   | ftq_backend_interfaces.md 4.     |
+| fetch                   | Not started | --                | After the FTQ. Its interface to  |
+|                         |             |                   | the FTQ is SPECIFIED,            |
+|                         |             |                   | ftq_ifu_interfaces.md, but       |
+|                         |             |                   | rtl/core/frontend/ifu/rtl holds  |
+|                         |             |                   | only a .gitkeep -- every port in |
+|                         |             |                   | that document is unbuilt on both |
+|                         |             |                   | sides.                           |
 
 ---
 
@@ -1314,7 +1514,7 @@ Key decisions for quick reference:
 
 ### BP cluster track
 
-Full detail: planning/arch/bp_cluster.md (LOCKED),
+Full detail: planning/arch/bp_cluster.md,
 planning/arch/fe_decisions.md (theory of operation),
 planning/interfaces/ftq_bpu_interfaces.md (port specification).
 
@@ -1593,4 +1793,5 @@ unless noted.
 
 ### Shared components track
 - components/rtl  components/tb
+
 

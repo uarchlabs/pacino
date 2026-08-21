@@ -276,14 +276,14 @@ and a pulse would need a rate nobody has bounded. A watermark is
 idempotent: repeating it is harmless, and a cycle in which it does
 not advance costs nothing.
 
-COMMIT IS RATE LIMITED BY THE RAS, not by the FTQ. `ras_decisions.md`
-211 requires that when a call-containing block commits, the return
-address is pushed onto the commit stack, and 4.5 requires BOS to
-advance to that entry's post-op TOSR. The `ras_commit_*` group on
-bp_cluster is SCALAR: one commit operation per cycle, no slot
-dimension. So if the watermark jumps by more than one entry, the FTQ
-must walk the intervening entries one per cycle to issue their RAS
-commits.
+COMMIT IS RATE LIMITED BY THE RAS, not by the FTQ.
+`ras_decisions.md` 3.3 requires that when a call-containing block
+commits, the return address is pushed onto the commit stack, and 4.5
+requires BOS to advance to that entry's post-op TOSR. The
+`ras_commit_*` group on bp_cluster is SCALAR: one commit operation
+per cycle, no slot dimension. So if the watermark jumps by more than
+one entry, the FTQ must walk the intervening entries one per cycle
+to issue their RAS commits.
 
 That walk is bounded and safe. FE-11 guarantees at most one RAS
 operation per entry, so one entry per cycle is one RAS commit per
@@ -450,6 +450,12 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
+  2026-08-21  Cross-reference repair. No content change. Section 6
+              cited "ras_decisions.md 211". Every other citation in
+              that file is a section number and 211 is not one; the
+              requirement is 3.3, Commit stack / Update. The
+              companion 4.5 in the same sentence was already correct.
+
   2026-08-19  Created. Resolution, redirect and commit defined as
               three separate events. Resolution names an in-block
               POSITION, not a prediction slot, so the backend needs
@@ -485,3 +491,4 @@ Every one of these is unverifiable today. The backend does not exist.
               share one. The caveat added earlier the same day is
               retired.
 ```
+
