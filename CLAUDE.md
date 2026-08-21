@@ -1,6 +1,15 @@
 <!-- SPDX-License-Identifier: Apache-2.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
+
+```
+ FILE:    CLAUDE.md
+ SOURCE:  various
+ STATUS:  WORKING
+ UPDATED: n/a
+ CONTACT: Jeff Nye
+```
+
 # Project: RISC-V RVA23 Processor Design
 You are assisting with the iterative RTL design and verification of a
 RISC-V processor. Work through each module systematically, delivering

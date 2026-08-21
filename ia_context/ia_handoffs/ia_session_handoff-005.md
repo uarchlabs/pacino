@@ -10,10 +10,11 @@
  CONTACT: Jeff Nye
 ```
 
-THIS FILE POINTS, IT DOES NOT REPEAT. Everything decided last
-session is in the planning documents of section 2 and in the five
-task files BP-100 and BP-102 through BP-105. Read those for content;
-read this for state, order and traps.
+resume sha 3421e6b3-bf5b-4a82-8e17-0f52ae12ed10
+
+Everything decided last session is in the planning documents of section 2 and
+in the five task files BP-100 and BP-102 through BP-105. Read those for
+content; read this for state, order and traps.
 
 Continues IA-004 directly. Same series, same tree, one day later.
 

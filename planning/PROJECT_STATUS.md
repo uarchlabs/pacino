@@ -182,8 +182,6 @@ accounted for the 278-check growth in groups A-F, per group.
 
 CLOSED this session: TD#111. TD#109 and TD#110 closed BP-096.
 
-Next free BP number is BP-098. Next free INFRA number is INFRA-012.
-
 ---
 
 ## Session-065: BP-096. Bind sweep, 407 vs 973.
