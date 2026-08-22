@@ -480,7 +480,7 @@ container, or a VM — particularly when using `--auto-accept-edits` or
 
 9.1 Tell IA '/context'
 9.2 Tell IA 'how much context was used'
-9.3 Tell IA 'report current context usage and write it to context-report.md'
+9.3 Tell IA 'write context usage to new file context-report.md'
     copy the content of this file to Context Report section of task file.
 
 10. Discuss results with claude.ai as needed. Record decisions in Results Discussion.

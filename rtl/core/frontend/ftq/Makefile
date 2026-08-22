@@ -63,70 +63,79 @@ PKG_SRCS := \
   $(BPU_DIR)/bp_defines_pkg.sv \
   $(BPU_DIR)/bp_structs_pkg.sv
 
+# ASSERTION COLLATERAL LIVES IN tb/, NOT rtl/ (BP-108). rtl/ holds
+# only synthesisable RTL; a *_assert.sv module and its bind are
+# verification collateral. This matches the bpu unit, whose
+# ittage_assert.sv, tage_assert.sv and tage_assert_bind.sv are all
+# named as $(TB_DIR)/... The binds are by MODULE NAME (TD#109), so
+# the directory a file sits in does not affect what it binds to.
+# Every source list below keeps its assertion file, lint and sim
+# alike, so the ten files retain lint coverage after the move.
+
 SCHED_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_ftb_sched.sv \
-  $(RTL_DIR)/ftq_ftb_sched_assert.sv
+  $(TB_DIR)/ftq_ftb_sched_assert.sv
 
 PTR_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_ptr.sv \
-  $(RTL_DIR)/ftq_ptr_assert.sv
+  $(TB_DIR)/ftq_ptr_assert.sv
 
 COMMIT_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_commit.sv \
-  $(RTL_DIR)/ftq_commit_assert.sv
+  $(TB_DIR)/ftq_commit_assert.sv
 
 ENTRY_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_entry.sv \
-  $(RTL_DIR)/ftq_entry_assert.sv
+  $(TB_DIR)/ftq_entry_assert.sv
 
 META_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_meta.sv \
-  $(RTL_DIR)/ftq_meta_assert.sv
+  $(TB_DIR)/ftq_meta_assert.sv
 
 STATUS_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_status.sv \
-  $(RTL_DIR)/ftq_status_assert.sv
+  $(TB_DIR)/ftq_status_assert.sv
 
 SHADOW_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_shadow.sv \
-  $(RTL_DIR)/ftq_shadow_assert.sv
+  $(TB_DIR)/ftq_shadow_assert.sv
 
 NPC_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_npc.sv \
-  $(RTL_DIR)/ftq_npc_assert.sv
+  $(TB_DIR)/ftq_npc_assert.sv
 
 IFU_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_ifu.sv \
-  $(RTL_DIR)/ftq_ifu_assert.sv
+  $(TB_DIR)/ftq_ifu_assert.sv
 
 RESOLVE_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_resolve.sv \
-  $(RTL_DIR)/ftq_resolve_assert.sv
+  $(TB_DIR)/ftq_resolve_assert.sv
 
 # The unit. Every leaf and every assertion file, plus the structural
 # top. The order is packages first, then leaves, then ftq.sv.
 FTQ_SRCS := \
   $(PKG_SRCS) \
-  $(RTL_DIR)/ftq_ptr.sv          $(RTL_DIR)/ftq_ptr_assert.sv \
-  $(RTL_DIR)/ftq_commit.sv       $(RTL_DIR)/ftq_commit_assert.sv \
-  $(RTL_DIR)/ftq_entry.sv        $(RTL_DIR)/ftq_entry_assert.sv \
-  $(RTL_DIR)/ftq_meta.sv         $(RTL_DIR)/ftq_meta_assert.sv \
-  $(RTL_DIR)/ftq_status.sv       $(RTL_DIR)/ftq_status_assert.sv \
-  $(RTL_DIR)/ftq_shadow.sv       $(RTL_DIR)/ftq_shadow_assert.sv \
-  $(RTL_DIR)/ftq_npc.sv          $(RTL_DIR)/ftq_npc_assert.sv \
-  $(RTL_DIR)/ftq_ifu.sv          $(RTL_DIR)/ftq_ifu_assert.sv \
-  $(RTL_DIR)/ftq_resolve.sv      $(RTL_DIR)/ftq_resolve_assert.sv \
-  $(RTL_DIR)/ftq_ftb_sched.sv    $(RTL_DIR)/ftq_ftb_sched_assert.sv \
+  $(RTL_DIR)/ftq_ptr.sv          $(TB_DIR)/ftq_ptr_assert.sv \
+  $(RTL_DIR)/ftq_commit.sv       $(TB_DIR)/ftq_commit_assert.sv \
+  $(RTL_DIR)/ftq_entry.sv        $(TB_DIR)/ftq_entry_assert.sv \
+  $(RTL_DIR)/ftq_meta.sv         $(TB_DIR)/ftq_meta_assert.sv \
+  $(RTL_DIR)/ftq_status.sv       $(TB_DIR)/ftq_status_assert.sv \
+  $(RTL_DIR)/ftq_shadow.sv       $(TB_DIR)/ftq_shadow_assert.sv \
+  $(RTL_DIR)/ftq_npc.sv          $(TB_DIR)/ftq_npc_assert.sv \
+  $(RTL_DIR)/ftq_ifu.sv          $(TB_DIR)/ftq_ifu_assert.sv \
+  $(RTL_DIR)/ftq_resolve.sv      $(TB_DIR)/ftq_resolve_assert.sv \
+  $(RTL_DIR)/ftq_ftb_sched.sv    $(TB_DIR)/ftq_ftb_sched_assert.sv \
   $(RTL_DIR)/ftq.sv
 
 .PHONY: all clean \
