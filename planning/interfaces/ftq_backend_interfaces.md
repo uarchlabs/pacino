@@ -488,7 +488,7 @@ Every one of these is unverifiable today. The backend does not exist.
               from the deallocation pointer is STRUCK, with the
               "freeing may run ahead" claim it rested on. It
               contradicted ftq_decisions.md 5.4, which governs by
-              ruling, session-068.
+              ruling, session-067.
 
   2026-08-21  Cross-reference repair. No content change. Section 6
               cited "ras_decisions.md 211". Every other citation in

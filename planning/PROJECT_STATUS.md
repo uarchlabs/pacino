@@ -1338,7 +1338,34 @@ it only documented current behavior.
 |     |          | correctly, so the older limits were left. The            |
 |     |          | completion figures behind those ratios are coarse and    |
 |     |          | strap-dependent; re-measure before setting a ratio rule. |
-
+| 112 | planning | OPEN. Five session-063 decisions have never been written |
+|     |          | into any planning document. They exist only in           |
+|     |          | pa_handoffs/session_handoff-064.md and, partially, in    |
+|     |          | ftq_bpu_interfaces.md:                                   |
+|     |          |                                                          |
+|     |          |   - the block-descriptor uBTB                            |
+|     |          |   - the stage-named redirect model                       |
+|     |          |   - the one-quantity comparison                          |
+|     |          |   - the branch_id qualification                          |
+|     |          |   - the two-group metadata write                         |
+|     |          |                                                          |
+|     |          | bp_cluster.md is where they belong. G8 and G17 were      |
+|     |          | SUPERSEDED by them, and ras_decisions.md 6.1 and         |
+|     |          | loop_pred_interfaces.md still carry the retired          |
+|     |          | pred_pc+32 dual-slot model those decisions replaced, so  |
+|     |          | the gap is actively producing wrong text elsewhere.      |
+|     |          |                                                          |
+|     |          | WHY THIS IS A TD AND NOT A HANDOFF NOTE: handoffs are    |
+|     |          | disposable and are recopied by hand. This item was       |
+|     |          | carried unchanged by handoff-065, -066, -067 and -069 -- |
+|     |          | four sessions of noticing and not fixing. The first      |
+|     |          | session that does not bother recopying it loses the      |
+|     |          | decisions from the record while the RTL still implements |
+|     |          | them.                                                    |
+|     |          |                                                          |
+|     |          | Fix is one PA-direct edit to bp_cluster.md, plus         |
+|     |          | correcting the two documents still carrying the          |
+|     |          | superseded model. No RTL change.                         |
 ---
 
 ## Open Items
