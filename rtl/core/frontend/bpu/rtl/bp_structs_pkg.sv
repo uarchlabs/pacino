@@ -108,6 +108,18 @@ package bp_structs_pkg;
     CHOOSE_RSRVD = 2'b11
   } bp_sc_chooser_e;
 
+  // Backend redirect cause, 2b. Carried on bkend_ftq_redir_cause.
+  // RC_UNSPEC names NO instruction: _idx, _pos and _self are
+  // meaningless on it and must not be read, and no history or RAS
+  // restore is performed. It is reset and debug-mode entry.
+  // See ftq_backend_interfaces.md 5 and 5.1.
+  typedef enum logic [1:0] {
+    RC_MISPREDICT = 2'b00, // branch resolved against the prediction
+    RC_TRAP       = 2'b01, // exception or interrupt
+    RC_REPLAY     = 2'b10, // pipeline replay, memory ordering
+    RC_UNSPEC     = 2'b11  // no naming instruction
+  } ftq_redir_cause_e;
+
   // BrIMLI modes, for perf analysis, 2'b00 is default
   typedef enum logic [1:0] {
     IDX_IMLI_PHR  = 2'b00, // baseline: IMLI, fall back to PHR when cold
@@ -483,6 +495,50 @@ package bp_structs_pkg;
     //logic [FTQ_IDX_BITS-1:0]  ftq_idx;   // FTQ entry being squashed
     logic                     valid;
   } bp_redirect_t;
+
+  // ----------------------------------------------------------------
+  // FTQ boundary structs
+  // ----------------------------------------------------------------
+
+  // ftq_resolve_t: one backend resolution channel into the FTQ.
+  // ftq_backend_interfaces.md 4. Carried as
+  //   ftq_resolve_t [0:NUM_RESOLVE_PORTS-1]
+  // at the port, ascending, per the port-dimension convention.
+  //
+  // THE BACKEND NAMES A POSITION, NOT A SLOT. Prediction slots are
+  // the two branch fields of one FTB block (FE-10) and nothing
+  // outside the BPU and the FTQ has reason to know which field a
+  // branch landed in. The IFU tags each instruction from its own
+  // predecode, and predecode yields a position; the FTQ maps
+  // position to slot by matching pos against the entry's slot pos
+  // fields. bp_update_t cannot acquire a position field without
+  // breaking FE-10, which is why this type exists alongside it.
+  typedef struct packed {
+    logic [FTQ_IDX_BITS-1:0]    ftq_idx;    // entry that fetched it
+    logic [FTB_BR_POS_BITS-1:0] pos;        // in-block position
+    logic                       taken;      // resolved direction
+    logic [VA_WIDTH-1:0]        target;     // resolved target
+    bp_br_type_e                br_type;    // resolved type
+    logic                       mispredict;
+  } ftq_resolve_t;
+
+  // ftq_pd_info_t: one predecode slot of the IFU writeback.
+  // ftq_ifu_interfaces.md 6. Carried as
+  //   ftq_pd_info_t [FTQ_PD_WIDTH-1:0]
+  // one per 2-byte position in the 32-byte prediction block.
+  //
+  // br_type here is the PREDECODE classification, two bits, and is
+  // NOT bp_br_type_e. Predecode knows only the encoding it decoded;
+  // the FTQ maps this pair plus is_call and is_ret onto
+  // bp_br_type_e when it rewrites the slot (ftq_ifu_interfaces.md
+  // 7 W1).
+  typedef struct packed {
+    logic       valid;   // slot holds an instruction start
+    logic       is_rvc;  // 16-bit encoding
+    logic [1:0] br_type; // 00 not CFI, 01 branch, 10 jal, 11 jalr
+    logic       is_call;
+    logic       is_ret;
+  } ftq_pd_info_t;
 
   // ----------------------------------------------------------------
   // uBTB structs

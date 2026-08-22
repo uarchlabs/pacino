@@ -912,61 +912,98 @@ it only documented current behavior.
 |                         |             |                   | counts as PORTS so the bind makes|
 |                         |             |                   | no hierarchical reference.       |
 |                         |             |                   | ITS TARGETS ARE NOT IN THE BPU   |
-|                         |             |                   | 47. Counted separately.          |
-| ftq.sv                  | Not started | --                | Structural top: no state, no     |
-|                         |             |                   | logic, no always block. Does NOT |
-|                         |             |                   | instantiate bp_cluster; a front- |
-|                         |             |                   | end top above both wires them.   |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-| ftq_ptr.sv              | Not started | --                | alloc_ptr and fetch_ptr. Reads   |
-|                         |             |                   | commit_ptr to compute full.      |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: ftq_decisions.md 5.1, |
-|                         |             |                   | 5.2, 5.5.                        |
-| ftq_commit.sv           | Not started | --                | commit_ptr and the commit walk.  |
-|                         |             |                   | Split from ftq_ptr because its   |
-|                         |             |                   | advance is not a local decision. |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: ftq_decisions.md 5.3, |
-|                         |             |                   | 5.4.                             |
-| ftq_npc.sv              | Not started | --                | Next-PC register and the         |
-|                         |             |                   | redirect arbitration feeding it. |
-|                         |             |                   | The p1 successor path must be    |
-|                         |             |                   | COMBINATIONAL -- it is the zero- |
-|                         |             |                   | bubble loop.                     |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: ftq_decisions.md 4.   |
-| ftq_entry.sv            | Not started | --                | Fast-path array, read every      |
-|                         |             |                   | cycle.                           |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: ftq_decisions.md 1,   |
-|                         |             |                   | 2.                               |
-| ftq_meta.sv             | Not started | --                | Slow-path array, read once at    |
-|                         |             |                   | resolution.                      |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: ftq_decisions.md 3.   |
-| ftq_status.sv           | Not started | --                | wb_rcvd, fault, gen. 192 flops   |
-|                         |             |                   | with a masked range clear -- a   |
-|                         |             |                   | different storage class from     |
-|                         |             |                   | ftq_entry.                       |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: entry_formats 4.      |
-| ftq_shadow.sv           | Not started | --                | Four-deep in-flight response     |
-|                         |             |                   | shadow, 4 x 7 bits. Drops        |
-|                         |             |                   | cluster responses naming         |
-|                         |             |                   | squashed entries.                |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour: ftq_decisions.md 5.6. |
-| ftq_ifu.sv              | Not started | --                | Request, flush, writeback,       |
-|                         |             |                   | predecode redirect.              |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour:                       |
-|                         |             |                   | ftq_ifu_interfaces.md.           |
-| ftq_resolve.sv          | Not started | --                | Resolution intake and update     |
-|                         |             |                   | fan-out.                         |
-|                         |             |                   | ftq_decisions.md 7.1.            |
-|                         |             |                   | Behaviour:                       |
-|                         |             |                   | ftq_backend_interfaces.md 4.     |
+|                         |             |                   | 47. The ftq unit is 22 targets   |
+|                         |             |                   | and 670 checks as of BP-107.     |
+| ftq.sv                  | Complete    | tb_ftq            | BP-107. Structural top, 7.1 and  |
+|                         |             |                   | 7.3. No state, no always block.  |
+|                         |             |                   | Three assigns, none of them      |
+|                         |             |                   | logic: a rename, an alias, and a |
+|                         |             |                   | termination for leaf observation |
+|                         |             |                   | nets. Does NOT instantiate       |
+|                         |             |                   | bp_cluster. NO ASSERTION FILE and|
+|                         |             |                   | should not have one: it holds no |
+|                         |             |                   | invariant, and all 73 leaf       |
+|                         |             |                   | properties run under its target  |
+|                         |             |                   | anyway. sim_ftq 56/0.            |
+| ftq_ptr.sv              | Complete    | tb_ftq_ptr        | BP-106, retrofitted BP-107.      |
+|                         |             |                   | alloc_ptr and fetch_ptr.         |
+|                         |             |                   | FTQ_ALLOC_LIMIT REVERTED to      |
+|                         |             |                   | FTQ_DEPTH once the watermark     |
+|                         |             |                   | gained a generation bit; the 64th|
+|                         |             |                   | entry is live and property Q3 was|
+|                         |             |                   | re-aimed. Reconstructs the       |
+|                         |             |                   | generation of                    |
+|                         |             |                   | bkend_ftq_redir_idx, which stays |
+|                         |             |                   | FTQ_IDX_BITS wide. sim_ftq_ptr   |
+|                         |             |                   | 102/0.                           |
+| ftq_commit.sv           | Complete    | tb_ftq_commit     | BP-106, retrofitted BP-107.      |
+|                         |             |                   | commit_ptr and a REGISTERED walk |
+|                         |             |                   | end, one entry per cycle. Its    |
+|                         |             |                   | generation reconstruction was    |
+|                         |             |                   | DELETED when bkend_ftq_commit_idx|
+|                         |             |                   | widened. No decrement path at    |
+|                         |             |                   | all, which is how R2 is met.     |
+|                         |             |                   | sim_ftq_commit 72/0.             |
+| ftq_npc.sv              | Complete    | tb_ftq_npc        | BP-107. Next-PC register and the |
+|                         |             |                   | 4.2 arbitration. THE p1 SUCCESSOR|
+|                         |             |                   | IS COMBINATIONAL, confirmed three|
+|                         |             |                   | ways: a same-cycle testbench read|
+|                         |             |                   | with no intervening clock edge,  |
+|                         |             |                   | property N4 as a same-cycle SVA, |
+|                         |             |                   | and an 18-cycle arithmetic       |
+|                         |             |                   | progression in tb_ftq that a     |
+|                         |             |                   | registered path would halve. All |
+|                         |             |                   | ten ordered arm pairs exercised. |
+|                         |             |                   | sim_ftq_npc 66/0.                |
+| ftq_entry.sv            | Complete    | tb_ftq_entry      | BP-107. Fast path, 224b x 64.    |
+|                         |             |                   | FOUR write ports in FE-3 order,  |
+|                         |             |                   | FIVE read ports, plus the RAS    |
+|                         |             |                   | commit payload formed here       |
+|                         |             |                   | because the qualification lives  |
+|                         |             |                   | in the entry. Resets only the 64 |
+|                         |             |                   | valid bits. sim_ftq_entry 48/0.  |
+| ftq_meta.sv             | Complete    | tb_ftq_meta       | BP-107. Slow path, 421b x 2 slots|
+|                         |             |                   | x 64, UNPACKED; TD-FE-2 still    |
+|                         |             |                   | deferred. Two disjoint write     |
+|                         |             |                   | groups, TWO read ports. No reset:|
+|                         |             |                   | a resolution can only name an    |
+|                         |             |                   | entry a prediction wrote.        |
+|                         |             |                   | sim_ftq_meta 26/0.               |
+| ftq_status.sv           | Complete    | tb_ftq_status     | BP-107. wb_rcvd, fault, gen. 192 |
+|                         |             |                   | flops, masked range clear by AGE |
+|                         |             |                   | not raw index, and the live-     |
+|                         |             |                   | window mask R1 needs. Allocation |
+|                         |             |                   | beats a same-cycle writeback.    |
+|                         |             |                   | sim_ftq_status 40/0.             |
+| ftq_shadow.sv           | Complete    | tb_ftq_shadow     | BP-107. FOUR STAGES, THREE FLOPS.|
+|                         |             |                   | Built as four registers first,   |
+|                         |             |                   | which put every cluster response |
+|                         |             |                   | one stage late and dropped all of|
+|                         |             |                   | them; the front end stopped after|
+|                         |             |                   | one block. It passed every leaf  |
+|                         |             |                   | test and only tb_ftq saw it.     |
+|                         |             |                   | Carries a full FTQ_PTR_BITS      |
+|                         |             |                   | pointer, not an index, because   |
+|                         |             |                   | which stages a redirect clears is|
+|                         |             |                   | an age compare. sim_ftq_shadow   |
+|                         |             |                   | 44/0.                            |
+| ftq_ifu.sv              | Complete    | tb_ftq_ifu        | BP-107. Request, flush, writeback|
+|                         |             |                   | and the predecode correction. The|
+|                         |             |                   | 6.1 one-bit generation test drops|
+|                         |             |                   | a stale writeback ENTIRELY. Slot |
+|                         |             |                   | placement is PROGRAM ORDER with  |
+|                         |             |                   | every slot above killed. NO      |
+|                         |             |                   | update port at all, which is how |
+|                         |             |                   | FE-8 is met. sim_ftq_ifu 67/0.   |
+| ftq_resolve.sv          | Complete    | tb_ftq_resolve    | BP-107. Resolution intake,       |
+|                         |             |                   | position-to-slot mapping and the |
+|                         |             |                   | fe_decisions 7.2 fan-out. An     |
+|                         |             |                   | unmapped position is REPORTED,   |
+|                         |             |                   | not dropped. The FTB channel is  |
+|                         |             |                   | NOT gated on the scheduler ready:|
+|                         |             |                   | that would close a combinational |
+|                         |             |                   | loop through 5.7.3 S6.           |
+|                         |             |                   | sim_ftq_resolve 82/0.            |
 | fetch                   | Not started | --                | After the FTQ. Its interface to  |
 |                         |             |                   | the FTQ is SPECIFIED,            |
 |                         |             |                   | ftq_ifu_interfaces.md, but       |
@@ -1788,6 +1825,14 @@ unless noted.
   was fixed by BP-092a and proven by BP-093 TC-A..TC-G,
   including a 64-pair position sweep and the identity
   path_bit = pos[1] ^ pos[0].
+- BP-099 RESCALED THAT IDENTITY. It was proven when a position
+  was FOUR bytes. POS_OFFSET_BITS is now 1, so pred_pc[3:2] is
+  pos[2:1] and the identity is path_bit = pos[2] ^ pos[1]. The
+  bp_history side is unchanged; it folds pred_pc[3:2] either
+  way. sim_bp_cluster was rebuilt under the new width by BP-099
+  (997 -> 1765), so the RTL is exercised. What is stale is the
+  RECORDED identity above and any test written to the old form.
+  Confirm BP-093 TC-A..TC-G sweep the new mapping.
 - Open / deferred: HI2, HI5 (= G23), HI6 (= TD#102), HI7,
   #82, #83, #84, #69/#70.
 

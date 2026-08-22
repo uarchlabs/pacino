@@ -21,9 +21,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module ftq_ptr_assert #(
-  parameter int FTQ_PTR_BITS = FTQ_IDX_BITS + 1
-) (
+module ftq_ptr_assert (
   input logic                    clk,
   input logic                    rstn,
   input logic [FTQ_PTR_BITS-1:0] commit_ptr,
@@ -37,7 +35,9 @@ module ftq_ptr_assert #(
   input logic                    redir_val
 );
 
-  localparam int FTQ_ALLOC_LIMIT = FTQ_DEPTH - 1;
+  // The 5.1 condition, restored by BP-107 when the commit watermark
+  // gained its generation bit. Was FTQ_DEPTH-1 under BP-106.
+  localparam int FTQ_ALLOC_LIMIT = FTQ_DEPTH;
 
   logic [FTQ_PTR_BITS-1:0] w_age_alloc;
   logic [FTQ_PTR_BITS-1:0] w_age_fetch;
@@ -64,14 +64,26 @@ module ftq_ptr_assert #(
       w_age_alloc <= FTQ_PTR_BITS'(FTQ_ALLOC_LIMIT);
   endproperty
 
-  // Q3  The allocation limit is in force. This is the property that
-  //     proves the ftq_commit watermark reconstruction is
-  //     unambiguous; see FTQ_ALLOC_LIMIT in ftq_ptr.sv. If a future
-  //     change reverts the limit to FTQ_DEPTH, this fires and the
-  //     watermark hole is live again.
-  property p_no_alias_full;
+  // Q3  RE-AIMED BY BP-107. It read !ptr_alias_full, which guarded
+  //     the FTQ_DEPTH-1 allocation limit BP-106 held to remove the
+  //     aliased 65th watermark value. bkend_ftq_commit_idx now
+  //     carries the generation, the limit is back at FTQ_DEPTH, and
+  //     the alias state is the ordinary 64-live full condition --
+  //     reachable, correct, and entered by group B of the
+  //     testbench. Left as !ptr_alias_full the property would be
+  //     inert until it fired on legal traffic, which is worse than
+  //     retiring it.
+  //
+  //     What is worth proving in its place is that the two
+  //     statements of full AGREE: the literal 5.1 low-bits-equal /
+  //     generations-differ form and the age form the module
+  //     actually gates allocation on. A future change that moves the
+  //     limit off FTQ_DEPTH breaks the agreement and fires here, so
+  //     the guard the old property provided is kept without the
+  //     stale bound.
+  property p_alias_full_is_full;
     @(posedge clk) disable iff (!rstn)
-      !ptr_alias_full;
+      ptr_alias_full == ftq_full;
   endproperty
 
   // Q4  Full blocks allocation. An accepted request in a full cycle
@@ -95,8 +107,8 @@ module ftq_ptr_assert #(
     else $error("FQ-1 fetch_ptr leads alloc_ptr");
   a_fq1_depth_bounded:   assert property (p_fq1_depth_bounded)
     else $error("FQ-1 live entries exceed the allocation limit");
-  a_no_alias_full:       assert property (p_no_alias_full)
-    else $error("Q3 alloc_ptr reached the 5.1 alias-full state");
+  a_alias_full_is_full:  assert property (p_alias_full_is_full)
+    else $error("Q3 the 5.1 full condition disagrees with ftq_full");
   a_full_blocks_alloc:   assert property (p_full_blocks_alloc)
     else $error("Q4 allocation advanced while full");
   a_full_not_empty:      assert property (p_full_not_empty)
@@ -106,9 +118,7 @@ endmodule : ftq_ptr_assert
 
 // Bind BY MODULE NAME. Every ftq_ptr instance gets the properties,
 // including instances that do not exist yet.
-bind ftq_ptr ftq_ptr_assert #(
-  .FTQ_PTR_BITS (FTQ_PTR_BITS)
-) u_assert (
+bind ftq_ptr ftq_ptr_assert u_assert (
   .clk            (clk),
   .rstn           (rstn),
   .commit_ptr     (commit_ptr),

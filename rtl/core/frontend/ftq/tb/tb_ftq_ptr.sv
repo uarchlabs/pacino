@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Jeff Nye, uarchlabs.com
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
-// Testbench for ftq_ptr (BP-106).
+// Testbench for ftq_ptr (BP-106, retrofitted BP-107).
 //
 // Self-checking. Every case establishes its start state by reset
 // plus a known driven sequence; the module holds two pointers and
@@ -23,13 +23,18 @@
 // illegally would violate FQ-1 and the bound properties would fail,
 // which is the intended behaviour and not what these cases test.
 //
-// THE 64-LIVE ALIAS STATE IS NOT DRIVEN. alloc_ptr[5:0] equal to
-// commit_ptr[5:0] with differing generations is exactly what
-// FTQ_ALLOC_LIMIT makes unreachable; property Q3 proves it cannot
-// occur, so there is no stimulus for it here. What the cases below
-// do cover is the adjacency the generation bit exists to separate:
-// after a full lap the low bits alias at EMPTY, and the design must
-// read empty rather than full.
+// THE 64-LIVE ALIAS STATE IS NOW DRIVEN, in group B. Under BP-106
+// FTQ_ALLOC_LIMIT stopped one short and alloc_ptr[5:0] equal to
+// commit_ptr[5:0] with differing generations was unreachable. The
+// commit watermark carries its generation now
+// (ftq_backend_interfaces.md 6), the limit is back at FTQ_DEPTH,
+// and that state is ordinary full occupancy -- so it is reached
+// deliberately and checked, and Q3 was re-aimed to say the two
+// statements of full agree rather than that one never happens.
+//
+// The cases also still cover the adjacency the generation bit
+// exists to separate: after a full lap the low bits alias at EMPTY,
+// and the design must read empty rather than full.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -37,12 +42,7 @@ import bp_structs_pkg::*;
 module tb;
 
   localparam int PB = FTQ_IDX_BITS + 1;   // pointer width, 7
-  localparam int LIM = FTQ_DEPTH - 1;     // FTQ_ALLOC_LIMIT, 63
-
-  localparam logic [1:0] RC_MISPREDICT = 2'b00;
-  localparam logic [1:0] RC_TRAP       = 2'b01;
-  localparam logic [1:0] RC_REPLAY     = 2'b10;
-  localparam logic [1:0] RC_UNSPEC     = 2'b11;
+  localparam int LIM = FTQ_DEPTH;         // FTQ_ALLOC_LIMIT, 64
 
   logic clk;
   logic rstn;
@@ -55,10 +55,11 @@ module tb;
   logic                     alloc_req_rdy;
   logic                     ifu_req_val;
   logic                     ifu_req_rdy;
+  logic                     alloc_inflight;
   logic                     redir_val;
   logic [FTQ_IDX_BITS-1:0]  redir_idx;
   logic                     redir_self;
-  logic [1:0]               redir_cause;
+  ftq_redir_cause_e         redir_cause;
 
   logic [PB-1:0]            alloc_ptr;
   logic [PB-1:0]            fetch_ptr;
@@ -66,12 +67,13 @@ module tb;
   logic                     ftq_empty;
   logic                     fetch_pending;
   logic                     ptr_alias_full;
+  logic                     squash_val;
+  logic [PB-1:0]            squash_start;
+  logic [PB-1:0]            squash_end;
   logic [FTQ_IDX_BITS-1:0]  alloc_idx;
   logic [FTQ_IDX_BITS-1:0]  fetch_idx;
 
-  ftq_ptr #(
-    .FTQ_PTR_BITS (PB)
-  ) dut (
+  ftq_ptr dut (
     .clk            (clk),
     .rstn           (rstn),
     .commit_ptr     (commit_ptr),
@@ -79,6 +81,7 @@ module tb;
     .alloc_req_rdy  (alloc_req_rdy),
     .ifu_req_val    (ifu_req_val),
     .ifu_req_rdy    (ifu_req_rdy),
+    .alloc_inflight (alloc_inflight),
     .redir_val      (redir_val),
     .redir_idx      (redir_idx),
     .redir_self     (redir_self),
@@ -89,6 +92,9 @@ module tb;
     .ftq_empty      (ftq_empty),
     .fetch_pending  (fetch_pending),
     .ptr_alias_full (ptr_alias_full),
+    .squash_val     (squash_val),
+    .squash_start   (squash_start),
+    .squash_end     (squash_end),
     .alloc_idx      (alloc_idx),
     .fetch_idx      (fetch_idx)
   );
@@ -134,6 +140,10 @@ module tb;
     alloc_req_rdy = 1'b0;
     ifu_req_val   = 1'b0;
     ifu_req_rdy   = 1'b0;
+    // The p0-to-p1 gap. Held clear for every case below, so
+    // fetch_pending is the raw 5.1 gap and the existing
+    // expectations stand unchanged. Group G drives it.
+    alloc_inflight = 1'b0;
     redir_val     = 1'b0;
     redir_idx     = '0;
     redir_self    = 1'b0;
@@ -182,7 +192,7 @@ module tb;
   // redirect ftq_npc publishes (7.3).
   task automatic redirect(input logic [FTQ_IDX_BITS-1:0] idx,
                           input logic                    self_sq,
-                          input logic [1:0]              cause);
+                          input ftq_redir_cause_e        cause);
     redir_val   = 1'b1;
     redir_idx   = idx;
     redir_self  = self_sq;
@@ -274,8 +284,16 @@ module tb;
     chk_eq("B7 fetch advances while full", fetch_ptr, 7'd4);
     chk   ("B8 still full after fetching", ftq_full);
 
-    // The 5.1 alias state is never entered. See the file header.
-    chk("B9 alias-full never asserted", !ptr_alias_full);
+    // THE 5.1 ALIAS STATE, entered deliberately. 64 live entries:
+    // the low bits of alloc_ptr and commit_ptr are equal and the
+    // generations differ. This is what the widened watermark made
+    // safe and what the reverted FTQ_ALLOC_LIMIT restores; under
+    // BP-106 it was unreachable by construction.
+    chk("B9a alias-full asserted at 64 live", ptr_alias_full);
+    chk("B9b alias-full agrees with ftq_full",
+        ptr_alias_full == ftq_full);
+    chk("B9c the 64th entry is live",
+        (alloc_ptr - commit_ptr) == PB'(FTQ_DEPTH));
 
     // Freeing one entry unblocks allocation, and exactly one.
     commit_n(1);
@@ -343,9 +361,23 @@ module tb;
     // _self CLEAR: the naming instruction completed, so entry 3
     // survives and allocation restarts at 4. fetch_ptr was at 6,
     // ahead of the new head, so it rewinds with it.
-    redirect(6'd3, 1'b0, RC_MISPREDICT);
+    // The squash range of 5.5 R3 is published for ftq_status while
+    // the redirect is presented, so it is sampled inside the
+    // redirect cycle rather than after it.
+    redir_val   = 1'b1;
+    redir_idx   = 6'd3;
+    redir_self  = 1'b0;
+    redir_cause = RC_MISPREDICT;
+    #1;
+    chk   ("D3a squash_val asserted in the redirect cycle",
+           squash_val);
+    chk_eq("D3b squash_start is the new head", squash_start, 7'd4);
+    chk_eq("D3c squash_end is the old head",   squash_end,  7'd10);
+    tick();
+    clr();
     chk_eq("D3 alloc_ptr rewound to K+1", alloc_ptr, 7'd4);
     chk_eq("D4 fetch_ptr clamped to K+1", fetch_ptr, 7'd4);
+    chk   ("D4a squash_val clear with no redirect", !squash_val);
 
     // _self SET: the naming instruction is squashed too, so entry 2
     // does not survive and allocation restarts at 2.
@@ -426,7 +458,18 @@ module tb;
     // squashed. Both are driven to values that would give a very
     // different answer if they were read, so a module that read
     // them fails here rather than passing by coincidence.
-    redirect(6'd17, 1'b1, RC_UNSPEC);
+    redir_val   = 1'b1;
+    redir_idx   = 6'd17;
+    redir_self  = 1'b1;
+    redir_cause = RC_UNSPEC;
+    #1;
+    // U3 squashes EVERY entry, so the exported range is the whole
+    // live window. It falls out of w_alloc_tgt being commit_ptr and
+    // is not cased separately.
+    chk_eq("E3a squash_start is commit_ptr", squash_start, 7'd5);
+    chk_eq("E3b squash_end is the old head", squash_end,  7'd20);
+    tick();
+    clr();
     chk_eq("E4 alloc_ptr snaps to commit_ptr", alloc_ptr,  7'd5);
     chk_eq("E5 fetch_ptr snaps to commit_ptr", fetch_ptr,  7'd5);
     chk_eq("E6 commit_ptr never rewinds",      commit_ptr, 7'd5);
@@ -480,7 +523,7 @@ module tb;
     chk_eq("F2 alloc_ptr at 40+limit", alloc_ptr, PB'(40 + LIM));
     chk   ("F3 full across the wrap",   ftq_full);
     chk   ("F4 not empty",              !ftq_empty);
-    chk   ("F5 alias-full clear",       !ptr_alias_full);
+    chk   ("F5 alias-full set at 64 live", ptr_alias_full);
     chk   ("F6 generations differ",
            alloc_ptr[FTQ_IDX_BITS] != commit_ptr[FTQ_IDX_BITS]);
 
@@ -499,6 +542,62 @@ module tb;
     commit_n(LIM);
     chk("F11 empty after freeing all", ftq_empty);
     chk("F12 not full",                !ftq_full);
+  endtask
+
+  // -----------------------------------------------------------------
+  // G. The p0-to-p1 allocation gap.
+  // -----------------------------------------------------------------
+  // alloc_ptr advances at p0 and the entry CONTENT is written at p1
+  // one cycle later (5.2), so the newest entry inside the 5.1
+  // run-ahead gap has an index and no content for that one cycle.
+  // fetch_pending must exclude it or the FTQ issues a fetch for an
+  // entry whose pc does not exist yet -- reachable in the first two
+  // cycles out of reset, not in a corner.
+  task automatic group_g();
+    $display("-- G: the p0 to p1 allocation gap --");
+    do_reset();
+
+    // One entry allocated and its p1 write still in flight. The raw
+    // gap is one; the WRITTEN gap is zero.
+    alloc_n(1);
+    alloc_inflight = 1'b1;
+    #1;
+    chk_eq("G1 alloc_ptr at 1",             alloc_ptr, 7'd1);
+    chk   ("G2 no fetch pending in flight", !fetch_pending);
+
+    // Asking for a fetch anyway does not move fetch_ptr: the module
+    // enforces it rather than trusting the caller to read
+    // fetch_pending.
+    fetch_n(3);
+    chk_eq("G3 fetch_ptr held while in flight", fetch_ptr, '0);
+
+    // The write lands. The entry is now fetchable.
+    alloc_inflight = 1'b0;
+    #1;
+    chk("G4 fetch pending once written", fetch_pending);
+    fetch_n(1);
+    chk_eq("G5 fetch_ptr advances", fetch_ptr, 7'd1);
+
+    // With a run-ahead of several entries the gap subtracts exactly
+    // one, not all of them: the older entries are written and must
+    // still be fetchable while the newest is in flight.
+    alloc_n(5);
+    alloc_inflight = 1'b1;
+    #1;
+    chk_eq("G6 alloc_ptr at 6",              alloc_ptr, 7'd6);
+    chk   ("G7 still pending with 4 written", fetch_pending);
+    fetch_n(4);
+    chk_eq("G8 fetch_ptr stops one short", fetch_ptr, 7'd5);
+    chk   ("G9 no pending at the frontier", !fetch_pending);
+    fetch_n(2);
+    chk_eq("G10 still one short", fetch_ptr, 7'd5);
+
+    alloc_inflight = 1'b0;
+    #1;
+    fetch_n(1);
+    chk_eq("G11 the last entry issues once written", fetch_ptr, 7'd6);
+    clr();
+    tick();
   endtask
 
   // -----------------------------------------------------------------
@@ -523,6 +622,7 @@ module tb;
     group_d();
     group_e();
     group_f();
+    group_g();
 
     $display("tb_ftq_ptr: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

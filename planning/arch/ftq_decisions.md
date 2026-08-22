@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-08-19
+ UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```
 
@@ -67,7 +67,31 @@ prior revision of this section attributed a read to "every redirecting
 predictor's cluster-boundary comparison". That read does not exist and
 must not be counted when the fast-path read ports are sized.
 
-`bp_ftq_meta_t` is read once, at resolution.
+FIVE FAST-PATH READ PORTS ARE NEEDED, NOT THREE. The three readings
+above are the three PURPOSES; they are not the port count, because two
+of them need two ports each and one needs a port of its own:
+
+```
+  fetch          the entry ftq_ifu is requesting
+  redirect       the entry the winning redirect names, addressed by
+                 the ROLLBACK index -- the arbitration's output
+  predecode      the entry a writeback names, addressed by the
+                 writeback's own index. It CANNOT share the redirect
+                 port: the predecode redirect is an INPUT to the
+                 arbitration whose output addresses that port, and
+                 the correction must be formed in the same cycle
+  resolve x2     ftq_backend_interfaces.md 4 fixes resolution at
+                 NUM_RESOLVE_PORTS per cycle and the two channels may
+                 name DIFFERENT entries, so one port cannot serve both
+```
+
+The commit payload of 5.4 reads the entry at commit_ptr as well;
+BP-107 formed it inside `ftq_entry` from `commit_step_val` rather than
+exporting a sixth port, because the qualification -- whether the block
+holds a call or a return -- lives in the entry.
+
+`bp_ftq_meta_t` is read once per RESOLUTION, so it needs TWO read
+ports for the same reason the fast path does.
 
 ---
 
@@ -180,7 +204,7 @@ part of this selection.
 Priority, highest first:
 
 ```
-  0  reset               the reset vector (4.6)
+  0  reset               the reset vector (4.7)
   1  backend redirect    bkend_ftq_redir_pc
   2  predecode redirect  derived from the IFU writeback,
                          ftq_ifu_interfaces.md 7 W3
@@ -244,6 +268,11 @@ the p1 successor combinational is the expected implementation.
       The cluster has NO request-ready output, so
       ftq_bpu_interfaces.md 3 makes this the FTQ's obligation.
   H2  the FTQ has no free entry. FE-U7.
+  H3  the entry at the head of the live window has its FAULT bit
+      set. ftq_entry_formats.md 4.3 R1: predicting past a block
+      that faulted would queue work that will not be fetched.
+      Applies only INSIDE the live window -- a stale bit on a
+      committed entry does not hold.
 ```
 
 NOT a hold condition: `ftq_ifu_req_rdy` low. The IFU being unable to
@@ -251,6 +280,11 @@ accept a fetch does not stop the FTQ predicting ahead. That is the
 point of a decoupled front end and the FTQ's depth is the decoupling
 buffer; prediction rate and fetch rate are deliberately separate.
 Only running out of entries, H2, couples them.
+
+H3 WAS MISSING FROM THIS LIST until BP-107. It is stated in
+ftq_entry_formats.md 4.3 R1 and was never mirrored here, so a reader
+working from section 4 alone built two hold conditions where there are
+three.
 
 ### 4.6 In-flight responses after a redirect
 
@@ -308,6 +342,19 @@ PREDICTED BUT UNFETCHED run-ahead, and that gap is the decoupling the
 FTQ exists to provide. At 64 entries of one 32-byte block it is at
 most 2 KiB of instruction stream.
 
+THE FETCHABLE FRONTIER IS NOT alloc_ptr. alloc_ptr advances at p0
+(5.2) and the entry CONTENT is written at p1, so for one cycle the
+newest entry in that gap has an index and no content. A fetch issued
+on the raw gap presents an UNWRITTEN pc to the IFU, and this is
+reachable in the first two cycles out of reset -- not a corner.
+
+The fetchable count is therefore the gap MINUS the requests still
+in flight between p0 and p1. `ftq_shadow` already knows: its p1 stage
+IS that request (5.6), so it exports the count and `ftq_ptr`
+subtracts it. FQ-1 is unaffected; what changes is which frontier
+`fetch_pending` measures to. Found by BP-107, which is also why the
+crossing appears in 7.2.
+
 ```
   empty   all three equal
   full    alloc_ptr[5:0] == commit_ptr[5:0]
@@ -316,6 +363,26 @@ most 2 KiB of instruction stream.
 
 Full is hold condition H2 of section 4.5. It is the only condition
 under which the FTQ stops predicting.
+
+THE 64-ENTRY FULL CONDITION DEPENDS ON THE COMMIT WATERMARK CARRYING
+A GENERATION BIT. At 64 live entries the set of values
+`bkend_ftq_commit_idx` may legally hold is SIXTY-FIVE, not 64: the 64
+live entries, plus the entry just committed, which
+ftq_backend_interfaces.md 6 promises may sit on the port indefinitely
+because repeating a watermark is harmless. FTQ_IDX_BITS cannot
+separate 65 values, and the two readings of the aliased value demand
+opposite responses -- accepting frees 63 live entries and issues 63
+false RAS commits, rejecting deadlocks, since a full FTQ predicts
+nothing and so can never advance the watermark again. The state is
+reached by ordinary traffic: the FTQ refilling to full before the
+backend retires one more block.
+
+The watermark is therefore FTQ_PTR_BITS wide
+(ftq_backend_interfaces.md 6). Found by BP-106, which built against
+the narrow port and held allocation at FTQ_DEPTH-1 to remove the
+65th value; the port was widened instead and the limit reverted. If
+the port is ever narrowed again, full must return to FTQ_DEPTH-1 live
+entries and this paragraph is why.
 
 ### 5.2 Allocation
 
@@ -362,6 +429,23 @@ ras_decisions.md 4.5 rules restore > commit > hold for BOS, so the
 FTQ SUPPRESSES the RAS commit it would have issued in a cycle where a
 redirect restore fires. The walk does not advance that cycle.
 
+RC_UNSPEC ABANDONS THE WALK. A walk in progress may cover entries
+that have architecturally retired but whose RAS commit has not yet
+issued. ftq_backend_interfaces.md 5.1 U3 squashes EVERY entry, so
+those entries are gone and their pending RAS commits are DISCARDED
+rather than drained. That is correct, not merely tolerable: the RAS
+is a predictor, so a lost commit costs accuracy and not correctness;
+U5 already rules both structures self-correcting from committed
+state; and RC_UNSPEC is reset and debug-mode entry, where draining
+first would stall entry by up to FTQ_DEPTH cycles to warm a predictor
+that is about to be re-warmed anyway.
+
+The walk end is snapped back to commit_ptr and NO STEP IS TAKEN in
+the RC_UNSPEC cycle. Stepping while clearing the end is not a wasted
+commit but a POINTER OVERRUN: the end lands one entry behind
+commit_ptr, the age computes as -1, and the walk becomes
+2*FTQ_DEPTH-1 entries long. BP-106 hit this in its first draft.
+
 ### 5.5 Redirect rewind
 
 On a redirect naming index K (ftq_backend_interfaces.md 5, or a BPU
@@ -393,8 +477,26 @@ The FTQ keeps a four-deep IN-FLIGHT SHADOW of its own requests, one
 stage per cluster stage:
 
 ```
-  shadow[p0..p3]  { valid, idx[FTQ_IDX_BITS-1:0] }     4 x 7 bits
+  shadow[p0..p3]  { valid, ptr[FTQ_PTR_BITS-1:0] }     4 x 8 bits
 ```
+
+FOUR STAGES, THREE FLOPS. Stage p0 is the request being PRESENTED
+this cycle and is registered NOWHERE -- not in the FTQ and not in the
+cluster. Building it as four registers is not a subtle error: the p1
+response for a request issued at T arrives at T+1, when a
+four-register shadow still holds that request at stage 0, so every
+response is checked against the stage behind it, EVERY RESPONSE IS
+DROPPED, and the front end stops after one block. BP-107 built it
+that way first and only the unit-level testbench could see it; no
+leaf test can.
+
+IT CARRIES A FULL POINTER, not an index. Deciding WHICH stages a
+redirect clears is a wrap-aware AGE comparison and an index cannot
+make it. Clearing every stage instead is wrong: stage 3 holds an
+OLDER request than stage 2, so a p2 redirect naming the stage 2 entry
+squashes stages 1 and 0 and must LEAVE STAGE 3 ALONE. This is not the
+widening rejected below -- that was FTQ_IDX_BITS at every bp_cluster
+port and in four metadata structs; this is four bits inside the FTQ.
 
 It shifts every cycle in lockstep with the cluster's own stage
 registers, which advance unconditionally. A redirect clears the
@@ -405,7 +507,7 @@ dropped.
 REJECTED ALTERNATIVE: widening the carried index to include the wrap
 bit. It would change FTQ_IDX_BITS at every bp_cluster port and widen
 `branch_id` in tage_pred_meta_t, sc_pred_meta_t, ittage_pred_meta_t
-and bp_ftq_entry_t, for no functional gain over 28 bits of shadow in
+and bp_ftq_entry_t, for no functional gain over 32 bits of shadow in
 the FTQ.
 
 REJECTED ALTERNATIVE: draining the cluster before re-issuing after a
@@ -511,12 +613,12 @@ the skid empty, and at most one with it occupied.
 Written as concurrent SVA because that is what a formal tool
 consumes; the BPU tree currently has none -- its three assertion
 files use procedural immediate assertions and are simulation only.
-Bind these when the scheduler RTL is written, and run them in the
-existing sim targets first. TD#109 is the cautionary case: an
+They are BOUND, by MODULE name, in ftq_ftb_sched's sim target
+(BP-100). TD#109 is the cautionary case: an
 assertion file bound to an INSTANCE name rather than a module name,
 instantiated by nothing, warned about by nothing.
 
-Signal names below are the contract for the unbuilt scheduler.
+Signal names below are the scheduler's port list, as built.
 
 ```systemverilog
   // P1  A lone FTB-bound update is never dropped and never held.
@@ -660,7 +762,7 @@ Collected for navigation. Each is recorded in `fe_decisions.md` or
   TD-FE-4  bp_ftq_slot_t.pred_src is diagnostic only.
   G9       RESOLVED. Section 5.7.
   G23      RESOLVED. The checkpoint is a field of the entry and is
-           reclaimed with it. Section 5.7.
+           reclaimed with it at 5.3. Section 5.8.
   RESETVEC RESOLVED. bp_defines_pkg::RESET_VECTOR. Section 4.7.
   PREFETCH Instruction prefetch is DEFERRED and the deferral has a
            structural cost. Section 6.1.
@@ -702,9 +804,8 @@ IMPACTED IF PREFETCH IS LATER WANTED:
                          fetch_ptr and alloc_ptr, with FQ-1
                          extended to order it
   ftq_decisions.md 5.5   the rewind rule gains a pointer
-  fast-path read ports   a further reader of bp_ftq_entry_t,
-                         against the two-read-port decision of
-                         section 1
+  fast-path read ports   a further reader of bp_ftq_entry_t, on top
+                         of the five of section 1
   a new interface        FTQ to prefetcher, or an extension of
                          ftq_ifu_interfaces.md
   redirect fan-out       the prefetcher must be told to drop stale
@@ -767,8 +868,33 @@ entry per cycle against the scalar RAS commit port, reads
 SUPPRESSES the advance in any cycle a redirect restore fires. That
 is a different job from allocating and issuing.
 
-`ftq_ptr` reads commit_ptr as an input to compute full. One writer,
-one reader, no shared state.
+THE CROSSING IS BIDIRECTIONAL. Each module owns its pointers and
+reads the other's:
+
+```
+  commit_ptr   ftq_commit -> ftq_ptr
+  alloc_ptr    ftq_ptr    -> ftq_commit
+```
+
+`ftq_ptr` needs commit_ptr for TWO things, not one. Besides full, it
+reconstructs the wrap generation of `bkend_ftq_redir_idx`, which is
+FTQ_IDX_BITS wide and carries none: the named entry lies at or after
+commit_ptr by 5.5 R2, so an index below commit_ptr's low bits belongs
+to the next generation. Without it a rewind across a wrap lands
+FTQ_DEPTH entries wrong.
+
+`ftq_commit` needs alloc_ptr to bound the walk end to the live
+window. This is not defensive. It is what rejects the held stale
+watermark of 5.1: without alloc_ptr there is no way to tell a
+repeated watermark from a forward one, and section 6's idempotence
+promise cannot be met.
+
+One writer and one reader per pointer, and no shared state, so the
+partition rule holds. What does not hold is that the dependency runs
+one way. Neither module reaches into the other's ADVANCE DECISION,
+which is the test that matters: each reads the other's resulting
+value. Suppression in particular turns out to be entirely local to
+`ftq_commit` once the redirect is an input. Reported by BP-106.
 
 ### 7.3 Why redirect arbitration is in ftq_npc
 
@@ -780,9 +906,45 @@ anywhere else would mean exporting the priority result to the module
 that already has to consume it.
 
 `ftq_npc` publishes the winning redirect to `ftq_ptr` for the rewind
-of 5.5 and to `ftq_status` for the masked clear of
-`ftq_entry_formats.md` 4.2 W4. Those two act on it; neither decides
-it.
+of 5.5. Those two act on it; neither decides it.
+
+THE RESOLVED SQUASH RANGE IS EXPORTED BY ftq_ptr, NOT DERIVED TWICE.
+This section originally sent the winning redirect to `ftq_status` as
+well and left the masked clear of `ftq_entry_formats.md` 4.2 W4 to it.
+Built that way, `ftq_status` repeats the wrap-generation
+reconstruction `ftq_ptr` already performs on `bkend_ftq_redir_idx` --
+two copies of one derivation, free to disagree -- and `ftq_shadow`
+needs a third. `ftq_ptr` therefore exports the RESOLVED range, half
+open and FTQ_PTR_BITS wide, and both consumers take an age.
+
+### 7.5 Ports this decomposition did not anticipate
+
+BP-107 built the eight remaining modules and needed seven signals
+7.1 through 7.4 do not name. NONE breaks the partition rule -- each is
+a value one module owns and another reads, and no module reaches into
+another's advance decision -- but the list belongs here rather than
+being rediscovered.
+
+```
+  ftq_shadow  -> ftq_ptr     alloc_inflight, the p0-to-p1 gap (5.1)
+  ftq_npc     -> ftq_entry   pred_pc_p1, the block start PC. NO p1
+                             PORT CARRIES IT; see
+                             ftq_bpu_interfaces.md 4. The FTQ must
+                             stage its own request, and r_next_pc
+                             already is that value one cycle on
+  ftq_ptr     -> ftq_status  squash_val / _start / _end, above
+              -> ftq_shadow  the same range
+  ftq_entry   -> (cluster)   ras_commit_*, formed here because the
+                             has-a-RAS-operation qualification lives
+                             in the entry (5.4, FE-11)
+  ftq_entry                  a SECOND resolve read port
+  ftq_meta                   a SECOND resolve read port
+  ftq_entry                  a predecode read port, distinct from the
+                             redirect port. See section 1
+  ftq_entry   -> (cluster)   restore_snapshot, D2 of
+                             ftq_backend_interfaces.md 5, as its own
+                             port so ftq.sv wires name to name
+```
 
 ### 7.4 Why status is not inside ftq_entry
 
@@ -797,6 +959,38 @@ one.
 ## 8. Document History
 
 ```
+  2026-08-21  BP-107 results folded in, six corrections. Section 1
+              counted three fast-path reads where five ports are
+              needed, and the slow path needs two; the count is now
+              separated from the three purposes. 4.5 gains H3, the
+              fault hold, which ftq_entry_formats.md 4.3 R1 stated
+              and this section never mirrored. 5.1: the fetchable
+              frontier is not alloc_ptr, because the entry is written
+              at p1 and allocated at p0. 5.6: four stages is THREE
+              FLOPS, and the shadow carries a full pointer, not an
+              index. 6.1 cited a "two-read-port decision of section
+              1" that section 1 never made. 7.3 corrected and 7.5
+              added, listing the seven ports the decomposition did
+              not anticipate.
+
+  2026-08-21  BP-106 results folded in. 5.1 gains the watermark
+              aliasing argument: the 64-entry full condition is only
+              safe because bkend_ftq_commit_idx now carries a
+              generation bit. 5.4 gains the RC_UNSPEC / commit-walk
+              interaction, which no document specified and which
+              BP-106's first draft got wrong. 7.2 corrected: the
+              crossing between ftq_ptr and ftq_commit is
+              bidirectional, not one-way.
+
+  2026-08-21  Cross-reference repair. No content change. 4.2 arm 0
+              cited the reset vector as 4.6; it is 4.7. The section
+              6 G23 entry cited 5.7, which is the FTB update
+              scheduler; the checkpoint is reclaimed with the entry
+              at 5.3 and 5.8 is what records it. 5.7.4's lead-in and
+              closing note still described the scheduler as unbuilt,
+              which BP-100 ended; the section header above them
+              already said BUILT.
+
   2026-08-20  TD-FE-8 CLOSED by one generation bit on the IFU
               path. Section 6 registry updated.
 
@@ -917,3 +1111,4 @@ one.
               the two escalations not taken. FE-5 amended narrowly
               as FE-5a; IC-FTB-09 resolved. The FTB is unchanged.
 ```
+

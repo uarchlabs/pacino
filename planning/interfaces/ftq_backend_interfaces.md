@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-08-19
+ UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```
 
@@ -262,7 +262,7 @@ events outside the instruction stream.
 
 ```
   bkend_ftq_commit_val                                     NEW
-  bkend_ftq_commit_idx   [FTQ_IDX_BITS-1:0]                NEW
+  bkend_ftq_commit_idx   [FTQ_PTR_BITS-1:0]                NEW
 ```
 
 `bkend_ftq_commit_idx` is a WATERMARK: the newest FTQ entry all of
@@ -276,6 +276,18 @@ and a pulse would need a rate nobody has bounded. A watermark is
 idempotent: repeating it is harmless, and a cycle in which it does
 not advance costs nothing.
 
+IT IS FTQ_PTR_BITS WIDE, NOT FTQ_IDX_BITS -- it carries the wrap
+generation. The idempotence promise above is what forces this. At
+full occupancy the value may name any of the 64 live entries OR the
+entry just committed, still on the port because nothing newer has
+retired, and 65 values do not fit in FTQ_IDX_BITS. The aliased pair
+demands opposite responses and neither is safe; the argument is
+written out at ftq_decisions.md 5.1. THIS IS NOT THE WIDENING
+REJECTED AT ftq_decisions.md 5.6, which was FTQ_IDX_BITS at every
+bp_cluster port and inside four metadata structs. This is one wire on
+a two-port group that is not on a critical path. Widened after BP-106
+found the hole.
+
 COMMIT IS RATE LIMITED BY THE RAS, not by the FTQ.
 `ras_decisions.md` 3.3 requires that when a call-containing block
 commits, the return address is pushed onto the commit stack, and 4.5
@@ -287,10 +299,11 @@ to issue their RAS commits.
 
 That walk is bounded and safe. FE-11 guarantees at most one RAS
 operation per entry, so one entry per cycle is one RAS commit per
-cycle, exactly the port's capacity. Freeing an entry may run ahead of
-its RAS commit; the RAS commit backlog is what the walk drains. The
-FTQ needs a commit-walk pointer distinct from both the allocation and
-the deallocation pointer.
+cycle, exactly the port's capacity. An entry is NOT freed before its
+RAS commit issues: the commit payload reads `bp_ras_snapshot_t` out
+of the entry, so freeing it first would read a slot that may already
+be reallocated. Commit and free are therefore ONE pointer, not two
+(ftq_decisions.md 5.4), and the walk is what paces both.
 
 `ras_decisions.md` 4.5 also rules that a mispredict restore in the
 same cycle wins over commit for BOS: restore > commit > hold. The FTQ
@@ -316,7 +329,17 @@ cycle where section 5 D2 fires.
       entry whose allocation generation does not match, is DROPPED
       silently. This is normal traffic, not an error: a branch in
       flight when an older branch redirects will resolve after the
-      squash. The generation bit is FE-U7 work, section 9.
+      squash.
+      ONLY THE FIRST HALF IS BUILDABLE TODAY. `ftq_resolve_t.ftq_idx`
+      is FTQ_IDX_BITS with no generation, and assumption A1 carries
+      FTQ_IDX_BITS + FTB_BR_POS_BITS per in-flight instruction and
+      nothing more. A resolution for a squashed entry whose index has
+      been REALLOCATED INSIDE the live window is therefore
+      indistinguishable from one for the new use. The live-window
+      test is built; the generation test is not. Section 9 called the
+      bit "FE-U7 work" and FE-U7 resolved without adding one to this
+      path. Closing it costs one bit per in-flight instruction and a
+      change to A1. Found by BP-107 (W2).
 
   R4  Resolutions are enqueued to the predictors in the order they
       arrive, not in program order. FE-6: this is an out-of-order
@@ -450,6 +473,23 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
+  2026-08-21  Section 7 R3: only the live-window half is buildable.
+              ftq_resolve_t.ftq_idx carries no generation bit and
+              assumption A1 does not carry one either, so a
+              reallocated index inside the live window cannot be
+              separated from the new use. Recorded by BP-107 rather
+              than left as a rule the RTL silently half-implements.
+
+  2026-08-21  Two corrections from BP-106. Section 6:
+              bkend_ftq_commit_idx widened to FTQ_PTR_BITS, because
+              the idempotence promise makes 65 values legal at full
+              occupancy and FTQ_IDX_BITS holds 64. Also section 6:
+              the sentence asking for a commit-walk pointer distinct
+              from the deallocation pointer is STRUCK, with the
+              "freeing may run ahead" claim it rested on. It
+              contradicted ftq_decisions.md 5.4, which governs by
+              ruling, session-068.
+
   2026-08-21  Cross-reference repair. No content change. Section 6
               cited "ras_decisions.md 211". Every other citation in
               that file is a section number and 211 is not one; the

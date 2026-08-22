@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Jeff Nye, uarchlabs.com
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
-// Testbench for ftq_commit (BP-106).
+// Testbench for ftq_commit (BP-106, retrofitted BP-107).
 //
 // Self-checking. Every case establishes its start state by reset
 // plus a known driven sequence. commit_ptr is not writable from
@@ -20,10 +20,12 @@
 // and the live window never exceeds FTQ_ALLOC_LIMIT.
 //
 // EVERY MECHANISM THE CASES RELY ON IS ESTABLISHED HERE, not
-// assumed. The generation reconstruction of the watermark is
-// derived in the comment at each case that depends on it rather
-// than taken on trust, because a wrong generation is the failure
-// mode that looks like a passing test at low indices.
+// assumed. THE WATERMARK NOW CARRIES ITS GENERATION: the port is
+// FTQ_PTR_BITS wide (ftq_backend_interfaces.md 6) and the module
+// reconstructs nothing for it. Cases that used to derive the
+// reconstruction in a comment now drive the full pointer, and the
+// wrap case of group F drives 7'd66 rather than the aliasing 6'd2
+// it had to drive before.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -31,12 +33,8 @@ import bp_structs_pkg::*;
 module tb;
 
   localparam int PB  = FTQ_IDX_BITS + 1;   // pointer width, 7
-  localparam int LIM = FTQ_DEPTH - 1;      // FTQ_ALLOC_LIMIT, 63
+  localparam int LIM = FTQ_DEPTH;          // FTQ_ALLOC_LIMIT, 64
 
-  localparam logic [1:0] RC_MISPREDICT = 2'b00;
-  localparam logic [1:0] RC_TRAP       = 2'b01;
-  localparam logic [1:0] RC_REPLAY     = 2'b10;
-  localparam logic [1:0] RC_UNSPEC     = 2'b11;
 
   logic clk;
   logic rstn;
@@ -46,18 +44,16 @@ module tb;
 
   logic [PB-1:0]           alloc_ptr;
   logic                    bkend_commit_val;
-  logic [FTQ_IDX_BITS-1:0] bkend_commit_idx;
+  logic [PB-1:0]           bkend_commit_idx;
   logic                    redir_val;
-  logic [1:0]              redir_cause;
+  ftq_redir_cause_e        redir_cause;
 
   logic [PB-1:0]           commit_ptr;
   logic                    commit_step_val;
   logic [FTQ_IDX_BITS-1:0] commit_step_idx;
   logic                    walk_active;
 
-  ftq_commit #(
-    .FTQ_PTR_BITS (PB)
-  ) dut (
+  ftq_commit dut (
     .clk              (clk),
     .rstn             (rstn),
     .alloc_ptr        (alloc_ptr),
@@ -126,7 +122,7 @@ module tb;
   // Present the watermark for one cycle so the walk end latches,
   // and leave it asserted. The end is registered, so the walk from
   // here on is independent of what the port does next.
-  task automatic present_wm(input logic [FTQ_IDX_BITS-1:0] idx);
+  task automatic present_wm(input logic [PB-1:0] idx);
     bkend_commit_val = 1'b1;
     bkend_commit_idx = idx;
     tick();
@@ -168,7 +164,7 @@ module tb;
   task automatic walk_to(input int target);
     while (commit_ptr !== PB'(target)) begin
       alloc_ptr = PB'(target);
-      present_wm(FTQ_IDX_BITS'(target - 1));
+      present_wm(PB'(target - 1));
       while (walk_active) tick();
     end
     clr();
@@ -188,7 +184,7 @@ module tb;
 
     // An empty queue has nothing to commit. alloc_ptr is still 0,
     // so the FQ-1 bound rejects any watermark.
-    present_wm(6'd3);
+    present_wm(PB'(3));
     hold_ticks("A4 no commit in an empty queue", 4);
     clr();
     tick();
@@ -196,7 +192,7 @@ module tb;
     // Ten entries live, 0..9. The watermark names entry 4, so
     // entries 0 through 4 inclusive are freed: five steps.
     alloc_ptr = 7'd10;
-    present_wm(6'd4);
+    present_wm(PB'(4));
     chk("A5 walk starts after the watermark latches", walk_active);
     walk_ticks("A6 walk advances one entry per cycle", 5);
     chk_eq("A7 commit_ptr reached watermark+1", commit_ptr, 7'd5);
@@ -224,13 +220,13 @@ module tb;
     alloc_ptr = 7'd32;
 
     // Commit entry 0 only, then hold the watermark for a long time.
-    present_wm(6'd0);
+    present_wm(PB'(0));
     walk_ticks("B1 one step for a one-entry watermark", 1);
     chk_eq("B2 commit_ptr at 1", commit_ptr, 7'd1);
     hold_ticks("B3 a stalled watermark costs nothing", 10);
 
     // Advance it by one and the walk takes exactly one more step.
-    bkend_commit_idx = 6'd1;
+    bkend_commit_idx = PB'(1);
     tick();
     walk_ticks("B4 one more step when it advances", 1);
     chk_eq("B5 commit_ptr at 2", commit_ptr, 7'd2);
@@ -240,7 +236,7 @@ module tb;
     // steps run, then drop bkend_commit_val. The end is registered,
     // so the remaining entries are still architecturally retired
     // and the walk must finish.
-    bkend_commit_idx = 6'd20;
+    bkend_commit_idx = PB'(20);
     tick();
     walk_ticks("B7 two steps before the deassert", 2);
     chk_eq("B8 commit_ptr at 4", commit_ptr, 7'd4);
@@ -262,7 +258,7 @@ module tb;
     do_reset();
 
     alloc_ptr = 7'd16;
-    present_wm(6'd9);
+    present_wm(PB'(9));
     walk_ticks("C1 walk to entry 9 inclusive", 10);
     chk_eq("C2 commit_ptr at 10", commit_ptr, 7'd10);
     clr();
@@ -274,13 +270,13 @@ module tb;
     // live window is only 6 entries, so the FQ-1 bound rejects it.
     // The point of the case is not which term rejects it but that
     // commit_ptr does not move.
-    present_wm(6'd2);
+    present_wm(PB'(2));
     hold_ticks("C3 a watermark behind does not rewind", 8);
     clr();
     tick();
 
     // A watermark equal to commit_ptr-1, the entry just committed.
-    present_wm(6'd9);
+    present_wm(PB'(9));
     hold_ticks("C4 the just-committed entry does not rewind", 6);
     clr();
     tick();
@@ -288,7 +284,7 @@ module tb;
     // A watermark far past alloc_ptr. R2 makes this the backend's
     // break, not the FTQ's, but FQ-1 must survive it: the walk must
     // not run past alloc_ptr.
-    present_wm(6'd50);
+    present_wm(PB'(50));
     hold_ticks("C5 a watermark past alloc_ptr does not walk", 8);
     chk_eq("C6 commit_ptr still at 10", commit_ptr, 7'd10);
     clr();
@@ -296,7 +292,7 @@ module tb;
 
     // And a legal one still works afterwards, so the rejections
     // above did not wedge the module.
-    present_wm(6'd12);
+    present_wm(PB'(12));
     walk_ticks("C7 a legal watermark still walks", 3);
     chk_eq("C8 commit_ptr at 13", commit_ptr, 7'd13);
     clr();
@@ -311,7 +307,7 @@ module tb;
     do_reset();
 
     alloc_ptr = 7'd40;
-    present_wm(6'd30);
+    present_wm(PB'(30));
     walk_ticks("D1 three steps before the redirect", 3);
     chk_eq("D2 commit_ptr at 3", commit_ptr, 7'd3);
 
@@ -358,7 +354,7 @@ module tb;
     do_reset();
 
     alloc_ptr = 7'd40;
-    present_wm(6'd35);
+    present_wm(PB'(35));
     walk_ticks("E1 five steps into a long walk", 5);
     chk_eq("E2 commit_ptr at 5",     commit_ptr, 7'd5);
     chk   ("E3 walk still in progress", walk_active);
@@ -389,7 +385,7 @@ module tb;
     hold_ticks("E8 refilling does not restart the old walk", 8);
 
     // A fresh watermark after RC_UNSPEC works normally.
-    present_wm(6'd8);
+    present_wm(PB'(8));
     walk_ticks("E9 a fresh watermark walks normally", 4);
     chk_eq("E10 commit_ptr at 9", commit_ptr, 7'd9);
     clr();
@@ -409,14 +405,13 @@ module tb;
            PB'(commit_ptr[FTQ_IDX_BITS]), '0);
 
     // Eight more entries live: 60..67, which straddles the wrap.
-    // The watermark names entry 66, whose low bits are 2. Two is
-    // BELOW commit_ptr's low bits of 60, so the reconstruction must
-    // place it in the next generation at 7'h42, giving a walk end
-    // of 7'h43 and an age of seven. A module that read the index
-    // without reconstructing would compute an end of 3 and refuse
-    // to move.
+    // The watermark names entry 7'd66 -- the generation bit is set
+    // and arrives ON THE PORT, so the walk end is 7'd67 and the age
+    // is seven with nothing reconstructed. Under the narrow port
+    // this case had to drive 6'd2 and depend on the module placing
+    // it in the far generation.
     alloc_ptr = 7'd68;
-    present_wm(FTQ_IDX_BITS'(66 % FTQ_DEPTH));
+    present_wm(7'd66);
     chk("F3 walk starts across the wrap", walk_active);
     walk_ticks("F4 seven steps across the wrap", 7);
     chk_eq("F5 commit_ptr crossed to 67", commit_ptr, 7'd67);
@@ -441,18 +436,20 @@ module tb;
     do_reset();
 
     alloc_ptr = 7'd20;
-    present_wm(6'd19);
+    present_wm(PB'(19));
     walk_ticks("G1 empty the queue", 20);
     chk_eq("G2 commit_ptr at 20", commit_ptr, 7'd20);
 
-    // The FTQ now refills to FULL while the backend retires
-    // nothing. The watermark is still index 19, the last entry
-    // committed. This is normal traffic for a decoupled front end,
-    // and it is the exact state the 5.1 full condition could not
-    // survive: at 64 live entries a held index of 19 is
-    // bit-identical to a watermark naming the newest live entry.
-    // FTQ_ALLOC_LIMIT holds the queue one short, so the held index
-    // reconstructs to an age of FTQ_DEPTH and is rejected.
+    // The FTQ now refills to FULL -- all 64 entries, the limit
+    // BP-107 restored -- while the backend retires nothing. The
+    // watermark is still 7'd19, the last entry committed. This is
+    // the exact state the narrow port could not survive: at 64 live
+    // entries a held INDEX of 19 was bit-identical to a watermark
+    // naming the newest live entry, 7'd83, and the two demanded
+    // opposite responses. With the generation on the port the held
+    // value is 7'd19 and the newest live entry is 7'd83, so they
+    // are different values and the held one is simply behind the
+    // walk end and rejected.
     alloc_ptr = PB'(20 + LIM);
     hold_ticks("G3 held watermark inert at full occupancy", 16);
     chk_eq("G4 commit_ptr unmoved at full", commit_ptr, 7'd20);
@@ -460,7 +457,7 @@ module tb;
     // A real advance of the watermark still commits the whole
     // queue, one entry per cycle. Entry 20+LIM-1 is the newest
     // live one.
-    bkend_commit_idx = FTQ_IDX_BITS'((20 + LIM - 1) % FTQ_DEPTH);
+    bkend_commit_idx = PB'(20 + LIM - 1);
     tick();
     chk("G5 a real advance starts the walk", walk_active);
     walk_ticks("G6 the full queue commits one per cycle", LIM);
@@ -479,7 +476,7 @@ module tb;
     do_reset();
 
     alloc_ptr = 7'd12;
-    present_wm(6'd5);
+    present_wm(PB'(5));
 
     // The step index must be the entry AT commit_ptr, because that
     // is the entry whose bp_ras_snapshot_t forms the commit

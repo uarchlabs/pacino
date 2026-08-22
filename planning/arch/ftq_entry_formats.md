@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-08-19
+ UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```
 
@@ -91,10 +91,21 @@ two-byte positions, so a 32-byte block has sixteen of them. RVA23
 mandates the C extension and a branch may begin at any 2-byte
 boundary, so a coarser position could not tell two RVC branches in one
 aligned word apart. The cluster also uses it to form the branch PC reported to
-bp_history: block base plus position times four (BP-092a).
+bp_history: block base plus `pos << POS_OFFSET_BITS`, which is two
+bytes per position at the values in bp_defines_pkg.sv (BP-092a,
+rescaled by BP-099). Stated as the shift rather than a literal
+multiplier so it cannot drift from the position width again.
 
 The history pointers and RAS snapshot are block scalar
 (ftq_decisions.md 3.1, fe_decisions.md 9).
+
+IT IS A p1 VALUE AND NOTHING CORRECTS IT. Written once from
+`bpu_pred_pft_p1`, and the p2/p3 groups of ftq_bpu_interfaces.md 4a
+carry `bp_ftq_slot_t` only, so a block scalar has no correction path.
+On a uBTB miss the p1 value is the FULL block end, so the very case
+this field exists for -- re-deriving the successor after a redirect
+rewrites a slot -- is the case where it is stale. See
+ftq_bpu_interfaces.md 4; the fix is there, not a second field here.
 
 `pft_addr` is block scalar as well: it is the address fetched after
 this block when no slot in it is taken, one value per entry. It is
@@ -277,7 +288,8 @@ outside both.
   W3  fault SETS on ifu_ftq_fault_val naming this index. The
       writeback carries both, so W2 and W3 can fire together.
   W4  A redirect rewind clears both for every entry it squashes,
-      in the same cycle it moves the pointer (5.5).
+      in the same cycle it moves the pointer
+      (ftq_decisions.md 5.5).
 ```
 
 `ifu_ftq_fault_pos` is NOT stored. The fault code is not carried at
@@ -291,7 +303,8 @@ block ended early.
 ```
   R1  fault holds the next-PC request. The FTQ stops requesting
       past a faulting block rather than predicting into a stream
-      that will not be fetched (4.5 hold conditions).
+      that will not be fetched (ftq_decisions.md 4.5 hold
+      conditions).
   R2  fault does NOT hold commit. The entry frees normally; the
       trap is taken in the backend, which redirects the FTQ
       through the ordinary RC_TRAP path.
@@ -357,6 +370,21 @@ path touches none of those.
 ## 5. Document History
 
 ```
+  2026-08-21  Section 2: recorded that pft_addr is a p1 value with
+              no correction path, found by BP-107 (W1). The fix is a
+              p2 port in ftq_bpu_interfaces.md 4, not a field here.
+
+  2026-08-21  Section 2 said the branch PC is block base plus
+              position times FOUR. POS_OFFSET_BITS is 1, so it is
+              times two; BP-099 rescaled it and this sentence was
+              not propagated. Restated as `pos << POS_OFFSET_BITS`.
+
+  2026-08-21  Cross-reference repair. No content change. 4.2 W4 and
+              4.3 R1 cited "5.5" and "4.5" unqualified. Both are
+              ftq_decisions.md sections. This file has no 4.5, and
+              its own section 5 is this history, so an unqualified
+              number resolved to the wrong document. Both qualified.
+
   2026-08-19  Created. Sections 4.1, 4.2 and 4.2.1 moved here whole
               from fe_decisions.md, and the duplicate layout deleted
               from bp_cluster.md. No content changed in the move.
@@ -383,3 +411,4 @@ path touches none of those.
               Section 3.1's overload figures restated: 278b per
               slot, 35,584b, FTQ 49,920b.
 ```
+

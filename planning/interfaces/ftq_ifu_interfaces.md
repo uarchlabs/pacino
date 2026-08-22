@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT -- closes TD-FE-1
- UPDATED: 2026-08-19
+ UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```
 
@@ -322,8 +322,8 @@ On `ifu_ftq_mis_val`, the FTQ:
 NO PREDICTOR UPDATE IS FORMED FROM PREDECODE. Updates remain
 post-execute (FE-8, `fe_decisions.md` 7.1). A structural mispredict
 here is corrected in the entry; the predictors learn it when the
-branch resolves, and the section 4.2.1 R2 rule already handles a
-classification that disagrees with the resolved type. Forming an
+branch resolves, and the `ftq_entry_formats.md` 3.1 R2 rule already
+handles a classification that disagrees with the resolved type. Forming an
 update here would give the predictors two producers in different
 orders and break FE-6.
 
@@ -419,10 +419,12 @@ FE-U7 and remains open.
 
   PredictWidth 16    KEPT as FTQ_PD_WIDTH, but for a different
                      reason. XiangShan's 16 is its prediction width.
-                     Here the prediction block is 8 positions and 16
-                     is the PREDECODE width, RVC granularity over a
-                     32-byte block. The two are different quantities
-                     that happen to share a value.
+                     Here both are 16, and for different reasons:
+                     the prediction block is 16 positions
+                     (FTB_BR_POS_BITS 4, two bytes each) and 16 is
+                     also the PREDECODE width, RVC granularity over
+                     a 32-byte block. Two quantities that happen to
+                     share a value.
 
   pdWb.pc vector     DROPPED. XiangShan returns the PC of every slot.
                      Every one of them is start_pc plus the slot
@@ -464,6 +466,15 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 ## 11. Document History
 
 ```
+  2026-08-21  Section 9 said the prediction block is 8 positions.
+              FTB_BR_POS_BITS is 4, so it is 16, as sections 3 and
+              10 of this file already said. Stale by BP-099.
+
+  2026-08-21  Cross-reference repair. No content change. Section 7
+              cited "the section 4.2.1 R2 rule", the fe_decisions.md
+              numbering that was retired when that content moved
+              out. It is ftq_entry_formats.md 3.1 R2.
+
   2026-08-20  Section 8 item 3 CLOSED: the entry fields are
               ftq_entry_formats.md 4, two added and one rejected.
               Section 6.1 added, closing TD-FE-8 with one
@@ -491,3 +502,4 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               shift are both retired: the conversion is the
               identity.
 ```
+

@@ -50,14 +50,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module ftq_ptr #(
-  // Pointer width: FTQ_IDX_BITS to index the array plus one wrap
-  // generation bit. A named width, not a knob -- ftq_decisions.md
-  // 5.1 fixes it at seven. It is a module parameter only because
-  // bp_defines_pkg does not yet declare FTQ_PTR_BITS; see the
-  // Deferred Work of BP-106.
-  parameter int FTQ_PTR_BITS = FTQ_IDX_BITS + 1
-) (
+module ftq_ptr (
   input  logic                     clk,
   input  logic                     rstn,
 
@@ -78,17 +71,25 @@ module ftq_ptr #(
   input  logic                     ifu_req_val,
   input  logic                     ifu_req_rdy,
 
+  // ---- the p0-to-p1 allocation gap, from ftq_shadow ----------------
+  // Set when a request accepted last cycle is at p1 now, so its
+  // entry write has not landed yet. fetch_pending subtracts it: the
+  // gap 5.1 calls the run-ahead is measured to the WRITTEN frontier,
+  // not to alloc_ptr, because alloc_ptr advances at p0 and the entry
+  // content is written at p1 (5.2). Without this the FTQ issues a
+  // fetch for an entry one cycle before its pc exists, in the first
+  // two cycles out of reset. A port 7.3 does not anticipate; see the
+  // BP-107 Results Capture.
+  input  logic                     alloc_inflight,
+
   // ---- redirect, from ftq_npc.sv (7.3) ----------------------------
   // The winning redirect of 4.3, already arbitrated. This module
   // acts on it; it does not decide it.
   //
-  // redir_cause is carried as raw bits because bp_structs_pkg does
-  // not yet declare ftq_redir_cause_e. The encoding is that of
-  // ftq_backend_interfaces.md 5 and is named by localparam below.
   input  logic                     redir_val,
   input  logic [FTQ_IDX_BITS-1:0]  redir_idx,
   input  logic                     redir_self,
-  input  logic [1:0]               redir_cause,
+  input  ftq_redir_cause_e         redir_cause,
 
   // ---- pointers out ------------------------------------------------
   output logic [FTQ_PTR_BITS-1:0]  alloc_ptr,
@@ -105,73 +106,63 @@ module ftq_ptr #(
 
   // ---- observation, for the bound properties ------------------------
   // The literal full condition of 5.1: low bits equal, generation
-  // differing. Published so the property that it NEVER OCCURS can be
-  // bound against the port list rather than reach into internals
-  // (TD#109). See the FTQ_ALLOC_LIMIT comment below for why it must
-  // not occur.
+  // differing. It is now a REACHABLE and CORRECT state -- the 64
+  // live entries the widened watermark made safe -- so the property
+  // bound to it says it agrees with ftq_full rather than that it
+  // never occurs. Published as a port so the bind reads only the
+  // port list and makes no hierarchical reference (TD#109).
   output logic                     ptr_alias_full,
+
+  // ---- the squash range, for ftq_status (7.3) -----------------------
+  // A redirect rewind frees the entries between the new alloc_ptr
+  // and the old one (5.5 R3) and ftq_status must clear their wb_rcvd
+  // and fault bits in the same cycle (ftq_entry_formats.md 4.2 W4).
+  // The range is [squash_start, squash_end), both FTQ_PTR_BITS so
+  // the consumer can take an age without repeating the generation
+  // reconstruction this module already performs on redir_idx.
+  //
+  // 7.3 publishes the winning REDIRECT to ftq_status and leaves the
+  // mask to it. Exporting the resolved range instead keeps one owner
+  // for the reconstruction; see the BP-107 Results Capture.
+  output logic                     squash_val,
+  output logic [FTQ_PTR_BITS-1:0]  squash_start,
+  output logic [FTQ_PTR_BITS-1:0]  squash_end,
 
   // ---- the entry index leaving with the p0 request ------------------
   output logic [FTQ_IDX_BITS-1:0]  alloc_idx,
   output logic [FTQ_IDX_BITS-1:0]  fetch_idx
 );
 
-  // ftq_backend_interfaces.md 5. Named locally until the enum is
-  // declared in bp_structs_pkg. Only RC_UNSPEC changes behaviour
-  // here: the other three all rewind to the named index, which is
-  // what lets one port group serve mispredict, trap and replay.
-  // They are declared so the encoding is recorded at the point of
-  // use rather than left as a bare 2'b11 comparison.
-  localparam logic [1:0] RC_MISPREDICT = 2'b00;
-  localparam logic [1:0] RC_TRAP       = 2'b01;
-  localparam logic [1:0] RC_REPLAY     = 2'b10;
-  localparam logic [1:0] RC_UNSPEC     = 2'b11;
-
   // -----------------------------------------------------------------
-  // FTQ_ALLOC_LIMIT -- a DEPARTURE from 5.1, reported by BP-106.
+  // FTQ_ALLOC_LIMIT -- now the 5.1 condition, no longer a departure.
   // -----------------------------------------------------------------
   // 5.1 gives full as alloc_ptr[5:0] == commit_ptr[5:0] with the
   // generation bits differing, which is an age of FTQ_DEPTH: all 64
-  // entries live. This module stops one short, at FTQ_DEPTH-1.
+  // entries live. BP-106 built this one short, at FTQ_DEPTH-1,
+  // because bkend_ftq_commit_idx was then FTQ_IDX_BITS wide and
+  // carried no generation. At 64 live entries the watermark may name
+  // any of 65 entries -- the 64 live ones plus the one just
+  // committed, which section 6 promises may sit on the port
+  // indefinitely -- and 6 bits cannot separate 65 values. Holding
+  // allocation one short removed the 65th value.
   //
-  // The reason is in ftq_commit.sv, not here. bkend_ftq_commit_idx
-  // is FTQ_IDX_BITS wide and carries NO generation bit
-  // (ftq_backend_interfaces.md 6), so ftq_commit must reconstruct
-  // one against commit_ptr. With 64 entries live there are 65
-  // distinct entries a held watermark could name -- the 64 live ones
-  // and the one just committed -- and 6 bits cannot separate 65
-  // values. Concretely, with commit_ptr at 5 and alloc_ptr at 69:
+  // THE PORT WAS WIDENED INSTEAD (ftq_backend_interfaces.md 6,
+  // 2026-08-21). The watermark now carries the generation, so
+  // ftq_commit reconstructs nothing for it and the 65th value is no
+  // longer ambiguous. The limit reverts and the 64th entry comes
+  // back.
   //
-  //   a watermark of 4 is the LAST ENTRY ALREADY COMMITTED, held on
-  //   the port because nothing new has retired. Section 6 says
-  //   repeating a watermark is harmless.
-  //
-  //   a watermark of 4 is ALSO entry 68, the newest live entry, if
-  //   the backend has just retired the whole queue.
-  //
-  // The two are bit-identical. Accepting frees 63 live entries and
-  // issues 63 false RAS commits; rejecting deadlocks the second
-  // case, because a full FTQ predicts nothing and the watermark has
-  // nothing left to advance past. Neither is safe, and the FTQ
-  // refilling to full before the backend retires an entry is normal
-  // traffic for a decoupled front end, not a corner.
-  //
-  // Holding allocation one entry short removes the 65th value and
-  // the ambiguity with it: a held stale watermark then always
-  // reconstructs to an age of FTQ_DEPTH, which exceeds every legal
-  // walk end and is rejected at every occupancy. The cost is one
-  // entry of 64.
-  //
-  // REVERT THIS TO FTQ_DEPTH the day bkend_ftq_commit_idx carries a
-  // generation bit. It is one line, and the property bound to
-  // ptr_alias_full is what proves the bound is in force.
-  localparam int FTQ_ALLOC_LIMIT = FTQ_DEPTH - 1;
+  // IF THE PORT IS EVER NARROWED AGAIN this must return to
+  // FTQ_DEPTH-1, and ftq_decisions.md 5.1 is the paragraph that
+  // says why.
+  localparam int FTQ_ALLOC_LIMIT = FTQ_DEPTH;
 
   // -----------------------------------------------------------------
   // Ages. See the header: every ordering decision is made on these.
   // -----------------------------------------------------------------
   logic [FTQ_PTR_BITS-1:0] w_age_alloc;
   logic [FTQ_PTR_BITS-1:0] w_age_fetch;
+  logic [FTQ_PTR_BITS-1:0] w_age_written;
 
   // -----------------------------------------------------------------
   // Advance enables.
@@ -217,7 +208,15 @@ module ftq_ptr #(
     // states the condition over all three.
     ftq_empty = (w_age_alloc == '0) && (w_age_fetch == '0);
 
-    fetch_pending = (w_age_fetch != w_age_alloc);
+    // The WRITTEN frontier, not alloc_ptr. See the alloc_inflight
+    // port comment. Written as a compare against a subtracted age
+    // rather than as an inequality on the raw pointers, because the
+    // subtraction can take the frontier back to fetch_ptr and the
+    // result must then be false, not wrap.
+    w_age_written = w_age_alloc - {{(FTQ_PTR_BITS-1){1'b0}},
+                                   alloc_inflight};
+    fetch_pending = (w_age_fetch != w_age_alloc) &&
+                    (w_age_fetch < w_age_written);
 
     // Full blocks allocation AND NOTHING ELSE. The gate is here as
     // well as in the H2 path so the pointer cannot be walked past
@@ -232,6 +231,14 @@ module ftq_ptr #(
 
   assign alloc_idx = alloc_ptr[FTQ_IDX_BITS-1:0];
   assign fetch_idx = fetch_ptr[FTQ_IDX_BITS-1:0];
+
+  // The squash range of 5.5 R3. w_alloc_tgt is the new head, so
+  // everything from it up to the current head is squashed. On
+  // RC_UNSPEC w_alloc_tgt is commit_ptr and the range is every live
+  // entry, which is 5.1 U3 falling out rather than being cased.
+  assign squash_val   = redir_val;
+  assign squash_start = w_alloc_tgt;
+  assign squash_end   = alloc_ptr;
 
   // -----------------------------------------------------------------
   // Redirect rewind, 5.5 R1.

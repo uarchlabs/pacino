@@ -16,6 +16,7 @@
 // governs and that fourth pointer is not built.
 //
 // THE INPUT IS A WATERMARK, NOT A PULSE (backend_interfaces 6).
+// It is FTQ_PTR_BITS wide and carries the wrap generation.
 // bkend_commit_idx names the NEWEST entry all of whose instructions
 // have architecturally retired. Every entry from commit_ptr through
 // that index inclusive is to be freed, so the watermark may jump
@@ -59,10 +60,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module ftq_commit #(
-  // See ftq_ptr.sv. A named width, not a knob.
-  parameter int FTQ_PTR_BITS = FTQ_IDX_BITS + 1
-) (
+module ftq_commit (
   input  logic                     clk,
   input  logic                     rstn,
 
@@ -73,14 +71,20 @@ module ftq_commit #(
   input  logic [FTQ_PTR_BITS-1:0]  alloc_ptr,
 
   // ---- commit watermark, from the backend -------------------------
+  // FTQ_PTR_BITS WIDE. It carries the wrap generation
+  // (ftq_backend_interfaces.md 6), so nothing is reconstructed for
+  // it here. BP-106 built against an FTQ_IDX_BITS port and had to
+  // rebuild the generation against commit_ptr; that reconstruction
+  // is DELETED, and with it the FTQ_DEPTH-1 allocation limit in
+  // ftq_ptr.sv that existed only to make it unambiguous.
   input  logic                     bkend_commit_val,
-  input  logic [FTQ_IDX_BITS-1:0]  bkend_commit_idx,
+  input  logic [FTQ_PTR_BITS-1:0]  bkend_commit_idx,
 
   // ---- redirect, from ftq_npc.sv ----------------------------------
   // Needed for two distinct things: suppression of the RAS commit on
   // a restoring cause, and abandonment of the walk on RC_UNSPEC.
   input  logic                     redir_val,
-  input  logic [1:0]               redir_cause,
+  input  ftq_redir_cause_e         redir_cause,
 
   // ---- pointer out -------------------------------------------------
   output logic [FTQ_PTR_BITS-1:0]  commit_ptr,
@@ -102,13 +106,6 @@ module ftq_commit #(
   output logic                     walk_active
 );
 
-  // ftq_backend_interfaces.md 5. Named locally until the enum is
-  // declared in bp_structs_pkg.
-  localparam logic [1:0] RC_MISPREDICT = 2'b00;
-  localparam logic [1:0] RC_TRAP       = 2'b01;
-  localparam logic [1:0] RC_REPLAY     = 2'b10;
-  localparam logic [1:0] RC_UNSPEC     = 2'b11;
-
   localparam logic [FTQ_PTR_BITS-1:0] PTR_ONE =
     {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
 
@@ -122,7 +119,6 @@ module ftq_commit #(
   logic                    w_suppress;
   logic                    w_unspec_squash;
   logic                    w_walk_stop;
-  logic                    w_wm_gen;
   logic [FTQ_PTR_BITS-1:0] w_wm_end;
   logic [FTQ_PTR_BITS-1:0] w_end_nxt;
   logic                    w_take_wm;
@@ -162,21 +158,21 @@ module ftq_commit #(
   // -----------------------------------------------------------------
   // The watermark, and whether it is accepted.
   // -----------------------------------------------------------------
-  // bkend_commit_idx carries no wrap bit, so its generation is
-  // reconstructed against commit_ptr exactly as the redirect index
-  // is in ftq_ptr.sv: the watermark names an entry at or after
-  // commit_ptr, so a low-bit value below commit_ptr's belongs to the
-  // next generation. The walk end is that entry PLUS ONE, because
-  // the watermark is inclusive.
+  // bkend_commit_idx CARRIES ITS OWN GENERATION, so the walk end is
+  // simply that entry plus one -- the watermark is inclusive. There
+  // is nothing to reconstruct. The FTQ_IDX_BITS reconstruction
+  // BP-106 needed here was deleted by BP-107 when the port widened
+  // (ftq_backend_interfaces.md 6).
+  //
+  // The redirect index in ftq_ptr.sv is a DIFFERENT case and its
+  // reconstruction stays: bkend_ftq_redir_idx is still
+  // FTQ_IDX_BITS, and it has no aliasing problem because 5.5 R2
+  // bounds it to at or after commit_ptr -- 64 values, not 65.
   always_comb begin : walk_end
     w_age_end   = w_end_r    - commit_ptr;
     w_age_alloc = alloc_ptr  - commit_ptr;
 
-    w_wm_gen = (bkend_commit_idx >= commit_ptr[FTQ_IDX_BITS-1:0]) ?
-                 commit_ptr[FTQ_IDX_BITS] :
-                 ~commit_ptr[FTQ_IDX_BITS];
-
-    w_wm_end = {w_wm_gen, bkend_commit_idx} + PTR_ONE;
+    w_wm_end = bkend_commit_idx + PTR_ONE;
     w_age_wm = w_wm_end - commit_ptr;
 
     // Accept only a watermark that moves the end FORWARD. This is
@@ -195,10 +191,13 @@ module ftq_commit #(
     // IT IS ALSO WHAT REJECTS A HELD STALE WATERMARK. Section 6
     // promises that repeating a watermark is harmless. Once the walk
     // has consumed one, commit_ptr sits at that entry plus one, so
-    // the repeat names commit_ptr-1 and reconstructs to an age of
-    // FTQ_DEPTH. ftq_ptr.sv holds alloc_ptr to FTQ_DEPTH-1 precisely
-    // so that age always exceeds w_age_alloc and is always rejected;
-    // the reasoning is written out in full at FTQ_ALLOC_LIMIT there.
+    // the repeat names commit_ptr-1 -- and because the watermark now
+    // carries its own generation, that is an age of 2**FTQ_PTR_BITS
+    // minus one, far past w_age_alloc, and is rejected at EVERY
+    // occupancy including 64 live entries. Under BP-106's narrow
+    // port the same repeat reconstructed to an age of exactly
+    // FTQ_DEPTH, which is why allocation had to stop one short to
+    // keep it out of range. That constraint is gone.
     //
     // This does NOT reject a watermark that regresses further than
     // one entry. That input is malformed, R2 places it outside the

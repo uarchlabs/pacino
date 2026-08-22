@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  STABLE
- UPDATED: 2026-08-21
+ UPDATED: 2026-08-22
  CONTACT: Jeff Nye
 ```
 
@@ -209,7 +209,8 @@ prompt is written.
 - CLAUDE.md stays lean: rules only, no history, no examples
 - Architectural reasoning lives in PROJECT_STATUS.md and
   planning/arch/
-- /compact after each logical unit within a session
+- However there should be no automated /compact commands 
+  given or instructed. Context management is manual
 
 ### Prompt content
 - Good detail: constraining Jeff's architectural decisions
@@ -237,6 +238,13 @@ prompt is written.
   file, line width, indent, reset/clock naming, style rules.
 - -Wno-VARHIDDEN is already in CLAUDE.md. Do not duplicate
   in prompts.
+- THE PA DOES NOT INSTRUCT THE IA ON SESSION OPERATION. Context,
+  compaction, model selection, run length, status line, and
+  anything else the operator controls are Jeff's, not the task
+  file's. A task file specifies WORK. This is the same class of
+  error as the two rules above -- writing about the IA's
+  ENVIRONMENT rather than its task -- and it will not always be
+  spelled /compact.
 - Do not use results marker syntax in prompt guidance text.
   Using :: RESULTS:START :: / :: RESULTS:END :: markers in
   guidance causes validation script failures. Instead write:
@@ -302,6 +310,24 @@ Each of these was paid for by a session and is not re-argued.
   an entry that was wrong at the moment it was written.
 - STATUS COUNTS COME FROM THE CURRENT SESSION. Never carry a
   prior session's pass/fail count into PROJECT_STATUS.
+- A PROPERTY NEVER OBSERVED TO FIRE IS A COMMENT. Every bound
+  concurrent property is proven live by FAULT INJECTION: break
+  the thing it guards on a scratchpad copy outside the tree,
+  confirm the property's own text appears, revert. BP-107 found
+  46 of 73 inert on the first pass, and 14 of one file's 15
+  defined but never asserted. A green suite carrying inert
+  assertions is worse than one carrying none, because it
+  reports coverage it does not have. Note that a concurrent
+  property only samples state present at a clock edge, so a
+  case that drives its inputs, checks at a delta and moves on
+  will leave the property inert however well it is written.
+- A GREEN REPORT IS NOT EVIDENCE THAT A TARGET STILL BUILDS.
+  It records what was true when the session that wrote it ran,
+  and the tree changes underneath. BP-106 reported 155 checks
+  green; the packages then gained declarations those modules
+  still held locally, and four targets stopped building with
+  nothing anywhere to say so. Requirement 0 asks what EXISTS.
+  Running the suite is what tells you what WORKS.
 
 ### Postmortem practice
 Every PA handoff carries a postmortem of the PA's own
@@ -526,7 +552,8 @@ The known RTL make files are:
 ```
 
 A unit's target count is per-unit. The bpu unit is 47 targets
-(18 lint, 22 sim, 7 cov). The ftq unit opened with BP-100 and
-its targets are counted separately; do not fold them into the
-bpu figure or read "47 of 47 green" as covering the tree.
+(18 lint, 22 sim, 7 cov). The ftq unit is 22 targets (11 lint,
+11 sim) and 670 checks as of BP-107, which completed it. Count
+them separately; do not fold the ftq figures into the bpu total
+or read "47 of 47 green" as covering the tree.
 

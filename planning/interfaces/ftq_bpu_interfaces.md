@@ -1,918 +1,1114 @@
 <!-- SPDX-License-Identifier: Apache-2.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-# FTQ to BPU Interface
+# FTQ Micro-Architectural Decisions
 ```
- FILE:    ftq_bpu_interfaces.md
- SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
-          bp_structs_pkg.sv, bp_cluster.sv
+ FILE:    ftq_decisions.md
+ SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-08-09
+ UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```
 
-Specifies the signals crossing the FTQ/BPU boundary and the routing
-from that boundary to the ports each predictor declares.
-
-fe_decisions.md is the theory of operation. This file is the port
-specification. The RTL port declaration is the reference for every
-port named here. Where fe_decisions.md or bp_structs_pkg.sv
-disagrees with the RTL, section 10 states the correction the other
-file needs.
+FTQ-owned behaviour: how the entry is stored, how long it lives, and
+what it holds for restore.
 
 ---
 
-## 1. Scope
+## 0. Scope and companion documents
 
-Covered:
-- prediction request from FTQ into the cluster
-- prediction results out of the cluster
-- redirects, derived at the cluster boundary
-- prediction metadata out of the cluster
-- updates from FTQ into each predictor
-- history checkpoint and rollback
-- configuration and status sidebands
+```
+  ftq_entry_formats.md      the two entry structures, field by field
+  ftq_bpu_interfaces.md     the ports crossing the BPU boundary
+  ftq_ifu_interfaces.md     the ports crossing the IFU boundary
+  ftq_backend_interfaces.md the ports crossing the backend boundary
+  fe_decisions.md           the BPU <-> FTQ paths: prediction,
+                            redirect, slot correction, update
+  bp_structs_pkg.sv         the reference declaration
+```
 
-Not covered:
-- IFU to FTQ (TD-FE-1, unspecified)
-- EXE to FTQ resolution
-- predictor internals
-- RAM arbitration (bp_arb_spec.md)
+Registries stay in `fe_decisions.md` and are NOT duplicated here.
+Front-end invariants are FE-1 through FE-14, technical debt is
+TD-FE-1 through TD-FE-8, and open items are FE-U1 through FE-U9, all
+in `fe_decisions.md` sections 11, 13 and 14. This file cites them by
+number.
+
+The FTQ has three logical external interfaces, all specified:
+
+```
+  ftq_bpu       BOTH   specified, ftq_bpu_interfaces.md
+  ftq_ifu       BOTH   specified, ftq_ifu_interfaces.md (TD-FE-1)
+  ftq_backend   IN     specified, ftq_backend_interfaces.md:
+                       resolution, redirect, commit
+```
+
+A fourth, ftq_icache, is DELIBERATELY NOT DEFINED. The ICache is
+encapsulated behind the IFU. XiangShan drives it from its FTQ for
+physical reasons -- critical path and register replication, with the
+evidence cited in ftq_ifu_interfaces.md 8 item 1 -- and if pacino
+meets the same pressure the answer is a pass-through or alternative
+path created during physical design, not a logical interface carried
+from the start.
 
 ---
 
-## 2. Conventions
+## 1. Entry storage
+`bp_ftq_entry_t` is read every cycle by fetch. The FTQ reads it again
+on redirect, to rewrite the named slot, to re-derive the block
+successor across the slots (fe_decisions.md 2.4), and to present
+the checkpoint and the RAS snapshot of the entry being corrected
+(section 3.2 and fe_decisions.md 9). It is read a third time at
+resolution, for `pc` and the slot's `br_type` (fe_decisions.md 7.2).
 
-Predictor ports are named as declared in the RTL. The eight modules
-do not share one naming convention. This file uses each module's
-actual port names and does not propose renaming.
+NO PREDICTOR READS IT, and neither does bp_cluster. The redirect
+comparison is made inside the cluster, against the prediction the
+cluster formed at p1 and holds in its own stage registers (FE-4). A
+prior revision of this section attributed a read to "every redirecting
+predictor's cluster-boundary comparison". That read does not exist and
+must not be counted when the fast-path read ports are sized.
 
-Naming variance present in the shipped RTL, recorded so a reader is
-not surprised by it:
+FIVE FAST-PATH READ PORTS ARE NEEDED, NOT THREE. The three readings
+above are the three PURPOSES; they are not the port count, because two
+of them need two ports each and one needs a port of its own:
 
 ```
-  tage, ittage, sc     <pred>_<signal>_<stage>, slot as unpacked
-                       [0:NUM_PRED_SLOTS-1] after the port name
-  ras                  same form, no queue-status ports
-  ubtb                 slot as packed [NUM_PRED_SLOTS-1:0] on the
-                       type
-  loop_pred            per-slot since BP-091; prediction output
-                       named pred_p1, update ports keep a p0 suffix
-  ftb                  flat ports, no structs, no slot dimension
-  bp_history           no stage suffixes, literal [1:0] and [2]
-                       dimensions
+  fetch          the entry ftq_ifu is requesting
+  redirect       the entry the winning redirect names, addressed by
+                 the ROLLBACK index -- the arbitration's output
+  predecode      the entry a writeback names, addressed by the
+                 writeback's own index. It CANNOT share the redirect
+                 port: the predecode redirect is an INPUT to the
+                 arbitration whose output addresses that port, and
+                 the correction must be formed in the same cycle
+  resolve x2     ftq_backend_interfaces.md 4 fixes resolution at
+                 NUM_RESOLVE_PORTS per cycle and the two channels may
+                 name DIFFERENT entries, so one port cannot serve both
 ```
 
-Cluster-boundary signals defined in this file and not present in any
-shipped RTL are marked NEW. Everything else names a declared port.
+The commit payload of 5.4 reads the entry at commit_ptr as well;
+BP-107 formed it inside `ftq_entry` from `commit_step_val` rather than
+exporting a sixth port, because the qualification -- whether the block
+holds a call or a return -- lives in the entry.
 
-Array direction follows the package convention: packed-struct
-dimensions descend, `[NUM_PRED_SLOTS-1:0]`; port dimensions ascend,
-`[0:NUM_PRED_SLOTS-1]`.
-
-Internal cluster nets carry a `w_` prefix. Stage registers carry an
-`r_` prefix with the stage in the suffix.
-
-Stage labels are p0/p1/p2/p3 for prediction and u0/u1 for update.
+`bp_ftq_meta_t` is read once per RESOLUTION, so it needs TWO read
+ports for the same reason the fast path does.
 
 ---
 
-## 3. Prediction request: FTQ to BPU
+---
 
-The FTQ drives one prediction request per cycle into the cluster.
+## 2. Entry Lifetime
 
 ```
-  ftq_pred_val_p0                          request valid
-  ftq_pred_pc_p0    [VA_WIDTH-1:0]         fetch block start PC
-  ftq_pred_idx_p0   [FTQ_IDX_BITS-1:0]     allocated FTQ index
+  p1            allocate. Fast-path entry written, all slots.
+  p2, p3        rewritten by redirect, per slot. The later stage wins
+                for the slot it names.
+  p2, p3        bp_ftq_meta_t written, per slot.
+  post-execute  bp_ftq_meta_t read. Updates formed and enqueued.
 ```
 
-The FTQ index is presented at p0 so the cluster can carry it into
-the predictor input structs, which hold it as `branch_id`.
-
-The cluster qualifies the request with the prediction-queue status
-of the queued predictors before presenting it to any of them, so all
-eight stay in lockstep and no prediction is dropped. The FTQ must
-not present a request while a `pq_not_full` output is low; the
-cluster has no request-ready output.
-
-Cluster routing of the request:
-
-| Destination      | Port                | Notes                    |
-|------------------|---------------------|--------------------------|
-| ubtb             | pred_pc_p0          | scalar PC                |
-| loop_pred        | pred_pc_p0          | per slot                 |
-| loop_pred        | pred_valid_p0       | per slot                 |
-| ftb              | pred_pc_p0          | scalar PC                |
-| ftb              | pred_valid_p0       | request valid            |
-| tage             | tage_pred_val_p0    | per-slot bit vector      |
-| tage             | tage_pred_inp_p0    | tage_pred_inp_t per slot |
-| ittage           | ittage_pred_val_p0  | per-slot bit vector      |
-| ittage           | ittage_pred_inp_p0  | ittage_pred_inp_t/slot   |
-
-`tage_pred_inp_t` and `ittage_pred_inp_t` each carry `pc` and
-`branch_id`. The cluster builds one per slot from the request.
-
-Every slot of `loop_pred.pred_pc_p0` is driven from the one request
-PC. There is no slot-1 PC at p0; the per-slot dimension is a shape,
-the same way the cluster drives `sc.inp_pc_p2` per slot from a single
-staged p2 copy.
-
-ubtb has no request-valid port. It presents an output every cycle.
-
-sc takes no p0 request. It is driven from the TAGE p2 result
-(section 5.3).
-
-RAS presents its top of stack at p0; see section 5.4.
+The entry persists until its post-execute resolution, when its metadata is read. 
+Allocation and deallocation policy is otherwise unspecified (FE-U7).
 
 ---
 
-## 4. Initial prediction: p1
+---
 
-ubtb and loop_pred produce the p1 prediction. Neither is a redirect
-source.
+## 3. Checkpoint and Restore
 
-```
-  ubtb.pred_p1       ubtb_pred_t [NUM_PRED_SLOTS-1:0]   out
-  ubtb.blk_p1        ubtb_blk_t                         out
-  loop_pred.pred_p1  lp_pred_t   per slot               out
-```
+The BPU owns all branch history state. Only the FTQ-facing checkpoint 
+and restore are specified here; internal history management is out of scope.
 
-`ubtb_blk_t` carries the entry hit and the reconstructed
-fall-through address. The hit is reported once per lookup; a slot's
-own valid bit says only whether that slot carries a branch.
+### 3.1 What is check-pointed
 
-`lp_pred_t` carries the loop table snapshot, including lp_hit,
-lp_pred_is_loop, and lp_pred_taken. It carries no target: the loop
-predictor supplies a direction only, and the target comes from the
-uBTB entry when the loop predictor wins.
-
-loop_pred is per-slot as of BP-091 and its prediction output is named
-`pred_p1`. TD#105 is closed.
-
-The p1 selection mux is cluster logic, per slot:
+A checkpoint consists of the GHR and PHR circular-buffer pointers, one pair per
+FTQ entry, indexed by the FTQ entry index:
 
 ```
-  lp_pred_is_loop set   ->  loop_pred supplies the direction
-  else ubtb slot valid  ->  ubtb supplies the slot
-  else                  ->  slot carries no prediction
+  ghist_ptr   8    GHR circular buffer pointer
+  phist_ptr   5    PHR circular buffer pointer
 ```
 
-There is no slot-0 exception to this rule.
+A checkpoint is block granular: one pair per FTQ entry, covering the
+bundle (G20). Checkpoints are written with post-update pointer values.
 
-A uBTB RETURN takes its target from the registered RAS top of stack
-rather than from the uBTB entry.
-
-Producer alignment. `ubtb.pred_p1` is combinational from
-`pred_pc_p0` and is therefore valid in the p0 cycle; loop_pred's
-output is registered and is valid in the p1 cycle. The cluster
-registers the uBTB result once so both describe the same request
-when the selection mux reads them.
-
-Cluster output to the FTQ at p1:
+The RAS snapshot (`bp_ras_snapshot_t`) is a separate field of the
+fast-path entry, not part of the checkpoint. It is restored on the same
+redirect (section 3.2):
 
 ```
-  bpu_pred_val_p1                                 NEW
-  bpu_pred_idx_p1  [FTQ_IDX_BITS-1:0]             NEW
-  bpu_pred_slot_p1 bp_ftq_slot_t
-                     [0:NUM_PRED_SLOTS-1]         NEW
-  bpu_pred_ras_p1  bp_ras_snapshot_t              NEW
-  bpu_pred_pft_p1  [VA_WIDTH-1:0]                 NEW
+  TOSR   top of stack read pointer
+  TOSW   top of stack write pointer
+  BOS    bottom of stack
 ```
 
-The FTQ writes these into the entry it allocates at p1. Allocation
-is unconditional: an entry is allocated for every prediction block,
-including one the p1 predictors miss, so a later stage has an entry
-to correct.
+### 3.2 Restore
 
-`bpu_pred_pft_p1` is the block fall-through: the address the front
-end fetches after this block when no slot in the block is taken.
-One value per prediction, not one per slot, and qualified by
-`bpu_pred_val_p1` -- it carries no valid of its own. TD#108.
+On redirect the FTQ presents the INDEX of the entry being corrected,
+on `ftq_rollback_val` / `ftq_rollback_idx`, and `bp_cluster` restores
+`ghist_ptr` and `phist_ptr` from its own copy of that entry's
+checkpoint.
 
-It is the p1 view of the fall-through and is exactly the not-taken
-term the cluster already uses when it forms each slot's p1
-successor for the section 6 redirect comparison: `blk_p1.pft_addr`
-on a uBTB hit, and the block-aligned request PC plus
-FTB_BLOCK_BYTES on a miss, where `blk_p1.pft_addr` reads zero. It
-is not the FTB `pftAddr` of section 5.1, which arrives at p2.
+THIS SECTION PREVIOUSLY SPECIFIED THE VALUE FORM -- the FTQ
+presenting the two pointers themselves. BP-102 settled it as the
+index form and this wording follows. The checkpoint array inside
+bp_history and the checkpoint field of the FTQ entry are written from
+the same p1 allocation and are one to one against an `FTQ_IDX_BITS`
+index, so the index selects the same pointer pair at 7 bits rather
+than 14, and bp_history needs no change. The entry still CARRIES the
+pointer pair (section 2); nothing reads it across this interface.
 
-The FTQ writes it into the allocated entry as
-`bp_ftq_entry_t.pft_addr`. The port is present only in the p1 cycle
-and the FTQ re-evaluates the block successor on every redirect
-(fe_decisions.md 2.4), so the not-taken arm is read back from the
-entry rather than resampled from the cluster.
+The index names the entry whose END-of-block pointer state is to be
+restored. On `RC_MISPREDICT` with `bkend_ftq_redir_self` clear that
+is the redirecting entry itself; with `_self` set the naming entry is
+squashed too and the index is the one before it. That derivation is
+the FTQ's work -- `bp_cluster` applies the index it is given and does
+not validate it.
+
+The FTQ arm outranks both of the cluster's own redirect arms
+unconditionally (`ftq_backend_interfaces.md` 8).
+
+RAS restoration is `ras_decisions.md` 4.3 and 4.4, and
+`fe_decisions.md` 9. It is the same pointer restore on every
+redirect cause and needs nothing from this section.
 
 ---
 
-## 4a. Slot correction: p2 and p3
+---
 
-The p1 group of section 4 is the uBTB and loop-predictor view. The
-FTB classifies the block at p2 and supplies each branch field's
-in-block position. The cluster republishes its view of every slot at
-p2, and again at p3 with the SC direction applied.
+## 4. Next fetch PC
+
+THE FTQ IS THE REQUESTER. `bp_cluster` takes `ftq_pred_pc_p0` as an
+INPUT and does not self-steer. `PROJECT_STATUS.md` said the opposite
+until 2026-08-19; that describes the XiangShan model, where the BPU
+holds its own PC and the FTQ supplies only ready and redirect
+(`ia_context/background/fe_qaa.md`). Pacino inverted it. The port
+direction settles it, and this section is the selection the
+inversion makes the FTQ responsible for.
+
+### 4.1 The register
+
+One register and its valid, driving the section 3 request group of
+`ftq_bpu_interfaces.md` directly:
 
 ```
-  bpu_slot_val_p2                                 NEW
-  bpu_slot_idx_p2  [FTQ_IDX_BITS-1:0]             NEW
-  bpu_slot_p2      bp_ftq_slot_t
-                     [0:NUM_PRED_SLOTS-1]         NEW
-  bpu_slot_val_p3                                 NEW
-  bpu_slot_idx_p3  [FTQ_IDX_BITS-1:0]             NEW
-  bpu_slot_p3      bp_ftq_slot_t
-                     [0:NUM_PRED_SLOTS-1]         NEW
+  r_next_pc   [VA_WIDTH-1:0]  ->  ftq_pred_pc_p0
+  r_next_val                  ->  ftq_pred_val_p0
 ```
 
-Same type as `bpu_pred_slot_p1`. The FTQ overwrites the slot
-description of the named entry with the latest group received.
+`ftq_pred_idx_p0` is the index the FTQ allocates for the request, not
+part of this selection.
 
-`bpu_slot_val_p2` is `r_val_p2 & ftb_valid_p2`: the cluster has a
-corrected view only when the FTB answered. `bpu_slot_val_p3` is
-`r_val_p3`.
+### 4.2 Selection
 
-THIS IS NOT A REDIRECT AND IS NOT GATED ON ONE. A redirect fires only
-when the p2 successor differs from the p1 successor. The case that
-matters most does not qualify: a conditional the uBTB missed and the
-FTB found, predicted not taken. Both views end the block at the same
-address, no redirect fires, and the entry would otherwise keep
-`br_type` NO_BRANCH and `pos` zero -- so section 7.2 would form no
-update and no predictor would ever be trained on that branch.
-TD-FE-6, FE-13.
+Priority, highest first:
 
-Field sources at p2:
+```
+  0  reset               the reset vector (4.7)
+  1  backend redirect    bkend_ftq_redir_pc
+  2  predecode redirect  derived from the IFU writeback,
+                         ftq_ifu_interfaces.md 7 W3
+  3  p3 redirect         bpu_redir_p3[s].target_pc
+  4  p2 redirect         bpu_redir_p2[s].target_pc
+  5  p1 successor        selection across slots, fe_decisions.md 2.4
+  6  hold                retain r_next_pc, deassert r_next_val (4.5)
+```
 
-| Field        | Source                                          |
-|--------------|-------------------------------------------------|
-| `slot_valid` | FTB conditional field valid, or jump placement  |
-| `br_type`    | FTB classification, `w_br_type_p2`              |
-| `taken`      | TAGE when its branch_id matches, else FTB       |
-| `target`     | section 3.3 target table by branch type         |
-| `pos`        | `ftb_br0_pos_p2` / `ftb_br1_pos_p2`, or         |
-|              | `ftb_jmp_pos_p2` for the jump slot              |
-| `pred_src`   | the arm that supplied the target                |
-| `confidence` | zero, FE-U3                                     |
+### 4.3 The priority is age order, not an axiom
 
-p3 changes `taken`, and `pred_src` to PRED_SC when SC actually moved
-the direction. SC corrects direction, not branch type, so `br_type`,
-`pos` and `target` pass through the p2 to p3 register unchanged.
+The rule that matters is that THE CORRECTION NAMING THE OLDEST FTQ
+ENTRY WINS, because everything younger than it is squashed by it
+anyway. The fixed priority of 4.2 IS that order in a correctly
+operating pipeline, so no wrap-aware age comparator is needed on this
+path:
+
+- Backend resolution is many stages behind fetch, so the entry it
+  names is always older than any entry still inside the BPU or the
+  IFU.
+- Predecode follows fetch, which follows p1, so its entry is always
+  older than the entry at p2 or p3.
+- p3 lags p2 by one cycle, so in a moving stream p3 names the older
+  entry. When the stream is stalled the two hold the same entry and
+  FE-3 decides: the later stage wins. bp_cluster.sv line 945 already
+  resolves the history rollback index exactly this way.
+
+Stated as a consequence rather than an assumption so that a future
+source which does NOT fit the depth ordering is recognised as such.
+The fallback is the age comparison itself, and that needs the wrap or
+generation bit FE-U7 must define.
+
+### 4.4 The p1 successor and the zero-bubble loop
+
+The p1 successor is the `fe_decisions.md` 2.4 selection: the first
+taken slot's target, or the block fall-through
+`bp_ftq_entry_t.pft_addr`, delivered at p1 on `bpu_pred_pft_p1`.
+
+TIMING. To sustain one block per cycle with no bubble, the path from
+the p1 group through this selection into `ftq_pred_pc_p0` must be
+COMBINATIONAL: the request for the next block is presented in the
+same cycle this block's prediction is formed. This is the critical
+loop of the front end and the reason the uBTB exists --
+`ftb_decisions.md` 1 names it the zero-bubble predictor that supplies
+the fast next-PC. The FTB, TAGE, ITTAGE and SC results all arrive
+later and correct by redirect; none of them is in this loop.
+
+Redirect targets do NOT need the same treatment. A redirect has
+already cost the cycles between the mispredicted block and the
+correcting stage, so one register stage on the redirect path is off
+the critical loop. Registering the redirect sources and leaving only
+the p1 successor combinational is the expected implementation.
+
+### 4.5 Hold conditions
+
+`r_next_val` deasserts and `r_next_pc` holds when either:
+
+```
+  H1  a queued predictor cannot accept a request: any of
+      tage_pq_not_full, ittage_pq_not_full or sc_uq_not_full low.
+      The cluster has NO request-ready output, so
+      ftq_bpu_interfaces.md 3 makes this the FTQ's obligation.
+  H2  the FTQ has no free entry. FE-U7.
+  H3  the entry at the head of the live window has its FAULT bit
+      set. ftq_entry_formats.md 4.3 R1: predicting past a block
+      that faulted would queue work that will not be fetched.
+      Applies only INSIDE the live window -- a stale bit on a
+      committed entry does not hold.
+```
+
+NOT a hold condition: `ftq_ifu_req_rdy` low. The IFU being unable to
+accept a fetch does not stop the FTQ predicting ahead. That is the
+point of a decoupled front end and the FTQ's depth is the decoupling
+buffer; prediction rate and fetch rate are deliberately separate.
+Only running out of entries, H2, couples them.
+
+H3 WAS MISSING FROM THIS LIST until BP-107. It is stated in
+ftq_entry_formats.md 4.3 R1 and was never mirrored here, so a reader
+working from section 4 alone built two hold conditions where there are
+three.
+
+### 4.6 In-flight responses after a redirect
+
+A redirect does not reach into the cluster. `bp_cluster` has no flush
+input, so requests already at p0, p1, p2 and p3 for entries the
+redirect squashed still complete and still present their results.
+
+THE FTQ DROPS THEM. Every cluster response carries the entry index it
+belongs to -- `bpu_pred_idx_p1`, `bpu_slot_idx_p2`, `bpu_slot_idx_p3`,
+`bpu_redir_idx_p2`, `bpu_redir_idx_p3`, `bpu_meta_idx_p2`,
+`bpu_meta_idx_p3` -- and the FTQ ignores any naming an entry it has
+squashed. This is the same rule as `ftq_backend_interfaces.md` R3 and
+it has the same prerequisite: the FE-U7 generation bit, so a
+reallocated index is not mistaken for the squashed one.
+
+### 4.7 Reset vector
+
+`bp_defines_pkg::RESET_VECTOR`, a parameter, VA_WIDTH wide, default
+`40'h00_8000_0000`. It initialises the next-PC register of 4.1 and is
+selected by arm 0 of 4.2.
+
+The privileged specification leaves the reset PC implementation
+defined. 0x8000_0000 is the RISC-V convention for the base of main
+memory and the target of the Spike boot ROM; the tree carries no
+memory map of its own, so the convention stands. Override it at
+elaboration for a different map.
+
+It must be FTB_BLOCK_BYTES aligned. An unaligned value makes the
+first fetch a partial block, and both the FTB and the uBTB index on
+the block-aligned PC. 0x8000_0000 satisfies this and the parameter
+comment records the requirement.
 
 ---
 
-## 5. Late predictions: p2 and p3
+## 5. Queue management (FE-U7, resolved)
 
-### 5.1 FTB
+### 5.1 Three pointers
 
-ftb declares 42 flat ports. The p2 outputs the cluster consumes:
-
-```
-  ftb_valid_p2       ftb_hit_p2        ftb_way_p2
-  ftb_br0_valid_p2   ftb_br0_pos_p2    ftb_br0_taken_p2
-  ftb_br0_conf_p2    ftb_br0_target_p2
-  ftb_br1_valid_p2   ftb_br1_pos_p2    ftb_br1_taken_p2
-  ftb_br1_conf_p2    ftb_br1_target_p2
-  ftb_jmp_valid_p2   ftb_jmp_pos_p2    ftb_jmp_target_p2
-  ftb_is_call_p2     ftb_is_ret_p2     ftb_is_jalr_p2
-  ftb_pft_addr_p2    ftb_fastpath_p2 [1:0]
-```
-
-br0 maps to slot 0 and br1 to slot 1 at the cluster boundary. That
-mapping is PROGRAM ORDERED as of IC-FTB-16: the update path fills br0
-with the earlier branch, so slot 0 is the block's first branch and
-slot 1 its second. The
-FTB is not internally slot-split: one lookup supplies both branch
-fields of one 32-byte block (ftb_decisions.md 2.1, 2.3).
-`ftb_fastpath_p2` is already a per-slot vector, bit 0 for br0 and
-bit 1 for br1.
-
-`ftb_pft_addr_p2` is the fall-through address used when a slot's
-direction resolves not-taken.
-
-The block's single jump field is placed in the lowest prediction
-slot carrying no valid conditional field. The jump is the
-block-terminating branch, so lowest-free-slot placement is program
-order.
-
-ftb declares no FTQ index port. The cluster tracks the index
-positionally through the p0 to p2 pipeline.
-
-`ftb_hit_p2` and `ftb_way_p2` are the carried writeWay scheme
-(IC-FTB-10): they are captured at predict and returned to the FTB on
-the update port as `ftb_upd_hit_u0` and `ftb_upd_way_u0`, so the FTB
-does not re-look-up the tag. They travel through the FTQ; see
-section 7.
-
-### 5.2 TAGE and ITTAGE
+FTQ_DEPTH is 64 and FTQ_IDX_BITS is 6. Pointers are SEVEN bits: the
+low six index the array, the top bit is the wrap generation.
 
 ```
-  tage_pred_rdy_p2    [NUM_PRED_SLOTS-1:0]        out
-  tage_pred_meta_p2   tage_pred_meta_t per slot   out
-  ittage_pred_rdy_p2  [NUM_PRED_SLOTS-1:0]        out
-  ittage_pred_meta_p2 ittage_pred_meta_t per slot out
+  alloc_ptr    head.   Next entry to allocate. Advances when a
+                       prediction request is accepted at p0.
+  fetch_ptr    middle. Next entry to issue a fetch request for.
+                       Advances on ftq_ifu_req_val & _rdy.
+  commit_ptr   tail.   Next entry to commit and free. Advances at
+                       most one entry per cycle; see 5.4.
 ```
 
-TAGE supplies direction: `tage_pred_meta_t.tage_pred_tkn`. ITTAGE
-supplies a target: `ittage_pred_meta_t.ittage_prm_tgt` or
-`ittage_alt_tgt`, selected by `ittage_using_primary`.
-`ittage_hit` clear means the FTB target stands.
+INVARIANT FQ-1: commit_ptr <= fetch_ptr <= alloc_ptr, in wrap-aware
+order. The gap between commit_ptr and fetch_ptr is the fetched but
+unretired stream; the gap between fetch_ptr and alloc_ptr is the
+PREDICTED BUT UNFETCHED run-ahead, and that gap is the decoupling the
+FTQ exists to provide. At 64 entries of one 32-byte block it is at
+most 2 KiB of instruction stream.
 
-The ITTAGE target field holds the upper bits of an Sv39 VA with bit
-0 not stored. The cluster reconstructs the full width by appending
-the zero bit and sign-extending.
+THE FETCHABLE FRONTIER IS NOT alloc_ptr. alloc_ptr advances at p0
+(5.2) and the entry CONTENT is written at p1, so for one cycle the
+newest entry in that gap has an index and no content. A fetch issued
+on the raw gap presents an UNWRITTEN pc to the IFU, and this is
+reachable in the first two cycles out of reset -- not a corner.
 
-Both metadata structs carry `branch_id`. Every p2 and p3 comparison
-is qualified by `branch_id` equal to the FTQ index held in the
-matching stage register, so a queued or back-pressured response
-cannot be compared against the wrong entry. The redirect logic
-therefore assumes no fixed predictor latency.
-
-### 5.3 SC
-
-sc consumes the TAGE p2 result directly:
-
-```
-  tage_pred_rdy_p2   in   from tage
-  tage_pred_meta_p2  in   from tage
-```
-
-The TAGE p2 result fans out to both the FTQ boundary comparison and
-the sc input.
-
-sc history and PC inputs, driven by the cluster:
+The fetchable count is therefore the gap MINUS the requests still
+in flight between p0 and p1. `ftq_shadow` already knows: its p1 stage
+IS that request (5.6), so it exports the count and `ftq_ptr`
+subtracts it. FQ-1 is unaffected; what changes is which frontier
+`fetch_pending` measures to. Found by BP-107, which is also why the
+crossing appears in 7.2.
 
 ```
-  inp_pc_p2        [VA_WIDTH-1:1]     per slot   TD#91
-  sc_phr_p2        [9:0]              scalar     TD#92
-  sc_t1_idx_fh_p2  [SC_MAX_FH-1:0]    scalar
-  sc_t2_idx_fh_p2  [SC_MAX_FH-1:0]    scalar
-  sc_t3_idx_fh_p2  [SC_MAX_FH-1:0]    scalar
+  empty   all three equal
+  full    alloc_ptr[5:0] == commit_ptr[5:0]
+          and alloc_ptr[6] != commit_ptr[6]
 ```
 
-sc does not take `bp_folded_hist_t`. The cluster slices the three SC
-folds and the low 10 bits of `tage_phr` out of the struct and drives
-them as separate ports.
+Full is hold condition H2 of section 4.5. It is the only condition
+under which the FTQ stops predicting.
 
-ALL FIVE are staged p0 to p2 by the cluster. The three folds were
-connected live to bp_history until BP-090; because bp_history
-advances whenever a branch is predicted, the live folds at p2
-described history newer than the block SC was indexing. Same class of
-signal as the PC and the phr, same staging. TAGE and ITTAGE take
-`bp_folded_hist_t` whole at their own p0 request and stage
-internally; only SC takes sliced folds.
+THE 64-ENTRY FULL CONDITION DEPENDS ON THE COMMIT WATERMARK CARRYING
+A GENERATION BIT. At 64 live entries the set of values
+`bkend_ftq_commit_idx` may legally hold is SIXTY-FIVE, not 64: the 64
+live entries, plus the entry just committed, which
+ftq_backend_interfaces.md 6 promises may sit on the port indefinitely
+because repeating a watermark is harmless. FTQ_IDX_BITS cannot
+separate 65 values, and the two readings of the aliased value demand
+opposite responses -- accepting frees 63 live entries and issues 63
+false RAS commits, rejecting deadlocks, since a full FTQ predicts
+nothing and so can never advance the watermark again. The state is
+reached by ordinary traffic: the FTQ refilling to full before the
+backend retires one more block.
 
-sc p3 output:
+The watermark is therefore FTQ_PTR_BITS wide
+(ftq_backend_interfaces.md 6). Found by BP-106, which built against
+the narrow port and held allocation at FTQ_DEPTH-1 to remove the
+65th value; the port was widened instead and the limit reverted. If
+the port is ever narrowed again, full must return to FTQ_DEPTH-1 live
+entries and this paragraph is why.
+
+### 5.2 Allocation
+
+The index is committed at p0, not at p1. `ftq_pred_idx_p0` leaves
+with the request, so alloc_ptr must advance when the request is
+accepted. The ENTRY CONTENT is written at p1 from the p1 group. One
+p1 response is produced for every p0 request -- `bpu_pred_val_p1`
+derives from the staged request valid -- so allocation cannot leak.
+
+fe_decisions.md 2.3 says the FTQ allocates at p1. That describes the
+entry write. The index is spoken for one cycle earlier.
+
+Allocation is unconditional: an entry is allocated for every
+prediction block, including one the p1 predictors miss, so a later
+stage has an entry to correct (fe_decisions.md 2.3).
+
+### 5.3 Deallocation
+
+IN ORDER, tail first, one source only: commit. An entry is freed when
+commit_ptr passes it.
+
+A slot off the executed path never resolves (fe_decisions.md 7.2), so
+resolution can never free an entry. Squashed entries are freed by the
+REDIRECT that squashed them, by rewinding the head; see 5.5.
+
+### 5.4 The commit walk
+
+`bkend_ftq_commit_idx` is a watermark and may jump several entries at
+once (ftq_backend_interfaces.md 6). commit_ptr advances toward it at
+MOST ONE ENTRY PER CYCLE.
+
+The limit is the RAS, not the FTQ. `ras_commit_val` and its payload
+group are scalar on bp_cluster -- no slot dimension -- so one commit
+operation per cycle is the port's capacity. FE-11 guarantees at most
+one RAS operation per entry, so one entry per cycle is exactly one
+RAS commit per cycle and the walk never falls behind what the port
+can carry.
+
+An entry cannot be freed before its RAS commit is issued: the commit
+payload reads `bp_ras_snapshot_t` out of the entry. Commit and free
+are therefore the same pointer, not two.
+
+ras_decisions.md 4.5 rules restore > commit > hold for BOS, so the
+FTQ SUPPRESSES the RAS commit it would have issued in a cycle where a
+redirect restore fires. The walk does not advance that cycle.
+
+RC_UNSPEC ABANDONS THE WALK. A walk in progress may cover entries
+that have architecturally retired but whose RAS commit has not yet
+issued. ftq_backend_interfaces.md 5.1 U3 squashes EVERY entry, so
+those entries are gone and their pending RAS commits are DISCARDED
+rather than drained. That is correct, not merely tolerable: the RAS
+is a predictor, so a lost commit costs accuracy and not correctness;
+U5 already rules both structures self-correcting from committed
+state; and RC_UNSPEC is reset and debug-mode entry, where draining
+first would stall entry by up to FTQ_DEPTH cycles to warm a predictor
+that is about to be re-warmed anyway.
+
+The walk end is snapped back to commit_ptr and NO STEP IS TAKEN in
+the RC_UNSPEC cycle. Stepping while clearing the end is not a wasted
+commit but a POINTER OVERRUN: the end lands one entry behind
+commit_ptr, the age computes as -1, and the walk becomes
+2*FTQ_DEPTH-1 entries long. BP-106 hit this in its first draft.
+
+### 5.5 Redirect rewind
+
+On a redirect naming index K (ftq_backend_interfaces.md 5, or a BPU
+or predecode redirect):
 
 ```
-  sc_pred_rdy_p3   [NUM_PRED_SLOTS-1:0]     out
-  sc_pred_meta_p3  sc_pred_meta_t per slot  out
+  R1  alloc_ptr rewinds to K, or K+1 when the naming entry itself
+      survives. fetch_ptr rewinds with it, since FQ-1 forbids
+      fetch_ptr running ahead of alloc_ptr.
+  R2  commit_ptr NEVER rewinds. Committed is architectural. A
+      redirect can only name an index at or after commit_ptr;
+      ftq_backend_interfaces.md R2 makes that the backend's
+      obligation and the FTQ does not arbitrate it.
+  R3  the entries between the new alloc_ptr and the old one are
+      free immediately. No walk, no commit.
 ```
 
-`sc_pred_meta_t.sc_pred_tkn` is the final direction for the slot;
-`sc_override` records whether SC changed the TAGE direction.
+### 5.6 Stale responses, and why the wrap bit is not carried
 
-### 5.4 RAS
+Section 4.6 requires the FTQ to drop cluster responses naming
+squashed entries. The response indices -- `bpu_pred_idx_p1`,
+`bpu_slot_idx_p2/p3`, `bpu_redir_idx_p2/p3`, `bpu_meta_idx_p2/p3` --
+are FTQ_IDX_BITS wide and carry NO wrap bit. A rewind can therefore
+re-allocate an index while a response for the squashed use of that
+same index is still in flight, and the index alone cannot separate
+them.
+
+The FTQ keeps a four-deep IN-FLIGHT SHADOW of its own requests, one
+stage per cluster stage:
 
 ```
-  ras_tos_addr_p0     [VA_WIDTH-1:0]    per slot  out
-  ras_tos_valid_p0    logic             per slot  out
-  ras_pred_val_p2     logic             per slot  in
-  ras_br_type_p2      bp_br_type_e      per slot  in
-  ras_pc_p2           [VA_WIDTH-1:0]    per slot  in   TD#101
-  ras_fall_through_p2 [VA_WIDTH-1:0]    per slot  in
-  ras_pop_addr_p2     [VA_WIDTH-1:0]    per slot  out
-  ras_pop_valid_p2    logic             per slot  out
-  ras_snapshot_p2     bp_ras_snapshot_t per slot  out
-  ras_pred_val_p3     logic             per slot  in
-  ras_br_type_p3      bp_br_type_e      per slot  in
+  shadow[p0..p3]  { valid, ptr[FTQ_PTR_BITS-1:0] }     4 x 8 bits
 ```
 
-The top of stack is presented at p0. The push or pop executes at p2
-once `ras_br_type_p2` carries the FTB classification. The p3 pair
-takes the registered p2 classification.
+FOUR STAGES, THREE FLOPS. Stage p0 is the request being PRESENTED
+this cycle and is registered NOWHERE -- not in the FTQ and not in the
+cluster. Building it as four registers is not a subtle error: the p1
+response for a request issued at T arrives at T+1, when a
+four-register shadow still holds that request at stage 0, so every
+response is checked against the stage behind it, EVERY RESPONSE IS
+DROPPED, and the front end stops after one block. BP-107 built it
+that way first and only the unit-level testbench could see it; no
+leaf test can.
 
-`ras_pc_p2` is declared and unread (TD#101). The cluster drives it
-from the staged p2 PC.
+IT CARRIES A FULL POINTER, not an index. Deciding WHICH stages a
+redirect clears is a wrap-aware AGE comparison and an index cannot
+make it. Clearing every stage instead is wrong: stage 3 holds an
+OLDER request than stage 2, so a p2 redirect naming the stage 2 entry
+squashes stages 1 and 0 and must LEAVE STAGE 3 ALONE. This is not the
+widening rejected below -- that was FTQ_IDX_BITS at every bp_cluster
+port and in four metadata structs; this is four bits inside the FTQ.
 
-RAS p2 operations are qualified by reachability across slots: a
-taken branch ends the block, so a later slot is off the predicted
-path and must not push or pop (FE-11). One snapshot per entry is
-therefore sufficient.
+It shifts every cycle in lockstep with the cluster's own stage
+registers, which advance unconditionally. A redirect clears the
+shadow stages holding squashed entries. A response is accepted only
+if its stage's shadow is valid AND its index matches; otherwise it is
+dropped.
 
-Restore and commit ports, section 8.
+REJECTED ALTERNATIVE: widening the carried index to include the wrap
+bit. It would change FTQ_IDX_BITS at every bp_cluster port and widen
+`branch_id` in tage_pred_meta_t, sc_pred_meta_t, ittage_pred_meta_t
+and bp_ftq_entry_t, for no functional gain over 32 bits of shadow in
+the FTQ.
+
+REJECTED ALTERNATIVE: draining the cluster before re-issuing after a
+redirect. Correct, and free of the aliasing entirely, but it adds up
+to three cycles to EVERY redirect. A p2 redirect costs two cycles
+today; this would more than double it.
+
+### 5.7 The FTB update scheduler (G9 / IC-FTB-09, resolved)
+
+BUILT by BP-100 as `rtl/core/frontend/ftq/rtl/ftq_ftb_sched.sv`,
+the first module of the FTQ unit. The rule below is implemented
+as written; the properties of 5.7.4 are bound to it by module
+name and run in its sim target.
+
+The same class of problem as 5.4 and the reason it sits here: a
+SCALAR predictor port fed by more than one source.
+
+The FTQ has NUM_PRED_SLOTS update channels and
+ftq_backend_interfaces.md 4 fixes the resolution input at two per
+cycle. Every predictor takes two except the FTB, whose update is 14
+FLAT ports with no slot dimension (ftq_bpu_interfaces.md 8) and which
+declares NO ready. There is no handshake protecting it: presenting
+two updates in one cycle silently loses one. The scheduler is
+therefore a correctness requirement, not an optimisation, and it
+belongs to the FTQ because the FTQ is what has two channels.
+
+Scope: the FTB ONLY. tage, ittage, sc and ubtb are all per-slot. The
+RAS is scalar too but is fed from the commit walk of 5.4.
+
+#### 5.7.1 Why one per cycle is not enough
+
+In steady state resolution rate equals prediction rate: every
+predicted branch eventually resolves. At the 8-issue target of
+CLAUDE.md, with 15 to 20 percent of dynamic instructions being
+branches, that is 1.2 to 1.6 branch resolutions per cycle. Every one
+writes the FTB -- fe_decisions.md 7.2 lists the FTB in all four
+fan-out rows, and ftb_decisions.md 5.5 steps conf on every resolve.
+
+One write per cycle is therefore below the stated target rate, not
+below a rare peak. And under FE-5 as originally written the deficit
+could not be absorbed: no update may be dropped, so the backlog
+backpressures resolution, which stalls the backend. A PREDICTOR
+TRAINING limit becomes a MACHINE THROUGHPUT limit. That is the defect
+this section removes.
+
+IC-FTB-09 was open, not decided. ftb_interfaces.md deferred
+multi-branch update scheduling to bp_cluster integration and no
+throughput analysis was ever done. There was no trade to reopen.
+
+#### 5.7.2 Update value
+
+An FTB-bound update is HIGH value when it allocates or corrects:
+
+```
+  HIGH   the FTB missed at predict (ftb_pred_meta_t.hit == 0), so
+         this update ALLOCATES the entry. Without it the branch is
+         never predicted at all.
+  HIGH   the branch mispredicted (ftq_resolve_t.mispredict), so
+         this update CORRECTS the thing that was wrong.
+  LOW    hit at predict and predicted correctly: a routine conf
+         step on a counter already in the right direction.
+```
+
+Both terms are available at update formation with no new state:
+`mispredict` arrives on the resolution channel, `hit` is read from
+the slow path with the rest of `bp_ftq_meta_t`.
+
+A dropped LOW update is a DELAYED training step, not a lost entry.
+The FTB entry still exists with its previous counter, and the next
+resolve of that branch trains it.
+
+#### 5.7.3 The rule
+
+```
+  S1  FTB-bound means the resolved br_type is anything other than
+      NO_BRANCH.
+  S2  Pending = the skid entry, if occupied, plus the FTB-bound
+      channels accepted this cycle. The skid is ONE deep.
+  S3  Issue exactly one: the skid entry when occupied, else the
+      highest-value new one, slot 0 breaking a tie. Issuing the
+      skid first preserves resolution order (FE-6).
+  S4  Retain the highest-value remaining pending update in the
+      skid.
+  S5  Anything still remaining is DROPPED if LOW.
+  S6  A HIGH update is NEVER dropped. If accepting one would force
+      S5 to drop a HIGH, the FTQ instead deasserts
+      ftq_bkend_rsv_rdy for that channel and the backend holds it.
+```
+
+S6 is what keeps this narrow. Backpressure survives only for
+allocations and mispredict corrections, and a sustained two-per-cycle
+rate of those is self-limiting: a mispredict causes a redirect, which
+flushes the pipeline. Steady state is dominated by correct
+predictions, which are LOW, so in steady state the FTQ never stalls
+resolution.
+
+Capacity follows from S2 to S4: one issues and at most one is
+retained, so at most two new FTB-bound updates can be accepted with
+the skid empty, and at most one with it occupied.
+
+#### 5.7.4 Properties
+
+Written as concurrent SVA because that is what a formal tool
+consumes; the BPU tree currently has none -- its three assertion
+files use procedural immediate assertions and are simulation only.
+They are BOUND, by MODULE name, in ftq_ftb_sched's sim target
+(BP-100). TD#109 is the cautionary case: an
+assertion file bound to an INSTANCE name rather than a module name,
+instantiated by nothing, warned about by nothing.
+
+Signal names below are the scheduler's port list, as built.
+
+```systemverilog
+  // P1  A lone FTB-bound update is never dropped and never held.
+  property p_ftb_lone_issues;
+    @(posedge clk) disable iff (!rstn)
+      (n_acc_ftb == 1 && !skid_val) |=> ftb_upd_valid_u0;
+  endproperty
+
+  // P2  A HIGH-value update is never dropped. This is the whole of
+  //     the FE-5 relaxation: only LOW updates may be lost.
+  property p_ftb_high_never_dropped;
+    @(posedge clk) disable iff (!rstn)
+      drop_val |-> !drop_is_high;
+  endproperty
+
+  // P3  The skid never overflows. It is one deep, so a write may
+  //     only coincide with the entry leaving.
+  property p_ftb_skid_bounded;
+    @(posedge clk) disable iff (!rstn)
+      (skid_val && skid_wr) |-> skid_issue;
+  endproperty
+
+  // P4  An occupied skid always issues NEXT, so the older update
+  //     goes first and resolution order is preserved (FE-6).
+  //
+  //     CORRECTED BY BP-100, from |-> to |=>. As first written this
+  //     property and P1 could not both hold in any implementation:
+  //     P1 asserts ftb_upd_valid_u0 with |=>, which requires a
+  //     REGISTERED output, and P4 asserted the same signal with
+  //     |->, which requires a combinational one. The registered
+  //     form was built. The intent is unchanged.
+  property p_ftb_skid_first;
+    @(posedge clk) disable iff (!rstn)
+      skid_val |=> (ftb_upd_valid_u0 && ftb_upd_from_skid);
+  endproperty
+
+  // P5  Resolution is never stalled when every pending FTB update
+  //     is LOW. This is the throughput claim of 5.7.1: training
+  //     pressure must not reach the backend.
+  property p_ftb_no_stall_on_low;
+    @(posedge clk) disable iff (!rstn)
+      (n_pend_ftb > 0 && !any_pend_high) |-> (&ftq_bkend_rsv_rdy);
+  endproperty
+```
+
+The signal names above are the scheduler's PORT LIST, not internal
+nets. ftq_ftb_sched carries skid_val, skid_wr, skid_issue, drop_val,
+drop_is_high and the two pending counts as outputs so the bind reads
+only ports and makes no hierarchical reference into the module
+(TD#109). ftq_bkend_rsv_rdy appears on the scheduler as upd_rdy: the
+scheduler owns only the FTB reason for deasserting it, and the FTQ
+ANDs that with its others.
+
+P2 and P5 are the two that carry the design intent. P2 bounds the
+accuracy cost; P5 bounds the throughput cost. P1, P3 and P4 are the
+structural checks that make the other two meaningful.
+
+Proving P1 to P5 also retires a verification cost. Without them a
+testbench must model the collision and the priority rule to predict
+FTB contents at all. With them, simulation can restrict stimulus to
+non-colliding sequences and check the datapath normally, leaving the
+drop behaviour to proof. This is a two-input arbiter with a one-bit
+priority function and one skid register: bounded state, no sequential
+depth, entirely control.
+
+#### 5.7.5 Not mergeable, and what is left on the table
+
+Two updates naming the same entry hit the same set AND the same way
+-- the carried hit and way come from ftb_pred_meta_t, which is scalar
+within the entry -- so their fields are different bit ranges inside
+one FTB_RAM_ENTRY_WIDTH slice of ftb_array. One RAM write could carry
+both. That is a real optimisation and it needs NO second write port:
+ftb_array.sv is a single 512-set array with one write port, and this
+would widen the write data rather than duplicate the port.
+
+It is NOT taken here. It covers only the same-block case, it requires
+widening the update payload and reworking ftb_cntrl's write logic in
+a verified module, and the drop rule above already removes the
+throughput problem. Recorded as the first escalation if measurement
+ever shows the LOW drop rate matters.
+
+The second escalation is banking ftb_array by index so two updates to
+different sets proceed in parallel. Two banks give roughly 1.5
+effective writes per cycle for random addresses, not 2.
+
+Neither can be chosen without measurement, and the repository has no
+simulator to measure with.
+
+### 5.8 What this settles
+
+```
+  FE-U7  RESOLVED by this section.
+  G23    Checkpoint slot reclaim. The checkpoint is a field of the
+         entry, so it is reclaimed with the entry at 5.3. No
+         separate protocol.
+  4.5 H2 Full is defined: 5.1.
+  4.6    The drop rule has a mechanism: 5.6.
+  G9     Update channel arbitration. The SC half was already done
+         and tested (BP-094 group H); the FTB half is 5.7.
+```
+
+The three IFU-facing entry fields deferred by
+ftq_ifu_interfaces.md 8 item 3 -- request-issued,
+writeback-received, fault -- are now decidable, and were decided.
+request-issued is redundant: fetch_ptr already says which entries
+have been issued. The other two are per-entry status and are
+ftq_entry_formats.md 4, held in flops outside both SRAMs.
 
 ---
 
-## 6. Redirects
+## 6. Open policy
 
-No predictor declares a redirect port. The inventory confirms this
-across all 140 ports of all eight modules.
-
-A redirect is derived at the cluster boundary by comparing a
-predictor's stage output against the prediction the cluster formed
-at p1 and carried forward in its own stage registers (FE-4). The
-cluster does not read the FTQ.
+Collected for navigation. Each is recorded in `fe_decisions.md` or
+`PROJECT_STATUS.md`; none is decided here.
 
 ```
-  bpu_redir_p2      bp_redirect_t [0:NUM_PRED_SLOTS-1]   NEW
-  bpu_redir_idx_p2  [FTQ_IDX_BITS-1:0]                   NEW
-  bpu_redir_p3      bp_redirect_t [0:NUM_PRED_SLOTS-1]   NEW
-  bpu_redir_idx_p3  [FTQ_IDX_BITS-1:0]                   NEW
+  FE-U7    RESOLVED. Section 5.
+  FE-U2    Flush handling. The FTQ side is answered by
+           ftq_backend_interfaces.md 5. The RAS behaviour behind D3
+           is CLOSED -- it is D2 and nothing more,
+           ras_decisions.md 4.4. The flush EVENT and the FTB half
+           are CLOSED too, BP-105: there is no flush event, a
+           flush is a redirect (fe_decisions.md FE-14). TD#96,
+           G24 and IC-FTB-07 all closed.
+  FE-U3    bp_ftq_slot_t.confidence has no consumer.
+  TD-FE-1  CLOSED, in full. The IFU interface is
+           ftq_ifu_interfaces.md; the entry fields it needs are
+           ftq_entry_formats.md 4. Two were added, wb_rcvd and
+           fault; request-issued was rejected as a second encoding
+           of fetch_ptr.
+  TD-FE-8  CLOSED. A predecode writeback in flight when its entry
+           was squashed and its index reallocated set the status
+           bits on the wrong use of that index. One generation bit
+           on the IFU path, toggled per allocation.
+           ftq_entry_formats.md 4.4, ftq_ifu_interfaces.md 6.1.
+  TD-FE-2  The slow-path overload is defined and DEFERRED. See
+           ftq_entry_formats.md 3.1.
+  TD-FE-3  bp_ftq_entry_t.pc and the per-slot target are 40 bits;
+           39 suffice under the C extension, 35 if a block always
+           starts on an FTB_BLOCK_BYTES boundary.
+  TD-FE-4  bp_ftq_slot_t.pred_src is diagnostic only.
+  G9       RESOLVED. Section 5.7.
+  G23      RESOLVED. The checkpoint is a field of the entry and is
+           reclaimed with it at 5.3. Section 5.8.
+  RESETVEC RESOLVED. bp_defines_pkg::RESET_VECTOR. Section 4.7.
+  PREFETCH Instruction prefetch is DEFERRED and the deferral has a
+           structural cost. Section 6.1.
+  TD-FE-7  CLOSED by BP-102. bp_cluster gained ftq_rollback_val
+           and ftq_rollback_idx, with priority over its own p2/p3
+           arms. ftq_backend_interfaces.md 8, section 3.2.
 ```
 
-`bp_redirect_t` is the per-slot payload and carries `target_pc` and
-`valid`. The index is scalar and sits alongside the array, since
-both slots occupy one FTQ entry.
+Next-PC selection was on this list and is now section 4. What
+remains open from it is the RESET VECTOR, which has no source
+anywhere in the tree; see 4.7.
 
-The group is named by STAGE, not by predictor. p2 carries the FTB,
-TAGE, ITTAGE, and RAS corrections; p3 carries the SC correction.
+### 6.1 Instruction prefetch -- DEFERRED, with impact
 
-The comparison is expressed as one quantity, the slot successor
-address, rather than as a taken/target pair. Both the p1 and the p2
-view are reduced to the address fetched after that slot, so two
-not-taken views compare equal and raise no redirect.
+DECIDED 2026-08-19, alongside the decision not to define an
+ftq_icache interface. Pacino specifies no instruction prefetcher and
+no FTQ-sourced prefetch path.
 
-The p1 operand is formed at p1 from the p1 view only: the slot
-target when taken, the uBTB fall-through on a hit, the
-block-aligned PC plus FTB_BLOCK_BYTES on a miss. A stale uBTB block
-boundary therefore redirects at p2 rather than letting the front end
-fetch past a boundary the FTB had already contradicted.
+WHAT THIS FORECLOSES, and it is not the same thing the ftq_icache
+decision defers. That one is PHYSICAL and PD can undo it. This one is
+FUNCTIONAL and PD cannot.
 
-The p3 comparison is against the p2-corrected value, not the raw p1
-prediction, so a p3 redirect fires only when SC changes the value
-the cluster published at p2.
+An instruction prefetcher wants the FTQ's RUN-AHEAD: the entries
+between fetch_ptr and alloc_ptr (section 5.1), which the BPU has
+predicted and the IFU has not yet fetched. That stream exists ONLY in
+the FTQ. The IFU is by construction behind fetch_ptr, so an
+IFU-encapsulated memory path has no access to it, and no amount of
+physical-design work creates the access.
 
-A redirect from a later stage supersedes an earlier redirect for the
-same entry index and slot. Supersession does not cross slots.
+XiangShan carries this as a separate consumer, not as part of its
+ICache path: FtqToPrefetchIO, toPrefetchPcBundle, and a dedicated
+pfPtr read port in ftq_pc_mem. The pointer sits between its ifuPtr
+and its bpuPtr, exactly in the run-ahead gap.
+
+IMPACTED IF PREFETCH IS LATER WANTED:
+
+```
+  ftq_decisions.md 5.1   a fourth pointer, prefetch_ptr, between
+                         fetch_ptr and alloc_ptr, with FQ-1
+                         extended to order it
+  ftq_decisions.md 5.5   the rewind rule gains a pointer
+  fast-path read ports   a further reader of bp_ftq_entry_t, on top
+                         of the five of section 1
+  a new interface        FTQ to prefetcher, or an extension of
+                         ftq_ifu_interfaces.md
+  redirect fan-out       the prefetcher must be told to drop stale
+                         requests, as XiangShan does with
+                         BpuFlushInfo on FtqToPrefetchIO
+```
+
+The pointer model of section 5 was written so the run-ahead is
+explicit rather than implicit, so adding prefetch_ptr later is an
+extension rather than a restructure. That is the whole of the
+insurance taken here.
 
 ---
 
-## 7. Prediction metadata: BPU to FTQ
+## 7. Module decomposition
 
-The FTQ slow path (`bp_ftq_meta_t`) holds the state each predictor
-needs to train and cannot recompute at resolution. It is written at
-prediction time and read once at resolution to form the updates of
-section 8.
+The FTQ is SEVERAL MODULES. `ftq.sv` is the top and is PURELY
+STRUCTURAL: instantiation and wiring, no logic of its own, no
+always block, no state. Anything that needs a decision made in it
+belongs in a leaf instead.
 
-Without this group the update path cannot work at all:
-`tage_upd_inp_t` embeds `tage_pred_meta_t`, `ittage_upd_inp_t`
-embeds `ittage_pred_meta_t`, and `sc_upd_inp_t` embeds
-`sc_pred_meta_t`. Those values exist only at predict time.
+### 7.1 The partition rule
 
-The metadata finalizes at two stages, so there are two write groups.
-Each writes a disjoint set of `bp_ftq_meta_t` members, so the FTQ
-never has to merge.
-
-### 7.1 p2 write
+EVERY PIECE OF STATE HAS EXACTLY ONE OWNER MODULE. Everything else
+reads it through a port. The partition below is derived from that
+rule and from nothing else, which is why it does not follow the
+section order of this document: two sections that touch the same
+register belong in one module, and one section that owns two
+unrelated registers splits.
 
 ```
-  bpu_meta_val_p2                                      NEW
-  bpu_meta_idx_p2     [FTQ_IDX_BITS-1:0]               NEW
-  bpu_meta_tage_p2    tage_pred_meta_t
-                        [0:NUM_PRED_SLOTS-1]           NEW
-  bpu_meta_ittage_p2  ittage_pred_meta_t
-                        [0:NUM_PRED_SLOTS-1]           NEW
-  bpu_meta_lp_p2      lp_pred_t
-                        [0:NUM_PRED_SLOTS-1]           NEW
-  bpu_meta_ftb_p2     ftb_pred_meta_t
-                        [0:NUM_PRED_SLOTS-1]           NEW
+  ftq.sv             structural top, no state, no logic
+  ftq_ptr.sv         alloc_ptr, fetch_ptr           5.1 5.2 5.5
+  ftq_commit.sv      commit_ptr, the commit walk    5.3 5.4
+  ftq_npc.sv         the next-PC register, and the
+                     redirect arbitration that
+                     feeds it                       4
+  ftq_entry.sv       the fast-path array            1 2
+  ftq_meta.sv        the slow-path array            3
+  ftq_status.sv      wb_rcvd, fault, gen            entry_formats 4
+  ftq_shadow.sv      the four-deep response shadow  5.6
+  ftq_ifu.sv         request, flush, writeback,
+                     predecode redirect             ftq_ifu_ifs
+  ftq_resolve.sv     resolution intake and update
+                     fan-out                        backend_ifs 4
+  ftq_ftb_sched.sv   BUILT, BP-100                  5.7
 ```
 
-The FTB classification is NOT carried here. It travels on the slot
-correction group of section 4a, which writes it into the fast-path
-entry where section 7.2 reads it.
+`ftq.sv` does NOT instantiate `bp_cluster`. The BPU is a separate
+unit; a front-end top above both wires them together.
 
-Writes the `tage`, `ittage`, `lp` and `ftb` members of
-`bp_ftq_meta_t` for the entry named by `bpu_meta_idx_p2`.
+### 7.2 Why the pointers split
 
-The TAGE and ITTAGE metadata are the predictor outputs passed
-through unchanged.
+`ftq_ptr` owns alloc_ptr and fetch_ptr. `ftq_commit` owns
+commit_ptr. Section 5.1 presents all three together and the
+partition rule splits them anyway, because commit_ptr is the only
+one whose advance is not a local decision: 5.4 rate-limits it to one
+entry per cycle against the scalar RAS commit port, reads
+`bp_ras_snapshot_t` out of the entry to form the commit payload, and
+SUPPRESSES the advance in any cycle a redirect restore fires. That
+is a different job from allocating and issuing.
 
-The loop predictor finalizes at p1, not p2. The cluster registers
-its p1 result and presents it in the p2 group so the FTQ performs
-one slow-path write per entry rather than two. The `lp` member of
-`bp_ftq_meta_t` is `lp_pred_t`, the same type loop_pred outputs, so
-the cluster passes the registered result through unchanged. TD#106
-retired `bp_loop_meta_t`, which carried the same thirteen fields in
-a different order; the cluster's field-by-field map went with it.
-See section 10, item 9.
-
-Every slot carries its own loop snapshot. The zero drive that
-covered slots above 0 before the loop predictor was per-slot is gone
-(BP-091).
-
-### 7.2 p3 write
+THE CROSSING IS BIDIRECTIONAL. Each module owns its pointers and
+reads the other's:
 
 ```
-  bpu_meta_val_p3                                      NEW
-  bpu_meta_idx_p3     [FTQ_IDX_BITS-1:0]               NEW
-  bpu_meta_sc_p3      sc_pred_meta_t
-                        [0:NUM_PRED_SLOTS-1]           NEW
+  commit_ptr   ftq_commit -> ftq_ptr
+  alloc_ptr    ftq_ptr    -> ftq_commit
 ```
 
-Writes the `sc` member of `bp_ftq_meta_t` for the entry named by
-`bpu_meta_idx_p3`. This is the SC predictor output passed through
-unchanged.
+`ftq_ptr` needs commit_ptr for TWO things, not one. Besides full, it
+reconstructs the wrap generation of `bkend_ftq_redir_idx`, which is
+FTQ_IDX_BITS wide and carries none: the named entry lies at or after
+commit_ptr by 5.5 R2, so an index below commit_ptr's low bits belongs
+to the next generation. Without it a rewind across a wrap lands
+FTQ_DEPTH entries wrong.
 
-`bpu_meta_val_p3` is asserted whether or not SC is enabled, so the
-entry's slow path is always complete. When SC is disabled the
-written value carries no prediction and the FTQ forms no SC update.
+`ftq_commit` needs alloc_ptr to bound the walk end to the live
+window. This is not defensive. It is what rejects the held stale
+watermark of 5.1: without alloc_ptr there is no way to tell a
+repeated watermark from a forward one, and section 6's idempotence
+promise cannot be met.
 
-### 7.3 FTB metadata
+One writer and one reader per pointer, and no shared state, so the
+partition rule holds. What does not hold is that the dependency runs
+one way. Neither module reaches into the other's ADVANCE DECISION,
+which is the test that matters: each reads the other's resulting
+value. Suppression in particular turns out to be entirely local to
+`ftq_commit` once the redirect is an input. Reported by BP-106.
 
-`bp_ftq_meta_t` carries an `ftb` member of type `ftb_pred_meta_t`,
-holding the FTB state the update path needs:
+### 7.3 Why redirect arbitration is in ftq_npc
+
+Four redirect sources reach the FTQ -- backend, p2, p3, and
+predecode -- and 4.3 orders them by AGE, not by an axiom. That
+ordering exists to answer one question: what does fetch do next.
+The winner is therefore the next-PC source, and putting the arbiter
+anywhere else would mean exporting the priority result to the module
+that already has to consume it.
+
+`ftq_npc` publishes the winning redirect to `ftq_ptr` for the rewind
+of 5.5. Those two act on it; neither decides it.
+
+THE RESOLVED SQUASH RANGE IS EXPORTED BY ftq_ptr, NOT DERIVED TWICE.
+This section originally sent the winning redirect to `ftq_status` as
+well and left the masked clear of `ftq_entry_formats.md` 4.2 W4 to it.
+Built that way, `ftq_status` repeats the wrap-generation
+reconstruction `ftq_ptr` already performs on `bkend_ftq_redir_idx` --
+two copies of one derivation, free to disagree -- and `ftq_shadow`
+needs a third. `ftq_ptr` therefore exports the RESOLVED range, half
+open and FTQ_PTR_BITS wide, and both consumers take an age.
+
+### 7.5 Ports this decomposition did not anticipate
+
+BP-107 built the eight remaining modules and needed seven signals
+7.1 through 7.4 do not name. NONE breaks the partition rule -- each is
+a value one module owns and another reads, and no module reaches into
+another's advance decision -- but the list belongs here rather than
+being rediscovered.
 
 ```
-  hit                              tag hit at predict
-  way   [FTB_WAY_BITS-1:0]         hit way, or the PLRU victim
-  jmp_pos [FTB_BR_POS_BITS-1:0]    jump field in-block position
+  ftq_shadow  -> ftq_ptr     alloc_inflight, the p0-to-p1 gap (5.1)
+  ftq_npc     -> ftq_entry   pred_pc_p1, the block start PC. NO p1
+                             PORT CARRIES IT; see
+                             ftq_bpu_interfaces.md 4. The FTQ must
+                             stage its own request, and r_next_pc
+                             already is that value one cycle on
+  ftq_ptr     -> ftq_status  squash_val / _start / _end, above
+              -> ftq_shadow  the same range
+  ftq_entry   -> (cluster)   ras_commit_*, formed here because the
+                             has-a-RAS-operation qualification lives
+                             in the entry (5.4, FE-11)
+  ftq_entry                  a SECOND resolve read port
+  ftq_meta                   a SECOND resolve read port
+  ftq_entry                  a predecode read port, distinct from the
+                             redirect port. See section 1
+  ftq_entry   -> (cluster)   restore_snapshot, D2 of
+                             ftq_backend_interfaces.md 5, as its own
+                             port so ftq.sv wires name to name
 ```
 
-The FTB determines the hit result and the write way at the
-prediction read and does not re-look-up the tag at update
-(IC-FTB-10). The FTQ returns them on `ftb_upd_hit_u0` and
-`ftb_upd_way_u0`.
+### 7.4 Why status is not inside ftq_entry
 
-These are scalar within the entry, not per slot: the FTB indexes one
-entry per lookup and both slots come from it. `bp_ftq_meta_t` is
-carried per slot, so the cluster writes the same values to every
-slot's copy.
-
-### 7.4 In-block positions
-
-The per-branch in-block position lives in `bp_ftq_slot_t.pos`, in
-the fast-path entry, sourced from `ftb_br0_pos_p2` and
-`ftb_br1_pos_p2` and delivered on the section 4a slot correction
-group. Until that group existed no port carried either signal out of
-the cluster and this paragraph described something unbuildable
-(TD-FE-6). The FTQ uses it to order br0 against br1 and to
-locate the taken branch in the fetch bundle (IC-FTB-15), and returns
-the resolving branch's position on `ftb_upd_pos_u0`.
-
-Locating a branch in the fetch bundle is every-cycle work, so the
-position belongs on the fast path rather than in the update-only
-metadata. The jump field's position travels in the metadata group
-(7.3), since it is one value per entry rather than one per slot.
-
-The uBTB also produces a position on `ubtb_pred_t.pos`, so the p1
-prediction can fill `bp_ftq_slot_t.pos` before the FTB result
-arrives.
-
-The position addresses two-byte slots: FTB_BR_POS_BITS is
-`$clog2(FTB_BLOCK_BYTES/2)`, so a 32-byte block has sixteen
-positions. RVA23 mandates the C extension, so a branch may begin at
-any 2-byte boundary and the position must resolve that. The cluster
-also uses the position to form the branch PC it reports to
-bp_history, block base plus position times two (BP-092a, section 9).
-
-### 7.5 Fields with no consumer
-
-`ftb_br0_conf_p2`, `ftb_br1_conf_p2` and `ftb_fastpath_p2` are FTB
-outputs that no port in this specification carries. The confidence
-values are exposed for observability, and the fast-path bypass is
-not yet built at the cluster. They are recorded here so a reader
-does not mistake their absence for an omission.
+Different storage class. `ftq_entry` is an SRAM read every cycle;
+`ftq_status` is 192 flops with a masked range clear. Keeping them
+apart makes the storage class STRUCTURAL rather than a comment, and
+`ftq_entry_formats.md` 4.1 is the argument for why they cannot share
+one.
 
 ---
 
-## 8. Updates: FTQ to BPU
-
-One update channel per prediction slot. The FTQ reads
-`bp_ftq_meta_t` at resolution and forms the per-predictor update
-payloads from `bp_update_t`, the resolved-branch record.
-
-| Predictor | Valid port        | Payload port    | Ready port      |
-|-----------|-------------------|-----------------|-----------------|
-| ubtb      | in ubtb_upd_t     | upd_u0          | none            |
-| loop_pred | upd_valid_p0      | upd_p0          | none            |
-| ftb       | ftb_upd_valid_u0  | 14 flat ports   | none            |
-| tage      | tage_upd_val_u0   | tage_upd_inp_u0 | tage_upd_rdy_u1 |
-| ittage    | ittage_upd_val_u0 | ittage_upd_inp  | ittage_upd_rdy  |
-| sc        | sc_upd_val_u0     | sc_upd_inp_u0   | sc_upd_rdy_u1   |
-| ras       | ras_commit_val    | 3 commit ports  | none            |
-
-Notes:
-- ubtb carries the valid inside `ubtb_upd_t.valid`; it has no
-  separate valid port.
-- loop_pred update ports carry a p0 suffix, not u0. They are
-  per-slot as of BP-091, at both the module and the cluster
-  boundary (`lp_upd_valid_p0`, `lp_upd_p0`).
-- ftb update is 14 flat ports: ftb_upd_pc_u0, ftb_upd_hit_u0,
-  ftb_upd_way_u0, ftb_upd_is_br_u0, ftb_upd_br_idx_u0,
-  ftb_upd_taken_u0, ftb_upd_target_u0, ftb_upd_pos_u0,
-  ftb_upd_is_jmp_u0, ftb_upd_jmp_target_u0, ftb_upd_is_call_u0,
-  ftb_upd_is_ret_u0, ftb_upd_is_jalr_u0, ftb_upd_pft_addr_u0.
-- ras update is the commit group: ras_commit_val,
-  ras_commit_br_type, ras_commit_ret_addr, ras_commit_snapshot.
-- ftb and ras have no slot dimension on their update ports.
-
-The uBTB and FTB update field sets mirror each other, so one set of
-resolved facts forms both.
-
-`ubtb_upd_t` carries no `br_type` field. The cluster rederives the
-resolved type from the payload's own is_br / is_jmp / is_call /
-is_ret / is_jalr bits, in the same arm order as ubtb.sv and the FTB
-classification, with is_br outranking is_jmp. A missing br_type read
-resolves to zero, which decodes as COND, so restoring the field
-instead of rederiving the type would silently classify every update
-as conditional and stop ITTAGE ever being updated.
-
-Update fan-out by resolved br_type is fe_decisions.md 7.2. The three
-encodings that table does not list follow from what each predictor
-does: NO_BRANCH forms no update; DIRECT_CALL pushes RAS and updates
-uBTB and FTB; INDIRECT_CALL updates ITTAGE for the target and RAS
-for the return address.
-
-Each queued predictor's update valid is additionally qualified by
-its own queue ready, so no update is presented to a full queue. The
-FTQ holds the update until it is accepted.
-
-Queue status ports, driven out of the cluster:
+## 8. Document History
 
 ```
-  tage    tage_pq_not_full, tage_upd_rdy, tage_upd_rdy_u1
-  ittage  ittage_pq_not_full, ittage_upd_rdy, ittage_upd_rdy_u1
-  sc      sc_uq_not_full, sc_upd_rdy, sc_upd_rdy_u1
-```
+  2026-08-21  BP-107 results folded in, six corrections. Section 1
+              counted three fast-path reads where five ports are
+              needed, and the slow path needs two; the count is now
+              separated from the three purposes. 4.5 gains H3, the
+              fault hold, which ftq_entry_formats.md 4.3 R1 stated
+              and this section never mirrored. 5.1: the fetchable
+              frontier is not alloc_ptr, because the entry is written
+              at p1 and allocated at p0. 5.6: four stages is THREE
+              FLOPS, and the shadow carries a full pointer, not an
+              index. 6.1 cited a "two-read-port decision of section
+              1" that section 1 never made. 7.3 corrected and 7.5
+              added, listing the seven ports the decomposition did
+              not anticipate.
 
-tage and ittage declare `pq_not_full` and `upd_rdy` with no
-predictor prefix (TD#49). The cluster boundary adds the prefix so
-the two groups are distinguishable.
+  2026-08-21  BP-106 results folded in. 5.1 gains the watermark
+              aliasing argument: the 64-entry full condition is only
+              safe because bkend_ftq_commit_idx now carries a
+              generation bit. 5.4 gains the RC_UNSPEC / commit-walk
+              interaction, which no document specified and which
+              BP-106's first draft got wrong. 7.2 corrected: the
+              crossing between ftq_ptr and ftq_commit is
+              bidirectional, not one-way.
 
-RAS restore, driven on redirect from the snapshot in the entry being
-corrected:
+  2026-08-21  Cross-reference repair. No content change. 4.2 arm 0
+              cited the reset vector as 4.6; it is 4.7. The section
+              6 G23 entry cited 5.7, which is the FTB update
+              scheduler; the checkpoint is reclaimed with the entry
+              at 5.3 and 5.8 is what records it. 5.7.4's lead-in and
+              closing note still described the scheduler as unbuilt,
+              which BP-100 ended; the section header above them
+              already said BUILT.
 
-```
-  ras_restore_val
-  ras_restore_snapshot  bp_ras_snapshot_t
-```
+  2026-08-20  TD-FE-8 CLOSED by one generation bit on the IFU
+              path. Section 6 registry updated.
 
-RAS flush ports `ras_flush_val` and `ras_flush_snapshot` are
-declared and READ BY NOTHING. They are redundant with the restore
-group above, which is the RAS response to a flush and to every other
-redirect (`ras_decisions.md` 4.4, CLOSED). Their presence is not an
-open design question; see 4.4.2 before raising one.
+  2026-08-20  Section 7 added: module decomposition. The FTQ is
+              several modules with a purely structural ftq.sv top,
+              partitioned by ONE rule -- every piece of state has
+              exactly one owner. Document History renumbered 7 to
+              8; nothing referenced 7.
 
----
+  2026-08-20  The last two open entry fields decided and placed
+              in ftq_entry_formats.md 4, closing TD-FE-1 in full.
+              Section 6 registry updated; TD-FE-8 opened for the
+              in-flight writeback race.
 
-## 9. History checkpoint and rollback
+  2026-08-20  Section 5.7.4 P4 CORRECTED, |-> to |=>. P1 and P4
+              as written could not both hold in any implementation:
+              one required a registered output and the other a
+              combinational one, on the same signal. Found by
+              building the scheduler (BP-100). 5.7.4 also gains a
+              note that the property signal names are the module's
+              port list, which is what BP-100 delivered.
 
-The checkpoint is the GHR and PHR circular-buffer pointer pair, one
-per FTQ entry, held in the FTQ entry (FE-7). bp_history advances the
-pointers and rolls back by index.
+  2026-08-20  Section 3.2 CORRECTED. It specified the value form,
+              the FTQ presenting ghist_ptr and phist_ptr; BP-102
+              built the index form and closed TD-FE-7, so the FTQ
+              presents ftq_rollback_idx and the cluster reads its own
+              checkpoint copy. The conflict was between this document
+              and fe_decisions.md 13, which had recorded the choice
+              as open; building it settled the choice.
 
-bp_history carries no stage suffix on any port.
+  2026-08-19  Created. Sections 4.3, 5 and 6 moved here whole from
+              fe_decisions.md; no content changed in the move.
+              Numbering: fe_decisions 4.3 -> section 1, 5 ->
+              section 2, 6 -> section 3. Section 0 added, naming the
+              companion documents, stating that the FE / TD-FE / FE-U
+              registries are NOT duplicated here, and listing the
+              four FTQ interfaces. Section 4 added: a navigation list
+              of open policy items, by reference only, plus the
+              next-PC ownership gap.
 
-Driven by the cluster at p1, from the formed prediction:
+  2026-08-19  ftq_ifu_interfaces.md added and TD-FE-1 closed. The
+              interface table in section 0 and the open policy list
+              in section 4 updated to match.
 
-```
-  pred_taken    [1:0]              bit n = branch n
-  pred_pc       [VA_WIDTH-1:0] [2] one per branch, after compaction
-  num_branches  [1:0]              count, 0 to 2
-```
+  2026-08-19  ftq_backend_interfaces.md added: resolution, redirect
+              and commit as three separate events. Section 0 and
+              section 4 updated. FE-U2's FTQ side is answered
+              there; FE-U7 and G23 are unblocked but not decided.
+              TD-FE-7 opened against bp_cluster. Also repaired the
+              FE-U7 entry, which had lost the words "flush is" to a
+              cross-reference edit earlier the same day.
 
-bp_history indexes these by BRANCH NUMBER, not by slot number, so
-the cluster compacts the valid slots down before presenting them. A
-bundle whose only branch sits in slot 1 presents that branch at
-index 0.
+  2026-08-19  Section 4 added: the next fetch PC. The FTQ is the
+              requester and owns the selection. Priority is stated
+              as a CONSEQUENCE of entry age rather than an axiom,
+              with the argument for why the depth ordering
+              reproduces it. The p1 successor path is identified as
+              the zero-bubble critical loop and the only source that
+              must be combinational. IFU backpressure is explicitly
+              NOT a hold condition. Cluster responses for squashed
+              entries are dropped by index, needing the same FE-U7
+              generation bit as ftq_backend R3. 4.7 opens the reset
+              vector, which has no source anywhere in the tree.
+              Open policy renumbered 4 -> 5, history 5 -> 6.
 
-`pred_pc` is the BRANCH PC, not the fetch block PC: the block base
-plus that branch's in-block position, four bytes per position
-(section 7.4). bp_history folds bits [3] and [2] of it into the PHR
-path bit, and a block-aligned PC has those bits hard zero, so the
-block PC would make the path bit a constant. See
-bp_history_interfaces.md, Producer obligations, and BP-092a.
+  2026-08-19  FE-U7 RESOLVED as section 5, queue management. Three
+              pointers with a wrap bit: alloc at p0 (the index
+              leaves with the request, one cycle before the entry
+              write), fetch, and a single commit pointer that both
+              issues the RAS commit and frees, walking at one entry
+              per cycle because ras_commit_* is scalar. Redirect
+              rewinds head and fetch, never commit. Stale responses
+              are caught by a four-deep in-flight shadow rather
+              than by carrying a wrap bit through bp_cluster; both
+              rejected alternatives are recorded with their cost.
+              G23 falls out. Section 6.1 records the instruction
+              prefetch deferral and what it forecloses. Open policy
+              renumbered 5 -> 6, history 6 -> 7.
 
-Checkpoint write, at allocation:
+  2026-08-19  G9 RESOLVED as section 5.7, the FTB update scheduler.
+              The FTB update is 14 flat ports with NO slot dimension
+              and NO ready, so presenting two in a cycle loses one
+              silently: the scheduler is a correctness requirement,
+              not an optimisation, and it is the FTQ's because the
+              FTQ is what has two channels. Slot 0 first into a
+              one-deep skid, with resolution backpressure bounding
+              it. Scope is the FTB alone; every other predictor
+              takes two per cycle and the scalar RAS port is fed
+              from the 5.4 commit walk. The one-per-cycle FTB
+              ceiling is recorded as a known limit rather than
+              reopening the single-port choice of FTB-3 /
+              IC-FTB-09.
 
-```
-  ckpt_wr_en                          driven at p1 allocation
-  ckpt_wr_idx  [FTQ_IDX_BITS-1:0]     FTQ index
-```
+  2026-08-19  RESETVEC resolved. bp_defines_pkg::RESET_VECTOR,
+              parameter, 40'h00_8000_0000, block aligned. Section
+              4.7 rewritten from an open item to the decision. It
+              was never a hard choice -- it was on the list because
+              nothing in the tree named a reset PC at all.
 
-Rollback, on redirect. These are bp_history's own ports, inside the
-cluster:
-
-```
-  rollback_valid
-  rollback_ckpt_idx  [FTQ_IDX_BITS-1:0]
-```
-
-Driven from the derived redirect and from the FTQ. When both stages
-redirect in the same cycle the p3 index wins, matching the
-supersession rule.
-
-At the CLUSTER BOUNDARY the FTQ drives the rollback directly
-(TD-FE-7, added by BP-102):
-
-```
-  ftq_rollback_val
-  ftq_rollback_idx   [FTQ_IDX_BITS-1:0]
-```
-
-```
-  w_rollback_valid    = ftq_rollback_val
-                      | w_any_redir_p2 | w_any_redir_p3;
-  w_rollback_ckpt_idx = ftq_rollback_val ? ftq_rollback_idx
-                      : (w_any_redir_p3 ? r_idx_p3 : r_idx_p2);
-```
-
-The FTQ arm outranks both cluster arms unconditionally: an
-architectural correction outranks a speculative one, so FE-3 does
-not decide this winner. FE-3 still orders p3 over p2 between
-themselves. The FTQ presents the INDEX of the entry whose
-end-of-block pointer state is to be restored, not the pointer values
-(ftq_decisions.md 3.2, ftq_backend_interfaces.md 8).
-
-A rollback SUPPRESSES the checkpoint write in the same cycle:
-bp_history writes the checkpoint from its normal-update branch,
-which the rollback branch replaces. An FTQ rollback landing in the
-same cycle as a p1 allocation therefore drops that allocation's
-checkpoint write, which is consistent -- the redirect discards that
-block anyway.
-
-Outputs:
-
-```
-  ghist_ptr       [GHIST_PTR_BITS-1:0]   current pointer
-  phist_ptr       [PHIST_PTR_BITS-1:0]   current pointer
-  ckpt_ghist_ptr  [GHIST_PTR_BITS-1:0]   checkpoint read
-  ckpt_phist_ptr  [PHIST_PTR_BITS-1:0]   checkpoint read
-  ghr_buf         [GHR_WIDTH-1:0]
-  phr_buf         [PHR_WIDTH-1:0]
-  folded          bp_folded_hist_t
-```
-
-`ckpt_ghist_ptr` and `ckpt_phist_ptr` are the pointer pair the FTQ
-writes into the allocated entry as that entry's checkpoint.
-
-`folded` drives `tage.folded_hist` and `ittage.folded_hist` whole.
-sc takes sliced fields instead (section 5.3).
-
----
-
-## 10. Package and document corrections required
-
-The RTL is the reference. These are the changes other files need to
-match it and to match this specification.
-
-### bp_structs_pkg.sv
-
-1. `bp_ftq_meta_t` is carried per slot. The array is declared at the
-   port, not inside the struct, per the `bp_update_t` convention.
-
-2. `bp_redirect_t` comments use s2/s3 stage labels. Change to p2/p3.
-
-3. `branch_id` is commented "FTQ slot index" in `bp_ftq_entry_t`,
-   `tage_pred_meta_t`, `sc_pred_meta_t`, and `ittage_pred_meta_t`.
-   It is the FTQ entry index (TD-FE-5).
-
-4. The uBTB index and tag comments read PC[26:7], which describes
-   the retired instruction-granularity indexing. The uBTB now
-   indexes at block granularity.
-
-5. `ubtb_pred_t.carry` is commented as a property of the slot
-   target. The implemented and specified behaviour is the entry
-   fall-through carry.
-
-### fe_decisions.md
-
-6. CLOSED, PA-direct correction, session-064. Section 2.2 and
-   section 9 placed the RAS top of stack at p1.
-
-7. CLOSED, PA-direct correction, session-064. Section 3.1 named
-   redirect signals `<pred>_redir_val_<pN>` and
-
-### Open items
-
-8. CLOSED, TD#92, BP-090. SC index fold staging. `inp_pc_p2` and
-   `sc_phr_p2` were staged p0 to p2 while the three SC index folds
-   were connected live to bp_history, which advances whenever a
-   branch is predicted, so at p2 the live folds described a later
-   block than the one SC was indexing. All three folds are now
-   staged the same way as the PC and the phr. Section 5.3 records
-   it; bp_arb_spec.md 6.1 names them among the staged inputs.
-
-9. CLOSED, TD#106, BP-092. `lp_pred_t` and `bp_loop_meta_t` carried
-   the same field set under two spellings (`lp_past_itr` against
-   `lp_pst_itr`, `lp_curr_itr` against `lp_cur_itr`) and the cluster
-   mapped between them for the section 7.1 write. `lp_pred_t`
-   survives, for consistency with the other predictor prediction
-   types. `bp_loop_meta_t` is deleted from bp_structs_pkg.sv, the
-   `lp` member of `bp_ftq_meta_t` is `lp_pred_t`, and the cluster's
-   `lp_to_meta()` is deleted rather than rewritten. The two retired
-   spellings disappear with the type.
-
-10. `bp_ftq_meta_t` gains an `ftb` member of a new type
-    `ftb_pred_meta_t` (hit, way, jmp_pos), so the FTB carried
-    writeWay state travels inside the struct like every other
-    predictor's state (section 7.3).
-
-11. `bp_ftq_slot_t` gains a `pos` field of FTB_BR_POS_BITS, the
-    in-block instruction position of that slot's branch
-    (section 7.4).
-
-15. CLOSED, 2026-08-19. `bp_ftq_entry_t` gains a `pft_addr` field of
-    VA_WIDTH, block scalar, holding the value delivered on
-    `bpu_pred_pft_p1`. Applied to bp_structs_pkg.sv and checked in
-    tb_bp_pkg.sv. Entry width 182b -> 222b.
-
-16. CLOSED, 2026-08-19. bp_cluster.sv gains the section 4a slot
-    correction group, six ports, driven from the p2 classification,
-    the FTB positions and the p2 target selection, plus a p3 stage
-    register carrying the slot with the SC direction applied.
-    tb_bp_cluster group I, 24 checks. sim_bp_cluster 973 -> 997, all
-    47 targets green. An earlier draft of this item proposed a
-    narrower `bpu_meta_brtype_p2`; it carried the type but not the
-    position, and left section 7.4 unbuildable.
-
-17. DEFERRED, not blocking. `bp_ftq_meta_t` becomes the two-arm
-    packed union of ftq_entry_formats.md 3.1. It is a storage
-    optimization only, 420b -> 277b per slot. tb_bp_cluster group F3
-    proves that the p2 and p3 write groups touch DISJOINT members of
-    the struct; under the union that holds only within `u.cond`,
-    since `sc` and `ittage` alias, so F3 must be restated per arm
-    when the union lands.
-
-### loop_pred
-
-12. CLOSED, TD#105, BP-091. loop_pred.sv was single-slot; no port
-    carried a slot dimension. It is now per-slot on
-    `pred_pc_p0`, `pred_valid_p0`, `pred_p1`, `upd_p0` and
-    `upd_valid_p0`, with per-slot table banks (TI6), and the
-    `pred_p0` to `pred_p1` rename is applied. loop_pred.sv,
-    tb_loop_pred.sv, loop_pred_interfaces.md and the bp_cluster
-    instantiation were all updated. The cluster boundary ports
-    `lp_upd_valid_p0` and `lp_upd_p0` gained the slot dimension in
-    the same task.
-
-### bp_history
-
-13. bp_history uses literal `[1:0]` and `[2]` where other modules
-    use NUM_PRED_SLOTS. Deferred. Recorded INFRA-011.
-
-14. bp_history does not generate the ITTAGE IT5 folds. ittage.sv
-    wires `it_t5_idx_fh`, `tag_fh1` and `tag_fh2` to outputs that
-    are never driven, so IT5 indexes on PC alone. TD#102.
-
----
-
-## 11. Document history
-
-```
-  2026-08-02  Created, session-063. Written from fe_decisions.md,
-              bpu_port_inventory.md (INFRA-011), and
-              bp_structs_pkg.sv. Predictor ports named as declared;
-              no renaming proposed. Redirect group named by stage,
-              since no predictor declares a redirect port. RAS top
-              of stack at p0 per ras.sv. Checkpoint held in the FTQ
-              entry; bp_history rolls back by index. loop_pred
-              described dual-slot per TD#105. bp_redirect_t arrayed
-              per slot with ftq_idx removed. bp_ftq_slot_t defined.
-
-  2026-08-02  Section 7 added: the prediction metadata write groups
-              at p2 and p3, the FTB carried hit and way, and the
-              in-block positions. Sections 8 through 11 renumbered.
-              Section 4 updated for the reshaped uBTB interface
-              (blk_p1, entry-scoped hit). Section 5 updated with the
-              branch_id match rule, the jump slot placement rule and
-              the RAS reachability rule. Section 6 updated with the
-              successor-address comparison and the p3 comparison
-              basis. Corrections 8 through 11 opened.
-
-  2026-08-19  Section 4a added: the p2 and p3 slot correction
-              groups, delivered in bp_cluster.sv. They carry the FTB
-              classification and the in-block positions into the
-              fast-path entry on every prediction, not only when a
-              redirect fires. Section 7.4 was describing a path no
-              port provided; it is now buildable. Item 16 closed,
-              item 17 opened and deferred (TD-FE-6, TD-FE-2).
-
-  2026-08-20  Section 9 gains the CLUSTER BOUNDARY rollback group,
-              ftq_rollback_val / ftq_rollback_idx, added by BP-102
-              and closing TD-FE-7. The priority rule and the
-              same-cycle checkpoint-write suppression are recorded
-              with it. The ports already listed in section 9 were
-              bp_history's own, inside the cluster; that is now
-              stated rather than implied.
-
-  2026-08-19  Section 4 records that the FTQ stores the p1
-              fall-through in bp_ftq_entry_t.pft_addr; section 10
-              item 15 opened and closed for the field addition.
-
-  2026-08-09  session-064. Section 9 pred_pc corrected:
-              it is one value per BRANCH after compaction, not one
-              per slot, and it is the branch PC rather than the
-              fetch block PC (BP-092a). Section 10 items 6, 7, 8 and
-              12 closed: the fe_decisions.md RAS-stage and
-              redirect-port corrections were applied by this task,
-              the SC index folds were staged by BP-090, and the
-              loop_pred dual-slot retrofit landed in BP-091. Item 14
-              opened for the IT5 fold gap (TD#102). Section 2, 3, 4,
-              5.3, 7.1, 7.4 and 8 updated to the post-BP-091,
-              post-BP-092 RTL: loop_pred per-slot throughout, the
-              slot-0 exception removed from the p1 mux, the SC folds
-              described as staged, the uBTB update br_type rederived
-              rather than carried, and the position granularity
-              stated.
+  2026-08-19  5.7 REWRITTEN, superseding the G9 entry above. That
+              entry said the one-per-cycle ceiling was recorded as a
+              known limit "rather than reopening the single-port
+              choice of FTB-3 / IC-FTB-09". There was no choice to
+              reopen: ftb_interfaces.md had IC-FTB-09 marked OPEN
+              and deferred to bp_cluster integration, and no
+              throughput analysis had been done.
+              5.7.1 does it: at the 8-issue target 1.2 to 1.6
+              branches resolve per cycle and every one writes the
+              FTB, so one write per cycle was below target, and
+              FE-5's no-drop rule turned the deficit into
+              backpressure on resolution -- a training limit
+              stalling the backend.
+              5.7.2 defines update value, 5.7.3 the drop rule: LOW
+              may be dropped, HIGH never, backpressure only to
+              protect a HIGH. 5.7.4 specifies five concurrent SVA
+              properties for the unbuilt scheduler; P2 bounds the
+              accuracy cost, P5 the throughput cost. 5.7.5 records
+              the two escalations not taken. FE-5 amended narrowly
+              as FE-5a; IC-FTB-09 resolved. The FTB is unchanged.
 ```
 

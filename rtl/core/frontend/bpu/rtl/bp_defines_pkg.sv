@@ -59,6 +59,21 @@ package bp_defines_pkg;
 
   // FTQ slot index width: $clog2(64) = 6
   localparam int FTQ_IDX_BITS = $clog2(FTQ_DEPTH);
+  // FTQ pointer width: FTQ_IDX_BITS to index the array plus one wrap
+  // generation bit, so a full queue and an empty one are
+  // distinguishable. = 7. See ftq_decisions.md 5.1.
+  // A derived WIDTH, not a knob.
+  localparam int FTQ_PTR_BITS = FTQ_IDX_BITS + 1;
+
+  // NUM_RESOLVE_PORTS: backend resolution channels into the FTQ.
+  // ftq_backend_interfaces.md 4 fixes it at NUM_PRED_SLOTS, and the
+  // reason is DOWNSTREAM CAPACITY, not a known backend width: each
+  // predictor's update queue has two write ports serving the two
+  // update channels (fe_decisions.md 7.3), so a third resolution in
+  // one cycle could not be forwarded. If the backend turns out to
+  // have more than two branch units, add a queue in the FTQ; do not
+  // widen this and leave the queues at two.
+  localparam int NUM_RESOLVE_PORTS = NUM_PRED_SLOTS;
 
   // ================================================================
   // :Loop predictor parameters:
@@ -125,8 +140,28 @@ package bp_defines_pkg;
   // Used to reduce a byte offset to the stored partial fall-through
   // index and to reconstruct the address from it.
   // This is a GRANULARITY parameter, distinct from PC_HASH_SHIFT.
-  //   Resolved here: 5 - 3 = 2, so one position is 4 bytes.
+  //   Resolved here: 5 - 4 = 1, so one position is 2 bytes.
+  //   Was 4 bytes until BP-099 widened FTB_BR_POS_BITS 3 -> 4 for the
+  //   RVA23 C extension. The subtraction above rescaled on its own,
+  //   which is the reason it is written as a subtraction.
   localparam int POS_OFFSET_BITS = FTB_OFFSET_BITS - FTB_BR_POS_BITS;
+
+  // FTQ_PD_WIDTH: predecode slots in one PREDICTION block. Derived
+  // from the block size and the RVC instruction granularity: RVA23
+  // mandates C, so an instruction may start at any 2-byte boundary.
+  // = 32 / 2 = 16. ftq_ifu_interfaces.md 3.
+  //
+  // It coincides with 2**FTB_BR_POS_BITS at the shipped geometry and
+  // the two are DELIBERATELY separate names: this one is derived
+  // from the block size and the instruction granularity, that one
+  // from the block size and the predictor position granularity. A
+  // change to either must be checked against the other.
+  localparam int FTQ_PD_WIDTH    = FTB_BLOCK_BYTES / 2;      // = 16
+  // FTQ_PD_POS_BITS: width of a predecode position. = 4. Equal to
+  // FTB_BR_POS_BITS at the shipped geometry, so the predecode to
+  // predictor position conversion is the identity
+  // (ftq_ifu_interfaces.md 3, 7 W2).
+  localparam int FTQ_PD_POS_BITS = $clog2(FTQ_PD_WIDTH);     // = 4
 
   // Target displacement / status widths (ftb_decisions.md 4.2, 8)
   parameter int TAR_STAT_BITS    = 2;  // fit / overflow / underflow

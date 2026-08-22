@@ -11,19 +11,15 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module ftq_commit_assert #(
-  parameter int FTQ_PTR_BITS = FTQ_IDX_BITS + 1
-) (
+module ftq_commit_assert (
   input logic                    clk,
   input logic                    rstn,
   input logic [FTQ_PTR_BITS-1:0] commit_ptr,
   input logic [FTQ_PTR_BITS-1:0] alloc_ptr,
   input logic                    commit_step_val,
   input logic                    redir_val,
-  input logic [1:0]              redir_cause
+  input ftq_redir_cause_e        redir_cause
 );
-
-  localparam logic [1:0] RC_UNSPEC = 2'b11;
 
   // C1  commit_ptr NEVER REWINDS (5.5 R2). Committed is
   //     architectural. The pointer either holds or advances by
@@ -82,9 +78,7 @@ module ftq_commit_assert #(
 endmodule : ftq_commit_assert
 
 // Bind BY MODULE NAME.
-bind ftq_commit ftq_commit_assert #(
-  .FTQ_PTR_BITS (FTQ_PTR_BITS)
-) u_assert (
+bind ftq_commit ftq_commit_assert u_assert (
   .clk             (clk),
   .rstn            (rstn),
   .commit_ptr      (commit_ptr),
