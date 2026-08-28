@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-21
+ UPDATED: 2026-08-22
  CONTACT: Jeff Nye
 ```
 
@@ -17,7 +17,73 @@ Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
 
-## IA interactive sessions: FTQ definition. Seven tasks, four interfaces.
+## Session-067, second half: the FTQ RTL. BP-106 to BP-108.
+
+THE FTQ UNIT IS COMPLETE. Eleven modules, 22 Makefile targets, 670
+checks, 73 bound properties, all green from a clean tree. Every
+property proven live by fault injection.
+
+```
+  BP-106  ftq_ptr, ftq_commit. Three pointers per ftq_decisions.md
+          5.4. 174 checks. Found the commit watermark aliasing
+          defect
+  BP-107  The remaining eight modules plus the BP-106 retrofit.
+          22 targets, 670 checks, 73 properties. Seven ports the
+          7.1 decomposition did not anticipate, now 7.5
+  BP-108  Assertion files moved rtl/ -> tb/ to match the bpu
+          convention. Proven a no-op by measurement
+```
+
+THE COMMIT WATERMARK ALIASED AT FULL OCCUPANCY. At 64 live entries
+the set of values bkend_ftq_commit_idx may legally carry is
+SIXTY-FIVE -- the 64 live entries plus the entry just committed,
+which ftq_backend_interfaces.md 6 promises may sit on the port
+indefinitely. FTQ_IDX_BITS holds 64. Accepting the aliased value
+frees 63 live entries and issues 63 false RAS commits; rejecting it
+deadlocks a full FTQ, which predicts nothing and so can never
+advance the watermark again. Reachable on ordinary traffic.
+RULED: widen the port to FTQ_PTR_BITS. Two ports, off any critical
+path, and the backend does not exist yet.
+
+THE SHADOW WAS BUILT AS FOUR REGISTERS AND DROPPED EVERY CLUSTER
+RESPONSE. 5.6 sizes it four deep; p0 is the request being presented
+and is registered nowhere, so it is four stages and THREE FLOPS. A
+four-register shadow checks every response against the stage behind
+it and the front end stops after one block. It passed every leaf
+test; only the unit testbench saw it. 5.6 corrected.
+
+46 OF 73 PROPERTIES DID NOT FIRE on the first injection pass. Most
+were testbenches whose stimulus never crossed a clock edge, so the
+property never sampled the state it guards; fourteen of
+ftq_resolve_assert's fifteen were defined and never asserted. All 73
+fire now. RULE, now in PROJECT_CORE: a property never observed to
+fire is a comment.
+
+THE BASELINE WAS BROKEN AND NOTHING SAID SO. Four of the six FTQ
+targets did not build at the start of BP-107. BP-106 had reported
+155 checks green; the packages then gained FTQ_PTR_BITS and
+ftq_redir_cause_e, which those modules still declared locally. RULE:
+a green report records what was true when the session that wrote it
+ran.
+
+Package additions this session, all under the scoped-edit rule:
+FTQ_PTR_BITS, NUM_RESOLVE_PORTS, FTQ_PD_WIDTH, FTQ_PD_POS_BITS,
+ftq_redir_cause_e, ftq_resolve_t, ftq_pd_info_t. No existing
+declaration changed.
+
+Counts:
+
+```
+  ftq unit    22 targets (11 lint, 11 sim), 670 checks
+  bpu unit    47 targets, unchanged and not run this half
+```
+
+NEW: TD#113 (pft_addr has no correction path), TD#114 (property
+census discrepancy).
+
+---
+
+## Session-067, first half: FTQ definition. Eight tasks, four interfaces.
 
 WAIVER, BP-098 THROUGH BP-105 ONLY. The IA wrote the FTQ planning
 documents directly in these interactive sessions under a one-time
@@ -153,7 +219,7 @@ The IA handoff for this session is
 ia_context/ia_handoffs/ia_session_handoff-005.md. It is NOT in the
 PA read set; its section 8 lists what wants PA attention.
 
-Next free BP number is BP-106. Next free INFRA number is INFRA-012.
+Next free BP number is BP-109. Next free INFRA number is INFRA-012.
 INFRA-012 has never been generated or run. Three citations of it in
 ftq_bpu_interfaces.md were a label attached retroactively to the
 session-064 PA-direct document corrections, and are corrected there.
@@ -384,11 +450,14 @@ it only documented current behavior.
 |                         |             |                   | UBTB_SET_WIDTH=400. Index/tag    |
 |                         |             |                   | comment corrected off PC[26:7]   |
 |                         |             |                   | to block granularity (BP-090).   |
-|                         |             |                   | SESSION-064: FTB_BR_POS_BITS =   |
-|                         |             |                   | $clog2(FTB_BLOCK_BYTES/4), i.e.  |
-|                         |             |                   | positions are 4-byte expanded-   |
-|                         |             |                   | instruction slots, 8 per block.  |
-|                         |             |                   | Confirmed BP-092a, not changed.  |
+|                         |             |                   | FTB_BR_POS_BITS =                |
+|                         |             |                   | $clog2(FTB_BLOCK_BYTES/2) = 4,   |
+|                         |             |                   | so POS_OFFSET_BITS is 1: a       |
+|                         |             |                   | position is TWO bytes and there  |
+|                         |             |                   | are 16 per block. Was 4 bytes    |
+|                         |             |                   | and 8 per block until BP-099     |
+|                         |             |                   | widened it for the RVA23 C       |
+|                         |             |                   | extension.                       |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -455,7 +524,8 @@ it only documented current behavior.
 |                         |             |                   | pred_taken/pred_pc compacted by  |
 |                         |             |                   | branch number, not slot number.  |
 |                         |             |                   | SESSION-064: pred_pc is the      |
-|                         |             |                   | BRANCH PC (block base + pos*4),  |
+|                         |             |                   | BRANCH PC (block base plus       |
+|                         |             |                   | pos << POS_OFFSET_BITS),         |
 |                         |             |                   | not the fetch block PC -- BP-092a|
 |                         |             |                   | fixed the cluster side, proven   |
 |                         |             |                   | BP-093 TC-A..TC-G. A block-      |
@@ -810,14 +880,8 @@ it only documented current behavior.
 |                         |             |                   | value and permission is settled  |
 |                         |             |                   | once by CLAUDE.md Fixed          |
 |                         |             |                   | Constants, not per file.         |
-|                         |             |                   | Session-063 decisions still NOT  |
-|                         |             |                   | promoted here: block-descriptor  |
-|                         |             |                   | uBTB, stage-named redirects, the |
-|                         |             |                   | one-quantity comparison, the     |
-|                         |             |                   | branch_id qualification, the     |
-|                         |             |                   | two-group metadata write. They   |
-|                         |             |                   | live in handoff-064 and          |
-|                         |             |                   | ftq_bpu_interfaces.md.           |
+|                         |             |                   | Five session-063 decisions are   |
+|                         |             |                   | still not promoted here. TD#112. |
 |                         |             |                   | SESSION-067: its bp_ftq_entry_t  |
 |                         |             |                   | copy deleted; ftq_entry_formats  |
 |                         |             |                   | .md is now the sole prose home.  |
@@ -1355,17 +1419,73 @@ it only documented current behavior.
 |     |          | pred_pc+32 dual-slot model those decisions replaced, so  |
 |     |          | the gap is actively producing wrong text elsewhere.      |
 |     |          |                                                          |
-|     |          | WHY THIS IS A TD AND NOT A HANDOFF NOTE: handoffs are    |
-|     |          | disposable and are recopied by hand. This item was       |
-|     |          | carried unchanged by handoff-065, -066, -067 and -069 -- |
-|     |          | four sessions of noticing and not fixing. The first      |
-|     |          | session that does not bother recopying it loses the      |
-|     |          | decisions from the record while the RTL still implements |
-|     |          | them.                                                    |
-|     |          |                                                          |
 |     |          | Fix is one PA-direct edit to bp_cluster.md, plus         |
 |     |          | correcting the two documents still carrying the          |
 |     |          | superseded model. No RTL change.                         |
+| 113 | ftq      | OPEN. bp_ftq_entry_t.pft_addr is a p1 value with NO      |
+|     |          | correction path, and two consumers read it as if it were |
+|     |          | the block's final fall-through.                          |
+|     |          |                                                          |
+|     |          | It is written once at p1 from bpu_pred_pft_p1. The p2/p3 |
+|     |          | groups of ftq_bpu_interfaces.md 4a carry bp_ftq_slot_t   |
+|     |          | only, and pft_addr is a block scalar, so nothing can     |
+|     |          | correct it. On a uBTB miss the p1 value is the block-    |
+|     |          | aligned PC plus FTB_BLOCK_BYTES, the FULL block end; when|
+|     |          | the FTB then terminates the block at an earlier branch,  |
+|     |          | or corrects a block end the uBTB missed (FE-13), the     |
+|     |          | entry keeps the p1 view for its whole life.              |
+|     |          |                                                          |
+|     |          |   - RAS return address. ras_decisions.md 8 names the FTB |
+|     |          |     fallThroughAddr as the source and says the RAS does  |
+|     |          |     not compute PC+2 or PC+4 itself. A block terminated  |
+|     |          |     by a call pushes an address past the call. Cost is   |
+|     |          |     prediction accuracy.                                 |
+|     |          |   - Not-taken successor. ftq_entry_formats.md 2 stores   |
+|     |          | the                                                      |
+|     |          |     field so the successor survives a redirect rewriting |
+|     |          | a                                                        |
+|     |          |     slot, which is the case where the p1 value is stale. |
+|     |          |     Cost is a FETCH ADDRESS.                             |
+|     |          |                                                          |
+|     |          | The FTQ has no alternative field: nothing in the entry   |
+|     |          | records whether a call was RVC or RVI, which section 8's |
+|     |          | +2 correction requires. FIX: the p2 group gains the FTB  |
+|     |          | fall-through and corrects the block scalar. Adding a     |
+|     |          | separate ret_addr field patches the RAS symptom and      |
+|     |          | leaves the successor wrong.                              |
+|     |          |                                                          |
+|     |          | Found by BP-107 (W1). Documents record it; the RTL still |
+|     |          | drives the p1 value. Grows ftq_bpu_interfaces.md 4a. RTL |
+|     |          | change in ftq_entry and the cluster boundary.            |
+| 114 | ftq      | OPEN. Two ftq_ifu properties may elaborate under lint and|
+|     |          | not under simulation. If so, BP-107's claim that all 73  |
+|     |          | fired under fault injection cannot hold for them.        |
+|     |          |                                                          |
+|     |          | BP-108's elaboration census matches BP-107's declared    |
+|     |          | property count EXACTLY under lint, 73, file for file     |
+|     |          | across all ten assertion files. Under simulation it sums |
+|     |          | to 71, and to 69 in the unit build:                      |
+|     |          |                                                          |
+|     |          |   file        declared  lint  mod sim  unit sim          |
+|     |          |   ftq_ifu           11    11        9         9          |
+|     |          |   ftq_entry          8     8        8         7          |
+|     |          |   ftq_npc           11    11       11        10          |
+|     |          |   TOTAL             73    73       71        69          |
+|     |          |                                                          |
+|     |          | A property absent from the simulated design cannot fire. |
+|     |          | This is the inert-assertion class one layer below the one|
+|     |          | BP-107 caught: not defined-and-never-asserted, but       |
+|     |          | asserted, lints, never reaches simulation.               |
+|     |          |                                                          |
+|     |          | CAVEATS: the census counts source lines emitting a       |
+|     |          | failure message, so merged or replicated properties could|
+|     |          | skew it; --json-only and a simulation build are not      |
+|     |          | identical elaborations; and the two figures come from two|
+|     |          | tasks' reports, not one measurement.                     |
+|     |          |                                                          |
+|     |          | Settle it by naming which of I1-I11 are missing from     |
+|     |          | sim_ftq_ifu. Short IA task, read-only.                   |
+
 ---
 
 ## Open Items
@@ -1564,9 +1684,12 @@ For known failure modes see ANTIPATTERNS.md.
 
 ### Decoder track
 
-Full detail: planning/arch/decode.md (file currently absent).
+There is no decode.md and none is planned: decode is fully
+contained in the RISC-V specification and riscv-opcodes, and a
+planning document duplicating them would only create drift.
+Revisit if custom instructions are added.
 
-Key decisions for quick reference:
+The decisions this project has made:
 - Illegal instruction: ILLEGAL flag in decode packet,
   ROB entry allocated, commit flushes to mtvec
 - vtype: decoder stateless, rename resolves dependency
@@ -1608,9 +1731,12 @@ Key decisions for quick reference:
   retired (session-063, BP-086). Entry hit is reported once
   per lookup on blk_p1.hit; a slot valid bit means only that
   the slot carries a branch.
-- In-block position: FTB_BR_POS_BITS = $clog2(BLOCK/4), so a
-  position is a 4-byte expanded-instruction slot, 8 per
-  block. The branch PC is block base + pos*4.
+- In-block position: FTB_BR_POS_BITS = $clog2(BLOCK/2), so a
+  position is a TWO-byte slot, 16 per block, and the branch
+  PC is block base plus pos << POS_OFFSET_BITS. BP-099
+  widened this from 4-byte slots for the RVA23 C extension;
+  POS_OFFSET_BITS is derived so it cannot disagree with the
+  position width.
 - BPU is decoupled frontend. The FTQ is the REQUESTER and owns
   next-PC selection: bp_cluster takes ftq_pred_pc_p0 as an input
   and does not self-steer. Corrected session-067; the previous
@@ -1691,10 +1817,10 @@ unless noted.
           3.4 status note record that no <pred>_redir_* port
           exists; Override lines in 5.x retargeted to the
           stage-named groups; open item J added for TD#39.
-    - planning/arch/bp_cluster.md                     In progress
-        - Branch prediction cluster summary data. The
-          session-063 decisions still are NOT promoted here;
-          they live in handoff-064 and ftq_bpu_interfaces.md.
+    - planning/arch/bp_cluster.md                     Working
+        - Branch prediction cluster summary data. Five
+          session-063 decisions are still not promoted here.
+          TD#112.
     - planning/arch/fe_decisions.md                   Draft
         - Front-end FTQ<->BPU theory of operation. Session-064
           corrections applied; see Module Status.

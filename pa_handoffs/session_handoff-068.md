@@ -8,10 +8,16 @@ Date: 2026-08-22
 Read PROJECT_STATUS.md, then this file, then CLAUDE.md
 to restore full context.
 
-Three tasks were run: BP-106, BP-107, BP-108. THE FTQ UNIT IS
-COMPLETE -- eleven modules, 22 targets, 670 checks, 73 bound
-properties, all green. Two architectural defects were found by
-building it, one of which changed a cluster-boundary port.
+ELEVEN TASKS WERE RUN: BP-098 THROUGH BP-108. The session specified
+the FTQ end to end and then built it. THE FTQ UNIT IS COMPLETE --
+eleven modules, 22 targets, 670 checks, 73 bound properties, all
+green.
+
+The session has two halves and they were run differently. BP-098
+through BP-105 were INTERACTIVE IA SESSIONS under a one-time waiver
+that let the IA write planning documents directly; that waiver
+EXPIRED WITH BP-105 and is not precedent. BP-106 through BP-108 were
+ordinary PA-written tasks under the standing rules.
 
 NEXT SESSION BEGINS ICACHE PLANNING. See NEXT SESSION.
 
@@ -113,9 +119,36 @@ between.
 
 ### Tasks run
 
-Task IDs used: BP-106, BP-107, BP-108.
+Task IDs used: BP-098 through BP-108, eleven in all.
 Next free BP number is BP-109. Next free INFRA number is INFRA-012 --
 still unissued.
+
+FIRST HALF -- THE FTQ SPECIFICATION. BP-098 to BP-105, interactive,
+under the planning-document waiver. Full record is in PROJECT_STATUS,
+"IA interactive sessions: FTQ definition"; summarised here so the
+next session knows what this session contained.
+
+  BP-098  INST_OFFSET split -> PC_HASH_SHIFT + POS_OFFSET_BITS
+  BP-099  FTB_BR_POS_BITS 3 -> 4, closing an RVA23 C-extension gap
+  BP-100  FTB update scheduler. BUILT. First FTQ module and the
+          project's first concurrent SVA
+  BP-101  pft_addr, the TD-FE-6 slot groups, RESET_VECTOR
+  BP-102  the TD-FE-7 rollback input, closing the FTQ definition
+  BP-103  the last two entry fields, TD-FE-8, and the eleven-module
+          decomposition. Specification only
+  BP-104  RAS-3 closed. A label fix, not a decision
+  BP-105  FLUSH CLOSED. FE-14: a flush is a redirect. TD#96, G24,
+          IC-FTB-07, IC-SC-06, IC-SCT-03 closed by decision.
+          RC_RESERVED -> RC_UNSPEC, defined
+
+  Four documents created: ftq_decisions.md, ftq_entry_formats.md,
+  ftq_ifu_interfaces.md, ftq_backend_interfaces.md. fe_decisions
+  sections 4, 5 and 6 moved out and are RETIRED, not reused.
+  CLOSED: TD-FE-1 in full, TD-FE-2, TD-FE-6, TD-FE-7, FE-U2, FE-U7,
+  G9, G23, IC-FTB-09, RESETVEC. NEW: FE-5a, FE-13, IC-FTB-16,
+  PREFETCH. 47 of 47 bpu targets green throughout.
+
+SECOND HALF -- THE FTQ RTL. BP-106 to BP-108, PA-written tasks.
 
   BP-106   ftq_ptr.sv, ftq_commit.sv. Three pointers per the 5.4
            ruling. 174 checks, 10 properties, all fired. Found the
@@ -172,6 +205,20 @@ All 73 fire now. The rule is in PROJECT_CORE Standing rules, with the
 clock-edge mechanism recorded alongside it, because "prove it fires"
 without the mechanism reads as a discipline problem when it is a
 testbench-construction problem.
+
+### The waiver, and why it must not be cited
+
+BP-098 through BP-105 were granted a one-time waiver letting the IA
+write planning documents directly, to work around repeated PA
+failures to produce usable task specifications. IT EXPIRED WITH
+BP-105. It is not precedent and does not propagate.
+
+The note is at the top of PROJECT_STATUS's FTQ definition section.
+The standing rule -- planning documents are IA-read-only -- is
+CLAUDE.md Fixed Constants and applied from BP-106 forward, which is
+why BP-106, BP-107 and BP-108 all carry an explicit read-only
+constraint and all three reported document corrections rather than
+making them.
 
 ### The baseline was broken and nothing said so
 
@@ -359,8 +406,15 @@ ordered, discussion block pre-filled, false claim carried into a
 prompt; 066 authorised IA modification of planning documents, four
 false premises in problem statements).
 
-Session-067 ran three tasks and finished the FTQ. Every error below
-was caught by Jeff, not by the PA.
+SCOPE OF THIS POSTMORTEM: BP-106 to BP-108 only. BP-098 through
+BP-105 were interactive IA sessions run in a different PA
+conversation, and this PA has no first-hand record of its own conduct
+during them. Their outcomes are recorded above and in PROJECT_STATUS;
+their PA performance is not assessed here because it cannot be
+assessed honestly from what this session was given.
+
+Session-067's second half ran three tasks and finished the FTQ. Every
+error below was caught by Jeff, not by the PA.
 
 1. MANUFACTURED BLOCKERS, THREE TIMES, AND JEFF NAMED THE PATTERN.
    The BP-099 position granularity was presented as a blocking

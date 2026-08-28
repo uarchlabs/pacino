@@ -8,3 +8,6 @@
 	path = tools/verilator
 	url = https://github.com/verilator/verilator.git
   branch = v5.048
+[submodule "tools/cachegen"]
+	path = tools/cachegen
+	url = git@github.com:jeffnye-gh/cachegen.git
