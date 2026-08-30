@@ -4,10 +4,11 @@
 # L1 Instruction Cache Micro-Architectural Decisions
 ```
  FILE:    icache_decisions.md
- SOURCE:  session-068 rulings; pacino_cache.md; the survey in
-          docs/superscalar_ooo_survey.md
+ SOURCE:  session-068 rulings; the survey in
+          docs/superscalar_ooo_survey.md; INFRA-012;
+          TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-08-27
+ UPDATED: 2026-08-29
  CONTACT: Jeff Nye
 ```
 
@@ -19,6 +20,10 @@ interfaces it presents, miss handling, maintenance and prefetch.
 ## 0. Scope and companion documents
 
 ```
+  l1i_ifu_interfaces.md     the PORTS of sections 4 and 7.
+                            This file is behaviour; that one is
+                            the port list, the handshake and the
+                            maintenance path
   ftq_ifu_interfaces.md     the FTQ <-> IFU boundary, specified
   ftq_decisions.md          FTQ-owned behaviour; section 0 states
                             the ICache position and needs the
@@ -40,11 +45,12 @@ Not yet written and cited here as stubs:
                             decode. No planning record exists
 ```
 
-REGISTRIES. This file owns L1I-1 through L1I-19, TD-L1I-1 through
-TD-L1I-5, and the open items L1I-U1 through L1I-U5. It does not
-duplicate the FE, TD-FE or FE-U registries, and it does not use the
+REGISTRIES. This file owns L1I-1 through L1I-22, TD-L1I-1 through
+TD-L1I-9, and the open items L1I-U2 through L1I-U5. It does not
+duplicate the FE, TD-FE or FE-U registries; it does not use the
 IC- prefix, which is already an interface-check identifier in
-ftb_interfaces.md and sc_interfaces.md.
+ftb_interfaces.md and sc_interfaces.md; and it does not use IF-,
+TD-IF- or IF-U, which are l1i_ifu_interfaces.md.
 
 THE L1I IS A GENERATED MODULE. It is emitted by `cgen` from JSON
 configuration. This document is the SOURCE and the JSON is
@@ -55,7 +61,11 @@ scoped to what the tool emits today.
 ### 0.1 The three interfaces
 
 ```
-  core   BOTH  to the IFU. Specified here, section 4
+  core   BOTH  to the IFU. Behaviour here, section 4; ports in
+               l1i_ifu_interfaces.md 4 and 5
+  maint  BOTH  to the IFU. Behaviour here, section 7; ports in
+               l1i_ifu_interfaces.md 10. Same peer as core,
+               separate port group and separate flow control
   mem    BOTH  to the L2. Specified here, section 5
   itlb   IN    the translated physical address. NAMED here,
                section 2.3; specified in itlb_decisions.md
@@ -73,17 +83,24 @@ That argument is unchanged by L1I-2 below.
 ### 1.1 The numbers
 
 ```
-  L1I-1  capacity 64 KiB, 8-way, 64-byte lines, 128 sets
+  L1I-1   capacity 64 KiB, 8-way, 64-byte lines, 128 sets
+  L1I-11  TWO BANKS, LINE INTERLEAVED. Demand fetch and the
+          IFU-originated prefetch of L1I-19 would otherwise
+          contend for one array port.
 ```
+
+L1I-1 and L1I-11 are the INPUTS. Everything below is computed
+from them:
 
 | Derived        | Value | From                          |
 |----------------|-------|-------------------------------|
 | sets           | 128   | 65536 / (8 * 64)              |
-| banks          | 2     | L1I-11                        |
 | sets per bank  | 64    | 128 / 2                       |
 | line bits      | 512   | 64 * 8                        |
-| ways           | 8     | L1I-1                         |
 | bytes per way  | 8192  | 65536 / 8                     |
+
+INFRA-012 CHECKED THIS AGAINST THE TOOL'S OWN DERIVATION and it
+agrees exactly, including the 1.2 decomposition below.
 
 CAPACITY. 64 KiB is where current high-performance I-sides sit:
 every Neoverse and every Cortex-X, SiFive P870, XuanTie C910 and
@@ -119,9 +136,20 @@ added beside it, so `offset + index + tag == pa_bits` still holds.
   tag      PA[pa_bits-1:13]     pa_bits - 13 bits
 ```
 
-THE TAG WIDTH IS NOT FIXED because `pa_bits` is not decided; see
-L1I-U1. At the 36 bits recommended there the tag is 23 bits and the
-tag array is 128 * 8 * (23 + 1 valid) = 24576 bits.
+```
+  L1I-20  pa_bits is 36. Ruled session-068, applied by TOOLS-003.
+          XiangShan Kunminghu implements 36 under Sv39. RVA23
+          does not fix it: Sv39 bounds it through the PTE's PPN
+          field and the implementation chooses.
+```
+
+AT THE L1I-1 GEOMETRY the tag is 23 bits and the tag array is
+128 * 8 * (23 + 1 valid) = 24576 bits.
+
+THE CONFIGURED GEOMETRY IS NOT L1I-1 YET. pacino still carries
+32 KiB with one bank, where the index is 6 bits and the tag is 24.
+Both numbers are correct for their own geometry; 23 arrives with
+the section 9 capacity and bank changes, not with L1I-20.
 
 ---
 
@@ -254,7 +282,8 @@ uses. No case was found for revisiting it.
 ```
   L1I-9   The core interface returns ONE FULL CACHE LINE, 64
           bytes, per request. The data path is 512 bits.
-  L1I-10  Up to EIGHT requests may be outstanding.
+  L1I-10  Up to SIXTEEN requests may be outstanding, matching
+          the sixteen MSHRs of L1I-12.
 ```
 
 The port in the initial pacino configuration was 32 bits wide with
@@ -264,16 +293,26 @@ decoupling the FTQ exists to provide: the FTQ runs up to 64 entries
 ahead precisely so fetch can be pipelined across misses, and a
 blocking port serialises that back down.
 
-Eight outstanding is chosen against the sixteen MSHRs of L1I-12: it
-is enough that the IFU is not the limit on miss parallelism, and
-below the MSHR count so a full request pipeline cannot on its own
-exhaust miss tracking.
+THE PORT COUNT AND THE MSHR COUNT ARE THE SAME NUMBER, and that is
+the point. A request can only miss if it is outstanding, so the
+port caps in-flight misses: at eight outstanding against sixteen
+MSHRs, half the miss-tracking capacity is unreachable and the
+configuration would claim depth the design cannot use. Sixteen
+each means one MSHR per outstanding request and no dead entries.
+
+The MSHR count is the one with an anchor behind it (section 6);
+the port follows it rather than the reverse.
+
+HIT-UNDER-MISS IS THE PRIMARY VALUE, not miss-under-miss. A
+blocking port stalls the whole fetch stream on one miss, which
+makes the FTQ's run-ahead unusable: the queue fills and nothing
+drains. No published I-side in the survey is blocking.
 
 ### 4.2 The line buffer is the IFU's
 
 ```
   L1I-14  The IFU holds the returned line and extracts the
-          32-byte fetch block. The L1I holds no last-line
+          32-byte PREDICTION block. The L1I holds no last-line
           register and answers every request from the array.
 ```
 
@@ -352,12 +391,19 @@ needs no change.
   bypass          to upstream, enabled
 ```
 
-CRITICAL FIRST MATTERS HERE. The requested 32-byte block returns in
-the first beat and is forwarded upstream as it arrives, so a miss
-costs the L2 latency and not the L2 latency plus a second beat.
-`bypass_to_upstream` is what permits the forward; both fields are
-already set in the configuration and this records why they must
-stay.
+CRITICAL FIRST DOES NOT SHORTEN THE MISS THAT CAUSED IT. An earlier
+revision claimed it did -- that the requested 32 bytes return in the
+first beat and are forwarded upstream as they arrive, saving a beat.
+THAT IS WRONG under L1I-9. The core interface answers with a whole
+64-byte line, so the L1I cannot respond until the second beat has
+landed, and the beat saved by forwarding is spent waiting for it.
+The two links are independent: TileLink is the L2 side only, and a
+saving on that side does not reach the core requester.
+
+BOTH FIELDS STAY, for a smaller reason. The refill order is
+observable to a SECOND requester that hits the line while it is
+filling, and ordering the beats usefully costs nothing. That is the
+whole of the claim; do not restore the stronger one.
 
 ---
 
@@ -382,10 +428,20 @@ against Arm's 4 IPC from L2, so 16 is a floor derived from a design
 achieving half the target, not a comfortable margin. The initial
 pacino value of 4 is below every published I-side in the survey.
 
-TARGETS PER MSHR. Two 32-byte blocks per line makes 2 the bare
-minimum -- it merges a line's own second half and nothing else --
-and the FTQ run-ahead means several queued fetches can land on one
-line. 4 matches the l1d and l2 nodes.
+TARGETS PER MSHR. An earlier revision derived 2 as the minimum
+from the line holding two prediction blocks. THAT DERIVATION IS
+VOID under L1I-14: the second block is served from the IFU's
+buffer and never becomes a request, so there is no second-half
+merge on sequential fetch.
+
+What does merge: a redirect returning to a line already in flight,
+and any pattern where the IFU issues for a later block before an
+earlier response lands. The second depends on IFU issue policy,
+which ifu_decisions.md owns and which does not exist.
+
+4 STANDS, matching the l1d and l2 nodes, but it is now an
+unmeasured choice rather than a derived one. Revisit when the IFU
+issue policy is written.
 
 ---
 
@@ -396,6 +452,15 @@ line. 4 matches the l1d and l2 nodes.
           the IFU. There is no memory-side invalidate; L1I-15.
           invalidate_line and invalidate_all are supported;
           flush_line and flush_all are not.
+
+          IT COVERS THE IFU'S LINE BUFFER TOO. L1I-14 puts a
+          64-byte line in the IFU and the L1I cannot see it, so
+          an invalidate that clears the array alone leaves a
+          stale instruction line -- the correctness failure 2.2
+          invokes to reject VIPT, by another route. The IFU
+          clears its own buffer AFTER the L1I reports the array
+          clear complete, or a draining response repopulates it.
+          l1i_ifu_interfaces.md IF-36.
 ```
 
 There is nothing to flush. The L1I is read-only, holds no dirty
@@ -404,9 +469,12 @@ state, and has no write path to the L2.
 DRIVERS:
 
 ```
-  M1  FENCE.I. Invalidates the whole cache. Implemented by the
-      reset-branch clear of the flop valid bits (section 3), so
-      it is a single-cycle operation
+  M1  FENCE.I. Invalidates the whole cache. DRAIN THEN CLEAR:
+      the clear is the reset-branch clear of the flop valid
+      bits (section 3) and takes one cycle, but a fill in flight
+      when it happens lands afterwards and re-validates a line
+      the fence removed. Every outstanding request drains first.
+      l1i_ifu_interfaces.md IF-31
   M2  Zicbom. RVA23 mandates it. cbo.inval names one line by
       address. Under PIPT that address indexes directly and no
       alias search is needed, which is the second return on
@@ -440,19 +508,37 @@ available, because the run-ahead stream between `fetch_ptr` and
 ### 8.1 Arbitration
 
 ```
+  L1I-21  THE CORE REQUEST CARRIES A PREFETCH BIT. One bit,
+          set by the IFU, distinguishing a prefetch from a
+          demand fetch. It is the only asymmetry between the
+          two: same identifier space, same response, and a
+          miss is invisible either way.
+  L1I-22  THE PREFETCH MSHR RESERVE IS TWO. A prefetch is
+          accepted only while at least two of the sixteen
+          MSHRs of L1I-12 are free. Ruled session-068.
+```
+
+```
   P1  Demand fetch always wins. A prefetch is issued only in a
-      cycle no demand request needs the port
-  P2  A prefetch never occupies an MSHR a demand miss requires. A
-      prefetch that would exhaust miss tracking is dropped, not
-      queued
+      cycle no demand request needs the port. IFU-internal;
+      the L1I does not see it
+  P2  A prefetch never occupies an MSHR a demand miss requires.
+      THE L1I ENFORCES THIS, on the bit of L1I-21: a prefetch
+      is refused unless TWO MSHRs remain free. L1I-22
   P3  A dropped prefetch is not retried. It was a hint
 ```
+
+P2 NAMES MSHR STATE, AND ONLY THE L1I HOLDS MSHR STATE. Without
+L1I-21 the rule has no enforcer: the IFU can throttle on its own
+outstanding count, but that is a proxy, and merging makes it a bad
+one -- merged requests occupy one MSHR and the IFU cannot tell.
 
 THIS IS A PARAMETER, NOT PROSE. The configuration schema gains a
 `prefetch_arbitration` field with an enumerated value naming this
 policy, so the rule is emitted rather than reimplemented per node.
 A policy stated only in a document is a policy that drifts from the
-RTL. TD-L1I-3 tracks the schema addition.
+RTL. TD-L1I-3 tracks the schema addition; TD-L1I-9 tracks the
+request bit, which no link field can express.
 
 ### 8.2 The hint path exists
 
@@ -475,11 +561,11 @@ are marked.
 | line_bytes               | 64             | L1I-1    |         |
 | associativity            | 8              | L1I-1    |         |
 | banks                    | 2              | L1I-11   | yes     |
-| bank_interleave          | line           | L1I-11   | yes     |
+| bank_interleave_granularity | line        | L1I-11   | yes     |
 | indexing                 | PIPT           | L1I-3    | yes     |
 | read_miss                | allocate       |          |         |
 | replacement              | tree_plru      | L1I-7    |         |
-| inclusion                | non_inclusive  | L1I-15   | yes     |
+| inclusion                | nine           | L1I-15   |         |
 | mshrs                    | 16             | L1I-12   | yes     |
 | mshr_targets             | 4              | L1I-13   | yes     |
 | victim_buffer_entries    | 0              | L1I-17   |         |
@@ -499,18 +585,60 @@ Core link, replacing the `pe_port` shape:
 | Field                    | Value | Decision | Changed |
 |--------------------------|-------|----------|---------|
 | read_width_bits          | 512   | L1I-9    | yes     |
-| address_width_bits       | pa_bits | L1I-4  | yes     |
-| outstanding_requests     | 8     | L1I-10   | yes     |
-| write_width_bits         | 0     | read only| yes     |
-| out_of_order_response    | true  | R2       | NEW     |
+| address_width_bits       | 36    | L1I-20   | DONE    |
+| outstanding_requests     | 16    | L1I-10   | yes     |
+| write_width_bits         | 0     | read only| n2      |
+| handshake.read_data_return | valid_with_id | R2 | n3 |
+| id_width_bits            | 4     | R2       | n3      |
+| a prefetch request bit   | 1     | L1I-21   | n4      |
+
+NOTES.
+
+```
+  DONE  APPLIED BY TOOLS-003. addressing.pa_bits and all four link
+      address widths moved together in one change, and the
+      T-10.addr_width checker rule now makes a disagreement an
+      error on any edge touching a cache or memory node. A link
+      address width is still a LITERAL -- the input language has
+      no symbolic reference -- so this row must move by hand if
+      pa_bits ever moves again. T-10 is what makes forgetting it
+      an error rather than a silent zero-extend on one side and
+      truncation on the other.
+  n2  THE SCHEMA REFUSES 0. custom.write_width_bits has minimum 8
+      and is required, so a read-only custom link cannot be
+      declared today. TD-L1I-7.
+  n3  NOT A NEW FIELD. An earlier revision named this row
+      `out_of_order_response`. The capability already exists under
+      another name: handshake.read_data_return takes valid_with_id
+      beside valid_flag, id_width_bits already exists, and the
+      signal builder already emits the request id and the response
+      id and rvalid. Nothing behind the wires consumes them, which
+      is an emitter gap and not a schema one. Do not add a second
+      field saying what read_data_return already says.
+      id_width_bits 4 covers the sixteen of L1I-10.
+  n4  NO SCHEMA FIELD EXISTS. A custom link's signal bundle is
+      derived from its declared shape, and there is no way to
+      add a requester-supplied qualifier to it. TD-L1I-9.
+```
 
 `pe_port` is shared with the LSU-to-L1D edge in the current
 topology. The I-side and D-side core ports are now different
-shapes, so either the link is parameterised per edge or a second
-link type is declared. TD-L1I-4.
+shapes. A LINK CANNOT BE PARAMETERISED PER EDGE -- the schema and
+the resolver both put the link on the endpoints rather than on the
+edge -- but nothing binds a port type to one link, so a SECOND LINK
+TYPE is two JSON edits and no tool change. TD-L1I-4.
 
 SYSTEM FIELDS. `pa_bits` is a system-level field carried by every
 node's package. Changing it is not an l1i-local edit; see L1I-U1.
+
+THIRTEEN OF THE TWENTY-TWO NODE FIELDS ABOVE ARE ACCEPTED, CARRIED
+AND REACH NO EMITTED LOGIC. INFRA-012 measured it: seven fields
+shape RTL, `indexing` shapes only a diagnostic, and the rest --
+every maintenance field, both fill fields, both timing fields, the
+buffer counts, mshr_targets and inclusion -- are inert. `mshrs`
+reaches a generated comment saying the control does not use it.
+So this table states the target, and most of it is not buildable
+until the emitter work of TD-L1I-8 is done.
 
 ---
 
@@ -519,16 +647,8 @@ node's package. Changing it is not an l1i-local edit; see L1I-U1.
 ### 10.1 Open, blocking specification
 
 ```
-  L1I-U1  pa_bits. Undecided. Sizes the tag array directly, at
-          128 * 8 bits per bit of PA in the L1I alone and again in
-          every other node.
-          RVA23 does NOT fix it: Sv39 sets an upper bound through
-          the PTE's PPN field and the implementation chooses how
-          much to implement. RECOMMENDATION: 36 bits, which is
-          what XiangShan Kunminghu implements under Sv39. The
-          current configuration value of 32 is almost certainly
-          too small once MMIO is placed alongside DRAM.
-          NOT RULED. Jeff's decision.
+  L1I-U1  CLOSED. pa_bits is 36; L1I-20, section 1.2. Ruled
+          session-068 and applied by TOOLS-003.
 
   L1I-U2  The ITLB. Entries, associativity, page sizes, ASID
           width, and its own latency. Under PIPT it is on the
@@ -602,6 +722,38 @@ node's package. Changing it is not an l1i-local edit; see L1I-U1.
             from a detected error by invalidating and refetching,
             which is cheaper than the D-side case and worth
             taking. Not decided.
+
+  TD-L1I-6  CLOSED by TOOLS-003. The T-10.addr_width checker rule
+            reports an error when a link's address width differs
+            from addressing.pa_bits on any edge touching a cache
+            or memory node, with a negative fixture proving it.
+
+  TD-L1I-7  A read-only custom link cannot be declared:
+            custom.write_width_bits has minimum 8 and is
+            required. Section 9 note n2. The consequence today is
+            visible in the emitted tree -- the core slave adapter
+            carries a write channel tied off into an unused net,
+            because the NODE knows it is read-only and the LINK
+            does not. INFRA-012.
+
+  TD-L1I-8  THE EMITTER BUILDS A BLOCKING CACHE. Sections 4
+            through 8 specify behaviour cachegen cannot emit at
+            all: no MSHR file exists, the core adapter is
+            single-outstanding by construction, no request
+            identifier reaches any module, the refill assembles
+            the whole line before answering, no node emits an
+            invalidate port of any kind, and nothing in the tool
+            has any notion of prefetch. This is the largest item
+            in this document and it is not an l1i configuration
+            question. INFRA-012 enumerates it as E2 through E8.
+
+            THE Zicbom HALF IS AN RVA23 GAP, not a preference:
+            L1I-18 has no hardware today.
+
+  TD-L1I-9  THE L1I-21 PREFETCH BIT CANNOT BE DECLARED. A custom
+            link's signal bundle is derived from its shape and
+            carries no requester-supplied qualifier. Schema and
+            emitter, in that order. Section 9 note n4.
 ```
 
 ---
@@ -641,6 +793,58 @@ Both are PA-direct edits. Neither is in scope for an IA task.
 ## 12. Document History
 
 ```
+  2026-08-29  TOOLS-003 folded in, session-068. Eight amendments,
+              two of them CORRECTNESS and found by writing down
+              what the IFU must drive.
+
+              7 M1's single-cycle FENCE.I is WRONG once sixteen
+              requests can be outstanding: a fill in flight lands
+              after the clear and re-validates a line the fence
+              removed. Drain then clear. L1I-18 did not cover the
+              IFU's own line buffer, so a fence could clear the
+              array and leave a stale line in the IFU; it now
+              does, and the buffer clear follows the array clear
+              rather than the request.
+
+              8.1 P2 named MSHR state the IFU cannot see. THE
+              CORE REQUEST NOW CARRIES A PREFETCH BIT, L1I-21,
+              and the L1I enforces P2 on it. The reserve size is
+              L1I-22, two, and the schema cannot express the
+              bit, TD-L1I-9.
+
+              pa_bits is 36, L1I-20; L1I-U1 and TD-L1I-6 close.
+              Section 9's address_width_bits row is 36 and
+              applied. Section 6's targets-per-MSHR derivation is
+              VOID under L1I-14 -- the second prediction block is
+              served from the IFU buffer and never becomes a
+              request -- so 4 is now an unmeasured choice. 0.1
+              gains the maintenance interface as a fourth. L1I-14
+              said fetch block where it meant prediction block;
+              FETCH_BLOCK_BYTES is 64 and FTB_BLOCK_BYTES is 32.
+
+  2026-08-28  INFRA-012 folded in, session-068. The core port is
+              SIXTEEN outstanding, not eight: at eight against
+              sixteen MSHRs half the miss tracking was unreachable.
+              5.2's critical-first justification WITHDRAWN -- under
+              L1I-9's whole-line core response the requester that
+              missed cannot see the saving, and the earlier text
+              attributed an L2-side saving to the core side. Both
+              fields stay for the weaker second-requester reason.
+              L1I-11 was cited three times and never stated; it is
+              now stated in 1.1, and `banks` is no longer listed as
+              a derived value. Four section 9 corrections, all
+              found by reading the tool: the schema's name is
+              bank_interleave_granularity; `nine` is the schema's
+              spelling of non-inclusive and l1i ALREADY declares
+              it, so that row changes nothing and contradicted 5.1
+              as written; a link address width is a literal and
+              cannot read pa_bits; out_of_order_response is not a
+              new field but the existing read_data_return
+              valid_with_id plus id_width_bits. TD-L1I-6, -7 and
+              -8 opened. TD-L1I-8 is the finding that matters:
+              thirteen of twenty-two node fields validate, are
+              carried, and move no emitted logic.
+
   2026-08-27  Created, session-068. Geometry, indexing, storage,
               both interfaces, miss handling, maintenance and
               prefetch decided as L1I-1 through L1I-19. PIPT taken
@@ -653,9 +857,8 @@ Both are PA-direct edits. Neither is in scope for an IA task.
               count derived from the published survey rather than
               from the initial configuration; the core port
               rewritten from a 32-bit single-outstanding test port
-              to a 512-bit line-at-a-time port with eight
-              outstanding. pa_bits, the ITLB, the walker topology
-              and PMP/PMA are recorded OPEN with recommendations
-              and are not decided here.
+              to a 512-bit line-at-a-time port. pa_bits, the ITLB,
+              the walker topology and PMP/PMA are recorded OPEN
+              with recommendations and are not decided here.
 ```
 

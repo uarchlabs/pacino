@@ -45,6 +45,16 @@ production-quality outputs.
                      an IA write. A waiver covers that task only. It is
                      never precedent and never propagates to the next
                      task, even one continuing the same work.
+- Packages:          A task may ADD declarations to
+                     bp_defines_pkg.sv and bp_structs_pkg.sv when its
+                     task file scopes the addition. It may NOT change
+                     or remove an existing declaration. Every addition
+                     is listed in Results Capture with its derivation.
+                     A PACKAGE ADDITION THAT SHADOWS A MODULE-LOCAL
+                     DECLARATION IS A BUILD BREAK under -Wall, not a
+                     tidy-up. Sequence the addition WITH the modules
+                     that stop declaring it locally, or state plainly
+                     that the tree is broken in between.
 ---
 
 ## Style Rules - enforced by style scripts, no exceptions
@@ -176,6 +186,14 @@ important. It must be defines first then structs
   completion. Any failure NOT on that waiver list blocks.
 - Status counts written to PROJECT_STATUS must come from a run in
   the current session. Do not carry a prior session's count.
+- A PACKAGE EDIT WIDENS THE RUN TO BOTH UNITS. Every target in
+  the bpu and the ftq compiles bp_defines_pkg.sv and
+  bp_structs_pkg.sv as its first two sources, so an addition made
+  under a task scoped to one unit reaches the other and that
+  task's own suite cannot see it. When a task touches either
+  package, run BOTH units and report both. If the other unit is
+  not run, say so in Results Capture rather than leaving its last
+  reported figure to stand.
 - ALL TARGETS MUST RUN. Every generated prompt's run step
   invokes every sim and lint target defined in the unit's
   Makefile, whether or not that target is a dependency of

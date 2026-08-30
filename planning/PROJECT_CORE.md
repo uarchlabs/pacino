@@ -445,6 +445,10 @@ planning/
                              bp_ftq_entry_t / bp_ftq_meta_t
     ftb_decisions.md
     ftb_confidence_override_rules.md
+    icache_decisions.md      L1I geometry, both interfaces,
+                             miss handling, maintenance,
+                             prefetch. Owns L1I-N, TD-L1I-N,
+                             L1I-UN
     ras_decisions.md
     sc_decisions.md
     sc_table_hash_rules.md
@@ -485,10 +489,18 @@ planning/
 ```
 
 There is no ftq_icache interface and there will not be one from
-this phase. The ICache is encapsulated behind the IFU; if
-physical design meets the fanout pressure XiangShan solved with
-register replication, the answer is a PD-phase path, not a
-logical interface carried from the start. ftq_decisions.md 0.
+this phase. If physical design meets the fanout pressure
+XiangShan solved with register replication, the answer is a
+PD-phase path, not a logical interface carried from the start.
+ftq_decisions.md 0.
+
+THE ICACHE IS A SIBLING OF THE IFU, not inside it. Jeff's ruling,
+session-068: it is its own module within the front-end boundary
+and the IFU exposes the interface to it. An earlier revision of
+this paragraph said the ICache was encapsulated behind the IFU
+and that is no longer accurate. WHAT SURVIVES IS THE PARAGRAPH
+ABOVE: independence changes the module hierarchy, not the absence
+of an FTQ-to-ICache interface. icache_decisions.md L1I-2.
 
 ### Interface specification approach
 Primary currency: SV structs in packages (not SV interfaces).
@@ -542,6 +554,21 @@ Make targets are discoverable by analysis of the Makefile.
 the Makefile's targets and run each one. See CLAUDE.md,
 Verification Expectations, and TD#99.
 
+THE bpu GAP IS KNOWN AND IS RECORDED HERE so no session has to
+rederive it. `all` names 38 of the 47. The NINE it omits:
+
+```
+  sim_ittage        sim_tage_manual
+  cov_history       cov_ubtb          cov_loop_pred
+  cov_tage_table    cov_tage          cov_bp_cluster
+  cov_bpu
+```
+
+All 18 lint targets ARE in `all`; the gap is two sim targets and
+every coverage target. Verified against the Makefile session-068.
+If the Makefile changes, this list changes with it -- it is a
+convenience, and the Makefile is still the reference.
+
 The known RTL make files are:
 ```
 ./rtl/Makefile
@@ -556,4 +583,23 @@ A unit's target count is per-unit. The bpu unit is 47 targets
 11 sim) and 670 checks as of BP-107, which completed it. Count
 them separately; do not fold the ftq figures into the bpu total
 or read "47 of 47 green" as covering the tree.
+
+### A package edit is a cross-unit change
+EVERY TARGET IN BOTH UNITS COMPILES bp_defines_pkg.sv AND
+bp_structs_pkg.sv, as its first two sources. All 47 in the bpu,
+all 22 in the ftq. So a package addition made under a task scoped
+to one unit reaches the other, and the task's own suite cannot
+see it.
+
+This is the mechanism behind the standing rule above: BP-106
+reported green, an FTQ task then added FTQ_PTR_BITS and
+ftq_redir_cause_e to the packages, and four targets stopped
+building because those modules still declared them locally. A
+package declaration that shadows a module-local one is a BUILD
+BREAK under -Wall, not a tidy-up.
+
+WHEN A TASK ADDS TO EITHER PACKAGE, both units are run afterwards,
+whatever the task's own scope was. If they are not run in that
+session, the handoff says plainly that the other unit is unbuilt
+rather than carrying its last green figure forward.
 
