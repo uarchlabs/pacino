@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-08-30
+ UPDATED: 2026-09-01
  CONTACT: Jeff Nye
 ```
 
@@ -311,8 +311,8 @@ exception travels with the instruction stream to the backend.
          7), or a maintenance operation is in flight (section 10).
 
   IF-17  ifu_l1i_req_rdy MUST NOT depend combinationally on
-         ifu_l1i_req_val. It MAY depend combinationally on
-         ifu_l1i_req_paddr; see IF-U1.
+         ifu_l1i_req_val. IF-40 makes it independent of
+         ifu_l1i_req_paddr as well.
 
   IF-18  A SEVENTEENTH OUTSTANDING REQUEST CANNOT BE PRESENTED. IF-6
          makes the identifier free list the limit, and sixteen
@@ -356,6 +356,13 @@ outstanding, and there are exactly as many MSHRs as identifiers.
          ACCEPTED. ifu_l1i_req_rdy is deasserted. The request is not
          queued, not rejected on a response channel, and not
          allocated a second MSHR for the same line.
+
+  IF-40  READY IS COMPUTED CONSERVATIVELY. ifu_l1i_req_rdy is low
+         whenever ANY MSHR holds four targets, whatever address the
+         request names. Ruled session-068. It does not read
+         ifu_l1i_req_paddr, so no address compare is in the ready
+         path. Requests to unrelated lines are refused for as long
+         as the full MSHR persists.
 ```
 
 WHY NO HIT INDICATION. It would arrive after the request was issued
@@ -379,13 +386,12 @@ channel and forces the IFU to re-present, which reorders the fetch
 stream against the FTQ entry order `ftq_ifu_interfaces.md` 4 relies
 on. Refusing costs cycles and reorders nothing.
 
-THE COST OF IF-21 IS HONEST AND IS PAID BY EVERY REQUESTER.
-`ifu_l1i_req_rdy` is one wire, so refusing a fifth target on one line
-also refuses a request to a completely different line presented in
-the same cycle. That is a real loss of throughput on a pattern the
-FTQ makes likely: several queued fetches landing on one line is
-exactly what L1I-13's four targets exist for. IF-U1 records the
-choice this leaves open.
+IF-40 REFUSES MORE THAN IF-21 REQUIRES. `ifu_l1i_req_rdy` is one
+wire and IF-40 does not qualify it by address, so a full MSHR
+refuses requests to every other line as well. The cost is
+throughput on a pattern the FTQ makes likely; the alternative put a
+36-bit compare against sixteen MSHR line addresses in the ready
+path and was rejected.
 
 ---
 
@@ -409,9 +415,9 @@ stated here rather than left to `ifu_decisions.md`:
          (ftq_ifu_interfaces.md 6). The L1I is not told.
 
   IF-24  On an ITLB MISS, the IFU presents no request and allocates
-         no identifier. It retries the translation. This assumes the
-         non-blocking ITLB of L1I-U3's recommendation, which is NOT
-         RULED; see IF-U2.
+         no identifier. It retries the translation. The ITLB is
+         non-blocking and returns miss to the requester;
+         L1I-U3.
 ```
 
 The three fault classes `ftq_ifu_interfaces.md` 6 names for
@@ -500,6 +506,11 @@ only, holds no dirty state and has no write path to the L2.
          A drain is not a discard at this boundary.
 
   IF-32  l1i_ifu_inv_done is one cycle wide.
+
+  IF-42  THE CLEAR TAKES ONE CYCLE. After the drain of IF-31,
+         inv_line clears its set in one cycle and inv_all clears
+         the array in one cycle. l1i_ifu_inv_done asserts the
+         cycle after the clear. Ruled session-068.
 ```
 
 WHY IF-31 IS THE WHOLE POINT. `icache_decisions.md` 7 M1 says
@@ -604,6 +615,17 @@ commit can.
          independent at this boundary. The IFU may still be holding
          in-flight requests when a maintenance request arrives; IF-30
          and IF-31 dispose of them.
+
+  IF-41  cbo.inval REACHES THE I-SIDE. MAINT_CBO_INVAL is driven
+         and the port group of 11.2 is live logic. Ruled
+         session-068. Section 13 records that the architecture
+         does not decide this and pacino must.
+
+  IF-43  MAINT_FENCE_I IS ALSO ROUTED TO THE D-SIDE. The backend
+         drives an equivalent operation to the LSU on the same
+         instruction. Ruled session-068. ifu_cmt_maint_ack covers
+         the I-side only, so the backend gates the post-fence
+         restart on both acknowledgements.
 ```
 
 ---
@@ -619,7 +641,8 @@ against it. EVERY ONE IS UNVERIFIABLE TODAY.
   A1  UNVERIFIABLE. The commit stage can hold the post-FENCE.I
       pipeline restart until ifu_cmt_maint_ack. If it cannot, IF-35
       buys nothing and the fence is not architecturally complete
-      when the instruction retires.
+      when the instruction retires. IF-43 makes this TWO
+      acknowledgements, not one: the I-side and the D-side.
 
   A2  UNVERIFIABLE. The backend translates cbo.inval's rs1 through
       the DTLB and presents a PHYSICAL address on
@@ -716,13 +739,8 @@ backend:
                                    and the IFU path is dead logic
 ```
 
-RECOMMENDATION, NOT A RULING. Route it. The cost is the difference
-between IF-29's line form and its all form, which is a tag lookup and
-a per-way clear that `invalidate_line` in the l1i configuration
-already claims to support, and it makes a range invalidation do what
-a programmer will expect it to do. THIS IS JEFF'S DECISION and IF-U3
-carries it, because it decides whether a whole port group is live or
-dead.
+ROUTED. IF-41, ruled session-068. MAINT_CBO_INVAL is live and
+IF-29's line form is built.
 
 ---
 
@@ -880,127 +898,37 @@ what was found and why; do not re-report them.
       becomes a request -- so 4 is now an unmeasured choice
 ```
 
-```
-  D1  SECTION 7 M1 IS WRONG ABOUT FENCE.I BEING SINGLE CYCLE. It
-      says the invalidate is "implemented by the reset-branch clear
-      of the flop valid bits, so it is a single-cycle operation".
-      The CLEAR is single cycle. The OPERATION is not: L1I-10 allows
-      sixteen requests outstanding, and a fill in flight when the
-      clear happens lands in the array after it and re-validates a
-      line the fence was supposed to remove. FENCE.I is drain then
-      clear. IF-31.
-
-  D2  L1I-14 AND L1I-18 DO NOT MEET. L1I-14 puts a 64-byte line in
-      the IFU and says the L1I holds no last-line register. L1I-18
-      says the only invalidate path is core side, through the IFU.
-      Neither says the IFU's own buffer is part of what an
-      invalidate clears, and a fence that clears the array and not
-      the buffer leaves a stale instruction line behind. That is the
-      correctness failure section 2.2 invokes to reject VIPT,
-      arriving by a different route. IF-36.
-
-  D3  SECTION 9's CORE LINK TABLE, ROW address_width_bits, READS 32
-      WITH NOTE n1. TOOLS-003 set it to 36 and made the disagreement
-      an error. The row should read 36, note n1 should be replaced
-      by a reference to the T-10 rule, and TD-L1I-6 should close.
-
-  D4  8.1 P2 IS NOT ENFORCEABLE BY ITS OWN OWNER. L1I-19 puts the
-      prefetch requester at the IFU and P2 says "a prefetch never
-      occupies an MSHR a demand miss requires". The IFU cannot see
-      the MSHR file, and IF-19 deliberately does not show it. Either
-      the L1I distinguishes a prefetch request from a demand request
-      on the core interface, which is a port this file does not
-      have, or P2 is restated as something the IFU can act on. P1
-      and P3 are fine as written; only P2 names state the requester
-      does not hold.
-
-  D5  1.2 STATES THE TAG CONDITIONALLY AND THE CONDITION IS NOW
-      RESOLVED. "THE TAG WIDTH IS NOT FIXED because pa_bits is not
-      decided" and "At the 36 bits recommended there the tag is 23
-      bits" should become statements. L1I-U1 should close: pa_bits
-      is 36, ruled session-068 and applied by TOOLS-003.
-
-      AND THE 23 IS CONDITIONAL ON SOMETHING ELSE THAT HAS NOT
-      HAPPENED. 23 is the tag at the L1I-1 geometry, 64 KiB 8-way
-      with 2 banks. The configuration still carries 32 KiB with 1
-      bank, so the tag cgen emits today is 24, not 23. Whichever way
-      the amendment reads, it should say which geometry the number
-      belongs to, because the two differ and both are in the
-      document.
-
-  D6  0.1 LISTS THREE INTERFACES AND THE MAINTENANCE PATH IS NOT ONE
-      OF THEM. `core BOTH to the IFU`, `mem BOTH to the L2`, `itlb
-      IN`. Section 10 of this file is a FOURTH interface: it shares
-      a peer with `core` but not a port group, a handshake or a
-      flow-control rule. Either 0.1 gains a row or 0.1's `core` row
-      says it carries two independent groups.
-```
-
 ---
 
 ## 16. Open items
 
+EVERY IF-U IS CLOSED. None is reused.
+
 ```
-  IF-U1  HOW ifu_l1i_req_rdy IS COMPUTED. IF-21 requires that a
-         request needing a fifth target on one MSHR is not accepted.
-         Two implementations satisfy it:
-           ADDRESS DEPENDENT   ready is computed from
-                               ifu_l1i_req_paddr against the MSHR
-                               file. Refuses only what must be
-                               refused, and puts a 36-bit compare
-                               against sixteen MSHR line addresses
-                               in the ready path
-           CONSERVATIVE        ready is deasserted whenever any MSHR
-                               holds four targets, whatever the
-                               address. One flop, no compare, and it
-                               refuses requests that could have
-                               proceeded
-         THIS IS A FREQUENCY AND AREA CHOICE AND IS JEFF'S. IF-17
-         permits either.
+  IF-U1  CLOSED. Conservative, IF-40.
 
-  IF-U2  THE NON-BLOCKING ITLB OF IF-24. L1I-U3 recommends a
-         non-blocking ITLB that returns miss to the IFU for retry,
-         and it is NOT RULED. IF-24 assumes it. If the ITLB blocks
-         instead, IF-24 is wrong and the IFU stalls rather than
-         retries.
+  IF-U2  CLOSED. It asked whether the ITLB assumed by IF-24 holds.
+         IF-24 was written on that assumption, so the item asked
+         about its own premise. The ITLB is non-blocking; L1I-U3.
 
-  IF-U3  WHETHER cbo.inval REACHES THE I-SIDE. Section 13.2 shows
-         the architecture does not decide it. 13.3 recommends
-         routing it and does not take the decision, because it
-         decides whether MAINT_CBO_INVAL is live logic or dead.
+  IF-U3  CLOSED. Routed. IF-41.
 
-  IF-U4  THE LATENCY OF invalidate_line. IF-31 says inv_line waits
-         for a matching MSHR and then clears. How many cycles the
-         clear itself takes is an array-timing figure of the same
-         kind as L1I-5's two, and belongs with it. Jeff's.
+  IF-U4  CLOSED. One cycle. IF-42.
 
-  IF-U5  WHETHER MAINT_FENCE_I NEEDS TO REACH THE L1D AS WELL. This
-         file specifies the I-side. FENCE.I orders prior stores
-         against instruction fetch, and whether that requires an act
-         on the D-side depends on the write policy and on whether
-         the L2 is reached. It is an L1D and LSU question and is
-         named here only so the commit-stage document has it.
+  IF-U5  CLOSED. FENCE.I is routed to the D-side as well. IF-43.
 ```
+
+NO OPEN ITEMS REMAIN IN THIS FILE.
 
 ---
 
 ## 17. Technical debt
 
 ```
-  TD-IF-1  NO PHYSICAL ADDRESS WIDTH EXISTS IN bp_defines_pkg.sv.
-           Section 3.1. The 36 lives only in the cachegen topology
-           file. Every parameter this interface needs is absent on
-           the IFU side, and the generated l1i_pkg names the two it
-           does have differently.
-
-           AND THE VA SIDE ALREADY HAS THE SAME DISAGREEMENT.
-           bp_defines_pkg.sv sets VA_WIDTH to 40; the cachegen
-           topology sets addressing.va_bits to 39. Two documents,
-           two numbers, and nothing compares them. That is exactly
-           the class of defect TOOLS-003 closed for pa_bits with the
-           T-10 rule, on the other address. The two may both be
-           right, 40 being the sign-extended form of Sv39's 39, but
-           nothing in either tree says so.
+  TD-IF-1  closed
+           VA_WIDTH is 40 and addressing.va_bits is 39. These are different
+           quantities: 40 is the Sv39 address plus its sign bit, the
+           vaddrBitsExtended convention. No action.
 
   TD-IF-2  A CUSTOM LINK CANNOT DECLARE AN ERROR RETURN. Section
            14.2 S6. IF-15 is unemittable and the emitted adapter
@@ -1060,6 +988,19 @@ sees a 2-byte boundary.
 ## 19. Document History
 
 ```
+  2026-09-01  IF-U3, IF-U4 and IF-U5 closed, session-068.
+              cbo.inval is routed to the I-side, IF-41. The
+              invalidate clear takes one cycle, IF-42. FENCE.I is
+              routed to the D-side as well, IF-43, so the backend
+              gates the post-fence restart on two
+              acknowledgements. 13.3 and A1 follow. No open item
+              remains in this file.
+
+  2026-08-31  IF-U1 closed as IF-40, conservative ready. IF-U2
+              deleted, circular. IF-17, IF-24 and section 7
+              updated. Section 15's duplicated defect text
+              removed; the status block stands.
+
   2026-08-30  THE PREFETCH BIT ADDED, session-068. 4.4 said P2 was
               not enforceable and left it; Jeff ruled the port in.
               ifu_l1i_req_prefetch is one bit, read in exactly one
