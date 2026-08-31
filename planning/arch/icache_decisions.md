@@ -8,7 +8,7 @@
           docs/superscalar_ooo_survey.md; INFRA-012;
           TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-08-29
+ UPDATED: 2026-09-02
  CONTACT: Jeff Nye
 ```
 
@@ -45,7 +45,7 @@ Not yet written and cited here as stubs:
                             decode. No planning record exists
 ```
 
-REGISTRIES. This file owns L1I-1 through L1I-22, TD-L1I-1 through
+REGISTRIES. This file owns L1I-1 through L1I-23, TD-L1I-1 through
 TD-L1I-9, and the open items L1I-U2 through L1I-U5. It does not
 duplicate the FE, TD-FE or FE-U registries; it does not use the
 IC- prefix, which is already an interface-check identifier in
@@ -377,7 +377,15 @@ L1D is an L2 question and is not decided here. TD-L1I-1.
 ```
   L1I-16  TL-UH. Channels A and D only. No B channel and no probe
           path, which follows from L1I-15.
+  L1I-23  SIXTEEN FILLS MAY BE IN FLIGHT, one per MSHR. a_source
+          carries the MSHR index and d_source names the fill it
+          answers, so D beats may return in any order. Ruled
+          session-068.
 ```
+
+One fill at a time makes fifteen MSHRs wait on the sixteenth, and
+L1I-12's count was derived from a design sustaining 4 IPC out of
+L2. A serialised memory side does not deliver that.
 
 A prior reading of the configuration reported the absence of
 channel B as a defect, on the strength of the l2 node's inclusive
@@ -557,17 +565,17 @@ are marked.
 
 | Field                    | Value          | Decision | Changed |
 |--------------------------|----------------|----------|---------|
-| capacity_bytes           | 65536          | L1I-1    | yes     |
+| capacity_bytes           | 65536          | L1I-1    | DONE    |
 | line_bytes               | 64             | L1I-1    |         |
 | associativity            | 8              | L1I-1    |         |
-| banks                    | 2              | L1I-11   | yes     |
-| bank_interleave_granularity | line        | L1I-11   | yes     |
-| indexing                 | PIPT           | L1I-3    | yes     |
+| banks                    | 2              | L1I-11   | DONE    |
+| bank_interleave_granularity | line        | L1I-11   | DONE    |
+| indexing                 | PIPT           | L1I-3    | DONE    |
 | read_miss                | allocate       |          |         |
 | replacement              | tree_plru      | L1I-7    |         |
 | inclusion                | nine           | L1I-15   |         |
-| mshrs                    | 16             | L1I-12   | yes     |
-| mshr_targets             | 4              | L1I-13   | yes     |
+| mshrs                    | 16             | L1I-12   | DONE    |
+| mshr_targets             | 4              | L1I-13   | DONE    |
 | victim_buffer_entries    | 0              | L1I-17   |         |
 | fill_buffer_entries      | 0              | L1I-17   |         |
 | beat_order               | critical_first | L1I-16   |         |
@@ -584,13 +592,15 @@ Core link, replacing the `pe_port` shape:
 
 | Field                    | Value | Decision | Changed |
 |--------------------------|-------|----------|---------|
-| read_width_bits          | 512   | L1I-9    | yes     |
+| read_width_bits          | 512   | L1I-9    | DONE    |
 | address_width_bits       | 36    | L1I-20   | DONE    |
-| outstanding_requests     | 16    | L1I-10   | yes     |
-| write_width_bits         | 0     | read only| n2      |
-| handshake.read_data_return | valid_with_id | R2 | n3 |
-| id_width_bits            | 4     | R2       | n3      |
-| a prefetch request bit   | 1     | L1I-21   | n4      |
+| outstanding_requests     | 16    | L1I-10   | DONE    |
+| write_width_bits         | 0     | read only| DONE    |
+| handshake.read_data_return | valid_with_id | R2 | DONE |
+| id_width_bits            | 4     | R2       | DONE    |
+| request_qualifiers       | prefetch | L1I-21| DONE    |
+| error_response           | true  | R2       | DONE    |
+| handshake.response_accept | none | R2       | DONE    |
 
 NOTES.
 
@@ -604,9 +614,9 @@ NOTES.
       pa_bits ever moves again. T-10 is what makes forgetting it
       an error rather than a silent zero-extend on one side and
       truncation on the other.
-  n2  THE SCHEMA REFUSES 0. custom.write_width_bits has minimum 8
-      and is required, so a read-only custom link cannot be
-      declared today. TD-L1I-7.
+  n2  CLOSED by TOOLS-004. write_width_bits takes 0 and is no
+      longer required; the emitted bundle drops the write
+      channel. TD-L1I-7 closed.
   n3  NOT A NEW FIELD. An earlier revision named this row
       `out_of_order_response`. The capability already exists under
       another name: handshake.read_data_return takes valid_with_id
@@ -616,9 +626,10 @@ NOTES.
       is an emitter gap and not a schema one. Do not add a second
       field saying what read_data_return already says.
       id_width_bits 4 covers the sixteen of L1I-10.
-  n4  NO SCHEMA FIELD EXISTS. A custom link's signal bundle is
-      derived from its declared shape, and there is no way to
-      add a requester-supplied qualifier to it. TD-L1I-9.
+  n4  CLOSED by TOOLS-004. custom.request_qualifiers declares
+      the bit and the L1I-22 reserve that reads it. TD-L1I-9
+      closed. Whether the reserve belongs on the link or on the
+      node beside mshrs is L1I-U7.
 ```
 
 `pe_port` is shared with the LSU-to-L1D edge in the current
@@ -631,14 +642,10 @@ TYPE is two JSON edits and no tool change. TD-L1I-4.
 SYSTEM FIELDS. `pa_bits` is a system-level field carried by every
 node's package. Changing it is not an l1i-local edit; see L1I-U1.
 
-THIRTEEN OF THE TWENTY-TWO NODE FIELDS ABOVE ARE ACCEPTED, CARRIED
-AND REACH NO EMITTED LOGIC. INFRA-012 measured it: seven fields
-shape RTL, `indexing` shapes only a diagnostic, and the rest --
-every maintenance field, both fill fields, both timing fields, the
-buffer counts, mshr_targets and inclusion -- are inert. `mshrs`
-reaches a generated comment saying the control does not use it.
-So this table states the target, and most of it is not buildable
-until the emitter work of TD-L1I-8 is done.
+STILL INERT AFTER TOOLS-004: both maintenance fields, both fill
+fields, both timing fields, the buffer counts and inclusion.
+mshrs, mshr_targets, banks and bank_interleave_granularity now
+reach emitted logic; indexing still shapes only a diagnostic.
 
 ---
 
@@ -649,6 +656,12 @@ until the emitter work of TD-L1I-8 is done.
 ```
   L1I-U1  CLOSED. pa_bits is 36; L1I-20, section 1.2. Ruled
           session-068 and applied by TOOLS-003.
+
+  L1I-U7  WHERE THE L1I-22 RESERVE IS DECLARED. TOOLS-004 put it
+          on the link, beside the prefetch bit it governs. The
+          alternative is the node, beside mshrs, which is what it
+          counts and where TD-L1I-3 would put
+          prefetch_arbitration. NOT RULED.
 
   L1I-U2  The ITLB. Entries, associativity, page sizes, ASID
           width, and its own latency. Under PIPT it is on the
@@ -711,10 +724,9 @@ until the emitter work of TD-L1I-8 is done.
             the schema must gain the field or the policy lives
             only in prose and will drift.
 
-  TD-L1I-4  The core link shape now differs between the I-side and
-            the D-side. pe_port is declared once and used on both
-            edges. Either parameterise per edge or declare a
-            second link type.
+  TD-L1I-4  CLOSED by TOOLS-004. pe_port_i is declared and the
+            ifu-to-l1i edge names it; pe_port is unchanged on the
+            lsu-to-l1d edge.
 
   TD-L1I-5  Nothing in the l1i configuration covers parity or ECC
             on the tag or data arrays. Absent from the schema
@@ -728,32 +740,29 @@ until the emitter work of TD-L1I-8 is done.
             from addressing.pa_bits on any edge touching a cache
             or memory node, with a negative fixture proving it.
 
-  TD-L1I-7  A read-only custom link cannot be declared:
-            custom.write_width_bits has minimum 8 and is
-            required. Section 9 note n2. The consequence today is
-            visible in the emitted tree -- the core slave adapter
-            carries a write channel tied off into an unused net,
-            because the NODE knows it is read-only and the LINK
-            does not. INFRA-012.
+  TD-L1I-7  CLOSED by TOOLS-004. write_width_bits takes 0 and the
+            emitted bundle drops the write channel.
 
-  TD-L1I-8  THE EMITTER BUILDS A BLOCKING CACHE. Sections 4
-            through 8 specify behaviour cachegen cannot emit at
-            all: no MSHR file exists, the core adapter is
-            single-outstanding by construction, no request
-            identifier reaches any module, the refill assembles
-            the whole line before answering, no node emits an
-            invalidate port of any kind, and nothing in the tool
-            has any notion of prefetch. This is the largest item
-            in this document and it is not an l1i configuration
-            question. INFRA-012 enumerates it as E2 through E8.
+  TD-L1I-8  PARTLY CLOSED by TOOLS-004. The MSHR file exists, the
+            core adapter is no longer single-outstanding, the
+            request identifier reaches every module on the path,
+            and prefetch has a notion in the tool.
+
+            WHAT REMAINS, and it is the whole of TOOLS-005:
+              - the bank control is still a blocking FSM, so
+                L1I-5's pipelined one-per-cycle hit throughput
+                is not delivered
+              - read_latency_cycles and tag_compare_stage are
+                still inert, so L1I-5's two cycles are not
+                delivered either
+              - the memory side fills one line at a time, so
+                L1I-23 is not delivered
 
             THE Zicbom HALF IS AN RVA23 GAP, not a preference:
-            L1I-18 has no hardware today.
+            L1I-18 has no hardware today, and it is a separate
+            task from TOOLS-005.
 
-  TD-L1I-9  THE L1I-21 PREFETCH BIT CANNOT BE DECLARED. A custom
-            link's signal bundle is derived from its shape and
-            carries no requester-supplied qualifier. Schema and
-            emitter, in that order. Section 9 note n4.
+  TD-L1I-9  CLOSED by TOOLS-004. custom.request_qualifiers.
 ```
 
 ---
@@ -793,6 +802,20 @@ Both are PA-direct edits. Neither is in scope for an IA task.
 ## 12. Document History
 
 ```
+  2026-09-02  L1I-23 added: sixteen fills in flight on the memory
+              side, one per MSHR, keyed by a_source and d_source.
+              Ruled session-068. One fill at a time made fifteen
+              MSHRs wait on the sixteenth and did not deliver the
+              L1I-12 count's own derivation.
+
+              TOOLS-004 folded in. TD-L1I-4, -7 and -9 closed.
+              TD-L1I-8 partly closed and its remainder is the
+              whole of TOOLS-005: pipelined hit throughput, the
+              two-cycle latency, and L1I-23. Section 9's applied
+              rows marked DONE, notes n2 and n4 closed, and the
+              inert-field paragraph re-measured. L1I-U7 opened on
+              where the L1I-22 reserve is declared.
+
   2026-08-29  TOOLS-003 folded in, session-068. Eight amendments,
               two of them CORRECTNESS and found by writing down
               what the IFU must drive.

@@ -16,6 +16,80 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-068: the L1 instruction cache. INFRA-012, TOOLS-003/4/5.
+
+The L1I is specified and cachegen emits it. Four tasks, two new
+planning documents, no RTL written by hand.
+
+  INFRA-012  read-only assessment of cachegen against the L1I
+             specification. Answer: no, and here is the enumeration
+  TOOLS-003  pa_bits 32 -> 36 with every link address width, one
+             commit. T-10.addr_width checker rule. Wrote
+             l1i_ifu_interfaces.md
+  TOOLS-004  the non-blocking port protocol and the MSHR file.
+             Four schema gaps closed
+  TOOLS-005  the pipelined bank, latency from configuration, and
+             sixteen fills in flight
+
+New documents: planning/arch/icache_decisions.md,
+planning/interfaces/l1i_ifu_interfaces.md.
+
+The l1i node as emitted:
+  64 KiB, 8-way, 64-byte lines, 128 sets, 2 banks line interleaved
+  PIPT, tree-PLRU, pa_bits 36, tag 23 bits
+  core port 512 bits, one full line per request, 16 outstanding
+  16 MSHRs, 4 targets each, 2 reserved against prefetch
+  hit latency 2 cycles, one hit per cycle, both from configuration
+  16 fills in flight, keyed by a_source and d_source
+
+Measured by TOOLS-005 at the emitted testbench, before and after:
+
+  hits per cycle      0.4 -> 1.0
+  hit latency         4   -> 2, == L1iReadLatency
+  fills in flight     1   -> 16, == L1iMshrs
+
+Counts, all from the session's own runs:
+
+  cachegen unit suite   87 -> 97 -> 108 passed, 0 failed
+  emitted nodes         7, all lint clean
+  l1i suite             14 -> 39 -> 67 passed
+  every other node      unchanged
+
+The emitter was the whole gap. cachegen validated thirteen of
+twenty-two l1i configuration fields and reached no emitted logic
+with any of them; INFRA-012 measured it and TOOLS-004/5 closed it.
+TOOLS-005 changed no schema and no configuration file: the two
+timing fields were already declared and carried, and only a
+consumer was missing.
+
+Not delivered end to end. L1I-23's sixteen fills are real at the
+l1i boundary and serialise at the l2, whose up_i slave holds one
+transaction. See TD#118.
+
+Maintenance is unbuilt. No generated node emits an invalidate port
+of any kind, so L1I-18 has no hardware and RVA23's Zicbom and
+Zifencei have no mechanism. TD#119.
+
+Decisions this session, all Jeff's:
+
+  the ICache is a sibling of the IFU; the IFU exposes the interface
+  PIPT, which removes the VIPT alias constraint at 64 KiB 8-way
+  the core port returns one full cache line; the IFU buffers it
+  sixteen outstanding to match sixteen MSHRs
+  pa_bits 36
+  a prefetch bit on the core request, with a reserve of two MSHRs
+  sixteen fills in flight
+  conservative req_rdy, no address compare in the ready path
+  cbo.inval is routed to the I-side
+  the invalidate clear takes one cycle
+  FENCE.I is routed to the D-side as well
+  cachegen tasks take TOOLS-NNN in this tree's prompts/
+
+New: TD#115 through TD#120.
+Next free BP is BP-109. Next free INFRA is INFRA-013. Next free
+TOOLS is TOOLS-006.
+
+---
 
 ## Session-067, second half: the FTQ RTL. BP-106 to BP-108.
 
@@ -1075,6 +1149,41 @@ it only documented current behavior.
 |                         |             |                   | only a .gitkeep -- every port in |
 |                         |             |                   | that document is unbuilt on both |
 |                         |             |                   | sides.                           |
+| icache_decisions.md     | Draft       | --                | Created session-068. L1I geometry,|
+|                         |             |                   | indexing, storage, both interfaces|
+|                         |             |                   | miss handling, maintenance,       |
+|                         |             |                   | prefetch. Owns L1I-1..23,         |
+|                         |             |                   | TD-L1I-1..9, L1I-U2..U7. PIPT at  |
+|                         |             |                   | 64 KiB 8-way; pa_bits 36; the core|
+|                         |             |                   | port returns a full line; sixteen |
+|                         |             |                   | outstanding and sixteen MSHRs.    |
+|                         |             |                   | Sections 1-9 decided; 10 carries  |
+|                         |             |                   | the ITLB, the walker topology,    |
+|                         |             |                   | PMP/PMA and the IFU line buffer.  |
+| l1i_ifu_interfaces.md   | Draft       | --                | Created TOOLS-003, session-068.   |
+|                         |             |                   | The L1I core boundary and the     |
+|                         |             |                   | maintenance path, both ends.      |
+|                         |             |                   | IF-1..43, TD-IF-1..5. No open item|
+|                         |             |                   | remains. Sixteen identifiers are  |
+|                         |             |                   | the flow control and the response |
+|                         |             |                   | carries no ready. Sections 10 and |
+|                         |             |                   | 11, the maintenance ports, are    |
+|                         |             |                   | specified and unbuilt.            |
+| l1i (cachegen node)     | Emitted     | l1i_tb            | TOOLS-004 and TOOLS-005. Not      |
+|                         |             |                   | hand-written RTL: emitted by      |
+|                         |             |                   | tools/cachegen from               |
+|                         |             |                   | testcases/pacino. 67 checks, lint |
+|                         |             |                   | clean. Non-blocking, pipelined,   |
+|                         |             |                   | sixteen fills in flight. The      |
+|                         |             |                   | maintenance ports of              |
+|                         |             |                   | l1i_ifu_interfaces.md 10 are NOT  |
+|                         |             |                   | emitted; TD#119.                  |
+| ifu                     | Not started | --                | Both its boundaries are specified:|
+|                         |             |                   | ftq_ifu_interfaces.md above and   |
+|                         |             |                   | l1i_ifu_interfaces.md below.      |
+|                         |             |                   | ifu_decisions.md does not exist   |
+|                         |             |                   | and the ITLB it depends on is not |
+|                         |             |                   | specified. TD#116, TD#117.        |
 
 ---
 
@@ -1485,6 +1594,91 @@ it only documented current behavior.
 |     |          |                                                          |
 |     |          | Settle it by naming which of I1-I11 are missing from     |
 |     |          | sim_ftq_ifu. Short IA task, read-only.                   |
+| 115 | icache   | OPEN. The ITLB is unspecified and the IFU cannot be     |
+|     |          | built without it. L1I-3 makes the L1I physically         |
+|     |          | indexed, so translation is in the fetch path ahead of    |
+|     |          | the array, and l1i_ifu_interfaces.md IF-8 has the IFU    |
+|     |          | issue a request only on a valid non-faulting             |
+|     |          | translation.                                             |
+|     |          |                                                          |
+|     |          | icache_decisions.md L1I-U2 carries the parameters with   |
+|     |          | a recommendation: 32 entries, fully associative, all     |
+|     |          | three Sv39 page sizes, ASID tagged, 1-cycle hit.         |
+|     |          | L1I-U3 carries the walker topology, recommending a       |
+|     |          | shared L2 TLB node with a TileLink edge into l2 and a    |
+|     |          | non-blocking ITLB. L1I-U4 carries PMP and PMA, which     |
+|     |          | nothing in pacino has.                                   |
+|     |          |                                                          |
+|     |          | Needs itlb_decisions.md. L1I-U3 adds a node and an edge  |
+|     |          | to the cachegen topology, so it is not a parameter       |
+|     |          | choice.                                                  |
+| 116 | ifu      | OPEN. ifu_decisions.md does not exist. Both IFU          |
+|     |          | boundaries are specified and the module between them is  |
+|     |          | not. What it owes:                                       |
+|     |          |                                                          |
+|     |          |   - the line buffer of L1I-14: depth, and what a         |
+|     |          |     redirect does to it. icache_decisions.md L1I-U5      |
+|     |          |   - the issue policy. icache_decisions.md 6 now records  |
+|     |          |     that the mshr_targets derivation is void under       |
+|     |          |     L1I-14 and 4 is an unmeasured choice; what actually  |
+|     |          |     merges depends on whether the IFU issues for a later |
+|     |          |     block before an earlier response lands               |
+|     |          |   - the reordering buffer of TD-IF-5: one predecode      |
+|     |          |     writeback per fetch block against out-of-order line  |
+|     |          |     responses, with nothing bounding the buffer          |
+|     |          |   - the maintenance path of l1i_ifu_interfaces.md 11,    |
+|     |          |     whose producer is the backend commit stage and is    |
+|     |          |     unspecified                                          |
+| 117 | frontend | OPEN. There is no front-end top. ftq.sv deliberately     |
+|     |          | does not instantiate bp_cluster, so two complete units   |
+|     |          | have never been elaborated together and the loop between |
+|     |          | them is closed only inside tb_ftq's modelled cluster.    |
+|     |          | Carried from session-067 and unchanged.                  |
+| 118 | icache   | OPEN. L1I-23 is not achieved end to end. Sixteen fills   |
+|     |          | are in flight at the l1i boundary, measured by TOOLS-005 |
+|     |          | T14, and serialise at the l2: l2_up_i_slv is a four-     |
+|     |          | state machine with one source latched per transaction.   |
+|     |          | It keys d_source correctly, so nothing is broken.        |
+|     |          |                                                          |
+|     |          | Two changes close it. The l2 slave adapter needs a per-  |
+|     |          | source record rather than one source_q, and the l2 needs |
+|     |          | the pipelined control TOOLS-005 built for the l1i.       |
+|     |          | cachegen cannot express the first: NodeCtx::nonblocking  |
+|     |          | reads outstanding_requests off a custom link and returns |
+|     |          | false for TileLink, and no field says how many           |
+|     |          | transactions a TileLink slave end accepts.               |
+|     |          |                                                          |
+|     |          | The miss throughput the IFU would be built against is    |
+|     |          | the l2 number, not the l1i number.                       |
+| 119 | icache   | OPEN, RVA23. No generated node emits an invalidate port  |
+|     |          | of any kind, so icache_decisions.md L1I-18 has no        |
+|     |          | hardware. Zicbom is mandatory in RVA23U64 and Zifencei   |
+|     |          | in RVA23S64, which pacino is.                            |
+|     |          |                                                          |
+|     |          | The gap is two layers. l1i_ifu_interfaces.md 14.2 S8:    |
+|     |          | the maintenance group is four booleans on the NODE and   |
+|     |          | the schema has nowhere to describe a PORT. 14.3 E7: no   |
+|     |          | emitter emits one. Schema first, then emitter.           |
+|     |          |                                                          |
+|     |          | The ports are specified, both ends:                      |
+|     |          | l1i_ifu_interfaces.md 10, IFU to L1I, and 11, backend    |
+|     |          | commit to IFU. Section 12 lists five assumptions about   |
+|     |          | the producer, all unverifiable because no backend        |
+|     |          | document exists.                                         |
+| 120 | icache   | OPEN, replacement quality, not correctness. TOOLS-005    |
+|     |          | reported both rather than hiding them.                   |
+|     |          |                                                          |
+|     |          |   - the replacement state moves in the compare stage, so |
+|     |          |     two accesses to one set in consecutive cycles both   |
+|     |          |     read the pre-update state                            |
+|     |          |   - two outstanding misses to one set may pick the same  |
+|     |          |     victim way, in which case the second fill overwrites |
+|     |          |     the first                                            |
+|     |          |                                                          |
+|     |          | Both requesters get the line they asked for either way.  |
+|     |          | The alternative, moving the state when the fill lands,   |
+|     |          | needs two writers of one port and an arbiter no          |
+|     |          | configuration field describes.                           |
 
 ---
 
@@ -1552,6 +1746,24 @@ it only documented current behavior.
 |          | sim_ittage_table: that target compiles  | Harmless; the       |
 |          | ittage_table.sv without sram_init.sv.   | Makefile line       |
 |          | Completion 266 units with and without.  | implies otherwise.  |
+| 17       | Planning documents carry history sections,  | Tabled          |
+|          | capitalised emphasis and reasoning for      | session-068.    |
+|          | decisions already made. A specification is  | Convention      |
+|          | decisions and open items. Where a decision  | change, PROJECT |
+|          | would be re-derived wrongly, state the      | _CORE Planning  |
+|          | constraint that prevents it as a decision.  | Directory.      |
+| 18       | The bpu 47 and ftq 22 targets have not been | Not run since   |
+|          | run since the session-067 package additions.| session-067.    |
+|          | Every target in both units compiles both    | PROJECT_CORE    |
+|          | packages, so the rule now says a package    | now states the  |
+|          | edit widens the run to both units.          | rule.           |
+| 19       | L1I-U7: whether the L1I-22 prefetch reserve | Open, PA.       |
+|          | is declared on the link beside the bit or   | TOOLS-004 put   |
+|          | on the node beside mshrs.                   | it on the link. |
+| 20       | l1i_ifu_interfaces.md 14.3 E5 is closed for | Reword rather   |
+|          | l1i only. read_latency_cycles and           | than close.     |
+|          | tag_compare_stage shape a pipeline, and     |                 |
+|          | l1d, l2 and mem have none.                  |                 |
 
 ---
 
