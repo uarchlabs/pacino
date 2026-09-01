@@ -12,9 +12,9 @@
 | Date         | 2026.08.28              |                          |
 | Module       | tools/cachegen          | assessment, no changes   |
 | Run time     | 14m.49s                 |                          |
-| Ctx %        | ac111839-cea6-4860-a0d0-eeabd3cd2337 |             |
-| Model        | claude-opus-5[1m] default | effort not reported      |
-| Resume sha   | <sha>                   |                          |
+| Ctx %        | 23%                     |                          |
+| Model        | claude-opus-5[1m] default | effort not reported    |
+| Resume sha   | ac111839-cea6-4860-a0d0-eeabd3cd2337 |             |
 | PA session   | 068                     |                          |
 
 Task:   [X] experiment  [ ] implementation  [ ] debug
@@ -43,9 +43,6 @@ proposal, written into Results Capture.
 # Results Discussion
 
 ## Claude.code Console Output
-
-eads up: prompts/.INFRA-012.md.swp exists — you have the file open in vim. My
-  write went to disk; if you save from that buffer you will lose it.
 
   Problem 1 — the answer
 

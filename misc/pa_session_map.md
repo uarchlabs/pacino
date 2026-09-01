@@ -446,4 +446,61 @@
 |    |              | architecture design for FE           |
 |    |              | a very fraught session               |
 |    |              | switched to IA for direct files access |
-|    |              | output session_handoff-???           |
+|    |              | output session_handoff-63            |
+| 63 | ?            | input session_handoff-063            |
+|    |              | INFRA-011                            |
+|    |              | BP-082                               |
+|    |              | BP-083                               |
+|    |              | BP-084                               |
+|    |              | BP-085                               |
+|    |              | BP-086                               |
+|    |              | BP-087                               |
+|    |              | BP-088                               |
+|    |              | BP-089                               |
+|    |              | BP-090                               |
+|    |              | claude code login problems           |
+|    |              | ubtb interfaces                      |
+|    |              | ftq bpu interface                    |
+|    |              | output session_handoff-064           |
+| 64 | bp hist int  | input session_handoff-064            |
+|    | fe decisions | BP-091                               |
+|    | ftq-bpu int. | BP-092                               |
+|    | bp arb       | BP-092a                              |
+|    |              | BP-093                               |
+|    |              | BP-094                               |
+|    |              | BP-095                               |
+|    |              | INFRA-012                            |
+|    |              | output session_handoff-065           |
+| 65 | ?            | input session_handoff-065            |
+|    |              | BP-096                               |
+|    |              | output session_handoff-066           |
+| 66 | ?            | input session_handoff-066            |
+|    |              | BP-097                               |
+|    |              | output session_handoff-067           |
+
+|IA-001| IA interact. | input none fresh start             |
+|      |              | xiangshan research                 |
+|IA-002|              | xiangshan pipeline study           |
+|IA-003|              | fe theory of operation, research   |
+|IA-004|              | BP-098 interactive                 |
+|      |              | BP-099 interactive                 |
+|      |              | BP-101\* interactive               |
+|IA-005|              | BP-100 interactive                 |
+|      |              | BP-102 interactive                 |
+|      |              | BP-103 interactive                 |
+|      |              | BP-104 interactive                 |
+|      |              | BP-105 interactive                 |
+
+| 67 | ftq planning | input session_handoff-067            |
+|    |              | BP-106                               |
+|    |              | BP-107                               |
+|    |              | BP-108                               |
+|    |              | output session_handoff-068           |
+| 68 | cache gen    | input session_handoff-068            |
+|    |              | icache decisions                     |
+|    |              | l1i ifu interface                    |
+|    |              | INFRA-012 overlap numbering          |
+|    |              | TOOLS-003                            |
+|    |              | TOOLS-004                            |
+|    |              | TOOLS-005                            |
+|    | I$ research  | output session_handoff-069           |

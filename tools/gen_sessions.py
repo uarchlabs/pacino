@@ -28,7 +28,10 @@ KNOWN_CATEGORIES = {"BP", "COMP", "DECODE", "INFRA", "TB", "TOOLS"}
 TASK_TYPES  = ["experiment", "implementation", "debug",
                "cleanup", "testbench", "verification"]
 STATUS_OPTS = ["in-progress", "complete", "abandoned"]
-MODE_OPTS   = ["automated", "manual"]
+# Mode checkboxes. "interactive" is optional -- older headers carry
+# only automated/manual. A header with no interactive box is not a
+# defect.
+MODE_OPTS   = ["automated", "manual", "interactive"]
 
 # -- Warning codes -------------------------------------------------------------
 
@@ -65,7 +68,16 @@ class W:
                                    # or overview section is empty/TBD
     MISSING_PA_SESSION  = "W019"   # No 'PA session' value in header table
                                    # (row absent, empty, or '???')
-    BAD_PA_SESSION      = "W020"   # PA session value is not 3 or 4 digits
+    BAD_PA_SESSION      = "W020"   # PA session value is not NNN[N] or
+                                   # IA-NNN[N]
+    MULTI_MODE          = "W021"   # More than one Mode box is checked;
+                                   # the modes are mutually exclusive
+    MISSING_TASK_TYPE   = "W022"   # Task: field absent or no box checked
+    MISSING_STATUS      = "W023"   # Status: field absent or no box
+                                   # checked; status falls back to
+                                   # 'unknown'
+    MULTI_STATUS        = "W024"   # More than one Status box is checked;
+                                   # only the first is recorded
 
 # -- Waivers -------------------------------------------------------------------
 #
@@ -90,22 +102,25 @@ class W:
 # at the end of the run so this table does not rot.
 #
 WAIVERS = {
+  "BP-107" : [W.VOICES_MERGED],
+  "BP-105" : [W.EMPTY_ASSESSMENT],
+  "BP-104" : [W.EMPTY_ASSESSMENT],
+  "BP-102" : [W.EMPTY_ASSESSMENT],
+  "BP-101" : [W.EMPTY_ASSESSMENT],
   "BP-090" : [W.VOICES_MERGED],
   "BP-089" : [W.ABANDONED_WITH_PASS],
+  "BP-088" : [W.ABANDONED_WITH_PASS],
   "BP-087" : [W.ABANDONED_WITH_PASS],
   "BP-086" : [W.EMPTY_ASSESSMENT],
   "BP-081" : [W.VOICES_MERGED],
   "BP-079" : [W.VOICES_MERGED],
   "BP-072" : [W.VOICES_MERGED],
   "BP-062" : [W.VOICES_MERGED],
+  "BP-050" : [W.ABANDONED_WITH_PASS],
+  "BP-045" : [W.VOICES_MERGED],
+  "BP-042" : [W.VOICES_MERGED],
   "BP-033" : [W.ABANDONED_WITH_PASS],
-  "BP-033-FIX-1" : [W.BAD_TASK_ID],
-
-
-    # "BP-033-FIX-1": W.BAD_TASK_ID,
-    # "BP-042":       [W.VOICES_MERGED, W.EMPTY_ASSESSMENT],
-    # "BP-050":       {W.ABANDONED_WITH_PASS: "reviewed 2026-08-17"},
-    # "*":            W.MISSING_PA_SESSION,
+  "BP-033-FIX-1" : [W.BAD_TASK_ID,W.VOICES_MERGED],
 }
 
 # All warning codes defined on W, used to reject typos in WAIVERS.
@@ -655,10 +670,14 @@ def parse_session_file(path):
         session['model']      = fields.get('model')
         session['resume_sha'] = fields.get('resume_sha')
 
-        # PA session -- expected to be a 3 or 4 digit number.
+        # PA session -- expected to be a 3 or 4 digit number, or the
+        # same number with an IA- prefix for an interactive IA
+        # session (IA-004 is the session that emitted
+        # ia_context/ia_handoffs/ia_session_handoff-004.md).
         # A missing row, an empty value, or the '???' placeholder all
         # map to the '???' sentinel and raise W019. Any other value
-        # that is not 3-4 digits raises W020.
+        # raises W020. The prefix is accepted in any case and stored
+        # uppercase, so IA-004 and ia-004 land on one value.
         pa_raw = fields.get('pa_session')
         if (pa_raw is None
                 or is_empty_or_tbd(pa_raw)
@@ -670,11 +689,15 @@ def parse_session_file(path):
                  "session number.")
         else:
             pa_val = pa_raw.strip()
-            session['pa_session'] = pa_val
-            if not re.fullmatch(r'\d{3,4}', pa_val):
+            m = re.fullmatch(r'(?i:(ia-)?)(\d{3,4})', pa_val)
+            if m:
+                pa_val = ('IA-' if m.group(1) else '') + m.group(2)
+            else:
                 warn(W.BAD_PA_SESSION,
-                     f"PA session '{pa_val}' is not 3 or 4 digits -- "
-                     f"expected something like '405' or '1234'.")
+                     f"PA session '{pa_val}' is not 3 or 4 digits, "
+                     f"with or without an IA- prefix -- expected "
+                     f"something like '405', '1234' or 'IA-004'.")
+            session['pa_session'] = pa_val
 
         for req in ['task_id', 'date', 'model']:
             if not fields.get(req):
@@ -683,18 +706,41 @@ def parse_session_file(path):
                      f"empty.")
 
         session['task_types'] = parse_checkboxes(header_text, TASK_TYPES)
+        if not session['task_types']:
+            warn(W.MISSING_TASK_TYPE,
+                 "Task: field absent or no box is checked -- check one "
+                 "of " + ', '.join(TASK_TYPES) + " in the header block. "
+                 "Backfill is acceptable; warn only, not fail.")
 
         # Mode checkboxes
         modes = parse_checkboxes(header_text, MODE_OPTS)
         session['modes'] = modes
+        if len(modes) > 1:
+            warn(W.MULTI_MODE,
+                 f"Mode: more than one box is checked "
+                 f"({', '.join(modes)}). The modes are mutually "
+                 f"exclusive -- check exactly one.")
         if not modes:
             warn(W.MISSING_MODE,
                  "Mode: field absent or no box is checked -- add "
-                 "'Mode: [x] automated' or '[x] manual' to the header "
-                 "block. Backfill is acceptable; warn only, not fail.")
+                 "'Mode: [x] automated', '[x] manual' or "
+                 "'[x] interactive' to the header block. Backfill "
+                 "is acceptable; warn only, not fail.")
 
         statuses = parse_checkboxes(header_text, STATUS_OPTS)
         session['status'] = statuses[0] if statuses else 'unknown'
+        if len(statuses) > 1:
+            warn(W.MULTI_STATUS,
+                 f"Status: more than one box is checked "
+                 f"({', '.join(statuses)}). The statuses are mutually "
+                 f"exclusive -- only '{statuses[0]}' is recorded, the "
+                 f"rest are dropped. Check exactly one.")
+        if not statuses:
+            warn(W.MISSING_STATUS,
+                 "Status: field absent or no box is checked -- add "
+                 "'[x] in-progress', '[x] complete' or '[x] abandoned' "
+                 "to the header block. status is recorded as 'unknown', "
+                 "which the sessions viewer cannot filter.")
 
         # Overview lives inside the header block, after the
         # '# Overview of task' heading and before :: HEADER:END ::

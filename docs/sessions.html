@@ -40,8 +40,9 @@
       --v-my:     #b84c25;
       --v-pa:     #378ADD;
 
-      /* Manual indicator colour */
-      --manual:   #9b6fd4;
+      /* Mode indicator colours */
+      --manual:      #9b6fd4;
+      --interactive: #2e9e94;
     }
 
     html, body { height: 100%; }
@@ -188,7 +189,7 @@
     .dot-progress  { background: var(--s-prog); }
     .dot-abandoned { background: var(--s-aband); }
 
-    /* Manual badge in card */
+    /* Mode badge in card (manual / interactive) */
     .manual-badge-card {
       font-family: var(--mono);
       font-size: 8px;
@@ -199,6 +200,13 @@
       letter-spacing: 0.05em;
       text-transform: uppercase;
       flex-shrink: 0;
+    }
+
+    /* Interactive recolours the mode badge, card and detail */
+    .manual-badge-card.badge-interactive,
+    .manual-badge-detail.badge-interactive {
+      border-color: var(--interactive);
+      color: var(--interactive);
     }
 
     .card-meta {
@@ -323,7 +331,7 @@
       border: 0.5px solid var(--border);
     }
 
-    /* Manual badge in detail header */
+    /* Mode badge in detail header (manual / interactive) */
     .manual-badge-detail {
       font-family: var(--mono);
       font-size: 9px;
@@ -728,6 +736,24 @@ function isManual(session) {
          session.modes.includes('manual');
 }
 
+function isInteractive(session) {
+  return Array.isArray(session.modes) &&
+         session.modes.includes('interactive');
+}
+
+// Badge markup for the modes worth calling out. 'automated' is the
+// default and gets no badge. A header that checks both modes gets
+// both badges rather than silently dropping one.
+function modeBadges(session, cls) {
+  const out = [];
+  if (isManual(session))
+    out.push(`<span class="${cls}">manual</span>`);
+  if (isInteractive(session))
+    out.push(`<span class="${cls} badge-interactive">interactive` +
+             `</span>`);
+  return out.join('');
+}
+
 // -- Task ID parsing ----------------------------------------------------------
 
 function parseTaskId(id) {
@@ -780,8 +806,7 @@ function renderList() {
         `warn${warnCount>1?'s':''}</span>` : '';
     const subMark  = isSub
       ? `<span class="sub-marker">&ldquo;</span>` : '';
-    const manBadge = isManual(s)
-      ? `<span class="manual-badge-card">manual</span>` : '';
+    const manBadge = modeBadges(s, 'manual-badge-card');
     const ov = s.overview
       ? s.overview.replace(/[#\n]/g,' ').replace(/\s+/g,' ').trim()
       : s.has_markers === false
@@ -829,9 +854,8 @@ function renderDetail(s) {
       `pa_session: ${s.pa_session}`,
   ].filter(Boolean).join('  &middot;  ');
 
-  // Manual badge for detail header
-  const manBadgeDetail = isManual(s)
-    ? `<span class="manual-badge-detail">manual</span>` : '';
+  // Mode badge(s) for detail header
+  const manBadgeDetail = modeBadges(s, 'manual-badge-detail');
 
   // Modules
   const modTags = (s.modules||[]).map(m =>

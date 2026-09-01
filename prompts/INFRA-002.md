@@ -16,9 +16,9 @@
 | Resume sha  | n/a                                          |   |
 | PA session  | 029 | |
 
-Task:   [ ] experiment  [ ] implementation  [ ] debug         [x] manual
+Task:   [x] experiment  [ ] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
-Mode:   [x] automated   [ ] manual
+Mode:   [ ] automated   [x] manual
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Task Overview
