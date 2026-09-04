@@ -1,11 +1,11 @@
-<!-- SPDX-License-Identifier: CC-BY-4.0                        -->
-<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
-<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
+<!-- SPDX-License-Identifier: CC-BY-4.0                         -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 # Blog Article Generation Process — RVA23 Co-Design
 ```
  FILE:    BLOG_GENERATION_PROCESS.md
  STATUS:  DRAFT
- UPDATED: 2026-07-13
+ UPDATED: 2026-09-04
  CONTACT: Jeff Nye
 ```
 
@@ -354,6 +354,37 @@ The PA will:
 Together the user and PA will decide if a particular focus, topic or
     angle for the article is the best fit for the information.
 
+## What the PA reads directly, and what must be supplied
+
+The PA sessions are in the same project as the blog sessions and are
+readable by the drafting session directly. The user does not need to
+export or paste them. What the session carries is the task file as
+emitted: the PROMPT block (manifest, hypothesis, background, binding
+decisions, requirements, constraints, deliverables) and the discussion
+around it, which is the authoritative record for Steps 5 and 6.
+
+What the session does not carry is the outcome. In the emitted file the
+Run time and Ctx % fields are blank, Status reads in-progress, and the
+Results Capture reads "RESULTS NOT YET WRITTEN". The IA fills those in on
+the repo side, at ./prompts/BP-NNN.md, and that version does not return
+to the chat.
+
+The input rule that follows:
+  - PA session chats: read directly, not supplied.
+  - Experiment files: supplied. Required for the Experiment Summary
+    columns (Status, Checks, Runtime, Context) and for the Results
+    Capture sections that carry the IA's own account — what was
+    delivered, assumptions and decisions not explicit in the prompt,
+    deferred work. Those sections routinely contain material that the
+    session handoffs compress out.
+  - session_handoff-NNN.md files bounding the range: supplied.
+  - PROJECT_STATUS.md and CLOSED_TECH_DEBT.md: supplied.
+
+If the experiment files are inconvenient to move as one batch, the
+header block plus everything from :: RESULTS:START :: to the end is
+sufficient; the PROMPT block is already in the session. Note the chat
+upload limit when planning the batches.
+
 ---
 
 ## Available context
@@ -582,6 +613,24 @@ quotation marks. When quoting, mark it clearly as quoted material (quotation
 marks, and named source) so a reader does not mistake it for the post's own
 voice.
 
+### Frustration in source material
+
+Source documents record frustration: with a tool, with the PA or IA, with a
+task that had to be rerun. This material is excluded from posts. The results
+are what matter; the emotion is a distraction from the work being performed.
+
+This narrows the quoting exception above. Register is admitted as evidence
+only where it demonstrates something about the artifacts or the review
+relationship that the content alone does not — not where it records how the
+author felt about a session. Frustration directed at the tooling, at the PA,
+or at the IA is excluded whether quoted or paraphrased.
+
+The underlying event is still reportable when it has an engineering
+consequence. Report the consequence, not the reaction. A session restarted
+after a timeout, a manifest trimmed, a rule added in response to a
+regression: these are recorded as what changed and why. The exclusion is on
+the expression, not on the fact that something went wrong.
+
 ### Target audience
 
 Stated previously but repeated for local reference:  
@@ -627,4 +676,5 @@ of being flagged:
 - bites harder
 - papered over
 - trench coat
+
 

@@ -320,7 +320,7 @@
 |    |              | BP-044c                              |
 |    |              | output session_handoff-047           |
 | 47 | tage         | input session_handoff-047            |
-|    |              | BP-045                               |
+|    | BLOG_bpu_14  | BP-045                               |
 |    |              | BP-046                               |
 |    |              | BP-047                               |
 |    |              | BP-048                               |
@@ -329,7 +329,7 @@
 |    |              | PROJECT_STATUS/CORE changes          |
 |    |              | output session_handoff-048           |
 | 48 | ittage       | input session_handoff-048            |
-|    |              | Claude.md changes                    |
+|    | BLOG_bpu_14  | Claude.md changes                    |
 |    |              | BP-050                               |
 |    |              | BP-050a                              |
 |    |              | BP-050b                              |
@@ -340,7 +340,7 @@
 |    |              | BP-054a                              |
 |    |              | output session_handoff-049           |
 | 49 | tage cleanup | input session_handoff-049            |
-|    |              | BP-055                               |
+|    | BLOG_bpu_14  | BP-055                               |
 |    |              | BP-056                               |
 |    |              | BP-057                               |
 |    |              | BP-058                               |
@@ -350,7 +350,7 @@
 |    |              | output session_handoff-050           |
 | 50 | ras planning | input session_handoff-050            |
 |    | ras impl     | bp_arb_spec for ras                  |
-|    |              | ras_decisions                        |
+|    | BLOG_bpu_15  | ras_decisions                        |
 |    |              | ras_interfaces                       |
 |    |              | resolve for consistency              |
 |    |              |   ras_decisions                      |
@@ -364,20 +364,20 @@
 |    |              | PA process failures                  |
 |    |              | output session_handoff-051           |
 | 51 | ras/ftb      | input session_handoff-051            |
-|    |              | BP-064                               |
+|    | BLOG_bpu_15  | BP-064                               |
 |    |              | ras_decisions cleanup                |
 |    |              | ftb_decisions                        |
 |    |              | ftb_interfaces                       |
 |    |              | ftb_conf_override_rules              |
 |    |              | output session_handoff-052           |
 | 52 | ftb plan     | input session_handoff-052            |
-|    |              | recovery efforts for 51 problems     |
+|    | BLOG_bpu_15  | recovery efforts for 51 problems     |
 |    |              | ftb_decisions clean up               |
 |    |              | ftb_interfaces clean up              |
 |    |              | ftb_conf_override_rules clean up     |
 |    |              | output session_handoff-053           |
 | 53 | ftb impl     | input session_handoff-053            |
-|    |              | ftb_decisions                        |
+|    | BLOG_bpu_15  | ftb_decisions                        |
 |    |              | ftb_interfaces                       |
 |    |              | ftb_confidence_override_rules.md     |
 |    |              | BP-065                               |
@@ -389,7 +389,7 @@
 |    |              | BP-068                               |
 |    |              | output session_handoff-053           |
 | 54 | bp_history   | input session_handoff-053            |
-|    |              | bp_history_decisions                 |
+|    | BLOG_bpu_16  | bp_history_decisions                 |
 |    |              | bp_history_interfaces                |
 |    |              | BP-069                               |
 |    |              | BP-070                               |
@@ -397,7 +397,7 @@
 |    |              | BP-072 written                       |
 |    |              | output session_handoff-055           |
 | 55 | bp_history   | input session_handoff-055            |
-|    |              | bp_history_decisions                 |
+|    | BLOG_bpu_16  | bp_history_decisions                 |
 |    |              | BP-072 re-written then run           |
 |    |              | BP-073                               |
 |    |              | BP-074                               |

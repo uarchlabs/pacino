@@ -21,6 +21,5 @@ echo "# Separator ---------------------------------------------------" >> ho
 cat planning/PROJECT_STATUS.md >> ho
 echo "# Separator ---------------------------------------------------" >> ho
 cat planning/BLOG_GENERATION_PROCESS.md >> ho
-
 echo "# Separator ---------------------------------------------------" >> ho
 cat blog_handoffs/blog_handoff-$1.md    >> ho
