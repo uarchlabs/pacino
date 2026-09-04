@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  WORKING
- UPDATED: 2026-08-22
+ UPDATED: 2026-09-04
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,60 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-069: RAS theory-of-operation audit. Documentation only.
+
+Interactive IA session. No RTL behavior changed.
+misc/ras_theory_of_operation.md checked line by line against ras.sv,
+tb_ras.sv, ras_decisions.md and ras_interfaces.md. Four defects, all
+in the documents, none in the RTL:
+
+  RAS-3 carried OPEN in the theory-of-operation document after
+    BP-104 closed it, with the ras_flush_* ports described as future
+    restore behavior. They stay unread. ras_decisions.md 4.4.2
+    exists because this keeps being re-raised from those ports
+  Speculative overflow described as dropping the oldest entry. The
+    wrap allocates at BOS+1, so reachable depth collapses to one in
+    a single push. TOSW+1 == BOS is the FULL condition; the wrap is
+    TOSW == BOS
+  Commit overflow cited a CSP_base register that does not exist.
+    Empty is CSP == 0, so the wrap makes a full 32-entry commit
+    stack read as EMPTY. TD#121
+  ras_decisions.md 6.1 claimed parallel slot evaluation with no
+    serial dependency, against IC-RAS-03, the RTL scan and TC-11
+
+Corrected: ras_decisions.md 3.2/3.3/6.1, ras_interfaces.md 3/4/
+IC-RAS-06/9.2, bp_structs_pkg.sv RETURN enum comment (C.JALR
+removed, rd-not-link qualifier added), misc/
+ras_theory_of_operation.md.
+
+Counts, 62 of 62 green. Both units, every sim and lint target forced
+with -B in this session. Every recorded count reconfirmed, none
+changed:
+
+```
+  bpu  18 lint + 22 sim green.   ftq  11 lint + 11 sim green.
+
+  sim_bp_cluster 1795/0   sim_loop_pred 9342/0   sim_ubtb    259/0
+  sim_ittage      211/0   sim_ittage_cntrl 147/0 sim_ftb      99/0
+  sim_sc_cntrl     98/0   sim_ras           87/0 sim_sc       55/0
+  sim_sc_fast      52/0   sim_ittage_table  32/0 sim_sc_table  6/0
+  sim_tage_table   15/0   sim_sc_brimli      7/0 sim          29
+  sim_tage 106/0, sim_tage_fast 106/0, _fast variants match base
+  sim_tage_manual 0 errors, sim_tage_tasks pass
+  sim_history 19224 fold comparisons + 3 external anchors
+
+  ftq  ptr 102  resolve 82  commit 72  ftb_sched 67  ifu 67
+       npc 66   ftq 56      entry 48   shadow 44     status 40
+       meta 26                                    all FAIL=0
+```
+
+The bp_cluster.sv module-status row still ends "Count unchanged at
+973" from BP-097, while 1795 is recorded in the session-067 notes.
+Older, not wrong. Not touched here.
+
+New: TD#121. No BP, INFRA or TOOLS number consumed.
 
 ---
 ## Session-068: the L1 instruction cache. INFRA-012, TOOLS-003/4/5.
@@ -1679,6 +1733,12 @@ it only documented current behavior.
 |     |          | The alternative, moving the state when the fill lands,   |
 |     |          | needs two writers of one port and an arbiter no          |
 |     |          | configuration field describes.                           |
+| 121 | ras.sv   | Commit stack encodes empty as CSP == 0, so a full 32-    |
+|     |          | entry stack reads as EMPTY after the wrap: the p0 read   |
+|     |          | and the empty-pop fallback lose their source. Entries    |
+|     |          | intact, only the valid is wrong -- degrades fallback     |
+|     |          | quality, never mispredicts. Wrap flag or 6-bit CSP.      |
+|     |          | Decide with the 16/32 rebalance. ras_decisions.md 3.3.   |
 
 ---
 

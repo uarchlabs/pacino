@@ -76,11 +76,16 @@ package bp_structs_pkg;
 
   // Branch type encoding, 3b.
   // Used in bp_ftq_slot_t.br_type and bp_update_t.br_type.
+  // RETURN excludes C.JALR, and excludes a JALR whose rd is also
+  // a link register. Without that exclusion a JALR rd=x1 rs1=x1
+  // would satisfy both the call and the return rule, and the
+  // three-way FTB/RAS/ITTAGE split is mutually exclusive.
+  // See planning/arch/ras_decisions.md section 2.
   typedef enum logic [2:0] {
     COND            = 3'b000, // conditional branch (JAL/B-type)
     DIRECT_CALL     = 3'b001, // direct call: JAL rd=x1 or x5
     INDIRECT_CALL   = 3'b010, // indirect call: JALR rd=x1 or x5
-    RETURN          = 3'b011, // return: JALR/C.JR/C.JALR rs1=x1/x5
+    RETURN          = 3'b011, // return: JALR/C.JR rs1=x1/x5
     INDIRECT_NONRET = 3'b100, // indirect JALR, not call, not return
     DIRECT_UNC      = 3'b101, // direct unconditional: JAL rd!=link
     NO_BRANCH       = 3'b110  // no branch in fetch block

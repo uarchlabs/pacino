@@ -77,7 +77,9 @@ Signal names follow the pattern:
   pipestage: p0, p1, p2 for prediction path.
              p3 for s3 repair.
              u0, u1 for update/commit path.
-             px for flush signals (not yet defined).
+             px for flush signals. Reserved and unread. There
+             is no flush event and no flush protocol; see
+             RI-1 and ras_decisions.md 4.4.
 
 Prediction slot dimension uses array index [0:NUM_PRED_SLOTS-1]
 on the signal, not a suffix. Example:
@@ -157,7 +159,11 @@ module ras (
   input  bp_ras_snapshot_t    ras_commit_snapshot,
 
   // ----------------------------------------------------------
-  // Flush (reserved, behavior TBD)
+  // Flush. RESERVED AND UNREAD -- not TBD. A flush is a
+  // redirect (fe_decisions.md FE-14); the RAS response is the
+  // pointer restore above. These two ports are redundant and
+  // are intentionally left unread. Read ras_decisions.md 4.4
+  // and 4.4.2 before reopening this.
   // ----------------------------------------------------------
   input  logic             ras_flush_val,
   input  bp_ras_snapshot_t ras_flush_snapshot
@@ -297,9 +303,17 @@ simultaneous push behavior.
 
 ### IC-RAS-06: Speculative stack overflow
 
-When TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES), the oldest
-speculative entry is silently dropped on the next push
-(circular wrap). No error signal is asserted.
+TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES) is the FULL condition:
+15 entries live, one push remaining. The next push finds
+TOSW == BOS, takes the sentinel skip, and wraps. No error
+signal is asserted.
+
+The wrap is not the loss of one entry. Allocation lands at
+BOS+1, so TOSR becomes BOS+1 and reachable depth collapses to
+one entry. The older entries remain physically resident but
+unreachable: the following pop hits TOSR == BOS and takes the
+IC-RAS-07 commit fallback. Consumers must not assume graceful
+single-entry loss across a wrap.
 
 ### IC-RAS-07: Speculative stack empty fallback
 
@@ -442,7 +456,8 @@ The following signals are combinational in p2:
                      ->  TOSR/TOSW update (slot 1, uses
                          post-slot-0 pointer state)
                      ->  ras_pop_addr_p2[1] (bypass or array)
-  post-slot-1 state  ->  ras_snapshot_p2[0], ras_snapshot_p2[1]
+  post-slot-0 state  ->  ras_snapshot_p2[0]
+  post-slot-1 state  ->  ras_snapshot_p2[1]
 
 Verilator stl_sequent note: always_comb blocks that must
 re-evaluate after FF updates must read at least one FF

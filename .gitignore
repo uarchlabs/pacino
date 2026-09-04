@@ -93,6 +93,19 @@ rtl/core/frontend/bpu/obj_sc_fast/
 rtl/core/frontend/bpu/obj_bp_cluster/
 rtl/core/frontend/bpu/obj_dir_cov_bp_cluster/
 
+# ftq files
+rtl/core/frontend/ftq/obj_ftq/
+rtl/core/frontend/ftq/obj_ftq_commit/
+rtl/core/frontend/ftq/obj_ftq_entry/
+rtl/core/frontend/ftq/obj_ftq_ftb_sched/
+rtl/core/frontend/ftq/obj_ftq_ifu/
+rtl/core/frontend/ftq/obj_ftq_meta/
+rtl/core/frontend/ftq/obj_ftq_npc/
+rtl/core/frontend/ftq/obj_ftq_ptr/
+rtl/core/frontend/ftq/obj_ftq_resolve/
+rtl/core/frontend/ftq/obj_ftq_shadow/
+rtl/core/frontend/ftq/obj_ftq_status/
+
 # lib
 rtl/lib/obj_dir
 

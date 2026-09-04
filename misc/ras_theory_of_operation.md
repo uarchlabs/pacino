@@ -93,8 +93,12 @@ type is supplied on its ports by the FTB. Classification follows the
 RISC-V register convention rather than the opcode alone:
 
 - **Call (push):** `JAL`/`JALR` with `rd = x1` or `x5`; `C.JALR`.
-- **Return (pop):** `JALR`/`C.JR` with `rs1 = x1` or `x5`
-  (`C.JALR` with `rs1 = x5` is excluded from the return class).
+- **Return (pop):** `JALR`/`C.JR` with `rs1 = x1` or `x5`, and
+  for `JALR` only when `rd` is not itself a link register
+  (`rd != x1`, `rd != x5`, or `rd == x0`). `C.JALR` with
+  `rs1 = x5` is excluded from the return class. The `rd`
+  qualifier is what keeps the classes disjoint: without it a
+  `JALR rd=x1, rs1=x1` would satisfy both rules above.
 
 This is one branch of a three-way classification of all `JALR`-class
 branches: the FTB handles indirect branches with a single stable
@@ -140,15 +144,17 @@ The RAS contains two independent register-file arrays (Figure 2):
 
 The partition is static: 16 + 32 entries in two separate arrays rather
 than a shared pool. The advantage is that each event affects exactly
-one array. Overflow is detected at fixed per-array limits; a mispredict
-restore reaches only the speculative array; commit advancement reaches
-only the commit array. Pointer arithmetic and the verification surface
-both remain small. The 48-entry total is sufficient that a shared pool
-would provide no measurable benefit (Section 4).
+one array. Each array wraps at its own fixed limit, with no shared
+moving boundary to check; a mispredict restore reaches only the
+speculative array; commit advancement reaches only the commit array.
+Pointer arithmetic and the verification surface both remain small. The
+48-entry total is sufficient that a shared pool would provide no
+measurable benefit (Section 4).
 
 Each entry, in both stacks, is a return address (`VA_WIDTH = 40b`) plus
-a 4-bit recursion counter (`rctr`). The parameters are fixed in
-`bp_defines_pkg.sv`:
+a 4-bit recursion counter (`rctr`). The values are fixed in
+`bp_defines_pkg.sv`; the two pointer widths are `localparam` derived by
+`$clog2` from the depths above them, not independently set:
 
 | Parameter | Value | Meaning |
 |---|---|---|
@@ -203,9 +209,16 @@ Push, pop, empty, and overflow then reduce to the following:
 - **Pop:** present TOSR; `TOSR--` (or decrement `rctr`, Section 3.5).
 - **Empty (`TOSR == BOS`):** fall through to the commit-stack top as
   the prediction; the commit entry is not consumed.
-- **Overflow (`TOSW+1 == BOS`):** the oldest speculative entry is
-  dropped on the next push (circular wrap). No fault is raised;
-  accuracy degrades in a controlled manner (TC-18).
+- **Full (`TOSW+1 == BOS`):** 15 entries live, one push remaining.
+- **Overflow (wrap):** the next push finds `TOSW == BOS` and takes
+  the sentinel skip, allocating at `BOS+1`. This is not the loss of
+  one entry. TOSR becomes `BOS+1`, so reachable depth collapses to a
+  single entry in one push; the older entries stay physically
+  resident but unreachable, and the following pop hits `TOSR == BOS`
+  and falls through to the commit stack. No fault is raised, and the
+  commit fallback bounds the damage, but the degradation is a cliff
+  rather than a gradual slope. TC-18 checks only that the unit stays
+  functional across the wrap, not the depth collapse.
 
 ### 3.3 The prediction path: s0 read and s2 push/pop
 
@@ -216,11 +229,13 @@ Because the read is combinational off the registered pointers and
 array, a freshly pushed entry becomes visible at s0 the cycle after the
 push commits, not the same cycle (TC-19 verifies this).
 
-At **s2**, gated on `ras_pred_val_p2` and FTB `br_type`, the
-authoritative operation runs combinationally and produces, per slot:
-the pop address (`ras_pop_addr_p2`), its valid bit
-(`ras_pop_valid_p2`, deasserted only when both stacks are empty), and
-the post-operation pointer snapshot (`ras_snapshot_p2`). The FTQ
+At **s2**, gated on `ras_pred_val_p2`, FTB `br_type` and the
+registered `ras_rst_done` (Section 3.9), the authoritative operation
+runs combinationally and produces, per slot: the pop address
+(`ras_pop_addr_p2`), its valid bit (`ras_pop_valid_p2`, asserted only
+on a slot that actually pops, and within that case deasserted only
+when both stacks are empty), and the post-operation pointer snapshot
+(`ras_snapshot_p2`). The FTQ
 latches the snapshot on the edge closing s2.
 
 ### 3.4 Dual-slot operation and the same-cycle bypass
@@ -308,6 +323,16 @@ described in Section 3.6. Commit is registered: it takes effect the
 cycle after `ras_commit_val` and does not interact combinationally with
 the s2 push/pop path.
 
+CSP is a free pointer: the top entry is at `CSP-1` and empty is
+`CSP == 0`. That encoding has a consequence at capacity. On the 32nd
+consecutive commit push CSP wraps to 0, so a *full* commit stack
+reads as empty, `commit_top_valid` deasserts, and both the s0 read
+and the empty-pop fallback lose their commit source until CSP
+advances again. Returns are a prediction and not a correctness
+requirement, so this is accepted rather than guarded; it is a
+candidate for rebalancing the 16/32 split if commit overflow is
+measured at cluster integration.
+
 When the speculative stack is empty and a pop is requested, the
 commit-stack top is presented as the result and is not consumed
 (read-only fallback, TC-15). The same fallback supplies the s0 read.
@@ -360,8 +385,7 @@ re-evaluates after the flop updates.
 
 ### 3.10 Known limitations in the current design
 
-Two limitations are documented and verified; they are not latent
-defects:
+Three items are documented and tracked; they are not latent defects:
 
 - **TD #78 -- undo-pop does not reverse a recursion-decrement pop.** The
   s3 undo-pop re-exposes a TOSR-moving pop correctly, but a pop that
@@ -377,12 +401,27 @@ defects:
   cannot affect correctness; it can only degrade a fallback prediction.
   A complete fix requires a recursion-count source on the commit
   interface and is deferred to bp_cluster/FTQ integration.
+- **TD #101 -- `ras_pc_p2` is declared and never read.** The branch PC
+  is on the port list and `bp_cluster` drives it from the staged s2 PC,
+  but nothing inside `ras.sv` consumes it: the pushed return address
+  comes from `ras_fall_through_p2`, and the RAS does not compute PC+2
+  or PC+4 itself (`ras_decisions.md` section 8). The port is either
+  confirmed for a future use or removed from `ras.sv` and `tb_ras.sv`.
 
-Two interface items remain open: **RAS-1** (predecode early-push hint;
-the authoritative push is already gated at s2) and **RAS-3** (flush-port
-behavior, which is undefined until the flush protocol is specified; the
-`ras_flush_*` ports are reserved and will follow the same pointer-only
-restore discipline).
+One interface item remains open: **RAS-1**, the predecode early-push
+hint, which is an optimization over the s2 authoritative push that is
+already in place.
+
+**RAS-3 is closed**, and is worth stating explicitly because the
+unread `ras_flush_*` ports invite the opposite conclusion. There is no
+flush-specific RAS behavior and none is coming. A flush is a redirect
+(`fe_decisions.md` FE-14), so the RAS response to a flush is the
+pointer-only restore of Section 3.6, already built and tested as
+`ras_restore_val`. `ras_flush_val` and `ras_flush_snapshot` are
+redundant with that restore group and are deliberately left unread;
+they are evidence of a redundant port, not of an open question. See
+`ras_decisions.md` 4.4 and 4.4.2, which exist because this was
+re-raised repeatedly from exactly that observation.
 
 ---
 
@@ -501,7 +540,7 @@ its matching return in slot 1 are resolved in one cycle.
 | Wrong-path data | retained resident (monotonic TOSW) | clear-on-pop | enables pointer-only re-expose on restore |
 | Recursion | 4-bit saturating counter per entry | one entry per repeat; no counter | protects limited speculative depth at low cost |
 | Empty handling | commit-stack fallback, not consumed | invalid / no prediction | recovers a usable prediction past speculative empty |
-| Overflow | circular wrap (controlled) | stall / fault | returns are a prediction, not a correctness requirement |
+| Overflow | circular wrap, commit fallback catches the miss | stall / fault | returns are a prediction, not a correctness requirement; the wrap collapses reachable depth rather than dropping one entry (Section 3.2) |
 
 ---
 
@@ -510,9 +549,11 @@ its matching return in slot 1 are resolved in one cycle.
 - **RAS-1** -- predecode early-push hint as an optimization over the s2
   authoritative push. To be closed when RTL analysis confirms that s2
   timing is sufficient for all call/return interleavings.
-- **RAS-3** -- flush-port (`ras_flush_*`) behavior, undefined until the
-  flush protocol is specified; will follow the mispredict pointer-only
-  restore.
+- **TD #101** -- `ras_pc_p2` declared on `ras.sv` and read by nothing;
+  confirm a use or remove it from the module and the testbench.
+- **Commit-stack wrap** -- CSP encodes empty as `CSP == 0`, so a full
+  commit stack reads as empty after the 32nd push (Section 3.7).
+  Candidate for a tech-debt entry and for rebalancing the 16/32 split.
 - **TD #78** -- s3 reversal of a recursion-decrement pop; to be
   re-evaluated if a repair over a recursion pop is required.
 - **TD #79** -- commit-stack recursion depth; requires a recursion-count

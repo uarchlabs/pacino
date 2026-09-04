@@ -190,9 +190,19 @@ Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
 so that empty (TOSR == BOS) is never aliased by a full stack.
 
-Overflow condition: TOSW + 1 == BOS (mod 16). On overflow,
-oldest speculative entry is silently dropped (circular wrap).
-Prediction accuracy degrades gracefully; no fault is raised.
+Full condition: TOSW + 1 == BOS (mod RAS_SPEC_ENTRIES). 15
+entries live, one push remaining. Overflow (wrap) condition:
+the next push finds TOSW == BOS and takes the sentinel skip.
+No fault is raised and no error signal is asserted.
+
+Overflow effect: the wrap is not the loss of one entry.
+Allocation lands at BOS+1, so TOSR becomes BOS+1 and the
+reachable depth (BOS to TOSR) collapses to one entry in a
+single push. The older entries stay physically resident but
+are unreachable -- the following pop hits TOSR == BOS and
+takes the commit-stack fallback. Degradation is bounded by
+that fallback, not gradual. Do not describe this as graceful
+single-entry loss.
 
 ### 3.3  Commit stack
 
@@ -219,9 +229,17 @@ On commit of a return: CSP decrements. The commit stack entry
 is consumed. BOS likewise advances to the committing entry's
 post-op TOSR (ras_commit_snapshot.tosr).
 
-Overflow condition: CSP + 1 == CSP_base (mod 32). Oldest
-committed entry silently dropped. Same graceful degradation
-policy as speculative stack.
+Overflow condition: CSP is a free pointer with no base
+register. Empty is CSP == 0, the top is at CSP-1, and overflow
+is the wrap of CSP to 0 on the 32nd consecutive commit push.
+No fault is raised.
+
+Overflow effect: the wrap makes a FULL commit stack read as
+EMPTY -- commit_top_valid deasserts, so the p0 TOS read and
+the speculative-empty pop fallback lose their source until CSP
+advances again. Accepted, not guarded: a lost fallback yields
+no prediction rather than a wrong one. Rebalance the 16/32
+split per the 3.1 revisit trigger if this is measured. TD #121.
 
 ---
 
@@ -380,8 +398,13 @@ Fixed boundary split. Slot 0 covers pred_pc to pred_pc+31.
 Slot 1 covers pred_pc+32 to pred_pc+63. Slot 1 PC is always
 pred_pc+32. Static, not data-dependent on slot 0 prediction.
 
-Both slots evaluated in parallel. No serial dependency between
-slot 0 and slot 1 RAS evaluation.
+Both slots are evaluated in the same cycle, but not
+independently. The evaluation is ordered: slot 0 before slot
+1, with slot 1 seeing the pointer state left by slot 0. This
+is IC-RAS-03 slot priority, and it is what makes the section
+6.3 bypass and the section 6.4 two-push recursion cases well
+defined. The bundle SPLIT is static and not data-dependent;
+the RAS EVALUATION over the two slots is serial.
 
 ### 6.2  Same-cycle combinations
 
