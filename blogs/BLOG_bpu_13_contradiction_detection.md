@@ -242,7 +242,7 @@ BP-044b also established a convention for direct RAM entry writes. A backdoor
 task, bw_write, writes a full entry directly into the RAM.
 
 bw_write was used to re-prove the UP=0 (using primary = 0) rows of the table
-using a geniue second table. IT2 was primary and IT1 was alternative. All
+using a genuine second table. IT2 was primary and IT1 was alternative. All
 reachable CTR rows were then proven by readback. Two of the three pre-existing
 sim_ittage failures were identified and repaired.
 
@@ -312,7 +312,7 @@ The IA detected the conflict without explicit direction to do so in the prompt.
 The task was to audit tests and the IA was constrained from modifying RTL.
 The IA understood the conventional use of bimodal counters vs. confidence
 counters for the base tables in a TAGE-style branch predictor and reported
-the discrepency in the results capture section of the task file.
+the discrepancy in the results capture section of the task file.
 
 Catching this early is an important part of efficient design.  This error was
 not debilitating to the branch predictor operation. This error would be
@@ -334,7 +334,7 @@ vocabulary CTR, USE, provider, and strong, and do not share the semantics. CTR
 means direction in TAGE T0 and confidence in ITTAGE. That overload propagated
 through three stages before reasoning caught it, and it will recur anywhere the
 two predictors' documents borrow each other's terms. This extends the audit
-task convept to major unit boundaries including assemblies, e.g. TAGE, ITTAGE
+task concept to major unit boundaries including assemblies, e.g. TAGE, ITTAGE
 and also BPU.
 
 ## Design Process Notes
@@ -349,7 +349,7 @@ in its own prompts.
 
 The IA's single failure mode this session was in test construction: the BP-044a
 test could not distinguish the bug from its absence. This was diagnosed as a
-problem in the prompt providing insufficent context. The manifest omitted
+problem in the prompt providing insufficient context. The manifest omitted
 ittage_table.sv, so the IA built the test against a partial view of the write
 path and could not see that the view was partial. The conservative default that
 restricts access to files outside the supplied context is what produced the
@@ -417,10 +417,10 @@ initiated by the architect; unfortunately this has to be done by 'feel'.
 ### The architect (aka me)
 
 I supplied the expect values and rule tables that were the source of the
-problems. Typos and inaccurate or ambigous definitions caused the IA and
+problems. Typos and inaccurate or ambiguous definitions caused the IA and
 PA the problems described above. 
 
-Once the IA had pointed out the discrepency to standard practice I inspected
+Once the IA had pointed out the discrepancy to standard practice I inspected
 the tables again and discovered the transposition errors. These errors were
 found in two planning files, `tage_cntrl_ctr_update_rules.md` and the TD #45
 entry in `PROJECT_STATUS.md`
@@ -429,7 +429,8 @@ On the positive side engineering judgement was able to interpret where the PA
 was struggling, when the IA results were correct and then take action in the 
 decisions and planning file updates.
 
-This process was recored in the handoff files for this session, `session-handoff-046.md`
+This process was recorded in the handoff files for this session,
+`session-handoff-046.md`
 
 ## Future steps
 

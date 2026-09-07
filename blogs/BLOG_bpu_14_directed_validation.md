@@ -23,32 +23,39 @@ COPYRIGHT: "Copyright 2026 Jeff Nye"
 
 ## Abstract
 
-The TAGE and ITTAGE branch predictors in the Pacino RVA23 design carry
-update paths that write five entry fields: a direction or confidence
-counter (CTR), a usefulness field (USE), an epoch field (EPC), an
-indirect target (TGT), and the allocation write. Each field is written
-under provider-selection logic that chooses between a primary and an
-alternate table. Three RVA23 Co-Design sessions ran twenty-one
-implementation tasks to prove each write path independently, then to
-prove the paths do not interfere. Nineteen of the twenty-one produced no
-RTL change: the design conformed to its specification on every rule row
-tested. Four real defects were found, one of them the same defect in both
-predictors. The result that transfers is not the defect count. A test
-that passes against conforming RTL is indistinguishable from a test that
-cannot fail, and the two were separated by injecting the defect the test
-claimed to detect, confirming the test failed, then reverting. One task
-was abandoned for omitting that step. A second task reported a defect,
-argued it was harmless, and marked itself complete; the defect was real
-and the test could not have seen it, because the test read back only the
-entry it expected to change. In a third case the automated classification
-named the RTL as inverted when the specification showed the RTL correct
-and five test cases transposed; repairing the RTL would have broken a
-conforming block. Four separate status counts in this range were carried
-forward without a run behind them. Both predictors closed the range
-directed-validated at the unit level, with fifteen technical debt items
-resolved.
+Three RVA23 Co-Design sessions ran twenty-one tasks to finish unit-level
+verification of the Pacino TAGE and ITTAGE branch predictors. Going in, the
+counter and usefulness write paths had been proven by reading them back out of
+RAM and the rest had not. Aging had never been enabled to this point.  Sixteen
+of the tasks were verification work: one specification rule row at a time, with
+entries seeded directly into table memory, the result read back out of RAM, and
+every field proven alone before any test mixed fields together.
 
-## The surface under test
+Four times in the range something plausible was asserted with nothing behind
+it. A regression count was carried forward without a run behind it, which hid
+46 failing tests through several sessions of RTL change. A failure
+classification named the RTL as inverted without checking the specification
+first; the specification showed the RTL conforming on all 33 rows and five
+tests transposed, so repairing the RTL would have broken a working block. A
+defect was reported, argued harmless, and the task marked itself complete,
+with no test behind the argument; the defect was real and corrupted the
+higher-priority table. A test passed without ever having been seen to fail,
+and that task was abandoned.
+
+The last of these produced a standing requirement in the methodology that every
+check demonstrate it can fail, which took three forms. Where a defect was
+fixed, the test ran against the unfixed design first. Where the design already
+conformed, a defect was introduced deliberately and then reverted, leaving no
+net RTL change. Where neither applied, the stimulus was seeded so that a wrong
+answer would be visible.
+
+Twelve of the sixteen verification tasks ended with no RTL change. Four
+defects were found and fixed, two of which are the same defect in the two
+predictors: a missing guard that let the use-alternate counter move on a
+comparison carrying no training signal. Fifteen technical debt items closed,
+and both predictors ended the range directed-validated at the unit level.
+
+## What had not been tested
 
 Before this range, the TAGE and ITTAGE update paths had been fixed where
 they were known to be broken and left alone where they were not. The
@@ -56,20 +63,27 @@ counter and usefulness write paths had been proven by RAM readback. The
 epoch, target, allocation, aging and prediction-side paths had not. Some
 had never been driven at all: aging ran with `tage_enable_aging` and
 `ittage_enable_aging` held at zero in every test written to that point,
-so the entire epoch mechanism was dark. The full remaining surface was
+so the entire epoch mechanism was dark. Every remaining untested path was
 enumerated as technical debt items #55 through #74.
 
-Two rules governed how that surface would be worked. The first was
-isolation before round-trip: prove each field alone, then mix. The
-second was the backdoor RAM write, a testbench task that seeds a complete
-entry directly into a table's memory rather than allocating one and
-predicting against it. Seeding removes the allocation path from the setup
-of every test that is not about allocation.
+Two rules governed how that work would be done. The first was isolation before
+round-trip: prove each field alone, then mix. The second was the backdoor RAM
+write, a testbench task that seeds a complete entry directly into a table's
+memory using hierarchical paths to the RAM entry. 
 
-Both rules were inherited. What this range added was a third, and it came
-from a task that was thrown away.
+Both rules were inherited. This range added a third, that every check must
+demonstrate it can fail. The requirement was written after BP-050 was abandoned
+for arguing its test would have caught a defect rather than showing that it
+did.
 
 ## Structural rework, and what it exposed
+
+The redundant bus dimensioning was not found in this range. It was recorded in
+session-040 as TD #45, an update-index simplification, and the description was
+wrong: it asked for per-table ports when the per-table dimension was itself
+the defect. Session-046 invalidated the entry, marked it wrong in
+`CLOSED_TECH_DEBT.md`, and moved the real fix to TD #66. BP-045 was the first
+task to work it, seven sessions after it was first recorded.
 
 The TAGE controller drove ten separate update and allocation buses
 dimensioned `[table][slot]`, one slice per table. Only one table per slot
@@ -79,18 +93,20 @@ collapsed them to `[slot]`, with the target table identified by the
 `*_tbl_sel_u0` selects that already existed. The per-table strobe
 assignments stayed in the existing `gen_tbl` generate loop; the collapsed
 data, selector and address buses moved to a new `gen_upd_bus` block keyed
-on slot alone. `tage_table.sv` needed no change — its input ports were
+on slot alone. `tage_table.sv` needed no change. Its input ports were
 already dimensioned by slot, and only the interconnect above the module
-carried the redundant dimension.
+had the redundant dimension.
 
 One of the ten could not collapse. The primary and alternate CTR writes
 can both assert in the same cycle, to different tables, at different
 history lengths, and therefore at different hashed indices. A single
 shared index bus carries one value per slot. `t_alt_upd_index_u0` was
 added alongside the primary update index, giving three index buses:
-primary update, alternate update, and allocation. The deviation was
-accepted as the correct structure rather than a workaround, and it
-exposed that ITTAGE had the same requirement and lacked the same bus.
+primary update, alternate update, and allocation. None of this was in the
+prompt, which assumed a single shared index. The IA derived the requirement
+from the CTR update rules and reported it as a deviation. It was accepted as
+the correct structure rather than a workaround, and it exposed that ITTAGE had
+the same requirement and lacked the same bus.
 That became TD #66's counterpart, TD #76, closed across BP-046 and
 BP-048.
 
@@ -100,7 +116,7 @@ convention. Renaming ports broke `tb_ittage_cntrl.sv` compilation, and
 the task edited that file to keep the count stable even though it was not
 in the manifest. The edit was mechanical and was reported under the
 stop-and-report policy. The prompt-writing rule that followed is that a
-task which renames a module's ports carries every instantiating testbench
+task which renames a module's ports lists every instantiating testbench
 in its manifest from the start.
 
 The regression counts that BP-045 and BP-046 ran to confirm no behavioral
@@ -192,8 +208,8 @@ that the incidental update had no observable effect on correctness.
 Both statements were wrong. The interfaces document specifies that only
 the component that provided the prediction has its target field modified;
 absence of an explicit prohibition is not authorization. The effect is
-also observable. In the UP=0 case the non-provider is the primary — the
-longer-history, higher-priority table. Its target field is overwritten
+also observable. In the UP=0 case the non-provider is the primary table,
+which has the longer history and the higher priority. Its target field is overwritten
 with a value resolved under a different history length, and on the next
 prediction at that address the primary hits and is selected as provider
 ahead of the alternate. The corrupted entry is the one consulted first.
@@ -222,7 +238,7 @@ partial-bit generate assignments produced incorrect results. The
 split-strobe form reuses the per-slot strobe pattern already proven for
 the counter writes.
 
-## The step that makes a passing test mean something
+## Showing that a check can fail
 
 BP-050 took up the ITTAGE epoch write. It found the write enable
 provider-only, added tests that read back both the provider and the
@@ -244,13 +260,34 @@ was required. Then the gate was deliberately corrupted to
 `(prm_match | alt_match)`, both non-provider checks failed with an
 expected value of 2 against an actual of 0, and the gate was reverted.
 
-Defect injection became the standard closing step for every conformance
-task in the range. BP-051 proved its guard by removing it and restoring
-it. BP-056 reverted an epoch gate to `prm_match` alone and watched two
-tests fail with the epoch field unwritten. BP-057 removed a guard and
-watched the counter move. In each case the deliverable is not that the
-test passed; it is that the test was shown to fail for the specific
-defect it exists to detect.
+Demonstrating that a check can fail became a required step in every
+verification task that followed, and it took three forms.
+
+Where a defect was fixed, the test ran against the unfixed design first.
+BP-049a extended its tests to read back the non-provider entry and
+recorded an expected `c000` against an actual `e000` before the target
+write was corrected. BP-051 added the missing UAON guard, removed it
+again to watch TC-UAON-08 return an expected 8 against an actual 9, and
+restored it.
+
+Where the design already conformed there was no defect to run against, so
+one was introduced on purpose. BP-050b widened the epoch gate to
+`(prm_match | alt_match)`, watched both non-provider checks fail with an
+expected 2 against an actual 0, and reverted. BP-056 reverted a TAGE
+epoch gate to `prm_match` alone, watched two tests fail with the epoch
+field unwritten, and restored it. BP-057 removed the guard it had just
+added and watched the counter move. Breaking the design and putting it
+back leaves no net RTL change, which is why a task reports both an
+injection and a design it did not modify.
+
+Where neither applied, the discrimination came from the stimulus. BP-052
+seeds a pre-state of USE=2'b10 so an aging-disabled result cannot be
+mistaken for an age-1 result. BP-058 seeds USE=10 in TC-87 for the same
+reason. BP-060 seeds `pred_strong` at 111 against the weak boundary 100
+so the bit has to move for the test to pass.
+
+What each task delivers is a test that has been seen to fail for the
+defect it exists to catch.
 
 BP-050 produced one more finding. Running every target in the Makefile
 rather than the one target under test revealed that `tb_ittage_cntrl.sv`
@@ -269,8 +306,8 @@ that status counts come from a run in the current session. Its cost is
 measurable. BP-054a ran for three and a half minutes and consumed 72% of
 context, almost entirely from twenty-two targets' console output.
 Compaction occurred in eight of the eleven tasks in the final session. A
-phased application of the rule, so that early tasks in a sequence do not
-carry the full output burden, is the planned revision.
+phased application of the rule, so that early tasks in a sequence run
+fewer targets, is the planned revision.
 
 ## Completing ITTAGE
 
@@ -307,9 +344,9 @@ order was extracted into `ittage_table_entry_formats.md` and
 `tage_table_entry_formats.md` as the single source, referenced from the
 interface documents. The task also carried more planning documents in its
 manifest than it read, and after a request timeout it was rerun with
-three of them removed. Minimal manifests — the reference documents, the
-RTL under test, the packages needed to compile, the testbench and the
-Makefile — became prompt practice from that point.
+three of them removed. From that point a manifest listed only the
+reference documents, the RTL under test, the packages needed to compile,
+the testbench and the Makefile.
 
 BP-054 proved the twelve prediction-path rules and found two further
 specification errors, both carried across from TAGE. `ittage_pred_strong`
@@ -419,7 +456,7 @@ test cases and reported 73, which resolves only if the prior baseline was
 68; the task after that reported a pass with no integer at all, which
 does not satisfy a rule requiring a count from the current session. The
 ledger closed once an integer was produced again, at which point the
-whole chain — 73, 81, 87, 95, 102, 103 — reconciled end to end.
+whole chain of 73, 81, 87, 95, 102 and 103 reconciled end to end.
 
 The pattern is the same as the one the injection step addresses. A count
 and a passing test are both assertions about a system's state, and both
@@ -463,8 +500,8 @@ counter and aging tests written before it lands, which argues for doing
 it before further ITTAGE test work rather than after.
 
 The arbitration and cluster items are gated on `bp_cluster` integration,
-which has open design questions of its own. The next predictor units —
-FTB, SC and RAS — are not started. The directed-validation sequence used
+which has open design questions of its own. The next predictor units
+(FTB, SC and RAS) are not started. The directed-validation sequence used
 here is the template for them.
 
 ## Technical Debt Referenced
@@ -499,15 +536,18 @@ The implementation assistant produced every directed test in the range,
 approximately 120 test cases across the two predictors, each citing the
 specification row it exercises. It root-caused four RTL defects to file
 and line and fixed them in the same session, and it produced the
-diagnostic reasoning behind the largest failure group in BP-047 — the
-`nba_sequent` re-evaluation against cleared inputs — which required
+diagnostic reasoning behind the largest failure group in BP-047, the
+`nba_sequent` re-evaluation against cleared inputs, which required
 tracing Verilator block classification rather than reading a failing
 comparison.
 
 Three of the range's specification errors were found by the
 implementation assistant reporting a discrepancy it was not asked to
 look for: the allocation write-data field order, the `pred_strong`
-carryover, and the stored final-target field. It also backed out its own
+carryover, and the stored final-target field. In BP-045 it went further and
+contradicted the task itself, deriving the three-index bus requirement from
+the CTR update rules and reporting the prompt's single-index assumption as
+wrong. It also backed out its own
 first approach in BP-049a after Verilator scheduling on partial-bit
 generate assignments gave incorrect results, and documented why.
 
@@ -542,8 +582,8 @@ failures across BP-055 through BP-058.
 
 Its own errors were in scope and in labelling. Manifests were oversized
 on several tasks, once contributing to a timeout, and the manifest
-omission on BP-049 — leaving the interfaces document out — is the direct
-cause of the rationalized target-write defect. The BP-059 requirement
+omission on BP-049, which left the interfaces document out, is the
+direct cause of the rationalized target-write defect. The BP-059 requirement
 carried a no-consecutive-skip label across from the ITTAGE allocation
 work when the TAGE policy is stop-at-first, which is the same
 cross-track contamination that appeared in the specification documents,
@@ -565,20 +605,23 @@ before.
 
 ### The generalization
 
-Nineteen of twenty-one tasks in this range ended with no RTL change. The
-design conformed to its specification nearly everywhere it was checked,
-which means the range's output is almost entirely tests, and the question
-of what those tests are worth is not answered by the fact that they pass.
+Sixteen of the twenty-one tasks were verification work, and twelve of
+those ended with no RTL change. The design conformed to its specification
+nearly everywhere it was checked, which means the range's output is
+almost entirely tests, and their passing does not establish what they are
+worth.
 
 A test written against conforming RTL and never run against anything else
 has an unknown detection capability. It may encode the requirement, or it
 may encode whatever the design does. The two are indistinguishable from
-the outside, and both produce the same green result. The step that
-separates them is cheap: corrupt the design in the specific way the test
-claims to detect, confirm the test fails, revert. The failing values
-recorded in this range — an expected `c000` against an actual `e000`, an
-expected 2 against an actual 0, an expected 8 against an actual 9 — are
-the evidence the tests are worth anything, and they cost minutes each.
+the outside, and both produce the same green result. Separating them is
+cheap. Break the design in the way the test claims to detect, confirm the
+test fails, restore. Where there is nothing to break, choose stimulus
+that makes a wrong answer visible. The values recorded in this range are
+what make the passing results mean anything. An expected 2 returned 0
+when the epoch gate was widened. An expected 8 returned 9 when the UAON
+guard was removed. An expected `c000` returned `e000` against the
+uncorrected target write path. Each took minutes.
 
 The same principle explains the range's other failures, which are not
 about tests at all. A count carried forward is an assertion about a
@@ -611,7 +654,7 @@ demonstrate.
 ---
 *Jeff Nye is a microprocessor architect with 35 years of industry experience 
 spanning performance modeling, RTL implementation, and architecture for 
-high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,  TI C6x and RISC-V designs, and recently served as sole architect and full-stack implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in an 8-issue RVA23 RISC-V processor — from research through timing closure at 2.75 GHz. He holds +20 issued patents in processor design, architecture, and hardware 
+high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,  TI C6x and RISC-V designs, and recently served as sole architect and full-stack implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in an 8-issue RVA23 RISC-V processor, from research through timing closure at 2.75 GHz. He holds +20 issued patents in processor design, architecture, and hardware 
 virtualization. He is the author of Pacino and the uarchlabs methodology documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
