@@ -2,263 +2,35 @@
   "generated_by": "ticfinder",
   "source": "blogs/BLOG_tools_1_ticfinder.md",
   "waivers": {
-    "067ef0": {
-      "construction": "TRICOLON",
-      "line_when_waived": 136,
-      "pattern": "tricolon",
-      "text": "A construction is a rhetorical move with a stable id. A pattern is one executable query that finds o"
-    },
-    "06fe14": {
+    "efbfba": {
       "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 146,
+      "line_when_waived": 152,
       "pattern": "af_rather_instead",
       "text": "rather than"
     },
-    "1137a4": {
-      "construction": "CONSULTANT_REGISTER",
-      "line_when_waived": 124,
-      "pattern": "",
-      "text": "leverage"
-    },
-    "1396aa": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 141,
-      "pattern": "af_rather_instead",
-      "text": "rather than\", \"instead of\" and \"less"
-    },
-    "1a76a5": {
-      "construction": "TRICOLON",
-      "line_when_waived": 199,
-      "pattern": "tricolon",
-      "text": "the pattern, the matched text and the containing sentence"
-    },
-    "1d5aa7": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 141,
-      "pattern": "af_less_than",
-      "text": "\"instead of\" and \"less X than Y\" sit under  ALTERNATIVE_FRAMING"
-    },
-    "3faa1b": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 278,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "45702b": {
-      "construction": "CONSULTANT_REGISTER",
-      "line_when_waived": 124,
-      "pattern": "",
-      "text": "leveraging"
-    },
-    "45bec8": {
-      "construction": "TRICOLON",
-      "line_when_waived": 275,
-      "pattern": "tricolon",
-      "text": "A dependency tree knows where the sentence ends and which tokens are conjuncts of which head, so thr"
-    },
-    "4b53b5": {
-      "construction": "BORROWED_RIGOUR",
-      "line_when_waived": 275,
-      "pattern": "",
-      "text": "failure mode"
-    },
-    "4d59db": {
-      "construction": "BORROWED_RIGOUR",
-      "line_when_waived": 405,
-      "pattern": "",
-      "text": "load-bearing"
-    },
-    "5a5297": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 337,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "63ff40": {
-      "construction": "TRICOLON",
-      "line_when_waived": 307,
-      "pattern": "tricolon",
-      "text": "Psalm, Android Lint, PVS-Studio, detekt, SonarQube and Semgrep"
-    },
-    "71174e": {
-      "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 193,
-      "pattern": "cc_parallel_sibling",
-      "text": "from the source line, never from the quote"
-    },
-    "7c3f19": {
-      "construction": "ABSTRACT_ADVERB",
-      "line_when_waived": 373,
-      "pattern": "abstract_adverb",
-      "text": "mutually exclusive"
-    },
-    "84ff01": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 412,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "87116e": {
-      "construction": "BORROWED_RIGOUR",
-      "line_when_waived": 373,
-      "pattern": "",
-      "text": "by construction"
-    },
-    "8d1d2d": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 342,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "9713b2": {
-      "construction": "TRICOLON",
-      "line_when_waived": 334,
-      "pattern": "tricolon",
-      "text": "The same is true of every tool named here, but a claim about levels of representation invites the qu"
-    },
-    "a15fe1": {
-      "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 316,
-      "pattern": "cc_cleft",
-      "text": "That is not a question a surface-form matcher answers badly. It is a question it cannot ask."
-    },
-    "a2efd5": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 355,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "a6bc79": {
+    "d4fb15": {
       "construction": "LLM_DICTION",
-      "line_when_waived": 120,
+      "line_when_waived": 129,
       "pattern": "",
       "text": "delve"
     },
-    "ac0ac3": {
+    "0d0acd": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 153,
+      "pattern": "af_rather_instead",
+      "text": "less X than Y..."
+    },
+    "a76b6b": {
       "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 135,
-      "pattern": "cc_cleft",
-      "text": "The split that matters is not structural versus phrasal. It is construction versus pattern."
-    },
-    "b3146d": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 241,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "b536a5": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 310,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "b57fcc": {
-      "construction": "TRICOLON",
-      "line_when_waived": 51,
-      "pattern": "tricolon",
-      "text": "ticfinder reports raw counts and rates of occurrence, classifies what it finds into named categories"
-    },
-    "c39962": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 123,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "c9e5d8": {
-      "construction": "BORROWED_RIGOUR",
-      "line_when_waived": 178,
+      "line_when_waived": 156,
       "pattern": "",
-      "text": "by construction"
+      "text": "not X but Y"
     },
-    "ca47c7": {
-      "construction": "TRICOLON",
-      "line_when_waived": 165,
-      "pattern": "tricolon",
-      "text": "Most of the tricolons were real lists: \"The epoch, target, allocation, aging and prediction-side pat"
-    },
-    "d3fd98": {
-      "construction": "TRICOLON",
-      "line_when_waived": 244,
-      "pattern": "tricolon",
-      "text": "deslop's  AntitheticalPair , vale-llm-slop's  NegativeParallelism , vale-ai-tells'  ContrastiveNegat"
-    },
-    "d5f248": {
-      "construction": "TRICOLON",
-      "line_when_waived": 401,
-      "pattern": "tricolon",
-      "text": "that a test which has only ever run against conforming RTL has unknown detection capability, and tha"
-    },
-    "d6048b": {
+    "d989db": {
       "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 211,
+      "line_when_waived": 157,
       "pattern": "af_rather_instead",
-      "text": "instead of accumulating silently"
-    },
-    "d80654": {
-      "construction": "TRICOLON",
-      "line_when_waived": 313,
-      "pattern": "tricolon",
-      "text": "whether three coordinated nouns are a rhetorical figure or an ordinary list draws on item count, det"
-    },
-    "de39f5": {
-      "construction": "TRICOLON",
-      "line_when_waived": 363,
-      "pattern": "tricolon",
-      "text": "-- assistant openers and closers, sycophancy, performed candor"
-    },
-    "e6bb74": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 129,
-      "pattern": "af_rather_instead",
-      "text": "rather than character sequences"
-    },
-    "e7faee": {
-      "construction": "TRICOLON",
-      "line_when_waived": 49,
-      "pattern": "tricolon",
-      "text": "corrective contrast, participial tails, and emphatic reflexives"
-    },
-    "e81bde": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 148,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "ec4e7a": {
-      "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 188,
-      "pattern": "cc_negated_apposition",
-      "text": "runs, not the count"
-    },
-    "f0ce83": {
-      "construction": "TRICOLON",
-      "line_when_waived": 351,
-      "pattern": "tricolon",
-      "text": "vale-ai-tells measures sentence-length variance, paragraph-length variance, sentence-start entropy, "
-    },
-    "f4da08": {
-      "construction": "TRICOLON",
-      "line_when_waived": 166,
-      "pattern": "tricolon",
-      "text": "epoch, target, allocation, aging and prediction-side"
-    },
-    "f5c8c0": {
-      "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 351,
-      "pattern": "cc_negated_apposition",
-      "text": "a category, not a rule"
-    },
-    "fac6fe": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 361,
-      "pattern": "af_less_than",
-      "text": "which matter more for hardware documentation than for prose style, since \"the module"
-    },
-    "fb7cae": {
-      "construction": "ABSTRACT_ADVERB",
-      "line_when_waived": 177,
-      "pattern": "abstract_adverb",
-      "text": "mutually exclusive"
+      "text": "less X than Y..."
     }
   }
 }

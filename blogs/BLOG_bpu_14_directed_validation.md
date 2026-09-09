@@ -3,7 +3,7 @@
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>  -->
 
 ```
-TITLE:     "Directed Validation: Proving the Test Before Trusting the Result"
+TITLE:     "UPDATED: Directed Validation: Proving the Test Before Trusting the Result"
 FILE:      BLOG_bpu_14_directed_validation.md
 AUTHOR:    Jeff Nye
 DATE:      2026-09-04
@@ -20,6 +20,8 @@ COPYRIGHT: "Copyright 2026 Jeff Nye"
 -->
 
 # Directed Validation: Proving the Test Before Trusting the Result
+
+<em>updated 2026-09-09</em>
 
 ## Abstract
 

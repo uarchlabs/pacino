@@ -46,148 +46,178 @@ useful, see [References](#references).
 
 ticfinder parses markdown with spaCy[2] and reports the rhetorical
 constructions that cluster in generated prose. Typical examples are three-part
-coordination, corrective contrast, participial tails, and emphatic reflexives.
+coordination [JEFF], corrective contrast[ANSC], participial tails
+(supplementive clauses) [KORT], and emphatic reflexives(intensifiers) [KONIG].
 
-ticfinder reports raw counts and rates of occurrence, classifies what it
-finds into named categories, and presents the result as a text report or
-as simple HTML highlighting.
+ticfinder reports raw counts and rates of occurrence. It classifies what it
+finds into named categories. Results are presented as a text report and
+a graphic view using annotated HTML. 
 
 ticfinder supports a waiver mechanism. Findings you have read and accepted are
-recorded there and drop out of later runs, so the reported count is becomes
-those findings no one has looked at yet.
+recorded and drop out of later runs, the reported count then becomes
+those findings that have not been triaged.
 
-What follows is how the detection works, what a parse finds that a
-regular expression cannot, what the neighbouring tools cover that this
-one does not, and a short list of what is genuinely new here.
+What follows is a discussion on how the detection works, what a parse finds
+that a regular expression cannot, what the neighbouring tools cover that ticfinder does not, and a short list of what is possibly novel in ticfinder.
 
-## Why this exists
+## Why ticfinder exists
 
-The previous posts in the Pacino series concern LLM-based Co-design of
-RTL. The methodology in RTL generation uses an LLM to draft RTL from a
-task file. The designer reviews this RTL against planning documents. The
-record of this review is captured in the task file. The documented
-review and the unit test suites provide a preliminary level of trust in
-the RTL outcome.
+To date I have focused Pacino development on specification and LLM generation
+of RTL, manual review of the results and periodic status reports in the form of
+articles or blogs. The 1st draft of the articles is done in coordination with
+the LLM. The LLM makes it efficient to define a reasonable scope for the next
+status report and accurately capture the statistics. This is done from session
+logs and other collateral, and interactively as I set the emphasis/topics for
+the next report.
 
-Pacino's next output is specification and documentation for human
-readers, drafted by the same method. Detailed microarchitecture
-specifications run to volume, which is what makes a prose style linter
-like ticfinder worth having.
+Reporting progress is always a balance between accuracy and detail level and
+time spent away from RTL generation. The LLM helps in ensuring accuracy of
+stats and file references.
 
-The problem is recognized, and growing. A study[3] of 28,415 PubMed
-abstracts found LLM-associated marker use rising from 4.995 to 11.658
-per thousand words after 2022, a 133% increase, while control vocabulary
-declined. A separate study[4] identified 280 excess style words in
-published scientific text. Both studies count words.
+The review and rewrite effort will grow dramatically once Pacino's front end
+it complete and I transition from machine focused planning documents to human
+focused specifications and theory of operation. ticfinders purpose is to bring
+the scope of the review/rewrite effort back in bounds.
 
-Counting structures is newer. DependencyAI[5], published February 2026,
-detects AI-generated text from dependency relation labels alone,
-deliberately discarding lexical markers, and reports that syntactic
-structure carries the signal. Rallapalli et al.[6] scored
-467,985 texts on Biber's sixty-seven lexicogrammatical features and
-found past participial clauses among the five features LLMs most
-overuse, which is `PARTICIPIAL_TAIL` under its linguistics name. The
-constructions in this post are register markers that linguistics has had
-vocabulary for since 1988, produced at rates a human register does not.
-That is the premise ticfinder works from, turned to a different end. The
-research classifies documents. This tool marks sentences for an editor.
+The problems with LLM generated prose is well recognized, and the industry
+expects the problem to grow. A study[3] of 28,415 PubMed abstracts found
+LLM-associated marker use rising from 4.995 to 11.658 per thousand words after
+2022, a 133% increase, while control vocabulary declined. A separate study[4]
+identified 280 excess style words in published scientific text. To distinguish, both of these studies counted words.
 
-## What it reports
+Counting structures is a newer idea and is what ticfinder and others implement.
 
-A run prints a header, a count table, and the findings grouped by
-construction.
+[5] detects AI-generated text from dependency relation labels alone,
+deliberately discarding lexical content, and shows that syntactic structure can
+be used to capture LLM artifacts.
 
+In [6] 467,985 were scored against Biber's [BIBER1] sixty-seven
+lexicogrammatical features and found past participial clauses among the five
+features LLMs most overuse, which is `PARTICIPIAL_TAIL` under its linguistics
+name.  The constructions in this post are register markers that linguistics has
+had vocabulary for since 1988, produced at rates a human register does not. 
+
+That is the premise ticfinder works from used to a different end. The
+research classifies documents. This tool marks sentences and phrasing
+structures supporting final review by an editor.
+
+## What ticfinder reports
+
+A ticfinder run prints a header, a count table, and the findings grouped by
+construction. A run can optionally emit annotated html. I find myself mostly
+using the annotated html, which also shows the raw markdown.
+
+Example report header:
 ```
-BLOG_bpu_14_directed_validation.md
-  5059 words - 316 sentences - 0 findings (0.0 per 1k words)
-  22 waived - 1 region skipped via ticfinder_off
-  clean
+lorem_ipsum.md
+  2788 words · 189 sentences · 35 findings (12.6 per 1k words)
+  1 waived, 2 stale [lorem_ipsum.waivers.json]
+    05fe14  was L148  ALTERNATIVE_FRAMING: rather than
+    071efa  was L143  ALTERNATIVE_FRAMING: rather than...
+  3 regions skipped via ticfinder_off
+
+  ALTERNATIVE_FRAMING   13  ############
+  TRICOLON              11  ##########
+  CORRECTIVE_CONTRAST    5  #####
+  BORROWED_RIGOUR        4  ####
+  ABSTRACT_ADVERB        2  ##
+
+  ...etc...
 ```
+
 
 Constructions come in two tiers. Structural ones are functions over a
-dependency parse: `CORRECTIVE_CONTRAST`, `NEG_ESCALATION`,
-`ABSTRACT_ADVERB`, `EMPHATIC_REFLEXIVE`, `PARTICIPIAL_TAIL`,
-`TRICOLON`, `DISGUISE_METAPHOR`, `ALTERNATIVE_FRAMING`. Lexical ones
-are token patterns and word lists: `FRAME_MARKER`, `HOLLOW_BOOSTER`,
-`CLOSER`, `EM_DASH`, `HEDGE_STACK`, and the phrase groups carried in a
-JSON file.
+dependency parse: `CORRECTIVE_CONTRAST`, `NEG_ESCALATION`, `ABSTRACT_ADVERB`,
+`EMPHATIC_REFLEXIVE`, `PARTICIPIAL_TAIL`, `TRICOLON`, `DISGUISE_METAPHOR`,
+`ALTERNATIVE_FRAMING`. Lexical ones are token patterns and word lists:
+`FRAME_MARKER`, `HOLLOW_BOOSTER`, `CLOSER`, `EM_DASH`, `HEDGE_STACK`, and the
+phrase groups carried in a JSON file.
 
-The tiers are not equal partners. The structural detectors account for
-the large majority of findings on the documents I have run, and the word
-lists catch diction a parse cannot see, because no syntactic relation
-distinguishes "delve" from "examine". That division is the ordinary
-shape of register analysis, which has counted lexical items and
-grammatical structures side by side since Biber[7] set out the
-method in 1988. The lexical tier here is lemma-aware rather than
-string-aware -- `leverage` reaches `leveraged` and `leveraging` through
-lemmatisation -- and it is otherwise the same technique every tool in
-this space uses. There is no claim attached to it.
+The tiers are unequal. Structural detectors produce most of the findings on the
+documents I have run so far; the word lists catch diction the parse cannot,
+since two verbs in the same syntactic slot look identical to a dependency query
+even when one is `delve` and the other `examine`. Counting lexical items and
+grammatical structures side by side is standard procedure in register analysis[BIBER2].
 
-What the parse buys is a different level of representation. The tool
-reads syntactic relations rather than character sequences, and its unit
-is a sentence from a segmenter, where the others work on a line or on a
-document flattened to one string. Every claim in this post about what
-ticfinder can see that the others cannot reduces to that, and nothing
-about it requires the word lists to be clever.
+What the structural tier provides is a different level of representation. The
+structural detectors read syntactic relations preferred over character
+sequences, and the tool works on sentences from a segmenter, where other tools
+work on a line or on a document flattened to one string. Every claim in this
+post about what ticfinder can see that other tools cannot reduces to that, and
+nothing about it requires the word lists to be clever.
 
-The split that matters is not structural versus phrasal. It is
-construction versus pattern. A construction is a rhetorical move with a
-stable id. A pattern is one executable query that finds one of its
-surface forms. `CORRECTIVE_CONTRAST` owns several patterns, because the
-same move parses several ways: coordinated with "but", a two-clause
-cleft including one that spans a sentence boundary, asyndetic sibling
-phrases, negated apposition. "rather than", "instead of" and "less X
-than Y" sit under `ALTERNATIVE_FRAMING` instead, on base rate.
+The split that matters is construction versus pattern: a construction is a
+rhetorical function that can be realized several ways, and a pattern is one
+executable query that finds one of those realizations. `CORRECTIVE_CONTRAST` has
+several patterns, because the same function surfaces several ways: coordinated
+with "but", a two-clause cleft including one that spans a sentence boundary,
+asyndetic sibling phrases, negated apposition. `rather than`, `instead of` and
+`less X than Y` sit under `ALTERNATIVE_FRAMING` instead.
 
-A pattern can carry its own confidence and override the construction's,
-because base rates inside one rhetorical family vary enormously. `not X
-but Y` is rare and diagnostic. A bare `rather than` is ordinary English
-describing a real choice. Reporting them at equal confidence makes the
-good rules look unreliable. That is also why "rather than" lives under
-`ALTERNATIVE_FRAMING` and not `CORRECTIVE_CONTRAST`: same rhetorical
-family, completely different base rate. Group ids by precision, not by
-rhetorical neatness.
+A pattern can carry its own confidence and override the construction's, because
+base rates inside one rhetorical family differ widely. `not X but Y` is rare and
+diagnostic. A bare `rather than` is ordinary English describing a real choice.
+Reporting them at equal confidence makes the good rules look unreliable. That
+is also why `rather than` lives under `ALTERNATIVE_FRAMING` and not
+`CORRECTIVE_CONTRAST`: same rhetorical family, completely different base rate.
+Group ids by precision, not by rhetorical neatness.
 
-## A worked case
+## Example screen shots
+
+### Detailed findings report
+
+![Detailed findings](diagrams/ticfinder_3.png)
+
+### Annotated HTML
+
+![Annotated HTML](diagrams/ticfinder_2.png)
+
+
+## An example ticfinder rewrite session
 
 The previous post in the BPU series, on directed validation, went
-through ticfinder before publication. Working one construction at a
-time, highest count first, the pass ended with every finding either
-rewritten or waived.
+through ticfinder before publication. The first run reported 78
+findings. The published version reports 39, every one of them read and
+waived, with nothing left outstanding. Roughly half the findings led to
+a rewrite and the other half were read and kept, and that ratio is the
+honest summary of what the tool is for.
 
-Two constructions came out entirely, with nothing waived.
-`PARTICIPIAL_TAIL` was the clearest tic in the document and every one
-became a main clause. Every `EMPHATIC_REFLEXIVE` went too, because in
-each case dropping "itself" cost nothing.
+Working one construction at a time, highest count first, the rewrites
+that mattered were the participial tails. A representative one:
 
-What was waived is more informative. Most of the tricolons were real
-lists: "The epoch, target, allocation, aging and prediction-side paths
-had not" enumerates five paths, and "primary update, alternate update,
-and allocation" names three buses in a sentence whose subject is that
-there are three of them. Every corrective contrast survived the tool's
-own test -- was X actually claimed by someone? -- because the document
-had spent a section establishing X in each case. Most of the
-alternative framing survived too, which is the base-rate problem in the
-open.
+    In BP-045 it went further and contradicted the task itself,
+    deriving the three-index bus requirement from the CTR update
+    rules and reporting the prompt's single-index assumption as
+    wrong.
 
-Two domain terms tripped detectors on their own. `mutually exclusive`
-reads as `ABSTRACT_ADVERB` and `by construction` as `BORROWED_RIGOUR`.
-In a hardware document both mean exactly what they say -- the second one
-does real work: it marks a claim proven by the structure of an
-expression, not by a test, which is the distinction that post was about.
+became
 
-Two failure modes are worth recording because both cost rework.
+    In BP-045 it went further and contradicted the task: it derived
+    the three-index bus requirement from the CTR update rules and
+    reported the prompt's single-index assumption as wrong.
 
-Rewrites introduce findings. Splitting a participial tail promotes
-whatever the tail carried into a main clause, and a three-item list
-there becomes a tricolon. The total fell while a new finding appeared.
-Compare the finding set between runs, not the count.
+The tail was carrying the actual finding, and promoting it to a main
+clause is what the sentence wanted anyway. All six participial tails
+and all four emphatic reflexives went the same way. Those two
+constructions are the high-precision end of the tool: every hit was
+worth acting on.
 
-Masked text misleads. Markdown masking blanks inline code while
-preserving offsets, so line numbers stay right and the quoted text goes
-wrong. One finding reads "reverted a TAGE epoch gate to alone" for a
-source line ending in an inline `prm_match`. Judge from the source
-line, never from the quote.
+The other half stayed. Most are tricolons, and most of those are lists
+that happen to have three or more members. "The epoch, target,
+allocation, aging and prediction-side paths had not" names five paths
+in a document about which paths had been checked, and no rewrite
+improves it. Reporting it anyway is correct behaviour. The tool cannot
+tell a list from a figure, and it says so by reporting a rate instead
+of a verdict.
+
+One thing about the pass was not obvious in advance. Rewriting a
+document introduces findings as well as removing them. The draft
+contained a single corrective contrast; the published version contains
+four, and none of them is the original. All four were written during
+the pass, in sentences produced while fixing something else. The total
+was falling the whole time, so a count would have hidden this
+completely. That is the reason for the ordering rule below.
+
 
 ## The ledger
 
@@ -442,7 +472,27 @@ It. github.com/t0ddharris/slopster. Accessed 8 Sept. 2026.
 [15] Karpov, Andrey. "Static Analysis: Baseline VS Diff." PVS-Studio, 2020,
 habr.com/en/companies/pvs-studio/articles/513952/.
 
+[JEFF] Jefferson, Gail. "List construction as a task and resource." Interaction competence 63 (1990): 92.
+
+[ANSC] Anscombre, Jean-Claude, and Oswald Ducrot. "Deux mais en français?." Lingua 43.1 (1977): 23-40.
+
+[KORT] Kortmann, Bernd. Free adjuncts and absolutes in English: Problems of control and interpretation. Routledge, 2013.
+
+[KONIG] König, Ekkehard, et al. "Intensifiers and reflexives." Reflexives: Forms and functions 40 (2000): 41.
+
+[BIBER1] Rowley-Jolivet, Elizabeth. "Douglas Biber et al., Longman Grammar of
+Spoken and Written English. Harlow: Pearson Education Limited, 1999." Les
+cahiers de l'APLIUT. Pédagogie et Recherche 21.3 (2002): 91-93.
+
+[BIBER2] Biber, Douglas. Variation across speech and writing. Cambridge
+university press, 1991.
+
+
+
 ## See Also
+
+Lanham, Richard A. A handlist of rhetorical terms. Univ of California Press,
+1991.
 
 Alex Contributors. alex: Catch Insensitive, Inconsiderate Writing. 2015,
 github.com/get-alex/alex. Accessed 8 Sept. 2026.
@@ -459,6 +509,7 @@ arxiv.org/abs/2502.12150.
 
 Wikipedia Contributors. "Wikipedia: Signs of AI Writing." Wikipedia,
 en.wikipedia.org/wiki/Wikipedia:Signs_of_AI_writing. Accessed 8 Sept. 2026.
+
 <!-- ticfinder_on -->
 
 ---
