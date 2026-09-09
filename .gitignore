@@ -114,3 +114,7 @@ rtl/core/frontend/bpu/*.fst
 # --------------------------------------------------------------------
 # docs
 site/
+
+# ticfinder
+reports
+

@@ -23,45 +23,48 @@ COPYRIGHT: "Copyright 2026 Jeff Nye"
 
 ## Abstract
 
+Four times in these sessions a task recorded a conclusion that no check
+supported. A status count was carried forward that no run had produced.
+A task placed a defect in the RTL without opening the document that
+would have settled it, and repairing the RTL would have broken a block
+that conformed. A task found a defect, argued it was harmless, and
+reported the work complete without testing the argument; the defect was
+real. A task offered a passing test as proof when the test had never
+been run against a design that could make it fail. Each conclusion was
+plausible, and each was wrong in the direction that would have cost the
+most.
+
+The work those failures interrupted was unit-level verification of the
+TAGE and ITTAGE branch predictors of Pacino, an 8-issue RVA23 RISC-V
+design. Three RVA23 Co-Design sessions ran twenty-one tasks against the
+update rules documents, one specification row at a time: seed an entry
+directly into table memory, drive the update the row describes, then
+read the entry back out of RAM to confirm the field changed as the row
+requires. Most tasks found the design already conforming. Four defects
+were fixed, two of them the same defect appearing independently in both
+predictors.
+
+The last of the four failures produced the requirement that governs the
+rest of this work: every check must demonstrate it can fail, whether by
+running against an unfixed design, by introducing a defect and
+reverting it, or by seeding stimulus that makes a wrong answer visible.
+Fifteen technical debt items closed, and both predictors are now
+directed-validated at the unit level.
+
+Two things frame that result. A structural defect in the TAGE update
+buses had been recorded seven sessions earlier under a description that
+was also wrong, and correcting it opened the sequence. And the rule that
+every target in the Makefile runs, adopted mid-way after a count went
+stale, turned out to have a measurable cost of its own.
+
+## What had not been tested
+
 A TAGE or ITTAGE table entry holds a counter (CTR), a usefulness field
 (USE), an epoch field (EPC), and, in ITTAGE, an indirect branch target
 (TGT). An update writes these fields individually; an allocation writes
 a whole entry. Which write happens under which condition is set out in
 the update rules documents, one row per condition, and those documents
 are the authority the RTL is checked against.
-
-Three RVA23 Co-Design sessions ran twenty-one tasks to finish unit-level
-verification of the TAGE and ITTAGE branch predictors of Pacino, an
-8-issue RVA23 RISC-V design, by working through those rules row by row.
-Each test seeds an entry directly into table memory, drives the update
-the row describes, then reads the entry back out of RAM to confirm the
-field changed as the row requires. Of the sixteen verification tasks,
-eleven found the design already conforming on every row they checked,
-three fixed RTL defects, one found a defect and argued it away, and one
-was abandoned. A fourth defect was fixed by the repair task that
-adjudicated the counter direction; two of the four are the same defect
-appearing independently in both predictors.
-
-Four kinds of failure ran through the sessions, and they are the more
-instructive result. Counts were carried forward that no run in the
-session had produced. One task concluded that the counter write strobes
-were swapped in the RTL without opening the update rules document that
-would have settled it; the RTL conformed on all 33 rows and the swap was
-in five test cases, so acting on that conclusion would have broken
-working logic. One found a defect and argued it was harmless. It marked
-itself complete without testing that argument; the defect was real and
-corrupted the higher-priority table. One offered a passing test as proof
-when the test had never been run against a design that could make it
-fail; that task was abandoned.
-
-The last of the four produced the requirement that governs the rest of
-this work: every check must demonstrate it can fail, whether by running
-against an unfixed design, by introducing a defect and reverting it, or
-by seeding stimulus that makes a wrong answer visible. Fifteen technical
-debt items closed, and both predictors are now directed-validated at the
-unit level.
-
-## What had not been tested
 
 Before these sessions, the TAGE and ITTAGE update paths had been fixed
 where they were known to be broken and left alone where they were not.
@@ -627,6 +630,24 @@ architect decisions.
 The all-targets rule and its planned phased revision are also architect
 decisions, made after measuring the rule's context cost, not before.
 
+### What changed in the method
+
+Six rules came out of these sessions. Each was written against a
+specific failure, and none of them was in place when that failure
+happened.
+
+| Rule | Written after |
+|---|---|
+| Every check demonstrates it can fail, by running against an unfixed design, by injecting a defect and reverting it, or by seeding stimulus that makes a wrong answer visible. | BP-050, which argued its check would catch a defect and never ran it against one. |
+| Every simulation and lint target in the Makefile runs, whether or not it is a dependency of `all`, and every status count comes from a run in the current session. | BP-049a's port rename left two testbenches uncompilable while their previous counts stood as current truth (BUG-002). |
+| A task adjudicates against the authority document before it changes code. A change is pre-authorized only if the document agrees. | BP-047 placed the counter swap in the RTL on the strength of the tests alone; the document showed the RTL conforming on all 33 rows. |
+| A task that renames a module's ports lists every instantiating testbench in its manifest from the start. | BP-046 broke `tb_ittage_cntrl.sv` and had to edit a file that was not in its manifest. |
+| A manifest carries only what the task will read: the reference documents, the RTL under test, the packages needed to compile, the testbench and the Makefile. | BP-053 timed out carrying more planning documents than it opened. |
+| A value used by two documents is extracted into one format document that both reference, rather than corrected in the one where it was found. | BP-053 found the allocation write-data field order transposed against the structural entry layout. |
+
+The all-targets rule is the one with a measured cost against it, and a
+phased revision is planned. The others cost nothing to keep.
+
 ### The generalization
 
 Sixteen of the twenty-one tasks were verification work, and thirteen of
@@ -647,16 +668,9 @@ when the epoch gate was widened. An expected 8 returned 9 when the UAON
 guard was removed. An expected `c000` returned `e000` against the
 uncorrected target write path. Each took minutes.
 
-The same principle explains the other failures, which are not about
-tests at all. A count carried forward is a claim about a system state
-that no run has produced. A defect reported and argued harmless is a
-claim about consequences that no test has examined. A classification
-that places a swap in the RTL and not in the test is a claim about which
-artifact is authoritative that no comparison has settled. Each was
-plausible, and each was wrong or unproven in the direction that would
-have cost the most: the rationalized target write would have corrupted
-the higher-priority table, and the RTL swap would have broken a block
-that conformed on all 33 rows.
+The other three failures are not about tests at all, and the same
+principle covers them. A count, a rationalization and a classification
+are each a claim that no run has settled.
 
 The two predictors provide the one controlled comparison available. The
 same UAON defect exists in both, found independently by the same

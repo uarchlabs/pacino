@@ -1,0 +1,240 @@
+{
+  "generated_by": "ticfinder",
+  "source": "blogs/BLOG_bpu_14_directed_validation.md",
+  "waivers": {
+    "040f42": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 433,
+      "pattern": "af_rather_instead",
+      "text": "rather than"
+    },
+    "0b5e5f": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "line_when_waived": 140,
+      "pattern": "cc_parallel_sibling",
+      "text": "in  tb_ittage , not against the controller suite"
+    },
+    "15ece9": {
+      "construction": "TRICOLON",
+      "line_when_waived": 69,
+      "pattern": "tricolon",
+      "text": "epoch, target, allocation, aging and prediction-side"
+    },
+    "1b66ab": {
+      "construction": "ABSTRACT_ADVERB",
+      "line_when_waived": 240,
+      "pattern": "abstract_adverb",
+      "text": "mutually exclusive"
+    },
+    "293b7a": {
+      "construction": "TRICOLON",
+      "line_when_waived": 115,
+      "pattern": "tricolon",
+      "text": "primary update, alternate update, and allocation"
+    },
+    "30e8f2": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "line_when_waived": 380,
+      "pattern": "cc_negated_apposition",
+      "text": "the test, not the RTL"
+    },
+    "362d2d": {
+      "construction": "TRICOLON",
+      "line_when_waived": 564,
+      "pattern": "tricolon",
+      "text": "It root-caused four RTL defects to file and line and fixed them in the same session, and it produced"
+    },
+    "386a04": {
+      "construction": "TRICOLON",
+      "line_when_waived": 104,
+      "pattern": "tricolon",
+      "text": "the collapsed data, selector and address"
+    },
+    "4bf970": {
+      "construction": "TRICOLON",
+      "line_when_waived": 572,
+      "pattern": "tricolon",
+      "text": "the allocation write-data field order, the  pred_strong  carryover, and the stored final-target fiel"
+    },
+    "513ac1": {
+      "construction": "TRICOLON",
+      "line_when_waived": 654,
+      "pattern": "tricolon",
+      "text": "The design conformed to its specification nearly everywhere it was checked, which means the output i"
+    },
+    "5d7b69": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 202,
+      "pattern": "af_rather_instead",
+      "text": "rather than"
+    },
+    "61bfec": {
+      "construction": "TRICOLON",
+      "line_when_waived": 531,
+      "pattern": "tricolon",
+      "text": "(FTB, SC and RAS"
+    },
+    "656ee5": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 417,
+      "pattern": "af_rather_instead",
+      "text": "instead of the counter value"
+    },
+    "691b1c": {
+      "construction": "TRICOLON",
+      "line_when_waived": 319,
+      "pattern": "tricolon",
+      "text": "every simulation and lint target in the Makefile runs, whether or not it is a dependency of  all , a"
+    },
+    "708d9f": {
+      "construction": "TRICOLON",
+      "line_when_waived": 262,
+      "pattern": "tricolon",
+      "text": "The gate was correct and the finding was right, but the task never demonstrated that its non-provide"
+    },
+    "72c34a": {
+      "construction": "TRICOLON",
+      "line_when_waived": 412,
+      "pattern": "tricolon",
+      "text": "It confirmed `age = (lcl_epoch - EPC) mod 4`, and an effective usefulness of the raw value at age 0,"
+    },
+    "773f0d": {
+      "construction": "TRICOLON",
+      "line_when_waived": 271,
+      "pattern": "tricolon",
+      "text": "Then the gate was deliberately corrupted to `(prm_match | alt_match)`, both non-provider checks fail"
+    },
+    "79f444": {
+      "construction": "TRICOLON",
+      "line_when_waived": 149,
+      "pattern": "tricolon",
+      "text": "tbl_hit_p1 ,  tbl_cntrl_bits_p1  and  tbl_pred_tgt_p1"
+    },
+    "7da80a": {
+      "construction": "TRICOLON",
+      "line_when_waived": 594,
+      "pattern": "tricolon",
+      "text": "The planning assistant scoped and sequenced all twenty-one tasks, including the dependency order tha"
+    },
+    "7e1071": {
+      "construction": "TRICOLON",
+      "line_when_waived": 365,
+      "pattern": "tricolon",
+      "text": "From that point a manifest listed only the reference documents, the RTL under test, the packages nee"
+    },
+    "7e77f6": {
+      "construction": "TRICOLON",
+      "line_when_waived": 314,
+      "pattern": "tricolon",
+      "text": "BP-050a enumerated all twenty targets, repaired both testbenches with no RTL change, and the escape "
+    },
+    "875495": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 360,
+      "pattern": "af_rather_instead",
+      "text": "Rather than correct one document"
+    },
+    "8bd2df": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 360,
+      "pattern": "af_less_than",
+      "text": "more planning documents in its manifest than it read, and after"
+    },
+    "8c80c0": {
+      "construction": "BORROWED_RIGOUR",
+      "line_when_waived": 240,
+      "pattern": "",
+      "text": "by construction"
+    },
+    "8d8477": {
+      "construction": "TRICOLON",
+      "line_when_waived": 292,
+      "pattern": "tricolon",
+      "text": "BP-056 reverted a TAGE epoch gate to  prm_match  alone, watched two tests fail with the epoch field "
+    },
+    "9810d6": {
+      "construction": "TRICOLON",
+      "line_when_waived": 153,
+      "pattern": "tricolon",
+      "text": "After  pred_val_p1  captures, the block evaluates against the correct values, then re-evaluates agai"
+    },
+    "98d86f": {
+      "construction": "TRICOLON",
+      "line_when_waived": 269,
+      "pattern": "tricolon",
+      "text": "The epoch write enable was established as provider-only by construction: it rides the mutually exclu"
+    },
+    "a529f0": {
+      "construction": "TRICOLON",
+      "line_when_waived": 189,
+      "pattern": "tricolon",
+      "text": "The modified test failed before the fix and passed after, and the defect was corrected against  itta"
+    },
+    "aa174f": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "line_when_waived": 420,
+      "pattern": "cc_negated_apposition",
+      "text": "a 32-bit input port, not a static parameter"
+    },
+    "b03224": {
+      "construction": "TRICOLON",
+      "line_when_waived": 378,
+      "pattern": "tricolon",
+      "text": "counter, usefulness, allocation, epoch and target"
+    },
+    "b72f19": {
+      "construction": "TRICOLON",
+      "line_when_waived": 302,
+      "pattern": "tricolon",
+      "text": "BP-060 seeded the provider counter at 3'b111 and again at the weak-band boundary 3'b100, so  pred_st"
+    },
+    "ba836c": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "line_when_waived": 585,
+      "pattern": "cc_cleft",
+      "text": "The pattern is not carelessness in execution; it is the absence of the authority document at the mom"
+    },
+    "ba9ad2": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 582,
+      "pattern": "af_rather_instead",
+      "text": "instead of demonstrating it"
+    },
+    "e67644": {
+      "construction": "TRICOLON",
+      "line_when_waived": 624,
+      "pattern": "tricolon",
+      "text": "the decision to extract the entry field order into standalone format documents and not patch one rul"
+    },
+    "f0d054": {
+      "construction": "TRICOLON",
+      "line_when_waived": 62,
+      "pattern": "tricolon",
+      "text": "a counter (CTR), a usefulness field (USE), an epoch field (EPC), and, in ITTAGE, an indirect branch "
+    },
+    "f23151": {
+      "construction": "TRICOLON",
+      "line_when_waived": 473,
+      "pattern": "tricolon",
+      "text": "an all-targets pass of 123, 77 and 32"
+    },
+    "f413bd": {
+      "construction": "TRICOLON",
+      "line_when_waived": 197,
+      "pattern": "tricolon",
+      "text": "The task chose the rules table, called the decisions note subordinate implementation guidance, and u"
+    },
+    "f46f57": {
+      "construction": "BORROWED_RIGOUR",
+      "line_when_waived": 267,
+      "pattern": "",
+      "text": "by construction"
+    },
+    "f82906": {
+      "construction": "TRICOLON",
+      "line_when_waived": 672,
+      "pattern": "tricolon",
+      "text": "A count, a rationalization and a classification"
+    }
+  }
+}
