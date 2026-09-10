@@ -137,7 +137,8 @@ The tiers are unequal. Structural detectors produce most of the findings on the
 documents I have run so far; the word lists catch diction the parse cannot,
 since two verbs in the same syntactic slot look identical to a dependency query
 even when one is `delve` and the other `examine`. Counting lexical items and
-grammatical structures side by side is standard procedure in register analysis[BIBER2].
+grammatical structures side by side is standard procedure in register
+analysis[BIBER2].
 
 What the structural tier provides is a different level of representation. The
 structural detectors read syntactic relations preferred over character
@@ -148,19 +149,19 @@ nothing about it requires the word lists to be clever.
 
 The split that matters is construction versus pattern: a construction is a
 rhetorical function that can be realized several ways, and a pattern is one
-executable query that finds one of those realizations. `CORRECTIVE_CONTRAST` has
-several patterns, because the same function surfaces several ways: coordinated
-with "but", a two-clause cleft including one that spans a sentence boundary,
-asyndetic sibling phrases, negated apposition. `rather than`, `instead of` and
-`less X than Y` sit under `ALTERNATIVE_FRAMING` instead.
+executable query that finds one of those realizations. `CORRECTIVE_CONTRAST`
+has several patterns, because the same function surfaces several ways:
+coordinated with "but", a two-clause cleft including one that spans a sentence
+boundary, asyndetic sibling phrases, negated apposition. `rather than`,
+`instead of` and `less X than Y` sit under `ALTERNATIVE_FRAMING` instead.
 
 A pattern can carry its own confidence and override the construction's, because
-base rates inside one rhetorical family differ widely. `not X but Y` is rare and
-diagnostic. A bare `rather than` is ordinary English describing a real choice.
-Reporting them at equal confidence makes the good rules look unreliable. That
-is also why `rather than` lives under `ALTERNATIVE_FRAMING` and not
-`CORRECTIVE_CONTRAST`: same rhetorical family, completely different base rate.
-Group ids by precision, not by rhetorical neatness.
+base rates inside one rhetorical family differ widely. `not X but Y` is rare
+and diagnostic. A bare `rather than` is ordinary English describing a real
+choice.  Reporting them at equal confidence makes the good rules look
+unreliable. That is also why `rather than` lives under `ALTERNATIVE_FRAMING`
+and not `CORRECTIVE_CONTRAST`: same rhetorical family, completely different
+base rate.  Group ids by precision, not by rhetorical neatness.
 
 ## Example screen shots
 
@@ -175,15 +176,34 @@ Group ids by precision, not by rhetorical neatness.
 
 ## An example ticfinder rewrite session
 
-The previous post in the BPU series, on directed validation, went
-through ticfinder before publication. The first run reported 78
-findings. The published version reports 39, every one of them read and
-waived, with nothing left outstanding. Roughly half the findings led to
-a rewrite and the other half were read and kept, and that ratio is the
-honest summary of what the tool is for.
+A previous post in the Pacino BPU series went through ticfinder before
+publication. The first run reported 78 findings. The published version reports
+39, all of them waived, with nothing left untriaged.
 
-Working one construction at a time, highest count first, the rewrites
-that mattered were the participial tails. A representative one:
+The waived findings
+```
+TRICOLON             26
+ALTERNATIVE_FRAMING  6
+CORRECTIVE_CONTRAST  4
+BORROWED_RIGOUR      2
+ABSTRACT_ADVERB      1
+```
+
+That table is the final waiver count and their catagories. It is not a
+breakdown of the original 78. Rewriting removed most of the original findings.
+
+<!-- ticfinder_off -->
+NOTE: <em>TRICOLON classification is a well known LLM tell, but it is also
+common in natural human speech; we humans love our rule of three.
+
+The numbers above are from one version of ticfinder and they will change.
+TRICOLON has some recent findings in literature [BAKH]. I am working on
+TRICOLON capture based on this new literature.</em>
+<!-- ticfinder_on -->
+
+Back at the original 78, I worked one construction at a time, highest count
+first. The rewrites that mattered were the participial tails. A representative
+one:
 
     In BP-045 it went further and contradicted the task itself,
     deriving the three-index bus requirement from the CTR update
@@ -196,54 +216,46 @@ became
     the three-index bus requirement from the CTR update rules and
     reported the prompt's single-index assumption as wrong.
 
-The tail was carrying the actual finding, and promoting it to a main
-clause is what the sentence wanted anyway. All six participial tails
-and all four emphatic reflexives went the same way. Those two
-constructions are the high-precision end of the tool: every hit was
-worth acting on.
+The tail expressed the actual finding, and promoting it to a main clause
+subjectively improved clarity and flow. All six `PARTICIPIAL_TAIL` and all four
+`EMPHATIC_REFLEXIVE` findings were rewritten the same way, which is why neither
+construction appears in the closing count. The remaining rewrites were spread
+across the other constructions and went much the same way. I have not itemized
+them.
 
-The other half stayed. Most are tricolons, and most of those are lists
-that happen to have three or more members. "The epoch, target,
-allocation, aging and prediction-side paths had not" names five paths
-in a document about which paths had been checked, and no rewrite
-improves it. Reporting it anyway is correct behaviour. The tool cannot
-tell a list from a figure, and it says so by reporting a rate instead
-of a verdict.
+My process was to walk through the high count, high confidence findings and
+then reassess. About 39 findings remained, the majority being TRICOLON. These
+are abused by LLMs but also very common in natural human text. The manifest in
+lists with three or more members. 
 
-One thing about the pass was not obvious in advance. Rewriting a
-document introduces findings as well as removing them. The draft
-contained a single corrective contrast; the published version contains
-four, and none of them is the original. All four were written during
-the pass, in sentences produced while fixing something else. The total
-was falling the whole time, so a count would have hidden this
-completely. That is the reason for the ordering rule below.
+This TRICOLON finding, "The epoch, target, allocation, aging and
+prediction-side paths had not...", names five paths in a section of the source
+document specifically about which RTL paths had been checked. It is an
+enumeration; no rewrite significantly improved clarity. ticfinder reports it to
+ensure it is reviewed.
 
+Two practical notes. First, rewriting a document introduces findings as well as
+removing them. Second, the waiver hashes cover the sentence containing each
+match, so rewriting a sentence can turn a waiver stale hile edits elsewhere in
+the document leave it intact. The ticfinder README describes how waiver hashes
+are formed.
 
-## The ledger
+## The unit of a waiver
 
-Each finding carries a six-character id that hashes the construction,
-the pattern, the matched text and the containing sentence, with
-whitespace normalised and offsets excluded. Rewrapping a paragraph
-keeps the waiver. Rewriting the sentence retires it.
+A waiver is keyed to the sentence the construction sits in, not to a
+line number and not to the matched phrase on its own. That is the same
+grain the detector works at, for the same reason: `rather than` is a
+tic in one sentence and a real choice in the next, so the phrase by
+itself is not something a reader can accept or reject. What gets
+recorded is a judgment about a construction in a context, and the
+sentence is the smallest unit that carries the context.
 
-After review, the remaining findings are waived by id, and the waiver
-file records what was accepted and why it was recognisable six months
-later. The reported count is then the number of findings nobody has
-looked at yet. Zero means reviewed, not clean, and those are different
-claims. A file with an empty waiver object says the document was
-reviewed and nothing was waived. A missing file says it was never
-reviewed at all.
-
-Waivers whose text has vanished report as stale instead of accumulating
-silently. A clean count sitting on stale entries is a false green, and
-that is the same class of error as a status count carried forward from a
-run nobody made -- the failure the previous post was written about.
-
-The practical consequence is an ordering rule. Because an id covers the
-sentence containing the match, rewriting a sentence retires any waiver
-written against it, so waiving as you go leaves stale entries behind.
-Work the document first, then take the waive list from one clean run at
-the end.
+Two consequences follow, and the README has the detail. Rewrapping a
+paragraph keeps a waiver, while rewriting the sentence turns it stale,
+which is why the waive list is taken from one clean run at the end
+rather than as you go. And stale waivers are reported rather than
+dropped, so the number a run prints is the number nobody has looked at
+yet: zero means reviewed, not clean.
 
 ## The neighbours
 
@@ -487,7 +499,9 @@ cahiers de l'APLIUT. Pédagogie et Recherche 21.3 (2002): 91-93.
 [BIBER2] Biber, Douglas. Variation across speech and writing. Cambridge
 university press, 1991.
 
-
+[BAKH] Bakhshi, Asim D. "Saying More Than They Know: A Framework for
+Quantifying Epistemic-Rhetorical Miscalibration in Large Language Models."
+arXiv preprint arXiv:2604.19768 (2026).
 
 ## See Also
 
