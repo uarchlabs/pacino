@@ -257,17 +257,66 @@ rather than as you go. And stale waivers are reported rather than
 dropped, so the number a run prints is the number nobody has looked at
 yet: zero means reviewed, not clean.
 
-## The neighbours
+## Related work
 
-Prose linting is old. proselint[8] carries 70-plus checks and matches
-against dictionaries and regular expressions; the diacritical-marks
-check is a straight lookup table. write-good[9] calls itself a naive
-linter and builds regexes. Vale has twelve rule extension points, of
-which exactly one, `sequence`, touches linguistics at all, reading
+ticfinder sits between three bodies of work: the linguistic description of the
+constructions it looks for, the stylometry and detection literature that
+established structure as a signal, and the prose linters it resembles in
+output.
+
+### The constructions
+
+Every construction ticfinder reports has a name in the descriptive literature
+and a study history predating LLMs by decades. Three-part coordination is
+treated by Jefferson as a conversational resource with its own completion
+properties [JEFF], and by Fahnestock as a figure doing argumentative work in
+scientific prose [FAHN]. Corrective contrast is Anscombre and Ducrot's second
+*mais*, the one that rejects a proposition where the first concedes it [ANSC].
+Participial tails are supplementive clauses in Quirk et al. [QUIRK] and free
+adjuncts in Kortmann [KORT]. Emphatic reflexives are intensifiers, described by
+Koenig and colleagues [KONIG].
+
+Biber's multidimensional analysis supplies the frame that makes these countable
+[7][BIBER1]. A register is characterised by the rates at which lexicogrammatical
+features occur rather than by features unique to it, which is why a tool of this
+kind reports a rate, and why every construction it finds is ordinary English.
+
+### Stylometry and detection
+
+Attributing text by counting features is old. Mosteller and Wallace settled the
+disputed Federalist papers on function word frequencies [MOST], and Stamatatos
+surveys what the field had become by 2009 [STAM]. The result most relevant here
+is Baayen, van Halteren and Tweedie, who applied the same statistical machinery
+to syntactic rewrite rules drawn from an annotated corpus and found that rule
+frequencies discriminate authorship better than word frequencies do [BAAY].
+That is the earliest clear statement of the premise this tool works from.
+
+The LLM-era literature arrived at the same premise by a different route. Kobak
+and colleagues identified excess vocabulary in post-2022 academic writing [4],
+and Alani and Jansen measured marker diffusion across 28,415 PubMed abstracts
+[3]. Both count words. Rallapalli and colleagues scored 467,985 texts against
+Biber's sixty-seven features and found past participial clauses among the five
+features LLMs most overuse [6]. Ahmed and Hammond detect generated text from
+dependency relation labels alone, discarding lexical content entirely [5].
+Bakhshi treats the rhetorical surface as a measurable property in its own right
+[BAKH].
+
+The difference from that work is purpose, not method. It classifies whole
+documents and validates against corpora. ticfinder marks individual sentences
+for a human editor, and has no corpus behind it.
+
+### Prose linters
+
+proselint carries seventy-plus checks built on dictionaries and regular
+expressions [8]. write-good describes itself as a naive linter and builds
+regexes [9]. Vale is the extension point most of the LLM-specific work is built
+on [1]; it offers twelve rule types, of which one, `sequence`, reads
 part-of-speech tags a sentence at a time. None of the three parses.
 
-Closer to home, there is a cluster of Vale style packages aimed
-squarely at LLM prose, and they got there independently.
+### LLM-tic style packages
+
+Four Vale style packages target LLM prose directly, developed concurrently with
+this one and with each other.
 
 | project | scale | detection |
 |---|---|---|
@@ -277,23 +326,40 @@ squarely at LLM prose, and they got there independently.
 | slopster[13] | a handful, plus an agent skill and a diff tool | `existence`, `substitution` |
 | ticfinder[14] | a dozen constructions and a phrase file | dependency parse plus token matcher |
 
-Rule counts move whenever those repositories move, so the table gives
-the shape rather than a census. The proportions are the durable part: in
-the largest of them, the overwhelming majority of rules are `existence`,
-which is regex.
+Rule counts move whenever those repositories move, so the table gives the shape
+rather than a census. The proportion is the durable part: in the largest of
+them, the overwhelming majority of rules are `existence`, which is regex.
 
-The taxonomies converge to a degree that is hard to dismiss. deslop has
-a rule named `BorrowedRigor`; I have a construction named
-`BORROWED_RIGOUR`, and neither of us knew about the other. deslop's
-`AntitheticalPair`, vale-llm-slop's `NegativeParallelism`,
-vale-ai-tells' `ContrastiveNegation` and my `CORRECTIVE_CONTRAST` are
-one construction under four names. `HedgeCascade` is `HEDGE_STACK`.
-`HollowCloser` is `CLOSER`. `OpenerCliche` is `FRAME_MARKER`. All five
-projects have an em-dash rule.
+Their taxonomies converge with ticfinder's and with each other. deslop has
+`BorrowedRigor` against `BORROWED_RIGOUR`. `CORRECTIVE_CONTRAST` appears as
+`ContrastiveNegation`, `ContrastiveFormulas` and `NegatedPair` in vale-ai-tells,
+`AntitheticalPair` and `NotJustScaffold` in deslop, `NegativeParallelism` in
+vale-llm-slop, and inside `AISlop` in slopster. `TRICOLON` appears as
+`VerbTricolon` and `VerbTricolonDensity`, and as `Tricolon`. `HedgeCascade` is
+`HEDGE_STACK`, `HollowCloser` is `CLOSER`, `OpenerCliche` is `FRAME_MARKER`.
+All five carry an em-dash rule and a diction list.
 
-None of this was coordinated. Four of the five projects were published
-before I knew any of them existed, and the overlap lies in which
-constructions they name; the rule wording differs everywhere.
+That convergence is the useful result. Categories five people arrive at
+separately, from exposure to the same register, are more likely to be
+properties of the register than the preferences of any one editor. The
+agreement is on which constructions to name; the rule wording differs
+everywhere, which is what one would expect if each author is approximating a
+functional category with whatever machinery the tool provides.
+
+### Overlap and difference
+
+ticfinder shares its taxonomy with the four packages above, its rate-based
+reporting with register analysis, and its content-hash waivers with static
+analysis practice, where Psalm, Android Lint, PVS-Studio, detekt, SonarQube and
+Semgrep all hash warning fields because line numbers shift [15].
+
+The level of representation is where it differs. The detection literature
+parses and classifies documents. The editing tools match surface forms and mark
+sentences. ticfinder parses and marks sentences. The rest follows from that:
+constructions are queries over a dependency tree rather than enumerated surface
+forms, a match is scoped to a sentence from a segmenter rather than to a line
+or to a document flattened into one string, and a waiver is keyed to the
+sentence its construction sits in.
 
 ## Regex against a parse
 
@@ -335,86 +401,31 @@ dependency on every run, parse quality is the ceiling on precision, and
 where the parse is wrong the finding is wrong. Masked inline code
 degrades the parse locally, which is why the quoted text misleads.
 
-## What is actually new
+## Limitations
 
-Very little, and it is worth being specific about which little.
+Document-level uniformity is not detected at all, and that is a whole category
+rather than a missing rule. vale-ai-tells measures sentence-length variance,
+paragraph-length variance, sentence-start entropy, sentence-start repetition,
+transition repetition and content duplication, sectioning a document by heading
+first so that variety across sections does not mask uniformity within one. The
+signal there is the absence of variance rather than the presence of a
+construction, and it is the best supported signal in the stylometry literature.
+ticfinder computes mean sentence length and its standard deviation and prints
+them under `--stats`, but no detector consumes them.
 
-Not new: prose linting. Not new: flagging LLM constructions -- four
-other projects, one with ten times the rule count. Not new: the insight
-that structure beats vocabulary as a signal, which the detection
-literature reached first and tested properly. Not new: content-hash
-suppression, which is standard practice in code analysis[15], where
-Psalm, Android Lint, PVS-Studio, detekt, SonarQube and Semgrep all hash
-warning fields precisely because line numbers shift.
+Domain vocabulary has to be suppressed by hand. In hardware documentation
+`mutually exclusive` reads as `ABSTRACT_ADVERB` and `by construction` as
+`BORROWED_RIGOUR`, and both mean exactly what they say. `by construction` marks
+a claim proven by the structure of an expression, which is a distinction worth
+keeping. Both are waived on every hardware document I run. The fix is known,
+and one of the neighbours has already built it: vale-ai-tells disables its
+fall-metaphor rules for aviation prose. ticfinder has no mechanism for scoping
+a construction to a register.
 
-What appears to be uncommon, in descending order of confidence:
-
-Detection at the level of syntactic structure rather than surface form,
-in a tool meant for editing. The detection research parses; the editing
-tools match surface forms. ticfinder sits in between. The tricolon
-labelling is the clearest case: deciding whether three coordinated nouns
-are a rhetorical figure or an ordinary list draws on item count,
-determiners, premodifiers, a cue word in the lead-in, and whether the
-members are short and of similar length. That is not a question a
-surface-form matcher answers badly. It is a question it cannot ask.
-
-The construction-and-pattern hierarchy, with per-pattern confidence
-overriding the construction's. The Vale rulesets are flat, and
-vale-ai-tells sets every rule to `error`. Owning several patterns under
-one stable id is what lets the id survive when surface forms drift, and
-what lets one noisy pattern be muted without losing the construction.
-
-A persistent review ledger for prose. None of the four has one.
-slopster's `slop-diff` comes nearest. It compares a branch against main
-and reports only new findings, and it is immune to line shifts. But that
-answers what changed, not what a human has accepted. For a specification
-that will be reviewed repeatedly by different people, the second
-question is the one that matters.
-
-One caveat sits under all four. None of this is validated. There is no
-corpus study behind ticfinder, no precision or recall figure, and no
-baseline beyond my own documents. The same is true of every tool named
-here, but a claim about levels of representation invites the question,
-and the honest answer is that the evidence in this post is worked
-examples rather than measurement.
-
-Refusing to render a verdict. ticfinder reports a rate against a
-denominator the author controls, and states in its own documentation
-that every construction it finds is legitimate English. That is a
-design stance rather than a feature, and it is the reason the tool is
-usable on a document where six of eight `ALTERNATIVE_FRAMING` hits are
-correct.
-
-## What I am taking from the others
-
-Reading four competing implementations produced a longer list of things
-to add than of things to claim.
-
-The largest gap is a category, not a rule. vale-ai-tells measures
-sentence-length variance, paragraph-length variance, sentence-start
-entropy, sentence-start repetition, transition repetition and content
-duplication, in Tengo scripts that section a document by heading first.
-The signal there is the absence of variance rather than the presence of
-a construction, it is the best-supported signal in the stylometry
-literature, and ticfinder does not look for it at all. It already
-computes the sentence statistics and reports them in its JSON output;
-nothing reads them.
-
-After that: anthropomorphism rules, which matter more for hardware
-documentation than for prose style, since "the module wants to" is a
-precision defect before it is a tell. Chat-artifact tells --
-assistant openers and closers, sycophancy, performed candor -- which
-leak whenever an assistant drafts specification text. Heading rules,
-of which vale-ai-tells has six and ticfinder none. And a set of
-constructions the Vale packages implement as regex that would suit a
-parse better: pseudo-cleft, shell-noun copula, summative appositive,
-stacked anaphora.
-
-The most immediately useful is the least sophisticated. vale-ai-tells
-disables its fall-metaphor rules for aviation prose. I have been hand-
-waiving `mutually exclusive` and `by construction` on every hardware
-document, which is a domain vocabulary problem with a known solution.
-
+Nothing here is validated. There is no corpus study behind ticfinder, no
+precision or recall figure, and no baseline beyond my own documents. The
+evidence in this post is worked examples, which is a weaker footing than the
+detection literature stands on.
 
 ## Where this goes
 
@@ -502,6 +513,23 @@ university press, 1991.
 [BAKH] Bakhshi, Asim D. "Saying More Than They Know: A Framework for
 Quantifying Epistemic-Rhetorical Miscalibration in Large Language Models."
 arXiv preprint arXiv:2604.19768 (2026).
+
+[QUIRK] Quirk, Randolph, Sidney Greenbaum, Geoffrey Leech, and Jan Svartvik. A
+Comprehensive Grammar of the English Language. Longman, 1985.
+
+[FAHN] Fahnestock, Jeanne. Rhetorical Figures in Science. Oxford UP, 1999.
+
+[MOST] Mosteller, Frederick, and David L. Wallace. Inference and Disputed
+Authorship: The Federalist. Addison-Wesley, 1964.
+
+[BAAY] Baayen, Harald, Hans van Halteren, and Fiona Tweedie. "Outside the Cave
+of Shadows: Using Syntactic Annotation to Enhance Authorship Attribution."
+Literary and Linguistic Computing, vol. 11, no. 3, 1996, pp. 121-132.
+
+[STAM] Stamatatos, Efstathios. "A Survey of Modern Authorship Attribution
+Methods." Journal of the American Society for Information Science and
+Technology, vol. 60, no. 3, 2009, pp. 538-556. doi:10.1002/asi.21001.
+
 
 ## See Also
 
