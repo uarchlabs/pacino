@@ -57,8 +57,11 @@ ticfinder supports a waiver mechanism. Findings you have read and accepted are
 recorded and drop out of later runs, the reported count then becomes
 those findings that have not been triaged.
 
-What follows is a discussion on how the detection works, what a parse finds
-that a regular expression cannot, what the neighbouring tools cover that ticfinder does not, and a short list of what is possibly novel in ticfinder.
+What follows is how the detection works and a worked rewrite session on an
+earlier post. A related work section then places ticfinder among the
+descriptive literature, the detection research and the tools that share its
+purpose, followed by what a parse finds that a regular expression cannot and
+a limitations section covering what it does not do.
 
 ## Why ticfinder exists
 
@@ -75,31 +78,14 @@ time spent away from RTL generation. The LLM helps in ensuring accuracy of
 stats and file references.
 
 The review and rewrite effort will grow dramatically once Pacino's front end
-it complete and I transition from machine focused planning documents to human
-focused specifications and theory of operation. ticfinders purpose is to bring
+is complete and I transition from machine focused planning documents to human
+focused specifications and theory of operation. ticfinder's purpose is to bring
 the scope of the review/rewrite effort back in bounds.
 
-The problems with LLM generated prose is well recognized, and the industry
-expects the problem to grow. A study[3] of 28,415 PubMed abstracts found
-LLM-associated marker use rising from 4.995 to 11.658 per thousand words after
-2022, a 133% increase, while control vocabulary declined. A separate study[4]
-identified 280 excess style words in published scientific text. To distinguish, both of these studies counted words.
-
-Counting structures is a newer idea and is what ticfinder and others implement.
-
-[5] detects AI-generated text from dependency relation labels alone,
-deliberately discarding lexical content, and shows that syntactic structure can
-be used to capture LLM artifacts.
-
-In [6] 467,985 were scored against Biber's [BIBER1] sixty-seven
-lexicogrammatical features and found past participial clauses among the five
-features LLMs most overuse, which is `PARTICIPIAL_TAIL` under its linguistics
-name.  The constructions in this post are register markers that linguistics has
-had vocabulary for since 1988, produced at rates a human register does not. 
-
-That is the premise ticfinder works from used to a different end. The
-research classifies documents. This tool marks sentences and phrasing
-structures supporting final review by an editor.
+The problems with LLM generated prose are well recognized, and the industry
+expects them to grow. The measurement behind that, and the tools other people
+have built in response, are covered in Related work below. ticfinder is now in
+the loop for Pacino's documentation rather than only for these posts.
 
 ## What ticfinder reports
 
@@ -277,9 +263,10 @@ adjuncts in Kortmann [KORT]. Emphatic reflexives are intensifiers, described by
 Koenig and colleagues [KONIG].
 
 Biber's multidimensional analysis supplies the frame that makes these countable
-[7][BIBER1]. A register is characterised by the rates at which lexicogrammatical
-features occur rather than by features unique to it, which is why a tool of this
-kind reports a rate, and why every construction it finds is ordinary English.
+[7][BIBER1]. A register is characterised by the rates at which
+lexicogrammatical features occur rather than by features unique to it, which is
+why a tool of this kind reports a rate, and why every construction it finds is
+ordinary English.
 
 ### Stylometry and detection
 
@@ -291,19 +278,25 @@ to syntactic rewrite rules drawn from an annotated corpus and found that rule
 frequencies discriminate authorship better than word frequencies do [BAAY].
 That is the earliest clear statement of the premise this tool works from.
 
-The LLM-era literature arrived at the same premise by a different route. Kobak
-and colleagues identified excess vocabulary in post-2022 academic writing [4],
-and Alani and Jansen measured marker diffusion across 28,415 PubMed abstracts
-[3]. Both count words. Rallapalli and colleagues scored 467,985 texts against
-Biber's sixty-seven features and found past participial clauses among the five
-features LLMs most overuse [6]. Ahmed and Hammond detect generated text from
-dependency relation labels alone, discarding lexical content entirely [5].
-Bakhshi treats the rhetorical surface as a measurable property in its own right
-[BAKH].
+The LLM-era literature began by counting words. Alani and Jansen examined
+28,415 PubMed abstracts and found LLM-associated marker use rising from 4.995
+to 11.658 per thousand words after 2022, a 133 per cent increase, while control
+vocabulary declined [3]. Kobak and colleagues identified 280 excess style words
+in published scientific text [4].
 
-The difference from that work is purpose, not method. It classifies whole
-documents and validates against corpora. ticfinder marks individual sentences
-for a human editor, and has no corpus behind it.
+Counting structures came later. Rallapalli and colleagues scored 467,985 texts
+against Biber's sixty-seven lexicogrammatical features [BIBER1] and found past
+participial clauses among the five features LLMs most overuse, which is
+`PARTICIPIAL_TAIL` under its linguistics name [6]. Ahmed and Hammond detect
+generated text from dependency relation labels alone, deliberately discarding
+lexical content [5]. Bakhshi treats the rhetorical surface as a measurable
+property in its own right [BAKH]. The constructions in this post are register
+markers linguistics has had vocabulary for since 1988, produced at rates a
+human register does not.
+
+The difference from that work is purpose rather than method. It classifies
+whole documents and validates against corpora. ticfinder marks individual
+sentences for a human editor, and has no corpus behind it.
 
 ### Prose linters
 
@@ -332,12 +325,13 @@ them, the overwhelming majority of rules are `existence`, which is regex.
 
 Their taxonomies converge with ticfinder's and with each other. deslop has
 `BorrowedRigor` against `BORROWED_RIGOUR`. `CORRECTIVE_CONTRAST` appears as
-`ContrastiveNegation`, `ContrastiveFormulas` and `NegatedPair` in vale-ai-tells,
-`AntitheticalPair` and `NotJustScaffold` in deslop, `NegativeParallelism` in
-vale-llm-slop, and inside `AISlop` in slopster. `TRICOLON` appears as
-`VerbTricolon` and `VerbTricolonDensity`, and as `Tricolon`. `HedgeCascade` is
-`HEDGE_STACK`, `HollowCloser` is `CLOSER`, `OpenerCliche` is `FRAME_MARKER`.
-All five carry an em-dash rule and a diction list.
+`ContrastiveNegation`, `ContrastiveFormulas` and `NegatedPair` in
+vale-ai-tells, `AntitheticalPair` and `NotJustScaffold` in deslop,
+`NegativeParallelism` in vale-llm-slop, and inside `AISlop` in slopster.
+`TRICOLON` appears as `VerbTricolon` and `VerbTricolonDensity`, and as
+`Tricolon`. `HedgeCascade` is `HEDGE_STACK`, `HollowCloser` is `CLOSER`,
+`OpenerCliche` is `FRAME_MARKER`.  All five carry an em-dash rule and a diction
+list.
 
 That convergence is the useful result. Categories five people arrive at
 separately, from exposure to the same register, are more likely to be
@@ -363,16 +357,15 @@ sentence its construction sits in.
 
 ## Regex against a parse
 
-The clearest comparison available is the tricolon, because
-vale-ai-tells and ticfinder both detect it and the implementations
-could not be less alike.
+The clearest place to test that difference is the tricolon, because
+vale-ai-tells and ticfinder both detect it, by completely different means.
 
-vale-ai-tells uses a couple of dozen hand-written regular expressions:
-gerund, past tense, third person, base form after a modal, base form
-after a pronoun subject, shared infinitive, repeated infinitive and
-post-colon, each crossed with syndetic and asyndetic forms and with
-"and" against "or", plus a negative lookbehind that exempts Conventional
-Commits subjects. The file's own comment explains the hardest part:
+vale-ai-tells uses twenty-four hand-written regular expressions: gerund, past
+tense, third person, base form after a modal, base form after a pronoun
+subject, shared infinitive, repeated infinitive and post-colon, each crossed
+with syndetic and asyndetic forms and with "and" against "or", plus a negative
+lookbehind that exempts Conventional Commits subjects. The file's own comment
+explains the hardest part:
 
 > Vale flattens a document to a single string before matching, joining
 > paragraphs with spaces, so a gap that allowed a period would let three
@@ -380,75 +373,68 @@ Commits subjects. The file's own comment explains the hardest part:
 > how a slop paragraph of six short sentences used to report a tricolon
 > it never contained.
 
-That failure mode does not exist over a parse. A dependency tree knows
-where the sentence ends and which tokens are conjuncts of which head,
-so three-part coordination is one detector, and it reports whether the
-coordination is of verbs, nouns or auxiliaries as a subtype rather than
-as a separate rule. The same holds for corrective contrast:
-vale-ai-tells' `ContrastiveNegation` is two regexes whose comment
-concedes it "will also catch a literal 'coffee, no sugar'".
+That failure mode does not exist over a parse. A dependency tree knows where
+the sentence ends and which tokens are conjuncts of which head, so three-part
+coordination is one detector, and it reports whether the coordination is of
+verbs, nouns or auxiliaries as a subtype rather than as a separate rule. The
+same holds for corrective contrast: vale-ai-tells' `ContrastiveNegation` is two
+regexes whose comment concedes it "will also catch a literal 'coffee, no
+sugar'".
 
 The Vale packages are not unlinguistic. Their `sequence` rules read
-part-of-speech tags, and word lists are lexicography. What Vale fixes
-for its rulesets is the level of representation, and that is the whole
-of the difference. Its only linguistic extension point reads
-part-of-speech tags, so a rule that needs to know what is coordinated
-with what has to enumerate surface forms. Given that constraint,
-twenty-four regexes and a lookbehind is good engineering.
+part-of-speech tags, and word lists are lexicography. What Vale fixes for its
+rulesets is the level of representation, and that is the whole of the
+difference. Its only linguistic extension point reads part-of-speech tags, so a
+rule that needs to know what is coordinated with what has to enumerate surface
+forms. Given that constraint, twenty-four regexes and a lookbehind is good
+engineering.
 
-The cost of the parse is the opposite one. spaCy's `md` model is a
-dependency on every run, parse quality is the ceiling on precision, and
-where the parse is wrong the finding is wrong. Masked inline code
-degrades the parse locally, which is why the quoted text misleads.
+The cost of the parse runs the other way. spaCy's `md` model is a dependency on
+every run, parse quality is the ceiling on precision, and where the parse is
+wrong the finding is wrong. The clearest current case lands in exactly the
+register this tool is meant for: every enumeration signal in the tricolon
+scorer, from determiners on the items to a cue word in the lead-in, is defined
+over English noun phrases. A list of bare signal names has none of them, scores
+zero, and falls through to `figure`, the one label reported at medium
+confidence. A plain catalogue of RTL signals is reported as a rhetorical figure
+with more confidence than a real one would be.
 
 ## Limitations
 
-Document-level uniformity is not detected at all, and that is a whole category
-rather than a missing rule. vale-ai-tells measures sentence-length variance,
-paragraph-length variance, sentence-start entropy, sentence-start repetition,
-transition repetition and content duplication, sectioning a document by heading
-first so that variety across sections does not mask uniformity within one. The
-signal there is the absence of variance rather than the presence of a
-construction, and it is the best supported signal in the stylometry literature.
-ticfinder computes mean sentence length and its standard deviation and prints
-them under `--stats`, but no detector consumes them.
+ticfinder has no model of register. Every scorer in it is tuned for English
+essay prose, and the documents it is aimed at are not written in that register.
+That costs in two directions.
 
-Domain vocabulary has to be suppressed by hand. In hardware documentation
-`mutually exclusive` reads as `ABSTRACT_ADVERB` and `by construction` as
-`BORROWED_RIGOUR`, and both mean exactly what they say. `by construction` marks
-a claim proven by the structure of an expression, which is a distinction worth
-keeping. Both are waived on every hardware document I run. The fix is known,
-and one of the neighbours has already built it: vale-ai-tells disables its
-fall-metaphor rules for aviation prose. ticfinder has no mechanism for scoping
-a construction to a register.
+Constructions fire where the domain means them literally. In hardware
+documentation `mutually exclusive` reads as `ABSTRACT_ADVERB` and `by
+construction` as `BORROWED_RIGOUR`, and both mean exactly what they say. `by
+construction` marks a claim proven by the structure of an expression rather
+than by a test, which is a distinction worth keeping. Both are waived on every
+hardware document I run. The fix is known, and one of the neighbours has
+already built it: vale-ai-tells disables its fall-metaphor rules for aviation
+prose. ticfinder has no equivalent.
+
+A whole category also cannot be added safely. vale-ai-tells measures
+sentence-length variance, sentence-start entropy, transition repetition and
+content duplication, which is the best supported signal in the stylometry
+literature and something ticfinder does not look for at all. It computes mean
+sentence length and its standard deviation and prints them under `--stats`, but
+wiring those to a rule would misfire. Specification prose is deliberately even,
+and on a five-sentence sample of it the lengths came out unremarkable while
+four of the five openings were identical. A sentence-start entropy rule would
+have fired, and would have been wrong.
 
 Nothing here is validated. There is no corpus study behind ticfinder, no
 precision or recall figure, and no baseline beyond my own documents. The
 evidence in this post is worked examples, which is a weaker footing than the
 detection literature stands on.
 
-## Where this goes
-
-The BPU posts argued that a test which has only ever run against
-conforming RTL has unknown detection capability, and that the cheap fix
-is to break the design, watch the test fail, and put it back. The
-prose analogue is weaker but the same shape: a construction that has
-only ever been read by its author has unknown load-bearing capacity,
-and the cheap fix is to try the sentence without it.
-
-The tool does not do that. It cannot, and it should not pretend to. It
-narrows five thousand words to twenty-two decisions and keeps the
-record of how they went. That is the same division of labour as the RTL
-work, and it is the reason the tool is now in the loop for Pacino's
-documentation rather than only for these posts.
-
----
-
 ## References
 
 <!-- ticfinder_off -->
-[1] Vale: A Syntax-Aware Linter for Prose. Errata AI, github.com/errata-ai/vale.
-Accessed 8 Sept. 2026.
+
+[1] Vale: A Syntax-Aware Linter for Prose. Errata AI,
+github.com/errata-ai/vale.  Accessed 8 Sept. 2026.
 
 [2] Honnibal, Matthew, et al. spaCy: Industrial-Strength Natural Language
 Processing in Python. Zenodo, 2020, https://doi.org/10.5281/zenodo.1212303.
@@ -495,13 +481,17 @@ It. github.com/t0ddharris/slopster. Accessed 8 Sept. 2026.
 [15] Karpov, Andrey. "Static Analysis: Baseline VS Diff." PVS-Studio, 2020,
 habr.com/en/companies/pvs-studio/articles/513952/.
 
-[JEFF] Jefferson, Gail. "List construction as a task and resource." Interaction competence 63 (1990): 92.
+[JEFF] Jefferson, Gail. "List construction as a task and resource." Interaction
+competence 63 (1990): 92.
 
-[ANSC] Anscombre, Jean-Claude, and Oswald Ducrot. "Deux mais en français?." Lingua 43.1 (1977): 23-40.
+[ANSC] Anscombre, Jean-Claude, and Oswald Ducrot. "Deux mais en français?."
+Lingua 43.1 (1977): 23-40.
 
-[KORT] Kortmann, Bernd. Free adjuncts and absolutes in English: Problems of control and interpretation. Routledge, 2013.
+[KORT] Kortmann, Bernd. Free adjuncts and absolutes in English: Problems of
+control and interpretation. Routledge, 2013.
 
-[KONIG] König, Ekkehard, et al. "Intensifiers and reflexives." Reflexives: Forms and functions 40 (2000): 41.
+[KONIG] König, Ekkehard, et al. "Intensifiers and reflexives." Reflexives:
+Forms and functions 40 (2000): 41.
 
 [BIBER1] Rowley-Jolivet, Elizabeth. "Douglas Biber et al., Longman Grammar of
 Spoken and Written English. Harlow: Pearson Education Limited, 1999." Les
