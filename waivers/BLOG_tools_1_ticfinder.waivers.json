@@ -2,35 +2,125 @@
   "generated_by": "ticfinder",
   "source": "blogs/BLOG_tools_1_ticfinder.md",
   "waivers": {
-    "efbfba": {
+    "13b63d": {
+      "construction": "TRICOLON",
+      "line_when_waived": 185,
+      "pattern": "tricolon",
+      "text": "Determiners, modifiers and punctuation"
+    },
+    "1e7525": {
       "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 152,
+      "line_when_waived": 434,
       "pattern": "af_rather_instead",
       "text": "rather than"
     },
-    "d4fb15": {
-      "construction": "LLM_DICTION",
-      "line_when_waived": 129,
-      "pattern": "",
-      "text": "delve"
-    },
-    "0d0acd": {
+    "239ca5": {
       "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 153,
-      "pattern": "af_rather_instead",
-      "text": "less X than Y..."
+      "line_when_waived": 225,
+      "pattern": "af_less_than",
+      "text": "more than three members, determiners"
     },
-    "a76b6b": {
-      "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 156,
-      "pattern": "",
-      "text": "not X but Y"
-    },
-    "d989db": {
+    "3faa1b": {
       "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 157,
+      "line_when_waived": 460,
       "pattern": "af_rather_instead",
-      "text": "less X than Y..."
+      "text": "rather than"
+    },
+    "4b53b5": {
+      "construction": "BORROWED_RIGOUR",
+      "line_when_waived": 457,
+      "pattern": "",
+      "text": "failure mode"
+    },
+    "53a0b5": {
+      "construction": "EMPHATIC_REFLEXIVE",
+      "line_when_waived": 318,
+      "pattern": "emphatic_reflexive",
+      "text": "the phrase by itself"
+    },
+    "566362": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 481,
+      "pattern": "af_less_than",
+      "text": "more confidence than a real one would be"
+    },
+    "5d8a89": {
+      "construction": "TRICOLON",
+      "line_when_waived": 354,
+      "pattern": "tricolon",
+      "text": "More recently Baayen, van Halteren and Tweedie"
+    },
+    "67ff1c": {
+      "construction": "TRICOLON",
+      "line_when_waived": 163,
+      "pattern": "tricolon",
+      "text": "cc  for a coordinator such as \"and\",  advmod  for an adverb attached to what it modifies,  conj  for"
+    },
+    "82b6fe": {
+      "construction": "TRICOLON",
+      "line_when_waived": 460,
+      "pattern": "tricolon",
+      "text": "verbs, nouns or auxiliaries"
+    },
+    "9d8af8": {
+      "construction": "TRICOLON",
+      "line_when_waived": 324,
+      "pattern": "tricolon",
+      "text": "the linguistic description of the constructions it looks for, the stylometry and detection literatur"
+    },
+    "a6db74": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 337,
+      "pattern": "af_rather_instead",
+      "text": "rather than conceding it"
+    },
+    "b10793": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 435,
+      "pattern": "af_rather_instead",
+      "text": "rather than to a line or to a document flattened into one string"
+    },
+    "b5a6fe": {
+      "construction": "TRICOLON",
+      "line_when_waived": 401,
+      "pattern": "tricolon",
+      "text": "Rule counts change with every commit to those repositories, so read the column as relative size and "
+    },
+    "ceb922": {
+      "construction": "TRICOLON",
+      "line_when_waived": 152,
+      "pattern": "tricolon",
+      "text": "only tokens, heads and a few dozen relation names"
+    },
+    "d3da7c": {
+      "construction": "PARTICIPIAL_TAIL",
+      "line_when_waived": 370,
+      "pattern": "participial_tail",
+      "text": ", discarding the lexical content"
+    },
+    "e9f393": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 418,
+      "pattern": "af_less_than",
+      "text": "more likely to be properties of the register than the preferences of any one editor. The agreement i"
+    },
+    "efbfba": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 137,
+      "pattern": "af_rather_instead",
+      "text": "rather than ,  instead of  and  less X than Y  sit under  ALTERNATIVE_FRAMING  instead."
+    },
+    "ff1d1d": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 351,
+      "pattern": "af_less_than",
+      "text": "more than sixty years. Mosteller and"
+    },
+    "ff94df": {
+      "construction": "TRICOLON",
+      "line_when_waived": 301,
+      "pattern": "tricolon",
+      "text": "The epoch, target, allocation, aging and prediction-side paths"
     }
   }
 }
