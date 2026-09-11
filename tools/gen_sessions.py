@@ -9,6 +9,9 @@ Run from the repo root:
     --no-waivers    ignore the WAIVERS table, report every warning
 
 Warnings are printed to stderr. sessions.json is written to docs/.
+A small "summary" block (counts by status and category, first/last session
+dates, latest sessions) is written near the top of the file for pages that
+only need totals.
 """
 
 import json
@@ -882,6 +885,53 @@ def sort_key(session):
     cat, num, sl, sn, _ = parsed
     return (cat, int(num), sl, sn)
 
+# -- Summary -------------------------------------------------------------------
+#
+# A small block written near the top of sessions.json so pages that only need
+# totals (e.g. the uarchlabs.com status panel) can read the first few KB of the
+# file instead of downloading all of it. Keep it small, and keep it before the
+# large "warnings", "waived", and "sessions" arrays.
+
+SUMMARY_LATEST_N = 5
+
+def norm_date(raw):
+    """'2026.08.28', '2026/08/28', or '2026-08-28' -> '2026-08-28'; else None."""
+    if not raw:
+        return None
+    d = re.sub(r'[./]', '-', str(raw).strip())
+    return d if re.fullmatch(r'\d{4}-\d{2}-\d{2}', d) else None
+
+def build_summary(sessions):
+    by_status   = {}
+    by_category = {}
+    for s in sessions:
+        status   = s.get('status') or 'unknown'
+        category = s.get('category') or 'uncategorized'
+        by_status[status]     = by_status.get(status, 0) + 1
+        by_category[category] = by_category.get(category, 0) + 1
+
+    dated = sorted(
+        (s for s in sessions if norm_date(s.get('date'))),
+        key=lambda s: (norm_date(s['date']), s.get('id') or ''))
+
+    latest = [{
+        "id":     s.get('id'),
+        "date":   norm_date(s.get('date')),
+        "status": s.get('status'),
+        "model":  s.get('model'),
+    } for s in reversed(dated[-SUMMARY_LATEST_N:])]
+
+    def by_count(d):
+        return dict(sorted(d.items(), key=lambda kv: (-kv[1], kv[0])))
+
+    return {
+        "by_status":   by_count(by_status),
+        "by_category": by_count(by_category),
+        "first_date":  norm_date(dated[0]['date'])  if dated else None,
+        "last_date":   norm_date(dated[-1]['date']) if dated else None,
+        "latest":      latest,
+    }
+
 # -- Main ----------------------------------------------------------------------
 
 def main():
@@ -981,6 +1031,7 @@ def main():
     output = {
         "generated":     datetime.now(timezone.utc).isoformat(),
         "session_count": len(sessions),
+        "summary":       build_summary(sessions),   # keep before the big arrays
         "warning_count": len(all_warnings),
         "warnings":      all_warnings,
         "waived_count":  len(all_waived),
@@ -1008,4 +1059,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
