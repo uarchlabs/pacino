@@ -1,0 +1,210 @@
+{
+  "generated_by": "ticfinder",
+  "source": "blogs/BLOG_bpu_15_specification_under_test.md",
+  "waivers": {
+    "055922": {
+      "construction": "TRICOLON",
+      "line_when_waived": 86,
+      "pattern": "tricolon",
+      "text": "when Pacino's expanded-instruction layout is what sets it, a bit that had been eliminated was retain"
+    },
+    "0bed8b": {
+      "construction": "TRICOLON",
+      "line_when_waived": 408,
+      "pattern": "tricolon",
+      "text": "the broken FTB parameter block and specifically the tag derived from the wrong block size, the store"
+    },
+    "0e58b7": {
+      "construction": "TRICOLON",
+      "line_when_waived": 223,
+      "pattern": "tricolon",
+      "text": "It ran as a single pass that fixed the documents, added one test, and re-ran the suite"
+    },
+    "2392e5": {
+      "construction": "TRICOLON",
+      "line_when_waived": 283,
+      "pattern": "tricolon",
+      "text": "the array tag and the PLRU valid, tree-PLRU victim selection, branch-type classification"
+    },
+    "2e9e86": {
+      "construction": "TRICOLON",
+      "line_when_waived": 309,
+      "pattern": "tricolon",
+      "text": "It had been specified as a saturating counter that suppresses TAGE and SC direction overrides above "
+    },
+    "39a5f0": {
+      "construction": "TRICOLON",
+      "line_when_waived": 282,
+      "pattern": "tricolon",
+      "text": "ftb_cntrl  took the whole of the logic: prediction read, way match against the array tag and the PLR"
+    },
+    "3cca63": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 450,
+      "pattern": "af_rather_instead",
+      "text": "rather than"
+    },
+    "3e388a": {
+      "construction": "TRICOLON",
+      "line_when_waived": 435,
+      "pattern": "tricolon",
+      "text": "And the target displacement widths were derivable throughout from ISA branch and jump reach, but wer"
+    },
+    "3e9fc2": {
+      "construction": "TRICOLON",
+      "line_when_waived": 134,
+      "pattern": "tricolon",
+      "text": "After one push from reset,  tosr  is 0,  tosw  is 1, and  bos  is 0"
+    },
+    "4a0bc7": {
+      "construction": "TRICOLON",
+      "line_when_waived": 403,
+      "pattern": "tricolon",
+      "text": "where a single read port on each storage module and a read-modify-write update path is a conflict th"
+    },
+    "4c82bf": {
+      "construction": "TRICOLON",
+      "line_when_waived": 133,
+      "pattern": "tricolon",
+      "text": "A push writes at  tosw , sets  tosr  to the old  tosw , and advances  tosw"
+    },
+    "511369": {
+      "construction": "TRICOLON",
+      "line_when_waived": 315,
+      "pattern": "tricolon",
+      "text": "The  FTB_CONF_SUPPRESS_THRESH  and  FTB_CONF_INIT  parameters were removed, and separate taken and n"
+    },
+    "5222c9": {
+      "construction": "TRICOLON",
+      "line_when_waived": 68,
+      "pattern": "tricolon",
+      "text": "The RAS planning documents,  ras_decisions.md  and  ras_interfaces.md"
+    },
+    "52edfb": {
+      "construction": "LLM_DICTION",
+      "line_when_waived": 312,
+      "pattern": "",
+      "text": "significant"
+    },
+    "559eaa": {
+      "construction": "TRICOLON",
+      "line_when_waived": 329,
+      "pattern": "tricolon",
+      "text": "The three documents were reconciled to the as-built RTL at the end of the session, and  ftb_decision"
+    },
+    "5e5adf": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 415,
+      "pattern": "af_rather_instead",
+      "text": "rather than"
+    },
+    "8cb4a3": {
+      "construction": "TRICOLON",
+      "line_when_waived": 196,
+      "pattern": "tricolon",
+      "text": "TC-17 seeded one entry at index 1, popped it, and forced p3 to disagree"
+    },
+    "8e24b7": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "line_when_waived": 100,
+      "pattern": "cc_negated_apposition",
+      "text": "FTB_BLOCK_BYTES , never a value derived from the fetch width"
+    },
+    "8ed554": {
+      "construction": "TRICOLON",
+      "line_when_waived": 273,
+      "pattern": "tricolon",
+      "text": "ftb_array  was reduced to pure data RAM with no reset and active-low enables, and a new  ftb_plru  w"
+    },
+    "90a5b1": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 432,
+      "pattern": "af_rather_instead",
+      "text": "rather than by its author"
+    },
+    "a6097c": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "line_when_waived": 163,
+      "pattern": "cc_negated_apposition",
+      "text": "the allocation, not the test"
+    },
+    "a8f04e": {
+      "construction": "TRICOLON",
+      "line_when_waived": 143,
+      "pattern": "tricolon",
+      "text": "The implementation assistant stopped, reported, and offered three fixes"
+    },
+    "b44edd": {
+      "construction": "TRICOLON",
+      "line_when_waived": 71,
+      "pattern": "tricolon",
+      "text": "a 4-bit recursion counter, a fixed boundary bundle split, slot 1's PC as  pred_pc+32 , and a simple "
+    },
+    "c08f69": {
+      "construction": "ABSTRACT_ADVERB",
+      "line_when_waived": 299,
+      "pattern": "abstract_adverb",
+      "text": "mutually exclusive"
+    },
+    "c81d06": {
+      "construction": "TRICOLON",
+      "line_when_waived": 127,
+      "pattern": "tricolon",
+      "text": "ordered before slot 1 and a same-cycle call-to-return bypass, a recursion counter, post-operation sn"
+    },
+    "d6f5a8": {
+      "construction": "TRICOLON",
+      "line_when_waived": 243,
+      "pattern": "tricolon",
+      "text": "The document edits followed the RTL as built: section 3.2 gained the sentinel rule and the 15-entry "
+    },
+    "d80a06": {
+      "construction": "TRICOLON",
+      "line_when_waived": 224,
+      "pattern": "tricolon",
+      "text": "documents, RTL and tests"
+    },
+    "dfc40e": {
+      "construction": "TRICOLON",
+      "line_when_waived": 132,
+      "pattern": "tricolon",
+      "text": "reset,  tosr ,  tosw  and  bos"
+    },
+    "e37d5d": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "line_when_waived": 236,
+      "pattern": "af_rather_instead",
+      "text": "rather than fixing it"
+    },
+    "e48f37": {
+      "construction": "TRICOLON",
+      "line_when_waived": 239,
+      "pattern": "tricolon",
+      "text": "Both TD entries were filed by hand before the task ran, section 5 was hand-reconciled first, and the"
+    },
+    "e7298c": {
+      "construction": "TRICOLON",
+      "line_when_waived": 346,
+      "pattern": "tricolon",
+      "text": "the confidence-init invariant, direction and training, the fast path, structural behavior, and the p"
+    },
+    "ec76d8": {
+      "construction": "TRICOLON",
+      "line_when_waived": 42,
+      "pattern": "tricolon",
+      "text": "The FTB build reopened its storage partition, redefined its confidence field, moved its entry width "
+    },
+    "f4267c": {
+      "construction": "TRICOLON",
+      "line_when_waived": 35,
+      "pattern": "tricolon",
+      "text": "The FTB had an architectural decision pass, then a full session that regenerated three planning docu"
+    },
+    "fd26bf": {
+      "construction": "TRICOLON",
+      "line_when_waived": 48,
+      "pattern": "tricolon",
+      "text": "the wrong value, a field nothing writes, or a repair labeled with the name of an operation it does n"
+    }
+  }
+}
