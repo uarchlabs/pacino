@@ -2,209 +2,119 @@
   "generated_by": "ticfinder",
   "source": "blogs/BLOG_bpu_15_specification_under_test.md",
   "waivers": {
-    "055922": {
+    "0b4840": {
       "construction": "TRICOLON",
-      "line_when_waived": 86,
       "pattern": "tricolon",
-      "text": "when Pacino's expanded-instruction layout is what sets it, a bit that had been eliminated was retain"
+      "line_when_waived": 32,
+      "text": "a mispredict recovery to simply restore the three pointers,  tosr ,  tosw  and  bos"
     },
-    "0bed8b": {
+    "1654c9": {
       "construction": "TRICOLON",
-      "line_when_waived": 408,
       "pattern": "tricolon",
-      "text": "the broken FTB parameter block and specifically the tag derived from the wrong block size, the store"
+      "line_when_waived": 47,
+      "text": "a 5-bit  pftAddr , an offset from the block start plus a carry bit"
     },
-    "0e58b7": {
+    "82327e": {
       "construction": "TRICOLON",
-      "line_when_waived": 223,
       "pattern": "tricolon",
-      "text": "It ran as a single pass that fixed the documents, added one test, and re-ran the suite"
+      "line_when_waived": 66,
+      "text": "four modules,  ftb_array ,  ftb_plru ,  ftb_cntrl  and the structural top  ftb"
     },
-    "2392e5": {
+    "10e708": {
       "construction": "TRICOLON",
-      "line_when_waived": 283,
       "pattern": "tricolon",
-      "text": "the array tag and the PLRU valid, tree-PLRU victim selection, branch-type classification"
+      "line_when_waived": 69,
+      "text": "ras_decisions.md ,  ras_interfaces.md ,  ftb_decisions.md  and  ftb_interfaces.md"
     },
-    "2e9e86": {
+    "6f2004": {
       "construction": "TRICOLON",
-      "line_when_waived": 309,
       "pattern": "tricolon",
-      "text": "It had been specified as a saturating counter that suppresses TAGE and SC direction overrides above "
+      "line_when_waived": 77,
+      "text": "the static partition confines mispredict restore to the speculative array and commit advancement to "
     },
-    "39a5f0": {
+    "87368a": {
       "construction": "TRICOLON",
-      "line_when_waived": 282,
       "pattern": "tricolon",
-      "text": "ftb_cntrl  took the whole of the logic: prediction read, way match against the array tag and the PLR"
+      "line_when_waived": 96,
+      "text": "Because  tosw  never retreats, entries stay valid until overwritten, and past values are still in th"
     },
-    "3cca63": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 450,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "3e388a": {
+    "e3dab4": {
       "construction": "TRICOLON",
-      "line_when_waived": 435,
       "pattern": "tricolon",
-      "text": "And the target displacement widths were derivable throughout from ISA branch and jump reach, but wer"
+      "line_when_waived": 98,
+      "text": "tosr ,  tosw  and  bos ,"
     },
-    "3e9fc2": {
+    "106fbe": {
       "construction": "TRICOLON",
-      "line_when_waived": 134,
       "pattern": "tricolon",
-      "text": "After one push from reset,  tosr  is 0,  tosw  is 1, and  bos  is 0"
+      "line_when_waived": 121,
+      "text": "one entry of usable depth, 15 live entries in 16 physical slots, and preserves the monotonic  tosw  "
     },
-    "4a0bc7": {
-      "construction": "TRICOLON",
-      "line_when_waived": 403,
-      "pattern": "tricolon",
-      "text": "where a single read port on each storage module and a read-modify-write update path is a conflict th"
+    "9a8b82": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_negated_apposition",
+      "line_when_waived": 187,
+      "text": "an upstream state defect, not a designed-for event"
     },
-    "4c82bf": {
-      "construction": "TRICOLON",
-      "line_when_waived": 133,
-      "pattern": "tricolon",
-      "text": "A push writes at  tosw , sets  tosr  to the old  tosw , and advances  tosw"
-    },
-    "511369": {
-      "construction": "TRICOLON",
-      "line_when_waived": 315,
-      "pattern": "tricolon",
-      "text": "The  FTB_CONF_SUPPRESS_THRESH  and  FTB_CONF_INIT  parameters were removed, and separate taken and n"
-    },
-    "5222c9": {
-      "construction": "TRICOLON",
-      "line_when_waived": 68,
-      "pattern": "tricolon",
-      "text": "The RAS planning documents,  ras_decisions.md  and  ras_interfaces.md"
-    },
-    "52edfb": {
+    "1331d9": {
       "construction": "LLM_DICTION",
-      "line_when_waived": 312,
       "pattern": "",
+      "line_when_waived": 193,
       "text": "significant"
     },
-    "559eaa": {
+    "ebc29b": {
       "construction": "TRICOLON",
-      "line_when_waived": 329,
       "pattern": "tricolon",
-      "text": "The three documents were reconciled to the as-built RTL at the end of the session, and  ftb_decision"
+      "line_when_waived": 205,
+      "text": "The two saturated states, 111 and 000"
     },
-    "5e5adf": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 415,
-      "pattern": "af_rather_instead",
-      "text": "rather than"
-    },
-    "8cb4a3": {
+    "c7d30b": {
       "construction": "TRICOLON",
-      "line_when_waived": 196,
       "pattern": "tricolon",
-      "text": "TC-17 seeded one entry at index 1, popped it, and forced p3 to disagree"
+      "line_when_waived": 241,
+      "text": "In that table \"push\" means restoration of stack height over a still-resident entry, and only the mis"
     },
-    "8e24b7": {
+    "3a5c19": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 247,
+      "text": "TC-17 seeded one entry at index 1, popped it, and forced p3 to disagree, expecting  tosr=1  with the"
+    },
+    "c56d53": {
       "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 100,
       "pattern": "cc_negated_apposition",
-      "text": "FTB_BLOCK_BYTES , never a value derived from the fetch width"
+      "line_when_waived": 270,
+      "text": "a degraded fallback prediction, not a functional break"
     },
-    "8ed554": {
-      "construction": "TRICOLON",
-      "line_when_waived": 273,
-      "pattern": "tricolon",
-      "text": "ftb_array  was reduced to pure data RAM with no reset and active-low enables, and a new  ftb_plru  w"
-    },
-    "90a5b1": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 432,
-      "pattern": "af_rather_instead",
-      "text": "rather than by its author"
-    },
-    "a6097c": {
+    "93ca4f": {
       "construction": "CORRECTIVE_CONTRAST",
-      "line_when_waived": 163,
-      "pattern": "cc_negated_apposition",
-      "text": "the allocation, not the test"
+      "pattern": "cc_coordinated",
+      "line_when_waived": 275,
+      "text": "TAGE and SC use but not their training"
+    },
+    "e8ee26": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 283,
+      "text": "where  FTB_CONF_WIDTH  is the knob and the trigger is cluster SPEC numbers, and a br0 coverage skew "
     },
     "a8f04e": {
       "construction": "TRICOLON",
-      "line_when_waived": 143,
       "pattern": "tricolon",
+      "line_when_waived": 305,
       "text": "The implementation assistant stopped, reported, and offered three fixes"
     },
-    "b44edd": {
-      "construction": "TRICOLON",
-      "line_when_waived": 71,
-      "pattern": "tricolon",
-      "text": "a 4-bit recursion counter, a fixed boundary bundle split, slot 1's PC as  pred_pc+32 , and a simple "
+    "05ee25": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 307,
+      "text": ", changing the emptiness test to  tosw == bos , on the stated grounds that it was the smallest RTL c"
     },
-    "c08f69": {
-      "construction": "ABSTRACT_ADVERB",
-      "line_when_waived": 299,
-      "pattern": "abstract_adverb",
-      "text": "mutually exclusive"
-    },
-    "c81d06": {
-      "construction": "TRICOLON",
-      "line_when_waived": 127,
-      "pattern": "tricolon",
-      "text": "ordered before slot 1 and a same-cycle call-to-return bypass, a recursion counter, post-operation sn"
-    },
-    "d6f5a8": {
-      "construction": "TRICOLON",
-      "line_when_waived": 243,
-      "pattern": "tricolon",
-      "text": "The document edits followed the RTL as built: section 3.2 gained the sentinel rule and the 15-entry "
-    },
-    "d80a06": {
-      "construction": "TRICOLON",
-      "line_when_waived": 224,
-      "pattern": "tricolon",
-      "text": "documents, RTL and tests"
-    },
-    "dfc40e": {
-      "construction": "TRICOLON",
-      "line_when_waived": 132,
-      "pattern": "tricolon",
-      "text": "reset,  tosr ,  tosw  and  bos"
-    },
-    "e37d5d": {
-      "construction": "ALTERNATIVE_FRAMING",
-      "line_when_waived": 236,
-      "pattern": "af_rather_instead",
-      "text": "rather than fixing it"
-    },
-    "e48f37": {
-      "construction": "TRICOLON",
-      "line_when_waived": 239,
-      "pattern": "tricolon",
-      "text": "Both TD entries were filed by hand before the task ran, section 5 was hand-reconciled first, and the"
-    },
-    "e7298c": {
-      "construction": "TRICOLON",
-      "line_when_waived": 346,
-      "pattern": "tricolon",
-      "text": "the confidence-init invariant, direction and training, the fast path, structural behavior, and the p"
-    },
-    "ec76d8": {
-      "construction": "TRICOLON",
-      "line_when_waived": 42,
-      "pattern": "tricolon",
-      "text": "The FTB build reopened its storage partition, redefined its confidence field, moved its entry width "
-    },
-    "f4267c": {
-      "construction": "TRICOLON",
-      "line_when_waived": 35,
-      "pattern": "tricolon",
-      "text": "The FTB had an architectural decision pass, then a full session that regenerated three planning docu"
-    },
-    "fd26bf": {
-      "construction": "TRICOLON",
-      "line_when_waived": 48,
-      "pattern": "tricolon",
-      "text": "the wrong value, a field nothing writes, or a repair labeled with the name of an operation it does n"
+    "5d806c": {
+      "construction": "DISGUISE_METAPHOR",
+      "pattern": "disguise_metaphor",
+      "line_when_waived": 322,
+      "text": "The chosen option would have passed every directed test in the suite while leaving the corruption pa"
     }
   }
 }

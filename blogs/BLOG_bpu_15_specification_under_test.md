@@ -3,11 +3,11 @@
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
 
 ```
-TITLE:     "Specification Under Test: What Bringup Proves About the Document"
+TITLE:     "The RAS and the FTB: Design Choices at p2"
 FILE:      BLOG_bpu_15_specification_under_test.md
 AUTHOR:    Jeff Nye
 DATE:      2026-09-04
-STATUS:    REVIEW BEFORE POSTING
+STATUS:    REVIEWED
 COPYRIGHT: "Copyright 2026 Jeff Nye"
 ```
 
@@ -19,349 +19,272 @@ COPYRIGHT: "Copyright 2026 Jeff Nye"
 ::END LINKS::
 -->
 
-# Specification Under Test: What Bringup Proves About the Document
+# The RAS and the FTB: Design Choices at p2
+
+EDITED: 2026-09-14, ticfinder/clarity/length
 
 ## Abstract
 
-The Pacino RVA23 branch prediction cluster contains seven predictors. Two
-of them, the return address stack and the fetch target buffer, went from
-planning document to verified unit over four sessions and ten
-implementation tasks. Both closed complete, with their authority
-documents reconciled to the RTL as built, at 87 and 99 directed checks
-and every Makefile target green.
+The return address stack (RAS) and fetch target buffer (FTB) were
+completed in these sessions in 10 implementation tasks. The RAS completed
+unit testing with 87 directed tests. The FTB completed with 99 directed
+tests. The RTL and the planning documents were reconciled.
 
-The two arrived at bringup with very different amounts of specification
-behind them. The RAS had two planning documents written in the same
-session as its RTL and its testbench. The FTB had an architectural
-decision pass, then a full session that regenerated three planning
-documents, ruled the last open entry widths, and verified that every
-shared parameter resolved identically across all three before the first
-line of RTL was drafted. Each document set still carried errors, and the
-build found them. The RAS testbench exposed two RTL defects, one of which
-could not be fixed as first proposed without giving up the invariant that
-makes pointer-only misprediction recovery work. The FTB build reopened
-its storage partition, redefined its confidence field, moved its entry
-width three times, and found a stored field with no producer anywhere.
+In the RAS design a pop moves the read pointer leaving the popped entry
+data on the stack until over-written. This allows a mispredict recovery
+to simply restore the three pointers, `tosr`, `tosw` and `bos`, 12 total
+bits stored in the relevant fetch target queue (FTQ) entry. With intact
+stale entries no replay mechanism is required to restore past values.
 
-The extra session of document work did not produce a quieter bringup, and
-that is the useful result. Cross-document review finds a parameter stated
-at two values. It does not find a parameter stated consistently at the
-wrong value, a field nothing writes, or a repair labeled with the name of
-an operation it does not perform. Each of those needs something built
-against it before the error has anything to appear against. That does not
-make the FTB's specification sessions wasted work; they closed decisions
-the build had no basis to make. The narrower claim is that "build-ready"
-is a status review cannot confer, and that a specification stays a draft
-until something has been built against it.
+There is one slot in the RAS held as a permanent sentinel. This keeps the
+write pointer monotonic. Each entry includes a recursion counter to
+reduce consumption of RAS entries for recursion.
 
-The range's clearest defect came from a single word. A repair table
-labeled an undo-pop operation "push". The correct behavior was a pointer
-move over an entry that was still resident, and the implementation
-followed the label into the allocation path.
+The FTB storage is split into two arrays, one RAM based, with the valid
+and the tree PLRU bits stored in a flop array. The FTB entry contains a
+3-bit bimodal direction counter.
 
-## Two units, two amounts of document work
+The FTB entry stores a branch's in-block position in 4 bits, at the
+2-byte granularity the C extension requires, and the conditional and jump
+target displacements in 13 and 21 bits. The fall-through address is a
+5-bit `pftAddr`, an offset from the block start plus a carry bit, from
+which the full address reconstructs as block-start + `pftAddr` + carry.
+And an update borrows the prediction read ports, at the cost of a bubble
+the FTB already pays as a p2 override.
 
-The RAS and the FTB sit at the same pipeline stage, s2, alongside TAGE
-and ITTAGE. Both were unbuilt when this range opened. What differed was
-how much specification work preceded the RTL.
+There was a process change confirmation in this session. The RAS
+operation enumeration table mis-labeled an undo-pop operation as a push.
+The IA implemented the push. A directed test showed the failure and was
+reported by the IA. This process exercised the new 'report failures and
+quote planning document' instructions. The RTL and planning documents
+were resolved.  The test was written as TC-17 (test case) of BP-063.
+The RTL was corrected.
 
-The RAS planning documents, `ras_decisions.md` and `ras_interfaces.md`,
-were written in the same session that produced `ras.sv` and `tb_ras.sv`.
-They record the decisions that had been open in the cluster document:
-a static partition of 16 speculative and 32 commit entries, a 4-bit
-recursion counter, a fixed boundary bundle split, slot 1's PC as
-`pred_pc+32`, and a simple circular buffer as the internal structure.
-`ras_interfaces.md` was corrected inside that session to the array-form
-port list. The slot dimension became `[0:NUM_PRED_SLOTS-1]`; the
-`_p0`/`_p1` suffix it replaced collides with the p-stage suffix, which
-already names the pipeline stage.
+## Design state
 
-The FTB took three sessions before any RTL. The first produced a decision
-record covering structure, sizing, the entry format, the ITTAGE-miss
-target fallback and a confidence override policy. The second was a
-recovery pass. The material from the first had been built on a structural
-model that had been rejected: the per-slot RAM decision from the TAGE
-work was applied to the FTB, 64-bit virtual addresses were used where the
-project uses `VA_WIDTH=40`, a two-byte instruction granularity was
-carried into the offsets from a surveyed design when Pacino's
-expanded-instruction layout is what sets it, a bit that had been
-eliminated was retained, and the width item was marked closed carrying
-wrong values. `ftb_interfaces.md` was regenerated from `ftb_decisions.md`
-to a single array, a single update port, `VA_WIDTH=40` and a 26-bit full
-tag.
+`ras.sv` is a single self-contained module. Its testbench closes at 87
+directed checks.
 
-Two rulings came out of that recovery. The predicted way and hit are
-determined at the prediction read and carried through the FTQ, which
-removes the update-side tag re-lookup entirely. And a fallthrough error
-check was ruled out. Such a check guards against a hit on the wrong
-entry, which is reachable only under a truncated tag; the full 26-bit tag
-makes it unreachable here. The FTB is not made defensive against its own
-corrupt state. A restore guard was recorded with the ruling: any
-reinstated fallback is `start + FTB_BLOCK_BYTES`, never a value derived
-from the fetch width.
+The FTB is four modules, `ftb_array`, `ftb_plru`, `ftb_cntrl` and the
+structural top `ftb`. The FTB closes at 99 directed checks.
 
-The last item blocking RTL was the entry widths, and they closed at the
-end of that session: `FTB_BR_POS_BITS=3`, `FTB_BR_TGT_BITS=13`,
-`FTB_JMP_TGT_BITS=21` and `TAR_STAT_BITS=2`. Those give an
-`ENTRY_WIDTH` of 108 over a `SET_WIDTH` of 432. The reasoning separates
-two classes of width. Position and `pftAddr` depend on instruction
-granularity, which is a Pacino property, and are derived here. Target
-displacements follow from ISA reach: a B-type branch reaches plus or
-minus 4 KB, which becomes plus or
-minus 8 KB under the expanded-instruction layout and needs 13 bits; a
-J-type jump reaches plus or minus 1 MB, which becomes plus or minus 2 MB
-and needs 21 bits. `ftb_decisions.md` section 4.4 had carried a blanket
-instruction not to take any width from a reference design, which was too
-broad, since the ISA reach is the same quantity whoever encodes it.
+The planning documents: `ras_decisions.md`, `ras_interfaces.md`,
+`ftb_decisions.md` and `ftb_interfaces.md` were reconciled to the RTL.
 
-The session closed with cross-document consistency verified: every shared
-parameter resolving to the same value in all three documents, the entry
-and set widths stated identically in the decisions and the interfaces,
-and the confidence width named in all three. The three documents were
-declared build-ready.
+## The RAS: pointer-only recovery
 
-## The fix the invariant ruled out
+The RAS is two independent arrays. The 16-entry speculative stack covers
+call depth in flight between fetch and commit; the 32-entry commit stack
+covers the committed call nest. A unified 48-entry pool was considered and
+rejected: the static partition confines mispredict restore to the
+speculative array and commit advancement to the commit array, keeps
+overflow detection at fixed limits on each, and at a 48-entry total budget
+a shared pool offers no flexibility worth the pointer arithmetic.
 
-`ras.sv` was implemented as a single self-contained module: two
-register-file stacks, a p0 top-of-stack read, p2 dual-slot push and pop
-with slot 0 ordered before slot 1 and a same-cycle call-to-return bypass,
-a recursion counter, post-operation snapshots, pointer-only misprediction
-restore, p3 repair, and a commit stack with an empty fallback. It linted
-clean.
+The two arrays meet at two points. When a call-containing block commits
+from the FTQ its return address is pushed onto the commit stack, and `bos`
+advances to the committing entry's post-operation `tosr` to mark the new
+committed boundary; a restore in the same cycle takes priority over the
+commit. When the speculative stack is empty, `tosr == bos`, a pop returns
+the commit stack top without consuming it.
 
-The testbench found the first defect immediately. After reset,
-`tosr`, `tosw` and `bos` are all zero. A push writes at `tosw`, sets
-`tosr` to the old `tosw`, and advances `tosw`. After one push from reset,
-`tosr` is 0, `tosw` is 1, and `bos` is 0. Emptiness is tested as
-`tosr != bos`. With one live entry, `tosr` and `bos` are both 0, so the
-stack reads empty. The test cannot distinguish zero entries from one.
-The consequences were that a single entry was invisible at p0, a
-subsequent pop fell through to the commit stack, and the bottom-most
-speculative entry could never be popped. The first run was 10 passing
-and 6 failing.
+Three pointers index the speculative buffer. `tosr`, the top-of-stack
+read pointer, sources predictions. `tosw` is the next free allocation
+slot. `bos` is the committed boundary. A push writes the return address
+and recursion count at `tosw` and sets `tosr` to the slot just written. A
+pop presents the `tosr` entry and decrements `tosr`. `tosw` does not
+move.
 
-The implementation assistant stopped, reported, and offered three fixes.
-The planning assistant selected the first: change the emptiness test to
-`tosw == bos`, described as the smallest RTL change.
+Because `tosw` never retreats, entries stay valid until overwritten, and past
+values are still in the array when a misprediction resolves. Misprediction
+recovery is then a write of three pointers, `tosr`, `tosw` and `bos`, 12 bits
+snapshotted per FTQ entry.  No replay is required to restore past values. 
 
-That recommendation was wrong, and the implementation assistant said so
-before implementing it. A pop decrements only `tosr`. `tosw` is monotonic
-by design, which is what preserves popped entries in the circular buffer
-so that a misprediction can be recovered by restoring three pointers with
-no data replay. `ras_decisions.md` section 3.2 states it directly: no
-data is overwritten on pop. With a monotonic `tosw`, an emptied stack
-still has `tosw` at the frontier and `bos` at the floor, so `tosw == bos`
-would report non-empty when the stack is empty. Making that test correct
-requires the pop to decrement `tosw` as well, which makes `tosw`
-non-monotonic and gives up pointer-only restore. A wrong-path pop
-followed by a push could then overwrite a still-live entry, and a later
-restore would re-expose corrupted data.
+A flush takes the same path as a mispredict redirect, because there is nothing
+a flush needs to do to the RAS that a redirect does not already do. The
+alternative considered was a linked speculative structure, which was rejected
+on the grounds that the complexity is not repaid: pointer-only recovery is what
+the buffer already supports, and the fallback for detected corruption is the
+commit stack.
 
-The revised diagnosis is narrower than the original. `tosr == bos` is the
-correct emptiness test. The defect is only that the first push lands on
-the `bos` slot, which makes one entry indistinguishable from none. That
-points at the allocation, not the test.
+### The sentinel slot
 
-The choice then carried a real cost, and it was the architect's. Re-base
-allocation keeps the emptiness test and treats the `bos` index as a
-permanent sentinel: a push that would land on `bos`, which happens only
-at cold start or a full wrap, allocates at `bos+1` instead. Reset values
-are unchanged, `tosw` stays monotonic, and the usable speculative depth
-drops from 16 to 15. The alternatives were the literal first
-option, which keeps 16 entries and passes every directed test while
-leaving a latent corruption path the directed suite does not cover, or an
-explicit empty count, which keeps both depth and restore semantics at the
-cost of more state and a larger change. Re-base allocation was selected
-on the grounds that the monotonic `tosw` invariant is foundational and
-in-flight call depth under realistic workloads is well under 15. The
-allocation sites compute
-`w_alloc = (w_tosw == bos) ? (w_tosw + 1) : w_tosw`.
+The `bos` index is a permanent sentinel. A push that would place `tosw` on
+`bos` allocates at `bos+1` instead, which occurs only at cold start or on a
+full wrap.
 
-## A repair operation named after the wrong thing
+The sentinel exists because without it a stack holding one entry is
+indistinguishable from an empty one. Reset zeros all three pointers, so a
+single push leaves `tosr` and `bos` both at 0 and the emptiness test `tosr ==
+bos` reports empty with a live entry present. The entry is then invisible to
+the p0 top-of-stack read, a subsequent pop falls through to the commit stack,
+and the bottom-most speculative entry can never be popped.
 
-The second defect was found by TC-17 after the first fix landed, at 77
-passing and 2 failing.
+The sentinel costs one entry of usable depth, 15 live entries in 16 physical
+slots, and preserves the monotonic `tosw` on which pointer-only restore
+depends. The alternative, taking `tosw == bos` as the emptiness test, requires
+the pop to decrement `tosw`. A non-monotonic `tosw` admits a wrong-path pop
+followed by a push that overwrites a still-live entry, which a later restore
+re-exposes as valid data.
 
-The p3 repair path `rep_push` covered two rows of the IC-RAS-11 repair
-table with identical logic. One row is a missed push, where p2 was a
-no-op and p3 resolves a call: a real entry is absent and allocating one
-at the frontier from the registered fallthrough is correct. The other row
-is an undo-pop, where p2 was a pop and p3 disagrees: a pop happened that
-should not have, and the entry it consumed is still physically resident,
-because pop does not overwrite. Undoing it means moving `tosr` back and
-reloading the address and recursion count from the array. There is no
-entry to create, and the registered fallthrough is not a call return
-address.
+On a wrap the allocation is at `bos+1`, so `tosr` becomes `bos+1` and reachable
+depth collapses to one entry in a single push. The older entries remain
+resident and become unreachable; the next pop meets `tosr == bos` and takes the
+commit stack fallback. Degradation is bounded by that fallback, not gradual.
 
-The implementation allocated in both cases. TC-17 seeded one entry at
-index 1, popped it, and forced p3 to disagree. The expected state was
-`tosr=1` with the top reading `0x9000`. The observed state was `tosr=2`,
-`tosw=3`, with the top reading `0x0000`.
+### The recursion counter
 
-The cause is in the document. Both `ras_decisions.md` section 1 and
-IC-RAS-11 label the undo-pop repair as "push". In that table "push" means
-restoration of stack height over a still-resident entry, and the same
-applies in the other direction, where undo-push retracts `tosr` over a
-still-resident frontier slot and clears no data. Only the missed-push
-row allocates and writes. The bare label routed the
-implementation into the allocate path, and nothing in the document
-contradicted it.
+Each RAS entry carries a 4-bit recursion counter with the conventional
+semantics. A push whose return address matches the entry at `tosr` increments
+the entry's counter.  Recursive chains occupy one slot.  The counter saturates
+at 15, and a pop decrements it without moving `tosr` until it reaches zero.
 
-The fix splits `rep_push` on the registered p2 operation. When it was a
-pop, the repair performs a `tosr`-only re-expose with no array write and
-`tosw` held. When it was a no-op against a resolved call, the frontier
-allocation is kept. The suite closed at 79 of 79, with all 22 Makefile
-targets exiting zero.
+The purpose is to protect the depth budget. A 15-entry usable speculative
+stack covers in-flight call depth between fetch and commit, and a
+recursive chain that allocated one slot per call would exhaust it on a
+workload where the true call nest is shallow.
 
-The fix left one behavior unreversed. A pop that decremented only the
-recursion counter and held `tosr` cannot be undone, because the pre-pop
-recursion count is not recoverable from post-pop state. That became
-TD #78.
+## The FTB storage partitioning
 
-## The reconciliation round
+`ftb_array` is 4-way over 512 sets, with a combinational read and a
+synchronous write. That gives read-old-on-collision with no state
+element, which is what the Pacino specification requires and which leaves a
+registered 1R1W SRAM a valid substitute.
 
-BP-064 changed no RTL. It ran as a single pass that fixed the documents,
-added one test, and re-ran the suite, so that documents, RTL and tests
-were proven aligned in one run.
+The array holds entry data. The `ftb_plru` module holds the four
+entry-valid bits and three tree-PLRU bits per set in flops,
+3,584 flops in total. `ftb_cntrl` contains the logic and drives both
+storage peers. FTB valid and plru state is initialized on reset.
 
-One item was reversed before the task ran. The commit-stack recursion
-counter had been recorded as a defect to fix: `ras_decisions.md`
-section 5 states the counter is updated when a recursive call commits,
-and the RTL writes zero on every commit push. The field turned out to be
-write-only, never read by any output path, and the commit interface
-carries no recursion count to forward. A wrong value degrades a fallback
-prediction and cannot cause a functional break. It was re-scoped to a
-deferral, TD #79, and `ras.sv` was left unchanged.
+Both storage modules return old contents on a same-cycle read against a
+write to the same set, so a prediction issued in the same cycle as an
+update sees data and validity from a single point in time, both from
+before the update.
 
-TC-21 pins TD #78 rather than fixing it. It asserts the current
-non-reversing behavior in eight checks, including the two intermediate
-states, so that a later change to the recursion-pop path fails at the
-step that changed. Both TD entries were filed by
-hand before the task ran, section 5 was hand-reconciled first, and the
-pinned values were verified against the RTL by hand and matched.
+## The FTB entry
 
-The document edits followed the RTL as built: section 3.2 gained the
-sentinel rule and the 15-entry usable depth, sections 1 and 1.2 gained
-the repair-label semantics and the TD #78 limitation note, sections 3.3
-and 4.5 recorded that BOS on commit advances to the committing entry's
-post-operation `tosr` with restore winning over commit, and IC-RAS-11
-gained the same repair-semantics clarification. `sim_ras` closed at 87
-of 87.
+### Entry field widths
 
-## Building against a document that had been checked
+The position field holds the in-block position of a branch instruction and
+supports 2-byte granularity, per the C extension requirement of RVA23S64. The
+block is 32 bytes the position field is 4 bits. The `pftAddr`field, the stored 
+partial fall-through address, is 5 bits.
 
-The FTB build ran four tasks in planned order, array then control then
-structural top then testbench, and three more that were not planned.
+`pftAddr` is the block's end address, the fall-through address, stored
+compactly. The entry stores the offset from the block start, plus
+one carry bit for when the end crosses the block boundary. The full
+address is reconstructed as block-start + `pftAddr` + carry. The five
+bits are four to name a 2-byte unit within the 32-byte block, plus the
+carry bit. See [F1].
 
-The first task found that the FTB parameter block in `bp_defines_pkg.sv`
-did not compile: five localparams missing semicolons, a duplicate
-`FETCH_BLOCK_BYTES` definition, and a placeholder entry width built from
-the wrong fields. One error went deeper than syntax. `FTB_TAG_BITS` was
-derived from `FETCH_BLOCK_BYTES`, which is 64, when the correct source is
-`FTB_BLOCK_BYTES`, which is 32. That collapses the FTB block
-into the fetch width, which `ftb_decisions.md` section 2.3 explicitly
-bans. The whole block was rewritten and the tag is now derived from
-`FTB_OFFSET_BITS`. The task had also been directed to change `FTB_WAYS`
-from 8 to 4; the package already read 4, and it was the documents that
-were stale.
+The target displacement fields hold branch reach. A B-type immediate
+reaches plus or minus 4 KB and a J-type plus or minus 1 MB, 12 and 20
+bits as encoded. Pacino expands RVC instructions to 32 bits before the
+FTB, so a given reach spans twice the bytes and each field gains one bit:
+13 and 21.
 
-`ftb_array` was built with a combinational read and a synchronous write.
-That gives read-old-on-collision without a state element, which is the
-behavior the specification requires, and leaves a registered 1R1W SRAM a
-valid substitute.
+The tag is a full 26-bit upper-VA tag. Two PCs cannot alias to one entry, so a
+hit is always the correct entry for the looked-up PC, and the `pftAddr`
+reconstruction is used unconditionally with no validation. The FTB does no
+self-checking; a corrupt entry is an upstream state defect, not a designed-for
+event.
 
-The storage partition was then reopened. `ftb_array` was reduced to pure
-data RAM with no reset and active-low enables, and a new `ftb_plru` was
-created to hold, per set, the four entry-valid bits and the three
-tree-PLRU bits in resettable flops, 3584 flops in total. The reason is
-migration: the data array becomes a substitutable SRAM macro with no
-reset, and validity lives in flops, because the FTB has no `sram_init`
-mechanism. This split the width into a logical value and a RAM value,
-`FTB_RAM_ENTRY_WIDTH=107` against the logical 108.
+### FTB override suppression mechanism
 
-`ftb_cntrl` took the whole of the logic: prediction read, way match
-against the array tag and the PLRU valid, tree-PLRU victim selection,
-branch-type classification, fallthrough reduce and reconstruct,
-allocation and eviction on the carried way, update field writes, and the
-confidence output. It drives both storage peers and instantiates neither.
+A 3-bit saturating bimodal counter per conditional branch carries the FTB's
+direction prediction. Its most significant bit is the predicted direction; its
+magnitude is the strength of that prediction.  The FTB always submits a
+direction for a valid conditional.
 
-It also made a decision the prompt did not cover. Each storage module
-exposes one read port. An update needs the carried way's current entry,
-because confidence training and the stored target are read-modify-write,
-and it needs the set's current PLRU state to compute the mark-used
-next state. So an active update borrows both read ports, addressed by the
-carried set index. No tag re-lookup is needed, and the carried-way rule
-stays intact. Update has priority, and a prediction in the
-same cycle self-bubbles. The justification given is that the FTB already
-costs a bubble at s2 and that update-channel scheduling belongs to the
-FTQ, which does not exist yet. One consequence falls out without being
-written: because a prediction cannot be granted while an update is
-active, the prediction-hit PLRU touch and the update touch are mutually
-exclusive on the single PLRU write port, so update-wins holds with no
-explicit arbitration.
+The FTB fast path is a latency optimization for certain branch sequences.  An
+FTB prediction can typically be overridden by a later TAGE or SC prediction.
+However when the FTB confidence counter is saturated any override from TAGE or
+SC is suppressed. This is the FTB 'fast path', which saves a cycle in those
+cases where the FTB confidence is very high. If the FTB is incorrect the
+confidence counter will natively train to less confidence and the system will
+correct itself towards high prediction accuracy.
 
-The same task reported a gap it was not asked to look for. The in-block
-position field is stored in the entry, and the update port carries no
-position to write into it. It stored zero and said so.
+The two saturated states, 111 and 000, enable the fast path mechanism.  In
+every other state the submitted FTB prediction can be overridden in favor of
+the later prediction which tend to be more accurate.
 
-## Two design points reopened, and the width
+There is a required global enable for the fast path mechanism, ftb_fastpath_en,
+which must be set for the override suppression to be available.
 
-The confidence field was then redefined. It had been specified as a
-saturating counter that suppresses TAGE and SC direction overrides above
-a threshold, and it sat alongside an `always_taken` bit. It became a
-bimodal direction counter, where the most significant bit is the
-predicted direction, with `always_taken` deleted and threshold
-suppression replaced by a fast path that acts only at the saturated
-endpoints. The `FTB_CONF_SUPPRESS_THRESH` and `FTB_CONF_INIT` parameters
-were removed, and separate taken and not-taken weak-init values took
-their place. The correctness comparison and its input were removed with
-them, because training is now against the resolved outcome directly.
+## Sharing the read ports
 
-The position field was then sourced and sunk: a producer on the update
-port and three consumers at p2, written only on allocation or free-field
-fill and preserved on an in-place update, closing FTB-4.
+`ftb_array` and `ftb_plru` are single-ported, and an update is
+read-modify-write on the carried entry's confidence and target and on the
+set's PLRU state. Update takes the port and a coincident prediction is
+dropped; the FTB already costs a bubble as a p2 override, so the drop is
+not a new cost. The update addresses by the carried set index and does not
+re-look-up the tag, the way and hit are determined at the prediction read
+and carried through the FTQ.
 
-The entry width therefore moved three times inside one session. It was
-ruled at 108 over a 432-bit set at the close of the specification
-session. It was confirmed at 108 by the array task. It was split into a
-logical 108 over a RAM 107 by the storage partition. It became a logical
-106 over a RAM 105 when `always_taken` was deleted, with the set at 424
-and the RAM set at 420. The three documents were reconciled to the
-as-built RTL at the end of the session, and `ftb_decisions.md` was
-promoted from Draft to Complete at that point and not before.
+## Correcting a mislabeled operation in the RAS enumeration table
 
-The structural top was written between the two reopenings. It contains
-three instances and the nets that wire them, with named connections
-throughout. `clk` goes to all three. `rstn` goes to the PLRU and the
-control module; the array has no reset. It was then revised
-twice by the two lettered tasks that followed it, which carry lower
-numbers. The RTL is correct; the record of the task that produced it no
-longer describes the file.
+An earlier post in this series described a transposition error in the
+TAGE and ITTAGE counter tables, and made the general point that an error
+in a planning file usually ends up in the RTL and in the test vectors,
+since both are written from the same document. That case ended well: the
+implementation assistant built the specification as written and then
+reported that the rules diverged from conventional bimodal counter
+practice, and the error surfaced from its own extrapolation. The RAS
+produced the same error class with the opposite ending.
 
-## The FTB testbench
+The p3 operation enumeration table, IC-RAS-11, labels two different
+repairs "push". One is a missed push, where p2 did nothing and p3
+resolves a call: no entry exists, so allocating one at the frontier from
+the registered fallthrough is correct. The other is an undo-pop, where p2
+popped and p3 disagrees. There the entry that was consumed is still in
+the array, because a pop leaves it there, so the repair is to move `tosr`
+back and reload the address and recursion count from the array. No entry
+is created, and the registered fallthrough is not a call return address.
+In that table "push" means restoration of stack height over a
+still-resident entry, and only the missed-push row allocates and writes.
+The implementation read the word and built the allocate path for both
+rows. Nothing else in the document contradicted it loudly enough to stop
+that, and the assistant did not flag it.
 
-`tb_ftb` drives the structural top through its ports only, with no
-hierarchical reference into any of the three leaf modules, which keeps
-the array-substitution property honest. It runs 99 checks in five groups:
-the confidence-init invariant, direction and training, the fast path,
-structural behavior, and the position round trip.
+A directed test found it instead. TC-17 seeded one entry at index 1,
+popped it, and forced p3 to disagree, expecting `tosr=1` with the top
+reading `0x9000`. It observed `tosr=2`, `tosw=3`, and a top of `0x0000`.
+The fix splits the repair on the registered p2 operation: when p2 was a
+pop, the repair is a `tosr`-only re-expose with no array write and `tosw`
+held; when p2 was a no-op against a resolved call, the frontier
+allocation is kept. The instruction that came with the fix was to correct
+the table's wording as well, because repairing only the RTL would leave
+the next reader of IC-RAS-11 free to make the same reading.
 
-Two properties of its construction are worth stating. Every expected
-target and fallthrough value is derived inside the testbench by
-replicating the encode and reconstruct arithmetic; no expected value is
-written down as a constant. And the tree-PLRU victim in the eviction test
-is derived from the documented touch function over a known allocation
-order, which gives way 0. The test never reads the victim off whatever
-state the array happened to be in. It samples from a clean allocation
-sequence before any hit prediction perturbs the state, because a miss
-does not touch PLRU.
+## Items left open for cluster integration.
 
-Three items carry an explicit waiver and a citation: flush, which has no
-protocol; the FTQ round trip, because the
-carried way's predict-to-update timing needs an FTQ that does not exist
-and no FTQ model was fabricated to stand in for it; and same-cycle
-predict-and-update arbitration beyond the separate-cycle sequencing the
-suite uses. The suite closed at 99 of 99, with the full unit green.
+Four items are open across the two units. All four are deferred to bp_cluster
+or FTQ integration.
+
+**The p3 repair does not reverse a recursion-decrement pop (TD #78).** A
+pop that only decremented a recursion counter cannot be undone; the
+pre-pop count is not recoverable from post-pop state. The fix is a
+pre-operation count carried per in-flight entry, which is not justified
+until such a repair is needed. TC-21 pins the current behavior.
+
+**The commit stack does not preserve recursion depth (TD #79).** The
+recursion field on a commit entry is write-only, so a recursive call that
+commits reads back from the fallback as a single entry. The effect is a
+degraded fallback prediction, not a functional break. A fix needs a
+recursion-count source on the commit interface, which is an FTQ decision.
+
+**Confidence-override interaction with the TAGE update and metadata path
+(FTB-2).** The fast path suppresses TAGE and SC use but not their
+training. Who owns that obligation, and what the metadata path does under
+a suppressed override, is a cluster question.
+
+**Update-channel arbitration (FTB-3).** The FTB exposes one update port.
+How multiple resolved branches are scheduled onto it belongs to the FTQ.
+
+Two smaller items are in the debt table: confidence hysteresis tuning,
+where `FTB_CONF_WIDTH` is the knob and the trigger is cluster SPEC
+numbers, and a br0 coverage skew in `tb_ftb`.
+
 
 ## Experiment Summary
 
@@ -373,154 +296,37 @@ suite uses. The suite closed at 99 of 99, with the full unit green.
 | BP-065 | ftb_array; FTB parameter block found broken and rewritten | PASS | 10 lint / 13 sim green | 6m 57s | 10% |
 | BP-065a | Storage split finalized; ftb_array to pure RAM, ftb_plru created | PASS | 11 lint / 13 sim green | 4m 51s | 10% |
 | BP-066 | ftb_cntrl, all FTB logic; shared read-port borrow; position gap reported | PASS | 11 lint / 13 sim green | 14m 11s | 18% |
-| BP-066a | Confidence redefined to bimodal direction; always_taken removed; widths to 106/105 | PASS | 13 lint / 13 sim green | 7m 8s | 12% |
+| BP-066a | Confidence redefined to bimodal direction; always_taken removed | PASS | 13 lint / 13 sim green | 7m 8s | 12% |
 | BP-066b | In-block position sourced and sunk, FTB-4 closed | PASS | 26/26 targets | 5m 3s | 9% |
 | BP-067 | ftb structural top; later revised by BP-066a and BP-066b | PASS | 26/26 targets | 2m 57s | 9% |
 | BP-068 | tb_ftb self-checking directed suite against the top | PASS | 99/0, 27/27 targets | 18m 13s | 22% |
 
-BP-062's context figure is the value recorded in its header. The task's
-own context report states that the measurement predates a large document
-load in the same session and that actual usage was higher.
-
 ## Design Process Notes
 
-### What the implementation assistant contributed
+The RAS testbench found the emptiness defect on its first run, at 10 passing
+and 6 failing. The implementation assistant stopped, reported, and offered
+three fixes. After consulting the planning assistant, I accepted the
+recommendation, changing the emptiness test to `tosw == bos`, on the stated
+grounds that it was the smallest RTL change.
 
-The implementation assistant produced all the RTL and both testbenches in
-this range, and on four occasions it stopped, because the task could not
-be executed as written. It stopped on a
-prompt that directed it to add parameters that already existed with wrong
-values. It stopped before touching a file outside its manifest when a
-package width change broke hardcoded literals in it. It stopped on each
-of the two RAS defects and reported before changing anything.
+That recommendation was a mistake the planning assistant was focused on minimal
+changes to the RTL, and the implementation assistant said so before writing any
+code. A pop decrements only `tosr`. `tosw` is monotonic by design, and
+`ras_decisions.md` section 3.2 states the reason directly: no data is
+overwritten on pop. With a monotonic `tosw`, an emptied stack still has `tosw`
+at the frontier and `bos` at the floor, so `tosw == bos` would report non-empty
+when the stack is empty. Making that test correct requires the pop to decrement
+`tosw` as well, which surrenders pointer-only restore.
 
-Two contributions went beyond procedure. The first is
-the retraction described above: presented with its own three options and
-told to implement the one that had been chosen, it re-derived the
-consequence against the monotonic pointer invariant, established that the
-chosen option would trade a latent corruption path for a passing suite,
-and said so before writing code. The second is the FTB read-port
-question, where a single read port on each storage module and a
-read-modify-write update path is a conflict the specification does not
-resolve, and the resolution given is bounded and justified against the
-stage the FTB already occupies.
+The key points the bad option came from the same assistant that caught it, so
+the proposal and the catch were not independent events.  And the selection
+criterion was size of change, which carries no information about correctness.
+The chosen option would have passed every directed test in the suite while
+leaving the corruption path open.
 
-It also reported three things it was not asked about: the broken FTB
-parameter block and specifically the tag derived from the wrong block
-size, the stored position field with no producer, and the stale
-`FTB_WAYS` value, which sat in the documents while the package already
-read 4.
-
-The way it failed in this range differs from the previous one. Here it
-followed a document label rather than a document rule. The IC-RAS-11
-table says the undo-pop repair is a "push", and the
-implementation used the allocate path that word names. The rest of the
-document supports the correct reading, and the label was the only thing
-pointing the other way.
-
-### What the planning assistant contributed
-
-The planning assistant sequenced both bringups, and the FTB ordering held
-under a build that reopened two design points: array first because it has
-no dependencies, control next, structural top after, testbench driven
-through the top's ports.
-
-Its errors in this range were in preparation and in analysis. The BP-062
-prompt was written without reading `bp_defines_pkg.sv`, which is what
-produced the first stop. The recommendation on the RAS emptiness test was
-made without checking it against the invariant that the same document
-states, and was retracted by the implementation assistant rather than by
-its author. The FTB material produced in the first architecture session
-was built on a structural model that had already been rejected, which
-cost the whole of the following session to correct. And the target
-displacement widths were derivable throughout from ISA branch and jump
-reach, but were carried as open across several document regenerations
-and were ruled only when the architect required it.
-
-The two lettered tasks that revised the structural top after it had been
-produced are a numbering error with a bookkeeping consequence: the task
-record no longer describes the file it created, though the file is
-correct.
-
-### What the architect contributed
-
-Every expected value in both testbenches originated with the architect,
-as did both defect fixes. The choice of re-base allocation over the two
-alternatives was made against a stated invariant with a stated cost, one
-entry of speculative depth, rather than against which option passed the
-suite. The `tosr`-only re-expose was chosen with the accompanying
-instruction that the repair table's wording be corrected so the authority
-document stops carrying the ambiguity that produced the defect.
-
-The reversal of the commit-stack recursion counter from a fix to a
-deferral was made after the field was established as write-only and the
-commit interface was established to carry no source for the value. Both
-technical debt entries were filed by hand before the reconciliation task
-ran, one document section was hand-reconciled first, and the pinned
-values in TC-21 were checked against the RTL by hand before the run.
-
-The FTB storage split and the confidence redefinition were both architect
-decisions taken during the build, after the specification sessions had
-closed.
-
-Two process rules also came from the architect. A per-task constraint
-that the implementation assistant writes only within the results markers
-was added after it edited a discussion block, and it was scoped to the
-one task. When that constraint collided with the separate rule requiring
-the implementation assistant to fill the model field in the task header,
-an explicit exception was added. And when a task edited
-`PROJECT_STATUS.md` under prompt authorization, the ruling kept that a
-per-prompt decision; the file's size argues against loading it into
-every manifest.
-
-### The generalization
-
-The FTB received three sessions of specification work before its first
-line of RTL. One of those was spent entirely on finding and correcting
-errors in the specification produced by the session before it, and the
-last closed with every shared parameter verified identical across three
-documents. The RAS
-received two documents written alongside the code. If document readiness
-predicted build outcomes, these two units should have diverged.
-
-They did not. Both closed with their documents reconciled to the RTL as
-built. The FTB's verified widths moved twice more during the build. Its
-storage partition and its confidence field were both redefined after the
-documents describing them were declared build-ready. A field the entry
-format specified had no producer anywhere in the update port. The RAS
-needed one reconciliation round. The difference in cost between them is
-not in the ratio of document effort to build effort.
-
-The reason is that the errors in both document sets were of a kind that
-review cannot reach. Cross-document consistency checking finds a
-parameter stated at two values. It does not find a parameter stated
-consistently at the wrong value, which is what the tag width was, nor a
-field with no producer, which is what the position was, nor a repair
-labeled with the name of an operation it does not perform, which is what
-cost the RAS its second defect. Each of those is internally consistent.
-Each requires something to be built before the inconsistency has anything
-to appear against.
-
-This is the same argument the previous range made about tests, one level
-up. A test that has only been run against conforming RTL cannot be
-distinguished from a test that cannot fail, and the way to separate them
-is to inject the defect and watch it fail. A specification that has only
-been reviewed against other documents cannot be distinguished from a
-specification that is correct, and the way to separate them is to build
-against it. Both are claims about a system that has never been exercised,
-and both cost more the longer they are trusted.
-
-None of that argues for writing less specification. The FTB's
-specification work was not wasted: the widths it ruled were the last
-thing blocking RTL, the rejected structural model would have been more
-expensive to discover in code, and the rulings on what to omit are
-decisions that the build had no basis to make. What the range shows is
-that document review has a floor it cannot go below, and that treating
-"build-ready" as a state a document reaches through review overstates
-what review establishes. The document is a draft until something has
-been built against it, whatever its status field says. Both units'
-authority documents were promoted to Complete only after the RTL existed,
-and in both cases that was the correct order.
+I took a fourth path. Re-base allocation keeps the correct emptiness test,
+keeps `tosw` monotonic, and pays one entry of speculative depth. This is in the
+current design.
 
 ## Technical Debt Referenced
 
@@ -535,31 +341,45 @@ carried alongside these.
 | 80 | FTB confidence hysteresis tuning. | FTB_CONF_WIDTH is the knob. Revisit at bp_cluster SPEC numbers. The entry's wording predates the BP-066a confidence redefinition and still describes threshold suppression; the mechanism is now the saturated-endpoint fast path. |
 | 81 | tb_ftb coverage skews to br0. | Optional symmetric br1 augment. The br1 direction and confidence init are exercised once, through the free-field write; the second fast-path bit and a br1 saturation path are not directly exercised. The fast path is generated per field in a loop sharing logic with the tested bit, so the risk is bounded. Not a blocker; sim_ftb 99/0. |
 
-## What comes next
+## Next steps
 
-Both units close this range complete and verified at the unit level, with
-their authority documents reconciled to the RTL as built. Every remaining
-item on either is downstream at cluster integration, with nothing left
-open at the unit: the FTB flush protocol, which has no definition yet;
-the
-interaction between the FTB fast path and the TAGE and SC metadata, which
-is a cluster obligation because the fast path suppresses the override and
-not the training; update-channel arbitration onto the FTB's single update
-port; the FTQ round trip for the carried way; and the source of the
-fast-path enable. On the RAS side, both filed items wait on interfaces
-that do not exist yet.
+Most of what remains waits on the cluster and the FTQ. On the FTB: the
+flush protocol, which has no definition yet; the fast path's interaction
+with TAGE and SC metadata; update-channel arbitration; the FTQ round trip
+for the carried way; and the source of the fast-path enable. On the RAS,
+TD #79 waits on a recursion-count source on the commit interface.
+
+Two items are unit work. TD #78 would be repaired in `ras.sv` by carrying
+a pre-operation recursion count, should cluster integration show that a p3
+repair over a recursion pop is required. TD #81 is a coverage gap in
+`tb_ftb`.
 
 That leaves `bp_history`, which the cluster work needs before it can
-start, and the statistical corrector, which is the last unbuilt
-predictor.
+start, and the statistical corrector, which was the last unbuilt predictor
+at the time of these sessions.
 
 ---
 
 ## References
 
-*No references required for this post.*
+- Contradiction Detection: When the Planning Document Is the Defect
+  (BLOG_bpu_13), for the earlier case of a planning-file error reaching
+  both the RTL and the tests.
 
 ---
+
+## Footnotes
+
+[F1] The position field was 3 bits at the close of this set of sessions,
+addressing the expanded-instruction granularity, and `pftAddr` was 4 bits. In
+later sessions BP-099 widened the position field to 4 bits so that it resolves
+to 2 bytes, which the RVA23 C extension requires, and `pftAddr` followed to 5.
+`POS_OFFSET_BITS` is derived as `FTB_OFFSET_BITS - FTB_BR_POS_BITS`, so it
+rescaled from 2 to 1 without a separate edit. The widths given above are the
+current ones; 3 bits was the design at the time this work closed.
+
+---
+
 <!-- ticfinder_off -->
 *Jeff Nye is a microprocessor architect with 35 years of industry
 experience spanning performance modeling, RTL implementation, and
@@ -574,4 +394,3 @@ documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
 <!-- ticfinder_on -->
-
