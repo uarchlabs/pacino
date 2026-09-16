@@ -2,73 +2,35 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-08-19
  CONTACT: Jeff Nye
 ```
 
-# Overview
+# Front End Theory of Operation: BPU and FTQ
 
-This document holds front end decisions. It carries two kinds of
-content and they have different scopes.
-
-The prose sections are the paths between the branch prediction
-cluster and the fetch target queue, sections 1 to 3 and 7 to 10,
-and the front end top, section 15.
-
-The registries are front end wide and are not split: invariants
-in section 11, technical debt in section 13, unresolved items in
-section 14. An FE, TD-FE or FE-U number may be issued for any
-front end subject, not only for the BPU and the FTQ.
-
-## The two paths
+This document describes the two paths that connect the branch
+prediction cluster and the fetch target queue.
 
 BPU to FTQ carries predictions. The FTQ allocates an entry on the
-initial prediction and issues a fetch from it. Later predictors
-correct that entry by redirect.
+initial prediction and issues a fetch from it. Later predictors correct
+that entry by redirect.
 
-Correction and redirect are the same thing. A predictor at p2 or
-p3 may override the p1 prediction held in the entry, replacing the
-corrected slot's target and redirecting fetch to the new address.
-A redirect names one FTQ entry index and carries a corrected
-target per slot. Redirects supersede by stage order. The mechanism
-is section 3.
+A redirect is the correction of an FTQ entry by a predictor at p2 or p3. A later predictor can override the initial p1 prediction held in the entry, replacing the corrected slot's target and redirecting fetch to the new address. Redirects supersede by stage order and carry a corrected target per slot; the mechanism is specified in section 3.
 
-FTQ to BPU carries updates. On post-execute resolution the FTQ
-reads the metadata captured at prediction time and forms an update
-for each predictor named by the resolved branch type. Updates
-reach the predictors through per-predictor update queues.
+FTQ to BPU carries updates. On post-execute resolution the FTQ reads
+the metadata captured at prediction time and forms an update for each
+predictor named by the resolved branch type. Updates reach the
+predictors through per-predictor update queues.
 
-Predictor internals are out of scope here, as is the RAM
-arbitration model. These sections state what each predictor
-contributes to the FTQ, when, and the handshakes that carry it.
+Predictor internals are out of scope, as is the RAM arbitration model.
+This document states what each predictor contributes to the FTQ, when,
+and the handshakes that carry it.
 
-## Conventions
-
-Stage labeling is p0 through p3 for prediction and u0/u1 for
-update.
+Stage labeling is p0 through p3 for prediction and u0/u1 for update.
 
 One FTQ entry holds one fetch block. A fetch block carries
-NUM_PRED_SLOTS predictions, one per prediction slot. The slots are
-the branch fields of one FTB block; see section 10.
-
-## The rest of the front end
-
-Each unit owns its own document and issues its own numbers. This
-document does not restate them.
-
-```
-  IFU                    ifu_decisions.md
-  predecode              dcd_decisions.md
-  instruction buffer     ibuf_decisions.md
-  instruction TLB        itlb_decisions.md
-  L2 TLB and walker      mmu_decisions.md
-  FTQ internals          ftq_decisions.md, ftq_entry_formats.md
-  predictors             one document per predictor
-```
-
-The L1I is emitted by cachegen rather than written, and is
-specified in icache_decisions.md. FE-16 puts it outside the front
-end.
+NUM_PRED_SLOTS predictions, one per prediction slot. The slots are the
+branch fields of one FTB block; see section 10.
 
 ---
 
@@ -909,96 +871,7 @@ ubtb.sv.
 
 ---
 
-## 15. Front End Top
-
-TD#117 records that there is no front-end top and that `ftq.sv`
-deliberately does not instantiate `bp_cluster`. This section is
-the level above both. It closes TD#117.
-
-### 15.1 Contents
-
-```
-  FE-15  The front end top is structural. It instantiates
-         bp_cluster, ftq, the IFU, the ibuf and decode, and wires
-         them. It holds no state and makes no decision. The same
-         rule ftq_decisions.md 7 applies to ftq.sv applies here.
-```
-
-`ftq.sv` is a structural top over the FTQ modules and `bp_cluster`
-is a structural top over the predictors. The front end top is the
-third of these and the last; nothing above it is front end.
-
-### 15.2 What is not inside
-
-```
-  FE-16  The L1I and the logic directly serving it are outside the
-         front end. The top connects to them across its boundary
-         and does not contain them.
-```
-
-The L1I is emitted by cachegen from `testcases/pacino` and does
-not live in the front end tree. Its port into the l2, up_i, is a
-topology edge of the emitted graph and is not a front end
-connection at all.
-
-### 15.3 The boundary
-
-```
-  FE-17  Four groups cross the front end boundary.
-
-         instruction       the IFU to the L1I, both directions.
-                           l1i_ifu_interfaces.md.
-
-         translation       the IFU to the ITLB, and the ITLB to
-                           the shared L2 TLB. itlb_decisions.md
-                           and mmu_decisions.md.
-
-         uncached          the IFU's second instruction source,
-                           IFU-21. It does not pass through the
-                           L1I.
-
-         backend           decode to rename and dispatch, and the
-                           FTQ to the backend for resolution,
-                           redirect and commit.
-                           ftq_backend_interfaces.md.
-```
-
-The backend group is two unrelated paths that happen to share a
-direction. Decode hands instructions forward. The FTQ exchanges
-control with the backend and is not in the instruction path at
-all.
-
-### 15.4 Reset and redirect
-
-```
-  FE-18  The top introduces no redirect source and no flush
-         mechanism. FE-14 holds across it: a flush is a redirect,
-         and a redirect reaches each unit by the path that unit
-         already declares.
-```
-
-`bp_cluster` clears its stage valids from its own p2 and p3 arms
-and from the FTQ arm of BP-102. The FTQ drives the IFU flush of
-ftq_ifu_interfaces.md 5. The ibuf clears on redirect, IBUF-8.
-There is no front-end-wide flush signal and the top does not
-create one.
-
-### 15.5 Unresolved
-
-```
-  FE-U10 Whether the ITLB is inside the front end top or outside
-         it with the L1I. It is written RTL and serves the IFU
-         alone, which argues inside. It is part of the translation
-         path whose other half, the shared L2 TLB, serves the data
-         side too and is certainly outside, which argues that the
-         boundary belongs between the ITLB and the L2 TLB rather
-         than in front of the ITLB. FE-17 is written for the
-         inside reading. Unresolved.
-```
-
----
-
-## 16. Document History
+## 15. Document History
 
 ```
   2026-07-09  tmp_004. Written from bp_cluster.md rev 1.0,
@@ -1132,5 +1005,4 @@ create one.
               only ftq_icache remains, and it is a decision rather
               than a specification.
 ```
-
 

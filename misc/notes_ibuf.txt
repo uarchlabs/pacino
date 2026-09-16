@@ -1,0 +1,68 @@
+  XSParameters.scala does not exist in this tree. The XSCoreParameters case
+  class is in xiangshan/scala/src/main/scala/xiangshan/Parameters.scala:56. All
+  parameter line numbers below are in that file. IBuffer.scala is at
+  xiangshan/scala/src/main/scala/xiangshan/frontend/IBuffer.scala — no ibuffer/
+  subdirectory in this checkout.
+
+  Values
+
+  ┌──────────────┬──────────────────────────────┬───────────────────────────┐
+  │  Parameter   │            Value             │         Location          │
+  ├──────────────┼──────────────────────────────┼───────────────────────────┤
+  │ IBufSize     │ 48 (literal)                 │ Parameters.scala:144;     │
+  │              │                              │ accessor :696             │
+  ├──────────────┼──────────────────────────────┼───────────────────────────┤
+  │              │ 6 (literal), comment         │ Parameters.scala:145;     │
+  │ IBufNBank    │ "IBuffer bank amount, should │ accessor :697             │
+  │              │  divide IBufSize"            │                           │
+  ├──────────────┼──────────────────────────────┼───────────────────────────┤
+  │ PredictWidth │ computed, = 16               │ Parameters.scala:630      │
+  ├──────────────┼──────────────────────────────┼───────────────────────────┤
+  │ DecodeWidth  │ 6 (literal)                  │ Parameters.scala:146      │
+  └──────────────┴──────────────────────────────┴───────────────────────────┘
+
+  PredictWidth is not a literal. Parameters.scala:630:
+
+  def PredictWidth = FetchWidth * (if (HasCExtension) 2 else 1)
+
+  Inputs: FetchWidth = 8 (Parameters.scala:78), HasCExtension = true
+  (Parameters.scala:65). So 8 * 2 = 16.
+
+  Bank depth is also computed, not declared: bankSize = IBufSize / IBufNBank =
+  48/6 = 8 (IBuffer.scala:115).
+
+  Override note: top/Configs.scala:89-90 sets IBufSize = 24, IBufNBank = 6 — but
+  that is inside MinimalConfig (Configs.scala:63), which also cuts FetchWidth
+  to 4. The default full core uses the case-class values above.
+
+  Banked: yes. The depth is total, not per bank.
+
+  IBuffer.scala:131 allocates one flat register vector of IBufSize = 48 entries.
+  :132-136 builds a banked view over that same storage, interleaved by index:
+
+  bankedIBufView = VecInit.tabulate(IBufNBank)(
+    bankID => VecInit.tabulate(bankSize)(
+      inBankOffset => ibuf(bankID + inBankOffset * IBufNBank)))
+
+  So 48 total = 6 banks x 8 entries. Entry n lives in bank n mod 6.
+
+  The two directions are not symmetric:
+
+  - Read/dequeue is bank-limited. :298-303 is a two-stage read: stage 1 picks at
+    most one entry per bank (bankSize -> 1 Mux1H per bank, IBufNBank of them),
+    stage 2 selects across banks for each of the DecodeWidth outputs. The file
+    comment at :296-297 states this is IBufNBank * (bankSize -> 1) + IBufNBank 
+    -> 1, chosen over a flat IBufSize -> 1 mux for area. The banking is
+    therefore a read-port-area optimization, and IBufNBank caps dequeue at
+    6/cycle. :117-118 requires IBufNBank >= DecodeWidth — here 6 >= 6, exactly
+    tight.
+  - Write/enqueue is not bank-limited. :253-271 gives every one of the 48
+    entries its own PredictWidth -> 1 mux (comment at :268), so up to
+    PredictWidth = 16 instructions can be written per cycle regardless of bank.
+    :129 says so explicitly: "Enqueue writes cannot benefit from this
+    characteristic unless use a SRAM."
+
+  Enqueue is gated by allowEnq := (IBufSize - PredictWidth).U >= numValidNext
+  (:180) — i.e. 48-16 = 32, one full fetch bundle of headroom.
+
+
