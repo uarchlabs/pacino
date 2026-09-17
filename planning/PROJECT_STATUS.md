@@ -5,7 +5,7 @@
 ```
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
- STATUS:  WORKING
+ STATUS:  DRAFT
  UPDATED: 2026-09-04
  CONTACT: Jeff Nye
 ```
@@ -763,7 +763,9 @@ it only documented current behavior.
 |                         |             |                   | top of file).                    |
 | bw_ram / sat_alu        | Complete    | tb_components     | COMP-001 PASS                    |
 | dual_lm1                | Complete    | tb_components     | COMP-002 now uses generate       |
-| sram_init               | Complete    | tb_components     | COMP-003                         |
+| sram_init.sv            | Complete    | tb_components     | COMP-003. The RTL module. The    |
+|                         |             |                   | document is arch/sram_init.md,   |
+|                         |             |                   | its own row below.               |
 | tage_hash.sv            | Complete    | tb_tage_hash      | BP-006 abandoned.                |
 | tage_table.sv           | Complete    | tb_tage_table     | BP-007 through BP-012 complete.  |
 |                         |             |                   | Signal naming debt #17 pending.  |
@@ -1230,7 +1232,10 @@ it only documented current behavior.
 |                         |             |                   | l1i_ifu_interfaces.md 10 are NOT  |
 |                         |             |                   | emitted; TD#119.                  |
 | ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..27,   |
-|                         |             |                   | TD-IFU-1..5, IFU-U4, IFU-U5.      |
+|                         |             |                   | TD-IFU-1, 4, 5 and 7..10;         |
+|                         |             |                   | IFU-U4, IFU-U5. TD-IFU-2, -3 and  |
+|                         |             |                   | -6 and IFU-U1..U3 were never      |
+|                         |             |                   | issued.                           |
 |                         |             |                   | Expansion and predecode in the    |
 |                         |             |                   | IFU, unaligned 34-byte block over |
 |                         |             |                   | 17 halfword positions, 16 slots   |
@@ -1264,13 +1269,13 @@ it only documented current behavior.
 |                         |             |                   | associative, all three Sv39 page  |
 |                         |             |                   | sizes in one array, ASID tagged,  |
 |                         |             |                   | 1-cycle hit. Closes TD#115.       |
-| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..18,   |
+| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..25,   |
 |                         |             |                   | MMU-U1..U5. Shared L2 TLB and     |
 |                         |             |                   | walker, Svade and Svadu both,     |
 |                         |             |                   | PMP at two sites, PMA on the      |
 |                         |             |                   | final PA only. Written RTL, not   |
 |                         |             |                   | a cachegen node.                  |
-| ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..11,    |
+| ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13,    |
 |                         |             |                   | IB-U1. One enable mask, not two.  |
 | itlb_ifu_interfaces.md  | Draft       | --                | Created session-069. IT-1..15.    |
 |                         |             |                   | One request port, one-bit tag,    |
@@ -1305,6 +1310,33 @@ it only documented current behavior.
 |                         |             |                   | per icache_decisions.md L1I-2.    |
 |                         |             |                   | An earlier session-069 row said   |
 |                         |             |                   | outside. Closes TD#117.           |
+| bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
+|                         |             |                   | Sections 9 and 10 are stubs       |
+|                         |             |                   | (TD#94); fe_decisions.md 12       |
+|                         |             |                   | records the departures this file  |
+|                         |             |                   | is wrong about. The Shared        |
+|                         |             |                   | planning documents list carried   |
+|                         |             |                   | "In progress", which was never a  |
+|                         |             |                   | Module Status value.              |
+| sram_init.md            | Complete    | --                | ADDED 2026-09-17. Had no row; the |
+|                         |             |                   | sram_init row above is the RTL    |
+|                         |             |                   | module.                           |
+| tage_cntrl              | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+| _alloc_rules.md         |             |                   |                                   |
+| tage_table              | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+| _entry_formats.md       |             |                   |                                   |
+| tage_table              | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+| _hash_rules.md          |             |                   |                                   |
+| manual_tb_decisions.md  | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+| tage_tb_decisions.md    | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+| tage_mtb_decisions.md   | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+| tage_coverage_plan.md   | Complete    | --                | ADDED 2026-09-17. Had no row.     |
+|                         |             |                   | Open Items 5 records the TAGE     |
+|                         |             |                   | validation plan Complete.         |
+
+THE NINE ROWS MARKED "ADDED 2026-09-17" carry a status DERIVED
+from statements already in this file, not from a fresh
+assessment of each document. Correct any that are wrong.
 
 ---
 
@@ -1632,8 +1664,8 @@ it only documented current behavior.
 |     |          | correctly, so the older limits were left. The            |
 |     |          | completion figures behind those ratios are coarse and    |
 |     |          | strap-dependent; re-measure before setting a ratio rule. |
-| 112 | planning | OPEN. Five session-063 decisions have never been written |
-|     |          | into any planning document. They exist only in           |
+| 112 | planning | CLOSED 2026-09-17 by Jeff's ruling. Five session-063     |
+|     |          | decisions were recorded only in                          |
 |     |          | pa_handoffs/session_handoff-064.md and, partially, in    |
 |     |          | ftq_bpu_interfaces.md:                                   |
 |     |          |                                                          |
@@ -1643,15 +1675,20 @@ it only documented current behavior.
 |     |          |   - the branch_id qualification                          |
 |     |          |   - the two-group metadata write                         |
 |     |          |                                                          |
-|     |          | bp_cluster.md is where they belong. G8 and G17 were      |
-|     |          | SUPERSEDED by them, and ras_decisions.md 6.1 and         |
-|     |          | loop_pred_interfaces.md still carry the retired          |
-|     |          | pred_pc+32 dual-slot model those decisions replaced, so  |
-|     |          | the gap is actively producing wrong text elsewhere.      |
+|     |          | The TD also named two documents as still carrying the    |
+|     |          | superseded pred_pc+32 dual-slot model. BOTH HAVE SINCE   |
+|     |          | BEEN CORRECTED and the TD text was not updated:          |
+|     |          | ras_decisions.md 6.1 was rewritten session-069, and      |
+|     |          | loop_pred_interfaces.md records the model superseded     |
+|     |          | under Slot PC derivation (BP-091). The claim that the    |
+|     |          | gap was "actively producing wrong text elsewhere" no     |
+|     |          | longer holds, which is what the TD rested on.            |
 |     |          |                                                          |
-|     |          | Fix is one PA-direct edit to bp_cluster.md, plus         |
-|     |          | correcting the two documents still carrying the          |
-|     |          | superseded model. No RTL change.                         |
+|     |          | G8 and G17 remain SUPERSEDED by the five decisions.      |
+|     |          | Promoting them into bp_cluster.md is not tracked here    |
+|     |          | any more; bp_cluster.md carries its own contradictions   |
+|     |          | with the current model and is the subject of a separate  |
+|     |          | pass.                                                    |
 | 113 | ftq      | OPEN. bp_ftq_entry_t.pft_addr is a p1 value with NO      |
 |     |          | correction path, and two consumers read it as if it were |
 |     |          | the block's final fall-through.                          |
@@ -1718,7 +1755,7 @@ it only documented current behavior.
 |     |          | Settle it by naming which of I1-I11 are missing from     |
 |     |          | sim_ftq_ifu. Short IA task, read-only.                   |
 | 115 | icache   | CLOSED session-069 by planning/arch/itlb_decisions.md   |
-|     |          | (ITLB-1..14) and mmu_decisions.md (MMU-1..23). L1I-U2   |
+|     |          | (ITLB-1..14) and mmu_decisions.md (MMU-1..25). L1I-U2   |
 |     |          | ruled at 64 entries, not the recommended 32; L1I-U3     |
 |     |          | adopted as recommended; L1I-U4 recommended and ruled.   |
 |     |          | The ITLB is WRITTEN RTL, not a cachegen node. Original  |
@@ -1898,11 +1935,23 @@ it only documented current behavior.
 |          | decisions and open items. Where a decision  | change, PROJECT |
 |          | would be re-derived wrongly, state the      | _CORE Planning  |
 |          | constraint that prevents it as a decision.  | Directory.      |
-| 18       | The bpu 47 and ftq 22 targets have not been | Not run since   |
-|          | run since the session-067 package additions.| session-067.    |
-|          | Every target in both units compiles both    | PROJECT_CORE    |
-|          | packages, so the rule now says a package    | now states the  |
-|          | edit widens the run to both units.          | rule.           |
+| 18       | A package edit widens the verification run  | Rule stated in  |
+|          | to BOTH units. Every target in the bpu and  | PROJECT_CORE    |
+|          | the ftq compiles bp_defines_pkg.sv and      | and CLAUDE.md.  |
+|          | bp_structs_pkg.sv as its first two sources, | Last run:       |
+|          | so an addition made under a task scoped to  | session-069,    |
+|          | one unit reaches the other and that task's  | sim+lint only.  |
+|          | own suite cannot see it.                    | Coverage        |
+|          | UPDATED 2026-09-17. This item read "the bpu | targets not run |
+|          | 47 and ftq 22 targets have not been run     | since           |
+|          | since the session-067 package additions",   | session-067.    |
+|          | which session-069 overtook: it forced every |                 |
+|          | sim and lint target in both units with -B   |                 |
+|          | and reported 62 of 62 green. THAT IS 62,    |                 |
+|          | NOT 69. The seven bpu coverage targets were |                 |
+|          | not in that run and remain unrun since      |                 |
+|          | session-067. The 62 figure is session-069's |                 |
+|          | and is not evidence about the tree today.   |                 |
 | 19       | L1I-U7: whether the L1I-22 prefetch reserve | Open, PA.       |
 |          | is declared on the link beside the bit or   | TOOLS-004 put   |
 |          | on the node beside mshrs.                   | it on the link. |
@@ -2033,7 +2082,7 @@ num_branches valid range: 0-2. Value 3 is undefined.
 
 ## Prompt Generation Guide
 
-See PROJECT_CORE.md §Prompt generation rules.
+See PROJECT_CORE.md, Prompt generation rules.
 For known failure modes see ANTIPATTERNS.md.
 
 ---
@@ -2043,8 +2092,10 @@ For known failure modes see ANTIPATTERNS.md.
 ### Decoder track
 
 Pacino implements the mandatory requirements of the RVA23S64
-profile. Pacino does not implement any optional extensions
-at this time.
+profile.
+
+Pacino implements this optional extension:
+  - Svadu
 
 The ISA requirements for RVA23S64 are fully described in the
 RISC-V specification and riscv-opcodes.
@@ -2193,7 +2244,7 @@ unless noted.
   bpu_pred_pft_p1 (TD#108, BP-092).
 
 ### Shared planning documents
-    - planning/arch/bp_arb_spec.md                    In progress
+    - planning/arch/bp_arb_spec.md                    Draft
         - RECONCILED session-057. Session-064: 6.1 names the SC
           index folds; a caveat at section 0 and a rewritten
           3.4 status note record that no <pred>_redir_* port
@@ -2241,8 +2292,8 @@ unless noted.
     - planning/interfaces/loop_pred_interfaces.md     Draft
         - Corrected to the delivered ports BP-091.
     - planning/arch/ifu_decisions.md                  Draft
-        - Created session-069. IFU-1..27, TD-IFU-1..5, IFU-U4,
-          IFU-U5. Expansion and predecode in the IFU, unaligned
+        - Created session-069. IFU-1..27, TD-IFU-1, 4, 5 and
+          7..10, IFU-U4, IFU-U5. Expansion and predecode in the IFU, unaligned
           34-byte block, the uncached path. Two decoupled
           pipelines: translation ahead of fetch, joined by a
           queue, the XiangShan arrangement without the way
@@ -2262,11 +2313,11 @@ unless noted.
           fully associative, all three Sv39 page sizes, ASID
           tagged, 1-cycle hit. Closes TD#115.
     - planning/arch/mmu_decisions.md                  Draft
-        - Created session-069. MMU-1..18, MMU-U1..U5. Shared
+        - Created session-069. MMU-1..25, MMU-U1..U5. Shared
           L2 TLB and walker, Svade and Svadu both, PMP at two
           sites, PMA on the final PA only.
     - planning/interfaces/ifu_ibuf_interfaces.md      Draft
-        - Created session-069. IB-1..11, IB-U1.
+        - Created session-069. IB-1..13. IB-U1 closed as IB-12.
     - planning/interfaces/itlb_ifu_interfaces.md      Draft
         - Created session-069. IT-1..15. One request port with
           a one-bit tag; responses may return out of order.

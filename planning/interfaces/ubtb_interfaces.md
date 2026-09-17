@@ -117,8 +117,14 @@ the stream to alignment.
   br_type  : bp_br_type_e. Valid when pred_p1[s].valid=1. The
              conditional fields always report COND. The slot
              carrying the jump field reports DIRECT_CALL,
-             INDIRECT_CALL, RETURN, INDIRECT_NONRET, or DIRECT_UNC
-             per the stored is_call / is_ret / is_jalr bits.
+             INDIRECT_CALL, RETURN, RETURN_CALL, INDIRECT_NONRET,
+             or DIRECT_UNC per the stored is_call / is_ret /
+             is_jalr bits.
+
+             RETURN_CALL is is_call AND is_ret AND is_jalr, added
+             session-069 for the JALR that pops then pushes
+             (ras_decisions.md 2). The stored bits already express
+             it; only the enum mapping was missing.
 
   br_taken : predicted direction, the conf MSB. Meaningful only when
              br_type==COND. Present in the struct for all types but

@@ -1,11 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-# Project Core — RISC-V RVA23 Processor Co-Design
+# Project Core -- RISC-V RVA23 Processor Co-Design
 ```
  FILE:    PROJECT_CORE.md
  SOURCE:  various
- STATUS:  STABLE
+ STATUS:  DRAFT
  UPDATED: 2026-08-22
  CONTACT: Jeff Nye
 ```
@@ -29,8 +29,8 @@ capture, and experiment discipline are themselves contributions
 worth documenting for an audience of experienced hardware
 architects evaluating AI-assisted design flows.
 
-Repo:  https://github.com/jeffnye-gh/riscv-codesign
-Local: ~/Development/jeffnye-gh/riscv-codesign
+Repo:  https://github.com/jeffnye-gh/pacino
+Local: ~/Development/jeffnye-gh/pacino
 
 ---
 
@@ -412,18 +412,38 @@ the same for every file under planning/: the IA does not, the
 PA drafts, Jeff applies. A per-file permission marker would be
 a second encoding of that one rule, free to disagree with it.
 
-LOCKED IS RETIRED. It was never a Module Status value. It
-appeared exactly twice, as an aside on two cross-references to
-bp_cluster.md, and nothing maintained it. It read as
-permission at a time when permission was not stated anywhere
-else, and it made a necessary change to a document look like a
-violation while the front end was still being designed.
-bp_cluster.md is Working. Do not reintroduce a permission
-marker on a planning file.
+THE HEADER STATUS FIELD IS DECORATIVE. Every file under
+planning/ carries a STATUS line in its header block. BY
+CONVENTION IT CARRIES DRAFT AND IS NOT UPDATED. It is not the
+document's maturity -- that is the Module Status table -- and
+it is not permission. Do not read it as either, do not audit
+it against the Module Status table, and do not promote it when
+a document is promoted.
+
+The sweep setting the remaining files to DRAFT is outstanding
+as of 2026-09-17; PROJECT_CORE.md and PROJECT_STATUS.md carry
+it. Until that sweep runs the field carries several other
+values, none of which means anything.
+
+LOCKED IS RETIRED, and so is every other value the header
+field has carried. LOCKED is retired for a reason the others
+are not: it read as PERMISSION at a time when permission was
+not stated anywhere else, and it made a necessary change to a
+document look like a violation while the front end was still
+being designed. Permission is settled once, by Planning
+document ownership above and by CLAUDE.md Fixed Constants. Do
+not reintroduce a permission marker on a planning file, in the
+header or anywhere else.
+
+This section states a RULE and deliberately does not count
+instances. An earlier revision asserted that LOCKED "appeared
+exactly twice"; the census was wrong when written and would
+have gone stale in any case.
 
 ### Current inventory
 Navigational only. PROJECT_STATUS.md Module Status is the
 authoritative list and carries each document's status.
+Regenerated from disk 2026-09-17.
 
 ```
 planning/
@@ -431,15 +451,22 @@ planning/
   PROJECT_STATUS.md          living record, updated every
                              session
   CLOSED_TECH_DEBT.md        closure entries, historical
-  GLOSSARY.md                pipe stage notation, naming
   ANTIPATTERNS.md            known prompt failure modes
+  PA_PROJECT_INSTRUCTIONS.md PA session setup
+  BLOG_GENERATION_PROCESS.md blog workflow
+  TAGE_DECOMP_LOG.md         archive
+  rva23-profile.adoc         in-tree copy of the RVA23
+                             profile specification. The
+                             reference for every compliance
+                             claim in this tree
   arch/
     bp_cluster.md            BP cluster summary data
     bp_arb_spec.md
     bp_history_decisions.md
     fe_decisions.md          front-end theory of operation.
-                             Owns FE-1..FE-14, TD-FE-1..8,
-                             FE-U1..FE-U9.
+                             Owns FE-1..FE-18, TD-FE-1..8,
+                             FE-U1..FE-U10. The registries are
+                             FRONT END WIDE, not BPU/FTQ only
     ftq_decisions.md         FTQ-owned behaviour
     ftq_entry_formats.md     sole prose home for
                              bp_ftq_entry_t / bp_ftq_meta_t
@@ -449,14 +476,26 @@ planning/
                              miss handling, maintenance,
                              prefetch. Owns L1I-N, TD-L1I-N,
                              L1I-UN
+    ifu_decisions.md         IFU. Owns IFU-N, TD-IFU-N, IFU-UN
+    dcd_decisions.md         predecode. Owns DCD-N, TD-DCD-N,
+                             DCD-UN
+    ibuf_decisions.md        instruction buffer. Owns IBUF-N,
+                             TD-IBUF-N, IBUF-UN
+    itlb_decisions.md        L1 ITLB. Owns ITLB-N, TD-ITLB-N,
+                             ITLB-UN
+    mmu_decisions.md         shared L2 TLB, walker, PMP, PMA.
+                             Owns MMU-N, TD-MMU-N, MMU-UN
     ras_decisions.md
     sc_decisions.md
     sc_table_hash_rules.md
     sram_init.md
     tage_cntrl_decisions.md
+    tage_cntrl_alloc_rules.md
     tage_cntrl_ctr_update_rules.md
     tage_cntrl_uaon_update_rules.md
     tage_cntrl_use_update_rules.md
+    tage_table_entry_formats.md
+    tage_table_hash_rules.md
     ittage_cntrl_decisions.md
     ittage_cntrl_alloc_rules.md
     ittage_cntrl_ctr_update_rules.md
@@ -464,8 +503,13 @@ planning/
     ittage_cntrl_use_update_rules.md
     ittage_table_entry_formats.md
     ittage_table_hash_rules.md
+    pacino_cache.md          GENERATED AND DATED. A snapshot of
+                             the cachegen output tree. Not a
+                             decision record and not maintained;
+                             do not cite it
   interfaces/
-    bpu_port_inventory.md    140 ports, eight modules
+    bpu_port_inventory.md    per-module port inventory read from
+                             the RTL (INFRA-011)
     ftq_bpu_interfaces.md
     ftq_ifu_interfaces.md
     ftq_backend_interfaces.md
@@ -480,13 +524,25 @@ planning/
     ftb_interfaces.md
     sc_interfaces.md
     sc_table_interfaces.md
+    l1i_ifu_interfaces.md    L1I core boundary and maintenance.
+                             Owns IF-N, TD-IF-N, IF-UN
+    ifu_ibuf_interfaces.md   Owns IB-N
+    itlb_ifu_interfaces.md   Owns IT-N
+    itlb_l2tlb_interfaces.md Owns IL-N
   testbenches/
     manual_tb_decisions.md
     sc_tb_decisions.md
+    tage_tb_decisions.md
+    tage_mtb_decisions.md
   verification/
     tage_coverage_plan.md
     sc_coverage_plan.md      not yet written
 ```
+
+A REGISTRY RANGE IN THIS LIST IS NAVIGATIONAL. The owning
+document is the reference for what numbers it has actually
+issued. Where this list and the owning document disagree, the
+owning document wins and this list is wrong.
 
 There is no ftq_icache interface and there will not be one from
 this phase. If physical design meets the fanout pressure
@@ -507,8 +563,17 @@ Primary currency: SV structs in packages (not SV interfaces).
 Rationale: better Verilator compatibility, simpler for Claude
 Code.
 
-BP cluster uses s-stage notation (s0/s1/s2/s3) to match the
-prediction pipeline. P-stage notation used elsewhere.
+STAGE NOTATION IS p0/p1/p2/p3 for prediction and u0/u1 for
+update, in every document and in the RTL. This is the
+decision; fe_decisions.md 12 records it.
+
+THE TRANSITION IS NOT COMPLETE. Several documents still carry
+s-stage notation (s0/s1/s2/s3) in their narrative, some
+alongside p-stage port names, and some state a local rule that
+s-notation is what planning documents use. Those local rules
+are superseded by this one. s0=p0, s1=p1, s2=p2, s3=p3
+throughout, so a document carrying the old labels is stale
+rather than describing something different.
 
 Array direction convention, package-wide: packed-struct
 dimensions descend, [NUM_PRED_SLOTS-1:0]; port dimensions

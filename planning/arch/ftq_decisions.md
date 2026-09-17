@@ -885,7 +885,8 @@ unrelated registers splits.
 
 ```
   ftq.sv             structural top, no state, no logic
-  ftq_ptr.sv         alloc_ptr, fetch_ptr           5.1 5.2 5.5
+  ftq_ptr.sv         alloc_ptr, xlate_ptr,
+                     fetch_ptr                      5.1 5.2 5.5
   ftq_commit.sv      commit_ptr, the commit walk    5.3 5.4
   ftq_npc.sv         the next-PC register, and the
                      redirect arbitration that
@@ -906,10 +907,25 @@ unit; a front-end top above both wires them together.
 
 ### 7.2 Why the pointers split
 
-`ftq_ptr` owns alloc_ptr and fetch_ptr. `ftq_commit` owns
-commit_ptr. Section 5.1 presents all three together and the
-partition rule splits them anyway, because commit_ptr is the only
-one whose advance is not a local decision: 5.4 rate-limits it to one
+`ftq_ptr` owns alloc_ptr, xlate_ptr and fetch_ptr. `ftq_commit`
+owns commit_ptr.
+
+XLATE_PTR IS IN `ftq_ptr` FOR THE SAME REASON fetch_ptr IS. Its
+advance is a local decision on a handshake, `ftq_ifu_xlate_val` and
+`_rdy`, exactly as fetch_ptr advances on `ftq_ifu_req_val` and
+`_rdy`. It is bounded by the same fetchable frontier as fetch_ptr
+and meets it first, being the pointer nearest alloc_ptr, so the
+frontier logic is shared rather than duplicated. And FQ-1 orders
+all four together. Added session-069 with the pointer itself; the
+decomposition predates it.
+
+The request port it drives is `ftq_ifu.sv`'s, alongside the fetch
+request, per `ftq_ifu_interfaces.md` 4.1. Pointer in `ftq_ptr`,
+port in `ftq_ifu`, mirroring fetch_ptr exactly.
+
+Section 5.1 presents all four together and the partition rule
+splits commit_ptr out anyway, because it is the only one whose
+advance is not a local decision: 5.4 rate-limits it to one
 entry per cycle against the scalar RAS commit port, reads
 `bp_ras_snapshot_t` out of the entry to form the commit payload, and
 SUPPRESSES the advance in any cycle a redirect restore fires. That
@@ -1171,4 +1187,5 @@ one.
               the two escalations not taken. FE-5 amended narrowly
               as FE-5a; IC-FTB-09 resolved. The FTB is unchanged.
 ```
+
 

@@ -45,6 +45,7 @@ instantiated twice.
   l2t_itlb_size  [1:0]                    L2TLB -> ITLB
   l2t_itlb_perm  [PERM_WIDTH-1:0]         L2TLB -> ITLB
   l2t_itlb_cause [CAUSE_WIDTH-1:0]        L2TLB -> ITLB
+  l2t_itlb_gpa   [GPA_WIDTH-1:0]          L2TLB -> ITLB
 ```
 
 IL-1  `itlb_l2t_tag` is two bits. Up to four requests may be
@@ -163,8 +164,9 @@ IL-10 A fault response ends the transaction. The cause
 IL-11 The faulting virtual address is not returned. The client
       supplied it and holds it against the tag.
 
-IL-11a The faulting GUEST PHYSICAL address IS returned, on a
-       guest page fault only. The client never had it; it is
+IL-11a The faulting GUEST PHYSICAL address IS returned on
+       `l2t_itlb_gpa`, valid on a guest page fault only. The
+       client never had it; it is
        produced inside the nested walk. Shtvala requires `htval`
        to carry it. This is the one address that travels back on
        this port, and it continues to the IFU as

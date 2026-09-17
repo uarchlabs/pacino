@@ -104,9 +104,38 @@ Call instructions (push trigger):
   C.JALR          (implicit rd=x1)
 
 Return instructions (pop trigger):
-  JALR  rs1=x1 or rs1=x5  (and rd != x1, rd != x5, or rd==x0)
+  JALR  rs1=x1 or rs1=x5, with rd not a link register or rd==x0
   C.JR  rs1=x1 or rs1=x5
   C.JALR with rs1=x5 is excluded from return classification.
+
+Pop-then-push (RETURN_CALL):
+  JALR  rd and rs1 BOTH link registers and rd != rs1
+
+RETURN_CALL, session-069. The specification's return-address-stack
+hints make a JALR whose rd and rs1 are both link registers and are
+UNEQUAL a pop followed by a push. An earlier revision of the return
+rule excluded every JALR with a link rd, which covers two different
+cases:
+
+```
+  rd == rs1, both link   push only. The exclusion is CORRECT; the
+                         specification agrees.
+  rd != rs1, both link   pop THEN push. The exclusion dropped the
+                         pop, so the stack grew by one on every
+                         such instruction instead of staying level.
+```
+
+`bp_br_type_e` gains RETURN_CALL at 3'b111, the one free encoding
+in the 3-bit enum. It is a package edit, so the verification run
+widens to both units.
+
+THE THREE-WAY SPLIT BELOW SURVIVES IT. The package comment on the
+enum worried that a JALR satisfying both the call and the return
+rule would break the mutually exclusive FTB / RAS / ITTAGE split.
+It does not, because RETURN_CALL is a SINGLE classification and it
+is unambiguously the RAS's: the split decides which predictor owns
+an instruction, and this one is owned by the RAS performing two
+operations rather than by two predictors performing one each.
 
 Three-way JALR split with FTB and ITTAGE:
   FTB:    JALR with fixed stable target (most direct calls)
@@ -446,8 +475,9 @@ second recovery point.
 
   RAS-DS1  The RAS accepts is_call and is_ret both set on one
            instruction and performs the pop first, then the
-           push. Ordering is DCD-U2 and TD-DCD-2 verifies the
-           built RAS against it.
+           push. On `ras_br_type_p2` that arrives as RETURN_CALL
+           (section 2). Ordering is DCD-U2 and TD-DCD-2 verifies
+           the built RAS against it.
 
 The superseded five follow.
 
@@ -552,10 +582,29 @@ after the call:
   - Full-width RVI call (4b): ret_addr = call_pc + 4
   - Compressed RVC call (2b): ret_addr = call_pc + 2
 
-The FTB fallThroughAddr field provides this value. A +2
-correction applies for full-width RVI calls truncated at a
-prediction block boundary. The RAS uses the FTB-provided value
-directly; it does not independently compute PC+2 or PC+4.
+The FTB fallThroughAddr field provides this value. The RAS uses it
+directly and does not independently compute PC+2 or PC+4.
+
+NO STRADDLE CORRECTION EXISTS. An earlier revision of this section
+said a +2 correction applies for full-width RVI calls truncated at
+a prediction block boundary. That was the `last_may_be_rvi_call`
+mechanism, which `ftb_decisions.md` 6 ELIMINATED; FTB-1 records
+that no straddle correction exists. Corrected session-069.
+
+It is eliminated rather than forgotten because `pft_addr` carries
+the TRUE instruction end, not a value clamped at the block
+boundary. A call is a taken branch and terminates the block, so
+the fall-through IS the address after the call. The encoding
+reaches past the block: `pftAddr` holds 0 to 16 at 2-byte
+granularity, which is 0 to 32 bytes, and the carry bit adds a
+further 32 (`ftb_decisions.md` 4.5, 5.5). A 32-bit call beginning
+at the block's last halfword ends at block start plus 34, which is
+`pftAddr` = 1 with carry set.
+
+The straddle case is real, not hypothetical: `ifu_decisions.md`
+IFU-8 covers 34 bytes and 17 halfword positions for exactly this
+reason. It is handled by the fall-through arithmetic rather than
+by a correction at the RAS.
 
 VA_WIDTH = 40b covers the RVA23 implementation VA space.
 

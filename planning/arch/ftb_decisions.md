@@ -562,8 +562,20 @@ plus carry into the next block. The reconstruction is bounds checked
 
 ## 6. last_may_be_rvi_call
 
-THIS BIT HAS BEEN ELIMINATED. THIS DISCUSSION KEPT INCASE THE 
+THIS BIT HAS BEEN ELIMINATED. THIS DISCUSSION KEPT INCASE THE
 DECISION NEEDS TO BE REVISITED IN THE FUTURE.
+
+WHY THE ELIMINATION IS SAFE, session-069. `pft_addr` carries the
+true instruction end rather than a value clamped at the block
+boundary, and the encoding reaches past the block: `pftAddr` holds
+0 to 16 at 2-byte granularity, 0 to 32 bytes, and carry adds a
+further 32. A 32-bit call beginning at the block's last halfword
+ends at block start plus 34, which is `pftAddr` = 1 with carry
+set. Since a call is a taken branch and terminates the block, that
+end IS the return address the RAS needs.
+
+`ras_decisions.md` 8 described the eliminated +2 correction until
+session-069 and has been corrected.
 
 A 1-bit field. It flags the case where the last instruction in a block
 is a call whose second half spills into the next block. The RAS return
@@ -638,6 +650,11 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               +/-1 MB original -> +/-2 MB expanded.
   TAR_STAT_BITS     = 2       fit / overflow / underflow status,
                               shared by conditional and jump targets.
+  PFTADDR_BITS      = 5       FTB_BR_POS_BITS + 1. The stored block
+                              end: an in-block position extended by
+                              one so it can represent the full-block
+                              end point (5.5). The carry bit is
+                              SEPARATE and is not counted here.
 
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
@@ -645,19 +662,31 @@ held in ftb_plru):
   FTB_ENTRY_WIDTH (logical, per way) = 110 bits:
     1   valid          -- held in ftb_plru (flops), not ftb_array
   + 26  tag
-  + 2 * (1 + 3 + 13 + 2 + 3)       = 44   br0 + br1 (valid,pos,tgt,
+  + 2 * (1 + 4 + 13 + 2 + 3)       = 46   br0 + br1 (valid,pos,tgt,
                                           stat,conf -- no always_taken)
-  + (1 + 3 + 21 + 2 + 3)           = 30   jump (valid,pos,tgt,stat,type)
-  + (4 + 1)                        =  5   pftAddr + carry
-    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 424 bits (logical).
+  + (1 + 4 + 21 + 2 + 3)           = 31   jump (valid,pos,tgt,stat,type)
+  + (5 + 1)                        =  6   pftAddr + carry
+    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 440 bits (logical).
+
+THIS BLOCK IS THE SOLE HOME OF THE ENTRY ARITHMETIC. Nothing else
+in the tree restates it; FTB-1 and section 10 cite it. That rule
+exists because BP-099 changed one parameter and the consequence
+landed in four places, of which two were corrected and two were
+not, leaving three different widths in circulation until
+session-069.
+
+The BP-099 delta is four bits, 106 to 110, one each on br0.pos,
+br1.pos, jump.pos and pftAddr. Three position fields, not four.
+The older 108 in the session-065 history entry predates the
+always_taken removal of session-053 and is correct for its date.
 
 RAM entry width (what ftb_array actually stores -- the logical entry
 minus the relocated entry-valid):
 
-  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 105 bits/way.
+  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 109 bits/way.
     The br0/br1/jump FIELD-valid bits remain in the RAM entry; only the
     ENTRY-level valid moves to ftb_plru.
-  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 420 bits.
+  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 436 bits.
 
 ftb_array is sized at FTB_RAM_* (data only). ftb_plru holds, per set,
 FTB_WAYS entry-valid bits + PLRU_BITS tree-PLRU bits = 7 bits
@@ -701,13 +730,13 @@ bounds checked; see 4.5.
 ## 9. Open Items
 
   FTB-1: CLOSED (session-052; reconciled session-053). All offset,
-         target, pftAddr, and carry widths ruled and listed in section
-         8. Position FTB_BR_POS_BITS=4; conditional FTB_BR_TGT_BITS=13;
-         jump FTB_JMP_TGT_BITS=21; TAR_STAT_BITS=2; PFTADDR_BITS=5;
-         carry=1. Logical ENTRY_WIDTH=110 after always_taken removal
-         and BP-099
-         (session-053). The storage split partitions it into
-         FTB_RAM_ENTRY_WIDTH=105 (ftb_array) + 1 valid (ftb_plru). The
+         target, pftAddr and carry widths are ruled and listed in
+         SECTION 8, WHICH IS THE SOLE HOME OF THE ARITHMETIC. The
+         numbers are not restated here: this entry carried them
+         until session-069 and went stale after BP-099, which is
+         the reason for the single-home rule. The storage split
+         partitions the logical entry into FTB_RAM_ENTRY_WIDTH
+         (ftb_array) + 1 valid (ftb_plru). The
          width is settled, not open. (Historical: last_may_be_rvi_call
          was eliminated; no straddle correction exists.)
 
@@ -778,6 +807,23 @@ bounds checked; see 4.5.
               4, ENTRY_WIDTH 110 not 106, POS_OFFSET_BITS 1 not 2,
               and 4.4 no longer claims expanded-granularity
               addressing.
+
+              Section 8 ARITHMETIC corrected in the same pass and
+              declared the SOLE HOME of the entry widths. Its
+              header said 110 while its own breakdown summed to
+              106, and FTB_SET_WIDTH 424, FTB_RAM_ENTRY_WIDTH 105
+              and FTB_RAM_SET_WIDTH 420 were all 106-derived. Now
+              110 / 440 / 109 / 436, with the breakdown at
+              FTB_BR_POS_BITS 4 and PFTADDR_BITS 5. PFTADDR_BITS
+              added to the parameter list; it was cited in 5.5 and
+              defined nowhere. FTB-1 reduced to a citation.
+
+              The 2026-08-19 entry below already recorded 106->110
+              and 424->440 correctly. The body was never updated
+              to match, and the RAM widths were not in that entry
+              at all, which is why 105 and 420 survived. Three
+              different entry widths were in circulation until
+              this pass.
 ```
 
   2026-08-19  FTB_BR_POS_BITS 3 -> 4 and PFTADDR_BITS 4 -> 5:
@@ -902,4 +948,5 @@ bounds checked; see 4.5.
               bp_cluster, consistent with the TAGE/ITTAGE pattern; they
               do not block COMPLETE. Decisions are settled; remaining FTB
               work is downstream at cluster integration.
+
 

@@ -5,8 +5,8 @@
 ```
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
- STATUS:  LOCKED
- UPDATED: 2026-06-26
+ STATUS:  DRAFT
+ UPDATED: 2026-09-17
  CONTACT: Jeff Nye
 ```
 
@@ -160,7 +160,21 @@ range 0-2, per PROJECT_STATUS).
 
   GHR bit:  pred_taken[slot].
   PHR bit:  pred_pc[slot][2] ^ pred_pc[slot][3]  (path_bit).
-  pred_pc is the fetch-block PC, not the branch PC.
+  pred_pc is the BRANCH PC, not the fetch-block PC.
+
+pred_pc is the block base plus that branch's in-block position,
+pos << POS_OFFSET_BITS, and the ports are indexed by BRANCH NUMBER
+after the cluster compacts its valid slots, not by slot number.
+
+AN EARLIER REVISION OF THIS LINE SAID THE FETCH-BLOCK PC. It was
+wrong and the fold arithmetic above is why: the PHR write consumes
+bits [3] and [2] only. A block start is 2'b00 there whenever it is
+a fall-through from an aligned predecessor, which is most of them,
+so the block PC gives a path bit that is nearly constant. The
+branch PC varies by construction because its in-block position
+does. Corrected 2026-09-17 to match bp_history_interfaces.md
+Producer obligations, ftq_bpu_interfaces.md 9 and BP-092a, which
+have carried the branch-PC reading since session-064.
 
 PHR does not currently contribute to any fold; all folds are
 GHR-derived (HI2, deferred -- section 9).
@@ -185,13 +199,23 @@ simulation (TD #74, tb_bp_history).
 
 ### 3.4  Checkpoint granularity
 
-The checkpoint captures one pointer pair per FTQ slot, written at
+The checkpoint captures one pointer pair per FTQ ENTRY, written at
 the bundle (one checkpoint per accepted prediction bundle), not
 per branch. There is no checkpoint position between slot 0 and
-slot 1 of the same bundle. Given the fixed bundle split (G8/G17)
-and post-execute update, bundle granularity is the intended
-recovery unit. A redirect targets a bundle boundary, not an
-intra-bundle slot.
+slot 1 of the same bundle. Bundle granularity is the intended
+recovery unit under post-execute update, and a redirect targets a
+bundle boundary, not an intra-bundle slot.
+
+TWO CORRECTIONS, 2026-09-17. This paragraph said "per FTQ slot"
+where it means per FTQ ENTRY -- the checkpoint array is indexed by
+FTQ index and the prediction slot is a different concept
+(fe_decisions.md FE-10). And it cited "the fixed bundle split
+(G8/G17)" as the reason for bundle granularity. G8 and G17 are
+SUPERSEDED (session-063): the pred_pc+0:31 / +32:63 split is the
+TAGE/ITTAGE bundle convention and does not govern block
+prediction. The conclusion survives without them -- one checkpoint
+per accepted bundle is a property of when the checkpoint is
+written, not of how the block is split.
 
 Rollback-by-index (section 2.2) applies to EVERY redirect that
 names an entry. `ftq_backend_interfaces.md` D1 lists them:
@@ -528,9 +552,11 @@ This section defines the mapping, not the values.
 ## 7. Checkpoint
 
 The checkpoint array (ckpt_gptr / ckpt_pptr, internal) stores the
-GHR pointer (8b) + PHR pointer (5b) per FTQ slot. Folds are NOT
-stored per slot; they are recomputed on rollback from buffer
-contents at the restored pointer (section 5, G15 framing).
+GHR pointer (8b) + PHR pointer (5b) per FTQ ENTRY, 13 bits per
+entry, indexed by FTQ index. Folds are NOT stored per entry; they
+are recomputed on rollback from buffer contents at the restored
+pointer (section 5, G15 framing). "Per FTQ slot" here and in 3.4
+meant per entry; corrected 2026-09-17.
 
 Write: ckpt_wr_en writes the POST-advance internal pointer pair (the
 next-write address for the cycle after this bundle) into ckpt_wr_idx,
@@ -618,27 +644,56 @@ not a hashed fold) have no folds.
        performance measurement (stale-fold accuracy cost in the
        rollback cycle).
 
-  G24: PERFORMANCE MEASUREMENT, not a correctness gate and not
+  HI6: OPEN, and NOT OWNED HERE. IT5 fold generation is missing
+       in bp_history.sv: ittage.sv wires it_t5_idx_fh / tag_fh1 /
+       tag_fh2 to outputs that are never driven, so IT5 indexes on
+       PC alone. = TD#102. Opened in bp_history_interfaces.md
+       session-064 and listed here 2026-09-17 so this file is not
+       read as holding the whole HI registry.
+
+  HI7: OPEN, and NOT OWNED HERE. Ports use literal [1:0] and [2]
+       where other modules use NUM_PRED_SLOTS. Deferred,
+       INFRA-011. Opened in bp_history_interfaces.md session-064.
+
+  HI8: PERFORMANCE MEASUREMENT, not a correctness gate and not
        technical debt (section 3.5, session-069). The accuracy
        cost of the imprecise GHR across a redirect: two wrong bits
        surviving H predictions after every mispredict. Measure
        against the alternative in 3.5, which corrects the bit at
        the cost of a rollback port change. Same standing as G15.
 
-  RTL + interface change (module-owned pointer, section 2). This
-  is NOT a doc-only reconciliation -- it changes bp_history.sv and
-  the interface port list. The as-built RTL is caller-owned; the
-  decision is module-owned. Deltas:
-    - Make ghist_ptr / phist_ptr internal registers; advance by
-      num_branches each cycle. Remove them as inputs; expose as
-      registered outputs (FTQ visibility, 2.3).
-    - Remove rollback_ghist_ptr / rollback_phist_ptr inputs. Add
-      a rollback index input (rollback_ckpt_idx, FTQ_IDX_BITS).
-    - Rollback reads ckpt_gptr[idx] / ckpt_pptr[idx], loads the
-      pointer, recomputes folds from the restored position.
-    - ckpt_ghist_ptr / ckpt_phist_ptr outputs unchanged.
+       RENUMBERED FROM G24, 2026-09-17. G24 was already allocated,
+       in the PROJECT_STATUS BP Cluster Open TBDs table, to the FTB
+       flush protocol (ftb_flush_px), which BP-105 closed by
+       decision. Every other citation of G24 in this tree --
+       PROJECT_STATUS, fe_decisions.md, ftq_decisions.md,
+       ftq_backend_interfaces.md, ras_decisions.md -- means that
+       FTB item and none of them means this one. HI8 was taken
+       because HI6 and HI7 were already issued in
+       bp_history_interfaces.md and never mirrored into this
+       file's section 9, which is what made HI6 look free.
 
-  Other interface reconciliation (DRAFT is stale vs as-built):
+THE HI REGISTRY IS SHARED between this document and
+bp_history_interfaces.md. Check BOTH before issuing a number.
+
+  RTL + interface change (module-owned pointer, section 2).
+  DELIVERED BY BP-069 and no longer open. The pointer is internal
+  and advances by num_branches; ghist_ptr and phist_ptr are
+  registered outputs; rollback supplies rollback_ckpt_idx and the
+  module reads its own checkpoint array. bp_history_interfaces.md
+  carries the delivered port list and PROJECT_STATUS records
+  bp_history.sv as module-owned.
+
+  SECTION 2 STILL READS AS THOUGH THIS IS PENDING. It says the
+  decision "diverges from the as-built RTL" and that the RTL and
+  port list "change to match (section 9)". That was true when
+  session-054 wrote it and has not been true since BP-069. Read
+  section 2 as the DECISION and its rationale; the divergence it
+  describes is closed. Noted 2026-09-17.
+
+  Interface reconciliation, also DELIVERED. The DRAFT-vs-as-built
+  deltas below were applied; they are kept as the record of what
+  moved, not as work:
     - rollback_en -> rollback_valid
     - ckpt_idx -> ckpt_wr_idx
     - pred_taken / pred_pc scalar -> [1:0] / [2]
@@ -698,6 +753,33 @@ not a hashed fold) have no folds.
 ---
 
 ## 11. Document History
+
+  2026-09-17  audit_v6, interactive. Five corrections, all of them
+              this document disagreeing with documents that had
+              already settled the point.
+              3.2: pred_pc is the BRANCH PC, not the fetch-block
+              PC. bp_history_interfaces.md, ftq_bpu_interfaces.md 9
+              and BP-092a have said so since session-064 and the
+              PHR fold arithmetic in 3.2 is the reason.
+              3.4: cited "the fixed bundle split (G8/G17)", which
+              session-063 superseded. The bundle-granularity
+              conclusion does not rest on it and is restated
+              without it.
+              3.4 and 7: "per FTQ slot" meant per FTQ ENTRY. The
+              prediction slot is a different concept (FE-10).
+              Section 9: G24 RENUMBERED HI8. G24 was already the
+              FTB flush protocol in the PROJECT_STATUS TBD table,
+              closed by BP-105, and every other citation in the
+              tree means that item. HI6 and HI7 were already
+              issued in bp_history_interfaces.md and are now
+              listed here, because their absence from this file's
+              section 9 is what made HI6 look free.
+              Section 9: the module-owned pointer RTL and port
+              change was DELIVERED by BP-069 and is no longer
+              open. Section 2 still describes the divergence as
+              live and is annotated rather than rewritten.
+              Header STATUS set to DRAFT per the PROJECT_CORE
+              convention; the field is decorative.
 
   2026-06-26  session-055 (fold-definition capture). Added section
               6, the canonical Fold Definition: age indexing,

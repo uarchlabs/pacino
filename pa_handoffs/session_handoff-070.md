@@ -168,6 +168,33 @@ unchanged and applies to the L1I only.
                            FTB-G1 and FTB-G2. 4.1 tag claim
                            qualified. BP-099 staleness corrected
                            at 4.2, 4.4, 5.5, section 8, FTB-1
+  ras_decisions.md 2       RETURN_CALL classification added for
+                           the pop-then-push JALR; the old rule
+                           excluded it. Mirrored in
+                           ftq_bpu_interfaces.md,
+                           ubtb_interfaces.md and DCD-11a
+  mmu_decisions.md 5       MMU-10a..c: one PMP/PMA checker,
+                           instantiated twice. itlb_decisions.md
+                           scope and IT-12a aligned to it
+  itlb_l2tlb_interfaces.md l2t_itlb_gpa added to the response
+                           group
+  ftq_decisions.md 7       xlate_ptr given its owner module,
+                           ftq_ptr.sv, with the reason. 7.2
+                           extended
+  ras_decisions.md 8       the +2 straddle correction removed; it
+                           was the eliminated last_may_be_rvi_call
+                           mechanism. ftb_decisions.md 6 gains the
+                           arithmetic showing why elimination is
+                           safe
+  ftb_decisions.md 8       ENTRY ARITHMETIC corrected and declared
+                           the sole home of the widths. Header
+                           said 110, breakdown summed to 106, set
+                           424, RAM 105 / 420. Now 110 / 440 /
+                           109 / 436. PFTADDR_BITS added to the
+                           parameter list, cited in 5.5 and
+                           defined nowhere. FTB-1 reduced to a
+                           citation so one change lands in one
+                           place
   ftq_decisions.md 0       the ICache is a SIBLING of the IFU
                            inside the front-end top, not
                            encapsulated behind it. The
@@ -376,6 +403,34 @@ WHAT IT HAS FOUND SO FAR, all resolved in the documents:
   14  PROJECT_STATUS and two FTQ documents still placed the L1I
       outside the front-end top. icache_decisions.md 11's
       amendment list was itself incomplete
+  20  bp_br_type_e had no value for the pop-then-push JALR that
+      DCD-11 requires, and ras_decisions.md 2 excluded the case
+      by rule. RETURN_CALL added at 3'b111, the one free
+      encoding. The exclusion was right for rd == rs1, which the
+      spec makes push-only, and wrong for rd != rs1, where it
+      dropped the pop and the stack grew on every occurrence.
+      PACKAGE EDIT: widens the run to both units
+  19  Who performs the PMP check and produces cause 1, stated
+      three ways. One checker, specified in mmu_decisions.md,
+      INSTANTIATED TWICE: ITLB-side for the translated PA,
+      walker-side for walk addresses. The IFU consumes, never
+      evaluates. MMU-10a..c
+  18  IL-11a said the guest physical address is returned and no
+      signal carried it. l2t_itlb_gpa added
+  17  xlate_ptr was added to ftq_decisions.md 5.1 in session-069
+      and given no owner in the section 7 module decomposition.
+      It belongs to ftq_ptr.sv, same as fetch_ptr: local advance
+      on a handshake, shared fetchable frontier, FQ-1 orders all
+      three
+  16  ras_decisions.md 8 described a +2 straddle correction that
+      ftb_decisions.md 6 and FTB-1 say was eliminated. FTB is
+      current: pft_addr carries the true instruction end, and
+      pftAddr 0..16 plus a carry of 32 reaches block start plus
+      34, so a call straddling the boundary needs no correction
+  15  THREE FTB entry widths in circulation: 110/440/109,
+      106/424/105, and 108 in a history entry. 110/440/109/436 is
+      correct; ftb_decisions.md 8 had a header at 110 over a
+      breakdown summing to 106. Section 8 is now the sole home
 ```
 
 THE PATTERN WORTH CARRYING FORWARD. Most of these are session-069
@@ -461,6 +516,10 @@ Two edits to built files come first:
 ```
   decode_pkg.sv   redefine predecode_pkt_t per DCD-16. A package
                   edit, so the run widens to both units
+  bp_structs_pkg.sv  add RETURN_CALL = 3'b111 to bp_br_type_e,
+                  and strike the comment above it saying the
+                  three-way split requires excluding the case.
+                  Also a package edit
   ftq_ifu.sv      add the ftq_ifu_commit_ptr output of IFU-22.
                   The interface document already carries it.
                   Complete and verified at 67 checks today
@@ -723,4 +782,3 @@ before predecode, decision 7, came from Jeff. The PA had recorded
 the XiangShan order and the reason for reversing it, that
 predecode on expanded encodings needs only the base-ISA branch
 forms, was Jeff's observation.
-

@@ -437,7 +437,14 @@ sc p3 output:
 ```
 
 The top of stack is presented at p0. The push or pop executes at p2
-once `ras_br_type_p2` carries the FTB classification. The p3 pair
+once `ras_br_type_p2` carries the FTB classification.
+
+RETURN_CALL IS ONE OF THEM, session-069. `bp_br_type_e` gains
+RETURN_CALL at 3'b111 for the JALR whose rd and rs1 are both link
+registers and are unequal, which the specification makes a pop
+followed by a push (`ras_decisions.md` 2, `dcd_decisions.md`
+DCD-11). One enum per slot still suffices: the case is two
+operations on one instruction, not two classifications. The p3 pair
 takes the registered p2 classification.
 
 `ras_pc_p2` is declared and unread (TD#101). The cluster drives it

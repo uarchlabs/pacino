@@ -140,6 +140,12 @@ DCD-11 `is_call` and `is_ret` are independent bits, not a single
        pops and pushes, a JALR whose `rd` and `rs1` are both link
        registers and are not equal. Both bits are set for it.
 
+DCD-11a Downstream, that pair maps to `bp_br_type_e.RETURN_CALL`,
+        added session-069 (`ras_decisions.md` 2). The predecoder
+        emits the two bits; the enum is formed from them where a
+        single classification is required, as on
+        `ras_br_type_p2`.
+
 TD-DCD-2  The RAS is Complete and was built before DCD-11 existed.
           Whether it accepts both bits set on one instruction,
           and in which order it applies them, is unverified.

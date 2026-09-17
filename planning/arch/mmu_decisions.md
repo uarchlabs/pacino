@@ -168,6 +168,25 @@ MMU-10 PMP is checked at two sites. On the translated physical
        address before an L1 access completes, and on every address
        the walker issues.
 
+MMU-10a ONE CHECKER, SPECIFIED HERE, INSTANTIATED TWICE. The PMP
+        and PMA checker is one module. Site 1's instance sits with
+        the ITLB, which has the translated physical address first;
+        site 2's sits in the walker, whose addresses never reach
+        an L1 TLB. This document owns the checker's behaviour; it
+        does not own both instances.
+
+MMU-10b Each instance produces cause 1 on its own response path.
+        The ITLB-side instance drives `itlb_ifu_cause`
+        (`itlb_ifu_interfaces.md` IT-6); the walker-side instance
+        drives `l2t_itlb_cause` (`itlb_l2tlb_interfaces.md`
+        IL-10). Neither the IFU nor the ITLB re-checks what the
+        other produced.
+
+MMU-10c THE IFU NEVER CHECKS. It CONSUMES a result that arrived
+        with the translation. IT-12 says the results are consumed
+        by the IFU before it issues an L1I request; that is
+        consumption, not evaluation.
+
 Two sites are forced, not chosen. MMU-4 has walk addresses bypass
 the L1 TLBs, so a single checker at the L1 boundary would leave
 walk traffic unchecked. CVA6 checks PMP on every access a walk
