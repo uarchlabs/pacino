@@ -17,7 +17,14 @@ Owns the IT-N registry.
 ## 1. Scope
 
 Two groups cross this boundary: the IFU asks the ITLB to
-translate a virtual address, and the ITLB answers. The ITLB's own
+translate a virtual address, and the ITLB answers.
+
+The requester is the IFU's TRANSLATION pipeline, `ifu_decisions.md`
+IFU-24, which runs ahead of the fetch pipeline and queues its
+results. It is not F0 of the fetch pipeline. Nothing in this
+document depends on which of the two it is, but a reader placing
+these ports in the fetch stages would put them in the wrong
+pipeline. The ITLB's own
 miss path into the shared L2 TLB is not here; it is
 `itlb_l2tlb_interfaces.md`.
 
@@ -116,10 +123,13 @@ IT-11 The IFU reads idempotent to decide whether the fetch may
       proceed speculatively. A non-idempotent region takes the
       uncached path of IFU-21 and does not reach the L1I.
 
-IT-12 The PMP and PMA check does not gate this response. ITLB-12
-      runs the check in parallel with the L1I array access and
-      gates that response instead, so the translation returns at
-      the ITLB-5 hit latency and the check does not extend it.
+IT-12 The PMP permission check and the PMA executable check do
+      not gate this response. ITLB-12 runs them in parallel with
+      the L1I array access and gates that response instead, so the
+      translation returns at the ITLB-5 hit latency and the check
+      does not extend it. The idempotent attribute of IT-11 is
+      different: it returns here, with the translation, because
+      IT-11 reads it before any request is issued. ITLB-12a.
 
 ---
 
@@ -144,8 +154,11 @@ IT-15 SFENCE.VMA does not cross this boundary. ITLB-14 gives the
 
 ## 8. Open
 
-None. ITLB-U1, the in-flight walk tracker depth, is bounded by
-TD#118 and does not change this port: IT-9 holds at any depth.
+None here. Two items elsewhere bear on this port without changing
+it: ITLB-U1, the in-flight walk tracker depth, bounded by TD#118,
+since IT-9 holds at any depth; and IFU-U5, the translation queue
+depth, which sets how far ahead of the fetch pipeline these
+requests are issued.
 
 ---
 
@@ -163,4 +176,3 @@ IFU-7     Two lookups per block, IT-1 and IT-2.
 IFU-21    The uncached path IT-11 selects.
 MMU-13    The attributes of IT-10.
 IB-9      Where the cause and VA are paired.
-

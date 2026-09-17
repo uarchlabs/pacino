@@ -210,7 +210,7 @@ Entry fields (logical entry, FTB_ENTRY_WIDTH = 110 bits/way):
                             isCall, isRet, isJalr
   fallthrough            -- pftAddr + carry
 
-position (FTB_BR_POS_BITS, 3 bits) is the in-block instruction slot
+position (FTB_BR_POS_BITS, 4 bits) is the in-block instruction slot
 (0..15) the branch occupies, distinct from the TARGET offset of 4.2 (an
 earlier draft called this field "offset", which collided with the
 target-offset term -- it is renamed "position" here). It is sourced
@@ -249,8 +249,25 @@ entry toward minimum area at the expense of capability.
   FTB_TAG_BITS = 26   = VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS
                       = 40 - 9 - 5.
 
-Full upper-VA tag. Chosen so two different PCs can never alias to one
-entry. No partial-tag aliasing.
+Full upper-VA tag above the block offset. No PARTIAL-tag aliasing:
+unlike Xiangshan's truncated 20-bit tag, no bits of the upper VA are
+discarded, so two PCs differing anywhere above bit 4 always miss each
+other.
+
+WITHIN one 32-byte region the tag does not separate. FTB_OFFSET_BITS
+of 5 are in neither the index nor the tag, so PC[4:0] does not reach
+the comparator. Prediction blocks are NOT aligned -- a block begins at
+the lookup PC, which is a taken branch target and so any 2-byte
+address (ftq_decisions.md 4.4, and section 3 here). Two lookup PCs in
+one 32-byte region therefore hit the same entry, and the entry's
+position and pftAddr fields are measured from whichever block start
+filled it.
+
+This is why 4.5 carries a fall-through bounds check. An earlier
+revision of this section said two different PCs can never alias and
+4.5 removed the check on that basis. The claim was true of partial-tag
+aliasing and false of within-region aliasing, which unaligned blocks
+make reachable.
 
 ### 4.2  Targets
 
@@ -289,7 +306,8 @@ code; in the worst all-RVC-expanded case that span doubles to +/-8 KB,
 so FTB_BR_TGT_BITS = 13. A J-type reaches +/-1 MB original, +/-2 MB
 expanded, so FTB_JMP_TGT_BITS = 21. Both pair with TAR_STAT_BITS = 2.
 The position field (which instruction in the block) is separate and is
-FTB_BR_POS_BITS = 3 ($clog2(8)), in-block granularity.
+FTB_BR_POS_BITS = 4 ($clog2(16)), in-block granularity: sixteen
+2-byte positions in a 32-byte block, BP-099.
 
 ### 4.3  conf: bimodal direction
 
@@ -306,9 +324,13 @@ ftb_confidence_override_rules.md (summarized in section 7).
 
 ### 4.4  Offset and fallthrough widths
 
-pacino expands RVC instructions to 32b before the FTB. The FTB
-addresses instructions at the expanded granularity, NOT 2-byte RVC
-granularity.
+pacino expands RVC instructions to 32b before the FTB, but the FTB
+addresses branches at 2-BYTE granularity, not at the expanded 4-byte
+granularity. A branch may begin at any 2-byte boundary under the C
+extension, so a coarser position could not separate two RVC branches
+in one aligned word. BP-099, 2026-08-19, widened FTB_BR_POS_BITS from
+3 to 4 for this reason. An earlier revision of this paragraph said the
+opposite and described the pre-BP-099 state.
 
 PARAMETER NOTE, 2026-08-19. The shift that reduces and reconstructs
 the partial fall-through address is POS_OFFSET_BITS, derived as
@@ -317,8 +339,10 @@ position width. It was INST_OFFSET, a parameter that also carried an
 unrelated meaning: the low PC bits dropped before a predictor index
 hash, now PC_HASH_SHIFT. The two were split because they are not the
 same quantity and would have to move independently if the position
-granularity ever changed. Both are 2 today and the split changed no
-behaviour.
+granularity ever changed. POS_OFFSET_BITS is 1 after BP-099,
+FTB_OFFSET_BITS 5 minus FTB_BR_POS_BITS 4, which is two bytes per
+position. PC_HASH_SHIFT is unchanged at 2. Both were 2 when the split
+was made, and the split is why only one of them moved.
 
 Two different quantities must not be conflated here:
 
@@ -339,36 +363,40 @@ Two different quantities must not be conflated here:
 
 All widths are now ruled. None remain derived-at-RTL.
 
-### 4.5  Fallthrough reconstruction: no error check (Xiangshan divergence)
+### 4.5  Fallthrough reconstruction: bounds checked
 
 pftAddr is stored partial (8.1). The full fallthrough is reconstructed
-as block-start-high ++ pftAddr (+ carry). The reconstruction is used
-UNCONDITIONALLY. There is no fallthrough error check.
+as block-start-high ++ pftAddr (+ carry).
 
-Xiangshan carries a fallThroughErr signal: it compares the
-reconstructed end against the block start and, if the end is not above
-the start, discards pftAddr and substitutes start + one prediction
-block. That guard exists because Xiangshan uses a truncated tag
-(tagSize 20), so two PCs can alias to one entry, a wrong-entry hit is
-possible, and the aliased entry's pftAddr is garbage relative to the
-looked-up start.
+  FTB-G1  The reconstructed end is compared against the looked-up
+          block start. If the end is not above the start, pftAddr is
+          discarded and the fallthrough is start + FTB_BLOCK_BYTES.
 
-This design uses a full tag (4.1, FTB_TAG_BITS = 26, no aliasing). A
-hit is always the correct entry for the looked-up PC, so the
-wrong-entry source of a bad pftAddr cannot occur. The only remaining
-source is a corrupt or malformed entry, which is an upstream state
-defect, not a designed-for event. FTB is NOT made defensive against
-its own corrupt state; the reconstructed pftAddr is trusted. The error
-comparator, the fallback mux, and any fallthrough-error output are
-removed.
+  FTB-G2  The fallback is start + FTB_BLOCK_BYTES, one PREDICTION
+          block of 32 bytes. It is NOT Xiangshan's start +
+          FetchWidth*4. In this design the fetch width maps to
+          FETCH_BLOCK_BYTES of 64, so copying the Xiangshan literal
+          would substitute a fetch-width fallthrough and re-commit
+          the block-versus-fetch collapse banned by 2.3. Adopt the
+          semantics, never the literal.
 
-Restore guard: if this check is ever reintroduced, the fallback value
-is start + FTB_BLOCK_BYTES (one prediction block, 32 bytes), NOT
-Xiangshan's start + FetchWidth*4. In this design the fetch width maps
-to FETCH_BLOCK_BYTES (64), so copying the Xiangshan literal would
-substitute a fetch-width fallthrough and re-commit the block-vs-fetch
-collapse banned by 2.3. Adopt the semantics (start + one prediction
-block), never the literal.
+Xiangshan carries this guard because its truncated 20-bit tag lets two
+PCs alias to one entry, so a wrong-entry hit gives a pftAddr that is
+garbage relative to the looked-up start.
+
+A previous revision of this section removed the guard, reasoning that
+pacino's full tag (4.1) makes a wrong-entry hit impossible. That
+reasoning covered only partial-tag aliasing. FTB_OFFSET_BITS of 5 are
+in neither the index nor the tag, and prediction blocks are unaligned,
+so two lookup PCs inside one 32-byte region hit the same entry and the
+aliased pftAddr is measured from a different block start. Pacino
+reaches Xiangshan's failure by a different route and needs the same
+guard. Session-069.
+
+The alternative considered and not taken was widening the tag to cover
+PC[4:0]. That removes the aliasing at its source but costs five bits
+per entry across the array, against one comparator and one mux for the
+guard.
 
 ---
 
@@ -518,15 +546,16 @@ that protocol exists).
 Full-to-partial reduction (ftb_cntrl): the update port delivers the
 resolved block end as a full VA (ftb_upd_pft_addr_u0). ftb_cntrl
 reduces it to the stored partial form:
-  pftAddr = end[FTB_OFFSET_BITS-1 : 2]   -- the in-block instruction
-            index of the end, expanded-instruction granularity
-            (FTB_BLOCK_BYTES/4 = 8 positions, 3 bits) extended by one
-            to represent the full-block end point (PFTADDR_BITS = 4,
-            8.1).
+  pftAddr = end[FTB_OFFSET_BITS-1 : POS_OFFSET_BITS]
+            -- the in-block position of the end at 2-byte granularity
+            (FTB_BLOCK_BYTES/2 = 16 positions, 4 bits) extended by one
+            to represent the full-block end point (PFTADDR_BITS = 5,
+            8.1). Stated as the shift, not a literal 2, so it cannot
+            drift from the position width again.
   carry   = 1 when the end lies in the next block (end crosses the
             FTB_BLOCK_BYTES boundary above block start), else 0.
 The reconstruction at read inverts this: block-start-high ++ pftAddr,
-plus carry into the next block. No error check on reconstruction
+plus carry into the next block. The reconstruction is bounds checked
 (4.5).
 
 ---
@@ -600,8 +629,9 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
   FTB_TAG_BITS      = 26      VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS.
   PLRU_BITS         = 3       FTB_WAYS - 1 (tree-PLRU). Stored in
                               ftb_plru.
-  FTB_BR_POS_BITS   = 3       $clog2(FTB_BLOCK_BYTES/4). In-block
-                              instruction position (8 expanded instr).
+  FTB_BR_POS_BITS   = 4       $clog2(FTB_BLOCK_BYTES/2). In-block
+                              position, sixteen 2-byte positions
+                              (BP-099, 2026-08-19).
   FTB_BR_TGT_BITS   = 13      conditional target displacement. B-type
                               +/-4 KB original -> +/-8 KB expanded.
   FTB_JMP_TGT_BITS  = 21      jump target displacement. J-type
@@ -661,8 +691,8 @@ Control polarity: ftb_array and ftb_plru enables are active low
 pftAddr = partial fall-through address. It's the block's end address stored as
 a short offset from the block start instead of a full VA, with carry as the
 overflow bit when the end crosses a boundary. The full fall-through
-reconstructs from block-start + pftAddr + carry. No fallthrough error check is
-applied on reconstruction; see 4.5.
+reconstructs from block-start + pftAddr + carry, and the result is
+bounds checked; see 4.5.
 
   PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES / 2) + 1
 
@@ -672,9 +702,10 @@ applied on reconstruction; see 4.5.
 
   FTB-1: CLOSED (session-052; reconciled session-053). All offset,
          target, pftAddr, and carry widths ruled and listed in section
-         8. Position FTB_BR_POS_BITS=3; conditional FTB_BR_TGT_BITS=13;
-         jump FTB_JMP_TGT_BITS=21; TAR_STAT_BITS=2; PFTADDR_BITS=4;
-         carry=1. Logical ENTRY_WIDTH=106 after always_taken removal
+         8. Position FTB_BR_POS_BITS=4; conditional FTB_BR_TGT_BITS=13;
+         jump FTB_JMP_TGT_BITS=21; TAR_STAT_BITS=2; PFTADDR_BITS=5;
+         carry=1. Logical ENTRY_WIDTH=110 after always_taken removal
+         and BP-099
          (session-053). The storage split partitions it into
          FTB_RAM_ENTRY_WIDTH=105 (ftb_array) + 1 valid (ftb_plru). The
          width is settled, not open. (Historical: last_may_be_rvi_call
@@ -735,6 +766,19 @@ applied on reconstruction; see 4.5.
 ---
 
 ## 11. Document History
+
+```
+  2026-09-15  session-069. 4.5 RESTORED the fall-through bounds
+              check removed earlier. 4.1 qualified: the full tag
+              removes partial-tag aliasing but FTB_OFFSET_BITS of 5
+              are in neither index nor tag, and blocks are unaligned,
+              so two lookup PCs in one 32-byte region share an entry.
+              Stale BP-099 text corrected at 4.2, 4.4, 5.5, section 8
+              and FTB-1: FTB_BR_POS_BITS 4 not 3, PFTADDR_BITS 5 not
+              4, ENTRY_WIDTH 110 not 106, POS_OFFSET_BITS 1 not 2,
+              and 4.4 no longer claims expanded-granularity
+              addressing.
+```
 
   2026-08-19  FTB_BR_POS_BITS 3 -> 4 and PFTADDR_BITS 4 -> 5:
               in-block positions are now 2-byte granular, sixteen

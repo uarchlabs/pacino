@@ -419,6 +419,14 @@ stated here rather than left to `ifu_decisions.md`:
          non-blocking and returns miss to the requester;
          itlb_decisions.md ITLB-8 and ITLB-9, ruled session-069
          from L1I-U3.
+
+IF-8, IF-23 AND IF-24 ARE SATISFIED BEFORE THIS PORT IS REACHED.
+The IFU translates a block in a pipeline that runs ahead of its
+fetch pipeline and queues the result (ifu_decisions.md IFU-23a).
+A block reaches the fetch pipeline only with its translation
+already resolved, so the hit, fault and miss cases above are
+settled one pipeline earlier rather than in the cycle the request
+would issue. The rules are unchanged; where they are evaluated is.
 ```
 
 The fault classes `ftq_ifu_interfaces.md` 6 names for
@@ -1057,5 +1065,4 @@ sees a 2-byte boundary.
               on a custom link, no response-side handshake, and
               nowhere at all to describe a maintenance port.
 ```
-
 

@@ -100,6 +100,13 @@ where each is used.
 Decoupled. The FTQ presents a request; the IFU accepts when its first
 stage is free and the ICache can take the access.
 
+THERE ARE TWO REQUEST GROUPS, NOT ONE. The IFU runs translation as a
+pipeline ahead of fetch (ifu_decisions.md IFU-23a). Section 4.1 is
+the translation request, driven by `xlate_ptr`. This section is the
+fetch request, driven by `fetch_ptr`. The same entry is presented
+twice, on the translation port first and the fetch port later, and
+the two are independently flow controlled.
+
 ```
   ftq_ifu_req_val                              NEW
   ftq_ifu_req_rdy                              NEW   IFU -> FTQ
@@ -110,6 +117,13 @@ stage is free and the ICache can take the access.
   ftq_ifu_taken_pos   [FTB_BR_POS_BITS-1:0]    NEW
   ftq_ifu_gen                                  NEW   TD-FE-8
   ftq_ifu_commit_ptr  [FTQ_IDX_BITS-1:0]       NEW   IFU-22
+```
+
+A request on this port is issued only for an entry whose translation
+has already been presented on 4.1. The FTQ does not enforce that; it
+follows from FQ-1, fetch_ptr <= xlate_ptr.
+
+```
 ```
 
 `ftq_ifu_start_pc` is `bp_ftq_entry_t.pc`, the block start.
@@ -131,6 +145,44 @@ is section 6.1.
 
 `ftq_ifu_idx` accompanies every request and returns on the writeback.
 It is the entry's own index, the same value carried in `branch_id`.
+
+### 4.1 Translation request: FTQ to IFU
+
+```
+  ftq_ifu_xlate_val                            NEW   IFU-24
+  ftq_ifu_xlate_rdy                            NEW   IFU -> FTQ
+  ftq_ifu_xlate_pc    [VA_WIDTH-1:0]           NEW   IFU-24
+  ftq_ifu_xlate_idx   [FTQ_IDX_BITS-1:0]       NEW   IFU-24
+```
+
+Driven from `xlate_ptr` (ftq_decisions.md 5.1), which sits between
+`alloc_ptr` and `fetch_ptr`. The IFU's translation pipeline accepts
+when its ITLB port and its translation queue can take another block.
+
+`ftq_ifu_xlate_pc` is `bp_ftq_entry_t.pc`, the same field section 4
+sends as `ftq_ifu_start_pc`. The entry is read twice because the two
+pointers reach it at different times.
+
+`ftq_ifu_xlate_idx` lets the IFU tag its queue entry so the fetch
+request can be matched against the translation that was produced for
+it.
+
+NO RESULT RETURNS ON THIS PORT. The translation lands in the IFU's
+own queue (IFU-25). The FTQ never sees a physical address, a PMA
+attribute or a translation fault; those reach it, if at all, through
+the predecode writeback fault fields of section 6.
+
+WHY THE ENTRY IS PRESENTED TWICE. L1I-3 makes the L1I physically
+indexed with translation complete before the array is indexed. A
+single request group would force the IFU to translate and fetch in
+one pass, which serialises the ITLB ahead of the array inside the
+fetch pipeline. Splitting the pointer moves the translation out of
+that path.
+
+The two pointers reset to the same entry and are set equal on a
+redirect, so the first fetch after either stalls one cycle waiting
+for its translation. That cost is stated in ftq_decisions.md 5.1 and
+in IFU-27.
 
 `ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
 not part of the request handshake and carries no valid. The FTQ
@@ -170,6 +222,14 @@ request for an entry it has already flushed.
 Drop every in-flight fetch whose FTQ index is at or after
 `ftq_ifu_flush_idx`, and discard whatever the IFU holds for those
 entries. The FTQ resumes requesting from the flush index.
+
+THIS FLUSHES BOTH IFU PIPELINES. The translation pipeline of 4.1 and
+the fetch pipeline of section 4 are flushed by this one group, and
+the translation queue between them (IFU-25) is emptied of every entry
+at or after the flush index. The FTQ sets `xlate_ptr` and `fetch_ptr`
+both to the flush index (ftq_decisions.md 5.1), so the first fetch
+after a flush waits for its own translation. Nothing is carried
+across a flush on the strength of having been translated before it.
 
 ONE flush group, not two. XiangShan carries `BpuFlushInfo` with
 separate `s2` and `s3` valid-pointer pairs and leaves the consumer to
@@ -524,5 +584,4 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               shift are both retired: the conversion is the
               identity.
 ```
-
 

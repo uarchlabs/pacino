@@ -121,17 +121,27 @@ Sstvala is mandatory in RVA23S64 and requires stval to carry the
 faulting virtual address for instruction page-fault and access-fault
 exceptions, so the VA travels with the cause.
 
-TD-ITLB-1  `l1i_ifu_interfaces.md` IF-8 states a single valid
-           non-faulting condition. ITLB-11 splits it into two
-           causes plus the VA. IF-8 needs amending and the IFU
-           side is unwritten, TD#116.
+`l1i_ifu_interfaces.md` needs no amendment for this. IF-8 is a
+gate condition, issue only on a valid non-faulting translation,
+and section 8 already separates what lies behind it: IF-23 is the
+fault case and IF-24 the miss case. Nothing there collapses two
+causes into one bit.
 
 ---
 
 ## 6. Check placement
 
-ITLB-12 The PMP and PMA check runs in parallel with the L1I array
-        access and gates the response, not the request. It is not
+ITLB-12 The PMP permission check and the PMA EXECUTABLE check run
+        in parallel with the L1I array access and gate the
+        response, not the request.
+
+ITLB-12a The PMA IDEMPOTENT attribute is not part of that. It
+         returns with the translation and is read before any
+         request is issued, because it selects between the cached
+         and the uncached path. MMU-14 and IT-11.
+
+ITLB-12 and ITLB-12a were one rule and could not be. A check that
+gates a response cannot also decide whether the request is made. It is not
         in the ITLB hit path.
 
 L1iReadLatency is 2, so there is a cycle for the check after
@@ -173,11 +183,11 @@ L1I-3     PIPT, translation ahead of the array.
 L1I-U2    Ruled session-069 at 64 entries, ITLB-1 to ITLB-5.
 L1I-U3    Ruled session-069 as recommended, walker side in
           `mmu_decisions.md`, ITLB side in section 4.
-IF-8      Amended by TD-ITLB-1.
+IF-8      The gate condition. IF-23 and IF-24 behind it already
+          separate fault from miss.
 TD#115    Closed by this document.
 IT-*      The IFU boundary is `itlb_ifu_interfaces.md`.
 IL-*      The L2 TLB boundary is `itlb_l2tlb_interfaces.md`.
           IL-5 is deliberately the opposite of ITLB-8: a miss
           there holds the transaction open rather than ending it.
 TD#118    Bounds ITLB-U1.
-

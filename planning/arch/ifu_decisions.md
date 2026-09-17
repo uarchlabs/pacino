@@ -188,11 +188,11 @@ IFU-9  Five stages: F0, F1, F2, F3 and WB. This is the XiangShan
 
 IFU-10 Stage contents.
 
-       F0  Accept the FTQ request. Issue the L1I request, or two
-           requests under IFU-7. Start the ITLB lookup, or two
-           under the same rule.
+       F0  Accept the FTQ request. Read the translation queue
+           head, IFU-25. Issue the L1I request with the physical
+           address it supplies, or two requests under IFU-7.
        F1  Compute the PC of every 2-byte position in the block.
-           Translation and the cache access are in flight.
+           The cache access is in flight.
        F2  L1I data returns. Check it against the request, form
            the per-instruction fault information from the line's
            fault information, compute the jump and fall-through
@@ -201,6 +201,14 @@ IFU-10 Stage contents.
        F3  Expand, predecode, check the prediction, mask, and
            present the slot vector of IFU-5 to the ibuf.
        WB  Write the predecode correction back to the FTQ.
+
+F0 does NOT start a translation. Translation happens in a separate
+pipeline that runs ahead of this one, section 5.1. L1I-3 makes the
+L1I physically indexed with translation complete before the array
+is indexed, so a request issued in the same cycle the lookup began
+would carry an address that does not exist yet. IF-8 says the same
+from the other side. An earlier revision of IFU-10 did exactly
+that.
 
 IFU-11 The straddle of section 4 is held in a register at F3 and
        carried into the next block. It holds the leading halfword,
@@ -223,6 +231,67 @@ decode. The prediction check is a priority encode over the 16
 positions to find the earliest control flow instruction, feeding
 a 39-bit target compare and a 4-bit position compare. F2 keeps
 the data return, the fault information and the position select.
+
+### 5.1 The translation pipeline
+
+IFU-23a The IFU has two decoupled pipelines. The TRANSLATION
+        pipeline runs ahead and produces physical addresses. The
+        FETCH pipeline of IFU-10 consumes them. A queue joins
+        them.
+
+IFU-24  The translation pipeline is driven by its own pointer
+        into the FTQ, ahead of the pointer the fetch pipeline
+        uses. It reads a block's start PC, performs the ITLB
+        lookup of `itlb_ifu_interfaces.md`, and enqueues the
+        result.
+
+IFU-25  The translation queue holds, per block: the physical
+        address, the PMA attributes of IT-10, and the fault
+        cause and status of IT-4. F0 reads the head.
+
+IFU-26  A block that translates to a non-idempotent region is
+        marked in the queue and is not issued to the L1I. It
+        takes the uncached path of IFU-21. MMU-14 and IT-11.
+
+IFU-27  On a redirect both pipelines are flushed and the queue is
+        emptied. The fetch pipeline then stalls until the
+        translation pipeline refills the head, which costs at
+        least one cycle on every redirect.
+
+This is the XiangShan arrangement with one part left out.
+XiangShan's IPrefetchPipe queries the MetaArray and the ITLB and
+writes hit way, ECC and exception information into a WayLookup
+queue for MainPipe to read, and it documents the same reset and
+redirect cost: WayLookup is empty, the prefetch and fetch pointers
+reset together, and MainPipe stalls one extra cycle.
+
+WHAT IS LEFT OUT, AND THIS IS A CHOICE. XiangShan puts the
+prefetch pipeline inside the ICache and queues the hit WAY along
+with the translation, so its main pipe reads the data array with
+the way already resolved. Pacino's L1I is EMITTED by cachegen.
+Putting a second pipeline, an ITLB client and a lookup queue
+inside it is a cachegen change of the class INFRA-012 sized for
+one node: 4 configuration, 5 schema, 8 emitter items. So the
+translation pipeline is placed in the IFU instead, the L1I is
+unchanged and still receives a physical address on the
+`l1i_ifu_interfaces.md` port, and the queue holds translation
+only, not the hit way.
+
+The cost of that choice is that the L1I tag compare stays in the
+fetch path where L1I-5 puts it, so the way is resolved during
+F1 and F2 rather than ahead of F0. The benefit is that nothing in
+the emitted L1I changes.
+
+IFU-U5 The translation queue depth. It sets how far ahead of the
+       fetch pipeline translation may run, and therefore how much
+       ITLB miss latency is hidden. The floor is 1. XiangShan
+       exposes theirs as nWayLookupSize and notes it caps the
+       prefetch distance by backpressure. Unresolved.
+
+The FTQ side is `xlate_ptr`, ftq_decisions.md 5.1, and the port is
+ftq_ifu_interfaces.md 4.1. Both were written session-069 with this
+section. FQ-1 becomes commit_ptr <= fetch_ptr <= xlate_ptr <=
+alloc_ptr.
 
 ---
 
@@ -267,7 +336,9 @@ IFU-20 On a flush the IFU drops every in-flight fetch whose index
        is at or after the flush index and discards everything it
        holds for those entries. A flush and a request in the same
        cycle means the flush applies first and that request is
-       the first fetch of the corrected stream.
+       the first fetch of the corrected stream. Both pipelines of
+       IFU-23a are flushed by the one group and the translation
+       queue is emptied; ftq_ifu_interfaces.md 5.
 
 IFU-20 is load-bearing beyond the IFU. The generation tag is one
 bit, and one bit is only sufficient because a stale writeback
@@ -336,6 +407,7 @@ IFU-U4 Bus width and the split it forces. XiangShan's MMIO bus is
 ## 8. Open
 
 IFU-U4  Uncached bus width. Section 7.
+IFU-U5  Translation queue depth. Section 5.1.
 
 ---
 
@@ -350,6 +422,11 @@ DCD-*     The predecoder of IFU-3 and IFU-16 is specified in
           and what it must produce; that one states how.
 IB-*      The ibuf boundary is `ifu_ibuf_interfaces.md`.
 IT-*      The translation boundary is `itlb_ifu_interfaces.md`.
+          Its requester is the translation pipeline of IFU-24,
+          not the fetch pipeline.
+L1I-3     PIPT. The reason F0 cannot start a translation.
+L1I-5     2-cycle hit, tag compare after the array read. Stays
+          in the fetch path under the IFU-23a placement.
 MMU-14    Requires the uncached path of section 7.
 IFU-7     Two lines means up to two ITLB lookups per block.
           `itlb_ifu_interfaces.md` carries both.
@@ -359,4 +436,3 @@ TD#116    Closed by this document.
 TD#118    The IFU outstanding-request depth has no real target
           until the l2 transaction limit is known. Not yet
           recorded as a decision.
-

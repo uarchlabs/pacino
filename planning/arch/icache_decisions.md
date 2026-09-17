@@ -344,7 +344,35 @@ document fixes is that the L1I does not have one.
   R3  The RVA23 C extension permits a fetch to begin on any
       2-byte boundary. That is the IFU's problem, not the L1I's,
       and is why R1 can be line aligned
+  R4  The physical address of R1 is produced BEFORE the request,
+      in a pipeline the L1I does not see. L1I-3 requires
+      translation to complete before the array is indexed, so
+      the IFU translates a block in a pipeline that runs ahead
+      of its fetch pipeline and queues the result
+      (ifu_decisions.md IFU-23a, IFU-24, IFU-25). The L1I is
+      unchanged by this: it still receives one line-aligned
+      physical address per request and knows nothing about
+      where it came from
 ```
+
+R4 IS STATED BECAUSE OF WHAT PACINO DID NOT COPY. XiangShan solves
+the same ordering problem inside its ICache: its prefetch pipeline
+queries the MetaArray and the ITLB together and writes the hit WAY
+and the translation into a WayLookup queue, so its main pipe reads
+the data array with the way already resolved and the tag compare
+out of the fetch path.
+
+Pacino keeps the translation pipeline in the IFU and leaves the
+MetaArray alone. The L1I is emitted by cachegen, and a second
+pipeline, an ITLB client and a lookup queue inside it is a cachegen
+change of the class INFRA-012 sized for one node: 4 configuration,
+5 schema, 8 emitter items. So the tag compare stays where L1I-5
+puts it, in the cycle after the array read, inside the fetch path.
+
+If that is ever revisited, the change is to cachegen and to this
+document, not to the IFU: the IFU would stop needing its own
+translation queue and would read a way and a translation from the
+L1I instead.
 
 ---
 
@@ -800,6 +828,17 @@ Both are PA-direct edits. Neither is in scope for an IA task.
 ---
 
 ## 12. Document History
+
+```
+  2026-09-15  session-069. 4.3 gains R4: the physical address of
+              R1 is produced in the IFU's translation pipeline,
+              which runs ahead of its fetch pipeline, because
+              L1I-3 forbids issuing a request in the cycle the
+              lookup begins. The L1I is unchanged. Records what
+              was NOT copied from XiangShan: the MetaArray and
+              way lookup stay out of the prefetch path, so the
+              L1I-5 tag compare remains in the fetch path.
+```
 
 ```
   2026-09-02  L1I-23 added: sixteen fills in flight on the memory

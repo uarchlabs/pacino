@@ -1225,14 +1225,19 @@ it only documented current behavior.
 |                         |             |                   | maintenance ports of              |
 |                         |             |                   | l1i_ifu_interfaces.md 10 are NOT  |
 |                         |             |                   | emitted; TD#119.                  |
-| ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..23,   |
-|                         |             |                   | TD-IFU-1..5, IFU-U4. Expansion    |
-|                         |             |                   | and predecode in the IFU, five    |
-|                         |             |                   | stages F0..F3+WB, unaligned       |
-|                         |             |                   | 34-byte block over 17 halfword    |
-|                         |             |                   | positions, 16 slots to the ibuf,  |
-|                         |             |                   | uncached fetch on its own source. |
-|                         |             |                   | Closes TD#116.                    |
+| ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..27,   |
+|                         |             |                   | TD-IFU-1..5, IFU-U4, IFU-U5.      |
+|                         |             |                   | Expansion and predecode in the    |
+|                         |             |                   | IFU, unaligned 34-byte block over |
+|                         |             |                   | 17 halfword positions, 16 slots   |
+|                         |             |                   | to the ibuf, uncached fetch on    |
+|                         |             |                   | its own source. TWO PIPELINES:    |
+|                         |             |                   | a translation pipeline driven by  |
+|                         |             |                   | ftq xlate_ptr, and the five-stage |
+|                         |             |                   | fetch pipeline F0..F3+WB, joined  |
+|                         |             |                   | by a translation queue. L1I-3     |
+|                         |             |                   | forbids translating and fetching  |
+|                         |             |                   | in one stage. Closes TD#116.      |
 | dcd_decisions.md        | Draft       | --                | Created session-069. DCD-1..16,   |
 |                         |             |                   | TD-DCD-1..2, DCD-U1..U2. One      |
 |                         |             |                   | predecoder, two views:            |
@@ -2182,9 +2187,11 @@ unless noted.
     - planning/interfaces/ftq_ifu_interfaces.md       Draft
         - FTQ/IFU port specification, session-067. Closes TD-FE-1.
           Session-069 added ftq_ifu_commit_ptr to section 4,
-          IFU-22, driven continuously for uncached fetch, and
-          dropped guest page fault from the section 6 fault
-          classes.
+          IFU-22, driven continuously for uncached fetch; added
+          section 4.1, the translation request group driven by
+          xlate_ptr; extended the section 5 flush to both IFU
+          pipelines; and dropped guest page fault from the
+          section 6 fault classes.
     - planning/interfaces/ftq_backend_interfaces.md   Draft
         - Backend/FTQ resolution, redirect and commit,
           session-067. Closes FE-U2 for the FTQ side; opens
@@ -2195,10 +2202,12 @@ unless noted.
     - planning/interfaces/loop_pred_interfaces.md     Draft
         - Corrected to the delivered ports BP-091.
     - planning/arch/ifu_decisions.md                  Draft
-        - Created session-069. IFU-1..23, TD-IFU-1..5, IFU-U4.
-          Expansion and predecode in the IFU, five stages
-          F0..F3+WB, unaligned 34-byte block, the uncached
-          path. Closes TD#116.
+        - Created session-069. IFU-1..27, TD-IFU-1..5, IFU-U4,
+          IFU-U5. Expansion and predecode in the IFU, unaligned
+          34-byte block, the uncached path. Two decoupled
+          pipelines: translation ahead of fetch, joined by a
+          queue, the XiangShan arrangement without the way
+          lookup. Closes TD#116.
     - planning/arch/dcd_decisions.md                  Draft
         - Created session-069. DCD-1..16, TD-DCD-1..2,
           DCD-U1..U2. One predecoder, two views. Redefines
@@ -2370,6 +2379,5 @@ unless noted.
 
 ### Shared components track
 - components/rtl  components/tb
-
 
 

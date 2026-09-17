@@ -127,6 +127,20 @@ unchanged and applies to the L1I only.
                            documents added to Shared planning,
                            eleven Module Status rows added, the
                            duplicate `fetch` row removed
+  ftb_decisions.md         4.5 fall-through guard RESTORED,
+                           FTB-G1 and FTB-G2. 4.1 tag claim
+                           qualified. BP-099 staleness corrected
+                           at 4.2, 4.4, 5.5, section 8, FTB-1
+  ubtb_interfaces.md       pft_addr bounds checked to match
+                           FTB-G1. The two meanings of `carry`
+                           separated, G18/UI2
+  ftq_decisions.md         5.1 is FOUR pointers: xlate_ptr added
+                           between alloc_ptr and fetch_ptr. FQ-1
+                           extended. 4.7 alignment clarified as
+                           reset-vector only
+  icache_decisions.md      4.3 gains R4: the physical address is
+                           produced ahead of the request, in a
+                           pipeline the L1I does not see
 ```
 
 `fe_decisions.md` was considered for replacement and kept.
@@ -176,7 +190,7 @@ retired rather than reused, outside references still resolve.
   12  ibuf depth 64, a parameter. Floor is 32 from decision 10;
       XiangShan is 48 at decode width 6, and 8 times our decode
       width of 8 is 64
-  13  Five IFU stages, F0 F1 F2 F3 WB, the XiangShan
+  13  Five IFU FETCH stages, F0 F1 F2 F3 WB, the XiangShan
       segmentation with pacino contents
   14  Expansion stays in F3 with predecode, the prediction check
       and the mask. F2 keeps the data return, fault information
@@ -193,6 +207,21 @@ retired rather than reused, outside references still resolve.
       serving it are outside it
   19  Pacino implements no optional RVA23S64 extensions at this
       time. Recorded in the PROJECT_STATUS decoder track
+  20  The FTB and uBTB fall-through reconstruction is BOUNDS
+      CHECKED, restoring the guard an earlier revision removed.
+      The full tag stops partial-tag aliasing but the low five
+      bits are in neither index nor tag, and blocks are
+      unaligned, so two lookup PCs in one 32-byte region share
+      an entry. Fallback is start + FTB_BLOCK_BYTES, never
+      XiangShan's FetchWidth*4
+  21  The IFU has TWO decoupled pipelines: translation ahead of
+      fetch, joined by a queue, driven by a new FTQ xlate_ptr.
+      L1I-3 makes the L1I physically indexed, so a fetch cannot
+      be issued in the cycle its translation begins. This is
+      the XiangShan arrangement WITHOUT the way lookup: the
+      MetaArray stays out of the prefetch path because the L1I
+      is emitted and a second pipeline inside it is a cachegen
+      change
 ```
 
 Four values were read from source and are not decisions: SLOTS is
@@ -283,7 +312,7 @@ Two edits to built files come first:
 
 ### The open items will be answered silently if left
 
-Twelve are unresolved and none stops a module being written. What
+Thirteen are unresolved and none stops a module being written. What
 they do is leave a choice the IA will make on its own, and the
 number then exists in RTL and in no document.
 
@@ -298,6 +327,8 @@ number then exists in RTL and in no document.
   IBUF-U1  whether the ibuf is banked. XiangShan banks for read
            mux area and requires banks >= decode width
   IFU-U4   uncached bus width, and whether it forces a split
+  IFU-U5   translation queue depth. Sets how far translation runs
+           ahead of fetch and how much ITLB miss latency hides
   DCD-U1   where vtype_hazard is computed. Not the predecoder
   DCD-U2   the order of pop and push in the RAS case
   FE-U10   whether the ITLB is inside the front end top
@@ -314,27 +345,40 @@ full data path exists. IFU-20 records the obligation from
 `ftq_ifu.sv`; the design waits. This was raised three times in
 session-069 after being deferred.
 
-### Reported by another session, not verified here
+### Two conflicts raised by another session, both resolved
 
-`ftb_decisions.md` is stale against the BP-099 widening of
-`FTB_BR_POS_BITS` from 3 to 4. Section 4 and 4.2 still say 3 bits,
-4.4 still describes 4-byte granularity, 5.5 reduces the end with
-`end[FTB_OFFSET_BITS-1:2]`, section 8 says 8 expanded instructions
-and sums to 106 bits where section 4 says 110, and FTB-1 says 106.
+Both were the PA's to answer for and both are now fixed.
 
-The PA has not read that file. The finding is consistent with
-three things it has seen: `FTQ_PD_POS_BITS` is `$clog2(16)` and so
-4, the 106-to-110 delta is four bits which is one position bit per
-slot at four slots, and `ftq_ifu_interfaces.md` section 10 records
-the widening as closed 2026-08-19 with that cost.
+ALIGNMENT. That session reported IFU-6 and DCD-5 saying blocks may
+start at any 2-byte address while the FTB, the uBTB and FTQ 4.7
+assumed 32-byte alignment. Unaligned is correct and stands; it is
+the XiangShan mechanism and the reason for the 34-byte, 17-position
+block. What the PA then found is that unaligned blocks make the
+FTB's removed fall-through guard unsafe: FTB_OFFSET_BITS of 5 are
+in neither index nor tag, so two lookup PCs in one 32-byte region
+share an entry. XiangShan carries fallThroughErr for the same
+failure by a different route, partial-tag aliasing. The guard is
+RESTORED as FTB-G1 and FTB-G2, fallback start + FTB_BLOCK_BYTES.
+`ubtb_interfaces.md` takes the same check. FTQ 4.7 now says the
+alignment requirement is on the RESET VECTOR only.
 
-The consequence is worth stating over the mismatch: a reader
-taking section 4.4 at face value concludes the front end has
-4-byte granularity, which would make IFU-6 look unbuildable.
+The BP-099 staleness in `ftb_decisions.md` is corrected at every
+site: FTB_BR_POS_BITS 4 not 3, PFTADDR_BITS 5 not 4, ENTRY_WIDTH
+110 not 106, POS_OFFSET_BITS 1 not 2, and 4.4 no longer claims
+expanded-granularity addressing.
 
-Also reported: `ubtb_interfaces.md` uses `carry` with two
-meanings. Labelled G18/UI2, so check the existing entry before
-treating it as new.
+The `carry` collision, G18/UI2, is resolved in the
+`ubtb_interfaces.md` field semantics: the per-slot carry means this
+slot's target is outside the block, the block carry means the
+fall-through crosses the boundary.
+
+FETCH PIPELINE ORDER. That session reported IFU-10 issuing the L1I
+request in the same stage it started the ITLB lookup, against
+L1I-3, IF-8, IT-11 and MMU-14. Correct, and the PA's error. Fixed
+by decision 21. A second defect surfaced with it: ITLB-12 lumped
+the PMA idempotent attribute in with the PMP check, so one rule
+both gated a response and decided whether a request was made. Split
+into ITLB-12 and ITLB-12a.
 
 ### Open, not blocking
 
@@ -496,4 +540,3 @@ before predecode, decision 7, came from Jeff. The PA had recorded
 the XiangShan order and the reason for reversing it, that
 predecode on expanded encodings needs only the base-ISA branch
 forms, was Jeff's observation.
-

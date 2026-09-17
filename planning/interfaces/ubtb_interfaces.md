@@ -124,18 +124,33 @@ uBTB asserts no redirect and no stall.
   conf     : the bimodal direction counter value. MSB is the
              direction.
 
-  carry    : 1 when the target lies outside this block. Used by the
-             cluster to decide whether the p1 prediction requires a
-             fetch block change.
+  carry    : 1 when THIS SLOT'S TARGET lies outside this block.
+             Used by the cluster to decide whether the p1
+             prediction requires a fetch block change.
+
+             This is NOT the carry used to reconstruct
+             blk_p1.pft_addr. That one is a block-scoped overflow
+             bit meaning the block END crosses the
+             FTB_BLOCK_BYTES boundary above the block start
+             (ftb_decisions.md 5.5). One is per slot and about a
+             branch target, the other is per block and about the
+             fall-through. They are different facts and are not
+             interchangeable. G18 / UI2.
 
 ### blk_p1 field semantics
 
   hit      : entry valid and tag matched.
 
   pft_addr : the block end, reconstructed to full width from the
-             stored partial pftAddr plus carry. Authoritative for
-             the cluster when no slot is taken. Reconstruction is
-             unconditional; there is no fallthrough error check.
+             stored partial pftAddr plus the BLOCK carry. Author-
+             itative for the cluster when no slot is taken. The
+             reconstruction is BOUNDS CHECKED: if the end is not
+             above the looked-up block start, pft_addr is driven
+             to start + FTB_BLOCK_BYTES instead. Same rule and
+             same reason as ftb_decisions.md 4.5 FTB-G1 and
+             FTB-G2. The uBTB index drops UBTB_OFFSET_BITS and
+             blocks are unaligned, so two lookup PCs in one
+             32-byte region share an entry.
 
 ### Consumer obligations
 
@@ -247,17 +262,25 @@ communicate miss reason or miss type externally.
 | ID  | Item                                      | Status           |
 |-----|-------------------------------------------|------------------|
 | UI2 | carry field consumer behavior in cluster  | TBD at           |
-|     | top -- how the cluster uses carry to      | bp_cluster       |
-|     | decide fetch block change vs continue     |                  |
+|     | top -- how the cluster uses the SLOT carry| bp_cluster       |
+|     | to decide fetch block change vs continue. |                  |
+|     | The name collision with the block-scoped  |                  |
+|     | fall-through carry is resolved in the     |                  |
+|     | pred_p1[s] field semantics, session-069.  |                  |
 | UI3 | Both update channels targeting one entry  | Confirm at       |
 |     | in the same cycle. Same-field collision   | bp_cluster       |
-|     | is a producer error.                      |                  |                     |                  |
+|     | is a producer error.                      |                  |
 
 ---
 
 ## Document History
 
 ```
+  2026-09-15  session-069. pft_addr reconstruction is bounds
+              checked, matching ftb_decisions.md 4.5 FTB-G1. The
+              two meanings of "carry", per-slot target-outside-block
+              and per-block fall-through overflow, are distinguished
+              in the field semantics. G18 / UI2.
   2026-08-02  session-063. Single-lookup block descriptor model.
               One lookup returns one entry describing one 32-byte
               block; the two prediction slots are br0 and br1 of
@@ -267,4 +290,5 @@ communicate miss reason or miss type externally.
               added for the entry-scoped hit and fallthrough.
               UI1 and UI4 closed.
 ```
+
 

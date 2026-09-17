@@ -107,7 +107,8 @@ ports for the same reason the fast path does.
   post-execute  bp_ftq_meta_t read. Updates formed and enqueued.
 ```
 
-The entry persists until its post-execute resolution, when its metadata is read. 
+The entry persists until its post-execute resolution, when its
+metadata is read.
 Allocation and deallocation policy is otherwise unspecified (FE-U7).
 
 ---
@@ -312,16 +313,26 @@ memory and the target of the Spike boot ROM; the tree carries no
 memory map of its own, so the convention stands. Override it at
 elaboration for a different map.
 
-It must be FTB_BLOCK_BYTES aligned. An unaligned value makes the
-first fetch a partial block, and both the FTB and the uBTB index on
-the block-aligned PC. 0x8000_0000 satisfies this and the parameter
-comment records the requirement.
+It must be FTB_BLOCK_BYTES aligned. 0x8000_0000 satisfies this and the
+parameter comment records the requirement.
+
+This is a requirement on the RESET VECTOR only and says nothing about
+prediction blocks in general. Blocks are NOT aligned: a block begins
+at the lookup PC, which is a taken branch target and so any 2-byte
+address (4.4, ftb_decisions.md 3). The FTB and the uBTB INDEX on the
+block-aligned PC, which is a different thing from the block starting
+there, and it is why two lookup PCs in one 32-byte region share an
+entry and why ftb_decisions.md 4.5 bounds checks the fall-through.
+
+The reset vector is constrained because there is no preceding block to
+have established a start: an unaligned reset vector would make the
+first fetch a partial block with no entry describing it.
 
 ---
 
 ## 5. Queue management (FE-U7, resolved)
 
-### 5.1 Three pointers
+### 5.1 Four pointers
 
 FTQ_DEPTH is 64 and FTQ_IDX_BITS is 6. Pointers are SEVEN bits: the
 low six index the array, the top bit is the wrap generation.
@@ -329,24 +340,52 @@ low six index the array, the top bit is the wrap generation.
 ```
   alloc_ptr    head.   Next entry to allocate. Advances when a
                        prediction request is accepted at p0.
-  fetch_ptr    middle. Next entry to issue a fetch request for.
+  xlate_ptr    second. Next entry to translate. Advances on
+                       ftq_ifu_xlate_val & _rdy. Session-069.
+  fetch_ptr    third.  Next entry to issue a fetch request for.
                        Advances on ftq_ifu_req_val & _rdy.
   commit_ptr   tail.   Next entry to commit and free. Advances at
                        most one entry per cycle; see 5.4.
 ```
 
-INVARIANT FQ-1: commit_ptr <= fetch_ptr <= alloc_ptr, in wrap-aware
-order. The gap between commit_ptr and fetch_ptr is the fetched but
-unretired stream; the gap between fetch_ptr and alloc_ptr is the
-PREDICTED BUT UNFETCHED run-ahead, and that gap is the decoupling the
-FTQ exists to provide. At 64 entries of one 32-byte block it is at
-most 2 KiB of instruction stream.
+INVARIANT FQ-1: commit_ptr <= fetch_ptr <= xlate_ptr <= alloc_ptr,
+in wrap-aware order. The gap between commit_ptr and fetch_ptr is the
+fetched but unretired stream; the gap between fetch_ptr and
+alloc_ptr is the PREDICTED BUT UNFETCHED run-ahead, and that gap is
+the decoupling the FTQ exists to provide. At 64 entries of one
+32-byte block it is at most 2 KiB of instruction stream.
+
+xlate_ptr divides that run-ahead in two. Between fetch_ptr and
+xlate_ptr are blocks whose translation is done and whose fetch has
+not issued; beyond xlate_ptr are blocks that are predicted and not
+yet translated.
+
+WHY IT EXISTS. L1I-3 makes the L1I physically indexed with
+translation complete before the array is indexed, so a fetch request
+cannot be issued in the same cycle its translation begins. Rather
+than serialise the two inside the fetch pipeline, the IFU runs
+translation as a separate pipeline ahead of fetch and queues the
+results (ifu_decisions.md IFU-23a, IFU-24). xlate_ptr is what drives
+that pipeline. XiangShan does the same and calls the pair
+prefetchPtr and fetchPtr.
+
+xlate_ptr is subject to the same unwritten-content hazard as
+fetch_ptr: it must measure to the fetchable frontier, not to
+alloc_ptr. See the paragraph below, which applies to both.
+
+OUT OF RESET AND AFTER A REDIRECT xlate_ptr and fetch_ptr are set to
+the same entry. The translation queue is empty, so the fetch
+pipeline stalls until translation of that entry completes. That is
+one cycle of added redirect latency and it is the cost of the
+scheme; XiangShan documents the identical stall.
 
 THE FETCHABLE FRONTIER IS NOT alloc_ptr. alloc_ptr advances at p0
 (5.2) and the entry CONTENT is written at p1, so for one cycle the
 newest entry in that gap has an index and no content. A fetch issued
 on the raw gap presents an UNWRITTEN pc to the IFU, and this is
-reachable in the first two cycles out of reset -- not a corner.
+reachable in the first two cycles out of reset -- not a corner. The
+same applies to xlate_ptr, and more often, because xlate_ptr is the
+pointer nearest alloc_ptr and so meets the frontier first.
 
 The fetchable count is therefore the gap MINUS the requests still
 in flight between p0 and p1. `ftq_shadow` already knows: its p1 stage
@@ -356,7 +395,7 @@ subtracts it. FQ-1 is unaffected; what changes is which frontier
 crossing appears in 7.2.
 
 ```
-  empty   all three equal
+  empty   all four equal
   full    alloc_ptr[5:0] == commit_ptr[5:0]
           and alloc_ptr[6] != commit_ptr[6]
 ```
@@ -1090,6 +1129,19 @@ one.
               was never a hard choice -- it was on the list because
               nothing in the tree named a reset PC at all.
 
+  2026-09-15  session-069. 5.1 gains xlate_ptr, a fourth pointer
+              between alloc_ptr and fetch_ptr, driving the IFU's
+              translation pipeline (ifu_decisions.md IFU-24).
+              FQ-1 extended. Out of reset and after a redirect
+              xlate_ptr and fetch_ptr are equal and the fetch
+              pipeline stalls one cycle.
+  2026-09-15  session-069. 4.7 clarified: the FTB_BLOCK_BYTES
+              alignment requirement is on the RESET VECTOR only.
+              Prediction blocks are not aligned; a block begins at
+              the lookup PC, which is a taken target and so any
+              2-byte address. Indexing on the block-aligned PC is a
+              separate fact and is why ftb_decisions.md 4.5 bounds
+              checks the fall-through.
   2026-08-19  5.7 REWRITTEN, superseding the G9 entry above. That
               entry said the one-per-cycle ceiling was recorded as a
               known limit "rather than reopening the single-port
