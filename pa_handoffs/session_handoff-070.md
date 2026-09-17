@@ -7,12 +7,12 @@ Date: 2026-09-15
 
 Read PROJECT_STATUS.md, then this file, then CLAUDE.md.
 
-No tasks were run. The session was planning. Nine documents were
-written or amended and the I-side front end is specified end to
-end for the first time.
+No tasks were run. The session was planning. Eight documents were
+created, four were amended, and the I-side front end is specified
+end to end for the first time.
 
-Next session: RTL generation for the IFU and the modules around
-it. See Next Session.
+Next session: a citation audit, then RTL generation for the IFU
+and the modules around it. See Next Session.
 
 ---
 
@@ -25,16 +25,15 @@ IFU, the predecoder, the instruction buffer, the ITLB, the shared
 L2 TLB with its walker, and the front end top. Three interface
 documents give their ports.
 
-The specification now runs well ahead of the RTL on the I side.
-That is the state to be aware of before generating: every port
-named in the three interface documents connects to something that
-does not exist yet.
+Every port named in the three new interface documents connects to
+something that does not exist yet.
 
 ### 2. The ITLB and the MMU are written, not emitted
 
 The L1I is emitted by cachegen. Nothing else on the I side is.
 The ITLB, the L2 TLB and the walker are ordinary modules written
 from their decision documents, as the bpu and the ftq were.
+cachegen has no TLB support and is not on their path.
 
 One cachegen dependency remains and it belongs to the l2, not to
 the MMU. MMU-2 puts a TileLink master port from the L2 TLB into
@@ -54,18 +53,37 @@ PC, FTQ index, fault cause or faulting VA. DCD-16 redefines it
 with all of them. That is a package edit, so it widens the
 verification run to both units.
 
-### 4. Sixteen fills are still real at the l1i and not at the l2
+The RVC expander is not in `dcd_decisions.md`. Its encodings are
+the compressed chapter of the specification and the project's
+decisions about it are placement and ordering, IFU-1 and IFU-4.
+
+### 4. No optional extensions
+
+Pacino implements the RVA23S64 mandatory set and no optional
+extension. Recorded in the PROJECT_STATUS decoder track this
+session.
+
+This settled a real question. `ftq_ifu_interfaces.md` and
+`l1i_ifu_interfaces.md` both named guest page fault as a fault
+class, which requires H and two-stage translation. Had H been in,
+`mmu_decisions.md` would have been materially incomplete: nested
+walks, a G-stage per guest physical address, `hgatp`, a VMID
+alongside the ASID of ITLB-4, and `henvcfg.ADUE` beside
+`menvcfg.ADUE`. It is not in. Both documents were corrected to two
+fault classes.
+
+### 5. Sixteen fills are still real at the l1i and not at the l2
 
 TD#118 is unchanged and now bounds three more items: ITLB-U1,
 MMU-U2 and IBUF-11. Outstanding walk counts and buffer depth all
 depend on a miss latency that is the l2's number, not the l1i's.
 
-### 5. Maintenance, TD#119, does not reach the new modules
+### 6. Maintenance, TD#119, does not reach the new modules
 
 The schema gap stops the emitted L1I carrying an invalidate port.
 The ITLB and the L2 TLB are written, so ITLB-14 and MMU-18 give
-each a distinct invalidate port written with the module. TD#119
-is unchanged and applies to the L1I only.
+each a distinct invalidate port written with the module. TD#119 is
+unchanged and applies to the L1I only.
 
 ---
 
@@ -74,8 +92,7 @@ is unchanged and applies to the L1I only.
 ### Documents created
 
 ```
-  planning/arch/itlb_decisions.md       ITLB-1..14, TD-ITLB-1,
-                                        ITLB-U1
+  planning/arch/itlb_decisions.md       ITLB-1..14, ITLB-U1
   planning/arch/mmu_decisions.md        MMU-1..18, MMU-U1..U5
   planning/arch/ifu_decisions.md        IFU-1..23, TD-IFU-1..5,
                                         IFU-U4
@@ -92,13 +109,24 @@ is unchanged and applies to the L1I only.
 ### Documents amended
 
 ```
-  fe_decisions.md   section 15, the front end top, FE-15..18 and
-                    FE-U10. Document History renumbered 15 to 16;
-                    nothing referenced 15. Overview rewritten to
-                    state that the prose is BPU and FTQ plus the
-                    top while the registries are front end wide,
-                    and to list where the rest of the front end
-                    lives
+  fe_decisions.md          section 15, the front end top,
+                           FE-15..18 and FE-U10. Document History
+                           renumbered 15 to 16; nothing referenced
+                           15. Overview rewritten: the prose is
+                           BPU and FTQ plus the top, the
+                           registries are front end wide, and the
+                           rest of the front end is listed by
+                           document
+  ftq_ifu_interfaces.md    ftq_ifu_commit_ptr added to section 4,
+                           IFU-22. Guest page fault dropped from
+                           the section 6 fault classes
+  l1i_ifu_interfaces.md    Guest page fault dropped from section
+                           8. IF-24's citation of L1I-U3 now
+                           points at ITLB-8 and ITLB-9
+  PROJECT_STATUS.md        Decoder track corrected, eight
+                           documents added to Shared planning,
+                           eleven Module Status rows added, the
+                           duplicate `fetch` row removed
 ```
 
 `fe_decisions.md` was considered for replacement and kept.
@@ -140,7 +168,7 @@ retired rather than reused, outside references still resolve.
    8  The prediction block is unaligned. Two lines fetched when
       the block starts in the upper half of a line, 34 bytes
       covered, 17 halfword positions, 16 slots
-   9  Wide port to the ibuf. 16 slots with an enable mask, no
+   9  Wide port to the ibuf. 16 slots with one enable mask, no
       compaction in the IFU
   10  Whole-block acceptance at the ibuf. Ready only when 16
       entries are free
@@ -163,6 +191,8 @@ retired rather than reused, outside references still resolve.
   18  The front end top is its own subject, section 15 of
       fe_decisions.md, taking FE numbers. The L1I and the logic
       serving it are outside it
+  19  Pacino implements no optional RVA23S64 extensions at this
+      time. Recorded in the PROJECT_STATUS decoder track
 ```
 
 Four values were read from source and are not decisions: SLOTS is
@@ -174,9 +204,60 @@ banks of 8 with DecodeWidth 6, banked for read-mux area only.
 
 ## Next session (070)
 
-RTL generation for the IFU and the modules around it.
+### Task 1: the citation audit
 
-### What can be generated now
+READ-ONLY. No file is modified by this task; it produces a report.
+
+Every document created this session ends with a Bindings section.
+Each line in one names a rule in another document and asserts
+something about it. Verify every one.
+
+```
+  itlb_decisions.md        section 9
+  mmu_decisions.md         section 10
+  ifu_decisions.md         section 9
+  ibuf_decisions.md        section 8
+  dcd_decisions.md         section 12
+  ifu_ibuf_interfaces.md   section 8
+  itlb_ifu_interfaces.md   section 9
+  itlb_l2tlb_interfaces.md section 8
+```
+
+For each citation, report one of: the cited rule exists and says
+what the citing document claims; the rule exists but says
+something different, with both texts quoted; the rule does not
+exist.
+
+WHY THIS TASK EXISTS. The PA wrote TD-ITLB-1 into
+`itlb_decisions.md` asserting that `l1i_ifu_interfaces.md` IF-8
+collapsed two fault causes into one bit and needed amending. IF-8
+is a gate condition and IF-23 and IF-24 behind it already separate
+fault from miss. The claim was wrong, it survived the whole
+session, it reached the previous draft of this handoff as pending
+work, and it was caught only when Jeff uploaded the file. The PA
+had written a claim about a document it had never read.
+
+That is the failure this task is scoped to catch. The PA
+reconciled the eight new documents against each other at the end
+of the session and found three real conflicts. It did not and
+could not verify their claims about documents it has not read:
+`icache_decisions.md`, `ftq_decisions.md`, `ftq_entry_formats.md`,
+`ftq_bpu_interfaces.md`, `bp_cluster.md`, `ras_decisions.md`,
+`predecode.sv`.
+
+SCOPE IT NARROWLY. This is not "find inconsistencies in the
+planning documents". That form was attempted by the PA at the
+start of this session: nine findings reported, eight withdrawn
+under questioning, one survived. The failure mode is reporting a
+mismatch between two statements without tracing whether anything
+depends on it. A citation either checks out or it does not, which
+is why the task is written this way.
+
+DO NOT report: documents that do not cross-reference each other,
+stale status fields, formatting, or anything not reachable from a
+Bindings line.
+
+### Task 2 onward: RTL generation
 
 Nothing blocks generation. Every module has a decision document
 and every port has an interface document.
@@ -190,19 +271,19 @@ and every port has an interface document.
   front end top fe_decisions.md 15
 ```
 
-### Two edits to built files come first
+Two edits to built files come first:
 
 ```
   decode_pkg.sv   redefine predecode_pkt_t per DCD-16. A package
                   edit, so the run widens to both units
-  ftq_ifu.sv      add the commit pointer output of IFU-22, and
-                  ftq_ifu_interfaces.md with it. Complete and
-                  verified at 67 checks today
+  ftq_ifu.sv      add the ftq_ifu_commit_ptr output of IFU-22.
+                  The interface document already carries it.
+                  Complete and verified at 67 checks today
 ```
 
 ### The open items will be answered silently if left
 
-Eleven are unresolved and none stops a module being written. What
+Twelve are unresolved and none stops a module being written. What
 they do is leave a choice the IA will make on its own, and the
 number then exists in RTL and in no document.
 
@@ -213,14 +294,14 @@ number then exists in RTL and in no document.
   MMU-U4   whether RVA23S64 mandates Smepmp. A specification
            lookup, taskable
   MMU-U5   whether Svpbmt is a second PMA source. Same
-  ITLB-U1   in-flight walk tracker depth, bounded by TD#118
-  IBUF-U1   whether the ibuf is banked. XiangShan banks for read
-            mux area and requires banks >= decode width
-  IFU-U4    uncached bus width, and whether it forces a split
-  DCD-U1    where vtype_hazard is computed. Not the predecoder
-  DCD-U2    the order of pop and push in the RAS case
-  FE-U10    whether the ITLB is inside the front end top
-  IB-U1     which source clears the ibuf, with the deferred flush
+  ITLB-U1  in-flight walk tracker depth, bounded by TD#118
+  IBUF-U1  whether the ibuf is banked. XiangShan banks for read
+           mux area and requires banks >= decode width
+  IFU-U4   uncached bus width, and whether it forces a split
+  DCD-U1   where vtype_hazard is computed. Not the predecoder
+  DCD-U2   the order of pop and push in the RAS case
+  FE-U10   whether the ITLB is inside the front end top
+  IB-U1    which source clears the ibuf, with the deferred flush
 ```
 
 TD-DCD-2 is a read of the built RAS: does it accept `is_call` and
@@ -230,18 +311,30 @@ TD-DCD-2 is a read of the built RAS: does it accept `is_call` and
 
 Flush and redirect across the IFU pipeline are deferred until the
 full data path exists. IFU-20 records the obligation from
-`ftq_ifu.sv`; the design waits.
+`ftq_ifu.sv`; the design waits. This was raised three times in
+session-069 after being deferred.
 
-### Needs files the PA has not read
+### Reported by another session, not verified here
 
-```
-  l1i_ifu_interfaces.md   IF-8 states one non-faulting condition.
-                          ITLB-11 needs two causes. TD-ITLB-1
-  ftq_ifu_interfaces.md   gains the commit pointer of IFU-22
-```
+`ftb_decisions.md` is stale against the BP-099 widening of
+`FTB_BR_POS_BITS` from 3 to 4. Section 4 and 4.2 still say 3 bits,
+4.4 still describes 4-byte granularity, 5.5 reduces the end with
+`end[FTB_OFFSET_BITS-1:2]`, section 8 says 8 expanded instructions
+and sums to 106 bits where section 4 says 110, and FTB-1 says 106.
 
-Neither was uploaded this session. The amendments are small and
-specified; the files are the only thing missing.
+The PA has not read that file. The finding is consistent with
+three things it has seen: `FTQ_PD_POS_BITS` is `$clog2(16)` and so
+4, the 106-to-110 delta is four bits which is one position bit per
+slot at four slots, and `ftq_ifu_interfaces.md` section 10 records
+the widening as closed 2026-08-19 with that cost.
+
+The consequence is worth stating over the mismatch: a reader
+taking section 4.4 at face value concludes the front end has
+4-byte granularity, which would make IFU-6 look unbuildable.
+
+Also reported: `ubtb_interfaces.md` uses `carry` with two
+meanings. Labelled G18/UI2, so check the existing entry before
+treating it as new.
 
 ### Open, not blocking
 
@@ -249,9 +342,9 @@ specified; the files are the only thing missing.
   TD#113  the pft_addr fix. Specified, not built. Carried from
           session-067 untouched
   TD#114  the property census. Carried untouched
-  TD#117  CLOSED by fe_decisions.md 15
   TD#115  CLOSED by itlb_decisions.md
   TD#116  CLOSED by ifu_decisions.md
+  TD#117  CLOSED by fe_decisions.md 15
   TD#118  sixteen fills at the l2. Now bounds ITLB-U1, MMU-U2 and
           IBUF-11
   TD#119  maintenance, the RVA23 gap. L1I only; the written
@@ -296,14 +389,21 @@ Every error below was caught by Jeff.
 1. A NINE-ITEM REVIEW OF WHICH ONE ITEM SURVIVED. The session
    opened with a review of the corpus. Nine findings were
    reported. Eight were withdrawn under questioning and the ninth
-   was a stale table row. The mechanism was the same in every
-   case: a rule in one document did not match something in
-   another, and the mismatch was reported as a consequence
-   without tracing whether anything depended on it. Membership of
-   a list and agreement between two statements were treated as
-   load-bearing without checking what they bore.
+   was a stale table row, the duplicate `fetch` entry, fixed this
+   session. The mechanism was the same in every case: a rule in
+   one document did not match something in another, and the
+   mismatch was reported as a consequence without tracing whether
+   anything depended on it.
 
-2. FOUR OBJECTIONS TO L1I-U3, ALL WITHDRAWN. Asked for issues
+2. A CLAIM WRITTEN ABOUT A DOCUMENT NEVER READ. TD-ITLB-1
+   asserted that `l1i_ifu_interfaces.md` IF-8 collapsed two fault
+   causes and needed amending. IF-8 is a gate condition and
+   IF-23 and IF-24 behind it already separate fault from miss.
+   The claim was written from the handoff's one-line summary of
+   IF-8, survived the session, and reached the first draft of
+   this handoff as pending work. Task 1 exists because of it.
+
+3. FOUR OBJECTIONS TO L1I-U3, ALL WITHDRAWN. Asked for issues
    with adopting a recommendation, the PA produced a list of
    topics the resulting specification would have to cover and
    presented it as risk. Two were missing documents restated as
@@ -311,7 +411,7 @@ Every error below was caught by Jeff.
    dissolved because the fix was already scheduled for another
    reason.
 
-3. THE EMITTED CASE TREATED AS THE DEFAULT. The PA stated that
+4. THE EMITTED CASE TREATED AS THE DEFAULT. The PA stated that
    RTL for the I-side translation path could not be produced
    until cachegen was extended. Every module in the project
    except the L1I is written by hand from a decision document.
@@ -319,44 +419,44 @@ Every error below was caught by Jeff.
    already been written in the wrong frame and had to be
    corrected.
 
-4. A QUESTION COUNT WRONG BY TWO WITH THE ANSWER ALREADY READ.
+5. A QUESTION COUNT WRONG BY TWO WITH THE ANSWER ALREADY READ.
    Asked what questions remained, the PA said one. Three
    recommendations sat unruled in `icache_decisions.md` 10.1,
    quoted back to Jeff twice in the same session.
 
-5. DEFERRED WORK RAISED THREE TIMES. Flush was deferred
+6. DEFERRED WORK RAISED THREE TIMES. Flush was deferred
    explicitly. It appeared in the next summary, was deferred
    again, and appeared again under a different heading.
 
-6. VAGUE PHRASING DEFENDED RATHER THAN FIXED. "Not on its path",
+7. VAGUE PHRASING DEFENDED RATHER THAN FIXED. "Not on its path",
    "real form as opposed to imaginary", "corrected range",
    "survives", "recorded on purpose". Each required a question.
    In at least two cases the first reply explained the phrase
    instead of replacing it. Sentence fragments were used
    throughout and were called out.
 
-7. A SYNTHESIS RUN OFFERED IN PLACE OF JUDGEMENT. IFU-U3 was
+8. A SYNTHESIS RUN OFFERED IN PLACE OF JUDGEMENT. IFU-U3 was
    written as wanting a synthesis run to settle the F2/F3
    boundary. There is no synthesis flow. The judgement answer
    existed and was given only after Jeff rejected the deferral.
 
-8. AN ALREADY-MADE DECISION REOPENED. The choice of what to
+9. AN ALREADY-MADE DECISION REOPENED. The choice of what to
    expand was raised as a question with the alignment answer as
    its precondition. Session-068 decision 4 had already fixed it:
    the IFU extracts the 32-byte block and expands that.
 
-9. TWO PREDECODERS INVENTED FROM A WIDTH DIFFERENCE.
-   `ftq_pd_info_t` at 16 positions and `predecode_pkt_t` at 8
-   slots were read as two modules. They are one classification at
-   two points. TD-IFU-5 was written in that frame and had to be
-   rewritten.
+10. TWO PREDECODERS INVENTED FROM A WIDTH DIFFERENCE.
+    `ftq_pd_info_t` at 16 positions and `predecode_pkt_t` at 8
+    slots were read as two modules. They are one classification
+    at two points. TD-IFU-5 was written in that frame and had to
+    be rewritten.
 
-10. WORK ITEMS PRESENTED AS OPEN QUESTIONS. TD-IFU-4 was listed
+11. WORK ITEMS PRESENTED AS OPEN QUESTIONS. TD-IFU-4 was listed
     as remaining when IFU-22 had already ruled it. A verification
     instruction was written into a decision document as though it
     were a decision. Both reduce to "do not build it wrong".
 
-11. THE DATE WAS WRONG IN NINE FILE HEADERS. Every document
+12. THE DATE WAS WRONG IN NINE FILE HEADERS. Every document
     written this session was stamped 2026-09-01. The date was
     2026-09-15 and was available throughout. The error was
     reported to Jeff as a discrepancy between two files rather
@@ -380,11 +480,14 @@ What held:
   - `fe_decisions.md` was checked for live references before
     being proposed for replacement. Eight citations from built
     RTL were found and the proposal was withdrawn.
-  - The later documents were reconciled against the earlier ones
-    at the end of the session. Three real conflicts were found:
+  - The eight new documents were reconciled against each other at
+    the end of the session. Three real conflicts were found:
     IFU-5's two masks against IB-2's one, ITLB-11's returned VA
     against IT-5, and two tech debt items left open after
     `dcd_decisions.md` closed them.
+  - The guest page fault question was raised rather than assumed
+    away. It was the difference between `mmu_decisions.md` being
+    correct and being materially incomplete.
   - Every document written this session is 80-column clean and
     ASCII-only, checked by script rather than asserted.
 

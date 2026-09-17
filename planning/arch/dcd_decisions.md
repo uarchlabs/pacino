@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: Apache-2.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
-# Predecode Decisions
+# Decode Implementation Decisions
 ```
  FILE:    dcd_decisions.md
  SOURCE:  session-069
@@ -23,6 +23,13 @@ the specification does not decide.
 
 `instr_decoder.sv` is not in scope. It is Complete and decodes
 what the predecoder hands it.
+
+The RVC expander is not in scope either. Its encodings are the
+compressed-instruction chapter of the specification, and the
+project's decisions about it are placement and ordering, which
+belong with the stage that holds it: `ifu_decisions.md` IFU-1 puts
+it in the IFU ahead of the ibuf, and IFU-4 runs it before
+predecode.
 
 The predecoder replaces `predecode.sv`, and `predecode_pkt_t` is
 redefined rather than extended. Neither the existing module nor
@@ -211,6 +218,8 @@ DCD-U2  The order of the pop and the push in the DCD-11 case, if
 
 ## 12. Bindings
 
+IFU-1     Expansion in the IFU. The RVC expander is specified
+          there, not here.
 IFU-3     Puts predecode in the IFU.
 IFU-4     Expansion before predecode, the premise of DCD-7.
 IFU-6     Unaligned block, the premise of DCD-5.
@@ -223,4 +232,5 @@ IFU-18    Direction is proven only for an unconditional, which
 IBUF-2    Consumes the bundle view of DCD-16.
 TD-IFU-1  Closed by DCD-16.
 TD-IFU-5  Closed by this document.
+
 

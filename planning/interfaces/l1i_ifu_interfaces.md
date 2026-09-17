@@ -417,16 +417,20 @@ stated here rather than left to `ifu_decisions.md`:
   IF-24  On an ITLB MISS, the IFU presents no request and allocates
          no identifier. It retries the translation. The ITLB is
          non-blocking and returns miss to the requester;
-         L1I-U3.
+         itlb_decisions.md ITLB-8 and ITLB-9, ruled session-069
+         from L1I-U3.
 ```
 
-The three fault classes `ftq_ifu_interfaces.md` 6 names for
-`ifu_ftq_fault_val` are instruction access fault, page fault and
-guest page fault. Two of the three are ITLB-side and reach the FTQ
-by IF-23. The third, instruction access fault, has TWO producers: the
-ITLB, by IF-23, and the L1I's memory side, by IF-15. They arrive on
-different paths and merge in the IFU. Nothing downstream can or needs
-to tell them apart.
+The fault classes `ftq_ifu_interfaces.md` 6 names for
+`ifu_ftq_fault_val` are instruction access fault and page fault.
+Guest page fault is not among them: pacino implements the RVA23S64
+mandatory set and no optional extension, so there is no H and no
+second translation stage.
+
+Page fault is ITLB-side and reaches the FTQ by IF-23. Instruction
+access fault has TWO producers: the ITLB, by IF-23, and the L1I's
+memory side, by IF-15. They arrive on different paths and merge in
+the IFU. Nothing downstream can or needs to tell them apart.
 
 ---
 
@@ -1053,4 +1057,5 @@ sees a 2-byte boundary.
               on a custom link, no response-side handshake, and
               nowhere at all to describe a maintenance port.
 ```
+
 

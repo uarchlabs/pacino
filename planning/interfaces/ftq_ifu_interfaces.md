@@ -109,6 +109,7 @@ stage is free and the ICache can take the access.
   ftq_ifu_taken_val                            NEW
   ftq_ifu_taken_pos   [FTB_BR_POS_BITS-1:0]    NEW
   ftq_ifu_gen                                  NEW   TD-FE-8
+  ftq_ifu_commit_ptr  [FTQ_IDX_BITS-1:0]       NEW   IFU-22
 ```
 
 `ftq_ifu_start_pc` is `bp_ftq_entry_t.pc`, the block start.
@@ -130,6 +131,23 @@ is section 6.1.
 
 `ftq_ifu_idx` accompanies every request and returns on the writeback.
 It is the entry's own index, the same value carried in `branch_id`.
+
+`ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
+not part of the request handshake and carries no valid. The FTQ
+already holds this pointer; what is new is exporting it.
+
+It exists for uncached fetch alone. A memory mapped device must not
+see a read for an instruction that is not on the committed path, so
+the IFU compares the index of an uncached block against this pointer
+and issues the bus transaction only when everything earlier has
+committed (`ifu_decisions.md` IFU-22). A cached fetch never reads
+it: cacheable reads are speculative by design and have no side
+effect. Stopping fetch is what lets the pipeline drain, but the
+drain takes an unknown number of cycles and the IFU cannot otherwise
+observe that it has finished. The FTQ cannot gate the request
+instead, because whether a block is uncached is discovered in the
+IFU from the PMA result at F2, after the request has been handed
+over.
 
 CROSS-LINE is DERIVED, not a port. The IFU computes it from
 `ftq_ifu_start_pc` and its own line size. XiangShan carries
@@ -238,8 +256,12 @@ branch's direction is NOT a predecode mispredict: predecode cannot
 know it, and TAGE and SC already own the direction.
 
 `ifu_ftq_fault_val` and `ifu_ftq_fault_pos` report that fetch
-terminated on an instruction access fault, page fault or guest page
-fault at that slot. The FAULT CODE IS NOT CARRIED HERE. The
+terminated on an instruction access fault or a page fault at that
+slot. Guest page fault is not a class here: pacino implements the
+RVA23S64 mandatory set and no optional extension, so there is no H
+and no second translation stage. It returns if H is ever added.
+
+The FAULT CODE IS NOT CARRIED HERE. The
 architectural exception travels with the instruction stream to the
 backend, which is where it is taken. The FTQ needs only to know that
 the block ended early so it stops requesting and stops predicting
@@ -502,4 +524,5 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               shift are both retired: the conversion is the
               identity.
 ```
+
 

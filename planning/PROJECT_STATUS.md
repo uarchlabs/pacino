@@ -1196,13 +1196,6 @@ it only documented current behavior.
 |                         |             |                   | that would close a combinational |
 |                         |             |                   | loop through 5.7.3 S6.           |
 |                         |             |                   | sim_ftq_resolve 82/0.            |
-| fetch                   | Not started | --                | After the FTQ. Its interface to  |
-|                         |             |                   | the FTQ is SPECIFIED,            |
-|                         |             |                   | ftq_ifu_interfaces.md, but       |
-|                         |             |                   | rtl/core/frontend/ifu/rtl holds  |
-|                         |             |                   | only a .gitkeep -- every port in |
-|                         |             |                   | that document is unbuilt on both |
-|                         |             |                   | sides.                           |
 | icache_decisions.md     | Draft       | --                | Created session-068. L1I geometry,|
 |                         |             |                   | indexing, storage, both interfaces|
 |                         |             |                   | miss handling, maintenance,       |
@@ -1232,12 +1225,69 @@ it only documented current behavior.
 |                         |             |                   | maintenance ports of              |
 |                         |             |                   | l1i_ifu_interfaces.md 10 are NOT  |
 |                         |             |                   | emitted; TD#119.                  |
-| ifu                     | Not started | --                | Both its boundaries are specified:|
-|                         |             |                   | ftq_ifu_interfaces.md above and   |
-|                         |             |                   | l1i_ifu_interfaces.md below.      |
-|                         |             |                   | ifu_decisions.md does not exist   |
-|                         |             |                   | and the ITLB it depends on is not |
-|                         |             |                   | specified. TD#116, TD#117.        |
+| ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..23,   |
+|                         |             |                   | TD-IFU-1..5, IFU-U4. Expansion    |
+|                         |             |                   | and predecode in the IFU, five    |
+|                         |             |                   | stages F0..F3+WB, unaligned       |
+|                         |             |                   | 34-byte block over 17 halfword    |
+|                         |             |                   | positions, 16 slots to the ibuf,  |
+|                         |             |                   | uncached fetch on its own source. |
+|                         |             |                   | Closes TD#116.                    |
+| dcd_decisions.md        | Draft       | --                | Created session-069. DCD-1..16,   |
+|                         |             |                   | TD-DCD-1..2, DCD-U1..U2. One      |
+|                         |             |                   | predecoder, two views:            |
+|                         |             |                   | ftq_pd_info_t at 16 positions and |
+|                         |             |                   | predecode_pkt_t at 8 slots.       |
+|                         |             |                   | SUPERSEDES predecode.sv and       |
+|                         |             |                   | redefines predecode_pkt_t. The    |
+|                         |             |                   | RVC expander is NOT here; it is   |
+|                         |             |                   | ifu_decisions.md IFU-1 and IFU-4. |
+| ibuf_decisions.md       | Draft       | --                | Created session-069. IBUF-1..11,  |
+|                         |             |                   | TD-IBUF-1, IBUF-U1. 16 in, 8 out. |
+|                         |             |                   | Whole-block acceptance, empty     |
+|                         |             |                   | bypass, depth 64 as a parameter.  |
+| itlb_decisions.md       | Draft       | --                | Created session-069. ITLB-1..14,  |
+|                         |             |                   | ITLB-U1. 64 entries fully         |
+|                         |             |                   | associative, all three Sv39 page  |
+|                         |             |                   | sizes in one array, ASID tagged,  |
+|                         |             |                   | 1-cycle hit. Closes TD#115.       |
+| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..18,   |
+|                         |             |                   | MMU-U1..U5. Shared L2 TLB and     |
+|                         |             |                   | walker, Svade and Svadu both,     |
+|                         |             |                   | PMP at two sites, PMA on the      |
+|                         |             |                   | final PA only. Written RTL, not   |
+|                         |             |                   | a cachegen node.                  |
+| ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..11,    |
+|                         |             |                   | IB-U1. One enable mask, not two.  |
+| itlb_ifu_interfaces.md  | Draft       | --                | Created session-069. IT-1..15.    |
+|                         |             |                   | One request port, one-bit tag,    |
+|                         |             |                   | out-of-order responses. No open   |
+|                         |             |                   | item.                             |
+| itlb_l2tlb_interfaces.md| Draft       | --                | Created session-069. IL-1..14.    |
+|                         |             |                   | Two-bit tag. A miss holds the     |
+|                         |             |                   | transaction open, the opposite of |
+|                         |             |                   | ITLB-8. No open item. Written to  |
+|                         |             |                   | be instantiated twice; the DTLB   |
+|                         |             |                   | is the second client.             |
+| ifu                     | Not started | --                | rtl/ holds only a .gitkeep. All   |
+|                         |             |                   | three boundaries now specified:   |
+|                         |             |                   | ftq_ifu, l1i_ifu, itlb_ifu.       |
+|                         |             |                   | ifu_decisions.md exists as of     |
+|                         |             |                   | session-069. Nothing blocks RTL.  |
+| ibuf                    | Not started | --                | ibuf_decisions.md and             |
+|                         |             |                   | ifu_ibuf_interfaces.md created    |
+|                         |             |                   | session-069. Had no planning      |
+|                         |             |                   | record before then.               |
+| itlb                    | Not started | --                | Written RTL from                  |
+|                         |             |                   | itlb_decisions.md. Not a cachegen |
+|                         |             |                   | node; cachegen has no TLB support.|
+| l2_tlb + walker         | Not started | --                | Written RTL from mmu_decisions.md.|
+|                         |             |                   | Shared I and D; the DTLB does not |
+|                         |             |                   | exist, so one client today.       |
+| frontend top            | Not started | --                | fe_decisions.md 15, FE-15..18.    |
+|                         |             |                   | Instantiates bp_cluster, ftq,     |
+|                         |             |                   | ifu, ibuf, decode. The L1I is     |
+|                         |             |                   | outside it. Closes TD#117.        |
 
 ---
 
@@ -1956,17 +2006,33 @@ For known failure modes see ANTIPATTERNS.md.
 
 ### Decoder track
 
-There is no decode.md and none is planned: decode is fully
-contained in the RISC-V specification and riscv-opcodes, and a
-planning document duplicating them would only create drift.
-Revisit if custom instructions are added.
+Pacino implements the mandatory requirements of the RVA23S64
+profile. Pacino does not implement any optional extensions
+at this time.
+
+The ISA requirements for RVA23S64 are fully described in the
+RISC-V specification and riscv-opcodes.
+
+There is a dcd_decisions.md planning file for implementation
+details of the decoder and predecoder. This is solely for design
+planning of items outside the scope of the official RISC-V ISA
+documentation.
+
+The RVC expander is not there. Its encodings are the compressed
+chapter of the specification, and what this project decides about
+it is placement and ordering: ifu_decisions.md IFU-1 puts it in
+the IFU ahead of the ibuf and IFU-4 runs it before predecode.
 
 The decisions this project has made:
 - Illegal instruction: ILLEGAL flag in decode packet,
   ROB entry allocated, commit flushes to mtvec
 - vtype: decoder stateless, rename resolves dependency
 - Dual decode packet: decode_pkt_t[7:0] scalar,
-  vec_decode_pkt_t[7:0] vector, predecode_pkt_t[7:0]
+  vec_decode_pkt_t[7:0] vector, predecode_pkt_t[7:0].
+  predecode_pkt_t is REDEFINED by dcd_decisions.md DCD-16,
+  session-069: it gains the start PC, the block position, the
+  FTQ index, the fault cause and the faulting VA, and its
+  branch hint becomes an exact classification
 - OPMVX: pkt.vs1=0, GPR in scalar pkt.rs1
 - Extension enable: ext_enable_t static from misa/CSR
 - Vector memory disambiguation: opcodes 0x07/0x27
@@ -1974,7 +2040,7 @@ The decisions this project has made:
 ### BP cluster track
 
 Full detail: planning/arch/bp_cluster.md,
-planning/arch/fe_decisions.md (theory of operation),
+planning/arch/fe_decisions.md (BPU/FTQ paths, sections 1-10),
 planning/interfaces/ftq_bpu_interfaces.md (port specification).
 
 Key decisions for quick reference:
@@ -2094,8 +2160,13 @@ unless noted.
           session-063 decisions are still not promoted here.
           TD#112.
     - planning/arch/fe_decisions.md                   Draft
-        - Front-end FTQ<->BPU theory of operation. Session-064
-          corrections applied; see Module Status.
+        - Sections 1-10 are the FTQ<->BPU paths. Session-064
+          corrections applied; see Module Status. Session-069
+          added section 15, the front end top, FE-15..18 and
+          FE-U10, closing TD#117; Document History renumbered
+          15 to 16 and the overview rewritten. The FE, TD-FE
+          and FE-U numbers are front end wide, not BPU/FTQ
+          only, per section 4,5,6 MOVED.
     - planning/interfaces/ftq_bpu_interfaces.md       Draft
         - FTQ/BPU port specification. Section 10 items 6, 7, 8,
           9 and 12 CLOSED session-064; item 14 opened. Session-067
@@ -2110,6 +2181,10 @@ unless noted.
           carried a copy until then.
     - planning/interfaces/ftq_ifu_interfaces.md       Draft
         - FTQ/IFU port specification, session-067. Closes TD-FE-1.
+          Session-069 added ftq_ifu_commit_ptr to section 4,
+          IFU-22, driven continuously for uncached fetch, and
+          dropped guest page fault from the section 6 fault
+          classes.
     - planning/interfaces/ftq_backend_interfaces.md   Draft
         - Backend/FTQ resolution, redirect and commit,
           session-067. Closes FE-U2 for the FTQ side; opens
@@ -2119,6 +2194,38 @@ unless noted.
         - 140-port inventory. STALE on loop_pred after BP-091.
     - planning/interfaces/loop_pred_interfaces.md     Draft
         - Corrected to the delivered ports BP-091.
+    - planning/arch/ifu_decisions.md                  Draft
+        - Created session-069. IFU-1..23, TD-IFU-1..5, IFU-U4.
+          Expansion and predecode in the IFU, five stages
+          F0..F3+WB, unaligned 34-byte block, the uncached
+          path. Closes TD#116.
+    - planning/arch/dcd_decisions.md                  Draft
+        - Created session-069. DCD-1..16, TD-DCD-1..2,
+          DCD-U1..U2. One predecoder, two views. Redefines
+          predecode_pkt_t and supersedes predecode.sv.
+    - planning/arch/ibuf_decisions.md                 Draft
+        - Created session-069. IBUF-1..11, TD-IBUF-1, IBUF-U1.
+          16 in, 8 out. Whole-block acceptance, empty bypass,
+          depth 64 as a parameter.
+    - planning/arch/itlb_decisions.md                 Draft
+        - Created session-069. ITLB-1..14, ITLB-U1. 64 entries
+          fully associative, all three Sv39 page sizes, ASID
+          tagged, 1-cycle hit. Closes TD#115.
+    - planning/arch/mmu_decisions.md                  Draft
+        - Created session-069. MMU-1..18, MMU-U1..U5. Shared
+          L2 TLB and walker, Svade and Svadu both, PMP at two
+          sites, PMA on the final PA only.
+    - planning/interfaces/ifu_ibuf_interfaces.md      Draft
+        - Created session-069. IB-1..11, IB-U1.
+    - planning/interfaces/itlb_ifu_interfaces.md      Draft
+        - Created session-069. IT-1..15. One request port with
+          a one-bit tag; responses may return out of order.
+          No open item.
+    - planning/interfaces/itlb_l2tlb_interfaces.md    Draft
+        - Created session-069. IL-1..14. Two-bit tag. A miss
+          holds the transaction open, the opposite of ITLB-8.
+          No open item. Written to be instantiated twice; the
+          DTLB is the second client.
     - planning/arch/ras_decisions.md                  Draft
     - planning/arch/sram_init.md                      Complete
     - planning/testbenches/manual_tb_decisions.md     Complete
@@ -2263,5 +2370,6 @@ unless noted.
 
 ### Shared components track
 - components/rtl  components/tb
+
 
 
