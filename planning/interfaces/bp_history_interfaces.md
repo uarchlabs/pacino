@@ -174,13 +174,22 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
     An earlier revision of this file stated the opposite. It was
     wrong, and the fold arithmetic here is why: the PHR write
-    above consumes pred_pc bits [3] and [2] only. A fetch block
-    PC is FTB_BLOCK_BYTES aligned, so bits [4:0] are zero by
-    construction, bits [3:2] are always 2'b00, the path bit is a
-    constant, and every PHR-derived fold degenerates. With the
-    branch PC, pred_pc[3:2] carries the low two bits of the
-    branch's in-block position and the path bit varies as it
-    should.
+    above consumes pred_pc bits [3] and [2] only. With the branch
+    PC, pred_pc[3:2] carries the low two bits of the branch's
+    in-block position and the path bit varies as it should.
+
+    THE REASON GIVEN FOR IT WAS ALSO WRONG, session-069. It said a
+    fetch block PC is FTB_BLOCK_BYTES aligned so bits [4:0] are
+    zero by construction. Prediction blocks are NOT aligned: a
+    block begins at the lookup PC, which is a taken branch target
+    and so any 2-byte address (ftq_decisions.md 4.7,
+    ifu_decisions.md IFU-6). The conclusion survives without that
+    premise and is stronger for being stated correctly: a block
+    start is 2'b00 in bits [3:2] whenever it is a fall-through
+    from an aligned predecessor, which is most of them, so the
+    block PC gives a path bit that is nearly constant rather than
+    exactly constant. The branch PC varies by construction because
+    its in-block position does.
 
     bp_cluster derives this value; see bp_cluster.sv
     w_slot_pc_p1 (BP-092a).

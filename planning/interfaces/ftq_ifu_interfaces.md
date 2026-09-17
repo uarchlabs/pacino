@@ -433,8 +433,14 @@ FE-U7 and remains open.
 
 ```
   1. ICache path. DECIDED 2026-08-19: pacino defines NO logical
-     ftq_icache interface. The ICache is encapsulated behind the
-     IFU. If physical design later needs the FTQ address earlier, a
+     ftq_icache interface. The ICache is an INDEPENDENT MODULE
+     inside the front-end top, a SIBLING of the IFU, and the IFU
+     exposes the interface to it (icache_decisions.md L1I-2,
+     fe_decisions.md FE-16). An earlier revision said the ICache
+     is encapsulated behind the IFU; corrected session-069. The
+     decision above is unaffected: independence changes the module
+     hierarchy, not whether the FTQ reaches the cache directly.
+     If physical design later needs the FTQ address earlier, a
      pass-through or alternative path is created in the PD phase,
      and this file does not change.
 

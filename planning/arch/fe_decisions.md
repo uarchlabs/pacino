@@ -276,7 +276,14 @@ The comparison reduces both views of a slot to ONE quantity, the
 address fetched after that slot. Two not-taken views therefore compare
 equal and raise no redirect. The p1 operand is formed at p1 from the p1
 view only: the slot target when taken, the uBTB fall-through on a hit,
-the block-aligned PC plus FTB_BLOCK_BYTES on a miss.
+the LOOKUP PC plus FTB_BLOCK_BYTES on a miss.
+
+Not the block-aligned PC. Prediction blocks are unaligned: a block
+begins at the lookup PC, which is a taken branch target and so any
+2-byte address (ftq_decisions.md 4.7, ifu_decisions.md IFU-6). A
+miss does not resync the stream to a 32-byte boundary
+(bp_cluster.md, Block width). An earlier revision said block-aligned
+and predates the session-069 ruling.
 
 The p3 comparison is against the p2-corrected value, not the raw p1
 prediction, so a p3 redirect fires only when SC changes what the cluster
@@ -748,9 +755,12 @@ ubtb.sv.
 
   TD-FE-3  bp_ftq_entry_t.pc and per-slot target are 40 bits. RVA23
            mandates the C extension, so bit 0 of an instruction
-           address is always zero and 39 bits suffice. If a fetch
-           block always begins on an FTB_BLOCK_BYTES boundary, pc
-           needs 35. Held at 40 until the design is working; revisit
+           address is always zero and 39 bits suffice. The further
+           reduction to 35 is NOT available: it assumed a fetch
+           block always begins on an FTB_BLOCK_BYTES boundary, and
+           blocks are unaligned (ftq_decisions.md 4.7,
+           ifu_decisions.md IFU-6). Corrected session-069. 39 is
+           the floor. Held at 40 until the design is working; revisit
            at the optimization step, together with the width of
            bp_redirect_t.target_pc, which carries the same quantity.
            The per-slot target is now replicated NUM_PRED_SLOTS

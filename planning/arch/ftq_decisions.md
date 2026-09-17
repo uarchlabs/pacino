@@ -42,8 +42,16 @@ The FTQ has three logical external interfaces, all specified:
                        resolution, redirect, commit
 ```
 
-A fourth, ftq_icache, is DELIBERATELY NOT DEFINED. The ICache is
-encapsulated behind the IFU. XiangShan drives it from its FTQ for
+A fourth, ftq_icache, is DELIBERATELY NOT DEFINED. The ICache is an
+INDEPENDENT MODULE inside the front-end top, a SIBLING of the IFU
+and not instantiated within it, and the IFU exposes the interface
+to it (icache_decisions.md L1I-2, fe_decisions.md FE-16). An
+earlier revision read that the ICache is encapsulated behind the
+IFU, which stated a hierarchy the design does not have.
+
+THAT CHANGES THE MODULE HIERARCHY AND NOT THIS SECTION'S POINT.
+There is still no FTQ-to-ICache interface, and the reason is
+unchanged: XiangShan drives it from its FTQ for
 physical reasons -- critical path and register replication, with the
 evidence cited in ftq_ifu_interfaces.md 8 item 1 -- and if pacino
 meets the same pressure the answer is a pass-through or alternative

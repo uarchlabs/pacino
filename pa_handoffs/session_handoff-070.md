@@ -8,11 +8,16 @@ Date: 2026-09-15
 Read PROJECT_STATUS.md, then this file, then CLAUDE.md.
 
 No tasks were run. The session was planning. Eight documents were
-created, four were amended, and the I-side front end is specified
-end to end for the first time.
+created, fifteen were amended, and the I-side front end is
+specified end to end for the first time.
 
-Next session: a citation audit, then RTL generation for the IFU
-and the modules around it. See Next Session.
+Next session: the cross-document audit continues, then RTL
+generation. See Next Session.
+
+THE AUDIT IS ALREADY RUNNING, in a parallel session, and produced
+fourteen findings during session-069 that are now closed in the
+documents. Most of them were session-069's own errors rather than
+old drift. It is not finished.
 
 ---
 
@@ -163,6 +168,30 @@ unchanged and applies to the L1I only.
                            FTB-G1 and FTB-G2. 4.1 tag claim
                            qualified. BP-099 staleness corrected
                            at 4.2, 4.4, 5.5, section 8, FTB-1
+  ftq_decisions.md 0       the ICache is a SIBLING of the IFU
+                           inside the front-end top, not
+                           encapsulated behind it. The
+                           no-FTQ-to-ICache decision is unchanged
+  ftq_ifu_interfaces.md 8  same correction, item 1
+  icache_decisions.md 11   the amendment list gains
+                           ftq_ifu_interfaces.md 8 and
+                           PROJECT_STATUS, which it had missed,
+                           plus a status line saying all four are
+                           now amended
+  PROJECT_STATUS           frontend top row: the L1I is INSIDE it
+  fe_decisions.md 3.1      the uBTB-miss p1 operand is the LOOKUP
+                           PC plus FTB_BLOCK_BYTES, not the
+                           block-aligned PC
+  ftq_bpu_interfaces.md    same correction at three sites, plus
+                           the path-bit argument in section 7
+                           which rested on the aligned premise
+  bp_history_interfaces.md the bits-[4:0]-zero-by-construction
+                           claim removed. Its conclusion, report
+                           the BRANCH PC not the block PC, stands;
+                           the stated reason did not
+  PROJECT_STATUS TD#113    the p1 miss value corrected
+  fe_decisions.md TD-FE-3  the 35-bit pc reduction withdrawn; it
+                           assumed aligned blocks. 39 is the floor
   ras_decisions.md         section 6 reworked. 6.1 rewritten to
                            one 32-byte block with pos-located
                            slots; the old fixed split at
@@ -303,18 +332,93 @@ banks of 8 with DecodeWidth 6, banked for read-mux area only.
 
 ## Next session (070)
 
-### Task 1: the citation audit
+### Task 1: the cross-document audit CONTINUES
 
-READ-ONLY. No file is modified by this task; it produces a report.
+IT IS ALREADY RUNNING. A parallel session has been auditing the
+planning tree against itself and feeding findings to Jeff, who has
+been putting them to the PA one at a time. Fourteen closed during
+session-069. It is not finished and it should continue into 070
+before RTL generation.
 
-Every document created this session ends with a Bindings section.
-Each line in one names a rule in another document and asserts
-something about it. Verify every one.
+WHAT IT HAS FOUND SO FAR, all resolved in the documents:
+
+```
+   1  ITLB-12 let a PMP failure reach the L1I and blocked only the
+      response, against l1i_ifu_interfaces.md IF-22. Also counted
+      64 PMP entries where MMU-11 sets 16
+   2  FE-16 put the L1I outside the front end against L1I-2.
+      L1I-2 is the ruling; the cache is self contained either way
+   3  bp_history_decisions.md 3.4 restored history on mispredicts
+      only; ftq_backend_interfaces.md D1 restores on three causes.
+      D1 wins, and 3.4's own granularity rule is why
+   4  l1i_ifu_interfaces.md 13.1 had menvcfg.CBIE 01 and 11
+      swapped. 01 is flush, 11 is invalidate
+   5  TD#115 and TD#117 were closed by documents while the table
+      still read OPEN. TD#116 was claimed closed and is not
+   6  sim_bp_cluster read 973 in the Module Status row; current is
+      1795. Dated rather than rewritten
+   7  The uBTB miss fall-through was named twice and defined
+      nowhere
+   8  bp_cluster.md gave the miss successor as PC + fetch_width,
+      which is 64. It is FTB_BLOCK_BYTES, 32
+   9  The flush index for a predecode or p2/p3 redirect, and
+      whether the ibuf is cleared at all. It is K, and only a
+      backend redirect clears
+  10  The restored GHR keeps the mispredicted branch's predicted
+      direction. DECIDED imprecise, alternative recorded, G24
+  11  IL-3 said the L2 TLB reads no CSR, leaving the walker with
+      no root and contradicting MMU-7
+  12  ras_decisions.md 6 described five cross-slot RAS
+      combinations FE-11 excludes, on a bundle split that no
+      longer exists
+  13  Five documents carried a block-aligned miss successor
+      against the unaligned ruling
+  14  PROJECT_STATUS and two FTQ documents still placed the L1I
+      outside the front-end top. icache_decisions.md 11's
+      amendment list was itself incomplete
+```
+
+THE PATTERN WORTH CARRYING FORWARD. Most of these are session-069
+errors, not old drift. Items 1, 2, 5, 8, 9, 11 and half of 13 were
+introduced or worsened by the PA during the session that wrote the
+new documents. The audit is catching the current session's work at
+least as much as the tree's history, which is an argument for
+running it against 070's RTL as well.
+
+WHAT THE PA HAS NOW READ. The list of unread documents this task
+was originally written around is largely gone:
+`icache_decisions.md`, `ftq_decisions.md`, `ftq_entry_formats.md`,
+`ftq_bpu_interfaces.md`, `ftq_backend_interfaces.md`,
+`bp_cluster.md`, `ras_decisions.md`, `bp_history_decisions.md`,
+`bp_history_interfaces.md`, `ubtb_interfaces.md`,
+`ftb_decisions.md`, `l1i_ifu_interfaces.md` and
+`ftq_ifu_interfaces.md` were all read during session-069. Claims
+made before they were read are the ones that failed.
+
+STILL UNREAD: `predecode.sv`, `bp_cluster.sv`, `ftb.sv`,
+`ftq_npc.sv`, and the parameter package. Those are RTL and the
+audit is scoped to documentation, but several findings above end
+at a question only the RTL answers: whether the RAS bypass and
+two-push recursion path of ras_decisions.md 6.3 and 6.4 were
+built, and are therefore dead logic; and whether ftb.sv and
+ubtb.sv implement the fall-through bounds check that 4.5 now
+requires again.
+
+SCOPE IT THE SAME WAY. This is not "find inconsistencies". The
+form that works is a specific claim in one document checked
+against the document it names, with the consequence stated rather
+than the mismatch. The form that fails was attempted by the PA at
+the start of session-069: nine findings, eight withdrawn under
+questioning, one survived.
+
+STILL WORTH DOING, and not yet done: the Bindings sections of the
+eight documents created in session-069 cite rules in other files
+by number. Those citations have not been verified line by line.
 
 ```
   itlb_decisions.md        section 9
   mmu_decisions.md         section 10
-  ifu_decisions.md         section 9
+  ifu_decisions.md         section 10
   ibuf_decisions.md        section 8
   dcd_decisions.md         section 12
   ifu_ibuf_interfaces.md   section 8
@@ -322,39 +426,9 @@ something about it. Verify every one.
   itlb_l2tlb_interfaces.md section 8
 ```
 
-For each citation, report one of: the cited rule exists and says
-what the citing document claims; the rule exists but says
-something different, with both texts quoted; the rule does not
-exist.
-
-WHY THIS TASK EXISTS. The PA wrote TD-ITLB-1 into
-`itlb_decisions.md` asserting that `l1i_ifu_interfaces.md` IF-8
-collapsed two fault causes into one bit and needed amending. IF-8
-is a gate condition and IF-23 and IF-24 behind it already separate
-fault from miss. The claim was wrong, it survived the whole
-session, it reached the previous draft of this handoff as pending
-work, and it was caught only when Jeff uploaded the file. The PA
-had written a claim about a document it had never read.
-
-That is the failure this task is scoped to catch. The PA
-reconciled the eight new documents against each other at the end
-of the session and found three real conflicts. It did not and
-could not verify their claims about documents it has not read:
-`icache_decisions.md`, `ftq_decisions.md`, `ftq_entry_formats.md`,
-`ftq_bpu_interfaces.md`, `bp_cluster.md`, `ras_decisions.md`,
-`predecode.sv`.
-
-SCOPE IT NARROWLY. This is not "find inconsistencies in the
-planning documents". That form was attempted by the PA at the
-start of this session: nine findings reported, eight withdrawn
-under questioning, one survived. The failure mode is reporting a
-mismatch between two statements without tracing whether anything
-depends on it. A citation either checks out or it does not, which
-is why the task is written this way.
-
-DO NOT report: documents that do not cross-reference each other,
-stale status fields, formatting, or anything not reachable from a
-Bindings line.
+For each, report one of: the cited rule exists and says what the
+citing document claims; it exists and says something different,
+with both texts quoted; it does not exist.
 
 ### Task 2 onward: RTL generation
 
@@ -427,9 +501,11 @@ full data path exists. IFU-20 records the obligation from
 `ftq_ifu.sv`; the design waits. This was raised three times in
 session-069 after being deferred.
 
-### Two conflicts raised by another session, both resolved
+### Two of the audit findings in detail
 
-Both were the PA's to answer for and both are now fixed.
+These two took the longest and reversed the most, so they are
+written out rather than left as lines in the Task 1 list. Both
+were the PA's to answer for and both are now fixed.
 
 ALIGNMENT. That session reported IFU-6 and DCD-5 saying blocks may
 start at any 2-byte address while the FTB, the uBTB and FTQ 4.7
@@ -647,3 +723,4 @@ before predecode, decision 7, came from Jeff. The PA had recorded
 the XiangShan order and the reason for reversing it, that
 predecode on expanded encodings needs only the base-ISA branch
 forms, was Jeff's observation.
+

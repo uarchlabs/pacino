@@ -193,16 +193,20 @@ One value per prediction, not one per slot, and qualified by
 It is the p1 view of the fall-through and is exactly the not-taken
 term the cluster already uses when it forms each slot's p1
 successor for the section 6 redirect comparison: `blk_p1.pft_addr`
-on a uBTB hit, and the block-aligned request PC plus
-FTB_BLOCK_BYTES on a miss, where `blk_p1.pft_addr` reads zero. It
+on a uBTB hit, and the LOOKUP PC plus FTB_BLOCK_BYTES on a miss,
+where `blk_p1.pft_addr` reads zero. Not the block-aligned PC:
+blocks are unaligned and a miss does not resync the stream
+(ftq_decisions.md 4.7, bp_cluster.md Block width). Corrected
+session-069. It
 is not the FTB `pftAddr` of section 5.1, which arrives at p2.
 
 AND THAT IS A DEFECT, NOT ONLY A DISTINCTION. `bp_ftq_entry_t.pft_addr`
 is written ONCE at p1 from this port and no later port can correct it:
 the 4a slot correction groups carry `bp_ftq_slot_t` only, and
 `pft_addr` is a block scalar. So the entry keeps the p1 view for its
-whole life, and on a uBTB MISS that view is the block-aligned PC plus
-FTB_BLOCK_BYTES -- the FULL block end. When the FTB then terminates
+whole life, and on a uBTB MISS that view is the LOOKUP PC plus
+FTB_BLOCK_BYTES -- a full 32-byte block from wherever it started.
+When the FTB then terminates
 the block at a branch earlier in it, or corrects a block end the uBTB
 missed (FE-13), the entry is wrong and stays wrong.
 
@@ -478,8 +482,8 @@ view are reduced to the address fetched after that slot, so two
 not-taken views compare equal and raise no redirect.
 
 The p1 operand is formed at p1 from the p1 view only: the slot
-target when taken, the uBTB fall-through on a hit, the
-block-aligned PC plus FTB_BLOCK_BYTES on a miss. A stale uBTB block
+target when taken, the uBTB fall-through on a hit, the LOOKUP PC
+plus FTB_BLOCK_BYTES on a miss. A stale uBTB block
 boundary therefore redirects at p2 rather than letting the front end
 fetch past a boundary the FTB had already contradicted.
 
@@ -725,8 +729,10 @@ index 0.
 `pred_pc` is the BRANCH PC, not the fetch block PC: the block base
 plus that branch's in-block position, TWO bytes per position
 (section 7.4). bp_history folds bits [3] and [2] of it into the PHR
-path bit, and a block-aligned PC has those bits hard zero, so the
-block PC would make the path bit a constant. See
+path bit. The block PC would make the path bit nearly constant,
+because most block starts are fall-throughs from a 32-byte-aligned
+predecessor and carry 2'b00 there; only a block entered by a taken
+branch has those bits set. The branch PC varies by construction. See
 bp_history_interfaces.md, Producer obligations, and BP-092a.
 
 Checkpoint write, at allocation:

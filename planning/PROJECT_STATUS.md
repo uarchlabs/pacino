@@ -1299,8 +1299,12 @@ it only documented current behavior.
 |                         |             |                   | exist, so one client today.       |
 | frontend top            | Not started | --                | fe_decisions.md 15, FE-15..18.    |
 |                         |             |                   | Instantiates bp_cluster, ftq,     |
-|                         |             |                   | ifu, ibuf, decode. The L1I is     |
-|                         |             |                   | outside it. Closes TD#117.        |
+|                         |             |                   | ifu, L1I, ibuf and decode. The    |
+|                         |             |                   | L1I is INSIDE it, a SIBLING of    |
+|                         |             |                   | the IFU and not inside the IFU,   |
+|                         |             |                   | per icache_decisions.md L1I-2.    |
+|                         |             |                   | An earlier session-069 row said   |
+|                         |             |                   | outside. Closes TD#117.           |
 
 ---
 
@@ -1655,8 +1659,10 @@ it only documented current behavior.
 |     |          | It is written once at p1 from bpu_pred_pft_p1. The p2/p3 |
 |     |          | groups of ftq_bpu_interfaces.md 4a carry bp_ftq_slot_t   |
 |     |          | only, and pft_addr is a block scalar, so nothing can     |
-|     |          | correct it. On a uBTB miss the p1 value is the block-    |
-|     |          | aligned PC plus FTB_BLOCK_BYTES, the FULL block end; when|
+|     |          | correct it. On a uBTB miss the p1 value is the LOOKUP    |
+|     |          | PC plus FTB_BLOCK_BYTES, a full 32-byte block from      |
+|     |          | wherever it started (corrected session-069: blocks are  |
+|     |          | unaligned, ftq_decisions.md 4.7); when                  |
 |     |          | the FTB then terminates the block at an earlier branch,  |
 |     |          | or corrects a block end the uBTB missed (FE-13), the     |
 |     |          | entry keeps the p1 view for its whole life.              |

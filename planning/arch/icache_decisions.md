@@ -821,9 +821,24 @@ not deleted:
 
   PROJECT_CORE.md       repeats the same sentence in its planning
                         inventory. Same amendment.
+
+  ftq_ifu_interfaces.md 8 item 1
+                        carries the same sentence. ADDED TO THIS
+                        LIST session-069; it was missed when the
+                        list was written and the omission is why
+                        it survived two sessions after the other
+                        two were named.
+
+  PROJECT_STATUS.md     Module Status, the frontend top row.
+                        ADDED session-069. It said the L1I is
+                        outside the front end top, which was a
+                        first-revision FE-16 wording, not L1I-2.
 ```
 
-Both are PA-direct edits. Neither is in scope for an IA task.
+All are PA-direct edits. None is in scope for an IA task.
+
+STATUS session-069: PROJECT_CORE.md, ftq_decisions.md 0,
+ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
 
 ---
 
