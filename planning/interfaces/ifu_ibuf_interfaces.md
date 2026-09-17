@@ -96,8 +96,10 @@ Each slot carries `predecode_pkt_t` as defined in
   start_pc     the address of this instruction
   pos          its halfword position in the fetch block
   ftq_idx      the FTQ entry this block came from
-  fault_cause  instruction page fault, access fault, or none
+  fault_cause  access fault, page fault, guest-page fault, none
   fault_va     the faulting virtual address
+  fault_gpa    the faulting guest physical address, valid only on
+               a guest-page fault
   cfi          the control flow classification of DCD-7
   is_vsetvl    per-instruction, from DCD-16
   needs_vtype  per-instruction, from DCD-16
@@ -112,6 +114,10 @@ IB-9  The fault fields are per slot, not per block. The
       architectural exception travels with the instruction it
       belongs to. The block-level fault report is a different
       thing and goes to the FTQ, not here. IFU-2 and DCD-15.
+
+IB-9a Three causes, not two. H is mandatory in RVA23 through Sha,
+      so a guest-page fault is a normal outcome and its guest
+      physical address rides here for Shtvala. MMU-16.
 
 `vtype_hazard` is not on this port. It is an intra-bundle property
 and the ibuf regroups instructions across bundle boundaries, so a
@@ -169,4 +175,3 @@ IBUF-4    The ready rule, IB-6.
 IBUF-5    Uncached as an ordinary write, IB-10.
 IBUF-8    The clear, IB-11.
 TD-DCD-1  Keeps `vtype_hazard` off this port.
-

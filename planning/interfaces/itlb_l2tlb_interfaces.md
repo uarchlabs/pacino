@@ -34,6 +34,8 @@ instantiated twice.
   itlb_l2t_req_rdy                        L2TLB -> ITLB
   itlb_l2t_vpn   [VPN_WIDTH-1:0]          ITLB  -> L2TLB
   itlb_l2t_asid  [ASID_WIDTH-1:0]         ITLB  -> L2TLB
+  itlb_l2t_vmid  [VMID_WIDTH-1:0]         ITLB  -> L2TLB
+  itlb_l2t_v                              ITLB  -> L2TLB
   itlb_l2t_tag   [1:0]                    ITLB  -> L2TLB
 
   l2t_itlb_rsp_val                        L2TLB -> ITLB
@@ -59,6 +61,17 @@ Sizing the tag to the tracker would couple them.
 IL-3  The ASID travels with the request. The L2 TLB does not
       read a CSR and does not hold a current ASID. The client
       holds it.
+
+IL-3a The VMID and the V bit travel with it for the same reason.
+      H is mandatory in RVA23 through Sha, so a request is either
+      a `V=0` single-stage translation or a `V=1` two-stage one,
+      and a two-stage request names its guest. ITLB-4a.
+
+IL-3b A `V=1` request commits the L2 TLB to a NESTED walk,
+      MMU-21, which is several times the work of a single-stage
+      one. The port does not distinguish them beyond the V bit;
+      the cost difference is the L2 TLB's to absorb and is why
+      IL-6 exists.
 
 ---
 
@@ -119,20 +132,29 @@ something the region table already decides.
 ## 5. Faults
 
 IL-10 A fault response ends the transaction. The cause
-      distinguishes a page fault raised by the walk from an
-      access fault raised by the PMP check the walker performs
-      under MMU-10.
+      distinguishes three: a page fault from a single-stage or
+      VS-stage walk, a GUEST page fault from the G-stage, and an
+      access fault from the PMP check the walker performs under
+      MMU-10. MMU-16.
 
 IL-11 The faulting virtual address is not returned. The client
       supplied it and holds it against the tag.
+
+IL-11a The faulting GUEST PHYSICAL address IS returned, on a
+       guest page fault only. The client never had it; it is
+       produced inside the nested walk. Shtvala requires `htval`
+       to carry it. This is the one address that travels back on
+       this port, and it continues to the IFU as
+       `itlb_ifu_gpa`, IT-6a.
 
 ---
 
 ## 6. Maintenance
 
-IL-12 SFENCE.VMA does not cross this boundary. The L2 TLB has
-      its own invalidate port, MMU-18, and the ITLB has its own,
-      ITLB-14. Neither forwards to the other.
+IL-12 SFENCE.VMA does not cross this boundary, and neither do
+      HFENCE.VVMA and HFENCE.GVMA. The L2 TLB has its own
+      invalidate port, MMU-18, and the ITLB has its own,
+      ITLB-14. Neither forwards to the other. MMU-17a.
 
 IL-13 A walk in flight when an invalidate arrives completes, and
       its result is not installed in the L2 TLB. MMU-17. Whether
@@ -171,4 +193,3 @@ MMU-13    PMA attributes, deliberately absent by IL-9.
 MMU-15    The static region table IL-9 defers to.
 MMU-17    Invalidate during a walk, IL-13 and IL-14.
 MMU-18    The L2 TLB invalidate port, IL-12.
-

@@ -71,6 +71,46 @@ MMU-U2 How many walks may be outstanding. The l2 slave holds one
 
 ---
 
+## 3a. Two-stage translation
+
+H is MANDATORY in RVA23 through Sha, so every translation this MMU
+performs is potentially two-stage.
+
+MMU-19 The MMU supports both single-stage and two-stage
+       translation. `V=0` accesses translate through `satp` only.
+       `V=1` accesses translate through `vsatp` for the VS-stage
+       and `hgatp` for the G-stage.
+
+MMU-20 Shvsatpa: every translation mode supported in `satp` is
+       supported in `vsatp`. Shgatpa: for each SvNN supported in
+       `satp` the corresponding `hgatp` SvNNx4 mode is supported,
+       and `hgatp` mode Bare is supported. Pacino is Sv39, so the
+       G-stage is Sv39x4 and its root table is four times the
+       normal size.
+
+MMU-21 The walk is NESTED, not sequential. Every address the
+       VS-stage walk produces is a guest physical address and
+       needs its own G-stage walk before it can be used. A
+       three-level VS-stage walk therefore costs up to four
+       G-stage walks, one per VS-stage PTE fetch plus one for the
+       final guest physical address.
+
+MMU-21 is the reason MMU-U2, the outstanding walk count, matters
+more than it did. A single two-stage walk occupies the walker for
+far longer than a single-stage one, and TD#118 serialises the
+memory accesses underneath it.
+
+MMU-22 The MMU raises a GUEST page fault when the G-stage fails
+       and an ordinary page fault when the VS-stage or a
+       single-stage walk fails. They are distinct causes; see
+       section 7.
+
+MMU-23 Shtvala: `htval` is written with the faulting guest
+       physical address on a guest page fault. The MMU produces
+       that address; the trap path writes it.
+
+---
+
 ## 4. A and D bits
 
 MMU-6  Both Svade and Svadu are supported.
@@ -79,6 +119,11 @@ MMU-7  `menvcfg.ADUE` selects the behaviour at runtime. With ADUE
        clear the walker raises a page fault when A is clear on
        access or D is clear on write, which is Svade. With ADUE
        set the walker updates the bits in memory, which is Svadu.
+
+MMU-7a For a `V=1` access, `henvcfg.ADUE` selects the behaviour of
+       the VS-stage. `menvcfg.ADUE` continues to govern the
+       G-stage. The two stages of one nested walk can therefore
+       be under different rules at the same time.
 
 MMU-8  The Svadu update is atomic with respect to other harts. The
        walker performs it as a read-modify-write that cannot be
@@ -167,10 +212,18 @@ MMU-U5 Whether Svpbmt is mandatory in RVA23S64. If it is, the PTE
 
 ## 7. Faults
 
-MMU-16 A PMP or PMA violation on an instruction fetch raises an
-       instruction access fault, cause 1. This is distinct from an
-       instruction page fault, cause 12, which comes from the
-       translation.
+MMU-16 Three fault causes reach the front end from translation and
+       checking:
+
+```
+   1  instruction access fault        PMP or PMA, MMU-10, MMU-12
+  12  instruction page fault          single-stage, or VS-stage
+  20  instruction guest-page fault    G-stage, MMU-22
+```
+
+MMU-16a Guest page fault exists because H is mandatory. It is not
+        an optional third case to be dropped when H is absent,
+        because H is not absent.
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
 faulting virtual address for both causes.
@@ -183,6 +236,13 @@ MMU-17 SFENCE.VMA invalidates L2 TLB entries by the same forms as
        the L1 TLBs. A walk in flight when an invalidate arrives is
        completed and its result is not installed.
 
+MMU-17a H adds two more. HFENCE.VVMA invalidates VS-stage
+        translations for the current VMID, by VA and by ASID.
+        HFENCE.GVMA invalidates G-stage translations, by guest
+        physical address and by VMID. Both reach the L2 TLB on the
+        same port as SFENCE.VMA, MMU-18, distinguished by an
+        operation field rather than by a separate port.
+
 MMU-18 The invalidate port is a distinct port. It is written with
        the module.
 
@@ -194,7 +254,10 @@ its port is written with it.
 
 ## 9. Open
 
-MMU-U1  L2 TLB geometry. Section 2.
+MMU-U1  L2 TLB geometry. Section 2. Two-stage translation makes
+        this larger than it looked: entries are tagged by VMID as
+        well as ASID, and G-stage and VS-stage entries may share
+        the array or be split.
 MMU-U2  Outstanding walk count. Section 3.
 MMU-U3  Atomic form, and the l2 third-master change. Section 4.
 MMU-U4  Smepmp requirement in RVA23S64. Section 5.
@@ -213,4 +276,3 @@ IL-*      The client boundary is `itlb_l2tlb_interfaces.md`.
           Written to be instantiated twice; the DTLB is the
           second client.
 TD#118    Bounds MMU-U2.
-

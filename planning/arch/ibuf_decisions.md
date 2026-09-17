@@ -36,7 +36,8 @@ IBUF-1  A FIFO. In order in, in order out. No reordering, no
 IBUF-2  Entries are uniform. Each holds what IFU-2 delivers: the
         expanded 32-bit instruction, its start PC, its position
         within the fetch block, its predecode result, its FTQ
-        index, and its fault cause.
+        index, its fault cause, its faulting virtual address, and
+        its faulting guest physical address.
 
 The start PC is stored per entry rather than derived. Expansion
 breaks the correspondence between position and address, because a
@@ -158,4 +159,3 @@ ITLB-11   The fault cause and VA carried in IBUF-2 originate
           here.
 IB-*      The write port is `ifu_ibuf_interfaces.md`.
 TD#118    Bounds IBUF-11.
-

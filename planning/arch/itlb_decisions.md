@@ -47,6 +47,13 @@ ITLB-4  ASID tagged. Entries carry an ASID field and a global bit
         taken from the PTE G bit. A global entry matches
         regardless of ASID.
 
+ITLB-4a VMID tagged as well, and carry a V bit. H is mandatory in
+        RVA23 through Sha, so an entry is either a `V=0`
+        single-stage translation or a `V=1` two-stage one, and a
+        `V=1` entry belongs to one guest. A hit requires the V bit
+        to match, and for `V=1` the VMID to match. The global bit
+        applies within a VMID, not across guests.
+
 ITLB-5  Hit latency is one cycle. The PMP and PMA check is not in
         this path. See ITLB-12.
 
@@ -63,7 +70,8 @@ separate 8-entry array for large pages, so it is not evidence that
 
 ITLB-6  Replacement is not-most-recently-used over the 64 entries.
 
-ITLB-7  ASID width is 16 bits, the Sv39 maximum.
+ITLB-7  ASID width is 16 bits, the Sv39 maximum. VMID width is 14
+        bits, the Sv39x4 maximum.
 
 Neither of these was in the L1I-U2 recommendation. Both are
 required to build the array and are recorded here rather than left
@@ -111,10 +119,11 @@ with the cause on the way into `predecode_pkt_t`.
 `itlb_ifu_interfaces.md` IT-5. The pair still reaches the backend
 as Sstvala requires; it is assembled one step later.
 
-The fault causes reaching the IFU are instruction page fault, cause
-12, and instruction access fault, cause 1. A page fault comes from
-the translation. An access fault comes from the PMP or PMA check in
-`mmu_decisions.md`. They are separate causes and the IFU cannot
+Three fault causes reach the IFU: instruction access fault, cause 1,
+from the PMP or PMA check in `mmu_decisions.md`; instruction page
+fault, cause 12, from a single-stage or VS-stage translation; and
+instruction guest-page fault, cause 20, from the G-stage. The third
+exists because H is mandatory in RVA23 through Sha. The IFU cannot
 collapse them.
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
@@ -159,7 +168,13 @@ attributes out with the translation so the gate has them.
 
 ITLB-13 SFENCE.VMA invalidates ITLB entries by VA, by ASID, by
         both, or all. Global entries are invalidated only by the
-        all form.
+        all form. It affects `V=0` entries and, when executed in
+        VS-mode, the current guest's VS-stage entries.
+
+ITLB-13a HFENCE.VVMA invalidates `V=1` VS-stage entries for the
+         current VMID, by VA and by ASID. HFENCE.GVMA invalidates
+         `V=1` entries by guest physical address and by VMID.
+         Both arrive on the ITLB-14 port with an operation field.
 
 ITLB-14 The invalidate port is a distinct port, not carried on the
         translation request path. It is written with the module.

@@ -43,6 +43,7 @@ miss path into the shared L2 TLB is not here; it is
   itlb_ifu_status [1:0]                   ITLB -> IFU
   itlb_ifu_ppn   [PPN_WIDTH-1:0]          ITLB -> IFU
   itlb_ifu_cause [CAUSE_WIDTH-1:0]        ITLB -> IFU
+  itlb_ifu_gpa   [GPA_WIDTH-1:0]          ITLB -> IFU
   itlb_ifu_pma   [PMA_WIDTH-1:0]          ITLB -> IFU
 ```
 
@@ -81,10 +82,25 @@ IT-5  The virtual address the fault applies to is not returned.
       The IFU supplied it and holds it. Returning it would give
       one fact two producers.
 
-IT-6  `itlb_ifu_cause` distinguishes an instruction page fault
-      from an instruction access fault. The first comes from the
-      translation and the second from the PMP or PMA check of
-      MMU-10 and MMU-12.
+IT-6  `itlb_ifu_cause` distinguishes three causes: instruction
+      access fault, cause 1, from the PMP or PMA check of MMU-10
+      and MMU-12; instruction page fault, cause 12, from a
+      single-stage or VS-stage translation; and instruction
+      guest-page fault, cause 20, from the G-stage. H is
+      mandatory in RVA23 through Sha, so the third is not
+      optional.
+
+IT-6a `itlb_ifu_gpa` carries the faulting GUEST PHYSICAL address
+      and is valid only when the cause is 20. Shtvala requires
+      `htval` to be written with it, and unlike the virtual
+      address of IT-5 the IFU never had it: it is produced inside
+      the walk. So it returns here and IT-5 does not apply to it.
+
+IT-6b The MODE fields the translation depends on, `satp`,
+      `vsatp`, `hgatp` and the current `V`, are not on this port.
+      The ITLB reads them from the CSR file directly, as it does
+      the ASID and VMID of ITLB-4 and ITLB-4a. The IFU presents a
+      virtual address and nothing about the translation regime.
 
 IT-5 is a departure from how ITLB-11 is worded. That rule has the
 ITLB return the fault cause and the faulting virtual address

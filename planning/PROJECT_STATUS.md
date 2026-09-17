@@ -2041,6 +2041,14 @@ The decisions this project has made:
 - OPMVX: pkt.vs1=0, GPR in scalar pkt.rs1
 - Extension enable: ext_enable_t static from misa/CSR
 - Vector memory disambiguation: opcodes 0x07/0x27
+- H IS MANDATORY, not optional. RVA23 makes Sha mandatory and
+  H is part of Sha, so pacino has two-stage translation. The
+  no-optional-extensions rule above does not remove it. Sha
+  also mandates Ssstateen, Shcounterenw, Shvstvala, Shtvala,
+  Shvstvecd, Shvsatpa and Shgatpa. Four reach the front end:
+  Shgatpa and Shvsatpa size the translation modes, Shtvala
+  requires htval to carry the faulting guest physical address,
+  and Shvstvala requires vstval to be written as stval is
 
 ### BP cluster track
 

@@ -57,20 +57,31 @@ The RVC expander is not in `dcd_decisions.md`. Its encodings are
 the compressed chapter of the specification and the project's
 decisions about it are placement and ordering, IFU-1 and IFU-4.
 
-### 4. No optional extensions
+### 4. H IS MANDATORY. Two-stage translation is in.
 
 Pacino implements the RVA23S64 mandatory set and no optional
-extension. Recorded in the PROJECT_STATUS decoder track this
-session.
+extension. H is NOT an optional extension: RVA23 makes Sha
+mandatory and H is part of Sha. Recorded in the PROJECT_STATUS
+decoder track.
 
-This settled a real question. `ftq_ifu_interfaces.md` and
-`l1i_ifu_interfaces.md` both named guest page fault as a fault
-class, which requires H and two-stage translation. Had H been in,
-`mmu_decisions.md` would have been materially incomplete: nested
-walks, a G-stage per guest physical address, `hgatp`, a VMID
-alongside the ASID of ITLB-4, and `henvcfg.ADUE` beside
-`menvcfg.ADUE`. It is not in. Both documents were corrected to two
-fault classes.
+The PA got this backwards mid-session, told Jeff H was optional,
+and removed guest page fault from the fault classes in
+`ftq_ifu_interfaces.md` and `l1i_ifu_interfaces.md`. Both edits
+were reverted and the consequence worked through properly.
+
+What two-stage translation costs, all now in the documents. The
+walk is NESTED, MMU-21: every address the VS-stage produces is a
+guest physical address needing its own G-stage walk, so a
+three-level VS-stage walk costs up to four G-stage walks. ITLB
+entries carry a VMID and a V bit, ITLB-4a. `henvcfg.ADUE` governs
+the VS-stage while `menvcfg.ADUE` governs the G-stage, MMU-7a, so
+one nested walk can have two stages under different A/D rules.
+There is a third fault cause, instruction guest-page fault at
+cause 20, MMU-16. Shtvala means the faulting GUEST PHYSICAL
+address travels back from the walk and out to the backend, IT-6a,
+IL-11a: it is the one address the IFU did not supply and therefore
+the one that returns on the translation port. HFENCE.VVMA and
+HFENCE.GVMA join SFENCE.VMA, MMU-17a.
 
 ### 5. Sixteen fills are still real at the l1i and not at the l2
 
@@ -206,7 +217,9 @@ retired rather than reused, outside references still resolve.
       fe_decisions.md, taking FE numbers. The L1I and the logic
       serving it are outside it
   19  Pacino implements no optional RVA23S64 extensions at this
-      time. Recorded in the PROJECT_STATUS decoder track
+      time. Recorded in the PROJECT_STATUS decoder track. H is
+      NOT optional: RVA23 mandates Sha and H is part of Sha, so
+      two-stage translation is in. MMU-19..23, ITLB-4a
   20  The FTB and uBTB fall-through reconstruction is BOUNDS
       CHECKED, restoring the guard an earlier revision removed.
       The full tag stops partial-tag aliasing but the low five
@@ -506,6 +519,26 @@ Every error below was caught by Jeff.
     reported to Jeff as a discrepancy between two files rather
     than recognised as the PA's own, and it is not the first
     session in which the date has been wrong.
+
+13. H WAS STATED AS OPTIONAL WHEN IT IS MANDATORY. Mid-session the
+    PA said RVA23S64 lists H among its options. RVA23 mandates Sha
+    and H is part of Sha. On that basis guest page fault was
+    removed from the fault classes of `ftq_ifu_interfaces.md` and
+    `l1i_ifu_interfaces.md`, both of which were correct before the
+    edit. Reverted, and the two-stage consequence written through
+    ten documents.
+
+    THIS ONE IS AN ADVISORY FOR THE ARCHITECT RATHER THAN A
+    PROCESS FAILURE. H was genuinely optional before RVA23 and was
+    reorganised into Sha for it, so the record shifted more than
+    once inside the span of the training data and the older state
+    is well represented in it. Profile membership is therefore a
+    class where the PA's recall is unreliable in a way that does
+    not feel unreliable, and a confident answer should be treated
+    as a prompt to check the ratified profile text rather than as
+    a result. The PA did say the first answer was unconfirmed and
+    then let it harden; the durable fix is that profile questions
+    get looked up every time, not that this instance was careless.
 
 What held:
 

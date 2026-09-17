@@ -166,8 +166,13 @@ DCD-14 The predecoder does not test the prediction. It reports
 ## 9. Faults
 
 DCD-15 A faulting position is reported with `fault_val` and
-       `fault_pos` in the block view, and with the cause and the
-       faulting virtual address in the bundle view.
+       `fault_pos` in the block view, and with the cause, the
+       faulting virtual address, and on a guest page fault the
+       faulting guest physical address, in the bundle view.
+
+The cause field is three-valued, not two: instruction access fault,
+instruction page fault and instruction guest-page fault. H is
+mandatory in RVA23 through Sha. `mmu_decisions.md` MMU-16.
 
 The two carry different things on purpose. The FTQ needs only to
 know the block ended early. The architectural exception travels
@@ -181,8 +186,8 @@ under IFU-20.
 DCD-16 `predecode_pkt_t` carries, per slot: valid, the expanded
        32-bit instruction, the start PC, the position within the
        fetch block, the FTQ index, the fault cause, the faulting
-       virtual address, and the control flow classification of
-       DCD-7.
+       virtual address, the faulting guest physical address, and
+       the control flow classification of DCD-7.
 
 The start PC and the position are both present and are not
 redundant. Expansion breaks the correspondence between them,
@@ -232,5 +237,4 @@ IFU-18    Direction is proven only for an unconditional, which
 IBUF-2    Consumes the bundle view of DCD-16.
 TD-IFU-1  Closed by DCD-16.
 TD-IFU-5  Closed by this document.
-
 

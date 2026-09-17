@@ -74,9 +74,18 @@ two, because a compressed instruction advances the PC by two and
 occupies a full slot.
 
 The fault cause is per slot, not per fetch block. `itlb_decisions.md`
-ITLB-11 returns an instruction page fault or an instruction access
-fault together with the faulting virtual address, and the exception
-has to reach the backend attached to the instruction it belongs to.
+ITLB-11 returns one of three causes and the exception has to reach
+the backend attached to the instruction it belongs to.
+
+IFU-2a A slot whose cause is an instruction guest-page fault, cause
+       20, also carries the faulting GUEST PHYSICAL address. It
+       comes back on the translation port, IT-6a, because the IFU
+       never had it. Shtvala requires `htval` to be written with
+       it. The virtual address of IFU-2 is still carried for
+       `stval` and `vstval` under Shvstvala.
+
+H is mandatory in RVA23 through Sha, so the guest case is not
+optional and the GPA field is not conditional on a build option.
 
 TD-IFU-1  CLOSED by `dcd_decisions.md` DCD-16, which redefines
           `predecode_pkt_t` with all four fields. The edit to
@@ -246,8 +255,9 @@ IFU-24  The translation pipeline is driven by its own pointer
         result.
 
 IFU-25  The translation queue holds, per block: the physical
-        address, the PMA attributes of IT-10, and the fault
-        cause and status of IT-4. F0 reads the head.
+        address, the PMA attributes of IT-10, the fault cause and
+        status of IT-4, and the guest physical address of IT-6a
+        when the cause is 20. F0 reads the head.
 
 IFU-26  A block that translates to a non-idempotent region is
         marked in the queue and is not issued to the L1I. It
