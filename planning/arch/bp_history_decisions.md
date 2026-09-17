@@ -233,7 +233,66 @@ noise for predicting inside it. That argues for a separate handler
 history, which nothing in this design proposes, rather than for
 zeroing. Session-069.
 
-### 3.5  RTL fix: if / else-if for the slot cases
+### 3.5  Imprecise GHR across a redirect (DECIDED)
+
+DECISION: the restored history is IMPRECISE and is accepted as
+such. No mechanism writes a corrected branch direction back into
+the buffer.
+
+WHAT IS IMPRECISE. The checkpoint stores the POST-advance pointer
+(section 7), so restoring the entry named by a redirect
+(`ftq_backend_interfaces.md` D1) puts the pointer past both of that
+bundle's bits. Those bits hold PREDICTED directions. Two are wrong
+after a mispredict:
+
+```
+  the mispredicted branch's own bit   holds the predicted
+                                      direction, not the resolved
+                                      one
+  the slot 1 bit                      present for a branch that is
+                                      off the corrected path, when
+                                      slot 0 was the mispredict and
+                                      resolves taken
+```
+
+They are wrong until they shift out, which is H predictions, 64 at
+the longest fold. The cost is ACCURACY ONLY. The GHR is a predictor
+input; no architectural state depends on it.
+
+WHY IT CANNOT BE FIXED WITHOUT A PORT CHANGE. Rollback supplies an
+index and nothing else (section 2.2, section 7: no pointer value is
+driven in), so there is no input a corrected direction could arrive
+on. And the checkpoint carries a pointer only, not num_branches
+(section 7), so there is no way to address the bundle's first bit
+rather than past its last.
+
+THE ALTERNATIVE NOT TAKEN, recorded for future analysis. Rollback
+carries the corrected direction and a slot indicator alongside the
+index. The module restores to the bundle's FIRST bit rather than
+past its last, writes the corrected direction, and advances by one,
+leaving the off-path slot 1 bit unwritten. That requires the slot
+count section 7 declined to store, or an equivalent way to locate
+the bundle's first bit, and it changes the rollback port.
+
+Section 7 already rejected a pre-advance checkpoint, but on
+different grounds: locating the newest bit for the FOLD RECOMPUTE
+ANCHOR, not correction. That objection does not settle this one and
+should not be cited as if it did.
+
+WHY THIS IS NOT TECHNICAL DEBT. It is a choice between two valid
+designs, not a known-wrong thing carried until it can be fixed.
+What it lacks is a number: the accuracy cost has never been
+measured, and the decision rests on reasoning rather than
+evidence. That is the same shape as G15, and it is carried in
+section 9 the same way.
+
+Section 3.4 needs reading with this. Its claim that a redirect
+targets a bundle boundary and not an intra-bundle slot is what
+makes the imprecision invisible: a slot 0 mispredict IS an
+intra-bundle event, and bundle granularity is why it cannot be
+expressed. Session-069.
+
+### 3.6  RTL fix: if / else-if for the slot cases
 
 The RTL applies num_branches>=1 and num_branches==2 as two
 separate if blocks that both assign the fold registers. On
@@ -559,6 +618,13 @@ not a hashed fold) have no folds.
        performance measurement (stale-fold accuracy cost in the
        rollback cycle).
 
+  G24: PERFORMANCE MEASUREMENT, not a correctness gate and not
+       technical debt (section 3.5, session-069). The accuracy
+       cost of the imprecise GHR across a redirect: two wrong bits
+       surviving H predictions after every mispredict. Measure
+       against the alternative in 3.5, which corrects the bit at
+       the cost of a rollback port change. Same standing as G15.
+
   RTL + interface change (module-owned pointer, section 2). This
   is NOT a doc-only reconciliation -- it changes bp_history.sv and
   the interface port list. The as-built RTL is caller-owned; the
@@ -580,7 +646,7 @@ not a hashed fold) have no folds.
     - DRAFT obligation "must not assert rollback + pred together"
       relaxed to "rollback wins" (section 4)
 
-  RTL fix (section 3.5): convert the slot cases to if / else-if.
+  RTL fix (section 3.6): convert the slot cases to if / else-if.
   Directed, apply at TD #74. No behavior change.
 
   Downstream tasks (not doc edits, sequenced after this doc):
@@ -700,4 +766,5 @@ not a hashed fold) have no folds.
               restore case exists.
               Open: the module-owned RTL/port edit and
               TD #74 / #69 / #70 sequencing (section 9).
+
 

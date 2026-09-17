@@ -138,9 +138,31 @@ latency is unknown until TD#118 closes.
 
 ## 6. Redirect
 
-IBUF-8  A redirect clears the buffer entirely. Nothing in it is
-        on the corrected path, because everything it holds was
-        fetched after the redirecting instruction.
+IBUF-8  A BACKEND redirect clears the buffer entirely. Nothing in
+        it is on the corrected path, because the redirecting
+        instruction has executed, is therefore past decode and out
+        of the buffer, and everything remaining is younger.
+
+IBUF-8a A predecode redirect does NOT clear the buffer. The
+        prediction check and the ibuf write are both in F3
+        (`ifu_decisions.md` IFU-12), and the truncation at
+        `mis_pos` is in the enable mask (`ifu_ibuf_interfaces.md`
+        IB-2), so the instructions after the mispredict never
+        enter the buffer. What the buffer holds is blocks older
+        than the one being corrected, all on the corrected path.
+
+IBUF-8b A p2 or p3 redirect does NOT clear the buffer. It fires
+        one or two cycles after p1, and FQ-1 gives
+        commit_ptr <= fetch_ptr <= xlate_ptr <= alloc_ptr with the
+        named entry at or near alloc_ptr. Nothing at or after it
+        has been fetched, so nothing at or after it can be in the
+        buffer.
+
+AN EARLIER REVISION OF IBUF-8 had every redirect clear the buffer,
+justified by everything it holds having been fetched after the
+redirecting instruction. That holds only for the backend case. For
+a predecode redirect it discards the part of the block before
+`mis_pos` that the IFU had just correctly enqueued. Session-069.
 
 ---
 
@@ -155,6 +177,8 @@ IBUF-U1  Whether the buffer is banked. Section 4.
 IFU-2     Sets the entry contents of IBUF-2.
 IFU-5     Gives the compaction to IBUF-3.
 IFU-23    Uncached fetch, IBUF-5.
+IB-12     The clear source, backend redirect alone.
+IB-13     The flush index is K, not K+1.
 ITLB-11   The fault cause and VA carried in IBUF-2 originate
           here.
 IB-*      The write port is `ifu_ibuf_interfaces.md`.

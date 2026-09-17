@@ -100,6 +100,13 @@ fallthrough.
 On miss the BP cluster proceeds with fetch at the fallthrough. The
 uBTB asserts no redirect and no stall.
 
+THE MISS FALLTHROUGH IS NOT FROM THIS MODULE. `blk_p1.pft_addr` is
+driven 0 on a miss like every other field, so the cluster computes
+the successor itself: lookup PC + FTB_BLOCK_BYTES, 32 bytes
+(`bp_cluster.md`, Block width). The base is the lookup PC, not the
+32-byte-aligned address containing it, so a miss does not resync
+the stream to alignment.
+
 ### pred_p1[s] field semantics
 
   target   : predicted target for this slot, reconstructed to full
@@ -250,7 +257,9 @@ readback.
 ## Miss Signaling Contract
 
 The uBTB has no miss output port. Miss is blk_p1.hit=0. The BP
-cluster detects the miss and continues fetch at the fallthrough.
+cluster detects the miss and continues fetch at the fallthrough it
+computes itself, lookup PC + FTB_BLOCK_BYTES; see the Semantics
+section above and `bp_cluster.md`.
 
 The uBTB does not stall, does not generate a redirect, and does not
 communicate miss reason or miss type externally.
@@ -276,6 +285,10 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-09-15  session-069. The miss fallthrough is stated: the
+              cluster computes lookup PC + FTB_BLOCK_BYTES, this
+              module drives 0. Previously the fallthrough was
+              named twice and defined nowhere.
   2026-09-15  session-069. pft_addr reconstruction is bounds
               checked, matching ftb_decisions.md 4.5 FTB-G1. The
               two meanings of "carry", per-slot target-outside-block
@@ -290,5 +303,4 @@ communicate miss reason or miss type externally.
               added for the entry-scoped hit and fallthrough.
               UI1 and UI4 closed.
 ```
-
 

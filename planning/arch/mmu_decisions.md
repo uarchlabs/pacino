@@ -109,6 +109,19 @@ MMU-23 Shtvala: `htval` is written with the faulting guest
        physical address on a guest page fault. The MMU produces
        that address; the trap path writes it.
 
+MMU-24 The MMU reads the translation regime from the CSR file
+       directly: `satp.PPN` for a single-stage root, `vsatp.PPN`
+       and `hgatp.PPN` for the two stages, the MODE fields, and
+       the ADUE bits of MMU-7 and MMU-7a.
+
+MMU-25 It does NOT hold a current ASID or VMID. Those are
+       identity, they belong to the request, and the client sends
+       them. `itlb_l2tlb_interfaces.md` IL-3 and IL-3c.
+
+The line between MMU-24 and MMU-25 is that identity is a property
+of one request and the regime is not. A root pointer is not
+something one request has and another does not.
+
 ---
 
 ## 4. A and D bits

@@ -140,15 +140,56 @@ unchanged and applies to the L1I only.
                            duplicate `fetch` row removed
   bp_history_decisions.md  3.4 restore is no longer mispredict-
                            only. Corrected at three sites: 3.4,
-                           the HI5 note, and the history entry
+                           the HI5 note, and the history entry.
+                           3.5 ADDED: the GHR is imprecise across
+                           a redirect and that is DECIDED, not
+                           owed. Two wrong bits survive H
+                           predictions after a mispredict. The
+                           alternative, a rollback port carrying
+                           the corrected direction, is recorded
+                           for future analysis. Cost is G24, a
+                           performance measurement in the G15
+                           sense, NOT a TD number. Old 3.5
+                           renumbered 3.6
   ftq_backend_interfaces.md  D1 unchanged and correct; a note
                            records that bp_history was the side
                            that moved
+  itlb_l2tlb_interfaces.md IL-3 split into identity and regime.
+                           An earlier revision said the L2 TLB
+                           reads no CSR at all, contradicting
+                           MMU-7 and MMU-7a and leaving the walker
+                           with no root. New IL-3c
   ftb_decisions.md         4.5 fall-through guard RESTORED,
                            FTB-G1 and FTB-G2. 4.1 tag claim
                            qualified. BP-099 staleness corrected
                            at 4.2, 4.4, 5.5, section 8, FTB-1
-  ubtb_interfaces.md       pft_addr bounds checked to match
+  ras_decisions.md         section 6 reworked. 6.1 rewritten to
+                           one 32-byte block with pos-located
+                           slots; the old fixed split at
+                           pred_pc+32 collapsed fetch and
+                           prediction width. 6.2, 6.3, 6.4
+                           superseded: FE-11 makes all five
+                           cross-slot combinations unreachable,
+                           so the bypass and two-push recursion
+                           are dead logic if built. RAS-DS1 adds
+                           the real case, DCD-11's pop-then-push
+  fe_decisions.md FE-11    premise narrowed to one RAS-operating
+                           INSTRUCTION per block; the snapshot
+                           conclusion is unchanged
+  bp_cluster.md            uBTB-miss successor corrected from
+                           PC + fetch_width (64) to
+                           PC + FTB_BLOCK_BYTES (32). The two
+                           widths are independent per
+                           ftb_decisions.md 2.3; the old text
+                           skipped a whole prediction block. New
+                           Block width section
+  ftq_ifu_interfaces.md 7  W3's flush index stated as K, not K+1,
+                           with why it differs by redirect kind.
+                           Section 5 records that the flush does
+                           NOT clear the ibuf
+  ubtb_interfaces.md       the miss fallthrough is now defined,
+                           not just named; pft_addr bounds checked
+                           to match
                            FTB-G1. The two meanings of `carry`
                            separated, G18/UI2
   ftq_decisions.md         5.1 is FOUR pointers: xlate_ptr added
@@ -353,7 +394,7 @@ Two edits to built files come first:
 
 ### The open items will be answered silently if left
 
-Twelve are unresolved and none stops a module being written. What
+Eleven are unresolved and none stops a module being written. What
 they do is leave a choice the IA will make on its own, and the
 number then exists in RTL and in no document.
 
@@ -373,7 +414,7 @@ number then exists in RTL and in no document.
   DCD-U1   where vtype_hazard is computed. Not the predecoder
   DCD-U2   the order of pop and push in the RAS case
 
-  IB-U1    which source clears the ibuf, with the deferred flush
+
 ```
 
 TD-DCD-2 is a read of the built RAS: does it accept `is_call` and

@@ -223,6 +223,13 @@ Drop every in-flight fetch whose FTQ index is at or after
 `ftq_ifu_flush_idx`, and discard whatever the IFU holds for those
 entries. The FTQ resumes requesting from the flush index.
 
+IT DOES NOT CLEAR THE IBUF. Only a backend redirect does
+(`ibuf_decisions.md` IBUF-8, `ifu_ibuf_interfaces.md` IB-12). A
+predecode redirect is truncated by the IB-2 mask in the same stage
+as the ibuf write, so nothing wrong arrives; a p2 or p3 redirect
+fires before the named entry is fetched. Clearing on either would
+discard valid work.
+
 THIS FLUSHES BOTH IFU PIPELINES. The translation pipeline of 4.1 and
 the fetch pipeline of section 4 are flushed by this one group, and
 the translation queue between them (IFU-25) is emptied of every entry
@@ -316,10 +323,9 @@ branch's direction is NOT a predecode mispredict: predecode cannot
 know it, and TAGE and SC already own the direction.
 
 `ifu_ftq_fault_val` and `ifu_ftq_fault_pos` report that fetch
-terminated on an instruction access fault or a page fault at that
-slot. Guest page fault is not a class here: pacino implements the
-RVA23S64 mandatory set and no optional extension, so there is no H
-and no second translation stage. It returns if H is ever added.
+terminated on an instruction access fault, page fault or guest page
+fault at that slot. Guest page fault is a class here because H is
+MANDATORY in RVA23 via Sha, so pacino has two-stage translation.
 
 The FAULT CODE IS NOT CARRIED HERE. The
 architectural exception travels with the instruction stream to the
@@ -396,6 +402,15 @@ On `ifu_ftq_mis_val`, the FTQ:
   W3  re-derives the block successor across the slots
       (fe_decisions.md 2.4) and drives ftq_ifu_flush_val with this
       entry's index, so fetch restarts from the corrected successor.
+      THE INDEX IS K, THE ENTRY ITSELF, NOT K+1. W1 and W2 correct
+      the entry rather than discarding it, and section 5 then drops
+      in-flight fetches at or after K. For a predecode redirect K
+      is already fetched, so including it costs nothing. For a p2
+      or p3 redirect K is not yet fetched and including it is
+      required: the correction changes taken_val and taken_pos,
+      which is what the IFU truncates the bundle on, so a fetch
+      issued against the old prediction would truncate in the wrong
+      place. Session-069.
   W4  restores the history pointers and the RAS snapshot from this
       entry, the same restore a p2 or p3 redirect performs
       (ftq_decisions.md 3.2).

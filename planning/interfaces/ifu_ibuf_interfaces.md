@@ -146,20 +146,41 @@ IB-11 The redirect does not cross this boundary. The ibuf clears
       forwarding it through the IFU would delay the ibuf clear by
       the IFU's own handling.
 
-IB-U1 Which source clears the ibuf, and whether it is the same
-      event that flushes the IFU. The FTQ drives
-      `ftq_ifu_flush_val` to the IFU. XiangShan clears its
-      IBuffer from the backend redirect instead. If the two
-      sources differ, the IFU and the ibuf can disagree for some
-      number of cycles about what has been discarded. Unresolved,
-      and it belongs with the flush work that is deferred until
-      the data path exists.
+IB-12 The ibuf clear source is the BACKEND REDIRECT ALONE. It is
+      not the FTQ flush group of `ftq_ifu_interfaces.md` 5.
+
+That group carries four sources. Two of them cannot have put
+anything wrong in the ibuf, so clearing on them destroys valid
+work:
+
+```
+  predecode redirect   truncated by the IB-2 mask in the same
+                       stage as the write, so the bad instructions
+                       never arrive. IBUF-8a
+  p2 / p3 redirect     fires before the named entry is fetched,
+                       FQ-1. IBUF-8b
+  backend redirect     the only one that can. IBUF-8
+```
+
+The IFU and the ibuf therefore take different events, deliberately
+rather than by disagreement: the IFU flushes on all four because it
+has in-flight fetches for entries at or after the named one, and
+the ibuf holds only what has already been enqueued.
+
+IB-13 The flush index names entry K, not K+1.
+      `ftq_ifu_interfaces.md` 7 W3 drives the flush with the
+      entry's own index. For a predecode redirect K is already
+      fetched so including it costs nothing; for a p2 or p3
+      redirect K is not yet fetched and including it is required,
+      because the correction changes `taken_pos` and a fetch
+      issued against the old prediction would truncate in the
+      wrong place.
 
 ---
 
 ## 7. Open
 
-IB-U1  The ibuf clear source. Section 6.
+None. IB-U1 closed session-069 as IB-12.
 
 ---
 
@@ -173,5 +194,6 @@ DCD-12    Start and range, folded into IB-2.
 DCD-16    Defines the payload.
 IBUF-4    The ready rule, IB-6.
 IBUF-5    Uncached as an ordinary write, IB-10.
-IBUF-8    The clear, IB-11.
+IBUF-8    The backend clear. IBUF-8a and IBUF-8b are the two
+          redirects that do not clear.
 TD-DCD-1  Keeps `vtype_hazard` off this port.

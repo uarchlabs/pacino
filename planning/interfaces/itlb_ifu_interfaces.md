@@ -96,11 +96,19 @@ IT-6a `itlb_ifu_gpa` carries the faulting GUEST PHYSICAL address
       address of IT-5 the IFU never had it: it is produced inside
       the walk. So it returns here and IT-5 does not apply to it.
 
-IT-6b The MODE fields the translation depends on, `satp`,
-      `vsatp`, `hgatp` and the current `V`, are not on this port.
-      The ITLB reads them from the CSR file directly, as it does
-      the ASID and VMID of ITLB-4 and ITLB-4a. The IFU presents a
-      virtual address and nothing about the translation regime.
+IT-6b Nothing about the translation regime is on this port. The
+      IFU presents a virtual address and no more.
+
+      The ITLB reads what it needs directly: the V bit, the ASID
+      and the VMID for the tag match of ITLB-4 and ITLB-4a, and
+      the MODE fields to know whether translation is enabled or
+      Bare.
+
+      IT DOES NOT READ THE ROOT POINTERS. The ITLB does not walk,
+      so `satp.PPN`, `vsatp.PPN` and `hgatp.PPN` are no use to it.
+      They belong to the walker inside the L2 TLB,
+      `itlb_l2tlb_interfaces.md` IL-3c. An earlier revision of
+      this rule had the ITLB read all three.
 
 IT-5 is a departure from how ITLB-11 is worded. That rule has the
 ITLB return the fault cause and the faulting virtual address

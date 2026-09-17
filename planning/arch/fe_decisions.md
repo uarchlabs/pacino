@@ -480,11 +480,13 @@ the call or return that updated the RAS. On a misprediction or flush
 the RAS is restored from the snapshot found in the entry being corrected.
 
 One snapshot per FTQ entry is sufficient under dual slot. A RAS
-operation is a call or a return, both taken branches, so a RAS
-operation in slot 0 ends the block before slot 1 is reached. At most
-one RAS operation therefore occurs per block, and one snapshot covers
-it. The cluster enforces this by gating p2 RAS operations on
-reachability across slots (FE-11).
+operation is a call or a return, both taken branches, so one in slot
+0 ends the block before slot 1 is reached. At most one
+RAS-operating INSTRUCTION therefore occurs per block, and one
+snapshot covers it -- including the DCD-11 JALR that pops and
+then pushes, since both happen at one position. The cluster enforces
+this by gating p2 RAS operations on reachability across slots
+(FE-11).
 
 RAS flush behavior is CLOSED: a flush restores the RAS by the same
 pointer restore as any redirect (ras_decisions.md 4.4). There is no
@@ -576,10 +578,19 @@ Proposed numbering. Stated here for the first time; not carried from
          field is carried. The index is ORDERED as of IC-FTB-16:
          slot 0 is the block's first branch in program order.
 
-  FE-11  At most one RAS operation occurs per block. A RAS operation
-         is a taken branch, so a RAS operation in slot 0 ends the
-         block before slot 1. One RAS snapshot per FTQ entry is
-         therefore sufficient.
+  FE-11  At most one RAS-OPERATING INSTRUCTION occurs per block. A
+         RAS operation is a taken branch, so one in slot 0 ends the
+         block before slot 1 is reached. One RAS snapshot per FTQ
+         entry is therefore sufficient.
+
+         THAT INSTRUCTION MAY PERFORM TWO OPERATIONS. A JALR whose
+         rd and rs1 are both link registers and are not equal is a
+         pop followed by a push (dcd_decisions.md DCD-11). The
+         snapshot conclusion is unaffected: two operations at one
+         position need no second recovery point. An earlier
+         revision said at most one RAS OPERATION per block, which
+         excluded that case. Corrected session-069;
+         ras_decisions.md 6.2 RAS-DS1.
 
   FE-12  No predictor declares a redirect port. Redirects exist only
          as cluster-derived, stage-named groups (section 3.1).

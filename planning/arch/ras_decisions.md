@@ -392,21 +392,64 @@ source on the commit interface can be decided.
 
 DECIDED session-050.
 
-### 6.1  Bundle split
+### 6.1  The two slots (REWRITTEN session-069)
 
-Fixed boundary split. Slot 0 covers pred_pc to pred_pc+31.
-Slot 1 covers pred_pc+32 to pred_pc+63. Slot 1 PC is always
-pred_pc+32. Static, not data-dependent on slot 0 prediction.
+Both slots are branch fields of ONE 32-byte prediction block.
+Slot 0 is the block's first branch in program order and slot 1
+the second, each located by its own `pos` inside the block's 16
+two-byte positions (`fe_decisions.md` FE-10,
+`ftq_entry_formats.md`, `ubtb_interfaces.md`). Neither slot has
+a fixed PC.
 
-Both slots are evaluated in the same cycle, but not
-independently. The evaluation is ordered: slot 0 before slot
-1, with slot 1 seeing the pointer state left by slot 0. This
-is IC-RAS-03 slot priority, and it is what makes the section
-6.3 bypass and the section 6.4 two-push recursion cases well
-defined. The bundle SPLIT is static and not data-dependent;
-the RAS EVALUATION over the two slots is serial.
+THE PREVIOUS TEXT DESCRIBED A SUPERSEDED MODEL and is kept here
+because the RTL may still implement it. It had slot 0 cover
+pred_pc to pred_pc+31 and slot 1 cover pred_pc+32 to pred_pc+63,
+with slot 1's PC always pred_pc+32:
 
-### 6.2  Same-cycle combinations
+```
+  Fixed boundary split. Slot 0 covers pred_pc to pred_pc+31.
+  Slot 1 covers pred_pc+32 to pred_pc+63. Slot 1 PC is always
+  pred_pc+32. Static, not data-dependent on slot 0 prediction.
+```
+
+That is two 32-byte blocks inside a 64-byte region, which is
+FETCH_BLOCK_BYTES standing in for FTB_BLOCK_BYTES. The two are
+independent and must not be collapsed (`ftb_decisions.md` 2.3).
+The text dates from session-050 and predates the single-lookup
+32-byte block model of session-063.
+
+Evaluation order is unchanged and still needed: slot 0 before
+slot 1, slot 1 seeing the pointer state slot 0 left. That is
+IC-RAS-03 slot priority.
+
+### 6.2  Same-cycle combinations (SUPERSEDED session-069)
+
+AT MOST ONE SLOT CAN CARRY A RAS OPERATION. `fe_decisions.md`
+FE-11: a RAS operation is a call or a return, both taken
+branches, so a RAS operation in slot 0 ends the block before
+slot 1 is reached. With 6.1 corrected, both slots are in the
+same block, so this applies to every combination below.
+
+NONE OF THE FIVE COMBINATIONS CAN OCCUR. They are retained, not
+deleted, because 6.3 and 6.4 describe logic that may exist in
+the RTL and would now be dead. Confirming that is an RTL task,
+not a documentation one.
+
+THE ONE REAL TWO-OPERATION CASE IS NOT AMONG THEM. A JALR whose
+`rd` and `rs1` are both link registers and are not equal is a
+POP FOLLOWED BY A PUSH: one instruction, one slot, one position,
+two RAS operations (`dcd_decisions.md` DCD-11, from the
+specification's return-address-stack hints). FE-11's premise
+excludes it wrongly; its conclusion, one snapshot per FTQ entry,
+survives, because a pop-then-push at a single position needs no
+second recovery point.
+
+  RAS-DS1  The RAS accepts is_call and is_ret both set on one
+           instruction and performs the pop first, then the
+           push. Ordering is DCD-U2 and TD-DCD-2 verifies the
+           built RAS against it.
+
+The superseded five follow.
 
 The five combinations the RAS must handle in a single cycle:
 
@@ -437,7 +480,10 @@ The five combinations the RAS must handle in a single cycle:
   neither slot is call or return:
     No RAS action.
 
-### 6.3  Same-cycle bypass
+### 6.3  Same-cycle bypass (SUPERSEDED session-069)
+
+The case this serves, slot0=call with slot1=return, cannot occur
+under 6.2. If the bypass exists in the RTL it is dead logic.
 
 The slot0=call, slot1=return case requires a bypass path.
 The return address pushed by slot0 is forwarded directly to
@@ -451,6 +497,12 @@ the condition gating it is combinationally determined from the
 slot0 and slot1 branch type inputs.
 
 ### 6.4  Recursion counter with two simultaneous pushes
+###       (SUPERSEDED session-069)
+
+Two simultaneous pushes require calls in both slots, which
+cannot occur under 6.2. If this path exists in the RTL it is
+dead logic. The single-push recursion counter of section 5 is
+unaffected.
 
 If slot0 and slot1 both push the same return address:
   - If that address matches the current TOS ret_addr:
@@ -611,3 +663,17 @@ Commit stack pointer width:
               pkg.sv). Section 11 corrected to reflect that
               bp_cluster.md duplication is intentional.
 
+```
+  2026-09-15  session-069. Section 6 reworked. 6.1 REWRITTEN: both
+              slots are branch fields of one 32-byte block, each
+              located by pos; the old fixed split at pred_pc+32
+              was FETCH_BLOCK_BYTES standing in for
+              FTB_BLOCK_BYTES and predates the session-063
+              single-lookup model. 6.2, 6.3 and 6.4 SUPERSEDED:
+              with 6.1 corrected, FE-11 makes all five cross-slot
+              combinations unreachable, so the bypass and the
+              two-push recursion path are dead logic if built.
+              RAS-DS1 added: the one real two-operation case is
+              DCD-11's pop-then-push within a single JALR.
+              Superseded text retained, not deleted.
+```

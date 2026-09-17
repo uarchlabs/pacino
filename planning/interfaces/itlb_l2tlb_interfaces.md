@@ -58,9 +58,32 @@ I side and leaves headroom. The tracker depth is a separate
 decision, ITLB-U1, and can change without touching this port.
 Sizing the tag to the tracker would couple them.
 
-IL-3  The ASID travels with the request. The L2 TLB does not
-      read a CSR and does not hold a current ASID. The client
-      holds it.
+IL-3  The translation context IDENTITY travels with the request:
+      the V bit, the ASID and the VMID. The L2 TLB does not hold a
+      current ASID or VMID; the client already holds both for its
+      own tag match, so sending them keeps one producer.
+
+IL-3c THE MMU DOES READ CSRs. IL-3 is about identity, not about
+      the whole CSR file. What the WALK needs is regime state and
+      is read directly, not carried per request:
+
+```
+  satp.PPN                 single-stage root
+  vsatp.PPN, hgatp.PPN     VS-stage and G-stage roots, MMU-19
+  the MODE fields          whether translation is on, and Bare
+  menvcfg.ADUE             Svade against Svadu, MMU-7
+  henvcfg.ADUE             the same for the VS-stage, MMU-7a
+```
+
+The division is that identity is a property of the REQUEST and the
+regime is not. A root pointer is not something one request has and
+another does not, and putting it on the port would make every
+client a producer of it.
+
+AN EARLIER REVISION OF IL-3 said the L2 TLB does not read a CSR,
+full stop. That contradicted MMU-7 and MMU-7a, which already have
+the MMU read the ADUE bits, and it left the walker with no source
+for the root it walks from. Session-069.
 
 IL-3a The VMID and the V bit travel with it for the same reason.
       H is mandatory in RVA23 through Sha, so a request is either

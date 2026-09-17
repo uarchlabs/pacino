@@ -29,14 +29,44 @@ Override chain (conditional branch direction and target):
 
 ---
 
+## Block width
+
+The successor on a uBTB miss is PC + FTB_BLOCK_BYTES, 32 bytes.
+
+FTB_BLOCK_BYTES is 32, the PREDICTION block. FETCH_BLOCK_BYTES is
+64, the FETCH block, a global parameter. `ftb_decisions.md` 2.3
+rules that the two are independent and must not be collapsed:
+treating the 64-byte fetch as a 64-byte prediction reintroduces a
+two-block-per-cycle structure and would demand four
+conditional-branch predictions per cycle against a two-prediction
+budget.
+
+AN EARLIER REVISION OF THIS DOCUMENT wrote the miss successor as
+`PC + fetch_width` at both sites below. `fetch_width` here is
+FETCH_BLOCK_BYTES, 64, so the successor skipped a whole prediction
+block: the 32 bytes between PC+32 and PC+64 went unpredicted and a
+branch in them was missed until the s2 redirect corrected it.
+Bounded to one cycle, but a wrong successor is written into the FTQ
+entry in the meantime. Corrected session-069.
+
+The base is the lookup PC, not the aligned address containing it.
+Prediction blocks are unaligned (`ftq_decisions.md` 4.7,
+`ifu_decisions.md` IFU-6), and a miss does not resync the stream to
+a 32-byte boundary.
+
+---
+
 ## Predictor Hierarchy and Roles
 
 ### uBTB (micro Branch Target Buffer)
 - Size:    256 entries, 4-way associative
 - Stage:   s1 output
 - Role:    First prediction. Provides next-PC to start speculative fetch.
-           On miss: no prediction generated. Fetch proceeds sequentially
-           (PC + fetch_width) until s2 redirect fires.
+           On miss: no prediction generated. Fetch proceeds
+           sequentially (PC + FTB_BLOCK_BYTES, 32 bytes) until the
+           s2 redirect fires. The base is the LOOKUP PC, not the
+           32-byte-aligned address containing it, so a miss does
+           not resync the stream to alignment.
            uBTB does not generate a redirect signal. It supplies or
            withholds an initial prediction only.
 
@@ -197,7 +227,7 @@ See planning/arch/ras_decisions.md for full decision rationale.
                   trusted (override control gates selection).
                   Fetch begins speculatively on s1 result.
                   On uBTB miss and loop predictor not trusted: fetch
-                  proceeds PC+fetch_width.
+                  proceeds PC + FTB_BLOCK_BYTES.
                   TAGE: SRAM read completes, tag match, slot reorder.
                   SC: saturating counter read.
                   FTB: result registered (arrives too late for s1).
@@ -460,6 +490,12 @@ Raw observations to be captured in docs/observations/ during BP work.
               the disjoint p2/p3 write groups recorded. Widths
               stated: slot 55b, entry 182b at NUM_PRED_SLOTS = 2.
 
+  2026-09-15  session-069. The uBTB-miss successor is PC +
+              FTB_BLOCK_BYTES (32), not PC + fetch_width (64).
+              fetch_width is FETCH_BLOCK_BYTES and collapsing the
+              two is banned by ftb_decisions.md 2.3. Corrected at
+              both sites; new Block width section states the base
+              is the lookup PC, not the aligned address.
   2026-08-19  bp_ftq_entry_t gains pft_addr, the block fall-through,
               VA_WIDTH wide and block scalar. Successor selection is
               re-evaluated on every redirect (fe_decisions.md 2.4)
