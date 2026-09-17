@@ -414,14 +414,51 @@ IFU-U4 Bus width and the split it forces. XiangShan's MMIO bus is
 
 ---
 
-## 8. Open
+## 8. What this document does NOT cover
+
+TD#116 lists four things the IFU owes. None is in this document,
+and an earlier session-069 draft wrongly recorded the TD as closed.
+They are listed here so the gap is visible from inside the document
+rather than only from the tech debt table.
+
+TD-IFU-7  The line buffer of `icache_decisions.md` L1I-14. The IFU
+          holds the returned 64-byte line and extracts the 32-byte
+          prediction block, so two sequential blocks come from one
+          line. Its depth, and what a redirect does to it, are
+          L1I-U5 and are unruled.
+
+TD-IFU-8  The issue policy. `icache_decisions.md` 6 records that
+          the mshr_targets derivation is void under L1I-14 and
+          that 4 is an unmeasured choice. What actually merges
+          depends on whether the IFU issues for a later block
+          before an earlier response lands, which this document
+          does not say.
+
+TD-IFU-9  The reordering buffer of TD-IF-5. One predecode
+          writeback per fetch block against out-of-order line
+          responses, IF-R2, with nothing bounding the buffer.
+          IFU-10 has WB write back per block and does not say what
+          holds a block whose line returned early.
+
+TD-IFU-10 The maintenance path of `l1i_ifu_interfaces.md` 11. Its
+          producer is the backend commit stage and is unspecified.
+          Section 7 here covers the uncached fetch path and not
+          this.
+
+These four bound RTL generation for the IFU in a way the twelve
+open items elsewhere do not: the first three are structure, not
+sizing.
+
+---
+
+## 9. Open
 
 IFU-U4  Uncached bus width. Section 7.
 IFU-U5  Translation queue depth. Section 5.1.
 
 ---
 
-## 9. Bindings
+## 10. Bindings
 
 ITLB-11   Supplies the fault cause and VA of IFU-2.
 M1 to M4  The four mispredict tests are the IFU's to make. M4,
@@ -442,7 +479,7 @@ IFU-7     Two lines means up to two ITLB lookups per block.
           `itlb_ifu_interfaces.md` carries both.
 IF-8      Amended by TD-ITLB-1, single non-faulting condition
           becomes two causes plus the VA.
-TD#116    Closed by this document.
+TD#116    NOT closed by this document. Narrowed. See section 8.
 TD#118    The IFU outstanding-request depth has no real target
           until the l2 transaction limit is known. Not yet
           recorded as a decision.

@@ -105,8 +105,8 @@ unchanged and applies to the L1I only.
 ```
   planning/arch/itlb_decisions.md       ITLB-1..14, ITLB-U1
   planning/arch/mmu_decisions.md        MMU-1..18, MMU-U1..U5
-  planning/arch/ifu_decisions.md        IFU-1..23, TD-IFU-1..5,
-                                        IFU-U4
+  planning/arch/ifu_decisions.md        IFU-1..27, TD-IFU-1..10,
+                                        IFU-U4, IFU-U5
   planning/arch/ibuf_decisions.md       IBUF-1..11, TD-IBUF-1,
                                         IBUF-U1
   planning/arch/dcd_decisions.md        DCD-1..16, TD-DCD-1..2,
@@ -317,7 +317,19 @@ Bindings line.
 
 ### Task 2 onward: RTL generation
 
-Nothing blocks generation. Every module has a decision document
+FOUR THINGS DO BLOCK THE IFU, found after this section was first
+written. TD#116 is narrowed, not closed: `ifu_decisions.md` covers
+none of the L1I-14 line buffer and L1I-U5, the issue policy against
+`mshr_targets`, the TD-IF-5 reorder buffer, or the maintenance
+path. They are TD-IFU-7 through TD-IFU-10 in that document. The
+first three are structure rather than sizing, so an IA generating
+the IFU will invent a line buffer depth, an issue policy and a
+reorder buffer, and none of the three will appear in any document.
+
+Resolve those before the IFU. The ITLB, the L2 TLB, the predecoder
+and the ibuf are unaffected and can be generated now.
+
+Nothing else blocks generation. Every module has a decision document
 and every port has an interface document.
 
 ```
@@ -416,7 +428,12 @@ into ITLB-12 and ITLB-12a.
           session-067 untouched
   TD#114  the property census. Carried untouched
   TD#115  CLOSED by itlb_decisions.md
-  TD#116  CLOSED by ifu_decisions.md
+  TD#116  STILL OPEN, narrowed. ifu_decisions.md exists but
+          covers none of its four items: the L1I-14 line buffer
+          and L1I-U5, the issue policy against mshr_targets, the
+          TD-IF-5 reorder buffer, and the maintenance path.
+          Carried in that document as TD-IFU-7..10. An earlier
+          draft of this handoff called it closed
   TD#117  CLOSED by fe_decisions.md 15
   TD#118  sixteen fills at the l2. Now bounds ITLB-U1, MMU-U2 and
           IBUF-11

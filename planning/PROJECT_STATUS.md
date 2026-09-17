@@ -959,6 +959,10 @@ it only documented current behavior.
 |                         |             |                   | was cycle-based and could not    |
 |                         |             |                   | fire, now #200000. Count         |
 |                         |             |                   | unchanged at 973.                |
+|                         |             |                   | COUNT SINCE: 997 (BP-101), 1765  |
+|                         |             |                   | (BP-099), 1795 (BP-102). The     |
+|                         |             |                   | 973 above is the BP-097 figure   |
+|                         |             |                   | and is historical, not current.  |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports across the  |
 |                         |             |                   | eight top-level modules, read    |
 |                         |             |                   | from RTL and compared to the     |
@@ -1237,7 +1241,11 @@ it only documented current behavior.
 |                         |             |                   | fetch pipeline F0..F3+WB, joined  |
 |                         |             |                   | by a translation queue. L1I-3     |
 |                         |             |                   | forbids translating and fetching  |
-|                         |             |                   | in one stage. Closes TD#116.      |
+|                         |             |                   | in one stage. NARROWS TD#116,     |
+|                         |             |                   | does not close it: the line       |
+|                         |             |                   | buffer, issue policy, reorder     |
+|                         |             |                   | buffer and maintenance path are   |
+|                         |             |                   | uncovered. TD-IFU-7..10.          |
 | dcd_decisions.md        | Draft       | --                | Created session-069. DCD-1..16,   |
 |                         |             |                   | TD-DCD-1..2, DCD-U1..U2. One      |
 |                         |             |                   | predecoder, two views:            |
@@ -1703,7 +1711,14 @@ it only documented current behavior.
 |     |          |                                                          |
 |     |          | Settle it by naming which of I1-I11 are missing from     |
 |     |          | sim_ftq_ifu. Short IA task, read-only.                   |
-| 115 | icache   | OPEN. The ITLB is unspecified and the IFU cannot be     |
+| 115 | icache   | CLOSED session-069 by planning/arch/itlb_decisions.md   |
+|     |          | (ITLB-1..14) and mmu_decisions.md (MMU-1..23). L1I-U2   |
+|     |          | ruled at 64 entries, not the recommended 32; L1I-U3     |
+|     |          | adopted as recommended; L1I-U4 recommended and ruled.   |
+|     |          | The ITLB is WRITTEN RTL, not a cachegen node. Original  |
+|     |          | text follows.                                           |
+|     |          |                                                          |
+|     |          | OPEN. The ITLB is unspecified and the IFU cannot be     |
 |     |          | built without it. L1I-3 makes the L1I physically         |
 |     |          | indexed, so translation is in the fetch path ahead of    |
 |     |          | the array, and l1i_ifu_interfaces.md IF-8 has the IFU    |
@@ -1721,9 +1736,13 @@ it only documented current behavior.
 |     |          | Needs itlb_decisions.md. L1I-U3 adds a node and an edge  |
 |     |          | to the cachegen topology, so it is not a parameter       |
 |     |          | choice.                                                  |
-| 116 | ifu      | OPEN. ifu_decisions.md does not exist. Both IFU          |
-|     |          | boundaries are specified and the module between them is  |
-|     |          | not. What it owes:                                       |
+| 116 | ifu      | STILL OPEN, NARROWED session-069. ifu_decisions.md now  |
+|     |          | exists (IFU-1..27) and covers expansion, predecode      |
+|     |          | placement, the straddle, the five-stage fetch pipeline,  |
+|     |          | the translation pipeline, the prediction check and the   |
+|     |          | uncached path. It covers NONE of the four items below.   |
+|     |          | An earlier session-069 draft claimed this TD closed;     |
+|     |          | it does not. The four are unchanged and still owed:      |
 |     |          |                                                          |
 |     |          |   - the line buffer of L1I-14: depth, and what a         |
 |     |          |     redirect does to it. icache_decisions.md L1I-U5      |
@@ -1738,7 +1757,13 @@ it only documented current behavior.
 |     |          |   - the maintenance path of l1i_ifu_interfaces.md 11,    |
 |     |          |     whose producer is the backend commit stage and is    |
 |     |          |     unspecified                                          |
-| 117 | frontend | OPEN. There is no front-end top. ftq.sv deliberately     |
+| 117 | frontend | CLOSED session-069 by fe_decisions.md 15, FE-15..18.    |
+|     |          | The top instantiates bp_cluster, ftq, ifu, L1I, ibuf    |
+|     |          | and decode. The L1I is INSIDE it as a sibling of the    |
+|     |          | IFU per L1I-2. Specified, not built. Original text      |
+|     |          | follows.                                                 |
+|     |          |                                                          |
+|     |          | OPEN. There is no front-end top. ftq.sv deliberately     |
 |     |          | does not instantiate bp_cluster, so two complete units   |
 |     |          | have never been elaborated together and the loop between |
 |     |          | them is closed only inside tb_ftq's modelled cluster.    |
@@ -2215,7 +2240,9 @@ unless noted.
           34-byte block, the uncached path. Two decoupled
           pipelines: translation ahead of fetch, joined by a
           queue, the XiangShan arrangement without the way
-          lookup. Closes TD#116.
+          lookup. NARROWS TD#116 rather than closing it; the four
+          items that TD owes are uncovered and are carried as
+          TD-IFU-7..10.
     - planning/arch/dcd_decisions.md                  Draft
         - Created session-069. DCD-1..16, TD-DCD-1..2,
           DCD-U1..U2. One predecoder, two views. Redefines

@@ -429,16 +429,14 @@ settled one pipeline earlier rather than in the cycle the request
 would issue. The rules are unchanged; where they are evaluated is.
 ```
 
-The fault classes `ftq_ifu_interfaces.md` 6 names for
-`ifu_ftq_fault_val` are instruction access fault and page fault.
-Guest page fault is not among them: pacino implements the RVA23S64
-mandatory set and no optional extension, so there is no H and no
-second translation stage.
-
-Page fault is ITLB-side and reaches the FTQ by IF-23. Instruction
-access fault has TWO producers: the ITLB, by IF-23, and the L1I's
-memory side, by IF-15. They arrive on different paths and merge in
-the IFU. Nothing downstream can or needs to tell them apart.
+The three fault classes `ftq_ifu_interfaces.md` 6 names for
+`ifu_ftq_fault_val` are instruction access fault, page fault and
+guest page fault. Two of the three are ITLB-side and reach the FTQ
+by IF-23; guest page fault exists because H is mandatory in RVA23
+via Sha and translation is two-stage. The third, instruction access
+fault, has TWO producers: the ITLB, by IF-23, and the L1I's memory
+side, by IF-15. They arrive on different paths and merge in the
+IFU. Nothing downstream can or needs to tell them apart.
 
 ---
 
@@ -706,8 +704,29 @@ carried in this tree:
 ```
 
 So the three behaviours the architecture permits are real and the
-gate is real: CBIE 0 traps below M, CBIE 1 invalidates, CBIE 2 is
-reserved, CBIE 3 remaps the instruction to a flush.
+gate is real:
+
+```
+  CBIE 00  traps below M: illegal instruction, or virtual
+           instruction when V is set
+  CBIE 01  the instruction executes and performs a FLUSH
+  CBIE 10  reserved
+  CBIE 11  the instruction executes and performs an INVALIDATE
+```
+
+AN EARLIER REVISION OF THIS PARAGRAPH HAD 01 AND 11 SWAPPED,
+saying 1 invalidates and 3 remaps to a flush. The Zicbom field
+definition is the other way round and the CMO specification's
+cbo.inval pseudocode confirms it: the flush branch is taken when
+the governing CBIE field is 01 and the invalidate branch is the
+else. Corrected session-069 against the ratified CMO and machine
+ISA text. The Spike citations above are neutral on which value
+maps to which and did not carry the error.
+
+The remap direction matters here: 01 is the RESTRICTIVE setting, a
+machine-mode supervisor downgrading a guest's invalidate into a
+flush so it cannot discard modified data it does not own. Reading
+it the other way inverts a safety property into a hazard.
 
 ONE CAVEAT ON THE EVIDENCE. Spike's `cbo_inval.h` treats any non-zero
 CBIE below M as the flush case and reaches the invalidate case only
