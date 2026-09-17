@@ -2243,6 +2243,12 @@ unless noted.
           holds the transaction open, the opposite of ITLB-8.
           No open item. Written to be instantiated twice; the
           DTLB is the second client.
+    - planning/arch/bp_history_decisions.md           Draft
+        - Session-069: 3.4 corrected. Checkpoint restore is NOT
+          mispredict-only; it applies to every redirect naming an
+          entry, RC_MISPREDICT, RC_TRAP and RC_REPLAY, matching
+          ftq_backend_interfaces.md D1. Bundle-granularity
+          checkpoints mean the index always resolves.
     - planning/arch/ras_decisions.md                  Draft
     - planning/arch/sram_init.md                      Complete
     - planning/testbenches/manual_tb_decisions.md     Complete

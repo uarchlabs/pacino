@@ -2,7 +2,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-08-19
  CONTACT: Jeff Nye
 ```
 
@@ -67,8 +67,8 @@ document does not restate them.
 ```
 
 The L1I is emitted by cachegen rather than written, and is
-specified in icache_decisions.md. FE-16 puts it outside the front
-end.
+specified in icache_decisions.md. FE-16 keeps it inside the front
+end top as a sibling of the IFU, per L1I-2.
 
 ---
 
@@ -919,35 +919,51 @@ the level above both. It closes TD#117.
 
 ```
   FE-15  The front end top is structural. It instantiates
-         bp_cluster, ftq, the IFU, the ibuf and decode, and wires
-         them. It holds no state and makes no decision. The same
-         rule ftq_decisions.md 7 applies to ftq.sv applies here.
+         bp_cluster, ftq, the IFU, the L1I, the ibuf and decode,
+         and wires them. It holds no state and makes no decision.
+         The same rule ftq_decisions.md 7 applies to ftq.sv
+         applies here.
 ```
 
 `ftq.sv` is a structural top over the FTQ modules and `bp_cluster`
 is a structural top over the predictors. The front end top is the
 third of these and the last; nothing above it is front end.
 
-### 15.2 What is not inside
+### 15.2 The L1I
 
 ```
-  FE-16  The L1I and the logic directly serving it are outside the
-         front end. The top connects to them across its boundary
-         and does not contain them.
+  FE-16  The L1I is INSIDE the front end top and is instantiated
+         there, as a SIBLING of the IFU. It is not inside the IFU.
+         The IFU exposes the interface to it. This is
+         icache_decisions.md L1I-2 and this section does not
+         restate that document.
 ```
 
-The L1I is emitted by cachegen from `testcases/pacino` and does
-not live in the front end tree. Its port into the l2, up_i, is a
-topology edge of the emitted graph and is not a front end
-connection at all.
+The point of L1I-2 is that the cache is SELF CONTAINED, not that
+it is elsewhere. Keeping it a sibling rather than a child of the
+IFU is what lets physical design treat it in isolation, and that
+purpose is met wherever the instantiation sits.
+
+An earlier revision of FE-16 put the L1I outside the front end
+altogether. It was written session-069 and contradicted L1I-2,
+which predates it. L1I-2 is the ruling.
+
+The L1I is emitted by cachegen from `testcases/pacino` rather than
+written, so its source is the emitter and the configuration, not a
+file in the front end tree. That is a build fact and does not move
+the module. Its port into the l2, up_i, is a topology edge of the
+emitted graph and is not a front end connection.
 
 ### 15.3 The boundary
 
 ```
   FE-17  Four groups cross the front end boundary.
 
-         instruction       the IFU to the L1I, both directions.
-                           l1i_ifu_interfaces.md.
+         instruction       NOT a boundary group. The IFU to L1I
+                           path, l1i_ifu_interfaces.md, is INTERNAL
+                           to the top under FE-16. What crosses is
+                           the L1I's up_i port into the l2, which
+                           is a cachegen topology edge.
 
          translation       the IFU to the ITLB, and the ITLB to
                            the shared L2 TLB. itlb_decisions.md
@@ -986,19 +1002,30 @@ create one.
 ### 15.5 Unresolved
 
 ```
-  FE-U10 Whether the ITLB is inside the front end top or outside
-         it with the L1I. It is written RTL and serves the IFU
-         alone, which argues inside. It is part of the translation
-         path whose other half, the shared L2 TLB, serves the data
-         side too and is certainly outside, which argues that the
-         boundary belongs between the ITLB and the L2 TLB rather
-         than in front of the ITLB. FE-17 is written for the
-         inside reading. Unresolved.
+  FE-U10 CLOSED by the FE-16 ruling. The ITLB is inside the front
+         end top, a sibling of the IFU on the same reasoning:
+         written RTL, serving the IFU alone, self contained. The
+         boundary falls between the ITLB and the shared L2 TLB,
+         which serves the data side and is outside. FE-17 is
+         written for that reading.
 ```
 
 ---
 
 ## 16. Document History
+
+```
+  2026-09-15  session-069. FE-16 CORRECTED. Its first revision put
+              the L1I outside the front end, contradicting
+              icache_decisions.md L1I-2, which predates it. L1I-2
+              is the ruling: the L1I is inside the front end top,
+              a sibling of the IFU, not inside the IFU. The point
+              is that the cache is SELF CONTAINED, which physical
+              design needs, not that it sits elsewhere. FE-15 and
+              FE-17 follow; FE-U10 closes on the same reasoning,
+              putting the ITLB inside and the shared L2 TLB out.
+```
+
 
 ```
   2026-07-09  tmp_004. Written from bp_cluster.md rev 1.0,
@@ -1132,5 +1159,4 @@ create one.
               only ftq_icache remains, and it is a decision rather
               than a specification.
 ```
-
 

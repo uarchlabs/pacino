@@ -193,21 +193,45 @@ and post-execute update, bundle granularity is the intended
 recovery unit. A redirect targets a bundle boundary, not an
 intra-bundle slot.
 
-Rollback-by-index (section 2.2) applies only to branch-mispredict
-redirects. A mispredict rewinds to the mispredicted branch's
-bundle, which by definition contained a branch and therefore has a
-checkpoint. The index always resolves.
+Rollback-by-index (section 2.2) applies to EVERY redirect that
+names an entry. `ftq_backend_interfaces.md` D1 lists them:
+RC_MISPREDICT, RC_TRAP and RC_REPLAY. Only RC_UNSPEC is excluded,
+and it is excluded because it names no entry to repair from, not
+because its history is unwanted (that document's U5).
 
-Exceptions and interrupts do not use this path. They redirect to a
-handler on a new architectural context; the speculative history is
-discarded and reinitialized, not restored from a checkpoint. There
-is no checkpoint lookup and no no-branch-target problem.
+THE INDEX ALWAYS RESOLVES, FOR ANY CAUSE. The granularity rule
+above is why: one checkpoint per accepted prediction bundle, not
+per branch, and `ftq_entry_formats.md` carries ghist_ptr and
+phist_ptr in every entry. A bundle with no branch in it has a
+checkpoint like any other.
 
-This split (mispredict restores, exception/interrupt reinitializes)
-is assumed to cover every history-affecting redirect. Confirm at
-bp_cluster that no third redirect type needs history restore onto a
-no-branch bundle; if the flush taxonomy holds, no restore-then-hold
-mechanism is required.
+AN EARLIER REVISION OF THIS PARAGRAPH restricted rollback to
+branch-mispredict redirects and had exceptions and interrupts
+discard and reinitialize the speculative history instead. Its
+argument was that a mispredict rewinds to a bundle which by
+definition contained a branch and therefore has a checkpoint. That
+is true and it does not distinguish: bundle granularity makes it
+true of every bundle. The revision also asked for confirmation at
+bp_cluster that no third redirect type needed restore onto a
+no-branch bundle. RC_TRAP and RC_REPLAY are that third and fourth
+type, the no-branch bundle is not a problem, and
+`ftq_backend_interfaces.md` had already answered it the other way.
+
+WHY RESTORE RATHER THAN REINITIALIZE ON A TRAP. A trap does not
+un-execute the branches that already resolved in the naming
+bundle, so the checkpoint of the entry being corrected is the
+state to resume from; reinitializing would discard resolved
+history, not only speculative history. And traps here means every
+syscall, timer interrupt and page fault, so zeroing on each one
+destroys the correlation the predictors depend on and returns
+through sret into a stream whose history has been erased. The
+restore path already exists for mispredicts.
+
+The case against, recorded because it is not empty: a handler is a
+different control-flow context, so pre-trap history is arguably
+noise for predicting inside it. That argues for a separate handler
+history, which nothing in this design proposes, rather than for
+zeroing. Session-069.
 
 ### 3.5  RTL fix: if / else-if for the slot cases
 
@@ -526,8 +550,10 @@ not a hashed fold) have no folds.
   HI5: DEFERRED (not in this scope). Checkpoint slot reclaim
        protocol -- when a slot is safe to reuse. Resolve at FTQ
        implementation. (The no-branch-flush concern raised earlier
-       is closed in section 3.4: checkpoint-restore is mispredict-
-       only and always hits a checkpointed bundle.)
+       is closed in section 3.4, but not for the reason first
+       given: restore is NOT mispredict-only, and the bundle
+       granularity means every entry has a checkpoint, so any
+       named entry resolves.)
 
   G15: REFRAMED (section 5.3). No longer a correctness gate; now a
        performance measurement (stale-fold accuracy cost in the
@@ -666,9 +692,12 @@ not a hashed fold) have no folds.
               interface port list (section 9). Sequential-only
               advance confirmed against Alpha 21264 and IBM GHV
               recovery practice; no surveyed design needs a
-              non-sequential pointer. Mispredict-only restore
-              (section 3.4): exceptions/interrupts reinitialize
-              history, so no no-branch-flush restore case exists.
+              non-sequential pointer. Restore applies to every
+              redirect that names an entry (section 3.4, corrected
+              session-069): RC_MISPREDICT, RC_TRAP and RC_REPLAY
+              per ftq_backend_interfaces.md D1. Bundle granularity
+              gives every entry a checkpoint, so no no-branch
+              restore case exists.
               Open: the module-owned RTL/port edit and
               TD #74 / #69 / #70 sequencing (section 9).
 

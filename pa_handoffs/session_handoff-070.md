@@ -138,6 +138,12 @@ unchanged and applies to the L1I only.
                            documents added to Shared planning,
                            eleven Module Status rows added, the
                            duplicate `fetch` row removed
+  bp_history_decisions.md  3.4 restore is no longer mispredict-
+                           only. Corrected at three sites: 3.4,
+                           the HI5 note, and the history entry
+  ftq_backend_interfaces.md  D1 unchanged and correct; a note
+                           records that bp_history was the side
+                           that moved
   ftb_decisions.md         4.5 fall-through guard RESTORED,
                            FTB-G1 and FTB-G2. 4.1 tag claim
                            qualified. BP-099 staleness corrected
@@ -214,8 +220,11 @@ retired rather than reused, outside references still resolve.
   17  Two-bit tag on the ITLB to L2 TLB port, decoupled from the
       tracker depth
   18  The front end top is its own subject, section 15 of
-      fe_decisions.md, taking FE numbers. The L1I and the logic
-      serving it are outside it
+      fe_decisions.md, taking FE numbers. The L1I is INSIDE it,
+      a sibling of the IFU and not inside the IFU, per L1I-2:
+      what matters is that the cache is self contained, which is
+      what physical design needs. The ITLB is inside on the same
+      reasoning; the shared L2 TLB is outside
   19  Pacino implements no optional RVA23S64 extensions at this
       time. Recorded in the PROJECT_STATUS decoder track. H is
       NOT optional: RVA23 mandates Sha and H is part of Sha, so
@@ -227,6 +236,13 @@ retired rather than reused, outside references still resolve.
       unaligned, so two lookup PCs in one 32-byte region share
       an entry. Fallback is start + FTB_BLOCK_BYTES, never
       XiangShan's FetchWidth*4
+  21a History restore applies to EVERY redirect that names an
+      entry: RC_MISPREDICT, RC_TRAP and RC_REPLAY, per
+      ftq_backend_interfaces.md D1. bp_history_decisions.md 3.4
+      had it mispredict-only with traps reinitializing; corrected.
+      Its own granularity rule settles it, one checkpoint per
+      accepted bundle rather than per branch, so the index
+      resolves for a bundle with no branch in it
   21  The IFU has TWO decoupled pipelines: translation ahead of
       fetch, joined by a queue, driven by a new FTQ xlate_ptr.
       L1I-3 makes the L1I physically indexed, so a fetch cannot
@@ -325,7 +341,7 @@ Two edits to built files come first:
 
 ### The open items will be answered silently if left
 
-Thirteen are unresolved and none stops a module being written. What
+Twelve are unresolved and none stops a module being written. What
 they do is leave a choice the IA will make on its own, and the
 number then exists in RTL and in no document.
 
@@ -344,7 +360,7 @@ number then exists in RTL and in no document.
            ahead of fetch and how much ITLB miss latency hides
   DCD-U1   where vtype_hazard is computed. Not the predecoder
   DCD-U2   the order of pop and push in the RAS case
-  FE-U10   whether the ITLB is inside the front end top
+
   IB-U1    which source clears the ibuf, with the deferred flush
 ```
 

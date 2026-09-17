@@ -140,27 +140,42 @@ causes into one bit.
 
 ## 6. Check placement
 
-ITLB-12 The PMP permission check and the PMA EXECUTABLE check run
-        in parallel with the L1I array access and gate the
-        response, not the request.
+ITLB-12 The PMP permission check, the PMA executable check and the
+        PMA idempotent read all complete BEFORE any L1I request is
+        issued. A request that fails them is never made.
 
-ITLB-12a The PMA IDEMPOTENT attribute is not part of that. It
-         returns with the translation and is read before any
-         request is issued, because it selects between the cached
-         and the uncached path. MMU-14 and IT-11.
+ITLB-12a None of these checks is in the ITLB-5 hit path. They run
+         in the translation pipeline, `ifu_decisions.md` IFU-23a,
+         which is a whole pipeline ahead of the fetch pipeline
+         that issues to the L1I. The translation returns at the
+         ITLB-5 latency and the checks complete before the result
+         leaves the queue.
 
-ITLB-12 and ITLB-12a were one rule and could not be. A check that
-gates a response cannot also decide whether the request is made. It is not
-        in the ITLB hit path.
+AN EARLIER REVISION OF ITLB-12 HAD THE CHECK GATE THE RESPONSE
+RATHER THAN THE REQUEST, on the reasoning that a serial check after
+a fully-associative hit would not fit in one cycle and that
+L1iReadLatency of 2 left a cycle to hide it in. Two things were
+wrong with it.
 
-L1iReadLatency is 2, so there is a cycle for the check after
-translation. Sixty-four PMP range compares serial after a
-fully-associative ITLB hit would not fit in ITLB-5's one cycle.
+It contradicted `l1i_ifu_interfaces.md` IF-22, which states that a
+faulting request never reaches the L1I and that this interface
+carries no fault port in either direction. Letting a PMP failure
+reach the array and blocking only the response is exactly the
+traffic IF-22 forbids.
 
-Gating the response is safe only because PMA has already excluded
-non-idempotent regions from being fetched at all. The rule and its
-justification are in `mmu_decisions.md`. The ITLB carries the PMA
-attributes out with the translation so the gate has them.
+And its timing argument counted sixty-four PMP range compares.
+MMU-11 sets sixteen entries.
+
+The argument is moot in any case. The IFU now translates in a
+pipeline ahead of fetch, so the checks have a pipeline to complete
+in rather than a cycle, and gating the request costs nothing.
+Session-069.
+
+The idempotent read was separated from the other two in an earlier
+revision because a check that gates a response cannot also decide
+whether a request is made. With ITLB-12 gating the request, the
+separation is unnecessary: all three are read before the request
+and all three can stop it. MMU-14 and IT-11 are unchanged.
 
 ---
 

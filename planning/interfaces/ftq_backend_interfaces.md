@@ -211,9 +211,19 @@ are SKIPPED on RC_UNSPEC, which names no entry to repair from; see
 5.1.
 
 The history restore is the same on all three instruction-naming
-causes. A trap does not un-execute the branches that already resolved in the naming block, so
-the checkpoint of the entry being corrected is the right state to
-resume from, and the trap vector is then fetched against it.
+causes. A trap does not un-execute the branches that already
+resolved in the naming block, so the checkpoint of the entry being
+corrected is the right state to resume from, and the trap vector is
+then fetched against it.
+
+`bp_history_decisions.md` 3.4 stated the opposite until
+session-069: rollback-by-index restricted to branch mispredicts,
+with exceptions and interrupts reinitializing the history instead.
+That document has been corrected to D1. Its own checkpoint
+granularity rule is why the restriction could not hold: one
+checkpoint per accepted prediction bundle, not per branch, so the
+index resolves for any named entry whether or not that bundle
+contained a branch.
 
 A backend redirect OUTRANKS every BPU-derived redirect and the
 predecode redirect, unconditionally and without comparison. Those are

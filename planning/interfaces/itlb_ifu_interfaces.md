@@ -139,13 +139,18 @@ IT-11 The IFU reads idempotent to decide whether the fetch may
       proceed speculatively. A non-idempotent region takes the
       uncached path of IFU-21 and does not reach the L1I.
 
-IT-12 The PMP permission check and the PMA executable check do
-      not gate this response. ITLB-12 runs them in parallel with
-      the L1I array access and gates that response instead, so the
-      translation returns at the ITLB-5 hit latency and the check
-      does not extend it. The idempotent attribute of IT-11 is
-      different: it returns here, with the translation, because
-      IT-11 reads it before any request is issued. ITLB-12a.
+IT-12 The checks do not gate THIS response. The translation
+      returns at the ITLB-5 hit latency with `itlb_ifu_pma`
+      valid, and the PMP and PMA results are consumed by the IFU
+      before it issues an L1I request, not before the ITLB
+      answers. ITLB-12 and ITLB-12a.
+
+IT-12a No L1I request is issued for a block that fails PMP or
+       PMA. `l1i_ifu_interfaces.md` IF-22: a faulting request
+       never reaches the L1I and that interface has no fault port
+       in either direction. The translation pipeline of IFU-23a
+       is what makes this free; there is no cycle to save by
+       letting the request go and killing the response.
 
 ---
 
