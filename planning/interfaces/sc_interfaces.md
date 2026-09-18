@@ -323,9 +323,8 @@ At the unit level (sc.sv, as shipped) the UQ is not built and the
 arbitration-layer ports are stubbed: sc_uq_not_full is tied to 1'b1
 and sc_upd_rdy is tied to all-ones. The credit arbiter itself is
 implemented and tested in bp_cluster (bp_arb_spec.md 4.5; TD#73
-closed by BP-094 group H). The unit-level gap is not tracked by any
-open TD -- TD#73 and TD#94 are closed and neither covered building
-the queue.
+closed by BP-094 group H). The unit-level gap is TD#123. TD#73 and
+TD#94 are closed and neither covered building the queue.
 
 When the SC arbiter grants an update and stalls a prediction, the
 TAGE response buffer head is held, backpressuring TAGE
@@ -421,7 +420,7 @@ conditional branches.
               bp_cluster (TD#73 closed by BP-094 group H, covering
               all seven bp_arb_spec 4.5 grant rules). Reworded to
               separate the two facts. The unit-level gap is now
-              untracked by any open TD and needs a number.
+              raised as TD#123.
 
               sc_table_hash_rules.md and sc_table_interfaces.md
               were both called "not yet written". Both were

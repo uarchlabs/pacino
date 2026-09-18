@@ -460,9 +460,9 @@ state.  The update is granted in a subsequent cycle.
                sc_uq_not_full = 1'b1 and sc_upd_rdy = all-ones,
                and builds no SC UQ. The SC_UQ_DEPTH and
                SC_UQ_WR_PORTS values above therefore describe the
-               target model, not sc.sv as shipped. That gap is not
-               tracked by any open TD: TD#73 and TD#94 are closed
-               and neither covered building the UQ.
+               target model, not sc.sv as shipped. That gap is TD#123:
+               TD#73 and TD#94 are closed and neither covered
+               building the UQ.
 
 ## 6. Statistical Corrector (SC) -- Chained Predictor
 
@@ -828,4 +828,4 @@ task file, not here.
               TD#94 are closed and neither was about building the
               queue, yet this document, sc_interfaces.md and
               sc.sv (lines 30-32 and 148) all name them as the
-              deferral. Needs a TD number; next free is TD#120.
+              deferral. Raised as TD#123.

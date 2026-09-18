@@ -628,6 +628,75 @@ Proposed numbering. Stated here for the first time; not carried from
          fires. A redirect says fetch must be resteered; the slot
          correction group says what the entry must record. The two
          are different questions and fire at different rates.
+
+  FE-19  A FETCH ADDRESS IS 41 BITS AND ITS HIGH BITS ARE CHECKED
+         BEFORE IT NARROWS. VA_WIDTH is 41 because H is mandatory
+         through Sha, MMU-20 makes the G-stage Sv39x4, and Shvsatpa
+         requires vsatp to support Bare. With V=1 and
+         vsatp.MODE=Bare the fetch PC is a guest physical address of
+         up to 41 bits. Sv39x4 requires bits 63:41 to be zero or the
+         access guest-page faults.
+
+         The backend computes a JALR target with 64-bit arithmetic
+         and may produce a PC with bits 63:41 set. That must fault.
+         Narrowing it to VA_WIDTH discards the evidence, so
+         bkend_ftq_redir_pc is checked WHERE IT IS FORMED, in the
+         backend, before it narrows. The front end does not
+         re-derive this and has no means to.
+
+         HOW A REJECTED ADDRESS IS SIGNALLED IS NOT DECIDED, FE-U11.
+         An earlier draft of this invariant said the FTQ receives a
+         redirect "already marked malformed". No such marking
+         exists: the redirect group of ftq_backend_interfaces.md 5
+         carries four cause values, MISPREDICT, TRAP, REPLAY and
+         UNSPEC, and none of them means this. Either the backend
+         traps before forming the redirect at all, or a fifth cause
+         is added. FE-U11.
+
+         This is not new with 41 bits. The same hole exists at 40
+         today; two-stage translation moves the boundary from 39 to
+         41 and makes it visible.
+
+         WITHIN 41 BITS, LEGALITY IS THE ITLB'S. Under V=0 or
+         vsatp.MODE=Sv39 a legal address has bits 40:39 equal to bit
+         38; under vsatp.MODE=Bare all 2^41 patterns are legal. The
+         same value is legal in one regime and a fault in the other,
+         and only the ITLB holds V and vsatp.MODE. MMU-16 already
+         has cause 12 and cause 20 for the two outcomes. No predictor
+         and no FTQ stage evaluates this.
+
+         CONSEQUENCE FOR PREDICTORS. Predictor storage need not
+         represent every address exactly. An FTB tag that does not
+         cover bit 40 aliases; an ITTAGE field that cannot express a
+         high GPA mispredicts. Both are caught -- block end by
+         predecode, target by mispredict redirect at resolve -- and
+         MMU-14 already keeps speculation out of non-idempotent
+         regions. Architectural addresses -- pc, pft_addr,
+         target_pc, ftq_resolve_t.target,
+         bkend_ftq_redir_pc, RESET_VECTOR -- may not truncate.
+         FTB_TAG_BITS is pinned at 26 and IT_MAX_TGT_WIDTH at 38 on
+         that basis. TD#122.
+
+         NOT FE-13. FE-13 republishes the cluster's own view of the
+         block, which on an alias is the aliased one, so it cannot
+         detect its own error. Predecode reads the fetched bytes and
+         is the independent check: ftq_ifu_interfaces.md 6 and 7.
+
+         POINTER MASKING DOES NOT REACH THIS INVARIANT. Ssnpm is
+         mandatory in RVA23S64, so it is fair to ask whether bits
+         40:39 are masked. They are not. The ratified Pointer
+         Masking specification v1.0 applies the ignore
+         transformation to explicit memory accesses only -- loads,
+         stores, atomics, FP loads and stores -- and states it does
+         NOT apply to implicit accesses such as page-table walks or
+         instruction fetches. Every address this invariant covers is
+         a fetch address, so Ssnpm has no front-end consequence.
+
+         RECORDED SO IT IS NOT RE-RAISED. A session-070 draft of
+         this invariant claimed the opposite, sourced to the J
+         extension working draft, whose discussion of masking the
+         two extra Sv39x4 GPA bits under vsatp.MODE=Bare concerns
+         DATA accesses. It was applied to the fetch path in error.
 ```
 
 ---
@@ -753,18 +822,27 @@ ubtb.sv.
            inside bp_ftq_meta_t and the array is still declared at
            instantiation.
 
-  TD-FE-3  bp_ftq_entry_t.pc and per-slot target are 40 bits. RVA23
-           mandates the C extension, so bit 0 of an instruction
-           address is always zero and 39 bits suffice. The further
-           reduction to 35 is NOT available: it assumed a fetch
-           block always begins on an FTB_BLOCK_BYTES boundary, and
-           blocks are unaligned (ftq_decisions.md 4.7,
-           ifu_decisions.md IFU-6). Corrected session-069. 39 is
-           the floor. Held at 40 until the design is working; revisit
-           at the optimization step, together with the width of
-           bp_redirect_t.target_pc, which carries the same quantity.
-           The per-slot target is now replicated NUM_PRED_SLOTS
-           times, so the saving scales with the slot count.
+  TD-FE-3  bp_ftq_entry_t.pc and per-slot target are VA_WIDTH bits.
+           REVERSED session-070, TD#122. This entry read that 39
+           bits suffice because RVA23 mandates C so bit 0 of an
+           instruction address is always zero, and that 39 was the
+           floor. That was computed against a 40-bit sign-extended
+           Sv39 address. VA_WIDTH is 41: the fetch PC may be a
+           41-bit guest physical address under V=1 with
+           vsatp.MODE=Bare, FE-19. The floor is therefore 40, as
+           addr[40:1], not 39.
+           The reduction to 35 remains unavailable for the reason
+           recorded in session-069: it assumed a fetch block always
+           begins on an FTB_BLOCK_BYTES boundary, and blocks are
+           unaligned (ftq_decisions.md 4.7, ifu_decisions.md IFU-6).
+           Any move to 40 is an ENCODING change, from addr[40:0] to
+           addr[40:1], not a width trim, and every producer and
+           consumer changes with it. Held at 41 until the design is
+           working; revisit at the optimization step, together with
+           the width of bp_redirect_t.target_pc, which carries the
+           same quantity. The per-slot target is replicated
+           NUM_PRED_SLOTS times, so the saving scales with the slot
+           count.
            To be merged into the project tech debt list.
 
   TD-FE-4  bp_ftq_slot_t.pred_src has no functional consumer. Update
@@ -926,6 +1004,16 @@ ubtb.sv.
          INDIRECT_CALL updates ITTAGE for the target and RAS for the
          return address. NO_BRANCH forms no update. Independent of
          the slot count.
+
+  FE-U11 How a backend redirect PC with bits 63:41 set is signalled.
+         FE-19 requires the check where the redirect is formed and
+         does not say what the backend does with the result. The
+         ftq_backend_interfaces.md 5 cause field has no value for
+         it. Two candidates: the backend traps on the JALR and forms
+         no redirect, which needs nothing here; or a fifth cause is
+         added, which changes that port. The first is likely right
+         and is not this document's to rule -- no backend document
+         exists. TD#122.
 ```
 
 ---
@@ -1179,5 +1267,18 @@ create one.
               and PHR pointers. Third of the four FTQ interfaces;
               only ftq_icache remains, and it is a decision rather
               than a specification.
-```
+  2026-09-17  session-070. FE-19 added: VA_WIDTH is 41 and the high
+              bits of a backend-formed redirect PC are checked before
+              the address narrows. H is mandatory through Sha, MMU-20
+              makes the G-stage Sv39x4, and Shvsatpa requires vsatp
+              to support Bare because Svbare requires it of satp, so
+              a V=1 vsatp.MODE=Bare fetch PC is a 41-bit guest
+              physical address. Legality within 41 bits stays with
+              the ITLB, which holds V and vsatp.MODE; the front end
+              does not evaluate it.
 
+              TD-FE-3 reversed. It called 39 the floor, computed
+              against a 40-bit sign-extended Sv39 address. The floor
+              is 40 as addr[40:1], and reaching it is an encoding
+              change rather than a width trim. TD#122.
+```

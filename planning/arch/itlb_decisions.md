@@ -182,9 +182,37 @@ and all three can stop it. MMU-14 and IT-11 are unchanged.
 ## 7. Maintenance
 
 ITLB-13 SFENCE.VMA invalidates ITLB entries by VA, by ASID, by
-        both, or all. Global entries are invalidated only by the
-        all form. It affects `V=0` entries and, when executed in
-        VS-mode, the current guest's VS-stage entries.
+        both, or all. GLOBAL ENTRIES ARE EXCLUDED BY THE TWO FORMS
+        THAT NAME AN ASID, not by everything except the all form.
+        The four forms, from RISC-V Privileged Architecture
+        chapter 11, Supervisor-Level ISA version 1.13, section
+        11.1.2.1 (library version v20260120):
+
+```
+  rs1=x0,  rs2=x0    all entries, all address spaces   global INCLUDED
+  rs1=x0,  rs2!=x0   that ASID                         global EXCLUDED
+  rs1!=x0, rs2=x0    that VA, all address spaces       global INCLUDED
+  rs1!=x0, rs2!=x0   that VA and that ASID             global EXCLUDED
+```
+
+        The specification attaches "except for entries containing
+        global mappings" to the two rs2!=x0 forms only. The
+        address-only form invalidates entries for the address in
+        rs1 "for all address spaces", with no exclusion stated.
+        Corroborated from the other side by the G bit description
+        in 11.1.3.1: global mappings need not be flushed when
+        SFENCE.VMA is executed with rs2!=x0. The exclusion is tied
+        to rs2!=x0 exactly.
+
+        AN EARLIER REVISION SAID "global entries are invalidated
+        only by the all form". That dropped the address-only form
+        and would leave a stale global translation alive across
+        `sfence.vma rs1, x0`. That is a correctness bug, not a
+        prediction-quality one: the ITLB would answer a later fetch
+        from an invalidated mapping. Corrected session-070.
+
+        It affects `V=0` entries and, when executed in VS-mode, the
+        current guest's VS-stage entries.
 
 ITLB-13a HFENCE.VVMA invalidates `V=1` VS-stage entries for the
          current VMID, by VA and by ASID. HFENCE.GVMA invalidates
@@ -221,3 +249,28 @@ IL-*      The L2 TLB boundary is `itlb_l2tlb_interfaces.md`.
           IL-5 is deliberately the opposite of ITLB-8: a miss
           there holds the transaction open rather than ending it.
 TD#118    Bounds ITLB-U1.
+
+---
+
+## 10. Document History
+
+```
+  2026-09-17  session-070 audit. ITLB-13 corrected. It read "Global
+              entries are invalidated only by the all form", which
+              is short by one form: the ratified privileged
+              specification attaches the global exclusion to the
+              two SFENCE.VMA forms with rs2!=x0, so the
+              address-only form (rs1!=x0, rs2=x0) invalidates
+              global mappings for that address. All four forms are
+              now stated explicitly rather than summarised, since
+              summarising them is what produced the error.
+
+              Not a prediction-quality issue. A global mapping
+              surviving sfence.vma rs1, x0 is a stale translation
+              the ITLB will hit on.
+
+              mmu_decisions.md MMU-17 needed no separate fix: it
+              says the L2 TLB uses "the same forms as the L1 TLBs",
+              which is a pointer to this rule. A cross-reference
+              was added there.
+```

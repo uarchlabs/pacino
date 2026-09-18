@@ -195,11 +195,15 @@ makes for the same reason.
 MMU-11 16 PMP entries, with TOR and NAPOT address matching. The
        count is a parameter.
 
-MMU-U4 Whether RVA23S64 mandates Smepmp, and whether that changes
-       MMU-11. The RVA23S64 mandatory privileged list was checked
-       in session-069 and Smepmp did not appear in what was
-       retrieved, but the full list was not seen. Treat as
-       unconfirmed rather than absent. Unresolved.
+MMU-U4 CLOSED session-070. Smepmp is NOT mandatory in RVA23S64.
+       The full mandatory privileged list was read from the
+       ratified `rva23-profile.adoc`: Ss1p13, then Svbare, Sv39,
+       Svade, Ssccptr, Sstvecd, Sstvala, Sscounterenw, Svpbmt and
+       Svinval carried from RVA22S64, then Svnapot, Sstc,
+       Sscofpmf, Ssnpm, Ssu64xl and Sha as new. Smepmp is not in
+       it, nor in the expansion options. MMU-11 is unchanged at 16
+       entries with TOR and NAPOT. Session-069 saw a partial list;
+       this is the whole one.
 
 ---
 
@@ -235,10 +239,62 @@ carrying the cacheability and coherence PMAs to support hardware
 page-table reads. The walker sees the same attributes as the L1
 clients.
 
-MMU-U5 Whether Svpbmt is mandatory in RVA23S64. If it is, the PTE
-       supplies a memory type and becomes a second PMA source
-       alongside MMU-15, needing a precedence rule. Not confirmed
-       in session-069. Unresolved.
+MMU-U5 CLOSED session-070 AS MANDATORY. `rva23-profile.adoc`
+       lists Svpbmt, page-based memory types, among the privileged
+       extensions mandatory in RVA23S64 and carried from RVA22S64.
+       So the PTE supplies a memory type and IS a second PMA source
+       alongside MMU-15. The precedence rule is required, not
+       conditional, and is MMU-U6.
+
+MMU-U6 The Svpbmt precedence rule. The PTE PBMT field and the
+       MMU-15 static region table both describe the memory type of
+       one access. Which wins, and what happens when the PTE names
+       a type the region does not support, is not decided. Bears on
+       MMU-14: if a PTE can make a region non-idempotent that the
+       region table calls idempotent, the speculation gate reads
+       the wrong source. Unresolved.
+
+---
+
+## 6a. Svnapot
+
+MMU-U7 SVNAPOT IS MANDATORY AND IS NOWHERE IN THIS TREE.
+       `rva23-profile.adoc` lists Svnapot, NAPOT translation
+       contiguity, among the new mandatory privileged extensions
+       in RVA23S64. It was optional in RVA22 and is not.
+
+       `itlb_decisions.md` ITLB-3 and `itlb_l2tlb_interfaces.md`
+       IL-7 both name three Sv39 page sizes, 4 KiB, 2 MiB and
+       1 GiB. Svnapot adds the 64 KiB contiguous case through the
+       PTE N bit, so there is a fourth. `l2t_itlb_size` is two
+       bits, which encodes four, so the port width survives; what
+       does not survive is IL-7's wording and the ITLB's install
+       path, which are written for three.
+
+       THIS DOCUMENT HAS NO L2 TLB PAGE-SIZE DECISION TO CONTRADICT.
+       MMU-1 states the topology only. L2 TLB entry count,
+       associativity and page-size handling are MMU-U1, unresolved.
+       So Svnapot enlarges MMU-U1 rather than overturning anything
+       decided here, and it is the L1 side, ITLB-3 and IL-7, that
+       carries a stated three.
+
+       IT REACHES THE G-STAGE, NOT ONLY THE TLB ARRAYS. Privileged
+       11.1.7 states that when the hypervisor extension is
+       implemented, Svnapot is also supported in G-stage
+       translation. H is mandatory here, so the walker of MMU-4 and
+       the nested walk of MMU-21 must honour the PTE N bit at both
+       stages, and a NAPOT G-stage PTE can cover a range of the
+       guest physical addresses a VS-stage walk produces.
+
+       The encoding is one case: N=1 with ppn[0] = xxxx1000 is a
+       64 KiB contiguous region. Every other N=1 encoding in
+       Table 7 is reserved and MUST raise a page fault, which is a
+       walker obligation, not a TLB one.
+
+       Two decisions, then. Whether the L1 TLBs store a NAPOT entry
+       once and match it across the range, or store it per 4 KiB
+       page. And how the walker handles N at each stage of a nested
+       walk. Unresolved.
 
 ---
 
@@ -268,6 +324,15 @@ MMU-17 SFENCE.VMA invalidates L2 TLB entries by the same forms as
        the L1 TLBs. A walk in flight when an invalidate arrives is
        completed and its result is not installed.
 
+       THE FORMS ARE `itlb_decisions.md` ITLB-13, WHICH STATES ALL
+       FOUR EXPLICITLY. The one worth knowing before implementing
+       this: global entries are excluded only by the two forms that
+       name an ASID (rs2!=x0). The address-only form, rs1!=x0 with
+       rs2=x0, DOES invalidate global mappings for that address.
+       ITLB-13 read otherwise until session-070. Do not re-summarise
+       the four forms here; point at ITLB-13. Source is RISC-V
+       Privileged chapter 11 section 11.1.2.1, version 1.13.
+
 MMU-17a H adds two more. HFENCE.VVMA invalidates VS-stage
         translations for the current VMID, by VA and by ASID.
         HFENCE.GVMA invalidates G-stage translations, by guest
@@ -277,6 +342,26 @@ MMU-17a H adds two more. HFENCE.VVMA invalidates VS-stage
 
 MMU-18 The invalidate port is a distinct port. It is written with
        the module.
+
+MMU-U8 SVINVAL IS MANDATORY AND IS NOT IN MMU-17 OR MMU-17a.
+       `rva23-profile.adoc` lists Svinval, fine-grained
+       address-translation cache invalidation, among the privileged
+       extensions mandatory in RVA23S64 and carried from RVA22S64.
+
+       MMU-17 and MMU-17a name three instructions: SFENCE.VMA,
+       HFENCE.VVMA and HFENCE.GVMA. Svinval adds SINVAL.VMA,
+       SFENCE.W.INVAL and SFENCE.INVAL.IR, and with H also
+       HINVAL.VVMA and HINVAL.GVMA. Five more, and the last two are
+       mandatory here because H is.
+
+       MMU-17a already distinguishes its operations by an operation
+       field rather than a separate port, so the port shape is
+       likely to hold. What is not decided is whether the invalidate
+       and the fence are separable inside the L2 TLB, which is the
+       whole point of Svinval, or whether SINVAL.VMA is implemented
+       as SFENCE.VMA and the ordering instructions as no-ops.
+       The second is architecturally legal and is what most
+       implementations do. Unresolved.
 
 TD#119 does not reach this document. That gap stops the emitted
 L1I from carrying an invalidate port. The L2 TLB is written, so
@@ -292,8 +377,11 @@ MMU-U1  L2 TLB geometry. Section 2. Two-stage translation makes
         the array or be split.
 MMU-U2  Outstanding walk count. Section 3.
 MMU-U3  Atomic form, and the l2 third-master change. Section 4.
-MMU-U4  Smepmp requirement in RVA23S64. Section 5.
-MMU-U5  Svpbmt as a second PMA source. Section 6.
+MMU-U4  CLOSED session-070. Smepmp is not mandatory. Section 5.
+MMU-U5  CLOSED session-070. Svpbmt is mandatory. Section 6.
+MMU-U6  Svpbmt precedence against MMU-15. Section 6.
+MMU-U7  Svnapot. Section 6a.
+MMU-U8  Svinval. Section 8.
 
 ---
 
@@ -308,3 +396,49 @@ IL-*      The client boundary is `itlb_l2tlb_interfaces.md`.
           Written to be instantiated twice; the DTLB is the
           second client.
 TD#118    Bounds MMU-U2.
+
+---
+
+## 13. Document History
+
+```
+  2026-09-17  session-070 audit. MMU-U4 and MMU-U5 both turned on
+              the same unread list. The ratified
+              rva23-profile.adoc was fetched and the RVA23S64
+              mandatory privileged set read in full.
+
+              MMU-U5 CLOSED as mandatory. Svpbmt is in the set, so
+              the PTE is a second PMA source and the precedence
+              rule is required. Raised as MMU-U6.
+
+              MMU-U4 CLOSED the other way. Smepmp is absent from
+              the mandatory set and from the expansion options.
+              MMU-11 unchanged.
+
+              Three mandatory extensions were found to be absent
+              from every document in the tree. MMU-U7 Svnapot,
+              which makes a fourth page size against the three of
+              ITLB-3 and IL-7. MMU-U8 Svinval, which adds five
+              instructions to the three of MMU-17 and MMU-17a.
+              Ssnpm, pointer masking, was also found absent and
+              was WRONGLY reported as reaching the front end. The
+              ratified Pointer Masking specification v1.0 applies
+              the ignore transformation to explicit memory accesses
+              only and states it does not apply to implicit
+              accesses such as page-table walks or instruction
+              fetches. The claim came from the J extension WORKING
+              DRAFT and concerns data accesses. Ssnpm has no
+              front-end or fetch-path consequence. It may still
+              reach the D side when the DTLB exists.
+
+              MMU-U7 extended: privileged 11.1.7 has Svnapot
+              supported in G-stage translation when H is
+              implemented, so it reaches the walker and the nested
+              walk, not only the TLB arrays. The reserved N=1
+              encodings of Table 7 must page fault.
+
+              MMU-U7's first draft attributed a three-page-size
+              statement to MMU-1. MMU-1 states the topology only;
+              page-size handling in the L2 TLB is MMU-U1 and is
+              unresolved. Corrected.
+```

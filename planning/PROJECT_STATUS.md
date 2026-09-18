@@ -1862,6 +1862,106 @@ assessment of each document. Correct any that are wrong.
 |     |          | intact, only the valid is wrong -- degrades fallback     |
 |     |          | quality, never mispredicts. Wrap flag or 6-bit CSP.      |
 |     |          | Decide with the 16/32 rebalance. ras_decisions.md 3.3.   |
+| 122 | frontend | OPEN, RVA23 COMPLIANCE. VA_WIDTH is 40 and cannot hold   |
+|     |          | a fetch PC. H is mandatory through Sha; MMU-20 makes the |
+|     |          | G-stage Sv39x4; Shvsatpa requires vsatp to support Bare  |
+|     |          | because Svbare requires it of satp. With V=1 and         |
+|     |          | vsatp.MODE=Bare the fetch PC is a guest physical address |
+|     |          | of up to 41 bits, zero extended, and Sv39x4 requires     |
+|     |          | bits 63:41 to be zero or the access guest-page faults.   |
+|     |          |                                                          |
+|     |          | Two separate failures. The 41-bit range does not fit a   |
+|     |          | 40-bit field. And sign extension corrupts any GPA with   |
+|     |          | bit 38 set, well below 41, because a GPA is zero         |
+|     |          | extended. ftq_bpu_interfaces.md 5.2 reconstructs the     |
+|     |          | ITTAGE target by sign extension and is the explicit      |
+|     |          | site; l1i_ifu_interfaces.md TD-IF-1 is the root, closed  |
+|     |          | "No action" on reasoning that MMU-19..23 overtook in     |
+|     |          | session-069.                                             |
+|     |          |                                                          |
+|     |          | RULED session-070: VA_WIDTH 40 -> 41. FTB_TAG_BITS       |
+|     |          | pinned at 26 rather than derived, IT_MAX_TGT_WIDTH left  |
+|     |          | at 38. Predictor storage may alias or mispredict. An     |
+|     |          | alias is caught by PREDECODE, ftq_ifu_interfaces.md 6    |
+|     |          | and 7, NOT by FE-13: FE-13 republishes the cluster's own |
+|     |          | view and cannot detect its own error. A wrong target is  |
+|     |          | caught by the mispredict redirect at resolve.            |
+|     |          | Architectural addresses may not truncate, and            |
+|     |          | those are the fields that follow VA_WIDTH for free.      |
+|     |          | This keeps sim_ftb 99 and sim_ittage 211 intact.         |
+|     |          |                                                          |
+|     |          | GPA_WIDTH = 41 is added in the same edit. The ITLB       |
+|     |          | interfaces already carry the GPA on [GPA_WIDTH-1:0] and  |
+|     |          | the parameter does not exist, alongside VPN_WIDTH,       |
+|     |          | PPN_WIDTH, ASID_WIDTH, VMID_WIDTH, PERM_WIDTH,           |
+|     |          | CAUSE_WIDTH and PMA_WIDTH. Same class as PA_WIDTH in     |
+|     |          | l1i_ifu_interfaces.md 3.1.                               |
+|     |          |                                                          |
+|     |          | A backend-computed JALR target may have bits 63:41 set   |
+|     |          | and must fault. Narrowing to 41 loses that, which is     |
+|     |          | true at 40 today. The check belongs where the redirect   |
+|     |          | PC is formed, ruled into fe_decisions.md FE-19. HOW the  |
+|     |          | rejection is signalled is NOT ruled: the redirect group  |
+|     |          | of ftq_backend_interfaces.md 5 carries MISPREDICT, TRAP, |
+|     |          | REPLAY and UNSPEC and has no value for it. FE-U11.       |
+|     |          |                                                          |
+|     |          | Documents: bp_defines_pkg.sv, bp_structs_pkg.sv (283,    |
+|     |          | 585), l1i_ifu_interfaces.md TD-IF-1 and 3.1,             |
+|     |          | fe_decisions.md TD-FE-3, FE-19 and FE-U11,               |
+|     |          | ftq_entry_formats.md (57, 58, 70 and every total derived |
+|     |          | from them), ftq_decisions.md 4.7,                        |
+|     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 8,           |
+|     |          | ittage_interfaces.md, bp_cluster.md, mmu_decisions.md    |
+|     |          | MMU-20 and MMU-23, ftq_backend_interfaces.md 5 (FE-U11), |
+|     |          | ras_decisions.md 8 ("VA_WIDTH = 40b covers the RVA23     |
+|     |          | implementation VA space"), ras_interfaces.md 2           |
+|     |          | (RAS_ADDR_WIDTH = VA_WIDTH = 40b), ftb_interfaces.md     |
+|     |          | (Conventions and section 5), sc_table_hash_rules.md      |
+|     |          | (parameter list).                                        |
+|     |          |                                                          |
+|     |          | ubtb_interfaces.md, dcd_decisions.md,                    |
+|     |          | ftq_ifu_interfaces.md, itlb_ifu_interfaces.md,           |
+|     |          | itlb_l2tlb_interfaces.md, sc_interfaces.md and           |
+|     |          | bp_arb_spec.md are parametric and need no edit. An       |
+|     |          | earlier revision of this entry also listed               |
+|     |          | ras_decisions.md here, wrongly; it states 40b in prose.  |
+|     |          | THAT LIST WAS BUILT BY GREP AND THE GREP WAS TRUNCATED.  |
+|     |          | The four documents above it were missed the same way.    |
+|     |          |                                                          |
+|     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
+|     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
+|     |          | tb/ before scoping the task.                             |
+|     |          |                                                          |
+|     |          | POINTER MASKING DOES NOT APPLY. Ssnpm is mandatory in    |
+|     |          | RVA23S64, but the ratified Pointer Masking spec v1.0     |
+|     |          | applies the ignore transformation to EXPLICIT memory     |
+|     |          | accesses only and states it does not apply to implicit   |
+|     |          | accesses such as page-table walks or instruction         |
+|     |          | fetches. Every address in this item is a fetch address.  |
+|     |          | No front-end consequence. A session-070 draft of this    |
+|     |          | entry and of FE-19 claimed the opposite, sourced to the  |
+|     |          | J extension WORKING DRAFT, whose discussion of masking   |
+|     |          | the two extra Sv39x4 GPA bits concerns DATA accesses.    |
+|     |          | Recorded so it is not re-raised.                         |
+| 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
+|     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
+|     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
+|     |          | separate SC update queue the target arbitration model.   |
+|     |          | sc.sv builds neither: it assigns sc_uq_not_full = 1'b1   |
+|     |          | and sc_upd_rdy = all-ones under a comment naming them    |
+|     |          | arbitration-layer stubs.                                 |
+|     |          |                                                          |
+|     |          | The credit arbiter itself IS implemented and tested, in  |
+|     |          | bp_cluster: TD#73 closed by BP-094 group H covering all  |
+|     |          | seven bp_arb_spec 4.5 grant rules. Only the unit-level   |
+|     |          | queue is absent.                                         |
+|     |          |                                                          |
+|     |          | RAISED session-070 because closing TD#73 and TD#94       |
+|     |          | orphaned it. Neither was ever about building the queue,  |
+|     |          | yet bp_arb_spec.md, sc_interfaces.md and sc.sv (lines    |
+|     |          | 30-32 and 148) all named them as the deferral. Those     |
+|     |          | three citations now point here. The sc.sv comments are   |
+|     |          | a two-line edit whenever an SC task next opens.          |
 
 ---
 
@@ -2089,6 +2189,15 @@ For known failure modes see ANTIPATTERNS.md.
 
 ## Architectural Decisions
 
+
+### Temporary Status
+
+Planning files have a status line in the file header. 
+During this temporary time all file header STATUS: has
+been moved to DRAFT. All references to this status should
+be aware that there will be discrepancies in marked and 
+reported status. This is expected and temporary.
+
 ### Decoder track
 
 Pacino implements the mandatory requirements of the RVA23S64
@@ -2112,7 +2221,36 @@ the IFU ahead of the ibuf and IFU-4 runs it before predecode.
 
 The decisions this project has made:
 - Illegal instruction: ILLEGAL flag in decode packet,
-  ROB entry allocated, commit flushes to mtvec
+  ROB entry allocated, commit flushes to the trap vector the
+  BACKEND supplies. NOT mtvec specifically. Corrected
+  session-070; the line read "commit flushes to mtvec".
+  Three things were wrong with that.
+
+  The vector is one of three. RVA23S64 requires S-mode and,
+  through Sha, H. A trap in HS-mode or U-mode goes to M-mode
+  unless medeleg delegates it, in which case HS-mode. A trap in
+  VS-mode or VU-mode goes to M-mode unless medeleg delegates it
+  to HS-mode, and then to VS-mode if hedeleg delegates it
+  further. So the target is mtvec, stvec or vstvec depending on
+  the originating privilege and the delegation registers.
+  Privileged, H extension version 1.0.
+
+  The cause is one of two. When V=1, a VIRTUAL-INSTRUCTION
+  exception, cause 22, is raised instead of illegal instruction,
+  cause 2, when the instruction is HS-qualified but prevented
+  from executing at V=1, whether by privilege or because a CSR
+  such as scounteren or hcounteren disables it. mtval or stval
+  is written the same as for an illegal-instruction trap.
+
+  Neither is the decoder's to decide. Both depend on V and on
+  runtime CSR state the decoder does not hold, so the single
+  ILLEGAL flag is correct as a decode output and the cause and
+  the vector are assigned downstream. ftq_backend_interfaces.md
+  A6 says so directly: the trap vector is supplied by the
+  backend on bkend_ftq_redir_pc, and the FTQ reads no CSR.
+  Naming mtvec here contradicted that twice over, by fixing a
+  vector the backend chooses and by implying a CSR read on the
+  front-end side.
 - vtype: decoder stateless, rename resolves dependency
 - Dual decode packet: decode_pkt_t[7:0] scalar,
   vec_decode_pkt_t[7:0] vector, predecode_pkt_t[7:0].
@@ -2124,8 +2262,18 @@ The decisions this project has made:
 - Extension enable: ext_enable_t static from misa/CSR
 - Vector memory disambiguation: opcodes 0x07/0x27
 - H IS MANDATORY, not optional. RVA23 makes Sha mandatory and
-  H is part of Sha, so pacino has two-stage translation. The
-  no-optional-extensions rule above does not remove it. Sha
+  H is part of Sha, so pacino has two-stage translation. It is
+  in because the profile mandates it, not by any choice made
+  here. An earlier revision said "the no-optional-extensions
+  rule above does not remove it"; no such rule exists in this
+  document, which states the RVA23S64 mandatory set plus one
+  optional extension, Svadu. The phrase came from
+  session_handoff-070, where the sentence above it reads
+  "Pacino implements the RVA23S64 mandatory set and no optional
+  extension". That sentence is the outlier: this document names
+  Svadu, and mmu_decisions.md MMU-6 and MMU-7 have both Svade
+  and Svadu supported with menvcfg.ADUE selecting at runtime.
+  Corrected session-070. Sha
   also mandates Ssstateen, Shcounterenw, Shvstvala, Shtvala,
   Shvstvecd, Shvsatpa and Shgatpa. Four reach the front end:
   Shgatpa and Shvsatpa size the translation modes, Shtvala
@@ -2280,8 +2428,15 @@ unless noted.
           IFU-22, driven continuously for uncached fetch; added
           section 4.1, the translation request group driven by
           xlate_ptr; extended the section 5 flush to both IFU
-          pipelines; and dropped guest page fault from the
-          section 6 fault classes.
+          pipelines. AN EARLIER REVISION OF THIS ENTRY ALSO SAID
+          session-069 "dropped guest page fault from the section
+          6 fault classes". That edit was made and REVERTED in
+          the same session, on the PA's mistaken advice that H
+          was optional. Section 6 carries guest page fault as a
+          class and is correct: H is mandatory through Sha.
+          l1i_ifu_interfaces.md took the same edit and the same
+          revert; its entry never carried the claim. Corrected
+          session-070.
     - planning/interfaces/ftq_backend_interfaces.md   Draft
         - Backend/FTQ resolution, redirect and commit,
           session-067. Closes FE-U2 for the FTQ side; opens
