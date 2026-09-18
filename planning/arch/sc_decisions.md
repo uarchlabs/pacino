@@ -5,7 +5,7 @@
 ```
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
- STATUS:  COMPLETE
+ STATUS:  DRAFT
  UPDATED: 2026-07-01
  CONTACT: Jeff Nye
 ```

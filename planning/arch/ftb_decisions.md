@@ -5,7 +5,7 @@
 ```
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
- STATUS:  COMPLETE
+ STATUS:  DRAFT
  UPDATED: 2026-06-25
  CONTACT: Jeff Nye
 ```

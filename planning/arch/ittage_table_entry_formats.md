@@ -5,7 +5,7 @@
 ```
  FILE:    ittage_table_entry_formats.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```

@@ -5,7 +5,7 @@
 ```
  FILE:    tage_cntrl_alloc_rules.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-04-05
  CONTACT: Jeff Nye
 ```

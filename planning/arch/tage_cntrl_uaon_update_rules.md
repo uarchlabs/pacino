@@ -5,7 +5,7 @@
 ```
  FILE:    tage_tmp_uaon_update_rules.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-07-02
  CONTACT: Jeff Nye
 ```

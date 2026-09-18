@@ -5,7 +5,7 @@
 ```
  FILE:    bp_history_interfaces.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-08-09
  CONTACT: Jeff Nye
 ```

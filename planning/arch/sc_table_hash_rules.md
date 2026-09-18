@@ -5,7 +5,7 @@
 ```
  FILE:    sc_table_hash_rules.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-06-30
  CONTACT: Jeff Nye
 ```

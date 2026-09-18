@@ -6,7 +6,7 @@
  FILE:    ftq_ifu_interfaces.md
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
- STATUS:  DRAFT -- closes TD-FE-1
+ STATUS:  DRAFT
  UPDATED: 2026-08-21
  CONTACT: Jeff Nye
 ```

@@ -5,7 +5,7 @@
 ```
  FILE:    ittage_cntrl_uaon_update_rules.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-06-10
  CONTACT: Jeff Nye
 ```

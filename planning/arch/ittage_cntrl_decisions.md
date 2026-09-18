@@ -5,7 +5,7 @@
 ```
  FILE:    ittage_cntrl_decisions.md
  SOURCE:  various
- STATUS:  COMPLETE
+ STATUS:  DRAFT
  UPDATED: 2026-05-16
  CONTACT: Jeff Nye
 ```

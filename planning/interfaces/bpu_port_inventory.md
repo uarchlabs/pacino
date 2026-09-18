@@ -5,7 +5,7 @@
 ```
  FILE:    bpu_port_inventory.md
  SOURCE:  INFRA-011
- STATUS:  WORKING
+ STATUS:  DRAFT
  UPDATED: 2026-08-02
  CONTACT: Jeff Nye
 ```

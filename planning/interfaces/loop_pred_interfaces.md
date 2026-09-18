@@ -6,7 +6,7 @@
 ```
  FILE:    loop_pred_interfaces.md
  SOURCE:  various
- STATUS:  LOCKED
+ STATUS:  DRAFT
  UPDATED: 2026-08-08
  CONTACT: Jeff Nye
 ```
