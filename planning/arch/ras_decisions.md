@@ -619,11 +619,14 @@ It is eliminated rather than forgotten because `pft_addr` carries
 the TRUE instruction end, not a value clamped at the block
 boundary. A call is a taken branch and terminates the block, so
 the fall-through IS the address after the call. The encoding
-reaches past the block: `pftAddr` holds 0 to 16 at 2-byte
-granularity, which is 0 to 32 bytes, and the carry bit adds a
-further 32 (`ftb_decisions.md` 4.5, 5.5). A 32-bit call beginning
-at the block's last halfword ends at block start plus 34, which is
-`pftAddr` = 1 with carry set.
+reaches past the block: under the session-070 ruling `pftAddr` is
+six bits measured from the ALIGNED REGION BASE, covering 0 to 126
+bytes, with no carry bit (`ftb_decisions.md` 5.5, 8.1). A 32-bit
+call beginning at the block's last halfword ends at block start
+plus 34 and is representable wherever the block starts within its
+region. An earlier revision gave this as "`pftAddr` = 1 with carry
+set", which holds only for an aligned block start. TD#124 tracks
+the RTL, which is still 5 bits plus carry.
 
 The straddle case is real, not hypothetical: `ifu_decisions.md`
 IFU-8 covers 34 bytes and 17 halfword positions for exactly this

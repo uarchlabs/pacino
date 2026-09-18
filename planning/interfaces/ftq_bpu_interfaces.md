@@ -674,11 +674,16 @@ resolves to zero, which decodes as COND, so restoring the field
 instead of rederiving the type would silently classify every update
 as conditional and stop ITTAGE ever being updated.
 
-Update fan-out by resolved br_type is fe_decisions.md 7.2. The three
-encodings that table does not list follow from what each predictor
-does: NO_BRANCH forms no update; DIRECT_CALL pushes RAS and updates
-uBTB and FTB; INDIRECT_CALL updates ITTAGE for the target and RAS
-for the return address.
+Update fan-out by resolved br_type is fe_decisions.md 7.2. FOUR
+encodings that table does not list, not three. Three follow from
+what each predictor does: NO_BRANCH forms no update; DIRECT_CALL
+pushes RAS and updates uBTB and FTB; INDIRECT_CALL updates ITTAGE
+for the target and RAS for the return address. The fourth,
+RETURN_CALL at 3'b111, was added session-069 for the JALR that pops
+then pushes (ras_decisions.md 2, dcd_decisions.md DCD-11a) and its
+fan-out is NOT determined -- fe_decisions.md FE-U9. An earlier
+revision said "three encodings", written before the enum went to
+eight. Corrected session-070.
 
 Each queued predictor's update valid is additionally qualified by
 its own queue ready, so no update is presented to a full queue. The
@@ -737,9 +742,16 @@ index 0.
 plus that branch's in-block position, TWO bytes per position
 (section 7.4). bp_history folds bits [3] and [2] of it into the PHR
 path bit. The block PC would make the path bit nearly constant,
-because most block starts are fall-throughs from a 32-byte-aligned
-predecessor and carry 2'b00 there; only a block entered by a taken
-branch has those bits set. The branch PC varies by construction. See
+because a block start moves only when the block boundary moves. AN
+EARLIER REVISION gave the reason as "most block starts are
+fall-throughs from a 32-byte-aligned predecessor and carry 2'b00
+there". Blocks are unaligned (ftq_decisions.md 4.7,
+ifu_decisions.md IFU-6), so a fall-through inherits its
+predecessor's low bits, and even from an aligned start the
+fall-through is 2'b00 there only when the block length is a
+multiple of 16 bytes. Corrected session-070, matching
+bp_history_decisions.md 3.2 and bp_history_interfaces.md Producer
+obligations. The branch PC varies by construction. See
 bp_history_interfaces.md, Producer obligations, and BP-092a.
 
 Checkpoint write, at allocation:

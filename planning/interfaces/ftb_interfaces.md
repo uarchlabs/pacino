@@ -160,7 +160,11 @@ fields of the one indexed entry, not two slots.
   output logic [VA_WIDTH-1:0]   ftb_pft_addr_p2
                         -- predicted fallthrough address, full width,
                            reconstructed by ftb_cntrl from the stored
-                           partial pftAddr + carry. Reconstructed
+                           partial pftAddr -- six bits from the
+                           aligned region base, NO CARRY BIT
+                           (ftb_decisions.md 5.5, ruled session-070;
+                           TD#124 tracks the RTL, still 5 + carry).
+                           Reconstructed
                            UNCONDITIONALLY; there is no fallthrough
                            error check (ftb_decisions.md 4.5).
                            Authoritative for the cluster; RAS push
@@ -256,8 +260,10 @@ IC-FTB-05).
   input  logic [VA_WIDTH-1:0]   ftb_upd_pft_addr_u0
                         -- resolved block end (fallthrough), full
                            width. ftb_cntrl reduces it to the stored
-                           partial pftAddr + carry at the write
-                           (ftb_decisions.md 5.4/5.5).
+                           partial pftAddr at the write -- relative
+                           to the ALIGNED REGION BASE, not the block
+                           start, six bits, no carry
+                           (ftb_decisions.md 5.4/5.5, TD#124).
 
 There is no last_may_be_rvi_call port. The bit was eliminated
 (ftb_decisions.md section 6).

@@ -307,9 +307,14 @@ per cycle, no slot dimension. So if the watermark jumps by more than
 one entry, the FTQ must walk the intervening entries one per cycle
 to issue their RAS commits.
 
-That walk is bounded and safe. FE-11 guarantees at most one RAS
-operation per entry, so one entry per cycle is one RAS commit per
-cycle, exactly the port's capacity. An entry is NOT freed before its
+That walk is bounded and safe. FE-11 guarantees at most one
+RAS-OPERATING INSTRUCTION per block and therefore one snapshot per
+entry, so one entry per cycle is one RAS commit per cycle, exactly
+the port's capacity. An earlier revision said "at most one RAS
+operation per entry"; since session-069 a single JALR may pop then
+push (DCD-11), two operations at one position. The conclusion is
+unaffected: the commit carries the entry's post-op snapshot, not a
+per-operation record. Corrected session-070. An entry is NOT freed before its
 RAS commit issues: the commit payload reads `bp_ras_snapshot_t` out
 of the entry, so freeing it first would read a slot that may already
 be reallocated. Commit and free are therefore ONE pointer, not two

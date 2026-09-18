@@ -169,7 +169,15 @@ the stream to alignment.
   hit      : entry valid and tag matched.
 
   pft_addr : the block end, reconstructed to full width from the
-             stored partial pftAddr plus the BLOCK carry. Author-
+             stored partial pftAddr. RULED session-070, NOT YET
+             BUILT (TD#124): pftAddr becomes six bits measured
+             from the 32-byte ALIGNED REGION BASE and THE CARRY
+             BIT IS DELETED. As built it is a four-bit slice in a
+             five-bit field plus a carry, which cannot represent
+             an end more than 62 bytes above the region base;
+             an unaligned block can reach 64. ftb_decisions.md
+             5.5, 8.1. The text below describes the built form.
+             Author-
              itative for the cluster when no slot is taken. The
              reconstruction is BOUNDS CHECKED: if the end is not
              above the looked-up block start, pft_addr is driven

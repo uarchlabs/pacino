@@ -175,8 +175,12 @@ only advance, rollback by index, FTQ visibility vs ownership).
     An earlier revision of this file stated the opposite. It was
     wrong, and the fold arithmetic here is why: the PHR write
     above consumes pred_pc bits [3] and [2] only. With the branch
-    PC, pred_pc[3:2] carries the low two bits of the branch's
-    in-block position and the path bit varies as it should.
+    PC, pred_pc[3:2] is simply bits [3:2] OF THE BRANCH PC and the
+    path bit varies as it should. It is NOT a function of the
+    in-block position alone: the branch PC is block start + 2*pos
+    and the start is unaligned, so no pos-only identity holds. An
+    earlier revision said pred_pc[3:2] "carries the low two bits
+    of the branch's in-block position". Corrected session-070.
 
     THE REASON GIVEN FOR IT WAS ALSO WRONG, session-069. It said a
     fetch block PC is FTB_BLOCK_BYTES aligned so bits [4:0] are
@@ -184,12 +188,18 @@ only advance, rollback by index, FTQ visibility vs ownership).
     block begins at the lookup PC, which is a taken branch target
     and so any 2-byte address (ftq_decisions.md 4.7,
     ifu_decisions.md IFU-6). The conclusion survives without that
-    premise and is stronger for being stated correctly: a block
-    start is 2'b00 in bits [3:2] whenever it is a fall-through
-    from an aligned predecessor, which is most of them, so the
-    block PC gives a path bit that is nearly constant rather than
-    exactly constant. The branch PC varies by construction because
-    its in-block position does.
+    premise. THE REPLACEMENT PREMISE WAS ALSO WRONG. It read "a
+    block start is 2'b00 in bits [3:2] whenever it is a
+    fall-through from an aligned predecessor, which is most of
+    them", which is the same alignment assumption one step
+    removed: blocks are unaligned, so a fall-through inherits its
+    predecessor's low bits, and even from an aligned start the
+    fall-through is 2'b00 there only when the block length is a
+    multiple of 16 bytes. No alignment claim is needed. A block
+    start moves only when the block boundary moves, while the
+    branch PC moves with every branch's in-block position, so the
+    block PC gives a nearly constant path bit and the branch PC
+    does not. Corrected session-070.
 
     bp_cluster derives this value; see bp_cluster.sv
     w_slot_pc_p1 (BP-092a).

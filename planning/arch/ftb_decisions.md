@@ -224,7 +224,7 @@ Entry fields (logical entry, FTB_ENTRY_WIDTH = 110 bits/way):
   jump field             -- valid, position, target (reconstructed full
                             VA_WIDTH from a stored displacement, 4.2),
                             isCall, isRet, isJalr
-  fallthrough            -- pftAddr + carry
+  fallthrough            -- pftAddr (6 bits, no carry; 5.5, 8)
 
 position (FTB_BR_POS_BITS, 4 bits) is the in-block instruction slot
 (0..15) the branch occupies, distinct from the TARGET offset of 4.2 (an
@@ -382,7 +382,8 @@ All widths are now ruled. None remain derived-at-RTL.
 ### 4.5  Fallthrough reconstruction: bounds checked
 
 pftAddr is stored partial (8.1). The full fallthrough is reconstructed
-as block-start-high ++ pftAddr (+ carry).
+as the aligned region base plus pftAddr shifted by POS_OFFSET_BITS.
+No carry term: 5.5 deleted the carry bit session-070.
 
   FTB-G1  The reconstructed end is compared against the looked-up
           block start. If the end is not above the start, pftAddr is
@@ -511,8 +512,10 @@ vector from ftb_plru to implement it; it is not specified now.)
   target (jump): the resolved jump target, as a 21-bit displacement
                 (FTB_JMP_TGT_BITS) with fit/overflow/underflow status.
   isCall / isRet / isJalr: from the resolved jump's type.
-  fallthrough (pftAddr + carry): reduced by ftb_cntrl from the
-                resolved block end address relative to block start.
+  fallthrough (pftAddr): reduced by ftb_cntrl from the resolved
+                block end address relative to THE ALIGNED REGION
+                BASE, not to the block start (5.5). Six bits, no
+                carry.
 
 ### 5.4a  Which conditional field a branch fills
 
@@ -546,13 +549,13 @@ only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
                 The stored target must stay current. Do NOT gate this
                 write on "ITTAGE missed" -- write it whenever the jump
                 resolves. See 4.2.
-  fallthrough (pftAddr + carry): recomputed on any update that MOVES
+  fallthrough (pftAddr): recomputed on any update that MOVES
                 the block boundary -- a branch added to a free field,
                 the terminating branch changing, or block truncation
                 (section 3) moving the end. Computed from the resolved
-                block end relative to block start, at the same write as
-                the other fields. Not rewritten when the boundary is
-                unchanged.
+                block end relative to THE ALIGNED REGION BASE (5.5),
+                at the same write as the other fields. Not rewritten
+                when the boundary is unchanged.
 
 All of the above are writes into the ftb_array entry (the carried way).
 The entry-valid in ftb_plru is unchanged on an in-place update -- it
@@ -562,17 +565,35 @@ that protocol exists).
 Full-to-partial reduction (ftb_cntrl): the update port delivers the
 resolved block end as a full VA (ftb_upd_pft_addr_u0). ftb_cntrl
 reduces it to the stored partial form:
-  pftAddr = end[FTB_OFFSET_BITS-1 : POS_OFFSET_BITS]
-            -- the in-block position of the end at 2-byte granularity
-            (FTB_BLOCK_BYTES/2 = 16 positions, 4 bits) extended by one
-            to represent the full-block end point (PFTADDR_BITS = 5,
-            8.1). Stated as the shift, not a literal 2, so it cannot
-            drift from the position width again.
-  carry   = 1 when the end lies in the next block (end crosses the
-            FTB_BLOCK_BYTES boundary above block start), else 0.
-The reconstruction at read inverts this: block-start-high ++ pftAddr,
-plus carry into the next block. The reconstruction is bounds checked
-(4.5).
+RULED session-070, NOT YET BUILT -- TD#124 tracks the RTL.
+
+  pftAddr = off[FTB_OFFSET_BITS+1 : POS_OFFSET_BITS]
+            where off = end - base and base is the 32-byte-ALIGNED
+            region containing the block start. Six bits
+            (PFTADDR_BITS = 6, 8.1), covering 0 to 126 bytes above
+            the region base at 2-byte granularity.
+  carry   = DELETED. Not needed at six bits.
+
+The reconstruction at read inverts this: base ++ 0, plus pftAddr
+shifted by POS_OFFSET_BITS. Bounds checked (4.5).
+
+WHY. The encoding is REGION-relative, not start-relative: the entry
+is shared by every PC in the 32-byte region, since FTB_OFFSET_BITS
+are in neither index nor tag (4.1), so a start-relative end would
+reconstruct to a different address for each PC that hits the entry.
+Blocks are unaligned, so with a start at region offset k <= 30, a
+32-byte block and a straddling 32-bit final instruction, off reaches
+(FTB_BLOCK_BYTES - 2) + FTB_BLOCK_BYTES + 2 = 64 bytes. Six bits
+cover that; four bits plus one carry bit do not.
+
+AS BUILT (TD#124) the reduction is off[4:1] zero-extended into a
+five-bit field with carry = |off[VA_WIDTH-1:5]. Two defects. The
+fifth bit is dead -- a four-bit slice cannot reach 16, so section
+6's "0 to 16" is unreachable. And at off = 64 the reconstruction
+gives pftAddr = 0 with carry set, which is base+32, wrong by 32
+bytes, and 4.5's bounds check does not catch it because base+32 is
+still above the start. Storage is unchanged either way: 5 + 1 carry
+becomes 6 + no carry.
 
 ---
 
@@ -583,11 +604,22 @@ DECISION NEEDS TO BE REVISITED IN THE FUTURE.
 
 WHY THE ELIMINATION IS SAFE, session-069. `pft_addr` carries the
 true instruction end rather than a value clamped at the block
-boundary, and the encoding reaches past the block: `pftAddr` holds
-0 to 16 at 2-byte granularity, 0 to 32 bytes, and carry adds a
-further 32. A 32-bit call beginning at the block's last halfword
-ends at block start plus 34, which is `pftAddr` = 1 with carry
-set. Since a call is a taken branch and terminates the block, that
+boundary, and the encoding reaches past the block: under the
+session-070 ruling (5.5) `pftAddr` is six bits measured from the
+ALIGNED REGION BASE and covers 0 to 126 bytes, which holds any
+block end including a straddle. A 32-bit call beginning at the
+block's last halfword ends at block start plus 34 and is
+representable wherever the block starts within its region.
+
+AN EARLIER REVISION read "`pftAddr` holds 0 to 16 at 2-byte
+granularity, 0 to 32 bytes, and carry adds a further 32. A 32-bit
+call beginning at the block's last halfword ends at block start
+plus 34, which is `pftAddr` = 1 with carry set." That worked only
+for a 32-byte-aligned block start. Blocks are unaligned, and from
+a start at region offset 30 the same call ends 64 bytes above the
+region base, which one carry bit cannot express. 5.5, TD#124.
+
+Since a call is a taken branch and terminates the block, that
 end IS the return address the RAS needs.
 
 `ras_decisions.md` 8 described the eliminated +2 correction until
@@ -666,11 +698,14 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               +/-1 MB original -> +/-2 MB expanded.
   TAR_STAT_BITS     = 2       fit / overflow / underflow status,
                               shared by conditional and jump targets.
-  PFTADDR_BITS      = 5       FTB_BR_POS_BITS + 1. The stored block
-                              end: an in-block position extended by
-                              one so it can represent the full-block
-                              end point (5.5). The carry bit is
-                              SEPARATE and is not counted here.
+  PFTADDR_BITS      = 6       $clog2(FTB_BLOCK_BYTES) + 1. The
+                              stored block end as a 2-byte-granular
+                              offset from the ALIGNED REGION BASE,
+                              covering 0 to 126 bytes (5.5). THERE
+                              IS NO CARRY BIT: it was 5 + 1 carry
+                              and is now 6, so the entry width is
+                              unchanged. Ruled session-070, built
+                              as 5 + carry until TD#124.
 
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
@@ -681,7 +716,7 @@ held in ftb_plru):
   + 2 * (1 + 4 + 13 + 2 + 3)       = 46   br0 + br1 (valid,pos,tgt,
                                           stat,conf -- no always_taken)
   + (1 + 4 + 21 + 2 + 3)           = 31   jump (valid,pos,tgt,stat,type)
-  + (5 + 1)                        =  6   pftAddr + carry
+  + 6                              =  6   pftAddr (no carry bit)
     FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 440 bits (logical).
 
 THIS BLOCK IS THE SOLE HOME OF THE ENTRY ARITHMETIC. Nothing else
@@ -733,20 +768,32 @@ Control polarity: ftb_array and ftb_plru enables are active low
 
 ## 8.1 Partial fall-through address derivation
 
-pftAddr = partial fall-through address. It's the block's end address stored as
-a short offset from the block start instead of a full VA, with carry as the
-overflow bit when the end crosses a boundary. The full fall-through
-reconstructs from block-start + pftAddr + carry, and the result is
+pftAddr = partial fall-through address. It is the block's end stored
+as a short 2-byte-granular offset from the 32-BYTE-ALIGNED REGION
+BASE rather than a full VA. The full fall-through reconstructs from
+that base plus pftAddr shifted by POS_OFFSET_BITS, and the result is
 bounds checked; see 4.5.
 
-  PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES / 2) + 1
+AN EARLIER REVISION described it as "a short offset from the block
+start ... with carry as the overflow bit" reconstructing from
+"block-start + pftAddr + carry". Both halves were wrong: the
+encoding is region-relative, not start-relative, and session-070
+deleted the carry bit. See 5.5 for why, and TD#124 for the RTL,
+which is still 5 bits plus carry.
+
+  PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES) + 1
+
+The maximum it must represent is one region offset short of the
+region end, plus a full block, plus a straddling halfword pair:
+(FTB_BLOCK_BYTES - 2) + FTB_BLOCK_BYTES + 2 = 2 * FTB_BLOCK_BYTES
+= 64 bytes = 32 positions.
 
 ---
 
 ## 9. Open Items
 
   FTB-1: CLOSED (session-052; reconciled session-053). All offset,
-         target, pftAddr and carry widths are ruled and listed in
+         target and pftAddr widths are ruled and listed in
          SECTION 8, WHICH IS THE SOLE HOME OF THE ARITHMETIC. The
          numbers are not restated here: this entry carried them
          until session-069 and went stale after BP-099, which is

@@ -1060,14 +1060,25 @@ ubtb.sv.
          one entry represents one fetch block with NUM_PRED_SLOTS
          predicted branches. See sections 4.1 and 10, FE-10.
 
-  FE-U9  br_type update fan-out covers four of the seven
+  FE-U9  br_type update fan-out covers four of the EIGHT
          bp_br_type_e encodings. The section 7.2 table has rows for
          conditional, indirect, return, and direct unconditional.
-         DIRECT_CALL, INDIRECT_CALL, and NO_BRANCH have no row. Both
-         call encodings push the RAS, and per the session-061 ruling
-         INDIRECT_CALL updates ITTAGE for the target and RAS for the
-         return address. NO_BRANCH forms no update. Independent of
-         the slot count.
+         FOUR have no row: DIRECT_CALL, INDIRECT_CALL, NO_BRANCH and
+         RETURN_CALL. Both call encodings push the RAS, and per the
+         session-061 ruling INDIRECT_CALL updates ITTAGE for the
+         target and RAS for the return address. NO_BRANCH forms no
+         update. Independent of the slot count.
+
+         RETURN_CALL AT 3'b111 IS THE FOURTH AND ITS FAN-OUT IS NOT
+         DETERMINED. It was added session-069 (ras_decisions.md 2,
+         dcd_decisions.md DCD-11a) for the JALR that pops then
+         pushes, which made the enum eight encodings, not seven.
+         That it drives the RAS twice is settled. Whether it also
+         trains ITTAGE for its target, as INDIRECT_CALL does, is
+         not: it is an indirect JALR whose predicted target comes
+         from the pop. Resolve with the 7.2 table. An earlier
+         revision of this item read "four of the seven" and named
+         three unlisted encodings. Corrected session-070.
 
   FE-U11 How a backend redirect PC with bits 63:41 set is signalled.
          FE-19 requires the check where the redirect is formed and

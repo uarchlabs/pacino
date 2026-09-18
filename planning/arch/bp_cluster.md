@@ -248,9 +248,42 @@ See planning/arch/ras_decisions.md for full decision rationale.
   Note: push->pop and pop->push within one p2/p3 pair cannot occur.
 
 #### Call and return detection (RISC-V register conventions)
-- Call:   JAL, JALR, C.JALR  where rd = x1 or x5
-- Return: JALR, C.JR, C.JALR where rs1 = x1 or x5
-          (C.JALR with rs1=x5 excluded from return classification)
+JAL pushes when rd = x1 or x5, and does nothing otherwise.
+
+JALR follows the RISC-V hint table exactly. Link means x1 or x5:
+
+```
+  rd      rs1     rs1 == rd    RAS action
+  !link   !link   --           none
+  !link   link    --           pop          RETURN
+  link    !link   --           push         call
+  link    link    no           pop, push    RETURN_CALL
+  link    link    yes          push         call
+```
+
+The compressed forms map onto that table, they are not extra cases:
+
+```
+  C.JR   rs1        = JALR x0, rs1, 0.  rd = x0, never link.
+                      rs1 link  -> pop.  rs1 !link -> none.
+  C.JALR rs1        = JALR x1, rs1, 0.  rd = x1, ALWAYS link.
+                      rs1 = x1  -> rs1 == rd   -> push.
+                      rs1 = x5  -> both, unequal -> pop, push.
+                      rs1 !link -> push.
+```
+
+SO C.JALR IS NEVER A POP-ONLY RETURN, and a JALR is a return only
+when rd is not a link register.
+
+  Two earlier revisions were wrong here. The first read "Return:
+  JALR, C.JR, C.JALR where rs1 = x1 or x5 (C.JALR with rs1=x5
+  excluded from return classification)", which made C.JALR with
+  rs1=x1 a return and omitted the rd constraint, so a JALR with a
+  link rd read as a return. A session-070 rewrite then gave the push
+  case as "rd = x1 or x5 and rs1 not a link register", which drops
+  the rs1 == rd row, leaving JALR x1, x1 in no class at all. The
+  table above is the fix for both. ras_decisions.md 2 is canonical
+  and agrees. Corrected session-070.
 
 #### Role in JALR prediction
 - RAS:    JALR/C.JR/C.JALR matching return register convention.

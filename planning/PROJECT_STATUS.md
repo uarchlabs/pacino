@@ -1928,6 +1928,57 @@ assessment of each document. Correct any that are wrong.
 |     |          | THAT LIST WAS BUILT BY GREP AND THE GREP WAS TRUNCATED.  |
 |     |          | The four documents above it were missed the same way.    |
 |     |          |                                                          |
+| 124 | ftb/ubtb | OPEN, RTL. pftAddr cannot represent the end of an        |
+|     |          | unaligned block. RULED session-070; documents record the |
+|     |          | ruling, RTL does not yet implement it.                   |
+|     |          |                                                          |
+|     |          | As built, ftb_cntrl.sv reduces the end against the       |
+|     |          | 32-byte ALIGNED region base:                             |
+|     |          |   upd_off    = end - {pc[39:5], 5'b0}                    |
+|     |          |   upd_new.pft   = upd_off[4:1]  (4 bits into a 5b field) |
+|     |          |   upd_new.carry = |upd_off[39:5]                         |
+|     |          | Reconstruct = base + (pft << 1) + (carry ? 32 : 0).      |
+|     |          |                                                          |
+|     |          | Two defects. The fifth bit of pft is DEAD -- a four-bit  |
+|     |          | slice cannot reach 16, so ftb_decisions.md 6's "0 to 16" |
+|     |          | is unreachable. And with a block start at region offset  |
+|     |          | k <= 30, a 32-byte block and a straddling 32-bit final   |
+|     |          | instruction, upd_off reaches 64; at 64 the reconstruct   |
+|     |          | gives pft = 0 with carry set = base+32, WRONG BY 32      |
+|     |          | BYTES, silently. 4.5's bounds check does not catch it    |
+|     |          | because base+32 is still above the start.                |
+|     |          |                                                          |
+|     |          | RULING: keep region-relative, widen to                   |
+|     |          | PFTADDR_BITS = $clog2(FTB_BLOCK_BYTES) + 1 = 6 and       |
+|     |          | DELETE the carry bit. Max off = 2*FTB_BLOCK_BYTES = 64   |
+|     |          | bytes = 32 positions, which 6 bits cover. Storage is     |
+|     |          | unchanged: 5 + 1 carry becomes 6 + none, so              |
+|     |          | FTB_ENTRY_WIDTH stays 110 and the RAM widths are         |
+|     |          | untouched. Start-relative was rejected: the entry is      |
+|     |          | shared by every PC in the region (4.1), so a             |
+|     |          | start-relative end reconstructs differently per lookup   |
+|     |          | PC.                                                      |
+|     |          |                                                          |
+|     |          | THE uBTB CARRIES THE IDENTICAL SCHEME and the same       |
+|     |          | defect: UBTB_PFTADDR_BITS + 1, recon_pft(base, pft,      |
+|     |          | carry) in ubtb.sv. Same fix.                             |
+|     |          |                                                          |
+|     |          | RTL: bp_defines_pkg.sv (PFTADDR_BITS,                    |
+|     |          | UBTB_PFTADDR_BITS, both entry widths), bp_structs_pkg.sv |
+|     |          | (drop carry from both entry structs), ftb_cntrl.sv       |
+|     |          | (reduce and reconstruct), ubtb.sv (recon_pft, reduce).   |
+|     |          | Package edit, so the run widens to both units. FTB is    |
+|     |          | Complete at sim_ftb 99/0 and the uBTB is green, so       |
+|     |          | neither testbench covers a block start at a nonzero      |
+|     |          | region offset whose end crosses two regions -- add that  |
+|     |          | case with the fix.                                       |
+|     |          |                                                          |
+|     |          | SEPARATE, SAME FILE: ftb_cntrl.sv line 500 comments the  |
+|     |          | reconstruct as "unconditional, no error check; 4.5",     |
+|     |          | while 4.5 says bounds checked and session-069 records    |
+|     |          | restoring that check. Confirm whether the restoration    |
+|     |          | ever reached RTL.                                        |
+|     |          |                                                          |
 |     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
 |     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
 |     |          | tb/ before scoping the task.                             |
@@ -2637,9 +2688,17 @@ unless noted.
   was fixed by BP-092a and proven by BP-093 TC-A..TC-G,
   including a 64-pair position sweep and the identity
   path_bit = pos[1] ^ pos[0].
-- BP-099 RESCALED THAT IDENTITY. It was proven when a position
-  was FOUR bytes. POS_OFFSET_BITS is now 1, so pred_pc[3:2] is
-  pos[2:1] and the identity is path_bit = pos[2] ^ pos[1]. The
+- BP-099 RESCALED THAT IDENTITY, AND NO pos-ONLY IDENTITY HOLDS
+  IN GENERAL. It was proven when a position was FOUR bytes.
+  POS_OFFSET_BITS is now 1, so pred_pc[3:2] would be pos[2:1] and
+  the identity path_bit = pos[2] ^ pos[1] -- BUT ONLY FOR A
+  16-BYTE-ALIGNED BLOCK BASE. The branch PC is block start +
+  2*pos and blocks are unaligned (ftq_decisions.md 4.7,
+  ifu_decisions.md IFU-6), so in general path_bit is
+  pred_pc[3] ^ pred_pc[2] and nothing simpler. The rescaled form
+  is what a test with an aligned base sees, which is presumably
+  why the old one passed. Stated session-070,
+  bp_history_interfaces.md Producer obligations. The
   bp_history side is unchanged; it folds pred_pc[3:2] either
   way. sim_bp_cluster was rebuilt under the new width by BP-099
   (997 -> 1765), so the RTL is exercised. What is stale is the

@@ -464,9 +464,18 @@ MOST ONE ENTRY PER CYCLE.
 The limit is the RAS, not the FTQ. `ras_commit_val` and its payload
 group are scalar on bp_cluster -- no slot dimension -- so one commit
 operation per cycle is the port's capacity. FE-11 guarantees at most
-one RAS operation per entry, so one entry per cycle is exactly one
-RAS commit per cycle and the walk never falls behind what the port
-can carry.
+one RAS-OPERATING INSTRUCTION per block and therefore ONE SNAPSHOT
+PER ENTRY, so one entry per cycle is exactly one RAS commit per
+cycle and the walk never falls behind what the port can carry.
+
+An earlier revision said FE-11 guarantees "at most one RAS operation
+per entry". Since session-069 that is false: a JALR whose rd and rs1
+are both link registers and unequal pops then pushes, two operations
+at one position (dcd_decisions.md DCD-11, ras_decisions.md 2). The
+conclusion is unaffected, because the commit carries the entry's
+post-op snapshot rather than a per-operation record, so two
+operations at one position still commit as one. Corrected
+session-070.
 
 An entry cannot be freed before its RAS commit is issued: the commit
 payload reads `bp_ras_snapshot_t` out of the entry. Commit and free

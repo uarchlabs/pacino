@@ -168,12 +168,23 @@ after the cluster compacts its valid slots, not by slot number.
 
 AN EARLIER REVISION OF THIS LINE SAID THE FETCH-BLOCK PC. It was
 wrong and the fold arithmetic above is why: the PHR write consumes
-bits [3] and [2] only. A block start is 2'b00 there whenever it is
-a fall-through from an aligned predecessor, which is most of them,
-so the block PC gives a path bit that is nearly constant. The
-branch PC varies by construction because its in-block position
-does. Corrected 2026-09-17 to match bp_history_interfaces.md
-Producer obligations, ftq_bpu_interfaces.md 9 and BP-092a, which
+bits [3] and [2] only. The block PC gives a path bit that is
+nearly constant because a block start moves only when the block
+boundary moves; the branch PC varies by construction because its
+in-block position does.
+
+THE REASON GIVEN FOR THAT WAS WRONG and does not depend on
+alignment. An earlier revision read "A block start is 2'b00 there
+whenever it is a fall-through from an aligned predecessor, which
+is most of them." Blocks are unaligned (ftq_decisions.md 4.7,
+ifu_decisions.md IFU-6), so a fall-through inherits its
+predecessor's low bits, and even from an aligned start the
+fall-through is 2'b00 there only when the block length is a
+multiple of 16 bytes. Corrected session-070.
+
+The branch-PC reading was corrected 2026-09-17 to match
+bp_history_interfaces.md Producer obligations,
+ftq_bpu_interfaces.md 9 and BP-092a, which
 have carried the branch-PC reading since session-064.
 
 PHR does not currently contribute to any fold; all folds are
