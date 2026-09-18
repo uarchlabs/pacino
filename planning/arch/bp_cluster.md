@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  STABLE (rev 1.0)
- UPDATED: 2026-08-19
+ UPDATED: 2026-09-17
  CONTACT: Jeff Nye
 ```
 ---
@@ -21,11 +21,14 @@ via a static configuration input.
 
 Predictors: uBTB, Loop, FTB, TAGE, SC, ITTAGE, RAS.
 
-Override chain (conditional branch direction and target):
-  SC > TAGE > FTB > uBTB
-  Loop predictor overrides uBTB at s1 when trusted (override control
-  decision). Loop predictor does not participate in s2/s3 chain.
-  ITTAGE and RAS are outside this chain (type-gated, see below).
+Override order (conditional branch direction and target):
+  uBTB (p1) -> FTB, TAGE (p2) -> SC (p3)
+  This is stage order, not a contention ranking: a later stage
+  supersedes an earlier one (FE-3, fe_decisions.md 12). Within p2,
+  TAGE overrides the FTB direction.
+  Loop predictor overrides uBTB at p1 when trusted (override control
+  decision). Loop predictor does not participate after p1.
+  ITTAGE and RAS are outside this ordering (type-gated, see below).
 
 ---
 
@@ -45,7 +48,7 @@ AN EARLIER REVISION OF THIS DOCUMENT wrote the miss successor as
 `PC + fetch_width` at both sites below. `fetch_width` here is
 FETCH_BLOCK_BYTES, 64, so the successor skipped a whole prediction
 block: the 32 bytes between PC+32 and PC+64 went unpredicted and a
-branch in them was missed until the s2 redirect corrected it.
+branch in them was missed until the p2 redirect corrected it.
 Bounded to one cycle, but a wrong successor is written into the FTQ
 entry in the meantime. Corrected session-069.
 
@@ -60,11 +63,11 @@ a 32-byte boundary.
 
 ### uBTB (micro Branch Target Buffer)
 - Size:    256 entries, 4-way associative
-- Stage:   s1 output
+- Stage:   p1 output
 - Role:    First prediction. Provides next-PC to start speculative fetch.
            On miss: no prediction generated. Fetch proceeds
            sequentially (PC + FTB_BLOCK_BYTES, 32 bytes) until the
-           s2 redirect fires. The base is the LOOKUP PC, not the
+           p2 redirect fires. The base is the LOOKUP PC, not the
            32-byte-aligned address containing it, so a miss does
            not resync the stream to alignment.
            uBTB does not generate a redirect signal. It supplies or
@@ -74,9 +77,9 @@ a 32-byte boundary.
 - Size:    256 entries, 4-way associative
            LP_N_SETS = LP_TBL_ENTRIES / LP_TBL_WAYS = 64 sets
            LP_IDX_BITS = $clog2(64) = 6b
-- Stage:   s1 output (same timing as uBTB)
+- Stage:   p1 output (same timing as uBTB)
 - Role:    Detects loop branches and predicts exit. Overrides uBTB at
-           s1 when loop predictor is trusted (high confidence).
+           p1 when loop predictor is trusted (high confidence).
            Trust decision made by override control, not internally.
 - Parameters (all overridable at elaboration):
     LP_TBL_ENTRIES = 256
@@ -87,25 +90,28 @@ a 32-byte boundary.
     LP_AGE_BITS    = 8    -- age/replacement counter width
     LP_N_SETS      = LP_TBL_ENTRIES / LP_TBL_WAYS
     LP_IDX_BITS    = $clog2(LP_N_SETS), min 1
-- Override: sits alongside uBTB in s1. Override control selects loop
+- Override: sits alongside uBTB in p1. Override control selects loop
            predictor output over uBTB when pred_is_loop and conf is
-           sufficient. Does not participate in s2/s3 override chain.
+           sufficient. Does not participate in p2/p3 override chain.
 
 ### FTB (Fetch Target Buffer, aka BTB)
-- Size:    2048 entries, 8-way associative
-- Stage:   s2 output (s0 send, s1 registered, s2 valid)
+- Size:    2048 entries, 4-way associative, 512 sets
+           FTB_WAYS = 4, FTB_ENTRIES = 2048, FTB_SETS = 512.
+           `ftb_decisions.md` 2.2 and section 8 are the reference;
+           do not restate the geometry here.
+- Stage:   p2 output (p0 send, p1 registered, p2 valid)
 - Role:    Authoritative branch target for direct conditional and
            unconditional branches. Identifies branch type per slot,
-           gating which predictor provides the target at s2:
+           gating which predictor provides the target at p2:
              return     -> RAS provides target
              indirect   -> ITTAGE provides target
              conditional -> TAGE provides direction, FTB provides target
              direct unc -> FTB provides target
 
 ### TAGE
-- Stage:   s2 output (s0 index calc, s1 SRAM read + tag match, s2 final)
+- Stage:   p2 output (p0 index calc, p1 SRAM read + tag match, p2 final)
 - Role:    Direction prediction for conditional branches. Overrides FTB
-           direction when TAGE disagrees. s2_redirect fires on override.
+           direction when TAGE disagrees. p2_redirect fires on override.
 - Tables:
     T0: 2 ways x 2048 entries, base table
         Entry layout: 2b CTR (no tag, no valid, no useful)
@@ -119,12 +125,12 @@ a 32-byte boundary.
         ctr    : 3b
         useful : 2b
 
-#design## SC (Statistical Corrector)
-- Stage:   s3 output (s0 index, s1 counter read, s2 accumulate, s3 final)
+### SC (Statistical Corrector)
+- Stage:   p3 output (p0 index, p1 counter read, p2 accumulate, p3 final)
 - Role:    Corrects TAGE when TAGE is systematically biased. Requires
            TAGE output to proceed (TAGE must be valid before SC can
            finalize). Overrides TAGE direction when combined counter
-           magnitude exceeds threshold. s3_redirect fires on override.
+           magnitude exceeds threshold. p3_redirect fires on override.
            Threshold: dynamically adapted at runtime (O-GEHL scheme,
            TC counter), not a fixed design-time value and not CSR-
            configurable. See sc_decisions.md sections 9-10, G7.
@@ -139,12 +145,15 @@ a 32-byte boundary.
          No folded history (BrIMLI index, not a hashed fold).
 
 ### ITTAGE (Indirect Target TAGE)
-- Stage:   s3 output (s0 index, s1 SRAM read, s2 raw prediction, s3 final)
+- Stage:   p2 output (p0 index and tag hash, p1 SRAM read + tag
+           match, p2 final target)
 - Role:    Target prediction for indirect non-return branches (JALR
-           non-return). Target stored directly as VA_WIDTH bits -- no
-           base+offset secondary LUT. Active only when FTB identifies
-           branch type as indirect.
-- VA_WIDTH: 40b (parameter, covers RVA23 implementation VA space)
+           non-return). Target stored directly in the ITTAGE tables --
+           no base+offset secondary LUT. Active only when FTB
+           identifies branch type as indirect.
+- Target:  38b, the upper 38 bits of a Sv39 VA. Bit 0 is always zero
+           for instruction alignment and is not stored.
+           IT_MAX_TGT_WIDTH = 38. See ittage_interfaces.md.
 - Tables:
     IT1: 2 banks x 256 entries, FH=4b,  FH1=4b,  FH2=4b,  hist=4b
     IT2: 2 banks x 256 entries, FH=8b,  FH1=8b,  FH2=8b,  hist=8b
@@ -187,17 +196,17 @@ See planning/arch/ras_decisions.md for full decision rationale.
            On return commit, CSP decrements.
 
 #### Pipeline stages
-- s2: reads FTB structural prediction; executes push (call) or pop
+- p2: reads FTB structural prediction; executes push (call) or pop
       (return); produces spec_pop_addr.
-- s3: checks if s3 structural prediction disagrees with s2; applies
+- p3: checks if p3 structural prediction disagrees with p2; applies
       inverse repair operation if needed.
 
-  s2/s3 repair table:
-    s2=push, s3=no-op  -> repair: pop
-    s2=no-op, s3=pop   -> repair: pop
-    s2=pop,  s3=no-op  -> repair: push
-    s2=no-op, s3=push  -> repair: push
-  Note: push->pop and pop->push within one s2/s3 pair cannot occur.
+  p2/p3 repair table:
+    p2=push, p3=no-op  -> repair: pop
+    p2=no-op, p3=pop   -> repair: pop
+    p2=pop,  p3=no-op  -> repair: push
+    p2=no-op, p3=push  -> repair: push
+  Note: push->pop and pop->push within one p2/p3 pair cannot occur.
 
 #### Call and return detection (RISC-V register conventions)
 - Call:   JAL, JALR, C.JALR  where rd = x1 or x5
@@ -210,8 +219,8 @@ See planning/arch/ras_decisions.md for full decision rationale.
 - ITTAGE: remaining indirect JALR with history-dependent targets
 
 #### Stage and update notes
-- Stage:  s2 push/pop + spec_pop_addr; s3 = s2 registered
-- Update: speculative at s2 (separate from main update channels)
+- Stage:  p2 push/pop + spec_pop_addr; p3 = p2 registered
+- Update: speculative at p2 (separate from main update channels)
           commit stack updated at retire/commit, not post-execute
 - Outside the conditional branch override chain.
 
@@ -219,58 +228,57 @@ See planning/arch/ras_decisions.md for full decision rationale.
 
 ## Pipeline Staging
 
-  Cycle N   (s0): PC input. Index calculations begin in all predictors.
+  Cycle N   (p0): PC input. Index calculations begin in all predictors.
                   FTB, TAGE, SC, ITTAGE send address to SRAM.
 
-  Cycle N+1 (s1): uBTB output valid -> first prediction available.
+  Cycle N+1 (p1): uBTB output valid -> first prediction available.
                   Loop predictor output valid -> overrides uBTB if
                   trusted (override control gates selection).
-                  Fetch begins speculatively on s1 result.
+                  Fetch begins speculatively on p1 result.
                   On uBTB miss and loop predictor not trusted: fetch
                   proceeds PC + FTB_BLOCK_BYTES.
                   TAGE: SRAM read completes, tag match, slot reorder.
                   SC: saturating counter read.
-                  FTB: result registered (arrives too late for s1).
+                  FTB: result registered (arrives too late for p1).
 
-  Cycle N+2 (s2): FTB output valid (registered from s1).
+  Cycle N+2 (p2): FTB output valid (registered from p1).
                   TAGE final result valid.
                   RAS: push/pop executes, spec_pop_addr valid.
-                  ITTAGE: raw prediction available.
+                  ITTAGE: final target valid.
                   SC: accumulates TAGE provider counter + SC counter,
-                      computes abs value vs threshold (result pending s3).
-                  s2_redirect fires if FTB/TAGE/RAS disagrees with s1.
-                  FTB entry saved for one additional cycle (-> s3).
+                      computes abs value vs threshold (result pending p3).
+                  p2_redirect fires if FTB/TAGE/RAS/ITTAGE disagrees
+                  with p1.
+                  FTB entry saved for one additional cycle (-> p3).
 
-  Cycle N+3 (s3): SC final result valid -> s3_redirect if SC != s2.
-                  ITTAGE final result valid.
-                  RAS s3 = s2 registered. Stack repair if s3 != s2.
-                  FTB entry from s2 held and available.
+  Cycle N+3 (p3): SC final result valid -> p3_redirect if SC != p2.
+                  RAS p3 = p2 registered. Stack repair if p3 != p2.
+                  FTB entry from p2 held and available.
 
 ---
 
 ## Redirect Architecture
 
-Two redirect points downstream of s1:
+Two redirect points downstream of p1:
 
-  s2_redirect: fires when FTB/TAGE/RAS result disagrees with uBTB s1.
-               Priority for target selection at s2:
+  p2_redirect: fires when FTB/TAGE/RAS/ITTAGE result disagrees with
+               uBTB p1. Target selection at p2 by branch type:
                  return     -> RAS spec_pop_addr
-                 indirect   -> ITTAGE (raw, pre-s3 final)
+                 indirect   -> ITTAGE (final; FTB target on miss)
                  conditional -> TAGE direction + FTB target
                  direct     -> FTB target
                TAGE overrides FTB direction (conditional only).
                RAS and ITTAGE are type-gated, not in the
                TAGE/FTB override chain.
 
-  s3_redirect: fires when SC overrides TAGE direction from s2.
+  p3_redirect: fires when SC overrides TAGE direction from p2.
                SC requires TAGE output as input; SC cannot finalize
-               before TAGE. Target for s3_redirect comes from FTB
-               (held from s2). Direction comes from SC.
-               ITTAGE final result also available at s3 -- may refine
-               indirect target if s2 used raw ITTAGE result.
+               before TAGE. Target for p3_redirect comes from FTB
+               (held from p2). Direction comes from SC.
+               No predictor produces a new target at p3.
 
 Note: uBTB does not generate a redirect. It provides or withholds an
-initial prediction only. The override chain starts at s2.
+initial prediction only. The override chain starts at p2.
 
 ---
 
@@ -373,9 +381,15 @@ Two update channels when dual_pred_en=1, one when dual_pred_en=0.
 Each channel carries both conditional and indirect branch resolution
 (they are one combined channel, not split by type).
 
-RAS update: speculative at s2 (separate from main update channels).
-Checkpoint/restore: RAS speculative state must be checkpointed and
-restored on mispredict flush. Policy TBD at rename/dispatch.
+RAS update: speculative at p2 (separate from main update channels).
+Checkpoint/restore: the RAS snapshot (tosr, tosw, bos) is written
+into the FTQ entry at prediction and restored from it on redirect.
+Pointer-only; the circular data is not cleared. A flush is a
+redirect (FE-14), so there is no separate flush protocol. The
+mechanism is ras_restore_val / ras_restore_snapshot, built in
+ras.sv and driven by tb_ras. Nothing here is deferred to
+rename/dispatch. ras_decisions.md 4.3 and 4.4 are the single
+source; do not restate or re-derive the protocol here.
 
 Prediction phase pre-computes meta-data needed for updates and
 stores it alongside the prediction result. Update path reads this
@@ -409,9 +423,12 @@ Parameter values derived in bp_defines_pkg.sv:
   TAGE_TBL_SEL_WIDTH = $clog2(5)   = 3   (5 tables T0-T4)
   TAGE_MAX_DWIDTH    = TAGE_TAG_BITS = 8  (tag is widest alloc field)
   TAGE_CTR_BITS      = 3                  (max: T0=2b, T1-T4=3b)
-  SC_NUM_MAIN_TBLS   = 4                  (ST0-ST3)
-  SC_NUM_ALL_TBLS    = 5                  (ST0-ST4 including IMLI)
+  SC_NUM_TABLES      = 5                  (ST0-ST4)
   FTQ_CONF_BITS      = 4                  (confidence placeholder)
+
+SC table roles are prose, not parameters: ST0-ST3 hold the
+confidence counters and ST4 is the BrIMLI table. See
+sc_decisions.md 6.
 
 SC index array (superseded session-056; sc_imli_idx split retired):
   sc_upd_idx [0:SC_NUM_TABLES-1][SC_MAX_IDX_WIDTH-1:0]
@@ -437,16 +454,20 @@ FTQ entry history checkpoint (BP-002):
 
 ## Timing Methodology Gap
 
-Verilator does not provide timing data. Pipe stage notation in struct
-comments (P0.comb, P1.clk) expresses intent to Claude Code but is not
-verified by any automated tool. Jeff reviews RTL directly for timing
-correctness. This is documented as a known methodology gap.
+Verilator does not provide timing data. Stage notation in struct
+comments expresses intent to Claude Code but is not verified by any
+automated tool. Jeff reviews RTL directly for timing correctness.
+This is documented as a known methodology gap.
 
-Timing intent for BP cluster structs uses s-stage notation to match
-the prediction pipeline rather than P-stage notation from the decoder:
-  s0.comb = combinational in s0
-  s1.clk  = registered at end of s1 (available start of s2)
+Timing intent for BP cluster structs uses the prediction pipeline
+stages, not the decoder's P-stages:
+  p0.comb = combinational in p0
+  p1.clk  = registered at end of p1 (available start of p2)
   etc.
+
+The decoder's P0/P1 and the prediction pipeline's p0/p1 are now
+distinguished by case alone. Struct comments in bp_structs_pkg.sv
+were not inspected in this pass and may still carry s-stage labels.
 
 ---
 
@@ -456,8 +477,9 @@ This is the second case study for the AI-assisted co-design methodology
 writeup. Complexity drivers vs. the decoder track:
   - Micro-architectural decisions were open (not spec-driven)
   - Interfaces not predetermined by any external spec
-  - Multi-module consistency is a real challenge (6 predictor modules
-    plus cluster top, all sharing bp_pkg.sv structs)
+  - Multi-module consistency is a real challenge (7 predictor
+    modules plus bp_history and the cluster top, all sharing
+    bp_defines_pkg.sv and bp_structs_pkg.sv)
   - Timing budget spans 3 cycles with conditional redirect paths
 Raw observations to be captured in docs/observations/ during BP work.
 
@@ -490,12 +512,6 @@ Raw observations to be captured in docs/observations/ during BP work.
               the disjoint p2/p3 write groups recorded. Widths
               stated: slot 55b, entry 182b at NUM_PRED_SLOTS = 2.
 
-  2026-09-15  session-069. The uBTB-miss successor is PC +
-              FTB_BLOCK_BYTES (32), not PC + fetch_width (64).
-              fetch_width is FETCH_BLOCK_BYTES and collapsing the
-              two is banned by ftb_decisions.md 2.3. Corrected at
-              both sites; new Block width section states the base
-              is the lookup PC, not the aligned address.
   2026-08-19  bp_ftq_entry_t gains pft_addr, the block fall-through,
               VA_WIDTH wide and block scalar. Successor selection is
               re-evaluated on every redirect (fe_decisions.md 2.4)
@@ -523,4 +539,92 @@ Raw observations to be captured in docs/observations/ during BP work.
               which is now the only prose copy. This document had
               held a third copy alongside fe_decisions.md and the
               package, and all three were being edited in lockstep.
+
+  2026-09-15  session-069. The uBTB-miss successor is PC +
+              FTB_BLOCK_BYTES (32), not PC + fetch_width (64).
+              fetch_width is FETCH_BLOCK_BYTES and collapsing the
+              two is banned by ftb_decisions.md 2.3. Corrected at
+              both sites; new Block width section states the base
+              is the lookup PC, not the aligned address.
+
+  2026-09-17  FTB associativity corrected from 8-way to 4-way,
+              512 sets. This was the last surviving copy of the
+              "FTB_WAYS currently 8" draft annotation that
+              ftb_decisions.md struck in session-053 when BP-065
+              confirmed the package at 4; this document was not
+              swept at the time. 4-way is what is built:
+              bp_defines_pkg.sv FTB_WAYS = 4, and ftb_cntrl.sv
+              plru_victim / plru_touch implement a 3-bit four-way
+              tree-PLRU. The geometry now cites ftb_decisions.md
+              rather than restating it, since restating it is how
+              the stale copy survived.
+
+              Three unrelated repairs in the same pass. The SC
+              heading read "#design## SC" and rendered as body
+              text, not a heading. Methodology Notes cited
+              bp_pkg.sv, deleted at the session-008 package split;
+              it is bp_defines_pkg.sv and bp_structs_pkg.sv. The
+              same line said 6 predictor modules; there are seven,
+              plus bp_history and the cluster top, which is what
+              bp_cluster.sv instantiates. Document History was not
+              in date order -- the session-069 entry sat above four
+              older ones -- and is now sorted.
+
+  2026-09-17  ITTAGE corrected to p2. The Stage bullet, the Pipeline
+              Staging block and Redirect Architecture all carried a
+              raw-at-p2 / final-at-p3 split with a p3 refinement of
+              the indirect target. That split was removed from
+              fe_decisions.md on 2026-07-23 as an artifact of the
+              base+offset LUT scheme, which Pacino does not use; this
+              document was not swept. p2 is confirmed by
+              fe_decisions.md 1, ittage_interfaces.md (p0 hash, p1
+              SRAM read and tag match, p2 final target) and the RTL:
+              ittage.sv and ittage_cntrl.sv declare only
+              ittage_pred_rdy_p2 and ittage_pred_meta_p2, and contain
+              no p3 signal. Closes TD#42.
+
+              ITTAGE target width corrected. It read "stored directly
+              as VA_WIDTH bits" with VA_WIDTH 40b. It is 38b, the
+              upper 38 bits of a Sv39 VA with bit 0 not stored
+              (ittage_interfaces.md; IT_MAX_TGT_WIDTH = 38). The
+              scheme -- target held in the ITTAGE tables, no
+              base+offset LUT -- was already correct here.
+
+              Stage labels converted from s0-s3 to p0-p3 throughout,
+              50 sites including p2_redirect and p3_redirect and the
+              RAS repair table. The stages are identical; only the
+              label changes (sc_decisions.md 3). Timing Methodology
+              Gap reworded to match.
+
+              Overview override chain annotated with stages:
+              uBTB (p1) -> FTB, TAGE (p2) -> SC (p3). The bare
+              "SC > TAGE > FTB > uBTB" was stage order written
+              without the labels, which fe_decisions.md 12 reads as a
+              contention ranking and rejects. With the labels it is
+              FE-3 supersession. The one real intra-stage rule, TAGE
+              over FTB direction within p2, is stated.
+
+              SC_NUM_MAIN_TBLS and SC_NUM_ALL_TBLS replaced by
+              SC_NUM_TABLES = 5. Neither name appears in
+              sc_decisions.md or sc_table_interfaces.md, and this
+              section already used SC_NUM_TABLES four lines below in
+              the sc_upd_idx / sc_upd_ctr declarations. The ST0-ST3
+              versus ST4 split that SC_NUM_MAIN_TBLS encoded is real
+              but is prose in sc_decisions.md 6, not a parameter, and
+              is restated as such here.
+
+              RAS checkpoint/restore "Policy TBD at rename/dispatch"
+              replaced by a pointer to ras_decisions.md 4.3 and 4.4.
+              The protocol is decided and built: pointer-only restore
+              of tosr/tosw/bos from the FTQ snapshot, no separate
+              flush path because a flush is a redirect (FE-14),
+              implemented as ras_restore_val /
+              ras_restore_snapshot in ras.sv with tb_ras coverage.
+              RAS-3 closed 2026-08-20. ras_decisions.md 4.4.2 lists
+              the stale OPEN markers that caused that item to be
+              re-raised repeatedly; this line was one more, and it
+              also named the wrong owner -- the History Module
+              section of this document already states that
+              speculative predictor state is owned by the BPC, not
+              rename/dispatch.
 

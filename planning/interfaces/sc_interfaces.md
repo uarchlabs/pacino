@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  LOCKED
- UPDATED: 2026-06-30
+ UPDATED: 2026-09-17
  CONTACT: Jeff Nye
 ```
 
@@ -46,7 +46,9 @@ Signal names follow the pattern:
 
 - `pipestage` : p2, p3 for the prediction path.
                 u0, u1 for the update path.
-                px for flush-related signals (not yet defined).
+                There is no px stage. No flush event exists; a
+                flush is a redirect (fe_decisions.md FE-14).
+                See IC-SC-06.
 
 Planning documents use s0/s1/s2/s3 and u0/u1. RTL uses
 p0/p1/p2/p3 and u0/u1. This document uses the RTL p-naming for
@@ -184,7 +186,7 @@ ST4 index: get_br_imli_idx(inp_pc_p2[15:6], sc_phr_p2, br_imli)
 ```
 
 sc_idx_hash and get_br_imli_idx are defined in
-sc_table_hash_rules.md (not yet written). ST4 takes PC[15:6]
+sc_table_hash_rules.md (written session-058). ST4 takes PC[15:6]
 (inp_pc_p2[15:6]).
 
 ### Semantics
@@ -317,10 +319,13 @@ SC has a separate update queue, entry type sc_upd_inp_t. TAGE and SC
 UQs are separate. A single conditional-branch commit enqueues one
 TAGE UQ entry and one SC UQ entry; each entry covers both slots
 (bp_arb_spec.md section 6.2). This is the target arbitration model.
-At the unit level (sc.sv, as shipped) the UQ/credit arbiter is not
-yet implemented: sc_uq_not_full is tied to 1'b1 and sc_upd_rdy is
-tied to all-ones. The real arbiter is deferred to bp_cluster
-integration (TD#73, TD#94).
+At the unit level (sc.sv, as shipped) the UQ is not built and the
+arbitration-layer ports are stubbed: sc_uq_not_full is tied to 1'b1
+and sc_upd_rdy is tied to all-ones. The credit arbiter itself is
+implemented and tested in bp_cluster (bp_arb_spec.md 4.5; TD#73
+closed by BP-094 group H). The unit-level gap is not tracked by any
+open TD -- TD#73 and TD#94 are closed and neither covered building
+the queue.
 
 When the SC arbiter grants an update and stalls a prediction, the
 TAGE response buffer head is held, backpressuring TAGE
@@ -343,24 +348,28 @@ section 13.
 ## SC Table Interface
 
 The SC-to-sc_table port list and per-table semantics are in
-sc_table_interfaces.md (not yet written).
+sc_table_interfaces.md (written session-058).
 
 ---
 
 ## Override Chain Position
 
-SC sits at the top of the conditional-direction override chain:
+SC is the last stage in the conditional-direction path:
 
 ```
-SC > TAGE > FTB > uBTB
+uBTB (p1) -> FTB, TAGE (p2) -> SC (p3)
 ```
+
+This is stage order, not a contention ranking: a later stage
+supersedes an earlier one (fe_decisions.md FE-3 and section 12).
+Within p2, TAGE overrides the FTB direction.
 
 Stage assignment:
 
 ```
-s1: uBTB + Loop
-s2: FTB + TAGE + ITTAGE + RAS
-s3: SC
+p1: uBTB + Loop
+p2: FTB + TAGE + ITTAGE + RAS
+p3: SC
 ```
 
 SC overrides TAGE direction at p3 for conditional branches. SC does
@@ -373,19 +382,19 @@ conditional branches.
 
 | ID       | Item                                      | Status          |
 |----------|-------------------------------------------|-----------------|
-| IC-SC-01 | `sc_idx_hash` not yet defined. Referenced | TBD.            |
-|          | by ST0-ST3 index. Definition in           | `sc_table_`     |
-|          | `sc_table_hash_rules.md`.                 | `hash_rules.md` |
-| IC-SC-02 | `get_br_imli_idx` not yet defined.        | TBD.            |
-|          | Referenced by ST4 index. Definition in    | `sc_table_`     |
-|          | `sc_table_hash_rules.md`.                 | `hash_rules`.md |
+| IC-SC-01 | `sc_idx_hash`. Referenced by ST0-ST3      | CLOSED.         |
+|          | index. Defined in                         | Written         |
+|          | `sc_table_hash_rules.md`.                 | session-058.    |
+| IC-SC-02 | `get_br_imli_idx`. Referenced by ST4      | CLOSED.         |
+|          | index. Defined in                         | Written         |
+|          | `sc_table_hash_rules.md`.                 | session-058.    |
 | IC-SC-03 | ST4 PC width. `get_br_imli_idx` pc input  | RESOLVED        |
 |          | is `inp_pc_p2[15:6]` (PC[15:6]), the      | session-058.    |
 |          | BrIMLI region. Confirm in                 |                 |
 |          | `sc_table_hash_rules.md` when written.    |                 |
-| IC-SC-04 | `sc_table` port list and per-table        | TBD.            |
-|          | semantics.                                | `sc_table_`     |
-|          |                                           | interfaces.md   |
+| IC-SC-04 | `sc_table` port list and per-table        | CLOSED.         |
+|          | semantics. In `sc_table_interfaces.md`.   | Written         |
+|          |                                           | session-058.    |
 | IC-SC-05 | `sc_enable` qualification point. Cluster- | TBD at impl.    |
 |          | level gate defined (`bp_arb_spec.md`      |                 |
 |          | section 0). Whether the SC module         |                 |
@@ -396,3 +405,38 @@ conditional branches.
 |          | redirect. sc needs no flush port and      | FE-14.          |
 |          | none is added.                            |                 |
 
+---
+
+## Document History
+
+```
+  2026-09-17  Session-070 audit. First history section in this file;
+              earlier changes are recorded only in PROJECT_STATUS.
+
+              Arbitration Model: the description of sc.sv was
+              correct and is kept -- the UQ is not built and
+              sc_uq_not_full / sc_upd_rdy are tied off. The
+              citation was not. TD#73 and TD#94 are both closed,
+              and the credit arbiter is implemented and tested in
+              bp_cluster (TD#73 closed by BP-094 group H, covering
+              all seven bp_arb_spec 4.5 grant rules). Reworded to
+              separate the two facts. The unit-level gap is now
+              untracked by any open TD and needs a number.
+
+              sc_table_hash_rules.md and sc_table_interfaces.md
+              were both called "not yet written". Both were
+              written in session-058. Corrected at both prose
+              sites; IC-SC-01, IC-SC-02 and IC-SC-04 closed.
+
+              Port Naming Convention described px as "not yet
+              defined" while IC-SC-06 in this same file records
+              BP-105: no flush event exists, a flush is a redirect
+              (FE-14), no flush port is added. Corrected.
+
+              Override Chain Position carried "SC > TAGE > FTB >
+              uBTB" with s1/s2/s3 labels, in a document whose Port
+              Naming Convention states it uses p-naming. Restated
+              as stage order per FE-3 with p-labels. The stage
+              assignment itself was already correct, including
+              ITTAGE at p2.
+```

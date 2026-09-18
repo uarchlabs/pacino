@@ -377,7 +377,7 @@ required or permitted.
 
 The SC = Statistical Corrector.
 
-SC reads tage_pred_ctr from tage_pred_meta captured in
+SC reads tage_prm_ctr from tage_pred_meta captured in
 the FTQ meta path at p2. TAGE must be valid before SC
 can finalize. SC does not read TAGE ports directly at
 runtime.

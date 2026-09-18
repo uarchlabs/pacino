@@ -667,7 +667,9 @@ Commit stack pointer width:
   bp_arb_spec.md       -- arbitration model. Section 7.2
                           covers RAS non-RAM status. Open
                           item RAS-2 now closed. RAS-1
-                          partially resolved. RAS-3 open.
+                          partially resolved. RAS-3 closed
+                          2026-08-20 (section 4.4, section
+                          10).
                           Section 2 predictor inventory RAS
                           row: p0 is TOS read only; push/pop
                           and redirect participation is at p2.
@@ -725,4 +727,12 @@ Commit stack pointer width:
               RAS-DS1 added: the one real two-operation case is
               DCD-11's pop-then-push within a single JALR.
               Superseded text retained, not deleted.
+
+  2026-09-17  Section 11 bp_arb_spec.md entry read "RAS-3 open"
+              while section 4.4's heading and section 10 both read
+              CLOSED 2026-08-20. Corrected. This was the third
+              artifact class of 4.4.2 -- a pointer entry
+              contradicting the section it points at -- surviving
+              one section below the warning against it. No
+              protocol change; the label was the only thing wrong.
 ```

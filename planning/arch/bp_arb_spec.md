@@ -307,8 +307,12 @@ Per-cycle grant logic (priority order):
   7. Both empty: no grant.
 
 These rules are IMPLEMENTED for SC inside bp_cluster (session-063).
-They are untested; TD#73 folds the grant-rule tests into
-tb_bp_cluster, with TD#39 (section 4.2) settled first.
+All seven are TESTED: TD#73 closed by BP-094 group H, which covers
+the seven grant rules plus tage consumer_ready, hierarchically in
+tb_bp_cluster. TD#39 was folded into that closure; its residual is a
+parameter decision (section 4.2), not a test gap. The untested
+residual of TD#73 is concurrent pred+upd for TAGE and ITTAGE, which
+does not involve SC.
 
 ### 4.6  Competing stage register
 
@@ -450,8 +454,15 @@ state.  The update is granted in a subsequent cycle.
                prediction response queues. This is a change
                from the previous version.
                The SC credit arbiter is IMPLEMENTED in bp_cluster
-               (session-063), not stubbed at the unit level. It is
-               untested; TD#73.
+               (session-063) and TESTED (TD#73 closed, BP-094
+               group H). The arbiter does not exist at the unit
+               level: sc.sv stubs the arbitration-layer ports,
+               sc_uq_not_full = 1'b1 and sc_upd_rdy = all-ones,
+               and builds no SC UQ. The SC_UQ_DEPTH and
+               SC_UQ_WR_PORTS values above therefore describe the
+               target model, not sc.sv as shipped. That gap is not
+               tracked by any open TD: TD#73 and TD#94 are closed
+               and neither covered building the UQ.
 
 ## 6. Statistical Corrector (SC) -- Chained Predictor
 
@@ -796,3 +807,25 @@ task file, not here.
               7.1). Section 4.5 marked implemented-for-SC and
               untested (TD#73). RAS p0 port names stated.
 
+  2026-09-17  Session-070 audit. Section 4.5 and 5.5 both read
+              "untested; TD#73". TD#73 closed by BP-094 group H,
+              whose closure covers exactly the seven 4.5 grant
+              rules plus tage consumer_ready, hierarchically. Both
+              corrected to TESTED. The TD#39 precondition in 4.5
+              is also overtaken: TD#39 was folded into the TD#73
+              closure and its residual is a parameter decision.
+
+              Section 5.5 read "not stubbed at the unit level".
+              That is wrong. sc.sv assigns sc_uq_not_full = 1'b1
+              and sc_upd_rdy = all-ones under a comment naming
+              them arbitration-layer stubs, and builds no SC UQ.
+              Both statements are true together: the arbiter is in
+              bp_cluster, and the unit-level ports are stubbed.
+              5.5 now says so, and marks SC_UQ_DEPTH and
+              SC_UQ_WR_PORTS as target-model values.
+
+              The SC UQ gap itself is now untracked. TD#73 and
+              TD#94 are closed and neither was about building the
+              queue, yet this document, sc_interfaces.md and
+              sc.sv (lines 30-32 and 148) all name them as the
+              deferral. Needs a TD number; next free is TD#120.
