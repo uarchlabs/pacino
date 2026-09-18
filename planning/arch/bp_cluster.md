@@ -315,8 +315,17 @@ See planning/arch/ras_decisions.md for full decision rationale.
 
 Two redirect points downstream of p1:
 
-  p2_redirect: fires when FTB/TAGE/RAS/ITTAGE result disagrees with
-               uBTB p1. Target selection at p2 by branch type:
+  p2_redirect: fires when the successor the cluster would publish at
+               p2 differs from the one ITS OWN p1 STAGE REGISTERS
+               HOLD. NOT "disagrees with uBTB p1": the p1 successor
+               is the uBTB's OR the loop predictor's, whichever the
+               p1 mux selected (fe_decisions.md 2.5, and the Loop
+               predictor line in the Overview above). Naming the uBTB
+               is wrong whenever the LP won the mux. The comparison
+               is one quantity against the cluster's own staged view,
+               never predictor against predictor (FE-4). Corrected
+               session-070.
+               Target selection at p2 by branch type:
                  return     -> RAS spec_pop_addr
                  indirect   -> ITTAGE (final; FTB target on miss)
                  conditional -> TAGE direction + FTB target

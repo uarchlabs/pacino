@@ -68,9 +68,15 @@ count; the re-expose moves TOSR by a slot instead. Pinned by
 tb_ras TC-21. See PROJECT_STATUS TD #78.
 
 RAS does not generate a redirect signal in the same sense as
-TAGE or SC. It provides the initial p0 prediction (TOS read)
-and participates in the p2 redirect when FTB disagrees with
-the uBTB p0 result.
+TAGE or SC. It provides the initial p0 prediction (TOS read) and
+supplies the target for a return at p2, which participates in the
+p2 redirect when the resulting successor differs from the one the
+cluster's p1 stage registers hold. An earlier revision said it
+participates "when FTB disagrees with the uBTB p0 result", which
+is wrong twice: the comparison is not predictor against predictor
+(FE-4), and the p1 successor is the uBTB's or the loop
+predictor's, whichever the p1 mux selected, held at p1 rather than
+p0 (fe_decisions.md 2.5). Corrected session-070.
 
 No PQ, UQ, or credit arbiter. RAS does not have synchronous
 SRAMs. See bp_arb_spec.md section 7.2.
@@ -84,9 +90,14 @@ SRAMs. See bp_arb_spec.md section 7.2.
 
 ### 1.2  Role in redirect architecture
 
-p2_redirect: fires when FTB/TAGE/RAS result disagrees with
-  uBTB p1. For return branches, RAS spec_pop_addr is the
-  redirect target.
+p2_redirect: fires when the successor the cluster would publish
+  at p2 differs from the one its own p1 stage registers hold. NOT
+  "disagrees with uBTB p1": the p1 successor is the uBTB's or the
+  loop predictor's, whichever the p1 mux selected (fe_decisions.md
+  2.5), and the comparison is one quantity against the cluster's
+  own staged view, never predictor against predictor (FE-4).
+  Corrected session-070. For return branches, RAS spec_pop_addr is
+  the redirect target.
 
 p3_redirect: RAS p3 = p2 registered. Stack repair applied at
   p3 if p3 structural prediction disagrees with p2 (see repair
