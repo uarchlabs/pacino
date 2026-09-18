@@ -226,9 +226,21 @@ implementing task specifies it. Marked IC-SC-05.
 - Must not consume sc_pred_meta_p3[s] when sc_pred_rdy_p3[s]=0.
 - Must set pred_src in bp_ftq_entry_t to PRED_SC when SC overrides
   TAGE direction (sc_pred_meta_p3[s].sc_override=1).
-- Must assert p3 redirect when sc_pred_rdy_p3[s]=1 and
-  sc_pred_meta_p3[s].sc_pred_tkn disagrees with the FTQ-held
-  direction for that fetch block (bp_arb_spec.md section 3.4).
+- Must apply the SC direction over the TAGE direction for a COND
+  branch when sc_override is set, unless ftb_fastpath_p2 is asserted
+  for that branch, in which case the FTB direction stands and no SC
+  override is applied (ftb_confidence_override_rules.md 4.2). The
+  direction priority is SC > TAGE > FTB, 4.3 of the same document.
+- Must assert p3 redirect when sc_pred_rdy_p3[s]=1 and the resulting
+  successor differs from the one the cluster's own p2 stage registers
+  hold for that block -- that is, ONLY WHEN SC CHANGES WHAT THE
+  CLUSTER PUBLISHED AT p2 (fe_decisions.md 3.1). THE REDIRECT
+  CONDITION IS NOT THE OVERRIDE: an override that does not change the
+  successor fires nothing, and the comparison is one quantity against
+  the cluster's own staged view, never predictor against predictor
+  and never against the FTQ (fe_decisions.md FE-4,
+  ftq_bpu_interfaces.md 6). An earlier revision gave the condition as
+  "the FTQ-held direction". Corrected session-070.
 - Must write sc_pred_meta_p3[s] into the FTQ meta path; the update
   path requires the captured indices and counters unconditionally.
 
@@ -359,9 +371,12 @@ SC is the last stage in the conditional-direction path:
 uBTB (p1) -> FTB, TAGE (p2) -> SC (p3)
 ```
 
-This is stage order, not a contention ranking: a later stage
-supersedes an earlier one (fe_decisions.md FE-3 and section 12).
-Within p2, TAGE overrides the FTB direction.
+ON DIRECTION this IS a ranking: SC > TAGE > FTB, all three produce
+that one quantity, suspended per branch when the FTB fast path fires
+(ftb_confidence_override_rules.md 4.3, 4.2). ON EVERYTHING ELSE it is
+stage order, not a ranking: a later stage supersedes an earlier one
+(fe_decisions.md FE-3 and section 12, narrowed session-070), and
+targets are selected by branch type.
 
 Stage assignment:
 

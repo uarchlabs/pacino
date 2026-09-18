@@ -416,13 +416,18 @@ not recovered. See TD #78 and tb_ras TC-21.
 
 ## 8. Override Chain Position
 
-RAS sits outside the conditional branch override chain:
-  SC > TAGE > FTB > uBTB
+RAS supplies the TARGET for a return. It takes no part in the
+direction ranking, which is SC > TAGE > FTB on direction and is
+suspended per branch when the FTB fast path fires
+(ftb_confidence_override_rules.md 4.3, 4.2). Target is selected by
+branch type, not ranked. An earlier revision read "RAS sits outside
+the conditional branch override chain: SC > TAGE > FTB > uBTB",
+which compresses the two. fe_decisions.md 12, narrowed session-070.
 
-RAS is type-gated alongside TAGE and ITTAGE at p2/s2:
-  p1/s1: uBTB + Loop
-  p2/s2: FTB + TAGE + ITTAGE + RAS
-  p3/s3: SC
+RAS is type-gated alongside TAGE and ITTAGE at p2:
+  p1: uBTB + Loop
+  p2: FTB + TAGE + ITTAGE + RAS
+  p3: SC
 
 RAS provides the return target at p2 when FTB identifies
 the branch type as RETURN. RAS overrides FTB target for

@@ -2075,15 +2075,33 @@ assessment of each document. Correct any that are wrong.
 |     |                                       | Threshold is DYNAMIC   |
 |     |                                       | (O-GEHL). Tuning       |
 |     |                                       | deferred TD#93.        |
-| G8  | Dual pred bundle split point          | SUPERSEDED session-063.|
+| G8  | Dual pred bundle split point          | SUPERSEDED session-063,|
+|     |                                       | RETIRED session-070.   |
 |     |                                       | The pred_pc+0:31 /     |
-|     |                                       | +32:63 split is the    |
-|     |                                       | TAGE/ITTAGE bundle     |
-|     |                                       | convention and does    |
-|     |                                       | NOT govern block       |
+|     |                                       | +32:63 split does NOT  |
+|     |                                       | govern block           |
 |     |                                       | prediction. ubtb.sv    |
 |     |                                       | rewritten to match     |
 |     |                                       | (BP-086).              |
+|     |                                       | This text said the     |
+|     |                                       | split "is the          |
+|     |                                       | TAGE/ITTAGE bundle     |
+|     |                                       | convention". It is not |
+|     |                                       | one any more:          |
+|     |                                       | tage_interfaces.md TI3 |
+|     |                                       | has slot 1's PC        |
+|     |                                       | supplied on            |
+|     |                                       | tage_pred_inp_p0[1].pc |
+|     |                                       | and records pred_pc+32 |
+|     |                                       | as an error that was   |
+|     |                                       | removed. There is no   |
+|     |                                       | pred_pc+32 split       |
+|     |                                       | anywhere. fe_decisions |
+|     |                                       | 12 and ftb_decisions   |
+|     |                                       | 2.1 carried the same   |
+|     |                                       | attribution and are    |
+|     |                                       | corrected; their FTB   |
+|     |                                       | conclusions stand.     |
 | G9  | Update channel arbitration            | RESOLVED session-067.  |
 |     |                                       | SC credit arbiter done |
 |     |                                       | and tested BP-094 grp  |

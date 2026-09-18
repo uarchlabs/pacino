@@ -31,8 +31,15 @@ prediction cluster.
 
 Pipeline stage: s2 output. s0 send, s1 registered, s2 valid.
 
-Override chain: SC > TAGE > FTB > uBTB. FTB overrides uBTB. TAGE and
-SC override FTB on direction. ITTAGE and RAS override FTB on target.
+Override, by quantity. ON DIRECTION there is a ranking: SC > TAGE >
+FTB, suspended per branch when the fast path fires
+(ftb_confidence_override_rules.md 4.3, 4.2). ON TARGET there is not:
+RAS supplies it for a return, ITTAGE for an indirect with the FTB
+target standing on an ITTAGE miss, FTB otherwise -- selected by
+branch type and by hit, not ranked. The FTB supersedes the uBTB by
+stage order, FE-3. An earlier revision compressed all of this into
+"Override chain: SC > TAGE > FTB > uBTB"; the decomposition below it
+was already right. fe_decisions.md 12, narrowed session-070.
 
 FTB classifies branch type per block, which gates who supplies the
 target at s2:
@@ -41,10 +48,14 @@ target at s2:
   conditional  -> TAGE provides direction, FTB provides target
   direct uncond -> FTB provides target
 
-Branch type classification is FTB's responsibility. The three-way
-JALR split (FTB / RAS / ITTAGE) is resolved by FTB structural
-prediction before s2. RAS, ITTAGE, and TAGE depend on FTB's branch
-type and fallthrough outputs.
+Branch type classification is FTB's responsibility. JALR OWNERSHIP
+IS RAS OR ITTAGE, resolved by FTB structural prediction before p2:
+a return goes to the RAS, every other indirect JALR to ITTAGE. The
+FTB is NOT a third arm -- its target is what stands when ITTAGE
+misses (section 4.2), selected by hit rather than by branch
+flavour. An earlier revision read "three-way JALR split (FTB / RAS
+/ ITTAGE)". Corrected session-070. RAS, ITTAGE, and TAGE depend on
+FTB's branch type and fallthrough outputs.
 
 ### 1.1  Timing
 
@@ -78,9 +89,14 @@ bit read from ftb_plru.
 
 The cluster predicts two branches per cycle. Both branches come from
 the one indexed entry (two conditional fields, section 4). FTB does
-NOT use per-slot RAMs. TI6 (per-slot RAMs) and the G8/G17 pred_pc+32
-bundle split are TAGE/ITTAGE conventions and do not apply to FTB
-structure. A single FTB lookup supplies both predictions.
+NOT use per-slot RAMs. TI6 (per-slot RAMs) is a TAGE/ITTAGE
+convention and does not apply to FTB structure. Neither does the
+G8/G17 pred_pc+32 bundle split -- AND THAT SPLIT NO LONGER EXISTS
+ANYWHERE: tage_interfaces.md TI3 has slot 1's PC supplied on
+tage_pred_inp_p0[1].pc and records pred_pc+32 as an error that was
+removed. This paragraph attributed it to TAGE/ITTAGE, which now
+points at nothing. Corrected session-070; the FTB conclusion is
+unchanged. A single FTB lookup supplies both predictions.
 
 ### 2.2  Associativity and capacity
 ```

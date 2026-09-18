@@ -15,9 +15,18 @@
 
 ITTAGE is a indirect target tagged geometric history length 
 branch predictor providing target prediction for indirect 
-branches. It fires at p2 alongside FTB and overrides FTB 
-target when ITTAGE has a matching entry. s2_redirect fires
-on override.
+branches. It fires at p2 alongside FTB and SUPPLIES THE TARGET for
+an indirect branch when it hits; the FTB target stands on a miss
+(ftb_decisions.md 4.2). This is target selection by hit and is
+independent of the conf direction mechanism, which never affects
+target overrides (ftb_confidence_override_rules.md 1).
+
+THE p2 REDIRECT IS A SEPARATE QUESTION: it fires only when the
+successor the cluster would publish differs from the one its own p1
+stage registers hold, so a target that matches the one already
+staged fires nothing (fe_decisions.md FE-4 and 2.5). An earlier
+revision said "s2_redirect fires on override". Corrected
+session-070.
 
 There are two phases in a ITTAGE design, prediction request and update
 request. The phase do not overlap.

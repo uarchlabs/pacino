@@ -112,12 +112,15 @@ Override priority (highest to lowest):
 For indirect branches:
   ITTAGE (p2) > RAS (p0)  [indirect chain, deferred]
 
-Note: fe_decisions.md section 12 rejects both priority chains. These
-predictors do not produce the same quantity and do not contend;
-redirects supersede by stage order (FE-3), and br_type selects the
-RAS for a return and the ITTAGE for an indirect so the two are never
-both consulted for one branch. The rows are retained here as the
-original text; fe_decisions.md governs.
+Note: fe_decisions.md section 12, narrowed session-070, rejects the
+chains as written but NOT the direction ranking inside the first one.
+ON DIRECTION, SC > TAGE > FTB is real: all three produce that one
+quantity, and the ranking is suspended per branch when the FTB fast
+path fires (ftb_confidence_override_rules.md 4.3, 4.2). The rest is
+not ranked: br_type selects the RAS for a return and the ITTAGE for
+an indirect, so the two are never both consulted for one branch, and
+redirects supersede by stage order (FE-3). The rows are retained here
+as the original text; fe_decisions.md governs.
 
 A redirect from a later stage supersedes any earlier redirect
 for the same FTQ entry.  The FTQ must track which redirects are
@@ -344,7 +347,11 @@ Structure:
 
 Handshake:
   - p2 result formation asserts p2_valid.  Result enters buffer.
-  - Consumer (FTQ or SC for TAGE) presents consumer_ready.
+  - Consumer presents consumer_ready. FOR TAGE THAT CONSUMER IS
+    SC, and consumer_ready is driven in bp_cluster.sv from SC
+    state alone: ~sc_enable | (sc_ready & ~w_sc_grant_upd). The
+    FTQ is not in that path. "FTQ or SC for TAGE" read as though
+    either could drive it; corrected session-070 against the RTL.
   - Buffer asserts pred_rdy when head is valid.
   - When buffer full and consumer not ready, resp_buf_full
     asserted to arbiter (blocks new prediction grants, rule 1).

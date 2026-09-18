@@ -61,9 +61,23 @@ reported.
 ### Timing
 
   pred_pc_p0 is presented at p0 (combinational input).
-  pred_p1 and blk_p1 are combinational from registered mem.
-  Both are valid at the start of p1, one cycle after pred_pc_p0.
+  pred_p1 and blk_p1 are combinational from pred_pc_p0. There is
+  NO REGISTER IN THE PATH: ubtb.sv derives index and tag by
+  continuous assign and produces every output field in one
+  always_comb reading mem, which is a flop array but is read
+  combinationally. Both outputs are therefore valid WITHIN THE p0
+  CYCLE, and the BP cluster registers them; the _p1 suffix names
+  where the consumer sees them, not where this module produces
+  them. bp_arb_spec.md 7.1 and ftq_bpu_interfaces.md 4.
   Both are held stable until the next pred_pc_p0 is presented.
+
+  AN EARLIER REVISION said the outputs were "combinational from
+  registered mem" and "valid at the start of p1, one cycle after
+  pred_pc_p0". That conflates mem being state with the read being
+  registered, and claims a cycle of latency the module does not
+  have. ubtb.sv's own header comment carries the same error and
+  is a comment-only fix for the next task that touches the file.
+  Corrected session-070 against the RTL.
 
 ### Lookup
 

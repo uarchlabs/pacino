@@ -105,9 +105,33 @@ stage after p1 is a redirect source.
 
 ### 2.1 Selection at p1
 
-The LP and uBTB are one-cycle predictors, current implementations use two single port RAMs in each predictor. The indexes are driven at p0 and its outputs are valid at p1. 
+The LP and uBTB are one-cycle predictors. NEITHER HAS AN SRAM. The
+uBTB is combinational from `pred_pc_p0`: `ubtb.sv` derives index and
+tag by continuous assign and produces every output field in one
+`always_comb` reading a flop array, with no register in the path, so
+the result is valid within the p0 cycle and the cluster registers it
+(`bp_arb_spec.md` 7.1, `ftq_bpu_interfaces.md` 4). The loop predictor
+is a registered counter array (`sram_init.md`). An earlier revision
+said both used "two single port RAMs in each predictor"; that is
+wrong for both, and section 7.3 of this document already said the
+uBTB is combinational. Corrected session-070.
 
-Both LP and uBTB support dual prediction, they will present two predictions per cycle when requested. Dual prediction is implemented as two independent prediction `slots`. The slots share no resources and operate fully independently.
+
+Both LP and uBTB support dual prediction, they will present two
+predictions per cycle when requested. THE TWO PREDICTORS DIFFER IN
+HOW. The uBTB's slots SHARE ONE LOOKUP: one lookup returns one entry
+describing one 32-byte block, and the slots are that entry's br0 and
+br1 fields (section 10, FE-10, `ubtb_interfaces.md`). The loop
+predictor's slots ARE independent: its table is replicated as one
+bank per slot (TI6) and a write to one bank cannot change another
+(`loop_pred_interfaces.md`), as the next paragraph says.
+
+An earlier revision said of both that the slots "share no resources
+and operate fully independently", which is the retired two-PC-range
+model and wrong for the uBTB. A session-070 revision then over-
+corrected to "THE SLOTS ARE NOT INDEPENDENT AND SHARE THE LOOKUP"
+for both, which is wrong for the LP and contradicted the paragraph
+below it. Corrected session-070.
 
 The loop predictor was retrofitted to NUM_PRED_SLOTS in BP-091: every
 prediction and update port carries a slot dimension and the internal
@@ -455,9 +479,18 @@ channel. The update queue asserts `upd_rdy` when it accepts. When the
 queue is full, `upd_rdy` deasserts and the FTQ holds valid until
 accepted.
 
-**Prediction delivery.** The FTQ presents `consumer_ready`; the
-predictor presents `pred_rdy` when its result is valid. The TAGE result
-is consumed by both the FTQ and the SC.
+**Prediction delivery.** The predictor presents `pred_rdy` when its
+result is valid. The TAGE result is consumed by both the FTQ and the
+SC.
+
+`consumer_ready` IS SC's, NOT THE FTQ's. It is an input port on
+tage.sv and is driven in bp_cluster.sv from SC state alone,
+`~sc_enable | (sc_ready & ~w_sc_grant_upd)`: it says whether SC can
+take the TAGE p2 result this cycle. The cluster drives it rather
+than sc.sv because deriving it from `tage_pred_rdy_p2` would close a
+combinational loop. An earlier revision of this paragraph named the
+FTQ, and `bp_arb_spec.md` 4.7 named either. Both corrected
+session-070 against the RTL.
 
 A prediction may be granted ahead of a pending update to the same RAM
 entry, and reads pre-update state. The potential accuracy loss from
@@ -723,9 +756,33 @@ it does so deliberately:
 
   3.3      "SC > TAGE > FTB/LP > uFTB/RAS" presented as an override
            priority.
-           RESOLUTION: there is no priority chain. These predictors do
-           not produce the same quantity and do not contend. Redirects
-           supersede by stage order (FE-3).
+           RESOLUTION, NARROWED session-070. The chain as written
+           mixes two quantities and only one of them is ranked.
+
+           DIRECTION IS ONE QUANTITY and IS ranked. The FTB submits a
+           direction for every valid conditional (conf MSB on
+           ftb_brI_taken_p2), TAGE supersedes it at p2, SC supersedes
+           TAGE at p3: SC > TAGE > FTB on direction. Section 3.3 of
+           this document says so, and
+           ftb_confidence_override_rules.md 4.3 and 8 are the owning
+           rules. Suspended per branch when ftb_fastpath_p2 fires,
+           where the FTB direction stands and neither TAGE nor SC
+           overrides it, though both are still requested and trained.
+
+           EVERYTHING ELSE IS NOT RANKED. Targets are selected by
+           branch type -- RAS for a return, ITTAGE for an indirect
+           with the FTB target on an ITTAGE miss, FTB otherwise --
+           and the uBTB and LP at p1 produce a whole prediction that
+           a later stage supersedes. Those do not contend and there
+           is no ordering among them beyond stage order, FE-3.
+
+           AN EARLIER REVISION of this resolution read "there is no
+           priority chain. These predictors do not produce the same
+           quantity and do not contend." That reason is true of LP,
+           uFTB and RAS and false of SC, TAGE and FTB, which all
+           produce a direction, so the resolution contradicted
+           section 3.3 of this same document. Narrowed rather than
+           withdrawn: the wider chain is still rejected.
 
   3.3      "ITTAGE (p2) > RAS (p0)" presented as an override chain.
            RESOLUTION: there is no chain. br_type selects the RAS for
@@ -748,8 +805,15 @@ it does so deliberately:
 
 Prior revisions of this document assigned the two prediction slots to
 fixed PC ranges (slot 0 pred_pc+0:31, slot 1 pred_pc+32:63), citing G8
-and G17. That is the TAGE/ITTAGE bundle split and does not apply to the
-FTB. The FTB prediction block is one 32-byte block and one FTB lookup
+and G17. That split does not apply to the FTB. NOR DOES IT APPLY TO
+TAGE OR ITTAGE ANY MORE: tage_interfaces.md TI3 has slot 1's PC
+supplied on tage_pred_inp_p0[1].pc and records pred_pc+32 as an error
+that was removed. This paragraph called it "the TAGE/ITTAGE bundle
+split", which sent the reader to a convention TAGE disowns. There is
+no pred_pc+32 split anywhere. Corrected session-070; the FTB
+conclusion below is unchanged.
+
+The FTB prediction block is one 32-byte block and one FTB lookup
 supplies both predictions (ftb_decisions.md 2.1, 2.3); the two slots
 are the block's two branch fields, not two PC ranges. Section 10 now
 follows ftb_decisions.md, and BP-086 removed the retired model from

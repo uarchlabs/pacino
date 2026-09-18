@@ -15,17 +15,24 @@
 ## Overview
 
 8-issue OoO RISC-V RVA23 branch predictor cluster. Optionally dual
-prediction (Xiangshan model): two independent next-PC predictions per
-fetch bundle, one per prediction slot. Dual mode is runtime-selectable
-via a static configuration input.
+prediction (Xiangshan model): two predictions per 32-byte block, one
+per prediction slot. THE SLOTS ARE THE BLOCK'S TWO BRANCH FIELDS, br0
+and br1, NOT TWO NEXT-PC SLOTS: one lookup supplies both, and a taken
+branch ends the block (fe_decisions.md 10, FE-10, FE-11). See Dual
+Prediction Mode below. Dual mode is runtime-selectable via a static
+configuration input. An earlier revision read "two independent
+next-PC predictions per fetch bundle"; corrected session-070.
 
 Predictors: uBTB, Loop, FTB, TAGE, SC, ITTAGE, RAS.
 
 Override order (conditional branch direction and target):
   uBTB (p1) -> FTB, TAGE (p2) -> SC (p3)
-  This is stage order, not a contention ranking: a later stage
-  supersedes an earlier one (FE-3, fe_decisions.md 12). Within p2,
-  TAGE overrides the FTB direction.
+  ON DIRECTION this IS a ranking: SC > TAGE > FTB, all three produce
+  that one quantity, suspended per branch when the FTB fast path
+  fires (ftb_confidence_override_rules.md 4.3, 4.2). ON EVERYTHING
+  ELSE it is stage order, not a ranking: a later stage supersedes an
+  earlier one (FE-3, fe_decisions.md 12, narrowed session-070), and
+  targets are selected by branch type.
   Loop predictor overrides uBTB at p1 when trusted (override control
   decision). Loop predictor does not participate after p1.
   ITTAGE and RAS are outside this ordering (type-gated, see below).
@@ -110,8 +117,26 @@ a 32-byte boundary.
 
 ### TAGE
 - Stage:   p2 output (p0 index calc, p1 SRAM read + tag match, p2 final)
-- Role:    Direction prediction for conditional branches. Overrides FTB
-           direction when TAGE disagrees. p2_redirect fires on override.
+- Role:    Direction prediction for conditional branches. OVERRIDES
+           THE FTB DIRECTION: the FTB submits its own direction for
+           every valid conditional (conf MSB on ftb_brI_taken_p2)
+           and TAGE supersedes it at p2. fe_decisions.md 3.3;
+           ftb_confidence_override_rules.md 3.1, 4.3 and 8, where
+           the direction priority is SC > TAGE > FTB.
+           EXCEPT UNDER THE FAST PATH: when ftb_fastpath_p2[i]
+           fires -- conf saturated and ftb_fastpath_en set -- the
+           FTB direction stands for that branch and no TAGE or SC
+           direction override is applied. TAGE and SC are still
+           requested and still trained
+           (ftb_confidence_override_rules.md 4.2, 6).
+           THE REDIRECT IS A SEPARATE QUESTION. p2_redirect fires
+           only when the successor the cluster would publish differs
+           from the one its own p1 stage registers hold, not on the
+           override itself: an override that does not change the
+           successor fires nothing (fe_decisions.md FE-4, 2.5).
+           An earlier revision read "p2_redirect fires on override";
+           a session-070 revision then over-corrected and denied the
+           direction override itself. Both corrected session-070.
 - Tables:
     T0: 2 ways x 2048 entries, base table
         Entry layout: 2b CTR (no tag, no valid, no useful)
@@ -126,11 +151,25 @@ a 32-byte boundary.
         useful : 2b
 
 ### SC (Statistical Corrector)
-- Stage:   p3 output (p0 index, p1 counter read, p2 accumulate, p3 final)
+- Stage:   p3 output. The SC path STARTS AT p2, not p0: the TAGE p2
+           result and the p0 inputs staged forward are presented at
+           p2, the table index hashes are computed at p2, the table
+           RAM reads issue at p2, and the result is valid at p3. The
+           update path is u0/u1. sc_decisions.md 2 and 9,
+           sc_interfaces.md Timing, sc_table_interfaces.md Table
+           Pipeline, bp_arb_spec.md 6.1. An earlier revision read
+           "p0 index, p1 counter read, p2 accumulate, p3 final",
+           which is a four-stage path this design does not have.
+           Corrected session-070.
 - Role:    Corrects TAGE when TAGE is systematically biased. Requires
            TAGE output to proceed (TAGE must be valid before SC can
            finalize). Overrides TAGE direction when combined counter
-           magnitude exceeds threshold. p3_redirect fires on override.
+           magnitude exceeds threshold, subject to the FTB fast
+           path (ftb_confidence_override_rules.md 4.2). The p3
+           redirect fires only when SC CHANGES WHAT THE CLUSTER
+           PUBLISHED AT p2, not on the override itself
+           (fe_decisions.md 3.1, FE-4). An earlier revision read
+           "p3_redirect fires on override"; corrected session-070.
            Threshold: dynamically adapted at runtime (O-GEHL scheme,
            TC counter), not a fixed design-time value and not CSR-
            configurable. See sc_decisions.md sections 9-10, G7.
@@ -213,10 +252,18 @@ See planning/arch/ras_decisions.md for full decision rationale.
 - Return: JALR, C.JR, C.JALR where rs1 = x1 or x5
           (C.JALR with rs1=x5 excluded from return classification)
 
-#### Role in JALR prediction (three-way split with FTB and ITTAGE)
-- FTB:    JALR with fixed stable target (most direct calls)
-- RAS:    JALR/C.JR/C.JALR matching return register convention
-- ITTAGE: remaining indirect JALR with history-dependent targets
+#### Role in JALR prediction
+- RAS:    JALR/C.JR/C.JALR matching return register convention.
+          Type-gated at p2.
+- ITTAGE: every other indirect JALR. Not "remaining" by target
+          stability -- ITTAGE is consulted for all of them.
+- FTB:    the FALLBACK, not a third arm. The FTB target stands when
+          ITTAGE misses (ftb_decisions.md 4.2), whatever the target's
+          stability. An earlier revision read "three-way split" with
+          "FTB: JALR with fixed stable target (most direct calls)",
+          which makes the FTB a type-based arm. Selection is by
+          ITTAGE hit, not by branch flavour. fe_decisions.md 3.3.
+          Corrected session-070.
 
 #### Stage and update notes
 - Stage:  p2 push/pop + spec_pop_addr; p3 = p2 registered
@@ -228,8 +275,12 @@ See planning/arch/ras_decisions.md for full decision rationale.
 
 ## Pipeline Staging
 
-  Cycle N   (p0): PC input. Index calculations begin in all predictors.
-                  FTB, TAGE, SC, ITTAGE send address to SRAM.
+  Cycle N   (p0): PC input. Index calculations begin in the
+                  predictors that index at p0.
+                  FTB, TAGE, ITTAGE send address to SRAM.
+                  SC DOES NOT. Its path starts at p2; see the SC
+                  Stage bullet. An earlier revision listed SC here
+                  and at p1; corrected session-070.
 
   Cycle N+1 (p1): uBTB output valid -> first prediction available.
                   Loop predictor output valid -> overrides uBTB if
@@ -238,15 +289,18 @@ See planning/arch/ras_decisions.md for full decision rationale.
                   On uBTB miss and loop predictor not trusted: fetch
                   proceeds PC + FTB_BLOCK_BYTES.
                   TAGE: SRAM read completes, tag match, slot reorder.
-                  SC: saturating counter read.
                   FTB: result registered (arrives too late for p1).
+                  SC: nothing. It has not started.
 
   Cycle N+2 (p2): FTB output valid (registered from p1).
                   TAGE final result valid.
                   RAS: push/pop executes, spec_pop_addr valid.
                   ITTAGE: final target valid.
-                  SC: accumulates TAGE provider counter + SC counter,
-                      computes abs value vs threshold (result pending p3).
+                  SC STARTS HERE: the TAGE p2 result and the staged
+                      p0 inputs are presented, index hashes are
+                      computed, and the table RAM reads issue. Result
+                      at p3. sc_decisions.md 2 and 9,
+                      sc_table_interfaces.md Table Pipeline.
                   p2_redirect fires if FTB/TAGE/RAS/ITTAGE disagrees
                   with p1.
                   FTB entry saved for one additional cycle (-> p3).
@@ -285,18 +339,35 @@ initial prediction only. The override chain starts at p2.
 ## Dual Prediction Mode
 
 Configuration: static input dual_pred_en (1 = dual, 0 = single).
-Mechanism: same as Xiangshan -- two independent next-PC slots per
-fetch bundle, allowing a taken branch in the middle of a bundle to
-also predict the branch at the predicted target.
+
+Mechanism: the two slots are the two BRANCH FIELDS of ONE 32-byte
+prediction block, br0 and br1, each located by its own pos within
+the block's 16 two-byte positions. One lookup supplies both
+(fe_decisions.md 10, FE-10). They are not two next-PC slots and not
+two PC ranges.
+
+A TAKEN BRANCH ENDS THE BLOCK. FE-11: a RAS-operating instruction,
+and any taken branch, terminates the block, so slot 1 is not
+reached when slot 0 is taken. An earlier revision said the slots
+allow "a taken branch in the middle of a bundle to also predict the
+branch at the predicted target", which describes a second
+prediction past a taken branch. That cannot happen.
+
+dual_pred_en DOES NOT CHANGE THE STRUCTURE. The slots and the
+channels exist either way (fe_decisions.md 10). At dual_pred_en=0
+only br0 is reported and only upd_ch[0] carries traffic; nothing is
+removed. An earlier revision read "One update channel: upd_ch[0]
+only", which reads as a structural difference. Corrected
+session-070.
 
 When dual_pred_en=1:
-  - Two prediction slots active per fetch bundle.
-  - Two independent update channels: upd_ch[0] and upd_ch[1].
+  - Both br0 and br1 reported per block.
+  - Both update channels carry traffic: upd_ch[0] and upd_ch[1].
   - Each channel handles both conditional and indirect resolution.
 
 When dual_pred_en=0:
-  - One prediction slot active.
-  - One update channel: upd_ch[0] only.
+  - Only br0 reported.
+  - Only upd_ch[0] carries traffic. upd_ch[1] still exists.
 
 ---
 

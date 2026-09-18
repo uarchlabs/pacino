@@ -16,8 +16,15 @@
 
 ITTAGE is an indirect target tagged geometric history length predictor
 providing target address prediction for indirect branches. It fires
-at p2 alongside FTB and TAGE and overrides FTB target when ITTAGE
-has a matching entry. ITTAGE does not predict direction -- it predicts
+at p2 alongside FTB and TAGE and SUPPLIES THE TARGET for an indirect
+branch when it hits; the FTB target stands on a miss
+(ftb_decisions.md 4.2). Target selection is by hit and is independent
+of the conf direction mechanism, which never affects target overrides
+(ftb_confidence_override_rules.md 1). The p2 redirect is a separate
+question: it fires only when the successor the cluster would publish
+differs from the one its own p1 stage registers hold
+(fe_decisions.md FE-4 and 2.5). ITTAGE does not predict direction
+-- it predicts
 a 38-bit target address (upper 38 bits of a Sv39 VA; bit 0 is always
 zero for instruction alignment and is not stored).
 
@@ -26,14 +33,31 @@ in parameter arrays is a placeholder only and is never instantiated.
 When no IT1-IT5 entry matches, ittage_hit is de-asserted in the
 response and the consumer falls through to the FTB target.
 
-Branch type partitioning is resolved upstream by the decoder and
-carried in the FTB entry. ITTAGE operates on indirect branches
-that are not RETURN, including indirect CALL with a history-
-dependent target. RAS handles RETURN only. RAS also tracks CALL
-for its own speculative-stack push (return-address bookkeeping);
-this is unrelated to target prediction. FTB provides the target
-for indirect CALL with a fixed stable target. No dynamic
-arbitration between ITTAGE and RAS is required at p2.
+Branch type partitioning is THE FTB's, not the decoder's.
+`ftb_decisions.md` 1 makes classification the FTB's
+responsibility, and the type reaches p2 from the FTB entry.
+Predecode does see instruction bits, but FE-8 forms no predictor
+update from it, so it is not the source of the partition. An
+earlier revision said the partition was "resolved upstream by
+the decoder and carried in the FTB entry"; the second half was
+right and the first was not. Corrected session-070.
+
+ITTAGE operates on indirect branches that are not RETURN,
+including indirect CALL with a history-dependent target. RAS
+handles RETURN only. RAS also tracks CALL for its own
+speculative-stack push (return-address bookkeeping); this is
+unrelated to target prediction.
+
+THE FTB TARGET IS THE ITTAGE-MISS FALLBACK, NOT A SEPARATE
+ARM. `fe_decisions.md` 3.3 selects ITTAGE on br_type indirect,
+and `ftb_decisions.md` 4.2 makes the FTB target what stands when
+ITTAGE misses. An earlier revision said "FTB provides the target
+for indirect CALL with a fixed stable target", which reads as a
+type-based split between the two. There is no such split: the
+selection is by hit, not by how stable the target is. Corrected
+session-070.
+
+No dynamic arbitration between ITTAGE and RAS is required at p2.
 
 Alternate provider and USE_ALT_ON_NA (UAON) are implemented,
 following the same principles as TAGE. IT_UAON_WIDTH=4,
@@ -281,10 +305,18 @@ Note: VIRT_ittage_pred_tgt is a virtual signal described above.
 - Must write ittage_pred_meta_p2[s] into FTQ meta path when
   ittage_pred_val_p0[s] was asserted, regardless of hit status.
   The update path requires these fields unconditionally.
-- Must set pred_src in bp_ftq_entry_t to PRED_ITTAGE when
-  ITTAGE overrides FTB target.
-- Must assert s2_redirect when ittage_hit is asserted and
-  VIRT_ittage_pred_tgt disagrees with FTB target.
+- Must set pred_src in bp_ftq_entry_t to PRED_ITTAGE when the
+  cluster takes the ITTAGE target for the slot.
+- Must assert p2 redirect when ittage_hit is asserted and the
+  successor implied by VIRT_ittage_pred_tgt differs from the one the
+  cluster's own p1 stage registers hold. THE COMPARISON IS NOT
+  AGAINST THE FTB: it is one quantity, the successor, against the
+  cluster's own staged view. fe_decisions.md FE-4 and
+  ftq_bpu_interfaces.md 6 -- no predictor is compared against another
+  predictor, and the cluster does not read the FTQ. An earlier
+  revision said "disagrees with FTB target". That the FTB target is
+  what stands on an ITTAGE miss (ftb_decisions.md 4.2) is a
+  selection rule, not a comparison. Corrected session-070.
 - Must gate ITTAGE prediction on indirect branch type, excluding
   RETURN. Indirect CALL is in scope for both ITTAGE and RAS. ITTAGE
   predicts the target, RAS pushes the return address.
@@ -435,26 +467,35 @@ See ittage_table_interfaces.md §Bank Address Assignment.
 
 ## Override Chain Position
 
-ITTAGE sits at s2 alongside FTB and TAGE. ITTAGE overrides FTB
-target (not direction) when a hit occurs:
+ITTAGE fires at p2 alongside FTB and TAGE, and supplies the target
+(not the direction) for an indirect branch when it hits:
 
 ```
-s1: uBTB + Loop
-s2: FTB + TAGE + ITTAGE + RAS
-s3: SC
+p1: uBTB + Loop
+p2: FTB + TAGE + ITTAGE + RAS
+p3: SC
 ```
 
-Override priority at s2 for target selection:
+Target selection at p2, by branch class then by hit:
 
 ```
-ITTAGE > FTB (for indirect branches only)
-RAS    > FTB (for RETURN branches only)
+  RETURN     RAS spec_pop_addr
+  indirect   ITTAGE on hit; the FTB target on an ITTAGE miss
+  otherwise  FTB target
 ```
+
+THIS IS SELECTION, NOT A PRIORITY CHAIN. An earlier revision wrote
+it as "ITTAGE > FTB" and "RAS > FTB", which reads as contenders
+ranked for one output. The FTB is not a third arm competing with
+the other two: it is what stands when ITTAGE misses
+(ftb_decisions.md 4.2), and RAS and ITTAGE are gated by branch
+class, not ranked. fe_decisions.md FE-3 and section 12. Corrected
+session-070.
 
 ITTAGE and RAS operate on mutually exclusive branch classes.
 No dynamic arbitration between them is required.
 
-SC at s3 overrides TAGE direction for conditional branches only.
+SC at p3 supplies the direction for conditional branches only.
 SC does not interact with ITTAGE target prediction.
 
 ---

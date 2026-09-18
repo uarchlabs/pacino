@@ -211,9 +211,14 @@ where it means per FTQ ENTRY -- the checkpoint array is indexed by
 FTQ index and the prediction slot is a different concept
 (fe_decisions.md FE-10). And it cited "the fixed bundle split
 (G8/G17)" as the reason for bundle granularity. G8 and G17 are
-SUPERSEDED (session-063): the pred_pc+0:31 / +32:63 split is the
-TAGE/ITTAGE bundle convention and does not govern block
-prediction. The conclusion survives without them -- one checkpoint
+SUPERSEDED (session-063) and the pred_pc+0:31 / +32:63 split does
+not govern block prediction. IT NO LONGER EXISTS ANYWHERE EITHER:
+tage_interfaces.md TI3 has slot 1's PC supplied on
+tage_pred_inp_p0[1].pc and records pred_pc+32 as an error that was
+removed. An earlier revision of this paragraph called it "the
+TAGE/ITTAGE bundle convention"; corrected session-070.
+
+The conclusion survives without them -- one checkpoint
 per accepted bundle is a property of when the checkpoint is
 written, not of how the block is split.
 

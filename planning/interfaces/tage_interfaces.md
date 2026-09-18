@@ -16,8 +16,20 @@
 
 TAGE is a tagged geometric history length branch predictor
 providing direction prediction for conditional branches. It
-fires at p2 alongside FTB and overrides FTB direction when
-TAGE disagrees. s2_redirect fires on override.
+fires at p2 alongside FTB and OVERRIDES THE FTB DIRECTION. The FTB
+submits its own direction for every valid conditional (conf MSB on
+ftb_brI_taken_p2) and TAGE supersedes it at p2, unless the FTB
+fast path fires for that branch. fe_decisions.md 3.3;
+ftb_confidence_override_rules.md 3.1, 4.2, 4.3 and 8.
+
+THE p2 REDIRECT IS A SEPARATE QUESTION. It fires only when the
+successor the cluster would publish differs from the one its own p1
+stage registers hold -- an override that does not change the
+successor fires nothing (fe_decisions.md FE-4 and 2.5,
+ftq_bpu_interfaces.md 6). An earlier revision said "s2_redirect
+fires on override"; a session-070 revision then over-corrected and
+denied the direction override itself. Both corrected
+session-070.
 
 Five tables: T0 is the base table (no tag, no useful bit,
 2b CTR). T1-T4 are tagged tables (valid=1b, tag=8b, ctr=3b,
@@ -253,10 +265,21 @@ The hash operations are defined in tage_table_hash_rules.md
   tage_pred_val_p0[s] was asserted, regardless of
   tage_pred_rdy_p2[s]. The update path requires these
   fields unconditionally.
-- Must set pred_src in bp_ftq_entry_t to PRED_TAGE when
-  TAGE overrides FTB direction.
-- Must assert s2_redirect when tage_pred_rdy_p2[s]=1 and
-  tage_pred_tkn disagrees with FTB direction.
+- Must set pred_src in bp_ftq_entry_t to PRED_TAGE when the
+  cluster takes the TAGE direction for the slot.
+- Must apply the TAGE direction over the FTB's for a COND branch,
+  unless ftb_fastpath_p2 is asserted for that branch, in which case
+  the FTB direction stands and no TAGE override is applied
+  (ftb_confidence_override_rules.md 4.2).
+- Must assert p2 redirect when tage_pred_rdy_p2[s]=1 and the
+  resulting successor differs from the one the cluster's own p1
+  stage registers hold. THE REDIRECT CONDITION IS NOT THE OVERRIDE:
+  an override that does not change the successor fires nothing, and
+  the comparison is one quantity against the cluster's own staged
+  view, never predictor against predictor, and never against the
+  FTQ (fe_decisions.md FE-4 and 2.5, ftq_bpu_interfaces.md 6). An
+  earlier revision gave the condition as "disagrees with FTB
+  direction". Corrected session-070.
 - Must gate TAGE override on br_type==COND only.
 
 ### TAGE simulation support
@@ -389,24 +412,44 @@ override chain position.
 
 ## Override Chain Position
 
-TAGE sits between FTB and SC in the override chain:
+ON DIRECTION there IS a priority chain, because the FTB, TAGE and
+SC all produce that one quantity:
 
 ```
-SC > TAGE > FTB > uBTB
+SC (p3) > TAGE (p2) > FTB (p2)
 ```
 
-TAGE sits at s2 alongside FTB and ITTAGE.
+ftb_confidence_override_rules.md 4.3 states it in those terms, and
+its section 8 table is explicit that the FTB always SUBMITS a
+direction and the question is whose is USED. fe_decisions.md 3.3
+agrees.
+
+THE EXCEPTION IS THE FTB FAST PATH. When ftb_fastpath_p2[i] fires,
+conf saturated and ftb_fastpath_en set, the FTB direction stands
+for that branch and neither TAGE nor SC overrides it. TAGE and SC
+are still requested and still trained
+(ftb_confidence_override_rules.md 4.2 and 6).
+
+WHAT IS NOT RANKED is everything else. The uBTB and LP at p1 produce
+a whole prediction that a later stage supersedes; targets come from
+RAS for a return, ITTAGE for an indirect with the FTB target on an
+ITTAGE miss, FTB otherwise, selected by branch type and hit. There
+is no ordering among those beyond stage order, FE-3.
+fe_decisions.md 12 rejects the wider "SC > TAGE > FTB > uBTB" on
+that basis and was NARROWED session-070 so its rejection no longer
+covers the direction ranking above, which its own section 3.3
+asserts. An earlier session-070 revision of this paragraph drew that
+scope on its own authority; the narrowing is now recorded in
+fe_decisions.md 12.
 
 ```
-s1: uBTB + Loop
-s2: FTB + TAGE + ITTAGE + RAS
-s3: SC
+p1: uBTB + Loop
+p2: FTB + TAGE + ITTAGE + RAS
+p3: SC
 ```
 
-TAGE overrides FTB direction at p2 for COND branches only.
-SC overrides TAGE direction at p3. TAGE does not participate
-in target selection -- FTB provides the target for
-conditional branches.
+TAGE does not participate in target selection; for a conditional
+the FTB supplies the target.
 
 ---
 

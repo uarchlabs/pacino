@@ -24,9 +24,14 @@ RAS predicts the target of return-type indirect branches
 (JALR/C.JR/C.JALR matching return register convention).
 
 Pipeline stage: p2 push/pop, p3 registered.
-Override chain: outside the conditional branch override chain
-(SC > TAGE > FTB > uBTB). RAS is type-gated -- active only
-when FTB identifies the branch type as return.
+Override: RAS supplies the TARGET for a return and takes no part in
+the direction ranking (SC > TAGE > FTB on direction,
+ftb_confidence_override_rules.md 4.3). It is type-gated -- active
+only when FTB identifies the branch type as return. An earlier
+revision placed it "outside the conditional branch override chain
+(SC > TAGE > FTB > uBTB)", which compresses a direction ranking and
+a target selection into one chain. fe_decisions.md 12, narrowed
+session-070.
 
 At p2: RAS overrides FTB target for return branches.
 At p3: p3 repair applied if p3 structural prediction differs
@@ -129,21 +134,29 @@ cases:
 in the 3-bit enum. It is a package edit, so the verification run
 widens to both units.
 
-THE THREE-WAY SPLIT BELOW SURVIVES IT. The package comment on the
+THE OWNERSHIP RULE BELOW SURVIVES IT. The package comment on the
 enum worried that a JALR satisfying both the call and the return
-rule would break the mutually exclusive FTB / RAS / ITTAGE split.
-It does not, because RETURN_CALL is a SINGLE classification and it
-is unambiguously the RAS's: the split decides which predictor owns
-an instruction, and this one is owned by the RAS performing two
+rule would break the mutually exclusive RAS / ITTAGE split. It does
+not, because RETURN_CALL is a SINGLE classification and it is
+unambiguously the RAS's: ownership decides which predictor handles
+an instruction, and this one is handled by the RAS performing two
 operations rather than by two predictors performing one each.
+An earlier revision called this a "three-way ... FTB / RAS /
+ITTAGE split"; the FTB is not an arm of it, see below.
 
-Three-way JALR split with FTB and ITTAGE:
-  FTB:    JALR with fixed stable target (most direct calls)
+JALR ownership:
   RAS:    JALR/C.JR/C.JALR matching return register convention
-  ITTAGE: remaining indirect JALR, history-dependent targets
+  ITTAGE: every other indirect JALR
 
-These are mutually exclusive by branch type, resolved by FTB
-structural prediction before p2.
+RAS and ITTAGE are mutually exclusive by branch type, resolved by FTB
+structural prediction before p2. THE FTB IS NOT A THIRD ARM. An
+earlier revision read "Three-way JALR split with FTB and ITTAGE" with
+"FTB: JALR with fixed stable target (most direct calls)". The FTB
+target is the ITTAGE-MISS FALLBACK (ftb_decisions.md 4.2), selected
+by hit rather than by how stable the target is, so it is not a
+type-based arm alongside the other two. ittage_interfaces.md and
+bp_cluster.md carried the same error. fe_decisions.md 3.3. Corrected
+session-070.
 
 ---
 
@@ -687,10 +700,14 @@ Commit stack pointer width:
 
   tage_interfaces.md   -- no RAS interaction.
 
-  ittage_interfaces.md -- no direct RAS interaction. The
-                          three-way JALR split (FTB/RAS/ITTAGE)
-                          is defined in section 2 of this
-                          document and in bp_cluster.md.
+  ittage_interfaces.md -- no direct RAS interaction. JALR
+                          ownership, RAS or ITTAGE, is defined in
+                          section 2 of this document and in
+                          bp_cluster.md. An earlier revision said
+                          "three-way JALR split (FTB/RAS/ITTAGE)";
+                          the FTB target is the ITTAGE-miss
+                          fallback, not a third arm.
+                          ftb_decisions.md 4.2.
 
 ---
 

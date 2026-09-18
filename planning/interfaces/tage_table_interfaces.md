@@ -15,8 +15,21 @@
 
 TAGE is a tagged geometric history length branch predictor
 providing direction prediction for conditional branches. It
-fires at p2 alongside FTB and overrides FTB direction when
-TAGE disagrees. s2_redirect fires on override.
+fires at p2 alongside FTB and OVERRIDES THE FTB DIRECTION. The FTB
+submits its own direction for every valid conditional and TAGE
+supersedes it at p2, unless the FTB fast path fires for that
+branch, in which case the FTB direction stands and TAGE is still
+requested and trained (fe_decisions.md 3.3;
+ftb_confidence_override_rules.md 3.1, 4.2, 4.3, 6, 8).
+
+THE p2 REDIRECT IS A SEPARATE QUESTION: it fires only when the
+successor the cluster would publish differs from the one its own p1
+stage registers hold, so an override that does not change the
+successor fires nothing (fe_decisions.md FE-4 and 2.5). An earlier
+revision said "s2_redirect fires on override"; a session-070
+revision then over-corrected and denied the direction override
+itself. Both corrected session-070. tage_interfaces.md Overview
+carries the same text.
 
 There are two phases in a TAGE design, prediction request and update
 request. The phase do not overlap.

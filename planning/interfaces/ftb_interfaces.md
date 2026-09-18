@@ -22,8 +22,14 @@ Conventions:
     block. There are NO per-slot RAMs and NO NUM_PRED_SLOTS unpacking
     on FTB ports. The cluster's two branches per cycle are br0 and br1
     of the one indexed entry (ftb_decisions.md 2.1).
-  - The G8/G17 pred_pc+32 bundle split and TI6 per-slot RAMs are
-    TAGE/ITTAGE conventions. They do NOT apply to FTB.
+  - TI6 per-slot RAMs is a TAGE/ITTAGE convention and does NOT
+    apply to FTB. The G8/G17 pred_pc+32 bundle split does not apply
+    either, AND NO LONGER EXISTS ANYWHERE: tage_interfaces.md TI3
+    has slot 1's PC supplied on tage_pred_inp_p0[1].pc and records
+    pred_pc+32 as an error that was removed. An earlier revision
+    called it a TAGE/ITTAGE convention, which pointed the reader at
+    something TAGE disowns. Corrected session-070; the FTB
+    conclusion is unchanged.
   - Active-low reset: rstn. Rising-edge clock: clk. Storage-module
     enables are active low (IC-FTB-13).
   - VA_WIDTH = 40. All full-width addresses are [VA_WIDTH-1:0].
@@ -142,10 +148,13 @@ fields of the one indexed entry, not two slots.
   output logic                  ftb_is_call_p2
   output logic                  ftb_is_ret_p2
   output logic                  ftb_is_jalr_p2
-                        -- jump type for this block. Gates the
-                           three-way JALR split (FTB / RAS / ITTAGE)
-                           resolved by FTB before s2 (ftb_decisions.md
-                           section 1).
+                        -- jump type for this block. Gates JALR
+                           ownership, RAS or ITTAGE, resolved by FTB
+                           before p2 (ftb_decisions.md section 1).
+                           The FTB is not a third arm: its target is
+                           the ITTAGE-miss fallback, section 4.2.
+                           An earlier revision said "three-way JALR
+                           split (FTB / RAS / ITTAGE)".
 
   -- fallthrough (block end)
   output logic [VA_WIDTH-1:0]   ftb_pft_addr_p2
