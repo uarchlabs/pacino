@@ -842,19 +842,20 @@ match it and to match this specification.
 1. `bp_ftq_meta_t` is carried per slot. The array is declared at the
    port, not inside the struct, per the `bp_update_t` convention.
 
-2. `bp_redirect_t` comments use s2/s3 stage labels. Change to p2/p3.
+2. CLOSED, verified session-070. `bp_redirect_t` s2/s3 comments to
+   p2/p3. bp_structs_pkg.sv contains no s2 or s3 label.
 
-3. `branch_id` is commented "FTQ slot index" in `bp_ftq_entry_t`,
-   `tage_pred_meta_t`, `sc_pred_meta_t`, and `ittage_pred_meta_t`.
-   It is the FTQ entry index (TD-FE-5).
+3. CLOSED, verified session-070. `branch_id` commented "FTQ slot
+   index". The package contains no such string; every branch_id
+   comment reads "FTQ entry index". This was TD-FE-5, which
+   fe_decisions.md 13 also still listed open.
 
-4. The uBTB index and tag comments read PC[26:7], which describes
-   the retired instruction-granularity indexing. The uBTB now
-   indexes at block granularity.
+4. CLOSED, verified session-070. The uBTB index and tag comments
+   read PC[26:7], the retired instruction-granularity indexing.
+   No such comment remains.
 
-5. `ubtb_pred_t.carry` is commented as a property of the slot
-   target. The implemented and specified behaviour is the entry
-   fall-through carry.
+5. CLOSED, verified session-070. `ubtb_pred_t.carry` commented as a
+   slot-target property. It now reads "entry fall-through".
 
 ### fe_decisions.md
 
@@ -889,14 +890,21 @@ match it and to match this specification.
    `lp_to_meta()` is deleted rather than rewritten. The two retired
    spellings disappear with the type.
 
-10. `bp_ftq_meta_t` gains an `ftb` member of a new type
-    `ftb_pred_meta_t` (hit, way, jmp_pos), so the FTB carried
+10. CLOSED, verified session-070: `ftb_pred_meta_t` is in
+    bp_structs_pkg.sv. `bp_ftq_meta_t` gains an `ftb` member of a
+    new type `ftb_pred_meta_t` (hit, way, jmp_pos), so the FTB carried
     writeWay state travels inside the struct like every other
     predictor's state (section 7.3).
 
-11. `bp_ftq_slot_t` gains a `pos` field of FTB_BR_POS_BITS, the
+11. CLOSED, verified session-070: bp_structs_pkg.sv declares
+    `logic [FTB_BR_POS_BITS-1:0] pos;` in bp_ftq_slot_t.
+    `bp_ftq_slot_t` gains a `pos` field of FTB_BR_POS_BITS, the
     in-block instruction position of that slot's branch
     (section 7.4).
+
+    Items 2, 3, 4, 5, 10 and 11 were all applied to the package and
+    were still listed here as required. Item 1 was NOT verified
+    session-070 and stays open.
 
 15. CLOSED, 2026-08-19. `bp_ftq_entry_t` gains a `pft_addr` field of
     VA_WIDTH, block scalar, holding the value delivered on

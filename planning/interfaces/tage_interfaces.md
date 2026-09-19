@@ -486,9 +486,10 @@ the FTB supplies the target.
 |     | slot 1 uses RAM1. Selection is         |                    |
 |     | structural, not runtime. Unrelated to  |                    |
 |     | sram_init/bw_ram bank scheme.          |                    |
-| TI7 | bp_tage_meta_t migration to            | Cleanup task.      |
-|     | tage_pred_meta_t -- both retained      | Post BP-010.       |
-|     | during transition                      |                    |
+| TI7 | bp_tage_meta_t migration to            | CLOSED, verified   |
+|     | tage_pred_meta_t. bp_tage_meta_t no    | session-070.       |
+|     | longer exists in bp_structs_pkg.sv.    | PROJECT_STATUS     |
+|     | Nothing is retained in transition.     | Open Items 4.      |
 | TI8 | Flush port definitions (_px signals).  | CLOSED BP-105.     |
 |     | NO FLUSH EVENT EXISTS: a flush is a    | fe_decisions       |
 |     | redirect. tage needs no flush port and | FE-14.             |

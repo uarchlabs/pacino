@@ -754,7 +754,17 @@ it only documented current behavior.
 |                         |             |                   | request that produced it and is  |
 |                         |             |                   | staged to p2 together.           |
 | tage_table_interfaces.md| Draft       | --                | Created session-016.             |
-|                         |             |                   | Updates pending.                 |
+|                         |             |                   | "Updates pending" since then,    |
+|                         |             |                   | naming nothing. The only         |
+|                         |             |                   | identifiable item was the px     |
+|                         |             |                   | flush line, closed by BP-105 and |
+|                         |             |                   | corrected session-070. If        |
+|                         |             |                   | nothing else is outstanding this |
+|                         |             |                   | row should go Complete. The TAGE |
+|                         |             |                   | decomposition names it as the    |
+|                         |             |                   | one exception and defers to this |
+|                         |             |                   | row; changing it means changing  |
+|                         |             |                   | both.                            |
 | tage_cntrl_use          | Complete    | --                | session-037/045.                 |
 | _update_rules.md        |             |                   |                                  |
 | tage_cntrl_uaon         | Complete    | --                | Session-060: reconciled to TD#87 |
@@ -975,7 +985,14 @@ it only documented current behavior.
 |                         |             |                   | from RTL and compared to the     |
 |                         |             |                   | eight interface docs. 4 findings,|
 |                         |             |                   | all in ubtb and bp_history.      |
-|                         |             |                   | STALE on loop_pred after BP-091. |
+|                         |             |                   | STALE on loop_pred after BP-091  |
+|                         |             |                   | AND ON ubtb: it lists 5 ubtb     |
+|                         |             |                   | ports with no blk_p1, and its    |
+|                         |             |                   | notes give the document names as |
+|                         |             |                   | pred_pc, pred, upd. ubtb.sv has  |
+|                         |             |                   | blk_p1 and ubtb_interfaces.md    |
+|                         |             |                   | names them pred_pc_p0, pred_p1,  |
+|                         |             |                   | blk_p1, upd_u0. Session-070.     |
 | ftq_bpu_interfaces.md   | Draft       | --                | SESSION-063. FTQ/BPU port        |
 |                         |             |                   | specification: request, p1       |
 |                         |             |                   | prediction, late predictions,    |
@@ -1057,7 +1074,10 @@ it only documented current behavior.
 |                         |             |                   | unchanged. Section 3.1 defines   |
 |                         |             |                   | the                              |
 |                         |             |                   | two-arm union, 278b per slot and |
-|                         |             |                   | 49,920b, DEFINED and DEFERRED    |
+|                         |             |                   | 50,176b (was 49,920b before      |
+|                         |             |                   | VA_WIDTH 41, TD#122; the union   |
+|                         |             |                   | is slow-path only so 278b is     |
+|                         |             |                   | unchanged), DEFINED and DEFERRED |
 |                         |             |                   | (TD-FE-2). Section 4 adds        |
 |                         |             |                   | wb_rcvd, fault and gen as three  |
 |                         |             |                   | flop vectors, 192b, OUTSIDE both |
@@ -1218,7 +1238,12 @@ it only documented current behavior.
 |                         |             |                   | indexing, storage, both interfaces|
 |                         |             |                   | miss handling, maintenance,       |
 |                         |             |                   | prefetch. Owns L1I-1..23,         |
-|                         |             |                   | TD-L1I-1..9, L1I-U2..U7. PIPT at  |
+|                         |             |                   | TD-L1I-1..9. OPEN: L1I-U5 and     |
+|                         |             |                   | U7 only. U1 closed; U2, U3, U4    |
+|                         |             |                   | RULED session-069 (itlb_ and      |
+|                         |             |                   | mmu_decisions.md); U6 NEVER       |
+|                         |             |                   | ISSUED. This read "L1I-U2..U7".   |
+|                         |             |                   | Session-070. PIPT at              |
 |                         |             |                   | 64 KiB 8-way; pa_bits 36; the core|
 |                         |             |                   | port returns a full line; sixteen |
 |                         |             |                   | outstanding and sixteen MSHRs.    |
@@ -1282,13 +1307,25 @@ it only documented current behavior.
 |                         |             |                   | sizes in one array, ASID tagged,  |
 |                         |             |                   | 1-cycle hit. Closes TD#115.       |
 | mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..25,   |
-|                         |             |                   | MMU-U1..U5. Shared L2 TLB and     |
+|                         |             |                   | MMU-U1..U8 (U6, U7, U8 added      |
+|                         |             |                   | session-070: Svpbmt precedence,   |
+|                         |             |                   | Svnapot, Svinval. U4 and U5       |
+|                         |             |                   | CLOSED session-070 against the    |
+|                         |             |                   | ratified rva23-profile.adoc --    |
+|                         |             |                   | Smepmp not mandatory, Svpbmt      |
+|                         |             |                   | mandatory).                       |
+|                         |             |                   | Shared L2 TLB and                 |
 |                         |             |                   | walker, Svade and Svadu both,     |
 |                         |             |                   | PMP at two sites, PMA on the      |
 |                         |             |                   | final PA only. Written RTL, not   |
 |                         |             |                   | a cachegen node.                  |
-| ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13,    |
-|                         |             |                   | IB-U1. One enable mask, not two.  |
+| ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13.    |
+|                         |             |                   | IB-U1 CLOSED as IB-12 -- this row |
+|                         |             |                   | listed it open while the Shared   |
+|                         |             |                   | planning entry and section 7 of   |
+|                         |             |                   | the file both close it.           |
+|                         |             |                   | Session-070.                      |
+|                         |             |                   | One enable mask, not two.         |
 | itlb_ifu_interfaces.md  | Draft       | --                | Created session-069. IT-1..15.    |
 |                         |             |                   | One request port, one-bit tag,    |
 |                         |             |                   | out-of-order responses. No open   |
@@ -1323,8 +1360,12 @@ it only documented current behavior.
 |                         |             |                   | An earlier session-069 row said   |
 |                         |             |                   | outside. Closes TD#117.           |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
-|                         |             |                   | Sections 9 and 10 are stubs       |
-|                         |             |                   | (TD#94); fe_decisions.md 12       |
+|                         |             |                   | Sections 9 and 10 say "Section    |
+|                         |             |                   | removed", not stubs; TD#94 is     |
+|                         |             |                   | CLOSED and tracks neither. This   |
+|                         |             |                   | row said "Sections 9 and 10 are   |
+|                         |             |                   | stubs (TD#94)". Session-070.      |
+|                         |             |                   | fe_decisions.md 12                |
 |                         |             |                   | records the departures this file  |
 |                         |             |                   | is wrong about. The Shared        |
 |                         |             |                   | planning documents list carried   |
@@ -1416,8 +1457,20 @@ assessment of each document. Correct any that are wrong.
 |    | Old "backpressure 2 cycles" note did  | (was 10.1) removed session-057; |
 |    | not match TAGE_UQ_DEPTH=8.            | tb requirements now live in the |
 |    | No RTL risk.                          | implementing task file.         |
-| 42 | Pipeline diagram shows ITTAGE at s3,  | Revisit after SC definition.    |
-|    | should be s2 (alongside FTB, TAGE).   | Update diagram and discussions. |
+| 42 | Pipeline diagram shows ITTAGE at s3,  | CLOSED session-070. The SC      |
+|    | should be s2 (alongside FTB, TAGE).   | gate is met and bp_cluster.md   |
+|    |                                       | is corrected at all three sites: |
+|    |                                       | the ITTAGE Stage bullet, the    |
+|    |                                       | Pipeline Staging block and      |
+|    |                                       | Redirect Architecture, which    |
+|    |                                       | carried a raw-at-p2 /           |
+|    |                                       | final-at-p3 split with no       |
+|    |                                       | signals behind it. p2 confirmed |
+|    |                                       | by fe_decisions.md 1,           |
+|    |                                       | ittage_interfaces.md and the    |
+|    |                                       | RTL: ittage.sv and              |
+|    |                                       | ittage_cntrl.sv declare only    |
+|    |                                       | _p2 and contain no _p3 signal.  |
 |    |                                       | #65 is CLOSED, BP-054           |
 | 43 | Reduce ITTAGE CTR width 3b -> 2b.     | Impacts bp_defines_pkg.sv,      |
 |    |                                       | ittage_table_interfaces.md, RTL |
@@ -1543,8 +1596,13 @@ assessment of each document. Correct any that are wrong.
 |    |           | commitment on this.                                      |
 | 94 | bp_arb_spec | CLOSED BP-081. Session-064: 6.1 now names the SC       |
 |    |           | index folds; 3.4 and 5.x annotated so the                |
-|    |           | <pred>_redir_* names are not read as ports. Sections     |
-|    |           | 9/10 remain stubs.                                       |
+|    |           | <pred>_redir_* names are not read as ports.              |
+|    |           | The closure text read "Sections 9/10 remain stubs."      |
+|    |           | They do not: both read "Section removed", and 10 adds    |
+|    |           | that testbench requirements derive from 4.5. Nothing     |
+|    |           | is outstanding there and this TD tracks nothing.         |
+|    |           | Corrected session-070; the Module Status row carried     |
+|    |           | the same claim.                                          |
 | 95 | tage      | CLOSED BP-081 (session-060).                             |
 | 96 | bpc       | CLOSED BP-105. THERE IS NO FLUSH EVENT. A flush is a     |
 |    |           | redirect: fe_decisions.md FE-14. A predictor is cleared  |
@@ -1729,8 +1787,17 @@ assessment of each document. Correct any that are wrong.
 |     |          |     Cost is a FETCH ADDRESS.                             |
 |     |          |                                                          |
 |     |          | The FTQ has no alternative field: nothing in the entry   |
-|     |          | records whether a call was RVC or RVI, which section 8's |
-|     |          | +2 correction requires. FIX: the p2 group gains the FTB  |
+|     |          | records whether a call was RVC or RVI. THAT IS NO LONGER |
+|     |          | A REQUIREMENT. This read "which section 8's +2           |
+|     |          | correction requires"; ras_decisions.md 8 says NO         |
+|     |          | STRADDLE CORRECTION EXISTS -- the last_may_be_rvi_call   |
+|     |          | mechanism was eliminated by ftb_decisions.md 6 and       |
+|     |          | FTB-1. pft_addr carries the TRUE instruction end, and a  |
+|     |          | call terminates the block, so the fall-through IS the    |
+|     |          | address after the call whatever its length. The rest of  |
+|     |          | this TD is unaffected: the defect is that the p1 value   |
+|     |          | is never corrected, not that a length bit is missing.    |
+|     |          | Corrected session-070. FIX: the p2 group gains the FTB   |
 |     |          | fall-through and corrects the block scalar. Adding a     |
 |     |          | separate ret_addr field patches the RAS symptom and      |
 |     |          | leaves the successor wrong.                              |
@@ -1940,6 +2007,58 @@ assessment of each document. Correct any that are wrong.
 |     |          | THAT LIST WAS BUILT BY GREP AND THE GREP WAS TRUNCATED.  |
 |     |          | The four documents above it were missed the same way.    |
 |     |          |                                                          |
+|     |          |                                                          |
+|     |          | DOCUMENT SWEEP DONE session-070. ftq_entry_formats.md    |
+|     |          | (pc, pft_addr, target 40->41; block scalars 112->114,    |
+|     |          | slot 56->57, entry 224->228, array 14,336->14,592,       |
+|     |          | total 68,224->68,480; slow path unchanged, it carries    |
+|     |          | no VA_WIDTH field), ftq_decisions.md 4.7,                |
+|     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 4.1 and 8,   |
+|     |          | ftb_interfaces.md, ittage_interfaces.md, bp_cluster.md,  |
+|     |          | ras_decisions.md 8, ras_interfaces.md 2,                 |
+|     |          | mmu_decisions.md MMU-20 and MMU-23,                      |
+|     |          | l1i_ifu_interfaces.md TD-IF-1 and 3.1. FTB_TAG_BITS is   |
+|     |          | PINNED at 26 and IT_MAX_TGT_WIDTH at 38, so sim_ftb 99   |
+|     |          | and sim_ittage 211 stand. NOT swept:                     |
+|     |          | sc_table_hash_rules.md, which was never uploaded.        |
+|     |          |                                                          |
+|     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
+|     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
+|     |          | tb/ before scoping the task.                             |
+|     |          |                                                          |
+|     |          | POINTER MASKING DOES NOT APPLY. Ssnpm is mandatory in    |
+|     |          | RVA23S64, but the ratified Pointer Masking spec v1.0     |
+|     |          | applies the ignore transformation to EXPLICIT memory     |
+|     |          | accesses only and states it does not apply to implicit   |
+|     |          | accesses such as page-table walks or instruction         |
+|     |          | fetches. Every address in this item is a fetch address.  |
+|     |          | No front-end consequence. A session-070 draft of this    |
+|     |          | entry and of FE-19 claimed the opposite, sourced to the  |
+|     |          | J extension WORKING DRAFT, whose discussion of masking   |
+|     |          | the two extra Sv39x4 GPA bits concerns DATA accesses.    |
+|     |          | Recorded so it is not re-raised.                         |
+|     |          |                                                          |
+| 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
+|     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
+|     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
+|     |          | separate SC update queue the target arbitration model.   |
+|     |          | sc.sv builds neither: it assigns sc_uq_not_full = 1'b1   |
+|     |          | and sc_upd_rdy = all-ones under a comment naming them    |
+|     |          | arbitration-layer stubs.                                 |
+|     |          |                                                          |
+|     |          | The credit arbiter itself IS implemented and tested, in  |
+|     |          | bp_cluster: TD#73 closed by BP-094 group H covering all  |
+|     |          | seven bp_arb_spec 4.5 grant rules. Only the unit-level   |
+|     |          | queue is absent.                                         |
+|     |          |                                                          |
+|     |          | RAISED session-070 because closing TD#73 and TD#94       |
+|     |          | orphaned it. Neither was ever about building the queue,  |
+|     |          | yet bp_arb_spec.md, sc_interfaces.md and sc.sv (lines    |
+|     |          | 30-32 and 148) all named them as the deferral. Those     |
+|     |          | three citations now point here. The sc.sv comments are   |
+|     |          | a two-line edit whenever an SC task next opens.          |
+
+|     |          |                                                          |
 | 124 | ftb/ubtb | OPEN, RTL. pftAddr cannot represent the end of an        |
 |     |          | unaligned block. RULED session-070; documents record the |
 |     |          | ruling, RTL does not yet implement it.                   |
@@ -1990,56 +2109,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | while 4.5 says bounds checked and session-069 records    |
 |     |          | restoring that check. Confirm whether the restoration    |
 |     |          | ever reached RTL.                                        |
-|     |          |                                                          |
-|     |          | DOCUMENT SWEEP DONE session-070. ftq_entry_formats.md    |
-|     |          | (pc, pft_addr, target 40->41; block scalars 112->114,    |
-|     |          | slot 56->57, entry 224->228, array 14,336->14,592,       |
-|     |          | total 68,224->68,480; slow path unchanged, it carries    |
-|     |          | no VA_WIDTH field), ftq_decisions.md 4.7,                |
-|     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 4.1 and 8,   |
-|     |          | ftb_interfaces.md, ittage_interfaces.md, bp_cluster.md,  |
-|     |          | ras_decisions.md 8, ras_interfaces.md 2,                 |
-|     |          | mmu_decisions.md MMU-20 and MMU-23,                      |
-|     |          | l1i_ifu_interfaces.md TD-IF-1 and 3.1. FTB_TAG_BITS is   |
-|     |          | PINNED at 26 and IT_MAX_TGT_WIDTH at 38, so sim_ftb 99   |
-|     |          | and sim_ittage 211 stand. NOT swept:                     |
-|     |          | sc_table_hash_rules.md, which was never uploaded.        |
-|     |          |                                                          |
-|     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
-|     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
-|     |          | tb/ before scoping the task.                             |
-|     |          |                                                          |
-|     |          | POINTER MASKING DOES NOT APPLY. Ssnpm is mandatory in    |
-|     |          | RVA23S64, but the ratified Pointer Masking spec v1.0     |
-|     |          | applies the ignore transformation to EXPLICIT memory     |
-|     |          | accesses only and states it does not apply to implicit   |
-|     |          | accesses such as page-table walks or instruction         |
-|     |          | fetches. Every address in this item is a fetch address.  |
-|     |          | No front-end consequence. A session-070 draft of this    |
-|     |          | entry and of FE-19 claimed the opposite, sourced to the  |
-|     |          | J extension WORKING DRAFT, whose discussion of masking   |
-|     |          | the two extra Sv39x4 GPA bits concerns DATA accesses.    |
-|     |          | Recorded so it is not re-raised.                         |
-| 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
-|     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
-|     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
-|     |          | separate SC update queue the target arbitration model.   |
-|     |          | sc.sv builds neither: it assigns sc_uq_not_full = 1'b1   |
-|     |          | and sc_upd_rdy = all-ones under a comment naming them    |
-|     |          | arbitration-layer stubs.                                 |
-|     |          |                                                          |
-|     |          | The credit arbiter itself IS implemented and tested, in  |
-|     |          | bp_cluster: TD#73 closed by BP-094 group H covering all  |
-|     |          | seven bp_arb_spec 4.5 grant rules. Only the unit-level   |
-|     |          | queue is absent.                                         |
-|     |          |                                                          |
-|     |          | RAISED session-070 because closing TD#73 and TD#94       |
-|     |          | orphaned it. Neither was ever about building the queue,  |
-|     |          | yet bp_arb_spec.md, sc_interfaces.md and sc.sv (lines    |
-|     |          | 30-32 and 148) all named them as the deferral. Those     |
-|     |          | three citations now point here. The sc.sv comments are   |
-|     |          | a two-line edit whenever an SC task next opens.          |
-
 ---
 
 ## Open Items
@@ -2185,10 +2254,25 @@ assessment of each document. Correct any that are wrong.
 |     |                                       | H. The FTB single      |
 |     |                                       | update port scheduler  |
 |     |                                       | is ftq_decisions.md    |
-|     |                                       | 5.7: slot 0 first into |
-|     |                                       | a one-deep skid, with  |
-|     |                                       | resolution backpressure|
-|     |                                       | bounding it. BUILT as  |
+|     |                                       | 5.7.3: the skid issues |
+|     |                                       | first when occupied,   |
+|     |                                       | else the HIGHEST-VALUE |
+|     |                                       | new update, slot 0     |
+|     |                                       | only breaking a tie    |
+|     |                                       | (S3). A leftover LOW   |
+|     |                                       | is DROPPED (S5) and    |
+|     |                                       | backpressure exists    |
+|     |                                       | ONLY to protect a HIGH |
+|     |                                       | from being dropped     |
+|     |                                       | (S6). This read "slot  |
+|     |                                       | 0 first into a one-    |
+|     |                                       | deep skid, with        |
+|     |                                       | resolution             |
+|     |                                       | backpressure bounding  |
+|     |                                       | it", which is the      |
+|     |                                       | pre-value-priority     |
+|     |                                       | rule. Session-070.     |
+|     |                                       | BUILT as               |
 |     |                                       | ftq_ftb_sched, BP-100. |
 |     |                                       | Both halves done.      |
 | G10 | TAGE/ITTAGE meta overload scheme      | TBD at implementation. |
@@ -2542,7 +2626,11 @@ unless noted.
           TD-FE-7. Six backend assumptions recorded, none
           verifiable -- the backend does not exist.
     - planning/interfaces/bpu_port_inventory.md       Working
-        - 140-port inventory. STALE on loop_pred after BP-091.
+        - 140-port inventory. STALE on loop_pred after BP-091 and
+          on ubtb: 5 ports, no blk_p1, and findings 1-3 give the
+          document names as pred_pc / pred / upd, which
+          ubtb_interfaces.md has not used since session-063.
+          Session-070.
     - planning/interfaces/loop_pred_interfaces.md     Draft
         - Corrected to the delivered ports BP-091.
     - planning/arch/ifu_decisions.md                  Draft
@@ -2567,7 +2655,9 @@ unless noted.
           fully associative, all three Sv39 page sizes, ASID
           tagged, 1-cycle hit. Closes TD#115.
     - planning/arch/mmu_decisions.md                  Draft
-        - Created session-069. MMU-1..25, MMU-U1..U5. Shared
+        - Created session-069. MMU-1..25, MMU-U1..U8 -- U6, U7
+          and U8 added session-070 (Svpbmt precedence, Svnapot,
+          Svinval), U4 and U5 closed the same session. Shared
           L2 TLB and walker, Svade and Svadu both, PMP at two
           sites, PMA on the final PA only.
     - planning/interfaces/ifu_ibuf_interfaces.md      Draft
@@ -2670,8 +2760,11 @@ unless noted.
     - Remaining deferred: #69 rollback, #67 sram_init non-fast,
       #74 dual-slot, #100 coverage, #103 T0 init.
     - Formal validation not started.
-- Tage planning documents all Complete; tage_interfaces.md
-  gained a Metadata timing section session-064.
+- Tage planning documents all Complete EXCEPT
+  tage_table_interfaces.md, which is Draft in Module Status and
+  has been since session-016. This line said "all Complete".
+  Session-070. tage_interfaces.md gained a Metadata timing
+  section session-064.
 
 ### ITTAGE decomposition
 - RTL available; unit testbenches written; directed validation

@@ -28,8 +28,9 @@ what it holds for restore.
 ```
 
 Registries stay in `fe_decisions.md` and are NOT duplicated here.
-Front-end invariants are FE-1 through FE-14, technical debt is
-TD-FE-1 through TD-FE-8, and open items are FE-U1 through FE-U9, all
+Front-end invariants are FE-1 through FE-19, technical debt is
+TD-FE-1 through TD-FE-8, and open items are FE-U1 through FE-U11,
+all
 in `fe_decisions.md` sections 11, 13 and 14. This file cites them by
 number.
 

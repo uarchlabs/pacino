@@ -464,8 +464,10 @@ planning/
     bp_arb_spec.md
     bp_history_decisions.md
     fe_decisions.md          front-end theory of operation.
-                             Owns FE-1..FE-18, TD-FE-1..8,
-                             FE-U1..FE-U10. The registries are
+                             Owns FE-1..FE-19, TD-FE-1..8,
+                             FE-U1..FE-U11 (was FE-1..18 and
+                             FE-U1..U10; FE-19 and FE-U11 added
+                             session-070). The registries are
                              FRONT END WIDE, not BPU/FTQ only
     ftq_decisions.md         FTQ-owned behaviour
     ftq_entry_formats.md     sole prose home for

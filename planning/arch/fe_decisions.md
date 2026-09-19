@@ -994,12 +994,14 @@ ubtb.sv.
            gating bpu_slot_val_p2 on w_any_redir_p2 reproduces the
            defect and I1 catches it.
 
-  TD-FE-5  bp_structs_pkg.sv comments branch_id as "FTQ slot index"
+  TD-FE-5  CLOSED, verified session-070. It read:
+           bp_structs_pkg.sv comments branch_id as "FTQ slot index"
            in bp_ftq_entry_t, tage_pred_meta_t, sc_pred_meta_t, and
-           ittage_pred_meta_t. The field is the FTQ entry index. With
-           the prediction slot now a distinct concept, the comment
-           reads as the slot index and should say "FTQ index".
-           Comment-only, no behavior change.
+           ittage_pred_meta_t; the field is the FTQ entry index.
+           The package contains no "FTQ slot index" string; every
+           branch_id comment reads "FTQ entry index". PROJECT_STATUS
+           recorded it done at session-063 and this entry and
+           ftq_bpu_interfaces.md 10 item 3 both stayed open.
 ```
 
 ---

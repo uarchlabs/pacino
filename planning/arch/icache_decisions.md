@@ -46,7 +46,10 @@ Not yet written and cited here as stubs:
 ```
 
 REGISTRIES. This file owns L1I-1 through L1I-23, TD-L1I-1 through
-TD-L1I-9, and the open items L1I-U2 through L1I-U5. It does not
+TD-L1I-9, and the open items L1I-U2 through L1I-U5 PLUS L1I-U7.
+L1I-U1 is closed and L1I-U6 was never issued. This line read
+"L1I-U2 through L1I-U5", which drops U7 (section 10.1, opened for
+where the L1I-22 reserve is declared). Session-070. It does not
 duplicate the FE, TD-FE or FE-U registries; it does not use the
 IC- prefix, which is already an interface-check identifier in
 ftb_interfaces.md and sc_interfaces.md; and it does not use IF-,

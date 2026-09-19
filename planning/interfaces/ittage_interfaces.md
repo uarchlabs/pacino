@@ -86,7 +86,9 @@ Signal names follow the pattern:
 
 - `pipestage` : p0, p1, p2 for prediction path.
                 u0, u1 for update path.
-                px for flush-related signals (not yet defined).
+                There is no px stage. No flush event exists; a
+                flush is a redirect (fe_decisions.md FE-14,
+                BP-105). Corrected session-070.
 
 Slot dimension uses vector index [0:NUM_PRED_SLOTS-1].
 clk and rstn carry no pipe stage suffix.
@@ -518,8 +520,10 @@ SC does not interact with ITTAGE target prediction.
 |     | incorrect.                             |                    |
 | II2 | PHR contribution to index/tag hashing  | TBD at impl.       |
 |     | All current folds are GHR-derived only.|                    |
-| II3 | Flush port definitions (_px signals)   | TBD. Not yet       |
-|     | not yet defined.                       | defined.           |
+| II3 | Flush port definitions (_px signals).  | CLOSED BP-105.     |
+|     | NO FLUSH EVENT EXISTS: a flush is a    | fe_decisions       |
+|     | redirect. ittage needs no flush port   | FE-14.             |
+|     | and none is added.                     |                    |
 | II4 | FTQ meta overload scheme for ITTAGE    | G10 in             |
 |     | and TAGE sharing index fields at       | bp_cluster.md.     |
 |     | update.                                |                    |
