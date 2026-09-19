@@ -218,7 +218,8 @@ Entry fields (logical entry, FTB_ENTRY_WIDTH = 110 bits/way):
 
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
-  tag                    -- FTB_TAG_BITS, full upper-VA tag (2.x)
+  tag                    -- FTB_TAG_BITS, VA[39:14]; bit 40 is
+                            NOT covered (4.1, TD#122)
   conditional branch 0   -- valid, position, target, conf[2:0]
   conditional branch 1   -- valid, position, target, conf[2:0]
   jump field             -- valid, position, target (reconstructed full
@@ -262,13 +263,32 @@ entry toward minimum area at the expense of capability.
 
 ### 4.1  Tag
 
-  FTB_TAG_BITS = 26   = VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS
-                      = 40 - 9 - 5.
+  FTB_TAG_BITS = 26   PINNED, not derived (TD#122, FE-19).
 
-Full upper-VA tag above the block offset. No PARTIAL-tag aliasing:
-unlike Xiangshan's truncated 20-bit tag, no bits of the upper VA are
-discarded, so two PCs differing anywhere above bit 4 always miss each
-other.
+It was VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS = 40 - 9 - 5.
+VA_WIDTH is now 41, and the tag is PINNED AT 26 rather than widened
+to 27. The reason is that predictor storage may alias: a tag that
+does not cover bit 40 mispredicts a block end, which predecode
+catches (ftq_ifu_interfaces.md 6 and 7), and a wrong target, which
+the mispredict redirect catches at resolve. Architectural addresses
+may not truncate; a predictor tag may. Pinning also keeps
+FTB_ENTRY_WIDTH at 110 and the RAM widths untouched, so sim_ftb's
+99 checks stand. Section 8 is the sole home of the arithmetic.
+
+THE TAG NO LONGER COVERS THE WHOLE UPPER VA. At 26 bits over a
+9-bit index and 5 offset bits it spans VA[39:14]. BIT 40 IS
+DISCARDED, so two PCs differing only in bit 40 ALIAS -- they hit
+the same entry and the older one's target or block end is returned.
+Two PCs differing anywhere in VA[39:5] still miss each other, which
+is the Xiangshan comparison that used to apply to the whole VA:
+unlike its truncated 20-bit tag, no bits below 40 are discarded.
+
+Bit 40 is only ever set for a guest physical address under V=1 with
+vsatp.MODE=Bare (FE-19), so the aliasing is confined to that case
+and is a misprediction, not a fault: predecode catches a wrong
+block end and the mispredict redirect catches a wrong target. This
+is the cost of pinning rather than widening to 27, and it is a
+consequence worth re-reading before TD#122 reaches RTL.
 
 WITHIN one 32-byte region the tag does not separate. FTB_OFFSET_BITS
 of 5 are in neither the index nor the tag, so PC[4:0] does not reach
@@ -675,7 +695,8 @@ policy.
 
 Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 
-  VA_WIDTH          = 40      already in package.
+  VA_WIDTH          = 41      ruled session-070, FE-19; the
+                              package still says 40, TD#122.
   FTB_WAYS          = 4       set-associative (package fixed to 4 in
                               BP-065; an earlier draft annotation read
                               "currently 8" -- stale, struck).
@@ -686,7 +707,12 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               writeWay (5.1).
   FTB_BLOCK_BYTES   = 32      FTB prediction block (16 positions).
   FTB_OFFSET_BITS   = 5       $clog2(FTB_BLOCK_BYTES).
-  FTB_TAG_BITS      = 26      VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS.
+  FTB_TAG_BITS      = 26      PINNED, NOT DERIVED (4.1, TD#122).
+                              It was VA_WIDTH - FTB_IDX_BITS -
+                              FTB_OFFSET_BITS; at VA_WIDTH 41 that
+                              gives 27. Held at 26: the tag spans
+                              VA[39:14] and bit 40 aliases, which
+                              is a misprediction, not a fault.
   PLRU_BITS         = 3       FTB_WAYS - 1 (tree-PLRU). Stored in
                               ftb_plru.
   FTB_BR_POS_BITS   = 4       $clog2(FTB_BLOCK_BYTES/2). In-block

@@ -192,7 +192,11 @@ a 32-byte boundary.
            identifies branch type as indirect.
 - Target:  38b, the upper 38 bits of a Sv39 VA. Bit 0 is always zero
            for instruction alignment and is not stored.
-           IT_MAX_TGT_WIDTH = 38. See ittage_interfaces.md.
+           IT_MAX_TGT_WIDTH = 38, NOT widened for VA_WIDTH 41:
+           predictor storage may mispredict where an architectural
+           address may not (fe_decisions.md FE-19). The
+           reconstruction must zero-extend rather than sign-extend;
+           TD#122. See ittage_interfaces.md.
 - Tables:
     IT1: 2 banks x 256 entries, FH=4b,  FH1=4b,  FH2=4b,  hist=4b
     IT2: 2 banks x 256 entries, FH=8b,  FH1=8b,  FH2=8b,  hist=8b
@@ -442,8 +446,13 @@ PHR (Path History Register):
 PHR folding is deferred. bp_history.sv maintains phr_mem and
 exposes phr_buf, but PHR does not contribute to any fold in
 bp_folded_hist_t. All current folds are GHR-derived only.
-PHR contribution to index and tag hashing is TBD -- resolved
-at TAGE and ITTAGE implementation sessions.
+PHR contribution to index and tag hashing is TBD, tracked by
+bp_history_decisions.md HI2 and tage_interfaces.md TI1. It is NOT
+resolved: an earlier revision said "resolved at TAGE and ITTAGE
+implementation sessions", and both units are now Complete and green
+with the question still open under HI2. Corrected session-070. The
+same statement appears under Folded Histories below; this is the
+one question, not two.
 
 ### Folded Histories
 
@@ -474,8 +483,10 @@ Incremental fold update rule for fold of width W, history H:
 On redirect: recompute all folds from circular buffer contents
 at the restored pointer position (combinational, G15).
 
-PHR/GHR mixing for index and tag hashing is TBD -- resolved
-at TAGE and ITTAGE implementation sessions.
+PHR/GHR mixing for index and tag hashing is the same open question
+as the one under History Module above: HI2 and TI1. Not resolved at
+the TAGE and ITTAGE sessions, which have happened. Corrected
+session-070.
 
 ### Checkpoints
 

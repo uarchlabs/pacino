@@ -88,6 +88,13 @@ MMU-20 Shvsatpa: every translation mode supported in `satp` is
        G-stage is Sv39x4 and its root table is four times the
        normal size.
 
+       THE GUEST PHYSICAL ADDRESS IS 41 BITS, ZERO EXTENDED.
+       Sv39x4 widens the incoming address by two bits and requires
+       bits 63:41 to be zero or the access guest-page faults. With
+       `V=1` and `vsatp.MODE=Bare` that address is the fetch PC
+       itself, which is why VA_WIDTH is 41 and GPA_WIDTH = 41.
+       fe_decisions.md FE-19, TD#122.
+
 MMU-21 The walk is NESTED, not sequential. Every address the
        VS-stage walk produces is a guest physical address and
        needs its own G-stage walk before it can be used. A
@@ -107,7 +114,13 @@ MMU-22 The MMU raises a GUEST page fault when the G-stage fails
 
 MMU-23 Shtvala: `htval` is written with the faulting guest
        physical address on a guest page fault. The MMU produces
-       that address; the trap path writes it.
+       that address; the trap path writes it. IT IS GPA_WIDTH = 41
+       BITS (MMU-20), and it travels on `l2t_itlb_gpa` and
+       `itlb_ifu_gpa`, both declared `[GPA_WIDTH-1:0]`. GPA_WIDTH
+       is not yet defined in the packages -- TD#122 adds it
+       alongside VPN_WIDTH, PPN_WIDTH, ASID_WIDTH, VMID_WIDTH,
+       PERM_WIDTH, CAUSE_WIDTH and PMA_WIDTH, which are all
+       referenced by the ITLB interfaces and defined nowhere.
 
 MMU-24 The MMU reads the translation regime from the CSR file
        directly: `satp.PPN` for a single-stage root, `vsatp.PPN`

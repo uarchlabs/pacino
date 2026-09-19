@@ -219,6 +219,19 @@ ITLB-13a HFENCE.VVMA invalidates `V=1` VS-stage entries for the
          `V=1` entries by guest physical address and by VMID.
          Both arrive on the ITLB-14 port with an operation field.
 
+         HFENCE.VVMA CARRIES THE SAME GLOBAL RULE AS ITLB-13. The
+         privileged specification says its effect "is much the same
+         as temporarily entering VS-mode and executing SFENCE.VMA",
+         so it has the same four rs1/rs2 forms and global entries
+         are excluded only by the two that name an ASID (rs2!=x0).
+         The VA-only form invalidates global VS-stage mappings for
+         that address. Global is per-VMID here, not across guests,
+         ITLB-4a. Checked session-070 when ITLB-13 was corrected.
+
+         HFENCE.GVMA HAS NO GLOBAL CASE. It selects by guest
+         physical address and VMID and takes no ASID, so the
+         exclusion has nothing to key on.
+
 ITLB-14 The invalidate port is a distinct port, not carried on the
         translation request path. It is written with the module.
 

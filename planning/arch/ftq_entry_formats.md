@@ -36,10 +36,10 @@ update. The two are separated so the every-cycle read does not carry
 the width of the update-only metadata.
 
 ```
-  fast path   bp_ftq_entry_t   224b   x 64 entries        14,336b
+  fast path   bp_ftq_entry_t   228b   x 64 entries        14,592b
   slow path   bp_ftq_meta_t    421b   x 2 slots x 64      53,888b
                                                           -------
-                                                          68,224b
+                                                          68,480b
 ```
 
 The slow-path figure is the unpacked layout. Section 3.1 defines an
@@ -54,8 +54,8 @@ defined and deferred.
 Block scalar fields, one per entry:
 
 ```
-pc            40     fetch block start PC, VA_WIDTH
-pft_addr      40     block fall-through address, VA_WIDTH
+pc            41     fetch block start PC, VA_WIDTH
+pft_addr      41     block fall-through address, VA_WIDTH
 branch_id      6     FTQ entry index, FTQ_IDX_BITS
 ras                  bp_ras_snapshot_t: TOSR, TOSW, BOS, 4 bits each
 ghist_ptr      8     GHR circular buffer pointer snapshot
@@ -67,7 +67,7 @@ Per-slot fields, `bp_ftq_slot_t[NUM_PRED_SLOTS-1:0]`:
 
 ```
 slot_valid     1     this slot carries a predicted branch
-target        40     predicted target for this slot, VA_WIDTH
+target        41     predicted target for this slot, VA_WIDTH
 br_type        3     bp_br_type_e
 taken          1     predicted direction
 pos            4     in-block branch position, FTB_BR_POS_BITS
@@ -168,8 +168,9 @@ at all updates the FTB, so it is common to both arms.
 ```
 
 Per slot 278b against 421b unpacked. The slow-path array falls from
-53,888b to 35,584b and the FTQ from 68,224b to 49,920b, a 27%
-reduction.
+53,888b to 35,584b and the FTQ from 68,480b to 50,176b, a 27%
+reduction. The union is slow-path only, so VA_WIDTH does not
+reach it.
 
 DISCRIMINANT. `bp_ftq_slot_t.br_type` in the fast-path entry. It is
 the FTB classification once the fe_decisions.md 2.5 slot correction
@@ -272,7 +273,7 @@ are NOT members of `bp_ftq_entry_t` and not members of
   reallocated.
 
 The entry totals of section 1 are therefore unchanged. Fast path
-224b, slow path 421b per slot, 68,224b together; these 192 bits sit
+228b, slow path 421b per slot, 68,480b together; these 192 bits sit
 outside both.
 
 ### 4.2 Write and clear
@@ -410,5 +411,15 @@ path touches none of those.
               Fast path 14,336b, slow path 53,888b, FTQ 68,224b.
               Section 3.1's overload figures restated: 278b per
               slot, 35,584b, FTQ 49,920b.
-```
 
+  2026-09-17  session-070. VA_WIDTH 40 -> 41 (TD#122, fe_decisions.md
+              FE-19). pc, pft_addr and the per-slot target are the
+              three fields that carry it. Block scalars 112 -> 114,
+              slot 56 -> 57, bp_ftq_entry_t 224 -> 228, fast-path
+              array 14,336 -> 14,592, total 68,224 -> 68,480.
+              bp_ftq_meta_t is predictor metadata only and carries
+              no VA_WIDTH field -- ITTAGE targets are
+              IT_MAX_TGT_WIDTH, unchanged -- so 421b and the
+              slow-path array are untouched, and so is the 278b
+              union proposal. TD#122 tracks the RTL.
+```

@@ -312,8 +312,10 @@ reallocated index is not mistaken for the squashed one.
 ### 4.7 Reset vector
 
 `bp_defines_pkg::RESET_VECTOR`, a parameter, VA_WIDTH wide, default
-`40'h00_8000_0000`. It initialises the next-PC register of 4.1 and is
-selected by arm 0 of 4.2.
+`41'h0_0080_0000_00` -- the same address, 0x8000_0000, at the wider
+width. It initialises the next-PC register of 4.1 and is selected by
+arm 0 of 4.2. The literal read `40'h00_8000_0000` until VA_WIDTH went
+to 41 (fe_decisions.md FE-19, TD#122, which tracks the RTL).
 
 The privileged specification leaves the reset PC implementation
 defined. 0x8000_0000 is the RISC-V convention for the base of main

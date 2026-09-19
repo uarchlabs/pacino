@@ -65,7 +65,8 @@ widths, or counter widths.
                          Already present in bp_defines_pkg.sv.
   RAS_COMMIT_PTR_BITS -- commit pointer width
                          $clog2(RAS_COMMIT_ENTRIES) = 5b
-  RAS_ADDR_WIDTH      -- return address width = VA_WIDTH = 40b
+  RAS_ADDR_WIDTH      -- return address width = VA_WIDTH = 41b
+                         (40b until TD#122 lands in the RTL)
 
 ---
 

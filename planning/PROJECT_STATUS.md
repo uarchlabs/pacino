@@ -656,9 +656,13 @@ it only documented current behavior.
 |                         |             |                   | pos << POS_OFFSET_BITS),         |
 |                         |             |                   | not the fetch block PC -- BP-092a|
 |                         |             |                   | fixed the cluster side, proven   |
-|                         |             |                   | BP-093 TC-A..TC-G. A block-      |
-|                         |             |                   | aligned PC would make the PHR    |
-|                         |             |                   | path bit a constant.             |
+|                         |             |                   | BP-093 TC-A..TC-G. The block PC  |
+|                         |             |                   | would make the PHR path bit      |
+|                         |             |                   | NEARLY constant: a block start   |
+|                         |             |                   | moves only when the boundary     |
+|                         |             |                   | moves. Said "A block-aligned PC  |
+|                         |             |                   | ... a constant"; blocks are NOT  |
+|                         |             |                   | aligned. Session-070.            |
 |                         |             |                   | Watchdog added BP-097.           |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
@@ -666,7 +670,8 @@ it only documented current behavior.
 |                         |             |                   | checkpoint POST-advance.         |
 |                         |             |                   | Session-061: IT5 BrIMLI/no-folds |
 |                         |             |                   | claim removed. Header still      |
-|                         |             |                   | DRAFT pending s6.6 sha + HI2/HI5.|
+|                         |             |                   | DRAFT pending s6.6 sha + HI2.    |
+|                         |             |                   | HI5 CLOSED session-070 by G23.   |
 | bp_history_interfaces.md| Draft       | --                | Rewritten session-054. Checkpoint|
 |                         |             |                   | Timing consistent with s7        |
 |                         |             |                   | (BP-074). SESSION-064: pred_pc   |
@@ -1014,8 +1019,9 @@ it only documented current behavior.
 |                         |             |                   | value and permission is settled  |
 |                         |             |                   | once by CLAUDE.md Fixed          |
 |                         |             |                   | Constants, not per file.         |
-|                         |             |                   | Five session-063 decisions are   |
-|                         |             |                   | still not promoted here. TD#112. |
+|                         |             |                   | Five session-063 decisions were  |
+|                         |             |                   | never promoted here. TD#112 is   |
+|                         |             |                   | CLOSED and does NOT track it.    |
 |                         |             |                   | SESSION-067: its bp_ftq_entry_t  |
 |                         |             |                   | copy deleted; ftq_entry_formats  |
 |                         |             |                   | .md is now the sole prose home.  |
@@ -1044,7 +1050,12 @@ it only documented current behavior.
 |                         |             |                   | here. Fast path 224b x 64 =      |
 |                         |             |                   | 14,336b; slow path 421b x 2      |
 |                         |             |                   | slots x 64 = 53,888b; 68,224b    |
-|                         |             |                   | together. Section 3.1 defines the|
+|                         |             |                   | together -- AS BUILT. TD#122     |
+|                         |             |                   | takes the fast path to 228b x    |
+|                         |             |                   | 64 = 14,592b and the total to    |
+|                         |             |                   | 68,480b; the slow path is        |
+|                         |             |                   | unchanged. Section 3.1 defines   |
+|                         |             |                   | the                              |
 |                         |             |                   | two-arm union, 278b per slot and |
 |                         |             |                   | 49,920b, DEFINED and DEFERRED    |
 |                         |             |                   | (TD-FE-2). Section 4 adds        |
@@ -1153,7 +1164,8 @@ it only documented current behavior.
 |                         |             |                   | registered path would halve. All |
 |                         |             |                   | ten ordered arm pairs exercised. |
 |                         |             |                   | sim_ftq_npc 66/0.                |
-| ftq_entry.sv            | Complete    | tb_ftq_entry      | BP-107. Fast path, 224b x 64.    |
+| ftq_entry.sv            | Complete    | tb_ftq_entry      | BP-107. Fast path, 224b x 64 as  |
+|                         |             |                   | built; 228b under TD#122.        |
 |                         |             |                   | FOUR write ports in FE-3 order,  |
 |                         |             |                   | FIVE read ports, plus the RAS    |
 |                         |             |                   | commit payload formed here       |
@@ -1979,6 +1991,20 @@ assessment of each document. Correct any that are wrong.
 |     |          | restoring that check. Confirm whether the restoration    |
 |     |          | ever reached RTL.                                        |
 |     |          |                                                          |
+|     |          | DOCUMENT SWEEP DONE session-070. ftq_entry_formats.md    |
+|     |          | (pc, pft_addr, target 40->41; block scalars 112->114,    |
+|     |          | slot 56->57, entry 224->228, array 14,336->14,592,       |
+|     |          | total 68,224->68,480; slow path unchanged, it carries    |
+|     |          | no VA_WIDTH field), ftq_decisions.md 4.7,                |
+|     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 4.1 and 8,   |
+|     |          | ftb_interfaces.md, ittage_interfaces.md, bp_cluster.md,  |
+|     |          | ras_decisions.md 8, ras_interfaces.md 2,                 |
+|     |          | mmu_decisions.md MMU-20 and MMU-23,                      |
+|     |          | l1i_ifu_interfaces.md TD-IF-1 and 3.1. FTB_TAG_BITS is   |
+|     |          | PINNED at 26 and IT_MAX_TGT_WIDTH at 38, so sim_ftb 99   |
+|     |          | and sim_ittage 211 stand. NOT swept:                     |
+|     |          | sc_table_hash_rules.md, which was never uploaded.        |
+|     |          |                                                          |
 |     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
 |     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
 |     |          | tb/ before scoping the task.                             |
@@ -2469,8 +2495,12 @@ unless noted.
           stage-named groups; open item J added for TD#39.
     - planning/arch/bp_cluster.md                     Working
         - Branch prediction cluster summary data. Five
-          session-063 decisions are still not promoted here.
-          TD#112.
+          session-063 decisions were never promoted here.
+          TD#112 is CLOSED (2026-09-17, Jeff's ruling) and its
+          text says the promotion is not tracked there any more,
+          so nothing open tracks it. Corrected session-070; both
+          this entry and the Module Status row cited a closed TD
+          as though it were the tracker.
     - planning/arch/fe_decisions.md                   Draft
         - Sections 1-10 are the FTQ<->BPU paths. Session-064
           corrections applied; see Module Status. Session-069
@@ -2567,8 +2597,14 @@ unless noted.
     - rtl/core/frontend/bpu/rtl/bp_cluster.sv
     - rtl/core/frontend/bpu/tb/tb_bp_cluster.sv
     - lint_bp_cluster, sim_bp_cluster, cov_bp_cluster.
-    - sim_bp_cluster 973/0, cov_bp_cluster 973/0, measured
-      BP-097. bp_cluster.sv line coverage 258/258. The whole-
+    - sim_bp_cluster 1795/0. The 973 figure this line carried is
+      the BP-097 measurement and is NOT CURRENT: the chain is
+      973 -> 997 (BP-101) -> 1765 (BP-099) -> 1795 (BP-102), see
+      the counts block above and the bp_cluster.sv Module Status
+      row. cov_bp_cluster was 973/0 at BP-097 and has not been
+      re-measured here; do not read it as current either.
+      Corrected session-070.
+      bp_cluster.sv line coverage 258/258 at BP-097. The whole-
       compile figure for cov_bp_cluster is 85.1% (4501/5289
       after BP-097); it includes every leaf predictor, covered
       separately by the per-predictor suites.
@@ -2599,10 +2635,19 @@ unless noted.
   530 is the pre-BP-094 state; BP-094.md accounts for the
   +278 per group.
 - Known state at the boundary:
-    - The nine metadata outputs have no consumer in this
-      repository. The FTQ unit now holds one module,
-      ftq_ftb_sched (BP-100), but it is on the update path and
-      reads none of them. Still true as written.
+    - THE FTQ IS NO LONGER ONE MODULE. It is eleven, built by
+      BP-106 and BP-107: ftq.sv, ftq_ptr, ftq_commit, ftq_npc,
+      ftq_entry, ftq_meta, ftq_status, ftq_shadow, ftq_ifu and
+      ftq_ftb_sched. This line read "The FTQ unit now holds one
+      module, ftq_ftb_sched (BP-100), but it is on the update
+      path and reads none of them. Still true as written."
+      That was written before BP-106/107.
+      WHETHER THE NINE METADATA OUTPUTS STILL HAVE NO CONSUMER
+      MUST BE RE-CHECKED, not assumed either way. ftq_meta.sv is
+      the slow-path array, 421b x 2 slots x 64, and it is where
+      bp_ftq_meta_t lives. Tracing whether bp_cluster's nine
+      metadata outputs reach it is an RTL read that has not been
+      done. Flagged session-070.
     - ftb_fastpath_p2 has no consumer (G25).
     - ubtb_pred_t.carry and .conf have no consumer (G18, FE-U3).
     - ftb_flush_px and the RAS flush group pass through
@@ -2704,8 +2749,15 @@ unless noted.
   (997 -> 1765), so the RTL is exercised. What is stale is the
   RECORDED identity above and any test written to the old form.
   Confirm BP-093 TC-A..TC-G sweep the new mapping.
-- Open / deferred: HI2, HI5 (= G23), HI6 (= TD#102), HI7,
-  #82, #83, #84, #69/#70.
+- Open / deferred: HI2, HI6 (= TD#102), HI7, #82, #83, #84,
+  #69/#70.
+- HI5 (= G23) CLOSED session-070. G23 resolved it: the checkpoint
+  is a FIELD of the FTQ entry, so a slot is reclaimed with the
+  entry at commit and there is no separate protocol
+  (ftq_decisions.md 5.8 and 5.3). HI5 asked exactly that question,
+  and bp_history_decisions.md deferred it "at FTQ implementation",
+  which has now happened. It was listed open here while G23 read
+  RESOLVED two sections above.
 
 ### Shared components track
 - components/rtl  components/tb

@@ -115,7 +115,22 @@ naming convention. The two must agree and nothing makes them.
   L1I_OFFSET_BITS  ABSENT, TD-IF-1    L1iOffsetBits       6
   REQ_ID_BITS      ABSENT, TD-IF-1    (no counterpart)    4
   MAX_OUTSTANDING  ABSENT, TD-IF-1    (no counterpart)   16
+  GPA_WIDTH        ABSENT, TD#122     (no counterpart)    41
+  VPN_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
+  PPN_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
+  ASID_WIDTH       ABSENT, TD#122     (no counterpart)    16
+  VMID_WIDTH       ABSENT, TD#122     (no counterpart)    14
+  PERM_WIDTH       ABSENT, TD#122     (no counterpart)   TBD
+  CAUSE_WIDTH      ABSENT, TD#122     (no counterpart)   TBD
+  PMA_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
 ```
+
+The eight rows below MAX_OUTSTANDING were added session-070. The
+ITLB interfaces declare ports against every one of them --
+`itlb_ifu_interfaces.md` 2 and `itlb_l2tlb_interfaces.md` 2 -- and
+none is defined in any package. GPA_WIDTH is 41 by MMU-20; ASID and
+VMID are 16 and 14 by `itlb_decisions.md` ITLB-7; the rest are
+undetermined. Same class as PA_WIDTH above. TD#122.
 
 `l1i_pkg` has no counterpart for the last two because the emitter
 does not consume `outstanding_requests` or `id_width_bits` at all
@@ -956,10 +971,19 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
 ## 17. Technical debt
 
 ```
-  TD-IF-1  closed
-           VA_WIDTH is 40 and addressing.va_bits is 39. These are different
-           quantities: 40 is the Sv39 address plus its sign bit, the
-           vaddrBitsExtended convention. No action.
+  TD-IF-1  REOPENED session-070 as TD#122. The closure text below was
+           correct when written and was overtaken by mmu_decisions.md
+           MMU-19..MMU-23 in session-069.
+           It read: "VA_WIDTH is 40 and addressing.va_bits is 39. These
+           are different quantities: 40 is the Sv39 address plus its
+           sign bit, the vaddrBitsExtended convention. No action."
+           VA_WIDTH IS 41. H is mandatory through Sha, the G-stage is
+           Sv39x4, and Shvsatpa requires vsatp to support Bare because
+           Svbare requires it of satp, so with V=1 and vsatp.MODE=Bare
+           the fetch PC is a 41-bit GUEST PHYSICAL address, zero
+           extended. A sign-extended 40-bit field cannot hold it, and
+           sign extension corrupts any GPA with bit 38 set.
+           fe_decisions.md FE-19. TD#122 tracks the RTL.
 
   TD-IF-2  A CUSTOM LINK CANNOT DECLARE AN ERROR RETURN. Section
            14.2 S6. IF-15 is unemittable and the emitted adapter

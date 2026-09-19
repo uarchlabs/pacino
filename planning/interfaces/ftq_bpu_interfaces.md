@@ -367,8 +367,18 @@ supplies a target: `ittage_pred_meta_t.ittage_prm_tgt` or
 `ittage_hit` clear means the FTB target stands.
 
 The ITTAGE target field holds the upper bits of an Sv39 VA with bit
-0 not stored. The cluster reconstructs the full width by appending
-the zero bit and sign-extending.
+0 not stored. The cluster reconstructs by appending the zero bit.
+
+SIGN EXTENSION IS WRONG HERE AND THE FIELD IS TOO NARROW. An earlier
+revision said the cluster reconstructs "by appending the zero bit and
+sign-extending". Under V=1 with vsatp.MODE=Bare the fetch PC is a
+41-bit guest physical address, ZERO extended, and Sv39x4 requires
+bits 63:41 to be zero; sign-extending corrupts any GPA with bit 38
+set. The 38-bit field cannot express a 41-bit GPA at all.
+IT_MAX_TGT_WIDTH is deliberately left at 38 because predictor
+storage may mispredict where an architectural address may not -- see
+fe_decisions.md FE-19 -- so what changes here is the RECONSTRUCTION,
+not the field. TD#122 tracks the RTL.
 
 Both metadata structs carry `branch_id`. Every p2 and p3 comparison
 is qualified by `branch_id` equal to the FTQ index held in the

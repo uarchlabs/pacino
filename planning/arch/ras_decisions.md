@@ -633,7 +633,12 @@ IFU-8 covers 34 bytes and 17 halfword positions for exactly this
 reason. It is handled by the fall-through arithmetic rather than
 by a correction at the RAS.
 
-VA_WIDTH = 40b covers the RVA23 implementation VA space.
+VA_WIDTH = 41b. It is not a virtual address width in the plain
+sense: H is mandatory through Sha, the G-stage is Sv39x4, and with
+V=1 and vsatp.MODE=Bare the fetch PC is a 41-bit guest physical
+address. An earlier revision read "VA_WIDTH = 40b covers the RVA23
+implementation VA space". fe_decisions.md FE-19, TD#122, which
+tracks the RTL.
 
 ---
 

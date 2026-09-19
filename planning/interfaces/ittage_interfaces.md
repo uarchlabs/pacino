@@ -26,7 +26,13 @@ differs from the one its own p1 stage registers hold
 (fe_decisions.md FE-4 and 2.5). ITTAGE does not predict direction
 -- it predicts
 a 38-bit target address (upper 38 bits of a Sv39 VA; bit 0 is always
-zero for instruction alignment and is not stored).
+zero for instruction alignment and is not stored). THE FIELD CANNOT
+EXPRESS A 41-BIT GUEST PHYSICAL ADDRESS and is deliberately not
+widened: predictor storage may mispredict where an architectural
+address may not (fe_decisions.md FE-19). What must change is the
+RECONSTRUCTION, which sign-extends today and must zero-extend --
+Sv39x4 requires bits 63:41 to be zero, so sign extension corrupts
+any GPA with bit 38 set. TD#122.
 
 Five active tables: IT1-IT5. No IT0 base table. IT0 index position
 in parameter arrays is a placeholder only and is never instantiated.

@@ -53,7 +53,9 @@ Signal names follow the pattern:
 
 - `pipestage` : p0, p1, p2 for prediction path.
                 u0, u1 for update path.
-                px for flush-related signals (not yet defined).
+                There is no px stage. No flush event exists; a
+                flush is a redirect (fe_decisions.md FE-14,
+                BP-105). See TI8.
 
 Slot dimension uses vector index [0:NUM_PRED_SLOTS-1].
 clk and rstn carry no pipe stage suffix.
@@ -337,7 +339,7 @@ tage_upd_val_u0[s] = 1  -- resolved update for slot s.
                            valid.
 tage_upd_rdy_u1[s] = 1  -- update applied for slot s.
 
-ittage_upd_rdy_u1[s]  -- flopped version of ittage_upd_val_u0[s].
+tage_upd_rdy_u1[s]    -- flopped version of tage_upd_val_u0[s].
                           All updates complete in one cycle.
                           No backpressure is currently required.
                           Consumer may ignore this signal.
@@ -348,13 +350,21 @@ pq_not_full           -- asserted when the prediction queue has
                           room to accept a new prediction request.
                           Consumer must gate tage_pred_val_p0
                           on this signal. Pending rename to
-                          tage_uq_not_full per TD #49
+                          tage_PQ_not_full per TD #49 -- this
+                          line said tage_uq_not_full, which is
+                          the rename for upd_rdy, not for this
+                          port. The port list above has it right.
+                          Corrected session-070.
 
 upd_rdy               -- asserted when the update queue is not
                           full. Consumer must gate
-                          ittage_upd_val_u0 on this signal.
+                          tage_upd_val_u0 on this signal.
                           Pending rename to tage_uq_not_full
                           per TD #49.
+
+                          The three ittage_* names in this block
+                          were copied from the ITTAGE document.
+                          Corrected session-070.
 
 ```
 
@@ -479,6 +489,8 @@ the FTB supplies the target.
 | TI7 | bp_tage_meta_t migration to            | Cleanup task.      |
 |     | tage_pred_meta_t -- both retained      | Post BP-010.       |
 |     | during transition                      |                    |
-| TI8 | Flush port definitions (_px signals)   | TBD. Not yet       |
-|     | not yet defined                        | defined.           |
+| TI8 | Flush port definitions (_px signals).  | CLOSED BP-105.     |
+|     | NO FLUSH EVENT EXISTS: a flush is a    | fe_decisions       |
+|     | redirect. tage needs no flush port and | FE-14.             |
+|     | none is added.                         |                    |
 

@@ -32,7 +32,10 @@ Conventions:
     conclusion is unchanged.
   - Active-low reset: rstn. Rising-edge clock: clk. Storage-module
     enables are active low (IC-FTB-13).
-  - VA_WIDTH = 40. All full-width addresses are [VA_WIDTH-1:0].
+  - VA_WIDTH = 41. All full-width addresses are [VA_WIDTH-1:0].
+    41 because H is mandatory through Sha and a V=1 vsatp.MODE=Bare
+    fetch PC is a 41-bit guest physical address (fe_decisions.md
+    FE-19). Was 40; TD#122 tracks the RTL.
   - conf is a bimodal DIRECTION counter; its MSB is FTB's predicted
     direction. There is no always_taken bit (removed session-053).
 
@@ -313,27 +316,19 @@ There is NO clk reset of the data array (pure SRAM-style storage). Cold
 validity is owned entirely by ftb_plru (IC-FTB-12). Do not rely on
 array power-up contents.
 
-  FTB_RAM_SET_WIDTH   = FTB_WAYS * FTB_RAM_ENTRY_WIDTH   (= 420)
+  FTB_RAM_SET_WIDTH   = FTB_WAYS * FTB_RAM_ENTRY_WIDTH
+  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 (the relocated entry-valid
+                        lives in ftb_plru)
 
-  FTB_RAM_ENTRY_WIDTH per way = 105 bits (the 106-bit logical entry
-  minus the relocated entry-valid):
-                  FTB_TAG_BITS            tag                  (26)
-                + 2 * (                   br0 + br1 = 44:
-                        1                   field valid
-                      + FTB_BR_POS_BITS     in-block position    (3)
-                      + FTB_BR_TGT_BITS     target displacement  (13)
-                      + TAR_STAT_BITS       fit/ovf/udf          (2)
-                      + FTB_CONF_WIDTH )    conf (bimodal dir)   (3)
-                + 1                       jump valid
-                + FTB_BR_POS_BITS         jump in-block position (3)
-                + FTB_JMP_TGT_BITS        jump target displ.     (21)
-                + TAR_STAT_BITS           jump fit/ovf/udf       (2)
-                + 3                       isCall / isRet / isJalr
-                + PFTADDR_BITS            partial fallthrough    (4)
-                + 1                       carry
-
-  Each conditional field is 22 bits (no always_taken). 26 + 2*22 + 30 +
-  4 + 1 = 105.
+THE ARITHMETIC IS NOT RESTATED HERE. ftb_decisions.md 8 is its sole
+home and says so. This block carried a full field-by-field sum with
+FTB_RAM_ENTRY_WIDTH = 105, a 106-bit logical entry,
+FTB_RAM_SET_WIDTH = 420, FTB_BR_POS_BITS = 3 and PFTADDR_BITS = 4
+plus a carry bit. Every one of those was stale: BP-099 took
+FTB_BR_POS_BITS to 4 and the entry to 110 / 109 / 440 / 436, and
+session-070 took PFTADDR_BITS to 6 and deleted the carry (TD#124).
+Restating it here is how it went stale, so it is now a pointer.
+Removed session-070.
 
 Way-slice packing: way w occupies rd_data/wr_data
 [w*FTB_RAM_ENTRY_WIDTH +: FTB_RAM_ENTRY_WIDTH]; wr_way[w] selects
@@ -442,12 +437,11 @@ IC-FTB-07 (CLOSED, BP-105):
   driven, and removing it would touch a green module for no gain.
 
 IC-FTB-08 (resolved, session-052; reconciled session-053):
-  Field widths ruled (ftb_decisions.md 8). FTB_BR_POS_BITS = 3,
-  FTB_BR_TGT_BITS = 13, FTB_JMP_TGT_BITS = 21, TAR_STAT_BITS = 2.
-  always_taken removed: each conditional field is 22 bits, so
-  FTB_RAM_ENTRY_WIDTH = 105, FTB_RAM_SET_WIDTH = 420; logical
-  FTB_ENTRY_WIDTH = 110 (1 valid in ftb_plru + 109 in ftb_array). The
-  width is settled.
+  Field widths are ruled in ftb_decisions.md 8 and are NOT restated
+  here. This block gave FTB_BR_POS_BITS = 3, FTB_RAM_ENTRY_WIDTH =
+  105 and FTB_RAM_SET_WIDTH = 420, all stale since BP-099; it is
+  110 / 109 / 440 / 436 with FTB_BR_POS_BITS = 4. Corrected
+  session-070 by removing the copy.
 
 IC-FTB-09 (resolved, 2026-08-19):
   G9 update channel arbitration. Multi-branch update scheduling onto
@@ -577,9 +571,16 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
   FTB_WAY_BITS      = 2        $clog2(FTB_WAYS), carried writeWay
   FTB_BLOCK_BYTES   = 32
   FTB_OFFSET_BITS   = 5        $clog2(FTB_BLOCK_BYTES), byte offset
-  FTB_TAG_BITS      = 26       VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS
+  FTB_TAG_BITS      = 26       PINNED, not derived. The formula
+                               VA_WIDTH - FTB_IDX_BITS -
+                               FTB_OFFSET_BITS gives 27 at
+                               VA_WIDTH 41. ftb_decisions.md 4.1,
+                               TD#122
   PLRU_BITS         = 3        FTB_WAYS - 1, tree-PLRU (in ftb_plru)
-  PFTADDR_BITS      = 4        $clog2(FTB_BLOCK_BYTES/4) + 1
+  PFTADDR_BITS      = 6        $clog2(FTB_BLOCK_BYTES) + 1, no
+                               carry bit (ftb_decisions.md 5.5,
+                               8.1). This line read 4 with the old
+                               /4 granularity; TD#124
   TAR_STAT_BITS     = 2        fit / overflow / underflow
   FTB_BR_POS_BITS   = 3        $clog2(FTB_BLOCK_BYTES/4), in-block pos
   FTB_BR_TGT_BITS   = 13       conditional target displacement
@@ -591,7 +592,9 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
   (IC-FTB-06). There is no FTB_CONF_SUPPRESS_THRESH.
 
   FTB_ENTRY_WIDTH = 110 / FTB_SET_WIDTH = 440   (logical, incl. valid)
-  FTB_RAM_ENTRY_WIDTH = 105 / FTB_RAM_SET_WIDTH = 420   (ftb_array data)
+  FTB_RAM_ENTRY_WIDTH = 109 / FTB_RAM_SET_WIDTH = 436   (ftb_array data)
+  -- ftb_decisions.md 8 is the authority; 105 / 420 here was stale
+  since BP-099. Corrected session-070.
 
 ftb_array uses the FTB_RAM_* widths; ftb_plru holds the valid bit per
 way and the PLRU state. All FTB field widths are settled.
