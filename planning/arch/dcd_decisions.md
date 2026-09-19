@@ -221,9 +221,13 @@ DCD-U1  Where `vtype_hazard` is computed. TD-DCD-1 establishes
         that it cannot be the predecoder and does not choose
         between the ibuf read port and decode.
 
-DCD-U2  The order of the pop and the push in the DCD-11 case, if
-        the RAS treats them as two operations. Belongs to the RAS
-        and is carried here only because DCD-11 raises it.
+DCD-U2  CLOSED session-070 by ras_decisions.md RAS-DS1: the RAS
+        treats them as two operations and performs the POP FIRST,
+        then the push. bp_cluster.md and ftq_bpu_interfaces.md 5.4
+        agree. This asked for the order "if the RAS treats them as
+        two operations"; it does, and RAS-DS1 says so. What is
+        still open is TD-DCD-2, whether the BUILT RAS implements
+        it -- a verification question, not an ordering one.
 
 ---
 

@@ -181,8 +181,27 @@ Cluster output to the FTQ at p1:
   bpu_pred_pft_p1  [VA_WIDTH-1:0]                 NEW
 ```
 
-The FTQ writes these into the entry it allocates at p1. Allocation
-is unconditional: an entry is allocated for every prediction block,
+The FTQ writes these into the entry it allocates at p1.
+
+bp_ftq_entry_t.ras IS NOT WRITTEN FROM THIS GROUP. The RAS pushes
+and pops at p2 (ras_decisions.md 1.1) and the entry must hold the
+POST-operation snapshot (ras_decisions.md 4.2, ras_interfaces.md
+IC-RAS-08). ras_interfaces.md IC-RAS-12 places the obligation on
+bp_cluster/the FTQ: write ras_snapshot_p2[s] into
+bp_ftq_entry_t.ras when ras_pred_val_p2[s] was asserted. That is a
+p2 write into an entry allocated at p1.
+
+So bpu_pred_ras_p1 initialises the field at allocate and p2
+overwrites it. What this section does not say is which port carries
+the p2 value to the FTQ: ras_snapshot_p2 is a cluster-internal RAS
+output (section 5) and the 4a slot-correction groups carry
+bp_ftq_slot_t only, while .ras is a block scalar -- the same
+structural point section 4 already makes about pft_addr. Whether
+that needs a port here or is satisfied inside the cluster is not
+stated anywhere. Flagged session-070, not resolved.
+
+Allocation is unconditional: an entry is allocated for every
+prediction block,
 including one the p1 predictors miss, so a later stage has an entry
 to correct.
 

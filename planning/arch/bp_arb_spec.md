@@ -627,9 +627,13 @@ on a mispredicted path.
 RAS state (TOSR, TOSW, BOS -- defined in bp_ras_snapshot_t in
 bp_structs_pkg.sv, each RAS_PTR_BITS=4b wide) must be
 checkpointed into the FTQ entry at the time of the prediction
-that consumed or produced the RAS state.  On mispredict or
-flush the RAS is restored from the FTQ snapshot of the last
-known-good entry.
+that consumed or produced the RAS state.  On a redirect the RAS
+is restored from the FTQ snapshot of THE ENTRY THE REDIRECT NAMES
+BY ITS INDEX, including when _self marks that entry squashed
+(ftq_backend_interfaces.md 5 D2, ras_decisions.md 3.2, 4.3 and
+4.4). A flush IS a redirect (FE-14). This read "the last
+known-good entry", which ras_decisions.md 3.2 records replacing.
+Session-070.
 
 The bp_ftq_entry_t struct includes a bp_ras_snapshot_t field.
 This is the RAS update mechanism -- not a RAM write but

@@ -52,7 +52,7 @@ ITTAGE operates on indirect branches that are neither RETURN nor
 RETURN_CALL, including indirect CALL with a history-dependent
 target. RETURN_CALL was added session-069 and this read "not
 RETURN" alone; session-070. RAS
-handles RETURN only. RAS also tracks CALL for its own
+handles RETURN and RETURN_CALL. RAS also tracks CALL for its own
 speculative-stack push (return-address bookkeeping); this is
 unrelated to target prediction.
 

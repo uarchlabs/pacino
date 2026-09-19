@@ -119,13 +119,21 @@ Call instructions (push trigger):
   JALR  rd=x1 or rd=x5
   C.JALR          (implicit rd=x1)
 
-Return instructions (pop trigger):
+Return instructions (pop trigger, pop ONLY):
   JALR  rs1=x1 or rs1=x5, with rd not a link register or rd==x0
   C.JR  rs1=x1 or rs1=x5
-  C.JALR with rs1=x5 is excluded from return classification.
+  C.JALR is NEVER a pop-only return: it expands to JALR x1, rs1, 0,
+  so its rd is always a link register.
 
 Pop-then-push (RETURN_CALL):
-  JALR  rd and rs1 BOTH link registers and rd != rs1
+  JALR    rd and rs1 BOTH link registers and rd != rs1
+  C.JALR  with rs1=x5 -- its rd is x1, so this is that same case
+
+  The C.JALR line above read "C.JALR with rs1=x5 is excluded from
+  return classification", which is true of POP-ONLY return and was
+  being read as excluding it from RETURN_CALL too. C.JALR rs1=x5 is
+  a pop-then-push; C.JALR rs1=x1 is push only, since rd == rs1.
+  bp_cluster.md gives the full hint table. Session-070.
 
 RETURN_CALL, session-069. The specification's return-address-stack
 hints make a JALR whose rd and rs1 are both link registers and are
@@ -199,7 +207,12 @@ Purpose:   Covers in-flight call depth between fetch and commit.
 
 Snapshot for mispredict recovery: three pointers (TOSR, TOSW,
 BOS) saved per FTQ entry. On mispredict, restore all three from
-the FTQ snapshot of the last known-good entry. Full speculative
+the FTQ snapshot of THE ENTRY THE REDIRECT NAMES by its index
+(ftq_backend_interfaces.md 5 D2), including when _self marks that
+entry squashed. This read "the last known-good entry"; 4.3 said
+"the mispredicted entry" and 4.4 "the youngest valid entry before
+the flush point". One rule, three phrasings; D2 is the reference.
+Session-070. Full speculative
 history is preserved in the circular buffer -- no replay of
 individual operations needed provided the buffer has not wrapped.
 
@@ -269,7 +282,11 @@ Entry fields:
   rctr      : 4b
 
 Pointer:
-  CSP  -- Commit Stack Pointer: points to current top
+  CSP  -- Commit Stack Pointer: the NEXT FREE slot. The top is at
+          CSP-1 and empty is CSP == 0, as stated below and as the
+          overflow rule requires (CSP wraps to 0 on the 32nd
+          consecutive push). This line read "points to current
+          top", which contradicts both. Session-070.
 
 Update: when a call-containing prediction block commits from
 the FTQ, the return address is pushed onto the commit stack
@@ -324,7 +341,11 @@ On neither: snapshot current pointer state unchanged.
 ### 4.3  Restore on mispredict
 
 On mispredict redirect from any predictor: restore TOSR, TOSW,
-BOS from the FTQ snapshot of the mispredicted entry. The
+BOS from the FTQ snapshot of the entry the redirect names by its
+index (ftq_backend_interfaces.md 5 D2). This read "the
+mispredicted entry"; see 3.2. Note ftq_decisions.md 3.2 uses the
+entry BEFORE it for the HISTORY restore when _self is set -- the
+RAS does not. Session-070. The
 circular buffer data is not cleared -- restoration is pointer-
 only. Subsequent pushes and pops write into slots above the
 restored TOSR, which may overwrite stale speculative data from
@@ -338,8 +359,11 @@ not re-derive it.
 
 THE DECISION. RAS restore on flush is the same pointer-restore
 protocol as mispredict recovery, section 4.3: TOSR, TOSW and BOS are
-restored from the FTQ snapshot of the youngest valid entry before the
-flush point. The circular data is not cleared. There is NO
+restored from the FTQ snapshot of the entry the redirect names by
+its index, exactly as in 4.3. This read "the youngest valid entry
+before the flush point". Session-070.
+
+The circular data is not cleared. There is NO
 flush-specific RAS behaviour, no separate flush protocol, and nothing
 for a flush to do to the RAS that a redirect does not already do.
 
@@ -500,7 +524,12 @@ second recovery point.
   RAS-DS1  The RAS accepts is_call and is_ret both set on one
            instruction and performs the pop first, then the
            push. On `ras_br_type_p2` that arrives as RETURN_CALL
-           (section 2). Ordering is DCD-U2 and TD-DCD-2 verifies
+           (section 2). THE ORDER IS DECIDED HERE: pop first, then
+           push. dcd_decisions.md DCD-U2 asks for that order "if
+           the RAS treats them as two operations", and this rule
+           says it does, so DCD-U2 is answered by RAS-DS1 rather
+           than gating it. This read "Ordering is DCD-U2" as
+           though still open. Session-070. TD-DCD-2 verifies
            the built RAS against it.
 
 The superseded five follow.

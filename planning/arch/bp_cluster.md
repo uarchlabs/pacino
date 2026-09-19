@@ -233,7 +233,9 @@ See planning/arch/ras_decisions.md for full decision rationale.
 - Structure: conventional circular stack
 - Entries:   32
 - Entry fields: ret_addr (VA_WIDTH bits), rctr (4b)
-- Pointer: CSP -- Commit Stack Pointer, points to current top
+- Pointer: CSP -- Commit Stack Pointer, the NEXT FREE slot; the top
+           is at CSP-1 and empty is CSP == 0 (ras_decisions.md 3.3).
+           This read "points to current top". Session-070.
 - Update:  on call commit from FTQ, push return address, CSP
            advances, BOS in speculative stack updated.
            On return commit, CSP decrements.
@@ -287,7 +289,11 @@ when rd is not a link register.
   case as "rd = x1 or x5 and rs1 not a link register", which drops
   the rs1 == rd row, leaving JALR x1, x1 in no class at all. The
   table above is the fix for both. ras_decisions.md 2 is canonical
-  and agrees. Corrected session-070.
+  and now agrees: its C.JALR line read "C.JALR with rs1=x5 is
+  excluded from return classification", true of pop-only return but
+  read as excluding it from RETURN_CALL as well. Corrected
+  session-070; C.JALR rs1=x5 is a pop-then-push and C.JALR rs1=x1
+  is push only. Corrected session-070.
 
 #### Role in JALR prediction
 - RAS:    JALR/C.JR/C.JALR matching return register convention.

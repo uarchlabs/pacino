@@ -30,8 +30,13 @@ Cleanup of this inconsistency is a future documentation task.
 Single module ras.sv owns:
 - Speculative stack (16 entries, simple circular buffer)
 - Commit stack (32 entries, conventional circular stack)
-- Push/pop logic for both prediction slots in a single cycle
-- Same-cycle bypass for slot0=call, slot1=return case
+- Push/pop logic per prediction slot. AT MOST ONE SLOT CARRIES A
+  RAS OPERATION: a RAS operation is a taken branch and ends the
+  block (FE-11, ras_decisions.md 6.2, SUPERSEDED session-069).
+  This read "for both prediction slots in a single cycle".
+- Same-cycle bypass for slot0=call, slot1=return. THAT CASE CANNOT
+  OCCUR under FE-11; if the logic is in the RTL it is dead
+  (ras_decisions.md 6.3, IC-RAS-04). Session-070.
 - Recursion counter management
 - p0/s0 TOS read for initial prediction
 - Snapshot output per prediction for FTQ storage
@@ -182,7 +187,15 @@ All structs defined in bp_structs_pkg.sv.
 Branch type enum. RAS acts on:
   DIRECT_CALL, INDIRECT_CALL -- push trigger
   RETURN                     -- pop trigger
+  RETURN_CALL                -- POP THEN PUSH, one instruction,
+                                two operations (ras_decisions.md 2
+                                and RAS-DS1, dcd_decisions.md
+                                DCD-11a)
   All other values: no RAS action.
+
+RETURN_CALL was added to bp_br_type_e at 3'b111 in session-069 and
+was missing from this list and from IC-RAS-01, IC-RAS-02 and
+IC-RAS-10. Session-070.
 
 ### bp_ras_snapshot_t
 
@@ -253,25 +266,33 @@ post-slot-0 pointer state.
 
 Push fires if and only if:
   ras_pred_val_p2[s] == 1
-  AND ras_br_type_p2[s] == DIRECT_CALL or INDIRECT_CALL
+  AND ras_br_type_p2[s] == DIRECT_CALL, INDIRECT_CALL
+      or RETURN_CALL
 
-No push on any other branch type. RAS does not make its
+No push on any other branch type. On RETURN_CALL the push follows
+the pop of IC-RAS-02 in the same operation. RAS does not make its
 own call/return classification.
 
 ### IC-RAS-02: Pop gating
 
 Pop fires if and only if:
   ras_pred_val_p2[s] == 1
-  AND ras_br_type_p2[s] == RETURN
+  AND ras_br_type_p2[s] == RETURN or RETURN_CALL
 
-No pop on any other branch type.
+No pop on any other branch type. On RETURN_CALL the pop comes
+FIRST and supplies the predicted target; the push of IC-RAS-01
+follows it (ras_decisions.md RAS-DS1).
 
 ### IC-RAS-03: Slot priority
 
-When both slots are active in the same cycle, slot 0
-is processed before slot 1. The slot 1 operation sees
-the post-slot-0 pointer state. This applies to all five
-same-cycle combinations. See ras_decisions.md section 6.2.
+AT MOST ONE SLOT CAN CARRY A RAS OPERATION. FE-11: a RAS operation
+is a taken branch, so it ends the block before slot 1 is reached
+(ras_decisions.md 6.2, SUPERSEDED session-069). The slot-priority
+rule is retained because the RTL may implement it: when both slots
+are active, slot 0 is processed before slot 1 and slot 1 sees the
+post-slot-0 pointer state. This read "This applies to all five
+same-cycle combinations"; none of the five can occur.
+Session-070.
 
 ### IC-RAS-04: Same-cycle bypass
 
@@ -281,10 +302,14 @@ forwarded combinationally from slot 0's push data without
 reading back from the speculative stack array.
 
 ras_pop_addr_p2[1] receives the forwarded value in this
-case. The bypass is always present in the RTL; its
-activation is combinationally determined from
-ras_br_type_p2[0] and ras_br_type_p2[1].
-See ras_decisions.md section 6.3.
+case.
+
+THE CASE CANNOT OCCUR. slot0=call with slot1=return needs two RAS
+operations in one block, which FE-11 excludes (ras_decisions.md
+6.2 and 6.3, SUPERSEDED session-069). If the bypass exists in the
+RTL it is dead logic; confirming that is an RTL task. This read
+"The bypass is always present in the RTL" as a live requirement.
+Session-070.
 
 ### IC-RAS-05: Recursion counter
 
@@ -299,8 +324,10 @@ TOSR. If rctr == 0, pop normally (TOSR decrements).
 Saturation: rctr saturates at (2^RAS_RCTR_WIDTH - 1) = 15.
 Additional pushes beyond saturation are suppressed.
 
-See ras_decisions.md sections 5 and 6.4 for two-slot
-simultaneous push behavior.
+See ras_decisions.md section 5 for the single-push recursion
+counter. Section 6.4, two-slot simultaneous push, is SUPERSEDED:
+two pushes need calls in both slots, which FE-11 excludes. The
+single-push rule above is unaffected. Session-070.
 
 ### IC-RAS-06: Speculative stack overflow
 
@@ -320,7 +347,8 @@ single-entry loss across a wrap.
 
 When TOSR == BOS (speculative stack empty) and a pop is
 requested, ras_pop_addr_p2[s] is driven from the commit
-stack top (CSP entry). ras_pop_valid_p2[s] remains
+stack top, which is the CSP-1 entry, not the CSP entry
+(ras_decisions.md 3.3). ras_pop_valid_p2[s] remains
 asserted. The commit stack entry is NOT consumed.
 
 The same fallback applies to ras_tos_addr_p0[s] at p0:
@@ -354,7 +382,9 @@ not cleared. See ras_decisions.md section 4.3.
 
 ### IC-RAS-10: Commit stack update
 
-On ras_commit_val with DIRECT_CALL or INDIRECT_CALL:
+On ras_commit_val with DIRECT_CALL, INDIRECT_CALL or RETURN_CALL
+(RETURN_CALL commits as the net effect of its pop and push; see
+ras_decisions.md RAS-DS1. Session-070):
   - Push ras_commit_ret_addr onto commit stack.
   - CSP advances.
   - BOS in speculative stack updated from ras_commit_snapshot.
@@ -411,7 +441,9 @@ not recovered. See TD #78 and tb_ras TC-21.
   containing FTQ entry commits.
 - Must set pred_src = PRED_RAS in bp_ftq_entry_t when RAS
   provides the return target at p2.
-- Must gate RAS override on br_type==RETURN only.
+- Must gate RAS override on br_type==RETURN or RETURN_CALL. This
+  read "RETURN only"; RETURN_CALL's pop supplies the predicted
+  target too (IC-RAS-02, ras_decisions.md RAS-DS1). Session-070.
 
 ---
 
@@ -430,10 +462,12 @@ RAS is type-gated alongside TAGE and ITTAGE at p2:
   p2: FTB + TAGE + ITTAGE + RAS
   p3: SC
 
-RAS provides the return target at p2 when FTB identifies
-the branch type as RETURN. RAS overrides FTB target for
-return branches only. It does not participate in direction
-prediction.
+RAS provides the return target at p2 when FTB identifies the branch
+type as RETURN or RETURN_CALL -- for RETURN_CALL the pop supplies
+the target and the push follows (ras_decisions.md RAS-DS1). RAS
+supplies the target for those two types only. It does not
+participate in direction prediction. This read "the branch type as
+RETURN ... for return branches only". Session-070.
 
 The p0/s0 TOS read (ras_tos_addr_p0) provides an earlier
 prediction before FTB is available. This is the initial
