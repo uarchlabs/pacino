@@ -34,23 +34,28 @@ Covered:
 Not covered:
 - IFU internals, the ICache, the ITLB
 - the IFU to IBuffer path, which does not return to the FTQ
-- EXE to FTQ resolution, still unspecified
+- EXE to FTQ resolution -- ftq_backend_interfaces.md. This read
+  "still unspecified"; that document exists. Session-070.
 - whether the FTQ drives the ICache directly; see section 8
 
 ---
 
 ## 2. Naming
 
-Predictor-facing ports carry a pipeline-stage suffix. The IFU pipeline
-is not defined, so there are no stage suffixes here yet. Ports are
-named by direction:
+Predictor-facing ports carry a pipeline-stage suffix. This document
+has no stage suffixes. That is a choice, not a gap: the IFU pipeline
+IS defined, F0 to F3 plus WB (ifu_decisions.md IFU-9), and this text
+read "The IFU pipeline is not defined". Session-070. Ports are named
+by direction:
 
 ```
   ftq_ifu_<signal>    FTQ  -> IFU
   ifu_ftq_<signal>    IFU  -> FTQ
 ```
 
-When the IFU pipeline is defined, add the stage suffix and record the
+The IFU pipeline IS defined -- F0 to F3 plus WB, ifu_decisions.md
+IFU-9 and IFU-10 -- so this is a naming choice, not a wait. If the
+suffixes are ever added here, record the
 rename here. This is a deliberate deviation, not an oversight.
 
 ---
@@ -253,7 +258,8 @@ Sources of a flush, all resolved by the FTQ into this one group:
   p2 redirect          bpu_redir_p2 / bpu_redir_idx_p2
   p3 redirect          bpu_redir_p3 / bpu_redir_idx_p3
   predecode redirect   section 6, derived from the writeback
-  backend redirect     ftq_backend, UNSPECIFIED
+  backend redirect     ftq_backend_interfaces.md (this read
+                       "ftq_backend, UNSPECIFIED"; session-070)
 ```
 
 A flush and a request may be presented in the same cycle. The flush
@@ -425,7 +431,10 @@ update here would give the predictors two producers in different
 orders and break FE-6.
 
 The FTQ does not need the writeback to free an entry. Deallocation is
-FE-U7 and remains open.
+FE-U7, which is RESOLVED by ftq_decisions.md 5: deallocation
+follows bkend_ftq_commit_idx and the entry is freed at commit
+(5.3). This said "remains open"; item 3 of section 8 in this same
+file already says FE-U7 is decided. Corrected session-070.
 
 ---
 

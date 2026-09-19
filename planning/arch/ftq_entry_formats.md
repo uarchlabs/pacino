@@ -49,7 +49,12 @@ defined and deferred.
 ---
 
 ## 2. Fast path: bp_ftq_entry_t
-`bp_ftq_entry_t` is read every cycle. It is written at p1 and rewritten by redirect.
+`bp_ftq_entry_t` is read every cycle. It is written at p1, its
+slots are rewritten at p2 and p3 ON EVERY PREDICTION rather than
+only on a redirect (fe_decisions.md 2.5 and FE-13,
+ftq_bpu_interfaces.md 4a, ftq_decisions.md 2), and the entry is
+freed at commit. This read "written at p1 and rewritten by
+redirect"; session-070.
 
 Block scalar fields, one per entry:
 
@@ -189,7 +194,22 @@ ARM SELECTION.
   INDIRECT_NONRET, INDIRECT_CALL  ->  u.ind
   RETURN, DIRECT_CALL,
   DIRECT_UNC, NO_BRANCH           ->  no arm; u is not written
+  RETURN_CALL                     ->  not decided, see below
 ```
+
+RETURN_CALL was missing from this table until session-070. It was
+added to bp_br_type_e in session-069 for the JALR that pops then
+pushes (ras_decisions.md 2, dcd_decisions.md DCD-11a), taking the
+enum to eight encodings while this table still listed seven.
+
+It pops and pushes the RAS. Neither touches this metadata, so on
+that alone it would write nothing, like RETURN. What is not settled
+is whether it ALSO trains ITTAGE at resolution, the way
+INDIRECT_CALL does. If it does, it writes the ITTAGE half; if not,
+it writes nothing. fe_decisions.md FE-U9 owns that question.
+
+Nothing here contradicts anything: RETURN_CALL consults only the
+RAS, so "RAS and ITTAGE are never both consulted" still holds.
 
 INDIRECT_CALL takes the indirect arm because it updates ITTAGE for
 the target (FE-U9, session-061). Its RAS push reads the fast-path

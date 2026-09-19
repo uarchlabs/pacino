@@ -396,7 +396,8 @@ THE INDEX FORM, not the pointer values. The checkpoint array inside
 bp_history and the checkpoint field of the FTQ entry are written
 from the same p1 allocation and are one to one against an
 `FTQ_IDX_BITS` index, so the index selects the same pair at 7 bits
-rather than 14 and bp_history needs no change at all.
+rather than 13 and bp_history needs no change at all. (13, not 14:
+ghist_ptr is 8 and phist_ptr is 5. Session-070.)
 
 The FTQ presents the index of the entry whose END-of-block pointer
 state is to be restored, which is what the cluster's own arms do
@@ -416,12 +417,17 @@ Not decided here. Listed because this interface is the last input
 they were waiting on.
 
 ```
-  FE-U7  Allocation and deallocation policy. All three pointers now
-         have a defined source: allocation advances on the p1
-         prediction, deallocation follows bkend_ftq_commit_idx, and
-         the commit walk of section 6 sits between them. Full is
-         allocation catching deallocation. A generation or wrap bit
-         is required by rule R3.
+  FE-U7  RESOLVED by ftq_decisions.md 5, not "not decided here".
+         FOUR pointers, not three: alloc_ptr, xlate_ptr, fetch_ptr
+         and commit_ptr (5.1; xlate_ptr added session-069).
+         ALLOCATION ADVANCES AT p0, not on the p1 prediction (5.2),
+         because ftq_pred_idx_p0 leaves with the request.
+         Deallocation follows bkend_ftq_commit_idx and the commit
+         walk of section 6 sits between them. Full is allocation
+         catching deallocation. A generation or wrap bit is
+         required by rule R3 and FE-U7 did NOT add one.
+         This entry read "All three pointers ... allocation
+         advances on the p1 prediction". Session-070.
   G23    Checkpoint slot reclaim. The checkpoint lives in the entry,
          so it is reclaimed with the entry at commit.
   G9     FTB update arbitration. Two resolution ports feed one FTB
@@ -443,8 +449,11 @@ Every one of these is unverifiable today. The backend does not exist.
 ```
   A1  CONFIRMED 2026-08-19. Instructions carry their FTQ index and
       in-block position from the IFU through to resolution and
-      retirement: FTQ_IDX_BITS + FTB_BR_POS_BITS = 9 bits per
-      in-flight instruction. Section 4 and section 6 both depend on
+      retirement: FTQ_IDX_BITS + FTB_BR_POS_BITS = 6 + 4 = 10 bits
+      per in-flight instruction. It read 9, which was correct until
+      BP-099 took FTB_BR_POS_BITS from 3 to 4 for the C extension.
+      Corrected session-070; the 2026-08-19 history entry keeps 9,
+      which was right when written. Section 4 and section 6 both depend on
       it. XiangShan does the same (ftqPtr and ftqOffset in
       FetchToIBuffer).
   A2  Retirement is in order, so a commit watermark is meaningful.

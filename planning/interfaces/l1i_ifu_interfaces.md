@@ -63,7 +63,10 @@ TD-FE- or FE-U, which are `fe_decisions.md`.
 
 ## 2. Naming
 
-The IFU pipeline is not defined, so there are no stage suffixes, for
+This document carries no stage suffixes, a choice rather than a
+gap: the IFU pipeline IS defined, F0 to F3 plus WB
+(ifu_decisions.md IFU-9). This read "The IFU pipeline is not
+defined". Session-070. No suffixes, for
 the same reason and with the same intent as `ftq_ifu_interfaces.md`
 section 2. Ports are named by direction.
 
@@ -74,7 +77,9 @@ section 2. Ports are named by direction.
   ifu_cmt_<signal>    IFU -> backend commit
 ```
 
-When the IFU pipeline is defined, add the stage suffix and record the
+The IFU pipeline IS defined -- F0 to F3 plus WB, ifu_decisions.md
+IFU-9 and IFU-10 -- so this is a naming choice, not a wait. If the
+suffixes are ever added here, record the
 rename here.
 
 ---

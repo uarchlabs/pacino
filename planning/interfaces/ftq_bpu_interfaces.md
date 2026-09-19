@@ -34,8 +34,9 @@ Covered:
 - configuration and status sidebands
 
 Not covered:
-- IFU to FTQ (TD-FE-1, unspecified)
-- EXE to FTQ resolution
+- IFU to FTQ -- ftq_ifu_interfaces.md. TD-FE-1 is CLOSED; this
+  read "(TD-FE-1, unspecified)". Session-070.
+- EXE to FTQ resolution -- ftq_backend_interfaces.md
 - predictor internals
 - RAM arbitration (bp_arb_spec.md)
 
@@ -922,7 +923,10 @@ match it and to match this specification.
 
 17. DEFERRED, not blocking. `bp_ftq_meta_t` becomes the two-arm
     packed union of ftq_entry_formats.md 3.1. It is a storage
-    optimization only, 420b -> 277b per slot. tb_bp_cluster group F3
+    optimization only, 421b -> 278b per slot (this read
+    "420b -> 277b"; ftq_entry_formats.md 3.1 is the owner and the
+    figures moved when jmp_pos widened. Session-070).
+    tb_bp_cluster group F3
     proves that the p2 and p3 write groups touch DISJOINT members of
     the struct; under the union that holds only within `u.cond`,
     since `sc` and `ittage` alias, so F3 must be restated per arm

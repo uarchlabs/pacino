@@ -48,8 +48,10 @@ earlier revision said the partition was "resolved upstream by
 the decoder and carried in the FTB entry"; the second half was
 right and the first was not. Corrected session-070.
 
-ITTAGE operates on indirect branches that are not RETURN,
-including indirect CALL with a history-dependent target. RAS
+ITTAGE operates on indirect branches that are neither RETURN nor
+RETURN_CALL, including indirect CALL with a history-dependent
+target. RETURN_CALL was added session-069 and this read "not
+RETURN" alone; session-070. RAS
 handles RETURN only. RAS also tracks CALL for its own
 speculative-stack push (return-address bookkeeping); this is
 unrelated to target prediction.
@@ -326,9 +328,18 @@ Note: VIRT_ittage_pred_tgt is a virtual signal described above.
   what stands on an ITTAGE miss (ftb_decisions.md 4.2) is a
   selection rule, not a comparison. Corrected session-070.
 - Must gate ITTAGE prediction on indirect branch type, excluding
-  RETURN. Indirect CALL is in scope for both ITTAGE and RAS. ITTAGE
-  predicts the target, RAS pushes the return address.
-  RETURN is handled by RAS exclusively.
+  RETURN AND RETURN_CALL. Indirect CALL is in scope for both ITTAGE
+  and RAS: ITTAGE predicts the target, RAS pushes the return
+  address. RETURN and RETURN_CALL are handled by the RAS
+  exclusively -- RETURN_CALL pops for its target and then pushes,
+  and ras_decisions.md 2 makes it unambiguously the RAS's.
+
+  This rule said "excluding RETURN" only. RETURN_CALL is an
+  indirect JALR and is not RETURN, so by the letter of it ITTAGE
+  would predict a RETURN_CALL, against ras_decisions.md 2,
+  fe_decisions.md FE-U9 and ftq_entry_formats.md 3.1. Corrected
+  session-070. Whether RETURN_CALL TRAINS ITTAGE at resolution is a
+  separate question and is still open: FE-U9.
 
 ### ITTAGE Simulation Support
 - ITTAGE_FAST_INIT: runtime plusarg (+ITTAGE_FAST_INIT=1).

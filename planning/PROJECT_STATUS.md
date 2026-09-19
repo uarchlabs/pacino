@@ -1353,7 +1353,10 @@ it only documented current behavior.
 |                         |             |                   | exist, so one client today.       |
 | frontend top            | Not started | --                | fe_decisions.md 15, FE-15..18.    |
 |                         |             |                   | Instantiates bp_cluster, ftq,     |
-|                         |             |                   | ifu, L1I, ibuf and decode. The    |
+|                         |             |                   | ifu, L1I, THE ITLB, ibuf and      |
+|                         |             |                   | decode -- the ITLB is inside by   |
+|                         |             |                   | fe_decisions.md FE-U10 and was    |
+|                         |             |                   | missing here. Session-070. The    |
 |                         |             |                   | L1I is INSIDE it, a SIBLING of    |
 |                         |             |                   | the IFU and not inside the IFU,   |
 |                         |             |                   | per icache_decisions.md L1I-2.    |
@@ -1880,7 +1883,8 @@ assessment of each document. Correct any that are wrong.
 |     |          |     whose producer is the backend commit stage and is    |
 |     |          |     unspecified                                          |
 | 117 | frontend | CLOSED session-069 by fe_decisions.md 15, FE-15..18.    |
-|     |          | The top instantiates bp_cluster, ftq, ifu, L1I, ibuf    |
+|     |          | The top instantiates bp_cluster, ftq, ifu, L1I, the     |
+|     |          | ITLB (FE-U10; added to this list session-070), ibuf     |
 |     |          | and decode. The L1I is INSIDE it as a sibling of the    |
 |     |          | IFU per L1I-2. Specified, not built. Original text      |
 |     |          | follows.                                                 |

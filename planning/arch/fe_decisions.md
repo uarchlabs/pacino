@@ -157,7 +157,11 @@ The successor PC for that case is defined in section 2.4.
 
 ### 2.2 Returns
 
-RAS is only active for return branch types. The RAS presents its
+RAS SUPPLIES A TARGET only for return branch types; it is also
+PUSHED by calls, which is an update rather than a prediction
+(section 7.2, FE-U9, ras_decisions.md 2). This read "RAS is only
+active for return branch types". Corrected session-070.
+The RAS presents its
 top-of-stack entry as the predicted target. THE TOP OF STACK IS READ
 AT p0: ras.sv declares `ras_tos_addr_p0` and `ras_tos_valid_p0`. The
 cluster registers that value and applies it when the p1 selection mux
@@ -436,8 +440,12 @@ group (section 2.5), not the p1 uBTB view (TD-FE-6):
 ```
 
 TAGE and SC predict direction and are updated only for conditional
-branches. ITTAGE is updated only for indirect branches. RAS is updated
-only for returns. The SC is excluded when disabled by its CSR bit
+branches. ITTAGE is updated only for indirect branches. RAS IS
+UPDATED BY BOTH: a return pops it and a call pushes it, and
+INDIRECT_CALL updates ITTAGE for the target and the RAS for the
+return address (FE-U9, session-061 ruling). This read "RAS is
+updated only for returns". Corrected session-070.
+The SC is excluded when disabled by its CSR bit
 (FE-U6).
 
 A predictor that missed at prediction time is still updated. Each
@@ -451,9 +459,16 @@ A slot off the executed path never resolves and forms no update.
 
 ### 7.3 Enqueue
 
-Each RAM-based predictor has an update queue in front of it. The queue
-is a FIFO with two write ports, so up to two updates may be enqueued
-per cycle. Two write ports serve NUM_PRED_SLOTS = 2 update channels.
+Each RAM-based predictor EXCEPT THE FTB has an update queue in front
+of it. The queue is a FIFO with two write ports, so up to two updates
+may be enqueued per cycle. Two write ports serve NUM_PRED_SLOTS = 2
+update channels.
+
+THE FTB HAS NO QUEUE AND NO READY. It has a single update port,
+scheduled by ftq_ftb_sched outside the predictor: ftq_decisions.md
+5.7, ftb_interfaces.md 2.5, ftq_bpu_interfaces.md 8. This paragraph
+said "each RAM-based predictor" without the exception. Corrected
+session-070.
 
 Updates reach a predictor in resolution order. This is an out-of-order
 machine and resolution order is not program order. The FIFO is not
@@ -744,7 +759,15 @@ This document uses it.
 it does so deliberately:
 
 ```
-  2, 7.1   uFTB output presented at p0.
+  2, 7.1   uFTB output presented at p0 -- AS A PORT NAME AND AN
+           ALLOCATION POINT, which is the error. The uBTB result
+           IS combinationally valid within the p0 cycle (7.1 is
+           cited for exactly that in section 2.1 of this document
+           and in ubtb_interfaces.md Timing); what is wrong is
+           treating p0 as the stage at which the prediction is
+           FORMED and the FTQ allocates. Session-070: the two
+           readings were being confused, this entry being read as
+           rejecting 7.1 outright.
            RESOLUTION: the initial prediction is formed at p1 and the
            FTQ allocates there. bp_arb_spec.md 7.2 itself refers to
            "the uBTB p1 prediction."
@@ -880,11 +903,26 @@ ubtb.sv.
   TD-FE-2  CLOSED. bp_ftq_meta_t field overloading. Resolved in
            ftq_entry_formats.md 3.1: a two-arm packed union, u.cond
            holding
-           tage, sc and lp, u.ind holding ittage, with ftb and a
-           wr_br_type discriminant outside the union. 420b -> 280b
-           per slot. The slot dimension is unaffected: the union is
-           inside bp_ftq_meta_t and the array is still declared at
-           instantiation.
+           tage, sc and lp, u.ind holding ittage, with ftb outside
+           the union. The member is chosen by
+           bp_ftq_slot_t.br_type; there is NO wr_br_type
+           discriminant -- it was dropped 2026-08-19 as redundant.
+           421b -> 278b per slot. The slot dimension is unaffected:
+           the union is inside bp_ftq_meta_t and the array is still
+           declared at instantiation.
+
+           IT IS DEFINED AND DEFERRED, NOT APPLIED. Section 16 of
+           this document, ftq_entry_formats.md 3.1, ftq_decisions.md
+           6 and the PROJECT_STATUS ftq_meta.sv row all say so, and
+           G10 still lists the overload as outstanding. "CLOSED"
+           here means the SCHEME is decided.
+
+           This entry read "420b -> 280b per slot" with a
+           wr_br_type discriminant. Both were superseded on
+           2026-08-19; ftq_bpu_interfaces.md 10 item 17 carried a
+           third pair, 420b -> 277b. ftq_entry_formats.md 3.1 is
+           the owner and gives 421b -> 278b. Corrected
+           session-070.
 
   TD-FE-3  bp_ftq_entry_t.pc and per-slot target are VA_WIDTH bits.
            REVERSED session-070, TD#122. This entry read that 39
@@ -956,7 +994,10 @@ ubtb.sv.
            written from the same p1 allocation and are one to one
            against an FTQ_IDX_BITS index, so presenting the index
            selects the same pointer pair the values would have, at
-           7 bits rather than 14, and leaves bp_history untouched.
+           7 bits rather than 13, and leaves bp_history untouched.
+           (13, not 14: ghist_ptr is 8 and phist_ptr is 5,
+           ftq_decisions.md 3.1, ftq_entry_formats.md 2,
+           bp_history_decisions.md 7. Session-070.)
            ftq_decisions.md 3.2 was worded for the value form and
            was corrected to match.
 
@@ -1048,7 +1089,8 @@ ubtb.sv.
          The phrasing is not yet placed in the specification.
 
   FE-U7  CLOSED 2026-08-19. FTQ allocation and deallocation policy
-         is ftq_decisions.md 5. Three pointers with a wrap bit:
+         is ftq_decisions.md 5. FOUR pointers with a wrap bit --
+         xlate_ptr was added session-069 and this read "Three":
          alloc advances at p0 when the request is accepted, since
          ftq_pred_idx_p0 leaves with it; fetch advances on the IFU
          handshake; one commit pointer both issues the RAS commit
@@ -1105,8 +1147,10 @@ the level above both. It closes TD#117.
 
 ```
   FE-15  The front end top is structural. It instantiates
-         bp_cluster, ftq, the IFU, the L1I, the ibuf and decode,
-         and wires them. It holds no state and makes no decision.
+         bp_cluster, ftq, the IFU, the L1I, THE ITLB, the ibuf and
+         decode, and wires them. It holds no state and makes no
+         decision. The ITLB is inside by FE-U10 and was missing
+         from this list; session-070.
          The same rule ftq_decisions.md 7 applies to ftq.sv
          applies here.
 ```
@@ -1143,7 +1187,11 @@ emitted graph and is not a front end connection.
 ### 15.3 The boundary
 
 ```
-  FE-17  Four groups cross the front end boundary.
+  FE-17  THREE groups cross the front end boundary, and one
+         listed here does not. This read "Four groups cross",
+         counting a row it then calls not a boundary group, and
+         placed the IFU-to-ITLB path on the boundary when FE-U10
+         puts the ITLB inside the top. Corrected session-070.
 
          instruction       NOT a boundary group. The IFU to L1I
                            path, l1i_ifu_interfaces.md, is INTERNAL
@@ -1151,8 +1199,11 @@ emitted graph and is not a front end connection.
                            the L1I's up_i port into the l2, which
                            is a cachegen topology edge.
 
-         translation       the IFU to the ITLB, and the ITLB to
-                           the shared L2 TLB. itlb_decisions.md
+         translation       the ITLB to the shared L2 TLB, and that
+                           alone. The IFU to the ITLB,
+                           itlb_ifu_interfaces.md, is INTERNAL:
+                           FE-U10 puts the ITLB inside the top, a
+                           sibling of the IFU. itlb_decisions.md
                            and mmu_decisions.md.
 
          uncached          the IFU's second instruction source,
@@ -1181,7 +1232,10 @@ all.
 
 `bp_cluster` clears its stage valids from its own p2 and p3 arms
 and from the FTQ arm of BP-102. The FTQ drives the IFU flush of
-ftq_ifu_interfaces.md 5. The ibuf clears on redirect, IBUF-8.
+ftq_ifu_interfaces.md 5. The ibuf clears on a BACKEND redirect
+only, IBUF-8, 8a and 8b, ifu_ibuf_interfaces.md IB-12. This read
+"clears on redirect", which would include the p2 and p3 cluster
+redirects; those do not clear it. Corrected session-070.
 There is no front-end-wide flush signal and the top does not
 create one.
 

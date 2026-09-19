@@ -110,15 +110,23 @@ ports for the same reason the fast path does.
 
 ```
   p1            allocate. Fast-path entry written, all slots.
-  p2, p3        rewritten by redirect, per slot. The later stage wins
-                for the slot it names.
+  p2, p3        slots rewritten ON EVERY PREDICTION, per slot, not
+                only on a redirect. The later stage wins for the
+                slot it names. fe_decisions.md 2.5 and FE-13,
+                ftq_bpu_interfaces.md 4a.
   p2, p3        bp_ftq_meta_t written, per slot.
   post-execute  bp_ftq_meta_t read. Updates formed and enqueued.
+  commit        entry FREED. 5.3.
 ```
 
-The entry persists until its post-execute resolution, when its
-metadata is read.
-Allocation and deallocation policy is otherwise unspecified (FE-U7).
+The entry's metadata is read at post-execute resolution; the ENTRY
+IS FREED AT COMMIT (5.3), not at resolution. Allocation and
+deallocation policy is section 5; FE-U7 is RESOLVED there.
+
+This block read "rewritten by redirect", omitted commit, said the
+entry "persists until its post-execute resolution", and called the
+policy "otherwise unspecified (FE-U7)". All four were overtaken by
+section 5. Corrected session-070.
 
 ---
 
@@ -165,6 +173,8 @@ index form and this wording follows. The checkpoint array inside
 bp_history and the checkpoint field of the FTQ entry are written from
 the same p1 allocation and are one to one against an `FTQ_IDX_BITS`
 index, so the index selects the same pointer pair at 7 bits rather
+than 13 -- ghist_ptr is 8 and phist_ptr is 5 (3.1). This read 14;
+session-070. Formerly rather
 than 14, and bp_history needs no change. The entry still CARRIES the
 pointer pair (section 2); nothing reads it across this interface.
 
@@ -245,7 +255,11 @@ path:
 Stated as a consequence rather than an assumption so that a future
 source which does NOT fit the depth ordering is recognised as such.
 The fallback is the age comparison itself, and that needs the wrap or
-generation bit FE-U7 must define.
+generation bit. FE-U7 is RESOLVED (section 5) and did NOT add one:
+ftq_backend_interfaces.md 9 records that it resolved without adding
+a generation bit to this interface, and rule R3 still requires one.
+This said "the wrap or generation bit FE-U7 must define".
+Session-070.
 
 ### 4.4 The p1 successor and the zero-bubble loop
 
@@ -274,10 +288,15 @@ the p1 successor combinational is the expected implementation.
 
 ```
   H1  a queued predictor cannot accept a request: any of
-      tage_pq_not_full, ittage_pq_not_full or sc_uq_not_full low.
+      tage_pq_not_full or ittage_pq_not_full low. NOT
+      sc_uq_not_full: SC has no prediction queue (bp_arb_spec.md
+      5.5), sc_uq_not_full is its UPDATE queue status, and sc.sv
+      ties it to 1'b1 (TD#123). ftq_bpu_interfaces.md 3 names only
+      pq_not_full outputs as the hold condition. Corrected
+      session-070.
       The cluster has NO request-ready output, so
       ftq_bpu_interfaces.md 3 makes this the FTQ's obligation.
-  H2  the FTQ has no free entry. FE-U7.
+  H2  the FTQ has no free entry. Section 5 (FE-U7, resolved).
   H3  the entry at the head of the live window has its FAULT bit
       set. ftq_entry_formats.md 4.3 R1: predicting past a block
       that faulted would queue work that will not be fetched.
@@ -307,7 +326,9 @@ belongs to -- `bpu_pred_idx_p1`, `bpu_slot_idx_p2`, `bpu_slot_idx_p3`,
 `bpu_redir_idx_p2`, `bpu_redir_idx_p3`, `bpu_meta_idx_p2`,
 `bpu_meta_idx_p3` -- and the FTQ ignores any naming an entry it has
 squashed. This is the same rule as `ftq_backend_interfaces.md` R3 and
-it has the same prerequisite: the FE-U7 generation bit, so a
+it has the same prerequisite: a generation bit, which FE-U7 did NOT
+supply when it resolved (section 5, ftq_backend_interfaces.md 9), so
+a
 reallocated index is not mistaken for the squashed one.
 
 ### 4.7 Reset vector
@@ -536,7 +557,7 @@ The FTQ keeps a four-deep IN-FLIGHT SHADOW of its own requests, one
 stage per cluster stage:
 
 ```
-  shadow[p0..p3]  { valid, ptr[FTQ_PTR_BITS-1:0] }     4 x 8 bits
+  shadow[p1..p3]  { valid, ptr[FTQ_PTR_BITS-1:0] }     3 x 8 bits
 ```
 
 FOUR STAGES, THREE FLOPS. Stage p0 is the request being PRESENTED
@@ -555,7 +576,9 @@ make it. Clearing every stage instead is wrong: stage 3 holds an
 OLDER request than stage 2, so a p2 redirect naming the stage 2 entry
 squashes stages 1 and 0 and must LEAVE STAGE 3 ALONE. This is not the
 widening rejected below -- that was FTQ_IDX_BITS at every bp_cluster
-port and in four metadata structs; this is four bits inside the FTQ.
+port and in four metadata structs; this is THREE bits inside the
+FTQ, one per stored shadow stage. This read "four bits", counting
+the four stages rather than the three that are flopped.
 
 It shifts every cycle in lockstep with the cluster's own stage
 registers, which advance unconditionally. A redirect clears the
@@ -566,8 +589,10 @@ dropped.
 REJECTED ALTERNATIVE: widening the carried index to include the wrap
 bit. It would change FTQ_IDX_BITS at every bp_cluster port and widen
 `branch_id` in tage_pred_meta_t, sc_pred_meta_t, ittage_pred_meta_t
-and bp_ftq_entry_t, for no functional gain over 32 bits of shadow in
-the FTQ.
+and bp_ftq_entry_t, for no functional gain over 24 bits of shadow in
+the FTQ. (This and the table above read four stages and 32 bits,
+against the FOUR STAGES, THREE FLOPS rule immediately below the
+table. Corrected session-070.)
 
 REJECTED ALTERNATIVE: draining the cluster before re-issuing after a
 redirect. Correct, and free of the aliasing entirely, but it adds up
@@ -815,9 +840,14 @@ Collected for navigation. Each is recorded in `fe_decisions.md` or
            ftq_entry_formats.md 4.4, ftq_ifu_interfaces.md 6.1.
   TD-FE-2  The slow-path overload is defined and DEFERRED. See
            ftq_entry_formats.md 3.1.
-  TD-FE-3  bp_ftq_entry_t.pc and the per-slot target are 40 bits;
-           39 suffice under the C extension, 35 if a block always
-           starts on an FTB_BLOCK_BYTES boundary.
+  TD-FE-3  bp_ftq_entry_t.pc and the per-slot target are VA_WIDTH,
+           now 41 (FE-19, TD#122). The floor is 40 as addr[40:1],
+           not 39, and 35 is NOT available because blocks do not
+           start on an FTB_BLOCK_BYTES boundary (4.7, IFU-6).
+           This read "40 bits; 39 suffice under the C extension,
+           35 if a block always starts on an FTB_BLOCK_BYTES
+           boundary". fe_decisions.md 13 is the owner.
+           Session-070.
   TD-FE-4  bp_ftq_slot_t.pred_src is diagnostic only.
   G9       RESOLVED. Section 5.7.
   G23      RESOLVED. The checkpoint is a field of the entry and is
@@ -830,9 +860,12 @@ Collected for navigation. Each is recorded in `fe_decisions.md` or
            arms. ftq_backend_interfaces.md 8, section 3.2.
 ```
 
-Next-PC selection was on this list and is now section 4. What
-remains open from it is the RESET VECTOR, which has no source
-anywhere in the tree; see 4.7.
+Next-PC selection was on this list and is now section 4. NOTHING
+remains open from it: the reset vector is
+`bp_defines_pkg::RESET_VECTOR` (4.7), which is the RESETVEC entry
+above. This paragraph said the reset vector "has no source anywhere
+in the tree", contradicting both 4.7 and the RESETVEC line six rows
+up. Corrected session-070.
 
 ### 6.1 Instruction prefetch -- DEFERRED, with impact
 
@@ -859,9 +892,13 @@ and its bpuPtr, exactly in the run-ahead gap.
 IMPACTED IF PREFETCH IS LATER WANTED:
 
 ```
-  ftq_decisions.md 5.1   a fourth pointer, prefetch_ptr, between
+  ftq_decisions.md 5.1   a FIFTH pointer, prefetch_ptr, between
                          fetch_ptr and alloc_ptr, with FQ-1
-                         extended to order it
+                         extended to order it. This said "fourth";
+                         5.1 has four already -- alloc_ptr,
+                         xlate_ptr, fetch_ptr, commit_ptr -- since
+                         session-069 added xlate_ptr.
+                         Session-070
   ftq_decisions.md 5.5   the rewind rule gains a pointer
   fast-path read ports   a further reader of bp_ftq_entry_t, on top
                          of the five of section 1
