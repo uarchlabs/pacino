@@ -169,8 +169,12 @@ only advance, rollback by index, FTQ visibility vs ownership).
     num_branches. The index is the branch number after
     compaction, not the prediction slot number.
   - pred_pc is the BRANCH PC: the block base plus that branch's
-    in-block position, four bytes per position. It is not the
-    fetch block PC.
+    in-block position, TWO bytes per position. It is not the
+    fetch block PC. This read "four bytes per position", which
+    BP-099 superseded when POS_OFFSET_BITS went to 1 for the C
+    extension; the granularity note below, ftq_bpu_interfaces.md
+    7.4 and 9 and ftq_entry_formats.md 2 all say two.
+    Session-070.
 
     An earlier revision of this file stated the opposite. It was
     wrong, and the fold arithmetic here is why: the PHR write
@@ -274,12 +278,17 @@ only advance, rollback by index, FTQ visibility vs ownership).
   Rollback supplies an INDEX, not a pointer. The module restores
   the pointer from its own checkpoint array.
 
-  Scope: rollback (checkpoint-restore) applies only to branch-
-  mispredict redirects. A mispredict target is the mispredicted
-  branch's bundle, which always carries a checkpoint, so the index
-  always resolves. Exceptions and interrupts do NOT use this path;
-  they reinitialize history on a new context and do not read a
-  checkpoint. See bp_history_decisions.md section 3.4.
+  Scope: rollback (checkpoint-restore) applies to RC_MISPREDICT,
+  RC_TRAP and RC_REPLAY -- every backend redirect cause that names
+  an FTQ entry (bp_history_decisions.md 3.4,
+  ftq_backend_interfaces.md 5 D1). A mispredict target is the
+  mispredicted branch's bundle, which always carries a checkpoint,
+  so the index always resolves.
+
+  THIS READ "applies only to branch-mispredict redirects" with
+  exceptions and interrupts reinitializing history instead.
+  Corrected session-070; 3.4 is the owner and covers all three
+  causes.
 
   ghr_mem and phr_mem are NOT cleared on rollback. Entries written
   after the checkpoint remain in the buffer but are unreachable via
@@ -296,9 +305,10 @@ only advance, rollback by index, FTQ visibility vs ownership).
 ### Producer obligations
 
   - rollback_ckpt_idx must be a previously written checkpoint slot.
-  - Use this path for branch-mispredict redirects only. Route
-    exception/interrupt redirects through the history reinit path,
-    not rollback_valid.
+  - Use this path for every backend redirect that names an FTQ
+    entry: RC_MISPREDICT, RC_TRAP and RC_REPLAY. This read
+    "branch-mispredict redirects only ... route exception/interrupt
+    redirects through the history reinit path". Session-070.
   - bp_cluster drives rollback from the derived redirect. When
     both stages redirect in the same cycle the p3 index wins,
     matching the supersession rule.
@@ -352,8 +362,14 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
   SC folds (one index fold per table with history, ST1-ST3):
     sc_t1_idx_fh  -- width = SC_T1_HIST = 4b
-    sc_t2_idx_fh  -- width = SC_T2_HIST = 10b
-    sc_t3_idx_fh  -- width = SC_T3_HIST = 16b
+    sc_t2_idx_fh  -- width = SC_TBL_FH[2] = 16b
+    sc_t3_idx_fh  -- width = SC_TBL_FH[3] = 64b
+
+    These read SC_T2_HIST = 10b and SC_T3_HIST = 16b. Neither
+    parameter exists; bp_defines_pkg.sv has
+    SC_TBL_FH[0:4] = '{0, 4, 16, 64, 0}, which bp_cluster.md
+    Folded Histories and bp_history_decisions.md 6.4/6.5 both
+    match. Corrected session-070.
     ST0 (hist=0) and ST4 (BrIMLI) have no folds.
 
     bp_cluster stages the three SC index folds from p0 to p2
@@ -428,8 +444,11 @@ only advance, rollback by index, FTQ visibility vs ownership).
 |     | rollback cycle. Predictions permitted on  | session-054.     |
 |     | stale folds; cost deferred to perf        | decisions.md s5. |
 |     | analysis (G15). = G22.                    |                  |
-| HI5 | Checkpoint slot reclaim protocol.         | TBD at FTQ impl. |
-|     | When is a checkpoint slot safe to reuse?  |                  |
+| HI5 | Checkpoint slot reclaim. When is a        | CLOSED           |
+|     | checkpoint slot safe to reuse? At entry   | session-070 by   |
+|     | commit: the checkpoint is a FIELD of the  | G23.             |
+|     | FTQ entry, reclaimed with it. No separate | ftq_decisions.md |
+|     | protocol.                                 | 5.8, 5.3.        |
 | HI6 | IT5 fold generation missing in            | TD#102 open.     |
 |     | bp_history.sv. IT5 has real history but   |                  |
 |     | its three fold outputs are never driven.  |                  |

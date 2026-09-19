@@ -295,8 +295,13 @@ after a mispredict:
                                       resolves taken
 ```
 
-They are wrong until they shift out, which is H predictions, 64 at
-the longest fold. The cost is ACCURACY ONLY. The GHR is a predictor
+They are wrong until they shift out, which is H predictions, where
+H is the HISTORY LENGTH of the longest table -- 119 for TAGE T4
+(TAGE_TBL_HIST, tage_interfaces.md Overview). This read "64 at the
+longest fold"; 64 is SC's longest FOLD WIDTH (SC_TBL_FH[3]), a
+different quantity. Session-070.
+
+The cost is ACCURACY ONLY. The GHR is a predictor
 input; no architectural state depends on it.
 
 WHY IT CANNOT BE FIXED WITHOUT A PORT CHANGE. Rollback supplies an
@@ -599,8 +604,12 @@ checkpoint remain in the buffer but are unreachable via the
 restored pointer. This is accepted.
 
 Checkpoint slot reclaim (when a slot is safe to reuse) and the
-no-branch-flush target case (section 3.4) are FTQ concerns,
-deferred (HI5, section 9).
+no-branch-flush target case (section 3.4) are FTQ concerns. BOTH
+ARE NOW ANSWERED. The no-branch-flush case is closed in 3.4. The
+reclaim is closed by G23: the checkpoint is a FIELD of the FTQ
+entry, so a slot is reclaimed with the entry at commit and there
+is no separate protocol (ftq_decisions.md 5.8 and 5.3). HI5 closed
+session-070, section 9.
 
 ---
 
@@ -648,9 +657,15 @@ not a hashed fold) have no folds.
        index/tag hashing. All folds are GHR-derived today. Resolve
        at TAGE/ITTAGE hashing work.
 
-  HI5: DEFERRED (not in this scope). Checkpoint slot reclaim
-       protocol -- when a slot is safe to reuse. Resolve at FTQ
-       implementation. (The no-branch-flush concern raised earlier
+  HI5: CLOSED session-070 by G23. Checkpoint slot reclaim -- when
+       a slot is safe to reuse. It was deferred here "at FTQ
+       implementation", and the FTQ has now answered it: the
+       checkpoint is a FIELD of the FTQ entry, so a slot is
+       reclaimed with the entry at commit and there is no separate
+       protocol (ftq_decisions.md 5.8 and 5.3, PROJECT_STATUS G23).
+       G23 has read RESOLVED while this entry read DEFERRED.
+
+       (The no-branch-flush concern raised earlier
        is closed in section 3.4, but not for the reason first
        given: restore is NOT mispredict-only, and the bundle
        granularity means every entry has a checkpoint, so any
@@ -726,8 +741,11 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
       fold definition (section 6). Proven (BP-072).
     - TD #69 / #70: TAGE / ITTAGE rollback + history-recompute
       test. Was blocked on G20/G21/G22; this document unblocks
-      it. Still gated on the cluster providing the rollback
-      stimulus path.
+      it. NO LONGER GATED ON STIMULUS: tb_bp_cluster E1 and E2
+      drive checkpoint and rollback through the cluster
+      (PROJECT_STATUS TD#69). This read "Still gated on the
+      cluster providing the rollback stimulus path".
+      Session-070.
     - Producer/consumer fold check: drive a known GHR, take the
       bp_history fold output, run it through the actual TAGE/
       ITTAGE table index hash, confirm the resulting index against

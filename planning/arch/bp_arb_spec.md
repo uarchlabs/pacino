@@ -57,10 +57,14 @@ This spec defines:
 | uFTB    |No       |p0        |p0            |Immediate              |
 | RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read for       initial prediction. p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md p1.   |
 | FTB     |Yes      |p1/p2     |p1/p2         |u0/u1                  |
-| LP      |Yes      |p1/p2     |p1/p2         |u0/u1                  |
+| LP      |NO*      |p1/p2     |p1/p2         |u0/u1                  |
 | TAGE    |Yes      |p2        |p2            |u0/u1                  |
 | SC      |Yes      |p3        |p3            |u0/u1 (separate UQ)    |
 | ITTAGE  |Yes      |p2        |p2            |u0/u1                  |
+
+* LP: NO SRAM. loop_pred.sv is a pure registered counter array
+  (sram_init.md, fe_decisions.md 2.1). This column read Yes.
+  Session-070; see 5.2.
 
 The indirect predictor chain (RAS + ITTAGE) shares the stage timing
 of its direct counterparts but has different update and correction
@@ -217,10 +221,13 @@ FTB, LP, and ITTAGE have analogous parameter sets with their own
 prefix and independently chosen values.
 
 Note, TD#39: PRED_CREDITS = 4 is less than STARVE_THRESH = 8, so the
-section 4.5 rule 2 starvation override may be unreachable at these
-values -- rule 4 reloads the credits and resets the starve counter
-before the counter can reach the threshold. Settle whether the
-relationship is intentional before writing arbiter tests.
+section 4.5 rule 2 starvation override is unreachable in ordinary
+traffic at these values -- rule 4 reloads the credits and resets the
+starve counter before the counter can reach the threshold. The rule
+IS tested: BP-094 group H test H6 seeds the counter to reach it
+(4.5, TD#73). Only whether the parameter relationship is intentional
+is still open. This read "may be unreachable ... before writing
+arbiter tests". Session-070.
 
 ### 4.3  Prediction Queue (PQ)
 
@@ -387,6 +394,16 @@ state.  The update is granted in a subsequent cycle.
                instantiated.
 
 ### 5.2  Loop Predictor (LP)
+
+  THE LP HAS NO SRAM. loop_pred.sv is a pure registered counter
+  array (sram_init.md; fe_decisions.md 2.1), so the queue and
+  credit machinery below describes a contention that does not
+  exist -- there is no single RAM port for prediction and update
+  to compete for. The section 2 table read "RAM-based: Yes" and is
+  now NO*. Retained rather than deleted because the LP may yet be
+  given a RAM; if it is not, 5.2 should be withdrawn.
+  fe_decisions.md 12 does not list this among its departures and
+  should. Flagged session-070.
 
   Parameters:  LP_PQ_DEPTH, LP_UQ_DEPTH, LP_UQ_WR_PORTS,
                LP_RESP_BUF_DEPTH, LP_PRED_CREDITS,
@@ -728,9 +745,11 @@ task file, not here.
        well: there is none (fe_decisions.md FE-14). Do not re-raise from the
        unread ras_flush_* ports (4.4.2).
 
-  H. FTB, LP, SC, ITTAGE parameter values.
-     All marked TBD.  Assign before each module's
-     arbitration RTL is written.
+  H. FTB and LP parameter values. Marked TBD; assign before each
+     module's arbitration RTL is written. SC AND ITTAGE ARE NOT
+     TBD -- 5.4 and 5.5 give their values (SC_UQ_DEPTH = 8,
+     SC_UQ_WR_PORTS = 2, and the ITTAGE set). This read "FTB, LP,
+     SC, ITTAGE ... All marked TBD". Session-070.
 
   I. ITTAGE arbitration spec.
 
@@ -741,10 +760,15 @@ task file, not here.
      Placeholder in section 5.4.6
 
   J. TD#39. PRED_CREDITS < STARVE_THRESH, so the section 4.5
-     rule 2 starvation override may be unreachable at the current
-     parameter values and therefore untestable. Settle whether the
-     relationship is intentional before the arbiter tests are
-     written. See section 4.2.
+     rule 2 starvation override is unreachable in ordinary traffic
+     at the current parameter values. IT IS NOT UNTESTABLE AND THE
+     TESTS ARE WRITTEN: TD#73 closed by BP-094 group H, which
+     covers all seven grant rules, and test H6 SEEDS the starve
+     counter to reach the override (PROJECT_STATUS TD#39, TD#73).
+     What remains is only whether the parameter relationship is
+     intentional. This read "may be unreachable ... and therefore
+     untestable ... before the arbiter tests are written", which
+     contradicts 4.5's "All seven are TESTED". Session-070.
 
 
 ## 12. Document History

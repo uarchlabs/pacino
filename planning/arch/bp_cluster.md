@@ -371,7 +371,14 @@ Two redirect points downstream of p1:
                RAS and ITTAGE are type-gated, not in the
                TAGE/FTB override chain.
 
-  p3_redirect: fires when SC overrides TAGE direction from p2.
+  p3_redirect: fires when SC CHANGES THE SUCCESSOR the cluster
+               published at p2 -- not whenever SC overrides the
+               TAGE direction. An override that leaves the next
+               fetch address unchanged fires nothing
+               (fe_decisions.md 3.1, FE-4; SC Role above;
+               sc_interfaces.md Consumer obligations). This read
+               "fires when SC overrides TAGE direction from p2".
+               Session-070.
                SC requires TAGE output as input; SC cannot finalize
                before TAGE. Target for p3_redirect comes from FTB
                (held from p2). Direction comes from SC.
@@ -426,21 +433,27 @@ not rename/dispatch. No SRAM -- purely registered state.
 
 GHR (Global History Register):
   Width:  GHR_WIDTH = 256b circular buffer
-  Pointer: ghist_ptr (GHIST_PTR_BITS = 8b), driven externally
+  Pointer: ghist_ptr (GHIST_PTR_BITS = 8b), OWNED BY bp_history
   Update: speculative on each prediction. Write pred_taken into
           buffer at ghist_ptr position, one write per active
           prediction slot in priority order.
-  Restore: on redirect, accept new ghist_ptr from external logic.
+  Restore: on redirect, bp_history restores its own pointer from
+           the checkpoint the rollback INDEX names. No pointer
+           value is supplied from outside. bp_history_decisions.md
+           2 and 10, bp_history_interfaces.md Pointer Ownership.
+           This read "driven externally" and "accept new ghist_ptr
+           from external logic". Session-070.
            Recompute all folded histories from buffer contents.
 
 PHR (Path History Register):
   Width:  PHR_WIDTH = 32b circular buffer
-  Pointer: phist_ptr (PHIST_PTR_BITS = 5b), driven externally
+  Pointer: phist_ptr (PHIST_PTR_BITS = 5b), OWNED BY bp_history
   Update: speculative on each prediction:
             PHR[phist_ptr] = pred_pc[2] ^ pred_pc[3]
           One write per active prediction slot in priority order.
           Bit selection (pc[2] ^ pc[3]) is subject to tuning.
-  Restore: on redirect, accept new phist_ptr from external logic.
+  Restore: as ghist_ptr above -- bp_history restores from the
+           checkpoint index, not from a supplied pointer value.
            Same policy as GHR.
 
 PHR folding is deferred. bp_history.sv maintains phr_mem and
@@ -501,7 +514,11 @@ Checkpoint written with post-update pointer values.
 ## Update Policy
 
 Update trigger: post-execute resolution. No wait for retire.
-Two update channels when dual_pred_en=1, one when dual_pred_en=0.
+Both update channels exist in either mode. At dual_pred_en=0 only
+upd_ch[0] carries traffic; upd_ch[1] is still there (Dual Prediction
+Mode above, fe_decisions.md 10). This read "Two update channels when
+dual_pred_en=1, one when dual_pred_en=0", a structural difference
+there is not. Session-070.
 Each channel carries both conditional and indirect branch resolution
 (they are one combined channel, not split by type).
 
