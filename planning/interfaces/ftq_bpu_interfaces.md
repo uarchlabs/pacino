@@ -613,7 +613,10 @@ the fast-path entry, sourced from `ftb_br0_pos_p2` and
 `ftb_br1_pos_p2` and delivered on the section 4a slot correction
 group. Until that group existed no port carried either signal out of
 the cluster and this paragraph described something unbuildable
-(TD-FE-6). The FTQ uses it to order br0 against br1 and to
+(TD-FE-6). The FTQ uses it to locate the branch in the fetch
+bundle. NOT to order br0 against br1: br0 is always the earlier
+branch by fill order (ftb_decisions.md 4, IC-FTB-16). This read "to
+order br0 against br1". Session-070. It is used to
 locate the taken branch in the fetch bundle (IC-FTB-15), and returns
 the resolving branch's position on `ftb_upd_pos_u0`.
 

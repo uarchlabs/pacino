@@ -102,13 +102,23 @@ fields of the one indexed entry, not two slots.
   output logic                  ftb_br0_valid_p2
                         -- 1 = conditional field 0 is occupied.
   output logic [FTB_BR_POS_BITS-1:0] ftb_br0_pos_p2
-                        -- br0 in-block position: which expanded-
-                           instruction slot (0..15) within the 32-byte
-                           block this branch occupies. Needed by the
-                           cluster/FTQ to order br0 vs br1 and locate
-                           the taken branch in the bundle. Written at
-                           allocate/free-field from ftb_upd_pos_u0
-                           (2.5); static for the life of the field.
+                        -- br0 in-block position: which 2-BYTE SLOT
+                           (0..15) within the 32-byte block this
+                           branch occupies. Used by the cluster/FTQ
+                           to locate the taken branch in the bundle.
+                           NOT to order br0 against br1 -- br0 is
+                           always the earlier branch by fill order
+                           (IC-FTB-16, ftb_decisions.md 4).
+                           Written at allocate/free-field from
+                           ftb_upd_pos_u0 (2.5); static for the life
+                           of the field.
+                           This entry read "which expanded-
+                           instruction slot" and "order br0 vs br1".
+                           BP-099 took positions to 2-byte
+                           granularity and retired the
+                           expanded-instruction model
+                           (ftb_decisions.md 4.4 and 11).
+                           Session-070.
   output logic                  ftb_br0_taken_p2
                         -- FTB direction for br0 = conf MSB, qualified
                            by valid: ftb_br0_taken_p2 =
@@ -167,9 +177,16 @@ fields of the one indexed entry, not two slots.
                            aligned region base, NO CARRY BIT
                            (ftb_decisions.md 5.5, ruled session-070;
                            TD#124 tracks the RTL, still 5 + carry).
-                           Reconstructed
-                           UNCONDITIONALLY; there is no fallthrough
-                           error check (ftb_decisions.md 4.5).
+                           Reconstructed UNCONDITIONALLY as built:
+                           ftb_cntrl.sv line 500 applies no
+                           fallthrough check. THAT DIVERGES FROM
+                           ftb_decisions.md 4.5, which requires a
+                           bounds check (FTB-G1, FTB-G2, restored
+                           session-069) and which ubtb_interfaces.md
+                           applies to blk_p1. TD#124. This entry
+                           cited 4.5 as the authority for there
+                           being no check; 4.5 says the opposite.
+                           Session-070.
                            Authoritative for the cluster; RAS push
                            uses this value (IC-FTB-03).
 
@@ -405,8 +422,12 @@ IC-FTB-02:
 IC-FTB-03:
   ftb_pft_addr_p2 is the authoritative fallthrough for the cluster.
   RAS uses this value as the pushed return address (ras_fall_through).
-  No straddle correction and no fallthrough error check are applied
-  (IC-FTB-11, ftb_decisions.md 4.5).
+  No straddle correction is applied. THE FALLTHROUGH BOUNDS CHECK IS
+  A CONFLICT, NOT A SETTLED ABSENCE: ftb_decisions.md 4.5 requires
+  one (FTB-G1, FTB-G2, restored session-069) and ubtb_interfaces.md
+  applies the same check to blk_p1, while IC-FTB-11 below and
+  ftb_cntrl.sv line 500 both say the reconstruct is unconditional.
+  The RTL matches this document, not 4.5. TD#124. Session-070.
 
 IC-FTB-04:
   br0 and br1 are the two conditional fields of one entry from one
@@ -486,12 +507,17 @@ IC-FTB-10 (resolved, session-052):
   and permitted -- IC-FTB-10 forbids the associative re-lookup, not the
   carried-way read.
 
-IC-FTB-11 (resolved, session-052):
-  Fallthrough reconstruction error. Ruled OUT. The full 26-bit tag
-  (ftb_decisions.md 4.1) makes wrong-entry hits unreachable.
-  ftb_pft_addr_p2 is reconstructed and used unconditionally; there is
-  no fallthrough-error output and no fallback mux. See ftb_decisions.md
-  4.5 for the divergence record and the restore guard.
+IC-FTB-11 (resolved session-052, REOPENED session-070):
+  Fallthrough reconstruction error. Ruled OUT in session-052 because
+  the full 26-bit tag made wrong-entry hits unreachable. TWO THINGS
+  HAVE CHANGED. ftb_decisions.md 4.5 restored a bounds check in
+  session-069 (FTB-G1, FTB-G2) because blocks are unaligned and two
+  lookup PCs in one 32-byte region share an entry, which is not a
+  wrong-entry hit. And the tag is now PINNED at 26 over a 41-bit VA
+  (4.1, TD#122), so it no longer covers the whole upper VA.
+  As built there is still no fallthrough-error output and no
+  fallback mux, and ftb_cntrl.sv line 500 reconstructs
+  unconditionally. TD#124 tracks the divergence.
 
 IC-FTB-12 (session-053):
   Storage split. ftb_array is pure 1R1W DATA RAM: no entry-valid, no
@@ -500,8 +526,9 @@ IC-FTB-12 (session-053):
   this is the FTB cold init -- the FTB has NO sram_init mechanism.
   Way-match, PLRU victim selection, PLRU next-state, and valid set/clear
   are all computed in ftb_cntrl, which drives both storage modules. The
-  logical entry is partitioned: 1 valid bit/way in ftb_plru, 105 in
-  ftb_array.
+  logical entry is partitioned: 1 valid bit/way in ftb_plru, 109 in
+  ftb_array. This read 105, stale since BP-099; ftb_decisions.md 8
+  is the authority. Session-070.
 
 IC-FTB-13 (session-053):
   Active-low controls. All enables on ftb_array and ftb_plru are active
@@ -563,7 +590,8 @@ IC-FTB-16 (2026-08-19):
 
 All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
 
-  VA_WIDTH          = 40
+  VA_WIDTH          = 41       ruled session-070, FE-19; the
+                               package still says 40, TD#122
   FTB_WAYS          = 4
   FTB_ENTRIES       = 2048
   FTB_SETS          = 512
@@ -582,7 +610,10 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
                                8.1). This line read 4 with the old
                                /4 granularity; TD#124
   TAR_STAT_BITS     = 2        fit / overflow / underflow
-  FTB_BR_POS_BITS   = 3        $clog2(FTB_BLOCK_BYTES/4), in-block pos
+  FTB_BR_POS_BITS   = 4        $clog2(FTB_BLOCK_BYTES/2), in-block
+                               position at 2-BYTE granularity. This
+                               read 3 with /4, superseded by BP-099
+                               for the C extension. Session-070
   FTB_BR_TGT_BITS   = 13       conditional target displacement
   FTB_JMP_TGT_BITS  = 21       jump target displacement
   FTB_CONF_WIDTH    = 3        bimodal direction counter (MSB = dir)

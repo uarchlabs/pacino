@@ -244,9 +244,11 @@ is no always_taken bit -- it was removed (session-053); conf is the sole
 per-branch direction state. See ftb_confidence_override_rules.md.
 
 Storage partition. The entry-level valid bit (1 per way) is the only
-field physically relocated to ftb_plru. The remaining 105 bits -- tag,
+field physically relocated to ftb_plru. The remaining 109 bits -- tag,
 both conditional fields, the jump field, and the fallthrough -- are
-stored in ftb_array (FTB_RAM_ENTRY_WIDTH, section 8). The per-field
+stored in ftb_array (FTB_RAM_ENTRY_WIDTH, section 8, which is the
+only place the widths are stated; this line read 105, stale since
+BP-099 -- session-070). The per-field
 valid bits of br0/br1/jump stay in the RAM entry; they are don't-care
 while the entry-valid (in ftb_plru) is 0, so they need no reset. The
 entry-valid gates the whole entry.
@@ -579,8 +581,11 @@ only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
 
 All of the above are writes into the ftb_array entry (the carried way).
 The entry-valid in ftb_plru is unchanged on an in-place update -- it
-was set at allocate and is only set/cleared there (and on flush, when
-that protocol exists).
+was set at allocate and is only set/cleared there. THERE IS NO FLUSH
+AND THERE WILL NOT BE: a flush is a redirect (fe_decisions.md FE-14,
+BP-105), and ftb_interfaces.md IC-FTB-07 and G24 are closed on that
+basis. This read "(and on flush, when that protocol exists)".
+Session-070.
 
 Full-to-partial reduction (ftb_cntrl): the update port delivers the
 resolved block end as a full VA (ftb_upd_pft_addr_u0). ftb_cntrl
@@ -833,9 +838,13 @@ region end, plus a full block, plus a straddling halfword pair:
          path. Flagged, not yet analyzed. Resolve at bp_cluster
          integration.
 
-  FTB-3: Update channel arbitration (G9). FTB exposes one update
-         port; how multiple resolved branches are scheduled onto it is
-         a cluster/FTQ concern, resolved at bp_cluster integration.
+  FTB-3: CLOSED. Update channel arbitration (G9). FTB exposes one
+         update port; how multiple resolved branches are scheduled
+         onto it was a cluster/FTQ concern and the FTQ has decided
+         it: ftq_decisions.md 5.7, BUILT as ftq_ftb_sched (BP-100).
+         ftb_interfaces.md IC-FTB-09 and PROJECT_STATUS G9 both
+         record it decided. This read "resolved at bp_cluster
+         integration" as though still pending. Session-070.
 
   FTB-4: CLOSED (session-053). The in-block position field
          (FTB_BR_POS_BITS per branch) was stored but had no producer or

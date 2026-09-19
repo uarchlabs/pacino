@@ -145,7 +145,11 @@ the stream to alignment.
              the consumer must ignore it for non-COND.
 
   pos      : in-block instruction position, 0..15, of this branch.
-             The cluster uses it to order br0 against br1 and to
+             The cluster uses it to locate the branch in the fetch
+             bundle. NOT to order br0 against br1: br0 is always
+             the earlier branch by fill order
+             (ftb_decisions.md 4, IC-FTB-16). This read "to order
+             br0 against br1". Session-070. It is used to
              locate the taken branch in the fetch bundle.
 
   conf     : the bimodal direction counter value. MSB is the

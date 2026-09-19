@@ -2018,7 +2018,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | total 68,224->68,480; slow path unchanged, it carries    |
 |     |          | no VA_WIDTH field), ftq_decisions.md 4.7,                |
 |     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 4.1 and 8,   |
-|     |          | ftb_interfaces.md, ittage_interfaces.md, bp_cluster.md,  |
+|     |          | ftb_interfaces.md (Conventions AND section 5 -- the      |
+|     |          | first sweep took Conventions only and left section 5 at  |
+|     |          | VA_WIDTH 40; fixed session-070),                         |
+|     |          | ittage_interfaces.md, bp_cluster.md,                     |
 |     |          | ras_decisions.md 8, ras_interfaces.md 2,                 |
 |     |          | mmu_decisions.md MMU-20 and MMU-23,                      |
 |     |          | l1i_ifu_interfaces.md TD-IF-1 and 3.1. FTB_TAG_BITS is   |
