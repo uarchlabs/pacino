@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -86,7 +86,16 @@ SRAMs. See bp_arb_spec.md section 7.2.
 
 ### 1.1  Stage and update notes
 
-- Stage:  p2 push/pop + spec_pop_addr; p3 = p2 registered.
+THE NAME spec_pop_addr IS RETIRED. ras.sv declares ras_tos_addr_p0,
+the p0 top-of-stack read the cluster registers and applies at p1,
+and ras_pop_addr_p2, the p2 pop output that supplies the return
+target and the p2 redirect target (ras_interfaces.md Port List).
+spec_pop_addr named the second of those in this document,
+bp_cluster.md, fe_decisions.md and ittage_interfaces.md, and the
+first of them in fe_decisions.md 9, and was declared by nothing.
+Swept session-072.
+
+- Stage:  p2 push/pop + ras_pop_addr_p2; p3 = p2 registered.
 - Update: speculative at p2 (separate from main update channels).
           Commit stack updated at retire/commit, not post-execute.
 - Outside the conditional branch override chain.
@@ -99,8 +108,8 @@ p2_redirect: fires when the successor the cluster would publish
   loop predictor's, whichever the p1 mux selected (fe_decisions.md
   2.5), and the comparison is one quantity against the cluster's
   own staged view, never predictor against predictor (FE-4).
-  Corrected session-070. For return branches, RAS spec_pop_addr is
-  the redirect target.
+  Corrected session-070. For return branches, the redirect target is
+  ras_pop_addr_p2.
 
 p3_redirect: RAS p3 = p2 registered. Stack repair applied at
   p3 if p3 structural prediction disagrees with p2 (see repair
@@ -330,6 +339,15 @@ same cycle wins over commit for BOS (restore > commit > hold).
 On commit of a return: CSP decrements. The commit stack entry
 is consumed. BOS likewise advances to the committing entry's
 post-op TOSR (ras_commit_snapshot.tosr).
+
+On commit of a RETURN_CALL: the return rule above, then the push
+rule, applied to the state the return leaves (RAS-DS1: pop first,
+then push). The net CSP movement is whatever those two steps give;
+it is not specified separately. BOS advances once, to the committing
+entry's post-op TOSR. Added session-072: this section had no
+RETURN_CALL rule, and ras_interfaces.md IC-RAS-10 put RETURN_CALL in
+the push arm, advancing CSP, while saying it commits as the net
+effect of a pop and a push.
 
 Overflow condition: CSP is a free pointer with no base
 register. Empty is CSP == 0, the top is at CSP-1, and overflow
@@ -655,7 +673,7 @@ allow the push to be initiated before FTB confirms, but the
 authoritative push is gated on FTB branch type at p2.
 
 This is consistent with bp_cluster.md: RAS push/pop executes
-at p2, spec_pop_addr valid at p2, p3 = p2 registered.
+at p2, ras_pop_addr_p2 valid at p2, p3 = p2 registered.
 
 Implication: the return address is available one cycle after
 the call instruction enters the prediction pipeline (p2). The
@@ -856,4 +874,10 @@ Commit stack pointer width:
               section is now a summary. 9: the parameters exist,
               BP-062. 11: the duplication with bp_cluster.md is
               reconciled, not intentional.
+
+  2026-09-20  session-072. 3.3: RETURN_CALL commit rule added, the
+              return rule then the push rule (RAS-DS1).
+
+  2026-09-20  session-072, second pass. 1.1: spec_pop_addr retired in favour of
+              the declared ras_tos_addr_p0 and ras_pop_addr_p2.
 ```

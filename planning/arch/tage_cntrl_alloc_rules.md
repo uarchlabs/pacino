@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_alloc_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -121,5 +121,7 @@ selector, which names the wrong table. Session-071.
 
 The current lcl_epoch value for the slot is written to the
 EPC field of the allocated entry at update time.
-See tage_cntrl_useful_update_rules.md for aging rules.
+See tage_cntrl_use_update_rules.md for aging rules. This named
+tage_cntrl_useful_update_rules.md, which does not exist.
+Session-072.
 

@@ -7,7 +7,7 @@
  FILE:    tage_table_entry_formats.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -48,6 +48,7 @@ CTR    : `TAGE_TBL_CTR[t]`
 USE    : `TAGE_TBL_USE[t]`
 EPC    : `TAGE_TBL_EPC[t]`
 TAG    : `TAGE_TBL_TAG[t]`
+```
 
 ### CTR field usage in TAGE
 

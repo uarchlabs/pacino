@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_use_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-02
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -71,10 +71,14 @@ lcl_aging_interval_1 are loaded with the current value of
 tage_aging_interval.
 
 lcl_aging_interval_0 is a down counter which decrements for each
-assertion of tage_pred_rdy_0_p2.
+assertion of tage_pred_rdy_p2[0].
 
 lcl_aging_interval_1 is a down counter which decrements for each
-assertion of tage_pred_rdy_1_p2.
+assertion of tage_pred_rdy_p2[1].
+
+tage_pred_rdy_p2 is one port carrying the slot as a packed vector
+(tage_interfaces.md Port List). This section read tage_pred_rdy_0_p2
+and tage_pred_rdy_1_p2, which do not exist. Session-072.
 
 When lcl_aging_interval_0 reaches zero, lcl_epoch_0 is incremented
 and lcl_aging_interval_0 is reloaded with the current value of
@@ -101,7 +105,7 @@ an aging interaction.
 
 ## Epoch Advance Timing:
 
-  lcl_epoch_0 increments one clock after pred_rdy_0_p2 first
+  lcl_epoch_0 increments one clock after tage_pred_rdy_p2[0] first
   asserts (N+1). The aging_ff and the valid pipeline register
   are separate always_ff blocks; the aging_ff samples the
   previous value of pred_rdy_p2 on the boundary posedge and
@@ -234,7 +238,9 @@ alternative components are calculated. The provider component's
 MODIFIED u_eff is returned in the prediction response. On the
 subsequent update these values are written to either the primary
 or alternative entries depending on the state of
-bpc_upd_data_t.common.using_primary. The current value of
+tage_upd_inp_t.tage_pred_meta.tage_using_primary (Table 7, UP).
+This read bpc_upd_data_t.common.using_primary, a type no document
+declares. Session-072. The current value of
 lcl_epoch_0/lcl_epoch_1 is written to the EPC field of the
 entry as well.
 

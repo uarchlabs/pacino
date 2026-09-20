@@ -2,7 +2,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -159,12 +159,18 @@ The remaining discussion focuses on a single slot for clarity, the decisions and
 Both LP and uBTB outputs are valid at p1. There is a selection mux which choses the prediction to present. 
 
 ```
-  LP output valid    ->  a loop was detected; the LP prediction is used
-  otherwise          ->  the uBTB prediction is used
-  neither valid      ->  this slot carries no prediction
+  lp_pred_is_loop set   ->  the LP supplies the direction
+  else ubtb slot valid  ->  the uBTB supplies the slot
+  else                  ->  this slot carries no prediction
 ```
 
-Both LP and uBTB assert a valid when they have a prediction, valid will not be asserted in the case of LP or uBTB misses. 
+The LP has no valid output. lp_pred_is_loop is set only on a hit at
+confidence cnf == LP_CONF_LEVEL, tested inside loop_pred
+(loop_pred_interfaces.md Semantics); lp_hit alone does not qualify.
+The LP supplies a direction only, and the target comes from the uBTB
+entry (ftq_bpu_interfaces.md 4, which owns this mux). The uBTB slot
+valid is pred_p1[s].valid. This keyed the mux on an "LP output
+valid" and said both predictors assert a valid. Session-072.
 
 The LP or uBTB predictions are not sources for redirects since they both are the 1st prediction in the pipeline. 
 
@@ -357,7 +363,7 @@ The FTB identifies the branch type of each slot at p2. That type
 selects the target source for the slot:
 
 ```
-  return        RAS spec_pop_addr
+  return        RAS ras_pop_addr_p2
   indirect      ITTAGE
   conditional   direction from TAGE, then SC (see below)
   direct unc.   FTB branch target
@@ -541,7 +547,8 @@ queue, and no arbiter.
   p0   top-of-stack read. ras.sv declares ras_tos_addr_p0 and
        ras_tos_valid_p0. The cluster registers the value and applies
        it at p1 as the predicted target for a return (section 2.2).
-       This is spec_pop_addr in the section 3.3 target table.
+       It is NOT the section 3.3 entry: that table selects at p2,
+       where the return target is ras_pop_addr_p2.
   p2   push or pop executes once the FTB branch type confirms a call
        or a return. Participates in the p2 redirect.
 ```
@@ -805,6 +812,15 @@ it does so deliberately:
            the p1 selection mux forms a RETURN slot (section 2.2).
            The RAS drives no FTQ port at p0 and forms no prediction
            of its own. Session-071.
+
+  2, 5.2   LP listed as RAM-based, with a prediction queue, update
+           queue and credit arbitration.
+           RESOLUTION: the LP has no SRAM; loop_pred.sv is a
+           registered counter array (sram_init.md) and declares no
+           PQ, UQ or arbiter. bp_arb_spec.md section 2 marks the
+           column NO* and 5.2 is retained only in case the LP is
+           given a RAM. Added session-072; bp_arb_spec.md 5.2 had
+           flagged the omission since session-070.
 
   2, 3.4   LP listed as a redirect source (lp_redir_val_p2).
            RESOLUTION: the LP is not a redirect source. It is selected
@@ -1112,8 +1128,13 @@ ubtb.sv.
          purpose TBD and FTQ_CONF_BITS a placeholder. Nothing in
          either path reads it; the cluster drives it to zero.
 
-  FE-U4  PHR contribution to index and tag hashing. bp_cluster.md
-         defers it to the TAGE and ITTAGE implementation sessions.
+  FE-U4  PHR contribution to index and tag hashing. OPEN, and not
+         deferred to anything: the TAGE and ITTAGE implementation
+         sessions it was deferred to are done, both units are
+         Complete, and every fold is still GHR-derived
+         (bp_cluster.md History Module, bp_history_decisions.md HI2). This
+         read that bp_cluster.md defers it to those sessions, a
+         deferral bp_cluster.md retired session-070. Session-072.
 
   FE-U5  Indirect chain update and correction semantics.
          bp_arb_spec.md defers RAS and ITTAGE to a later spec.
@@ -1462,4 +1483,14 @@ create one.
               the 4.4 producer entry now covers 6.2. The 2026-08-09
               history entry was labelled INFRA-012, a task that did
               not exist then; it was a PA-direct correction.
+
+  2026-09-20  session-072. 2.1: the p1 mux keys on lp_pred_is_loop,
+              not an LP valid, which does not exist; the LP supplies
+              direction only. 12: the LP no-SRAM departure from
+              bp_arb_spec.md 2 and 5.2 added. FE-U4 no longer
+              deferred to the completed TAGE/ITTAGE sessions.
+
+  2026-09-20  session-072, second pass. 3.3 and 9: spec_pop_addr swept to
+              ras_pop_addr_p2, and 9 no longer identifies the p0
+              TOS read with the 3.3 entry.
 ```

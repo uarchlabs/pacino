@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -105,7 +105,6 @@ unchanged. A single FTB lookup supplies both predictions.
   FTB_SETS    = 512     FTB_ENTRIES / FTB_WAYS.
 ```
 
-```
 4-way is the Xiangshan choice at the same 2048-entry capacity. 8-way
 was an unmeasured belief; FTB_WAYS is parameterized so 8-way is a
 synthesis experiment, not a redesign. Revisit with SPEC numbers if
@@ -411,7 +410,18 @@ Two different quantities must not be conflated here:
     excluded the position/pftAddr widths and wrongly swept in the
     target widths. Corrected here.
 
-All widths are now ruled. None remain derived-at-RTL.
+All widths of the fields the entry holds are ruled. None remain
+derived-at-RTL.
+
+TWO FIELDS ARE PROPOSED AND NOT RULED. TD#89 would add PC[15:6] of
+each conditional branch (20 bits) and TD#90 a backwards-branch bit
+per conditional (2 bits), both for sc_upd_inp (sc_decisions.md,
+BrIMLI Update). Neither is in the entry arithmetic (8.1). Both may
+be derivable rather than stored: the branch PC is block start plus
+pos (4.6 R-2), and a backwards branch is target < branch PC, both
+reconstructed at the read. Not the sign of the stored displacement
+alone while 4.2 measures it from the block start (TD#125 O-1). Recorded session-072; this read "All widths are now
+ruled" with both TDs open against the format.
 
 ### 4.5  Fallthrough reconstruction: bounds checked
 
@@ -974,6 +984,11 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-09-20  session-072. 4.4: TD#89 and TD#90 recorded as proposed
+              fields, not ruled and not in the entry arithmetic.
+              A stray code fence in 2.2 that turned sections 2.2
+              to 10 into one code block, and one that split this
+              history, removed.
   2026-09-19  session-071. 4.6 added: stored positions are
               region-relative at FTB_BR_RPOS_BITS = 5 with a read
               window mask, converted inside the FTB so every port
@@ -1012,7 +1027,6 @@ region end, plus a full block, plus a straddling halfword pair:
               at all, which is why 105 and 420 survived. Three
               different entry widths were in circulation until
               this pass.
-```
 
   2026-08-19  FTB_BR_POS_BITS 3 -> 4 and PFTADDR_BITS 4 -> 5:
               in-block positions are now 2-byte granular, sixteen
@@ -1136,5 +1150,4 @@ region end, plus a full block, plus a straddling halfword pair:
               bp_cluster, consistent with the TAGE/ITTAGE pattern; they
               do not block COMPLETE. Decisions are settled; remaining FTB
               work is downstream at cluster integration.
-
-
+```

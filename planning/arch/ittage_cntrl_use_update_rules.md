@@ -6,7 +6,7 @@
  FILE:    ittage_cntrl_use_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-03
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -85,10 +85,14 @@ On reset: lcl_aging_interval_0 and lcl_aging_interval_1 are
 loaded with the current value of ittage_aging_interval.
 
 lcl_aging_interval_0 decrements on each assertion of
-ittage_pred_rdy_0_p2.
+ittage_pred_rdy_p2[0].
 
 lcl_aging_interval_1 decrements on each assertion of
-ittage_pred_rdy_1_p2.
+ittage_pred_rdy_p2[1].
+
+ittage_pred_rdy_p2 is one port carrying the slot as a packed
+vector (ittage_interfaces.md Port List). This read
+ittage_pred_rdy_0_p2 and _1_p2, which do not exist. Session-072.
 
 When lcl_aging_interval_0 reaches zero:
   lcl_epoch_0 increments (2b wrapping).
@@ -124,10 +128,15 @@ and alternative components using the slot's lcl_epoch register.
 ```
 age = (IT_AGE_EPOCH - EPOCH) mod 4
 
-if (age == 0) u_eff = USEFUL
-if (age == 1) u_eff = USEFUL >> 1
-else          u_eff = 0
+     if (age == 0) u_eff = USEFUL;
+else if (age == 1) u_eff = USEFUL >> 1;
+else               u_eff = 0;
 ```
+
+This read as three bare statements, so the else bound to the
+age == 1 test alone and age == 0 fell through to u_eff = 0. The
+chain above is the rule, as tage_cntrl_use_update_rules.md gives
+it. Session-072.
 
 Where:
   IT_AGE_EPOCH = lcl_epoch_0 or lcl_epoch_1 for the slot

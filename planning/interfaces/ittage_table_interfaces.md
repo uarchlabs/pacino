@@ -6,7 +6,7 @@
  FILE:    ittage_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-05-16
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -276,7 +276,10 @@ AND provider CTR was null at predict time. The active strobe is
 selected by ittage_using_primary: prm_tgt_wr_u0 gated by
 THIS_TABLE vs prm_tbl_sel_u0, alt_tgt_wr_u0 gated by THIS_TABLE
 vs alt_tbl_sel_u0. See ittage_interfaces.md §Target Write Gating
-for full gating conditions and mutual exclusion with CTR writes.
+for full gating conditions and the relationship to CTR writes,
+which are NOT required to be mutually exclusive with a target
+write. This read "mutual exclusion with CTR writes", which that
+section withdrew session-071. Session-072.
 
 ### Misc Ports
 
@@ -401,6 +404,23 @@ use_wr_u0[s]           write enable for USE field. Gated by
 
 epc_wr_u0[s]           write enable for EPC field. Gated by
                        THIS_TABLE vs prm_tbl_sel_u0.
+
+                       THE ONE GATE AND TABLE 7's PRM/ALT SELECT
+                       ARE THE SAME WRITE.
+                       ittage_cntrl_use_update_rules.md Table 7
+                       sends the useful write to the ALT component
+                       when ittage_using_primary is 0; there is no
+                       second gate because ittage_cntrl drives
+                       prm_tbl_sel_u0 and upd_index_u0 with the
+                       component and index Table 7 selects.
+                       prm_ctr_wr_u0 is not asserted in that case
+                       -- the CTR write is alt_ctr_wr_u0 on
+                       alt_tbl_sel_u0 -- so the primary selector is
+                       free to carry the alternate for the USE and
+                       EPC write. Neither document supersedes the
+                       other. Session-072;
+                       tage_table_interfaces.md carries the same
+                       note.
 
 prm_tgt_wr_u0[s]       write enable for target field via the
                        primary provider. Asserted only on

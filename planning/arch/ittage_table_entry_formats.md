@@ -6,7 +6,7 @@
  FILE:    ittage_table_entry_formats.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-10
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -29,8 +29,8 @@ show
 
 ```
 MSB                      LSB
-<tag>  TGT EPC USE CTR VALID
-
+TAG  TGT EPC USE CTR VALID
+```
 
 Field widths for EPC, USE, CTR, TGT, and VALID 
 are defined by parameters found in `bp_defines_pkg.sv`
@@ -44,6 +44,7 @@ Only t=1-5 is actually used. The IT0 position is a placeholder
 for consistent parameter array semantics.
 
 The fields are listed from LSB to MSB
+
 ```
 VALID  : 1 bit
 CTR    : `IT_TBL_CTR[t]`
@@ -51,13 +52,21 @@ USE    : `IT_TBL_USE[t]`
 EPC    : `IT_TBL_EPC[t]`
 TGT    : `IT_TBL_TGT_WIDTH[t]`
 TAG    : `IT_TBL_TAG[t]`
+```
 
-### TAG field construction
+### TAG field
 
-### TAG field construction
-The TAG width is specified by `IT_TBL_TAG[t]`. This is extracted
-from the virtual address beginning with bit 1. Bit 0 is not used
-and not stored.
+The TAG width is specified by `IT_TBL_TAG[t]`. This document does
+not define the tag's VALUE: it is tag_hash_p0, computed inside
+ittage_table from the PC and two folded histories
+(ittage_table_hash_rules.md, Tag Hash Function), and ittage_cntrl
+captures it into ittage_alc_tag at predict time.
+
+This read that the tag "is extracted from the virtual address
+beginning with bit 1", a second and different derivation: the
+hash shifts the PC by THIS_INDEX_BITS and XORs fh1 and fh2 into
+it. The hash rules are the sole home for the derivation; the
+heading was also duplicated. Session-072.
 
 ### CTR field usage in ITTAGE
 

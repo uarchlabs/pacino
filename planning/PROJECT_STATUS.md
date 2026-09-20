@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -2624,7 +2624,9 @@ Key decisions for quick reference:
   for returns and separately pushes the return address on
   indirect/direct CALL.
 - Loop overrides uBTB at p1 when trusted, PER SLOT. There is
-  no slot-0 exception (BP-091).
+  no slot-0 exception (BP-091). Trusted means lp_pred_is_loop,
+  which loop_pred sets on a hit at cnf == LP_CONF_LEVEL; the LP
+  supplies the direction and the uBTB entry the target.
 - Update policy: post-execute, not retire
 - RAS: dual-stack, static partition, 16 speculative +
   32 commit entries. Pointer-only snapshot recovery. The top
@@ -2663,7 +2665,8 @@ Key decisions for quick reference:
   geometry canonical in bp_history_decisions.md s6. ITTAGE
   IT5 has real folded history but bp_history does not
   generate it -- TD#102 open.
-- TAGE entry: T0 2b CTR only, T1-T4 valid+tag+CTR+useful.
+- TAGE entry: T0 2b CTR only, T1-T4 valid+tag+EPC+useful+CTR
+  (tage_table_entry_formats.md; EPC was missing, session-072).
   T0 init value under review, TD#103 open.
 - Predictor metadata: every member of tage_pred_meta_t,
   branch_id included, describes the request that produced it

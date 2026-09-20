@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -65,15 +65,22 @@ unconditionally valid as the fallback direction.
 
 T0 uses a 2b saturating counter. Weak states are 01 and 10. T0 initializes to 00 (strongly not taken), per TAGE_SRAM_INIT_VALUE=0 in bp_defines_pkg.sv.
 
-T0 is never the alternate provider -- it is always the fallback.
-use_alt_on_na does not apply when T0 is the provider.
+T0 is the provider when no tagged table hits (ADR-001,
+tage_cntrl_ctr_update_rules.md), and use_alt_on_na does not apply
+then. T0 IS the alternate when the primary is T1, or when only one
+tagged table hits (Alternate provider, below; rows 14-17 of the CTR
+update table). This read "T0 is never the alternate provider",
+which the next paragraph, the Alternate provider section and the
+CTR table all contradict. Session-072.
 
 When use_alt_on_na fires and the alternate is T0, the direction
 comes from T0 CTR MSB (bit 1).
 
 
-T0 direction is always taken from the t_taken_p1[0][s] port
-output of the T0 tage_table instance, not from the padded
+T0 direction is always taken from the taken_p1[s] port output
+of the T0 tage_bim instance (tage_table_interfaces.md, T0 Port
+List), seen inside tage_cntrl as t_taken_p1[0][s], not from the
+padded
 CTR field in tage_pred_meta_t. t_taken_p1 is defined in
 tage_table_interfaces.md as the MSB of the T0 entry, which
 is CTR[1]. tage_prm_ctr stores the T0 2b CTR zero-padded
@@ -83,6 +90,11 @@ tage_prm_tkn captures the correct direction from
 t_taken_p1[0][s] at predict time and is the authoritative
 direction field for both prediction output and update-time
 interpretation.
+
+T0 is its own module, tage_bim.sv, not a tage_table instance
+(tage_table_interfaces.md Table description, sram_init.md,
+tage_interfaces.md). This read "the T0 tage_table instance".
+Session-072.
 
 ---
 
@@ -233,12 +245,13 @@ Summary:
   (T0 as primary is the unconditional fallback; row 18 in
   tage_cntrl_ctr_update_rules.md is an ASSERT/invalid case,
   not a live update path). T0 not updated.
+```
 
 ---
 
 ## Useful Counter and Aging Rules
 
-See tage_cntrl_useful_update_rules.md for full rules
+See tage_cntrl_use_update_rules.md for full rules
 including UAON, Table 7, aging interval and epoch operation,
 and u_eff computation.
 
@@ -271,7 +284,11 @@ aligned data. tage_table performs the merged write.
 
 ## Open Items Before BP-008 Prompt
 
-1. tage_interfaces.md port list uses old field names. Must be
-   updated to reflect tage_prm_* renames before or alongside
-   BP-008. Assumed manual update.
+1. CLOSED. tage_interfaces.md port list uses old field names,
+   to be updated for the tage_prm_* renames before or alongside
+   BP-008. BP-008 has run and tage_cntrl.sv is Complete;
+   tage_interfaces.md now restates no meta field names and points
+   at bp_structs_pkg.sv, and its TI7 records the migration closed
+   and verified. This stood open as a BP-008 prerequisite.
+   Session-072.
 

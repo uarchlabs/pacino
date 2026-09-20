@@ -6,7 +6,7 @@
  FILE:    tage_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-10
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
  
@@ -365,11 +365,14 @@ cntrl_bits_p1       this is a THIS_CTR_WIDTH (default 2b) wide bus that
 tage_pred_val_p0    is the trigger that enable SRAM read
                     produced by tage top top level for prediction slot 0/1
 
-index_hash_p0       is the PC-derived index which accesses the SRAM for
-                    prediction slot 0/1. This signal is taken from 
-                    tage_pred_inp_0/1_p0.pc[12:2].  This signal is not 
-                    hashed it is directly taken from the PC input.
-                    This is not routed through tage_hash
+The T0 index is tage_pred_inp_p0[s].pc[12:2], used inside tage_bim
+to address the RAM for slot s. It is not hashed and not routed
+through tage_hash, and T0 exposes no index port: the T0 port list
+above declares no index_hash or idx_hash output, unlike T1-TN.
+
+This paragraph named a T0 signal "index_hash_p0" and spelled the
+request port tage_pred_inp_0/1_p0; neither exists. The T1-TN
+sections use idx_hash_p0 and tage_pred_inp_p0[s]. Session-072.
 
 ### T1-TN Semantics:
 
@@ -404,16 +407,23 @@ cntrl_bits_p1[s]  is the control bit portion of the entry, used by
 idx_hash_p0[s]    combinational index hash computed from pc and
                   folded_hist at p0. One value per prediction slot.
                   Used by tage_cntrl to populate tage_prm_idx,
-                  tage_alt_idx, and tage_alc_idx in prediction meta.
+                  tage_alt_idx, and tage_alloc_idx in prediction
+                  meta.
                   The rules for idx_hash_p0 generation are found
                   in tage_table_hash_rules.md
 
 tag_hash_p0[s]    combinational tag hash computed from pc and
                   folded_hist at p0. One value per prediction slot.
-                  Used by tage_cntrl to populate tage_alc_tag in
+                  Used by tage_cntrl to populate tage_alloc_tag in
                   prediction meta.
-                  The rules for idx_hash_p0 generation are found
+                  The rules for tag_hash_p0 generation are found
                   in tage_table_hash_rules.md
+
+                  These read tage_alc_idx and tage_alc_tag, the
+                  ITTAGE spelling; the TAGE meta fields are
+                  tage_alloc_* (tage_cntrl_decisions.md,
+                  tage_cntrl_alloc_rules.md). The tag_hash_p0 entry
+                  cited the rules for idx_hash_p0. Session-072.
 ---
 
 ## Update Interface
@@ -474,6 +484,21 @@ use_wr_u0[s]       this is the write signal for the use field. This is
 epc_wr_u0[s]       this is the write signal for the epc field. This is
                 gated by THIS_TABLE compared to prm_tbl_sel_u0.
                 this is produced by tage_cntrl.
+
+THE ONE USEFUL GATE AND TABLE 7's PRM/ALT SELECT ARE THE SAME
+WRITE. tage_cntrl_use_update_rules.md Table 7 sends the useful
+write to the ALT component when tage_using_primary is 0, while
+use_wr_u0 and epc_wr_u0 carry a single table gate. There is no
+second gate because prm_tbl_sel_u0 and upd_index_u0 are driven by
+tage_cntrl, which presents the component and index Table 7
+selects: the primary when tage_using_primary is 1, the alternate
+when it is 0. prm_ctr_wr_u0 is not asserted in the second case --
+the CTR write is alt_ctr_wr_u0, gated on alt_tbl_sel_u0 -- so the
+primary selector is free to carry the alternate for the useful and
+epoch write. The CTR strobes need two selectors because TAGE may
+write both components' CTRs in one update; the useful write is
+always one component. Neither document supersedes the other.
+Session-072; ittage_table_interfaces.md carries the same note.
 
 alc_wr_u0[s]       this is the write signal for an entry allocation. This is
                 gated by THIS_TABLE compared to alc_tbl_sel_u0.

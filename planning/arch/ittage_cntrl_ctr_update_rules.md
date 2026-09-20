@@ -6,7 +6,7 @@
  FILE:    ittage_cntrl_ctr_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -33,7 +33,13 @@ CTR is a confidence counter in ITTAGE, not a direction counter.
 INC means increment toward max (higher confidence).
 DEC means decrement toward zero (lower confidence).
 CTR reaching null triggers target replacement on next
-misprediction. See ittage_cntrl_alloc_rules.md.
+misprediction. See ittage_interfaces.md Target Write Gating;
+allocation is a separate path, ittage_cntrl_alloc_rules.md.
+
+The legend read PT as ittage_pred_target, a signal ittage_cntrl
+does not produce, and pT / aT as ittage_prm_target /
+ittage_alt_target, where the meta fields are _tgt. This section
+pointed target replacement at the allocation rules. Session-072.
 
 ---
 
@@ -48,11 +54,17 @@ Legend:
 ```
 H     = ittage_hit
 UP    = ittage_using_primary
-PT    = ittage_pred_target
+PT    = VIRT_ittage_pred_tgt: ittage_prm_tgt when UP=1,
+        ittage_alt_tgt when UP=0. Not a physical signal
+        (ittage_interfaces.md Semantics); ittage_cntrl does
+        not select a target (ittage_cntrl_decisions.md Final
+        target).
 RT    = resolved_target
-pT    = ittage_prm_target
-aT    = ittage_alt_target
-MIS   = indir_mispredict (PT != RT)
+pT    = ittage_prm_tgt
+aT    = ittage_alt_tgt
+MIS   = indir_mispredict, supplied in ittage_upd_inp_t. It
+        equals (PT != RT); the table is not evaluated by
+        comparing targets.
 pCMP  = ittage_prm_comp
 aCMP  = ittage_alt_comp
 pACT  = action for primary CTR

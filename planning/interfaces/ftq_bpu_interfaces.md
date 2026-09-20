@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -787,8 +787,15 @@ Queue status ports, driven out of the cluster:
 ```
 
 tage and ittage declare `pq_not_full` and `upd_rdy` with no
-predictor prefix (TD#49). The cluster boundary adds the prefix so
-the two groups are distinguishable.
+predictor prefix. The cluster boundary adds the prefix so the two
+groups are distinguishable, which is why the rows above read
+tage_upd_rdy and ittage_upd_rdy while the SC row reads
+sc_uq_not_full: sc.sv declares the prefixed names already.
+
+THESE ARE THE CURRENT NAMES, NOT THE TD#49 TARGETS. TD#49 renames
+pq_not_full to <pred>_pq_not_full and upd_rdy to
+<pred>_uq_not_full, so these two rows become tage_uq_not_full and
+ittage_uq_not_full when it is applied. Session-072.
 
 RAS restore, driven on redirect from the snapshot in the entry being
 corrected:

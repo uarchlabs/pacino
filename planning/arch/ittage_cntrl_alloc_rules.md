@@ -6,7 +6,7 @@
  FILE:    ittage_cntrl_alloc_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-10
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -57,8 +57,11 @@ prevention.
 Useful bit decrement on failed allocation is not implemented.
 ---
 ## No-hit Allocation
-When ittage_pred_rdy was 0 at predict time (no table hit),
-allocation scans from IT1. The no-consecutive-table constraint
+When ittage_hit was 0 at predict time (no table hit),
+allocation scans from IT1. ittage_pred_rdy_p2 asserts whether or
+not a table hit (ittage_interfaces.md Semantics); ittage_hit is the
+no-hit signal. This keyed the scan on ittage_pred_rdy being 0,
+which never marks a no-hit. Session-072. The no-consecutive-table constraint
 still applies.
 ---
 ## Initialization of Allocated Entry
@@ -89,7 +92,6 @@ THIS_TABLE to ittage_alc_comp (via alc_tbl_sel_u0). Only
 the selected candidate table performs the write.
 ---
 ## EPC Field
-```
 The current lcl_epoch value for the slot is written to the
 EPC field of the allocated entry at update time.
 See ittage_cntrl_use_update_rules.md for aging rules.

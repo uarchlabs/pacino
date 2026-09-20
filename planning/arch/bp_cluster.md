@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 ---
@@ -33,8 +33,9 @@ Override order (conditional branch direction and target):
   ELSE it is stage order, not a ranking: a later stage supersedes an
   earlier one (FE-3, fe_decisions.md 12, narrowed session-070), and
   targets are selected by branch type.
-  Loop predictor overrides uBTB at p1 when trusted (override control
-  decision). Loop predictor does not participate after p1.
+  Loop predictor overrides uBTB at p1 when trusted, that is when
+  lp_pred_is_loop is set (Loop Predictor above). Loop predictor does
+  not participate after p1.
   ITTAGE and RAS are outside this ordering (type-gated, see below).
 
 ---
@@ -95,8 +96,12 @@ session-071 RTL read.
            LP_IDX_BITS = $clog2(64) = 6b
 - Stage:   p1 output (same timing as uBTB)
 - Role:    Detects loop branches and predicts exit. Overrides uBTB at
-           p1 when loop predictor is trusted (high confidence).
-           Trust decision made by override control, not internally.
+           p1 when loop predictor is trusted. THE TRUST TEST IS
+           INSIDE loop_pred: lp_pred_is_loop is set only on a hit
+           with cnf == LP_CONF_LEVEL (loop_pred_interfaces.md
+           Semantics). The cluster's p1 mux then selects on
+           lp_pred_is_loop alone. This read "Trust decision made by
+           override control, not internally". Session-072.
 - Parameters (all overridable at elaboration):
     LP_TBL_ENTRIES = 256
     LP_TBL_WAYS    = 4
@@ -106,9 +111,11 @@ session-071 RTL read.
     LP_AGE_BITS    = 8    -- age/replacement counter width
     LP_N_SETS      = LP_TBL_ENTRIES / LP_TBL_WAYS
     LP_IDX_BITS    = $clog2(LP_N_SETS), min 1
-- Override: sits alongside uBTB in p1. Override control selects loop
-           predictor output over uBTB when pred_is_loop and conf is
-           sufficient. Does not participate in p2/p3 override chain.
+- Override: sits alongside uBTB in p1. The p1 mux selects the loop
+           predictor's DIRECTION over the uBTB's when
+           lp_pred_is_loop is set; the target comes from the uBTB
+           entry (ftq_bpu_interfaces.md 4). Does not participate in
+           the p2/p3 override chain.
 
 ### FTB (Fetch Target Buffer, aka BTB)
 - Size:    2048 entries, 4-way associative, 512 sets
@@ -153,11 +160,11 @@ session-071 RTL read.
     T2: 2 banks x 2048, FH=11b, FH1=8b,  FH2=7b,  hist=13b
     T3: 2 banks x 2048, FH=11b, FH1=8b,  FH2=7b,  hist=32b
     T4: 2 banks x 2048, FH=11b, FH1=8b,  FH2=7b,  hist=119b
-    T1-T4 tagged entry layout:
-        valid  : 1b
-        tag    : 8b
-        ctr    : 3b
-        useful : 2b
+    T1-T4 tagged entry: TAG EPC USE CTR VALID, MSB to LSB. The
+        field order and widths are owned by
+        tage_table_entry_formats.md; by default tag 8b, epc 2b,
+        useful 2b, ctr 3b, valid 1b. This listed valid, tag, ctr
+        and useful with no EPC. Session-072.
 
 ### SC (Statistical Corrector)
 - Stage:   p3 output. The SC path STARTS AT p2, not p0: the TAGE p2
@@ -247,9 +254,9 @@ moved there. Session-071.
 
   Cycle N+1 (p1): uBTB output valid -> first prediction available.
                   Loop predictor output valid -> overrides uBTB if
-                  trusted (override control gates selection).
+                  lp_pred_is_loop is set.
                   Fetch begins speculatively on p1 result.
-                  On uBTB miss and loop predictor not trusted: fetch
+                  On uBTB miss and lp_pred_is_loop clear: fetch
                   proceeds PC + FTB_BLOCK_BYTES.
                   TAGE: SRAM read completes, tag match, slot reorder.
                   FTB: result registered (arrives too late for p1).
@@ -257,7 +264,7 @@ moved there. Session-071.
 
   Cycle N+2 (p2): FTB output valid (registered from p1).
                   TAGE final result valid.
-                  RAS: push/pop executes, spec_pop_addr valid.
+                  RAS: push/pop executes, ras_pop_addr_p2 valid.
                   ITTAGE: final target valid.
                   SC STARTS HERE: the TAGE p2 result and the staged
                       p0 inputs are presented, index hashes are
@@ -293,7 +300,7 @@ Two redirect points downstream of p1:
                never predictor against predictor (FE-4). Corrected
                session-070.
                Target selection at p2 by branch type:
-                 return     -> RAS spec_pop_addr
+                 return     -> RAS ras_pop_addr_p2
                  indirect   -> ITTAGE (final; FTB target on miss)
                  conditional -> TAGE direction + FTB target
                  direct     -> FTB target
@@ -711,3 +718,12 @@ Raw observations to be captured in docs/observations/ during BP work.
               pointer; ras_decisions.md is its only home, and the
               JALR hint table moved there.
 
+  2026-09-20  session-072. TAGE T1-T4 entry listed without EPC; now
+              cites tage_table_entry_formats.md. Loop Predictor: the
+              trust test is inside loop_pred (lp_pred_is_loop), not
+              in override control; the LP supplies direction only.
+
+  2026-09-20  session-072, second pass. the two remaining "override control"
+              statements on loop-predictor trust swept to
+              lp_pred_is_loop; spec_pop_addr swept to
+              ras_pop_addr_p2.

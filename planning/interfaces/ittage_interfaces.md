@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -433,29 +433,37 @@ ittage_cntrl_ctr_update_rules.md.
 The definitive operation of update time allocations is found in
 ittage_cntrl_alloc_rules.md.
 
-### Target Write Gating (tgt_wr_u0)
+### Target Write Gating (prm_tgt_wr_u0 / alt_tgt_wr_u0)
 
-The target field is written only when all three conditions hold:
+THERE ARE TWO TARGET STROBES, one per provider, declared in
+ittage_table_interfaces.md. This section read "tgt_wr_u0", a
+single strobe that no port list declares. Session-072.
+
+A target write is issued only when all three conditions hold:
 
 ```
   indir_mispredict == 1
   AND provider CTR from meta == 3'b000 (null confidence)
-  AND THIS_TABLE matches the provider table selector
+  AND THIS_TABLE matches that provider's table selector
 ```
 
-The provider table selector depends on which provider was used:
+ittage_using_primary selects which strobe carries the write, and
+with it which selector gates the table:
 
 ```
-  ittage_using_primary == 1: match prm_tbl_sel_u0
-  ittage_using_primary == 0: match alt_tbl_sel_u0
+  ittage_using_primary == 1: prm_tgt_wr_u0, gated on prm_tbl_sel_u0
+  ittage_using_primary == 0: alt_tgt_wr_u0, gated on alt_tbl_sel_u0
 ```
+
+The two are mutually exclusive for a slot, as prm_ctr_wr_u0 and
+alt_ctr_wr_u0 are. Both carry tgt_wd_u0 as their write data.
 
 From Seznec: if CTR is non-null on misprediction, decrement
 CTR -- no target write. If CTR is null on misprediction,
 replace target -- CTR stays at null, no CTR write. Under this
-rule the two strobes do not coincide, but tgt_wr_u0 and the
-active CTR write port (prm_ctr_wr_u0 or alt_ctr_wr_u0) are NOT
-REQUIRED to be mutually exclusive: a same-entry CTR and TGT
+rule the two do not coincide, but the active target strobe and
+the active CTR write port (prm_ctr_wr_u0 or alt_ctr_wr_u0) are
+NOT REQUIRED to be mutually exclusive: a same-entry CTR and TGT
 write is one merged RAM write, as for CTR and USE
 (ittage_cntrl_decisions.md, Concurrent CTR and TGT Writes).
 This read that the two "are mutually exclusive" and "are never
@@ -503,7 +511,7 @@ p3: SC
 Target selection at p2, by branch class then by hit:
 
 ```
-  RETURN     RAS spec_pop_addr
+  RETURN     RAS ras_pop_addr_p2
   indirect   ITTAGE on hit; the FTB target on an ITTAGE miss
   otherwise  FTB target
 ```
@@ -545,7 +553,7 @@ SC does not interact with ITTAGE target prediction.
 |     | update.                                |                    |
 | II5 | No-hit allocation scan direction.      | Complete           |
 |     | Confirm scan from IT1 at impl.         |                    |
-| II6 | tgt_wr_u0 gating definition.           | Complete           |
+| II6 | Target write gating definition.        | Complete           |
 |     | Gating conditions, and the CTR write   |                    |
 |     | relationship (not required exclusive), |                    |
 |     | Target Write Gating section above      |                    |

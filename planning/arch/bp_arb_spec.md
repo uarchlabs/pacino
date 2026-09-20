@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -57,7 +57,7 @@ This spec defines:
 | uFTB    |No       |p0        |p0            |Immediate              |
 | RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read, an input to the p1 prediction (fe_decisions.md 12, session-071). p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md p1.   |
 | FTB     |Yes      |p1/p2     |p1/p2         |u0/u1                  |
-| LP      |NO*      |p1/p2     |p1/p2         |u0/u1                  |
+| LP      |NO*      |p1        |NONE**        |u0/u1                  |
 | TAGE    |Yes      |p2        |p2            |u0/u1                  |
 | SC      |Yes      |p3        |p3            |u0/u1 (separate UQ)    |
 | ITTAGE  |Yes      |p2        |p2            |u0/u1                  |
@@ -65,6 +65,10 @@ This spec defines:
 * LP: NO SRAM. loop_pred.sv is a pure registered counter array
   (sram_init.md, fe_decisions.md 2.1). This column read Yes.
   Session-070; see 5.2.
+** LP: completes at p1 and is selected against the uFTB by the p1
+  mux; it is not a redirect source (5.2, open item F,
+  fe_decisions.md 3.2 and 12). These columns read p1/p2 and p1/p2.
+  Session-072.
 
 The indirect predictor chain (RAS + ITTAGE) shares the stage timing
 of its direct counterparts but has different update and correction
@@ -92,7 +96,8 @@ not a redirect source; the initial prediction is formed at p1.
 ### 3.2  Predictor stage assignments
 
   p0:     uFTB, RAS (TOS read only)
-  p1/p2:  FTB, LP
+  p1:     LP, selected against the uFTB by mux (not an override)
+  p1/p2:  FTB
   p2:     TAGE, ITTAGE, RAS (push/pop, redirect participation)
   p3:     SC (chained from TAGE p2 output)
 
@@ -407,8 +412,8 @@ state.  The update is granted in a subsequent cycle.
   to compete for. The section 2 table read "RAM-based: Yes" and is
   now NO*. Retained rather than deleted because the LP may yet be
   given a RAM; if it is not, 5.2 should be withdrawn.
-  fe_decisions.md 12 does not list this among its departures and
-  should. Flagged session-070.
+  fe_decisions.md 12 lists this departure as of session-072;
+  flagged session-070.
 
   Parameters:  LP_PQ_DEPTH, LP_UQ_DEPTH, LP_UQ_WR_PORTS,
                LP_RESP_BUF_DEPTH, LP_PRED_CREDITS,
@@ -895,3 +900,8 @@ task file, not here.
               every valid block. 5.1: prediction block, not fetch
               block. The 2026-08-09 entry was labelled INFRA-012,
               which did not exist then.
+
+  2026-09-20  session-072. 2 and 3.2: the LP row's stage columns read p1/p2 and
+              p1/p2; now p1 and NONE, matching 5.2, open item F and
+              fe_decisions.md 3.2. 5.2 notes that fe_decisions.md 12
+              now lists the no-SRAM departure.

@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -477,10 +477,15 @@ This section defines the mapping, not the values.
 
   Equivalently:
     - The newest bit (age 0) lands at the high end, position W-1.
-    - Each older bit sits one position lower, modulo W (a left
-      rotate per age step).
-    - Ages that reach or exceed W wrap and XOR-overlap onto lower
-      positions; this overlap is the compression.
+    - Each older bit sits one position HIGHER, modulo W: age 1 wraps
+      to position 0, age 2 to 1, and so on (a left rotate per age
+      step, as 6.3 applies it).
+    - Age i and age i + W land on the same position and XOR-overlap;
+      this overlap is the compression.
+
+  This read "one position lower", against the formula, the
+  parenthetical, 6.3 and the 6.5 example, and said wrapped ages
+  overlap "onto lower positions". Session-072.
 
   The folded value is
 
@@ -655,9 +660,12 @@ not a hashed fold) have no folds.
   HI4: RESOLVED (section 5). Stale-fold predictions allowed;
        "must not fire" obligation withdrawn; decoupled from G15.
 
-  HI2: DEFERRED (not in this scope). PHR contribution to fold
-       index/tag hashing. All folds are GHR-derived today. Resolve
-       at TAGE/ITTAGE hashing work.
+  HI2: OPEN. PHR contribution to fold index/tag hashing. All folds
+       are GHR-derived today. It was deferred to the TAGE/ITTAGE
+       hashing work; that work is done, both units are Complete, and
+       the question was not answered there. It has no scheduled
+       home (bp_cluster.md History Module, fe_decisions.md FE-U4).
+       Session-072.
 
   HI5: CLOSED session-070 by G23. Checkpoint slot reclaim -- when
        a slot is safe to reuse. It was deferred here "at FTQ
@@ -889,4 +897,6 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               pos << POS_OFFSET_BITS; "block base" had been read as
               the aligned base (TD#125).
 
-
+  2026-09-20  session-072. 6.2: "each older bit sits one position
+              lower" contradicted the formula; older is higher. HI2
+              no longer deferred to the completed TAGE/ITTAGE work.

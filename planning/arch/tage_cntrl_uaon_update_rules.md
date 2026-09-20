@@ -3,14 +3,19 @@
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 # tage_cntrl UAON Update Rules
 ```
- FILE:    tage_tmp_uaon_update_rules.md
+ FILE:    tage_cntrl_uaon_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-07-02
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
 Changelog:
+- 2026-09-20 (session-072): the alternative component definition
+  admitted only tagged tables, so it excluded T0, which
+  tage_cntrl_decisions.md and tage_cntrl_ctr_update_rules.md rows
+  14-17 make a legal alternate. The FILE field read
+  tage_tmp_uaon_update_rules.md.
 - 2026-07-02 (TD#87): the UAON update gate now keys on tage_pred_weak,
   not tage_pred_strong. TD#87 redefined tage_pred_strong to mean
   STRICTLY strong (3'b000/3'b111), which is narrower than the prior
@@ -50,8 +55,16 @@ Parameter: TAGE_UAON_THRES = 8, defined in bp_defines_pkg.sv.
 Primary component: the table with a tag hit and the longest
 history length. tage_prm_comp holds its table index.
 
-Alternative component: the table with the next lower history
-length and a tag hit. tage_alt_comp holds its table index.
+Alternative component: the provider below the primary -- the
+tagged table with the next lower history length and a tag hit,
+or T0 when the primary is T1 or no lower tagged table hits. T0
+has no tag and is always available, so a tag hit is not what
+qualifies it (tage_cntrl_decisions.md Alternate provider;
+tage_cntrl_ctr_update_rules.md rows 14-17, alt = BIM).
+tage_alt_comp holds the table index, 0 for T0.
+
+When NO tagged table hits, T0 is the PRIMARY (ADR-001), both
+comps are 0, and this section does not apply -- see TTM above.
 
 NOT WEAK: with a 3b CTR, weak states are 3'b011 and 3'b100
 only. All other CTR values are NOT WEAK.

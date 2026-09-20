@@ -32,18 +32,38 @@ Legend:
 UP    = `tage_using_primary`
 PT    = `tage_pred_tkn`
 RT    = `resolved_taken`
-pT    = `tage_prm_taken`
-aT    = `tage_alt_taken`
+pT    = `tage_prm_tkn`
+aT    = `tage_alt_tkn`
 pCMP  = `tage_prm_comp`
 aCMP  = `tage_alt_comp`
 pACT  =  action for primary CTR
 aACT  =  action for alternative CTR
 t0ACT =  action for T0 (bim) CTR
 
+INC AND DEC MEAN DIFFERENT THINGS IN THE TWO GROUPS OF COLUMNS.
+  pACT, aACT : INC = strengthen, a step AWAY from the direction
+               boundary in the entry's current direction; DEC =
+               weaken, a step TOWARD it. INC on a not-taken entry
+               lowers its value (row 2.1).
+  t0ACT      : INC = numeric increment, a step toward taken; DEC =
+               numeric decrement, a step toward not-taken. DEC on a
+               correct not-taken prediction is a strengthen (row 13a).
+Both groups move the counter toward the resolved direction; only the
+label differs. So 13a and 17.1, and 13b and 15.1, describe the same
+movement under different labels. The values are unchanged; this
+note was added session-072 because the legend defined both groups
+only as "action for" a counter.
+
 ```
-diff  = `tage_prm_taken` != `tage_alt_taken`
+diff  = `tage_prm_tkn` != `tage_alt_tkn`
          diff is for reference, diff is not a signal 
          in the prediction meta data
+
+         The meta fields are tage_prm_tkn and tage_alt_tkn
+         (tage_cntrl_decisions.md, Manual Changes Already
+         Applied). This document read tage_prm_taken and
+         tage_alt_taken in the legend and here; no such fields
+         exist. Session-072.
 ```
 
 | #     | UP | PT | RT | diff | pT | aT | pCMP | aCMP | pACT | aACT | t0ACT | Explanation                                       |

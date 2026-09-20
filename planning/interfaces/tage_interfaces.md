@@ -6,7 +6,7 @@
  FILE:    tage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -32,9 +32,11 @@ denied the direction override itself. Both corrected
 session-070.
 
 Five tables: T0 is the base table (no tag, no useful bit,
-2b CTR). T1-T4 are tagged tables (valid=1b, tag=8b, ctr=3b,
-useful=2b), each with 2 banks x 2048 entries and increasing
-history lengths (8b, 13b, 32b, 119b).
+2b CTR). T1-T4 are tagged tables, each with 2 banks x 2048
+entries and increasing history lengths (8b, 13b, 32b, 119b).
+The entry is TAG EPC USE CTR VALID; tage_table_entry_formats.md
+owns the layout and widths. This listed valid, tag, ctr and
+useful with no EPC. Session-072.
 
 Pipeline: p0 index calculation, p1 SRAM read and tag match,
 p2 final prediction output.

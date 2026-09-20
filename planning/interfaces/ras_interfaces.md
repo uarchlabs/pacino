@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -388,9 +388,7 @@ not cleared. See ras_decisions.md section 4.3.
 
 ### IC-RAS-10: Commit stack update
 
-On ras_commit_val with DIRECT_CALL, INDIRECT_CALL or RETURN_CALL
-(RETURN_CALL commits as the net effect of its pop and push; see
-ras_decisions.md RAS-DS1. Session-070):
+On ras_commit_val with DIRECT_CALL or INDIRECT_CALL:
   - Push ras_commit_ret_addr onto commit stack.
   - CSP advances.
   - BOS in speculative stack updated from ras_commit_snapshot.
@@ -398,6 +396,15 @@ ras_decisions.md RAS-DS1. Session-070):
 On ras_commit_val with RETURN:
   - CSP decrements.
   - BOS updated accordingly.
+
+On ras_commit_val with RETURN_CALL:
+  - The RETURN arm, then the call arm, the second applied to the
+    state the first leaves (ras_decisions.md 3.3, RAS-DS1).
+  - BOS updated once, from ras_commit_snapshot.
+
+RETURN_CALL was listed in the call arm, so CSP advanced, while this
+section said it commits as the net effect of its pop and push.
+ras_decisions.md 3.3 owns the rule. Session-072.
 
 Commit is registered (takes effect the cycle after
 ras_commit_val is asserted). Commit does not interact with
@@ -599,3 +606,5 @@ On rstn deassert (active low, synchronous):
               4c; the restore presents the snapshot of the entry
               the redirect names.
 
+  2026-09-20  session-072. IC-RAS-10: RETURN_CALL moved out of the
+              call arm into its own arm, citing ras_decisions.md 3.3.

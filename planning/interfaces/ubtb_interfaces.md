@@ -6,7 +6,7 @@
  FILE:    ubtb_interfaces.md
  SOURCE:  various; session-063 rewrite
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -258,7 +258,10 @@ same entry; they write different fields of it.
   is_ret     : jump type.
   is_jalr    : jump type.
   pft_addr   : resolved block end, full width. ubtb.sv reduces it to
-               the stored partial pftAddr plus carry.
+               the stored partial pftAddr plus carry. THAT IS THE
+               BUILT FORM. Ruled session-070, not built (TD#124):
+               six bits from the aligned region base, no carry
+               (blk_p1 field semantics above, ftb_decisions.md 5.5).
 
 ### Allocation and field writes
 
@@ -276,7 +279,9 @@ The jump target is rewritten on every resolve of that jump, whether
 or not ITTAGE or RAS supplies the runtime target.
 
 pftAddr and carry are recomputed on any update that moves the block
-boundary.
+boundary. Built form; after TD#124 there is no carry and only
+pftAddr is recomputed. This paragraph and the pft_addr field above
+carried the built form unannotated. Session-072.
 
 A block containing a third conditional branch ends at the second
 conditional. The third branch becomes the first branch of the next
@@ -294,8 +299,8 @@ readback.
 ### Producer obligations
 
   - Must provide resolved values, not speculative ones.
-  - Must compute carry and pft_addr correctly before asserting
-    valid.
+  - Must compute pft_addr correctly before asserting valid (and,
+    in the built form, carry; TD#124 deletes it).
   - Both channels may target one entry in the same cycle. They must
     not target the same FIELD of that entry.
 
@@ -331,6 +336,10 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-09-20  session-072. The Update Interface pft_addr field, the
+              pftAddr/carry recompute and the producer obligation
+              annotated as the built form against the TD#124
+              ruling.
   2026-09-19  session-071. pos is start-relative at both ports and
               stored region-relative, one bit wider, with a read
               window, as the FTB (ftb_decisions.md 4.6, TD#125). The

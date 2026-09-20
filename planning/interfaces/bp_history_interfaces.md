@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -363,7 +363,7 @@ only advance, rollback by index, FTQ visibility vs ownership).
     prediction-accuracy loss, not a correctness break.
 
   SC folds (one index fold per table with history, ST1-ST3):
-    sc_t1_idx_fh  -- width = SC_T1_HIST = 4b
+    sc_t1_idx_fh  -- width = SC_TBL_FH[1] = 4b
     sc_t2_idx_fh  -- width = SC_TBL_FH[2] = 16b
     sc_t3_idx_fh  -- width = SC_TBL_FH[3] = 64b
 
@@ -371,7 +371,8 @@ only advance, rollback by index, FTQ visibility vs ownership).
     parameter exists; bp_defines_pkg.sv has
     SC_TBL_FH[0:4] = '{0, 4, 16, 64, 0}, which bp_cluster.md
     Folded Histories and bp_history_decisions.md 6.4/6.5 both
-    match. Corrected session-070.
+    match. Corrected session-070. ST1 read SC_T1_HIST, which does
+    not exist either; session-072.
     ST0 (hist=0) and ST4 (BrIMLI) have no folds.
 
     bp_cluster stages the three SC index folds from p0 to p2
@@ -436,9 +437,11 @@ only advance, rollback by index, FTQ visibility vs ownership).
 |     | (NUM_PRED_SLOTS=2). Combined branch-0-    | session-054.     |
 |     | then-branch-1, bundle-granularity         | bp_history_      |
 |     | checkpoint. = G20.                        | decisions.md s3. |
-| HI2 | PHR contribution to fold index and tag    | Deferred to TAGE |
-|     | hashing. Currently all folds are GHR-     | and ITTAGE impl  |
-|     | derived only. PHR mixing TBD.             | sessions.        |
+| HI2 | PHR contribution to fold index and tag    | OPEN. The TAGE / |
+|     | hashing. Currently all folds are GHR-     | ITTAGE sessions  |
+|     | derived only. PHR mixing TBD.             | it was deferred  |
+|     |                                           | to are done;     |
+|     |                                           | no home. S-072.  |
 | HI3 | rollback_valid + prediction same-cycle    | RESOLVED         |
 |     | priority. Rollback wins; mutually         | session-054.     |
 |     | exclusive with update. = G21.             | decisions.md s4. |
