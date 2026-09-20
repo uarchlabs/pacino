@@ -42,7 +42,10 @@ Also corrected: A1 (the RAS p0 read is an input to the p1
 prediction), A4 (xlate_ptr and fetch_ptr take the minimum of their
 value and the flush index; F stated per cause), A5 (4.6 needs no
 generation bit), A7 (update producer at 6.2), A8 (three INFRA-012
-labels), A9, A10. The A2 terminology sweep covered the files the PA
+labels), A9, A10. Audit batch C, C1 to C17, corrected in the ITTAGE,
+TAGE, SC, sram_init, ubtb, ras and ftb documents; C17 was the PA's
+own omission from the N1 width change.
+The A2 terminology sweep covered the files the PA
 had: bp_arb_spec, bp_cluster, bp_history_*, fe_decisions, ftb_*,
 ftq_*, ras_*, ubtb_interfaces, loop_pred_interfaces, sc_interfaces,
 ifu_decisions, ifu_ibuf_interfaces, ibuf_decisions, dcd_decisions,
@@ -2153,6 +2156,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | THE uBTB CARRIES THE IDENTICAL SCHEME and the same       |
 |     |          | defect: UBTB_PFTADDR_BITS + 1, recon_pft(base, pft,      |
 |     |          | carry) in ubtb.sv. Same fix.                             |
+|     |          | ALSO IN SCOPE, session-071: ubtb_pred_t.carry is the     |
+|     |          | entry fall-through carry (G18, ubtb_interfaces.md UI2),  |
+|     |          | so deleting the entry carry leaves it with no source.    |
+|     |          | Remove it, or state what drives it, in the same change.  |
 |     |          |                                                          |
 |     |          | RTL: bp_defines_pkg.sv (PFTADDR_BITS,                    |
 |     |          | UBTB_PFTADDR_BITS, both entry widths), bp_structs_pkg.sv |

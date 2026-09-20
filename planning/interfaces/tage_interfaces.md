@@ -6,7 +6,7 @@
  FILE:    tage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-04-27
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -410,10 +410,14 @@ required or permitted.
 
 The SC = Statistical Corrector.
 
-SC reads tage_prm_ctr from tage_pred_meta captured in
-the FTQ meta path at p2. TAGE must be valid before SC
-can finalize. SC does not read TAGE ports directly at
-runtime.
+SC takes tage_pred_rdy_p2 and tage_pred_meta_p2 directly
+from tage at p2 and consumes tage_pred_strong,
+tage_pred_medium, tage_pred_tkn and tage_extd_ctr from the
+meta (sc_interfaces.md, bp_arb_spec.md 6.1,
+ftq_bpu_interfaces.md 5). TAGE must be valid before SC can
+finalize. This read that SC reads tage_prm_ctr from the FTQ
+meta path and "does not read TAGE ports directly at
+runtime". Session-071.
 
 The SC is only mentioned here for reference in the 
 override chain position. 

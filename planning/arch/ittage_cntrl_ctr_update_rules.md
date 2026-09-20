@@ -6,7 +6,7 @@
  FILE:    ittage_cntrl_ctr_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-03
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -74,6 +74,13 @@ When UP=0: alt is provider. pT and pCMP are don't care
 When UP=1: primary is provider. aT and aCMP are don't care
            for CTR update purposes. Same test coverage
            rationale applies.
+
+UP=0 with pCMP=0 (rows 2, 4, 6, 8, 10, 12, 14, 16) cannot
+arise from a prediction: the alternate is found only below a
+primary, and UP=0 requires a null primary
+(ittage_cntrl_decisions.md). Those rows are update inputs a
+test can present, with pCMP don't-care; they are not reachable
+states. Session-071.
 ```
 
 | #  | H | UP | PT | RT | MIS | pT | aT | pCMP | aCMP | pACT  | aACT  | Explanation                              |

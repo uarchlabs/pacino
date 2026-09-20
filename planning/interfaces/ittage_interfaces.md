@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-05-16
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -450,12 +450,17 @@ The provider table selector depends on which provider was used:
   ittage_using_primary == 0: match alt_tbl_sel_u0
 ```
 
-tgt_wr_u0 and the active CTR write port (prm_ctr_wr_u0 or
-alt_ctr_wr_u0) are mutually exclusive. From Seznec: if CTR is
-non-null on misprediction, decrement CTR -- no target write.
-If CTR is null on misprediction, replace target -- CTR stays
-at null, no CTR write. Both strobes are never asserted in the
-same cycle for the same entry.
+From Seznec: if CTR is non-null on misprediction, decrement
+CTR -- no target write. If CTR is null on misprediction,
+replace target -- CTR stays at null, no CTR write. Under this
+rule the two strobes do not coincide, but tgt_wr_u0 and the
+active CTR write port (prm_ctr_wr_u0 or alt_ctr_wr_u0) are NOT
+REQUIRED to be mutually exclusive: a same-entry CTR and TGT
+write is one merged RAM write, as for CTR and USE
+(ittage_cntrl_decisions.md, Concurrent CTR and TGT Writes).
+This read that the two "are mutually exclusive" and "are never
+asserted in the same cycle for the same entry", the requirement
+that document dropped. Session-071.
 
 Explicitly: Even when the gating conditions are satisfied for 
 both the primary and the alternate hitting tables, only the 
@@ -541,8 +546,8 @@ SC does not interact with ITTAGE target prediction.
 | II5 | No-hit allocation scan direction.      | Complete           |
 |     | Confirm scan from IT1 at impl.         |                    |
 | II6 | tgt_wr_u0 gating definition.           | Complete           |
-|     | Gating conditions and mutual           |                    |
-|     | exclusion with CTR write defined in    |                    |
+|     | Gating conditions, and the CTR write   |                    |
+|     | relationship (not required exclusive), |                    |
 |     | Target Write Gating section above      |                    |
 |     | and in ittage_cntrl_decisions.md.      |                    |
 

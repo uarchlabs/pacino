@@ -182,13 +182,13 @@ fields of the one indexed entry, not two slots.
                            aligned region base, NO CARRY BIT
                            (ftb_decisions.md 5.5, ruled session-070;
                            TD#124 tracks the RTL, still 5 + carry).
-                           Reconstructed UNCONDITIONALLY as built:
-                           ftb_cntrl.sv line 500 applies no
-                           fallthrough check. THAT DIVERGES FROM
-                           ftb_decisions.md 4.5, which requires a
-                           bounds check (FTB-G1, FTB-G2, restored
-                           session-069) and which ubtb_interfaces.md
-                           applies to blk_p1. TD#124. This entry
+                           SPECIFIED: bounds checked per
+                           ftb_decisions.md 4.5 (FTB-G1, FTB-G2),
+                           as ubtb_interfaces.md applies to blk_p1:
+                           an end not above the start is replaced
+                           by start + FTB_BLOCK_BYTES. AS BUILT:
+                           ftb_cntrl.sv line 500 reconstructs
+                           unconditionally. TD#124. This entry
                            cited 4.5 as the authority for there
                            being no check; 4.5 says the opposite.
                            Session-070.
@@ -430,12 +430,13 @@ IC-FTB-02:
 IC-FTB-03:
   ftb_pft_addr_p2 is the authoritative fallthrough for the cluster.
   RAS uses this value as the pushed return address (ras_fall_through).
-  No straddle correction is applied. THE FALLTHROUGH BOUNDS CHECK IS
-  A CONFLICT, NOT A SETTLED ABSENCE: ftb_decisions.md 4.5 requires
-  one (FTB-G1, FTB-G2, restored session-069) and ubtb_interfaces.md
-  applies the same check to blk_p1, while IC-FTB-11 below and
-  ftb_cntrl.sv line 500 both say the reconstruct is unconditional.
-  The RTL matches this document, not 4.5. TD#124. Session-070.
+  No straddle correction is applied. The value is BOUNDS CHECKED
+  (ftb_decisions.md 4.5, FTB-G1, FTB-G2), as ubtb_interfaces.md
+  applies to blk_p1. As built, ftb_cntrl.sv line 500 reconstructs
+  unconditionally, TD#124. This entry recorded the check as "A
+  CONFLICT, NOT A SETTLED ABSENCE" (session-070); 4.5 is the
+  authority, so it is the specification and the RTL is the
+  divergence. Session-071.
 
 IC-FTB-04:
   br0 and br1 are the two conditional fields of one entry from one
@@ -468,9 +469,11 @@ IC-FTB-07 (CLOSED, BP-105):
 IC-FTB-08 (resolved, session-052; reconciled session-053):
   Field widths are ruled in ftb_decisions.md 8 and are NOT restated
   here. This block gave FTB_BR_POS_BITS = 3, FTB_RAM_ENTRY_WIDTH =
-  105 and FTB_RAM_SET_WIDTH = 420, all stale since BP-099; it is
-  110 / 109 / 440 / 436 with FTB_BR_POS_BITS = 4. Corrected
-  session-070 by removing the copy.
+  105 and FTB_RAM_SET_WIDTH = 420, all stale since BP-099. The
+  current values are in ftb_decisions.md 8 only. Corrected
+  session-070 by removing the copy; session-071 removed the "110 /
+  109 / 440 / 436" this entry still restated, stale once the
+  stored positions widened.
 
 IC-FTB-09 (resolved, 2026-08-19):
   G9 update channel arbitration. Multi-branch update scheduling onto
@@ -523,9 +526,12 @@ IC-FTB-11 (resolved session-052, REOPENED session-070):
   lookup PCs in one 32-byte region share an entry, which is not a
   wrong-entry hit. And the tag is now PINNED at 26 over a 41-bit VA
   (4.1, TD#122), so it no longer covers the whole upper VA.
-  As built there is still no fallthrough-error output and no
-  fallback mux, and ftb_cntrl.sv line 500 reconstructs
-  unconditionally. TD#124 tracks the divergence.
+  RESOLVED AS SPECIFIED session-071: the reconstruction is bounds
+  checked per ftb_decisions.md 4.5 (FTB-G1, FTB-G2), with the
+  start + FTB_BLOCK_BYTES fallback. As built there is still no
+  fallback mux and ftb_cntrl.sv line 500 reconstructs
+  unconditionally; TD#124 tracks the divergence. An upper bound
+  is open, ftb_decisions.md 4.6 O-2.
 
 IC-FTB-12 (session-053):
   Storage split. ftb_array is pure 1R1W DATA RAM: no entry-valid, no
@@ -534,9 +540,10 @@ IC-FTB-12 (session-053):
   this is the FTB cold init -- the FTB has NO sram_init mechanism.
   Way-match, PLRU victim selection, PLRU next-state, and valid set/clear
   are all computed in ftb_cntrl, which drives both storage modules. The
-  logical entry is partitioned: 1 valid bit/way in ftb_plru, 109 in
-  ftb_array. This read 105, stale since BP-099; ftb_decisions.md 8
-  is the authority. Session-070.
+  logical entry is partitioned: 1 valid bit/way in ftb_plru, 112 in
+  ftb_array. This read 105, stale since BP-099 (session-070), then
+  109, stale since session-071 widened the stored positions;
+  ftb_decisions.md 8 is the authority.
 
 IC-FTB-13 (session-053):
   Active-low controls. All enables on ftb_array and ftb_plru are active
@@ -644,7 +651,9 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
 
   FTB_ENTRY_WIDTH = 113 / FTB_SET_WIDTH = 452   (logical, incl. valid;
   110 / 440 before the stored positions widened, session-071)
-  FTB_RAM_ENTRY_WIDTH = 109 / FTB_RAM_SET_WIDTH = 436   (ftb_array data)
+  FTB_RAM_ENTRY_WIDTH = 112 / FTB_RAM_SET_WIDTH = 448   (ftb_array data;
+  109 / 436 before session-071, which widened FTB_ENTRY_WIDTH above
+  and left these)
   -- ftb_decisions.md 8 is the authority; 105 / 420 here was stale
   since BP-099. Corrected session-070.
 

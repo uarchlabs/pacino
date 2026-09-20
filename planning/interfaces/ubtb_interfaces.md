@@ -160,18 +160,21 @@ the stream to alignment.
   conf     : the bimodal direction counter value. MSB is the
              direction.
 
-  carry    : 1 when THIS SLOT'S TARGET lies outside this block.
-             Used by the cluster to decide whether the p1
-             prediction requires a prediction block change.
+  carry    : the ENTRY fall-through carry, the block-scoped
+             overflow bit of the stored pftAddr (ftb_decisions.md
+             5.5), not a property of this slot's target. That is
+             what bp_structs_pkg.sv's comment says, verified
+             session-070 (ftq_bpu_interfaces.md 10 item 5), and
+             what G18 records. It has no consumer (G18, UI2).
+             TD#124 deletes the entry carry, which leaves this
+             field with no source; TD#124 must remove it or say
+             what drives it.
 
-             This is NOT the carry used to reconstruct
-             blk_p1.pft_addr. That one is a block-scoped overflow
-             bit meaning the block END crosses the
-             FTB_BLOCK_BYTES boundary above the block start
-             (ftb_decisions.md 5.5). One is per slot and about a
-             branch target, the other is per block and about the
-             fall-through. They are different facts and are not
-             interchangeable. G18 / UI2.
+             This read that carry is "1 when THIS SLOT'S TARGET
+             lies outside this block" and "is NOT the carry used
+             to reconstruct blk_p1.pft_addr" (session-069), which
+             session-070's package-comment correction reversed.
+             Session-071.
 
 ### blk_p1 field semantics
 
@@ -314,13 +317,11 @@ communicate miss reason or miss type externally.
 
 | ID  | Item                                      | Status           |
 |-----|-------------------------------------------|------------------|
-| UI2 | carry field consumer behavior in cluster  | TBD at           |
-|     | top -- how the cluster uses the SLOT carry| bp_cluster       |
-|     | to decide prediction block change vs      |                  |
-|     | continue.                                 |                  |
-|     | The name collision with the block-scoped  |                  |
-|     | fall-through carry is resolved in the     |                  |
-|     | pred_p1[s] field semantics, session-069.  |                  |
+| UI2 | pred_p1[s].carry has no consumer. It is   | TBD at           |
+|     | the entry fall-through carry (G18), and   | bp_cluster;      |
+|     | TD#124 deletes its source. Session-071;   | TD#124           |
+|     | this read that it was a per-slot target   |                  |
+|     | carry distinct from the fall-through one. |                  |
 | UI3 | Both update channels targeting one entry  | Confirm at       |
 |     | in the same cycle. Same-field collision   | bp_cluster       |
 |     | is a producer error.                      |                  |
@@ -334,7 +335,10 @@ communicate miss reason or miss type externally.
               stored region-relative, one bit wider, with a read
               window, as the FTB (ftb_decisions.md 4.6, TD#125). The
               consumer obligation to compare pred_p1 against the p2
-              FTB result is removed: FE-4. "Fetch block" replaced by
+              FTB result is removed: FE-4. carry is the entry
+              fall-through carry, as G18 and the package say, not
+              a slot-target bit; TD#124 removes its source. "Fetch
+              block" replaced by
               "prediction block" where the 32-byte unit was meant.
   2026-09-15  session-069. The miss fallthrough is stated: the
               cluster computes lookup PC + FTB_BLOCK_BYTES, this

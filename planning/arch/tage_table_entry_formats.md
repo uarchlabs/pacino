@@ -7,7 +7,7 @@
  FILE:    tage_table_entry_formats.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-10
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -51,9 +51,14 @@ TAG    : `TAGE_TBL_TAG[t]`
 
 ### CTR field usage in TAGE
 
-CTR encodes confidence in the predicted direction. CTR is incremented
-on correct prediction and decremented on misprediction. When CTR
-reaches null on misprediction the entry is now a candidate for re-allocation.
+CTR is a 3-bit direction counter; its MSB is the predicted
+direction (tage_cntrl_decisions.md, CTR Encoding). It steps toward
+the resolved direction. It has no null state and plays no part in
+choosing an allocation candidate, which is chosen by u_eff == 0
+(tage_cntrl_alloc_rules.md). This read that CTR "encodes confidence"
+and that an entry whose CTR "reaches null on misprediction" becomes
+a re-allocation candidate, which is the ITTAGE target rule, not
+TAGE's. Session-071.
 
 ### Maximum field widths
 

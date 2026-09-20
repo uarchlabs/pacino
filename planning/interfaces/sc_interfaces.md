@@ -199,8 +199,11 @@ tage_pred_rdy_p2[s] = 0  -- no TAGE result for slot s.
 sc_pred_rdy_p3[s]   = 1  -- sc_pred_meta_p3[s] valid.
 ```
 
-Both slots may be valid in the same cycle. Slots operate in parallel
-with no cross-slot interaction (sc_decisions.md section 2).
+Both slots may be valid in the same cycle. Slots predict in parallel
+from separate table RAMs, but share the threshold, TC, chooser and
+BrIMLI registers in sc_cntrl, whose adaptation the lowest-indexed valid
+update slot drives (sc_decisions.md section 2, TD#98). This read "with
+no cross-slot interaction". Session-071.
 
 SC prediction requires TAGE output. SC updates proceed without TAGE
 input (sc_decisions.md section 2).

@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-04-05
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -102,9 +102,15 @@ interpretation.
 Direction = CTR[2] (MSB).
 
 Strong states: 000 (strongly NT), 111 (strongly T).
-Weak states: 001, 010, 011 (weakly NT), 100, 101, 110 (weakly T).
-Boundary states: 011 and 100 -- most uncertain, use_alt_on_na
-trigger points.
+Weak states: 011 and 100 only -- the most uncertain, and the
+use_alt_on_na trigger points.
+Medium states: 001, 010 (NT) and 101, 110 (T).
+This is the one-hot decode of tage_pred_strong, tage_pred_weak and
+tage_pred_medium (TD#87, below and tage_interfaces.md). This read
+"Weak states: 001, 010, 011 ... 100, 101, 110" with 011 and 100 as
+separate "boundary" states; TD#87 moved 001, 010, 101 and 110 to
+medium and the list was not updated. The wn/wt mnemonics in the
+table above are names, not the class. Session-071.
 
 Newly allocated entries initialize to 100 (weakest taken).
 

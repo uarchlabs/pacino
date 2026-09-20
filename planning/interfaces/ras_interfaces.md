@@ -50,8 +50,10 @@ Both stacks are register files.
 
 RAS is outside the conditional branch override chain. It is
 type-gated: push fires when br_type==DIRECT_CALL or
-INDIRECT_CALL; pop fires when br_type==RETURN. All other
-branch types produce no RAS action. Branch type classification
+INDIRECT_CALL; pop fires when br_type==RETURN; RETURN_CALL pops
+then pushes (IC-RAS-01, IC-RAS-02, ras_decisions.md 2). All
+other branch types produce no RAS action. This list omitted
+RETURN_CALL. Session-071. Branch type classification
 is the responsibility of FTB; RAS does not classify
 instructions independently.
 

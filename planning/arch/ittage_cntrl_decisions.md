@@ -6,7 +6,7 @@
  FILE:    ittage_cntrl_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-05-16
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -54,20 +54,26 @@ table that reference comp==0 map to no-hit, not a base table.
 
 CTR is a confidence counter. It does not encode direction.
 
-  000  null    no confidence (target replacement candidate)
+  000  null    no confidence (target replacement candidate,
+               UAON trigger point)
   001  low1    low confidence
   010  low2    low confidence
-  011  low3    low confidence (boundary -- UAON trigger point)
-  100  high0   high confidence (boundary -- UAON trigger point)
+  011  low3    low confidence
+  100  high0   high confidence
   101  high1   high confidence
   110  high2   high confidence
   111  high3   maximum confidence
 
 Direction = not applicable. ITTAGE predicts target address only.
 
-Strong states: 000 (null), 111 (maximum confidence).
-Weak states: 001, 010, 011, 100, 101, 110.
-Boundary states: 011 and 100 -- UAON trigger points.
+NULL is 000 only; every other value is NOT NULL. The UAON trigger
+is null alone (below), and ittage_pred_strong means NOT NULL on the
+final provider (ittage_cntrl_uaon_update_rules.md). ITTAGE has no
+strong, weak or boundary classes: those are the TAGE direction
+counter's (tage_cntrl_decisions.md). This read "Strong states: 000
+(null), 111", "Weak states: 001 ... 110" and "Boundary states: 011
+and 100 -- UAON trigger points", carried from TAGE and contradicting
+the trigger and the strong flag below. Session-071.
 
 Newly allocated entries initialize to 3'b000 (null confidence).
 
@@ -183,14 +189,24 @@ delayed one cycle.
 
 See ittage_cntrl_ctr_update_rules.md for the full table.
 
-Summary of cases:
-- prm_comp > 0 and alt_comp > 0: both providers are tagged
-  tables. CTR actions per rows 2-5 of update table.
-- prm_comp == 0 and alt_comp == 0: no hit. No CTR update.
-  Allocation path only. Row 1.
-- prm_comp > 0 and alt_comp == 0: primary hit, no alternate.
-  Only primary CTR updated. Rows 6-9.
-- prm_comp == 0 and alt_comp > 0: unreachable.
+Summary of cases. The table is organised by the provider,
+ittage_using_primary (UP), not by which comps are nonzero:
+- H == 0: no hit. No CTR update. Allocation path only. Row 1.
+- UP == 0: the alternate provided (the primary was null and
+  use_alt_on_na fired). Only the alternate CTR is updated,
+  INC on a correct target and DEC on a mispredict. Rows 2-17.
+- UP == 1: the primary provided. Only the primary CTR is
+  updated, INC or DEC the same way. Rows 18-33.
+- prm_comp == 0 and alt_comp > 0: cannot arise from a
+  prediction, because the alternate is found only below a
+  primary (Alternate provider, above). The even rows 2 to 16
+  carry pCMP == 0 under UP == 0; pCMP is don't-care there and
+  those rows exist for test coverage of the update input, not
+  as reachable states.
+This read "rows 2-5" for both providers tagged and "Rows 6-9"
+for a primary hit with no alternate. The table's rows 2-17 are
+UP == 0 and rows 6-9 are alternate-provider mispredicts.
+Session-071.
 
 ---
 

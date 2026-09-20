@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_alloc_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-04-05
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -110,8 +110,10 @@ time during candidate selection. The write strobe at update
 time does not re-evaluate adjacency.
 
 alc_wr_u0 is gated per table inside tage_table by comparing
-THIS_TABLE to tage_alloc_comp (via prm_tbl_sel_u0). Only the
-selected candidate table performs the write.
+THIS_TABLE to tage_alloc_comp, presented as alc_tbl_sel_u0
+(tage_table_interfaces.md). Only the selected candidate table
+performs the write. This read "via prm_tbl_sel_u0", the provider's
+selector, which names the wrong table. Session-071.
 
 ---
 

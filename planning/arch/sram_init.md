@@ -6,7 +6,7 @@
  FILE:    planning/arch/sram_init.md
  SOURCE:  session-043
  STATUS:  DRAFT
- UPDATED: 2026-05-19
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -151,19 +151,20 @@ Confirmed consumers
                       table module but shares same sram_init in tage
   ittage.sv        -- ITTAGE top (parent module) 
   ittage_table.sv  -- ITTAGE table module
-
-ittage_table.sv  -- ITTAGE table module
   sc.sv            -- SC top (parent module)
   sc_table.sv      -- SC table module
   sc_brimli.sv     -- SC BrIMLI table module (ST4)
 
-Future consumers requiring same treatment at implementation:
-
-  ubtb.sv          -- uBTB, design is TBD.
-
 Modules confirmed NOT to instantiate sram_init:
 
   loop_pred.sv     -- No SRAM. Pure registered counter array.
+  ubtb.sv          -- No SRAM. A flop array read combinationally
+                      (fe_decisions.md, ubtb_interfaces.md).
+                      This list had it as a future consumer,
+                      "design is TBD". Session-071.
+  ftb (ftb_plru)   -- cold init by resetting the valid flops;
+                      ftb_array is not initialised
+                      (ftb_interfaces.md IC-FTB-12).
 
 ---
 

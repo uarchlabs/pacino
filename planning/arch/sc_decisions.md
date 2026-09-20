@@ -6,7 +6,7 @@
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
  STATUS:  DRAFT
- UPDATED: 2026-07-01
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -98,8 +98,13 @@ LO/HI threshold pair.
 The TAGE s2 output is supplied to the SC, the SC operation is one cycle and the
 SC outputs its results in s3.
 
-Like TAGE, the SC supports dual predictions. These predictions operate in
-parallel and do not share resources or conflict in operation. 
+Like TAGE, the SC supports dual predictions. The two slots have separate
+table RAMs (section 6) and predict in parallel. They are NOT wholly
+independent: the threshold, TC and the two chooser counters (section 8)
+and the BrIMLI counter are single registers in sc_cntrl, and under a
+dual-slot update the lowest-indexed valid update slot drives their
+adaptation (TD#98, temporary, BP-077). This read that the two predictions
+"do not share resources or conflict in operation". Session-071.
 
 SC predictions require TAGE output. SC updates can proceed without input from
 TAGE. 
@@ -130,8 +135,13 @@ So planning docs say s0/s1/s2/s3/u0/u1, RTL should use p0/p1/p2/p3/u0/u1.
 There are two non-overlapping phases for the SC operation. There is the
 prediction phase and the update phase.
 
-TAGE and SC are in lock step, TAGE and SC are each in the prediction phase or
-the update phase. There is never a case there one is in the opposite phase.
+SC's own prediction and update phases do not overlap: each table RAM is
+either read or written. TAGE and SC are NOT in lock step. SC has its own
+update queue and its own arbitration (bp_arb_spec.md 4.5 and 6), so TAGE
+may be in one phase while SC is in the other. This read "TAGE and SC are
+in lock step ... There is never a case there one is in the opposite
+phase"; bp_arb_spec.md records the lockstep constraint as eliminated by
+design. Session-071.
 
 There are dedicating module IOs for each phase. The module IO list and naming
 convention are found in `sc_interfaces.md`.
@@ -363,7 +373,9 @@ logic [SC_MAX_IDX_WIDTH-1:0] st3_index
 // compile-time parameter (section 12), not a port. The call below
 // takes the parameter default.
 logic [SC_MAX_IDX_WIDTH-1:0] st4_index
-  = get_br_imli_idx(inp_pc_p2,sc_phr_p2,br_imli);
+  = get_br_imli_idx(inp_pc_p2[15:6],sc_phr_p2,br_imli);
+// The pc argument is [9:0], PC[15:6] (section 12). This call passed the
+// whole inp_pc_p2. Session-071.
 
 // IA NOTE: ctr\* are read SIGNED. The raw ctr is what is captured into
 // sc_upd_ctr below (the update path saturate-steps the raw counter).
@@ -796,4 +808,8 @@ the number of index bits or number of entries in this table instance.
               SC_BR_IMLI_MODE); no runtime br_imli_mode port on sc_brimli,
               sc_cntrl, or sc.sv. Section 12 subsection added; section 9
               st4_index note added. Implemented by BP-079a.
+  2026-09-19  Session-071. Section 2: the slots share the threshold, TC,
+              chooser and BrIMLI registers (TD#98). Section 4: TAGE and
+              SC are not in lock step. Section 9: st4_index passes
+              inp_pc_p2[15:6].
 

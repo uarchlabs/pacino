@@ -6,7 +6,7 @@
  FILE:    tage_table_hash_rules.md 
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-04-06
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -49,8 +49,10 @@ TAGE_TN_FH TAGE_TN_FH1 TAGE_TN_FH2, again TN is T1, T2, T3, T4
 
 ## Relevant parameters
 
-PC_HASH_SHIFT is a global parameter which defines the left shift of
-the pc address, this shift is 2 at present.
+PC_HASH_SHIFT is a global parameter which defines the RIGHT shift
+of the pc address, this shift is 2 at present, as the index hash
+below applies it (PC >> PC_HASH_SHIFT). This read "left shift".
+Session-071.
 
 THIS_INDEX_BITS is a module level parameter that defines the table
 specific width of the index 
