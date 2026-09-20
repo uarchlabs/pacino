@@ -632,8 +632,11 @@ it only documented current behavior.
 |                         |             |                   | UBTB_BR_TGT_BITS,                |
 |                         |             |                   | UBTB_JMP_TGT_BITS,               |
 |                         |             |                   | UBTB_CONF_WIDTH, INIT_TKN/NTK,   |
-|                         |             |                   | UBTB_ENTRY_WIDTH=100,            |
-|                         |             |                   | UBTB_SET_WIDTH=400. Index/tag    |
+|                         |             |                   | UBTB_ENTRY_WIDTH=100 (104 after  |
+|                         |             |                   | BP-099, ftq_ifu_interfaces.md 10;|
+|                         |             |                   | TD#125 adds 3 more),             |
+|                         |             |                   | UBTB_SET_WIDTH=400 (416).        |
+|                         |             |                   | Index/tag                        |
 |                         |             |                   | comment corrected off PC[26:7]   |
 |                         |             |                   | to block granularity (BP-090).   |
 |                         |             |                   | FTB_BR_POS_BITS =                |
@@ -1039,7 +1042,8 @@ it only documented current behavior.
 |                         |             |                   | (BP-099), 1795 (BP-102). The     |
 |                         |             |                   | 973 above is the BP-097 figure   |
 |                         |             |                   | and is historical, not current.  |
-| bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports across the  |
+| bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
+|                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
 |                         |             |                   | from RTL and compared to the     |
 |                         |             |                   | eight interface docs. 4 findings,|
@@ -1074,7 +1078,8 @@ it only documented current behavior.
 |                         |             |                   | Section 10 item 16 CLOSED (group |
 |                         |             |                   | I, 24 checks, 973 -> 997); item  |
 |                         |             |                   | 15 CLOSED (pft_addr, entry 182 ->|
-|                         |             |                   | 222b); item 17 opened and        |
+|                         |             |                   | 222b, now 228b; ftq_entry_       |
+|                         |             |                   | formats.md 1); item 17 opened and|
 |                         |             |                   | DEFERRED (the bp_ftq_meta_t      |
 |                         |             |                   | union). Section 9 gains the      |
 |                         |             |                   | cluster-boundary rollback group, |
@@ -1746,7 +1751,9 @@ assessment of each document. Correct any that are wrong.
 |     |          | tage_cntrl_decisions.md's T0 init line again (see the    |
 |     |          | conflict note at the top of this file).                  |
 | 104 | ftb      | Two stale RTL header comments (INFRA-008). Comment-only: |
-|     |          |   - ftb_cntrl.sv: "107 bits/way", actual 105.            |
+|     |          |   - ftb_cntrl.sv: "107 bits/way". The entry is 112       |
+|     |          |     (ftb_decisions.md, sole home); this read 105, the    |
+|     |          |     pre-BP-099 width, and 109 was superseded s-071.      |
 |     |          |   - ftb.sv: ftb_fastpath_en "beyond the interface draft",|
 |     |          |     it is a documented top input.                        |
 |     |          | Fold into the first FTB-touching RTL task.               |
@@ -2582,7 +2589,11 @@ The decisions this project has made:
   front-end side.
 - vtype: decoder stateless, rename resolves dependency
 - Dual decode packet: decode_pkt_t[7:0] scalar,
-  vec_decode_pkt_t[7:0] vector, predecode_pkt_t[7:0].
+  vec_decode_pkt_t[7:0] vector, predecode_pkt_t[7:0] AT THE IBUF
+  READ PORT INTO DECODE. The 8 is that port's width, not the
+  type's: the ibuf write port carries the same struct 16 wide
+  (dcd_decisions.md DCD-1, ifu_ibuf_interfaces.md IB-1, IFU-5,
+  IBUF-3 and IBUF-9). Session-072.
   predecode_pkt_t is REDEFINED by dcd_decisions.md DCD-16,
   session-069: it gains the start PC, the block position, the
   FTQ index, the fault cause and the faulting VA, and its
@@ -2715,8 +2726,12 @@ unless noted.
   members, shown constructively in BP-093 group F.
 - The uBTB update branch type is REDERIVED from the payload's
   own is_br / is_jmp / is_call / is_ret / is_jalr bits.
-  Verified BP-094 G0 across all seven encodings, including
-  the three fe_decisions 7.2 does not tabulate.
+  Verified BP-094 G0 across the seven encodings THAT EXISTED
+  THEN. bp_br_type_e has EIGHT since session-069 added
+  RETURN_CALL at 3'b111, and four are untabulated in
+  fe_decisions 7.2 (FE-U9): DIRECT_CALL, INDIRECT_CALL,
+  NO_BRANCH and RETURN_CALL. RETURN_CALL's rederivation is
+  unverified. Session-072.
 - The jump field is reported in the lowest prediction slot
   carrying no valid conditional field.
 - RAS p2 operations are gated by reachability across slots
@@ -2783,10 +2798,12 @@ unless noted.
           TD-FE-7. Six backend assumptions recorded, none
           verifiable -- the backend does not exist.
     - planning/interfaces/bpu_port_inventory.md       Working
-        - 140-port inventory. STALE on loop_pred after BP-091 and
-          on ubtb: 5 ports, no blk_p1, and findings 1-3 give the
-          document names as pred_pc / pred / upd, which
-          ubtb_interfaces.md has not used since session-063.
+        - 140-port inventory, 141 since session-071 added ubtb's
+          blk_p1 and took ubtb to 6. It was STALE on loop_pred
+          after BP-091 and on ubtb: 5 ports, no blk_p1, and
+          findings 1-3 gave the document names as pred_pc / pred /
+          upd, which ubtb_interfaces.md has not used since
+          session-063. Session-072.
           Session-070.
     - planning/interfaces/loop_pred_interfaces.md     Draft
         - Corrected to the delivered ports BP-091.
@@ -2885,8 +2902,11 @@ unless noted.
 - Known state at the boundary:
     - THE FTQ IS NO LONGER ONE MODULE. It is eleven, built by
       BP-106 and BP-107: ftq.sv, ftq_ptr, ftq_commit, ftq_npc,
-      ftq_entry, ftq_meta, ftq_status, ftq_shadow, ftq_ifu and
-      ftq_ftb_sched. This line read "The FTQ unit now holds one
+      ftq_entry, ftq_meta, ftq_status, ftq_shadow, ftq_ifu,
+      ftq_resolve and ftq_ftb_sched. This list said eleven and
+      named ten, leaving out ftq_resolve.sv, which is the tenth
+      of the eleven in ftq_decisions.md 7.1 and has its own
+      Module Status row. Session-072. This line read "The FTQ unit now holds one
       module, ftq_ftb_sched (BP-100), but it is on the update
       path and reads none of them. Still true as written."
       That was written before BP-106/107.

@@ -373,8 +373,10 @@ ftb_confidence_override_rules.md (summarized in section 7).
 
 ### 4.4  Offset and fallthrough widths
 
-pacino expands RVC instructions to 32b before the FTB, but the FTB
-addresses branches at 2-BYTE granularity, not at the expanded 4-byte
+pacino expands RVC instructions to 32b in the IFU, DOWNSTREAM of the
+FTB (ifu_decisions.md IFU-1 and IFU-4, dcd_decisions.md 1), so the
+FTB never sees an expanded instruction. It addresses branches at
+2-BYTE granularity, not at the expanded 4-byte
 granularity. A branch may begin at any 2-byte boundary under the C
 extension, so a coarser position could not separate two RVC branches
 in one aligned word. BP-099, 2026-08-19, widened FTB_BR_POS_BITS from
@@ -1150,4 +1152,7 @@ region end, plus a full block, plus a straddling halfword pair:
               bp_cluster, consistent with the TAGE/ITTAGE pattern; they
               do not block COMPLETE. Decisions are settled; remaining FTB
               work is downstream at cluster integration.
+
+  2026-09-20  session-072. 4.4: RVC expansion is in the IFU,
+              downstream of the FTB; this read "before the FTB".
 ```

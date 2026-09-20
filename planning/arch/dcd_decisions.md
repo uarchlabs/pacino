@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -46,14 +46,23 @@ DCD-1  There is one predecoder. It produces two views of one
        halfword positions of the prediction block. It goes to the FTQ
        writeback and its shape is fixed by `ftq_ifu.sv`.
 
-       The bundle view is `predecode_pkt_t` at each of the 8
-       decode slots. It goes through the ibuf to
-       `instr_decoder`.
+       The bundle view is `predecode_pkt_t`, one per instruction
+       slot. It goes through the ibuf to `instr_decoder`.
 
 The two differ in width because their consumers do. The FTQ needs
 an answer at every position in the block, including positions that
 are not instruction starts. Decode needs `SLOTS` of 8. The
 classification is computed once.
+
+THE ARRAY WIDTH BELONGS TO THE PORT, NOT TO THE TYPE.
+`predecode_pkt_t` is a per-slot struct and both ibuf ports carry an
+array of it: 16 wide on the write port, because the IFU does not
+compact (ifu_ibuf_interfaces.md IB-1, IFU-5, IBUF-3), and 8 wide on
+the read port into decode, where instr_decoder is `[SLOTS-1:0]`
+(IBUF-9). The ibuf is the width converter. This read "at each of
+the 8 decode slots", which attaches decode's width to the type and
+puts it against the four documents that carry 16 on the write port.
+Session-072.
 
 DCD-2  Position 16, the 17th halfword of IFU-8, has no entry in
        either view. It can only be the tail of a straddling
@@ -192,8 +201,14 @@ under IFU-20.
 DCD-16 `predecode_pkt_t` carries, per slot: valid, the expanded
        32-bit instruction, the start PC, the position within the
        prediction block, the FTQ index, the fault cause, the faulting
-       virtual address, the faulting guest physical address, and
-       the control flow classification of DCD-7.
+       virtual address, the faulting guest physical address, the
+       control flow classification of DCD-7, and `is_vsetvl` and
+       `needs_vtype`.
+
+       The last two are per-instruction and belong here by
+       TD-DCD-1; the enumeration did not carry them while
+       ifu_ibuf_interfaces.md 4 listed them as coming from this
+       rule. `vtype_hazard` is NOT here, TD-DCD-1. Session-072.
 
 The start PC and the position are both present and are not
 redundant. Expansion breaks the correspondence between them,
@@ -247,4 +262,3 @@ IFU-18    Direction is proven only for an unconditional, which
 IBUF-2    Consumes the bundle view of DCD-16.
 TD-IFU-1  Closed by DCD-16.
 TD-IFU-5  Closed by this document.
-

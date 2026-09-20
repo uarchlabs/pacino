@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -321,7 +321,9 @@ fetched bytes.
 ```
   typedef struct packed {
     logic        valid;    // slot holds an instruction start
-    logic        is_rvc;   // 16-bit encoding
+    logic        is_rvc;   // 16-bit encoding. UNDRIVEN at the
+                           // moment: no producer in DCD-7, no
+                           // consumer in the FTQ. Session-072.
     logic [1:0]  br_type;  // 00 not CFI, 01 branch, 10 jal, 11 jalr
     logic        is_call;
     logic        is_ret;
@@ -658,5 +660,7 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               section 3's mismatch text and section 7 W2's lossy
               shift are both retired: the conversion is the
               identity.
-```
 
+  2026-09-20  session-072. ftq_pd_info_t.is_rvc marked undriven:
+              no producer in DCD-7, no consumer in the FTQ.
+```

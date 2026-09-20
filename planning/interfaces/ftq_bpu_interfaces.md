@@ -539,7 +539,9 @@ Restore and commit ports, section 8.
 ## 6. Redirects
 
 No predictor declares a redirect port. The inventory confirms this
-across all 140 ports of all eight modules.
+across all its ports of all eight modules: 140 at INFRA-011, 141
+since session-071 added ubtb's blk_p1 (bpu_port_inventory.md
+Coverage). Session-072.
 
 A redirect is derived at the cluster boundary by comparing a
 predictor's stage output against the prediction the cluster formed
@@ -995,7 +997,9 @@ match it and to match this specification.
 15. CLOSED, 2026-08-19. `bp_ftq_entry_t` gains a `pft_addr` field of
     VA_WIDTH, block scalar, holding the value delivered on
     `bpu_pred_pft_p1`. Applied to bp_structs_pkg.sv and checked in
-    tb_bp_pkg.sv. Entry width 182b -> 222b.
+    tb_bp_pkg.sv. Entry width 182b -> 222b AT THE TIME. It is now
+    228b after the BP-099 position widening and VA_WIDTH 41;
+    ftq_entry_formats.md 1 is the sole home. Session-072.
 
 16. CLOSED, 2026-08-19. bp_cluster.sv gains the section 4a slot
     correction group, six ports, driven from the p2 classification,

@@ -21,7 +21,9 @@
 - Redirect naming. Sections 3.3, 3.4 and 5.x below use a
   `<pred>_redir_*` per-predictor naming that does not exist in any
   RTL. No predictor declares a redirect port; INFRA-011 confirmed
-  this across all 140 ports of the eight top-level modules. The
+  this across all 140 ports of the eight top-level modules, 141
+  since session-071 added ubtb's blk_p1 (bpu_port_inventory.md
+  Coverage). Session-072. The
   redirect is derived at the bp_cluster boundary and the groups are
   named by STAGE: `bpu_redir_p2` and `bpu_redir_p3`. The port
   specification is ftq_bpu_interfaces.md section 6, and the theory of
@@ -172,7 +174,8 @@ sc_redir_val_p3
 Status: NO SUCH PORT EXISTS, on any predictor or at the cluster
 boundary. The session-060 audit (INFRA-009) found none on the
 unit-level RTL, and INFRA-011 confirmed the same across all 140
-ports of all eight modules once bp_cluster was built. The redirect
+ports of all eight modules once bp_cluster was built; the inventory
+is 141 since session-071 added ubtb's blk_p1. Session-072. The redirect
 is cluster-derived logic, and the delivered groups are named by
 stage rather than by predictor:
 

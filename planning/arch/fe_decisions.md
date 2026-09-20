@@ -296,7 +296,9 @@ Correction and redirect are synonymous terms. A later-stage predictor may change
 ### 3.1 Interface
 
 NO PREDICTOR DECLARES A REDIRECT PORT. INFRA-011 confirmed this across
-all 140 ports of the eight top-level BPU modules. A prior revision of
+all 140 ports of the eight top-level BPU modules, and the inventory
+now stands at 141: session-071 added ubtb's blk_p1, making ubtb 6
+(bpu_port_inventory.md Coverage). Session-072. A prior revision of
 this section named `<pred>_redir_val_<pN>`, `<pred>_redir_tgt_<pN>` and
 `<pred>_redir_ftq_idx_<pN>` as a per-predictor port group. No such
 ports exist and none is planned.
