@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -178,8 +178,10 @@ MMU-U3 Two parts. Whether the MMU-8 atomic is a TileLink AMO on
 ## 5. PMP
 
 MMU-10 PMP is checked at two sites. On the translated physical
-       address before an L1 access completes, and on every address
-       the walker issues.
+       address before any L1 request is issued (itlb_decisions.md
+       ITLB-12), and on every address the walker issues. This read
+       "before an L1 access completes", the response-gating form
+       ITLB-12 withdrew. Session-071.
 
 MMU-10a ONE CHECKER, SPECIFIED HERE, INSTANTIATED TWICE. The PMP
         and PMA checker is one module. Site 1's instance sits with
@@ -236,16 +238,23 @@ MMU-14 Non-idempotent regions are never fetched speculatively and
 MMU-15 PMA comes from a static region table fixed at
        configuration, one entry per address range.
 
-MMU-14 is what makes `itlb_decisions.md` ITLB-12 safe. Gating the
-response rather than the request means the L1I array is read before
-the check completes. That costs nothing for a cacheable main-memory
-region, which has no side effect on read, and is unacceptable for
-an I/O region. Excluding non-idempotent regions from speculation is
-therefore a precondition for the timing decision, not an
-independent policy.
+`itlb_decisions.md` ITLB-12 gates the REQUEST: the PMP permission
+check, the PMA executable check and the PMA idempotent read all
+complete in the IFU's translation pipeline before any L1I request is
+issued, so the L1I array is never read for an access that fails
+them. MMU-14 stands on its own: a non-idempotent region takes the
+uncached path of `ifu_decisions.md` IFU-21 and is never fetched
+speculatively or prefetched, because a read there can have a side
+effect whether or not it is permitted.
 
 The split is: PMA decides whether the access may be speculated,
-PMP decides whether it may complete.
+PMP decides whether it may be issued.
+
+AN EARLIER REVISION of this paragraph had MMU-14 make ITLB-12 safe,
+on ITLB-12's withdrawn form: gating the response rather than the
+request, so the L1I array was read before the check completed and
+MMU-14 was the precondition for that timing decision. ITLB-12 was
+revised in session-069 and this paragraph was not. Session-071.
 
 Ssccptr is mandatory in RVA23S64 and requires main memory regions
 carrying the cacheability and coherence PMAs to support hardware
@@ -404,7 +413,9 @@ L1I-U3    Ruled session-069 as recommended. MMU-1 to MMU-3.
 L1I-U4    Ruled session-069. MMU-10 to MMU-16.
 L1I-21    Bound by MMU-14.
 ITLB-U1   Bounded by MMU-U2.
-ITLB-12   Depends on MMU-14.
+ITLB-12   Gates the request; MMU-10 site 1. It no longer depends
+          on MMU-14, which read "Depends on MMU-14" until
+          session-071.
 IL-*      The client boundary is `itlb_l2tlb_interfaces.md`.
           Written to be instantiated twice; the DTLB is the
           second client.
@@ -454,4 +465,11 @@ TD#118    Bounds MMU-U2.
               statement to MMU-1. MMU-1 states the topology only;
               page-size handling in the L2 TLB is MMU-U1 and is
               unresolved. Corrected.
+
+  2026-09-19  session-071. MMU-10 and the MMU-14 paragraph restated
+              against ITLB-12 as revised in session-069: the checks
+              gate the L1I REQUEST, so the L1I array is never read
+              before they complete and MMU-14 is no longer the
+              precondition for a timing decision. The bindings
+              entry for ITLB-12 corrected to match.
 ```

@@ -8,7 +8,7 @@
           docs/superscalar_ooo_survey.md; INFRA-012;
           TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-09-02
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -34,22 +34,26 @@ interfaces it presents, miss handling, maintenance and prefetch.
                             output tree, node l1i
 ```
 
-Not yet written and cited here as stubs:
+Written session-069; this list called them "Not yet written and
+cited here as stubs" until session-071:
 
 ```
   ifu_decisions.md          IFU-owned behaviour. Owns the line
-                            buffer of L1I-14 and the request
-                            pipeline the L1I latency sits in
-  itlb_decisions.md         the ITLB, and the L2 TLB below it
+                            buffer of L1I-14 (TD-IFU-7) and the
+                            request pipeline the L1I latency sits in
+  itlb_decisions.md         the ITLB. The L2 TLB below it is
+                            mmu_decisions.md
   ibuf_decisions.md         the instruction buffer between IFU and
-                            decode. No planning record exists
+                            decode
 ```
 
 REGISTRIES. This file owns L1I-1 through L1I-23, TD-L1I-1 through
-TD-L1I-9, and the open items L1I-U2 through L1I-U5 PLUS L1I-U7.
-L1I-U1 is closed and L1I-U6 was never issued. This line read
-"L1I-U2 through L1I-U5", which drops U7 (section 10.1, opened for
-where the L1I-22 reserve is declared). Session-070. It does not
+TD-L1I-9, and the items L1I-U1 through L1I-U7. OPEN: L1I-U5 and
+L1I-U7. L1I-U1 is closed; L1I-U2, L1I-U3 and L1I-U4 were RULED
+session-069 (section 10.1, itlb_decisions.md, mmu_decisions.md);
+L1I-U6 was never issued. This line read "the open items L1I-U2
+through L1I-U5 PLUS L1I-U7" (session-070), which listed three ruled
+items as open. Session-071. It does not
 duplicate the FE, TD-FE or FE-U registries; it does not use the
 IC- prefix, which is already an interface-check identifier in
 ftb_interfaces.md and sc_interfaces.md; and it does not use IF-,
@@ -149,10 +153,12 @@ added beside it, so `offset + index + tag == pa_bits` still holds.
 AT THE L1I-1 GEOMETRY the tag is 23 bits and the tag array is
 128 * 8 * (23 + 1 valid) = 24576 bits.
 
-THE CONFIGURED GEOMETRY IS NOT L1I-1 YET. pacino still carries
-32 KiB with one bank, where the index is 6 bits and the tag is 24.
-Both numbers are correct for their own geometry; 23 arrives with
-the section 9 capacity and bank changes, not with L1I-20.
+THE CONFIGURED GEOMETRY IS L1I-1. The node carried 32 KiB with one
+bank, index 6 bits and tag 24, until the section 9 capacity and bank
+changes were applied; the emitted l1i is 64 KiB, 8-way, two banks,
+tag 23 (PROJECT_STATUS.md, Session-068). This paragraph said pacino
+"still carries 32 KiB with one bank" while section 9 marked both
+changes DONE. Session-071.
 
 ---
 
@@ -476,7 +482,8 @@ merge on sequential fetch.
 What does merge: a redirect returning to a line already in flight,
 and any pattern where the IFU issues for a later block before an
 earlier response lands. The second depends on IFU issue policy,
-which ifu_decisions.md owns and which does not exist.
+which ifu_decisions.md owns as TD-IFU-8, still open. This read
+"which does not exist". Session-071.
 
 4 STANDS, matching the l1d and l2 nodes, but it is now an
 unmeasured choice rather than a derived one. Revisit when the IFU
@@ -576,8 +583,10 @@ THIS IS A PARAMETER, NOT PROSE. The configuration schema gains a
 `prefetch_arbitration` field with an enumerated value naming this
 policy, so the rule is emitted rather than reimplemented per node.
 A policy stated only in a document is a policy that drifts from the
-RTL. TD-L1I-3 tracks the schema addition; TD-L1I-9 tracks the
-request bit, which no link field can express.
+RTL. TD-L1I-3 tracks the schema addition. The request bit is
+declared by custom.request_qualifiers since TOOLS-004, which closed
+TD-L1I-9; this read that "no link field can express" it.
+Session-071.
 
 ### 8.2 The hint path exists
 
@@ -663,20 +672,26 @@ NOTES.
       node beside mshrs is L1I-U7.
 ```
 
-`pe_port` is shared with the LSU-to-L1D edge in the current
-topology. The I-side and D-side core ports are now different
-shapes. A LINK CANNOT BE PARAMETERISED PER EDGE -- the schema and
-the resolver both put the link on the endpoints rather than on the
-edge -- but nothing binds a port type to one link, so a SECOND LINK
-TYPE is two JSON edits and no tool change. TD-L1I-4.
+`pe_port` is shared with the LSU-to-L1D edge. The I-side and D-side
+core ports are different shapes, and A LINK CANNOT BE PARAMETERISED
+PER EDGE -- the schema and the resolver both put the link on the
+endpoints rather than on the edge -- so the I-side has its own link
+type, `pe_port_i`, declared by TOOLS-004 and named by the ifu-to-l1i
+edge; `pe_port` is unchanged on the lsu-to-l1d edge. TD-L1I-4
+closed. This paragraph described the second link type as a
+proposal. Session-071.
 
 SYSTEM FIELDS. `pa_bits` is a system-level field carried by every
 node's package. Changing it is not an l1i-local edit; see L1I-U1.
 
-STILL INERT AFTER TOOLS-004: both maintenance fields, both fill
-fields, both timing fields, the buffer counts and inclusion.
-mshrs, mshr_targets, banks and bank_interleave_granularity now
-reach emitted logic; indexing still shapes only a diagnostic.
+STILL INERT AFTER TOOLS-005: both maintenance fields, both fill
+fields, the buffer counts and inclusion. mshrs, mshr_targets, banks
+and bank_interleave_granularity reach emitted logic since TOOLS-004,
+and read_latency_cycles and tag_compare_stage since TOOLS-005, which
+consumed them without changing their values (so their Changed cells
+stay blank); indexing still shapes only a diagnostic. This read
+"STILL INERT AFTER TOOLS-004" and listed both timing fields.
+Session-071.
 
 ---
 
@@ -703,7 +718,9 @@ reach emitted logic; indexing still shapes only a diagnostic.
           ASID tagged, 1-cycle hit. Fully associative removes the
           index-versus-page-size problem that a set-associative
           TLB has with mixed page sizes.
-          NOT RULED.
+          RULED session-069 at 64 entries, otherwise as
+          recommended: itlb_decisions.md ITLB-1 to ITLB-5. TD#115
+          closed. This read "NOT RULED" until session-071.
 
   L1I-U3  The page table walker's position in the pacino
           topology. This is a NODE GRAPH change, not a parameter.
@@ -720,19 +737,25 @@ reach emitted logic; indexing still shapes only a diagnostic.
           walker, with a TileLink master edge into l2 alongside
           up_i and up_d, and a non-blocking ITLB that returns miss
           to the IFU for retry.
-          NOT RULED. It adds a node and an edge to pacino.
+          RULED session-069 as recommended: the walker side is
+          mmu_decisions.md, the ITLB side itlb_decisions.md ITLB-8
+          to ITLB-10. It adds a node and an edge to pacino. This
+          read "NOT RULED" until session-071.
 
   L1I-U4  PMP and PMA. XiangShan places them in the MMU boundary
           and the walkers check physical addresses before
           accessing memory, with an access fault returned up to
           the L1 TLB, which raises an instruction access fault to
           the request source. Nothing in pacino has a PMP or PMA
-          node. Where they sit is undecided and it affects the
-          fault path of T2.
+          node. RULED session-069: PMP and PMA are in the MMU
+          (mmu_decisions.md MMU-10 to MMU-16), and every check
+          completes before any L1I request is issued
+          (itlb_decisions.md ITLB-12). This read "Where they sit is
+          undecided" until session-071.
 
   L1I-U5  The IFU line buffer's depth and its redirect behaviour.
-          Belongs to ifu_decisions.md and is named here only so
-          L1I-14 has an owner.
+          Owned by ifu_decisions.md TD-IFU-7, where it is still
+          unruled; named here only so L1I-14 has an owner.
 ```
 
 ### 10.2 Technical debt
@@ -754,6 +777,11 @@ reach emitted logic; indexing still shapes only a diagnostic.
             configuration schema. Section 8.1 states the policy;
             the schema must gain the field or the policy lives
             only in prose and will drift.
+            NARROWED by TOOLS-004: the L1I-22 reserve is now
+            expressible, on the link, as custom.request_qualifiers.
+            What the field would still add is P1 and P3, which the
+            core link does not see. Where the reserve belongs is
+            L1I-U7. Session-071.
 
   TD-L1I-4  CLOSED by TOOLS-004. pe_port_i is declared and the
             ifu-to-l1i edge names it; pe_port is unchanged on the
@@ -774,24 +802,22 @@ reach emitted logic; indexing still shapes only a diagnostic.
   TD-L1I-7  CLOSED by TOOLS-004. write_width_bits takes 0 and the
             emitted bundle drops the write channel.
 
-  TD-L1I-8  PARTLY CLOSED by TOOLS-004. The MSHR file exists, the
-            core adapter is no longer single-outstanding, the
-            request identifier reaches every module on the path,
-            and prefetch has a notion in the tool.
+  TD-L1I-8  CLOSED at the l1i boundary by TOOLS-004 and TOOLS-005.
+            TOOLS-004: the MSHR file exists, the core adapter is no
+            longer single-outstanding, the request identifier
+            reaches every module on the path, and prefetch has a
+            notion in the tool. TOOLS-005: the bank is pipelined at
+            one hit per cycle, the two-cycle latency comes from
+            read_latency_cycles and tag_compare_stage, and sixteen
+            fills are in flight, measured at the emitted testbench.
 
-            WHAT REMAINS, and it is the whole of TOOLS-005:
-              - the bank control is still a blocking FSM, so
-                L1I-5's pipelined one-per-cycle hit throughput
-                is not delivered
-              - read_latency_cycles and tag_compare_stage are
-                still inert, so L1I-5's two cycles are not
-                delivered either
-              - the memory side fills one line at a time, so
-                L1I-23 is not delivered
-
+            NOT DELIVERED END TO END: the sixteen fills serialise at
+            the l2, whose up_i slave holds one transaction, TD#118.
             THE Zicbom HALF IS AN RVA23 GAP, not a preference:
-            L1I-18 has no hardware today, and it is a separate
-            task from TOOLS-005.
+            L1I-18 has no hardware, TD#119.
+
+            This read "PARTLY CLOSED by TOOLS-004" with the three
+            TOOLS-005 items as remaining. Session-071.
 
   TD-L1I-9  CLOSED by TOOLS-004. custom.request_qualifiers.
 ```
@@ -848,6 +874,15 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
 ## 12. Document History
 
 ```
+  2026-09-19  session-071. Brought up to date with session-069 and
+              TOOLS-005: L1I-U2, U3 and U4 recorded as ruled (the
+              registry line and 10.1 still said open); the three
+              documents written in session-069 no longer called
+              unwritten; the configured geometry is L1I-1;
+              TD-L1I-8 closed at the l1i boundary with TD#118 and
+              TD#119 as the remainder; the timing fields are
+              consumed since TOOLS-005.
+
   2026-09-15  session-069. 4.3 gains R4: the physical address of
               R1 is produced in the IFU's translation pipeline,
               which runs ahead of its fetch pipeline, because

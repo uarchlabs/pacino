@@ -94,10 +94,13 @@ IBUF-10 The entry delivers a `predecode_pkt_t` to decode.
         whatever the ibuf stores in that field survives to
         rename.
 
-TD-IBUF-1  `predecode_pkt_t` has no PC, no FTQ index, no fault
-           cause and no faulting VA. IBUF-2 requires all four.
-           Same item as TD-IFU-1; the field is added once and
-           both documents depend on it.
+TD-IBUF-1  CLOSED by `dcd_decisions.md` DCD-16, as TD-IFU-1 is:
+           DCD-16 redefines `predecode_pkt_t` with the PC, the FTQ
+           index, the fault cause and the faulting VA that IBUF-2
+           requires. The edit to `decode_pkg.sv` remains, a package
+           edit (ifu_decisions.md TD-IFU-1). This read that
+           `predecode_pkt_t` has none of the four and left the item
+           open while TD-IFU-1 was closed. Session-071.
 
 `ftq_pd_info_t`, the 16-position predecode array of IFU-14, and
 `predecode_pkt_t`, the 8-slot bundle here, are different views of

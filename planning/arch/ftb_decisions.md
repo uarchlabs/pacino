@@ -121,7 +121,7 @@ FTB, victim style), consistent with the decoupled frontend. NOT a
 larger flat L1. Bigger commercial designs go multi-level, not
 fatter-flat.
 
-### 2.3  Block width vs fetch width
+### 2.3  Prediction block vs fetch block
 
 FTB prediction block = 32 bytes (FTB_BLOCK_BYTES), 16 two-byte
 instructions, matched to 8-wide issue and to the two-branch-per-cycle
@@ -425,10 +425,11 @@ No carry term: 5.5 deleted the carry bit session-070.
 
   FTB-G2  The fallback is start + FTB_BLOCK_BYTES, one PREDICTION
           block of 32 bytes. It is NOT Xiangshan's start +
-          FetchWidth*4. In this design the fetch width maps to
-          FETCH_BLOCK_BYTES of 64, so copying the Xiangshan literal
-          would substitute a fetch-width fallthrough and re-commit
-          the block-versus-fetch collapse banned by 2.3. Adopt the
+          FetchWidth*4. A fetch-width literal here would map to
+          FETCH_BLOCK_BYTES, the 64-byte fetch block, so copying the
+          Xiangshan literal would substitute a fetch-block
+          fallthrough and re-commit the block-versus-fetch collapse
+          banned by 2.3. Adopt the
           semantics, never the literal.
 
 Xiangshan carries this guard because its truncated 20-bit tag lets two

@@ -22,10 +22,14 @@ DIVISION OF LABOUR. `icache_decisions.md` specifies BEHAVIOUR and
 this file specifies PORTS. Where a behaviour is already decided there
 it is cited by its L1I number and not restated.
 
-Every port here is NEW. No module on either side exists:
-`rtl/core/frontend/ifu/rtl` holds only a .gitkeep, and the L1I is a
-generated module whose emitter cannot yet produce any of this
-(TD-L1I-8).
+Every port here is NEW. The IFU does not exist:
+`rtl/core/frontend/ifu/rtl` holds only a .gitkeep. The L1I is a
+generated module; since TOOLS-004 and TOOLS-005 its emitted core
+port carries the 512-bit line, sixteen identifiers and sixteen fills
+at the l1i boundary (section 14.3), and the maintenance ports of
+sections 10 and 11 are still not emitted (E7, TD#119). This read
+that the emitter "cannot yet produce any of this (TD-L1I-8)".
+Session-071.
 
 ---
 
@@ -45,7 +49,9 @@ Not covered:
 - the IFU line buffer's depth and redirect behaviour, which is
   L1I-U5 and belongs to `ifu_decisions.md`
 - the ITLB. Named in `icache_decisions.md` 2.3 as T1, T2 and T3;
-  owned by `itlb_decisions.md`, which does not exist
+  owned by `itlb_decisions.md`, with its IFU boundary in
+  `itlb_ifu_interfaces.md`. This read "which does not exist";
+  both were written session-069. Session-071
 - the FTQ to IFU boundary, which is `ftq_ifu_interfaces.md` and is
   neither contradicted nor duplicated here
 - prefetch policy. L1I-19 puts the requester at the IFU, so the
@@ -118,8 +124,8 @@ naming convention. The two must agree and nothing makes them.
   L1I_LINE_BYTES   ABSENT, TD-IF-1    L1iLineBytes       64
   L1I_LINE_BITS    ABSENT, TD-IF-1    L1iLineBits       512
   L1I_OFFSET_BITS  ABSENT, TD-IF-1    L1iOffsetBits       6
-  REQ_ID_BITS      ABSENT, TD-IF-1    (no counterpart)    4
-  MAX_OUTSTANDING  ABSENT, TD-IF-1    (no counterpart)   16
+  REQ_ID_BITS      ABSENT, TD-IF-1    L1iReqIdBits        4
+  MAX_OUTSTANDING  ABSENT, TD-IF-1    L1iMaxOutstanding  16
   GPA_WIDTH        ABSENT, TD#122     (no counterpart)    41
   VPN_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
   PPN_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
@@ -137,10 +143,14 @@ none is defined in any package. GPA_WIDTH is 41 by MMU-20; ASID and
 VMID are 16 and 14 by `itlb_decisions.md` ITLB-7; the rest are
 undetermined. Same class as PA_WIDTH above. TD#122.
 
-`l1i_pkg` has no counterpart for the last two because the emitter
-does not consume `outstanding_requests` or `id_width_bits` at all
-(INFRA-012 E2 and E3, confirmed by TOOLS-003). Section 14 says which
-of these a configuration change can supply and which cannot.
+`l1i_pkg` carries REQ_ID_BITS and MAX_OUTSTANDING as L1iReqIdBits
+and L1iMaxOutstanding since TOOLS-004, which also added L1iMshrs,
+L1iMshrTargets, L1iMshrIdxBits, L1iMshrTgtBits, L1iMshrCntBits and
+L1iQualReserve. TD-IF-1 stands: nothing makes the hand-written and
+generated sides agree. This read that `l1i_pkg` has no counterpart
+because the emitter did not consume `outstanding_requests` or
+`id_width_bits` (INFRA-012 E2 and E3). Session-071. Section 14 says
+which of these a configuration change can supply and which cannot.
 
 ADDING THESE PARAMETERS IS NOT THIS FILE'S ACT. This file is a
 specification and writes no RTL. TD-IF-1 carries the addition.
@@ -802,6 +812,12 @@ the schema and the tool. Confirmed means read this session, in
 `tools/cachegen/planning/schema` and `cli/src`, and where a claim was
 testable it was tested.
 
+STATUS AS OF SESSION-071. This section is the TOOLS-003 assessment.
+TOOLS-004 and TOOLS-005 closed most of it, and each item below now
+says so. TOOLS-004 closed S2, S3, S6, S7 and S9, each with its
+consumer, and E1 (both sites), E2, E3 and E4; TOOLS-005 closed E5.
+Still open: S1, S8 and E7.
+
 ### 14.1 Expressible today, no tool change
 
 For a `custom` link carrying the interface of sections 4 and 5:
@@ -821,8 +837,8 @@ For a `custom` link carrying the interface of sections 4 and 5:
   handshake.read_data_return
                        valid_with_id yes, IF-12 and IF-14
   id_width_bits                4     yes, IF-2
-  outstanding_requests         16    yes, the schema accepts it. It
-                                     is NOT CONSUMED, see 14.3 E2
+  outstanding_requests         16    yes, and consumed since
+                                     TOOLS-004, 14.3 E2
   read_byte_enables            false yes
   write_response               false yes
 ```
@@ -830,12 +846,18 @@ For a `custom` link carrying the interface of sections 4 and 5:
 ### 14.2 Needs a schema change
 
 ```
-  S2  A READ-ONLY LINK. custom.write_width_bits has minimum 8 and is
-      in the required list, so `0` cannot be declared. Section 4.1
-      has no write channel at all. TD-L1I-7, unchanged by TOOLS-003
-      and CONFIRMED against links.schema.json this session.
+  S2  CLOSED by TOOLS-004. A READ-ONLY LINK: write_width_bits
+      takes 0 and is no longer required, and the emitted bundle
+      drops the write channel. TD-L1I-7 closed
+      (`icache_decisions.md` 9 n2). As assessed by TOOLS-003:
+      custom.write_width_bits had minimum 8 and was required, so
+      `0` could not be declared.
 
-  S6  AN ERROR RETURN ON A CUSTOM LINK. NEW, and not in INFRA-012's
+  S6  CLOSED by TOOLS-004. custom.error_response is a boolean;
+      the bundle gains rerr and the slave adapter drives it from
+      rsp_err instead of tying it off. TD-IF-2 closed. As assessed
+      by TOOLS-003:
+      AN ERROR RETURN ON A CUSTOM LINK. NEW, and not in INFRA-012's
       list. IF-15's l1i_ifu_rsp_err CANNOT BE DECLARED. There is no
       field for it, and the consequence is already visible in the
       emitted tree: l1i_core_slv.sv carries
@@ -844,7 +866,11 @@ For a `custom` link carrying the interface of sections 4 and 5:
       and ties rsp_err into an unused net. The node knows it can
       return an error and the link has no way to say so. TD-IF-2.
 
-  S7  A RESPONSE-SIDE HANDSHAKE. NEW. `handshake.accept` governs the
+  S7  CLOSED by TOOLS-004. custom.handshake.response_accept takes
+      none or ready, and pe_port_i declares none, which is IF-10:
+      a declared absence, not a tool policy. TD-IF-3 closed. As
+      assessed by TOOLS-003:
+      A RESPONSE-SIDE HANDSHAKE. NEW. `handshake.accept` governs the
       REQUEST side only. IF-10's deliberate ABSENCE of a response
       ready cannot be declared, and neither could its presence. The
       emitted adapter's response behaviour is a tool policy, not a
@@ -863,23 +889,35 @@ For a `custom` link carrying the interface of sections 4 and 5:
       interface cannot see it, so the field describes P2 and P3
       only.
 
-  S9  THE PREFETCH REQUEST BIT. NEW. ifu_l1i_req_prefetch cannot
-      be declared: a custom link's bundle is derived from its
-      shape and carries no requester-supplied qualifier. Schema
-      and emitter, in that order. TD-L1I-9.
+  S9  CLOSED by TOOLS-004. THE PREFETCH REQUEST BIT is declared by
+      custom.request_qualifiers, with the L1I-22 reserve that
+      reads it. TD-L1I-9 closed (`icache_decisions.md` 9 n4).
+      Where the reserve is declared is L1I-U7. As assessed by
+      TOOLS-003: ifu_l1i_req_prefetch could not be declared,
+      because a custom link's bundle carried no requester-supplied
+      qualifier.
 
-  S3  A CONSTRAINT TYING read_data_return `valid_with_id` TO A
+  S3  CLOSED by TOOLS-004: valid_with_id now requires
+      id_width_bits of at least 1, proved by the negative fixture
+      neg_id_width_zero. As assessed by TOOLS-003:
+      A CONSTRAINT TYING read_data_return `valid_with_id` TO A
       NON-ZERO id_width_bits. Unchanged from INFRA-012. IF-2 and
       IF-11 are exactly the pair that would disagree without it.
 ```
 
 ### 14.3 Needs an emitter change
 
-INFRA-012 E1 through E8 stand. Two of them were TESTED this session
-rather than read, and one grew:
+INFRA-012 E1 through E8 stood at TOOLS-003. Two of them were TESTED
+then rather than read, and one grew. E1 to E5 have since closed, as
+marked; E7 is open:
 
 ```
-  E1  THE 512-BIT CORE PORT BREAKS THE PACKAGE. CONFIRMED BY
+  E1  CLOSED by TOOLS-004, both sites: the package emits the
+      one-word-per-line shape with no [-1:0], and the testbench
+      driver has no write path on a read-only link. The emitted
+      l1i carries the 512-bit core port and is lint clean. The
+      TOOLS-003 finding follows.
+      THE 512-BIT CORE PORT BREAKS THE PACKAGE. CONFIRMED BY
       EXPERIMENT, not by reading. A scratch copy of pacino with a
       second core link at read_width_bits 512 emits cleanly, and
       Verilator then reports on l1i_pkg.sv:
@@ -897,20 +935,23 @@ rather than read, and one grew:
       an asymmetric link breaks the testbench as well as the
       package. That is a second site and it is not in E1's fix.
 
-  E2  outstanding_requests reaches nothing. CONFIRMED: the string
-      appears in no consumer, and IF-6, IF-18 and the whole of
-      section 6 have no emitted counterpart.
+  E2  CLOSED by TOOLS-004: the core adapter is no longer
+      single-outstanding; sixteen outstanding are emitted. At
+      TOOLS-003, outstanding_requests reached nothing, and IF-6,
+      IF-18 and section 6 had no emitted counterpart.
 
-  E3  The request and response identifiers are emitted as wires by
-      link_sig and consumed by nothing. IF-11 and IF-12 have no
-      emitted counterpart.
+  E3  CLOSED by TOOLS-004: the request identifier reaches every
+      module on the path. At TOOLS-003 the identifiers were wires
+      from link_sig consumed by nothing.
 
-  E4  No MSHR file. IF-20 and IF-21 have no emitted counterpart, and
-      section 7 is the largest single gap between this file and the
-      tool.
+  E4  CLOSED by TOOLS-004: the MSHR file exists, sixteen MSHRs of
+      four targets, with sixteen fills in flight since TOOLS-005.
+      At TOOLS-003 there was none, and section 7 was the largest
+      single gap between this file and the tool.
 
-  E5  read_latency_cycles and tag_compare_stage are dead for a cache
-      node. IF-14's one-cycle minimum is not enforced by anything.
+  E5  CLOSED by TOOLS-005: read_latency_cycles and
+      tag_compare_stage set the emitted two-cycle latency. At
+      TOOLS-003 both were dead for a cache node.
 
   E7  NO NODE EMITS AN INVALIDATE PORT OF ANY KIND. The whole of
       section 10 is unemittable. With S8, the maintenance path needs
@@ -990,11 +1031,13 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
            sign extension corrupts any GPA with bit 38 set.
            fe_decisions.md FE-19. TD#122 tracks the RTL.
 
-  TD-IF-2  A CUSTOM LINK CANNOT DECLARE AN ERROR RETURN. Section
+  TD-IF-2  CLOSED by TOOLS-004, section 14.2 S6. Original text:
+           A CUSTOM LINK CANNOT DECLARE AN ERROR RETURN. Section
            14.2 S6. IF-15 is unemittable and the emitted adapter
            already ties the signal off with a comment saying so.
 
-  TD-IF-3  A CUSTOM LINK CANNOT DECLARE ITS RESPONSE-SIDE
+  TD-IF-3  CLOSED by TOOLS-004, section 14.2 S7. Original text:
+           A CUSTOM LINK CANNOT DECLARE ITS RESPONSE-SIDE
            HANDSHAKE. Section 14.2 S7. IF-10's absence of a response
            ready is a tool policy today, not a configured property.
 
@@ -1032,8 +1075,9 @@ Both were checked this session against the profile listing in
 Zicbom in the RVA23U64 mandatory string and Zifencei in the RVA23S64
 additions.
 
-THE GAP IS UNCHANGED BY THIS FILE. TD-L1I-8 records that L1I-18 has
-no hardware, and section 14.3 E7 confirms it: no generated node emits
+THE GAP IS UNCHANGED BY THIS FILE. L1I-18 has no hardware
+(`icache_decisions.md` TD-L1I-8, TD#119), and section 14.3 E7
+confirms it: no generated node emits
 an invalidate port of any kind. This file specifies the ports; it
 does not build them, and RVA23 conformance for both extensions
 remains blocked on the emitter work.
@@ -1048,6 +1092,14 @@ sees a 2-byte boundary.
 ## 19. Document History
 
 ```
+  2026-09-19  session-071. Section 14 brought up to date with
+              TOOLS-004 and TOOLS-005, checked against the
+              TOOLS-004 report: S2, S3, S6, S7, S9 and E1 to E5
+              marked closed; TD-IF-2 and TD-IF-3 closed; the 3.1
+              table names L1iReqIdBits and L1iMaxOutstanding.
+              Section 1: the ITLB documents exist. TOOLS-004 had
+              listed these amendments and they were never
+              applied.
   2026-09-19  session-071. "Fetch block" replaced by "prediction
               block" in section 5, IF-23 and TD-IF-5, where the
               32-byte unit was meant. The fetch block is the 64-byte

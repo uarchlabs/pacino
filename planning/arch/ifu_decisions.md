@@ -15,8 +15,9 @@ Owns the IFU-N, TD-IFU-N and IFU-UN registries.
 Scope is the IFU. Its boundaries are held elsewhere:
 `ftq_ifu_interfaces.md` upstream, `l1i_ifu_interfaces.md` for the
 instruction side, `itlb_ifu_interfaces.md` for translation, and
-`ifu_ibuf_interfaces.md` downstream. TD#116 closes on this
-document.
+`ifu_ibuf_interfaces.md` downstream. TD#116 is NARROWED by this
+document, not closed; section 8 lists what it still owes. This read
+"TD#116 closes on this document". Session-071.
 
 ---
 
@@ -240,7 +241,10 @@ so F2 and F3 do not hold what XiangShan's do. Expansion is a mux
 per position and predecode on expanded encodings is a narrow
 decode. The prediction check is a priority encode over the 16
 positions to find the earliest control flow instruction, feeding
-a 39-bit target compare and a 4-bit position compare. F2 keeps
+a 40-bit target compare, target[VA_WIDTH-1:1] at VA_WIDTH 41
+(fe_decisions.md FE-19, TD-FE-3), and a 4-bit position compare.
+This read "a 39-bit target compare", the floor computed against the
+retired 40-bit address. Session-071. F2 keeps
 the data return, the fault information and the position select.
 
 ### 5.1 The translation pipeline
