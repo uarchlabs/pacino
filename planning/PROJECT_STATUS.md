@@ -56,14 +56,20 @@ had: bp_arb_spec, bp_cluster, bp_history_*, fe_decisions, ftb_*,
 ftq_*, ras_*, ubtb_interfaces, loop_pred_interfaces, sc_interfaces,
 ifu_decisions, ifu_ibuf_interfaces, ibuf_decisions, dcd_decisions,
 l1i_ifu_interfaces and itlb_l2tlb_interfaces; icache_decisions,
-itlb_decisions and itlb_ifu_interfaces needed nothing. The TAGE,
-ITTAGE and SC documents, mmu_decisions, bpu_port_inventory,
-ftb_confidence_override_rules, pacino_cache, manual_tb_decisions and
-sram_init have not been swept against this session's rulings.
+itlb_decisions and itlb_ifu_interfaces needed nothing. Batches C to
+E brought in and swept the ITTAGE, TAGE and SC documents they cited,
+mmu_decisions, bpu_port_inventory and sram_init. NOT SWEPT against
+this session's rulings, never supplied: ittage_cntrl_alloc_rules,
+ittage_cntrl_use_update_rules, ittage_table_interfaces,
+ittage_table_entry_formats, tage_cntrl_ctr_update_rules,
+tage_cntrl_use_update_rules, tage_coverage_plan, tage_tb_decisions,
+tage_mtb_decisions, sc_tb_decisions, manual_tb_decisions,
+ftb_confidence_override_rules, pacino_cache and CLAUDE.md.
 
 Open, raised this session: the p3 RAS repair against the p2
 snapshot (ftq_bpu_interfaces.md 4c); ftb_decisions.md 4.6 O-1 to
-O-3; the RC_UNSPEC flush index.
+O-3; the RC_UNSPEC flush index; the L2 TLB half of Svnapot, now in
+MMU-U1.
 
 New: TD#125, TD#126, TD#127. No BP, INFRA or TOOLS number consumed.
 
