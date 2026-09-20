@@ -20,26 +20,34 @@ Not all of this context will be necessary for all tasks.
 - SC top level decisions (this document)
     - `planning/arch/sc_decisions.md`
 
-- SC table index creation  [NOT WRITTEN]
+- SC table index creation  [written session-058]
     - `planning/arch/sc_table_hash_rules.md`
 
-- SC confidence counter operation  [NOT WRITTEN]
-    - `planning/arch/sc_cntrl_ctr_update_rules.md`
+- SC confidence counter operation  [NOT A SEPARATE DOCUMENT]
+    - the counter step is section 10 of this document;
+      `sc_cntrl_ctr_update_rules.md` is not in the PROJECT_CORE.md
+      inventory and was not written
 
-- SC table entry format reference  [NOT WRITTEN]
-    - `planning/arch/sc_table_entry_formats.md`
+- SC table entry format reference  [DROPPED]
+    - the entry is one signed counter of SC_TBL_CTR bits,
+      `sc_table_interfaces.md` Entry Formats; no
+      `sc_table_entry_formats.md`
 
 - SC line coverage plan   [NOT WRITTEN]
     - `verification/sc_coverage_plan.md`
 
-- SC table module IO ports and semantics  [NOT WRITTEN]
+- SC table module IO ports and semantics  [written session-058]
     - `planning/interfaces/sc_table_interfaces.md`
 
-- SC top level IO ports and semantics  [NOT WRITTEN]
+- SC top level IO ports and semantics  [written session-058]
     - `planning/interfaces/sc_interfaces.md`
 
-- SC testbench requirements  [NOT WRITTEN]
+- SC testbench requirements  [written session-058]
     - `planning/testbenches/sc_tb_decisions.md`
+
+This list marked all but this document and sram_init.md "[NOT
+WRITTEN]"; four were written session-058 (PROJECT_STATUS.md Module
+Status). Session-071.
 
 - SC SRAM reset triggered initialization semantics
     - `planning/arch/sram_init.md`
@@ -811,5 +819,8 @@ the number of index bits or number of entries in this table instance.
   2026-09-19  Session-071. Section 2: the slots share the threshold, TC,
               chooser and BrIMLI registers (TD#98). Section 4: TAGE and
               SC are not in lock step. Section 9: st4_index passes
-              inp_pc_p2[15:6].
+              inp_pc_p2[15:6]. Section 1: the document list records
+              the four SC documents written session-058, the entry
+              format document as dropped and the counter rules as
+              section 10.
 

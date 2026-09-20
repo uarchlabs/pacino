@@ -6,9 +6,18 @@
  FILE:    bpu_port_inventory.md
  SOURCE:  INFRA-011
  STATUS:  DRAFT
- UPDATED: 2026-08-02
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
+
+STATUS, session-071. This is the INFRA-011 read of the RTL port
+blocks, 2026-08-02. Sections 1 and 2 have been brought up to date
+from the task records since, NOT re-read from the RTL: ubtb gained
+blk_p1 (session-063) and ubtb_interfaces.md now uses the suffixed
+names, and BP-091 made loop_pred per-slot and renamed pred_p0 to
+pred_p1 (TD#105). Sections 3 to 8 are as read by INFRA-011 and
+have not been re-verified. A fresh read is the only way to make
+this file an RTL fact again.
 
 ---
 
@@ -33,18 +42,24 @@ Doc: planning/interfaces/ubtb_interfaces.md
 |------------|-----|----------------|-------|--------|----------|
 | clk        | in  | logic          | NONE  | SCALAR | OK       |
 | rstn       | in  | logic          | NONE  | SCALAR | OK       |
-| pred_pc_p0 | in  | [VA_WIDTH-1:0] | p0    | SCALAR | MISMATCH |
-| pred_p1    | out | ubtb_pred_t    | p1    | ARRAY  | MISMATCH |
-| upd_u0     | in  | ubtb_upd_t     | u0    | ARRAY  | MISMATCH |
+| pred_pc_p0 | in  | [VA_WIDTH-1:0] | p0    | SCALAR | OK       |
+| pred_p1    | out | ubtb_pred_t    | p1    | ARRAY  | OK       |
+| blk_p1     | out | ubtb_blk_t     | p1    | SCALAR | OK       |
+| upd_u0     | in  | ubtb_upd_t     | u0    | ARRAY  | OK       |
 
 Notes:
 - pred_p1 declared with packed slot dimension on the type:
-  `ubtb_pred_t [NUM_PRED_SLOTS-1:0] pred_p1` (ubtb.sv:37).
+  `ubtb_pred_t [NUM_PRED_SLOTS-1:0] pred_p1` (ubtb.sv:37 at
+  INFRA-011).
 - upd_u0 declared with packed slot dimension on the type:
-  `ubtb_upd_t [NUM_PRED_SLOTS-1:0] upd_u0` (ubtb.sv:38).
-- MISMATCH rows: direction and type agree with the document; the
-  document name differs. Document names are pred_pc, pred, upd
-  (ubtb_interfaces.md:45-47).
+  `ubtb_upd_t [NUM_PRED_SLOTS-1:0] upd_u0` (ubtb.sv:38 at
+  INFRA-011).
+- blk_p1 added session-071 from the records: ubtb.sv has it
+  (PROJECT_STATUS.md Module Status) and ubtb_interfaces.md lists it.
+  Its line is not recorded here.
+- Findings 1 to 3 are resolved: ubtb_interfaces.md names the ports
+  pred_pc_p0, pred_p1, blk_p1 and upd_u0. This table read five
+  ports, no blk_p1, and three MISMATCH rows. Session-071.
 
 EXTRA: none
 
@@ -55,15 +70,22 @@ EXTRA: none
 RTL: rtl/core/frontend/bpu/rtl/loop_pred.sv
 Doc: planning/interfaces/loop_pred_interfaces.md
 
-| Port          | Dir | Type / Width   | Stage | Slot   | Doc |
-|---------------|-----|----------------|-------|--------|-----|
-| clk           | in  | logic          | NONE  | SCALAR | OK  |
-| rstn          | in  | logic          | NONE  | SCALAR | OK  |
-| pred_pc_p0    | in  | [VA_WIDTH-1:0] | p0    | SCALAR | OK  |
-| pred_valid_p0 | in  | logic          | p0    | SCALAR | OK  |
-| pred_p0       | out | lp_pred_t      | p0    | SCALAR | OK  |
-| upd_p0        | in  | lp_upd_t       | p0    | SCALAR | OK  |
-| upd_valid_p0  | in  | logic          | p0    | SCALAR | OK  |
+| Port          | Dir | Type / Width         | Stage | Slot   | Doc |
+|---------------|-----|----------------------|-------|--------|-----|
+| clk           | in  | logic                | NONE  | SCALAR | OK  |
+| rstn          | in  | logic                | NONE  | SCALAR | OK  |
+| pred_pc_p0    | in  | [VA_WIDTH-1:0]       | p0    | ARRAY  | OK  |
+| pred_valid_p0 | in  | [NUM_PRED_SLOTS-1:0] | p0    | ARRAY  | OK  |
+| pred_p1       | out | lp_pred_t            | p1    | ARRAY  | OK  |
+| upd_p0        | in  | lp_upd_t             | p0    | ARRAY  | OK  |
+| upd_valid_p0  | in  | [NUM_PRED_SLOTS-1:0] | p0    | ARRAY  | OK  |
+
+Notes:
+- Brought up to date session-071 from BP-091 (TD#105) and
+  loop_pred_interfaces.md, not re-read from the RTL. The payload
+  and address ports are unpacked [0:NUM_PRED_SLOTS-1] after the
+  name, the valid bits a packed vector. This table read every port
+  SCALAR and the prediction output as pred_p0, the pre-BP-091 RTL.
 
 EXTRA: none
 
@@ -314,6 +336,11 @@ EXTRA: none
 
 ## Findings
 
+Findings 1 to 3 RESOLVED session-071: ubtb_interfaces.md now uses
+the suffixed names. Finding 4 is unchanged in the document
+(bp_history_interfaces.md still gives pred_pc the packed form) and
+has not been re-checked against the RTL.
+
 1. planning/interfaces/ubtb_interfaces.md:45 -- port pred_pc_p0 is
    listed as pred_pc. The p0 stage suffix present in ubtb.sv:36 is
    absent from the document name. Direction and type agree.
@@ -337,7 +364,9 @@ EXTRA: none
 
 ## Coverage
 
-Eight modules, 140 ports read from the RTL port declaration blocks:
-ubtb 5, loop_pred 7, ftb 42, tage 16, ittage 15, sc 18, ras 21,
-bp_history 16. All eighteen Context Loaded paths were present on
+Eight modules, 140 ports read from the RTL port declaration blocks
+at INFRA-011: ubtb 5, loop_pred 7, ftb 42, tage 16, ittage 15, sc
+18, ras 21, bp_history 16. With blk_p1, ubtb is 6 and the total
+141 (session-071, from the records).
+All eighteen Context Loaded paths were present on
 disk. No port row required UNKNOWN.

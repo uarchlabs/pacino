@@ -6,7 +6,7 @@
  FILE:    sc_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-06-30
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -102,8 +102,11 @@ Signal names follow the pattern:
 `<signal>_<pipestage>`
 
 - `pipestage` : p2 for the index inputs, p3 for the counter output.
-                u0, u1 for the update path. px for flush-related
-                signals (not yet defined).
+                u0, u1 for the update path. There is no px stage
+                and no flush signal: a flush is a redirect
+                (IC-SCT-03, fe_decisions.md FE-14). This read "px
+                for flush-related signals (not yet defined)".
+                Session-071.
 
 Slot dimension uses vector index [0:NUM_PRED_SLOTS-1].
 clk and rstn carry no pipe stage suffix.
@@ -376,20 +379,24 @@ the same instance.
 ## Entry Formats
 
 The SC table entry is a single signed counter of width SC_TBL_CTR.
-There is no separate entry-format document (sc_decisions.md section
-7 file-set decision: sc_table_entry_formats.md dropped).
+There is no separate entry-format document: sc_table_entry_formats.md
+was dropped (sc_decisions.md section 1, document list). This cited "the
+sc_decisions.md section 7 file-set decision", which section 7 does not
+contain. Session-071.
 
 ---
 ## Known Gaps and Deferred Items
 
 | ID       | Item                                    | Status         |
 |----------|-----------------------------------------|----------------|
-| IC-SCT-01| sc_idx_hash not yet defined. Referenced | TBD.           |
-|          | by sc_table idx_hash_p2. Definition in  | sc_table_      |
-|          | sc_table_hash_rules.md.                  | hash_rules.md  |
-| IC-SCT-02| get_br_imli_idx not yet defined.        | TBD.           |
-|          | Referenced by sc_brimli idx_hash_p2.    | sc_table_      |
-|          | Definition in sc_table_hash_rules.md.    | hash_rules.md  |
+| IC-SCT-01| sc_idx_hash, referenced by sc_table     | CLOSED.        |
+|          | idx_hash_p2. Defined in                 | sc_table_      |
+|          | sc_table_hash_rules.md, session-058.    | hash_rules.md  |
+| IC-SCT-02| get_br_imli_idx, referenced by          | CLOSED.        |
+|          | sc_brimli idx_hash_p2. Defined in       | sc_table_      |
+|          | sc_table_hash_rules.md, session-058.    | hash_rules.md  |
+|          | Both rows read "not yet defined", TBD,  | Session-071.   |
+|          | until session-071.                      |                |
 | IC-SCT-03| Flush port definitions (_px signals).   | CLOSED BP-105. |
 |          | NO FLUSH EVENT EXISTS: a flush is a     | fe_decisions   |
 |          | redirect. sc_table needs no flush port  | FE-14.         |

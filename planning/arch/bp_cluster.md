@@ -214,114 +214,25 @@ session-071 RTL read.
     IT5: 2 banks x 512 entries, FH=9b, FH1=9b, FH2=8b, hist=32b
 
 ### RAS (Return Address Stack)
-Dual-stack, static partition. 16 speculative + 32 commit entries.
-See planning/arch/ras_decisions.md for full decision rationale.
+Dual-stack, static partition: 16 speculative + 32 commit entries,
+pointer-only snapshot recovery. Push and pop at p2, type-gated on the
+FTB branch type; p3 applies an inverse repair when the p3 view
+disagrees with p2. Outside the conditional override chain: RAS
+supplies the target for a return, ITTAGE for every other indirect
+JALR, and the FTB target is the ITTAGE-miss fallback, not a third arm.
 
-#### Speculative stack
-- Structure: simple circular buffer, pointer-only snapshot recovery.
-             Linked circular array considered and rejected session-050.
-             See planning/arch/ras_decisions.md section 3.2.
-- Entries:   16
-- Entry fields:
-    ret_addr  : VA_WIDTH bits -- PC+2 or PC+4 of instruction after call
-    rctr      : 4b            -- recursion counter, see ras_decisions.md
-                                 section 5
-- Pointers:
-    TOSR  -- Top Of Stack Read: current top for predictions
-    TOSW  -- Top Of Stack Write: next free allocation slot
-    BOS   -- Bottom Of Stack: boundary of committed state
-- Push:  write to TOSW slot, TOSR = TOSW, TOSW advances
-- Pop:   present TOSR entry as prediction, TOSR decrements.
-         No data overwritten.
-- Redirect recovery: restore (TOSR, TOSW, BOS) from FTQ snapshot.
-  Pointer-only restore; no push/pop replay needed.
-- Empty fallback: when speculative stack empty during pop, commit
-  stack top used as prediction result without consuming the entry.
+ras_decisions.md is the one home for all of it: role and repair table
+1, call and return detection with the full JALR hint table 2, the
+stacks and pointers 3, snapshot and restore 4, the recursion counter
+5, dual-slot behaviour 6, return address value 8, parameters 9.
 
-#### Commit stack
-- Structure: conventional circular stack
-- Entries:   32
-- Entry fields: ret_addr (VA_WIDTH bits), rctr (4b)
-- Pointer: CSP -- Commit Stack Pointer, the NEXT FREE slot; the top
-           is at CSP-1 and empty is CSP == 0 (ras_decisions.md 3.3).
-           This read "points to current top". Session-070.
-- Update:  on call commit from FTQ, push return address, CSP
-           advances, BOS in speculative stack updated.
-           On return commit, CSP decrements.
-
-#### Pipeline stages
-- p2: reads FTB structural prediction; executes push (call) or pop
-      (return); produces spec_pop_addr.
-- p3: checks if p3 structural prediction disagrees with p2; applies
-      inverse repair operation if needed.
-
-  p2/p3 repair table:
-    p2=push, p3=no-op  -> repair: pop
-    p2=no-op, p3=pop   -> repair: pop
-    p2=pop,  p3=no-op  -> repair: push
-    p2=no-op, p3=push  -> repair: push
-  Note: push->pop and pop->push within one p2/p3 pair cannot occur.
-
-#### Call and return detection (RISC-V register conventions)
-JAL pushes when rd = x1 or x5, and does nothing otherwise.
-
-JALR follows the RISC-V hint table exactly. Link means x1 or x5:
-
-```
-  rd      rs1     rs1 == rd    RAS action
-  !link   !link   --           none
-  !link   link    --           pop          RETURN
-  link    !link   --           push         call
-  link    link    no           pop, push    RETURN_CALL
-  link    link    yes          push         call
-```
-
-The compressed forms map onto that table, they are not extra cases:
-
-```
-  C.JR   rs1        = JALR x0, rs1, 0.  rd = x0, never link.
-                      rs1 link  -> pop.  rs1 !link -> none.
-  C.JALR rs1        = JALR x1, rs1, 0.  rd = x1, ALWAYS link.
-                      rs1 = x1  -> rs1 == rd   -> push.
-                      rs1 = x5  -> both, unequal -> pop, push.
-                      rs1 !link -> push.
-```
-
-SO C.JALR IS NEVER A POP-ONLY RETURN, and a JALR is a return only
-when rd is not a link register.
-
-  Two earlier revisions were wrong here. The first read "Return:
-  JALR, C.JR, C.JALR where rs1 = x1 or x5 (C.JALR with rs1=x5
-  excluded from return classification)", which made C.JALR with
-  rs1=x1 a return and omitted the rd constraint, so a JALR with a
-  link rd read as a return. A session-070 rewrite then gave the push
-  case as "rd = x1 or x5 and rs1 not a link register", which drops
-  the rs1 == rd row, leaving JALR x1, x1 in no class at all. The
-  table above is the fix for both. ras_decisions.md 2 is canonical
-  and now agrees: its C.JALR line read "C.JALR with rs1=x5 is
-  excluded from return classification", true of pop-only return but
-  read as excluding it from RETURN_CALL as well. Corrected
-  session-070; C.JALR rs1=x5 is a pop-then-push and C.JALR rs1=x1
-  is push only. Corrected session-070.
-
-#### Role in JALR prediction
-- RAS:    JALR/C.JR/C.JALR matching return register convention.
-          Type-gated at p2.
-- ITTAGE: every other indirect JALR. Not "remaining" by target
-          stability -- ITTAGE is consulted for all of them.
-- FTB:    the FALLBACK, not a third arm. The FTB target stands when
-          ITTAGE misses (ftb_decisions.md 4.2), whatever the target's
-          stability. An earlier revision read "three-way split" with
-          "FTB: JALR with fixed stable target (most direct calls)",
-          which makes the FTB a type-based arm. Selection is by
-          ITTAGE hit, not by branch flavour. fe_decisions.md 3.3.
-          Corrected session-070.
-
-#### Stage and update notes
-- Stage:  p2 push/pop + spec_pop_addr; p3 = p2 registered
-- Update: speculative at p2 (separate from main update channels)
-          commit stack updated at retire/commit, not post-execute
-- Outside the conditional branch override chain.
+This section restated the whole of that -- structure, pointers,
+pipeline, the repair table, the hint table and the JALR roles --
+under a session-050 decision recording the duplication as
+intentional. PROJECT_CORE.md places each rule in exactly one
+document, and this file already says so of 4.3 and 4.4 (Update
+Policy). The hint table, which ras_decisions.md 2 pointed here for,
+moved there. Session-071.
 
 ---
 
@@ -796,4 +707,7 @@ Raw observations to be captured in docs/observations/ during BP work.
               start-relative. Pipeline timeline: p2 and p3 redirects
               restated as the published successor against the
               cluster's own stage registers (FE-4).
+  2026-09-19  session-071. RAS section reduced to a summary and a
+              pointer; ras_decisions.md is its only home, and the
+              JALR hint table moved there.
 

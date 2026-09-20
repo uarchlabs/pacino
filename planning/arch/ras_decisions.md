@@ -136,7 +136,36 @@ Pop-then-push (RETURN_CALL):
   return classification", which is true of POP-ONLY return and was
   being read as excluding it from RETURN_CALL too. C.JALR rs1=x5 is
   a pop-then-push; C.JALR rs1=x1 is push only, since rd == rs1.
-  bp_cluster.md gives the full hint table. Session-070.
+  Session-070.
+
+JALR follows the RISC-V hint table exactly. Link means x1 or x5:
+
+```
+  rd      rs1     rs1 == rd    RAS action
+  !link   !link   --           none
+  !link   link    --           pop          RETURN
+  link    !link   --           push         call
+  link    link    no           pop, push    RETURN_CALL
+  link    link    yes          push         call
+```
+
+The compressed forms map onto that table, they are not extra cases:
+
+```
+  C.JR   rs1        = JALR x0, rs1, 0.  rd = x0, never link.
+                      rs1 link  -> pop.  rs1 !link -> none.
+  C.JALR rs1        = JALR x1, rs1, 0.  rd = x1, ALWAYS link.
+                      rs1 = x1  -> rs1 == rd   -> push.
+                      rs1 = x5  -> both, unequal -> pop, push.
+                      rs1 !link -> push.
+```
+
+SO C.JALR IS NEVER A POP-ONLY RETURN, and a JALR is a return only
+when rd is not a link register.
+
+The hint table and the compressed-form mapping moved here from
+bp_cluster.md session-071, which this section had pointed to for
+them; this is now their only home.
 
 RETURN_CALL, session-069. The specification's return-address-stack
 hints make a JALR whose rd and rs1 are both link registers and are
@@ -687,8 +716,8 @@ tracks the RTL.
 
 ## 9. Parameters
 
-Defined in bp_defines_pkg.sv. Names and values to be added
-when RAS RTL task is written.
+Defined in bp_defines_pkg.sv, added by BP-062. This read "Names
+and values to be added when RAS RTL task is written". Session-071.
 
   RAS_SPEC_ENTRIES   = 16        -- speculative stack depth
   RAS_COMMIT_ENTRIES = 32        -- commit stack depth
@@ -731,13 +760,13 @@ Commit stack pointer width:
 
 ## 11. Interactions With Other Planning Documents
 
-  bp_cluster.md        -- architectural summary. RAS section
-                          contains full detail by decision
-                          (session-050). Duplication with this
-                          document is intentional; to be
-                          reconciled at a later session.
-                          ras_decisions.md is canonical
-                          authority where the two conflict.
+  bp_cluster.md        -- architectural summary. Its RAS
+                          section is a short summary pointing
+                          here; this document is the only home
+                          of the RAS rules (PROJECT_CORE.md).
+                          Session-050 had recorded the full
+                          duplication as intentional;
+                          reconciled session-071.
 
   bp_arb_spec.md       -- arbitration model. Section 7.2
                           covers RAS non-RAM status. Open
@@ -822,4 +851,9 @@ Commit stack pointer width:
               4c (ruled, Jeff); the p3 repair question is open.
               4.3: history and RAS restore from the same named
               entry; the divergence note is retired.
+  2026-09-19  session-071. 2: the JALR hint table and compressed
+              mapping moved here from bp_cluster.md, whose RAS
+              section is now a summary. 9: the parameters exist,
+              BP-062. 11: the duplication with bp_cluster.md is
+              reconciled, not intentional.
 ```

@@ -1040,6 +1040,9 @@ it only documented current behavior.
 |                         |             |                   | blk_p1 and ubtb_interfaces.md    |
 |                         |             |                   | names them pred_pc_p0, pred_p1,  |
 |                         |             |                   | blk_p1, upd_u0. Session-070.     |
+|                         |             |                   | Session-071: sections 1 and 2    |
+|                         |             |                   | updated from the task records,   |
+|                         |             |                   | not the RTL; 3 to 8 unverified.  |
 | ftq_bpu_interfaces.md   | Draft       | --                | SESSION-063. FTQ/BPU port        |
 |                         |             |                   | specification: request, p1       |
 |                         |             |                   | prediction, late predictions,    |
