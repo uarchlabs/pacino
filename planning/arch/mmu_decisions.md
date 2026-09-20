@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -391,7 +391,15 @@ MMU-16a Guest page fault exists because H is mandatory. It is not
         because H is not absent.
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
-faulting virtual address for both causes.
+faulting virtual address for ALL THREE causes, cause 20 included:
+a guest-page fault reports the faulting guest virtual address in
+stval, and Shtvala puts the guest PHYSICAL address in htval
+(MMU-23). This read "for both causes" beside a three-cause table
+that MMU-16a says is not reducible to two. Every other document
+carries three: itlb_decisions.md ITLB-11,
+itlb_ifu_interfaces.md IT-6, ifu_decisions.md IFU-2a,
+dcd_decisions.md DCD-15 and ifu_ibuf_interfaces.md IB-9a.
+Session-072.
 
 ---
 
@@ -560,4 +568,8 @@ TD#118    Bounds MMU-U2.
               adopted: Svinval as its fence equivalents. MMU-14
               reads the effective attributes and sends
               non-cacheable fetch to the uncached path.
+
+  2026-09-20  session-072. section 7: Sstvala named two causes
+              beside a three-cause table; all three carry stval,
+              and htval carries the GPA on cause 20.
 ```

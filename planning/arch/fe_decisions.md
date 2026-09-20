@@ -736,18 +736,56 @@ Proposed numbering. Stated here for the first time; not carried from
          today; two-stage translation moves the boundary from 39 to
          41 and makes it visible.
 
-         WITHIN 41 BITS, LEGALITY IS THE ITLB'S. Under V=0 or
-         vsatp.MODE=Sv39 a legal address has bits 40:39 equal to bit
-         38; under vsatp.MODE=Bare all 2^41 patterns are legal. The
-         same value is legal in one regime and a fault in the other,
-         and only the ITLB holds V and vsatp.MODE. MMU-16 already
-         has cause 12 and cause 20 for the two outcomes. No predictor
+         WITHIN 41 BITS, LEGALITY IS THE ITLB'S. THREE REGIMES, not
+         two:
+
+         - translation on, V=0 with satp.MODE=Sv39 or V=1 with
+           vsatp.MODE=Sv39: a legal address has bits 40:39 equal to
+           bit 38.
+         - V=1 with vsatp.MODE=Bare: the fetch PC is a guest
+           physical address and all 2^41 patterns are legal, which
+           is why VA_WIDTH is 41.
+         - V=0 with satp.MODE=Bare: THE FETCH ADDRESS IS PHYSICAL.
+           Svbare is mandatory (rva23-profile.adoc), so this regime
+           is reachable, and it is the one the machine resets into.
+           No sign-extension rule applies and nothing translates;
+           the address is bounded by pa_bits = 36
+           (icache_decisions.md L1I-20), and an address above that
+           is out of implemented physical space, which the PMP and
+           PMA checks answer with cause 1 rather than a page fault
+           (MMU-10, MMU-12). V=1 with both vsatp.MODE and
+           hgatp.MODE Bare reaches physical space the same way.
+
+         The same value is legal in one regime and a fault in
+         another, and only the ITLB holds V, satp.MODE and
+         vsatp.MODE. MMU-16 has cause 12 and cause 20 for the
+         translating regimes and cause 1 for the third. No predictor
          and no FTQ stage evaluates this.
+
+         This enumeration carried two regimes and attributed the
+         sign-extension rule to the whole of V=0, which is wrong
+         wherever satp.MODE is Bare. Session-072.
 
          CONSEQUENCE FOR PREDICTORS. Predictor storage need not
          represent every address exactly. An FTB tag that does not
          cover bit 40 aliases; an ITTAGE field that cannot express a
-         high GPA mispredicts. Both are caught -- block end by
+         high GPA mispredicts.
+
+         THE REGIMES ABOVE BIND ARCHITECTURAL ADDRESSES, NOT
+         PREDICTIONS. The ITTAGE reconstruction ZERO-EXTENDS
+         unconditionally (TD#122, bp_cluster.md, ittage_interfaces
+         Overview), so bits 40:39 are 00 on every reconstructed
+         target, including one whose bit 38 is set in a
+         sign-extending regime. That is a MISPREDICTED TARGET, not
+         an illegal architectural address: it is corrected by the
+         mispredict redirect at resolve, and the architectural
+         target comes from the backend, which never reads it. The
+         speculative fetch to it does not commit a fault either --
+         l1i_ifu_interfaces.md IF-8 issues only on a valid
+         non-faulting translation. Zero extension is what Sv39x4
+         requires of a real GPA; the conflict is only with
+         predictions the regime would have rejected, and those are
+         wrong predictions by construction. Session-072. Both are caught -- block end by
          predecode, target by mispredict redirect at resolve -- and
          MMU-14 already keeps speculation out of non-idempotent
          regions. Architectural addresses -- pc, pft_addr,
@@ -1493,4 +1531,11 @@ create one.
   2026-09-20  session-072, second pass. 3.3 and 9: spec_pop_addr swept to
               ras_pop_addr_p2, and 9 no longer identifies the p0
               TOS read with the 3.3 entry.
+
+  2026-09-20  session-072, third pass. FE-19: the legality
+              enumeration carried two regimes and attributed the
+              sign-extension rule to all of V=0; V=0 with
+              satp.MODE=Bare is physical and bounded by pa_bits.
+              The ITTAGE zero-extend is stated as binding
+              predictions, not architectural addresses.
 ```

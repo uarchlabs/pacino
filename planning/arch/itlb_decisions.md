@@ -6,7 +6,7 @@
  FILE:    itlb_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -139,8 +139,10 @@ exists because H is mandatory in RVA23 through Sha. The IFU cannot
 collapse them.
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
-faulting virtual address for instruction page-fault and access-fault
-exceptions, so the VA travels with the cause.
+faulting virtual address for all three causes, so the VA travels
+with the cause. On cause 20 the guest PHYSICAL address travels
+separately, on IT-6a, for htval (mmu_decisions.md MMU-23). This
+named page-fault and access-fault exceptions only. Session-072.
 
 `l1i_ifu_interfaces.md` needs no amendment for this. IF-8 is a
 gate condition, issue only on a valid non-faulting translation,
@@ -322,4 +324,8 @@ TD#118    Bounds ITLB-U1.
               entry holds the page's PBMT. ITLB-12: the effective
               attributes gate the request. ITLB-13b: Svinval as
               its fence equivalents.
+
+  2026-09-20  session-072. ITLB-11: the Sstvala sentence named
+              page-fault and access-fault only; all three causes
+              carry stval.
 ```

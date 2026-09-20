@@ -34,6 +34,12 @@ RECONSTRUCTION, which sign-extends today and must zero-extend --
 Sv39x4 requires bits 63:41 to be zero, so sign extension corrupts
 any GPA with bit 38 set. TD#122.
 
+ZERO EXTENSION IS UNCONDITIONAL, so a reconstructed target always
+carries bits 40:39 = 00, which a sign-extending regime would
+reject for a target with bit 38 set. That is a mispredict, caught
+at resolve, not an illegal architectural address; fe_decisions.md
+FE-19 holds the regimes and the reasoning. Session-072.
+
 Five active tables: IT1-IT5. No IT0 base table. IT0 index position
 in parameter arrays is a placeholder only and is never instantiated.
 When no IT1-IT5 entry matches, ittage_hit is de-asserted in the
