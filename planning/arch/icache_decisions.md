@@ -31,7 +31,10 @@ interfaces it presents, miss handling, maintenance and prefetch.
   fe_decisions.md           front-end theory of operation; owns the
                             FE / TD-FE / FE-U registries
   pacino_cache.md           the generated description of the cgen
-                            output tree, node l1i
+                            output tree, node l1i. GENERATED AND
+                            DATED, not maintained; do not cite it
+                            (PROJECT_CORE.md). Listed here as a
+                            companion until session-072.
 ```
 
 Written session-069; this list called them "Not yet written and
@@ -977,5 +980,7 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
               to a 512-bit line-at-a-time port. pa_bits, the ITLB,
               the walker topology and PMP/PMA are recorded OPEN
               with recommendations and are not decided here.
-```
 
+  2026-09-20  session-072. D6: pacino_cache.md marked generated and
+              not to be cited (PROJECT_CORE).
+```

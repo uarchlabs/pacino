@@ -17,9 +17,11 @@ Those documents reference this file for FTB-specific decisions.
 Claude Code loads this file when working on ftb.sv or related
 testbenches.
 
-Note on stage notation: planning documents use s-stage notation
-(s0/s1/s2/s3). RTL and port names use p-stage notation (p0/p1/p2/p3).
-They are equivalent. Port names use p-stage; narrative uses s-stage.
+Stage notation is p0/p1/p2/p3 for prediction and u0/u1 for update,
+in every document and in the RTL (PROJECT_CORE.md, Interface
+specification approach; fe_decisions.md 12). This document carried a
+local rule that planning narrative uses s0/s1/s2/s3; PROJECT_CORE
+supersedes it. Session-072.
 
 ---
 
@@ -29,7 +31,7 @@ FTB provides the authoritative branch target for direct conditional
 and unconditional branches, and classifies branch type for the whole
 prediction cluster.
 
-Pipeline stage: s2 output. s0 send, s1 registered, s2 valid.
+Pipeline stage: p2 output. p0 send, p1 registered, p2 valid.
 
 Override, by quantity. ON DIRECTION there is a ranking: SC > TAGE >
 FTB, suspended per branch when the fast path fires
@@ -42,7 +44,7 @@ stage order, FE-3. An earlier revision compressed all of this into
 was already right. fe_decisions.md 12, narrowed session-070.
 
 FTB classifies branch type per block, which gates who supplies the
-target at s2:
+target at p2:
   return       -> RAS provides target
   indirect     -> ITTAGE provides target
   conditional  -> TAGE provides direction, FTB provides target
@@ -59,11 +61,11 @@ FTB's branch type and fallthrough outputs.
 
 ### 1.1  Timing
 
-uBTB is the zero-bubble s1 predictor that supplies the fast next-PC.
-FTB at s2 is therefore not on the critical first-cycle path, which
-gives FTB a larger, slower read budget. FTB overrides uBTB at s2 on
+uBTB is the zero-bubble p1 predictor that supplies the fast next-PC.
+FTB at p2 is therefore not on the critical first-cycle path, which
+gives FTB a larger, slower read budget. FTB overrides uBTB at p2 on
 the presumption that the larger, slower structure is more accurate.
-That override is an s2 redirect and costs a bubble. The bubble is the
+That override is a p2 redirect and costs a bubble. The bubble is the
 accepted cost of the timing latitude; it is what allows FTB to be
 sized and clocked as a second-level structure rather than a
 zero-bubble one.
@@ -186,7 +188,7 @@ same-set write, so a prediction sees a coherent pre-update snapshot of
 data and validity/replacement together (IC-FTB-14).
 
 Outside FTB: FTQ-level update scheduling, and cluster-wide override
-resolution at s2.
+resolution at p2.
 
 ---
 
@@ -306,7 +308,7 @@ WITHIN one 32-byte region the tag does not separate. FTB_OFFSET_BITS
 of 5 are in neither the index nor the tag, so PC[4:0] does not reach
 the comparator. Prediction blocks are NOT aligned -- a block begins at
 the lookup PC, which is a taken branch target and so any 2-byte
-address (ftq_decisions.md 4.4, and section 3 here). Two lookup PCs in
+address (ftq_decisions.md 4.7, and section 3 here). Two lookup PCs in
 one 32-byte region therefore hit the same entry, and the entry's
 position and pftAddr fields are measured from whichever block start
 filled it.
@@ -555,7 +557,7 @@ second tag lookup on the update path. See ftb_interfaces.md IC-FTB-10.
 FTB allocates and tracks any conditional branch or jump that resolves
 in a fetched block, taken or not. A taken-only FTB does not work here:
 a not-taken conditional that FTB did not store would give TAGE nothing
-to override at s2, put the block boundary in the wrong place, and give
+to override at p2, put the block boundary in the wrong place, and give
 RAS the wrong fallthrough.
 
 Cost: more entries than a taken-only BTB, so more pressure on the
@@ -757,8 +759,8 @@ ftb_confidence_override_rules.md. Summary:
 - Trains bimodally at execute on the resolved OUTCOME (taken ->
   increment, not-taken -> decrement, saturating), per field br0/br1.
 - Fast-path (ftb_fastpath_en = 1 AND conf saturated, i.e. 111 or 000):
-  FTB commits its direction at s2 and skips the TAGE/SC wait, ignoring
-  the TAGE/SC direction override for that branch -- saving the s3 SC
+  FTB commits its direction at p2 and skips the TAGE/SC wait, ignoring
+  the TAGE/SC direction override for that branch -- saving the p3 SC
   wait cycle (1.1). Output is ftb_fastpath_p2 (2-bit, bit0 br0,
   bit1 br1).
 - Otherwise (en=0 or conf unsaturated): FTB waits for TAGE/SC and is
@@ -1155,4 +1157,9 @@ region end, plus a full block, plus a straddling halfword pair:
 
   2026-09-20  session-072. 4.4: RVC expansion is in the IFU,
               downstream of the FTB; this read "before the FTB".
+
+  2026-09-20  session-072. D5: the local stage-notation rule is
+              replaced by PROJECT_CORE's p-stage rule and the
+              narrative s2/s3 swept to p2/p3. D4: the unaligned-block
+              citation moved from ftq_decisions.md 4.4 to 4.7.
 ```

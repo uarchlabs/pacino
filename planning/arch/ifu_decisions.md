@@ -487,8 +487,14 @@ L1I-5     2-cycle hit, tag compare after the array read. Stays
 MMU-14    Requires the uncached path of section 7.
 IFU-7     Two lines means up to two ITLB lookups per block.
           `itlb_ifu_interfaces.md` carries both.
-IF-8      Amended by TD-ITLB-1, single non-faulting condition
-          becomes two causes plus the VA.
+IF-8      NOT amended. It is a gate condition -- issue only on a
+          valid non-faulting translation -- and stands as written;
+          the three causes and the VA are behind it at IF-23 and
+          IF-24 (itlb_decisions.md 5). This read "Amended by
+          TD-ITLB-1, single non-faulting condition becomes two
+          causes plus the VA": no TD-ITLB-1 was ever issued in the
+          registry itlb_decisions.md owns, and two causes is three.
+          Session-072.
 TD#116    NOT closed by this document. Narrowed. See section 8.
 TD#118    The IFU outstanding-request depth has no real target
           until the l2 transaction limit is known. Not yet

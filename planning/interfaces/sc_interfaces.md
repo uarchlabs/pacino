@@ -50,10 +50,11 @@ Signal names follow the pattern:
                 flush is a redirect (fe_decisions.md FE-14).
                 See IC-SC-06.
 
-Planning documents use s0/s1/s2/s3 and u0/u1. RTL uses
-p0/p1/p2/p3 and u0/u1. This document uses the RTL p-naming for
-port names and the s-naming only where it quotes another planning
-document. See sc_decisions.md section 3.
+Stage notation is p0/p1/p2/p3 for prediction and u0/u1 for update,
+in every document and in the RTL (PROJECT_CORE.md, Interface
+specification approach; fe_decisions.md 12). This document carried a
+local rule that planning narrative uses s0/s1/s2/s3; PROJECT_CORE
+supersedes it. Session-072.
 
 Slot dimension uses vector index [0:NUM_PRED_SLOTS-1].
 clk and rstn carry no pipe stage suffix.

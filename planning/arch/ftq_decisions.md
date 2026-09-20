@@ -172,9 +172,11 @@ presenting the two pointers themselves. BP-102 settled it as the
 index form and this wording follows. The checkpoint array inside
 bp_history and the checkpoint field of the FTQ entry are written from
 the same p1 allocation and are one to one against an `FTQ_IDX_BITS`
-index, so the index selects the same pointer pair at 7 bits rather
-than 13 -- ghist_ptr is 8 and phist_ptr is 5 (3.1). This read 14;
-session-070. Formerly rather
+index, so the index selects the same pointer pair at FTQ_IDX_BITS = 6
+bits rather than 13 -- ghist_ptr is 8 and phist_ptr is 5 (3.1). This
+read 14 for the 13; session-070. It read 7 for the index, which is
+FTQ_PTR_BITS, the pointer with its wrap bit, not this port
+(ftq_backend_interfaces.md); session-072. Formerly rather
 than 14, and bp_history needs no change. The entry still CARRIES the
 pointer pair (section 2); nothing reads it across this interface.
 
@@ -368,7 +370,7 @@ parameter comment records the requirement.
 This is a requirement on the RESET VECTOR only and says nothing about
 prediction blocks in general. Blocks are NOT aligned: a block begins
 at the lookup PC, which is a taken branch target and so any 2-byte
-address (4.4, ftb_decisions.md 3). The FTB and the uBTB INDEX on the
+address (4.7, ftb_decisions.md 3). The FTB and the uBTB INDEX on the
 block-aligned PC, which is a different thing from the block starting
 there, and it is why two lookup PCs in one 32-byte region share an
 entry and why ftb_decisions.md 4.5 bounds checks the fall-through.

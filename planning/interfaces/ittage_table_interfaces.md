@@ -133,7 +133,8 @@ consumer/producer obligations. It does not restate struct
 field layouts -- see bp_structs_pkg.sv.
 
 ### Top Level Parameters
-These parameters are defined in the br_defines_pkg.sv.  These parameters 
+These parameters are defined in bp_defines_pkg.sv (this read
+br_defines_pkg.sv, session-072).  These parameters
 define the limits, they are not table specific.
 
 ```

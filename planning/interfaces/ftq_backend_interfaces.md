@@ -400,8 +400,10 @@ FE-3 still orders p3 over p2 between themselves.
 THE INDEX FORM, not the pointer values. The checkpoint array inside
 bp_history and the checkpoint field of the FTQ entry are written
 from the same p1 allocation and are one to one against an
-`FTQ_IDX_BITS` index, so the index selects the same pair at 7 bits
-rather than 13 and bp_history needs no change at all. (13, not 14:
+`FTQ_IDX_BITS` index, so the index selects the same pair at 6 bits
+rather than 13 and bp_history needs no change at all. This read 7,
+which is FTQ_PTR_BITS, the pointer with its wrap bit; the port above
+is [FTQ_IDX_BITS-1:0]. Session-072. (13, not 14:
 ghist_ptr is 8 and phist_ptr is 5. Session-070.)
 
 The FTQ presents the index of the entry whose END-of-block pointer

@@ -66,13 +66,20 @@ There is one untagged table, T0.
 There are separate verilog modules for the table types.
 
 Tagged tages use tage_table,
-  the file is frontend/branch_predictor/rtl/tage_table.sv
+  the file is rtl/core/frontend/bpu/rtl/tage_table.sv
 Untagged tages use tage_bim,
-  the file is frontend/branch_predictor/rtl/tage_bim.sv
+  the file is rtl/core/frontend/bpu/rtl/tage_bim.sv
+
+These read frontend/branch_predictor/rtl/, which is not the tree
+(PROJECT_CORE.md, package paths). Session-072.
 
 The untagged table, T0, is known as the base table. This is also known 
 as the bimodal table or bim. An entry in T0 is a 2b CTR. T0 has two internal
-banks using the bit write SRAM module, common/rtl/bw_ram.sv
+banks using the bit write SRAM module, rtl/lib/rtl/bw_ram.sv
+(this read common/rtl/bw_ram.sv; PROJECT_CORE.md lists
+./rtl/lib/Makefile among the RTL makefiles and no common/ track
+exists anywhere in PROJECT_CORE.md or PROJECT_STATUS.md.
+Session-072.)
 
 The tagged tables are T1-T4, and entry in a tagged table include 
 a tag field of table specific width, an EPC field of parameterized
@@ -140,17 +147,22 @@ consumer/producer obligations. It does not restate struct
 field layouts -- see bp_structs_pkg.sv.
 
 ### Top Level Parameters
-These parameters are defined in the br_defines_pkg.sv.
+These parameters are defined in bp_defines_pkg.sv (this read
+br_defines_pkg.sv, session-072).
 These parameters define the limits, they are not table specific.
 
 
-NUM_PRED_SLOTS   : int
-MAX_IDX_WIDTH    : int
-MAX_TAG_WIDTH    : int
-MAX_EPC_WIDTH    : int
-MAX_USE_WIDTH    : int
-MAX_CTR_WIDTH    : int
-MAX_VAL_WIDTH    : int
+NUM_PRED_SLOTS      : int
+TAGE_MAX_IDX_WIDTH  : int
+TAGE_MAX_TAG_WIDTH  : int
+TAGE_MAX_EPC_WIDTH  : int
+TAGE_MAX_USE_WIDTH  : int
+TAGE_MAX_CTR_WIDTH  : int
+TAGE_MAX_VAL_WIDTH  : int
+
+These carried no prefix here while tage_table_entry_formats.md
+gives TAGE_MAX_*, and the sibling predictors prefix uniformly
+(IT_MAX_*, SC_MAX_*). Session-072.
 
 Top level module parameters are vectored, the vector positions are 
 aligned with the assumption that tables will be instantiated in a generate
@@ -182,7 +194,8 @@ TAGE_TBL_IDX[0:4]  : int  this is the width of the index bus for tables T0-T4
 ## Derived Parameters
 
 ### T1-TN
-CNTRL_BITS_WIDTH = MAX_EPC_WIDTH+MAX_USE_WIDTH+MAX_CTR_WIDTH+MAX_VAL_WIDTH;
+CNTRL_BITS_WIDTH = TAGE_MAX_EPC_WIDTH+TAGE_MAX_USE_WIDTH
+                 + TAGE_MAX_CTR_WIDTH+TAGE_MAX_VAL_WIDTH;
                    the width of the control bits in tables T1-T4.
 ALLOC_DATA_WIDTH = CNTRL_BITS_WIDTH+THIS_TAG_BITS
 
@@ -280,7 +293,7 @@ output [CNTRL_BITS_WIDTH-1:0]  cntrl_bits_p1[0:NUM_PRED_SLOTS-1]
 
 output logic [THIS_INDEX_BITS-1:0]
   idx_hash_p0[0:NUM_PRED_SLOTS-1]
-output logic [MAX_TAG_WIDTH-1:0]
+output logic [TAGE_MAX_TAG_WIDTH-1:0]
   tag_hash_p0[0:NUM_PRED_SLOTS-1]
 
 input [NUM_PRED_SLOTS-1:0]     tage_pred_val_p0
@@ -524,5 +537,3 @@ alc_index_u0[s] this is allocation index used to access the ram entry for
 
 The table entry formats for TAGE are found in
 `planning/arch/tage_table_entry_formats.md`
-
-

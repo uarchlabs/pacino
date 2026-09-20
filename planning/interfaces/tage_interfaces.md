@@ -352,7 +352,9 @@ pq_not_full           -- asserted when the prediction queue has
                           room to accept a new prediction request.
                           Consumer must gate tage_pred_val_p0
                           on this signal. Pending rename to
-                          tage_PQ_not_full per TD #49 -- this
+                          tage_pq_not_full per TD #49 (lower case;
+                          this read tage_PQ_not_full, session-072)
+                          -- this
                           line said tage_uq_not_full, which is
                           the rename for upd_rdy, not for this
                           port. The port list above has it right.

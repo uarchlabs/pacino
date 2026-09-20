@@ -16,12 +16,11 @@ and planning/arch/bp_arb_spec.md section 7.2 (arbitration role).
 Claude Code loads this file when implementing or modifying ras.sv
 or tb_ras.sv.
 
-Note on stage notation: planning documents use s-stage notation
-(s0/s1/s2/s3). RTL and port names use p-stage notation
-(p0/p1/p2/p3). They are equivalent: s0=p0, s1=p1, s2=p2, s3=p3.
-Port names in this document use p-stage notation to match RTL.
-Narrative text uses s-stage notation to match planning documents.
-Cleanup of this inconsistency is a future documentation task.
+Stage notation is p0/p1/p2/p3 for prediction and u0/u1 for update,
+in every document and in the RTL (PROJECT_CORE.md, Interface
+specification approach; fe_decisions.md 12). This document carried a
+local rule that planning narrative uses s0/s1/s2/s3; PROJECT_CORE
+supersedes it. Session-072.
 
 ---
 
@@ -38,12 +37,12 @@ Single module ras.sv owns:
   OCCUR under FE-11; if the logic is in the RTL it is dead
   (ras_decisions.md 6.3, IC-RAS-04). Session-070.
 - Recursion counter management
-- p0/s0 TOS read, an input the cluster registers for the p1
+- p0 TOS read, an input the cluster registers for the p1
   prediction (fe_decisions.md 2.2). Not itself a prediction
 - Snapshot output per prediction for FTQ storage
 - Restore input from FTQ on mispredict
 - Commit stack update on FTQ commit
-- p3/s3 repair logic
+- p3 repair logic
 
 No PQ, UQ, or credit arbiter. No synchronous SRAMs.
 Both stacks are register files.
@@ -84,7 +83,7 @@ Signal names follow the pattern:
   <signal>_<pipestage>
 
   pipestage: p0, p1, p2 for prediction path.
-             p3 for s3 repair.
+             p3 for repair.
              u0, u1 for update/commit path.
              px for flush signals. Reserved and unread. There
              is no flush event and no flush protocol; see
@@ -107,7 +106,7 @@ module ras (
   input  logic rstn,
 
   // ----------------------------------------------------------
-  // p0/s0: TOS read, before the FTB result.
+  // p0: TOS read, before the FTB result.
   // Combinational read of current TOSR entry per slot.
   // Registered by the cluster and applied by the p1 mux as
   // the target of a RETURN slot. Drives no FTQ port.
@@ -117,7 +116,7 @@ module ras (
   output logic                ras_tos_valid_p0[0:NUM_PRED_SLOTS-1],
 
   // ----------------------------------------------------------
-  // p2/s2: Prediction inputs
+  // p2: Prediction inputs
   // FTB structural prediction valid. Push/pop gates on these.
   // ----------------------------------------------------------
   input  logic          ras_pred_val_p2[0:NUM_PRED_SLOTS-1],
@@ -131,7 +130,7 @@ module ras (
   input  logic [VA_WIDTH-1:0] ras_pc_p2 [0:NUM_PRED_SLOTS-1],
 
   // ----------------------------------------------------------
-  // p2/s2: Prediction outputs
+  // p2: Prediction outputs
   // ----------------------------------------------------------
   // Pop address (return target prediction) per slot.
   output logic [VA_WIDTH-1:0] ras_pop_addr_p2[0:NUM_PRED_SLOTS-1],
@@ -144,7 +143,7 @@ module ras (
   output bp_ras_snapshot_t    ras_snapshot_p2[0:NUM_PRED_SLOTS-1],
 
   // ----------------------------------------------------------
-  // p3/s3: Repair inputs
+  // p3: Repair inputs
   // Registered FTB prediction, one cycle after p2.
   // Used to detect and undo incorrect p2 push/pop.
   // See IC-RAS-11 and ras_decisions.md section 1.
@@ -221,16 +220,16 @@ Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos
 ### Timing
 
 ```
-p0/s0: Combinational TOS read. ras_tos_addr_p0 and
+p0: Combinational TOS read. ras_tos_addr_p0 and
        ras_tos_valid_p0 are valid combinationally from
        current TOSR. No push or pop at p0.
 
-p2/s2: ras_pred_val_p2 and ras_br_type_p2 valid.
+p2: ras_pred_val_p2 and ras_br_type_p2 valid.
        Push or pop executes combinationally.
        ras_pop_addr_p2, ras_pop_valid_p2, ras_snapshot_p2
        all valid combinationally in p2.
 
-p3/s3: ras_pred_val_p3 and ras_br_type_p3 are the
+p3: ras_pred_val_p3 and ras_br_type_p3 are the
        registered p2 inputs. Repair logic compares p3
        FTB prediction against the p2 operation applied
        and executes the inverse if they disagree.
@@ -246,8 +245,13 @@ ras_pred_val_p2[s] = 0  -- no valid FTB result for slot s.
                            No push or pop for slot s.
 
 ras_pop_valid_p2[s] = 1 -- ras_pop_addr_p2[s] is valid.
-                           Used by s2_redirect logic when
-                           br_type==RETURN.
+                           Used by the p2 redirect logic when
+                           br_type==RETURN. This read
+                           "s2_redirect logic": that is this
+                           document's own consumer, not a signal
+                           name. The XiangShan s2_redirect /
+                           s3_redirect citation is
+                           fe_decisions.md 11. Session-072.
 ras_pop_valid_p2[s] = 0 -- both stacks empty; no valid
                            return address available.
 
@@ -413,7 +417,7 @@ p2 push/pop combinationally.
 One commit event per cycle. The FTQ retires one entry per
 cycle; dual-slot simultaneous commit does not occur.
 
-### IC-RAS-11: p3/s3 repair
+### IC-RAS-11: p3 repair
 
 At p3 (p2 registered), if ras_br_type_p3[s] disagrees with
 the p2 operation that was applied, an inverse repair is
@@ -426,7 +430,7 @@ applied to the speculative stack:
 
 push->pop and pop->push within one p2/p3 pair cannot occur.
 Repair applies to the speculative stack only.
-See ras_decisions.md section 1 (s2/s3 repair table).
+See ras_decisions.md section 1 (p2/p3 repair table).
 
 Repair semantics: the push/pop labels denote stack-height
 restoration of resident entries, not fresh allocation or array
@@ -488,7 +492,7 @@ supplies the target for those two types only. It does not
 participate in direction prediction. This read "the branch type as
 RETURN ... for return branches only". Session-070.
 
-The p0/s0 TOS read (ras_tos_addr_p0) is available before the FTB.
+The p0 TOS read (ras_tos_addr_p0) is available before the FTB.
 The cluster registers it and the p1 selection mux applies it as the
 target of a RETURN slot; the p1 prediction the FTQ acts on is the
 cluster's, formed at p1 (fe_decisions.md FE-2, 2.2), and the p2
@@ -549,11 +553,11 @@ On rstn deassert (active low, synchronous):
 |        | ras_restore_val. ras_flush_val and    | unread ports;      |
 |        | ras_flush_snapshot are redundant and  | see 4.4.2.         |
 |        | intentionally left unread.            |                    |
-| RI-2   | s/p stage notation inconsistency.     | Future doc         |
-|        | Planning docs use s0-s3; RTL uses     | cleanup task.      |
-|        | p0-p3. This document uses p-notation  | RTL is             |
-|        | in port names and s-notation in       | authoritative.     |
-|        | narrative to match existing practice. |                    |
+| RI-2   | CLOSED session-072. s/p stage         | CLOSED.            |
+|        | notation. PROJECT_CORE rules p0-p3    | p-notation         |
+|        | and u0/u1 everywhere, so the dual     | throughout.        |
+|        | p/s labels here are swept to p. Not   |                    |
+|        | a future cleanup task.                |                    |
 | RI-3   | PHR/GHR contribution to RAS.          | N/A. RAS does      |
 |        |                                       | not use folded     |
 |        |                                       | history. No action.|
@@ -608,3 +612,14 @@ On rstn deassert (active low, synchronous):
 
   2026-09-20  session-072. IC-RAS-10: RETURN_CALL moved out of the
               call arm into its own arm, citing ras_decisions.md 3.3.
+
+  2026-09-20  session-072. D5: the local stage-notation rule replaced
+              by PROJECT_CORE's. D12: the RAS inventory row points
+              at ras_decisions.md 1 and 1.2, not "p1".
+
+  2026-09-20  session-072. D5: the dual p/s stage labels swept to
+              p-notation and RI-2 closed; it listed the notation as a
+              future cleanup task.
+
+  2026-09-20  session-072. D5: the last s-notation site, "s2_redirect
+              logic", is the p2 redirect logic.

@@ -315,9 +315,10 @@ drive:
            where training matters most.
   TD-FE-7  CLOSED by BP-102. bp_cluster had no rollback TRIGGER
            input. The checkpoints were all inside bp_history; only
-           the index was missing on a backend redirect. Seven bits,
-           priority over the cluster's own p2/p3 arms, bp_history
-           unchanged. The INDEX form was taken over the pointer-value
+           the index was missing on a backend redirect.
+           FTQ_IDX_BITS = 6 bits (this read seven, which is
+           FTQ_PTR_BITS; session-072), priority over the cluster's
+           own p2/p3 arms, bp_history unchanged. The INDEX form was taken over the pointer-value
            form; ftq_decisions.md 3.2 had specified the value form
            and was corrected.
 ```

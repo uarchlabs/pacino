@@ -66,7 +66,7 @@ bp_defines_pkg.sv.
 
   -- Checkpoint write
   ckpt_wr_en   : input  logic                       -- write enable
-  ckpt_wr_idx  : input  logic [FTQ_IDX_BITS-1:0]    -- FTQ slot index
+  ckpt_wr_idx  : input  logic [FTQ_IDX_BITS-1:0]    -- FTQ ENTRY index
 
   -- Rollback (redirect recovery, by checkpoint index)
   rollback_valid    : input  logic                  -- restore enable
@@ -223,7 +223,7 @@ only advance, rollback by index, FTQ visibility vs ownership).
 ## Checkpoint Interface
 
 ### Producer: BP cluster (writes on each accepted bundle)
-### Consumer: bp_history (stores pointer snapshot per FTQ slot)
+### Consumer: bp_history (stores pointer snapshot per FTQ ENTRY)
 
 ### Timing
 
@@ -249,7 +249,10 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
 ### Producer obligations
 
-  - ckpt_wr_idx must be a valid FTQ slot index (0 to FTQ_DEPTH-1).
+  - ckpt_wr_idx must be a valid FTQ ENTRY index (0 to FTQ_DEPTH-1).
+    "Slot" is the prediction slot, a different concept
+    (bp_history_decisions.md, fe_decisions.md TD-FE-5); these three
+    sites read "FTQ slot". Session-072.
   - ckpt_wr_en should be asserted in the same cycle as the bundle
     prediction update (num_branches > 0) it checkpoints.
   - Producer must not write the same ckpt_wr_idx twice without an
@@ -488,5 +491,3 @@ and the module-owned pointer decision.
               The 2026-08-09 entry was labelled INFRA-012, a task
               that did not exist then; it was a PA-direct
               correction.
-```
-

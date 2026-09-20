@@ -43,7 +43,11 @@ The buses are named as tage_tN_idx_fh,tage_tN_tag_fh1,tage_tN_tag_fh2,
 where tN is either t1, t2, t3, t4.
 
 The width parameters for these buses are similarly named
-TAGE_TN_FH TAGE_TN_FH1 TAGE_TN_FH2, again TN is T1, T2, T3, T4
+TAGE_TBL_FH[N] TAGE_TBL_FH1[N] TAGE_TBL_FH2[N], where N is the value
+of THIS_TABLE, 1 to 4. These read TAGE_TN_FH / _FH1 / _FH2, which no
+package declares; the parameters are the arrays
+(tage_table_interfaces.md, bp_history_decisions.md). ITTAGE and SC
+use the array form. Session-072.
 
 ---
 
@@ -77,7 +81,7 @@ The width of the output is set by module parameter THIS_INDEX_BITS.
 
 The width of the PC input global parameter VA_WIDTH
 The width of the fh input is set by the table specific parameter
-TAGE_TN_FH, where N is determined by the value of module parameter THIS_TABLE
+TAGE_TBL_FH[N], where N is determined by the value of module parameter THIS_TABLE
 
 The hashing operation is 
 
@@ -98,10 +102,10 @@ The width of the output is set by module parameter THIS_TAG_BITS.
 The width of the PC input global parameter VA_WIDTH
 
 The width of the fh1 input is set by the table specific parameter
-TAGE_TN_FH1, where N is determined by the value of module parameter THIS_TABLE
+TAGE_TBL_FH1[N], where N is determined by the value of module parameter THIS_TABLE
 
 The width of the fh2 input is set by the table specific parameter
-TAGE_TN_FH2, where N is determined by the value of module parameter THIS_TABLE
+TAGE_TBL_FH2[N], where N is determined by the value of module parameter THIS_TABLE
 
 The hashing operation is 
 

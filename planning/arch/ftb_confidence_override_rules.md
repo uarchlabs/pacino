@@ -34,9 +34,9 @@ of that prediction. FTB always submits a direction for every valid
 conditional.
 
 When conf is SATURATED (all-ones or all-zeros) and the fast-path is
-enabled, FTB commits its own direction at s2 and does NOT wait for
+enabled, FTB commits its own direction at p2 and does NOT wait for
 TAGE/SC, ignoring any TAGE/SC direction difference for that branch.
-This saves the cycle that waiting for the s3 SC response would cost
+This saves the cycle that waiting for the p3 SC response would cost
 (ftb_decisions.md 1.1). When conf is not saturated, or the fast-path is
 disabled, FTB waits for TAGE/SC and is overridden as normal -- ordinary
 BTB-like behavior.
@@ -59,7 +59,7 @@ are independent of this mechanism.
   Strength   = distance from the midpoint. 111 / 000 are the two
                saturated (maximum-certainty) states.
 
-conf is exposed at s2 on ftb_br0_conf_p2 / ftb_br1_conf_p2
+conf is exposed at p2 on ftb_br0_conf_p2 / ftb_br1_conf_p2
 (ftb_interfaces.md 2.3).
 
 ---
@@ -124,8 +124,8 @@ fresh or flapping entry is mid-range and never fast-paths (section 7).
 ### 4.2 Effect
 
 When the fast-path fires for branch i:
-  - FTB commits its own direction (conf MSB) at s2 for that branch.
-  - FTB does NOT wait for the s3 SC response -- this is the saved cycle.
+  - FTB commits its own direction (conf MSB) at p2 for that branch.
+  - FTB does NOT wait for the p3 SC response -- this is the saved cycle.
   - Any TAGE or SC DIRECTION difference for that branch is ignored; no
     TAGE/SC direction override is applied.
   - TARGET overrides (ITTAGE / RAS) are unaffected and proceed normally.
@@ -208,8 +208,10 @@ Reallocation overwrites conf with the weak init for the new branch's
 observed direction, so a reallocated entry never carries the previous
 branch's conf.
 
-Add FTB_CONF_INIT_TKN / FTB_CONF_INIT_NTK to bp_defines_pkg.sv at RTL
-task time (ftb_decisions.md 8).
+FTB_CONF_INIT_TKN and FTB_CONF_INIT_NTK ARE IN bp_defines_pkg.sv,
+added by BP-065/065a/066a and listed with their values in
+ftb_decisions.md 8. This asked for them to be added "at RTL task
+time". Session-072.
 
 ---
 
@@ -300,3 +302,6 @@ Tests must cover:
               SC still requested and trained under fast-path (section 6).
               Self-correction at the endpoints added (3.4).
 
+  2026-09-20  session-072. The local s-stage narrative swept to
+              p-stage (PROJECT_CORE). FTB_CONF_INIT_TKN / _NTK are
+              already in bp_defines_pkg.sv, not pending an RTL task.

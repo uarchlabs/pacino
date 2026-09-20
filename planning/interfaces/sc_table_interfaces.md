@@ -36,9 +36,12 @@ ST0-ST4.
 There are two table module types.
 
 sc_table implements ST0-ST3. The file is
-frontend/branch_predictor/rtl/sc_table.sv.
+rtl/core/frontend/bpu/rtl/sc_table.sv.
 sc_brimli implements ST4. The file is
-frontend/branch_predictor/rtl/sc_brimli.sv.
+rtl/core/frontend/bpu/rtl/sc_brimli.sv.
+
+These read frontend/branch_predictor/rtl/, which is not the tree
+(PROJECT_CORE.md, package paths). Session-072.
 
 sc_brimli is a separate module to simplify specialization and
 instantiation in sc.sv. The two modules may be combined in a future

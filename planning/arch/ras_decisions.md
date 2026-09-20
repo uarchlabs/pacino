@@ -742,8 +742,11 @@ and values to be added when RAS RTL task is written". Session-071.
   RAS_RCTR_WIDTH     = 4         -- recursion counter bits
   RAS_ADDR_WIDTH     = VA_WIDTH  -- return address width
 
-Pointer width (already present in bp_structs_pkg.sv as
-RAS_PTR_BITS):
+Pointer width (already present in bp_defines_pkg.sv as
+RAS_PTR_BITS; it is a parameter, and section 11 and
+ras_interfaces.md both place it there. This read
+bp_structs_pkg.sv, which holds types only
+(PROJECT_STATUS.md, package split). Session-072):
   RAS_PTR_BITS = $clog2(RAS_SPEC_ENTRIES) = 4b
 
 bp_ras_snapshot_t uses RAS_PTR_BITS for tosr, tosw, bos.
@@ -880,4 +883,7 @@ Commit stack pointer width:
 
   2026-09-20  session-072, second pass. 1.1: spec_pop_addr retired in favour of
               the declared ras_tos_addr_p0 and ras_pop_addr_p2.
+
+  2026-09-20  session-072. D22: RAS_PTR_BITS is in
+              bp_defines_pkg.sv, not bp_structs_pkg.sv.
 ```

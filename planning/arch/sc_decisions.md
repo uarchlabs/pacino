@@ -56,7 +56,8 @@ Status). Session-071.
 
 ```
 - Decisions related to the branch prediction unit
-    - `planning/arch/bp_decisions.md`
+    - `planning/arch/bp_cluster.md`  (this read bp_decisions.md,
+      which does not exist; session-072)
 
 - Decisions related to the load balanced prediction/update interface
     - `planning/arch/bp_arb_spec.md`
@@ -82,7 +83,8 @@ There is a library of common/shared modules.
     - This is the basis of the SC tables
  
 - RAM init module
-    - `rtl/lib/rtl/sram_init.sv`
+    - `components/rtl/sram_init.sv`   (this read rtl/lib/rtl/;
+      session-072, see sram_init.md)
     - This is the module that performs post reset table initization.
 ```
 
@@ -103,8 +105,8 @@ prediction. The threshold mechanism and the override-corner logic are specified
 in sections 9 (prediction) and 10 (update); the SC does not use a fixed
 LO/HI threshold pair.
 
-The TAGE s2 output is supplied to the SC, the SC operation is one cycle and the
-SC outputs its results in s3.
+The TAGE p2 output is supplied to the SC, the SC operation is one cycle and the
+SC outputs its results in p3.
 
 Like TAGE, the SC supports dual predictions. The two slots have separate
 table RAMs (section 6) and predict in parallel. They are NOT wholly
@@ -119,22 +121,16 @@ TAGE.
 
 ## 3. Pipeline Notation
 
-NOTE: There is an unfortunate discrepency in nomenclature of pipe stage naming.
+Stage notation is p0/p1/p2/p3 for prediction and u0/u1 for update, in
+every document and in the RTL (PROJECT_CORE.md, Interface specification
+approach; fe_decisions.md 12).
 
-The planning documents, specifications, etc, use s0/s1/s2/s3 pipestage naming.
-However the RTL uses p0/p1/p2/p3. This document will continue the s0-3 labels
-for consistency with the other documents until such time that all documents can
-be updated.
+The SC begins prediction operation using p2 signals.
 
-The reason for the shift is the prediction slot 0/slot 1 complication re: slot0
--> s0, slot1 -> s1
-
-The SC begins prediction operation using s2 signals.
-
-For updates the pipestage numbering is u0/u1. This is consistent with
-documentation and RTL.
-
-So planning docs say s0/s1/s2/s3/u0/u1, RTL should use p0/p1/p2/p3/u0/u1.
+This section read that planning documents use s0/s1/s2/s3 and that this
+document would keep the s-labels until every document could be updated.
+PROJECT_CORE supersedes that local rule: s0=p0, s1=p1, s2=p2, s3=p3, and
+a document carrying the old labels is stale. Session-072.
 
 ---
 
@@ -224,7 +220,7 @@ Each table ST1-ST3 has a different history length. History length determines
 how many bits of history are XOR's with the PC to form the index.
 
 The table geometry are controlled by parameter arrays. These parameters are
-found in `bp_defined_pkg.sv`. 
+found in `bp_defines_pkg.sv`. 
 
 NOTE: `SC_TBL_BANKS[0:4]` this parameter is not currently used.
 
@@ -243,8 +239,9 @@ document.
 
 ### Parameter meaning 
 
-The values are declared in `bp_defines_pkg.sv1`. That document is the reference
-this info is provided to assist the discussion.
+The values are declared in `bp_defines_pkg.sv`. That file is the reference;
+this info is provided to assist the discussion. The two spellings here read
+`bp_defined_pkg.sv` and `bp_defines_pkg.sv1`. Session-072.
 
 ```
 SC_TBL_BANKS[n]  : this parameter is not currently used.
@@ -299,7 +296,7 @@ There are local registers in `sc_cntrl.sv`. They are defined here:
 
 ```
 //Unsigned dynamic threshold
-logic [SC_THRSH_BITS-1:0]  threshold,threshhold_d;
+logic [SC_THRSH_BITS-1:0]  threshold,threshold_d;   //was threshhold_d
 
 //Threshold adaption counter, includes declaration of temporaries
 logic signed [SC_TC_BITS-1:0]     TC,TC_d,TC_inc; 
@@ -759,7 +756,7 @@ Entries in the SC tables do not require a valid bit.
 
 The entries in the RAMs are initialized on the rising edge of the active low
 reset.  On detection of this edge the `sram_init` module walks each entry in
-the RAMs writing value S`C_SRAM_INIT_VALUE` to the entry. Note all RAMs are
+the RAMs writing value `SC_SRAM_INIT_VALUE` to the entry. Note all RAMs are
 accessed in parallel during this process. The `sram_init` module is
 parameterized with the maximum number of entries across ST0-ST4 and the maximum
 data width across each table.
@@ -824,3 +821,9 @@ the number of index bits or number of entries in this table instance.
               format document as dropped and the counter rules as
               section 10.
 
+  2026-09-20  session-072. D5: the TAGE/SC stage text swept to
+              p-notation. D3: sram_init.sv path normalised;
+              bw_ram.sv marked unconfirmed.
+
+  2026-09-20  session-072. D3: bw_ram.sv path confirmed as
+              rtl/lib/rtl/bw_ram.sv.

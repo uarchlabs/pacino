@@ -339,7 +339,9 @@ EXTRA: none
 Findings 1 to 3 RESOLVED session-071: ubtb_interfaces.md now uses
 the suffixed names. Finding 4 is unchanged in the document
 (bp_history_interfaces.md still gives pred_pc the packed form) and
-has not been re-checked against the RTL.
+has not been re-checked against the RTL. Finding 4 cited line 58,
+which is the clk port; the pred_pc line is cited by name instead,
+since line numbers move. Session-072.
 
 1. planning/interfaces/ubtb_interfaces.md:45 -- port pred_pc_p0 is
    listed as pred_pc. The p0 stage suffix present in ubtb.sv:36 is
@@ -353,8 +355,8 @@ has not been re-checked against the RTL.
    listed as upd. The u0 stage suffix present in ubtb.sv:38 is
    absent from the document name. Direction and type agree.
 
-4. planning/interfaces/bp_history_interfaces.md:58 -- port pred_pc
-   is listed as `input logic [VA_WIDTH-1:0] [2]`, both dimensions
+4. planning/interfaces/bp_history_interfaces.md, Port List, the
+   pred_pc line -- port pred_pc is listed as `input logic [VA_WIDTH-1:0] [2]`, both dimensions
    before the name (packed form). bp_history.sv:36 declares
    `input logic [VA_WIDTH-1:0] pred_pc [2]`, the [2] dimension
    unpacked after the name. Direction agrees; the dimension

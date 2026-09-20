@@ -57,7 +57,7 @@ This spec defines:
 |Predictor|RAM-based|Pred stage|Override stage|Update timing          |
 |---------|---------|----------|--------------|-----------------------|
 | uFTB    |No       |p0        |p0            |Immediate              |
-| RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read, an input to the p1 prediction (fe_decisions.md 12, session-071). p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md p1.   |
+| RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read, an input to the p1 prediction (fe_decisions.md 12, session-071). p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md 1 and 1.2.   |
 | FTB     |Yes      |p1/p2     |p1/p2         |u0/u1                  |
 | LP      |NO*      |p1        |NONE**        |u0/u1                  |
 | TAGE    |Yes      |p2        |p2            |u0/u1                  |

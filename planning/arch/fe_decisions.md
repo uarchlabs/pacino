@@ -1074,7 +1074,7 @@ ubtb.sv.
            known only to the FTQ and no port carried it in.
 
            The fix, as built: two input ports, ftq_rollback_val and
-           ftq_rollback_idx -- seven bits, a valid and an index, no
+           ftq_rollback_idx -- a valid and an FTQ_IDX_BITS index, no
            history data -- ORed into the existing rollback with
            priority over the cluster's own, since an architectural
            correction outranks a speculative one. bp_history is
@@ -1086,7 +1086,12 @@ ubtb.sv.
            written from the same p1 allocation and are one to one
            against an FTQ_IDX_BITS index, so presenting the index
            selects the same pointer pair the values would have, at
-           7 bits rather than 13, and leaves bp_history untouched.
+           FTQ_IDX_BITS = 6 bits rather than 13, and leaves
+           bp_history untouched. SEVEN IS FTQ_PTR_BITS, the pointer
+           with its wrap bit, which this port does not carry: the
+           port is [FTQ_IDX_BITS-1:0] (ftq_backend_interfaces.md,
+           ftq_bpu_interfaces.md) and FTQ_IDX_BITS is 6. This read
+           seven in both places. Session-072.
            (13, not 14: ghist_ptr is 8 and phist_ptr is 5,
            ftq_decisions.md 3.1, ftq_entry_formats.md 2,
            bp_history_decisions.md 7. Session-070.)
@@ -1540,4 +1545,7 @@ create one.
               satp.MODE=Bare is physical and bounded by pa_bits.
               The ITTAGE zero-extend is stated as binding
               predictions, not architectural addresses.
+
+  2026-09-20  session-072. D18: the rollback index is FTQ_IDX_BITS = 6,
+              not 7; 7 is FTQ_PTR_BITS.
 ```

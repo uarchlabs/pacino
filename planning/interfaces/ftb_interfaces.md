@@ -15,9 +15,10 @@ which is the canonical authority. Where this file and ftb_decisions.md
 disagree, ftb_decisions.md wins and this file is wrong.
 
 Conventions:
-  - Stage notation: planning narrative uses s-stage (s0/s1/s2/s3).
-    Port names use p-stage (p0/p1/p2) for prediction, u0 for update,
-    px for flush. s-stage and p-stage are equivalent.
+  - Stage notation: p0/p1/p2/p3 for prediction and u0/u1 for update,
+    in every document and in the RTL (PROJECT_CORE.md,
+    fe_decisions.md 12). This read that planning narrative uses
+    s-stage; PROJECT_CORE supersedes that. Session-072.
   - FTB is a SINGLE data array, one lookup per cycle, one entry per
     block. There are NO per-slot RAMs and NO NUM_PRED_SLOTS unpacking
     on FTB ports. The cluster's two branches per cycle are br0 and br1
@@ -69,7 +70,7 @@ the storage modules (IC-FTB-12).
   rstn              -- active-low synchronous reset (to ftb_plru and
                        ftb_cntrl; ftb_array has no reset)
 
-### 2.2 Prediction request (s0 in, registered s1)
+### 2.2 Prediction request (p0 in, registered p1)
 
   input  logic                  pred_valid_p0
                         -- 1 = prediction request valid this cycle.
@@ -78,10 +79,10 @@ the storage modules (IC-FTB-12).
                            covers the 32-byte block from this PC. No
                            slot-1 PC; FTB is not slot-split.
 
-bp_cluster owns pipeline advance (s0 -> s1 -> s2). FTB registers the
-request internally; outputs in 2.3 are valid at s2.
+bp_cluster owns pipeline advance (p0 -> p1 -> p2). FTB registers the
+request internally; outputs in 2.3 are valid at p2.
 
-### 2.3 Prediction outputs (to bp_cluster override logic, at s2)
+### 2.3 Prediction outputs (to bp_cluster override logic, at p2)
 
 One entry's worth of outputs. br0 and br1 are the two conditional
 fields of the one indexed entry, not two slots.
@@ -195,7 +196,7 @@ fields of the one indexed entry, not two slots.
                            Authoritative for the cluster; RAS push
                            uses this value (IC-FTB-03).
 
-### 2.4 Fast-path (direction bypass) (to override logic, s2)
+### 2.4 Fast-path (direction bypass) (to override logic, p2)
 
   input  logic                  ftb_fastpath_en
                         -- 1 = fast-path enabled; a saturated conf may
@@ -210,7 +211,7 @@ fields of the one indexed entry, not two slots.
                            1 = FTB commits its direction for that branch
                            and the cluster must NOT apply a TAGE/SC
                            DIRECTION override and must not stall for SC
-                           (saves the s3 SC cycle). Asserted when
+                           (saves the p3 SC cycle). Asserted when
                            ftb_fastpath_en AND conf saturated (111 or
                            000) AND ftb_valid_p2 AND the matching
                            ftb_brI_valid_p2 (IC-FTB-02). Target
@@ -540,10 +541,11 @@ IC-FTB-12 (session-053):
   this is the FTB cold init -- the FTB has NO sram_init mechanism.
   Way-match, PLRU victim selection, PLRU next-state, and valid set/clear
   are all computed in ftb_cntrl, which drives both storage modules. The
-  logical entry is partitioned: 1 valid bit/way in ftb_plru, 112 in
-  ftb_array. This read 105, stale since BP-099 (session-070), then
-  109, stale since session-071 widened the stored positions;
-  ftb_decisions.md 8 is the authority.
+  logical entry is partitioned: 1 valid bit/way in ftb_plru, the
+  FTB_RAM_ENTRY_WIDTH bits in ftb_array. This carried the number,
+  which read 105 until session-070 and 109 until session-071;
+  ftb_decisions.md 8 is the authority and is no longer copied here.
+  Session-072.
 
 IC-FTB-13 (session-053):
   Active-low controls. All enables on ftb_array and ftb_plru are active
@@ -609,53 +611,28 @@ IC-FTB-16 (2026-08-19):
 
 ## 5. Parameters
 
-All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
+All from bp_defines_pkg.sv. THE VALUES ARE NOT RESTATED HERE:
+ftb_decisions.md 8 and 8.1 are their sole home, as section 3's
+arithmetic-not-restated block and IC-FTB-08 in section 4 both say. The names this interface uses:
 
-  VA_WIDTH          = 41       ruled session-070, FE-19; the
-                               package still says 40, TD#122
-  FTB_WAYS          = 4
-  FTB_ENTRIES       = 2048
-  FTB_SETS          = 512
-  FTB_IDX_BITS      = 9
-  FTB_WAY_BITS      = 2        $clog2(FTB_WAYS), carried writeWay
-  FTB_BLOCK_BYTES   = 32
-  FTB_OFFSET_BITS   = 5        $clog2(FTB_BLOCK_BYTES), byte offset
-  FTB_TAG_BITS      = 26       PINNED, not derived. The formula
-                               VA_WIDTH - FTB_IDX_BITS -
-                               FTB_OFFSET_BITS gives 27 at
-                               VA_WIDTH 41. ftb_decisions.md 4.1,
-                               TD#122
-  PLRU_BITS         = 3        FTB_WAYS - 1, tree-PLRU (in ftb_plru)
-  PFTADDR_BITS      = 6        $clog2(FTB_BLOCK_BYTES) + 1, no
-                               carry bit (ftb_decisions.md 5.5,
-                               8.1). This line read 4 with the old
-                               /4 granularity; TD#124
-  TAR_STAT_BITS     = 2        fit / overflow / underflow
-  FTB_BR_POS_BITS   = 4        $clog2(FTB_BLOCK_BYTES/2), in-block
-                               position at 2-BYTE granularity. This
-                               read 3 with /4, superseded by BP-099
-                               for the C extension. Session-070.
-                               The width of every position PORT,
-                               start-relative
-  FTB_BR_RPOS_BITS  = 5        FTB_BR_POS_BITS + 1, the STORED
-                               position, region-relative
-                               (ftb_decisions.md 4.6). Session-071,
-                               TD#125
-  FTB_BR_TGT_BITS   = 13       conditional target displacement
-  FTB_JMP_TGT_BITS  = 21       jump target displacement
-  FTB_CONF_WIDTH    = 3        bimodal direction counter (MSB = dir)
-  FTB_CONF_INIT_TKN = 3'b100   allocate weak-taken (MSB=1, unsaturated)
-  FTB_CONF_INIT_NTK = 3'b011   allocate weak-not-taken (MSB=0, unsat.)
-  Invariant: both init values unsaturated, MSB matches direction
-  (IC-FTB-06). There is no FTB_CONF_SUPPRESS_THRESH.
+  VA_WIDTH, FTB_WAYS, FTB_ENTRIES, FTB_SETS, FTB_IDX_BITS,
+  FTB_WAY_BITS, FTB_BLOCK_BYTES, FTB_OFFSET_BITS, FTB_TAG_BITS,
+  PLRU_BITS, PFTADDR_BITS, TAR_STAT_BITS, FTB_BR_POS_BITS
+  (the width of every position PORT, start-relative),
+  FTB_BR_RPOS_BITS (the STORED position, region-relative),
+  FTB_BR_TGT_BITS, FTB_JMP_TGT_BITS, FTB_CONF_WIDTH,
+  FTB_CONF_INIT_TKN, FTB_CONF_INIT_NTK, and the entry arithmetic
+  FTB_ENTRY_WIDTH / FTB_SET_WIDTH (logical, including the valid bit)
+  and FTB_RAM_ENTRY_WIDTH / FTB_RAM_SET_WIDTH (the ftb_array data).
 
-  FTB_ENTRY_WIDTH = 113 / FTB_SET_WIDTH = 452   (logical, incl. valid;
-  110 / 440 before the stored positions widened, session-071)
-  FTB_RAM_ENTRY_WIDTH = 112 / FTB_RAM_SET_WIDTH = 448   (ftb_array data;
-  109 / 436 before session-071, which widened FTB_ENTRY_WIDTH above
-  and left these)
-  -- ftb_decisions.md 8 is the authority; 105 / 420 here was stale
-  since BP-099. Corrected session-070.
+  Invariant: both conf init values unsaturated, MSB matches
+  direction (IC-FTB-06). There is no FTB_CONF_SUPPRESS_THRESH.
+
+This section carried every value and the entry arithmetic, against
+the rule the file states about itself twice. The copies agreed with
+ftb_decisions.md 8 at the time they were removed, having been stale
+at 105 / 420 until session-070 and at 109 / 436 until session-071 --
+which is the argument for not keeping them. Session-072.
 
 ftb_array uses the FTB_RAM_* widths; ftb_plru holds the valid bit per
 way and the PLRU state. All FTB field widths are settled.
@@ -745,3 +722,15 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
               mapping question. Section 5: FTB_BR_RPOS_BITS added,
               entry 110 -> 113. TD#125 tracks the RTL.
 
+  2026-09-20  session-072. D5: the local stage-notation rule replaced
+              by PROJECT_CORE's.
+
+  2026-09-20  session-072. D5: the s-stage section heads and timing
+              text swept to p-stage.
+
+  2026-09-20  session-072. D13: section 5 and IC-FTB-12 no longer
+              restate the field widths or the entry arithmetic;
+              ftb_decisions.md 8 is the sole home, as section 3's
+              arithmetic-not-restated block and IC-FTB-08 already
+              said. Both citations read "3.4", a section this file
+              does not have; session-072.
