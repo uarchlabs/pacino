@@ -233,7 +233,13 @@ MMU-13 The attributes carried per region are cacheable, coherent,
 MMU-14 Non-idempotent regions are never fetched speculatively and
        never prefetched. This binds the L1I-21 prefetch bit: a
        prefetch to a non-idempotent region is dropped, not
-       faulted.
+       faulted. The attributes are the EFFECTIVE ones of MMU-U6,
+       not the region table's alone: a fetch uses the L1I only
+       when the effective type is cacheable and idempotent, and
+       otherwise takes the uncached path of `ifu_decisions.md`
+       IFU-21. So a page marked NC or IO never allocates in the
+       L1I. Session-071; this read "Non-idempotent regions" against
+       the region table only.
 
 MMU-15 PMA comes from a static region table fixed at
        configuration, one entry per address range.
@@ -268,13 +274,41 @@ MMU-U5 CLOSED session-070 AS MANDATORY. `rva23-profile.adoc`
        alongside MMU-15. The precedence rule is required, not
        conditional, and is MMU-U6.
 
-MMU-U6 The Svpbmt precedence rule. The PTE PBMT field and the
-       MMU-15 static region table both describe the memory type of
-       one access. Which wins, and what happens when the PTE names
-       a type the region does not support, is not decided. Bears on
-       MMU-14: if a PTE can make a region non-idempotent that the
-       region table calls idempotent, the speculation gate reads
-       the wrong source. Unresolved.
+MMU-U6 CLOSED session-071 (Jeff). THE EFFECTIVE MEMORY TYPE IS
+       THE MOST RESTRICTIVE of the MMU-15 region table, the G-stage
+       PBMT and the VS-stage PBMT. A PTE can make an access less
+       cacheable, non-idempotent or strongly ordered, never the
+       reverse; the region table still decides what the memory is.
+       Ordered PMA < NC < IO, the walker returns the more
+       restrictive of the two stages' PBMT as one 2-bit value
+       (itlb_l2tlb_interfaces.md IL-9), the L1 TLB stores it per
+       entry, and on a hit combines it with the region attributes
+       of the physical address. The combination is order-free, so
+       the specification's G-stage-then-VS-stage override sequence
+       needs no separate handling.
+
+       THIS IS A LEGAL STRICT IMPLEMENTATION OF SVPBMT'S OVERRIDE,
+       not the override as the specification describes it. The
+       specification lets NC on an I/O region make accesses
+       idempotent and weakly ordered, and names write-combining and
+       speculative access as the use. Those relaxations are
+       permissions: forgoing speculation is always legal and
+       stronger ordering always satisfies RVWMO. The cost is on the
+       D side, where a driver mapping device memory NC gets
+       strongly-ordered, non-speculative access. XiangShan gates its
+       uncached path the same way, on the region's MMIO bit OR a
+       non-PMA PBMT.
+
+       WALKER OBLIGATIONS, beside the Svnapot ones of MMU-U7:
+       PBMT = 3 is reserved and raises a page fault; with
+       menvcfg.PBMTE clear, or henvcfg.PBMTE clear for the G-stage,
+       bits 62-61 of a leaf PTE must be zero and a non-zero value
+       raises a page fault; bits 62-61 of a non-leaf PTE are
+       reserved. Cause 12 at a single or VS stage, 20 at the
+       G-stage (MMU-16).
+
+       It read: "Which wins, and what happens when the PTE names a
+       type the region does not support, is not decided." 
 
 ---
 
@@ -286,12 +320,13 @@ MMU-U7 SVNAPOT IS MANDATORY AND IS NOWHERE IN THIS TREE.
        in RVA23S64. It was optional in RVA22 and is not.
 
        `itlb_decisions.md` ITLB-3 and `itlb_l2tlb_interfaces.md`
-       IL-7 both name three Sv39 page sizes, 4 KiB, 2 MiB and
-       1 GiB. Svnapot adds the 64 KiB contiguous case through the
+       IL-7 named three Sv39 page sizes, 4 KiB, 2 MiB and 1 GiB,
+       until session-071; both now name four. Svnapot adds the
+       64 KiB contiguous case through the
        PTE N bit, so there is a fourth. `l2t_itlb_size` is two
-       bits, which encodes four, so the port width survives; what
-       does not survive is IL-7's wording and the ITLB's install
-       path, which are written for three.
+       bits, which encodes four, so the port width survived; IL-7's
+       wording and the ITLB's install path, written for three, were
+       updated session-071.
 
        THIS DOCUMENT HAS NO L2 TLB PAGE-SIZE DECISION TO CONTRADICT.
        MMU-1 states the topology only. L2 TLB entry count,
@@ -313,10 +348,30 @@ MMU-U7 SVNAPOT IS MANDATORY AND IS NOWHERE IN THIS TREE.
        Table 7 is reserved and MUST raise a page fault, which is a
        walker obligation, not a TLB one.
 
-       Two decisions, then. Whether the L1 TLBs store a NAPOT entry
-       once and match it across the range, or store it per 4 KiB
-       page. And how the walker handles N at each stage of a nested
-       walk. Unresolved.
+       RULED session-071 (Jeff):
+         - a NAPOT entry is HELD ONCE in the L1 TLB, which is fully
+           associative (ITLB-2), and matched across its range by
+           masking VPN[3:0] out of the compare, the same mechanism
+           the 2 MiB and 1 GiB sizes use
+         - on every output, at BOTH stages, PPN[3:0] is REPLACED by
+           VPN[3:0] (for the G-stage, by GPA[15:12]); the stored
+           PPN[3:0] is the size marker, not an address
+         - reserved N encodings page-fault IN THE WALKER, at each
+           stage of the nested walk, cause 12 or 20 (MMU-16)
+       The PBMT reserved-encoding and PBMTE checks of MMU-U6 are
+       the same kind of walker obligation.
+
+       The two output sites are the ones public implementations
+       have got wrong: CVA6 issue 3569 substitutes on the
+       first-stage output and not the G-stage one, and QEMU's IOMMU
+       model did not check N at all and produced an address 32 KB
+       off. The test plan must cover a 64 KiB mapping at each stage
+       and every reserved N encoding.
+
+       STILL OPEN, in MMU-U1: how the set-associative L2 TLB holds a
+       NAPOT entry. The published precedent (Rocket, arXiv
+       2406.17802) drops VPN[3:0] from the index. It read "Two
+       decisions, then ... Unresolved." 
 
 ---
 
@@ -365,6 +420,9 @@ MMU-17a H adds two more. HFENCE.VVMA invalidates VS-stage
 MMU-18 The invalidate port is a distinct port. It is written with
        the module.
 
+MMU-17 and MMU-17a name three instructions; the five Svinval
+instructions are handled by MMU-U8 below. Session-071.
+
 MMU-U8 SVINVAL IS MANDATORY AND IS NOT IN MMU-17 OR MMU-17a.
        `rva23-profile.adoc` lists Svinval, fine-grained
        address-translation cache invalidation, among the privileged
@@ -383,7 +441,19 @@ MMU-U8 SVINVAL IS MANDATORY AND IS NOT IN MMU-17 OR MMU-17a.
        whole point of Svinval, or whether SINVAL.VMA is implemented
        as SFENCE.VMA and the ordering instructions as no-ops.
        The second is architecturally legal and is what most
-       implementations do. Unresolved.
+       implementations do.
+
+       ADOPTED session-071 (Jeff), the second:
+         SINVAL.VMA      = SFENCE.VMA,  same four rs1/rs2 forms
+         HINVAL.VVMA     = HFENCE.VVMA
+         HINVAL.GVMA     = HFENCE.GVMA
+         SFENCE.W.INVAL  no operation at the TLBs
+         SFENCE.INVAL.IR no operation at the TLBs
+       The invalidates arrive on the MMU-18 and ITLB-14 ports with
+       the operation field of MMU-17a; no port changes. XiangShan
+       Kunminghu does the same: its TLB treats Svinval.vma and
+       Sfence.vma identically. Any ordering the two fences imply
+       outside the TLBs belongs to the backend.
 
 TD#119 does not reach this document. That gap stops the emitted
 L1I from carrying an invalidate port. The L2 TLB is written, so
@@ -396,14 +466,19 @@ its port is written with it.
 MMU-U1  L2 TLB geometry. Section 2. Two-stage translation makes
         this larger than it looked: entries are tagged by VMID as
         well as ASID, and G-stage and VS-stage entries may share
-        the array or be split.
+        the array or be split. It also holds the L2 TLB half of
+        MMU-U7: how a set-associative array holds a 64 KiB NAPOT
+        entry.
 MMU-U2  Outstanding walk count. Section 3.
 MMU-U3  Atomic form, and the l2 third-master change. Section 4.
 MMU-U4  CLOSED session-070. Smepmp is not mandatory. Section 5.
 MMU-U5  CLOSED session-070. Svpbmt is mandatory. Section 6.
-MMU-U6  Svpbmt precedence against MMU-15. Section 6.
-MMU-U7  Svnapot. Section 6a.
-MMU-U8  Svinval. Section 8.
+MMU-U6  CLOSED session-071. Most restrictive of region and both
+        PBMTs. Section 6.
+MMU-U7  CLOSED session-071 for the L1 TLB and the walker; the L2
+        TLB half is MMU-U1. Section 6a.
+MMU-U8  CLOSED session-071. Svinval as the fence equivalents.
+        Section 8.
 
 ---
 
@@ -472,4 +547,17 @@ TD#118    Bounds MMU-U2.
               before they complete and MMU-14 is no longer the
               precondition for a timing decision. The bindings
               entry for ITLB-12 corrected to match.
+  2026-09-19  session-071. MMU-17 and MMU-17a marked incomplete
+              against MMU-U8. ITLB-3, IL-7, IL-9 and IL-12 now
+              point to MMU-U7, MMU-U6 and MMU-U8 instead of stating
+              complete sets.
+  2026-09-19  session-071, rulings (Jeff). MMU-U6 closed: the
+              effective type is the most restrictive of region and
+              both PBMTs, with the PBMT walker checks. MMU-U7 ruled:
+              NAPOT held once, masked match, PPN[3:0] substituted on
+              every output at both stages, reserved N faults in the
+              walker; the L2 TLB half stays in MMU-U1. MMU-U8
+              adopted: Svinval as its fence equivalents. MMU-14
+              reads the effective attributes and sends
+              non-cacheable fetch to the uncached path.
 ```

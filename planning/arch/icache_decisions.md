@@ -720,7 +720,9 @@ Session-071.
           TLB has with mixed page sizes.
           RULED session-069 at 64 entries, otherwise as
           recommended: itlb_decisions.md ITLB-1 to ITLB-5. TD#115
-          closed. This read "NOT RULED" until session-071.
+          closed. This read "NOT RULED" until session-071. The page
+          sizes are four, not three: Svnapot is mandatory and adds
+          64 KiB (ITLB-3, mmu_decisions.md MMU-U7, session-071).
 
   L1I-U3  The page table walker's position in the pacino
           topology. This is a NODE GRAPH change, not a parameter.

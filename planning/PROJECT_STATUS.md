@@ -44,7 +44,13 @@ value and the flush index; F stated per cause), A5 (4.6 needs no
 generation bit), A7 (update producer at 6.2), A8 (three INFRA-012
 labels), A9, A10. Audit batch C, C1 to C17, corrected in the ITTAGE,
 TAGE, SC, sram_init, ubtb, ras and ftb documents; C17 was the PA's
-own omission from the N1 width change.
+own omission from the N1 width change. Audit batches D and E
+corrected; E led to three MMU rulings (Jeff): MMU-U6 the effective
+memory type is the most restrictive of the region table and both
+PBMTs, with the PBMT walker checks; MMU-U7 NAPOT held once with a
+masked match and PPN[3:0] substituted on every output at both stages;
+MMU-U8 Svinval as its fence equivalents. l2t_itlb_pbmt added (IL-9a);
+non-cacheable fetch takes the uncached path (MMU-14).
 The A2 terminology sweep covered the files the PA
 had: bp_arb_spec, bp_cluster, bp_history_*, fe_decisions, ftb_*,
 ftq_*, ras_*, ubtb_interfaces, loop_pred_interfaces, sc_interfaces,
@@ -1358,9 +1364,13 @@ it only documented current behavior.
 |                         |             |                   | bypass, depth 64 as a parameter.  |
 | itlb_decisions.md       | Draft       | --                | Created session-069. ITLB-1..14,  |
 |                         |             |                   | ITLB-U1. 64 entries fully         |
-|                         |             |                   | associative, all three Sv39 page  |
-|                         |             |                   | sizes in one array, ASID tagged,  |
-|                         |             |                   | 1-cycle hit. Closes TD#115.       |
+|                         |             |                   | associative, the three Sv39 page  |
+|                         |             |                   | sizes and the 64 KiB Svnapot size |
+|                         |             |                   | in one array (NAPOT held once,    |
+|                         |             |                   | MMU-U7), ASID tagged, 1-cycle     |
+|                         |             |                   | hit. Closes TD#115. Session-071:  |
+|                         |             |                   | this read "all three Sv39 page    |
+|                         |             |                   | sizes".                           |
 | mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..25,   |
 |                         |             |                   | MMU-U1..U8 (U6, U7, U8 added      |
 |                         |             |                   | session-070: Svpbmt precedence,   |
@@ -1368,7 +1378,10 @@ it only documented current behavior.
 |                         |             |                   | CLOSED session-070 against the    |
 |                         |             |                   | ratified rva23-profile.adoc --    |
 |                         |             |                   | Smepmp not mandatory, Svpbmt      |
-|                         |             |                   | mandatory).                       |
+|                         |             |                   | mandatory). U6, U7 (L1 TLB and    |
+|                         |             |                   | walker) and U8 CLOSED             |
+|                         |             |                   | session-071; U7's L2 TLB half is  |
+|                         |             |                   | in U1.                            |
 |                         |             |                   | Shared L2 TLB and                 |
 |                         |             |                   | walker, Svade and Svadu both,     |
 |                         |             |                   | PMP at two sites, PMA on the      |
@@ -2787,8 +2800,9 @@ unless noted.
           depth 64 as a parameter.
     - planning/arch/itlb_decisions.md                 Draft
         - Created session-069. ITLB-1..14, ITLB-U1. 64 entries
-          fully associative, all three Sv39 page sizes, ASID
-          tagged, 1-cycle hit. Closes TD#115.
+          fully associative, the three Sv39 page sizes and the
+          64 KiB Svnapot size (session-071, MMU-U7), ASID tagged,
+          1-cycle hit. Closes TD#115.
     - planning/arch/mmu_decisions.md                  Draft
         - Created session-069. MMU-1..25, MMU-U1..U8 -- U6, U7
           and U8 added session-070 (Svpbmt precedence, Svnapot,

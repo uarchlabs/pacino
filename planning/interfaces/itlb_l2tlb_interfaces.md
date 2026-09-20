@@ -44,6 +44,7 @@ instantiated twice.
   l2t_itlb_ppn   [PPN_WIDTH-1:0]          L2TLB -> ITLB
   l2t_itlb_size  [1:0]                    L2TLB -> ITLB
   l2t_itlb_perm  [PERM_WIDTH-1:0]         L2TLB -> ITLB
+  l2t_itlb_pbmt  [1:0]                    L2TLB -> ITLB
   l2t_itlb_cause [CAUSE_WIDTH-1:0]        L2TLB -> ITLB
   l2t_itlb_gpa   [GPA_WIDTH-1:0]          L2TLB -> ITLB
 ```
@@ -134,9 +135,15 @@ L1I line (fe_decisions.md Conventions). Session-071.
 
 ## 4. Page size and permissions
 
-IL-7  `l2t_itlb_size` names which of the three Sv39 page sizes
-      the translation covers: 4 KiB, 2 MiB or 1 GiB. The ITLB
-      installs the entry at that size, ITLB-3.
+IL-7  `l2t_itlb_size` names which page size the translation
+      covers: 4 KiB, 64 KiB (Svnapot), 2 MiB or 1 GiB. Two bits
+      encode the four; the encoding is not yet assigned. The ITLB
+      installs the entry at that size, ITLB-3; a 64 KiB entry is
+      held once with a masked match (mmu_decisions.md MMU-U7).
+      The PPN returned for a 64 KiB page is the PTE's, with
+      PPN[3:0] the size marker; the ITLB substitutes on its
+      output. This read "which of the three Sv39 page sizes".
+      Session-071.
 
 IL-8  `l2t_itlb_perm` carries the PTE permission and attribute
       bits the ITLB must hold to answer later hits without asking
@@ -149,10 +156,23 @@ IL-9  The PMA attributes of MMU-13 are not returned here. They
       physical address, so the ITLB derives them from the PPN it
       was given rather than being told.
 
-IL-9 is a placement choice and it follows MMU-15. A PMA is a
-property of an address range, not of a translation, so returning
-it on this port would make the L2 TLB a second source for
-something the region table already decides.
+IL-9 is a placement choice and it follows MMU-15 for the
+attributes the region table decides. Svpbmt is mandatory in
+RVA23S64, so the PTE's PBMT field is a second memory type source,
+per translation, that the region table cannot supply
+(mmu_decisions.md MMU-U5). This paragraph said a PMA "is a property
+of an address range, not of a translation" and that returning one
+would make the L2 TLB "a second source for something the region
+table already decides", which MMU-U5 contradicts. Session-071.
+
+IL-9a `l2t_itlb_pbmt` returns the page's memory type on a hit: the
+      more restrictive of the G-stage and VS-stage PBMT, ordered
+      PMA < NC < IO, and PMA (2'b00) when neither stage sets one.
+      The ITLB stores it (ITLB-3a) and combines it with the region
+      attributes into the effective type, the most restrictive of
+      the three (mmu_decisions.md MMU-U6, ruled session-071). A
+      reserved PBMT, or a non-zero one with PBMTE clear, never
+      reaches this port: the walker faults it.
 
 ---
 
@@ -180,7 +200,8 @@ IL-11a The faulting GUEST PHYSICAL address IS returned on
 ## 6. Maintenance
 
 IL-12 SFENCE.VMA does not cross this boundary, and neither do
-      HFENCE.VVMA and HFENCE.GVMA. The L2 TLB has its own
+      HFENCE.VVMA and HFENCE.GVMA, nor the Svinval instructions,
+      which act as those three (mmu_decisions.md MMU-U8). The L2 TLB has its own
       invalidate port, MMU-18, and the ITLB has its own,
       ITLB-14. Neither forwards to the other. MMU-17a.
 
@@ -200,7 +221,8 @@ IL-14 The response is returned normally. The client installs
 
 ## 7. Open
 
-None.
+None. MMU-U6, MMU-U7 and MMU-U8, which reached IL-7, IL-9 and
+IL-12, were ruled session-071; IL-9a adds l2t_itlb_pbmt.
 
 ---
 

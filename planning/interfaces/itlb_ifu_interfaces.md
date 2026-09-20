@@ -6,7 +6,7 @@
  FILE:    itlb_ifu_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -141,11 +141,18 @@ IT-9  A re-request for a virtual address with a walk already in
 ## 5. PMA
 
 IT-10 `itlb_ifu_pma` returns the attributes of MMU-13 on a hit:
-      cacheable, coherent, executable, idempotent.
+      cacheable, coherent, executable, idempotent. They are the
+      EFFECTIVE attributes: the region table combined with the
+      entry's PBMT, the most restrictive of the two
+      (mmu_decisions.md MMU-U6, ITLB-3a). Executable and coherent
+      come from the region table alone.
 
-IT-11 The IFU reads idempotent to decide whether the fetch may
-      proceed speculatively. A non-idempotent region takes the
-      uncached path of IFU-21 and does not reach the L1I.
+IT-11 The IFU reads cacheable and idempotent to decide the path. A
+      fetch uses the L1I only when both are set; otherwise it takes
+      the uncached path of IFU-21 and does not reach the L1I
+      (MMU-14). So a page marked NC or IO by its PTE never reaches
+      the L1I. This read "The IFU reads idempotent" against the
+      region alone. Session-071.
 
 IT-12 The checks do not gate THIS response. The translation
       returns at the ITLB-5 hit latency with `itlb_ifu_pma`

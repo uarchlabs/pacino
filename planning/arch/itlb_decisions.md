@@ -6,7 +6,7 @@
  FILE:    itlb_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -40,8 +40,20 @@ ITLB-1  64 entries.
 
 ITLB-2  Fully associative.
 
-ITLB-3  One array holds all three Sv39 page sizes: 4 KiB, 2 MiB
-        and 1 GiB. No separate large-page array.
+ITLB-3  One array holds every page size: the three Sv39 sizes,
+        4 KiB, 2 MiB and 1 GiB, and the 64 KiB Svnapot case. No
+        separate large-page array. A NAPOT entry is HELD ONCE and
+        matched across its range by masking VPN[3:0] out of the
+        compare; on a hit the output PPN[3:0] is VPN[3:0], not the
+        stored value, which is the size marker (mmu_decisions.md
+        MMU-U7, ruled session-071). Svnapot is mandatory in
+        RVA23S64. This read "all three Sv39 page sizes".
+
+ITLB-3a Each entry also holds the page's PBMT, the more restrictive
+        of the two stages' values as returned on
+        itlb_l2tlb_interfaces.md IL-9. On a hit it is combined with
+        the region attributes of the physical address to give the
+        effective type (mmu_decisions.md MMU-U6). Session-071.
 
 ITLB-4  ASID tagged. Entries carry an ASID field and a global bit
         taken from the PTE G bit. A global entry matches
@@ -141,8 +153,11 @@ causes into one bit.
 ## 6. Check placement
 
 ITLB-12 The PMP permission check, the PMA executable check and the
-        PMA idempotent read all complete BEFORE any L1I request is
-        issued. A request that fails them is never made.
+        read of the EFFECTIVE cacheable and idempotent attributes
+        (ITLB-3a, mmu_decisions.md MMU-14) all complete BEFORE any
+        L1I request is issued. A request that fails them is never
+        made. This read "the PMA idempotent read"; the effective
+        type includes the PTE's PBMT. Session-071.
 
 ITLB-12a None of these checks is in the ITLB-5 hit path. They run
          in the translation pipeline, `ifu_decisions.md` IFU-23a,
@@ -235,6 +250,13 @@ ITLB-13a HFENCE.VVMA invalidates `V=1` VS-stage entries for the
 ITLB-14 The invalidate port is a distinct port, not carried on the
         translation request path. It is written with the module.
 
+ITLB-13b Svinval, mandatory in RVA23S64, per mmu_decisions.md
+         MMU-U8 (adopted session-071): SINVAL.VMA acts as
+         SFENCE.VMA with ITLB-13's four forms and global rule,
+         HINVAL.VVMA as HFENCE.VVMA and HINVAL.GVMA as HFENCE.GVMA
+         (ITLB-13a), all on the ITLB-14 port. SFENCE.W.INVAL and
+         SFENCE.INVAL.IR do nothing at the ITLB.
+
 TD#119 does not reach this document. It is the cachegen schema
 gap that stops the emitted L1I from carrying an invalidate port.
 The ITLB is written from this document, so its port is written
@@ -245,6 +267,9 @@ with it.
 ## 8. Open
 
 ITLB-U1  In-flight walk tracker depth. Section 4.
+
+MMU-U6, MMU-U7 and MMU-U8, which bounded ITLB-3, ITLB-3a, ITLB-12
+and section 7, were ruled session-071.
 
 ---
 
@@ -286,4 +311,15 @@ TD#118    Bounds ITLB-U1.
               says the L2 TLB uses "the same forms as the L1 TLBs",
               which is a pointer to this rule. A cross-reference
               was added there.
+
+  2026-09-19  session-071. ITLB-3 includes the Svnapot 64 KiB case
+              and points to MMU-U7 for how it is held; section 7
+              records that Svinval's five instructions are MMU-U8;
+              section 8 names both. Both extensions are mandatory
+              and the document stated a complete set without them.
+  2026-09-19  session-071, rulings. ITLB-3: NAPOT held once with a
+              masked match and PPN[3:0] substituted. ITLB-3a: the
+              entry holds the page's PBMT. ITLB-12: the effective
+              attributes gate the request. ITLB-13b: Svinval as
+              its fence equivalents.
 ```

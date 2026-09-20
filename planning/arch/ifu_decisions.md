@@ -265,9 +265,12 @@ IFU-25  The translation queue holds, per block: the physical
         status of IT-4, and the guest physical address of IT-6a
         when the cause is 20. F0 reads the head.
 
-IFU-26  A block that translates to a non-idempotent region is
-        marked in the queue and is not issued to the L1I. It
-        takes the uncached path of IFU-21. MMU-14 and IT-11.
+IFU-26  A block whose effective type is not both cacheable and
+        idempotent is marked in the queue and is not issued to the
+        L1I. It takes the uncached path of IFU-21. MMU-14 and IT-11;
+        the effective type includes the PTE's PBMT
+        (mmu_decisions.md MMU-U6). This read "translates to a
+        non-idempotent region". Session-071.
 
 IFU-27  On a redirect both pipelines are flushed and the queue is
         emptied. The fetch pipeline then stalls until the
@@ -378,7 +381,8 @@ the IFU.
 
 ## 7. Uncached fetch
 
-Fetch from a non-idempotent region cannot use the normal path.
+Fetch from a page whose effective type is non-idempotent or
+non-cacheable (MMU-14, MMU-U6) cannot use the normal path.
 MMU-14 forbids speculating into it, and a memory mapped device
 must not see a read for an instruction that is not on the
 committed path.
