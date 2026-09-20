@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-09-01
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -313,7 +313,7 @@ directly: `handshake.read_data_return` takes `same_cycle` beside
 The L1I has no exception behaviour of its own beyond what the L2
 returns (`icache_decisions.md` 2.3). On the TL-UH link of L1I-16
 that is `d_denied` or `d_corrupt`. The IFU turns it into an
-instruction access fault at the fetch block that requested the line,
+instruction access fault at the prediction block that requested the line,
 and reports it through `ifu_ftq_fault_val` and `ifu_ftq_fault_pos`
 (`ftq_ifu_interfaces.md` 6), which is the same path a translation
 fault takes. THE FAULT CODE DIFFERS AND IS NOT CARRIED HERE, for the
@@ -428,9 +428,9 @@ The absence is the specification, so what the IFU does instead is
 stated here rather than left to `ifu_decisions.md`:
 
 ```
-  IF-23  On an ITLB FAULT for a fetch block, the IFU presents no
-         request, allocates no identifier, terminates the fetch
-         block at the faulting instruction position, and reports it
+  IF-23  On an ITLB FAULT for a prediction block, the IFU presents
+         no request, allocates no identifier, terminates the
+         prediction block at the faulting instruction position, and reports it
          with ifu_ftq_fault_val and ifu_ftq_fault_pos
          (ftq_ifu_interfaces.md 6). The L1I is not told.
 
@@ -1006,7 +1006,7 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
 
   TD-IF-5  THE PREDECODE WRITEBACK AND THE LINE RESPONSE ARE NOT
            ORDERED AGAINST EACH OTHER. ftq_ifu_interfaces.md 6 has
-           the IFU return one writeback per fetch block; IF-12 lets
+           the IFU return one writeback per prediction block; IF-12 lets
            the line responses that feed those blocks return out of
            order. The IFU therefore reorders between its two
            boundaries, and nothing in either file says what bounds
@@ -1048,6 +1048,11 @@ sees a 2-byte boundary.
 ## 19. Document History
 
 ```
+  2026-09-19  session-071. "Fetch block" replaced by "prediction
+              block" in section 5, IF-23 and TD-IF-5, where the
+              32-byte unit was meant. The fetch block is the 64-byte
+              L1I line (fe_decisions.md Conventions).
+
   2026-09-01  IF-U3, IF-U4 and IF-U5 closed, session-068.
               cbo.inval is routed to the I-side, IF-41. The
               invalidate clear takes one cycle, IF-42. FENCE.I is

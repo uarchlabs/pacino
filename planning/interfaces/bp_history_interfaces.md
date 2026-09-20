@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-08-09
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -168,9 +168,11 @@ only advance, rollback by index, FTQ visibility vs ownership).
   - pred_taken[n] / pred_pc[n] valid for each branch n <
     num_branches. The index is the branch number after
     compaction, not the prediction slot number.
-  - pred_pc is the BRANCH PC: the block base plus that branch's
-    in-block position, TWO bytes per position. It is not the
-    fetch block PC. This read "four bytes per position", which
+  - pred_pc is the BRANCH PC: the block START plus that branch's
+    in-block position, TWO bytes per position, pos counted from the
+    block start. Not the 32-byte-aligned base, which bp_cluster.sv
+    uses (TD#125, session-071). It is not the prediction block
+    PC. This read "four bytes per position", which
     BP-099 superseded when POS_OFFSET_BITS went to 1 for the C
     extension; the granularity note below, ftq_bpu_interfaces.md
     7.4 and 9 and ftq_entry_formats.md 2 all say two.
@@ -463,7 +465,7 @@ and the module-owned pointer decision.
 ## Document history
 
 ```
-  2026-08-09  INFRA-012 / session-064. Producer obligation
+  2026-08-09  PA-direct correction, session-064. Producer obligation
               corrected: pred_pc is the BRANCH PC, not the fetch
               block PC, with the PHR fold arithmetic recorded as
               the reason (BP-092a binding decision 1). Port list
@@ -477,5 +479,11 @@ and the module-owned pointer decision.
               replaced with the real IT5 geometry plus the TD#102
               generation gap. SC fold staging note added (BP-090).
               HI6 and HI7 opened.
+
+  2026-09-19  session-071. Producer obligations: pred_pc is block
+              START plus position, not the aligned base (TD#125).
+              The 2026-08-09 entry was labelled INFRA-012, a task
+              that did not exist then; it was a PA-direct
+              correction.
 ```
 

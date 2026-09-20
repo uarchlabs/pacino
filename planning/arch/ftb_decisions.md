@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-06-25
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -127,11 +127,18 @@ FTB prediction block = 32 bytes (FTB_BLOCK_BYTES), 16 two-byte
 instructions, matched to 8-wide issue and to the two-branch-per-cycle
 budget. FTB predicts one 32-byte block per cycle.
 
-Fetch delivers 64 bytes (FETCH_BLOCK_BYTES, a fetch-unit / global
-parameter, not an FTB parameter) into the FTQ per cycle, decoupled
-from FTB by the queue. The wider fetch gives decode and fusion a
-larger window. It does NOT raise the prediction rate. Prediction rate
-is two branches per cycle.
+The FETCH block is 64 bytes (FETCH_BLOCK_BYTES, a fetch-unit / global
+parameter, not an FTB parameter): the L1I line the IFU reads, from
+which it extracts one prediction block per request (fe_decisions.md
+Conventions, ifu_decisions.md IFU-7). The FTQ decouples the FTB from
+fetch. Fetch does NOT raise the prediction rate, which is two branches
+per cycle, and as specified it delivers one prediction block per
+cycle; delivering two is open (ftq_ifu_interfaces.md 8 item 2).
+
+This read "Fetch delivers 64 bytes ... into the FTQ per cycle" and
+that "the wider fetch gives decode and fusion a larger window".
+Nothing is delivered into the FTQ but predictions, and the IFU hands
+the ibuf 16 slots, one block (IFU-5). Session-071.
 
 These two widths are independent and must not be collapsed. Treating
 the 64-byte fetch as a 64-byte prediction reintroduces a
@@ -198,11 +205,11 @@ A block can contain more branches than the entry can hold (section 4:
 two conditional + one jump). When a block has a third conditional
 branch with no field for it, the block ENDS at the second conditional.
 The fallthrough points just after that second branch. The third
-branch becomes the first branch of the next fetch block and gets its
+branch becomes the first branch of the next prediction block and gets its
 own entry on a separate lookup. Branches are never dropped; the block
 is split.
 
-Cost of the split: that block becomes two fetch blocks, two lookups
+Cost of the split: that block becomes two prediction blocks, two lookups
 instead of one, on that path. This only happens with three or more
 conditional branches in one 32-byte block, which is rare.
 
@@ -214,7 +221,8 @@ Each entry holds two conditional branch fields and one jump field
 (2+1). No Xiangshan-style field sharing. Two conditional branches with
 no jump fill both conditional fields directly.
 
-Entry fields (logical entry, FTB_ENTRY_WIDTH = 110 bits/way):
+Entry fields (logical entry, FTB_ENTRY_WIDTH = 113 bits/way; 110
+until the stored position widened, 4.6):
 
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
@@ -227,10 +235,12 @@ Entry fields (logical entry, FTB_ENTRY_WIDTH = 110 bits/way):
                             isCall, isRet, isJalr
   fallthrough            -- pftAddr (6 bits, no carry; 5.5, 8)
 
-position (FTB_BR_POS_BITS, 4 bits) is the in-block instruction slot
-(0..15) the branch occupies, distinct from the TARGET offset of 4.2 (an
-earlier draft called this field "offset", which collided with the
-target-offset term -- it is renamed "position" here). It is sourced
+position is STORED region-relative in FTB_BR_RPOS_BITS, 5 bits, and
+PRESENTED start-relative in FTB_BR_POS_BITS, 4 bits, the in-block
+instruction slot (0..15) the branch occupies (4.6). It is distinct
+from the TARGET offset of 4.2 (an earlier draft called this field
+"offset", which collided with the target-offset term -- it is
+renamed "position" here). It is sourced
 from ftb_upd_pos_u0 and read out on ftb_brI_pos_p2 / ftb_jmp_pos_p2
 (ftb_interfaces.md 2.3/2.5, IC-FTB-15); the cluster/FTQ uses it to
 locate the taken branch in the fetch bundle. It NO LONGER orders br0
@@ -244,7 +254,7 @@ is no always_taken bit -- it was removed (session-053); conf is the sole
 per-branch direction state. See ftb_confidence_override_rules.md.
 
 Storage partition. The entry-level valid bit (1 per way) is the only
-field physically relocated to ftb_plru. The remaining 109 bits -- tag,
+field physically relocated to ftb_plru. The remaining 112 bits -- tag,
 both conditional fields, the jump field, and the fallthrough -- are
 stored in ftb_array (FTB_RAM_ENTRY_WIDTH, section 8, which is the
 only place the widths are stated; this line read 105, stale since
@@ -273,9 +283,10 @@ to 27. The reason is that predictor storage may alias: a tag that
 does not cover bit 40 mispredicts a block end, which predecode
 catches (ftq_ifu_interfaces.md 6 and 7), and a wrong target, which
 the mispredict redirect catches at resolve. Architectural addresses
-may not truncate; a predictor tag may. Pinning also keeps
+may not truncate; a predictor tag may. Pinning also kept
 FTB_ENTRY_WIDTH at 110 and the RAM widths untouched, so sim_ftb's
-99 checks stand. Section 8 is the sole home of the arithmetic.
+99 checks stand against the tag change. 4.6 widens the stored
+positions separately, to 113. Section 8 is the sole home of the arithmetic.
 
 THE TAG NO LONGER COVERS THE WHOLE UPPER VA. At 26 bits over a
 9-bit index and 5 offset bits it spans VA[39:14]. BIT 40 IS
@@ -310,7 +321,8 @@ make reachable.
 ### 4.2  Targets
 
 Conditional branch targets are stored as an offset from the block
-start, with a fit/overflow/underflow status field. Offset storage is
+start, with a fit/overflow/underflow status field. A shared entry
+breaks a start-relative base; the fix is open, 4.6 O-1. Offset storage is
 lossless -- the target reconstructs exactly -- so it is an area win,
 not an accuracy tradeoff. The cost is a reconstruct-and-bounds-check
 step in logic.
@@ -437,6 +449,59 @@ PC[4:0]. That removes the aliasing at its source but costs five bits
 per entry across the array, against one comparator and one mux for the
 guard.
 
+### 4.6  Stored positions are region-relative
+
+RULED session-071 (Jeff), option (R). An entry is shared by every
+lookup PC in its 32-byte region (4.1, 4.5), so every in-block
+quantity it STORES must mean the same thing to every one of them.
+Positions did not: the update path wrote them relative to the block
+start and bp_cluster.sv read them relative to the aligned region
+base. TD#125.
+
+  R-1  A stored position is REGION-relative, FTB_BR_RPOS_BITS = 5.
+       A block starting at halfword offset k covers region
+       positions k to k+15, so the largest is 30, which 5 bits hold.
+       No region-crossing rule is needed. A read keeps only the
+       fields whose stored position lies in [k, k+16); a field
+       outside that window reports invalid. That hides branches
+       before the start and branches past this block's end that an
+       earlier start recorded.
+  R-2  The conversion is INSIDE the FTB (and the uBTB,
+       ubtb_interfaces.md). ftb_cntrl adds k to ftb_upd_pos_u0 at
+       the write, from the update PC, and subtracts k at the read,
+       from the lookup PC. Every port, the FTQ entry, the backend
+       resolution and the predecode writeback stay START-relative,
+       FTB_BR_POS_BITS = 4, and the branch PC is block start plus
+       pos << POS_OFFSET_BITS.
+  R-3  A uBTB miss steps to lookup PC + FTB_BLOCK_BYTES, with no
+       resync to the region (bp_cluster.md Block width). Unchanged
+       in the documents; bp_cluster.sv uses the aligned base.
+
+Cost: one bit per stored position, three per entry, 110 to 113
+(section 8). A package change.
+
+This matches XiangShan V3, whose main BTB stores positions from an
+aligned base and qualifies a hit on the position being at or after
+the start's offset within it.
+
+OPEN UNDER TD#125, each a consequence of (R) and not yet ruled:
+
+  O-1  TARGET BASE. 4.2 stores targets as a displacement from the
+       BLOCK START, which a shared entry breaks the same way.
+       Proposed: measure from the branch PC, region base plus the
+       stored position, which every sharer agrees on and which
+       keeps the ISA reach of 4.2 exact.
+  O-2  UPPER BOUND ON THE FALL-THROUGH. FTB-G1 checks only that the
+       reconstructed end is above the start. An end recorded from a
+       start at region offset 30 can lie 64 bytes above a later
+       start at offset 0. Proposed FTB-G3: an end beyond start +
+       FTB_BLOCK_BYTES + 2 takes the FTB-G2 fallback too.
+  O-3  SLOT MAPPING AND FILL ORDER. With the window mask br0 can be
+       hidden while br1 is visible, so IC-FTB-16's "slot 0 is the
+       first branch" holds per region rather than per start, and
+       5.4a's program-order fill needs restating for starts that
+       share an entry.
+
 ---
 
 ## 5. Allocation and Update
@@ -550,6 +615,8 @@ This makes the prediction slot array program-ordered, so slot 0 is the
 first branch of the block, and it makes the jump field's
 lowest-free-slot placement program order in every case rather than
 only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
+Under the window mask of 4.6 this holds per region, not per start;
+restating it for starts that share an entry is 4.6 O-3, open.
 
 ### 5.5  Field writes when an existing branch resolves
 
@@ -561,7 +628,8 @@ only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
   position:     NOT rewritten on an in-place resolve -- it is static for
                 a filled field (the branch does not move). Written only
                 when the field is first filled (allocate / free-field,
-                5.4) from ftb_upd_pos_u0, and reset by reallocation.
+                5.4) from ftb_upd_pos_u0 rebased to the region (4.6
+                R-2), and reset by reallocation.
   conditional target: rewrite if the resolved taken target differs
                 from the stored offset.
   jump target:  rewrite on EVERY resolve of that jump, including when
@@ -722,7 +790,11 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               ftb_plru.
   FTB_BR_POS_BITS   = 4       $clog2(FTB_BLOCK_BYTES/2). In-block
                               position, sixteen 2-byte positions
-                              (BP-099, 2026-08-19).
+                              (BP-099, 2026-08-19). START-relative;
+                              the width of every position PORT.
+  FTB_BR_RPOS_BITS  = 5       FTB_BR_POS_BITS + 1. The STORED
+                              position, region-relative, 0 to 30
+                              (4.6). Session-071, TD#125.
   FTB_BR_TGT_BITS   = 13      conditional target displacement. B-type
                               +/-4 KB original -> +/-8 KB expanded.
   FTB_JMP_TGT_BITS  = 21      jump target displacement. J-type
@@ -741,14 +813,19 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
 
-  FTB_ENTRY_WIDTH (logical, per way) = 110 bits:
+  FTB_ENTRY_WIDTH (logical, per way) = 113 bits:
     1   valid          -- held in ftb_plru (flops), not ftb_array
   + 26  tag
-  + 2 * (1 + 4 + 13 + 2 + 3)       = 46   br0 + br1 (valid,pos,tgt,
+  + 2 * (1 + 5 + 13 + 2 + 3)       = 48   br0 + br1 (valid,pos,tgt,
                                           stat,conf -- no always_taken)
-  + (1 + 4 + 21 + 2 + 3)           = 31   jump (valid,pos,tgt,stat,type)
+  + (1 + 5 + 21 + 2 + 3)           = 32   jump (valid,pos,tgt,stat,type)
   + 6                              =  6   pftAddr (no carry bit)
-    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 440 bits (logical).
+    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 452 bits (logical).
+
+The session-071 delta is three bits, 110 to 113, one each on the
+stored br0, br1 and jump positions, which widen from FTB_BR_POS_BITS
+to FTB_BR_RPOS_BITS (4.6). pftAddr is unaffected. RULED, NOT BUILT:
+the package and RTL are at 110 / 109 (or 5 + carry, TD#124); TD#125.
 
 THIS BLOCK IS THE SOLE HOME OF THE ENTRY ARITHMETIC. Nothing else
 in the tree restates it; FTB-1 and section 10 cite it. That rule
@@ -765,10 +842,10 @@ always_taken removal of session-053 and is correct for its date.
 RAM entry width (what ftb_array actually stores -- the logical entry
 minus the relocated entry-valid):
 
-  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 109 bits/way.
+  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 112 bits/way.
     The br0/br1/jump FIELD-valid bits remain in the RAM entry; only the
     ENTRY-level valid moves to ftb_plru.
-  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 436 bits.
+  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 448 bits.
 
 ftb_array is sized at FTB_RAM_* (data only). ftb_plru holds, per set,
 FTB_WAYS entry-valid bits + PLRU_BITS tree-PLRU bits = 7 bits
@@ -790,8 +867,9 @@ Confidence parameters (see ftb_confidence_override_rules.md):
   saturated endpoints, not a threshold.)
 
 FETCH_BLOCK_BYTES = 64 is a global / fetch-unit parameter, already in
-bp_defines_pkg.sv. It is NOT an FTB parameter; it is the fetch width,
-decoupled from the FTB block width by the FTQ.
+bp_defines_pkg.sv. It is NOT an FTB parameter; it is the fetch block,
+the L1I line the IFU reads (2.3). This read "the fetch width".
+Session-071.
 
 Control polarity: ftb_array and ftb_plru enables are active low
 (rd_en_n, wr_en_n, val_we_n, plru_we_n), per the BPU array convention
@@ -895,6 +973,17 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-09-19  session-071. 4.6 added: stored positions are
+              region-relative at FTB_BR_RPOS_BITS = 5 with a read
+              window mask, converted inside the FTB so every port
+              stays start-relative (ruled, Jeff, option R). Entry
+              110 -> 113, RAM entry 109 -> 112, sets 440 -> 452 and
+              436 -> 448 (section 8). Three consequences recorded
+              open under TD#125: target base, a fall-through upper
+              bound, slot mapping under the mask. 2.3 and 8: the
+              fetch block is the L1I line, not a fetch width, and
+              nothing is delivered into the FTQ but predictions.
+
   2026-09-15  session-069. 4.5 RESTORED the fall-through bounds
               check removed earlier. 4.1 qualified: the full tag
               removes partial-tag aliasing but FTB_OFFSET_BITS of 5

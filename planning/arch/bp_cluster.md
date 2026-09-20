@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-17
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 ---
@@ -44,7 +44,8 @@ Override order (conditional branch direction and target):
 The successor on a uBTB miss is PC + FTB_BLOCK_BYTES, 32 bytes.
 
 FTB_BLOCK_BYTES is 32, the PREDICTION block. FETCH_BLOCK_BYTES is
-64, the FETCH block, a global parameter. `ftb_decisions.md` 2.3
+64, the FETCH block, a global parameter: the L1I line the IFU reads
+(fe_decisions.md Conventions). `ftb_decisions.md` 2.3
 rules that the two are independent and must not be collapsed:
 treating the 64-byte fetch as a 64-byte prediction reintroduces a
 two-block-per-cycle structure and would demand four
@@ -63,6 +64,14 @@ The base is the lookup PC, not the aligned address containing it.
 Prediction blocks are unaligned (`ftq_decisions.md` 4.7,
 `ifu_decisions.md` IFU-6), and a miss does not resync the stream to
 a 32-byte boundary.
+
+AS BUILT, bp_cluster.sv forms both the miss successor and the branch
+PC from the 32-byte-ALIGNED base: the successor is aligned base +
+FTB_BLOCK_BYTES, and the branch PC aligned base + (pos <<
+POS_OFFSET_BITS) with pos start-relative. Both are wrong for a block
+that does not start on a 32-byte boundary. The branch PC is block
+START + (pos << POS_OFFSET_BITS) (ftb_decisions.md 4.6 R-2). TD#125,
+session-071 RTL read.
 
 ---
 
@@ -344,11 +353,15 @@ when rd is not a link register.
                       computed, and the table RAM reads issue. Result
                       at p3. sc_decisions.md 2 and 9,
                       sc_table_interfaces.md Table Pipeline.
-                  p2_redirect fires if FTB/TAGE/RAS/ITTAGE disagrees
-                  with p1.
+                  p2_redirect fires if the successor the cluster
+                  would publish at p2, formed from FTB/TAGE/RAS/ITTAGE,
+                  differs from its own p1 stage registers (FE-4).
                   FTB entry saved for one additional cycle (-> p3).
 
-  Cycle N+3 (p3): SC final result valid -> p3_redirect if SC != p2.
+  Cycle N+3 (p3): SC final result valid -> p3_redirect if the p3
+                  successor differs from the cluster's own p2 stage
+                  registers (FE-4). This read "if SC != p2",
+                  predictor against stage. Session-071.
                   RAS p3 = p2 registered. Stack repair if p3 != p2.
                   FTB entry from p2 held and available.
 
@@ -401,7 +414,9 @@ Configuration: static input dual_pred_en (1 = dual, 0 = single).
 
 Mechanism: the two slots are the two BRANCH FIELDS of ONE 32-byte
 prediction block, br0 and br1, each located by its own pos within
-the block's 16 two-byte positions. One lookup supplies both
+the block's 16 two-byte positions, counted from the block start. The
+FTB and uBTB store positions region-relative and convert at their own
+boundary (ftb_decisions.md 4.6). One lookup supplies both
 (fe_decisions.md 10, FE-10). They are not two next-PC slots and not
 two PC ranges.
 
@@ -774,4 +789,11 @@ Raw observations to be captured in docs/observations/ during BP work.
               section of this document already states that
               speculative predictor state is owned by the BPC, not
               rename/dispatch.
+
+  2026-09-19  session-071. Block width: the FETCH block is the L1I
+              line; the as-built aligned-base successor and branch PC
+              recorded against TD#125. Dual Prediction Mode: pos is
+              start-relative. Pipeline timeline: p2 and p3 redirects
+              restated as the published successor against the
+              cluster's own stage registers (FE-4).
 

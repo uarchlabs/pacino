@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-08-21
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -84,7 +84,7 @@ The FTQ drives one prediction request per cycle into the cluster.
 
 ```
   ftq_pred_val_p0                          request valid
-  ftq_pred_pc_p0    [VA_WIDTH-1:0]         fetch block start PC
+  ftq_pred_pc_p0    [VA_WIDTH-1:0]         prediction block start PC
   ftq_pred_idx_p0   [FTQ_IDX_BITS-1:0]     allocated FTQ index
 ```
 
@@ -183,22 +183,20 @@ Cluster output to the FTQ at p1:
 
 The FTQ writes these into the entry it allocates at p1.
 
-bp_ftq_entry_t.ras IS NOT WRITTEN FROM THIS GROUP. The RAS pushes
+bp_ftq_entry_t.ras IS WRITTEN AT p2, BY SECTION 4c. The RAS pushes
 and pops at p2 (ras_decisions.md 1.1) and the entry must hold the
 POST-operation snapshot (ras_decisions.md 4.2, ras_interfaces.md
-IC-RAS-08). ras_interfaces.md IC-RAS-12 places the obligation on
-bp_cluster/the FTQ: write ras_snapshot_p2[s] into
-bp_ftq_entry_t.ras when ras_pred_val_p2[s] was asserted. That is a
-p2 write into an entry allocated at p1.
+IC-RAS-08).
 
-So bpu_pred_ras_p1 initialises the field at allocate and p2
-overwrites it. What this section does not say is which port carries
-the p2 value to the FTQ: ras_snapshot_p2 is a cluster-internal RAS
-output (section 5) and the 4a slot-correction groups carry
-bp_ftq_slot_t only, while .ras is a block scalar -- the same
-structural point section 4 already makes about pft_addr. Whether
-that needs a port here or is satisfied inside the cluster is not
-stated anywhere. Flagged session-070, not resolved.
+`bpu_pred_ras_p1` only INITIALISES the field at allocate, and nothing
+restores from that value: every entry that survives reaches p2, and
+the 4c write overwrites it unconditionally. The port is kept because
+removing it is an RTL change for no functional gain.
+
+RULED session-071 (Jeff). This section said the field "IS NOT
+WRITTEN FROM THIS GROUP" and, a paragraph later, that
+`bpu_pred_ras_p1` initialises it, and left the p2 port unnamed
+(flagged session-070).
 
 Allocation is unconditional: an entry is allocated for every
 prediction block,
@@ -258,7 +256,7 @@ entry rather than resampled from the cluster.
 
 ### 4b. No p1 port carries the block start PC
 
-`bp_ftq_entry_t.pc` is the fetch block start and the entry is written
+`bp_ftq_entry_t.pc` is the prediction block start and the entry is written
 at p1, but NO PORT IN THIS SECTION CARRIES IT: the group has the
 slots, the RAS snapshot and the fall-through. The value exists only as
 the `ftq_pred_pc_p0` the FTQ issued a cycle earlier, so THE FTQ MUST
@@ -326,6 +324,54 @@ Field sources at p2:
 p3 changes `taken`, and `pred_src` to PRED_SC when SC actually moved
 the direction. SC corrects direction, not branch type, so `br_type`,
 `pos` and `target` pass through the p2 to p3 register unchanged.
+
+---
+
+## 4c. Block-scalar correction: p2
+
+The 4a groups carry `bp_ftq_slot_t` only. A block scalar of the entry
+that is not known until p2 needs its own group. RULED session-071
+(Jeff).
+
+```
+  bpu_blk_val_p2                                  NEW
+  bpu_blk_idx_p2   [FTQ_IDX_BITS-1:0]             NEW
+  bpu_blk_ras_p2   bp_ras_snapshot_t              NEW
+```
+
+`bpu_blk_val_p2` is `r_val_p2`: EVERY valid p2 block, whether or not
+the FTB answered and whether or not the block operated on the RAS. It
+is not `bpu_slot_val_p2`, which also requires `ftb_valid_p2`.
+
+`bpu_blk_ras_p2` is `ras_snapshot_p2[NUM_PRED_SLOTS-1]`, the pointer
+state after both slots' operations (ras_interfaces.md IC-RAS-08). A
+block with no call or return presents the unchanged state. The FTQ
+writes it into `bp_ftq_entry_t.ras` of the named entry
+unconditionally.
+
+WHY EVERY BLOCK. Gating the write on a RAS operation, or on the FTB
+answering, leaves the p1 initial value in the entry. That value is
+taken before this block's own p2 operation and, in a moving stream,
+can predate the previous block's as well, so a restore from a block
+with no RAS operation would drop that push or pop. The p2 write is
+the only one a restore can rely on.
+
+The index is subject to the stale-response drop of ftq_decisions.md
+4.6, through the shadow of 5.6 at its p2 stage, like every other
+indexed response.
+
+OPEN, raised session-071: THE p3 REPAIR. ras_decisions.md 1 and 1.2
+and IC-RAS-11 repair the speculative stack at p3 when the p3 view of a
+slot differs from the p2 operation applied, which happens when SC
+reverses an earlier slot and so changes which later slot is
+reachable (FE-11). The snapshot written here is then the pre-repair
+state. Whether the entry needs a p3 write, or the repair is covered
+by the p3 redirect's own restore, is not decided.
+
+THIS IS ALSO WHERE TD#113 LANDS. Section 4 records that the fix for
+the uncorrected p1 fall-through is a p2 group carrying the FTB
+fall-through into the block scalar. That field joins this group when
+TD#113 is built; it is not specified here.
 
 ---
 
@@ -483,7 +529,8 @@ from the staged p2 PC.
 RAS p2 operations are qualified by reachability across slots: a
 taken branch ends the block, so a later slot is off the predicted
 path and must not push or pop (FE-11). One snapshot per entry is
-therefore sufficient.
+therefore sufficient. `ras_snapshot_p2[NUM_PRED_SLOTS-1]` reaches the
+FTQ on section 4c.
 
 Restore and commit ports, section 8.
 
@@ -653,7 +700,16 @@ The position addresses two-byte slots: FTB_BR_POS_BITS is
 positions. RVA23 mandates the C extension, so a branch may begin at
 any 2-byte boundary and the position must resolve that. The cluster
 also uses the position to form the branch PC it reports to
-bp_history, block base plus position times two (BP-092a, section 9).
+bp_history, block START plus position times two (BP-092a, section
+9).
+
+EVERY POSITION ON THESE PORTS IS MEASURED FROM THE BLOCK START. The
+FTB and the uBTB store positions relative to the 32-byte-aligned
+region and convert at their own boundary (ftb_decisions.md 4.6), so
+`pos` here, in `bp_ftq_slot_t` and on `ftb_upd_pos_u0` is always
+start-relative. bp_cluster.sv forms the branch PC from the ALIGNED
+base, which is wrong for any block not starting on a 32-byte
+boundary; TD#125. This read "block base". Session-071.
 
 ### 7.5 Fields with no consumer
 
@@ -771,8 +827,8 @@ the cluster compacts the valid slots down before presenting them. A
 bundle whose only branch sits in slot 1 presents that branch at
 index 0.
 
-`pred_pc` is the BRANCH PC, not the fetch block PC: the block base
-plus that branch's in-block position, TWO bytes per position
+`pred_pc` is the BRANCH PC, not the prediction block PC: the block
+START plus that branch's in-block position, TWO bytes per position
 (section 7.4). bp_history folds bits [3] and [2] of it into the PHR
 path bit. The block PC would make the path bit nearly constant,
 because a block start moves only when the block boundary moves. AN
@@ -980,6 +1036,16 @@ match it and to match this specification.
 ## 11. Document history
 
 ```
+  2026-09-19  session-071. Section 4c added: bpu_blk_val_p2,
+              bpu_blk_idx_p2 and bpu_blk_ras_p2 carry the
+              post-operation RAS snapshot for every valid p2 block,
+              closing the port gap flagged session-070 (ruled,
+              Jeff). bpu_pred_ras_p1 is initialise-only. The p3
+              repair is recorded as open. 7.4 and section 9: the
+              branch PC is block START plus position, and every
+              position on a port is start-relative (TD#125).
+              "Fetch block" replaced by "prediction block".
+
   2026-08-21  BP-107 results. Section 4: bp_ftq_entry_t.pft_addr is
               a p1 value that NO later port can correct, because the
               4a groups carry bp_ftq_slot_t and pft_addr is a block

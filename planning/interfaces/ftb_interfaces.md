@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-06-25
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -104,7 +104,12 @@ fields of the one indexed entry, not two slots.
   output logic [FTB_BR_POS_BITS-1:0] ftb_br0_pos_p2
                         -- br0 in-block position: which 2-BYTE SLOT
                            (0..15) within the 32-byte block this
-                           branch occupies. Used by the cluster/FTQ
+                           branch occupies, counted from the BLOCK
+                           START. ftb_cntrl stores it region-relative
+                           and converts at the read, suppressing a
+                           field outside this block's window
+                           (ftb_decisions.md 4.6, session-071).
+                           Used by the cluster/FTQ
                            to locate the taken branch in the bundle.
                            NOT to order br0 against br1 -- br0 is
                            always the earlier branch by fill order
@@ -254,7 +259,10 @@ IC-FTB-05).
                         -- in-block position of the resolving branch
                            (0..15), = (branch_pc - block_start) >>
                            POS_OFFSET_BITS, supplied by the FTQ/resolve
-                           side. Written to the selected field's pos at
+                           side. START-relative; ftb_cntrl adds the
+                           update PC's region offset before storing
+                           it (ftb_decisions.md 4.6 R-2). Written to
+                           the selected field's pos at
                            allocate / free-field fill (the conditional
                            chosen by ftb_upd_br_idx_u0, or the jump when
                            ftb_upd_is_jmp_u0). Static for the life of a
@@ -545,7 +553,8 @@ IC-FTB-14 (session-053):
 
 IC-FTB-15 (session-053, FTB-4 resolved):
   In-block position is sourced and sunk. Each stored position field
-  (br0, br1, jump; FTB_BR_POS_BITS each) has a producer and a consumer:
+  (br0, br1, jump; FTB_BR_RPOS_BITS each, stored region-relative,
+  ftb_decisions.md 4.6) has a producer and a consumer:
   written from ftb_upd_pos_u0 (2.5) at allocate / free-field fill,
   routed to the field selected by ftb_upd_br_idx_u0 or ftb_upd_is_jmp_u0;
   read out on ftb_br0_pos_p2 / ftb_br1_pos_p2 / ftb_jmp_pos_p2 (2.3).
@@ -561,6 +570,11 @@ IC-FTB-16 (2026-08-19):
   block carrying one conditional always fills br0, never br1. The
   producer of ftb_upd_br_idx_u0 -- the FTQ -- is responsible; the FTB
   does not reorder and does not check.
+
+  Under the read window of ftb_decisions.md 4.6, br0 can be
+  suppressed while br1 is visible, so program order holds per region
+  rather than per block start. Restating this invariant for starts
+  that share an entry is ftb_decisions.md 4.6 O-3, open, TD#125.
 
   Two consequences follow.
 
@@ -613,7 +627,13 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
   FTB_BR_POS_BITS   = 4        $clog2(FTB_BLOCK_BYTES/2), in-block
                                position at 2-BYTE granularity. This
                                read 3 with /4, superseded by BP-099
-                               for the C extension. Session-070
+                               for the C extension. Session-070.
+                               The width of every position PORT,
+                               start-relative
+  FTB_BR_RPOS_BITS  = 5        FTB_BR_POS_BITS + 1, the STORED
+                               position, region-relative
+                               (ftb_decisions.md 4.6). Session-071,
+                               TD#125
   FTB_BR_TGT_BITS   = 13       conditional target displacement
   FTB_JMP_TGT_BITS  = 21       jump target displacement
   FTB_CONF_WIDTH    = 3        bimodal direction counter (MSB = dir)
@@ -622,7 +642,8 @@ All from bp_defines_pkg.sv. Settled values (ftb_decisions.md 8 / 8.1):
   Invariant: both init values unsaturated, MSB matches direction
   (IC-FTB-06). There is no FTB_CONF_SUPPRESS_THRESH.
 
-  FTB_ENTRY_WIDTH = 110 / FTB_SET_WIDTH = 440   (logical, incl. valid)
+  FTB_ENTRY_WIDTH = 113 / FTB_SET_WIDTH = 452   (logical, incl. valid;
+  110 / 440 before the stored positions widened, session-071)
   FTB_RAM_ENTRY_WIDTH = 109 / FTB_RAM_SET_WIDTH = 436   (ftb_array data)
   -- ftb_decisions.md 8 is the authority; 105 / 420 here was stale
   since BP-099. Corrected session-070.
@@ -636,8 +657,9 @@ resolved by ftq_decisions.md 5.7 and built as ftq_ftb_sched
 
 FETCH_BLOCK_BYTES = 64 is a global / fetch-unit parameter, already in
 the package. It is NOT an FTB parameter. The FTB prediction block is
-FTB_BLOCK_BYTES (32), decoupled from fetch width by the FTQ. Do not
-collapse the two (ftb_decisions.md 2.3).
+FTB_BLOCK_BYTES (32), decoupled from the fetch block, the 64-byte
+L1I line the IFU reads, by the FTQ. Do not collapse the two
+(ftb_decisions.md 2.3; this read "fetch width", session-071).
 
 ---
 
@@ -705,4 +727,12 @@ collapse the two (ftb_decisions.md 2.3).
               IC-FTB-15 added (every stored field must have a named
               producer and consumer). No width change -- pos already
               occupied bits in the 105-bit entry. RTL wired in BP-066b.
+
+  2026-09-19  session-071. Positions on every port are
+              start-relative; ftb_cntrl stores them region-relative
+              at FTB_BR_RPOS_BITS = 5 and applies a read window
+              (ftb_decisions.md 4.6, ruled, option R). IC-FTB-15
+              and IC-FTB-16 note the stored form and the open slot
+              mapping question. Section 5: FTB_BR_RPOS_BITS added,
+              entry 110 -> 113. TD#125 tracks the RTL.
 

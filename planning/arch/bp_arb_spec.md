@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-08-09
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -55,7 +55,7 @@ This spec defines:
 |Predictor|RAM-based|Pred stage|Override stage|Update timing          |
 |---------|---------|----------|--------------|-----------------------|
 | uFTB    |No       |p0        |p0            |Immediate              |
-| RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read for       initial prediction. p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md p1.   |
+| RAS     |No       |p0/p2     |p2            |Speculative push/snapshot restore. p0: TOS read, an input to the p1 prediction (fe_decisions.md 12, session-071). p2: push/pop executes, redirect participation. See section 7.2 and ras_decisions.md p1.   |
 | FTB     |Yes      |p1/p2     |p1/p2         |u0/u1                  |
 | LP      |NO*      |p1/p2     |p1/p2         |u0/u1                  |
 | TAGE    |Yes      |p2        |p2            |u0/u1                  |
@@ -149,6 +149,11 @@ uFTB and RAS drive the FTQ directly at p0 without a redirect
 interface. They are the initial prediction.  RAS push/pop 
 and redirect participation occurs at p2; the p0 output is 
 a TOS read only.
+
+Note: fe_decisions.md 12 departs from this paragraph. Neither drives
+the FTQ at p0. The cluster registers the uBTB output and the RAS TOS
+read and forms the initial prediction at p1, where the FTQ allocates
+(FE-2). Session-071.
 
 Redirect signal naming examples:
 ```
@@ -379,14 +384,14 @@ state.  The update is granted in a subsequent cycle.
                FTB_RESP_BUF_DEPTH, FTB_PRED_CREDITS,
                FTB_UPD_CREDITS, FTB_STARVE_THRESH.
   Values:      TBD.  Independent of TAGE sizing.
-  Pred input:  ftb_pred_inp_t  (PC + branch_id + fetch block
+  Pred input:  ftb_pred_inp_t  (PC + branch_id + prediction block
                boundary fields -- wider than tage_pred_inp_t)
-  Upd input:   ftb_upd_inp_t   (resolved fetch block metadata)
+  Upd input:   ftb_upd_inp_t   (resolved prediction block metadata)
   Pred output: ftb_pred_meta_t (branch targets, block end PC,
                taken map)
   Override:    p2, via the cluster-derived bpu_redir_p2 group.
                No ftb_redir_val_p2 port exists.
-  Notes:       FTB updates on every resolved fetch block, not
+  Notes:       FTB updates on every resolved prediction block, not
                only on mispredictions.  UQ drain rate may be
                higher than TAGE.  Size UQ_DEPTH accordingly.
                As shipped, ftb.sv declares 42 flat ports and no
@@ -581,6 +586,11 @@ Note: A single conditional branch commit event must enqueue one entry
 in the TAGE UQ and one in the SC UQ. Each of these entries can contain
 two branches, since Pacino BPC is dual prediction capable.
 
+Note: fe_decisions.md 12 corrects "commit" above, as it does for 4.4.
+The producer is post-execute resolution (FE-6): one resolved
+conditional branch enqueues one TAGE UQ entry and one SC UQ entry.
+Session-071.
+
 The SC and TAGE UQ's are separate.
 
 ## 7. Non-RAM Predictors
@@ -615,6 +625,11 @@ causes the RAS to present the TOS value as the predicted
 target.  This is the initial p0 prediction, not a redirect.
 ras.sv declares ras_tos_addr_p0 and ras_tos_valid_p0.
 
+Note: fe_decisions.md 12 (entry "2, 7.2") departs from the sentence
+above. The TOS read is an input to the p1 prediction: the cluster
+registers it and the p1 mux applies it to a RETURN slot. It is not a
+prediction and reaches no FTQ port at p0. Session-071.
+
 #### Push (call)
 
 A call instruction is detected via FTB structural prediction
@@ -634,6 +649,10 @@ BY ITS INDEX, including when _self marks that entry squashed
 4.4). A flush IS a redirect (FE-14). This read "the last
 known-good entry", which ras_decisions.md 3.2 records replacing.
 Session-070.
+
+The snapshot is written at p2 for every valid block, from the state
+after both slots, on ftq_bpu_interfaces.md 4c (ras_decisions.md 4.2,
+session-071), not only for a block that operated on the RAS.
 
 The bp_ftq_entry_t struct includes a bp_ras_snapshot_t field.
 This is the RAS update mechanism -- not a RAM write but
@@ -821,7 +840,8 @@ task file, not here.
               prediction, These signals). Section 6.1 cross-ref
               "section 61" corrected to 6.1.
 
-  2026-08-09  INFRA-012 / session-064. Section 6.1 now names the
+  2026-08-09  PA-direct correction, session-064. Section 6.1 now
+              names the
               three SC index folds among the p0-to-p2 staged
               inputs, alongside the prediction PC and the phr
               (TD#92, staged by BP-090), with the reason recorded:
@@ -864,3 +884,14 @@ task file, not here.
               queue, yet this document, sc_interfaces.md and
               sc.sv (lines 30-32 and 148) all name them as the
               deferral. Raised as TD#123.
+
+  2026-09-19  session-071. Notes added at section 3 (after the
+              redirect interface listing), 6.2 and 7.2 recording
+              fe_decisions.md 12's departures: neither the uBTB nor
+              the RAS drives the FTQ at p0, the RAS TOS read is an
+              input to the p1 prediction, and the 6.2 producer is
+              resolution, not commit. The inventory row's RAS p0
+              cell restated. 7.2: the snapshot is written at p2 for
+              every valid block. 5.1: prediction block, not fetch
+              block. The 2026-08-09 entry was labelled INFRA-012,
+              which did not exist then.

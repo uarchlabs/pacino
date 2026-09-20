@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-08-21
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -179,11 +179,20 @@ than 14, and bp_history needs no change. The entry still CARRIES the
 pointer pair (section 2); nothing reads it across this interface.
 
 The index names the entry whose END-of-block pointer state is to be
-restored. On `RC_MISPREDICT` with `bkend_ftq_redir_self` clear that
-is the redirecting entry itself; with `_self` set the naming entry is
-squashed too and the index is the one before it. That derivation is
-the FTQ's work -- `bp_cluster` applies the index it is given and does
-not validate it.
+restored, and it is THE ENTRY THE REDIRECT NAMES, `bkend_ftq_redir_idx`,
+on every instruction-naming cause and whether `bkend_ftq_redir_self`
+is set or clear (ftq_backend_interfaces.md 5 D1). The history and the
+RAS (D2) restore from the same entry. `bp_cluster` applies the index
+it is given and does not validate it.
+
+RULED session-071 (Jeff). This read that with `_self` set "the naming
+entry is squashed too and the index is the one before it". That fails
+in the case `_self` exists for. A precise trap is taken when the
+trapping instruction is the oldest in flight, so its entry K is at
+commit_ptr and K-1 has already been committed and FREED (5.3): its
+index may be reallocated, and it lies outside the live window 5.5 R2
+requires a redirect to name. It also made the history and the RAS
+restore from different entries for one redirect.
 
 The FTQ arm outranks both of the cluster's own redirect arms
 unconditionally (`ftq_backend_interfaces.md` 8).
@@ -323,13 +332,21 @@ redirect squashed still complete and still present their results.
 
 THE FTQ DROPS THEM. Every cluster response carries the entry index it
 belongs to -- `bpu_pred_idx_p1`, `bpu_slot_idx_p2`, `bpu_slot_idx_p3`,
-`bpu_redir_idx_p2`, `bpu_redir_idx_p3`, `bpu_meta_idx_p2`,
-`bpu_meta_idx_p3` -- and the FTQ ignores any naming an entry it has
-squashed. This is the same rule as `ftq_backend_interfaces.md` R3 and
-it has the same prerequisite: a generation bit, which FE-U7 did NOT
-supply when it resolved (section 5, ftq_backend_interfaces.md 9), so
-a
-reallocated index is not mistaken for the squashed one.
+`bpu_blk_idx_p2`, `bpu_redir_idx_p2`, `bpu_redir_idx_p3`,
+`bpu_meta_idx_p2`, `bpu_meta_idx_p3` -- and the FTQ ignores any
+naming an entry it has squashed.
+
+THE MECHANISM IS 5.6 AND NEEDS NO GENERATION BIT. A cluster response
+returns a fixed number of stages after its request, so the FTQ holds
+the full pointer of every request in flight in its own shadow and
+accepts a response only on shadow valid and index match. A
+reallocated index is told apart from its squashed use by the shadow,
+not by anything the response carries. This is NOT the situation of
+`ftq_backend_interfaces.md` R3: backend resolution latency is
+unbounded, nothing can shadow it, and R3 still needs the generation
+bit FE-U7 did not supply (section 5, ftq_backend_interfaces.md 9).
+This section said the two rules shared that prerequisite, which
+contradicted 5.6 and 5.8. Session-071.
 
 ### 4.7 Reset vector
 
@@ -392,6 +409,11 @@ xlate_ptr are blocks whose translation is done and whose fetch has
 not issued; beyond xlate_ptr are blocks that are predicted and not
 yet translated.
 
+XLATE_PTR IS SPECIFIED AND NOT BUILT. ftq_ptr.sv has no xlate_ptr and
+ftq_ifu.sv no translation request group (session-071 RTL read). The
+FTQ unit was completed by BP-107 before session-069 added both, so
+the built FTQ is the three-pointer design. TD#127.
+
 WHY IT EXISTS. L1I-3 makes the L1I physically indexed with
 translation complete before the array is indexed, so a fetch request
 cannot be issued in the same cycle its translation begins. Rather
@@ -405,11 +427,16 @@ xlate_ptr is subject to the same unwritten-content hazard as
 fetch_ptr: it must measure to the fetchable frontier, not to
 alloc_ptr. See the paragraph below, which applies to both.
 
-OUT OF RESET AND AFTER A REDIRECT xlate_ptr and fetch_ptr are set to
-the same entry. The translation queue is empty, so the fetch
-pipeline stalls until translation of that entry completes. That is
-one cycle of added redirect latency and it is the cost of the
-scheme; XiangShan documents the identical stall.
+OUT OF RESET xlate_ptr and fetch_ptr are set to the same entry.
+AFTER A REDIRECT each moves back to the flush index if it was past it
+and is otherwise left where it is (5.5 R1). In the usual case both
+were past it, land on it together, and the translation queue is
+empty from that entry on, so the fetch pipeline stalls until
+translation of that entry completes. That is one cycle of added
+redirect latency and it is the cost of the scheme; XiangShan
+documents the identical stall. This read that after a redirect both
+"are set to the same entry", which skips unfetched entries older than
+the flush index when the IFU is behind. Session-071.
 
 THE FETCHABLE FRONTIER IS NOT alloc_ptr. alloc_ptr advances at p0
 (5.2) and the entry CONTENT is written at p1, so for one cycle the
@@ -533,8 +560,32 @@ or predecode redirect):
 
 ```
   R1  alloc_ptr rewinds to K, or K+1 when the naming entry itself
-      survives. fetch_ptr rewinds with it, since FQ-1 forbids
-      fetch_ptr running ahead of alloc_ptr.
+      survives. xlate_ptr and fetch_ptr do NOT follow alloc_ptr.
+      Each becomes the wrap-aware MINIMUM of its current value and
+      the flush index F of ftq_ifu_interfaces.md 5, so it moves
+      only if it was ahead of F. FQ-1 holds because F is never
+      past the new alloc_ptr.
+
+        backend, _self clear   F = K+1. K is fetched and its
+                               instructions stand; refetching it
+                               would deliver them twice
+        backend, _self set     F = K
+        p2, p3, predecode      F = K. K survives, corrected, and
+                               must be fetched against the
+                               correction (ftq_ifu_interfaces.md
+                               7 W3)
+
+      AS BUILT, session-071 RTL read: ftq_ifu.sv drives F = K or
+      K+1 by _self and ftq_ptr.sv moves fetch_ptr only if it was
+      ahead, which is this rule for the backend. It uses K+1 for a
+      surviving entry on every cause, so the p2, p3 and predecode
+      row is not built. TD#126.
+
+      This read "fetch_ptr rewinds with it, since FQ-1 forbids
+      fetch_ptr running ahead of alloc_ptr". That made fetch_ptr
+      K+1 whenever K survives, so the refetch of K that W3 requires
+      never issued, and it moved fetch_ptr FORWARD past unfetched
+      entries when the IFU was behind K. Session-071.
   R2  commit_ptr NEVER rewinds. Committed is architectural. A
       redirect can only name an index at or after commit_ptr;
       ftq_backend_interfaces.md R2 makes that the backend's
@@ -547,7 +598,8 @@ or predecode redirect):
 
 Section 4.6 requires the FTQ to drop cluster responses naming
 squashed entries. The response indices -- `bpu_pred_idx_p1`,
-`bpu_slot_idx_p2/p3`, `bpu_redir_idx_p2/p3`, `bpu_meta_idx_p2/p3` --
+`bpu_slot_idx_p2/p3`, `bpu_blk_idx_p2`, `bpu_redir_idx_p2/p3`,
+`bpu_meta_idx_p2/p3` --
 are FTQ_IDX_BITS wide and carry NO wrap bit. A rewind can therefore
 re-allocate an index while a response for the squashed use of that
 same index is still in flight, and the index alone cannot separate
@@ -1235,6 +1287,18 @@ one.
               accuracy cost, P5 the throughput cost. 5.7.5 records
               the two escalations not taken. FE-5 amended narrowly
               as FE-5a; IC-FTB-09 resolved. The FTB is unchanged.
+
+  2026-09-19  session-071. 3.2: the history restores from the entry
+              the redirect names on every cause, _self set included,
+              as the RAS does (ruled, Jeff). 4.6: the drop rule's
+              mechanism is 5.6 and needs no generation bit; only
+              backend R3 does. bpu_blk_idx_p2 added to the response
+              index lists (ftq_bpu_interfaces.md 4c). 5.1: xlate_ptr
+              recorded as not built, TD#127; the post-redirect rule
+              for xlate_ptr and fetch_ptr is 5.5 R1. 5.5 R1:
+              xlate_ptr and fetch_ptr take the minimum of their
+              current value and the flush index, with F stated per
+              cause; the W3 row is unbuilt, TD#126.
 ```
 
 

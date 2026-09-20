@@ -6,7 +6,7 @@
  FILE:    itlb_l2tlb_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -123,9 +123,12 @@ IL-6  `retry` is not a miss. It means the L2 TLB could not accept
 
 IL-5 is why this port differs from the one above it. The ITLB
 answers the IFU immediately because the IFU has other work and a
-fetch block to abandon. The ITLB has nothing else to do with a
-missed translation, so holding the transaction open costs it
+prediction block to abandon. The ITLB has nothing else to do with
+a missed translation, so holding the transaction open costs it
 nothing and saves a re-request path.
+
+This read "a fetch block to abandon"; the fetch block is the 64-byte
+L1I line (fe_decisions.md Conventions). Session-071.
 
 ---
 
@@ -213,7 +216,9 @@ ITLB-U1   Tracker depth, decoupled from IL-1 by design.
 IT-1      Two outstanding I-side translations, the sizing input
           to IL-1.
 MMU-3     The L1 TLBs are clients of this port.
-MMU-10    The walker's PMP check, the second cause of IL-10.
+MMU-10    The walker's PMP check, the access-fault cause of IL-10.
+          This read "the second cause"; IL-10 lists it third.
+          Session-071.
 MMU-13    PMA attributes, deliberately absent by IL-9.
 MMU-15    The static region table IL-9 defers to.
 MMU-17    Invalidate during a walk, IL-13 and IL-14.

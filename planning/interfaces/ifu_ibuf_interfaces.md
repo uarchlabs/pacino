@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -16,7 +16,7 @@ Owns the IB-N registry.
 
 ## 1. Scope
 
-One group crosses this boundary: the IFU presents a fetch block's
+One group crosses this boundary: the IFU presents a prediction block's
 instructions to the ibuf. There is no return path other than the
 handshake.
 
@@ -94,7 +94,8 @@ Each slot carries `predecode_pkt_t` as defined in
 ```
   instr        the expanded 32-bit instruction
   start_pc     the address of this instruction
-  pos          its halfword position in the fetch block
+  pos          its halfword position in the prediction block,
+               counted from the block start
   ftq_idx      the FTQ entry this block came from
   fault_cause  access fault, page fault, guest-page fault, none
   fault_va     the faulting virtual address
@@ -167,7 +168,8 @@ rather than by disagreement: the IFU flushes on all four because it
 has in-flight fetches for entries at or after the named one, and
 the ibuf holds only what has already been enqueued.
 
-IB-13 The flush index names entry K, not K+1.
+IB-13 The flush index is K, not K+1, for a predecode, p2 or p3
+      redirect and for a backend redirect with `_self` set.
       `ftq_ifu_interfaces.md` 7 W3 drives the flush with the
       entry's own index. For a predecode redirect K is already
       fetched so including it costs nothing; for a p2 or p3
@@ -175,6 +177,14 @@ IB-13 The flush index names entry K, not K+1.
       because the correction changes `taken_pos` and a fetch
       issued against the old prediction would truncate in the
       wrong place.
+      A backend redirect with `_self` clear flushes at K+1: K is
+      fetched and its instructions stand, and refetching it would
+      deliver them twice (ftq_decisions.md 5.5 R1,
+      ftq_backend_interfaces.md 5 D5). IB-12 is unaffected: the
+      ibuf clears on every backend redirect whatever the index.
+      This read "The flush index names entry K, not K+1" for the
+      flush group as a whole. Session-071. The RTL flushes at K+1
+      for a surviving entry on every cause; TD#126.
 
 ---
 

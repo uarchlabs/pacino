@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-04
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,49 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-071: audit batch A1-A10, three RTL findings. Documents only.
+
+No RTL changed and no suite run. Jeff's audit findings A1 to A10
+were checked against the documents and corrected; an informal IA
+read of the RTL settled A2 and exposed three defects.
+
+Rulings, all Jeff's:
+
+  A2   FETCH block = 64 bytes, the L1I line the IFU reads.
+       PREDICTION block = 32 bytes, one FTQ entry. "Fetch block"
+       had been used for the 32-byte unit throughout.
+       fe_decisions.md Conventions. Delivering two blocks per cycle
+       stays open, ftq_ifu_interfaces.md 8 item 2
+  A3   the history restores from the entry the redirect names on
+       every cause, _self set included, as the RAS does
+  A6   ftq_bpu_interfaces.md 4c: bpu_blk_val/idx/ras_p2 write the
+       post-both-slots RAS snapshot for every valid p2 block;
+       bpu_pred_ras_p1 is initialise-only
+  N1   option (R): stored positions region-relative, converted
+       inside the FTB and uBTB, ports start-relative.
+       ftb_decisions.md 4.6. TD#125
+
+Also corrected: A1 (the RAS p0 read is an input to the p1
+prediction), A4 (xlate_ptr and fetch_ptr take the minimum of their
+value and the flush index; F stated per cause), A5 (4.6 needs no
+generation bit), A7 (update producer at 6.2), A8 (three INFRA-012
+labels), A9, A10. The A2 terminology sweep covered the files the PA
+had: bp_arb_spec, bp_cluster, bp_history_*, fe_decisions, ftb_*,
+ftq_*, ras_*, ubtb_interfaces, loop_pred_interfaces, sc_interfaces,
+ifu_decisions, ifu_ibuf_interfaces, ibuf_decisions, dcd_decisions,
+l1i_ifu_interfaces and itlb_l2tlb_interfaces; icache_decisions,
+itlb_decisions and itlb_ifu_interfaces needed nothing. The TAGE,
+ITTAGE and SC documents, mmu_decisions, bpu_port_inventory,
+ftb_confidence_override_rules, pacino_cache, manual_tb_decisions and
+sram_init have not been swept against this session's rulings.
+
+Open, raised this session: the p3 RAS repair against the p2
+snapshot (ftq_bpu_interfaces.md 4c); ftb_decisions.md 4.6 O-1 to
+O-3; the RC_UNSPEC flush index.
+
+New: TD#125, TD#126, TD#127. No BP, INFRA or TOOLS number consumed.
 
 ---
 ## Session-069: RAS theory-of-operation audit. Documentation only.
@@ -652,9 +695,10 @@ it only documented current behavior.
 |                         |             |                   | pred_taken/pred_pc compacted by  |
 |                         |             |                   | branch number, not slot number.  |
 |                         |             |                   | SESSION-064: pred_pc is the      |
-|                         |             |                   | BRANCH PC (block base plus       |
+|                         |             |                   | BRANCH PC (block START plus      |
 |                         |             |                   | pos << POS_OFFSET_BITS),         |
-|                         |             |                   | not the fetch block PC -- BP-092a|
+|                         |             |                   | not the prediction block PC --   |
+|                         |             |                   | BP-092a                          |
 |                         |             |                   | fixed the cluster side, proven   |
 |                         |             |                   | BP-093 TC-A..TC-G. The block PC  |
 |                         |             |                   | would make the PHR path bit      |
@@ -1155,7 +1199,12 @@ it only documented current behavior.
 |                         |             |                   | properties run under its target  |
 |                         |             |                   | anyway. sim_ftq 56/0.            |
 | ftq_ptr.sv              | Complete    | tb_ftq_ptr        | BP-106, retrofitted BP-107.      |
-|                         |             |                   | alloc_ptr and fetch_ptr.         |
+|                         |             |                   | alloc_ptr and fetch_ptr. NO      |
+|                         |             |                   | xlate_ptr: ftq_decisions.md 5.1  |
+|                         |             |                   | added it after this was built,   |
+|                         |             |                   | TD#127. Redirect moves fetch_ptr |
+|                         |             |                   | only if ahead, as 5.5 R1 now     |
+|                         |             |                   | states. Session-071.             |
 |                         |             |                   | FTQ_ALLOC_LIMIT REVERTED to      |
 |                         |             |                   | FTQ_DEPTH once the watermark     |
 |                         |             |                   | gained a generation bit; the 64th|
@@ -1877,7 +1926,8 @@ assessment of each document. Correct any that are wrong.
 |     |          |     merges depends on whether the IFU issues for a later |
 |     |          |     block before an earlier response lands               |
 |     |          |   - the reordering buffer of TD-IF-5: one predecode      |
-|     |          |     writeback per fetch block against out-of-order line  |
+|     |          |     writeback per prediction block against           |
+|     |          |     out-of-order line                                    |
 |     |          |     responses, with nothing bounding the buffer          |
 |     |          |   - the maintenance path of l1i_ifu_interfaces.md 11,    |
 |     |          |     whose producer is the backend commit stage and is    |
@@ -2064,7 +2114,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | 30-32 and 148) all named them as the deferral. Those     |
 |     |          | three citations now point here. The sc.sv comments are   |
 |     |          | a two-line edit whenever an SC task next opens.          |
-
 |     |          |                                                          |
 | 124 | ftb/ubtb | OPEN, RTL. pftAddr cannot represent the end of an        |
 |     |          | unaligned block. RULED session-070; documents record the |
@@ -2096,6 +2145,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | shared by every PC in the region (4.1), so a             |
 |     |          | start-relative end reconstructs differently per lookup   |
 |     |          | PC.                                                      |
+|     |          | TD#125 (session-071) widens the three STORED positions   |
+|     |          | by one bit each, 110 -> 113, independently of this       |
+|     |          | ruling. This row's width statements describe the pftAddr |
+|     |          | change alone.                                            |
 |     |          |                                                          |
 |     |          | THE uBTB CARRIES THE IDENTICAL SCHEME and the same       |
 |     |          | defect: UBTB_PFTADDR_BITS + 1, recon_pft(base, pft,      |
@@ -2116,6 +2169,67 @@ assessment of each document. Correct any that are wrong.
 |     |          | while 4.5 says bounds checked and session-069 records    |
 |     |          | restoring that check. Confirm whether the restoration    |
 |     |          | ever reached RTL.                                        |
+| 125 | bpu      | OPEN, RTL. STORED POSITIONS ARE READ AGAINST THE WRONG   |
+|     |          | BASE. RULED session-071 (Jeff), option (R):              |
+|     |          | ftb_decisions.md 4.6.                                    |
+|     |          |                                                          |
+|     |          | As built, the update path stores pos unchanged from the  |
+|     |          | backend resolution (ftq_resolve.sv 309, ftq_ftb_sched.sv |
+|     |          | 305, ftb_cntrl.sv 371 and 392), so it is START-relative, |
+|     |          | while bp_cluster.sv 735-740 forms the branch PC as the   |
+|     |          | 32-byte-ALIGNED base plus pos. Nothing in ftb_cntrl.sv,  |
+|     |          | ubtb.sv or bp_cluster.sv masks a field whose position    |
+|     |          | lies before the lookup PC's region offset. For any block |
+|     |          | not starting on a 32-byte boundary the branch PC is      |
+|     |          | wrong by the start offset, and a branch an earlier start |
+|     |          | recorded is still reported. bp_cluster.sv 715 also steps |
+|     |          | a uBTB miss to aligned base + 32, resyncing the stream,  |
+|     |          | against bp_cluster.md Block width. Accuracy only:        |
+|     |          | predecode and resolution still correct the stream. Every |
+|     |          | suite is green because the testbenches use aligned       |
+|     |          | bases.                                                   |
+|     |          |                                                          |
+|     |          | FIX, per 4.6: store positions region-relative at         |
+|     |          | FTB_BR_RPOS_BITS = 5 (and the uBTB equivalent), rebase   |
+|     |          | at the write in ftb_cntrl and ubtb from the update PC,   |
+|     |          | mask to the window [k, k+16) and subtract k at the read, |
+|     |          | so every port stays start-relative. Branch PC = block    |
+|     |          | start + (pos << POS_OFFSET_BITS). Miss successor =       |
+|     |          | lookup PC + FTB_BLOCK_BYTES. FTB entry 110 -> 113, RAM   |
+|     |          | entry 109 -> 112; the uBTB entry grows by three bits     |
+|     |          | likewise. Package change, so both units run. Same files  |
+|     |          | as TD#124; run them together.                            |
+|     |          |                                                          |
+|     |          | OPEN WITHIN IT (4.6 O-1 to O-3, not ruled): the target   |
+|     |          | displacement base, which 4.2 measures from the block     |
+|     |          | start and a shared entry breaks the same way; an upper   |
+|     |          | bound on the reconstructed fall-through; slot mapping    |
+|     |          | and fill order under the mask (IC-FTB-16, 5.4a). Found   |
+|     |          | by the session-071 IA read of the RTL.                   |
+| 126 | ftq      | OPEN, RTL. THE FLUSH INDEX IS K+1 WHERE W3 REQUIRES K.   |
+|     |          | ftq_ifu.sv 232-239 drives the IFU flush at redir_idx     |
+|     |          | when _self is set and redir_idx + 1 when it is clear,    |
+|     |          | for every cause. For a p2, p3 or predecode redirect the  |
+|     |          | named entry survives corrected, and                      |
+|     |          | ftq_ifu_interfaces.md 7 W3 and ifu_ibuf_interfaces.md    |
+|     |          | IB-13 require the flush at K so K is fetched against the |
+|     |          | correction: a fetch of K issued against the old          |
+|     |          | prediction truncates at the old taken_pos. The backend   |
+|     |          | half, K+1 with _self clear and K with it set, is correct |
+|     |          | and is now written into ftq_backend_interfaces.md D5 and |
+|     |          | ftq_decisions.md 5.5 R1, as is the minimum rule          |
+|     |          | ftq_ptr.sv already applies to fetch_ptr. Found by the    |
+|     |          | session-071 IA read.                                     |
+| 127 | ftq      | OPEN. XLATE_PTR IS SPECIFIED AND NOT BUILT. Session-069  |
+|     |          | added xlate_ptr to ftq_decisions.md 5.1 and the          |
+|     |          | translation request group to ftq_ifu_interfaces.md 4.1.  |
+|     |          | ftq_ptr.sv has no xlate_ptr and ftq_ifu.sv no            |
+|     |          | translation group: BP-107 completed the FTQ unit before  |
+|     |          | either was written, so the built FTQ is the three-       |
+|     |          | pointer design and its Complete status predates 5.1.     |
+|     |          | Needed before the IFU can be built against 4.1. Found by |
+|     |          | the session-071 IA read.                                 |
+
 ---
 
 ## Open Items
@@ -2487,7 +2601,9 @@ Key decisions for quick reference:
   32 commit entries. Pointer-only snapshot recovery. The top
   of stack is read at p0 (ras_tos_addr_p0).
 - FTB: single set-associative array (4-way / 2048 / 512
-  sets), 26-bit full tag, tree-PLRU, 2 conditional + 1 jump
+  sets), 26-bit tag over VA[39:14], pinned, bit 40 aliasing
+  (ftb_decisions.md 4.1, TD#122; this read "full tag", session-071),
+  tree-PLRU, 2 conditional + 1 jump
   per entry. Storage split ftb_array / ftb_plru / ftb_cntrl.
   conf is a bimodal DIRECTION counter; saturated-endpoint
   fast-path (ftb_fastpath_en). FTB target is the ITTAGE-miss
@@ -2500,7 +2616,9 @@ Key decisions for quick reference:
   the slot carries a branch.
 - In-block position: FTB_BR_POS_BITS = $clog2(BLOCK/2), so a
   position is a TWO-byte slot, 16 per block, and the branch
-  PC is block base plus pos << POS_OFFSET_BITS. BP-099
+  PC is block START plus pos << POS_OFFSET_BITS, pos counted
+  from the start (TD#125: bp_cluster.sv uses the aligned base;
+  session-071). BP-099
   widened this from 4-byte slots for the RVA23 C extension;
   POS_OFFSET_BITS is derived so it cannot disagree with the
   position width.

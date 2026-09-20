@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -43,7 +43,7 @@ DCD-1  There is one predecoder. It produces two views of one
        classification.
 
        The block view is `ftq_pd_info_t` at each of the 16
-       halfword positions of the fetch block. It goes to the FTQ
+       halfword positions of the prediction block. It goes to the FTQ
        writeback and its shape is fixed by `ftq_ifu.sv`.
 
        The bundle view is `predecode_pkt_t` at each of the 8
@@ -191,7 +191,7 @@ under IFU-20.
 
 DCD-16 `predecode_pkt_t` carries, per slot: valid, the expanded
        32-bit instruction, the start PC, the position within the
-       fetch block, the FTQ index, the fault cause, the faulting
+       prediction block, the FTQ index, the fault cause, the faulting
        virtual address, the faulting guest physical address, and
        the control flow classification of DCD-7.
 
@@ -205,11 +205,11 @@ TD-DCD-1  The vtype fields of the old `predecode_pkt_t` are
           first two are per-instruction and belong here. The
           third does not. `vtype_hazard` is defined as a vsetvl
           preceding a `needs_vtype` in the same bundle, and the
-          bundle the predecoder sees is a fetch block while the
-          bundle decode sees is 8 slots from the ibuf head. The
-          ibuf regroups: one fetch block can split across two
-          decode bundles and one decode bundle can draw from two
-          fetch blocks. An intra-bundle property computed before
+          bundle the predecoder sees is a prediction block while
+          the bundle decode sees is 8 slots from the ibuf head.
+          The ibuf regroups: one prediction block can split across
+          two decode bundles and one decode bundle can draw from
+          two prediction blocks. An intra-bundle property computed before
           the ibuf is wrong after it. `vtype_hazard` has to be
           computed at the ibuf read port or in decode.
 

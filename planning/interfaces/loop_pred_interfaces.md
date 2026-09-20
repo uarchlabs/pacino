@@ -7,7 +7,7 @@
  FILE:    loop_pred_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-08-08
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -70,7 +70,7 @@ The banks diverge only because they are written by different slots'
 updates.
 
 An earlier revision of this document stated that slot 1 predicts the
-fetch block following slot 0 at pred_pc + 32. That is superseded.
+prediction block following slot 0 at pred_pc + 32. That is superseded.
 Session-063 retired the two-PC-range block model, G8 and G17 are
 superseded, and BP-086 removed the pred_pc_p0 + 32 slot 1 lookup
 from ubtb.sv.
@@ -228,8 +228,12 @@ Evaluated on every lookup, in priority order:
   - Must set pred_src in bp_ftq_slot_t to identify the loop
     predictor as provider when lp_pred_is_loop=1 and override
     control selects the loop predictor output.
-  - Must compare pred_p1 against the p2 FTB/TAGE result and
-    fire the p2 redirect if they disagree, same as uBTB.
+  - The loop predictor takes no part in the redirect comparison.
+    The cluster compares the successor it would publish at p2
+    against its own p1 stage registers (fe_decisions.md FE-4), and
+    the LP is not a redirect source. This read "Must compare pred_p1
+    against the p2 FTB/TAGE result and fire the p2 redirect if they
+    disagree, same as uBTB". Session-071.
 
 ---
 

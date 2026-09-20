@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-17
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -328,8 +328,10 @@ SC's PQ for arbitration (bp_arb_spec.md sections 5.5, 6). SC's
 prediction rate is gated by TAGE's.
 
 SC has a separate update queue, entry type sc_upd_inp_t. TAGE and SC
-UQs are separate. A single conditional-branch commit enqueues one
-TAGE UQ entry and one SC UQ entry; each entry covers both slots
+UQs are separate. A single resolved conditional branch enqueues one
+TAGE UQ entry and one SC UQ entry at post-execute resolution, not
+commit (fe_decisions.md FE-6 and section 12; this read "commit",
+session-071); each entry covers both slots
 (bp_arb_spec.md section 6.2). This is the target arbitration model.
 At the unit level (sc.sv, as shipped) the UQ is not built and the
 arbitration-layer ports are stubbed: sc_uq_not_full is tied to 1'b1
@@ -453,4 +455,9 @@ conditional branches.
               as stage order per FE-3 with p-labels. The stage
               assignment itself was already correct, including
               ITTAGE at p2.
+
+  2026-09-19  session-071. Arbitration Model: the UQ producer is
+              post-execute resolution, not commit, per FE-6; the
+              sentence was carried from bp_arb_spec.md 6.2, which
+              now carries the same note.
 ```

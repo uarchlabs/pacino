@@ -6,7 +6,7 @@
  FILE:    ibuf_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -35,7 +35,7 @@ IBUF-1  A FIFO. In order in, in order out. No reordering, no
 
 IBUF-2  Entries are uniform. Each holds what IFU-2 delivers: the
         expanded 32-bit instruction, its start PC, its position
-        within the fetch block, its predecode result, its FTQ
+        within the prediction block, its predecode result, its FTQ
         index, its fault cause, its faulting virtual address, and
         its faulting guest physical address.
 
@@ -86,7 +86,7 @@ IBUF-9  The read port is 8 wide. `instr_decoder.sv` is an 8-wide
         parallel decoder and every port is `[SLOTS-1:0]`.
 
 The ibuf is therefore the width converter of the front end: 16
-positions in from one fetch block, 8 out to decode.
+positions in from one prediction block, 8 out to decode.
 
 IBUF-10 The entry delivers a `predecode_pkt_t` to decode.
         `instr_decoder` reads only `.instr` and `.valid` from it
@@ -101,7 +101,7 @@ TD-IBUF-1  `predecode_pkt_t` has no PC, no FTQ index, no fault
 
 `ftq_pd_info_t`, the 16-position predecode array of IFU-14, and
 `predecode_pkt_t`, the 8-slot bundle here, are different views of
-the same predecode. The first is sized to the fetch block and goes
+the same predecode. The first is sized to the prediction block and goes
 to the FTQ. The second is sized to decode and goes through the
 ibuf.
 
@@ -178,7 +178,8 @@ IFU-2     Sets the entry contents of IBUF-2.
 IFU-5     Gives the compaction to IBUF-3.
 IFU-23    Uncached fetch, IBUF-5.
 IB-12     The clear source, backend redirect alone.
-IB-13     The flush index is K, not K+1.
+IB-13     The flush index: K for predecode, p2, p3 and backend
+          with _self set; K+1 for backend with _self clear.
 ITLB-11   The fault cause and VA carried in IBUF-2 originate
           here.
 IB-*      The write port is `ifu_ibuf_interfaces.md`.

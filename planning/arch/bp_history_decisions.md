@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-09-17
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -160,10 +160,12 @@ range 0-2, per PROJECT_STATUS).
 
   GHR bit:  pred_taken[slot].
   PHR bit:  pred_pc[slot][2] ^ pred_pc[slot][3]  (path_bit).
-  pred_pc is the BRANCH PC, not the fetch-block PC.
+  pred_pc is the BRANCH PC, not the prediction-block PC.
 
-pred_pc is the block base plus that branch's in-block position,
-pos << POS_OFFSET_BITS, and the ports are indexed by BRANCH NUMBER
+pred_pc is the block START plus that branch's in-block position,
+pos << POS_OFFSET_BITS, with pos counted from the block start (not
+the 32-byte-aligned base, which bp_cluster.sv uses; TD#125,
+session-071), and the ports are indexed by BRANCH NUMBER
 after the cluster compacts its valid slots, not by slot number.
 
 AN EARLIER REVISION OF THIS LINE SAID THE FETCH-BLOCK PC. It was
@@ -882,5 +884,9 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               restore case exists.
               Open: the module-owned RTL/port edit and
               TD #74 / #69 / #70 sequencing (section 9).
+
+  2026-09-19  session-071. 3.2: pred_pc is the block START plus
+              pos << POS_OFFSET_BITS; "block base" had been read as
+              the aligned base (TD#125).
 
 

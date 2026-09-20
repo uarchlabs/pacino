@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-08-21
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -203,7 +203,12 @@ The FTQ's response:
       (ras_decisions.md 4.4.2).
   D4  free every squashed entry and restart allocation at the
       corrected stream.
-  D5  drive the IFU flush group of ftq_ifu_interfaces.md 5.
+  D5  drive the IFU flush group of ftq_ifu_interfaces.md 5, with
+      flush index K+1 when _self is clear and K when it is set
+      (ftq_decisions.md 5.5 R1). K's own fetch stands when it
+      survives; refetching it would deliver its instructions twice.
+      As built in ftq_ifu.sv. The index was unstated until
+      session-071.
 ```
 
 D1, D2 and D4 apply to RC_MISPREDICT, RC_TRAP and RC_REPLAY. They
@@ -497,6 +502,13 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
+  2026-09-19  session-071. D5 states the IFU flush index, K+1 with
+              _self clear and K with it set, matching the RTL and
+              ftq_decisions.md 5.5 R1. D1 already named the entry
+              the redirect names for the history restore;
+              ftq_decisions.md 3.2, which used the entry before it
+              when _self is set, now agrees.
+
   2026-08-21  Section 7 R3: only the live-window half is buildable.
               ftq_resolve_t.ftq_idx carries no generation bit and
               assumption A1 does not carry one either, so a

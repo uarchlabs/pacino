@@ -6,7 +6,7 @@
  FILE:    ubtb_interfaces.md
  SOURCE:  various; session-063 rewrite
  STATUS:  DRAFT
- UPDATED: 2026-08-02
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -144,7 +144,12 @@ the stream to alignment.
              br_type==COND. Present in the struct for all types but
              the consumer must ignore it for non-COND.
 
-  pos      : in-block instruction position, 0..15, of this branch.
+  pos      : in-block instruction position, 0..15, of this branch,
+             counted from the BLOCK START. The entry stores it
+             region-relative, UBTB_BR_POS_BITS + 1 wide, and ubtb.sv
+             converts at the read, reporting a slot whose stored
+             position lies outside this block's window as invalid
+             (ftb_decisions.md 4.6, session-071, TD#125).
              The cluster uses it to locate the branch in the fetch
              bundle. NOT to order br0 against br1: br0 is always
              the earlier branch by fill order
@@ -157,7 +162,7 @@ the stream to alignment.
 
   carry    : 1 when THIS SLOT'S TARGET lies outside this block.
              Used by the cluster to decide whether the p1
-             prediction requires a fetch block change.
+             prediction requires a prediction block change.
 
              This is NOT the carry used to reconstruct
              blk_p1.pft_addr. That one is a block-scoped overflow
@@ -198,8 +203,13 @@ the stream to alignment.
   - Must not use pred_p1[s].br_taken when br_type != COND.
   - Must write the selected slot into the FTQ fast path
     (bp_ftq_slot_t) with pred_src set to PRED_UBTB.
-  - Must compare pred_p1[s] against the p2 FTB result and derive a
-    redirect if they disagree.
+
+The uBTB takes no part in the redirect comparison. The cluster
+compares the successor it would publish at p2 against its own p1
+stage registers (fe_decisions.md FE-4); no predictor is compared
+against another, and the uBTB is not a redirect source. This list
+carried "Must compare pred_p1[s] against the p2 FTB result and derive
+a redirect if they disagree". Session-071.
 
 ---
 
@@ -233,7 +243,9 @@ same entry; they write different fields of it.
                at fill the weak conf init direction.
   target     : resolved taken target, full width. ubtb.sv converts
                to the stored displacement form.
-  pos        : in-block position of the resolving branch, 0..15.
+  pos        : in-block position of the resolving branch, 0..15,
+               START-relative. ubtb.sv adds the update PC's region
+               offset before storing it (ftb_decisions.md 4.6 R-2).
                Written at fill; static for the life of a filled
                field.
   is_jmp     : this resolve is a jump.
@@ -304,7 +316,8 @@ communicate miss reason or miss type externally.
 |-----|-------------------------------------------|------------------|
 | UI2 | carry field consumer behavior in cluster  | TBD at           |
 |     | top -- how the cluster uses the SLOT carry| bp_cluster       |
-|     | to decide fetch block change vs continue. |                  |
+|     | to decide prediction block change vs      |                  |
+|     | continue.                                 |                  |
 |     | The name collision with the block-scoped  |                  |
 |     | fall-through carry is resolved in the     |                  |
 |     | pred_p1[s] field semantics, session-069.  |                  |
@@ -317,6 +330,12 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-09-19  session-071. pos is start-relative at both ports and
+              stored region-relative, one bit wider, with a read
+              window, as the FTB (ftb_decisions.md 4.6, TD#125). The
+              consumer obligation to compare pred_p1 against the p2
+              FTB result is removed: FE-4. "Fetch block" replaced by
+              "prediction block" where the 32-byte unit was meant.
   2026-09-15  session-069. The miss fallthrough is stated: the
               cluster computes lookup PC + FTB_BLOCK_BYTES, this
               module drives 0. Previously the fallthrough was

@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-08-21
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -67,16 +67,27 @@ Three sizes are in play and must not be collapsed.
 ```
   FTB_BLOCK_BYTES    32   the PREDICTION block. One FTQ entry
                           describes exactly one of these.
-  FETCH_BLOCK_BYTES  64   the global fetch width in bp_defines_pkg.
+  FETCH_BLOCK_BYTES  64   the FETCH block: the unit the IFU reads
+                          from the L1I, one cache line
+                          (fe_decisions.md Conventions).
   FTB_BR_POS_BITS     4   in-block position, 2-byte granular, so
                           sixteen positions per prediction block.
 ```
 
-`bp_defines_pkg.sv` line 81 states that the 32 and the 64 must not be
-collapsed. This interface names the 32-byte prediction block: one
-request, one FTQ index, one entry. Whether the IFU coalesces two
-consecutive requests into one 64-byte cache access is an IFU-internal
-optimization and is not visible here. See section 8, item 1.
+`bp_defines_pkg.sv`, in the comment above FTB_BLOCK_BYTES, states
+that the 32 and the 64 must not be collapsed. This interface names
+the 32-byte prediction block: one request, one FTQ index, one entry,
+at most one request per cycle. The IFU reads the 64-byte line holding
+the block and extracts the block from it (ifu_decisions.md IFU-7,
+TD-IFU-7). Serving two sequential requests from one held line is
+IFU-internal and not visible here.
+
+DELIVERING TWO PREDICTION BLOCKS PER CYCLE IS NOT IFU-INTERNAL. It
+needs two requests per cycle from the FTQ and reopens this interface;
+section 8, item 2. This paragraph called coalescing "an IFU-internal
+optimization" without that distinction, cited item 1 for it, and
+cited bp_defines_pkg.sv by a line number that had moved.
+Session-071.
 
 GRANULARITY. Predecode and the predictor now agree. Both resolve
 2-byte positions, so a predecode position and a predictor position
@@ -97,6 +108,12 @@ FTB_BR_POS_BITS is derived from the block size and the predictor's
 position granularity. They coincide at the shipped geometry and a
 change to either must be checked against the other. Section 7 states
 where each is used.
+
+Every position on this interface is measured from the BLOCK START:
+position 0 is the first halfword of the block. The FTB and the uBTB
+store positions relative to the 32-byte-aligned region, one bit wider,
+and convert at their own boundary, so no port anywhere carries the
+stored form (ftb_decisions.md 4.6). Session-071.
 
 ---
 
@@ -184,9 +201,11 @@ one pass, which serialises the ITLB ahead of the array inside the
 fetch pipeline. Splitting the pointer moves the translation out of
 that path.
 
-The two pointers reset to the same entry and are set equal on a
-redirect, so the first fetch after either stalls one cycle waiting
-for its translation. That cost is stated in ftq_decisions.md 5.1 and
+The two pointers reset to the same entry, and on a redirect each
+moves back to the flush index if it was past it (ftq_decisions.md 5.5
+R1), so the first fetch after either usually stalls one cycle waiting
+for its translation. This read "are set equal on a redirect".
+Session-071. That cost is stated in ftq_decisions.md 5.1 and
 in IFU-27.
 
 `ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
@@ -226,7 +245,9 @@ request for an entry it has already flushed.
 
 Drop every in-flight fetch whose FTQ index is at or after
 `ftq_ifu_flush_idx`, and discard whatever the IFU holds for those
-entries. The FTQ resumes requesting from the flush index.
+entries. The FTQ resumes requesting from the flush index, or from
+where it already was if it had not reached it (ftq_decisions.md 5.5
+R1). The index is K or K+1 by cause, as 5.5 R1 tabulates.
 
 IT DOES NOT CLEAR THE IBUF. Only a backend redirect does
 (`ibuf_decisions.md` IBUF-8, `ifu_ibuf_interfaces.md` IB-12). A
@@ -238,10 +259,15 @@ discard valid work.
 THIS FLUSHES BOTH IFU PIPELINES. The translation pipeline of 4.1 and
 the fetch pipeline of section 4 are flushed by this one group, and
 the translation queue between them (IFU-25) is emptied of every entry
-at or after the flush index. The FTQ sets `xlate_ptr` and `fetch_ptr`
-both to the flush index (ftq_decisions.md 5.1), so the first fetch
-after a flush waits for its own translation. Nothing is carried
-across a flush on the strength of having been translated before it.
+at or after the flush index. The FTQ moves `xlate_ptr` and `fetch_ptr`
+back to the flush index if they were past it and leaves them
+otherwise (ftq_decisions.md 5.5 R1). When they were past it, the
+first fetch after a flush waits for its own translation. Nothing at
+or after the flush index is carried across a flush on the strength of
+having been translated before it. This read that the FTQ "sets
+`xlate_ptr` and `fetch_ptr` both to the flush index", which skips
+unfetched entries older than it when the IFU is behind. Session-071.
+Section 4.1 and xlate_ptr are not built, TD#127.
 
 ONE flush group, not two. XiangShan carries `BpuFlushInfo` with
 separate `s2` and `s3` valid-pointer pairs and leaves the consumer to
@@ -270,7 +296,7 @@ the corrected stream.
 
 ## 6. Predecode writeback: IFU to FTQ
 
-One writeback per fetch block, after the IFU has predecoded the
+One writeback per prediction block, after the IFU has predecoded the
 fetched bytes.
 
 ```
@@ -416,7 +442,9 @@ On `ifu_ftq_mis_val`, the FTQ:
       required: the correction changes taken_val and taken_pos,
       which is what the IFU truncates the bundle on, so a fetch
       issued against the old prediction would truncate in the wrong
-      place. Session-069.
+      place. Session-069. NOT BUILT: ftq_ifu.sv flushes at K+1 for
+      a surviving entry on every cause (session-071 RTL read).
+      TD#126.
   W4  restores the history pointers and the RAS snapshot from this
       entry, the same restore a p2 or p3 redirect performs
       (ftq_decisions.md 3.2).
@@ -483,6 +511,13 @@ file already says FE-U7 is decided. Corrected session-070.
      IFU coalesces two consecutive FTQ entries into one 64-byte
      access, and what that does to ftq_ifu_req_rdy backpressure,
      is an IFU decision this file deliberately does not take.
+     NARROWED session-071. Serving two requests from one held line
+     is IFU-internal. Delivering two prediction blocks per cycle is
+     not: the FTQ would issue two requests per cycle, fetch_ptr
+     would advance by up to two, and there would be two predecode
+     writebacks, so sections 4 and 6 reopen. As built the FTQ
+     issues one request per cycle (ftq_ifu.sv, ftq_ptr.sv).
+     Still open; it is decided with the IFU design.
 
   3. Entry fields. RESOLVED, ftq_entry_formats.md 4. FE-U7 is
      resolved (ftq_decisions.md 5), so the policy that reads them
@@ -578,6 +613,16 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 ## 11. Document History
 
 ```
+  2026-09-19  session-071. Section 3: FETCH_BLOCK_BYTES is the
+              fetch block, the L1I line the IFU reads, not a fetch
+              width; delivering two prediction blocks per cycle is
+              not IFU-internal; ports carry block-start positions.
+              Section 5: xlate_ptr and fetch_ptr move back to the
+              flush index only if past it; the index is K or K+1 by
+              cause. W3 recorded as unbuilt, TD#126. Section 8 item
+              2 narrowed. "Fetch block" replaced by "prediction
+              block" where the 32-byte unit was meant.
+
   2026-08-21  Section 9 said the prediction block is 8 positions.
               FTB_BR_POS_BITS is 4, so it is 16, as sections 3 and
               10 of this file already said. Stale by BP-099.

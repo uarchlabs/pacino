@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-15
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -32,7 +32,7 @@ its read and write ports are fixed width, and the only variability
 on the write side is how many slots are valid in a cycle.
 
 The IFU owns the straddle. A 32-bit instruction can begin in one
-fetch block and end in the next, so the IFU holds the leading
+prediction block and end in the next, so the IFU holds the leading
 halfword across the boundary. Nothing downstream sees a partial
 instruction.
 
@@ -73,7 +73,7 @@ the same thing. Expansion breaks the correspondence between the
 two, because a compressed instruction advances the PC by two and
 occupies a full slot.
 
-The fault cause is per slot, not per fetch block. `itlb_decisions.md`
+The fault cause is per slot, not per prediction block. `itlb_decisions.md`
 ITLB-11 returns one of three causes and the exception has to reach
 the backend attached to the instruction it belongs to.
 
@@ -156,8 +156,8 @@ separately and predecode keeps only the classification.
 
 ## 4. Straddle
 
-A 32-bit instruction can begin in the last halfword of one fetch
-block and end in the next. Because RVC makes instructions 2-byte
+A 32-bit instruction can begin in the last halfword of one
+prediction block and end in the next. Because RVC makes instructions 2-byte
 aligned, this also happens at a line boundary and at a page
 boundary, so the second half can miss, can translate differently,
 and can fault on its own.
@@ -186,7 +186,9 @@ the first did not, and arrive at its own time.
 The fault raised on the second half belongs to the instruction
 that started in the first. XiangShan carries an exception mask on
 its IFU-to-IBuffer boundary that can mark the first instruction of
-either fetch block for this reason.
+either prediction block for this reason. XiangShan's "fetch block" is
+its 32-byte prediction block, not pacino's 64-byte fetch block
+(fe_decisions.md Conventions). Session-071.
 
 ---
 
@@ -435,7 +437,7 @@ TD-IFU-8  The issue policy. `icache_decisions.md` 6 records that
           does not say.
 
 TD-IFU-9  The reordering buffer of TD-IF-5. One predecode
-          writeback per fetch block against out-of-order line
+          writeback per prediction block against out-of-order line
           responses, IF-R2, with nothing bounding the buffer.
           IFU-10 has WB write back per block and does not say what
           holds a block whose line returned early.

@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-06-23
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -68,8 +68,11 @@ count; the re-expose moves TOSR by a slot instead. Pinned by
 tb_ras TC-21. See PROJECT_STATUS TD #78.
 
 RAS does not generate a redirect signal in the same sense as
-TAGE or SC. It provides the initial p0 prediction (TOS read) and
-supplies the target for a return at p2, which participates in the
+TAGE or SC. Its p0 TOS read is an input to the p1 prediction, which
+the cluster registers and applies when the p1 mux forms a RETURN slot
+(fe_decisions.md 2.2); this read "It provides the initial p0
+prediction (TOS read)", session-071. It supplies the target for a
+return at p2, which participates in the
 p2 redirect when the resulting successor differs from the one the
 cluster's p1 stage registers hold. An earlier revision said it
 participates "when FTB disagrees with the uBTB p0 result", which
@@ -330,22 +333,33 @@ FTQ access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos
 
 ### 4.2  Snapshot write timing
 
-Snapshot is written into the FTQ entry at the time the
-prediction that consumed or produced the RAS state is issued.
-One snapshot per FTQ entry.
+Snapshot is written into the FTQ entry at p2, for EVERY valid
+block, from ras_snapshot_p2[NUM_PRED_SLOTS-1] -- the state after
+both slots' operations -- on ftq_bpu_interfaces.md 4c. It is not
+gated on a RAS operation or on the FTB answering. One snapshot per
+FTQ entry. The p1 value from bpu_pred_ras_p1 only initialises the
+field and is always overwritten.
 
 On a push (call detected): snapshot the post-push pointer state.
 On a pop (return detected): snapshot the post-pop pointer state.
 On neither: snapshot current pointer state unchanged.
+
+RULED session-071 (Jeff). This read "at the time the prediction
+that consumed or produced the RAS state is issued", and
+ras_interfaces.md IC-RAS-12 gated the write per slot on
+ras_pred_val_p2, which left the p1 value in a block with no FTB
+result. Whether the p3 repair of section 1 also needs to rewrite the
+snapshot is open (ftq_bpu_interfaces.md 4c).
 
 ### 4.3  Restore on mispredict
 
 On mispredict redirect from any predictor: restore TOSR, TOSW,
 BOS from the FTQ snapshot of the entry the redirect names by its
 index (ftq_backend_interfaces.md 5 D2). This read "the
-mispredicted entry"; see 3.2. Note ftq_decisions.md 3.2 uses the
-entry BEFORE it for the HISTORY restore when _self is set -- the
-RAS does not. Session-070. The
+mispredicted entry"; see 3.2. Session-070. The history restores from
+the same entry: ftq_decisions.md 3.2 used the entry BEFORE it when
+_self is set and this note recorded the divergence; session-071
+ruled the named entry for both. The
 circular buffer data is not cleared -- restoration is pointer-
 only. Subsequent pushes and pops write into slots above the
 restored TOSR, which may overwrite stale speculative data from
@@ -800,4 +814,12 @@ Commit stack pointer width:
               contradicting the section it points at -- surviving
               one section below the warning against it. No
               protocol change; the label was the only thing wrong.
+
+  2026-09-19  session-071. 1: the p0 TOS read is an input to the p1
+              prediction, not the initial p0 prediction. 4.2: the
+              snapshot is written at p2 for every valid block from
+              the post-both-slots state, on ftq_bpu_interfaces.md
+              4c (ruled, Jeff); the p3 repair question is open.
+              4.3: history and RAS restore from the same named
+              entry; the divergence note is retired.
 ```

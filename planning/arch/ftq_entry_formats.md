@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-08-21
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -52,14 +52,16 @@ defined and deferred.
 `bp_ftq_entry_t` is read every cycle. It is written at p1, its
 slots are rewritten at p2 and p3 ON EVERY PREDICTION rather than
 only on a redirect (fe_decisions.md 2.5 and FE-13,
-ftq_bpu_interfaces.md 4a, ftq_decisions.md 2), and the entry is
-freed at commit. This read "written at p1 and rewritten by
+ftq_bpu_interfaces.md 4a, ftq_decisions.md 2), its RAS snapshot is
+rewritten at p2 for every valid block (ftq_bpu_interfaces.md 4c,
+session-071), and the entry is freed at commit. This read
+"written at p1 and rewritten by
 redirect"; session-070.
 
 Block scalar fields, one per entry:
 
 ```
-pc            41     fetch block start PC, VA_WIDTH
+pc            41     prediction block start PC, VA_WIDTH
 pft_addr      41     block fall-through address, VA_WIDTH
 branch_id      6     FTQ entry index, FTQ_IDX_BITS
 ras                  bp_ras_snapshot_t: TOSR, TOSW, BOS, 4 bits each
@@ -75,14 +77,15 @@ slot_valid     1     this slot carries a predicted branch
 target        41     predicted target for this slot, VA_WIDTH
 br_type        3     bp_br_type_e
 taken          1     predicted direction
-pos            4     in-block branch position, FTB_BR_POS_BITS
+pos            4     in-block branch position, FTB_BR_POS_BITS,
+                     counted from the block start
 pred_src       3     predictor that supplied this slot
                      not currently used, see TD-FE-4
 confidence     4     saturating counter, FTQ_CONF_BITS
 ```
 
 The per-slot array is declared inside `bp_ftq_entry_t`: one entry holds 
-one fetch block and all its slots.
+one prediction block and all its slots.
 
 `br_type` is per slot and selects the predictor update set at
 resolution (fe_decisions.md 7.2). It is written at p1 from the uBTB
@@ -95,18 +98,28 @@ kept the p1 value for the entry's whole life (TD-FE-6).
 two-byte positions, so a 32-byte block has sixteen of them. RVA23
 mandates the C extension and a branch may begin at any 2-byte
 boundary, so a coarser position could not tell two RVC branches in one
-aligned word apart. The cluster also uses it to form the branch PC reported to
-bp_history: block base plus `pos << POS_OFFSET_BITS`, which is two
+aligned word apart. It is counted from the block START, as on every
+port; the FTB and the uBTB store positions region-relative and
+convert at their own boundary (ftb_decisions.md 4.6, session-071).
+The cluster also uses it to form the branch PC reported to
+bp_history: block START plus `pos << POS_OFFSET_BITS` -- not the
+32-byte-aligned base, which bp_cluster.sv uses (TD#125) -- which is two
 bytes per position at the values in bp_defines_pkg.sv (BP-092a,
 rescaled by BP-099). Stated as the shift rather than a literal
 multiplier so it cannot drift from the position width again.
 
 The history pointers and RAS snapshot are block scalar
-(ftq_decisions.md 3.1, fe_decisions.md 9).
+(ftq_decisions.md 3.1, fe_decisions.md 9). The RAS snapshot is
+initialised at p1 from `bpu_pred_ras_p1` and OVERWRITTEN at p2 for
+every valid block from `bpu_blk_ras_p2`, the state after both slots'
+operations (ftq_bpu_interfaces.md 4c, ras_decisions.md 4.2). No
+restore reads the p1 value. Session-071, ruled.
 
-IT IS A p1 VALUE AND NOTHING CORRECTS IT. Written once from
+`pft_addr` IS A p1 VALUE AND NOTHING CORRECTS IT. Written once from
 `bpu_pred_pft_p1`, and the p2/p3 groups of ftq_bpu_interfaces.md 4a
-carry `bp_ftq_slot_t` only, so a block scalar has no correction path.
+carry `bp_ftq_slot_t` only. The block-scalar group of 4c now exists
+for the RAS snapshot and is where the fall-through joins when TD#113
+is built.
 On a uBTB miss the p1 value is the FULL block end, so the very case
 this field exists for -- re-deriving the successor after a redirect
 rewrites a slot -- is the case where it is stale. See
@@ -391,6 +404,14 @@ path touches none of those.
 ## 5. Document History
 
 ```
+  2026-09-19  session-071. Section 2: the RAS snapshot is
+              overwritten at p2 for every valid block
+              (ftq_bpu_interfaces.md 4c); pft_addr named in the
+              paragraph that had begun "IT IS A p1 VALUE" directly
+              under the RAS sentence; pos is start-relative and the
+              branch PC is block START plus pos (TD#125). "Fetch
+              block" replaced by "prediction block".
+
   2026-08-21  Section 2: recorded that pft_addr is a p1 value with
               no correction path, found by BP-107 (W1). The fix is a
               p2 port in ftq_bpu_interfaces.md 4, not a field here.

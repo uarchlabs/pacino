@@ -2,7 +2,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-08-19
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -47,9 +47,25 @@ contributes to the FTQ, when, and the handshakes that carry it.
 Stage labeling is p0 through p3 for prediction and u0/u1 for
 update.
 
-One FTQ entry holds one fetch block. A fetch block carries
-NUM_PRED_SLOTS predictions, one per prediction slot. The slots are
-the branch fields of one FTB block; see section 10.
+One FTQ entry holds one PREDICTION block: FTB_BLOCK_BYTES, 32 bytes,
+beginning at any 2-byte address (ftq_decisions.md 4.7). A prediction
+block carries NUM_PRED_SLOTS predictions, one per prediction slot. The
+slots are the branch fields of one FTB block; see section 10.
+
+A FETCH block is a different thing: FETCH_BLOCK_BYTES, 64 bytes, the
+unit the IFU reads from the L1I, which is one cache line held in the
+IFU line buffer (ifu_decisions.md TD-IFU-7). The IFU takes one
+prediction block per request and extracts it from the line it read
+(IFU-7, IFU-8). No RTL reads FETCH_BLOCK_BYTES; it is the L1I line
+size under a second name. Whether the IFU ever DELIVERS two prediction
+blocks per cycle is open, ftq_ifu_interfaces.md 8 item 2, and is not
+IFU-internal if it does. The two sizes must not be collapsed, and
+"fetch block" is not a name for the 32-byte unit.
+
+RULED session-071 (Jeff). This read "One FTQ entry holds one fetch
+block", and section 10 defined a fetch block as one 32-byte FTB
+block. The misuse had spread to most of the front-end documents and
+to RTL comments.
 
 ## The rest of the front end
 
@@ -188,7 +204,7 @@ slots carry no taken prediction and whose successor is the
 fall-through address.
 
 The FTQ entry index is the 6-bit index into the 64-entry FTQ. It
-identifies one fetch block and is the value carried in `branch_id`. All
+identifies one prediction block and is the value carried in `branch_id`. All
 NUM_PRED_SLOTS predictions for that block occupy the one entry.
 
 The entry written at p1 records the prediction and the architectural state it was made against (ftq_entry_formats.md 2), so the block can be restored on a later redirect (ftq_decisions.md 3).
@@ -199,7 +215,7 @@ writeback. It is specified in ftq_ifu_interfaces.md.
 
 ### 2.4 Successor PC
 
-The successor PC is the start PC of the next fetch block: the address
+The successor PC is the start PC of the next prediction block: the address
 fetched after this block. It is selected across the block's slots,
 priority-ordered top to bottom:
 
@@ -295,7 +311,7 @@ The groups are named by STAGE, not by predictor:
 
 `bp_redirect_t` is the per-slot payload and carries `target_pc` and
 `valid`. The array is per slot; the index is scalar alongside it,
-because both slots occupy one fetch block, which is one FTQ entry.
+because both slots occupy one prediction block, which is one FTQ entry.
 
 p2 carries the FTB, TAGE, ITTAGE and RAS corrections. p3 carries the SC
 correction.
@@ -530,9 +546,14 @@ queue, and no arbiter.
        or a return. Participates in the p2 redirect.
 ```
 
-`bp_ras_snapshot_t` is checkpointed into the FTQ entry at the time of
-the call or return that updated the RAS. On a misprediction or flush
-the RAS is restored from the snapshot found in the entry being corrected.
+`bp_ras_snapshot_t` is written into the FTQ entry at p2 for EVERY
+valid block, whether or not the block operated on the RAS: the state
+after both slots' operations, carried on ftq_bpu_interfaces.md 4c
+(ras_decisions.md 4.2). A block with no call or return records the
+unchanged state. On a misprediction or flush the RAS is restored from
+the snapshot in the entry the redirect names (ftq_backend_interfaces.md
+5 D2). This read "checkpointed into the FTQ entry at the time of the
+call or return that updated the RAS". Session-071.
 
 One snapshot per FTQ entry is sufficient under dual slot. A RAS
 operation is a call or a return, both taken branches, so one in slot
@@ -554,9 +575,12 @@ flush event at all -- FE-14. TD #96, G24 and IC-FTB-07 are closed.
 `NUM_PRED_SLOTS` parameterizes the number of prediction slots and the
 number of update channels, `upd_ch[0]` through `upd_ch[NUM_PRED_SLOTS-1]`.
 
-One FTQ entry holds all NUM_PRED_SLOTS predictions for one fetch block.
+One FTQ entry holds all NUM_PRED_SLOTS predictions for one prediction
+block.
 
-A fetch block is one 32-byte FTB block (FTB_BLOCK_BYTES). Both slots
+A prediction block is one 32-byte FTB block (FTB_BLOCK_BYTES). It is
+not the fetch block; see Conventions. This read "A fetch block is one
+32-byte FTB block". Session-071. Both slots
 are predicted from one FTB lookup: slot 0 is the block's first branch
 field, slot 1 the second. The slots are not two PC ranges; they are
 the two branch fields of one block (ftb_decisions.md 2.1, 2.3).
@@ -627,7 +651,7 @@ Proposed numbering. Stated here for the first time; not carried from
          RAM entry reads pre-update state. The prediction accuracy
          loss from the stale read is accepted.
 
-  FE-10  One FTQ entry holds one fetch block and all NUM_PRED_SLOTS
+  FE-10  One FTQ entry holds one prediction block and all NUM_PRED_SLOTS
          predictions for it. The slots are the branch fields of one
          FTB block. The slot is the array index; no slot identifier
          field is carried. The index is ORDERED as of IC-FTB-16:
@@ -769,8 +793,18 @@ it does so deliberately:
            readings were being confused, this entry being read as
            rejecting 7.1 outright.
            RESOLUTION: the initial prediction is formed at p1 and the
-           FTQ allocates there. bp_arb_spec.md 7.2 itself refers to
-           "the uBTB p1 prediction."
+           FTQ allocates there. This entry said bp_arb_spec.md 7.2
+           refers to "the uBTB p1 prediction"; 7.2 contains no such
+           text. Session-071.
+
+  2, 7.2   The RAS top-of-stack read at p0 called "the initial p0
+           prediction", and in section 2 the RAS said to drive the
+           FTQ directly at p0.
+           RESOLUTION: the p0 TOS read is an INPUT to the p1
+           prediction. The cluster registers it and applies it when
+           the p1 selection mux forms a RETURN slot (section 2.2).
+           The RAS drives no FTQ port at p0 and forms no prediction
+           of its own. Session-071.
 
   2, 3.4   LP listed as a redirect source (lp_redir_val_p2).
            RESOLUTION: the LP is not a redirect source. It is selected
@@ -812,7 +846,9 @@ it does so deliberately:
            a return and the ITTAGE for an indirect. The two are never
            both consulted for one branch.
 
-  4.4      The update queue producer described as commit.
+  4.4, 6.2 The update queue producer described as commit. 6.2 was
+           added session-071; it carried the same statement with no
+           annotation.
            RESOLUTION: the producer is post-execute resolution. The
            two write ports and the backpressure behavior are retained
            as written.
@@ -934,7 +970,7 @@ ubtb.sv.
            vsatp.MODE=Bare, FE-19. The floor is therefore 40, as
            addr[40:1], not 39.
            The reduction to 35 remains unavailable for the reason
-           recorded in session-069: it assumed a fetch block always
+           recorded in session-069: it assumed a prediction block always
            begins on an FTB_BLOCK_BYTES boundary, and blocks are
            unaligned (ftq_decisions.md 4.7, ifu_decisions.md IFU-6).
            Any move to 40 is an ENCODING change, from addr[40:0] to
@@ -1099,9 +1135,9 @@ ubtb.sv.
          is the only condition that stops the FTQ predicting.
          Redirect rewinds alloc and fetch, never commit.
 
-  FE-U8  CLOSED. Fetch block to FTQ entry mapping. bp_ftq_entry_t now
+  FE-U8  CLOSED. Prediction block to FTQ entry mapping. bp_ftq_entry_t now
          carries a per-slot array of target, taken, and br_type, so
-         one entry represents one fetch block with NUM_PRED_SLOTS
+         one entry represents one prediction block with NUM_PRED_SLOTS
          predicted branches. See sections 4.1 and 10, FE-10.
 
   FE-U9  br_type update fan-out covers four of the EIGHT
@@ -1295,7 +1331,8 @@ create one.
               FE-11 propagated to the branch-field model; FE-11
               restated to the RAS-operation basis.
 
-  2026-08-09  INFRA-012 / session-064. Three corrections carried from
+  2026-08-09  PA-direct correction, session-064. Three corrections
+              carried from
               ftq_bpu_interfaces.md section 10.
               Section 2.2 and section 9: the RAS top of stack is read
               at p0, not p1. ras.sv declares ras_tos_addr_p0 and
@@ -1412,4 +1449,17 @@ create one.
               against a 40-bit sign-extended Sv39 address. The floor
               is 40 as addr[40:1], and reaching it is an encoding
               change rather than a width trim. TD#122.
+
+  2026-09-19  session-071. Conventions and section 10 define the
+              PREDICTION block (32 bytes, one FTQ entry) and the
+              FETCH block (64 bytes, the L1I line the IFU reads) as
+              separate things; "fetch block" had been used for the
+              32-byte unit throughout, including FE-10 and FE-U8.
+              Section 9: the RAS snapshot is written at p2 for every
+              valid block (ftq_bpu_interfaces.md 4c). Section 12:
+              the "2, 7.1" entry no longer quotes text bp_arb_spec
+              does not contain; "2, 7.2" added for the RAS p0 read;
+              the 4.4 producer entry now covers 6.2. The 2026-08-09
+              history entry was labelled INFRA-012, a task that did
+              not exist then; it was a PA-direct correction.
 ```

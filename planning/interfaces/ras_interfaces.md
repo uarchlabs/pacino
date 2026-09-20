@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-06-23
+ UPDATED: 2026-09-19
  CONTACT: Jeff Nye
 ```
 
@@ -38,7 +38,8 @@ Single module ras.sv owns:
   OCCUR under FE-11; if the logic is in the RTL it is dead
   (ras_decisions.md 6.3, IC-RAS-04). Session-070.
 - Recursion counter management
-- p0/s0 TOS read for initial prediction
+- p0/s0 TOS read, an input the cluster registers for the p1
+  prediction (fe_decisions.md 2.2). Not itself a prediction
 - Snapshot output per prediction for FTQ storage
 - Restore input from FTQ on mispredict
 - Commit stack update on FTQ commit
@@ -104,10 +105,11 @@ module ras (
   input  logic rstn,
 
   // ----------------------------------------------------------
-  // p0/s0: TOS read -- initial prediction before FTB result.
+  // p0/s0: TOS read, before the FTB result.
   // Combinational read of current TOSR entry per slot.
-  // Driven to the FTQ/uBTB path as the earliest available
-  // return target. No push or pop at p0.
+  // Registered by the cluster and applied by the p1 mux as
+  // the target of a RETURN slot. Drives no FTQ port.
+  // No push or pop at p0.
   // ----------------------------------------------------------
   output logic [VA_WIDTH-1:0] ras_tos_addr_p0[0:NUM_PRED_SLOTS-1],
   output logic                ras_tos_valid_p0[0:NUM_PRED_SLOTS-1],
@@ -367,8 +369,10 @@ Slot 0 snapshot reflects the state after slot 0's operation
 only. Slot 1 snapshot reflects the state after both slot 0
 and slot 1 operations have been applied.
 
-The FTQ captures ras_snapshot_p2 on the rising edge closing
-p2. See ras_decisions.md section 4.2.
+The FTQ captures ras_snapshot_p2[NUM_PRED_SLOTS-1], the state
+after both slots, on the rising edge closing p2, for every valid
+block, through ftq_bpu_interfaces.md 4c. See ras_decisions.md
+section 4.2.
 
 ### IC-RAS-09: Restore priority
 
@@ -433,10 +437,16 @@ not recovered. See TD #78 and tb_ras TC-21.
   prediction, not from predecode or decode.
 - Must present ras_br_type_p3[s] as the registered version
   of ras_br_type_p2[s] from the previous cycle.
-- Must write ras_snapshot_p2[s] into bp_ftq_entry_t.ras
-  when ras_pred_val_p2[s] was asserted.
-- Must assert ras_restore_val for one cycle on mispredict
-  and present the FTQ snapshot of the mispredicted entry.
+- Must write ras_snapshot_p2[NUM_PRED_SLOTS-1] into
+  bp_ftq_entry_t.ras for EVERY valid p2 block, through
+  ftq_bpu_interfaces.md 4c, whether or not ras_pred_val_p2 was
+  asserted for any slot. This read "ras_snapshot_p2[s] ... when
+  ras_pred_val_p2[s] was asserted", which left the p1 initial
+  value in a block with no FTB result. Session-071, ruled.
+- Must assert ras_restore_val for one cycle on a redirect and
+  present the FTQ snapshot of the entry the redirect names
+  (ftq_backend_interfaces.md 5 D2). This read "the mispredicted
+  entry". Session-071.
 - Must assert ras_commit_val when a call- or return-
   containing FTQ entry commits.
 - Must set pred_src = PRED_RAS in bp_ftq_entry_t when RAS
@@ -469,10 +479,12 @@ supplies the target for those two types only. It does not
 participate in direction prediction. This read "the branch type as
 RETURN ... for return branches only". Session-070.
 
-The p0/s0 TOS read (ras_tos_addr_p0) provides an earlier
-prediction before FTB is available. This is the initial
-prediction the FTQ acts on; it may be corrected by the p2
-result.
+The p0/s0 TOS read (ras_tos_addr_p0) is available before the FTB.
+The cluster registers it and the p1 selection mux applies it as the
+target of a RETURN slot; the p1 prediction the FTQ acts on is the
+cluster's, formed at p1 (fe_decisions.md FE-2, 2.2), and the p2
+result may correct it. This read that the TOS read "is the initial
+prediction the FTQ acts on". Session-071.
 
 ---
 
@@ -576,4 +588,12 @@ On rstn deassert (active low, synchronous):
               IC-RAS-07 extended to cover p0 TOS empty
               fallback. Open items reduced to RI-1 through
               RI-3.
+
+  2026-09-19  session-071. The p0 TOS read is an input to the p1
+              prediction, not the initial prediction the FTQ acts
+              on (sections 1, 4 and 8). IC-RAS-08 and
+              IC-RAS-12: the post-both-slots snapshot is written for
+              every valid p2 block through ftq_bpu_interfaces.md
+              4c; the restore presents the snapshot of the entry
+              the redirect names.
 
