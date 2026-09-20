@@ -343,7 +343,7 @@ input clk
 
 The tbl_ri ports are not driven by tage_cntrl. They are driven
 by an SRAM initialization module instantiated in tage.sv. The 
-init module is found components/rtl/sram_init.sv
+init module is found rtl/lib/rtl/sram_init.sv
 
 
 tbl_ri_active  ram initialization is active
@@ -405,8 +405,9 @@ folded_hist          the bp_folded_hist_t output of bp_history,
                      corresponding to its THIS_TABLE value
                      (tage_tN_idx_fh, tage_tN_tag_fh1,
                      tage_tN_tag_fh2) and uses them locally to
-                     compute the index and tag hashes. index_hash
-                     and tag_hash are no longer sourced externally.
+                     compute the index and tag hashes. idx_hash_p0
+                     and tag_hash_p0 are no longer sourced
+                     externally.
                      Produced by bp_history.
 
 hit_p1[s]     is the result of a tag compare. Gated with valid.

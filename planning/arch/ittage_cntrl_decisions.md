@@ -6,7 +6,7 @@
  FILE:    ittage_cntrl_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -213,7 +213,7 @@ Session-071.
 ## Target Update Rules
 
 Target field write gating is defined in ittage_interfaces.md
-§Target Write Gating.
+section Target Write Gating.
 
 ---
 
@@ -268,6 +268,9 @@ exclusive. This is unnecessarily restrictive.
 
 1. CLOSED session-036: ittage_table_interfaces.md created.
 
-2. CLOSED session-037: II6 tgt_wr_u0 gating defined.
+2. CLOSED session-037: II6 target write gating defined, on the two
+   declared strobes prm_tgt_wr_u0 and alt_tgt_wr_u0. This read
+   "tgt_wr_u0", a single strobe no port list declares;
+   session-072.
    See ittage_interfaces.md Target Write Gating section.
 

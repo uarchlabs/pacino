@@ -6,7 +6,7 @@
  FILE:    tage_table_hash_rules.md 
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -15,8 +15,8 @@
 ## Scope
 
 Define the hash functions used locally within each tage_table instance 
-to derive index_hash_p0 and tag_hash_p0 for T1-T4, replacing the removed 
-inputs that were previously sourced from tage_cntrl. T0 is excluded — it 
+to derive idx_hash_p0 and tag_hash_p0 for T1-T4, replacing the removed 
+inputs that were previously sourced from tage_cntrl. T0 is excluded -- it
 uses direct PC bits, no hash.
 
 ---

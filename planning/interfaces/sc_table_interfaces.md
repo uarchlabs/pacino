@@ -6,7 +6,7 @@
  FILE:    sc_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -264,7 +264,7 @@ input  logic                          clk
 
 The tbl_ri ports are not driven by sc_cntrl. They are driven by an
 SRAM initialization module instantiated in sc.sv. The init module is
-components/rtl/sram_init.sv. The scheme is identical to tage
+rtl/lib/rtl/sram_init.sv. The scheme is identical to tage
 (tage_table_interfaces.md Misc Interface).
 
 ```

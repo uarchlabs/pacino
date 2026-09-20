@@ -11,11 +11,17 @@
  CONTACT: Jeff Nye
 ```
 
-The second of the FTQ's four interfaces. Every port here is NEW:
-no module on either side of it exists, so nothing in this file names
-a declared port. `rtl/core/frontend/ifu/rtl` holds only a .gitkeep.
-The FTQ unit is no longer empty -- BP-100 built ftq_ftb_sched -- but
-that module is on the update path and touches nothing here.
+The second of the FTQ's four interfaces. THE FTQ SIDE IS BUILT:
+ftq_ifu.sv is Complete and its port list is the FTQ half of this
+boundary (ifu_decisions.md, ftq_decisions.md 7.1), so the names
+here are declared on that side. THE "NEW" TAG ON THE PORT ROWS
+MEANS NOT YET DECLARED ON THE IFU SIDE; it does not mean the port
+is undeclared on both. The IFU side does not exist --
+`rtl/core/frontend/ifu/rtl` holds only a .gitkeep -- and those ports
+are new. This read that no module on either side exists and that
+nothing here names a declared port, which was true only until
+BP-106/107; this file names ftq_ifu.sv twice itself, in sections 7
+and 8. Session-072.
 
 Where this file departs from the XiangShan Kunminghu contract
 translated in `ia_context/background/xs_ifu_ftq.md`, section 9 says
@@ -144,9 +150,6 @@ the two are independently flow controlled.
 A request on this port is issued only for an entry whose translation
 has already been presented on 4.1. The FTQ does not enforce that; it
 follows from FQ-1, fetch_ptr <= xlate_ptr.
-
-```
-```
 
 `ftq_ifu_start_pc` is `bp_ftq_entry_t.pc`, the block start.
 
@@ -615,34 +618,6 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 ## 11. Document History
 
 ```
-  2026-09-19  session-071. Section 3: FETCH_BLOCK_BYTES is the
-              fetch block, the L1I line the IFU reads, not a fetch
-              width; delivering two prediction blocks per cycle is
-              not IFU-internal; ports carry block-start positions.
-              Section 5: xlate_ptr and fetch_ptr move back to the
-              flush index only if past it; the index is K or K+1 by
-              cause. W3 recorded as unbuilt, TD#126. Section 8 item
-              2 narrowed. "Fetch block" replaced by "prediction
-              block" where the 32-byte unit was meant.
-
-  2026-08-21  Section 9 said the prediction block is 8 positions.
-              FTB_BR_POS_BITS is 4, so it is 16, as sections 3 and
-              10 of this file already said. Stale by BP-099.
-
-  2026-08-21  Cross-reference repair. No content change. Section 7
-              cited "the section 4.2.1 R2 rule", the fe_decisions.md
-              numbering that was retired when that content moved
-              out. It is ftq_entry_formats.md 3.1 R2.
-
-  2026-08-20  Section 8 item 3 CLOSED: the entry fields are
-              ftq_entry_formats.md 4, two added and one rejected.
-              Section 6.1 added, closing TD-FE-8 with one
-              generation bit -- ftq_ifu_gen out, ifu_ftq_pdwb_gen
-              back, toggled per allocation. One bit is sufficient
-              because the flush of section 5 BOUNDS the number of
-              stale writebacks in flight to one per flush; if that
-              contract changes the width must be revisited.
-
   2026-08-19  Created. Closes TD-FE-1. Fetch request, flush and
               predecode writeback defined against the 32-byte
               prediction block. Departures from the XiangShan
@@ -661,6 +636,44 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               shift are both retired: the conversion is the
               identity.
 
+  2026-08-20  Section 8 item 3 CLOSED: the entry fields are
+              ftq_entry_formats.md 4, two added and one rejected.
+              Section 6.1 added, closing TD-FE-8 with one
+              generation bit -- ftq_ifu_gen out, ifu_ftq_pdwb_gen
+              back, toggled per allocation. One bit is sufficient
+              because the flush of section 5 BOUNDS the number of
+              stale writebacks in flight to one per flush; if that
+              contract changes the width must be revisited.
+
+  2026-08-21  Section 9 said the prediction block is 8 positions.
+              FTB_BR_POS_BITS is 4, so it is 16, as sections 3 and
+              10 of this file already said. Stale by BP-099.
+
+  2026-08-21  Cross-reference repair. No content change. Section 7
+              cited "the section 4.2.1 R2 rule", the fe_decisions.md
+              numbering that was retired when that content moved
+              out. It is ftq_entry_formats.md 3.1 R2.
+
+  2026-09-19  session-071. Section 3: FETCH_BLOCK_BYTES is the
+              fetch block, the L1I line the IFU reads, not a fetch
+              width; delivering two prediction blocks per cycle is
+              not IFU-internal; ports carry block-start positions.
+              Section 5: xlate_ptr and fetch_ptr move back to the
+              flush index only if past it; the index is K or K+1 by
+              cause. W3 recorded as unbuilt, TD#126. Section 8 item
+              2 narrowed. "Fetch block" replaced by "prediction
+              block" where the 32-byte unit was meant.
+
   2026-09-20  session-072. ftq_pd_info_t.is_rvc marked undriven:
               no producer in DCD-7, no consumer in the FTQ.
+
+  2026-09-20  session-072. E7: an empty code fence in section 4
+              removed.
+
+  2026-09-20  session-072. G1: the scope note records that the FTQ
+              side is built (ftq_ifu.sv) and only the IFU side is
+              new.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
 ```

@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: Apache-2.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 ```
  FILE:    fe_decisions.md
  SOURCE:  various
@@ -16,8 +19,12 @@ cluster and the fetch target queue, sections 1 to 3 and 7 to 10,
 and the front end top, section 15.
 
 The registries are front end wide and are not split: invariants
-in section 11, technical debt in section 13, unresolved items in
-section 14. An FE, TD-FE or FE-U number may be issued for any
+in section 11 and, for the front-end top, section 15; technical
+debt in section 13, unresolved items in section 14. FE-15 to
+FE-18 are issued in section 15, beside the top they describe, and
+FE-13 follows FE-14 in section 11: the numbers are issue order,
+not document order. This read that the invariants are in section
+11. Session-072. An FE, TD-FE or FE-U number may be issued for any
 front end subject, not only for the BPU and the FTQ.
 
 ## The two paths
@@ -239,9 +246,9 @@ on a not-taken block.
 
 The FTQ writes that value into the allocated entry as
 `bp_ftq_entry_t.pft_addr` (ftq_entry_formats.md 2). `bpu_pred_pft_p1`
-only in the p1 cycle, and the selection above is re-evaluated on every
-redirect, so the not-taken arm has to be read back from the entry
-rather than resampled from the cluster.
+is present only in the p1 cycle, and the selection above is
+re-evaluated on every redirect, so the not-taken arm has to be read
+back from the entry rather than resampled from the cluster.
 
 Both slots are predicted at p1. The selection chooses which slot's
 target is the successor; it does not gate whether a slot is predicted.
@@ -432,9 +439,12 @@ Section numbers 4, 5 and 6 are retired rather than reused, so every
 "section 7.2" and "section 2.4" reference in this document and in
 ftq_bpu_interfaces.md still resolves.
 
-The registries stay here: invariants in section 11, technical debt
+The registries stay here, as the Overview says: invariants in
+section 11 and, for the front-end top, section 15; technical debt
 in section 13, unresolved items in section 14. They cover the front
-end as a whole and are not split.
+end as a whole and are not split. This read that the invariants are
+in section 11 alone, against FE-15 to FE-18 in section 15.
+Session-072.
 
 ---
 
@@ -771,7 +781,14 @@ Proposed numbering. Stated here for the first time; not carried from
          CONSEQUENCE FOR PREDICTORS. Predictor storage need not
          represent every address exactly. An FTB tag that does not
          cover bit 40 aliases; an ITTAGE field that cannot express a
-         high GPA mispredicts.
+         high GPA mispredicts. Both are caught -- block end by
+         predecode, target by mispredict redirect at resolve -- and
+         MMU-14 already keeps speculation out of non-idempotent
+         regions. Architectural addresses -- pc, pft_addr,
+         target_pc, ftq_resolve_t.target,
+         bkend_ftq_redir_pc, RESET_VECTOR -- may not truncate.
+         FTB_TAG_BITS is pinned at 26 and IT_MAX_TGT_WIDTH at 38 on
+         that basis. TD#122.
 
          THE REGIMES ABOVE BIND ARCHITECTURAL ADDRESSES, NOT
          PREDICTIONS. The ITTAGE reconstruction ZERO-EXTENDS
@@ -787,14 +804,7 @@ Proposed numbering. Stated here for the first time; not carried from
          non-faulting translation. Zero extension is what Sv39x4
          requires of a real GPA; the conflict is only with
          predictions the regime would have rejected, and those are
-         wrong predictions by construction. Session-072. Both are caught -- block end by
-         predecode, target by mispredict redirect at resolve -- and
-         MMU-14 already keeps speculation out of non-idempotent
-         regions. Architectural addresses -- pc, pft_addr,
-         target_pc, ftq_resolve_t.target,
-         bkend_ftq_redir_pc, RESET_VECTOR -- may not truncate.
-         FTB_TAG_BITS is pinned at 26 and IT_MAX_TGT_WIDTH at 38 on
-         that basis. TD#122.
+         wrong predictions by construction. Session-072.
 
          NOT FE-13. FE-13 republishes the cluster's own view of the
          block, which on an alias is the aliased one, so it cannot
@@ -1204,7 +1214,10 @@ ubtb.sv.
   FE-U8  CLOSED. Prediction block to FTQ entry mapping. bp_ftq_entry_t now
          carries a per-slot array of target, taken, and br_type, so
          one entry represents one prediction block with NUM_PRED_SLOTS
-         predicted branches. See sections 4.1 and 10, FE-10.
+         predicted branches. See ftq_entry_formats.md 2, where the
+         fast path moved, and section 10, FE-10. This read
+         "sections 4.1 and 10"; 4.1 is retired (section 6, MOVED).
+         Session-072.
 
   FE-U9  br_type update fan-out covers four of the EIGHT
          bp_br_type_e encodings. The section 7.2 table has rows for
@@ -1357,19 +1370,6 @@ create one.
 ## 16. Document History
 
 ```
-  2026-09-15  session-069. FE-16 CORRECTED. Its first revision put
-              the L1I outside the front end, contradicting
-              icache_decisions.md L1I-2, which predates it. L1I-2
-              is the ruling: the L1I is inside the front end top,
-              a sibling of the IFU, not inside the IFU. The point
-              is that the cache is SELF CONTAINED, which physical
-              design needs, not that it sits elsewhere. FE-15 and
-              FE-17 follow; FE-U10 closes on the same reasoning,
-              putting the ITLB inside and the shared L2 TLB out.
-```
-
-
-```
   2026-07-09  tmp_004. Written from bp_cluster.md rev 1.0,
               bp_arb_spec.md rev 1.0, and bp_structs_pkg.sv. Covers
               the BPU to FTQ prediction and redirect path and the FTQ
@@ -1474,6 +1474,13 @@ create one.
               24 checks, sim_bp_cluster 973 -> 997, all 47 targets
               green in this session.
 
+  2026-08-19  ftq_backend_interfaces.md written: resolution,
+              redirect and commit. FE-U2 closed for the FTQ side.
+              TD-FE-7 opened -- bp_cluster has no history-rollback
+              input, so a backend mispredict cannot restore the GHR
+              and PHR pointers. Third of the four FTQ interfaces;
+              only ftq_icache remains, and it is a decision rather
+              than a specification.
   2026-08-20  TD-FE-8 CLOSED, one generation bit on the IFU path,
               toggled per allocation. FTQ module decomposition
               recorded in ftq_decisions.md 7: several modules, a
@@ -1494,13 +1501,17 @@ create one.
               sim_bp_cluster 1765 -> 1795, all 47 targets green in
               that session.
 
-  2026-08-19  ftq_backend_interfaces.md written: resolution,
-              redirect and commit. FE-U2 closed for the FTQ side.
-              TD-FE-7 opened -- bp_cluster has no history-rollback
-              input, so a backend mispredict cannot restore the GHR
-              and PHR pointers. Third of the four FTQ interfaces;
-              only ftq_icache remains, and it is a decision rather
-              than a specification.
+  2026-09-15  session-069. FE-16 CORRECTED. Its first revision put
+              the L1I outside the front end, contradicting
+              icache_decisions.md L1I-2, which predates it. L1I-2
+              is the ruling: the L1I is inside the front end top,
+              a sibling of the IFU, not inside the IFU. The point
+              is that the cache is SELF CONTAINED, which physical
+              design needs, not that it sits elsewhere. FE-15 and
+              FE-17 follow; FE-U10 closes on the same reasoning,
+              putting the ITLB inside and the shared L2 TLB out.
+
+
   2026-09-17  session-070. FE-19 added: VA_WIDTH is 41 and the high
               bits of a backend-formed redirect PC are checked before
               the address narrows. H is mandatory through Sha, MMU-20
@@ -1548,4 +1559,18 @@ create one.
 
   2026-09-20  session-072. D18: the rollback index is FTQ_IDX_BITS = 6,
               not 7; 7 is FTQ_PTR_BITS.
+
+  2026-09-20  session-072. E5: the registry pointer names section 15 and
+              the issue-order numbering. E9: the zero-extension
+              paragraph moved clear of the "Both are caught"
+              clause. E11: SPDX header added. E12: the history
+              section's split fences merged.
+
+  2026-09-20  session-072. D16: FE-U8 cites ftq_entry_formats.md 2
+              instead of the retired section 4.1. E17: section 6's
+              registry sentence matches the Overview. E18: the
+              pft_addr sentence has its verb back.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
 ```

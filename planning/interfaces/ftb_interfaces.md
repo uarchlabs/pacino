@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -734,3 +734,5 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
               arithmetic-not-restated block and IC-FTB-08 already
               said. Both citations read "3.4", a section this file
               does not have; session-072.
+
+  2026-09-20  session-072. E4: UPDATED brought to the session date.

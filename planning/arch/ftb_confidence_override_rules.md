@@ -6,7 +6,7 @@
  FILE:    planning/arch/ftb_confidence_override_rules.md
  SOURCE:  session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-06-25
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -279,6 +279,10 @@ Tests must cover:
 
 ## 11. Document History
 
+  Entries below that were written before session-072 use the
+  retired s-stage labels in their text. s0=p0, s1=p1, s2=p2,
+  s3=p3 (PROJECT_CORE.md); the labels are not live stage names.
+
   2026-06-24  session-052. Regenerated from the session-051 draft for
               the single-array correction (slot-0/slot-1 framing
               removed, ftb_suppress_dir_p2 2-bit output, signal names
@@ -305,3 +309,6 @@ Tests must cover:
   2026-09-20  session-072. The local s-stage narrative swept to
               p-stage (PROJECT_CORE). FTB_CONF_INIT_TKN / _NTK are
               already in bp_defines_pkg.sv, not pending an RTL task.
+
+  2026-09-20  session-072. D29: the history section notes that
+              older entries use the retired s-labels.

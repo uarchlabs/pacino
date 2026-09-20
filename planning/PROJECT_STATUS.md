@@ -1153,10 +1153,16 @@ it only documented current behavior.
 |                         |             |                   | TD-FE-8 opened and closed 4.4.   |
 | ftq_ifu_interfaces.md   | Draft       | --                | Created session-067. Closes      |
 |                         |             |                   | TD-FE-1. Fetch request, flush,   |
-|                         |             |                   | predecode writeback. EVERY PORT  |
-|                         |             |                   | IS NEW -- neither side exists;   |
-|                         |             |                   | rtl/core/frontend/ifu/rtl holds  |
-|                         |             |                   | only a .gitkeep. Section 6.1     |
+|                         |             |                   | predecode writeback. THE FTQ     |
+|                         |             |                   | SIDE IS BUILT: ftq_ifu.sv is     |
+|                         |             |                   | Complete (BP-107, its own row    |
+|                         |             |                   | below) and its port list is the  |
+|                         |             |                   | FTQ half. Only the IFU side is   |
+|                         |             |                   | new: rtl/core/frontend/ifu/rtl   |
+|                         |             |                   | holds only a .gitkeep. This read |
+|                         |             |                   | "EVERY PORT IS NEW -- neither    |
+|                         |             |                   | side exists"; session-072.       |
+|                         |             |                   | Section 6.1                      |
 |                         |             |                   | closes TD-FE-8: one generation   |
 |                         |             |                   | bit, ftq_ifu_gen out and         |
 |                         |             |                   | ifu_ftq_pdwb_gen back, toggled   |
@@ -2109,8 +2115,11 @@ assessment of each document. Correct any that are wrong.
 |     |          | mmu_decisions.md MMU-20 and MMU-23,                      |
 |     |          | l1i_ifu_interfaces.md TD-IF-1 and 3.1. FTB_TAG_BITS is   |
 |     |          | PINNED at 26 and IT_MAX_TGT_WIDTH at 38, so sim_ftb 99   |
-|     |          | and sim_ittage 211 stand. NOT swept:                     |
-|     |          | sc_table_hash_rules.md, which was never uploaded.        |
+|     |          | and sim_ittage 211 stand. sc_table_hash_rules.md was not |
+|     |          | swept at that pass, not having been uploaded; it was     |
+|     |          | swept session-071 and its Parameter references block now |
+|     |          | reads VA_WIDTH = 41. Nothing is outstanding.             |
+|     |          | Session-072.                                             |
 |     |          |                                                          |
 |     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
 |     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
@@ -2530,10 +2539,14 @@ For known failure modes see ANTIPATTERNS.md.
 ### Temporary Status
 
 Planning files have a status line in the file header. 
-During this temporary time all file header STATUS: has
-been moved to DRAFT. All references to this status should
-be aware that there will be discrepancies in marked and 
-reported status. This is expected and temporary.
+During this temporary time file header STATUS: is being moved
+to DRAFT. THE SWEEP HAS NOT RUN: PROJECT_CORE.md records it as
+outstanding as of 2026-09-17, TAGE_DECOMP_LOG.md carries ARCHIVE
+and PA_PROJECT_INSTRUCTIONS.md carries no STATUS line at all.
+All references to this status should be aware that there will be
+discrepancies in marked and reported status. This is expected and
+temporary. This read that all headers "has been moved to DRAFT",
+against PROJECT_CORE.md. Session-072.
 
 ### Decoder track
 
@@ -3033,5 +3046,11 @@ unless noted.
 
 ### Shared components track
 - components/rtl  components/tb
+
+NO SUCH DIRECTORY EXISTS. PROJECT_CORE.md's Repository Layout has
+no components/ track, and the shared library modules sram_init.sv
+and bw_ram.sv are in rtl/lib/rtl/ (sram_init.md). Retained as
+written until the track is either created or removed; not a
+location to cite. Session-072.
 
 

@@ -10,7 +10,10 @@
  CONTACT: Jeff Nye
 ```
 
-Owns the ITLB-N, TD-ITLB-N and ITLB-UN registries.
+Owns the ITLB-N, TD-ITLB-N and ITLB-UN registries. The numbers are
+issue order and the sections are topical, so they do not run in
+numeric order: section 7 runs ITLB-13, ITLB-13a, ITLB-14, ITLB-13b.
+Session-072.
 
 Scope is the L1 instruction TLB only. The shared L2 TLB, the page
 table walker, and the PMP and PMA checkers are in
@@ -139,10 +142,16 @@ exists because H is mandatory in RVA23 through Sha. The IFU cannot
 collapse them.
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
-faulting virtual address for all three causes, so the VA travels
-with the cause. On cause 20 the guest PHYSICAL address travels
-separately, on IT-6a, for htval (mmu_decisions.md MMU-23). This
-named page-fault and access-fault exceptions only. Session-072.
+faulting virtual address for page-fault, access-fault and
+misaligned exceptions, and for breakpoint exceptions that write an
+address; it does not name the guest-page fault, cause 20, for which
+the profile mandates Shtvala and Shvstvala instead
+(mmu_decisions.md 7, rva23-profile.adoc). The VA travels with the
+cause on all three here because the IFU pairs them (IT-5), not
+because Sstvala requires it on cause 20. On cause 20 the guest
+PHYSICAL address travels separately, on IT-6a, for htval (MMU-23).
+This named page-fault and access-fault only, then all three.
+Session-072.
 
 `l1i_ifu_interfaces.md` needs no amendment for this. IF-8 is a
 gate condition, issue only on a valid non-faulting translation,
@@ -328,4 +337,8 @@ TD#118    Bounds ITLB-U1.
   2026-09-20  session-072. ITLB-11: the Sstvala sentence named
               page-fault and access-fault only; all three causes
               carry stval.
+
+  2026-09-20  session-072. D30: same Sstvala correction. E26: the
+              header records that the registry numbers are issue
+              order.
 ```

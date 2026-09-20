@@ -6,7 +6,7 @@
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -83,8 +83,7 @@ There is a library of common/shared modules.
     - This is the basis of the SC tables
  
 - RAM init module
-    - `components/rtl/sram_init.sv`   (this read rtl/lib/rtl/;
-      session-072, see sram_init.md)
+    - `rtl/lib/rtl/sram_init.sv`
     - This is the module that performs post reset table initization.
 ```
 
@@ -179,11 +178,12 @@ SC -> `(sc_pred_meta_t) sc_pred_meta` to TOP
 
 `(sc_upd_inp_t) sc_upd_inp` -> to SC
 
-
-FIXME: this is wrong should be removed, kept for communication with PA
-### Update Phase SC structure outputs:
-SC -> `(sc_pred_meta_t) sc_pred_meta` to TOP
-end FIXME
+There is no update-phase SC structure output. The only update-phase
+output is sc_upd_rdy_u1 (sc_interfaces.md, Update Interface);
+sc_pred_meta is a PREDICTION-phase structure. A block giving
+sc_pred_meta as an update-phase output stood here under its own
+FIXME saying it was wrong and kept for communication with the PA.
+Session-072.
 
 The details of the SC top level ports and the SC table ports are found in
 `sc_interfaces.md` and `sc_table_interfaces.md`.
@@ -827,3 +827,10 @@ the number of index bits or number of entries in this table instance.
 
   2026-09-20  session-072. D3: bw_ram.sv path confirmed as
               rtl/lib/rtl/bw_ram.sv.
+
+  2026-09-20  session-072. E13: the FIXME block giving sc_pred_meta as
+              an update-phase output removed; sc_upd_rdy_u1 is the
+              only update-phase output.
+
+  2026-09-20  session-072. D34: sram_init.sv is rtl/lib/rtl/, reverting
+              this pass's components/rtl/ change.

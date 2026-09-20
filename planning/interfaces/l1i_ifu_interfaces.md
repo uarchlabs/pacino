@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -846,6 +846,11 @@ For a `custom` link carrying the interface of sections 4 and 5:
 ### 14.2 Needs a schema change
 
 ```
+  S1  prefetch_arbitration. TD-L1I-3, unchanged. IF-9 and 4.4
+      narrow what the field means: P1 is IFU-internal and this
+      interface cannot see it, so the field describes P2 and P3
+      only.
+
   S2  CLOSED by TOOLS-004. A READ-ONLY LINK: write_width_bits
       takes 0 and is no longer required, and the emitted bundle
       drops the write channel. TD-L1I-7 closed
@@ -853,6 +858,12 @@ For a `custom` link carrying the interface of sections 4 and 5:
       custom.write_width_bits had minimum 8 and was required, so
       `0` could not be declared.
 
+  S3  CLOSED by TOOLS-004: valid_with_id now requires
+      id_width_bits of at least 1, proved by the negative fixture
+      neg_id_width_zero. As assessed by TOOLS-003:
+      A CONSTRAINT TYING read_data_return `valid_with_id` TO A
+      NON-ZERO id_width_bits. Unchanged from INFRA-012. IF-2 and
+      IF-11 are exactly the pair that would disagree without it.
   S6  CLOSED by TOOLS-004. custom.error_response is a boolean;
       the bundle gains rerr and the slave adapter drives it from
       rsp_err instead of tying it off. TD-IF-2 closed. As assessed
@@ -884,11 +895,6 @@ For a `custom` link carrying the interface of sections 4 and 5:
       is an emitter that does not emit a port, S8 is a schema with
       nowhere to describe one. TD-IF-4.
 
-  S1  prefetch_arbitration. TD-L1I-3, unchanged. IF-9 and 4.4
-      narrow what the field means: P1 is IFU-internal and this
-      interface cannot see it, so the field describes P2 and P3
-      only.
-
   S9  CLOSED by TOOLS-004. THE PREFETCH REQUEST BIT is declared by
       custom.request_qualifiers, with the L1I-22 reserve that
       reads it. TD-L1I-9 closed (`icache_decisions.md` 9 n4).
@@ -897,12 +903,6 @@ For a `custom` link carrying the interface of sections 4 and 5:
       because a custom link's bundle carried no requester-supplied
       qualifier.
 
-  S3  CLOSED by TOOLS-004: valid_with_id now requires
-      id_width_bits of at least 1, proved by the negative fixture
-      neg_id_width_zero. As assessed by TOOLS-003:
-      A CONSTRAINT TYING read_data_return `valid_with_id` TO A
-      NON-ZERO id_width_bits. Unchanged from INFRA-012. IF-2 and
-      IF-11 are exactly the pair that would disagree without it.
 ```
 
 ### 14.3 Needs an emitter change
@@ -1070,10 +1070,16 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
              MAINT_FENCE_I.
 ```
 
-Both were checked this session against the profile listing in
-`tools/cachegen/tools/jnutils/ncurses/rva23.md`, which carries
-Zicbom in the RVA23U64 mandatory string and Zifencei in the RVA23S64
-additions.
+Both were re-checked session-072 against `rva23-profile.adoc`, which
+PROJECT_CORE.md names the reference for every compliance claim in
+this tree: Zicbom is under RVA23U64 Mandatory Extensions and
+Zifencei under RVA23S64 Mandatory Extensions, where the note says it
+is mandated as the only standard way to support instruction-fetch
+coherence. Both claims stand.
+
+The earlier check cited `tools/cachegen/tools/jnutils/ncurses/`
+`rva23.md`, a cachegen working file outside planning/ that
+PROJECT_CORE.md does not list. Session-072.
 
 THE GAP IS UNCHANGED BY THIS FILE. L1I-18 has no hardware
 (`icache_decisions.md` TD-L1I-8, TD#119), and section 14.3 E7
@@ -1092,52 +1098,6 @@ sees a 2-byte boundary.
 ## 19. Document History
 
 ```
-  2026-09-19  session-071. Section 14 brought up to date with
-              TOOLS-004 and TOOLS-005, checked against the
-              TOOLS-004 report: S2, S3, S6, S7, S9 and E1 to E5
-              marked closed; TD-IF-2 and TD-IF-3 closed; the 3.1
-              table names L1iReqIdBits and L1iMaxOutstanding.
-              Section 1: the ITLB documents exist. TOOLS-004 had
-              listed these amendments and they were never
-              applied.
-  2026-09-19  session-071. "Fetch block" replaced by "prediction
-              block" in section 5, IF-23 and TD-IF-5, where the
-              32-byte unit was meant. The fetch block is the 64-byte
-              L1I line (fe_decisions.md Conventions).
-
-  2026-09-01  IF-U3, IF-U4 and IF-U5 closed, session-068.
-              cbo.inval is routed to the I-side, IF-41. The
-              invalidate clear takes one cycle, IF-42. FENCE.I is
-              routed to the D-side as well, IF-43, so the backend
-              gates the post-fence restart on two
-              acknowledgements. 13.3 and A1 follow. No open item
-              remains in this file.
-
-  2026-08-31  IF-U1 closed as IF-40, conservative ready. IF-U2
-              deleted, circular. IF-17, IF-24 and section 7
-              updated. Section 15's duplicated defect text
-              removed; the status block stands.
-
-  2026-08-30  THE PREFETCH BIT ADDED, session-068. 4.4 said P2 was
-              not enforceable and left it; Jeff ruled the port in.
-              ifu_l1i_req_prefetch is one bit, read in exactly one
-              place: IF-39 refuses a prefetch unless two MSHRs are
-              free, L1I-22. Everything else about a prefetch is
-              identical to a demand fetch, so IF-19's invisible
-              miss and the shared identifier space both stand.
-              S9 and TD-L1I-9: no link field can express the bit.
-
-              IF-36 GAINED ITS ORDERING. The rule said the IFU
-              clears its buffer and did not say when. IF-31 drains
-              rather than discards and IF-10 makes the IFU accept
-              every draining response, so a clear on receipt is
-              repopulated by the next response -- D1's defect one
-              layer up. The clear follows l1i_ifu_inv_done.
-
-              All six reported defects are applied in
-              icache_decisions.md, with a seventh the PA found.
-              Section 15 records their status.
-
   2026-08-29  Created, TOOLS-003. Closes the port-list half of
               icache_decisions.md section 4, which stated the shape
               and stopped. Sixteen identifiers with an IFU-owned
@@ -1169,5 +1129,61 @@ sees a 2-byte boundary.
               found by writing the port list down: no error return
               on a custom link, no response-side handshake, and
               nowhere at all to describe a maintenance port.
-```
 
+  2026-08-30  THE PREFETCH BIT ADDED, session-068. 4.4 said P2 was
+              not enforceable and left it; Jeff ruled the port in.
+              ifu_l1i_req_prefetch is one bit, read in exactly one
+              place: IF-39 refuses a prefetch unless two MSHRs are
+              free, L1I-22. Everything else about a prefetch is
+              identical to a demand fetch, so IF-19's invisible
+              miss and the shared identifier space both stand.
+              S9 and TD-L1I-9: no link field can express the bit.
+
+              IF-36 GAINED ITS ORDERING. The rule said the IFU
+              clears its buffer and did not say when. IF-31 drains
+              rather than discards and IF-10 makes the IFU accept
+              every draining response, so a clear on receipt is
+              repopulated by the next response -- D1's defect one
+              layer up. The clear follows l1i_ifu_inv_done.
+
+              All six reported defects are applied in
+              icache_decisions.md, with a seventh the PA found.
+              Section 15 records their status.
+
+  2026-08-31  IF-U1 closed as IF-40, conservative ready. IF-U2
+              deleted, circular. IF-17, IF-24 and section 7
+              updated. Section 15's duplicated defect text
+              removed; the status block stands.
+
+  2026-09-01  IF-U3, IF-U4 and IF-U5 closed, session-068.
+              cbo.inval is routed to the I-side, IF-41. The
+              invalidate clear takes one cycle, IF-42. FENCE.I is
+              routed to the D-side as well, IF-43, so the backend
+              gates the post-fence restart on two
+              acknowledgements. 13.3 and A1 follow. No open item
+              remains in this file.
+
+  2026-09-19  session-071. Section 14 brought up to date with
+              TOOLS-004 and TOOLS-005, checked against the
+              TOOLS-004 report: S2, S3, S6, S7, S9 and E1 to E5
+              marked closed; TD-IF-2 and TD-IF-3 closed; the 3.1
+              table names L1iReqIdBits and L1iMaxOutstanding.
+              Section 1: the ITLB documents exist. TOOLS-004 had
+              listed these amendments and they were never
+              applied.
+  2026-09-19  session-071. "Fetch block" replaced by "prediction
+              block" in section 5, IF-23 and TD-IF-5, where the
+              32-byte unit was meant. The fetch block is the 64-byte
+              L1I line (fe_decisions.md Conventions).
+
+  2026-09-20  session-072. D16: the section 18 compliance claims
+              re-checked against rva23-profile.adoc, the reference
+              PROJECT_CORE.md names; the earlier check cited a
+              cachegen working file.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
+
+  2026-09-20  session-072. E24: the 14.2 schema gaps in numeric
+              order.
+```

@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-08-22
+ UPDATED: 2026-09-17
  CONTACT: Jeff Nye
 ```
 

@@ -491,3 +491,7 @@ and the module-owned pointer decision.
               The 2026-08-09 entry was labelled INFRA-012, a task
               that did not exist then; it was a PA-direct
               correction.
+
+  2026-09-20  session-072. E15: the history code fence, open
+              since the section was written, is closed.
+```

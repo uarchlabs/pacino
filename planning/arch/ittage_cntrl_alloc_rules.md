@@ -76,7 +76,10 @@ VALID  = 1'b1
 The allocation write data is constructed per the entry layout
 in ittage_table_entry_formats.md. TAG bits are the MSBs:
   [TAG, TGT, EPC, USE, CTR, VALID]
-This maps directly to alc_wd_u0[IT_ALLOC_DATA_WIDTH-1:0].
+This maps directly to alc_wd_u0[THIS_ALLOC_DATA_WIDTH-1:0], the
+derived parameter ittage_table_interfaces.md declares and sizes
+the port with. This read IT_ALLOC_DATA_WIDTH, which occurs nowhere
+else. Session-072.
 
 ---
 ## Write Strobe Generation

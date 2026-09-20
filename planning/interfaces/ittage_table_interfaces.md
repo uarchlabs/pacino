@@ -120,7 +120,7 @@ u0, SRAM write occurs in u1.
 ## Port Naming Convention
 
 Port naming convention follows ittage_interfaces.md
-§Port Naming Convention. The ports are not identical between
+section Port Naming Convention. The ports are not identical between
 the two table types. They are listed below.
 
 ---
@@ -276,7 +276,7 @@ prm_tgt_wr_u0 / alt_tgt_wr_u0 are asserted only on misprediction
 AND provider CTR was null at predict time. The active strobe is
 selected by ittage_using_primary: prm_tgt_wr_u0 gated by
 THIS_TABLE vs prm_tbl_sel_u0, alt_tgt_wr_u0 gated by THIS_TABLE
-vs alt_tbl_sel_u0. See ittage_interfaces.md §Target Write Gating
+vs alt_tbl_sel_u0. See ittage_interfaces.md section Target Write Gating
 for full gating conditions and the relationship to CTR writes,
 which are NOT required to be mutually exclusive with a target
 write. This read "mutual exclusion with CTR writes", which that
@@ -301,7 +301,7 @@ input                              clk
 
 The tbl_ri ports are not driven by ittage_cntrl. They are driven
 by an SRAM initialization module instantiated in ittage.sv. The
-init module is found components/rtl/sram_init.sv
+init module is found rtl/lib/rtl/sram_init.sv
 
 
 tbl_ri_active  ram initialization is active
@@ -330,7 +330,7 @@ ittage_pred_val_p0[s]   trigger that enables SRAM read for
 
 ittage_pred_inp_p0[s]   carries branch PC and branch_id for
                         slot s. PC used locally to derive
-                        index_hash and tag_hash. Produced by
+                        idx_hash_p0 and tag_hash_p0. Produced by
                         ittage top level.
 
 folded_hist             bp_folded_hist_t output of bp_history,

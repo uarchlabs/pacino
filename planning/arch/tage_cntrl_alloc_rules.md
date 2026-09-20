@@ -51,7 +51,7 @@ If provider table is the last table, no allocation should
 occur tage_alloc_comp should be set to zero.
 
 tage_cntrl generates tage_alloc_idx directly (pre-hashed).
-Source is the index_hash_p0 that drove the candidate table
+Source is the idx_hash_p0 that drove the candidate table
 during prediction. No rehashing at update time.
 
 Captures into meta:
@@ -90,7 +90,9 @@ VALID = 1'b1
 ## Allocation Write Data Assembly
 
 The allocation write data is constructed per the entry layout
-in tage_table_interfaces.md. TAG bits are the MSBs:
+in tage_table_entry_formats.md, which owns it; this cited
+tage_table_interfaces.md, whose Entry Formats section points
+there and carries no layout. Session-072. TAG bits are the MSBs:
 
   [TAG, EPC, USE, CTR, VALID]
 

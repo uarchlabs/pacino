@@ -6,7 +6,7 @@
  FILE:    ittage_table_hash_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-05-16
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -15,7 +15,9 @@
 ## Scope
 
 Define the hash functions used locally within each ittage_table
-instance to derive index_hash_p0 and tag_hash_p0 for IT1-IT5.
+instance to derive idx_hash_p0 and tag_hash_p0 for IT1-IT5. This
+read index_hash_p0, which no port list declares; the declared
+output is idx_hash_p0 (ittage_table_interfaces.md). Session-072.
 There is no IT0 -- ITTAGE has no base table and no direct PC
 index path.
 

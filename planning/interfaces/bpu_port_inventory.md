@@ -6,7 +6,7 @@
  FILE:    bpu_port_inventory.md
  SOURCE:  INFRA-011
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -343,17 +343,13 @@ has not been re-checked against the RTL. Finding 4 cited line 58,
 which is the clk port; the pred_pc line is cited by name instead,
 since line numbers move. Session-072.
 
-1. planning/interfaces/ubtb_interfaces.md:45 -- port pred_pc_p0 is
-   listed as pred_pc. The p0 stage suffix present in ubtb.sv:36 is
-   absent from the document name. Direction and type agree.
-
-2. planning/interfaces/ubtb_interfaces.md:46 -- port pred_p1 is
-   listed as pred. The p1 stage suffix present in ubtb.sv:37 is
-   absent from the document name. Direction and type agree.
-
-3. planning/interfaces/ubtb_interfaces.md:47 -- port upd_u0 is
-   listed as upd. The u0 stage suffix present in ubtb.sv:38 is
-   absent from the document name. Direction and type agree.
+1 to 3. RESOLVED session-071, recorded as they were written at
+   INFRA-011. ubtb_interfaces.md listed pred_pc_p0, pred_p1 and
+   upd_u0 without their stage suffixes, as pred_pc, pred and upd,
+   while ubtb.sv carried them; the document now names all four
+   ports, blk_p1 included, so all three MISMATCH rows are gone.
+   The lines cited then, :45 to :47, are the Port List heading and
+   its first rows today. Session-072.
 
 4. planning/interfaces/bp_history_interfaces.md, Port List, the
    pred_pc line -- port pred_pc is listed as `input logic [VA_WIDTH-1:0] [2]`, both dimensions

@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -404,13 +404,31 @@ path touches none of those.
 ## 5. Document History
 
 ```
-  2026-09-19  session-071. Section 2: the RAS snapshot is
-              overwritten at p2 for every valid block
-              (ftq_bpu_interfaces.md 4c); pft_addr named in the
-              paragraph that had begun "IT IS A p1 VALUE" directly
-              under the RAS sentence; pos is start-relative and the
-              branch PC is block START plus pos (TD#125). "Fetch
-              block" replaced by "prediction block".
+  2026-08-19  Created. Sections 4.1, 4.2 and 4.2.1 moved here whole
+              from fe_decisions.md, and the duplicate layout deleted
+              from bp_cluster.md. No content changed in the move.
+              Section 1 added: the two-path summary and the storage
+              totals. Numbering: fe_decisions 4.1 -> section 2,
+              4.2 -> section 3, 4.2.1 -> section 3.1.
+
+  2026-08-19  FTB_BR_POS_BITS 3 -> 4. bp_ftq_slot_t.pos widens, so
+              the slot is 56b and the entry 224b; ftb_pred_meta_t
+              gains a bit in jmp_pos, so bp_ftq_meta_t is 421b.
+              Fast path 14,336b, slow path 53,888b, FTQ 68,224b.
+              Section 3.1's overload figures restated: 278b per
+              slot, 35,584b, FTQ 49,920b.
+
+  2026-08-20  Section 4 added: the per-entry fetch status fields
+              wb_rcvd and fault, closing the remainder of TD-FE-1.
+              request-issued deliberately NOT added -- fetch_ptr
+              already carries it. Both are FLOPS outside either
+              SRAM; 4.1 gives the three reasons. TD-FE-8 opened in
+              4.4 for the in-flight writeback race, which 5.6's
+              shadow cannot cover because IFU latency is unbounded.
+              Section 4 Document History renumbered to 5; nothing
+              referenced it. TD-FE-8 CLOSED the same day: a third
+              flop vector, gen, toggled on allocation and carried
+              on the IFU path. Section 4 is 192 bits, not 128.
 
   2026-08-21  Section 2: recorded that pft_addr is a p1 value with
               no correction path, found by BP-107 (W1). The fix is a
@@ -427,32 +445,6 @@ path touches none of those.
               its own section 5 is this history, so an unqualified
               number resolved to the wrong document. Both qualified.
 
-  2026-08-19  Created. Sections 4.1, 4.2 and 4.2.1 moved here whole
-              from fe_decisions.md, and the duplicate layout deleted
-              from bp_cluster.md. No content changed in the move.
-              Section 1 added: the two-path summary and the storage
-              totals. Numbering: fe_decisions 4.1 -> section 2,
-              4.2 -> section 3, 4.2.1 -> section 3.1.
-
-  2026-08-20  Section 4 added: the per-entry fetch status fields
-              wb_rcvd and fault, closing the remainder of TD-FE-1.
-              request-issued deliberately NOT added -- fetch_ptr
-              already carries it. Both are FLOPS outside either
-              SRAM; 4.1 gives the three reasons. TD-FE-8 opened in
-              4.4 for the in-flight writeback race, which 5.6's
-              shadow cannot cover because IFU latency is unbounded.
-              Section 4 Document History renumbered to 5; nothing
-              referenced it. TD-FE-8 CLOSED the same day: a third
-              flop vector, gen, toggled on allocation and carried
-              on the IFU path. Section 4 is 192 bits, not 128.
-
-  2026-08-19  FTB_BR_POS_BITS 3 -> 4. bp_ftq_slot_t.pos widens, so
-              the slot is 56b and the entry 224b; ftb_pred_meta_t
-              gains a bit in jmp_pos, so bp_ftq_meta_t is 421b.
-              Fast path 14,336b, slow path 53,888b, FTQ 68,224b.
-              Section 3.1's overload figures restated: 278b per
-              slot, 35,584b, FTQ 49,920b.
-
   2026-09-17  session-070. VA_WIDTH 40 -> 41 (TD#122, fe_decisions.md
               FE-19). pc, pft_addr and the per-slot target are the
               three fields that carry it. Block scalars 112 -> 114,
@@ -463,4 +455,16 @@ path touches none of those.
               IT_MAX_TGT_WIDTH, unchanged -- so 421b and the
               slow-path array are untouched, and so is the 278b
               union proposal. TD#122 tracks the RTL.
+  2026-09-19  session-071. Section 2: the RAS snapshot is
+              overwritten at p2 for every valid block
+              (ftq_bpu_interfaces.md 4c); pft_addr named in the
+              paragraph that had begun "IT IS A p1 VALUE" directly
+              under the RAS sentence; pos is start-relative and the
+              branch PC is block START plus pos (TD#125). "Fetch
+              block" replaced by "prediction block".
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
+
+  2026-09-20  session-072. E25: UPDATED brought to the session date.
 ```

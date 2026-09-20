@@ -187,7 +187,7 @@ or delayed, never merely skewed.
 bp_history. It is shared across both prediction slots
 and passed directly to each tage_table instance.
 Each tage_table instance selects its table-specific
-fields and derives index_hash and tag_hash locally.
+fields and derives idx_hash_p0 and tag_hash_p0 locally.
 TAGE consumes the following fields for index and tag
 computation:
 
@@ -257,7 +257,7 @@ prediction slot.
 
 ### Hash Functions
 
-Each tage_table instance generates index_hash and tag_hash
+Each tage_table instance generates idx_hash_p0 and tag_hash_p0
 locally. These hashes are used to access the RAMS in p0.
 
 The hash operations are defined in tage_table_hash_rules.md

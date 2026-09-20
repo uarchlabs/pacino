@@ -988,63 +988,9 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
-  2026-09-20  session-072. 4.4: TD#89 and TD#90 recorded as proposed
-              fields, not ruled and not in the entry arithmetic.
-              A stray code fence in 2.2 that turned sections 2.2
-              to 10 into one code block, and one that split this
-              history, removed.
-  2026-09-19  session-071. 4.6 added: stored positions are
-              region-relative at FTB_BR_RPOS_BITS = 5 with a read
-              window mask, converted inside the FTB so every port
-              stays start-relative (ruled, Jeff, option R). Entry
-              110 -> 113, RAM entry 109 -> 112, sets 440 -> 452 and
-              436 -> 448 (section 8). Three consequences recorded
-              open under TD#125: target base, a fall-through upper
-              bound, slot mapping under the mask. 2.3 and 8: the
-              fetch block is the L1I line, not a fetch width, and
-              nothing is delivered into the FTQ but predictions.
-
-  2026-09-15  session-069. 4.5 RESTORED the fall-through bounds
-              check removed earlier. 4.1 qualified: the full tag
-              removes partial-tag aliasing but FTB_OFFSET_BITS of 5
-              are in neither index nor tag, and blocks are unaligned,
-              so two lookup PCs in one 32-byte region share an entry.
-              Stale BP-099 text corrected at 4.2, 4.4, 5.5, section 8
-              and FTB-1: FTB_BR_POS_BITS 4 not 3, PFTADDR_BITS 5 not
-              4, ENTRY_WIDTH 110 not 106, POS_OFFSET_BITS 1 not 2,
-              and 4.4 no longer claims expanded-granularity
-              addressing.
-
-              Section 8 ARITHMETIC corrected in the same pass and
-              declared the SOLE HOME of the entry widths. Its
-              header said 110 while its own breakdown summed to
-              106, and FTB_SET_WIDTH 424, FTB_RAM_ENTRY_WIDTH 105
-              and FTB_RAM_SET_WIDTH 420 were all 106-derived. Now
-              110 / 440 / 109 / 436, with the breakdown at
-              FTB_BR_POS_BITS 4 and PFTADDR_BITS 5. PFTADDR_BITS
-              added to the parameter list; it was cited in 5.5 and
-              defined nowhere. FTB-1 reduced to a citation.
-
-              The 2026-08-19 entry below already recorded 106->110
-              and 424->440 correctly. The body was never updated
-              to match, and the RAM widths were not in that entry
-              at all, which is why 105 and 420 survived. Three
-              different entry widths were in circulation until
-              this pass.
-
-  2026-08-19  FTB_BR_POS_BITS 3 -> 4 and PFTADDR_BITS 4 -> 5:
-              in-block positions are now 2-byte granular, sixteen
-              per 32-byte block, so a branch at any RVA23 C-extension
-              boundary has its own position. Entry 106 -> 110 bits
-              per way, set 424 -> 440, array 217,088 -> 225,280.
-              Nothing was restructured: every width derives from
-              $clog2(FTB_BLOCK_BYTES / N), and BP-098 had already
-              split the granularity shift out of INST_OFFSET so
-              POS_OFFSET_BITS rescaled 2 -> 1 on its own. Section
-              4.4's "8 expanded instructions" model is retired.
-              All 47 bpu targets green; only sim_bp_cluster's count
-              moved, 997 -> 1765, because its position sweep now
-              covers 16x16 pairs instead of 8x8.
+  Entries below that were written before session-072 use the
+  retired s-stage labels in their text. s0=p0, s1=p1, s2=p2,
+  s3=p3 (PROJECT_CORE.md); the labels are not live stage names.
 
   2026-06-24  session-051/052. Initial draft, expanded from
               ftb_decision_record.md. Single-array structure
@@ -1155,6 +1101,64 @@ region end, plus a full block, plus a straddling halfword pair:
               do not block COMPLETE. Decisions are settled; remaining FTB
               work is downstream at cluster integration.
 
+  2026-08-19  FTB_BR_POS_BITS 3 -> 4 and PFTADDR_BITS 4 -> 5:
+              in-block positions are now 2-byte granular, sixteen
+              per 32-byte block, so a branch at any RVA23 C-extension
+              boundary has its own position. Entry 106 -> 110 bits
+              per way, set 424 -> 440, array 217,088 -> 225,280.
+              Nothing was restructured: every width derives from
+              $clog2(FTB_BLOCK_BYTES / N), and BP-098 had already
+              split the granularity shift out of INST_OFFSET so
+              POS_OFFSET_BITS rescaled 2 -> 1 on its own. Section
+              4.4's "8 expanded instructions" model is retired.
+              All 47 bpu targets green; only sim_bp_cluster's count
+              moved, 997 -> 1765, because its position sweep now
+              covers 16x16 pairs instead of 8x8.
+
+  2026-09-15  session-069. 4.5 RESTORED the fall-through bounds
+              check removed earlier. 4.1 qualified: the full tag
+              removes partial-tag aliasing but FTB_OFFSET_BITS of 5
+              are in neither index nor tag, and blocks are unaligned,
+              so two lookup PCs in one 32-byte region share an entry.
+              Stale BP-099 text corrected at 4.2, 4.4, 5.5, section 8
+              and FTB-1: FTB_BR_POS_BITS 4 not 3, PFTADDR_BITS 5 not
+              4, ENTRY_WIDTH 110 not 106, POS_OFFSET_BITS 1 not 2,
+              and 4.4 no longer claims expanded-granularity
+              addressing.
+
+              Section 8 ARITHMETIC corrected in the same pass and
+              declared the SOLE HOME of the entry widths. Its
+              header said 110 while its own breakdown summed to
+              106, and FTB_SET_WIDTH 424, FTB_RAM_ENTRY_WIDTH 105
+              and FTB_RAM_SET_WIDTH 420 were all 106-derived. Now
+              110 / 440 / 109 / 436, with the breakdown at
+              FTB_BR_POS_BITS 4 and PFTADDR_BITS 5. PFTADDR_BITS
+              added to the parameter list; it was cited in 5.5 and
+              defined nowhere. FTB-1 reduced to a citation.
+
+              The 2026-08-19 entry below already recorded 106->110
+              and 424->440 correctly. The body was never updated
+              to match, and the RAM widths were not in that entry
+              at all, which is why 105 and 420 survived. Three
+              different entry widths were in circulation until
+              this pass.
+
+  2026-09-19  session-071. 4.6 added: stored positions are
+              region-relative at FTB_BR_RPOS_BITS = 5 with a read
+              window mask, converted inside the FTB so every port
+              stays start-relative (ruled, Jeff, option R). Entry
+              110 -> 113, RAM entry 109 -> 112, sets 440 -> 452 and
+              436 -> 448 (section 8). Three consequences recorded
+              open under TD#125: target base, a fall-through upper
+              bound, slot mapping under the mask. 2.3 and 8: the
+              fetch block is the L1I line, not a fetch width, and
+              nothing is delivered into the FTQ but predictions.
+
+  2026-09-20  session-072. 4.4: TD#89 and TD#90 recorded as proposed
+              fields, not ruled and not in the entry arithmetic.
+              A stray code fence in 2.2 that turned sections 2.2
+              to 10 into one code block, and one that split this
+              history, removed.
   2026-09-20  session-072. 4.4: RVC expansion is in the IFU,
               downstream of the FTB; this read "before the FTB".
 
@@ -1162,4 +1166,10 @@ region end, plus a full block, plus a straddling halfword pair:
               replaced by PROJECT_CORE's p-stage rule and the
               narrative s2/s3 swept to p2/p3. D4: the unaligned-block
               citation moved from ftq_decisions.md 4.4 to 4.7.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
+
+  2026-09-20  session-072. D29: the history section notes that older
+              entries use the retired s-labels.
 ```

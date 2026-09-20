@@ -219,7 +219,7 @@ or delayed, never merely skewed.
 bp_history. It is shared across both prediction slots
 and passed directly to each ittage_table instance.
 Each ittage_table instance selects its table-specific
-fields and derives index_hash and tag_hash locally.
+fields and derives idx_hash_p0 and tag_hash_p0 locally.
 ITTAGE consumes the following fields for index and tag
 computation:
 
@@ -297,7 +297,7 @@ the UAON counter is >= IT_UAON_THRES the alternative component
 becomes the provider.
 
 For full provider selection scan logic see
-ittage_cntrl_decisions.md §Prediction Phase.
+ittage_cntrl_decisions.md section Prediction Phase.
 
 Operation of the UAON is described in ittage_cntrl_uaon_update_rules.md.
 
@@ -306,7 +306,7 @@ prediction slot.
 
 ### Hash Functions
 
-Each ittage_table instance generates index_hash and tag_hash
+Each ittage_table instance generates idx_hash_p0 and tag_hash_p0
 locally. These hashes are used to access the RAMs in p0.
 
 The hash operations are defined in ittage_table_hash_rules.md.
@@ -499,7 +499,7 @@ No read-modify-write cycles are required or permitted.
 
 ## Bank Address Assignment
 
-See ittage_table_interfaces.md §Bank Address Assignment.
+See ittage_table_interfaces.md section Bank Address Assignment.
 
 ---
 

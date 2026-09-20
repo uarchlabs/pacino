@@ -188,7 +188,7 @@ Captures into meta:
 See tage_cntrl_alloc_rules.md for full rules.
 
 tage_cntrl generates tage_alloc_idx directly (pre-hashed).
-It is not run through tage_hash. Source is the index_hash_p0
+It is not run through tage_hash. Source is the idx_hash_p0
 that was used to access the candidate table during prediction.
 Written into meta as-is. Update path uses it as a direct
 RAM address with no rehashing.

@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 

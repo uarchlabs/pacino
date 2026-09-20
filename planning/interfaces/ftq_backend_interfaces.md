@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -504,12 +504,39 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
-  2026-09-19  session-071. D5 states the IFU flush index, K+1 with
-              _self clear and K with it set, matching the RTL and
-              ftq_decisions.md 5.5 R1. D1 already named the entry
-              the redirect names for the history restore;
-              ftq_decisions.md 3.2, which used the entry before it
-              when _self is set, now agrees.
+  2026-08-19  Created. Resolution, redirect and commit defined as
+              three separate events. Resolution names an in-block
+              POSITION, not a prediction slot, so the backend needs
+              no knowledge of the slot model; the FTQ maps position
+              to slot. Port count set by the downstream update
+              capacity of two, not by an unknown backend width.
+              Commit is an idempotent watermark, rate limited by
+              the scalar RAS commit port to one entry per cycle.
+              TD-FE-7 opened: bp_cluster derives its history
+              rollback only from its own p2/p3 redirects and has no
+              input, so a backend mispredict cannot restore the GHR
+              and PHR pointers. Six backend assumptions recorded in
+              section 10; none is verifiable, the backend does not
+              exist.
+
+  2026-08-19  A1 CONFIRMED: 9 bits per in-flight instruction.
+              Section 4 records that the position-to-slot mapping is
+              monotone under IC-FTB-16, that a slot id still cannot
+              replace the position because the IFU holds no slot
+              map, and that the mapping is exact only while positions
+              are unique -- which they are not at
+              FTB_BR_POS_BITS = 3.
+
+  2026-08-19  FTB_BR_POS_BITS widened to 4. The section 4
+              position-to-slot mapping is now EXACT: one position
+              per 2-byte slot, so no two branches in a block can
+              share one. The caveat added earlier the same day is
+              retired.
+  2026-08-20  TD-FE-7 CLOSED by BP-102. Section 8 rewritten from
+              a defect report to the built interface; section 5 D1
+              no longer says the input does not exist. The index
+              form was taken over the pointer-value form.
+              tb_bp_cluster group J, 30 checks.
 
   2026-08-21  Section 7 R3: only the live-window half is buildable.
               ftq_resolve_t.ftq_idx carries no generation bit and
@@ -534,39 +561,13 @@ Every one of these is unverifiable today. The backend does not exist.
               requirement is 3.3, Commit stack / Update. The
               companion 4.5 in the same sentence was already correct.
 
-  2026-08-19  Created. Resolution, redirect and commit defined as
-              three separate events. Resolution names an in-block
-              POSITION, not a prediction slot, so the backend needs
-              no knowledge of the slot model; the FTQ maps position
-              to slot. Port count set by the downstream update
-              capacity of two, not by an unknown backend width.
-              Commit is an idempotent watermark, rate limited by
-              the scalar RAS commit port to one entry per cycle.
-              TD-FE-7 opened: bp_cluster derives its history
-              rollback only from its own p2/p3 redirects and has no
-              input, so a backend mispredict cannot restore the GHR
-              and PHR pointers. Six backend assumptions recorded in
-              section 10; none is verifiable, the backend does not
-              exist.
+  2026-09-19  session-071. D5 states the IFU flush index, K+1 with
+              _self clear and K with it set, matching the RTL and
+              ftq_decisions.md 5.5 R1. D1 already named the entry
+              the redirect names for the history restore;
+              ftq_decisions.md 3.2, which used the entry before it
+              when _self is set, now agrees.
 
-  2026-08-20  TD-FE-7 CLOSED by BP-102. Section 8 rewritten from
-              a defect report to the built interface; section 5 D1
-              no longer says the input does not exist. The index
-              form was taken over the pointer-value form.
-              tb_bp_cluster group J, 30 checks.
-
-  2026-08-19  A1 CONFIRMED: 9 bits per in-flight instruction.
-              Section 4 records that the position-to-slot mapping is
-              monotone under IC-FTB-16, that a slot id still cannot
-              replace the position because the IFU holds no slot
-              map, and that the mapping is exact only while positions
-              are unique -- which they are not at
-              FTB_BR_POS_BITS = 3.
-
-  2026-08-19  FTB_BR_POS_BITS widened to 4. The section 4
-              position-to-slot mapping is now EXACT: one position
-              per 2-byte slot, so no two branches in a block can
-              share one. The caveat added earlier the same day is
-              retired.
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
 ```
-

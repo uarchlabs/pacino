@@ -152,8 +152,11 @@ and ittage_alt_useful.
 On the subsequent update, u_eff is written back to the USEFUL
 field of the entry. The values are carried in the update data:
 
-  ittage_upd_inp[s].ittage_pred_meta.ittage_prm_useful
-  ittage_upd_inp[s].ittage_pred_meta.ittage_alt_useful
+  ittage_upd_inp_u0[s].ittage_pred_meta.ittage_prm_useful
+  ittage_upd_inp_u0[s].ittage_pred_meta.ittage_alt_useful
+
+(The port is ittage_upd_inp_u0, as the Table 7 legend below and
+ittage_interfaces.md give it; this read ittage_upd_inp. Session-072.)
 
 Which field is written (prm or alt) is determined by the
 table below. The current lcl_epoch value is written to the

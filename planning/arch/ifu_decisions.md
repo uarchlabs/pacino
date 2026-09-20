@@ -6,11 +6,15 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
-Owns the IFU-N, TD-IFU-N and IFU-UN registries.
+Owns the IFU-N, TD-IFU-N and IFU-UN registries. The numbers are
+issue order and the sections are topical, so they do not run in
+numeric order: IFU-5 follows IFU-1 in section 1, IFU-4 follows
+TD-IFU-5 in section 3, and IFU-23 is in section 7 after IFU-23a to
+IFU-27 in 5.1. Session-072.
 
 Scope is the IFU. Its boundaries are held elsewhere:
 `ftq_ifu_interfaces.md` upstream, `l1i_ifu_interfaces.md` for the

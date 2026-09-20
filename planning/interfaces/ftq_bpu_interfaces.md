@@ -254,26 +254,6 @@ entry rather than resampled from the cluster.
 
 ---
 
-### 4b. No p1 port carries the block start PC
-
-`bp_ftq_entry_t.pc` is the prediction block start and the entry is written
-at p1, but NO PORT IN THIS SECTION CARRIES IT: the group has the
-slots, the RAS snapshot and the fall-through. The value exists only as
-the `ftq_pred_pc_p0` the FTQ issued a cycle earlier, so THE FTQ MUST
-STAGE ITS OWN REQUEST to write its own entry.
-
-This is not an omission to fix by adding a port -- the cluster would
-be echoing back a value the FTQ gave it. It is recorded because a
-reader sizing the p1 group from this section alone will conclude the
-entry can be written from it, and it cannot. BP-107 publishes
-`ftq_npc`'s `r_next_pc`, which already holds that value one cycle on,
-so it costs no state; see ftq_decisions.md 7.5.
-
-Widening `ftq_shadow` by VA_WIDTH per stage would also work and is
-worse: it carries for four stages something only one stage needs.
-
----
-
 ## 4a. Slot correction: p2 and p3
 
 The p1 group of section 4 is the uBTB and loop-predictor view. The
@@ -324,6 +304,26 @@ Field sources at p2:
 p3 changes `taken`, and `pred_src` to PRED_SC when SC actually moved
 the direction. SC corrects direction, not branch type, so `br_type`,
 `pos` and `target` pass through the p2 to p3 register unchanged.
+
+---
+
+## 4b. No p1 port carries the block start PC
+
+`bp_ftq_entry_t.pc` is the prediction block start and the entry is written
+at p1, but NO PORT IN THIS SECTION CARRIES IT: the group has the
+slots, the RAS snapshot and the fall-through. The value exists only as
+the `ftq_pred_pc_p0` the FTQ issued a cycle earlier, so THE FTQ MUST
+STAGE ITS OWN REQUEST to write its own entry.
+
+This is not an omission to fix by adding a port -- the cluster would
+be echoing back a value the FTQ gave it. It is recorded because a
+reader sizing the p1 group from this section alone will conclude the
+entry can be written from it, and it cannot. BP-107 publishes
+`ftq_npc`'s `r_next_pc`, which already holds that value one cycle on,
+so it costs no state; see ftq_decisions.md 7.5.
+
+Widening `ftq_shadow` by VA_WIDTH per stage would also work and is
+worse: it carries for four stages something only one stage needs.
 
 ---
 
@@ -1047,15 +1047,60 @@ match it and to match this specification.
 ## 11. Document history
 
 ```
-  2026-09-19  session-071. Section 4c added: bpu_blk_val_p2,
-              bpu_blk_idx_p2 and bpu_blk_ras_p2 carry the
-              post-operation RAS snapshot for every valid p2 block,
-              closing the port gap flagged session-070 (ruled,
-              Jeff). bpu_pred_ras_p1 is initialise-only. The p3
-              repair is recorded as open. 7.4 and section 9: the
-              branch PC is block START plus position, and every
-              position on a port is start-relative (TD#125).
-              "Fetch block" replaced by "prediction block".
+  2026-08-02  Created, session-063. Written from fe_decisions.md,
+              bpu_port_inventory.md (INFRA-011), and
+              bp_structs_pkg.sv. Predictor ports named as declared;
+              no renaming proposed. Redirect group named by stage,
+              since no predictor declares a redirect port. RAS top
+              of stack at p0 per ras.sv. Checkpoint held in the FTQ
+              entry; bp_history rolls back by index. loop_pred
+              described dual-slot per TD#105. bp_redirect_t arrayed
+              per slot with ftq_idx removed. bp_ftq_slot_t defined.
+
+  2026-08-02  Section 7 added: the prediction metadata write groups
+              at p2 and p3, the FTB carried hit and way, and the
+              in-block positions. Sections 8 through 11 renumbered.
+              Section 4 updated for the reshaped uBTB interface
+              (blk_p1, entry-scoped hit). Section 5 updated with the
+              branch_id match rule, the jump slot placement rule and
+              the RAS reachability rule. Section 6 updated with the
+              successor-address comparison and the p3 comparison
+              basis. Corrections 8 through 11 opened.
+
+  2026-08-09  session-064. Section 9 pred_pc corrected:
+              it is one value per BRANCH after compaction, not one
+              per slot, and it is the branch PC rather than the
+              fetch block PC (BP-092a). Section 10 items 6, 7, 8 and
+              12 closed: the fe_decisions.md RAS-stage and
+              redirect-port corrections were applied by this task,
+              the SC index folds were staged by BP-090, and the
+              loop_pred dual-slot retrofit landed in BP-091. Item 14
+              opened for the IT5 fold gap (TD#102). Section 2, 3, 4,
+              5.3, 7.1, 7.4 and 8 updated to the post-BP-091,
+              post-BP-092 RTL: loop_pred per-slot throughout, the
+              slot-0 exception removed from the p1 mux, the SC folds
+              described as staged, the uBTB update br_type rederived
+              rather than carried, and the position granularity
+              stated.
+  2026-08-19  Section 4a added: the p2 and p3 slot correction
+              groups, delivered in bp_cluster.sv. They carry the FTB
+              classification and the in-block positions into the
+              fast-path entry on every prediction, not only when a
+              redirect fires. Section 7.4 was describing a path no
+              port provided; it is now buildable. Item 16 closed,
+              item 17 opened and deferred (TD-FE-6, TD-FE-2).
+
+  2026-08-19  Section 4 records that the FTQ stores the p1
+              fall-through in bp_ftq_entry_t.pft_addr; section 10
+              item 15 opened and closed for the field addition.
+
+  2026-08-20  Section 9 gains the CLUSTER BOUNDARY rollback group,
+              ftq_rollback_val / ftq_rollback_idx, added by BP-102
+              and closing TD-FE-7. The priority rule and the
+              same-cycle checkpoint-write suppression are recorded
+              with it. The ports already listed in section 9 were
+              bp_history's own, inside the cluster; that is now
+              stated rather than implied.
 
   2026-08-21  BP-107 results. Section 4: bp_ftq_entry_t.pft_addr is
               a p1 value that NO later port can correct, because the
@@ -1081,60 +1126,19 @@ match it and to match this specification.
               corrections. No such task was ever generated or run.
               Corrected; INFRA-012 remains free.
 
-  2026-08-02  Created, session-063. Written from fe_decisions.md,
-              bpu_port_inventory.md (INFRA-011), and
-              bp_structs_pkg.sv. Predictor ports named as declared;
-              no renaming proposed. Redirect group named by stage,
-              since no predictor declares a redirect port. RAS top
-              of stack at p0 per ras.sv. Checkpoint held in the FTQ
-              entry; bp_history rolls back by index. loop_pred
-              described dual-slot per TD#105. bp_redirect_t arrayed
-              per slot with ftq_idx removed. bp_ftq_slot_t defined.
+  2026-09-19  session-071. Section 4c added: bpu_blk_val_p2,
+              bpu_blk_idx_p2 and bpu_blk_ras_p2 carry the
+              post-operation RAS snapshot for every valid p2 block,
+              closing the port gap flagged session-070 (ruled,
+              Jeff). bpu_pred_ras_p1 is initialise-only. The p3
+              repair is recorded as open. 7.4 and section 9: the
+              branch PC is block START plus position, and every
+              position on a port is start-relative (TD#125).
+              "Fetch block" replaced by "prediction block".
 
-  2026-08-02  Section 7 added: the prediction metadata write groups
-              at p2 and p3, the FTB carried hit and way, and the
-              in-block positions. Sections 8 through 11 renumbered.
-              Section 4 updated for the reshaped uBTB interface
-              (blk_p1, entry-scoped hit). Section 5 updated with the
-              branch_id match rule, the jump slot placement rule and
-              the RAS reachability rule. Section 6 updated with the
-              successor-address comparison and the p3 comparison
-              basis. Corrections 8 through 11 opened.
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
 
-  2026-08-19  Section 4a added: the p2 and p3 slot correction
-              groups, delivered in bp_cluster.sv. They carry the FTB
-              classification and the in-block positions into the
-              fast-path entry on every prediction, not only when a
-              redirect fires. Section 7.4 was describing a path no
-              port provided; it is now buildable. Item 16 closed,
-              item 17 opened and deferred (TD-FE-6, TD-FE-2).
-
-  2026-08-20  Section 9 gains the CLUSTER BOUNDARY rollback group,
-              ftq_rollback_val / ftq_rollback_idx, added by BP-102
-              and closing TD-FE-7. The priority rule and the
-              same-cycle checkpoint-write suppression are recorded
-              with it. The ports already listed in section 9 were
-              bp_history's own, inside the cluster; that is now
-              stated rather than implied.
-
-  2026-08-19  Section 4 records that the FTQ stores the p1
-              fall-through in bp_ftq_entry_t.pft_addr; section 10
-              item 15 opened and closed for the field addition.
-
-  2026-08-09  session-064. Section 9 pred_pc corrected:
-              it is one value per BRANCH after compaction, not one
-              per slot, and it is the branch PC rather than the
-              fetch block PC (BP-092a). Section 10 items 6, 7, 8 and
-              12 closed: the fe_decisions.md RAS-stage and
-              redirect-port corrections were applied by this task,
-              the SC index folds were staged by BP-090, and the
-              loop_pred dual-slot retrofit landed in BP-091. Item 14
-              opened for the IT5 fold gap (TD#102). Section 2, 3, 4,
-              5.3, 7.1, 7.4 and 8 updated to the post-BP-091,
-              post-BP-092 RTL: loop_pred per-slot throughout, the
-              slot-0 exception removed from the p1 mux, the SC folds
-              described as staged, the uBTB update br_type rederived
-              rather than carried, and the position granularity
-              stated.
+  2026-09-20  session-072. E23: 4a now precedes 4b and 4b is an H2
+              like its siblings.
 ```
-

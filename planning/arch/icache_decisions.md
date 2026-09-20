@@ -4,11 +4,11 @@
 # L1 Instruction Cache Micro-Architectural Decisions
 ```
  FILE:    icache_decisions.md
- SOURCE:  session-068 rulings; the survey in
-          docs/superscalar_ooo_survey.md; INFRA-012;
-          TOOLS-003
+ SOURCE:  session-068 rulings; a survey cited as
+          docs/superscalar_ooo_survey.md (NOT IN THE TREE,
+          see section 1); INFRA-012; TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -89,6 +89,16 @@ That argument is unchanged by L1I-2 below.
 ---
 
 ## 1. Geometry
+
+THE SURVEY THIS DOCUMENT CITES IS NOT IN THE TREE. The header names
+docs/superscalar_ooo_survey.md; no such file exists, and
+PROJECT_CORE.md's description of docs/ lists none. The survey is the
+stated evidence for L1I-1 capacity and associativity, L1I-7
+replacement and the L1I-12 MSHR count, and the Neoverse, Zen,
+XuanTie, Intel and XiangShan figures those rules cite appear nowhere
+else in planning/. The rulings stand as ruled; their evidence is
+recorded only here. Committing the survey, or recording where it
+lives, is outstanding. Session-072.
 
 ### 1.1 The numbers
 
@@ -706,12 +716,6 @@ Session-071.
   L1I-U1  CLOSED. pa_bits is 36; L1I-20, section 1.2. Ruled
           session-068 and applied by TOOLS-003.
 
-  L1I-U7  WHERE THE L1I-22 RESERVE IS DECLARED. TOOLS-004 put it
-          on the link, beside the prefetch bit it governs. The
-          alternative is the node, beside mshrs, which is what it
-          counts and where TD-L1I-3 would put
-          prefetch_arbitration. NOT RULED.
-
   L1I-U2  The ITLB. Entries, associativity, page sizes, ASID
           width, and its own latency. Under PIPT it is on the
           fetch path, so 2.4's stated latency is incomplete until
@@ -761,6 +765,12 @@ Session-071.
   L1I-U5  The IFU line buffer's depth and its redirect behaviour.
           Owned by ifu_decisions.md TD-IFU-7, where it is still
           unruled; named here only so L1I-14 has an owner.
+
+  L1I-U7  WHERE THE L1I-22 RESERVE IS DECLARED. TOOLS-004 put it
+          on the link, beside the prefetch bit it governs. The
+          alternative is the node, beside mshrs, which is what it
+          counts and where TD-L1I-3 would put
+          prefetch_arbitration. NOT RULED.
 ```
 
 ### 10.2 Technical debt
@@ -879,39 +889,44 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
 ## 12. Document History
 
 ```
-  2026-09-19  session-071. Brought up to date with session-069 and
-              TOOLS-005: L1I-U2, U3 and U4 recorded as ruled (the
-              registry line and 10.1 still said open); the three
-              documents written in session-069 no longer called
-              unwritten; the configured geometry is L1I-1;
-              TD-L1I-8 closed at the l1i boundary with TD#118 and
-              TD#119 as the remainder; the timing fields are
-              consumed since TOOLS-005.
+  2026-08-27  Created, session-068. Geometry, indexing, storage,
+              both interfaces, miss handling, maintenance and
+              prefetch decided as L1I-1 through L1I-19. PIPT taken
+              over VIPT, which makes the 64 KiB 8-way geometry free
+              of the alias constraint and removes the multi-set
+              invalidate that section 7 would otherwise have
+              needed. The L1I is non-inclusive with the L2, so
+              TL-UH is correct as configured and there is no
+              back-invalidate. Capacity, associativity and MSHR
+              count derived from the published survey rather than
+              from the initial configuration; the core port
+              rewritten from a 32-bit single-outstanding test port
+              to a 512-bit line-at-a-time port. pa_bits, the ITLB,
+              the walker topology and PMP/PMA are recorded OPEN
+              with recommendations and are not decided here.
 
-  2026-09-15  session-069. 4.3 gains R4: the physical address of
-              R1 is produced in the IFU's translation pipeline,
-              which runs ahead of its fetch pipeline, because
-              L1I-3 forbids issuing a request in the cycle the
-              lookup begins. The L1I is unchanged. Records what
-              was NOT copied from XiangShan: the MetaArray and
-              way lookup stay out of the prefetch path, so the
-              L1I-5 tag compare remains in the fetch path.
-```
-
-```
-  2026-09-02  L1I-23 added: sixteen fills in flight on the memory
-              side, one per MSHR, keyed by a_source and d_source.
-              Ruled session-068. One fill at a time made fifteen
-              MSHRs wait on the sixteenth and did not deliver the
-              L1I-12 count's own derivation.
-
-              TOOLS-004 folded in. TD-L1I-4, -7 and -9 closed.
-              TD-L1I-8 partly closed and its remainder is the
-              whole of TOOLS-005: pipelined hit throughput, the
-              two-cycle latency, and L1I-23. Section 9's applied
-              rows marked DONE, notes n2 and n4 closed, and the
-              inert-field paragraph re-measured. L1I-U7 opened on
-              where the L1I-22 reserve is declared.
+  2026-08-28  INFRA-012 folded in, session-068. The core port is
+              SIXTEEN outstanding, not eight: at eight against
+              sixteen MSHRs half the miss tracking was unreachable.
+              5.2's critical-first justification WITHDRAWN -- under
+              L1I-9's whole-line core response the requester that
+              missed cannot see the saving, and the earlier text
+              attributed an L2-side saving to the core side. Both
+              fields stay for the weaker second-requester reason.
+              L1I-11 was cited three times and never stated; it is
+              now stated in 1.1, and `banks` is no longer listed as
+              a derived value. Four section 9 corrections, all
+              found by reading the tool: the schema's name is
+              bank_interleave_granularity; `nine` is the schema's
+              spelling of non-inclusive and l1i ALREADY declares
+              it, so that row changes nothing and contradicted 5.1
+              as written; a link address width is a literal and
+              cannot read pa_bits; out_of_order_response is not a
+              new field but the existing read_data_return
+              valid_with_id plus id_width_bits. TD-L1I-6, -7 and
+              -8 opened. TD-L1I-8 is the finding that matters:
+              thirteen of twenty-two node fields validate, are
+              carried, and move no emitted logic.
 
   2026-08-29  TOOLS-003 folded in, session-068. Eight amendments,
               two of them CORRECTNESS and found by writing down
@@ -942,45 +957,47 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
               said fetch block where it meant prediction block;
               FETCH_BLOCK_BYTES is 64 and FTB_BLOCK_BYTES is 32.
 
-  2026-08-28  INFRA-012 folded in, session-068. The core port is
-              SIXTEEN outstanding, not eight: at eight against
-              sixteen MSHRs half the miss tracking was unreachable.
-              5.2's critical-first justification WITHDRAWN -- under
-              L1I-9's whole-line core response the requester that
-              missed cannot see the saving, and the earlier text
-              attributed an L2-side saving to the core side. Both
-              fields stay for the weaker second-requester reason.
-              L1I-11 was cited three times and never stated; it is
-              now stated in 1.1, and `banks` is no longer listed as
-              a derived value. Four section 9 corrections, all
-              found by reading the tool: the schema's name is
-              bank_interleave_granularity; `nine` is the schema's
-              spelling of non-inclusive and l1i ALREADY declares
-              it, so that row changes nothing and contradicted 5.1
-              as written; a link address width is a literal and
-              cannot read pa_bits; out_of_order_response is not a
-              new field but the existing read_data_return
-              valid_with_id plus id_width_bits. TD-L1I-6, -7 and
-              -8 opened. TD-L1I-8 is the finding that matters:
-              thirteen of twenty-two node fields validate, are
-              carried, and move no emitted logic.
+  2026-09-02  L1I-23 added: sixteen fills in flight on the memory
+              side, one per MSHR, keyed by a_source and d_source.
+              Ruled session-068. One fill at a time made fifteen
+              MSHRs wait on the sixteenth and did not deliver the
+              L1I-12 count's own derivation.
 
-  2026-08-27  Created, session-068. Geometry, indexing, storage,
-              both interfaces, miss handling, maintenance and
-              prefetch decided as L1I-1 through L1I-19. PIPT taken
-              over VIPT, which makes the 64 KiB 8-way geometry free
-              of the alias constraint and removes the multi-set
-              invalidate that section 7 would otherwise have
-              needed. The L1I is non-inclusive with the L2, so
-              TL-UH is correct as configured and there is no
-              back-invalidate. Capacity, associativity and MSHR
-              count derived from the published survey rather than
-              from the initial configuration; the core port
-              rewritten from a 32-bit single-outstanding test port
-              to a 512-bit line-at-a-time port. pa_bits, the ITLB,
-              the walker topology and PMP/PMA are recorded OPEN
-              with recommendations and are not decided here.
+              TOOLS-004 folded in. TD-L1I-4, -7 and -9 closed.
+              TD-L1I-8 partly closed and its remainder is the
+              whole of TOOLS-005: pipelined hit throughput, the
+              two-cycle latency, and L1I-23. Section 9's applied
+              rows marked DONE, notes n2 and n4 closed, and the
+              inert-field paragraph re-measured. L1I-U7 opened on
+              where the L1I-22 reserve is declared.
+
+  2026-09-15  session-069. 4.3 gains R4: the physical address of
+              R1 is produced in the IFU's translation pipeline,
+              which runs ahead of its fetch pipeline, because
+              L1I-3 forbids issuing a request in the cycle the
+              lookup begins. The L1I is unchanged. Records what
+              was NOT copied from XiangShan: the MetaArray and
+              way lookup stay out of the prefetch path, so the
+              L1I-5 tag compare remains in the fetch path.
+
+  2026-09-19  session-071. Brought up to date with session-069 and
+              TOOLS-005: L1I-U2, U3 and U4 recorded as ruled (the
+              registry line and 10.1 still said open); the three
+              documents written in session-069 no longer called
+              unwritten; the configured geometry is L1I-1;
+              TD-L1I-8 closed at the l1i boundary with TD#118 and
+              TD#119 as the remainder; the timing fields are
+              consumed since TOOLS-005.
 
   2026-09-20  session-072. D6: pacino_cache.md marked generated and
               not to be cited (PROJECT_CORE).
+
+  2026-09-20  session-072. E10: L1I-U7 moved into numeric order.
+              E12: the history section's split fences merged.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
+
+  2026-09-20  session-072. D33: the survey the header cites is not in
+              the tree; recorded in the header and at section 1.
 ```

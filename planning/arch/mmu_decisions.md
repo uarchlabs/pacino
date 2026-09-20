@@ -391,15 +391,21 @@ MMU-16a Guest page fault exists because H is mandatory. It is not
         because H is not absent.
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
-faulting virtual address for ALL THREE causes, cause 20 included:
-a guest-page fault reports the faulting guest virtual address in
-stval, and Shtvala puts the guest PHYSICAL address in htval
-(MMU-23). This read "for both causes" beside a three-cause table
-that MMU-16a says is not reducible to two. Every other document
-carries three: itlb_decisions.md ITLB-11,
-itlb_ifu_interfaces.md IT-6, ifu_decisions.md IFU-2a,
-dcd_decisions.md DCD-15 and ifu_ibuf_interfaces.md IB-9a.
-Session-072.
+faulting virtual address for page-fault, access-fault and
+misaligned exceptions on load, store and instruction, and for
+breakpoint exceptions that write an address (rva23-profile.adoc).
+That covers causes 1 and 12. IT DOES NOT NAME CAUSE 20: for a
+guest-page fault the profile mandates Shtvala, htval written with
+the faulting guest physical address (MMU-23), and Shvstvala,
+vstval written in all the cases described for stval. What stval
+holds on cause 20 is the ISA's rule, not Sstvala's.
+
+The VA travels with the cause on all three inside the front end
+regardless, because the IFU pairs them (itlb_ifu_interfaces.md
+IT-5, ifu_ibuf_interfaces.md IB-9); that is this design's doing,
+not a profile requirement. This read "for both causes" until
+session-072, then "for ALL THREE causes, cause 20 included,"
+which attributed to Sstvala more than it says. Session-072.
 
 ---
 
@@ -506,7 +512,7 @@ TD#118    Bounds MMU-U2.
 
 ---
 
-## 13. Document History
+## 11. Document History
 
 ```
   2026-09-17  session-070 audit. MMU-U4 and MMU-U5 both turned on
@@ -572,4 +578,11 @@ TD#118    Bounds MMU-U2.
   2026-09-20  session-072. section 7: Sstvala named two causes
               beside a three-cause table; all three carry stval,
               and htval carries the GPA on cause 20.
+
+  2026-09-20  session-072. E3: the history section renumbered 13 to 11;
+              11 and 12 do not exist.
+
+  2026-09-20  session-072. D30: Sstvala's requirement stated as the
+              profile defines it; cause 20 is Shtvala and
+              Shvstvala, not Sstvala.
 ```

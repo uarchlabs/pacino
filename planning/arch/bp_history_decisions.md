@@ -798,32 +798,28 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
 
 ## 11. Document History
 
-  2026-09-17  audit_v6, interactive. Five corrections, all of them
-              this document disagreeing with documents that had
-              already settled the point.
-              3.2: pred_pc is the BRANCH PC, not the fetch-block
-              PC. bp_history_interfaces.md, ftq_bpu_interfaces.md 9
-              and BP-092a have said so since session-064 and the
-              PHR fold arithmetic in 3.2 is the reason.
-              3.4: cited "the fixed bundle split (G8/G17)", which
-              session-063 superseded. The bundle-granularity
-              conclusion does not rest on it and is restated
-              without it.
-              3.4 and 7: "per FTQ slot" meant per FTQ ENTRY. The
-              prediction slot is a different concept (FE-10).
-              Section 9: G24 RENUMBERED HI8. G24 was already the
-              FTB flush protocol in the PROJECT_STATUS TBD table,
-              closed by BP-105, and every other citation in the
-              tree means that item. HI6 and HI7 were already
-              issued in bp_history_interfaces.md and are now
-              listed here, because their absence from this file's
-              section 9 is what made HI6 look free.
-              Section 9: the module-owned pointer RTL and port
-              change was DELIVERED by BP-069 and is no longer
-              open. Section 2 still describes the divergence as
-              live and is annotated rather than rewritten.
-              Header STATUS set to DRAFT per the PROJECT_CORE
-              convention; the field is decorative.
+  2026-06-25  session-054. Created. Resolves G20/G21/G22
+              (= HI1/HI3/HI4). Decisions: dual-slot combined
+              slot-0-then-slot-1 update with bundle-granularity
+              checkpoint (section 3); rollback wins, mutually
+              exclusive with update (section 4); stale-fold
+              predictions allowed, G22 decoupled from G15
+              (section 5). Pointer model ruled module-owned:
+              internal pointer, sequential-only advance, internal
+              checkpoint, rollback by index (section 2). This
+              diverges from the as-built RTL (caller-owned input
+              pointer) and changes both bp_history.sv and the
+              interface port list (section 9). Sequential-only
+              advance confirmed against Alpha 21264 and IBM GHV
+              recovery practice; no surveyed design needs a
+              non-sequential pointer. Restore applies to every
+              redirect that names an entry (section 3.4, corrected
+              session-069): RC_MISPREDICT, RC_TRAP and RC_REPLAY
+              per ftq_backend_interfaces.md D1. Bundle granularity
+              gives every entry a checkpoint, so no no-branch
+              restore case exists.
+              Open: the module-owned RTL/port edit and
+              TD #74 / #69 / #70 sequencing (section 9).
 
   2026-06-26  session-055 (fold-definition capture). Added section
               6, the canonical Fold Definition: age indexing,
@@ -870,28 +866,32 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               the hash-rule docs were found to define fold consumption
               only, which motivated the section 6 capture above.
 
-  2026-06-25  session-054. Created. Resolves G20/G21/G22
-              (= HI1/HI3/HI4). Decisions: dual-slot combined
-              slot-0-then-slot-1 update with bundle-granularity
-              checkpoint (section 3); rollback wins, mutually
-              exclusive with update (section 4); stale-fold
-              predictions allowed, G22 decoupled from G15
-              (section 5). Pointer model ruled module-owned:
-              internal pointer, sequential-only advance, internal
-              checkpoint, rollback by index (section 2). This
-              diverges from the as-built RTL (caller-owned input
-              pointer) and changes both bp_history.sv and the
-              interface port list (section 9). Sequential-only
-              advance confirmed against Alpha 21264 and IBM GHV
-              recovery practice; no surveyed design needs a
-              non-sequential pointer. Restore applies to every
-              redirect that names an entry (section 3.4, corrected
-              session-069): RC_MISPREDICT, RC_TRAP and RC_REPLAY
-              per ftq_backend_interfaces.md D1. Bundle granularity
-              gives every entry a checkpoint, so no no-branch
-              restore case exists.
-              Open: the module-owned RTL/port edit and
-              TD #74 / #69 / #70 sequencing (section 9).
+  2026-09-17  audit_v6, interactive. Five corrections, all of them
+              this document disagreeing with documents that had
+              already settled the point.
+              3.2: pred_pc is the BRANCH PC, not the fetch-block
+              PC. bp_history_interfaces.md, ftq_bpu_interfaces.md 9
+              and BP-092a have said so since session-064 and the
+              PHR fold arithmetic in 3.2 is the reason.
+              3.4: cited "the fixed bundle split (G8/G17)", which
+              session-063 superseded. The bundle-granularity
+              conclusion does not rest on it and is restated
+              without it.
+              3.4 and 7: "per FTQ slot" meant per FTQ ENTRY. The
+              prediction slot is a different concept (FE-10).
+              Section 9: G24 RENUMBERED HI8. G24 was already the
+              FTB flush protocol in the PROJECT_STATUS TBD table,
+              closed by BP-105, and every other citation in the
+              tree means that item. HI6 and HI7 were already
+              issued in bp_history_interfaces.md and are now
+              listed here, because their absence from this file's
+              section 9 is what made HI6 look free.
+              Section 9: the module-owned pointer RTL and port
+              change was DELIVERED by BP-069 and is no longer
+              open. Section 2 still describes the divergence as
+              live and is annotated rather than rewritten.
+              Header STATUS set to DRAFT per the PROJECT_CORE
+              convention; the field is decorative.
 
   2026-09-19  session-071. 3.2: pred_pc is the block START plus
               pos << POS_OFFSET_BITS; "block base" had been read as
@@ -900,3 +900,6 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
   2026-09-20  session-072. 6.2: "each older bit sits one position
               lower" contradicted the formula; older is higher. HI2
               no longer deferred to the completed TAGE/ITTAGE work.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.

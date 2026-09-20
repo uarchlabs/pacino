@@ -85,9 +85,13 @@ Signal names follow the pattern:
   pipestage: p0, p1, p2 for prediction path.
              p3 for repair.
              u0, u1 for update/commit path.
-             px for flush signals. Reserved and unread. There
-             is no flush event and no flush protocol; see
-             RI-1 and ras_decisions.md 4.4.
+             NO px STAGE. A flush is a redirect (fe_decisions.md
+             FE-14), and the two flush ports, ras_flush_val and
+             ras_flush_snapshot, carry no stage suffix; they are
+             reserved and unread, and there is no flush event and
+             no flush protocol. See RI-1 and ras_decisions.md
+             4.4. This listed "px for flush signals", against
+             every other predictor document. Session-072.
 
 Prediction slot dimension uses array index [0:NUM_PRED_SLOTS-1]
 on the signal, not a suffix. Example:
@@ -588,6 +592,10 @@ On rstn deassert (active low, synchronous):
 
 ## 13. Document History
 
+  Entries below that were written before session-072 use the
+  retired s-stage labels in their text. s0=p0, s1=p1, s2=p2,
+  s3=p3 (PROJECT_CORE.md); the labels are not live stage names.
+
   2026-06-23  session-050. Initial draft.
               Port list corrected: slot dimension uses
               [0:NUM_PRED_SLOTS-1] array index, not _p0/_p1
@@ -623,3 +631,9 @@ On rstn deassert (active low, synchronous):
 
   2026-09-20  session-072. D5: the last s-notation site, "s2_redirect
               logic", is the p2 redirect logic.
+
+  2026-09-20  session-072. D23: the pipestage list no longer declares a
+              px stage; the two flush ports carry no suffix.
+
+  2026-09-20  session-072. D29: the history section notes that older
+              entries use the retired s-labels.

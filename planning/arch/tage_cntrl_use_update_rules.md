@@ -127,7 +127,8 @@ The truth table for USEFUL counter updates is shown in Table 7.
 ## Columns
 
 The signals referenced are presumed to have
-tage_upd_inp.tage_pred_meta prefixed. The prefix was removed in
+tage_upd_inp_u0[s].tage_pred_meta prefixed (the declared port,
+tage_interfaces.md; this read tage_upd_inp. Session-072). The prefix was removed in
 the column header to limit table column width.
 
 -   Preds differed (tage_prm_tkn != tage_alt_tkn)

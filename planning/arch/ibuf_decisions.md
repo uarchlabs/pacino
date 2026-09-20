@@ -6,11 +6,14 @@
  FILE:    ibuf_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
-Owns the IBUF-N, TD-IBUF-N and IBUF-UN registries.
+Owns the IBUF-N, TD-IBUF-N and IBUF-UN registries. The numbers are
+issue order and the sections are topical, so they do not run in
+numeric order: IBUF-8, IBUF-8a and IBUF-8b are the redirect rules
+and sit in section 6, after IBUF-9 to IBUF-11. Session-072.
 
 Scope is the instruction buffer between the IFU and decode. The
 write side is fixed by `ifu_decisions.md` and recorded here rather

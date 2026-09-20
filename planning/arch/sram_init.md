@@ -6,7 +6,7 @@
  FILE:    planning/arch/sram_init.md
  SOURCE:  session-043
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -17,18 +17,19 @@ initialization module, sram_init.
 
 ## Operation
 
-THE FILE IS `components/rtl/sram_init.sv`. This document owns the
-module and gave no path, so three interface documents carried
-components/rtl/ and sc_decisions.md carried rtl/lib/rtl/. The
-shared components track is components/rtl and components/tb
-(PROJECT_STATUS.md). Session-072.
+THE FILE IS `rtl/lib/rtl/sram_init.sv`, beside its sibling
+`rtl/lib/rtl/bw_ram.sv`, which this document does not own. This
+document owns sram_init and gave no path, so four documents carried
+components/rtl/ and sc_decisions.md carried rtl/lib/rtl/.
 
-`bw_ram.sv` is `rtl/lib/rtl/bw_ram.sv`, which this document does not
-own either; it is named here only because the two paths in
-circulation were settled in the same pass. PROJECT_CORE.md lists
-./rtl/lib/Makefile and no common/ track exists, so the
-common/rtl/bw_ram.sv spelling in tage_table_interfaces.md was the
-wrong one. Session-072.
+PROJECT_CORE.md lists ./rtl/lib/Makefile in its RTL makefiles and
+has no components/ or common/ track in its Repository Layout, and
+the tree has no components/ directory: both modules are in
+rtl/lib/rtl/. A session-072 pass first settled sram_init at
+components/rtl/ on PROJECT_STATUS.md's "Shared components track"
+while rejecting common/rtl/ for bw_ram on PROJECT_CORE's layout --
+the same test applied to one module and not the other. Corrected
+later in session-072.
 
 sram_init.sv is a shared initializer module. There are two
 modes, normal and FAST_INIT. FAST_INIT is triggered by a
@@ -189,10 +190,10 @@ Modules confirmed NOT to instantiate sram_init:
   ittage.sv:        +ITTAGE_FAST_INIT=1 (same as table)
   sc.sv:            +SC_FAST_INIT=1
   sc_table.sv:      +SC_FAST_INIT=1   (same as top)
+  sc_brimli.sv:     +SC_FAST_INIT=1   (same as table)
+
+Note: sram_init.sv has no need to read a plusarg.
 
 The sc.sv line read "uses TAGE fast init". SC has its own plusarg
 and its own SC_SRAM_INIT_VALUE (sc_decisions.md, sc_interfaces.md).
-Session-072.
-  sc_brimli.sv:     +SC_FAST_INIT=1   (same as table)
-
-Note: sram_init.sv has no need to read a plusarg. 
+Session-072; the note was inside the list and split it.

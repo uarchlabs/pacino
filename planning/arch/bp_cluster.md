@@ -546,8 +546,11 @@ stages, not the decoder's P-stages:
   etc.
 
 The decoder's P0/P1 and the prediction pipeline's p0/p1 are now
-distinguished by case alone. Struct comments in bp_structs_pkg.sv
-were not inspected in this pass and may still carry s-stage labels.
+distinguished by case alone. bp_structs_pkg.sv CARRIES NO s2 OR s3
+LABEL: the conversion was applied and verified session-070
+(ftq_bpu_interfaces.md section 10, PROJECT_STATUS.md). This read
+that the struct comments were not inspected and might still carry
+them. Session-072.
 
 ---
 
@@ -727,3 +730,6 @@ Raw observations to be captured in docs/observations/ during BP work.
               statements on loop-predictor trust swept to
               lp_pred_is_loop; spec_pop_addr swept to
               ras_pop_addr_p2.
+
+  2026-09-20  session-072. D28: bp_structs_pkg.sv carries no s2 or s3
+              label; the conversion was verified session-070.

@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -176,8 +176,7 @@ index, so the index selects the same pointer pair at FTQ_IDX_BITS = 6
 bits rather than 13 -- ghist_ptr is 8 and phist_ptr is 5 (3.1). This
 read 14 for the 13; session-070. It read 7 for the index, which is
 FTQ_PTR_BITS, the pointer with its wrap bit, not this port
-(ftq_backend_interfaces.md); session-072. Formerly rather
-than 14, and bp_history needs no change. The entry still CARRIES the
+(ftq_backend_interfaces.md); session-072. The entry still CARRIES the
 pointer pair (section 2); nothing reads it across this interface.
 
 The index names the entry whose END-of-block pointer state is to be
@@ -1083,6 +1082,16 @@ two copies of one derivation, free to disagree -- and `ftq_shadow`
 needs a third. `ftq_ptr` therefore exports the RESOLVED range, half
 open and FTQ_PTR_BITS wide, and both consumers take an age.
 
+### 7.4 Why status is not inside ftq_entry
+
+Different storage class. `ftq_entry` is an SRAM read every cycle;
+`ftq_status` is 192 flops with a masked range clear. Keeping them
+apart makes the storage class STRUCTURAL rather than a comment, and
+`ftq_entry_formats.md` 4.1 is the argument for why they cannot share
+one.
+
+---
+
 ### 7.5 Ports this decomposition did not anticipate
 
 BP-107 built the eight remaining modules and needed seven signals
@@ -1112,81 +1121,9 @@ being rediscovered.
                              port so ftq.sv wires name to name
 ```
 
-### 7.4 Why status is not inside ftq_entry
-
-Different storage class. `ftq_entry` is an SRAM read every cycle;
-`ftq_status` is 192 flops with a masked range clear. Keeping them
-apart makes the storage class STRUCTURAL rather than a comment, and
-`ftq_entry_formats.md` 4.1 is the argument for why they cannot share
-one.
-
----
-
 ## 8. Document History
 
 ```
-  2026-08-21  BP-107 results folded in, six corrections. Section 1
-              counted three fast-path reads where five ports are
-              needed, and the slow path needs two; the count is now
-              separated from the three purposes. 4.5 gains H3, the
-              fault hold, which ftq_entry_formats.md 4.3 R1 stated
-              and this section never mirrored. 5.1: the fetchable
-              frontier is not alloc_ptr, because the entry is written
-              at p1 and allocated at p0. 5.6: four stages is THREE
-              FLOPS, and the shadow carries a full pointer, not an
-              index. 6.1 cited a "two-read-port decision of section
-              1" that section 1 never made. 7.3 corrected and 7.5
-              added, listing the seven ports the decomposition did
-              not anticipate.
-
-  2026-08-21  BP-106 results folded in. 5.1 gains the watermark
-              aliasing argument: the 64-entry full condition is only
-              safe because bkend_ftq_commit_idx now carries a
-              generation bit. 5.4 gains the RC_UNSPEC / commit-walk
-              interaction, which no document specified and which
-              BP-106's first draft got wrong. 7.2 corrected: the
-              crossing between ftq_ptr and ftq_commit is
-              bidirectional, not one-way.
-
-  2026-08-21  Cross-reference repair. No content change. 4.2 arm 0
-              cited the reset vector as 4.6; it is 4.7. The section
-              6 G23 entry cited 5.7, which is the FTB update
-              scheduler; the checkpoint is reclaimed with the entry
-              at 5.3 and 5.8 is what records it. 5.7.4's lead-in and
-              closing note still described the scheduler as unbuilt,
-              which BP-100 ended; the section header above them
-              already said BUILT.
-
-  2026-08-20  TD-FE-8 CLOSED by one generation bit on the IFU
-              path. Section 6 registry updated.
-
-  2026-08-20  Section 7 added: module decomposition. The FTQ is
-              several modules with a purely structural ftq.sv top,
-              partitioned by ONE rule -- every piece of state has
-              exactly one owner. Document History renumbered 7 to
-              8; nothing referenced 7.
-
-  2026-08-20  The last two open entry fields decided and placed
-              in ftq_entry_formats.md 4, closing TD-FE-1 in full.
-              Section 6 registry updated; TD-FE-8 opened for the
-              in-flight writeback race.
-
-  2026-08-20  Section 5.7.4 P4 CORRECTED, |-> to |=>. P1 and P4
-              as written could not both hold in any implementation:
-              one required a registered output and the other a
-              combinational one, on the same signal. Found by
-              building the scheduler (BP-100). 5.7.4 also gains a
-              note that the property signal names are the module's
-              port list, which is what BP-100 delivered.
-
-  2026-08-20  Section 3.2 CORRECTED. It specified the value form,
-              the FTQ presenting ghist_ptr and phist_ptr; BP-102
-              built the index form and closed TD-FE-7, so the FTQ
-              presents ftq_rollback_idx and the cluster reads its own
-              checkpoint copy. The conflict was between this document
-              and fe_decisions.md 13, which had recorded the choice
-              as open; building it settled the choice.
-
   2026-08-19  Created. Sections 4.3, 5 and 6 moved here whole from
               fe_decisions.md; no content changed in the move.
               Numbering: fe_decisions 4.3 -> section 1, 5 ->
@@ -1256,19 +1193,6 @@ one.
               was never a hard choice -- it was on the list because
               nothing in the tree named a reset PC at all.
 
-  2026-09-15  session-069. 5.1 gains xlate_ptr, a fourth pointer
-              between alloc_ptr and fetch_ptr, driving the IFU's
-              translation pipeline (ifu_decisions.md IFU-24).
-              FQ-1 extended. Out of reset and after a redirect
-              xlate_ptr and fetch_ptr are equal and the fetch
-              pipeline stalls one cycle.
-  2026-09-15  session-069. 4.7 clarified: the FTB_BLOCK_BYTES
-              alignment requirement is on the RESET VECTOR only.
-              Prediction blocks are not aligned; a block begins at
-              the lookup PC, which is a taken target and so any
-              2-byte address. Indexing on the block-aligned PC is a
-              separate fact and is why ftb_decisions.md 4.5 bounds
-              checks the fall-through.
   2026-08-19  5.7 REWRITTEN, superseding the G9 entry above. That
               entry said the one-per-cycle ceiling was recorded as a
               known limit "rather than reopening the single-port
@@ -1290,6 +1214,81 @@ one.
               the two escalations not taken. FE-5 amended narrowly
               as FE-5a; IC-FTB-09 resolved. The FTB is unchanged.
 
+  2026-08-20  TD-FE-8 CLOSED by one generation bit on the IFU
+              path. Section 6 registry updated.
+
+  2026-08-20  Section 7 added: module decomposition. The FTQ is
+              several modules with a purely structural ftq.sv top,
+              partitioned by ONE rule -- every piece of state has
+              exactly one owner. Document History renumbered 7 to
+              8; nothing referenced 7.
+
+  2026-08-20  The last two open entry fields decided and placed
+              in ftq_entry_formats.md 4, closing TD-FE-1 in full.
+              Section 6 registry updated; TD-FE-8 opened for the
+              in-flight writeback race.
+
+  2026-08-20  Section 5.7.4 P4 CORRECTED, |-> to |=>. P1 and P4
+              as written could not both hold in any implementation:
+              one required a registered output and the other a
+              combinational one, on the same signal. Found by
+              building the scheduler (BP-100). 5.7.4 also gains a
+              note that the property signal names are the module's
+              port list, which is what BP-100 delivered.
+
+  2026-08-20  Section 3.2 CORRECTED. It specified the value form,
+              the FTQ presenting ghist_ptr and phist_ptr; BP-102
+              built the index form and closed TD-FE-7, so the FTQ
+              presents ftq_rollback_idx and the cluster reads its own
+              checkpoint copy. The conflict was between this document
+              and fe_decisions.md 13, which had recorded the choice
+              as open; building it settled the choice.
+
+  2026-08-21  BP-107 results folded in, six corrections. Section 1
+              counted three fast-path reads where five ports are
+              needed, and the slow path needs two; the count is now
+              separated from the three purposes. 4.5 gains H3, the
+              fault hold, which ftq_entry_formats.md 4.3 R1 stated
+              and this section never mirrored. 5.1: the fetchable
+              frontier is not alloc_ptr, because the entry is written
+              at p1 and allocated at p0. 5.6: four stages is THREE
+              FLOPS, and the shadow carries a full pointer, not an
+              index. 6.1 cited a "two-read-port decision of section
+              1" that section 1 never made. 7.3 corrected and 7.5
+              added, listing the seven ports the decomposition did
+              not anticipate.
+
+  2026-08-21  BP-106 results folded in. 5.1 gains the watermark
+              aliasing argument: the 64-entry full condition is only
+              safe because bkend_ftq_commit_idx now carries a
+              generation bit. 5.4 gains the RC_UNSPEC / commit-walk
+              interaction, which no document specified and which
+              BP-106's first draft got wrong. 7.2 corrected: the
+              crossing between ftq_ptr and ftq_commit is
+              bidirectional, not one-way.
+
+  2026-08-21  Cross-reference repair. No content change. 4.2 arm 0
+              cited the reset vector as 4.6; it is 4.7. The section
+              6 G23 entry cited 5.7, which is the FTB update
+              scheduler; the checkpoint is reclaimed with the entry
+              at 5.3 and 5.8 is what records it. 5.7.4's lead-in and
+              closing note still described the scheduler as unbuilt,
+              which BP-100 ended; the section header above them
+              already said BUILT.
+
+  2026-09-15  session-069. 5.1 gains xlate_ptr, a fourth pointer
+              between alloc_ptr and fetch_ptr, driving the IFU's
+              translation pipeline (ifu_decisions.md IFU-24).
+              FQ-1 extended. Out of reset and after a redirect
+              xlate_ptr and fetch_ptr are equal and the fetch
+              pipeline stalls one cycle.
+  2026-09-15  session-069. 4.7 clarified: the FTB_BLOCK_BYTES
+              alignment requirement is on the RESET VECTOR only.
+              Prediction blocks are not aligned; a block begins at
+              the lookup PC, which is a taken target and so any
+              2-byte address. Indexing on the block-aligned PC is a
+              separate fact and is why ftb_decisions.md 4.5 bounds
+              checks the fall-through.
   2026-09-19  session-071. 3.2: the history restores from the entry
               the redirect names on every cause, _self set included,
               as the RAS does (ruled, Jeff). 4.6: the drop rule's
@@ -1301,6 +1300,10 @@ one.
               xlate_ptr and fetch_ptr take the minimum of their
               current value and the flush index, with F stated per
               cause; the W3 row is unbuilt, TD#126.
+
+  2026-09-20  session-072. E3: 7.4 and 7.5 in numeric order. E6:
+              a sentence fragment left by the D18 edit removed.
+
+  2026-09-20  session-072. E22: Document History sorted into date order;
+              newer entries had been appended at the wrong end.
 ```
-
-

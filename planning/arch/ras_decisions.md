@@ -825,6 +825,7 @@ Commit stack pointer width:
 
 ## 12. Document History
 
+```
   2026-06-23  session-050. Initial draft.
               Decisions recorded: static partition (G5),
               4b recursion counter (G6), fixed bundle split
@@ -843,7 +844,6 @@ Commit stack pointer width:
               pkg.sv). Section 11 corrected to reflect that
               bp_cluster.md duplication is intentional.
 
-```
   2026-09-15  session-069. Section 6 reworked. 6.1 REWRITTEN: both
               slots are branch fields of one 32-byte block, each
               located by pos; the old fixed split at pred_pc+32
@@ -886,4 +886,8 @@ Commit stack pointer width:
 
   2026-09-20  session-072. D22: RAS_PTR_BITS is in
               bp_defines_pkg.sv, not bp_structs_pkg.sv.
+
+  2026-09-20  session-072. E21: the history section was a paragraph
+              followed by a code block; the whole section is now
+              fenced.
 ```

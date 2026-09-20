@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_ctr_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-04-04
+ UPDATED: 2026-09-20
  CONTACT: Jeff Nye
 ```
 
@@ -20,8 +20,11 @@
 - pred_diff     : tage_prm_tkn != tage_alt_tkn
 - resolved_taken: supplied at update time via tage_upd_inp_t
 - X             : don't care
-- —             : no action
-- -             : not applicable (one provider is T0)
+- --            : no action
+- n/a           : not applicable (one provider is T0)
+
+These two markers were an EM DASH and a HYPHEN, which no plain-ASCII
+grep separates and the eye does not either. Session-072.
 
 ---
 
@@ -68,35 +71,35 @@ diff  = `tage_prm_tkn` != `tage_alt_tkn`
 
 | #     | UP | PT | RT | diff | pT | aT | pCMP | aCMP | pACT | aACT | t0ACT | Explanation                                       |
 |-------|----|----|----|------|----|----|------|------|------|------|-------|---------------------------------------------------|
-| 1.1   | 1  | 1  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted taken correctly     |
-| 1.2   | 1  | 1  | 1  | 0    | 1  | 1  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted taken correctly     |
-| 2.1   | 1  | 0  | 0  | 0    | 0  | 0  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted not-taken correctly |
-| 2.2   | 1  | 0  | 0  | 1    | 0  | 1  | >0   | >0   | INC  | —    | —     | Provider = primary, predicted not-taken correctly |
-| 3     | 1  | 1  | 0  | 1    | 1  | 0  | >0   | >0   | DEC  | INC  | —     | Provider = primary wrong, alt opposite prediction |
-| 4     | 1  | 0  | 1  | 1    | 0  | 1  | >0   | >0   | DEC  | INC  | —     | Provider = primary wrong, alt opposite prediction |
-| 5     | 1  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | DEC  | —    | —     | Provider = primary wrong, alt same or ignored     |
-| 6     | 1  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | DEC  | —    | —     | Provider = primary wrong, alt same or ignored     |
-| 7.1   | 0  | 1  | 1  | 1    | 0  | 1  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted taken correctly         |
-| 7.2   | 0  | 1  | 1  | 0    | 1  | 1  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted taken correctly         |
-| 8.1   | 0  | 0  | 0  | 0    | 0  | 0  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted not-taken correctly     |
-| 8.2   | 0  | 0  | 0  | 1    | 1  | 0  | >0   | >0   | —    | INC  | —     | Provider = alt, predicted not-taken correctly     |
-| 9     | 0  | 1  | 0  | 1    | 0  | 1  | >0   | >0   | INC  | DEC  | —     | Provider = alt wrong, primary opposite prediction |
-| 10    | 0  | 0  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | DEC  | —     | Provider = alt wrong, primary opposite prediction |
-| 11    | 0  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | —    | DEC  | —     | Provider = alt wrong, pred_diff ignored           |
-| 12    | 0  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | —    | DEC  | —     | Provider = alt wrong, pred_diff ignored           |
-| 13a   | 1  | 0  | 0  | 0    | 0  | 0  | 0    | 0    | —    | —    | DEC   | BIM predicted NT, resolved NT, correct |
-| 13b   | 1  | 0  | 1  | 0    | 0  | 0  | 0    | 0    | —    | —    | INC   | BIM predicted NT, resolved T, wrong |
-| 13c   | 1  | 1  | 0  | 0    | 1  | 1  | 0    | 0    | —    | —    | DEC   | BIM predicted T, resolved NT, wrong |
-| 13d   | 1  | 1  | 1  | 0    | 1  | 1  | 0    | 0    | —    | —    | INC   | BIM predicted T, resolved T, correct |
+| 1.1   | 1  | 1  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | --    | --     | Provider = primary, predicted taken correctly     |
+| 1.2   | 1  | 1  | 1  | 0    | 1  | 1  | >0   | >0   | INC  | --    | --     | Provider = primary, predicted taken correctly     |
+| 2.1   | 1  | 0  | 0  | 0    | 0  | 0  | >0   | >0   | INC  | --    | --     | Provider = primary, predicted not-taken correctly |
+| 2.2   | 1  | 0  | 0  | 1    | 0  | 1  | >0   | >0   | INC  | --    | --     | Provider = primary, predicted not-taken correctly |
+| 3     | 1  | 1  | 0  | 1    | 1  | 0  | >0   | >0   | DEC  | INC  | --     | Provider = primary wrong, alt opposite prediction |
+| 4     | 1  | 0  | 1  | 1    | 0  | 1  | >0   | >0   | DEC  | INC  | --     | Provider = primary wrong, alt opposite prediction |
+| 5     | 1  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | DEC  | --    | --     | Provider = primary wrong, alt same or ignored     |
+| 6     | 1  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | DEC  | --    | --     | Provider = primary wrong, alt same or ignored     |
+| 7.1   | 0  | 1  | 1  | 1    | 0  | 1  | >0   | >0   | --    | INC  | --     | Provider = alt, predicted taken correctly         |
+| 7.2   | 0  | 1  | 1  | 0    | 1  | 1  | >0   | >0   | --    | INC  | --     | Provider = alt, predicted taken correctly         |
+| 8.1   | 0  | 0  | 0  | 0    | 0  | 0  | >0   | >0   | --    | INC  | --     | Provider = alt, predicted not-taken correctly     |
+| 8.2   | 0  | 0  | 0  | 1    | 1  | 0  | >0   | >0   | --    | INC  | --     | Provider = alt, predicted not-taken correctly     |
+| 9     | 0  | 1  | 0  | 1    | 0  | 1  | >0   | >0   | INC  | DEC  | --     | Provider = alt wrong, primary opposite prediction |
+| 10    | 0  | 0  | 1  | 1    | 1  | 0  | >0   | >0   | INC  | DEC  | --     | Provider = alt wrong, primary opposite prediction |
+| 11    | 0  | 1  | 0  | 0    | 1  | 1  | >0   | >0   | --    | DEC  | --     | Provider = alt wrong, pred_diff ignored           |
+| 12    | 0  | 0  | 1  | 0    | 0  | 0  | >0   | >0   | --    | DEC  | --     | Provider = alt wrong, pred_diff ignored           |
+| 13a   | 1  | 0  | 0  | 0    | 0  | 0  | 0    | 0    | --    | --    | DEC   | BIM predicted NT, resolved NT, correct |
+| 13b   | 1  | 0  | 1  | 0    | 0  | 0  | 0    | 0    | --    | --    | INC   | BIM predicted NT, resolved T, wrong |
+| 13c   | 1  | 1  | 0  | 0    | 1  | 1  | 0    | 0    | --    | --    | DEC   | BIM predicted T, resolved NT, wrong |
+| 13d   | 1  | 1  | 1  | 0    | 1  | 1  | 0    | 0    | --    | --    | INC   | BIM predicted T, resolved T, correct |
 | 13e   | 0  | x  | x  | x    | x  | x  | 0    | 0    |ASSERT|ASSERT|ASSERT | Invalid: UP=0 when pCMP=aCMP=0. ADR-001 violation. tage_assert.sv fires. No RTL action. |
-| 14.1  | 1  | 1  | 0  | 0    | 1  | 1  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary wrong, alt same |
-| 14.2  | 1  | 1  | 0  | 1    | 1  | 0  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary wrong, alt opposite |       
-| 15.1  | 1  | 0  | 1  | 0    | 0  | 0  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary predicted NT, resolved T, wrong |
-| 15.2  | 1  | 0  | 1  | 1    | 0  | 1  | >0   | 0    | DEC  | —    | -     | Alt=BIM, primary predicted NT, resolved T, wrong, alt opposite |
-| 16.1  | 1  | 1  | 1  | 0    | 1  | 1  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted T, resolved T, correct, alt same |
-| 16.2  | 1  | 1  | 1  | 1    | 1  | 0  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted T, resolved T, correct, alt opposite |
-| 17.1  | 1  | 0  | 0  | 0    | 0  | 0  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted NT, resolved NT, correct, alt same |
-| 17.2  | 1  | 0  | 0  | 1    | 0  | 1  | >0   | 0    | INC  | —    | -     | Alt=BIM, primary predicted NT, resolved NT, correct, alt opposite |
+| 14.1  | 1  | 1  | 0  | 0    | 1  | 1  | >0   | 0    | DEC  | --    | n/a   | Alt=BIM, primary wrong, alt same |
+| 14.2  | 1  | 1  | 0  | 1    | 1  | 0  | >0   | 0    | DEC  | --    | n/a   | Alt=BIM, primary wrong, alt opposite |       
+| 15.1  | 1  | 0  | 1  | 0    | 0  | 0  | >0   | 0    | DEC  | --    | n/a   | Alt=BIM, primary predicted NT, resolved T, wrong |
+| 15.2  | 1  | 0  | 1  | 1    | 0  | 1  | >0   | 0    | DEC  | --    | n/a   | Alt=BIM, primary predicted NT, resolved T, wrong, alt opposite |
+| 16.1  | 1  | 1  | 1  | 0    | 1  | 1  | >0   | 0    | INC  | --    | n/a   | Alt=BIM, primary predicted T, resolved T, correct, alt same |
+| 16.2  | 1  | 1  | 1  | 1    | 1  | 0  | >0   | 0    | INC  | --    | n/a   | Alt=BIM, primary predicted T, resolved T, correct, alt opposite |
+| 17.1  | 1  | 0  | 0  | 0    | 0  | 0  | >0   | 0    | INC  | --    | n/a   | Alt=BIM, primary predicted NT, resolved NT, correct, alt same |
+| 17.2  | 1  | 0  | 0  | 1    | 0  | 1  | >0   | 0    | INC  | --    | n/a   | Alt=BIM, primary predicted NT, resolved NT, correct, alt opposite |
 | 18    | x  | x  | x  | x    | x  | x  | 0    | >0   |ASSERT|ASSERT|ASSERT | invalid condition pCMP=0 aCMP>0, handled by assert|
 
 
