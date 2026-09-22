@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,80 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-073: the regression command. TOOLS-006.
+
+THE TREE HAS ONE REGRESSION COMMAND. tools/regress.sh, run from the
+repo root with no arguments, finds every Makefile under rtl/ and runs
+every test target in each: 78 targets, 78 PASS, 0 warnings, exit 0,
+223 s serial. Each result matches a baseline taken before any edit,
+target for target.
+
+FOUR TESTBENCHES REPORTED A FAILED CHECK AND EXITED 0: tb_components
+(lib), tb_rvc_expander, tb_instr_decoder and tb_predecode (decode).
+Found by injecting a failing check into each on scratch copies, not
+by reading their output. A regression reading exit status called all
+four PASS with a failed check in the log. Their end-of-run code now
+exits through $fatal(1), the pattern bpu and ftq already used
+(BP-094, BP-095). What they check is unchanged. Their printed counts
+were correct throughout, so results recorded from printed counts
+stand; only mechanical checking was blind. This is TD#99's second
+motive, confirmed a second time.
+
+regress.sh, as built:
+  every target make defines must be in REGRESS_TARGETS or in
+  REGRESS_EXCLUDE; a target in neither fails the run and is named
+  the classification is read from make's rule database, not from a
+  name pattern, so the `all` gap cannot return under a new name
+  a target fails on a non-zero exit OR on any %Warning in its log
+  tools/known_failures.txt waives a listed failure; a listed target
+  that now passes, or that was not run, fails the run
+  targets run one at a time; logs go to a temp dir, printed per run
+  it takes an optional root, so it can run against a scratch copy
+
+Plumbing (REGRESS_TARGETS, REGRESS_EXCLUDE with a reason for each
+exclusion, and regress_list) was appended to all five rtl/ Makefiles.
+No existing line changed in the task itself.
+
+TD#99 confirmed against the Makefiles: bpu `all` names 38 of 47,
+omitting sim_ittage, sim_tage_manual and the seven cov_* targets.
+decode, ftq and lib `all` are complete. rtl/Makefile defines no test
+target of its own; it recurses, and regress.sh does not use it.
+
+Follow-on, interactive, on Jeff's instruction. These changed existing
+recipes, which the task constraints did not allow:
+  rtl/lib and rtl/core/frontend/decode now include rtl/Vars.mk and
+  call $(VERILATOR). BOTH UNITS HAD BEEN TAKING VERILATOR FROM PATH
+  (5.020 at /usr/local/bin) WHILE CLAUDE.md REQUIRES 5.048. Every
+  decode and lib result recorded before this session is a 5.020
+  result. Both units now need RVA_ROOT set, as bpu and ftq did.
+  rtl/Makefile: ftq added to `all` and to `clean`, which had skipped
+  the unit entirely. `cov` unchanged; ftq has no coverage target.
+  tools/hooks/pre-push installs by `git config core.hooksPath
+  tools/hooks`, not a symlink. Not installed by the IA.
+  tools/known_failures.txt created by Jeff from the proposed file.
+  It holds comment lines only: no waived failure in the tree.
+  CLAUDE.md verification rules rewritten by Jeff to cite regress.sh.
+
+Rerun after the follow-on: 78 targets, 78 PASS, 0 warnings, exit 0,
+152 s. First run of the decode and lib suites under 5.048; no warning
+and no failed check. Decode wall time fell 90 s -> 29 s with
+identical check counts (43, 567, 476). NOT EXPLAINED, open.
+
+Detection proven by injection, each on its own scratch copy outside
+the repo, each reverted: an unclassified target; a failed check and a
+lint warning in every unit; and the waived, unlisted and now-passes
+known-failure cases. NOT TESTED: the stale-entry path, an entry
+naming a target that was not run.
+
+tools/handoff.sh was already modified in the working tree before the
+task and was not touched.
+
+CLOSED: TD#99, by TOOLS-006.
+New: TD#129, TD#130. No BP or INFRA number consumed.
+Next free BP is BP-109. Next free INFRA is INFRA-013. Next free
+TOOLS is TOOLS-007.
 
 ---
 ## Session-071: audit batch A1-A10, three RTL findings. Documents only.
@@ -1706,7 +1780,13 @@ assessment of each document. Correct any that are wrong.
 |    |           | TEMPORARY (BP-077): lowest-indexed valid update slot     |
 |    |           | drives the shared threshold/TC/chooser/BrIMLI            |
 |    |           | adaptation. Evaluate at PD/perf. Related: #93, #86.      |
-| 99 | bpu       | Create a PR/CI/CD process. Motivating evidence           |
+| 99 | bpu       | CLOSED TOOLS-006 (session-073). tools/regress.sh runs   |
+|    |           | every target of every rtl/ Makefile (78), fails on an    |
+|    |           | unclassified target, and is gated at push by            |
+|    |           | tools/hooks/pre-push. The four testbenches that could    |
+|    |           | not fail through exit status were found by injection     |
+|    |           | and fixed; see session-073. Was: create a PR/CI/CD       |
+|    |           | process. Motivating evidence                            |
 |    |           | (session-060): `make all` silently omits targets.        |
 |    |           | `all` names 38 of 47, enumerated from the Makefile       |
 |    |           | BP-097. The 37 recorded through session-064 was wrong.   |
@@ -2282,6 +2362,27 @@ assessment of each document. Correct any that are wrong.
 |     |            | IFU is complete and can drive a performance measurement|
 |     |            | harness. Gate any history-storage area commitment on   |
 |     |            | this.                                                  |
+| 129 | build    | OPEN. THE TOP-LEVEL rtl/Makefile IS STILL NOT COMPLETE.  |
+|     |          | Session-073 added ftq to its `all` and `clean`, but      |
+|     |          | `cov` reaches only bpu cov_bpu, so cov_bp_cluster is     |
+|     |          | unreachable from the top. Found by TOOLS-006.            |
+|     |          | Either complete the top-level targets or retire them in  |
+|     |          | favour of tools/regress.sh, which runs every target of   |
+|     |          | every unit. Nothing depends on them today.               |
+| 130 | tools    | OPEN. regress.sh REPORTING GAPS. None affect pass/fail;  |
+|     |          | all are display or validation, found by TOOLS-006.       |
+|     |          |   - six targets print no check total the parser reads:   |
+|     |          |     sim_history, sim_tage, sim_tage_fast, cov_history,   |
+|     |          |     sim_tage_tasks and cov_tage. They still print        |
+|     |          |     per-test PASS/FAIL and exit non-zero on failure.     |
+|     |          |   - cov_bpu reports the last sub-run's count (259/0) and |
+|     |          |     not a total over the five cov_* it re-runs.          |
+|     |          |   - the third field of a known_failures.txt line prints  |
+|     |          |     as the TD without validation. A TD number is no      |
+|     |          |     longer required, so an entry without one prints its  |
+|     |          |     first description word in the TD column.             |
+|     |          |   - the stale-entry path (an entry naming a target that  |
+|     |          |     was not run) is implemented but never injected.      |
 
 ---
 

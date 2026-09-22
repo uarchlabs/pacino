@@ -595,7 +595,7 @@ ascend, [0:NUM_PRED_SLOTS-1].
 | Spike      | --                             | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
 |            |                                |                                   | issue.                        |
 | Surfer     | --                             | $(USER)/.cargo/bin/surfer         |                               |
-| Var.mk     | --                             | $(RVA_ROOT)/rtl/Var.mk            | Common Makefile variables.    |
+| Vars.mk    | --                             | $(RVA_ROOT)/rtl/Vars.mk            | Common Makefile variables.    |
 |            |                                |                                   | VERILATOR, SPIKE, SURFER      |
 |            |                                |                                   | paths. All RTL Makefiles      |
 |            |                                |                                   | include this file.            |

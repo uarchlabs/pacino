@@ -517,15 +517,19 @@ module tb;
     $display("tb_components: %0d/%0d PASSED",
       bwr_pass + alu_pass + dlm_pass + si_pass,
       bwr_total + alu_total + dlm_total + si_total);
+    // TOOLS-006: a failing run must exit non-zero. $finish exits 0, so
+    // the failure exit is $fatal(1). $finish is deferred to the end of
+    // the time step, so the two exits sit in mutually exclusive branches.
     if ((bwr_pass + alu_pass + dlm_pass + si_pass) ==
-        (bwr_total + alu_total + dlm_total + si_total))
+        (bwr_total + alu_total + dlm_total + si_total)) begin
       $display("ALL PASS");
-    else
+      $finish;
+    end else begin
       $display("FAILURES: %0d",
         (bwr_total + alu_total + dlm_total + si_total) -
         (bwr_pass  + alu_pass  + dlm_pass  + si_pass));
-
-    $finish;
+      $fatal(1, "tb_components: checks failed");
+    end
   end  // initial
 
 endmodule

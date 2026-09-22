@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# tools/hooks/pre-push -- refuse a push when the RTL regression fails
+#
+# Runs tools/regress.sh from the repo root and prints its summary. A
+# non-zero exit from regress.sh refuses the push. This file is not
+# installed by the project tooling. To install, from the repo root:
+#   git config core.hooksPath tools/hooks
+# git then runs hooks from tools/hooks/ instead of .git/hooks/.
+# git passes the remote name and url as arguments and the refs on stdin;
+# none of them change what is run, so they are ignored.
+
+ROOT=$(git rev-parse --show-toplevel) || exit 1
+cd "$ROOT" || exit 1
+
+OUT=$(mktemp "${TMPDIR:-/tmp}/pre-push.XXXXXX")
+echo "pre-push: running tools/regress.sh (full output in $OUT)"
+./tools/regress.sh > "$OUT" 2>&1
+rc=$?
+
+# Print from the summary banner to the end. If regress.sh stopped before
+# printing a summary, print everything it wrote.
+if grep -q '^REGRESSION SUMMARY' "$OUT"; then
+  sed -n '/^=\{10,\}$/,$p' "$OUT"
+else
+  cat "$OUT"
+fi
+
+if [ $rc -ne 0 ]; then
+  echo "pre-push: regression failed (exit $rc). Push refused."
+  exit 1
+fi
+echo "pre-push: regression passed."
+exit 0

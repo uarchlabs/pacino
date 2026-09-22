@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 
 # Makefile - decoder unit
-# Requires Verilator 5.020
+# Requires Verilator 5.048 ($(VERILATOR) from rtl/Vars.mk)
 #
 # Targets:
 #   lint_exp        - lint rvc_expander only
@@ -18,10 +18,7 @@
 #   coverage        - run RVA23 coverage check script
 #   clean           - remove build artifacts
 
-VERILATOR := $(shell which verilator 2>/dev/null)
-ifeq ($(VERILATOR),)
-  $(error [error] verilator not found. Install verilator before running make)
-endif
+include $(RVA_ROOT)/rtl/Vars.mk
 
 ifeq ($(VERBOSE),1)
   Q :=
@@ -144,3 +141,22 @@ help:
 	@echo "  sim_all        - run sim_predecode, sim_dec, coverage"
 	@echo "  coverage       - run RVA23 coverage check script"
 	@echo "  clean          - remove build artifacts"
+
+# -- Regression plumbing (TOOLS-006) ----------------------------------
+# tools/regress.sh runs every REGRESS_TARGETS entry with its own make
+# call and fails if a target defined in this file is in neither list.
+# Exclusions:
+#   all, lint, sim, sim_all - aggregates; their recipes only run the
+#                             targets listed in REGRESS_TARGETS.
+#   help                    - prints the target list.
+#   clean, regress_list     - housekeeping and this plumbing.
+REGRESS_TARGETS := \
+  lint_exp lint_dec lint_predecode \
+  sim_exp sim_dec sim_predecode \
+  coverage
+REGRESS_EXCLUDE := all lint sim sim_all help clean regress_list
+
+.PHONY: regress_list
+regress_list:
+	@echo "test: $(REGRESS_TARGETS)"
+	@echo "exclude: $(REGRESS_EXCLUDE)"

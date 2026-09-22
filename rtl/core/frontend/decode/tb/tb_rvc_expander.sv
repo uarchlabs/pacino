@@ -493,12 +493,15 @@ initial begin
     $display("====================================================");
     $display("rvc_expander: PASS=%0d  FAIL=%0d", pass_count, fail_count);
     $display("====================================================");
-    if (fail_count != 0)
+    // TOOLS-006: a failing run must exit non-zero. $finish exits 0, so
+    // the failure exit is $fatal(1), in a branch exclusive of $finish.
+    if (fail_count != 0) begin
         $display("STATUS: FAIL");
-    else
+        $fatal(1, "tb_rvc_expander: %0d checks failed", fail_count);
+    end else begin
         $display("STATUS: PASS");
-
-    $finish;
+        $finish;
+    end
 end
 
 endmodule

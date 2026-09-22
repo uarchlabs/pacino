@@ -500,11 +500,15 @@ initial begin
   // -------------------------------------------------------------------------
   @(posedge clk);
   $display("predecode tb: %0d passed, %0d failed", pass_count, fail_count);
-  if (fail_count != 0)
+  // TOOLS-006: a failing run must exit non-zero. $finish exits 0, so
+  // the failure exit is $fatal(1), in a branch exclusive of $finish.
+  if (fail_count != 0) begin
     $display("RESULT: FAIL");
-  else
+    $fatal(1, "tb_predecode: %0d checks failed", fail_count);
+  end else begin
     $display("RESULT: PASS");
-  $finish;
+    $finish;
+  end
 end
 
 endmodule

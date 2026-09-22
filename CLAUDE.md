@@ -175,38 +175,28 @@ important. It must be defines first then structs
 - Include directed tests for boundary conditions and known edge cases.
 - Include a basic sanity check that runs in under 10 seconds with
   Verilator.
-- A verification, testbench, debug, or cleanup task must run the
-  COMPLETE existing test suite for every module named in the task
-  header or Deliverables, not only the directed tests the task
-  adds. Report the full pass/fail count for each suite run.
-- A non-green suite for an in-scope module blocks Status: complete.
-  Mark the task in-progress or abandoned and report the failures.
-- Exception: failures explicitly listed in the task Constraints as
-  known/waived, each citing a tech-debt number, do not block
-  completion. Any failure NOT on that waiver list blocks.
-- Status counts written to PROJECT_STATUS must come from a run in
-  the current session. Do not carry a prior session's count.
-- A PACKAGE EDIT WIDENS THE RUN TO BOTH UNITS. Every target in
-  the bpu and the ftq compiles bp_defines_pkg.sv and
-  bp_structs_pkg.sv as its first two sources, so an addition made
-  under a task scoped to one unit reaches the other and that
-  task's own suite cannot see it. When a task touches either
-  package, run BOTH units and report both. If the other unit is
-  not run, say so in Results Capture rather than leaving its last
-  reported figure to stand.
-- ALL TARGETS MUST RUN. Every generated prompt's run step
-  invokes every sim and lint target defined in the unit's
-  Makefile, whether or not that target is a dependency of
-  `all`. `make all` is not sufficient -- a target omitted
-  from `all` is still run. Enumerate the Makefile's targets
-  and run each one. Report the pass count and fail count for
-  every target, from a run in the current session. No prompt
-  scopes the run to a subset. A port rename, a one-line fix,
-  a comment change -- every target runs regardless. Any sim
-  target with a non-zero fail count, or any lint target with
-  a non-zero warning or error count, blocks Status: complete,
-  unless that specific failure is listed in Constraints with
-  a TD number.
+- A testbench must exit non-zero on any failed check: $fatal(1) on the
+  failure path, $finish only on the pass path, in exclusive branches.
+- THE REGRESSION IS tools/regress.sh. Every task that ends in a
+  status claim runs it from the repo root with no arguments:
+    ./tools/regress.sh
+  It finds every Makefile under rtl/ and runs every test target in
+  each, one make call per target. This covers targets `all` omits
+  and both units after a package edit. Do not enumerate targets by
+  hand and do not scope the run to a subset.
+- Report the summary block it prints: the git sha line, one line per
+  target, and the totals. Counts written to Results Capture or
+  PROJECT_STATUS come from a run in the current session. Do not carry
+  a prior session's count.
+- A non-zero exit blocks Status: complete. Mark the task in-progress
+  or abandoned and report the failures.
+- The only waived failures are those listed in tools/known_failures.txt.
+  A task file cannot add a waiver. The IA never edits
+  tools/known_failures.txt; it proposes entries in Results Capture and
+  Jeff applies them.
+- A new lint, sim or cov target must be added to REGRESS_TARGETS in
+  its Makefile, or to REGRESS_EXCLUDE with a reason. regress.sh fails
+  on any target in neither list.
 
 ## Verification - self-contained tests (no test debt)
 
@@ -284,9 +274,11 @@ important. It must be defines first then structs
 
 - Before raising a topic the user did not ask about, check whether it is 
   already closed. If it is, do not raise it. If you think a closed item is 
-  wrong, say so in one sentence and wait — do not re-argue it.
+  wrong, say so in one sentence and wait, do not re-argue it.
 
-- Do not use unnecessary jargon, and picturesque phrasing, "That was an excuse wearing a diagnosis costume." That is one example of many, not the entire example set.
+- Do not use unnecessary jargon, and picturesque phrasing, "That was an excuse
+  wearing a diagnosis costume." That is one example of many, not the entire
+  example set.
 
  
 ## Current Scope

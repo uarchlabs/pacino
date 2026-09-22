@@ -334,3 +334,23 @@ sim_ftq:
 clean:
 	@echo "[cleaning]   ftq"
 	$(Q)rm -rf $(VER_OUT)*
+
+# -- Regression plumbing (TOOLS-006) ----------------------------------
+# tools/regress.sh runs every REGRESS_TARGETS entry with its own make
+# call and fails if a target defined in this file is in neither list.
+# Exclusions:
+#   all                 - aggregate.
+#   clean, regress_list - housekeeping and this plumbing.
+REGRESS_TARGETS := \
+  lint_ftq_ftb_sched sim_ftq_ftb_sched lint_ftq_ptr sim_ftq_ptr \
+  lint_ftq_commit sim_ftq_commit lint_ftq_entry sim_ftq_entry \
+  lint_ftq_meta sim_ftq_meta lint_ftq_status sim_ftq_status \
+  lint_ftq_shadow sim_ftq_shadow lint_ftq_npc sim_ftq_npc \
+  lint_ftq_ifu sim_ftq_ifu lint_ftq_resolve sim_ftq_resolve \
+  lint_ftq sim_ftq
+REGRESS_EXCLUDE := all clean regress_list
+
+.PHONY: regress_list
+regress_list:
+	@echo "test: $(REGRESS_TARGETS)"
+	@echo "exclude: $(REGRESS_EXCLUDE)"

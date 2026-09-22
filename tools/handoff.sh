@@ -15,11 +15,10 @@ echo "All experiment files need to follow the task template exactly. " >> ho
 echo "" >> ho
 echo "The PA session hand off file path: " >> ho
 echo "- pa_handoffs/session_handoff-$1.md"     >> ho
-## -------------------------------------------------------------
-#echo "" >> ho
-#echo "Cache RTL has been developed using the external cgen tool. " >> ho
-#echo "This is an overview"           >> ho
-#echo "planning/arch/pacino_cache.md" >> ho
+# -------------------------------------------------------------
+echo "" >> ho
+echo "Notes from IA on next steps to begin IFU RTL" >> ho
+echo "misc/ifu_notes.md" >> ho
 ## -------------------------------------------------------------
 echo "" >> ho
 cat planning/PROJECT_CORE.md          >> ho
@@ -27,3 +26,4 @@ cat planning/PROJECT_STATUS.md        >> ho
 cat CLAUDE.md                         >> ho
 cat templates/TASK_TEMPLATE.md        >> ho
 cat pa_handoffs/session_handoff-$1.md >> ho
+cat misc/ifu_notes.md >> ho

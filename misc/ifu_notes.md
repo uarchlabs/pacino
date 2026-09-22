@@ -3,8 +3,8 @@
 <!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 # IFU RTL Readiness Notes, Revision 2
 ```
- FILE:    ifu_notes_2.md
- SOURCE:  ifu_notes.md (session-072, PA assessment), IA read of the
+ FILE:    ifu_notes.md
+ SOURCE:  previous ifu_notes.md (session-072, PA assessment), IA read of the
           IFU boundary documents and the front-end RTL, 2026-09-21
  STATUS:  DRAFT
  UPDATED: 2026-09-21
@@ -15,10 +15,6 @@ Not a decision record. An assessment for the PA session that scopes
 IFU RTL generation, the IFU unit test and front-end integration.
 Nothing here issues a number or rules anything. Every item names the
 document that owns it; that document decides.
-
-This file supersedes ifu_notes.md. Everything in ifu_notes.md is
-carried here, either unchanged or corrected against a complete read.
-Items that are new in this revision are marked NEW.
 
 ---
 

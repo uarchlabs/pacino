@@ -1,0 +1,16 @@
+# tools/known_failures.proposed.txt -- TOOLS-006
+#
+# Proposed content for tools/known_failures.txt, which Jeff creates.
+# Line format, one line per failing target:
+#   <makefile dir> <target> TD#? <one-line description of the failure>
+# Lines starting with # and blank lines are ignored by tools/regress.sh.
+#
+# Source: the TOOLS-006 Problem 1 baseline, every test target in every
+# rtl/ Makefile run individually with make -B. 78 targets ran, 78 passed
+# with 0 Verilator warnings. No failing target was found, so no entry
+# is proposed.
+#
+# The lib and decode testbenches exited 0 on a failed check before
+# TOOLS-006 changed their end-of-run code. The baseline passes for those
+# four sim targets were confirmed from the printed counts (all FAIL=0),
+# not from the exit status alone.

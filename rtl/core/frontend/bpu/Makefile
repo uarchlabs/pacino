@@ -966,3 +966,35 @@ clean_cov_bpu:
 clean_cov: clean_cov_tage clean_cov_tage_table \
   clean_cov_loop_pred clean_cov_history \
   clean_cov_ubtb clean_cov_bp_cluster clean_cov_bpu
+
+# -- Regression plumbing (TOOLS-006) ----------------------------------
+# tools/regress.sh runs every REGRESS_TARGETS entry with its own make
+# call and fails if a target defined in this file is in neither list.
+# `all` omits sim_ittage, sim_tage_manual and every cov_* target; this
+# list does not. cov_bpu re-runs five cov_* targets and then merges
+# them; it is kept because the merge step is its own.
+# Exclusions:
+#   all                 - aggregate.
+#   clean, clean_cov*   - housekeeping.
+#   regress_list        - this plumbing.
+REGRESS_TARGETS := \
+  lint lint_loop_pred lint_tage_table lint_sc_table lint_sc_brimli \
+  lint_sc_cntrl lint_sc lint_ittage_table lint_ittage_cntrl lint_ittage \
+  lint_tage_cntrl lint_tage lint_ras lint_ftb_array lint_ftb_plru \
+  lint_ftb_cntrl lint_ftb lint_bp_cluster \
+  sim sim_history sim_ubtb sim_loop_pred sim_tage_table sim_sc_table \
+  sim_sc_table_fast sim_sc_brimli sim_sc_brimli_fast sim_sc_cntrl sim_sc \
+  sim_sc_fast sim_ittage_table sim_ittage_cntrl sim_ittage \
+  sim_bp_cluster sim_ras sim_ftb sim_tage sim_tage_fast sim_tage_tasks \
+  sim_tage_manual \
+  cov_history cov_ubtb cov_loop_pred cov_tage_table cov_tage \
+  cov_bp_cluster cov_bpu
+REGRESS_EXCLUDE := \
+  all clean clean_cov clean_cov_tage clean_cov_tage_table \
+  clean_cov_loop_pred clean_cov_history clean_cov_ubtb \
+  clean_cov_bp_cluster clean_cov_bpu regress_list
+
+.PHONY: regress_list
+regress_list:
+	@echo "test: $(REGRESS_TARGETS)"
+	@echo "exclude: $(REGRESS_EXCLUDE)"
