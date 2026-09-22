@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -181,18 +181,20 @@ fields of the one indexed entry, not two slots.
                            reconstructed by ftb_cntrl from the stored
                            partial pftAddr -- six bits from the
                            aligned region base, NO CARRY BIT
-                           (ftb_decisions.md 5.5, ruled session-070;
-                           TD#124 tracks the RTL, still 5 + carry).
-                           SPECIFIED: bounds checked per
-                           ftb_decisions.md 4.5 (FTB-G1, FTB-G2),
-                           as ubtb_interfaces.md applies to blk_p1:
-                           an end not above the start is replaced
-                           by start + FTB_BLOCK_BYTES. AS BUILT:
-                           ftb_cntrl.sv line 500 reconstructs
-                           unconditionally. TD#124. This entry
-                           cited 4.5 as the authority for there
-                           being no check; 4.5 says the opposite.
-                           Session-070.
+                           (ftb_decisions.md 5.5, ruled session-070,
+                           BUILT by BP-110). Bounds checked per
+                           ftb_decisions.md 4.5: an end not above
+                           the start (FTB-G1), or beyond start +
+                           FTB_BLOCK_BYTES + 2 (FTB-G3, ruled
+                           session-073), is replaced by start +
+                           FTB_BLOCK_BYTES. BOTH CHECKS ARE BUILT
+                           by BP-110; before it ftb_cntrl
+                           reconstructed unconditionally, so this
+                           entry's earlier "AS BUILT" note was
+                           correct and the restoration recorded in
+                           session-069 had never reached the RTL.
+                           The uBTB does NOT have this check; see
+                           ubtb_interfaces.md.
                            Authoritative for the cluster; RAS push
                            uses this value (IC-FTB-03).
 
@@ -244,7 +246,22 @@ IC-FTB-05).
   input  logic                  ftb_upd_is_br_u0
                         -- 1 = this resolve is a conditional branch.
   input  logic                  ftb_upd_br_idx_u0
-                        -- which conditional field, 0 or 1.
+                        -- which conditional PORT SLOT, 0 or 1, as
+                           the update's own block start saw it.
+                           RATIFIED session-073: it names a slot,
+                           not a storage field. Under the O-3b read
+                           compaction the FTQ only ever sees port
+                           slots, so this is the only reading under
+                           which the producer needs no knowledge of
+                           the region window. ftb_cntrl maps the
+                           slot back to a storage field through the
+                           same window: a slot mapping to a visible
+                           field is an in-place update; otherwise
+                           the branch fills an empty field, else a
+                           field hidden from this start. For an
+                           aligned start with nothing hidden the
+                           mapping is the identity. Built by
+                           BP-110.
   input  logic                  ftb_upd_taken_u0
                         -- resolved direction. 1 = taken. Drives the
                            bimodal conf step (increment toward 111 on
@@ -572,18 +589,26 @@ IC-FTB-15 (session-053, FTB-4 resolved):
   field may be left write-only (0-stuffed) or read-only: a field is not
   "settled" until it has a named producer and consumer.
 
-IC-FTB-16 (2026-08-19):
-  br0 holds the earlier branch. The conditional fields are filled in
-  PROGRAM ORDER: for a block carrying two conditional branches, br0
-  holds the one at the lower in-block position and br1 the higher. A
-  block carrying one conditional always fills br0, never br1. The
-  producer of ftb_upd_br_idx_u0 -- the FTQ -- is responsible; the FTB
-  does not reorder and does not check.
+IC-FTB-16 (2026-08-19, amended session-073):
+  br0 holds the earlier branch. STORAGE IS IN ASCENDING REGION
+  POSITION (ftb_decisions.md 4.6 O-3a): br0 holds the lower stored
+  position and br1 the higher, whatever start wrote them. A start
+  that fills one conditional into an empty entry fills br0.
 
-  Under the read window of ftb_decisions.md 4.6, br0 can be
-  suppressed while br1 is visible, so program order holds per region
-  rather than per block start. Restating this invariant for starts
-  that share an entry is ftb_decisions.md 4.6 O-3, open, TD#125.
+  THE FTB REORDERS AND CHECKS. This invariant previously made the
+  FTQ responsible and said the FTB did neither; O-3 moved both
+  inside ftb_cntrl, which swaps storage into ascending order at the
+  write and compacts the window-surviving fields onto the ports at
+  the read (O-3b). Built by BP-110.
+
+  ON THE PORTS, program order is per START. Under the read window of
+  ftb_decisions.md 4.6 br0 can be suppressed while br1 is visible;
+  compaction then reports br1 on PORT SLOT 0, so slot 0 is always
+  the first branch at or after the looked-up start. "br0 maps to
+  slot 0" holds only when br0 is visible. In storage program order
+  is per REGION.
+
+  ftb_upd_br_idx_u0 (2.5) names a port slot in the same terms.
 
   Two consequences follow.
 

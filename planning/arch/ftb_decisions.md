@@ -330,10 +330,15 @@ not an accuracy tradeoff. The cost is a reconstruct-and-bounds-check
 step in logic.
 
 The jump field target is stored as a 21-bit displacement
-(FTB_JMP_TGT_BITS) plus a fit/overflow/underflow status, the same
-lossless offset-from-block-start encoding as the conditional targets
-(4.2 above), reconstructed to full width at read. It is load-bearing
-for the cluster:
+(FTB_JMP_TGT_BITS) plus a fit/overflow/underflow status, reconstructed
+to full width at read. RULED session-073 (Jeff), extending O-1 to the
+jump: EVERY TARGET IS A DISPLACEMENT FROM ITS OWN INSTRUCTION. A
+conditional is measured from the branch PC and a jump from the jump
+PC, each of which is the region base plus that field's stored
+position, so every sharer of the entry agrees on it. BP-110 built the
+conditional half; the jump target is still measured from the region
+base in the RTL, which is coherent across sharers but is not this
+rule. TD#137. It is load-bearing for the cluster:
 
 ITTAGE has no IT0 base table. An ITTAGE miss therefore produces no
 ITTAGE target. The FTB jump target is the architectural fallback for
@@ -439,6 +444,17 @@ No carry term: 5.5 deleted the carry bit session-070.
   FTB-G1  The reconstructed end is compared against the looked-up
           block start. If the end is not above the start, pftAddr is
           discarded and the fallthrough is start + FTB_BLOCK_BYTES.
+
+  FTB-G3  RULED session-073, 4.6 O-2. An end beyond start +
+          FTB_BLOCK_BYTES + 2 also takes the FTB-G2 fallback. An end
+          recorded from a start at region offset 30 can otherwise lie
+          64 bytes above a later start at offset 0 and pass FTB-G1.
+
+  FTB-G1 AND FTB-G3 WERE BUILT BY BP-110 (session-073). Until then
+  ftb_cntrl reconstructed UNCONDITIONALLY: the session-069 restoration
+  of FTB-G1 was recorded here and never reached the RTL, which is what
+  the "no error check" comment at ftb_cntrl.sv 500 meant. A document
+  saying a rule is restored is not evidence that it is built.
 
   FTB-G2  The fallback is start + FTB_BLOCK_BYTES, one PREDICTION
           block of 32 bytes. It is NOT Xiangshan's start +
@@ -546,7 +562,13 @@ UNDER TD#125, each a consequence of (R):
 
        5.4a and IC-FTB-16 are amended to match, and the read path
        gains the compaction, which is inside ftb_cntrl by R-2.
-       TD#125 carries both. All of 4.6 is now ruled.
+       All of 4.6 is ruled, and R-1, R-2, R-3, O-1 (conditional),
+       O-2 and O-3 were BUILT IN THE FTB by BP-110, session-073.
+       THE uBTB DIVERGES DELIBERATELY: it masks out-of-window
+       fields but does not compact or reorder them, keeps
+       region-base targets, and has no fall-through bounds check.
+       Ruled session-073; ubtb_interfaces.md states each
+       divergence and is the home for it.
 
 ---
 
@@ -661,8 +683,17 @@ This makes the prediction slot array program-ordered, so slot 0 is the
 first branch of the block, and it makes the jump field's
 lowest-free-slot placement program order in every case rather than
 only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
-Under the window mask of 4.6 this holds per region, not per start;
-restating it for starts that share an entry is 4.6 O-3, open.
+
+RESTATED ON REGION POSITION, 4.6 O-3c, ruled session-073. For starts
+that share an entry, "program order" is order of REGION position: br0
+holds the lower stored position and br1 the higher, whatever start
+wrote them (O-3a). The FTB, not only the FTQ, now enforces it:
+ftb_cntrl swaps storage into ascending order at the write and compacts
+the window-surviving fields onto the ports at the read (O-3b), so port
+slot 0 is the first branch at or after the start. IC-FTB-16's "the FTB
+does not reorder and does not check" is retired. ftb_upd_br_idx_u0
+names a PORT slot as the update's start saw it; ftb_cntrl maps it back
+to a storage field through the same window. Built by BP-110.
 
 ### 5.5  Field writes when an existing branch resolves
 
@@ -704,7 +735,7 @@ Session-070.
 Full-to-partial reduction (ftb_cntrl): the update port delivers the
 resolved block end as a full VA (ftb_upd_pft_addr_u0). ftb_cntrl
 reduces it to the stored partial form:
-RULED session-070, NOT YET BUILT -- TD#124 tracks the RTL.
+RULED session-070, BUILT by BP-110 (session-073). TD#124 closed.
 
   pftAddr = off[FTB_OFFSET_BITS+1 : POS_OFFSET_BITS]
             where off = end - base and base is the 32-byte-ALIGNED
@@ -725,14 +756,15 @@ Blocks are unaligned, so with a start at region offset k <= 30, a
 (FTB_BLOCK_BYTES - 2) + FTB_BLOCK_BYTES + 2 = 64 bytes. Six bits
 cover that; four bits plus one carry bit do not.
 
-AS BUILT (TD#124) the reduction is off[4:1] zero-extended into a
-five-bit field with carry = |off[VA_WIDTH-1:5]. Two defects. The
+AS BUILT BEFORE BP-110 the reduction was off[4:1] zero-extended into
+a five-bit field with carry = |off[VA_WIDTH-1:5]. Two defects. The
 fifth bit is dead -- a four-bit slice cannot reach 16, so section
 6's "0 to 16" is unreachable. And at off = 64 the reconstruction
 gives pftAddr = 0 with carry set, which is base+32, wrong by 32
 bytes, and 4.5's bounds check does not catch it because base+32 is
 still above the start. Storage is unchanged either way: 5 + 1 carry
-becomes 6 + no carry.
+becomes 6 + no carry. BP-110 pinned the off = 64 case (tb_ftb R1,
+tb_ubtb TC16) failing before the fix.
 
 ---
 
@@ -840,7 +872,7 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               the width of every position PORT.
   FTB_BR_RPOS_BITS  = 5       FTB_BR_POS_BITS + 1. The STORED
                               position, region-relative, 0 to 30
-                              (4.6). Session-071, TD#125.
+                              (4.6). Session-071, BUILT by BP-110.
   FTB_BR_TGT_BITS   = 13      conditional target displacement. B-type
                               +/-4 KB original -> +/-8 KB expanded.
   FTB_JMP_TGT_BITS  = 21      jump target displacement. J-type
@@ -853,8 +885,8 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               covering 0 to 126 bytes (5.5). THERE
                               IS NO CARRY BIT: it was 5 + 1 carry
                               and is now 6, so the entry width is
-                              unchanged. Ruled session-070, built
-                              as 5 + carry until TD#124.
+                              unchanged. Ruled session-070, BUILT
+                              by BP-110.
 
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
@@ -870,8 +902,9 @@ held in ftb_plru):
 
 The session-071 delta is three bits, 110 to 113, one each on the
 stored br0, br1 and jump positions, which widen from FTB_BR_POS_BITS
-to FTB_BR_RPOS_BITS (4.6). pftAddr is unaffected. RULED, NOT BUILT:
-the package and RTL are at 110 / 109 (or 5 + carry, TD#124); TD#125.
+to FTB_BR_RPOS_BITS (4.6). pftAddr is unaffected. BUILT by BP-110:
+the package elaborates at 113 / 112, and ftb_cntrl carries an
+elaboration check that $bits(ftb_entry_t) == FTB_RAM_ENTRY_WIDTH.
 
 THIS BLOCK IS THE SOLE HOME OF THE ENTRY ARITHMETIC. Nothing else
 in the tree restates it; FTB-1 and section 10 cite it. That rule
@@ -933,8 +966,7 @@ AN EARLIER REVISION described it as "a short offset from the block
 start ... with carry as the overflow bit" reconstructing from
 "block-start + pftAddr + carry". Both halves were wrong: the
 encoding is region-relative, not start-relative, and session-070
-deleted the carry bit. See 5.5 for why, and TD#124 for the RTL,
-which is still 5 bits plus carry.
+deleted the carry bit. See 5.5 for why. Built by BP-110.
 
   PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES) + 1
 
@@ -1019,6 +1051,18 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-09-22  session-073, after BP-110. 5.5, 4.5, 4.6 and section 8
+              record what is BUILT: six-bit pftAddr with no carry,
+              region-relative stored positions at 113/112, FTB-G1
+              and FTB-G3, O-1 for conditionals, O-3a and O-3b. 4.5
+              records that FTB-G1 had never been built despite
+              session-069 recording it restored. 5.4a restated on
+              region position (O-3c). 4.2: O-1 extended to the jump
+              target by Jeff -- every target is a displacement from
+              its own instruction -- with the RTL still measuring
+              the jump from the region base, TD#137. The uBTB
+              divergence is ruled and stated in 4.6.
+
   2026-09-22  session-073. 4.6 O-1 and O-2 RULED by Jeff as
               proposed: the conditional target base is the branch
               PC, and FTB-G3 bounds the reconstructed end at

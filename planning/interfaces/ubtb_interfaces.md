@@ -6,7 +6,7 @@
  FILE:    ubtb_interfaces.md
  SOURCE:  various; session-063 rewrite
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -92,6 +92,28 @@ Slot 0 is built from the entry's br0 field. Slot 1 from br1. A slot
 carrying the block-terminating jump reports the jump field's type
 and target.
 
+THE uBTB DIVERGES FROM THE FTB AND THE DIVERGENCE IS RULED
+(session-073, Jeff; ftb_decisions.md 4.6). Under the read window the
+uBTB MASKS ONLY: a field whose stored position lies outside this
+block's window reports invalid, and the surviving fields are NOT
+compacted onto the slots and NOT reordered in storage. Slot 0 stays
+br0. The FTB does compact (4.6 O-3b); the uBTB does not.
+
+Three consequences, all accepted:
+  - with br0 hidden and br1 visible, slot 0 is EMPTY and slot 1
+    carries the block's first branch.
+  - a visible jump takes slot 0 ahead of br1, so the p1 slot order
+    can invert. The FTB corrects the order at p2, and FE-3 already
+    has a later stage supersede the whole p1 prediction.
+  - br_idx on the update port names the STORAGE field, not a port
+    slot as ftb_upd_br_idx_u0 does. A field hidden from the update's
+    start is refilled with that start's branch rather than kept.
+
+The uBTB is a p1 guess that p2 replaces, so slot-order inversion
+costs accuracy for one cycle and nothing else. Compaction would have
+bought consistency with the FTB at the price of a second set of
+window rules in a module whose output is always superseded.
+
 ### Semantics
 
   blk_p1.hit = 1   -- entry valid and tag matched. blk_p1.pft_addr
@@ -160,19 +182,17 @@ the stream to alignment.
   conf     : the bimodal direction counter value. MSB is the
              direction.
 
-  carry    : the ENTRY fall-through carry, the block-scoped
-             overflow bit of the stored pftAddr (ftb_decisions.md
-             5.5), not a property of this slot's target. That is
-             what bp_structs_pkg.sv's comment says, verified
-             session-070 (ftq_bpu_interfaces.md 10 item 5), and
-             what G18 records. It has no consumer (G18, UI2).
-             TD#124 deletes the entry carry, which leaves this
-             field with no source; TD#124 must remove it or say
-             what drives it.
+  carry    : DELETED by BP-110 (session-073). It was the ENTRY
+             fall-through carry, the block-scoped overflow bit of
+             the stored pftAddr, and it had no consumer anywhere in
+             rtl/. Nothing replaces it: at six bits pftAddr reaches
+             past the block boundary on its own, so a consumer
+             derives the crossing from blk_p1.pft_addr itself.
+             G18 and UI2 close as "field removed".
 
-             This read that carry is "1 when THIS SLOT'S TARGET
-             lies outside this block" and "is NOT the carry used
-             to reconstruct blk_p1.pft_addr" (session-069), which
+             It read at one point as "1 when THIS SLOT'S TARGET
+             lies outside this block" and "NOT the carry used to
+             reconstruct blk_p1.pft_addr" (session-069), which
              session-070's package-comment correction reversed.
              Session-071.
 
@@ -181,23 +201,25 @@ the stream to alignment.
   hit      : entry valid and tag matched.
 
   pft_addr : the block end, reconstructed to full width from the
-             stored partial pftAddr. RULED session-070, NOT YET
-             BUILT (TD#124): pftAddr becomes six bits measured
-             from the 32-byte ALIGNED REGION BASE and THE CARRY
-             BIT IS DELETED. As built it is a four-bit slice in a
-             five-bit field plus a carry, which cannot represent
-             an end more than 62 bytes above the region base;
-             an unaligned block can reach 64. ftb_decisions.md
-             5.5, 8.1. The text below describes the built form.
-             Author-
-             itative for the cluster when no slot is taken. The
-             reconstruction is BOUNDS CHECKED: if the end is not
-             above the looked-up block start, pft_addr is driven
-             to start + FTB_BLOCK_BYTES instead. Same rule and
-             same reason as ftb_decisions.md 4.5 FTB-G1 and
-             FTB-G2. The uBTB index drops UBTB_OFFSET_BITS and
-             blocks are unaligned, so two lookup PCs in one
-             32-byte region share an entry.
+             stored partial pftAddr. BUILT by BP-110: six bits
+             measured from the 32-byte ALIGNED REGION BASE, NO
+             CARRY BIT. Before that it was a four-bit slice in a
+             five-bit field plus a carry, which could not represent
+             an end more than 62 bytes above the region base while
+             an unaligned block reaches 64. ftb_decisions.md 5.5,
+             8.1. Authoritative for the cluster when no slot is
+             taken.
+
+             IT IS NOT BOUNDS CHECKED. Ruled session-073 (Jeff).
+             This entry previously required the FTB-G1 rule of
+             ftb_decisions.md 4.5, and the RTL has never had it.
+             The uBTB index drops UBTB_OFFSET_BITS and blocks are
+             unaligned, so two lookup PCs in one 32-byte region do
+             share an entry and an aliased end can be reported.
+             That is accepted for the same reason as the slot
+             divergence above: the p1 prediction is superseded at
+             p2, where the FTB result IS bounds checked (FTB-G1 and
+             FTB-G3).
 
 ### Consumer obligations
 
@@ -241,7 +263,13 @@ same entry; they write different fields of it.
   pc         : block start PC of the entry being updated. Derives
                the set index and tag for the write.
   is_br      : this resolve is a conditional branch.
-  br_idx     : which conditional field, 0 or 1.
+  br_idx     : which conditional STORAGE field, 0 or 1. Unlike
+               ftb_upd_br_idx_u0, which names a port slot
+               (ftb_interfaces.md 2.5), this names the field
+               directly, because the uBTB does not compact. A field
+               hidden from this update's start is REFILLED with
+               this start's branch and a fresh conf. Ruled
+               session-073.
   br_taken   : resolved direction. Drives the bimodal conf step, and
                at fill the weak conf init direction.
   target     : resolved taken target, full width. ubtb.sv converts
@@ -322,11 +350,9 @@ communicate miss reason or miss type externally.
 
 | ID  | Item                                      | Status           |
 |-----|-------------------------------------------|------------------|
-| UI2 | pred_p1[s].carry has no consumer. It is   | TBD at           |
-|     | the entry fall-through carry (G18), and   | bp_cluster;      |
-|     | TD#124 deletes its source. Session-071;   | TD#124           |
-|     | this read that it was a per-slot target   |                  |
-|     | carry distinct from the fall-through one. |                  |
+| UI2 | CLOSED session-073, BP-110. The carry     | Field removed.   |
+|     | field is deleted; it never had a          |                  |
+|     | consumer. G18 closes with it.             |                  |
 | UI3 | Both update channels targeting one entry  | Confirm at       |
 |     | in the same cycle. Same-field collision   | bp_cluster       |
 |     | is a producer error.                      |                  |
@@ -336,6 +362,14 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-09-22  session-073, after BP-110. The uBTB divergence from
+              the FTB is ruled and stated at the head of the
+              prediction section: mask only, no compaction, no
+              reorder, br_idx names a storage field, and a hidden
+              field is refilled. pft_addr is six bits with no carry
+              and is ruled NOT bounds checked. carry deleted; G18
+              and UI2 closed.
+
   2026-09-20  session-072. The Update Interface pft_addr field, the
               pftAddr/carry recompute and the producer obligation
               annotated as the built form against the TD#124

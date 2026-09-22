@@ -137,10 +137,34 @@ Rulings, Jeff, later in the session:
        unit-testable only; it cannot be integrated against the FTQ
        redirect path until that closes.
 
-CLOSED: TD#99, by TOOLS-006.
-New: TD#129 to TD#136. BP-109 consumed.
-Next free BP is BP-110. Next free INFRA is INFRA-013. Next free
-TOOLS is TOOLS-007. Next free TD is TD#137.
+BP-110 built TD#124 and TD#125 together, with no port change. The
+defects were pinned FAILING FIRST on a rebuilt pre-edit tree (tb_ftb
+10, tb_ubtb 5, tb_bp_cluster 8) rather than by reverting the fix
+afterwards. 43 checks added; regress.sh green, 78 of 78.
+
+It also found that THE FTB HAD NO FALL-THROUGH BOUNDS CHECK AT ALL.
+ftb_decisions.md 4.5 recorded FTB-G1 as restored in session-069 and
+nothing was ever built. BP-110 built FTB-G1 and FTB-G3. With TD#127
+that is two instances in two sessions of a document saying as-built
+when nothing was built.
+
+Rulings that followed, all Jeff's: the uBTB divergence is EXPLICIT
+(mask only, no compaction, no reorder, region-base targets, br_idx
+names a storage field, and a p1 slot-order inversion the FTB corrects
+at p2); the uBTB is NOT bounds checked; every target is a
+displacement from its own instruction, extending O-1 to the jump,
+which the RTL does not yet do (TD#137); and ftb_upd_br_idx_u0 is a
+PORT SLOT as the update's start saw it.
+
+C9, cited in the TD#124 row against ubtb_pred_t.carry, was a
+session-071 audit batch finding number, not a registry item. The PA
+carried it into the prompt without checking. The carry deletion
+stands on its own evidence: no reader in rtl/.
+
+CLOSED: TD#99 by TOOLS-006. TD#124 and TD#125 by BP-110.
+New: TD#129 to TD#137. BP-109 and BP-110 consumed.
+Next free BP is BP-111. Next free INFRA is INFRA-013. Next free
+TOOLS is TOOLS-007. Next free TD is TD#138.
 
 ---
 ## Session-072: the cross-document audit closed. Documents only.
@@ -2350,107 +2374,58 @@ assessment of each document. Correct any that are wrong.
 |     |          | three citations now point here. The sc.sv comments are   |
 |     |          | a two-line edit whenever an SC task next opens.          |
 |     |          |                                                          |
-| 124 | ftb/ubtb | OPEN, RTL. pftAddr cannot represent the end of an        |
-|     |          | unaligned block. RULED session-070; documents record the |
-|     |          | ruling, RTL does not yet implement it.                   |
+| 124 | ftb/ubtb | CLOSED BP-110 (session-073). pftAddr is six bits from    |
+|     |          | the aligned region base with NO CARRY, in the FTB and    |
+|     |          | the uBTB. ubtb_pred_t.carry is deleted and nothing       |
+|     |          | replaces it: no reader existed in rtl/, and a six-bit    |
+|     |          | pftAddr reaches past the block boundary on its own.      |
+|     |          | Pinned failing first: tb_ftb R1 and tb_ubtb TC16 read    |
+|     |          | the end back 32 bytes short on the pre-edit tree.        |
 |     |          |                                                          |
-|     |          | As built, ftb_cntrl.sv reduces the end against the       |
-|     |          | 32-byte ALIGNED region base:                             |
-|     |          |   upd_off    = end - {pc[39:5], 5'b0}                    |
-|     |          |   upd_new.pft   = upd_off[4:1]  (4 bits into a 5b field) |
-|     |          |   upd_new.carry = |upd_off[39:5]                         |
-|     |          | Reconstruct = base + (pft << 1) + (carry ? 32 : 0).      |
+|     |          | ALSO FOUND: the FTB had NO fall-through bounds check at  |
+|     |          | all. The session-069 restoration of FTB-G1 was recorded  |
+|     |          | in ftb_decisions.md 4.5 and never reached the RTL, which |
+|     |          | is what the ftb_cntrl.sv 500 comment meant. BP-110 built |
+|     |          | FTB-G1 and FTB-G3. Second instance in two sessions of a  |
+|     |          | document saying as-built when nothing was built; TD#127  |
+|     |          | is the other.                                            |
 |     |          |                                                          |
-|     |          | Two defects. The fifth bit of pft is DEAD -- a four-bit  |
-|     |          | slice cannot reach 16, so ftb_decisions.md 6's "0 to 16" |
-|     |          | is unreachable. And with a block start at region offset  |
-|     |          | k <= 30, a 32-byte block and a straddling 32-bit final   |
-|     |          | instruction, upd_off reaches 64; at 64 the reconstruct   |
-|     |          | gives pft = 0 with carry set = base+32, WRONG BY 32      |
-|     |          | BYTES, silently. 4.5's bounds check does not catch it    |
+|     |          | The uBTB is ruled NOT bounds checked (session-073);      |
+|     |          | ubtb_interfaces.md states it.                            |
+|     |          |                                                          |
+|     |          | Was: pftAddr could not represent an unaligned block end. |
+|     |          | A four-bit slice in a five-bit field left the fifth bit  |
+|     |          | dead, and at off = 64 the reconstruction gave base+32,   |
+|     |          | wrong by 32 bytes, which FTB-G1 would not have caught    |
 |     |          | because base+32 is still above the start.                |
+| 125 | bpu      | CLOSED BP-110 (session-073). Stored positions are        |
+|     |          | region-relative at FTB_BR_RPOS_BITS = 5, converted       |
+|     |          | inside ftb_cntrl and ubtb (R-2), with the [k, k+16)      |
+|     |          | window on the read. Entry 110 -> 113, RAM 109 -> 112,    |
+|     |          | elaborated and checked in ftb_cntrl. O-1 built for       |
+|     |          | conditionals, O-2 as FTB-G3, O-3a storage in region      |
+|     |          | order, O-3b the read compaction. bp_cluster.sv no longer |
+|     |          | forms any in-block address: w_blk_base_p1 and its        |
+|     |          | localparams are gone and the miss successor is lookup PC |
+|     |          | + 32 (R-3).                                              |
 |     |          |                                                          |
-|     |          | RULING: keep region-relative, widen to                   |
-|     |          | PFTADDR_BITS = $clog2(FTB_BLOCK_BYTES) + 1 = 6 and       |
-|     |          | DELETE the carry bit. Max off = 2*FTB_BLOCK_BYTES = 64   |
-|     |          | bytes = 32 positions, which 6 bits cover. Storage is     |
-|     |          | unchanged: 5 + 1 carry becomes 6 + none, so              |
-|     |          | FTB_ENTRY_WIDTH stays 110 and the RAM widths are         |
-|     |          | untouched. Start-relative was rejected: the entry is      |
-|     |          | shared by every PC in the region (4.1), so a             |
-|     |          | start-relative end reconstructs differently per lookup   |
-|     |          | PC.                                                      |
-|     |          | TD#125 (session-071) widens the three STORED positions   |
-|     |          | by one bit each, 110 -> 113, independently of this       |
-|     |          | ruling. This row's width statements describe the pftAddr |
-|     |          | change alone.                                            |
+|     |          | Pinned failing first: tb_ftb R2 and R3, tb_ubtb TC17,    |
+|     |          | tb_bp_cluster K1 and TC-B on the pre-edit tree.          |
 |     |          |                                                          |
-|     |          | THE uBTB CARRIES THE IDENTICAL SCHEME and the same       |
-|     |          | defect: UBTB_PFTADDR_BITS + 1, recon_pft(base, pft,      |
-|     |          | carry) in ubtb.sv. Same fix.                             |
-|     |          | ALSO IN SCOPE, session-071: ubtb_pred_t.carry is the     |
-|     |          | entry fall-through carry (G18, ubtb_interfaces.md UI2),  |
-|     |          | so deleting the entry carry leaves it with no source.    |
-|     |          | Remove it, or state what drives it, in the same change.  |
+|     |          | THE uBTB DIVERGES, RULED session-073: mask only, no      |
+|     |          | compaction, no storage reorder, region-base targets, no  |
+|     |          | bounds check, and br_idx names a storage field. A p1     |
+|     |          | slot-order inversion is possible and the FTB corrects it |
+|     |          | at p2. ubtb_interfaces.md is the home for it.            |
 |     |          |                                                          |
-|     |          | RTL: bp_defines_pkg.sv (PFTADDR_BITS,                    |
-|     |          | UBTB_PFTADDR_BITS, both entry widths), bp_structs_pkg.sv |
-|     |          | (drop carry from both entry structs), ftb_cntrl.sv       |
-|     |          | (reduce and reconstruct), ubtb.sv (recon_pft, reduce).   |
-|     |          | Package edit, so the run widens to both units. FTB is    |
-|     |          | Complete at sim_ftb 99/0 and the uBTB is green, so       |
-|     |          | neither testbench covers a block start at a nonzero      |
-|     |          | region offset whose end crosses two regions -- add that  |
-|     |          | case with the fix.                                       |
+|     |          | ftb_upd_br_idx_u0 is RATIFIED as a PORT SLOT as the      |
+|     |          | update's start saw it (ftb_interfaces.md 2.5).           |
 |     |          |                                                          |
-|     |          | SEPARATE, SAME FILE: ftb_cntrl.sv line 500 comments the  |
-|     |          | reconstruct as "unconditional, no error check; 4.5",     |
-|     |          | while 4.5 says bounds checked and session-069 records    |
-|     |          | restoring that check. Confirm whether the restoration    |
-|     |          | ever reached RTL.                                        |
-| 125 | bpu      | OPEN, RTL. STORED POSITIONS ARE READ AGAINST THE WRONG   |
-|     |          | BASE. RULED session-071 (Jeff), option (R):              |
-|     |          | ftb_decisions.md 4.6.                                    |
-|     |          |                                                          |
-|     |          | As built, the update path stores pos unchanged from the  |
-|     |          | backend resolution (ftq_resolve.sv 309, ftq_ftb_sched.sv |
-|     |          | 305, ftb_cntrl.sv 371 and 392), so it is START-relative, |
-|     |          | while bp_cluster.sv 735-740 forms the branch PC as the   |
-|     |          | 32-byte-ALIGNED base plus pos. Nothing in ftb_cntrl.sv,  |
-|     |          | ubtb.sv or bp_cluster.sv masks a field whose position    |
-|     |          | lies before the lookup PC's region offset. For any block |
-|     |          | not starting on a 32-byte boundary the branch PC is      |
-|     |          | wrong by the start offset, and a branch an earlier start |
-|     |          | recorded is still reported. bp_cluster.sv 715 also steps |
-|     |          | a uBTB miss to aligned base + 32, resyncing the stream,  |
-|     |          | against bp_cluster.md Block width. Accuracy only:        |
-|     |          | predecode and resolution still correct the stream. Every |
-|     |          | suite is green because the testbenches use aligned       |
-|     |          | bases.                                                   |
-|     |          |                                                          |
-|     |          | FIX, per 4.6: store positions region-relative at         |
-|     |          | FTB_BR_RPOS_BITS = 5 (and the uBTB equivalent), rebase   |
-|     |          | at the write in ftb_cntrl and ubtb from the update PC,   |
-|     |          | mask to the window [k, k+16) and subtract k at the read, |
-|     |          | so every port stays start-relative. Branch PC = block    |
-|     |          | start + (pos << POS_OFFSET_BITS). Miss successor =       |
-|     |          | lookup PC + FTB_BLOCK_BYTES. FTB entry 110 -> 113, RAM   |
-|     |          | entry 109 -> 112; the uBTB entry grows by three bits     |
-|     |          | likewise. Package change, so both units run. Same files  |
-|     |          | as TD#124; run them together.                            |
-|     |          |                                                          |
-|     |          | 4.6 O-1 and O-2 RULED session-073 (Jeff), as proposed: a |
-|     |          | conditional target is a displacement from the BRANCH PC, |
-|     |          | and FTB-G3 sends a reconstructed end beyond start +      |
-|     |          | FTB_BLOCK_BYTES + 2 to the FTB-G2 fallback.              |
-|     |          |                                                          |
-|     |          | O-3 RULED session-073 (Jeff), as proposed: O-3a storage  |
-|     |          | in region position order, O-3b the read compacts onto    |
-|     |          | the ports so port slot 0 is the first branch at or after |
-|     |          | the start, O-3c 5.4a restated on region position. 5.4a   |
-|     |          | and IC-FTB-16 are amended with the RTL. ALL OF 4.6 IS    |
-|     |          | NOW RULED; nothing blocks the TD#124 + TD#125 task.      |
-|     |          | Found by the session-071 IA read of the RTL.             |
+|     |          | Was: the update path stored pos start-relative and       |
+|     |          | bp_cluster.sv read it against the aligned region base,   |
+|     |          | so every unaligned block got a branch PC wrong by the    |
+|     |          | start offset and a branch an earlier start recorded was  |
+|     |          | still reported. Found by the session-071 IA read.        |
 | 126 | ftq      | OPEN, RTL. THE FLUSH INDEX IS K+1 WHERE W3 REQUIRES K.   |
 |     |          | ftq_ifu.sv 232-239 drives the IFU flush at redir_idx     |
 |     |          | when _self is set and redir_idx + 1 when it is clear,    |
@@ -2542,6 +2517,22 @@ assessment of each document. Correct any that are wrong.
 |     |          |                                                          |
 |     |          | Ruling needed on 5.2 and on prop1.md 5 before any RTL.   |
 |     |          |                                                          |
+| 137 | ftb      | OPEN, RTL. THE FTB JUMP TARGET IS STILL MEASURED FROM    |
+|     |          | THE REGION BASE. Ruled session-073 (Jeff),               |
+|     |          | ftb_decisions.md 4.2: every target is a displacement     |
+|     |          | from its own instruction, so a jump target is measured   |
+|     |          | from the JUMP PC as O-1 measures a conditional from the  |
+|     |          | branch PC. BP-110 built the conditional half only,       |
+|     |          | because the task scoped O-1 to conditionals.             |
+|     |          |                                                          |
+|     |          | A rule-consistency change, not a defect. The region base |
+|     |          | is shared by every start, so the as-built encoding is    |
+|     |          | coherent; it costs at most 32 bytes of the 21-bit J-type |
+|     |          | reach, which is immaterial.                              |
+|     |          |                                                          |
+|     |          | One task: ftb_cntrl.sv encode and reconstruct, the tb    |
+|     |          | fixture encodings, and a check that a jump target round  |
+|     |          | trips from two starts sharing an entry.                  |
 | 133 | frontend | OPEN, PERFORMANCE STUDY. DOES DELIVERING TWO PREDICTION  |
 |     |          | BLOCKS PER CYCLE BUY ANYTHING? Ruled session-073 (Jeff): |
 |     |          | the front end delivers ONE prediction block per cycle.   |

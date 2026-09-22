@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Compare planning files against the delivered versions.
-# Baseline: session-071, except the three files updated in
-# session-073 (PROJECT_STATUS.md, l1i_ifu_interfaces.md,
-# mmu_decisions.md).
+# Baseline: session-071, except the files updated in session-073
+# (PROJECT_STATUS.md, l1i_ifu_interfaces.md, mmu_decisions.md,
+# ftb_decisions.md, ftb_interfaces.md, ubtb_interfaces.md).
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
 # Exit status: 0 if every file matches, 1 otherwise.
@@ -20,14 +20,14 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   0320bf9df383
-PLAN  PROJECT_STATUS.md           0c745fcc1a76
+PLAN  PROJECT_STATUS.md           31c67e6e6377
 
 ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  dcd_decisions.md                  3060707d7350
 ARCH  fe_decisions.md                   47c145d1ddc1
-ARCH  ftb_decisions.md            95d65b58517c
+ARCH  ftb_decisions.md            6853d885739d
 ARCH  ftq_decisions.md                  145d8d0ee0df
 ARCH  ftq_entry_formats.md              982078e73bc6
 ARCH  ibuf_decisions.md                 280c63bb3213
@@ -65,7 +65,7 @@ INTF  ittage_table_interfaces.md        152940fce590
 INTF  tage_table_interfaces.md          c77c3b137298
 INTF  bp_history_interfaces.md          f799a4123d5b
 INTF  bpu_port_inventory.md             0add13030cb6
-INTF  ftb_interfaces.md                 04c4be57569e
+INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md         b34fce489216
 INTF  ftq_bpu_interfaces.md             ac5e14b07d24
 INTF  ftq_ifu_interfaces.md             72a610baec12
@@ -79,7 +79,7 @@ INTF  ras_interfaces.md                 45e38659a223
 INTF  sc_interfaces.md                  c5913f89bc7c
 INTF  sc_table_interfaces.md            f64578d705ba
 INTF  tage_interfaces.md                1fc5cde68a3e
-INTF  ubtb_interfaces.md                cc3a1269d860
+INTF  ubtb_interfaces.md          af2952f2938f
 
 
 EOF
