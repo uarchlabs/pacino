@@ -83,7 +83,7 @@ module tb;
   localparam int BLK_OFF_BITS = $clog2(FTB_BLOCK_BYTES);      // 5
   localparam int BR_POS_SHIFT = BLK_OFF_BITS - FTB_BR_POS_BITS; // 2
   // VA-width form of the block size, so address arithmetic below is
-  // 40 bits on both sides.
+  // VA_WIDTH bits on both sides.
   localparam logic [VA_WIDTH-1:0] BLK_SZ = VA_WIDTH'(FTB_BLOCK_BYTES);
 
   // SC credit-arbiter counter widths, restated exactly as bp_cluster
@@ -350,7 +350,8 @@ module tb;
   endfunction
 
   // The branch PC BP-092a specifies: block base plus the scaled
-  // in-block position.
+  // in-block position. Every caller passes a region-aligned pc, where
+  // the block base is the lookup PC (BP-110, ftb_decisions.md 4.6).
   function automatic logic [VA_WIDTH-1:0]
       slot_pc(input logic [VA_WIDTH-1:0] pc,
               input logic [FTB_BR_POS_BITS-1:0] pos);
@@ -383,26 +384,22 @@ module tb;
     return x[LP_TAG_BITS-1:0];
   endfunction
 
-  // uBTB stored partial fall-through and carry for a wanted address.
+  // uBTB stored partial fall-through for a wanted address: the offset
+  // from the aligned region base in positions, no carry bit (TD#124).
   function automatic logic [UBTB_PFTADDR_BITS-1:0]
       ub_pft_field(input logic [VA_WIDTH-1:0] want,
                    input logic [VA_WIDTH-1:0] base);
     logic [VA_WIDTH-1:0] off;
     off = want - base;
-    return {{(UBTB_PFTADDR_BITS-(UBTB_OFFSET_BITS-UBTB_POS_OFFSET_BITS)){1'b0}},
-            off[UBTB_OFFSET_BITS-1:UBTB_POS_OFFSET_BITS]};
-  endfunction
-
-  function automatic logic
-      ub_pft_carry(input logic [VA_WIDTH-1:0] want,
-                   input logic [VA_WIDTH-1:0] base);
-    logic [VA_WIDTH-1:0] off;
-    off = want - base;
-    return |off[VA_WIDTH-1:UBTB_OFFSET_BITS];
+    return off[UBTB_POS_OFFSET_BITS +: UBTB_PFTADDR_BITS];
   endfunction
 
   // One uBTB conditional field. conf is the weak init in the wanted
   // direction; its MSB is the direction ubtb.sv reports on br_taken.
+  // The stored position is region-relative (ftb_decisions.md 4.6).
+  // Every table-written entry in this file is installed for a
+  // region-aligned lookup PC, where the region position equals the
+  // start-relative pos, so pos is widened unchanged.
   function automatic ubtb_cond_t
       mk_cond(input logic v, input logic [UBTB_BR_POS_BITS-1:0] pos,
               input logic [VA_WIDTH-1:0] tgt,
@@ -412,7 +409,7 @@ module tb;
     c      = '0;
     d      = tgt - base;
     c.valid = v;
-    c.pos   = pos;
+    c.pos   = ($bits(c.pos))'(pos);
     c.tgt   = d[UBTB_BR_TGT_BITS-1:0];
     c.stat  = 2'b00;
     c.conf  = taken ? UBTB_CONF_INIT_TKN : UBTB_CONF_INIT_NTK;
@@ -430,7 +427,7 @@ module tb;
     j        = '0;
     d        = tgt - base;
     j.valid  = v;
-    j.pos    = pos;
+    j.pos    = ($bits(j.pos))'(pos);
     j.tgt    = d[UBTB_JMP_TGT_BITS-1:0];
     j.stat   = 2'b00;
     j.is_call = is_call;
@@ -804,7 +801,7 @@ module tb;
     chk("A1 ittage_pq_not_full out of reset",
         ittage_pq_not_full === 1'b1);
 
-    req(40'h00_0000_1000, 6'h15);
+    req(VA_WIDTH'('h00_0000_1000), 6'h15);
     tick();
     norq();
     chk("A1 pred_val at p1", bpu_pred_val_p1 === 1'b1);
@@ -977,13 +974,12 @@ module tb;
     //    must take loop_pred when its lp_pred_is_loop is set.
     //    Case 1: loop_pred claims slot 1 only.
     do_reset();
-    pc   = 40'h00_0000_1000;
+    pc   = VA_WIDTH'('h00_0000_1000);
     base = blk_base(pc);
     e    = '0;
-    e.br0 = mk_cond(1'b1, 4'd1, base + 40'h100, base, 1'b0);
-    e.br1 = mk_cond(1'b1, 4'd2, base + 40'h200, base, 1'b0);
+    e.br0 = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h100), base, 1'b0);
+    e.br1 = mk_cond(1'b1, 4'd2, base + VA_WIDTH'('h200), base, 1'b0);
     e.pft = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     // slot 1 bank: trusted loop entry predicting taken (curr < past)
@@ -1002,7 +998,7 @@ module tb;
     chk("B1 slot1 br_type forced COND by loop_pred",
         bpu_pred_slot_p1[1].br_type === COND);
     chk_eq("B1 slot1 target still the uBTB entry target",
-           bpu_pred_slot_p1[1].target, base + 40'h200);
+           bpu_pred_slot_p1[1].target, base + VA_WIDTH'('h200));
     chk("B1 slot1 pos survives the loop_pred override",
         bpu_pred_slot_p1[1].pos === 4'd2);
 
@@ -1041,11 +1037,10 @@ module tb;
     // -- B2. Entry hit against slot valid.
     //    Case a: entry hits, no slot carries a branch. A legal state.
     do_reset();
-    pc   = 40'h00_0000_3000;
+    pc   = VA_WIDTH'('h00_0000_3000);
     base = blk_base(pc);
     e    = '0;
-    e.pft   = ub_pft_field(base + 40'h18, base);
-    e.carry = ub_pft_carry(base + 40'h18, base);
+    e.pft   = ub_pft_field(base + VA_WIDTH'('h18), base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h04);
@@ -1058,13 +1053,13 @@ module tb;
     chk("B2a prediction still allocated",
         bpu_pred_val_p1 === 1'b1);
     chk_eq("B2a fall-through comes from the hit entry",
-           bpu_pred_pft_p1, base + 40'h18);
+           bpu_pred_pft_p1, base + VA_WIDTH'('h18));
     chk("B2a hit reported to the p1 view",
         dut.r_ubtb_blk_p1.hit === 1'b1);
 
     //    Case b: entry misses entirely.
     do_reset();
-    pc   = 40'h00_0000_4000;
+    pc   = VA_WIDTH'('h00_0000_4000);
     base = blk_base(pc);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1083,12 +1078,11 @@ module tb;
     //    Case c: entry hits but only slot 1 carries a branch. The
     //    slot valid and the entry hit are separate terms.
     do_reset();
-    pc   = 40'h00_0000_5000;
+    pc   = VA_WIDTH'('h00_0000_5000);
     base = blk_base(pc);
     e    = '0;
-    e.br1 = mk_cond(1'b1, 4'd5, base + 40'h40, base, 1'b1);
+    e.br1 = mk_cond(1'b1, 4'd5, base + VA_WIDTH'('h40), base, 1'b1);
     e.pft = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h06);
@@ -1103,13 +1097,12 @@ module tb;
 
     // -- B3. pos propagation from ubtb_pred_t into bp_ftq_slot_t.
     do_reset();
-    pc   = 40'h00_0000_6000;
+    pc   = VA_WIDTH'('h00_0000_6000);
     base = blk_base(pc);
     e    = '0;
-    e.br0 = mk_cond(1'b1, 4'd3, base + 40'h20, base, 1'b0);
-    e.br1 = mk_cond(1'b1, 4'd7, base + 40'h60, base, 1'b0);
+    e.br0 = mk_cond(1'b1, 4'd3, base + VA_WIDTH'('h20), base, 1'b0);
+    e.br1 = mk_cond(1'b1, 4'd7, base + VA_WIDTH'('h60), base, 1'b0);
     e.pft = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h07);
@@ -1122,13 +1115,12 @@ module tb;
     //    is read at p0 and registered; the target must be that value
     //    and the source must be PRED_RAS.
     do_reset();
-    pc   = 40'h00_0000_7000;
+    pc   = VA_WIDTH'('h00_0000_7000);
     base = blk_base(pc);
-    ras_push_commit(40'h00_0000_ABC0);
+    ras_push_commit(VA_WIDTH'('h00_0000_ABC0));
     e    = '0;
-    e.jmp = mk_jmp(1'b1, 4'd4, base + 40'h80, base, 1'b0, 1'b1, 1'b1);
+    e.jmp = mk_jmp(1'b1, 4'd4, base + VA_WIDTH'('h80), base, 1'b0, 1'b1, 1'b1);
     e.pft = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h08);
@@ -1139,7 +1131,7 @@ module tb;
     chk("B4 RAS supplied the p1 target",
         bpu_pred_slot_p1[0].pred_src === PRED_RAS);
     chk_eq("B4 target is the registered top of stack",
-           bpu_pred_slot_p1[0].target, 40'h00_0000_ABC0);
+           bpu_pred_slot_p1[0].target, VA_WIDTH'('h00_0000_ABC0));
     chk("B4 a RETURN taken at p1", bpu_pred_slot_p1[0].taken === 1'b1);
     chk("B4 registered tos valid", dut.r_ras_tos_val_p1[0] === 1'b1);
 
@@ -1153,40 +1145,42 @@ module tb;
     chk("B4b empty RAS: uBTB target stands",
         bpu_pred_slot_p1[0].pred_src === PRED_UBTB);
     chk_eq("B4b empty RAS: target is the entry jump target",
-           bpu_pred_slot_p1[0].target, base + 40'h80);
+           bpu_pred_slot_p1[0].target, base + VA_WIDTH'('h80));
 
     // -- B5. bpu_pred_pft_p1, the TD#108 fall-through.
     do_reset();
-    pc   = 40'h00_0000_8000;
+    pc   = VA_WIDTH'('h00_0000_8000);
     base = blk_base(pc);
     e    = '0;
-    e.br0 = mk_cond(1'b1, 4'd1, base + 40'h10, base, 1'b0);
-    e.pft = ub_pft_field(base + 40'h0C, base);
-    e.carry = ub_pft_carry(base + 40'h0C, base);
+    e.br0 = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h10), base, 1'b0);
+    e.pft = ub_pft_field(base + VA_WIDTH'('h0C), base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h0A);
     tick();
     norq();
     chk_eq("B5 hit: pft is blk_p1.pft_addr",
-           bpu_pred_pft_p1, base + 40'h0C);
+           bpu_pred_pft_p1, base + VA_WIDTH'('h0C));
     chk_eq("B5 hit: pft equals the internal p1 view",
            bpu_pred_pft_p1, dut.w_pft_p1);
 
-    //    B5b: miss -> block-aligned PC plus one block. Request from
-    //    mid-block so the alignment is actually exercised.
+    //    B5b: miss -> lookup PC plus one block, with NO resync to the
+    //    32-byte-aligned base (ftb_decisions.md 4.6 R-3,
+    //    ubtb_interfaces.md Semantics). Request from mid-block so the
+    //    two differ. BP-110: this read "block-aligned PC plus one
+    //    block" and probed dut.w_blk_base_p1, which R-3 removes.
     do_reset();
-    pc   = 40'h00_0000_901C;
+    pc   = VA_WIDTH'('h00_0000_901C);
     base = blk_base(pc);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
     req(pc, 6'h0B);
     tick();
     norq();
-    chk_eq("B5b miss: pft is block base plus FTB_BLOCK_BYTES",
-           bpu_pred_pft_p1, base + BLK_SZ);
-    chk_eq("B5b miss: block base is the aligned request PC",
-           dut.w_blk_base_p1, 40'h00_0000_9000);
+    chk_eq("B5b miss: pft is lookup PC plus FTB_BLOCK_BYTES",
+           bpu_pred_pft_p1, pc + BLK_SZ);
+    chk("B5b miss: pft is not resynced to the aligned base",
+        bpu_pred_pft_p1 !== base + BLK_SZ);
 
     $display("---- GROUP B done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
@@ -1225,7 +1219,7 @@ module tb;
     //    shown to hold across the stream and not just on one cycle.
     do_reset();
     tage_bim_fill(2'b11);
-    pc = 40'h00_0180_0000;
+    pc = VA_WIDTH'('h00_0180_0000);
     ubtb_clear_set(pc);
     ubtb_clear_set(pc + BLK_SZ);
     lp_clear_both(pc);
@@ -1258,12 +1252,12 @@ module tb;
     // -- C1a. Conditional slot, TAGE says taken -> FTB branch target.
     do_reset();
     tage_bim_fill(2'b11);           // TAGE predicts taken for any PC
-    pc   = 40'h00_0100_0000;
+    pc   = VA_WIDTH'('h00_0100_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
     // FTB br0 stored NOT taken, so a taken p2 result can only have
     // come from TAGE.
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1277,17 +1271,17 @@ module tb;
     chk("C1a TAGE overrode the stored FTB direction",
         dut.w_taken_p2[0] === 1'b1);
     chk_eq("C1a successor is the FTB branch target",
-           bpu_redir_p2[0].target_pc, base + 40'h300);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h300));
 
     // -- C1b. Conditional slot, TAGE says not taken -> fall-through.
     do_reset();
     tage_bim_fill(2'b00);           // TAGE predicts not taken
-    pc   = 40'h00_0110_0000;
+    pc   = VA_WIDTH'('h00_0110_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
     // FTB br0 stored TAKEN this time, so a not-taken p2 result can
     // only have come from TAGE.
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1305,11 +1299,11 @@ module tb;
     // -- C1c. RETURN -> RAS pop address.
     do_reset();
     tage_bim_fill(2'b00);
-    ras_push_commit(40'h00_0000_DEC0);
-    pc   = 40'h00_0120_0000;
+    ras_push_commit(VA_WIDTH'('h00_0000_DEC0));
+    pc   = VA_WIDTH'('h00_0120_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h400, 4'd2, 1'b0, 1'b1, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h400), 4'd2, 1'b0, 1'b1, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1322,15 +1316,15 @@ module tb;
     chk("C1c RAS pop valid at p2",
         dut.w_ras_pop_valid_p2[0] === 1'b1);
     chk_eq("C1c successor is the RAS pop address",
-           bpu_redir_p2[0].target_pc, 40'h00_0000_DEC0);
+           bpu_redir_p2[0].target_pc, VA_WIDTH'('h00_0000_DEC0));
 
     // -- C1d. Direct unconditional -> FTB jump target.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0130_0000;
+    pc   = VA_WIDTH'('h00_0130_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h500, 4'd3, 1'b0, 1'b0, 1'b0,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h500), 4'd3, 1'b0, 1'b0, 1'b0,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1341,15 +1335,15 @@ module tb;
     chk("C1d FTB classified the jump as DIRECT_UNC",
         dut.w_br_type_p2[0] === DIRECT_UNC);
     chk_eq("C1d successor is the FTB jump target",
-           bpu_redir_p2[0].target_pc, base + 40'h500);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h500));
 
     // -- C1e. Indirect, ITTAGE misses -> FTB jump target stands.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0140_0000;
+    pc   = VA_WIDTH'('h00_0140_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h600, 4'd4, 1'b0, 1'b0, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1362,7 +1356,7 @@ module tb;
     chk("C1e ITTAGE reports no hit",
         bpu_meta_ittage_p2[0].ittage_hit === 1'b0);
     chk_eq("C1e successor falls back to the FTB jump target",
-           bpu_redir_p2[0].target_pc, base + 40'h600);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h600));
 
     // -- C1f. Indirect, ITTAGE hits -> ITTAGE target.
     //    The IT1 entry is written at the index and tag the DUT itself
@@ -1372,16 +1366,16 @@ module tb;
     //    request and the checking request.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0150_0000;
+    pc   = VA_WIDTH'('h00_0150_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h600, 4'd4, 1'b0, 1'b0, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
     req(pc, 6'h15);
     #1;                              // let the p0 hashes settle
-    ittage_seed_it1_s0(IT_MAX_TGT_WIDTH'(40'h00_0000_7788 >> 1));
+    ittage_seed_it1_s0(IT_MAX_TGT_WIDTH'(VA_WIDTH'('h00_0000_7788) >> 1));
     tick();
     norq();
     tick();
@@ -1395,17 +1389,72 @@ module tb;
     chk("C1f ITTAGE reports a hit",
         bpu_meta_ittage_p2[0].ittage_hit === 1'b1);
     chk_eq("C1f successor is the ITTAGE target",
-           bpu_redir_p2[0].target_pc, 40'h00_0000_7788);
+           bpu_redir_p2[0].target_pc, VA_WIDTH'('h00_0000_7788));
+
+    // -- C1f2. TD#122. ITTAGE target that is a guest physical address
+    //    with bit 38 set. With V=1 the fetch PC is ZERO extended
+    //    (ftq_bpu_interfaces.md 5.2); a sign-extending reconstruction
+    //    sets bit 39 and above. Same fixture as C1f. The expected
+    //    value is a 64-bit constant, not a VA_WIDTH one, so a tree
+    //    whose VA_WIDTH truncates or sign-extends cannot match it.
+    do_reset();
+    tage_bim_fill(2'b00);
+    pc   = VA_WIDTH'('h00_0152_0000);
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0,
+                  1'b1, pft, 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h1C);
+    #1;                              // let the p0 hashes settle
+    ittage_seed_it1_s0(IT_MAX_TGT_WIDTH'(64'h40_0000_7788 >> 1));
+    tick();
+    norq();
+    tick();
+    tick();
+    req(pc, 6'h1D);
+    tick();
+    norq();
+    tick();
+    chk("C1f2 ITTAGE reports a hit on the bit-38 GPA target",
+        bpu_meta_ittage_p2[0].ittage_hit === 1'b1);
+    chk("C1f2 bit-38 GPA target is zero extended, not sign extended",
+        64'(bpu_redir_p2[0].target_pc) === 64'h40_0000_7788);
+
+    // -- C1f3. TD#122. A fetch PC with bit 40 set must not truncate.
+    //    A direct jump's successor is the block base plus the stored
+    //    displacement, so bit 40 of the request PC must reach the
+    //    published target. FTB_TAG_BITS is pinned at 26 and does not
+    //    cover bit 40; that aliases in the FTB (FE-19) but does not
+    //    stop this entry, written and read with the same PC, hitting.
+    do_reset();
+    tage_bim_fill(2'b00);
+    pc   = VA_WIDTH'(64'h100_0154_0000);
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h500), 4'd3, 1'b0, 1'b0,
+                  1'b0, pft, 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h1E);
+    tick();
+    norq();
+    tick();
+    chk("C1f3 FTB classified the bit-40 jump as DIRECT_UNC",
+        dut.w_br_type_p2[0] === DIRECT_UNC);
+    chk("C1f3 bit-40 successor keeps bit 40",
+        64'(bpu_redir_p2[0].target_pc) === 64'h100_0154_0500);
 
     // -- C1g. The two call encodings of the FTB jump field. Both are
     //    RAS pushes, so the successor is the FTB jump target and the
     //    p2 snapshot must advance.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0155_0000;
+    pc   = VA_WIDTH'('h00_0155_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h700, 4'd5, 1'b1, 1'b0, 1'b0,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h700), 4'd5, 1'b1, 1'b0, 1'b0,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1416,16 +1465,16 @@ module tb;
     chk("C1g direct call classified DIRECT_CALL",
         dut.w_br_type_p2[0] === DIRECT_CALL);
     chk_eq("C1g direct call successor is the FTB jump target",
-           bpu_redir_p2[0].target_pc, base + 40'h700);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h700));
     chk("C1g direct call is a RAS push at p2",
         dut.w_ras_snapshot_p2[0].tosr !== dut.w_ras_snapshot_p2[0].bos);
 
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0158_0000;
+    pc   = VA_WIDTH'('h00_0158_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h700, 4'd5, 1'b1, 1'b0, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h700), 4'd5, 1'b1, 1'b0, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1438,17 +1487,17 @@ module tb;
     chk("C1h indirect call with no ITTAGE hit",
         bpu_meta_ittage_p2[0].ittage_hit === 1'b0);
     chk_eq("C1h indirect call successor is the FTB jump target",
-           bpu_redir_p2[0].target_pc, base + 40'h700);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h700));
 
     // -- C1i. RETURN with an empty RAS. ras_pop_valid_p2 is low, so
     //    the successor falls back to the FTB jump target rather than
     //    using an invalid pop address.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_015C_0000;
+    pc   = VA_WIDTH'('h00_015C_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h800, 4'd2, 1'b0, 1'b1, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h800), 4'd2, 1'b0, 1'b1, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1461,22 +1510,21 @@ module tb;
     chk("C1i RAS pop invalid on an empty stack",
         dut.w_ras_pop_valid_p2[0] === 1'b0);
     chk_eq("C1i successor falls back to the FTB jump target",
-           bpu_redir_p2[0].target_pc, base + 40'h800);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h800));
 
     // -- C2. Two not-taken views compare equal and raise NO redirect.
     //    The uBTB and the FTB agree on the block end and neither slot
     //    is taken.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0160_0000;
+    pc   = VA_WIDTH'('h00_0160_0000);
     base = blk_base(pc);
-    pft  = base + 40'h18;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h300, 4'd1, pft,
+    pft  = base + VA_WIDTH'('h18);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h300), base, 1'b0);
     e.pft   = ub_pft_field(pft, base);
-    e.carry = ub_pft_carry(pft, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h17);
@@ -1498,22 +1546,21 @@ module tb;
     //    it.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0170_0000;
+    pc   = VA_WIDTH'('h00_0170_0000);
     base = blk_base(pc);
-    pft  = base + 40'h18;                       // FTB block end
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h300, 4'd1, pft,
+    pft  = base + VA_WIDTH'('h18);                       // FTB block end
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
-    e.pft   = ub_pft_field(base + 40'h0C, base); // uBTB block end
-    e.carry = ub_pft_carry(base + 40'h0C, base);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h300), base, 1'b0);
+    e.pft   = ub_pft_field(base + VA_WIDTH'('h0C), base); // uBTB block end
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h18);
     tick();
     norq();
     chk_eq("C3 p1 fall-through is the uBTB block end",
-           bpu_pred_pft_p1, base + 40'h0C);
+           bpu_pred_pft_p1, base + VA_WIDTH'('h0C));
     tick();
     chk("C3 stale block boundary redirects at p2",
         bpu_redir_p2[0].valid === 1'b1);
@@ -1549,10 +1596,10 @@ module tb;
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);              // SC_CTR_MIN, strongly not taken
     sc_enable = 1'b1;
-    pc   = 40'h00_0190_0000;
+    pc   = VA_WIDTH'('h00_0190_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1581,7 +1628,7 @@ module tb;
           chk_q("C4 TAGE overrode the stored FTB direction",
                 dut.w_taken_p2[0] === 1'b1);
           chk_eq_q("C4 p2 successor reaching the FTQ is the branch target",
-                   bpu_redir_p2[0].target_pc, base + 40'h300);
+                   bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h300));
           chk_q("C4 the p2 metadata write names this entry",
                 bpu_meta_tage_p2[0].branch_id === bpu_meta_idx_p2);
         end
@@ -1638,10 +1685,10 @@ module tb;
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);              // SC_CTR_MIN, strongly not taken
     sc_enable = 1'b1;
-    pc   = 40'h00_0200_0000;
+    pc   = VA_WIDTH'('h00_0200_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1651,7 +1698,7 @@ module tb;
     tick();
     chk("D1a p2 published taken",  dut.w_taken_p2[0] === 1'b1);
     chk_eq("D1a p2 successor is the branch target",
-           bpu_redir_p2[0].target_pc, base + 40'h300);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h300));
     tick();
     chk("D1a SC response matched this entry",
         dut.w_sc_hit_p3[0] === 1'b1);
@@ -1673,10 +1720,10 @@ module tb;
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);              // SC_CTR_MAX, strongly taken
     sc_enable = 1'b1;
-    pc   = 40'h00_0210_0000;
+    pc   = VA_WIDTH'('h00_0210_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1692,7 +1739,7 @@ module tb;
     chk("D1b no p3 redirect when SC changes nothing",
         bpu_redir_p3[0].valid === 1'b0);
     chk_eq("D1b p3 successor equals the p2 successor",
-           bpu_redir_p3[0].target_pc, base + 40'h300);
+           bpu_redir_p3[0].target_pc, base + VA_WIDTH'('h300));
 
     // -- D1c. SC disabled. bpu_meta_val_p3 must still assert and no
     //    p3 redirect may fire.
@@ -1700,10 +1747,10 @@ module tb;
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);
     sc_enable = 1'b0;
-    pc   = 40'h00_0220_0000;
+    pc   = VA_WIDTH'('h00_0220_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -1763,7 +1810,7 @@ module tb;
     qstat_bad     = 0;
     idx_q         = 6'h00;
     for (int i = 0; i < 40; i++) begin
-      req(40'h00_0300_0000 + VA_WIDTH'(i * 32), idx_q);
+      req(VA_WIDTH'('h00_0300_0000) + VA_WIDTH'(i * 32), idx_q);
       idx_q = idx_q + 6'd1;
       tick();
       // BP-097. Sampled EVERY cycle of the stream, not once at the
@@ -1852,13 +1899,12 @@ module tb;
 
     // -- TC-A. Two branches in one block, block-aligned request.
     do_reset();
-    pc   = 40'h00_0000_1000;
+    pc   = VA_WIDTH'('h00_0000_1000);
     base = blk_base(pc);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h100, base, 1'b0);
-    e.br1   = mk_cond(1'b1, 4'd2, base + 40'h200, base, 1'b1);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h100), base, 1'b0);
+    e.br1   = mk_cond(1'b1, 4'd2, base + VA_WIDTH'('h200), base, 1'b1);
     e.pft   = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     g0 = ghist_ptr;
@@ -1866,7 +1912,10 @@ module tb;
     req(pc, 6'h30);
     tick();
     norq();
-    chk_eq("TC-A blk_base", dut.w_blk_base_p1, 40'h00_0000_1000);
+    // BP-110: this probed dut.w_blk_base_p1, which R-2 removes. The
+    //    branch PC base is now the registered lookup PC itself.
+    chk_eq("TC-A branch PC base is the lookup PC", dut.r_pc_p1,
+           VA_WIDTH'('h00_0000_1000));
     xpc0 = slot_pc(pc, 4'd1);
     xpc1 = slot_pc(pc, 4'd2);
     chk_eq("TC-A slot_pc[0]", dut.w_slot_pc_p1[0], xpc0);
@@ -1888,22 +1937,30 @@ module tb;
         phr_buf[1:0] === {xpc1[3] ^ xpc1[2], xpc0[3] ^ xpc0[2]});
     chk("TC-A GHR took 0 then 1", ghr_buf[1:0] === 2'b10);
 
-    // -- TC-B. Same block, unaligned request PC. Byte-for-byte the
-    //    same reported PCs as TC-A.
+    // -- TC-B. Same entry, unaligned request PC 0x101C, region offset
+    //    28 bytes. The entry is shared by every PC in the 32-byte
+    //    region, and TC-A's two branches sit at region offsets 2 and
+    //    4, BEFORE this start. They must not be reported
+    //    (ftb_decisions.md 4.6 R-1, TD#125), so no branch PC reaches
+    //    bp_history. BP-110: this read "byte-for-byte the same
+    //    reported PCs as TC-A", which is the TD#125 defect, and probed
+    //    dut.w_blk_base_p1, which R-2 removes.
     do_reset();
-    pc   = 40'h00_0000_101C;
+    pc   = VA_WIDTH'('h00_0000_101C);
     base = blk_base(pc);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h31);
     tick();
     norq();
-    chk_eq("TC-B blk_base ignores the in-block offset",
-           dut.w_blk_base_p1, 40'h00_0000_1000);
-    chk_eq("TC-B slot_pc[0]", dut.w_slot_pc_p1[0], xpc0);
-    chk_eq("TC-B slot_pc[1]", dut.w_slot_pc_p1[1], xpc1);
-    chk_eq("TC-B pred_pc[0]", dut.w_hist_pred_pc[0], xpc0);
-    chk_eq("TC-B pred_pc[1]", dut.w_hist_pred_pc[1], xpc1);
+    chk("TC-B the unaligned start hits the shared entry",
+        dut.r_ubtb_blk_p1.hit === 1'b1);
+    chk_eq("TC-B slot_pc[0] zero, branch before the start",
+           dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
+    chk_eq("TC-B slot_pc[1] zero, branch before the start",
+           dut.w_slot_pc_p1[1], VA_WIDTH'('h0));
+    chk_eq("TC-B pred_pc[0] zero", dut.w_hist_pred_pc[0], VA_WIDTH'('h0));
+    chk_eq("TC-B pred_pc[1] zero", dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
 
     // -- TC-C. Position sweep, every pair of in-block positions. The
     //    bound is derived, so the sweep covers 2**FTB_BR_POS_BITS
@@ -1912,15 +1969,14 @@ module tb;
     for (int p0i = 0; p0i < (1 << FTB_BR_POS_BITS); p0i++) begin
       for (int p1i = 0; p1i < (1 << FTB_BR_POS_BITS); p1i++) begin
         do_reset();
-        pc   = 40'h00_0000_2000;
+        pc   = VA_WIDTH'('h00_0000_2000);
         base = blk_base(pc);
         e       = '0;
         e.br0   = mk_cond(1'b1, UBTB_BR_POS_BITS'(p0i),
-                          base + 40'h100, base, 1'b0);
+                          base + VA_WIDTH'('h100), base, 1'b0);
         e.br1   = mk_cond(1'b1, UBTB_BR_POS_BITS'(p1i),
-                          base + 40'h200, base, 1'b0);
+                          base + VA_WIDTH'('h200), base, 1'b0);
         e.pft   = ub_pft_field(base + BLK_SZ, base);
-        e.carry = ub_pft_carry(base + BLK_SZ, base);
         ubtb_install(pc, e);
         lp_clear_both(pc);
         req(pc, 6'h32);
@@ -1942,31 +1998,30 @@ module tb;
 
     // -- TC-D / E3. One branch only, in slot 1 -- compaction.
     do_reset();
-    pc   = 40'h00_0000_3000;
+    pc   = VA_WIDTH'('h00_0000_3000);
     base = blk_base(pc);
     e       = '0;
-    e.br1   = mk_cond(1'b1, 4'd5, base + 40'h200, base, 1'b1);
+    e.br1   = mk_cond(1'b1, 4'd5, base + VA_WIDTH'('h200), base, 1'b1);
     e.pft   = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h33);
     tick();
     norq();
     chk_eq("TC-D slot_pc[0] is zero on an invalid slot",
-           dut.w_slot_pc_p1[0], 40'h0);
+           dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
     chk_eq("TC-D slot_pc[1]", dut.w_slot_pc_p1[1], slot_pc(pc, 4'd5));
     chk("TC-D num_branches", dut.w_hist_num_branches === 2'd1);
     chk_eq("TC-D/E3 slot-1 branch presented at branch index 0",
            dut.w_hist_pred_pc[0], slot_pc(pc, 4'd5));
     chk_eq("TC-D pred_pc[1] untouched",
-           dut.w_hist_pred_pc[1], 40'h0);
+           dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
     chk("TC-D/E3 that branch's direction at index 0",
         dut.w_hist_pred_taken[0] === 1'b1);
 
     // -- TC-E. No branch in the block. bp_history holds.
     do_reset();
-    pc   = 40'h00_0000_4000;
+    pc   = VA_WIDTH'('h00_0000_4000);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
     g0 = ghist_ptr;
@@ -1974,11 +2029,11 @@ module tb;
     req(pc, 6'h34);
     tick();
     norq();
-    chk_eq("TC-E slot_pc[0] zero", dut.w_slot_pc_p1[0], 40'h0);
-    chk_eq("TC-E slot_pc[1] zero", dut.w_slot_pc_p1[1], 40'h0);
+    chk_eq("TC-E slot_pc[0] zero", dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
+    chk_eq("TC-E slot_pc[1] zero", dut.w_slot_pc_p1[1], VA_WIDTH'('h0));
     chk("TC-E num_branches zero", dut.w_hist_num_branches === 2'd0);
-    chk_eq("TC-E pred_pc[0] zero", dut.w_hist_pred_pc[0], 40'h0);
-    chk_eq("TC-E pred_pc[1] zero", dut.w_hist_pred_pc[1], 40'h0);
+    chk_eq("TC-E pred_pc[0] zero", dut.w_hist_pred_pc[0], VA_WIDTH'('h0));
+    chk_eq("TC-E pred_pc[1] zero", dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
     tick();
     chk("TC-E ghist pointer held", ghist_ptr === g0);
     chk("TC-E phist pointer held", phist_ptr === p0);
@@ -1987,12 +2042,11 @@ module tb;
 
     // -- TC-F. loop_pred wins the selection mux.
     do_reset();
-    pc   = 40'h00_0000_5000;
+    pc   = VA_WIDTH'('h00_0000_5000);
     base = blk_base(pc);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd6, base + 40'h100, base, 1'b0);
+    e.br0   = mk_cond(1'b1, 4'd6, base + VA_WIDTH'('h100), base, 1'b0);
     e.pft   = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     lp_install(0, pc, LP_CNF_BITS'(LP_CONF_LEVEL), 14'd1, 14'd4);
@@ -2010,7 +2064,7 @@ module tb;
 
     // -- TC-G. loop_pred wins with no uBTB entry for that slot.
     do_reset();
-    pc   = 40'h00_0000_6000;
+    pc   = VA_WIDTH'('h00_0000_6000);
     base = blk_base(pc);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -2023,23 +2077,22 @@ module tb;
     chk("TC-G position gated off with no uBTB entry",
         bpu_pred_slot_p1[0].pos === 4'd0);
     chk_eq("TC-G target gated off with no uBTB entry",
-           bpu_pred_slot_p1[0].target, 40'h0);
+           bpu_pred_slot_p1[0].target, VA_WIDTH'('h0));
     chk_eq("TC-G slot_pc[0] is the block base",
-           dut.w_slot_pc_p1[0], 40'h00_0000_6000);
+           dut.w_slot_pc_p1[0], VA_WIDTH'('h00_0000_6000));
     chk_eq("TC-G pred_pc[0] is the block base",
-           dut.w_hist_pred_pc[0], 40'h00_0000_6000);
+           dut.w_hist_pred_pc[0], VA_WIDTH'('h00_0000_6000));
     chk("TC-G path bit is 0", dut.u_bp_history.path_bit_0 === 1'b0);
 
     // -- E1. Checkpoint write at allocation. The checkpoint holds the
     //    POST-advance pointer pair for the allocated index.
     do_reset();
-    pc   = 40'h00_0000_1000;
+    pc   = VA_WIDTH'('h00_0000_1000);
     base = blk_base(pc);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h100, base, 1'b0);
-    e.br1   = mk_cond(1'b1, 4'd2, base + 40'h200, base, 1'b1);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h100), base, 1'b0);
+    e.br1   = mk_cond(1'b1, 4'd2, base + VA_WIDTH'('h200), base, 1'b1);
     e.pft   = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     chk("E1 checkpoint write disabled with no prediction",
@@ -2081,15 +2134,14 @@ module tb;
     sc_fill(6'b100000);
     sc_enable = 1'b1;
 
-    pc   = 40'h00_0400_0000;
+    pc   = VA_WIDTH'('h00_0400_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;              // FTB block end
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
-    e.pft   = ub_pft_field(base + 40'h0C, base);   // stale block end
-    e.carry = ub_pft_carry(base + 40'h0C, base);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h300), base, 1'b0);
+    e.pft   = ub_pft_field(base + VA_WIDTH'('h0C), base);   // stale block end
     ubtb_install(pc, e);
     lp_clear_both(pc);
 
@@ -2124,10 +2176,10 @@ module tb;
     tage_bim_fill(2'b00);
     sc_fill(6'b011111);
     sc_enable = 1'b1;
-    pc   = 40'h00_0430_0000;
+    pc   = VA_WIDTH'('h00_0430_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);             // p1 fall-through matches the FTB
     lp_clear_both(pc);
@@ -2150,19 +2202,19 @@ module tb;
     do_reset();
     tage_bim_fill(2'b00);
     sc_enable = 1'b0;
-    ftb_alloc_cond(40'h00_0420_0000, 2'd0, 1'b0, 1'b0,
-                   40'h00_0420_0300, 4'd1,
-                   40'h00_0420_0018, 1'b0);
+    ftb_alloc_cond(VA_WIDTH'('h00_0420_0000), 2'd0, 1'b0, 1'b0,
+                   VA_WIDTH'('h00_0420_0300), 4'd1,
+                   VA_WIDTH'('h00_0420_0018), 1'b0);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, 40'h00_0420_0300,
-                      40'h00_0420_0000, 1'b0);
-    e.pft   = ub_pft_field(40'h00_0420_000C, 40'h00_0420_0000);
-    e.carry = ub_pft_carry(40'h00_0420_000C, 40'h00_0420_0000);
-    ubtb_install(40'h00_0420_0000, e);
-    lp_clear_both(40'h00_0420_0000);
-    req(40'h00_0420_0000, 6'h3C);
+    e.br0   = mk_cond(1'b1, 4'd1, VA_WIDTH'('h00_0420_0300),
+                      VA_WIDTH'('h00_0420_0000), 1'b0);
+    e.pft   = ub_pft_field(VA_WIDTH'('h00_0420_000C),
+                           VA_WIDTH'('h00_0420_0000));
+    ubtb_install(VA_WIDTH'('h00_0420_0000), e);
+    lp_clear_both(VA_WIDTH'('h00_0420_0000));
+    req(VA_WIDTH'('h00_0420_0000), 6'h3C);
     tick();
-    req(40'h00_0420_0000, 6'h1C);
+    req(VA_WIDTH'('h00_0420_0000), 6'h1C);
     tick();
     norq();
     chk("E2b p2 redirect alone", dut.w_any_redir_p2 === 1'b1);
@@ -2187,14 +2239,13 @@ module tb;
     sc_fill(6'b100000);
     sc_enable = 1'b1;
     for (int b = 0; b < 8; b++) begin
-      pc   = 40'h00_0440_0000 + VA_WIDTH'(b * 32);
+      pc   = VA_WIDTH'('h00_0440_0000) + VA_WIDTH'(b * 32);
       base = blk_base(pc);
-      ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1,
+      ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1,
                      base + BLK_SZ, 1'b0);
       e       = '0;
-      e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
-      e.pft   = ub_pft_field(base + 40'h0C, base);
-      e.carry = ub_pft_carry(base + 40'h0C, base);
+      e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h300), base, 1'b0);
+      e.pft   = ub_pft_field(base + VA_WIDTH'('h0C), base);
       ubtb_install(pc, e);
       lp_clear_both(pc);
     end
@@ -2206,7 +2257,7 @@ module tb;
     sc_upd_val_u0[0]     = 1'b1;
     tie_seen = 0;
     for (int i = 0; i < 60; i++) begin
-      req(40'h00_0440_0000 + (VA_WIDTH'(i % 8) * BLK_SZ),
+      req(VA_WIDTH'('h00_0440_0000) + (VA_WIDTH'(i % 8) * BLK_SZ),
           FTQ_IDX_BITS'(i));
       tick();
       if (dut.w_any_redir_p2 && dut.w_any_redir_p3
@@ -2286,20 +2337,20 @@ module tb;
 
       // Two committed return addresses, so the RETURN blocks pop a
       // real address rather than falling back to the FTB target.
-      ras_push_commit(40'h00_0000_C100);
-      ras_push_commit(40'h00_0000_C200);
+      ras_push_commit(VA_WIDTH'('h00_0000_C100));
+      ras_push_commit(VA_WIDTH'('h00_0000_C200));
 
       // Four consecutive blocks: call, call, return, return.
       for (int b = 0; b < 4; b++) begin
-        cpc   = 40'h00_0460_0000 + VA_WIDTH'(b * 32);
+        cpc   = VA_WIDTH'('h00_0460_0000) + VA_WIDTH'(b * 32);
         cbase = blk_base(cpc);
         if (b < 2) begin
           // DIRECT_CALL: is_call, not jalr, not ret -> RAS push.
-          ftb_alloc_jmp(cpc, 2'd0, cbase + 40'h700, 4'd5,
+          ftb_alloc_jmp(cpc, 2'd0, cbase + VA_WIDTH'('h700), 4'd5,
                         1'b1, 1'b0, 1'b0, cbase + BLK_SZ, 1'b0);
         end else begin
           // RETURN: is_ret + is_jalr -> RAS pop.
-          ftb_alloc_jmp(cpc, 2'd0, cbase + 40'h800, 4'd2,
+          ftb_alloc_jmp(cpc, 2'd0, cbase + VA_WIDTH'('h800), 4'd2,
                         1'b0, 1'b1, 1'b1, cbase + BLK_SZ, 1'b0);
         end
         ubtb_clear_set(cpc);
@@ -2316,7 +2367,7 @@ module tb;
       // two drain cycles.
       for (int i = 0; i < 10; i++) begin
         if (i < 8)
-          req(40'h00_0460_0000 + (VA_WIDTH'(i % 4) * BLK_SZ),
+          req(VA_WIDTH'('h00_0460_0000) + (VA_WIDTH'(i % 4) * BLK_SZ),
               FTQ_IDX_BITS'(6'h04 + i));
         else
           norq();
@@ -2372,18 +2423,17 @@ module tb;
     //    OWN loop snapshot; the zero drive above slot 0 is gone.
     do_reset();
     tage_bim_fill(2'b11);
-    pc   = 40'h00_0500_0000;
+    pc   = VA_WIDTH'('h00_0500_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd2, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd2, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
-    ftb_alloc_jmp(pc, 2'd2, base + 40'h500, 4'd6, 1'b0, 1'b0, 1'b0,
+    ftb_alloc_jmp(pc, 2'd2, base + VA_WIDTH'('h500), 4'd6, 1'b0, 1'b0, 1'b0,
                   pft, 1'b1);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
-    e.br1   = mk_cond(1'b1, 4'd3, base + 40'h380, base, 1'b0);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h300), base, 1'b0);
+    e.br1   = mk_cond(1'b1, 4'd3, base + VA_WIDTH'('h380), base, 1'b0);
     e.pft   = ub_pft_field(pft, base);
-    e.carry = ub_pft_carry(pft, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     // Distinct loop state per slot: different confidence and different
@@ -2469,7 +2519,7 @@ module tb;
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);
     sc_enable = 1'b1;
-    ftb_alloc_cond(pc, 2'd1, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd1, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -2527,7 +2577,7 @@ module tb;
     //    stage apart, so the FTQ can take them as two separate writes
     //    rather than one merged one.
     do_reset();
-    pc = 40'h00_0510_0000;
+    pc = VA_WIDTH'('h00_0510_0000);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
     req(pc, 6'h2E);
@@ -2577,7 +2627,7 @@ module tb;
     //    tagged tables, so a test placed after groups G and H would
     //    otherwise inherit their allocations.
     do_reset();
-    pc   = 40'h00_0700_0000;
+    pc   = VA_WIDTH'('h00_0700_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pft, 4'd3, pft, 1'b0);
@@ -2616,15 +2666,14 @@ module tb;
     //    p2 group that merely echoed p1 would fail here.
     do_reset();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0740_0000;
+    pc   = VA_WIDTH'('h00_0740_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h180, 4'd6, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h180), 4'd6, pft,
                    1'b0);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h180, base, 1'b0);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h180), base, 1'b0);
     e.pft   = ub_pft_field(base + BLK_SZ, base);
-    e.carry = ub_pft_carry(base + BLK_SZ, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h32);
@@ -2641,10 +2690,10 @@ module tb;
     // -- I3. A slot holding the block's jump field takes the JUMP
     //    position, not a conditional field's (interfaces 5.1, 7.3).
     do_reset();
-    pc   = 40'h00_0780_0000;
+    pc   = VA_WIDTH'('h00_0780_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h240, 4'd5, 1'b0, 1'b0, 1'b0,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h240), 4'd5, 1'b0, 1'b0, 1'b0,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -2667,10 +2716,10 @@ module tb;
     tage_bim_fill(2'b11);            // TAGE taken
     sc_enable = 1'b1;
     sc_fill({SC_MAX_CTR_WIDTH{1'b0}});
-    pc   = 40'h00_07C0_0000;
+    pc   = VA_WIDTH'('h00_07C0_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h1C0, 4'd2, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h1C0), 4'd2, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -2689,7 +2738,7 @@ module tb;
     chk("I4 pos survives the p2 -> p3 register",
         bpu_slot_p3[0].pos === 4'd2);
     chk_eq("I4 target survives the p2 -> p3 register",
-           bpu_slot_p3[0].target, base + 40'h1C0);
+           bpu_slot_p3[0].target, base + VA_WIDTH'('h1C0));
     sc_enable = 1'b0;
 
     $display("---- GROUP I done (pass %0d fail %0d) ----",
@@ -2753,7 +2802,6 @@ module tb;
       e.br1 = mk_cond(1'b1, 4'd2, pft, base, 1'b0);
     end
     e.pft   = ub_pft_field(pft, base);
-    e.carry = ub_pft_carry(pft, base);
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, idx);
@@ -2781,9 +2829,9 @@ module tb;
     //    checkpoints hold three different pointer values and naming
     //    the wrong one fails.
     j_reset();
-    j_alloc(40'h00_0900_0000, 6'h10, 2);
-    j_alloc(40'h00_0910_0000, 6'h11, 1);
-    j_alloc(40'h00_0920_0000, 6'h12, 2);
+    j_alloc(VA_WIDTH'('h00_0900_0000), 6'h10, 2);
+    j_alloc(VA_WIDTH'('h00_0910_0000), 6'h11, 1);
+    j_alloc(VA_WIDTH'('h00_0920_0000), 6'h12, 2);
 
     chk("J1 the three checkpoints hold three different values",
         (dut.u_bp_history.ckpt_gptr[6'h10] !==
@@ -2825,17 +2873,16 @@ module tb;
     //    the predictors pick and the redirect does not depend on
     //    TAGE at all.
     j_reset();
-    j_alloc(40'h00_0930_0000, 6'h0A, 2);      // reference checkpoint
+    j_alloc(VA_WIDTH'('h00_0930_0000), 6'h0A, 2);      // reference checkpoint
     c_ref = dut.u_bp_history.ckpt_gptr[6'h0A];
 
-    pc   = 40'h00_0940_0000;
+    pc   = VA_WIDTH'('h00_0940_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pft, 4'd1, pft, 1'b0);
     e       = '0;
     e.br0   = mk_cond(1'b1, 4'd1, pft, base, 1'b0);
-    e.pft   = ub_pft_field(base + 40'h0C, base);   // stale block end
-    e.carry = ub_pft_carry(base + 40'h0C, base);
+    e.pft   = ub_pft_field(base + VA_WIDTH'('h0C), base);   // stale block end
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h3C);
@@ -2873,21 +2920,20 @@ module tb;
     //    block end, so the tie is reached with distinct indices
     //    (the BP-094 construction used by E2a).
     j_reset();
-    j_alloc(40'h00_0950_0000, 6'h0B, 2);      // reference checkpoint
+    j_alloc(VA_WIDTH'('h00_0950_0000), 6'h0B, 2);      // reference checkpoint
 
     tage_bim_fill(2'b11);           // TAGE taken
     sc_fill(6'b100000);             // SC reverses it at p3
     sc_enable = 1'b1;
 
-    pc   = 40'h00_0960_0000;
+    pc   = VA_WIDTH'('h00_0960_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     e       = '0;
-    e.br0   = mk_cond(1'b1, 4'd1, base + 40'h300, base, 1'b0);
-    e.pft   = ub_pft_field(base + 40'h0C, base);   // stale block end
-    e.carry = ub_pft_carry(base + 40'h0C, base);
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h300), base, 1'b0);
+    e.pft   = ub_pft_field(base + VA_WIDTH'('h0C), base);   // stale block end
     ubtb_install(pc, e);
     lp_clear_both(pc);
     req(pc, 6'h3A);
@@ -2934,9 +2980,9 @@ module tb;
     //    pointer takes the rollback value instead. E1 is the
     //    contrast case, where the same request does write it.
     j_reset();
-    j_alloc(40'h00_0970_0000, 6'h0A, 2);
-    j_alloc(40'h00_0980_0000, 6'h0B, 1);
-    j_alloc(40'h00_0990_0000, 6'h0C, 2);
+    j_alloc(VA_WIDTH'('h00_0970_0000), 6'h0A, 2);
+    j_alloc(VA_WIDTH'('h00_0980_0000), 6'h0B, 1);
+    j_alloc(VA_WIDTH'('h00_0990_0000), 6'h0C, 2);
     c_ref = dut.u_bp_history.ckpt_gptr[6'h0A];
 
     chk("J4 the live pointer has moved past the 0x0A checkpoint",
@@ -2946,7 +2992,7 @@ module tb;
     //    tick after the request is presented. The rollback is
     //    asserted in that cycle, the cycle whose posedge would carry
     //    out the checkpoint write.
-    req(40'h00_0970_0000, 6'h0A);   // re-request the same entry
+    req(VA_WIDTH'('h00_0970_0000), 6'h0A);   // re-request the same entry
     tick();
     norq();
     ftq_rollback_val = 1'b1;
@@ -3124,7 +3170,7 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     sc_enable = 1'b1;
-    pc = 40'h00_0600_0000;
+    pc = VA_WIDTH'('h00_0600_0000);
 
     // NO_BRANCH: forms NO update anywhere, even with valid high.
     ubtb_upd_u0[0]    = mk_upd(NO_BRANCH, 1'b1, pc);
@@ -3243,10 +3289,10 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     tage_bim_fill(2'b01);
-    pc   = 40'h00_0610_0000;
+    pc   = VA_WIDTH'('h00_0610_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -3292,10 +3338,10 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0620_0000;
+    pc   = VA_WIDTH'('h00_0620_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h600, 4'd4, 1'b0, 1'b0, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -3312,7 +3358,7 @@ module tb;
     ubtb_upd_u0[0] = mk_upd(INDIRECT_NONRET, 1'b0, pc);
     ittage_upd_inp_u0[0].ittage_pred_meta = ftq_ittage[6'h0A][0];
     ittage_upd_inp_u0[0].resolved_target  =
-      IT_MAX_TGT_WIDTH'(40'h00_0000_9AA0 >> 1);
+      IT_MAX_TGT_WIDTH'(VA_WIDTH'('h00_0000_9AA0) >> 1);
     ittage_upd_inp_u0[0].indir_mispredict = 1'b1;
     ittage_upd_val_u0[0] = 1'b1;
     #1;
@@ -3324,14 +3370,13 @@ module tb;
 
     req_to_p3(pc, 6'h0B);
     it_hit_2 = ftq_ittage[6'h0B][0].ittage_hit;
-    it_tgt_2 = {1'b0,
-                ftq_ittage[6'h0B][0].ittage_prm_tgt, 1'b0};
+    it_tgt_2 = VA_WIDTH'({ftq_ittage[6'h0B][0].ittage_prm_tgt, 1'b0});
     chk("G2 second prediction HITS in ITTAGE after the update",
         it_hit_2 === 1'b1);
     chk("G2 the hit is a change from the first prediction",
         it_hit_2 !== it_hit_1);
     chk_eq("G2 the hit carries the resolved target",
-           it_tgt_2, 40'h00_0000_9AA0);
+           it_tgt_2, VA_WIDTH'('h00_0000_9AA0));
 
     // -- G3. SC. The five counter tables are seeded at -1 and the
     //    TAGE bimodal at 2'b11, so the local SC sum is
@@ -3359,10 +3404,10 @@ module tb;
     tage_bim_fill(2'b11);
     sc_fill(6'b111111);              // -1 in each consulted counter
     sc_enable = 1'b1;
-    pc   = 40'h00_0630_0000;
+    pc   = VA_WIDTH'('h00_0630_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h300, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -3421,7 +3466,7 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0640_0000;
+    pc   = VA_WIDTH'('h00_0640_0000);
     base = blk_base(pc);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -3438,7 +3483,7 @@ module tb;
     u            = mk_upd(COND, 1'b1, pc);
     u.br_idx     = 1'b0;
     u.br_taken   = 1'b1;
-    u.target     = base + 40'h240;
+    u.target     = base + VA_WIDTH'('h240);
     u.pos        = 4'd3;
     u.pft_addr   = base + BLK_SZ;
     ubtb_upd_u0[0] = u;
@@ -3461,7 +3506,7 @@ module tb;
     chk("G4 the resolved position was learned",
         bpu_pred_slot_p1[0].pos === 4'd3);
     chk_eq("G4 the resolved target was learned",
-           bpu_pred_slot_p1[0].target, base + 40'h240);
+           bpu_pred_slot_p1[0].target, base + VA_WIDTH'('h240));
     repeat (3) tick();
 
     // -- G5. FTB. A cold FTB misses at p2; the resolved block is
@@ -3471,7 +3516,7 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0650_0000;
+    pc   = VA_WIDTH'('h00_0650_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
     ubtb_clear_set(pc);
@@ -3484,7 +3529,7 @@ module tb;
     // Resolve: install the block. The FTB update channel carries its
     // own structural classification, so this is the only fan-out that
     // does not read the uBTB payload.
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + 40'h340, 4'd2, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h340), 4'd2, pft,
                    1'b0);
     repeat (3) tick();
 
@@ -3504,7 +3549,7 @@ module tb;
     tick();
     chk("G5 the entry under test is at p2", dut.r_idx_p2 === 6'h1C);
     chk_eq("G5 the resolved branch target is now the p2 successor",
-           bpu_redir_p2[0].target_pc, base + 40'h340);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h340));
 
     // -- G6. loop_pred. A cold bank reports no hit. Resolve a
     //    BACKWARD conditional branch, which is the allocation
@@ -3514,10 +3559,10 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0660_0000;
+    pc   = VA_WIDTH'('h00_0660_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base - 40'h100, 4'd1, pft,
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base - VA_WIDTH'('h100), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -3532,7 +3577,7 @@ module tb;
     ubtb_upd_u0[0] = mk_upd(COND, 1'b0, pc);
     lp_upd_p0[0]              = '0;
     lp_upd_p0[0].pc           = pc;
-    lp_upd_p0[0].target       = base - 40'h100;   // backward
+    lp_upd_p0[0].target       = base - VA_WIDTH'('h100);   // backward
     lp_upd_p0[0].actual_taken = 1'b1;
     lp_upd_p0[0].lp_idx       = ftq_lp[6'h12][0].lp_idx;
     lp_upd_p0[0].lp_tag       = ftq_lp[6'h12][0].lp_tag;
@@ -3563,10 +3608,10 @@ module tb;
     ftq_clear();
     clr_upd_chans();
     tage_bim_fill(2'b00);
-    pc   = 40'h00_0670_0000;
+    pc   = VA_WIDTH'('h00_0670_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
-    ftb_alloc_jmp(pc, 2'd0, base + 40'h800, 4'd2, 1'b0, 1'b1, 1'b1,
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h800), 4'd2, 1'b0, 1'b1, 1'b1,
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
@@ -3580,14 +3625,14 @@ module tb;
     chk("G7 no pop is available before the call resolves",
         dut.w_ras_pop_valid_p2[0] === 1'b0);
     chk_eq("G7 the successor falls back to the FTB jump target",
-           bpu_redir_p2[0].target_pc, base + 40'h800);
+           bpu_redir_p2[0].target_pc, base + VA_WIDTH'('h800));
     repeat (3) tick();
 
     // Resolve the matching DIRECT_CALL. w_ras_commit_val admits both
     // call encodings and RETURN and nothing else.
     ras_commit_val      = 1'b1;
     ras_commit_br_type  = DIRECT_CALL;
-    ras_commit_ret_addr = 40'h00_0000_D440;
+    ras_commit_ret_addr = VA_WIDTH'('h00_0000_D440);
     ras_commit_snapshot = '0;
     #1;
     chk("G7 the cluster admits a DIRECT_CALL commit",
@@ -3608,7 +3653,7 @@ module tb;
     chk("G7 the pop is now available",
         dut.w_ras_pop_valid_p2[0] === 1'b1);
     chk_eq("G7 the successor is the resolved return address",
-           bpu_redir_p2[0].target_pc, 40'h00_0000_D440);
+           bpu_redir_p2[0].target_pc, VA_WIDTH'('h00_0000_D440));
 
     clr_upd_chans();
     $display("---- GROUP G done (pass %0d fail %0d) ----",
@@ -3649,7 +3694,7 @@ module tb;
     clr_upd_chans();
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);
-    pc = 40'h00_0700_0000;
+    pc = VA_WIDTH'('h00_0700_0000);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
 
@@ -3981,6 +4026,65 @@ module tb;
   endtask
 
   // =================================================================
+  // GROUP K -- region-relative positions at the cluster (BP-110)
+  // =================================================================
+  //
+  // The uBTB stores positions region-relative and converts at its own
+  // ports (ftb_decisions.md 4.6 R-2), so pred_p1[s].pos is
+  // START-relative and the p1 branch PC is the lookup PC plus the
+  // scaled position. The entry is installed through the uBTB update
+  // channel, not by table write, so the case does not depend on the
+  // stored field layout.
+  task automatic group_k();
+    ubtb_upd_t           u;
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] base;
+
+    $display("---- GROUP K: region-relative positions ----");
+
+    // -- K1. TD#125 at p1. Block start at region offset 10, branch at
+    //    start-relative pos 3, so the branch PC is base + 16. As built
+    //    the cluster added pos to the aligned base and reported
+    //    base + 6.
+    do_reset();
+    clr_upd_chans();
+    pc   = VA_WIDTH'('h00_0660_000A);
+    base = blk_base(pc);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+
+    u            = mk_upd(COND, 1'b1, pc);
+    u.br_idx     = 1'b0;
+    u.br_taken   = 1'b1;
+    u.target     = base + VA_WIDTH'('h240);
+    u.pos        = 4'd3;
+    u.pft_addr   = pc + BLK_SZ;
+    ubtb_upd_u0[0] = u;
+    tick();
+    clr_upd_chans();
+    repeat (2) tick();
+
+    req(pc, 6'h10);
+    tick();
+    norq();
+    chk("K1 the uBTB hits the unaligned start",
+        dut.r_ubtb_blk_p1.hit === 1'b1);
+    chk("K1 slot0 valid", bpu_pred_slot_p1[0].slot_valid === 1'b1);
+    chk("K1 slot0 pos is start-relative",
+        bpu_pred_slot_p1[0].pos === 4'd3);
+    chk_eq("K1 slot0 branch PC is the lookup PC plus pos",
+           dut.w_slot_pc_p1[0], base + VA_WIDTH'('h10));
+    chk_eq("K1 bp_history receives the same branch PC",
+           dut.w_hist_pred_pc[0], base + VA_WIDTH'('h10));
+    chk_eq("K1 fall-through is the lookup PC plus one block",
+           bpu_pred_pft_p1, pc + BLK_SZ);
+    repeat (3) tick();
+
+    $display("---- GROUP K done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
   // Main
   // =================================================================
   initial begin
@@ -4008,6 +4112,7 @@ module tb;
     group_h();
     group_i();
     group_j();
+    group_k();
 
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

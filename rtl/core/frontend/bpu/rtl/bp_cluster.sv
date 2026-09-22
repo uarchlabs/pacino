@@ -49,8 +49,8 @@
 // valid bit says only that the slot carries a branch; the entry hit
 // is blk_p1.hit. blk_p1.pft_addr is authoritative for the cluster
 // when no slot is taken and is the p1 operand of the p2 redirect
-// comparison; on a miss it reads zero and the block-aligned start PC
-// plus one block stands in.
+// comparison; on a miss it reads zero and the lookup PC plus one
+// block stands in (ftb_decisions.md 4.6 R-3).
 //
 // Pipeline stage assignment:
 //   p0  indices and addresses to the RAMs; RAS top-of-stack read
@@ -279,20 +279,14 @@ module bp_cluster (
   localparam int SC_UPD_CRED_W  = $clog2(SC_UPD_CREDITS  + 1);
   localparam int SC_STARVE_W    = $clog2(SC_STARVE_THRESH + 1);
 
-  // Prediction-block alignment. The uBTB and the FTB describe the
-  // same FTB_BLOCK_BYTES block, so one offset width serves both. It
-  // forms w_blk_base_p1, which is the p1 fall-through default on a
-  // uBTB miss and the base of the per-slot branch PC.
-  localparam int BLK_OFF_BITS   = $clog2(FTB_BLOCK_BYTES);
-
-  // Scaling from an in-block position to a byte offset. pos counts
-  // two-byte slots, not bytes: bp_defines_pkg sizes it as
-  // $clog2(FTB_BLOCK_BYTES / 2), so 2**FTB_BR_POS_BITS positions cover
-  // the 2**BLK_OFF_BITS bytes of one block. Each position is therefore
-  // 2**(BLK_OFF_BITS - FTB_BR_POS_BITS) bytes. Derived, not assumed,
-  // so a block-size or position-width change rescales with it.
-  //   Resolved here: BLK_OFF_BITS 5, FTB_BR_POS_BITS 4 -> shift 1
-  localparam int BR_POS_SHIFT   = BLK_OFF_BITS - FTB_BR_POS_BITS;
+  // No block alignment is formed here. The uBTB and the FTB convert
+  // their stored region-relative positions to START-relative at their
+  // own ports (ftb_decisions.md 4.6 R-2), so the cluster works from the
+  // lookup PC only: a branch PC is the lookup PC plus the position
+  // scaled by POS_OFFSET_BITS (bp_defines_pkg), and a uBTB miss steps
+  // to the lookup PC plus FTB_BLOCK_BYTES (4.6 R-3). BP-110 removed
+  // BLK_OFF_BITS, BR_POS_SHIFT and w_blk_base_p1, which formed both
+  // from the 32-byte-aligned base.
 
   // ----------------------------------------------------------------
   // Internal nets: bp_history -> TAGE, ITTAGE, SC
@@ -449,10 +443,8 @@ module bp_cluster (
 
   bp_ftq_slot_t        w_slot_p1    [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_slot_pc_p1 [0:NUM_PRED_SLOTS-1];
-  // p1 block base, block fall-through, and the per-slot p1 successor
-  // built from them. All are the p1 view only; nothing here reads an
-  // FTB result.
-  logic [VA_WIDTH-1:0] w_blk_base_p1;
+  // p1 block fall-through and the per-slot p1 successor built from
+  // it. Both are the p1 view only; nothing here reads an FTB result.
   logic [VA_WIDTH-1:0] w_pft_p1;
   logic [VA_WIDTH-1:0] w_succ_p1    [0:NUM_PRED_SLOTS-1];
 
@@ -698,21 +690,16 @@ module bp_cluster (
       end
     end
 
-    // -- Block base: the block-aligned start of the single block this
-    //    p1 view describes. One alignment expression, shared by the
-    //    fall-through default below and by the per-slot branch PC.
-    w_blk_base_p1 = {r_pc_p1[VA_WIDTH-1:BLK_OFF_BITS],
-                     {BLK_OFF_BITS{1'b0}}};
-
     // -- p1 successor of each slot: the address fetched after that
     //    slot, formed from the p1 view only. blk_p1.pft_addr is the
     //    uBTB block fall-through and is authoritative for the cluster
     //    when no slot is taken (ubtb_interfaces.md, blk_p1 field
-    //    semantics). It reads zero on a miss, so the block-aligned
-    //    start PC plus one block stands in.
+    //    semantics). It reads zero on a miss, so the lookup PC plus
+    //    one prediction block stands in, with NO resync to the
+    //    32-byte-aligned base (ftb_decisions.md 4.6 R-3).
     w_pft_p1 = r_ubtb_blk_p1.hit
                  ? r_ubtb_blk_p1.pft_addr
-                 : (w_blk_base_p1 + VA_WIDTH'(FTB_BLOCK_BYTES));
+                 : (r_pc_p1 + VA_WIDTH'(FTB_BLOCK_BYTES));
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_succ_p1[s] = w_slot_p1[s].taken ? w_slot_p1[s].target
@@ -724,8 +711,10 @@ module bp_cluster (
     //    One uBTB lookup returns one entry describing one block, and
     //    both slots are conditional fields of that entry, so the two
     //    branches sit inside the SAME block at different in-block
-    //    positions. The PC is therefore the block base plus that
-    //    slot's scaled position, never a per-slot block stride.
+    //    positions. The uBTB reports each position START-relative
+    //    (ftb_decisions.md 4.6 R-2), so the PC is the lookup PC plus
+    //    that slot's scaled position, never a per-slot block stride
+    //    and never the 32-byte-aligned base.
     //    pos is taken from the FORMED slot, not from the uBTB
     //    directly: when loop_pred wins the selection mux the reported
     //    PC must still describe the branch actually predicted.
@@ -734,9 +723,9 @@ module bp_cluster (
     //    bit qualifies the PC.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_slot_pc_p1[s] = w_slot_p1[s].slot_valid
-                          ? (w_blk_base_p1
+                          ? (r_pc_p1
                              + (VA_WIDTH'(w_slot_p1[s].pos)
-                                << BR_POS_SHIFT))
+                                << POS_OFFSET_BITS))
                           : '0;
     end
 
@@ -886,19 +875,21 @@ module bp_cluster (
     logic [VA_WIDTH-1:0] p1_succ;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      // ITTAGE target. The metadata holds the upper 38 bits of an
-      // Sv39 VA with bit 0 not stored; bit 39 is the Sv39 sign
-      // extension of bit 38.
+      // ITTAGE target. The metadata holds VA[IT_MAX_TGT_WIDTH:1]; bit 0
+      // is not stored. Reconstruct by appending the zero bit and ZERO
+      // extending to VA_WIDTH (ftq_bpu_interfaces.md 5.2). NOT sign
+      // extension: with V=1 the fetch PC is a zero-extended guest
+      // physical address, and sign extending corrupts any GPA with
+      // bit 38 set. A target above the stored width mispredicts and is
+      // corrected at resolve (FE-19, TD#122).
       it_hit = w_ittage_pred_rdy_p2[s]
              & (w_ittage_pred_meta_p2[s].branch_id == r_idx_p2)
              & w_ittage_pred_meta_p2[s].ittage_hit;
       it_tgt = w_ittage_pred_meta_p2[s].ittage_using_primary
-                 ? {w_ittage_pred_meta_p2[s]
-                      .ittage_prm_tgt[IT_MAX_TGT_WIDTH-1],
-                    w_ittage_pred_meta_p2[s].ittage_prm_tgt, 1'b0}
-                 : {w_ittage_pred_meta_p2[s]
-                      .ittage_alt_tgt[IT_MAX_TGT_WIDTH-1],
-                    w_ittage_pred_meta_p2[s].ittage_alt_tgt, 1'b0};
+                 ? VA_WIDTH'({w_ittage_pred_meta_p2[s].ittage_prm_tgt,
+                              1'b0})
+                 : VA_WIDTH'({w_ittage_pred_meta_p2[s].ittage_alt_tgt,
+                              1'b0});
 
       // The predictor that supplied the slot is recorded alongside
       // the target it supplied. Diagnostic only (TD-FE-4), but it is

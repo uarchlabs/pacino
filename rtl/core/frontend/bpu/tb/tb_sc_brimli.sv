@@ -400,8 +400,8 @@ module tb;
     // inp_pc_p2 is [VA_WIDTH-1:1]; the DUT slices [15:6] for the
     // BrIMLI pc argument. Distinct PCs -> distinct indices per slot.
     // u_dut uses the default IDX_IMLI_PHR mode.
-    pc0   = 39'h0000_1240;
-    pc1   = 39'h0000_2E80;
+    pc0   = (VA_WIDTH-1)'('h0000_1240);
+    pc1   = (VA_WIDTH-1)'('h0000_2E80);
     phr   = 10'h155;
     imli  = 10'h0AA;         // nonzero -> IDX_IMLI_PHR uses imli
     eidx0 = calc_idx(pc0, phr, imli, IDX_IMLI_PHR);
@@ -456,7 +456,7 @@ module tb;
     logic [P_INDEX_BITS-1:0] e0, e1, e2, e3, e4;
     logic [P_INDEX_BITS-1:0] a0, a1, a2, a3, a4;
     logic ok;
-    pc      = 39'h0000_39C0;
+    pc      = (VA_WIDTH-1)'('h0000_39C0);
     phr     = 10'h2D3;
     imli_nz = 10'h11C;
 

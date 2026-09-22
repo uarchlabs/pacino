@@ -219,7 +219,7 @@ module tb;
   endtask
 
   task automatic chk38(
-    input string nm, input logic [37:0] act, exp
+    input string nm, input logic [IT_MAX_TGT_WIDTH-1:0] act, exp
   );
     if (act === exp) begin
       pass_cnt++;
@@ -285,7 +285,7 @@ module tb;
   task automatic mk_upd(output ittage_upd_inp_t ui);
     ui = '0;
     ui.indir_mispredict                      = 1'b0;
-    ui.resolved_target                       = 38'hBEEF;
+    ui.resolved_target                       = IT_MAX_TGT_WIDTH'('hBEEF);
     ui.ittage_pred_meta.ittage_hit           = 1'b1;
     ui.ittage_pred_meta.ittage_using_primary = 1'b1;
     ui.ittage_pred_meta.ittage_pred_strong   = 1'b1;
@@ -295,8 +295,8 @@ module tb;
     ui.ittage_pred_meta.ittage_alt_ctr       = 3'b010;
     ui.ittage_pred_meta.ittage_prm_idx       = 9'h033;
     ui.ittage_pred_meta.ittage_alt_idx       = 9'h011;
-    ui.ittage_pred_meta.ittage_prm_tgt       = 38'hAAAA;
-    ui.ittage_pred_meta.ittage_alt_tgt       = 38'hBBBB;
+    ui.ittage_pred_meta.ittage_prm_tgt       = IT_MAX_TGT_WIDTH'('hAAAA);
+    ui.ittage_pred_meta.ittage_alt_tgt       = IT_MAX_TGT_WIDTH'('hBBBB);
     ui.ittage_pred_meta.ittage_alc_comp      = TSW'(4);
     ui.ittage_pred_meta.ittage_alc_idx       = 9'h044;
     ui.ittage_pred_meta.ittage_alc_tag       = 11'h555;
@@ -400,12 +400,12 @@ module tb;
     ittage_pred_val_p0[0]   = 1'b1;
     tbl_hit_p1[3][0]        = 1'b1;
     tbl_cntrl_bits_p1[3][0] =
-      mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'hAAAA);
-    tbl_pred_tgt_p1[3][0]   = 38'hAAAA;
+      mk_cb(1'b1, 3'b000, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    tbl_pred_tgt_p1[3][0]   = IT_MAX_TGT_WIDTH'('hAAAA);
     tbl_hit_p1[1][0]        = 1'b1;
     tbl_cntrl_bits_p1[1][0] =
-      mk_cb(1'b1, 3'b011, 2'b00, 2'b00, 38'hBBBB);
-    tbl_pred_tgt_p1[1][0]   = 38'hBBBB;
+      mk_cb(1'b1, 3'b011, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('hBBBB));
+    tbl_pred_tgt_p1[1][0]   = IT_MAX_TGT_WIDTH'('hBBBB);
     @(posedge clk); #1;
     ua = dut.use_alt[0];
     ittage_pred_val_p0[0]   = 1'b0;
@@ -546,9 +546,9 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     // IT3 hit, USE=2'b11, EPC=2'b00 (age = epoch-EPC = 0-0 = 0)
-    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, 38'hAAAA);
-    ptgt[3] = 38'hAAAA;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('hAAAA);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     // age=0: u_eff = USEFUL = 2'b11 (non-triggering, USE holds)
     chk2("AGE05 u_eff age0 hold",
          m.ittage_prm_useful, 2'b11);
@@ -575,9 +575,9 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     // IT3 hit, USE=2'b10, EPC=2'b00 (age=epoch-EPC=1-0=1)
-    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, 38'hAAAA);
-    ptgt[3] = 38'hAAAA;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('hAAAA);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     // Failing value (no-op): 2'b10  Passing value (decremented): 2'b01
     chk2("AGE06 u_eff age1 dec",
          m.ittage_prm_useful, 2'b01);
@@ -602,9 +602,9 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     // IT3 hit, USE=2'b11, EPC=2'b00 (age=2)
-    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, 38'hAAAA);
-    ptgt[3] = 38'hAAAA;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('hAAAA);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     // age=2 >= 2: u_eff = 0
     chk2("AGE07 u_eff age2 zero",
          m.ittage_prm_useful, 2'b00);
@@ -632,9 +632,9 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, 38'hAAAA);
-    ptgt[3] = 38'hAAAA;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('hAAAA);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     chk2("AGE08 trigger_pass 2b01",
          m.ittage_prm_useful, 2'b01);
     // Case B: non-triggering (age=0, epoch=0, EPC=0, USE=2'b10)
@@ -643,9 +643,9 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, 38'hAAAA);
-    ptgt[3] = 38'hAAAA;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b10, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('hAAAA);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     chk2("AGE08 no_trigger_hold 2b10",
          m.ittage_prm_useful, 2'b10);
   endtask
@@ -682,9 +682,9 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, 38'hAAAA);
-    ptgt[3] = 38'hAAAA;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+    cb[3]   = mk_cb(1'b1, 3'b101, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('hAAAA));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('hAAAA);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     chk2("AGE09 u_eff no_dec",
          m.ittage_prm_useful, 2'b11);
   endtask
@@ -703,7 +703,7 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    pred_s0(40'hAAA, 6'b0, cb, ptgt, idx, tag, m, rdy);
+    pred_s0(VA_WIDTH'('hAAA), 6'b0, cb, ptgt, idx, tag, m, rdy);
     chk1("PRED01 rdy",      rdy,                    1'b1);
     chk1("PRED01 hit",      m.ittage_hit,           1'b0);
     chk3("PRED01 prm_comp", m.ittage_prm_comp,      3'(0));
@@ -726,11 +726,11 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     cb[5]   = mk_cb(1'b1, 3'b110, 2'b10, 2'b00,
-                    38'h0000_0000_1234);
-    ptgt[5] = 38'h0000_0000_1234;
+                    IT_MAX_TGT_WIDTH'('h0000_0000_1234));
+    ptgt[5] = IT_MAX_TGT_WIDTH'('h0000_0000_1234);
     idx[5]  = 9'h055;
     tag[5]  = 11'h2AA;
-    pred_s0(40'h0, 6'b10_0000, cb, ptgt, idx, tag, m, rdy);
+    pred_s0(VA_WIDTH'('h0), 6'b10_0000, cb, ptgt, idx, tag, m, rdy);
     chk1("PRED02 hit",      m.ittage_hit,           1'b1);
     chk3("PRED02 prm_comp", m.ittage_prm_comp,      3'(5));
     chk3("PRED02 alt_comp", m.ittage_alt_comp,      3'(0));
@@ -739,7 +739,7 @@ module tb;
     chk1("PRED02 strong",   m.ittage_pred_strong,   1'b1);
     chk1("PRED02 using_prm",m.ittage_using_primary, 1'b1);
     chk38("PRED02 prm_tgt", m.ittage_prm_tgt,
-          38'h0000_0000_1234);
+          IT_MAX_TGT_WIDTH'('h0000_0000_1234));
   endtask
 
   // ================================================================
@@ -757,14 +757,14 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     cb[5]   = mk_cb(1'b1, 3'b101, 2'b01, 2'b00,
-                    38'h0000_0000_AAAA);
-    ptgt[5] = 38'h0000_0000_AAAA;
+                    IT_MAX_TGT_WIDTH'('h0000_0000_AAAA));
+    ptgt[5] = IT_MAX_TGT_WIDTH'('h0000_0000_AAAA);
     idx[5]  = 9'h011;
     cb[3]   = mk_cb(1'b1, 3'b010, 2'b00, 2'b00,
-                    38'h0000_0000_BBBB);
-    ptgt[3] = 38'h0000_0000_BBBB;
+                    IT_MAX_TGT_WIDTH'('h0000_0000_BBBB));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('h0000_0000_BBBB);
     idx[3]  = 9'h022;
-    pred_s0(40'h0, 6'b10_1000, cb, ptgt, idx, tag, m, rdy);
+    pred_s0(VA_WIDTH'('h0), 6'b10_1000, cb, ptgt, idx, tag, m, rdy);
     chk3("PRED03 prm_comp", m.ittage_prm_comp,      3'(5));
     chk3("PRED03 alt_comp", m.ittage_alt_comp,      3'(3));
     chk9("PRED03 prm_idx",  m.ittage_prm_idx,       9'h011);
@@ -773,7 +773,7 @@ module tb;
     chk3("PRED03 alt_ctr",  m.ittage_alt_ctr,       3'b010);
     chk1("PRED03 using_prm",m.ittage_using_primary, 1'b1);
     chk38("PRED03 prm_tgt", m.ittage_prm_tgt,
-          38'h0000_0000_AAAA);
+          IT_MAX_TGT_WIDTH'('h0000_0000_AAAA));
     chk1("PRED03 strong",   m.ittage_pred_strong,   1'b1);
   endtask
 
@@ -793,19 +793,19 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00,
-                    38'h0000_0000_1111);
-    ptgt[3] = 38'h0000_0000_1111;
+                    IT_MAX_TGT_WIDTH'('h0000_0000_1111));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('h0000_0000_1111);
     cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00,
-                    38'h0000_0000_2222);
-    ptgt[1] = 38'h0000_0000_2222;
-    pred_s0(40'h0, 6'b00_1010, cb, ptgt, idx, tag, m, rdy);
+                    IT_MAX_TGT_WIDTH'('h0000_0000_2222));
+    ptgt[1] = IT_MAX_TGT_WIDTH'('h0000_0000_2222);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1010, cb, ptgt, idx, tag, m, rdy);
     chk1("PRED04 hit",      m.ittage_hit,            1'b1);
     chk3("PRED04 prm_comp", m.ittage_prm_comp,       3'(3));
     chk3("PRED04 alt_comp", m.ittage_alt_comp,       3'(1));
     chk1("PRED04 using_prm",m.ittage_using_primary,  1'b0);
     chk1("PRED04 uaon",     m.ittage_use_alt_on_na,  1'b1);
     chk38("PRED04 alt_tgt", m.ittage_alt_tgt,
-          38'h0000_0000_2222);
+          IT_MAX_TGT_WIDTH'('h0000_0000_2222));
     chk1("PRED04 strong",   m.ittage_pred_strong,    1'b1);
   endtask
 
@@ -824,12 +824,12 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00,
-                    38'h0000_0000_1111);
-    ptgt[3] = 38'h0000_0000_1111;
-    pred_s0(40'h0, 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
+                    IT_MAX_TGT_WIDTH'('h0000_0000_1111));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('h0000_0000_1111);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     chk1("PRED05 using_prm", m.ittage_using_primary, 1'b1);
     chk38("PRED05 prm_tgt",  m.ittage_prm_tgt,
-          38'h0000_0000_1111);
+          IT_MAX_TGT_WIDTH'('h0000_0000_1111));
     chk1("PRED05 strong",    m.ittage_pred_strong,   1'b0);
   endtask
 
@@ -843,20 +843,20 @@ module tb;
     $display("--- TC-PRED-06 ---");
     clr();
     ittage_pred_val_p0            = 2'b11;
-    ittage_pred_inp_p0[0].pc      = 40'h0;
+    ittage_pred_inp_p0[0].pc      = VA_WIDTH'('h0);
     ittage_pred_inp_p0[0].branch_id = '0;
-    ittage_pred_inp_p0[1].pc      = 40'h0;
+    ittage_pred_inp_p0[1].pc      = VA_WIDTH'('h0);
     ittage_pred_inp_p0[1].branch_id = '0;
     // Drive tbl_hit_p1 BEFORE p0->p1 posedge so Verilator's
     // nba_sequent at that edge sees the correct table results.
     tbl_hit_p1[5][0]        = 1'b1;
     tbl_hit_p1[2][1]        = 1'b1;
     tbl_cntrl_bits_p1[5][0] = mk_cb(1'b1, 3'b111, 2'b11,
-                                2'b00, 38'h0000_0000_CCCC);
-    tbl_pred_tgt_p1[5][0]   = 38'h0000_0000_CCCC;
+                                2'b00, IT_MAX_TGT_WIDTH'('h0000_0000_CCCC));
+    tbl_pred_tgt_p1[5][0]   = IT_MAX_TGT_WIDTH'('h0000_0000_CCCC);
     tbl_cntrl_bits_p1[2][1] = mk_cb(1'b1, 3'b001, 2'b00,
-                                2'b00, 38'h0000_0000_DDDD);
-    tbl_pred_tgt_p1[2][1]   = 38'h0000_0000_DDDD;
+                                2'b00, IT_MAX_TGT_WIDTH'('h0000_0000_DDDD));
+    tbl_pred_tgt_p1[2][1]   = IT_MAX_TGT_WIDTH'('h0000_0000_DDDD);
     @(posedge clk); #1;
     ittage_pred_val_p0      = '0;
     // Hold hit/cntrl/tgt stable until meta_p2_reg latches.
@@ -875,11 +875,11 @@ module tb;
     chk3("PRED06 s0 prm_comp", m0.ittage_prm_comp,   3'(5));
     chk1("PRED06 s0 hit",      m0.ittage_hit,         1'b1);
     chk38("PRED06 s0 prm_tgt", m0.ittage_prm_tgt,
-          38'h0000_0000_CCCC);
+          IT_MAX_TGT_WIDTH'('h0000_0000_CCCC));
     chk3("PRED06 s1 prm_comp", m1.ittage_prm_comp,   3'(2));
     chk1("PRED06 s1 hit",      m1.ittage_hit,         1'b1);
     chk38("PRED06 s1 prm_tgt", m1.ittage_prm_tgt,
-          38'h0000_0000_DDDD);
+          IT_MAX_TGT_WIDTH'('h0000_0000_DDDD));
   endtask
 
   // ================================================================
@@ -998,7 +998,7 @@ module tb;
     // prm_ctr=3'b000, mispredict: DEC saturates at 3'b000.
     // tgt_wr fires independently: mispredict + UP=1 + prm_ctr==0.
     chk1("UPD05 prm_tgt_wr", prm_tgt_wr_u0[0], 1'b1);
-    chk38("UPD05 tgt_wd",    tgt_wd_u0[0],     38'hBEEF);
+    chk38("UPD05 tgt_wd",    tgt_wd_u0[0],     IT_MAX_TGT_WIDTH'('hBEEF));
     chk1("UPD05 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
     chk1("UPD05 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
     chk3("UPD05 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b000);
@@ -1019,13 +1019,13 @@ module tb;
     ui.ittage_pred_meta.ittage_alc_comp      = TSW'(4);
     ui.ittage_pred_meta.ittage_prm_ctr       = 3'b101;
     ui.ittage_pred_meta.ittage_alc_tag       = 11'h555;
-    ui.resolved_target                       = 38'hBEEF;
+    ui.resolved_target                       = IT_MAX_TGT_WIDTH'('hBEEF);
     clr();
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
     #1;
     // lcl_epoch=0 (reset, aging disabled)
-    exp_alc = {11'h555, 38'hBEEF,
+    exp_alc = {11'h555, IT_MAX_TGT_WIDTH'('hBEEF),
                2'b00, 2'b00, 3'b000, 1'b1};
     // alc_index must come from ittage_alc_idx (9'h044), not
     // ittage_prm_idx (9'h033). ittage_alc_idx != ittage_prm_idx
@@ -1076,9 +1076,9 @@ module tb;
     mk_upd(ui);
     // pred_strong=0, prm_wrong, alt_correct -> INC uaon
     ui.ittage_pred_meta.ittage_pred_strong = 1'b0;
-    ui.ittage_pred_meta.ittage_prm_tgt     = 38'hAAAA;
-    ui.ittage_pred_meta.ittage_alt_tgt     = 38'hBBBB;
-    ui.resolved_target                     = 38'hBBBB;
+    ui.ittage_pred_meta.ittage_prm_tgt     = IT_MAX_TGT_WIDTH'('hAAAA);
+    ui.ittage_pred_meta.ittage_alt_tgt     = IT_MAX_TGT_WIDTH'('hBBBB);
+    ui.resolved_target                     = IT_MAX_TGT_WIDTH'('hBBBB);
     clr();
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;
@@ -1090,12 +1090,12 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00,
-                    38'h0000_0000_1111);
-    ptgt[3] = 38'h0000_0000_1111;
+                    IT_MAX_TGT_WIDTH'('h0000_0000_1111));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('h0000_0000_1111);
     cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00,
-                    38'h0000_0000_2222);
-    ptgt[1] = 38'h0000_0000_2222;
-    pred_s0(40'h0, 6'b00_1010, cb, ptgt, idx, tag, m, rdy);
+                    IT_MAX_TGT_WIDTH'('h0000_0000_2222));
+    ptgt[1] = IT_MAX_TGT_WIDTH'('h0000_0000_2222);
+    pred_s0(VA_WIDTH'('h0), 6'b00_1010, cb, ptgt, idx, tag, m, rdy);
     chk1("UPD08 using_prm=0", m.ittage_using_primary, 1'b0);
     chk1("UPD08 uaon_fired",  m.ittage_use_alt_on_na, 1'b1);
   endtask
@@ -1134,7 +1134,8 @@ module tb;
     do_reset();
     // resolved==alt_tgt (alt_correct), resolved!=prm_tgt (prm_wrong)
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hBBBB);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hBBBB));
     chk4("UAON02 uaon[0] inc", dut.uaon[0], 4'(9));
   endtask
 
@@ -1146,7 +1147,8 @@ module tb;
     do_reset();
     // resolved==prm_tgt (prm_correct), resolved!=alt_tgt (alt_wrong)
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hAAAA);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hAAAA));
     chk4("UAON03 uaon[0] dec", dut.uaon[0], 4'(7));
   endtask
 
@@ -1158,7 +1160,8 @@ module tb;
     do_reset();
     // resolved differs from both targets -> both wrong -> hold
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hCCCC);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hCCCC));
     chk4("UAON04 uaon[0] both_wrong", dut.uaon[0], 4'(8));
   endtask
 
@@ -1170,7 +1173,8 @@ module tb;
     do_reset();
     // resolved==prm_tgt==alt_tgt -> both correct -> hold
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hAAAA, 38'hAAAA);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hAAAA),
+             IT_MAX_TGT_WIDTH'('hAAAA));
     chk4("UAON05 uaon[0] both_right", dut.uaon[0], 4'(8));
   endtask
 
@@ -1182,7 +1186,8 @@ module tb;
     do_reset();
     // pred_strong=1 blocks update even if prm_wrong && alt_correct
     uaon_upd(1'b1, 1'b1, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hBBBB);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hBBBB));
     chk4("UAON06 uaon[0] pred_strong", dut.uaon[0], 4'(8));
   endtask
 
@@ -1194,7 +1199,8 @@ module tb;
     do_reset();
     // hit=0 blocks update even if prm_wrong && alt_correct
     uaon_upd(1'b0, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hBBBB);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hBBBB));
     chk4("UAON07 uaon[0] hit0", dut.uaon[0], 4'(8));
   endtask
 
@@ -1209,7 +1215,8 @@ module tb;
     do_reset();
     // alt_comp=0 (no alternate); stale alt_tgt==resolved -> blocked
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(0),
-             38'hBEEF, 38'hDEAD, 38'hDEAD);
+             IT_MAX_TGT_WIDTH'('hBEEF), IT_MAX_TGT_WIDTH'('hDEAD),
+             IT_MAX_TGT_WIDTH'('hDEAD));
     chk4("UAON08 uaon[0] sgl_hit_guard",
          dut.uaon[0], 4'(8));
   endtask
@@ -1226,21 +1233,24 @@ module tb;
     do_reset();  // uaon[0] = 8
     // DEC to 7: prm_correct && alt_wrong
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hAAAA);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hAAAA));
     chk4("UAON09 uaon[0] at_7", dut.uaon[0], 4'(7));
     // uaon=7 < THRES -> alt not selected
     obs_use_alt(ua);
     chk1("UAON09 use_alt=0 at_7", ua, 1'b0);
     // INC to 8: prm_wrong && alt_correct
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hBBBB);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hBBBB));
     chk4("UAON09 uaon[0] at_8", dut.uaon[0], 4'(8));
     // uaon=8 >= THRES -> alt selected
     obs_use_alt(ua);
     chk1("UAON09 use_alt=1 at_8", ua, 1'b1);
     // DEC back to 7
     uaon_upd(1'b1, 1'b0, TSW'(3), TSW'(1),
-             38'hAAAA, 38'hBBBB, 38'hAAAA);
+             IT_MAX_TGT_WIDTH'('hAAAA), IT_MAX_TGT_WIDTH'('hBBBB),
+             IT_MAX_TGT_WIDTH'('hAAAA));
     chk4("UAON09 uaon[0] back_7", dut.uaon[0], 4'(7));
     // uaon=7 < THRES -> alt not selected
     obs_use_alt(ua);
@@ -1266,16 +1276,16 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[3]   = mk_cb(1'b1, 3'b001, 2'b01, 2'b00, 38'h100);
-    ptgt[3] = 38'h100;
+    cb[3]   = mk_cb(1'b1, 3'b001, 2'b01, 2'b00, IT_MAX_TGT_WIDTH'('h100));
+    ptgt[3] = IT_MAX_TGT_WIDTH'('h100);
     idx[3]  = 9'h033;
     // IT4: USE=00, EPC=00 -> age=0, u_eff=0 (qualifies)
-    cb[4]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h200);
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('h200));
     idx[4]  = 9'h044;
     tag[4]  = 11'h4BB;
     // IT5: USE=11, EPC=00 -> age=0, u_eff=11 (does not qualify)
-    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h300);
-    pred_s0(40'h0, 6'b001000, cb, ptgt, idx, tag, m, rdy);
+    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h300));
+    pred_s0(VA_WIDTH'('h0), 6'b001000, cb, ptgt, idx, tag, m, rdy);
     chk3("ALC01 prm_comp", m.ittage_prm_comp, 3'(3));
     chk3("ALC01 alc_comp", m.ittage_alc_comp, 3'(4));
     chk9("ALC01 alc_idx",  m.ittage_alc_idx,  9'h044);
@@ -1313,16 +1323,16 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, 38'hAA);
-    ptgt[1] = 38'hAA;
+    cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, IT_MAX_TGT_WIDTH'('hAA));
+    ptgt[1] = IT_MAX_TGT_WIDTH'('hAA);
     idx[1]  = 9'h011;
     // IT2: USE=10, EPC=00 -> u_eff=10 (does not qualify)
-    cb[2]   = mk_cb(1'b1, 3'b000, 2'b10, 2'b00, 38'h0);
+    cb[2]   = mk_cb(1'b1, 3'b000, 2'b10, 2'b00, IT_MAX_TGT_WIDTH'('h0));
     // IT3: USE=00, EPC=00 -> u_eff=0 (qualifies)
-    cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('h0));
     idx[3]  = 9'h033;
     tag[3]  = 11'h3AA;
-    pred_s0(40'h0, 6'b000010, cb, ptgt, idx, tag, m, rdy);
+    pred_s0(VA_WIDTH'('h0), 6'b000010, cb, ptgt, idx, tag, m, rdy);
     chk3("ALC02 prm_comp", m.ittage_prm_comp, 3'(1));
     chk3("ALC02 alc_comp", m.ittage_alc_comp, 3'(3));
     chk9("ALC02 alc_idx",  m.ittage_alc_idx,  9'h033);
@@ -1347,16 +1357,16 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[2]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, 38'hBB);
-    ptgt[2] = 38'hBB;
+    cb[2]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, IT_MAX_TGT_WIDTH'('hBB));
+    ptgt[2] = IT_MAX_TGT_WIDTH'('hBB);
     // IT3: USE=00, EPC=00 -> u_eff=0 (qualifies first)
-    cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('h0));
     idx[3]  = 9'h033;
     // IT4: USE=00, EPC=00 -> u_eff=0 (also qualifies, but
     //   consecutive to IT3; skipped by if-else chain)
-    cb[4]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('h0));
     idx[4]  = 9'h044;
-    pred_s0(40'h0, 6'b000100, cb, ptgt, idx, tag, m, rdy);
+    pred_s0(VA_WIDTH'('h0), 6'b000100, cb, ptgt, idx, tag, m, rdy);
     chk3("ALC03 prm_comp", m.ittage_prm_comp, 3'(2));
     chk3("ALC03 alc_comp", m.ittage_alc_comp, 3'(3));
     chk9("ALC03 alc_idx",  m.ittage_alc_idx,  9'h033);
@@ -1380,10 +1390,10 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[5]   = mk_cb(1'b1, 3'b101, 2'b01, 2'b00, 38'h5555);
-    ptgt[5] = 38'h5555;
+    cb[5]   = mk_cb(1'b1, 3'b101, 2'b01, 2'b00, IT_MAX_TGT_WIDTH'('h5555));
+    ptgt[5] = IT_MAX_TGT_WIDTH'('h5555);
     idx[5]  = 9'h055;
-    pred_s0(40'h0, 6'b100000, cb, ptgt, idx, tag, m, rdy);
+    pred_s0(VA_WIDTH'('h0), 6'b100000, cb, ptgt, idx, tag, m, rdy);
     chk3("ALC04 prm_comp", m.ittage_prm_comp, 3'(5));
     chk3("ALC04 alc_comp", m.ittage_alc_comp, 3'(0));
     mk_upd(ui);
@@ -1417,14 +1427,14 @@ module tb;
       cb[t] = '0; ptgt[t] = '0;
       idx[t] = '0; tag[t] = '0;
     end
-    cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, 38'hCC);
-    ptgt[1] = 38'hCC;
+    cb[1]   = mk_cb(1'b1, 3'b011, 2'b01, 2'b00, IT_MAX_TGT_WIDTH'('hCC));
+    ptgt[1] = IT_MAX_TGT_WIDTH'('hCC);
     // IT2-IT5: USE=11, EPC=00 -> u_eff=11 (none qualify)
-    cb[2]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    cb[3]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    cb[4]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    pred_s0(40'h0, 6'b000010, cb, ptgt, idx, tag, m, rdy);
+    cb[2]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    pred_s0(VA_WIDTH'('h0), 6'b000010, cb, ptgt, idx, tag, m, rdy);
     chk3("ALC05 prm_comp", m.ittage_prm_comp, 3'(1));
     chk3("ALC05 alc_comp", m.ittage_alc_comp, 3'(0));
     mk_upd(ui);
@@ -1499,15 +1509,15 @@ module tb;
       idx[t] = '0; tag[t] = '0;
     end
     // IT1: USE=00, EPC=00 -> u_eff=0 (qualifies first)
-    cb[1]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, 38'h0);
+    cb[1]   = mk_cb(1'b1, 3'b000, 2'b00, 2'b00, IT_MAX_TGT_WIDTH'('h0));
     idx[1]  = 9'h011;
     tag[1]  = 11'h1AA;
     // IT2-IT5: USE=11 -> u_eff != 0 (ensure IT1 is chosen)
-    cb[2]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    cb[3]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    cb[4]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, 38'h0);
-    pred_s0(40'h0, 6'b000000, cb, ptgt, idx, tag, m, rdy);
+    cb[2]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    cb[3]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    cb[4]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    cb[5]   = mk_cb(1'b1, 3'b000, 2'b11, 2'b00, IT_MAX_TGT_WIDTH'('h0));
+    pred_s0(VA_WIDTH'('h0), 6'b000000, cb, ptgt, idx, tag, m, rdy);
     chk1("ALC08 hit",      m.ittage_hit,      1'b0);
     chk3("ALC08 prm_comp", m.ittage_prm_comp, 3'(0));
     chk3("ALC08 alc_comp", m.ittage_alc_comp, 3'(1));
@@ -1563,9 +1573,9 @@ module tb;
     ui.ittage_pred_meta.ittage_alc_comp = TSW'(3);
     ui.ittage_pred_meta.ittage_alc_idx  = 9'h033;
     ui.ittage_pred_meta.ittage_alc_tag  = 11'h4AB;
-    ui.resolved_target                  = 38'h3CAFE;
+    ui.resolved_target                  = IT_MAX_TGT_WIDTH'('h3CAFE);
     // Expected: {TAG, TGT, EPC, USE, CTR, VALID}
-    exp_wd = {11'h4AB, 38'h3CAFE, 2'b10, 2'b00, 3'b000, 1'b1};
+    exp_wd = {11'h4AB, IT_MAX_TGT_WIDTH'('h3CAFE), 2'b10, 2'b00, 3'b000, 1'b1};
     clr();
     ittage_upd_val_u0[0] = 1'b1;
     ittage_upd_inp_u0[0] = ui;

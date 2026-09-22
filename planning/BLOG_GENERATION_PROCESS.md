@@ -5,7 +5,7 @@
 ```
  FILE:    BLOG_GENERATION_PROCESS.md
  STATUS:  DRAFT
- UPDATED: 2026-09-04
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -101,7 +101,7 @@ this document only. This is top of the file.
 ```
 <!-- SPDX-License-Identifier: CC-BY-4.0                        -->
 <!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                -->
-<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
 ```
 
 ## File meta data
@@ -187,8 +187,8 @@ Example
 
 ## Technical debt referenced
 
-Technical debt is referenced in the artical as TD# N. This is not a link to the
-technical debt table in the blog. This is a recently changed rule.
+Technical debt is referenced in prose as `TD #NN` (for example, TD #84). This
+is not a link to the technical debt table in the post.
 
 Headers are:
 ```
@@ -222,6 +222,10 @@ range predates the current status files.
 References to external documents, in particular those in the research 
 literature are indicated with the conventional [N]. This marker is not
 a link to the reference section.
+
+Cite an external design or codebase only where the project took something from
+it: a mechanism, a rule, or a value verified against it. Designs surveyed for
+orientation and not copied are not named.
 
 The reference section is labeled # References. It has a format similar to
 this exmaple.
@@ -321,6 +325,10 @@ The process below is the procedure for producing that from a session range.
     starting reference, prior posts have each covered 2-8
     experiments — use that as a sanity check when judging whether
     a candidate range is too thin or too broad, not as a hard rule.
+    A range spanning more than one design unit costs more words per
+    experiment than a range within one unit, because setup is not
+    shared. Split such a range on unit boundaries before compressing
+    it.
   - The PA is consulted to determine the range of sessions
     necessary for a coherent and sizable article.
 
@@ -464,6 +472,10 @@ degradation, off-by-one errors in handoff numbering, abandoned drafts. These
 feed the "what the sessions exposed about the methodology" subsection. Report
 them neutrally — cost and benefit both.
 
+PA postmortem records are included only where the event changed an artifact:
+a file, a task, a rule, or a decision. Trend narrative, supervision-cost claims
+and self-assessment from postmortems are excluded.
+
 ### 7. Separate PA contribution from IA contribution
 
 Using PROJECT_CORE's dictate-vs-propose framing: what did the PA produce
@@ -487,6 +499,9 @@ refers to the published post sequence; this step operates on the range.
 Includes drafting the Abstract last, after the body sections exist — it's
 easier to compress an already-written post accurately than to predict its shape
 in advance.
+
+Series navigation blocks are left present and empty; they are filled at
+publication, not per post.
 
 ---
 

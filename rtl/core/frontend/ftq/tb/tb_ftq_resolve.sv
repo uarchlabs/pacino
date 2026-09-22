@@ -113,7 +113,7 @@ module tb;
     end
   end
 
-  localparam logic [VA_WIDTH-1:0] BASE_PC = 40'h00_8000_0000;
+  localparam logic [VA_WIDTH-1:0] BASE_PC = VA_WIDTH'('h00_8000_0000);
 
   int pass_cnt;
   int fail_cnt;
@@ -254,15 +254,15 @@ module tb;
     do_reset();
 
     put_entry(4,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(11)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(11)),
       1'b1, 2);
     settle();
     chk("A1 no bucket fires with no resolution",
         !(|rsv_accept) && !(|rsv_nomap) && !(|rsv_drop_sq));
 
     present(0, 4, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("A2 a live mapped resolution is accepted", rsv_accept[0]);
     chk("A3 and nothing else fires",
@@ -292,19 +292,19 @@ module tb;
     // matched on a truncated compare would still separate them; a
     // second pair one apart is used below to catch that.
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
-      mk_slot(1'b1, 40'h00_9100_0000, INDIRECT_NONRET,
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), INDIRECT_NONRET,
               FTB_BR_POS_BITS'(11)),
       1'b1, 1);
 
     present(0, 9, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("B1 the lower position maps to slot 0",
         rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(0)));
 
     present(0, 9, FTB_BR_POS_BITS'(11), INDIRECT_NONRET, 1'b1,
-            40'h00_9200_0000, 1'b0);
+            VA_WIDTH'('h00_9200_0000), 1'b0);
     settle();
     chk("B2 the higher position maps to slot 1",
         rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(1)));
@@ -315,31 +315,31 @@ module tb;
     // field was widened to 4 bits, and adjacent positions are what
     // the old 3-bit field collided.
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(6)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(7)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(6)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(7)),
       1'b1, 1);
     present(0, 9, FTB_BR_POS_BITS'(6), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("B3 adjacent positions separate, slot 0",
         rsv_slot[0] == TRX_SLOT_BITS'(0));
     present(0, 9, FTB_BR_POS_BITS'(7), COND, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     settle();
     chk("B4 adjacent positions separate, slot 1",
         rsv_slot[0] == TRX_SLOT_BITS'(1));
 
     // POSITION 0 AND POSITION 15, the two ends of the field.
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(0)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(15)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(0)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(15)),
       1'b1, 1);
     present(0, 9, FTB_BR_POS_BITS'(0), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("B5 position 0 maps", rsv_slot[0] == TRX_SLOT_BITS'(0));
     present(0, 9, FTB_BR_POS_BITS'(15), COND, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     settle();
     chk("B6 position 15 maps", rsv_slot[0] == TRX_SLOT_BITS'(1));
 
@@ -347,28 +347,28 @@ module tb;
     // validity is part of the match: a slot the FTB never filled
     // holds a stale position from a previous use of the entry.
     put_entry(9,
-      mk_slot(1'b0, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(6)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(7)),
+      mk_slot(1'b0, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(6)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(7)),
       1'b1, 1);
     present(0, 9, FTB_BR_POS_BITS'(6), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("B7 an invalid slot does not map", rsv_nomap[0]);
     clr();
 
     // THE TWO CHANNELS MAP INDEPENDENTLY, on different entries.
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(2)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(8)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(2)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(8)),
       1'b1, 1);
     put_entry(20,
-      mk_slot(1'b1, 40'h00_9200_0000, COND, FTB_BR_POS_BITS'(5)),
-      mk_slot(1'b1, 40'h00_9300_0000, COND, FTB_BR_POS_BITS'(13)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9200_0000), COND, FTB_BR_POS_BITS'(5)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9300_0000), COND, FTB_BR_POS_BITS'(13)),
       1'b0, 3);
     present(0, 9,  FTB_BR_POS_BITS'(8),  COND, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     present(1, 20, FTB_BR_POS_BITS'(5),  COND, 1'b0,
-            40'h00_9200_0000, 1'b1);
+            VA_WIDTH'('h00_9200_0000), 1'b1);
     settle();
     chk   ("B8 channel 0 maps to slot 1",
            rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(1)));
@@ -387,8 +387,8 @@ module tb;
     do_reset();
 
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(11)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(11)),
       1'b1, 1);
 
     // Position 7 names neither slot. The entry describes a
@@ -396,7 +396,7 @@ module tb;
     // stale or aliased FTB entry -- and it is NOT the same
     // condition as a squashed entry.
     present(0, 9, FTB_BR_POS_BITS'(7), COND, 1'b1,
-            40'h00_9400_0000, 1'b0);
+            VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
     chk("C1 an unmapped position is REPORTED", rsv_nomap[0]);
     chk("C2 it is not reported as a squash",   !rsv_drop_sq[0]);
@@ -421,12 +421,12 @@ module tb;
     // The two channels report independently: one maps, one does
     // not, and the mapping one still forms its update.
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
     present(0, 9, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     present(1, 9, FTB_BR_POS_BITS'(12), COND, 1'b1,
-            40'h00_9500_0000, 1'b0);
+            VA_WIDTH'('h00_9500_0000), 1'b0);
     settle();
     chk("C7 one channel maps and the other reports",
         rsv_accept[0] && rsv_nomap[1]);
@@ -442,14 +442,14 @@ module tb;
     do_reset();
 
     put_entry(9,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
 
     // A live window of 5 through 19.
     commit_ptr = FTQ_PTR_BITS'(5);
     alloc_ptr  = FTQ_PTR_BITS'(20);
     present(0, 9, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("D1 an entry inside the window is accepted", rsv_accept[0]);
 
@@ -477,19 +477,19 @@ module tb;
     // ACROSS THE WRAP. A window from 60 to 68 covers indices 60..63
     // and 0..3. A raw index compare reports the complement.
     put_entry(2,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
     put_entry(30,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
     commit_ptr = FTQ_PTR_BITS'(60);
     alloc_ptr  = FTQ_PTR_BITS'(68);
     present(0, 2, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("D7 index 2 is inside the wrapping window", rsv_accept[0]);
     present(0, 30, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("D8 index 30 is outside it", rsv_drop_sq[0]);
     clr();
@@ -505,19 +505,19 @@ module tb;
     do_reset();
 
     put_entry(17,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(3)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(11)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(11)),
       1'b1, 2);
 
     present(0, 17, FTB_BR_POS_BITS'(11), COND, 1'b1,
-            40'h00_ABCD_0000, 1'b1);
+            VA_WIDTH'('h00_ABCD_0000), 1'b1);
     settle();
     chk   ("E1 the update is presented",  ftb_upd_val[0]);
     chk_va("E2 the PC is the entry's",    ftb_upd[0].pc,
            VA_WIDTH'(BASE_PC + 17 * 32));
     chk   ("E3 the direction passes through", ftb_upd[0].taken);
     chk_va("E4 the target passes through", ftb_upd[0].target,
-           40'h00_ABCD_0000);
+           VA_WIDTH'('h00_ABCD_0000));
     chk   ("E5 the position passes through",
            ftb_upd[0].pos == FTB_BR_POS_BITS'(11));
     chk_va("E6 the fall-through is the entry's",
@@ -543,7 +543,7 @@ module tb;
 
     // A JUMP fills the jump field instead.
     present(0, 17, FTB_BR_POS_BITS'(3), DIRECT_UNC, 1'b1,
-            40'h00_BEEF_0000, 1'b0);
+            VA_WIDTH'('h00_BEEF_0000), 1'b0);
     settle();
     chk("E12 a jump sets is_jmp",
         ftb_upd[0].is_jmp && !ftb_upd[0].is_br);
@@ -551,19 +551,19 @@ module tb;
         !ftb_upd[0].is_call && !ftb_upd[0].is_ret);
 
     present(0, 17, FTB_BR_POS_BITS'(3), DIRECT_CALL, 1'b1,
-            40'h00_BEEF_0000, 1'b0);
+            VA_WIDTH'('h00_BEEF_0000), 1'b0);
     settle();
     chk("E14 a direct call sets is_call",
         ftb_upd[0].is_call && !ftb_upd[0].is_jalr);
 
     present(0, 17, FTB_BR_POS_BITS'(3), RETURN, 1'b1,
-            40'h00_BEEF_0000, 1'b0);
+            VA_WIDTH'('h00_BEEF_0000), 1'b0);
     settle();
     chk("E15 a return sets is_ret and is_jalr",
         ftb_upd[0].is_ret && ftb_upd[0].is_jalr);
 
     present(0, 17, FTB_BR_POS_BITS'(3), INDIRECT_CALL, 1'b1,
-            40'h00_BEEF_0000, 1'b0);
+            VA_WIDTH'('h00_BEEF_0000), 1'b0);
     settle();
     chk("E16 an indirect call is both call and jalr",
         ftb_upd[0].is_call && ftb_upd[0].is_jalr);
@@ -573,7 +573,7 @@ module tb;
     // valid and classified as not FTB-bound -- accepted and then
     // ignored, with no drop reported.
     present(0, 17, FTB_BR_POS_BITS'(3), NO_BRANCH, 1'b0,
-            40'h0, 1'b0);
+            VA_WIDTH'('h0), 1'b0);
     settle();
     chk("E17 NO_BRANCH forms no FTB update", !ftb_upd_val[0]);
     clr();
@@ -587,14 +587,14 @@ module tb;
     do_reset();
 
     put_entry(21,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(4)),
-      mk_slot(1'b1, 40'h00_9100_0000, INDIRECT_NONRET,
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(4)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), INDIRECT_NONRET,
               FTB_BR_POS_BITS'(12)),
       1'b1, 0);
 
     // conditional -> uBTB, LP, FTB, TAGE, SC.
     present(0, 21, FTB_BR_POS_BITS'(4), COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("F1 a conditional updates tage, sc and lp",
         upd_tage_val[0] && upd_sc_val[0] && upd_lp_val[0]);
@@ -612,7 +612,7 @@ module tb;
 
     // indirect -> uBTB, FTB, ITTAGE.
     present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_NONRET, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     settle();
     chk("F7 an indirect updates ittage",  upd_ittage_val[1]);
     chk("F8 and not tage, sc or lp",
@@ -627,7 +627,7 @@ module tb;
     // snapshot, not the metadata, so no RAS traffic forms here.
     m_entry[21].slot[1].br_type = INDIRECT_CALL;
     present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_CALL, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     settle();
     chk("F11 an indirect call updates ittage", upd_ittage_val[1]);
 
@@ -636,7 +636,7 @@ module tb;
     // predictor update on this path at all.
     m_entry[21].slot[1].br_type = RETURN;
     present(0, 21, FTB_BR_POS_BITS'(12), RETURN, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     settle();
     chk("F12 a return updates the uBTB and the FTB",
         upd_ubtb_val[1] && ftb_upd_val[0]);
@@ -647,7 +647,7 @@ module tb;
     // direct unconditional -> uBTB, FTB only.
     m_entry[21].slot[1].br_type = DIRECT_UNC;
     present(0, 21, FTB_BR_POS_BITS'(12), DIRECT_UNC, 1'b1,
-            40'h00_9100_0000, 1'b0);
+            VA_WIDTH'('h00_9100_0000), 1'b0);
     settle();
     chk("F14 a direct unconditional updates the uBTB and FTB only",
         upd_ubtb_val[1] && ftb_upd_val[0] &&
@@ -656,7 +656,7 @@ module tb;
     // NO_BRANCH forms NO update at all.
     m_entry[21].slot[1].br_type = NO_BRANCH;
     present(0, 21, FTB_BR_POS_BITS'(12), NO_BRANCH, 1'b0,
-            40'h0, 1'b0);
+            VA_WIDTH'('h0), 1'b0);
     settle();
     chk("F15 NO_BRANCH forms no update",
         !upd_ubtb_val[1] && !ftb_upd_val[0]);
@@ -664,13 +664,13 @@ module tb;
     // BOTH CHANNELS AT ONCE, on the two slots of one entry. This is
     // the ordinary two-per-cycle case ftq_ftb_sched exists for.
     put_entry(21,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(4)),
-      mk_slot(1'b1, 40'h00_9100_0000, COND, FTB_BR_POS_BITS'(12)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(4)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(12)),
       1'b1, 0);
     present(0, 21, FTB_BR_POS_BITS'(4),  COND, 1'b1,
-            40'h00_9000_0000, 1'b0);
+            VA_WIDTH'('h00_9000_0000), 1'b0);
     present(1, 21, FTB_BR_POS_BITS'(12), COND, 1'b0,
-            40'h00_9100_0000, 1'b1);
+            VA_WIDTH'('h00_9100_0000), 1'b1);
     settle();
     chk("F16 both slots update in one cycle",
         upd[0].valid && upd[1].valid);
@@ -694,10 +694,10 @@ module tb;
     // derive from the RESOLVED facts and from ftb, which lies
     // outside the deferred union.
     put_entry(25,
-      mk_slot(1'b1, 40'h00_9000_0000, COND, FTB_BR_POS_BITS'(4)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(4)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
     present(0, 25, FTB_BR_POS_BITS'(4), INDIRECT_NONRET, 1'b1,
-            40'h00_9900_0000, 1'b1);
+            VA_WIDTH'('h00_9900_0000), 1'b1);
     settle();
     chk("G1 the disagreement is reported", rsv_type_dis[0]);
     chk("G2 the resolution is still accepted", rsv_accept[0]);
@@ -711,7 +711,7 @@ module tb;
 
     // AGREEING types do not suppress, so G3 is not a constant.
     present(0, 25, FTB_BR_POS_BITS'(4), COND, 1'b1,
-            40'h00_9900_0000, 1'b0);
+            VA_WIDTH'('h00_9900_0000), 1'b0);
     settle();
     chk("G8 an agreeing type does not suppress",
         !rsv_type_dis[0] && upd_tage_val[0]);

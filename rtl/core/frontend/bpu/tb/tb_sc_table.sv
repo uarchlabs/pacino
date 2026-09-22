@@ -299,8 +299,8 @@ module tb;
     logic [P_INDEX_BITS-1:0] eidx0, eidx1;
     logic [P_CTR_WIDTH-1:0]  seed0, seed1;
     logic ihok, rdok;
-    pc0   = 39'h0000_0044;   // (pc>>2)=0x11
-    pc1   = 39'h0000_0060;   // (pc>>2)=0x18
+    pc0   = (VA_WIDTH-1)'('h0000_0044);   // (pc>>2)=0x11
+    pc1   = (VA_WIDTH-1)'('h0000_0060);   // (pc>>2)=0x18
     fh    = 64'h0000_0000_0000_0005;
     eidx0 = calc_idx(pc0, fh);
     eidx1 = calc_idx(pc1, fh);

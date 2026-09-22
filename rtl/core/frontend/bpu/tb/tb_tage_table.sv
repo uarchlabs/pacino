@@ -102,22 +102,22 @@ module tb;
   // TC15: idx=0x060, tag=0xAC -> pc=0x56180 (epc_we_s0 test)
   // TC16: idx=0x070, tag=0xAC -> pc=0x561C0 (alt CTR slot 1 test)
   // ----------------------------------------------------------------
-  localparam logic [VA_WIDTH-1:0] PC_TC1       = 40'h5_6004;
-  localparam logic [VA_WIDTH-1:0] PC_TC2_MISS  = 40'h6_6004;
-  localparam logic [VA_WIDTH-1:0] PC_TC3       = 40'h7_6014;
-  localparam logic [VA_WIDTH-1:0] PC_TC4       = 40'h5_4040;
-  localparam logic [VA_WIDTH-1:0] PC_TC4_MISS  = 40'h6_4040;
-  localparam logic [VA_WIDTH-1:0] PC_TC5       = 40'h6_6054;
-  localparam logic [VA_WIDTH-1:0] PC_TC6       = 40'h6_E080;
-  localparam logic [VA_WIDTH-1:0] PC_TC7       = 40'h7_60C0;
-  localparam logic [VA_WIDTH-1:0] PC_TC8_PRED  = 40'h5_6100;
-  localparam logic [VA_WIDTH-1:0] PC_TC9_S0    = 40'h5_6154;
-  localparam logic [VA_WIDTH-1:0] PC_TC9_S1    = 40'h5_E154;
-  localparam logic [VA_WIDTH-1:0] PC_TC11      = 40'h5_6404;
-  localparam logic [VA_WIDTH-1:0] PC_TC12      = 40'h2_0020;
-  localparam logic [VA_WIDTH-1:0] PC_TC14_S1   = 40'h5_6140;
-  localparam logic [VA_WIDTH-1:0] PC_TC15_EPC  = 40'h5_6180;
-  localparam logic [VA_WIDTH-1:0] PC_TC16_S1   = 40'h5_61C0;
+  localparam logic [VA_WIDTH-1:0] PC_TC1       = VA_WIDTH'('h5_6004);
+  localparam logic [VA_WIDTH-1:0] PC_TC2_MISS  = VA_WIDTH'('h6_6004);
+  localparam logic [VA_WIDTH-1:0] PC_TC3       = VA_WIDTH'('h7_6014);
+  localparam logic [VA_WIDTH-1:0] PC_TC4       = VA_WIDTH'('h5_4040);
+  localparam logic [VA_WIDTH-1:0] PC_TC4_MISS  = VA_WIDTH'('h6_4040);
+  localparam logic [VA_WIDTH-1:0] PC_TC5       = VA_WIDTH'('h6_6054);
+  localparam logic [VA_WIDTH-1:0] PC_TC6       = VA_WIDTH'('h6_E080);
+  localparam logic [VA_WIDTH-1:0] PC_TC7       = VA_WIDTH'('h7_60C0);
+  localparam logic [VA_WIDTH-1:0] PC_TC8_PRED  = VA_WIDTH'('h5_6100);
+  localparam logic [VA_WIDTH-1:0] PC_TC9_S0    = VA_WIDTH'('h5_6154);
+  localparam logic [VA_WIDTH-1:0] PC_TC9_S1    = VA_WIDTH'('h5_E154);
+  localparam logic [VA_WIDTH-1:0] PC_TC11      = VA_WIDTH'('h5_6404);
+  localparam logic [VA_WIDTH-1:0] PC_TC12      = VA_WIDTH'('h2_0020);
+  localparam logic [VA_WIDTH-1:0] PC_TC14_S1   = VA_WIDTH'('h5_6140);
+  localparam logic [VA_WIDTH-1:0] PC_TC15_EPC  = VA_WIDTH'('h5_6180);
+  localparam logic [VA_WIDTH-1:0] PC_TC16_S1   = VA_WIDTH'('h5_61C0);
 
   // ----------------------------------------------------------------
   // Test entry data (ALLOC_DATA_W=16b).

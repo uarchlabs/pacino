@@ -16,20 +16,33 @@
 // ONE lookup per cycle returns ONE entry describing ONE
 // UBTB_BLOCK_BYTES block. The entry mirrors the FTB entry: two
 // conditional fields (br0, br1), one block-terminating jump field,
-// and a partial fall-through address plus a carry bit. Prediction
-// slot 0 is built from br0, slot 1 from br1. The jump field is
-// reported in the lowest slot that carries no valid conditional
-// field. There is no second lookup and no slot-1 PC.
+// and a partial fall-through address with no carry bit (TD#124).
+// There is no second lookup and no slot-1 PC.
+//
+// Positions are STORED region-relative and PRESENTED start-relative
+// (ftb_decisions.md 4.6, ubtb_interfaces.md pos). The entry is shared
+// by every lookup PC in its 32-byte region. The write adds the update
+// PC's region offset k to upd_u0[u].pos; the read reports a field
+// only when its stored position lies in [k, k+16) of the lookup PC,
+// and subtracts k. A field outside that window reports its slot
+// invalid (ubtb_interfaces.md pos). Slot 0 is built from br0, slot 1
+// from br1: the uBTB does NOT pack visible fields onto the slots or
+// reorder storage; that is the FTB read path (4.6 O-3), and
+// ubtb_interfaces.md still assigns slot 0 to br0. The jump field is
+// reported in the lowest slot that carries no visible conditional
+// field.
 //
 // NUM_PRED_SLOTS sizes the prediction and update port arrays only.
 // It does not change the number of lookups. At NUM_PRED_SLOTS = 1
 // only the br0 field is reported.
 //
-// Targets are stored as displacements from block start with a
-// fit/overflow/underflow status (ftb_decisions.md 4.2) and are
-// reconstructed to full width on read. Reconstruction is
-// unconditional; there is no fall-through error check and no error
-// output (ftb_decisions.md 4.5).
+// Targets are stored as displacements from the 32-byte-aligned region
+// base with a fit/overflow/underflow status (ftb_decisions.md 4.2)
+// and are reconstructed to full width on read. The FTB measures a
+// conditional target from the branch PC instead (4.6 O-1); the uBTB
+// does not. The fall-through reconstructs from the region base plus
+// pftAddr and is NOT bounds checked here (see BP-110 Results
+// Capture); the FTB result at p2 is authoritative.
 //
 // conf is a bimodal DIRECTION counter. Its most significant bit is
 // the predicted direction for that conditional branch.
@@ -38,10 +51,12 @@
 // single array local to this module; it is not split into separate
 // data and valid peers the way the FTB is.
 //
-// uBTB pipeline timing:
-// p0: pred_pc_p0 presented. Index and tag derived comb.
-// p1: mem is registered. pred_p1 and blk_p1 are comb from mem.
-//     Both valid at the start of p1, one cycle after pred_pc_p0.
+// uBTB timing:
+// The lookup is combinational. pred_p1 and blk_p1 are formed from
+// pred_pc_p0 and the registered array in the same cycle, with no
+// register between them; the module adds no cycle of latency. The
+// p1 suffix names the cluster stage that consumes them: bp_cluster.sv
+// registers them into r_ubtb_pred_p1 / r_ubtb_blk_p1.
 // Update: synchronous write on clk posedge when upd_u0[u].valid.
 // Read-during-write: prediction reflects the pre-update state; the
 // new entry is visible on the following cycle (no bypass).
@@ -97,8 +112,8 @@ module ubtb #(
     return pc[UBTB_OFFSET_BITS+UBTB_IDX_BITS +: UBTB_TAG_BITS];
   endfunction
 
-  // Block start address: the PC with the in-block offset cleared.
-  // Every stored displacement is relative to this base.
+  // Region base: the PC with the in-block offset cleared. Every stored
+  // target displacement and the stored pftAddr are relative to it.
   function automatic logic [VA_WIDTH-1:0] get_base(
     input logic [VA_WIDTH-1:0] pc
   );
@@ -111,8 +126,7 @@ module ubtb #(
   // ----------------------------------------------------------------
 
   // Reconstruct a full-VA conditional target from the stored
-  // displacement and the block-start base. Sign-extend; no error
-  // check on reconstruction (4.5).
+  // displacement and the region base. Sign-extend.
   function automatic logic [VA_WIDTH-1:0] recon_br(
       input logic [UBTB_BR_TGT_BITS-1:0] disp,
       input logic [VA_WIDTH-1:0]         base);
@@ -169,16 +183,41 @@ module ubtb #(
   endfunction
 
   // Reconstruct the full-width fall-through from the stored partial
-  // index and the carry bit (ftb_decisions.md 8.1). pft holds the
-  // in-block instruction index at expanded granularity; carry adds
-  // one whole block when the end crosses the block boundary.
+  // pftAddr (ftb_decisions.md 5.5, 8.1): the region base plus pftAddr
+  // in positions. No carry term.
   function automatic logic [VA_WIDTH-1:0] recon_pft(
       input logic [UBTB_PFTADDR_BITS-1:0] pft,
-      input logic                         carry,
       input logic [VA_WIDTH-1:0]          base);
-    recon_pft = base
-      + ({{(VA_WIDTH-UBTB_PFTADDR_BITS){1'b0}}, pft} << UBTB_POS_OFFSET_BITS)
-      + (carry ? VA_WIDTH'(UBTB_BLOCK_BYTES) : VA_WIDTH'(0));
+    recon_pft = base + (VA_WIDTH'(pft) << UBTB_POS_OFFSET_BITS);
+  endfunction
+
+  // Region window test (ftb_decisions.md 4.6 R-1). A stored region
+  // position is visible to a start at region offset k when it lies in
+  // [k, k+16). The difference is one bit wider than a stored position
+  // so it carries a sign.
+  function automatic logic in_window(
+      input logic [UBTB_BR_RPOS_BITS-1:0] rpos,
+      input logic [UBTB_BR_POS_BITS-1:0]  k);
+    logic [UBTB_BR_RPOS_BITS:0] d;
+    d         = (UBTB_BR_RPOS_BITS+1)'(rpos) - (UBTB_BR_RPOS_BITS+1)'(k);
+    in_window = (d[UBTB_BR_RPOS_BITS:UBTB_BR_POS_BITS] == '0);
+  endfunction
+
+  // Stored region position -> start-relative slot position (4.6 R-2).
+  // Meaningful only when in_window() holds.
+  function automatic logic [UBTB_BR_POS_BITS-1:0] to_start_pos(
+      input logic [UBTB_BR_RPOS_BITS-1:0] rpos,
+      input logic [UBTB_BR_POS_BITS-1:0]  k);
+    logic [UBTB_BR_RPOS_BITS-1:0] d;
+    d            = rpos - UBTB_BR_RPOS_BITS'(k);
+    to_start_pos = d[UBTB_BR_POS_BITS-1:0];
+  endfunction
+
+  // Region offset of a PC in positions.
+  function automatic logic [UBTB_BR_POS_BITS-1:0] get_k(
+    input logic [VA_WIDTH-1:0] pc
+  );
+    return pc[UBTB_OFFSET_BITS-1:UBTB_POS_OFFSET_BITS];
   endfunction
 
   // Saturating bimodal step (UBTB_CONF_WIDTH bits). up = resolved
@@ -207,43 +246,49 @@ module ubtb #(
   // same helper serves both the single-channel case and the merge of
   // two channels landing on one entry in one cycle.
   //
-  // - the fall-through is reduced and rewritten on every update
-  // - a conditional field that is already occupied steps its bimodal
-  //   conf toward the resolved direction and keeps its stored
-  //   position; a free field fills with the weak init in the
-  //   resolved direction and takes its position from the update
+  // - the fall-through is reduced from the region base and rewritten
+  //   on every update, with no carry (TD#124)
+  // - a conditional field that is occupied AND visible from this
+  //   update start steps its bimodal conf toward the resolved
+  //   direction and keeps its stored position. A free field, or one
+  //   whose stored position lies outside this start's window (it was
+  //   recorded by another start in the region), fills with the weak
+  //   init in the resolved direction and takes the REGION position
+  //   up.pos + k (ftb_decisions.md 4.6 R-2)
   // - the target displacement is re-encoded on every resolve, so an
   //   unchanged target simply stores the same value and "rewrite the
   //   target if it differs" falls out
   // - the jump field is written whenever is_jmp is set, and its
-  //   target is rewritten on every such resolve
+  //   target is rewritten on every such resolve; its position follows
+  //   the same fill rule as a conditional field
   function automatic ubtb_entry_t apply_upd(
       input ubtb_entry_t ent,
       input ubtb_upd_t   up);
-    ubtb_entry_t         e;
-    ubtb_cond_t          fld_old;
-    ubtb_cond_t          fld_new;
-    logic [VA_WIDTH-1:0] base;
-    logic [VA_WIDTH-1:0] off;
-    logic                fresh;
-    logic                jfresh;
+    ubtb_entry_t                  e;
+    ubtb_cond_t                   fld_old;
+    ubtb_cond_t                   fld_new;
+    logic [VA_WIDTH-1:0]          base;
+    logic [VA_WIDTH-1:0]          off;
+    logic [UBTB_BR_POS_BITS-1:0]  k;
+    logic [UBTB_BR_RPOS_BITS-1:0] rpos;
+    logic                         fresh;
+    logic                         jfresh;
 
     e    = ent;
     base = get_base(up.pc);
     off  = up.pft_addr - base;
+    k    = get_k(up.pc);
+    rpos = UBTB_BR_RPOS_BITS'(up.pos) + UBTB_BR_RPOS_BITS'(k);
 
-    // Fall-through reduce: pft is the in-block instruction index of
-    // the block end at expanded granularity, carry is set when the
-    // end crosses the block boundary.
-    e.pft   = {{(UBTB_PFTADDR_BITS-(UBTB_OFFSET_BITS-UBTB_POS_OFFSET_BITS))
-                {1'b0}}, off[UBTB_OFFSET_BITS-1:UBTB_POS_OFFSET_BITS]};
-    e.carry = |off[VA_WIDTH-1:UBTB_OFFSET_BITS];
+    // Fall-through reduce: the block end as a position offset from
+    // the region base.
+    e.pft = off[UBTB_POS_OFFSET_BITS +: UBTB_PFTADDR_BITS];
 
     fld_old = (up.br_idx == 1'b0) ? e.br0 : e.br1;
-    fresh   = ~fld_old.valid;
+    fresh   = ~(fld_old.valid & in_window(fld_old.pos, k));
 
     fld_new.valid = 1'b1;
-    fld_new.pos   = fresh ? up.pos : fld_old.pos;
+    fld_new.pos   = fresh ? rpos : fld_old.pos;
     fld_new.tgt   = enc_br_disp(up.target, base);
     fld_new.stat  = br_stat(up.target, base);
     fld_new.conf  = fresh
@@ -255,10 +300,10 @@ module ubtb #(
       else                   e.br1 = fld_new;
     end
 
-    jfresh = ~e.jmp.valid;
+    jfresh = ~(e.jmp.valid & in_window(e.jmp.pos, k));
     if (up.is_jmp) begin
       e.jmp.valid   = 1'b1;
-      e.jmp.pos     = jfresh ? up.pos : e.jmp.pos;
+      e.jmp.pos     = jfresh ? rpos : e.jmp.pos;
       e.jmp.tgt     = enc_jmp_disp(up.jmp_target, base);
       e.jmp.stat    = jmp_stat(up.jmp_target, base);
       e.jmp.is_call = up.is_call;
@@ -276,19 +321,25 @@ module ubtb #(
   // every prediction slot. The block reads mem (a flop array), so it
   // is nba_sequent and re-evaluates after FF updates (the CLAUDE.md
   // stl_sequent workaround note).
-  logic [UBTB_IDX_BITS-1:0] p_idx;
-  logic [UBTB_TAG_BITS-1:0] p_tag;
-  logic [VA_WIDTH-1:0]      p_base;
+  logic [UBTB_IDX_BITS-1:0]    p_idx;
+  logic [UBTB_TAG_BITS-1:0]    p_tag;
+  logic [VA_WIDTH-1:0]         p_base;
+  logic [UBTB_BR_POS_BITS-1:0] p_k;
 
   assign p_idx  = get_idx(pred_pc_p0);
   assign p_tag  = get_tag(pred_pc_p0);
   assign p_base = get_base(pred_pc_p0);
+  assign p_k    = get_k(pred_pc_p0);
 
   logic [UBTB_WAYS-1:0]   p_hit_vec;
   logic [WR_PTR_BITS-1:0] p_hit_way;
   logic                   p_hit;
   ubtb_entry_t            p_ent;
   ubtb_cond_t             p_cfld;
+  logic                   p_cval;
+  logic                   p_vis0;
+  logic                   p_vis1;
+  logic                   p_visj;
   logic                   p_jmp_used;
 
   always_comb begin
@@ -309,40 +360,53 @@ module ubtb #(
     pred_p1    = '0;
     blk_p1     = '0;
     p_cfld     = '0;
+    p_cval     = 1'b0;
     p_jmp_used = 1'b0;
+
+    // Region window (4.6 R-1): only fields whose stored position lies
+    // in [k, k+16) of the lookup PC are reported.
+    p_vis0 = p_ent.br0.valid & in_window(p_ent.br0.pos, p_k);
+    p_vis1 = p_ent.br1.valid & in_window(p_ent.br1.pos, p_k);
+    p_visj = p_ent.jmp.valid & in_window(p_ent.jmp.pos, p_k);
 
     if (p_hit) begin
       blk_p1.hit      = 1'b1;
-      blk_p1.pft_addr = recon_pft(p_ent.pft, p_ent.carry, p_base);
+      blk_p1.pft_addr = recon_pft(p_ent.pft, p_base);
 
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        // Slot 0 takes br0, slot 1 takes br1. A slot above 1 carries
-        // no conditional field (NUM_PRED_SLOTS 3+ is undefined per
+        // Slot 0 takes br0, slot 1 takes br1, each only when visible
+        // from this lookup PC. A slot above 1 carries no conditional
+        // field (NUM_PRED_SLOTS 3+ is undefined per
         // ubtb_interfaces.md 2).
-        if      (s == 0) p_cfld = p_ent.br0;
-        else if (s == 1) p_cfld = p_ent.br1;
-        else             p_cfld = '0;
+        if (s == 0) begin
+          p_cfld = p_ent.br0;
+          p_cval = p_vis0;
+        end else if (s == 1) begin
+          p_cfld = p_ent.br1;
+          p_cval = p_vis1;
+        end else begin
+          p_cfld = '0;
+          p_cval = 1'b0;
+        end
 
-        if (p_cfld.valid) begin
+        if (p_cval) begin
           pred_p1[s].valid    = 1'b1;
           pred_p1[s].target   = recon_br(p_cfld.tgt, p_base);
           pred_p1[s].br_type  = COND;
           pred_p1[s].br_taken = p_cfld.conf[UBTB_CONF_WIDTH-1];
-          pred_p1[s].pos      = p_cfld.pos;
+          pred_p1[s].pos      = to_start_pos(p_cfld.pos, p_k);
           pred_p1[s].conf     = p_cfld.conf;
-          pred_p1[s].carry    = p_ent.carry;
-        end else if (p_ent.jmp.valid && !p_jmp_used) begin
+        end else if (p_visj && !p_jmp_used) begin
           // Block-terminating jump: reported in the LOWEST slot that
-          // carries no valid conditional field. br_taken and conf
-          // are not meaningful for a jump and are driven 0.
+          // carries no conditional field. br_taken and conf are not
+          // meaningful for a jump and are driven 0.
           p_jmp_used          = 1'b1;
           pred_p1[s].valid    = 1'b1;
           pred_p1[s].target   = recon_jmp(p_ent.jmp.tgt, p_base);
           pred_p1[s].br_type  = jmp_br_type(p_ent.jmp);
           pred_p1[s].br_taken = 1'b0;
-          pred_p1[s].pos      = p_ent.jmp.pos;
+          pred_p1[s].pos      = to_start_pos(p_ent.jmp.pos, p_k);
           pred_p1[s].conf     = '0;
-          pred_p1[s].carry    = p_ent.carry;
         end
       end
     end

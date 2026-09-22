@@ -63,7 +63,7 @@ task automatic tage_use_test(
   start_test(this_test);
 
   //Set initial conditions
-  pc    = 40'h1000;
+  pc    = VA_WIDTH'('h1000);
   bid   = 3;
 
   pidx  = int'(11'h100);
@@ -337,7 +337,7 @@ task automatic tage_ctr_test(
   start_test(this_test);
 
   //Set initial conditions
-  pc    = 40'h1000;
+  pc    = VA_WIDTH'('h1000);
   bid   = 3;
 
   pidx  = int'(11'h100);
@@ -1472,7 +1472,7 @@ endtask
 // -------------------------------------------------------------------
 // tage_round_trip_sanity: throwaway infrastructure check.
 // Verifies RAM write/read paths and one predict-update-predict cycle.
-// PC = 40'h0000_1234 with folded_hist=0:
+// PC = 0x0000_1234 with folded_hist=0:
 //   T1 idx = PC[12:2] & 0x7FF = 1165 (bank=1, row=141)
 //   T1 tag = PC[18:11] & 0xFF = 8'h02
 // This test must pass without any RTL modifications.
@@ -1483,7 +1483,7 @@ task automatic tage_round_trip_sanity(
   input toe  = 0
 );
 
-  localparam logic [VA_WIDTH-1:0] TEST_PC  = 40'h0000_1234;
+  localparam logic [VA_WIDTH-1:0] TEST_PC  = VA_WIDTH'('h0000_1234);
   localparam int                  TEST_TBL = 1;
   localparam int                  TEST_IDX = 1165;
 

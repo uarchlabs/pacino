@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -127,21 +127,50 @@ naming convention. The two must agree and nothing makes them.
   REQ_ID_BITS      ABSENT, TD-IF-1    L1iReqIdBits        4
   MAX_OUTSTANDING  ABSENT, TD-IF-1    L1iMaxOutstanding  16
   GPA_WIDTH        ABSENT, TD#122     (no counterpart)    41
-  VPN_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
-  PPN_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
+  GVPN_WIDTH       ABSENT, TD#122     (no counterpart)    29
+  VPN_WIDTH        ABSENT, TD#122     (no counterpart)    27
+  PPN_WIDTH        ABSENT, TD#122     (no counterpart)    24
   ASID_WIDTH       ABSENT, TD#122     (no counterpart)    16
   VMID_WIDTH       ABSENT, TD#122     (no counterpart)    14
-  PERM_WIDTH       ABSENT, TD#122     (no counterpart)   TBD
-  CAUSE_WIDTH      ABSENT, TD#122     (no counterpart)   TBD
-  PMA_WIDTH        ABSENT, TD#122     (no counterpart)   TBD
+  PERM_WIDTH       ABSENT, TD#122     (no counterpart)     8
+  CAUSE_WIDTH      ABSENT, TD#122     (no counterpart)     5
+  PMA_WIDTH        ABSENT, TD#122     (no counterpart)     4
 ```
 
-The eight rows below MAX_OUTSTANDING were added session-070. The
-ITLB interfaces declare ports against every one of them --
-`itlb_ifu_interfaces.md` 2 and `itlb_l2tlb_interfaces.md` 2 -- and
-none is defined in any package. GPA_WIDTH is 41 by MMU-20; ASID and
-VMID are 16 and 14 by `itlb_decisions.md` ITLB-7; the rest are
-undetermined. Same class as PA_WIDTH above. TD#122.
+The rows below MAX_OUTSTANDING were added session-070, GVPN_WIDTH
+session-073. The ITLB interfaces declare ports against every one of
+them except GVPN_WIDTH -- `itlb_ifu_interfaces.md` 2 and
+`itlb_l2tlb_interfaces.md` 2 -- and none is defined in any package.
+Same class as PA_WIDTH above. TD#122.
+
+ALL NINE NOW HAVE VALUES, ruled session-073. Their sources:
+
+```
+  GPA_WIDTH   41  MMU-20, Sv39x4 guest physical
+  GVPN_WIDTH  29  the G-stage VPN, GPA_WIDTH - 12. VPN_WIDTH is
+                  VS-stage only and one parameter cannot serve
+                  both stages
+  VPN_WIDTH   27  Sv39 VA, three levels of nine
+  PPN_WIDTH   24  PA_WIDTH - 12, from IF-1's 36
+  ASID_WIDTH  16  ITLB-7, the Sv39 maximum
+  VMID_WIDTH  14  ITLB-7, the Sv39x4 maximum
+  PERM_WIDTH   8  the PTE low byte, V R W X U G A D. IL-8 names
+                  executable, user and global and is not
+                  exhaustive; carrying the byte whole needs no
+                  rule about what the I-side drops and serves the
+                  D-side client of IL-3 unchanged
+  CAUSE_WIDTH  5  exception codes 0 to 31. The three causes of
+                  IT-6 are 1, 12 and 20; 20 sets the width
+  PMA_WIDTH    4  one bit per MMU-13 attribute: cacheable,
+                  coherent, executable, idempotent. IT-10 returns
+                  the EFFECTIVE four. The PBMT of IL-9a is a
+                  separate two-bit field and is not this
+```
+
+A PTE PPN field is 44 bits in Sv39 and PPN_WIDTH is 24, so a PTE
+whose PPN has any bit set above bit 23 names a physical address
+this implementation cannot form. Nothing in `mmu_decisions.md`
+says the walker faults it. Open, raised session-073.
 
 `l1i_pkg` carries REQ_ID_BITS and MAX_OUTSTANDING as L1iReqIdBits
 and L1iMaxOutstanding since TOOLS-004, which also added L1iMshrs,
@@ -1186,4 +1215,9 @@ sees a 2-byte boundary.
 
   2026-09-20  session-072. E24: the 14.2 schema gaps in numeric
               order.
+
+  2026-09-22  session-073. The 3.1 table: the seven TBD values
+              are filled and GVPN_WIDTH is added, ruled this
+              session. Sources listed below the table. Raised:
+              nothing faults a PTE PPN above PPN_WIDTH.
 ```

@@ -299,7 +299,7 @@ module tb;
   task automatic tc_p01();
     $display("-- TC-P01 No-hit slot 0");
     clr();
-    do_pred(40'h0000_1000, 6'h01, 0);
+    do_pred(VA_WIDTH'('h0000_1000), 6'h01, 0);
     wait_prdy(0);
     chk("P01:rdy0",
       64'(ittage_pred_rdy_p2[0]),                        64'h1);
@@ -328,9 +328,9 @@ module tb;
     clr();
     @(posedge clk);
     ittage_pred_val_p0              = 2'b11;
-    ittage_pred_inp_p0[0].pc        = 40'h0000_2000;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_2000);
     ittage_pred_inp_p0[0].branch_id = 6'h02;
-    ittage_pred_inp_p0[1].pc        = 40'h0000_2020;
+    ittage_pred_inp_p0[1].pc        = VA_WIDTH'('h0000_2020);
     ittage_pred_inp_p0[1].branch_id = 6'h03;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
@@ -359,7 +359,7 @@ module tb;
     clr();
 
     // Phase A: seed prediction -- no hit, capture alc fields
-    do_pred(40'h0000_3000, 6'h04, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h04, 0);
     wait_prdy(0);
     cap_alc_comp = ittage_pred_meta_p2[0].ittage_alc_comp;
     cap_alc_idx  = ittage_pred_meta_p2[0].ittage_alc_idx;
@@ -375,13 +375,14 @@ module tb;
     upd.ittage_pred_meta.ittage_alc_comp      = cap_alc_comp;
     upd.ittage_pred_meta.ittage_alc_idx       = cap_alc_idx;
     upd.ittage_pred_meta.ittage_alc_tag       = cap_alc_tag;
-    upd.resolved_target                       = 38'h0_0000_4000;
+    upd.resolved_target                       =
+        IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict                      = 1'b1;
     do_upd(upd, 0);
     @(posedge clk); // ensure write commits before Phase C pred
 
     // Phase C: hit prediction -- same PC, same folded_hist=0
-    do_pred(40'h0000_3000, 6'h05, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h05, 0);
     wait_prdy(0);
     cap_p3c = ittage_pred_meta_p2[0];
     chk("P03-C:hit",
@@ -413,11 +414,11 @@ module tb;
     $display("-- TC-P04 CTR increment");
     upd = '0;
     upd.ittage_pred_meta = cap_p3c;
-    upd.resolved_target  = 38'h0_0000_4000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_3000, 6'h06, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h06, 0);
     wait_prdy(0);
     chk("P04:prm_ctr",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr),        64'h1);
@@ -437,7 +438,7 @@ module tb;
     cnt_start = mon_prdy0_cnt;
     for (int i = 0; i < 10; i++) begin
       do_pred(
-        40'h0001_0000 + VA_WIDTH'(i * 32),
+        VA_WIDTH'('h0001_0000) + VA_WIDTH'(i * 32),
         FTQ_IDX_BITS'('h10 + i),
         0);
     end
@@ -484,7 +485,7 @@ module tb;
     upd = '0;
     @(posedge clk);
     ittage_pred_val_p0              = 2'b01;
-    ittage_pred_inp_p0[0].pc        = 40'h0000_5000;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_5000);
     ittage_pred_inp_p0[0].branch_id = 6'h20;
     ittage_upd_val_u0               = 2'b01;
     ittage_upd_inp_u0[0]            = upd;
@@ -512,11 +513,11 @@ module tb;
     p_start = mon_prdy0_cnt;
     upd = '0;
     upd.ittage_pred_meta = cap_p3c; // from TC-P03
-    upd.resolved_target  = 38'h0_0000_4000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     @(posedge clk);
     ittage_pred_val_p0              = 2'b01;
-    ittage_pred_inp_p0[0].pc        = 40'h0000_3000;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_3000);
     ittage_pred_inp_p0[0].branch_id = 6'h07;
     ittage_upd_val_u0               = 2'b01;
     ittage_upd_inp_u0[0]            = upd;
@@ -555,7 +556,7 @@ module tb;
         pq_not_full ? 2'b01 : 2'b00;
       if (pq_not_full) begin
         ittage_pred_inp_p0[0].pc        =
-          40'h0002_0000 + VA_WIDTH'(i * 32);
+          VA_WIDTH'('h0002_0000) + VA_WIDTH'(i * 32);
         ittage_pred_inp_p0[0].branch_id =
           FTQ_IDX_BITS'('h30 + i);
       end
@@ -597,7 +598,7 @@ module tb;
       if (pq_not_full) begin
         ittage_pred_val_p0 = 2'b01;
         ittage_pred_inp_p0[0].pc        =
-          40'h0003_0000 + VA_WIDTH'(i * 32);
+          VA_WIDTH'('h0003_0000) + VA_WIDTH'(i * 32);
         ittage_pred_inp_p0[0].branch_id =
           FTQ_IDX_BITS'('h40 + i);
       end else begin
@@ -638,7 +639,7 @@ module tb;
     //          upd enqueued (not bypassed since grant went to pred).
     @(posedge clk);
     ittage_pred_val_p0              = 2'b01;
-    ittage_pred_inp_p0[0].pc        = 40'h0004_0000;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0004_0000);
     ittage_pred_inp_p0[0].branch_id = 6'h08;
     ittage_upd_val_u0               = 2'b01;
     ittage_upd_inp_u0[0]            = '0;
@@ -646,7 +647,7 @@ module tb;
     //            After this grant: pred_credits=0, starve_ctr=2.
     @(posedge clk);
     ittage_pred_val_p0              = 2'b01;
-    ittage_pred_inp_p0[0].pc        = 40'h0004_0020;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0004_0020);
     ittage_pred_inp_p0[0].branch_id = 6'h09;
     ittage_upd_val_u0               = 2'b00;
     ittage_upd_inp_u0[0]            = '0;
@@ -668,19 +669,19 @@ module tb;
     $display("-- TC-UAON-01 UAON gating");
     clr();
     // Use TC-P03 Phase C meta: hit=1, pred_strong=0 (CTR=0),
-    // using_primary=1, alt_tgt=0, prm_tgt=38'h0_0000_4000.
+    // using_primary=1, alt_tgt=0, prm_tgt=0x0_0000_4000.
     // resolved_target = prm_tgt -> prm_correct=1.
-    // alt_tgt(0) != resolved(38'h0_0000_4000) -> alt_wrong=1.
+    // alt_tgt(0) != resolved(0x0_0000_4000) -> alt_wrong=1.
     // Conditions for UAON DEC: hit, !strong, prm_correct, alt_wrong.
     // UAON: 8 -> 7.
     upd = '0;
     upd.ittage_pred_meta = cap_p3c;
-    upd.resolved_target  = 38'h0_0000_4000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     // Issue pred+upd simultaneously; pred wins first (Rule 3)
     @(posedge clk);
     ittage_pred_val_p0              = 2'b01;
-    ittage_pred_inp_p0[0].pc        = 40'h0000_3000;
+    ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_3000);
     ittage_pred_inp_p0[0].branch_id = 6'h0A;
     ittage_upd_val_u0               = 2'b01;
     ittage_upd_inp_u0[0]            = upd;
@@ -693,7 +694,7 @@ module tb;
     repeat(15) @(posedge clk);
     // Follow-up prediction: UAON should be 7 < IT_UAON_THRES=8
     // -> ittage_use_alt_on_na = 0
-    do_pred(40'h0000_3000, 6'h0B, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h0B, 0);
     wait_prdy(0);
     chk("UAON01:use_alt_on_na",
       64'(ittage_pred_meta_p2[0].ittage_use_alt_on_na),  64'h0);
@@ -709,17 +710,17 @@ module tb;
     ittage_upd_inp_t upd;
     automatic logic [IT_MAX_CTR_WIDTH-1:0] ctr_pre;
     $display("-- TC-CTR-R01 CTR row 1 H=0 no update");
-    do_pred(40'h0000_3000, 6'h40, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h40, 0);
     wait_prdy(0);
     ctr_pre = ittage_pred_meta_p2[0].ittage_prm_ctr;
     upd = '0;
     upd.ittage_pred_meta = ittage_pred_meta_p2[0];
     upd.ittage_pred_meta.ittage_hit = 1'b0; // force H=0 -> row 1
-    upd.resolved_target  = 38'h0_0000_4000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_3000, 6'h41, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h41, 0);
     wait_prdy(0);
     chk("CTR-R01:no_ctr_chg",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr),
@@ -739,7 +740,7 @@ module tb;
     ittage_upd_inp_t upd;
     automatic logic [IT_MAX_USE_WIDTH-1:0] use_before;
     $display("-- TC-USE-R01 USE row 1 DIFF=0 no USE write");
-    do_pred(40'h0000_3000, 6'h50, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h50, 0);
     wait_prdy(0);
     use_before = ittage_pred_meta_p2[0].ittage_prm_useful;
     upd = '0;
@@ -748,14 +749,14 @@ module tb;
     upd.ittage_pred_meta.ittage_using_primary = 1'b1;
     // DIFF=0: prm_tgt == alt_tgt -> suppress USE write
     upd.ittage_pred_meta.ittage_prm_tgt =
-      38'h0_0000_4000;
+      IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.ittage_pred_meta.ittage_alt_tgt =
-      38'h0_0000_4000;
-    upd.resolved_target  = 38'h0_0000_4000;
+      IT_MAX_TGT_WIDTH'('h0_0000_4000);
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_3000, 6'h51, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h51, 0);
     wait_prdy(0);
     chk("USE-R01:no_use_chg",
       64'(ittage_pred_meta_p2[0].ittage_prm_useful),
@@ -773,20 +774,20 @@ module tb;
     ittage_upd_inp_t upd;
     automatic logic [IT_MAX_USE_WIDTH-1:0] use_before;
     $display("-- TC-USE-R02 USE row 2 HIT=0 no USE write");
-    do_pred(40'h0000_3000, 6'h52, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h52, 0);
     wait_prdy(0);
     use_before = ittage_pred_meta_p2[0].ittage_prm_useful;
     upd = '0;
     upd.ittage_pred_meta = ittage_pred_meta_p2[0];
     upd.ittage_pred_meta.ittage_hit     = 1'b0; // HIT=0 -> row 2
-    upd.ittage_pred_meta.ittage_prm_tgt = 38'h0_0000_4000;
+    upd.ittage_pred_meta.ittage_prm_tgt = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     // DIFF=1 but HIT=0 takes precedence: uWR stays 0
-    upd.ittage_pred_meta.ittage_alt_tgt = 38'h0_0000_5000;
-    upd.resolved_target  = 38'h0_0000_4000;
+    upd.ittage_pred_meta.ittage_alt_tgt = IT_MAX_TGT_WIDTH'('h0_0000_5000);
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_3000, 6'h53, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h53, 0);
     wait_prdy(0);
     chk("USE-R02:no_use_chg",
       64'(ittage_pred_meta_p2[0].ittage_prm_useful),
@@ -802,7 +803,7 @@ module tb;
   task automatic tc_use_r03();
     ittage_upd_inp_t upd;
     $display("-- TC-USE-R03 USE row 3 DIFF=1 HIT=1 UP=1 INC");
-    do_pred(40'h0000_3000, 6'h54, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h54, 0);
     wait_prdy(0);
     upd = '0;
     upd.ittage_pred_meta = ittage_pred_meta_p2[0];
@@ -810,15 +811,15 @@ module tb;
     upd.ittage_pred_meta.ittage_using_primary = 1'b1;
     // DIFF=1: prm_tgt != alt_tgt
     upd.ittage_pred_meta.ittage_prm_tgt     =
-      38'h0_0000_4000;
+      IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.ittage_pred_meta.ittage_alt_tgt     =
-      38'h0_0000_5000;
+      IT_MAX_TGT_WIDTH'('h0_0000_5000);
     upd.ittage_pred_meta.ittage_prm_useful  = 2'h0;
-    upd.resolved_target  = 38'h0_0000_4000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_3000, 6'h55, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h55, 0);
     wait_prdy(0);
     chk("USE-R03:prm_use_inc",
       64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h1);
@@ -836,24 +837,24 @@ module tb;
   task automatic tc_use_r04();
     ittage_upd_inp_t upd;
     $display("-- TC-USE-R04 USE row 4 DIFF=1 HIT=1 UP=1 DEC");
-    do_pred(40'h0000_3000, 6'h56, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h56, 0);
     wait_prdy(0);
     upd = '0;
     upd.ittage_pred_meta = ittage_pred_meta_p2[0];
     upd.ittage_pred_meta.ittage_hit         = 1'b1;
     upd.ittage_pred_meta.ittage_using_primary = 1'b1;
     upd.ittage_pred_meta.ittage_prm_tgt     =
-      38'h0_0000_4000;
+      IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.ittage_pred_meta.ittage_alt_tgt     =
-      38'h0_0000_5000;
+      IT_MAX_TGT_WIDTH'('h0_0000_5000);
     // Force prm_useful=1 so DEC writes 0 to RAM regardless
     // of whether TC-USE-R03 previously wrote 1.
     upd.ittage_pred_meta.ittage_prm_useful  = 2'h1;
-    upd.resolved_target  = 38'h0_0000_6000; // mispredict
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_6000); // mispredict
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_3000, 6'h57, 0);
+    do_pred(VA_WIDTH'('h0000_3000), 6'h57, 0);
     wait_prdy(0);
     chk("USE-R04:prm_use_dec",
       64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h0);
@@ -861,10 +862,10 @@ module tb;
   endtask
 
   // ================================================================
-  // CTR backdoor tests: use PC=40'h0000_0200, folded_hist=0.
+  // CTR backdoor tests: use PC=0x0000_0200, folded_hist=0.
   // IT1 and IT2 at this PC (both idx=8'h80, tag=8'h02):
   //   bank = idx[7] = 1, entry = idx[6:0] = 0, tag_ext = 11'h002.
-  // Seeded TGT = 38'h0_0000_5000 throughout.
+  // Seeded TGT = 0x0_0000_5000 throughout.
   // ================================================================
 
   // ================================================================
@@ -879,8 +880,8 @@ module tb;
     clr();
     // IT1 slot-0: CTR=1, USE=1, VAL=1. No IT2+ entry at this idx.
     bw_write(1, 0, 1, 0, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h60, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h60, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-UP1-INC:hit",
@@ -891,11 +892,11 @@ module tb;
       64'(m.ittage_prm_ctr),       64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_5000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_5000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0200, 6'h61, 0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h61, 0);
     wait_prdy(0);
     chk("CTR-UP1-INC:ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h2);
@@ -912,22 +913,22 @@ module tb;
     $display("-- TC-CTR-UP1-DEC rows 22-29 representative");
     clr();
     bw_write(1, 0, 1, 0, 1'b1, 3'h3, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h62, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h62, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-UP1-DEC:ctr_pre",
       64'(m.ittage_prm_ctr),       64'h3);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_6000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_6000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // Mispredict triggers alloc to IT2 at {1,0}. Invalidate so IT2
     // does not preempt IT1 as primary in the readback prediction.
-    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    do_pred(40'h0000_0200, 6'h63, 0);
+    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h63, 0);
     wait_prdy(0);
     chk("CTR-UP1-DEC:ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h2);
@@ -947,11 +948,11 @@ module tb;
     clr();
     // IT2 primary: CTR=0 triggers UAON use_alt.
     bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
     // IT1 alternate: CTR=1.
     bw_write(1, 0, 1, 0, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h64, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h64, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-UP0-INC:hit",
@@ -962,11 +963,11 @@ module tb;
       64'(m.ittage_alt_ctr),       64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_5000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_5000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0200, 6'h65, 0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h65, 0);
     wait_prdy(0);
     chk("CTR-UP0-INC:alt_ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h2);
@@ -983,10 +984,10 @@ module tb;
     $display("-- TC-CTR-UP0-DEC rows 6-13 representative");
     clr();
     bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
     bw_write(1, 0, 1, 0, 1'b1, 3'h3, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h66, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h66, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-UP0-DEC:using_prm",
@@ -995,14 +996,14 @@ module tb;
       64'(m.ittage_alt_ctr),       64'h3);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_6000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_6000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // Mispredict (prm=IT2) triggers alloc to IT3 at {bank=0,ent=128}.
     // Invalidate so IT3 does not preempt as primary in the readback.
-    bw_write(3, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    do_pred(40'h0000_0200, 6'h67, 0);
+    bw_write(3, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h67, 0);
     wait_prdy(0);
     chk("CTR-UP0-DEC:alt_ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h2);
@@ -1025,44 +1026,44 @@ module tb;
     // Clear alloc residues from prior DEC tests at the two PC=0x200
     // addresses: IT2 at {1,0}, IT3-IT5 at {0,128} (9-bit idx=0x080).
     clr();
-    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(5, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    bw_write(4, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    bw_write(5, 0, 0, 128, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
     bw_write(1, 0, 1, 0, 1'b1, 3'h7, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h68, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h68, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-SAT:prm_max_pre",  64'(m.ittage_prm_ctr), 64'h7);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_5000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_5000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0200, 6'h69, 0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h69, 0);
     wait_prdy(0);
     chk("CTR-SAT:prm_max_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h7);
 
     // prm DEC at 0; invalidate IT2 so no alternate fires
     clr();
-    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(2, 0, 1, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(1, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h6A, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h6A, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-SAT:prm_zero_pre", 64'(m.ittage_prm_ctr),       64'h0);
     chk("CTR-SAT:prm_zero_prm", 64'(m.ittage_using_primary), 64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_6000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_6000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0200, 6'h6B, 0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h6B, 0);
     wait_prdy(0);
     chk("CTR-SAT:prm_zero_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h0);
@@ -1070,10 +1071,10 @@ module tb;
     // alt INC at max
     clr();
     bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
     bw_write(1, 0, 1, 0, 1'b1, 3'h7, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h6C, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h6C, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-SAT:alt_max_pre",  64'(m.ittage_alt_ctr), 64'h7);
@@ -1081,11 +1082,11 @@ module tb;
       64'(m.ittage_using_primary), 64'h0);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_5000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_5000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0200, 6'h6D, 0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h6D, 0);
     wait_prdy(0);
     chk("CTR-SAT:alt_max_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h7);
@@ -1093,10 +1094,10 @@ module tb;
     // alt DEC at 0
     clr();
     bw_write(2, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
     bw_write(1, 0, 1, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_5000, 11'h002);
-    do_pred(40'h0000_0200, 6'h6E, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_5000), 11'h002);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h6E, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("CTR-SAT:alt_zero_pre", 64'(m.ittage_alt_ctr), 64'h0);
@@ -1104,11 +1105,11 @@ module tb;
       64'(m.ittage_using_primary), 64'h0);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_6000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_6000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0200, 6'h6F, 0);
+    do_pred(VA_WIDTH'('h0000_0200), 6'h6F, 0);
     wait_prdy(0);
     chk("CTR-SAT:alt_zero_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h0);
@@ -1126,14 +1127,14 @@ module tb;
     ittage_pred_meta_t m;
     $display("-- TC-USE-R05 USE row 5 DIFF=1 HIT=1 UP=0 INC");
     clr();
-    // PC=40'h0000_0300: IT1/IT2 idx=8'hC0 bank=1 ent=64 tag=8'h03.
+    // PC=0x0000_0300: IT1/IT2 idx=8'hC0 bank=1 ent=64 tag=8'h03.
     // IT2 prm: CTR=0 -> not_null=0 -> UAON use_alt fires.
     bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
-             38'h0_0000_A000, 11'h003);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h003);
     // IT1 alt: CTR=1, USE=1, TGT!=IT2.TGT -> DIFF=1.
     bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0000_B000, 11'h003);
-    do_pred(40'h0000_0300, 6'h70, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_B000), 11'h003);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h70, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("USE-R05:hit",
@@ -1144,11 +1145,11 @@ module tb;
       64'(m.ittage_alt_useful),      64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_B000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_B000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0300, 6'h71, 0);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h71, 0);
     wait_prdy(0);
     chk("USE-R05:alt_use_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h2);
@@ -1168,10 +1169,10 @@ module tb;
     clr();
     // Reseed PC=0x0300 entries. IT1 USE=2 for DEC -> 1.
     bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
-             38'h0_0000_A000, 11'h003);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h003);
     bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h2, 2'h0,
-             38'h0_0000_B000, 11'h003);
-    do_pred(40'h0000_0300, 6'h72, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_B000), 11'h003);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h72, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("USE-R06:using_prm",
@@ -1180,14 +1181,14 @@ module tb;
       64'(m.ittage_alt_useful),      64'h2);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_1234_5678;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_1234_5678);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // MISP=1, prm_comp=IT2=2<5: alloc fires to IT3.
     // IT3 at PC=0x300: 9-bit idx=9'hC0 -> bank=0 ent=192. Invalidate.
-    bw_write(3, 0, 0, 192, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    do_pred(40'h0000_0300, 6'h73, 0);
+    bw_write(3, 0, 0, 192, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h73, 0);
     wait_prdy(0);
     chk("USE-R06:alt_use_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h1);
@@ -1208,21 +1209,21 @@ module tb;
     // alt INC at max (USE=3 -> 3, UP=0)
     clr();
     bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
-             38'h0_0000_A000, 11'h003);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h003);
     bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h3, 2'h0,
-             38'h0_0000_B000, 11'h003);
-    do_pred(40'h0000_0300, 6'h74, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_B000), 11'h003);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h74, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("USE-SAT:alt_max_pre",
       64'(m.ittage_alt_useful),      64'h3);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_B000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_B000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0300, 6'h75, 0);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h75, 0);
     wait_prdy(0);
     chk("USE-SAT:alt_max_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h3);
@@ -1230,34 +1231,34 @@ module tb;
     // alt DEC at 0 (USE=0 -> 0, UP=0)
     clr();
     bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h0, 2'h0,
-             38'h0_0000_A000, 11'h003);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h003);
     bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h0, 2'h0,
-             38'h0_0000_B000, 11'h003);
-    do_pred(40'h0000_0300, 6'h76, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_B000), 11'h003);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h76, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("USE-SAT:alt_zero_pre",
       64'(m.ittage_alt_useful),      64'h0);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_1234_5678;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_1234_5678);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // MISP=1: alloc to IT3 at PC=0x300. Invalidate.
-    bw_write(3, 0, 0, 192, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    do_pred(40'h0000_0300, 6'h77, 0);
+    bw_write(3, 0, 0, 192, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    do_pred(VA_WIDTH'('h0000_0300), 6'h77, 0);
     wait_prdy(0);
     chk("USE-SAT:alt_zero_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_useful), 64'h0);
 
     // prm INC at max (USE=3 -> 3, UP=1)
-    // PC=40'h0000_0500: IT1 idx=8'h40 bank=0 ent=64 tag=8'h05.
+    // PC=0x0000_0500: IT1 idx=8'h40 bank=0 ent=64 tag=8'h05.
     clr();
-    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
     bw_write(1, 0, 0, 64, 1'b1, 3'h3, 2'h3, 2'h0,
-             38'h0_0000_C000, 11'h005);
-    do_pred(40'h0000_0500, 6'h78, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_C000), 11'h005);
+    do_pred(VA_WIDTH'('h0000_0500), 6'h78, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("USE-SAT:prm_max_pre",
@@ -1266,21 +1267,21 @@ module tb;
       64'(m.ittage_using_primary),   64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_C000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_C000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
-    do_pred(40'h0000_0500, 6'h79, 0);
+    do_pred(VA_WIDTH'('h0000_0500), 6'h79, 0);
     wait_prdy(0);
     chk("USE-SAT:prm_max_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h3);
 
     // prm DEC at 0 (USE=0 -> 0, UP=1)
     clr();
-    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
     bw_write(1, 0, 0, 64, 1'b1, 3'h1, 2'h0, 2'h0,
-             38'h0_0000_C000, 11'h005);
-    do_pred(40'h0000_0500, 6'h7A, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_C000), 11'h005);
+    do_pred(VA_WIDTH'('h0000_0500), 6'h7A, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("USE-SAT:prm_zero_pre",
@@ -1289,14 +1290,14 @@ module tb;
       64'(m.ittage_using_primary),   64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_1234_5678;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_1234_5678);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // MISP=1, prm_comp=IT1=1<5: alloc to IT2 at PC=0x500
     // IT2 idx=8'h40 -> bank=0 ent=64. Invalidate.
-    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    do_pred(40'h0000_0500, 6'h7B, 0);
+    bw_write(2, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    do_pred(VA_WIDTH'('h0000_0500), 6'h7B, 0);
     wait_prdy(0);
     chk("USE-SAT:prm_zero_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_useful), 64'h0);
@@ -1317,10 +1318,10 @@ module tb;
     clr();
     // IT2 invalid: IT1 is the only primary at PC=0x0700.
     bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(1, 0, 1, 64, 1'b1, 3'h2, 2'h1, 2'h0,
-             38'h0_0000_A000, 11'h007);
-    do_pred(40'h0000_0700, 6'h01, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h007);
+    do_pred(VA_WIDTH'('h0000_0700), 6'h01, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("TGT-A:hit",
@@ -1333,14 +1334,14 @@ module tb;
       64'(m.ittage_prm_tgt),       64'h0_0000_A000);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_B000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_B000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // Alloc committed to IT2 at (1,64). Invalidate for readback.
     bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
-    do_pred(40'h0000_0700, 6'h02, 0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    do_pred(VA_WIDTH'('h0000_0700), 6'h02, 0);
     wait_prdy(0);
     chk("TGT-A:ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h1);
@@ -1362,10 +1363,10 @@ module tb;
     $display("-- TC-TGT-B UP=1 CTR zero mispredict: tgt replaced");
     clr();
     bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(1, 0, 1, 64, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_A000, 11'h007);
-    do_pred(40'h0000_0700, 6'h03, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h007);
+    do_pred(VA_WIDTH'('h0000_0700), 6'h03, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("TGT-B:hit",
@@ -1378,13 +1379,13 @@ module tb;
       64'(m.ittage_prm_tgt),       64'h0_0000_A000);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_B000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_B000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     bw_write(2, 0, 1, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
-    do_pred(40'h0000_0700, 6'h04, 0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    do_pred(VA_WIDTH'('h0000_0700), 6'h04, 0);
     wait_prdy(0);
     chk("TGT-B:ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_prm_ctr), 64'h0);
@@ -1409,14 +1410,14 @@ module tb;
     clr();
     // Pre-invalidate IT3 alloc slot so alc_comp selects IT3.
     bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT2 primary: CTR=0 -> UAON use_alt fires (UAON=8>=8).
     bw_write(2, 0, 0, 64, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_C000, 11'h009);
+             IT_MAX_TGT_WIDTH'('h0_0000_C000), 11'h009);
     // IT1 alternate: CTR=2 (non-zero). TGT distinct from resolved.
     bw_write(1, 0, 0, 64, 1'b1, 3'h2, 2'h1, 2'h0,
-             38'h0_0000_D000, 11'h009);
-    do_pred(40'h0000_0900, 6'h05, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_D000), 11'h009);
+    do_pred(VA_WIDTH'('h0000_0900), 6'h05, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("TGT-C:hit",
@@ -1429,14 +1430,14 @@ module tb;
       64'(m.ittage_alt_tgt),       64'h0_0000_D000);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_E000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_E000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // IT3 alloc committed at (0,64). Invalidate to expose IT2/IT1.
     bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
-    do_pred(40'h0000_0900, 6'h06, 0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    do_pred(VA_WIDTH'('h0000_0900), 6'h06, 0);
     wait_prdy(0);
     chk("TGT-C:alt_ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h1);
@@ -1459,14 +1460,14 @@ module tb;
       "-- TC-TGT-D UP=0 alt CTR zero mispredict: tgt replaced");
     clr();
     bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT2 primary: CTR=0 -> UAON use_alt fires.
     bw_write(2, 0, 0, 64, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_C000, 11'h009);
+             IT_MAX_TGT_WIDTH'('h0_0000_C000), 11'h009);
     // IT1 alternate: CTR=0. TGT distinct from resolved.
     bw_write(1, 0, 0, 64, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_D000, 11'h009);
-    do_pred(40'h0000_0900, 6'h07, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_D000), 11'h009);
+    do_pred(VA_WIDTH'('h0000_0900), 6'h07, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("TGT-D:hit",
@@ -1479,13 +1480,13 @@ module tb;
       64'(m.ittage_alt_tgt),       64'h0_0000_D000);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_E000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_E000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     bw_write(3, 0, 0, 64, 1'b0, 3'h0, 2'h0, 2'h0,
-             38'h0, 11'h0);
-    do_pred(40'h0000_0900, 6'h08, 0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    do_pred(VA_WIDTH'('h0000_0900), 6'h08, 0);
     wait_prdy(0);
     chk("TGT-D:alt_ctr_post",
       64'(ittage_pred_meta_p2[0].ittage_alt_ctr), 64'h0);
@@ -1519,25 +1520,25 @@ module tb;
     // TGT=0) at PC=0x1000 bank=0 ent=0 tag=0x010. UAON=8 fires
     // use_alt=1 -> pred_strong=0. prm_correct&&alt_wrong -> DEC.
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_F000, 11'h010);
+             IT_MAX_TGT_WIDTH'('h0_0000_F000), 11'h010);
     bw_write(1, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0, 11'h010);
-    do_pred(40'h0000_1000, 6'h10, 0);
+             IT_MAX_TGT_WIDTH'('h0), 11'h010);
+    do_pred(VA_WIDTH'('h0000_1000), 6'h10, 0);
     wait_prdy(0);
     m   = ittage_pred_meta_p2[0];
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_F000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_F000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
     // uaon[0]=7 < 8: use_alt will not fire even with alt present.
     // IT2=prm (CTR=0, TGT=0xA000), IT1=alt (CTR=1, TGT=0xC000).
     bw_write(2, 0, 1, 64, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0000_A000, 11'h007);
+             IT_MAX_TGT_WIDTH'('h0_0000_A000), 11'h007);
     bw_write(1, 0, 1, 64, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0000_C000, 11'h007);
-    do_pred(40'h0000_0700, 6'h11, 0);
+             IT_MAX_TGT_WIDTH'('h0_0000_C000), 11'h007);
+    do_pred(VA_WIDTH'('h0000_0700), 6'h11, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("TGT-B-ext:hit",
@@ -1552,7 +1553,7 @@ module tb;
       64'(m.ittage_alt_tgt),       64'h0_0000_C000);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_B000;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_B000);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
@@ -1560,7 +1561,7 @@ module tb;
     // TGT = d[45:8]. IT2 prm_tgt must update; IT1 alt_tgt unchanged.
     begin
       automatic logic [53:0] it2_ent, it1_ent;
-      automatic logic [37:0] it2_tgt, it1_tgt;
+      automatic logic [IT_MAX_TGT_WIDTH-1:0] it2_tgt, it1_tgt;
       it2_ent = dut.gen_ittage_tables[2].gen_active
                   .u_table.u_ram_s0.mem[1][64];
       it1_ent = dut.gen_ittage_tables[1].gen_active
@@ -1575,7 +1576,7 @@ module tb;
 
   // ================================================================
   // TC-EPC-UP1: EPC write provider-only proof, UP=1.
-  // PC=40'h0000_2800: IT1/IT2 idx=8'h00 bank=0 ent=0 tag=11'h028.
+  // PC=0x0000_2800: IT1/IT2 idx=8'h00 bank=0 ent=0 tag=11'h028.
   // IT2 primary (CTR=1 not-null -> UP=1, EPC=2'h03, TGT=0x30000).
   // IT1 alt (CTR=1, EPC=2'h02, TGT=0x50000). DIFF=1. MISP=0.
   // After update: IT2 EPC <- lcl_epoch[0]=0; IT1 EPC unchanged(0x02).
@@ -1587,16 +1588,16 @@ module tb;
     $display("-- TC-EPC-UP1 EPC provider-only UP=1");
     clr();
     // Invalidate IT3-IT5 at bank=0 ent=0 (same idx as PC=0x2800).
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT2 primary: CTR=1 not-null->UP=1. EPC=2'h03. TGT=0x30000.
     bw_write(2, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h03,
-             38'h0_0003_0000, 11'h028);
+             IT_MAX_TGT_WIDTH'('h0_0003_0000), 11'h028);
     // IT1 alt: EPC=2'h02. TGT=0x50000. DIFF=1 vs IT2.TGT.
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h02,
-             38'h0_0005_0000, 11'h028);
-    do_pred(40'h0000_2800, 6'hB0, 0);
+             IT_MAX_TGT_WIDTH'('h0_0005_0000), 11'h028);
+    do_pred(VA_WIDTH'('h0000_2800), 6'hB0, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("EPC-UP1:hit",
@@ -1609,7 +1610,8 @@ module tb;
       64'(m.ittage_alt_comp),      64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0003_0000; // correct -> MISP=0
+    // correct -> MISP=0
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0003_0000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
@@ -1635,7 +1637,7 @@ module tb;
   // ================================================================
   // TC-EPC-UP0: EPC write provider-only proof, UP=0.
   // Requires do_reset() before call (UAON must be 8). Self-contained.
-  // PC=40'h0000_3C00: IT1/IT2 idx=8'h00 bank=0 ent=0 tag=11'h03C.
+  // PC=0x0000_3C00: IT1/IT2 idx=8'h00 bank=0 ent=0 tag=11'h03C.
   // IT2 primary (CTR=0->UAON=8>=8->use_alt=1->UP=0, EPC=2'h02,
   //   TGT=0x40000). IT1 alt (CTR=1, EPC=2'h03, TGT=0x60000).
   // DIFF=1. MISP=0.
@@ -1648,17 +1650,17 @@ module tb;
     $display("-- TC-EPC-UP0 EPC provider-only UP=0");
     clr();
     // Invalidate IT3-IT5 at bank=0 ent=0 (same idx as PC=0x3C00).
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT2 primary: CTR=0->UAON=8>=8->use_alt=1->UP=0.
     //   EPC=2'h02 TGT=0x40000.
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h02,
-             38'h0_0004_0000, 11'h03C);
+             IT_MAX_TGT_WIDTH'('h0_0004_0000), 11'h03C);
     // IT1 alt: CTR=1, EPC=2'h03, TGT=0x60000. DIFF=1 vs IT2.TGT.
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h03,
-             38'h0_0006_0000, 11'h03C);
-    do_pred(40'h0000_3C00, 6'hB1, 0);
+             IT_MAX_TGT_WIDTH'('h0_0006_0000), 11'h03C);
+    do_pred(VA_WIDTH'('h0000_3C00), 6'hB1, 0);
     wait_prdy(0);
     m = ittage_pred_meta_p2[0];
     chk("EPC-UP0:hit",
@@ -1671,7 +1673,8 @@ module tb;
       64'(m.ittage_alt_comp),      64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0006_0000; // correct -> MISP=0
+    // correct -> MISP=0
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0006_0000);
     upd.indir_mispredict = 1'b0;
     do_upd(upd, 0);
     @(posedge clk);
@@ -1711,21 +1714,24 @@ module tb;
   // IT5+IT3+IT1 hit; IT4+IT2 invalid.
   // IT5=longest->primary; IT3=next longest->alternate.
   // Distinct TGT values make wrong selection visible.
-  // PC=40'h0000_B000, fh=0: IT1/IT2 bank=0 ent=0 tag=11'h0B0,
+  // PC=0x0000_B000, fh=0: IT1/IT2 bank=0 ent=0 tag=11'h0B0,
   //   IT3/IT4/IT5 bank=0 ent=0 tag=11'h058.
   // ================================================================
   task automatic tc_pred01_multi_hit();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT5 = 38'h0_0000_5A00;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT3 = 38'h0_0000_3B00;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT1 = 38'h0_0000_1C00;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT5 =
+        IT_MAX_TGT_WIDTH'('h0_0000_5A00);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT3 =
+        IT_MAX_TGT_WIDTH'('h0_0000_3B00);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT1 =
+        IT_MAX_TGT_WIDTH'('h0_0000_1C00);
     $display("-- TC-PRED-01 provider/alt selection multi-hit");
     do_reset();
     clr();
     bw_write(5, 0, 0, 0, 1'b1, 3'h2, 2'h1, 2'h0, TGT5, 11'h058);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(3, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0, TGT3, 11'h058);
-    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0, TGT1, 11'h0B0);
     do_pred(PC_P, 6'hC0, 0);
     wait_prdy(0);
@@ -1748,16 +1754,16 @@ module tb;
   // TC-PRED-02: Single hit (only IT3). alt_comp=0 sentinel.
   // ================================================================
   task automatic tc_pred02_single_hit();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
     $display("-- TC-PRED-02 single hit alt_comp=0");
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(3, 0, 0, 0, 1'b1, 3'h2, 2'h1, 2'h0,
-             38'h0_0000_DD00, 11'h058);
-    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+             IT_MAX_TGT_WIDTH'('h0_0000_DD00), 11'h058);
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     do_pred(PC_P, 6'hC1, 0);
     wait_prdy(0);
     chk("PRED02:hit",
@@ -1773,15 +1779,15 @@ module tb;
   // TC-PRED-03: No hit. hit=0, prm_comp=0. rdy still asserts.
   // ================================================================
   task automatic tc_pred03_no_hit();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
     $display("-- TC-PRED-03 no hit rdy still asserts");
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     do_pred(PC_P, 6'hC2, 0);
     wait_prdy(0);
     chk("PRED03:hit",
@@ -1799,17 +1805,17 @@ module tb;
   // not_null=1 -> use_alt=0 -> using_primary=1.
   // ================================================================
   task automatic tc_pred04_using_prm_not_null();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
     $display("-- TC-PRED-04 using_primary prm CTR not-null");
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h3, 2'h1, 2'h0,
-             38'h0_0001_1000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0001_1000), 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0002_2000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0002_2000), 11'h0B0);
     do_pred(PC_P, 6'hC3, 0);
     wait_prdy(0);
     chk("PRED04:using_prm",
@@ -1827,18 +1833,18 @@ module tb;
   // Force UAON[0]=5 < IT_UAON_THRES=8: use_alt=0 -> using_prm=1.
   // ================================================================
   task automatic tc_pred05_using_prm_uaon_below();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
     $display(
       "-- TC-PRED-05 using_prm prm null UAON below threshold");
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0001_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0001_0000), 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0002_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0002_0000), 11'h0B0);
     force_uaon(0, IT_UAON_WIDTH'(5));
     do_pred(PC_P, 6'hC4, 0);
     wait_prdy(0);
@@ -1855,18 +1861,18 @@ module tb;
   // UAON=8(reset) >= IT_UAON_THRES=8: use_alt=1 -> using_prm=0.
   // ================================================================
   task automatic tc_pred06_using_alt_uaon_at_thres();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
     $display(
       "-- TC-PRED-06 using_primary=0 prm null UAON at threshold");
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0001_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0001_0000), 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0002_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0002_0000), 11'h0B0);
     do_pred(PC_P, 6'hC5, 0);
     wait_prdy(0);
     chk("PRED06:using_prm",
@@ -1886,19 +1892,19 @@ module tb;
   // UAON stays at 8 (predictions only, no updates between sub-cases).
   // ================================================================
   task automatic tc_pred07_pred_strong();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
     $display("-- TC-PRED-07 pred_strong follows final CTR");
     do_reset();
 
     // Sub-A: prm not-null(CTR=2). pred_strong=1.
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h2, 2'h1, 2'h0,
-             38'h0_0001_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0001_0000), 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0,
-             38'h0_0002_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0002_0000), 11'h0B0);
     do_pred(PC_P, 6'hC6, 0);
     wait_prdy(0);
     chk("PRED07A:using_prm",
@@ -1910,12 +1916,12 @@ module tb;
     // Sub-B: only IT2 valid(CTR=0), no IT1 alt -> using_prm=1.
     // final_ctr=prm_ctr=0 -> pred_strong=0.
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0001_0000, 11'h0B0);
-    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+             IT_MAX_TGT_WIDTH'('h0_0001_0000), 11'h0B0);
+    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     do_pred(PC_P, 6'hC7, 0);
     wait_prdy(0);
     chk("PRED07B:using_prm",
@@ -1927,13 +1933,13 @@ module tb;
     // Sub-C: IT2=prm(CTR=0), IT1=alt(CTR=3). UAON=8>=8 -> use_alt.
     // final_ctr=alt_ctr=3 -> pred_strong=1.
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0001_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0001_0000), 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h3, 2'h1, 2'h0,
-             38'h0_0003_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0003_0000), 11'h0B0);
     do_pred(PC_P, 6'hC8, 0);
     wait_prdy(0);
     chk("PRED07C:using_prm",
@@ -1945,13 +1951,13 @@ module tb;
     // Sub-D: IT2=prm(CTR=0), IT1=alt(CTR=0). UAON=8 -> use_alt.
     // final_ctr=alt_ctr=0 -> pred_strong=0.
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0001_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0001_0000), 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
-             38'h0_0003_0000, 11'h0B0);
+             IT_MAX_TGT_WIDTH'('h0_0003_0000), 11'h0B0);
     do_pred(PC_P, 6'hC9, 0);
     wait_prdy(0);
     chk("PRED07D:using_prm",
@@ -1968,19 +1974,23 @@ module tb;
   // All four TGTs distinct: wrong source visible in readback.
   // ================================================================
   task automatic tc_pred08_target_output();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_A = 38'h0_0001_1100;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_B = 38'h0_0002_2200;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_C = 38'h0_0003_3300;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_D = 38'h0_0004_4400;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_A =
+        IT_MAX_TGT_WIDTH'('h0_0001_1100);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_B =
+        IT_MAX_TGT_WIDTH'('h0_0002_2200);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_C =
+        IT_MAX_TGT_WIDTH'('h0_0003_3300);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_D =
+        IT_MAX_TGT_WIDTH'('h0_0004_4400);
     $display("-- TC-PRED-08 target output correct provider");
 
     // Case A: prm not-null(CTR=3)->using_prm=1. prm_tgt=TGT_A.
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h3, 2'h1, 2'h0, TGT_A, 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0, TGT_B, 11'h0B0);
     do_pred(PC_P, 6'hCA, 0);
@@ -1997,9 +2007,9 @@ module tb;
     // alt_tgt=TGT_D; prm_tgt=TGT_C unchanged.
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0, TGT_C, 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b1, 3'h1, 2'h1, 2'h0, TGT_D, 11'h0B0);
     do_pred(PC_P, 6'hCB, 0);
@@ -2021,16 +2031,17 @@ module tb;
   // Also confirms prm_comp, using_primary, pred_strong, tgt at p2.
   // ================================================================
   task automatic tc_pred09_s2_timing();
-    localparam logic [VA_WIDTH-1:0] PC_P = 40'h0000_B000;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_S = 38'h0_0000_B123;
+    localparam logic [VA_WIDTH-1:0] PC_P = VA_WIDTH'('h0000_B000);
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] TGT_S =
+        IT_MAX_TGT_WIDTH'('h0_0000_B123);
     $display("-- TC-PRED-09 s2 timing TD#42");
     do_reset();
     clr();
-    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(3, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     bw_write(2, 0, 0, 0, 1'b1, 3'h2, 2'h1, 2'h0, TGT_S, 11'h0B0);
-    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // Drive pred_val; arbiter grants immediately (PQ empty, bypass).
     ittage_pred_val_p0              = 2'b01;
     ittage_pred_inp_p0[0].pc        = PC_P;
@@ -2059,7 +2070,7 @@ module tb;
 
   // ================================================================
   // TC-RT01: Capstone round-trip test (BP-055).
-  // PC_RT=40'h0000_6000, folded_hist=0.
+  // PC_RT=0x0000_6000, folded_hist=0.
   // Hash (PC_HASH_SHIFT=2):
   //   IT1/IT2: idx8=(PC>>2)&0xFF=0x00 bank=0 ent=0 tag8=(PC>>8)&0xFF
   //            =0x60 -> stored as 11'h060.
@@ -2086,24 +2097,27 @@ module tb;
   //          throughout (UP=1 in all phases -> alt never written).
   // ================================================================
   task automatic tc_rt01_capstone();
-    localparam logic [VA_WIDTH-1:0]         PC_RT  = 40'h0000_6000;
+    localparam logic [VA_WIDTH-1:0]         PC_RT  = VA_WIDTH'('h0000_6000);
     // IT1 seed values (alternate, shorter history)
     localparam logic [IT_MAX_CTR_WIDTH-1:0] S1_CTR = 3'h2;
     localparam logic [IT_MAX_USE_WIDTH-1:0] S1_USE = 2'h1;
     localparam logic [IT_MAX_EPC_WIDTH-1:0] S1_EPC = 2'h2;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] S1_TGT = 38'h0_0000_AA00;
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] S1_TGT =
+        IT_MAX_TGT_WIDTH'('h0_0000_AA00);
     localparam logic [IT_MAX_TAG_WIDTH-1:0] S1_TAG = 11'h060;
     // IT3 seed values (provider, longer history)
     localparam logic [IT_MAX_CTR_WIDTH-1:0] S3_CTR = 3'h2;
     localparam logic [IT_MAX_USE_WIDTH-1:0] S3_USE = 2'h1;
     localparam logic [IT_MAX_EPC_WIDTH-1:0] S3_EPC = 2'h3;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] S3_TGT = 38'h0_0000_CC00;
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] S3_TGT =
+        IT_MAX_TGT_WIDTH'('h0_0000_CC00);
     localparam logic [IT_MAX_TAG_WIDTH-1:0] S3_TAG = 11'h030;
     // IT5 isolation reference (non-matching tag -> never hits)
     localparam logic [IT_MAX_CTR_WIDTH-1:0] R5_CTR = 3'h5;
     localparam logic [IT_MAX_USE_WIDTH-1:0] R5_USE = 2'h3;
     localparam logic [IT_MAX_EPC_WIDTH-1:0] R5_EPC = 2'h1;
-    localparam logic [IT_MAX_TGT_WIDTH-1:0] R5_TGT = 38'h0_0000_D000;
+    localparam logic [IT_MAX_TGT_WIDTH-1:0] R5_TGT =
+        IT_MAX_TGT_WIDTH'('h0_0000_D000);
     localparam logic [IT_MAX_TAG_WIDTH-1:0] R5_TAG = 11'h1FF;
 
     ittage_upd_inp_t   upd;
@@ -2113,8 +2127,8 @@ module tb;
 
     // ---- Phase 1: Seed + lookup --------------------------------
     // Invalidate IT2 and IT4 at PC_RT index to prevent aliasing.
-    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT1: alternate (shorter history, tag=8'h60).
     bw_write(1, 0, 0, 0, 1'b1, S1_CTR, S1_USE, S1_EPC, S1_TGT, S1_TAG);
     // IT3: provider (longer history, tag=9'h030).
@@ -2182,12 +2196,12 @@ module tb;
       64'(m.ittage_prm_useful), 64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_EE00; // mispredict
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_EE00); // mispredict
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // Alloc fires to IT4 (prm_comp=3<5, IT4 u_eff=0); invalidate.
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT3: CTR 3->2(DEC), USE 1->0(DEC). TGT unchanged (CTR!=null).
     begin
       automatic logic [54:0] e3;
@@ -2222,7 +2236,7 @@ module tb;
     // Mispredict: CTR-null -> TGT replaced + allocation fires to IT4.
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_FF00;
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_FF00);
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
@@ -2280,7 +2294,7 @@ module tb;
     // ---- Phase 5A: TGT unchanged (CTR non-null, MISP=1) --------
     // Confirms target field is NOT replaced when CTR != null.
     bw_write(3, 0, 0, 0, 1'b1, 3'h2, S3_USE, 2'h0, S3_TGT, S3_TAG);
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     force_uaon(0, IT_UAON_WIDTH'(8)); // restore; CTR!=null -> UP=1 anyway
     do_pred(PC_RT, 6'hD3, 0);
     wait_prdy(0);
@@ -2289,12 +2303,12 @@ module tb;
       64'(m.ittage_prm_ctr), 64'h2);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_EE00; // mispredict
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_EE00); // mispredict
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);
     // Alloc fires to IT4; invalidate for Phase 5B.
-    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, 38'h0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     begin
       automatic logic [54:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
@@ -2319,7 +2333,7 @@ module tb;
       64'(m.ittage_using_primary), 64'h1);
     upd = '0;
     upd.ittage_pred_meta = m;
-    upd.resolved_target  = 38'h0_0000_EE00; // new target
+    upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_EE00); // new target
     upd.indir_mispredict = 1'b1;
     do_upd(upd, 0);
     @(posedge clk);

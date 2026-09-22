@@ -84,10 +84,107 @@ naming a target that was not run.
 tools/handoff.sh was already modified in the working tree before the
 task and was not touched.
 
+Ruled this session (Jeff), against TD#122: the nine ITLB/MMU widths.
+VPN_WIDTH 27 is VS-stage only and GVPN_WIDTH 29 is added for the
+G-stage; GPA_WIDTH 41, PPN_WIDTH 24 (PA_WIDTH - 12), ASID_WIDTH 16,
+VMID_WIDTH 14, PERM_WIDTH 8, CAUSE_WIDTH 5, PMA_WIDTH 4.
+l1i_ifu_interfaces.md 3.1 carries the table and the source of each.
+PMA_WIDTH is one bit per MMU-13 attribute, not the PBMT encoding.
+
+RAISED: a Sv39 PTE PPN field is 44 bits and PPN_WIDTH is 24. Nothing
+in mmu_decisions.md faults a PTE whose PPN is set above the
+implemented width, so a malformed PTE truncates silently.
+
+BP-109 built the TD#122 RTL change. VA_WIDTH is 41, FTB_TAG_BITS is
+pinned as a literal 26, the nine ITLB/MMU widths are declared, and
+the ITTAGE reconstruction zero-extends per ftq_bpu_interfaces.md 5.2.
+The literal sweep found 1307 sites in 31 files, all in bpu and ftq.
+SEVEN OF THEM TOOK THEIR WIDTH FROM THE EXPRESSION, not from a
+number, and no search could find them; they came out of running the
+tree at 41 and reading the width warnings. tb_bp_cluster gained C1f2
+and C1f3, each proven by three separate injections to fail on the
+defect it targets and on nothing else. regress.sh green, 78 of 78,
+every check count matching the baseline except the four added.
+
+Also found by BP-109: the tb_bp_cluster MODEL of the reconstruction
+zero-extended while the RTL sign-extended. The two disagreed and 1795
+checks never noticed, because no test set bit 38.
+
+Raised by BP-109: TD#132, the ITTAGE upper-half target. Open, and
+needing fe_decisions.md: how a V=0 Sv39 address is held in the 41-bit
+fetch PC. It is not only a prediction-quality question. A canonical
+kernel VA has bits 63:38 set, which is the pattern FE-19 and TD#122
+have the redirect PC check REJECT as an out-of-range GPA. FE-19,
+FE-U11 and the representation have to be settled together, and the
+IFU needs the answer.
+
+Rulings, Jeff, later in the session:
+
+  ONE PREDICTION BLOCK PER CYCLE. A 32-byte block carries two
+       branch slots and that is sufficient. ftq_ifu_interfaces.md 8
+       item 2 closes; whether two blocks would pay is a measurement,
+       deferred as TD#133.
+  ftb_decisions.md 4.6 O-1, O-2 and O-3, all as proposed: the
+       conditional target base is the BRANCH PC; FTB-G3 bounds the
+       reconstructed fall-through at start + FTB_BLOCK_BYTES + 2;
+       positions are stored in region order and the read compacts
+       onto the ports, with 5.4a restated on region position. ALL
+       OF 4.6 IS RULED and the TD#124 + TD#125 task is unblocked.
+  THE FIRST IFU TASK DOES NOT CARRY wrong-path requests, the
+       uncached path or fence.i. Each is extensive and each gets a
+       dedicated or abbreviated session with the context to do it:
+       TD#134, TD#135, TD#136. An IFU built without TD#134 is
+       unit-testable only; it cannot be integrated against the FTQ
+       redirect path until that closes.
+
 CLOSED: TD#99, by TOOLS-006.
-New: TD#129, TD#130. No BP or INFRA number consumed.
-Next free BP is BP-109. Next free INFRA is INFRA-013. Next free
-TOOLS is TOOLS-007.
+New: TD#129 to TD#136. BP-109 consumed.
+Next free BP is BP-110. Next free INFRA is INFRA-013. Next free
+TOOLS is TOOLS-007. Next free TD is TD#137.
+
+---
+## Session-072: the cross-document audit closed. Documents only.
+
+No tasks were run and no RTL changed. Jeff's audit tool produced
+batches A1-A26, B2-B4, C1-C10, D2-D35, E3-E26, F1-F3 and G1; the PA
+corrected them. FORTY-SEVEN planning documents were amended,
+PROJECT_CORE.md among them. NO TECHNICAL DEBT WAS OPENED AND NO
+NUMBER WAS CONSUMED. Jeff called the audit CLOSED at the end of the
+session, after a final fix round and check_planning.
+
+check_planning.sh CHANGED SHAPE: it takes the repo root, not the
+planning directory, and resolves each file through a location token.
+
+ifu_notes.md was written: the PA's assessment of what still blocks
+IFU RTL generation. It is not a planning document and is not in
+check_planning.sh.
+
+Residue recorded at the close, none of it blocking:
+  never supplied, not swept against session-071 or 072:
+  tage_coverage_plan, tage_tb_decisions, tage_mtb_decisions,
+  sc_tb_decisions, manual_tb_decisions and CLAUDE.md. They sit in
+  check_planning.sh with their session-071 checksums.
+  ftb_confidence_override_rules.md was touched (D5, D21, D29) but
+  not swept against the session-071 position and fast-path rulings.
+  the TD#122 RTL literal grep is still not run; widen the patterns
+  to any `[39:` slice, `[38]` as a sign bit, `{24{` and `{25{`.
+  bpu_port_inventory.md sections 3 to 8 are unverified against the
+  RTL; its finding 4 (bp_history pred_pc packed form) is unchecked.
+  CLAUDE.md names the deleted bp_pkg in two rationales.
+  PROJECT_CORE.md defines three task prefixes while TOOLS-NNN is in
+  use, and its "Document status" calls DRAFT permanent.
+  E4 from session-070 was never answered.
+  docs/superscalar_ooo_survey.md, cited by icache_decisions.md, is
+  NOT IN THE TREE. L1I-1, L1I-7 and L1I-12 rest on evidence recorded
+  only there. D33.
+  this file's "Shared components track" names a directory that does
+  not exist. Annotated, not removed.
+  NEW: ftq_bpu_interfaces.md 4 has the loop predictor supply the
+  direction and the uBTB entry supply the target. What happens when
+  lp_pred_is_loop is set and the uBTB misses is stated nowhere.
+
+No BP, INFRA, TOOLS or TD number consumed. At the close: next free
+BP-109, INFRA-013, TOOLS-006, TD#128.
 
 ---
 ## Session-071: audit batch A1-A10, three RTL findings. Documents only.
@@ -146,6 +243,56 @@ O-3; the RC_UNSPEC flush index; the L2 TLB half of Svnapot, now in
 MMU-U1.
 
 New: TD#125, TD#126, TD#127. No BP, INFRA or TOOLS number consumed.
+
+---
+## Session-070: the audit's first pass. Four rulings, three TDs.
+
+No tasks were run and no RTL changed. The cross-document audit
+session-069 started ran in a parallel session and was applied here.
+Twenty-seven documents were amended. Jeff ruled that the audit
+completes before any RTL change cycle.
+
+Rulings, all Jeff's:
+
+  VA_WIDTH 40 -> 41. A compliance defect, not drift: with H
+       mandatory through Sha, the G-stage Sv39x4 (MMU-20) and
+       vsatp.MODE=Bare required, a V=1 fetch PC is a zero-extended
+       GPA of up to 41 bits. FTB_TAG_BITS pinned at 26 and
+       IT_MAX_TGT_WIDTH left at 38, on the FE-19 distinction that
+       architectural addresses may not truncate and predictor
+       storage may. Documents swept, RTL not: TD#122.
+  pftAddr cannot represent an unaligned block end. Keep it
+       region-relative, widen PFTADDR_BITS to 6 and DELETE the
+       carry bit; storage is unchanged. The uBTB carries the
+       identical scheme and the identical defect. TD#124.
+  DIRECTION is one quantity and IS ranked, SC > TAGE > FTB,
+       suspended per branch when the FTB fast path fires. TARGET
+       is selected by branch type and hit, not ranked.
+       fe_decisions.md 12 narrowed, not withdrawn. THE FAST PATH
+       EXCEPTION WAS IN NO DOCUMENT: under ftb_fastpath_p2[i]
+       neither TAGE nor SC overrides the FTB direction, though
+       both are still requested and trained.
+  A redirect is not the override. It fires only when the
+       successor the cluster would publish differs from what its
+       own earlier stage registers hold. Three interface documents
+       gave it as predictor against predictor; corrected.
+
+Also: ITTAGE is at p2, TD#42 closed, bp_cluster.md corrected at
+three sites. bp_cluster.md converted from s0-s3 to p0-p3 at 50
+sites, which leaves the decoder's P0/P1 distinguished from the
+prediction pipeline's p0/p1 BY CASE ALONE; not ruled. The FTB is
+4-way and always was; bp_cluster.md said 8-way. Worth knowing if
+8-way is ever reopened: ftb_cntrl.sv's plru_victim and plru_touch
+are hand-written for four ways, so ftb_decisions.md 2.2's "a
+synthesis experiment, not a redesign" understates it.
+
+New: TD#122, TD#123, TD#124. No BP, INFRA or TOOLS number consumed.
+Closed or corrected: TD#42, TD#94, TD#112, TD-FE-5, RAS-3, HI5,
+MMU-U4 (Smepmp is NOT mandatory in RVA23S64), MMU-U5 (Svpbmt IS),
+FTB-3, DCD-U2, TI7, L1I-U2/U3/U4. IC-FTB-11 REOPENED: its
+session-052 reasoning assumed the tag covered the whole VA.
+Opened: FE-U11, MMU-U6, MMU-U7 (Svnapot, mandatory and absent),
+MMU-U8 (Svinval, mandatory and absent).
 
 ---
 ## Session-069: RAS theory-of-operation audit. Documentation only.
@@ -2114,109 +2261,75 @@ assessment of each document. Correct any that are wrong.
 |     |          | intact, only the valid is wrong -- degrades fallback     |
 |     |          | quality, never mispredicts. Wrap flag or 6-bit CSP.      |
 |     |          | Decide with the 16/32 rebalance. ras_decisions.md 3.3.   |
-| 122 | frontend | OPEN, RVA23 COMPLIANCE. VA_WIDTH is 40 and cannot hold   |
-|     |          | a fetch PC. H is mandatory through Sha; MMU-20 makes the |
-|     |          | G-stage Sv39x4; Shvsatpa requires vsatp to support Bare  |
-|     |          | because Svbare requires it of satp. With V=1 and         |
-|     |          | vsatp.MODE=Bare the fetch PC is a guest physical address |
-|     |          | of up to 41 bits, zero extended, and Sv39x4 requires     |
-|     |          | bits 63:41 to be zero or the access guest-page faults.   |
-|     |          |                                                          |
-|     |          | Two separate failures. The 41-bit range does not fit a   |
-|     |          | 40-bit field. And sign extension corrupts any GPA with   |
-|     |          | bit 38 set, well below 41, because a GPA is zero         |
-|     |          | extended. ftq_bpu_interfaces.md 5.2 reconstructs the     |
-|     |          | ITTAGE target by sign extension and is the explicit      |
-|     |          | site; l1i_ifu_interfaces.md TD-IF-1 is the root, closed  |
-|     |          | "No action" on reasoning that MMU-19..23 overtook in     |
-|     |          | session-069.                                             |
+| 122 | frontend | OPEN, RVA23 COMPLIANCE. VA_WIDTH = 40 CANNOT HOLD A      |
+|     |          | FETCH PC. H is mandatory through Sha, MMU-20 makes the   |
+|     |          | G-stage Sv39x4, and Shvsatpa plus Svbare require         |
+|     |          | vsatp.MODE=Bare, so with V=1 the fetch PC is a           |
+|     |          | zero-extended GPA of up to 41 bits. Two failures: 41     |
+|     |          | bits do not fit a 40-bit field, and sign extension       |
+|     |          | corrupts any GPA with bit 38 set. Explicit site:         |
+|     |          | ftq_bpu_interfaces.md 5.2.                               |
 |     |          |                                                          |
 |     |          | RULED session-070: VA_WIDTH 40 -> 41. FTB_TAG_BITS       |
-|     |          | pinned at 26 rather than derived, IT_MAX_TGT_WIDTH left  |
-|     |          | at 38. Predictor storage may alias or mispredict. An     |
-|     |          | alias is caught by PREDECODE, ftq_ifu_interfaces.md 6    |
-|     |          | and 7, NOT by FE-13: FE-13 republishes the cluster's own |
-|     |          | view and cannot detect its own error. A wrong target is  |
-|     |          | caught by the mispredict redirect at resolve.            |
-|     |          | Architectural addresses may not truncate, and            |
-|     |          | those are the fields that follow VA_WIDTH for free.      |
-|     |          | This keeps sim_ftb 99 and sim_ittage 211 intact.         |
+|     |          | PINNED at 26 and IT_MAX_TGT_WIDTH PINNED at 38 (FE-19:   |
+|     |          | architectural addresses may not truncate, predictor      |
+|     |          | storage may). A tag alias is caught by predecode,        |
+|     |          | ftq_ifu_interfaces.md 6 and 7; a wrong target by the     |
+|     |          | mispredict redirect at resolve. FTB_ENTRY_WIDTH stays    |
+|     |          | 110, so sim_ftb 99 and sim_ittage 211 stand.             |
 |     |          |                                                          |
-|     |          | GPA_WIDTH = 41 is added in the same edit. The ITLB       |
-|     |          | interfaces already carry the GPA on [GPA_WIDTH-1:0] and  |
-|     |          | the parameter does not exist, alongside VPN_WIDTH,       |
-|     |          | PPN_WIDTH, ASID_WIDTH, VMID_WIDTH, PERM_WIDTH,           |
-|     |          | CAUSE_WIDTH and PMA_WIDTH. Same class as PA_WIDTH in     |
-|     |          | l1i_ifu_interfaces.md 3.1.                               |
+|     |          | BUILT BY BP-109, session-073. VA_WIDTH is 41.            |
+|     |          | FTB_TAG_BITS is the literal 26 (it had DERIVED from      |
+|     |          | VA_WIDTH and would have become 27). IT_MAX_TGT_WIDTH was |
+|     |          | already a literal 38. The nine ITLB/MMU widths are       |
+|     |          | declared with the values ruled session-073; see          |
+|     |          | l1i_ifu_interfaces.md 3.1 for the source of each. The    |
+|     |          | ITTAGE reconstruction in bp_cluster.sv zero-extends, per |
+|     |          | ftq_bpu_interfaces.md 5.2.                               |
 |     |          |                                                          |
-|     |          | A backend-computed JALR target may have bits 63:41 set   |
-|     |          | and must fault. Narrowing to 41 loses that, which is     |
-|     |          | true at 40 today. The check belongs where the redirect   |
-|     |          | PC is formed, ruled into fe_decisions.md FE-19. HOW the  |
-|     |          | rejection is signalled is NOT ruled: the redirect group  |
-|     |          | of ftq_backend_interfaces.md 5 carries MISPREDICT, TRAP, |
-|     |          | REPLAY and UNSPEC and has no value for it. FE-U11.       |
+|     |          | The literal grep was run: 1307 sites in 31 files, all in |
+|     |          | bpu and ftq, swept to parameter-derived form. SEVEN      |
+|     |          | SITES TOOK THEIR WIDTH FROM HOW THE EXPRESSION WAS       |
+|     |          | BUILT and no search could find them; they were found by  |
+|     |          | running the tree at 41 and reading the width warnings.   |
+|     |          | tb_bp_cluster gained C1f2 and C1f3, each proven to fail  |
+|     |          | on the pre-fix tree. regress.sh green, 78 of 78.         |
 |     |          |                                                          |
-|     |          | Documents: bp_defines_pkg.sv, bp_structs_pkg.sv (283,    |
-|     |          | 585), l1i_ifu_interfaces.md TD-IF-1 and 3.1,             |
-|     |          | fe_decisions.md TD-FE-3, FE-19 and FE-U11,               |
-|     |          | ftq_entry_formats.md (57, 58, 70 and every total derived |
-|     |          | from them), ftq_decisions.md 4.7,                        |
-|     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 8,           |
-|     |          | ittage_interfaces.md, bp_cluster.md, mmu_decisions.md    |
-|     |          | MMU-20 and MMU-23, ftq_backend_interfaces.md 5 (FE-U11), |
-|     |          | ras_decisions.md 8 ("VA_WIDTH = 40b covers the RVA23     |
-|     |          | implementation VA space"), ras_interfaces.md 2           |
-|     |          | (RAS_ADDR_WIDTH = VA_WIDTH = 40b), ftb_interfaces.md     |
-|     |          | (Conventions and section 5), sc_table_hash_rules.md      |
-|     |          | (parameter list).                                        |
+|     |          | STILL OPEN under this TD: PA_WIDTH and the other TD-IF-1 |
+|     |          | rows are still absent from the packages, so PPN_WIDTH is |
+|     |          | the plain 24 rather than PA_WIDTH - 12. FE-U11 is        |
+|     |          | unchanged: FE-19 puts the 63:41 check where the redirect |
+|     |          | PC is formed and ftq_backend_interfaces.md 5 has no      |
+|     |          | cause value for the rejection.                           |
 |     |          |                                                          |
-|     |          | ubtb_interfaces.md, dcd_decisions.md,                    |
-|     |          | ftq_ifu_interfaces.md, itlb_ifu_interfaces.md,           |
-|     |          | itlb_l2tlb_interfaces.md, sc_interfaces.md and           |
-|     |          | bp_arb_spec.md are parametric and need no edit. An       |
-|     |          | earlier revision of this entry also listed               |
-|     |          | ras_decisions.md here, wrongly; it states 40b in prose.  |
-|     |          | THAT LIST WAS BUILT BY GREP AND THE GREP WAS TRUNCATED.  |
-|     |          | The four documents above it were missed the same way.    |
+|     |          | RAISED session-073, not part of this TD: a Sv39 PTE PPN  |
+|     |          | field is 44 bits and PPN_WIDTH is 24, and nothing in     |
+|     |          | mmu_decisions.md faults a PTE whose PPN is set above the |
+|     |          | implemented width. Silent truncation of a physical       |
+|     |          | address if it is never checked.                          |
 |     |          |                                                          |
+|     |          | Files: bp_defines_pkg.sv, bp_structs_pkg.sv (283, 585).  |
+|     |          | Runs as one cycle with TD#124 and TD#125: ftb_cntrl.sv,  |
+|     |          | ubtb.sv, bp_cluster.sv, both packages.                   |
 |     |          |                                                          |
-|     |          | DOCUMENT SWEEP DONE session-070. ftq_entry_formats.md    |
-|     |          | (pc, pft_addr, target 40->41; block scalars 112->114,    |
-|     |          | slot 56->57, entry 224->228, array 14,336->14,592,       |
-|     |          | total 68,224->68,480; slow path unchanged, it carries    |
-|     |          | no VA_WIDTH field), ftq_decisions.md 4.7,                |
-|     |          | ftq_bpu_interfaces.md 5.2, ftb_decisions.md 4.1 and 8,   |
-|     |          | ftb_interfaces.md (Conventions AND section 5 -- the      |
-|     |          | first sweep took Conventions only and left section 5 at  |
-|     |          | VA_WIDTH 40; fixed session-070),                         |
-|     |          | ittage_interfaces.md, bp_cluster.md,                     |
-|     |          | ras_decisions.md 8, ras_interfaces.md 2,                 |
-|     |          | mmu_decisions.md MMU-20 and MMU-23,                      |
-|     |          | l1i_ifu_interfaces.md TD-IF-1 and 3.1. FTB_TAG_BITS is   |
-|     |          | PINNED at 26 and IT_MAX_TGT_WIDTH at 38, so sim_ftb 99   |
-|     |          | and sim_ittage 211 stand. sc_table_hash_rules.md was not |
-|     |          | swept at that pass, not having been uploaded; it was     |
-|     |          | swept session-071 and its Parameter references block now |
-|     |          | reads VA_WIDTH = 41. Nothing is outstanding.             |
-|     |          | Session-072.                                             |
+|     |          | BEFORE SCOPING: the RTL literal grep has never been run. |
+|     |          | Search rtl/ and tb/ for 40'h, any [39: slice, [38] as a  |
+|     |          | sign bit, and {24{ / {25{ replications. That count       |
+|     |          | decides whether this is one task or three.               |
 |     |          |                                                          |
-|     |          | UNKNOWN: hardcoded literals in hand-written RTL and the  |
-|     |          | testbenches. grep 40'h, [39:0], [39:1] across rtl/ and   |
-|     |          | tb/ before scoping the task.                             |
+|     |          | Document sweep COMPLETE, sessions 070 and 071. Nothing   |
+|     |          | outstanding.                                             |
 |     |          |                                                          |
-|     |          | POINTER MASKING DOES NOT APPLY. Ssnpm is mandatory in    |
-|     |          | RVA23S64, but the ratified Pointer Masking spec v1.0     |
-|     |          | applies the ignore transformation to EXPLICIT memory     |
-|     |          | accesses only and states it does not apply to implicit   |
-|     |          | accesses such as page-table walks or instruction         |
-|     |          | fetches. Every address in this item is a fetch address.  |
-|     |          | No front-end consequence. A session-070 draft of this    |
-|     |          | entry and of FE-19 claimed the opposite, sourced to the  |
-|     |          | J extension WORKING DRAFT, whose discussion of masking   |
-|     |          | the two extra Sv39x4 GPA bits concerns DATA accesses.    |
-|     |          | Recorded so it is not re-raised.                         |
+|     |          | Open, not part of this TD: FE-U11. FE-19 puts the 63:41  |
+|     |          | check where the redirect PC is formed;                   |
+|     |          | ftq_backend_interfaces.md 5 carries MISPREDICT, TRAP,    |
+|     |          | REPLAY and UNSPEC and has no value for the rejection.    |
 |     |          |                                                          |
+|     |          | DO NOT RE-RAISE: pointer masking does not apply. Ssnpm   |
+|     |          | is mandatory in RVA23S64, but Pointer Masking v1.0       |
+|     |          | exempts implicit accesses, instruction fetch included. A |
+|     |          | session-070 draft claimed otherwise from the J working   |
+|     |          | draft, which concerns data accesses.                     |
 | 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
 |     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
 |     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
@@ -2326,12 +2439,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | likewise. Package change, so both units run. Same files  |
 |     |          | as TD#124; run them together.                            |
 |     |          |                                                          |
-|     |          | OPEN WITHIN IT (4.6 O-1 to O-3, not ruled): the target   |
-|     |          | displacement base, which 4.2 measures from the block     |
-|     |          | start and a shared entry breaks the same way; an upper   |
-|     |          | bound on the reconstructed fall-through; slot mapping    |
-|     |          | and fill order under the mask (IC-FTB-16, 5.4a). Found   |
-|     |          | by the session-071 IA read of the RTL.                   |
+|     |          | 4.6 O-1 and O-2 RULED session-073 (Jeff), as proposed: a |
+|     |          | conditional target is a displacement from the BRANCH PC, |
+|     |          | and FTB-G3 sends a reconstructed end beyond start +      |
+|     |          | FTB_BLOCK_BYTES + 2 to the FTB-G2 fallback.              |
+|     |          |                                                          |
+|     |          | O-3 RULED session-073 (Jeff), as proposed: O-3a storage  |
+|     |          | in region position order, O-3b the read compacts onto    |
+|     |          | the ports so port slot 0 is the first branch at or after |
+|     |          | the start, O-3c 5.4a restated on region position. 5.4a   |
+|     |          | and IC-FTB-16 are amended with the RTL. ALL OF 4.6 IS    |
+|     |          | NOW RULED; nothing blocks the TD#124 + TD#125 task.      |
+|     |          | Found by the session-071 IA read of the RTL.             |
 | 126 | ftq      | OPEN, RTL. THE FLUSH INDEX IS K+1 WHERE W3 REQUIRES K.   |
 |     |          | ftq_ifu.sv 232-239 drives the IFU flush at redir_idx     |
 |     |          | when _self is set and redir_idx + 1 when it is clear,    |
@@ -2383,6 +2502,109 @@ assessment of each document. Correct any that are wrong.
 |     |          |     first description word in the TD column.             |
 |     |          |   - the stale-entry path (an entry naming a target that  |
 |     |          |     was not run) is implemented but never injected.      |
+| 131 | decode   | OPEN, UNEXPLAINED. THE DECODE SUITE GOT 3x FASTER AND    |
+|     |          | NOBODY KNOWS WHY. Session-073: after lib and decode were |
+|     |          | moved from Verilator 5.020 (found on PATH) to the        |
+|     |          | project's 5.048, decode wall time fell 90 s -> 29 s.     |
+|     |          | Check counts are identical (sim_exp 43, sim_dec 567,     |
+|     |          | sim_predecode 476) and no warning appeared, so the same  |
+|     |          | checks ran. Most likely compile and simulation speed     |
+|     |          | under 5.048 with a warm ccache, but that is a guess.     |
+|     |          | Confirm before trusting decode timing for anything:      |
+|     |          | compare `make -n` output and the verilated build under   |
+|     |          | both versions. Low risk, but an unexplained factor of    |
+|     |          | three in a suite is not a fact until it is explained.    |
+| 132 | bpu      | OPEN, PERFORMANCE, BLOCKED ON A RULING. ITTAGE CANNOT    |
+|     |          | REPRESENT A V=0 UPPER-HALF TARGET. The field holds       |
+|     |          | VA[38:1] and ftq_bpu_interfaces.md 5.2 rebuilds the      |
+|     |          | target by zero extension, which is right for a V=1 GPA.  |
+|     |          | A Sv39 kernel address has bits 63:38 set, so the rebuilt |
+|     |          | target has bits 40:39 = 00 and every kernel indirect     |
+|     |          | target ITTAGE supplies is wrong. It does not wear off:   |
+|     |          | the update writes back the same VA[38:1] the entry       |
+|     |          | already holds, so no update corrects it, and while it    |
+|     |          | hits it overrides the FTB jump target. ITTAGE stops      |
+|     |          | predicting function pointers, switch tables and vtables  |
+|     |          | in kernel code. Found by BP-109, which built 5.2 as      |
+|     |          | written.                                                 |
+|     |          |                                                          |
+|     |          | misc/prop1.md IS THE HOME: the proposal, the four        |
+|     |          | alternatives with their costs, the RTL sites and the     |
+|     |          | checks. Revision 2 carries the PA review of session-073. |
+|     |          | Do not restate it here.                                  |
+|     |          |                                                          |
+|     |          | In short: take target bits 40:39 from the block base at  |
+|     |          | p2. No storage, no new path. The companion in prop1.md 5 |
+|     |          | (the FTQ refuses allocation and the target write when    |
+|     |          | the resolved target's bits 40:39 differ from its PC's)   |
+|     |          | is ruled WITH it, not after it: without it the sticky    |
+|     |          | entry above survives for the cross-region case.          |
+|     |          |                                                          |
+|     |          | Ruling needed on 5.2 and on prop1.md 5 before any RTL.   |
+|     |          |                                                          |
+| 133 | frontend | OPEN, PERFORMANCE STUDY. DOES DELIVERING TWO PREDICTION  |
+|     |          | BLOCKS PER CYCLE BUY ANYTHING? Ruled session-073 (Jeff): |
+|     |          | the front end delivers ONE prediction block per cycle.   |
+|     |          | One 32-byte block carries two branch slots, which is     |
+|     |          | judged sufficient. ftq_ifu_interfaces.md 8 item 2 closes |
+|     |          | on that ruling.                                          |
+|     |          |                                                          |
+|     |          | What is deferred here is the measurement, not the        |
+|     |          | design: whether two blocks per cycle would raise         |
+|     |          | delivered instructions per cycle enough to pay for two   |
+|     |          | FTQ requests per cycle and the second set of ports. Not  |
+|     |          | IFU-internal if it is ever done.                         |
+|     |          |                                                          |
+|     |          | Assess with the same harness as TD#128, once the IFU is  |
+|     |          | complete and something can drive it. Gate any two-block  |
+|     |          | commitment on this.                                      |
+| 134 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. WRONG-PATH       |
+|     |          | REQUESTS AFTER A REDIRECT. ifu_notes.md 6.4. The IFU     |
+|     |          | must flush its translation pipeline and its fetch        |
+|     |          | pipeline, and deal with what is already in flight: up to |
+|     |          | 16 L1I requests, the ITLB's in-flight walks and the line |
+|     |          | buffer. The L1I interface HAS NO CANCEL PORT, so a       |
+|     |          | wrong-path response returns and must be discarded, which |
+|     |          | needs an epoch or generation on the request tag and a    |
+|     |          | rule for the line buffer. None of it is specified.       |
+|     |          |                                                          |
+|     |          | Ruled session-073 (Jeff): this is not part of the first  |
+|     |          | IFU task. It lifts the flush-and-redirect deferral of    |
+|     |          | session-069, which is a design increment, and it gets a  |
+|     |          | dedicated or abbreviated session with the context to do  |
+|     |          | it properly. The first IFU task stubs it and says so.    |
+|     |          |                                                          |
+|     |          | Consequence: an IFU built without this is UNIT-TESTABLE  |
+|     |          | ONLY. It cannot be integrated against the FTQ redirect   |
+|     |          | path until this closes. Related: TD#126, TD#127.         |
+| 135 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE UNCACHED     |
+|     |          | FETCH PATH. ifu_notes.md 6.8, MMU-14, IT-11, IFU-21. A   |
+|     |          | fetch whose effective memory type is not cacheable and   |
+|     |          | idempotent never reaches the L1I and takes the uncached  |
+|     |          | path instead. WHERE THAT PATH GOES IS NOT ESTABLISHED:   |
+|     |          | l1i_ifu_interfaces.md is the only IFU memory interface   |
+|     |          | specified, so either the L1I gains a non-allocating mode |
+|     |          | (a cachegen schema question) or the IFU gains a second   |
+|     |          | port to the l2. Confirm against ifu_decisions.md IFU-21, |
+|     |          | which the PA has not read, before assuming either.       |
+|     |          |                                                          |
+|     |          | Ruled session-073 (Jeff): deferred with TD#134. A ruling |
+|     |          | on the port comes before the RTL.                        |
+| 136 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE IFU HALF OF  |
+|     |          | FENCE.I AND CBO.INVAL. ifu_notes.md 6.9. The IFU routes  |
+|     |          | the maintenance operation and gates the post-fence       |
+|     |          | restart on the acknowledgements (l1i_ifu_interfaces.md   |
+|     |          | IF-42, IF-43). Zifencei and Zicbom are mandatory in      |
+|     |          | RVA23S64.                                                |
+|     |          |                                                          |
+|     |          | BLOCKED AT THE FAR END BY TD#119: the cachegen schema    |
+|     |          | gap means the emitted L1I carries no invalidate port to  |
+|     |          | receive it. The IFU side can be built against a stub and |
+|     |          | unit-tested, but nothing is testable end to end until a  |
+|     |          | TOOLS task closes TD#119. Doing TD#119 first avoids      |
+|     |          | building against a port that does not exist.             |
+|     |          |                                                          |
+|     |          | Ruled session-073 (Jeff): deferred with TD#134.          |
 
 ---
 

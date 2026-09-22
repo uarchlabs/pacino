@@ -464,11 +464,11 @@ module tb;
     // A TAKEN SLOT resteers the loop in the same cycle, without a
     // redirect: this is arm 5 of 4.2, not arms 3 or 4.
     mdl_tkn_en  = 1'b1;
-    mdl_tkn_tgt = 40'h00_C000_0000;
+    mdl_tkn_tgt = VA_WIDTH'('h00_C000_0000);
     tick();
     tick();
     chk_va("B6 a taken slot supplies the successor",
-           ftq_pred_pc_p0, 40'h00_C000_0000);
+           ftq_pred_pc_p0, VA_WIDTH'('h00_C000_0000));
     chk   ("B7 and no redirect was published", !ftq_ifu_flush_val);
     mdl_tkn_en = 1'b0;
 
@@ -561,12 +561,12 @@ module tb;
     bkend_ftq_redir_val   = 1'b1;
     bkend_ftq_redir_idx   = 6'd4;
     bkend_ftq_redir_self  = 1'b0;
-    bkend_ftq_redir_pc    = 40'h00_D000_0000;
+    bkend_ftq_redir_pc    = VA_WIDTH'('h00_D000_0000);
     bkend_ftq_redir_cause = RC_MISPREDICT;
     #1;
     // ftq_npc: the corrected PC is presented at p0 immediately.
     chk_va("D2 the corrected PC is requested", ftq_pred_pc_p0,
-           40'h00_D000_0000);
+           VA_WIDTH'('h00_D000_0000));
     // ftq_ifu: the flush group is driven, starting one past the
     // naming entry because it survives.
     chk   ("D3 the IFU is flushed",  ftq_ifu_flush_val);
@@ -595,7 +595,7 @@ module tb;
     bkend_ftq_redir_val  = 1'b1;
     bkend_ftq_redir_idx  = 6'd7;
     bkend_ftq_redir_self = 1'b1;
-    bkend_ftq_redir_pc   = 40'h00_E000_0000;
+    bkend_ftq_redir_pc   = VA_WIDTH'('h00_E000_0000);
     #1;
     chk("D11 _self set flushes from the named entry",
         ftq_ifu_flush_idx == 6'd7);
@@ -612,14 +612,14 @@ module tb;
     bkend_ftq_redir_val   = 1'b1;
     bkend_ftq_redir_idx   = 6'd33;
     bkend_ftq_redir_self  = 1'b1;
-    bkend_ftq_redir_pc    = 40'h00_F000_0000;
+    bkend_ftq_redir_pc    = VA_WIDTH'('h00_F000_0000);
     bkend_ftq_redir_cause = RC_UNSPEC;
     #1;
     chk   ("D14 RC_UNSPEC performs no restore", !ftq_rollback_val);
     chk   ("D15 and no RAS restore",            !ras_restore_val);
     chk   ("D16 but it does flush",             ftq_ifu_flush_val);
     chk_va("D17 and it requests its PC",        ftq_pred_pc_p0,
-           40'h00_F000_0000);
+           VA_WIDTH'('h00_F000_0000));
     tick();
     bkend_ftq_redir_val   = 1'b0;
     bkend_ftq_redir_cause = RC_MISPREDICT;
@@ -664,7 +664,7 @@ module tb;
     bkend_ftq_redir_val   = 1'b1;
     bkend_ftq_redir_idx   = 6'd15;
     bkend_ftq_redir_self  = 1'b0;
-    bkend_ftq_redir_pc    = 40'h00_A000_0000;
+    bkend_ftq_redir_pc    = VA_WIDTH'('h00_A000_0000);
     bkend_ftq_redir_cause = RC_MISPREDICT;
     #1;
     chk("E3 the RAS commit is suppressed by the restore",

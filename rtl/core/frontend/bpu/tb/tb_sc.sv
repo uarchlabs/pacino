@@ -335,7 +335,7 @@ module tb;
     for (int s = 0; s < P_SLOTS; s++) begin
       tage_pred_meta_p2[s]              = '0;
       tage_pred_meta_p2[s].tage_pred_tkn = 1'b1;
-      inp_pc_p2[s]                      = 39'h0000_0040;
+      inp_pc_p2[s]                      = (VA_WIDTH-1)'('h0000_0040);
     end
     sc_upd_val_u0 = 2'b11;
     for (int s = 0; s < P_SLOTS; s++) begin
@@ -381,8 +381,8 @@ module tb;
 
     // Prediction stimulus (distinct PCs per slot).
     clr_inputs();
-    inp_pc_p2[0]    = 39'h0000_0044;   // pc>>2 = 0x11
-    inp_pc_p2[1]    = 39'h0000_0088;   // pc>>2 = 0x22
+    inp_pc_p2[0]    = (VA_WIDTH-1)'('h0000_0044);   // pc>>2 = 0x11
+    inp_pc_p2[1]    = (VA_WIDTH-1)'('h0000_0088);   // pc>>2 = 0x22
     sc_t1_idx_fh_p2 = 64'd5;
     sc_t2_idx_fh_p2 = 64'd10;
     sc_t3_idx_fh_p2 = 64'd3;

@@ -28,9 +28,11 @@
 // (111 / 000) with ftb_fastpath_en=1.
 //
 // Test groups: D (direction/conf), FP (fast-path), S (structural),
-// P (position), I (invariant). WAIVED here (BP-068 Constraints):
-// flush (IC-FTB-07), FTQ round-trip / carried-way timing (IC-FTB-10),
-// concurrent same-cycle predict+update arbitration (IC-FTB-09).
+// P (position), I (invariant), R (region-relative positions and
+// the bounded fall-through, TD#124 / TD#125, BP-110). WAIVED here
+// (BP-068 Constraints): flush (IC-FTB-07), FTQ round-trip /
+// carried-way timing (IC-FTB-10), concurrent same-cycle
+// predict+update arbitration (IC-FTB-09).
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -170,11 +172,13 @@ module tb;
   localparam logic [FTB_CONF_WIDTH-1:0] CONF_SAT_N = '0;
 
   // Build a block-aligned PC from a tag and a set index. tag occupies
-  // PC[39:14], idx PC[13:5], block offset PC[4:0] = 0.
+  // the FTB_TAG_BITS above the index, PC[39:14]; idx PC[13:5]; block
+  // offset PC[4:0] = 0. VA bits above the tag are zero: FTB_TAG_BITS
+  // is pinned at 26 (TD#122), so PC bit 40 is not tag-covered.
   function automatic logic [VA_WIDTH-1:0] make_pc(
       input logic [FTB_TAG_BITS-1:0] tag,
       input logic [FTB_IDX_BITS-1:0] idx);
-    make_pc = {tag, idx, {FTB_OFFSET_BITS{1'b0}}};
+    make_pc = VA_WIDTH'({tag, idx, {FTB_OFFSET_BITS{1'b0}}});
   endfunction
 
   // Expected conditional target read-back: base + sign-extended low
@@ -200,20 +204,25 @@ module tb;
       + {{(VA_WIDTH-FTB_JMP_TGT_BITS){disp[FTB_JMP_TGT_BITS-1]}}, disp};
   endfunction
 
-  // Expected fallthrough read-back from a full-VA block end. Mirrors
-  // the ftb_cntrl reduce (pftAddr + carry) and the reconstruct.
+  // Expected fallthrough read-back from a full-VA block end, for a
+  // lookup at start. Mirrors the ftb_cntrl reduce (pftAddr from the
+  // aligned region base, no carry; ftb_decisions.md 5.5) and the
+  // bounded reconstruct (FTB-G1, FTB-G3, FTB-G2 fallback; 4.5, 4.6).
   function automatic logic [VA_WIDTH-1:0] exp_pft(
-      input logic [VA_WIDTH-1:0] pft_in, input logic [VA_WIDTH-1:0] base);
-    logic [VA_WIDTH-1:0]    off;
+      input logic [VA_WIDTH-1:0] pft_in, input logic [VA_WIDTH-1:0] start);
+    logic [VA_WIDTH-1:0]     rbase;
+    logic [VA_WIDTH-1:0]     off;
     logic [PFTADDR_BITS-1:0] pidx;
-    logic                   carry;
-    off   = pft_in - base;
-    pidx  = {{(PFTADDR_BITS-(FTB_OFFSET_BITS-POS_OFFSET_BITS)){1'b0}},
-             off[FTB_OFFSET_BITS-1:POS_OFFSET_BITS]};
-    carry = |off[VA_WIDTH-1:FTB_OFFSET_BITS];
-    exp_pft = base
-      + ({{(VA_WIDTH-PFTADDR_BITS){1'b0}}, pidx} << POS_OFFSET_BITS)
-      + (carry ? VA_WIDTH'(FTB_BLOCK_BYTES) : VA_WIDTH'(0));
+    logic [VA_WIDTH-1:0]     full;
+    rbase = {start[VA_WIDTH-1:FTB_OFFSET_BITS], {FTB_OFFSET_BITS{1'b0}}};
+    off   = pft_in - rbase;
+    pidx  = off[POS_OFFSET_BITS +: PFTADDR_BITS];
+    full  = rbase + (VA_WIDTH'(pidx) << POS_OFFSET_BITS);
+    if ((full <= start)
+        || (full > start + VA_WIDTH'(FTB_BLOCK_BYTES + (1 << POS_OFFSET_BITS))))
+      exp_pft = start + VA_WIDTH'(FTB_BLOCK_BYTES);
+    else
+      exp_pft = full;
   endfunction
 
   // -----------------------------------------------------------------
@@ -374,7 +383,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h0000A1, 9'd5);
-    tgt = pc + 40'h100;
+    tgt = pc + VA_WIDTH'('h100);
     upd_br(pc, 1'b0, 2'd2, 1'b0, 1'b1, tgt, 4'd1, pc); // alloc way2 br0 tkn
     predict(pc);
     check("S2 valid on hit",        ftb_valid_p2 == 1'b1);
@@ -390,7 +399,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h0000B2, 9'd9);
-    tgt = pc + 40'h80;
+    tgt = pc + VA_WIDTH'('h80);
     upd_br(pc, 1'b0, 2'd1, 1'b0, 1'b1, tgt, 4'd0, pc); // alloc way1 conf=4
     predict(pc);
     check("S3 alloc conf==INIT_TKN", ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
@@ -406,7 +415,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h0000C3, 9'd11);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd2, pc); // alloc br0 tkn
     upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b0, tgt, 4'd4, pc); // free br1 ntkn
     predict(pc);
@@ -421,7 +430,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h0000D4, 9'd13);
-    tgt = pc + 40'h60;
+    tgt = pc + VA_WIDTH'('h60);
     upd_br(pc, 1'b0, 2'd3, 1'b0, 1'b0, tgt, 4'd1, pc); // alloc ntkn
     predict(pc);
     check("S5 not-taken branch tracked (valid)",
@@ -440,7 +449,7 @@ module tb;
       s6_pc[w] = make_pc(26'h000100 + FTB_TAG_BITS'(w), 9'd21);
     for (int w = 0; w < 4; w++)
       upd_br(s6_pc[w], 1'b0, w[FTB_WAY_BITS-1:0], 1'b0, 1'b1,
-             s6_pc[w] + 40'h20, 4'd0, s6_pc[w]); // alloc way w
+             s6_pc[w] + VA_WIDTH'('h20), 4'd0, s6_pc[w]); // alloc way w
     // Read the victim off the clean allocate sequence first (a miss
     // prediction does not touch PLRU, so this does not perturb state).
     // Touch order 0,1,2,3 leaves PLRU state 000 -> victim way0.
@@ -454,7 +463,7 @@ module tb;
             ftb_valid_p2 && (ftb_way_p2 == w[FTB_WAY_BITS-1:0]));
     end
     // Allocate the carried victim; way0's old tag (s6_pc[0]) is evicted.
-    upd_br(s6_pc[4], 1'b0, 2'd0, 1'b0, 1'b1, s6_pc[4] + 40'h20, 4'd0,
+    upd_br(s6_pc[4], 1'b0, 2'd0, 1'b0, 1'b1, s6_pc[4] + VA_WIDTH'('h20), 4'd0,
            s6_pc[4]);
     predict(s6_pc[4]);
     check("S6 new tag now hits way0",
@@ -469,8 +478,8 @@ module tb;
     // =============================================================
     do_reset();
     pc = make_pc(26'h0000E5, 9'd33);
-    j1 = pc + 40'h200;
-    j2 = pc + 40'h2C0;
+    j1 = pc + VA_WIDTH'('h200);
+    j2 = pc + VA_WIDTH'('h2C0);
     upd_jmp(pc, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd6, pc); // alloc jalr
     predict(pc);
     check("S7 jmp valid",            ftb_jmp_valid_p2 == 1'b1);
@@ -487,24 +496,24 @@ module tb;
     do_reset();
     pc   = make_pc(26'h000040, 9'd1);   // base 0x100020, room below
     base = pc;
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, base + 40'h400, 4'd0, pc);
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h400), 4'd0, pc);
     predict(pc);
     check("S8 in-range +0x400 lossless",
-          ftb_br0_target_p2 == base + 40'h400);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + 40'h0FFF, 4'd0, pc);
+          ftb_br0_target_p2 == base + VA_WIDTH'('h400));
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h0FFF), 4'd0, pc);
     predict(pc);
     check("S8 max in-range +0xFFF lossless (fit boundary)",
-          ftb_br0_target_p2 == base + 40'h0FFF);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base - 40'h400, 4'd0, pc);
+          ftb_br0_target_p2 == base + VA_WIDTH'('h0FFF));
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base - VA_WIDTH'('h400), 4'd0, pc);
     predict(pc);
     check("S8 negative in-range -0x400 lossless",
-          ftb_br0_target_p2 == base - 40'h400);
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + 40'h1000, 4'd0, pc);
+          ftb_br0_target_p2 == base - VA_WIDTH'('h400));
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h1000), 4'd0, pc);
     predict(pc);
     check("S8 overflow +0x1000 wraps per encode (status=overflow)",
-          ftb_br0_target_p2 == exp_br_tgt(base + 40'h1000, base));
+          ftb_br0_target_p2 == exp_br_tgt(base + VA_WIDTH'('h1000), base));
     check("S8 overflow read-back != true target (lossy past reach)",
-          ftb_br0_target_p2 != (base + 40'h1000));
+          ftb_br0_target_p2 != (base + VA_WIDTH'('h1000)));
 
     // =============================================================
     // S9: jump target round-trip -- same for FTB_JMP_TGT_BITS.
@@ -512,46 +521,50 @@ module tb;
     do_reset();
     pc   = make_pc(26'h000080, 9'd2);   // base 0x200040
     base = pc;
-    upd_jmp(pc, 1'b0, 2'd0, base + 40'h1000, 1'b1, 1'b0, 1'b0, 4'd0, pc);
+    upd_jmp(pc, 1'b0, 2'd0, base + VA_WIDTH'('h1000), 1'b1, 1'b0, 1'b0, 4'd0,
+            pc);
     predict(pc);
     check("S9 jmp in-range +0x1000 lossless",
-          ftb_jmp_target_p2 == base + 40'h1000);
-    upd_jmp(pc, 1'b1, 2'd0, base + 40'hF_FFFF, 1'b1, 1'b0, 1'b0, 4'd0, pc);
+          ftb_jmp_target_p2 == base + VA_WIDTH'('h1000));
+    upd_jmp(pc, 1'b1, 2'd0, base + VA_WIDTH'('hF_FFFF), 1'b1, 1'b0, 1'b0, 4'd0,
+            pc);
     predict(pc);
     check("S9 jmp max in-range +0xFFFFF lossless (fit boundary)",
-          ftb_jmp_target_p2 == base + 40'hF_FFFF);
-    upd_jmp(pc, 1'b1, 2'd0, base + 40'h10_0000, 1'b1, 1'b0, 1'b0, 4'd0, pc);
+          ftb_jmp_target_p2 == base + VA_WIDTH'('hF_FFFF));
+    upd_jmp(pc, 1'b1, 2'd0, base + VA_WIDTH'('h10_0000), 1'b1, 1'b0, 1'b0,
+            4'd0, pc);
     predict(pc);
     check("S9 jmp overflow +0x100000 wraps per encode",
-          ftb_jmp_target_p2 == exp_jmp_tgt(base + 40'h10_0000, base));
+          ftb_jmp_target_p2 == exp_jmp_tgt(base + VA_WIDTH'('h10_0000), base));
 
     // =============================================================
-    // S10: fallthrough reduce/reconstruct -- in-block 4-byte-aligned
-    // ends are lossless; a cross-block end carries (4.5, 5.5, 8.1).
+    // S10: fallthrough reduce/reconstruct -- in-block ends are
+    // lossless, and so is an end at the next block start (4.5, 5.5,
+    // 8.1).
     // =============================================================
     do_reset();
     pc   = make_pc(26'h0000F6, 9'd44);
     base = pc;
-    tgt  = base + 40'h10;
+    tgt  = base + VA_WIDTH'('h10);
     // in-block end at instruction index 3 (offset 12).
-    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + 40'd12);
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + VA_WIDTH'('d12));
     predict(pc);
     check("S10 in-block end +12 lossless",
-          ftb_pft_addr_p2 == base + 40'd12);
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d12));
     check("S10 in-block end +12 == model",
-          ftb_pft_addr_p2 == exp_pft(base + 40'd12, base));
+          ftb_pft_addr_p2 == exp_pft(base + VA_WIDTH'('d12), base));
     // in-block end at index 7 (offset 28), last in-block position.
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + 40'd28);
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + VA_WIDTH'('d28));
     predict(pc);
     check("S10 in-block end +28 lossless",
-          ftb_pft_addr_p2 == base + 40'd28);
-    // cross-block end at next block start (offset 32) -> carry.
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + 40'd32);
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d28));
+    // cross-block end at next block start (offset 32).
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd0, base + VA_WIDTH'('d32));
     predict(pc);
-    check("S10 cross-block end +32 carries",
-          ftb_pft_addr_p2 == base + 40'd32);
+    check("S10 cross-block end +32 lossless",
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d32));
     check("S10 cross-block end +32 == model",
-          ftb_pft_addr_p2 == exp_pft(base + 40'd32, base));
+          ftb_pft_addr_p2 == exp_pft(base + VA_WIDTH'('d32), base));
 
     // =============================================================
     // S11: branch-type classification -- jump type bits drive
@@ -559,7 +572,7 @@ module tb;
     // =============================================================
     do_reset();
     pc = make_pc(26'h000111, 9'd55);
-    j1 = pc + 40'h100;
+    j1 = pc + VA_WIDTH'('h100);
     upd_jmp(pc, 1'b0, 2'd0, j1, 1'b1, 1'b0, 1'b0, 4'd0, pc); // call
     predict(pc);
     check("S11 call: is_call",  ftb_is_call_p2 == 1'b1);
@@ -583,7 +596,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h000221, 9'd64);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4, MSB=1
     predict(pc);
     check("D1 MSB=1 -> taken", ftb_br0_taken_p2 == 1'b1);
@@ -603,7 +616,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h000222, 9'd65);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     predict(pc);
@@ -613,7 +626,7 @@ module tb;
     check("D2 taken no wrap (stays 111)", ftb_br0_conf_p2 == CONF_SAT_T);
     do_reset();
     pc  = make_pc(26'h000223, 9'd66);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b0, tgt, 4'd0, pc); // conf=3
     train_br(pc, 2'd0, 1'b0, 1'b0, 3, tgt, 4'd0, pc);  // ->0
     predict(pc);
@@ -630,7 +643,7 @@ module tb;
     do_reset();
     ftb_fastpath_en = 1'b1;
     pc  = make_pc(26'h000224, 9'd70);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // taken alloc
     predict(pc);
     check("D3 taken init conf==3'b100", ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
@@ -638,7 +651,7 @@ module tb;
           ftb_br0_conf_p2[FTB_CONF_WIDTH-1] == 1'b1);
     check("D3 fresh taken does NOT fast-path", ftb_fastpath_p2[0] == 1'b0);
     pc  = make_pc(26'h000225, 9'd71);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b0, tgt, 4'd0, pc); // not-taken alloc
     predict(pc);
     check("D3 ntkn init conf==3'b011", ftb_br0_conf_p2 == FTB_CONF_INIT_NTK);
@@ -654,7 +667,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h000226, 9'd80);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     ftb_fastpath_en = 1'b1;
@@ -679,12 +692,13 @@ module tb;
     do_reset();
     pcA = make_pc(26'h00030A, 9'd90);
     pcB = make_pc(26'h00030B, 9'd90);   // same set, different tag
-    tgt = pcA + 40'h40;
+    tgt = pcA + VA_WIDTH'('h40);
     upd_br(pcA, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pcA); // alloc tkn
     train_br(pcA, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pcA);  // ->7
     predict(pcA);
     check("D5 A saturated 111 before realloc", ftb_br0_conf_p2 == CONF_SAT_T);
-    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b0, pcB + 40'h40, 4'd0, pcB); // realloc
+    // realloc
+    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b0, pcB + VA_WIDTH'('h40), 4'd0, pcB);
     predict(pcB);
     check("D5 B hits after realloc",   ftb_valid_p2 == 1'b1);
     check("D5 B conf == new weak init (011)",
@@ -699,7 +713,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h000401, 9'd100);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     ftb_fastpath_en = 1'b1;
@@ -721,7 +735,7 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h000402, 9'd101);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4 (unsat)
     ftb_fastpath_en = 1'b1;
     predict(pc);
@@ -738,7 +752,7 @@ module tb;
     check("FP4 miss: not valid",       ftb_valid_p2 == 1'b0);
     check("FP4 miss: no fast-path",    ftb_fastpath_p2 == 2'b00);
     pc = make_pc(26'h000403, 9'd103);
-    upd_jmp(pc, 1'b0, 2'd0, pc + 40'h80, 1'b1, 1'b0, 1'b0, 4'd0, pc);
+    upd_jmp(pc, 1'b0, 2'd0, pc + VA_WIDTH'('h80), 1'b1, 1'b0, 1'b0, 4'd0, pc);
     predict(pc);                                     // jmp only, no br0
     check("FP4 empty br0 field invalid", ftb_br0_valid_p2 == 1'b0);
     check("FP4 empty field: br0 no fast-path", ftb_fastpath_p2[0] == 1'b0);
@@ -752,7 +766,7 @@ module tb;
     do_reset();
     pc   = make_pc(26'h000404, 9'd104);
     base = pc;
-    tgt  = base + 40'h300;
+    tgt  = base + VA_WIDTH'('h300);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
     ftb_fastpath_en = 1'b1;
@@ -771,10 +785,11 @@ module tb;
     // =============================================================
     do_reset();
     pc  = make_pc(26'h000501, 9'd120);
-    tgt = pc + 40'h40;
+    tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd3, pc);            // br0 pos3
     upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, tgt, 4'd5, pc);            // br1 pos5
-    upd_jmp(pc, 1'b1, 2'd0, pc + 40'h80, 1'b1, 1'b0, 1'b0, 4'd7, pc); // jmp7
+    // jmp7
+    upd_jmp(pc, 1'b1, 2'd0, pc + VA_WIDTH'('h80), 1'b1, 1'b0, 1'b0, 4'd7, pc);
     predict(pc);
     check("P1 br0 pos round-trip ==3", ftb_br0_pos_p2 == 4'd3);
     check("P1 br1 pos round-trip ==5", ftb_br1_pos_p2 == 4'd5);
@@ -794,9 +809,106 @@ module tb;
     // a new branch with a new position; the new position is stored.
     // =============================================================
     pcB = make_pc(26'h000502, 9'd120);  // same set, different tag
-    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b1, pcB + 40'h40, 4'd4, pcB); // realloc
+    // realloc
+    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b1, pcB + VA_WIDTH'('h40), 4'd4, pcB);
     predict(pcB);
     check("P3 realloc stores new pos ==4", ftb_br0_pos_p2 == 4'd4);
+
+    // =============================================================
+    // R1: TD#124. A block starting at region offset 30 with a 32-byte
+    // block and a straddling 32-bit final instruction ends 64 bytes
+    // above the region base (ftb_decisions.md 5.5). The end must
+    // reconstruct exactly. As built, pftAddr + carry reconstructed
+    // base+32, and FTB-G1 passed it because base+32 is above the start.
+    // =============================================================
+    do_reset();
+    base = make_pc(26'h000611, 9'd130);
+    pc   = base + VA_WIDTH'('d30);
+    tgt  = pc + VA_WIDTH'('h100);
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd3,
+           base + VA_WIDTH'('d64));
+    predict(pc);
+    $display("R1 pft got %h exp %h", ftb_pft_addr_p2,
+             base + VA_WIDTH'('d64));
+    check("R1 start at region offset 30 hits", ftb_valid_p2 == 1'b1);
+    check("R1 end at region offset 64 reconstructs exactly",
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d64));
+    check("R1 end is start + FTB_BLOCK_BYTES + 2 (straddle)",
+          ftb_pft_addr_p2
+            == pc + VA_WIDTH'(FTB_BLOCK_BYTES + (1 << POS_OFFSET_BITS)));
+    check("R1 br0 pos is start-relative ==3", ftb_br0_pos_p2 == 4'd3);
+    check("R1 br0 target round-trip", ftb_br0_target_p2 == tgt);
+
+    // =============================================================
+    // R2: TD#125. Two starts in one 32-byte region share an entry.
+    // A starts at region offset 0, B at offset 10. A branch A
+    // recorded below B's start must not be reported to B, B's own
+    // branch must come back at B's start-relative position, and both
+    // starts must see a coherent entry afterwards (4.6 R-1, R-2, O-1,
+    // O-3).
+    // =============================================================
+    do_reset();
+    base = make_pc(26'h000612, 9'd131);
+    pcA  = base;
+    pcB  = base + VA_WIDTH'('d10);
+    j1   = base + VA_WIDTH'('h100);          // A's branch target
+    j2   = base + VA_WIDTH'('h300);          // B's branch target
+    // A: branch at start-relative pos 2, branch PC base+4.
+    upd_br(pcA, 1'b0, 2'd1, 1'b0, 1'b1, j1, 4'd2,
+           base + VA_WIDTH'('d32));
+    predict(pcB);
+    check("R2 B hits the shared entry", ftb_valid_p2 == 1'b1);
+    check("R2 A's branch below B's start not reported (br0)",
+          ftb_br0_valid_p2 == 1'b0);
+    check("R2 A's branch below B's start not reported (br1)",
+          ftb_br1_valid_p2 == 1'b0);
+    // B: its first branch, start-relative pos 3, branch PC base+16.
+    // B's prediction held no branch, so the FTQ fills slot 0.
+    upd_br(pcB, 1'b1, 2'd1, 1'b0, 1'b1, j2, 4'd3,
+           base + VA_WIDTH'('d32));
+    predict(pcB);
+    check("R2 B br0 valid", ftb_br0_valid_p2 == 1'b1);
+    check("R2 B br0 pos is start-relative ==3", ftb_br0_pos_p2 == 4'd3);
+    check("R2 B branch PC == start + pos",
+          pcB + (VA_WIDTH'(ftb_br0_pos_p2) << POS_OFFSET_BITS)
+            == base + VA_WIDTH'('d16));
+    check("R2 B br0 target is B's", ftb_br0_target_p2 == j2);
+    check("R2 B br1 empty (A's branch still hidden)",
+          ftb_br1_valid_p2 == 1'b0);
+    predict(pcA);
+    check("R2 A br0 still A's branch, pos 2", ftb_br0_valid_p2
+          && (ftb_br0_pos_p2 == 4'd2));
+    check("R2 A br0 target is A's", ftb_br0_target_p2 == j1);
+    check("R2 A br1 is B's branch, pos 8", ftb_br1_valid_p2
+          && (ftb_br1_pos_p2 == 4'd8));
+    check("R2 A br1 target is B's", ftb_br1_target_p2 == j2);
+
+    // =============================================================
+    // R3: FTB-G3 and the upper edge of the window. A start at region
+    // offset 30 records a branch at start-relative pos 5 (region
+    // position 20) and an end 62 bytes above the region base. Seen
+    // from a start at offset 0, that branch lies past the block end
+    // and the end lies beyond start + FTB_BLOCK_BYTES + 2: the branch
+    // is not reported and the fall-through takes the FTB-G2 fallback
+    // (4.6 R-1, O-2).
+    // =============================================================
+    do_reset();
+    base = make_pc(26'h000613, 9'd132);
+    pcA  = base + VA_WIDTH'('d30);
+    pcB  = base;
+    upd_br(pcA, 1'b0, 2'd0, 1'b0, 1'b1, pcA + VA_WIDTH'('h80), 4'd5,
+           base + VA_WIDTH'('d62));
+    predict(pcA);
+    check("R3 recording start sees its own end",
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d62));
+    check("R3 recording start sees its own branch, pos 5",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd5));
+    predict(pcB);
+    check("R3 offset-0 start hits the shared entry", ftb_valid_p2 == 1'b1);
+    check("R3 branch past this block's end not reported",
+          ftb_br0_valid_p2 == 1'b0);
+    check("R3 FTB-G3: end beyond start+34 falls back to start+32",
+          ftb_pft_addr_p2 == pcB + VA_WIDTH'(FTB_BLOCK_BYTES));
 
     // -------------------------------------------------------------
     $display("=================================================");

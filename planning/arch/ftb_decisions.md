@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -323,7 +323,8 @@ make reachable.
 
 Conditional branch targets are stored as an offset from the block
 start, with a fit/overflow/underflow status field. A shared entry
-breaks a start-relative base; the fix is open, 4.6 O-1. Offset storage is
+breaks a start-relative base. RULED session-073, 4.6 O-1: the base is
+the branch PC, not the block start. Offset storage is
 lossless -- the target reconstructs exactly -- so it is an area win,
 not an accuracy tradeoff. The cost is a reconstruct-and-bounds-check
 step in logic.
@@ -424,7 +425,9 @@ BrIMLI Update). Neither is in the entry arithmetic (8.1). Both may
 be derivable rather than stored: the branch PC is block start plus
 pos (4.6 R-2), and a backwards branch is target < branch PC, both
 reconstructed at the read. Not the sign of the stored displacement
-alone while 4.2 measures it from the block start (TD#125 O-1). Recorded session-072; this read "All widths are now
+alone while 4.2 measured it from the block start. 4.6 O-1 ruled
+session-073: the base is the branch PC, so the two now agree.
+Recorded session-072; this read "All widths are now
 ruled" with both TDs open against the format.
 
 ### 4.5  Fallthrough reconstruction: bounds checked
@@ -499,23 +502,51 @@ This matches XiangShan V3, whose main BTB stores positions from an
 aligned base and qualifies a hit on the position being at or after
 the start's offset within it.
 
-OPEN UNDER TD#125, each a consequence of (R) and not yet ruled:
+UNDER TD#125, each a consequence of (R):
 
-  O-1  TARGET BASE. 4.2 stores targets as a displacement from the
-       BLOCK START, which a shared entry breaks the same way.
-       Proposed: measure from the branch PC, region base plus the
-       stored position, which every sharer agrees on and which
-       keeps the ISA reach of 4.2 exact.
-  O-2  UPPER BOUND ON THE FALL-THROUGH. FTB-G1 checks only that the
-       reconstructed end is above the start. An end recorded from a
-       start at region offset 30 can lie 64 bytes above a later
-       start at offset 0. Proposed FTB-G3: an end beyond start +
-       FTB_BLOCK_BYTES + 2 takes the FTB-G2 fallback too.
-  O-3  SLOT MAPPING AND FILL ORDER. With the window mask br0 can be
+  O-1  TARGET BASE. RULED session-073 (Jeff), as proposed. A
+       conditional target is a displacement from the BRANCH PC,
+       which is the region base plus the stored position. 4.2's
+       block-start base broke on a shared entry the same way the
+       positions did. Every sharer agrees on the branch PC, and
+       the ISA reach of 4.2 stays exact.
+  O-2  UPPER BOUND ON THE FALL-THROUGH. RULED session-073 (Jeff),
+       as proposed, FTB-G3: a reconstructed end beyond start +
+       FTB_BLOCK_BYTES + 2 takes the FTB-G2 fallback, as an end
+       at or below the start already does under FTB-G1. FTB-G1
+       alone passed an end recorded from a start at region offset
+       30 that lies 64 bytes above a later start at offset 0.
+  O-3  SLOT MAPPING AND FILL ORDER. RULED session-073 (Jeff), as
+       proposed, in three parts. With the window mask br0 can be
        hidden while br1 is visible, so IC-FTB-16's "slot 0 is the
-       first branch" holds per region rather than per start, and
-       5.4a's program-order fill needs restating for starts that
-       share an entry.
+       first branch" holds per region in storage and per start on
+       the ports, and 5.4a's program-order fill is restated for
+       starts that share an entry.
+
+       O-3a  STORAGE is in ascending REGION position order. br0
+             holds the lower stored position, br1 the higher,
+             whatever start wrote them. This is what makes the
+             entry mean one thing to every sharer.
+       O-3b  THE READ COMPACTS. After the [k, k+16) window mask,
+             the surviving fields are packed onto the ports in
+             ascending position, so port slot 0 is always the
+             first branch at or after the start. IC-FTB-16 then
+             holds PER START on the ports and PER REGION in
+             storage, and the consumer needs no window knowledge.
+             Without compaction a start that hides br0 reports
+             its only branch in slot 1, and the FTQ entry, the
+             predecode writeback and the resolution all have to
+             learn the window rule.
+       O-3c  5.4a IS RESTATED ON REGION POSITION. Which
+             conditional field a branch fills is decided by its
+             region position, not by program order within one
+             start. For a single start the two agree; for two
+             starts sharing an entry only the region position is
+             well defined.
+
+       5.4a and IC-FTB-16 are amended to match, and the read path
+       gains the compaction, which is inside ftb_cntrl by R-2.
+       TD#125 carries both. All of 4.6 is now ruled.
 
 ---
 
@@ -988,6 +1019,20 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-09-22  session-073. 4.6 O-1 and O-2 RULED by Jeff as
+              proposed: the conditional target base is the branch
+              PC, and FTB-G3 bounds the reconstructed end at
+              start + FTB_BLOCK_BYTES + 2. 4.2 and 4.4 updated
+              where they called O-1 open. O-3 stays open and now
+              carries the PA's three-part proposal (O-3a storage
+              in region order, O-3b the read compacts onto the
+              ports, O-3c 5.4a restated on region position).
+
+  2026-09-22  session-073. 4.6 O-3 RULED by Jeff as proposed, all
+              three parts. Every open item under 4.6 is now
+              closed; TD#125 carries the RTL and the 5.4a and
+              IC-FTB-16 amendments.
+
   Entries below that were written before session-072 use the
   retired s-stage labels in their text. s0=p0, s1=p1, s2=p2,
   s3=p3 (PROJECT_CORE.md); the labels are not live stage names.

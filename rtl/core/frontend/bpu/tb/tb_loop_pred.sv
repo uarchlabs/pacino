@@ -217,7 +217,7 @@ module tb;
   // ================================================================
   task automatic tc1(input int sl);
     do_reset();
-    do_pred(sl, 40'h0000_1100);
+    do_pred(sl, VA_WIDTH'('h0000_1100));
     check($sformatf("TC1.%s", sl_of(sl)),
           pred_p1[sl].lp_pred_is_loop == 1'b0,
           "cold lookup: lp_pred_is_loop should be 0");
@@ -234,8 +234,8 @@ module tb;
   task automatic tc2(input int sl);
     logic [VA_WIDTH-1:0] pc2, tgt2;
     do_reset();
-    pc2  = 40'h0000_2200;
-    tgt2 = pc2 - 40'd256;  // backward: tgt < pc
+    pc2  = VA_WIDTH'('h0000_2200);
+    tgt2 = pc2 - VA_WIDTH'('d256);  // backward: tgt < pc
     alloc_entry(sl, pc2, tgt2, LP_WAY_BITS'(0));
     do_pred(sl, pc2);
     check($sformatf("TC2a.%s", sl_of(sl)),
@@ -258,8 +258,8 @@ module tb;
     logic [VA_WIDTH-1:0] pc3, tgt3;
     lp_upd_t             u;
     do_reset();
-    pc3  = 40'h0000_3300;
-    tgt3 = pc3 + 40'd256;  // forward: tgt > pc -> no alloc
+    pc3  = VA_WIDTH'('h0000_3300);
+    tgt3 = pc3 + VA_WIDTH'('d256);  // forward: tgt > pc -> no alloc
     u    = mk_alloc(pc3, tgt3, LP_WAY_BITS'(0));
     send_upd(sl, u);
     do_pred(sl, pc3);
@@ -276,8 +276,8 @@ module tb;
   task automatic tc4(input int sl);
     logic [VA_WIDTH-1:0] pc4, tgt4;
     do_reset();
-    pc4  = 40'h0000_4400;
-    tgt4 = pc4 - 40'd256;
+    pc4  = VA_WIDTH'('h0000_4400);
+    tgt4 = pc4 - VA_WIDTH'('d256);
     alloc_entry(sl, pc4, tgt4, LP_WAY_BITS'(0));
     do_pred(sl, pc4);
     check($sformatf("TC4a.%s", sl_of(sl)),
@@ -311,8 +311,8 @@ module tb;
     int                     c;
 
     do_reset();
-    pc5  = 40'h0000_5500;
-    tgt5 = pc5 - 40'd256;
+    pc5  = VA_WIDTH'('h0000_5500);
+    tgt5 = pc5 - VA_WIDTH'('d256);
     idx5 = idx_of(pc5);
     tag5 = tag_of(pc5);
 
@@ -429,7 +429,7 @@ module tb;
     logic [VA_WIDTH-1:0] pc8;
     lp_upd_t             u;
     do_reset();
-    pc8 = 40'hC800;
+    pc8 = VA_WIDTH'('hC800);
     // lp_hit=1, lp_pred_is_loop=0, actual_taken=0,
     // curr_itr==past_itr=5 -> correct exit fires.
     u                 = '0;
@@ -444,7 +444,7 @@ module tb;
     u.lp_tag          = tag_of(pc8);
     u.lp_way          = LP_WAY_BITS'(0);
     u.pc              = pc8;
-    u.target          = pc8 - 40'd256;
+    u.target          = pc8 - VA_WIDTH'('d256);
     send_upd(sl, u);
     do_pred(sl, pc8);
     check($sformatf("TC8a.%s", sl_of(sl)),
@@ -469,7 +469,7 @@ module tb;
     logic [VA_WIDTH-1:0] pc9;
     lp_upd_t             u;
     do_reset();
-    pc9 = 40'hD900;
+    pc9 = VA_WIDTH'('hD900);
     // curr_itr(7) != past_itr(3) -> wrong exit fires.
     u                 = '0;
     u.lp_hit          = 1'b1;
@@ -482,7 +482,7 @@ module tb;
     u.lp_tag          = tag_of(pc9);
     u.lp_way          = LP_WAY_BITS'(0);
     u.pc              = pc9;
-    u.target          = pc9 - 40'd256;
+    u.target          = pc9 - VA_WIDTH'('d256);
     send_upd(sl, u);
     do_pred(sl, pc9);
     check($sformatf("TC9a.%s", sl_of(sl)),
@@ -505,7 +505,7 @@ module tb;
     logic [VA_WIDTH-1:0] pc10;
     lp_upd_t             u;
     do_reset();
-    pc10 = 40'hE100;
+    pc10 = VA_WIDTH'('hE100);
     // lp_pred_is_loop=1, lp_pred_taken=0, actual_taken=1 -> cond4.
     u                 = '0;
     u.lp_hit          = 1'b1;
@@ -519,7 +519,7 @@ module tb;
     u.lp_tag          = tag_of(pc10);
     u.lp_way          = LP_WAY_BITS'(0);
     u.pc              = pc10;
-    u.target          = pc10 - 40'd256;
+    u.target          = pc10 - VA_WIDTH'('d256);
     send_upd(sl, u);
     do_pred(sl, pc10);
     check($sformatf("TC10a.%s", sl_of(sl)),
@@ -548,7 +548,7 @@ module tb;
     lp_upd_t                u;
 
     do_reset();
-    pc11  = 40'h0000_0080;
+    pc11  = VA_WIDTH'('h0000_0080);
     idx11 = idx_of(pc11);  // = 8
     tag11 = tag_of(pc11);  // = 0x0082, distinct from 1..4
     check($sformatf("TC11pre.%s", sl_of(sl)),
@@ -564,8 +564,8 @@ module tb;
       u.lp_hit          = 1'b0;
       u.lp_pred_is_loop = 1'b0;
       u.lp_idx          = idx11;
-      u.pc              = 40'hFF00;
-      u.target          = 40'hF000;  // target < pc -> backward
+      u.pc              = VA_WIDTH'('hFF00);
+      u.target          = VA_WIDTH'('hF000);  // target < pc -> backward
       u.lp_tag          = LP_TAG_BITS'(w + 1);
       u.lp_victim       = LP_WAY_BITS'(w);
       send_upd(sl, u);
@@ -583,8 +583,8 @@ module tb;
     u.lp_tag          = LP_TAG_BITS'(2);  // way 1 tag
     u.lp_way          = LP_WAY_BITS'(1);
     u.lp_age          = 8'h01;
-    u.pc              = 40'hFF00;
-    u.target          = 40'hF000;
+    u.pc              = VA_WIDTH'('hFF00);
+    u.target          = VA_WIDTH'('hF000);
     send_upd(sl, u);
     // way0: age=0xFF. way1: age=0x01. ways2,3: age=0xFF.
     // Prio 3: way1.age(1) < way0.age(0xFF) -> victim = way 1
@@ -611,8 +611,8 @@ module tb;
     lp_upd_t                u;
 
     do_reset();
-    pc12a  = 40'h0000_1000;
-    pc12b  = 40'h0000_2000;
+    pc12a  = VA_WIDTH'('h0000_1000);
+    pc12b  = VA_WIDTH'('h0000_2000);
     idx12  = idx_of(pc12a);
     tag12a = tag_of(pc12a);
     tag12b = tag_of(pc12b);
@@ -620,8 +620,8 @@ module tb;
           (idx_of(pc12b) == idx12) && (tag12a != tag12b),
           "TC12: the two PCs must share a set and differ in tag");
 
-    alloc_entry(sl, pc12a, pc12a - 40'd256, LP_WAY_BITS'(0));
-    alloc_entry(sl, pc12b, pc12b - 40'd256, LP_WAY_BITS'(1));
+    alloc_entry(sl, pc12a, pc12a - VA_WIDTH'('d256), LP_WAY_BITS'(0));
+    alloc_entry(sl, pc12b, pc12b - VA_WIDTH'('d256), LP_WAY_BITS'(1));
     // Both entries: curr_itr=1, past_itr=0, cnf=0, age=max.
 
     // Cond5 update for entry A: curr_itr 2 -> 3
@@ -635,7 +635,7 @@ module tb;
     u.lp_tag          = tag12a;
     u.lp_way          = LP_WAY_BITS'(0);
     u.pc              = pc12a;
-    u.target          = pc12a - 40'd256;
+    u.target          = pc12a - VA_WIDTH'('d256);
     send_upd(sl, u);
 
     // Cond5 update for entry B: curr_itr 4 -> 5
@@ -649,7 +649,7 @@ module tb;
     u.lp_tag          = tag12b;
     u.lp_way          = LP_WAY_BITS'(1);
     u.pc              = pc12b;
-    u.target          = pc12b - 40'd256;
+    u.target          = pc12b - VA_WIDTH'('d256);
     send_upd(sl, u);
 
     do_pred(sl, pc12a);
@@ -677,12 +677,12 @@ module tb;
     lp_upd_t                u;
 
     do_reset();
-    pc13    = 40'hA000;
+    pc13    = VA_WIDTH'('hA000);
     idx13   = idx_of(pc13);
     tag13   = tag_of(pc13);
     itr_max = {LP_ITR_BITS{1'b1}};
 
-    alloc_entry(sl, pc13, pc13 - 40'd256, LP_WAY_BITS'(0));
+    alloc_entry(sl, pc13, pc13 - VA_WIDTH'('d256), LP_WAY_BITS'(0));
 
     // Cond1: curr_itr = max-1 -> max (one increment to saturation).
     u                 = '0;
@@ -697,7 +697,7 @@ module tb;
     u.lp_tag          = tag13;
     u.lp_way          = LP_WAY_BITS'(0);
     u.pc              = pc13;
-    u.target          = pc13 - 40'd256;
+    u.target          = pc13 - VA_WIDTH'('d256);
     send_upd(sl, u);
     do_pred(sl, pc13);
     check($sformatf("TC13a.%s", sl_of(sl)),
@@ -727,11 +727,11 @@ module tb;
     lp_upd_t                u;
 
     do_reset();
-    pc18  = 40'hB100;
+    pc18  = VA_WIDTH'('hB100);
     idx18 = idx_of(pc18);
     tag18 = tag_of(pc18);
 
-    alloc_entry(sl, pc18, pc18 - 40'd256, LP_WAY_BITS'(0));
+    alloc_entry(sl, pc18, pc18 - VA_WIDTH'('d256), LP_WAY_BITS'(0));
 
     // Correct exit at conf = LP_CONF_LEVEL - 1 -> conf = max.
     u                 = '0;
@@ -745,7 +745,7 @@ module tb;
     u.lp_tag          = tag18;
     u.lp_way          = LP_WAY_BITS'(0);
     u.pc              = pc18;
-    u.target          = pc18 - 40'd256;
+    u.target          = pc18 - VA_WIDTH'('d256);
     send_upd(sl, u);
     do_pred(sl, pc18);
     check($sformatf("TC18a.%s", sl_of(sl)),
@@ -780,7 +780,7 @@ module tb;
     lp_upd_t             u;
     lp_pred_t            pre_a, pre_b, post_a, post_b;
 
-    pc14 = 40'h0001_4000;
+    pc14 = VA_WIDTH'('h0001_4000);
 
     for (int a = 0; a < NUM_PRED_SLOTS; a++) begin
       for (int b = 0; b < NUM_PRED_SLOTS; b++) begin
@@ -790,8 +790,8 @@ module tb;
 
         // Seed BOTH slots with the same entry so "unchanged" is a
         // real value, not the reset value.
-        alloc_entry(a, pc14, pc14 - 40'd256, LP_WAY_BITS'(0));
-        alloc_entry(b, pc14, pc14 - 40'd256, LP_WAY_BITS'(0));
+        alloc_entry(a, pc14, pc14 - VA_WIDTH'('d256), LP_WAY_BITS'(0));
+        alloc_entry(b, pc14, pc14 - VA_WIDTH'('d256), LP_WAY_BITS'(0));
 
         do_pred(a, pc14);
         pre_a = pred_p1[a];
@@ -815,7 +815,7 @@ module tb;
         u.lp_tag          = tag_of(pc14);
         u.lp_way          = LP_WAY_BITS'(0);
         u.pc              = pc14;
-        u.target          = pc14 - 40'd256;
+        u.target          = pc14 - VA_WIDTH'('d256);
         send_upd(a, u);
 
         do_pred(a, pc14);
@@ -858,16 +858,16 @@ module tb;
     lp_upd_t             ua, ub;
     lp_pred_t            pre_b, post_b;
 
-    pca = 40'h0001_4A00;
-    pcb = 40'h0001_4B00;
+    pca = VA_WIDTH'('h0001_4A00);
+    pcb = VA_WIDTH'('h0001_4B00);
 
     for (int a = 0; a < NUM_PRED_SLOTS; a++) begin
       for (int b = 0; b < NUM_PRED_SLOTS; b++) begin
         if (a == b) continue;
 
         do_reset();
-        alloc_entry(a, pca, pca - 40'd256, LP_WAY_BITS'(0));
-        alloc_entry(b, pcb, pcb - 40'd256, LP_WAY_BITS'(0));
+        alloc_entry(a, pca, pca - VA_WIDTH'('d256), LP_WAY_BITS'(0));
+        alloc_entry(b, pcb, pcb - VA_WIDTH'('d256), LP_WAY_BITS'(0));
 
         do_pred(b, pcb);
         pre_b = pred_p1[b];
@@ -887,7 +887,7 @@ module tb;
         ua.lp_tag          = tag_of(pca);
         ua.lp_way          = LP_WAY_BITS'(0);
         ua.pc              = pca;
-        ua.target          = pca - 40'd256;
+        ua.target          = pca - VA_WIDTH'('d256);
 
         // The decoy. It is a valid-looking allocation AND a
         // valid-looking hit update at slot b's own set and way, so
@@ -906,7 +906,7 @@ module tb;
         ub.lp_way          = LP_WAY_BITS'(0);
         ub.lp_victim       = LP_WAY_BITS'(0);
         ub.pc              = pcb;
-        ub.target          = pcb - 40'd256;
+        ub.target          = pcb - VA_WIDTH'('d256);
 
         idle_all();
         upd_p0[a]       = ua;
@@ -948,7 +948,7 @@ module tb;
     do_reset();
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      pc[s] = 40'h0001_5000 + (VA_WIDTH'(s) * 40'h400);
+      pc[s] = VA_WIDTH'('h0001_5000) + (VA_WIDTH'(s) * VA_WIDTH'('h400));
     end
 
     // Prove the per-slot PCs are distinguishable in the table.
@@ -963,7 +963,7 @@ module tb;
 
     // Seed slot s with curr_itr = s+1 at its own PC.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      alloc_entry(s, pc[s], pc[s] - 40'd256, LP_WAY_BITS'(0));
+      alloc_entry(s, pc[s], pc[s] - VA_WIDTH'('d256), LP_WAY_BITS'(0));
       if (s > 0) begin
         // Cond5 s times: curr_itr 1 -> s+1.
         for (int k = 0; k < s; k++) begin
@@ -977,7 +977,7 @@ module tb;
           u.lp_tag          = tag_of(pc[s]);
           u.lp_way          = LP_WAY_BITS'(0);
           u.pc              = pc[s];
-          u.target          = pc[s] - 40'd256;
+          u.target          = pc[s] - VA_WIDTH'('d256);
           send_upd(s, u);
         end
       end
@@ -1022,12 +1022,12 @@ module tb;
     lp_upd_t             u;
 
     do_reset();
-    pc16 = 40'h0001_6000;
+    pc16 = VA_WIDTH'('h0001_6000);
 
     // Seed every slot identically, so the only difference after the
     // simultaneous update is the update payload itself.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      alloc_entry(s, pc16, pc16 - 40'd256, LP_WAY_BITS'(0));
+      alloc_entry(s, pc16, pc16 - VA_WIDTH'('d256), LP_WAY_BITS'(0));
     end
 
     // One cycle, every slot updating with its own past_itr and its
@@ -1046,7 +1046,7 @@ module tb;
       u.lp_tag          = tag_of(pc16);
       u.lp_way          = LP_WAY_BITS'(0);
       u.pc              = pc16;
-      u.target          = pc16 - 40'd256;
+      u.target          = pc16 - VA_WIDTH'('d256);
       upd_p0[s]         = u;
       upd_valid_p0[s]   = 1'b1;
     end
@@ -1140,7 +1140,7 @@ module tb;
     // ---- Part B: ways 1..N-1 invalid, every bank ----
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       do_reset();
-      pc17  = 40'h0000_0080;
+      pc17  = VA_WIDTH'('h0000_0080);
       tag17 = tag_of(pc17);
 
       for (int w = 0; w < LP_TBL_WAYS; w++) begin
@@ -1164,8 +1164,8 @@ module tb;
         u.lp_idx          = idx_of(pc17);
         u.lp_tag          = LP_TAG_BITS'(w + 1);
         u.lp_victim       = LP_WAY_BITS'(w);
-        u.pc              = 40'hFF00;
-        u.target          = 40'hF000;  // backward
+        u.pc              = VA_WIDTH'('hFF00);
+        u.target          = VA_WIDTH'('hF000);  // backward
         send_upd(s, u);
       end
     end

@@ -375,7 +375,7 @@ module tb;
 
     // ---- TC2: single branch write, pointer advances by 1 --------
     do_reset();
-    upd(1, 1'b1, 1'b0, 40'h0, 40'h0);
+    upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
     if (ghr_buf[0] !== 1'b1)
       $fatal(1, "TC2 FAIL: ghr_buf[0] expected 1");
     if (ghist_ptr !== 8'd1)
@@ -386,7 +386,7 @@ module tb;
 
     // ---- TC3: dual branch write, slot0 at ptr, slot1 at ptr+1 ---
     do_reset();
-    upd(2, 1'b0, 1'b1, 40'h0, 40'h0); // slot0=0, slot1=1
+    upd(2, 1'b0, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0)); // slot0=0, slot1=1
     if (ghr_buf[0] !== 1'b0)
       $fatal(1, "TC3 FAIL: ghr_buf[0] expected 0");
     if (ghr_buf[1] !== 1'b1)
@@ -400,13 +400,13 @@ module tb;
     // ---- TC4: PHR path bit write --------------------------------
     do_reset();
     // pc[2]^pc[3]=1 -> path bit 1 at phist_ptr=0
-    upd(1, 1'b1, 1'b0, 40'h4, 40'h0); // bit2=1 bit3=0
+    upd(1, 1'b1, 1'b0, VA_WIDTH'('h4), VA_WIDTH'('h0)); // bit2=1 bit3=0
     if (phr_buf[0] !== 1'b1)
       $fatal(1, "TC4 FAIL: phr_buf[0] expected 1 (path=1)");
     if (phist_ptr !== 5'd1)
       $fatal(1, "TC4 FAIL: phist_ptr expected 1");
     // pc[2]^pc[3]=0 -> path bit 0 at phist_ptr=1
-    upd(1, 1'b1, 1'b0, 40'hC, 40'h0); // bit2=1 bit3=1
+    upd(1, 1'b1, 1'b0, VA_WIDTH'('hC), VA_WIDTH'('h0)); // bit2=1 bit3=1
     if (phr_buf[1] !== 1'b0)
       $fatal(1, "TC4 FAIL: phr_buf[1] expected 0 (path=0)");
     check_all_folds("TC4");
@@ -417,17 +417,17 @@ module tb;
     // 0 holds; 1 advances by 1; 2 advances by 2.
     do_reset();
     // hold
-    upd(0, 1'b1, 1'b1, 40'h0, 40'h0);
+    upd(0, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
     if (ghist_ptr !== 8'd0 || phist_ptr !== 5'd0)
       $fatal(1, "TC5 FAIL: nb=0 advanced the pointer");
     if (ghr_buf !== '0)
       $fatal(1, "TC5 FAIL: nb=0 wrote GHR");
     // by 1
-    upd(1, 1'b1, 1'b0, 40'h0, 40'h0);
+    upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
     if (ghist_ptr !== 8'd1)
       $fatal(1, "TC5 FAIL: nb=1 ptr expected 1");
     // by 2
-    upd(2, 1'b1, 1'b1, 40'h0, 40'h0);
+    upd(2, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
     if (ghist_ptr !== 8'd3)
       $fatal(1, "TC5 FAIL: nb=2 ptr expected 3");
     if (ghr_buf[1] !== 1'b1 || ghr_buf[2] !== 1'b1)
@@ -444,7 +444,7 @@ module tb;
     begin
       int k;
       for (k = 0; k < 400; k++) begin
-        upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+        upd(1, nextbit(), 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
         check_all_folds("TC6");
       end
     end
@@ -460,7 +460,7 @@ module tb;
     begin
       int k;
       for (k = 0; k < 300; k++) begin
-        upd(2, nextbit(), nextbit(), 40'h0, 40'h0);
+        upd(2, nextbit(), nextbit(), VA_WIDTH'('h0), VA_WIDTH'('h0));
         check_all_folds("TC7");
       end
     end
@@ -479,7 +479,7 @@ module tb;
       logic [TAGE_MAX_FH-1:0] inc_t4;
       logic [SC_MAX_FH-1:0]   inc_sc3;
       // prime well past the longest window so T4/SC3 are meaningful
-      for (k = 0; k < 80; k++) upd(2, nextbit(), nextbit(), 40'h0, 40'h0);
+      for (k = 0; k < 80; k++) upd(2, nextbit(), nextbit(), '0, '0);
       // checkpointed dual bundle, slot1 differs from slot0
       pred_taken   = 2'b01;        // slot0=1, slot1=0
       num_branches = 2'd2;
@@ -517,13 +517,13 @@ module tb;
       int guard;
       guard = 0;
       while (ghist_ptr != 8'(GHR_WIDTH-1) && guard < 1000) begin
-        upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+        upd(1, nextbit(), 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
         guard++;
       end
       if (ghist_ptr !== 8'(GHR_WIDTH-1))
         $fatal(1, "TC9 FAIL: could not reach ptr=255");
       // dual bundle across the boundary
-      upd(2, 1'b1, 1'b1, 40'h0, 40'h0);
+      upd(2, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
       if (ghr_buf[GHR_WIDTH-1] !== 1'b1)
         $fatal(1, "TC9 FAIL: slot0 @255 not written");
       if (ghr_buf[0] !== 1'b1)
@@ -545,12 +545,12 @@ module tb;
       logic [GHIST_PTR_BITS-1:0] pre_g;
       logic [PHIST_PTR_BITS-1:0] pre_p;
       for (k = 0; k < 12; k++)
-        upd(1, nextbit(), 1'b0, 40'h4, 40'h0);  // also advance PHR
+        upd(1, nextbit(), 1'b0, VA_WIDTH'('h4), '0);  // also advance PHR
       // a checkpointed single bundle at index 3
       pre_g        = ghist_ptr;
       pre_p        = phist_ptr;
       pred_taken   = 2'b01;
-      pred_pc[0]   = 40'h4;
+      pred_pc[0]   = VA_WIDTH'('h4);
       num_branches = 2'd1;
       ckpt_wr_en   = 1'b1;
       ckpt_wr_idx  = FTQ_IDX_BITS'(3);
@@ -563,7 +563,7 @@ module tb;
       if (ckpt_phist_ptr !== 5'((int'(pre_p)+1) % PHR_WIDTH))
         $fatal(1, "TC10 FAIL: ckpt_phist_ptr post-advance mismatch");
       // diverge, then rollback to the checkpoint
-      for (k = 0; k < 5; k++) upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+      for (k = 0; k < 5; k++) upd(1, nextbit(), 1'b0, '0, '0);
       rollback_valid    = 1'b1;
       rollback_ckpt_idx = FTQ_IDX_BITS'(3);
       tick();
@@ -586,7 +586,7 @@ module tb;
       logic [GHIST_PTR_BITS-1:0] g_at_ck;
       logic [GHIST_PTR_BITS-1:0] v5;
       logic [GHR_WIDTH-1:0]      ghr_before;
-      for (k = 0; k < 20; k++) upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+      for (k = 0; k < 20; k++) upd(1, nextbit(), 1'b0, '0, '0);
       // checkpoint at index 7
       pred_taken   = 2'b01;
       num_branches = 2'd1;
@@ -596,7 +596,7 @@ module tb;
       drive_idle();
       g_at_ck = ckpt_ghist_ptr;  // post-advance ckpt value
       // diverge a little, also write a different ckpt slot (5)
-      for (k = 0; k < 4; k++) upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+      for (k = 0; k < 4; k++) upd(1, nextbit(), 1'b0, '0, '0);
       pred_taken   = 2'b01;
       num_branches = 2'd1;
       ckpt_wr_en   = 1'b1;
@@ -646,7 +646,7 @@ module tb;
     begin
       int k;
       bp_folded_hist_t pre_fold;
-      for (k = 0; k < 30; k++) upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+      for (k = 0; k < 30; k++) upd(1, nextbit(), 1'b0, '0, '0);
       // checkpoint at index 2
       pred_taken   = 2'b01;
       num_branches = 2'd1;
@@ -655,7 +655,7 @@ module tb;
       tick();
       drive_idle();
       // diverge so the recompute will differ from current fold
-      for (k = 0; k < 6; k++) upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+      for (k = 0; k < 6; k++) upd(1, nextbit(), 1'b0, '0, '0);
       pre_fold = folded;
       // Assert rollback combinationally. folded is registered, so
       // within this same (rollback) cycle -- before the next posedge --
@@ -680,7 +680,7 @@ module tb;
     begin
       int k;
       logic [GHIST_PTR_BITS-1:0] g6;
-      for (k = 0; k < 8; k++) upd(1, nextbit(), 1'b0, 40'h0, 40'h0);
+      for (k = 0; k < 8; k++) upd(1, nextbit(), 1'b0, '0, '0);
       // checkpoint idx 2
       pred_taken   = 2'b01; num_branches = 2'd1;
       ckpt_wr_en   = 1'b1; ckpt_wr_idx = FTQ_IDX_BITS'(2);
@@ -724,14 +724,14 @@ module tb;
     do_reset();
     begin
       logic [GHR_WIDTH-1:0] kh;
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p0 = 1 (oldest)
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p1 = 1
-      upd(1, 1'b0, 1'b0, 40'h0, 40'h0); // p2 = 0
-      upd(1, 1'b0, 1'b0, 40'h0, 40'h0); // p3 = 0
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p4 = 1
-      upd(1, 1'b0, 1'b0, 40'h0, 40'h0); // p5 = 0
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p6 = 1
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p7 = 1 (newest)
+      upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p0 = 1 (oldest)
+      upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p1 = 1
+      upd(1, 1'b0, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p2 = 0
+      upd(1, 1'b0, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p3 = 0
+      upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p4 = 1
+      upd(1, 1'b0, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p5 = 0
+      upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p6 = 1
+      upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p7 = 1 (newest)
       if (ghr_buf[7:0] !== 8'hD3)
         $fatal(1, "TC14 FAIL: ghr_buf[7:0]=%h exp D3", ghr_buf[7:0]);
       if (ghist_ptr !== 8'd8)
@@ -754,8 +754,8 @@ module tb;
     do_reset();
     begin
       logic [GHR_WIDTH-1:0] kh;
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p0 = 1 (oldest in window)
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0); // p1 = 1 (newest)
+      upd(1, 1'b1, 1'b0, '0, '0); // p0 = 1 (oldest in window)
+      upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0)); // p1 = 1 (newest)
       if (ghr_buf[1:0] !== 2'b11)
         $fatal(1, "TC15 FAIL: ghr_buf[1:0]=%b exp 11", ghr_buf[1:0]);
       if (ghist_ptr !== 8'd2)
@@ -783,10 +783,10 @@ module tb;
     begin
       int                   k;
       logic [GHR_WIDTH-1:0] kh;
-      for (k = 0; k < 250; k++) upd(1, 1'b0, 1'b0, 40'h0, 40'h0);
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0);                 // pos 250 = 1
-      for (k = 0; k < 62; k++) upd(1, 1'b0, 1'b0, 40'h0, 40'h0);
-      upd(1, 1'b1, 1'b0, 40'h0, 40'h0);                 // pos 57  = 1
+      for (k = 0; k < 250; k++) upd(1, 1'b0, 1'b0, '0, '0);
+      upd(1, 1'b1, 1'b0, '0, '0);                 // pos 250 = 1
+      for (k = 0; k < 62; k++) upd(1, 1'b0, 1'b0, '0, '0);
+      upd(1, 1'b1, 1'b0, '0, '0);                 // pos 57  = 1
       if (ghist_ptr !== 8'd58)
         $fatal(1, "TC16 FAIL: ghist_ptr=%0d exp 58", ghist_ptr);
       if (ghr_buf[250] !== 1'b1 || ghr_buf[57] !== 1'b1)

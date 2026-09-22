@@ -119,13 +119,13 @@ module tb;
 
   // The five arm addresses, distinct so a check that reads the
   // wrong arm reads a recognisable value.
-  localparam logic [VA_WIDTH-1:0] PC_BKEND = 40'h00_1000_0000;
-  localparam logic [VA_WIDTH-1:0] PC_PD    = 40'h00_2000_0000;
-  localparam logic [VA_WIDTH-1:0] PC_P3    = 40'h00_3000_0000;
-  localparam logic [VA_WIDTH-1:0] PC_P2    = 40'h00_4000_0000;
-  localparam logic [VA_WIDTH-1:0] PC_S0    = 40'h00_5000_0000;
-  localparam logic [VA_WIDTH-1:0] PC_S1    = 40'h00_6000_0000;
-  localparam logic [VA_WIDTH-1:0] PC_PFT   = 40'h00_7000_0000;
+  localparam logic [VA_WIDTH-1:0] PC_BKEND = VA_WIDTH'('h00_1000_0000);
+  localparam logic [VA_WIDTH-1:0] PC_PD    = VA_WIDTH'('h00_2000_0000);
+  localparam logic [VA_WIDTH-1:0] PC_P3    = VA_WIDTH'('h00_3000_0000);
+  localparam logic [VA_WIDTH-1:0] PC_P2    = VA_WIDTH'('h00_4000_0000);
+  localparam logic [VA_WIDTH-1:0] PC_S0    = VA_WIDTH'('h00_5000_0000);
+  localparam logic [VA_WIDTH-1:0] PC_S1    = VA_WIDTH'('h00_6000_0000);
+  localparam logic [VA_WIDTH-1:0] PC_PFT   = VA_WIDTH'('h00_7000_0000);
 
   int pass_cnt;
   int fail_cnt;

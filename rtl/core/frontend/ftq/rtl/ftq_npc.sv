@@ -353,7 +353,7 @@ module ftq_npc (
   // State. Arm 0 of 4.2 is the reset.
   // -----------------------------------------------------------------
   // RESET_VECTOR is bp_defines_pkg's, VA_WIDTH wide, block aligned,
-  // 40'h00_8000_0000 by default (4.7). It is ISSUED, not merely
+  // 0x00_8000_0000 by default (4.7). It is ISSUED, not merely
   // held: with no hold asserted the first thing the front end does
   // is request it, in the first cycle out of reset.
   //

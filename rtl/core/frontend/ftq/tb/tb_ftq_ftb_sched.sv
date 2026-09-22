@@ -160,7 +160,7 @@ module tb;
     upd[c]         = '0;
     upd[c].pc      = pc;
     upd[c].is_br   = bound;
-    upd[c].target  = pc + 40'h100;
+    upd[c].target  = pc + VA_WIDTH'('h100);
     upd[c].pos     = 4'd3;
     upd[c].hit     = ~high;
     upd_hit[c]     = ~high;
@@ -191,7 +191,7 @@ module tb;
     // -- B1. One FTB-bound update, skid empty. It issues, one cycle
     //    later, because the output is registered. This is the P1
     //    case driven directly.
-    drive(0, 40'h00_1000_0000, 1'b0, 1'b1);
+    drive(0, VA_WIDTH'('h00_1000_0000), 1'b0, 1'b1);
     #1;
     chk("B1 the channel is accepted", n_acc_ftb === 'd1);
     chk("B1 the skid is empty", skid_val === 1'b0);
@@ -205,7 +205,7 @@ module tb;
     chk("B1 it did not come from the skid",
         ftb_upd_from_skid === 1'b0);
     chk_eq("B1 the payload pc flattened out",
-           ftb_upd_pc_u0, 40'h00_1000_0000);
+           ftb_upd_pc_u0, VA_WIDTH'('h00_1000_0000));
     chk("B1 nothing was retained", skid_val === 1'b0);
     tick();
     chk("B1 the output falls after one cycle",
@@ -215,46 +215,46 @@ module tb;
     //    flatten out unchanged, not just the pc.
     do_reset();
     upd_val[0]            = 1'b1;
-    upd[0].pc             = 40'h00_2000_0000;
+    upd[0].pc             = VA_WIDTH'('h00_2000_0000);
     upd[0].hit            = 1'b1;
     upd[0].way            = 2'd2;
     upd[0].is_br          = 1'b1;
     upd[0].br_idx         = 1'b1;
     upd[0].taken          = 1'b1;
-    upd[0].target         = 40'h00_2000_0300;
+    upd[0].target         = VA_WIDTH'('h00_2000_0300);
     upd[0].pos            = 4'd9;
     upd[0].is_jmp         = 1'b1;
-    upd[0].jmp_target     = 40'h00_2000_0400;
+    upd[0].jmp_target     = VA_WIDTH'('h00_2000_0400);
     upd[0].is_call        = 1'b1;
     upd[0].is_ret         = 1'b0;
     upd[0].is_jalr        = 1'b1;
-    upd[0].pft_addr       = 40'h00_2000_0020;
+    upd[0].pft_addr       = VA_WIDTH'('h00_2000_0020);
     upd_hit[0]            = 1'b1;
     upd_mispred[0]        = 1'b0;
     tick();
     clr();
     chk("B2 valid", ftb_upd_valid_u0 === 1'b1);
-    chk_eq("B2 pc", ftb_upd_pc_u0, 40'h00_2000_0000);
+    chk_eq("B2 pc", ftb_upd_pc_u0, VA_WIDTH'('h00_2000_0000));
     chk("B2 hit", ftb_upd_hit_u0 === 1'b1);
     chk("B2 way", ftb_upd_way_u0 === 2'd2);
     chk("B2 is_br", ftb_upd_is_br_u0 === 1'b1);
     chk("B2 br_idx", ftb_upd_br_idx_u0 === 1'b1);
     chk("B2 taken", ftb_upd_taken_u0 === 1'b1);
-    chk_eq("B2 target", ftb_upd_target_u0, 40'h00_2000_0300);
+    chk_eq("B2 target", ftb_upd_target_u0, VA_WIDTH'('h00_2000_0300));
     chk("B2 pos", ftb_upd_pos_u0 === 4'd9);
     chk("B2 is_jmp", ftb_upd_is_jmp_u0 === 1'b1);
     chk_eq("B2 jmp_target", ftb_upd_jmp_target_u0,
-           40'h00_2000_0400);
+           VA_WIDTH'('h00_2000_0400));
     chk("B2 is_call", ftb_upd_is_call_u0 === 1'b1);
     chk("B2 is_ret", ftb_upd_is_ret_u0 === 1'b0);
     chk("B2 is_jalr", ftb_upd_is_jalr_u0 === 1'b1);
-    chk_eq("B2 pft_addr", ftb_upd_pft_addr_u0, 40'h00_2000_0020);
+    chk_eq("B2 pft_addr", ftb_upd_pft_addr_u0, VA_WIDTH'('h00_2000_0020));
 
     // -- B3. S1. An update that is FTB-bound in neither field is not
     //    scheduled at all: it consumes no capacity, is always ready,
     //    and never issues.
     do_reset();
-    drive(0, 40'h00_3000_0000, 1'b0, 1'b0);   // is_br = 0, is_jmp = 0
+    drive(0, VA_WIDTH'('h00_3000_0000), 1'b0, 1'b0);   // is_br = 0, is_jmp = 0
     #1;
     chk("B3 an unbound update is not pending", n_pend_ftb === '0);
     chk("B3 an unbound update is not accepted", n_acc_ftb === '0);
@@ -275,8 +275,8 @@ module tb;
     //    an empty skid is two. The tie is broken by channel index,
     //    which is program order within an entry (IC-FTB-16).
     do_reset();
-    drive(0, 40'h00_4000_0000, 1'b0, 1'b1);
-    drive(1, 40'h00_4100_0000, 1'b0, 1'b1);
+    drive(0, VA_WIDTH'('h00_4000_0000), 1'b0, 1'b1);
+    drive(1, VA_WIDTH'('h00_4100_0000), 1'b0, 1'b1);
     #1;
     chk("C1 both channels are accepted", n_acc_ftb === 'd2);
     chk("C1 both stay ready, nothing is held", upd_rdy === 2'b11);
@@ -288,29 +288,29 @@ module tb;
     chk("C1 channel 0 issues first on a tie",
         ftb_upd_valid_u0 === 1'b1);
     chk_eq("C1 the issued payload is channel 0's",
-           ftb_upd_pc_u0, 40'h00_4000_0000);
+           ftb_upd_pc_u0, VA_WIDTH'('h00_4000_0000));
     chk("C1 channel 1 is now in the skid", skid_val === 1'b1);
     tick();
     chk("C1 the skid issues next", ftb_upd_valid_u0 === 1'b1);
     chk("C1 and reports that it came from the skid",
         ftb_upd_from_skid === 1'b1);
     chk_eq("C1 the skid payload is channel 1's",
-           ftb_upd_pc_u0, 40'h00_4100_0000);
+           ftb_upd_pc_u0, VA_WIDTH'('h00_4100_0000));
     chk("C1 the skid is empty again", skid_val === 1'b0);
 
     // -- C2. Value beats index. Channel 1 is HIGH and channel 0 is
     //    LOW, so channel 1 issues first even though channel 0 is
     //    earlier. A scheduler that ranked on index alone fails here.
     do_reset();
-    drive(0, 40'h00_5000_0000, 1'b0, 1'b1);   // LOW
-    drive(1, 40'h00_5100_0000, 1'b1, 1'b1);   // HIGH
+    drive(0, VA_WIDTH'('h00_5000_0000), 1'b0, 1'b1);   // LOW
+    drive(1, VA_WIDTH'('h00_5100_0000), 1'b1, 1'b1);   // HIGH
     tick();
     clr();
     chk_eq("C2 the HIGH update issues first, not channel 0",
-           ftb_upd_pc_u0, 40'h00_5100_0000);
+           ftb_upd_pc_u0, VA_WIDTH'('h00_5100_0000));
     tick();
     chk_eq("C2 the LOW update follows out of the skid",
-           ftb_upd_pc_u0, 40'h00_5000_0000);
+           ftb_upd_pc_u0, VA_WIDTH'('h00_5000_0000));
     chk("C2 it came from the skid", ftb_upd_from_skid === 1'b1);
     $display("---- GROUP C done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
@@ -325,13 +325,13 @@ module tb;
     //    in one cycle: a routine conf step is lost rather than
     //    stalling resolution.
     do_reset();
-    drive(0, 40'h00_6000_0000, 1'b0, 1'b1);
-    drive(1, 40'h00_6100_0000, 1'b0, 1'b1);
+    drive(0, VA_WIDTH'('h00_6000_0000), 1'b0, 1'b1);
+    drive(1, VA_WIDTH'('h00_6100_0000), 1'b0, 1'b1);
     tick();                       // ch0 issues, ch1 retained
     clr();
     chk("D1 the skid is occupied", skid_val === 1'b1);
-    drive(0, 40'h00_6200_0000, 1'b0, 1'b1);   // LOW
-    drive(1, 40'h00_6300_0000, 1'b0, 1'b1);   // LOW
+    drive(0, VA_WIDTH'('h00_6200_0000), 1'b0, 1'b1);   // LOW
+    drive(1, VA_WIDTH'('h00_6300_0000), 1'b0, 1'b1);   // LOW
     #1;
     chk("D1 both LOW channels stay ready", upd_rdy === 2'b11);
     chk("D1 one of them is dropped", drop_val === 1'b1);
@@ -342,23 +342,23 @@ module tb;
     tick();
     clr();
     chk_eq("D1 the skid entry issued, not a new one",
-           ftb_upd_pc_u0, 40'h00_6100_0000);
+           ftb_upd_pc_u0, VA_WIDTH'('h00_6100_0000));
     chk("D1 it came from the skid", ftb_upd_from_skid === 1'b1);
     chk_eq("D1 the better new update took the skid",
-           dut.w_skid_pl.pc, 40'h00_6200_0000);
+           dut.w_skid_pl.pc, VA_WIDTH'('h00_6200_0000));
 
     // -- D2. S6. The same collision with both new updates HIGH. A
     //    HIGH update may not be dropped, so the lower-ranked channel
     //    is NOT accepted: its ready deasserts and the backend holds
     //    it. Nothing is dropped.
     do_reset();
-    drive(0, 40'h00_7000_0000, 1'b0, 1'b1);
-    drive(1, 40'h00_7100_0000, 1'b0, 1'b1);
+    drive(0, VA_WIDTH'('h00_7000_0000), 1'b0, 1'b1);
+    drive(1, VA_WIDTH'('h00_7100_0000), 1'b0, 1'b1);
     tick();                       // fill the skid
     clr();
     chk("D2 the skid is occupied", skid_val === 1'b1);
-    drive(0, 40'h00_7200_0000, 1'b1, 1'b1);   // HIGH
-    drive(1, 40'h00_7300_0000, 1'b1, 1'b1);   // HIGH
+    drive(0, VA_WIDTH'('h00_7200_0000), 1'b1, 1'b1);   // HIGH
+    drive(1, VA_WIDTH'('h00_7300_0000), 1'b1, 1'b1);   // HIGH
     #1;
     chk("D2 channel 0 is accepted", upd_rdy[0] === 1'b1);
     chk("D2 channel 1 is HELD rather than dropped",
@@ -372,12 +372,12 @@ module tb;
     //    NEITHER channel is held. A scheduler that held on any
     //    collision would stall resolution here and fail P5's intent.
     do_reset();
-    drive(0, 40'h00_8000_0000, 1'b0, 1'b1);
-    drive(1, 40'h00_8100_0000, 1'b0, 1'b1);
+    drive(0, VA_WIDTH'('h00_8000_0000), 1'b0, 1'b1);
+    drive(1, VA_WIDTH'('h00_8100_0000), 1'b0, 1'b1);
     tick();                       // fill the skid
     clr();
-    drive(0, 40'h00_8200_0000, 1'b0, 1'b1);   // LOW
-    drive(1, 40'h00_8300_0000, 1'b1, 1'b1);   // HIGH
+    drive(0, VA_WIDTH'('h00_8200_0000), 1'b0, 1'b1);   // LOW
+    drive(1, VA_WIDTH'('h00_8300_0000), 1'b1, 1'b1);   // HIGH
     #1;
     chk("D3 neither channel is held", upd_rdy === 2'b11);
     chk("D3 the LOW update is dropped", drop_val === 1'b1);
@@ -385,7 +385,7 @@ module tb;
     tick();
     clr();
     chk_eq("D3 the HIGH update was the one retained",
-           dut.w_skid_pl.pc, 40'h00_8300_0000);
+           dut.w_skid_pl.pc, VA_WIDTH'('h00_8300_0000));
     $display("---- GROUP D done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
   endtask
@@ -402,8 +402,8 @@ module tb;
     do_reset();
     held = 0;
     for (int i = 0; i < 64; i++) begin
-      drive(0, 40'h00_9000_0000 + (i << 8), 1'b0, 1'b1);
-      drive(1, 40'h00_9800_0000 + (i << 8), 1'b0, 1'b1);
+      drive(0, VA_WIDTH'('h00_9000_0000) + VA_WIDTH'(i << 8), 1'b0, 1'b1);
+      drive(1, VA_WIDTH'('h00_9800_0000) + VA_WIDTH'(i << 8), 1'b0, 1'b1);
       #1;
       if (upd_rdy !== 2'b11) held++;
       tick();
@@ -418,8 +418,8 @@ module tb;
     do_reset();
     held = 0;
     for (int i = 0; i < 16; i++) begin
-      drive(0, 40'h00_A000_0000 + (i << 8), 1'b1, 1'b1);
-      drive(1, 40'h00_A800_0000 + (i << 8), 1'b1, 1'b1);
+      drive(0, VA_WIDTH'('h00_A000_0000) + VA_WIDTH'(i << 8), 1'b1, 1'b1);
+      drive(1, VA_WIDTH'('h00_A800_0000) + VA_WIDTH'(i << 8), 1'b1, 1'b1);
       #1;
       if (upd_rdy !== 2'b11) held++;
       tick();

@@ -403,19 +403,19 @@
 |    |              | BP-074                               |
 |    |              | output session_handoff-056           |
 | 56 | sc planning  | input session_handoff-056            |
-|    |              | misc/sc_design_survey.md             |
+|    | BLOG_bpu_17  | misc/sc_design_survey.md             |
 |    |              | sc_decisions                         |
 |    |              | sc_interfaces                        |
 |    |              | output session_handoff-057           |
 | 57 | sc planning  | input session_handoff-057            |
 |    | bp_arb_spec  | decide how sc fits the arb scheme    |
-|    |              | this was left open previously        |
+|    | BLOG_bpu_17  | this was left open previously        |
 |    |              | bp_arb_spec                          |
 |    |              | ???????????????                      |
 |    |              | output session_handoff-058           |
 | 58 | sc_table     | input session_handoff-058            |
 |    | sc_brimli    | sc_interfaces                        |
-|    |              | sc_table_interfaces                  |
+|    | BLOG_bpu_17  | sc_table_interfaces                  |
 |    |              | sc_table_hash_rules                  |
 |    |              | sc_tb_decisions                      |
 |    |              | BP-075 (was named SC-001, changed)   |
@@ -425,7 +425,7 @@
 |    |              | output session_handoff-059           |
 | 59 | sc top level | input session_handoff-059            |
 |    | tage lint    | sc_decisions.md                      |
-|    |              | discovered tage structure compatibility issues |
+|    | BLOG_bpu_17  | discovered tage structure compatibility issues |
 |    |              | these will be fixed in next session  |
 |    |              | BP-078                               |
 |    |              | BP-079 (was named 079a, changed)     |

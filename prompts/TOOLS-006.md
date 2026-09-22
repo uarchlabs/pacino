@@ -9,7 +9,7 @@
 | Field        | Value                   | Notes                    |
 |--------------|-------------------------|--------------------------|
 | Task ID      | TOOLS-006               |                          |
-| Date         | YYYY.MM.DD              |                          |
+| Date         | 2026.09.22              |                          |
 | Module       | tools/regress.sh, all rtl/ Makefiles |             |
 | Run time     | 33m.22s + interactive   |                          |
 | Ctx %        | 23%                     |                          |

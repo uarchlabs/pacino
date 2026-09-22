@@ -387,11 +387,11 @@ module tb;
   // This test is a throwaway to confirm the task infrastructure
   // compiles and runs. It will be replaced by the project author.
   //
-  // PC = 40'h0000_1234:
+  // PC = 0x0000_1234:
   //   T1 idx = (0x1234 >> 2) & 0x7FF = 1165 (bank=1, row=141)
   //   T1 tag = (0x1234 >> 11) & 0xFF = 2 = 8'h02 (folded_hist=0)
   task automatic tage_round_trip_sanity(inout integer errs);
-    localparam logic [VA_WIDTH-1:0] TEST_PC  = 40'h0000_1234;
+    localparam logic [VA_WIDTH-1:0] TEST_PC  = VA_WIDTH'('h0000_1234);
     localparam int                  TEST_TBL = 1;
     localparam int                  TEST_IDX = 1165; // bank=1, row=141
 

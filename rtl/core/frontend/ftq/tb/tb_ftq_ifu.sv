@@ -145,11 +145,11 @@ module tb;
     .wb_drop_gen       (wb_drop_gen)
   );
 
-  localparam logic [VA_WIDTH-1:0] BLK_PC  = 40'h00_8000_0100;
-  localparam logic [VA_WIDTH-1:0] BLK_PFT = 40'h00_8000_0120;
-  localparam logic [VA_WIDTH-1:0] TGT0    = 40'h00_9000_0000;
-  localparam logic [VA_WIDTH-1:0] TGT1    = 40'h00_A000_0000;
-  localparam logic [VA_WIDTH-1:0] PD_TGT  = 40'h00_B000_0000;
+  localparam logic [VA_WIDTH-1:0] BLK_PC  = VA_WIDTH'('h00_8000_0100);
+  localparam logic [VA_WIDTH-1:0] BLK_PFT = VA_WIDTH'('h00_8000_0120);
+  localparam logic [VA_WIDTH-1:0] TGT0    = VA_WIDTH'('h00_9000_0000);
+  localparam logic [VA_WIDTH-1:0] TGT1    = VA_WIDTH'('h00_A000_0000);
+  localparam logic [VA_WIDTH-1:0] PD_TGT  = VA_WIDTH'('h00_B000_0000);
 
   int pass_cnt;
   int fail_cnt;

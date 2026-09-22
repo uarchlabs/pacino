@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -390,6 +390,27 @@ MMU-16a Guest page fault exists because H is mandatory. It is not
         an optional third case to be dropped when H is absent,
         because H is not absent.
 
+MMU-U9  A PTE PPN WIDER THAN THE IMPLEMENTED PHYSICAL ADDRESS IS
+        NOT CHECKED ANYWHERE. A Sv39 PTE carries a 44-bit PPN
+        field. PA_WIDTH is 36 (`l1i_ifu_interfaces.md` IF-1), so
+        PPN_WIDTH is 24, ruled session-073. Nothing in this
+        document faults a PTE whose PPN has a bit set above bit
+        23, at either stage, so such a PTE would be truncated to
+        an address this implementation can form and the walk
+        would continue as if nothing were wrong. The same gap
+        applies to the `satp.PPN`, `vsatp.PPN` and `hgatp.PPN`
+        roots of IL-3c.
+
+        NOT RULED, and the cause is the open part. Both a page
+        fault at the stage that read the PTE (cause 12 or 20,
+        MMU-16) and an access fault from the MMU-10 PMP check
+        (cause 1) are defensible, and which the ratified
+        privileged specification permits or requires for an
+        unimplemented PPN bit has NOT been checked against the
+        document. Check it before ruling; MMU-U4 and MMU-U5 were
+        both decided from an unread list and both had to be
+        redone. Raised session-073 from TD#122.
+
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
 faulting virtual address for page-fault, access-fault and
 misaligned exceptions on load, store and instruction, and for
@@ -493,6 +514,8 @@ MMU-U7  CLOSED session-071 for the L1 TLB and the walker; the L2
         TLB half is MMU-U1. Section 6a.
 MMU-U8  CLOSED session-071. Svinval as the fence equivalents.
         Section 8.
+MMU-U9  A PTE PPN above the implemented 24 bits is unchecked.
+        Section 7. Raised session-073.
 
 ---
 
@@ -515,6 +538,13 @@ TD#118    Bounds MMU-U2.
 ## 11. Document History
 
 ```
+  2026-09-22  session-073. MMU-U9 raised from TD#122: with
+              PPN_WIDTH ruled at 24 against a 44-bit PTE PPN
+              field, nothing faults a PTE that names a physical
+              address this implementation cannot form. The cause
+              and the stage are not ruled, and the specification
+              has not been checked.
+
   2026-09-17  session-070 audit. MMU-U4 and MMU-U5 both turned on
               the same unread list. The ratified
               rva23-profile.adoc was fetched and the RVA23S64

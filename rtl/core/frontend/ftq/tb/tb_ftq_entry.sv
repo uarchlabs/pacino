@@ -203,15 +203,15 @@ module tb;
   task automatic alloc(input int idx);
     alloc_wr_val       = 1'b1;
     alloc_wr_idx       = FTQ_IDX_BITS'(idx);
-    alloc_wr_pc        = VA_WIDTH'(40'h00_8000_0000 + idx * 32);
-    alloc_wr_pft_addr  = VA_WIDTH'(40'h00_8000_0020 + idx * 32);
+    alloc_wr_pc        = VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + idx * 32);
+    alloc_wr_pft_addr  = VA_WIDTH'(VA_WIDTH'('h00_8000_0020) + idx * 32);
     alloc_wr_ras.tosr  = RAS_PTR_BITS'(idx);
     alloc_wr_ras.tosw  = RAS_PTR_BITS'(idx + 1);
     alloc_wr_ras.bos   = RAS_PTR_BITS'(idx + 2);
     alloc_wr_ghist_ptr = GHIST_PTR_BITS'(idx);
     alloc_wr_phist_ptr = PHIST_PTR_BITS'(idx);
     alloc_wr_slot[0]   = mk_slot(1'b1,
-                           VA_WIDTH'(40'h00_9000_0000 + idx * 64),
+                           VA_WIDTH'(VA_WIDTH'('h00_9000_0000) + idx * 64),
                            COND, 1'b0, FTB_BR_POS_BITS'(2));
     alloc_wr_slot[1]   = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
@@ -239,9 +239,9 @@ module tb;
     #1;
     chk   ("A2 the allocated entry is valid", fetch_rd_entry.valid);
     chk_va("A3 pc landed",       fetch_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 7 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 7 * 32));
     chk_va("A4 pft_addr landed", fetch_rd_entry.pft_addr,
-           VA_WIDTH'(40'h00_8000_0020 + 7 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0020) + 7 * 32));
     chk   ("A5 branch_id is the index",
            fetch_rd_entry.branch_id == 6'd7);
     chk   ("A6 ghist checkpoint landed",
@@ -253,7 +253,7 @@ module tb;
            fetch_rd_entry.ras.tosw == RAS_PTR_BITS'(8) &&
            fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(9));
     chk_va("A9 slot 0 target landed", fetch_rd_entry.slot[0].target,
-           VA_WIDTH'(40'h00_9000_0000 + 7 * 64));
+           VA_WIDTH'(VA_WIDTH'('h00_9000_0000) + 7 * 64));
     chk   ("A10 slot 1 is invalid",
            !fetch_rd_entry.slot[1].slot_valid);
 
@@ -285,17 +285,17 @@ module tb;
     rsv_rd_idx[1] = 6'd0;
     #1;
     chk_va("B1 fetch port",   fetch_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 1 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 1 * 32));
     chk_va("B2 redirect port", redir_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 2 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 2 * 32));
     chk_va("B3 writeback port", pdwb_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 3 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 3 * 32));
     chk_va("B4 commit port",  commit_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 4 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 4 * 32));
     chk_va("B5 resolve port 0", rsv_rd_entry[0].pc,
-           VA_WIDTH'(40'h00_8000_0000 + 5 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 5 * 32));
     chk_va("B6 resolve port 1", rsv_rd_entry[1].pc,
-           VA_WIDTH'(40'h00_8000_0000 + 0 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 0 * 32));
 
     // The restore snapshot is the redirect port's entry, which is
     // what D2 of backend_interfaces 5 requires.
@@ -326,9 +326,9 @@ module tb;
     // checkpoint or the RAS snapshot.
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd11;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_A000_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_A000_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(4));
-    p2_wr_slot[1] = mk_slot(1'b1, VA_WIDTH'(40'h00_A000_1000),
+    p2_wr_slot[1] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_A000_1000)),
                             DIRECT_UNC, 1'b0, FTB_BR_POS_BITS'(9));
     tick();
     p2_wr_val = 1'b0;
@@ -336,13 +336,13 @@ module tb;
     fetch_rd_idx = 6'd11;
     #1;
     chk_va("C1 p2 rewrote slot 0", fetch_rd_entry.slot[0].target,
-           VA_WIDTH'(40'h00_A000_0000));
+           VA_WIDTH'(VA_WIDTH'('h00_A000_0000)));
     chk   ("C2 p2 rewrote slot 0 pos",
            fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(4));
     chk   ("C3 p2 made slot 1 valid",
            fetch_rd_entry.slot[1].slot_valid);
     chk_va("C4 block pc untouched by p2", fetch_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 11 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 11 * 32));
     chk   ("C5 checkpoint untouched by p2",
            fetch_rd_entry.ghist_ptr == GHIST_PTR_BITS'(11));
 
@@ -351,18 +351,18 @@ module tb;
     // settle it.
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd11;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_B000_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_B000_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(4));
     p3_wr_val     = 1'b1;
     p3_wr_idx     = 6'd11;
-    p3_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_C000_0000),
+    p3_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_C000_0000)),
                             COND, 1'b0, FTB_BR_POS_BITS'(4));
     p3_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
     clr();
     #1;
     chk_va("C6 p3 supersedes p2 on one index",
-           fetch_rd_entry.slot[0].target, VA_WIDTH'(40'h00_C000_0000));
+           fetch_rd_entry.slot[0].target, VA_WIDTH'(VA_WIDTH'('h00_C000_0000)));
     chk   ("C7 p3 direction stands",
            !fetch_rd_entry.slot[0].taken);
 
@@ -372,23 +372,23 @@ module tb;
     alloc(12);
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd12;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_D000_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_D000_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(1));
     p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     p3_wr_val     = 1'b1;
     p3_wr_idx     = 6'd11;
-    p3_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_E000_0000),
+    p3_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_E000_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(4));
     tick();
     clr();
     fetch_rd_idx = 6'd12;
     #1;
     chk_va("C8 p2 landed in its own entry",
-           fetch_rd_entry.slot[0].target, VA_WIDTH'(40'h00_D000_0000));
+           fetch_rd_entry.slot[0].target, VA_WIDTH'(VA_WIDTH'('h00_D000_0000)));
     fetch_rd_idx = 6'd11;
     #1;
     chk_va("C9 p3 landed in its own entry",
-           fetch_rd_entry.slot[0].target, VA_WIDTH'(40'h00_E000_0000));
+           fetch_rd_entry.slot[0].target, VA_WIDTH'(VA_WIDTH'('h00_E000_0000)));
   endtask
 
   // -----------------------------------------------------------------
@@ -402,9 +402,9 @@ module tb;
     // Two valid slots to start, so the kill has something to clear.
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd20;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_9100_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9100_0000)),
                             COND, 1'b0, FTB_BR_POS_BITS'(3));
-    p2_wr_slot[1] = mk_slot(1'b1, VA_WIDTH'(40'h00_9200_0000),
+    p2_wr_slot[1] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9200_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(11));
     tick();
     p2_wr_val = 1'b0;
@@ -421,38 +421,38 @@ module tb;
     pd_wr_val  = 1'b1;
     pd_wr_idx  = 6'd20;
     pd_wr_sel  = TRX_SLOT_BITS'(1);
-    pd_wr_slot = mk_slot(1'b1, VA_WIDTH'(40'h00_9300_0000),
+    pd_wr_slot = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9300_0000)),
                          DIRECT_UNC, 1'b1, FTB_BR_POS_BITS'(5));
     pd_wr_kill = 1'b1;
     tick();
     clr();
     #1;
     chk_va("D2 the named slot was rewritten",
-           fetch_rd_entry.slot[1].target, VA_WIDTH'(40'h00_9300_0000));
+           fetch_rd_entry.slot[1].target, VA_WIDTH'(VA_WIDTH'('h00_9300_0000)));
     chk   ("D3 the named slot took the predecode type",
            fetch_rd_entry.slot[1].br_type == DIRECT_UNC);
     chk_va("D4 the slot below is untouched",
-           fetch_rd_entry.slot[0].target, VA_WIDTH'(40'h00_9100_0000));
+           fetch_rd_entry.slot[0].target, VA_WIDTH'(VA_WIDTH'('h00_9100_0000)));
 
     // Now the kill has work: correct slot 0 and slot 1 must go.
     pd_wr_val  = 1'b1;
     pd_wr_idx  = 6'd20;
     pd_wr_sel  = TRX_SLOT_BITS'(0);
-    pd_wr_slot = mk_slot(1'b1, VA_WIDTH'(40'h00_9400_0000),
+    pd_wr_slot = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9400_0000)),
                          DIRECT_CALL, 1'b1, FTB_BR_POS_BITS'(1));
     pd_wr_kill = 1'b1;
     tick();
     clr();
     #1;
     chk_va("D5 slot 0 rewritten", fetch_rd_entry.slot[0].target,
-           VA_WIDTH'(40'h00_9400_0000));
+           VA_WIDTH'(VA_WIDTH'('h00_9400_0000)));
     chk   ("D6 slot 1 killed",
            !fetch_rd_entry.slot[1].slot_valid);
     chk   ("D7 slot 1 not taken after the kill",
            !fetch_rd_entry.slot[1].taken);
     chk_va("D8 the block pc survives the correction",
            fetch_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 20 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 20 * 32));
   endtask
 
   // -----------------------------------------------------------------
@@ -474,7 +474,7 @@ module tb;
     // A block ending in a taken call.
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd30;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_9500_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9500_0000)),
                             DIRECT_CALL, 1'b1, FTB_BR_POS_BITS'(6));
     p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
@@ -489,7 +489,7 @@ module tb;
            ras_commit_snapshot.bos  == RAS_PTR_BITS'(32));
     chk_va("E5 the return address is the block fall-through",
            ras_commit_ret_addr,
-           VA_WIDTH'(40'h00_8000_0020 + 30 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0020) + 30 * 32));
 
     // NO STEP, NO COMMIT. commit_step_val carries the suppression of
     // 5.4: ras_decisions.md 4.5 orders BOS restore > commit > hold,
@@ -502,7 +502,7 @@ module tb;
     // A taken RETURN commits too.
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd30;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_9600_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9600_0000)),
                             RETURN, 1'b1, FTB_BR_POS_BITS'(8));
     tick();
     p2_wr_val = 1'b0;
@@ -516,7 +516,7 @@ module tb;
     // branch.
     p2_wr_val     = 1'b1;
     p2_wr_idx     = 6'd30;
-    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(40'h00_9700_0000),
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9700_0000)),
                             DIRECT_CALL, 1'b0, FTB_BR_POS_BITS'(8));
     tick();
     p2_wr_val = 1'b0;
@@ -545,7 +545,7 @@ module tb;
         fetch_rd_idx = FTQ_IDX_BITS'(i);
         #1;
         if (fetch_rd_entry.pc !==
-              VA_WIDTH'(40'h00_8000_0000 + i * 32)) bad++;
+              VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + i * 32)) bad++;
         if (fetch_rd_entry.branch_id !== FTQ_IDX_BITS'(i)) bad++;
       end
       chk("F1 all 64 entries hold their own payload", bad == 0);
@@ -555,19 +555,19 @@ module tb;
     // adjacency an off-by-one in the write decode produces.
     alloc_wr_val      = 1'b1;
     alloc_wr_idx      = 6'd0;
-    alloc_wr_pc       = VA_WIDTH'(40'h00_FFFF_0000);
-    alloc_wr_pft_addr = VA_WIDTH'(40'h00_FFFF_0020);
+    alloc_wr_pc       = VA_WIDTH'(VA_WIDTH'('h00_FFFF_0000));
+    alloc_wr_pft_addr = VA_WIDTH'(VA_WIDTH'('h00_FFFF_0020));
     tick();
     alloc_wr_val = 1'b0;
     fetch_rd_idx = 6'd63;
     #1;
     chk_va("F2 entry 63 survives a write to entry 0",
            fetch_rd_entry.pc,
-           VA_WIDTH'(40'h00_8000_0000 + 63 * 32));
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 63 * 32));
     fetch_rd_idx = 6'd0;
     #1;
     chk_va("F3 entry 0 took the new payload", fetch_rd_entry.pc,
-           VA_WIDTH'(40'h00_FFFF_0000));
+           VA_WIDTH'(VA_WIDTH'('h00_FFFF_0000)));
   endtask
 
   // -----------------------------------------------------------------

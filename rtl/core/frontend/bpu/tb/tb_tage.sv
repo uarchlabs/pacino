@@ -75,7 +75,7 @@
 // BP-061:  Capstone round-trip test TC-103.
 //          capstone_rt_tst: CTR+EPC, USE, alloc, interference
 //          reference all exercised together on overlapping
-//          entries at PC=40'h22800 (idx=512 bank=0 row=512).
+//          entries at PC=0x22800 (idx=512 bank=0 row=512).
 //          All 103 tests pass under sim_tage_fast.
 // ===================================================================
 
@@ -1982,7 +1982,7 @@ module tb;
     //   stg clear -> @posedge (p0->p1: raddr_q=128, dout valid) ->
     //   @posedge (p1->p2: meta latched, rdy=1).
     inp           = '0;
-    inp.pc        = 40'h200;
+    inp.pc        = VA_WIDTH'('h200);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -2085,7 +2085,7 @@ module tb;
 
     // Stage prediction inputs (Verilator struct NBA requirement).
     inp           = '0;
-    inp.pc        = 40'h21400;
+    inp.pc        = VA_WIDTH'('h21400);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -2192,7 +2192,7 @@ module tb;
 
     // Stage prediction inputs (Verilator struct NBA requirement).
     inp           = '0;
-    inp.pc        = 40'h21400;
+    inp.pc        = VA_WIDTH'('h21400);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -2307,7 +2307,7 @@ module tb;
 
     // Stage prediction inputs (Verilator struct NBA requirement).
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -2411,7 +2411,7 @@ module tb;
 
     // Stage prediction inputs (Verilator struct NBA requirement).
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -2510,7 +2510,7 @@ module tb;
     //   @posedge N+2: pred_val_p2=1. rdy=1.
     //   @posedge N+3: pred_val_p2=0. rdy=0.
     stg_pred_val0 = 1'b1;
-    stg_pred_inp0.pc = 40'h0;
+    stg_pred_inp0.pc = VA_WIDTH'('h0);
     @(posedge clk);
     // After posedge N: val=1 via NBA. pred_val_p2 not yet 1.
     rdy_p1 = tage_pred_rdy_p2[0];
@@ -2594,7 +2594,7 @@ module tb;
     // Drive slot 1 with PC=0x5000. Slot 0 held at zero (stg_pred_val0
     // not set). T1: idx_hash=11h400 -> bank=1 row=0, tag_hash=8h0A.
     inp           = '0;
-    inp.pc        = 40'h5000;
+    inp.pc        = VA_WIDTH'('h5000);
     inp.branch_id = 6'h0;
     stg_pred_inp1 = inp;
     stg_pred_val1 = 1'b1;
@@ -2776,7 +2776,7 @@ module tb;
   // rt_correct_t0_tst
   // Round-trip: T0 provider, correct prediction, CTR increments.
   // CTR rule: tage_cntrl_ctr_update_rules.md row 13d.
-  // PC=40'h001E0: T0 idx=0x78=120 bank=0 row=120 tag=0x00.
+  // PC=0x001E0: T0 idx=0x78=120 bank=0 row=120 tag=0x00.
   // Pre-load: T0 mem[0][120]=2'b10 (weak taken).
   //           T1-T4 VALID=0 (FAST_INIT).
   // ----------------------------------------------------------------
@@ -2796,9 +2796,9 @@ module tb;
       $display(
         "[INFO] rt_correct_t0_tst: pre T0 mem[0][120]=2b10");
 
-    // Step 2: First predict PC=40'h001E0.
+    // Step 2: First predict PC=0x001E0.
     inp           = '0;
-    inp.pc        = 40'h001E0;
+    inp.pc        = VA_WIDTH'('h001E0);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -2900,7 +2900,7 @@ module tb;
   //           (alt=BIM, prm correct, INC prm CTR).
   // USE rule: Table 7 row 3 (preds_diff=1 TTM=0 using_prm=1
   //           mispredict=0 -> INC u_eff).
-  // PC=40'h02900: idx=0x240=576 bank=0 row=576 tag=0x05.
+  // PC=0x02900: idx=0x240=576 bank=0 row=576 tag=0x05.
   // Pre-load: T1 mem[0][576]=0x051B (CTR=101 USE=01 EPC=0).
   //           T0 mem[0][576]=2'b00 (not-taken -> preds_diff=1).
   //           T2-T4 VALID=0 (FAST_INIT).
@@ -2928,9 +2928,9 @@ module tb;
         "[INFO] rt_correct_tagged_tst: T0 mem[0][576]=2b00");
     end
 
-    // Step 2: First predict PC=40'h02900.
+    // Step 2: First predict PC=0x02900.
     inp           = '0;
-    inp.pc        = 40'h02900;
+    inp.pc        = VA_WIDTH'('h02900);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -3056,7 +3056,7 @@ module tb;
   // Alloc rule: tage_cntrl_alloc_rules.md -- mispredict +
   //             prm_comp(1)<TAGE_MAX_TBL(4) + alc_comp(2)!=0
   //             -> write alloc entry to T2.
-  // PC=40'h05500: idx=0x540=1344 bank=1 row=320 tag=0x0A.
+  // PC=0x05500: idx=0x540=1344 bank=1 row=320 tag=0x0A.
   // Pre-load: T1 mem[1][320]=0x0A19 (CTR=100 USE=01 EPC=0).
   //           T2 mem[1][320]=0 (VALID=0, alloc candidate).
   //           T0/T3/T4 at idx 1344=0 (FAST_INIT).
@@ -3080,9 +3080,9 @@ module tb;
       $display(
         "[INFO] rt_mispredict_alloc_tst: T1 mem[1][320]=0A19");
 
-    // Step 2: First predict PC=40'h05500.
+    // Step 2: First predict PC=0x05500.
     inp           = '0;
-    inp.pc        = 40'h05500;
+    inp.pc        = VA_WIDTH'('h05500);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -3193,7 +3193,7 @@ module tb;
   //           (alt=BIM, prm wrong, DEC prm CTR).
   // Alloc rule: tage_cntrl_alloc_rules.md -- provider is last
   //   table (T4), tage_alc_comp=0 in meta -> no write.
-  // PC=40'h07D00: idx=0x740=1856 bank=1 row=832 tag=0x0F.
+  // PC=0x07D00: idx=0x740=1856 bank=1 row=832 tag=0x0F.
   // Pre-load: T4 mem[1][832]=0x0F19 (CTR=100 USE=01 EPC=0).
   //           T1-T3 mem[1][832]=0 (VALID=0, FAST_INIT).
   // ----------------------------------------------------------------
@@ -3218,9 +3218,9 @@ module tb;
       $display(
         "[INFO] rt_no_alloc_last_tbl_tst: T4 mem[1][832]=0F19");
 
-    // Step 2: First predict PC=40'h07D00.
+    // Step 2: First predict PC=0x07D00.
     inp           = '0;
-    inp.pc        = 40'h07D00;
+    inp.pc        = VA_WIDTH'('h07D00);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -3356,7 +3356,7 @@ module tb;
   //           (prm correct, both tagged: prm INC).
   // USE rule: Table 7 row 3 (pred_diff=1, using_prm=1,
   //           mispredict=0: INC prm USE).
-  // PC=40'h09100: idx=0x440=1088 bank=1 row=64 tag=0x12.
+  // PC=0x09100: idx=0x440=1088 bank=1 row=64 tag=0x12.
   // Pre-load: T2 mem[1][64]=0x120B (CTR=101 USE=00 VAL=1).
   //           T1 mem[1][64]=0x1207 (CTR=011 USE=00 VAL=1).
   // After: T2 CTR 101->110 USE 00->01 -> 0x121D. T1 0x1207.
@@ -3386,9 +3386,9 @@ module tb;
         "[INFO] rt_ctr_rows1_2_tst: T1 mem[1][64]=1207");
     end
 
-    // Step 2: First predict PC=40'h09100.
+    // Step 2: First predict PC=0x09100.
     inp           = '0;
-    inp.pc        = 40'h09100;
+    inp.pc        = VA_WIDTH'('h09100);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -3533,7 +3533,7 @@ module tb;
   //           (prm wrong, pred_diff=1: prm DEC, alt INC).
   // USE rule: Table 7 row 4 (pred_diff=1, using_prm=1,
   //           mispredict=1: DEC prm USE).
-  // PC=40'h0B800: idx=0x600=1536 bank=1 row=512 tag=0x17.
+  // PC=0x0B800: idx=0x600=1536 bank=1 row=512 tag=0x17.
   // Pre-load: T2 mem[1][512]=0x171B (CTR=101 USE=01 VAL=1).
   //           T1 mem[1][512]=0x1707 (CTR=011 USE=00 VAL=1).
   //           T3/T4 mem[1][512]=0x0010 (USE=01 VALID=0)
@@ -3573,9 +3573,9 @@ module tb;
         "[INFO] rt_ctr_rows3_4_tst: T3/T4[1][512]=0010");
     end
 
-    // Step 2: First predict PC=40'h0B800.
+    // Step 2: First predict PC=0x0B800.
     inp           = '0;
-    inp.pc        = 40'h0B800;
+    inp.pc        = VA_WIDTH'('h0B800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -3721,7 +3721,7 @@ module tb;
   // CTR rule: tage_cntrl_ctr_update_rules.md rows 5/6
   //           (prm wrong, pred_diff=0: prm DEC only).
   // USE rule: Table 7 row 1 (pred_diff=0: no USE update).
-  // PC=40'h0C000: idx=0x000=0 bank=0 row=0 tag=0x18.
+  // PC=0x0C000: idx=0x000=0 bank=0 row=0 tag=0x18.
   // Pre-load: T2 mem[0][0]=0x1809 (CTR=100 USE=00 VAL=1).
   //           T1 mem[0][0]=0x180B (CTR=101 USE=00 VAL=1).
   //           T3/T4 mem[0][0]=0x0010 (USE=01 VALID=0).
@@ -3759,9 +3759,9 @@ module tb;
         "[INFO] rt_ctr_rows5_6_tst: T3/T4 mem[0][0]=0010");
     end
 
-    // Step 2: First predict PC=40'h0C000.
+    // Step 2: First predict PC=0x0C000.
     inp           = '0;
-    inp.pc        = 40'h0C000;
+    inp.pc        = VA_WIDTH'('h0C000);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -3909,7 +3909,7 @@ module tb;
   //           (using_prm=0, both tagged, alt correct: alt INC).
   // USE rule: Table 7 row 1 (pred_diff=0: no USE update).
   //           T2 CTR[2]=1, T1 CTR[2]=1: pred_diff=0.
-  // PC=40'h12400: idx=0x100=256 bank=0 row=256 tag=0x24.
+  // PC=0x12400: idx=0x100=256 bank=0 row=256 tag=0x24.
   // Pre-load: T2 mem[0][256]=0x2409 (CTR=100 boundary VAL=1).
   //           T1 mem[0][256]=0x240B (CTR=101 VAL=1).
   // uaon[0]=4'h8 written before predict.
@@ -3945,9 +3945,9 @@ module tb;
         "[INFO] rt_ctr_rows7_8_tst: uaon[0]=8");
     end
 
-    // Step 2: First predict PC=40'h12400.
+    // Step 2: First predict PC=0x12400.
     inp           = '0;
-    inp.pc        = 40'h12400;
+    inp.pc        = VA_WIDTH'('h12400);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -4092,7 +4092,7 @@ module tb;
   //            prm INC, alt DEC).
   // USE rule: Table 7 row 6 (pred_diff=1, using_prm=0,
   //           mispredict=1: DEC alt USE). T1 USE 01->00.
-  // PC=40'h14600: idx=0x180=384 bank=0 row=384 tag=0x28.
+  // PC=0x14600: idx=0x180=384 bank=0 row=384 tag=0x28.
   // Pre-load: T2 mem[0][384]=0x2807 (CTR=011 USE=00 VAL=1).
   //           T1 mem[0][384]=0x2819 (CTR=100 USE=01 VAL=1).
   //           T3/T4 mem[0][384]=0x0010 (USE=01 VALID=0)
@@ -4141,9 +4141,9 @@ module tb;
         "[INFO] rt_ctr_rows9_10_tst: uaon[0]=8");
     end
 
-    // Step 2: First predict PC=40'h14600.
+    // Step 2: First predict PC=0x14600.
     inp           = '0;
-    inp.pc        = 40'h14600;
+    inp.pc        = VA_WIDTH'('h14600);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -4287,7 +4287,7 @@ module tb;
   //           (using_prm=0, pred_diff=0, alt wrong:
   //            alt DEC only, prm no change).
   // USE rule: Table 7 row 1 (pred_diff=0: no USE update).
-  // PC=40'h1F400: idx=0x500=1280 bank=1 row=256 tag=0x3E.
+  // PC=0x1F400: idx=0x500=1280 bank=1 row=256 tag=0x3E.
   // Pre-load: T2 mem[1][256]=0x3E09 (CTR=100 USE=00 VAL=1).
   //           T1 mem[1][256]=0x3E19 (CTR=100 USE=01 VAL=1).
   //           T3/T4 mem[1][256]=0x0010 (USE=01 VALID=0)
@@ -4340,9 +4340,9 @@ module tb;
         "[INFO] rt_ctr_rows11_12_tst: uaon[0]=8");
     end
 
-    // Step 2: First predict PC=40'h1F400.
+    // Step 2: First predict PC=0x1F400.
     inp           = '0;
-    inp.pc        = 40'h1F400;
+    inp.pc        = VA_WIDTH'('h1F400);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -4486,7 +4486,7 @@ module tb;
   //           (prm_comp=0, alt_comp=0, pred_tkn=0,
   //            resolved_taken=1: T0 INC 01->10).
   // Direction-probability: u_resolved=1 -> INC. 01->10.
-  // PC=40'h190: T0 idx=100 bank=0 row=100.
+  // PC=0x190: T0 idx=100 bank=0 row=100.
   // Pre-load: T0 mem[0][100]=2'b01 (weakly not-taken).
   //           T1-T4 mem[0][100]=16'h0010 (USE=01, VALID=0):
   //           no tag hits; blocks allocation candidate.
@@ -4524,9 +4524,9 @@ module tb;
         "[INFO] rt_ctr_row13b_tst: T1-T4[0][100]=0010");
     end
 
-    // Step 2: First predict PC=40'h190.
+    // Step 2: First predict PC=0x190.
     inp           = '0;
-    inp.pc        = 40'h190;
+    inp.pc        = VA_WIDTH'('h190);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -4650,7 +4650,7 @@ module tb;
   // CTR rule: tage_cntrl_ctr_update_rules.md row 13c
   //           (prm_comp=0, alt_comp=0, pred_tkn=1,
   //            resolved_taken=0: T0 DEC 10->01).
-  // PC=40'h320: T0 idx=200 bank=0 row=200.
+  // PC=0x320: T0 idx=200 bank=0 row=200.
   // Pre-load: T0 mem[0][200]=2'b10 (weakly taken).
   //           T1-T4 mem[0][200]=16'h0010 (USE=01, VALID=0):
   //           no tag hits; blocks allocation candidate.
@@ -4688,9 +4688,9 @@ module tb;
         "[INFO] rt_ctr_row13c_tst: T1-T4[0][200]=0010");
     end
 
-    // Step 2: First predict PC=40'h320.
+    // Step 2: First predict PC=0x320.
     inp           = '0;
-    inp.pc        = 40'h320;
+    inp.pc        = VA_WIDTH'('h320);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -4815,7 +4815,7 @@ module tb;
   //           (prm_comp=0, alt_comp=0, pred_tkn=0,
   //            resolved_taken=0: T0 DEC 01->00).
   // Direction-probability: u_resolved=0 -> DEC. 01->00.
-  // PC=40'h480: T0 idx=288 bank=0 row=288.
+  // PC=0x480: T0 idx=288 bank=0 row=288.
   // Pre-load: T0 mem[0][288]=2'b01 (weakly not-taken).
   //           T1-T4 not pre-loaded. FAST_INIT ensures
   //           VALID=0 (no tag hits). Allocation suppressed
@@ -4845,9 +4845,9 @@ module tb;
         "[INFO] rt_ctr_row13a_tst: T1-T4 not pre-loaded");
     end
 
-    // Step 2: First predict PC=40'h480.
+    // Step 2: First predict PC=0x480.
     inp           = '0;
-    inp.pc        = 40'h480;
+    inp.pc        = VA_WIDTH'('h480);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -4971,7 +4971,7 @@ module tb;
   // CTR rule: tage_cntrl_ctr_update_rules.md row 13d
   //           (prm_comp=0, alt_comp=0, pred_tkn=1,
   //            resolved_taken=1: T0 INC 10->11).
-  // PC=40'h600: T0 idx=384 bank=0 row=384.
+  // PC=0x600: T0 idx=384 bank=0 row=384.
   // Pre-load: T0 mem[0][384]=2'b10 (weakly taken).
   //           T1-T4 not pre-loaded. FAST_INIT ensures
   //           VALID=0 (no tag hits). Allocation suppressed
@@ -5001,9 +5001,9 @@ module tb;
         "[INFO] rt_ctr_row13d_tst: T1-T4 not pre-loaded");
     end
 
-    // Step 2: First predict PC=40'h600.
+    // Step 2: First predict PC=0x600.
     inp           = '0;
-    inp.pc        = 40'h600;
+    inp.pc        = VA_WIDTH'('h600);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -5130,7 +5130,7 @@ module tb;
   // USE rule: tage_cntrl_use_update_rules.md Table 7 row 4
   //   (pred_diff=1, TTM=0, using_prm=1, mispredict=1:
   //    DEC prm USE).
-  // PC=40'h780: idx=480 bank=0 row=480 tag=0x00.
+  // PC=0x780: idx=480 bank=0 row=480 tag=0x00.
   // T1 pre-load: mem[0][480]=16'h001B (CTR=101 USE=01 VAL=1).
   // T0 pre-load: mem[0][480]=2'b01 (weakly not-taken).
   // T2-T4 pre-load: mem[0][480]=16'h0010 (USE=01 VAL=0,
@@ -5172,9 +5172,9 @@ module tb;
         "[INFO] rt_ctr_rows14_15_tst: T2-T4[0][480]=0010");
     end
 
-    // Step 2: First predict PC=40'h780.
+    // Step 2: First predict PC=0x780.
     inp           = '0;
-    inp.pc        = 40'h780;
+    inp.pc        = VA_WIDTH'('h780);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -5332,7 +5332,7 @@ module tb;
   // USE rule: tage_cntrl_use_update_rules.md Table 7 row 3
   //   (pred_diff=1, TTM=0, using_prm=1, mispredict=0:
   //    INC prm USE).
-  // PC=40'h900: idx=576 bank=0 row=576 tag=0x01.
+  // PC=0x900: idx=576 bank=0 row=576 tag=0x01.
   // T1 pre-load: mem[0][576]=16'h011B (CTR=101 USE=01 VAL=1).
   // T0 pre-load: mem[0][576]=2'b01 (weakly not-taken).
   // cond_mispredict=0: no T2-T4 pre-load needed.
@@ -5365,9 +5365,9 @@ module tb;
         "[INFO] rt_ctr_rows16_17_tst: T0 mem[0][576]=2b01");
     end
 
-    // Step 2: First predict PC=40'h900.
+    // Step 2: First predict PC=0x900.
     inp           = '0;
-    inp.pc        = 40'h900;
+    inp.pc        = VA_WIDTH'('h900);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -5509,7 +5509,7 @@ module tb;
 
   // ----------------------------------------------------------------
   // BP-014f TC-40: uaon_threshold_cross_tst
-  // PC=40'hB00: bank=0 row=704 tag=0x01.
+  // PC=0xB00: bank=0 row=704 tag=0x01.
   // uaon[0] starts at 4'h7 (below threshold=8).
   // T2 prm CTR=100 (boundary taken). T1 alt CTR=010.
   // First predict: using_prm=1 (uaon<threshold).
@@ -5558,9 +5558,9 @@ module tb;
         "[INFO] uaon_threshold_cross_tst: T3/T4[0][704]=0010");
     end
 
-    // Step 2: First predict PC=40'hB00.
+    // Step 2: First predict PC=0xB00.
     inp           = '0;
-    inp.pc        = 40'hB00;
+    inp.pc        = VA_WIDTH'('hB00);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -5759,11 +5759,11 @@ module tb;
         "[INFO] uaon_dec_restore_tst: wrote T1[0][704]=0109");
     end
 
-    // Step 2: Second predict PC=40'hB00.
+    // Step 2: Second predict PC=0xB00.
     // uaon=8 >= threshold. T2 CTR=011 boundary.
     // UAON fires: using_prm=0. Alt T1 CTR=100 taken.
     inp           = '0;
-    inp.pc        = 40'hB00;
+    inp.pc        = VA_WIDTH'('hB00);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -5934,7 +5934,7 @@ module tb;
   // CTR rule: tage_cntrl_ctr_update_rules.md row 13c
   //   (prm_comp=0, pred_tkn=1, resolved_taken=0: T0 DEC).
   //   RTL debt #34: pred_crt=0 -> subtract 1: 2'b10->2'b01.
-  // PC=40'hD00: idx=832 bank=0 row=832 tag=0x01.
+  // PC=0xD00: idx=832 bank=0 row=832 tag=0x01.
   // T1 alloc target bank=0 row=832:
   //   entry={tag=0x01, 8'h09}=0x0109.
   // T2-T4 bank=0 row=832: unchanged (zero from FAST_INIT).
@@ -5965,9 +5965,9 @@ module tb;
         "[INFO] alloc_t0_provider_tst: T1-T4[0][832]=unloaded");
     end
 
-    // Step 2: First predict PC=40'hD00.
+    // Step 2: First predict PC=0xD00.
     inp           = '0;
-    inp.pc        = 40'hD00;
+    inp.pc        = VA_WIDTH'('hD00);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -6154,7 +6154,7 @@ module tb;
   // USE rule: tage_cntrl_use_update_rules.md Table 7 row 1
   //   (pred_diff=0 -> no USE update).
   //   T1 CTR[2]=1, T0 CTR[1]=1 (pre-loaded 2'b10): diff=0.
-  // PC=40'h1100: idx=1088 bank=1 row=64 tag=0x02.
+  // PC=0x1100: idx=1088 bank=1 row=64 tag=0x02.
   // T2 alloc target bank=1 row=64:
   //   entry={tag=0x02, 8'h09}=0x0209.
   // T1 bank=1 row=64: CTR 101->100 -> 0x0209 (USE unchanged).
@@ -6203,9 +6203,9 @@ module tb;
         "[INFO] alloc_no_consecutive_tst: T2-T4[1][64]=0000");
     end
 
-    // Step 2: First predict PC=40'h1100.
+    // Step 2: First predict PC=0x1100.
     inp           = '0;
-    inp.pc        = 40'h1100;
+    inp.pc        = VA_WIDTH'('h1100);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -6388,7 +6388,7 @@ module tb;
   //   u_prm_use=u_eff(T1)=USE>>1=00>>1=00. DEC sat at 00.
   //   EPC written: lcl_epoch[0]=1.
   //   T1 lower byte after: {EPC=01,USE=00,CTR=100,VALID=1}=0x49.
-  // PC=40'h1300: idx=1216 bank=1 row=192 tag=0x02.
+  // PC=0x1300: idx=1216 bank=1 row=192 tag=0x02.
   // T3 alloc target bank=1 row=192:
   //   entry={tag=0x02,EPC=01,USE=00,CTR=100,VALID=1}=0x0249.
   // T1 bank=1 row=192: 0x0249 (CTR 101->100, EPC=01).
@@ -6411,7 +6411,7 @@ module tb;
 
     local_fails = 0;
 
-    // Step 1: Pre-load. PC=40'h1300 bank=1 row=192 tag=0x02.
+    // Step 1: Pre-load. PC=0x1300 bank=1 row=192 tag=0x02.
     // T1: TAG=0x02 EPC=00 USE=00 CTR=101 VALID=1 -> 0x020B.
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][192]
       = 16'h020B;
@@ -6439,9 +6439,9 @@ module tb;
         "[INFO] aging_age1_not_candidate_tst: epoch=1 ueff=01");
     end
 
-    // Step 3: First predict PC=40'h1300.
+    // Step 3: First predict PC=0x1300.
     inp           = '0;
-    inp.pc        = 40'h1300;
+    inp.pc        = VA_WIDTH'('h1300);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -6627,7 +6627,7 @@ module tb;
   //   u_prm_use=u_eff(T1)=0 (age=2->u_eff=0). DEC sat at 00.
   //   EPC written: lcl_epoch[0]=2.
   //   T1 lower byte after: {EPC=10,USE=00,CTR=100,VALID=1}=0x89.
-  // PC=40'h1500: idx=1344 bank=1 row=320 tag=0x02.
+  // PC=0x1500: idx=1344 bank=1 row=320 tag=0x02.
   // T2 alloc target bank=1 row=320:
   //   entry={tag=0x02,EPC=10,USE=00,CTR=100,VALID=1}=0x0289.
   // T1 bank=1 row=320: 0x0289 (CTR 101->100, EPC=10).
@@ -6650,7 +6650,7 @@ module tb;
 
     local_fails = 0;
 
-    // Step 1: Pre-load. PC=40'h1500 bank=1 row=320 tag=0x02.
+    // Step 1: Pre-load. PC=0x1500 bank=1 row=320 tag=0x02.
     // T1: TAG=0x02 EPC=00 USE=00 CTR=101 VALID=1 -> 0x020B.
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][320]
       = 16'h020B;
@@ -6678,9 +6678,9 @@ module tb;
         "[INFO] aging_age2_is_candidate_tst: epoch=2 ueff=0");
     end
 
-    // Step 3: First predict PC=40'h1500.
+    // Step 3: First predict PC=0x1500.
     inp           = '0;
-    inp.pc        = 40'h1500;
+    inp.pc        = VA_WIDTH'('h1500);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -6849,7 +6849,7 @@ module tb;
   // t0_dec_min_sat_tst (TC-46)
   // Rule: tage_cntrl_ctr_update_rules.md row 13c.
   // T0 CTR DEC from min (2'b00) -> stays at 2'b00 (sat min).
-  // PC=40'h1200: T0 idx=11'h480 bank=1 row=128.
+  // PC=0x1200: T0 idx=11'h480 bank=1 row=128.
   // prm_comp=0 alt_comp=0 prm_tkn=1 resolved_taken=0.
   // cond_mispredict=1 (pred=T, resolved=NT).
   // Expected: mem[1][128] == 2'b00 after update.
@@ -6865,7 +6865,7 @@ module tb;
     local_fails = 0;
 
     // Address aliasing hygiene: zero T1-T4 at bank=1 row=128.
-    // PC=40'h1200 hashes to idx=11'h480 for T1-T4 (fh=0).
+    // PC=0x1200 hashes to idx=11'h480 for T1-T4 (fh=0).
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][128]
       = 16'h0000;
     u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][128]
@@ -6930,7 +6930,7 @@ module tb;
   // ----------------------------------------------------------------
   // TC-47  TB-ARB-01: Prediction only, no updates in flight.
   // Verify: prediction completes slot0 and slot1 in p0+p1+p2.
-  // Uses: pc=40'hA00 -> T0 bank=0 row=640.
+  // Uses: pc=0xA00 -> T0 bank=0 row=640.
   // Pre-load T0 s0/s1 mem[0][640] = 2b10 (NT weak).
   // ----------------------------------------------------------------
   task automatic arb_pred_only_tst(int verbose);
@@ -6945,7 +6945,7 @@ module tb;
       $display("[INFO] arb_pred_only_tst: pre T0 s0/s1[0][640]=10");
 
     inp           = '0;
-    inp.pc        = 40'hA00;
+    inp.pc        = VA_WIDTH'('hA00);
     inp.branch_id = 6'h1;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -7056,7 +7056,7 @@ module tb;
   // ----------------------------------------------------------------
   // TC-49  TB-ARB-03: Concurrent pred+upd, different entries.
   // Verify: pred wins Rule 3, upd gets Rule 6 next cycle, both rdy.
-  // Pred: pc=40'hA80 -> row=672. Upd: prm_idx=11'h280 (row 640).
+  // Pred: pc=0xA80 -> row=672. Upd: prm_idx=11'h280 (row 640).
   // Debt #37 investigaton: arb_grant_upd combinational forward.
   // ----------------------------------------------------------------
   task automatic arb_concurrent_pred_wins_tst(int verbose);
@@ -7070,7 +7070,7 @@ module tb;
     u_dut.u_tage_bim.u_ram_s0.mem[0][640] = 2'b10;
 
     inp           = '0;
-    inp.pc        = 40'hA80;
+    inp.pc        = VA_WIDTH'('hA80);
     inp.branch_id = 6'h3;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -7121,7 +7121,7 @@ module tb;
   // ----------------------------------------------------------------
   // TC-50  TB-ARB-04: Concurrent pred+upd, same entry.
   // Pred reads pre-update state. Upd writes next cycle. Both done.
-  // pc=40'hA00 -> row=640, bank=0. Upd: prm_idx=11'h280 (same row).
+  // pc=0xA00 -> row=640, bank=0. Upd: prm_idx=11'h280 (same row).
   // Pre-load T0 s0 mem[0][640] = 2b10 (NT weak).
   // After upd (resolved_taken=1): CTR -> 2b11 (NT strong? -> TKN).
   // Pred should read CTR=010 before upd writes.
@@ -7140,7 +7140,7 @@ module tb;
       $display("[INFO] arb_concurrent_upd_wins_tst: T0[0][640]=10");
 
     inp           = '0;
-    inp.pc        = 40'hA00;
+    inp.pc        = VA_WIDTH'('hA00);
     inp.branch_id = 6'h4;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -7291,12 +7291,12 @@ module tb;
     consumer_ready = 1'b0;
 
     // Pre-load T0 s0 row 700 bank 0 with CTR=2b11.
-    // pc=40'hAF0 -> bits[12:2]=0xAF0>>2=0x2BC, bank=0, row=700.
+    // pc=0xAF0 -> bits[12:2]=0xAF0>>2=0x2BC, bank=0, row=700.
     u_dut.u_tage_bim.u_ram_s0.mem[0][700] = 2'b11;
 
     // Issue pred 1 to fill first RB slot.
     stg_pred_inp0 = '0;
-    stg_pred_inp0.pc = 40'hAF0;
+    stg_pred_inp0.pc = VA_WIDTH'('hAF0);
     stg_pred_val0 = 1'b1;
     @(posedge clk);
     stg_pred_val0 = 1'b0;
@@ -7306,7 +7306,7 @@ module tb;
     // RB now has 1 entry (consumer_ready=0, no bypass/drain).
 
     // Issue pred 2 to fill second (last) RB slot.
-    stg_pred_inp0.pc = 40'hAF0;
+    stg_pred_inp0.pc = VA_WIDTH'('hAF0);
     stg_pred_val0 = 1'b1;
     @(posedge clk);
     stg_pred_val0 = 1'b0;
@@ -7320,7 +7320,7 @@ module tb;
         u_dut.resp_buf_full_w);
 
     // Hold pred stg for PQ_DEPTH+1 cycles to fill PQ.
-    stg_pred_inp0.pc = 40'hAF0;
+    stg_pred_inp0.pc = VA_WIDTH'('hAF0);
     stg_pred_val0    = 1'b1;
     repeat (TAGE_PQ_DEPTH + 1) @(posedge clk);
     stg_pred_val0 = 1'b0;
@@ -7373,13 +7373,13 @@ module tb;
     consumer_ready = 1'b0;
 
     u_dut.u_tage_bim.u_ram_s0.mem[0][750] = 2'b11;
-    // pc=40'hBB8 -> bits[12:2]=0xBB8>>2=0x2EE, bank=0, row=750.
+    // pc=0xBB8 -> bits[12:2]=0xBB8>>2=0x2EE, bank=0, row=750.
 
     // Fill RB slot 1: pred takes 3 cycles p0->p2.
     // RB enqueue fires the cycle AFTER pred_rdy (rb_ff sees
     // cntrl_pred_rdy_p2 pre-NBA, one cycle late). Need 4 cycles.
     stg_pred_inp0    = '0;
-    stg_pred_inp0.pc = 40'hBB8;
+    stg_pred_inp0.pc = VA_WIDTH'('hBB8);
     stg_pred_val0    = 1'b1;
     @(posedge clk);
     stg_pred_val0    = 1'b0;
@@ -7390,7 +7390,7 @@ module tb;
 
     // Fill RB slot 2 (same 4-cycle sequence).
     stg_pred_inp0    = '0;
-    stg_pred_inp0.pc = 40'hBB8;
+    stg_pred_inp0.pc = VA_WIDTH'('hBB8);
     stg_pred_val0    = 1'b1;
     @(posedge clk);
     stg_pred_val0    = 1'b0;
@@ -7407,7 +7407,7 @@ module tb;
     end
 
     // Issue concurrent pred + upd; pred must be blocked.
-    stg_pred_inp0.pc = 40'hBB8;
+    stg_pred_inp0.pc = VA_WIDTH'('hBB8);
     stg_pred_val0    = 1'b1;
     stg_upd_inp0     = '0;
     stg_upd_inp0.tage_pred_meta.tage_prm_idx  = 11'h280;
@@ -7478,7 +7478,7 @@ module tb;
 
     // Issue pred and upd together (cycle 0): both stg set.
     stg_pred_inp0     = '0;
-    stg_pred_inp0.pc  = 40'hA00;
+    stg_pred_inp0.pc  = VA_WIDTH'('hA00);
     stg_upd_inp0      = '0;
     stg_upd_inp0.tage_pred_meta.tage_prm_idx  = 11'h280;
     stg_upd_inp0.tage_pred_meta.tage_prm_comp = 3'd0;
@@ -7990,10 +7990,10 @@ module tb;
       $display(
         "[INFO] fh_sel_t3_t4_tst: T3 fh=1AA T4 fh=155 set");
 
-    // Prediction 1: pc=40'hE00. T3/T4 idx/tag recomputed with
+    // Prediction 1: pc=0xE00. T3/T4 idx/tag recomputed with
     // non-zero fh -> exercises fh_sel arms 3 and 4.
     inp           = '0;
-    inp.pc        = 40'hE00;
+    inp.pc        = VA_WIDTH'('hE00);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -8011,9 +8011,9 @@ module tb;
         rdy[0]);
     end
 
-    // Prediction 2: pc=40'hC00 for additional T3/T4 activity.
+    // Prediction 2: pc=0xC00 for additional T3/T4 activity.
     inp           = '0;
-    inp.pc        = 40'hC00;
+    inp.pc        = VA_WIDTH'('hC00);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -8087,9 +8087,9 @@ module tb;
     tage_enable_aging   = 1'b1;
     tage_aging_interval = 32'h0;
 
-    // Predict PC=40'h190: T1 idx=100 bank=0 tag=0x00 -> T1 hit.
+    // Predict PC=0x190: T1 idx=100 bank=0 tag=0x00 -> T1 hit.
     inp           = '0;
-    inp.pc        = 40'h190;
+    inp.pc        = VA_WIDTH'('h190);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -8243,7 +8243,7 @@ module tb;
   // ----------------------------------------------------------------
   // TC-60  alc_end_to_end_tst: CE-10 allocation end-to-end.
   // Named owner of the alc_wr path in tage_table.sv.
-  // PC=40'hF40 -> all tables idx=976 bank=0.
+  // PC=0xF40 -> all tables idx=976 bank=0.
   // Pre-load T0[0][976]=2b10 (taken). T1-T4[0][976]=0x0000
   // (VAL=0 miss -> ueff=0 -> T1 is first allocation candidate).
   // Prediction: prm=T0 alc_comp=T1 alc_tag=0x01.
@@ -8281,10 +8281,10 @@ module tb;
         "[INFO] alc_end_to_end_tst: T1-T4[0][976]=0000");
     end
 
-    // Predict PC=40'hF40. T1-T4 miss (VAL=0) -> prm=T0.
+    // Predict PC=0xF40. T1-T4 miss (VAL=0) -> prm=T0.
     // T1 ueff=0 -> alc_comp=1 alc_idx=976 alc_tag=0x01.
     inp           = '0;
-    inp.pc        = 40'hF40;
+    inp.pc        = VA_WIDTH'('hF40);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -8370,7 +8370,7 @@ module tb;
   // TC-61  fh_sel_t2_tst: CP-11 fh_sel mux arm T2.
   // Drives non-zero T2 folded-hist fields, pre-loads a matching
   // T2 RAM entry, issues a prediction, and verifies T2 hit.
-  // PC=40'h14000 t2_idx=100 t2_fh1=15 t2_fh2=0A.
+  // PC=0x14000 t2_idx=100 t2_fh1=15 t2_fh2=0A.
   // idx=11'(0x5000^0x100)=256 bank=0 row=256.
   // tag=8'(0x28^0x15^0x14)=0x29.
   // Entry 0x290B: TAG=0x29 CTR=101 VAL=1.
@@ -8396,9 +8396,9 @@ module tb;
       $display(
         "[INFO] fh_sel_t2_tst: T2 s0 mem[0][256]=290B");
 
-    // Stage prediction: PC=40'h14000.
+    // Stage prediction: PC=0x14000.
     inp           = '0;
-    inp.pc        = 40'h14000;
+    inp.pc        = VA_WIDTH'('h14000);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -8455,7 +8455,7 @@ module tb;
   // TC-62  fh_sel_t3_tst: CP-12 fh_sel mux arm T3.
   // Drives non-zero T3 folded-hist fields, pre-loads a matching
   // T3 RAM entry, issues a prediction, and verifies T3 hit.
-  // PC=40'h16000 t3_idx=080 t3_fh1=22 t3_fh2=11.
+  // PC=0x16000 t3_idx=080 t3_fh1=22 t3_fh2=11.
   // idx=11'(0x5800^0x080)=128 bank=0 row=128.
   // tag=8'(0x2C^0x22^0x22)=0x2C.
   // Entry 0x2C0B: TAG=0x2C CTR=101 VAL=1.
@@ -8481,9 +8481,9 @@ module tb;
       $display(
         "[INFO] fh_sel_t3_tst: T3 s0 mem[0][128]=2C0B");
 
-    // Stage prediction: PC=40'h16000.
+    // Stage prediction: PC=0x16000.
     inp           = '0;
-    inp.pc        = 40'h16000;
+    inp.pc        = VA_WIDTH'('h16000);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -8538,10 +8538,10 @@ module tb;
 
   // ----------------------------------------------------------------
   // TC-63  ctr_t1_max_sat_tst: CE-01 T1 CTR max saturation.
-  // Pre-load T1 s0 idx=640 (PC=40'hA00, folded_hist=0):
+  // Pre-load T1 s0 idx=640 (PC=0xA00, folded_hist=0):
   //   bank=0 row=640 tag=8'h01.
   //   Entry 0x011F: TAG=01 EPC=00 USE=01 CTR=111 VAL=1.
-  // Predict PC=40'hA00: prm_comp=1 prm_ctr=111 prm_tkn=1.
+  // Predict PC=0xA00: prm_comp=1 prm_ctr=111 prm_tkn=1.
   // Update: resolved_taken=1 cond_mispredict=0 (correct).
   // CTR INC attempt at max 111->111 (saturates). CE-01 covered.
   // ----------------------------------------------------------------
@@ -8562,9 +8562,9 @@ module tb;
       $display(
         "[INFO] ctr_t1_max_sat_tst: T1 s0 mem[0][640]=011F");
 
-    // Predict PC=40'hA00 with zero folded_hist.
+    // Predict PC=0xA00 with zero folded_hist.
     inp           = '0;
-    inp.pc        = 40'hA00;
+    inp.pc        = VA_WIDTH'('hA00);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -8640,11 +8640,11 @@ module tb;
 
   // ----------------------------------------------------------------
   // TC-64  ctr_t1_min_sat_tst: CE-02 T1 CTR min saturation.
-  // Pre-load T1 s0 idx=1024 (PC=40'h1000, folded_hist=0):
+  // Pre-load T1 s0 idx=1024 (PC=0x1000, folded_hist=0):
   //   bank=1 row=0 tag=8'h02.
   //   Entry 0x0211: TAG=02 EPC=00 USE=01 CTR=000 VAL=1.
   // T2-T4 s0 mem[1][0]=0x0010 (USE=01 VALID=0 blocks alloc).
-  // Predict PC=40'h1000: prm_comp=1 prm_ctr=000 prm_tkn=0.
+  // Predict PC=0x1000: prm_comp=1 prm_ctr=000 prm_tkn=0.
   // Update: resolved_taken=1 cond_mispredict=1 (wrong).
   // CTR DEC attempt at min 000->000 (saturates). CE-02 covered.
   // ----------------------------------------------------------------
@@ -8673,9 +8673,9 @@ module tb;
       $display(
         "[INFO] ctr_t1_min_sat_tst: T1 s0 mem[1][0]=0211");
 
-    // Predict PC=40'h1000 with zero folded_hist.
+    // Predict PC=0x1000 with zero folded_hist.
     inp           = '0;
-    inp.pc        = 40'h1000;
+    inp.pc        = VA_WIDTH'('h1000);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -8746,12 +8746,12 @@ module tb;
 
   // ----------------------------------------------------------------
   // TC-65  use_t1_max_sat_tst: CE-03 T1 USE max saturation.
-  // Pre-load T1 s0 idx=896 (PC=40'hE00, folded_hist=0):
+  // Pre-load T1 s0 idx=896 (PC=0xE00, folded_hist=0):
   //   bank=0 row=896 tag=8'h01.
   //   Entry 0x013F: TAG=01 EPC=00 USE=11 CTR=111 VAL=1.
   // T0 CTR=00 (FAST_INIT, row=896 uncontaminated): alt_tkn=0.
   // pred_diff=1 (prm_tkn=1 != alt_tkn=0): USE update fires.
-  // Predict PC=40'hE00: prm_comp=1 prm_use=11 pred_diff=1.
+  // Predict PC=0xE00: prm_comp=1 prm_use=11 pred_diff=1.
   // Update: resolved_taken=1 cond_mispredict=0 (correct).
   // USE INC attempt at max 11->11 (saturates). CE-03 covered.
   // ----------------------------------------------------------------
@@ -8772,9 +8772,9 @@ module tb;
       $display(
         "[INFO] use_t1_max_sat_tst: T1 s0 mem[0][896]=013F");
 
-    // Predict PC=40'hE00 with zero folded_hist.
+    // Predict PC=0xE00 with zero folded_hist.
     inp           = '0;
-    inp.pc        = 40'hE00;
+    inp.pc        = VA_WIDTH'('hE00);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -8849,12 +8849,12 @@ module tb;
 
   // ----------------------------------------------------------------
   // TC-66  use_t1_min_sat_tst: CE-04 T1 USE min saturation.
-  // Pre-load T1 s0 idx=1152 (PC=40'h1200, folded_hist=0):
+  // Pre-load T1 s0 idx=1152 (PC=0x1200, folded_hist=0):
   //   bank=1 row=128 tag=8'h02.
   //   Entry 0x0203: TAG=02 EPC=00 USE=00 CTR=001 VAL=1.
   // T0 s0 mem[1][128]=2b10 (CTR=10 alt_tkn=1 pred_diff=1).
   // T2-T4 s0 mem[1][128]=0x0010 (USE=01 VALID=0 blocks alloc).
-  // Predict PC=40'h1200: prm_comp=1 prm_use=00 pred_diff=1.
+  // Predict PC=0x1200: prm_comp=1 prm_use=00 pred_diff=1.
   // Update: resolved_taken=1 cond_mispredict=1 (wrong).
   // USE DEC attempt at min 00->00 (saturates). CE-04 covered.
   // ----------------------------------------------------------------
@@ -8886,9 +8886,9 @@ module tb;
       $display(
         "[INFO] use_t1_min_sat_tst: T1 s0 mem[1][128]=0203");
 
-    // Predict PC=40'h1200 with zero folded_hist.
+    // Predict PC=0x1200 with zero folded_hist.
     inp           = '0;
-    inp.pc        = 40'h1200;
+    inp.pc        = VA_WIDTH'('h1200);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -8964,7 +8964,7 @@ module tb;
 
   // ----------------------------------------------------------------
   // TC-67  no_alloc_candidate_tst: CE-05 no allocation candidate.
-  // PC=40'h2800 -> all tables idx=512 bank=0 row=512.
+  // PC=0x2800 -> all tables idx=512 bank=0 row=512.
   // tag(T1-T4) = pc>>11 = 8'h05 (folded_hist=0).
   // T1 s0 mem[0][512]=0x0509:
   //   TAG=05 EPC=00 USE=00 CTR=100 VAL=1 -> T1 hits as provider.
@@ -9007,11 +9007,11 @@ module tb;
       $display(
         "[INFO] no_alloc_candidate_tst: T1[0][512]=0509");
 
-    // Predict PC=40'h2800, folded_hist=0.
+    // Predict PC=0x2800, folded_hist=0.
     // T1 hits (tag=05 match), T2-T4 miss (VAL=0).
     // alc_comp scan: T2,T3,T4 ueff=01>0 -> alc_comp=0.
     inp           = '0;
-    inp.pc        = 40'h2800;
+    inp.pc        = VA_WIDTH'('h2800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -9170,7 +9170,7 @@ module tb;
   // TC-69 epc_prm_match_tst
   // Table 7 row 3: DIFF=1 TTM=0 UP=1 MISP=0 -> uWR=1 INC PRM.
   // Proves: prm_match arm of epc_we_s0 writes EPC to lcl_epoch.
-  // PC=40'h3800 -> idx=0x600 bank=1 row=512 tag=0x07.
+  // PC=0x3800 -> idx=0x600 bank=1 row=512 tag=0x07.
   // T2 seed: 0x071B TAG=07 EPC=00 USE=01 CTR=101 VAL=1.
   // T1 seed: 0x0717 TAG=07 EPC=00 USE=01 CTR=011 VAL=1.
   // T3 iso:  0x07D8 TAG=07 EPC=11 USE=01 CTR=100 VAL=0.
@@ -9198,7 +9198,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     inp           = '0;
-    inp.pc        = 40'h3800;
+    inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -9287,7 +9287,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     inp           = '0;
-    inp.pc        = 40'h3800;
+    inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -9374,7 +9374,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     inp           = '0;
-    inp.pc        = 40'h3800;
+    inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -9462,7 +9462,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     inp           = '0;
-    inp.pc        = 40'h3800;
+    inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -9555,7 +9555,7 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     inp           = '0;
-    inp.pc        = 40'h3800;
+    inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -9658,7 +9658,7 @@ module tb;
       = 16'h4507;
 
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -10021,7 +10021,7 @@ module tb;
     u_dut.u_tage_cntrl.uaon[0] = 4'h7;
 
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -10047,7 +10047,7 @@ module tb;
     u_dut.u_tage_cntrl.uaon[0] = 4'h8;
 
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -10077,7 +10077,7 @@ module tb;
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
 
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
@@ -10282,7 +10282,7 @@ module tb;
   // TC-83  aging_interval_adv_tst: step 3 interval decrement and
   // epoch advance.
   // Force lcl_aging_interval[0]=0 (boundary). Force lcl_epoch=0.
-  // Enable aging. Trigger prediction to PC=40'h320 (T0 hit, T1-T4
+  // Enable aging. Trigger prediction to PC=0x320 (T0 hit, T1-T4
   // idx=200 bank=0 all invalid after fast-init). Confirm:
   //   - At posedge C (pred_rdy_p2 fires) epoch is still 0.
   //   - At posedge D (N+1) epoch advances to 1.
@@ -10302,7 +10302,7 @@ module tb;
     tage_enable_aging   = 1'b1;
     tage_aging_interval = 32'h0;
     inp           = '0;
-    inp.pc        = 40'h320;
+    inp.pc        = VA_WIDTH'('h320);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);           // posedge A: stager drives p0
@@ -10360,7 +10360,7 @@ module tb;
     tage_enable_aging   = 1'b1;
     tage_aging_interval = 32'h0;
     inp           = '0;
-    inp.pc        = 40'h324;
+    inp.pc        = VA_WIDTH'('h324);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -10393,7 +10393,7 @@ module tb;
   // ---------------------------------------------------------------
   // TC-85  aging_age_compare_tst: step 5 age compare.
   // T1 s0 mem[0][202]=0x003B: TAG=00 EPC=00 USE=11 CTR=101 VAL=1.
-  // PC=40'h328: T1 idx=(0x328>>2)=202 bank=0 tag=(0x328>>11)=0.
+  // PC=0x328: T1 idx=(0x328>>2)=202 bank=0 tag=(0x328>>11)=0.
   // tage_enable_aging=0; lcl_epoch forced per sub-test.
   // age=(lcl_epoch-EPC) mod 4; EPC=00.
   // Formula (tage_cntrl_use_update_rules.md "Effective USEFUL"):
@@ -10411,7 +10411,7 @@ module tb;
       = 16'h003B;
     tage_enable_aging = 1'b0;
     inp               = '0;
-    inp.pc            = 40'h328;
+    inp.pc            = VA_WIDTH'('h328);
     // Sub-test age=0: u_eff must equal USE=11.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     stg_pred_inp0 = inp;
@@ -10509,7 +10509,7 @@ module tb;
   // ---------------------------------------------------------------
   // TC-86  aging_use_reduce_tst: step 6 USE reduction effect.
   // T1 s0[0][203]=0x000F: TAG=00 EPC=00 USE=00 CTR=111 VAL=1.
-  //   Provider for PC=40'h32C (idx=203 bank=0 tag=0).
+  //   Provider for PC=0x32C (idx=203 bank=0 tag=0).
   // T2-T4 s0[0][203]=0x0030: TAG=00 EPC=00 USE=11 CTR=000 VAL=0.
   //   Not a tag hit (VAL=0). EPC/USE still read for u_eff scan.
   // tage_enable_aging=0; lcl_epoch forced per sub-test.
@@ -10539,7 +10539,7 @@ module tb;
       = 16'h0030;
     tage_enable_aging = 1'b0;
     inp               = '0;
-    inp.pc            = 40'h32C;
+    inp.pc            = VA_WIDTH'('h32C);
     // Sub-test A: epoch=0, T2 u_eff=11, no candidate above T1.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     stg_pred_inp0 = inp;
@@ -10596,7 +10596,7 @@ module tb;
   // TC-87  aging_enable_gate_tst: step 7 enable gating.
   // With tage_enable_aging=0 the epoch is frozen and u_eff=USE.
   // Sub-test A: T1 s0[0][204]=0x002B: TAG=00 EPC=00 USE=10
-  //   CTR=101 VAL=1. PC=40'h330 (idx=204 bank=0 tag=0).
+  //   CTR=101 VAL=1. PC=0x330 (idx=204 bank=0 tag=0).
   //   lcl_epoch=0. Predict. tage_prm_useful must equal USE=10.
   //   (u_eff=USE when aging disabled; doc: "u_eff=USEFUL (aging
   //   disabled, equivalent to age==0 path)")
@@ -10618,7 +10618,7 @@ module tb;
       = 16'h002B;
     tage_enable_aging = 1'b0;
     inp               = '0;
-    inp.pc            = 40'h330;
+    inp.pc            = VA_WIDTH'('h330);
     // Sub-test A: lcl_epoch=0. u_eff=USE=10 (aging disabled).
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     stg_pred_inp0 = inp;
@@ -10678,7 +10678,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-88  alc_trigger_gating_tst: alloc trigger gating.
-  // PC=40'h828: idx=0x20A=522 bank=0 row=522 tag=0x01.
+  // PC=0x828: idx=0x20A=522 bank=0 row=522 tag=0x01.
   // T1[0][522]=0x0000 (VAL=0, USE=0 -> alloc candidate).
   // T2-T4[0][522]=0x0000. T0 prm. prm_comp=0 < TAGE_MAX_TBL=4.
   // Sub-test A: cond_mispredict=1 -> alloc fires -> T1 = 0x0109.
@@ -10708,7 +10708,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][522]
       = 16'h0000;
     inp           = '0;
-    inp.pc        = 40'h828;
+    inp.pc        = VA_WIDTH'('h828);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -10744,7 +10744,7 @@ module tb;
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
       = 16'h0000;
     inp           = '0;
-    inp.pc        = 40'h828;
+    inp.pc        = VA_WIDTH'('h828);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -10819,7 +10819,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-89  alc_which_table_tst: table selection correctness.
-  // PC=40'h20A0: idx=0x028=40 bank=0 row=40 tag=0x04.
+  // PC=0x20A0: idx=0x028=40 bank=0 row=40 tag=0x04.
   // T1[0][40]=0x0039: TAG=00 EPC=00 USE=11 CTR=100 VAL=1.
   //   T1 is a miss (TAG=0x00 != 0x04) and USE=3 (non-alloc).
   // T2[0][40]=0x0000: VAL=0 USE=0 -> first allocatable above T0.
@@ -10847,7 +10847,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][40]
       = 16'h0000;
     inp           = '0;
-    inp.pc        = 40'h20A0;
+    inp.pc        = VA_WIDTH'('h20A0);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -10916,7 +10916,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-90  alc_consec_skip_tst: no-consecutive-skip policy.
-  // PC=40'h3918: idx=0x646=1606 bank=1 row=582 tag=0x07.
+  // PC=0x3918: idx=0x646=1606 bank=1 row=582 tag=0x07.
   // T1[1][582]=0x0039: USE=3 non-alloc miss.
   // T2[1][582]=0x0000: VAL=0 USE=0 -> first candidate. alc=T2.
   // T3[1][582]=0x000E: USE=0 VAL=0 CTR=3b111 (non-zero distinct).
@@ -10945,7 +10945,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][582]
       = 16'h0000;
     inp           = '0;
-    inp.pc        = 40'h3918;
+    inp.pc        = VA_WIDTH'('h3918);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11007,7 +11007,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-91  alc_no_cand_tst: no-candidate sentinel.
-  // PC=40'h5800: idx=0x600=1536 bank=1 row=512 tag=0x0B.
+  // PC=0x5800: idx=0x600=1536 bank=1 row=512 tag=0x0B.
   // T1-T4[1][512]=0x0039: USE=3 -> u_eff=3 != 0 (no candidate).
   // alc_comp must be 0 after prediction. After mispredict update
   // no table RAM changes (all remain 0x0039).
@@ -11033,7 +11033,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
       = 16'h0039;
     inp           = '0;
-    inp.pc        = 40'h5800;
+    inp.pc        = VA_WIDTH'('h5800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11094,7 +11094,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-92  alc_pre_hashed_idx_tst: allocation at pre-hashed idx.
-  // PC=40'h4140: idx=0x050=80 bank=0 row=80 tag=0x08.
+  // PC=0x4140: idx=0x050=80 bank=0 row=80 tag=0x08.
   // T1[0][80]=0x0000: alloc target (USE=0 VAL=0).
   // T1[0][81]=0x003F: decoy row (TAG=00 EPC=00 USE=3 CTR=7 VAL=1).
   //   Adjacent row seeded to non-zero to detect off-by-one.
@@ -11123,7 +11123,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][80]
       = 16'h0039;
     inp           = '0;
-    inp.pc        = 40'h4140;
+    inp.pc        = VA_WIDTH'('h4140);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11193,7 +11193,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-93  alc_contents_tst: allocated-entry field decode.
-  // PC=40'h1878: idx=0x61E=1566 bank=1 row=542 tag=0x03.
+  // PC=0x1878: idx=0x61E=1566 bank=1 row=542 tag=0x03.
   // T1[1][542]=0x0000 (alloc target). T2-T4[1][542]=0x0039.
   // Sub-test A: epoch=0 -> alloc = {TAG=03,EPC=00,USE=00,
   //   CTR=100,VAL=1} = 0x0309.
@@ -11222,7 +11222,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][542]
       = 16'h0039;
     inp           = '0;
-    inp.pc        = 40'h1878;
+    inp.pc        = VA_WIDTH'('h1878);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11259,7 +11259,7 @@ module tb;
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542]
       = 16'h0000;
     inp           = '0;
-    inp.pc        = 40'h1878;
+    inp.pc        = VA_WIDTH'('h1878);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11302,7 +11302,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-94  alc_we_gate_tst: alc_we_s0 assertion conditions.
-  // PC=40'h1050: idx=0x414=1044 bank=1 row=20 tag=0x02.
+  // PC=0x1050: idx=0x414=1044 bank=1 row=20 tag=0x02.
   // T1[1][20]=0x0000 (alloc candidate). T2-T4[1][20]=0x0039.
   // Sub-test A: mispredict + alc_comp=T1 -> alc_we_s0[T1]=1.
   // Sub-test B: correct prediction -> alc_we_s0[T1]=0.
@@ -11328,7 +11328,7 @@ module tb;
       = 16'h0039;
     // Sub-test A: mispredict -> alc_we_s0=1 for T1.
     inp           = '0;
-    inp.pc        = 40'h1050;
+    inp.pc        = VA_WIDTH'('h1050);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11364,7 +11364,7 @@ module tb;
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][20]
       = 16'h0000;
     inp           = '0;
-    inp.pc        = 40'h1050;
+    inp.pc        = VA_WIDTH'('h1050);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11442,7 +11442,7 @@ module tb;
 
   // ---------------------------------------------------------------
   // TC-95  alc_ram_isolate_tst: RAM-level write isolation.
-  // PC=40'h28C8: idx=0x232=562 bank=0 row=562 tag=0x05.
+  // PC=0x28C8: idx=0x232=562 bank=0 row=562 tag=0x05.
   // T1[0][562]=0x0000: alloc target (USE=0 VAL=0). alc=T1.
   // T2[0][562]=0x003F: USE=3 (non-alloc). T2 skipped.
   //   0x003F = TAG=00 EPC=00 USE=11 CTR=111 VAL=1.
@@ -11471,7 +11471,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][562]
       = 16'h0039;
     inp           = '0;
-    inp.pc        = 40'h28C8;
+    inp.pc        = VA_WIDTH'('h28C8);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11566,7 +11566,7 @@ module tb;
     u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][50]
       = 16'h0000;
     inp    = '0;
-    inp.pc = 40'h100C8;
+    inp.pc = VA_WIDTH'('h100C8);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11664,7 +11664,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][75]
       = 16'h0000;
     inp    = '0;
-    inp.pc = 40'h1212C;
+    inp.pc = VA_WIDTH'('h1212C);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11754,7 +11754,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][125]
       = 16'h0000;
     inp    = '0;
-    inp.pc = 40'h141F4;
+    inp.pc = VA_WIDTH'('h141F4);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11831,7 +11831,7 @@ module tb;
     // Sub-test A: uaon below threshold -> using_primary=1.
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     inp    = '0;
-    inp.pc = 40'h16258;
+    inp.pc = VA_WIDTH'('h16258);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11860,7 +11860,7 @@ module tb;
     // Sub-test B: uaon at/above threshold -> using_primary=0.
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
     inp    = '0;
-    inp.pc = 40'h16258;
+    inp.pc = VA_WIDTH'('h16258);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11922,7 +11922,7 @@ module tb;
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175]
       = 16'h300F;
     inp    = '0;
-    inp.pc = 40'h182BC;
+    inp.pc = VA_WIDTH'('h182BC);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -11946,7 +11946,7 @@ module tb;
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175]
       = 16'h3009;
     inp    = '0;
-    inp.pc = 40'h182BC;
+    inp.pc = VA_WIDTH'('h182BC);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12001,7 +12001,7 @@ module tb;
     // Sub-test A: using_primary=1 -> pred_tkn follows prm CTR MSB.
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     inp    = '0;
-    inp.pc = 40'h1A320;
+    inp.pc = VA_WIDTH'('h1A320);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12030,7 +12030,7 @@ module tb;
     // Sub-test B: using_primary=0 -> pred_tkn follows alt CTR MSB.
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
     inp    = '0;
-    inp.pc = 40'h1A320;
+    inp.pc = VA_WIDTH'('h1A320);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12091,7 +12091,7 @@ module tb;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][225]
       = 16'h0000;
     inp    = '0;
-    inp.pc = 40'h1E384;
+    inp.pc = VA_WIDTH'('h1E384);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12164,7 +12164,7 @@ module tb;
   // Four write paths exercised together on overlapping entries
   // with no cross-path interference.
   //
-  // PC=40'h22800: all T1-T4 idx=0x200=512 bank=0 row=512
+  // PC=0x22800: all T1-T4 idx=0x200=512 bank=0 row=512
   //               tag_hash=0x45 (fh=0)
   //
   // Seeds (mem[0][512]):
@@ -12216,9 +12216,9 @@ module tb;
     // CTR=101 USE=11 EPC=01 TAG=0x12 valid=1 -> 0x127B
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512]
       = 16'h127B;
-    // Predict at PC=40'h22800 (fh=0 -> idx=0x200 tag=0x45).
+    // Predict at PC=0x22800 (fh=0 -> idx=0x200 tag=0x45).
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12289,7 +12289,7 @@ module tb;
     // Expected T1=0x453D, T2=0x4527 (unchanged).
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12352,7 +12352,7 @@ module tb;
     // T4 interference ref unchanged -> 0x127B.
     // Expected: T1=0x453F T2=0x4515 T3=0x4509 T4=0x127B.
     inp           = '0;
-    inp.pc        = 40'h22800;
+    inp.pc        = VA_WIDTH'('h22800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
     @(posedge clk);
@@ -12502,7 +12502,7 @@ module tb;
 
       // Issue prediction on both slots with the same PC.
       inp           = '0;
-      inp.pc        = 40'h182BC;
+      inp.pc        = VA_WIDTH'('h182BC);
       stg_pred_inp0 = inp;
       stg_pred_inp1 = inp;
       stg_pred_val0 = 1'b1;
@@ -12650,8 +12650,8 @@ module tb;
     // it -- two addresses a whole number of table spans apart share a
     // row. The separation is CHECKED below against the DUT's own
     // registered index, not assumed.
-    localparam logic [VA_WIDTH-1:0] PC_A = 40'h0_0003_0040;
-    localparam logic [VA_WIDTH-1:0] PC_B = 40'h0_0003_0800;
+    localparam logic [VA_WIDTH-1:0] PC_A = VA_WIDTH'('h0_0003_0040);
+    localparam logic [VA_WIDTH-1:0] PC_B = VA_WIDTH'('h0_0003_0800);
     // T0 counters: PC_A strongly taken, PC_B strongly not taken.
     // T0 is 2b and zero-extends into the 3b meta CTR field, so
     // 2'b11 -> 3'b011 taken and 2'b00 -> 3'b000 not taken.

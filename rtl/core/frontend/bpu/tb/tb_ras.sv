@@ -196,11 +196,11 @@ module tb;
   // -----------------------------------------------------------------
   // Test addresses
   // -----------------------------------------------------------------
-  localparam logic [VA_WIDTH-1:0] ADDR_A = 40'h00_0000_1000;
-  localparam logic [VA_WIDTH-1:0] ADDR_B = 40'h00_0000_2000;
-  localparam logic [VA_WIDTH-1:0] ADDR_C = 40'h00_0000_3000;
-  localparam logic [VA_WIDTH-1:0] ADDR_X = 40'h00_0000_9000;
-  localparam logic [VA_WIDTH-1:0] ADDR_R = 40'h00_000A_0000;
+  localparam logic [VA_WIDTH-1:0] ADDR_A = VA_WIDTH'('h00_0000_1000);
+  localparam logic [VA_WIDTH-1:0] ADDR_B = VA_WIDTH'('h00_0000_2000);
+  localparam logic [VA_WIDTH-1:0] ADDR_C = VA_WIDTH'('h00_0000_3000);
+  localparam logic [VA_WIDTH-1:0] ADDR_X = VA_WIDTH'('h00_0000_9000);
+  localparam logic [VA_WIDTH-1:0] ADDR_R = VA_WIDTH'('h00_000A_0000);
 
   logic [VA_WIDTH-1:0] fill_addr [0:15];
 
@@ -211,7 +211,7 @@ module tb;
     pass_cnt = 0;
     fail_cnt = 0;
     for (int i = 0; i < 16; i++)
-      fill_addr[i] = 40'h0001_0000 + (i * 40'h100);
+      fill_addr[i] = VA_WIDTH'('h0001_0000) + (i * VA_WIDTH'('h100));
 
     // =============================================================
     // TC-01: Reset state

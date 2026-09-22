@@ -88,7 +88,7 @@ package bp_structs_pkg;
     RETURN          = 3'b011, // return: JALR/C.JR rs1=x1/x5
     INDIRECT_NONRET = 3'b100, // indirect JALR, not call, not return
     DIRECT_UNC      = 3'b101, // direct unconditional: JAL rd!=link
-    NO_BRANCH       = 3'b110  // no branch in fetch block
+    NO_BRANCH       = 3'b110  // no branch in prediction block
   } bp_br_type_e;
 
   // Prediction source: which predictor supplied the final result.
@@ -280,7 +280,8 @@ package bp_structs_pkg;
     logic [IT_TBL_SEL_WIDTH-1:0]   ittage_alc_comp;      // alloc tbl
     logic [IT_MAX_IDX_WIDTH-1:0]   ittage_alc_idx;       // alloc idx
     logic [IT_MAX_TAG_WIDTH-1:0]   ittage_alc_tag;       // alloc tag
-    // Predicted targets (upper 38b of Sv39 VA, bit 0 not stored)
+    // Predicted targets: VA[IT_MAX_TGT_WIDTH:1], bit 0 not stored.
+    // Zero-extended to VA_WIDTH on use (ftq_bpu_interfaces.md 5.2).
     logic [IT_MAX_TGT_WIDTH-1:0]   ittage_prm_tgt;       // primary target
     logic [IT_MAX_TGT_WIDTH-1:0]   ittage_alt_tgt;       // alt target
     // Prediction flags
@@ -397,7 +398,7 @@ package bp_structs_pkg;
   // Top-level structs
   // ----------------------------------------------------------------
 
-  // bp_ftq_slot_t: one prediction slot of one fetch block.
+  // bp_ftq_slot_t: one prediction slot of one prediction block.
   // The slots are the branch fields of one 32-byte FTB block, not
   // two PC ranges. See planning/arch/ftb_decisions.md 2.1, 2.3.
   // Carried as an array inside bp_ftq_entry_t.
@@ -413,7 +414,7 @@ package bp_structs_pkg;
 
   // bp_ftq_entry_t: fast-path FTQ entry.
   // Stored in a fast SRAM read every cycle by the front-end.
-  // One entry holds one fetch block and all NUM_PRED_SLOTS
+  // One entry holds one prediction block and all NUM_PRED_SLOTS
   // predictions for it.
   // The RAS snapshot is stored here for O(1) redirect recovery.
   // ghist_ptr and phist_ptr are this entry's history checkpoint.
@@ -426,7 +427,7 @@ package bp_structs_pkg;
   // redirect rewrites a slot, so the not-taken term is needed after
   // p1 and cannot be recovered from the rest of the entry.
   typedef struct packed {
-    logic [VA_WIDTH-1:0]       pc;         // fetch block start PC
+    logic [VA_WIDTH-1:0]       pc;         // prediction block start PC
     logic [VA_WIDTH-1:0]       pft_addr;   // block fall-through addr
     logic [FTQ_IDX_BITS-1:0]   branch_id;  // FTQ entry index
     bp_ras_snapshot_t          ras;        // RAS pointer snapshot
@@ -557,20 +558,23 @@ package bp_structs_pkg;
   // fit/overflow/underflow status (ftb_decisions.md 4.2). The
   // encoding is lossless when the branch is in reach.
 
-  // One conditional branch field. 1+3+13+2+3 = 22 bits.
+  // One conditional branch field. pos is STORED region-relative, one
+  // bit wider than the start-relative port position (ftb_decisions.md
+  // 4.6); ubtb.sv converts at the read and the write.
   typedef struct packed {
     logic                          valid;  // field occupied
-    logic [UBTB_BR_POS_BITS-1:0]   pos;    // in-block position 0..15
+    logic [UBTB_BR_RPOS_BITS-1:0]  pos;    // region position 0..30
     logic [UBTB_BR_TGT_BITS-1:0]   tgt;    // target displacement
     logic [TAR_STAT_BITS-1:0]      stat;   // fit / ovf / udf
     logic [UBTB_CONF_WIDTH-1:0]    conf;   // bimodal direction; MSB
                                            // is the direction
   } ubtb_cond_t;
 
-  // The block-terminating jump field. 1+3+21+2+3 = 30 bits.
+  // The block-terminating jump field. pos is stored region-relative,
+  // as in ubtb_cond_t.
   typedef struct packed {
     logic                          valid;    // field occupied
-    logic [UBTB_BR_POS_BITS-1:0]   pos;      // in-block position
+    logic [UBTB_BR_RPOS_BITS-1:0]  pos;      // region position 0..30
     logic [UBTB_JMP_TGT_BITS-1:0]  tgt;      // jump displacement
     logic [TAR_STAT_BITS-1:0]      stat;     // fit / ovf / udf
     logic                          is_call;
@@ -578,43 +582,34 @@ package bp_structs_pkg;
     logic                          is_jalr;
   } ubtb_jmp_t;
 
-  // One uBTB storage entry (one way of one set).
-  // 1 + 20 + 23 + 23 + 31 + 5 + 1 = 104 bits.
+  // One uBTB storage entry (one way of one set), UBTB_ENTRY_WIDTH bits.
   // The tag is the UBTB_TAG_BITS VA bits immediately above the
   // block-granularity index, not a retired-instruction-granularity
-  // field: index = pc[10:5], tag = pc[30:11] at VA_WIDTH 40 with a
-  // 32-byte block. See bp_defines_pkg.sv, UBTB_TAG_BITS.
+  // field: index = pc[10:5], tag = pc[30:11] with a 32-byte block,
+  // at any VA_WIDTH. See bp_defines_pkg.sv, UBTB_TAG_BITS.
   typedef struct packed {
     logic                          valid;  // entry valid
     logic [UBTB_TAG_BITS-1:0]      tag;    // pc[30:11]
     ubtb_cond_t                    br0;    // conditional field 0
     ubtb_cond_t                    br1;    // conditional field 1
     ubtb_jmp_t                     jmp;    // terminal jump field
-    logic [UBTB_PFTADDR_BITS-1:0]  pft;    // partial fallthrough
-    logic                          carry;  // fallthrough crosses the
-                                           // block boundary
+    logic [UBTB_PFTADDR_BITS-1:0]  pft;    // block end from the aligned
+                                           // region base, no carry
   } ubtb_entry_t;
 
   // Prediction output for one prediction slot. Slot 0 is built from
-  // the entry br0 field, slot 1 from br1. A slot carrying the
-  // block-terminating jump reports that jump type and target.
+  // the entry br0 field, slot 1 from br1, each only when its stored
+  // region position is visible from the lookup PC
+  // (ftb_decisions.md 4.6). A slot carrying the block-terminating
+  // jump reports that jump type and target.
   // Targets are reconstructed to full width by ubtb.sv.
   typedef struct packed {
     logic                          valid;    // slot carries a branch
     logic [VA_WIDTH-1:0]           target;   // reconstructed target
     bp_br_type_e                   br_type;  // branch type
     logic                          br_taken; // direction, COND only
-    logic [UBTB_BR_POS_BITS-1:0]   pos;      // in-block position
+    logic [UBTB_BR_POS_BITS-1:0]   pos;      // start-relative position
     logic [UBTB_CONF_WIDTH-1:0]    conf;     // bimodal direction ctr
-    logic                          carry;    // entry fall-through
-                                             // carry, copied from the
-                                             // stored entry carry
-                                             // bit: the block end
-                                             // crosses the block
-                                             // boundary. Entry
-                                             // scoped, not a
-                                             // property of this
-                                             // slot's target.
   } ubtb_pred_t;
 
   // Entry-scoped prediction sidebands, one set per lookup. Both slots
