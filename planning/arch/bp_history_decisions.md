@@ -93,8 +93,8 @@ the decision. The RTL and interface port list change to match
   BP-072 reconciliation (pointer-walk addressing; geometry UNCHANGED).
   The fold geometry -- position mapping posmap(i) = (i+W-1)%W, newest
   bit inserted at the high end (W-1), leaving bit removed at (H-1)%W --
-  is defined canonically in section 6 (origin: BP-071 Xiangshan
-  convention) and did NOT change. What BP-072 set is the buffer-walk
+  is defined canonically in section 6 (origin: BP-071 convention) 
+  and did NOT change. What BP-072 set is the buffer-walk
   ADDRESSING that feeds that geometry under the module-owned
   incrementing pointer (section 2.1): the newest bit sits just below
   the live pointer, so the recompute walks the GHR DOWNWARD (offset
@@ -564,16 +564,12 @@ This section defines the mapping, not the values.
 
 ### 6.6  Origin
 
-  The geometry above originates in the Xiangshan FoldedHistory
-  implementation (newest bit folded in at the high end, leaving
-  bit removed at (H-1) mod W, one definition shared by update and
-  recompute). It was captured into this section as the project's
-  own contract from commit <XS-COMMIT-SHA> (<XS-CAPTURE-DATE>) so
-  the definition does not depend on an external, mutable source.
-  Xiangshan is cited as ORIGIN only; this section is the AUTHORITY.
-  If a discrepancy with the upstream implementation is ever found,
-  this document and the RTL it governs are corrected together by a
-  tracked task -- the citation is not a live dependency.
+	The geometry above originates in the Seznec's O-GEHL and TAGE predictors as
+implemented by Xiangshan in their FoldedHistory implementation (newest bit
+folded in at the high end, leaving bit removed at (H-1) mod W, one definition
+shared by update and recompute). It was captured into this section as the
+project's own contract from commit <XS-COMMIT-SHA> (<XS-CAPTURE-DATE>) so the
+definition does not depend on an external, mutable source.  
 
 ---
 
@@ -826,11 +822,11 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               position mapping posmap(i) = (i+W-1)%W, window
               eviction, the recompute == incremental invariant, and
               a checkable worked example tied to the BP-073 TC14
-              anchor (history 0xD3 -> fold 0xE5). Xiangshan demoted
+              anchor (history 0xD3 -> fold 0xE5). demoted
               to an origin footnote (section 6.6) with a captured
               commit/date placeholder. Section 2.2 now cites section
               6 as the geometry authority rather than "the BP-071
-              Xiangshan convention." Old sections 6-10 renumbered to
+              convention." Old sections 6-10 renumbered to
               7-11; all "section N>=6" cross-references updated. No
               RTL or behavior change -- this captures the frozen,
               externally-anchored (BP-073) geometry in the project's

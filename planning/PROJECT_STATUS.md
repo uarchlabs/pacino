@@ -2275,6 +2275,13 @@ assessment of each document. Correct any that are wrong.
 |     |          | pointer design and its Complete status predates 5.1.     |
 |     |          | Needed before the IFU can be built against 4.1. Found by |
 |     |          | the session-071 IA read.                                 |
+| 128 | bp_history | History geometry sizing -- deferred investigation.     |
+|     |            | GHR_WIDTH=256, PHR_WIDTH=32, the per-table fold depths |
+|     |            | and the PHR bit selection (pc[2]^pc[3]) are unmeasured |
+|     |            | and carry no derivation in this tree. Assess when the  |
+|     |            | IFU is complete and can drive a performance measurement|
+|     |            | harness. Gate any history-storage area commitment on   |
+|     |            | this.                                                  |
 
 ---
 

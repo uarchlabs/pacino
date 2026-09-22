@@ -1,0 +1,76 @@
+{
+  "generated_by": "ticfinder",
+  "source": "blogs/BLOG_bpu_16_external_anchors.md",
+  "waivers": {
+    "332245": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 55,
+      "enabled": true,
+      "text": "A final task, BP-074, performed an audit of that section against the RTL and re-derived all constant"
+    },
+    "6eb920": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 61,
+      "enabled": true,
+      "text": "the 256b GHR, the 32b PHR and the folding logic"
+    },
+    "6b9019": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_coordinated",
+      "line_when_waived": 62,
+      "enabled": true,
+      "text": "The PHR register is implemented but not utilized in the current design"
+    },
+    "1ceb07": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 76,
+      "enabled": true,
+      "text": ", resulting in incompatible implementations"
+    },
+    "16e371": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_coordinated",
+      "line_when_waived": 116,
+      "enabled": true,
+      "text": "not in the planning document but in execution"
+    },
+    "2950c1": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 151,
+      "enabled": true,
+      "text": "At H = W the window fills exactly and the wrap-out term is inactive, so any disagreement between the"
+    },
+    "aba5c2": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 163,
+      "enabled": true,
+      "text": "A review confirmed it, and the task was abandoned and reverted"
+    },
+    "9f76ba": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 172,
+      "enabled": true,
+      "text": "instead of the history"
+    },
+    "76f8f7": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 218,
+      "enabled": true,
+      "text": ", covering single-slot, dual-slot, a bundle crossing the buffer boundary"
+    },
+    "9a4e13": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 251,
+      "enabled": true,
+      "text": "age indexing with the newest bit at age zero, the position mapping, the eviction position, the invar"
+    }
+  }
+}
