@@ -875,21 +875,16 @@ module bp_cluster (
     logic [VA_WIDTH-1:0] p1_succ;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      // ITTAGE target. The metadata holds VA[IT_MAX_TGT_WIDTH:1]; bit 0
-      // is not stored. Reconstruct by appending the zero bit and ZERO
-      // extending to VA_WIDTH (ftq_bpu_interfaces.md 5.2). NOT sign
-      // extension: with V=1 the fetch PC is a zero-extended guest
-      // physical address, and sign extending corrupts any GPA with
-      // bit 38 set. A target above the stored width mispredicts and is
-      // corrected at resolve (FE-19, TD#122).
+      // ITTAGE target. The metadata holds VA[40:1]; bit 0 is always
+      // zero at 2-byte granularity and is not stored. The target is
+      // {stored, 1'b0}, exactly VA_WIDTH bits: no bit is inferred and
+      // there is no extension (ftq_bpu_interfaces.md 5.2, TD#132).
       it_hit = w_ittage_pred_rdy_p2[s]
              & (w_ittage_pred_meta_p2[s].branch_id == r_idx_p2)
              & w_ittage_pred_meta_p2[s].ittage_hit;
       it_tgt = w_ittage_pred_meta_p2[s].ittage_using_primary
-                 ? VA_WIDTH'({w_ittage_pred_meta_p2[s].ittage_prm_tgt,
-                              1'b0})
-                 : VA_WIDTH'({w_ittage_pred_meta_p2[s].ittage_alt_tgt,
-                              1'b0});
+                 ? {w_ittage_pred_meta_p2[s].ittage_prm_tgt, 1'b0}
+                 : {w_ittage_pred_meta_p2[s].ittage_alt_tgt, 1'b0};
 
       // The predictor that supplied the slot is recorded alongside
       // the target it supplied. Diagnostic only (TD-FE-4), but it is

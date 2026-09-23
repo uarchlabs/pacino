@@ -130,6 +130,16 @@ Rulings, Jeff, later in the session:
        positions are stored in region order and the read compacts
        onto the ports, with 5.4a restated on region position. ALL
        OF 4.6 IS RULED and the TD#124 + TD#125 task is unblocked.
+  ITTAGE STORES VA[40:1]. IT_MAX_TGT_WIDTH 38 -> 40, reversing
+       the session-070 pin. No sign or zero extension survives
+       anywhere: the field carries every bit but bit 0, which is
+       always zero. 8,192 bits in the ITTAGE array and 512 in the
+       FTQ slow path. TD#132, built by BP-111. misc/prop1.md keeps
+       the rejected alternatives.
+  ftq_entry_formats.md 3.1, the metadata union, STAYS DEFERRED. A
+       storage optimization with no dependants; unpacked is the
+       more forgiving layout while the design moves, and the union
+       absorbs the ITTAGE widening whenever it is built.
   THE FIRST IFU TASK DOES NOT CARRY wrong-path requests, the
        uncached path or fence.i. Each is extensive and each gets a
        dedicated or abbreviated session with the context to do it:
@@ -161,9 +171,44 @@ session-071 audit batch finding number, not a registry item. The PA
 carried it into the prompt without checking. The carry deletion
 stands on its own evidence: no reader in rtl/.
 
-CLOSED: TD#99 by TOOLS-006. TD#124 and TD#125 by BP-110.
-New: TD#129 to TD#137. BP-109 and BP-110 consumed.
-Next free BP is BP-111. Next free INFRA is INFRA-013. Next free
+BP-111 built TD#132 and TD#137. The ITTAGE target field holds VA[40:1]
+and NO SITE ANYWHERE INFERS A TARGET BIT: three extensions removed,
+and the cluster's uncast {stored, 1'b0} makes any future width
+disagreement a lint failure instead of a silent extension. Entry
+widths 54/54/55/55/57 -> 56/56/57/57/59, only TAG moving; the array
+226,304 -> 234,496 bits, the 8,192 the ruling expected. The FTB jump
+target now comes from the jump PC. regress.sh green, 78 of 78.
+
+THE x2 IN THE RULING WAS RIGHT FOR THE WRONG REASON. It is the two
+per-slot RAM copies, not IT_TBL_BANKS, which divide a copy rather
+than duplicating it. Corrected in ittage_table_entry_formats.md and
+ftq_bpu_interfaces.md 5.2.
+
+TD#137 turned out to have one observable effect after all: WHERE THE
+REACH WINDOW SITS. Any in-reach target was already correct under
+either base. BP-111 pinned it with a target at the edge of the 21-bit
+reach and reported that its other case could not be made to fail,
+rather than manufacturing one.
+
+CLAUDE.md STILL FORBIDS CHANGING A PACKAGE DECLARATION. The rule was
+to be replaced when tools/regress.sh landed and was not. This is the
+second task to change one anyway, correctly and with disclosure.
+Until the rule is updated, every package task starts by breaking it.
+
+Carried, comment-only, for whichever task next opens these files:
+ftq_meta.sv and tb_ftq_meta.sv still say 421 bits; tb_ittage_cntrl.sv
+helpers chk38 and chk57 are named for widths that are now 40 and 59.
+
+PA errors this session, both mine: C9 was cited into BP-110 from an
+audit batch number rather than a registry tag, and the task headers
+went out with YYYY.MM.DD unfilled. A third, caught while closing
+these rows: an earlier edit of the TD#132 block deleted the TD#137
+row that sat inside it. Restored.
+
+CLOSED: TD#99 by TOOLS-006. TD#124, TD#125 by BP-110. TD#132,
+TD#137 by BP-111.
+New: TD#129 to TD#137. BP-109, BP-110 and BP-111 consumed.
+Next free BP is BP-112. Next free INFRA is INFRA-013. Next free
 TOOLS is TOOLS-007. Next free TD is TD#138.
 
 ---
@@ -2489,50 +2534,36 @@ assessment of each document. Correct any that are wrong.
 |     |          | compare `make -n` output and the verilated build under   |
 |     |          | both versions. Low risk, but an unexplained factor of    |
 |     |          | three in a suite is not a fact until it is explained.    |
-| 132 | bpu      | OPEN, PERFORMANCE, BLOCKED ON A RULING. ITTAGE CANNOT    |
-|     |          | REPRESENT A V=0 UPPER-HALF TARGET. The field holds       |
-|     |          | VA[38:1] and ftq_bpu_interfaces.md 5.2 rebuilds the      |
-|     |          | target by zero extension, which is right for a V=1 GPA.  |
-|     |          | A Sv39 kernel address has bits 63:38 set, so the rebuilt |
-|     |          | target has bits 40:39 = 00 and every kernel indirect     |
-|     |          | target ITTAGE supplies is wrong. It does not wear off:   |
-|     |          | the update writes back the same VA[38:1] the entry       |
-|     |          | already holds, so no update corrects it, and while it    |
-|     |          | hits it overrides the FTB jump target. ITTAGE stops      |
-|     |          | predicting function pointers, switch tables and vtables  |
-|     |          | in kernel code. Found by BP-109, which built 5.2 as      |
-|     |          | written.                                                 |
+| 132 | bpu      | CLOSED BP-111 (session-073). The ITTAGE target field     |
+|     |          | holds VA[40:1]. IT_MAX_TGT_WIDTH and IT_TBL_TGT_WIDTH    |
+|     |          | are 40, the reconstruction is {stored, 1'b0}, and NO     |
+|     |          | SITE ANYWHERE INFERS A TARGET BIT. Three extensions      |
+|     |          | removed: the cluster reconstruction and the read and     |
+|     |          | write casts in ittage_table. Entry widths 54/54/55/55/57 |
+|     |          | -> 56/56/57/57/59; only TAG moves, to offset 48. Array   |
+|     |          | 226,304 -> 234,496 bits, the 8,192 the ruling expected.  |
+|     |          | The x2 is the TWO PER-SLOT RAM COPIES, not IT_TBL_BANKS, |
+|     |          | which divide a copy; the ruling's wording gave the right |
+|     |          | number for the wrong reason and is corrected in          |
+|     |          | ittage_table_entry_formats.md and ftq_bpu_interfaces.md  |
+|     |          | 5.2. ittage_pred_meta_t 143 -> 147, bp_ftq_meta_t 421 -> |
+|     |          | 425, both as predicted; ittage_upd_inp_t 182 -> 188, all |
+|     |          | of it target fields.                                     |
 |     |          |                                                          |
-|     |          | misc/prop1.md IS THE HOME: the proposal, the four        |
-|     |          | alternatives with their costs, the RTL sites and the     |
-|     |          | checks. Revision 2 carries the PA review of session-073. |
-|     |          | Do not restate it here.                                  |
+|     |          | Pinned failing first: C1f4 (a target with bits 40:39 =   |
+|     |          | 11 came back with them clear), G2b (THE STICKINESS: the  |
+|     |          | update wrote the resolved target and the entry still     |
+|     |          | produced the wrong one), TC-TGT40 at the unit level.     |
 |     |          |                                                          |
-|     |          | In short: take target bits 40:39 from the block base at  |
-|     |          | p2. No storage, no new path. The companion in prop1.md 5 |
-|     |          | (the FTQ refuses allocation and the target write when    |
-|     |          | the resolved target's bits 40:39 differ from its PC's)   |
-|     |          | is ruled WITH it, not after it: without it the sticky    |
-|     |          | entry above survives for the cross-region case.          |
-|     |          |                                                          |
-|     |          | Ruling needed on 5.2 and on prop1.md 5 before any RTL.   |
-|     |          |                                                          |
-| 137 | ftb      | OPEN, RTL. THE FTB JUMP TARGET IS STILL MEASURED FROM    |
-|     |          | THE REGION BASE. Ruled session-073 (Jeff),               |
-|     |          | ftb_decisions.md 4.2: every target is a displacement     |
-|     |          | from its own instruction, so a jump target is measured   |
-|     |          | from the JUMP PC as O-1 measures a conditional from the  |
-|     |          | branch PC. BP-110 built the conditional half only,       |
-|     |          | because the task scoped O-1 to conditionals.             |
-|     |          |                                                          |
-|     |          | A rule-consistency change, not a defect. The region base |
-|     |          | is shared by every start, so the as-built encoding is    |
-|     |          | coherent; it costs at most 32 bytes of the 21-bit J-type |
-|     |          | reach, which is immaterial.                              |
-|     |          |                                                          |
-|     |          | One task: ftb_cntrl.sv encode and reconstruct, the tb    |
-|     |          | fixture encodings, and a check that a jump target round  |
-|     |          | trips from two starts sharing an entry.                  |
+|     |          | Was: the field held VA[38:1] and the cluster supplied    |
+|     |          | bits 40:39 by extension. No extension rule is right for  |
+|     |          | both a V=1 guest physical address (zero extended, bit 38 |
+|     |          | significant) and a V=0 Sv39 kernel address (40:39 set),  |
+|     |          | and a wrong entry could not be corrected by any update.  |
+|     |          | Kernel function pointers, switch tables and vtables      |
+|     |          | stopped being predicted. Found by BP-109. misc/prop1.md  |
+|     |          | keeps the rejected alternatives.                         |
+
 | 133 | frontend | OPEN, PERFORMANCE STUDY. DOES DELIVERING TWO PREDICTION  |
 |     |          | BLOCKS PER CYCLE BUY ANYTHING? Ruled session-073 (Jeff): |
 |     |          | the front end delivers ONE prediction block per cycle.   |
@@ -2596,6 +2627,27 @@ assessment of each document. Correct any that are wrong.
 |     |          | building against a port that does not exist.             |
 |     |          |                                                          |
 |     |          | Ruled session-073 (Jeff): deferred with TD#134.          |
+
+| 137 | ftb      | CLOSED BP-111 (session-073). ftb_cntrl encodes,          |
+|     |          | status-checks and reconstructs the jump target from the  |
+|     |          | JUMP PC, the region base plus the jump field's stored    |
+|     |          | position, as BP-110 made a conditional target measured   |
+|     |          | from the branch PC. FTB_JMP_TGT_BITS stays 21 and the    |
+|     |          | entry arithmetic is unchanged: a base moved, not a       |
+|     |          | width.                                                   |
+|     |          |                                                          |
+|     |          | THE ONE OBSERVABLE DIFFERENCE IS WHERE THE REACH WINDOW  |
+|     |          | SITS. Any in-reach target reconstructs correctly under   |
+|     |          | either base, since the region base and the jump PC are   |
+|     |          | both shared by every start sharing the entry. BP-111     |
+|     |          | pinned it with a jump target at the edge of the 21-bit   |
+|     |          | reach (tb_ftb J2), wrong from both starts under the old  |
+|     |          | base. Its J1 round-trip case could not be made to fail   |
+|     |          | and the IA said so rather than manufacturing one.        |
+|     |          |                                                          |
+|     |          | Was: the jump target was a displacement from the region  |
+|     |          | base. Ruled session-073 (Jeff): every target is a        |
+|     |          | displacement from its own instruction.                   |
 
 ---
 

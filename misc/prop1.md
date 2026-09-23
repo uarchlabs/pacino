@@ -3,7 +3,15 @@
 From:    IA, after BP-109 (TD#122)
 Review:  PA, session-073. Changes marked [PA].
 To:      Jeff
-Status:  PROPOSAL, revision 2. Needs a ruling.
+Status:  NOT ADOPTED. Ruled session-073 (Jeff): the two missing
+         bits are STORED instead (alternative D, section 4), so
+         IT_MAX_TGT_WIDTH goes 38 -> 40 and no reconstruction rule
+         remains. Section 1 stands as the statement of the defect.
+         Sections 2, 5 and 6 are the rejected design and are kept
+         for the record. TD#132 carries the ruling; the homes are
+         ftq_bpu_interfaces.md 5.2 and
+         ittage_table_entry_formats.md.
+         Was: PROPOSAL, revision 2, needs a ruling.
          Changes ftq_bpu_interfaces.md 5.2 and, for section 5,
          ftq_bpu_interfaces.md 8.
 Date:    2026-09-22
@@ -132,21 +140,39 @@ The FTQ holds the full PC and target at resolve, so this is one 2-bit
 compare. It changes the ITTAGE update interface (ftq_bpu_interfaces.md
 8).
 
-[PA] The ruling must name each field the flag suppresses. Proposed,
-and to be confirmed against ittage_cntrl_decisions.md before 8 is
-amended:
+[PA] The ruling must name each field the flag suppresses.
+CONFIRMED against ittage_cntrl_decisions.md, revision 2:
 
 ```
-  allocation on a miss           SUPPRESSED
-  target write on a hit          SUPPRESSED
-  useful / confidence counter    NOT suppressed: a hit that
-                                 mispredicted still ages the entry
+  allocation                 SUPPRESSED. The alloc path of
+                             ittage_cntrl_alloc_rules.md; the
+                             entry is never written.
+  target write               SUPPRESSED. The two declared
+                             strobes prm_tgt_wr_u0 and
+                             alt_tgt_wr_u0 (ittage_interfaces.md
+                             Target Write Gating, II6).
+  CTR update                 NOT suppressed. DEC on a mispredict
+                             as the CTR update rules already
+                             specify.
+  useful counter and aging   NOT suppressed
+                             (ittage_cntrl_use_update_rules.md,
+                             which the PA has not read).
 ```
 
-The counter is the one that matters. If the update is suppressed
-whole, an entry that cannot be represented keeps the confidence it
-earned, keeps hitting, and keeps overriding the FTB target. The
-entry has to be allowed to decay out of the way.
+The CTR is the one that matters, and the existing rules already do
+the right thing once the target write is gated. On a mispredict the
+provider CTR decrements; at 3'b000 the entry is null, which is the
+replacement candidate and the UAON trigger point, so it falls out of
+the way by itself. Suppressing the update whole would leave an entry
+that cannot be represented holding the confidence it earned, hitting,
+and overriding the FTB target for as long as it lives.
+
+[PA] Note what the existing target rule means for section 1. Under
+"Concurrent CTR and TGT Writes" the target field is rewritten on a
+mispredict only when CTR is 0. For the section 1 defect that rewrite
+puts back the same VA[38:1] the entry already holds, so the entry
+cycles: decay to null, rewrite the same bits, climb again. That is
+the sticky entry, in the RTL's own terms.
 
 ## 6. [PA] Side effect: the reconstruction is lookup-PC dependent
 

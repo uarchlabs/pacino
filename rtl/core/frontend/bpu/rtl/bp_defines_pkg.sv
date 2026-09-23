@@ -437,7 +437,7 @@ package bp_defines_pkg;
   parameter int IT_TBL_USE[0:5]        = '{ 0,   2,   2,   2,   2,   2 };
   parameter int IT_TBL_EPC[0:5]        = '{ 0,   2,   2,   2,   2,   2 };
   parameter int IT_TBL_IDX[0:5]        = '{ 0,   8,   8,   9,   9,   9 };
-  parameter int IT_TBL_TGT_WIDTH[0:5]  = '{ 0,  38,  38,  38,  38,  38 };
+  parameter int IT_TBL_TGT_WIDTH[0:5]  = '{ 0,  40,  40,  40,  40,  40 };
 
   localparam int IT_MAX_IDX_WIDTH = 9;
   localparam int IT_MAX_TAG_WIDTH = 11;
@@ -445,12 +445,12 @@ package bp_defines_pkg;
   localparam int IT_MAX_USE_WIDTH = 2;
   localparam int IT_MAX_CTR_WIDTH = 3;
   localparam int IT_MAX_VAL_WIDTH = 1;
-  // IT_MAX_TGT_WIDTH: PINNED at 38, NOT derived from VA_WIDTH. TD#122,
-  // ruled session-070. Holds VA[38:1]; predictor storage may
-  // mispredict where an architectural address may not (FE-19).
-  // Reconstruction is ftq_bpu_interfaces.md 5.2: append a zero bit 0
-  // and ZERO extend to VA_WIDTH.
-  localparam int IT_MAX_TGT_WIDTH = 38;
+  // IT_MAX_TGT_WIDTH: 40, holds VA[40:1]. TD#132, ruled session-073
+  // (ittage_table_entry_formats.md TGT field). Bit 0 is always zero at
+  // 2-byte granularity and is not stored. Reconstruction is
+  // ftq_bpu_interfaces.md 5.2: {stored, 1'b0}. No bit is inferred:
+  // there is no sign or zero extension anywhere in the path.
+  localparam int IT_MAX_TGT_WIDTH = 40;
   localparam int IT_MAX_FH        = 9;
   localparam int IT_MAX_FH1       = 9;
   localparam int IT_MAX_FH2       = 8;

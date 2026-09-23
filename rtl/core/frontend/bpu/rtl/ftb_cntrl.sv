@@ -28,9 +28,10 @@
 //     subtracts k and packs the survivors onto the ports in ascending
 //     position; storage is kept in ascending region position order
 //     (ftb_decisions.md 4.6 R-1, R-2, O-3)
-//   - target encode/reconstruct: a conditional target is a
-//     displacement from the BRANCH PC (4.6 O-1); a jump target from
-//     the 32-byte-aligned region base
+//   - target encode/reconstruct: every target is a displacement from
+//     its own instruction: a conditional target from the BRANCH PC
+//     (4.6 O-1), a jump target from the JUMP PC (4.2, TD#137); both
+//     PCs are the region base plus the field's stored position
 //   - fallthrough reduce/reconstruct: pftAddr from the aligned region
 //     base, no carry (5.5), bounds checked by FTB-G1 and FTB-G3 with
 //     the FTB-G2 fallback (4.5, 4.6 O-2)
@@ -236,7 +237,8 @@ module ftb_cntrl (
   endfunction
 
   // Reconstruct a full-VA jump target from the stored displacement
-  // and the aligned region base.
+  // and its base, the jump PC (4.2, TD#137). Sign-extend the
+  // displacement.
   function automatic logic [VA_WIDTH-1:0] recon_jmp(
       input logic [FTB_JMP_TGT_BITS-1:0] disp,
       input logic [VA_WIDTH-1:0]         base);
@@ -302,8 +304,9 @@ module ftb_cntrl (
     to_start_pos = d[FTB_BR_POS_BITS-1:0];
   endfunction
 
-  // Branch PC from the aligned region base and a stored region
-  // position (4.6 O-1).
+  // Instruction PC from the aligned region base and a stored region
+  // position: the branch PC of a conditional field (4.6 O-1) and the
+  // jump PC of the jump field (4.2, TD#137).
   function automatic logic [VA_WIDTH-1:0] branch_pc(
       input logic [VA_WIDTH-1:0]         base,
       input logic [FTB_BR_RPOS_BITS-1:0] rpos);
@@ -500,8 +503,12 @@ module ftb_cntrl (
     if (ftb_upd_is_jmp_u0) begin
       upd_new.jmp.valid   = 1'b1;
       upd_new.jmp.pos     = jmp_fresh ? upd_rpos : upd_new.jmp.pos;
-      upd_new.jmp.tgt     = enc_jmp_disp(ftb_upd_jmp_target_u0, upd_base);
-      upd_new.jmp.stat    = jmp_stat(ftb_upd_jmp_target_u0, upd_base);
+      // Target base is the jump PC, region base plus the stored jump
+      // position just settled above (4.2, TD#137).
+      upd_new.jmp.tgt     = enc_jmp_disp(ftb_upd_jmp_target_u0,
+                                         branch_pc(upd_base, upd_new.jmp.pos));
+      upd_new.jmp.stat    = jmp_stat(ftb_upd_jmp_target_u0,
+                                     branch_pc(upd_base, upd_new.jmp.pos));
       upd_new.jmp.is_call = ftb_upd_is_call_u0;
       upd_new.jmp.is_ret  = ftb_upd_is_ret_u0;
       upd_new.jmp.is_jalr = ftb_upd_is_jalr_u0;
@@ -626,7 +633,8 @@ module ftb_cntrl (
     // jump field + branch-type classification (3-way JALR split).
     n_jmp_valid = n_valid_p2 & vis_jmp;
     n_jmp_pos   = to_start_pos(sel_entry.jmp.pos, k_p1);
-    n_jmp_tgt   = recon_jmp(sel_entry.jmp.tgt, base_p1);
+    n_jmp_tgt   = recon_jmp(sel_entry.jmp.tgt,
+                            branch_pc(base_p1, sel_entry.jmp.pos));
     n_is_call   = n_jmp_valid & sel_entry.jmp.is_call;
     n_is_ret    = n_jmp_valid & sel_entry.jmp.is_ret;
     n_is_jalr   = n_jmp_valid & sel_entry.jmp.is_jalr;

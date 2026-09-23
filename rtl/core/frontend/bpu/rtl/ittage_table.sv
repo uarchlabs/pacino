@@ -17,8 +17,8 @@
 //   [3:1]      = CTR (confidence counter, not direction predictor)
 //   [5:4]      = USE
 //   [7:6]      = EPC
-//   [45:8]     = TGT (38-bit indirect target)
-//   [ALLOC_DATA_WIDTH-1:46] = TAG
+//   [47:8]     = TGT (40-bit indirect target, VA[40:1])
+//   [ALLOC_DATA_WIDTH-1:48] = TAG
 //
 // Prediction pipeline: inputs at p0, outputs at p1 (1-cycle).
 // Update: write-enable gated by THIS_TABLE vs prm/alt_tbl_sel.
@@ -314,7 +314,7 @@ module ittage_table #(
       if (epc_we_s0)
         ram_din_s0[EPC_MSB:EPC_LSB] = epc_wd_u0[0];
       if (tgt_we_s0)
-        ram_din_s0[TGT_MSB:TGT_LSB] = THIS_TGT_WIDTH'(tgt_wd_u0[0]);
+        ram_din_s0[TGT_MSB:TGT_LSB] = tgt_wd_u0[0];
     end
   end
 
@@ -367,8 +367,7 @@ module ittage_table #(
       (ram_dout_s0[TAG_MSB:TAG_LSB] ==
        tag_hash_p1[0][THIS_TAG_BITS-1:0]);
 
-  assign pred_tgt_p1[0] =
-    IT_MAX_TGT_WIDTH'(ram_dout_s0[TGT_MSB:TGT_LSB]);
+  assign pred_tgt_p1[0] = ram_dout_s0[TGT_MSB:TGT_LSB];
 
   // cntrl_bits_p1[0]: VAL at [0], CTR at [CB_CTR_H:1],
   // USE at [CB_USE_H:CB_CTR_H+1], EPC at [CB_EPC_H:CB_USE_H+1],
@@ -452,7 +451,7 @@ module ittage_table #(
       if (epc_we_s1)
         ram_din_s1[EPC_MSB:EPC_LSB] = epc_wd_u0[1];
       if (tgt_we_s1)
-        ram_din_s1[TGT_MSB:TGT_LSB] = THIS_TGT_WIDTH'(tgt_wd_u0[1]);
+        ram_din_s1[TGT_MSB:TGT_LSB] = tgt_wd_u0[1];
     end
   end
 
@@ -505,8 +504,7 @@ module ittage_table #(
       (ram_dout_s1[TAG_MSB:TAG_LSB] ==
        tag_hash_p1[1][THIS_TAG_BITS-1:0]);
 
-  assign pred_tgt_p1[1] =
-    IT_MAX_TGT_WIDTH'(ram_dout_s1[TGT_MSB:TGT_LSB]);
+  assign pred_tgt_p1[1] = ram_dout_s1[TGT_MSB:TGT_LSB];
 
   // cntrl_bits_p1[1]: VAL at [0], CTR at [CB_CTR_H:1],
   // USE at [CB_USE_H:CB_CTR_H+1], EPC at [CB_EPC_H:CB_USE_H+1],

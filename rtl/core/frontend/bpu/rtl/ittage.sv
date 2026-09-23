@@ -60,10 +60,10 @@ module ittage (
   localparam int CNTRL_BITS_WIDTH =
     IT_MAX_VAL_WIDTH  + IT_MAX_CTR_WIDTH
     + IT_MAX_USE_WIDTH + IT_MAX_EPC_WIDTH
-    + IT_MAX_TGT_WIDTH;  // 1+3+2+2+38 = 46
+    + IT_MAX_TGT_WIDTH;  // 1+3+2+2+40 = 48
 
   localparam int IT_MAX_ALLOC_DATA_WIDTH =
-    CNTRL_BITS_WIDTH + IT_MAX_TAG_WIDTH;  // 46+11 = 57
+    CNTRL_BITS_WIDTH + IT_MAX_TAG_WIDTH;  // 48+11 = 59
 
   // Max entries: 2^IT_MAX_IDX_WIDTH covers largest table (IT3-5).
   localparam int IT_MAX_NUM_ENTRIES = 1 << IT_MAX_IDX_WIDTH;

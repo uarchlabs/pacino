@@ -6,7 +6,7 @@
  FILE:    ittage_table_entry_formats.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -76,6 +76,27 @@ reaches null on misprediction, the target field is replaced with
 the resolved target. 
 
 In ITTAGE CTR is not a direction predictor as it is in TAGE.
+
+### TGT field
+
+The TGT width is `IT_TBL_TGT_WIDTH[t]`, 40 for every tagged table.
+THE FIELD HOLDS VA[40:1]. Bit 0 is not stored because it is always
+zero at 2-byte granularity, and the reconstruction is
+`{stored, 1'b0}`. NO BITS ARE INFERRED: there is no sign or zero
+extension anywhere in the path.
+
+RULED session-073 (Jeff), raised by BP-109 as TD#132. The field was
+38 bits, pinned session-070, with bits 40:39 supplied by extension.
+No extension rule is correct for both a V=1 guest physical address
+(zero extended, bit 38 significant) and a V=0 Sv39 kernel address
+(bits 40:39 set), and a wrong entry cannot be corrected by any
+update because the update writes back the bits the entry already
+holds. Widening costs 2 bits x 2048 entries x the TWO PER-SLOT RAM
+COPIES (u_ram_s0, u_ram_s1) = 8,192 bits; the array goes 226,304 ->
+234,496 bits, measured by BP-111. IT_TBL_BANKS divides a copy and
+does not duplicate it, so it is not the factor here.
+misc/prop1.md records the alternatives that were rejected.
+ftq_bpu_interfaces.md 5.2 is the reconstruction's home.
 
 ### Maximum field widths
 

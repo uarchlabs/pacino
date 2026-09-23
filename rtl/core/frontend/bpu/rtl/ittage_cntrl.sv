@@ -82,7 +82,7 @@ module ittage_cntrl #(
 
   // ================================================================
   // CB_* localparams: cntrl_bits field positions (match ittage_table)
-  // VAL=[0], CTR=[3:1], USE=[5:4], EPC=[7:6], TGT=[45:8]
+  // VAL=[0], CTR=[3:1], USE=[5:4], EPC=[7:6], TGT=[47:8]
   // ================================================================
   localparam int CB_CTR_LO = 1;
   localparam int CB_CTR_HI = IT_MAX_CTR_WIDTH;

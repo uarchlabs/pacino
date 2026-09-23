@@ -33,8 +33,10 @@ module tb;
                                  + IT_MAX_CTR_WIDTH
                                  + IT_MAX_USE_WIDTH
                                  + IT_MAX_EPC_WIDTH
-                                 + IT_MAX_TGT_WIDTH;   // 46
-  localparam int ALC_W           = CBITS_W + THIS_TAG_BITS; // 54
+                                 + IT_MAX_TGT_WIDTH;   // 48
+  localparam int ALC_W           = CBITS_W + THIS_TAG_BITS; // 56
+  // cntrl_bits TGT field: above VAL, CTR, USE, EPC; ends at CBITS_W-1.
+  localparam int CB_TGT_LO       = CBITS_W - IT_MAX_TGT_WIDTH;  // 8
 
   // PC constants
   localparam logic [VA_WIDTH-1:0] PC_A = VA_WIDTH'('h00_0000_1040);
@@ -242,8 +244,8 @@ module tb;
             64'(cntrl_bits_p1[0][5:4]), 64'h1);
     check_w("TC-ALLOC-HIT cntrl_bits[0][7:6]",
             64'(cntrl_bits_p1[0][7:6]), 64'h2);
-    check_w("TC-ALLOC-HIT cntrl_bits[0][45:8]",
-            64'(cntrl_bits_p1[0][45:8]), 64'h55);
+    check_w("TC-ALLOC-HIT cntrl_bits[0] TGT field",
+            64'(cntrl_bits_p1[0][CBITS_W-1:CB_TGT_LO]), 64'h55);
 
     // --------------------------------------------------------
     // TC-PRED-VAL-ZERO: pred_val=0 does not suppress hit_p1
@@ -350,8 +352,8 @@ module tb;
     check("TC-TGT-WR hit_p1[0]", hit_p1[0], 1'b1);
     check_w("TC-TGT-WR pred_tgt_p1[0]",
             64'(pred_tgt_p1[0]), 64'h1234);
-    check_w("TC-TGT-WR cntrl_bits[0][45:8]",
-            64'(cntrl_bits_p1[0][45:8]), 64'h1234);
+    check_w("TC-TGT-WR cntrl_bits[0] TGT field",
+            64'(cntrl_bits_p1[0][CBITS_W-1:CB_TGT_LO]), 64'h1234);
 
     // --------------------------------------------------------
     // TC-ALC-GATE: Wrong alc_tbl_sel blocked (2 != 1)

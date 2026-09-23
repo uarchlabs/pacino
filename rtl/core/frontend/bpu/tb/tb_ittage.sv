@@ -221,14 +221,35 @@ module tb;
   endtask
 
   // ================================================================
+  // Entry geometry, from the package (ittage_table_entry_formats.md).
+  // Field order from LSB: VALID, CTR, USE, EPC, TGT, TAG. TAG starts
+  // at the control-bit width, so it moves with IT_MAX_TGT_WIDTH.
+  // E_W12 / E_W34 / E_W5: entry width of IT1-IT2 / IT3-IT4 / IT5.
+  // ================================================================
+  localparam int E_TGT_LO = IT_MAX_VAL_WIDTH + IT_MAX_CTR_WIDTH
+                          + IT_MAX_USE_WIDTH + IT_MAX_EPC_WIDTH;
+  localparam int E_TGT_HI = E_TGT_LO + IT_MAX_TGT_WIDTH - 1;
+  localparam int E_TAG_LO = E_TGT_HI + 1;
+  localparam int E_W12    = E_TAG_LO + IT_TBL_TAG[1];
+  localparam int E_W34    = E_TAG_LO + IT_TBL_TAG[3];
+  localparam int E_W5     = E_TAG_LO + IT_TBL_TAG[5];
+
+  // Reduce a full-VA indirect target to the stored ITTAGE field by
+  // dropping bit 0 (ftq_bpu_interfaces.md 5.2).
+  function automatic logic [IT_MAX_TGT_WIDTH-1:0] it_tgt_enc(
+      input logic [VA_WIDTH-1:0] va);
+    it_tgt_enc = va[VA_WIDTH-1:1];
+  endfunction
+
+  // ================================================================
   // bw_write: backdoor write to ittage_table RAM.
   // tbl : 1-5 (IT1-IT5).
   // slot: 0 -> u_ram_s0 (pred slot 0), 1 -> u_ram_s1 (pred slot 1).
   // bank: MSB of full index hash (0 or 1).
   // ent : remaining index bits (0..RAM_ENTRIES-1).
-  // Entry packing: VAL[0],CTR[3:1],USE[5:4],EPC[7:6],TGT[45:8],
-  //   TAG[ALLOC_DATA_WIDTH-1:46]. Max ALLOC_DATA_WIDTH=57 (IT5).
-  // Tag is stored at d[56:46]; write truncates to table width.
+  // Entry packing: VAL[0],CTR[3:1],USE[5:4],EPC[7:6],
+  //   TGT[E_TGT_HI:E_TGT_LO], TAG[E_W*-1:E_TAG_LO].
+  // Tag is built at the IT5 width; the write truncates to table width.
   // Backdoor path: dut.gen_ittage_tables[T].gen_active.u_table
   //   .u_ram_s{slot}.mem[bank][ent].
   // ================================================================
@@ -242,34 +263,34 @@ module tb;
     input logic [IT_MAX_TGT_WIDTH-1:0] tgt,
     input logic [IT_MAX_TAG_WIDTH-1:0] tag
   );
-    automatic logic [56:0] d;
+    automatic logic [E_W5-1:0] d;
     d        = '0;
     d[0]     = val;
     d[3:1]   = ctr;
     d[5:4]   = use_fld;
     d[7:6]   = epc;
-    d[45:8]  = tgt;
-    d[56:46] = IT_MAX_TAG_WIDTH'(tag);
+    d[E_TGT_HI:E_TGT_LO] = tgt;
+    d[E_W5-1:E_TAG_LO]   = IT_MAX_TAG_WIDTH'(tag);
     if (slot == 0) begin
       case (tbl)
-        // IT1/IT2: ALLOC_DATA_WIDTH=54, TAG=8b -> d[53:0]
-        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[53:0];
-        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[53:0];
-        // IT3/IT4: ALLOC_DATA_WIDTH=55, TAG=9b -> d[54:0]
-        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[54:0];
-        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[54:0];
-        // IT5: ALLOC_DATA_WIDTH=57, TAG=11b -> d[56:0]
-        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[56:0];
+        // IT1/IT2: TAG IT_TBL_TAG[1] -> d[E_W12-1:0]
+        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W12-1:0];
+        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W12-1:0];
+        // IT3/IT4: TAG IT_TBL_TAG[3] -> d[E_W34-1:0]
+        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W34-1:0];
+        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W34-1:0];
+        // IT5: TAG IT_TBL_TAG[5] -> d[E_W5-1:0]
+        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W5-1:0];
         default:
           $display("  WARN: bw_write: invalid tbl %0d", tbl);
       endcase
     end else begin
       case (tbl)
-        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[53:0];
-        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[53:0];
-        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[54:0];
-        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[54:0];
-        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[56:0];
+        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W12-1:0];
+        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W12-1:0];
+        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W34-1:0];
+        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W34-1:0];
+        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W5-1:0];
         default:
           $display("  WARN: bw_write: invalid tbl %0d", tbl);
       endcase
@@ -1558,16 +1579,17 @@ module tb;
     do_upd(upd, 0);
     @(posedge clk);
     // Direct RAM readback avoids alloc interference. Entry packing:
-    // TGT = d[45:8]. IT2 prm_tgt must update; IT1 alt_tgt unchanged.
+    // TGT = d[E_TGT_HI:E_TGT_LO]. IT2 prm_tgt must update; IT1
+    // alt_tgt unchanged.
     begin
-      automatic logic [53:0] it2_ent, it1_ent;
+      automatic logic [E_W12-1:0] it2_ent, it1_ent;
       automatic logic [IT_MAX_TGT_WIDTH-1:0] it2_tgt, it1_tgt;
       it2_ent = dut.gen_ittage_tables[2].gen_active
                   .u_table.u_ram_s0.mem[1][64];
       it1_ent = dut.gen_ittage_tables[1].gen_active
                   .u_table.u_ram_s0.mem[1][64];
-      it2_tgt = it2_ent[45:8];
-      it1_tgt = it1_ent[45:8];
+      it2_tgt = it2_ent[E_TGT_HI:E_TGT_LO];
+      it1_tgt = it1_ent[E_TGT_HI:E_TGT_LO];
       chk("TGT-B-ext:prm_tgt_post", 64'(it2_tgt), 64'h0_0000_B000);
       chk("TGT-B-ext:alt_tgt_post", 64'(it1_tgt), 64'h0_0000_C000);
     end
@@ -1618,7 +1640,7 @@ module tb;
     // Direct RAM read. IT2=provider: EPC->lcl_epoch[0]=0.
     // IT1=non-provider: EPC stays 2'h02.
     begin
-      automatic logic [53:0] it2_ent, it1_ent;
+      automatic logic [E_W12-1:0] it2_ent, it1_ent;
       automatic logic [1:0]  it2_epc, it1_epc;
       it2_ent = dut.gen_ittage_tables[2].gen_active
                   .u_table.u_ram_s0.mem[0][0];
@@ -1681,7 +1703,7 @@ module tb;
     // Direct RAM read. IT1=provider(alt when UP=0): EPC->0.
     // IT2=non-provider: EPC stays 2'h02.
     begin
-      automatic logic [53:0] it2_ent, it1_ent;
+      automatic logic [E_W12-1:0] it2_ent, it1_ent;
       automatic logic [1:0]  it2_epc, it1_epc;
       it2_ent = dut.gen_ittage_tables[2].gen_active
                   .u_table.u_ram_s0.mem[0][0];
@@ -2165,7 +2187,7 @@ module tb;
     // USE: u_eff=0 (age=1 from EPC=3 vs epoch=0), INC writes 0+1=1
     // (raw USE stays 1; EPC write resets age so next u_eff=1).
     begin
-      automatic logic [54:0] e3;
+      automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P2:it3_ctr",
@@ -2177,7 +2199,7 @@ module tb;
     end
     // IT1 (non-provider): EPC must remain at seed value (S1_EPC=2).
     begin
-      automatic logic [53:0] e1;
+      automatic logic [E_W12-1:0] e1;
       e1 = dut.gen_ittage_tables[1].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P2:it1_epc_nc",
@@ -2204,7 +2226,7 @@ module tb;
     bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // IT3: CTR 3->2(DEC), USE 1->0(DEC). TGT unchanged (CTR!=null).
     begin
-      automatic logic [54:0] e3;
+      automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P3:ctr_post",
@@ -2212,7 +2234,7 @@ module tb;
       chk("RT01-P3:use_post",
         64'(e3[5:4]),  64'h0);
       chk("RT01-P3:tgt_nc",
-        64'(e3[45:8]), 64'h0_0000_CC00);
+        64'(e3[E_TGT_HI:E_TGT_LO]), 64'h0_0000_CC00);
     end
     @(posedge clk);
 
@@ -2244,11 +2266,11 @@ module tb;
     // alloc_rules: CTR=0, USE=0, EPC=lcl_epoch=0, TGT=resolved,
     //   TAG=alc_tag=(PC_RT>>9)&0x1FF=0x30, VAL=1.
     begin
-      automatic logic [54:0] e4;
-      automatic logic [8:0]  t4;
+      automatic logic [E_W34-1:0] e4;
+      automatic logic [IT_TBL_TAG[4]-1:0] t4;
       e4 = dut.gen_ittage_tables[4].gen_active
              .u_table.u_ram_s0.mem[0][0];
-      t4 = e4[54:46];
+      t4 = e4[E_W34-1:E_TAG_LO];
       chk("RT01-P4:alc_val",
         64'(e4[0]),    64'h1);
       chk("RT01-P4:alc_ctr",
@@ -2258,14 +2280,14 @@ module tb;
       chk("RT01-P4:alc_epc",
         64'(e4[7:6]),  64'h0);
       chk("RT01-P4:alc_tgt",
-        64'(e4[45:8]), 64'h0_0000_FF00);
+        64'(e4[E_TGT_HI:E_TGT_LO]), 64'h0_0000_FF00);
       chk("RT01-P4:alc_tag",
         64'(t4),       64'h030);
     end
     // Check (b): IT5 isolation ref unchanged (TC-ALC-11 closure).
     // A spurious write to IT5 would change at least one field below.
     begin
-      automatic logic [56:0] e5;
+      automatic logic [E_W5-1:0] e5;
       e5 = dut.gen_ittage_tables[5].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P4:ref_ctr",
@@ -2275,19 +2297,19 @@ module tb;
       chk("RT01-P4:ref_epc",
         64'(e5[7:6]),   64'(R5_EPC));
       chk("RT01-P4:ref_tgt",
-        64'(e5[45:8]),  64'(R5_TGT));
+        64'(e5[E_TGT_HI:E_TGT_LO]),  64'(R5_TGT));
       chk("RT01-P4:ref_tag",
-        64'(e5[56:46]), 64'(R5_TAG));
+        64'(e5[E_W5-1:E_TAG_LO]), 64'(R5_TAG));
     end
     // IT3: CTR stays null(0); TGT replaced with resolved(0xFF00).
     begin
-      automatic logic [54:0] e3;
+      automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P4:it3_ctr_null",
         64'(e3[3:1]),  64'h0);
       chk("RT01-P4:it3_tgt_wr",
-        64'(e3[45:8]), 64'h0_0000_FF00);
+        64'(e3[E_TGT_HI:E_TGT_LO]), 64'h0_0000_FF00);
     end
     @(posedge clk);
 
@@ -2310,13 +2332,13 @@ module tb;
     // Alloc fires to IT4; invalidate for Phase 5B.
     bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     begin
-      automatic logic [54:0] e3;
+      automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P5A:ctr_post",
         64'(e3[3:1]),  64'h1);           // DEC 2->1
       chk("RT01-P5A:tgt_nc",
-        64'(e3[45:8]), 64'h0_0000_CC00); // unchanged
+        64'(e3[E_TGT_HI:E_TGT_LO]), 64'h0_0000_CC00); // unchanged
     end
     @(posedge clk);
 
@@ -2338,11 +2360,11 @@ module tb;
     do_upd(upd, 0);
     @(posedge clk);
     begin
-      automatic logic [54:0] e3;
+      automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P5B:tgt_wr",
-        64'(e3[45:8]), 64'h0_0000_EE00); // replaced with resolved
+        64'(e3[E_TGT_HI:E_TGT_LO]), 64'h0_0000_EE00); // replaced with resolved
     end
     @(posedge clk);
 
@@ -2350,7 +2372,7 @@ module tb;
     // IT1: UP=1 in all phases -> alternate path never written.
     // Expected final state: unchanged from initial seed.
     begin
-      automatic logic [53:0] e1;
+      automatic logic [E_W12-1:0] e1;
       e1 = dut.gen_ittage_tables[1].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P6:it1_val",
@@ -2362,15 +2384,15 @@ module tb;
       chk("RT01-P6:it1_epc",
         64'(e1[7:6]),   64'(S1_EPC));
       chk("RT01-P6:it1_tgt",
-        64'(e1[45:8]),  64'(S1_TGT));
+        64'(e1[E_TGT_HI:E_TGT_LO]),  64'(S1_TGT));
       chk("RT01-P6:it1_tag",
-        64'(e1[53:46]), 64'h60);
+        64'(e1[E_W12-1:E_TAG_LO]), 64'h60);
     end
     // IT3 after Phase 5B: val=1, CTR=0, TGT=0xEE00, TAG=9'h030.
     // CTR=0 (null at reseed, stays null on CTR-null MISP).
     // TGT=0xEE00 (replaced in Phase 5B).
     begin
-      automatic logic [54:0] e3;
+      automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
              .u_table.u_ram_s0.mem[0][0];
       chk("RT01-P6:it3_val",
@@ -2378,10 +2400,74 @@ module tb;
       chk("RT01-P6:it3_ctr",
         64'(e3[3:1]),   64'h0);
       chk("RT01-P6:it3_tgt",
-        64'(e3[45:8]),  64'h0_0000_EE00);
+        64'(e3[E_TGT_HI:E_TGT_LO]),  64'h0_0000_EE00);
       chk("RT01-P6:it3_tag",
-        64'(e3[54:46]), 64'h030);
+        64'(e3[E_W34-1:E_TAG_LO]), 64'h030);
     end
+    @(posedge clk);
+  endtask
+
+  // ================================================================
+  // TC-TGT40: TD#132. The TGT field holds VA[40:1]. A resolved target
+  // with bits 40:39 = 11 is written by both update paths at the
+  // PC_RT geometry of TC-RT01 (all five tables index bank 0 entry 0):
+  //   - IT3 provider, CTR null, MISP=1: TGT replaced (prm tgt write)
+  //   - allocation to IT4: TGT and TAG written by the alloc path
+  // The stored fields are read back whole, the IT4 TAG is read at the
+  // offset past the widened TGT, and the next prediction's provider
+  // (IT4) returns the full target.
+  // ================================================================
+  task automatic tc_tgt40();
+    localparam logic [VA_WIDTH-1:0]         PC_RT  = VA_WIDTH'('h0000_6000);
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] T3_TAG = 11'h030;
+    localparam logic [63:0]                 RES_VA = 64'h180_0000_EE00;
+    localparam logic [63:0]                 RES_ST = RES_VA >> 1;
+    ittage_upd_inp_t   upd;
+    ittage_pred_meta_t m;
+    $display("-- TC-TGT40 VA[40:1] target storage (TD#132)");
+    do_reset();
+    // Only IT3 may hit at PC_RT; invalidate the others at [0][0].
+    bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    bw_write(2, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    bw_write(4, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    bw_write(5, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, '0, 11'h0);
+    bw_write(3, 0, 0, 0, 1'b1, 3'h0, 2'h1, 2'h0,
+             IT_MAX_TGT_WIDTH'('h0_0000_CC00), T3_TAG);
+    force_uaon(0, IT_UAON_WIDTH'(7)); // keep UP=1 with CTR=null
+    do_pred(PC_RT, 6'hE0, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT40:prm_comp",  64'(m.ittage_prm_comp),      64'h3);
+    chk("TGT40:ctr_null",  64'(m.ittage_prm_ctr),       64'h0);
+    chk("TGT40:usingprm",  64'(m.ittage_using_primary), 64'h1);
+    chk("TGT40:alc_comp",  64'(m.ittage_alc_comp),      64'h4);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = it_tgt_enc(VA_WIDTH'(RES_VA));
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, 0);
+    @(posedge clk);
+    begin
+      automatic logic [E_W34-1:0] e3, e4;
+      e3 = dut.gen_ittage_tables[3].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      e4 = dut.gen_ittage_tables[4].gen_active
+             .u_table.u_ram_s0.mem[0][0];
+      $display("  TGT40 IT3 tgt 0x%0h IT4 tgt 0x%0h expected 0x%0h",
+               e3[E_TGT_HI:E_TGT_LO], e4[E_TGT_HI:E_TGT_LO], RES_ST);
+      chk("TGT40:it3_tgt_wr",  64'(e3[E_TGT_HI:E_TGT_LO]), RES_ST);
+      chk("TGT40:it3_tag_nc",  64'(e3[E_W34-1:E_TAG_LO]),  64'(T3_TAG));
+      chk("TGT40:it4_alc_val", 64'(e4[0]),                 64'h1);
+      chk("TGT40:it4_alc_tgt", 64'(e4[E_TGT_HI:E_TGT_LO]), RES_ST);
+      chk("TGT40:it4_alc_tag", 64'(e4[E_W34-1:E_TAG_LO]),
+          64'(m.ittage_alc_tag[IT_TBL_TAG[4]-1:0]));
+    end
+    force_uaon(0, IT_UAON_WIDTH'(8)); // restore
+    do_pred(PC_RT, 6'hE1, 0);
+    wait_prdy(0);
+    m = ittage_pred_meta_p2[0];
+    chk("TGT40:p2_prm_comp", 64'(m.ittage_prm_comp), 64'h4);
+    chk("TGT40:p2_prm_tgt",  64'(m.ittage_prm_tgt),  RES_ST);
     @(posedge clk);
   endtask
 
@@ -2470,6 +2556,7 @@ module tb;
 
     // BP-055: capstone round-trip test (self-contained).
     tc_rt01_capstone();
+    tc_tgt40();
 
     repeat(5) @(posedge clk);
 

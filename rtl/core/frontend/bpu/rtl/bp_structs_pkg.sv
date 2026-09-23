@@ -281,7 +281,7 @@ package bp_structs_pkg;
     logic [IT_MAX_IDX_WIDTH-1:0]   ittage_alc_idx;       // alloc idx
     logic [IT_MAX_TAG_WIDTH-1:0]   ittage_alc_tag;       // alloc tag
     // Predicted targets: VA[IT_MAX_TGT_WIDTH:1], bit 0 not stored.
-    // Zero-extended to VA_WIDTH on use (ftq_bpu_interfaces.md 5.2).
+    // Used as {tgt, 1'b0}, no extension (ftq_bpu_interfaces.md 5.2).
     logic [IT_MAX_TGT_WIDTH-1:0]   ittage_prm_tgt;       // primary target
     logic [IT_MAX_TGT_WIDTH-1:0]   ittage_alt_tgt;       // alt target
     // Prediction flags

@@ -692,8 +692,15 @@ module tb;
   localparam int IT1_TAG  = IT_TBL_TAG[1];              // 8
   localparam int IT_CB_W  = IT_MAX_VAL_WIDTH + IT_MAX_CTR_WIDTH
                           + IT_MAX_USE_WIDTH + IT_MAX_EPC_WIDTH
-                          + IT_MAX_TGT_WIDTH;           // 46
-  localparam int IT1_ALC  = IT_CB_W + IT1_TAG;          // 54
+                          + IT_MAX_TGT_WIDTH;           // 48
+  localparam int IT1_ALC  = IT_CB_W + IT1_TAG;          // 56
+
+  // Reduce a full-VA indirect target to the stored ITTAGE field by
+  // dropping bit 0 (ftq_bpu_interfaces.md 5.2).
+  function automatic logic [IT_MAX_TGT_WIDTH-1:0] it_tgt_enc(
+      input logic [VA_WIDTH-1:0] va);
+    it_tgt_enc = va[VA_WIDTH-1:1];
+  endfunction
 
   // Write IT1 for slot 0 at the index and tag the DUT computed for the
   // PC currently on ftq_pred_pc_p0. Both are READ OUT of the DUT, so
@@ -1375,7 +1382,7 @@ module tb;
     lp_clear_both(pc);
     req(pc, 6'h15);
     #1;                              // let the p0 hashes settle
-    ittage_seed_it1_s0(IT_MAX_TGT_WIDTH'(VA_WIDTH'('h00_0000_7788) >> 1));
+    ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'('h00_0000_7788)));
     tick();
     norq();
     tick();
@@ -1391,12 +1398,12 @@ module tb;
     chk_eq("C1f successor is the ITTAGE target",
            bpu_redir_p2[0].target_pc, VA_WIDTH'('h00_0000_7788));
 
-    // -- C1f2. TD#122. ITTAGE target that is a guest physical address
-    //    with bit 38 set. With V=1 the fetch PC is ZERO extended
-    //    (ftq_bpu_interfaces.md 5.2); a sign-extending reconstruction
-    //    sets bit 39 and above. Same fixture as C1f. The expected
-    //    value is a 64-bit constant, not a VA_WIDTH one, so a tree
-    //    whose VA_WIDTH truncates or sign-extends cannot match it.
+    // -- C1f2. TD#122, TD#132. ITTAGE target that is a V=1 guest
+    //    physical address with bit 38 set and bits 40:39 clear. The
+    //    field holds VA[40:1], so the target is stored whole; an
+    //    extension rule would set bits 40:39. Same fixture as C1f. The
+    //    expected value is a 64-bit constant, not a VA_WIDTH one, so a
+    //    tree whose VA_WIDTH truncates or extends cannot match it.
     do_reset();
     tage_bim_fill(2'b00);
     pc   = VA_WIDTH'('h00_0152_0000);
@@ -1408,7 +1415,7 @@ module tb;
     lp_clear_both(pc);
     req(pc, 6'h1C);
     #1;                              // let the p0 hashes settle
-    ittage_seed_it1_s0(IT_MAX_TGT_WIDTH'(64'h40_0000_7788 >> 1));
+    ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'(64'h40_0000_7788)));
     tick();
     norq();
     tick();
@@ -1419,8 +1426,40 @@ module tb;
     tick();
     chk("C1f2 ITTAGE reports a hit on the bit-38 GPA target",
         bpu_meta_ittage_p2[0].ittage_hit === 1'b1);
-    chk("C1f2 bit-38 GPA target is zero extended, not sign extended",
+    chk("C1f2 bit-38 GPA target is stored whole, bits 40:39 clear",
         64'(bpu_redir_p2[0].target_pc) === 64'h40_0000_7788);
+
+    // -- C1f4. TD#132. ITTAGE target with bits 40:39 = 11, a V=0 Sv39
+    //    upper-half address. The field holds VA[40:1], so the target
+    //    is stored and read back whole; no extension rule could supply
+    //    11 in bits 40:39. Same fixture as C1f. The expected value is
+    //    a 64-bit constant, so a VA_WIDTH truncation cannot match it.
+    do_reset();
+    tage_bim_fill(2'b00);
+    pc   = VA_WIDTH'('h00_0156_0000);
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0,
+                  1'b1, pft, 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h20);
+    #1;                              // let the p0 hashes settle
+    ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'(64'h180_0000_7788)));
+    tick();
+    norq();
+    tick();
+    tick();
+    req(pc, 6'h21);
+    tick();
+    norq();
+    tick();
+    chk("C1f4 ITTAGE reports a hit on the bits 40:39 = 11 target",
+        bpu_meta_ittage_p2[0].ittage_hit === 1'b1);
+    $display("  C1f4 published target 0x%011h, expected 0x18000007788",
+             bpu_redir_p2[0].target_pc);
+    chk("C1f4 bits 40:39 = 11 target is stored, not extended",
+        64'(bpu_redir_p2[0].target_pc) === 64'h180_0000_7788);
 
     // -- C1f3. TD#122. A fetch PC with bit 40 set must not truncate.
     //    A direct jump's successor is the block base plus the stored
@@ -3086,6 +3125,19 @@ module tb;
     tick_snoop();      // idx at p3
   endtask
 
+  // req_to_p3 that also returns the target the cluster published for
+  // slot 0 at p2, the cluster's own reconstruction of the target.
+  task automatic req_to_p3_tgt(input  logic [VA_WIDTH-1:0]     pc,
+                               input  logic [FTQ_IDX_BITS-1:0] idx,
+                               output logic [VA_WIDTH-1:0]     tgt);
+    req(pc, idx);
+    tick_snoop();
+    norq();
+    tick_snoop();      // idx at p2
+    tgt = bpu_redir_p2[0].target_pc;
+    tick_snoop();      // idx at p3
+  endtask
+
   // Clear every update channel. Called before and after each update
   // pulse so no channel is left asserted into the next case.
   task automatic clr_upd_chans();
@@ -3154,6 +3206,9 @@ module tb;
     logic                it_hit_1;
     logic                it_hit_2;
     logic [VA_WIDTH-1:0] it_tgt_2;
+    logic [VA_WIDTH-1:0] it_res;
+    logic [VA_WIDTH-1:0] it_pub_2;
+    logic [VA_WIDTH-1:0] it_pub_3;
     ubtb_upd_t           u;
 
     $display("---- GROUP G: closed predict-update loop ----");
@@ -3358,7 +3413,7 @@ module tb;
     ubtb_upd_u0[0] = mk_upd(INDIRECT_NONRET, 1'b0, pc);
     ittage_upd_inp_u0[0].ittage_pred_meta = ftq_ittage[6'h0A][0];
     ittage_upd_inp_u0[0].resolved_target  =
-      IT_MAX_TGT_WIDTH'(VA_WIDTH'('h00_0000_9AA0) >> 1);
+      it_tgt_enc(VA_WIDTH'('h00_0000_9AA0));
     ittage_upd_inp_u0[0].indir_mispredict = 1'b1;
     ittage_upd_val_u0[0] = 1'b1;
     #1;
@@ -3370,13 +3425,68 @@ module tb;
 
     req_to_p3(pc, 6'h0B);
     it_hit_2 = ftq_ittage[6'h0B][0].ittage_hit;
-    it_tgt_2 = VA_WIDTH'({ftq_ittage[6'h0B][0].ittage_prm_tgt, 1'b0});
+    it_tgt_2 = {ftq_ittage[6'h0B][0].ittage_prm_tgt, 1'b0};
     chk("G2 second prediction HITS in ITTAGE after the update",
         it_hit_2 === 1'b1);
     chk("G2 the hit is a change from the first prediction",
         it_hit_2 !== it_hit_1);
     chk_eq("G2 the hit carries the resolved target",
            it_tgt_2, VA_WIDTH'('h00_0000_9AA0));
+
+    // -- G2b. TD#132 stickiness. Same loop as G2 with a resolved
+    //    target whose bits 40:39 = 11. The allocation writes the
+    //    resolved target; the second prediction is then resolved
+    //    against the same target, mispredict set only when the
+    //    published target differs, and the metadata fed back. The
+    //    third prediction must publish the resolved target: an entry
+    //    that loses bits 40:39 is rewritten with the bits it already
+    //    holds and stays wrong.
+    do_reset();
+    ftq_clear();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);
+    pc   = VA_WIDTH'('h00_0628_0000);
+    base = blk_base(pc);
+    pft  = base + BLK_SZ;
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b0, 1'b0, 1'b1,
+                  pft, 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    it_res = VA_WIDTH'(64'h180_0000_9AA0);
+
+    req_to_p3(pc, 6'h2A);
+    chk("G2b first prediction misses in ITTAGE",
+        ftq_ittage[6'h2A][0].ittage_hit === 1'b0);
+    ubtb_upd_u0[0] = mk_upd(INDIRECT_NONRET, 1'b0, pc);
+    ittage_upd_inp_u0[0].ittage_pred_meta = ftq_ittage[6'h2A][0];
+    ittage_upd_inp_u0[0].resolved_target  = it_tgt_enc(it_res);
+    ittage_upd_inp_u0[0].indir_mispredict = 1'b1;
+    ittage_upd_val_u0[0] = 1'b1;
+    tick();
+    clr_upd_chans();
+    repeat (4) tick();
+
+    req_to_p3_tgt(pc, 6'h2B, it_pub_2);
+    chk("G2b second prediction HITS in ITTAGE",
+        ftq_ittage[6'h2B][0].ittage_hit === 1'b1);
+    $display("  G2b second published target 0x%011h, resolved 0x%011h",
+             it_pub_2, it_res);
+    ubtb_upd_u0[0] = mk_upd(INDIRECT_NONRET, 1'b0, pc);
+    ittage_upd_inp_u0[0].ittage_pred_meta = ftq_ittage[6'h2B][0];
+    ittage_upd_inp_u0[0].resolved_target  = it_tgt_enc(it_res);
+    ittage_upd_inp_u0[0].indir_mispredict = (it_pub_2 !== it_res);
+    ittage_upd_val_u0[0] = 1'b1;
+    tick();
+    clr_upd_chans();
+    repeat (4) tick();
+
+    req_to_p3_tgt(pc, 6'h2C, it_pub_3);
+    chk("G2b third prediction HITS in ITTAGE",
+        ftq_ittage[6'h2C][0].ittage_hit === 1'b1);
+    $display("  G2b third published target 0x%011h, resolved 0x%011h",
+             it_pub_3, it_res);
+    chk("G2b after the update the entry publishes the resolved target",
+        64'(it_pub_3) === 64'h180_0000_9AA0);
 
     // -- G3. SC. The five counter tables are seeded at -1 and the
     //    TAGE bimodal at 2'b11, so the local SC sum is

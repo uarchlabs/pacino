@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -432,19 +432,36 @@ supplies a target: `ittage_pred_meta_t.ittage_prm_tgt` or
 `ittage_alt_tgt`, selected by `ittage_using_primary`.
 `ittage_hit` clear means the FTB target stands.
 
-The ITTAGE target field holds the upper bits of an Sv39 VA with bit
-0 not stored. The cluster reconstructs by appending the zero bit.
+THE FIELD HOLDS VA[40:1] AND THERE IS NO EXTENSION RULE. RULED
+session-073 (Jeff): IT_MAX_TGT_WIDTH is 40, so the field carries
+every bit of the target except bit 0, which is always zero on a
+2-byte-granular ISA. The cluster reconstructs by appending that bit:
+`{stored, 1'b0}`. Nothing is inferred, so no rule can be wrong.
+TD#132 tracks the RTL.
 
-SIGN EXTENSION IS WRONG HERE AND THE FIELD IS TOO NARROW. An earlier
-revision said the cluster reconstructs "by appending the zero bit and
-sign-extending". Under V=1 with vsatp.MODE=Bare the fetch PC is a
-41-bit guest physical address, ZERO extended, and Sv39x4 requires
-bits 63:41 to be zero; sign-extending corrupts any GPA with bit 38
-set. The 38-bit field cannot express a 41-bit GPA at all.
-IT_MAX_TGT_WIDTH is deliberately left at 38 because predictor
-storage may mispredict where an architectural address may not -- see
-fe_decisions.md FE-19 -- so what changes here is the RECONSTRUCTION,
-not the field. TD#122 tracks the RTL.
+WHY THE FIELD WIDENED. It was 38 bits, pinned session-070, with the
+missing bits 40:39 supplied by extension. No extension rule works. A
+V=1 fetch PC is a 41-bit guest physical address, zero extended, and
+sign extension corrupts any GPA with bit 38 set; but zero extension
+gives bits 40:39 = 00, and a V=0 Sv39 kernel address needs them set.
+Worse, a wrong entry is STICKY: the update writes back the same
+VA[38:1] the entry already holds, so no mispredict can correct it,
+and while it hits it overrides the FTB jump target. Kernel indirect
+branches stop being predicted at all.
+
+The alternatives are in misc/prop1.md, which proposed supplying the
+two bits from the branch PC instead. That is free but makes one
+stored entry mean different targets under different lookup PCs, and
+needs a companion change in the FTQ update path to avoid training
+entries it cannot represent. Jeff ruled for storage: +2 bits x 2048
+entries x the TWO PER-SLOT RAM COPIES = 8,192 bits in the ITTAGE
+array (measured by BP-111: 226,304 -> 234,496 bits), plus 4 bits per
+slot of FTQ metadata, in exchange for an entry that means one thing
+and no rule with an exception.
+
+FE-19 still holds: predictor storage may mispredict where an
+architectural address may not. It permitted the narrow field; it did
+not require it.
 
 Both metadata structs carry `branch_id`. Every p2 and p3 comparison
 is qualified by `branch_id` equal to the FTQ index held in the

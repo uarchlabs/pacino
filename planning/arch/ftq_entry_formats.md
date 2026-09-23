@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -37,9 +37,9 @@ the width of the update-only metadata.
 
 ```
   fast path   bp_ftq_entry_t   228b   x 64 entries        14,592b
-  slow path   bp_ftq_meta_t    421b   x 2 slots x 64      53,888b
+  slow path   bp_ftq_meta_t    425b   x 2 slots x 64      54,400b
                                                           -------
-                                                          68,480b
+                                                          68,992b
 ```
 
 The slow-path figure is the unpacked layout. Section 3.1 defines an
@@ -163,7 +163,7 @@ to a single arm.
 The predictor metadata blocks are mutually exclusive by branch type.
 TAGE, SC and the loop predictor train only on conditional branches;
 ITTAGE trains only on indirect branches. No branch is both. Storing
-all four unpacked therefore holds 143 bits per slot that no
+all four unpacked therefore holds 147 bits per slot that no
 resolution can ever read.
 
 The four are overlaid in one union region with two arms. The FTB
@@ -181,14 +181,21 @@ at all updates the FTB, so it is common to both arms.
     lp           lp_pred_t              80b   [79:0]
 
   u.ind                                 271b
-    rsvd                               128b   [270:143]
-    ittage       ittage_pred_meta_t    143b   [142:0]
+    rsvd                               124b   [270:147]
+    ittage       ittage_pred_meta_t    147b   [146:0]
 ```
 
-Per slot 278b against 421b unpacked. The slow-path array falls from
-53,888b to 35,584b and the FTQ from 68,480b to 50,176b, a 27%
+Per slot 278b against 425b unpacked. The slow-path array falls from
+54,400b to 35,584b and the FTQ from 68,992b to 50,176b, a 30%
 reduction. The union is slow-path only, so VA_WIDTH does not
 reach it.
+
+THE UNION ABSORBS THE SESSION-073 ITTAGE WIDENING FOR FREE. The two
+extra bits on each of ittage_prm_tgt and ittage_alt_tgt take the
+block from 143b to 147b, which grows into u.ind's reserved field and
+leaves the arm at 271b, set by u.cond. The 278b and 35,584b figures
+are unchanged by it. That is why the widening costs 512 bits in the
+unpacked layout and nothing here.
 
 DISCRIMINANT. `bp_ftq_slot_t.br_type` in the fast-path entry. It is
 the FTB classification once the fe_decisions.md 2.5 slot correction
@@ -455,6 +462,20 @@ path touches none of those.
               IT_MAX_TGT_WIDTH, unchanged -- so 421b and the
               slow-path array are untouched, and so is the 278b
               union proposal. TD#122 tracks the RTL.
+  2026-09-22  session-073. IT_MAX_TGT_WIDTH 38 -> 40 (TD#132,
+              ruled by Jeff; ftq_bpu_interfaces.md 5.2 and
+              ittage_table_entry_formats.md). ittage_pred_meta_t
+              carries two targets per slot, so it goes 143b ->
+              147b, bp_ftq_meta_t 421b -> 425b, the slow-path
+              array 53,888b -> 54,400b and the FTQ total 68,480b
+              -> 68,992b. The fast path is untouched: no ITTAGE
+              target reaches it. The 3.1 union absorbs the
+              widening into u.ind's reserved field, so the 278b
+              scheme is unchanged and stays DEFERRED (Jeff,
+              session-073): it is a storage optimization with no
+              dependants, and unpacked is the more forgiving
+              layout while the design is still moving.
+
   2026-09-19  session-071. Section 2: the RAS snapshot is
               overwritten at p2 for every valid block
               (ftq_bpu_interfaces.md 4c); pft_addr named in the

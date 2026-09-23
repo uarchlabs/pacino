@@ -336,9 +336,17 @@ jump: EVERY TARGET IS A DISPLACEMENT FROM ITS OWN INSTRUCTION. A
 conditional is measured from the branch PC and a jump from the jump
 PC, each of which is the region base plus that field's stored
 position, so every sharer of the entry agrees on it. BP-110 built the
-conditional half; the jump target is still measured from the region
-base in the RTL, which is coherent across sharers but is not this
-rule. TD#137. It is load-bearing for the cluster:
+conditional half and BP-111 the jump half, so both targets are
+measured from their own instruction in the RTL. TD#137 closed.
+
+The one observable difference is WHERE THE REACH WINDOW SITS. Any
+in-reach target reconstructs correctly under either base, because the
+region base and the jump PC are both shared by every start; what
+changes is which targets are in reach. BP-111 pinned it with a jump
+target at the edge of the 21-bit reach (tb_ftb J2), which comes back
+wrong from both starts under the region base.
+
+It is load-bearing for the cluster:
 
 ITTAGE has no IT0 base table. An ITTAGE miss therefore produces no
 ITTAGE target. The FTB jump target is the architectural fallback for
@@ -1051,6 +1059,11 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-09-22  session-073, after BP-111. 4.2: the jump target is
+              built from the jump PC; TD#137 closed. The reach
+              window is the only observable difference and tb_ftb
+              J2 pins it.
+
   2026-09-22  session-073, after BP-110. 5.5, 4.5, 4.6 and section 8
               record what is BUILT: six-bit pftAddr with no carry,
               region-relative stored positions at 113/112, FTB-G1
@@ -1059,8 +1072,8 @@ region end, plus a full block, plus a straddling halfword pair:
               session-069 recording it restored. 5.4a restated on
               region position (O-3c). 4.2: O-1 extended to the jump
               target by Jeff -- every target is a displacement from
-              its own instruction -- with the RTL still measuring
-              the jump from the region base, TD#137. The uBTB
+              its own instruction. BP-111 built it the same day;
+              TD#137 closed. The uBTB
               divergence is ruled and stated in 4.6.
 
   2026-09-22  session-073. 4.6 O-1 and O-2 RULED by Jeff as

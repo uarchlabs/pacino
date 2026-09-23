@@ -194,6 +194,7 @@ module tb;
   endfunction
 
   // Expected jump target read-back (FTB_JMP_TGT_BITS displacement).
+  // base is the JUMP PC (ftb_decisions.md 4.2, TD#137).
   function automatic logic [VA_WIDTH-1:0] exp_jmp_tgt(
       input logic [VA_WIDTH-1:0] tgt, input logic [VA_WIDTH-1:0] base);
     logic [VA_WIDTH-1:0]         d;
@@ -346,6 +347,7 @@ module tb;
   logic [VA_WIDTH-1:0] base;
   logic [VA_WIDTH-1:0] tgt;
   logic [VA_WIDTH-1:0] j1, j2;
+  logic [VA_WIDTH-1:0] jpc;
   logic [VA_WIDTH-1:0] s6_pc [0:4];
 
   // -----------------------------------------------------------------
@@ -483,10 +485,11 @@ module tb;
     upd_jmp(pc, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd6, pc); // alloc jalr
     predict(pc);
     check("S7 jmp valid",            ftb_jmp_valid_p2 == 1'b1);
-    check("S7 jmp target == first",  ftb_jmp_target_p2 == exp_jmp_tgt(j1, pc));
+    jpc = pc + VA_WIDTH'(6 << POS_OFFSET_BITS);            // jump PC
+    check("S7 jmp target == first",  ftb_jmp_target_p2 == exp_jmp_tgt(j1, jpc));
     upd_jmp(pc, 1'b1, 2'd0, j2, 1'b0, 1'b0, 1'b1, 4'd6, pc); // rewrite
     predict(pc);
-    check("S7 jmp target == latest", ftb_jmp_target_p2 == exp_jmp_tgt(j2, pc));
+    check("S7 jmp target == latest", ftb_jmp_target_p2 == exp_jmp_tgt(j2, jpc));
 
     // =============================================================
     // S8: conditional target round-trip -- in-range lossless; beyond
@@ -516,7 +519,9 @@ module tb;
           ftb_br0_target_p2 != (base + VA_WIDTH'('h1000)));
 
     // =============================================================
-    // S9: jump target round-trip -- same for FTB_JMP_TGT_BITS.
+    // S9: jump target round-trip -- same for FTB_JMP_TGT_BITS. The
+    // jump is at pos 0 of a region-aligned start, so its jump PC is
+    // base.
     // =============================================================
     do_reset();
     pc   = make_pc(26'h000080, 9'd2);   // base 0x200040
@@ -909,6 +914,64 @@ module tb;
           ftb_br0_valid_p2 == 1'b0);
     check("R3 FTB-G3: end beyond start+34 falls back to start+32",
           ftb_pft_addr_p2 == pcB + VA_WIDTH'(FTB_BLOCK_BYTES));
+
+    // =============================================================
+    // J1: TD#137. A jump target recorded from one start and read
+    // from a second start sharing the entry. A starts at region
+    // offset 0, B at offset 8; the jump sits at region position 10,
+    // jump PC base+20, target jump PC + 0x1000. Both the region base
+    // and the jump PC are common to the two starts, so an in-reach
+    // target round-trips under either base: this case cannot tell
+    // the bases apart and is kept as the round-trip check only.
+    // =============================================================
+    do_reset();
+    base = make_pc(26'h000614, 9'd133);
+    pcA  = base;
+    pcB  = base + VA_WIDTH'('d8);
+    jpc  = base + VA_WIDTH'('d20);
+    j1   = jpc + VA_WIDTH'('h1000);
+    upd_jmp(pcA, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd10,
+            base + VA_WIDTH'('d24));
+    predict(pcA);
+    check("J1 recording start: jmp valid, pos 10",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd10));
+    check("J1 recording start: jmp target round-trips",
+          ftb_jmp_target_p2 == j1);
+    predict(pcB);
+    check("J1 second start: jmp valid, pos 6",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd6));
+    check("J1 second start: jmp target round-trips",
+          ftb_jmp_target_p2 == j1);
+
+    // =============================================================
+    // J2: TD#137. The displacement is measured from the JUMP PC, so
+    // the forward reach ends at jump PC + 2**(FTB_JMP_TGT_BITS-1) - 2
+    // wherever the jump sits in the region. The jump is at region
+    // position 16, jump PC base+32; the target is the last even
+    // address in reach of the jump PC, 32 bytes past the last one in
+    // reach of the region base. Recorded from A (offset 2), read from
+    // A and from B (offset 30), both sharing the entry.
+    // =============================================================
+    do_reset();
+    base = make_pc(26'h000615, 9'd134);
+    pcA  = base + VA_WIDTH'('d2);
+    pcB  = base + VA_WIDTH'('d30);
+    jpc  = base + VA_WIDTH'('d32);
+    j1   = jpc + VA_WIDTH'((1 << (FTB_JMP_TGT_BITS - 1)) - 2);
+    upd_jmp(pcA, 1'b0, 2'd0, j1, 1'b0, 1'b0, 1'b1, 4'd15,
+            base + VA_WIDTH'('d34));
+    predict(pcA);
+    $display("J2 A jmp target got %h exp %h", ftb_jmp_target_p2, j1);
+    check("J2 recording start: jmp valid, pos 15",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd15));
+    check("J2 recording start: edge-of-reach target is exact",
+          ftb_jmp_target_p2 == j1);
+    predict(pcB);
+    $display("J2 B jmp target got %h exp %h", ftb_jmp_target_p2, j1);
+    check("J2 second start: jmp valid, pos 1",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd1));
+    check("J2 second start: edge-of-reach target is exact",
+          ftb_jmp_target_p2 == j1);
 
     // -------------------------------------------------------------
     $display("=================================================");

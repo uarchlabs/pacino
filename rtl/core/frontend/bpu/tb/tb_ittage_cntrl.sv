@@ -231,7 +231,7 @@ module tb;
   endtask
 
   task automatic chk57(
-    input string nm, input logic [56:0] act, exp
+    input string nm, input logic [MADW-1:0] act, exp
   );
     if (act === exp) begin
       pass_cnt++;
