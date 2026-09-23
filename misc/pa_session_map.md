@@ -432,23 +432,23 @@
 |    |              | BP-080                               |
 |    |              | output session_handoff-060           |
 | 60 | tage cleanup | input session_handoff-060            |
-|    |              | tage_cntrl_uaon_update_rules.md      |
+|    | BLOG_bpu_18  | tage_cntrl_uaon_update_rules.md      |
 |    |              | BP-081                               |
 |    |              | output session_handoff-061           |
 |    |              | output session_handoff-060           |
 | 61 | ?            | input session_handoff-061            |
-|    |              | verify planning docs against design  |
+|    | BLOG_bpu_18  | verify planning docs against design  |
 |    |              | INFRA-008                            |
 |    |              | INFRA-009                            |
 |    |              | INFRA-010                            |
 |    |              | output session_handoff-062           |
 | 62 | ?            | input session_handoff-062            |
-|    |              | architecture design for FE           |
+|    | BLOG_bpu_18  | architecture design for FE           |
 |    |              | a very fraught session               |
 |    |              | switched to IA for direct files access |
 |    |              | output session_handoff-63            |
 | 63 | ?            | input session_handoff-063            |
-|    |              | INFRA-011                            |
+|    | BLOG_bpu_19  | INFRA-011                            |
 |    |              | BP-082                               |
 |    |              | BP-083                               |
 |    |              | BP-084                               |

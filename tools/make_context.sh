@@ -9,19 +9,17 @@ DEST=~/Downloads/context
 mkdir -p ~/Downloads/context
 rm -f ~/Downloads/context/*
 
-cp misc/pa_session_map.md  $DEST
-cp blogs/BLOG_bpu_15_specification_under_test.md $DEST
-cp blogs/BLOG_bpu_16_external_anchors.md $DEST
-cp planning/BLOG_GENERATION_PROCESS.md $DEST
-cp pa_handoffs/session_handoff-056.md $DEST
-cp pa_handoffs/session_handoff-057.md $DEST
-cp pa_handoffs/session_handoff-058.md $DEST
-cp pa_handoffs/session_handoff-059.md $DEST
-cp pa_handoffs/session_handoff-060.md $DEST
-cp prompts/BP-075.md $DEST
-cp prompts/BP-075a.md $DEST
-cp prompts/BP-076.md $DEST
-cp prompts/BP-077.md $DEST
-cp prompts/BP-078.md $DEST
-cp prompts/BP-079.md $DEST
-cp prompts/BP-080.md $DEST
+cp prompts/BP-082.md $DEST
+cp prompts/BP-083.md $DEST
+cp prompts/BP-084.md $DEST
+cp prompts/BP-085.md $DEST
+cp prompts/BP-086.md $DEST
+cp prompts/BP-087.md $DEST
+cp prompts/BP-088.md $DEST
+cp prompts/BP-089.md $DEST
+cp prompts/BP-090.md $DEST
+
+cp planning/interfaces/bpu_port_inventory.md $DEST
+cp planning/interfaces/ftq_bpu_interfaces.md $DEST
+cp planning/interfaces/ubtb_interfaces.md $DEST
+
