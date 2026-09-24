@@ -116,6 +116,10 @@ module tb;
   logic [VA_WIDTH-1:0]      ftb_upd_pft_addr_u0;
 
   // ---- IFU boundary --------------------------------------------------
+  logic                     ftq_ifu_xlate_val;
+  logic                     ftq_ifu_xlate_rdy;
+  logic [VA_WIDTH-1:0]      ftq_ifu_xlate_pc;
+  logic [FTQ_IDX_BITS-1:0]  ftq_ifu_xlate_idx;
   logic                     ftq_ifu_req_val;
   logic                     ftq_ifu_req_rdy;
   logic [VA_WIDTH-1:0]      ftq_ifu_start_pc;
@@ -223,6 +227,10 @@ module tb;
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
+    .ftq_ifu_xlate_val     (ftq_ifu_xlate_val),
+    .ftq_ifu_xlate_rdy     (ftq_ifu_xlate_rdy),
+    .ftq_ifu_xlate_pc      (ftq_ifu_xlate_pc),
+    .ftq_ifu_xlate_idx     (ftq_ifu_xlate_idx),
     .ftq_ifu_req_val       (ftq_ifu_req_val),
     .ftq_ifu_req_rdy       (ftq_ifu_req_rdy),
     .ftq_ifu_start_pc      (ftq_ifu_start_pc),
@@ -356,6 +364,7 @@ module tb;
     tage_upd_rdy_u1       = 1'b1;
     ittage_upd_rdy_u1     = 1'b1;
     sc_upd_rdy_u1         = 1'b1;
+    ftq_ifu_xlate_rdy     = 1'b1;
     ftq_ifu_req_rdy       = 1'b1;
     ifu_ftq_pdwb_val      = 1'b0;
     ifu_ftq_pdwb_idx      = '0;
@@ -511,6 +520,19 @@ module tb;
     tick();
     chk("C2 none while the p1 write is still in flight",
         !ftq_ifu_req_val);
+    tick();
+
+    // THE TRANSLATION COMES FIRST (BP-112, TD#127). The entry is
+    // written, so xlate_ptr presents it on ftq_ifu_interfaces.md 4.1
+    // in this cycle; FQ-1 holds fetch_ptr behind xlate_ptr, so the
+    // fetch request follows one cycle later. L1I-3: a fetch cannot
+    // issue in the cycle its translation begins.
+    chk   ("C2a the translation is presented once the entry is written",
+           ftq_ifu_xlate_val && (ftq_ifu_xlate_idx == '0));
+    chk_va("C2b with the block start PC", ftq_ifu_xlate_pc,
+           RESET_VECTOR);
+    chk   ("C2c no fetch in the cycle its translation begins",
+           !ftq_ifu_req_val);
     tick();
     chk   ("C3 a fetch is requested once the entry is written",
            ftq_ifu_req_val);
@@ -699,6 +721,83 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // F. A front-end redirect, end to end (BP-112, TD#126 and TD#127).
+  // -----------------------------------------------------------------
+  // A predecode redirect names entry K = 3, which was fetched against
+  // a p1 miss. K SURVIVES, CORRECTED: the IFU flush names K itself
+  // (ftq_ifu_interfaces.md 7 W3), xlate_ptr and fetch_ptr come back
+  // to K (ftq_decisions.md 5.5 R1), and K is translated and then
+  // fetched again carrying the corrected taken_pos. Group D holds the
+  // backend half, K+1.
+  //
+  // The waits below are BOUNDED and ordered rather than cycle exact:
+  // what is checked is which entry each port names next, not how many
+  // cycles the refill takes.
+  localparam logic [VA_WIDTH-1:0] PD_TGT = VA_WIDTH'('h00_B000_0000);
+
+  task automatic group_f();
+    int n_x;
+    int n_f;
+    $display("-- F: a front-end redirect, end to end --");
+    do_reset();
+    repeat (12) tick();
+    chk("F1 entry 3 was already fetched", ftq_ifu_idx > 6'd3);
+
+    // The writeback for entry 3. Its generation is 1: one allocation
+    // since reset. Predecode found a JAL at position 6 in a block the
+    // p1 miss predicted to have none (M1).
+    ifu_ftq_pdwb_val = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd3;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pd[6]    = '{valid: 1'b1, is_rvc: 1'b0, br_type: 2'b10,
+                         is_call: 1'b0, is_ret: 1'b0};
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(6);
+    ifu_ftq_target   = PD_TGT;
+    #1;
+    chk("F2 the IFU is flushed",          ftq_ifu_flush_val);
+    chk("F3 AT K, not K+1",               ftq_ifu_flush_idx == 6'd3);
+    chk_va("F4 fetch resumes at the corrected successor",
+           ftq_pred_pc_p0, PD_TGT);
+    tick();
+    ifu_ftq_pdwb_val = 1'b0;
+    ifu_ftq_mis_val  = 1'b0;
+    ifu_ftq_pd[6]    = '0;
+    #1;
+    chk("F5 allocation restarts at K+1", ftq_pred_idx_p0 == 6'd4);
+    chk("F6 xlate_ptr is back on K",     ftq_ifu_xlate_idx == 6'd3);
+    chk("F7 fetch_ptr is back on K",     ftq_ifu_idx == 6'd3);
+
+    // The next translation presented is K, and no fetch of K is
+    // presented before it.
+    n_x = 0;
+    n_f = 0;
+    for (int c = 0; c < 8; c++) begin
+      if (ftq_ifu_xlate_val) break;
+      if (ftq_ifu_req_val) n_f++;
+      n_x++;
+      tick();
+    end
+    chk("F8 K is translated again",
+        ftq_ifu_xlate_val && (ftq_ifu_xlate_idx == 6'd3));
+    chk("F9 with no fetch presented ahead of it", n_f == 0);
+    chk_va("F10 with K's own block start PC", ftq_ifu_xlate_pc,
+           VA_WIDTH'(RESET_VECTOR + 3 * FTB_BLOCK_BYTES));
+
+    // Then K is fetched again, against the correction.
+    for (int c = 0; c < 8; c++) begin
+      if (ftq_ifu_req_val) break;
+      tick();
+    end
+    chk("F11 K is fetched again",
+        ftq_ifu_req_val && (ftq_ifu_idx == 6'd3));
+    chk("F12 carrying the corrected taken branch",
+        ftq_ifu_taken_val &&
+        (ftq_ifu_taken_pos == FTB_BR_POS_BITS'(6)));
+    chk_va("F13 and the corrected successor", ftq_ifu_next_pc, PD_TGT);
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -715,6 +814,7 @@ module tb;
     group_c();
     group_d();
     group_e();
+    group_f();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

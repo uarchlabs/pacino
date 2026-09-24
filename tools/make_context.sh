@@ -9,17 +9,22 @@ DEST=~/Downloads/context
 mkdir -p ~/Downloads/context
 rm -f ~/Downloads/context/*
 
-cp prompts/BP-082.md $DEST
-cp prompts/BP-083.md $DEST
-cp prompts/BP-084.md $DEST
-cp prompts/BP-085.md $DEST
-cp prompts/BP-086.md $DEST
-cp prompts/BP-087.md $DEST
-cp prompts/BP-088.md $DEST
-cp prompts/BP-089.md $DEST
-cp prompts/BP-090.md $DEST
-
-cp planning/interfaces/bpu_port_inventory.md $DEST
-cp planning/interfaces/ftq_bpu_interfaces.md $DEST
-cp planning/interfaces/ubtb_interfaces.md $DEST
-
+cp planning/BLOG_GENERATION_PROCESS.md $DEST
+cp misc/pa_session_map.md $DEST
+cp pa_handoffs/session_handoff-064.md $DEST
+cp pa_handoffs/session_handoff-065.md $DEST
+cp pa_handoffs/session_handoff-066.md $DEST
+cp pa_handoffs/session_handoff-067.md $DEST
+cp prompts/BP-091.md $DEST
+cp prompts/BP-092.md $DEST
+cp prompts/BP-092a.md $DEST
+cp prompts/BP-093.md $DEST
+cp prompts/BP-094.md $DEST
+cp prompts/BP-095.md $DEST
+cp prompts/BP-096.md $DEST
+cp prompts/BP-097.md $DEST
+cp prompts/INFRA-012.md $DEST
+cp planning/PROJECT_STATUS.md $DEST
+cp planning/CLOSED_TECH_DEBT.md $DEST
+cp blogs/BLOG_bpu_16_external_anchors.md  $DEST
+cp blogs/BLOG_bpu_19_bp_cluster_build.md  $DEST

@@ -104,7 +104,9 @@ production-quality outputs.
   modify any content outside these markers.
   The sole exception is the Model header field, 
   which the IA populates per "Model Reporting in Task Files" below.
-
+- No default permission is allowed for git commands unless expressed
+  in the task file. Unless permission has been granted the IA
+  must ask for permission before proceeding.
 - Results Capture content must be ASCII only. No Unicode.
 - Final console output should avoid non-ASCII if possible.
   This is a preference but not a hard requirement.

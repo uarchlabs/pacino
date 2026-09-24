@@ -35,6 +35,15 @@
 // The cases also still cover the adjacency the generation bit
 // exists to separate: after a full lap the low bits alias at EMPTY,
 // and the design must read empty rather than full.
+//
+// XLATE_PTR, BP-112 (TD#127). FQ-1 now puts xlate_ptr between
+// fetch_ptr and alloc_ptr, so no fetch can issue until the entry's
+// translation has been accepted. Groups A to G predate the pointer
+// and run with the translation port FREE-RUNNING -- val and rdy held
+// high by clr() -- so xlate_ptr follows the written frontier one
+// cycle behind, and alloc_n() gives it that cycle before returning.
+// No check in A to G changed. Group H drives the port by hand and
+// covers advance, wrap and redirect for xlate_ptr.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -43,6 +52,12 @@ module tb;
 
   localparam int PB = FTQ_IDX_BITS + 1;   // pointer width, 7
   localparam int LIM = FTQ_DEPTH;         // FTQ_ALLOC_LIMIT, 64
+
+  // ftq_npc's arm_win, one-hot over [5:1] (ftq_decisions.md 4.2).
+  localparam logic [5:1] ARM_BKEND = 5'b00001;
+  localparam logic [5:1] ARM_PD    = 5'b00010;
+  localparam logic [5:1] ARM_P3    = 5'b00100;
+  localparam logic [5:1] ARM_P2    = 5'b01000;
 
   logic clk;
   logic rstn;
@@ -53,6 +68,8 @@ module tb;
   logic [PB-1:0]            commit_ptr;
   logic                     alloc_req_val;
   logic                     alloc_req_rdy;
+  logic                     xlate_req_val;
+  logic                     xlate_req_rdy;
   logic                     ifu_req_val;
   logic                     ifu_req_rdy;
   logic                     alloc_inflight;
@@ -60,17 +77,21 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]  redir_idx;
   logic                     redir_self;
   ftq_redir_cause_e         redir_cause;
+  logic [5:1]               redir_arm;
 
   logic [PB-1:0]            alloc_ptr;
+  logic [PB-1:0]            xlate_ptr;
   logic [PB-1:0]            fetch_ptr;
   logic                     ftq_full;
   logic                     ftq_empty;
+  logic                     xlate_pending;
   logic                     fetch_pending;
   logic                     ptr_alias_full;
   logic                     squash_val;
   logic [PB-1:0]            squash_start;
   logic [PB-1:0]            squash_end;
   logic [FTQ_IDX_BITS-1:0]  alloc_idx;
+  logic [FTQ_IDX_BITS-1:0]  xlate_idx;
   logic [FTQ_IDX_BITS-1:0]  fetch_idx;
 
   ftq_ptr dut (
@@ -79,6 +100,8 @@ module tb;
     .commit_ptr     (commit_ptr),
     .alloc_req_val  (alloc_req_val),
     .alloc_req_rdy  (alloc_req_rdy),
+    .xlate_req_val  (xlate_req_val),
+    .xlate_req_rdy  (xlate_req_rdy),
     .ifu_req_val    (ifu_req_val),
     .ifu_req_rdy    (ifu_req_rdy),
     .alloc_inflight (alloc_inflight),
@@ -86,16 +109,20 @@ module tb;
     .redir_idx      (redir_idx),
     .redir_self     (redir_self),
     .redir_cause    (redir_cause),
+    .redir_arm      (redir_arm),
     .alloc_ptr      (alloc_ptr),
+    .xlate_ptr      (xlate_ptr),
     .fetch_ptr      (fetch_ptr),
     .ftq_full       (ftq_full),
     .ftq_empty      (ftq_empty),
+    .xlate_pending  (xlate_pending),
     .fetch_pending  (fetch_pending),
     .ptr_alias_full (ptr_alias_full),
     .squash_val     (squash_val),
     .squash_start   (squash_start),
     .squash_end     (squash_end),
     .alloc_idx      (alloc_idx),
+    .xlate_idx      (xlate_idx),
     .fetch_idx      (fetch_idx)
   );
 
@@ -138,6 +165,11 @@ module tb;
   task automatic clr();
     alloc_req_val = 1'b0;
     alloc_req_rdy = 1'b0;
+    // The translation port free-runs: the module gates the advance on
+    // xlate_pending, so val and rdy high is an IFU that accepts every
+    // translation the FTQ presents. Group H overrides it.
+    xlate_req_val = 1'b1;
+    xlate_req_rdy = 1'b1;
     ifu_req_val   = 1'b0;
     ifu_req_rdy   = 1'b0;
     // The p0-to-p1 gap. Held clear for every case below, so
@@ -148,6 +180,9 @@ module tb;
     redir_idx     = '0;
     redir_self    = 1'b0;
     redir_cause   = RC_MISPREDICT;
+    // Groups A to G predate the arm input and every redirect in them
+    // is a backend one. Group H drives the front-end arms.
+    redir_arm     = ARM_BKEND;
   endtask
 
   task automatic do_reset();
@@ -161,13 +196,31 @@ module tb;
 
   // Present n accepted prediction requests at p0, one per cycle.
   // Acceptance is alloc_req_val & alloc_req_rdy; the module applies
-  // the full gate itself.
+  // the full gate itself. The trailing cycle lets a free-running
+  // translation port reach the new head: xlate_ptr trails the
+  // frontier by one cycle, and fetch_ptr may not pass it (FQ-1).
   task automatic alloc_n(input int n);
     alloc_req_val = 1'b1;
     alloc_req_rdy = 1'b1;
     repeat (n) tick();
     alloc_req_val = 1'b0;
     alloc_req_rdy = 1'b0;
+    tick();
+  endtask
+
+  // Translate n entries by hand, one per cycle.
+  task automatic xlate_n(input int n);
+    xlate_req_val = 1'b1;
+    xlate_req_rdy = 1'b1;
+    repeat (n) tick();
+    xlate_req_val = 1'b0;
+    xlate_req_rdy = 1'b0;
+  endtask
+
+  // Stop the free-running translation port.
+  task automatic xlate_off();
+    xlate_req_val = 1'b0;
+    xlate_req_rdy = 1'b0;
   endtask
 
   // Issue n accepted fetch requests, one per cycle.
@@ -189,7 +242,7 @@ module tb;
   endtask
 
   // One redirect cycle. idx, self and cause are the winning
-  // redirect ftq_npc publishes (7.3).
+  // redirect ftq_npc publishes (7.3). A backend redirect, arm 1.
   task automatic redirect(input logic [FTQ_IDX_BITS-1:0] idx,
                           input logic                    self_sq,
                           input ftq_redir_cause_e        cause);
@@ -197,11 +250,27 @@ module tb;
     redir_idx   = idx;
     redir_self  = self_sq;
     redir_cause = cause;
+    redir_arm   = ARM_BKEND;
     tick();
     redir_val   = 1'b0;
     redir_idx   = '0;
     redir_self  = 1'b0;
     redir_cause = RC_MISPREDICT;
+  endtask
+
+  // One FRONT-END redirect cycle: p2, p3 or predecode, which ftq_npc
+  // always publishes as RC_MISPREDICT with _self clear.
+  task automatic redirect_fe(input logic [FTQ_IDX_BITS-1:0] idx,
+                             input logic [5:1]              arm);
+    redir_val   = 1'b1;
+    redir_idx   = idx;
+    redir_self  = 1'b0;
+    redir_cause = RC_MISPREDICT;
+    redir_arm   = arm;
+    tick();
+    redir_val   = 1'b0;
+    redir_idx   = '0;
+    redir_arm   = ARM_BKEND;
   endtask
 
   // -----------------------------------------------------------------
@@ -601,6 +670,225 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // H. xlate_ptr, TD#127 (BP-112).
+  // -----------------------------------------------------------------
+  //   reset    5.1  xlate_ptr and fetch_ptr are the same entry
+  //   advance  5.1  on ftq_ifu_xlate_val & _rdy, bounded by the
+  //                 WRITTEN frontier, not by alloc_ptr
+  //   order    5.1  FQ-1, fetch_ptr <= xlate_ptr <= alloc_ptr
+  //   wrap     5.1  seven bits, the top one the generation
+  //   redirect 5.5  R1, the minimum of its value and F, F by source
+  task automatic group_h();
+    $display("-- H: xlate_ptr --");
+    do_reset();
+    xlate_off();
+
+    chk_eq("H1 xlate_ptr resets to 0",          xlate_ptr, '0);
+    chk   ("H2 and equals fetch_ptr",           xlate_ptr == fetch_ptr);
+    chk   ("H3 nothing to translate at reset",  !xlate_pending);
+
+    // ADVANCE. Three entries allocated and none translated. There is
+    // a translation pending and NO fetch pending: fetch waits for
+    // translation (FQ-1, ftq_ifu_interfaces.md 4).
+    alloc_n(3);
+    chk_eq("H4 alloc_ptr at 3",                alloc_ptr, 7'd3);
+    chk_eq("H5 xlate_ptr held with the port off", xlate_ptr, '0);
+    chk   ("H6 a translation is pending",      xlate_pending);
+    chk   ("H7 no fetch before its translation", !fetch_pending);
+    fetch_n(2);
+    chk_eq("H8 fetch_ptr cannot pass xlate_ptr", fetch_ptr, '0);
+
+    // val without rdy, and rdy without val, do not advance it.
+    xlate_req_val = 1'b1;
+    xlate_req_rdy = 1'b0;
+    repeat (2) tick();
+    xlate_req_val = 1'b0;
+    xlate_req_rdy = 1'b1;
+    repeat (2) tick();
+    xlate_off();
+    chk_eq("H9 no advance without val and rdy", xlate_ptr, '0);
+
+    xlate_n(1);
+    chk_eq("H10 one handshake, one entry", xlate_ptr, 7'd1);
+    chk   ("H11 the translated entry is fetchable", fetch_pending);
+    fetch_n(3);
+    chk_eq("H12 fetch_ptr stops at xlate_ptr", fetch_ptr, 7'd1);
+
+    // FQ-1 upper half: xlate_ptr may not pass alloc_ptr.
+    xlate_n(6);
+    chk_eq("H13 xlate_ptr stops at alloc_ptr", xlate_ptr, 7'd3);
+    chk   ("H14 nothing left to translate",    !xlate_pending);
+
+    // THE WRITTEN FRONTIER (5.1). xlate_ptr meets it first.
+    alloc_req_val = 1'b1;
+    alloc_req_rdy = 1'b1;
+    tick();
+    alloc_req_val = 1'b0;
+    alloc_req_rdy = 1'b0;
+    alloc_inflight = 1'b1;
+    #1;
+    chk_eq("H15 alloc_ptr at 4",                alloc_ptr, 7'd4);
+    chk   ("H16 no translation of an unwritten entry", !xlate_pending);
+    xlate_n(2);
+    chk_eq("H17 xlate_ptr held at the frontier", xlate_ptr, 7'd3);
+    alloc_inflight = 1'b0;
+    #1;
+    chk   ("H18 pending once the write lands", xlate_pending);
+    xlate_n(1);
+    chk_eq("H19 and it advances", xlate_ptr, 7'd4);
+
+    // A REDIRECT OUTRANKS THE HANDSHAKE in the same cycle. xlate_ptr
+    // at 4 is ahead of F = 3 for a backend _self-clear redirect
+    // naming 2, and lands on F, not F+1.
+    xlate_req_val = 1'b1;
+    xlate_req_rdy = 1'b1;
+    redirect(6'd2, 1'b0, RC_MISPREDICT);
+    xlate_off();
+    chk_eq("H20 the redirect outranks the handshake", xlate_ptr, 7'd3);
+
+    // WRAP. One full lap with the port free-running.
+    do_reset();
+    for (int i = 0; i < FTQ_DEPTH; i++) begin
+      alloc_n(1);
+      fetch_n(1);
+      commit_n(1);
+    end
+    chk_eq("H21 xlate_ptr wrapped, gen set", xlate_ptr, 7'h40);
+    chk_eq("H22 xlate_idx back to zero", PB'(xlate_idx), '0);
+    chk   ("H23 empty needs all four equal", ftq_empty);
+
+    // REDIRECT, backend _self clear, xlate_ptr ahead of F = K+1.
+    do_reset();
+    alloc_n(10);
+    fetch_n(6);
+    chk_eq("H24 xlate_ptr ran to the head", xlate_ptr, 7'd10);
+    redirect(6'd3, 1'b0, RC_MISPREDICT);
+    chk_eq("H25 backend _self clear: alloc_ptr K+1", alloc_ptr, 7'd4);
+    chk_eq("H26 xlate_ptr to F = K+1",              xlate_ptr, 7'd4);
+    chk_eq("H27 fetch_ptr to F = K+1",              fetch_ptr, 7'd4);
+
+    // backend _self set, F = K.
+    alloc_n(6);
+    redirect(6'd5, 1'b1, RC_TRAP);
+    chk_eq("H28 backend _self set: xlate_ptr to K", xlate_ptr, 7'd5);
+    chk_eq("H29 alloc_ptr to K",                    alloc_ptr, 7'd5);
+
+    // xlate_ptr BEHIND F is left where it is. The unfetched and
+    // untranslated entries older than F are live.
+    do_reset();
+    alloc_n(10);
+    fetch_n(2);
+    xlate_off();
+    redirect(6'd1, 1'b0, RC_REPLAY);
+    chk_eq("H30 setup: xlate_ptr at 2",       xlate_ptr, 7'd2);
+    alloc_n(8);
+    chk_eq("H31 alloc_ptr at 10 again",       alloc_ptr, 7'd10);
+    redirect(6'd7, 1'b0, RC_MISPREDICT);
+    chk_eq("H32 xlate_ptr behind F, held",    xlate_ptr, 7'd2);
+    chk_eq("H33 fetch_ptr behind F, held",    fetch_ptr, 7'd2);
+    chk_eq("H34 alloc_ptr to K+1",            alloc_ptr, 7'd8);
+    // One idle cycle before the next reset, so the properties bound
+    // to ftq_ptr sample the state after this redirect (Q7).
+    tick();
+
+    // FRONT END, predecode. K = 6 survives, corrected. alloc_ptr is
+    // K+1 as for a surviving backend entry, but F = K: xlate_ptr and
+    // fetch_ptr land ON K so it is translated and fetched again
+    // (ftq_ifu_interfaces.md 7 W3).
+    do_reset();
+    alloc_n(10);
+    fetch_n(8);
+    redirect_fe(6'd6, ARM_PD);
+    chk_eq("H35 predecode: alloc_ptr to K+1", alloc_ptr, 7'd7);
+    chk_eq("H36 predecode: xlate_ptr to K",   xlate_ptr, 7'd6);
+    chk_eq("H37 predecode: fetch_ptr to K",   fetch_ptr, 7'd6);
+    chk   ("H38 K is to be translated again", xlate_pending);
+    chk   ("H39 and not fetched until it is", !fetch_pending);
+    tick();
+    chk_eq("H40 K translated",                xlate_ptr, 7'd7);
+    fetch_n(1);
+    chk_eq("H41 K fetched again",             fetch_ptr, 7'd7);
+
+    // FRONT END, p2, with fetch_ptr exactly at K+1: K was fetched
+    // against the old prediction and must be fetched again.
+    do_reset();
+    alloc_n(10);
+    fetch_n(7);
+    redirect_fe(6'd6, ARM_P2);
+    chk_eq("H42 p2: xlate_ptr to K", xlate_ptr, 7'd6);
+    chk_eq("H43 p2: fetch_ptr back to K", fetch_ptr, 7'd6);
+    tick();
+
+    // FRONT END, p3, with both pointers behind K: left alone.
+    do_reset();
+    alloc_n(10);
+    fetch_n(2);
+    xlate_off();
+    redirect(6'd3, 1'b0, RC_REPLAY);
+    alloc_n(6);
+    chk_eq("H44a setup: xlate_ptr at 4",  xlate_ptr, 7'd4);
+    chk_eq("H44b setup: alloc_ptr at 10", alloc_ptr, 7'd10);
+    redirect_fe(6'd6, ARM_P3);
+    chk_eq("H45 p3: xlate_ptr behind K, held", xlate_ptr, 7'd4);
+    chk_eq("H46 p3: fetch_ptr behind K, held", fetch_ptr, 7'd2);
+    chk_eq("H47 p3: alloc_ptr to K+1",         alloc_ptr, 7'd7);
+    tick();
+
+    // FRONT END ACROSS THE WRAP. commit_ptr at 60, head at 68; index
+    // 2 belongs to the next generation, entry 7'h42.
+    do_reset();
+    alloc_n(60);
+    fetch_n(60);
+    commit_n(60);
+    alloc_n(8);
+    fetch_n(8);
+    redirect_fe(6'd2, ARM_P3);
+    chk_eq("H48 across the wrap: alloc_ptr 7'h43", alloc_ptr, 7'h43);
+    chk_eq("H49 across the wrap: xlate_ptr 7'h42", xlate_ptr, 7'h42);
+    chk_eq("H50 across the wrap: fetch_ptr 7'h42", fetch_ptr, 7'h42);
+    tick();
+
+    // RC_UNSPEC. F = commit_ptr, forced by U3 and FQ-1.
+    do_reset();
+    alloc_n(20);
+    fetch_n(12);
+    commit_n(5);
+    redirect(6'd17, 1'b1, RC_UNSPEC);
+    chk_eq("H51 RC_UNSPEC: xlate_ptr to commit_ptr", xlate_ptr, 7'd5);
+    chk   ("H52 and the queue is empty",             ftq_empty);
+
+    // TD#138, AS BUILT, NOT RULED. A redirect and an accepted
+    // translation AND fetch handshake in the same cycle, with both
+    // pointers BEHIND F. The redirect wins and both handshakes are
+    // dropped: xlate_ptr stays at 4 and fetch_ptr at 2, not 5 and 3,
+    // although the entries they name are live and the IFU accepted
+    // them. ftq_ifu_interfaces.md 5 reads otherwise. This pins the
+    // built behaviour so a change to it is seen.
+    do_reset();
+    xlate_off();
+    alloc_n(10);
+    xlate_n(4);
+    fetch_n(2);
+    xlate_req_val = 1'b1;
+    xlate_req_rdy = 1'b1;
+    ifu_req_val   = 1'b1;
+    ifu_req_rdy   = 1'b1;
+    #1;
+    chk("H53 setup: both handshakes would be accepted",
+        xlate_pending && fetch_pending);
+    redirect(6'd7, 1'b0, RC_MISPREDICT);
+    xlate_off();
+    ifu_req_val   = 1'b0;
+    ifu_req_rdy   = 1'b0;
+    chk_eq("H54 same cycle: xlate handshake dropped", xlate_ptr, 7'd4);
+    chk_eq("H55 same cycle: fetch handshake dropped", fetch_ptr, 7'd2);
+    chk_eq("H56 same cycle: alloc_ptr to K+1",        alloc_ptr, 7'd8);
+    tick();
+    clr();
+    tick();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -623,6 +911,7 @@ module tb;
     group_e();
     group_f();
     group_g();
+    group_h();
 
     $display("tb_ftq_ptr: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

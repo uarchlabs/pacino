@@ -26,7 +26,17 @@ module ftq_ifu_assert (
   input logic                     gen_fetch,
   input logic                     gen_pdwb,
   input logic                     wb_rcvd_pdwb,
+  input logic [FTQ_IDX_BITS-1:0]  xlate_idx,
+  input logic                     xlate_pending,
+  input logic [VA_WIDTH-1:0]      xlate_pc,
   input logic                     redir_val,
+  input logic [FTQ_IDX_BITS-1:0]  redir_idx,
+  input logic                     redir_self,
+  input ftq_redir_cause_e         redir_cause,
+  input logic [5:1]               redir_arm,
+  input logic                     ftq_ifu_xlate_val,
+  input logic [VA_WIDTH-1:0]      ftq_ifu_xlate_pc,
+  input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_xlate_idx,
   input logic                     ftq_ifu_req_val,
   input logic [VA_WIDTH-1:0]      ftq_ifu_start_pc,
   input logic [VA_WIDTH-1:0]      ftq_ifu_next_pc,
@@ -35,6 +45,7 @@ module ftq_ifu_assert (
   input logic [FTB_BR_POS_BITS-1:0] ftq_ifu_taken_pos,
   input logic                     ftq_ifu_gen,
   input logic                     ftq_ifu_flush_val,
+  input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_flush_idx,
   input logic                     ifu_ftq_pdwb_val,
   input logic                     ifu_ftq_pdwb_gen,
   input logic                     ifu_ftq_mis_val,
@@ -49,6 +60,17 @@ module ftq_ifu_assert (
   input logic                     wb_accept,
   input logic                     wb_drop_gen
 );
+
+  // ftq_npc's arm numbering, as ftq_ifu declares it.
+  localparam int ARM_PD = 2;
+  localparam int ARM_P3 = 3;
+  localparam int ARM_P2 = 4;
+
+  logic w_fe_redir;
+  always_comb begin : fe_set
+    w_fe_redir = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
+                 redir_arm[ARM_P2];
+  end
 
   // I1  A stale writeback is dropped ENTIRELY. 6.1 X3, and the four
   //     outputs are the whole of "entirely".
@@ -166,6 +188,43 @@ module ftq_ifu_assert (
         (ftq_ifu_next_pc == fetch_entry.pft_addr);
   endproperty
 
+  // I12 7 W3 and ifu_ibuf_interfaces.md IB-13. A p2, p3 or predecode
+  //     redirect flushes AT K: K survives, corrected, and a fetch of
+  //     K issued against the old prediction truncates in the wrong
+  //     place. TD#126 flushed at K+1 for every surviving entry.
+  property p_fe_flush_at_k;
+    @(posedge clk) disable iff (!rstn)
+      (redir_val && w_fe_redir && (redir_cause != RC_UNSPEC)) |->
+        (ftq_ifu_flush_idx == redir_idx);
+  endproperty
+
+  // I13 The backend half, unchanged by BP-112 (ftq_backend_interfaces
+  //     .md 5 D5). _self clear flushes at K+1, _self set at K.
+  property p_bkend_flush_by_self;
+    @(posedge clk) disable iff (!rstn)
+      (redir_val && !w_fe_redir && (redir_cause != RC_UNSPEC)) |->
+        (ftq_ifu_flush_idx == (redir_self ? redir_idx
+                                          : redir_idx + 1'b1));
+  endproperty
+
+  // I14 4.1. The translation request carries its entry's own index
+  //     and block start pc. A wrong index tags the IFU's translation
+  //     queue entry against the wrong fetch; a wrong pc translates the
+  //     wrong page.
+  property p_xlate_self;
+    @(posedge clk) disable iff (!rstn)
+      ftq_ifu_xlate_val |-> (ftq_ifu_xlate_idx == xlate_idx) &&
+                            (ftq_ifu_xlate_pc  == xlate_pc);
+  endproperty
+
+  // I15 No translation request without a pending entry. xlate_pending
+  //     is measured to the WRITTEN frontier (5.1), so this is also
+  //     what stops a request for an entry whose pc does not exist yet.
+  property p_xlate_needs_pending;
+    @(posedge clk) disable iff (!rstn)
+      ftq_ifu_xlate_val |-> xlate_pending;
+  endproperty
+
   a_stale_wb_dropped:   assert property (p_stale_wb_dropped)
     else $error("I1 a stale writeback was not dropped entirely");
   a_accept_needs_match: assert property (p_accept_needs_match)
@@ -188,6 +247,14 @@ module ftq_ifu_assert (
     else $error("I10 taken_val set with no taken slot in the entry");
   a_not_taken_is_pft:   assert property (p_not_taken_is_pft)
     else $error("I11 no taken slot but next_pc is not the pft_addr");
+  a_fe_flush_at_k:      assert property (p_fe_flush_at_k)
+    else $error("I12 a front-end redirect did not flush at K");
+  a_bkend_flush_self:   assert property (p_bkend_flush_by_self)
+    else $error("I13 the backend flush index does not follow _self");
+  a_xlate_self:         assert property (p_xlate_self)
+    else $error("I14 the translation request does not describe its entry");
+  a_xlate_pending:      assert property (p_xlate_needs_pending)
+    else $error("I15 a translation was requested for no pending entry");
 
   logic w_unused;
   assign w_unused = |ftq_ifu_taken_pos | |pd_wr_sel |
@@ -205,7 +272,17 @@ bind ftq_ifu ftq_ifu_assert u_assert (
   .gen_fetch         (gen_fetch),
   .gen_pdwb          (gen_pdwb),
   .wb_rcvd_pdwb      (wb_rcvd_pdwb),
+  .xlate_idx         (xlate_idx),
+  .xlate_pending     (xlate_pending),
+  .xlate_pc          (xlate_pc),
   .redir_val         (redir_val),
+  .redir_idx         (redir_idx),
+  .redir_self        (redir_self),
+  .redir_cause       (redir_cause),
+  .redir_arm         (redir_arm),
+  .ftq_ifu_xlate_val (ftq_ifu_xlate_val),
+  .ftq_ifu_xlate_pc  (ftq_ifu_xlate_pc),
+  .ftq_ifu_xlate_idx (ftq_ifu_xlate_idx),
   .ftq_ifu_req_val   (ftq_ifu_req_val),
   .ftq_ifu_start_pc  (ftq_ifu_start_pc),
   .ftq_ifu_next_pc   (ftq_ifu_next_pc),
@@ -214,6 +291,7 @@ bind ftq_ifu ftq_ifu_assert u_assert (
   .ftq_ifu_taken_pos (ftq_ifu_taken_pos),
   .ftq_ifu_gen       (ftq_ifu_gen),
   .ftq_ifu_flush_val (ftq_ifu_flush_val),
+  .ftq_ifu_flush_idx (ftq_ifu_flush_idx),
   .ifu_ftq_pdwb_val  (ifu_ftq_pdwb_val),
   .ifu_ftq_pdwb_gen  (ifu_ftq_pdwb_gen),
   .ifu_ftq_mis_val   (ifu_ftq_mis_val),

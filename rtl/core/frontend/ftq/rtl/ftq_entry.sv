@@ -38,9 +38,14 @@
 // reach here, so the case is an input error and allocation --
 // the newest event for the index -- wins the block fields.
 //
-// READ PORTS. Five, and ftq_decisions.md 1 counts three. The two it
-// does not count are both named elsewhere in the same document set:
+// READ PORTS. Six, and ftq_decisions.md 1 counts three. The three it
+// does not count are all named elsewhere in the same document set:
 //
+//   xlate    every cycle, at xlate_ptr, the block start pc ONLY. The
+//            translation request of ftq_ifu_interfaces.md 4.1 carries
+//            bp_ftq_entry_t.pc and nothing else from the entry, so the
+//            port is VA_WIDTH wide rather than a whole entry. Added by
+//            BP-112 (TD#127).
 //   fetch    every cycle, at fetch_ptr. Section 1.
 //   redir    on redirect, for the checkpoint and the RAS snapshot
 //            to restore, and to re-derive the block successor.
@@ -126,6 +131,9 @@ module ftq_entry (
   input  logic                      pd_wr_kill,
 
   // ---- reads -------------------------------------------------------
+  input  logic [FTQ_IDX_BITS-1:0]   xlate_rd_idx,
+  output logic [VA_WIDTH-1:0]       xlate_rd_pc,
+
   input  logic [FTQ_IDX_BITS-1:0]   fetch_rd_idx,
   output bp_ftq_entry_t             fetch_rd_entry,
 
@@ -169,6 +177,7 @@ module ftq_entry (
   // Reads. Combinational, see the header.
   // -----------------------------------------------------------------
   always_comb begin : reads
+    xlate_rd_pc      = r_arr[xlate_rd_idx].pc;
     fetch_rd_entry   = r_arr[fetch_rd_idx];
     redir_rd_entry   = r_arr[redir_rd_idx];
     pdwb_rd_entry    = r_arr[pdwb_rd_idx];

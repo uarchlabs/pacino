@@ -41,7 +41,8 @@
 //
 // ELEVEN MODULES, one owner per piece of state (7.1):
 //
-//   ftq_ptr         alloc_ptr, fetch_ptr        5.1 5.2 5.5
+//   ftq_ptr         alloc_ptr, xlate_ptr,
+//                   fetch_ptr                   5.1 5.2 5.5
 //   ftq_commit      commit_ptr, the walk        5.3 5.4
 //   ftq_npc         the next-PC register and
 //                   the redirect arbitration    4
@@ -175,6 +176,11 @@ module ftq (
   // =================================================================
   // IFU boundary, ftq_ifu_interfaces.md
   // =================================================================
+  output logic                        ftq_ifu_xlate_val,
+  input  logic                        ftq_ifu_xlate_rdy,
+  output logic [VA_WIDTH-1:0]         ftq_ifu_xlate_pc,
+  output logic [FTQ_IDX_BITS-1:0]     ftq_ifu_xlate_idx,
+
   output logic                        ftq_ifu_req_val,
   input  logic                        ftq_ifu_req_rdy,
   output logic [VA_WIDTH-1:0]         ftq_ifu_start_pc,
@@ -232,9 +238,13 @@ module ftq (
   // Internal nets. Named for the port they carry, prefixed w_.
   // -----------------------------------------------------------------
   logic [FTQ_PTR_BITS-1:0]  w_alloc_ptr;
+  logic [FTQ_PTR_BITS-1:0]  w_xlate_ptr;
   logic [FTQ_PTR_BITS-1:0]  w_fetch_ptr;
   logic [FTQ_PTR_BITS-1:0]  w_commit_ptr;
   logic [FTQ_IDX_BITS-1:0]  w_alloc_idx;
+  logic [FTQ_IDX_BITS-1:0]  w_xlate_idx;
+  logic                     w_xlate_pending;
+  logic [VA_WIDTH-1:0]      w_xlate_pc;
   logic [FTQ_IDX_BITS-1:0]  w_fetch_idx;
   logic                     w_fetch_pending;
   logic                     w_ptr_alias_full;
@@ -320,7 +330,7 @@ module ftq (
   logic                     w_sched_any_high;
 
   // -----------------------------------------------------------------
-  // ftq_ptr. alloc_ptr and fetch_ptr, 5.1 5.2 5.5.
+  // ftq_ptr. alloc_ptr, xlate_ptr and fetch_ptr, 5.1 5.2 5.5.
   // -----------------------------------------------------------------
   // alloc_req_rdy is tied high. The acceptance of 5.2 is H1 clear,
   // and H1 is already inside ftq_pred_val_p0: ftq_npc forms the hold
@@ -333,6 +343,8 @@ module ftq (
     .commit_ptr     (w_commit_ptr),
     .alloc_req_val  (ftq_pred_val_p0),
     .alloc_req_rdy  (1'b1),
+    .xlate_req_val  (ftq_ifu_xlate_val),
+    .xlate_req_rdy  (ftq_ifu_xlate_rdy),
     .ifu_req_val    (ftq_ifu_req_val),
     .ifu_req_rdy    (ftq_ifu_req_rdy),
     .alloc_inflight (w_alloc_inflight),
@@ -340,16 +352,20 @@ module ftq (
     .redir_idx      (w_redir_idx),
     .redir_self     (w_redir_self),
     .redir_cause    (w_redir_cause),
+    .redir_arm      (w_arm_win),
     .alloc_ptr      (w_alloc_ptr),
+    .xlate_ptr      (w_xlate_ptr),
     .fetch_ptr      (w_fetch_ptr),
     .ftq_full       (ftq_full),
     .ftq_empty      (ftq_empty),
+    .xlate_pending  (w_xlate_pending),
     .fetch_pending  (w_fetch_pending),
     .ptr_alias_full (w_ptr_alias_full),
     .squash_val     (w_squash_val),
     .squash_start   (w_squash_start),
     .squash_end     (w_squash_end),
     .alloc_idx      (w_alloc_idx),
+    .xlate_idx      (w_xlate_idx),
     .fetch_idx      (w_fetch_idx)
   );
 
@@ -483,6 +499,8 @@ module ftq (
     .pd_wr_sel           (w_pd_wr_sel),
     .pd_wr_slot          (w_pd_wr_slot),
     .pd_wr_kill          (w_pd_wr_kill),
+    .xlate_rd_idx        (w_xlate_idx),
+    .xlate_rd_pc         (w_xlate_pc),
     .fetch_rd_idx        (w_fetch_idx),
     .fetch_rd_entry      (w_fetch_entry),
     .redir_rd_idx        (ftq_rollback_idx),
@@ -555,9 +573,16 @@ module ftq (
   // -----------------------------------------------------------------
   // ftq_ifu. The IFU boundary.
   // -----------------------------------------------------------------
+  // redir_arm is ftq_npc's arm_win. The flush index of 5.5 R1 is K
+  // for a p2, p3 or predecode redirect and K or K+1 by _self for a
+  // backend one, and the arm is the only place the source is
+  // visible; ftq_ptr reads it for the same reason (BP-112, TD#126).
   ftq_ifu u_ifu (
     .clk               (clk),
     .rstn              (rstn),
+    .xlate_idx         (w_xlate_idx),
+    .xlate_pending     (w_xlate_pending),
+    .xlate_pc          (w_xlate_pc),
     .fetch_idx         (w_fetch_idx),
     .fetch_pending     (w_fetch_pending),
     .fetch_entry       (w_fetch_entry),
@@ -569,6 +594,11 @@ module ftq (
     .redir_idx         (w_redir_idx),
     .redir_self        (w_redir_self),
     .redir_cause       (w_redir_cause),
+    .redir_arm         (w_arm_win),
+    .ftq_ifu_xlate_val (ftq_ifu_xlate_val),
+    .ftq_ifu_xlate_rdy (ftq_ifu_xlate_rdy),
+    .ftq_ifu_xlate_pc  (ftq_ifu_xlate_pc),
+    .ftq_ifu_xlate_idx (ftq_ifu_xlate_idx),
     .ftq_ifu_req_val   (ftq_ifu_req_val),
     .ftq_ifu_req_rdy   (ftq_ifu_req_rdy),
     .ftq_ifu_start_pc  (ftq_ifu_start_pc),
@@ -699,7 +729,7 @@ module ftq (
   // the ENTRY, not on a position inside it. Section 5 declares it;
   // nothing in D1 through D5 reads it.
   logic w_unused;
-  assign w_unused = w_ptr_alias_full | w_walk_active | |w_arm_win |
+  assign w_unused = w_ptr_alias_full | w_walk_active |
                     |w_shadow_val    | w_wb_accept   | w_wb_drop_gen |
                     |w_wb_rcvd_vec   | |w_fault_vec  | |w_gen_vec |
                     |w_rsv_nomap     | |w_rsv_drop_sq |

@@ -53,6 +53,8 @@ module tb;
   bp_ftq_slot_t             pd_wr_slot;
   logic                     pd_wr_kill;
 
+  logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx;
+  logic [VA_WIDTH-1:0]      xlate_rd_pc;
   logic [FTQ_IDX_BITS-1:0]  fetch_rd_idx;
   bp_ftq_entry_t            fetch_rd_entry;
   logic [FTQ_IDX_BITS-1:0]  redir_rd_idx;
@@ -92,6 +94,8 @@ module tb;
     .pd_wr_sel           (pd_wr_sel),
     .pd_wr_slot          (pd_wr_slot),
     .pd_wr_kill          (pd_wr_kill),
+    .xlate_rd_idx        (xlate_rd_idx),
+    .xlate_rd_pc         (xlate_rd_pc),
     .fetch_rd_idx        (fetch_rd_idx),
     .fetch_rd_entry      (fetch_rd_entry),
     .redir_rd_idx        (redir_rd_idx),
@@ -181,6 +185,7 @@ module tb;
     pd_wr_idx          = '0;
     pd_wr_sel          = '0;
     pd_wr_slot         = '0;
+    xlate_rd_idx       = '0;
     fetch_rd_idx       = '0;
     redir_rd_idx       = '0;
     pdwb_rd_idx        = '0;
@@ -269,7 +274,7 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
-  // B. The four read ports are independent views of one array.
+  // B. The read ports are independent views of one array.
   // -----------------------------------------------------------------
   task automatic group_b();
     $display("-- B: read port independence --");
@@ -295,6 +300,20 @@ module tb;
     chk_va("B5 resolve port 0", rsv_rd_entry[0].pc,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 5 * 32));
     chk_va("B6 resolve port 1", rsv_rd_entry[1].pc,
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 0 * 32));
+
+    // The translation port (BP-112, ftq_ifu_interfaces.md 4.1). The
+    // block start pc only, at its own index, independent of the
+    // fetch port that reads the same entry later.
+    xlate_rd_idx = 6'd4;
+    #1;
+    chk_va("B6a translation port", xlate_rd_pc,
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 4 * 32));
+    chk_va("B6b fetch port unmoved by it", fetch_rd_entry.pc,
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 1 * 32));
+    xlate_rd_idx = 6'd0;
+    #1;
+    chk_va("B6c translation port follows its index", xlate_rd_pc,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 0 * 32));
 
     // The restore snapshot is the redirect port's entry, which is

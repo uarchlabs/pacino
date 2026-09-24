@@ -9,8 +9,11 @@
 // .gitkeep. This is the FTQ half of the contract and nothing else;
 // the testbench models the other side.
 //
-// FOUR JOBS, and they are the four groups of the interface:
+// FIVE JOBS, and they are the five groups of the interface:
 //
+//   4.1 the translation request, driven from xlate_ptr (BP-112,
+//      TD#127). Decoupled like the fetch request and flow controlled
+//      independently of it.
 //   4  the fetch request. Decoupled -- the FTQ presents, the IFU
 //      accepts when its first stage is free.
 //   5  the flush. ONE group, not two: the FTQ has already resolved
@@ -66,6 +69,13 @@ module ftq_ifu (
   input  logic                     clk,
   input  logic                     rstn,
 
+  // ---- from ftq_ptr, the entry to translate ------------------------
+  input  logic [FTQ_IDX_BITS-1:0]  xlate_idx,
+  input  logic                     xlate_pending,
+
+  // ---- from ftq_entry, bp_ftq_entry_t.pc at xlate_idx ---------------
+  input  logic [VA_WIDTH-1:0]      xlate_pc,
+
   // ---- from ftq_ptr, the entry to request --------------------------
   input  logic [FTQ_IDX_BITS-1:0]  fetch_idx,
   input  logic                     fetch_pending,
@@ -95,6 +105,17 @@ module ftq_ifu (
   input  logic [FTQ_IDX_BITS-1:0]  redir_idx,
   input  logic                     redir_self,
   input  ftq_redir_cause_e         redir_cause,
+  // The winning arm, one-hot, as numbered on ftq_npc's arm_win. The
+  // SOURCE of the redirect is visible nowhere else: p2, p3 and
+  // predecode arrive as RC_MISPREDICT with _self clear, which is also
+  // how a backend mispredict whose entry survives arrives.
+  input  logic [5:1]               redir_arm,
+
+  // ---- section 4.1, the translation request ------------------------
+  output logic                     ftq_ifu_xlate_val,
+  input  logic                     ftq_ifu_xlate_rdy,
+  output logic [VA_WIDTH-1:0]      ftq_ifu_xlate_pc,
+  output logic [FTQ_IDX_BITS-1:0]  ftq_ifu_xlate_idx,
 
   // ---- section 4, the fetch request --------------------------------
   output logic                     ftq_ifu_req_val,
@@ -149,6 +170,18 @@ module ftq_ifu (
   output logic                     wb_drop_gen
 );
 
+  // The arms of ftq_npc's arbitration (ftq_decisions.md 4.2), as
+  // numbered on arm_win. Arm 5 is the p1 successor and publishes no
+  // redirect.
+  localparam int ARM_BKEND = 1;
+  localparam int ARM_PD    = 2;
+  localparam int ARM_P3    = 3;
+  localparam int ARM_P2    = 4;
+  localparam int ARM_P1    = 5;
+
+  // The redirect is one of the front-end causes of W3.
+  logic                w_fe_redir;
+
   // The predecode slot the writeback names, and the bp_ftq_slot_t
   // built from it.
   ftq_pd_info_t        w_pd_at_mis;
@@ -163,6 +196,29 @@ module ftq_ifu (
 
   logic [TRX_SLOT_BITS-1:0] w_sel;
   logic                     w_sel_found;
+
+  // -----------------------------------------------------------------
+  // Section 4.1. The translation request.
+  // -----------------------------------------------------------------
+  // The same entry is presented twice: here first, from xlate_ptr,
+  // and on the fetch request later, from fetch_ptr. The two pointers
+  // reach it at different times, so the pc is read twice.
+  //
+  // xlate_pending is the 5.1 run-ahead measured from xlate_ptr to the
+  // WRITTEN frontier, so an entry whose p1 write has not landed is
+  // never presented. The acceptance advances xlate_ptr, which is
+  // ftq_ptr's state, so ftq_ifu_xlate_rdy is consumed there.
+  //
+  // NO RESULT RETURNS. The translation lands in the IFU's own queue
+  // (IFU-25) and the FTQ never sees a physical address. Nor does the
+  // request carry a generation tag: the one-bit scheme of 6.1 is on
+  // the fetch request and the writeback, and no second scheme is
+  // built for this port.
+  always_comb begin : xlate_request
+    ftq_ifu_xlate_val = xlate_pending;
+    ftq_ifu_xlate_idx = xlate_idx;
+    ftq_ifu_xlate_pc  = xlate_pc;
+  end
 
   // -----------------------------------------------------------------
   // Section 4. The fetch request.
@@ -181,8 +237,8 @@ module ftq_ifu (
   // block.
   //
   // The request is presented in FTQ entry order and only for an
-  // entry that has been allocated and not yet issued, which is
-  // exactly fetch_pending.
+  // entry whose translation has been presented and whose fetch has
+  // not yet issued, which is exactly fetch_pending (FQ-1).
   always_comb begin : request
     ftq_ifu_req_val   = fetch_pending;
     ftq_ifu_idx       = fetch_idx;
@@ -211,10 +267,28 @@ module ftq_ifu (
   // Drop every in-flight fetch whose index is AT OR AFTER the flush
   // index, and discard whatever the IFU holds for those entries.
   //
-  // The index is the first entry to drop, so it follows _self the
-  // same way the allocation rewind of 5.5 R1 does: _self clear means
-  // the naming entry survives and the flush starts one past it,
-  // _self set means it does not and the flush starts at it.
+  // The index is the first entry to drop, the flush index F of 5.5
+  // R1. It is K or K+1 BY SOURCE, not by _self alone:
+  //
+  //   p2, p3, predecode      K.   7 W3 and ifu_ibuf_interfaces.md
+  //                               IB-13. K SURVIVES, CORRECTED, and
+  //                               must be fetched again: the
+  //                               correction changes taken_val and
+  //                               taken_pos, which is what the IFU
+  //                               truncates on, so a fetch of K issued
+  //                               against the old prediction ends in
+  //                               the wrong place. For predecode K is
+  //                               already fetched and including it
+  //                               costs nothing.
+  //   backend, _self set     K.   K does not survive.
+  //   backend, _self clear   K+1. K's instructions stand, and
+  //                               refetching K would deliver them
+  //                               twice (ftq_backend_interfaces.md 5
+  //                               D5).
+  //
+  // The front-end set is named by arm because every member arrives
+  // _self clear, the same encoding as the backend K+1 row. Keying on
+  // _self alone was TD#126: K+1 for a surviving entry on every cause.
   //
   // RC_UNSPEC squashes EVERY entry (5.1 U3) and _idx and _self are
   // meaningless on it, so the flush index cannot be derived from
@@ -229,9 +303,14 @@ module ftq_ifu (
   // fetch of the corrected stream; that is the IFU's obligation,
   // stated in section 5, and needs nothing here.
   always_comb begin : flush
+    w_fe_redir = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
+                 redir_arm[ARM_P2];
+
     ftq_ifu_flush_val = redir_val;
     if (redir_cause == RC_UNSPEC) begin
       ftq_ifu_flush_idx = fetch_idx;
+    end else if (w_fe_redir) begin
+      ftq_ifu_flush_idx = redir_idx;
     end else if (redir_self) begin
       ftq_ifu_flush_idx = redir_idx;
     end else begin
@@ -417,16 +496,20 @@ module ftq_ifu (
   //              instruction stream to the backend. The FTQ needs
   //              only to know the block ended early.
   //
-  // ftq_ifu_req_rdy is likewise not read HERE. The acceptance
-  // advances fetch_ptr, which is ftq_ptr's state, so the port is
-  // consumed there; it is on this port list because section 4
-  // declares it on this interface.
+  // ftq_ifu_req_rdy and ftq_ifu_xlate_rdy are likewise not read
+  // HERE. Each acceptance advances a pointer, which is ftq_ptr's
+  // state, so the ports are consumed there; they are on this port
+  // list because sections 4 and 4.1 declare them on this interface.
+  // redir_arm[ARM_BKEND] and the p1 arm are not read: the backend
+  // row is every redirect outside the front-end set.
   //
   // clk and rstn are read by the bound properties, not by this
   // module. See the port list.
   logic w_unused;
   assign w_unused = |ifu_ftq_pd_range | ifu_ftq_cfi_val |
                     |ifu_ftq_cfi_pos  | |ifu_ftq_fault_pos |
-                    ftq_ifu_req_rdy   | rstn | clk;
+                    ftq_ifu_req_rdy   | ftq_ifu_xlate_rdy |
+                    redir_arm[ARM_BKEND] | redir_arm[ARM_P1] |
+                    rstn | clk;
 
 endmodule : ftq_ifu

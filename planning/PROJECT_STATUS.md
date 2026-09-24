@@ -205,11 +205,65 @@ went out with YYYY.MM.DD unfilled. A third, caught while closing
 these rows: an earlier edit of the TD#132 block deleted the TD#137
 row that sat inside it. Restored.
 
+BP-112 built TD#126 and TD#127. regress.sh green, 78 of 78; the only
+count changes are its own checks.
+
+TD#126 WAS NOT MEETABLE FROM THE INTERFACE IT WAS WRITTEN AGAINST.
+ftq_ifu_interfaces.md 7 W3 keys the IFU flush index on the redirect
+cause, and ftq_npc drives RC_MISPREDICT with self=0 for p2, p3,
+predecode and the backend alike, so the distinction is not on the
+bus. BP-112 routed ftq_npc's arm_win, which had only ever been
+terminated in ftq.sv. WITH FTB-G1 (TD#124) AND TD#127 THAT IS THREE
+IN TWO SESSIONS of a rule recorded in a document that no RTL could
+satisfy, and all three surfaced when someone BUILT against the
+document. The session-072 audit swept 47 files against each other
+and found none of them.
+
+The fix was also wider than the TD: fetch_ptr rewound to K+1 for
+every surviving entry, so flushing the IFU at K alone would have
+meant K was flushed and never presented again. The PA's prompt named
+one file.
+
+Found and not fixed: TD#139, a CORRECTNESS bug that predates the
+task. In a redirect cycle the p0 request carries the pre-rewind
+alloc index, so the redirect target block is written to a squashed
+entry and never fetched, and the first 32 bytes of the corrected
+stream are skipped. 670 FTQ checks never saw it because tb_ftq D9
+checks only the index. It is ahead of the IFU work: TD#134 would
+otherwise design wrong-path handling against a redirect path that
+loses its target.
+
+Also new: TD#138 (redirect plus handshake, pinned by tb_ftq_ptr
+H53-H56 so it cannot drift before it is ruled), TD#140, TD#141,
+TD#142.
+
+Q7 IN ftq_ptr_assert WAS NEVER BEING CHECKED: a reset followed the
+redirects it watched, so the property never evaluated. Found by
+mutation, not by reading. Same class as the four testbenches that
+exited 0 on a failed check.
+
+sim_ftq_ptr went from about 2s to 20s and the ftq section from 12s
+to 30s, for four added checks. Unexplained, same shape as TD#131.
+
+Process: the IA ran git stash and git stash pop, which unstaged a
+staged file (content unchanged, restored). Jeff's ruling: THE IA GETS
+NO PERMISSION FOR GIT COMMANDS THAT MODIFY GIT STATE. That is a
+launcher permission, not a rule for the IA to remember.
+
+PA failure, mine: I wrote Problems 2, 3 and 4 of BP-112 without
+reading ftq_decisions.md, ftq_ifu_interfaces.md or
+ftq_backend_interfaces.md. I had two TD rows I had written myself.
+Three of the four in-session interruptions follow directly from
+that, as does the ftq_entry.sv manifest miss. For BP-110 I read
+ftb_decisions.md end to end first and the prompt named sites, rules
+and arithmetic. The unit's documents get read BEFORE the prompt is
+written.
+
 CLOSED: TD#99 by TOOLS-006. TD#124, TD#125 by BP-110. TD#132,
-TD#137 by BP-111.
-New: TD#129 to TD#137. BP-109, BP-110 and BP-111 consumed.
-Next free BP is BP-112. Next free INFRA is INFRA-013. Next free
-TOOLS is TOOLS-007. Next free TD is TD#138.
+TD#137 by BP-111. TD#126, TD#127 by BP-112.
+New: TD#129 to TD#142. BP-109 to BP-112 consumed.
+Next free BP is BP-113. Next free INFRA is INFRA-013. Next free
+TOOLS is TOOLS-007. Next free TD is TD#143.
 
 ---
 ## Session-072: the cross-document audit closed. Documents only.
@@ -2471,29 +2525,49 @@ assessment of each document. Correct any that are wrong.
 |     |          | so every unaligned block got a branch PC wrong by the    |
 |     |          | start offset and a branch an earlier start recorded was  |
 |     |          | still reported. Found by the session-071 IA read.        |
-| 126 | ftq      | OPEN, RTL. THE FLUSH INDEX IS K+1 WHERE W3 REQUIRES K.   |
-|     |          | ftq_ifu.sv 232-239 drives the IFU flush at redir_idx     |
-|     |          | when _self is set and redir_idx + 1 when it is clear,    |
-|     |          | for every cause. For a p2, p3 or predecode redirect the  |
-|     |          | named entry survives corrected, and                      |
-|     |          | ftq_ifu_interfaces.md 7 W3 and ifu_ibuf_interfaces.md    |
-|     |          | IB-13 require the flush at K so K is fetched against the |
-|     |          | correction: a fetch of K issued against the old          |
-|     |          | prediction truncates at the old taken_pos. The backend   |
-|     |          | half, K+1 with _self clear and K with it set, is correct |
-|     |          | and is now written into ftq_backend_interfaces.md D5 and |
-|     |          | ftq_decisions.md 5.5 R1, as is the minimum rule          |
-|     |          | ftq_ptr.sv already applies to fetch_ptr. Found by the    |
+| 126 | ftq      | CLOSED BP-112 (session-073). ftq_ifu.sv flushes the IFU  |
+|     |          | at K for a front-end redirect and leaves the backend     |
+|     |          | rows as they were. ftq_ptr needed the same correction:   |
+|     |          | fetch_ptr rewound to K+1 for every surviving entry, so   |
+|     |          | flushing at K alone would have meant K was flushed and   |
+|     |          | never presented again. It now takes min(current, F) with |
+|     |          | F = K for front-end causes, per 5.5 R1. Pinned failing   |
+|     |          | first (F1, flush at K=12, got 13); F2 holds the backend  |
+|     |          | half and passes before and after.                        |
+|     |          |                                                          |
+|     |          | THE RULE COULD NOT BE MET FROM THE INTERFACE IT WAS      |
+|     |          | WRITTEN AGAINST. W3 keys the flush index on the redirect |
+|     |          | cause, but ftq_npc drives RC_MISPREDICT with self=0 for  |
+|     |          | p2, p3, predecode and the backend alike, so the          |
+|     |          | distinction is not on the bus. BP-112 routed ftq_npc's   |
+|     |          | arm_win, which until now was only terminated in ftq.sv.  |
+|     |          | ftq_ifu_interfaces.md 7 and ftq_decisions.md must say    |
+|     |          | that the arbitration arm is what distinguishes a         |
+|     |          | front-end redirect, or the next reader finds a rule      |
+|     |          | keyed on a cause that cannot carry it.                   |
+|     |          |                                                          |
+|     |          | Was: ftq_ifu.sv drove the flush at redir_idx when _self  |
+|     |          | was set and redir_idx + 1 when clear, for every cause. A |
+|     |          | p2, p3 or predecode redirect corrects K and K survives,  |
+|     |          | so a fetch of K went out against the old prediction and  |
+|     |          | truncated at the old taken_pos. Found by the session-071 |
+|     |          | IA read.                                                 |
+
+| 127 | ftq      | CLOSED BP-112 (session-073). ftq_ptr.sv carries          |
+|     |          | xlate_ptr: it resets equal to fetch_ptr, advances on the |
+|     |          | translation handshake, stops at the written frontier,    |
+|     |          | cannot be passed by fetch_ptr (FQ-1), and takes          |
+|     |          | min(current, F) on a redirect. Each rule is recorded in  |
+|     |          | the results with the document section it came from.      |
+|     |          | ftq_ifu.sv carries the 4.1 translation request group,    |
+|     |          | FTQ side only, and ftq_entry.sv gained a sixth read      |
+|     |          | port, pc only, at xlate_idx.                             |
+|     |          |                                                          |
+|     |          | Was: BP-107 completed the FTQ as a three-pointer design  |
+|     |          | before ftq_decisions.md 5.1 added the fourth, so the     |
+|     |          | built FTQ predated its own specification. Found by the   |
 |     |          | session-071 IA read.                                     |
-| 127 | ftq      | OPEN. XLATE_PTR IS SPECIFIED AND NOT BUILT. Session-069  |
-|     |          | added xlate_ptr to ftq_decisions.md 5.1 and the          |
-|     |          | translation request group to ftq_ifu_interfaces.md 4.1.  |
-|     |          | ftq_ptr.sv has no xlate_ptr and ftq_ifu.sv no            |
-|     |          | translation group: BP-107 completed the FTQ unit before  |
-|     |          | either was written, so the built FTQ is the three-       |
-|     |          | pointer design and its Complete status predates 5.1.     |
-|     |          | Needed before the IFU can be built against 4.1. Found by |
-|     |          | the session-071 IA read.                                 |
+
 | 128 | bp_history | History geometry sizing -- deferred investigation.     |
 |     |            | GHR_WIDTH=256, PHR_WIDTH=32, the per-table fold depths |
 |     |            | and the PHR bit selection (pc[2]^pc[3]) are unmeasured |
@@ -2648,6 +2722,91 @@ assessment of each document. Correct any that are wrong.
 |     |          | Was: the jump target was a displacement from the region  |
 |     |          | base. Ruled session-073 (Jeff): every target is a        |
 |     |          | displacement from its own instruction.                   |
+
+| 138 | ftq      | OPEN, NOT RULED. A REDIRECT AND A REQUEST HANDSHAKE IN   |
+|     |          | THE SAME CYCLE. As built since BP-106 for fetch_ptr and  |
+|     |          | extended to xlate_ptr by BP-112 to match: the redirect   |
+|     |          | wins and the handshake presented that cycle is ignored,  |
+|     |          | while ftq_ifu still presents the request from the        |
+|     |          | PRE-rewind pointer. ftq_ifu_interfaces.md 5 says the     |
+|     |          | opposite: the flush applies first and the request that   |
+|     |          | accompanies it is the first fetch of the CORRECTED       |
+|     |          | stream, so the index should be min(pointer, F).          |
+|     |          |                                                          |
+|     |          | Consequences as built: an entry behind F is presented    |
+|     |          | again next cycle and so fetched twice under one          |
+|     |          | generation tag; an entry at or past F names something    |
+|     |          | the redirect squashes. On the 4.1 port, which carries no |
+|     |          | generation tag, a stale queued translation can be        |
+|     |          | matched by index after the entry is reallocated.         |
+|     |          |                                                          |
+|     |          | Cost of the alternative, suppressing val while redir_val |
+|     |          | is set: ZERO slots against the design as built, since    |
+|     |          | the handshake is discarded anyway; at most one slot per  |
+|     |          | port per redirect against section 5 as written. Section  |
+|     |          | 5 would need amending to say no request accompanies a    |
+|     |          | flush.                                                   |
+|     |          |                                                          |
+|     |          | BP-112's Deferred Work has the full statement, the port  |
+|     |          | list and the per-case analysis. ftq_ptr.sv carries the   |
+|     |          | as-built behaviour in a comment pointing here, and       |
+|     |          | tb_ftq_ptr H53-H56 pin it so it cannot change by         |
+|     |          | accident before it is ruled.                             |
+
+| 139 | ftq      | OPEN, CORRECTNESS, HIGHEST PRIORITY IN THE FTQ. THE      |
+|     |          | REDIRECT TARGET BLOCK IS WRITTEN TO A SQUASHED ENTRY     |
+|     |          | AND NEVER FETCHED. In a redirect cycle ftq_pred_idx_p0   |
+|     |          | (ftq.sv, assign ftq_pred_idx_p0 = w_alloc_idx) still     |
+|     |          | carries the PRE-rewind alloc_ptr while ftq_npc presents  |
+|     |          | the redirect target at p0. The target block is written   |
+|     |          | at p1 to an index the redirect squashes; the next index  |
+|     |          | issued holds target+32. THE FIRST 32 BYTES OF THE        |
+|     |          | CORRECTED STREAM ARE SKIPPED, so instructions that must  |
+|     |          | execute do not.                                          |
+|     |          |                                                          |
+|     |          | Seen in a tb_ftq probe of a predecode redirect on K=3    |
+|     |          | with old head 12: c0 p0 idx 12 pc B000_0000; c1 p0 idx   |
+|     |          | 4 pc B000_0020; c4 the fetch of entry 4 has start_pc     |
+|     |          | B000_0020. Backend redirects use the same path; tb_ftq   |
+|     |          | D9 checks only the index, which is why 670 FTQ checks    |
+|     |          | never saw it. PREDATES BP-112, which found it and did    |
+|     |          | not fix it: the fix touches allocation on every          |
+|     |          | redirect cause.                                          |
+|     |          |                                                          |
+|     |          | Side effect: the in-flight p1 of that request counts     |
+|     |          | against alloc_ptr-1, so after a front-end redirect the   |
+|     |          | translation of K stalls TWO cycles where                 |
+|     |          | ftq_decisions.md 5.1 and IFU-27 say one. tb_ftq F uses   |
+|     |          | bounded waits and does not pin the latency.              |
+|     |          |                                                          |
+|     |          | FIX THIS BEFORE THE IFU. TD#134 designs wrong-path       |
+|     |          | handling against the redirect path, and that path        |
+|     |          | currently loses the target block.                        |
+
+| 140 | ftq      | OPEN, DOCUMENT GAP. MAY THE REFETCH WRITEBACK REDIRECT?  |
+|     |          | The W3 refetch of K after a predecode redirect produces  |
+|     |          | a SECOND writeback for K with wb_rcvd already set.       |
+|     |          | ftq_entry_formats.md 4.3 R3, and property I4, treat that |
+|     |          | as a protocol violation and suppress its predecode       |
+|     |          | redirect. So a structural mispredict found on the        |
+|     |          | refetch is DROPPED. Two rules meet and the documents do  |
+|     |          | not say which wins. Raised by BP-112.                    |
+
+| 141 | ftq      | OPEN, small. THE RC_UNSPEC FLUSH COMMENT AND THE CODE    |
+|     |          | DISAGREE. ftq_ifu.sv's comment says the flush drives the |
+|     |          | commit pointer's index; the code drives fetch_idx, the   |
+|     |          | pre-redirect fetch_ptr. Fetches in flight between        |
+|     |          | commit_ptr and fetch_ptr are then not named by the       |
+|     |          | flush. Backend half, left alone by BP-112 and reported   |
+|     |          | only. Decide which is right, then fix the other.         |
+
+| 142 | ftq      | OPEN. ftq_ifu_commit_ptr IS SPECIFIED AND NOT BUILT.     |
+|     |          | ftq_ifu_interfaces.md 4, IFU-22, lists it on the fetch   |
+|     |          | request group. Found incidentally by BP-112, which did   |
+|     |          | not carry it. Same class as TD#127 and the FTB-G1        |
+|     |          | finding of TD#124: a document stating a port or a rule   |
+|     |          | that no RTL provides. Needed before the IFU is built     |
+|     |          | against section 4.                                       |
 
 ---
 

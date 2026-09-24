@@ -19,6 +19,13 @@
 //   the flush of section 5 bounds stale writebacks to one
 //                                        -> group E
 //
+// BP-112 adds two groups:
+//
+//   the flush index by cause, TD#126     -> group F
+//   the translation request of 4.1,
+//   issued and retired against a
+//   modelled consumer, TD#127            -> group G
+//
 // HOW "NO PREDICTOR UPDATE" IS CHECKED, since a negative is easy to
 // claim and hard to test. ftq_ifu HAS NO UPDATE PORT AT ALL: the
 // module's outputs are the request group, the flush group, the two
@@ -45,6 +52,9 @@ module tb;
   initial clk = 1'b0;
   always #5 clk = ~clk;
 
+  logic [FTQ_IDX_BITS-1:0]   xlate_idx;
+  logic                      xlate_pending;
+  logic [VA_WIDTH-1:0]       xlate_pc;
   logic [FTQ_IDX_BITS-1:0]   fetch_idx;
   logic                      fetch_pending;
   bp_ftq_entry_t             fetch_entry;
@@ -56,6 +66,11 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]   redir_idx;
   logic                      redir_self;
   ftq_redir_cause_e          redir_cause;
+  logic [5:1]                redir_arm;
+  logic                      ftq_ifu_xlate_val;
+  logic                      ftq_ifu_xlate_rdy;
+  logic [VA_WIDTH-1:0]       ftq_ifu_xlate_pc;
+  logic [FTQ_IDX_BITS-1:0]   ftq_ifu_xlate_idx;
   logic                      ftq_ifu_req_val;
   logic                      ftq_ifu_req_rdy;
   logic [VA_WIDTH-1:0]       ftq_ifu_start_pc;
@@ -96,6 +111,9 @@ module tb;
   ftq_ifu dut (
     .clk               (clk),
     .rstn              (rstn),
+    .xlate_idx         (xlate_idx),
+    .xlate_pending     (xlate_pending),
+    .xlate_pc          (xlate_pc),
     .fetch_idx         (fetch_idx),
     .fetch_pending     (fetch_pending),
     .fetch_entry       (fetch_entry),
@@ -107,6 +125,11 @@ module tb;
     .redir_idx         (redir_idx),
     .redir_self        (redir_self),
     .redir_cause       (redir_cause),
+    .redir_arm         (redir_arm),
+    .ftq_ifu_xlate_val (ftq_ifu_xlate_val),
+    .ftq_ifu_xlate_rdy (ftq_ifu_xlate_rdy),
+    .ftq_ifu_xlate_pc  (ftq_ifu_xlate_pc),
+    .ftq_ifu_xlate_idx (ftq_ifu_xlate_idx),
     .ftq_ifu_req_val   (ftq_ifu_req_val),
     .ftq_ifu_req_rdy   (ftq_ifu_req_rdy),
     .ftq_ifu_start_pc  (ftq_ifu_start_pc),
@@ -150,6 +173,49 @@ module tb;
   localparam logic [VA_WIDTH-1:0] TGT0    = VA_WIDTH'('h00_9000_0000);
   localparam logic [VA_WIDTH-1:0] TGT1    = VA_WIDTH'('h00_A000_0000);
   localparam logic [VA_WIDTH-1:0] PD_TGT  = VA_WIDTH'('h00_B000_0000);
+  localparam logic [VA_WIDTH-1:0] XL_PC   = VA_WIDTH'('h00_8000_0240);
+
+  // ftq_npc's arm_win, one-hot over [5:1] (ftq_decisions.md 4.2).
+  localparam logic [5:1] ARM_BKEND = 5'b00001;
+  localparam logic [5:1] ARM_PD    = 5'b00010;
+  localparam logic [5:1] ARM_P3    = 5'b00100;
+  localparam logic [5:1] ARM_P2    = 5'b01000;
+
+  // -----------------------------------------------------------------
+  // The IFU's translation queue, modelled one deep (IFU-25). ISSUE is
+  // the 4.1 handshake: the entry is captured with the index and pc
+  // it was presented with. RETIRE is the section 4 fetch request for
+  // the same index being accepted, which is the match 4.1 says
+  // ftq_ifu_xlate_idx exists for; mq_match records whether the fetch
+  // carried the pc that was translated.
+  // -----------------------------------------------------------------
+  logic                    mq_val;
+  logic [FTQ_IDX_BITS-1:0] mq_idx;
+  logic [VA_WIDTH-1:0]     mq_pc;
+  logic                    mq_retired;
+  logic                    mq_match;
+
+  always_ff @(posedge clk or negedge rstn) begin : xlate_queue_model
+    if (!rstn) begin
+      mq_val     <= 1'b0;
+      mq_idx     <= '0;
+      mq_pc      <= '0;
+      mq_retired <= 1'b0;
+      mq_match   <= 1'b0;
+    end else begin
+      if (ftq_ifu_req_val && ftq_ifu_req_rdy && mq_val &&
+          (mq_idx == ftq_ifu_idx)) begin
+        mq_val     <= 1'b0;
+        mq_retired <= 1'b1;
+        mq_match   <= (mq_pc == ftq_ifu_start_pc);
+      end
+      if (ftq_ifu_xlate_val && ftq_ifu_xlate_rdy) begin
+        mq_val <= 1'b1;
+        mq_idx <= ftq_ifu_xlate_idx;
+        mq_pc  <= ftq_ifu_xlate_pc;
+      end
+    end
+  end
 
   int pass_cnt;
   int fail_cnt;
@@ -238,6 +304,11 @@ module tb;
 
   task automatic do_reset();
     rstn              = 1'b0;
+    xlate_idx         = '0;
+    xlate_pending     = 1'b0;
+    xlate_pc          = '0;
+    ftq_ifu_xlate_rdy = 1'b1;
+    redir_arm         = '0;
     fetch_idx         = '0;
     fetch_pending     = 1'b0;
     fetch_entry       = '0;
@@ -366,7 +437,9 @@ module tb;
     chk("B1 no flush with no redirect", !ftq_ifu_flush_val);
 
     // _self CLEAR: the naming entry survives, so the flush starts
-    // one past it.
+    // one past it. Every redirect in this group is a BACKEND one,
+    // arm 1; group F has the front-end arms.
+    redir_arm   = ARM_BKEND;
     redir_val   = 1'b1;
     redir_idx   = 6'd12;
     redir_self  = 1'b0;
@@ -689,6 +762,143 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // F. The flush index by cause, TD#126 (BP-112).
+  // -----------------------------------------------------------------
+  // ftq_ifu_interfaces.md 7 W3 and ifu_ibuf_interfaces.md IB-13: a
+  // p2, p3 or predecode redirect CORRECTS entry K and K survives, so
+  // the IFU is flushed AT K and K is fetched again against the
+  // correction. A backend redirect with _self clear flushes at K+1:
+  // K's instructions stand and refetching K would deliver them twice
+  // (ftq_backend_interfaces.md 5 D5, ftq_decisions.md 5.5 R1).
+  task automatic group_f();
+    $display("-- F: the flush index by cause --");
+    do_reset();
+    fetch_idx = 6'd30;
+
+    // A predecode redirect naming K = 12. It arrives as ftq_npc
+    // publishes it: RC_MISPREDICT, _self clear, arm 2. F1 FAILED on
+    // the pre-BP-112 tree, which had no arm input and gave K+1.
+    redir_arm   = ARM_PD;
+    redir_val   = 1'b1;
+    redir_idx   = 6'd12;
+    redir_self  = 1'b0;
+    redir_cause = RC_MISPREDICT;
+    settle();
+    chk("F1 a front-end redirect flushes AT K",
+        ftq_ifu_flush_val && (ftq_ifu_flush_idx == 6'd12));
+
+    // A backend mispredict naming K = 12 with _self clear. K
+    // survives and its fetch stands, so the flush starts at K+1.
+    // Identical to F1 on every port but the arm, which is the whole
+    // of TD#126. Passed before BP-112 and after.
+    redir_arm   = ARM_BKEND;
+    redir_idx   = 6'd12;
+    redir_self  = 1'b0;
+    redir_cause = RC_MISPREDICT;
+    settle();
+    chk("F2 a backend _self-clear redirect flushes at K+1",
+        ftq_ifu_flush_val && (ftq_ifu_flush_idx == 6'd13));
+
+    // The other two front-end arms.
+    redir_arm = ARM_P3;
+    settle();
+    chk("F3 a p3 redirect flushes AT K", ftq_ifu_flush_idx == 6'd12);
+    redir_arm = ARM_P2;
+    settle();
+    chk("F4 a p2 redirect flushes AT K", ftq_ifu_flush_idx == 6'd12);
+
+    // The backend _self-set row is K too, and is unchanged.
+    redir_arm  = ARM_BKEND;
+    redir_self = 1'b1;
+    settle();
+    chk("F5 a backend _self-set redirect flushes at K",
+        ftq_ifu_flush_idx == 6'd12);
+
+    // At the top of the index space a front-end redirect names 63,
+    // not 0: K does not wrap because nothing is added to it.
+    redir_arm  = ARM_PD;
+    redir_self = 1'b0;
+    redir_idx  = 6'd63;
+    settle();
+    chk("F6 a front-end redirect at index 63 flushes at 63",
+        ftq_ifu_flush_idx == 6'd63);
+    redir_val = 1'b0;
+    redir_arm = '0;
+    settle();
+  endtask
+
+  // -----------------------------------------------------------------
+  // G. Section 4.1, the translation request, TD#127 (BP-112).
+  // -----------------------------------------------------------------
+  // ftq_ifu is combinational and xlate_ptr is ftq_ptr's, so this
+  // file stands in for ftq_ptr: it moves xlate_idx on an accepted
+  // translation exactly as ftq_ptr would. The IFU's translation queue
+  // is the one-deep model above.
+  task automatic group_g();
+    $display("-- G: the translation request --");
+    do_reset();
+
+    ftq_ifu_xlate_rdy = 1'b0;
+    ftq_ifu_req_rdy   = 1'b0;
+    xlate_idx         = 6'd9;
+    xlate_pc          = XL_PC;
+    xlate_pending     = 1'b0;
+    settle();
+    chk("G1 no translation request with nothing pending",
+        !ftq_ifu_xlate_val);
+
+    xlate_pending = 1'b1;
+    settle();
+    chk   ("G2 a translation request is presented", ftq_ifu_xlate_val);
+    chk   ("G3 it carries the entry index",
+           ftq_ifu_xlate_idx == 6'd9);
+    chk_va("G4 and the block start pc", ftq_ifu_xlate_pc, XL_PC);
+
+    // ftq_ifu_xlate_rdy is the IFU's acceptance, consumed by
+    // ftq_ptr. It is not a condition on the request.
+    chk("G5 rdy low does not withdraw the request", ftq_ifu_xlate_val);
+    chk("G6 and nothing was issued to the model", !mq_val);
+
+    // THE TWO GROUPS ARE INDEPENDENT (section 4). A translation is
+    // presented with no fetch pending; the fetch port is idle.
+    chk("G7 no fetch request rides on the translation",
+        !ftq_ifu_req_val);
+
+    // ISSUE. The IFU accepts at this edge; ftq_ptr would advance
+    // xlate_ptr to 10 at the same edge, and the entry is caught up.
+    ftq_ifu_xlate_rdy = 1'b1;
+    @(posedge clk);
+    #1;
+    xlate_idx     = 6'd10;
+    xlate_pending = 1'b0;
+    #1;
+    chk   ("G8 the model captured the translation", mq_val);
+    chk   ("G9 for entry 9", mq_idx == 6'd9);
+    chk_va("G10 with the pc presented", mq_pc, XL_PC);
+    chk   ("G11 the request drops once caught up", !ftq_ifu_xlate_val);
+
+    // RETIRE. The fetch request for entry 9 arrives later, from
+    // fetch_ptr, and is matched against the translation by index.
+    fetch_entry   = mk_entry(6'd9,
+                      mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0),
+                      mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0));
+    fetch_entry.pc = XL_PC;
+    fetch_idx     = 6'd9;
+    gen_fetch     = 1'b1;
+    fetch_pending = 1'b1;
+    ftq_ifu_req_rdy = 1'b1;
+    @(posedge clk);
+    #1;
+    fetch_pending = 1'b0;
+    #1;
+    chk("G12 the fetch of entry 9 retired the translation",
+        mq_retired && !mq_val);
+    chk("G13 and the fetch carried the translated pc", mq_match);
+    ftq_ifu_req_rdy = 1'b1;
+    settle();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -705,6 +915,8 @@ module tb;
     group_c();
     group_d();
     group_e();
+    group_f();
+    group_g();
 
     $display("tb_ftq_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

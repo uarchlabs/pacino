@@ -5,7 +5,8 @@
 // ===================================================================
 // FTQ head and middle pointers (BP-106).
 //
-// Owns alloc_ptr and fetch_ptr of ftq_decisions.md 5.1. commit_ptr
+// Owns alloc_ptr, xlate_ptr and fetch_ptr of ftq_decisions.md 5.1
+// (xlate_ptr added by BP-112, TD#127). commit_ptr
 // is owned by ftq_commit.sv and arrives here as an INPUT; this
 // module never writes it. That is the partition rule of 7.1 -- every
 // piece of state has exactly one owner.
@@ -19,9 +20,14 @@
 //                      the request as ftq_pred_idx_p0, so it is
 //                      spoken for one cycle before the entry content
 //                      is written at p1.
-//   fetch_ptr  middle. Advances on ftq_ifu_req_val & _rdy.
+//   xlate_ptr  second. Advances on ftq_ifu_xlate_val & _rdy. Drives
+//                      the translation request of
+//                      ftq_ifu_interfaces.md 4.1.
+//   fetch_ptr  third.  Advances on ftq_ifu_req_val & _rdy.
 //
-//   empty  all three equal
+//   FQ-1  commit_ptr <= fetch_ptr <= xlate_ptr <= alloc_ptr
+//
+//   empty  all four equal
 //   full   alloc_ptr[IDX-1:0] == commit_ptr[IDX-1:0]
 //          and alloc_ptr[IDX] != commit_ptr[IDX]
 //
@@ -67,6 +73,10 @@ module ftq_ptr (
   input  logic                     alloc_req_val,
   input  logic                     alloc_req_rdy,
 
+  // ---- translation issue, ftq_ifu_interfaces.md 4.1 ---------------
+  input  logic                     xlate_req_val,
+  input  logic                     xlate_req_rdy,
+
   // ---- fetch issue -------------------------------------------------
   input  logic                     ifu_req_val,
   input  logic                     ifu_req_rdy,
@@ -90,18 +100,27 @@ module ftq_ptr (
   input  logic [FTQ_IDX_BITS-1:0]  redir_idx,
   input  logic                     redir_self,
   input  ftq_redir_cause_e         redir_cause,
+  // The winning arm of ftq_npc's 4.2 arbitration, one-hot. It is the
+  // only place the SOURCE of the redirect is visible: p2, p3 and
+  // predecode all arrive as RC_MISPREDICT with _self clear, the same
+  // encoding as a backend mispredict whose entry survives, and the
+  // flush index F of 5.5 R1 differs between them.
+  input  logic [5:1]               redir_arm,
 
   // ---- pointers out ------------------------------------------------
   output logic [FTQ_PTR_BITS-1:0]  alloc_ptr,
+  output logic [FTQ_PTR_BITS-1:0]  xlate_ptr,
   output logic [FTQ_PTR_BITS-1:0]  fetch_ptr,
 
   // ---- status ------------------------------------------------------
-  // ftq_full is hold condition H2 (4.5). ftq_empty is the all-three-
-  // equal condition of 5.1. fetch_pending says an allocated entry
-  // has not yet been issued to the IFU; it is the run-ahead the FTQ
-  // exists to provide, and it qualifies ftq_ifu_req_val.
+  // ftq_full is hold condition H2 (4.5). ftq_empty is the all-four-
+  // equal condition of 5.1. xlate_pending says a written entry has
+  // not yet been presented for translation; it qualifies
+  // ftq_ifu_xlate_val. fetch_pending says a TRANSLATED entry has not
+  // yet been issued to the IFU; it qualifies ftq_ifu_req_val.
   output logic                     ftq_full,
   output logic                     ftq_empty,
+  output logic                     xlate_pending,
   output logic                     fetch_pending,
 
   // ---- observation, for the bound properties ------------------------
@@ -130,8 +149,19 @@ module ftq_ptr (
 
   // ---- the entry index leaving with the p0 request ------------------
   output logic [FTQ_IDX_BITS-1:0]  alloc_idx,
+  output logic [FTQ_IDX_BITS-1:0]  xlate_idx,
   output logic [FTQ_IDX_BITS-1:0]  fetch_idx
 );
+
+  // -----------------------------------------------------------------
+  // The arms of ftq_npc's arbitration, as numbered on its arm_win
+  // output (ftq_decisions.md 4.2). Arm 5 is the p1 successor and
+  // publishes no redirect.
+  // -----------------------------------------------------------------
+  localparam int ARM_BKEND = 1;
+  localparam int ARM_PD    = 2;
+  localparam int ARM_P3    = 3;
+  localparam int ARM_P2    = 4;
 
   // -----------------------------------------------------------------
   // FTQ_ALLOC_LIMIT -- now the 5.1 condition, no longer a departure.
@@ -161,6 +191,7 @@ module ftq_ptr (
   // Ages. See the header: every ordering decision is made on these.
   // -----------------------------------------------------------------
   logic [FTQ_PTR_BITS-1:0] w_age_alloc;
+  logic [FTQ_PTR_BITS-1:0] w_age_xlate;
   logic [FTQ_PTR_BITS-1:0] w_age_fetch;
   logic [FTQ_PTR_BITS-1:0] w_age_written;
 
@@ -168,6 +199,7 @@ module ftq_ptr (
   // Advance enables.
   // -----------------------------------------------------------------
   logic w_alloc_en;
+  logic w_xlate_en;
   logic w_fetch_en;
 
   // -----------------------------------------------------------------
@@ -176,9 +208,12 @@ module ftq_ptr (
   logic                    w_unspec;
   logic                    w_redir_gen;
   logic [FTQ_PTR_BITS-1:0] w_redir_base;
+  logic                    w_fe_redir;
   logic [FTQ_PTR_BITS-1:0] w_alloc_tgt;
+  logic [FTQ_PTR_BITS-1:0] w_flush_tgt;
+  logic [FTQ_PTR_BITS-1:0] w_age_flush_tgt;
+  logic [FTQ_PTR_BITS-1:0] w_xlate_tgt;
   logic [FTQ_PTR_BITS-1:0] w_fetch_tgt;
-  logic [FTQ_PTR_BITS-1:0] w_age_alloc_tgt;
 
   // -----------------------------------------------------------------
   // Status, and the enables.
@@ -188,6 +223,7 @@ module ftq_ptr (
   // requires the textual-order form for a dependency chain.
   always_comb begin : status
     w_age_alloc = alloc_ptr - commit_ptr;
+    w_age_xlate = xlate_ptr - commit_ptr;
     w_age_fetch = fetch_ptr - commit_ptr;
 
     // The literal 5.1 condition, published for the property that it
@@ -202,11 +238,12 @@ module ftq_ptr (
     // no reachable state can walk past the limit undetected.
     ftq_full = (w_age_alloc >= FTQ_PTR_BITS'(FTQ_ALLOC_LIMIT));
 
-    // All three equal. fetch_ptr cannot lead alloc_ptr under FQ-1,
-    // so alloc == commit with the same generation is enough to make
-    // fetch equal too; it is written out in full anyway because 5.1
-    // states the condition over all three.
-    ftq_empty = (w_age_alloc == '0) && (w_age_fetch == '0);
+    // All four equal. Neither xlate_ptr nor fetch_ptr can lead
+    // alloc_ptr under FQ-1, so alloc == commit with the same
+    // generation is enough to make both equal too; it is written out
+    // in full anyway because 5.1 states the condition over all four.
+    ftq_empty = (w_age_alloc == '0) && (w_age_xlate == '0) &&
+                (w_age_fetch == '0);
 
     // The WRITTEN frontier, not alloc_ptr. See the alloc_inflight
     // port comment. Written as a compare against a subtracted age
@@ -215,7 +252,24 @@ module ftq_ptr (
     // result must then be false, not wrap.
     w_age_written = w_age_alloc - {{(FTQ_PTR_BITS-1){1'b0}},
                                    alloc_inflight};
-    fetch_pending = (w_age_fetch != w_age_alloc) &&
+
+    // xlate_ptr MEASURES TO THE WRITTEN FRONTIER, not to alloc_ptr
+    // (5.1). It is the pointer nearest alloc_ptr and so meets the
+    // frontier first; the frontier logic is shared with fetch_ptr
+    // rather than duplicated (7.2).
+    xlate_pending = (w_age_xlate != w_age_alloc) &&
+                    (w_age_xlate < w_age_written);
+
+    // fetch_ptr MEASURES TO xlate_ptr. FQ-1 puts fetch_ptr at or
+    // behind xlate_ptr, so an entry is fetchable only once its
+    // translation has been presented on 4.1 in an EARLIER cycle: L1I-3
+    // makes the L1I physically indexed, so a fetch cannot issue in
+    // the cycle its translation begins. ftq_ifu_interfaces.md 4 says
+    // the FTQ does not check this per request; it follows from the
+    // pointer order, and this is where the pointer order is kept.
+    // The written frontier stays in the term: after a redirect
+    // xlate_ptr can sit at an entry whose p1 write is in flight.
+    fetch_pending = (w_age_fetch < w_age_xlate) &&
                     (w_age_fetch < w_age_written);
 
     // Full blocks allocation AND NOTHING ELSE. The gate is here as
@@ -223,13 +277,16 @@ module ftq_ptr (
     // commit_ptr by a caller that ignores ftq_full.
     w_alloc_en = alloc_req_val & alloc_req_rdy & ~ftq_full;
 
-    // fetch_ptr may not pass alloc_ptr (FQ-1). Same reasoning:
-    // fetch_pending is published for the caller to qualify its
-    // request with, and enforced here regardless.
+    // xlate_ptr may not pass alloc_ptr, and fetch_ptr may not pass
+    // xlate_ptr (FQ-1). Same reasoning: each pending term is
+    // published for the caller to qualify its request with, and
+    // enforced here regardless.
+    w_xlate_en = xlate_req_val & xlate_req_rdy & xlate_pending;
     w_fetch_en = ifu_req_val & ifu_req_rdy & fetch_pending;
   end
 
   assign alloc_idx = alloc_ptr[FTQ_IDX_BITS-1:0];
+  assign xlate_idx = xlate_ptr[FTQ_IDX_BITS-1:0];
   assign fetch_idx = fetch_ptr[FTQ_IDX_BITS-1:0];
 
   // The squash range of 5.5 R3. w_alloc_tgt is the new head, so
@@ -253,10 +310,25 @@ module ftq_ptr (
   // squashes EVERY entry, so allocation restarts at commit_ptr and
   // the queue goes empty. commit_ptr itself never rewinds (R2).
   //
-  // fetch_ptr rewinds WITH alloc_ptr, but only when it is ahead of
-  // the new head. A fetch_ptr that had not yet reached the squash
-  // point still has live entries in front of it and must not be
-  // pushed forward.
+  // xlate_ptr and fetch_ptr do NOT follow alloc_ptr. Each becomes the
+  // wrap-aware MINIMUM of its current value and the flush index F of
+  // ftq_ifu_interfaces.md 5, so it moves only if it was ahead of F. A
+  // pointer that had not yet reached F still has live entries in
+  // front of it and must not be pushed forward. F by source, 5.5 R1:
+  //
+  //   backend, _self clear   F = K+1   K's fetch stands
+  //   backend, _self set     F = K
+  //   p2, p3, predecode      F = K     K survives, CORRECTED, and must
+  //                                    be translated and fetched again
+  //                                    against the correction (W3)
+  //   RC_UNSPEC              F = commit_ptr. 5.5 R1 does not tabulate
+  //                          it; U3 squashes every entry, so alloc_ptr
+  //                          is commit_ptr and FQ-1 then forces both.
+  //
+  // For the backend rows F is the new alloc_ptr, which is the rule
+  // BP-106 built for fetch_ptr. For the front-end row F is one
+  // BEHIND the new alloc_ptr, and FQ-1 holds because F is never past
+  // it.
   always_comb begin : rewind
     w_unspec = (redir_cause == RC_UNSPEC);
 
@@ -277,28 +349,50 @@ module ftq_ptr (
       w_alloc_tgt = w_redir_base + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
     end
 
-    w_age_alloc_tgt = w_alloc_tgt - commit_ptr;
+    // The front-end cause set. Named arms, not _self: every one of
+    // these arrives _self clear, and so does a backend redirect whose
+    // entry survives.
+    w_fe_redir = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
+                 redir_arm[ARM_P2];
 
-    w_fetch_tgt = (w_age_fetch > w_age_alloc_tgt) ? w_alloc_tgt
+    w_flush_tgt = (w_fe_redir && !w_unspec) ? w_redir_base
+                                            : w_alloc_tgt;
+
+    w_age_flush_tgt = w_flush_tgt - commit_ptr;
+
+    w_xlate_tgt = (w_age_xlate > w_age_flush_tgt) ? w_flush_tgt
+                                                  : xlate_ptr;
+    w_fetch_tgt = (w_age_fetch > w_age_flush_tgt) ? w_flush_tgt
                                                   : fetch_ptr;
   end
 
   // -----------------------------------------------------------------
   // State.
   // -----------------------------------------------------------------
-  // A redirect outranks allocation and fetch issue in the same cycle
-  // (ftq_backend_interfaces.md 7 R1): the redirect squashes entries
-  // an allocation in the same cycle would extend past.
+  // A redirect outranks allocation, translation and fetch issue in
+  // the same cycle: the redirect squashes entries an allocation in
+  // the same cycle would extend past.
+  //
+  // On a redirect, the redirect wins and the handshake presented in
+  // the same cycle is ignored. Applies to fetch_ptr and xlate_ptr.
+  // Built this way since BP-106. Not ruled; see TD#138.
+  //
+  // OUT OF RESET xlate_ptr and fetch_ptr are the same entry (5.1).
   always_ff @(posedge clk or negedge rstn) begin : seq
     if (!rstn) begin
       alloc_ptr <= '0;
+      xlate_ptr <= '0;
       fetch_ptr <= '0;
     end else if (redir_val) begin
       alloc_ptr <= w_alloc_tgt;
+      xlate_ptr <= w_xlate_tgt;
       fetch_ptr <= w_fetch_tgt;
     end else begin
       if (w_alloc_en) begin
         alloc_ptr <= alloc_ptr + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
+      end
+      if (w_xlate_en) begin
+        xlate_ptr <= xlate_ptr + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
       end
       if (w_fetch_en) begin
         fetch_ptr <= fetch_ptr + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
