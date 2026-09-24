@@ -22,6 +22,7 @@ module ftq_shadow_assert (
   input logic                    rstn,
   input logic                    req_val,
   input logic [FTQ_PTR_BITS-1:0] req_ptr,
+  input logic                    req_rewound,
   input logic                    squash_val,
   input logic [FTQ_PTR_BITS-1:0] squash_start,
   input logic [FTQ_PTR_BITS-1:0] squash_end,
@@ -51,6 +52,10 @@ module ftq_shadow_assert (
       w_in_range[n] = shadow_val[n] &&
                       ((shadow_ptr[n] - squash_start) < w_len);
     end
+    // CHANGED BY BP-113. A request allocated from the rewound head is
+    // inside the range by index and is the new allocation, so it is
+    // not squashed (TD#139). Stages 1 to 3 are never exempt.
+    w_in_range[0] = w_in_range[0] && !req_rewound;
   end
 
   // A REGISTERED COPY OF THE STAGE POINTERS, not $past. shadow_ptr[0]
@@ -128,10 +133,16 @@ module ftq_shadow_assert (
   //     surviving response, which is the exact error the four-deep
   //     age comparison exists to avoid -- stage 3 holds an OLDER
   //     request than stage 2, so a p2 redirect leaves it alone.
+  //
+  //     CHANGED BY BP-113: a request allocated from the rewound head
+  //     (req_rewound) enters whatever its index. It is the redirect
+  //     target, and dropping it here drops its p1 write, which loses
+  //     the first block of the corrected stream (TD#139).
   property p_request_enters;
     @(posedge clk) disable iff (!rstn)
-      (req_val && !(squash_val &&
-                    ((req_ptr - squash_start) < w_len))) |=>
+      (req_val && (req_rewound ||
+                   !(squash_val &&
+                     ((req_ptr - squash_start) < w_len)))) |=>
         shadow_val[1];
   endproperty
 
@@ -173,6 +184,7 @@ bind ftq_shadow ftq_shadow_assert u_assert (
   .rstn           (rstn),
   .req_val        (req_val),
   .req_ptr        (req_ptr),
+  .req_rewound    (req_rewound),
   .squash_val     (squash_val),
   .squash_start   (squash_start),
   .squash_end     (squash_end),

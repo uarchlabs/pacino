@@ -90,6 +90,7 @@ module tb;
   logic                     squash_val;
   logic [PB-1:0]            squash_start;
   logic [PB-1:0]            squash_end;
+  logic [PB-1:0]            alloc_req_ptr;
   logic [FTQ_IDX_BITS-1:0]  alloc_idx;
   logic [FTQ_IDX_BITS-1:0]  xlate_idx;
   logic [FTQ_IDX_BITS-1:0]  fetch_idx;
@@ -121,6 +122,7 @@ module tb;
     .squash_val     (squash_val),
     .squash_start   (squash_start),
     .squash_end     (squash_end),
+    .alloc_req_ptr  (alloc_req_ptr),
     .alloc_idx      (alloc_idx),
     .xlate_idx      (xlate_idx),
     .fetch_idx      (fetch_idx)
@@ -465,14 +467,19 @@ module tb;
     chk_eq("D8 fetch_ptr behind head, held", fetch_ptr, 7'd2);
 
     // A redirect outranks an allocation in the same cycle
-    // (backend_interfaces 7 R1).
+    // (backend_interfaces 7 R1): the rewind is applied first and the
+    // allocation is made from the rewound head, so the request takes
+    // K+1 = 5 and alloc_ptr lands on 6. CHANGED BY BP-113: this read
+    // 5, which dropped the allocation while the request went out
+    // carrying the pre-rewind index 10 (TD#139). Group I has the
+    // three 5.5 R1 rows.
     do_reset();
     alloc_n(10);
     alloc_req_val = 1'b1;
     alloc_req_rdy = 1'b1;
     redirect(6'd4, 1'b0, RC_MISPREDICT);
     clr();
-    chk_eq("D9 redirect outranks allocation", alloc_ptr, 7'd5);
+    chk_eq("D9 redirect outranks allocation", alloc_ptr, 7'd6);
 
     // REWIND ACROSS A WRAP. commit_ptr is left at 60 while
     // allocation runs past the wrap to 68, so the live window
@@ -889,6 +896,112 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // I. The index leaving with the p0 request (BP-113, TD#139).
+  // -----------------------------------------------------------------
+  // 5.2: the index committed at p0 is the one allocated. In a redirect
+  // cycle that is the head 5.5 R1 rewinds to, and alloc_ptr then lands
+  // one past it if the request was accepted, or on it if not. The
+  // rewound VALUE is the one groups D, E and H check; what this group
+  // checks is that the request in the redirect cycle carries it.
+  //
+  // Each row is run twice from the same start, once with a request in
+  // the redirect cycle and once without, so the 5.5 R1 value and the
+  // allocation made from it are both seen.
+  //
+  // Every row is followed by one more edge before the next row's
+  // reset, so Q10 of ftq_ptr_assert samples the redirect cycle. A
+  // reset in that cycle disables it, as Q7's comment says.
+  task automatic redir_row(input string                   nm,
+                           input logic [FTQ_IDX_BITS-1:0] idx,
+                           input logic                    self_sq,
+                           input ftq_redir_cause_e        cause,
+                           input logic [5:1]              arm,
+                           input logic                    req,
+                           input logic [PB-1:0]           exp_tgt);
+    do_reset();
+    alloc_n(10);
+    fetch_n(6);
+    commit_n(2);
+    alloc_req_val = req;
+    alloc_req_rdy = req;
+    redir_val     = 1'b1;
+    redir_idx     = idx;
+    redir_self    = self_sq;
+    redir_cause   = cause;
+    redir_arm     = arm;
+    #1;
+    chk_eq({nm, ": the p0 pointer is the rewound head"},
+           alloc_req_ptr, exp_tgt);
+    chk_eq({nm, ": alloc_idx is its low bits"},
+           PB'(alloc_idx), PB'(exp_tgt[FTQ_IDX_BITS-1:0]));
+    tick();
+    clr();
+    chk_eq({nm, req ? ": alloc_ptr one past it" : ": alloc_ptr on it"},
+           alloc_ptr, exp_tgt + PB'(req));
+  endtask
+
+  task automatic group_i();
+    $display("-- I: the p0 index in a redirect cycle --");
+
+    // Outside a redirect the p0 pointer is alloc_ptr.
+    do_reset();
+    alloc_n(3);
+    #1;
+    chk_eq("I1 no redirect: the p0 pointer is alloc_ptr",
+           alloc_req_ptr, alloc_ptr);
+    chk_eq("I2 no redirect: alloc_idx is alloc_ptr",
+           PB'(alloc_idx), PB'(alloc_ptr[FTQ_IDX_BITS-1:0]));
+
+    // 10 allocated, 6 fetched, commit_ptr at 2. K = 4.
+    redir_row("I3 backend _self clear, req",
+              6'd4, 1'b0, RC_MISPREDICT, ARM_BKEND, 1'b1, 7'd5);
+    tick();
+    redir_row("I4 backend _self clear, no req",
+              6'd4, 1'b0, RC_MISPREDICT, ARM_BKEND, 1'b0, 7'd5);
+    tick();
+    redir_row("I5 backend _self set, req",
+              6'd4, 1'b1, RC_TRAP,       ARM_BKEND, 1'b1, 7'd4);
+    tick();
+    redir_row("I6 backend _self set, no req",
+              6'd4, 1'b1, RC_TRAP,       ARM_BKEND, 1'b0, 7'd4);
+    tick();
+    redir_row("I7 predecode, req",
+              6'd4, 1'b0, RC_MISPREDICT, ARM_PD,    1'b1, 7'd5);
+    tick();
+    redir_row("I8 predecode, no req",
+              6'd4, 1'b0, RC_MISPREDICT, ARM_PD,    1'b0, 7'd5);
+    tick();
+    // RC_UNSPEC: the head is commit_ptr whatever _idx and _self say.
+    redir_row("I9 RC_UNSPEC, req",
+              6'd9, 1'b1, RC_UNSPEC,     ARM_BKEND, 1'b1, 7'd2);
+    tick();
+
+    // The front-end row keeps K to be fetched again: F = K is one
+    // behind the rewound head, and the redirect-cycle allocation
+    // moves alloc_ptr further from it, not onto it.
+    redir_row("I10 p2, req",
+              6'd4, 1'b0, RC_MISPREDICT, ARM_P2,    1'b1, 7'd5);
+    chk_eq("I11 p2, req: xlate_ptr on K",  xlate_ptr, 7'd4);
+    chk_eq("I12 p2, req: fetch_ptr on K",  fetch_ptr, 7'd4);
+    tick();
+
+    // FULL IN THE REDIRECT CYCLE. ftq_full is taken from the
+    // pre-rewind head, as ftq_npc's H2 hold is, so the request is
+    // not accepted and alloc_ptr lands on the rewound head. The
+    // target is requested again next cycle from there.
+    do_reset();
+    alloc_n(64);
+    chk("I13 setup: the queue is full", ftq_full);
+    alloc_req_val = 1'b1;
+    alloc_req_rdy = 1'b1;
+    redirect(6'd4, 1'b0, RC_MISPREDICT);
+    clr();
+    chk_eq("I14 full: no allocation in the redirect cycle",
+           alloc_ptr, 7'd5);
+    tick();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -912,6 +1025,7 @@ module tb;
     group_f();
     group_g();
     group_h();
+    group_i();
 
     $display("tb_ftq_ptr: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

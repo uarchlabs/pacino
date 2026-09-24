@@ -605,10 +605,13 @@ module tb;
     tick();
     bkend_ftq_redir_val = 1'b0;
     #1;
-    // ftq_ptr: the rewind. Allocation restarts at 5, so the next
-    // index issued is 5.
+    // ftq_ptr: the rewind. Allocation restarts at 5, and the request
+    // presented WITH the redirect took 5 for the corrected PC, so the
+    // next index issued is 6. CHANGED BY BP-113: this read 5, which
+    // was TD#139 -- entry 5 then held the target's fall-through and
+    // the target block itself was lost. Group G checks the PCs.
     chk("D9 allocation rewound to the entry after",
-        ftq_pred_idx_p0 == 6'd5);
+        ftq_pred_idx_p0 == 6'd6);
     chk("D10 the flush deasserted with the redirect",
         !ftq_ifu_flush_val);
 
@@ -626,8 +629,9 @@ module tb;
     tick();
     bkend_ftq_redir_val = 1'b0;
     #1;
+    // Rewound to 7, which the redirect-cycle request took (BP-113).
     chk("D13 allocation rewound to the named entry",
-        ftq_pred_idx_p0 == 6'd7);
+        ftq_pred_idx_p0 == 6'd8);
 
     // RC_UNSPEC squashes EVERY entry and performs NO restore.
     repeat (6) tick();
@@ -646,7 +650,13 @@ module tb;
     bkend_ftq_redir_val   = 1'b0;
     bkend_ftq_redir_cause = RC_MISPREDICT;
     #1;
-    chk("D18 the queue is empty after RC_UNSPEC", ftq_empty);
+    // U3 empties the queue and the redirect-cycle request then takes
+    // the first entry for the RC_UNSPEC PC, so exactly one entry is
+    // live. CHANGED BY BP-113: this read ftq_empty, which held only
+    // because that request was lost (TD#139).
+    chk("D18 the queue is emptied, then holds only the target",
+        !ftq_empty &&
+        ((dut.w_alloc_ptr - dut.w_commit_ptr) == FTQ_PTR_BITS'(1)));
   endtask
 
   // -----------------------------------------------------------------
@@ -764,7 +774,9 @@ module tb;
     ifu_ftq_mis_val  = 1'b0;
     ifu_ftq_pd[6]    = '0;
     #1;
-    chk("F5 allocation restarts at K+1", ftq_pred_idx_p0 == 6'd4);
+    // K+1 went out with the redirect, carrying PD_TGT (BP-113; this
+    // read 4, TD#139).
+    chk("F5 allocation restarts at K+1", ftq_pred_idx_p0 == 6'd5);
     chk("F6 xlate_ptr is back on K",     ftq_ifu_xlate_idx == 6'd3);
     chk("F7 fetch_ptr is back on K",     ftq_ifu_idx == 6'd3);
 
@@ -798,6 +810,176 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // G. The redirect target block is fetched (BP-113, TD#139).
+  // -----------------------------------------------------------------
+  // In a redirect cycle ftq_npc presents the redirect target at p0.
+  // The index leaving with it must be the one 5.5 R1 allocates, so
+  // the target block is written to an entry that survives and is the
+  // first NEW block fetched. Group D checks only the index; this
+  // group checks the PC each fetch carries, which is what the defect
+  // loses.
+  //
+  // THE FETCH IS CAPTURED ON ITS HANDSHAKE. ftq_ifu_req_rdy is high
+  // throughout, so a presented request is an issued one. The redirect
+  // cycle itself is not sampled: its request comes from the
+  // pre-rewind pointer and its handshake is dropped (TD#138).
+  //
+  // THE TRANSLATION LATENCY IS PINNED, not bounded: c counts the
+  // cycles after the redirect cycle until the flush entry F is
+  // presented for translation. 5.1 and IFU-27 give one cycle for a
+  // front-end redirect, where F = K is already written. For a
+  // backend redirect F is the target block itself, whose p1 write
+  // lands at the end of the first cycle, so it is two.
+  task automatic next_fetch(output logic [FTQ_IDX_BITS-1:0] idx,
+                            output logic [VA_WIDTH-1:0]     pc);
+    idx = '1;
+    pc  = '1;
+    for (int c = 0; c < 16; c++) begin
+      if (ftq_ifu_req_val) begin
+        idx = ftq_ifu_idx;
+        pc  = ftq_ifu_start_pc;
+        break;
+      end
+      tick();
+    end
+    $display("  fetch: idx %0d start_pc %010h", idx, pc);
+    tick();
+  endtask
+
+  task automatic xlate_wait(input  logic [FTQ_IDX_BITS-1:0] f_idx,
+                            output int                      lat);
+    lat = -1;
+    for (int c = 1; c < 16; c++) begin
+      if (ftq_ifu_xlate_val && (ftq_ifu_xlate_idx == f_idx)) begin
+        lat = c;
+        break;
+      end
+      tick();
+    end
+    $display("  xlate of entry %0d presented %0d cycle(s) after the %s",
+             f_idx, lat, "redirect cycle");
+  endtask
+
+  // One backend redirect cycle, then deasserted.
+  task automatic bkend_redirect(input logic [FTQ_IDX_BITS-1:0] idx,
+                                input logic                    self_sq,
+                                input ftq_redir_cause_e        cause,
+                                input logic [VA_WIDTH-1:0]     pc);
+    bkend_ftq_redir_val   = 1'b1;
+    bkend_ftq_redir_idx   = idx;
+    bkend_ftq_redir_self  = self_sq;
+    bkend_ftq_redir_pc    = pc;
+    bkend_ftq_redir_cause = cause;
+    #1;
+    $display("  redirect cycle: p0 idx %0d pc %010h", ftq_pred_idx_p0,
+             ftq_pred_pc_p0);
+  endtask
+
+  task automatic bkend_release();
+    tick();
+    bkend_ftq_redir_val   = 1'b0;
+    bkend_ftq_redir_self  = 1'b0;
+    bkend_ftq_redir_cause = RC_MISPREDICT;
+    #1;
+  endtask
+
+  localparam logic [VA_WIDTH-1:0] G_PD_TGT = VA_WIDTH'('h00_B000_0000);
+  localparam logic [VA_WIDTH-1:0] G_BC_TGT = VA_WIDTH'('h00_D000_0000);
+  localparam logic [VA_WIDTH-1:0] G_BS_TGT = VA_WIDTH'('h00_E000_0000);
+  localparam logic [VA_WIDTH-1:0] G_UN_TGT = VA_WIDTH'('h00_F000_0000);
+
+  task automatic group_g();
+    logic [FTQ_IDX_BITS-1:0] f_idx;
+    logic [VA_WIDTH-1:0]     f_pc;
+    int                      lat;
+    $display("-- G: the redirect target block is fetched --");
+
+    // ---- predecode redirect, K = 3, K survives: alloc_ptr -> K+1 ----
+    // Same stimulus as group F. Entry 3 was fetched against a p1
+    // miss; predecode finds a JAL at position 6.
+    do_reset();
+    repeat (12) tick();
+    chk("G1 entry 3 was already fetched", ftq_ifu_idx > 6'd3);
+    ifu_ftq_pdwb_val = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd3;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pd[6]    = '{valid: 1'b1, is_rvc: 1'b0, br_type: 2'b10,
+                         is_call: 1'b0, is_ret: 1'b0};
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(6);
+    ifu_ftq_target   = G_PD_TGT;
+    #1;
+    $display("  redirect cycle: p0 idx %0d pc %010h", ftq_pred_idx_p0,
+             ftq_pred_pc_p0);
+    chk_va("G2 the target is requested in the redirect cycle",
+           ftq_pred_pc_p0, G_PD_TGT);
+    chk   ("G3 at the post-rewind index K+1", ftq_pred_idx_p0 == 6'd4);
+    tick();
+    ifu_ftq_pdwb_val = 1'b0;
+    ifu_ftq_mis_val  = 1'b0;
+    ifu_ftq_pd[6]    = '0;
+    #1;
+    chk   ("G4 the next index follows it", ftq_pred_idx_p0 == 6'd5);
+    xlate_wait(6'd3, lat);
+    chk   ("G5 K is translated one cycle after the redirect", lat == 1);
+    next_fetch(f_idx, f_pc);
+    chk   ("G6 the first fetch is the refetch of K", f_idx == 6'd3);
+    next_fetch(f_idx, f_pc);
+    chk   ("G7 the next fetch is entry K+1", f_idx == 6'd4);
+    chk_va("G8 and carries the redirect target", f_pc, G_PD_TGT);
+    next_fetch(f_idx, f_pc);
+    chk_va("G9 then the target's fall-through", f_pc,
+           VA_WIDTH'(G_PD_TGT + FTB_BLOCK_BYTES));
+
+    // ---- backend, _self clear, K = 4: alloc_ptr -> K+1, F = K+1 -----
+    do_reset();
+    repeat (20) tick();
+    bkend_redirect(6'd4, 1'b0, RC_MISPREDICT, G_BC_TGT);
+    chk   ("G10 _self clear: the target is at index K+1",
+           ftq_pred_idx_p0 == 6'd5);
+    bkend_release();
+    xlate_wait(6'd5, lat);
+    chk   ("G11 F is translated two cycles after the redirect",
+           lat == 2);
+    next_fetch(f_idx, f_pc);
+    chk   ("G12 the first fetch is entry K+1", f_idx == 6'd5);
+    chk_va("G13 and carries the redirect target", f_pc, G_BC_TGT);
+    next_fetch(f_idx, f_pc);
+    chk_va("G14 then the target's fall-through", f_pc,
+           VA_WIDTH'(G_BC_TGT + FTB_BLOCK_BYTES));
+
+    // ---- backend, _self set, K = 7: alloc_ptr -> K, F = K -----------
+    do_reset();
+    repeat (20) tick();
+    bkend_redirect(6'd7, 1'b1, RC_TRAP, G_BS_TGT);
+    chk   ("G15 _self set: the target is at index K",
+           ftq_pred_idx_p0 == 6'd7);
+    bkend_release();
+    xlate_wait(6'd7, lat);
+    chk   ("G16 F is translated two cycles after the redirect",
+           lat == 2);
+    next_fetch(f_idx, f_pc);
+    chk   ("G17 the first fetch is entry K", f_idx == 6'd7);
+    chk_va("G18 and carries the redirect target", f_pc, G_BS_TGT);
+    next_fetch(f_idx, f_pc);
+    chk_va("G19 then the target's fall-through", f_pc,
+           VA_WIDTH'(G_BS_TGT + FTB_BLOCK_BYTES));
+
+    // ---- RC_UNSPEC: alloc_ptr -> commit_ptr, which is 0 here --------
+    // _idx and _self are driven to values that would give a
+    // different answer if read (U1, U2).
+    do_reset();
+    repeat (20) tick();
+    bkend_redirect(6'd33, 1'b1, RC_UNSPEC, G_UN_TGT);
+    chk   ("G20 RC_UNSPEC: the target is at commit_ptr",
+           ftq_pred_idx_p0 == 6'd0);
+    bkend_release();
+    next_fetch(f_idx, f_pc);
+    chk   ("G21 the first fetch is entry 0", f_idx == 6'd0);
+    chk_va("G22 and carries the redirect target", f_pc, G_UN_TGT);
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -815,6 +997,7 @@ module tb;
     group_d();
     group_e();
     group_f();
+    group_g();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

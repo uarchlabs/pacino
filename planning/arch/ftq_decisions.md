@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -355,7 +355,7 @@ contradicted 5.6 and 5.8. Session-071.
 `41'h0_0080_0000_00` -- the same address, 0x8000_0000, at the wider
 width. It initialises the next-PC register of 4.1 and is selected by
 arm 0 of 4.2. The literal read `40'h00_8000_0000` until VA_WIDTH went
-to 41 (fe_decisions.md FE-19, TD#122, which tracks the RTL).
+to 41 (fe_decisions.md FE-19); built by BP-109, TD#122 closed.
 
 The privileged specification leaves the reset PC implementation
 defined. 0x8000_0000 is the RISC-V convention for the base of main
@@ -410,10 +410,14 @@ xlate_ptr are blocks whose translation is done and whose fetch has
 not issued; beyond xlate_ptr are blocks that are predicted and not
 yet translated.
 
-XLATE_PTR IS SPECIFIED AND NOT BUILT. ftq_ptr.sv has no xlate_ptr and
-ftq_ifu.sv no translation request group (session-071 RTL read). The
-FTQ unit was completed by BP-107 before session-069 added both, so
-the built FTQ is the three-pointer design. TD#127.
+XLATE_PTR IS BUILT, by BP-112 (session-073), closing TD#127. It
+resets equal to fetch_ptr, advances on the translation handshake,
+stops at the written frontier below, cannot be passed by fetch_ptr
+(FQ-1) and takes the wrap-aware minimum of itself and F on a
+redirect. ftq_ifu.sv carries the 4.1 request group and ftq_entry.sv
+a sixth read port, pc only, at xlate_idx. Until then the built FTQ
+was the three-pointer design: BP-107 completed the unit before
+session-069 added the fourth pointer.
 
 WHY IT EXISTS. L1I-3 makes the L1I physically indexed with
 translation complete before the array is indexed, so a fetch request
@@ -435,7 +439,27 @@ were past it, land on it together, and the translation queue is
 empty from that entry on, so the fetch pipeline stalls until
 translation of that entry completes. That is one cycle of added
 redirect latency and it is the cost of the scheme; XiangShan
-documents the identical stall. This read that after a redirect both
+documents the identical stall.
+
+THE TWO CASES DIFFER AND THIS SECTION DID NOT SEPARATE THEM. Measured
+by BP-113 after TD#139 was fixed, counting from the redirect cycle to
+the first cycle the translation request for F is presented:
+
+```
+  front-end (p2, p3, predecode)   1 cycle    tb_ftq G5
+  backend                         2 cycles   tb_ftq G11, G16
+```
+
+The backend case takes the extra cycle because F is the target entry
+itself and its p1 write lands at the end of the first cycle, so there
+is nothing to translate until then. ifu_decisions.md IFU-27 also says
+one cycle without separating them and needs the same split.
+
+Both were one cycle worse until BP-113: the p0 request in a redirect
+cycle carried the pre-rewind alloc index, so its in-flight p1 counted
+against alloc_ptr-1 and the frontier lagged. TD#139.
+
+This read that after a redirect both
 "are set to the same entry", which skips unfetched entries older than
 the flush index when the IFU is behind. Session-071.
 
@@ -493,6 +517,26 @@ derives from the staged request valid -- so allocation cannot leak.
 
 fe_decisions.md 2.3 says the FTQ allocates at p1. That describes the
 entry write. The index is spoken for one cycle earlier.
+
+IN A REDIRECT CYCLE THE INDEX LEAVING AT p0 IS THE REWOUND ONE. The
+redirect target ftq_npc presents at p0 is allocated from the head
+5.5 R1 rewinds to, in that same cycle, and alloc_ptr ends ONE PAST
+that head when the request is accepted, or on it when H2 holds it.
+The R1 value itself is unchanged. ftq_ptr exports alloc_req_ptr for
+this and alloc_idx is cut from it, so ftq.sv's ftq_pred_idx_p0 stays
+a rename. THE ORDER IS REWIND FIRST, THEN ALLOCATE FROM THE REWOUND
+HEAD: a redirect outranks an allocation, it does not discard it.
+
+Until BP-113 the index still carried the old alloc_ptr, so the target
+block was written at p1 to an entry the redirect squashed and never
+fetched, and the next index issued held target+32. THE FIRST BLOCK OF
+THE CORRECTED STREAM WAS LOST, on every redirect cause including
+RC_TRAP and RC_UNSPEC. Instructions that had to execute did not.
+TD#139, found by BP-112 and fixed by BP-113; five existing checks in
+tb_ftq and tb_ftq_ptr had encoded the defect as expected behaviour.
+
+ftq_pred_idx_p0 is now combinational on the winning redirect arm, as
+ftq_pred_pc_p0 already was. A later timing pass moves both together.
 
 Allocation is unconditional: an entry is allocated for every
 prediction block, including one the p1 predictors miss, so a later
@@ -576,11 +620,23 @@ or predecode redirect):
                                correction (ftq_ifu_interfaces.md
                                7 W3)
 
-      AS BUILT, session-071 RTL read: ftq_ifu.sv drives F = K or
-      K+1 by _self and ftq_ptr.sv moves fetch_ptr only if it was
-      ahead, which is this rule for the backend. It uses K+1 for a
-      surviving entry on every cause, so the p2, p3 and predecode
-      row is not built. TD#126.
+      BUILT by BP-112 (session-073), closing TD#126. All three
+      rows are in the RTL, and xlate_ptr takes the same minimum.
+
+      THE CAUSE BUS CANNOT EXPRESS THIS TABLE. ftq_npc drives
+      RC_MISPREDICT with _self clear for p2, p3, predecode and the
+      backend alike, so no consumer of the redirect bus can tell
+      which row applies. BP-112 routed ftq_npc's arm_win, the
+      arbitration arm that won, to ftq_ifu and ftq_ptr: arms 2, 3
+      and 4 (predecode, p3, p2) are the front-end set and take
+      F = K. THE ARBITRATION ARM, NOT THE CAUSE, IS WHAT
+      DISTINGUISHES A FRONT-END REDIRECT, and a reader who keys
+      new logic on the cause will rebuild the TD#126 defect.
+
+      Before BP-112: ftq_ifu.sv drove F by _self alone, so it used
+      K+1 for a surviving entry on every cause and the p2, p3 and
+      predecode row was not built, and ftq_ptr.sv rewound fetch_ptr
+      to K+1 with it, so the refetch of K never issued.
 
       This read "fetch_ptr rewinds with it, since FQ-1 forbids
       fetch_ptr running ahead of alloc_ptr". That made fetch_ptr
@@ -1121,7 +1177,56 @@ being rediscovered.
                              port so ftq.sv wires name to name
 ```
 
+BP-112 added three more, all of them consequences of 5.1 and 5.5 R1
+being built:
+
+```
+  ftq_npc     -> ftq_ptr     arm_win, the winning redirect arm. The
+              -> ftq_ifu     cause cannot carry the front-end split
+                             (5.5 R1). It existed before and was
+                             terminated in ftq.sv
+  ftq_ptr     -> ftq_entry   xlate_rd_idx, a SIXTH read port, pc
+                             only, for the 4.1 request
+  ftq_ptr     -> ftq_ifu     xlate_idx and xlate_pending, the 4.1
+                             request group's source
+```
+
+BP-113 added two more, both from 5.2's redirect-cycle allocation:
+
+```
+  ftq_ptr     -> ftq_shadow  alloc_req_ptr, the pointer the request
+              -> ftq_entry   actually leaves with, so the shadow
+                             stages the entry the cluster was given
+  ftq.sv      -> ftq_shadow  req_rewound, wired from squash_val: the
+                             p0 pointer is the rewound head exactly
+                             when a squash is applied, and without it
+                             the shadow's index test squashes the
+                             target's own p1 write
+```
+
+Section 1 still counts three read ports on ftq_entry; it is six.
+
 ## 8. Document History
+
+```
+  2026-09-22  session-073, after BP-113. 5.2: the redirect-cycle
+              allocation is fixed -- rewind first, then allocate
+              from the rewound head -- and TD#139 is closed. 5.1:
+              the post-redirect translation latency is measured and
+              the front-end and backend cases are SEPARATED, 1 and
+              2 cycles; IFU-27 needs the same split. 7.5: two more
+              crossings, alloc_req_ptr and req_rewound.
+
+  2026-09-22  session-073, after BP-112. 5.1: xlate_ptr is BUILT,
+              TD#127 closed, and the one-cycle redirect latency is
+              measured as two because of TD#139. 5.2: the index
+              leaving at p0 in a redirect cycle is the pre-rewind
+              one, TD#139. 5.5 R1: BUILT, TD#126 closed, with the
+              arm_win note -- the cause bus cannot express the
+              table. 7.5: three more crossings, and ftq_entry has
+              six read ports, not three. 4.7: RESET_VECTOR built
+              at 41 bits by BP-109.
+```
 
 ```
   2026-08-19  Created. Sections 4.3, 5 and 6 moved here whole from

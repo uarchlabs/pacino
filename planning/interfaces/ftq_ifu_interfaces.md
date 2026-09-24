@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -145,6 +145,7 @@ the two are independently flow controlled.
   ftq_ifu_taken_pos   [FTB_BR_POS_BITS-1:0]    NEW
   ftq_ifu_gen                                  NEW   TD-FE-8
   ftq_ifu_commit_ptr  [FTQ_IDX_BITS-1:0]       NEW   IFU-22
+                                               NOT BUILT, TD#142
 ```
 
 A request on this port is issued only for an entry whose translation
@@ -270,7 +271,7 @@ or after the flush index is carried across a flush on the strength of
 having been translated before it. This read that the FTQ "sets
 `xlate_ptr` and `fetch_ptr` both to the flush index", which skips
 unfetched entries older than it when the IFU is behind. Session-071.
-Section 4.1 and xlate_ptr are not built, TD#127.
+Section 4.1 and xlate_ptr are BUILT, BP-112, TD#127 closed.
 
 ONE flush group, not two. XiangShan carries `BpuFlushInfo` with
 separate `s2` and `s3` valid-pointer pairs and leaves the consumer to
@@ -294,6 +295,19 @@ Sources of a flush, all resolved by the FTQ into this one group:
 A flush and a request may be presented in the same cycle. The flush
 applies first: the request that accompanies it is the first fetch of
 the corrected stream.
+
+NEITHER REQUEST PORT DOES THIS, AND IT IS NOT RULED. TD#138. In a
+flush cycle ftq_ifu still presents the section 4 and section 4.1
+requests from the PRE-rewind pointers, and ftq_ptr discards the
+handshake if the IFU accepts one. So the request accompanying a
+flush names the old stream, not the corrected one. Meeting this
+sentence needs a same-cycle path from the winning redirect through
+ftq_ptr's minimum to the entry read index and the request outputs;
+the alternative is to suppress both valids in a flush cycle, which
+costs at most one slot per port per redirect and requires this
+sentence to say instead that no request accompanies a flush.
+BP-112 recorded the analysis and tb_ftq_ptr H53-H56 pin the current
+behaviour so it cannot drift before the ruling.
 
 ---
 
@@ -447,9 +461,18 @@ On `ifu_ftq_mis_val`, the FTQ:
       required: the correction changes taken_val and taken_pos,
       which is what the IFU truncates the bundle on, so a fetch
       issued against the old prediction would truncate in the wrong
-      place. Session-069. NOT BUILT: ftq_ifu.sv flushes at K+1 for
-      a surviving entry on every cause (session-071 RTL read).
-      TD#126.
+      place. Session-069. BUILT by BP-112, TD#126 closed, together
+      with the fetch_ptr half: it had rewound to K+1 with the
+      flush, so flushing at K alone would have left K flushed and
+      never presented again.
+
+      THIS RULE CANNOT BE KEYED ON THE REDIRECT CAUSE. ftq_npc
+      drives RC_MISPREDICT with _self clear for p2, p3, predecode
+      and the backend alike, so the distinction W3 needs is not on
+      the bus. The FTQ resolves it internally from ftq_npc's
+      arm_win, the arbitration arm that won: arms 2, 3 and 4 are
+      predecode, p3 and p2. ftq_decisions.md 5.5 R1 carries the
+      same note.
   W4  restores the history pointers and the RAS snapshot from this
       entry, the same restore a p2 or p3 redirect performs
       (ftq_decisions.md 3.2).
@@ -618,6 +641,14 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 ## 11. Document History
 
 ```
+  2026-09-22  session-073, after BP-112. Section 4.1 and section 5's
+              pointer rules are BUILT, TD#127 closed. 7 W3 is
+              BUILT, TD#126 closed, with the note that the rule
+              cannot be keyed on the redirect cause and is
+              resolved from ftq_npc's arm_win. Section 5's
+              same-cycle flush-and-request sentence is recorded as
+              unmet and not ruled, TD#138. ftq_ifu_commit_ptr
+              marked not built, TD#142.
   2026-08-19  Created. Closes TD-FE-1. Fetch request, flush and
               predecode writeback defined against the 32-byte
               prediction block. Departures from the XiangShan

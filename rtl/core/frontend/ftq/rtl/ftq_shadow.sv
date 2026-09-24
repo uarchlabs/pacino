@@ -78,6 +78,17 @@ module ftq_shadow (
   input  logic                     req_val,
   input  logic [FTQ_PTR_BITS-1:0]  req_ptr,
 
+  // ---- the request was allocated from the rewound head --------------
+  // Set when req_ptr is the head the squash below rewinds TO, not an
+  // entry it discards (BP-113, TD#139). That pointer lies inside
+  // [squash_start, squash_end) -- it IS squash_start -- but it names
+  // the new allocation of the index, made after the squash, so stage
+  // 0 is exempt from the clear. Stages 1 to 3 hold requests made
+  // before the redirect and are never exempt. Clear, a request inside
+  // the range is squashed like any other stage, which is the
+  // behaviour for a caller that presents the pre-rewind head.
+  input  logic                     req_rewound,
+
   // ---- the squash range, from ftq_ptr ------------------------------
   // Half open, [squash_start, squash_end), the same range
   // ftq_status masks with. A stage is cleared when the entry it
@@ -232,6 +243,10 @@ module ftq_shadow (
       w_clr[n] = squash_val && shadow_val[n] &&
                  (w_age[n] < w_squash_len);
     end
+
+    // A request allocated from the rewound head survives the squash
+    // that rewound it. See the req_rewound port comment.
+    w_clr[0] = w_clr[0] && !req_rewound;
   end
 
   // -----------------------------------------------------------------

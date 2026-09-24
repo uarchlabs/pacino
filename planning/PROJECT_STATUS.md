@@ -259,10 +259,36 @@ ftb_decisions.md end to end first and the prompt named sites, rules
 and arithmetic. The unit's documents get read BEFORE the prompt is
 written.
 
+BP-113 fixed TD#139, the correctness defect BP-112 found. regress.sh
+green, 78 of 78. tb_ftq group G failed 15 checks on the pre-edit tree
+and passes after; sim_ftq 72 -> 94, sim_ftq_ptr 159 -> 189,
+sim_ftq_shadow 44 -> 49, nothing else moved.
+
+FIVE EXISTING CHECKS HAD ENCODED THE DEFECT as expected behaviour and
+were corrected on Jeff's approval, each keeping its count and
+carrying a comment with the old value. Two of the five, tb_ftq D9 and
+tb_ftq_ptr D9, are the checks that were supposed to cover this path.
+With the four testbenches that exited 0 on a failed check (TOOLS-006)
+and the tb_bp_cluster model that disagreed with its RTL (BP-109),
+that is the third time this session that a suite certified behaviour
+it was written to catch.
+
+The two-cycle post-redirect stall resolved with the index fix. The
+measurement separated a case the documents had not: front-end 1
+cycle, backend 2, because F is the target entry itself. 5.1 now says
+so; ifu_decisions.md IFU-27 says one cycle for both and needs the
+same split. Nobody has that file open yet.
+
+Q10 was added to ftq_ptr_assert and H3 and H5 changed in
+ftq_shadow_assert, each proven to fire by mutation. One mutation did
+not fire Q10 at first because the new tb_ftq_ptr group reset
+immediately after each redirect; a trailing clock edge fixed the
+test, not the property.
+
 CLOSED: TD#99 by TOOLS-006. TD#124, TD#125 by BP-110. TD#132,
-TD#137 by BP-111. TD#126, TD#127 by BP-112.
-New: TD#129 to TD#142. BP-109 to BP-112 consumed.
-Next free BP is BP-113. Next free INFRA is INFRA-013. Next free
+TD#137 by BP-111. TD#126, TD#127 by BP-112. TD#139 by BP-113.
+New: TD#129 to TD#142. BP-109 to BP-113 consumed.
+Next free BP is BP-114. Next free INFRA is INFRA-013. Next free
 TOOLS is TOOLS-007. Next free TD is TD#143.
 
 ---
@@ -2753,35 +2779,39 @@ assessment of each document. Correct any that are wrong.
 |     |          | tb_ftq_ptr H53-H56 pin it so it cannot change by         |
 |     |          | accident before it is ruled.                             |
 
-| 139 | ftq      | OPEN, CORRECTNESS, HIGHEST PRIORITY IN THE FTQ. THE      |
-|     |          | REDIRECT TARGET BLOCK IS WRITTEN TO A SQUASHED ENTRY     |
-|     |          | AND NEVER FETCHED. In a redirect cycle ftq_pred_idx_p0   |
-|     |          | (ftq.sv, assign ftq_pred_idx_p0 = w_alloc_idx) still     |
-|     |          | carries the PRE-rewind alloc_ptr while ftq_npc presents  |
-|     |          | the redirect target at p0. The target block is written   |
-|     |          | at p1 to an index the redirect squashes; the next index  |
-|     |          | issued holds target+32. THE FIRST 32 BYTES OF THE        |
-|     |          | CORRECTED STREAM ARE SKIPPED, so instructions that must  |
-|     |          | execute do not.                                          |
+| 139 | ftq      | CLOSED BP-113 (session-073). The redirect target is now  |
+|     |          | allocated from the head 5.5 R1 rewinds to, in the        |
+|     |          | redirect cycle: ftq_ptr exports alloc_req_ptr and        |
+|     |          | alloc_idx is cut from it, so ftq.sv stays a rename, and  |
+|     |          | alloc_ptr ends one past the rewound head when the        |
+|     |          | request is accepted or on it when the queue is full. The |
+|     |          | R1 values are unchanged. ftq_shadow took one new input,  |
+|     |          | req_rewound, wired from squash_val: the rewound head IS  |
+|     |          | squash_start, so without it the shadow squashed the      |
+|     |          | target's own p1 write and the defect returned.           |
 |     |          |                                                          |
-|     |          | Seen in a tb_ftq probe of a predecode redirect on K=3    |
-|     |          | with old head 12: c0 p0 idx 12 pc B000_0000; c1 p0 idx   |
-|     |          | 4 pc B000_0020; c4 the fetch of entry 4 has start_pc     |
-|     |          | B000_0020. Backend redirects use the same path; tb_ftq   |
-|     |          | D9 checks only the index, which is why 670 FTQ checks    |
-|     |          | never saw it. PREDATES BP-112, which found it and did    |
-|     |          | not fix it: the fix touches allocation on every          |
-|     |          | redirect cause.                                          |
+|     |          | Pinned failing first: tb_ftq group G, 15 checks failing  |
+|     |          | on the old code, each reading the PC the fetch carried.  |
+|     |          | The index-only checks in the same group PASSED on the    |
+|     |          | broken code, which is why D9 missed this for five        |
+|     |          | sessions. FIVE EXISTING CHECKS HAD ENCODED THE DEFECT    |
+|     |          | and were corrected with Jeff's approval, each carrying a |
+|     |          | comment with its old value: tb_ftq D9, D13, D18, F5 and  |
+|     |          | tb_ftq_ptr D9.                                           |
 |     |          |                                                          |
-|     |          | Side effect: the in-flight p1 of that request counts     |
-|     |          | against alloc_ptr-1, so after a front-end redirect the   |
-|     |          | translation of K stalls TWO cycles where                 |
-|     |          | ftq_decisions.md 5.1 and IFU-27 say one. tb_ftq F uses   |
-|     |          | bounded waits and does not pin the latency.              |
+|     |          | The two-cycle translation stall resolved with the index  |
+|     |          | fix and no separate change. Measured after: front-end 1  |
+|     |          | cycle, backend 2, the backend case because F is the      |
+|     |          | target entry and its p1 write lands at the end of the    |
+|     |          | first cycle. ftq_decisions.md 5.1 now separates them;    |
+|     |          | ifu_decisions.md IFU-27 still says one cycle for both    |
+|     |          | and needs the same split.                                |
 |     |          |                                                          |
-|     |          | FIX THIS BEFORE THE IFU. TD#134 designs wrong-path       |
-|     |          | handling against the redirect path, and that path        |
-|     |          | currently loses the target block.                        |
+|     |          | Was: in a redirect cycle the p0 request carried the      |
+|     |          | pre-rewind alloc index, so the target block was written  |
+|     |          | to a squashed entry and never fetched and the first 32   |
+|     |          | bytes of the corrected stream were skipped, on every     |
+|     |          | cause including RC_TRAP and RC_UNSPEC. Found by BP-112.  |
 
 | 140 | ftq      | OPEN, DOCUMENT GAP. MAY THE REFETCH WRITEBACK REDIRECT?  |
 |     |          | The W3 refetch of K after a predecode redirect produces  |

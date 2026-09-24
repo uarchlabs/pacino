@@ -43,6 +43,7 @@ module tb;
 
   logic                    req_val;
   logic [FTQ_PTR_BITS-1:0] req_ptr;
+  logic                    req_rewound;
   logic                    squash_val;
   logic [FTQ_PTR_BITS-1:0] squash_start;
   logic [FTQ_PTR_BITS-1:0] squash_end;
@@ -74,6 +75,7 @@ module tb;
     .rstn           (rstn),
     .req_val        (req_val),
     .req_ptr        (req_ptr),
+    .req_rewound    (req_rewound),
     .squash_val     (squash_val),
     .squash_start   (squash_start),
     .squash_end     (squash_end),
@@ -121,6 +123,10 @@ module tb;
 
   task automatic clr();
     req_val    = 1'b0;
+    // Groups A to F predate the port and present the pre-rewind
+    // head, so a request inside the squash range is squashed there
+    // (D2). Group G drives it.
+    req_rewound = 1'b0;
     squash_val = 1'b0;
     gv_pred_p1 = 1'b0;
     gv_slot_p2 = 1'b0;
@@ -508,6 +514,48 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // G. A request allocated from the rewound head (BP-113, TD#139).
+  // -----------------------------------------------------------------
+  // ftq_ptr presents the rewound head at p0 in a redirect cycle, and
+  // that head is squash_start: inside the range by index, the new
+  // allocation by fact. It must enter the shadow, and its p1 write
+  // must be accepted, while an OLDER stage holding the squashed use
+  // of the same index is still cleared. D2 is the same stimulus with
+  // req_rewound clear.
+  task automatic group_g();
+    $display("-- G: a request allocated from the rewound head --");
+    do_reset();
+
+    // Entry 41, then the first use of 42, then a redirect whose
+    // rewound head is 42, with the request for the new use of 42.
+    push(41);
+    push(42);
+    req_val      = 1'b1;
+    req_ptr      = FTQ_PTR_BITS'(42);
+    req_rewound  = 1'b1;
+    squash_val   = 1'b1;
+    squash_start = FTQ_PTR_BITS'(42);
+    squash_end   = FTQ_PTR_BITS'(43);
+    tick();
+    clr();
+    chk("G1 the rewound request enters the shadow",
+        shadow_val[1] && (shadow_ptr[1] == FTQ_PTR_BITS'(42)));
+    chk("G2 the squashed use of the same index is cleared",
+        !shadow_val[2]);
+    chk("G3 the entry before the range survives",
+        shadow_val[3] && (shadow_ptr[3] == FTQ_PTR_BITS'(41)));
+    chk("G4 alloc_inflight counts the rewound request", alloc_inflight);
+
+    // Its p1 response -- the redirect target block -- is accepted.
+    gv_pred_p1  = 1'b1;
+    idx_pred_p1 = 6'd42;
+    #1;
+    chk("G5 and its p1 write is accepted", ok_pred_p1);
+    tick();
+    clr();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -525,6 +573,7 @@ module tb;
     group_d();
     group_e();
     group_f();
+    group_g();
 
     $display("tb_ftq_shadow: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

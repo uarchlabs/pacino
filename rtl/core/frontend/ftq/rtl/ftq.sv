@@ -241,6 +241,7 @@ module ftq (
   logic [FTQ_PTR_BITS-1:0]  w_xlate_ptr;
   logic [FTQ_PTR_BITS-1:0]  w_fetch_ptr;
   logic [FTQ_PTR_BITS-1:0]  w_commit_ptr;
+  logic [FTQ_PTR_BITS-1:0]  w_alloc_req_ptr;
   logic [FTQ_IDX_BITS-1:0]  w_alloc_idx;
   logic [FTQ_IDX_BITS-1:0]  w_xlate_idx;
   logic                     w_xlate_pending;
@@ -364,11 +365,14 @@ module ftq (
     .squash_val     (w_squash_val),
     .squash_start   (w_squash_start),
     .squash_end     (w_squash_end),
+    .alloc_req_ptr  (w_alloc_req_ptr),
     .alloc_idx      (w_alloc_idx),
     .xlate_idx      (w_xlate_idx),
     .fetch_idx      (w_fetch_idx)
   );
 
+  // w_alloc_idx is the rewound head in a redirect cycle and alloc_ptr
+  // otherwise: ftq_ptr makes that choice, this is a rename (BP-113).
   assign ftq_pred_idx_p0 = w_alloc_idx;
 
   // -----------------------------------------------------------------
@@ -436,11 +440,17 @@ module ftq (
   // -----------------------------------------------------------------
   // ftq_shadow. The four-deep response shadow, 5.6.
   // -----------------------------------------------------------------
+  // req_ptr is the entry the p0 request allocates, the same pointer
+  // ftq_pred_idx_p0 is cut from, so stage 0 and the cluster name one
+  // entry in every cycle. req_rewound is the squash valid: in a
+  // redirect cycle that pointer is the rewound head, inside the squash
+  // range by index and the new allocation by fact (BP-113, TD#139).
   ftq_shadow u_shadow (
     .clk            (clk),
     .rstn           (rstn),
     .req_val        (ftq_pred_val_p0),
-    .req_ptr        (w_alloc_ptr),
+    .req_ptr        (w_alloc_req_ptr),
+    .req_rewound    (w_squash_val),
     .squash_val     (w_squash_val),
     .squash_start   (w_squash_start),
     .squash_end     (w_squash_end),

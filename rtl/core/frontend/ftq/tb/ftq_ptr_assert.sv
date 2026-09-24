@@ -28,6 +28,7 @@ module ftq_ptr_assert (
   input logic [FTQ_PTR_BITS-1:0] alloc_ptr,
   input logic [FTQ_PTR_BITS-1:0] xlate_ptr,
   input logic [FTQ_PTR_BITS-1:0] fetch_ptr,
+  input logic [FTQ_PTR_BITS-1:0] alloc_req_ptr,
   input logic                    ftq_full,
   input logic                    ftq_empty,
   input logic                    ptr_alias_full,
@@ -60,6 +61,23 @@ module ftq_ptr_assert (
     w_age_fetch = fetch_ptr - commit_ptr;
     w_fe_redir  = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
                   redir_arm[ARM_P2];
+  end
+
+  // A REGISTERED COPY of the p0 pointer and its acceptance, not
+  // $past: alloc_req_ptr is combinational on the redirect inputs, the
+  // same reason ftq_shadow_assert keeps r_prev_ptr. Acceptance is the
+  // gate ftq_ptr applies, full taken from the pre-rewind head.
+  logic [FTQ_PTR_BITS-1:0] r_req_ptr;
+  logic                    r_req_acc;
+
+  always_ff @(posedge clk or negedge rstn) begin : hist
+    if (!rstn) begin
+      r_req_ptr <= '0;
+      r_req_acc <= 1'b0;
+    end else begin
+      r_req_ptr <= alloc_req_ptr;
+      r_req_acc <= alloc_req_val && alloc_req_rdy && !ftq_full;
+    end
   end
 
   // Q1  FQ-1, first half. CHANGED BY BP-112: it read fetch_ptr never
@@ -115,7 +133,8 @@ module ftq_ptr_assert (
 
   // Q4  Full blocks allocation. An accepted request in a full cycle
   //     would put alloc_ptr past the limit. Redirect excluded: a
-  //     redirect rewinds and does not allocate.
+  //     redirect rewinds, and the allocation made from the rewound
+  //     head in that cycle is Q10's (BP-113).
   property p_full_blocks_alloc;
     @(posedge clk) disable iff (!rstn)
       (ftq_full && alloc_req_val && alloc_req_rdy && !redir_val) |=>
@@ -162,6 +181,20 @@ module ftq_ptr_assert (
         (xlate_ptr != alloc_ptr) && (fetch_ptr != alloc_ptr);
   endproperty
 
+  // Q10 5.2 IN EVERY CYCLE, THE REDIRECT CYCLE INCLUDED. The pointer
+  //     the p0 request carries is the one allocated: alloc_ptr next
+  //     cycle is that pointer, plus one if the request was accepted.
+  //     Outside a redirect this says the request carries alloc_ptr.
+  //     In a redirect cycle it says the request carries the rewound
+  //     head, which is TD#139: the pre-rewind head went out and the
+  //     redirect target was written to an entry the rewind freed.
+  //     Added by BP-113.
+  property p_p0_ptr_is_allocated;
+    @(posedge clk) disable iff (!rstn)
+      alloc_ptr == (r_req_ptr +
+                    {{(FTQ_PTR_BITS-1){1'b0}}, r_req_acc});
+  endproperty
+
   a_fq1_fetch_le_xlate:  assert property (p_fq1_fetch_le_xlate)
     else $error("FQ-1 fetch_ptr leads xlate_ptr");
   a_fq1_xlate_le_alloc:  assert property (p_fq1_xlate_le_alloc)
@@ -180,6 +213,8 @@ module ftq_ptr_assert (
     else $error("Q4 allocation advanced while full");
   a_full_not_empty:      assert property (p_full_not_empty)
     else $error("Q5 full and empty asserted together");
+  a_p0_ptr_is_allocated: assert property (p_p0_ptr_is_allocated)
+    else $error("Q10 the p0 index is not the entry allocated");
 
 endmodule : ftq_ptr_assert
 
@@ -192,6 +227,7 @@ bind ftq_ptr ftq_ptr_assert u_assert (
   .alloc_ptr      (alloc_ptr),
   .xlate_ptr      (xlate_ptr),
   .fetch_ptr      (fetch_ptr),
+  .alloc_req_ptr  (alloc_req_ptr),
   .ftq_full       (ftq_full),
   .ftq_empty      (ftq_empty),
   .ptr_alias_full (ptr_alias_full),

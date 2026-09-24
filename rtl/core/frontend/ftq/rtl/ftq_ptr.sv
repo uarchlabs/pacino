@@ -19,7 +19,8 @@
 //                      ACCEPTED at p0 (5.2). The index leaves with
 //                      the request as ftq_pred_idx_p0, so it is
 //                      spoken for one cycle before the entry content
-//                      is written at p1.
+//                      is written at p1. In a redirect cycle it is the
+//                      rewound head (alloc_req_ptr, BP-113).
 //   xlate_ptr  second. Advances on ftq_ifu_xlate_val & _rdy. Drives
 //                      the translation request of
 //                      ftq_ifu_interfaces.md 4.1.
@@ -147,7 +148,14 @@ module ftq_ptr (
   output logic [FTQ_PTR_BITS-1:0]  squash_start,
   output logic [FTQ_PTR_BITS-1:0]  squash_end,
 
-  // ---- the entry index leaving with the p0 request ------------------
+  // ---- the entry leaving with the p0 request ------------------------
+  // alloc_req_ptr is the entry the p0 request allocates (5.2): the
+  // head, or in a redirect cycle the head 5.5 R1 rewinds to. ftq.sv
+  // presents its low bits as ftq_pred_idx_p0 and ftq_shadow stages
+  // the full pointer. BP-113, TD#139: before it the redirect cycle
+  // carried the pre-rewind head, and the target block was written to
+  // an entry the redirect had just squashed.
+  output logic [FTQ_PTR_BITS-1:0]  alloc_req_ptr,
   output logic [FTQ_IDX_BITS-1:0]  alloc_idx,
   output logic [FTQ_IDX_BITS-1:0]  xlate_idx,
   output logic [FTQ_IDX_BITS-1:0]  fetch_idx
@@ -285,7 +293,12 @@ module ftq_ptr (
     w_fetch_en = ifu_req_val & ifu_req_rdy & fetch_pending;
   end
 
-  assign alloc_idx = alloc_ptr[FTQ_IDX_BITS-1:0];
+  // THE INDEX LEAVING AT p0 IS THE ONE ALLOCATED, in the redirect
+  // cycle too (5.2). ftq_npc presents the redirect target at p0 in the
+  // cycle the rewind is decided, so the request must carry the
+  // rewound head, not the head the redirect is discarding.
+  assign alloc_req_ptr = redir_val ? w_alloc_tgt : alloc_ptr;
+  assign alloc_idx = alloc_req_ptr[FTQ_IDX_BITS-1:0];
   assign xlate_idx = xlate_ptr[FTQ_IDX_BITS-1:0];
   assign fetch_idx = fetch_ptr[FTQ_IDX_BITS-1:0];
 
@@ -325,10 +338,12 @@ module ftq_ptr (
   //                          it; U3 squashes every entry, so alloc_ptr
   //                          is commit_ptr and FQ-1 then forces both.
   //
-  // For the backend rows F is the new alloc_ptr, which is the rule
-  // BP-106 built for fetch_ptr. For the front-end row F is one
-  // BEHIND the new alloc_ptr, and FQ-1 holds because F is never past
-  // it.
+  // For the backend rows F is the rewound head w_alloc_tgt, which is
+  // the rule BP-106 built for fetch_ptr. For the front-end row F is
+  // one BEHIND it, and FQ-1 holds because F is never past it. A
+  // request accepted in the redirect cycle takes w_alloc_tgt and
+  // leaves alloc_ptr one past it (see State), which moves alloc_ptr
+  // away from F, never towards it.
   always_comb begin : rewind
     w_unspec = (redir_cause == RC_UNSPEC);
 
@@ -369,9 +384,21 @@ module ftq_ptr (
   // -----------------------------------------------------------------
   // State.
   // -----------------------------------------------------------------
-  // A redirect outranks allocation, translation and fetch issue in
-  // the same cycle: the redirect squashes entries an allocation in
-  // the same cycle would extend past.
+  // A redirect is applied BEFORE the allocation in the same cycle,
+  // and the allocation is then made from the rewound head: the
+  // request presented with the redirect is the redirect target, it
+  // took w_alloc_tgt as its index (alloc_req_ptr), and alloc_ptr
+  // moves one past it. Without a request alloc_ptr lands on
+  // w_alloc_tgt, which is the 5.5 R1 value; with one it lands one
+  // past it, which is 5.2 applied to that value. BP-113, TD#139.
+  // Before it the allocation was dropped here while the request went
+  // out anyway, carrying the pre-rewind index.
+  //
+  // w_alloc_en carries ftq_full from the PRE-rewind head, the same
+  // term ftq_npc holds the request on (H2). A redirect arriving with
+  // the queue full therefore allocates nothing that cycle; the target
+  // is retained in ftq_npc's register and requested next cycle, at
+  // the rewound head.
   //
   // On a redirect, the redirect wins and the handshake presented in
   // the same cycle is ignored. Applies to fetch_ptr and xlate_ptr.
@@ -384,7 +411,7 @@ module ftq_ptr (
       xlate_ptr <= '0;
       fetch_ptr <= '0;
     end else if (redir_val) begin
-      alloc_ptr <= w_alloc_tgt;
+      alloc_ptr <= w_alloc_tgt + {{(FTQ_PTR_BITS-1){1'b0}}, w_alloc_en};
       xlate_ptr <= w_xlate_tgt;
       fetch_ptr <= w_fetch_tgt;
     end else begin
