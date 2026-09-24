@@ -300,11 +300,42 @@ Rulings, Jeff, closing the session's FTQ items:
        PA raised this as an open question twice before arriving at
        the answer the surrounding rules already gave.
 
+BP-114 closed TD#140, TD#141 and TD#142. regress.sh green, 78 of 78;
+sim_ftq_ifu 86 -> 99 and sim_ftq 94 -> 113, nothing else moved.
+
+TD#141 WAS A DEFECT, NOT THE COMMENT MISMATCH ITS ROW DESCRIBED. On
+RC_UNSPEC, which is debug entry and reset, the flush named fetch_idx
+while U3 squashes every entry, so in-flight fetches between
+commit_ptr and fetch_ptr survived and wrote back into squashed
+entries. tb_ftq group H failed on the pre-edit tree with the flush
+index at 24, commit_ptr at 6, and 18 fetches left unflushed. The two
+readings had sat in one file since BP-107, one in the comment and
+one in the code.
+
+R3a, WRITTEN BY THE PA LAST TURN, WAS WRONG. It said section 7's W1
+and W2 apply to the second writeback's fields; section 7 applies them
+only on a reported mispredict, and the rewrite and the redirect are
+one event (ftq_ifu_assert I5), so R3a would have split them and
+changed an entry's successor with no flush. BP-114 reported the
+conflict instead of implementing it and left the RTL as built, which
+was right. 4.3 is corrected: the second writeback derives neither a
+redirect nor a rewrite.
+
+I4 already held the no-redirect rule; only its comment and error
+message carried the old reading. BP-114 restated it, added the
+acceptance half, and proved both directions by mutation, including
+that restoring the old reading fires at the refetch, which shows the
+sequence is genuinely exercised.
+
+Carried, the two stale RTL comments the TD#138 ruling left behind:
+ftq_ifu.sv above the flush always_comb, and ftq_ptr.sv:403-405, which
+still says the handshake rule is not ruled.
+
 CLOSED: TD#99 by TOOLS-006. TD#124, TD#125 by BP-110. TD#132,
 TD#137 by BP-111. TD#126, TD#127 by BP-112. TD#139 by BP-113.
-TD#138 by ruling.
-New: TD#129 to TD#142. BP-109 to BP-113 consumed.
-Next free BP is BP-114. Next free INFRA is INFRA-013. Next free
+TD#138 by ruling. TD#140, TD#141, TD#142 by BP-114.
+New: TD#129 to TD#142. BP-109 to BP-114 consumed.
+Next free BP is BP-115. Next free INFRA is INFRA-013. Next free
 TOOLS is TOOLS-007. Next free TD is TD#143.
 
 ---
@@ -2823,45 +2854,57 @@ assessment of each document. Correct any that are wrong.
 |     |          | bytes of the corrected stream were skipped, on every     |
 |     |          | cause including RC_TRAP and RC_UNSPEC. Found by BP-112.  |
 
-| 140 | ftq      | OPEN, RTL ONLY, the rule is settled. THE W3 REFETCH'S    |
-|     |          | WRITEBACK IS EXPECTED, NOT A PROTOCOL VIOLATION. A       |
-|     |          | predecode redirect on K flushes at K and fetch restarts  |
-|     |          | from K, so K is fetched twice BY DESIGN and its second   |
-|     |          | writeback arrives with wb_rcvd set and gen[K]            |
-|     |          | unchanged, which 6.1 X3 accepts. ftq_entry_formats.md    |
-|     |          | 4.3 called that a protocol violation, which is what W3   |
-|     |          | requires to happen on every predecode redirect.          |
+| 140 | ftq      | CLOSED BP-114 (session-073). Assertion I4, which is in   |
+|     |          | ftq_ifu_assert.sv, agrees with ftq_entry_formats.md 4.3  |
+|     |          | R3a: a second writeback naming an entry with wb_rcvd set |
+|     |          | is legal, is accepted, and derives no redirect. BP-114   |
+|     |          | found the property ALREADY held the no-redirect half --  |
+|     |          | only its comment and message called the refetch          |
+|     |          | writeback a protocol violation -- and added the          |
+|     |          | acceptance half. Both proven by mutation, and restoring  |
+|     |          | the old reading fires at the refetch, which shows the    |
+|     |          | sequence is really exercised (tb_ftq F14-F19).           |
 |     |          |                                                          |
-|     |          | Ruled session-073 (Jeff) and written into 4.3 as R3a:    |
-|     |          | the writeback is accepted, section 7 W1 and W2 apply to  |
-|     |          | the fields, and it derives NO redirect. R3's bound, one  |
-|     |          | predecode redirect per entry, is unchanged and is what   |
-|     |          | stops a refetch loop.                                    |
-|     |          |                                                          |
-|     |          | WHAT REMAINS IS THE RTL: assertion I4 still asserts the  |
-|     |          | old reading and would fire on ordinary traffic the       |
-|     |          | first time a predecode redirect runs end to end.         |
-|     |          | Nothing exercises it today because the IFU does not      |
-|     |          | exist. Fix it in whichever task next opens the ftq       |
-|     |          | assertions.                                              |
-|     |          |                                                          |
-|     |          | Raised by BP-112.                                        |
+|     |          | R3a ITSELF WAS WRONG AND IS CORRECTED. It said section   |
+|     |          | 7's W1 and W2 apply to the second writeback's fields.    |
+|     |          | Section 7 applies them only on ifu_ftq_mis_val, and the  |
+|     |          | rewrite and the redirect are ONE EVENT (I5), so R3a as   |
+|     |          | written would have split them and changed an entry's     |
+|     |          | successor with no flush. A mispredict reported on the    |
+|     |          | refetch is dropped whole; the backend redirect is the    |
+|     |          | backstop. Found by BP-114, PA error.                     |
 
-| 141 | ftq      | OPEN, small. THE RC_UNSPEC FLUSH COMMENT AND THE CODE    |
-|     |          | DISAGREE. ftq_ifu.sv's comment says the flush drives the |
-|     |          | commit pointer's index; the code drives fetch_idx, the   |
-|     |          | pre-redirect fetch_ptr. Fetches in flight between        |
-|     |          | commit_ptr and fetch_ptr are then not named by the       |
-|     |          | flush. Backend half, left alone by BP-112 and reported   |
-|     |          | only. Decide which is right, then fix the other.         |
+| 141 | ftq      | CLOSED BP-114 (session-073). THIS WAS A DEFECT, NOT A    |
+|     |          | COMMENT MISMATCH. RC_UNSPEC squashes EVERY entry         |
+|     |          | (ftq_backend_interfaces.md 5.1 U3), so the flush index   |
+|     |          | must name the oldest live entry, which is commit_ptr's.  |
+|     |          | ftq_ifu.sv drove fetch_idx, so every in-flight fetch     |
+|     |          | between commit_ptr and fetch_ptr survived the flush and  |
+|     |          | its writeback landed on a squashed entry. Pinned failing |
+|     |          | first: tb_ftq group H, flush index 24 where commit_ptr   |
+|     |          | was 6, 18 in-flight fetches left unflushed. ftq_ptr was  |
+|     |          | already correct; ftq_ifu was the only module wrong.      |
+|     |          | tb_ftq_ifu B6 had encoded the old value and was changed. |
+|     |          |                                                          |
+|     |          | 5.5 R1's F-by-source table never had an RC_UNSPEC row;   |
+|     |          | it now does.                                             |
+|     |          |                                                          |
+|     |          | Was: the comment said the commit pointer's index and the |
+|     |          | code drove fetch_idx. Raised by BP-112.                  |
 
-| 142 | ftq      | OPEN. ftq_ifu_commit_ptr IS SPECIFIED AND NOT BUILT.     |
-|     |          | ftq_ifu_interfaces.md 4, IFU-22, lists it on the fetch   |
-|     |          | request group. Found incidentally by BP-112, which did   |
-|     |          | not carry it. Same class as TD#127 and the FTB-G1        |
-|     |          | finding of TD#124: a document stating a port or a rule   |
-|     |          | that no RTL provides. Needed before the IFU is built     |
-|     |          | against section 4.                                       |
+| 142 | ftq      | CLOSED BP-114 (session-073). ftq_ifu_commit_ptr is on    |
+|     |          | the section 4 fetch request group, FTQ_IDX_BITS wide,    |
+|     |          | driven every cycle from commit_ptr with no valid and no  |
+|     |          | handshake. ftq.sv passes the whole pointer and the slice |
+|     |          | is taken in ftq_ifu, so ftq.sv stays wiring. Checked in  |
+|     |          | tb_ftq_ifu group H across allocation, commit, redirect   |
+|     |          | and wrap, including the IFU-22 case a block at           |
+|     |          | commit_ptr may issue and one ahead must wait, on the     |
+|     |          | live unit in tb_ftq group H, and every cycle by          |
+|     |          | assertion I17.                                           |
+|     |          |                                                          |
+|     |          | Was: specified in ftq_ifu_interfaces.md 4 and not built. |
+|     |          | Found incidentally by BP-112.                            |
 
 ---
 

@@ -23,6 +23,7 @@ module ftq_ifu_assert (
   input logic [FTQ_IDX_BITS-1:0]  fetch_idx,
   input logic                     fetch_pending,
   input bp_ftq_entry_t            fetch_entry,
+  input logic [FTQ_PTR_BITS-1:0]  commit_ptr,
   input logic                     gen_fetch,
   input logic                     gen_pdwb,
   input logic                     wb_rcvd_pdwb,
@@ -44,6 +45,7 @@ module ftq_ifu_assert (
   input logic                     ftq_ifu_taken_val,
   input logic [FTB_BR_POS_BITS-1:0] ftq_ifu_taken_pos,
   input logic                     ftq_ifu_gen,
+  input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_commit_ptr,
   input logic                     ftq_ifu_flush_val,
   input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_flush_idx,
   input logic                     ifu_ftq_pdwb_val,
@@ -101,15 +103,25 @@ module ftq_ifu_assert (
       pd_redir_val |-> wb_accept && ifu_ftq_mis_val;
   endproperty
 
-  // I4  R3 of ftq_entry_formats.md 4.3. An entry derives AT MOST
-  //     ONE predecode redirect, and only from its own writeback. A
-  //     second writeback naming an entry that already has wb_rcvd
-  //     set is a protocol violation, not a second redirect -- and
-  //     acting on it would redirect the front end to a block it has
-  //     already fetched past.
-  property p_one_redirect_per_entry;
+  // I4  R3 and R3a of ftq_entry_formats.md 4.3 (TD#140, BP-114). A
+  //     second writeback naming an entry that already has wb_rcvd set
+  //     is LEGAL: the W3 refetch produces one on every predecode
+  //     redirect, with gen unchanged. So a current one (gen matches)
+  //     is ACCEPTED and sets the status like any other, and it
+  //     derives NO redirect whatever its predecode result -- R3's
+  //     bound of one predecode redirect per entry is what stops a
+  //     refetch loop. A stale one (gen differs) is I1's case.
+  //     This read "a protocol violation" until BP-114; the redirect
+  //     half was already the property, the acceptance half is new.
+  property p_refetch_wb_no_redirect;
     @(posedge clk) disable iff (!rstn)
       wb_rcvd_pdwb |-> !pd_redir_val;
+  endproperty
+
+  property p_refetch_wb_accepted;
+    @(posedge clk) disable iff (!rstn)
+      (ifu_ftq_pdwb_val && wb_rcvd_pdwb && (ifu_ftq_pdwb_gen == gen_pdwb))
+        |-> wb_accept && wb_set_val;
   endproperty
 
   // I5  THE ENTRY REWRITE AND THE REDIRECT ARE ONE EVENT. W1 and W3
@@ -231,8 +243,10 @@ module ftq_ifu_assert (
     else $error("I2 the writeback accept does not track the gen test");
   a_redir_needs_mis:    assert property (p_redir_needs_mis)
     else $error("I3 a predecode redirect with no structural mispredict");
-  a_one_redirect:       assert property (p_one_redirect_per_entry)
-    else $error("I4 a second predecode redirect for one entry");
+  a_refetch_no_redir:   assert property (p_refetch_wb_no_redirect)
+    else $error("I4 a writeback on a set wb_rcvd derived a redirect");
+  a_refetch_accepted:   assert property (p_refetch_wb_accepted)
+    else $error("I4 a current writeback on a set wb_rcvd was rejected");
   a_write_and_redirect: assert property (p_write_and_redirect_together)
     else $error("I5 the slot rewrite and the redirect disagree");
   a_redir_pc_corrected: assert property (p_redir_pc_is_corrected)
@@ -251,10 +265,32 @@ module ftq_ifu_assert (
     else $error("I12 a front-end redirect did not flush at K");
   a_bkend_flush_self:   assert property (p_bkend_flush_by_self)
     else $error("I13 the backend flush index does not follow _self");
+  // I16 ftq_backend_interfaces.md 5.1 U3 (TD#141, BP-114). RC_UNSPEC
+  //     squashes EVERY entry, so the flush names the oldest live one,
+  //     commit_ptr's index, and section 5 drops every in-flight fetch.
+  //     fetch_idx left those between commit_ptr and fetch_ptr alive.
+  property p_unspec_flush_at_commit;
+    @(posedge clk) disable iff (!rstn)
+      (redir_val && (redir_cause == RC_UNSPEC)) |->
+        (ftq_ifu_flush_idx == commit_ptr[FTQ_IDX_BITS-1:0]);
+  endproperty
+
+  // I17 Section 4, IFU-22 (TD#142, BP-114). ftq_ifu_commit_ptr is
+  //     driven CONTINUOUSLY: in every cycle, with no antecedent on the
+  //     request, the handshake or a redirect.
+  property p_commit_ptr_export;
+    @(posedge clk) disable iff (!rstn)
+      ftq_ifu_commit_ptr == commit_ptr[FTQ_IDX_BITS-1:0];
+  endproperty
+
   a_xlate_self:         assert property (p_xlate_self)
     else $error("I14 the translation request does not describe its entry");
   a_xlate_pending:      assert property (p_xlate_needs_pending)
     else $error("I15 a translation was requested for no pending entry");
+  a_unspec_flush:       assert property (p_unspec_flush_at_commit)
+    else $error("I16 RC_UNSPEC did not flush at commit_ptr");
+  a_commit_ptr_export:  assert property (p_commit_ptr_export)
+    else $error("I17 ftq_ifu_commit_ptr does not track commit_ptr");
 
   logic w_unused;
   assign w_unused = |ftq_ifu_taken_pos | |pd_wr_sel |
@@ -269,6 +305,7 @@ bind ftq_ifu ftq_ifu_assert u_assert (
   .fetch_idx         (fetch_idx),
   .fetch_pending     (fetch_pending),
   .fetch_entry       (fetch_entry),
+  .commit_ptr        (commit_ptr),
   .gen_fetch         (gen_fetch),
   .gen_pdwb          (gen_pdwb),
   .wb_rcvd_pdwb      (wb_rcvd_pdwb),
@@ -290,6 +327,7 @@ bind ftq_ifu ftq_ifu_assert u_assert (
   .ftq_ifu_taken_val (ftq_ifu_taken_val),
   .ftq_ifu_taken_pos (ftq_ifu_taken_pos),
   .ftq_ifu_gen       (ftq_ifu_gen),
+  .ftq_ifu_commit_ptr (ftq_ifu_commit_ptr),
   .ftq_ifu_flush_val (ftq_ifu_flush_val),
   .ftq_ifu_flush_idx (ftq_ifu_flush_idx),
   .ifu_ftq_pdwb_val  (ifu_ftq_pdwb_val),

@@ -358,8 +358,21 @@ block ended early.
       fetch restarts from K (ftq_ifu_interfaces.md 7 W3), so K is
       fetched twice BY DESIGN and its second writeback arrives
       with wb_rcvd already set and gen[K] unchanged, which 6.1 X3
-      accepts. It is accepted, section 7's W1 and W2 apply to the
-      fields as for any writeback, and it derives no redirect.
+      accepts. It is accepted and sets status. IT DERIVES NEITHER
+      A REDIRECT NOR A FIELD REWRITE. Section 7 applies W1 and W2
+      only on ifu_ftq_mis_val, and the rewrite and the redirect
+      are ONE EVENT (ftq_ifu_assert I5): a rewrite without a flush
+      would change the entry's successor while the old successor
+      is still being fetched. So a mispredict reported on the
+      refetch is dropped whole. That is safe because the refetch
+      returns the same bytes against the corrected entry, so it
+      cannot disagree unless something else is already wrong, and
+      the backend redirect remains the correctness backstop.
+
+      This rule first said "W1 and W2 apply to the fields as for
+      any writeback", which would have split the rewrite from the
+      redirect. Corrected session-073 after BP-114 reported the
+      conflict.
       R3's bound is what stops a refetch loop; R3 previously
       called this case a violation, which is what W3 requires to
       happen on every predecode redirect. Ruled session-073,
@@ -367,10 +380,11 @@ block ended early.
 ```
 
 Assertion I4 follows R3a: a second writeback on a set wb_rcvd is
-LEGAL and must not derive a redirect. Asserting it as an error would
-fire on ordinary traffic the first time a predecode redirect runs
-end to end, which nothing exercises today because the IFU does not
-exist. The RTL change is outstanding, TD#140.
+LEGAL, is accepted, and must not derive a redirect. BP-114 found the
+property already held the no-redirect half -- only its comment and
+message called the refetch writeback a violation -- and added the
+acceptance half, both proven by mutation. I4 is in ftq_ifu_assert.sv.
+TD#140 closed.
 
 R3 is the reason wb_rcvd exists at all. Deallocation does not need
 it: 5.3 frees on commit only, and `ftq_ifu_interfaces.md` 7 already
@@ -482,8 +496,10 @@ path touches none of those.
               writeback a protocol violation, and R3a states what
               it does instead. R3's bound -- one predecode
               redirect per entry -- is unchanged and is what stops
-              a refetch loop. Assertion I4 still asserts the old
-              reading; TD#140.
+              a refetch loop. Assertion I4 corrected by BP-114 and
+              TD#140 closed. R3a's "W1 and W2 apply" corrected
+              after BP-114: the second writeback derives neither a
+              redirect nor a rewrite, since the two are one event.
 
   2026-09-22  session-073. IT_MAX_TGT_WIDTH 38 -> 40 (TD#132,
               ruled by Jeff; ftq_bpu_interfaces.md 5.2 and

@@ -128,6 +128,7 @@ module tb;
   logic                     ftq_ifu_taken_val;
   logic [FTB_BR_POS_BITS-1:0] ftq_ifu_taken_pos;
   logic                     ftq_ifu_gen;
+  logic [FTQ_IDX_BITS-1:0]  ftq_ifu_commit_ptr;
   logic                     ftq_ifu_flush_val;
   logic [FTQ_IDX_BITS-1:0]  ftq_ifu_flush_idx;
   logic                     ifu_ftq_pdwb_val;
@@ -239,6 +240,7 @@ module tb;
     .ftq_ifu_taken_val     (ftq_ifu_taken_val),
     .ftq_ifu_taken_pos     (ftq_ifu_taken_pos),
     .ftq_ifu_gen           (ftq_ifu_gen),
+    .ftq_ifu_commit_ptr    (ftq_ifu_commit_ptr),
     .ftq_ifu_flush_val     (ftq_ifu_flush_val),
     .ftq_ifu_flush_idx     (ftq_ifu_flush_idx),
     .ifu_ftq_pdwb_val      (ifu_ftq_pdwb_val),
@@ -807,6 +809,46 @@ module tb;
         ftq_ifu_taken_val &&
         (ftq_ifu_taken_pos == FTB_BR_POS_BITS'(6)));
     chk_va("F13 and the corrected successor", ftq_ifu_next_pc, PD_TGT);
+
+    // THE W3 REFETCH'S WRITEBACK (ftq_entry_formats.md 4.3 R3a,
+    // TD#140, BP-114). K is fetched twice by design, so its second
+    // writeback arrives with wb_rcvd[K] set and gen[K] unchanged. It
+    // is LEGAL: accepted by 6.1 X3, and it derives NO redirect, both
+    // when predecode now agrees with the corrected entry and when it
+    // reports a mispredict again (R3's bound does not depend on the
+    // predecode result). ftq_ifu_assert I4 samples every cycle here.
+    tick();   // the refetch of K is accepted at this edge
+    // The state R3a describes, read rather than assumed.
+    chk("F14 wb_rcvd[K] is still set from the first writeback",
+        dut.w_wb_rcvd_vec[3]);
+    chk("F15 and gen[K] is unchanged: K was not reallocated",
+        dut.w_gen_vec[3] == 1'b1);
+    ifu_ftq_pdwb_val = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd3;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_mis_val  = 1'b0;
+    #1;
+    chk("F16 the refetch writeback is accepted",
+        dut.w_wb_accept && !dut.w_wb_drop_gen);
+    chk("F17 and derives no redirect", !ftq_ifu_flush_val);
+    tick();
+    // The same writeback reporting a mispredict at the position the
+    // correction already holds.
+    ifu_ftq_pd[6]    = '{valid: 1'b1, is_rvc: 1'b0, br_type: 2'b10,
+                         is_call: 1'b0, is_ret: 1'b0};
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(6);
+    ifu_ftq_target   = PD_TGT;
+    #1;
+    chk("F18 a refetch writeback with mis_val is accepted too",
+        dut.w_wb_accept);
+    chk("F19 and still derives no redirect",
+        !ftq_ifu_flush_val && !dut.w_pd_redir_val);
+    tick();
+    ifu_ftq_pdwb_val = 1'b0;
+    ifu_ftq_mis_val  = 1'b0;
+    ifu_ftq_pd[6]    = '0;
+    tick();
   endtask
 
   // -----------------------------------------------------------------
@@ -980,6 +1022,157 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // H. RC_UNSPEC with fetches in flight behind fetch_ptr (BP-114,
+  //    TD#141).
+  // -----------------------------------------------------------------
+  // ftq_backend_interfaces.md 5.1 U3 squashes EVERY entry, and
+  // ftq_ifu_interfaces.md 5 has the IFU drop every in-flight fetch AT
+  // OR AFTER the flush index. The only index that drops the whole live
+  // window is the OLDEST live entry, which is commit_ptr's. Group G's
+  // RC_UNSPEC row has commit_ptr at 0; here it is moved off 0 first,
+  // so a flush index of 0 or of fetch_idx cannot pass by coincidence.
+  //
+  // THE IFU IS MODELLED HERE as a record of issued fetches, h_ifl,
+  // one bit per index. A fetch is issued on its handshake and the
+  // model ignores a request presented in a flush cycle (section 5,
+  // TD#138). Retiring an entry through commit clears its bit: its
+  // writeback has returned. On the flush the model applies section 5
+  // literally, measuring "after" from its own oldest in-flight entry,
+  // h_base, which is what an IFU can see.
+  localparam logic [VA_WIDTH-1:0] H_UN_TGT = VA_WIDTH'('h00_F100_0000);
+
+  logic [FTQ_DEPTH-1:0]    h_ifl;
+  logic [FTQ_IDX_BITS-1:0] h_base;
+  int                      h_cyc;
+  int                      h_cp_bad;
+
+  // Tick n cycles, recording each fetch handshake the IFU would act
+  // on. The request is sampled before the edge it is accepted at.
+  //
+  // ftq_ifu_commit_ptr (TD#142) is compared with ftq_commit's pointer
+  // in EVERY cycle this task runs, whatever the request and redirect
+  // are doing, which is what "driven continuously" means.
+  task automatic h_run(input int n);
+    for (int c = 0; c < n; c++) begin
+      h_cyc++;
+      if (ftq_ifu_commit_ptr !== dut.w_commit_ptr[FTQ_IDX_BITS-1:0]) begin
+        h_cp_bad++;
+      end
+      if (ftq_ifu_req_val && ftq_ifu_req_rdy && !ftq_ifu_flush_val) begin
+        h_ifl[ftq_ifu_idx] = 1'b1;
+      end
+      tick();
+    end
+  endtask
+
+  function automatic int h_count();
+    int n;
+    n = 0;
+    for (int i = 0; i < FTQ_DEPTH; i++) n += int'(h_ifl[i]);
+    return n;
+  endfunction
+
+  task automatic group_h();
+    logic [FTQ_IDX_BITS-1:0] f_idx;
+    logic [VA_WIDTH-1:0]     f_pc;
+    logic [FTQ_IDX_BITS-1:0] c_idx;
+    logic [FTQ_IDX_BITS-1:0] fl_age;
+    int                      n_live;
+    int                      n_keep;
+    $display("-- H: RC_UNSPEC with fetches in flight --");
+    do_reset();
+    h_ifl    = '0;
+    h_base   = '0;
+    h_cyc    = 0;
+    h_cp_bad = 0;
+
+    // A run-ahead with the IFU accepting every cycle. Nothing commits,
+    // so the exported pointer stays on 0 while allocation and fetch
+    // move past it.
+    h_run(20);
+    chk("H8 allocation moves, ftq_ifu_commit_ptr stays on entry 0",
+        (ftq_pred_idx_p0 > 6'd10) && (ftq_ifu_idx > 6'd10) &&
+        (ftq_ifu_commit_ptr == 6'd0));
+
+    // Commit through entry 5. The watermark is inclusive, so the walk
+    // leaves commit_ptr on 6; it runs one entry per cycle and is
+    // bounded here so a stuck walk fails H1 rather than hangs.
+    bkend_ftq_commit_val = 1'b1;
+    bkend_ftq_commit_idx = FTQ_PTR_BITS'(5);
+    for (int c = 0; c < 16; c++) begin
+      if (dut.w_commit_ptr == FTQ_PTR_BITS'(6)) break;
+      h_run(1);
+    end
+    bkend_ftq_commit_val = 1'b0;
+    c_idx = dut.w_commit_ptr[FTQ_IDX_BITS-1:0];
+    chk("H1 commit_ptr is off zero, on entry 6",
+        dut.w_commit_ptr == FTQ_PTR_BITS'(6));
+    chk("H9 ftq_ifu_commit_ptr follows the commit to entry 6",
+        ftq_ifu_commit_ptr == 6'd6);
+
+    // Entries 0 to 5 retired, so their writebacks have returned.
+    for (int i = 0; i < 6; i++) h_ifl[i] = 1'b0;
+    h_base = c_idx;
+
+    // THE STIMULUS THE CASE RELIES ON, checked rather than assumed:
+    // every entry from commit_ptr up to fetch_ptr has been issued and
+    // is still in flight, and there is more than one of them.
+    n_live = int'(FTQ_IDX_BITS'(ftq_ifu_idx - c_idx));
+    $display("  commit_ptr %0d fetch_ptr %0d in flight %0d",
+             c_idx, ftq_ifu_idx, h_count());
+    chk("H2 fetches are in flight between commit_ptr and fetch_ptr",
+        (n_live > 1) && (h_count() == n_live));
+
+    // RC_UNSPEC. _idx and _self are driven to values that would give
+    // a different answer if read (U1, U2).
+    bkend_redirect(6'd33, 1'b1, RC_UNSPEC, H_UN_TGT);
+    $display("  RC_UNSPEC flush_idx %0d, commit_ptr %0d, fetch_idx %0d",
+             ftq_ifu_flush_idx, c_idx, ftq_ifu_idx);
+    chk("H3 RC_UNSPEC flushes the IFU", ftq_ifu_flush_val);
+    chk("H4 the flush index names the oldest live entry, commit_ptr",
+        ftq_ifu_flush_idx == c_idx);
+    // commit_ptr never rewinds (5.5 R2), and the export is driven in
+    // the redirect cycle as in any other.
+    chk("H10 ftq_ifu_commit_ptr holds through the redirect cycle",
+        ftq_ifu_commit_ptr == c_idx);
+
+    // Section 5 applied by the model: drop every in-flight fetch whose
+    // index is at or after the flush index.
+    fl_age = FTQ_IDX_BITS'(ftq_ifu_flush_idx - h_base);
+    for (int i = 0; i < FTQ_DEPTH; i++) begin
+      if (FTQ_IDX_BITS'(FTQ_IDX_BITS'(i) - h_base) >= fl_age) begin
+        h_ifl[i] = 1'b0;
+      end
+    end
+    n_keep = h_count();
+    $display("  in-flight fetches surviving the flush: %0d", n_keep);
+    chk("H5 no in-flight fetch survives an RC_UNSPEC flush",
+        n_keep == 0);
+    bkend_release();
+
+    // Allocation restarted at commit_ptr (U3), so the first fetch of
+    // the corrected stream is entry 6 carrying the RC_UNSPEC PC.
+    next_fetch(f_idx, f_pc);
+    chk   ("H6 the first fetch is the commit_ptr entry", f_idx == c_idx);
+    chk_va("H7 and carries the RC_UNSPEC PC", f_pc, H_UN_TGT);
+
+    // IFU-22 on the live unit. The first fetch of the corrected stream
+    // is AT commit_ptr, so an uncached block there may issue its bus
+    // read; the next one is ahead of it and must wait.
+    chk("H11 the refetched entry is at ftq_ifu_commit_ptr: uncached may go",
+        f_idx == ftq_ifu_commit_ptr);
+    next_fetch(f_idx, f_pc);
+    chk("H12 the next entry is ahead of it: uncached must wait",
+        (f_idx == FTQ_IDX_BITS'(c_idx + 1'b1)) &&
+        (f_idx != ftq_ifu_commit_ptr));
+    h_run(8);
+    $display("  ftq_ifu_commit_ptr compared in %0d cycles, %0d mismatches",
+             h_cyc, h_cp_bad);
+    chk("H13 ftq_ifu_commit_ptr equals commit_ptr in every cycle",
+        (h_cyc > 30) && (h_cp_bad == 0));
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -998,6 +1191,7 @@ module tb;
     group_e();
     group_f();
     group_g();
+    group_h();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

@@ -619,6 +619,16 @@ or predecode redirect):
                                must be fetched against the
                                correction (ftq_ifu_interfaces.md
                                7 W3)
+        RC_UNSPEC              F = commit_ptr. U3 squashes EVERY
+                               entry, so the oldest live one is
+                               the only index that drops every
+                               in-flight fetch
+                               (ftq_backend_interfaces.md 5.1).
+                               This table did not carry the row;
+                               ftq_ifu.sv drove fetch_idx and left
+                               the fetches between commit_ptr and
+                               fetch_ptr unflushed. TD#141, built
+                               by BP-114
 
       BUILT by BP-112 (session-073), closing TD#126. All three
       rows are in the RTL, and xlate_ptr takes the same minimum.
@@ -1209,6 +1219,10 @@ Section 1 still counts three read ports on ftq_entry; it is six.
 ## 8. Document History
 
 ```
+  2026-09-22  session-073, after BP-114. 5.5 R1's F-by-source
+              table gains the RC_UNSPEC row it never had, F =
+              commit_ptr; TD#141.
+
   2026-09-22  session-073, after BP-113. 5.2: the redirect-cycle
               allocation is fixed -- rewind first, then allocate
               from the rewound head -- and TD#139 is closed. 5.1:

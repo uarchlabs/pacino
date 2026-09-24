@@ -15,7 +15,8 @@
 //      TD#127). Decoupled like the fetch request and flow controlled
 //      independently of it.
 //   4  the fetch request. Decoupled -- the FTQ presents, the IFU
-//      accepts when its first stage is free.
+//      accepts when its first stage is free. ftq_ifu_commit_ptr
+//      rides on this group with no handshake (BP-114, TD#142).
 //   5  the flush. ONE group, not two: the FTQ has already resolved
 //      stage supersession before anything leaves it (FE-3), so
 //      exporting both stages would ask the IFU to redo a decision
@@ -83,6 +84,12 @@ module ftq_ifu (
   // ---- from ftq_entry, the entry at fetch_idx ----------------------
   input  bp_ftq_entry_t            fetch_entry,
 
+  // ---- from ftq_commit, the oldest live entry ----------------------
+  // FTQ_PTR_BITS, as ftq_commit owns it. Only the index is read: it is
+  // exported on section 4 as ftq_ifu_commit_ptr, and it is the flush
+  // index of an RC_UNSPEC redirect. The wrap bit has no reader here.
+  input  logic [FTQ_PTR_BITS-1:0]  commit_ptr,
+
   // ---- from ftq_status ---------------------------------------------
   // gen_fetch is gen[fetch_idx], the tag that leaves with the
   // request. gen_pdwb is gen[ifu_ftq_pdwb_idx], the tag the
@@ -91,8 +98,9 @@ module ftq_ifu (
   input  logic                     gen_pdwb,
   // R3 of ftq_entry_formats.md 4.3: an entry derives AT MOST ONE
   // predecode redirect, and only from its own writeback. A second
-  // writeback naming an entry that already has the bit set is a
-  // protocol violation, not a second redirect.
+  // writeback naming an entry that already has the bit set derives
+  // no redirect. It is LEGAL, not a protocol violation (R3a): the W3
+  // refetch of a predecode-redirected entry produces it by design.
   input  logic                     wb_rcvd_pdwb,
 
   // ---- from ftq_entry, the entry the writeback names ---------------
@@ -126,6 +134,9 @@ module ftq_ifu (
   output logic                     ftq_ifu_taken_val,
   output logic [FTB_BR_POS_BITS-1:0] ftq_ifu_taken_pos,
   output logic                     ftq_ifu_gen,
+  // IFU-22. Driven continuously: no valid, and not part of the
+  // request handshake (BP-114, TD#142).
+  output logic [FTQ_IDX_BITS-1:0]  ftq_ifu_commit_ptr,
 
   // ---- section 5, the flush ----------------------------------------
   output logic                     ftq_ifu_flush_val,
@@ -239,10 +250,19 @@ module ftq_ifu (
   // The request is presented in FTQ entry order and only for an
   // entry whose translation has been presented and whose fetch has
   // not yet issued, which is exactly fetch_pending (FQ-1).
+  //
+  // ftq_ifu_commit_ptr is DRIVEN CONTINUOUSLY from commit_ptr, in
+  // every cycle and independent of fetch_pending and
+  // ftq_ifu_req_rdy. It carries no valid and is not part of the
+  // handshake (section 4, IFU-22). It exists for uncached fetch
+  // alone: the IFU issues an uncached block's bus read only when the
+  // block's index equals this pointer, meaning everything older has
+  // committed. A cached fetch never reads it.
   always_comb begin : request
-    ftq_ifu_req_val   = fetch_pending;
-    ftq_ifu_idx       = fetch_idx;
-    ftq_ifu_gen       = gen_fetch;
+    ftq_ifu_req_val    = fetch_pending;
+    ftq_ifu_idx        = fetch_idx;
+    ftq_ifu_gen        = gen_fetch;
+    ftq_ifu_commit_ptr = commit_ptr[FTQ_IDX_BITS-1:0];
     ftq_ifu_start_pc  = fetch_entry.pc;
     ftq_ifu_next_pc   = fetch_entry.pft_addr;
     ftq_ifu_taken_val = 1'b0;
@@ -290,13 +310,19 @@ module ftq_ifu (
   // _self clear, the same encoding as the backend K+1 row. Keying on
   // _self alone was TD#126: K+1 for a surviving entry on every cause.
   //
-  // RC_UNSPEC squashes EVERY entry (5.1 U3) and _idx and _self are
-  // meaningless on it, so the flush index cannot be derived from
-  // them. It is the redirect index the FTQ has: nothing the IFU
-  // holds survives, and the FTQ resumes requesting from wherever
-  // ftq_ptr rewound to, which on RC_UNSPEC is commit_ptr. Driving
-  // the commit pointer's index is what makes the IFU drop the whole
-  // live window.
+  //   RC_UNSPEC              commit_ptr. ftq_backend_interfaces.md
+  //                               5.1 U3 squashes EVERY entry, and U1
+  //                               and U2 make _idx and _self
+  //                               meaningless, so neither is read.
+  //                               The live window starts at
+  //                               commit_ptr, so its index is the one
+  //                               flush index that drops every
+  //                               in-flight fetch. It is also where
+  //                               ftq_ptr rewinds xlate_ptr and
+  //                               fetch_ptr on this cause. fetch_idx
+  //                               left the fetches between commit_ptr
+  //                               and fetch_ptr unflushed (BP-114,
+  //                               TD#141).
   //
   // A flush and a request may be presented in the same cycle. The
   // flush applies first and the accompanying request is the first
@@ -308,7 +334,7 @@ module ftq_ifu (
 
     ftq_ifu_flush_val = redir_val;
     if (redir_cause == RC_UNSPEC) begin
-      ftq_ifu_flush_idx = fetch_idx;
+      ftq_ifu_flush_idx = commit_ptr[FTQ_IDX_BITS-1:0];
     end else if (w_fe_redir) begin
       ftq_ifu_flush_idx = redir_idx;
     end else if (redir_self) begin
@@ -455,10 +481,13 @@ module ftq_ifu (
   // R3 qualifies the REDIRECT, not the status set. An entry derives
   // at most one predecode redirect and only from its own writeback;
   // a second writeback naming an entry that already has wb_rcvd set
-  // is a protocol violation, and the FTQ declines to act on it
-  // rather than redirecting twice. The status set is idempotent --
-  // setting a bit that is already set is a no-op -- so it is not
-  // gated.
+  // derives none, whatever its predecode result. That second
+  // writeback is EXPECTED (R3a, session-073, TD#140): a predecode
+  // redirect on K flushes at K and K is fetched again (7 W3), so its
+  // writeback returns with wb_rcvd set and gen[K] unchanged. It is
+  // accepted by 6.1 X3 like any other, and R3's bound is what stops
+  // a refetch loop. The status set is idempotent -- setting a bit
+  // that is already set is a no-op -- so it is not gated.
   always_comb begin : wb_outputs
     wb_set_val    = wb_accept;
     wb_set_idx    = ifu_ftq_pdwb_idx;
@@ -501,7 +530,8 @@ module ftq_ifu (
   // state, so the ports are consumed there; they are on this port
   // list because sections 4 and 4.1 declare them on this interface.
   // redir_arm[ARM_BKEND] and the p1 arm are not read: the backend
-  // row is every redirect outside the front-end set.
+  // row is every redirect outside the front-end set. The wrap bit of
+  // commit_ptr is not read: both of its uses here are indices.
   //
   // clk and rstn are read by the bound properties, not by this
   // module. See the port list.
@@ -510,6 +540,6 @@ module ftq_ifu (
                     |ifu_ftq_cfi_pos  | |ifu_ftq_fault_pos |
                     ftq_ifu_req_rdy   | ftq_ifu_xlate_rdy |
                     redir_arm[ARM_BKEND] | redir_arm[ARM_P1] |
-                    rstn | clk;
+                    commit_ptr[FTQ_IDX_BITS] | rstn | clk;
 
 endmodule : ftq_ifu

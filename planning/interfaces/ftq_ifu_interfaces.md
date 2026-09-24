@@ -145,7 +145,6 @@ the two are independently flow controlled.
   ftq_ifu_taken_pos   [FTB_BR_POS_BITS-1:0]    NEW
   ftq_ifu_gen                                  NEW   TD-FE-8
   ftq_ifu_commit_ptr  [FTQ_IDX_BITS-1:0]       NEW   IFU-22
-                                               NOT BUILT, TD#142
 ```
 
 A request on this port is issued only for an entry whose translation
@@ -214,7 +213,9 @@ in IFU-27.
 
 `ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
 not part of the request handshake and carries no valid. The FTQ
-already holds this pointer; what is new is exporting it.
+already holds this pointer; what is new is exporting it. BUILT by
+BP-114 (session-073), TD#142 closed; ftq_ifu_assert I17 checks it
+every cycle.
 
 It exists for uncached fetch alone. A memory mapped device must not
 see a read for an instruction that is not on the committed path, so
@@ -654,7 +655,10 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               resolved from ftq_npc's arm_win. Section 5's
               same-cycle flush-and-request sentence RULED: no
               request accompanies a flush, and the IFU must ignore
-              any request presented in a flush cycle. TD#138. ftq_ifu_commit_ptr
+              any request presented in a flush cycle. TD#138.
+
+  2026-09-22  session-073, after BP-114. ftq_ifu_commit_ptr is
+              BUILT, TD#142 closed. ftq_ifu_commit_ptr
               marked not built, TD#142.
   2026-08-19  Created. Closes TD-FE-1. Fetch request, flush and
               predecode writeback defined against the 32-byte

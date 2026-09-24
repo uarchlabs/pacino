@@ -24,7 +24,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   0320bf9df383
-PLAN  PROJECT_STATUS.md           a8fb33b91b9e
+PLAN  PROJECT_STATUS.md           ae131f332248
 
 ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
@@ -32,8 +32,8 @@ ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  dcd_decisions.md                  3060707d7350
 ARCH  fe_decisions.md                   47c145d1ddc1
 ARCH  ftb_decisions.md            35cacdaab9cd
-ARCH  ftq_decisions.md            da206d8e97c1
-ARCH  ftq_entry_formats.md        557277d1cd83
+ARCH  ftq_decisions.md            40da51fdac1a
+ARCH  ftq_entry_formats.md        f8f37ff7a19d
 ARCH  ibuf_decisions.md                 280c63bb3213
 ARCH  icache_decisions.md               1f2e8430e1b9
 ARCH  ifu_decisions.md            cc3983a98490
@@ -72,7 +72,7 @@ INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
 INTF  ftq_bpu_interfaces.md       4675dfb2360b
-INTF  ftq_ifu_interfaces.md       d8bb3eede862
+INTF  ftq_ifu_interfaces.md       69e619e2a6fa
 INTF  ifu_ibuf_interfaces.md      f6caa60a5465
 INTF  itlb_ifu_interfaces.md            bad2da3edbaa
 INTF  itlb_l2tlb_interfaces.md          cdd678fff43d

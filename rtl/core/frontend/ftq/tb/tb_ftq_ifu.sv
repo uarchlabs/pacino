@@ -19,6 +19,9 @@
 //   the flush of section 5 bounds stale writebacks to one
 //                                        -> group E
 //
+// BP-114 adds group H, ftq_ifu_commit_ptr (TD#142), and changes B6
+// to the RC_UNSPEC flush at commit_ptr (TD#141).
+//
 // BP-112 adds two groups:
 //
 //   the flush index by cause, TD#126     -> group F
@@ -58,6 +61,7 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]   fetch_idx;
   logic                      fetch_pending;
   bp_ftq_entry_t             fetch_entry;
+  logic [FTQ_PTR_BITS-1:0]   commit_ptr;
   logic                      gen_fetch;
   logic                      gen_pdwb;
   logic                      wb_rcvd_pdwb;
@@ -79,6 +83,7 @@ module tb;
   logic                      ftq_ifu_taken_val;
   logic [FTB_BR_POS_BITS-1:0] ftq_ifu_taken_pos;
   logic                      ftq_ifu_gen;
+  logic [FTQ_IDX_BITS-1:0]   ftq_ifu_commit_ptr;
   logic                      ftq_ifu_flush_val;
   logic [FTQ_IDX_BITS-1:0]   ftq_ifu_flush_idx;
   logic                      ifu_ftq_pdwb_val;
@@ -117,6 +122,7 @@ module tb;
     .fetch_idx         (fetch_idx),
     .fetch_pending     (fetch_pending),
     .fetch_entry       (fetch_entry),
+    .commit_ptr        (commit_ptr),
     .gen_fetch         (gen_fetch),
     .gen_pdwb          (gen_pdwb),
     .wb_rcvd_pdwb      (wb_rcvd_pdwb),
@@ -138,6 +144,7 @@ module tb;
     .ftq_ifu_taken_val (ftq_ifu_taken_val),
     .ftq_ifu_taken_pos (ftq_ifu_taken_pos),
     .ftq_ifu_gen       (ftq_ifu_gen),
+    .ftq_ifu_commit_ptr (ftq_ifu_commit_ptr),
     .ftq_ifu_flush_val (ftq_ifu_flush_val),
     .ftq_ifu_flush_idx (ftq_ifu_flush_idx),
     .ifu_ftq_pdwb_val  (ifu_ftq_pdwb_val),
@@ -312,6 +319,7 @@ module tb;
     fetch_idx         = '0;
     fetch_pending     = 1'b0;
     fetch_entry       = '0;
+    commit_ptr        = '0;
     gen_fetch         = 1'b0;
     gen_pdwb          = 1'b0;
     wb_rcvd_pdwb      = 1'b0;
@@ -461,15 +469,21 @@ module tb;
 
     // RC_UNSPEC squashes EVERY entry and _idx and _self are
     // meaningless on it (U1, U2), so the flush index cannot come
-    // from them. It comes from fetch_idx, so nothing the IFU holds
-    // survives. Both meaningless fields are driven to values that
-    // would give a different answer if read.
+    // from them. It is commit_ptr's index, the oldest live entry, so
+    // nothing the IFU holds survives (5.1 U3, section 5). Both
+    // meaningless fields, and fetch_idx, are driven to values that
+    // would give a different answer if read, and commit_ptr carries
+    // its wrap bit set so a read of the full pointer would show.
+    // CHANGED BY BP-114: this expected 30, fetch_idx, which was
+    // TD#141.
+    commit_ptr  = {1'b1, 6'd21};
     redir_idx   = 6'd44;
     redir_self  = 1'b1;
     redir_cause = RC_UNSPEC;
     settle();
-    chk("B6 RC_UNSPEC does not read _idx or _self",
-        ftq_ifu_flush_idx == 6'd30);
+    chk("B6 RC_UNSPEC flushes at commit_ptr, not _idx, _self or fetch",
+        ftq_ifu_flush_idx == 6'd21);
+    commit_ptr  = '0;
 
     // ONE GROUP, and every source resolves into it before it
     // arrives: the flush tracks the winning redirect and nothing
@@ -702,13 +716,15 @@ module tb;
     chk("E1 the first writeback redirects", pd_redir_val);
 
     // A SECOND writeback naming an entry that already has the bit
-    // set is a PROTOCOL VIOLATION, not a second redirect
-    // (ftq_entry_formats.md 4.3 R3). Acting on it would resteer the
-    // front end to a block it has already fetched past. The status
-    // set is idempotent and is not gated.
+    // set derives NO redirect (ftq_entry_formats.md 4.3 R3), whatever
+    // its predecode result. It is LEGAL, not a protocol violation:
+    // the W3 refetch produces it on every predecode redirect (R3a,
+    // TD#140), so it is accepted and the status set, which is
+    // idempotent, still fires. ftq_ifu_assert I4 states both halves.
     wb_rcvd_pdwb = 1'b1;
     settle();
     chk("E2 a second writeback derives no redirect", !pd_redir_val);
+    chk("E2a and is accepted, not rejected", wb_accept && !wb_drop_gen);
     chk("E3 and rewrites no field",                  !pd_wr_val);
     chk("E4 but the status set is still idempotent", wb_set_val);
 
@@ -899,6 +915,108 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // H. ftq_ifu_commit_ptr, section 4 and IFU-22 (BP-114, TD#142).
+  // -----------------------------------------------------------------
+  // ftq_ifu is combinational and commit_ptr is ftq_commit's, so this
+  // file stands in for ftq_ptr and ftq_commit as group G does: each
+  // step moves the pointers the way those modules would, and the
+  // export is checked against commit_ptr at every step. The live
+  // unit's version of this is tb_ftq group H.
+  //
+  // THE IFU-22 GATE IS MODELLED as the IFU would apply it to an
+  // uncached block: issue the bus read only when the block's index
+  // equals ftq_ifu_commit_ptr, meaning everything older committed.
+  function automatic logic uc_may_issue(input logic [FTQ_IDX_BITS-1:0] b);
+    return b == ftq_ifu_commit_ptr;
+  endfunction
+
+  task automatic group_h();
+    $display("-- H: ftq_ifu_commit_ptr --");
+    do_reset();
+
+    // Out of reset: every pointer on entry 0, nothing pending.
+    chk("H1 driven out of reset with nothing pending",
+        (ftq_ifu_commit_ptr == 6'd0) && !ftq_ifu_req_val);
+
+    // ALLOCATION. The fetch and translation pointers move ahead while
+    // nothing commits; the export does not move with them.
+    xlate_idx     = 6'd6;
+    xlate_pending = 1'b1;
+    fetch_idx     = 6'd4;
+    fetch_pending = 1'b1;
+    fetch_entry   = mk_entry(6'd4,
+                      mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0),
+                      mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0));
+    settle();
+    chk("H2 allocation and fetch move, ftq_ifu_commit_ptr stays at 0",
+        ftq_ifu_req_val && (ftq_ifu_idx == 6'd4) &&
+        (ftq_ifu_commit_ptr == 6'd0));
+
+    // NO HANDSHAKE. The export does not depend on the request being
+    // presented or accepted.
+    ftq_ifu_req_rdy = 1'b0;
+    settle();
+    chk("H3 req_rdy low: still driven", ftq_ifu_commit_ptr == 6'd0);
+    fetch_pending = 1'b0;
+    settle();
+    chk("H4 no request presented: still driven",
+        !ftq_ifu_req_val && (ftq_ifu_commit_ptr == 6'd0));
+    ftq_ifu_req_rdy = 1'b1;
+    fetch_pending   = 1'b1;
+
+    // COMMIT. Entries 0 and 1 retire; ftq_commit moves to 2 and the
+    // export follows in the same cycle.
+    commit_ptr = FTQ_PTR_BITS'(2);
+    settle();
+    chk("H5 commit moves it to entry 2", ftq_ifu_commit_ptr == 6'd2);
+
+    // THE IFU-22 CASE. A block AT the commit pointer may issue its
+    // uncached read; one AHEAD of it must wait, and may issue once
+    // the pointer reaches it.
+    chk("H6 an uncached block at commit_ptr may issue",
+        uc_may_issue(6'd2));
+    chk("H7 an uncached block one ahead must wait",
+        !uc_may_issue(6'd3));
+    commit_ptr = FTQ_PTR_BITS'(3);
+    settle();
+    chk("H8 it may issue once commit_ptr reaches it",
+        uc_may_issue(6'd3) && !uc_may_issue(6'd2));
+
+    // A REDIRECT. A backend mispredict on entry 3 and then RC_UNSPEC:
+    // commit_ptr does not rewind (5.5 R2), and the export stays on it
+    // through the redirect cycle while the flush is presented.
+    redir_arm   = ARM_BKEND;
+    redir_val   = 1'b1;
+    redir_idx   = 6'd3;
+    redir_self  = 1'b0;
+    redir_cause = RC_MISPREDICT;
+    settle();
+    chk("H9 a mispredict redirect: still commit_ptr",
+        ftq_ifu_flush_val && (ftq_ifu_commit_ptr == 6'd3));
+    redir_cause = RC_UNSPEC;
+    settle();
+    chk("H10 RC_UNSPEC: still commit_ptr, and the flush names it",
+        (ftq_ifu_commit_ptr == 6'd3) && (ftq_ifu_flush_idx == 6'd3));
+    redir_val   = 1'b0;
+    redir_arm   = '0;
+    redir_cause = RC_MISPREDICT;
+
+    // ACROSS THE WRAP. Only the index leaves; the wrap bit is not on
+    // the port.
+    commit_ptr = {1'b0, 6'd63};
+    settle();
+    chk("H11 entry 63", ftq_ifu_commit_ptr == 6'd63);
+    commit_ptr = {1'b1, 6'd0};
+    settle();
+    chk("H12 wraps to entry 0, the wrap bit dropped",
+        ftq_ifu_commit_ptr == 6'd0);
+    commit_ptr    = '0;
+    fetch_pending = 1'b0;
+    xlate_pending = 1'b0;
+    settle();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -917,6 +1035,7 @@ module tb;
     group_e();
     group_f();
     group_g();
+    group_h();
 
     $display("tb_ftq_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

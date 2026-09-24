@@ -189,6 +189,8 @@ module ftq (
   output logic                        ftq_ifu_taken_val,
   output logic [FTB_BR_POS_BITS-1:0]  ftq_ifu_taken_pos,
   output logic                        ftq_ifu_gen,
+  // IFU-22, uncached fetch. No valid, no handshake (BP-114, TD#142).
+  output logic [FTQ_IDX_BITS-1:0]     ftq_ifu_commit_ptr,
 
   output logic                        ftq_ifu_flush_val,
   output logic [FTQ_IDX_BITS-1:0]     ftq_ifu_flush_idx,
@@ -587,6 +589,10 @@ module ftq (
   // for a p2, p3 or predecode redirect and K or K+1 by _self for a
   // backend one, and the arm is the only place the source is
   // visible; ftq_ptr reads it for the same reason (BP-112, TD#126).
+  //
+  // commit_ptr is ftq_commit's, passed whole. ftq_ifu exports its
+  // index as ftq_ifu_commit_ptr and flushes at it on RC_UNSPEC
+  // (BP-114, TD#141 and TD#142); the slice is taken there.
   ftq_ifu u_ifu (
     .clk               (clk),
     .rstn              (rstn),
@@ -596,6 +602,7 @@ module ftq (
     .fetch_idx         (w_fetch_idx),
     .fetch_pending     (w_fetch_pending),
     .fetch_entry       (w_fetch_entry),
+    .commit_ptr        (w_commit_ptr),
     .gen_fetch         (w_gen_fetch),
     .gen_pdwb          (w_gen_pdwb),
     .wb_rcvd_pdwb      (w_wb_rcvd_pdwb),
@@ -617,6 +624,7 @@ module ftq (
     .ftq_ifu_taken_val (ftq_ifu_taken_val),
     .ftq_ifu_taken_pos (ftq_ifu_taken_pos),
     .ftq_ifu_gen       (ftq_ifu_gen),
+    .ftq_ifu_commit_ptr (ftq_ifu_commit_ptr),
     .ftq_ifu_flush_val (ftq_ifu_flush_val),
     .ftq_ifu_flush_idx (ftq_ifu_flush_idx),
     .ifu_ftq_pdwb_val  (ifu_ftq_pdwb_val),
