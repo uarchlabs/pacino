@@ -285,8 +285,24 @@ not fire Q10 at first because the new tb_ftq_ptr group reset
 immediately after each redirect; a trailing clock edge fixed the
 test, not the property.
 
+Rulings, Jeff, closing the session's FTQ items:
+
+  TD#138, the flush-cycle request: THE DOCUMENT CHANGES, NOT THE
+       RTL. No request accompanies a flush, and the IFU must ignore
+       any request presented while the flush is asserted.
+       ftq_ifu_interfaces.md 5 rewritten; the obligation is now the
+       first IFU task's.
+  TD#140: W3 has priority and there was no real choice to make. The
+       refetch's writeback is expected, its field writes apply, and
+       it derives no redirect; R3's one-redirect bound stands.
+       ftq_entry_formats.md 4.3 gains R3a. Assertion I4 still
+       carries the old reading and is the only RTL work left. The
+       PA raised this as an open question twice before arriving at
+       the answer the surrounding rules already gave.
+
 CLOSED: TD#99 by TOOLS-006. TD#124, TD#125 by BP-110. TD#132,
 TD#137 by BP-111. TD#126, TD#127 by BP-112. TD#139 by BP-113.
+TD#138 by ruling.
 New: TD#129 to TD#142. BP-109 to BP-113 consumed.
 Next free BP is BP-114. Next free INFRA is INFRA-013. Next free
 TOOLS is TOOLS-007. Next free TD is TD#143.
@@ -2749,35 +2765,29 @@ assessment of each document. Correct any that are wrong.
 |     |          | base. Ruled session-073 (Jeff): every target is a        |
 |     |          | displacement from its own instruction.                   |
 
-| 138 | ftq      | OPEN, NOT RULED. A REDIRECT AND A REQUEST HANDSHAKE IN   |
-|     |          | THE SAME CYCLE. As built since BP-106 for fetch_ptr and  |
-|     |          | extended to xlate_ptr by BP-112 to match: the redirect   |
-|     |          | wins and the handshake presented that cycle is ignored,  |
-|     |          | while ftq_ifu still presents the request from the        |
-|     |          | PRE-rewind pointer. ftq_ifu_interfaces.md 5 says the     |
-|     |          | opposite: the flush applies first and the request that   |
-|     |          | accompanies it is the first fetch of the CORRECTED       |
-|     |          | stream, so the index should be min(pointer, F).          |
+| 138 | ftq      | CLOSED session-073 by ruling, no RTL change. A REDIRECT  |
+|     |          | AND A REQUEST HANDSHAKE IN THE SAME CYCLE. Ruled         |
+|     |          | (Jeff): the document changes, not the RTL. NO REQUEST    |
+|     |          | ACCOMPANIES A FLUSH. A request may be presented in the   |
+|     |          | flush cycle but belongs to the old stream; the FTQ       |
+|     |          | drives it from the pre-rewind pointer and discards the   |
+|     |          | handshake, and the first request of the corrected        |
+|     |          | stream is the one presented the cycle after.             |
 |     |          |                                                          |
-|     |          | Consequences as built: an entry behind F is presented    |
-|     |          | again next cycle and so fetched twice under one          |
-|     |          | generation tag; an entry at or past F names something    |
-|     |          | the redirect squashes. On the 4.1 port, which carries no |
-|     |          | generation tag, a stale queued translation can be        |
-|     |          | matched by index after the entry is reallocated.         |
+|     |          | THE OBLIGATION MOVES TO THE IFU: it must ignore any      |
+|     |          | request presented while ftq_ifu_flush_val is set, on     |
+|     |          | the section 4 and 4.1 groups both. Accepting one         |
+|     |          | fetches the same entry twice under one generation tag    |
+|     |          | when the pre-rewind pointer was behind F, and fetches a  |
+|     |          | squashed entry when it was not. ftq_ifu_interfaces.md 5  |
+|     |          | states it; the first IFU task must honour it.            |
 |     |          |                                                          |
-|     |          | Cost of the alternative, suppressing val while redir_val |
-|     |          | is set: ZERO slots against the design as built, since    |
-|     |          | the handshake is discarded anyway; at most one slot per  |
-|     |          | port per redirect against section 5 as written. Section  |
-|     |          | 5 would need amending to say no request accompanies a    |
-|     |          | flush.                                                   |
-|     |          |                                                          |
-|     |          | BP-112's Deferred Work has the full statement, the port  |
-|     |          | list and the per-case analysis. ftq_ptr.sv carries the   |
-|     |          | as-built behaviour in a comment pointing here, and       |
-|     |          | tb_ftq_ptr H53-H56 pin it so it cannot change by         |
-|     |          | accident before it is ruled.                             |
+|     |          | Was: section 5 said the flush applies first and the      |
+|     |          | request accompanying it is the first fetch of the        |
+|     |          | corrected stream. No request port has ever done that,    |
+|     |          | and meeting it would need a same-cycle path from the     |
+|     |          | winning redirect through ftq_ptr's rewind to the request |
+|     |          | outputs. Raised by BP-112; tb_ftq_ptr H53-H56 pin it.    |
 
 | 139 | ftq      | CLOSED BP-113 (session-073). The redirect target is now  |
 |     |          | allocated from the head 5.5 R1 rewinds to, in the        |
@@ -2813,14 +2823,29 @@ assessment of each document. Correct any that are wrong.
 |     |          | bytes of the corrected stream were skipped, on every     |
 |     |          | cause including RC_TRAP and RC_UNSPEC. Found by BP-112.  |
 
-| 140 | ftq      | OPEN, DOCUMENT GAP. MAY THE REFETCH WRITEBACK REDIRECT?  |
-|     |          | The W3 refetch of K after a predecode redirect produces  |
-|     |          | a SECOND writeback for K with wb_rcvd already set.       |
-|     |          | ftq_entry_formats.md 4.3 R3, and property I4, treat that |
-|     |          | as a protocol violation and suppress its predecode       |
-|     |          | redirect. So a structural mispredict found on the        |
-|     |          | refetch is DROPPED. Two rules meet and the documents do  |
-|     |          | not say which wins. Raised by BP-112.                    |
+| 140 | ftq      | OPEN, RTL ONLY, the rule is settled. THE W3 REFETCH'S    |
+|     |          | WRITEBACK IS EXPECTED, NOT A PROTOCOL VIOLATION. A       |
+|     |          | predecode redirect on K flushes at K and fetch restarts  |
+|     |          | from K, so K is fetched twice BY DESIGN and its second   |
+|     |          | writeback arrives with wb_rcvd set and gen[K]            |
+|     |          | unchanged, which 6.1 X3 accepts. ftq_entry_formats.md    |
+|     |          | 4.3 called that a protocol violation, which is what W3   |
+|     |          | requires to happen on every predecode redirect.          |
+|     |          |                                                          |
+|     |          | Ruled session-073 (Jeff) and written into 4.3 as R3a:    |
+|     |          | the writeback is accepted, section 7 W1 and W2 apply to  |
+|     |          | the fields, and it derives NO redirect. R3's bound, one  |
+|     |          | predecode redirect per entry, is unchanged and is what   |
+|     |          | stops a refetch loop.                                    |
+|     |          |                                                          |
+|     |          | WHAT REMAINS IS THE RTL: assertion I4 still asserts the  |
+|     |          | old reading and would fire on ordinary traffic the       |
+|     |          | first time a predecode redirect runs end to end.         |
+|     |          | Nothing exercises it today because the IFU does not      |
+|     |          | exist. Fix it in whichever task next opens the ftq       |
+|     |          | assertions.                                              |
+|     |          |                                                          |
+|     |          | Raised by BP-112.                                        |
 
 | 141 | ftq      | OPEN, small. THE RC_UNSPEC FLUSH COMMENT AND THE CODE    |
 |     |          | DISAGREE. ftq_ifu.sv's comment says the flush drives the |

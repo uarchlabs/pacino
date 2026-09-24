@@ -352,9 +352,25 @@ block ended early.
   R3  wb_rcvd qualifies the predecode redirect. An entry derives
       at most one, and only from its own writeback
       (ftq_ifu_interfaces.md 6). A second writeback naming an
-      entry that already has the bit set is a protocol violation,
-      not a second redirect.
+      entry that already has the bit set derives NO redirect.
+  R3a THE W3 REFETCH'S WRITEBACK IS EXPECTED, NOT A PROTOCOL
+      VIOLATION. A predecode redirect on entry K flushes at K and
+      fetch restarts from K (ftq_ifu_interfaces.md 7 W3), so K is
+      fetched twice BY DESIGN and its second writeback arrives
+      with wb_rcvd already set and gen[K] unchanged, which 6.1 X3
+      accepts. It is accepted, section 7's W1 and W2 apply to the
+      fields as for any writeback, and it derives no redirect.
+      R3's bound is what stops a refetch loop; R3 previously
+      called this case a violation, which is what W3 requires to
+      happen on every predecode redirect. Ruled session-073,
+      TD#140.
 ```
+
+Assertion I4 follows R3a: a second writeback on a set wb_rcvd is
+LEGAL and must not derive a redirect. Asserting it as an error would
+fire on ordinary traffic the first time a predecode redirect runs
+end to end, which nothing exercises today because the IFU does not
+exist. The RTL change is outstanding, TD#140.
 
 R3 is the reason wb_rcvd exists at all. Deallocation does not need
 it: 5.3 frees on commit only, and `ftq_ifu_interfaces.md` 7 already
@@ -462,6 +478,13 @@ path touches none of those.
               IT_MAX_TGT_WIDTH, unchanged -- so 421b and the
               slow-path array are untouched, and so is the 278b
               union proposal. TD#122 tracks the RTL.
+  2026-09-22  session-073. 4.3: R3 no longer calls the W3 refetch's
+              writeback a protocol violation, and R3a states what
+              it does instead. R3's bound -- one predecode
+              redirect per entry -- is unchanged and is what stops
+              a refetch loop. Assertion I4 still asserts the old
+              reading; TD#140.
+
   2026-09-22  session-073. IT_MAX_TGT_WIDTH 38 -> 40 (TD#132,
               ruled by Jeff; ftq_bpu_interfaces.md 5.2 and
               ittage_table_entry_formats.md). ittage_pred_meta_t

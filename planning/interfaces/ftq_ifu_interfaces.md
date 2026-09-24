@@ -292,22 +292,28 @@ Sources of a flush, all resolved by the FTQ into this one group:
                        "ftq_backend, UNSPECIFIED"; session-070)
 ```
 
-A flush and a request may be presented in the same cycle. The flush
-applies first: the request that accompanies it is the first fetch of
-the corrected stream.
+NO REQUEST ACCOMPANIES A FLUSH. A request may be PRESENTED in the
+flush cycle, on section 4 or on 4.1, but it belongs to the old
+stream: the FTQ drives it from the pre-rewind pointer and discards
+the handshake, so the pointer does not advance and the entry is
+presented again the next cycle from the rewound pointer. THE IFU
+MUST IGNORE ANY REQUEST PRESENTED IN A CYCLE WHERE
+ftq_ifu_flush_val IS SET, on both groups. Accepting one and acting
+on it fetches the same entry twice under one generation tag when
+the pre-rewind pointer was behind the flush index, and fetches a
+squashed entry when it was not.
 
-NEITHER REQUEST PORT DOES THIS, AND IT IS NOT RULED. TD#138. In a
-flush cycle ftq_ifu still presents the section 4 and section 4.1
-requests from the PRE-rewind pointers, and ftq_ptr discards the
-handshake if the IFU accepts one. So the request accompanying a
-flush names the old stream, not the corrected one. Meeting this
-sentence needs a same-cycle path from the winning redirect through
-ftq_ptr's minimum to the entry read index and the request outputs;
-the alternative is to suppress both valids in a flush cycle, which
-costs at most one slot per port per redirect and requires this
-sentence to say instead that no request accompanies a flush.
-BP-112 recorded the analysis and tb_ftq_ptr H53-H56 pin the current
-behaviour so it cannot drift before the ruling.
+The first request of the corrected stream is the one presented the
+CYCLE AFTER the flush.
+
+RULED session-073 (Jeff), TD#138. This section said the opposite --
+that the flush applies first and the request accompanying it is the
+first fetch of the corrected stream -- which no request port has
+ever done and which would need a same-cycle path from the winning
+redirect through ftq_ptr's rewind to the entry read index and the
+request outputs. The behaviour as built costs nothing, since the
+handshake was already being discarded. tb_ftq_ptr H53-H56 pin it.
+BP-112 recorded the full analysis.
 
 ---
 
@@ -646,8 +652,9 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               BUILT, TD#126 closed, with the note that the rule
               cannot be keyed on the redirect cause and is
               resolved from ftq_npc's arm_win. Section 5's
-              same-cycle flush-and-request sentence is recorded as
-              unmet and not ruled, TD#138. ftq_ifu_commit_ptr
+              same-cycle flush-and-request sentence RULED: no
+              request accompanies a flush, and the IFU must ignore
+              any request presented in a flush cycle. TD#138. ftq_ifu_commit_ptr
               marked not built, TD#142.
   2026-08-19  Created. Closes TD-FE-1. Fetch request, flush and
               predecode writeback defined against the 32-byte

@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -183,8 +183,13 @@ IB-13 The flush index is K, not K+1, for a predecode, p2 or p3
       ftq_backend_interfaces.md 5 D5). IB-12 is unaffected: the
       ibuf clears on every backend redirect whatever the index.
       This read "The flush index names entry K, not K+1" for the
-      flush group as a whole. Session-071. The RTL flushes at K+1
-      for a surviving entry on every cause; TD#126.
+      flush group as a whole. Session-071. BUILT by BP-112,
+      session-073, TD#126 closed: until then the RTL flushed at
+      K+1 for a surviving entry on every cause, because the
+      redirect CAUSE cannot express the distinction this rule
+      needs -- ftq_npc drives RC_MISPREDICT with `_self` clear for
+      p2, p3, predecode and the backend alike. The FTQ resolves it
+      from ftq_npc's arm_win instead (ftq_decisions.md 5.5 R1).
 
 ---
 
@@ -194,7 +199,17 @@ None. IB-U1 closed session-069 as IB-12.
 
 ---
 
-## 8. Bindings
+## 8. Document History
+
+```
+  2026-09-22  session-073. IB-13: BUILT by BP-112, TD#126 closed,
+              with the note that the rule cannot be keyed on the
+              redirect cause.
+```
+
+---
+
+## 9. Bindings
 
 IFU-5     Fixed-width vector, compaction in the ibuf. IB-1.
 IFU-15    The prediction check truncation folded into IB-2.

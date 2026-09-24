@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -278,8 +278,25 @@ IFU-26  A block whose effective type is not both cacheable and
 
 IFU-27  On a redirect both pipelines are flushed and the queue is
         emptied. The fetch pipeline then stalls until the
-        translation pipeline refills the head, which costs at
-        least one cycle on every redirect.
+        translation pipeline refills the head.
+
+        THE COST IS NOT THE SAME FOR BOTH KINDS OF REDIRECT.
+        Measured by BP-113 (session-073) from the redirect cycle
+        to the first cycle the FTQ presents the translation
+        request for the flush index F:
+
+```
+          front-end (p2, p3, predecode)   1 cycle
+          backend                         2 cycles
+```
+
+        The backend case costs the extra cycle because F is the
+        target entry itself and its p1 content write lands at the
+        end of the redirect cycle, so there is nothing to
+        translate until then. A front-end redirect corrects an
+        entry that already has content. This rule said "at least
+        one cycle" for both; ftq_decisions.md 5.1 carries the same
+        split and the same measurement.
 
 This is the XiangShan arrangement with one part left out.
 XiangShan's IPrefetchPipe queries the MetaArray and the ITLB and

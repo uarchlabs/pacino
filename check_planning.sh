@@ -4,7 +4,9 @@
 # (PROJECT_STATUS.md, l1i_ifu_interfaces.md, mmu_decisions.md,
 # ftb_decisions.md, ftb_interfaces.md, ubtb_interfaces.md,
 # ftq_bpu_interfaces.md, ftq_entry_formats.md,
-# ittage_table_entry_formats.md).
+# ittage_table_entry_formats.md, ftq_decisions.md,
+# ftq_ifu_interfaces.md, ifu_decisions.md,
+# ftq_backend_interfaces.md, ifu_ibuf_interfaces.md).
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
 # Exit status: 0 if every file matches, 1 otherwise.
@@ -22,7 +24,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   0320bf9df383
-PLAN  PROJECT_STATUS.md           3bd184fee17e
+PLAN  PROJECT_STATUS.md           a8fb33b91b9e
 
 ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
@@ -31,10 +33,10 @@ ARCH  dcd_decisions.md                  3060707d7350
 ARCH  fe_decisions.md                   47c145d1ddc1
 ARCH  ftb_decisions.md            35cacdaab9cd
 ARCH  ftq_decisions.md            da206d8e97c1
-ARCH  ftq_entry_formats.md        c8ff38abba11
+ARCH  ftq_entry_formats.md        557277d1cd83
 ARCH  ibuf_decisions.md                 280c63bb3213
 ARCH  icache_decisions.md               1f2e8430e1b9
-ARCH  ifu_decisions.md                  72e04cc7055d
+ARCH  ifu_decisions.md            cc3983a98490
 ARCH  itlb_decisions.md                 8ecd4944ccfe
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
@@ -68,10 +70,10 @@ INTF  tage_table_interfaces.md          c77c3b137298
 INTF  bp_history_interfaces.md          f799a4123d5b
 INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           790cab4465fa
-INTF  ftq_backend_interfaces.md         b34fce489216
+INTF  ftq_backend_interfaces.md   388c3ce734af
 INTF  ftq_bpu_interfaces.md       4675dfb2360b
-INTF  ftq_ifu_interfaces.md       a334243491db
-INTF  ifu_ibuf_interfaces.md            d2df21b0164c
+INTF  ftq_ifu_interfaces.md       d8bb3eede862
+INTF  ifu_ibuf_interfaces.md      f6caa60a5465
 INTF  itlb_ifu_interfaces.md            bad2da3edbaa
 INTF  itlb_l2tlb_interfaces.md          cdd678fff43d
 INTF  ittage_interfaces.md              7b90d2a1b3e3

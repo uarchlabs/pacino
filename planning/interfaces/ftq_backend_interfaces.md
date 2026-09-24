@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-09-22
  CONTACT: Jeff Nye
 ```
 
@@ -340,6 +340,18 @@ cycle where section 5 D2 fires.
       cycle may name; applying the resolution first would train a
       predictor on a squashed path.
 
+      R1 RANKS THESE THREE AND NOTHING ELSE. It does NOT rank a
+      redirect against an ALLOCATION, and it has been read that
+      way twice. A prediction request presented in the redirect
+      cycle is not discarded: the rewind applies first and the
+      request is then allocated FROM THE REWOUND HEAD
+      (ftq_decisions.md 5.2). Reading R1 as "a redirect outranks
+      an allocation" is what left the redirect target written to a
+      squashed entry and never fetched, TD#139, and a tb_ftq_ptr
+      check cited R1 for it. Nor does R1 rank a redirect against a
+      REQUEST HANDSHAKE on the IFU ports, which is TD#138 and is
+      not ruled.
+
   R2  A commit can never name an entry a redirect squashes. Commit
       is architectural and squashed entries are speculative. If both
       arrive naming overlapping entries, the backend is broken; the
@@ -504,6 +516,11 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
+  2026-09-22  session-073, after BP-113. R1: it ranks redirect,
+              commit and resolve and nothing else. It does not rank
+              a redirect against an allocation, which is
+              ftq_decisions.md 5.2, nor against a request
+              handshake, which is TD#138.
   2026-08-19  Created. Resolution, redirect and commit defined as
               three separate events. Resolution names an in-block
               POSITION, not a prediction slot, so the backend needs
