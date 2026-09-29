@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacino — Microarchitecture</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #21272e;
+      --bg2:       #2a3038;
+      --bg3:       #323b44;
+      --border:    #353f4a;
+      --border2:   #4a5666;
+      --border3:   #60717f;
+      --text:      #e8ecf0;
+      --text2:     #8a97a6;
+      --text3:     #556070;
+      --mono:      'SFMono-Regular', 'Consolas', 'Liberation Mono', monospace;
+      --radius:    6px;
+      --radius-lg: 8px;
+      --accent:    #b84c25;
+      --accent-br: #d96b3f;
+      --fe:        #2dca97;
+      --mc:        #5ca8f0;
+      --be:        #a49ff0;
+      --mm:        #e09a2a;
+      --done-bg:   #1a2d0a;
+      --done-fg:   #8fcf4a;
+      --act-bg:    #2a1e04;
+      --act-fg:    #f5b844;
+      --plan-bg:   #232930;
+      --plan-fg:   #556070;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px 20px 28px;
+    }
+
+    /* ── Header ── */
+    .hd {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .hd-title {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--accent-br);
+    }
+    .hd-sub {
+      font-size: 11px;
+      color: var(--text2);
+      margin-top: 3px;
+      font-family: var(--mono);
+    }
+
+    /* ── Legend ── */
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .leg-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-family: var(--mono);
+      color: var(--text3);
+    }
+    .leg-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* ── Diagram grid ── */
+    .diagram {
+      display: grid;
+      grid-template-columns: 1fr 24px 1fr 24px 1fr 24px 1fr;
+      align-items: start;
+      gap: 0;
+      margin-bottom: 16px;
+    }
+    .arrow-col {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 44px;
+      color: var(--border2);
+      font-size: 14px;
+    }
+
+    /* ── Group ── */
+    .group { display: flex; flex-direction: column; gap: 3px; }
+    .group-header {
+      font-family: var(--mono);
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text3);
+      padding: 0 0 7px 0;
+      margin-bottom: 2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 0.5px solid var(--border);
+    }
+    .group-accent { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+
+    /* ── Block ── */
+    .block {
+      padding: 6px 8px;
+      border-radius: var(--radius);
+      border: 0.5px solid var(--border);
+      background: var(--bg2);
+      cursor: pointer;
+      transition: border-color 0.12s, background 0.12s, transform 0.08s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .block:hover { border-color: var(--border2); background: var(--bg3); }
+    .block:active { transform: scale(0.98); }
+    .block.selected {
+      border-color: var(--accent);
+      background: var(--bg3);
+      box-shadow: inset 0 0 0 1px rgba(184,76,37,0.3);
+    }
+    .block-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .dot-done    { background: #639922; }
+    .dot-active  { background: #BA7517; }
+    .dot-planned { background: var(--border2); }
+    .block-name {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Detail panel ── */
+    .detail-panel {
+      border: 0.5px solid var(--border);
+      border-left: 2px solid var(--accent);
+      border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+      background: var(--bg2);
+      padding: 14px 18px;
+      min-height: 90px;
+    }
+    .detail-hint {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text3);
+    }
+    .detail-top { display: flex; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
+    .detail-name {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .status-badge {
+      font-family: var(--mono);
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-weight: 500;
+      margin-left: 9px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .badge-done    { background: var(--done-bg); color: var(--done-fg); }
+    .badge-active  { background: var(--act-bg);  color: var(--act-fg);  }
+    .badge-planned { background: var(--plan-bg); color: var(--plan-fg); border: 0.5px solid var(--border); }
+    .detail-desc {
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.7;
+      margin-bottom: 10px;
+    }
+    .params { display: flex; flex-wrap: wrap; gap: 4px; }
+    .param-tag {
+      font-size: 10px;
+      font-family: var(--mono);
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: 3px;
+      padding: 2px 6px;
+      color: var(--text2);
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 14px 12px 20px; }
+      .hd { flex-direction: column; gap: 8px; }
+      .diagram { grid-template-columns: 1fr 18px 1fr; }
+      .group-be { grid-column: 1; grid-row: 2; }
+      .arr-be   { display: none; }
+      .group-mm { display: none; }
+      .arr-mm   { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="hd">
+    <div>
+      <div class="hd-title">pacino · microarchitecture</div>
+      <div class="hd-sub">8-issue OoO · RVA23S64 · decoupled frontend / OoO backend</div>
+    </div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot dot-done"></div>done</div>
+      <div class="leg-item"><div class="leg-dot dot-active"></div>active</div>
+      <div class="leg-item"><div class="leg-dot dot-planned"></div>planned</div>
+    </div>
+  </div>
+
+  <!-- Diagram -->
+  <div class="diagram">
+
+    <div class="group">
+      <div class="group-header"><span class="group-accent" style="background:var(--fe)"></span>Frontend</div>
+      <div class="block" data-id="bpu"><div class="block-dot dot-active"></div><div class="block-name">BPU</div></div>
+      <div class="block" data-id="ftq"><div class="block-dot dot-active"></div><div class="block-name">FTQ</div></div>
+      <div class="block" data-id="ifu"><div class="block-dot dot-planned"></div><div class="block-name">IFU / I$</div></div>
+      <div class="block" data-id="predecode"><div class="block-dot dot-planned"></div><div class="block-name">Predecode</div></div>
+      <div class="block" data-id="ibuf"><div class="block-dot dot-planned"></div><div class="block-name">IBuf</div></div>
+      <div class="block" data-id="decode"><div class="block-dot dot-done"></div><div class="block-name">Decode</div></div>
+    </div>
+
+    <div class="arrow-col">→</div>
+
+    <div class="group">
+      <div class="group-header"><span class="group-accent" style="background:var(--mc)"></span>Midcore</div>
+      <div class="block" data-id="rename"><div class="block-dot dot-planned"></div><div class="block-name">Rename</div></div>
+      <div class="block" data-id="dispatch"><div class="block-dot dot-planned"></div><div class="block-name">Dispatch</div></div>
+      <div class="block" data-id="rob"><div class="block-dot dot-planned"></div><div class="block-name">ROB</div></div>
+      <div class="block" data-id="prf"><div class="block-dot dot-planned"></div><div class="block-name">PRF</div></div>
+      <div class="block" data-id="rs"><div class="block-dot dot-planned"></div><div class="block-name">Issue queues</div></div>
+    </div>
+
+    <div class="arrow-col arr-be">→</div>
+
+    <div class="group group-be">
+      <div class="group-header"><span class="group-accent" style="background:var(--be)"></span>Execution</div>
+      <div class="block" data-id="int"><div class="block-dot dot-planned"></div><div class="block-name">Int ALU</div></div>
+      <div class="block" data-id="fpu"><div class="block-dot dot-planned"></div><div class="block-name">FPU</div></div>
+      <div class="block" data-id="vec"><div class="block-dot dot-planned"></div><div class="block-name">Vec (RVV)</div></div>
+      <div class="block" data-id="mat"><div class="block-dot dot-planned"></div><div class="block-name">Matrix</div></div>
+      <div class="block" data-id="atm"><div class="block-dot dot-planned"></div><div class="block-name">Atomics</div></div>
+      <div class="block" data-id="lsu"><div class="block-dot dot-planned"></div><div class="block-name">LSU</div></div>
+    </div>
+
+    <div class="arrow-col arr-mm">→</div>
+
+    <div class="group">
+      <div class="group-header"><span class="group-accent" style="background:var(--mm)"></span>Memory</div>
+      <div class="block" data-id="l1d"><div class="block-dot dot-planned"></div><div class="block-name">L1D + DTLB</div></div>
+      <div class="block" data-id="l2"><div class="block-dot dot-planned"></div><div class="block-name">L2 + L2TLB</div></div>
+      <div class="block" data-id="l3"><div class="block-dot dot-planned"></div><div class="block-name">L3 + prefetch</div></div>
+      <div class="block" data-id="mmu"><div class="block-dot dot-planned"></div><div class="block-name">MMU / PTW</div></div>
+      <div class="block" data-id="prot"><div class="block-dot dot-planned"></div><div class="block-name">PMA / PMP</div></div>
+    </div>
+
+  </div>
+
+  <!-- Detail panel -->
+  <div class="detail-panel" id="detail-panel">
+    <div class="detail-hint">// click any block to inspect</div>
+  </div>
+
+<script>
+const DATA = {
+  bpu: { name: 'Branch predictor unit', status: 'active', desc: 'Seven-predictor hierarchy in a 4-stage pipeline. At s0 all structures are indexed. At s1, uBTB and Loop produce the first prediction; Loop overrides uBTB when trusted. At s2, FTB, TAGE, and RAS refine or override. At s3, SC and ITTAGE apply final corrections. Override chain: SC > TAGE > FTB > uBTB. TAGE is Seznec-style with T0 (bimodal base) plus four tagged geometric-history tables (T1–T4). RAS is a dual-stack 48-entry design with per-FTQ-entry snapshots for speculative recovery.', params: ['uBTB', 'Loop', 'FTB', 'TAGE (T0 + T1–T4)', 'SC', 'ITTAGE', 'RAS 48-entry', 'GHR=256b', 'PHR=32b', '4-stage pipeline'] },
+  ftq: { name: 'Fetch target queue', status: 'active', desc: 'Decouples the BPU from the IFU. The BPU generates the next fetch PC autonomously — ahead of fetch and decode — and writes into the FTQ. The IFU consumes entries independently. Carries per-entry RAS snapshots for speculative recovery and supports early redirect detection on the FTQ writeback path.', params: ['depth=64', 'dual branch slots/cycle', 'num_pred_slots=2', 'per-entry RAS snapshot', 'FTQ writeback path', 'early redirect detect'] },
+  ifu: { name: 'Instruction fetch unit + I-cache', status: 'planned', desc: 'Fetches 64-byte blocks from the instruction cache on each cycle. VA_WIDTH=40. Handles virtual-to-physical translation via the ITLB. Sends raw instruction bytes downstream to the predecode stage.', params: ['fetch block=64B', 'VA_WIDTH=40', 'ITLB', 'physical tag I$'] },
+  predecode: { name: 'Predecode', status: 'done', desc: 'Scans the raw fetch stream ahead of full decode to detect branches and classify their types. Writes a predecode packet back to the FTQ writeback path for early redirect detection before rename. Shortens the branch misprediction penalty by catching obvious redirects before the full decode pipeline.', params: ['feeds FTQ writeback path', 'early redirect detect', 'branch type classify', 'ahead of full decode'] },
+  ibuf: { name: 'Instruction buffer', status: 'planned', desc: 'Elastic buffer between the fetch/predecode frontend and the decode stage. Absorbs fetch bandwidth bubbles and decouples frontend timing from the decode/rename pipeline. Allows the frontend to run ahead of the backend.', params: ['fetch–decode decoupler', 'absorbs fetch bubbles', '8-wide output to decode'] },
+  decode: { name: 'Decode', status: 'done', desc: 'Full 8-wide decode covering scalar RV64, RVC compressed, and RVV vector instructions. Uses a dual-width packet: decode_pkt_t[7:0] for scalar and vec_decode_pkt_t[7:0] for vector, with a separate predecode packet feeding the FTQ writeback path. Over 1000 directed tests pass against spike-dasm as an independent oracle. Tasks DECODE-001 through DECODE-011 complete.', params: ['8-wide', 'decode_pkt_t[7:0]', 'vec_decode_pkt_t[7:0]', 'RV64 + RVC + RVV', 'spike-dasm verified', '1000+ directed tests', 'DECODE-001–011 complete'] },
+  rename: { name: 'Rename', status: 'planned', desc: 'Maps architectural registers to physical registers using a RAT (register alias table) and a free list. Separate rename tracks for integer, FP, vector, and matrix register files. ARMT supports speculative recovery on branch mispredictions and exception flushes.', params: ['RAT', 'ARMT', 'free list', 'int / FP / vec / matrix', '8-wide rename'] },
+  dispatch: { name: 'Dispatch', status: 'planned', desc: 'Allocates renamed instructions into the ROB and the appropriate reservation station cluster (integer, FP, vector, LDST, matrix). 8-wide dispatch matches the decode/rename width. ROB and RS allocation are coupled at this stage.', params: ['8-wide dispatch', 'ROB alloc', 'RS alloc', 'per-type RS routing'] },
+  rob: { name: 'Reorder buffer', status: 'planned', desc: 'Centralized ROB enforces in-order commit despite out-of-order execution. Tracks all in-flight instructions from dispatch to writeback. Handles precise exceptions, pipeline flushes, and branch misprediction recovery. Supports 8-wide commit.', params: ['centralized', 'in-order commit', 'precise exceptions', 'flush / recovery', '8-wide commit'] },
+  prf: { name: 'Physical register file', status: 'planned', desc: 'Separate register files for integer, floating-point, vector (RVV), and matrix (tile registers). The PRF holds speculative results and is the source for all operand reads at issue time. Multi-ported to support the 8-issue bandwidth.', params: ['int PRF', 'FP PRF', 'vec PRF (RVV)', 'matrix tile reg file', 'multi-port read'] },
+  rs: { name: 'Issue queues (reservation stations)', status: 'planned', desc: 'Distributed reservation stations, one per execution cluster: integer, FP, vector, LDST, and matrix. Instructions wait here until all source operands are ready, then issue out-of-order to their execution unit. Each RS monitors the result buses for operand wakeup.', params: ['int RS', 'FP RS', 'vec RS', 'LDST RS', 'matrix RS', 'OoO issue', 'operand wakeup'] },
+  int: { name: 'Integer ALU cluster', status: 'planned', desc: 'Multiple integer execution units handling ALU operations, branch resolution, and scalar cryptography. Full coverage of the RVA23S64 integer extension set including Zba/Zbb/Zbc/Zbs bit manipulation and the Zk scalar crypto suite.', params: ['multi-port ALU', 'branch resolve', 'Zba / Zbb / Zbc / Zbs', 'Zk / Zkn', 'Zbkb / Zbkc / Zbkx', 'Zicond'] },
+  fpu: { name: 'Floating-point unit', status: 'planned', desc: 'IEEE 754 compliant FPU supporting single, double, and half precision (RVF, RVD, Zfh, Zfhmin) plus extended floating-point operations (Zfa). Includes FMA, FDIV, and FSQRT execution units.', params: ['RVF / RVD', 'Zfh / Zfhmin', 'Zfa', 'IEEE 754', 'FMA', 'FDIV / FSQRT'] },
+  vec: { name: 'Vector execution (RVV)', status: 'planned', desc: 'RVV vector execution unit as required by RVA23S64. The vector LSU (VLSU) handles all vector memory operations including vsplit, vmerge, segment loads, misaligned access, and the vector fractional overflow buffer. Zvkb (vector crypto) included.', params: ['RVV', 'VLSU', 'vsplit / vmerge', 'segment / misalign', 'vfofbuf', 'Zvkb'] },
+  mat: { name: 'Matrix unit', status: 'planned', desc: 'Matrix execution unit with a dedicated tile register file for matrix operands. Matrix load/store is handled through the mmlsu (matrix LSU) path. Targets future matrix-acceleration workloads.', params: ['tile reg file', 'mmlsu (matrix ld/st)'] },
+  atm: { name: 'Atomics', status: 'planned', desc: 'Handles A-extension atomic memory operations (LR/SC and AMOs). Closely coupled with the LSU and store queue to guarantee ordering and atomicity semantics. Zawrs (wait-on-reservation-set) is included.', params: ['A-extension AMOs', 'LR / SC', 'store queue coupling', 'Zawrs'] },
+  lsu: { name: 'Load / store unit', status: 'planned', desc: 'Address generation unit (AGU), load queue (LQ), store queue (SQ), store buffer (SB), forwarding network, exception buffer, and uncached buffer for MMIO traffic. Separate VLSU and mmlsu sub-paths handle vector and matrix memory traffic. The full LSU cluster is one of the most complex units in the design.', params: ['AGU', 'LQ', 'SQ', 'store buffer', 'forwarding', 'exception buffer', 'uncached buffer (MMIO)', 'VLSU', 'mmlsu'] },
+  l1d: { name: 'L1D cache + DTLB', status: 'planned', desc: 'First-level data cache with integrated DTLB for virtual-to-physical translation. Serves load/store requests from the LSU with single-cycle hit latency. Includes MSHR (miss-status holding registers) for outstanding misses and a write-back queue.', params: ['L1D', 'DTLB', 'MSHR', 'write-back queue', 'low-latency hit path'] },
+  l2: { name: 'L2 unified cache + L2TLB', status: 'planned', desc: 'Unified second-level cache shared between instruction and data subsystems. The L2TLB caches page table walk results to reduce PTW pressure. Backed by L3.', params: ['unified L2', 'L2TLB', 'PTW result cache', 'shared I + D'] },
+  l3: { name: 'L3 + prefetch', status: 'planned', desc: 'Last-level on-die cache with a hardware prefetch engine. Connected to the uncore fabric via TileLink for coherent memory access to DRAM.', params: ['L3 LLC', 'prefetch engine', 'TileLink fabric', 'uncore interface'] },
+  mmu: { name: 'MMU / page table walker', status: 'planned', desc: 'Covers ITLB, DTLB, L2TLB, and the page table walker. Supports Sv39/Sv48 virtual memory, plus Svnapot, Svpbmt, and Svinval as required by RVA23S64. The H extension enables two-stage VS/G translation for hypervisor workloads. SSTC provides supervisor-mode timer support.', params: ['ITLB / DTLB / L2TLB', 'PTW', 'Sv39 / Sv48', 'Svnapot / Svpbmt', 'Svinval', 'H-ext (VS / G stage)', 'SSTC'] },
+  prot: { name: 'PMA / PMP', status: 'planned', desc: 'Physical memory attribute (PMA) and physical memory protection (PMP) units enforce memory access permissions and attribute checking for physical addresses. Required for RVA23S64 supervisor-mode compliance.', params: ['PMA', 'PMP', 'physical addr protection', 'supervisor mode', 'RVA23 required'] }
+};
+
+const SL = ['done', 'active', 'planned'];
+const SC = ['badge-done', 'badge-active', 'badge-planned'];
+let cur = null;
+
+function showDetail(id) {
+  if (cur === id) return;
+  cur = id;
+  document.querySelectorAll('.block').forEach(b => b.classList.remove('selected'));
+  document.querySelectorAll(`.block[data-id="${id}"]`).forEach(b => b.classList.add('selected'));
+  const d = DATA[id];
+  const si = d.status === 'done' ? 0 : d.status === 'active' ? 1 : 2;
+  const tags = d.params.map(p => `<span class="param-tag">${p}</span>`).join('');
+  document.getElementById('detail-panel').innerHTML =
+    `<div class="detail-top"><span class="detail-name">${d.name}</span><span class="status-badge ${SC[si]}">${SL[si]}</span></div>
+     <div class="detail-desc">${d.desc}</div>
+     <div class="params">${tags}</div>`;
+}
+
+const DOT = { done: 'dot-done', active: 'dot-active', planned: 'dot-planned' };
+
+document.querySelectorAll('.block').forEach(b => {
+  b.addEventListener('click', () => showDetail(b.dataset.id));
+  const d = DATA[b.dataset.id];
+  if (d) {
+    const dot = b.querySelector('.block-dot');
+    dot.className = 'block-dot ' + DOT[d.status];
+  }
+});
+</script>
+</body>
+</html>
+
