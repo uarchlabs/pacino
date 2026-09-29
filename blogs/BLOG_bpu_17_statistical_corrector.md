@@ -4,7 +4,7 @@
 
 ```
 TITLE:     "The Statistical Corrector: Design Choices at p3"
-FILE:      BLOG_bpu_17_statistical_corrector.md
+FILE:      blog1.md
 AUTHOR:    Jeff Nye
 DATE:      2026-09-22
 STATUS:    REVIEW BEFORE POSTING
@@ -70,7 +70,8 @@ value. The sign of this value is the SC prediction, positive equals taken. The
 magnitude of this value is the SC confidence.
 
 With two exceptions, the SC will override a TAGE prediction when SC and TAGE
-directions differ. The exceptions are:
+directions differ. The exceptions, and the two chooser counters that decide
+them, follow the chooser of TAGE-SC-L [7]. The exceptions are:
 
 - **TAGE strong, SC weak**.
     - The TAGE provider counter is saturated (strong) and the SC magnitude is
@@ -125,6 +126,14 @@ confidence class, decoded from the TAGE CTR, and on `|S|` relative to the
 A strong TAGE prediction is therefore overridden whenever the SC disagrees with
 `|S|` at or above one half of `threshold`.
 
+Figure 1 shows the same rule as a map. Each row is a TAGE provider counter
+value and the horizontal axis is `|S|`. The map applies only when the SC and
+TAGE directions differ. A chooser is consulted only in the two shaded corners.
+Everywhere else the SC direction is final.
+
+FIG 1: SC Override and Chooser Selection - Claude
+![SC Override and Chooser Selection](diagrams/sc_override_map.svg)
+
 The final prediction, `sc_pred_tkn`, is returned with the meta data needed for
 the update: the five table indices, the five raw counter values, `S`, `|S|`,
 the TAGE prediction, and which chooser, if any, was consulted.
@@ -142,6 +151,17 @@ In Pacino an SC prediction is considered weak when `|S|` is less than one half
 of `threshold`. An SC prediction is considered very weak when `|S|` is less
 than one quarter of `threshold`. The fractions are fixed in the comparison
 logic. The band boundaries move with the value held in `threshold`.
+
+Figure 2 draws the bands to scale. The five table terms, `2*ctr+1`, and the
+TAGE term, `2*CTR - 7`, are all odd, and there are six of them, so `S` is
+always even. At the reset value of 10 the medium-TAGE corner therefore admits
+only `|S|` = 0, the strong-TAGE corner admits 0, 2 and 4, and the training gate
+admits 0 through 8. The corners widen in proportion as `threshold` rises. At a
+`threshold` below 4 the medium-TAGE corner is empty, and at 512 the training
+gate covers every achievable `|S|`.
+
+FIG 2: SC Confidence Bands - Claude
+![SC Confidence Bands](diagrams/sc_bands.svg)
 
 The `choose_hi_vlo` register learns which of TAGE or SC is more often correct
 when a strong TAGE prediction is contradicted by a weak SC prediction.
@@ -189,11 +209,21 @@ incremented if the final prediction was correct, and decremented if the final
 prediction was incorrect and the TAGE prediction was correct. Both choosers
 saturate at -32 and +31 and reset to 0.
 
-Figure 1 shows the update of the four threshold registers for one update
+A consulted chooser always sees a disagreement, so exactly one of the SC and
+TAGE predictions is correct. Figure 3 tabulates the four cases. The first
+test compares the final prediction, `sc_pred_tkn`, with the resolved
+direction. A chooser at -1 selects TAGE, so the decrement case, a wrong final
+prediction with a correct TAGE prediction, cannot occur. The values -32 to -2
+are not reachable from reset.
+
+FIG 3: SC Chooser Update - Claude
+![SC Chooser Update](diagrams/sc_chooser.svg)
+
+Figure 4 shows the update of the four threshold registers for one update
 request.
 
-FIG: SC Threshold and Chooser Update - Claude
-![SC Threshold and Chooser Update](sc_flow.svg)
+FIG 4: SC Threshold and Chooser Update - Claude
+![SC Threshold and Chooser Update](diagrams/sc_flow.svg)
 
 ## Effectiveness of statistical correctors
 
@@ -646,6 +676,10 @@ https://files.inria.fr/pacap/seznec/TageCookBook/predictor.h
 
 [6] gem5 simulator, statistical corrector implementation,
 src/cpu/pred/statistical_corrector.cc. https://github.com/gem5/gem5
+
+[7] A. Seznec, "TAGE-SC-L Branch Predictors Again," 5th JILP Workshop on
+Computer Architecture Competitions (JWAC-5): Championship Branch Prediction
+(CBP-5), 2016. https://jilp.org/cbp2016/paper/AndreSeznecLimited.pdf
 <!-- ticfinder_on -->
 
 ## Footnotes

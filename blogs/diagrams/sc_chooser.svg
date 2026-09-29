@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="580" viewBox="0 0 1080 580">
+  <title>Pacino SC: chooser update outcomes and reachable values</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box  { fill:#ffffff; stroke:#333; stroke-width:1.5; }
+      .th   { fill:#eef3fb; stroke:#333; stroke-width:1.5; }
+      .ln   { fill:none; stroke:#333; stroke-width:1.5; }
+      .sc   { fill:#eef3fb; stroke:#333; stroke-width:1.5; }
+      .tg   { fill:#fbe3c8; stroke:#333; stroke-width:1.5; }
+      .un   { fill:#eeeeee; stroke:#999; stroke-width:1.5; stroke-dasharray:4 3; }
+      text  { font-family:Helvetica,Arial,sans-serif; font-size:12px; fill:#111; text-anchor:middle; }
+      .mono { font-family:Menlo,Consolas,monospace; font-size:11px; }
+      .lbl  { font-size:11px; fill:#555; }
+      .hdr  { font-size:13px; font-weight:bold; text-anchor:start; }
+      .note { font-size:11px; fill:#333; text-anchor:start; }
+    </style>
+  </defs>
+  <rect width="1080" height="580" fill="#ffffff"/>
+
+  <text class="hdr" x="30" y="30">A. Chooser update when consulted (choose_hi_vlo or choose_med_vvlo)</text>
+  <text class="note" x="30" y="48">A chooser is consulted only when SC and TAGE disagree, so exactly one of them matches resolved_taken.</text>
+
+  <!-- table: columns 30|170|350|510|610|710|790|1050 -->
+  <rect class="th"  x="30" y="62"  width="1020" height="30"/>
+  <rect class="box" x="30" y="92"  width="1020" height="30"/>
+  <rect class="box" x="30" y="122" width="1020" height="30"/>
+  <rect class="box" x="30" y="152" width="1020" height="30"/>
+  <rect class="box" x="30" y="182" width="1020" height="30"/>
+  <path class="ln" d="M170,62 V212 M350,62 V212 M510,62 V212 M610,62 V212 M710,62 V212 M790,62 V212"/>
+
+  <text x="100" y="82">chooser value</text>
+  <text x="260" y="82">selected (sc_pred_tkn)</text>
+  <text x="430" y="82">correct predictor</text>
+  <text class="mono" x="560" y="82">sc_match</text>
+  <text class="mono" x="660" y="82">tg_match</text>
+  <text x="750" y="82">delta</text>
+  <text x="920" y="82">effect</text>
+
+  <text class="mono" x="100" y="112">&gt;= 0</text><text x="260" y="112">SC</text><text x="430" y="112">SC</text>
+  <text class="mono" x="560" y="112">1</text><text class="mono" x="660" y="112">0</text><text class="mono" x="750" y="112">+1</text>
+  <text x="920" y="112">toward SC</text>
+
+  <text class="mono" x="100" y="142">&gt;= 0</text><text x="260" y="142">SC</text><text x="430" y="142">TAGE</text>
+  <text class="mono" x="560" y="142">0</text><text class="mono" x="660" y="142">1</text><text class="mono" x="750" y="142">-1</text>
+  <text x="920" y="142">toward TAGE</text>
+
+  <text class="mono" x="100" y="172">&lt; 0</text><text x="260" y="172">TAGE</text><text x="430" y="172">TAGE</text>
+  <text class="mono" x="560" y="172">1</text><text class="mono" x="660" y="172">1</text><text class="mono" x="750" y="172">+1</text>
+  <text x="920" y="172">toward SC</text>
+
+  <text class="mono" x="100" y="202">&lt; 0</text><text x="260" y="202">TAGE</text><text x="430" y="202">SC</text>
+  <text class="mono" x="560" y="202">0</text><text class="mono" x="660" y="202">0</text><text class="mono" x="750" y="202">0</text>
+  <text x="920" y="202">unchanged</text>
+
+  <text class="note" x="30" y="232">sc_match = (sc_pred_tkn == resolved_taken), where sc_pred_tkn is the final prediction; tg_match = (sc_tage_pred_tkn == resolved_taken).</text>
+  <text class="note" x="30" y="248">sc_match is tested first: +1 if sc_match, else -1 if tg_match, else no change. Saturation at -32 and +31.</text>
+
+  <!-- ===== Panel B: reachable values ===== -->
+  <text class="hdr" x="30" y="290">B. Chooser values reachable from reset (0)</text>
+  <text class="note" x="330" y="290">Arcs above the cells increment the chooser; arcs below decrement it.</text>
+
+  <!-- cells -->
+  <rect class="un" x="60"  y="360" width="200" height="40"/>
+  <text class="mono" x="160" y="384">-32 .. -2</text>
+  <rect class="tg" x="300" y="360" width="80"  height="40"/>
+  <text class="mono" x="340" y="384">-1</text>
+  <rect class="sc" x="420" y="360" width="80"  height="40"/>
+  <text class="mono" x="460" y="384">0</text>
+  <rect class="sc" x="540" y="360" width="80"  height="40"/>
+  <text class="mono" x="580" y="384">1</text>
+  <rect class="sc" x="660" y="360" width="200" height="40"/>
+  <text class="mono" x="760" y="384">2 .. 30</text>
+  <rect class="sc" x="900" y="360" width="80"  height="40"/>
+  <text class="mono" x="940" y="384">31</text>
+
+  <!-- increments (above) -->
+  <path class="ln" d="M345,360 Q402,318 455,358" marker-end="url(#a)"/>
+  <text class="lbl" x="400" y="336">TAGE correct: +1</text>
+  <path class="ln" d="M465,360 Q522,318 575,358" marker-end="url(#a)"/>
+  <text class="lbl" x="520" y="336">SC correct: +1</text>
+  <path class="ln" d="M585,360 Q642,318 695,358" marker-end="url(#a)"/>
+  <text class="lbl" x="640" y="336">SC correct: +1</text>
+  <path class="ln" d="M825,360 Q882,318 935,358" marker-end="url(#a)"/>
+  <text class="lbl" x="880" y="336">SC correct: +1</text>
+
+  <!-- decrements (below) -->
+  <path class="ln" d="M455,400 Q398,442 345,402" marker-end="url(#a)"/>
+  <text class="lbl" x="400" y="440">TAGE correct: -1</text>
+  <path class="ln" d="M575,400 Q518,442 465,402" marker-end="url(#a)"/>
+  <text class="lbl" x="520" y="440">TAGE correct: -1</text>
+  <path class="ln" d="M695,400 Q638,442 585,402" marker-end="url(#a)"/>
+  <text class="lbl" x="640" y="440">TAGE correct: -1</text>
+  <path class="ln" d="M935,400 Q878,442 825,402" marker-end="url(#a)"/>
+  <text class="lbl" x="880" y="440">TAGE correct: -1</text>
+
+  <!-- self loops -->
+  <path class="ln" d="M300,370 C272,352 272,408 298,392" marker-end="url(#a)"/>
+  <text class="lbl" x="280" y="424">SC correct: 0</text>
+  <path class="ln" d="M980,370 C1008,352 1008,408 982,392" marker-end="url(#a)"/>
+  <text class="lbl" x="1010" y="424">SC correct:</text>
+  <text class="lbl" x="1010" y="438">saturates</text>
+
+  <!-- region braces -->
+  <path class="ln" d="M62,462 V470 H258 V462"/>
+  <text class="lbl" x="160" y="486">unreachable from reset</text>
+  <path class="ln" d="M302,462 V470 H378 V462"/>
+  <text x="340" y="486">selects TAGE</text>
+  <path class="ln" d="M422,462 V470 H978 V462"/>
+  <text x="700" y="486">selects SC (sc_override = 1)</text>
+
+  <!-- notes -->
+  <text class="note" x="30" y="520">At -1 the chooser selects TAGE, so the final prediction is the TAGE prediction. The decrement case (final wrong, TAGE correct) cannot occur,</text>
+  <text class="note" x="30" y="536">and the chooser cannot go below -1. Values -32 to -2 are within the 6-bit range (SC_CHOOSER_MIN = -32) but unreachable from reset.</text>
+  <text class="note" x="30" y="552">Reset value is 0. Each chooser is trained only on an update whose prediction consulted it (sc_chooser = HIGH or MED).</text>
+  <text class="note" x="30" y="568">Drawn as implemented in sc_cntrl.sv global_next.</text>
+</svg>

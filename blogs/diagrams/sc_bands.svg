@@ -1,0 +1,135 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="650" viewBox="0 0 1080 650">
+  <title>Pacino SC: confidence bands at several threshold values</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <style>
+      .ln   { fill:none; stroke:#333; stroke-width:1.5; }
+      .out  { fill:#ffffff; stroke:#333; stroke-width:1; }
+      .vv   { fill:#b9dfb9; }
+      .vl   { fill:#fbd3a6; }
+      .lo   { fill:#cfe0f5; }
+      .odd  { fill:#eeeeee; stroke:#999; stroke-width:1; }
+      text  { font-family:Helvetica,Arial,sans-serif; font-size:12px; fill:#111; text-anchor:middle; }
+      .mono { font-family:Menlo,Consolas,monospace; font-size:11px; }
+      .lbl  { font-size:11px; fill:#555; }
+      .hdr  { font-size:13px; font-weight:bold; text-anchor:start; }
+      .note { font-size:11px; fill:#333; text-anchor:start; }
+      .st   { text-anchor:start; }
+    </style>
+  </defs>
+  <rect width="1080" height="650" fill="#ffffff"/>
+
+  <!-- ===== Panel A: to scale, 2.4 px per unit of |S|, x = 200 + 2.4*|S| ===== -->
+  <text class="hdr" x="30" y="30">A. Band edges at four threshold values, drawn to scale against the reachable range of |S|</text>
+  <text class="note" x="30" y="48">The band edges are threshold&gt;&gt;2, threshold&gt;&gt;1 and threshold. A rising threshold widens both chooser corners and the training zone.</text>
+
+  <!-- T = 10 (reset): 2, 5, 10 -->
+  <text class="st" x="30" y="86">threshold = 10</text>
+  <text class="lbl st" x="30" y="101">(reset value)</text>
+  <rect class="out" x="200" y="74" width="772.8" height="20"/>
+  <rect class="lo" x="200" y="74" width="24"   height="20"/>
+  <rect class="vl" x="200" y="74" width="12"   height="20"/>
+  <rect class="vv" x="200" y="74" width="4.8"  height="20"/>
+  <rect class="ln" x="200" y="74" width="772.8" height="20" style="stroke-width:1"/>
+  <text class="lbl st" x="200" y="110">very weak |S| &lt; 2;  weak |S| &lt; 5;  training |S| &lt; 10</text>
+
+  <!-- T = 40: 10, 20, 40 -->
+  <text class="st" x="30" y="148">threshold = 40</text>
+  <rect class="out" x="200" y="136" width="772.8" height="20"/>
+  <rect class="lo" x="200" y="136" width="96"  height="20"/>
+  <rect class="vl" x="200" y="136" width="48"  height="20"/>
+  <rect class="vv" x="200" y="136" width="24"  height="20"/>
+  <rect class="ln" x="200" y="136" width="772.8" height="20" style="stroke-width:1"/>
+  <text class="lbl st" x="200" y="172">very weak |S| &lt; 10;  weak |S| &lt; 20;  training |S| &lt; 40</text>
+
+  <!-- T = 160: 40, 80, 160 -->
+  <text class="st" x="30" y="210">threshold = 160</text>
+  <rect class="out" x="200" y="198" width="772.8" height="20"/>
+  <rect class="lo" x="200" y="198" width="384" height="20"/>
+  <rect class="vl" x="200" y="198" width="192" height="20"/>
+  <rect class="vv" x="200" y="198" width="96"  height="20"/>
+  <rect class="ln" x="200" y="198" width="772.8" height="20" style="stroke-width:1"/>
+  <text class="lbl st" x="200" y="234">very weak |S| &lt; 40;  weak |S| &lt; 80;  training |S| &lt; 160</text>
+
+  <!-- T = 512 (max): 128, 256, 512 (beyond max |S|) -->
+  <text class="st" x="30" y="272">threshold = 512</text>
+  <text class="lbl st" x="30" y="287">(SC_THRSH_MAX)</text>
+  <rect class="lo" x="200" y="260" width="772.8" height="20"/>
+  <rect class="vl" x="200" y="260" width="614.4" height="20"/>
+  <rect class="vv" x="200" y="260" width="307.2" height="20"/>
+  <rect class="ln" x="200" y="260" width="772.8" height="20" style="stroke-width:1"/>
+  <text class="lbl st" x="200" y="296">very weak |S| &lt; 128;  weak |S| &lt; 256;  training at every |S|, since threshold exceeds max |S|</text>
+  <line class="ln" x1="978" y1="270" x2="1040" y2="270" marker-end="url(#a)"/>
+  <text class="lbl" x="1010" y="262">T = 512</text>
+
+  <!-- |S| axis -->
+  <line class="ln" x1="200" y1="318" x2="972.8" y2="318"/>
+  <path class="ln" d="M200,318 V324 M320,318 V324 M440,318 V324 M560,318 V324 M680,318 V324 M800,318 V324 M920,318 V324 M972.8,318 V324"/>
+  <text x="200" y="338">0</text>
+  <text x="320" y="338">50</text>
+  <text x="440" y="338">100</text>
+  <text x="560" y="338">150</text>
+  <text x="680" y="338">200</text>
+  <text x="800" y="338">250</text>
+  <text x="920" y="338">300</text>
+  <text x="980" y="338">322</text>
+  <text class="lbl" x="586" y="355">|S| = sc_abs_sum;  max |S| = 5*63 + 7 = 322</text>
+
+  <!-- legend -->
+  <rect class="vv" x="30"  y="372" width="14" height="14" stroke="#333"/>
+  <text class="note" x="50"  y="383">|S| &lt; T&gt;&gt;2: both chooser corners</text>
+  <rect class="vl" x="290" y="372" width="14" height="14" stroke="#333"/>
+  <text class="note" x="310" y="383">T&gt;&gt;2 &lt;= |S| &lt; T&gt;&gt;1: strong-TAGE corner only</text>
+  <rect class="lo" x="580" y="372" width="14" height="14" stroke="#333"/>
+  <text class="note" x="600" y="383">T&gt;&gt;1 &lt;= |S| &lt; T: training, no chooser</text>
+  <rect class="out" x="830" y="372" width="14" height="14"/>
+  <text class="note" x="850" y="383">|S| &gt;= T: train on mispredict</text>
+
+  <!-- ===== Panel B: zoom at reset, one cell per integer |S| ===== -->
+  <text class="hdr" x="30" y="428">B. Zoom at reset, threshold = 10: S is always even</text>
+  <text class="note" x="30" y="446">Five odd table terms (2*ctr+1) plus an odd TAGE term (2*CTR - 7) sum to an even value, so odd |S| never occurs (grey cells).</text>
+
+  <!-- cells: x = 200 + 52*v -->
+  <rect class="vv"  x="200" y="464" width="52" height="34" stroke="#333"/>
+  <rect class="odd" x="252" y="464" width="52" height="34"/>
+  <rect class="vl"  x="304" y="464" width="52" height="34" stroke="#333"/>
+  <rect class="odd" x="356" y="464" width="52" height="34"/>
+  <rect class="vl"  x="408" y="464" width="52" height="34" stroke="#333"/>
+  <rect class="odd" x="460" y="464" width="52" height="34"/>
+  <rect class="lo"  x="512" y="464" width="52" height="34" stroke="#333"/>
+  <rect class="odd" x="564" y="464" width="52" height="34"/>
+  <rect class="lo"  x="616" y="464" width="52" height="34" stroke="#333"/>
+  <rect class="odd" x="668" y="464" width="52" height="34"/>
+  <rect class="out" x="720" y="464" width="52" height="34"/>
+  <rect class="odd" x="772" y="464" width="52" height="34"/>
+  <rect class="out" x="824" y="464" width="52" height="34"/>
+  <text class="lbl st" x="30" y="485">|S| =</text>
+  <text x="226" y="485">0</text>
+  <text class="lbl" x="278" y="485">1</text>
+  <text x="330" y="485">2</text>
+  <text class="lbl" x="382" y="485">3</text>
+  <text x="434" y="485">4</text>
+  <text class="lbl" x="486" y="485">5</text>
+  <text x="538" y="485">6</text>
+  <text class="lbl" x="590" y="485">7</text>
+  <text x="642" y="485">8</text>
+  <text class="lbl" x="694" y="485">9</text>
+  <text x="746" y="485">10</text>
+  <text class="lbl" x="798" y="485">11</text>
+  <text x="850" y="485">12</text>
+  <text class="lbl" x="900" y="485">...</text>
+
+  <!-- boundaries: 2 -> 304, 5 -> 460, 10 -> 720 -->
+  <path class="ln" d="M202,512 V520 H302 V512"/>
+  <text class="note" x="312" y="524">threshold&gt;&gt;2 = 2: medium-TAGE corner, |S| in {0}</text>
+  <path class="ln" d="M202,540 V548 H458 V540"/>
+  <text class="note" x="468" y="552">threshold&gt;&gt;1 = 5: strong-TAGE corner, |S| in {0, 2, 4}</text>
+  <path class="ln" d="M202,568 V576 H718 V568"/>
+  <text class="note" x="728" y="580">threshold = 10: training, |S| in {0 .. 8}</text>
+
+  <!-- notes -->
+  <text class="note" x="30" y="614">Small thresholds: at threshold = 1 both chooser corners are empty; at 2 or 3 the medium corner is empty and the strong corner is {0};</text>
+  <text class="note" x="30" y="630">at 4 to 7 the medium corner is {0}. Range of threshold is 1 to 512 (SC_THRSH_MIN, SC_THRSH_MAX); tc_reg saturating at +63 or -64 moves it by 1.</text>
+</svg>

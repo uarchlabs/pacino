@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="590" viewBox="0 0 1080 590">
+  <title>Pacino SC: override and chooser selection by TAGE confidence and SC magnitude</title>
+  <defs>
+    <style>
+      .ln   { fill:none; stroke:#333; stroke-width:1.5; }
+      .bd   { fill:none; stroke:#333; stroke-width:1; stroke-dasharray:4 3; }
+      .sep  { fill:none; stroke:#333; stroke-width:1; }
+      .sc   { fill:#eef3fb; }
+      .hi   { fill:#fbe3c8; }
+      .med  { fill:#dcefdc; }
+      text  { font-family:Helvetica,Arial,sans-serif; font-size:12px; fill:#111; text-anchor:middle; }
+      .mono { font-family:Menlo,Consolas,monospace; font-size:11px; }
+      .lbl  { font-size:11px; fill:#555; }
+      .hdr  { font-size:13px; font-weight:bold; text-anchor:start; }
+      .note { font-size:11px; fill:#333; text-anchor:start; }
+      .st   { text-anchor:start; }
+    </style>
+  </defs>
+  <rect width="1080" height="590" fill="#ffffff"/>
+
+  <text class="hdr" x="30" y="30">Final prediction when the SC direction (sign of S) disagrees with the TAGE direction</text>
+  <text class="note" x="30" y="50">When they agree, the final prediction is the shared direction and no chooser is consulted (sc_chooser = NONE, sc_override = 0).</text>
+
+  <!-- row header -->
+  <text class="lbl" x="50"  y="100">CTR</text>
+  <text class="lbl" x="120" y="100">tage_extd_ctr</text>
+  <text class="lbl" x="190" y="100">class</text>
+
+  <!-- regions: SC everywhere, chooser corners overlaid -->
+  <rect class="sc"  x="230" y="110" width="620" height="272"/>
+  <rect class="hi"  x="230" y="110" width="240" height="34"/>
+  <rect class="hi"  x="230" y="348" width="240" height="34"/>
+  <rect class="med" x="230" y="144" width="130" height="68"/>
+  <rect class="med" x="230" y="280" width="130" height="68"/>
+
+  <!-- class group separators and plot border -->
+  <path class="sep" d="M230,144 H850 M230,212 H850 M230,280 H850 M230,348 H850"/>
+  <line x1="230" y1="246" x2="850" y2="246" stroke="#999" stroke-width="1" stroke-dasharray="2 3"/>
+  <rect class="ln" x="230" y="110" width="620" height="272"/>
+
+  <!-- band boundaries -->
+  <path class="bd" d="M360,144 V348 M470,110 V382 M620,110 V382"/>
+
+  <!-- row labels -->
+  <text class="mono" x="50" y="131">111</text><text class="mono" x="120" y="131">+7</text><text class="lbl" x="190" y="131">strong</text>
+  <text class="mono" x="50" y="165">110</text><text class="mono" x="120" y="165">+5</text><text class="lbl" x="190" y="165">medium</text>
+  <text class="mono" x="50" y="199">101</text><text class="mono" x="120" y="199">+3</text><text class="lbl" x="190" y="199">medium</text>
+  <text class="mono" x="50" y="233">100</text><text class="mono" x="120" y="233">+1</text><text class="lbl" x="190" y="233">weak</text>
+  <text class="mono" x="50" y="267">011</text><text class="mono" x="120" y="267">-1</text><text class="lbl" x="190" y="267">weak</text>
+  <text class="mono" x="50" y="301">010</text><text class="mono" x="120" y="301">-3</text><text class="lbl" x="190" y="301">medium</text>
+  <text class="mono" x="50" y="335">001</text><text class="mono" x="120" y="335">-5</text><text class="lbl" x="190" y="335">medium</text>
+  <text class="mono" x="50" y="369">000</text><text class="mono" x="120" y="369">-7</text><text class="lbl" x="190" y="369">strong</text>
+
+  <!-- strong-TAGE corner labels -->
+  <text x="350" y="124">choose_hi_vlo decides</text>
+  <text class="mono" x="350" y="138">SC if &gt;= 0, else TAGE</text>
+  <text x="350" y="362">choose_hi_vlo decides</text>
+  <text class="mono" x="350" y="376">SC if &gt;= 0, else TAGE</text>
+
+  <!-- medium-TAGE corner labels -->
+  <text class="mono" x="295" y="161">choose_med_vvlo</text>
+  <text x="295" y="175">decides</text>
+  <text class="mono" x="295" y="189">SC if &gt;= 0,</text>
+  <text class="mono" x="295" y="203">else TAGE</text>
+  <text class="mono" x="295" y="297">choose_med_vvlo</text>
+  <text x="295" y="311">decides</text>
+  <text class="mono" x="295" y="325">SC if &gt;= 0,</text>
+  <text class="mono" x="295" y="339">else TAGE</text>
+
+  <!-- SC override labels -->
+  <text x="735" y="131">SC overrides</text>
+  <text x="735" y="182">SC overrides</text>
+  <text x="735" y="238">SC overrides TAGE (sc_override = 1)</text>
+  <text class="lbl" x="735" y="262">every weak-TAGE disagreement, at any |S|</text>
+  <text x="735" y="318">SC overrides</text>
+  <text x="735" y="369">SC overrides</text>
+
+  <!-- TAGE direction braces -->
+  <path class="ln" d="M858,112 H866 V244 H858"/>
+  <text class="note" x="876" y="172">TAGE predicts taken</text>
+  <text class="note" x="876" y="188">disagrees when S &lt; 0</text>
+  <path class="ln" d="M858,248 H866 V380 H858"/>
+  <text class="note" x="876" y="308">TAGE predicts not taken</text>
+  <text class="note" x="876" y="324">disagrees when S &gt;= 0</text>
+
+  <!-- |S| axis -->
+  <path class="ln" d="M230,382 V388 M360,382 V388 M470,382 V388 M620,382 V388 M850,382 V388"/>
+  <text x="230" y="402">0</text>
+  <text x="360" y="402">T/4</text>
+  <text x="470" y="402">T/2</text>
+  <text x="620" y="402">T</text>
+  <text x="850" y="402">322</text>
+  <text class="mono" x="360" y="417">threshold&gt;&gt;2</text>
+  <text class="mono" x="470" y="417">threshold&gt;&gt;1</text>
+  <text class="mono" x="620" y="417">threshold</text>
+  <text class="mono" x="850" y="417">max |S|</text>
+  <text class="lbl" x="540" y="437">|S| = sc_abs_sum, schematic and not to scale (see Figure 2 for scaled bands)</text>
+
+  <!-- training brackets -->
+  <path class="ln" d="M232,452 V460 H618 V452"/>
+  <text x="425" y="478">table counters train: |S| &lt; threshold</text>
+  <text class="lbl" x="425" y="493">if SC correct: tc_reg - 1</text>
+  <path class="ln" d="M622,452 V460 H848 V452"/>
+  <text x="735" y="478">train only on SC mispredict</text>
+  <text class="lbl" x="735" y="493">if SC correct: tc_reg unchanged</text>
+
+  <!-- notes -->
+  <text class="note" x="30" y="524">Selection order in sc_cntrl.sv: (1) directions agree -&gt; no override; (2) tage_pred_strong and |S| &lt; threshold&gt;&gt;1 -&gt; choose_hi_vlo;</text>
+  <text class="note" x="30" y="540">(3) tage_pred_medium and |S| &lt; threshold&gt;&gt;2 -&gt; choose_med_vvlo; (4) otherwise the SC direction. Any SC mispredict increments tc_reg at every |S|.</text>
+  <text class="note" x="30" y="556">S = sum over ST0-ST4 of (2*ctr+1) + tage_extd_ctr, where tage_extd_ctr = 2*CTR - 7. CTR is the TAGE provider counter.</text>
+  <text class="note" x="30" y="572">At reset threshold = 10, so the medium corner is |S| &lt; 2, the strong corner is |S| &lt; 5 and the training zone is |S| &lt; 10.</text>
+</svg>
