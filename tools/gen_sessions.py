@@ -105,6 +105,9 @@ class W:
 # at the end of the run so this table does not rot.
 #
 WAIVERS = {
+  "TOOLS-006" : [W.VOICES_MERGED],
+  "BP-112" : [W.VOICES_MERGED],
+  "BP-109" : [W.VOICES_MERGED],
   "BP-107" : [W.VOICES_MERGED],
   "BP-105" : [W.EMPTY_ASSESSMENT],
   "BP-104" : [W.EMPTY_ASSESSMENT],

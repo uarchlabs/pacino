@@ -19,7 +19,7 @@
 
 Task:   [ ] experiment  [x] implementation  [ ] debug
         [ ] cleanup     [ ] testbench       [ ] verification
-Mode:   [ ] automated   [ ] manual          [ ] interactive
+Mode:   [x] automated   [ ] manual          [ ] interactive
 Status: [ ] in-progress [x] complete        [ ] abandoned
 
 # Task Overview
