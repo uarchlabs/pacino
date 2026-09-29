@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="1190" viewBox="0 0 1060 1190">
+  <title>Pacino SC: threshold, tc_reg and chooser update on an update request</title>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#333"/>
+    </marker>
+    <style>
+      .box  { fill:#ffffff; stroke:#333; stroke-width:1.5; }
+      .dec  { fill:#eef3fb; stroke:#333; stroke-width:1.5; }
+      .reg  { fill:#eef7ee; stroke:#333; stroke-width:1.5; }
+      .ln   { fill:none; stroke:#333; stroke-width:1.5; }
+      text  { font-family:Helvetica,Arial,sans-serif; font-size:12px; fill:#111; text-anchor:middle; }
+      .mono { font-family:Menlo,Consolas,monospace; font-size:11px; }
+      .lbl  { font-size:11px; fill:#555; }
+      .yn   { font-size:11px; fill:#555; text-anchor:start; }
+      .hdr  { font-size:13px; font-weight:bold; text-anchor:start; }
+      .note { font-size:11px; fill:#333; text-anchor:start; }
+    </style>
+  </defs>
+  <rect width="1060" height="1190" fill="#ffffff"/>
+
+  <!-- start -->
+  <rect class="box" x="330" y="20" width="380" height="46" rx="8"/>
+  <text x="520" y="40">Update request (sc_upd_val_u0 = 1)</text>
+  <text class="lbl" x="520" y="56">up to one per slot per cycle</text>
+  <line class="ln" x1="520" y1="66" x2="520" y2="92" marker-end="url(#a)"/>
+
+  <rect class="box" x="300" y="92" width="440" height="50"/>
+  <text x="520" y="112">Shared-state update: lowest valid slot only (TD#98)</text>
+  <text class="mono" x="520" y="129">use its sc_pred_meta and resolved_taken</text>
+
+  <!-- split -->
+  <path class="ln" d="M520,142 V166 M170,166 H730"/>
+  <line class="ln" x1="170" y1="166" x2="170" y2="228" marker-end="url(#a)"/>
+  <line class="ln" x1="730" y1="166" x2="730" y2="228" marker-end="url(#a)"/>
+  <text class="hdr" x="182" y="200">Threshold adaptation</text>
+  <text class="hdr" x="742" y="200">Chooser training</text>
+
+  <!-- ===== left column: tc_reg / threshold ===== -->
+  <polygon class="dec" points="170,230 295,285 170,340 45,285"/>
+  <text x="170" y="275">SC prediction incorrect?</text>
+  <text class="mono" x="170" y="292">sc_lcl_pred_tkn !=</text>
+  <text class="mono" x="170" y="307">resolved_taken</text>
+  <line class="ln" x1="295" y1="285" x2="320" y2="285" marker-end="url(#a)"/>
+  <text class="yn" x="298" y="278">yes</text>
+  <rect class="box" x="320" y="260" width="200" height="50"/>
+  <text class="mono" x="420" y="281">tc_inc = tc_reg + 1</text>
+  <text class="lbl" x="420" y="298">(not above +63)</text>
+
+  <line class="ln" x1="170" y1="340" x2="170" y2="380" marker-end="url(#a)"/>
+  <text class="yn" x="178" y="364">no</text>
+
+  <polygon class="dec" points="170,380 295,435 170,490 45,435"/>
+  <text x="170" y="425">|SC sum| &lt; threshold?</text>
+  <text class="mono" x="170" y="442">sc_abs_sum &lt;</text>
+  <text class="mono" x="170" y="457">threshold</text>
+  <line class="ln" x1="295" y1="435" x2="320" y2="435" marker-end="url(#a)"/>
+  <text class="yn" x="298" y="428">yes</text>
+  <rect class="box" x="320" y="410" width="200" height="50"/>
+  <text class="mono" x="420" y="431">tc_inc = tc_reg - 1</text>
+  <text class="lbl" x="420" y="448">(not below -64)</text>
+
+  <line class="ln" x1="170" y1="490" x2="170" y2="520" marker-end="url(#a)"/>
+  <text class="yn" x="178" y="509">no</text>
+  <rect class="box" x="70" y="520" width="200" height="40"/>
+  <text class="mono" x="170" y="544">tc_inc = tc_reg</text>
+
+  <!-- merge into limit checks -->
+  <path class="ln" d="M520,285 H535 V600 M520,435 H535 M170,560 V600 M170,600 H535"/>
+  <line class="ln" x1="170" y1="600" x2="170" y2="625" marker-end="url(#a)"/>
+
+  <polygon class="dec" points="170,625 295,680 170,735 45,680"/>
+  <text x="170" y="677">TC at max (+63)?</text>
+  <text class="mono" x="170" y="694">tc_inc == +63</text>
+  <line class="ln" x1="295" y1="680" x2="320" y2="680" marker-end="url(#a)"/>
+  <text class="yn" x="298" y="673">yes</text>
+  <rect class="reg" x="320" y="648" width="200" height="64"/>
+  <text class="mono" x="420" y="668">tc_reg_d = 0</text>
+  <text class="mono" x="420" y="684">threshold_d = threshold + 1</text>
+  <text class="lbl" x="420" y="701">(not above 512)</text>
+
+  <line class="ln" x1="170" y1="735" x2="170" y2="765" marker-end="url(#a)"/>
+  <text class="yn" x="178" y="754">no</text>
+
+  <polygon class="dec" points="170,765 295,820 170,875 45,820"/>
+  <text x="170" y="817">TC at min (-64)?</text>
+  <text class="mono" x="170" y="834">tc_inc == -64</text>
+  <line class="ln" x1="295" y1="820" x2="320" y2="820" marker-end="url(#a)"/>
+  <text class="yn" x="298" y="813">yes</text>
+  <rect class="reg" x="320" y="788" width="200" height="64"/>
+  <text class="mono" x="420" y="808">tc_reg_d = 0</text>
+  <text class="mono" x="420" y="824">threshold_d = threshold - 1</text>
+  <text class="lbl" x="420" y="841">(not below 1)</text>
+
+  <line class="ln" x1="170" y1="875" x2="170" y2="905" marker-end="url(#a)"/>
+  <text class="yn" x="178" y="894">no</text>
+  <rect class="reg" x="60" y="905" width="220" height="50"/>
+  <text class="mono" x="170" y="926">tc_reg_d = tc_inc</text>
+  <text class="mono" x="170" y="943">threshold_d = threshold</text>
+
+  <path class="ln" d="M520,680 H535 V1000 M520,820 H535 M170,955 V1000 M170,1000 H535"/>
+  <line class="ln" x1="350" y1="1000" x2="350" y2="1040" marker-end="url(#a)"/>
+
+  <!-- ===== right column: choosers ===== -->
+  <polygon class="dec" points="730,230 855,285 730,340 605,285"/>
+  <text x="730" y="280">Chooser consulted at prediction?</text>
+  <text class="mono" x="730" y="297">sc_chooser</text>
+  <line class="ln" x1="855" y1="285" x2="890" y2="285" marker-end="url(#a)"/>
+  <text class="yn" x="857" y="278">NONE</text>
+  <rect class="box" x="890" y="265" width="130" height="40"/>
+  <text x="955" y="289">no chooser change</text>
+
+  <line class="ln" x1="730" y1="340" x2="730" y2="370" marker-end="url(#a)"/>
+  <text class="yn" x="738" y="359">HIGH or MED</text>
+  <rect class="box" x="615" y="370" width="230" height="56"/>
+  <text class="mono" x="730" y="392">HIGH: target = choose_hi_vlo</text>
+  <text class="mono" x="730" y="410">MED:  target = choose_med_vvlo</text>
+  <line class="ln" x1="730" y1="426" x2="730" y2="455" marker-end="url(#a)"/>
+
+  <polygon class="dec" points="730,455 855,510 730,565 605,510"/>
+  <text x="730" y="500">Final prediction correct?</text>
+  <text class="mono" x="730" y="517">sc_pred_tkn ==</text>
+  <text class="mono" x="730" y="532">resolved_taken</text>
+  <line class="ln" x1="855" y1="510" x2="890" y2="510" marker-end="url(#a)"/>
+  <text class="yn" x="860" y="503">yes</text>
+  <rect class="reg" x="890" y="488" width="130" height="44"/>
+  <text class="mono" x="955" y="507">target + 1</text>
+  <text class="lbl" x="955" y="523">(not above +31)</text>
+
+  <line class="ln" x1="730" y1="565" x2="730" y2="595" marker-end="url(#a)"/>
+  <text class="yn" x="738" y="584">no</text>
+
+  <polygon class="dec" points="730,595 855,650 730,705 605,650"/>
+  <text x="730" y="640">TAGE prediction correct?</text>
+  <text class="mono" x="730" y="657">sc_tage_pred_tkn ==</text>
+  <text class="mono" x="730" y="672">resolved_taken</text>
+  <line class="ln" x1="855" y1="650" x2="890" y2="650" marker-end="url(#a)"/>
+  <text class="yn" x="860" y="643">yes</text>
+  <rect class="reg" x="890" y="628" width="130" height="44"/>
+  <text class="mono" x="955" y="647">target - 1</text>
+  <text class="lbl" x="955" y="663">(not below -32)</text>
+
+  <line class="ln" x1="730" y1="705" x2="730" y2="735" marker-end="url(#a)"/>
+  <text class="yn" x="738" y="724">no</text>
+  <rect class="box" x="630" y="735" width="200" height="40"/>
+  <text x="730" y="759">target unchanged</text>
+
+  <path class="ln" d="M1020,285 H1040 V1000 M1020,510 H1040 M1020,650 H1040 M730,775 V1000 M690,1000 H1040"/>
+  <line class="ln" x1="690" y1="1000" x2="690" y2="1040" marker-end="url(#a)"/>
+
+  <!-- commit -->
+  <rect class="box" x="280" y="1040" width="480" height="56" rx="8"/>
+  <text x="520" y="1062">Next rising clk edge: each register loads its _d value</text>
+  <text class="mono" x="520" y="1080">threshold, tc_reg, choose_hi_vlo, choose_med_vvlo</text>
+
+  <!-- notes -->
+  <text class="note" x="30" y="1122">SC sum = sum over ST0-ST4 of (2*ctr+1) + TAGE provider counter rescaled to -7..+7. SC prediction = sign of SC sum, before any chooser override. TC = tc_reg.</text>
+  <text class="note" x="30" y="1140">Reset (rstn low): threshold = 10, tc_reg = 0, choose_hi_vlo = 0, choose_med_vvlo = 0. A prediction request changes none of these registers.</text>
+  <text class="note" x="30" y="1158">Drawn as implemented in sc_cntrl.sv (global_next). The chooser's first test uses the final prediction (sc_pred_tkn), not the SC sum sign</text>
+  <text class="note" x="30" y="1176">(sc_lcl_pred_tkn); as a result a chooser that favors TAGE cannot fall below -1.</text>
+</svg>
