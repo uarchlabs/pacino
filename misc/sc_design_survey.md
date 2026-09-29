@@ -144,3 +144,140 @@ Cross-cutting notes:
 - Xiangshan TAGE-SC design doc (docs.xiangshan.cc, frontend/BPU)
 - CBP2025 framework + traces: github.com/ramisheikh/cbp2025
 
+
+## The available literature
+
+The public literature agrees that a statistical corrector reduces
+mispredictions when added to a conventional TAGE. It disagrees on four points:
+how large the benefit is, which SC components produce it, whether an SC is
+needed at all, and whether it addresses the mispredictions that matter most.
+The figures below were taken from the papers themselves. Each paper uses a
+different trace set, so the MPKI values should not be compared across papers.
+
+  1. The SC gives a clear benefit (Seznec)
+  - MICRO 2011, "A New Case for the TAGE Branch Predictor."
+    - The SC targets branches that are "only statistically biased." Seznec states that
+      on some of these branches TAGE "performs even worse than a simple PC-indexed
+      table of wide counters."
+    - Adding a global-history SC on top of TAGE + IUM + loop predictor gave about a 2%
+      reduction in the misprediction penalty.
+    - All the small side predictors together (ISL-TAGE) reduced the mispredictions of a
+      512 Kbit TAGE by 6%. Seznec equates this to scaling TAGE to 2 Mbit.
+    - Seznec also argues that a local-history SC "dwarfs the benefits of the loop
+      predictor and the global history Statistical Corrector."
+  - CBP2025 "TAGE-SC" (SiFive).
+    - TAGE alone: 3.781 MPKI.
+    - TAGE with SC tables that use only TAGE outputs: 3.612 MPKI.
+    - Without IMLI and without local history: 3.522 MPKI.
+    - Without local history: 3.472 MPKI.
+    - Full predictor: 3.363 MPKI, about 11% below TAGE alone.
+    - For the hardware-realistic configuration with 1 to 5 tables, the paper claims a
+      misprediction reduction "up to 5%."
+
+  2. The SC corrects a flaw in TAGE (Michaud, TACO 2018, BATAGE)
+  - Michaud argues that the need for an SC comes mainly from TAGE's cold-counter
+    problem. A newly allocated up/down counter cannot be distinguished from one that
+    has been trained many times.
+  - He also argues that the SC is what makes TAGE's USE_ALT_ON_NA meta-predictor
+    "practically superfluous," which the SC paper did not state.
+  - BATAGE replaces the up/down counter and the useful counter with dual
+    taken/not-taken counters and Bayesian confidence. Average MPKI:
+
+  | Configuration  | MPKI |
+  |----------------|------|
+  | TAGE 7KB       | 4.42 |
+  | TAGE-GSC 8KB   | 4.27 |
+  | BATAGE 7KB     | 4.29 |
+  | BATAGE-GSC 8KB | 4.24 |
+
+  - His conclusion is that "BATAGE does not need statistical correction." He also
+    reports that an 8KB BATAGE matches the CBP2016 winner without an SC, local history
+    or loop predictor.
+
+  3. Which components provide the benefit (Seznec against his earlier work)
+  - Local history. In 2011 local history was presented as the most valuable SC input.
+    In 2025 Seznec puts its benefit at about 3% and says it "would not justify the
+    complexity of managing speculative local history."
+  - SC tables that use only TAGE outputs. In 2025 these give the largest gain: 0.169
+    MPKI, against 0.056 MPKI in the scaled CBP2016 predictor.
+  - Global-history SC tables. Their contribution is now small.
+  - Loop predictor. The 2025 entry drops it because it adds only 0.003 MPKI. The
+    redesigned IMLI components capture most of that benefit.
+
+  4. The limit of the approach (Lin and Tarsa, Intel, 2019)
+  - The mispredictions that remain after TAGE-SC-L come from a small number of
+    systematically hard-to-predict branches and from rarely executed branches.
+  - Adding storage does not remove the root causes. TAGE-SC-L captures less than half
+    of the IPC opportunity even at an impractical 1024KB.
+  - This paper does not dispute the SC's gain. It disputes the view that statistical
+    correction of this kind addresses the dominant remaining loss.
+
+  Hardware realism
+  - Both Seznec and Michaud state that the championship configurations cannot be built
+    directly. Michaud notes that the 64KB CBP2016 predictor has 30 TAGE banks, 20 SC
+    weight tables and 3 local-history components.
+  - As the project survey records, no commercial core has disclosed whether it has a
+    discrete SC.
+
+  Relevance to pacino
+  - Pacino has no SC tables indexed by TAGE outputs. Seznec's 2025 results identify
+    these tables as the largest SC contributor.
+  - Pacino adds the TAGE counter at weight 1 rather than Seznec's weight of 8 (TD#86).
+  - Pacino's TAGE uses 3-bit up/down counters and USE_ALT_ON_NA, which is the setting
+    in which Michaud's cold-counter argument applies.
+
+  Sources:
+  - [(https://www.cs.cmu.edu/~18742/papers/Seznec2011.pdf](Seznec, A New Case for the TAGE Branch Predictor (MICRO 2011))
+
+  - [https://ericrotenberg.wordpress.ncsu.edu/files/2025/06/cbp2025-final37-Seznec.pdf](Seznec, TAGE-SC for CBP2025)
+  - [https://inria.hal.science/hal-01799442/document](Michaud, An Alternative TAGE-like Conditional Branch Predictor, TACO 2018, HAL 
+    copy)
+  - [https://dl.acm.org/doi/abs/10.1145/3226098] (Michaud, ACM DL)
+  - [https://arxiv.org/abs/1906.08170] (Lin and Tarsa, Branch Prediction Is Not A Solved Problem, arXiv 1906.08170)
+  - [https://jilp.org/cbp2016/paper/AndreSeznecLimited.pdf] (Seznec, TAGE-SC-L Branch Predictors Again, CBP-5)
+
+### Public Summary
+The public literature agrees that a statistical corrector reduces mispredictions when
+  added to a conventional TAGE, but it disputes the size of that gain, where it comes
+  from, and whether it is needed at all. Seznec, who introduced the SC, reports a
+  modest but consistent benefit. In 2011 it was about 2% on top of TAGE with a loop
+  predictor. In his CBP2025 entry the full TAGE-SC reaches 3.363 MPKI against 3.781
+  MPKI for TAGE alone, and he claims up to 5% for a hardware-realistic configuration.
+  His own view of which components provide the gain has changed. In 2011 he held that
+  local-history SC tables were the most valuable component; by 2025 he judged them
+  worth about 3%, which does not justify managing speculative local history, and
+  attributed most of the gain to SC tables indexed by TAGE's outputs, with IMLI
+  replacing the loop predictor. Michaud (2018) argues that the SC mainly compensates
+  for a defect in TAGE, the cold-counter problem, in which a newly allocated counter
+  cannot be distinguished from a well-trained one. His BATAGE predictor uses dual
+  taken/not-taken counters with Bayesian confidence and matches TAGE-plus-SC accuracy
+  (4.29 against 4.27 MPKI), and adding an SC to BATAGE gives only a marginal further
+  gain. Lin and Tarsa (Intel, 2019) do not dispute the SC's gain. They argue that the
+  mispredictions remaining after TAGE-SC-L come from a small set of systematically
+  hard-to-predict branches and from rarely executed branches, and that neither
+  statistical correction nor added storage addresses these. Finally, both Seznec and
+  Michaud state that the championship TAGE-SC-L configurations cannot be built directly
+  in hardware, and no commercial core has disclosed whether it contains a discrete SC.
+
+### As it relates to Pacino
+Pacino's SC is built on Seznec's design. It uses five tagless GEHL-style tables of
+  6-bit counters, sums 2*ctr+1 values with a TAGE counter term, and adjusts its
+  threshold at run time. It follows Seznec's 2025 hardware-realism position rather than
+  the championship configurations: it has no local-history tables, stays within his
+  realistic range of one to five tables, and completes one cycle after TAGE. It departs
+  from his 2025 findings in two respects. First, it has no SC tables indexed by TAGE's
+  outputs, which Seznec identifies as the largest single source of SC gain; ST0 is
+  indexed by PC only. Second, it weights the TAGE term at 1 rather than 8 (deferred
+  under TD#86). It also keeps a separate loop predictor at p1 alongside the BrIMLI
+  table. Seznec dropped the loop predictor because IMLI captures its accuracy, but
+  pacino retains it because it can redirect fetch earlier, which is a timing argument
+  his accuracy measurements do not address. Michaud's argument applies directly:
+  pacino's TAGE uses 3-bit up/down counters and USE_ALT_ON_NA, which is the setting in
+  which he attributes the SC's value to the cold-counter problem, and the project has
+  not evaluated a dual-counter TAGE as an alternative. Nothing in pacino's SC is aimed
+  at the hard-to-predict and rarely executed branches that Lin and Tarsa identify as
+  the dominant remaining loss. The planning documents and PROJECT_STATUS.md record no
+  MPKI measurement of pacino's SC; performance evaluation is listed only as future
+  work, for example for choosing the BrIMLI index mode. As a result, none of these
+  claims has yet been tested against pacino itself.
+
