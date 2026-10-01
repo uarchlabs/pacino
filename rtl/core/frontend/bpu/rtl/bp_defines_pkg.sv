@@ -484,6 +484,30 @@ package bp_defines_pkg;
   parameter int RAS_ADDR_WIDTH      = VA_WIDTH;
 
   // ================================================================
+  // :L1I interface parameters:
+  // ================================================================
+  // The IFU side of the L1I core and maintenance ports. TD#122 /
+  // TD-IF-1, ruled session-074. Values and names are
+  // l1i_ifu_interfaces.md 3 and 3.1; the maintenance encoding is
+  // 11.2. Declared ahead of the ITLB / MMU section because PPN_WIDTH
+  // there is derived from PA_WIDTH.
+  //
+  // The generated L1I declares the same quantities in l1i_pkg under
+  // cachegen's names (L1iPaBits, L1iLineBytes, ...). l1i_param_chk
+  // compares the two at elaboration; a change here must be matched
+  // by the cachegen configuration or that check fails.
+  parameter  int   PA_WIDTH        = 36;   // IF-1, L1I-4
+  parameter  int   L1I_LINE_BYTES  = 64;   // L1I-9
+  localparam int   L1I_LINE_BITS   = L1I_LINE_BYTES * 8;  // = 512
+  localparam int   L1I_OFFSET_BITS = $clog2(L1I_LINE_BYTES); // = 6
+  parameter  int   MAX_OUTSTANDING = 16;   // L1I-10, IF-6
+  localparam int   REQ_ID_BITS     = $clog2(MAX_OUTSTANDING); // = 4
+  // cmt_ifu_maint_op encoding. No l1i_pkg counterpart: the emitted
+  // L1I has no maintenance port (TD#119).
+  localparam logic MAINT_FENCE_I   = 1'b0; // l1i_ifu_interfaces 11.2
+  localparam logic MAINT_CBO_INVAL = 1'b1; // l1i_ifu_interfaces 11.2
+
+  // ================================================================
   // :ITLB / MMU widths:
   // ================================================================
   // Declared by no package until TD#122. Values ruled session-073;
@@ -493,7 +517,7 @@ package bp_defines_pkg;
   parameter int GPA_WIDTH   = 41; // MMU-20, Sv39x4 guest physical
   parameter int GVPN_WIDTH  = 29; // G-stage VPN, GPA_WIDTH - 12
   parameter int VPN_WIDTH   = 27; // Sv39 VA, three levels of nine
-  parameter int PPN_WIDTH   = 24; // PA_WIDTH - 12, from IF-1's 36
+  parameter int PPN_WIDTH   = PA_WIDTH - 12; // PA_WIDTH - 12, from IF-1's 36
   parameter int ASID_WIDTH  = 16; // ITLB-7, the Sv39 maximum
   parameter int VMID_WIDTH  = 14; // ITLB-7, the Sv39x4 maximum
   parameter int PERM_WIDTH  =  8; // PTE low byte, V R W X U G A D

@@ -28,8 +28,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   93e792152927
-PLAN  PROJECT_STATUS.md                 5ec414046ca5
+PLAN  PROJECT_CORE.md                   e3be8c359f3a
+PLAN  PROJECT_STATUS.md                 23fed543637d
 
 UNKN  CLAUDE.md                         5582b9971ea5
 
@@ -37,7 +37,7 @@ ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  cachegen_decisions.md             ea488dd8c90d
-ARCH  dcd_decisions.md                  bdd023331155
+ARCH  dcd_decisions.md                  41cad1a9d77f
 ARCH  fe_decisions.md                   47c145d1ddc1
 ARCH  ftb_decisions.md            35cacdaab9cd
 ARCH  ftq_decisions.md            40da51fdac1a
@@ -81,11 +81,11 @@ INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
 INTF  ftq_bpu_interfaces.md       4675dfb2360b
 INTF  ftq_ifu_interfaces.md       69e619e2a6fa
-INTF  ifu_ibuf_interfaces.md      11720ba8cc7d
+INTF  ifu_ibuf_interfaces.md      6c74a16a805b
 INTF  itlb_ifu_interfaces.md            bad2da3edbaa
 INTF  itlb_l2tlb_interfaces.md          cdd678fff43d
 INTF  ittage_interfaces.md              7b90d2a1b3e3
-INTF  l1i_ifu_interfaces.md             7ff703bec5e2
+INTF  l1i_ifu_interfaces.md             72100dbd9e87
 INTF  loop_pred_interfaces.md           c20911b0ecc7
 INTF  ras_interfaces.md                 45e38659a223
 INTF  sc_interfaces.md                  c5913f89bc7c

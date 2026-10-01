@@ -546,6 +546,56 @@ package bp_structs_pkg;
     logic       is_ret;
   } ftq_pd_info_t;
 
+  // ifu_fault_e: the instruction fault cause carried per slot in
+  // ifu_pd_pkt_t. dcd_decisions.md DCD-15, ifu_ibuf_interfaces.md
+  // IB-9a. Three causes plus none; H is mandatory in RVA23, so the
+  // guest-page fault is a normal outcome. The values are an encoding
+  // of this port, not the exception codes, which are noted per value.
+  typedef enum logic [1:0] {
+    IFU_FAULT_NONE       = 2'b00,
+    IFU_FAULT_ACCESS     = 2'b01,  // exception code 1
+    IFU_FAULT_PAGE       = 2'b10,  // exception code 12
+    IFU_FAULT_GUEST_PAGE = 2'b11   // exception code 20
+  } ifu_fault_e;
+
+  // ifu_pd_pkt_t: one instruction slot of the predecode BUNDLE view,
+  // dcd_decisions.md DCD-16; fields per ifu_ibuf_interfaces.md 4. It
+  // is a new struct, not a redefinition of decode_pkg's
+  // predecode_pkt_t, which stays for the built decode until TD#143.
+  //
+  // THE ARRAY WIDTH BELONGS TO THE PORT, NOT TO THE TYPE (DCD-1). It
+  // is carried 16 wide on the IFU write port into the ibuf
+  // (ifu_ibuf_slot, IB-1) and 8 wide on the ibuf read port into
+  // decode. The ibuf is the width converter.
+  //
+  // valid is produced by the ibuf on its read side, not by the IFU,
+  // and is not driven on the IFU write port (IB-3). ifu_ibuf_en is
+  // the write-side statement of which slots are real (IB-2).
+  //
+  // br_type uses the ftq_pd_info_t encoding of DCD-7 (00 not CFI, 01
+  // branch, 10 jal, 11 jalr) and is NOT bp_br_type_e. is_call and
+  // is_ret are independent bits (DCD-11).
+  //
+  // There is no vtype_hazard field. It is an intra-bundle property
+  // and the ibuf regroups instructions across bundles, so it cannot
+  // be computed before the ibuf (TD-DCD-1, open as DCD-U1).
+  typedef struct packed {
+    logic                       valid;       // IB-3
+    logic [31:0]                instr;       // expanded
+    logic [VA_WIDTH-1:0]        start_pc;
+    logic [FTQ_PD_POS_BITS-1:0] pos;         // from block start
+    logic [FTQ_IDX_BITS-1:0]    ftq_idx;
+    ifu_fault_e                 fault_cause;
+    logic [VA_WIDTH-1:0]        fault_va;
+    logic [GPA_WIDTH-1:0]       fault_gpa;   // cause 20 only
+    logic                       is_rvc;      // 16-bit encoding
+    logic [1:0]                 br_type;     // DCD-7
+    logic                       is_call;
+    logic                       is_ret;
+    logic                       is_vsetvl;
+    logic                       needs_vtype;
+  } ifu_pd_pkt_t;
+
   // ----------------------------------------------------------------
   // uBTB structs
   // ----------------------------------------------------------------

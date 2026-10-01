@@ -111,6 +111,9 @@ rtl/lib/obj_dir
 
 # fst files
 rtl/core/frontend/bpu/*.fst
+
+
+rtl/core/frontend/l1i_param_chk/obj_lint_neg/
 # --------------------------------------------------------------------
 # docs
 site/

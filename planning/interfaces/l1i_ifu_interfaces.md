@@ -108,10 +108,11 @@ rename here.
 
 ### 3.1 The parameters
 
-STATUS, session-074. The nine ITLB/MMU widths are in
-`bp_defines_pkg` since BP-109, and `VA_WIDTH` is 41. The six L1I
-names are RULED into `bp_defines_pkg` (TD#122, TD-IF-1) and not yet
-declared. The table's middle column is as of session-073.
+STATUS, session-074. All fifteen are declared in
+`bp_defines_pkg`: the nine ITLB/MMU widths by BP-109, the six L1I
+names by BP-115. `VA_WIDTH` is 41 and PPN_WIDTH is now
+PA_WIDTH - 12. `l1i_param_chk` checks the six against `l1i_pkg` at
+elaboration; its lint and lint_neg targets run under regress.sh.
 
 Before that ruling `bp_defines_pkg.sv` carried no physical address
 width at all. The 36 of IF-1 lived only in
@@ -120,32 +121,34 @@ width at all. The 36 of IF-1 lived only in
 
 The IFU is hand written and reads `bp_defines_pkg`. The L1I is
 generated and its constants are in `l1i_pkg`, under a different
-naming convention. The two must agree and nothing makes them.
+naming convention. The two must agree; `l1i_param_chk` makes
+them, BP-115.
 
 ```
   this file        bp_defines_pkg     l1i_pkg         value
   ---------------- ------------------ --------------- -----
-  PA_WIDTH         ABSENT, TD-IF-1    L1iPaBits          36
-  L1I_LINE_BYTES   ABSENT, TD-IF-1    L1iLineBytes       64
-  L1I_LINE_BITS    ABSENT, TD-IF-1    L1iLineBits       512
-  L1I_OFFSET_BITS  ABSENT, TD-IF-1    L1iOffsetBits       6
-  REQ_ID_BITS      ABSENT, TD-IF-1    L1iReqIdBits        4
-  MAX_OUTSTANDING  ABSENT, TD-IF-1    L1iMaxOutstanding  16
-  GPA_WIDTH        ABSENT, TD#122     (no counterpart)    41
-  GVPN_WIDTH       ABSENT, TD#122     (no counterpart)    29
-  VPN_WIDTH        ABSENT, TD#122     (no counterpart)    27
-  PPN_WIDTH        ABSENT, TD#122     (no counterpart)    24
-  ASID_WIDTH       ABSENT, TD#122     (no counterpart)    16
-  VMID_WIDTH       ABSENT, TD#122     (no counterpart)    14
-  PERM_WIDTH       ABSENT, TD#122     (no counterpart)     8
-  CAUSE_WIDTH      ABSENT, TD#122     (no counterpart)     5
-  PMA_WIDTH        ABSENT, TD#122     (no counterpart)     4
+  PA_WIDTH         BP-115             L1iPaBits          36
+  L1I_LINE_BYTES   BP-115             L1iLineBytes       64
+  L1I_LINE_BITS    BP-115             L1iLineBits       512
+  L1I_OFFSET_BITS  BP-115             L1iOffsetBits       6
+  REQ_ID_BITS      BP-115             L1iReqIdBits        4
+  MAX_OUTSTANDING  BP-115             L1iMaxOutstanding  16
+  GPA_WIDTH        BP-109             (no counterpart)    41
+  GVPN_WIDTH       BP-109             (no counterpart)    29
+  VPN_WIDTH        BP-109             (no counterpart)    27
+  PPN_WIDTH        BP-109             (no counterpart)    24
+  ASID_WIDTH       BP-109             (no counterpart)    16
+  VMID_WIDTH       BP-109             (no counterpart)    14
+  PERM_WIDTH       BP-109             (no counterpart)     8
+  CAUSE_WIDTH      BP-109             (no counterpart)     5
+  PMA_WIDTH        BP-109             (no counterpart)     4
 ```
 
 The rows below MAX_OUTSTANDING were added session-070, GVPN_WIDTH
 session-073. The ITLB interfaces declare ports against every one of
 them except GVPN_WIDTH -- `itlb_ifu_interfaces.md` 2 and
-`itlb_l2tlb_interfaces.md` 2 -- and none is defined in any package.
+`itlb_l2tlb_interfaces.md` 2 -- and none was defined in any package
+until BP-109.
 Same class as PA_WIDTH above. TD#122.
 
 ALL NINE NOW HAVE VALUES, ruled session-073. Their sources:
@@ -180,14 +183,15 @@ says the walker faults it. Open, raised session-073.
 `l1i_pkg` carries REQ_ID_BITS and MAX_OUTSTANDING as L1iReqIdBits
 and L1iMaxOutstanding since TOOLS-004, which also added L1iMshrs,
 L1iMshrTargets, L1iMshrIdxBits, L1iMshrTgtBits, L1iMshrCntBits and
-L1iQualReserve. TD-IF-1 stands: nothing makes the hand-written and
-generated sides agree. This read that `l1i_pkg` has no counterpart
+L1iQualReserve. Nothing made the hand-written and generated sides
+agree until BP-115. This read that `l1i_pkg` has no counterpart
 because the emitter did not consume `outstanding_requests` or
 `id_width_bits` (INFRA-012 E2 and E3). Session-071. Section 14 says
 which of these a configuration change can supply and which cannot.
 
 ADDING THESE PARAMETERS IS NOT THIS FILE'S ACT. This file is a
-specification and writes no RTL. TD-IF-1 carries the addition.
+specification and writes no RTL. TD-IF-1 carried the addition;
+BP-109 and BP-115 made it.
 
 ---
 
@@ -1072,6 +1076,8 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
            MAX_OUTSTANDING, and MAINT_FENCE_I / MAINT_CBO_INVAL of
            11.2 -- and checked equal to the emitted l1i_pkg at
            elaboration. PPN_WIDTH becomes PA_WIDTH - 12. TD#122.
+           CLOSED by BP-115, session-074: declared, and checked by
+           rtl/core/frontend/l1i_param_chk.
 
   TD-IF-2  CLOSED by TOOLS-004, section 14.2 S6. Original text:
            A CUSTOM LINK CANNOT DECLARE AN ERROR RETURN. Section
@@ -1243,5 +1249,7 @@ sees a 2-byte boundary.
   2026-10-01  session-074. 3.1 status: the ITLB/MMU widths are
               declared, the L1I names ruled into bp_defines_pkg.
               TD-IF-1 gains that ruling; TD-IF-5 resolved by the
-              TD#116 ruling.
+              TD#116 ruling. Then BP-115: the six L1I names are
+              declared and checked, the table reads BP-109 and
+              BP-115, and TD-IF-1 is closed.
 ```

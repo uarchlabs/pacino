@@ -268,6 +268,12 @@ prompt is written.
   Do not use short paths -- these will fail the file
   existence check in validate_and_extract.py.
 - For known prompt failure modes see ANTIPATTERNS.md.
+- After a task file is issued the PA does not edit it. Jeff
+  writes the Discussion sections, Claude.ai Assessment included;
+  the PA gives its assessment in chat. Session-074.
+- Mode checkbox: the PA ticks automated in every task file it
+  writes. Manual or interactive is ticked only when Jeff names it
+  when the task is requested. Session-074.
 - Suite-gating waivers: THE ONLY WAIVER LIST IS
   tools/known_failures.txt. CLAUDE.md requires every task that
   ends in a status claim to run tools/regress.sh and blocks

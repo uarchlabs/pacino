@@ -92,6 +92,8 @@ Each slot carries `ifu_pd_pkt_t` as defined in
 `dcd_decisions.md` DCD-16:
 
 ```
+  valid        produced by the ibuf on its read side, not driven
+               here (IB-3)
   instr        the expanded 32-bit instruction
   start_pc     the address of this instruction
   pos          its halfword position in the prediction block,
@@ -103,7 +105,10 @@ Each slot carries `ifu_pd_pkt_t` as defined in
                a guest-page fault
   is_rvc       the instruction was a 16-bit encoding; expansion
                erases the length
-  cfi          the control flow classification of DCD-7
+  br_type      DCD-7: 00 not a CFI, 01 branch, 10 JAL, 11 JALR;
+               the ftq_pd_info_t encoding, not bp_br_type_e
+  is_call      DCD-7 and DCD-11
+  is_ret       DCD-7 and DCD-11
   is_vsetvl    per-instruction, from DCD-16
   needs_vtype  per-instruction, from DCD-16
 ```
@@ -206,7 +211,9 @@ None. IB-U1 closed session-069 as IB-12.
 ```
   2026-10-01  session-074. The payload struct is ifu_pd_pkt_t,
               a new struct, not a redefined predecode_pkt_t.
-              dcd_decisions.md DCD-16. Section 4 gains is_rvc.
+              dcd_decisions.md DCD-16. Section 4 gains is_rvc,
+              lists valid, and names the DCD-7 fields as the
+              struct declares them (BP-115).
   2026-09-22  session-073. IB-13: BUILT by BP-112, TD#126 closed,
               with the note that the rule cannot be keyed on the
               redirect cause.

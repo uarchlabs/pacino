@@ -16,10 +16,20 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
-## Session-074: PA-direct corrections. Documents only.
+## Session-074: rulings for the IFU, and BP-115.
 
-No task run, no RTL changed. TD#143 opened; next free TD is
-TD#144. PA-direct corrections, session-074, applied by Jeff:
+BP-115 RUN, COMPLETE. bp_defines_pkg gains the six L1I names and
+MAINT_*; PPN_WIDTH is PA_WIDTH - 12 (still 24). bp_structs_pkg
+gains ifu_fault_e and ifu_pd_pkt_t, 175 bits. New unit
+rtl/core/frontend/l1i_param_chk: lint, and lint_neg, which passes
+only if the check rejects PA_WIDTH=32. regress.sh 80 targets PASS,
+the 78 earlier ones count for count against a pre-edit baseline.
+Verilator 5.048 reports an elaboration $error as
+%Warning-USERERROR, fatal under -Wall; -Wno-fatal would turn
+lint_neg red. TD#122 CLOSED.
+
+TD#143 opened. Next free TD is TD#144. Next free BP is BP-116.
+PA-direct corrections, session-074, applied by Jeff:
 
   CLAUDE.md Packages: a task may add, change or remove package
        declarations, decode_pkg.sv included; the shadowing rule
@@ -61,7 +71,11 @@ TD#144. PA-direct corrections, session-074, applied by Jeff:
        gap-fixing task. Closes handoff-074 Task 2.
   l1i_ifu_interfaces.md: 3.1 status brought current; TD-IF-1
        carries the TD#122 ruling; TD-IF-5 resolved by TD#116.
-       IF-7 checked against TD#116: consistent.
+       IF-7 checked against TD#116: consistent. After BP-115: the
+       3.1 table reads BP-109 / BP-115, TD-IF-1 closed.
+  After BP-115 (IA-reported): ifu_ibuf_interfaces.md 4 lists valid
+       and the struct's DCD-7 field names; DCD-15 reads three
+       causes plus none.
   PROJECT_CORE.md Tools Status: check_planning.sh recorded as a
        standing step, and credited as the PA's idea (Jeff). The
        next handoff says so.
@@ -1922,9 +1936,8 @@ it only documented current behavior.
 |                         |             |                   | read "Nothing blocks RTL". Ruled, |
 |                         |             |                   | not yet built or not yet in the   |
 |                         |             |                   | owning document: TD#116, IFU-25,  |
-|                         |             |                   | IFU-U5, the L1I package names     |
-|                         |             |                   | (TD#122) and ifu_pd_pkt_t         |
-|                         |             |                   | (DCD-16).                         |
+|                         |             |                   | IFU-U5. The L1I names and         |
+|                         |             |                   | ifu_pd_pkt_t are BUILT, BP-115.   |
 |                         |             |                   | TD#134-136 are stubbed by ruling. |
 | ibuf                    | Not started | --                | ibuf_decisions.md and             |
 |                         |             |                   | ifu_ibuf_interfaces.md created    |
@@ -2537,19 +2550,15 @@ assessment of each document. Correct any that are wrong.
 |     |          | intact, only the valid is wrong -- degrades fallback     |
 |     |          | quality, never mispredicts. Wrap flag or 6-bit CSP.      |
 |     |          | Decide with the 16/32 rebalance. ras_decisions.md 3.3.   |
-| 122 | frontend | RULED session-074, BUILD PENDING. VA_WIDTH 41 and the    |
-|     |          | nine ITLB/MMU widths built by BP-109 (session-073).      |
-|     |          |                                                          |
-|     |          | TD-IF-1 RULED (Jeff): the L1I port parameters go in      |
-|     |          | bp_defines_pkg: PA_WIDTH 36, REQ_ID_BITS 4,              |
-|     |          | MAX_OUTSTANDING 16, L1I_LINE_BYTES 64, L1I_LINE_BITS     |
-|     |          | 512, L1I_OFFSET_BITS 6, MAINT_FENCE_I 0, MAINT_CBO_INVAL |
-|     |          | 1, and PPN_WIDTH becomes PA_WIDTH - 12. The L1I-facing   |
-|     |          | boundary checks equality against the emitted l1i_pkg at  |
-|     |          | elaboration. Closes when built.                          |
+| 122 | frontend | CLOSED session-074. VA_WIDTH 41 and the nine ITLB/MMU    |
+|     |          | widths built by BP-109; the six L1I names declared in    |
+|     |          | bp_defines_pkg and checked against l1i_pkg by            |
+|     |          | rtl/core/frontend/l1i_param_chk (lint, lint_neg) by      |
+|     |          | BP-115. PPN_WIDTH is PA_WIDTH - 12.                      |
 |     |          |                                                          |
 |     |          | DO NOT RE-RAISE: Pointer Masking v1.0 exempts            |
-|     |          | instruction fetch.                                       |
+|     |          | instruction fetch. (Moves to FE-19 when fe_decisions.md  |
+|     |          | is next open.)                                           |
 | 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
 |     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
 |     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |

@@ -187,9 +187,10 @@ DCD-15 A faulting position is reported with `fault_val` and
        faulting virtual address, and on a guest page fault the
        faulting guest physical address, in the bundle view.
 
-The cause field is three-valued, not two: instruction access fault,
-instruction page fault and instruction guest-page fault. H is
-mandatory in RVA23 through Sha. `mmu_decisions.md` MMU-16.
+The cause field carries three causes, not two, plus none:
+instruction access fault, instruction page fault and instruction
+guest-page fault. H is mandatory in RVA23 through Sha.
+`mmu_decisions.md` MMU-16.
 
 The two carry different things on purpose. The FTQ needs only to
 know the block ended early. The architectural exception travels
