@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-17
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -49,12 +49,15 @@ nowhere else.
         ia_context/ia_handoffs/.
 ```
 
-Task IDs use three prefixes:
+Task IDs use four prefixes:
 
 ```
   BP-NNN     a BPU or front-end task, RTL or specification
   INFRA-NNN  a read-only IA audit or inventory task
   COMP-NNN   a shared-component task
+  TOOLS-NNN  a tools task: cachegen, the regression, build
+             infrastructure (cachegen tasks since session-068,
+             tools/regress.sh as TOOLS-006)
 ```
 
 A PA-direct edit -- a planning document the PA drafts and Jeff
@@ -222,10 +225,9 @@ prompt is written.
   via the manifest.
 - Constraints section: experiment-specific items only.
   Global style rules live in CLAUDE.md and must not be
-  repeated in prompts. Suite-gating waiver lists ARE
-  experiment-specific (which tests, which TD numbers, this
-  task) and belong here -- they are not the global-rule
-  restatement this bans. See prompt generation rules below.
+  repeated in prompts. This includes the verification rule:
+  a task file does NOT carry a suite-gating waiver list. See
+  prompt generation rules below.
 - A constraint that fences an area the requirements send the
   IA into will strand the session's best finding. Check the
   constraints against the requirements before issuing.
@@ -266,14 +268,14 @@ prompt is written.
   Do not use short paths -- these will fail the file
   existence check in validate_and_extract.py.
 - For known prompt failure modes see ANTIPATTERNS.md.
-- Suite-gating waivers: CLAUDE.md requires the IA to run each
-  in-scope module's complete suite and blocks completion on any
-  non-waived failure. When writing a verification, testbench,
-  debug, or cleanup prompt for a unit that has known/open suite
-  failures, the Constraints section MUST enumerate the waived
-  tests and cite each one's tech-debt number. A failure not on
-  that list will (correctly) block completion. Omitting the
-  waiver list will strand legitimate work as in-progress.
+- Suite-gating waivers: THE ONLY WAIVER LIST IS
+  tools/known_failures.txt. CLAUDE.md requires every task that
+  ends in a status claim to run tools/regress.sh and blocks
+  completion on any red result not in that file. A task file
+  cannot add a waiver and the prompt does not enumerate one.
+  Entries are Jeff's: the IA proposes them in Results Capture
+  and Jeff applies them. This replaced the per-task waiver
+  list in session-073 (TOOLS-006).
 
 ### Results capture
 - Claude Code writes its summary directly into the experiment
@@ -357,7 +359,8 @@ Claude Code proposes (subject to Jeff review):
 
 ```
   planning/       specification and decision record. See below.
-  prompts/        one file per task, BP-NNN.md / INFRA-NNN.md
+  prompts/        one file per task, BP-NNN.md / INFRA-NNN.md /
+                  TOOLS-NNN.md
   templates/      TASK_TEMPLATE.md
   pa_handoffs/    session_handoff-NNN.md, PA to next PA session
   ia_context/
@@ -478,6 +481,10 @@ planning/
                              miss handling, maintenance,
                              prefetch. Owns L1I-N, TD-L1I-N,
                              L1I-UN
+    cachegen_decisions.md    what pacino needs from cachegen
+                             that it lacks. Owns CG-N, CG-GN,
+                             CG-UN. Cited by every cachegen
+                             TOOLS task
     ifu_decisions.md         IFU. Owns IFU-N, TD-IFU-N, IFU-UN
     dcd_decisions.md         predecode. Owns DCD-N, TD-DCD-N,
                              DCD-UN
@@ -610,53 +617,54 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |                        |       |                          |  rate_limits.five_hour.resets_at. |
 |                        |       |                          |  Note: display lost on terminal scroll. Run script directly |
 |                        |       |                          |  to restore: ~/.claude/statusline.sh |
+| check_planning.sh      | --    | ./check_planning.sh      | md5 of every planning file against the PA's  |
+|                        |       |                          | delivered versions. PA idea; in use by       |
+|                        |       |                          | session-072, origin before that.             |
+|                        |       |                          | See "Planning file check" below.             |
+
+### Planning file check
+check_planning.sh holds a 12-character md5 prefix for every
+planning file and CLAUDE.md, as the PA last delivered them. Jeff
+runs ./check_planning.sh . after installing planning files and
+before issuing a task; exit 0 means the tree holds exactly what the
+PA wrote. The PA updates the script in the same delivery as any
+planning file it changes, and verifies the new checksums against
+its own copies before delivering. A DIFFER line's got/want pair
+identifies which version is installed. Session-074 it caught two
+stale installs before a task was issued against them.
 
 ### Common
 tools/bin: $(RVA_ROOT)/tools/bin is the common install directory for all submodule tools.
 README.md updated to show build instructions for Verilator and Spike.
 
-### make targets
-Make targets are discoverable by analysis of the Makefile.
-`make all` is NOT a complete run: it omits targets. Enumerate
-the Makefile's targets and run each one. See CLAUDE.md,
-Verification Expectations, and TD#99.
+### The regression
+THE REGRESSION IS tools/regress.sh, built by TOOLS-006
+(session-073). Run from the repo root with no arguments. It finds
+every Makefile under rtl/, classifies every target from make's
+rule database, runs each one, and fails the run on a target that
+is in neither REGRESS_TARGETS nor REGRESS_EXCLUDE. A target fails
+on a non-zero exit or on any %Warning in its log.
+tools/known_failures.txt is the only waiver list; Jeff edits it,
+the IA never does. tools/hooks/pre-push refuses a push on a red
+run. CLAUDE.md Verification Expectations is the rule; this
+section is the rationale.
 
-THE bpu GAP IS KNOWN AND IS RECORDED HERE so no session has to
-rederive it. `all` names 38 of the 47. The NINE it omits:
+`make all` IS NOT A COMPLETE RUN, and is no longer the thing to
+run. The bpu `all` named 38 of 47 targets (TD#99). regress.sh
+exists so that gap cannot return under a new name. Do not
+enumerate targets by hand, and do not record a unit's target or
+check count here: counts come from a regress.sh run in the
+current session, and a figure written here goes stale.
 
-```
-  sim_ittage        sim_tage_manual
-  cov_history       cov_ubtb          cov_loop_pred
-  cov_tage_table    cov_tage          cov_bp_cluster
-  cov_bpu
-```
-
-All 18 lint targets ARE in `all`; the gap is two sim targets and
-every coverage target. Verified against the Makefile session-068.
-If the Makefile changes, this list changes with it -- it is a
-convenience, and the Makefile is still the reference.
-
-The known RTL make files are:
-```
-./rtl/Makefile
-./rtl/lib/Makefile
-./rtl/core/frontend/decode/Makefile
-./rtl/core/frontend/bpu/Makefile
-./rtl/core/frontend/ftq/Makefile
-```
-
-A unit's target count is per-unit. The bpu unit is 47 targets
-(18 lint, 22 sim, 7 cov). The ftq unit is 22 targets (11 lint,
-11 sim) and 670 checks as of BP-107, which completed it. Count
-them separately; do not fold the ftq figures into the bpu total
-or read "47 of 47 green" as covering the tree.
+A new unit gets a Makefile under rtl/ with REGRESS_TARGETS and
+REGRESS_EXCLUDE; regress.sh picks it up with no other change.
 
 ### A package edit is a cross-unit change
-EVERY TARGET IN BOTH UNITS COMPILES bp_defines_pkg.sv AND
-bp_structs_pkg.sv, as its first two sources. All 47 in the bpu,
-all 22 in the ftq. So a package addition made under a task scoped
-to one unit reaches the other, and the task's own suite cannot
-see it.
+EVERY TARGET IN THE bpu AND ftq UNITS COMPILES bp_defines_pkg.sv
+AND bp_structs_pkg.sv as its first two sources. So a package
+change made under a task scoped to one unit reaches the other,
+and the task's own suite cannot see it. decode_pkg.sv is shared
+the same way by the decode modules and, after DCD-16, by the IFU.
 
 This is the mechanism behind the standing rule above: BP-106
 reported green, an FTQ task then added FTQ_PTR_BITS and
@@ -665,8 +673,7 @@ building because those modules still declared them locally. A
 package declaration that shadows a module-local one is a BUILD
 BREAK under -Wall, not a tidy-up.
 
-WHEN A TASK ADDS TO EITHER PACKAGE, both units are run afterwards,
-whatever the task's own scope was. If they are not run in that
-session, the handoff says plainly that the other unit is unbuilt
-rather than carrying its last green figure forward.
+Running tools/regress.sh covers this: it runs every unit, not the
+task's own. The package rule itself, including what a task may
+change, is CLAUDE.md Fixed Constants, Packages.
 

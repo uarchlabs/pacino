@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -31,9 +31,11 @@ belong with the stage that holds it: `ifu_decisions.md` IFU-1 puts
 it in the IFU ahead of the ibuf, and IFU-4 runs it before
 predecode.
 
-The predecoder replaces `predecode.sv`, and `predecode_pkt_t` is
-redefined rather than extended. Neither the existing module nor
-the existing struct constrains anything below.
+The predecoder replaces `predecode.sv`. Its bundle view is a NEW
+struct, `ifu_pd_pkt_t`, not a redefinition of `predecode_pkt_t`
+(Jeff, session-074). The old struct stays for the built decode
+until decode moves to the new one, TD#143. Neither the existing
+module nor the existing struct constrains anything below.
 
 ---
 
@@ -46,7 +48,7 @@ DCD-1  There is one predecoder. It produces two views of one
        halfword positions of the prediction block. It goes to the FTQ
        writeback and its shape is fixed by `ftq_ifu.sv`.
 
-       The bundle view is `predecode_pkt_t`, one per instruction
+       The bundle view is `ifu_pd_pkt_t`, one per instruction
        slot. It goes through the ibuf to `instr_decoder`.
 
 The two differ in width because their consumers do. The FTQ needs
@@ -55,7 +57,7 @@ are not instruction starts. Decode needs `SLOTS` of 8. The
 classification is computed once.
 
 THE ARRAY WIDTH BELONGS TO THE PORT, NOT TO THE TYPE.
-`predecode_pkt_t` is a per-slot struct and both ibuf ports carry an
+`ifu_pd_pkt_t` is a per-slot struct and both ibuf ports carry an
 array of it: 16 wide on the write port, because the IFU does not
 compact (ifu_ibuf_interfaces.md IB-1, IFU-5, IBUF-3), and 8 wide on
 the read port into decode, where instr_decoder is `[SLOTS-1:0]`
@@ -198,12 +200,12 @@ under IFU-20.
 
 ## 10. The bundle view
 
-DCD-16 `predecode_pkt_t` carries, per slot: valid, the expanded
+DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        32-bit instruction, the start PC, the position within the
        prediction block, the FTQ index, the fault cause, the faulting
-       virtual address, the faulting guest physical address, the
-       control flow classification of DCD-7, and `is_vsetvl` and
-       `needs_vtype`.
+       virtual address, the faulting guest physical address,
+       `is_rvc`, the control flow classification of DCD-7, and
+       `is_vsetvl` and `needs_vtype`.
 
        The last two are per-instruction and belong here by
        TD-DCD-1; the enumeration did not carry them while
@@ -214,6 +216,11 @@ The start PC and the position are both present and are not
 redundant. Expansion breaks the correspondence between them,
 because a compressed instruction advances the PC by two and fills
 a whole slot.
+
+`is_rvc` is present because expansion also erases the length. The
+backend needs it for the link address of a compressed JAL or JALR
+(rd = pc + 2) and for the fall-through PC of a not-taken
+mispredict. Added session-074 (Jeff).
 
 TD-DCD-1  The vtype fields of the old `predecode_pkt_t` are
           `is_vsetvl`, `needs_vtype` and `vtype_hazard`. The

@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -33,7 +33,7 @@ planning artifact in that unit.
   ifu_ibuf_val                            IFU -> ibuf
   ifu_ibuf_en   [FTQ_PD_WIDTH-1:0]        IFU -> ibuf
   ifu_ibuf_slot [0:FTQ_PD_WIDTH-1]        IFU -> ibuf
-                predecode_pkt_t
+                ifu_pd_pkt_t
   ibuf_ifu_rdy                            ibuf -> IFU
 ```
 
@@ -51,7 +51,7 @@ IB-2  `ifu_ibuf_en` is the per-slot write enable and is the only
       The ibuf does not distinguish those cases and does not need
       to.
 
-IB-3  `predecode_pkt_t.valid` is not driven on this port. It is
+IB-3  `ifu_pd_pkt_t.valid` is not driven on this port. It is
       produced by the ibuf on its read side, where it says whether
       a read slot holds an instruction. Driving it here would give
       one fact two producers.
@@ -88,7 +88,7 @@ IB-7  The IFU holds `ifu_ibuf_val` and the whole payload stable
 
 ## 4. Payload
 
-Each slot carries `predecode_pkt_t` as defined in
+Each slot carries `ifu_pd_pkt_t` as defined in
 `dcd_decisions.md` DCD-16:
 
 ```
@@ -101,6 +101,8 @@ Each slot carries `predecode_pkt_t` as defined in
   fault_va     the faulting virtual address
   fault_gpa    the faulting guest physical address, valid only on
                a guest-page fault
+  is_rvc       the instruction was a 16-bit encoding; expansion
+               erases the length
   cfi          the control flow classification of DCD-7
   is_vsetvl    per-instruction, from DCD-16
   needs_vtype  per-instruction, from DCD-16
@@ -202,6 +204,9 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-01  session-074. The payload struct is ifu_pd_pkt_t,
+              a new struct, not a redefined predecode_pkt_t.
+              dcd_decisions.md DCD-16. Section 4 gains is_rvc.
   2026-09-22  session-073. IB-13: BUILT by BP-112, TD#126 closed,
               with the note that the rule cannot be keyed on the
               redirect cause.

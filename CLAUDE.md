@@ -45,16 +45,21 @@ production-quality outputs.
                      an IA write. A waiver covers that task only. It is
                      never precedent and never propagates to the next
                      task, even one continuing the same work.
-- Packages:          A task may ADD declarations to
-                     bp_defines_pkg.sv and bp_structs_pkg.sv when its
-                     task file scopes the addition. It may NOT change
-                     or remove an existing declaration. Every addition
-                     is listed in Results Capture with its derivation.
-                     A PACKAGE ADDITION THAT SHADOWS A MODULE-LOCAL
+- Packages:          A task may ADD, CHANGE or REMOVE declarations in
+                     any package (bp_defines_pkg.sv, bp_structs_pkg.sv,
+                     decode_pkg.sv) when its task file scopes the
+                     change. Every change is listed in Results Capture
+                     with its derivation.
+                     A PACKAGE DECLARATION THAT SHADOWS A MODULE-LOCAL
                      DECLARATION IS A BUILD BREAK under -Wall, not a
-                     tidy-up. Sequence the addition WITH the modules
-                     that stop declaring it locally, or state plainly
-                     that the tree is broken in between.
+                     tidy-up. Sequence the change WITH the modules that
+                     stop declaring it locally, or state plainly that
+                     the tree is broken in between.
+                     Every package task ends by running
+                     tools/regress.sh; its summary goes in Results
+                     Capture. Any red result not in
+                     tools/known_failures.txt blocks Status: complete.
+                     The IA does not edit tools/known_failures.txt.
 ---
 
 ## Style Rules - enforced by style scripts, no exceptions
@@ -246,12 +251,12 @@ important. It must be defines first then structs
   sessions) are listed in the experiment Constraints section and
   must not be added to CLAUDE.md.
 - Always include -Wno-IMPORTSTAR in VER_FLAGS. The project
-  mandates file-scope wildcard import (import bp_pkg::*;
-  before the module declaration). Verilator v5.048 warns on
-  wildcard imports in $unit scope. This is structural and
-  suppressed project-wide.
+  mandates file-scope wildcard import (import bp_defines_pkg::*;
+  then import bp_structs_pkg::*; before the module declaration).
+  Verilator v5.048 warns on wildcard imports in $unit scope. This
+  is structural and suppressed project-wide.
 - -Wno-VARHIDDEN: add to individual sim or lint targets only when
-  a module parameter intentionally shadows a bp_pkg parameter
+  a module parameter intentionally shadows a package parameter
   (e.g. NUM_PRED_SLOTS). Do not add to VER_FLAGS.
 - Always include -Wno-UNUSED in VER_FLAGS. Package-only
   files and structs not yet consumed by any module will

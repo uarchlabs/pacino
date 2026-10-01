@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -106,12 +106,17 @@ rename here.
          and no partial line.
 ```
 
-### 3.1 The parameters do not exist yet
+### 3.1 The parameters
 
-`bp_defines_pkg.sv` carries `VA_WIDTH` (40) and `FETCH_BLOCK_BYTES`
-(64) and carries NO PHYSICAL ADDRESS WIDTH AT ALL. The 36 of IF-1
-lives today only in `tools/cachegen/testcases/pacino/
-pacino_topology.json`, as `addressing.pa_bits`.
+STATUS, session-074. The nine ITLB/MMU widths are in
+`bp_defines_pkg` since BP-109, and `VA_WIDTH` is 41. The six L1I
+names are RULED into `bp_defines_pkg` (TD#122, TD-IF-1) and not yet
+declared. The table's middle column is as of session-073.
+
+Before that ruling `bp_defines_pkg.sv` carried no physical address
+width at all. The 36 of IF-1 lived only in
+`tools/cachegen/testcases/pacino/pacino_topology.json`, as
+`addressing.pa_bits`.
 
 The IFU is hand written and reads `bp_defines_pkg`. The L1I is
 generated and its constants are in `l1i_pkg`, under a different
@@ -1060,6 +1065,14 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
            sign extension corrupts any GPA with bit 38 set.
            fe_decisions.md FE-19. TD#122 tracks the RTL.
 
+           SECOND SCOPE, ruled session-074 (Jeff). The 3.1 table
+           has used this ID for the L1I names as well. They go in
+           bp_defines_pkg, not yet declared -- PA_WIDTH, L1I_LINE_BYTES,
+           L1I_LINE_BITS, L1I_OFFSET_BITS, REQ_ID_BITS,
+           MAX_OUTSTANDING, and MAINT_FENCE_I / MAINT_CBO_INVAL of
+           11.2 -- and checked equal to the emitted l1i_pkg at
+           elaboration. PPN_WIDTH becomes PA_WIDTH - 12. TD#122.
+
   TD-IF-2  CLOSED by TOOLS-004, section 14.2 S6. Original text:
            A CUSTOM LINK CANNOT DECLARE AN ERROR RETURN. Section
            14.2 S6. IF-15 is unemittable and the emitted adapter
@@ -1085,6 +1098,12 @@ NO OPEN ITEMS REMAIN IN THIS FILE.
            the reordering buffer that implies. It belongs in
            ifu_decisions.md and is named here because this file is
            the half that introduces the out-of-order return.
+
+           RESOLVED session-074 by TD#116 (Jeff). The line buffer
+           is the reorder store, consumed in allocation order, one
+           slot per identifier (IF-7). Its depth is a parameter,
+           default 16 = MAX_OUTSTANDING, so the identifier free
+           list bounds it. Closes when ifu_decisions.md carries it.
 ```
 
 ---
@@ -1220,4 +1239,9 @@ sees a 2-byte boundary.
               are filled and GVPN_WIDTH is added, ruled this
               session. Sources listed below the table. Raised:
               nothing faults a PTE PPN above PPN_WIDTH.
+
+  2026-10-01  session-074. 3.1 status: the ITLB/MMU widths are
+              declared, the L1I names ruled into bp_defines_pkg.
+              TD-IF-1 gains that ruling; TD-IF-5 resolved by the
+              TD#116 ruling.
 ```

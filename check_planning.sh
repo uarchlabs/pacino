@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # Compare planning files against the delivered versions.
 # Baseline: session-071, except the files updated in session-073
-# (PROJECT_STATUS.md, l1i_ifu_interfaces.md, mmu_decisions.md,
+# (mmu_decisions.md,
 # ftb_decisions.md, ftb_interfaces.md, ubtb_interfaces.md,
 # ftq_bpu_interfaces.md, ftq_entry_formats.md,
 # ittage_table_entry_formats.md, ftq_decisions.md,
 # ftq_ifu_interfaces.md, ifu_decisions.md,
-# ftq_backend_interfaces.md, ifu_ibuf_interfaces.md).
+# ftq_backend_interfaces.md)
+# and the files updated in session-074 (PROJECT_CORE.md,
+# PROJECT_STATUS.md, CLAUDE.md, dcd_decisions.md,
+# cachegen_decisions.md (new), l1i_ifu_interfaces.md,
+# ifu_ibuf_interfaces.md).
+# CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
 # Exit status: 0 if every file matches, 1 otherwise.
@@ -23,13 +28,16 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   0320bf9df383
-PLAN  PROJECT_STATUS.md           ae131f332248
+PLAN  PROJECT_CORE.md                   93e792152927
+PLAN  PROJECT_STATUS.md                 5ec414046ca5
+
+UNKN  CLAUDE.md                         5582b9971ea5
 
 ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
-ARCH  dcd_decisions.md                  3060707d7350
+ARCH  cachegen_decisions.md             ea488dd8c90d
+ARCH  dcd_decisions.md                  bdd023331155
 ARCH  fe_decisions.md                   47c145d1ddc1
 ARCH  ftb_decisions.md            35cacdaab9cd
 ARCH  ftq_decisions.md            40da51fdac1a
@@ -73,11 +81,11 @@ INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
 INTF  ftq_bpu_interfaces.md       4675dfb2360b
 INTF  ftq_ifu_interfaces.md       69e619e2a6fa
-INTF  ifu_ibuf_interfaces.md      f6caa60a5465
+INTF  ifu_ibuf_interfaces.md      11720ba8cc7d
 INTF  itlb_ifu_interfaces.md            bad2da3edbaa
 INTF  itlb_l2tlb_interfaces.md          cdd678fff43d
 INTF  ittage_interfaces.md              7b90d2a1b3e3
-INTF  l1i_ifu_interfaces.md             5d29946afbb1
+INTF  l1i_ifu_interfaces.md             7ff703bec5e2
 INTF  loop_pred_interfaces.md           c20911b0ecc7
 INTF  ras_interfaces.md                 45e38659a223
 INTF  sc_interfaces.md                  c5913f89bc7c

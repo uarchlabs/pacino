@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,72 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-074: PA-direct corrections. Documents only.
+
+No task run, no RTL changed. TD#143 opened; next free TD is
+TD#144. PA-direct corrections, session-074, applied by Jeff:
+
+  CLAUDE.md Packages: a task may add, change or remove package
+       declarations, decode_pkg.sv included; the shadowing rule
+       and the derivation listing are kept; regress.sh is the
+       gate. The two bp_pkg rationales now name the split
+       packages. Handoff-074 Read This First 3.
+  PROJECT_CORE.md: TOOLS-NNN is a task prefix; the suite-gating
+       waiver rule points at tools/known_failures.txt; Tools
+       Status points at tools/regress.sh instead of hand
+       enumeration.
+  TD#122 / TD-IF-1 RULED (Jeff): the L1I port parameters go in
+       bp_defines_pkg, checked against l1i_pkg at elaboration.
+       Row cut to the ruling; history in the session-073 notes
+       and FE-19. Closes when built.
+  DCD-16 RULED (Jeff): the bundle view is a NEW struct,
+       ifu_pd_pkt_t; predecode_pkt_t stays for the built decode
+       until TD#143. dcd_decisions.md and ifu_ibuf_interfaces.md
+       renamed. ifu_pd_pkt_t is declared in bp_structs_pkg beside
+       ftq_pd_info_t, not in decode_pkg (Jeff): decode's build is
+       untouched until TD#143. DCD-16 gains is_rvc (Jeff):
+       expansion erases the length, and the backend needs it.
+  TD#122 CHECK (Jeff): a lint-only module, l1i_param_chk, compares
+       the six L1I names against the emitted l1i_pkg, with its own
+       Makefile under rtl/ so regress.sh runs it. BP-115.
+  TD#116 RULED (Jeff): line buffer depth a parameter, default
+       16; in-order issue; coalescing against the previous
+       request; the line buffer is the reorder store; the
+       maintenance path moved to TD#136.
+  IFU-25 RULED (Jeff): a page-crossing block's translation queue
+       entry holds two results, the second valid only for a
+       crossing block, filled by a second ITLB lookup.
+  IFU-U5 RULED (Jeff): translation queue depth a parameter,
+       default 4; an entry frees when its block's L1I request
+       issues, and its result travels with the request.
+  CACHEGEN (Jeff): cachegen_decisions.md created, all pacino
+       caches. Pacino drives, cachegen follows; output under
+       regress.sh first; the cache RTL may depart from the
+       generator, reconciled later by a comparison task and a
+       gap-fixing task. Closes handoff-074 Task 2.
+  l1i_ifu_interfaces.md: 3.1 status brought current; TD-IF-1
+       carries the TD#122 ruling; TD-IF-5 resolved by TD#116.
+       IF-7 checked against TD#116: consistent.
+  PROJECT_CORE.md Tools Status: check_planning.sh recorded as a
+       standing step, and credited as the PA's idea (Jeff). The
+       next handoff says so.
+  This file: the ifu row, the quick-reference ITTAGE and
+       position bullets, G18, Open Item 18 and the bp_ftq_meta_t
+       widths, all stale after session-073.
+
+NOT CORRECTED, needs the owning file read: ifu_decisions.md IFU-27
+(the TD#139 row says it still gives one stall cycle for both
+redirect sources; handoff-074 says it was split), and whether
+ftq_ifu_interfaces.md 7 names the arbitration arm as TD#126
+required. Also owed: the pointer-masking line in TD#122 moves to
+FE-19; import/l1i/ is a stale 32-bit emission (confirmed by
+Jeff), delete or mark it; ibuf_decisions.md and ifu_decisions.md
+(TD-IFU-1) may still name
+predecode_pkt_t for the bundle view; ifu_decisions.md TD-IFU-7 to
+9 and icache_decisions.md L1I-U5 carry the TD#116 rulings;
+ifu_decisions.md IFU-25 and IFU-U5 carry their rulings.
 
 ---
 ## Session-073: the regression command. TOOLS-006.
@@ -1568,6 +1634,13 @@ it only documented current behavior.
 |                         |             |                   | flop vectors, 192b, OUTSIDE both |
 |                         |             |                   | SRAMs. TD-FE-1 CLOSED in full.   |
 |                         |             |                   | TD-FE-8 opened and closed 4.4.   |
+|                         |             |                   | SESSION-074: the widths above    |
+|                         |             |                   | predate BP-109 (TD#122) and      |
+|                         |             |                   | BP-111 (TD#132). bp_ftq_meta_t is|
+|                         |             |                   | 425b per slot after BP-111,      |
+|                         |             |                   | measured. The totals and the     |
+|                         |             |                   | union figure are NOT re-derived; |
+|                         |             |                   | do not cite them as built.       |
 | ftq_ifu_interfaces.md   | Draft       | --                | Created session-067. Closes      |
 |                         |             |                   | TD-FE-1. Fetch request, flush,   |
 |                         |             |                   | predecode writeback. THE FTQ     |
@@ -1694,6 +1767,8 @@ it only documented current behavior.
 |                         |             |                   | groups, TWO read ports. No reset:|
 |                         |             |                   | a resolution can only name an    |
 |                         |             |                   | entry a prediction wrote.        |
+|                         |             |                   | 425b per slot since BP-111       |
+|                         |             |                   | (TD#132); 421b is BP-107's.      |
 |                         |             |                   | sim_ftq_meta 26/0.               |
 | ftq_status.sv           | Complete    | tb_ftq_status     | BP-107. wb_rcvd, fault, gen. 192 |
 |                         |             |                   | flops, masked range clear by AGE |
@@ -1788,9 +1863,9 @@ it only documented current behavior.
 |                         |             |                   | TD-DCD-1..2, DCD-U1..U2. One      |
 |                         |             |                   | predecoder, two views:            |
 |                         |             |                   | ftq_pd_info_t at 16 positions and |
-|                         |             |                   | predecode_pkt_t at 8 slots.       |
-|                         |             |                   | SUPERSEDES predecode.sv and       |
-|                         |             |                   | redefines predecode_pkt_t. The    |
+|                         |             |                   | ifu_pd_pkt_t, a NEW struct        |
+|                         |             |                   | (session-074). SUPERSEDES         |
+|                         |             |                   | predecode.sv, TD#143. The         |
 |                         |             |                   | RVC expander is NOT here; it is   |
 |                         |             |                   | ifu_decisions.md IFU-1 and IFU-4. |
 | ibuf_decisions.md       | Draft       | --                | Created session-069. IBUF-1..11,  |
@@ -1843,7 +1918,14 @@ it only documented current behavior.
 |                         |             |                   | three boundaries now specified:   |
 |                         |             |                   | ftq_ifu, l1i_ifu, itlb_ifu.       |
 |                         |             |                   | ifu_decisions.md exists as of     |
-|                         |             |                   | session-069. Nothing blocks RTL.  |
+|                         |             |                   | session-069. SESSION-074: this    |
+|                         |             |                   | read "Nothing blocks RTL". Ruled, |
+|                         |             |                   | not yet built or not yet in the   |
+|                         |             |                   | owning document: TD#116, IFU-25,  |
+|                         |             |                   | IFU-U5, the L1I package names     |
+|                         |             |                   | (TD#122) and ifu_pd_pkt_t         |
+|                         |             |                   | (DCD-16).                         |
+|                         |             |                   | TD#134-136 are stubbed by ruling. |
 | ibuf                    | Not started | --                | ibuf_decisions.md and             |
 |                         |             |                   | ifu_ibuf_interfaces.md created    |
 |                         |             |                   | session-069. Had no planning      |
@@ -2372,28 +2454,26 @@ assessment of each document. Correct any that are wrong.
 |     |          | Needs itlb_decisions.md. L1I-U3 adds a node and an edge  |
 |     |          | to the cachegen topology, so it is not a parameter       |
 |     |          | choice.                                                  |
-| 116 | ifu      | STILL OPEN, NARROWED session-069. ifu_decisions.md now  |
-|     |          | exists (IFU-1..27) and covers expansion, predecode      |
-|     |          | placement, the straddle, the five-stage fetch pipeline,  |
-|     |          | the translation pipeline, the prediction check and the   |
-|     |          | uncached path. It covers NONE of the four items below.   |
-|     |          | An earlier session-069 draft claimed this TD closed;     |
-|     |          | it does not. The four are unchanged and still owed:      |
+| 116 | ifu      | RULED session-074 (Jeff). Closes when ifu_decisions.md   |
+|     |          | (TD-IFU-7 to 9) and icache_decisions.md (L1I-U5) carry   |
+|     |          | it.                                                      |
 |     |          |                                                          |
-|     |          |   - the line buffer of L1I-14: depth, and what a         |
-|     |          |     redirect does to it. icache_decisions.md L1I-U5      |
-|     |          |   - the issue policy. icache_decisions.md 6 now records  |
-|     |          |     that the mshr_targets derivation is void under       |
-|     |          |     L1I-14 and 4 is an unmeasured choice; what actually  |
-|     |          |     merges depends on whether the IFU issues for a later |
-|     |          |     block before an earlier response lands               |
-|     |          |   - the reordering buffer of TD-IF-5: one predecode      |
-|     |          |     writeback per prediction block against           |
-|     |          |     out-of-order line                                    |
-|     |          |     responses, with nothing bounding the buffer          |
-|     |          |   - the maintenance path of l1i_ifu_interfaces.md 11,    |
-|     |          |     whose producer is the backend commit stage and is    |
-|     |          |     unspecified                                          |
+|     |          | LINE BUFFER: depth a parameter, default 16; one slot     |
+|     |          | reserved per L1I request ID (IF-7). Size it later with   |
+|     |          | the TD#128 harness.                                      |
+|     |          |                                                          |
+|     |          | ISSUE: in order, oldest first, when a translated block,  |
+|     |          | a free ID and a free slot all exist.                     |
+|     |          |                                                          |
+|     |          | COALESCING: a block whose line matches the previous      |
+|     |          | request reuses that request's ID and slot. A slot frees  |
+|     |          | when its last block is consumed.                         |
+|     |          |                                                          |
+|     |          | REORDER: the line buffer, consumed in allocation order.  |
+|     |          | No separate structure.                                   |
+|     |          |                                                          |
+|     |          | Maintenance path moved to TD#136. Line buffer behaviour  |
+|     |          | on a redirect stays with TD#134.                         |
 | 117 | frontend | CLOSED session-069 by fe_decisions.md 15, FE-15..18.    |
 |     |          | The top instantiates bp_cluster, ftq, ifu, L1I, the     |
 |     |          | ITLB (FE-U10; added to this list session-070), ibuf     |
@@ -2457,75 +2537,19 @@ assessment of each document. Correct any that are wrong.
 |     |          | intact, only the valid is wrong -- degrades fallback     |
 |     |          | quality, never mispredicts. Wrap flag or 6-bit CSP.      |
 |     |          | Decide with the 16/32 rebalance. ras_decisions.md 3.3.   |
-| 122 | frontend | OPEN, RVA23 COMPLIANCE. VA_WIDTH = 40 CANNOT HOLD A      |
-|     |          | FETCH PC. H is mandatory through Sha, MMU-20 makes the   |
-|     |          | G-stage Sv39x4, and Shvsatpa plus Svbare require         |
-|     |          | vsatp.MODE=Bare, so with V=1 the fetch PC is a           |
-|     |          | zero-extended GPA of up to 41 bits. Two failures: 41     |
-|     |          | bits do not fit a 40-bit field, and sign extension       |
-|     |          | corrupts any GPA with bit 38 set. Explicit site:         |
-|     |          | ftq_bpu_interfaces.md 5.2.                               |
+| 122 | frontend | RULED session-074, BUILD PENDING. VA_WIDTH 41 and the    |
+|     |          | nine ITLB/MMU widths built by BP-109 (session-073).      |
 |     |          |                                                          |
-|     |          | RULED session-070: VA_WIDTH 40 -> 41. FTB_TAG_BITS       |
-|     |          | PINNED at 26 and IT_MAX_TGT_WIDTH PINNED at 38 (FE-19:   |
-|     |          | architectural addresses may not truncate, predictor      |
-|     |          | storage may). A tag alias is caught by predecode,        |
-|     |          | ftq_ifu_interfaces.md 6 and 7; a wrong target by the     |
-|     |          | mispredict redirect at resolve. FTB_ENTRY_WIDTH stays    |
-|     |          | 110, so sim_ftb 99 and sim_ittage 211 stand.             |
+|     |          | TD-IF-1 RULED (Jeff): the L1I port parameters go in      |
+|     |          | bp_defines_pkg: PA_WIDTH 36, REQ_ID_BITS 4,              |
+|     |          | MAX_OUTSTANDING 16, L1I_LINE_BYTES 64, L1I_LINE_BITS     |
+|     |          | 512, L1I_OFFSET_BITS 6, MAINT_FENCE_I 0, MAINT_CBO_INVAL |
+|     |          | 1, and PPN_WIDTH becomes PA_WIDTH - 12. The L1I-facing   |
+|     |          | boundary checks equality against the emitted l1i_pkg at  |
+|     |          | elaboration. Closes when built.                          |
 |     |          |                                                          |
-|     |          | BUILT BY BP-109, session-073. VA_WIDTH is 41.            |
-|     |          | FTB_TAG_BITS is the literal 26 (it had DERIVED from      |
-|     |          | VA_WIDTH and would have become 27). IT_MAX_TGT_WIDTH was |
-|     |          | already a literal 38. The nine ITLB/MMU widths are       |
-|     |          | declared with the values ruled session-073; see          |
-|     |          | l1i_ifu_interfaces.md 3.1 for the source of each. The    |
-|     |          | ITTAGE reconstruction in bp_cluster.sv zero-extends, per |
-|     |          | ftq_bpu_interfaces.md 5.2.                               |
-|     |          |                                                          |
-|     |          | The literal grep was run: 1307 sites in 31 files, all in |
-|     |          | bpu and ftq, swept to parameter-derived form. SEVEN      |
-|     |          | SITES TOOK THEIR WIDTH FROM HOW THE EXPRESSION WAS       |
-|     |          | BUILT and no search could find them; they were found by  |
-|     |          | running the tree at 41 and reading the width warnings.   |
-|     |          | tb_bp_cluster gained C1f2 and C1f3, each proven to fail  |
-|     |          | on the pre-fix tree. regress.sh green, 78 of 78.         |
-|     |          |                                                          |
-|     |          | STILL OPEN under this TD: PA_WIDTH and the other TD-IF-1 |
-|     |          | rows are still absent from the packages, so PPN_WIDTH is |
-|     |          | the plain 24 rather than PA_WIDTH - 12. FE-U11 is        |
-|     |          | unchanged: FE-19 puts the 63:41 check where the redirect |
-|     |          | PC is formed and ftq_backend_interfaces.md 5 has no      |
-|     |          | cause value for the rejection.                           |
-|     |          |                                                          |
-|     |          | RAISED session-073, not part of this TD: a Sv39 PTE PPN  |
-|     |          | field is 44 bits and PPN_WIDTH is 24, and nothing in     |
-|     |          | mmu_decisions.md faults a PTE whose PPN is set above the |
-|     |          | implemented width. Silent truncation of a physical       |
-|     |          | address if it is never checked.                          |
-|     |          |                                                          |
-|     |          | Files: bp_defines_pkg.sv, bp_structs_pkg.sv (283, 585).  |
-|     |          | Runs as one cycle with TD#124 and TD#125: ftb_cntrl.sv,  |
-|     |          | ubtb.sv, bp_cluster.sv, both packages.                   |
-|     |          |                                                          |
-|     |          | BEFORE SCOPING: the RTL literal grep has never been run. |
-|     |          | Search rtl/ and tb/ for 40'h, any [39: slice, [38] as a  |
-|     |          | sign bit, and {24{ / {25{ replications. That count       |
-|     |          | decides whether this is one task or three.               |
-|     |          |                                                          |
-|     |          | Document sweep COMPLETE, sessions 070 and 071. Nothing   |
-|     |          | outstanding.                                             |
-|     |          |                                                          |
-|     |          | Open, not part of this TD: FE-U11. FE-19 puts the 63:41  |
-|     |          | check where the redirect PC is formed;                   |
-|     |          | ftq_backend_interfaces.md 5 carries MISPREDICT, TRAP,    |
-|     |          | REPLAY and UNSPEC and has no value for the rejection.    |
-|     |          |                                                          |
-|     |          | DO NOT RE-RAISE: pointer masking does not apply. Ssnpm   |
-|     |          | is mandatory in RVA23S64, but Pointer Masking v1.0       |
-|     |          | exempts implicit accesses, instruction fetch included. A |
-|     |          | session-070 draft claimed otherwise from the J working   |
-|     |          | draft, which concerns data accesses.                     |
+|     |          | DO NOT RE-RAISE: Pointer Masking v1.0 exempts            |
+|     |          | instruction fetch.                                       |
 | 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
 |     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
 |     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
@@ -2774,6 +2798,8 @@ assessment of each document. Correct any that are wrong.
 |     |          | building against a port that does not exist.             |
 |     |          |                                                          |
 |     |          | Ruled session-073 (Jeff): deferred with TD#134.          |
+|     |          | Also, from TD#116: the producer of l1i_ifu_interfaces.md |
+|     |          | 11 is the backend commit stage, which has no document.   |
 
 | 137 | ftb      | CLOSED BP-111 (session-073). ftb_cntrl encodes,          |
 |     |          | status-checks and reconstructs the jump target from the  |
@@ -2906,6 +2932,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | Was: specified in ftq_ifu_interfaces.md 4 and not built. |
 |     |          | Found incidentally by BP-112.                            |
 
+| 143 | decode   | OPEN. RETIRE predecode_pkt_t AND predecode.sv. Ruled     |
+|     |          | session-074 (Jeff): the DCD-16 bundle view is a new      |
+|     |          | struct, ifu_pd_pkt_t; the old predecode_pkt_t stays for  |
+|     |          | instr_decoder, predecode.sv and their two testbenches.   |
+|     |          |                                                          |
+|     |          | The ibuf read port into decode carries ifu_pd_pkt_t      |
+|     |          | (IBUF-9), so decode must move: instr_decoder takes the   |
+|     |          | new struct, its predecode_out (which carries             |
+|     |          | vtype_hazard to rename) is settled with DCD-U1, and      |
+|     |          | predecode.sv, tb_predecode and predecode_pkt_t are       |
+|     |          | deleted. Blocks front-end integration, not the IFU.      |
+
 ---
 
 ## Open Items
@@ -2978,16 +3016,16 @@ assessment of each document. Correct any that are wrong.
 |          | decisions and open items. Where a decision  | change, PROJECT |
 |          | would be re-derived wrongly, state the      | _CORE Planning  |
 |          | constraint that prevents it as a decision.  | Directory.      |
-| 18       | A package edit widens the verification run  | Rule stated in  |
-|          | to BOTH units. Every target in the bpu and  | PROJECT_CORE    |
-|          | the ftq compiles bp_defines_pkg.sv and      | and CLAUDE.md.  |
-|          | bp_structs_pkg.sv as its first two sources, | Last run:       |
-|          | so an addition made under a task scoped to  | session-069,    |
-|          | one unit reaches the other and that task's  | sim+lint only.  |
-|          | own suite cannot see it.                    | Coverage        |
-|          | UPDATED 2026-09-17. This item read "the bpu | targets not run |
-|          | 47 and ftq 22 targets have not been run     | since           |
-|          | since the session-067 package additions",   | session-067.    |
+| 18       | A package edit widens the verification run  | SUPERSEDED      |
+|          | to BOTH units. Every target in the bpu and  | session-073.    |
+|          | the ftq compiles bp_defines_pkg.sv and      | tools/regress.sh|
+|          | bp_structs_pkg.sv as its first two sources, | runs every unit |
+|          | so an addition made under a task scoped to  | on every status |
+|          | one unit reaches the other and that task's  | claim. CLAUDE.md|
+|          | own suite cannot see it.                    | Verification.   |
+|          | UPDATED 2026-09-17. This item read "the bpu |                 |
+|          | 47 and ftq 22 targets have not been run     |                 |
+|          | since the session-067 package additions",   |                 |
 |          | which session-069 overtook: it forced every |                 |
 |          | sim and lint target in both units with -B   |                 |
 |          | and reported 62 of 62 green. THAT IS 62,    |                 |
@@ -2995,6 +3033,8 @@ assessment of each document. Correct any that are wrong.
 |          | not in that run and remain unrun since      |                 |
 |          | session-067. The 62 figure is session-069's |                 |
 |          | and is not evidence about the tree today.   |                 |
+|          | SESSION-074: superseded by regress.sh,      |                 |
+|          | which runs every target of every unit.      |                 |
 | 19       | L1I-U7: whether the L1I-22 prefetch reserve | Open, PA.       |
 |          | is declared on the link beside the bit or   | TOOLS-004 put   |
 |          | on the node beside mshrs.                   | it on the link. |
@@ -3097,12 +3137,12 @@ assessment of each document. Correct any that are wrong.
 |     |                                       | block stride on        |
 |     |                                       | w_slot_pc_p1 was found |
 |     |                                       | and fixed (BP-092a).   |
-| G18 | carry field consumer in cluster       | STILL TBD. ubtb_pred_t |
-|     |                                       | .carry has no consumer.|
-|     |                                       | It is the entry fall-  |
-|     |                                       | through carry, not a   |
-|     |                                       | property of the slot   |
-|     |                                       | target. (= UI2)        |
+| G18 | carry field consumer in cluster       | RETIRED BP-110.        |
+|     |                                       | ubtb_pred_t.carry is   |
+|     |                                       | DELETED; no reader     |
+|     |                                       | existed in rtl/        |
+|     |                                       | (TD#124). Was: STILL   |
+|     |                                       | TBD. (= UI2)           |
 | G19 | NO_BRANCH target on hit               | RESOLVED session-063.  |
 |     |                                       | Verified BP-093 B2:    |
 |     |                                       | a hit with no valid    |
@@ -3233,15 +3273,14 @@ The decisions this project has made:
   front-end side.
 - vtype: decoder stateless, rename resolves dependency
 - Dual decode packet: decode_pkt_t[7:0] scalar,
-  vec_decode_pkt_t[7:0] vector, predecode_pkt_t[7:0] AT THE IBUF
+  vec_decode_pkt_t[7:0] vector, ifu_pd_pkt_t[7:0] AT THE IBUF
   READ PORT INTO DECODE. The 8 is that port's width, not the
   type's: the ibuf write port carries the same struct 16 wide
   (dcd_decisions.md DCD-1, ifu_ibuf_interfaces.md IB-1, IFU-5,
   IBUF-3 and IBUF-9). Session-072.
-  predecode_pkt_t is REDEFINED by dcd_decisions.md DCD-16,
-  session-069: it gains the start PC, the block position, the
-  FTQ index, the fault cause and the faulting VA, and its
-  branch hint becomes an exact classification
+  ifu_pd_pkt_t is dcd_decisions.md DCD-16, a NEW struct (Jeff,
+  session-074). The built decode still takes the old
+  predecode_pkt_t until TD#143 moves it.
 - OPMVX: pkt.vs1=0, GPR in scalar pkt.rs1
 - Extension enable: ext_enable_t static from misa/CSR
 - Vector memory disambiguation: opcodes 0x07/0x27
@@ -3303,8 +3342,9 @@ Key decisions for quick reference:
 - In-block position: FTB_BR_POS_BITS = $clog2(BLOCK/2), so a
   position is a TWO-byte slot, 16 per block, and the branch
   PC is block START plus pos << POS_OFFSET_BITS, pos counted
-  from the start (TD#125: bp_cluster.sv uses the aligned base;
-  session-071). BP-099
+  from the start. TD#125 CLOSED BP-110: stored positions are
+  region-relative and converted inside ftb_cntrl and ubtb;
+  every port is start-relative. BP-099
   widened this from 4-byte slots for the RVA23 C extension;
   POS_OFFSET_BITS is derived so it cannot disagree with the
   position width.
@@ -3327,7 +3367,8 @@ Key decisions for quick reference:
   branch_id included, describes the request that produced it
   and is staged to p2 together (BP-094). ITTAGE was inspected
   and already correct.
-- ITTAGE entry: IT1-IT5 valid+tag+EPC+USE+CTR(3b)+TGT(38b).
+- ITTAGE entry: IT1-IT5 valid+tag+EPC+USE+CTR(3b)+TGT(40b),
+  the target VA[40:1] (TD#132, BP-111; was 38b).
   No IT0 base table.
 - SC index: uniform 5-entry arrays. No tag bits. ST4 is
   BrIMLI, SC only. Dynamic threshold (O-GEHL), two-corner
@@ -3462,8 +3503,13 @@ unless noted.
           TD-IFU-7..10.
     - planning/arch/dcd_decisions.md                  Draft
         - Created session-069. DCD-1..16, TD-DCD-1..2,
-          DCD-U1..U2. One predecoder, two views. Redefines
-          predecode_pkt_t and supersedes predecode.sv.
+          DCD-U1..U2. One predecoder, two views. Its bundle
+          view is ifu_pd_pkt_t (session-074); supersedes
+          predecode.sv, TD#143.
+    - planning/arch/cachegen_decisions.md             Draft
+        - Created session-074. CG-1..5, CG-G1..G7, CG-U1..U2.
+          Pacino drives; cachegen follows. Gaps from TD#118-120,
+          TD#122 and handoff-074 Task 2.
     - planning/arch/ibuf_decisions.md                 Draft
         - Created session-069. IBUF-1..11, TD-IBUF-1, IBUF-U1.
           16 in, 8 out. Whole-block acceptance, empty bypass,
@@ -3556,12 +3602,14 @@ unless noted.
       That was written before BP-106/107.
       WHETHER THE NINE METADATA OUTPUTS STILL HAVE NO CONSUMER
       MUST BE RE-CHECKED, not assumed either way. ftq_meta.sv is
-      the slow-path array, 421b x 2 slots x 64, and it is where
+      the slow-path array, 425b x 2 slots x 64 (421b before
+      BP-111), and it is where
       bp_ftq_meta_t lives. Tracing whether bp_cluster's nine
       metadata outputs reach it is an RTL read that has not been
       done. Flagged session-070.
     - ftb_fastpath_p2 has no consumer (G25).
-    - ubtb_pred_t.carry and .conf have no consumer (G18, FE-U3).
+    - ubtb_pred_t.conf has no consumer (FE-U3). .carry was
+      deleted by BP-110 (G18).
     - ftb_flush_px and the RAS flush group pass through
       untested. CLOSED BP-105: both are REDUNDANT, not
       unfinished. No flush event exists (FE-14), so there is
