@@ -28,7 +28,15 @@ Verilator 5.048 reports an elaboration $error as
 %Warning-USERERROR, fatal under -Wall; -Wno-fatal would turn
 lint_neg red. TD#122 CLOSED.
 
-TD#143 opened. Next free TD is TD#144. Next free BP is BP-116.
+TD#143 and TD#144 opened. Next free TD is TD#145. Next free BP is
+BP-116, next free INFRA is INFRA-014.
+
+INFRA-013 RUN, COMPLETE. TD#114 CLOSED. 85 FTQ property labels;
+8 absent from at least one build, all folded tautologies; I7, I10
+and I11 are tautologies that stay compiled. 9 of 18 ftq_ifu
+properties check nothing. Fixes TD#144; the rule against them is
+now in CLAUDE.md. The IA ran a git command against an explicit
+prohibition; Jeff is moving enforcement outside the model.
 PA-direct corrections, session-074, applied by Jeff:
 
   CLAUDE.md Packages: a task may add, change or remove package
@@ -2388,17 +2396,11 @@ assessment of each document. Correct any that are wrong.
 |     |          | FTB fall-through and rewrites pft_addr. A separate       |
 |     |          | ret_addr field would fix the RAS only. RTL: ftq_entry    |
 |     |          | and the bp_cluster boundary. Found by BP-107.            |
-| 114 | ftq      | OPEN. Some FTQ assertion properties may lint but not     |
-|     |          | compile into simulation.                                 |
-|     |          |                                                          |
-|     |          | BP-108 census: 73 declared and in lint; 71 in the module |
-|     |          | sims (ftq_ifu -2); 69 in the unit sim (ftq_ifu -2,       |
-|     |          | ftq_entry -1, ftq_npc -1). Counted from failure-message  |
-|     |          | lines, before BP-114 added I17: re-measure.              |
-|     |          |                                                          |
-|     |          | ACTION: per sim target, list compiled property labels    |
-|     |          | and diff against declared. Each missing one is compiled  |
-|     |          | into sim or shown to be a counting artefact.             |
+| 114 | ftq      | CLOSED by INFRA-013 (session-074). 8 of 85 labels are    |
+|     |          | absent from at least one build, all because the property |
+|     |          | restates a direct assignment or tie-off and folds. I7,   |
+|     |          | I10 and I11 fold the same way but stay compiled. Fixes   |
+|     |          | are TD#144.                                              |
 | 115 | icache   | CLOSED session-069 by planning/arch/itlb_decisions.md   |
 |     |          | (ITLB-1..14) and mmu_decisions.md (MMU-1..25). L1I-U2   |
 |     |          | ruled at 64 entries, not the recommended 32; L1I-U3     |
@@ -2894,6 +2896,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | vtype_hazard to rename) is settled with DCD-U1, and      |
 |     |          | predecode.sv, tb_predecode and predecode_pkt_t are       |
 |     |          | deleted. Blocks front-end integration, not the IFU.      |
+| 144 | ftq      | OPEN. FTQ assertions that check nothing (INFRA-013).     |
+|     |          | Delete each; restate where an independent check exists,  |
+|     |          | in the module that consumes the signal.                  |
+|     |          |                                                          |
+|     |          | I9, I17: delete. I5: delete; check the two effects at    |
+|     |          | unit scope (ftq_entry slot write, ftq_npc PD arm). I8,   |
+|     |          | I15: move to ftq_ptr as properties of fetch_pending and  |
+|     |          | xlate_pending. I14: E-series property on ftq_entry's     |
+|     |          | xlate port. N6: delete, N7 covers it. E8: restate as the |
+|     |          | ftq_entry kill effect. I7, I10, I11: same treatment.     |
+|     |          |                                                          |
+|     |          | Rule now in CLAUDE.md, Verification - assertions.        |
 
 ---
 

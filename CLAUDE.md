@@ -219,6 +219,18 @@ important. It must be defines first then structs
     Do not carry state across test cases.
 - Report any dependency found unproven and prove it in this run.
 
+## Verification - assertions
+
+- A property compares the checked signal against a source
+  INDEPENDENT of the RTL that drives it: another module's state,
+  a value the property derives itself, or an earlier cycle.
+- A property that restates its driving assignment is not a check
+  and is not written. It cannot fail without an edit to that line,
+  and Verilator may fold it away entirely. INFRA-013 found 9 of 18
+  ftq_ifu properties of this kind.
+- A property whose antecedent or consequent is driven only by the
+  testbench checks the stimulus, not the RTL. Say so or move it.
+
 ---
 
 ## Project Structure
