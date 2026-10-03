@@ -6,7 +6,7 @@
  FILE:    itlb_ifu_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -115,7 +115,8 @@ ITLB return the fault cause and the faulting virtual address
 together, because the pair is what must reach the backend under
 Sstvala. The pair is assembled in the IFU: it already holds the
 VA, it receives the cause here, and it carries both into
-`predecode_pkt_t` at IB-9. Nothing is lost and the VA does not
+`ifu_pd_pkt_t` at IB-9 (DCD-16; this read `predecode_pkt_t` until
+session-074). Nothing is lost and the VA does not
 make a round trip.
 
 ---
@@ -192,9 +193,10 @@ IT-15 SFENCE.VMA does not cross this boundary. ITLB-14 gives the
 
 None here. Two items elsewhere bear on this port without changing
 it: ITLB-U1, the in-flight walk tracker depth, bounded by TD#118,
-since IT-9 holds at any depth; and IFU-U5, the translation queue
-depth, which sets how far ahead of the fetch pipeline these
-requests are issued.
+since IT-9 holds at any depth. IFU-U5, the translation queue depth
+that sets how far ahead of the fetch pipeline these requests are
+issued, was closed session-074 at a parameter of 4; a page-crossing
+block issues its two lookups on successive cycles (IFU-25, IT-1).
 
 ---
 

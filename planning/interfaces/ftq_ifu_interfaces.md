@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -206,10 +206,12 @@ that path.
 
 The two pointers reset to the same entry, and on a redirect each
 moves back to the flush index if it was past it (ftq_decisions.md 5.5
-R1), so the first fetch after either usually stalls one cycle waiting
-for its translation. This read "are set equal on a redirect".
-Session-071. That cost is stated in ftq_decisions.md 5.1 and
-in IFU-27.
+R1), so the first fetch after either stalls waiting for its
+translation: one cycle after a front-end redirect, two after a
+backend redirect, measured by BP-113. This read "usually stalls one
+cycle" until session-074, and before that "are set equal on a
+redirect" (session-071). The cost is stated in ftq_decisions.md 5.1
+and in IFU-27.
 
 `ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
 not part of the request handshake and carries no valid. The FTQ
@@ -552,7 +554,11 @@ file already says FE-U7 is decided. Corrected session-070.
      would advance by up to two, and there would be two predecode
      writebacks, so sections 4 and 6 reopen. As built the FTQ
      issues one request per cycle (ftq_ifu.sv, ftq_ptr.sv).
-     Still open; it is decided with the IFU design.
+     CLOSED. One prediction block per cycle, ruled session-073
+     (TD#133, which defers only the measurement). The IFU serves
+     consecutive blocks in one line from one L1I request,
+     ifu_decisions.md TD-IFU-8, session-074. This read "Still open;
+     it is decided with the IFU design" until session-074.
 
   3. Entry fields. RESOLVED, ftq_entry_formats.md 4. FE-U7 is
      resolved (ftq_decisions.md 5), so the policy that reads them
@@ -718,4 +724,9 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 
   2026-09-20  session-072. E22: Document History sorted into date order;
               newer entries had been appended at the wrong end.
+
+  2026-10-01  session-074. 4.1: the stall after a redirect is one
+              cycle front-end, two backend (BP-113, IFU-27).
+              Section 8 item 2 CLOSED on TD#133 and TD-IFU-8. The
+              TD#126 wording in 7 W3 checked: arm_win is named.
 ```

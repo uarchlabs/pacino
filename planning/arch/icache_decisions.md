@@ -8,7 +8,7 @@
           docs/superscalar_ooo_survey.md (NOT IN THE TREE,
           see section 1); INFRA-012; TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -51,12 +51,12 @@ cited here as stubs" until session-071:
 ```
 
 REGISTRIES. This file owns L1I-1 through L1I-23, TD-L1I-1 through
-TD-L1I-9, and the items L1I-U1 through L1I-U7. OPEN: L1I-U5 and
-L1I-U7. L1I-U1 is closed; L1I-U2, L1I-U3 and L1I-U4 were RULED
-session-069 (section 10.1, itlb_decisions.md, mmu_decisions.md);
-L1I-U6 was never issued. This line read "the open items L1I-U2
-through L1I-U5 PLUS L1I-U7" (session-070), which listed three ruled
-items as open. Session-071. It does not
+TD-L1I-9, and the items L1I-U1 through L1I-U7. OPEN: L1I-U7.
+L1I-U5 closed session-074. L1I-U1 is closed; L1I-U2, L1I-U3 and
+L1I-U4 were RULED session-069 (section 10.1, itlb_decisions.md,
+mmu_decisions.md); L1I-U6 was never issued. This line read "the
+open items L1I-U2 through L1I-U5 PLUS L1I-U7" (session-070), which
+listed three ruled items as open. Session-071. It does not
 duplicate the FE, TD-FE or FE-U registries; it does not use the
 IC- prefix, which is already an interface-check identifier in
 ftb_interfaces.md and sc_interfaces.md; and it does not use IF-,
@@ -493,14 +493,15 @@ buffer and never becomes a request, so there is no second-half
 merge on sequential fetch.
 
 What does merge: a redirect returning to a line already in flight,
-and any pattern where the IFU issues for a later block before an
-earlier response lands. The second depends on IFU issue policy,
-which ifu_decisions.md owns as TD-IFU-8, still open. This read
-"which does not exist". Session-071.
+and a non-consecutive repeat of a line still in flight. The IFU
+issue policy is written, ifu_decisions.md TD-IFU-8, session-074:
+in order, and a block whose line matches the previous request
+reuses that request, so consecutive blocks in one line never make
+a second request.
 
-4 STANDS, matching the l1d and l2 nodes, but it is now an
-unmeasured choice rather than a derived one. Revisit when the IFU
-issue policy is written.
+4 STANDS, matching the l1d and l2 nodes. It is an unmeasured
+choice rather than a derived one; the TD#128 harness is where it
+gets measured.
 
 ---
 
@@ -762,9 +763,10 @@ Session-071.
           (itlb_decisions.md ITLB-12). This read "Where they sit is
           undecided" until session-071.
 
-  L1I-U5  The IFU line buffer's depth and its redirect behaviour.
-          Owned by ifu_decisions.md TD-IFU-7, where it is still
-          unruled; named here only so L1I-14 has an owner.
+  L1I-U5  CLOSED session-074 by ifu_decisions.md TD-IFU-7: the
+          IFU line buffer's depth is a parameter, default 16, one
+          slot per request identifier. Its redirect behaviour is
+          TD#134.
 
   L1I-U7  WHERE THE L1I-22 RESERVE IS DECLARED. TOOLS-004 put it
           on the link, beside the prefetch bit it governs. The
@@ -1000,4 +1002,9 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
 
   2026-09-20  session-072. D33: the survey the header cites is not in
               the tree; recorded in the header and at section 1.
+
+  2026-10-01  session-074. L1I-U5 closed by TD-IFU-7 (line buffer
+              depth 16, one slot per identifier). Section 6: the
+              IFU issue policy is written, so the merge cases are
+              named; 4 targets stands, unmeasured.
 ```

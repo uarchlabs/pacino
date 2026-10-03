@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Compare planning files against the delivered versions.
 # Baseline: session-071, except the files updated in session-073
-# (mmu_decisions.md,
-# ftb_decisions.md, ftb_interfaces.md, ubtb_interfaces.md,
-# ftq_bpu_interfaces.md, ftq_entry_formats.md,
+# (mmu_decisions.md, ftb_decisions.md, ftb_interfaces.md,
+# ubtb_interfaces.md, ftq_bpu_interfaces.md, ftq_entry_formats.md,
 # ittage_table_entry_formats.md, ftq_decisions.md,
-# ftq_ifu_interfaces.md, ifu_decisions.md,
 # ftq_backend_interfaces.md)
 # and the files updated in session-074 (PROJECT_CORE.md,
 # PROJECT_STATUS.md, CLAUDE.md, dcd_decisions.md,
 # cachegen_decisions.md (new), l1i_ifu_interfaces.md,
+# fe_decisions.md, icache_decisions.md, ifu_decisions.md,
+# ibuf_decisions.md, ftq_ifu_interfaces.md, itlb_ifu_interfaces.md,
 # ifu_ibuf_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
@@ -29,7 +29,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   e3be8c359f3a
-PLAN  PROJECT_STATUS.md                 23fed543637d
+PLAN  PROJECT_STATUS.md                 db276a541021
 
 UNKN  CLAUDE.md                         5582b9971ea5
 
@@ -38,13 +38,13 @@ ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  cachegen_decisions.md             ea488dd8c90d
 ARCH  dcd_decisions.md                  41cad1a9d77f
-ARCH  fe_decisions.md                   47c145d1ddc1
+ARCH  fe_decisions.md                   37908124512b
 ARCH  ftb_decisions.md            35cacdaab9cd
 ARCH  ftq_decisions.md            40da51fdac1a
 ARCH  ftq_entry_formats.md        f8f37ff7a19d
-ARCH  ibuf_decisions.md                 280c63bb3213
-ARCH  icache_decisions.md               1f2e8430e1b9
-ARCH  ifu_decisions.md            cc3983a98490
+ARCH  ibuf_decisions.md                 991e44398d8a
+ARCH  icache_decisions.md               dee12ddc7206
+ARCH  ifu_decisions.md            76fa0272e6b8
 ARCH  itlb_decisions.md                 8ecd4944ccfe
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
@@ -80,9 +80,9 @@ INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
 INTF  ftq_bpu_interfaces.md       4675dfb2360b
-INTF  ftq_ifu_interfaces.md       69e619e2a6fa
+INTF  ftq_ifu_interfaces.md       72fd643f1292
 INTF  ifu_ibuf_interfaces.md      6c74a16a805b
-INTF  itlb_ifu_interfaces.md            bad2da3edbaa
+INTF  itlb_ifu_interfaces.md            c69e9f37fcf4
 INTF  itlb_l2tlb_interfaces.md          cdd678fff43d
 INTF  ittage_interfaces.md              7b90d2a1b3e3
 INTF  l1i_ifu_interfaces.md             72100dbd9e87

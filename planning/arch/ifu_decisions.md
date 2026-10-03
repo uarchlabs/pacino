@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -19,9 +19,8 @@ IFU-27 in 5.1. Session-072.
 Scope is the IFU. Its boundaries are held elsewhere:
 `ftq_ifu_interfaces.md` upstream, `l1i_ifu_interfaces.md` for the
 instruction side, `itlb_ifu_interfaces.md` for translation, and
-`ifu_ibuf_interfaces.md` downstream. TD#116 is NARROWED by this
-document, not closed; section 8 lists what it still owes. This read
-"TD#116 closes on this document". Session-071.
+`ifu_ibuf_interfaces.md` downstream. TD#116 closes on this
+document as revised session-074; section 8 records the rulings.
 
 ---
 
@@ -68,14 +67,22 @@ The port detail belongs to `ifu_ibuf_interfaces.md`.
 
 ## 2. Slot payload
 
-IFU-2  Each slot delivered to the ibuf carries the expanded
-       32-bit instruction, its start PC, its position within the
-       buffer, its predecode result, its FTQ pointer, and its
-       fault cause.
+IFU-2  Each slot delivered to the ibuf is an `ifu_pd_pkt_t`,
+       whose fields are `dcd_decisions.md` DCD-16 and
+       `ifu_ibuf_interfaces.md` 4: the expanded instruction, its
+       start PC, its position within the prediction block, its
+       FTQ index, its fault cause, faulting VA and faulting GPA,
+       is_rvc, its control flow classification, is_vsetvl and
+       needs_vtype. Declared in `bp_structs_pkg`, BP-115.
 
-The start PC and the buffer position are both needed and are not
-the same thing. Expansion breaks the correspondence between the
-two, because a compressed instruction advances the PC by two and
+This read "its position within the buffer" and "its FTQ pointer",
+and did not list the faulting VA that IFU-2a refers to. The
+position is within the prediction block and the index is
+FTQ_IDX_BITS, the value ftq_resolve_t returns. Session-074.
+
+The start PC and the position are both needed and are not the same
+thing. Expansion breaks the correspondence between the two,
+because a compressed instruction advances the PC by two and
 occupies a full slot.
 
 The fault cause is per slot, not per prediction block. `itlb_decisions.md`
@@ -92,10 +99,13 @@ IFU-2a A slot whose cause is an instruction guest-page fault, cause
 H is mandatory in RVA23 through Sha, so the guest case is not
 optional and the GPA field is not conditional on a build option.
 
-TD-IFU-1  CLOSED by `dcd_decisions.md` DCD-16, which redefines
-          `predecode_pkt_t` with all four fields. The edit to
-          `decode_pkg.sv` remains to be made and is a package
-          edit, so it widens the verification run to both units.
+TD-IFU-1  CLOSED by `dcd_decisions.md` DCD-16 and BUILT by
+          BP-115. The bundle view is a NEW struct, `ifu_pd_pkt_t`,
+          in `bp_structs_pkg`; `predecode_pkt_t` in `decode_pkg.sv`
+          is not changed and is retired with decode's move to the
+          new struct, TD#143. This read that DCD-16 redefines
+          `predecode_pkt_t` and that a `decode_pkg.sv` edit
+          remained. Session-074.
 
           `predecode_pkt_t` in `decode_pkg.sv` carries valid, the
           32-bit instruction, three vtype annotations and a branch
@@ -269,6 +279,15 @@ IFU-25  The translation queue holds, per block: the physical
         status of IT-4, and the guest physical address of IT-6a
         when the cause is 20. F0 reads the head.
 
+        A BLOCK THAT CROSSES A PAGE HOLDS TWO RESULTS in its one
+        entry: the second page's physical address, PMA attributes,
+        fault cause and GPA, valid only for a crossing block and
+        filled by a second ITLB lookup in the next cycle. A fault
+        on the second page belongs to the positions in it (DCD-15).
+        Ruled session-074 (Jeff). Ending blocks at page boundaries
+        instead would change built BPU and FTQ block semantics for
+        an event on well under 1% of sequential blocks.
+
 IFU-26  A block whose effective type is not both cacheable and
         idempotent is marked in the queue and is not issued to the
         L1I. It takes the uncached path of IFU-21. MMU-14 and IT-11;
@@ -322,11 +341,14 @@ fetch path where L1I-5 puts it, so the way is resolved during
 F1 and F2 rather than ahead of F0. The benefit is that nothing in
 the emitted L1I changes.
 
-IFU-U5 The translation queue depth. It sets how far ahead of the
-       fetch pipeline translation may run, and therefore how much
-       ITLB miss latency is hidden. The floor is 1. XiangShan
-       exposes theirs as nWayLookupSize and notes it caps the
-       prefetch distance by backpressure. Unresolved.
+IFU-U5 CLOSED session-074 (Jeff). The translation queue depth is
+       a parameter, default 4. An entry frees when its block's L1I
+       request issues, not when the data returns; the translation
+       result travels with the request. Freeing on return would
+       make the queue cover everything in flight, up to 32 blocks
+       at a line buffer of 16. Four covers a one- or two-cycle ITLB
+       hit at one block per cycle. Translation stays in order,
+       IT-14. XiangShan exposes theirs as nWayLookupSize.
 
 The FTQ side is `xlate_ptr`, ftq_decisions.md 5.1, and the port is
 ftq_ifu_interfaces.md 4.1. Both were written session-069 with this
@@ -445,47 +467,45 @@ IFU-U4 Bus width and the split it forces. XiangShan's MMIO bus is
 
 ---
 
-## 8. What this document does NOT cover
+## 8. The line buffer, issue and reordering
 
-TD#116 lists four things the IFU owes. None is in this document,
-and an earlier session-069 draft wrongly recorded the TD as closed.
-They are listed here so the gap is visible from inside the document
-rather than only from the tech debt table.
+Ruled session-074 (Jeff), closing TD#116. These were listed here
+as unruled.
 
-TD-IFU-7  The line buffer of `icache_decisions.md` L1I-14. The IFU
-          holds the returned 64-byte line and extracts the 32-byte
-          prediction block, so two sequential blocks come from one
-          line. Its depth, and what a redirect does to it, are
-          L1I-U5 and are unruled.
+TD-IFU-7  CLOSED. The line buffer of `icache_decisions.md` L1I-14
+          has a depth that is a parameter, default 16 =
+          MAX_OUTSTANDING. One slot is reserved per L1I request
+          identifier when it is allocated (`l1i_ifu_interfaces.md`
+          IF-7), because the response carries no ready and must
+          always have somewhere to land. Size it later with the
+          TD#128 harness. What a redirect does to it is TD#134.
 
-TD-IFU-8  The issue policy. `icache_decisions.md` 6 records that
-          the mshr_targets derivation is void under L1I-14 and
-          that 4 is an unmeasured choice. What actually merges
-          depends on whether the IFU issues for a later block
-          before an earlier response lands, which this document
-          does not say.
+TD-IFU-8  CLOSED. Issue is in order, oldest first, whenever a
+          translated block, a free identifier and a free slot all
+          exist. A block whose line matches the PREVIOUS request
+          reuses that request's identifier and slot; a slot frees
+          when its last block is consumed. One comparator catches
+          the common case, consecutive blocks in one line. So two
+          sequential blocks make one L1I request, and what merges
+          in the L1I MSHRs is a redirect back to a line in flight
+          or a non-consecutive repeat.
 
-TD-IFU-9  The reordering buffer of TD-IF-5. One predecode
-          writeback per prediction block against out-of-order line
-          responses, IF-R2, with nothing bounding the buffer.
-          IFU-10 has WB write back per block and does not say what
-          holds a block whose line returned early.
+TD-IFU-9  CLOSED. The reordering store of TD-IF-5 is the line
+          buffer itself, consumed in allocation order. A response
+          lands in the slot its identifier reserved; F2 takes slots
+          in order. No separate structure, and the identifier free
+          list bounds it.
 
-TD-IFU-10 The maintenance path of `l1i_ifu_interfaces.md` 11. Its
-          producer is the backend commit stage and is unspecified.
-          Section 7 here covers the uncached fetch path and not
-          this.
-
-These four bound RTL generation for the IFU in a way the twelve
-open items elsewhere do not: the first three are structure, not
-sizing.
+TD-IFU-10 MOVED to TD#136. The maintenance path of
+          `l1i_ifu_interfaces.md` 11; its producer is the backend
+          commit stage, which has no document. Section 7 here
+          covers uncached fetch, not this.
 
 ---
 
 ## 9. Open
 
 IFU-U4  Uncached bus width. Section 7.
-IFU-U5  Translation queue depth. Section 5.1.
 
 ---
 
@@ -516,7 +536,8 @@ IF-8      NOT amended. It is a gate condition -- issue only on a
           causes plus the VA": no TD-ITLB-1 was ever issued in the
           registry itlb_decisions.md owns, and two causes is three.
           Session-072.
-TD#116    NOT closed by this document. Narrowed. See section 8.
+TD#116    Closed by section 8, session-074.
+TD#136    Carries TD-IFU-10.
 TD#118    The IFU outstanding-request depth has no real target
           until the l2 transaction limit is known. Not yet
           recorded as a decision.

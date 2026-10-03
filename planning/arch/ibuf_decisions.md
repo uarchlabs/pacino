@@ -6,7 +6,7 @@
  FILE:    ibuf_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -36,11 +36,9 @@ port widths, and behaviour on a redirect.
 IBUF-1  A FIFO. In order in, in order out. No reordering, no
         out-of-order read.
 
-IBUF-2  Entries are uniform. Each holds what IFU-2 delivers: the
-        expanded 32-bit instruction, its start PC, its position
-        within the prediction block, its predecode result, its FTQ
-        index, its fault cause, its faulting virtual address, and
-        its faulting guest physical address.
+IBUF-2  Entries are uniform. Each holds one `ifu_pd_pkt_t`, the
+        struct IFU-2 delivers: `dcd_decisions.md` DCD-16 and
+        `ifu_ibuf_interfaces.md` 4.
 
 The start PC is stored per entry rather than derived. Expansion
 breaks the correspondence between position and address, because a
@@ -91,25 +89,23 @@ IBUF-9  The read port is 8 wide. `instr_decoder.sv` is an 8-wide
 The ibuf is therefore the width converter of the front end: 16
 positions in from one prediction block, 8 out to decode.
 
-IBUF-10 The entry delivers a `predecode_pkt_t` to decode.
-        `instr_decoder` reads only `.instr` and `.valid` from it
-        and passes the rest through to rename untouched, so
-        whatever the ibuf stores in that field survives to
-        rename.
+IBUF-10 The entry delivers an `ifu_pd_pkt_t` to decode. The
+        built `instr_decoder` still takes the old
+        `predecode_pkt_t`, reading only `.instr` and `.valid` and
+        passing the rest to rename untouched; it moves to the new
+        struct under TD#143.
 
-TD-IBUF-1  CLOSED by `dcd_decisions.md` DCD-16, as TD-IFU-1 is:
-           DCD-16 redefines `predecode_pkt_t` with the PC, the FTQ
-           index, the fault cause and the faulting VA that IBUF-2
-           requires. The edit to `decode_pkg.sv` remains, a package
-           edit (ifu_decisions.md TD-IFU-1). This read that
-           `predecode_pkt_t` has none of the four and left the item
-           open while TD-IFU-1 was closed. Session-071.
+TD-IBUF-1  CLOSED by `dcd_decisions.md` DCD-16 and BUILT by BP-115:
+           `ifu_pd_pkt_t`, a new struct in `bp_structs_pkg`,
+           carries everything IBUF-2 requires. This read that
+           DCD-16 redefines `predecode_pkt_t` and that a
+           `decode_pkg.sv` edit remained. Session-074.
 
 `ftq_pd_info_t`, the 16-position predecode array of IFU-14, and
-`predecode_pkt_t`, the 8-slot bundle here, are different views of
-the same predecode. The first is sized to the prediction block and goes
-to the FTQ. The second is sized to decode and goes through the
-ibuf.
+`ifu_pd_pkt_t`, the per-slot bundle here, are different views of
+the same predecode. The first goes to the FTQ. The second goes
+through the ibuf, 16 wide on the write port and 8 on the read
+port; the width belongs to the port, not the type (DCD-1).
 
 IBUF-U1 Whether the buffer is banked. A flat depth-to-1 mux per
         read output may be too expensive at 8 outputs, and

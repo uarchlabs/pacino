@@ -83,17 +83,23 @@ PA-direct corrections, session-074, applied by Jeff:
        position bullets, G18, Open Item 18 and the bp_ftq_meta_t
        widths, all stale after session-073.
 
-NOT CORRECTED, needs the owning file read: ifu_decisions.md IFU-27
-(the TD#139 row says it still gives one stall cycle for both
-redirect sources; handoff-074 says it was split), and whether
-ftq_ifu_interfaces.md 7 names the arbitration arm as TD#126
-required. Also owed: the pointer-masking line in TD#122 moves to
-FE-19; import/l1i/ is a stale 32-bit emission (confirmed by
-Jeff), delete or mark it; ibuf_decisions.md and ifu_decisions.md
-(TD-IFU-1) may still name
-predecode_pkt_t for the bundle view; ifu_decisions.md TD-IFU-7 to
-9 and icache_decisions.md L1I-U5 carry the TD#116 rulings;
-ifu_decisions.md IFU-25 and IFU-U5 carry their rulings.
+OWED EDITS DONE, session-074, all owning files read in full:
+  ifu_decisions.md: TD#116 closed in section 8 (TD-IFU-7 to 9;
+       TD-IFU-10 to TD#136); IFU-25 page-crossing; IFU-U5 closed;
+       IFU-2 points at ifu_pd_pkt_t and drops "position within the
+       buffer" and "FTQ pointer"; TD-IFU-1 built by BP-115.
+       IFU-27 ALREADY carried the 1/2-cycle split; the TD#139 row
+       was what was stale.
+  icache_decisions.md: L1I-U5 closed; section 6 merge cases named.
+  ibuf_decisions.md: IBUF-2, IBUF-10, TD-IBUF-1 name ifu_pd_pkt_t.
+  ftq_ifu_interfaces.md: 4.1 stall is 1 front-end / 2 backend;
+       8 item 2 closed on TD#133. 7 W3 ALREADY named arm_win
+       (TD#126), so nothing was owed there.
+  fe_decisions.md: FE-19 ALREADY held the pointer-masking text, so
+       TD#122's line is dropped; FE-19's 38-bit ITTAGE pin and
+       zero-extension paragraph retired (TD#132); FE-U11 no longer
+       names TD#122; Conventions one block per cycle.
+  import/l1i/ deleted (Jeff).
 
 ---
 ## Session-073: the regression command. TOOLS-006.
@@ -1933,10 +1939,10 @@ it only documented current behavior.
 |                         |             |                   | ftq_ifu, l1i_ifu, itlb_ifu.       |
 |                         |             |                   | ifu_decisions.md exists as of     |
 |                         |             |                   | session-069. SESSION-074: this    |
-|                         |             |                   | read "Nothing blocks RTL". Ruled, |
-|                         |             |                   | not yet built or not yet in the   |
-|                         |             |                   | owning document: TD#116, IFU-25,  |
-|                         |             |                   | IFU-U5. The L1I names and         |
+|                         |             |                   | read "Nothing blocks RTL". The    |
+|                         |             |                   | structural rulings are in         |
+|                         |             |                   | ifu_decisions.md (TD#116, IFU-25, |
+|                         |             |                   | IFU-U5); the L1I names and        |
 |                         |             |                   | ifu_pd_pkt_t are BUILT, BP-115.   |
 |                         |             |                   | TD#134-136 are stubbed by ruling. |
 | ibuf                    | Not started | --                | ibuf_decisions.md and             |
@@ -2368,80 +2374,31 @@ assessment of each document. Correct any that are wrong.
 |     |          | any more; bp_cluster.md carries its own contradictions   |
 |     |          | with the current model and is the subject of a separate  |
 |     |          | pass.                                                    |
-| 113 | ftq      | OPEN. bp_ftq_entry_t.pft_addr is a p1 value with NO      |
-|     |          | correction path, and two consumers read it as if it were |
-|     |          | the block's final fall-through.                          |
+| 113 | ftq      | OPEN. bp_ftq_entry_t.pft_addr is written once at p1 from |
+|     |          | bpu_pred_pft_p1 and never corrected: the p2/p3 groups    |
+|     |          | carry slots only. When the FTB ends the block earlier    |
+|     |          | than the uBTB did, the entry keeps the p1 fall-through.  |
 |     |          |                                                          |
-|     |          | It is written once at p1 from bpu_pred_pft_p1. The p2/p3 |
-|     |          | groups of ftq_bpu_interfaces.md 4a carry bp_ftq_slot_t   |
-|     |          | only, and pft_addr is a block scalar, so nothing can     |
-|     |          | correct it. On a uBTB miss the p1 value is the LOOKUP    |
-|     |          | PC plus FTB_BLOCK_BYTES, a full 32-byte block from      |
-|     |          | wherever it started (corrected session-069: blocks are  |
-|     |          | unaligned, ftq_decisions.md 4.7); when                  |
-|     |          | the FTB then terminates the block at an earlier branch,  |
-|     |          | or corrects a block end the uBTB missed (FE-13), the     |
-|     |          | entry keeps the p1 view for its whole life.              |
+|     |          | Two consumers read it as final: the RAS return address   |
+|     |          | (ras_decisions.md 8; costs accuracy) and the not-taken   |
+|     |          | successor (ftq_entry_formats.md 2; costs a fetch         |
+|     |          | address).                                                |
 |     |          |                                                          |
-|     |          |   - RAS return address. ras_decisions.md 8 names the FTB |
-|     |          |     fallThroughAddr as the source and says the RAS does  |
-|     |          |     not compute PC+2 or PC+4 itself. A block terminated  |
-|     |          |     by a call pushes an address past the call. Cost is   |
-|     |          |     prediction accuracy.                                 |
-|     |          |   - Not-taken successor. ftq_entry_formats.md 2 stores   |
-|     |          | the                                                      |
-|     |          |     field so the successor survives a redirect rewriting |
-|     |          | a                                                        |
-|     |          |     slot, which is the case where the p1 value is stale. |
-|     |          |     Cost is a FETCH ADDRESS.                             |
+|     |          | FIX: the p2 group (ftq_bpu_interfaces.md 4a) carries the |
+|     |          | FTB fall-through and rewrites pft_addr. A separate       |
+|     |          | ret_addr field would fix the RAS only. RTL: ftq_entry    |
+|     |          | and the bp_cluster boundary. Found by BP-107.            |
+| 114 | ftq      | OPEN. Some FTQ assertion properties may lint but not     |
+|     |          | compile into simulation.                                 |
 |     |          |                                                          |
-|     |          | The FTQ has no alternative field: nothing in the entry   |
-|     |          | records whether a call was RVC or RVI. THAT IS NO LONGER |
-|     |          | A REQUIREMENT. This read "which section 8's +2           |
-|     |          | correction requires"; ras_decisions.md 8 says NO         |
-|     |          | STRADDLE CORRECTION EXISTS -- the last_may_be_rvi_call   |
-|     |          | mechanism was eliminated by ftb_decisions.md 6 and       |
-|     |          | FTB-1. pft_addr carries the TRUE instruction end, and a  |
-|     |          | call terminates the block, so the fall-through IS the    |
-|     |          | address after the call whatever its length. The rest of  |
-|     |          | this TD is unaffected: the defect is that the p1 value   |
-|     |          | is never corrected, not that a length bit is missing.    |
-|     |          | Corrected session-070. FIX: the p2 group gains the FTB   |
-|     |          | fall-through and corrects the block scalar. Adding a     |
-|     |          | separate ret_addr field patches the RAS symptom and      |
-|     |          | leaves the successor wrong.                              |
+|     |          | BP-108 census: 73 declared and in lint; 71 in the module |
+|     |          | sims (ftq_ifu -2); 69 in the unit sim (ftq_ifu -2,       |
+|     |          | ftq_entry -1, ftq_npc -1). Counted from failure-message  |
+|     |          | lines, before BP-114 added I17: re-measure.              |
 |     |          |                                                          |
-|     |          | Found by BP-107 (W1). Documents record it; the RTL still |
-|     |          | drives the p1 value. Grows ftq_bpu_interfaces.md 4a. RTL |
-|     |          | change in ftq_entry and the cluster boundary.            |
-| 114 | ftq      | OPEN. Two ftq_ifu properties may elaborate under lint and|
-|     |          | not under simulation. If so, BP-107's claim that all 73  |
-|     |          | fired under fault injection cannot hold for them.        |
-|     |          |                                                          |
-|     |          | BP-108's elaboration census matches BP-107's declared    |
-|     |          | property count EXACTLY under lint, 73, file for file     |
-|     |          | across all ten assertion files. Under simulation it sums |
-|     |          | to 71, and to 69 in the unit build:                      |
-|     |          |                                                          |
-|     |          |   file        declared  lint  mod sim  unit sim          |
-|     |          |   ftq_ifu           11    11        9         9          |
-|     |          |   ftq_entry          8     8        8         7          |
-|     |          |   ftq_npc           11    11       11        10          |
-|     |          |   TOTAL             73    73       71        69          |
-|     |          |                                                          |
-|     |          | A property absent from the simulated design cannot fire. |
-|     |          | This is the inert-assertion class one layer below the one|
-|     |          | BP-107 caught: not defined-and-never-asserted, but       |
-|     |          | asserted, lints, never reaches simulation.               |
-|     |          |                                                          |
-|     |          | CAVEATS: the census counts source lines emitting a       |
-|     |          | failure message, so merged or replicated properties could|
-|     |          | skew it; --json-only and a simulation build are not      |
-|     |          | identical elaborations; and the two figures come from two|
-|     |          | tasks' reports, not one measurement.                     |
-|     |          |                                                          |
-|     |          | Settle it by naming which of I1-I11 are missing from     |
-|     |          | sim_ftq_ifu. Short IA task, read-only.                   |
+|     |          | ACTION: per sim target, list compiled property labels    |
+|     |          | and diff against declared. Each missing one is compiled  |
+|     |          | into sim or shown to be a counting artefact.             |
 | 115 | icache   | CLOSED session-069 by planning/arch/itlb_decisions.md   |
 |     |          | (ITLB-1..14) and mmu_decisions.md (MMU-1..25). L1I-U2   |
 |     |          | ruled at 64 entries, not the recommended 32; L1I-U3     |
@@ -2467,26 +2424,16 @@ assessment of each document. Correct any that are wrong.
 |     |          | Needs itlb_decisions.md. L1I-U3 adds a node and an edge  |
 |     |          | to the cachegen topology, so it is not a parameter       |
 |     |          | choice.                                                  |
-| 116 | ifu      | RULED session-074 (Jeff). Closes when ifu_decisions.md   |
-|     |          | (TD-IFU-7 to 9) and icache_decisions.md (L1I-U5) carry   |
-|     |          | it.                                                      |
+| 116 | ifu      | CLOSED session-074 by ruling (Jeff), now in              |
+|     |          | ifu_decisions.md section 8 (TD-IFU-7 to 9) and           |
+|     |          | icache_decisions.md L1I-U5.                              |
 |     |          |                                                          |
-|     |          | LINE BUFFER: depth a parameter, default 16; one slot     |
-|     |          | reserved per L1I request ID (IF-7). Size it later with   |
-|     |          | the TD#128 harness.                                      |
-|     |          |                                                          |
-|     |          | ISSUE: in order, oldest first, when a translated block,  |
-|     |          | a free ID and a free slot all exist.                     |
-|     |          |                                                          |
-|     |          | COALESCING: a block whose line matches the previous      |
-|     |          | request reuses that request's ID and slot. A slot frees  |
-|     |          | when its last block is consumed.                         |
-|     |          |                                                          |
-|     |          | REORDER: the line buffer, consumed in allocation order.  |
-|     |          | No separate structure.                                   |
-|     |          |                                                          |
-|     |          | Maintenance path moved to TD#136. Line buffer behaviour  |
-|     |          | on a redirect stays with TD#134.                         |
+|     |          | Line buffer depth a parameter, default 16, one slot per  |
+|     |          | L1I request ID. Issue in order, oldest first; a block    |
+|     |          | whose line matches the previous request reuses its ID    |
+|     |          | and slot. The line buffer is the reorder store.          |
+|     |          | Maintenance path moved to TD#136; line buffer on a       |
+|     |          | redirect is TD#134.                                      |
 | 117 | frontend | CLOSED session-069 by fe_decisions.md 15, FE-15..18.    |
 |     |          | The top instantiates bp_cluster, ftq, ifu, L1I, the     |
 |     |          | ITLB (FE-U10; added to this list session-070), ibuf     |
@@ -2555,10 +2502,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | bp_defines_pkg and checked against l1i_pkg by            |
 |     |          | rtl/core/frontend/l1i_param_chk (lint, lint_neg) by      |
 |     |          | BP-115. PPN_WIDTH is PA_WIDTH - 12.                      |
-|     |          |                                                          |
-|     |          | DO NOT RE-RAISE: Pointer Masking v1.0 exempts            |
-|     |          | instruction fetch. (Moves to FE-19 when fe_decisions.md  |
-|     |          | is next open.)                                           |
 | 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
 |     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
 |     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
@@ -2879,9 +2822,8 @@ assessment of each document. Correct any that are wrong.
 |     |          | fix and no separate change. Measured after: front-end 1  |
 |     |          | cycle, backend 2, the backend case because F is the      |
 |     |          | target entry and its p1 write lands at the end of the    |
-|     |          | first cycle. ftq_decisions.md 5.1 now separates them;    |
-|     |          | ifu_decisions.md IFU-27 still says one cycle for both    |
-|     |          | and needs the same split.                                |
+|     |          | first cycle. ftq_decisions.md 5.1 and ifu_decisions.md   |
+|     |          | IFU-27 both separate them (IFU-27 checked session-074).  |
 |     |          |                                                          |
 |     |          | Was: in a redirect cycle the p0 request carried the      |
 |     |          | pre-rewind alloc index, so the target block was written  |

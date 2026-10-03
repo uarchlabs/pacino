@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -64,9 +64,9 @@ unit the IFU reads from the L1I, which is one cache line held in the
 IFU line buffer (ifu_decisions.md TD-IFU-7). The IFU takes one
 prediction block per request and extracts it from the line it read
 (IFU-7, IFU-8). No RTL reads FETCH_BLOCK_BYTES; it is the L1I line
-size under a second name. Whether the IFU ever DELIVERS two prediction
-blocks per cycle is open, ftq_ifu_interfaces.md 8 item 2, and is not
-IFU-internal if it does. The two sizes must not be collapsed, and
+size under a second name. The front end DELIVERS one prediction block
+per cycle (TD#133, ftq_ifu_interfaces.md 8 item 2); two per cycle
+would not be IFU-internal. The two sizes must not be collapsed, and
 "fetch block" is not a name for the 32-byte unit.
 
 RULED session-071 (Jeff). This read "One FTQ entry holds one fetch
@@ -780,31 +780,21 @@ Proposed numbering. Stated here for the first time; not carried from
 
          CONSEQUENCE FOR PREDICTORS. Predictor storage need not
          represent every address exactly. An FTB tag that does not
-         cover bit 40 aliases; an ITTAGE field that cannot express a
-         high GPA mispredicts. Both are caught -- block end by
-         predecode, target by mispredict redirect at resolve -- and
-         MMU-14 already keeps speculation out of non-idempotent
-         regions. Architectural addresses -- pc, pft_addr,
-         target_pc, ftq_resolve_t.target,
+         cover bit 40 aliases, and is caught by predecode at the
+         block end. MMU-14 already keeps speculation out of
+         non-idempotent regions. Architectural addresses -- pc,
+         pft_addr, target_pc, ftq_resolve_t.target,
          bkend_ftq_redir_pc, RESET_VECTOR -- may not truncate.
-         FTB_TAG_BITS is pinned at 26 and IT_MAX_TGT_WIDTH at 38 on
-         that basis. TD#122.
+         FTB_TAG_BITS is pinned at 26 on that basis, TD#122.
 
-         THE REGIMES ABOVE BIND ARCHITECTURAL ADDRESSES, NOT
-         PREDICTIONS. The ITTAGE reconstruction ZERO-EXTENDS
-         unconditionally (TD#122, bp_cluster.md, ittage_interfaces
-         Overview), so bits 40:39 are 00 on every reconstructed
-         target, including one whose bit 38 is set in a
-         sign-extending regime. That is a MISPREDICTED TARGET, not
-         an illegal architectural address: it is corrected by the
-         mispredict redirect at resolve, and the architectural
-         target comes from the backend, which never reads it. The
-         speculative fetch to it does not commit a fault either --
-         l1i_ifu_interfaces.md IF-8 issues only on a valid
-         non-faulting translation. Zero extension is what Sv39x4
-         requires of a real GPA; the conflict is only with
-         predictions the regime would have rejected, and those are
-         wrong predictions by construction. Session-072.
+         THE ITTAGE STORES THE WHOLE TARGET. Since BP-111 (TD#132)
+         its target field is VA[40:1], IT_MAX_TGT_WIDTH is 40, and
+         no site infers a target bit. This read that
+         IT_MAX_TGT_WIDTH was pinned at 38 and that the ITTAGE
+         reconstruction zero-extended bits 40:39, which no
+         extension rule could get right for both a V=1 guest
+         physical address and a V=0 Sv39 kernel address.
+         Session-074.
 
          NOT FE-13. FE-13 republishes the cluster's own view of the
          block, which on an alias is the aliased one, so it cannot
@@ -1247,7 +1237,8 @@ ubtb.sv.
          no redirect, which needs nothing here; or a fifth cause is
          added, which changes that port. The first is likely right
          and is not this document's to rule -- no backend document
-         exists. TD#122.
+         exists. TD#122 carried it until that TD closed,
+         session-074; it now waits on the backend document.
 ```
 
 ---
@@ -1573,4 +1564,10 @@ create one.
 
   2026-09-20  session-072. E22: Document History sorted into date order;
               newer entries had been appended at the wrong end.
+
+  2026-10-01  session-074. Conventions: one prediction block per
+              cycle, TD#133. FE-19: the ITTAGE stores VA[40:1]
+              since BP-111 (TD#132); the 38-bit pin and the
+              zero-extension paragraph are retired. FE-U11 no
+              longer names TD#122 as its carrier.
 ```
