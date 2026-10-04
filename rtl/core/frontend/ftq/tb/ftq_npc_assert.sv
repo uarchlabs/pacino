@@ -29,12 +29,6 @@ module ftq_npc_assert (
   input logic                    p1_val,
   input bp_ftq_slot_t            p1_slot [0:NUM_PRED_SLOTS-1],
   input logic [VA_WIDTH-1:0]     p1_pft_addr,
-  input logic                    tage_pq_not_full,
-  input logic                    ittage_pq_not_full,
-  input logic                    sc_uq_not_full,
-  input logic                    h2_ftq_full,
-  input logic                    r1_fault_hold,
-  input logic                    ftq_pred_val_p0,
   input logic [VA_WIDTH-1:0]     ftq_pred_pc_p0,
   input logic [VA_WIDTH-1:0]     pred_pc_p1,
   input logic                    redir_val,
@@ -59,10 +53,6 @@ module ftq_npc_assert (
     if (!rstn) r_prev_pc <= RESET_VECTOR;
     else       r_prev_pc <= ftq_pred_pc_p0;
   end
-
-  logic w_hold;
-  assign w_hold = ~tage_pq_not_full | ~ittage_pq_not_full |
-                  ~sc_uq_not_full   |  h2_ftq_full | r1_fault_hold;
 
   // N1  Exactly one arm wins, or none. None is arm 6, the hold of
   //     4.5. Two arms winning would mean the priority encoder of
@@ -137,16 +127,7 @@ module ftq_npc_assert (
         arm_win[2] && (ftq_pred_pc_p0 == pd_redir_pc);
   endproperty
 
-  // N6  H1 AND H2 HOLD THE REQUEST WITHOUT LOSING IT. Two halves,
-  //     and 4.5 states both: the valid deasserts, and the PC is
-  //     retained. The second half is what a naive hold gets wrong --
-  //     deasserting the valid while letting the register capture
-  //     something else drops a block from the stream with no other
-  //     symptom.
-  property p_hold_deasserts;
-    @(posedge clk) disable iff (!rstn)
-      w_hold |-> !ftq_pred_val_p0;
-  endproperty
+  // N6 removed (BP-116, TD#144): w_hold |-> !pred_val restated one assign.
 
   // N7  The hold arm retains. When no source wins, the PC presented
   //     is the one presented last cycle. pred_pc_p1 IS the register,
@@ -200,8 +181,6 @@ module ftq_npc_assert (
     else $error("N4a arm 5 won with no p1 response");
   a_predecode_beats:        assert property (p_predecode_beats_cluster)
     else $error("N5 a cluster arm outranked predecode");
-  a_hold_deasserts:         assert property (p_hold_deasserts)
-    else $error("N6 the request was presented during a hold");
   a_hold_retains:           assert property (p_hold_retains)
     else $error("N7 the hold arm did not retain the PC");
   a_pred_pc_p1_is_prev:     assert property (p_pred_pc_p1_is_prev)
@@ -225,12 +204,6 @@ bind ftq_npc ftq_npc_assert u_assert (
   .p1_val             (p1_val),
   .p1_slot            (p1_slot),
   .p1_pft_addr        (p1_pft_addr),
-  .tage_pq_not_full   (tage_pq_not_full),
-  .ittage_pq_not_full (ittage_pq_not_full),
-  .sc_uq_not_full     (sc_uq_not_full),
-  .h2_ftq_full        (h2_ftq_full),
-  .r1_fault_hold      (r1_fault_hold),
-  .ftq_pred_val_p0    (ftq_pred_val_p0),
   .ftq_pred_pc_p0     (ftq_pred_pc_p0),
   .pred_pc_p1         (pred_pc_p1),
   .redir_val          (redir_val),

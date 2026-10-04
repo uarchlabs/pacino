@@ -20,6 +20,16 @@
 //
 // The RAS commit payload is checkable outright: E5 and E6 state the
 // two rules 5.4 and FE-11 give it.
+//
+// WRITES ARE CHECKED THROUGH THE READ PORTS (BP-116, TD#144). The
+// array is still not reached into. A registered copy of the last
+// predecode write is kept ARMED until a later p1, p2 or p3 write
+// names the same index, and in every cycle it is armed it is
+// compared with any read port addressing that index: the write
+// inputs of an earlier cycle against the stored state, which no
+// single RTL line drives both of. E8 and E9 are that form. E10
+// compares the pc-only xlate port with the whole-entry ports in the
+// same cycle.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -39,9 +49,99 @@ module ftq_entry_assert (
   input logic                     ras_commit_val,
   input bp_br_type_e              ras_commit_br_type,
   input bp_ras_snapshot_t         ras_commit_snapshot,
+  input logic                     alloc_wr_val,
+  input logic [FTQ_IDX_BITS-1:0]  alloc_wr_idx,
+  input logic                     p2_wr_val,
+  input logic [FTQ_IDX_BITS-1:0]  p2_wr_idx,
+  input logic                     p3_wr_val,
+  input logic [FTQ_IDX_BITS-1:0]  p3_wr_idx,
   input logic                     pd_wr_val,
-  input logic                     pd_wr_kill
+  input logic [FTQ_IDX_BITS-1:0]  pd_wr_idx,
+  input logic [TRX_SLOT_BITS-1:0] pd_wr_sel,
+  input bp_ftq_slot_t             pd_wr_slot,
+  input logic                     pd_wr_kill,
+  input logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx,
+  input logic [VA_WIDTH-1:0]      xlate_rd_pc
 );
+
+  // The four whole-entry read ports, as one array so E8 to E10 are
+  // one loop each rather than four copies.
+  localparam int NUM_EPORTS = 4;
+
+  logic [FTQ_IDX_BITS-1:0] w_port_idx [0:NUM_EPORTS-1];
+  bp_ftq_entry_t           w_port_ent [0:NUM_EPORTS-1];
+
+  // The last predecode write, armed until a later p1, p2 or p3
+  // write to its index replaces the slots. A p1/p2/p3 write in the
+  // SAME cycle as the pd write does not disarm it: the pd write is
+  // last in ftq_entry's write block and lands over them.
+  logic                     w_pd_overwritten;
+  logic                     r_pd_val;
+  logic                     r_pd_kill;
+  logic [FTQ_IDX_BITS-1:0]  r_pd_idx;
+  logic [TRX_SLOT_BITS-1:0] r_pd_sel;
+  bp_ftq_slot_t             r_pd_slot;
+
+  always_ff @(posedge clk or negedge rstn) begin : pd_hist
+    if (!rstn) begin
+      r_pd_val  <= 1'b0;
+      r_pd_kill <= 1'b0;
+      r_pd_idx  <= '0;
+      r_pd_sel  <= '0;
+      r_pd_slot <= '0;
+    end else if (pd_wr_val) begin
+      r_pd_val  <= 1'b1;
+      r_pd_kill <= pd_wr_kill;
+      r_pd_idx  <= pd_wr_idx;
+      r_pd_sel  <= pd_wr_sel;
+      r_pd_slot <= pd_wr_slot;
+    end else if (w_pd_overwritten) begin
+      r_pd_val  <= 1'b0;
+    end
+  end
+
+  always_comb begin : pd_disarm
+    w_pd_overwritten = (alloc_wr_val && (alloc_wr_idx == r_pd_idx)) ||
+                       (p2_wr_val    && (p2_wr_idx    == r_pd_idx)) ||
+                       (p3_wr_val    && (p3_wr_idx    == r_pd_idx));
+  end
+
+  logic w_e8_bad;
+  logic w_e9_bad;
+  logic w_e10_bad;
+
+  always_comb begin : port_checks
+    w_port_idx[0] = fetch_rd_idx;
+    w_port_ent[0] = fetch_rd_entry;
+    w_port_idx[1] = redir_rd_idx;
+    w_port_ent[1] = redir_rd_entry;
+    w_port_idx[2] = pdwb_rd_idx;
+    w_port_ent[2] = pdwb_rd_entry;
+    w_port_idx[3] = commit_rd_idx;
+    w_port_ent[3] = commit_rd_entry;
+
+    w_e8_bad  = 1'b0;
+    w_e9_bad  = 1'b0;
+    w_e10_bad = 1'b0;
+    for (int p = 0; p < NUM_EPORTS; p++) begin
+      if (r_pd_val && (w_port_idx[p] == r_pd_idx)) begin
+        if (w_port_ent[p].slot[r_pd_sel] != r_pd_slot) begin
+          w_e9_bad = 1'b1;
+        end
+        for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+          if (r_pd_kill && (TRX_SLOT_BITS'(s) > r_pd_sel) &&
+              (w_port_ent[p].slot[s].slot_valid ||
+               w_port_ent[p].slot[s].taken)) begin
+            w_e8_bad = 1'b1;
+          end
+        end
+      end
+      if ((w_port_idx[p] == xlate_rd_idx) &&
+          (w_port_ent[p].pc != xlate_rd_pc)) begin
+        w_e10_bad = 1'b1;
+      end
+    end
+  end
 
   // E1  The fetch read port returns the entry it addressed. This is
   //     the every-cycle read of section 1 and the one a wrong index
@@ -111,16 +211,46 @@ module ftq_entry_assert (
       ras_commit_val |-> (ras_commit_snapshot == commit_rd_entry.ras);
   endproperty
 
-  // E8  A predecode slot write ALWAYS kills the slots above it. The
-  //     branch predecode found at mis_pos is taken, so everything
-  //     after it in the block is off the path
+  // E8  A predecode slot write with the kill CLEARS the slots above
+  //     it. The branch predecode found at mis_pos is taken, so
+  //     everything after it in the block is off the path
   //     (ftq_ifu_interfaces.md 7 W1). A write that left a later slot
   //     valid would leave the entry describing a branch the block
   //     never reaches, and the successor re-derivation of W3 would
   //     then pick that slot's target.
+  //     RESTATED BY BP-116 (TD#144). It read pd_wr_val |-> pd_wr_kill,
+  //     which is a tie-off in the unit (ftq_ifu drives the kill 1)
+  //     and testbench stimulus here. It now states the kill's EFFECT
+  //     on the stored entry, read back while the write is armed:
+  //     slot_valid and taken are clear on every slot above
+  //     pd_wr_sel. The pd write is last in ftq_entry's write block,
+  //     so a same-cycle p2 or p3 write to the index cannot override
+  //     it and needs no exclusion.
   property p_write_kills_above;
     @(posedge clk) disable iff (!rstn)
-      pd_wr_val |-> pd_wr_kill;
+      !w_e8_bad;
+  endproperty
+
+  // E9  The predecode slot write LANDS (BP-116, TD#144; the entry
+  //     half of ftq_ifu I5). After pd_wr_val, and until a later
+  //     write replaces the slots, a read port addressing pd_wr_idx
+  //     returns pd_wr_slot in slot pd_wr_sel.
+  //     Same precedence argument as E8. The redirect half of I5 is
+  //     ftq_npc N5.
+  property p_pd_write_lands;
+    @(posedge clk) disable iff (!rstn)
+      !w_e9_bad;
+  endproperty
+
+  // E10 The xlate read port returns the pc of the entry it addressed
+  //     (BP-116, TD#144; replaces ftq_ifu I14). It carries no
+  //     branch_id, so E1 to E4's self-description does not apply;
+  //     instead any whole-entry port addressing the same index in the
+  //     same cycle must return the same pc. A wrong pc here translates
+  //     the wrong page and the fetch of the entry later misses.
+  property p_xlate_pc_agrees;
+    @(posedge clk) disable iff (!rstn)
+      !w_e10_bad;
   endproperty
 
   a_fetch_self:        assert property (p_fetch_self)
@@ -139,6 +269,10 @@ module ftq_entry_assert (
     else $error("E7 the RAS payload is not the freed entry's");
   a_write_kills_above: assert property (p_write_kills_above)
     else $error("E8 a predecode slot write did not kill above it");
+  a_pd_write_lands:    assert property (p_pd_write_lands)
+    else $error("E9 the predecode slot write did not land");
+  a_xlate_pc_agrees:   assert property (p_xlate_pc_agrees)
+    else $error("E10 the xlate read port returned a foreign pc");
 
 endmodule : ftq_entry_assert
 
@@ -158,6 +292,17 @@ bind ftq_entry ftq_entry_assert u_assert (
   .ras_commit_val      (ras_commit_val),
   .ras_commit_br_type  (ras_commit_br_type),
   .ras_commit_snapshot (ras_commit_snapshot),
+  .alloc_wr_val        (alloc_wr_val),
+  .alloc_wr_idx        (alloc_wr_idx),
+  .p2_wr_val           (p2_wr_val),
+  .p2_wr_idx           (p2_wr_idx),
+  .p3_wr_val           (p3_wr_val),
+  .p3_wr_idx           (p3_wr_idx),
   .pd_wr_val           (pd_wr_val),
-  .pd_wr_kill          (pd_wr_kill)
+  .pd_wr_idx           (pd_wr_idx),
+  .pd_wr_sel           (pd_wr_sel),
+  .pd_wr_slot          (pd_wr_slot),
+  .pd_wr_kill          (pd_wr_kill),
+  .xlate_rd_idx        (xlate_rd_idx),
+  .xlate_rd_pc         (xlate_rd_pc)
 );

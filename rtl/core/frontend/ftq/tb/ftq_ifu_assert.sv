@@ -13,6 +13,13 @@
 // outputs and the property states all four, because a partial drop
 // is the failure that produced TD-FE-8 in the first place: the
 // status bits set on the wrong use of a reallocated index.
+//
+// BP-116, TD#144. Nine labels restated a direct assignment in this
+// module and could not fail (CLAUDE.md Verification - assertions).
+// Each is removed with a one-line note at its old place. Their
+// rules are checked where an independent source exists: ftq_ptr Q11
+// and Q12, ftq_entry E8, E9 and E10, ftq_npc N5, and tb_ftq_ifu
+// groups A, G and I.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -20,42 +27,21 @@ import bp_structs_pkg::*;
 module ftq_ifu_assert (
   input logic                     clk,
   input logic                     rstn,
-  input logic [FTQ_IDX_BITS-1:0]  fetch_idx,
-  input logic                     fetch_pending,
-  input bp_ftq_entry_t            fetch_entry,
   input logic [FTQ_PTR_BITS-1:0]  commit_ptr,
-  input logic                     gen_fetch,
   input logic                     gen_pdwb,
   input logic                     wb_rcvd_pdwb,
-  input logic [FTQ_IDX_BITS-1:0]  xlate_idx,
-  input logic                     xlate_pending,
-  input logic [VA_WIDTH-1:0]      xlate_pc,
   input logic                     redir_val,
   input logic [FTQ_IDX_BITS-1:0]  redir_idx,
   input logic                     redir_self,
   input ftq_redir_cause_e         redir_cause,
   input logic [5:1]               redir_arm,
-  input logic                     ftq_ifu_xlate_val,
-  input logic [VA_WIDTH-1:0]      ftq_ifu_xlate_pc,
-  input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_xlate_idx,
-  input logic                     ftq_ifu_req_val,
-  input logic [VA_WIDTH-1:0]      ftq_ifu_start_pc,
-  input logic [VA_WIDTH-1:0]      ftq_ifu_next_pc,
-  input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_idx,
-  input logic                     ftq_ifu_taken_val,
-  input logic [FTB_BR_POS_BITS-1:0] ftq_ifu_taken_pos,
-  input logic                     ftq_ifu_gen,
-  input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_commit_ptr,
-  input logic                     ftq_ifu_flush_val,
   input logic [FTQ_IDX_BITS-1:0]  ftq_ifu_flush_idx,
   input logic                     ifu_ftq_pdwb_val,
   input logic                     ifu_ftq_pdwb_gen,
   input logic                     ifu_ftq_mis_val,
-  input logic                     ifu_ftq_fault_val,
   input logic                     wb_set_val,
   input logic                     fault_set_val,
   input logic                     pd_wr_val,
-  input logic [TRX_SLOT_BITS-1:0] pd_wr_sel,
   input bp_ftq_slot_t             pd_wr_slot,
   input logic                     pd_redir_val,
   input logic [VA_WIDTH-1:0]      pd_redir_pc,
@@ -124,17 +110,7 @@ module ftq_ifu_assert (
         |-> wb_accept && wb_set_val;
   endproperty
 
-  // I5  THE ENTRY REWRITE AND THE REDIRECT ARE ONE EVENT. W1 and W3
-  //     of section 7 fire together: the slot is corrected and fetch
-  //     restarts from the corrected successor. Correcting without
-  //     redirecting leaves the front end fetching the wrong stream;
-  //     redirecting without correcting sends it back to an entry
-  //     that still describes the branch predecode disproved, so the
-  //     next fetch of that entry repeats the mistake.
-  property p_write_and_redirect_together;
-    @(posedge clk) disable iff (!rstn)
-      pd_wr_val == pd_redir_val;
-  endproperty
+  // I5 removed: pd_wr_val == pd_redir_val is one assign; see E9, N5.
 
   // I6  W3. The redirect PC is the successor of the CORRECTED
   //     entry. When the correction leaves a taken branch in the slot
@@ -147,58 +123,11 @@ module ftq_ifu_assert (
         |-> (pd_redir_pc == pd_wr_slot.target);
   endproperty
 
-  // I7  The request carries the entry's OWN index and generation.
-  //     ftq_ifu_gen is an opaque tag the IFU stores and returns
-  //     unchanged (section 4), so if the wrong one leaves here every
-  //     writeback for that entry fails the 6.1 test and is dropped
-  //     -- the entry never receives its predecode correction and
-  //     nothing reports it.
-  property p_request_self;
-    @(posedge clk) disable iff (!rstn)
-      ftq_ifu_req_val |-> (ftq_ifu_idx == fetch_idx) &&
-                          (ftq_ifu_gen == gen_fetch) &&
-                          (ftq_ifu_start_pc == fetch_entry.pc);
-  endproperty
-
-  // I8  No request without a pending entry. fetch_pending is the
-  //     run-ahead of 5.1 measured to the WRITTEN frontier, so this
-  //     is also what stops a request for an entry whose p1 write has
-  //     not landed.
-  property p_request_needs_pending;
-    @(posedge clk) disable iff (!rstn)
-      ftq_ifu_req_val |-> fetch_pending;
-  endproperty
-
-  // I9  The flush is driven by the redirect and by nothing else.
-  //     ONE group, not two: every source -- p2, p3, predecode,
-  //     backend -- has already been resolved into the winning
-  //     redirect before it reaches here (section 5, FE-3).
-  property p_flush_is_redirect;
-    @(posedge clk) disable iff (!rstn)
-      ftq_ifu_flush_val == redir_val;
-  endproperty
-
-  // I10 taken_val is set exactly when a slot of the entry is valid
-  //     and taken. It tells the IFU to TRUNCATE the bundle, so
-  //     setting it with no taken branch cuts a block short and
-  //     clearing it with one lets the IFU present instructions past
-  //     a branch the FTQ predicted taken.
-  property p_taken_val_has_slot;
-    @(posedge clk) disable iff (!rstn)
-      (ftq_ifu_req_val && ftq_ifu_taken_val) |->
-        ((fetch_entry.slot[0].slot_valid && fetch_entry.slot[0].taken)
-      || (fetch_entry.slot[1].slot_valid && fetch_entry.slot[1].taken));
-  endproperty
-
-  // I11 The complement, and the other half of section 4: "not valid
-  //     means fetch the whole block". With no taken slot the
-  //     successor is the fall-through, which is fe_decisions.md
-  //     2.4's third arm read off the stored entry.
-  property p_not_taken_is_pft;
-    @(posedge clk) disable iff (!rstn)
-      (ftq_ifu_req_val && !ftq_ifu_taken_val) |->
-        (ftq_ifu_next_pc == fetch_entry.pft_addr);
-  endproperty
+  // I7 removed: request idx/gen/pc restated the assign; tb groups A, I.
+  // I8 removed: req_val |-> fetch_pending is one assign; see ptr Q12.
+  // I9 removed: flush_val == redir_val is one assign; no other source.
+  // I10 removed: taken_val restated the slot loop; tb groups A, I.
+  // I11 removed: next_pc == pft restated the slot loop; tb groups A, I.
 
   // I12 7 W3 and ifu_ibuf_interfaces.md IB-13. A p2, p3 or predecode
   //     redirect flushes AT K: K survives, corrected, and a fetch of
@@ -219,23 +148,8 @@ module ftq_ifu_assert (
                                           : redir_idx + 1'b1));
   endproperty
 
-  // I14 4.1. The translation request carries its entry's own index
-  //     and block start pc. A wrong index tags the IFU's translation
-  //     queue entry against the wrong fetch; a wrong pc translates the
-  //     wrong page.
-  property p_xlate_self;
-    @(posedge clk) disable iff (!rstn)
-      ftq_ifu_xlate_val |-> (ftq_ifu_xlate_idx == xlate_idx) &&
-                            (ftq_ifu_xlate_pc  == xlate_pc);
-  endproperty
-
-  // I15 No translation request without a pending entry. xlate_pending
-  //     is measured to the WRITTEN frontier (5.1), so this is also
-  //     what stops a request for an entry whose pc does not exist yet.
-  property p_xlate_needs_pending;
-    @(posedge clk) disable iff (!rstn)
-      ftq_ifu_xlate_val |-> xlate_pending;
-  endproperty
+  // I14 removed: xlate idx/pc restated the assign; see entry E10.
+  // I15 removed: xlate_val |-> xlate_pending is one assign; see Q11.
 
   a_stale_wb_dropped:   assert property (p_stale_wb_dropped)
     else $error("I1 a stale writeback was not dropped entirely");
@@ -247,20 +161,8 @@ module ftq_ifu_assert (
     else $error("I4 a writeback on a set wb_rcvd derived a redirect");
   a_refetch_accepted:   assert property (p_refetch_wb_accepted)
     else $error("I4 a current writeback on a set wb_rcvd was rejected");
-  a_write_and_redirect: assert property (p_write_and_redirect_together)
-    else $error("I5 the slot rewrite and the redirect disagree");
   a_redir_pc_corrected: assert property (p_redir_pc_is_corrected)
     else $error("I6 the redirect PC is not the corrected successor");
-  a_request_self:       assert property (p_request_self)
-    else $error("I7 the fetch request does not describe its entry");
-  a_request_pending:    assert property (p_request_needs_pending)
-    else $error("I8 a fetch was requested for no pending entry");
-  a_flush_is_redirect:  assert property (p_flush_is_redirect)
-    else $error("I9 the IFU flush does not track the redirect");
-  a_taken_val_has_slot: assert property (p_taken_val_has_slot)
-    else $error("I10 taken_val set with no taken slot in the entry");
-  a_not_taken_is_pft:   assert property (p_not_taken_is_pft)
-    else $error("I11 no taken slot but next_pc is not the pft_addr");
   a_fe_flush_at_k:      assert property (p_fe_flush_at_k)
     else $error("I12 a front-end redirect did not flush at K");
   a_bkend_flush_self:   assert property (p_bkend_flush_by_self)
@@ -275,26 +177,10 @@ module ftq_ifu_assert (
         (ftq_ifu_flush_idx == commit_ptr[FTQ_IDX_BITS-1:0]);
   endproperty
 
-  // I17 Section 4, IFU-22 (TD#142, BP-114). ftq_ifu_commit_ptr is
-  //     driven CONTINUOUSLY: in every cycle, with no antecedent on the
-  //     request, the handshake or a redirect.
-  property p_commit_ptr_export;
-    @(posedge clk) disable iff (!rstn)
-      ftq_ifu_commit_ptr == commit_ptr[FTQ_IDX_BITS-1:0];
-  endproperty
+  // I17 removed: commit_ptr export is one assign; tb_ftq_ifu group H.
 
-  a_xlate_self:         assert property (p_xlate_self)
-    else $error("I14 the translation request does not describe its entry");
-  a_xlate_pending:      assert property (p_xlate_needs_pending)
-    else $error("I15 a translation was requested for no pending entry");
   a_unspec_flush:       assert property (p_unspec_flush_at_commit)
     else $error("I16 RC_UNSPEC did not flush at commit_ptr");
-  a_commit_ptr_export:  assert property (p_commit_ptr_export)
-    else $error("I17 ftq_ifu_commit_ptr does not track commit_ptr");
-
-  logic w_unused;
-  assign w_unused = |ftq_ifu_taken_pos | |pd_wr_sel |
-                    ifu_ftq_fault_val;
 
 endmodule : ftq_ifu_assert
 
@@ -302,42 +188,21 @@ endmodule : ftq_ifu_assert
 bind ftq_ifu ftq_ifu_assert u_assert (
   .clk               (clk),
   .rstn              (rstn),
-  .fetch_idx         (fetch_idx),
-  .fetch_pending     (fetch_pending),
-  .fetch_entry       (fetch_entry),
   .commit_ptr        (commit_ptr),
-  .gen_fetch         (gen_fetch),
   .gen_pdwb          (gen_pdwb),
   .wb_rcvd_pdwb      (wb_rcvd_pdwb),
-  .xlate_idx         (xlate_idx),
-  .xlate_pending     (xlate_pending),
-  .xlate_pc          (xlate_pc),
   .redir_val         (redir_val),
   .redir_idx         (redir_idx),
   .redir_self        (redir_self),
   .redir_cause       (redir_cause),
   .redir_arm         (redir_arm),
-  .ftq_ifu_xlate_val (ftq_ifu_xlate_val),
-  .ftq_ifu_xlate_pc  (ftq_ifu_xlate_pc),
-  .ftq_ifu_xlate_idx (ftq_ifu_xlate_idx),
-  .ftq_ifu_req_val   (ftq_ifu_req_val),
-  .ftq_ifu_start_pc  (ftq_ifu_start_pc),
-  .ftq_ifu_next_pc   (ftq_ifu_next_pc),
-  .ftq_ifu_idx       (ftq_ifu_idx),
-  .ftq_ifu_taken_val (ftq_ifu_taken_val),
-  .ftq_ifu_taken_pos (ftq_ifu_taken_pos),
-  .ftq_ifu_gen       (ftq_ifu_gen),
-  .ftq_ifu_commit_ptr (ftq_ifu_commit_ptr),
-  .ftq_ifu_flush_val (ftq_ifu_flush_val),
   .ftq_ifu_flush_idx (ftq_ifu_flush_idx),
   .ifu_ftq_pdwb_val  (ifu_ftq_pdwb_val),
   .ifu_ftq_pdwb_gen  (ifu_ftq_pdwb_gen),
   .ifu_ftq_mis_val   (ifu_ftq_mis_val),
-  .ifu_ftq_fault_val (ifu_ftq_fault_val),
   .wb_set_val        (wb_set_val),
   .fault_set_val     (fault_set_val),
   .pd_wr_val         (pd_wr_val),
-  .pd_wr_sel         (pd_wr_sel),
   .pd_wr_slot        (pd_wr_slot),
   .pd_redir_val      (pd_redir_val),
   .pd_redir_pc       (pd_redir_pc),

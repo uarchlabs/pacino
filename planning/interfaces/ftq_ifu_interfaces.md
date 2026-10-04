@@ -59,10 +59,8 @@ by direction:
   ifu_ftq_<signal>    IFU  -> FTQ
 ```
 
-The IFU pipeline IS defined -- F0 to F3 plus WB, ifu_decisions.md
-IFU-9 and IFU-10 -- so this is a naming choice, not a wait. If the
-suffixes are ever added here, record the
-rename here. This is a deliberate deviation, not an oversight.
+If the suffixes are ever added here, record the rename here. This
+is a deliberate deviation, not an oversight.
 
 ---
 
@@ -216,8 +214,9 @@ and in IFU-27.
 `ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
 not part of the request handshake and carries no valid. The FTQ
 already holds this pointer; what is new is exporting it. BUILT by
-BP-114 (session-073), TD#142 closed; ftq_ifu_assert I17 checks it
-every cycle.
+BP-114 (session-073), TD#142 closed. tb_ftq_ifu group H checks it;
+ftq_ifu_assert I17 restated its own assignment and was deleted by
+BP-116 (TD#144).
 
 It exists for uncached fetch alone. A memory mapped device must not
 see a read for an instruction that is not on the committed path, so
@@ -228,9 +227,11 @@ it: cacheable reads are speculative by design and have no side
 effect. Stopping fetch is what lets the pipeline drain, but the
 drain takes an unknown number of cycles and the IFU cannot otherwise
 observe that it has finished. The FTQ cannot gate the request
-instead, because whether a block is uncached is discovered in the
-IFU from the PMA result at F2, after the request has been handed
-over.
+instead, because whether a block is uncached is learned in the
+IFU's translation pipeline and marked in the queue entry
+(ifu_decisions.md IFU-25, IFU-26), after the translation request has
+been handed over. This read "discovered from the PMA result at F2".
+Session-074.
 
 CROSS-LINE is DERIVED, not a port. The IFU computes it from
 `ftq_ifu_start_pc` and its own line size. XiangShan carries
@@ -347,9 +348,9 @@ fetched bytes.
 ```
   typedef struct packed {
     logic        valid;    // slot holds an instruction start
-    logic        is_rvc;   // 16-bit encoding. UNDRIVEN at the
-                           // moment: no producer in DCD-7, no
-                           // consumer in the FTQ. Session-072.
+    logic        is_rvc;   // 16-bit encoding. Driven by the
+                           // predecoder (BP-116); no consumer in
+                           // the FTQ.
     logic [1:0]  br_type;  // 00 not CFI, 01 branch, 10 jal, 11 jalr
     logic        is_call;
     logic        is_ret;
@@ -361,20 +362,30 @@ actually fetched: the tail is cut short by a taken branch, by the
 block end, or by a fault.
 
 `ifu_ftq_cfi_val` and `ifu_ftq_cfi_pos` name the first control-flow
-instruction predecode actually found. `ifu_ftq_target` is its target
-when predecode can compute one, which is every direct branch and JAL.
-For JALR it carries no meaning and is not read.
+instruction predecode actually found. `ifu_ftq_target` is the target
+of the instruction at `ifu_ftq_mis_pos` when `ifu_ftq_mis_val` is
+set, and of the instruction at `ifu_ftq_cfi_pos` otherwise, when
+predecode can compute one: every direct branch and JAL. For JALR it
+carries no meaning and is not read. W1 writes it into the slot at
+mis_pos, and under M3 the first CFI can be a not-taken branch before
+the taken slot, so the cfi's target would be the wrong one. This
+read "is its target", the cfi's. Session-074, as BP-116 built it.
 
 `ifu_ftq_mis_val` and `ifu_ftq_mis_pos` mark a STRUCTURAL
 mispredict predecode can prove without executing anything:
 
 ```
-  M1  the block was predicted to have no taken branch, and predecode
-      found an unconditional direct branch, JAL, or a call
+  M1  predecode found a JAL, call or not, before the predicted
+      taken position, or anywhere when no taken position is
+      predicted. M1 names the first such JAL. A JALR is never M1:
+      its target is unknown here. Ruled session-074 (Jeff); this
+      read "predicted to have no taken branch ... JAL, or a call",
+      and the JAL before a predicted taken position is TD#146
   M2  a taken slot named a position that holds no instruction start,
       or holds an instruction that is not a control transfer
-  M3  the direct target computed by predecode differs from the
-      target the entry holds for that slot
+  M3  the direct target computed by predecode for the TAKEN slot
+      differs from ftq_ifu_next_pc. Only the taken slot's target
+      reaches the IFU, so M3 checks no other slot
   M4  the predicted taken position lies outside ifu_ftq_pd_range
 ```
 
@@ -462,18 +473,20 @@ On `ifu_ftq_mis_val`, the FTQ:
   W3  re-derives the block successor across the slots
       (fe_decisions.md 2.4) and drives ftq_ifu_flush_val with this
       entry's index, so fetch restarts from the corrected successor.
-      THE INDEX IS K, THE ENTRY ITSELF, NOT K+1. W1 and W2 correct
-      the entry rather than discarding it, and section 5 then drops
-      in-flight fetches at or after K. For a predecode redirect K
-      is already fetched, so including it costs nothing. For a p2
-      or p3 redirect K is not yet fetched and including it is
-      required: the correction changes taken_val and taken_pos,
-      which is what the IFU truncates the bundle on, so a fetch
-      issued against the old prediction would truncate in the wrong
-      place. Session-069. BUILT by BP-112, TD#126 closed, together
-      with the fetch_ptr half: it had rewound to K+1 with the
-      flush, so flushing at K alone would have left K flushed and
-      never presented again.
+      THE INDEX DEPENDS ON THE ARM. For a p2 or p3 redirect it is
+      K: K is not yet fetched and including it is required, since
+      the correction changes taken_val and taken_pos, which is what
+      the IFU truncates the bundle on, so a fetch issued against
+      the old prediction would truncate in the wrong place. For a
+      PREDECODE redirect it is K+1: K is already fetched, and its
+      positions up to mis_pos are already in the ibuf (IB-2,
+      IBUF-8a), which a predecode redirect does not clear (IB-12).
+      Refetching K would deliver them twice.
+
+      RULED session-074 (Jeff). This read that the index is K for
+      all three, "for a predecode redirect K is already fetched,
+      so including it costs nothing". BP-112 built K for all three
+      (TD#126); the predecode arm at K+1 is TD#146, unbuilt.
 
       THIS RULE CANNOT BE KEYED ON THE REDIRECT CAUSE. ftq_npc
       drives RC_MISPREDICT with _self clear for p2, p3, predecode
@@ -620,8 +633,8 @@ file already says FE-U7 is decided. Corrected session-070.
 
   jalTarget          FOLDED into ifu_ftq_target. XiangShan carries a
                      separate directly-computed JAL target alongside
-                     the general one. One target field plus
-                     ifu_ftq_cfi_pos names the same thing.
+                     the general one. One target field, at mis_pos
+                     or cfi_pos (section 6), names the same thing.
 ```
 
 ---
@@ -654,18 +667,6 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
 ## 11. Document History
 
 ```
-  2026-09-22  session-073, after BP-112. Section 4.1 and section 5's
-              pointer rules are BUILT, TD#127 closed. 7 W3 is
-              BUILT, TD#126 closed, with the note that the rule
-              cannot be keyed on the redirect cause and is
-              resolved from ftq_npc's arm_win. Section 5's
-              same-cycle flush-and-request sentence RULED: no
-              request accompanies a flush, and the IFU must ignore
-              any request presented in a flush cycle. TD#138.
-
-  2026-09-22  session-073, after BP-114. ftq_ifu_commit_ptr is
-              BUILT, TD#142 closed. ftq_ifu_commit_ptr
-              marked not built, TD#142.
   2026-08-19  Created. Closes TD-FE-1. Fetch request, flush and
               predecode writeback defined against the 32-byte
               prediction block. Departures from the XiangShan
@@ -725,8 +726,27 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
   2026-09-20  session-072. E22: Document History sorted into date order;
               newer entries had been appended at the wrong end.
 
+  2026-09-22  session-073, after BP-112. Section 4.1 and section 5's
+              pointer rules are BUILT, TD#127 closed. 7 W3 is
+              BUILT, TD#126 closed, with the note that the rule
+              cannot be keyed on the redirect cause and is
+              resolved from ftq_npc's arm_win. Section 5's
+              same-cycle flush-and-request sentence RULED: no
+              request accompanies a flush, and the IFU must ignore
+              any request presented in a flush cycle. TD#138.
+
+  2026-09-22  session-073, after BP-114. ftq_ifu_commit_ptr is
+              BUILT, TD#142 closed.
+
   2026-10-01  session-074. 4.1: the stall after a redirect is one
               cycle front-end, two backend (BP-113, IFU-27).
               Section 8 item 2 CLOSED on TD#133 and TD-IFU-8. The
               TD#126 wording in 7 W3 checked: arm_win is named.
+
+  2026-10-01  session-074, after BP-116. 6: ifu_ftq_target is the
+              target at mis_pos (C4); M1 widened and JALR excluded
+              (C5); M3 is the taken slot (C7); is_rvc driven. 7 W3:
+              predecode flushes at K+1 (C6), TD#146. 4.1: uncached is
+              marked in the translation queue; I17 citation. 2: a
+              repeated paragraph removed.
 ```

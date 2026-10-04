@@ -36,6 +36,9 @@ module ftq_ptr_assert (
   input logic                    alloc_req_rdy,
   input logic                    xlate_req_val,
   input logic                    xlate_req_rdy,
+  input logic                    alloc_inflight,
+  input logic                    xlate_pending,
+  input logic                    fetch_pending,
   input logic                    redir_val,
   input ftq_redir_cause_e        redir_cause,
   input logic [5:1]              redir_arm
@@ -195,6 +198,45 @@ module ftq_ptr_assert (
                     {{(FTQ_PTR_BITS-1){1'b0}}, r_req_acc});
   endproperty
 
+  // Q11 xlate_pending, from the pointers (BP-116, TD#144; was
+  //     ftq_ifu I15). A translation is pending exactly when an entry
+  //     at or after xlate_ptr is WRITTEN: xlate_ptr is not at
+  //     alloc_ptr, and the one entry below alloc_ptr is not the p1
+  //     write still in flight. Derived here on RAW POINTER EQUALITY,
+  //     not on the age compares ftq_ptr forms. The two agree only
+  //     while FQ-1 holds, and Q1b checks that separately. Dropping
+  //     the written-frontier term from ftq_ptr presents the in-flight
+  //     entry, and fires here.
+  logic [FTQ_PTR_BITS-1:0] w_xlate_nx;
+  logic [FTQ_PTR_BITS-1:0] w_fetch_nx;
+  logic                    w_exp_xlate_pend;
+  logic                    w_exp_fetch_pend;
+
+  always_comb begin : pend_model
+    w_xlate_nx       = xlate_ptr + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
+    w_fetch_nx       = fetch_ptr + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
+    w_exp_xlate_pend = (xlate_ptr != alloc_ptr) &&
+                       !(alloc_inflight && (w_xlate_nx == alloc_ptr));
+    w_exp_fetch_pend = (fetch_ptr != xlate_ptr) &&
+                       !(alloc_inflight && (w_fetch_nx == alloc_ptr));
+  end
+
+  property p_xlate_pending_from_ptrs;
+    @(posedge clk) disable iff (!rstn)
+      xlate_pending == w_exp_xlate_pend;
+  endproperty
+
+  // Q12 fetch_pending, from the pointers (BP-116, TD#144; was
+  //     ftq_ifu I8). A fetch is pending exactly when fetch_ptr is
+  //     behind xlate_ptr -- the entry's translation went out in an
+  //     earlier cycle (L1I-3) -- and the entry at fetch_ptr is not
+  //     the in-flight p1 write. Same derivation and same FQ-1
+  //     dependence as Q11 (Q1 checks fetch against xlate).
+  property p_fetch_pending_from_ptrs;
+    @(posedge clk) disable iff (!rstn)
+      fetch_pending == w_exp_fetch_pend;
+  endproperty
+
   a_fq1_fetch_le_xlate:  assert property (p_fq1_fetch_le_xlate)
     else $error("FQ-1 fetch_ptr leads xlate_ptr");
   a_fq1_xlate_le_alloc:  assert property (p_fq1_xlate_le_alloc)
@@ -215,6 +257,10 @@ module ftq_ptr_assert (
     else $error("Q5 full and empty asserted together");
   a_p0_ptr_is_allocated: assert property (p_p0_ptr_is_allocated)
     else $error("Q10 the p0 index is not the entry allocated");
+  a_xlate_pend_ptrs:     assert property (p_xlate_pending_from_ptrs)
+    else $error("Q11 xlate_pending disagrees with the pointers");
+  a_fetch_pend_ptrs:     assert property (p_fetch_pending_from_ptrs)
+    else $error("Q12 fetch_pending disagrees with the pointers");
 
 endmodule : ftq_ptr_assert
 
@@ -235,6 +281,9 @@ bind ftq_ptr ftq_ptr_assert u_assert (
   .alloc_req_rdy  (alloc_req_rdy),
   .xlate_req_val  (xlate_req_val),
   .xlate_req_rdy  (xlate_req_rdy),
+  .alloc_inflight (alloc_inflight),
+  .xlate_pending  (xlate_pending),
+  .fetch_pending  (fetch_pending),
   .redir_val      (redir_val),
   .redir_cause    (redir_cause),
   .redir_arm      (redir_arm)

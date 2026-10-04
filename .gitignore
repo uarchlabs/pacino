@@ -114,6 +114,27 @@ rtl/core/frontend/bpu/*.fst
 
 
 rtl/core/frontend/l1i_param_chk/obj_lint_neg/
+
+rtl/core/frontend/ftq/obj_labels_ftq/
+rtl/core/frontend/ftq/obj_labels_ftq_commit/
+rtl/core/frontend/ftq/obj_labels_ftq_entry/
+rtl/core/frontend/ftq/obj_labels_ftq_ftb_sched/
+rtl/core/frontend/ftq/obj_labels_ftq_ifu/
+rtl/core/frontend/ftq/obj_labels_ftq_meta/
+rtl/core/frontend/ftq/obj_labels_ftq_npc/
+rtl/core/frontend/ftq/obj_labels_ftq_ptr/
+rtl/core/frontend/ftq/obj_labels_ftq_resolve/
+rtl/core/frontend/ftq/obj_labels_ftq_shadow/
+rtl/core/frontend/ftq/obj_labels_ftq_status/
+
+rtl/core/frontend/ifu/obj_ifu/
+rtl/core/frontend/ifu/obj_ifu_predecode/
+rtl/core/frontend/ifu/obj_ifu_rvc_exp/
+rtl/core/frontend/ifu/obj_labels_ifu/
+rtl/core/frontend/ifu/obj_labels_ifu_predecode/
+rtl/core/frontend/ifu/obj_labels_ifu_rvc_exp/
+
+
 # --------------------------------------------------------------------
 # docs
 site/

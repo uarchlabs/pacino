@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -117,10 +117,9 @@ MMU-23 Shtvala: `htval` is written with the faulting guest
        that address; the trap path writes it. IT IS GPA_WIDTH = 41
        BITS (MMU-20), and it travels on `l2t_itlb_gpa` and
        `itlb_ifu_gpa`, both declared `[GPA_WIDTH-1:0]`. GPA_WIDTH
-       is not yet defined in the packages -- TD#122 adds it
-       alongside VPN_WIDTH, PPN_WIDTH, ASID_WIDTH, VMID_WIDTH,
-       PERM_WIDTH, CAUSE_WIDTH and PMA_WIDTH, which are all
-       referenced by the ITLB interfaces and defined nowhere.
+       and the other ITLB widths are in bp_defines_pkg since
+       BP-109 (TD#122). This read that they were defined nowhere.
+       Session-074.
 
 MMU-24 The MMU reads the translation regime from the CSR file
        directly: `satp.PPN` for a single-stage root, `vsatp.PPN`
@@ -228,7 +227,10 @@ MMU-12 PMA is checked on the final translated physical address
        only, not on the virtual address and not mid-walk.
 
 MMU-13 The attributes carried per region are cacheable, coherent,
-       executable and idempotent.
+       executable and idempotent. Wherever they travel as a
+       PMA_WIDTH vector the positions are [0] cacheable,
+       [1] coherent, [2] executable, [3] idempotent. Session-074,
+       as BP-116 built it (itlb_ifu_interfaces.md IT-10).
 
 MMU-14 Non-idempotent regions are never fetched speculatively and
        never prefetched. This binds the L1I-21 prefetch bit: a
@@ -615,4 +617,8 @@ TD#118    Bounds MMU-U2.
   2026-09-20  session-072. D30: Sstvala's requirement stated as the
               profile defines it; cause 20 is Shtvala and
               Shvstvala, not Sstvala.
+
+  2026-10-01  session-074. MMU-13 fixes the PMA bit positions as
+              BP-116 built them. MMU-23 no longer says the widths
+              are undefined; BP-109 declared them.
 ```

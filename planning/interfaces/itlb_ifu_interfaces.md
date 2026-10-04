@@ -35,7 +35,7 @@ miss path into the shared L2 TLB is not here; it is
 ```
   ifu_itlb_req_val                        IFU  -> ITLB
   ifu_itlb_req_rdy                        ITLB -> IFU
-  ifu_itlb_vpn   [VPN_WIDTH-1:0]          IFU  -> ITLB
+  ifu_itlb_vpn   [VA_WIDTH-13:0]          IFU  -> ITLB
   ifu_itlb_tag                            IFU  -> ITLB
 
   itlb_ifu_rsp_val                        ITLB -> IFU
@@ -46,6 +46,14 @@ miss path into the shared L2 TLB is not here; it is
   itlb_ifu_gpa   [GPA_WIDTH-1:0]          ITLB -> IFU
   itlb_ifu_pma   [PMA_WIDTH-1:0]          ITLB -> IFU
 ```
+
+IT-16 `ifu_itlb_vpn` is VA_WIDTH - 12 = 29 bits, the fetch
+      address above the page offset, not VPN_WIDTH (27). With V=1
+      and vsatp.MODE=Bare the fetch PC is a 41-bit guest physical
+      address, and with V=0 and satp.MODE=Bare a fetch address
+      above bit 35 must reach the PMA check to fault (FE-19). A
+      27-bit port drops both. Ruled session-074 (Jeff); this read
+      [VPN_WIDTH-1:0]. The IFU port is TD#146, unbuilt.
 
 IT-1  One request port. A block that crosses a page needs two
       translations and they are issued on successive cycles, not
@@ -77,6 +85,10 @@ IT-4  `itlb_ifu_status` is three-way, which is ITLB-11.
   2'b10   fault  cause valid. ppn invalid.
   2'b11   reserved
 ```
+
+      A reserved status, or a fault whose cause is not 1, 12 or
+      20, is treated by the IFU as an instruction access fault.
+      Session-074, as BP-116 built it.
 
 IT-5  The virtual address the fault applies to is not returned.
       The IFU supplied it and holds it. Returning it would give
@@ -141,8 +153,9 @@ IT-9  A re-request for a virtual address with a walk already in
 
 ## 5. PMA
 
-IT-10 `itlb_ifu_pma` returns the attributes of MMU-13 on a hit:
-      cacheable, coherent, executable, idempotent. They are the
+IT-10 `itlb_ifu_pma` returns the attributes of MMU-13 on a hit,
+      at the bit positions MMU-13 fixes: [0] cacheable,
+      [1] coherent, [2] executable, [3] idempotent. They are the
       EFFECTIVE attributes: the region table combined with the
       entry's PBMT, the most restrictive of the two
       (mmu_decisions.md MMU-U6, ITLB-3a). Executable and coherent

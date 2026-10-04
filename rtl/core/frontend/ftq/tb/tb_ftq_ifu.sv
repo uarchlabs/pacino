@@ -22,6 +22,17 @@
 // BP-114 adds group H, ftq_ifu_commit_ptr (TD#142), and changes B6
 // to the RC_UNSPEC flush at commit_ptr (TD#141).
 //
+// BP-116 adds group I (TD#144). ftq_ifu_assert I7, I10 and I11
+// restated the request assignments and were removed; group I checks
+// the same fields against values this file derives from the entry
+// it wrote, over every slot valid/taken combination.
+//
+// BP-116 also adds group J and a second instance, an ftq_entry fed
+// by this DUT's pd_wr_* outputs. I5 is gone from ftq_ifu_assert; its
+// entry half is ftq_entry_assert E8 and E9, which need a predecode
+// write with a slot above it valid, held across an edge and read
+// back. Group J makes one from a real writeback.
+//
 // BP-112 adds two groups:
 //
 //   the flush index by cause, TD#126     -> group F
@@ -173,6 +184,81 @@ module tb;
     .pd_redir_pc       (pd_redir_pc),
     .wb_accept         (wb_accept),
     .wb_drop_gen       (wb_drop_gen)
+  );
+
+  // -----------------------------------------------------------------
+  // The second instance: ftq_entry, written by ftq_ifu's pd_wr_*.
+  // Allocation is driven here; p2 and p3 are idle; every read port
+  // addresses j_rd_idx. Groups A to I write it too, through the same
+  // pd_wr_* nets, and its bound properties hold throughout.
+  // -----------------------------------------------------------------
+  logic                      j_alloc_val;
+  logic [FTQ_IDX_BITS-1:0]   j_alloc_idx;
+  bp_ftq_slot_t              j_alloc_slot [0:NUM_PRED_SLOTS-1];
+  bp_ftq_slot_t              j_idle_slot  [0:NUM_PRED_SLOTS-1];
+  logic [FTQ_IDX_BITS-1:0]   j_rd_idx;
+  logic [FTQ_IDX_BITS-1:0]   j_rsv_idx [0:NUM_RESOLVE_PORTS-1];
+  logic [VA_WIDTH-1:0]       j_xlate_pc;
+  bp_ftq_entry_t             j_fetch_e;
+  bp_ftq_entry_t             j_redir_e;
+  bp_ftq_entry_t             j_pdwb_e;
+  bp_ftq_entry_t             j_commit_e;
+  bp_ftq_entry_t             j_rsv_e [0:NUM_RESOLVE_PORTS-1];
+  bp_ras_snapshot_t          j_restore_snap;
+  logic                      j_ras_val;
+  bp_br_type_e               j_ras_type;
+  logic [VA_WIDTH-1:0]       j_ras_ret;
+  bp_ras_snapshot_t          j_ras_snap;
+
+  always_comb begin : j_tieoffs
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      j_idle_slot[s] = '0;
+    end
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      j_rsv_idx[p] = j_rd_idx;
+    end
+  end
+
+  ftq_entry u_entry (
+    .clk                 (clk),
+    .rstn                (rstn),
+    .alloc_wr_val        (j_alloc_val),
+    .alloc_wr_idx        (j_alloc_idx),
+    .alloc_wr_pc         (BLK_PC),
+    .alloc_wr_pft_addr   (BLK_PFT),
+    .alloc_wr_ras        ('0),
+    .alloc_wr_ghist_ptr  ('0),
+    .alloc_wr_phist_ptr  ('0),
+    .alloc_wr_slot       (j_alloc_slot),
+    .p2_wr_val           (1'b0),
+    .p2_wr_idx           ('0),
+    .p2_wr_slot          (j_idle_slot),
+    .p3_wr_val           (1'b0),
+    .p3_wr_idx           ('0),
+    .p3_wr_slot          (j_idle_slot),
+    .pd_wr_val           (pd_wr_val),
+    .pd_wr_idx           (pd_wr_idx),
+    .pd_wr_sel           (pd_wr_sel),
+    .pd_wr_slot          (pd_wr_slot),
+    .pd_wr_kill          (pd_wr_kill),
+    .xlate_rd_idx        (j_rd_idx),
+    .xlate_rd_pc         (j_xlate_pc),
+    .fetch_rd_idx        (j_rd_idx),
+    .fetch_rd_entry      (j_fetch_e),
+    .redir_rd_idx        (j_rd_idx),
+    .redir_rd_entry      (j_redir_e),
+    .restore_snapshot    (j_restore_snap),
+    .pdwb_rd_idx         (j_rd_idx),
+    .pdwb_rd_entry       (j_pdwb_e),
+    .commit_rd_idx       (j_rd_idx),
+    .commit_rd_entry     (j_commit_e),
+    .commit_step_val     (1'b0),
+    .ras_commit_val      (j_ras_val),
+    .ras_commit_br_type  (j_ras_type),
+    .ras_commit_ret_addr (j_ras_ret),
+    .ras_commit_snapshot (j_ras_snap),
+    .rsv_rd_idx          (j_rsv_idx),
+    .rsv_rd_entry        (j_rsv_e)
   );
 
   localparam logic [VA_WIDTH-1:0] BLK_PC  = VA_WIDTH'('h00_8000_0100);
@@ -340,6 +426,12 @@ module tb;
       ifu_ftq_pd[i] = mk_pd(1'b0, 1'b0, 2'b00, 1'b0, 1'b0);
     end
     clr_wb();
+    j_alloc_val       = 1'b0;
+    j_alloc_idx       = '0;
+    j_rd_idx          = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      j_alloc_slot[s] = '0;
+    end
     repeat (4) tick();
     rstn = 1'b1;
     settle();
@@ -1017,6 +1109,135 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // I. The request fields against a reference (BP-116, TD#144).
+  // -----------------------------------------------------------------
+  // The reference is written independently of ftq_ifu's descending
+  // loop: an ascending scan that stops at the first valid taken slot,
+  // which is program order (FE-10). Every combination of slot_valid
+  // and taken on the two slots, both generation polarities, and three
+  // indices including both ends. pc, pft, targets and positions all
+  // differ per case so a field taken from the wrong source shows.
+  task automatic ref_succ(input  bp_ftq_entry_t             e,
+                          output logic                      tv,
+                          output logic [FTB_BR_POS_BITS-1:0] tp,
+                          output logic [VA_WIDTH-1:0]       np);
+    tv = 1'b0;
+    tp = '0;
+    np = e.pft_addr;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (!tv && e.slot[s].slot_valid && e.slot[s].taken) begin
+        tv = 1'b1;
+        tp = e.slot[s].pos;
+        np = e.slot[s].target;
+      end
+    end
+  endtask
+
+  task automatic group_i();
+    logic [FTQ_IDX_BITS-1:0]    idxs [0:2];
+    logic [FTQ_IDX_BITS-1:0]    ix;
+    logic [3:0]                 c;
+    logic                       e_tv;
+    logic [FTB_BR_POS_BITS-1:0] e_tp;
+    logic [VA_WIDTH-1:0]        e_np;
+    logic                       ok;
+    $display("-- I: request fields against a reference --");
+    do_reset();
+    idxs[0] = 6'd0;
+    idxs[1] = 6'd17;
+    idxs[2] = 6'd63;
+    for (int g = 0; g < 2; g++) begin
+      for (int k = 0; k < 3; k++) begin
+        for (int cc = 0; cc < 16; cc++) begin
+          ix = idxs[k];
+          c  = 4'(cc);
+          fetch_entry = mk_entry(ix,
+              mk_slot(c[0], TGT0 + VA_WIDTH'(cc * 'h40), COND, c[1],
+                      FTB_BR_POS_BITS'(2 + k)),
+              mk_slot(c[2], TGT1 + VA_WIDTH'(cc * 'h40), COND, c[3],
+                      FTB_BR_POS_BITS'(11 + k)));
+          fetch_entry.pc       = BLK_PC  + VA_WIDTH'(ix) * 'h1000;
+          fetch_entry.pft_addr = BLK_PFT + VA_WIDTH'(ix) * 'h1000;
+          fetch_idx     = ix;
+          gen_fetch     = g[0];
+          fetch_pending = 1'b1;
+          settle();
+          ref_succ(fetch_entry, e_tv, e_tp, e_np);
+          ok = ftq_ifu_req_val && (ftq_ifu_idx == ix) &&
+               (ftq_ifu_gen == g[0]) &&
+               (ftq_ifu_start_pc == fetch_entry.pc) &&
+               (ftq_ifu_taken_val == e_tv) &&
+               (!e_tv || (ftq_ifu_taken_pos == e_tp)) &&
+               (ftq_ifu_next_pc == e_np);
+          chk($sformatf("I gen=%0d idx=%0d slots=%04b", g, ix, c), ok);
+        end
+      end
+    end
+    fetch_pending = 1'b0;
+    settle();
+  endtask
+
+  // -----------------------------------------------------------------
+  // J. A predecode correction landing in ftq_entry (BP-116, TD#144).
+  // -----------------------------------------------------------------
+  // Entry 8 is allocated with a taken COND in slot 0 at position 3
+  // and a taken COND in slot 1 at position 9, so the kill has both
+  // slot_valid and taken to clear. Predecode
+  // finds a JAL at position 1, before both: ftq_ifu places it in
+  // slot 0 and kills slot 1. The writeback is held for ONE edge, then
+  // the entry is read back across a second edge, so E8 and E9 sample
+  // the stored result. Expected values are this file's, not the DUT's.
+  task automatic group_j();
+    bp_ftq_slot_t exp_s0;
+    $display("-- J: the correction lands in ftq_entry --");
+    do_reset();
+
+    j_alloc_slot[0] = mk_slot(1'b1, TGT0, COND, 1'b1,
+                              FTB_BR_POS_BITS'(3));
+    j_alloc_slot[1] = mk_slot(1'b1, TGT1, COND, 1'b1,
+                              FTB_BR_POS_BITS'(9));
+    j_alloc_idx     = 6'd8;
+    j_alloc_val     = 1'b1;
+    j_rd_idx        = 6'd8;
+    settle();
+    j_alloc_val     = 1'b0;
+    chk("J1 entry 8 allocated with both slots valid",
+        j_fetch_e.valid && j_fetch_e.slot[0].slot_valid &&
+        j_fetch_e.slot[1].slot_valid);
+
+    // The writeback, against the entry as allocated.
+    pdwb_entry       = j_fetch_e;
+    gen_pdwb         = 1'b1;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd8;
+    wb_rcvd_pdwb     = 1'b0;
+    ifu_ftq_pd[1]    = mk_pd(1'b1, 1'b1, 2'b10, 1'b0, 1'b0);
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(1);
+    ifu_ftq_target   = PD_TGT;
+    ifu_ftq_pdwb_val = 1'b1;
+    settle();
+    clr_wb();
+    settle();
+
+    exp_s0            = '0;
+    exp_s0.slot_valid = 1'b1;
+    exp_s0.target     = PD_TGT;
+    exp_s0.br_type    = DIRECT_UNC;
+    exp_s0.taken      = 1'b1;
+    exp_s0.pos        = FTB_BR_POS_BITS'(1);
+    exp_s0.pred_src   = PRED_NONE;
+    chk("J2 slot 0 holds the predecode JAL",
+        j_fetch_e.slot[0] == exp_s0);
+    chk("J3 slot 1 is killed: not valid, not taken",
+        !j_fetch_e.slot[1].slot_valid && !j_fetch_e.slot[1].taken);
+    chk("J4 slot 1's other fields are untouched",
+        (j_fetch_e.slot[1].target == TGT1) &&
+        (j_fetch_e.slot[1].pos == FTB_BR_POS_BITS'(9)));
+    settle();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -1036,6 +1257,8 @@ module tb;
     group_f();
     group_g();
     group_h();
+    group_i();
+    group_j();
 
     $display("tb_ftq_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

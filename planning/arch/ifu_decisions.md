@@ -35,10 +35,13 @@ The ibuf holds uniform 32-bit slots. It does not pack halfwords,
 its read and write ports are fixed width, and the only variability
 on the write side is how many slots are valid in a cycle.
 
-The IFU owns the straddle. A 32-bit instruction can begin in one
-prediction block and end in the next, so the IFU holds the leading
-halfword across the boundary. Nothing downstream sees a partial
-instruction.
+The IFU owns the straddle. A 32-bit instruction can begin in the
+last halfword of a prediction block. The IFU fetches the 17th
+halfword (IFU-8), so the instruction completes inside its own block,
+and the next block, which begins on its tail, walks from position 1
+(IFU-11). Nothing downstream sees a partial instruction. This read
+that the IFU holds the leading halfword across the boundary.
+Session-074.
 
 The PC is carried per slot. Expansion breaks the correspondence
 between slot position and address, because a compressed
@@ -216,7 +219,9 @@ IFU-10 Stage contents.
 
        F0  Accept the FTQ request. Read the translation queue
            head, IFU-25. Issue the L1I request with the physical
-           address it supplies, or two requests under IFU-7.
+           address it supplies, two requests under IFU-7, or none
+           when the block's line matches the previous request
+           (TD-IFU-8) or the translation faulted (IF-23).
        F1  Compute the PC of every 2-byte position in the block.
            The cache access is in flight.
        F2  L1I data returns. Check it against the request, form
@@ -236,11 +241,20 @@ would carry an address that does not exist yet. IF-8 says the same
 from the other side. An earlier revision of IFU-10 did exactly
 that.
 
-IFU-11 The straddle of section 4 is held in a register at F3 and
-       carried into the next block. It holds the leading halfword,
-       its PC, and its fault information, because the instruction
-       it belongs to completes in a line that has its own
-       translation.
+IFU-11 A 32-bit instruction starting at position 15 completes in
+       its own block from the 17th halfword (IFU-8, DCD-2). F3
+       holds a register with the address of that tail. A block
+       whose start equals it begins its walk at position 1
+       (DCD-5). The tail's translation and fault are its own
+       block's second result when the straddle crosses a page
+       (IFU-25).
+
+       RULED session-074 (Jeff), as BP-116 built it. This read
+       that the register holds the leading halfword, its PC and
+       its fault, and that the instruction completes in the next
+       block. That contradicted IFU-8, and an instruction carried
+       into the next block would sit at position -1, which
+       ifu_pd_pkt_t.pos cannot express.
 
 `L1iReadLatency` is 2, so F1 and F2 are mostly the wait for data.
 That is why five stages carry what BOOM does in four: BOOM's
@@ -295,9 +309,14 @@ IFU-26  A block whose effective type is not both cacheable and
         (mmu_decisions.md MMU-U6). This read "translates to a
         non-idempotent region". Session-071.
 
-IFU-27  On a redirect both pipelines are flushed and the queue is
-        emptied. The fetch pipeline then stalls until the
-        translation pipeline refills the head.
+IFU-27  On a redirect both pipelines are flushed of everything at
+        or after the flush index (ftq_ifu_interfaces.md 5). The
+        fetch pipeline then stalls until the translation pipeline
+        refills the head. As built by BP-116 a flush clears ALL
+        state and is legal only with nothing outstanding; that is
+        the TD#134 stub. Clearing all is wrong once an entry older
+        than F can be held. This read "the queue is emptied".
+        Session-074.
 
         THE COST IS NOT THE SAME FOR BOTH KINDS OF REDIRECT.
         Measured by BP-113 (session-073) from the redirect cycle
@@ -342,13 +361,16 @@ F1 and F2 rather than ahead of F0. The benefit is that nothing in
 the emitted L1I changes.
 
 IFU-U5 CLOSED session-074 (Jeff). The translation queue depth is
-       a parameter, default 4. An entry frees when its block's L1I
-       request issues, not when the data returns; the translation
-       result travels with the request. Freeing on return would
-       make the queue cover everything in flight, up to 32 blocks
-       at a line buffer of 16. Four covers a one- or two-cycle ITLB
-       hit at one block per cycle. Translation stays in order,
-       IT-14. XiangShan exposes theirs as nWayLookupSize.
+       a parameter, default 4. An entry frees when its block enters
+       F1, whether it issued a request, reused the previous line or
+       faulted; the translation result travels with the block.
+       Freeing on data return would make the queue cover everything
+       in flight, up to 32 blocks at a line buffer of 16. Four
+       covers the one-cycle ITLB hit of ITLB-5 at one block per
+       cycle. A longer hit would cut throughput whatever the
+       depth: the one-bit tag of IT-2 allows one block at the ITLB
+       at a time. Translation stays in order, IT-14. XiangShan
+       exposes theirs as nWayLookupSize.
 
 The FTQ side is `xlate_ptr`, ftq_decisions.md 5.1, and the port is
 ftq_ifu_interfaces.md 4.1. Both were written session-069 with this
@@ -396,11 +418,11 @@ IFU-19 The generation bit issued with the request is carried
 
 IFU-20 On a flush the IFU drops every in-flight fetch whose index
        is at or after the flush index and discards everything it
-       holds for those entries. A flush and a request in the same
-       cycle means the flush applies first and that request is
-       the first fetch of the corrected stream. Both pipelines of
-       IFU-23a are flushed by the one group and the translation
-       queue is emptied; ftq_ifu_interfaces.md 5.
+       holds for those entries. A request presented in a flush
+       cycle is ignored (ftq_ifu_interfaces.md 5, TD#138). Both
+       pipelines of IFU-23a are flushed by the one group. This read
+       that the flush applies first and that request is the first
+       fetch of the corrected stream. Session-074.
 
 IFU-20 is load-bearing beyond the IFU. The generation tag is one
 bit, and one bit is only sufficient because a stale writeback
@@ -445,18 +467,19 @@ finished. The FTQ already holds the commit pointer, so what is
 added is its export, not the knowledge.
 
 The FTQ cannot gate the request instead. Whether a block is
-uncached is discovered in the IFU from the PMA result at F2,
-after the FTQ has handed the request over.
+uncached is learned in the IFU's translation pipeline, from the PMA
+result, and marked in the queue entry (IFU-25, IFU-26), after the
+FTQ has handed the translation request over. This read "from the
+PMA result at F2". Session-074.
 
 IFU-23 Uncached fetch returns one instruction at a time. It is
        sent to the ibuf alone, and the IFU waits for it to commit
        before issuing the next.
 
-TD-IFU-4  `ftq_ifu.sv` is Complete and verified at 67 checks and
-          has no commit pointer output. IFU-22 adds one to the
-          fetch request group of `ftq_ifu_interfaces.md`. It is a
-          driven value, not a query with a response, so it adds
-          no handshake.
+TD-IFU-4  CLOSED. `ftq_ifu_commit_ptr` was added to the fetch
+          request group by BP-114 (TD#142). It is a driven value,
+          not a query with a response, so it adds no handshake.
+          This read that ftq_ifu.sv has no commit pointer output.
 
 IFU-U4 Bus width and the split it forces. XiangShan's MMIO bus is
        8 bytes and aligned, so a 32-bit instruction whose address
@@ -483,9 +506,11 @@ TD-IFU-7  CLOSED. The line buffer of `icache_decisions.md` L1I-14
 TD-IFU-8  CLOSED. Issue is in order, oldest first, whenever a
           translated block, a free identifier and a free slot all
           exist. A block whose line matches the PREVIOUS request
-          reuses that request's identifier and slot; a slot frees
-          when its last block is consumed. One comparator catches
-          the common case, consecutive blocks in one line. So two
+          reuses that request's line-buffer slot and makes no
+          request; it shares no identifier, which may already be
+          retired. A slot frees when its last block is consumed.
+          One comparator catches the common case, consecutive
+          blocks in one line. So two
           sequential blocks make one L1I request, and what merges
           in the L1I MSHRs is a redirect back to a line in flight
           or a non-consecutive repeat.
@@ -506,6 +531,9 @@ TD-IFU-10 MOVED to TD#136. The maintenance path of
 ## 9. Open
 
 IFU-U4  Uncached bus width. Section 7.
+IFU-U6  Instruction prefetch. L1I-19 puts the requester in the IFU
+        and ftq_decisions.md 6.1 defers prefetch. Nothing is built;
+        ifu_l1i_req_prefetch is driven 0. DEFERRED, session-074.
 
 ---
 

@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-01
  CONTACT: Jeff Nye
 ```
 
@@ -76,9 +76,10 @@ prior revision of this section attributed a read to "every redirecting
 predictor's cluster-boundary comparison". That read does not exist and
 must not be counted when the fast-path read ports are sized.
 
-FIVE FAST-PATH READ PORTS ARE NEEDED, NOT THREE. The three readings
-above are the three PURPOSES; they are not the port count, because two
-of them need two ports each and one needs a port of its own:
+SIX FAST-PATH READ PORTS ARE BUILT. The three readings above are the
+three PURPOSES; they are not the port count, because two of them need
+two ports each and one needs a port of its own, and BP-112 added a
+sixth, pc only, for the translation request of xlate_ptr (7.5):
 
 ```
   fetch          the entry ftq_ifu is requesting
@@ -452,8 +453,8 @@ the first cycle the translation request for F is presented:
 
 The backend case takes the extra cycle because F is the target entry
 itself and its p1 write lands at the end of the first cycle, so there
-is nothing to translate until then. ifu_decisions.md IFU-27 also says
-one cycle without separating them and needs the same split.
+is nothing to translate until then. ifu_decisions.md IFU-27 carries
+the same split.
 
 Both were one cycle worse until BP-113: the p0 request in a redirect
 cycle carried the pre-rewind alloc index, so its in-flight p1 counted
@@ -615,10 +616,16 @@ or predecode redirect):
                                instructions stand; refetching it
                                would deliver them twice
         backend, _self set     F = K
-        p2, p3, predecode      F = K. K survives, corrected, and
+        p2, p3                 F = K. K survives, corrected, and
                                must be fetched against the
                                correction (ftq_ifu_interfaces.md
                                7 W3)
+        predecode              F = K+1. K is fetched and its head
+                               is already in the ibuf, which does
+                               not clear on it; refetching K
+                               delivers that head twice. Ruled
+                               session-074 (Jeff); this row read
+                               K with p2 and p3. TD#146, unbuilt
         RC_UNSPEC              F = commit_ptr. U3 squashes EVERY
                                entry, so the oldest live one is
                                the only index that drops every
@@ -1214,33 +1221,9 @@ BP-113 added two more, both from 5.2's redirect-cycle allocation:
                              target's own p1 write
 ```
 
-Section 1 still counts three read ports on ftq_entry; it is six.
+Section 1 counts six, since session-074.
 
 ## 8. Document History
-
-```
-  2026-09-22  session-073, after BP-114. 5.5 R1's F-by-source
-              table gains the RC_UNSPEC row it never had, F =
-              commit_ptr; TD#141.
-
-  2026-09-22  session-073, after BP-113. 5.2: the redirect-cycle
-              allocation is fixed -- rewind first, then allocate
-              from the rewound head -- and TD#139 is closed. 5.1:
-              the post-redirect translation latency is measured and
-              the front-end and backend cases are SEPARATED, 1 and
-              2 cycles; IFU-27 needs the same split. 7.5: two more
-              crossings, alloc_req_ptr and req_rewound.
-
-  2026-09-22  session-073, after BP-112. 5.1: xlate_ptr is BUILT,
-              TD#127 closed, and the one-cycle redirect latency is
-              measured as two because of TD#139. 5.2: the index
-              leaving at p0 in a redirect cycle is the pre-rewind
-              one, TD#139. 5.5 R1: BUILT, TD#126 closed, with the
-              arm_win note -- the cause bus cannot express the
-              table. 7.5: three more crossings, and ftq_entry has
-              six read ports, not three. 4.7: RESET_VECTOR built
-              at 41 bits by BP-109.
-```
 
 ```
   2026-08-19  Created. Sections 4.3, 5 and 6 moved here whole from
@@ -1425,4 +1408,31 @@ Section 1 still counts three read ports on ftq_entry; it is six.
 
   2026-09-20  session-072. E22: Document History sorted into date order;
               newer entries had been appended at the wrong end.
+
+  2026-09-22  session-073, after BP-112. 5.1: xlate_ptr is BUILT,
+              TD#127 closed, and the one-cycle redirect latency is
+              measured as two because of TD#139. 5.2: the index
+              leaving at p0 in a redirect cycle is the pre-rewind
+              one, TD#139. 5.5 R1: BUILT, TD#126 closed, with the
+              arm_win note -- the cause bus cannot express the
+              table. 7.5: three more crossings, and ftq_entry has
+              six read ports, not three. 4.7: RESET_VECTOR built
+              at 41 bits by BP-109.
+
+  2026-09-22  session-073, after BP-113. 5.2: the redirect-cycle
+              allocation is fixed -- rewind first, then allocate
+              from the rewound head -- and TD#139 is closed. 5.1:
+              the post-redirect translation latency is measured and
+              the front-end and backend cases are SEPARATED, 1 and
+              2 cycles; IFU-27 needs the same split. 7.5: two more
+              crossings, alloc_req_ptr and req_rewound.
+
+  2026-09-22  session-073, after BP-114. 5.5 R1's F-by-source
+              table gains the RC_UNSPEC row it never had, F =
+              commit_ptr; TD#141.
+
+  2026-10-01  session-074. 5.5 R1: predecode flushes at F = K+1,
+              p2 and p3 stay at K (TD#146). 5.1: IFU-27 carries the
+              split. Section 1: six read ports, as 7.5 says. The
+              session-073 entries moved into date order.
 ```

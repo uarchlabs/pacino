@@ -175,15 +175,17 @@ rather than by disagreement: the IFU flushes on all four because it
 has in-flight fetches for entries at or after the named one, and
 the ibuf holds only what has already been enqueued.
 
-IB-13 The flush index is K, not K+1, for a predecode, p2 or p3
-      redirect and for a backend redirect with `_self` set.
-      `ftq_ifu_interfaces.md` 7 W3 drives the flush with the
-      entry's own index. For a predecode redirect K is already
-      fetched so including it costs nothing; for a p2 or p3
-      redirect K is not yet fetched and including it is required,
-      because the correction changes `taken_pos` and a fetch
-      issued against the old prediction would truncate in the
-      wrong place.
+IB-13 The flush index is K for a p2 or p3 redirect and for a
+      backend redirect with `_self` set. For a p2 or p3 redirect
+      K is not yet fetched and including it is required, because
+      the correction changes `taken_pos` and a fetch issued
+      against the old prediction would truncate in the wrong
+      place. For a PREDECODE redirect it is K+1: K's positions up
+      to mis_pos are already in the ibuf by IB-2, the ibuf does
+      not clear on it (IB-12), and refetching K would deliver
+      them twice. `ftq_ifu_interfaces.md` 7 W3. Ruled session-074
+      (Jeff); this read K for predecode too, "including it costs
+      nothing". The predecode arm at K+1 is TD#146, unbuilt.
       A backend redirect with `_self` clear flushes at K+1: K is
       fetched and its instructions stand, and refetching it would
       deliver them twice (ftq_decisions.md 5.5 R1,
@@ -213,7 +215,8 @@ None. IB-U1 closed session-069 as IB-12.
               a new struct, not a redefined predecode_pkt_t.
               dcd_decisions.md DCD-16. Section 4 gains is_rvc,
               lists valid, and names the DCD-7 fields as the
-              struct declares them (BP-115).
+              struct declares them (BP-115). After BP-116: IB-13,
+              a predecode redirect flushes at K+1, TD#146.
   2026-09-22  session-073. IB-13: BUILT by BP-112, TD#126 closed,
               with the note that the rule cannot be keyed on the
               redirect cause.

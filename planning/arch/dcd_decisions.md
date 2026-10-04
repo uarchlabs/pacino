@@ -95,7 +95,15 @@ DCD-4  A position is an instruction start if it is reached by the
        next start is two positions later.
 
 DCD-5  The walk begins at the block start PC supplied by the FTQ,
-       not at position 0. The block is unaligned, IFU-6.
+       which is position 0: positions count from the block start
+       (ftq_ifu_interfaces.md 3) and the block is unaligned, IFU-6.
+       When the block starts on the tail of a 32-bit instruction
+       that began at position 15 of the previous block, the walk
+       begins at position 1 (IFU-11).
+
+       Session-074. This read "not at position 0", from before
+       positions were counted from the block start, and did not
+       cover a block that starts on a tail.
 
 DCD-6  The start mask is a parallel prefix over the per-position
        lengths, not a sequential walk. Each position independently
@@ -171,7 +179,12 @@ DCD-12 A position's `valid` is set when it is an instruction
 
 DCD-13 `pd_range` marks the positions actually fetched. The
        range ends at the predicted taken position when the FTQ
-       supplied one, and at the block end otherwise.
+       supplied one, and at the block end otherwise, and is cut
+       short at a fault (ftq_ifu_interfaces.md 6). The block end
+       is `ftq_ifu_next_pc`, the fall-through: the not-taken range
+       is the positions whose address is below it, all sixteen
+       when it is not within 32 bytes above the start. Session-074,
+       as BP-116 built it.
 
 DCD-14 The predecoder does not test the prediction. It reports
        what it found. The comparison against the prediction, and
@@ -212,6 +225,12 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        TD-DCD-1; the enumeration did not carry them while
        ifu_ibuf_interfaces.md 4 listed them as coming from this
        rule. `vtype_hazard` is NOT here, TD-DCD-1. Session-072.
+
+       `needs_vtype` is set for every OP-V instruction other than
+       the vsetvl configuration forms, and for every vector load
+       and store. It over-marks the whole-register forms, which is
+       safe for rename. Session-074, as BP-116 built it; recheck
+       against decode when decode moves to ifu_pd_pkt_t, TD#143.
 
 The start PC and the position are both present and are not
 redundant. Expansion breaks the correspondence between them,

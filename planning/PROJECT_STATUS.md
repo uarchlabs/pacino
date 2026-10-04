@@ -28,8 +28,8 @@ Verilator 5.048 reports an elaboration $error as
 %Warning-USERERROR, fatal under -Wall; -Wno-fatal would turn
 lint_neg red. TD#122 CLOSED.
 
-TD#143 and TD#144 opened. Next free TD is TD#145. Next free BP is
-BP-116, next free INFRA is INFRA-014.
+TD#143 to TD#146 opened. Next free TD is TD#147. Next free BP is
+BP-117, next free INFRA is INFRA-014.
 
 INFRA-013 RUN, COMPLETE. TD#114 CLOSED. 85 FTQ property labels;
 8 absent from at least one build, all folded tautologies; I7, I10
@@ -37,6 +37,17 @@ and I11 are tautologies that stay compiled. 9 of 18 ftq_ifu
 properties check nothing. Fixes TD#144; the rule against them is
 now in CLAUDE.md. The IA ran a git command against an explicit
 prohibition; Jeff is moving enforcement outside the model.
+
+BP-116 RUN, COMPLETE. Part A closed TD#144. Part B built the IFU:
+eight modules, three testbenches, 93 regress targets PASS. The IA
+reported 15 planning conflicts; the PA's cross-check of every IFU
+document found 12 more, C16 to C27. All are resolved in the
+documents (session-074 rulings C3, C5, C6, C19, C20; the rest
+adopted as built or corrected as stale). Three need RTL: TD#146.
+The IA found decode's rvc_expander wrong in 12,456 encodings:
+TD#145. The 27 should have been caught before BP-116 was issued;
+the PA had not cross-checked the documents against each other.
+
 PA-direct corrections, session-074, applied by Jeff:
 
   CLAUDE.md Packages: a task may add, change or remove package
@@ -1942,17 +1953,14 @@ it only documented current behavior.
 |                         |             |                   | ITLB-8. No open item. Written to  |
 |                         |             |                   | be instantiated twice; the DTLB   |
 |                         |             |                   | is the second client.             |
-| ifu                     | Not started | --                | rtl/ holds only a .gitkeep. All   |
-|                         |             |                   | three boundaries now specified:   |
-|                         |             |                   | ftq_ifu, l1i_ifu, itlb_ifu.       |
-|                         |             |                   | ifu_decisions.md exists as of     |
-|                         |             |                   | session-069. SESSION-074: this    |
-|                         |             |                   | read "Nothing blocks RTL". The    |
-|                         |             |                   | structural rulings are in         |
-|                         |             |                   | ifu_decisions.md (TD#116, IFU-25, |
-|                         |             |                   | IFU-U5); the L1I names and        |
-|                         |             |                   | ifu_pd_pkt_t are BUILT, BP-115.   |
-|                         |             |                   | TD#134-136 are stubbed by ruling. |
+| ifu                     | Unit tested | tb_ifu, tb_ifu_*  | Built BP-116, session-074: ifu,   |
+|                         |             |                   | ifu_xlate, ifu_fetch, ifu_lbuf,   |
+|                         |             |                   | ifu_rvc_exp, ifu_predecode,       |
+|                         |             |                   | ifu_f3, ifu_wb. Unit-testable     |
+|                         |             |                   | only: TD#134 (flush), TD#135      |
+|                         |             |                   | (uncached), TD#136 (maintenance)  |
+|                         |             |                   | are stubbed by ruling. TD#146     |
+|                         |             |                   | holds three unbuilt rulings.      |
 | ibuf                    | Not started | --                | ibuf_decisions.md and             |
 |                         |             |                   | ifu_ibuf_interfaces.md created    |
 |                         |             |                   | session-069. Had no planning      |
@@ -2724,6 +2732,14 @@ assessment of each document. Correct any that are wrong.
 |     |          | Consequence: an IFU built without this is UNIT-TESTABLE  |
 |     |          | ONLY. It cannot be integrated against the FTQ redirect   |
 |     |          | path until this closes. Related: TD#126, TD#127.         |
+|     |          |                                                          |
+|     |          | BP-116 built the stub: a flush clears ALL IFU state and  |
+|     |          | an assertion (ifu_assert U3) fires if one arrives with   |
+|     |          | an L1I id or ITLB lookup outstanding. CLEAR-ALL IS WRONG |
+|     |          | IN GENERAL: ftq_ptr does not rewind xlate_ptr or         |
+|     |          | fetch_ptr past an entry older than F, so a held older    |
+|     |          | translation or block would be lost. This task must flush |
+|     |          | only at or after F (IFU-20, IFU-27).                     |
 | 135 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE UNCACHED     |
 |     |          | FETCH PATH. ifu_notes.md 6.8, MMU-14, IT-11, IFU-21. A   |
 |     |          | fetch whose effective memory type is not cacheable and   |
@@ -2896,18 +2912,34 @@ assessment of each document. Correct any that are wrong.
 |     |          | vtype_hazard to rename) is settled with DCD-U1, and      |
 |     |          | predecode.sv, tb_predecode and predecode_pkt_t are       |
 |     |          | deleted. Blocks front-end integration, not the IFU.      |
-| 144 | ftq      | OPEN. FTQ assertions that check nothing (INFRA-013).     |
-|     |          | Delete each; restate where an independent check exists,  |
-|     |          | in the module that consumes the signal.                  |
+| 144 | ftq      | CLOSED by BP-116 Part A (session-074). Eleven labels     |
+|     |          | deleted or restated; Q11, Q12, E9, E10 and the restated  |
+|     |          | E8 each shown to fail under a scratch mutation.          |
+|     |          | assert_labels in the ftq and ifu Makefiles guards        |
+|     |          | removal; it cannot see a kept tautology, which the       |
+|     |          | CLAUDE.md assertion rule covers. Gap left: tb_ftq_entry  |
+|     |          | never samples E8's killed state.                         |
+| 145 | decode   | OPEN. rvc_expander.sv (Complete) mis-expands 12,456 of   |
+|     |          | the 49,152 16-bit encodings in six classes, among them   |
+|     |          | negative C.BEQZ/C.BNEZ offsets, c.mul as MULW and the    |
+|     |          | doubleword store offsets. Found by BP-116, whose         |
+|     |          | tb_ifu_rvc_exp corrects them from the specification's    |
+|     |          | field tables. C, Zcb and Zcmop are mandatory in RVA23.   |
+|     |          | Fix with that testbench's reference as the oracle;       |
+|     |          | decode's own tests passed with it wrong.                 |
+| 146 | ifu, ftq | OPEN. RTL for three session-074 rulings, all unbuilt.    |
 |     |          |                                                          |
-|     |          | I9, I17: delete. I5: delete; check the two effects at    |
-|     |          | unit scope (ftq_entry slot write, ftq_npc PD arm). I8,   |
-|     |          | I15: move to ftq_ptr as properties of fetch_pending and  |
-|     |          | xlate_pending. I14: E-series property on ftq_entry's     |
-|     |          | xlate port. N6: delete, N7 covers it. E8: restate as the |
-|     |          | ftq_entry kill effect. I7, I10, I11: same treatment.     |
+|     |          | C6: the predecode arm flushes at K+1 (ftq_decisions.md   |
+|     |          | 5.5 R1, ftq_ifu_interfaces.md 7 W3); p2 and p3 stay at   |
+|     |          | K. ftq_ptr and ftq_ifu, keyed on arm_win, not the cause. |
 |     |          |                                                          |
-|     |          | Rule now in CLAUDE.md, Verification - assertions.        |
+|     |          | C5: M1 also fires on a JAL before the predicted taken    |
+|     |          | position; JALR is never M1 (ftq_ifu_interfaces.md 6).    |
+|     |          | ifu_f3.                                                  |
+|     |          |                                                          |
+|     |          | C19: ifu_itlb_vpn widens to VA_WIDTH-12                  |
+|     |          | (itlb_ifu_interfaces.md IT-16). ifu_xlate and its        |
+|     |          | testbench.                                               |
 
 ---
 

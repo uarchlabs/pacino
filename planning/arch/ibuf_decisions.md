@@ -151,7 +151,10 @@ IBUF-8a A predecode redirect does NOT clear the buffer. The
         `mis_pos` is in the enable mask (`ifu_ibuf_interfaces.md`
         IB-2), so the instructions after the mispredict never
         enter the buffer. What the buffer holds is blocks older
-        than the one being corrected, all on the corrected path.
+        than the one being corrected and that block up to
+        `mis_pos`, all on the corrected path. So the refetch starts
+        at K+1, not K, or K's head would enter twice (IB-13,
+        TD#146). Session-074.
 
 IBUF-8b A p2 or p3 redirect does NOT clear the buffer. It fires
         one or two cycles after p1, and FQ-1 gives

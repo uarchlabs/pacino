@@ -19,6 +19,7 @@
 #   lint_ftq_ifu         sim_ftq_ifu          BP-107
 #   lint_ftq_resolve     sim_ftq_resolve      BP-107
 #   lint_ftq             sim_ftq              BP-107, the unit
+#   assert_labels                             BP-116, TD#144
 include $(RVA_ROOT)/rtl/Vars.mk
 
 ifeq ($(VERBOSE),1)
@@ -117,6 +118,14 @@ IFU_SRCS := \
   $(RTL_DIR)/ftq_ifu.sv \
   $(TB_DIR)/ftq_ifu_assert.sv
 
+# tb_ftq_ifu group J (BP-116) writes an ftq_entry from ftq_ifu's
+# pd_wr_* outputs, so the sim adds that leaf and its properties. The
+# lint target stays ftq_ifu alone.
+IFU_TB_SRCS := \
+  $(IFU_SRCS) \
+  $(RTL_DIR)/ftq_entry.sv \
+  $(TB_DIR)/ftq_entry_assert.sv
+
 RESOLVE_SRCS := \
   $(PKG_SRCS) \
   $(RTL_DIR)/ftq_resolve.sv \
@@ -149,7 +158,8 @@ FTQ_SRCS := \
   lint_ftq_npc       sim_ftq_npc \
   lint_ftq_ifu       sim_ftq_ifu \
   lint_ftq_resolve   sim_ftq_resolve \
-  lint_ftq           sim_ftq
+  lint_ftq           sim_ftq \
+  assert_labels
 
 all: lint_ftq_ftb_sched sim_ftq_ftb_sched \
      lint_ftq_ptr       sim_ftq_ptr \
@@ -161,7 +171,8 @@ all: lint_ftq_ftb_sched sim_ftq_ftb_sched \
      lint_ftq_npc       sim_ftq_npc \
      lint_ftq_ifu       sim_ftq_ifu \
      lint_ftq_resolve   sim_ftq_resolve \
-     lint_ftq           sim_ftq
+     lint_ftq           sim_ftq \
+     assert_labels
 
 # -- FTB update scheduler (ftq_ftb_sched.sv, BP-100).
 lint_ftq_ftb_sched:
@@ -294,7 +305,7 @@ sim_ftq_ifu:
 	@echo "[compiling]  tb_ftq_ifu"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_ftq_ifu \
-	  $(IFU_SRCS) $(TB_DIR)/tb_ftq_ifu.sv $(VSILENCE)
+	  $(IFU_TB_SRCS) $(TB_DIR)/tb_ftq_ifu.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ftq_ifu/Vtb"
 	$(Q)./$(VER_OUT)_ftq_ifu/Vtb
 
@@ -331,6 +342,78 @@ sim_ftq:
 	@echo "[simulating] $(VER_OUT)_ftq/Vtb"
 	$(Q)./$(VER_OUT)_ftq/Vtb
 
+# -- Every declared property is in every sim model (BP-116, TD#144).
+#    INFRA-013's method. Each sim model is verilated to C++ (--cc, the
+#    sim target's flags and sources, no compile) into its own
+#    obj_labels_* directory, so the result does not depend on any
+#    other target having run. Verilator writes an assertion's full
+#    hierarchical path into the C++ as a string, ending ".<label>"; a
+#    generate-loop label appears once per iteration. A label declared
+#    in an assertion file the model compiles but absent from its C++
+#    has been folded to a constant, and the target fails. It also
+#    fails on an unlabeled assert property, which this cannot check,
+#    and on a tb/*_assert.sv that no model compiles.
+#    A kept tautology still passes: this guards removal, not meaning.
+LABEL_MODELS := ftq_ftb_sched ftq_ptr ftq_commit ftq_entry ftq_meta \
+                ftq_status ftq_shadow ftq_npc ftq_ifu ftq_resolve ftq
+
+LABEL_SRCS_ftq_ftb_sched := $(SCHED_SRCS)
+LABEL_SRCS_ftq_ptr       := $(PTR_SRCS)
+LABEL_SRCS_ftq_commit    := $(COMMIT_SRCS)
+LABEL_SRCS_ftq_entry     := $(ENTRY_SRCS)
+LABEL_SRCS_ftq_meta      := $(META_SRCS)
+LABEL_SRCS_ftq_status    := $(STATUS_SRCS)
+LABEL_SRCS_ftq_shadow    := $(SHADOW_SRCS)
+LABEL_SRCS_ftq_npc       := $(NPC_SRCS)
+LABEL_SRCS_ftq_ifu       := $(IFU_TB_SRCS)
+LABEL_SRCS_ftq_resolve   := $(RESOLVE_SRCS)
+LABEL_SRCS_ftq           := $(FTQ_SRCS)
+
+LABEL_ASSERT_FILES := $(sort $(wildcard $(TB_DIR)/*_assert.sv))
+LABEL_UNCOMPILED   := $(filter-out \
+  $(foreach m,$(LABEL_MODELS),$(LABEL_SRCS_$(m))),$(LABEL_ASSERT_FILES))
+
+# A labeled assertion: "<label> : assert property".
+LABEL_RE := ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:
+LABEL_RE := $(LABEL_RE)[[:space:]]*assert[[:space:]]+property
+
+# One model: verilate, then look up each label of each assertion file
+# it compiles. $(1) model, $(2) its sources. Shell variables tot, mis
+# accumulate across models.
+label_sh = $(VERILATOR) --cc $(VER_FLAGS) $(SIM_EXTRA_FLAGS) $(COMMON) \
+  --top-module tb --Mdir $(VER_OUT)_labels_$(1) \
+  $(2) $(TB_DIR)/tb_$(1).sv > /dev/null || exit 1; \
+  n=0; m=0; \
+  for f in $(filter %_assert.sv,$(2)); do \
+    for l in $$(sed -nE 's/$(LABEL_RE).*/\1/p' $$f); do \
+      n=$$((n+1)); \
+      if ! grep -qF ".$$l\"" $(VER_OUT)_labels_$(1)/*.cpp; then \
+        echo "MISSING: $$l ($$f) is not in the tb_$(1) model"; \
+        m=$$((m+1)); \
+      fi; \
+    done; \
+  done; \
+  echo "  tb_$(1): $$((n-m)) of $$n labels present"; \
+  tot=$$((tot+n)); mis=$$((mis+m));
+
+assert_labels:
+	@echo "[checking]   assertion labels in the sim models"
+	$(Q)if [ -n "$(strip $(LABEL_UNCOMPILED))" ]; then \
+	  echo "UNCOMPILED: $(LABEL_UNCOMPILED)"; exit 1; fi
+	$(Q)for f in $(LABEL_ASSERT_FILES); do \
+	  a=$$(grep -cE 'assert[[:space:]]+property' $$f); \
+	  b=$$(grep -cE '$(LABEL_RE)' $$f); \
+	  echo "  $$f: $$b labels: $$(sed -nE 's/$(LABEL_RE).*/\1/p' $$f \
+	    | tr '\n' ' ')"; \
+	  if [ $$a -ne $$b ]; then \
+	    echo "UNLABELED: $$f has $$((a-b)) unlabeled assert property"; \
+	    exit 1; fi; \
+	done
+	$(Q)tot=0; mis=0; \
+	$(foreach m,$(LABEL_MODELS),$(call label_sh,$(m),$(LABEL_SRCS_$(m)))) \
+	echo "assert_labels: PASS=$$((tot-mis)) FAIL=$$mis"; \
+	test $$mis -eq 0
+
 clean:
 	@echo "[cleaning]   ftq"
 	$(Q)rm -rf $(VER_OUT)*
@@ -347,7 +430,7 @@ REGRESS_TARGETS := \
   lint_ftq_meta sim_ftq_meta lint_ftq_status sim_ftq_status \
   lint_ftq_shadow sim_ftq_shadow lint_ftq_npc sim_ftq_npc \
   lint_ftq_ifu sim_ftq_ifu lint_ftq_resolve sim_ftq_resolve \
-  lint_ftq sim_ftq
+  lint_ftq sim_ftq assert_labels
 REGRESS_EXCLUDE := all clean regress_list
 
 .PHONY: regress_list

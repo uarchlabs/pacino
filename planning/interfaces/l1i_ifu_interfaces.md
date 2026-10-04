@@ -22,14 +22,14 @@ DIVISION OF LABOUR. `icache_decisions.md` specifies BEHAVIOUR and
 this file specifies PORTS. Where a behaviour is already decided there
 it is cited by its L1I number and not restated.
 
-Every port here is NEW. The IFU does not exist:
-`rtl/core/frontend/ifu/rtl` holds only a .gitkeep. The L1I is a
-generated module; since TOOLS-004 and TOOLS-005 its emitted core
-port carries the 512-bit line, sixteen identifiers and sixteen fills
-at the l1i boundary (section 14.3), and the maintenance ports of
-sections 10 and 11 are still not emitted (E7, TD#119). This read
-that the emitter "cannot yet produce any of this (TD-L1I-8)".
-Session-071.
+The IFU side of every port here is BUILT by BP-116 (session-074),
+except the maintenance ports of sections 10 and 11, which are
+deferred (TD#136). The L1I is a generated module; since TOOLS-004
+and TOOLS-005 its emitted core port carries the 512-bit line,
+sixteen identifiers and sixteen fills at the l1i boundary (section
+14.3), and the maintenance ports of sections 10 and 11 are still not
+emitted (E7, TD#119). This read that the emitter "cannot yet produce
+any of this (TD-L1I-8)". Session-071.
 
 ---
 
@@ -83,10 +83,7 @@ section 2. Ports are named by direction.
   ifu_cmt_<signal>    IFU -> backend commit
 ```
 
-The IFU pipeline IS defined -- F0 to F3 plus WB, ifu_decisions.md
-IFU-9 and IFU-10 -- so this is a naming choice, not a wait. If the
-suffixes are ever added here, record the
-rename here.
+If the suffixes are ever added here, record the rename here.
 
 ---
 
@@ -1251,5 +1248,7 @@ sees a 2-byte boundary.
               TD-IF-1 gains that ruling; TD-IF-5 resolved by the
               TD#116 ruling. Then BP-115: the six L1I names are
               declared and checked, the table reads BP-109 and
-              BP-115, and TD-IF-1 is closed.
+              BP-115, and TD-IF-1 is closed. After BP-116: the
+              header records the IFU side as built; a repeated
+              paragraph in section 2 removed.
 ```
