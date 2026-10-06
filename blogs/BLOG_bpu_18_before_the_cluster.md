@@ -23,270 +23,162 @@ COPYRIGHT: "Copyright 2026 Jeff Nye"
 
 ## Abstract
 
-The branch prediction cluster, `bp_cluster`, instantiates the seven Pacino
-predictors and the history module and connects them to the fetch target queue
-(FTQ). It was the planned next step throughout the three sessions covered
-here, and three preconditions had to be met before it could start.
+The branch prediction cluster (BPC) instantiates the Pacino predictors and
+provides the interface to the fetch target queue (FTQ). These sessions covered
+three preconditions necessary before the BPC integration could be performed.
 
-TAGE did not elaborate. BP-081 retyped two FIFOs off retired structs, deleted
-a dead confidence field, and generated the three-way TAGE confidence decode
-and the extended counter the statistical corrector consumes. The decode
-narrowed the meaning of an existing signal, `tage_pred_strong`, and the TAGE
-update gate that depended on the old meaning was moved to a new signal. All
-seven predictors and the history module then passed at the unit level.
+During the statistical corrector (SC) planning phase the requirements from the
+TAGE to SC interface had changed requiring a TAGE fix to match the new
+package(s).
 
-The planning documents had not been checked against the RTL they describe,
-and the cluster build would treat them as the interface authority. Three
-read-only audits compared the documents for each predictor group with the
-shipped RTL, testbenches and Makefile. They found 22 discrepancies. Twenty
-were stale text. Two needed a design ruling: which predictor owns the target of
-an indirect call, and whether ITTAGE's longest-history table has folded
-history. The second exposed an RTL gap, in which that table has been indexed
-on the PC alone.
+While planning for the integration I realized the planning documents had been
+built in isolation and needed a correlation effort to find inconsistent
+statements and any misleading/incomplete information.
 
-One discrepancy was resolved in the wrong direction. The audit corrected a
-document to match the RTL's initial value for a TAGE table, and the same
-session recorded that RTL value as a defect.
+Before writing the FTQ interface I decided there needed to be a frontend
+planning document that encompassed how the BPC and FTQ would inter-operate.
+These decisions are contained in `fe_decisions.md`.
 
-No document defined the boundary between the cluster and the FTQ. Session 062
-wrote `fe_decisions.md`, which settled the dual-slot FTQ entry, how redirects
-are formed, and the prediction slot model.
+BPC integration was not performed in these sessions but all three of the
+preconditions were completed. At this stage the interfaces within the FE were
+not fully described. That occurred in the next set of sessions.
 
-## Where the range starts
+The primary methodology finding in these sessions was reinforcement of the role
+of the architect in the design process. Document analysis reported the RTL and
+planning documents had drifted, either through mistakes or missing
+requirements, in a few cases with no single source to defer to. In the Pacino
+methodology these decisions are made by the human.
 
-The previous range closed with the statistical corrector complete and the six
-TAGE targets failing to elaborate. Package edits made during SC planning had
-retired two structs and a field that `tage.sv` and `tage_cntrl.sv` still used.
-A report-only task, BP-080, had scoped the repair.
+## Reconciling TAGE with SC package changes
 
-The plan at that point was to repair TAGE and then build `bp_cluster`, which
-had not been started. The cluster build did not start in any of the three
-sessions. Session 060 repaired TAGE, as planned. Session 061 was planned as the
-cluster build and was redirected to audit the planning documents. Session 062
-was again planned as the cluster build and was redirected to specify the FTQ
-boundary. Each redirect was made because the cluster build depended on
-something that was not yet true.
+In sessions 057 and 058 edits to `bp_structs_pkg.sv` were made as part of SC
+planning [1]. `cond_pred_meta_t`, `cond_pred_upd_inp_t` and `tage_high_conf`
+were retired.
 
-## Restoring TAGE
+BP-081 retyped the TAGE update queue and response buffer to the existing
+`tage_upd_inp_t` and `tage_pred_meta_t`, and deleted the dead `tage_high_conf`
+logic, closing TD #94 and TD #95.
 
-BP-081 carried out the repair BP-080 had scoped. `tage.sv` holds an update
-queue and a response buffer whose element types were the retired merged
-structs. BP-081 retyped them to `tage_upd_inp_t` and `tage_pred_meta_t` and
-replaced the per-field writes with whole-struct writes. The fields dropped by
-the retype had been written and never read, so the change preserves behavior.
-It also deleted the dead `tage_high_conf` logic from `tage_cntrl.sv`.
+BP-081 also generated the SC-facing fields described in TD #87/#88. These were
+the one-hot strong, medium and weak decode of the provider counter and the
+extended counter `2*ctr - 7`.
 
-The plan from the previous session was to tie the SC-facing TAGE fields that
-TAGE did not yet generate to zero. I folded their generation into BP-081
-instead, which closed TD #87 and TD #88 and required one package edit, the
-re-addition of `tage_pred_weak`.
+BP-081's only package edit was the re-addition of `tage_pred_weak` for this new
+decode. The `tage_pred_strong` definition changed from "not weak" to an
+explicit strong encoding, 000 or 111. As part of this the UAON[F1] gate moved
+from the old `!tage_pred_strong` to `tage_pred_weak`, 011 or 100.
 
-### The confidence decode
+`tb_tage_tasks.sv` used the removed field but was missing from the task
+manifest. The IA stopped and asked before editing outside its scope, and I
+authorized the fix. BUG-006 now requires affected files to be found by
+searching the unit, not taken from a list in the task.
 
-TAGE's provider counter is 3 bits. BP-081 decodes it one-hot, after the
-selection between the primary and alternative providers. Values 000 and 111
-are strong, 011 and 100 are weak, and the remaining four are medium. The
-extended counter for the SC is `2*ctr - 7` as a signed 5-bit value, which maps
-the eight counter values to the odd numbers from -7 to +7. That is the same
-centered form the SC applies to its own counters before summing.
-
-Before this task, `tage_pred_strong` meant "not weak", six of the eight
-values. Under the decode it means two of the eight. The name was kept and the
-meaning narrowed, so every consumer of the old meaning had to change with it.
-
-One consumer was the TAGE update rule for the use-alternate-on-newly-allocated
-(UAON) counters, which acts only when the provider was weak. It had been
-written as "if not strong". Keyed on the narrowed signal, that test would also
-fire on the four medium values. The IA moved the gate to `tage_pred_weak`,
-which reproduces the old behavior on every counter value, and confirmed it
-against an existing test in which a medium counter must suppress the UAON
-update. The rules document, `tage_cntrl_uaon_update_rules.md`, still defined
-strong as not weak. The IA wrote a corrected copy, which I checked and merged
-into the canonical document.
-
-### The file the manifest missed
-
-The task manifest listed the TAGE testbenches that BP-080's search had found
-referencing the removed field. That search covered only BP-080's own manifest.
-`tb_tage_tasks.sv` also referenced the field, was not listed, and did not
-compile. The IA stopped and asked before editing a file outside its scope, and
-I authorized the two-line deletion. The corrective rule, recorded as BUG-006,
-is that the files affected by a deleted or renamed field are the result of
-searching the unit for the symbol, not a list written into the task.
-
-### Running every target
-
-The TAGE suite returned green: `sim_tage` 105 of 105, `sim_tage_table` 15 of
-15, and `make all` exited cleanly. When I asked whether every Makefile target
-had run, the answer was no. `make all` does not include `sim_ittage`,
-`sim_tage_manual` or the coverage targets. The IA ran them, and they passed.
-That gap is the motivating evidence recorded in TD #99, which asks for a
-process that runs every target.
+I asked the IA if it had run all targets in the bpu Makefile. It had run `make
+all` but not all targets were covered. The missing targets were run with no
+errors. TD #99 was recorded for future work to develop a pre-push regression
+scheme.[F2]
 
 The coverage run reported 73.7% line coverage for `cov_tage` and 79.5% for
-`cov_tage_table`, against an earlier stated figure above 90%. Whether that is
-under-coverage or a difference in what was counted was not settled in the
-range. It is TD #100.[F1]
+`cov_tage_table`, against an earlier stated figure above 90%. TD #100 was
+recorded for diagnosis.[F3]
 
-The range's first session ended with all seven predictors, the uBTB, loop
-predictor, FTB, TAGE, SC, ITTAGE and RAS, and the history module complete and
-passing at the unit level.
+Session 060 ended with all seven predictors and `bp_history` passing at the
+unit level.
 
 ## Auditing the planning documents
 
-The cluster instantiates all seven predictors at once, and the task author
-builds it from their interface documents. A wrong port name or a stale field
-in any one of them would stop the cluster from elaborating. I redirected
-session 061 to check the documents first.
+Prior to BPC integration I redirected session 061 to audit the documents. The
+audit was three read-only IA tasks, FTB, then TAGE/SC and finally ITTAGE/RAS.
+Each task compared the planning documents for the group against the group's
+testbenches, packages, RTL, Makefile targets, as well as shared files. The task
+files reported discrepancies and any information that PA/I thought might be
+misleading. The IA audit results were reported to the PA and PA drafted the
+planning document updates. A discrepancy that needed a design decision rather
+than a text correction came to me.
 
-The audit was three read-only IA tasks, one per group: the FTB, then TAGE and
-SC, then ITTAGE and RAS. Each compared the group's planning documents with its
-RTL, testbenches, packages and Makefile targets, and with the shared documents
-where they describe the group. Each reported only discrepancies that would
-mislead someone using the documents as the authority, and excluded items
-already tracked. The IA did not edit anything. The planning assistant drafted
-each correction afterwards and I applied it. A discrepancy that needed a design
-decision rather than a text correction came to me.
+### Findings by group
 
-The first task was allowed to skip a shared document when it judged that the
-document's FTB content was already covered by open items, and it skipped all
-three. For the second and third groups I required the shared documents to be
-read in full, because TAGE, SC and ITTAGE have much more content in them. The
-ITTAGE finding described below was a contradiction between shared documents.
+INFRA-008 found no discrepancies in the FTB documents, and two stale RTL
+comments (TD #104).
 
-### The FTB
+INFRA-009 found 12 discrepancies in TAGE and SC. `tage_pred_strong` was
+redefined to 000 or 111, from "not weak". The TAGE base table index is PC bits
+12 to 2, not 11 to 1. `br_imli_mode` is now an RTL parameter instead of a
+port. The SC threshold is dynamic, not fixed, and the SC table geometry had
+changed. The SC unit testbench instantiates only ST1, so ST0 has no unit
+coverage.
 
-INFRA-008 found no discrepancy in the FTB documents. It found two stale
-comments in the RTL, recorded as TD #104. It did not run the simulation
-targets, because they write build files and the task forbade creating files,
-so the FTB's recorded result of 99 passing checks was not re-verified.
+INFRA-010 found 10 discrepancies in ITTAGE [4] and RAS. The ITTAGE
+allocation-write field order, MSB to LSB, is TAG, TGT, EPC, USE, CTR, VALID,
+incorrectly documented as TAG, EPC, USE, CTR, TGT, VALID. The ITTAGE table tag
+width is IT_TBL_TAG, 8 to 11 bits per table, not as documented 38b. Two target
+write strobes were present in the RTL, `prm_tgt_wr_u0` and `alt_tgt_wr_u0`, not
+a single strobe. The parameter `ITTAGE_RESP_BUF_DEPTH` was marked as
+vestigial; the response buffer is no longer in the design.
 
-### TAGE and SC
+The remaining minor findings were stale names and descriptions, and an unread
+RAS input deferred to TD #101.
 
-INFRA-009 found 12 discrepancies. Two TAGE documents still defined
-`tage_pred_strong` as not weak, one session after BP-081 changed it, and
-omitted the new medium and extended-counter fields. The TAGE decisions document
-gave the base table's index as PC bits 11 to 1; the RTL and the hash-rule
-document use bits 12 to 2. The same document summarized four rows of a counter
-update table for a case that cannot occur, where the rules document has one
-row marked as an assertion.
-
-The SC findings were the ones the previous range left behind. The interface
-and hash documents described `br_imli_mode` as a port, which BP-079 had made a
-parameter. `sc_interfaces.md` described the SC update queue as functional,
-where the unit stubs it. `bp_cluster.md` still gave the SC tables their
-original geometry of 256 entries of 24 bits, and described the SC threshold as
-fixed at design time. The SC decisions document specifies a dynamic threshold,
-so the cluster document contradicted it. `sram_init.md` listed the SC as a
-future consumer with the TAGE plusarg. And `sc_tb_decisions.md` implied that
-the ST0 table, the one with no folded history, had unit coverage. The unit
-testbench instantiates only ST1, so the ST0 path is untested at the unit
-level. That gap was documented and not assigned a debt number.
-
-### ITTAGE and RAS
-
-INFRA-010 found 10. The ITTAGE allocation rules gave the fields of the
-allocation write in an order different from the entry format and the RTL; a
-write assembled from that document would build a corrupt entry. The entry
-format document cited the 38-bit target width parameter as the tag width. The
-interface documents described one target-write strobe where the RTL has one
-for the primary and one for the alternative provider, and one described up to
-four counter writes per update where ITTAGE writes one. The arbitration
-specification listed a response-buffer depth parameter for a buffer removed
-in BP-038b. On the RAS, `ras.sv` declares an input, `ras_pc_p2`,
-that no document lists and the module never reads. The document was corrected
-to list it, and whether the port is needed is TD #101.
+The documents were corrected for all findings. The two design discrepancies
+are covered in the next section.
 
 ### Two rulings
 
-Two ITTAGE findings were contradictions between documents that described
-different designs, and the IA reported them without choosing.
+Two ITTAGE findings were contradictions between documents, detected and
+reported by the IA. There was confusion as to where indirect calls were
+assigned; the documents differed. I made the ruling that ITTAGE predicts the
+target, and the RAS manages the return address. This is conventional.
 
-The first was ownership of an indirect call. `bp_cluster.md` placed indirect
-calls with ITTAGE, and `ittage_interfaces.md` excluded them and assigned them
-to the RAS alone. The two units do different things with the same
-instruction. ITTAGE predicts the call's target, which depends on history. The
-RAS pushes the return address. I ruled that both are in scope for an indirect
-call, each for its own job, and `ittage_interfaces.md` was corrected.
+The second contradiction was the description of the longest ITTAGE table, IT5.
+A cut and paste error labeled IT5 as a BrIMLI table [5], a transposition from
+the SC documents.
 
-The second was ITTAGE's fifth table, IT5. `bp_history_decisions.md`,
-`bp_cluster.md` and `bp_history.sv` treated it as a BrIMLI table with no folded
-history. The packages, the ITTAGE interface and hash documents, and an
-interface item marked complete all gave it folded history with a 32-bit
-depth. The BrIMLI description had been copied from the SC, where ST4 is a
-BrIMLI table, and was wrong. The consequence was in the RTL. `bp_history.sv`
-does not generate IT5's folds, and `ittage.sv` connects IT5 to outputs that are
-never driven and read as zero. IT5 is indexed by the PC alone, so the ITTAGE
-table with the longest history contributes no history. This is a loss of
-prediction accuracy and not a functional failure. The documents were
-corrected, and the RTL fix is TD #102.
+This gap was recorded as TD #102 for later resolution. TD #102 will impact both
+the ITTAGE and the history module but at present it represents a loss of
+prediction accuracy rather than a functional failure.
 
 ### The base table's initial value
 
-The TAGE decisions document said the base table, T0, initializes to 10, weakly
-taken. The package sets `TAGE_SRAM_INIT_VALUE` to 0, so T0 comes up strongly
-not-taken. INFRA-009 reported the difference, the planning assistant grouped it
-with the text corrections, and the document was changed to 00.
-
-In the same session I recorded TD #103, which says the intended initial value
-is 10 and the RTL is wrong. The document had been right. The audit corrected it
-to match the defect. The document now describes current behavior, and the
-status file carries a note that it must be changed back when TD #103 closes.
+During audit there was some confusion on the initialization value used by the
+TAGE base table (T0). All TAGE tables, T0 included, initialize from
+`TAGE_SRAM_INIT_VALUE`, which is 0 (strongly not taken). T0 is intended to
+initialize to weakly taken, 10, as the planning document stated. The audit
+cleanup mistakenly changed the document to match the RTL. TD #103 now captures
+the fix: a T0-specific init value of 10, and restoration of the document.
 
 ## Specifying the FTQ boundary
 
-Session 062 was planned to write the interface between the cluster and the
-FTQ. No document defined how the two exchange predictions, redirects and
-updates, so the session first wrote that as a theory-of-operation document,
-`fe_decisions.md`, from an earlier draft. The planning assistant and I
-corrected it section by section. It settled six points.
+Session 062 developed the `fe_decisions.md` file which defines the cluster
+organization and the cluster to FTQ interface with role assignments for
+exchanging predictions, redirects and updates. It settled seven points:[F4]
 
-The FTQ entry is dual-slot. The entry splits into fields that describe the
-whole prediction block, such as the PC, the history pointers and the RAS
-snapshot, and a per-slot array holding each slot's target, branch type,
-direction and source. The metadata is carried per slot. This closed FE-U8.
-
-The two prediction slots are the two branch fields of one 32-byte FTB block,
-supplied by one FTB lookup. Earlier text assigned the slots to two fixed PC
-ranges. That convention comes from how TAGE and ITTAGE split their bundle and
-does not govern the FTB, which `ftb_decisions.md` defines. Two resolved items
-in the status file, G8 and G17, carried the fixed-range reading and were
-identified as stale.
-
-Predictors do not drive redirects. A predictor presents its prediction at its
-stage, and the cluster compares it with the earlier prediction and derives
-the redirect. No predictor knows that it is overriding another. The RAS
-interface already had no redirect port, and the audit in session 061 had
-found that the redirect signals named in the arbitration specification did
-not exist on the TAGE, SC or ITTAGE RTL.
-
-ITTAGE produces its full target at p2. The earlier text refined a raw p2 target
-into a final p3 target, which is a table-plus-offset structure used in other
-designs and not in Pacino.
-
-A history checkpoint is the pair of GHR and PHR pointers, one pair per FTQ
-entry. The RAS snapshot is a separate field in the entry, restored by the same
-redirect but not part of the checkpoint.
-
-An FTQ entry is allocated at p1 for every prediction block, including a block
-the p1 predictors miss, because a later predictor can only redirect against an
-entry that exists.
-
-The review also corrected a justification. The document said one RAS snapshot
-per entry was enough because at most one branch per block is on the executed
-path. That is false: a not-taken branch in slot 0 leaves slot 1 on the path.
-The correct basis is that a RAS operation is a call or a return, both taken
-branches, so a RAS operation in slot 0 ends the block before slot 1. FE-11 was
-restated on that basis.[F2]
+- The FTQ entry is dual-slot: block-level fields (PC, history pointers, RAS
+  snapshot) and a per-slot array (target, branch type, direction, source).
+- The two slots are the two branch fields of one 32-byte FTB block, from one
+  lookup, not two fixed PC ranges.
+- Predictors do not drive redirects. Each presents its prediction at its
+  stage, and the cluster compares it with the earlier one and derives the
+  redirect.
+- ITTAGE produces its final target at p2.
+- A history checkpoint is the GHR and PHR pointer pair, one per FTQ entry. The
+  RAS snapshot is a separate field restored by the same redirect.
+- An FTQ entry is allocated at p1 for every prediction block, including a p1
+  miss, so a later predictor always has an entry to redirect against.
+- At most one RAS operation occurs per prediction block. A call or return is
+  a taken branch, so one in slot 0 ends the block before slot 1. Each FTQ
+  entry therefore needs only one RAS snapshot.
 
 ### The interface file
 
-The interface file itself was not written. It depends on reading all eight
-predictor port lists. For most of the session, files attached to the chat
-arrived without readable content, and seven of the eight interface documents
-could not be read. The session switched to the implementation assistant for
-direct access to the repository files. The range ends with `fe_decisions.md` written and the
-interface file not started.
+The interface file was not written in these sessions. The file needed all
+eight predictor port lists. Some files shared in the PA session arrived empty
+according to the PA. It is likely this was due to the length of the files and
+the remaining context available in the PA session. Unfortunately Claude.ai has
+no `/context` command and it has no way to report context load, unlike Claude
+Code.[F5]
+
+The port inventory moved to the IA, which read the repository directly. In the
+next session, `ftq_bpu_interfaces.md` was written from that inventory.
 
 ## Experiment Summary
 
@@ -306,11 +198,13 @@ tokens combined; the 6% is the main thread only.
 
 ### The IA contribution
 
-BP-081 did the most work that its prompt did not state. It worked out that the
-narrowed `tage_pred_strong` would change the UAON gate, chose the signal that
-preserves the old behavior, and confirmed it against an existing test. It found
-that the UAON rules document carried the old definition. It stopped at the
-unlisted testbench instead of editing it.
+BP-081 went furthest beyond its task specification. The IA identified that
+narrowing `tage_pred_strong` would change the UAON update condition, gated the
+update on `tage_pred_weak` to preserve the prior behavior, and verified the
+change against an existing directed test. It also identified that the UAON
+rules document still carried the superseded definition. When it found an
+affected testbench outside its manifest, it halted and requested authorization
+instead of editing the file.
 
 The audits cited file and line for each finding and traced several to their
 cause, including the BrIMLI description of IT5 and the split target-write
@@ -335,15 +229,17 @@ was complete, later, and named the status-file items it superseded.
 
 I folded the TD #87 and TD #88 generation into BP-081, asked whether every
 target had run, and authorized the out-of-scope testbench edit. I redirected
-session 061 to the audit, tightened the shared-document rule after the first
-group, and made the two ITTAGE rulings. I recorded TD #103. In session 062 I
-supplied the design corrections to `fe_decisions.md`: the single-stage ITTAGE
-target, the slot model, the checkpoint definition and the redirect model.
+session 061 to the audit, required the later audit groups to read the shared
+documents in full, and made the two ITTAGE rulings. I recorded TD #103. In
+session 062 I supplied the design corrections to `fe_decisions.md`: the
+single-stage ITTAGE target, the slot model, the checkpoint definition and the
+redirect model.
 
 ### The generalization
 
 An audit that compares a document with the RTL finds where they disagree. It
-does not find which one is wrong.
+does not find which one is wrong. An earlier case of a reference taken from the
+design under test is described in [6].
 
 Twenty of the 22 findings were resolved by changing the document to match the
 RTL. For stale names, removed parameters and superseded ports that is correct,
@@ -367,9 +263,9 @@ The range closes with all seven predictors and `bp_history` passing at the unit
 level, their planning documents checked against the RTL, and the FTQ boundary
 written down in `fe_decisions.md`. The cluster has still not been started.
 
-The next session begins with the interface work that session 062 could not
-finish: an inventory of every port on the eight top-level modules, then the
-FTQ-to-cluster interface file, then the cluster itself.
+The next session continues the interface work that session 062 could not
+finish: the IA's inventory of every port on the eight top-level modules, the
+FTQ-to-cluster interface file written from it, then the cluster itself.
 
 The debt opened in this range is small RTL work that the cluster does not need
 in order to elaborate: the unread RAS input (TD #101), IT5's missing folds (TD
@@ -396,37 +292,76 @@ experiments outside the range have since changed the state of some items.
 | 104 | Two stale FTB RTL comments (INFRA-008). | ftb_cntrl.sv states 107 bits per way where the entry is 105; ftb.sv states ftb_fastpath_en is beyond the interface draft, which now lists it. Comment-only; fold into the first FTB RTL task. |
 
 ## References
+<!-- ticfinder_off -->
 
-- The Statistical Corrector: Design Choices at p3 (BLOG_bpu_17), for the
-  package edits that broke TAGE and the BP-080 investigation that scoped the
-  repair.
+[1] "The Statistical Corrector: Design Choices at p3" (BLOG_bpu_17), for the
+package edits that broke TAGE and the BP-080 investigation that scoped the
+repair.
 
-- External Anchors: When a Proof and Its Reference Share the Same Error
-  (BLOG_bpu_16), for the earlier case of a reference taken from the design
-  under test.
+[2] Seznec, André, and Pierre Michaud. "A case for (partially) tagged geometric
+history length branch prediction." The Journal of Instruction-Level
+Parallelism 8 (2006): 23.
+
+[3] Seznec, André. "Tage-sc-l branch predictors." JILP-Championship Branch
+Prediction. 2014.
+
+[4] Seznec, André. "A 64-Kbytes ITTAGE indirect branch predictor." JWAC-2:
+Championship Branch Prediction. 2011.
+
+[5] Seznec, André, Joshua San Miguel, and Jorge Albericio. "The inner most
+loop iteration counter: a new dimension in branch history." Proceedings of the
+48th International Symposium on Microarchitecture. 2015.
+
+[6] "External Anchors: When a Proof and Its Reference Share the Same Error"
+(BLOG_bpu_16), for the earlier case of a reference taken from the design under
+test.
+<!-- ticfinder_on -->
 
 ## Footnotes
 
 <!-- ticfinder_off -->
-[F1] BP-097, in a later range, found that 8,043 of the 8,700 lines counted by
+[F1] UAON is known in the literature as `USE_ALT_ON_NA`, i.e.
+use-alternate-on-newly-allocated. It is a counter that tracks whether the
+alternate prediction is more accurate than the primary prediction when the
+primary's entry appears newly allocated, i.e. its counter is weak (011 or
+100). See [2] and [3].
+
+[F2] TOOLS-006, in a later range, closed TD #99 with `tools/regress.sh`, which
+runs every target of every `rtl/` Makefile and is run by a pre-push hook.
+
+[F3] BP-097, in a later range, found that 8,043 of the 8,700 lines counted by
 `cov_tage` are testbench lines, and that the DUT-only coverage is near 90%.
 TD #100 remains open until a conclusion states its denominator.
 
-[F2] `fe_decisions.md` has been revised substantially since session 062. In
+[F4] `fe_decisions.md` has been revised substantially since session 062. In
 session 064 the RAS top-of-stack read was moved from p1 to p0, and after a
 port inventory confirmed that no predictor declares a redirect port, the
 redirect section was rewritten to two cluster-level groups named by stage,
 `bpu_redir_p2` and `bpu_redir_p3`. In session 071 the 32-byte unit was named
 the prediction block, distinct from the 64-byte fetch block the IFU reads.
 This post uses the later term.
+
+[F5] Confirmed with the latest Claude.ai.
+
+Q: do you have any method to return your context load, remaining, etc ?
+
+A: No. I have no tool that reports context used or remaining, and no
+visibility into token counts. Claude Code shows the IA a "Ctx %", which is
+where your task headers get that figure; nothing equivalent exists in this
+chat.
 <!-- ticfinder_on -->
 
 ---
 <!-- ticfinder_off -->
-*Jeff Nye is a microprocessor architect with 35 years of industry experience 
-spanning performance modeling, RTL implementation, and architecture for 
-high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,  TI C6x and RISC-V designs, and recently served as sole architect and full-stack implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in an 8-issue RVA23 RISC-V processor — from research through timing closure at 2.75 GHz. He holds +20 issued patents in processor design, architecture, and hardware 
-virtualization. He is the author of Pacino and the uarchlabs methodology documented here.*
+*Jeff Nye is a microprocessor architect with 35 years of industry experience
+spanning performance modeling, RTL implementation, and architecture for
+high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,
+TI C6x and RISC-V designs, and recently served as sole architect and full-stack
+implementer of the TAGE-SC-L + ITTAGE branch prediction cluster in an 8-issue
+RVA23 RISC-V processor, from research through timing closure at 2.75 GHz. He
+holds +20 issued patents in processor design, architecture, and hardware
+virtualization. He is the author of Pacino and the uarchlabs methodology
+documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
 <!-- ticfinder_on -->

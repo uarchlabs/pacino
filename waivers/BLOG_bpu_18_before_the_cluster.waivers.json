@@ -1,0 +1,167 @@
+{
+  "generated_by": "ticfinder",
+  "source": "blogs/BLOG_bpu_18_before_the_cluster.md",
+  "waivers": {
+    "3fc8e6": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 60,
+      "enabled": true,
+      "text": ", closing TD #94 and TD #95"
+    },
+    "93e551": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 63,
+      "enabled": true,
+      "text": "one-hot strong, medium and weak"
+    },
+    "bbf826": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 63,
+      "enabled": true,
+      "text": "the one-hot strong, medium and weak decode of the provider counter and the extended counter  2*ctr -"
+    },
+    "131b98": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 67,
+      "enabled": true,
+      "text": "an explicit strong encoding, 000 or 111"
+    },
+    "b3de36": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 72,
+      "enabled": true,
+      "text": "The IA stopped and asked before editing outside its scope, and I authorized the fix."
+    },
+    "17391d": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 91,
+      "enabled": true,
+      "text": "three read-only IA tasks, FTB, then TAGE/SC and finally ITTAGE/RAS"
+    },
+    "7e808f": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 92,
+      "enabled": true,
+      "text": "the group's testbenches, packages, RTL, Makefile targets, as well as shared files"
+    },
+    "e89eae": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_negated_apposition",
+      "line_when_waived": 105,
+      "enabled": true,
+      "text": "PC bits 12 to 2, not 11 to 1"
+    },
+    "42bb57": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 106,
+      "enabled": true,
+      "text": "instead of"
+    },
+    "519c63": {
+      "construction": "LLM_DICTION",
+      "pattern": "",
+      "line_when_waived": 107,
+      "enabled": true,
+      "text": "dynamic"
+    },
+    "966d7b": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_negated_apposition",
+      "line_when_waived": 115,
+      "enabled": true,
+      "text": "the RTL,  prm_tgt_wr_u0  and  alt_tgt_wr_u0 , not a single strobe"
+    },
+    "a2c37d": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 115,
+      "enabled": true,
+      "text": "the RTL,  prm_tgt_wr_u0  and  alt_tgt_wr_u0 , not a single strobe"
+    },
+    "7628c9": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 119,
+      "enabled": true,
+      "text": "stale names and descriptions, and an unread RAS input deferred to TD #101"
+    },
+    "f1c303": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 138,
+      "enabled": true,
+      "text": "rather than"
+    },
+    "f3745b": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 153,
+      "enabled": true,
+      "text": "predictions, redirects and updates"
+    },
+    "57d5b3": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 155,
+      "enabled": true,
+      "text": "dual-slot: block-level fields (PC, history pointers, RAS   snapshot) and a per-slot array (target, b"
+    },
+    "cce8e8": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 159,
+      "enabled": true,
+      "text": "Each presents its prediction at its   stage, and the cluster compares it with the earlier one and de"
+    },
+    "142cb4": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 201,
+      "enabled": true,
+      "text": "that narrowing  tage_pred_strong  would change the UAON update condition, gated the update on  tage_"
+    },
+    "e71f56": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 207,
+      "enabled": true,
+      "text": "instead of editing the file"
+    },
+    "7febf5": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 218,
+      "enabled": true,
+      "text": "The planning assistant wrote the four task files, drafted the document corrections from the audit fi"
+    },
+    "22e6b4": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 221,
+      "enabled": true,
+      "text": "instead of"
+    },
+    "c84d5e": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 234,
+      "enabled": true,
+      "text": "the single-stage ITTAGE target, the slot model, the checkpoint definition and the redirect model"
+    },
+    "271489": {
+      "construction": "EMPHATIC_REFLEXIVE",
+      "pattern": "emphatic_reflexive",
+      "line_when_waived": 268,
+      "enabled": true,
+      "text": "then the cluster itself"
+    }
+  }
+}
