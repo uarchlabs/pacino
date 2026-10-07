@@ -12,7 +12,7 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(SCRIPT_DIR, "spike_oracle.csv")
 SPIKE_DASM = os.path.join(
-  SCRIPT_DIR, "spike", "install", "bin", "spike-dasm"
+  SCRIPT_DIR, "bin", "spike-dasm"
 )
 
 ISA = (

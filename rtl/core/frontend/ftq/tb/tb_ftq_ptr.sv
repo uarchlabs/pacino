@@ -799,22 +799,32 @@ module tb;
     tick();
 
     // FRONT END, predecode. K = 6 survives, corrected. alloc_ptr is
-    // K+1 as for a surviving backend entry, but F = K: xlate_ptr and
-    // fetch_ptr land ON K so it is translated and fetched again
-    // (ftq_ifu_interfaces.md 7 W3).
+    // K+1 as for a surviving backend entry, and so is F: K is already
+    // fetched and its head is in the ibuf, which does not clear on a
+    // predecode redirect, so xlate_ptr and fetch_ptr land on K+1 and K
+    // is NOT translated or fetched again (ftq_decisions.md 5.5 R1,
+    // ftq_ifu_interfaces.md 7 W3, ruled session-074, TD#146).
+    // CHANGED BY BP-117: H36 to H38 encoded F = K, the BP-112 build;
+    // H40 and H41 keep their values with the opposite meaning.
     do_reset();
     alloc_n(10);
     fetch_n(8);
     redirect_fe(6'd6, ARM_PD);
     chk_eq("H35 predecode: alloc_ptr to K+1", alloc_ptr, 7'd7);
-    chk_eq("H36 predecode: xlate_ptr to K",   xlate_ptr, 7'd6);
-    chk_eq("H37 predecode: fetch_ptr to K",   fetch_ptr, 7'd6);
-    chk   ("H38 K is to be translated again", xlate_pending);
-    chk   ("H39 and not fetched until it is", !fetch_pending);
+    // was 7'd6, "xlate_ptr to K"
+    chk_eq("H36 predecode: xlate_ptr to K+1", xlate_ptr, 7'd7);
+    // was 7'd6, "fetch_ptr to K"
+    chk_eq("H37 predecode: fetch_ptr to K+1", fetch_ptr, 7'd7);
+    // was xlate_pending, "K is to be translated again"
+    chk   ("H38 K is not translated again",   !xlate_pending);
+    chk   ("H39 and nothing is fetchable",    !fetch_pending);
     tick();
-    chk_eq("H40 K translated",                xlate_ptr, 7'd7);
+    // was "K translated": 7 was xlate_ptr after K's second translation
+    chk_eq("H40 xlate_ptr holds at K+1",      xlate_ptr, 7'd7);
     fetch_n(1);
-    chk_eq("H41 K fetched again",             fetch_ptr, 7'd7);
+    // was "K fetched again": 7 was fetch_ptr after K's second fetch
+    chk_eq("H41 fetch_ptr holds at K+1, K is not refetched",
+           fetch_ptr, 7'd7);
 
     // FRONT END, p2, with fetch_ptr exactly at K+1: K was fetched
     // against the old prediction and must be fetched again.
@@ -940,6 +950,60 @@ module tb;
            alloc_ptr, exp_tgt + PB'(req));
   endtask
 
+  // -----------------------------------------------------------------
+  // J. The flush index by ARM, from one start state (BP-117, TD#146).
+  // -----------------------------------------------------------------
+  // 5.5 R1: predecode F = K+1, p2 and p3 F = K, backend _self clear
+  // F = K+1. Each row starts from the same state, 10 allocated, 8
+  // fetched, commit_ptr at 2, and names K = 6, so the four rows differ
+  // in the arm and nothing else. The predecode row fails on the
+  // pre-BP-117 tree, which built it at K with p2 and p3.
+  task automatic arm_row(input string                   nm,
+                         input logic [FTQ_IDX_BITS-1:0] idx,
+                         input logic [5:1]              arm,
+                         input logic [PB-1:0]           exp_f);
+    do_reset();
+    alloc_n(10);
+    fetch_n(8);
+    commit_n(2);
+    if (arm == ARM_BKEND) redirect(idx, 1'b0, RC_MISPREDICT);
+    else                  redirect_fe(idx, arm);
+    chk_eq({nm, ": xlate_ptr"}, xlate_ptr, exp_f);
+    chk_eq({nm, ": fetch_ptr"}, fetch_ptr, exp_f);
+    chk_eq({nm, ": alloc_ptr K+1"}, alloc_ptr, PB'(idx) + PB'(1));
+    tick();
+  endtask
+
+  task automatic group_j();
+    $display("-- J: the flush index by arm, one start state --");
+    arm_row("J1 predecode, F = K+1",         6'd6, ARM_PD,    7'd7);
+    arm_row("J2 p3, F = K",                  6'd6, ARM_P3,    7'd6);
+    arm_row("J3 p2, F = K",                  6'd6, ARM_P2,    7'd6);
+    arm_row("J4 backend _self clear, K+1",   6'd6, ARM_BKEND, 7'd7);
+    // fetch_ptr exactly at K+1: predecode leaves it there (it is the
+    // minimum already) and brings xlate_ptr back to it; K = 7 is not
+    // fetched again. The p2 row of the same state is H42, H43.
+    arm_row("J5 predecode, fetch_ptr at K+1", 6'd7, ARM_PD,    7'd8);
+
+    // Across the wrap: commit_ptr at 60, head at 68; index 2 is the
+    // next generation, entry 7'h42, so F is 7'h43. H48 to H50 are the
+    // p3 row of the same state.
+    do_reset();
+    alloc_n(60);
+    fetch_n(60);
+    commit_n(60);
+    alloc_n(8);
+    fetch_n(8);
+    redirect_fe(6'd2, ARM_PD);
+    chk_eq("J6 predecode across the wrap: alloc_ptr 7'h43",
+           alloc_ptr, 7'h43);
+    chk_eq("J7 predecode across the wrap: xlate_ptr 7'h43",
+           xlate_ptr, 7'h43);
+    chk_eq("J8 predecode across the wrap: fetch_ptr 7'h43",
+           fetch_ptr, 7'h43);
+    tick();
+  endtask
+
   task automatic group_i();
     $display("-- I: the p0 index in a redirect cycle --");
 
@@ -1026,6 +1090,7 @@ module tb;
     group_g();
     group_h();
     group_i();
+    group_j();
 
     $display("tb_ftq_ptr: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

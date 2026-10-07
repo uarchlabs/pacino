@@ -54,10 +54,13 @@ module ftq_ifu_assert (
   localparam int ARM_P3 = 3;
   localparam int ARM_P2 = 4;
 
-  logic w_fe_redir;
+  // The two front-end sets of 5.5 R1, by arm. p2 and p3 keep K;
+  // predecode flushes past it (BP-117, TD#146).
+  logic w_keep_k;
+  logic w_pd_redir;
   always_comb begin : fe_set
-    w_fe_redir = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
-                 redir_arm[ARM_P2];
+    w_keep_k   = redir_arm[ARM_P3] | redir_arm[ARM_P2];
+    w_pd_redir = redir_arm[ARM_PD];
   end
 
   // I1  A stale writeback is dropped ENTIRELY. 6.1 X3, and the four
@@ -91,9 +94,11 @@ module ftq_ifu_assert (
 
   // I4  R3 and R3a of ftq_entry_formats.md 4.3 (TD#140, BP-114). A
   //     second writeback naming an entry that already has wb_rcvd set
-  //     is LEGAL: the W3 refetch produces one on every predecode
-  //     redirect, with gen unchanged. So a current one (gen matches)
-  //     is ACCEPTED and sets the status like any other, and it
+  //     is LEGAL, with gen unchanged. R3a was written for the W3
+  //     refetch of K, which BP-117 (TD#146) removed by flushing a
+  //     predecode redirect at K+1; the rule is kept as the bound. So
+  //     a current one (gen matches) is ACCEPTED and sets the status
+  //     like any other, and it
   //     derives NO redirect whatever its predecode result -- R3's
   //     bound of one predecode redirect per entry is what stops a
   //     refetch loop. A stale one (gen differs) is I1's case.
@@ -129,21 +134,37 @@ module ftq_ifu_assert (
   // I10 removed: taken_val restated the slot loop; tb groups A, I.
   // I11 removed: next_pc == pft restated the slot loop; tb groups A, I.
 
-  // I12 7 W3 and ifu_ibuf_interfaces.md IB-13. A p2, p3 or predecode
-  //     redirect flushes AT K: K survives, corrected, and a fetch of
-  //     K issued against the old prediction truncates in the wrong
-  //     place. TD#126 flushed at K+1 for every surviving entry.
+  // I12 7 W3 and ifu_ibuf_interfaces.md IB-13. A p2 or p3 redirect
+  //     flushes AT K: K survives, corrected, and a fetch of K issued
+  //     against the old prediction truncates in the wrong place.
+  //     TD#126 flushed at K+1 for every surviving entry. CHANGED BY
+  //     BP-117: the antecedent included the predecode arm.
   property p_fe_flush_at_k;
     @(posedge clk) disable iff (!rstn)
-      (redir_val && w_fe_redir && (redir_cause != RC_UNSPEC)) |->
+      (redir_val && w_keep_k && (redir_cause != RC_UNSPEC)) |->
         (ftq_ifu_flush_idx == redir_idx);
   endproperty
 
+  // I12a 7 W3, IB-13 and 5.5 R1, ruled session-074 (TD#146, BP-117).
+  //     A predecode redirect flushes at K+1: K is fetched and its head
+  //     is in the ibuf, which does not clear on it (IB-12), so a
+  //     refetch of K delivers that head twice. The index is formed
+  //     here from redir_idx, not taken from the arm decode ftq_ifu
+  //     uses, and _self is not read: the predecode row is K+1
+  //     whatever it carries.
+  property p_pd_flush_past_k;
+    @(posedge clk) disable iff (!rstn)
+      (redir_val && w_pd_redir && (redir_cause != RC_UNSPEC)) |->
+        (ftq_ifu_flush_idx == FTQ_IDX_BITS'(redir_idx + 1'b1));
+  endproperty
+
   // I13 The backend half, unchanged by BP-112 (ftq_backend_interfaces
-  //     .md 5 D5). _self clear flushes at K+1, _self set at K.
+  //     .md 5 D5). _self clear flushes at K+1, _self set at K. CHANGED
+  //     BY BP-117: the predecode arm is I12a's, not this row's.
   property p_bkend_flush_by_self;
     @(posedge clk) disable iff (!rstn)
-      (redir_val && !w_fe_redir && (redir_cause != RC_UNSPEC)) |->
+      (redir_val && !w_keep_k && !w_pd_redir &&
+       (redir_cause != RC_UNSPEC)) |->
         (ftq_ifu_flush_idx == (redir_self ? redir_idx
                                           : redir_idx + 1'b1));
   endproperty
@@ -164,7 +185,9 @@ module ftq_ifu_assert (
   a_redir_pc_corrected: assert property (p_redir_pc_is_corrected)
     else $error("I6 the redirect PC is not the corrected successor");
   a_fe_flush_at_k:      assert property (p_fe_flush_at_k)
-    else $error("I12 a front-end redirect did not flush at K");
+    else $error("I12 a p2 or p3 redirect did not flush at K");
+  a_pd_flush_past_k:    assert property (p_pd_flush_past_k)
+    else $error("I12a a predecode redirect did not flush at K+1");
   a_bkend_flush_self:   assert property (p_bkend_flush_by_self)
     else $error("I13 the backend flush index does not follow _self");
   // I16 ftq_backend_interfaces.md 5.1 U3 (TD#141, BP-114). RC_UNSPEC

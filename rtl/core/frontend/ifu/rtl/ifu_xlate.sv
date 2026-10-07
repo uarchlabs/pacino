@@ -43,6 +43,15 @@
 // flush cycle is ignored (ftq_ifu_interfaces.md 5, TD#138), and no
 // lookup is presented in a flush cycle.
 //
+// THE LOOKUP VPN IS EVERY FETCH ADDRESS BIT ABOVE THE PAGE OFFSET,
+// [VA_WIDTH-1:12], VA_WIDTH-12 = 29 bits (itlb_ifu_interfaces.md
+// IT-16), on both lookups of a crossing block. It is not VPN_WIDTH
+// (27, the Sv39 VPN): with V=1 and vsatp.MODE=Bare the fetch PC is a
+// 41-bit guest physical address, and with V=0 and satp.MODE=Bare a
+// fetch address above bit 35 must reach the PMA check to fault
+// (FE-19). The ITLB, not the IFU, decides which bits a regime uses.
+// Ruled session-074, TD#146, built BP-117; BP-116 drove VPN_WIDTH.
+//
 // PMA bit positions are not fixed by any document (IT-10 names the
 // four attributes, MMU-13 their order). This module takes them in
 // MMU-13's order from bit 0. See the BP-116 Results Capture.
@@ -68,7 +77,7 @@ module ifu_xlate #(
   // ---- itlb_ifu_interfaces.md 2 ------------------------------------
   output logic                     ifu_itlb_req_val,
   input  logic                     ifu_itlb_req_rdy,
-  output logic [VPN_WIDTH-1:0]     ifu_itlb_vpn,
+  output logic [VA_WIDTH-13:0]     ifu_itlb_vpn,     // IT-16
   output logic                     ifu_itlb_tag,
   input  logic                     itlb_ifu_rsp_val,
   input  logic                     itlb_ifu_tag,
@@ -95,6 +104,9 @@ module ifu_xlate #(
 
   localparam int XQ_PTR = (XQ_DEPTH > 1) ? $clog2(XQ_DEPTH) : 1;
   localparam int XQ_CNT = $clog2(XQ_DEPTH + 1);
+
+  // The lookup VPN width, IT-16: the fetch address above the offset.
+  localparam int LK_VPN_W = VA_WIDTH - 12;
 
   // itlb_ifu_status, IT-4.
   localparam logic [1:0] ST_HIT  = 2'b00;
@@ -155,7 +167,7 @@ module ifu_xlate #(
   logic                    w_done;
   logic                    w_accept;
   logic                    w_new_cross;
-  logic [VPN_WIDTH-1:0]    w_cur_vpn;
+  logic [LK_VPN_W-1:0]     w_cur_vpn;
   logic                    w_req_new;
   logic                    w_req_fire;
   xq_ent_t                 w_enq;
@@ -204,7 +216,7 @@ module ifu_xlate #(
     w_new_cross = (ftq_ifu_xlate_pc[11:0] >= CROSS_FROM);
 
     // ---- the lookup presented this cycle (IT-1, IT-13) ----------------
-    w_cur_vpn        = r_cur_pc[12 +: VPN_WIDTH];
+    w_cur_vpn        = r_cur_pc[12 +: LK_VPN_W];
     ifu_itlb_req_val = 1'b0;
     ifu_itlb_tag     = 1'b0;
     ifu_itlb_vpn     = w_cur_vpn;
@@ -214,10 +226,10 @@ module ifu_xlate #(
     end else if (r_cur_val && w_need[1] && !w_out[1]) begin
       ifu_itlb_req_val = 1'b1;
       ifu_itlb_tag     = 1'b1;
-      ifu_itlb_vpn     = w_cur_vpn + VPN_WIDTH'(1);
+      ifu_itlb_vpn     = w_cur_vpn + LK_VPN_W'(1);
     end else if (w_accept) begin
       ifu_itlb_req_val = 1'b1;
-      ifu_itlb_vpn     = ftq_ifu_xlate_pc[12 +: VPN_WIDTH];
+      ifu_itlb_vpn     = ftq_ifu_xlate_pc[12 +: LK_VPN_W];
       w_req_new        = 1'b1;
     end
     if (ftq_ifu_flush_val) ifu_itlb_req_val = 1'b0;

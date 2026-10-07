@@ -10,7 +10,8 @@
 # fe_decisions.md, icache_decisions.md, ifu_decisions.md,
 # ibuf_decisions.md, ftq_ifu_interfaces.md, itlb_ifu_interfaces.md,
 # ftq_decisions.md, mmu_decisions.md,
-# ifu_ibuf_interfaces.md).
+# ifu_ibuf_interfaces.md), and the files updated in session-075
+# (ftq_decisions.md, ftq_ifu_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -40,7 +41,7 @@ ARCH  cachegen_decisions.md             ea488dd8c90d
 ARCH  dcd_decisions.md                  430f2373309c
 ARCH  fe_decisions.md                   37908124512b
 ARCH  ftb_decisions.md            35cacdaab9cd
-ARCH  ftq_decisions.md            78572ed785c7
+ARCH  ftq_decisions.md            2b2a475820f3
 ARCH  ftq_entry_formats.md        f8f37ff7a19d
 ARCH  ibuf_decisions.md                 03a5e323da19
 ARCH  icache_decisions.md               dee12ddc7206
@@ -80,7 +81,7 @@ INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
 INTF  ftq_bpu_interfaces.md       4675dfb2360b
-INTF  ftq_ifu_interfaces.md       add22f7e5685
+INTF  ftq_ifu_interfaces.md       6bd053577a83
 INTF  ifu_ibuf_interfaces.md      7d7e689b23dd
 INTF  itlb_ifu_interfaces.md            b54e910f2fa0
 INTF  itlb_l2tlb_interfaces.md          cdd678fff43d

@@ -35,6 +35,19 @@
 // worked by hand from the field tables, one per correction class and
 // a few ordinary ones, so the correction functions are themselves
 // checked against a third source.
+//
+// THE INDEPENDENT ORACLE (BP-117). The reference above and the
+// spec_* corrections were written by the same hand that wrote the
+// RTL's tables, so agreeing with them proves less than it looks.
+// tb/ifu_rvc_exp_oracle.hex holds an expected word for every 16-bit
+// encoding produced by LLVM (gen_ifu_rvc_exp_oracle.py): its
+// disassembler expands the encoding through its own compress-pattern
+// table and its assembler re-encodes the expansion with C off. Every
+// encoding is checked against it at all seventeen positions, and the
+// reference above is checked against it too, so a defect in either
+// side shows. The file's class field says which encodings LLVM
+// decides and which the spec decides; see the generator's header.
+// The path is +oracle=<file>, default tb/ifu_rvc_exp_oracle.hex.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -69,6 +82,27 @@ module tb;
   int n_ref;       // decided by the reference
   int n_rsv;       // reference reserved -> {16'h0, c}
   int n_fix [1:6]; // decided by spec_* correction class Rn
+
+  // The oracle: {class[7:0], expected[31:0]} per encoding. Class
+  // numbers are the generator's.
+  localparam int OC_NA      = 0;
+  localparam int OC_LLVM    = 1;
+  localparam int OC_RSV     = 2;
+  localparam int OC_ILL0    = 3;
+  localparam int OC_HINT    = 4;
+  localparam int OC_MOP     = 5;
+  localparam int OC_RSVLLVM = 6;
+  localparam int OC_MVALT   = 7;
+  localparam int OC_N       = 8;
+
+  logic [39:0] orc [0:65535];
+  string       orc_file;
+  int          o_match [0:OC_N-1];  // DUT equals the oracle word
+  int          o_mis   [0:OC_N-1];  // DUT differs from it
+  int          o_rmis  [0:OC_N-1];  // tb reference differs from it
+  int          oc;
+  logic [31:0] ow;
+  logic        dut_ok;
 
   task automatic chk(input string nm, input logic cond);
     if (cond) begin
@@ -198,6 +232,16 @@ module tb;
     ref_mask = '0;
     ref_mask[1:0] = 2'b11;          // slot 0 valid, slot 0 is RVC
     for (int i = 0; i < NPOS; i++) hw[i] = '0;
+    for (int i = 0; i < OC_N; i++) begin
+      o_match[i] = 0;
+      o_mis[i]   = 0;
+      o_rmis[i]  = 0;
+    end
+    if (!$value$plusargs("oracle=%s", orc_file)) begin
+      orc_file = "tb/ifu_rvc_exp_oracle.hex";
+    end
+    for (int v = 0; v < 65536; v++) orc[v] = 'x;
+    $readmemh(orc_file, orc);
     #1;
 
     // ---- golden vectors -------------------------------------------
@@ -234,6 +278,26 @@ module tb;
           chk($sformatf("C %04h pos %0d: got %08h exp %08h", v[15:0], i,
                         expv[i], e), (expv[i] == e) && rvc[i]);
         end
+
+        // The oracle. A missing or short file leaves X here, and an X
+        // class is not a known class, so it fails rather than skips.
+        oc = int'(orc[v][39:32]);
+        ow = orc[v][31:0];
+        chk($sformatf("O %04h: oracle entry present", v[15:0]),
+            !$isunknown(orc[v]) && (oc > OC_NA) && (oc < OC_N));
+        if (!$isunknown(orc[v]) && (oc > OC_NA) && (oc < OC_N)) begin
+          dut_ok = 1'b1;
+          for (int i = 0; i < NPOS; i++) begin
+            if (expv[i] !== ow) dut_ok = 1'b0;
+          end
+          chk($sformatf("O %04h class %0d: DUT %08h oracle %08h",
+                        v[15:0], oc, expv[0], ow), dut_ok);
+          chk($sformatf("O %04h class %0d: tb ref %08h oracle %08h",
+                        v[15:0], oc, e, ow), e == ow);
+          if (dut_ok) o_match[oc]++;
+          else        o_mis[oc]++;
+          if (e != ow) o_rmis[oc]++;
+        end
       end
     end
 
@@ -265,6 +329,14 @@ module tb;
              n_fix[1], n_fix[2], n_fix[3], n_fix[4]);
     $display("tb_ifu_rvc_exp: corrections R5 %0d R6 %0d",
              n_fix[5], n_fix[6]);
+    // The oracle summary, by class. LLVM is the comparison against an
+    // independent source; the rest are decided by the spec and named
+    // in the generator's header.
+    for (int i = OC_LLVM; i < OC_N; i++) begin
+      $display("tb_ifu_rvc_exp: oracle class %0d match %0d mismatch %0d %s",
+               i, o_match[i], o_mis[i],
+               $sformatf("ref-mismatch %0d", o_rmis[i]));
+    end
     $display("tb_ifu_rvc_exp: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ifu_rvc_exp: %0d checks failed", fail_cnt);

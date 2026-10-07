@@ -809,10 +809,12 @@ module tb;
 
     // A SECOND writeback naming an entry that already has the bit
     // set derives NO redirect (ftq_entry_formats.md 4.3 R3), whatever
-    // its predecode result. It is LEGAL, not a protocol violation:
-    // the W3 refetch produces it on every predecode redirect (R3a,
-    // TD#140), so it is accepted and the status set, which is
+    // its predecode result. It is LEGAL, not a protocol violation
+    // (R3a, TD#140), so it is accepted and the status set, which is
     // idempotent, still fires. ftq_ifu_assert I4 states both halves.
+    // R3a was written for the W3 refetch of K; since BP-117 (TD#146)
+    // a predecode redirect flushes at K+1 and K is not refetched, so
+    // this stimulus is the only source of the second writeback here.
     wb_rcvd_pdwb = 1'b1;
     settle();
     chk("E2 a second writeback derives no redirect", !pd_redir_val);
@@ -870,30 +872,35 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
-  // F. The flush index by cause, TD#126 (BP-112).
+  // F. The flush index by cause, TD#126 (BP-112), TD#146 (BP-117).
   // -----------------------------------------------------------------
   // ftq_ifu_interfaces.md 7 W3 and ifu_ibuf_interfaces.md IB-13: a
-  // p2, p3 or predecode redirect CORRECTS entry K and K survives, so
-  // the IFU is flushed AT K and K is fetched again against the
-  // correction. A backend redirect with _self clear flushes at K+1:
-  // K's instructions stand and refetching K would deliver them twice
-  // (ftq_backend_interfaces.md 5 D5, ftq_decisions.md 5.5 R1).
+  // p2 or p3 redirect CORRECTS entry K before it is fetched and K
+  // survives, so the IFU is flushed AT K and K is fetched against the
+  // correction. A PREDECODE redirect flushes at K+1: K is already
+  // fetched and its head is in the ibuf, which does not clear on it
+  // (IB-12), so a refetch of K delivers that head twice. A backend
+  // redirect with _self clear flushes at K+1 too: K's instructions
+  // stand (ftq_backend_interfaces.md 5 D5, ftq_decisions.md 5.5 R1).
+  // F1, F3 and F4 are the three front-end arms on one redirect.
   task automatic group_f();
     $display("-- F: the flush index by cause --");
     do_reset();
     fetch_idx = 6'd30;
 
     // A predecode redirect naming K = 12. It arrives as ftq_npc
-    // publishes it: RC_MISPREDICT, _self clear, arm 2. F1 FAILED on
-    // the pre-BP-112 tree, which had no arm input and gave K+1.
+    // publishes it: RC_MISPREDICT, _self clear, arm 2.
+    // CHANGED BY BP-117 (TD#146): this expected 12, F = K, the
+    // BP-112 build. It fails on the pre-BP-117 tree, which flushed
+    // the predecode arm at K with p2 and p3.
     redir_arm   = ARM_PD;
     redir_val   = 1'b1;
     redir_idx   = 6'd12;
     redir_self  = 1'b0;
     redir_cause = RC_MISPREDICT;
     settle();
-    chk("F1 a front-end redirect flushes AT K",
-        ftq_ifu_flush_val && (ftq_ifu_flush_idx == 6'd12));
+    chk("F1 a predecode redirect flushes at K+1",
+        ftq_ifu_flush_val && (ftq_ifu_flush_idx == 6'd13));
 
     // A backend mispredict naming K = 12 with _self clear. K
     // survives and its fetch stands, so the flush starts at K+1.
@@ -922,13 +929,22 @@ module tb;
     chk("F5 a backend _self-set redirect flushes at K",
         ftq_ifu_flush_idx == 6'd12);
 
-    // At the top of the index space a front-end redirect names 63,
-    // not 0: K does not wrap because nothing is added to it.
+    // At the top of the index space a predecode redirect naming 63
+    // flushes at K+1, which wraps to 0.
+    // CHANGED BY BP-117 (TD#146): this expected 63, F = K for the
+    // predecode arm. F7 keeps the no-wrap case on the p3 arm.
     redir_arm  = ARM_PD;
     redir_self = 1'b0;
     redir_idx  = 6'd63;
     settle();
-    chk("F6 a front-end redirect at index 63 flushes at 63",
+    chk("F6 a predecode redirect at index 63 flushes at 0",
+        ftq_ifu_flush_idx == 6'd0);
+
+    // A p3 redirect at 63 names 63, not 0: K does not wrap because
+    // nothing is added to it. Added by BP-117.
+    redir_arm = ARM_P3;
+    settle();
+    chk("F7 a p3 redirect at index 63 flushes at 63",
         ftq_ifu_flush_idx == 6'd63);
     redir_val = 1'b0;
     redir_arm = '0;

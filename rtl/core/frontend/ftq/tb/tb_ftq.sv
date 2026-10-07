@@ -318,6 +318,30 @@ module tb;
   int pass_cnt;
   int fail_cnt;
 
+  // K's presentations after a predecode redirect (BP-117, TD#146).
+  // Counts every fetch and translation request presented for entry
+  // k_mon_idx while k_mon_on is set. Armed the cycle AFTER the
+  // redirect: the flush-cycle request comes from the pre-rewind
+  // pointer and is discarded (ftq_ifu_interfaces.md 5). The counters
+  // are written only here and cleared by reset; a test reads them
+  // before and after. k_mon_on and k_mon_idx are cleared in do_reset.
+  logic                    k_mon_on;
+  logic [FTQ_IDX_BITS-1:0] k_mon_idx;
+  int                      k_mon_fetch;
+  int                      k_mon_xlate;
+
+  always @(posedge clk) begin : k_monitor
+    if (!rstn) begin
+      k_mon_fetch <= 0;
+      k_mon_xlate <= 0;
+    end else if (k_mon_on && !ftq_ifu_flush_val) begin
+      if (ftq_ifu_req_val && (ftq_ifu_idx == k_mon_idx))
+        k_mon_fetch <= k_mon_fetch + 1;
+      if (ftq_ifu_xlate_val && (ftq_ifu_xlate_idx == k_mon_idx))
+        k_mon_xlate <= k_mon_xlate + 1;
+    end
+  end
+
   task automatic chk(input string nm, input logic cond);
     if (cond) begin
       pass_cnt++;
@@ -368,6 +392,8 @@ module tb;
     sc_upd_rdy_u1         = 1'b1;
     ftq_ifu_xlate_rdy     = 1'b1;
     ftq_ifu_req_rdy       = 1'b1;
+    k_mon_on              = 1'b0;
+    k_mon_idx             = '0;
     ifu_ftq_pdwb_val      = 1'b0;
     ifu_ftq_pdwb_idx      = '0;
     ifu_ftq_pdwb_gen      = 1'b0;
@@ -736,11 +762,15 @@ module tb;
   // F. A front-end redirect, end to end (BP-112, TD#126 and TD#127).
   // -----------------------------------------------------------------
   // A predecode redirect names entry K = 3, which was fetched against
-  // a p1 miss. K SURVIVES, CORRECTED: the IFU flush names K itself
+  // a p1 miss. K SURVIVES, CORRECTED, and is NOT fetched again: its
+  // positions up to mis_pos are already in the ibuf, which does not
+  // clear on a predecode redirect (IB-12), so the IFU flush names K+1
   // (ftq_ifu_interfaces.md 7 W3), xlate_ptr and fetch_ptr come back
-  // to K (ftq_decisions.md 5.5 R1), and K is translated and then
-  // fetched again carrying the corrected taken_pos. Group D holds the
-  // backend half, K+1.
+  // to K+1 (ftq_decisions.md 5.5 R1), and the first block translated
+  // and fetched is K+1, the corrected successor. Ruled session-074,
+  // TD#146. CHANGED BY BP-117: this group pinned F = K and the
+  // refetch of K, the BP-112 build; each changed check carries its
+  // old value. Group D holds the backend half.
   //
   // The waits below are BOUNDED and ordered rather than cycle exact:
   // what is checked is which entry each port names next, not how many
@@ -750,6 +780,8 @@ module tb;
   task automatic group_f();
     int n_x;
     int n_f;
+    int k_f0;
+    int k_x0;
     $display("-- F: a front-end redirect, end to end --");
     do_reset();
     repeat (12) tick();
@@ -768,21 +800,28 @@ module tb;
     ifu_ftq_target   = PD_TGT;
     #1;
     chk("F2 the IFU is flushed",          ftq_ifu_flush_val);
-    chk("F3 AT K, not K+1",               ftq_ifu_flush_idx == 6'd3);
+    // was ftq_ifu_flush_idx == 3, "AT K, not K+1"
+    chk("F3 AT K+1, not K",               ftq_ifu_flush_idx == 6'd4);
     chk_va("F4 fetch resumes at the corrected successor",
            ftq_pred_pc_p0, PD_TGT);
     tick();
     ifu_ftq_pdwb_val = 1'b0;
     ifu_ftq_mis_val  = 1'b0;
     ifu_ftq_pd[6]    = '0;
+    k_mon_idx        = 6'd3;
+    k_f0             = k_mon_fetch;
+    k_x0             = k_mon_xlate;
+    k_mon_on         = 1'b1;
     #1;
     // K+1 went out with the redirect, carrying PD_TGT (BP-113; this
     // read 4, TD#139).
     chk("F5 allocation restarts at K+1", ftq_pred_idx_p0 == 6'd5);
-    chk("F6 xlate_ptr is back on K",     ftq_ifu_xlate_idx == 6'd3);
-    chk("F7 fetch_ptr is back on K",     ftq_ifu_idx == 6'd3);
+    // was ftq_ifu_xlate_idx == 3, "xlate_ptr is back on K"
+    chk("F6 xlate_ptr is back on K+1",   ftq_ifu_xlate_idx == 6'd4);
+    // was ftq_ifu_idx == 3, "fetch_ptr is back on K"
+    chk("F7 fetch_ptr is back on K+1",   ftq_ifu_idx == 6'd4);
 
-    // The next translation presented is K, and no fetch of K is
+    // The next translation presented is K+1, and no fetch is
     // presented before it.
     n_x = 0;
     n_f = 0;
@@ -792,33 +831,50 @@ module tb;
       n_x++;
       tick();
     end
-    chk("F8 K is translated again",
-        ftq_ifu_xlate_val && (ftq_ifu_xlate_idx == 6'd3));
+    // was ftq_ifu_xlate_idx == 3, "K is translated again"
+    chk("F8 K+1 is the next translation, not K",
+        ftq_ifu_xlate_val && (ftq_ifu_xlate_idx == 6'd4));
     chk("F9 with no fetch presented ahead of it", n_f == 0);
-    chk_va("F10 with K's own block start PC", ftq_ifu_xlate_pc,
-           VA_WIDTH'(RESET_VECTOR + 3 * FTB_BLOCK_BYTES));
+    // was RESET_VECTOR + 3 * FTB_BLOCK_BYTES, "K's own block start PC"
+    chk_va("F10 with K+1's block start PC, the corrected successor",
+           ftq_ifu_xlate_pc, PD_TGT);
 
-    // Then K is fetched again, against the correction.
+    // Then K+1 is fetched: the first fetch after the redirect.
     for (int c = 0; c < 8; c++) begin
       if (ftq_ifu_req_val) break;
       tick();
     end
-    chk("F11 K is fetched again",
-        ftq_ifu_req_val && (ftq_ifu_idx == 6'd3));
-    chk("F12 carrying the corrected taken branch",
-        ftq_ifu_taken_val &&
-        (ftq_ifu_taken_pos == FTB_BR_POS_BITS'(6)));
-    chk_va("F13 and the corrected successor", ftq_ifu_next_pc, PD_TGT);
+    // was ftq_ifu_idx == 3, "K is fetched again"
+    chk("F11 K+1 is the first fetch, not K",
+        ftq_ifu_req_val && (ftq_ifu_idx == 6'd4));
+    // was ftq_ifu_taken_val && ftq_ifu_taken_pos == 6, "carrying the
+    // corrected taken branch", which was K's refetch payload
+    chk_va("F12 starting at the corrected successor",
+           ftq_ifu_start_pc, PD_TGT);
+    // was ftq_ifu_next_pc == PD_TGT, "and the corrected successor",
+    // K's refetch; K+1 is a p1 miss and falls through
+    chk_va("F13 and falling through from it", ftq_ifu_next_pc,
+           VA_WIDTH'(PD_TGT + FTB_BLOCK_BYTES));
+    repeat (16) tick();
+    k_mon_on = 1'b0;
+    // The ibuf already holds K's head (IB-2) and keeps it (IB-12), so
+    // K must not be fetched again or its head is delivered twice.
+    // Added by BP-117.
+    chk($sformatf("F20 K is never fetched again (%0d) nor translated (%0d)",
+                  k_mon_fetch - k_f0, k_mon_xlate - k_x0),
+        (k_mon_fetch == k_f0) && (k_mon_xlate == k_x0));
 
-    // THE W3 REFETCH'S WRITEBACK (ftq_entry_formats.md 4.3 R3a,
-    // TD#140, BP-114). K is fetched twice by design, so its second
-    // writeback arrives with wb_rcvd[K] set and gen[K] unchanged. It
-    // is LEGAL: accepted by 6.1 X3, and it derives NO redirect, both
-    // when predecode now agrees with the corrected entry and when it
-    // reports a mispredict again (R3's bound does not depend on the
-    // predecode result). ftq_ifu_assert I4 samples every cycle here.
-    tick();   // the refetch of K is accepted at this edge
-    // The state R3a describes, read rather than assumed.
+    // A SECOND WRITEBACK FOR K (ftq_entry_formats.md 4.3 R3a, TD#140,
+    // BP-114). R3a was written for the W3 refetch of K, which produced
+    // it on every predecode redirect while the flush was at K. BP-117
+    // moves the flush to K+1, F20 shows K is not refetched, and the
+    // writeback below is INJECTED to keep R3's bound covered: it
+    // arrives with wb_rcvd[K] set and gen[K] unchanged, is LEGAL,
+    // accepted by 6.1 X3, and derives NO redirect, both when
+    // predecode agrees with the corrected entry and when it reports a
+    // mispredict again. ftq_ifu_assert I4 samples every cycle here.
+    // The state R3a describes, read rather than assumed. F14 and F15
+    // keep their values; the edge above no longer accepts a refetch.
     chk("F14 wb_rcvd[K] is still set from the first writeback",
         dut.w_wb_rcvd_vec[3]);
     chk("F15 and gen[K] is unchanged: K was not reallocated",
@@ -868,10 +924,13 @@ module tb;
   //
   // THE TRANSLATION LATENCY IS PINNED, not bounded: c counts the
   // cycles after the redirect cycle until the flush entry F is
-  // presented for translation. 5.1 and IFU-27 give one cycle for a
-  // front-end redirect, where F = K is already written. For a
-  // backend redirect F is the target block itself, whose p1 write
-  // lands at the end of the first cycle, so it is two.
+  // presented for translation. When F is the redirect target block
+  // itself, its p1 write lands at the end of the first cycle, so it
+  // is two: the backend _self-clear row and, since BP-117, the
+  // predecode row (F = K+1, TD#146). A p2 or p3 redirect has F = K,
+  // already written, and 5.1 and IFU-27 give it one cycle; this
+  // group does not drive p2 or p3. The predecode row read one cycle,
+  // F = K, until BP-117.
   task automatic next_fetch(output logic [FTQ_IDX_BITS-1:0] idx,
                             output logic [VA_WIDTH-1:0]     pc);
     idx = '1;
@@ -962,16 +1021,25 @@ module tb;
     ifu_ftq_pd[6]    = '0;
     #1;
     chk   ("G4 the next index follows it", ftq_pred_idx_p0 == 6'd5);
-    xlate_wait(6'd3, lat);
-    chk   ("G5 K is translated one cycle after the redirect", lat == 1);
+    // was xlate_wait(3), lat == 1, "K is translated one cycle after
+    // the redirect"
+    xlate_wait(6'd4, lat);
+    chk   ("G5 F = K+1 is translated two cycles after the redirect",
+           lat == 2);
     next_fetch(f_idx, f_pc);
-    chk   ("G6 the first fetch is the refetch of K", f_idx == 6'd3);
+    // was f_idx == 3, "the first fetch is the refetch of K"
+    chk   ("G6 the first fetch is entry K+1, not a refetch of K",
+           f_idx == 6'd4);
+    // was f_idx == 4 on the second fetch, "the next fetch is entry K+1"
+    chk_va("G7 and carries the redirect target", f_pc, G_PD_TGT);
     next_fetch(f_idx, f_pc);
-    chk   ("G7 the next fetch is entry K+1", f_idx == 6'd4);
-    chk_va("G8 and carries the redirect target", f_pc, G_PD_TGT);
-    next_fetch(f_idx, f_pc);
-    chk_va("G9 then the target's fall-through", f_pc,
+    // was f_pc == G_PD_TGT on the second fetch, "and carries the
+    // redirect target"
+    chk_va("G8 then the target's fall-through", f_pc,
            VA_WIDTH'(G_PD_TGT + FTB_BLOCK_BYTES));
+    // was f_pc == G_PD_TGT + 32 on the third fetch, "then the target's
+    // fall-through"
+    chk   ("G9 at entry K+2", f_idx == 6'd5);
 
     // ---- backend, _self clear, K = 4: alloc_ptr -> K+1, F = K+1 -----
     do_reset();

@@ -99,8 +99,9 @@ module ftq_ifu (
   // R3 of ftq_entry_formats.md 4.3: an entry derives AT MOST ONE
   // predecode redirect, and only from its own writeback. A second
   // writeback naming an entry that already has the bit set derives
-  // no redirect. It is LEGAL, not a protocol violation (R3a): the W3
-  // refetch of a predecode-redirected entry produces it by design.
+  // no redirect. It is LEGAL, not a protocol violation (R3a). R3a was
+  // written for the W3 refetch of a predecode-redirected entry, which
+  // BP-117 (TD#146) removed by flushing that redirect at K+1.
   input  logic                     wb_rcvd_pdwb,
 
   // ---- from ftq_entry, the entry the writeback names ---------------
@@ -190,8 +191,8 @@ module ftq_ifu (
   localparam int ARM_P2    = 4;
   localparam int ARM_P1    = 5;
 
-  // The redirect is one of the front-end causes of W3.
-  logic                w_fe_redir;
+  // The redirect is p2 or p3, the two arms of W3 that keep K.
+  logic                w_keep_k;
 
   // The predecode slot the writeback names, and the bp_ftq_slot_t
   // built from it.
@@ -290,25 +291,33 @@ module ftq_ifu (
   // The index is the first entry to drop, the flush index F of 5.5
   // R1. It is K or K+1 BY SOURCE, not by _self alone:
   //
-  //   p2, p3, predecode      K.   7 W3 and ifu_ibuf_interfaces.md
+  //   p2, p3                 K.   7 W3 and ifu_ibuf_interfaces.md
   //                               IB-13. K SURVIVES, CORRECTED, and
   //                               must be fetched again: the
   //                               correction changes taken_val and
   //                               taken_pos, which is what the IFU
   //                               truncates on, so a fetch of K issued
   //                               against the old prediction ends in
-  //                               the wrong place. For predecode K is
-  //                               already fetched and including it
-  //                               costs nothing.
+  //                               the wrong place.
+  //   predecode              K+1. 7 W3 and IB-13. K is already
+  //                               fetched and its positions up to
+  //                               mis_pos are in the ibuf (IB-2),
+  //                               which does not clear on a predecode
+  //                               redirect (IB-12). Refetching K would
+  //                               deliver them twice. Ruled
+  //                               session-074, TD#146, BP-117; BP-112
+  //                               built K here with p2 and p3.
   //   backend, _self set     K.   K does not survive.
   //   backend, _self clear   K+1. K's instructions stand, and
   //                               refetching K would deliver them
   //                               twice (ftq_backend_interfaces.md 5
   //                               D5).
   //
-  // The front-end set is named by arm because every member arrives
-  // _self clear, the same encoding as the backend K+1 row. Keying on
-  // _self alone was TD#126: K+1 for a surviving entry on every cause.
+  // The p2, p3 set is named by ARM because p2, p3 and predecode all
+  // arrive _self clear, the same encoding as the backend K+1 row.
+  // Keying on _self alone was TD#126: K+1 for a surviving entry on
+  // every cause. The predecode arm needs no term of its own: it is
+  // always _self clear, so it takes the K+1 row below.
   //
   //   RC_UNSPEC              commit_ptr. ftq_backend_interfaces.md
   //                               5.1 U3 squashes EVERY entry, and U1
@@ -324,18 +333,21 @@ module ftq_ifu (
   //                               and fetch_ptr unflushed (BP-114,
   //                               TD#141).
   //
-  // A flush and a request may be presented in the same cycle. The
-  // flush applies first and the accompanying request is the first
-  // fetch of the corrected stream; that is the IFU's obligation,
-  // stated in section 5, and needs nothing here.
+  // NO REQUEST ACCOMPANIES A FLUSH (section 5, ruled session-073,
+  // TD#138). A request may be presented in the flush cycle, but it
+  // belongs to the old stream: it is driven from the pre-rewind
+  // pointer, ftq_ptr discards its handshake, and the entry is
+  // presented again the next cycle from the rewound pointer. The IFU
+  // ignores any request presented while ftq_ifu_flush_val is set. The
+  // first request of the corrected stream is the one presented the
+  // cycle after the flush.
   always_comb begin : flush
-    w_fe_redir = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
-                 redir_arm[ARM_P2];
+    w_keep_k = redir_arm[ARM_P3] | redir_arm[ARM_P2];
 
     ftq_ifu_flush_val = redir_val;
     if (redir_cause == RC_UNSPEC) begin
       ftq_ifu_flush_idx = commit_ptr[FTQ_IDX_BITS-1:0];
-    end else if (w_fe_redir) begin
+    end else if (w_keep_k) begin
       ftq_ifu_flush_idx = redir_idx;
     end else if (redir_self) begin
       ftq_ifu_flush_idx = redir_idx;
@@ -481,13 +493,15 @@ module ftq_ifu (
   // R3 qualifies the REDIRECT, not the status set. An entry derives
   // at most one predecode redirect and only from its own writeback;
   // a second writeback naming an entry that already has wb_rcvd set
-  // derives none, whatever its predecode result. That second
-  // writeback is EXPECTED (R3a, session-073, TD#140): a predecode
-  // redirect on K flushes at K and K is fetched again (7 W3), so its
-  // writeback returns with wb_rcvd set and gen[K] unchanged. It is
-  // accepted by 6.1 X3 like any other, and R3's bound is what stops
-  // a refetch loop. The status set is idempotent -- setting a bit
-  // that is already set is a no-op -- so it is not gated.
+  // derives none, whatever its predecode result, and is accepted by
+  // 6.1 X3 like any other (R3a, session-073, TD#140). R3a was written
+  // for the W3 refetch of K, which produced that second writeback on
+  // every predecode redirect while the predecode flush was at K.
+  // BP-117 (TD#146) moves the predecode flush to K+1, so the refetch
+  // no longer happens; the gate stays, because R3 is the bound that
+  // stops a refetch loop if any path ever refetches K again. The
+  // status set is idempotent -- setting a bit that is already set is
+  // a no-op -- so it is not gated.
   always_comb begin : wb_outputs
     wb_set_val    = wb_accept;
     wb_set_idx    = ifu_ftq_pdwb_idx;
@@ -529,8 +543,9 @@ module ftq_ifu (
   // HERE. Each acceptance advances a pointer, which is ftq_ptr's
   // state, so the ports are consumed there; they are on this port
   // list because sections 4 and 4.1 declare them on this interface.
-  // redir_arm[ARM_BKEND] and the p1 arm are not read: the backend
-  // row is every redirect outside the front-end set. The wrap bit of
+  // redir_arm[ARM_BKEND], redir_arm[ARM_PD] and the p1 arm are not
+  // read: the K+1 and K rows by _self are every redirect outside the
+  // p2, p3 set, and the predecode arm is always _self clear. The wrap bit of
   // commit_ptr is not read: both of its uses here are indices.
   //
   // clk and rstn are read by the bound properties, not by this
@@ -539,7 +554,8 @@ module ftq_ifu (
   assign w_unused = |ifu_ftq_pd_range | ifu_ftq_cfi_val |
                     |ifu_ftq_cfi_pos  | |ifu_ftq_fault_pos |
                     ftq_ifu_req_rdy   | ftq_ifu_xlate_rdy |
-                    redir_arm[ARM_BKEND] | redir_arm[ARM_P1] |
+                    redir_arm[ARM_BKEND] | redir_arm[ARM_PD] |
+                    redir_arm[ARM_P1] |
                     commit_ptr[FTQ_IDX_BITS] | rstn | clk;
 
 endmodule : ftq_ifu

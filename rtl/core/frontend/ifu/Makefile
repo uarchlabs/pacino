@@ -16,6 +16,7 @@
 #   lint_ifu_wb                               WB
 #   lint_ifu             sim_ifu              the unit
 #   assert_labels                             BP-116, TD#144
+#   oracle_ifu_rvc_exp                        BP-117, the expander oracle
 #
 # The xlate, lbuf, fetch, f3 and wb modules have no testbench of their
 # own: BP-116 B5 names three testbenches, and tb_ifu drives all four
@@ -79,14 +80,15 @@ IFU_SRCS := \
   $(RTL_DIR)/ifu_wb.sv \
   $(RTL_DIR)/ifu.sv            $(TB_DIR)/ifu_assert.sv
 
-.PHONY: all clean assert_labels \
+.PHONY: all clean assert_labels oracle_ifu_rvc_exp \
   lint_ifu_rvc_exp lint_ifu_predecode lint_ifu_xlate lint_ifu_lbuf \
   lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu \
   sim_ifu_rvc_exp sim_ifu_predecode sim_ifu
 
 all: lint_ifu_rvc_exp lint_ifu_predecode lint_ifu_xlate lint_ifu_lbuf \
      lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu \
-     sim_ifu_rvc_exp sim_ifu_predecode sim_ifu assert_labels
+     sim_ifu_rvc_exp sim_ifu_predecode sim_ifu assert_labels \
+     oracle_ifu_rvc_exp
 
 # One lint per module: $(1) module, $(2) sources.
 define lint_rule
@@ -123,6 +125,25 @@ endef
 $(eval $(call sim_rule,ifu_rvc_exp))
 $(eval $(call sim_rule,ifu_predecode))
 $(eval $(call sim_rule,ifu))
+
+# -- The independent expander oracle (BP-117 Problem 4).
+#    tb_ifu_rvc_exp reads tb/ifu_rvc_exp_oracle.hex, LLVM's expansion
+#    of every 16-bit encoding (see tb/gen_ifu_rvc_exp_oracle.py). This
+#    target REGENERATES it from the toolchain and fails if the result
+#    differs from the checked-in file, so the vectors stay what the
+#    toolchain says and are not a one-off. The regenerated copy goes in
+#    the expander's sim directory, $(VER_OUT)_ifu_rvc_exp. RVC_ORACLE_TC is the
+#    toolchain bin directory; the generator fails if it is absent.
+RVC_ORACLE_TC ?= /usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin
+ORACLE_HEX    := $(TB_DIR)/ifu_rvc_exp_oracle.hex
+
+oracle_ifu_rvc_exp:
+	@echo "[generating] ifu_rvc_exp oracle"
+	$(Q)mkdir -p $(VER_OUT)_ifu_rvc_exp
+	$(Q)python3 -I $(TB_DIR)/gen_ifu_rvc_exp_oracle.py $(RVC_ORACLE_TC) \
+	  $(VER_OUT)_ifu_rvc_exp/oracle_regen.hex
+	$(Q)cmp $(ORACLE_HEX) $(VER_OUT)_ifu_rvc_exp/oracle_regen.hex
+	@echo "oracle_ifu_rvc_exp: PASS, $(ORACLE_HEX) matches the toolchain"
 
 # -- Every declared property is in every sim model (BP-116, TD#144).
 #    The ftq Makefile's method, unchanged: verilate each sim model to
@@ -186,7 +207,8 @@ clean:
 REGRESS_TARGETS := \
   lint_ifu_rvc_exp lint_ifu_predecode lint_ifu_xlate lint_ifu_lbuf \
   lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu \
-  sim_ifu_rvc_exp sim_ifu_predecode sim_ifu assert_labels
+  sim_ifu_rvc_exp sim_ifu_predecode sim_ifu assert_labels \
+  oracle_ifu_rvc_exp
 REGRESS_EXCLUDE := all clean regress_list
 
 .PHONY: regress_list

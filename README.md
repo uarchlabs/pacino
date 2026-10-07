@@ -15,7 +15,7 @@ source hardware design organization. The design flow is currently tightly
 coupled to RVA23-based microarchitectures. As the uarchlabs portfolio grows,
 the flow will be abstracted into a standalone tool.
 
-RTL is in SystemVerilog, simulation with Verilator 5.020.
+RTL is in SystemVerilog, simulation with Verilator 5.048
 
 ---
 # TOC
@@ -70,13 +70,43 @@ cd pacino
 
 ### Compile and install spike
 
+Spike is the `tools/spike` submodule (riscv-isa-sim, version 1.1.1-dev,
+submodule commit 20feb9c2). Requires `tools/prereqs.sh` to have been run
+and `RVA_ROOT` set by `tools/setup.sh`.
+
 ```bash
-cd $RVA_ROOT/tools/spike
-mkdir build
+cd $RVA_ROOT
+git submodule update --init tools/spike   # if not cloned recursively
+cd tools/spike
+mkdir -p build
 cd build
 ../configure --prefix=$RVA_ROOT/tools
-make -j4
+make -j$(nproc)
 make install
+```
+
+`--prefix=$RVA_ROOT/tools` installs to `$RVA_ROOT/tools/bin`:
+`spike`, `spike-dasm`, `spike-log-parser`, `elf2hex`, `xspike`,
+`termios-xspike`. This is the path `rtl/Vars.mk` (`SPIKE`) and
+`tools/check_spike_decode.py` expect. Do not use a different prefix.
+
+Spike's build dependencies are installed by the `#Spike` block of
+`tools/prereqs.sh`, among them `device-tree-compiler`,
+`build-essential`, `libboost-regex-dev` and `libboost-system-dev`.
+
+Check the install:
+
+```bash
+$RVA_ROOT/tools/bin/spike --help | head -1    # Spike RISC-V ISA Simulator 1.1.1-dev
+echo "DASM(0505)" | $RVA_ROOT/tools/bin/spike-dasm --isa=rv64gc   # c.addi a0, 1
+```
+
+Run the spike-dasm decode check (needs the Embecosm toolchain at
+`/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309`, see Constants):
+
+```bash
+make -C $RVA_ROOT/tools            # builds rva23_insn_ref.disasm
+make -C $RVA_ROOT/tools spike_all  # spike_oracle.csv, then check_spike_decode.py
 ```
 
 ### Compile and install verilator
@@ -319,6 +349,7 @@ $RVA_ROOT/
 |   |-- TASK_TEMPLATE.md       IA prompt template
 |
 |-- tools/
+|   |-- bin/                     installed verilator and spike binaries (not committed)
 |   |-- check_rva23_coverage.py  verify against riscv-opcodes and spike-dasm
 |   |-- check_spike_decode.py
 |   |-- cov_table.py
@@ -332,7 +363,7 @@ $RVA_ROOT/
 |   |-- rva23_ext_test.c
 |   |-- rva23_insn_ref.c
 |   |-- spike/                   git submodule (riscv-isa-sim)
-|   |   |-- install/             spike build output (not committed)
+|   |   |-- build/               spike build directory (not committed)
 |   |-- validate_and_extract.py
 
 ```
@@ -346,7 +377,7 @@ $RVA_ROOT/
 | Architecture      | RISC-V RVA23 profile                               |
 | Microarchitecture | 8-issue out-of-order                               |
 | RTL language      | SystemVerilog                                      |
-| Simulator         | Verilator 5.020                                    |
+| Simulator         | Verilator 5.048 (tools/bin/verilator)              |
 | Compiler          | Embecosm riscv-embecosm-embedded-ubuntu2204-20250309 |
 
 ---
@@ -381,16 +412,20 @@ opcodes and CSRs. Used as ground truth for coverage checking and decoder validat
 
 ## spike
 
-Git submodule at `tools/spike/`. Functional simulator
+Git submodule at `tools/spike/`. Functional ISA simulator; `spike-dasm` is
+used as an independent disassembler (TOOLS-002). Installed to `tools/bin/`
+(see "Compile and install spike").
 
 spike-dasm input format uses `DASM(hex)` tokens, not raw hex values.
+Extensions must be enumerated; there is no `G` shortcut beyond `rv64g`.
+The full RVA23 string is `ISA` in `tools/check_spike_decode.py`.
 
 ```bash
 # disassemble a NOP
-echo "DASM(00000013)" | tools/spike/install/bin/spike-dasm
+echo "DASM(00000013)" | tools/bin/spike-dasm
 
 # disassemble a vector instruction
-echo "DASM(00000057)" | tools/spike/install/bin/spike-dasm --isa rv64gcv
+echo "DASM(00000057)" | tools/bin/spike-dasm --isa rv64gcv
 ```
 
 ---

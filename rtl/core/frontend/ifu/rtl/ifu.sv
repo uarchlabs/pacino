@@ -98,7 +98,7 @@ module ifu #(
   // ---- itlb_ifu_interfaces.md 2 ------------------------------------
   output logic                     ifu_itlb_req_val,
   input  logic                     ifu_itlb_req_rdy,
-  output logic [VPN_WIDTH-1:0]     ifu_itlb_vpn,
+  output logic [VA_WIDTH-13:0]     ifu_itlb_vpn,     // IT-16
   output logic                     ifu_itlb_tag,
   input  logic                     itlb_ifu_rsp_val,
   input  logic                     itlb_ifu_tag,

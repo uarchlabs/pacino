@@ -7,21 +7,23 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
-The second of the FTQ's four interfaces. THE FTQ SIDE IS BUILT:
-ftq_ifu.sv is Complete and its port list is the FTQ half of this
-boundary (ifu_decisions.md, ftq_decisions.md 7.1), so the names
-here are declared on that side. THE "NEW" TAG ON THE PORT ROWS
-MEANS NOT YET DECLARED ON THE IFU SIDE; it does not mean the port
-is undeclared on both. The IFU side does not exist --
-`rtl/core/frontend/ifu/rtl` holds only a .gitkeep -- and those ports
-are new. This read that no module on either side exists and that
-nothing here names a declared port, which was true only until
-BP-106/107; this file names ftq_ifu.sv twice itself, in sections 7
-and 8. Session-072.
+The second of the FTQ's four interfaces. BOTH SIDES ARE BUILT: the
+FTQ half is ftq_ifu.sv (BP-107, ftq_decisions.md 7.1) and the IFU
+half is rtl/core/frontend/ifu (BP-116). The RTL is the reference
+for the declared names. THE "NEW" TAG ON THE PORT ROWS IS
+HISTORICAL: it marked a port not yet declared on the IFU side, and
+none is now. Two session-074 rulings on this boundary are not yet
+in the RTL: the predecode flush at K+1 (7 W3) and the widened M1
+(6), both TD#146.
+
+This read that the IFU side did not exist and that
+`rtl/core/frontend/ifu/rtl` held only a .gitkeep, which was true
+until BP-116; session-075. Before that it read that no module on
+either side existed, true until BP-106/107; session-072.
 
 Where this file departs from the XiangShan Kunminghu contract
 translated in `ia_context/background/xs_ifu_ftq.md`, section 9 says
@@ -749,4 +751,8 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               predecode flushes at K+1 (C6), TD#146. 4.1: uncached is
               marked in the translation queue; I17 citation. 2: a
               repeated paragraph removed.
+
+  2026-10-06  session-075. Scope paragraph: the IFU side is built
+              (BP-116); the NEW tag is historical; the two unbuilt
+              session-074 rulings on this boundary named.
 ```

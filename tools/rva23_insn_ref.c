@@ -1,17 +1,23 @@
 /*
- * rva23s64_insn_ref.c
+ * rva23_insn_ref.c
  *
  * One instruction per testable mandatory extension in the RVA23S64 profile.
  * (RVA23 Profile v1.0, ratified 2024-10-17)
  *
- * Compile only, never link or execute.
+ * Compile only, never link or execute. Built by tools/Makefile (default
+ * target), which compiles to rva23_insn_ref.o and disassembles it to
+ * rva23_insn_ref.disasm, the input of gen_spike_oracle.py:
  *
- *   riscv64-unknown-linux-gnu-gcc \
- *     -march=rv64gcb_v_zicsr_zicntr_zihpm_zifencei_zihintpause \
- *             _zicbom_zicbop_zicboz_zfhmin_zihintntl             \
- *             _zicond_zimop_zcmop_zcb_zfa_zawrs_zvfhmin_zvbb      \
- *             _svinval_svnapot_sstc_sscofpmf_h                    \
- *     -mabi=lp64d -O0 -c -o rva23s64_insn_ref.o rva23s64_insn_ref.c
+ *   make -C $RVA_ROOT/tools
+ *
+ * Toolchain and flags are the Makefile's RCC, MARCH, MABI and RCC_OPTS:
+ *   /usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin/
+ *     riscv64-unknown-elf-gcc -c -march=<MARCH> -mabi=lp64d
+ *     -DTEST_ALL -O0 -static
+ * MARCH does not include zimop or zcmop, so the Zimop and Zcmop lines
+ * below are written as .insn encodings (mop.r.0 = 0x81c140f3,
+ * c.mop.1 = 0x6085), checked against tools/riscv-opcodes rv_zimop and
+ * rv_zcmop.
  *
  * Extensions with no unique testable instruction are noted but omitted:
  *   Ziccif, Ziccamoa, Zicclsm, Za64rs, Zic64b, Zkt, Zvkt, Supm,
@@ -49,7 +55,7 @@ void rva23s64_insn_ref(void)
     asm volatile ("vbrev8.v  v2,  v0");                    /* Zvbb     - vector bit-reverse bytes */
     asm volatile ("ntl.all");                              /* Zihintntl - non-temporal locality hint */
     asm volatile ("czero.eqz x1,  x2,  x3");              /* Zicond   - conditional zero if equal */
-    asm volatile (".insn r 0x73, 0x4, 0x42, x1, x2, x0"); /* Zimop    - may-be-op mop.r.0 */
+    asm volatile (".insn r 0x73, 0x4, 0x40, x1, x2, x28");/* Zimop    - may-be-op mop.r.0 */
     asm volatile (".insn 0x6085");                         /* Zcmop    - compressed may-be-op c.mop.1 */
     asm volatile ("c.zext.b  x8");                         /* Zcb      - zero-extend byte */
     asm volatile ("fli.s     f1,  min");                   /* Zfa      - load float immediate */

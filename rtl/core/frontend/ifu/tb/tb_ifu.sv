@@ -33,6 +33,12 @@
 //
 // Each test resets the unit and the models and builds its own state;
 // nothing carries across tests.
+//
+// BP-117 (TD#146): ref_block's M1 is the session-074 rule, the first
+// JAL before the predicted taken position or anywhere when none is
+// predicted, ahead of M2 to M4. The ITLB model keys its page map on
+// the IT-16 lookup width, VA_WIDTH-12, and logs every lookup.
+// t_m1_jal and t_vpn_high are the two rulings' directed tests.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -43,6 +49,7 @@ module tb;
   localparam int NPOS  = FTQ_PD_WIDTH + 1;
   localparam int MAXB  = 64;
   localparam int IBCAP = 32;
+  localparam int LKV   = VA_WIDTH - 12;   // IT-16 lookup VPN width
 
   logic clk;
   logic rstn;
@@ -88,7 +95,7 @@ module tb;
   logic                     l1i_ifu_rsp_err;
   logic                     ifu_itlb_req_val;
   logic                     ifu_itlb_req_rdy;
-  logic [VPN_WIDTH-1:0]     ifu_itlb_vpn;
+  logic [LKV-1:0]           ifu_itlb_vpn;
   logic                     ifu_itlb_tag;
   logic                     itlb_ifu_rsp_val;
   logic                     itlb_ifu_tag;
@@ -128,7 +135,7 @@ module tb;
     int                   misses;
   } page_t;
 
-  page_t                 pmap   [logic [VPN_WIDTH-1:0]];
+  page_t                 pmap   [logic [LKV-1:0]];
   logic [15:0]           mem_hw [logic [PA_WIDTH-2:0]];
   logic [31:0]           exp_of [logic [PA_WIDTH-2:0]];
   logic                  err_ln [logic [PA_WIDTH-L1I_OFFSET_BITS-1:0]];
@@ -136,9 +143,9 @@ module tb;
   localparam logic [15:0] FILL_HW  = 16'h0001;        // c.nop
   localparam logic [31:0] FILL_EXP = 32'h0000_0013;   // addi x0,x0,0
 
-  function automatic logic [VPN_WIDTH-1:0] vpn_of(
+  function automatic logic [LKV-1:0] vpn_of(
       input logic [VA_WIDTH-1:0] va);
-    return va[12 +: VPN_WIDTH];
+    return va[VA_WIDTH-1:12];
   endfunction
 
   // This file's translation. Unmapped pages are identity-mapped.
@@ -146,7 +153,7 @@ module tb;
                                    output ifu_fault_e          f,
                                    output logic [PA_WIDTH-1:0] pa,
                                    output logic [GPA_WIDTH-1:0] gpa);
-    logic [VPN_WIDTH-1:0] v;
+    logic [LKV-1:0] v;
     v   = vpn_of(va);
     gpa = '0;
     if (pmap.exists(v)) begin
@@ -279,8 +286,11 @@ module tb;
   logic itlb_stall_odd;            // ready low on odd cycles
   logic p_val [0:1];
   int   p_cnt [0:1];
-  logic [VPN_WIDTH-1:0] p_vpn [0:1];
+  logic [LKV-1:0] p_vpn [0:1];
   int   n_itlb_req;
+  // Every lookup the ITLB took, in order: its VPN and tag.
+  logic [LKV-1:0] lk_vpn [0:255];
+  logic           lk_tag [0:255];
   int   cyc;
 
   assign ifu_itlb_req_rdy = rstn && !(itlb_stall_odd && cyc[0]);
@@ -294,11 +304,11 @@ module tb;
   // flops at the edge.
   initial begin : itlb_model
     int r;
-    logic [VPN_WIDTH-1:0] v;
+    logic [LKV-1:0] v;
     page_t pg;
     logic s_fire;
     logic s_tag;
-    logic [VPN_WIDTH-1:0] s_vpn;
+    logic [LKV-1:0] s_vpn;
     itlb_ifu_rsp_val = 1'b0;
     itlb_ifu_tag     = 1'b0;
     itlb_ifu_status  = 2'b00;
@@ -362,6 +372,10 @@ module tb;
           p_val[s_tag] = 1'b1;
           p_cnt[s_tag] = itlb_lat[s_tag];
           p_vpn[s_tag] = s_vpn;
+          if (n_itlb_req < 256) begin
+            lk_vpn[n_itlb_req] = s_vpn;
+            lk_tag[n_itlb_req] = s_tag;
+          end
           n_itlb_req   = n_itlb_req + 1;
         end
       end
@@ -723,12 +737,26 @@ module tb;
       end
     end
 
-    // M1 to M4 (ftq_ifu_interfaces.md 6).
+    // M1 to M4 (ftq_ifu_interfaces.md 6). M1 is the first JAL, call
+    // or not, BEFORE the predicted taken position, or anywhere when
+    // none is predicted; never a JALR. It is earlier in program order
+    // than anything at the taken position, so it is tested first.
+    // CHANGED BY BP-117 (TD#146): M1 was tested only when no taken
+    // position was predicted.
     e.mis_val = 1'b0;
     e.mis_pos = 0;
     e.tgt_cmp = 1'b0;
     e.wb_tgt  = '0;
-    if (b.taken_val) begin
+    for (int i = 0; i < NPD; i++) begin
+      if (!e.mis_val && e.valid[i] && (e.br[i] == 2'b10) &&
+          (!b.taken_val || (i < int'(b.taken_pos)))) begin
+        e.mis_val = 1'b1;                                           // M1
+        e.mis_pos = i;
+      end
+    end
+    if (e.mis_val) begin
+      // M1 found; nothing at the taken position is on the path.
+    end else if (b.taken_val) begin
       p = int'(b.taken_pos);
       e.mis_pos = p;
       if (!e.rng[p])                              e.mis_val = 1'b1; // M4
@@ -737,13 +765,6 @@ module tb;
       else if (e.br[p] == 2'b00)                  e.mis_val = 1'b1; // M2
       else if ((e.br[p] != 2'b11) && (e.tgt[p] != b.next_pc))
                                                   e.mis_val = 1'b1; // M3
-    end else begin
-      for (int i = 0; i < NPD; i++) begin
-        if (!e.mis_val && e.valid[i] && (e.br[i] == 2'b10)) begin
-          e.mis_val = 1'b1;                                         // M1
-          e.mis_pos = i;
-        end
-      end
     end
     if (e.mis_val && (e.br[e.mis_pos] == 2'b01 || e.br[e.mis_pos] == 2'b10))
     begin
@@ -1159,6 +1180,88 @@ module tb;
         (wb_fltp[3] == 4'd8) && !wb_rng[3][12]);
   endtask
 
+  // M1 under a predicted taken position (C5, TD#146, BP-117). Each
+  // block is sixteen c.addi with the instructions under test written
+  // over them, on its own page, so nothing aliases between blocks.
+  localparam logic [31:0] JALR_T0 = 32'h0002_8067;   // jalr x0,0(t0)
+
+  task automatic t_m1_jal();
+    logic [VA_WIDTH-1:0] b [0:4];
+    logic [VA_WIDTH-1:0] jal_tgt [0:1];
+    tname = "m1_jal_before_taken";
+    $display("-- %s --", tname);
+    reset_all();
+    for (int k = 0; k < 5; k++) begin
+      b[k] = VA_WIDTH'('h0_8010_0000) + VA_WIDTH'(k * 'h1000);
+      for (int i = 0; i < 16; i++) put16(b[k] + VA_WIDTH'(2 * i),
+                                         16'h0505, 32'h0015_0513);
+    end
+    // 0: a call JAL at position 2, then a BEQ at position 8 that is
+    //    predicted taken with its correct target. Only M1 can fire.
+    put32(b[0] + VA_WIDTH'(4),  enc_jal(5'd1, 512));
+    put32(b[0] + VA_WIDTH'(16), enc_beq(-16));
+    jal_tgt[0] = b[0] + VA_WIDTH'(4 + 512);
+    add_blk(b[0], b[0], 1'b1, 8);
+    // 1: a non-call JAL at position 1, predicted taken at position 6,
+    //    which holds a c.addi: M2 would fire at 6, M1 fires at 1.
+    put32(b[1] + VA_WIDTH'(2), enc_jal(5'd0, 64));
+    jal_tgt[1] = b[1] + VA_WIDTH'(2 + 64);
+    add_blk(b[1], b[1] + VA_WIDTH'(400), 1'b1, 6);
+    // 2: a JALR at position 2 before a correctly predicted BEQ at 8.
+    put32(b[2] + VA_WIDTH'(4),  JALR_T0);
+    put32(b[2] + VA_WIDTH'(16), enc_beq(-16));
+    add_blk(b[2], b[2], 1'b1, 8);
+    // 3: a JALR at position 3 with no taken position predicted.
+    put32(b[3] + VA_WIDTH'(6), JALR_T0);
+    add_blk(b[3], b[3] + VA_WIDTH'(32), 1'b0, 0);
+    // 4: a JAL AT the predicted taken position, target correct. Not
+    //    before it, so M1 does not apply and M3 finds nothing.
+    put32(b[4] + VA_WIDTH'(8), enc_jal(5'd0, 100));
+    add_blk(b[4], b[4] + VA_WIDTH'(8 + 100), 1'b1, 4);
+    run_and_check(800);
+    chk("C5a M1 at a call JAL before the predicted taken branch",
+        (nwb > 0) && wb_misv[0] && (wb_misp[0] == 4'd2) &&
+        (wb_tgt[0] == jal_tgt[0]));
+    chk("C5b the ibuf enable truncates at the JAL (IB-2)",
+        (nrx > 0) && (rx_en[0] == 16'h0007));
+    chk("C5c M1 at a non-call JAL outranks M2 at the taken position",
+        (nwb > 1) && wb_misv[1] && (wb_misp[1] == 4'd1) &&
+        (wb_tgt[1] == jal_tgt[1]) && (rx_en[1] == 16'h0003));
+    chk("C5d a JALR before the predicted taken position is not M1",
+        (nwb > 2) && !wb_misv[2] && (rx_en[2] == 16'h01F7));
+    chk("C5e a JALR with none predicted is not M1",
+        (nwb > 3) && !wb_misv[3] && (rx_en[3] == 16'hFFEF));
+    chk("C5f a JAL at the taken position is not M1",
+        (nwb > 4) && !wb_misv[4]);
+  endtask
+
+  // The lookup carries every fetch address bit above the page offset
+  // (C19, IT-16, TD#146, BP-117). A crossing block whose PC has bits
+  // 40 and 39 set, above the Sv39 VPN's top bit VPN_WIDTH+11 = 38,
+  // then the block after it on the next page.
+  task automatic t_vpn_high();
+    logic [VA_WIDTH-1:0] b;
+    logic [LKV-1:0]      v;
+    tname = "vpn_high_bits";
+    $display("-- %s --", tname);
+    reset_all();
+    b = VA_WIDTH'('h180_8011_0FE0);
+    v = b[VA_WIDTH-1:12];
+    fill_mixed(b, 64);
+    add_blk(b, b + VA_WIDTH'(32), 1'b0, 0);
+    add_blk(b + VA_WIDTH'(32), b + VA_WIDTH'(64), 1'b0, 0);
+    run_and_check(400);
+    chk($sformatf("C19a three lookups, two for the crossing block: %0d",
+                  n_itlb_req), n_itlb_req == 3);
+    chk($sformatf("C19b first lookup is the block's page %08h, got %08h",
+                  v, lk_vpn[0]), (lk_vpn[0] == v) && !lk_tag[0]);
+    chk($sformatf("C19c second lookup is the next page %08h, got %08h",
+                  v + LKV'(1), lk_vpn[1]),
+        (lk_vpn[1] == v + LKV'(1)) && lk_tag[1]);
+    chk($sformatf("C19d next block's lookup keeps the high bits, %08h",
+                  lk_vpn[2]), (lk_vpn[2] == v + LKV'(1)) && !lk_tag[2]);
+  endtask
+
   task automatic t_gen();
     logic [VA_WIDTH-1:0] b;
     tname = "gen_carried";
@@ -1252,6 +1355,8 @@ module tb;
     t_l1i_error();
     t_taken_trunc();
     t_mispredicts();
+    t_m1_jal();
+    t_vpn_high();
     t_gen();
     t_backpressure();
     t_flush();

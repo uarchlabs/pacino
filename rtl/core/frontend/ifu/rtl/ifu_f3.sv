@@ -25,21 +25,30 @@
 // delivered with its cause (IB-9). A faulting instruction's encoding
 // is not known, so its classification is driven zero.
 //
-// THE CHECK, M1 to M4, ftq_ifu_interfaces.md 6. With a predicted
-// taken position tp:
+// THE CHECK, M1 to M4, ftq_ifu_interfaces.md 6.
+//   M1  the first valid JAL, call or not, BEFORE the predicted taken
+//       position tp, or anywhere when none is predicted. A JALR is
+//       never M1: its target is unknown here. Ruled session-074,
+//       TD#146, built BP-117; BP-116 raised M1 only when none was
+//       predicted.
+// With tp predicted and no M1:
 //   M4  tp lies outside pd_range: a fault cut the range before it
 //   M2  tp is not a valid start, or holds no control transfer
 //   M3  tp holds a branch or JAL whose target differs from next_pc,
 //       the taken slot's target (the one target the request carries)
 //   no check when the instruction at tp itself faults
-// With none predicted:
-//   M1  the first valid JAL. JALR is not included: predecode cannot
-//       compute its target and the FTQ would redirect to the entry's
-//       stale one (ftq_ifu.sv W1). See the Results Capture.
-// mis_pos is tp, or the M1 position. cfi is the first valid control
+// M1 OUTRANKS M2 TO M4 BECAUSE IT IS EARLIER IN PROGRAM ORDER. A JAL
+// before tp is taken unconditionally, so the path never reaches tp
+// and whatever tp holds is off the path; mis_pos names the first
+// position that fails, which is the JAL. M2 to M4 are all findings AT
+// tp and are mutually exclusive by their conditions. The documents
+// state no priority; this one follows from M1 naming the "first"
+// JAL and from IB-2 truncating at mis_pos. See the BP-117 Results
+// Capture.
+// mis_pos is the M1 position, or tp. cfi is the first valid control
 // transfer (IFU-15). ifu_ftq_target is the target at mis_pos when
 // mis_val, else at cfi_pos: ftq_ifu.sv writes it into the slot at
-// mis_pos (W1). See the Results Capture.
+// mis_pos (W1). See the BP-116 Results Capture.
 //
 // THE IBUF VECTOR (IFU-5, IB-1, IB-2). Sixteen slots, never
 // compacted. ifu_ibuf_en is valid (start and in pd_range, DCD-12) and
@@ -169,6 +178,8 @@ module ifu_f3 (
   logic                       w_xfer;
   logic                       w_tp_in;
   logic [FTQ_PD_POS_BITS-1:0] w_tp;
+  logic                       w_m1_val;
+  logic [FTQ_PD_POS_BITS-1:0] w_m1_pos;
 
   always_comb begin : f3
     for (int i = 0; i < NPOS; i++) f3_hw[i] = r_hw[i];
@@ -223,9 +234,27 @@ module ifu_f3 (
     // ---- the prediction check, M1 to M4 --------------------------------
     w_tp      = FTQ_PD_POS_BITS'(r_taken_pos);
     w_tp_in   = w_range[w_tp];
+
+    // M1: the first valid JAL, strictly before tp when tp is
+    // predicted. Descending, so the lowest position is assigned last.
+    // A faulting position has w_br driven to PD_NONE, and the range
+    // is cut after the first fault, so a JAL is never found past one.
+    w_m1_val = 1'b0;
+    w_m1_pos = '0;
+    for (int i = NPD - 1; i >= 0; i--) begin
+      if (w_valid[i] && (w_br[i] == PD_JAL) &&
+          (!r_taken_val || (FTQ_PD_POS_BITS'(i) < w_tp))) begin
+        w_m1_val = 1'b1;
+        w_m1_pos = FTQ_PD_POS_BITS'(i);
+      end
+    end
+
     w_mis_val = 1'b0;
     w_mis_pos = '0;
-    if (r_taken_val) begin
+    if (w_m1_val) begin
+      w_mis_val = 1'b1;                                     // M1
+      w_mis_pos = w_m1_pos;
+    end else if (r_taken_val) begin
       w_mis_pos = w_tp;
       if (!w_tp_in) begin
         w_mis_val = 1'b1;                                   // M4
@@ -238,13 +267,6 @@ module ifu_f3 (
       end else if ((w_br[w_tp] != PD_JALR) &&
                    (p_tgt[w_tp] != r_next_pc)) begin
         w_mis_val = 1'b1;                                   // M3
-      end
-    end else begin
-      for (int i = NPD - 1; i >= 0; i--) begin
-        if (w_valid[i] && (w_br[i] == PD_JAL)) begin
-          w_mis_val = 1'b1;                                 // M1
-          w_mis_pos = FTQ_PD_POS_BITS'(i);
-        end
       end
     end
 

@@ -216,7 +216,7 @@ module ftq_ptr (
   logic                    w_unspec;
   logic                    w_redir_gen;
   logic [FTQ_PTR_BITS-1:0] w_redir_base;
-  logic                    w_fe_redir;
+  logic                    w_keep_k;
   logic [FTQ_PTR_BITS-1:0] w_alloc_tgt;
   logic [FTQ_PTR_BITS-1:0] w_flush_tgt;
   logic [FTQ_PTR_BITS-1:0] w_age_flush_tgt;
@@ -331,19 +331,26 @@ module ftq_ptr (
   //
   //   backend, _self clear   F = K+1   K's fetch stands
   //   backend, _self set     F = K
-  //   p2, p3, predecode      F = K     K survives, CORRECTED, and must
+  //   p2, p3                 F = K     K survives, CORRECTED, and must
   //                                    be translated and fetched again
   //                                    against the correction (W3)
-  //   RC_UNSPEC              F = commit_ptr. 5.5 R1 does not tabulate
-  //                          it; U3 squashes every entry, so alloc_ptr
-  //                          is commit_ptr and FQ-1 then forces both.
+  //   predecode              F = K+1   K is already fetched and its
+  //                                    head is in the ibuf, which does
+  //                                    not clear on it (IB-12), so a
+  //                                    refetch of K delivers that head
+  //                                    twice. Ruled session-074, TD#146,
+  //                                    BP-117; BP-112 built it at K
+  //   RC_UNSPEC              F = commit_ptr. U3 squashes every entry, so
+  //                          alloc_ptr is commit_ptr and FQ-1 then
+  //                          forces both.
   //
-  // For the backend rows F is the rewound head w_alloc_tgt, which is
-  // the rule BP-106 built for fetch_ptr. For the front-end row F is
-  // one BEHIND it, and FQ-1 holds because F is never past it. A
-  // request accepted in the redirect cycle takes w_alloc_tgt and
-  // leaves alloc_ptr one past it (see State), which moves alloc_ptr
-  // away from F, never towards it.
+  // For the backend and predecode rows F is the rewound head
+  // w_alloc_tgt, which is the rule BP-106 built for fetch_ptr: every
+  // one of them is _self clear with K surviving, or _self set with K
+  // squashed. For the p2, p3 row F is one BEHIND it, and FQ-1 holds
+  // because F is never past it. A request accepted in the redirect
+  // cycle takes w_alloc_tgt and leaves alloc_ptr one past it (see
+  // State), which moves alloc_ptr away from F, never towards it.
   always_comb begin : rewind
     w_unspec = (redir_cause == RC_UNSPEC);
 
@@ -364,13 +371,14 @@ module ftq_ptr (
       w_alloc_tgt = w_redir_base + {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
     end
 
-    // The front-end cause set. Named arms, not _self: every one of
-    // these arrives _self clear, and so does a backend redirect whose
-    // entry survives.
-    w_fe_redir = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
-                 redir_arm[ARM_P2];
+    // The p2, p3 set, which keeps K. Named arms, not the cause: p2,
+    // p3 and predecode all arrive RC_MISPREDICT with _self clear, and
+    // so does a backend redirect whose entry survives (5.5 R1). The
+    // predecode arm is NOT in the set: its F is K+1, the same value
+    // as the backend _self-clear row, so it takes w_alloc_tgt below.
+    w_keep_k = redir_arm[ARM_P3] | redir_arm[ARM_P2];
 
-    w_flush_tgt = (w_fe_redir && !w_unspec) ? w_redir_base
+    w_flush_tgt = (w_keep_k && !w_unspec) ? w_redir_base
                                             : w_alloc_tgt;
 
     w_age_flush_tgt = w_flush_tgt - commit_ptr;
@@ -402,7 +410,10 @@ module ftq_ptr (
   //
   // On a redirect, the redirect wins and the handshake presented in
   // the same cycle is ignored. Applies to fetch_ptr and xlate_ptr.
-  // Built this way since BP-106. Not ruled; see TD#138.
+  // Built this way since BP-106 and RULED session-073 (Jeff, TD#138):
+  // no request accompanies a flush, the request presented in the
+  // flush cycle belongs to the old stream and its handshake is
+  // discarded (ftq_ifu_interfaces.md 5).
   //
   // OUT OF RESET xlate_ptr and fetch_ptr are the same entry (5.1).
   always_ff @(posedge clk or negedge rstn) begin : seq

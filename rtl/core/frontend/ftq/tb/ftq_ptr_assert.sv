@@ -40,6 +40,7 @@ module ftq_ptr_assert (
   input logic                    xlate_pending,
   input logic                    fetch_pending,
   input logic                    redir_val,
+  input logic [FTQ_IDX_BITS-1:0] redir_idx,
   input ftq_redir_cause_e        redir_cause,
   input logic [5:1]              redir_arm
 );
@@ -56,14 +57,23 @@ module ftq_ptr_assert (
   logic [FTQ_PTR_BITS-1:0] w_age_alloc;
   logic [FTQ_PTR_BITS-1:0] w_age_xlate;
   logic [FTQ_PTR_BITS-1:0] w_age_fetch;
-  logic                    w_fe_redir;
+  logic                    w_keep_k;
+  logic                    w_pd_redir;
+  // The age of K+1, the predecode flush index. R2 puts K at or after
+  // commit_ptr, so K's age is its index distance from commit_ptr's
+  // index, 0 to 63, and needs no generation reconstruction.
+  logic [FTQ_PTR_BITS-1:0] w_age_k1;
 
   always_comb begin : ages
     w_age_alloc = alloc_ptr - commit_ptr;
     w_age_xlate = xlate_ptr - commit_ptr;
     w_age_fetch = fetch_ptr - commit_ptr;
-    w_fe_redir  = redir_arm[ARM_PD] | redir_arm[ARM_P3] |
-                  redir_arm[ARM_P2];
+    // p2 and p3 keep K; predecode flushes past it (BP-117, TD#146).
+    w_keep_k    = redir_arm[ARM_P3] | redir_arm[ARM_P2];
+    w_pd_redir  = redir_arm[ARM_PD];
+    w_age_k1    = {1'b0, FTQ_IDX_BITS'(redir_idx -
+                                       commit_ptr[FTQ_IDX_BITS-1:0])} +
+                  {{(FTQ_PTR_BITS-1){1'b0}}, 1'b1};
   end
 
   // A REGISTERED COPY of the p0 pointer and its acceptance, not
@@ -174,14 +184,35 @@ module ftq_ptr_assert (
         ((fetch_ptr - $past(commit_ptr)) <= $past(w_age_fetch));
   endproperty
 
-  // Q8  7 W3. A p2, p3 or predecode redirect leaves K to be
-  //     translated and fetched again: F = K and alloc_ptr = K+1, so
-  //     neither xlate_ptr nor fetch_ptr is left AT alloc_ptr. TD#126
-  //     built F = K+1, which leaves both there when they were ahead.
+  // Q8  7 W3. A p2 or p3 redirect leaves K to be translated and
+  //     fetched again: F = K and alloc_ptr = K+1, so neither xlate_ptr
+  //     nor fetch_ptr is left AT alloc_ptr. TD#126 built F = K+1,
+  //     which leaves both there when they were ahead. CHANGED BY
+  //     BP-117: the antecedent included the predecode arm, which now
+  //     flushes at K+1 (Q8a).
   property p_fe_redirect_keeps_k;
     @(posedge clk) disable iff (!rstn)
-      (redir_val && w_fe_redir && (redir_cause != RC_UNSPEC)) |=>
+      (redir_val && w_keep_k && (redir_cause != RC_UNSPEC)) |=>
         (xlate_ptr != alloc_ptr) && (fetch_ptr != alloc_ptr);
+  endproperty
+
+  // Q8a 5.5 R1, the predecode row, ruled session-074 (TD#146,
+  //     BP-117). F = K+1: K is fetched and its head is in the ibuf,
+  //     which does not clear on it, so it is not fetched again. Each
+  //     of xlate_ptr and fetch_ptr becomes the wrap-aware minimum of
+  //     its own value and K+1. Formed here from redir_idx and the
+  //     commit_ptr of the redirect cycle, not from ftq_ptr's rewind
+  //     targets: K = F would leave a pointer that was past K on K.
+  property p_pd_redirect_past_k;
+    @(posedge clk) disable iff (!rstn)
+      (redir_val && w_pd_redir && (redir_cause != RC_UNSPEC)) |=>
+        ((xlate_ptr - $past(commit_ptr)) ==
+           (($past(w_age_xlate) > $past(w_age_k1)) ? $past(w_age_k1)
+                                                    : $past(w_age_xlate)))
+        &&
+        ((fetch_ptr - $past(commit_ptr)) ==
+           (($past(w_age_fetch) > $past(w_age_k1)) ? $past(w_age_k1)
+                                                    : $past(w_age_fetch)));
   endproperty
 
   // Q10 5.2 IN EVERY CYCLE, THE REDIRECT CYCLE INCLUDED. The pointer
@@ -246,7 +277,9 @@ module ftq_ptr_assert (
   a_redirect_not_fwd:    assert property (p_redirect_not_forward)
     else $error("Q7 a redirect moved xlate_ptr or fetch_ptr forward");
   a_fe_redirect_keeps_k: assert property (p_fe_redirect_keeps_k)
-    else $error("Q8 a front-end redirect did not rewind to K");
+    else $error("Q8 a p2 or p3 redirect did not rewind to K");
+  a_pd_redirect_past_k:  assert property (p_pd_redirect_past_k)
+    else $error("Q8a a predecode redirect did not rewind to min(ptr, K+1)");
   a_fq1_depth_bounded:   assert property (p_fq1_depth_bounded)
     else $error("FQ-1 live entries exceed the allocation limit");
   a_alias_full_is_full:  assert property (p_alias_full_is_full)
@@ -285,6 +318,7 @@ bind ftq_ptr ftq_ptr_assert u_assert (
   .xlate_pending  (xlate_pending),
   .fetch_pending  (fetch_pending),
   .redir_val      (redir_val),
+  .redir_idx      (redir_idx),
   .redir_cause    (redir_cause),
   .redir_arm      (redir_arm)
 );

@@ -586,9 +586,16 @@ module ftq (
   // ftq_ifu. The IFU boundary.
   // -----------------------------------------------------------------
   // redir_arm is ftq_npc's arm_win. The flush index of 5.5 R1 is K
-  // for a p2, p3 or predecode redirect and K or K+1 by _self for a
-  // backend one, and the arm is the only place the source is
-  // visible; ftq_ptr reads it for the same reason (BP-112, TD#126).
+  // for a p2 or p3 redirect, K+1 for a predecode redirect, and K or
+  // K+1 by _self for a backend one. The arm is the only place the
+  // source is visible: p2, p3 and predecode all arrive RC_MISPREDICT
+  // with _self clear. ftq_ptr reads it for the same reason (BP-112,
+  // TD#126; predecode row BP-117, TD#146).
+ 
+  // OLD: redir_arm is ftq_npc's arm_win. The flush index of 5.5 R1 is K
+  // OLD: for a p2, p3 or predecode redirect and K or K+1 by _self for a
+  // OLD: backend one, and the arm is the only place the source is
+  // OLD: visible; ftq_ptr reads it for the same reason (BP-112, TD#126).
   //
   // commit_ptr is ftq_commit's, passed whole. ftq_ifu exports its
   // index as ftq_ifu_commit_ptr and flushes at it on RC_UNSPEC

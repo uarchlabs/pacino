@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -637,18 +637,24 @@ or predecode redirect):
                                fetch_ptr unflushed. TD#141, built
                                by BP-114
 
-      BUILT by BP-112 (session-073), closing TD#126. All three
-      rows are in the RTL, and xlate_ptr takes the same minimum.
+      BUILT by BP-112 (session-073), closing TD#126, for the two
+      backend rows and the p2, p3 row; xlate_ptr takes the same
+      minimum. BP-112 built the predecode arm at F = K with p2 and
+      p3, so the predecode row above is unbuilt (TD#146). The
+      RC_UNSPEC row is BP-114. This read "All three rows are in the
+      RTL"; session-075.
 
       THE CAUSE BUS CANNOT EXPRESS THIS TABLE. ftq_npc drives
       RC_MISPREDICT with _self clear for p2, p3, predecode and the
       backend alike, so no consumer of the redirect bus can tell
       which row applies. BP-112 routed ftq_npc's arm_win, the
-      arbitration arm that won, to ftq_ifu and ftq_ptr: arms 2, 3
-      and 4 (predecode, p3, p2) are the front-end set and take
-      F = K. THE ARBITRATION ARM, NOT THE CAUSE, IS WHAT
-      DISTINGUISHES A FRONT-END REDIRECT, and a reader who keys
-      new logic on the cause will rebuild the TD#126 defect.
+      arbitration arm that won, to ftq_ifu and ftq_ptr. Arms 2, 3
+      and 4 are predecode, p3 and p2: arms 3 and 4 take F = K and
+      arm 2 takes F = K+1. This read that all three "are the
+      front-end set and take F = K", against the predecode row
+      above; session-075. THE ARBITRATION ARM, NOT THE CAUSE, IS
+      WHAT DISTINGUISHES A FRONT-END REDIRECT, and a reader who
+      keys new logic on the cause will rebuild the TD#126 defect.
 
       Before BP-112: ftq_ifu.sv drove F by _self alone, so it used
       K+1 for a surviving entry on every cause and the p2, p3 and
@@ -1435,4 +1441,9 @@ Section 1 counts six, since session-074.
               p2 and p3 stay at K (TD#146). 5.1: IFU-27 carries the
               split. Section 1: six read ports, as 7.5 says. The
               session-073 entries moved into date order.
+
+  2026-10-06  session-075. 5.5 R1: the arm_win paragraph gave the
+              predecode arm F = K against the table's K+1 row; arm
+              2 takes K+1, arms 3 and 4 take K. The BUILT note now
+              says which task built which row.
 ```

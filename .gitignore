@@ -51,6 +51,11 @@ tools/lib/
 tools/share/
 tools/__pycache__/
 
+tools/rva23_ext_test
+tools/rva23_ext_test.disasm
+tools/rva23_insn_ref.disasm
+tools/spike_oracle.csv
+
 # local temp copies - optional
 versions/
 
@@ -133,7 +138,6 @@ rtl/core/frontend/ifu/obj_ifu_rvc_exp/
 rtl/core/frontend/ifu/obj_labels_ifu/
 rtl/core/frontend/ifu/obj_labels_ifu_predecode/
 rtl/core/frontend/ifu/obj_labels_ifu_rvc_exp/
-
 
 # --------------------------------------------------------------------
 # docs
