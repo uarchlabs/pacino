@@ -34,7 +34,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   e3be8c359f3a
-PLAN  PROJECT_STATUS.md                 a92db30ab62d
+PLAN  PROJECT_STATUS.md                 854f7ff9c668
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -42,7 +42,7 @@ ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  cachegen_decisions.md             ea488dd8c90d
-ARCH  dcd_decisions.md                  c3651a62d8d5
+ARCH  dcd_decisions.md                  81ff31ece1ef
 ARCH  fe_decisions.md                   3dfb9fa5280c
 ARCH  ftb_decisions.md            35cacdaab9cd
 ARCH  ftq_decisions.md            73c2a0c60f1d
@@ -50,7 +50,7 @@ ARCH  ftq_entry_formats.md        5879eefe11a4
 ARCH  ibuf_decisions.md                 437f6e04b345
 ARCH  icache_decisions.md               dee12ddc7206
 ARCH  ifu_decisions.md            6af2f7f5e918
-ARCH  itlb_decisions.md                 a4ccf751a0af
+ARCH  itlb_decisions.md                 c6732553031a
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  1cf6d9b26ea6
@@ -84,7 +84,7 @@ INTF  bp_history_interfaces.md          f799a4123d5b
 INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
-INTF  ftq_bpu_interfaces.md       ee65477ddc2a
+INTF  ftq_bpu_interfaces.md       6955a6b3650c
 INTF  ftq_ifu_interfaces.md       8d3732475aa5
 INTF  ifu_ibuf_interfaces.md      9abc0f53d3f3
 INTF  itlb_ifu_interfaces.md            aa329f6c941a

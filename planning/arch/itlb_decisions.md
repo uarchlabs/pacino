@@ -295,7 +295,7 @@ ITLB-14 The invalidate port is a distinct port, not carried on the
         here once reviewed. The front-end top
         exposes it as a boundary input, since its producer is the
         backend, which does not exist (FE-20). Ruled session-075
-        (Jeff); BP-119.
+        (Jeff); BP-118.
 
 ITLB-13b Svinval, mandatory in RVA23S64, per mmu_decisions.md
          MMU-U8 (adopted session-071): SINVAL.VMA acts as
@@ -383,5 +383,5 @@ TD#118    Bounds ITLB-U1.
               PTE permission check on every hit, cause 12; G-stage
               permissions are the walker's. ITLB-17: the CSR input
               group. ITLB-14: the invalidate port list is proposed
-              by BP-119. ITLB-11: ifu_pd_pkt_t, not predecode_pkt_t.
+              by BP-118. ITLB-11: ifu_pd_pkt_t, not predecode_pkt_t.
 ```

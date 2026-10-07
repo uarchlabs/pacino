@@ -53,8 +53,10 @@ Rulings (Jeff):
        killed L1I ids; shared slots survive if any block does; dead
        ITLB lookups drained; no writeback for a dropped block after
        the flush cycle.
-  TD#113 and TD#134 are built together, BP-118.
-  The front end, BP-119, after BP-118: ibuf, ITLB, the PMP/PMA
+  ONE TASK, BP-118, builds TD#113, TD#134 and the front end. It
+       was written as BP-118 (TD#113, TD#134) and BP-119 (the
+       front end) and merged before either ran; BP-119 is free.
+  The front end in BP-118: ibuf, ITLB, the PMP/PMA
        checker, decode on ifu_pd_pkt_t (TD#143) and the front-end
        top with an end-to-end testbench. Rulings, all session-075:
        ibuf not banked (IBUF-U1), one read ready (IBUF-12), cleared
@@ -65,7 +67,7 @@ Rulings (Jeff):
        (ITLB-17, MMU-11a, FE-20); the PMA region table a
        parameter, default main memory 0x8000_0000 to the top of
        the 36-bit space, 62 GiB (MMU-15a); the invalidate port
-       list proposed by BP-119 (ITLB-14); decode DCD-17 to DCD-20
+       list proposed by BP-118 (ITLB-14); decode DCD-17 to DCD-20
        (DCD-U1 closed); RETURN_CALL trains uBTB, FTB and RAS
        (FE-U9 closed); a return the uBTB misses is corrected at
        p2 (FE-U1 closed); the loop predictor overrides only a slot
@@ -109,7 +111,7 @@ without checking that Spike produces 32-bit expansions, and without
 looking for the decoder track's existing oracle work. The IA found
 an independent source anyway.
 
-Next free BP is BP-120, INFRA-014, TOOLS-007, TD#150.
+Next free BP is BP-119, INFRA-014, TOOLS-007, TD#150.
 
 ---
 ## Session-074: rulings for the IFU, and BP-115.
@@ -3005,7 +3007,7 @@ assessment of each document. Correct any that are wrong.
 |     |          | DCD-20: decode computes vtype_hazard (DCD-U1 closed),    |
 |     |          | passes ifu_pd_pkt_t through, raises no illegal on a      |
 |     |          | fetch fault, and C and Zcb are always on.                |
-|     |          | rvc_expander.sv goes with it (TD#145). Unbuilt; BP-119.  |
+|     |          | rvc_expander.sv goes with it (TD#145). Unbuilt; BP-118.  |
 | 144 | ftq      | CLOSED by BP-116 Part A (session-074). Eleven labels     |
 |     |          | deleted or restated; Q11, Q12, E9, E10 and the restated  |
 |     |          | E8 each shown to fail under a scratch mutation.          |
@@ -3029,7 +3031,7 @@ assessment of each document. Correct any that are wrong.
 |     |          | that dependency, or make the path configurable. BP-117.  |
 | 148 | ifu      | OPEN. is_vsetvl and needs_vtype in ifu_pd_pkt_t have no  |
 |     |          | reader once decode computes its own (dcd_decisions.md    |
-|     |          | DCD-17). Kept so BP-119 needs no bp_structs_pkg change.  |
+|     |          | DCD-17). Kept so BP-118 needs no bp_structs_pkg change.  |
 |     |          | Remove them from the struct, ifu_predecode and the ibuf. |
 | 149 | bpu, ftq | OPEN, DEFERRED. The p3 RAS repair: after SC reverses a   |
 |     |          | slot at p3 the entry holds the pre-repair snapshot, so a |

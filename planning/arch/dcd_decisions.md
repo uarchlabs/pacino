@@ -259,7 +259,7 @@ TD-DCD-1  The vtype fields of the old `predecode_pkt_t` are
 
 ## 10a. Decode on the bundle view -- TD#143
 
-RULED session-075 (Jeff). UNBUILT; BP-119. What decode does once it
+RULED session-075 (Jeff). UNBUILT; BP-118. What decode does once it
 takes `ifu_pd_pkt_t` from the ibuf read port (IBUF-9) instead of
 `predecode_pkt_t`. Section 1 keeps `instr_decoder.sv`'s instruction
 decode out of scope, since that is the specification's; these four
@@ -298,7 +298,7 @@ DCD-20 C AND Zcb ARE ALWAYS ENABLED. After expansion in the IFU
        compressed encodings is deleted.
 
 TD#148  `is_vsetvl` and `needs_vtype` in `ifu_pd_pkt_t` have no
-        reader once DCD-17 is built. Left in place so BP-119 needs
+        reader once DCD-17 is built. Left in place so BP-118 needs
         no change to `bp_structs_pkg`.
 
 ---
@@ -337,4 +337,4 @@ TD-IFU-1  Closed by DCD-16.
 TD-IFU-5  Closed by this document.
 IBUF-9    The 8-wide read port that sets the decode bundle of
           DCD-17.
-TD#143    Built by DCD-17 to DCD-20, BP-119.
+TD#143    Built by DCD-17 to DCD-20, BP-118.

@@ -165,7 +165,7 @@ THE LOOP PREDICTOR ONLY OVERRIDES THE DIRECTION OF A SLOT THE uBTB
 SUPPLIED. It carries no target, so when lp_pred_is_loop is set and
 the uBTB slot is not valid, the slot carries no prediction. Ruled
 session-075 (Jeff). Whether bp_cluster.sv does this is checked by
-BP-119.
+BP-118.
 
 A uBTB RETURN takes its target from the registered RAS top of stack
 rather than from the uBTB entry.
