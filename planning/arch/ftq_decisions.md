@@ -438,23 +438,31 @@ AFTER A REDIRECT each moves back to the flush index if it was past it
 and is otherwise left where it is (5.5 R1). In the usual case both
 were past it, land on it together, and the translation queue is
 empty from that entry on, so the fetch pipeline stalls until
-translation of that entry completes. That is one cycle of added
-redirect latency and it is the cost of the scheme; XiangShan
-documents the identical stall.
+translation of that entry completes. That is one or two cycles of
+added redirect latency, by source as tabulated below, and it is the
+cost of the scheme; XiangShan documents the identical stall.
 
-THE TWO CASES DIFFER AND THIS SECTION DID NOT SEPARATE THEM. Measured
-by BP-113 after TD#139 was fixed, counting from the redirect cycle to
-the first cycle the translation request for F is presented:
+THE CASES DIFFER BY WHETHER F ALREADY HAS CONTENT. Counting from the
+redirect cycle to the first cycle the translation request for F is
+presented:
 
 ```
-  front-end (p2, p3, predecode)   1 cycle    tb_ftq G5
+  p2, p3                          1 cycle    not measured
+  predecode                       2 cycles   tb_ftq G5, BP-117
   backend                         2 cycles   tb_ftq G11, G16
 ```
 
-The backend case takes the extra cycle because F is the target entry
-itself and its p1 write lands at the end of the first cycle, so there
-is nothing to translate until then. ifu_decisions.md IFU-27 carries
-the same split.
+When F is the redirect target block itself -- the backend case, and
+the predecode case since BP-117 put F at K+1 -- its p1 content write
+lands at the end of the first cycle, so there is nothing to translate
+until then. For p2 and p3, F is K, an entry that already has content,
+so the request can go out a cycle sooner. That row is inferred, not
+measured: tb_ftq drives no p2 or p3 redirect. ifu_decisions.md IFU-27
+carries the same table.
+
+This table read "front-end (p2, p3, predecode) 1 cycle, tb_ftq G5"
+from BP-113. G5 was the predecode case, measured while predecode
+still flushed at K. Session-075.
 
 Both were one cycle worse until BP-113: the p0 request in a redirect
 cycle carried the pre-rewind alloc index, so its in-flight p1 counted
@@ -625,7 +633,8 @@ or predecode redirect):
                                not clear on it; refetching K
                                delivers that head twice. Ruled
                                session-074 (Jeff); this row read
-                               K with p2 and p3. TD#146, unbuilt
+                               K with p2 and p3. Built by BP-117,
+                               TD#146 closed
         RC_UNSPEC              F = commit_ptr. U3 squashes EVERY
                                entry, so the oldest live one is
                                the only index that drops every
@@ -637,12 +646,11 @@ or predecode redirect):
                                fetch_ptr unflushed. TD#141, built
                                by BP-114
 
-      BUILT by BP-112 (session-073), closing TD#126, for the two
-      backend rows and the p2, p3 row; xlate_ptr takes the same
-      minimum. BP-112 built the predecode arm at F = K with p2 and
-      p3, so the predecode row above is unbuilt (TD#146). The
-      RC_UNSPEC row is BP-114. This read "All three rows are in the
-      RTL"; session-075.
+      BUILT. BP-112 (session-073, TD#126) built the two backend
+      rows and the p2, p3 row; xlate_ptr takes the same minimum.
+      BP-112 put the predecode arm at F = K with p2 and p3; BP-117
+      (session-075, TD#146) moved it to K+1, keyed on arm_win. The
+      RC_UNSPEC row is BP-114.
 
       THE CAUSE BUS CANNOT EXPRESS THIS TABLE. ftq_npc drives
       RC_MISPREDICT with _self clear for p2, p3, predecode and the
@@ -1446,4 +1454,10 @@ Section 1 counts six, since session-074.
               predecode arm F = K against the table's K+1 row; arm
               2 takes K+1, arms 3 and 4 take K. The BUILT note now
               says which task built which row.
+
+  2026-10-06  session-075, after BP-117. 5.5 R1: the predecode row
+              is built, TD#146 closed. 5.1: the post-redirect
+              translation latency is 2 cycles for predecode as well
+              as backend, since F is now the target block; the p2,
+              p3 row of 1 cycle is marked unmeasured.
 ```

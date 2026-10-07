@@ -16,9 +16,9 @@ FTQ half is ftq_ifu.sv (BP-107, ftq_decisions.md 7.1) and the IFU
 half is rtl/core/frontend/ifu (BP-116). The RTL is the reference
 for the declared names. THE "NEW" TAG ON THE PORT ROWS IS
 HISTORICAL: it marked a port not yet declared on the IFU side, and
-none is now. Two session-074 rulings on this boundary are not yet
-in the RTL: the predecode flush at K+1 (7 W3) and the widened M1
-(6), both TD#146.
+none is now. The session-074 rulings on this boundary, the
+predecode flush at K+1 (7 W3) and the widened M1 (6), are built
+by BP-117 (TD#146).
 
 This read that the IFU side did not exist and that
 `rtl/core/frontend/ifu/rtl` held only a .gitkeep, which was true
@@ -207,11 +207,14 @@ that path.
 The two pointers reset to the same entry, and on a redirect each
 moves back to the flush index if it was past it (ftq_decisions.md 5.5
 R1), so the first fetch after either stalls waiting for its
-translation: one cycle after a front-end redirect, two after a
-backend redirect, measured by BP-113. This read "usually stalls one
-cycle" until session-074, and before that "are set equal on a
-redirect" (session-071). The cost is stated in ftq_decisions.md 5.1
-and in IFU-27.
+translation: one cycle after a p2 or p3 redirect, two after a
+predecode or backend redirect, where F is the redirect target block
+and has no content until the end of the first cycle. The cost is
+stated, with its sources, in ftq_decisions.md 5.1 and in IFU-27. This
+read "one cycle after a front-end redirect, two after a backend
+redirect" until session-075, which was true while predecode flushed
+at K; before that "usually stalls one cycle" (session-074) and "are
+set equal on a redirect" (session-071).
 
 `ftq_ifu_commit_ptr` is DRIVEN CONTINUOUSLY, not requested. It is
 not part of the request handshake and carries no valid. The FTQ
@@ -381,8 +384,9 @@ mispredict predecode can prove without executing anything:
       taken position, or anywhere when no taken position is
       predicted. M1 names the first such JAL. A JALR is never M1:
       its target is unknown here. Ruled session-074 (Jeff); this
-      read "predicted to have no taken branch ... JAL, or a call",
-      and the JAL before a predicted taken position is TD#146
+      read "predicted to have no taken branch ... JAL, or a call".
+      Built by BP-117, TD#146. A JAL AT the predicted taken
+      position is not M1; M3 checks it
   M2  a taken slot named a position that holds no instruction start,
       or holds an instruction that is not a control transfer
   M3  the direct target computed by predecode for the TAKEN slot
@@ -394,6 +398,17 @@ mispredict predecode can prove without executing anything:
 M1 through M4 need no execution and no register file. A CONDITIONAL
 branch's direction is NOT a predecode mispredict: predecode cannot
 know it, and TAGE and SC already own the direction.
+
+PRIORITY. One writeback carries one mis_pos, and it names the
+EARLIEST failing position in the block. M1 therefore outranks M2, M3
+and M4: an M1 JAL lies before the predicted taken position, it is
+always taken, so nothing at or after it executes, and the ibuf
+truncates at mis_pos (IB-2). Reporting a later failure instead would
+admit the instructions between the JAL and that position to the
+ibuf and leave the JAL to be caught by a backend redirect. M2, M3
+and M4 are all findings at the taken position itself; among them the
+order ifu_f3.sv implements stands. Ruled session-075 (Jeff), as
+BP-117 built it.
 
 `ifu_ftq_fault_val` and `ifu_ftq_fault_pos` report that fetch
 terminated on an instruction access fault, page fault or guest page
@@ -488,7 +503,7 @@ On `ifu_ftq_mis_val`, the FTQ:
       RULED session-074 (Jeff). This read that the index is K for
       all three, "for a predecode redirect K is already fetched,
       so including it costs nothing". BP-112 built K for all three
-      (TD#126); the predecode arm at K+1 is TD#146, unbuilt.
+      (TD#126); BP-117 built the predecode arm at K+1 (TD#146).
 
       THIS RULE CANNOT BE KEYED ON THE REDIRECT CAUSE. ftq_npc
       drives RC_MISPREDICT with _self clear for p2, p3, predecode
@@ -753,6 +768,8 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               repeated paragraph removed.
 
   2026-10-06  session-075. Scope paragraph: the IFU side is built
-              (BP-116); the NEW tag is historical; the two unbuilt
-              session-074 rulings on this boundary named.
+              (BP-116); the NEW tag is historical. After BP-117:
+              M1 and 7 W3 built, TD#146 closed; 6 gains the M1
+              priority (Jeff); 4.1 latency is two cycles for a
+              predecode redirect as well as a backend one.
 ```

@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -185,7 +185,8 @@ IB-13 The flush index is K for a p2 or p3 redirect and for a
       not clear on it (IB-12), and refetching K would deliver
       them twice. `ftq_ifu_interfaces.md` 7 W3. Ruled session-074
       (Jeff); this read K for predecode too, "including it costs
-      nothing". The predecode arm at K+1 is TD#146, unbuilt.
+      nothing". The predecode arm at K+1 is built by BP-117,
+      TD#146 closed.
       A backend redirect with `_self` clear flushes at K+1: K is
       fetched and its instructions stand, and refetching it would
       deliver them twice (ftq_decisions.md 5.5 R1,
@@ -211,6 +212,8 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-06  session-075. IB-13: the predecode arm at K+1 is built
+              by BP-117, TD#146 closed.
   2026-10-01  session-074. The payload struct is ifu_pd_pkt_t,
               a new struct, not a redefined predecode_pkt_t.
               dcd_decisions.md DCD-16. Section 4 gains is_rvc,

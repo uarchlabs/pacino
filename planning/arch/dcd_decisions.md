@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -252,16 +252,62 @@ TD-DCD-1  The vtype fields of the old `predecode_pkt_t` are
           The ibuf regroups: one prediction block can split across
           two decode bundles and one decode bundle can draw from
           two prediction blocks. An intra-bundle property computed before
-          the ibuf is wrong after it. `vtype_hazard` has to be
-          computed at the ibuf read port or in decode.
+          the ibuf is wrong after it. `vtype_hazard` is computed
+          in decode, DCD-17.
+
+---
+
+## 10a. Decode on the bundle view -- TD#143
+
+RULED session-075 (Jeff). UNBUILT; BP-119. What decode does once it
+takes `ifu_pd_pkt_t` from the ibuf read port (IBUF-9) instead of
+`predecode_pkt_t`. Section 1 keeps `instr_decoder.sv`'s instruction
+decode out of scope, since that is the specification's; these four
+rules are its boundary, which the specification does not decide.
+
+DCD-17 `vtype_hazard` IS COMPUTED IN DECODE. For each of the 8
+       decode slots it is set when an earlier valid slot in the
+       same decode bundle is a vsetvl form and this slot needs
+       vtype. Decode computes it from its OWN classification of
+       the instruction, not from the `is_vsetvl` and `needs_vtype`
+       bits in `ifu_pd_pkt_t`: decode's is exact, and the IFU's
+       `needs_vtype` over-marks the whole-register forms (DCD-16).
+       Closes DCD-U1.
+
+       The ibuf stays a buffer with no knowledge of instruction
+       meaning, and the decode bundle is exactly the group the
+       flag describes.
+
+DCD-18 DECODE PASSES `ifu_pd_pkt_t` THROUGH to rename unchanged,
+       beside its own decode packet, plus `vtype_hazard` per slot.
+       The PC, FTQ index, position, fault fields and `is_rvc`
+       reach the backend this way (ftq_backend_interfaces.md A1).
+       `predecode_out` and `predecode_pkt_t` are retired.
+
+DCD-19 A SLOT CARRYING A FETCH FAULT IS NOT DECODED AS ILLEGAL.
+       Its instruction bits are meaningless, and an instruction
+       fetch fault takes priority over an illegal instruction
+       exception. Decode passes the fault through and raises no
+       illegal on that slot.
+
+DCD-20 C AND Zcb ARE ALWAYS ENABLED. After expansion in the IFU
+       decode cannot tell which compressed extension an
+       instruction came from: `is_rvc` survives, the Zcb
+       distinction does not. RVA23 mandates both, so `misa.C` is
+       read-only 1, and decode's per-extension gating of
+       compressed encodings is deleted.
+
+TD#148  `is_vsetvl` and `needs_vtype` in `ifu_pd_pkt_t` have no
+        reader once DCD-17 is built. Left in place so BP-119 needs
+        no change to `bp_structs_pkg`.
 
 ---
 
 ## 11. Open
 
-DCD-U1  Where `vtype_hazard` is computed. TD-DCD-1 establishes
-        that it cannot be the predecoder and does not choose
-        between the ibuf read port and decode.
+DCD-U1  CLOSED session-075 by DCD-17: decode. It asked where
+        `vtype_hazard` is computed; TD-DCD-1 had excluded the
+        predecoder and left the ibuf read port and decode.
 
 DCD-U2  CLOSED session-070 by ras_decisions.md RAS-DS1: the RAS
         treats them as two operations and performs the POP FIRST,
@@ -289,3 +335,6 @@ IFU-18    Direction is proven only for an unconditional, which
 IBUF-2    Consumes the bundle view of DCD-16.
 TD-IFU-1  Closed by DCD-16.
 TD-IFU-5  Closed by this document.
+IBUF-9    The 8-wide read port that sets the decode bundle of
+          DCD-17.
+TD#143    Built by DCD-17 to DCD-20, BP-119.

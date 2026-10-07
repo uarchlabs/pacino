@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -471,7 +471,16 @@ group (section 2.5), not the p1 uBTB view (TD-FE-6):
   indirect       uBTB, FTB, ITTAGE
   return         uBTB, FTB, RAS
   direct unc.    uBTB, FTB
+  direct call    uBTB, FTB, RAS
+  indirect call  uBTB, FTB, ITTAGE, RAS
+  return-call    uBTB, FTB, RAS (pop, then push)
+  no branch      none
 ```
+
+The last four rows close FE-U9, session-075 (Jeff). RETURN_CALL
+does not train ITTAGE: its target comes from the RAS pop, and
+ITTAGE is never consulted for a RAS-predicted branch (section 3.3),
+so training it would fill an entry nothing reads.
 
 TAGE and SC predict direction and are updated only for conditional
 branches. ITTAGE is updated only for indirect branches. RAS IS
@@ -1147,12 +1156,17 @@ ubtb.sv.
 ## 14. Unresolved
 
 ```
-  FE-U1  Return identification before p1. The RAS presents its
-         top-of-stack as the initial predicted target for a return,
-         but the FTB branch type does not exist until p2. The uBTB
-         entry's br_type is what identifies the return at p1
-         (section 2.2); the residual question is what happens when
-         the uBTB misses and the block contains a return.
+  FE-U1  CLOSED session-075 (Jeff). Return identification before
+         p1. The RAS presents its top-of-stack as the initial
+         predicted target for a return, but the FTB branch type
+         does not exist until p2. The uBTB entry's br_type is what
+         identifies the return at p1 (section 2.2); the residual
+         question was what happens when the uBTB misses and the
+         block contains a return. Nothing at p1: the FTB
+         identifies the return at p2 and the p2 redirect corrects
+         the successor from ras_pop_addr_p2 (section 3.3). The
+         cost is the p2 redirect latency on a uBTB miss, which
+         every other branch type the uBTB misses already pays.
 
   FE-U2  CLOSED for the FTQ side, 2026-08-19. A backend mispredict
          flush reaches the FTQ on the redirect group of
@@ -1209,7 +1223,9 @@ ubtb.sv.
          "sections 4.1 and 10"; 4.1 is retired (section 6, MOVED).
          Session-072.
 
-  FE-U9  br_type update fan-out covers four of the EIGHT
+  FE-U9  CLOSED session-075 (Jeff) by the section 7.2 table:
+         RETURN_CALL trains uBTB, FTB and RAS, not ITTAGE. The
+         item as raised: br_type update fan-out covers four of the EIGHT
          bp_br_type_e encodings. The section 7.2 table has rows for
          conditional, indirect, return, and direct unconditional.
          FOUR have no row: DIRECT_CALL, INDIRECT_CALL, NO_BRANCH and
@@ -1344,6 +1360,38 @@ only, IBUF-8, 8a and 8b, ifu_ibuf_interfaces.md IB-12. This read
 redirects; those do not clear it. Corrected session-070.
 There is no front-end-wide flush signal and the top does not
 create one.
+
+### 15.4a Inputs the top takes because their producers do not exist
+
+```
+  FE-20  Ruled session-075 (Jeff). Three groups cross the boundary
+         INWARD in addition to FE-17's, each standing in for a
+         unit that does not exist yet. The top passes them through
+         and decides none of them.
+
+         csr           V, the current privilege, satp, vsatp and
+                       hgatp ASID, VMID and MODE fields, and the
+                       pmpcfg and pmpaddr registers. ITLB-17 and
+                       MMU-11a. The CSR file does not exist.
+
+         config        the cluster configuration: sc_enable,
+                       dual_pred_en and ftb_fastpath_en (G25).
+                       What eventually drives them is the CSR
+                       file's question, not the top's.
+
+         maintenance   the ITLB invalidate port of ITLB-14. Its
+                       producer is the backend.
+
+         And one OUTWARD dependency: decode's output to rename is
+         qualified by the ibuf read ready of IBUF-12, which comes
+         in on the backend group until rename exists.
+
+  FE-21  The L1I is the cachegen emission under
+         tools/cachegen/output/l1i, instantiated from that path,
+         as rtl/core/frontend/l1i_param_chk already compiles
+         against it. Its l2-side port, up_i, leaves the top as a
+         boundary edge; a testbench answers it.
+```
 
 ### 15.5 Unresolved
 
@@ -1570,4 +1618,12 @@ create one.
               since BP-111 (TD#132); the 38-bit pin and the
               zero-extension paragraph are retired. FE-U11 no
               longer names TD#122 as its carrier.
+
+  2026-10-07  session-075, rulings (Jeff). 7.2: rows for
+              direct call, indirect call, return-call and no
+              branch; RETURN_CALL does not train ITTAGE, closing
+              FE-U9. FE-U1 closed: a return the uBTB misses is
+              corrected at p2. 15.4a: FE-20, the csr, config and
+              maintenance input groups; FE-21, the L1I from its
+              emitted path.
 ```

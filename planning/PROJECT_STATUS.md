@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,102 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-075: BP-117, TD#146 built.
+
+BP-117 RUN, COMPLETE. regress.sh 94 targets PASS, exit 0.
+  C6   a predecode redirect flushes the IFU at K+1, and xlate_ptr
+       and fetch_ptr take min(ptr, K+1); p2 and p3 stay at K. Keyed
+       on arm_win. New checks fail 9, 2 and 13 times on the pre-edit
+       tree in tb_ftq_ptr, tb_ftq_ifu and tb_ftq; the existing
+       checks that encoded K were corrected, each with its old value.
+  C5   ifu_f3 raises M1 on the first JAL before the predicted taken
+       position, never on a JALR.
+  C19  ifu_itlb_vpn is [VA_WIDTH-13:0] on both lookups.
+  ifu_rvc_exp checked against LLVM 21 (embecosm toolchain) over all
+       49,152 encodings: 0 mismatches in the RTL or the tb
+       reference. 46,396 compare directly; the rest are decided by
+       the specification where LLVM keeps the encoding 16-bit or
+       disagrees (C.MV word, C.LUI nzimm=0, C.MOP). In regress as
+       oracle_ifu_rvc_exp. This also confirms TD#145 independently.
+  A predecode redirect now costs 2 cycles to its first translation
+       request, not 1, because F is the target block.
+TD#146 CLOSED. TD#145 CLOSED by ruling. TD#147, TD#148 and TD#149
+opened.
+
+Rulings (Jeff):
+  M1 OUTRANKS M2 TO M4. The writeback names the earliest failing
+       position in the block. ftq_ifu_interfaces.md 6.
+  rvc_expander.sv is NOT repaired. Retired with TD#143; row set to
+       Deprecated.
+  TD#113: bpu_blk_pft_p2 joins the 4c block-scalar group and
+       rewrites pft_addr for every valid p2 block. Its value is the
+       not-taken term of the cluster's own p2 successor, so the entry
+       and the redirect decision share one source.
+       ftq_bpu_interfaces.md 4c.
+  TD#134: the IFU flush with requests in flight, IFU-28 to IFU-32
+       (ifu_decisions.md 6.1). Survival measured from commit_ptr;
+       killed L1I ids; shared slots survive if any block does; dead
+       ITLB lookups drained; no writeback for a dropped block after
+       the flush cycle.
+  TD#113 and TD#134 are built together, BP-118.
+  The front end, BP-119, after BP-118: ibuf, ITLB, the PMP/PMA
+       checker, decode on ifu_pd_pkt_t (TD#143) and the front-end
+       top with an end-to-end testbench. Rulings, all session-075:
+       ibuf not banked (IBUF-U1), one read ready (IBUF-12), cleared
+       by the backend redirect valid (IBUF-13); ITLB tracker depth
+       a parameter, default 1 (ITLB-15, closing ITLB-U1), PTE
+       permissions checked on every hit (ITLB-16), G-stage
+       permissions in the walker (MMU-26), the CSR input group
+       (ITLB-17, MMU-11a, FE-20); the PMA region table a
+       parameter, default main memory 0x8000_0000 to the top of
+       the 36-bit space, 62 GiB (MMU-15a); the invalidate port
+       list proposed by BP-119 (ITLB-14); decode DCD-17 to DCD-20
+       (DCD-U1 closed); RETURN_CALL trains uBTB, FTB and RAS
+       (FE-U9 closed); a return the uBTB misses is corrected at
+       p2 (FE-U1 closed); the loop predictor overrides only a slot
+       the uBTB supplied; the p3 RAS repair deferred (TD#149); the
+       L1I from its emitted path (FE-21).
+  NOT RULED: the l2t_itlb_size encoding, itlb_l2tlb_interfaces.md
+       IL-7, proposed ascending by page size.
+  IFU-31 corrected: the ITLB wait after a flush is the ITLB's miss
+       latency and BP-118 does not measure it.
+
+PA-direct corrections, session-075, applied by Jeff:
+  ftq_decisions.md 5.5 R1: the arm_win paragraph gave predecode
+       F = K against its own table; arm 2 is K+1, arms 3 and 4 K.
+  ftq_ifu_interfaces.md: scope paragraph (both sides built).
+  After BP-117: TD#146 marked built in ftq_decisions.md,
+       ftq_ifu_interfaces.md, ifu_ibuf_interfaces.md IB-13 and
+       itlb_ifu_interfaces.md IT-16; the M1 priority added; the
+       post-redirect latency table corrected in ftq_decisions.md
+       5.1, ftq_ifu_interfaces.md 4.1 and ifu_decisions.md IFU-27
+       (p2/p3 1 cycle, inferred, not measured); ftq_entry_formats.md
+       R3a no longer says K is refetched by design, and 4.1's totals
+       read 425b and 68,992b.
+  The TD#113 and TD#134 rulings: ftq_bpu_interfaces.md 4 and 4c,
+       ftq_entry_formats.md 2, ifu_decisions.md 6.1 (IFU-28 to
+       IFU-32), IFU-27 and TD-IFU-7. TD#113 and TD#134 rows cut to
+       the rulings.
+
+Tools, Jeff: Spike rebuilt and installed to tools/bin;
+check_spike_decode.py points there; spike_check 50/50. The IA
+corrected the mop.r.0 encoding in tools/rva23_insn_ref.c. tools/ is
+not under regress.sh.
+
+Carried from BP-117, not yet tasked:
+  no check pins the FTQ entry after an M1 JAL ahead of a predicted
+       taken slot
+  tb_ftq drives no p2 or p3 redirect, so the 1-cycle row is unmeasured
+  ftq.sv keeps its pre-BP-117 comment as // OLD: lines for cleanup
+
+PA error, mine: BP-117 Problem 4 named Spike as an oracle candidate
+without checking that Spike produces 32-bit expansions, and without
+looking for the decoder track's existing oracle work. The IA found
+an independent source anyway.
+
+Next free BP is BP-120, INFRA-014, TOOLS-007, TD#150.
 
 ---
 ## Session-074: rulings for the IFU, and BP-115.
@@ -1117,7 +1213,10 @@ it only documented current behavior.
 |-------------------------|-------------|-------------------|----------------------------------|
 | predecode.sv            | Complete    | tb_predecode      | clk/rstn unused (debt #4)        |
 | instr_decoder.sv        | Complete    | tb_instr_decoder  | 1043 passing                     |
-| rvc_expander.sv         | Complete    | tb_rvc_expander   |                                  |
+| rvc_expander.sv         | Deprecated  | tb_rvc_expander   | Wrong in 12,456 encodings,       |
+|                         |             |                   | TD#145. Not repaired; retired    |
+|                         |             |                   | with TD#143 (Jeff, session-075). |
+|                         |             |                   | ifu_rvc_exp is the expander.     |
 | decode_pkg.sv           | Complete    | --                | All decode structs               |
 | bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
 |                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
@@ -1959,8 +2058,10 @@ it only documented current behavior.
 |                         |             |                   | ifu_f3, ifu_wb. Unit-testable     |
 |                         |             |                   | only: TD#134 (flush), TD#135      |
 |                         |             |                   | (uncached), TD#136 (maintenance)  |
-|                         |             |                   | are stubbed by ruling. TD#146     |
-|                         |             |                   | holds three unbuilt rulings.      |
+|                         |             |                   | are stubbed by ruling. BP-117     |
+|                         |             |                   | built TD#146 (C5, C19) and checks |
+|                         |             |                   | ifu_rvc_exp against LLVM over all |
+|                         |             |                   | 49,152 encodings, 0 mismatches.   |
 | ibuf                    | Not started | --                | ibuf_decisions.md and             |
 |                         |             |                   | ifu_ibuf_interfaces.md created    |
 |                         |             |                   | session-069. Had no planning      |
@@ -2400,10 +2501,12 @@ assessment of each document. Correct any that are wrong.
 |     |          | successor (ftq_entry_formats.md 2; costs a fetch         |
 |     |          | address).                                                |
 |     |          |                                                          |
-|     |          | FIX: the p2 group (ftq_bpu_interfaces.md 4a) carries the |
-|     |          | FTB fall-through and rewrites pft_addr. A separate       |
-|     |          | ret_addr field would fix the RAS only. RTL: ftq_entry    |
-|     |          | and the bp_cluster boundary. Found by BP-107.            |
+|     |          | FIX RULED session-075 (Jeff): bpu_blk_pft_p2 on the 4c   |
+|     |          | block-scalar group (ftq_bpu_interfaces.md 4c), the       |
+|     |          | not-taken term of the cluster's own p2 successor,        |
+|     |          | written into pft_addr for every valid p2 block. This     |
+|     |          | read "the p2 group (4a)". RTL: bp_cluster and ftq_entry. |
+|     |          | Unbuilt; BP-118. Found by BP-107.                        |
 | 114 | ftq      | CLOSED by INFRA-013 (session-074). 8 of 85 labels are    |
 |     |          | absent from at least one build, all because the property |
 |     |          | restates a direct assignment or tie-off and folds. I7,   |
@@ -2713,33 +2816,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | Assess with the same harness as TD#128, once the IFU is  |
 |     |          | complete and something can drive it. Gate any two-block  |
 |     |          | commitment on this.                                      |
-| 134 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. WRONG-PATH       |
-|     |          | REQUESTS AFTER A REDIRECT. ifu_notes.md 6.4. The IFU     |
-|     |          | must flush its translation pipeline and its fetch        |
-|     |          | pipeline, and deal with what is already in flight: up to |
-|     |          | 16 L1I requests, the ITLB's in-flight walks and the line |
-|     |          | buffer. The L1I interface HAS NO CANCEL PORT, so a       |
-|     |          | wrong-path response returns and must be discarded, which |
-|     |          | needs an epoch or generation on the request tag and a    |
-|     |          | rule for the line buffer. None of it is specified.       |
+| 134 | ifu      | OPEN, RULED session-075 (Jeff), unbuilt; BP-118. HOW THE |
+|     |          | IFU FLUSH IS APPLIED WITH REQUESTS IN FLIGHT.            |
+|     |          | ifu_decisions.md 6.1, IFU-28 to IFU-32: a block survives |
+|     |          | when older than F measured from commit_ptr; killed L1I   |
+|     |          | ids discard their response; a shared line buffer slot    |
+|     |          | survives if any of its blocks does; dead ITLB lookups    |
+|     |          | are drained before translation restarts; no writeback    |
+|     |          | for a dropped block after the flush cycle.               |
 |     |          |                                                          |
-|     |          | Ruled session-073 (Jeff): this is not part of the first  |
-|     |          | IFU task. It lifts the flush-and-redirect deferral of    |
-|     |          | session-069, which is a design increment, and it gets a  |
-|     |          | dedicated or abbreviated session with the context to do  |
-|     |          | it properly. The first IFU task stubs it and says so.    |
-|     |          |                                                          |
-|     |          | Consequence: an IFU built without this is UNIT-TESTABLE  |
-|     |          | ONLY. It cannot be integrated against the FTQ redirect   |
-|     |          | path until this closes. Related: TD#126, TD#127.         |
-|     |          |                                                          |
-|     |          | BP-116 built the stub: a flush clears ALL IFU state and  |
-|     |          | an assertion (ifu_assert U3) fires if one arrives with   |
-|     |          | an L1I id or ITLB lookup outstanding. CLEAR-ALL IS WRONG |
-|     |          | IN GENERAL: ftq_ptr does not rewind xlate_ptr or         |
-|     |          | fetch_ptr past an entry older than F, so a held older    |
-|     |          | translation or block would be lost. This task must flush |
-|     |          | only at or after F (IFU-20, IFU-27).                     |
+|     |          | Replaces the BP-116 stub, which clears all IFU state and |
+|     |          | asserts (ifu_assert U3) if a flush arrives with anything |
+|     |          | outstanding. Until built the IFU is unit-testable only.  |
 | 135 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE UNCACHED     |
 |     |          | FETCH PATH. ifu_notes.md 6.8, MMU-14, IT-11, IFU-21. A   |
 |     |          | fetch whose effective memory type is not cacheable and   |
@@ -2912,6 +3000,12 @@ assessment of each document. Correct any that are wrong.
 |     |          | vtype_hazard to rename) is settled with DCD-U1, and      |
 |     |          | predecode.sv, tb_predecode and predecode_pkt_t are       |
 |     |          | deleted. Blocks front-end integration, not the IFU.      |
+|     |          |                                                          |
+|     |          | RULED session-075 (Jeff), dcd_decisions.md DCD-17 to     |
+|     |          | DCD-20: decode computes vtype_hazard (DCD-U1 closed),    |
+|     |          | passes ifu_pd_pkt_t through, raises no illegal on a      |
+|     |          | fetch fault, and C and Zcb are always on.                |
+|     |          | rvc_expander.sv goes with it (TD#145). Unbuilt; BP-119.  |
 | 144 | ftq      | CLOSED by BP-116 Part A (session-074). Eleven labels     |
 |     |          | deleted or restated; Q11, Q12, E9, E10 and the restated  |
 |     |          | E8 each shown to fail under a scratch mutation.          |
@@ -2919,27 +3013,29 @@ assessment of each document. Correct any that are wrong.
 |     |          | removal; it cannot see a kept tautology, which the       |
 |     |          | CLAUDE.md assertion rule covers. Gap left: tb_ftq_entry  |
 |     |          | never samples E8's killed state.                         |
-| 145 | decode   | OPEN. rvc_expander.sv (Complete) mis-expands 12,456 of   |
-|     |          | the 49,152 16-bit encodings in six classes, among them   |
-|     |          | negative C.BEQZ/C.BNEZ offsets, c.mul as MULW and the    |
-|     |          | doubleword store offsets. Found by BP-116, whose         |
-|     |          | tb_ifu_rvc_exp corrects them from the specification's    |
-|     |          | field tables. C, Zcb and Zcmop are mandatory in RVA23.   |
-|     |          | Fix with that testbench's reference as the oracle;       |
-|     |          | decode's own tests passed with it wrong.                 |
-| 146 | ifu, ftq | OPEN. RTL for three session-074 rulings, all unbuilt.    |
-|     |          |                                                          |
-|     |          | C6: the predecode arm flushes at K+1 (ftq_decisions.md   |
-|     |          | 5.5 R1, ftq_ifu_interfaces.md 7 W3); p2 and p3 stay at   |
-|     |          | K. ftq_ptr and ftq_ifu, keyed on arm_win, not the cause. |
-|     |          |                                                          |
-|     |          | C5: M1 also fires on a JAL before the predicted taken    |
-|     |          | position; JALR is never M1 (ftq_ifu_interfaces.md 6).    |
-|     |          | ifu_f3.                                                  |
-|     |          |                                                          |
-|     |          | C19: ifu_itlb_vpn widens to VA_WIDTH-12                  |
-|     |          | (itlb_ifu_interfaces.md IT-16). ifu_xlate and its        |
-|     |          | testbench.                                               |
+| 145 | decode   | CLOSED session-075 by ruling (Jeff): rvc_expander.sv is  |
+|     |          | NOT repaired. It is retired with decode's old input path |
+|     |          | under TD#143; ifu_rvc_exp is the expander in the design. |
+|     |          | The finding stands: 12,456 of 49,152 encodings wrong in  |
+|     |          | six classes, confirmed by BP-117's independent oracle.   |
+| 146 | ifu, ftq | CLOSED by BP-117 (session-075). C6 predecode flushes at  |
+|     |          | K+1, keyed on arm_win; C5 M1 on a JAL before the taken   |
+|     |          | position, never JALR, outranking M2-M4 (Jeff); C19       |
+|     |          | ifu_itlb_vpn [VA_WIDTH-13:0] on both lookups.            |
+| 147 | ifu      | OPEN. oracle_ifu_rvc_exp, a regress target, runs LLVM    |
+|     |          | from a toolchain at a fixed /usr/local path              |
+|     |          | (RVC_ORACLE_TC in the ifu Makefile). On a machine        |
+|     |          | without it regress.sh goes red. Either accept and record |
+|     |          | that dependency, or make the path configurable. BP-117.  |
+| 148 | ifu      | OPEN. is_vsetvl and needs_vtype in ifu_pd_pkt_t have no  |
+|     |          | reader once decode computes its own (dcd_decisions.md    |
+|     |          | DCD-17). Kept so BP-119 needs no bp_structs_pkg change.  |
+|     |          | Remove them from the struct, ifu_predecode and the ibuf. |
+| 149 | bpu, ftq | OPEN, DEFERRED. The p3 RAS repair: after SC reverses a   |
+|     |          | slot at p3 the entry holds the pre-repair snapshot, so a |
+|     |          | later restore to it is slightly wrong. Accuracy only.    |
+|     |          | Fix if measured: a p3 snapshot write.                    |
+|     |          | ftq_bpu_interfaces.md 4c.                                |
 
 ---
 
@@ -2947,7 +3043,13 @@ assessment of each document. Correct any that are wrong.
 
 | Priority | Item                                    | Status              |
 |----------|-----------------------------------------|---------------------|
-| 1        | TOOLS-002 spike ISA string              | Deferred            |
+| 1        | TOOLS-002 spike ISA string              | Follow-ons closed   |
+|          |                                         | session-075: Spike  |
+|          |                                         | rebuilt to          |
+|          |                                         | tools/bin,          |
+|          |                                         | spike_check 50/50.  |
+|          |                                         | Not in regress.     |
+|          |                                         | TOOLS-003 open.     |
 | 2        | DECODE-012 pre-decode restructure       | Defer to fetch unit |
 | 3        | Whisper ISS lock-step validation        | Post-pipeline       |
 | 4        | Cleanup CLI-001,002,004,008,011,012,TI7 | Complete.           |

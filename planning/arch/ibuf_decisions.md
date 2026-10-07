@@ -6,7 +6,7 @@
  FILE:    ibuf_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -107,7 +107,11 @@ the same predecode. The first goes to the FTQ. The second goes
 through the ibuf, 16 wide on the write port and 8 on the read
 port; the width belongs to the port, not the type (DCD-1).
 
-IBUF-U1 Whether the buffer is banked. A flat depth-to-1 mux per
+IBUF-U1 CLOSED session-075 (Jeff) for this build: NOT BANKED.
+        Banking changes only how the 8 read outputs are selected,
+        not what the buffer does, and the timing it would fix
+        cannot be measured under Verilator. Reopen at physical
+        design. The question as raised: a flat depth-to-1 mux per
         read output may be too expensive at 8 outputs, and
         banking replaces it with a per-bank mux followed by a
         select across banks. If banked, the bank count is at
@@ -115,7 +119,15 @@ IBUF-U1 Whether the buffer is banked. A flat depth-to-1 mux per
         XiangShan banks for exactly this reason, requires the
         count to be at least its decode width, and sits at 6 and
         6 with no margin. Banking changes nothing about enqueue:
-        every entry keeps its own write mux. Unresolved.
+        every entry keeps its own write mux.
+
+IBUF-12 THE READ PORT HAS ONE READY. The ibuf presents up to 8
+        valid entries from the head, in order. A single ready from
+        downstream dequeues every valid one presented in that
+        cycle together; there is no partial dequeue. Ruled
+        session-075 (Jeff). Decode is combinational and the stall
+        comes from rename, which does not exist, so the ready is a
+        front-end boundary input until it does.
 
 ---
 
@@ -145,6 +157,12 @@ IBUF-8  A BACKEND redirect clears the buffer entirely. Nothing in
         instruction has executed, is therefore past decode and out
         of the buffer, and everything remaining is younger.
 
+IBUF-13 The clear is `bkend_ftq_redir_val`, wired by the front-end
+        top directly to the ibuf: the same signal that enters the
+        FTQ (ftq_backend_interfaces.md 5), on every cause including
+        RC_UNSPEC. Ruled session-075 (Jeff). Not the FTQ's IFU
+        flush, IB-12.
+
 IBUF-8a A predecode redirect does NOT clear the buffer. The
         prediction check and the ibuf write are both in F3
         (`ifu_decisions.md` IFU-12), and the truncation at
@@ -173,7 +191,8 @@ a predecode redirect it discards the part of the block before
 
 ## 7. Open
 
-IBUF-U1  Whether the buffer is banked. Section 4.
+None. IBUF-U1 closed session-075, not banked; reopen at physical
+design.
 
 ---
 
@@ -183,8 +202,10 @@ IFU-2     Sets the entry contents of IBUF-2.
 IFU-5     Gives the compaction to IBUF-3.
 IFU-23    Uncached fetch, IBUF-5.
 IB-12     The clear source, backend redirect alone.
-IB-13     The flush index: K for predecode, p2, p3 and backend
-          with _self set; K+1 for backend with _self clear.
+IB-13     The flush index: K for p2, p3 and backend with _self
+          set; K+1 for predecode and for backend with _self clear.
+          This read "K for predecode", true until BP-117.
+          Session-075.
 ITLB-11   The fault cause and VA carried in IBUF-2 originate
           here.
 IB-*      The write port is `ifu_ibuf_interfaces.md`.

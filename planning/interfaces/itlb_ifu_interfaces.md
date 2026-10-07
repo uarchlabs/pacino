@@ -6,7 +6,7 @@
  FILE:    itlb_ifu_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -53,7 +53,8 @@ IT-16 `ifu_itlb_vpn` is VA_WIDTH - 12 = 29 bits, the fetch
       address, and with V=0 and satp.MODE=Bare a fetch address
       above bit 35 must reach the PMA check to fault (FE-19). A
       27-bit port drops both. Ruled session-074 (Jeff); this read
-      [VPN_WIDTH-1:0]. The IFU port is TD#146, unbuilt.
+      [VPN_WIDTH-1:0]. The IFU port is built at this width on
+      both lookups by BP-117, TD#146 closed.
 
 IT-1  One request port. A block that crosses a page needs two
       translations and they are issued on successive cycles, not

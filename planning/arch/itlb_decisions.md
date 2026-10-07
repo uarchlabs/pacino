@@ -6,7 +6,7 @@
  FILE:    itlb_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -114,12 +114,18 @@ same VA while the walk is outstanding, so without a match against
 in-flight walks the ITLB issues duplicate walks for every retry.
 This is the same shape as the L1I-14 MSHR target problem.
 
-ITLB-U1 The depth of the in-flight walk tracker. One outstanding
+ITLB-U1 CLOSED session-075 (Jeff) by ITLB-15. The question was
+        the depth of the in-flight walk tracker. One outstanding
         walk makes ITLB-8 mean only that hits continue during a
         miss. More than one requires the walker to accept more
         than one, which is an `mmu_decisions.md` question and is
         bounded by how many transactions the l2 slave accepts,
-        TD#118. Unresolved.
+        TD#118.
+
+ITLB-15 The walk tracker depth is a parameter, default 1. The l2
+        serialises walks (TD#118, MMU-U2), so more buys nothing
+        until that is fixed. IL-1's two-bit tag allows up to four
+        and is not tied to this value.
 
 ---
 
@@ -130,7 +136,8 @@ ITLB-11 The ITLB returns a fault cause, not a single non-faulting
 
 The faulting virtual address is not returned on the port. The IFU
 supplied it and holds it against the request tag, and pairs it
-with the cause on the way into `predecode_pkt_t`.
+with the cause on the way into `ifu_pd_pkt_t` (this read
+`predecode_pkt_t`; DCD-16, session-075).
 `itlb_ifu_interfaces.md` IT-5. The pair still reaches the backend
 as Sstvala requires; it is assembled one step later.
 
@@ -160,6 +167,29 @@ fault case and IF-24 the miss case. Nothing there collapses two
 causes into one bit.
 
 ---
+
+ITLB-16 THE PTE PERMISSION CHECK IS MADE ON EVERY HIT, against
+        the current privilege, and raises cause 12. The entry
+        holds the permission byte of IL-8. A fetch faults when X
+        is clear; in U-mode, or VU-mode for a V=1 entry, when U is
+        clear; in S-mode, or VS-mode, when U is set. SUM does not
+        apply to instruction fetch, and MXR concerns loads only.
+        Ruled session-075 (Jeff).
+
+        It cannot be made once at walk time and cached as a
+        result: privilege changes without a fence, so the same
+        entry can be legal at one hit and faulting at the next.
+
+        G-STAGE PERMISSIONS ARE NOT CHECKED HERE. Every G-stage
+        access is treated as a user-mode access, so the result
+        does not depend on the current privilege, and the walker
+        checks it and returns cause 20 (mmu_decisions.md MMU-26).
+
+ITLB-17 The ITLB reads its translation regime from a CSR input
+        group on the front-end boundary: V, the current privilege,
+        satp ASID and MODE, vsatp ASID and MODE, hgatp VMID and
+        MODE. It holds no CSR of its own. fe_decisions.md FE-20.
+        Ruled session-075 (Jeff).
 
 ## 6. Check placement
 
@@ -260,6 +290,12 @@ ITLB-13a HFENCE.VVMA invalidates `V=1` VS-stage entries for the
 
 ITLB-14 The invalidate port is a distinct port, not carried on the
         translation request path. It is written with the module.
+        Its port list is proposed by the task that builds the
+        ITLB, from ITLB-13, ITLB-13a and ITLB-13b, and recorded
+        here once reviewed. The front-end top
+        exposes it as a boundary input, since its producer is the
+        backend, which does not exist (FE-20). Ruled session-075
+        (Jeff); BP-119.
 
 ITLB-13b Svinval, mandatory in RVA23S64, per mmu_decisions.md
          MMU-U8 (adopted session-071): SINVAL.VMA acts as
@@ -277,7 +313,7 @@ with it.
 
 ## 8. Open
 
-ITLB-U1  In-flight walk tracker depth. Section 4.
+None. ITLB-U1 closed session-075 by ITLB-15.
 
 MMU-U6, MMU-U7 and MMU-U8, which bounded ITLB-3, ITLB-3a, ITLB-12
 and section 7, were ruled session-071.
@@ -341,4 +377,11 @@ TD#118    Bounds ITLB-U1.
   2026-09-20  session-072. D30: same Sstvala correction. E26: the
               header records that the registry numbers are issue
               order.
+
+  2026-10-07  session-075, rulings (Jeff). ITLB-15: tracker depth a
+              parameter, default 1, closing ITLB-U1. ITLB-16: the
+              PTE permission check on every hit, cause 12; G-stage
+              permissions are the walker's. ITLB-17: the CSR input
+              group. ITLB-14: the invalidate port list is proposed
+              by BP-119. ITLB-11: ifu_pd_pkt_t, not predecode_pkt_t.
 ```

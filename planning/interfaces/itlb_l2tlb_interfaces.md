@@ -6,7 +6,7 @@
  FILE:    itlb_l2tlb_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -137,7 +137,9 @@ L1I line (fe_decisions.md Conventions). Session-071.
 
 IL-7  `l2t_itlb_size` names which page size the translation
       covers: 4 KiB, 64 KiB (Svnapot), 2 MiB or 1 GiB. Two bits
-      encode the four; the encoding is not yet assigned. The ITLB
+      encode the four. PROPOSED session-075, NOT RULED: 2'b00
+      4 KiB, 2'b01 64 KiB, 2'b10 2 MiB, 2'b11 1 GiB, ascending by
+      size, so a larger code always masks more VPN bits. The ITLB
       installs the entry at that size, ITLB-3; a 64 KiB entry is
       held once with a masked match (mmu_decisions.md MMU-U7).
       The PPN returned for a 64 KiB page is the PTE's, with

@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -161,6 +161,12 @@ The p1 selection mux is cluster logic, per slot:
 
 There is no slot-0 exception to this rule.
 
+THE LOOP PREDICTOR ONLY OVERRIDES THE DIRECTION OF A SLOT THE uBTB
+SUPPLIED. It carries no target, so when lp_pred_is_loop is set and
+the uBTB slot is not valid, the slot carries no prediction. Ruled
+session-075 (Jeff). Whether bp_cluster.sv does this is checked by
+BP-119.
+
 A uBTB RETURN takes its target from the registered RAS top of stack
 rather than from the uBTB entry.
 
@@ -240,11 +246,12 @@ Two consumers are affected, and they are not equally forgiving:
   rewrites a slot -- which is the case where the p1 value is stale.
   Cost here is a FETCH ADDRESS, not an accuracy loss.
 
-THE FIX IS THIS SECTION, not a new entry field. Adding a separate
-`ret_addr` patches the RAS symptom and leaves the successor wrong. The
-p2 group should carry the FTB fall-through and correct the block
-scalar. Found by BP-107 (W1); the RAS half was confirmed against
-ras_decisions.md 8 at Jeff's instruction.
+THE FIX IS A p2 PORT, not a new entry field. Adding a separate
+`ret_addr` patches the RAS symptom and leaves the successor wrong.
+The p2 block-scalar group carries the corrected fall-through and
+rewrites the block scalar: `bpu_blk_pft_p2`, section 4c, ruled
+session-075 and unbuilt (BP-118). Found by BP-107 (W1); the RAS half
+was confirmed against ras_decisions.md 8 at Jeff's instruction.
 
 The FTQ writes it into the allocated entry as
 `bp_ftq_entry_t.pft_addr`. The port is present only in the p1 cycle
@@ -337,6 +344,7 @@ that is not known until p2 needs its own group. RULED session-071
   bpu_blk_val_p2                                  NEW
   bpu_blk_idx_p2   [FTQ_IDX_BITS-1:0]             NEW
   bpu_blk_ras_p2   bp_ras_snapshot_t              NEW
+  bpu_blk_pft_p2   [VA_WIDTH-1:0]                 NEW   TD#113
 ```
 
 `bpu_blk_val_p2` is `r_val_p2`: EVERY valid p2 block, whether or not
@@ -360,18 +368,41 @@ The index is subject to the stale-response drop of ftq_decisions.md
 4.6, through the shadow of 5.6 at its p2 stage, like every other
 indexed response.
 
-OPEN, raised session-071: THE p3 REPAIR. ras_decisions.md 1 and 1.2
-and IC-RAS-11 repair the speculative stack at p3 when the p3 view of a
-slot differs from the p2 operation applied, which happens when SC
-reverses an earlier slot and so changes which later slot is
-reachable (FE-11). The snapshot written here is then the pre-repair
-state. Whether the entry needs a p3 write, or the repair is covered
-by the p3 redirect's own restore, is not decided.
+DEFERRED, TD#149, session-075 (Jeff): THE p3 REPAIR. ras_decisions.md
+1 and 1.2 and IC-RAS-11 repair the speculative stack at p3 when the
+p3 view of a slot differs from the p2 operation applied, which
+happens when SC reverses an earlier slot and so changes which later
+slot is reachable (FE-11). The snapshot written here is then the
+pre-repair state, and a later restore to this entry restores a
+slightly wrong stack. The RAS is a predictor, so the cost is
+accuracy, not correctness. The fix, if measurement asks for it, is
+a p3 snapshot write. Raised session-071; this read OPEN.
 
-THIS IS ALSO WHERE TD#113 LANDS. Section 4 records that the fix for
-the uncorrected p1 fall-through is a p2 group carrying the FTB
-fall-through into the block scalar. That field joins this group when
-TD#113 is built; it is not specified here.
+`bpu_blk_pft_p2` IS THE CORRECTED FALL-THROUGH, TD#113. It is the
+same not-taken address the cluster uses as the not-taken term of its
+p2 successor when it forms the section 6 p2 redirect comparison: the
+FTB fall-through when the FTB answers, and the p1 value carried
+forward when it does not. The FTQ writes it into
+`bp_ftq_entry_t.pft_addr` of the named entry, unconditionally, under
+`bpu_blk_val_p2`, exactly as it writes `bpu_blk_ras_p2`. RULED
+session-075 (Jeff). Unbuilt; BP-118.
+
+ONE SOURCE FOR BOTH. Because the value written into the entry and the
+value the p2 redirect comparison reads are the same net, the entry's
+not-taken successor and the cluster's decision about whether the
+block end moved cannot disagree. A separate derivation for the entry
+would let them.
+
+Section 4 names the two consumers the stale value harmed: the
+not-taken arm of the successor selection (fe_decisions.md 2.4) and
+the RAS return address (ras_decisions.md 8). Both are corrected by
+this write if both read `pft_addr`; BP-118 confirms that against the
+RTL.
+
+This read that the field "joins this group when TD#113 is built; it
+is not specified here". Section 4's TD#113 text, and the TD#113 row,
+place the fix in "the p2 group"; this section is that group.
+Session-075.
 
 ---
 
@@ -1158,4 +1189,14 @@ match it and to match this specification.
 
   2026-09-20  session-072. E23: 4a now precedes 4b and 4b is an H2
               like its siblings.
+
+  2026-10-06  session-075. 4c gains bpu_blk_pft_p2, the TD#113
+              fix, ruled (Jeff): the not-taken term of the cluster's
+              own p2 successor, written into pft_addr for every
+              valid p2 block. Section 4 points to it. Unbuilt;
+              BP-118.
+
+  2026-10-07  session-075, rulings (Jeff). Section 4: the loop
+              predictor overrides only a slot the uBTB supplied.
+              4c: the p3 RAS repair deferred as TD#149.
 ```

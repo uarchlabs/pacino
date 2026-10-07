@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -115,15 +115,19 @@ every valid block from `bpu_blk_ras_p2`, the state after both slots'
 operations (ftq_bpu_interfaces.md 4c, ras_decisions.md 4.2). No
 restore reads the p1 value. Session-071, ruled.
 
-`pft_addr` IS A p1 VALUE AND NOTHING CORRECTS IT. Written once from
-`bpu_pred_pft_p1`, and the p2/p3 groups of ftq_bpu_interfaces.md 4a
-carry `bp_ftq_slot_t` only. The block-scalar group of 4c now exists
-for the RAS snapshot and is where the fall-through joins when TD#113
-is built.
+`pft_addr` IS A p1 VALUE AND, AS BUILT, NOTHING CORRECTS IT. Written
+once from `bpu_pred_pft_p1`, and the p2/p3 groups of
+ftq_bpu_interfaces.md 4a carry `bp_ftq_slot_t` only.
 On a uBTB miss the p1 value is the FULL block end, so the very case
 this field exists for -- re-deriving the successor after a redirect
-rewrites a slot -- is the case where it is stale. See
-ftq_bpu_interfaces.md 4; the fix is there, not a second field here.
+rewrites a slot -- is the case where it is stale.
+
+THE FIX IS RULED, session-075 (Jeff), TD#113, unbuilt: the 4c
+block-scalar group gains `bpu_blk_pft_p2`, and the FTQ rewrites
+`pft_addr` from it for every valid p2 block, as it rewrites `ras`
+from `bpu_blk_ras_p2`. The value is the not-taken term of the
+cluster's own p2 successor. ftq_bpu_interfaces.md 4c is the owner;
+no second field is added here. BP-118.
 
 `pft_addr` is block scalar as well: it is the address fetched after
 this block when no slot in it is taken, one value per entry. It is
@@ -313,8 +317,9 @@ are NOT members of `bp_ftq_entry_t` and not members of
   reallocated.
 
 The entry totals of section 1 are therefore unchanged. Fast path
-228b, slow path 421b per slot, 68,480b together; these 192 bits sit
-outside both.
+228b, slow path 425b per slot, 68,992b together; these 192 bits sit
+outside both. This read 421b and 68,480b, the figures before BP-111
+(TD#132); section 1 already carried the current ones. Session-075.
 
 ### 4.2 Write and clear
 
@@ -353,30 +358,31 @@ block ended early.
       at most one, and only from its own writeback
       (ftq_ifu_interfaces.md 6). A second writeback naming an
       entry that already has the bit set derives NO redirect.
-  R3a THE W3 REFETCH'S WRITEBACK IS EXPECTED, NOT A PROTOCOL
-      VIOLATION. A predecode redirect on entry K flushes at K and
-      fetch restarts from K (ftq_ifu_interfaces.md 7 W3), so K is
-      fetched twice BY DESIGN and its second writeback arrives
-      with wb_rcvd already set and gen[K] unchanged, which 6.1 X3
-      accepts. It is accepted and sets status. IT DERIVES NEITHER
-      A REDIRECT NOR A FIELD REWRITE. Section 7 applies W1 and W2
+  R3a A SECOND WRITEBACK IS LEGAL, NOT A PROTOCOL VIOLATION. One
+      arriving with wb_rcvd already set and gen[K] unchanged passes
+      6.1 X3, is accepted and sets status. IT DERIVES NEITHER A
+      REDIRECT NOR A FIELD REWRITE. Section 7 applies W1 and W2
       only on ifu_ftq_mis_val, and the rewrite and the redirect
       are ONE EVENT (ftq_ifu_assert I5): a rewrite without a flush
       would change the entry's successor while the old successor
-      is still being fetched. So a mispredict reported on the
-      refetch is dropped whole. That is safe because the refetch
-      returns the same bytes against the corrected entry, so it
-      cannot disagree unless something else is already wrong, and
-      the backend redirect remains the correctness backstop.
+      is still being fetched. So a mispredict reported on a second
+      writeback is dropped whole, and the backend redirect remains
+      the correctness backstop.
+
+      NO DOCUMENTED PATH PRODUCES ONE SINCE BP-117. This rule was
+      written for the W3 refetch: a predecode redirect on K flushed
+      at K, so K was fetched twice by design. Since BP-117 a
+      predecode redirect flushes at K+1 (ftq_ifu_interfaces.md 7
+      W3, TD#146) and K is not refetched. The rule and I4 stay as
+      the defined response if a second writeback ever arrives.
+      Session-075.
 
       This rule first said "W1 and W2 apply to the fields as for
       any writeback", which would have split the rewrite from the
       redirect. Corrected session-073 after BP-114 reported the
-      conflict.
-      R3's bound is what stops a refetch loop; R3 previously
-      called this case a violation, which is what W3 requires to
-      happen on every predecode redirect. Ruled session-073,
-      TD#140.
+      conflict. R3 previously called this case a violation, which
+      was what W3 then required on every predecode redirect. Ruled
+      session-073, TD#140.
 ```
 
 Assertion I4 follows R3a: a second writeback on a set wb_rcvd is
@@ -527,4 +533,12 @@ path touches none of those.
               newer entries had been appended at the wrong end.
 
   2026-09-20  session-072. E25: UPDATED brought to the session date.
+
+  2026-10-06  session-075, after BP-117. 4.3 R3a: a second writeback
+              is still legal and derives nothing, but no documented
+              path produces one since a predecode redirect flushes at
+              K+1. 4.1: the slow-path and total figures brought to
+              425b and 68,992b, matching section 1. Section 2: the
+              TD#113 fix for pft_addr is ruled, bpu_blk_pft_p2 on
+              the 4c group; unbuilt.
 ```

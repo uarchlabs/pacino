@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-06
  CONTACT: Jeff Nye
 ```
 
@@ -316,25 +316,31 @@ IFU-27  On a redirect both pipelines are flushed of everything at
         state and is legal only with nothing outstanding; that is
         the TD#134 stub. Clearing all is wrong once an entry older
         than F can be held. This read "the queue is emptied".
-        Session-074.
+        Session-074. How the flush is applied with requests in
+        flight is ruled as IFU-28 to IFU-32, section 6.1
+        (session-075, TD#134), unbuilt.
 
-        THE COST IS NOT THE SAME FOR BOTH KINDS OF REDIRECT.
-        Measured by BP-113 (session-073) from the redirect cycle
-        to the first cycle the FTQ presents the translation
-        request for the flush index F:
+        THE COST DEPENDS ON WHETHER F ALREADY HAS CONTENT. From the
+        redirect cycle to the first cycle the FTQ presents the
+        translation request for the flush index F:
 
 ```
-          front-end (p2, p3, predecode)   1 cycle
-          backend                         2 cycles
+          p2, p3          1 cycle     not measured
+          predecode       2 cycles    BP-117, tb_ftq G5
+          backend         2 cycles    BP-113, tb_ftq G11, G16
 ```
 
-        The backend case costs the extra cycle because F is the
-        target entry itself and its p1 content write lands at the
-        end of the redirect cycle, so there is nothing to
-        translate until then. A front-end redirect corrects an
-        entry that already has content. This rule said "at least
-        one cycle" for both; ftq_decisions.md 5.1 carries the same
-        split and the same measurement.
+        For a backend redirect, and for a predecode redirect since
+        BP-117 put F at K+1, F is the redirect target block and its
+        p1 content write lands at the end of the redirect cycle, so
+        there is nothing to translate until then. A p2 or p3
+        redirect corrects K, which already has content; that row
+        is inferred, since tb_ftq drives no p2 or p3 redirect.
+        ftq_decisions.md 5.1 carries the same table.
+
+        This read "front-end (p2, p3, predecode) 1 cycle" from
+        BP-113, measured while predecode still flushed at K.
+        Before that, "at least one cycle" for both. Session-075.
 
 This is the XiangShan arrangement with one part left out.
 XiangShan's IPrefetchPipe queries the MetaArray and the ITLB and
@@ -429,6 +435,69 @@ bit, and one bit is only sufficient because a stale writeback
 cannot outlive the flush cycle. If the IFU ever holds a writeback
 longer than that, the tag width has to be revisited.
 
+### 6.1 How the flush is applied -- TD#134
+
+RULED session-075 (Jeff). UNBUILT; BP-118. IFU-28 to IFU-32 say how
+IFU-20 is met with requests still in flight. Until they are built a
+flush clears all IFU state and is legal only with nothing
+outstanding (IFU-27, the BP-116 stub). Clearing all is wrong because
+the FTQ does not rewind fetch_ptr or xlate_ptr past an entry older
+than the flush index F (ftq_decisions.md 5.5 R1), so a block older
+than F that the IFU drops is never presented again.
+
+IFU-28 SURVIVAL. A block SURVIVES a flush when it is older than F,
+       measured from the commit pointer: with
+       age(i) = (i - ftq_ifu_commit_ptr) mod FTQ_DEPTH, a block with
+       FTQ index i survives when age(i) < age(F). Every block the
+       IFU holds is at or after commit_ptr, because an entry commits
+       only after its instructions have left the IFU, so the age is
+       well defined without a wrap bit. Surviving blocks continue in
+       every structure: both pipelines, the translation queue and
+       the line buffer. Non-surviving blocks are dropped from all of
+       them in the flush cycle. RC_UNSPEC, where F is commit_ptr,
+       drops everything with no special case.
+
+IFU-29 L1I RESPONSES FOR DROPPED BLOCKS. The L1I has no cancel and
+       the IFU accepts every response (l1i_ifu_interfaces.md IF-10).
+       At the flush, every in-flight request identifier whose blocks
+       all fail IFU-28 is marked KILLED. When a killed identifier's
+       response arrives its data is discarded, and the identifier
+       and its line buffer slot are freed as for any response
+       (IF-11). No generation counter is needed: an identifier
+       cannot be reissued while it is in flight (IF-6), so a killed
+       identifier cannot be confused with a later request.
+
+IFU-30 A SHARED LINE BUFFER SLOT. A slot that serves more than one
+       block (TD-IFU-8, IF-7) survives when any block it serves
+       survives; the blocks that fail IFU-28 are removed from it.
+       Blocks are taken in order, so the removal is one cut at the
+       first non-surviving block.
+
+IFU-31 ITLB LOOKUPS IN FLIGHT. ITLB responses have no ready and may
+       return out of order under a one-bit tag naming the half of a
+       block (itlb_ifu_interfaces.md IT-2, IT-3, IT-14). When the
+       block being translated fails IFU-28, its outstanding lookups
+       are DEAD: their responses are dropped, and translation of a
+       new block does not start until every dead lookup has
+       answered, so a tag value is never shared between a dead and
+       a live lookup. When the block being translated survives,
+       translation continues. How long the wait lasts is the
+       ITLB's miss latency, a property of the ITLB and not of the
+       IFU; a testbench model of the ITLB answers when the
+       stimulus says and so cannot measure it. What the IFU must
+       guarantee is that translation of a new block starts the
+       cycle after the last dead lookup answers, and not before.
+       This read "BP-118 measures it". Session-075.
+
+IFU-32 THE GENERATION BOUND. After the flush cycle the IFU presents
+       no writeback (ftq_ifu_interfaces.md 6) for a block that
+       failed IFU-28. This is what keeps one generation bit
+       sufficient (IFU-20, ftq_ifu_interfaces.md 6.1), and an
+       assertion checks it.
+
+TD#135 (uncached) and TD#136 (maintenance) stay stubbed. A request
+presented in a flush cycle is still ignored (IFU-20).
+
 The fault takes two paths and they carry different things. The
 architectural exception travels with the instruction to the
 backend, which is the fault cause and faulting VA of IFU-2. The
@@ -501,7 +570,8 @@ TD-IFU-7  CLOSED. The line buffer of `icache_decisions.md` L1I-14
           identifier when it is allocated (`l1i_ifu_interfaces.md`
           IF-7), because the response carries no ready and must
           always have somewhere to land. Size it later with the
-          TD#128 harness. What a redirect does to it is TD#134.
+          TD#128 harness. What a redirect does to it is IFU-29
+          and IFU-30 (TD#134).
 
 TD-IFU-8  CLOSED. Issue is in order, oldest first, whenever a
           translated block, a free identifier and a free slot all

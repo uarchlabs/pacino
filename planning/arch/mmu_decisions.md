@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -130,6 +130,15 @@ MMU-25 It does NOT hold a current ASID or VMID. Those are
        identity, they belong to the request, and the client sends
        them. `itlb_l2tlb_interfaces.md` IL-3 and IL-3c.
 
+MMU-26 THE WALKER CHECKS G-STAGE PERMISSIONS and returns cause 20
+       on a failure. Every G-stage access is treated as a
+       user-mode access, so the result does not depend on the
+       current privilege and can be decided once, at walk time.
+       VS-stage and single-stage permissions are checked by the L1
+       TLB on every hit instead (itlb_decisions.md ITLB-16),
+       because privilege changes without a fence. Ruled
+       session-075 (Jeff).
+
 The line between MMU-24 and MMU-25 is that identity is a property
 of one request and the regime is not. A root pointer is not
 something one request has and another does not.
@@ -209,6 +218,14 @@ makes for the same reason.
 MMU-11 16 PMP entries, with TOR and NAPOT address matching. The
        count is a parameter.
 
+MMU-11a THE CHECKER READS THE PMP REGISTERS AS INPUTS. The pmpcfg
+        and pmpaddr values and the current privilege come in on a
+        CSR input group; the checker holds no CSR. Each instance
+        takes the group from its parent. For the ITLB-side
+        instance that group crosses the front-end boundary
+        (fe_decisions.md FE-20), because the CSR file does not
+        exist. Ruled session-075 (Jeff).
+
 MMU-U4 CLOSED session-070. Smepmp is NOT mandatory in RVA23S64.
        The full mandatory privileged list was read from the
        ratified `rva23-profile.adoc`: Ss1p13, then Svbare, Sv39,
@@ -245,6 +262,30 @@ MMU-14 Non-idempotent regions are never fetched speculatively and
 
 MMU-15 PMA comes from a static region table fixed at
        configuration, one entry per address range.
+
+MMU-15a THE REGION TABLE IS A PARAMETER OF THE CHECKER, and its
+        default is one main-memory region and a default for the
+        rest. Ruled session-075 (Jeff):
+
+```
+  0x0_8000_0000 .. 0xF_FFFF_FFFF   main memory, 62 GiB
+                                   cacheable, coherent,
+                                   executable, idempotent
+  everything else                  none of the four
+```
+
+        Main memory starts at the reset vector (ftq_decisions.md
+        4.7) and runs to the top of the 36-bit physical space
+        (l1i_ifu_interfaces.md IF-1). 64 GiB is the whole space at
+        PA_WIDTH 36, so 62 GiB is the most main memory there can
+        be above 0x8000_0000; a larger memory needs a wider
+        PA_WIDTH, which moves PPN_WIDTH, the ITLB entry, l1i_pkg
+        and cachegen's pa_bits together. The shape is XiangShan's
+        documented map: main memory from 0x8000_0000 to the top of
+        the physical space, devices below it, which in pacino are
+        not yet placed. The table classifies addresses and costs
+        no storage, so a later device map changes the parameter
+        and nothing else.
 
 `itlb_decisions.md` ITLB-12 gates the REQUEST: the PMP permission
 check, the PMA executable check and the PMA idempotent read all
@@ -621,4 +662,10 @@ TD#118    Bounds MMU-U2.
   2026-10-01  session-074. MMU-13 fixes the PMA bit positions as
               BP-116 built them. MMU-23 no longer says the widths
               are undefined; BP-109 declared them.
+
+  2026-10-07  session-075, rulings (Jeff). MMU-11a: the checker
+              takes the PMP registers on an input group. MMU-15a:
+              the region table is a parameter, default main memory
+              0x8000_0000 to the top of the 36-bit space. MMU-26:
+              G-stage permissions are checked by the walker.
 ```
