@@ -482,6 +482,15 @@ does not train ITTAGE: its target comes from the RAS pop, and
 ITTAGE is never consulted for a RAS-predicted branch (section 3.3),
 so training it would fill an entry nothing reads.
 
+AS BUILT, THE RETURN-CALL ROW IS NOT MET. bp_br_type_e has no
+RETURN_CALL name, the cluster never classifies it, and 3'b111 trains
+the FTB as a plain jump and never the RAS. Found by BP-118; TD#152,
+fixed in BP-119.
+
+AS BUILT, ONLY THE FTB AND RAS ROWS TRAIN in the front-end top: no
+unit forms the per-predictor payloads (ftq_bpu_interfaces.md 8,
+TD#151, BP-119).
+
 TAGE and SC predict direction and are updated only for conditional
 branches. ITTAGE is updated only for indirect branches. RAS IS
 UPDATED BY BOTH: a return pops it and a call pushes it, and
@@ -1375,9 +1384,15 @@ create one.
                        MMU-11a. The CSR file does not exist.
 
          config        the cluster configuration: sc_enable,
-                       dual_pred_en and ftb_fastpath_en (G25).
-                       What eventually drives them is the CSR
-                       file's question, not the top's.
+                       ftb_fastpath_en (G25), tage_enable_aging,
+                       tage_aging_interval, ittage_enable_aging and
+                       ittage_aging_interval, and decode's
+                       ext_enable. What eventually drives them is
+                       the CSR file's question, not the top's. This
+                       listed dual_pred_en, which no module has
+                       (section 10 describes it), and omitted the
+                       aging inputs and ext_enable; found by BP-118.
+                       Session-075.
 
          maintenance   the ITLB invalidate port of ITLB-14. Its
                        producer is the backend.
@@ -1389,8 +1404,13 @@ create one.
   FE-21  The L1I is the cachegen emission under
          tools/cachegen/output/l1i, instantiated from that path,
          as rtl/core/frontend/l1i_param_chk already compiles
-         against it. Its l2-side port, up_i, leaves the top as a
-         boundary edge; a testbench answers it.
+         against it. Its l2-side port leaves the top as a
+         boundary edge; a testbench answers it. The emission names
+         that port `mem` (link tl_l1i_l2), and its core port
+         `core_*`, not the `ifu_l1i_*` and `l1i_ifu_*` of
+         l1i_ifu_interfaces.md; widths agree and fe_top maps them
+         one to one. This read `up_i`. BUILT by BP-118 as
+         rtl/core/frontend/fe_top. Session-075.
 ```
 
 ### 15.5 Unresolved
@@ -1626,4 +1646,10 @@ create one.
               corrected at p2. 15.4a: FE-20, the csr, config and
               maintenance input groups; FE-21, the L1I from its
               emitted path.
+
+  2026-10-07  session-075, after BP-118. 7.2: as built the
+              return-call row is not met (TD#152) and only the FTB
+              and RAS train in the top (TD#151). FE-20: the config
+              group as the RTL has it. FE-21: the emitted port names
+              and fe_top built.
 ```

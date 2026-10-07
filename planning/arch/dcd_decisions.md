@@ -21,8 +21,9 @@ instruction encoding, immediate format and register field named
 here. This document does not restate them. It contains only what
 the specification does not decide.
 
-`instr_decoder.sv` is not in scope. It is Complete and decodes
-what the predecoder hands it.
+`instr_decoder.sv` is not in scope for its instruction decode. It
+is Complete and decodes what the ibuf hands it, `ifu_pd_pkt_t` since
+BP-118; section 10a holds the rules for that boundary.
 
 The RVC expander is not in scope either. Its encodings are the
 compressed-instruction chapter of the specification, and the
@@ -232,6 +233,18 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        safe for rename. Session-074, as BP-116 built it; recheck
        against decode when decode moves to ifu_pd_pkt_t, TD#143.
 
+DCD-16a A SLOT THAT FAULTED AT FETCH carries only `valid`, the
+        start PC, the FTQ index, the position and the fault fields
+        (cause, faulting VA, faulting GPA). Every other field on it
+        -- the instruction, `is_rvc`, the DCD-7 classification,
+        `is_vsetvl`, `needs_vtype` -- is meaningless, and neither
+        decode nor the backend may read it. The faulting
+        instruction never executes, so nothing needs its length or
+        class: the trap is taken from the fault fields. Ruled
+        session-075 (Jeff); the IFU drives `is_rvc` from the
+        faulting halfword today, which this makes harmless rather
+        than wrong. Found by BP-118.
+
 The start PC and the position are both present and are not
 redundant. Expansion breaks the correspondence between them,
 because a compressed instruction advances the PC by two and fills
@@ -259,7 +272,7 @@ TD-DCD-1  The vtype fields of the old `predecode_pkt_t` are
 
 ## 10a. Decode on the bundle view -- TD#143
 
-RULED session-075 (Jeff). UNBUILT; BP-118. What decode does once it
+RULED session-075 (Jeff). BUILT by BP-118. What decode does once it
 takes `ifu_pd_pkt_t` from the ibuf read port (IBUF-9) instead of
 `predecode_pkt_t`. Section 1 keeps `instr_decoder.sv`'s instruction
 decode out of scope, since that is the specification's; these four
@@ -301,6 +314,14 @@ TD#148  `is_vsetvl` and `needs_vtype` in `ifu_pd_pkt_t` have no
         reader once DCD-17 is built. Left in place so BP-118 needs
         no change to `bp_structs_pkg`.
 
+TD#155  `en_c`, `en_zcb` and `MASK_BITS` in instr_decoder lose
+        their readers with the gating DCD-20 deletes.
+
+As built by BP-118, a faulting slot's decode packet is `valid` and
+the instruction bits only, no illegal and no vector decode, and it
+neither raises nor seeds `vtype_hazard`. DCD-16a makes the
+instruction bits meaningless too; decode reads none of them.
+
 ---
 
 ## 11. Open
@@ -337,4 +358,5 @@ TD-IFU-1  Closed by DCD-16.
 TD-IFU-5  Closed by this document.
 IBUF-9    The 8-wide read port that sets the decode bundle of
           DCD-17.
-TD#143    Built by DCD-17 to DCD-20, BP-118.
+TD#143    DCD-17 to DCD-20 built by BP-118; rvc_expander.sv
+          retires in BP-119.

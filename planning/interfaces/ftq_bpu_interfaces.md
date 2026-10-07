@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -164,8 +164,9 @@ There is no slot-0 exception to this rule.
 THE LOOP PREDICTOR ONLY OVERRIDES THE DIRECTION OF A SLOT THE uBTB
 SUPPLIED. It carries no target, so when lp_pred_is_loop is set and
 the uBTB slot is not valid, the slot carries no prediction. Ruled
-session-075 (Jeff). Whether bp_cluster.sv does this is checked by
-BP-118.
+session-075 (Jeff). bp_cluster.sv did not: with the uBTB slot absent
+it made the slot a taken conditional to address 0. Fixed by BP-118;
+the loop arm now requires the uBTB slot valid.
 
 A uBTB RETURN takes its target from the registered RAS top of stack
 rather than from the uBTB entry.
@@ -250,7 +251,7 @@ THE FIX IS A p2 PORT, not a new entry field. Adding a separate
 `ret_addr` patches the RAS symptom and leaves the successor wrong.
 The p2 block-scalar group carries the corrected fall-through and
 rewrites the block scalar: `bpu_blk_pft_p2`, section 4c, ruled
-session-075 and unbuilt (BP-118). Found by BP-107 (W1); the RAS half
+session-075 and built by BP-118. Found by BP-107 (W1); the RAS half
 was confirmed against ras_decisions.md 8 at Jeff's instruction.
 
 The FTQ writes it into the allocated entry as
@@ -338,7 +339,10 @@ worse: it carries for four stages something only one stage needs.
 
 The 4a groups carry `bp_ftq_slot_t` only. A block scalar of the entry
 that is not known until p2 needs its own group. RULED session-071
-(Jeff).
+(Jeff). BUILT BY BP-118, session-075, the RAS half included: until
+then no bpu_blk_* port existed on either side and the entry kept the
+p1 snapshot, though this section and fe_decisions.md 9 described the
+p2 write as built.
 
 ```
   bpu_blk_val_p2                                  NEW
@@ -385,7 +389,8 @@ FTB fall-through when the FTB answers, and the p1 value carried
 forward when it does not. The FTQ writes it into
 `bp_ftq_entry_t.pft_addr` of the named entry, unconditionally, under
 `bpu_blk_val_p2`, exactly as it writes `bpu_blk_ras_p2`. RULED
-session-075 (Jeff). Unbuilt; BP-118.
+session-075 (Jeff). Built by BP-118: the net is `w_pft_p2` in
+bp_cluster.sv, `w_ftb_valid_p2 ? w_ftb_pft_addr_p2 : r_pft_p1_p2`.
 
 ONE SOURCE FOR BOTH. Because the value written into the entry and the
 value the p2 redirect comparison reads are the same net, the entry's
@@ -393,11 +398,13 @@ not-taken successor and the cluster's decision about whether the
 block end moved cannot disagree. A separate derivation for the entry
 would let them.
 
-Section 4 names the two consumers the stale value harmed: the
-not-taken arm of the successor selection (fe_decisions.md 2.4) and
-the RAS return address (ras_decisions.md 8). Both are corrected by
-this write if both read `pft_addr`; BP-118 confirms that against the
-RTL.
+FOUR READERS, not the two section 4 names. BP-118 found every one
+reads `pft_addr` and now sees the corrected value: the fetch
+successor `ftq_ifu_next_pc` and the predecode W3 successor, both in
+ftq_ifu.sv (the successor selection of fe_decisions.md 2.4); the RAS
+commit return address in ftq_entry.sv (ras_decisions.md 8); and the
+FTB update fall-through in ftq_resolve.sv, which section 4 did not
+name. ftq_npc's p1 successor reads `bpu_pred_pft_p1`, not the entry.
 
 This read that the field "joins this group when TD#113 is built; it
 is not specified here". Section 4's TD#113 text, and the TD#113 row,
@@ -563,7 +570,11 @@ sc p3 output:
 The top of stack is presented at p0. The push or pop executes at p2
 once `ras_br_type_p2` carries the FTB classification.
 
-RETURN_CALL IS ONE OF THEM, session-069. `bp_br_type_e` gains
+RETURN_CALL IS ONE OF THEM, session-069, AS SPECIFIED. AS BUILT IT
+IS NOT: BP-118 found bp_br_type_e has seven names, the cluster's p2
+classification tests is_ret first and never forms it, and 3'b111
+trains the FTB as a plain jump and never the RAS. TD#152, BP-119.
+The specification: `bp_br_type_e` gains
 RETURN_CALL at 3'b111 for the JALR whose rd and rs1 are both link
 registers and are unequal, which the specification makes a pop
 followed by a push (`ras_decisions.md` 2, `dcd_decisions.md`
@@ -776,6 +787,17 @@ does not mistake their absence for an omission.
 One update channel per prediction slot. The FTQ reads
 `bp_ftq_meta_t` at resolution and forms the per-predictor update
 payloads from `bp_update_t`, the resolved-branch record.
+
+NOT BUILT, TD#151. ftq.sv presents `bp_update_t`, the metadata and
+one valid vector per predictor, and nothing forms the payloads, so in
+the front-end top only the FTB and the RAS train. Found by BP-118.
+RULED session-075 (Jeff): the payloads are formed by a module inside
+the FTQ, instantiated by ftq.sv, so the FTQ's ports are the ones this
+section lists. Every payload field has a source in `bp_update_t`,
+`bp_ftq_meta_t` or the fast-path entry; a field without one is a
+defect in that struct. The cluster's per-slot readies are ANDed per
+predictor (TD#150). The SC-disabled rule and the FTB scheduler path
+are unchanged. BP-119.
 
 | Predictor | Valid port        | Payload port    | Ready port      |
 |-----------|-------------------|-----------------|-----------------|
@@ -1199,4 +1221,12 @@ match it and to match this specification.
   2026-10-07  session-075, rulings (Jeff). Section 4: the loop
               predictor overrides only a slot the uBTB supplied.
               4c: the p3 RAS repair deferred as TD#149.
+
+  2026-10-07  session-075, after BP-118. 4c built, RAS half
+              included, which this file described as built and was
+              not; four readers of pft_addr named. Section 4: the
+              loop rule was violated and is fixed. 5.4: RETURN_CALL
+              is not in the enum as built, TD#152. Section 8: the
+              payloads are not formed, TD#151, and the ruling for
+              where.
 ```

@@ -19,6 +19,9 @@ Scope is the instruction buffer between the IFU and decode. The
 write side is fixed by `ifu_decisions.md` and recorded here rather
 than decided. The port itself is `ifu_ibuf_interfaces.md`.
 
+BUILT by BP-118 (session-075) as rtl/core/frontend/ibuf, with
+tb_ibuf and three bound properties.
+
 ---
 
 ## 1. Why the document is short
@@ -89,11 +92,10 @@ IBUF-9  The read port is 8 wide. `instr_decoder.sv` is an 8-wide
 The ibuf is therefore the width converter of the front end: 16
 positions in from one prediction block, 8 out to decode.
 
-IBUF-10 The entry delivers an `ifu_pd_pkt_t` to decode. The
-        built `instr_decoder` still takes the old
-        `predecode_pkt_t`, reading only `.instr` and `.valid` and
-        passing the rest to rename untouched; it moves to the new
-        struct under TD#143.
+IBUF-10 The entry delivers an `ifu_pd_pkt_t` to decode, which
+        takes it since BP-118 (dcd_decisions.md DCD-17 to DCD-20).
+        This read that `instr_decoder` still took
+        `predecode_pkt_t`. Session-075.
 
 TD-IBUF-1  CLOSED by `dcd_decisions.md` DCD-16 and BUILT by BP-115:
            `ifu_pd_pkt_t`, a new struct in `bp_structs_pkg`,
@@ -129,6 +131,10 @@ IBUF-12 THE READ PORT HAS ONE READY. The ibuf presents up to 8
         comes from rename, which does not exist, so the ready is a
         front-end boundary input until it does.
 
+        As built by BP-118 the read port is `ibuf_dec_slot
+        [0:IBUF_RD_WIDTH-1]` of `ifu_pd_pkt_t` with ready
+        `dec_ibuf_rdy`; IBUF_RD_WIDTH is 8.
+
 ---
 
 ## 5. Depth
@@ -161,7 +167,9 @@ IBUF-13 The clear is `bkend_ftq_redir_val`, wired by the front-end
         top directly to the ibuf: the same signal that enters the
         FTQ (ftq_backend_interfaces.md 5), on every cause including
         RC_UNSPEC. Ruled session-075 (Jeff). Not the FTQ's IFU
-        flush, IB-12.
+        flush, IB-12. In the clear cycle the buffer presents
+        nothing and discards that cycle's write, as BP-118 built
+        it.
 
 IBUF-8a A predecode redirect does NOT clear the buffer. The
         prediction check and the ibuf write are both in F3

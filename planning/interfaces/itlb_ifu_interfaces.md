@@ -6,7 +6,7 @@
  FILE:    itlb_ifu_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -169,11 +169,18 @@ IT-11 The IFU reads cacheable and idempotent to decide the path. A
       the L1I. This read "The IFU reads idempotent" against the
       region alone. Session-071.
 
-IT-12 The checks do not gate THIS response. The translation
-      returns at the ITLB-5 hit latency with `itlb_ifu_pma`
-      valid, and the PMP and PMA results are consumed by the IFU
-      before it issues an L1I request, not before the ITLB
-      answers. ITLB-12 and ITLB-12a.
+IT-12 A PMP or PMA failure arrives ON THIS RESPONSE as status
+      fault, cause 1. The checker instance beside the ITLB
+      (mmu_decisions.md MMU-10a, MMU-10b) evaluates the translated
+      address, and the IFU consumes the result before it issues an
+      L1I request; it does not check. On a hit `itlb_ifu_pma` is
+      the effective attributes of IT-10, which decide the cached
+      or uncached path (IT-11). ITLB-12 and ITLB-12a.
+
+      This read that the checks do not gate this response and that
+      the IFU consumes "the PMP and PMA results" from it, which
+      left where a denial appears unstated; BP-118 built it as
+      cause 1, as MMU-10b already said. Ruled session-075 (Jeff).
 
 IT-12a No L1I request is issued for a block that fails PMP or
        PMA. `l1i_ifu_interfaces.md` IF-22: a faulting request

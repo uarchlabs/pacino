@@ -32,7 +32,7 @@ instantiated twice.
 ```
   itlb_l2t_req_val                        ITLB  -> L2TLB
   itlb_l2t_req_rdy                        L2TLB -> ITLB
-  itlb_l2t_vpn   [VPN_WIDTH-1:0]          ITLB  -> L2TLB
+  itlb_l2t_vpn   [VA_WIDTH-13:0]          ITLB  -> L2TLB
   itlb_l2t_asid  [ASID_WIDTH-1:0]         ITLB  -> L2TLB
   itlb_l2t_vmid  [VMID_WIDTH-1:0]         ITLB  -> L2TLB
   itlb_l2t_v                              ITLB  -> L2TLB
@@ -42,12 +42,18 @@ instantiated twice.
   l2t_itlb_tag   [1:0]                    L2TLB -> ITLB
   l2t_itlb_status [1:0]                   L2TLB -> ITLB
   l2t_itlb_ppn   [PPN_WIDTH-1:0]          L2TLB -> ITLB
-  l2t_itlb_size  [1:0]                    L2TLB -> ITLB
+  l2t_itlb_size  [2:0]                    L2TLB -> ITLB
   l2t_itlb_perm  [PERM_WIDTH-1:0]         L2TLB -> ITLB
   l2t_itlb_pbmt  [1:0]                    L2TLB -> ITLB
   l2t_itlb_cause [CAUSE_WIDTH-1:0]        L2TLB -> ITLB
   l2t_itlb_gpa   [GPA_WIDTH-1:0]          L2TLB -> ITLB
 ```
+
+IL-1a `itlb_l2t_vpn` is VA_WIDTH - 12 = 29 bits, for the reason
+      itlb_ifu_interfaces.md IT-16 gives for the IFU side: with V=1
+      and vsatp.MODE=Bare the address is a 41-bit guest physical
+      address, and a 27-bit field drops bits 40:39. BP-118 built
+      it at 29. This read [VPN_WIDTH-1:0]. Session-075.
 
 IL-1  `itlb_l2t_tag` is two bits. Up to four requests may be
       outstanding from one client.
@@ -136,10 +142,11 @@ L1I line (fe_decisions.md Conventions). Session-071.
 ## 4. Page size and permissions
 
 IL-7  `l2t_itlb_size` names which page size the translation
-      covers: 4 KiB, 64 KiB (Svnapot), 2 MiB or 1 GiB. Two bits
-      encode the four. PROPOSED session-075, NOT RULED: 2'b00
-      4 KiB, 2'b01 64 KiB, 2'b10 2 MiB, 2'b11 1 GiB, ascending by
-      size, so a larger code always masks more VPN bits. The ITLB
+      covers: 4 KiB, 64 KiB (Svnapot), 2 MiB or 1 GiB. THREE bits,
+      RULED session-075 (Jeff): 3'b000 4 KiB, 3'b001 64 KiB,
+      3'b010 2 MiB, 3'b011 1 GiB, 3'b1xx reserved for a future
+      size. Ascending, so a larger code always masks more VPN
+      bits. BP-118 built two bits; BP-119 widens. The ITLB
       installs the entry at that size, ITLB-3; a 64 KiB entry is
       held once with a masked match (mmu_decisions.md MMU-U7).
       The PPN returned for a 64 KiB page is the PTE's, with

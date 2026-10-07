@@ -16,7 +16,56 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
-## Session-075: BP-117, TD#146 built.
+## Session-075: BP-117 and BP-118. The front end runs end to end.
+
+BP-118 RUN, COMPLETE. regress.sh 104 targets PASS. 1h53m, 80% of a
+1M context, no compaction; problems 3 to 6 run by parallel
+sub-agents, whose mutation campaigns the IA reran itself.
+  TD#113 and the RAS half of 4c built (the RAS half was ruled
+       session-071 and never built; the task said it existed).
+  TD#134 built, IFU-28 to IFU-32; tb_ifu 411 -> 575.
+  New units: ibuf (52 checks), pmp_pma_chk (60), itlb (113 at
+       walk depth 1, 116 at 2), fe_top.
+  Decode on ifu_pd_pkt_t; predecode.sv deleted; rvc_expander.sv
+       kept, two things still depend on it (TD#143).
+  The loop-predictor rule fixed in bp_cluster: a trusted loop
+       entry with no uBTB slot predicted taken to address 0.
+  fe_top: a bare program (107 instructions) and an Sv39 program
+       (54) retire exactly across predecode, mispredict and trap
+       redirects, an access fault and a page fault.
+  Found by integrating: ftq_status let a writeback in the squash
+       cycle override the squash (fixed); only the FTB and RAS
+       train in the top (TD#151); RETURN_CALL not in the enum
+       (TD#152); an ifu_lbuf count can overflow (TD#153); the uBTB
+       never predicts a taken jump (TD#154); readies differ in
+       width (TD#150).
+  The IA ran read-only git commands, and so did a sub-agent it
+       launched, against CLAUDE.md. Jeff has set git to "ask" in
+       the project settings.
+TD#113, TD#134 CLOSED. TD#150 to TD#155 opened.
+
+PA errors, mine, in BP-118: described bpu_blk_ras_p2 as existing;
+listed rvc_expander.sv for deletion without checking its users,
+which BP-117's results named; took RETURN_CALL in the enum and
+dual_pred_en on the cluster from the documents without checking the
+RTL; left itlb_l2t_vpn at 27 bits after IT-16 had widened the IFU
+side for the same reason.
+
+Rulings after BP-118 (Jeff), all recorded:
+  IL-7: l2t_itlb_size is 3 bits; 000 4 KiB, 001 64 KiB, 010 2 MiB,
+       011 1 GiB, 1xx reserved. BP-119 widens the built port.
+  A slot that faulted at fetch carries only valid, PC, FTQ index,
+       position and the fault fields; everything else on it is
+       meaningless and the backend must not read it (DCD-16a).
+  PMP grain 4 KiB (MMU-11). M-mode fetch is untranslated
+       (MMU-19a). A PMP or PMA failure reaches the IFU as fault
+       cause 1 (IT-12). GVMA drops every V=1 entry of the VMID
+       (ITLB-13a). A walk fault is held for the re-request
+       (ITLB-10a). IFU-28a and IFU-29a.
+  The update converter is a module inside the FTQ; readies ANDed
+       (TD#150). RETURN_CALL fixed in full. The ifu_lbuf count a
+       parameter. The uBTB jump slot taken. rvc_expander retired.
+       All BP-119.
 
 BP-117 RUN, COMPLETE. regress.sh 94 targets PASS, exit 0.
   C6   a predecode redirect flushes the IFU at K+1, and xlate_ptr
@@ -73,8 +122,8 @@ Rulings (Jeff):
        p2 (FE-U1 closed); the loop predictor overrides only a slot
        the uBTB supplied; the p3 RAS repair deferred (TD#149); the
        L1I from its emitted path (FE-21).
-  NOT RULED: the l2t_itlb_size encoding, itlb_l2tlb_interfaces.md
-       IL-7, proposed ascending by page size.
+  The l2t_itlb_size encoding was left NOT RULED here; ruled after
+       BP-118, see above.
   IFU-31 corrected: the ITLB wait after a flush is the ITLB's miss
        latency and BP-118 does not measure it.
 
@@ -111,7 +160,7 @@ without checking that Spike produces 32-bit expansions, and without
 looking for the decoder track's existing oracle work. The IA found
 an independent source anyway.
 
-Next free BP is BP-119, INFRA-014, TOOLS-007, TD#150.
+Next free BP is BP-119, INFRA-014, TOOLS-007, TD#156.
 
 ---
 ## Session-074: rulings for the IFU, and BP-115.
@@ -1213,8 +1262,11 @@ it only documented current behavior.
 
 | Module                  | Status      | Tests             | Notes                            |
 |-------------------------|-------------|-------------------|----------------------------------|
-| predecode.sv            | Complete    | tb_predecode      | clk/rstn unused (debt #4)        |
-| instr_decoder.sv        | Complete    | tb_instr_decoder  | 1043 passing                     |
+| predecode.sv            | Deprecated  | --                | Deleted by BP-118 with           |
+|                         |             |                   | tb_predecode and predecode_pkt_t |
+|                         |             |                   | (TD#143).                        |
+| instr_decoder.sv        | Complete    | tb_instr_decoder  | Takes ifu_pd_pkt_t since BP-118  |
+|                         |             |                   | (DCD-17 to DCD-20). 654 checks.  |
 | rvc_expander.sv         | Deprecated  | tb_rvc_expander   | Wrong in 12,456 encodings,       |
 |                         |             |                   | TD#145. Not repaired; retired    |
 |                         |             |                   | with TD#143 (Jeff, session-075). |
@@ -2054,37 +2106,47 @@ it only documented current behavior.
 |                         |             |                   | ITLB-8. No open item. Written to  |
 |                         |             |                   | be instantiated twice; the DTLB   |
 |                         |             |                   | is the second client.             |
-| ifu                     | Unit tested | tb_ifu, tb_ifu_*  | Built BP-116, session-074: ifu,   |
+| ifu                     | Working     | tb_ifu, tb_ifu_*  | Built BP-116, session-074: ifu,   |
 |                         |             |                   | ifu_xlate, ifu_fetch, ifu_lbuf,   |
 |                         |             |                   | ifu_rvc_exp, ifu_predecode,       |
-|                         |             |                   | ifu_f3, ifu_wb. Unit-testable     |
-|                         |             |                   | only: TD#134 (flush), TD#135      |
-|                         |             |                   | (uncached), TD#136 (maintenance)  |
-|                         |             |                   | are stubbed by ruling. BP-117     |
-|                         |             |                   | built TD#146 (C5, C19) and checks |
-|                         |             |                   | ifu_rvc_exp against LLVM over all |
-|                         |             |                   | 49,152 encodings, 0 mismatches.   |
-| ibuf                    | Not started | --                | ibuf_decisions.md and             |
-|                         |             |                   | ifu_ibuf_interfaces.md created    |
-|                         |             |                   | session-069. Had no planning      |
-|                         |             |                   | record before then.               |
-| itlb                    | Not started | --                | Written RTL from                  |
-|                         |             |                   | itlb_decisions.md. Not a cachegen |
-|                         |             |                   | node; cachegen has no TLB support.|
+|                         |             |                   | ifu_f3, ifu_wb. BP-117 built      |
+|                         |             |                   | TD#146 and checks ifu_rvc_exp     |
+|                         |             |                   | against LLVM, 0 mismatches.       |
+|                         |             |                   | BP-118 built TD#134, the flush    |
+|                         |             |                   | with requests in flight (IFU-28   |
+|                         |             |                   | to IFU-32); tb_ifu 575 checks.    |
+|                         |             |                   | TD#135 and TD#136 stay stubbed.   |
+|                         |             |                   | Status was "Unit tested", not one |
+|                         |             |                   | of the five values; session-075.  |
+| ibuf                    | Working     | tb_ibuf           | Built BP-118,                     |
+|                         |             |                   | rtl/core/frontend/ibuf: depth 64, |
+|                         |             |                   | 8-wide read, one ready, cleared   |
+|                         |             |                   | by the backend redirect. 52       |
+|                         |             |                   | checks, properties S1 to S3.      |
+| itlb                    | Working     | tb_itlb           | Built BP-118, rtl/mmu/itlb, with  |
+|                         |             |                   | pmp_pma_chk inside (MMU-10a). 64  |
+|                         |             |                   | entries, four page sizes, per-hit |
+|                         |             |                   | permission check, all invalidate  |
+|                         |             |                   | forms. 113 checks at walk depth   |
+|                         |             |                   | 1, 116 at 2. l2t_itlb_size widens |
+|                         |             |                   | to 3 bits in BP-119 (IL-7).       |
+| pmp_pma_chk             | Working     | tb_pmp_pma_chk    | Built BP-118, rtl/mmu/pmp. The    |
+|                         |             |                   | one checker of MMU-10a: 16 PMP    |
+|                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
+|                         |             |                   | grain (MMU-11), region table      |
+|                         |             |                   | parameter (MMU-15a). 60 checks.   |
 | l2_tlb + walker         | Not started | --                | Written RTL from mmu_decisions.md.|
 |                         |             |                   | Shared I and D; the DTLB does not |
 |                         |             |                   | exist, so one client today.       |
-| frontend top            | Not started | --                | fe_decisions.md 15, FE-15..18.    |
-|                         |             |                   | Instantiates bp_cluster, ftq,     |
-|                         |             |                   | ifu, L1I, THE ITLB, ibuf and      |
-|                         |             |                   | decode -- the ITLB is inside by   |
-|                         |             |                   | fe_decisions.md FE-U10 and was    |
-|                         |             |                   | missing here. Session-070. The    |
-|                         |             |                   | L1I is INSIDE it, a SIBLING of    |
-|                         |             |                   | the IFU and not inside the IFU,   |
-|                         |             |                   | per icache_decisions.md L1I-2.    |
-|                         |             |                   | An earlier session-069 row said   |
-|                         |             |                   | outside. Closes TD#117.           |
+| frontend top            | Working     | tb_fe_top         | Built BP-118,                     |
+|                         |             |                   | rtl/core/frontend/fe_top:         |
+|                         |             |                   | structural, seven instances. Bare |
+|                         |             |                   | and Sv39 programs retire exactly  |
+|                         |             |                   | across predecode, mispredict and  |
+|                         |             |                   | trap redirects and both fetch-    |
+|                         |             |                   | fault classes. Only the FTB and   |
+|                         |             |                   | RAS train until the update        |
+|                         |             |                   | converter, TD#151, BP-119.        |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -2493,22 +2555,16 @@ assessment of each document. Correct any that are wrong.
 |     |          | any more; bp_cluster.md carries its own contradictions   |
 |     |          | with the current model and is the subject of a separate  |
 |     |          | pass.                                                    |
-| 113 | ftq      | OPEN. bp_ftq_entry_t.pft_addr is written once at p1 from |
-|     |          | bpu_pred_pft_p1 and never corrected: the p2/p3 groups    |
-|     |          | carry slots only. When the FTB ends the block earlier    |
-|     |          | than the uBTB did, the entry keeps the p1 fall-through.  |
-|     |          |                                                          |
-|     |          | Two consumers read it as final: the RAS return address   |
-|     |          | (ras_decisions.md 8; costs accuracy) and the not-taken   |
-|     |          | successor (ftq_entry_formats.md 2; costs a fetch         |
-|     |          | address).                                                |
-|     |          |                                                          |
-|     |          | FIX RULED session-075 (Jeff): bpu_blk_pft_p2 on the 4c   |
-|     |          | block-scalar group (ftq_bpu_interfaces.md 4c), the       |
-|     |          | not-taken term of the cluster's own p2 successor,        |
-|     |          | written into pft_addr for every valid p2 block. This     |
-|     |          | read "the p2 group (4a)". RTL: bp_cluster and ftq_entry. |
-|     |          | Unbuilt; BP-118. Found by BP-107.                        |
+| 113 | ftq      | CLOSED by BP-118 (session-075). bpu_blk_pft_p2 on the 4c |
+|     |          | group is w_pft_p2, the not-taken term of the cluster's   |
+|     |          | own p2 successor: the FTB fall-through when the FTB      |
+|     |          | answers, else the p1 value carried forward. The FTQ      |
+|     |          | rewrites pft_addr from it for every valid p2 block. Four |
+|     |          | readers now see the corrected value: the fetch           |
+|     |          | successor, the predecode W3 successor, the RAS commit    |
+|     |          | return address and the FTB update fall-through. BP-118   |
+|     |          | also built the RAS half of 4c, ruled session-071 and     |
+|     |          | never built until then. Found by BP-107.                 |
 | 114 | ftq      | CLOSED by INFRA-013 (session-074). 8 of 85 labels are    |
 |     |          | absent from at least one build, all because the property |
 |     |          | restates a direct assignment or tie-off and folds. I7,   |
@@ -2818,18 +2874,13 @@ assessment of each document. Correct any that are wrong.
 |     |          | Assess with the same harness as TD#128, once the IFU is  |
 |     |          | complete and something can drive it. Gate any two-block  |
 |     |          | commitment on this.                                      |
-| 134 | ifu      | OPEN, RULED session-075 (Jeff), unbuilt; BP-118. HOW THE |
-|     |          | IFU FLUSH IS APPLIED WITH REQUESTS IN FLIGHT.            |
-|     |          | ifu_decisions.md 6.1, IFU-28 to IFU-32: a block survives |
-|     |          | when older than F measured from commit_ptr; killed L1I   |
-|     |          | ids discard their response; a shared line buffer slot    |
-|     |          | survives if any of its blocks does; dead ITLB lookups    |
-|     |          | are drained before translation restarts; no writeback    |
-|     |          | for a dropped block after the flush cycle.               |
-|     |          |                                                          |
-|     |          | Replaces the BP-116 stub, which clears all IFU state and |
-|     |          | asserts (ifu_assert U3) if a flush arrives with anything |
-|     |          | outstanding. Until built the IFU is unit-testable only.  |
+| 134 | ifu      | CLOSED by BP-118 (session-075). IFU-28 to IFU-32 built;  |
+|     |          | ifu_assert U3 restated as the IFU-32 check and U4 added  |
+|     |          | for IFU-31. Two rules the documents did not state,       |
+|     |          | accepted (Jeff): a dropped block's presented L1I request |
+|     |          | is held to acceptance and its response discarded         |
+|     |          | (IFU-29a); the straddle register survives only with the  |
+|     |          | block after it (IFU-28a).                                |
 | 135 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE UNCACHED     |
 |     |          | FETCH PATH. ifu_notes.md 6.8, MMU-14, IT-11, IFU-21. A   |
 |     |          | fetch whose effective memory type is not cacheable and   |
@@ -2991,23 +3042,14 @@ assessment of each document. Correct any that are wrong.
 |     |          | Was: specified in ftq_ifu_interfaces.md 4 and not built. |
 |     |          | Found incidentally by BP-112.                            |
 
-| 143 | decode   | OPEN. RETIRE predecode_pkt_t AND predecode.sv. Ruled     |
-|     |          | session-074 (Jeff): the DCD-16 bundle view is a new      |
-|     |          | struct, ifu_pd_pkt_t; the old predecode_pkt_t stays for  |
-|     |          | instr_decoder, predecode.sv and their two testbenches.   |
-|     |          |                                                          |
-|     |          | The ibuf read port into decode carries ifu_pd_pkt_t      |
-|     |          | (IBUF-9), so decode must move: instr_decoder takes the   |
-|     |          | new struct, its predecode_out (which carries             |
-|     |          | vtype_hazard to rename) is settled with DCD-U1, and      |
-|     |          | predecode.sv, tb_predecode and predecode_pkt_t are       |
-|     |          | deleted. Blocks front-end integration, not the IFU.      |
-|     |          |                                                          |
-|     |          | RULED session-075 (Jeff), dcd_decisions.md DCD-17 to     |
-|     |          | DCD-20: decode computes vtype_hazard (DCD-U1 closed),    |
-|     |          | passes ifu_pd_pkt_t through, raises no illegal on a      |
-|     |          | fetch fault, and C and Zcb are always on.                |
-|     |          | rvc_expander.sv goes with it (TD#145). Unbuilt; BP-118.  |
+| 143 | decode   | OPEN, NEARLY CLOSED. BP-118 moved decode to ifu_pd_pkt_t |
+|     |          | (DCD-17 to DCD-20) and deleted predecode.sv,             |
+|     |          | tb_predecode and predecode_pkt_t. rvc_expander.sv and    |
+|     |          | tb_rvc_expander.sv remain: tb_ifu_rvc_exp uses           |
+|     |          | rvc_expander as a second reference, and                  |
+|     |          | check_rva23_coverage.py takes its C and Zcb credit from  |
+|     |          | that file. Retired by BP-119 once both no longer depend  |
+|     |          | on it.                                                   |
 | 144 | ftq      | CLOSED by BP-116 Part A (session-074). Eleven labels     |
 |     |          | deleted or restated; Q11, Q12, E9, E10 and the restated  |
 |     |          | E8 each shown to fail under a scratch mutation.          |
@@ -3038,6 +3080,50 @@ assessment of each document. Correct any that are wrong.
 |     |          | later restore to it is slightly wrong. Accuracy only.    |
 |     |          | Fix if measured: a p3 snapshot write.                    |
 |     |          | ftq_bpu_interfaces.md 4c.                                |
+| 150 | ftq, bpu | OPEN, DEFERRED. Update readies are reduced, not per      |
+|     |          | slot. bp_cluster gives each queued predictor (TAGE,      |
+|     |          | ITTAGE, SC) a ready per slot; the FTQ update converter   |
+|     |          | (BP-119) ANDs them, so a full queue on either slot       |
+|     |          | stalls both update channels for that predictor. Correct: |
+|     |          | FE-5 holds, nothing is dropped. Costs throughput only    |
+|     |          | when one slot's queue fills and the other's does not.    |
+|     |          | Fix if measured: accept each slot independently, which   |
+|     |          | needs ftq_resolve to hold a partly accepted resolution   |
+|     |          | pair. Ruled session-075 (Jeff).                          |
+| 151 | ftq, bpu | OPEN; BP-119. No unit converts the FTQ's bp_update_t     |
+|     |          | into the cluster's per-predictor payloads (ubtb_upd_t,   |
+|     |          | lp_upd_t, tage_upd_inp_t, ittage_upd_inp_t,              |
+|     |          | sc_upd_inp_t), though ftq_bpu_interfaces.md 8 has the    |
+|     |          | FTQ form them. In fe_top only the FTB and the RAS train. |
+|     |          | Ruled session-075 (Jeff): a module inside the FTQ,       |
+|     |          | instantiated by ftq.sv. Every payload field has a source |
+|     |          | in bp_update_t, bp_ftq_meta_t or the entry; a field      |
+|     |          | without one is a defect in that struct. Found by BP-118. |
+| 152 | bpu, ftq | OPEN; BP-119. RETURN_CALL is not in bp_br_type_e as      |
+|     |          | built, though the documents have carried it at 3'b111    |
+|     |          | since session-069. 3'b111 trains the FTB as a plain jump |
+|     |          | and never the RAS, and the cluster never classifies it   |
+|     |          | at p2 (is_ret is tested first). Fix in full: enum, p2    |
+|     |          | classification, RAS pop then push at prediction and      |
+|     |          | commit (closes TD-DCD-2), uBTB update decode,            |
+|     |          | ftq_resolve fan-out, ftq_entry commit qualifier. Found   |
+|     |          | by BP-118.                                               |
+| 153 | ifu      | OPEN; BP-119. ifu_lbuf's per-slot reader count covers 32 |
+|     |          | readers; BQ_DEPTH 32 plus F0 can reach 33 on a tight     |
+|     |          | loop in one line. Ruled session-075 (Jeff): a parameter, |
+|     |          | default the maximum derived from the pipeline, between   |
+|     |          | 32 and 63, with an assertion at the limit. Found by      |
+|     |          | BP-118.                                                  |
+| 154 | bpu      | OPEN; BP-119. ubtb.sv reports the jump slot with         |
+|     |          | br_taken = 0 and the cluster's p1 mux uses it as the     |
+|     |          | direction, so the uBTB never predicts a taken JAL or     |
+|     |          | direct call; the FTB redirect corrects each at p2.       |
+|     |          | Accuracy only, but every block ending in a jump pays it. |
+|     |          | Ruled session-075 (Jeff): fix, the jump slot is taken.   |
+|     |          | Found by BP-118.                                         |
+| 155 | decode   | OPEN. en_c, en_zcb and MASK_BITS in instr_decoder lose   |
+|     |          | their readers with the compressed gating DCD-20 deletes. |
+|     |          | Remove them. Found by BP-118.                            |
 
 ---
 

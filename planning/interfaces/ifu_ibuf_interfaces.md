@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -127,6 +127,11 @@ IB-9a Three causes, not two. H is mandatory in RVA23 through Sha,
       so a guest-page fault is a normal outcome and its guest
       physical address rides here for Shtvala. MMU-16.
 
+IB-9b On a slot that faulted at fetch only valid, start_pc, pos,
+      ftq_idx and the fault fields mean anything; the rest of the
+      payload is not to be read. dcd_decisions.md DCD-16a, ruled
+      session-075.
+
 `vtype_hazard` is not on this port. It is an intra-bundle property
 and the ibuf regroups instructions across bundle boundaries, so a
 value computed before the ibuf is wrong after it. TD-DCD-1, open
@@ -212,6 +217,7 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-07  session-075. IB-9b: what a faulting slot carries.
   2026-10-06  session-075. IB-13: the predecode arm at K+1 is built
               by BP-117, TD#146 closed.
   2026-10-01  session-074. The payload struct is ifu_pd_pkt_t,

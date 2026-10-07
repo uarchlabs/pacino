@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -312,13 +312,11 @@ IFU-26  A block whose effective type is not both cacheable and
 IFU-27  On a redirect both pipelines are flushed of everything at
         or after the flush index (ftq_ifu_interfaces.md 5). The
         fetch pipeline then stalls until the translation pipeline
-        refills the head. As built by BP-116 a flush clears ALL
-        state and is legal only with nothing outstanding; that is
-        the TD#134 stub. Clearing all is wrong once an entry older
-        than F can be held. This read "the queue is emptied".
-        Session-074. How the flush is applied with requests in
-        flight is ruled as IFU-28 to IFU-32, section 6.1
-        (session-075, TD#134), unbuilt.
+        refills the head. How the flush is applied with requests in
+        flight is IFU-28 to IFU-32, section 6.1, built by BP-118.
+        This read "the queue is emptied" (session-074), and until
+        session-075 described the BP-116 stub that cleared all
+        state, legal only with nothing outstanding.
 
         THE COST DEPENDS ON WHETHER F ALREADY HAS CONTENT. From the
         redirect cycle to the first cycle the FTQ presents the
@@ -437,10 +435,10 @@ longer than that, the tag width has to be revisited.
 
 ### 6.1 How the flush is applied -- TD#134
 
-RULED session-075 (Jeff). UNBUILT; BP-118. IFU-28 to IFU-32 say how
-IFU-20 is met with requests still in flight. Until they are built a
-flush clears all IFU state and is legal only with nothing
-outstanding (IFU-27, the BP-116 stub). Clearing all is wrong because
+RULED session-075 (Jeff). BUILT by BP-118. IFU-28 to IFU-32 say how
+IFU-20 is met with requests still in flight. They replace the BP-116
+stub, which cleared all IFU state and was legal only with nothing
+outstanding. Clearing all is wrong because
 the FTQ does not rewind fetch_ptr or xlate_ptr past an entry older
 than the flush index F (ftq_decisions.md 5.5 R1), so a block older
 than F that the IFU drops is never presented again.
@@ -472,6 +470,20 @@ IFU-30 A SHARED LINE BUFFER SLOT. A slot that serves more than one
        survives; the blocks that fail IFU-28 are removed from it.
        Blocks are taken in order, so the removal is one cut at the
        first non-surviving block.
+
+IFU-28a THE STRADDLE REGISTER (IFU-11) survives a flush only when
+        the block after the one that set it survives; otherwise it
+        is cleared, and the corrected block at the same address
+        walks from position 0. Built by BP-118, accepted session-075
+        (Jeff).
+
+IFU-29a A REQUEST ALREADY PRESENTED IS NOT WITHDRAWN. When a flush
+        drops a block whose L1I request is presented and not yet
+        accepted, the request stays presented, unchanged, until the
+        L1I accepts it (l1i_ifu_interfaces.md IF-4), and its
+        response is then discarded by IFU-29. F0 accepts nothing
+        else meanwhile. Built by BP-118, accepted session-075
+        (Jeff).
 
 IFU-31 ITLB LOOKUPS IN FLIGHT. ITLB responses have no ready and may
        return out of order under a one-bit tag naming the half of a
@@ -571,7 +583,10 @@ TD-IFU-7  CLOSED. The line buffer of `icache_decisions.md` L1I-14
           IF-7), because the response carries no ready and must
           always have somewhere to land. Size it later with the
           TD#128 harness. What a redirect does to it is IFU-29
-          and IFU-30 (TD#134).
+          and IFU-30 (TD#134). A slot's reader count is sized by a
+          parameter, default the maximum derived from the pipeline,
+          with an assertion at the limit; it was fixed at 32 against
+          a possible 33 (TD#153, ruled session-075, BP-119).
 
 TD-IFU-8  CLOSED. Issue is in order, oldest first, whenever a
           translated block, a free identifier and a free slot all

@@ -81,6 +81,10 @@ MMU-19 The MMU supports both single-stage and two-stage
        `V=1` accesses translate through `vsatp` for the VS-stage
        and `hgatp` for the G-stage.
 
+MMU-19a M-MODE FETCH IS NOT TRANSLATED, whatever satp holds.
+        mstatus.MPRV affects loads and stores only. Accepted
+        session-075 (Jeff) as BP-118 built it.
+
 MMU-20 Shvsatpa: every translation mode supported in `satp` is
        supported in `vsatp`. Shgatpa: for each SvNN supported in
        `satp` the corresponding `hgatp` SvNNx4 mode is supported,
@@ -196,7 +200,10 @@ MMU-10a ONE CHECKER, SPECIFIED HERE, INSTANTIATED TWICE. The PMP
         the ITLB, which has the translated physical address first;
         site 2's sits in the walker, whose addresses never reach
         an L1 TLB. This document owns the checker's behaviour; it
-        does not own both instances.
+        does not own both instances. BUILT by BP-118 as
+        rtl/mmu/pmp/rtl/pmp_pma_chk.sv, instantiated inside the
+        ITLB. References for the PMP rules are in the BP-118
+        record: tools/spike's csrs.cc and mmu.cc.
 
 MMU-10b Each instance produces cause 1 on its own response path.
         The ITLB-side instance drives `itlb_ifu_cause`
@@ -216,7 +223,12 @@ walk traffic unchecked. CVA6 checks PMP on every access a walk
 makes for the same reason.
 
 MMU-11 16 PMP entries, with TOR and NAPOT address matching. The
-       count is a parameter.
+       count is a parameter. THE GRAIN IS 4 KiB, G = 10, accepted
+       session-075 (Jeff) as BP-118 built it: the ITLB checks one
+       page base per entry, which is exact only when no PMP
+       boundary falls inside a page, and a 4 KiB grain guarantees
+       that. The privileged specification leaves G to the
+       platform.
 
 MMU-11a THE CHECKER READS THE PMP REGISTERS AS INPUTS. The pmpcfg
         and pmpaddr values and the current privilege come in on a
@@ -668,4 +680,8 @@ TD#118    Bounds MMU-U2.
               the region table is a parameter, default main memory
               0x8000_0000 to the top of the 36-bit space. MMU-26:
               G-stage permissions are checked by the walker.
+
+  2026-10-07  session-075, after BP-118. MMU-10a built. MMU-11:
+              the PMP grain is 4 KiB. MMU-19a: M-mode fetch is not
+              translated.
 ```

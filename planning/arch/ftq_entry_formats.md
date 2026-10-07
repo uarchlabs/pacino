@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -122,7 +122,7 @@ On a uBTB miss the p1 value is the FULL block end, so the very case
 this field exists for -- re-deriving the successor after a redirect
 rewrites a slot -- is the case where it is stale.
 
-THE FIX IS RULED, session-075 (Jeff), TD#113, unbuilt: the 4c
+THE FIX IS RULED, session-075 (Jeff), TD#113, and BUILT by BP-118: the 4c
 block-scalar group gains `bpu_blk_pft_p2`, and the FTQ rewrites
 `pft_addr` from it for every valid p2 block, as it rewrites `ras`
 from `bpu_blk_ras_p2`. The value is the not-taken term of the
@@ -336,6 +336,12 @@ outside both. This read 421b and 68,480b, the figures before BP-111
   W4  A redirect rewind clears both for every entry it squashes,
       in the same cycle it moves the pointer
       (ftq_decisions.md 5.5).
+  W4a W4 OUTRANKS W2 AND W3 IN ONE CYCLE. A writeback or fault set
+      naming an index the same cycle's squash covers does not land.
+      The one stale writeback ftq_ifu_interfaces.md 6.1 bounds
+      arrives in exactly that cycle, with its generation still
+      matching. Found and fixed by BP-118 through the front-end
+      top; ftq_status_assert S1 fired. Session-075.
 ```
 
 `ifu_ftq_fault_pos` is NOT stored. The fault code is not carried at
@@ -541,4 +547,8 @@ path touches none of those.
               425b and 68,992b, matching section 1. Section 2: the
               TD#113 fix for pft_addr is ruled, bpu_blk_pft_p2 on
               the 4c group; unbuilt.
+
+  2026-10-07  session-075, after BP-118. Section 2: the TD#113 fix
+              is built. 4.2 W4a: the squash outranks a same-cycle
+              writeback or fault set.
 ```

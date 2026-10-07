@@ -34,7 +34,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   e3be8c359f3a
-PLAN  PROJECT_STATUS.md                 854f7ff9c668
+PLAN  PROJECT_STATUS.md                 c3862ad553a1
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -42,18 +42,18 @@ ARCH  bp_arb_spec.md                    d77fcf79123c
 ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  cachegen_decisions.md             ea488dd8c90d
-ARCH  dcd_decisions.md                  81ff31ece1ef
-ARCH  fe_decisions.md                   3dfb9fa5280c
+ARCH  dcd_decisions.md                  47020fdfbca7
+ARCH  fe_decisions.md                   557721aeea17
 ARCH  ftb_decisions.md            35cacdaab9cd
 ARCH  ftq_decisions.md            73c2a0c60f1d
-ARCH  ftq_entry_formats.md        5879eefe11a4
-ARCH  ibuf_decisions.md                 437f6e04b345
+ARCH  ftq_entry_formats.md        cebe529e6c2e
+ARCH  ibuf_decisions.md                 34f9eb23bd4f
 ARCH  icache_decisions.md               dee12ddc7206
-ARCH  ifu_decisions.md            6af2f7f5e918
-ARCH  itlb_decisions.md                 c6732553031a
+ARCH  ifu_decisions.md            8a56d7d3afac
+ARCH  itlb_decisions.md                 c2f97660b74b
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  1cf6d9b26ea6
+ARCH  mmu_decisions.md                  c43771704919
 ARCH  ras_decisions.md                  d841d505e3c9
 ARCH  sc_decisions.md                   d264a4ba07ed
 ARCH  sc_table_hash_rules.md            ef4c7e462412
@@ -84,11 +84,11 @@ INTF  bp_history_interfaces.md          f799a4123d5b
 INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           790cab4465fa
 INTF  ftq_backend_interfaces.md   388c3ce734af
-INTF  ftq_bpu_interfaces.md       6955a6b3650c
+INTF  ftq_bpu_interfaces.md       a4346dc710ef
 INTF  ftq_ifu_interfaces.md       8d3732475aa5
-INTF  ifu_ibuf_interfaces.md      9abc0f53d3f3
-INTF  itlb_ifu_interfaces.md            aa329f6c941a
-INTF  itlb_l2tlb_interfaces.md          16874747647a
+INTF  ifu_ibuf_interfaces.md      d1c8ae118057
+INTF  itlb_ifu_interfaces.md            57e989f8bfda
+INTF  itlb_l2tlb_interfaces.md          641bed3fd96b
 INTF  ittage_interfaces.md              7b90d2a1b3e3
 INTF  l1i_ifu_interfaces.md             4a7e8201e4f5
 INTF  loop_pred_interfaces.md           c20911b0ecc7

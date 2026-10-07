@@ -114,6 +114,13 @@ same VA while the walk is outstanding, so without a match against
 in-flight walks the ITLB issues duplicate walks for every retry.
 This is the same shape as the L1I-14 MSHR target problem.
 
+ITLB-10a A WALK FAULT IS HELD in its tracker slot until the IFU
+         re-requests that address, and is answered then as a
+         fault. Under ITLB-9 the requester re-requests rather than
+         waiting, so the fault has to be kept for it. An invalidate
+         drops held faults (ITLB-14). Built by BP-118, accepted
+         session-075 (Jeff).
+
 ITLB-U1 CLOSED session-075 (Jeff) by ITLB-15. The question was
         the depth of the in-flight walk tracker. One outstanding
         walk makes ITLB-8 mean only that hits continue during a
@@ -288,14 +295,46 @@ ITLB-13a HFENCE.VVMA invalidates `V=1` VS-stage entries for the
          physical address and VMID and takes no ASID, so the
          exclusion has nothing to key on.
 
+         GVMA INVALIDATES EVERY V=1 ENTRY OF THE VMID, or of all
+         VMIDs, whatever address it names. An entry holds the
+         guest virtual page and the final physical page, not the
+         guest physical address, so it cannot be matched by GPA.
+         Invalidating more than required is legal. Built by BP-118,
+         accepted session-075 (Jeff).
+
 ITLB-14 The invalidate port is a distinct port, not carried on the
         translation request path. It is written with the module.
-        Its port list is proposed by the task that builds the
-        ITLB, from ITLB-13, ITLB-13a and ITLB-13b, and recorded
-        here once reviewed. The front-end top
-        exposes it as a boundary input, since its producer is the
-        backend, which does not exist (FE-20). Ruled session-075
-        (Jeff); BP-118.
+        The front-end top exposes it as a boundary input, since its
+        producer is the backend, which does not exist (FE-20).
+        Ruled session-075 (Jeff). AS BUILT BY BP-118, one cycle, no
+        ready:
+
+```
+  bkend_itlb_inv_val                      backend -> ITLB
+  bkend_itlb_inv_op     [1:0]             0 VMA   SFENCE.VMA,
+                                                  SINVAL.VMA
+                                          1 VVMA  HFENCE.VVMA,
+                                                  HINVAL.VVMA
+                                          2 GVMA  HFENCE.GVMA,
+                                                  HINVAL.GVMA
+                                          3 reserved, all
+  bkend_itlb_inv_rs1_nz                   select by address
+  bkend_itlb_inv_rs2_nz                   select by ASID (VMA,
+                                          VVMA) or VMID (GVMA)
+  bkend_itlb_inv_vpn    [VA_WIDTH-13:0]   the rs1 page
+  bkend_itlb_inv_asid   [ASID_WIDTH-1:0]
+  bkend_itlb_inv_vmid   [VMID_WIDTH-1:0]  VVMA the current VMID;
+                                          GVMA rs2's VMID
+```
+
+        VMA acts on V=0 entries and VVMA on the V=1 entries of
+        inv_vmid; global entries are excluded only when rs2_nz
+        (ITLB-13). An SFENCE.VMA in VS-mode is presented as VVMA
+        with the current VMID. SFENCE.W.INVAL and SFENCE.INVAL.IR
+        are not presented (ITLB-13b). Every invalidate releases the
+        walk tracker: unsent walks are dropped, in-flight walks are
+        killed and install nothing (IL-13, IL-14), and held faults
+        (ITLB-10a) are dropped.
 
 ITLB-13b Svinval, mandatory in RVA23S64, per mmu_decisions.md
          MMU-U8 (adopted session-071): SINVAL.VMA acts as
@@ -384,4 +423,9 @@ TD#118    Bounds ITLB-U1.
               permissions are the walker's. ITLB-17: the CSR input
               group. ITLB-14: the invalidate port list is proposed
               by BP-118. ITLB-11: ifu_pd_pkt_t, not predecode_pkt_t.
+
+  2026-10-07  session-075, after BP-118. Built at rtl/mmu/itlb.
+              ITLB-14 records the invalidate port as built.
+              ITLB-13a: GVMA drops every V=1 entry of the VMID.
+              ITLB-10a: walk faults are held for the re-request.
 ```
