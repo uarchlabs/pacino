@@ -117,6 +117,11 @@ module tb;
   logic                    bpu_slot_val_p3;
   logic [FTQ_IDX_BITS-1:0] bpu_slot_idx_p3;
   bp_ftq_slot_t            bpu_slot_p3 [0:NUM_PRED_SLOTS-1];
+  // Block-scalar correction group (ftq_bpu_interfaces.md 4c, BP-118).
+  logic                    bpu_blk_val_p2;
+  logic [FTQ_IDX_BITS-1:0] bpu_blk_idx_p2;
+  bp_ras_snapshot_t        bpu_blk_ras_p2;
+  logic [VA_WIDTH-1:0]     bpu_blk_pft_p2;
 
   logic                    bpu_meta_val_p2;
   logic [FTQ_IDX_BITS-1:0] bpu_meta_idx_p2;
@@ -221,6 +226,10 @@ module tb;
     .bpu_slot_val_p3       (bpu_slot_val_p3),
     .bpu_slot_idx_p3       (bpu_slot_idx_p3),
     .bpu_slot_p3           (bpu_slot_p3),
+    .bpu_blk_val_p2        (bpu_blk_val_p2),
+    .bpu_blk_idx_p2        (bpu_blk_idx_p2),
+    .bpu_blk_ras_p2        (bpu_blk_ras_p2),
+    .bpu_blk_pft_p2        (bpu_blk_pft_p2),
     .bpu_meta_val_p2       (bpu_meta_val_p2),
     .bpu_meta_idx_p2       (bpu_meta_idx_p2),
     .bpu_meta_tage_p2      (bpu_meta_tage_p2),
@@ -2101,7 +2110,14 @@ module tb;
         dut.w_hist_pred_taken[0] === 1'b1);
     chk_eq("TC-F pred_pc[0]", dut.w_hist_pred_pc[0], slot_pc(pc, 4'd6));
 
-    // -- TC-G. loop_pred wins with no uBTB entry for that slot.
+    // -- TC-G. loop_pred trusted with no uBTB entry for that slot.
+    //    RESTATED by BP-118 (ftq_bpu_interfaces.md 4, ruled
+    //    session-075): the LP overrides only the direction of a slot
+    //    the uBTB supplied, so with no uBTB slot the slot carries NO
+    //    prediction. This case read that the slot was valid from
+    //    loop_pred alone and that its slot PC and pred_pc were the
+    //    block base; both are now zero, since a slot carrying no
+    //    branch reports no branch PC.
     do_reset();
     pc   = VA_WIDTH'('h00_0000_6000);
     base = blk_base(pc);
@@ -2111,16 +2127,18 @@ module tb;
     req(pc, 6'h36);
     tick();
     norq();
-    chk("TC-G slot0 is valid from loop_pred alone",
-        bpu_pred_slot_p1[0].slot_valid === 1'b1);
+    chk("TC-G slot0 carries no prediction from loop_pred alone",
+        bpu_pred_slot_p1[0].slot_valid === 1'b0);
+    chk("TC-G slot0 is not taken",
+        bpu_pred_slot_p1[0].taken === 1'b0);
     chk("TC-G position gated off with no uBTB entry",
         bpu_pred_slot_p1[0].pos === 4'd0);
     chk_eq("TC-G target gated off with no uBTB entry",
            bpu_pred_slot_p1[0].target, VA_WIDTH'('h0));
-    chk_eq("TC-G slot_pc[0] is the block base",
-           dut.w_slot_pc_p1[0], VA_WIDTH'('h00_0000_6000));
-    chk_eq("TC-G pred_pc[0] is the block base",
-           dut.w_hist_pred_pc[0], VA_WIDTH'('h00_0000_6000));
+    chk_eq("TC-G slot_pc[0] is zero for a slot with no branch",
+           dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
+    chk("TC-G no branch is reported to bp_history",
+        dut.w_hist_num_branches === 2'd0);
     chk("TC-G path bit is 0", dut.u_bp_history.path_bit_0 === 1'b0);
 
     // -- E1. Checkpoint write at allocation. The checkpoint holds the
@@ -4194,6 +4212,173 @@ module tb;
              pass_cnt, fail_cnt);
   endtask
 
+
+  // =================================================================
+  // GROUP L -- the 4c block-scalar group and two rulings (BP-118)
+  // =================================================================
+  //
+  // L1-L4 are TD#113 and the 4c group (ftq_bpu_interfaces.md 4c).
+  // L5 is the LP ruling of ftq_bpu_interfaces.md 4 (Problem 7a).
+  // L6 pins the update fan-out of the eighth bp_br_type_e encoding,
+  // 3'b111, which the package does not name (Problem 7b).
+  task automatic group_l();
+    ubtb_entry_t         e;
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] base;
+    logic [VA_WIDTH-1:0] p1_pft;
+    bp_ras_snapshot_t    p1_ras;
+
+    $display("---- GROUP L: 4c block-scalar group, BP-118 ----");
+
+    // -- L1. The FTB ends the block EARLIER than a uBTB miss assumed.
+    //    The uBTB misses, so the p1 fall-through is the lookup PC plus
+    //    one block. The FTB holds a not-taken conditional at pos 1 and
+    //    a block end at pc + 8. The corrected fall-through is pc + 8,
+    //    and it is the same value the p2 redirect fetches next.
+    j_reset();
+    pc   = VA_WIDTH'('h00_0910_0000);
+    base = blk_base(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h400), 4'd1,
+                   pc + VA_WIDTH'(8), 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h21);
+    tick();
+    norq();
+    p1_pft = bpu_pred_pft_p1;
+    chk_eq("L1 the p1 fall-through is the uBTB-miss value",
+           p1_pft, pc + BLK_SZ);
+    tick();
+    chk("L1 the block group is valid at p2", bpu_blk_val_p2 === 1'b1);
+    chk("L1 it names the entry this request allocated",
+        bpu_blk_idx_p2 === 6'h21);
+    chk("L1 the FTB answered", dut.w_ftb_valid_p2 === 1'b1);
+    chk_eq("L1 the corrected fall-through is the FTB block end",
+           bpu_blk_pft_p2, pc + VA_WIDTH'(8));
+    chk("L1 the p2 redirect fires: the block end moved",
+        bpu_redir_p2[0].valid === 1'b1);
+    chk_eq("L1 and fetches the same fall-through it publishes",
+           bpu_redir_p2[0].target_pc, bpu_blk_pft_p2);
+
+    // -- L2. The FTB does NOT answer. The block group is still valid
+    //    (it is r_val_p2, not the slot group's FTB-qualified valid)
+    //    and carries the p1 fall-through forward. The start is
+    //    unaligned so the value is not a block boundary.
+    j_reset();
+    pc   = VA_WIDTH'('h00_0920_0006);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h22);
+    tick();
+    norq();
+    p1_pft = bpu_pred_pft_p1;
+    tick();
+    chk("L2 the FTB did not answer", dut.w_ftb_valid_p2 === 1'b0);
+    chk("L2 the slot group is not valid", bpu_slot_val_p2 === 1'b0);
+    chk("L2 the block group is valid regardless",
+        bpu_blk_val_p2 === 1'b1);
+    chk_eq("L2 the fall-through is the p1 value carried forward",
+           bpu_blk_pft_p2, p1_pft);
+    chk_eq("L2 which is the lookup PC plus one block",
+           bpu_blk_pft_p2, pc + BLK_SZ);
+
+    // -- L3. No block, no group: the valid is the p2 stage valid.
+    tick();
+    chk("L3 no request at p2, no block group", bpu_blk_val_p2 === 1'b0);
+
+    // -- L4. The RAS snapshot is the POST-op state. A block ending in a
+    //    direct call pushes at p2, so the snapshot after it differs
+    //    from the p1 initial value, which is the state before it.
+    j_reset();
+    pc   = VA_WIDTH'('h00_0930_0000);
+    base = blk_base(pc);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd2, 1'b1, 1'b0,
+                  1'b0, pc + VA_WIDTH'(8), 1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h23);
+    tick();
+    norq();
+    p1_ras = bpu_pred_ras_p1;
+    tick();
+    chk("L4 the FTB classified a direct call",
+        dut.w_br_type_p2[0] === DIRECT_CALL);
+    chk("L4 the block snapshot is the RAS state after both slots",
+        bpu_blk_ras_p2 === dut.w_ras_snapshot_p2[NUM_PRED_SLOTS-1]);
+    chk("L4 and differs from the pre-op p1 value: the push is in it",
+        bpu_blk_ras_p2 !== p1_ras);
+    chk_eq("L4 the call block's fall-through is its return address",
+           bpu_blk_pft_p2, pc + VA_WIDTH'(8));
+
+    // -- L5. Problem 7a. A trusted loop entry and NO uBTB slot: the LP
+    //    carries no target, so the slot carries no prediction. With a
+    //    uBTB slot present the LP direction stands (B1 covers it).
+    j_reset();
+    pc = VA_WIDTH'('h00_0940_0000);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    lp_install(1, pc, LP_CNF_BITS'(LP_CONF_LEVEL), 14'd1, 14'd4);
+    req(pc, 6'h24);
+    tick();
+    norq();
+    chk("L5 the loop entry is trusted",
+        dut.w_lp_pred_p1[1].lp_pred_is_loop === 1'b1);
+    chk("L5 the uBTB slot is not valid",
+        dut.r_ubtb_pred_p1[1].valid === 1'b0);
+    chk("L5 so slot 1 carries no prediction",
+        (bpu_pred_slot_p1[1].slot_valid === 1'b0)
+     && (bpu_pred_slot_p1[1].taken === 1'b0)
+     && (bpu_pred_slot_p1[1].pred_src === PRED_NONE));
+    chk_eq("L5 and the p1 successor is the fall-through",
+           dut.w_succ_p1[1], pc + BLK_SZ);
+    tick();
+
+    // -- L6. Problem 7b, PINNED AS BUILT. RETURN_CALL is the JALR that
+    //    pops then pushes; bp_br_type_e does not name it, so 3'b111
+    //    is driven by cast. The cluster derives the update type from
+    //    the payload's structural bits, and is_ret outranks is_call,
+    //    so the payload of a pop-then-push decodes as RETURN: the uBTB
+    //    is updated, ITTAGE, TAGE and SC are not. fe_decisions.md 7.2
+    //    also asks for a RAS pop then push; the RAS commit of 3'b111
+    //    is masked here and in ras.sv, so the RAS is NOT trained.
+    //    That is the reported gap, pinned so a change is visible.
+    do_reset();
+    clr_upd_chans();
+    sc_enable = 1'b1;
+    pc = VA_WIDTH'('h00_0950_0000);
+    ubtb_upd_u0[0]         = mk_upd(RETURN, 1'b1, pc);
+    ubtb_upd_u0[0].is_call = 1'b1;
+    ubtb_upd_u0[0].is_jalr = 1'b1;
+    tage_upd_val_u0   = 2'b01;
+    ittage_upd_val_u0 = 2'b01;
+    sc_upd_val_u0     = 2'b01;
+    lp_upd_valid_p0   = 2'b01;
+    ras_commit_val      = 1'b1;
+    ras_commit_br_type  = bp_br_type_e'(3'b111);
+    ras_commit_ret_addr = pc + VA_WIDTH'(4);
+    #1;
+    chk("L6 a pop-then-push payload decodes as RETURN",
+        dut.w_upd_type_u0[0] === RETURN);
+    chk("L6 the uBTB is updated",
+        dut.w_ubtb_upd_u0[0].valid === 1'b1);
+    chk("L6 ITTAGE is not updated",
+        dut.w_ittage_upd_val_u0[0] === 1'b0);
+    chk("L6 TAGE, SC and the LP are not updated",
+        (dut.w_tage_upd_val_u0[0] === 1'b0)
+     && (dut.w_sc_upd_val_u0[0] === 1'b0)
+     && (dut.w_lp_upd_val_p0[0] === 1'b0));
+    chk("L6 AS BUILT the RAS commit of 3'b111 is masked",
+        dut.w_ras_commit_val === 1'b0);
+    ras_commit_val     = 1'b0;
+    ras_commit_br_type = NO_BRANCH;
+    clr_upd_chans();
+    sc_enable = 1'b0;
+    tick();
+
+    $display("---- GROUP L done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
   // =================================================================
   // Main
   // =================================================================
@@ -4223,6 +4408,7 @@ module tb;
     group_i();
     group_j();
     group_k();
+    group_l();
 
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

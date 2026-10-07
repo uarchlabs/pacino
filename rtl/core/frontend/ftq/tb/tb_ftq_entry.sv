@@ -40,6 +40,11 @@ module tb;
   logic [PHIST_PTR_BITS-1:0] alloc_wr_phist_ptr;
   bp_ftq_slot_t             alloc_wr_slot [0:NUM_PRED_SLOTS-1];
 
+  logic                     blk_wr_val;
+  logic [FTQ_IDX_BITS-1:0]  blk_wr_idx;
+  bp_ras_snapshot_t         blk_wr_ras;
+  logic [VA_WIDTH-1:0]      blk_wr_pft_addr;
+
   logic                     p2_wr_val;
   logic [FTQ_IDX_BITS-1:0]  p2_wr_idx;
   bp_ftq_slot_t             p2_wr_slot [0:NUM_PRED_SLOTS-1];
@@ -83,6 +88,10 @@ module tb;
     .alloc_wr_ghist_ptr  (alloc_wr_ghist_ptr),
     .alloc_wr_phist_ptr  (alloc_wr_phist_ptr),
     .alloc_wr_slot       (alloc_wr_slot),
+    .blk_wr_val          (blk_wr_val),
+    .blk_wr_idx          (blk_wr_idx),
+    .blk_wr_ras          (blk_wr_ras),
+    .blk_wr_pft_addr     (blk_wr_pft_addr),
     .p2_wr_val           (p2_wr_val),
     .p2_wr_idx           (p2_wr_idx),
     .p2_wr_slot          (p2_wr_slot),
@@ -146,6 +155,7 @@ module tb;
 
   task automatic clr();
     alloc_wr_val    = 1'b0;
+    blk_wr_val      = 1'b0;
     p2_wr_val       = 1'b0;
     p3_wr_val       = 1'b0;
     pd_wr_val       = 1'b0;
@@ -180,6 +190,9 @@ module tb;
     alloc_wr_ras       = '0;
     alloc_wr_ghist_ptr = '0;
     alloc_wr_phist_ptr = '0;
+    blk_wr_idx         = '0;
+    blk_wr_ras         = '0;
+    blk_wr_pft_addr    = '0;
     p2_wr_idx          = '0;
     p3_wr_idx          = '0;
     pd_wr_idx          = '0;
@@ -589,6 +602,133 @@ module tb;
            VA_WIDTH'(VA_WIDTH'('h00_FFFF_0000)));
   endtask
 
+
+  // -----------------------------------------------------------------
+  // G. The 4c block-scalar write (BP-118, TD#113).
+  // -----------------------------------------------------------------
+  // ras and pft_addr of the named entry are replaced; nothing else
+  // in it moves, and no other entry moves. The values are chosen to
+  // differ from every value alloc() writes, so a write that missed
+  // reads as the alloc value and a write to the wrong entry reads as
+  // a changed neighbour.
+  task automatic group_g();
+    $display("-- G: the 4c block-scalar write --");
+    do_reset();
+
+    alloc(40);
+    alloc(41);
+    alloc(42);
+
+    blk_wr_val      = 1'b1;
+    blk_wr_idx      = 6'd41;
+    blk_wr_pft_addr = VA_WIDTH'(VA_WIDTH'('h00_8000_0532));
+    blk_wr_ras.tosr = RAS_PTR_BITS'(5);
+    blk_wr_ras.tosw = RAS_PTR_BITS'(6);
+    blk_wr_ras.bos  = RAS_PTR_BITS'(7);
+    tick();
+    blk_wr_val = 1'b0;
+
+    fetch_rd_idx = 6'd41;
+    #1;
+    chk_va("G1 pft_addr took the p2 value", fetch_rd_entry.pft_addr,
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0532)));
+    chk("G2 ras took the p2 snapshot",
+        (fetch_rd_entry.ras.tosr == RAS_PTR_BITS'(5)) &&
+        (fetch_rd_entry.ras.tosw == RAS_PTR_BITS'(6)) &&
+        (fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(7)));
+    chk("G3 the slots and the block start did not move",
+        (fetch_rd_entry.pc ==
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 41 * 32)) &&
+        fetch_rd_entry.slot[0].slot_valid &&
+        (fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(2)) &&
+        fetch_rd_entry.valid);
+
+    fetch_rd_idx = 6'd40;
+    #1;
+    chk_va("G4 the entry below kept its pft_addr",
+           fetch_rd_entry.pft_addr,
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0020) + 40 * 32));
+    fetch_rd_idx = 6'd42;
+    #1;
+    chk_va("G5 the entry above kept its pft_addr",
+           fetch_rd_entry.pft_addr,
+           VA_WIDTH'(VA_WIDTH'('h00_8000_0020) + 42 * 32));
+
+    // THE CONSUMER. The RAS commit return address of 5.4 reads the
+    // entry's pft_addr, so after the p2 write it is the corrected
+    // value. Entry 41 is made to end in a taken call.
+    p2_wr_val     = 1'b1;
+    p2_wr_idx     = 6'd41;
+    p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9500_0000)),
+                            DIRECT_CALL, 1'b1, FTB_BR_POS_BITS'(8));
+    p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+    tick();
+    p2_wr_val       = 1'b0;
+    commit_rd_idx   = 6'd41;
+    commit_step_val = 1'b1;
+    #1;
+    chk_va("G6 the RAS commit return address is the corrected value",
+           ras_commit_ret_addr, VA_WIDTH'(VA_WIDTH'('h00_8000_0532)));
+    chk("G7 the RAS commit snapshot is the p2 snapshot",
+        ras_commit_val && (ras_commit_snapshot.tosr == RAS_PTR_BITS'(5)));
+    commit_step_val = 1'b0;
+
+    // SAME INDEX, SAME CYCLE. An allocation naming the index the p2
+    // write names is the newer event and wins the block fields.
+    alloc_wr_val       = 1'b1;
+    alloc_wr_idx       = 6'd42;
+    alloc_wr_pc        = VA_WIDTH'(VA_WIDTH'('h00_A000_0000));
+    alloc_wr_pft_addr  = VA_WIDTH'(VA_WIDTH'('h00_A000_0020));
+    blk_wr_val         = 1'b1;
+    blk_wr_idx         = 6'd42;
+    blk_wr_pft_addr    = VA_WIDTH'(VA_WIDTH'('h00_BBBB_0000));
+    tick();
+    alloc_wr_val = 1'b0;
+    blk_wr_val   = 1'b0;
+    fetch_rd_idx = 6'd42;
+    #1;
+    chk_va("G8 allocation wins the block fields on a shared index",
+           fetch_rd_entry.pft_addr, VA_WIDTH'(VA_WIDTH'('h00_A000_0020)));
+    clr();
+  endtask
+
+
+  // -----------------------------------------------------------------
+  // H. The RAS commit of all eight bp_br_type_e encodings (BP-118,
+  //    Problem 7b). A taken slot of each type is committed. The calls
+  //    and the return commit; 3'b111, RETURN_CALL, which the package
+  //    does not name and fe_decisions.md 7.2 says pops then pushes,
+  //    does NOT commit AS BUILT -- pinned so a change is visible.
+  // -----------------------------------------------------------------
+  task automatic group_h();
+    bp_br_type_e bt;
+    logic        exp;
+    $display("-- H: the RAS commit of every encoding --");
+    do_reset();
+    alloc(50);
+    for (int t = 0; t < 8; t++) begin
+      bt = bp_br_type_e'(t);
+      p2_wr_val     = 1'b1;
+      p2_wr_idx     = 6'd50;
+      p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9800_0000)),
+                              bt, 1'b1, FTB_BR_POS_BITS'(4));
+      p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+      tick();
+      p2_wr_val       = 1'b0;
+      commit_rd_idx   = 6'd50;
+      commit_step_val = 1'b1;
+      #1;
+      exp = (bt == DIRECT_CALL) || (bt == INDIRECT_CALL) ||
+            (bt == RETURN);
+      chk($sformatf("H%0d br_type %0d commits the RAS: %0d", t + 1, t,
+                    exp),
+          (ras_commit_val == exp) &&
+          (!exp || (ras_commit_br_type == bt)));
+      commit_step_val = 1'b0;
+    end
+    clr();
+  endtask
+
   // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
@@ -607,6 +747,8 @@ module tb;
     group_d();
     group_e();
     group_f();
+    group_g();
+    group_h();
 
     $display("tb_ftq_entry: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

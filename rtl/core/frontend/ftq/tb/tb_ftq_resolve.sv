@@ -754,6 +754,84 @@ module tb;
     clr();
   endtask
 
+
+  // -----------------------------------------------------------------
+  // H. The fan-out of all eight bp_br_type_e encodings (BP-118,
+  //    Problem 7b, fe_decisions.md 7.2).
+  // -----------------------------------------------------------------
+  // F covers six encodings for the queued predictors. H adds
+  // DIRECT_CALL and the eighth encoding, 3'b111, and pins the FTB
+  // classification bits for every type, since that classification is
+  // what the next prediction of the block will use.
+  //
+  // 3'b111 IS RETURN_CALL, the JALR that pops then pushes. The
+  // package does not name it, so it is driven by cast. 7.2 rules it
+  // trains uBTB, FTB and RAS (pop, then push) and not ITTAGE. AS
+  // BUILT: uBTB yes, ITTAGE no, TAGE, SC and LP no, and the FTB is
+  // trained as a plain direct jump, is_call, is_ret and is_jalr all
+  // clear. The RAS half is the commit group (ftq_entry, tb_ftq_entry
+  // H1), which does not issue for it. Pinned so a change is visible;
+  // reported in BP-118 Results Capture.
+  task automatic group_h();
+    bp_br_type_e bt;
+    $display("-- H: fan-out of all eight encodings --");
+    do_reset();
+
+    for (int t = 0; t < 8; t++) begin
+      bt = bp_br_type_e'(t);
+      put_entry(30,
+        mk_slot(1'b1, VA_WIDTH'('h00_9200_0000), bt, FTB_BR_POS_BITS'(6)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0),
+        1'b1, 0);
+      present(0, 30, FTB_BR_POS_BITS'(6), bt, 1'b1,
+              VA_WIDTH'('h00_9200_0000), 1'b0);
+      settle();
+      case (t)
+        0: chk("H1 COND: uBTB, LP, FTB as a branch, TAGE, SC",
+               upd_ubtb_val[0] && upd_lp_val[0] && upd_tage_val[0] &&
+               upd_sc_val[0] && !upd_ittage_val[0] && ftb_upd_val[0] &&
+               ftb_upd[0].is_br && !ftb_upd[0].is_jmp);
+        1: chk("H2 DIRECT_CALL: uBTB, FTB as a direct call only",
+               upd_ubtb_val[0] && !upd_lp_val[0] && !upd_tage_val[0] &&
+               !upd_sc_val[0] && !upd_ittage_val[0] && ftb_upd_val[0] &&
+               ftb_upd[0].is_jmp && ftb_upd[0].is_call &&
+               !ftb_upd[0].is_ret && !ftb_upd[0].is_jalr);
+        2: chk("H3 INDIRECT_CALL: uBTB, FTB as an indirect call, ITTAGE",
+               upd_ubtb_val[0] && upd_ittage_val[0] && !upd_tage_val[0] &&
+               !upd_sc_val[0] && !upd_lp_val[0] && ftb_upd_val[0] &&
+               ftb_upd[0].is_jmp && ftb_upd[0].is_call &&
+               !ftb_upd[0].is_ret && ftb_upd[0].is_jalr);
+        3: chk("H4 RETURN: uBTB, FTB as a return only",
+               upd_ubtb_val[0] && !upd_ittage_val[0] && !upd_tage_val[0] &&
+               !upd_sc_val[0] && !upd_lp_val[0] && ftb_upd_val[0] &&
+               ftb_upd[0].is_jmp && !ftb_upd[0].is_call &&
+               ftb_upd[0].is_ret && ftb_upd[0].is_jalr);
+        4: chk("H5 INDIRECT_NONRET: uBTB, FTB as a JALR, ITTAGE",
+               upd_ubtb_val[0] && upd_ittage_val[0] && !upd_tage_val[0] &&
+               !upd_sc_val[0] && !upd_lp_val[0] && ftb_upd_val[0] &&
+               ftb_upd[0].is_jmp && !ftb_upd[0].is_call &&
+               !ftb_upd[0].is_ret && ftb_upd[0].is_jalr);
+        5: chk("H6 DIRECT_UNC: uBTB, FTB as a direct jump only",
+               upd_ubtb_val[0] && !upd_ittage_val[0] && !upd_tage_val[0] &&
+               !upd_sc_val[0] && !upd_lp_val[0] && ftb_upd_val[0] &&
+               ftb_upd[0].is_jmp && !ftb_upd[0].is_call &&
+               !ftb_upd[0].is_ret && !ftb_upd[0].is_jalr);
+        6: chk("H7 NO_BRANCH: nothing",
+               !upd_ubtb_val[0] && !upd_ittage_val[0] && !upd_tage_val[0] &&
+               !upd_sc_val[0] && !upd_lp_val[0] && !ftb_upd_val[0]);
+        default: begin
+          chk("H8 3'b111: uBTB and FTB, not ITTAGE, TAGE, SC or LP",
+              upd_ubtb_val[0] && ftb_upd_val[0] && !upd_ittage_val[0] &&
+              !upd_tage_val[0] && !upd_sc_val[0] && !upd_lp_val[0]);
+          chk("H9 AS BUILT 3'b111 trains the FTB as a direct jump",
+              ftb_upd[0].is_jmp && !ftb_upd[0].is_call &&
+              !ftb_upd[0].is_ret && !ftb_upd[0].is_jalr);
+        end
+      endcase
+      clr();
+    end
+  endtask
+
   // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
@@ -773,6 +851,7 @@ module tb;
     group_e();
     group_f();
     group_g();
+    group_h();
 
     $display("tb_ftq_resolve: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

@@ -149,6 +149,16 @@ module bp_cluster (
   output bp_ftq_slot_t                    bpu_slot_p3
                                             [0:NUM_PRED_SLOTS-1],
 
+  // ---- 4c: block-scalar correction, BPU -> FTQ (p2) ----------------
+  // Valid for EVERY valid p2 block, not only when the FTB answers:
+  // bpu_blk_val_p2 is r_val_p2. ras is the pointer state after both
+  // slots' operations; pft is the corrected block fall-through, the
+  // not-taken term of the p2 successor (TD#113, BP-118).
+  output logic                            bpu_blk_val_p2,
+  output logic [FTQ_IDX_BITS-1:0]         bpu_blk_idx_p2,
+  output bp_ras_snapshot_t                bpu_blk_ras_p2,
+  output logic [VA_WIDTH-1:0]             bpu_blk_pft_p2,
+
   // ---- metadata write, BPU -> FTQ slow path (interfaces 7.1) ------
   // bp_ftq_meta_t is carried per slot; the array is declared here, at
   // the port, not inside the struct. This group writes its tage,
@@ -418,6 +428,9 @@ module bp_cluster (
   // The p1 view of the address fetched after each slot, carried
   // forward as the p1 operand of the p2 redirect comparison.
   logic [VA_WIDTH-1:0]     r_succ_p1_p2 [0:NUM_PRED_SLOTS-1];
+  // The p1 block fall-through carried forward. It is the p2 not-taken
+  // term when the FTB does not answer (ftq_bpu_interfaces.md 4c).
+  logic [VA_WIDTH-1:0]     r_pft_p1_p2;
   // The loop predictor finalizes at p1. Its result is registered here
   // and presented in the p2 metadata group so the FTQ performs one
   // slow-path write per entry rather than two.
@@ -461,6 +474,12 @@ module bp_cluster (
   logic                w_reach_p2   [0:NUM_PRED_SLOTS-1];
   logic                w_tage_hit_p2[0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_tkn_tgt_p2 [0:NUM_PRED_SLOTS-1];
+  // The p2 block fall-through: the FTB fall-through when the FTB
+  // answered, else the p1 value carried forward. ONE net serves the
+  // not-taken term of every p2 successor, the p3 carry and
+  // bpu_blk_pft_p2, so the entry and the redirect comparison cannot
+  // disagree (4c, "One source for both").
+  logic [VA_WIDTH-1:0] w_pft_p2;
   logic [VA_WIDTH-1:0] w_succ_p2    [0:NUM_PRED_SLOTS-1];
   bp_redirect_t        w_redir_p2   [0:NUM_PRED_SLOTS-1];
 
@@ -544,6 +563,7 @@ module bp_cluster (
       r_val_p3  <= 1'b0;
       r_idx_p3  <= '0;
       r_pft_p3  <= '0;
+      r_pft_p1_p2 <= '0;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_ras_tos_addr_p1[s] <= '0;
         r_ras_tos_val_p1[s]  <= 1'b0;
@@ -592,6 +612,7 @@ module bp_cluster (
       r_sc_t1_fh_p2 <= r_sc_t1_fh_p1;
       r_sc_t2_fh_p2 <= r_sc_t2_fh_p1;
       r_sc_t3_fh_p2 <= r_sc_t3_fh_p1;
+      r_pft_p1_p2   <= w_pft_p1;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_slot_p2[s]    <= w_slot_p1[s];
         r_succ_p1_p2[s] <= w_succ_p1[s];
@@ -605,7 +626,7 @@ module bp_cluster (
       //    FTB read.
       r_val_p3 <= r_val_p2;
       r_idx_p3 <= r_idx_p2;
-      r_pft_p3 <= w_ftb_pft_addr_p2;
+      r_pft_p3 <= w_pft_p2;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_br_type_p3[s] <= w_br_type_p2[s];
         r_ras_val_p3[s] <= w_ras_pred_val_p2[s];
@@ -660,7 +681,13 @@ module bp_cluster (
         // Every slot has its own loop_pred producer and its own
         // trust bit; the rule below is the one slot 0 has always
         // used, applied per slot (TD#105).
-        if (w_lp_pred_p1[s].lp_pred_is_loop) begin
+        // The LP overrides only the direction of a slot the uBTB
+        // supplied: it carries no target, so with lp_pred_is_loop set
+        // and the uBTB slot not valid the slot carries no prediction
+        // (ftq_bpu_interfaces.md 4, ruled session-075, BP-118). The
+        // uBTB slot valid is pred_p1[s].valid (fe_decisions.md 2.1).
+        if (w_lp_pred_p1[s].lp_pred_is_loop
+            && r_ubtb_pred_p1[s].valid) begin
           w_slot_p1[s].slot_valid = 1'b1;
           w_slot_p1[s].taken      = w_lp_pred_p1[s].lp_pred_taken;
           w_slot_p1[s].br_type    = COND;
@@ -874,6 +901,11 @@ module bp_cluster (
     logic                it_hit;
     logic [VA_WIDTH-1:0] p1_succ;
 
+    // The block fall-through at p2. When the FTB did not answer,
+    // ftb_pft_addr_p2 is not qualified (ftb_cntrl drives it from the
+    // unmatched way), so the p1 value carried in r_pft_p1_p2 stands.
+    w_pft_p2 = w_ftb_valid_p2 ? w_ftb_pft_addr_p2 : r_pft_p1_p2;
+
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       // ITTAGE target. The metadata holds VA[40:1]; bit 0 is always
       // zero at 2-byte granularity and is not stored. The target is
@@ -910,7 +942,7 @@ module bp_cluster (
           w_pred_src_p2[s] = PRED_FTB;
         end
         default: begin // NO_BRANCH
-          w_tkn_tgt_p2[s]  = w_ftb_pft_addr_p2;
+          w_tkn_tgt_p2[s]  = w_pft_p2;
           w_pred_src_p2[s] = PRED_NONE;
         end
       endcase
@@ -918,7 +950,7 @@ module bp_cluster (
       // Successor of this slot: the taken target, or the block
       // fall-through when the slot resolves not taken.
       w_succ_p2[s] = w_taken_p2[s] ? w_tkn_tgt_p2[s]
-                                   : w_ftb_pft_addr_p2;
+                                   : w_pft_p2;
 
       // The p1 prediction carried in the stage register, expressed as
       // the same quantity so the comparison is target against target.
@@ -971,6 +1003,19 @@ module bp_cluster (
 
   assign bpu_slot_val_p2 = r_val_p2 & w_ftb_valid_p2;
   assign bpu_slot_idx_p2 = r_idx_p2;
+
+  // ================================================================
+  // p2: block-scalar correction (ftq_bpu_interfaces.md 4c)
+  // ================================================================
+  // EVERY valid p2 block: gating on the FTB answering or on a RAS
+  // operation would leave the p1 initial values in the entry. The
+  // RAS snapshot is the state after both slots' operations; the
+  // fall-through is w_pft_p2, the same net the p2 redirect
+  // comparison uses as its not-taken term.
+  assign bpu_blk_val_p2 = r_val_p2;
+  assign bpu_blk_idx_p2 = r_idx_p2;
+  assign bpu_blk_ras_p2 = w_ras_snapshot_p2[NUM_PRED_SLOTS-1];
+  assign bpu_blk_pft_p2 = w_pft_p2;
 
   // ================================================================
   // p3: SC redirect derivation

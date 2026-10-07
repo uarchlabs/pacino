@@ -54,6 +54,8 @@ module tb;
   logic                    gv_meta_p2;
   logic [FTQ_IDX_BITS-1:0] idx_meta_p2;
   logic [FTQ_IDX_BITS-1:0] idx_redir_p2;
+  logic                    gv_blk_p2;
+  logic [FTQ_IDX_BITS-1:0] idx_blk_p2;
   logic                    gv_slot_p3;
   logic [FTQ_IDX_BITS-1:0] idx_slot_p3;
   logic                    gv_meta_p3;
@@ -63,6 +65,7 @@ module tb;
   logic                    ok_slot_p2;
   logic                    ok_meta_p2;
   logic                    ok_redir_p2;
+  logic                    ok_blk_p2;
   logic                    ok_slot_p3;
   logic                    ok_meta_p3;
   logic                    ok_redir_p3;
@@ -86,6 +89,8 @@ module tb;
     .gv_meta_p2     (gv_meta_p2),
     .idx_meta_p2    (idx_meta_p2),
     .idx_redir_p2   (idx_redir_p2),
+    .gv_blk_p2      (gv_blk_p2),
+    .idx_blk_p2     (idx_blk_p2),
     .gv_slot_p3     (gv_slot_p3),
     .idx_slot_p3    (idx_slot_p3),
     .gv_meta_p3     (gv_meta_p3),
@@ -95,6 +100,7 @@ module tb;
     .ok_slot_p2     (ok_slot_p2),
     .ok_meta_p2     (ok_meta_p2),
     .ok_redir_p2    (ok_redir_p2),
+    .ok_blk_p2      (ok_blk_p2),
     .ok_slot_p3     (ok_slot_p3),
     .ok_meta_p3     (ok_meta_p3),
     .ok_redir_p3    (ok_redir_p3),
@@ -131,6 +137,7 @@ module tb;
     gv_pred_p1 = 1'b0;
     gv_slot_p2 = 1'b0;
     gv_meta_p2 = 1'b0;
+    gv_blk_p2  = 1'b0;
     gv_slot_p3 = 1'b0;
     gv_meta_p3 = 1'b0;
   endtask
@@ -144,6 +151,7 @@ module tb;
     idx_slot_p2  = '0;
     idx_meta_p2  = '0;
     idx_redir_p2 = '0;
+    idx_blk_p2   = '0;
     idx_slot_p3  = '0;
     idx_meta_p3  = '0;
     idx_redir_p3 = '0;
@@ -555,6 +563,53 @@ module tb;
     clr();
   endtask
 
+
+  // -----------------------------------------------------------------
+  // H. The 4c block-scalar group, bpu_blk_*_p2 (BP-118, TD#113).
+  // -----------------------------------------------------------------
+  // The group is checked at stage 2 on its own valid and index, the
+  // same drop every other indexed response takes (4.6, 5.6). Its
+  // valid is r_val_p2 alone, so it is exercised here with the slot
+  // group valid LOW: an accept that leaned on gv_slot_p2 would fail
+  // H1.
+  task automatic group_h();
+    $display("-- H: the 4c block-scalar group --");
+    do_reset();
+
+    push(30); push(31); push(32);
+
+    // Stage 2 holds 31.
+    gv_blk_p2  = 1'b1;
+    idx_blk_p2 = 6'd31;
+    gv_slot_p2 = 1'b0;
+    #1;
+    chk("H1 the p2 block group is accepted at its stage", ok_blk_p2);
+
+    idx_blk_p2 = 6'd32;
+    #1;
+    chk("H2 a p2 block group for another entry is dropped",
+        !ok_blk_p2);
+
+    idx_blk_p2 = 6'd31;
+    gv_blk_p2  = 1'b0;
+    #1;
+    chk("H3 no group valid, no accept", !ok_blk_p2);
+    clr();
+
+    // A squash of 31 onward, with stage 1 holding 32 and stage 2
+    // holding 31. After the edge 31 is at stage 3 and 32, squashed,
+    // is the cleared stage 2. A block group naming 32 is dropped;
+    // so is one naming 32 if the FTQ has since reallocated it.
+    squash_cyc(32, 33);
+    gv_blk_p2  = 1'b1;
+    idx_blk_p2 = 6'd32;
+    #1;
+    chk("H4 a p2 block group for a squashed entry is dropped",
+        !ok_blk_p2);
+    tick();
+    clr();
+  endtask
+
   // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
@@ -574,6 +629,7 @@ module tb;
     group_e();
     group_f();
     group_g();
+    group_h();
 
     $display("tb_ftq_shadow: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

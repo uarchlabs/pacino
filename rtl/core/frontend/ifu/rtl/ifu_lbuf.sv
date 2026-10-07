@@ -35,9 +35,18 @@
 // it and reuses the slot on a match, so consecutive blocks in one line
 // make one L1I request (TD-IFU-8).
 //
-// FLUSH. TD#134 is deferred: a flush with a request outstanding is an
-// assertion failure, so no identifier is in flight across a flush and
-// every slot can be released.
+// FLUSH (IFU-29, IFU-30; TD#134, BP-118). Nothing is cleared. The L1I
+// has no cancel and every response is accepted (IF-10), so an
+// identifier in flight stays in flight until its response, which
+// frees it as any response does (IF-11). ifu_fetch reports, per slot,
+// how many references the dropped blocks held (kill_cnt) and the
+// count falls by that much. A slot left with no reader frees once its
+// line has landed; its data is never read, which is the discard of
+// IFU-29. A slot still read by a surviving block keeps it (IFU-30).
+// No generation is needed: an identifier is not reissued while it is
+// in flight (IF-6). The previous-request register is dropped when its
+// slot is left with no reader, so no later block reuses a line whose
+// only readers were dropped.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -80,7 +89,10 @@ module ifu_lbuf #(
   output logic                     rd_err1,
   input  logic                     cons_val,
   input  logic                     cons_use0,
-  input  logic                     cons_use1
+  input  logic                     cons_use1,
+
+  // ---- references dropped by a flush, from ifu_fetch ---------------
+  input  logic [$clog2(2*LB_DEPTH+1)-1:0] kill_cnt [0:LB_DEPTH-1]
 );
 
   localparam int SB = $clog2(LB_DEPTH);
@@ -152,8 +164,6 @@ module ifu_lbuf #(
   always_comb begin : counts
     w_alloc        = alloc_val && alloc_ok && !flush;
     w_rsp_slot     = r_id_slot[l1i_ifu_rsp_id];
-    w_prev_val_nx  = w_alloc ? 1'b1 : r_prev_val;
-    w_prev_slot_nx = w_alloc ? alloc_slot : r_prev_slot;
     for (int s = 0; s < LB_DEPTH; s++) begin
       w_rc_nx[s] = r_rc[s];
       if (w_alloc && (alloc_slot == SB'(s))) begin
@@ -168,6 +178,17 @@ module ifu_lbuf #(
       if (cons_val && cons_use1 && (rd_slot1 == SB'(s))) begin
         w_rc_nx[s] = w_rc_nx[s] - CB'(1);
       end
+      w_rc_nx[s]     = w_rc_nx[s] - kill_cnt[s];
+    end
+
+    // The previous request: replaced by an allocation, or dropped by a
+    // flush that leaves its slot with no reader.
+    w_prev_val_nx  = w_alloc ? 1'b1
+                   : ((flush && (w_rc_nx[r_prev_slot] == '0)) ? 1'b0
+                                                              : r_prev_val);
+    w_prev_slot_nx = w_alloc ? alloc_slot : r_prev_slot;
+
+    for (int s = 0; s < LB_DEPTH; s++) begin
       w_landed_nx[s] = r_landed[s] ||
                        (l1i_ifu_rsp_val && (w_rsp_slot == SB'(s)));
       w_free[s] = r_busy[s] && (w_rc_nx[s] == '0) && w_landed_nx[s] &&
@@ -189,12 +210,6 @@ module ifu_lbuf #(
       r_prev_slot <= '0;
       for (int s = 0; s < LB_DEPTH; s++) r_rc[s] <= '0;
       for (int i = 0; i < MAX_OUTSTANDING; i++) r_id_slot[i] <= '0;
-    end else if (flush) begin
-      r_id_busy   <= '0;
-      r_busy      <= '0;
-      r_landed    <= '0;
-      r_prev_val  <= 1'b0;
-      for (int s = 0; s < LB_DEPTH; s++) r_rc[s] <= '0;
     end else begin
       // IF-10 / IF-11: land the response, free its identifier.
       if (l1i_ifu_rsp_val) begin
@@ -211,6 +226,7 @@ module ifu_lbuf #(
           r_landed[s] <= w_landed_nx[s];
         end
       end
+      r_prev_val <= w_prev_val_nx;
       if (w_alloc) begin
         r_id_busy[alloc_id]  <= 1'b1;
         r_id_slot[alloc_id]  <= alloc_slot;

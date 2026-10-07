@@ -55,8 +55,11 @@
 // not after mis_pos (the truncation of IFU-15). The slot's valid
 // field is not driven (IB-3). The block is offered whole (IB-5) and
 // held, payload and all, while ibuf_ifu_rdy is low (IB-7). It is not
-// offered in a flush cycle: the block at F3 is younger than the flush
-// point and the ibuf clears only on a backend redirect (IB-12).
+// offered in a flush cycle. A block at F3 that survives the flush
+// (IFU-28) stays and is offered from the next cycle; one that does
+// not is dropped. The ibuf clears only on a backend redirect (IB-12)
+// and discards a write in that cycle, so holding the offer for one
+// cycle loses nothing.
 //
 // THE STRADDLE REGISTER (IFU-11). The 17th halfword (IFU-8) lets a
 // 32-bit instruction starting at the block's last position complete
@@ -66,7 +69,11 @@
 // next block starts on that instruction's tail. The register holds
 // that address; a block arriving at F3 with exactly that start PC
 // begins its start walk at position 1 (first_tail). It is written on
-// every transfer and cleared by a flush. IFU-11 reads that the
+// every transfer. A flush keeps it only when the block AFTER the one
+// that set it survives (IFU-28): that block is the next to reach F3
+// and is the sequential successor. Otherwise the next block is the
+// corrected stream, whose start is a redirect target and begins on an
+// instruction. IFU-11 reads that the
 // register holds the leading halfword; under IFU-8 the instruction is
 // already complete, so only the tail address is needed. See the
 // Results Capture.
@@ -78,6 +85,8 @@ module ifu_f3 (
   input  logic                     clk,
   input  logic                     rstn,
   input  logic                     flush,
+  input  logic [FTQ_IDX_BITS-1:0]  flush_idx,
+  input  logic [FTQ_IDX_BITS-1:0]  commit_ptr,
 
   // ---- F2, from ifu_fetch ------------------------------------------
   input  logic                     f2_val,
@@ -157,6 +166,14 @@ module ifu_f3 (
   // ---- the straddle register -----------------------------------------
   logic                       r_strad_val;
   logic [VA_WIDTH-1:0]        r_strad_pc;
+  logic [FTQ_IDX_BITS-1:0]    r_strad_idx;   // the block that set it
+
+  // IFU-28. Older than the flush index, measured from commit_ptr.
+  function automatic logic survives(input logic [FTQ_IDX_BITS-1:0] i,
+                                    input logic [FTQ_IDX_BITS-1:0] f,
+                                    input logic [FTQ_IDX_BITS-1:0] c);
+    return FTQ_IDX_BITS'(i - c) < FTQ_IDX_BITS'(f - c);
+  endfunction
 
   // ---- this cycle ----------------------------------------------------
   ifu_fault_e                 w_ifault [0:NPD-1];
@@ -351,13 +368,19 @@ module ifu_f3 (
       end
       r_strad_val <= 1'b0;
       r_strad_pc  <= '0;
+      r_strad_idx <= '0;
     end else if (flush) begin
-      r_val       <= 1'b0;
-      r_strad_val <= 1'b0;
+      // Nothing transfers or loads in a flush cycle (f2_rdy and
+      // ifu_ibuf_val are both low).
+      r_val       <= r_val && survives(r_idx, flush_idx, commit_ptr);
+      r_strad_val <= r_strad_val &&
+                     survives(r_strad_idx + FTQ_IDX_BITS'(1), flush_idx,
+                              commit_ptr);
     end else begin
       if (w_xfer) begin
         r_strad_val <= w_strad_set;
         r_strad_pc  <= r_next_pc;
+        r_strad_idx <= r_idx;
       end
       if (f2_rdy) begin
         r_val <= f2_val;

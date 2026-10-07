@@ -68,6 +68,10 @@ module tb;
   logic                     bpu_slot_val_p3;
   logic [FTQ_IDX_BITS-1:0]  bpu_slot_idx_p3;
   bp_ftq_slot_t             bpu_slot_p3 [0:NUM_PRED_SLOTS-1];
+  logic                     bpu_blk_val_p2;
+  logic [FTQ_IDX_BITS-1:0]  bpu_blk_idx_p2;
+  bp_ras_snapshot_t         bpu_blk_ras_p2;
+  logic [VA_WIDTH-1:0]      bpu_blk_pft_p2;
   bp_redirect_t             bpu_redir_p2 [0:NUM_PRED_SLOTS-1];
   logic [FTQ_IDX_BITS-1:0]  bpu_redir_idx_p2;
   bp_redirect_t             bpu_redir_p3 [0:NUM_PRED_SLOTS-1];
@@ -182,6 +186,10 @@ module tb;
     .bpu_slot_val_p3       (bpu_slot_val_p3),
     .bpu_slot_idx_p3       (bpu_slot_idx_p3),
     .bpu_slot_p3           (bpu_slot_p3),
+    .bpu_blk_val_p2        (bpu_blk_val_p2),
+    .bpu_blk_idx_p2        (bpu_blk_idx_p2),
+    .bpu_blk_ras_p2        (bpu_blk_ras_p2),
+    .bpu_blk_pft_p2        (bpu_blk_pft_p2),
     .bpu_redir_p2          (bpu_redir_p2),
     .bpu_redir_idx_p2      (bpu_redir_idx_p2),
     .bpu_redir_p3          (bpu_redir_p3),
@@ -285,6 +293,44 @@ module tb;
   // slot.
   logic                mdl_tkn_en;
   logic [VA_WIDTH-1:0] mdl_tkn_tgt;
+  bp_br_type_e         mdl_tkn_type;
+
+  // THE 4c GROUP (ftq_bpu_interfaces.md 4c, BP-118). Like the real
+  // cluster, the model presents it for EVERY valid p2 block, one
+  // cycle after p1, carrying the p1 fall-through forward. One index
+  // may be given a corrected fall-through, mdl_blk_pft, standing in
+  // for an FTB that ends the block earlier than the p1 view. The RAS
+  // snapshot is the p1 value (zero) unless overridden the same way.
+  logic                    mdl_blk_ovr;
+  logic [FTQ_IDX_BITS-1:0] mdl_blk_idx;
+  logic [VA_WIDTH-1:0]     mdl_blk_pft;
+  bp_ras_snapshot_t        mdl_blk_ras;
+  logic                    r_mdl_val_p2;
+  logic [FTQ_IDX_BITS-1:0] r_mdl_idx_p2;
+  logic [VA_WIDTH-1:0]     r_mdl_pft_p2;
+
+  always_ff @(posedge clk or negedge rstn) begin : cluster_model_p2
+    if (!rstn) begin
+      r_mdl_val_p2 <= 1'b0;
+      r_mdl_idx_p2 <= '0;
+      r_mdl_pft_p2 <= '0;
+    end else begin
+      r_mdl_val_p2 <= bpu_pred_val_p1;
+      r_mdl_idx_p2 <= bpu_pred_idx_p1;
+      r_mdl_pft_p2 <= bpu_pred_pft_p1;
+    end
+  end
+
+  always_comb begin : cluster_model_blk
+    bpu_blk_val_p2 = r_mdl_val_p2;
+    bpu_blk_idx_p2 = r_mdl_idx_p2;
+    bpu_blk_pft_p2 = r_mdl_pft_p2;
+    bpu_blk_ras_p2 = '0;
+    if (mdl_blk_ovr && (r_mdl_idx_p2 == mdl_blk_idx)) begin
+      bpu_blk_pft_p2 = mdl_blk_pft;
+      bpu_blk_ras_p2 = mdl_blk_ras;
+    end
+  end
 
   always_ff @(posedge clk or negedge rstn) begin : cluster_model
     if (!rstn) begin
@@ -308,7 +354,7 @@ module tb;
       if (mdl_tkn_en) begin
         bpu_pred_slot_p1[0].slot_valid <= 1'b1;
         bpu_pred_slot_p1[0].taken      <= 1'b1;
-        bpu_pred_slot_p1[0].br_type    <= COND;
+        bpu_pred_slot_p1[0].br_type    <= mdl_tkn_type;
         bpu_pred_slot_p1[0].target     <= mdl_tkn_tgt;
         bpu_pred_slot_p1[0].pos        <= FTB_BR_POS_BITS'(2);
       end
@@ -416,6 +462,11 @@ module tb;
     bkend_ftq_commit_idx  = '0;
     mdl_tkn_en            = 1'b0;
     mdl_tkn_tgt           = '0;
+    mdl_tkn_type          = COND;
+    mdl_blk_ovr           = 1'b0;
+    mdl_blk_idx           = '0;
+    mdl_blk_pft           = '0;
+    mdl_blk_ras           = '0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       bpu_slot_p2[s]        = '0;
       bpu_slot_p3[s]        = '0;
@@ -1240,6 +1291,152 @@ module tb;
         (h_cyc > 30) && (h_cp_bad == 0));
   endtask
 
+
+  // -----------------------------------------------------------------
+  // I. TD#113, the corrected fall-through (BP-118).
+  // -----------------------------------------------------------------
+  // The cluster writes bp_ftq_entry_t.pft_addr at p1 from
+  // bpu_pred_pft_p1 and, since BP-118, rewrites it at p2 from
+  // bpu_blk_pft_p2. The model's p1 view is a uBTB MISS, so its p1
+  // fall-through is the block start plus FTB_BLOCK_BYTES; the p2
+  // value for the entry under test is the start plus 8, an FTB that
+  // ends the block earlier. Every reader of pft_addr is checked to
+  // see the p2 value: the fetch successor, the predecode W3
+  // successor, the RAS commit return address and the FTB update
+  // fall-through. Before BP-118 every one of them read start + 32.
+  localparam logic [VA_WIDTH-1:0] I_PFT0 =
+    VA_WIDTH'(RESET_VECTOR + 8);
+
+  task automatic group_i();
+    int                      n;
+    logic [FTQ_IDX_BITS-1:0] sq_idx;
+    $display("-- I: the corrected fall-through, TD#113 --");
+
+    // I1. THE NOT-TAKEN SUCCESSOR. Entry 0 holds no taken slot, so
+    // the fetch request's next_pc is the entry's pft_addr.
+    do_reset();
+    ftq_ifu_req_rdy = 1'b0;
+    mdl_blk_ovr = 1'b1;
+    mdl_blk_idx = 6'd0;
+    mdl_blk_pft = I_PFT0;
+    n = 0;
+    while (!(ftq_ifu_req_val && (ftq_ifu_idx == 6'd0)) && (n < 8)) begin
+      tick();
+      n++;
+    end
+    chk   ("I1 entry 0 is presented for fetch",
+           ftq_ifu_req_val && (ftq_ifu_idx == 6'd0));
+    chk   ("I1 with no taken slot", !ftq_ifu_taken_val);
+    chk_va("I1 next_pc is the p2 fall-through, not the p1 one",
+           ftq_ifu_next_pc, I_PFT0);
+    // Entry 1 got the p1 value forward and is unchanged.
+    chk_va("I1 an entry with no correction keeps the p1 value",
+           dut.u_entry.r_arr[1].pft_addr,
+           VA_WIDTH'(RESET_VECTOR + 2 * FTB_BLOCK_BYTES));
+
+    // I2. THE PREDECODE W3 SUCCESSOR. Entry 0 is rewritten with a
+    // taken slot at position 2 and the writeback finds no control
+    // transfer there (M2), so the corrected slot is not taken and
+    // W3 re-derives the successor as the entry's pft_addr.
+    ftq_ifu_req_rdy = 1'b1;
+    repeat (6) tick();
+    ifu_ftq_pdwb_val = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd0;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pd[2]    = '{valid: 1'b1, is_rvc: 1'b0, br_type: 2'b00,
+                         is_call: 1'b0, is_ret: 1'b0};
+    ifu_ftq_pd_range = '1;
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(2);
+    #1;
+    chk   ("I2 a predecode redirect is derived", ftq_ifu_flush_val);
+    chk_va("I2 W3 re-derives the successor from the p2 fall-through",
+           ftq_pred_pc_p0, I_PFT0);
+    tick();
+    ifu_ftq_pdwb_val = 1'b0;
+    ifu_ftq_mis_val  = 1'b0;
+    ifu_ftq_pd[2]    = '0;
+    ifu_ftq_pd_range = '0;
+    tick();
+
+    // I3. THE RAS COMMIT RETURN ADDRESS and I4 THE FTB UPDATE
+    // FALL-THROUGH. Entry 0 is made a block ending in a taken direct
+    // call at position 2, with the p2 fall-through as its return
+    // address and a distinct p2 RAS snapshot.
+    do_reset();
+    mdl_tkn_en   = 1'b1;
+    mdl_tkn_tgt  = VA_WIDTH'('h00_9100_0000);
+    mdl_tkn_type = DIRECT_CALL;
+    mdl_blk_ovr  = 1'b1;
+    mdl_blk_idx  = 6'd0;
+    mdl_blk_pft  = I_PFT0;
+    mdl_blk_ras.tosr = RAS_PTR_BITS'(3);
+    mdl_blk_ras.tosw = RAS_PTR_BITS'(4);
+    tick();
+    mdl_tkn_en = 1'b0;
+    repeat (4) tick();
+    chk("I3 entry 0 records the p2 RAS snapshot",
+        dut.u_entry.r_arr[0].ras.tosw == RAS_PTR_BITS'(4));
+
+    bkend_ftq_rsv_val                 = 2'b01;
+    bkend_ftq_rsv[0]                  = '0;
+    bkend_ftq_rsv[0].ftq_idx          = 6'd0;
+    bkend_ftq_rsv[0].pos              = FTB_BR_POS_BITS'(2);
+    bkend_ftq_rsv[0].taken            = 1'b1;
+    bkend_ftq_rsv[0].target           = VA_WIDTH'('h00_9100_0000);
+    bkend_ftq_rsv[0].br_type          = DIRECT_CALL;
+    #1;
+    chk_va("I4 the FTB update fall-through is the p2 value",
+           dut.w_ftb_upd[0].pft_addr, I_PFT0);
+    tick();
+    bkend_ftq_rsv_val = '0;
+
+    bkend_ftq_commit_val = 1'b1;
+    bkend_ftq_commit_idx = FTQ_PTR_BITS'(1);
+    n = 0;
+    while (!ras_commit_val && (n < 8)) begin
+      tick();
+      n++;
+    end
+    chk   ("I3 the call block commits the RAS", ras_commit_val);
+    chk_va("I3 with the p2 fall-through as the return address",
+           ras_commit_ret_addr, I_PFT0);
+    chk   ("I3 and the p2 snapshot",
+           ras_commit_snapshot.tosw == RAS_PTR_BITS'(4));
+    tick();
+    bkend_ftq_commit_val = 1'b0;
+
+    // I5. A p2 WRITE FOR A SQUASHED ENTRY DOES NOT LAND. A backend
+    // redirect squashes the block at p1 in the redirect cycle; next
+    // cycle that block's 4c group arrives at p2, carrying a value the
+    // test marks. Allocation is then held so the index is not
+    // reallocated over it before it can be read.
+    do_reset();
+    repeat (10) tick();
+    sq_idx = bpu_pred_idx_p1;
+    mdl_blk_ovr = 1'b1;
+    mdl_blk_idx = sq_idx;
+    mdl_blk_pft = VA_WIDTH'('h00_DEAD_0000);
+    bkend_ftq_redir_val   = 1'b1;
+    bkend_ftq_redir_idx   = sq_idx - 6'd3;
+    bkend_ftq_redir_self  = 1'b0;
+    bkend_ftq_redir_pc    = VA_WIDTH'('h00_A000_0000);
+    bkend_ftq_redir_cause = RC_MISPREDICT;
+    tick();
+    bkend_ftq_redir_val = 1'b0;
+    tage_pq_not_full    = 1'b0;
+    #1;
+    chk("I5 the squashed block's p2 group is presented",
+        bpu_blk_val_p2 && (bpu_blk_idx_p2 == sq_idx));
+    chk("I5 and the shadow drops it", !dut.w_ok_blk_p2);
+    tick();
+    chk("I5 so its value did not land in the entry",
+        dut.u_entry.r_arr[sq_idx].pft_addr !=
+          VA_WIDTH'('h00_DEAD_0000));
+    tage_pq_not_full = 1'b1;
+    mdl_blk_ovr      = 1'b0;
+  endtask
+
   // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
@@ -1260,6 +1457,7 @@ module tb;
     group_f();
     group_g();
     group_h();
+    group_i();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

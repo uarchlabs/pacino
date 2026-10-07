@@ -477,6 +477,54 @@ module tb;
     chk("E9 a fault inside the wrapping window",  fault_hold);
   endtask
 
+
+  // -----------------------------------------------------------------
+  // F. W4 over a same-cycle W2 / W3 (BP-118, found by tb_fe_top).
+  // -----------------------------------------------------------------
+  // A writeback presented in the redirect cycle for an entry the
+  // redirect squashes belongs to the squashed use: the clear wins.
+  // One for an entry outside the range still lands.
+  task automatic group_f();
+    $display("-- F: the squash over a same-cycle writeback --");
+    do_reset();
+
+    squash_val    = 1'b1;
+    squash_start  = FTQ_PTR_BITS'(3);
+    squash_end    = FTQ_PTR_BITS'(24);
+    wb_set_val    = 1'b1;
+    wb_set_idx    = 6'd4;
+    fault_set_val = 1'b1;
+    fault_set_idx = 6'd4;
+    tick();
+    clr();
+    chk("F1 a writeback inside the squash range does not set wb_rcvd",
+        !wb_rcvd[4]);
+    chk("F2 nor fault", !fault[4]);
+
+    squash_val    = 1'b1;
+    squash_start  = FTQ_PTR_BITS'(3);
+    squash_end    = FTQ_PTR_BITS'(24);
+    wb_set_val    = 1'b1;
+    wb_set_idx    = 6'd2;
+    fault_set_val = 1'b1;
+    fault_set_idx = 6'd2;
+    tick();
+    clr();
+    chk("F3 one outside the range, same cycle, still sets wb_rcvd",
+        wb_rcvd[2]);
+    chk("F4 and fault", fault[2]);
+
+    // Across the wrap: the range [62, 66) holds 62, 63, 0 and 1.
+    squash_val    = 1'b1;
+    squash_start  = FTQ_PTR_BITS'(62);
+    squash_end    = FTQ_PTR_BITS'(66);
+    wb_set_val    = 1'b1;
+    wb_set_idx    = 6'd1;
+    tick();
+    clr();
+    chk("F5 inside a wrapping range, the clear wins", !wb_rcvd[1]);
+  endtask
+
   // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
@@ -494,6 +542,7 @@ module tb;
     group_c();
     group_d();
     group_e();
+    group_f();
 
     $display("tb_ftq_status: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

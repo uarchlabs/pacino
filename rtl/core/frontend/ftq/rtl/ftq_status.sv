@@ -190,10 +190,20 @@ module ftq_status (
       // W2, W3. Both may fire in one cycle and they may name
       // different indices, so they are separate ports rather than
       // one index with two enables.
-      if (wb_set_val && !(alloc_val && (alloc_idx == wb_set_idx))) begin
+      //
+      // W4 OVER W2 AND W3 for an index the squash frees (BP-118).
+      // The IFU may present, in the redirect cycle itself, the
+      // writeback of a block the redirect squashes; its generation
+      // still matches, because the index is not reallocated until
+      // after the rewind (ftq_ifu_interfaces.md 6.1 bounds exactly
+      // this one writeback). It belongs to the squashed use, so its
+      // set must not survive the clear. Found by tb_fe_top, where a
+      // backend mispredict named K while K+2 was in WB; S1 fired.
+      if (wb_set_val && !w_squash_msk[wb_set_idx] &&
+          !(alloc_val && (alloc_idx == wb_set_idx))) begin
         wb_rcvd[wb_set_idx] <= 1'b1;
       end
-      if (fault_set_val &&
+      if (fault_set_val && !w_squash_msk[fault_set_idx] &&
           !(alloc_val && (alloc_idx == fault_set_idx))) begin
         fault[fault_set_idx] <= 1'b1;
       end

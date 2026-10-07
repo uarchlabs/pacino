@@ -51,9 +51,25 @@
 //                     within 32 bytes after the start
 // The fault cut of the range needs the start mask and is F3's.
 //
-// FLUSH. TD#134: everything is discarded and nothing is outstanding.
+// FLUSH (IFU-28, IFU-29, IFU-30; TD#134, BP-118). A block survives
+// when age(i) < age(F), ages taken from the commit pointer. In the
+// flush cycle:
+//   - the F1 queue is cut to its surviving prefix (it is in FTQ order)
+//   - F0 continues when its block survives
+//   - every dropped block gives back its line buffer references:
+//     kill_cnt[s] is the number of dropped blocks reading slot s, and
+//     ifu_lbuf takes it off the slot's count. A slot shared by a
+//     surviving and a dropped block keeps the survivor (IFU-30); a
+//     slot every block of which is dropped frees when its response
+//     lands, and that response is never read (IFU-29)
+//   - a dropped F0 block whose L1I request was presented and not yet
+//     accepted keeps presenting it until it is accepted (IF-4 holds
+//     req_id and req_paddr stable to acceptance; nothing permits a
+//     withdrawal). F0 holds that ZOMBIE and accepts nothing else, and
+//     the response is discarded like any other dropped block's
 // A request presented in a flush cycle is ignored (ftq_ifu_interfaces
-// .md 5, TD#138) and no L1I request is presented in a flush cycle.
+// .md 5, TD#138). No fresh L1I request is presented in a flush cycle;
+// a held one stays presented.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -64,6 +80,8 @@ module ifu_fetch #(
   input  logic                     clk,
   input  logic                     rstn,
   input  logic                     flush,
+  input  logic [FTQ_IDX_BITS-1:0]  flush_idx,
+  input  logic [FTQ_IDX_BITS-1:0]  commit_ptr,
 
   // ---- ftq_ifu_interfaces.md 4 -------------------------------------
   input  logic                     ftq_ifu_req_val,
@@ -109,6 +127,8 @@ module ifu_fetch #(
   output logic                     cons_val,
   output logic                     cons_use0,
   output logic                     cons_use1,
+  // References dropped by a flush, per slot. Zero outside a flush.
+  output logic [$clog2(2*LB_DEPTH+1)-1:0] kill_cnt [0:LB_DEPTH-1],
 
   // ---- l1i_ifu_interfaces.md 4 -------------------------------------
   output logic                     ifu_l1i_req_val,
@@ -141,6 +161,7 @@ module ifu_fetch #(
   localparam int BQ_CNT   = $clog2(BQ_DEPTH + 1);
   localparam int NPOS     = FTQ_PD_WIDTH + 1;               // 17
   localparam int LINE_W   = PA_WIDTH - L1I_OFFSET_BITS;     // 30
+  localparam int CB       = $clog2(2 * LB_DEPTH + 1);       // refcount
 
   // The block a not-taken range is measured against (DCD-13).
   localparam logic [VA_WIDTH-1:0] BLK_BYTES = VA_WIDTH'(FTB_BLOCK_BYTES);
@@ -182,6 +203,7 @@ module ifu_fetch #(
   logic [REQ_ID_BITS-1:0] r_pend_id;
   logic [SB-1:0]       r_pend_slot;
   logic [LINE_W-1:0]   r_pend_line;
+  logic                r_zomb;         // dropped, request still held
 
   // ---- F1 ------------------------------------------------------------
   blk_t                r_bq [0:BQ_DEPTH-1];
@@ -211,9 +233,25 @@ module ifu_fetch #(
   logic                w_accept;
   logic                w_bq_full;
   blk_t                w_push_blk;
+  logic                w_f0_surv;
+  logic [BQ_CNT-1:0]   w_bq_keep;
+
+  // IFU-28. Older than the flush index, measured from commit_ptr.
+  function automatic logic survives(input logic [FTQ_IDX_BITS-1:0] i,
+                                    input logic [FTQ_IDX_BITS-1:0] f,
+                                    input logic [FTQ_IDX_BITS-1:0] c);
+    return FTQ_IDX_BITS'(i - c) < FTQ_IDX_BITS'(f - c);
+  endfunction
+
+  function automatic logic [BQ_PTR-1:0] bq_nxt(input logic [BQ_PTR-1:0] p);
+    return (32'(p) == BQ_DEPTH - 1) ? '0 : p + BQ_PTR'(1);
+  endfunction
 
   always_comb begin : f0
-    w_match = r_f0_val && xq_val && (xq_idx == r_f0.idx);
+    // A zombie takes no new work, and nothing is matched in a flush
+    // cycle, so no reuse, allocation or push happens then.
+    w_match = r_f0_val && !r_zomb && !flush && xq_val &&
+              (xq_idx == r_f0.idx);
     w_two   = r_f0.start_pc[L1I_OFFSET_BITS-1];   // upper half, IFU-7
     w_line0 = {xq_ppn0, r_f0.start_pc[11:L1I_OFFSET_BITS]};
     w_line1 = xq_cross ? {xq_ppn1, (12-L1I_OFFSET_BITS)'(0)}
@@ -243,24 +281,24 @@ module ifu_fetch #(
     w_cur_which = r_pend ? r_pend_which : w_fresh_which;
     w_cur_slot  = r_pend ? r_pend_slot  : alloc_slot;
 
-    ifu_l1i_req_val      = (r_pend || w_fresh) && !flush;
+    ifu_l1i_req_val      = r_pend || w_fresh;
     ifu_l1i_req_id       = r_pend ? r_pend_id : alloc_id;
     ifu_l1i_req_paddr    = {(r_pend ? r_pend_line
                                     : (w_fresh_which ? w_line1 : w_line0)),
                             L1I_OFFSET_BITS'(0)};
     ifu_l1i_req_prefetch = 1'b0;          // prefetch is not in scope
-    alloc_val  = w_fresh && !flush;
+    alloc_val  = w_fresh;
     alloc_line = w_fresh_which ? w_line1 : w_line0;
 
     w_fire  = ifu_l1i_req_val && ifu_l1i_req_rdy;
     w_fire0 = w_fire && !w_cur_which;
     w_fire1 = w_fire &&  w_cur_which;
 
-    att_val  = w_match && !r_dec && w_reuse0 && !flush;
+    att_val  = w_match && !r_dec && w_reuse0;
     att_slot = prev_slot;
 
     w_bq_full = (32'(r_bq_cnt) == BQ_DEPTH);
-    w_push    = w_match && !flush && !w_bq_full &&
+    w_push    = w_match && !w_bq_full &&
                 (!w_use0 || w_reuse0 || r_done0 || w_fire0) &&
                 (!w_use1 || r_done1 || w_fire1);
     xq_pop    = w_push;
@@ -279,6 +317,58 @@ module ifu_fetch #(
 
     ftq_ifu_req_rdy = !r_f0_val || w_push;
     w_accept        = ftq_ifu_req_val && ftq_ifu_req_rdy && !flush;
+  end
+
+  // -----------------------------------------------------------------
+  // The flush: which blocks survive, and the references the rest give
+  // back (IFU-28 to IFU-30).
+  // -----------------------------------------------------------------
+  always_comb begin : flush_cut
+    logic [BQ_PTR-1:0] p;
+    logic              run_ok;
+    w_f0_surv = survives(r_f0.idx, flush_idx, commit_ptr);
+    for (int s = 0; s < LB_DEPTH; s++) kill_cnt[s] = '0;
+
+    // F1. In FTQ order, so the survivors are a prefix from the head;
+    // every entry after the first non-survivor is dropped.
+    w_bq_keep = '0;
+    run_ok    = 1'b1;
+    p         = r_bq_rd;
+    for (int n = 0; n < BQ_DEPTH; n++) begin
+      if (32'(n) < 32'(r_bq_cnt)) begin
+        if (run_ok && survives(r_bq[p].rq.idx, flush_idx, commit_ptr)) begin
+          w_bq_keep = w_bq_keep + BQ_CNT'(1);
+        end else begin
+          run_ok = 1'b0;
+          if (flush) begin
+            for (int s = 0; s < LB_DEPTH; s++) begin
+              if (r_bq[p].use0 && (r_bq[p].slot0 == SB'(s)))
+                kill_cnt[s] = kill_cnt[s] + CB'(1);
+              if (r_bq[p].use1 && (r_bq[p].slot1 == SB'(s)))
+                kill_cnt[s] = kill_cnt[s] + CB'(1);
+            end
+          end
+        end
+      end
+      p = bq_nxt(p);
+    end
+
+    // F0. The references a block in F0 holds: the reused slot once the
+    // reuse is attached, each line whose request was accepted, and the
+    // line whose request is presented and not yet accepted (its slot
+    // was reserved, with a count of one, when it was first presented).
+    if (flush && r_f0_val && !r_zomb && !w_f0_surv) begin
+      for (int s = 0; s < LB_DEPTH; s++) begin
+        if (r_dec && r_reuse0 && (r_reuse_slot == SB'(s)))
+          kill_cnt[s] = kill_cnt[s] + CB'(1);
+        if (r_done0 && (r_slot0 == SB'(s)))
+          kill_cnt[s] = kill_cnt[s] + CB'(1);
+        if (r_done1 && (r_slot1 == SB'(s)))
+          kill_cnt[s] = kill_cnt[s] + CB'(1);
+        if (r_pend && (r_pend_slot == SB'(s)))
+          kill_cnt[s] = kill_cnt[s] + CB'(1);
+      end
+    end
   end
 
   // ---- F2 this cycle ------------------------------------------------
@@ -351,8 +441,12 @@ module ifu_fetch #(
   // -----------------------------------------------------------------
   // State.
   // -----------------------------------------------------------------
-  function automatic logic [BQ_PTR-1:0] bq_nxt(input logic [BQ_PTR-1:0] p);
-    return (32'(p) == BQ_DEPTH - 1) ? '0 : p + BQ_PTR'(1);
+  function automatic logic [BQ_PTR-1:0] bq_adv(input logic [BQ_PTR-1:0] p,
+                                               input logic [BQ_CNT-1:0] n);
+    logic [BQ_PTR-1:0] q;
+    q = p;
+    for (int k = 0; k < BQ_DEPTH; k++) if (32'(k) < 32'(n)) q = bq_nxt(q);
+    return q;
   endfunction
 
   always_ff @(posedge clk or negedge rstn) begin : seq
@@ -371,18 +465,46 @@ module ifu_fetch #(
       r_pend_id    <= '0;
       r_pend_slot  <= '0;
       r_pend_line  <= '0;
+      r_zomb       <= 1'b0;
       r_bq_rd      <= '0;
       r_bq_wr      <= '0;
       r_bq_cnt     <= '0;
     end else if (flush) begin
-      r_f0_val <= 1'b0;
-      r_dec    <= 1'b0;
-      r_done0  <= 1'b0;
-      r_done1  <= 1'b0;
-      r_pend   <= 1'b0;
-      r_bq_rd  <= '0;
-      r_bq_wr  <= '0;
-      r_bq_cnt <= '0;
+      // No push, pop or acceptance in a flush cycle. F1 keeps its
+      // surviving prefix.
+      r_bq_cnt <= w_bq_keep;
+      r_bq_wr  <= bq_adv(r_bq_rd, w_bq_keep);
+
+      if (r_f0_val && !r_zomb && !w_f0_surv) begin
+        // F0 is dropped. A presented, unaccepted request stays held.
+        r_dec   <= 1'b0;
+        r_done0 <= 1'b0;
+        r_done1 <= 1'b0;
+        if (r_pend && !w_fire) begin
+          r_zomb <= 1'b1;
+        end else begin
+          r_f0_val <= 1'b0;
+          r_pend   <= 1'b0;
+        end
+      end else if (r_f0_val) begin
+        // F0 survives, or is already a zombie: only the held request
+        // can move this cycle.
+        if (w_fire) begin
+          r_pend <= 1'b0;
+          if (r_zomb) begin
+            r_zomb   <= 1'b0;
+            r_f0_val <= 1'b0;
+          end
+        end
+        if (w_fire0 && !r_zomb) begin
+          r_done0 <= 1'b1;
+          r_slot0 <= w_cur_slot;
+        end
+        if (w_fire1 && !r_zomb) begin
+          r_done1 <= 1'b1;
+          r_slot1 <= w_cur_slot;
+        end
+      end
     end else begin
       // ---- F1 queue --------------------------------------------------
       if (w_push) begin
@@ -431,6 +553,11 @@ module ifu_fetch #(
         if (w_fire1) begin
           r_done1 <= 1'b1;
           r_slot1 <= w_cur_slot;
+        end
+        // A zombie leaves F0 once its request is accepted.
+        if (r_zomb && w_fire) begin
+          r_zomb   <= 1'b0;
+          r_f0_val <= 1'b0;
         end
       end
     end

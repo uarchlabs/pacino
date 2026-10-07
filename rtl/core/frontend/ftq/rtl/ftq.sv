@@ -105,6 +105,14 @@ module ftq (
   input  logic [FTQ_IDX_BITS-1:0]     bpu_slot_idx_p3,
   input  bp_ftq_slot_t                bpu_slot_p3 [0:NUM_PRED_SLOTS-1],
 
+  // ---- 4c. block-scalar correction, p2 (BP-118) --------------------
+  // Valid for every valid p2 block. ras is the post-op snapshot and
+  // pft is the corrected fall-through (TD#113).
+  input  logic                        bpu_blk_val_p2,
+  input  logic [FTQ_IDX_BITS-1:0]     bpu_blk_idx_p2,
+  input  bp_ras_snapshot_t            bpu_blk_ras_p2,
+  input  logic [VA_WIDTH-1:0]         bpu_blk_pft_p2,
+
   // ---- 6. redirects, derived at the cluster boundary ---------------
   input  bp_redirect_t                bpu_redir_p2 [0:NUM_PRED_SLOTS-1],
   input  logic [FTQ_IDX_BITS-1:0]     bpu_redir_idx_p2,
@@ -271,6 +279,7 @@ module ftq (
   logic                     w_ok_slot_p2;
   logic                     w_ok_meta_p2;
   logic                     w_ok_redir_p2;
+  logic                     w_ok_blk_p2;
   logic                     w_ok_slot_p3;
   logic                     w_ok_meta_p3;
   logic                     w_ok_redir_p3;
@@ -463,6 +472,8 @@ module ftq (
     .gv_meta_p2     (bpu_meta_val_p2),
     .idx_meta_p2    (bpu_meta_idx_p2),
     .idx_redir_p2   (bpu_redir_idx_p2),
+    .gv_blk_p2      (bpu_blk_val_p2),
+    .idx_blk_p2     (bpu_blk_idx_p2),
     .gv_slot_p3     (bpu_slot_val_p3),
     .idx_slot_p3    (bpu_slot_idx_p3),
     .gv_meta_p3     (bpu_meta_val_p3),
@@ -472,6 +483,7 @@ module ftq (
     .ok_slot_p2     (w_ok_slot_p2),
     .ok_meta_p2     (w_ok_meta_p2),
     .ok_redir_p2    (w_ok_redir_p2),
+    .ok_blk_p2      (w_ok_blk_p2),
     .ok_slot_p3     (w_ok_slot_p3),
     .ok_meta_p3     (w_ok_meta_p3),
     .ok_redir_p3    (w_ok_redir_p3),
@@ -500,6 +512,10 @@ module ftq (
     .alloc_wr_ghist_ptr  (ckpt_ghist_ptr),
     .alloc_wr_phist_ptr  (ckpt_phist_ptr),
     .alloc_wr_slot       (bpu_pred_slot_p1),
+    .blk_wr_val          (w_ok_blk_p2),
+    .blk_wr_idx          (bpu_blk_idx_p2),
+    .blk_wr_ras          (bpu_blk_ras_p2),
+    .blk_wr_pft_addr     (bpu_blk_pft_p2),
     .p2_wr_val           (w_ok_slot_p2),
     .p2_wr_idx           (bpu_slot_idx_p2),
     .p2_wr_slot          (bpu_slot_p2),

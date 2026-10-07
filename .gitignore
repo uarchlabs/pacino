@@ -139,6 +139,15 @@ rtl/core/frontend/ifu/obj_labels_ifu/
 rtl/core/frontend/ifu/obj_labels_ifu_predecode/
 rtl/core/frontend/ifu/obj_labels_ifu_rvc_exp/
 
+
+rtl/core/frontend/fe_top/obj_fe_top/
+rtl/core/frontend/ibuf/obj_ibuf/
+rtl/core/frontend/ibuf/obj_labels_ibuf/
+rtl/mmu/itlb/obj_itlb/
+rtl/mmu/itlb/obj_itlb_d2/
+rtl/mmu/itlb/obj_labels/
+rtl/mmu/pmp/obj_pmp_pma_chk/
+
 # --------------------------------------------------------------------
 # docs
 site/

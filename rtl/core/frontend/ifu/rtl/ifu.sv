@@ -26,18 +26,23 @@
 // l1i_ifu_interfaces.md 4 and 5, itlb_ifu_interfaces.md 2 and
 // ifu_ibuf_interfaces.md 2.
 //
+// THE FLUSH (IFU-28 to IFU-32, TD#134, BP-118) is applied by each
+// owner from ftq_ifu_flush_idx and ftq_ifu_commit_ptr: a block older
+// than the flush index survives in every structure, the rest are
+// dropped in the flush cycle, L1I responses for dropped blocks are
+// discarded as they land, and ITLB lookups of a dropped block are
+// waited out before a new block is translated. ifu_wb needs no index:
+// it is loaded only from an F3 transfer, which never happens in a
+// flush cycle, and F3 keeps only survivors (IFU-32).
+//
 // NOT BUILT, by ruling (BP-116 Binding Decisions):
-//   TD#134  wrong-path responses after a flush. A flush clears all
-//           IFU state; ifu_assert fires if one arrives with an L1I or
-//           ITLB request outstanding
 //   TD#135  the uncached path (IFU-21 to IFU-23). IFU-26 marking is
 //           built; ifu_fetch_assert fires if a marked block reaches F0
 //   TD#136  maintenance. The ports of l1i_ifu_interfaces.md 10 and 11
 //           are not declared
 //   prefetch  ifu_l1i_req_prefetch is driven 0
-// ftq_ifu_commit_ptr and ftq_ifu_flush_idx are inputs with no reader:
-// the first until TD#135, the second because a flush clears all IFU
-// state until TD#134.
+// ftq_ifu_commit_ptr is read for the flush ages; its IFU-22 use waits
+// on TD#135.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -153,6 +158,7 @@ module ifu #(
   logic                     w_cons_val;
   logic                     w_cons_use0;
   logic                     w_cons_use1;
+  logic [$clog2(2*LB_DEPTH+1)-1:0] w_kill_cnt [0:LB_DEPTH-1];
 
   // ---- F2 ----------------------------------------------------------------
   logic                     w_f2_val;
@@ -208,6 +214,8 @@ module ifu #(
     .ftq_ifu_xlate_pc  (ftq_ifu_xlate_pc),
     .ftq_ifu_xlate_idx (ftq_ifu_xlate_idx),
     .ftq_ifu_flush_val (ftq_ifu_flush_val),
+    .ftq_ifu_flush_idx (ftq_ifu_flush_idx),
+    .ftq_ifu_commit_ptr (ftq_ifu_commit_ptr),
     .ifu_itlb_req_val  (ifu_itlb_req_val),
     .ifu_itlb_req_rdy  (ifu_itlb_req_rdy),
     .ifu_itlb_vpn      (ifu_itlb_vpn),
@@ -261,13 +269,16 @@ module ifu #(
     .rd_err1          (w_rd_err1),
     .cons_val         (w_cons_val),
     .cons_use0        (w_cons_use0),
-    .cons_use1        (w_cons_use1)
+    .cons_use1        (w_cons_use1),
+    .kill_cnt         (w_kill_cnt)
   );
 
   ifu_fetch #(.LB_DEPTH(LB_DEPTH)) u_fetch (
     .clk                  (clk),
     .rstn                 (rstn),
     .flush                (ftq_ifu_flush_val),
+    .flush_idx            (ftq_ifu_flush_idx),
+    .commit_ptr           (ftq_ifu_commit_ptr),
     .ftq_ifu_req_val      (ftq_ifu_req_val),
     .ftq_ifu_req_rdy      (ftq_ifu_req_rdy),
     .ftq_ifu_start_pc     (ftq_ifu_start_pc),
@@ -307,6 +318,7 @@ module ifu #(
     .cons_val             (w_cons_val),
     .cons_use0            (w_cons_use0),
     .cons_use1            (w_cons_use1),
+    .kill_cnt             (w_kill_cnt),
     .ifu_l1i_req_val      (ifu_l1i_req_val),
     .ifu_l1i_req_rdy      (ifu_l1i_req_rdy),
     .ifu_l1i_req_id       (ifu_l1i_req_id),
@@ -354,6 +366,8 @@ module ifu #(
     .clk           (clk),
     .rstn          (rstn),
     .flush         (ftq_ifu_flush_val),
+    .flush_idx     (ftq_ifu_flush_idx),
+    .commit_ptr    (ftq_ifu_commit_ptr),
     .f2_val        (w_f2_val),
     .f2_rdy        (w_f2_rdy),
     .f2_idx        (w_f2_idx),

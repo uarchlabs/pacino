@@ -39,6 +39,19 @@
 // predicted, ahead of M2 to M4. The ITLB model keys its page map on
 // the IT-16 lookup width, VA_WIDTH-12, and logs every lookup.
 // t_m1_jal and t_vpn_high are the two rulings' directed tests.
+//
+// BP-118 (TD#134): the flush with requests in flight, IFU-28 to
+// IFU-32. The FTQ model takes a flush index and a commit pointer and
+// rewinds its translation and fetch positions to the flush position
+// when they were past it (ftq_decisions.md 5.5 R1); a test replaces
+// the blocks from the flush position on with the corrected stream,
+// each carrying the toggled generation. Indices start at idx0, so a
+// test can place the block list across the FTQ index wrap. The L1I
+// model can hold every response, or the responses of named lines,
+// and can hold its ready low. The ITLB model logs the cycle of every
+// lookup and response. A delivered block k is still checked against
+// blk[k]: after a flush, rx[k] for k at or past the flush position
+// must be the corrected block, which a delivered dropped block fails.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -246,28 +259,54 @@ module tb;
   logic flush_req;
   int   n_xlate_acc;
   int   n_req_acc;
+  // BP-118. The flush: the list position of F and its index, the
+  // commit pointer, a fetch hold, and the predecode redirect the FTQ
+  // derives from a writeback (ftq_ifu_interfaces.md 7 W3: F = K+1).
+  int                      fl_pos;
+  logic [FTQ_IDX_BITS-1:0] fl_idx;
+  logic [FTQ_IDX_BITS-1:0] cptr;
+  int                      idx0;
+  logic                    fetch_hold;
+  logic                    pd_auto;
+  logic [FTQ_IDX_BITS-1:0] pd_k_idx;
+  int                      pd_k_pos;
+  logic                    pd_fire;
+  int                      n_flush;
+
+  always_comb begin : ftq_pd
+    pd_fire = pd_auto && ifu_ftq_pdwb_val && ifu_ftq_mis_val &&
+              (ifu_ftq_pdwb_idx == pd_k_idx);
+  end
 
   always_comb begin : ftq_drive
     ftq_ifu_xlate_val  = run && (xptr < nblk);
     ftq_ifu_xlate_pc   = blk[(xptr < nblk) ? xptr : 0].start_pc;
     ftq_ifu_xlate_idx  = blk[(xptr < nblk) ? xptr : 0].idx;
-    ftq_ifu_req_val    = run && (fptr < xptr);
+    ftq_ifu_req_val    = run && (fptr < xptr) && !fetch_hold;
     ftq_ifu_start_pc   = blk[(fptr < nblk) ? fptr : 0].start_pc;
     ftq_ifu_next_pc    = blk[(fptr < nblk) ? fptr : 0].next_pc;
     ftq_ifu_idx        = blk[(fptr < nblk) ? fptr : 0].idx;
     ftq_ifu_taken_val  = blk[(fptr < nblk) ? fptr : 0].taken_val;
     ftq_ifu_taken_pos  = blk[(fptr < nblk) ? fptr : 0].taken_pos;
     ftq_ifu_gen        = blk[(fptr < nblk) ? fptr : 0].gen;
-    ftq_ifu_commit_ptr = '0;
-    ftq_ifu_flush_val  = flush_req;
-    ftq_ifu_flush_idx  = blk[(fptr < nblk) ? fptr : 0].idx;
+    ftq_ifu_commit_ptr = cptr;
+    ftq_ifu_flush_val  = flush_req || pd_fire;
+    ftq_ifu_flush_idx  = pd_fire ? (pd_k_idx + FTQ_IDX_BITS'(1)) : fl_idx;
   end
 
   always @(posedge clk) begin : ftq_model
     if (!rstn) begin
       xptr <= 0;
       fptr <= 0;
-    end else if (!flush_req) begin
+    end else if (ftq_ifu_flush_val) begin
+      // 5.5 R1: each position moves back to F if it was past it. The
+      // handshakes of the flush cycle are discarded.
+      n_flush <= n_flush + 1;
+      if (xptr > (pd_fire ? pd_k_pos + 1 : fl_pos))
+        xptr <= pd_fire ? pd_k_pos + 1 : fl_pos;
+      if (fptr > (pd_fire ? pd_k_pos + 1 : fl_pos))
+        fptr <= pd_fire ? pd_k_pos + 1 : fl_pos;
+    end else begin
       if (ftq_ifu_xlate_val && ftq_ifu_xlate_rdy) begin
         xptr        <= xptr + 1;
         n_xlate_acc <= n_xlate_acc + 1;
@@ -291,6 +330,11 @@ module tb;
   // Every lookup the ITLB took, in order: its VPN and tag.
   logic [LKV-1:0] lk_vpn [0:255];
   logic           lk_tag [0:255];
+  int             lk_cyc [0:255];
+  // Every response presented, in order: its tag and cycle.
+  int             n_itlb_rsp;
+  logic           rs_tag [0:255];
+  int             rs_cyc [0:255];
   int   cyc;
 
   assign ifu_itlb_req_rdy = rstn && !(itlb_stall_odd && cyc[0]);
@@ -341,6 +385,11 @@ module tb;
           p_val[r] = 1'b0;
           itlb_ifu_rsp_val = 1'b1;
           itlb_ifu_tag     = r[0];
+          if (n_itlb_rsp < 256) begin
+            rs_tag[n_itlb_rsp] = r[0];
+            rs_cyc[n_itlb_rsp] = cyc;
+          end
+          n_itlb_rsp = n_itlb_rsp + 1;
           itlb_ifu_cause   = '0;
           itlb_ifu_gpa     = '0;
           itlb_ifu_ppn     = v[PPN_WIDTH-1:0];
@@ -375,6 +424,7 @@ module tb;
           if (n_itlb_req < 256) begin
             lk_vpn[n_itlb_req] = s_vpn;
             lk_tag[n_itlb_req] = s_tag;
+            lk_cyc[n_itlb_req] = cyc;
           end
           n_itlb_req   = n_itlb_req + 1;
         end
@@ -401,8 +451,15 @@ module tb;
   int    n_l1i_req;
   int    max_pend;
   logic [PA_WIDTH-1:0] req_pa_log [0:255];
+  // BP-118. Hold every response, or those of the named lines, and
+  // hold the request ready low. A response log: the id and the cycle.
+  logic  l1i_hold_all;
+  logic  l1i_hold_ln [logic [PA_WIDTH-L1I_OFFSET_BITS-1:0]];
+  logic  l1i_rdy_low;
+  int    n_l1i_rsp;
+  logic [REQ_ID_BITS-1:0] rsp_id_log [0:255];
 
-  assign ifu_l1i_req_rdy = rstn;
+  assign ifu_l1i_req_rdy = rstn && !l1i_rdy_low;
 
   function automatic logic [L1I_LINE_BITS-1:0] line_data(
       input logic [PA_WIDTH-1:0] pa);
@@ -456,7 +513,9 @@ module tb;
         best = 0;
         if ((l1i_hold_k == 0) || l1i_releasing) begin
           for (int i = 0; i < MAX_OUTSTANDING; i++) begin
-            if (q_val[i] && (q_due[i] <= cyc)) begin
+            if (q_val[i] && (q_due[i] <= cyc) && !l1i_hold_all &&
+                !l1i_hold_ln.exists(q_pa[i][PA_WIDTH-1:L1I_OFFSET_BITS]))
+            begin
               case (l1i_ord)
                 ORD_REV:  k = -q_seq[i];
                 ORD_ODD:  k = (q_seq[i] % 2 == 1) ? q_seq[i]
@@ -478,6 +537,8 @@ module tb;
           l1i_ifu_rsp_data = line_data(q_pa[pick]);
           l1i_ifu_rsp_err  =
             err_ln.exists(q_pa[pick][PA_WIDTH-1:L1I_OFFSET_BITS]);
+          if (n_l1i_rsp < 256) rsp_id_log[n_l1i_rsp] = q_id[pick];
+          n_l1i_rsp = n_l1i_rsp + 1;
         end
         if (s_fire) begin
           for (int i = 0; i < MAX_OUTSTANDING; i++) begin
@@ -622,6 +683,11 @@ module tb;
 
   logic                ref_tail_val;
   logic [VA_WIDTH-1:0] ref_tail_pc;
+  // BP-118. The list position of the first block of a corrected
+  // stream: the reference straddle state does not carry into it,
+  // because the unit drops the straddle with the block after the one
+  // that set it. -1 for none.
+  int                  ref_cut_pos;
 
   function automatic logic lnk(input logic [4:0] r);
     return (r == 5'd1) || (r == 5'd5);
@@ -885,6 +951,21 @@ module tb;
     n_hold_bad     = 0;
     ref_tail_val   = 1'b0;
     ref_tail_pc    = '0;
+    fl_pos         = 0;
+    fl_idx         = '0;
+    ref_cut_pos    = -1;
+    cptr           = '0;
+    idx0           = 0;
+    fetch_hold     = 1'b0;
+    pd_auto        = 1'b0;
+    pd_k_idx       = '0;
+    pd_k_pos       = 0;
+    n_flush        = 0;
+    n_itlb_rsp     = 0;
+    l1i_hold_all   = 1'b0;
+    l1i_rdy_low    = 1'b0;
+    n_l1i_rsp      = 0;
+    l1i_hold_ln.delete();
     pmap.delete();
     mem_hw.delete();
     exp_of.delete();
@@ -900,7 +981,7 @@ module tb;
   task automatic add_blk(input logic [VA_WIDTH-1:0] spc,
                          input logic [VA_WIDTH-1:0] npc,
                          input logic tv, input int tp);
-    blk[nblk].idx       = FTQ_IDX_BITS'(nblk);
+    blk[nblk].idx       = FTQ_IDX_BITS'(idx0 + nblk);
     blk[nblk].gen       = nblk[0];
     blk[nblk].start_pc  = spc;
     blk[nblk].next_pc   = npc;
@@ -923,7 +1004,10 @@ module tb;
     #1;
     chk($sformatf("all %0d blocks delivered (%0d) and written back (%0d)",
                   nblk, nrx, nwb), (nrx == nblk) && (nwb == nblk));
-    for (int k = k0; k < nblk && k < nrx && k < nwb; k++) check_block(k);
+    for (int k = k0; k < nblk && k < nrx && k < nwb; k++) begin
+      if (k == ref_cut_pos) ref_tail_val = 1'b0;
+      check_block(k);
+    end
     run = 1'b0;
   endtask
 
@@ -1324,6 +1408,8 @@ module tb;
     add_blk(b + VA_WIDTH'(288), b + VA_WIDTH'(320), 1'b0, 0);
     n0 = n_xlate_acc;
     run = 1'b1;
+    fl_pos = 3;
+    fl_idx = blk[3].idx;
     flush_req = 1'b1;
     @(posedge clk);
     #1;
@@ -1336,6 +1422,418 @@ module tb;
     end
     ref_tail_val = 1'b0;
     run_and_check(400, 3);
+  endtask
+
+
+  // =================================================================
+  // BP-118 (TD#134): the flush with requests in flight, IFU-28 to 32.
+  // =================================================================
+  // Line buffer bookkeeping read back for IFU-29 and IFU-30.
+  function automatic int lb_rc_sum();
+    int n;
+    n = 0;
+    for (int s = 0; s < 16; s++) n += int'(dut.u_lbuf.r_rc[s]);
+    return n;
+  endfunction
+
+  function automatic int lb_busy_cnt();
+    int n;
+    n = 0;
+    for (int s = 0; s < 16; s++) n += int'(dut.u_lbuf.r_busy[s]);
+    return n;
+  endfunction
+
+  function automatic int lb_id_cnt();
+    int n;
+    n = 0;
+    for (int i = 0; i < MAX_OUTSTANDING; i++)
+      n += int'(dut.u_lbuf.r_id_busy[i]);
+    return n;
+  endfunction
+
+  // Replace blocks pos onward with a corrected stream of sequential
+  // 32-byte blocks from base, each with its index kept and its
+  // generation toggled (the FTQ reallocates F onward, X2).
+  task automatic restream(input int pos, input logic [VA_WIDTH-1:0] base);
+    int d;
+    for (int k = pos; k < nblk; k++) begin
+      d                = 32 * (k - pos);
+      blk[k].start_pc  = base + VA_WIDTH'(d);
+      blk[k].next_pc   = base + VA_WIDTH'(d + 32);
+      blk[k].taken_val = 1'b0;
+      blk[k].taken_pos = '0;
+      blk[k].gen       = !blk[k].gen;
+    end
+  endtask
+
+  // Present one flush naming position fpos.
+  task automatic flush_at(input int fpos);
+    fl_pos    = fpos;
+    fl_idx    = (fpos < nblk) ? blk[fpos].idx
+                              : FTQ_IDX_BITS'(idx0 + fpos);
+    flush_req = 1'b1;
+    @(posedge clk);
+    #1;
+    flush_req = 1'b0;
+  endtask
+
+  // IFU-28, IFU-29, IFU-30. Eight half blocks in six lines; blocks 0
+  // and 1 share a line, and so do 2 and 3. Every L1I response is held
+  // until after the flush, so every block is in the unit when it
+  // arrives. The flush names position fpos with the commit pointer at
+  // the first block. Survivors are delivered and written back in
+  // order; blocks at or after F never appear; the held responses are
+  // released in reverse, and every identifier and slot is free once
+  // they are in.
+  task automatic t_flush_inflight(input int i0, input int fpos,
+                                  input string nm);
+    logic [VA_WIDTH-1:0] a;
+    logic [VA_WIDTH-1:0] n;
+    int c;
+    int off [0:7];
+    tname = nm;
+    $display("-- %s --", tname);
+    reset_all();
+    idx0 = i0;
+    cptr = FTQ_IDX_BITS'(i0);
+    a = VA_WIDTH'('h0_8020_0000);
+    n = VA_WIDTH'('h0_8021_0000);
+    fill_mixed(a, 512);
+    fill_mixed(n, 512);
+    off = '{0, 16, 64, 80, 192, 256, 320, 384};
+    for (int k = 0; k < 8; k++)
+      add_blk(a + VA_WIDTH'(off[k]), a + VA_WIDTH'(off[k] + 16), 1'b0, 0);
+    l1i_hold_all = 1'b1;
+    run = 1'b1;
+    c = 0;
+    while (((n_req_acc < 8) || (n_l1i_req < 6)) && (c < 200)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    repeat (3) @(posedge clk);
+    #1;
+    chk("all eight blocks fetched, six lines requested, none landed",
+        (n_req_acc == 8) && (n_l1i_req == 6) && (n_l1i_rsp == 0) &&
+        (nrx == 0));
+    chk("six identifiers in flight before the flush", lb_id_cnt() == 6);
+    run = 1'b0;
+    restream(fpos, n);
+    flush_at(fpos);
+    chk($sformatf("IFU-30 survivors keep %0d references, got %0d", fpos,
+                  lb_rc_sum()), lb_rc_sum() == fpos);
+    chk("IFU-29 every identifier stays in flight across the flush",
+        lb_id_cnt() == 6);
+    chk("IFU-29 every slot stays reserved for its response",
+        lb_busy_cnt() == 6);
+    // Release in reverse: the dropped lines land first and out of
+    // order, among the survivors'.
+    l1i_ord      = ORD_REV;
+    l1i_hold_all = 1'b0;
+    c = 0;
+    while (((n_l1i_rsp < 6) || (nrx < fpos) || (nwb < fpos)) &&
+           (c < 200)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    repeat (4) @(posedge clk);
+    #1;
+    chk($sformatf("IFU-28 only the %0d survivors delivered (%0d) and "
+                  , fpos, nrx), (nrx == fpos) && (nwb == fpos));
+    chk("IFU-29 every identifier is free once the responses are in",
+        lb_id_cnt() == 0);
+    chk("IFU-29 every slot is free once the responses are in",
+        (lb_busy_cnt() == 0) && (lb_rc_sum() == 0));
+    chk("no L1I request issued after the flush while stopped",
+        n_l1i_req == 6);
+    run_and_check(600);
+  endtask
+
+  // IFU-28 in the translation queue, and a dropped block whose L1I
+  // request is held by ready (IF-4).
+  task automatic t_flush_xq_zombie();
+    logic [VA_WIDTH-1:0] a;
+    logic [VA_WIDTH-1:0] n;
+    logic [REQ_ID_BITS-1:0] zid;
+    logic [PA_WIDTH-1:0]    zpa;
+    logic                   held;
+    int c;
+    tname = "flush_xq_and_zombie";
+    $display("-- %s --", tname);
+    reset_all();
+    a = VA_WIDTH'('h0_8022_0000);
+    n = VA_WIDTH'('h0_8023_0000);
+    fill_mixed(a, 1024);
+    fill_mixed(n, 512);
+    for (int k = 0; k < 6; k++)
+      add_blk(a + VA_WIDTH'(128 * k), a + VA_WIDTH'(128 * k + 32), 1'b0, 0);
+    fetch_hold = 1'b1;
+    run = 1'b1;
+    repeat (20) @(posedge clk);
+    #1;
+    chk($sformatf("the translation queue fills behind a held fetch: %0d",
+                  int'(dut.u_xlate.r_cnt)), dut.u_xlate.r_cnt == 4);
+    restream(2, n);
+    flush_at(2);
+    chk($sformatf("IFU-28 the queue keeps its two survivors: %0d",
+                  int'(dut.u_xlate.r_cnt)), dut.u_xlate.r_cnt == 2);
+    chk("the kept head is block 0", dut.u_xlate.xq_idx == blk[0].idx);
+    fetch_hold = 1'b0;
+    run_and_check(600);
+
+    // The zombie. One block, ready held low, so its request is
+    // presented and not accepted when the flush drops the block.
+    reset_all();
+    fill_mixed(a, 512);
+    fill_mixed(n, 512);
+    add_blk(a, a + VA_WIDTH'(32), 1'b0, 0);
+    add_blk(a + VA_WIDTH'(32), a + VA_WIDTH'(64), 1'b0, 0);
+    l1i_rdy_low = 1'b1;
+    run = 1'b1;
+    c = 0;
+    while (!ifu_l1i_req_val && (c < 50)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    repeat (2) @(posedge clk);
+    #1;
+    zid  = ifu_l1i_req_id;
+    zpa  = ifu_l1i_req_paddr;
+    chk("a request is presented and refused", ifu_l1i_req_val);
+    run = 1'b0;
+    restream(0, n);
+    fl_pos    = 0;
+    fl_idx    = blk[0].idx;
+    flush_req = 1'b1;
+    #1;
+    held = ifu_l1i_req_val && (ifu_l1i_req_id == zid) &&
+           (ifu_l1i_req_paddr == zpa);
+    @(posedge clk);
+    #1;
+    flush_req = 1'b0;
+    for (int k = 0; k < 4; k++) begin
+      if (!(ifu_l1i_req_val && (ifu_l1i_req_id == zid) &&
+            (ifu_l1i_req_paddr == zpa))) held = 1'b0;
+      if (ftq_ifu_req_rdy) held = 1'b0;
+      @(posedge clk);
+      #1;
+    end
+    chk("IF-4 the dropped block's request stays presented, unchanged, "
+        , held);
+    l1i_rdy_low = 1'b0;
+    repeat (8) @(posedge clk);
+    #1;
+    chk("its response came and was discarded: nothing delivered",
+        (n_l1i_rsp >= 1) && (nrx == 0) && (nwb == 0) &&
+        (lb_id_cnt() == 0));
+    run_and_check(600);
+    chk("the zombie line was fetched once, then the new stream",
+        req_pa_log[0] == zpa);
+  endtask
+
+  // IFU-31. A page-crossing block has both lookups in flight when the
+  // flush drops it; the ITLB answers tag 1 at 4 cycles and tag 0 at
+  // 9, out of order and late. The next block's translation starts
+  // the cycle after the last dead response and not before, and the
+  // dead responses are not taken as the new block's.
+  task automatic t_flush_itlb_dead();
+    logic [VA_WIDTH-1:0] a;
+    logic [VA_WIDTH-1:0] n;
+    int c;
+    tname = "flush_itlb_dead";
+    $display("-- %s --", tname);
+    reset_all();
+    a = VA_WIDTH'('h0_8024_0FE0);
+    n = VA_WIDTH'('h0_8025_0040);
+    map_page(n, 24'h00_0F55, IFU_FAULT_NONE, 0, '0);
+    fill_mixed(a, 64);
+    fill_mixed(n, 128);
+    add_blk(a, a + VA_WIDTH'(32), 1'b0, 0);
+    add_blk(a + VA_WIDTH'(32), a + VA_WIDTH'(64), 1'b0, 0);
+    itlb_lat[0] = 9;
+    itlb_lat[1] = 4;
+    run = 1'b1;
+    c = 0;
+    while ((n_itlb_req < 2) && (c < 50)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    chk("both lookups of the crossing block are in flight",
+        (n_itlb_req == 2) && (n_itlb_rsp == 0));
+    restream(0, n);
+    flush_at(0);
+    itlb_lat[0] = 1;
+    itlb_lat[1] = 1;
+    c = 0;
+    while ((n_itlb_req < 3) && (c < 50)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    chk("the dead responses came out of order, tag 1 first",
+        (n_itlb_rsp >= 2) && rs_tag[0] && !rs_tag[1]);
+    chk($sformatf({"IFU-31 the new lookup follows the last dead response",
+                   " by one cycle: rsp %0d lookup %0d"}, rs_cyc[1],
+                  lk_cyc[2]), lk_cyc[2] == rs_cyc[1] + 2);
+    chk("and it is the new block's page",
+        lk_vpn[2] == n[VA_WIDTH-1:12]);
+    run_and_check(400);
+
+    // The block in lookup SURVIVES: translation continues.
+    reset_all();
+    fill_mixed(a, 64);
+    fill_mixed(n, 128);
+    fill_mixed(VA_WIDTH'('h0_8023_0040), 64);
+    add_blk(VA_WIDTH'('h0_8023_0040), VA_WIDTH'('h0_8023_0060), 1'b0, 0);
+    add_blk(a, a + VA_WIDTH'(32), 1'b0, 0);
+    add_blk(a + VA_WIDTH'(32), a + VA_WIDTH'(64), 1'b0, 0);
+    itlb_lat[0] = 6;
+    itlb_lat[1] = 6;
+    run = 1'b1;
+    c = 0;
+    while ((n_itlb_req < 3) && (c < 50)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    restream(2, n);
+    flush_at(2);
+    itlb_lat[0] = 1;
+    itlb_lat[1] = 1;
+    run_and_check(400);
+    chk($sformatf("the surviving block's two lookups were not repeated: %0d",
+                  n_itlb_req), n_itlb_req == 4);
+
+  endtask
+
+
+  // IFU-28 at F3, and the straddle register across a flush. The ibuf
+  // refuses, so a block sits in F3 when the flush arrives. Block 0
+  // ends in a 32-bit instruction straddling into block 1, whose upper
+  // halfword is itself a recorded c.addi, so a walk from position 0
+  // of block 1's start is well defined.
+  //   A  block 0 transferred and set the straddle; block 1 is held in
+  //      F3; the flush is at 2. Block 1 survives with the straddle
+  //      kept: it begins at position 1.
+  //   B  the same, the flush at 1. Block 1 is dropped from F3 and the
+  //      straddle with it; the corrected block 1 starts at the same
+  //      address and walks from position 0.
+  task automatic t_flush_f3(input logic part_b);
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] n;
+    int c;
+    tname = part_b ? "flush_f3_dropped" : "flush_f3_survives";
+    $display("-- %s --", tname);
+    reset_all();
+    b = VA_WIDTH'('h0_8028_0000);
+    n = VA_WIDTH'('h0_8029_0000);
+    fill_mixed(n, 256);
+    for (int i = 0; i < 64; i++) put16(b + VA_WIDTH'(2 * i), 16'h0505,
+                                       32'h0015_0513);
+    put32(b + VA_WIDTH'(30), 32'h0505_0513);         // addi a0,a0,80
+    put16(b + VA_WIDTH'(32), 16'h0505, 32'h0015_0513);
+    for (int k = 0; k < 4; k++)
+      add_blk(b + VA_WIDTH'(32 * k), b + VA_WIDTH'(32 * k + 32), 1'b0, 0);
+    run = 1'b1;
+    c = 0;
+    while ((nrx < 1) && (c < 100)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    ib_force_stall = 1'b1;
+    repeat (6) @(posedge clk);
+    #1;
+    chk("block 0 delivered, block 1 held in F3 by the ibuf",
+        (nrx == 1) && ifu_ibuf_val && (ifu_ibuf_slot[0].ftq_idx ==
+                                       blk[1].idx));
+    chk("the straddle is set for block 1", dut.u_f3.r_strad_val);
+    run = 1'b0;
+    if (part_b) begin
+      restream(1, b + VA_WIDTH'(32));
+      ref_cut_pos = 1;
+      flush_at(1);
+    end else begin
+      restream(2, n);
+      flush_at(2);
+    end
+    chk(part_b ? "IFU-28 the dropped block leaves F3"
+               : "IFU-28 the surviving block stays in F3",
+        dut.u_f3.r_val == !part_b);
+    chk(part_b ? "the straddle is dropped with the block after its setter"
+               : "the straddle is kept: the block after its setter survives",
+        dut.u_f3.r_strad_val == !part_b);
+    ib_force_stall = 1'b0;
+    run_and_check(600);
+    chk(part_b ? "the corrected block 1 walks from position 0"
+               : "the surviving block 1 begins on the straddle tail",
+        (nrx > 1) && (rx_en[1][0] == part_b));
+  endtask
+
+  // The predecode redirect: K's writeback carries an M1 and the FTQ
+  // flushes at K+1 in the same cycle (ftq_ifu_interfaces.md 7 W3).
+  // K+1 and K+2 have their lines held, so they are in flight at the
+  // flush. K is delivered and written back once; K+1 and K+2 are
+  // dropped and the corrected stream follows.
+  task automatic t_flush_predecode();
+    logic [VA_WIDTH-1:0] a;
+    logic [VA_WIDTH-1:0] x;
+    logic [VA_WIDTH-1:0] t;
+    int c;
+    logic seen;
+    tname = "flush_predecode_k";
+    $display("-- %s --", tname);
+    reset_all();
+    a = VA_WIDTH'('h0_8026_0000);
+    x = VA_WIDTH'('h0_8026_0400);
+    t = VA_WIDTH'('h0_8027_0000);
+    fill_mixed(a, 1024);
+    fill_mixed(t, 256);
+    for (int i = 0; i < 16; i++) put16(x + VA_WIDTH'(2 * i), 16'h0505,
+                                       32'h0015_0513);
+    put32(x + VA_WIDTH'(8), enc_jal(5'd0, int'(t - (x + VA_WIDTH'(8)))));
+    add_blk(a, a + VA_WIDTH'(32), 1'b0, 0);
+    add_blk(a + VA_WIDTH'(128), a + VA_WIDTH'(160), 1'b0, 0);
+    add_blk(x, x + VA_WIDTH'(32), 1'b0, 0);                      // K
+    add_blk(a + VA_WIDTH'(256), a + VA_WIDTH'(288), 1'b0, 0);
+    add_blk(a + VA_WIDTH'(384), a + VA_WIDTH'(416), 1'b0, 0);
+    l1i_hold_ln[a[PA_WIDTH-1:L1I_OFFSET_BITS] +
+                (PA_WIDTH-L1I_OFFSET_BITS)'(4)] = 1'b1;
+    l1i_hold_ln[a[PA_WIDTH-1:L1I_OFFSET_BITS] +
+                (PA_WIDTH-L1I_OFFSET_BITS)'(6)] = 1'b1;
+    pd_auto  = 1'b1;
+    pd_k_idx = blk[2].idx;
+    pd_k_pos = 2;
+    run = 1'b1;
+    c    = 0;
+    seen = 1'b0;
+    while (!seen && (c < 300)) begin
+      if (pd_fire) begin
+        seen = 1'b1;
+        chk("the flush is at K+1",
+            ftq_ifu_flush_idx == blk[2].idx + FTQ_IDX_BITS'(1));
+        chk("K+1 and K+2 are in flight at the flush",
+            (n_l1i_req >= 5) && (n_l1i_rsp <= 3));
+        restream(3, t);
+      end
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    pd_auto = 1'b0;
+    chk("the predecode redirect fired once", seen && (n_flush == 1));
+    repeat (6) @(posedge clk);
+    #1;
+    l1i_hold_ln.delete();
+    run_and_check(600);
+    chk("K was not dropped by its own flush: delivered and written back",
+        (nwb > 2) && (wb_idx[2] == blk[2].idx) && wb_misv[2] &&
+        (wb_misp[2] == 4'd4) && (rx_en[2] == 16'h001F));
+    chk($sformatf("five blocks delivered, none twice: %0d", nrx),
+        nrx == 5);
   endtask
 
   // =================================================================
@@ -1360,6 +1858,14 @@ module tb;
     t_gen();
     t_backpressure();
     t_flush();
+    t_flush_inflight(0,  3, "flush_inflight");
+    t_flush_inflight(61, 3, "flush_inflight_wrap");
+    t_flush_inflight(20, 0, "flush_inflight_rc_unspec");
+    t_flush_xq_zombie();
+    t_flush_itlb_dead();
+    t_flush_predecode();
+    t_flush_f3(1'b0);
+    t_flush_f3(1'b1);
     $display("tb_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ifu: %0d checks failed", fail_cnt);

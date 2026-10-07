@@ -5,21 +5,24 @@
 // ===================================================================
 // tb_instr_decoder.sv
 // Self-checking testbench for instr_decoder.
-// Drives predecode_pkt_t bundles (wrapping raw instructions) and
+// Drives ifu_pd_pkt_t bundles (wrapping raw instructions) and
 // verifies decoded fields in decode_pkt_t bundles.
 // Uses a free-running clock for Verilator 5.020 --timing compatibility.
 // DECODE-010: input changed from raw bits to predecode_pkt_t.
-//   make_predecode_pkt() wraps a raw 32-bit instruction into a
-//   predecode_pkt_t with is_vsetvl/needs_vtype computed correctly.
-//   All 543 existing tests pass unchanged via the updated drive() task.
+// BP-118 (TD#143): input changed to ifu_pd_pkt_t, the ibuf read port
+//   bundle. make_pd_pkt() wraps a raw 32-bit instruction into an
+//   ifu_pd_pkt_t with valid set and no fault. The old predecode_pkt_t
+//   is retired. T65 and T66 encoded the compressed-extension gating
+//   that DCD-20 deletes and are restated; T73 to T75 cover DCD-17 to
+//   DCD-19 and the DCD-18 pass-through.
 // ---------------------------------------------------------------------------
 // ===================================================================
 `default_nettype none
 `timescale 1ns/1ps
 
-/* verilator lint_off IMPORTSTAR */
+import bp_defines_pkg::*;
+import bp_structs_pkg::*;
 import decode_pkg::*;
-/* verilator lint_on IMPORTSTAR */
 
 module tb;
 
@@ -36,24 +39,26 @@ always #5 clk = ~clk;
 // DUT ports
 // ---------------------------------------------------------------------------
 ext_enable_t     ext_enable;
-predecode_pkt_t  [SLOTS-1:0] predecode_bundle;
+ifu_pd_pkt_t                 pd_bundle [0:SLOTS-1];
 decode_pkt_t     [SLOTS-1:0] decode_bundle;
 /* verilator lint_off UNUSEDSIGNAL */
 vec_decode_pkt_t [SLOTS-1:0] vec_decode_bundle;
 logic            [SLOTS-1:0] is_vector;
-predecode_pkt_t  [SLOTS-1:0] predecode_out;
 /* verilator lint_on UNUSEDSIGNAL */
+ifu_pd_pkt_t                 pd_out    [0:SLOTS-1];
+logic            [SLOTS-1:0] vtype_hazard;
 
 // ---------------------------------------------------------------------------
 // DUT instantiation
 // ---------------------------------------------------------------------------
 instr_decoder dut (
     .ext_enable        (ext_enable),
-    .predecode_bundle  (predecode_bundle),
+    .pd_bundle         (pd_bundle),
     .decode_bundle     (decode_bundle),
     .vec_decode_bundle (vec_decode_bundle),
     .is_vector         (is_vector),
-    .predecode_out     (predecode_out)
+    .pd_out            (pd_out),
+    .vtype_hazard      (vtype_hazard)
 );
 
 // ---------------------------------------------------------------------------
@@ -63,23 +68,26 @@ int pass_count;
 int fail_count;
 
 // ---------------------------------------------------------------------------
-// make_predecode_pkt: wrap a raw 32-bit instruction into predecode_pkt_t
-// Sets valid=1, computes is_vsetvl and needs_vtype from opcode/funct3.
-// vtype_hazard is left 0 -- intra-bundle policy resolved by rename.
-// may_be_branch set for JAL/JALR/BRANCH opcodes (conservative hint).
+// make_pd_pkt: wrap a raw 32-bit instruction into ifu_pd_pkt_t
+// Sets valid=1 and fault_cause=IFU_FAULT_NONE. is_vsetvl and
+// needs_vtype are computed from opcode/funct3 the way the IFU
+// predecoder marks them (DCD-16), so the bundle looks like real ibuf
+// output; decode does not read them (DCD-17, TD#148). The remaining
+// fields are zero; T75 drives them.
 // ---------------------------------------------------------------------------
-function automatic predecode_pkt_t make_predecode_pkt(
+function automatic ifu_pd_pkt_t make_pd_pkt(
     input logic [31:0] instr
 );
-    predecode_pkt_t pkt;
-    logic [6:0]     opc;
-    logic [2:0]     f3;
-    logic           vec_w;
-    pkt          = '0;
-    pkt.valid    = 1'b1;
-    pkt.instr    = instr;
-    opc          = instr[6:0];
-    f3           = instr[14:12];
+    ifu_pd_pkt_t pkt;
+    logic [6:0]  opc;
+    logic [2:0]  f3;
+    logic        vec_w;
+    pkt             = '0;
+    pkt.valid       = 1'b1;
+    pkt.instr       = instr;
+    pkt.fault_cause = IFU_FAULT_NONE;
+    opc             = instr[6:0];
+    f3              = instr[14:12];
     // vector memory width: funct3 in {000,101,110,111}
     vec_w = (f3 == 3'b000) | (f3 == 3'b101) |
             (f3 == 3'b110) | (f3 == 3'b111);
@@ -87,16 +95,13 @@ function automatic predecode_pkt_t make_predecode_pkt(
     pkt.needs_vtype = ((opc == 7'b1010111) & (f3 != 3'b111)) |
                       ((opc == 7'b0000111) & vec_w)           |
                       ((opc == 7'b0100111) & vec_w);
-    pkt.vtype_hazard  = 1'b0;
-    pkt.may_be_branch = (opc == 7'b1101111) | (opc == 7'b1100111) |
-                        (opc == 7'b1100011);
     return pkt;
 endfunction
 
 task automatic clear_all();
     int s;
     for (s = 0; s < SLOTS; s++) begin
-        predecode_bundle[s] = '0;
+        pd_bundle[s] = '0;
     end
 endtask
 
@@ -104,7 +109,7 @@ task automatic drive(
     input int          slot,
     input logic [31:0] instr
 );
-    predecode_bundle[slot] = make_predecode_pkt(instr);
+    pd_bundle[slot] = make_pd_pkt(instr);
 endtask
 
 `define CHECK_FIELD(slot, field, expected, tname) \
@@ -160,6 +165,22 @@ task automatic check_pkt(
     `CHECK_FIELD(slot, is_load,    exp_is_load,    tname)
     `CHECK_FIELD(slot, is_store,   exp_is_store,   tname)
     `CHECK_FIELD(slot, is_illegal, exp_is_illegal, tname)
+endtask
+
+// check_hazard: compare all 8 vtype_hazard bits against an expected
+// mask, one check per slot.
+task automatic check_hazard(
+    input logic [SLOTS-1:0] exp_mask,
+    input string            tname
+);
+    for (int k = 0; k < SLOTS; k++) begin
+        if (vtype_hazard[k] !== exp_mask[k]) begin
+            $display("FAIL [%s] slot=%0d vtype_hazard got=%0b exp=%0b",
+                     tname, k, vtype_hazard[k], exp_mask[k]);
+            fail_count++;
+        end else
+            pass_count++;
+    end
 endtask
 
 // ---------------------------------------------------------------------------
@@ -490,7 +511,7 @@ initial begin
     pass_count   = 0;
     fail_count   = 0;
     ext_enable   = RVA23_ENABLE; // all extensions enabled by default
-    predecode_bundle = '0;
+    pd_bundle    = '{default: '0};
 
     // -----------------------------------------------------------------------
     // T1: All slots invalid - valid=0
@@ -2025,19 +2046,22 @@ initial begin
     `CHECK_FIELD(0, is_illegal, 1'b0, "T64_fld_reg")
 
     // -----------------------------------------------------------------------
-    // T65: en_c=0 -- raw 16-bit instruction -> ILLEGAL
-    //   c.addi x1, 1: Q1 funct3=000, rd=1, nzimm=1
-    //   packed into 32-bit word {16'h0000, 16'h0085} where
-    //   inst[1:0]=01 (Q1) and inst[15:13]=000 (not Zcb)
+    // T65: DCD-20, C is always enabled. RESTATED by BP-118.
+    //   Before TD#143 this drove a raw 16-bit c.addi word with en_c=0
+    //   and expected ILLEGAL from decode's compressed gating. DCD-20
+    //   deletes that gating: the IFU expands every compressed
+    //   instruction before the ibuf, so decode sees the 32-bit form
+    //   with is_rvc set. en_c=0 must not make it illegal.
+    //   c.addi x1, 1 -> ADDI x1, x1, 1, is_rvc=1.
     // -----------------------------------------------------------------------
     ext_enable       = RVA23_ENABLE;
     ext_enable.en_c  = 1'b0;
     clear_all();
-    // c.addi x1, 1: bits[15:13]=000, bit[12]=0, bits[11:7]=00001,
-    //   bits[6:2]=00001, bits[1:0]=01 -> 0x0085
-    drive(0, {16'h0000, 16'h0085});
+    drive(0, enc_i(12'd1, 5'd1, 3'b000, 5'd1, OPIMM));
+    pd_bundle[0].is_rvc = 1'b1;
     @(posedge clk);
-    `CHECK_FIELD(0, is_illegal, 1'b1, "T65_c_en_c0")
+    `CHECK_FIELD(0, is_illegal, 1'b0,    "T65_c_en_c0_expanded")
+    `CHECK_FIELD(0, alu_op,     ALU_ADD, "T65_c_en_c0_expanded")
     // regression: en_c=1, expanded 32-bit ADDI (not ILLEGAL)
     ext_enable = RVA23_ENABLE;
     clear_all();
@@ -2047,19 +2071,24 @@ initial begin
     `CHECK_FIELD(0, is_illegal, 1'b0, "T65_c_reg")
 
     // -----------------------------------------------------------------------
-    // T66: en_zcb=0, en_c=1 -- Zcb Q0 instruction -> ILLEGAL
-    //   c.lbu: Q0 (inst[1:0]=00), inst[15:13]=100
-    //   packed into {16'h0000, 16'h8000}
+    // T66: DCD-20, Zcb is always enabled. RESTATED by BP-118.
+    //   Before TD#143 this drove a raw c.lbu word with en_zcb=0 and
+    //   expected ILLEGAL. After expansion decode cannot tell a Zcb
+    //   instruction from its base form. c.lbu x8, 0(x9) -> LBU x8,
+    //   0(x9), is_rvc=1, with en_zcb=0 and en_c=0: not illegal.
     // Regression: base C expansion (ADDI) with en_zcb=0 -> not ILLEGAL
     // -----------------------------------------------------------------------
     ext_enable          = RVA23_ENABLE;
     ext_enable.en_zcb   = 1'b0;
+    ext_enable.en_c     = 1'b0;
     clear_all();
-    // c.lbu pattern: inst[15:13]=100, inst[1:0]=00 -> 0x8000 area
-    // bits: 1000_0000_0000_0000 = 0x8000
-    drive(0, {16'h0000, 16'h8000});
+    drive(0, enc_i(12'd0, 5'd9, 3'b100, 5'd8, OPLOAD));
+    pd_bundle[0].is_rvc = 1'b1;
     @(posedge clk);
-    `CHECK_FIELD(0, is_illegal, 1'b1, "T66_zcb_en_zcb0")
+    `CHECK_FIELD(0, is_illegal, 1'b0,    "T66_zcb_en_zcb0_expanded")
+    `CHECK_FIELD(0, alu_op,     ALU_LBU, "T66_zcb_en_zcb0_expanded")
+    ext_enable          = RVA23_ENABLE;
+    ext_enable.en_zcb   = 1'b0;
     // regression: expanded ADDI (not Zcb pattern) -> not ILLEGAL
     clear_all();
     drive(0, enc_i(12'd2, 5'd1, 3'b000, 5'd1, OPIMM));
@@ -2148,6 +2177,167 @@ initial begin
     ext_enable = RVA23_ENABLE;
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T72_hfence_reg")
+
+    // -----------------------------------------------------------------------
+    // T73: DCD-17, vtype_hazard computed in decode, per 8-slot bundle.
+    //   Each case starts from a cleared bundle; nothing carries over.
+    // -----------------------------------------------------------------------
+    ext_enable = RVA23_ENABLE;
+
+    // T73a: vsetvli and a vtype user in ONE bundle. Slot 0 vsetvli,
+    //   slot 1 vadd.vv, slot 2 ADDI, slot 5 vle32.v. Hazard on 1 and 5
+    //   only: the vsetvl itself and the scalar slot raise none.
+    clear_all();
+    drive(0, enc_vsetvli(5'd1, 5'd2, 3'b010, 3'b000, 1'b1, 1'b0));
+    drive(1, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    drive(2, enc_i(12'd7, 5'd2, 3'b000, 5'd6, OPIMM));
+    drive(5, enc_vle32v(5'd7, 5'd8, 1'b1));
+    @(posedge clk);
+    check_hazard(8'b0010_0010, "T73a_same_bundle");
+
+    // T73b: the same two SPLIT across bundles. Bundle A ends with the
+    //   vsetvli in slot 7; bundle B has the vadd.vv in slot 0. The flag
+    //   is intra-bundle (DCD-17), so neither bundle raises it.
+    clear_all();
+    drive(7, enc_vsetvli(5'd1, 5'd2, 3'b010, 3'b000, 1'b1, 1'b0));
+    @(posedge clk);
+    check_hazard(8'b0000_0000, "T73b_split_bundle_A");
+    clear_all();
+    drive(0, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    @(posedge clk);
+    check_hazard(8'b0000_0000, "T73b_split_bundle_B");
+
+    // T73c: the vsetvl AFTER the user. Slot 0 vadd.vv, slot 1 vsetvl,
+    //   slot 2 vsetivli. A later vsetvl does not hazard an earlier
+    //   user, and a vsetvl does not need vtype, so nothing is set.
+    clear_all();
+    drive(0, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    drive(1, enc_vsetvl(5'd1, 5'd2, 5'd3));
+    drive(2, enc_vsetivli(5'd1, 5'd4, 3'b010, 3'b000, 1'b0, 1'b0));
+    @(posedge clk);
+    check_hazard(8'b0000_0000, "T73c_vsetvl_after_user");
+
+    // T73d: decode's OWN classification, not the IFU bits. Slot 0
+    //   vsetvli; slot 1 vl1re8.v with the IFU needs_vtype over-mark
+    //   set (DCD-16): decode clears needs_vtype on whole-register
+    //   forms, so no hazard. Slot 2 vle32.v with the IFU needs_vtype
+    //   forced 0: decode marks it, hazard set.
+    clear_all();
+    drive(0, enc_vsetvli(5'd1, 5'd2, 3'b010, 3'b000, 1'b1, 1'b0));
+    drive(1, enc_vl1rev(5'd3, 5'd4));
+    pd_bundle[1].needs_vtype = 1'b1;
+    drive(2, enc_vle32v(5'd7, 5'd8, 1'b1));
+    pd_bundle[2].needs_vtype = 1'b0;
+    @(posedge clk);
+    check_hazard(8'b0000_0100, "T73d_own_needs_vtype");
+
+    // T73e: an IFU is_vsetvl bit on a scalar slot is not a vsetvl.
+    //   Slot 0 ADDI with pd.is_vsetvl forced 1, slot 1 vadd.vv.
+    clear_all();
+    drive(0, enc_i(12'd7, 5'd2, 3'b000, 5'd6, OPIMM));
+    pd_bundle[0].is_vsetvl = 1'b1;
+    drive(1, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    @(posedge clk);
+    check_hazard(8'b0000_0000, "T73e_own_is_vsetvl");
+
+    // T73f: an INVALID slot holding a vsetvli encoding seeds nothing.
+    clear_all();
+    drive(0, enc_vsetvli(5'd1, 5'd2, 3'b010, 3'b000, 1'b1, 1'b0));
+    pd_bundle[0].valid = 1'b0;
+    drive(1, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    @(posedge clk);
+    check_hazard(8'b0000_0000, "T73f_invalid_vsetvl");
+
+    // T73g: a FAULTING slot holding a vsetvli encoding seeds nothing
+    //   (DCD-19: its bits are meaningless).
+    clear_all();
+    drive(0, enc_vsetvli(5'd1, 5'd2, 3'b010, 3'b000, 1'b1, 1'b0));
+    pd_bundle[0].fault_cause = IFU_FAULT_PAGE;
+    drive(1, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    @(posedge clk);
+    check_hazard(8'b0000_0000, "T73g_fault_vsetvl");
+
+    // -----------------------------------------------------------------------
+    // T74: DCD-19, a fetch-faulting slot is not decoded as illegal.
+    //   Every slot carries the all-zero word, which is an illegal
+    //   encoding. Slots 0, 1, 2 fault with each cause; slot 3 does
+    //   not fault and is the control: it IS illegal. Slot 4 faults
+    //   while carrying a legal vadd.vv: no vector decode.
+    // -----------------------------------------------------------------------
+    clear_all();
+    for (int k = 0; k < 4; k++) drive(k, 32'h0000_0000);
+    pd_bundle[0].fault_cause = IFU_FAULT_ACCESS;
+    pd_bundle[0].fault_va    = VA_WIDTH'(64'h0_8000_1000);
+    pd_bundle[1].fault_cause = IFU_FAULT_PAGE;
+    pd_bundle[1].fault_va    = VA_WIDTH'(64'h1_2345_6782);
+    pd_bundle[2].fault_cause = IFU_FAULT_GUEST_PAGE;
+    pd_bundle[2].fault_va    = VA_WIDTH'(64'h0_4000_0ffe);
+    pd_bundle[2].fault_gpa   = GPA_WIDTH'(64'h1_ffff_f000);
+    drive(4, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
+    pd_bundle[4].fault_cause = IFU_FAULT_PAGE;
+    @(posedge clk);
+    for (int k = 0; k < 3; k++) begin
+        `CHECK_FIELD(k, valid,      1'b1, "T74_fault_valid")
+        `CHECK_FIELD(k, is_illegal, 1'b0, "T74_fault_no_illegal")
+        if (pd_out[k].fault_cause !== pd_bundle[k].fault_cause ||
+            pd_out[k].fault_va    !== pd_bundle[k].fault_va    ||
+            pd_out[k].fault_gpa   !== pd_bundle[k].fault_gpa) begin
+            $display("FAIL [T74_fault_passthru] slot=%0d", k);
+            fail_count++;
+        end else
+            pass_count++;
+    end
+    `CHECK_FIELD(3, is_illegal, 1'b1, "T74_nofault_control_illegal")
+    `CHECK_FIELD(4, is_illegal, 1'b0, "T74_fault_vadd_no_illegal")
+    if (is_vector[4] !== 1'b0 || vec_decode_bundle[4] !== '0) begin
+        $display("FAIL [T74_fault_vadd_no_vec] is_vector=%0b",
+                 is_vector[4]);
+        fail_count++;
+    end else
+        pass_count++;
+    // T74b: the same faulting slot with en_v cleared and a vector
+    //   encoding: still not illegal (the fault outranks the gate).
+    ext_enable      = RVA23_ENABLE;
+    ext_enable.en_v = 1'b0;
+    @(posedge clk);
+    `CHECK_FIELD(4, is_illegal, 1'b0, "T74b_fault_vadd_en_v0")
+    ext_enable = RVA23_ENABLE;
+
+    // -----------------------------------------------------------------------
+    // T75: DCD-18, every ifu_pd_pkt_t field reaches pd_out unchanged,
+    //   on all 8 slots, valid or not, faulting or not. Each slot gets
+    //   a distinct pattern in every field, derived from the slot
+    //   number so a slot swap is caught too.
+    // -----------------------------------------------------------------------
+    clear_all();
+    for (int k = 0; k < SLOTS; k++) begin
+        pd_bundle[k].valid       = (k != 6);
+        pd_bundle[k].instr       = 32'h1234_5000 | 32'(k * 32'h111);
+        pd_bundle[k].start_pc    = VA_WIDTH'(64'h1_0000_0000)
+                                 + VA_WIDTH'(k * 2 + 1);
+        pd_bundle[k].pos         = FTQ_PD_POS_BITS'(15 - k);
+        pd_bundle[k].ftq_idx     = FTQ_IDX_BITS'(7 * k + 3);
+        pd_bundle[k].fault_cause = ifu_fault_e'(k % 4);
+        pd_bundle[k].fault_va    = VA_WIDTH'(64'h0_abcd_0000)
+                                 ^ VA_WIDTH'(k);
+        pd_bundle[k].fault_gpa   = GPA_WIDTH'(64'h1_5555_0000)
+                                 ^ GPA_WIDTH'(k << 4);
+        pd_bundle[k].is_rvc      = k[0];
+        pd_bundle[k].br_type     = k[1:0];
+        pd_bundle[k].is_call     = k[1];
+        pd_bundle[k].is_ret      = k[2];
+        pd_bundle[k].is_vsetvl   = ~k[0];
+        pd_bundle[k].needs_vtype = ~k[1];
+    end
+    @(posedge clk);
+    for (int k = 0; k < SLOTS; k++) begin
+        if (pd_out[k] !== pd_bundle[k]) begin
+            $display("FAIL [T75_passthru] slot=%0d got=%h exp=%h",
+                     k, pd_out[k], pd_bundle[k]);
+            fail_count++;
+        end else
+            pass_count++;
+    end
 
     // -----------------------------------------------------------------------
     // Summary

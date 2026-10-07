@@ -6,41 +6,61 @@
 // instr_decoder.sv
 // 8-wide parallel instruction decoder for RVA23 / RV64GC.
 //
-// Receives a predecode_pkt_t bundle (8 slots) from predecode.sv.
-// Extracts instr[31:0] and valid from each slot internally.
-// Produces one decode_pkt_t and one vec_decode_pkt_t per slot.
-// All slots decode simultaneously; no sequential dependency.
+// Receives an ifu_pd_pkt_t bundle (8 slots) from the ibuf read port
+// (ibuf_decisions.md IBUF-9, IBUF-10). Decodes the expanded 32-bit
+// instr of each slot. Produces one decode_pkt_t and one
+// vec_decode_pkt_t per slot, plus vtype_hazard per slot.
 //
-// The predecode_bundle input is passed through unchanged to the output
-// predecode_out so rename can read vtype_hazard and other pre-decode
-// annotations without re-reading the fetch stage.
-//   predecode_pkt_t.vtype_hazard is available to rename via
-//   predecode_out -- policy TBD per CLAUDE.md.
+// Decode boundary rules, dcd_decisions.md 10a (TD#143, BP-118):
+//   DCD-17  vtype_hazard is computed here, per slot: an earlier valid
+//           slot of this bundle is a vsetvl form and this slot needs
+//           vtype. The two facts come from decode's own vector
+//           classification (vec_decode_bundle), not from the
+//           is_vsetvl / needs_vtype bits of ifu_pd_pkt_t: decode's
+//           are exact and the IFU's needs_vtype over-marks the
+//           whole-register forms (DCD-16). Those two input bits have
+//           no reader here (TD#148).
+//   DCD-18  pd_bundle is passed through to pd_out unchanged, beside
+//           the decode packets. The PC, FTQ index, position, fault
+//           fields and is_rvc reach rename this way.
+//   DCD-19  a slot whose fault_cause is not IFU_FAULT_NONE is not
+//           decoded. Its instr bits are meaningless and the fetch
+//           fault outranks an illegal instruction exception, so its
+//           decode packet is zero except valid and instr, is_illegal
+//           is clear, and its vector packet is zero. The fault itself
+//           travels in pd_out.
+//   DCD-20  C and Zcb are always enabled. The IFU expands every
+//           compressed instruction before the ibuf (IFU-1), so decode
+//           sees only 32-bit encodings and cannot tell which
+//           compressed extension one came from. The per-extension
+//           compressed gating that lived in decode_one is deleted;
+//           ext_enable.en_c and .en_zcb have no reader here.
 //
 // Downstream interface note:
 //   - decode_bundle[8] connects directly to rename/dispatch stage
 //   - vec_decode_bundle[8] carries vector decode alongside decode_bundle
-//   - predecode_out[8] passes pre-decode annotations to rename
+//   - pd_out[8] carries the fetch-side packet to rename
+//   - vtype_hazard[8] flags the intra-bundle vtype dependency; the
+//     policy is rename's (CLAUDE.md)
 //   - Slots with valid=0 carry zeroed decode packets; rename should skip
 //   - is_illegal=1 slots should cause a precise exception in dispatch
 // ===================================================================
 
 `default_nettype none
 
-/* verilator lint_off IMPORTSTAR */
-/* verilator lint_off UNUSEDPARAM */
+import bp_defines_pkg::*;
+import bp_structs_pkg::*;
 import decode_pkg::*;
-/* verilator lint_on UNUSEDPARAM */
-/* verilator lint_on IMPORTSTAR */
 
 /* verilator lint_off UNUSEDPARAM */
 module instr_decoder (
     // --- extension enable/disable control ---
     input  ext_enable_t                 ext_enable,
 
-    // --- pre-decoded bundle from predecode.sv ---
-    // instr[31:0] and valid are extracted internally from each slot.
-    input  predecode_pkt_t  [SLOTS-1:0] predecode_bundle,
+    // --- bundle from the ibuf read port, 8 slots from the head ---
+    // Unpacked [0:SLOTS-1], the shape of the ibuf read port, so the
+    // front-end top wires it with no conversion.
+    input  ifu_pd_pkt_t                 pd_bundle [0:SLOTS-1],
 
     // --- scalar decoded output bundle to rename/dispatch ---
     output decode_pkt_t     [SLOTS-1:0] decode_bundle,
@@ -51,10 +71,11 @@ module instr_decoder (
     output vec_decode_pkt_t [SLOTS-1:0] vec_decode_bundle,
     output logic            [SLOTS-1:0] is_vector,
 
-    // --- pre-decode pass-through to rename ---
-    // predecode_pkt_t.vtype_hazard is available to rename via this
-    // output -- policy TBD per CLAUDE.md.
-    output predecode_pkt_t  [SLOTS-1:0] predecode_out
+    // --- fetch-side packet pass-through to rename (DCD-18) ---
+    output ifu_pd_pkt_t                 pd_out [0:SLOTS-1],
+
+    // --- intra-bundle vtype dependency per slot (DCD-17) ---
+    output logic            [SLOTS-1:0] vtype_hazard
 );
 
 // ---------------------------------------------------------------------------
@@ -805,8 +826,6 @@ function automatic decode_pkt_t decode_one(
     logic [6:0] op;
     logic [2:0] f3;
     logic [6:0] f7;
-    logic        w_is_16b; // 16-bit instruction (C extension encoding)
-    logic        w_is_zcb; // Zcb-specific sub-encoding within C ext
 
     // Zero out to avoid latches
     pkt          = '0;
@@ -827,33 +846,9 @@ function automatic decode_pkt_t decode_one(
     pkt.funct3  = f3;
     pkt.funct7  = f7;
 
-    // ------------------------------------------------------------------
-    // C / Zcb extension gating
-    // inst[1:0] != 2'b11 identifies a 16-bit instruction (pre-expansion
-    // path; rvc_expander runs first in the pipeline but the testbench
-    // may drive raw 16-bit encodings directly).
-    //
-    // Zcb Q0: bits[1:0]=00, bits[15:13]=100
-    //   c.lbu, c.lhu, c.lh, c.sb, c.sh
-    // Zcb Q1: bits[1:0]=01, bits[15:13]=100, bits[11:10]=11,
-    //   bit[12]=1, bits[6:5] in {10,11}
-    //   c.mul, c.zext.b/h/w, c.sext.b/h, c.not
-    // ------------------------------------------------------------------
-    w_is_16b = (inst[1:0] != 2'b11);
-    w_is_zcb = ((inst[1:0] == 2'b00) && (inst[15:13] == 3'b100)) ||
-               ((inst[1:0] == 2'b01) && (inst[15:13] == 3'b100) &&
-                (inst[11:10] == 2'b11) && inst[12] &&
-                ((inst[6:5] == 2'b10) || (inst[6:5] == 2'b11)));
-    if (w_is_16b && !ext_enable.en_c) begin
-        pkt.alu_op    = ALU_ILL;
-        pkt.is_illegal = 1'b1;
-        return pkt;
-    end
-    if (w_is_16b && !ext_enable.en_zcb && w_is_zcb) begin
-        pkt.alu_op    = ALU_ILL;
-        pkt.is_illegal = 1'b1;
-        return pkt;
-    end
+    // No compressed-extension gating here: DCD-20. The IFU expands
+    // every compressed instruction before the ibuf, so a 16-bit
+    // encoding never reaches decode, and C and Zcb are mandatory.
 
     unique casez (op)
 
@@ -1454,28 +1449,43 @@ endfunction
 /* verilator lint_on UNUSEDSIGNAL */
 
 // ---------------------------------------------------------------------------
-// Parallel decode - one decode_one() and decode_vec_one() per slot
-// All slots decode simultaneously with no inter-slot dependency.
-// Instruction bits and validity are extracted from predecode_bundle.
-// predecode_out is a direct pass-through for rename to read annotations.
+// Parallel decode and the intra-bundle vtype scan
+// Every slot decodes independently. The only cross-slot term is
+// vtype_hazard, a prefix OR of is_vsetvl over the earlier slots, so
+// the whole bundle is one always_comb evaluated in slot order rather
+// than a chain of continuous assigns (CLAUDE.md).
 // ---------------------------------------------------------------------------
-genvar i;
-generate
-    for (i = 0; i < SLOTS; i++) begin : g_decode
-        always_comb begin
-            decode_bundle[i]     = decode_one(
-                predecode_bundle[i].instr,
-                predecode_bundle[i].valid,
-                ext_enable);
-            vec_decode_bundle[i] = decode_vec_one(
-                predecode_bundle[i].instr,
-                predecode_bundle[i].valid,
-                ext_enable);
-            is_vector[i]         = vec_decode_bundle[i].is_vector;
-            predecode_out[i]     = predecode_bundle[i];
+always_comb begin : decode_comb
+    logic seen_vsetvl; // an earlier valid slot of this bundle is vsetvl
+
+    seen_vsetvl = 1'b0;
+    for (int s = 0; s < SLOTS; s++) begin
+        pd_out[s] = pd_bundle[s];
+
+        if (pd_bundle[s].valid &&
+            (pd_bundle[s].fault_cause != IFU_FAULT_NONE)) begin
+            // DCD-19: fetch fault. Not decoded, never illegal.
+            decode_bundle[s]       = '0;
+            decode_bundle[s].valid = 1'b1;
+            decode_bundle[s].instr = pd_bundle[s].instr;
+            vec_decode_bundle[s]   = '0;
+        end else begin
+            decode_bundle[s]     = decode_one(pd_bundle[s].instr,
+                                              pd_bundle[s].valid,
+                                              ext_enable);
+            vec_decode_bundle[s] = decode_vec_one(pd_bundle[s].instr,
+                                                  pd_bundle[s].valid,
+                                                  ext_enable);
         end
+
+        is_vector[s] = vec_decode_bundle[s].is_vector;
+
+        // DCD-17. An invalid or faulting slot has a zero vector packet,
+        // so it neither raises nor seeds a hazard.
+        vtype_hazard[s] = seen_vsetvl & vec_decode_bundle[s].needs_vtype;
+        seen_vsetvl     = seen_vsetvl | vec_decode_bundle[s].is_vsetvl;
     end
-endgenerate
+end
 
 endmodule
 

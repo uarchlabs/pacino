@@ -98,10 +98,11 @@ module ftq_shadow (
   input  logic [FTQ_PTR_BITS-1:0]  squash_end,
 
   // ---- the cluster response groups ---------------------------------
-  // Each group is presented with its own index, and 5.6 lists all
-  // seven by name. The p2 groups all name one entry and the p3
-  // groups likewise, but each is checked against its own index
-  // rather than against a shared one: that costs a comparator and
+  // Each group is presented with its own index. 5.6 lists seven by
+  // name and 4.6 adds the 4c group's bpu_blk_idx_p2 as an eighth.
+  // The p2 groups all name one entry and the p3 groups likewise, but
+  // each is checked against its own index rather than against a
+  // shared one: that costs a comparator and
   // catches a cluster that ever presented two p2 groups for
   // different entries, which the interface forbids and nothing
   // else would detect.
@@ -116,6 +117,11 @@ module ftq_shadow (
   input  logic                     gv_meta_p2,
   input  logic [FTQ_IDX_BITS-1:0]  idx_meta_p2,
   input  logic [FTQ_IDX_BITS-1:0]  idx_redir_p2,
+  // The 4c block-scalar group (ftq_bpu_interfaces.md 4c, BP-118). Its
+  // valid is r_val_p2 alone, not the FTB-qualified slot valid, so it
+  // is checked on its own valid and index like every other group.
+  input  logic                     gv_blk_p2,
+  input  logic [FTQ_IDX_BITS-1:0]  idx_blk_p2,
   input  logic                     gv_slot_p3,
   input  logic [FTQ_IDX_BITS-1:0]  idx_slot_p3,
   input  logic                     gv_meta_p3,
@@ -138,6 +144,7 @@ module ftq_shadow (
   output logic                     ok_slot_p2,
   output logic                     ok_meta_p2,
   output logic                     ok_redir_p2,
+  output logic                     ok_blk_p2,
   output logic                     ok_slot_p3,
   output logic                     ok_meta_p3,
   output logic                     ok_redir_p3,
@@ -203,6 +210,8 @@ module ftq_shadow (
       (r_ptr[2][FTQ_IDX_BITS-1:0] == idx_meta_p2);
     ok_redir_p2 = r_val[2] &&
       (r_ptr[2][FTQ_IDX_BITS-1:0] == idx_redir_p2);
+    ok_blk_p2   = gv_blk_p2 && r_val[2] &&
+      (r_ptr[2][FTQ_IDX_BITS-1:0] == idx_blk_p2);
 
     ok_slot_p3  = gv_slot_p3 && r_val[3] &&
       (r_ptr[3][FTQ_IDX_BITS-1:0] == idx_slot_p3);

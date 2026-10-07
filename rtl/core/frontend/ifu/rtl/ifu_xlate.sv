@@ -36,12 +36,23 @@
 // cacheable and idempotent (IT-11). The uncached path is TD#135 and
 // is not built: an assertion fires if a marked block reaches F0.
 //
-// FLUSH (IFU-27, ftq_ifu_interfaces.md 5). The block in lookup and
-// the whole queue are discarded. TD#134 is deferred: a flush with a
-// lookup outstanding is an assertion failure, so a response can never
-// return for a discarded block. A translation request presented in a
-// flush cycle is ignored (ftq_ifu_interfaces.md 5, TD#138), and no
-// lookup is presented in a flush cycle.
+// FLUSH (IFU-27, IFU-28, IFU-31; ftq_ifu_interfaces.md 5; TD#134,
+// BP-118). A block SURVIVES when it is older than the flush index F,
+// measured from the commit pointer: age(i) = (i - commit_ptr) mod
+// FTQ_DEPTH, survive when age(i) < age(F). RC_UNSPEC (F = commit_ptr)
+// drops everything with no special case.
+//   - the queue is in FTQ order, so its survivors are a prefix from
+//     the head; the rest are cut in the flush cycle
+//   - the block in lookup continues when it survives. When it does
+//     not, its lookups still in flight are DEAD: their responses are
+//     dropped, and no new block is accepted until every dead lookup
+//     has answered, so a tag is never shared by a dead and a live
+//     lookup (IFU-31). ftq_ifu_xlate_rdy reads the REGISTERED dead
+//     set, so a new block is accepted the cycle after the last dead
+//     response and not in it
+// A translation request presented in a flush cycle is ignored
+// (ftq_ifu_interfaces.md 5, TD#138), and no lookup is presented in a
+// flush cycle.
 //
 // THE LOOKUP VPN IS EVERY FETCH ADDRESS BIT ABOVE THE PAGE OFFSET,
 // [VA_WIDTH-1:12], VA_WIDTH-12 = 29 bits (itlb_ifu_interfaces.md
@@ -71,8 +82,10 @@ module ifu_xlate #(
   input  logic [VA_WIDTH-1:0]      ftq_ifu_xlate_pc,
   input  logic [FTQ_IDX_BITS-1:0]  ftq_ifu_xlate_idx,
 
-  // ---- ftq_ifu_interfaces.md 5 -------------------------------------
+  // ---- ftq_ifu_interfaces.md 5, and the commit pointer of 4 --------
   input  logic                     ftq_ifu_flush_val,
+  input  logic [FTQ_IDX_BITS-1:0]  ftq_ifu_flush_idx,
+  input  logic [FTQ_IDX_BITS-1:0]  ftq_ifu_commit_ptr,
 
   // ---- itlb_ifu_interfaces.md 2 ------------------------------------
   output logic                     ifu_itlb_req_val,
@@ -150,6 +163,7 @@ module ifu_xlate #(
   logic                    r_cur_cross;
   logic [1:0]              r_need;     // per tag: no final result yet
   logic [1:0]              r_out;      // per tag: lookup in flight
+  logic [1:0]              r_dead;     // per tag: dead lookup in flight
   pg_res_t                 r_res [0:1];
 
   // ---- the queue -----------------------------------------------------
@@ -171,6 +185,22 @@ module ifu_xlate #(
   logic                    w_req_new;
   logic                    w_req_fire;
   xq_ent_t                 w_enq;
+  logic [1:0]              w_dead;
+  logic                    w_cur_surv;
+  logic [XQ_CNT-1:0]       w_keep;
+  logic                    w_keep_run;
+  logic [XQ_PTR-1:0]       w_kp;
+
+  // IFU-28. Older than the flush index, measured from commit_ptr.
+  function automatic logic survives(input logic [FTQ_IDX_BITS-1:0] i,
+                                    input logic [FTQ_IDX_BITS-1:0] f,
+                                    input logic [FTQ_IDX_BITS-1:0] c);
+    return FTQ_IDX_BITS'(i - c) < FTQ_IDX_BITS'(f - c);
+  endfunction
+
+  function automatic logic [XQ_PTR-1:0] nxt(input logic [XQ_PTR-1:0] p);
+    return (32'(p) == XQ_DEPTH - 1) ? '0 : p + XQ_PTR'(1);
+  endfunction
 
   function automatic ifu_fault_e map_cause(
       input logic [CAUSE_WIDTH-1:0] c);
@@ -205,10 +235,35 @@ module ifu_xlate #(
     end
     w_done = r_cur_val && !w_need[0] && !w_need[1];
 
+    // ---- dead lookups, IFU-31 -------------------------------------
+    // A dead tag's response is dropped: no block is in lookup while
+    // any tag is dead, so nothing above consumes it.
+    for (int t = 0; t < 2; t++) begin
+      w_dead[t] = r_dead[t] &&
+                  !(itlb_ifu_rsp_val && (itlb_ifu_tag == t[0]));
+    end
+    w_cur_surv = survives(r_cur_idx, ftq_ifu_flush_idx,
+                          ftq_ifu_commit_ptr);
+
+    // ---- the queue prefix that survives a flush, IFU-28 -------------
+    w_keep     = '0;
+    w_keep_run = 1'b1;
+    w_kp       = r_rd;
+    for (int n = 0; n < XQ_DEPTH; n++) begin
+      if ((32'(n) < 32'(r_cnt)) && w_keep_run &&
+          survives(r_q[w_kp].idx, ftq_ifu_flush_idx, ftq_ifu_commit_ptr))
+      begin
+        w_keep = w_keep + XQ_CNT'(1);
+      end else begin
+        w_keep_run = 1'b0;
+      end
+      w_kp = nxt(w_kp);
+    end
+
     // ---- accept the next block (4.1) ----------------------------------
     // Room is counted against the current count with the block in
     // lookup included, so an enqueue never meets a full queue.
-    ftq_ifu_xlate_rdy = (!r_cur_val || w_done) &&
+    ftq_ifu_xlate_rdy = (r_dead == 2'b00) && (!r_cur_val || w_done) &&
                         ((32'(r_cnt) + (r_cur_val ? 32'd1 : 32'd0)) <
                          XQ_DEPTH);
     w_accept    = ftq_ifu_xlate_val && ftq_ifu_xlate_rdy &&
@@ -263,8 +318,13 @@ module ifu_xlate #(
   // -----------------------------------------------------------------
   // State.
   // -----------------------------------------------------------------
-  function automatic logic [XQ_PTR-1:0] nxt(input logic [XQ_PTR-1:0] p);
-    return (32'(p) == XQ_DEPTH - 1) ? '0 : p + XQ_PTR'(1);
+  // The tail after a flush: the head plus the surviving prefix.
+  function automatic logic [XQ_PTR-1:0] adv(input logic [XQ_PTR-1:0] p,
+                                            input logic [XQ_CNT-1:0] n);
+    logic [XQ_PTR-1:0] q;
+    q = p;
+    for (int k = 0; k < XQ_DEPTH; k++) if (32'(k) < 32'(n)) q = nxt(q);
+    return q;
   endfunction
 
   always_ff @(posedge clk or negedge rstn) begin : seq
@@ -275,21 +335,48 @@ module ifu_xlate #(
       r_cur_cross <= 1'b0;
       r_need      <= '0;
       r_out       <= '0;
+      r_dead      <= '0;
       r_res[0]    <= '0;
       r_res[1]    <= '0;
       r_rd        <= '0;
       r_wr        <= '0;
       r_cnt       <= '0;
     end else if (ftq_ifu_flush_val) begin
-      r_cur_val   <= 1'b0;
-      r_need      <= '0;
-      r_out       <= '0;
-      r_rd        <= '0;
-      r_wr        <= '0;
-      r_cnt       <= '0;
+      // IFU-28 and IFU-31. No acceptance, no lookup and no pop happen
+      // in a flush cycle (w_accept, ifu_itlb_req_val and the fetch
+      // side's xq_pop are all gated by it). A response arriving now is
+      // taken as on any cycle.
+      r_res[0] <= w_res[0];
+      r_res[1] <= w_res[1];
+      if (r_cur_val && w_cur_surv) begin
+        // The block in lookup survives, so the whole queue does too:
+        // every entry in it is older. Continue as normal.
+        r_dead <= w_dead;
+        if (w_done) begin
+          r_q[r_wr]   <= w_enq;
+          r_wr        <= nxt(r_wr);
+          r_cnt       <= r_cnt + XQ_CNT'(1);
+          r_cur_val   <= 1'b0;
+          r_need      <= '0;
+          r_out       <= '0;
+        end else begin
+          r_need <= w_need;
+          r_out  <= w_out;
+        end
+      end else begin
+        // Cut the queue to its surviving prefix. The block in lookup,
+        // if any, is dropped and its lookups still in flight are dead.
+        r_cnt     <= w_keep;
+        r_wr      <= adv(r_rd, w_keep);
+        r_cur_val <= 1'b0;
+        r_need    <= '0;
+        r_out     <= '0;
+        r_dead    <= w_dead | (r_cur_val ? w_out : 2'b00);
+      end
     end else begin
       r_res[0] <= w_res[0];
       r_res[1] <= w_res[1];
+      r_dead   <= w_dead;
 
       if (w_done) begin
         r_q[r_wr] <= w_enq;

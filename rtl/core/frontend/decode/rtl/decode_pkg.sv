@@ -444,34 +444,6 @@ typedef struct packed {
 parameter ext_enable_t RVA23_ENABLE = '{default: 1'b1};
 /* verilator lint_on UNUSEDPARAM */
 
-// Per-slot pre-decode packet.
-// Produced by predecode.sv; consumed by instr_decoder.sv.
-// Carries the raw (or RVC-expanded) instruction with early annotations
-// for vtype dependency and a conservative branch hint.
-//
-// vtype_hazard is informational: rename resolves the actual policy.
-// may_be_branch is conservative: full decode remains in instr_decoder.
-// See CLAUDE.md microarchitectural implications.
-typedef struct packed {
-  // instruction validity
-  logic        valid;          // slot contains a valid instruction
-
-  // raw instruction (post RVC expansion if present, else raw)
-  logic [31:0] instr;          // instruction bits passed to decoder
-
-  // vtype annotation fields
-  logic        is_vsetvl;      // slot is vsetvl/vsetvli/vsetivli
-  logic        needs_vtype;    // slot consumes current vtype
-  logic        vtype_hazard;   // vsetvl precedes a needs_vtype in
-                               // the same bundle -- intra-bundle
-                               // dependency detected
-
-  // early branch hint (placeholder for DECODE-011)
-  logic        may_be_branch;  // conservative early branch detect
-                               // set if opcode is JAL/JALR/BRANCH
-                               // full resolution deferred to decode
-} predecode_pkt_t;
-
 // Per-instruction vector decode packet.
 // Travels in parallel with decode_pkt_t through the pipeline.
 // Populated when opcode == OP_VECTOR (0x57) or when a vector memory

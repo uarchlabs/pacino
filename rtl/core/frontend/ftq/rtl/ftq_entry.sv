@@ -17,6 +17,11 @@
 //       Unconditional: an entry is allocated for every prediction
 //       block, including one the p1 predictors miss, so a later
 //       stage has an entry to correct (5.2).
+//   p2  block-scalar correction (ftq_bpu_interfaces.md 4c). ras and
+//       pft_addr of the named entry, for EVERY valid p2 block,
+//       whether or not the FTB answered. ras becomes the post-op
+//       snapshot (ras_decisions.md 4.2) and pft_addr the cluster's
+//       corrected fall-through, TD#113 (BP-118).
 //   p2  slot correction. The slot array only. NOT gated on a
 //       redirect (FE-13) -- it carries the FTB classification and
 //       the in-block positions into the entry on every prediction,
@@ -114,6 +119,14 @@ module ftq_entry (
   input  logic                      p2_wr_val,
   input  logic [FTQ_IDX_BITS-1:0]   p2_wr_idx,
   input  bp_ftq_slot_t              p2_wr_slot [0:NUM_PRED_SLOTS-1],
+
+  // ---- p2 block-scalar correction write (ftq_bpu_interfaces.md 4c) -
+  // blk_wr_val is the shadow-qualified bpu_blk_val_p2, so a write for
+  // a squashed or reallocated index never arrives (4.6, 5.6).
+  input  logic                      blk_wr_val,
+  input  logic [FTQ_IDX_BITS-1:0]   blk_wr_idx,
+  input  bp_ras_snapshot_t          blk_wr_ras,
+  input  logic [VA_WIDTH-1:0]       blk_wr_pft_addr,
 
   // ---- p3 slot correction write -----------------------------------
   input  logic                      p3_wr_val,
@@ -218,52 +231,19 @@ module ftq_entry (
   // type touches no stack, so ras_commit_val stays low and the step
   // frees the entry without a commit.
   //
-  // ras_commit_ret_addr IS DRIVEN FROM pft_addr, AND THE ENTRY HOLDS
-  // THE WRONG pft_addr. This is a KNOWN DEFECT, not a derivation
-  // awaiting confirmation, and it cannot be fixed inside this unit.
+  // ras_commit_ret_addr IS DRIVEN FROM pft_addr. ras_decisions.md 8
+  // names the source: ret_addr is call_pc + 2 or + 4, and "the FTB
+  // fallThroughAddr field provides this value". The RAS consumes it
+  // and does NOT compute PC+2 or PC+4 itself.
   //
-  // ras_decisions.md 8 names the source outright: ret_addr is
-  // call_pc + 2 or + 4, and "the FTB fallThroughAddr field provides
-  // this value". The RAS consumes it and explicitly does NOT compute
-  // PC+2 or PC+4 itself, so the FTQ's job is to forward the right
-  // field rather than to derive one.
-  //
-  // THE FTQ DOES NOT HAVE THAT FIELD. bp_ftq_entry_t.pft_addr is
-  // written once, at p1, from bpu_pred_pft_p1, and
-  // ftq_bpu_interfaces.md 4 says of it: "It is not the FTB pftAddr
-  // of section 5.1, which arrives at p2." The FTB's own
-  // ftb_pft_addr_p2 is consumed INSIDE the cluster and no port
-  // carries it out; the p2 and p3 slot correction groups carry
-  // bp_ftq_slot_t only, and pft_addr is a block scalar. So the entry
-  // keeps the p1 view for its whole life.
-  //
-  // WHEN THE TWO DIFFER:
-  //
-  //   uBTB hit    they agree by construction -- blk_p1.pft_addr is
-  //               the uBTB entry's fall-through and the uBTB entry
-  //               mirrors the FTB entry.
-  //   uBTB miss   they do NOT. The p1 value is the block-aligned PC
-  //               plus FTB_BLOCK_BYTES, the FULL block end, so a
-  //               block terminated by a call earlier in the block
-  //               pushes an address past the call. Allocation is
-  //               unconditional (5.2), so this entry exists and can
-  //               commit.
-  //   p2 fixed it the FTB found a branch the uBTB missed -- the
-  //               FE-13 case -- and corrected the block end. The
-  //               entry still holds the p1 value.
-  //
-  // A wrong ret_addr costs prediction accuracy on the matching
-  // return, not correctness: the RAS is a predictor and the return
-  // resolves against the real target. That is why this is reported
-  // rather than worked around.
-  //
-  // pft_addr is driven anyway because it is the ONLY candidate the
-  // entry offers -- pc, the slot targets and the slot positions
-  // cannot reconstruct it, since nothing records whether the call
-  // was RVC or RVI. THE FIX IS A PLANNING CHANGE, outside this
-  // task: either the p2 group gains the FTB fall-through and the
-  // entry gains a field for it, or the entry gains a ret_addr field
-  // written at p2. Reported in the BP-107 Results Capture.
+  // Until BP-118 the entry held the p1 view for its whole life, which
+  // on a uBTB miss is the lookup PC plus FTB_BLOCK_BYTES, so a block
+  // ended by a call earlier in it pushed an address past the call
+  // (BP-107, TD#113). The 4c write now replaces pft_addr at p2 with
+  // the cluster's corrected fall-through -- the FTB fall-through when
+  // the FTB answered, else the p1 value carried forward -- so the
+  // commit reads the corrected value. A predecode correction does not
+  // rewrite pft_addr; that case is not covered here.
   always_comb begin : ras_commit_payload
     ras_commit_snapshot = commit_rd_entry.ras;
     ras_commit_ret_addr = commit_rd_entry.pft_addr;
@@ -298,6 +278,15 @@ module ftq_entry (
         r_arr[e].valid <= 1'b0;
       end
     end else begin
+      // p2: the block-scalar fields of the named entry. Before the
+      // allocation write in text, so an allocation naming the same
+      // index -- the newest event for it -- wins the block fields, as
+      // the header orders.
+      if (blk_wr_val) begin
+        r_arr[blk_wr_idx].ras      <= blk_wr_ras;
+        r_arr[blk_wr_idx].pft_addr <= blk_wr_pft_addr;
+      end
+
       // p1: the whole entry, block-scalar fields included.
       if (alloc_wr_val) begin
         r_arr[alloc_wr_idx] <= w_alloc_entry;
