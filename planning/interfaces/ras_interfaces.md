@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -412,7 +412,8 @@ On ras_commit_val with RETURN_CALL:
 
 RETURN_CALL was listed in the call arm, so CSP advanced, while this
 section said it commits as the net effect of its pop and push.
-ras_decisions.md 3.3 owns the rule. Session-072.
+ras_decisions.md 3.3 owns the rule. Session-072. Built by BP-119;
+before it, ras.sv did nothing with a RETURN_CALL commit.
 
 Commit is registered (takes effect the cycle after
 ras_commit_val is asserted). Commit does not interact with
@@ -431,8 +432,12 @@ applied to the speculative stack:
   p2=no-op, p3=pop   -> repair: pop  (apply missed pop)
   p2=pop,  p3=no-op  -> repair: push (undo the pop)
   p2=no-op, p3=push  -> repair: push (apply missed push)
+  p2=return-call, p3=no-op -> undo both, as one operation: TOSR
+                              restored to its pre-op value
+  p2=no-op, p3=return-call -> missed pop, then missed push
 
-push->pop and pop->push within one p2/p3 pair cannot occur.
+push->pop and pop->push within one p2/p3 pair cannot occur. The
+return-call rows were built by BP-119 (ras_decisions.md 1).
 Repair applies to the speculative stack only.
 See ras_decisions.md section 1 (p2/p3 repair table).
 
@@ -440,7 +445,9 @@ Repair semantics: the push/pop labels denote stack-height
 restoration of resident entries, not fresh allocation or array
 clear. Undo-pop (p2=pop, p3=no-op) and undo-push (p2=push,
 p3=no-op) move TOSR over still-resident entries with no array
-write (undo-push decrements an in-place recursion count when
+write; from BP-120 undo-pop restores the pre-op TOSR and a missed
+pop follows the popped entry's next-on-stack link
+(ras_decisions.md 3.2, ruled session-075) (undo-push decrements an in-place recursion count when
 present). Only the missed-push case (p2=no-op, p3=push)
 allocates and writes a new frontier entry. Undo-pop does NOT
 reverse a recursion-decrement pop (TOSR held, rctr decremented):
@@ -637,3 +644,8 @@ On rstn deassert (active low, synchronous):
 
   2026-09-20  session-072. D29: the history section notes that older
               entries use the retired s-labels.
+
+  2026-10-07  session-075, after BP-119. IC-RAS-10: the RETURN_CALL
+              commit built. IC-RAS-11: the two return-call repair
+              rows, built; undo-pop and missed pop follow the
+              next-on-stack link ruled in ras_decisions.md 3.2.

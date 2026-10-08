@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -114,6 +114,18 @@ FTB_BR_POS_BITS is 4, giving one position per 2-byte slot, so no two
 branches in a block can share one. It was ambiguous until 2026-08-19,
 when the field was 3 bits and two RVC branches in one aligned word
 collided onto a single slot.
+
+A position that matches neither slot of a live entry is a branch the
+entry does not hold. It is PLACED in a slot in program order and
+trained (ftq_entry_formats.md 3.1, ruled session-075, built by
+BP-119); it is not dropped.
+
+TWO RESOLUTIONS, ONE SLOT. Two resolution ports in one cycle can
+name the same slot index (in two entries), or two unmapped
+resolutions of one entry can be placed in the same free slot. As
+built (BP-119) the later write wins and both are reported accepted,
+so one update is lost. Not reachable in the front-end top today,
+which drives port 0 only. TD#158, BP-120.
 
 `bp_update_t` is unchanged. It is arrayed `[NUM_PRED_SLOTS-1:0]` and
 the slot IS the array index, so once the FTQ has resolved position to
@@ -516,6 +528,10 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
+  2026-10-07  session-075, after BP-119. Section 4: an unmapped
+              position is placed and trained; two resolutions
+              naming one slot lose an update, TD#158.
+
   2026-09-22  session-073, after BP-113. R1: it ranks redirect,
               commit and resolve and nothing else. It does not rank
               a redirect against an allocation, which is

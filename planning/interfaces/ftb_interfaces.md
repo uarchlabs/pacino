@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -116,8 +116,10 @@ fields of the one indexed entry, not two slots.
                            always the earlier branch by fill order
                            (IC-FTB-16, ftb_decisions.md 4).
                            Written at allocate/free-field from
-                           ftb_upd_pos_u0 (2.5); static for the life
-                           of the field.
+                           ftb_upd_pos_u0 (2.5); static while the
+                           same branch holds the field (IC-FTB-15).
+                           This read "static for the life of the
+                           field"; session-075.
                            This entry read "which expanded-
                            instruction slot" and "order br0 vs br1".
                            BP-099 took positions to 2-byte
@@ -154,7 +156,9 @@ fields of the one indexed entry, not two slots.
   output logic [FTB_BR_POS_BITS-1:0] ftb_jmp_pos_p2
                         -- jump in-block position (0..15), same meaning
                            as the conditional positions. Written at
-                           allocate from ftb_upd_pos_u0 (2.5).
+                           allocate from ftb_upd_pos_u0 (2.5), and
+                           when a different jump of the region
+                           rewrites the field (IC-FTB-01).
   output logic [VA_WIDTH-1:0]   ftb_jmp_target_p2
                         -- jump target, reconstructed full width by
                            ftb_cntrl from the stored 21-bit
@@ -283,9 +287,11 @@ IC-FTB-05).
                            the selected field's pos at
                            allocate / free-field fill (the conditional
                            chosen by ftb_upd_br_idx_u0, or the jump when
-                           ftb_upd_is_jmp_u0). Static for the life of a
-                           filled field; not rewritten on an in-place
-                           conf/target update (ftb_decisions.md 5.4/5.5).
+                           ftb_upd_is_jmp_u0). Not rewritten when the
+                           same branch (same region position)
+                           resolves; an update at a different position
+                           is a different branch (IC-FTB-15,
+                           ftb_decisions.md 5.5).
 
   (No ftb_upd_ftb_dir_u0 -- conf trains bimodally on the resolved
    OUTCOME, not on FTB-prediction correctness, so FTB's original
@@ -440,6 +446,16 @@ IC-FTB-01:
   4.2 / 5.5). This is the override-chain "...else FTB jump target"
   floor.
 
+  The jump field holds ONE jump. A resolve of the jump at the stored
+  region position rewrites target and type and keeps the position. A
+  resolve of a different jump of the region (a different position)
+  rewrites the whole field: position, target, isCall, isRet, isJalr,
+  and pftAddr if the boundary moves. Ruled session-075 (Jeff),
+  ftb_decisions.md 5.5. As built until BP-120, ftb_cntrl.sv keeps the
+  stored position whenever the stored jump is visible from the
+  update's start ("preserved on an in-place jump-target rewrite"),
+  which mixes two jumps in one field. TD#156.
+
 IC-FTB-02:
   ftb_fastpath_p2[i] is valid only when ftb_valid_p2 is asserted and
   the matching ftb_brI_valid_p2 is asserted. Do not sample the
@@ -449,12 +465,11 @@ IC-FTB-03:
   ftb_pft_addr_p2 is the authoritative fallthrough for the cluster.
   RAS uses this value as the pushed return address (ras_fall_through).
   No straddle correction is applied. The value is BOUNDS CHECKED
-  (ftb_decisions.md 4.5, FTB-G1, FTB-G2), as ubtb_interfaces.md
-  applies to blk_p1. As built, ftb_cntrl.sv line 500 reconstructs
-  unconditionally, TD#124. This entry recorded the check as "A
-  CONFLICT, NOT A SETTLED ABSENCE" (session-070); 4.5 is the
-  authority, so it is the specification and the RTL is the
-  divergence. Session-071.
+  (ftb_decisions.md 4.5, FTB-G1, FTB-G3), built by BP-110 (2.3).
+  This entry said "as built, ftb_cntrl.sv line 500 reconstructs
+  unconditionally, TD#124" and that ubtb_interfaces.md applies the
+  same check to blk_p1; both stale, the uBTB is ruled NOT bounds
+  checked (ubtb_interfaces.md). Corrected session-075.
 
 IC-FTB-04:
   br0 and br1 are the two conditional fields of one entry from one
@@ -546,10 +561,10 @@ IC-FTB-11 (resolved session-052, REOPENED session-070):
   (4.1, TD#122), so it no longer covers the whole upper VA.
   RESOLVED AS SPECIFIED session-071: the reconstruction is bounds
   checked per ftb_decisions.md 4.5 (FTB-G1, FTB-G2), with the
-  start + FTB_BLOCK_BYTES fallback. As built there is still no
-  fallback mux and ftb_cntrl.sv line 500 reconstructs
-  unconditionally; TD#124 tracks the divergence. An upper bound
-  is open, ftb_decisions.md 4.6 O-2.
+  start + FTB_BLOCK_BYTES fallback, and the upper bound is FTB-G3
+  (ruled session-073). Both built by BP-110, TD#124 closed. This read
+  "as built there is still no fallback mux ... an upper bound is
+  open"; corrected session-075.
 
 IC-FTB-12 (session-053):
   Storage split. ftb_array is pure 1R1W DATA RAM: no entry-valid, no
@@ -584,8 +599,14 @@ IC-FTB-15 (session-053, FTB-4 resolved):
   written from ftb_upd_pos_u0 (2.5) at allocate / free-field fill,
   routed to the field selected by ftb_upd_br_idx_u0 or ftb_upd_is_jmp_u0;
   read out on ftb_br0_pos_p2 / ftb_br1_pos_p2 / ftb_jmp_pos_p2 (2.3).
-  Position is static for the life of a filled field -- not rewritten on
-  an in-place conf/target update; reset only by reallocation. No stored
+  Position is static while the SAME branch holds the field -- not
+  rewritten when an update at the stored region position steps conf
+  or rewrites the target. An update at a different position is a
+  different branch: the jump field is rewritten whole (IC-FTB-01);
+  a conditional field is filled as a new branch, with position,
+  weak conf, target and the IC-FTB-16 order (ruled session-075,
+  ftb_decisions.md 5.5, TD#156). This read "static for the life of
+  a filled field ... reset only by reallocation". No stored
   field may be left write-only (0-stuffed) or read-only: a field is not
   "settled" until it has a named producer and consumer.
 
@@ -761,3 +782,9 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
               does not have; session-072.
 
   2026-09-20  session-072. E4: UPDATED brought to the session date.
+
+  2026-10-07  session-075, after BP-119. IC-FTB-01, IC-FTB-15 and
+              the 2.3 and 2.5 position text: a field keeps its
+              position only for the same branch (ruled, Jeff),
+              TD#156. IC-FTB-03 and IC-FTB-11: stale "as built"
+              notes brought to the BP-110 build.

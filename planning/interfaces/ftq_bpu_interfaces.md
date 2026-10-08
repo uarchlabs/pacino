@@ -570,11 +570,11 @@ sc p3 output:
 The top of stack is presented at p0. The push or pop executes at p2
 once `ras_br_type_p2` carries the FTB classification.
 
-RETURN_CALL IS ONE OF THEM, session-069, AS SPECIFIED. AS BUILT IT
-IS NOT: BP-118 found bp_br_type_e has seven names, the cluster's p2
-classification tests is_ret first and never forms it, and 3'b111
-trains the FTB as a plain jump and never the RAS. TD#152, BP-119.
-The specification: `bp_br_type_e` gains
+RETURN_CALL IS ONE OF THEM, session-069; BUILT BY BP-119 (TD#152
+closed). Before BP-119, bp_br_type_e had seven names, the cluster's
+p2 classification tested is_ret first and never formed it, and
+3'b111 trained the FTB as a plain jump and never the RAS. The
+specification, now met: `bp_br_type_e` gains
 RETURN_CALL at 3'b111 for the JALR whose rd and rs1 are both link
 registers and are unequal, which the specification makes a pop
 followed by a push (`ras_decisions.md` 2, `dcd_decisions.md`
@@ -788,25 +788,33 @@ One update channel per prediction slot. The FTQ reads
 `bp_ftq_meta_t` at resolution and forms the per-predictor update
 payloads from `bp_update_t`, the resolved-branch record.
 
-NOT BUILT, TD#151. ftq.sv presents `bp_update_t`, the metadata and
-one valid vector per predictor, and nothing forms the payloads, so in
-the front-end top only the FTB and the RAS train. Found by BP-118.
-RULED session-075 (Jeff): the payloads are formed by a module inside
-the FTQ, instantiated by ftq.sv, so the FTQ's ports are the ones this
-section lists. Every payload field has a source in `bp_update_t`,
-`bp_ftq_meta_t` or the fast-path entry; a field without one is a
-defect in that struct. The cluster's per-slot readies are ANDed per
-predictor (TD#150). The SC-disabled rule and the FTB scheduler path
-are unchanged. BP-119.
+BUILT BY BP-119 (TD#151, TD#150 closed). The payloads are formed by
+`ftq_upd_conv`, a module inside the FTQ instantiated by ftq.sv
+(ruled session-075), so the FTQ's ports are the ones this section
+lists. Every payload field has a source in `bp_update_t`,
+`bp_ftq_meta_t` or the fast-path entry; BP-119 found none missing.
+The FTQ also takes `sc_enable` (FE-20).
+
+Handshake. A slot's update is accepted when every predictor it
+trains is ready; no predictor is given a partial update. The
+cluster's readies are per slot and ANDed per predictor. The SC ready
+is a grant from the cluster's update arbitration and depends on the
+SC valid, so the FTQ presents the SC valid before it sees the SC
+ready (bp_arb_spec.md). The SC-disabled rule is unchanged.
+
+The FTB update path through ftq_ftb_sched is unchanged and is not
+gated by the other predictors' readies, so a resolution held for a
+predictor is trained into the FTB again when it is presented again.
+That is a defect, TD#157.
 
 | Predictor | Valid port        | Payload port    | Ready port      |
 |-----------|-------------------|-----------------|-----------------|
 | ubtb      | in ubtb_upd_t     | upd_u0          | none            |
 | loop_pred | upd_valid_p0      | upd_p0          | none            |
 | ftb       | ftb_upd_valid_u0  | 14 flat ports   | none            |
-| tage      | tage_upd_val_u0   | tage_upd_inp_u0 | tage_upd_rdy_u1 |
+| tage      | tage_upd_val_u0   | tage_upd_inp_u0 | tage_upd_rdy    |
 | ittage    | ittage_upd_val_u0 | ittage_upd_inp  | ittage_upd_rdy  |
-| sc        | sc_upd_val_u0     | sc_upd_inp_u0   | sc_upd_rdy_u1   |
+| sc        | sc_upd_val_u0     | sc_upd_inp_u0   | sc_upd_rdy      |
 | ras       | ras_commit_val    | 3 commit ports  | none            |
 
 Notes:
@@ -823,6 +831,9 @@ Notes:
 - ras update is the commit group: ras_commit_val,
   ras_commit_br_type, ras_commit_ret_addr, ras_commit_snapshot.
 - ftb and ras have no slot dimension on their update ports.
+- The ready ports are per slot. tage_upd_rdy_u1 and sc_upd_rdy_u1
+  also exist; they are "update applied" flops (tage_interfaces.md),
+  not accept readies. Corrected by BP-119.
 
 The uBTB and FTB update field sets mirror each other, so one set of
 resolved facts forms both.
@@ -1229,4 +1240,10 @@ match it and to match this specification.
               is not in the enum as built, TD#152. Section 8: the
               payloads are not formed, TD#151, and the ruling for
               where.
+
+  2026-10-07  session-075, after BP-119. 5.4: RETURN_CALL built.
+              Section 8: ftq_upd_conv built; the handshake and the
+              SC grant stated; Ready column corrected to the
+              accept readies; the FTB double-training defect
+              recorded, TD#157.
 ```

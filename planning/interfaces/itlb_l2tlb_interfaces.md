@@ -146,7 +146,9 @@ IL-7  `l2t_itlb_size` names which page size the translation
       RULED session-075 (Jeff): 3'b000 4 KiB, 3'b001 64 KiB,
       3'b010 2 MiB, 3'b011 1 GiB, 3'b1xx reserved for a future
       size. Ascending, so a larger code always masks more VPN
-      bits. BP-118 built two bits; BP-119 widens. The ITLB
+      bits. BP-118 built two bits; BP-119 widened to three. A
+      response that hits with a reserved size code is handled as a
+      reserved status (IT-4, IL-4), built by BP-119. The ITLB
       installs the entry at that size, ITLB-3; a 64 KiB entry is
       held once with a masked match (mmu_decisions.md MMU-U7).
       The PPN returned for a 64 KiB page is the PTE's, with

@@ -482,14 +482,23 @@ does not train ITTAGE: its target comes from the RAS pop, and
 ITTAGE is never consulted for a RAS-predicted branch (section 3.3),
 so training it would fill an entry nothing reads.
 
-AS BUILT, THE RETURN-CALL ROW IS NOT MET. bp_br_type_e has no
-RETURN_CALL name, the cluster never classifies it, and 3'b111 trains
-the FTB as a plain jump and never the RAS. Found by BP-118; TD#152,
-fixed in BP-119.
+Every row is built, BP-119. The return-call row was not met
+before it (found by BP-118, TD#152), and before it only the FTB and
+RAS rows trained in the front-end top, because no unit formed the
+per-predictor payloads (TD#151; now ftq_upd_conv,
+ftq_bpu_interfaces.md 8).
 
-AS BUILT, ONLY THE FTB AND RAS ROWS TRAIN in the front-end top: no
-unit forms the per-predictor payloads (ftq_bpu_interfaces.md 8,
-TD#151, BP-119).
+A BRANCH ITS FTQ ENTRY DOES NOT HOLD. On its first execution a
+conditional branch or a JALR the FTB does not hold has no slot in
+its FTQ entry: the p2 slot correction carries only what the FTB
+returned, and predecode writes a slot only on a structural
+mispredict. RULED session-075 (Jeff), built by BP-119: its
+resolution is placed in a slot of its entry in program order (the
+ftq_ifu W1 rule) and trains every predictor of its row from that
+slot's prediction-time metadata, the FTB allocating on a miss. Before
+this ruling such a resolution formed no update, so the FTB never
+learned the branch and TAGE, SC, LP and ITTAGE never trained
+(ftq_entry_formats.md 3.1).
 
 TAGE and SC predict direction and are updated only for conditional
 branches. ITTAGE is updated only for indirect branches. RAS IS
@@ -1392,7 +1401,9 @@ create one.
                        listed dual_pred_en, which no module has
                        (section 10 describes it), and omitted the
                        aging inputs and ext_enable; found by BP-118.
-                       Session-075.
+                       Session-075. sc_enable goes to the cluster
+                       and the FTQ (the converter applies the
+                       SC-disabled rule), BP-119.
 
          maintenance   the ITLB invalidate port of ITLB-14. Its
                        producer is the backend.
@@ -1652,4 +1663,9 @@ create one.
               and RAS train in the top (TD#151). FE-20: the config
               group as the RTL has it. FE-21: the emitted port names
               and fe_top built.
+
+  2026-10-07  session-075, after BP-119. 7.2: every row built;
+              the ruling that a branch its FTQ entry does not hold
+              is placed at resolution and trains every predictor of
+              its row. FE-20: sc_enable also goes to the FTQ.
 ```

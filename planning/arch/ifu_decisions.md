@@ -586,7 +586,12 @@ TD-IFU-7  CLOSED. The line buffer of `icache_decisions.md` L1I-14
           and IFU-30 (TD#134). A slot's reader count is sized by a
           parameter, default the maximum derived from the pipeline,
           with an assertion at the limit; it was fixed at 32 against
-          a possible 33 (TD#153, ruled session-075, BP-119).
+          a possible 33 (TD#153, ruled session-075). BUILT BY
+          BP-119: parameter LB_RD_MAX, default 2*LB_DEPTH+1 = 33,
+          the count stored in 6 bits, and assertion U5 firing when a
+          count exceeds the parameter (the default is reachable and
+          legal). The 6-bit count never overflowed; the defect was
+          the fixed bound only.
 
 TD-IFU-8  CLOSED. Issue is in order, oldest first, whenever a
           translated block, a free identifier and a free slot all

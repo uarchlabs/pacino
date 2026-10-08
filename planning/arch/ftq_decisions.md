@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -1086,8 +1086,11 @@ unrelated registers splits.
   ftq_shadow.sv      the four-deep response shadow  5.6
   ftq_ifu.sv         request, flush, writeback,
                      predecode redirect             ftq_ifu_ifs
-  ftq_resolve.sv     resolution intake and update
-                     fan-out                        backend_ifs 4
+  ftq_resolve.sv     resolution intake, placement
+                     of an unmapped branch, and
+                     update fan-out                 backend_ifs 4
+  ftq_upd_conv.sv    per-predictor update payloads
+                     from bp_update_t, BUILT BP-119 ftq_bpu_ifs 8
   ftq_ftb_sched.sv   BUILT, BP-100                  5.7
 ```
 
@@ -1460,4 +1463,7 @@ Section 1 counts six, since session-074.
               translation latency is 2 cycles for predecode as well
               as backend, since F is now the target block; the p2,
               p3 row of 1 cycle is marked unmeasured.
+
+  2026-10-07  session-075, after BP-119. 7.1: ftq_upd_conv added;
+              ftq_resolve places an unmapped branch.
 ```

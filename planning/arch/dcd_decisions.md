@@ -166,10 +166,14 @@ DCD-11a Downstream, that pair maps to `bp_br_type_e.RETURN_CALL`,
         single classification is required, as on
         `ras_br_type_p2`.
 
-TD-DCD-2  The RAS is Complete and was built before DCD-11 existed.
-          Whether it accepts both bits set on one instruction,
-          and in which order it applies them, is unverified.
-          A task against the RAS, not against the predecoder.
+TD-DCD-2  CLOSED by BP-119. It asked whether the RAS, built
+          before DCD-11, accepts both bits set on one instruction
+          and in which order. It did not: ras.sv treated 3'b111 as
+          a no-op at p2, in the p3 repair and at commit, and
+          nothing upstream presented 3'b111 anyway (the cluster
+          and the uBTB presented RETURN, so the stack was one
+          short after each switch). BP-119 built RAS-DS1: pop,
+          then push, at p2, p3 and commit.
 
 ---
 
@@ -315,7 +319,12 @@ TD#148  `is_vsetvl` and `needs_vtype` in `ifu_pd_pkt_t` have no
         no change to `bp_structs_pkg`.
 
 TD#155  `en_c`, `en_zcb` and `MASK_BITS` in instr_decoder lose
-        their readers with the gating DCD-20 deletes.
+        their readers with the gating DCD-20 deletes. They are
+        declared in decode_pkg.sv (`ext_enable_t`), so removing
+        them is a package change; it narrows fe_top's ext_enable
+        input and removes tb_instr_decoder's en_c=0 and en_zcb=0
+        cases. Not done by BP-119, which did not scope the
+        package; BP-120.
 
 As built by BP-118, a faulting slot's decode packet is `valid` and
 the instruction bits only, no illegal and no vector decode, and it
@@ -335,8 +344,8 @@ DCD-U2  CLOSED session-070 by ras_decisions.md RAS-DS1: the RAS
         then the push. bp_cluster.md and ftq_bpu_interfaces.md 5.4
         agree. This asked for the order "if the RAS treats them as
         two operations"; it does, and RAS-DS1 says so. What is
-        still open is TD-DCD-2, whether the BUILT RAS implements
-        it -- a verification question, not an ordering one.
+        then open was TD-DCD-2, whether the BUILT RAS implemented
+        it; it did not, and BP-119 built it.
 
 ---
 

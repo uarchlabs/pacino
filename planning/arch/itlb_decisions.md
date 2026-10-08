@@ -51,6 +51,9 @@ ITLB-3  One array holds every page size: the three Sv39 sizes,
         stored value, which is the size marker (mmu_decisions.md
         MMU-U7, ruled session-071). Svnapot is mandatory in
         RVA23S64. This read "all three Sv39 page sizes".
+        A response whose size code is reserved (3'b1xx,
+        itlb_l2tlb_interfaces.md IL-7) is never installed; it is
+        handled as a reserved status (IT-4). Built by BP-119.
 
 ITLB-3a Each entry also holds the page's PBMT, the more restrictive
         of the two stages' values as returned on
@@ -428,4 +431,7 @@ TD#118    Bounds ITLB-U1.
               ITLB-14 records the invalidate port as built.
               ITLB-13a: GVMA drops every V=1 entry of the VMID.
               ITLB-10a: walk faults are held for the re-request.
+
+  2026-10-07  session-075, after BP-119. ITLB-3: a reserved size
+              code is not installed and is handled as IT-4.
 ```

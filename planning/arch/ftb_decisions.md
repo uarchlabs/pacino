@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -710,11 +710,36 @@ to a storage field through the same window. Built by BP-110.
                 increments toward 111, not-taken decrements toward 000,
                 saturating. Outcome-driven, not FTB-correctness-driven;
                 this also carries the direction (conf MSB).
-  position:     NOT rewritten on an in-place resolve -- it is static for
-                a filled field (the branch does not move). Written only
-                when the field is first filled (allocate / free-field,
-                5.4) from ftb_upd_pos_u0 rebased to the region (4.6
-                R-2), and reset by reallocation.
+  position:     NOT rewritten when the SAME branch resolves -- it is
+                static for a filled field (the branch does not move).
+                Written when the field is first filled (allocate /
+                free-field, 5.4) from ftb_upd_pos_u0 rebased to the
+                region (4.6 R-2), and reset by reallocation.
+
+                THE SAME BRANCH MEANS THE SAME POSITION. RULED
+                session-075 (Jeff). An update to a filled field whose
+                region position differs from the stored one is a
+                DIFFERENT branch of the region (the entry is shared
+                by every start in it, 4.6), and the stored fields are
+                not kept for it:
+                  jump field: the whole field is rewritten from the
+                    update -- position, target, isCall, isRet,
+                    isJalr -- and pftAddr if the boundary moves.
+                  conditional field: the update is a new branch, as
+                    the free-field case of 5.1 and 5.4: position
+                    written, conf initialised weak in the resolved
+                    direction, target written, the 5.4a order
+                    restored and pftAddr recomputed.
+                AS BUILT BEFORE THIS RULING (found by BP-119),
+                ftb_cntrl.sv kept the stored position whenever the
+                stored jump was visible from the update's start, and
+                rewrote only target and type, so two jumps of one
+                region produced a field with one jump's type and
+                target at the other's position (coro: every
+                RETURN_CALL mispredicted). The conditional fields
+                kept their position the same way. Two jumps of one
+                region now take turns in the one jump field; that
+                costs accuracy, and is correct. TD#156, BP-120.
   conditional target: rewrite if the resolved taken target differs
                 from the stored offset.
   jump target:  rewrite on EVERY resolve of that jump, including when
@@ -1059,6 +1084,11 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-10-07  session-075, after BP-119. 5.5: a filled field
+              keeps its position only for the same branch; a
+              different position rewrites the jump field or is a
+              new conditional (ruled, Jeff). TD#156, BP-120.
+
   2026-09-22  session-073, after BP-111. 4.2: the jump target is
               built from the jump PC; TD#137 closed. The reach
               window is the only observable difference and tb_ftb

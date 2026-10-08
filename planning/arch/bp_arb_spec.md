@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -601,6 +601,14 @@ Session-071.
 
 The SC and TAGE UQ's are separate.
 
+The cluster's SC update request into the arbiter is AN SC UPDATE
+PRESENTED (sc_upd_val_u0), not an update on a conditional channel.
+The SC ready returned to the FTQ is the arbiter's grant, so it
+depends on the SC valid, and the FTQ presents the SC valid before it
+sees the ready (ftq_bpu_interfaces.md 8). Changed by BP-119: the
+request was formed from the conditional-channel valid, which made a
+combinational loop once the FTQ gated its valids on the readies.
+
 ## 7. Non-RAM Predictors
 
 ### 7.1  uFTB
@@ -908,3 +916,7 @@ task file, not here.
               p1/p2; now p1 and NONE, matching 5.2, open item F and
               fe_decisions.md 3.2. 5.2 notes that fe_decisions.md 12
               now lists the no-SRAM departure.
+
+  2026-10-07  session-075, after BP-119. 6.2: the SC update request
+              is an SC update presented; the SC ready is a grant
+              that depends on it.

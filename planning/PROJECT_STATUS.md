@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -16,7 +16,68 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
-## Session-075: BP-117 and BP-118. The front end runs end to end.
+## Session-075: BP-117 to BP-119. The front end runs end to end and trains.
+
+BP-119 RUN, IN PROGRESS by one item, TD#155, left by ruling (the
+fields are in decode_pkg.sv, which the task did not scope).
+regress.sh 104 targets PASS, exit 0.
+  TD#151 the update converter ftq_upd_conv, inside the FTQ; every
+       payload field sourced, none missing. 186 checks. TD#150 the
+       readies ANDed per predictor; the SC ready is a grant that
+       depends on the SC valid.
+  TD#152 RETURN_CALL in full: enum, p2 classification, uBTB,
+       predecode, RAS pop then push at p2, p3 and commit, FTB
+       training, commit. TD-DCD-2 answered: the old RAS did nothing
+       with 3'b111.
+  TD#143 rvc_expander retired. TD#153 LB_RD_MAX = 2*LB_DEPTH+1 =
+       33, assertion U5. TD#154 the uBTB jump slot taken. IL-7 three
+       bits, reserved codes handled as IT-4.
+  Integration found that a branch its FTQ entry did not hold (any
+       conditional or JALR on first execution) formed no update: the
+       FTB never learned it and the table predictors never trained.
+       Ruled in session (Jeff): place it in program order and train
+       every predictor of its row. Built; ftq_entry gains a placement
+       write port. tb_fe_top 35 checks; loops 765 -> 605 cycles,
+       79 -> 51 mispredicts; coro 399 -> 550 cycles, held back by
+       TD#156.
+  Found and not fixed: TD#156 the FTB/uBTB field position; TD#157
+       FTB trained twice for a held resolution; TD#158 two
+       resolutions naming one slot; TD#159 the RAS pointer rules;
+       TD#160 predecode redirects 27 -> 30, not investigated.
+  The IA read about thirty files outside the manifest to source the
+       converter fields and diagnose the defect, and reported it.
+       Three forked agents built problems 3, 4 and 6; no git
+       command was run.
+TD#143, TD#151 to TD#154 CLOSED. TD#156 to TD#160 opened.
+
+PA errors, mine, in BP-119: TD#155's fields live in decode_pkg.sv
+and I scoped no package change; the manifest was too narrow for the
+converter, whose fields are sourced from the predictor control
+files and their rule documents.
+
+Rulings after BP-119 (Jeff), recorded:
+  The FTB and uBTB keep a stored position only for the same branch
+       (same region position); otherwise the jump field is
+       rewritten, or the conditional field filled as a new branch
+       (ftb_decisions.md 5.5, ubtb_interfaces.md). TD#156.
+  TD#159: the RAS gains a next-on-stack link per speculative
+       entry; push records TOSR in it, pop follows it. Reverses the
+       session-050 simple buffer; TOSW, BOS, the snapshot and the
+       restore unchanged (ras_decisions.md 3.2).
+  Fix TD#157, TD#158, TD#159 and TD#160, and TD#155 with the
+       decode_pkg change scoped, in one task, BP-120.
+
+PA-direct edits after BP-119, applied by Jeff: ftq_bpu_interfaces.md
+5.4 and 8 (built, handshake, Ready column), fe_decisions.md 7.2 and
+FE-20, ftq_entry_formats.md 2 and 3.1, ftq_decisions.md 7.1,
+ftq_backend_interfaces.md 4, ifu_decisions.md TD#153,
+itlb_l2tlb_interfaces.md IL-7, itlb_decisions.md ITLB-3,
+dcd_decisions.md TD-DCD-2 and TD#155, ras_decisions.md 1, 3.2, 3.3
+and RAS-DS1, ras_interfaces.md IC-RAS-10 and 11, bp_arb_spec.md 6.2,
+ftb_decisions.md 5.5, ubtb_interfaces.md, ftb_interfaces.md
+2.3, 2.5, IC-FTB-01 and IC-FTB-15 (and the stale TD#124 notes in
+IC-FTB-03 and IC-FTB-11).
+
 
 BP-118 RUN, COMPLETE. regress.sh 104 targets PASS. 1h53m, 80% of a
 1M context, no compaction; problems 3 to 6 run by parallel
@@ -160,7 +221,8 @@ without checking that Spike produces 32-bit expansions, and without
 looking for the decoder track's existing oracle work. The IA found
 an independent source anyway.
 
-Next free BP is BP-119, INFRA-014, TOOLS-007, TD#156.
+Next free BP is BP-121 (BP-120 written), INFRA-014, TOOLS-007,
+TD#161.
 
 ---
 ## Session-074: rulings for the IFU, and BP-115.
@@ -1267,10 +1329,14 @@ it only documented current behavior.
 |                         |             |                   | (TD#143).                        |
 | instr_decoder.sv        | Complete    | tb_instr_decoder  | Takes ifu_pd_pkt_t since BP-118  |
 |                         |             |                   | (DCD-17 to DCD-20). 654 checks.  |
-| rvc_expander.sv         | Deprecated  | tb_rvc_expander   | Wrong in 12,456 encodings,       |
-|                         |             |                   | TD#145. Not repaired; retired    |
-|                         |             |                   | with TD#143 (Jeff, session-075). |
-|                         |             |                   | ifu_rvc_exp is the expander.     |
+| rvc_expander.sv         | Deprecated  | --                | Deleted by BP-119 with           |
+|                         |             |                   | tb_rvc_expander (TD#143,         |
+|                         |             |                   | TD#145). ifu_rvc_exp is the      |
+|                         |             |                   | expander; C and Zcb coverage     |
+|                         |             |                   | credit moved to it. Stale names  |
+|                         |             |                   | of it remain in decode_pkg.sv,   |
+|                         |             |                   | gen_ifu_rvc_exp_oracle.py and    |
+|                         |             |                   | create_docs_stubs.sh, TD#155.    |
 | decode_pkg.sv           | Complete    | --                | All decode structs               |
 | bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
 |                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
@@ -1442,6 +1508,11 @@ it only documented current behavior.
 |                         |             |                   | defects, all caught.             |
 |                         |             |                   | CLI-012 port naming retrofit now |
 |                         |             |                   | reflected in the doc.            |
+|                         |             |                   | BP-119: RETURN_CALL reported;    |
+|                         |             |                   | the jump slot predicted taken    |
+|                         |             |                   | (TD#154). Keeps a stored         |
+|                         |             |                   | position for a different branch, |
+|                         |             |                   | TD#156.                          |
 | ubtb_interfaces.md      | Draft       | --                | SESSION-063: REWRITTEN for the   |
 |                         |             |                   | single-lookup model. UI1 closed  |
 |                         |             |                   | (pred_pc+32 retired). UI4 closed |
@@ -1633,6 +1704,11 @@ it only documented current behavior.
 |                         |             |                   | snapshot IS the p2 start state,  |
 |                         |             |                   | checked one cycle apart against  |
 |                         |             |                   | the RAS pointer registers.       |
+|                         |             |                   | BP-119: RETURN_CALL built, pop   |
+|                         |             |                   | then push at p2, p3 and commit   |
+|                         |             |                   | (TD#152). The pointer rules      |
+|                         |             |                   | mispredict after a pop then a    |
+|                         |             |                   | push, TD#159.                    |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -1642,6 +1718,9 @@ it only documented current behavior.
 | ftb_plru.sv             | Complete    | sim_ftb           | entry-valid + tree-PLRU flops.   |
 | ftb_cntrl.sv            | Complete    | sim_ftb           | All FTB logic. Stale "107 bits/  |
 |                         |             |                   | way" header comment, TD#104.     |
+|                         |             |                   | Keeps a stored position for a    |
+|                         |             |                   | different branch of the region,  |
+|                         |             |                   | TD#156 (found BP-119).           |
 | ftb.sv                  | Complete    | tb_ftb            | Structural top. sim_ftb 99/0.    |
 |                         |             | sim_ftb           | Stale fastpath_en comment, TD#104|
 | sc_decisions.md         | Draft       | --                | Created session-056. Corrected   |
@@ -1990,13 +2069,29 @@ it only documented current behavior.
 |                         |             |                   | FE-8 is met. sim_ftq_ifu 67/0.   |
 | ftq_resolve.sv          | Complete    | tb_ftq_resolve    | BP-107. Resolution intake,       |
 |                         |             |                   | position-to-slot mapping and the |
-|                         |             |                   | fe_decisions 7.2 fan-out. An     |
-|                         |             |                   | unmapped position is REPORTED,   |
-|                         |             |                   | not dropped. The FTB channel is  |
-|                         |             |                   | NOT gated on the scheduler ready:|
-|                         |             |                   | that would close a combinational |
-|                         |             |                   | loop through 5.7.3 S6.           |
-|                         |             |                   | sim_ftq_resolve 82/0.            |
+|                         |             |                   | fe_decisions 7.2 fan-out.        |
+|                         |             |                   | BP-119: an unmapped position of  |
+|                         |             |                   | a live entry is PLACED in        |
+|                         |             |                   | program order and trained        |
+|                         |             |                   | (ftq_entry_formats.md 3.1); this |
+|                         |             |                   | read "REPORTED, not dropped".    |
+|                         |             |                   | The FTB channel is NOT gated on  |
+|                         |             |                   | the scheduler ready: that would  |
+|                         |             |                   | close a combinational loop       |
+|                         |             |                   | through 5.7.3 S6; so a held      |
+|                         |             |                   | resolution trains the FTB twice, |
+|                         |             |                   | TD#157. Two resolutions naming   |
+|                         |             |                   | one slot lose one update,        |
+|                         |             |                   | TD#158.                          |
+| ftq_upd_conv.sv         | Complete    | tb_ftq_upd_conv   | BP-119, TD#151. Forms the        |
+|                         |             |                   | per-predictor update payloads    |
+|                         |             |                   | from bp_update_t, bp_ftq_meta_t  |
+|                         |             |                   | and the entry, inside the FTQ.   |
+|                         |             |                   | Readies ANDed per predictor      |
+|                         |             |                   | (TD#150); a slot is accepted     |
+|                         |             |                   | only when every predictor it     |
+|                         |             |                   | trains is ready. 186 checks;     |
+|                         |             |                   | properties V1 to V5.             |
 | icache_decisions.md     | Draft       | --                | Created session-068. L1I geometry,|
 |                         |             |                   | indexing, storage, both interfaces|
 |                         |             |                   | miss handling, maintenance,       |
@@ -2128,8 +2223,10 @@ it only documented current behavior.
 |                         |             |                   | entries, four page sizes, per-hit |
 |                         |             |                   | permission check, all invalidate  |
 |                         |             |                   | forms. 113 checks at walk depth   |
-|                         |             |                   | 1, 116 at 2. l2t_itlb_size widens |
-|                         |             |                   | to 3 bits in BP-119 (IL-7).       |
+|                         |             |                   | 1, 116 at 2. l2t_itlb_size        |
+|                         |             |                   | widened to 3 bits by BP-119       |
+|                         |             |                   | (IL-7); a reserved size code is   |
+|                         |             |                   | handled as IT-4.                  |
 | pmp_pma_chk             | Working     | tb_pmp_pma_chk    | Built BP-118, rtl/mmu/pmp. The    |
 |                         |             |                   | one checker of MMU-10a: 16 PMP    |
 |                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
@@ -2140,13 +2237,15 @@ it only documented current behavior.
 |                         |             |                   | exist, so one client today.       |
 | frontend top            | Working     | tb_fe_top         | Built BP-118,                     |
 |                         |             |                   | rtl/core/frontend/fe_top:         |
-|                         |             |                   | structural, seven instances. Bare |
-|                         |             |                   | and Sv39 programs retire exactly  |
-|                         |             |                   | across predecode, mispredict and  |
-|                         |             |                   | trap redirects and both fetch-    |
-|                         |             |                   | fault classes. Only the FTB and   |
-|                         |             |                   | RAS train until the update        |
-|                         |             |                   | converter, TD#151, BP-119.        |
+|                         |             |                   | structural, seven instances.      |
+|                         |             |                   | Bare, Sv39, loops and coro        |
+|                         |             |                   | programs retire exactly across    |
+|                         |             |                   | predecode, mispredict and trap    |
+|                         |             |                   | redirects and both fetch-fault    |
+|                         |             |                   | classes. Every predictor trains   |
+|                         |             |                   | since BP-119; 35 checks. loops    |
+|                         |             |                   | 605 cycles, 51 mispredicts; coro  |
+|                         |             |                   | 550 and 39, held back by TD#156.  |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -3042,14 +3141,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | Was: specified in ftq_ifu_interfaces.md 4 and not built. |
 |     |          | Found incidentally by BP-112.                            |
 
-| 143 | decode   | OPEN, NEARLY CLOSED. BP-118 moved decode to ifu_pd_pkt_t |
-|     |          | (DCD-17 to DCD-20) and deleted predecode.sv,             |
-|     |          | tb_predecode and predecode_pkt_t. rvc_expander.sv and    |
-|     |          | tb_rvc_expander.sv remain: tb_ifu_rvc_exp uses           |
-|     |          | rvc_expander as a second reference, and                  |
-|     |          | check_rva23_coverage.py takes its C and Zcb credit from  |
-|     |          | that file. Retired by BP-119 once both no longer depend  |
-|     |          | on it.                                                   |
+| 143 | decode   | CLOSED by BP-119 (session-075). rvc_expander.sv and      |
+|     |          | tb_rvc_expander.sv deleted; tb_ifu_rvc_exp and           |
+|     |          | check_rva23_coverage.py no longer use them. Stale names  |
+|     |          | of it in other files are carried by TD#155.              |
 | 144 | ftq      | CLOSED by BP-116 Part A (session-074). Eleven labels     |
 |     |          | deleted or restated; Q11, Q12, E9, E10 and the restated  |
 |     |          | E8 each shown to fail under a scratch mutation.          |
@@ -3080,50 +3175,83 @@ assessment of each document. Correct any that are wrong.
 |     |          | later restore to it is slightly wrong. Accuracy only.    |
 |     |          | Fix if measured: a p3 snapshot write.                    |
 |     |          | ftq_bpu_interfaces.md 4c.                                |
-| 150 | ftq, bpu | OPEN, DEFERRED. Update readies are reduced, not per      |
-|     |          | slot. bp_cluster gives each queued predictor (TAGE,      |
-|     |          | ITTAGE, SC) a ready per slot; the FTQ update converter   |
-|     |          | (BP-119) ANDs them, so a full queue on either slot       |
-|     |          | stalls both update channels for that predictor. Correct: |
-|     |          | FE-5 holds, nothing is dropped. Costs throughput only    |
-|     |          | when one slot's queue fills and the other's does not.    |
-|     |          | Fix if measured: accept each slot independently, which   |
-|     |          | needs ftq_resolve to hold a partly accepted resolution   |
-|     |          | pair. Ruled session-075 (Jeff).                          |
-| 151 | ftq, bpu | OPEN; BP-119. No unit converts the FTQ's bp_update_t     |
-|     |          | into the cluster's per-predictor payloads (ubtb_upd_t,   |
-|     |          | lp_upd_t, tage_upd_inp_t, ittage_upd_inp_t,              |
-|     |          | sc_upd_inp_t), though ftq_bpu_interfaces.md 8 has the    |
-|     |          | FTQ form them. In fe_top only the FTB and the RAS train. |
-|     |          | Ruled session-075 (Jeff): a module inside the FTQ,       |
-|     |          | instantiated by ftq.sv. Every payload field has a source |
-|     |          | in bp_update_t, bp_ftq_meta_t or the entry; a field      |
-|     |          | without one is a defect in that struct. Found by BP-118. |
-| 152 | bpu, ftq | OPEN; BP-119. RETURN_CALL is not in bp_br_type_e as      |
-|     |          | built, though the documents have carried it at 3'b111    |
-|     |          | since session-069. 3'b111 trains the FTB as a plain jump |
-|     |          | and never the RAS, and the cluster never classifies it   |
-|     |          | at p2 (is_ret is tested first). Fix in full: enum, p2    |
-|     |          | classification, RAS pop then push at prediction and      |
-|     |          | commit (closes TD-DCD-2), uBTB update decode,            |
-|     |          | ftq_resolve fan-out, ftq_entry commit qualifier. Found   |
-|     |          | by BP-118.                                               |
-| 153 | ifu      | OPEN; BP-119. ifu_lbuf's per-slot reader count covers 32 |
-|     |          | readers; BQ_DEPTH 32 plus F0 can reach 33 on a tight     |
-|     |          | loop in one line. Ruled session-075 (Jeff): a parameter, |
-|     |          | default the maximum derived from the pipeline, between   |
-|     |          | 32 and 63, with an assertion at the limit. Found by      |
-|     |          | BP-118.                                                  |
-| 154 | bpu      | OPEN; BP-119. ubtb.sv reports the jump slot with         |
-|     |          | br_taken = 0 and the cluster's p1 mux uses it as the     |
-|     |          | direction, so the uBTB never predicts a taken JAL or     |
-|     |          | direct call; the FTB redirect corrects each at p2.       |
-|     |          | Accuracy only, but every block ending in a jump pays it. |
-|     |          | Ruled session-075 (Jeff): fix, the jump slot is taken.   |
-|     |          | Found by BP-118.                                         |
-| 155 | decode   | OPEN. en_c, en_zcb and MASK_BITS in instr_decoder lose   |
-|     |          | their readers with the compressed gating DCD-20 deletes. |
-|     |          | Remove them. Found by BP-118.                            |
+| 150 | ftq, bpu | OPEN, DEFERRED. The AND is built (BP-119, ftq_upd_conv). |
+|     |          | bp_cluster gives each queued predictor (TAGE, ITTAGE,    |
+|     |          | SC) a ready per slot; the converter ANDs them, so a full |
+|     |          | queue on either slot stalls both update channels for     |
+|     |          | that predictor. Correct: FE-5 holds, nothing is dropped. |
+|     |          | Costs throughput only when one slot's queue fills and    |
+|     |          | the other's does not. Fix if measured: accept each slot  |
+|     |          | independently, which needs ftq_resolve to hold a partly  |
+|     |          | accepted resolution pair. Ruled session-075 (Jeff).      |
+| 151 | ftq, bpu | CLOSED by BP-119 (session-075). ftq_upd_conv, inside the |
+|     |          | FTQ, forms every per-predictor payload; every field      |
+|     |          | sourced. Integration found that a branch its FTQ entry   |
+|     |          | did not hold formed no update at all, so TAGE, SC, LP    |
+|     |          | and ITTAGE never trained and the FTB never learned it.   |
+|     |          | Ruled (Jeff) and built: the resolution is placed in      |
+|     |          | program order and trains every predictor of its row      |
+|     |          | (ftq_entry_formats.md 3.1).                              |
+| 152 | bpu, ftq | CLOSED by BP-119 (session-075). RETURN_CALL at 3'b111 in |
+|     |          | bp_br_type_e, formed at p2, pop then push at p2, p3 and  |
+|     |          | commit, uBTB and predecode report it, ftq_resolve trains |
+|     |          | the FTB with call, ret and jalr set, ftq_entry commits   |
+|     |          | it. TD-DCD-2 closed: the old RAS treated 3'b111 as a     |
+|     |          | no-op.                                                   |
+| 153 | ifu      | CLOSED by BP-119 (session-075). Parameter LB_RD_MAX,     |
+|     |          | default 2*LB_DEPTH+1 = 33; assertion U5 fires above it.  |
+|     |          | The 6-bit count never overflowed; the fixed bound was    |
+|     |          | the defect.                                              |
+| 154 | bpu      | CLOSED by BP-119 (session-075). The uBTB jump slot is    |
+|     |          | predicted taken at p1.                                   |
+| 155 | decode   | OPEN; BP-120. en_c, en_zcb and MASK_BITS in              |
+|     |          | instr_decoder lose their readers with the compressed     |
+|     |          | gating DCD-20 deletes. They are declared in              |
+|     |          | decode_pkg.sv (ext_enable_t), so this is a package       |
+|     |          | change; it narrows fe_top's ext_enable input and removes |
+|     |          | tb_instr_decoder's en_c=0 and en_zcb=0 cases. BP-119 did |
+|     |          | not scope the package and left it. Also carries the      |
+|     |          | stale rvc_expander names (decode_pkg.sv lines 15 and 26, |
+|     |          | gen_ifu_rvc_exp_oracle.py line 22, create_docs_stubs.sh  |
+|     |          | line 50), the unused decode/verilator/sim_main_exp.cpp   |
+|     |          | and the unused DEC_DIR in the ifu Makefile, all found by |
+|     |          | BP-119.                                                  |
+| 156 | bpu      | OPEN; BP-120. ftb_cntrl.sv and ubtb.sv keep a filled     |
+|     |          | field's stored position when a DIFFERENT branch of the   |
+|     |          | region trains it, rewriting only target and type, so two |
+|     |          | jumps of one region give a field with one jump's type    |
+|     |          | and target at the other's position (coro: all 20         |
+|     |          | RETURN_CALLs mispredict). Conditional fields keep their  |
+|     |          | position the same way. Ruled session-075 (Jeff): keep    |
+|     |          | the position only when the update's region position      |
+|     |          | equals it; otherwise rewrite the jump field, or fill the |
+|     |          | conditional field as a new branch (ftb_decisions.md      |
+|     |          | 5.5). Found by BP-119.                                   |
+| 157 | ftq      | OPEN; BP-120. The FTB update is presented to             |
+|     |          | ftq_ftb_sched whatever the other predictors' readiness,  |
+|     |          | so a resolution held for a predictor trains the FTB      |
+|     |          | again when presented again. Gating the FTB valid on the  |
+|     |          | readies closes a loop through the scheduler. Accuracy    |
+|     |          | only (a conf step applied twice). Found by BP-119.       |
+| 158 | ftq      | OPEN; BP-120. Two resolution ports in one cycle naming   |
+|     |          | the same slot index (two entries) both write that update |
+|     |          | channel in ftq_resolve, and two unmapped resolutions of  |
+|     |          | one entry can be placed in the same free slot; the later |
+|     |          | wins and both are accepted, so one update is lost. Not   |
+|     |          | reachable in fe_top (port 0 only). Found by BP-119.      |
+| 159 | bpu      | OPEN; BP-120. ras_decisions.md 3.2: push writes at TOSW, |
+|     |          | which only advances, and pop moved TOSR to TOSR-1, so    |
+|     |          | after a pop then a push a further pop re-exposes the     |
+|     |          | popped slot, not the entry below it. The correct path    |
+|     |          | mispredicts: f calls g, g returns, f calls h, h returns, |
+|     |          | and f's return predicts g's return address. Ruled        |
+|     |          | session-075 (Jeff): a next-on-stack link per speculative |
+|     |          | entry, reversing the session-050 simple buffer; snapshot |
+|     |          | and restore unchanged. Found by BP-119 (tb_bp_cluster    |
+|     |          | M1).                                                     |
+| 160 | ifu, bpu | OPEN; BP-120. The bare program's predecode redirect      |
+|     |          | count rose from 27 to 30 once the uBTB began training    |
+|     |          | (BP-119). Not investigated; may be a defect or expected. |
 
 ---
 

@@ -6,7 +6,7 @@
  FILE:    ubtb_interfaces.md
  SOURCE:  various; session-063 rewrite
  STATUS:  DRAFT
- UPDATED: 2026-09-22
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -277,8 +277,8 @@ same entry; they write different fields of it.
   pos        : in-block position of the resolving branch, 0..15,
                START-relative. ubtb.sv adds the update PC's region
                offset before storing it (ftb_decisions.md 4.6 R-2).
-               Written at fill; static for the life of a filled
-               field.
+               Written at fill; static while the same branch holds
+               the field (Allocation and field writes below).
   is_jmp     : this resolve is a jump.
   jmp_target : resolved jump target, full width. Written on every
                jump resolve.
@@ -286,16 +286,27 @@ same entry; they write different fields of it.
   is_ret     : jump type.
   is_jalr    : jump type.
   pft_addr   : resolved block end, full width. ubtb.sv reduces it to
-               the stored partial pftAddr plus carry. THAT IS THE
-               BUILT FORM. Ruled session-070, not built (TD#124):
                six bits from the aligned region base, no carry
                (blk_p1 field semantics above, ftb_decisions.md 5.5).
+               Built by BP-110, TD#124 closed; this read "partial
+               pftAddr plus carry ... not built".
 
 ### Allocation and field writes
 
-  Tag hit, field already filled : train conf toward the resolved
+  Tag hit, field already filled,
+  same position                 : train conf toward the resolved
                                   outcome; rewrite the target if it
                                   differs; keep pos.
+  Tag hit, field already filled,
+  different position            : a different branch of the region
+                                  (ftb_decisions.md 5.5, ruled
+                                  session-075). Jump field: rewrite
+                                  the whole field. Conditional
+                                  field: fill it as a new branch, as
+                                  the free-field row. AS BUILT BEFORE
+                                  THE RULING (BP-119), ubtb.sv kept
+                                  a visible stored position for a
+                                  different branch. TD#156, BP-120.
   Tag hit, field free           : fill it. conf starts weak in the
                                   resolved direction
                                   (UBTB_CONF_INIT_TKN /
@@ -306,10 +317,8 @@ same entry; they write different fields of it.
 The jump target is rewritten on every resolve of that jump, whether
 or not ITTAGE or RAS supplies the runtime target.
 
-pftAddr and carry are recomputed on any update that moves the block
-boundary. Built form; after TD#124 there is no carry and only
-pftAddr is recomputed. This paragraph and the pft_addr field above
-carried the built form unannotated. Session-072.
+pftAddr is recomputed on any update that moves the block boundary.
+There is no carry (BP-110, TD#124 closed).
 
 A block containing a third conditional branch ends at the second
 conditional. The third branch becomes the first branch of the next
@@ -362,6 +371,14 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-10-07  session-075, after BP-119. Allocation and field
+              writes: a filled field keeps pos only for the same
+              position; otherwise the jump field is rewritten or
+              the conditional filled as new (ruled, Jeff), TD#156.
+              pft_addr text brought to the BP-110 build (no carry).
+              The cluster now meets the obligation not to use
+              br_taken when br_type is not COND (BP-119).
+
   2026-09-22  session-073, after BP-110. The uBTB divergence from
               the FTB is ruled and stated at the head of the
               prediction section: mask only, no compaction, no

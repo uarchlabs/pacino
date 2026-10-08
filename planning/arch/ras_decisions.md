@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-07
  CONTACT: Jeff Nye
 ```
 
@@ -42,7 +42,16 @@ p2/p3 repair table:
   p2=no-op, p3=pop   -> repair: pop
   p2=pop,  p3=no-op  -> repair: push
   p2=no-op, p3=push  -> repair: push
+  p2=return-call, p3=no-op -> repair: undo both, as one operation
+  p2=no-op, p3=return-call -> repair: missed pop, then missed push
 Note: push->pop and pop->push within one p2/p3 pair cannot occur.
+
+The two return-call rows were added after BP-119, which built them.
+The undo restores TOSR to its value before the p2 operation, held in
+a register (exact for the pointers by FE-11; a recursion count is
+not restored, the TD #78 limitation). A return-call paired at the
+other stage with a plain push or pop is not specified here; BP-120
+reports what ras.sv does with it.
 
 Repair label semantics: the push/pop labels above denote
 stack-height restoration of resident entries, not fresh
@@ -243,7 +252,9 @@ structural change.
 ### 3.2  Speculative stack
 
 Entries:   16
-Structure: simple circular buffer. No linked-list structure.
+Structure: circular buffer with a next-on-stack link per entry
+           (ruled session-075, below). This read "simple circular
+           buffer. No linked-list structure."
 Purpose:   Covers in-flight call depth between fetch and commit.
 
 Snapshot for mispredict recovery: three pointers (TOSR, TOSW,
@@ -270,24 +281,56 @@ shows wrong-path corruption as a significant contributor.
 Candidate remedies at that point: linked structure or corruption
 detector per Desmet et al.
 
+DEFECT IN THE POINTER RULES BELOW, found by BP-119, TD#159. Push
+writes at TOSW and TOSW only advances; pop moves TOSR to TOSR-1.
+After a pop then a push, TOSR-1 is the slot just popped, not the
+entry below it. So the CORRECT path mispredicts: f calls g (push
+Rf, push Rg), g returns (pop: TOSR at Rf), f calls h (push Rh,
+written above Rg), h returns (pop: TOSR at Rg, not Rf), and f's
+return is predicted to Rg. This is not the wrong-path corruption
+the session-050 comparison weighed. That comparison was between a
+simple buffer that pushes at TOSR+1 and the linked array; the rules
+below are the linked array's pointers (TOSR, TOSW) without its
+link, and are correct for neither.
+
+RULED session-075 (Jeff): ADD THE LINK. This reverses "No
+linked-list structure" above and the session-050 choice of the
+simple buffer. Each speculative entry carries nos, RAS_PTR_BITS
+wide, the index of the entry below it on the stack. A push writes
+the current TOSR into the new entry's nos. A pop that does not
+only decrement a recursion count sets TOSR to the popped entry's
+nos. TOSW, BOS, the sentinel, the three-pointer snapshot and the
+restore of 4.3 are unchanged, and restore stays exact while the
+buffer has not wrapped, since TOSW only advances and a wrong-path
+push never overwrites a live entry. The p3 repair follows the link
+(undo-pop restores the pre-op TOSR; missed pop follows nos).
+Rejected: pushing at TOSR+1 and dropping TOSW, which matches the
+session-050 wording but loses exact restore and rewrites the
+snapshot, sentinel and overflow rules. Cost 16 x 4 = 64 bits.
+BP-120, TD#159.
+
 Entry fields:
   ret_addr  : VA_WIDTH bits  -- PC+2 or PC+4 of instruction
                                 after call (compressed vs full)
   rctr      : 4b             -- recursion counter (see section 5)
+  nos       : RAS_PTR_BITS   -- next on stack: the entry below this
+                                one (ruled session-075, BP-120)
 
 Pointers (all RAS_PTR_BITS wide, $clog2(RAS_SPEC_ENTRIES)=4b):
   TOSR  -- Top Of Stack Read: current top for predictions
   TOSW  -- Top Of Stack Write: next free allocation slot
   BOS   -- Bottom Of Stack: boundary of committed state
 
-Push: write ret_addr and rctr to TOSW slot. TOSR = TOSW.
+Push: write ret_addr, rctr and nos = TOSR to the TOSW slot.
+      TOSR = TOSW.
       TOSW advances to next slot. The BOS index is a permanent
       sentinel: a push that would land TOSW on BOS allocates at
       BOS+1 instead. This occurs at cold-start after reset, or on
       a full circular wrap. The sentinel keeps a single live
       entry distinguishable from empty.
-Pop:  present TOSR entry as prediction. TOSR decrements.
-      No data overwritten on pop.
+Pop:  present TOSR entry as prediction. TOSR = that entry's
+      nos. No data overwritten on pop. This read "TOSR
+      decrements", the TD#159 defect; session-075.
 
 Empty condition: TOSR == BOS. On pop when empty, fall through
 to commit stack top as prediction result. Commit stack entry
@@ -342,7 +385,7 @@ post-op TOSR (ras_commit_snapshot.tosr).
 
 On commit of a RETURN_CALL: the return rule above, then the push
 rule, applied to the state the return leaves (RAS-DS1: pop first,
-then push). The net CSP movement is whatever those two steps give;
+then push). Built by BP-119. The net CSP movement is whatever those two steps give;
 it is not specified separately. BOS advances once, to the committing
 entry's post-op TOSR. Added session-072: this section had no
 RETURN_CALL rule, and ras_interfaces.md IC-RAS-10 put RETURN_CALL in
@@ -510,7 +553,7 @@ Counter width: 4b. Tracks up to 15 repeated pushes of the same
 return address before saturating. Saturation behavior: counter
 holds at 15, additional pushes are suppressed. On pop: if
 rctr > 0, decrement rctr without moving TOSR. If rctr == 0,
-pop normally (TOSR decrements).
+pop normally (TOSR follows nos, 3.2).
 
 Match condition: incoming push address equals ret_addr at TOSR
 and the speculative stack is not empty (TOSR != BOS).
@@ -590,8 +633,9 @@ second recovery point.
            the RAS treats them as two operations", and this rule
            says it does, so DCD-U2 is answered by RAS-DS1 rather
            than gating it. This read "Ordering is DCD-U2" as
-           though still open. Session-070. TD-DCD-2 verifies
-           the built RAS against it.
+           though still open. Session-070. BUILT BY BP-119:
+           before it, ras.sv treated RETURN_CALL as a no-op at
+           p2, in the p3 repair and at commit (TD-DCD-2, closed).
 
 The superseded five follow.
 
@@ -890,4 +934,11 @@ Commit stack pointer width:
   2026-09-20  session-072. E21: the history section was a paragraph
               followed by a code block; the whole section is now
               fenced.
+
+  2026-10-07  session-075, after BP-119. 1: return-call rows in the
+              p2/p3 repair table, built. RAS-DS1 and 3.3 built;
+              TD-DCD-2 closed. 3.2: the pointer rules mispredict on
+              the correct path after a pop then a push, TD#159.
+              Ruled (Jeff): add the next-on-stack link; reverses
+              session-050's simple buffer.
 ```

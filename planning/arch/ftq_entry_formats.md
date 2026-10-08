@@ -58,6 +58,14 @@ session-071), and the entry is freed at commit. This read
 "written at p1 and rewritten by
 redirect"; session-070.
 
+Two more writers rewrite a slot. Predecode writes the slot of a
+branch it finds on a structural mispredict (ftq_ifu W1). And
+ftq_resolve writes a PLACED slot when it accepts the resolution of a
+branch the entry did not hold (section 3.1, after R2), through the
+ftq_entry placement port `rsv_wr_*`, added by BP-119. The placement
+write is last in ftq_entry's write order, so it overrides a predecode
+write to the same entry in the same cycle.
+
 Block scalar fields, one per entry:
 
 ```
@@ -276,7 +284,24 @@ READ RULES.
       right arm.
 ```
 
-R2 is reachable whenever an FTB entry is stale or aliased.
+R2 applies only to a branch that maps to a slot of its entry. It is
+reachable whenever an FTB entry is stale or aliased.
+
+THE UNMAPPED RESOLUTION. A resolution of a live entry that maps to
+no slot is not only the stale or aliased case: it is the ordinary
+first execution of any conditional branch or JALR the FTB does not
+yet hold, because the p2 correction carries only what the FTB
+returned and predecode writes a slot only on a structural
+mispredict. RULED session-075 (Jeff), built by BP-119: ftq_resolve
+places it in a slot of the entry in program order (the ftq_ifu W1
+rule: the lowest free slot, or the slot at or after its position,
+which can displace a stored later branch), and trains it like a
+mapped branch: the FTB (allocating on a miss), the uBTB, and TAGE,
+SC, LP and ITTAGE from the placed slot's metadata. R2 does not apply
+to a placed branch. The placed slot is written into the entry only
+when the resolution is accepted, so a held resolution is placed
+again when presented again. Before this ruling the unmapped
+resolution formed no update at all.
 
 ---
 
@@ -551,4 +576,11 @@ path touches none of those.
   2026-10-07  session-075, after BP-118. Section 2: the TD#113 fix
               is built. 4.2 W4a: the squash outranks a same-cycle
               writeback or fault set.
+
+  2026-10-07  session-075, after BP-119. Section 2: the predecode
+              and placement writers, the placement last in write
+              order. 3.1: the unmapped resolution is the first
+              execution of a branch the entry does not hold; it is
+              placed and trained, R2 applying only to a mapped
+              branch (ruled, Jeff).
 ```
