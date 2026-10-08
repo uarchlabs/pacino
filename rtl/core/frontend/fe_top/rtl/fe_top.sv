@@ -99,6 +99,9 @@ module fe_top (
   input  logic [VA_WIDTH-1:0]         bkend_ftq_redir_pc,
   input  logic                        bkend_ftq_redir_self,
   input  ftq_redir_cause_e            bkend_ftq_redir_cause,
+  // The resolved direction of the redirecting branch (BP-121, the
+  // corrected history rollback).
+  input  logic                        bkend_ftq_redir_taken,
   input  logic                        bkend_ftq_commit_val,
   input  logic [FTQ_PTR_BITS-1:0]     bkend_ftq_commit_idx,
 
@@ -227,6 +230,10 @@ module fe_top (
   sc_pred_meta_t              bpu_meta_sc_p3     [0:NUM_PRED_SLOTS-1];
   logic                       ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]    ftq_rollback_idx;
+  logic                       ftq_rollback_corr;
+  logic [1:0]                 ftq_rollback_n;
+  logic [1:0]                 ftq_rollback_tkn;
+  logic [1:0]                 ftq_rollback_pbit;
   logic [GHIST_PTR_BITS-1:0]  ckpt_ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  ckpt_phist_ptr;
   logic                       ras_restore_val;
@@ -254,6 +261,7 @@ module fe_top (
   logic                       ftb_upd_is_call_u0;
   logic                       ftb_upd_is_ret_u0;
   logic                       ftb_upd_is_jalr_u0;
+  logic                       ftb_upd_jmp_rvc_u0;
   logic [VA_WIDTH-1:0]        ftb_upd_pft_addr_u0;
 
   // The per-predictor update channels, FTQ -> BPU, section 8.
@@ -405,6 +413,7 @@ module fe_top (
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_flush_px          (1'b0),
     .tage_upd_val_u0       (tage_upd_val_u0),
@@ -423,6 +432,10 @@ module fe_top (
     .ras_flush_snapshot    ('0),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
+    .ftq_rollback_corr     (ftq_rollback_corr),
+    .ftq_rollback_n        (ftq_rollback_n),
+    .ftq_rollback_tkn      (ftq_rollback_tkn),
+    .ftq_rollback_pbit     (ftq_rollback_pbit),
     .ghist_ptr             (bpu_ghist_ptr),
     .phist_ptr             (bpu_phist_ptr),
     .ckpt_ghist_ptr        (ckpt_ghist_ptr),
@@ -493,6 +506,10 @@ module fe_top (
     .bpu_meta_sc_p3        (bpu_meta_sc_p3),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
+    .ftq_rollback_corr     (ftq_rollback_corr),
+    .ftq_rollback_n        (ftq_rollback_n),
+    .ftq_rollback_tkn      (ftq_rollback_tkn),
+    .ftq_rollback_pbit     (ftq_rollback_pbit),
     .ras_restore_val       (ras_restore_val),
     .ras_restore_snapshot  (ras_restore_snapshot),
     .ras_commit_val        (ras_commit_val),
@@ -526,6 +543,7 @@ module fe_top (
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftq_ifu_xlate_val     (ftq_ifu_xlate_val),
     .ftq_ifu_xlate_rdy     (ftq_ifu_xlate_rdy),
@@ -563,6 +581,7 @@ module fe_top (
     .bkend_ftq_redir_pc    (bkend_ftq_redir_pc),
     .bkend_ftq_redir_self  (bkend_ftq_redir_self),
     .bkend_ftq_redir_cause (bkend_ftq_redir_cause),
+    .bkend_ftq_redir_taken (bkend_ftq_redir_taken),
     .bkend_ftq_commit_val  (bkend_ftq_commit_val),
     .bkend_ftq_commit_idx  (bkend_ftq_commit_idx),
     .ftq_full              (ftq_full),

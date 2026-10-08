@@ -62,6 +62,9 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
   logic [TRX_SLOT_BITS-1:0] rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1];
   bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1];
+  // BP-121: the resolved fall-through and the block-end flag.
+  logic [VA_WIDTH-1:0]      rsv_wr_pft  [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_end;
 
   logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx;
   logic [VA_WIDTH-1:0]      xlate_rd_pc;
@@ -112,6 +115,8 @@ module tb;
     .rsv_wr_idx          (rsv_wr_idx),
     .rsv_wr_sel          (rsv_wr_sel),
     .rsv_wr_slot         (rsv_wr_slot),
+    .rsv_wr_pft          (rsv_wr_pft),
+    .rsv_wr_end          (rsv_wr_end),
     .xlate_rd_idx        (xlate_rd_idx),
     .xlate_rd_pc         (xlate_rd_pc),
     .fetch_rd_idx        (fetch_rd_idx),
@@ -223,7 +228,9 @@ module tb;
       rsv_wr_idx[p]  = '0;
       rsv_wr_sel[p]  = '0;
       rsv_wr_slot[p] = '0;
+      rsv_wr_pft[p]  = '0;
     end
+    rsv_wr_end = '0;
     clr();
     repeat (4) tick();
     rstn = 1'b1;

@@ -206,6 +206,8 @@ module bp_cluster (
   input  logic                            ftb_upd_is_call_u0,
   input  logic                            ftb_upd_is_ret_u0,
   input  logic                            ftb_upd_is_jalr_u0,
+  // The resolved jump is 16 bits (BP-121, TD#164).
+  input  logic                            ftb_upd_jmp_rvc_u0,
   input  logic [VA_WIDTH-1:0]             ftb_upd_pft_addr_u0,
   input  logic                            ftb_flush_px,
 
@@ -242,6 +244,16 @@ module bp_cluster (
   // unchanged (ftq_backend_interfaces.md 8).
   input  logic                            ftq_rollback_val,
   input  logic [FTQ_IDX_BITS-1:0]         ftq_rollback_idx,
+  // The corrected history of the rollback entry's bundle, for a
+  // redirect the FTQ itself raised (a backend mispredict): the number
+  // of bits, their directions and path bits (BP-121; bp_history
+  // _decisions.md 3.5 reopened, ruled by Jeff: correct on redirect).
+  // The cluster forms the correction itself for its own p2 / p3
+  // redirect.
+  input  logic                            ftq_rollback_corr,
+  input  logic [1:0]                      ftq_rollback_n,
+  input  logic [1:0]                      ftq_rollback_tkn,
+  input  logic [1:0]                      ftq_rollback_pbit,
 
   // ---- section 9: history pointer and buffer outputs --------------
   output logic [GHIST_PTR_BITS-1:0]       ghist_ptr,
@@ -284,10 +296,10 @@ module bp_cluster (
   // ----------------------------------------------------------------
   // Local constants
   // ----------------------------------------------------------------
-  // SC credit arbiter counter widths (bp_arb_spec.md 4.2, 5.5).
-  localparam int SC_PRED_CRED_W = $clog2(SC_PRED_CREDITS + 1);
-  localparam int SC_UPD_CRED_W  = $clog2(SC_UPD_CREDITS  + 1);
-  localparam int SC_STARVE_W    = $clog2(SC_STARVE_THRESH + 1);
+  // SC arbiter starvation counter width (bp_arb_spec.md 4.2, 5.5), two
+  // past the threshold for the starvation hold. BP-121 retired the
+  // credit counters.
+  localparam int SC_STARVE_W    = $clog2(SC_STARVE_THRESH + 3);
 
   // No block alignment is formed here. The uBTB and the FTB convert
   // their stored region-relative positions to START-relative at their
@@ -310,6 +322,18 @@ module bp_cluster (
   logic [FTQ_IDX_BITS-1:0]    w_ckpt_wr_idx;
   logic                       w_rollback_valid;
   logic [FTQ_IDX_BITS-1:0]    w_rollback_ckpt_idx;
+  // The corrected bundle to the history (BP-121): from the p2 or p3
+  // view for this cluster's own redirect, else the FTQ's.
+  logic                       w_rb_corr;
+  logic [1:0]                 w_rb_n;
+  logic [1:0]                 w_rb_tkn;
+  logic [1:0]                 w_rb_pbit;
+  logic [1:0]                 w_c2_n;
+  logic [1:0]                 w_c2_tkn;
+  logic [1:0]                 w_c2_pbit;
+  logic [1:0]                 w_c3_n;
+  logic [1:0]                 w_c3_tkn;
+  logic [1:0]                 w_c3_pbit;
 
   // ----------------------------------------------------------------
   // Internal nets: uBTB and loop_pred p1 results
@@ -347,6 +371,12 @@ module bp_cluster (
   logic                       w_ftb_is_call_p2;
   logic                       w_ftb_is_ret_p2;
   logic                       w_ftb_is_jalr_p2;
+  logic                       w_ftb_jmp_rvc_p2;
+  // The fall-through of the block's jump: the jump PC plus its length
+  // (BP-121, TD#164, ruled by Jeff). The address after a call, so the
+  // address the RAS pushes, and the block end when the jump is in the
+  // block.
+  logic [VA_WIDTH-1:0]        w_jmp_ft_p2;
   logic [VA_WIDTH-1:0]        w_ftb_pft_addr_p2;
   logic [1:0]                 w_ftb_fastpath_p2;
 
@@ -439,6 +469,7 @@ module bp_cluster (
   // p2 -> p3
   logic                    r_val_p3;
   logic [FTQ_IDX_BITS-1:0] r_idx_p3;
+  logic [VA_WIDTH-1:0]     r_pc_p3;     // BP-121: the p3 history bundle
   bp_br_type_e             r_br_type_p3 [0:NUM_PRED_SLOTS-1];
   logic                    r_ras_val_p3 [0:NUM_PRED_SLOTS-1];
   logic                    r_taken_p3   [0:NUM_PRED_SLOTS-1];
@@ -447,6 +478,21 @@ module bp_cluster (
   // The p2 slot description carried to p3 so the SC direction can be
   // applied to it without rebuilding the slot (TD-FE-6).
   bp_ftq_slot_t            r_slot_p3    [0:NUM_PRED_SLOTS-1];
+  // The FTB answered this block at p2 (BP-121, TD#161). The p3 slot
+  // group is the p2 group with the SC direction applied, so it exists
+  // only when the p2 group did.
+  logic                    r_ftb_ans_p3;
+  // A table-predictor request is at p1 / p2 (BP-121): the p0 request
+  // staged WITHOUT the FE-14 squash. TAGE, ITTAGE and SC are not told
+  // of a squash and answer a squashed request at p2 regardless, so the
+  // SC arbiter must see that p2 slot as occupied (r_val_p2 is low for
+  // a squashed block).
+  logic                    r_tv_p1;
+  logic                    r_tv_p2;
+  // The block's p2 slots carry a branch (BP-121, TD#166): registered
+  // without the p2 reachability, which p3 recomputes from the SC
+  // direction for the RAS repair.
+  logic                    r_brv_p3 [0:NUM_PRED_SLOTS-1];
 
   // ----------------------------------------------------------------
   // Derived per-stage nets
@@ -460,6 +506,8 @@ module bp_cluster (
   // it. Both are the p1 view only; nothing here reads an FTB result.
   logic [VA_WIDTH-1:0] w_pft_p1;
   logic [VA_WIDTH-1:0] w_succ_p1    [0:NUM_PRED_SLOTS-1];
+  logic [VA_WIDTH-1:0] w_nxt_p1;
+  bp_ftq_slot_t        w_slot_sw_p1;
 
   bp_br_type_e         w_br_type_p2 [0:NUM_PRED_SLOTS-1];
   logic                w_br_val_p2  [0:NUM_PRED_SLOTS-1];
@@ -492,6 +540,19 @@ module bp_cluster (
   logic                w_any_redir_p2;
   logic                w_any_redir_p3;
 
+  // Squash of the blocks younger than a redirect (BP-121, FE-14). A
+  // redirect from any source names an entry older than the block at
+  // p1, so that block is squashed; the block at p2 survives only the
+  // p2 redirect it raised itself. w_own_p2 / w_own_p3: the FTQ took
+  // this cluster's p2 / p3 redirect (its rollback names that stage's
+  // entry, and the stage raised one).
+  logic                w_own_p2;
+  logic                w_own_p3;
+  logic                w_kill_p1;
+  logic                w_kill_p2;
+  logic                w_ras_restore_val;
+  logic                w_reach_p3   [0:NUM_PRED_SLOTS-1];
+
   // ----------------------------------------------------------------
   // Update fan-out nets
   // ----------------------------------------------------------------
@@ -516,9 +577,8 @@ module bp_cluster (
   logic                      w_sc_upd_req;
   logic                      w_sc_grant_pred;
   logic                      w_sc_grant_upd;
-  logic [SC_PRED_CRED_W-1:0] r_sc_pred_credits;
-  logic [SC_UPD_CRED_W-1:0]  r_sc_upd_credits;
   logic [SC_STARVE_W-1:0]    r_sc_starve_ctr;
+  logic                      w_sc_hold;
 
   // ================================================================
   // p0: request qualification (bp_arb_spec.md 8.1, FE-5)
@@ -561,7 +621,11 @@ module bp_cluster (
       r_sc_t2_fh_p2  <= '0;
       r_sc_t3_fh_p2  <= '0;
       r_val_p3  <= 1'b0;
+      r_ftb_ans_p3 <= 1'b0;
+      r_tv_p1   <= 1'b0;
+      r_tv_p2   <= 1'b0;
       r_idx_p3  <= '0;
+      r_pc_p3   <= '0;
       r_pft_p3  <= '0;
       r_pft_p1_p2 <= '0;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
@@ -572,6 +636,7 @@ module bp_cluster (
         r_lp_pred_p2[s]      <= '0;
         r_br_type_p3[s]      <= NO_BRANCH;
         r_ras_val_p3[s]      <= 1'b0;
+        r_brv_p3[s]          <= 1'b0;
         r_taken_p3[s]        <= 1'b0;
         r_tkn_tgt_p3[s]      <= '0;
         r_slot_p3[s]         <= '0;
@@ -585,6 +650,8 @@ module bp_cluster (
       //    and is registered for the same reason. The SC index folds
       //    are sampled in the cycle the request is presented.
       r_val_p1       <= w_req_val_p0;
+      r_tv_p1        <= w_req_val_p0;
+      r_tv_p2        <= r_tv_p1;
       r_pc_p1        <= ftq_pred_pc_p0;
       r_idx_p1       <= ftq_pred_idx_p0;
       r_phr_p1       <= w_folded.tage_phr[9:0];
@@ -605,7 +672,11 @@ module bp_cluster (
       //    The loop result is registered here for the p2 metadata
       //    group; loop_pred.pred_p1 is valid in the p1 cycle. It is
       //    carried per slot: every slot has a loop producer.
-      r_val_p2 <= r_val_p1;
+      // FE-14: a stage whose block a redirect squashed is withheld,
+      // so no predictor, and in particular not the RAS, acts on it
+      // (BP-121; before, the squashed block still pushed or popped the
+      // RAS at p2 on the restored stack).
+      r_val_p2 <= r_val_p1 & ~w_kill_p1;
       r_pc_p2  <= r_pc_p1;
       r_idx_p2 <= r_idx_p1;
       r_phr_p2 <= r_phr_p1;
@@ -624,12 +695,15 @@ module bp_cluster (
       //    target and the fall-through address are carried so the SC
       //    direction can select between them at p3 without a second
       //    FTB read.
-      r_val_p3 <= r_val_p2;
+      r_val_p3 <= r_val_p2 & ~w_kill_p2;
+      r_ftb_ans_p3 <= r_val_p2 & w_ftb_valid_p2;
       r_idx_p3 <= r_idx_p2;
+      r_pc_p3  <= r_pc_p2;
       r_pft_p3 <= w_pft_p2;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_br_type_p3[s] <= w_br_type_p2[s];
         r_ras_val_p3[s] <= w_ras_pred_val_p2[s];
+        r_brv_p3[s]     <= w_br_val_p2[s];
         r_taken_p3[s]   <= w_taken_p2[s];
         r_tkn_tgt_p3[s] <= w_tkn_tgt_p2[s];
         r_slot_p3[s]    <= w_slot_p2[s];
@@ -666,6 +740,9 @@ module bp_cluster (
   always_comb begin : p1_form_comb
     int  nb;
     logic ubtb_slot_hit;
+    logic tkn_seen;
+
+    w_slot_sw_p1 = '0;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_slot_p1[s]            = '0;
@@ -734,6 +811,22 @@ module bp_cluster (
       end
     end
 
+    // -- Program order across the slots (FE-10, IC-FTB-16; BP-121).
+    //    The uBTB masks out-of-window fields but does not reorder them
+    //    (ubtb_interfaces.md, ruled session-073), so its slot 1 can hold
+    //    the earlier branch. The successor selection here and in the
+    //    FTQ takes the lowest taken slot as the first, so the two are
+    //    put in position order: before BP-121 a block whose taken
+    //    branch sat in slot 1 below a slot 0 branch was predicted to
+    //    the later branch's target (twocond).
+    if ((NUM_PRED_SLOTS == 2) && w_slot_p1[0].slot_valid
+        && w_slot_p1[NUM_PRED_SLOTS-1].slot_valid
+        && (w_slot_p1[NUM_PRED_SLOTS-1].pos < w_slot_p1[0].pos)) begin
+      w_slot_sw_p1                 = w_slot_p1[0];
+      w_slot_p1[0]                 = w_slot_p1[NUM_PRED_SLOTS-1];
+      w_slot_p1[NUM_PRED_SLOTS-1]  = w_slot_sw_p1;
+    end
+
     // -- p1 successor of each slot: the address fetched after that
     //    slot, formed from the p1 view only. blk_p1.pft_addr is the
     //    uBTB block fall-through and is authoritative for the cluster
@@ -745,9 +838,16 @@ module bp_cluster (
                  ? r_ubtb_blk_p1.pft_addr
                  : (r_pc_p1 + VA_WIDTH'(FTB_BLOCK_BYTES));
 
-    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+    // The successor of a not-taken slot is what is fetched after it:
+    // the next slot's successor, and the block fall-through after the
+    // last slot (BP-121). It was the block fall-through for every
+    // not-taken slot, which is wrong when a later slot is taken (see
+    // p2_succ_comb). Formed from the highest slot down.
+    w_nxt_p1 = w_pft_p1;
+    for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
       w_succ_p1[s] = w_slot_p1[s].taken ? w_slot_p1[s].target
-                                        : w_pft_p1;
+                                        : w_nxt_p1;
+      w_nxt_p1     = w_succ_p1[s];
     end
 
     // -- Branch PC of each p1 slot, reported to bp_history as that
@@ -783,11 +883,18 @@ module bp_cluster (
     w_hist_pred_pc[1]   = '0;
     w_hist_num_branches = 2'b00;
     nb                  = 0;
+    //    Only the branches on the predicted path: none after a taken one
+    //    (BP-121, with the corrected rollback; before, a slot past a
+    //    taken slot added its bit too, so the history held a branch
+    //    that is not executed and the corrected bundle could not match
+    //    the one a correct prediction of the same block writes).
+    tkn_seen = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      if (w_slot_p1[s].slot_valid && (nb < 2)) begin
+      if (w_slot_p1[s].slot_valid && (nb < 2) && !tkn_seen) begin
         w_hist_pred_taken[nb] = w_slot_p1[s].taken;
         w_hist_pred_pc[nb]    = w_slot_pc_p1[s];
         nb                    = nb + 1;
+        tkn_seen              = w_slot_p1[s].taken;
       end
     end
     w_hist_num_branches = 2'(nb);
@@ -928,7 +1035,16 @@ module bp_cluster (
     // The block fall-through at p2. When the FTB did not answer,
     // ftb_pft_addr_p2 is not qualified (ftb_cntrl drives it from the
     // unmatched way), so the p1 value carried in r_pft_p1_p2 stands.
-    w_pft_p2 = w_ftb_valid_p2 ? w_ftb_pft_addr_p2 : r_pft_p1_p2;
+    // When the FTB holds a jump visible from this start the block ends
+    // at that jump, and its fall-through is the jump's own end, not
+    // the region's stored pftAddr, which every start of the region
+    // shares and the last updating start wrote (BP-121, TD#164).
+    if (!w_ftb_valid_p2)
+      w_pft_p2 = r_pft_p1_p2;
+    else if (w_ftb_jmp_valid_p2)
+      w_pft_p2 = w_jmp_ft_p2;
+    else
+      w_pft_p2 = w_ftb_pft_addr_p2;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       // ITTAGE target. The metadata holds VA[40:1]; bit 0 is always
@@ -971,26 +1087,48 @@ module bp_cluster (
         end
       endcase
 
-      // Successor of this slot: the taken target, or the block
-      // fall-through when the slot resolves not taken.
-      w_succ_p2[s] = w_taken_p2[s] ? w_tkn_tgt_p2[s]
-                                   : w_pft_p2;
+    end
 
-      // The p1 prediction carried in the stage register, expressed as
-      // the same quantity so the comparison is target against target.
-      // The p1 side uses the p1 fall-through, not the FTB one: taking
-      // the FTB value on both sides would mask the case this
-      // comparison exists to catch, a block whose boundary the FTB
-      // places somewhere the uBTB did not.
-      p1_succ = r_succ_p1_p2[s];
+    // Successor of each slot: the address fetched after it. The taken
+    // target; when not taken, the next slot's successor, and the block
+    // fall-through after the last slot (ftq_bpu_interfaces.md 6, "the
+    // address fetched after that slot"). Formed from the highest slot
+    // down. BEFORE BP-121 a not-taken slot's successor was the block
+    // fall-through even when a later slot is taken: with slot 0 a
+    // not-taken conditional and slot 1 a taken call, slot 0 compared
+    // the fall-through against the p1 view and, the FTQ taking the
+    // lowest redirecting slot, steered fetch past the call (misp_call,
+    // a stream error, once TD#164 made the jump block's fall-through
+    // differ from the p1 one).
+    p1_succ = w_pft_p2;
+    for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
+      w_succ_p2[s] = w_taken_p2[s] ? w_tkn_tgt_p2[s] : p1_succ;
+      p1_succ      = w_succ_p2[s];
+    end
 
-      w_redir_p2[s].valid     = r_val_p2 & w_ftb_valid_p2
-                              & (w_succ_p2[s] != p1_succ);
+    // The comparison against the p1 view carried in the stage
+    // register, the same quantity, so it is target against target. The
+    // p1 side uses the p1 fall-through, not the FTB one: taking the FTB
+    // value on both sides would mask the case this comparison exists to
+    // catch, a block whose boundary the FTB places somewhere the uBTB
+    // did not. A slot after a taken slot is not on the path: it does
+    // not redirect (BP-121; before, an unreachable slot whose successor
+    // differed could win the FTQ's lowest-slot selection over nothing
+    // and steer to a branch past the block's end).
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      w_redir_p2[s].valid     = r_val_p2 & w_ftb_valid_p2 & w_reach_p2[s]
+                              & (w_succ_p2[s] != r_succ_p1_p2[s]);
       w_redir_p2[s].target_pc = w_succ_p2[s];
     end
   end
 
   assign bpu_redir_idx_p2 = r_idx_p2;
+
+  // The jump fall-through (BP-121, TD#164): the start PC plus the jump's
+  // start-relative position, plus its length.
+  assign w_jmp_ft_p2 = r_pc_p2
+                     + (VA_WIDTH'(w_ftb_jmp_pos_p2) << POS_OFFSET_BITS)
+                     + (w_ftb_jmp_rvc_p2 ? VA_WIDTH'(2) : VA_WIDTH'(4));
 
   // ================================================================
   // p2: slot correction (TD-FE-6)
@@ -1054,7 +1192,10 @@ module bp_cluster (
   // preserved: the FTQ takes the later stage for the same entry index
   // and slot (FE-3).
   always_comb begin : p3_redir_comb
-    logic [VA_WIDTH-1:0] p2_succ;
+    logic [VA_WIDTH-1:0] p2_nxt;
+    logic [VA_WIDTH-1:0] p3_nxt;
+    logic [VA_WIDTH-1:0] p2_succ [0:NUM_PRED_SLOTS-1];
+    logic                reach;
 
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_sc_hit_p3[s] = w_sc_pred_rdy_p3[s] & sc_enable
@@ -1063,12 +1204,26 @@ module bp_cluster (
       w_taken_p3[s]  = ((r_br_type_p3[s] == COND) & w_sc_hit_p3[s])
                          ? w_sc_pred_meta_p3[s].sc_pred_tkn
                          : r_taken_p3[s];
+    end
 
-      w_succ_p3[s]   = w_taken_p3[s] ? r_tkn_tgt_p3[s] : r_pft_p3;
-      p2_succ        = r_taken_p3[s] ? r_tkn_tgt_p3[s] : r_pft_p3;
+    // Successors chained from the highest slot down, as at p2 (BP-121).
+    p2_nxt = r_pft_p3;
+    p3_nxt = r_pft_p3;
+    for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
+      w_succ_p3[s] = w_taken_p3[s] ? r_tkn_tgt_p3[s] : p3_nxt;
+      p2_succ[s]   = r_taken_p3[s] ? r_tkn_tgt_p3[s] : p2_nxt;
+      p3_nxt       = w_succ_p3[s];
+      p2_nxt       = p2_succ[s];
+    end
 
-      w_redir_p3[s].valid     = r_val_p3 & (w_succ_p3[s] != p2_succ);
+    // A slot after a slot taken in the p3 view is not on the path.
+    reach = 1'b1;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      w_reach_p3[s]           = reach;
+      w_redir_p3[s].valid     = r_val_p3 & reach
+                              & (w_succ_p3[s] != p2_succ[s]);
       w_redir_p3[s].target_pc = w_succ_p3[s];
+      reach                   = reach & ~w_taken_p3[s];
     end
   end
 
@@ -1097,7 +1252,13 @@ module bp_cluster (
     end
   end
 
-  assign bpu_slot_val_p3 = r_val_p3;
+  // Valid only for a block the FTB answered at p2 (BP-121, TD#161).
+  // When it did not, the p2 group wrote nothing and r_slot_p3 is the
+  // empty view; presenting it overwrote the p1 slots with no slots, so
+  // the entry's fetch block fell through where the FTQ had already
+  // allocated the p1 successor: a stream error. Before BP-121 this was
+  // r_val_p3.
+  assign bpu_slot_val_p3 = r_val_p3 & r_ftb_ans_p3;
   assign bpu_slot_idx_p3 = r_idx_p3;
 
   // ================================================================
@@ -1124,8 +1285,92 @@ module bp_cluster (
   // between themselves.
   assign w_rollback_valid    = ftq_rollback_val
                              | w_any_redir_p2 | w_any_redir_p3;
+
+  // The squash (BP-121, FE-14; see the declarations). The RAS restore
+  // of a p2 or p3 redirect is not applied: the stack already holds the
+  // redirecting block's own operation (p2) or gets its repair this
+  // cycle (p3), and the restore would discard them (it reads the
+  // entry's snapshot, which for a p2 redirect predates the operation:
+  // the p2 snapshot write lands in the same cycle). The block younger
+  // than it is squashed instead: ras_p2_keep drops the p2 pass of a
+  // squashed block.
+  assign w_own_p3          = ftq_rollback_val & w_any_redir_p3
+                           & (ftq_rollback_idx == r_idx_p3);
+  assign w_own_p2          = ftq_rollback_val & w_any_redir_p2
+                           & (ftq_rollback_idx == r_idx_p2) & ~w_own_p3;
+  assign w_kill_p1         = ftq_rollback_val;
+  assign w_kill_p2         = ftq_rollback_val & ~w_own_p2;
+  assign w_ras_restore_val = ras_restore_val & ~(w_own_p2 | w_own_p3);
   assign w_rollback_ckpt_idx = ftq_rollback_val ? ftq_rollback_idx
                              : (w_any_redir_p3 ? r_idx_p3 : r_idx_p2);
+
+  // The corrected history bundle (BP-121, 3.5 reopened): the branches
+  // of the redirecting block on the corrected path, in program order
+  // up to and including the first taken one, as the stage that
+  // redirects sees them; for a redirect the FTQ raised, the FTQ's. The
+  // rollback trigger and index are unchanged: the cluster's own p2 / p3
+  // redirect rolls back with its own bundle whether or not the FTQ
+  // echoes it.
+  always_comb begin : rb_corr_mux
+    if (w_own_p3 || (!ftq_rollback_val && w_any_redir_p3)) begin
+      w_rb_corr = 1'b1;
+      w_rb_n    = w_c3_n;
+      w_rb_tkn  = w_c3_tkn;
+      w_rb_pbit = w_c3_pbit;
+    end else if (w_own_p2 || (!ftq_rollback_val && w_any_redir_p2)) begin
+      w_rb_corr = 1'b1;
+      w_rb_n    = w_c2_n;
+      w_rb_tkn  = w_c2_tkn;
+      w_rb_pbit = w_c2_pbit;
+    end else begin
+      w_rb_corr = ftq_rollback_corr;
+      w_rb_n    = ftq_rollback_n;
+      w_rb_tkn  = ftq_rollback_tkn;
+      w_rb_pbit = ftq_rollback_pbit;
+    end
+  end
+
+  // The p2 and p3 bundles. Gated on r_val_p2 / r_val_p3, flops, so the
+  // blocks re-evaluate (stl_sequent rule).
+  always_comb begin : rb_corr_p2
+    logic [VA_WIDTH-1:0] bpc;
+    logic                stop;
+    int                  n;
+    n         = 0;
+    stop      = ~r_val_p2;
+    w_c2_tkn  = 2'b00;
+    w_c2_pbit = 2'b00;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      bpc = r_pc_p2 + (VA_WIDTH'(w_pos_p2[s]) << POS_OFFSET_BITS);
+      if (!stop && w_br_val_p2[s] && (n < 2)) begin
+        w_c2_tkn[n]  = w_taken_p2[s];
+        w_c2_pbit[n] = bpc[2] ^ bpc[3];
+        n            = n + 1;
+        stop         = w_taken_p2[s];
+      end
+    end
+    w_c2_n = 2'(n);
+  end
+
+  always_comb begin : rb_corr_p3
+    logic [VA_WIDTH-1:0] bpc;
+    logic                stop;
+    int                  n;
+    n         = 0;
+    stop      = ~r_val_p3;
+    w_c3_tkn  = 2'b00;
+    w_c3_pbit = 2'b00;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      bpc = r_pc_p3 + (VA_WIDTH'(r_slot_p3[s].pos) << POS_OFFSET_BITS);
+      if (!stop && r_brv_p3[s] && (n < 2)) begin
+        w_c3_tkn[n]  = w_taken_p3[s];
+        w_c3_pbit[n] = bpc[2] ^ bpc[3];
+        n            = n + 1;
+        stop         = w_taken_p3[s];
+      end
+    end
+    w_c3_n = 2'(n);
+  end
 
   // ================================================================
   // SC credit arbiter (bp_arb_spec.md 4.5, 5.5, 6.1)
@@ -1142,7 +1387,7 @@ module bp_cluster (
   // and a bypass-only queue is the degenerate legal case of section
   // 4.3/4.4. "Queue non-empty" is therefore "a request is presented".
   //
-  // The prediction request is the cluster p2 stage valid, not
+  // The prediction request is the p2 request (r_tv_p2), not
   // tage_pred_rdy_p2: tage.sv already qualifies that output with
   // consumer_ready, and consumer_ready is an output of this arbiter,
   // so using it as an input would close a combinational loop.
@@ -1157,69 +1402,46 @@ module bp_cluster (
   // (BP-119). The COND qualification still gates the SC write itself
   // (w_sc_upd_val_u0), so a non-conditional SC valid can never write
   // SC; at most it requests the port.
-  assign w_sc_pred_req = r_val_p2 & sc_enable;
+  // BP-121: r_tv_p2, the request TAGE answers at p2 whether or not
+  // the cluster squashed its block (FE-14), so an SC update is never
+  // granted under a TAGE result. It was r_val_p2.
+  assign w_sc_pred_req = r_tv_p2 & sc_enable;
   assign w_sc_upd_req  = sc_enable & w_sc_uq_not_full_int
                        & (|(sc_upd_val_u0 & w_sc_upd_rdy_int));
 
-  // Rule 1 of section 4.5 blocks prediction grants when the response
-  // path cannot take a result. sc.sv exposes no response-buffer full
-  // flag; the equivalent condition available here is sc_ready, which
-  // is low until the SC RAM init completes.
+  // The grant (BP-121, ruled by Jeff): a prediction is never delayed
+  // by an update. TAGE hands its p2 result to SC in the same cycle
+  // (consumer_ready below), so an SC update granted while a block is at
+  // p2 held the TAGE result a cycle and left every later TAGE and SC
+  // result late for the cluster's fixed p2 / p3 reads (branch_id
+  // mismatch); before BP-121 most p2 blocks saw a late result.
+  //   pred    a block is at p2 and the SC RAMs are ready (rule 1
+  //           above): grant the prediction
+  //   upd     otherwise an update is presented: grant it
+  //   hold    an update that has waited SC_STARVE_THRESH cycles
+  //           deasserts sc_uq_not_full for ONE cycle; the FTQ withholds
+  //           that p0 request (its H1 hold), so two cycles later no block
+  //           is at p2 and the update is granted
+  // The credit counters of 4.5 are retired with rules 2 to 4.
   always_comb begin : sc_arb_comb
-    w_sc_grant_pred = 1'b0;
-    w_sc_grant_upd  = 1'b0;
-
-    // Rule 2: starvation override (highest priority)
-    if (w_sc_upd_req
-        && (r_sc_starve_ctr >= SC_STARVE_W'(SC_STARVE_THRESH))) begin
-      w_sc_grant_upd = 1'b1;
-    end
-    // Rules 3/4: both sides have a request
-    else if (w_sc_pred_req && w_sc_upd_req) begin
-      if ((r_sc_pred_credits > '0) && sc_ready)
-        w_sc_grant_pred = 1'b1;  // rule 3
-      else
-        w_sc_grant_upd  = 1'b1;  // rule 4
-    end
-    // Rule 5: prediction only
-    else if (w_sc_pred_req && !w_sc_upd_req) begin
-      if (sc_ready)
-        w_sc_grant_pred = 1'b1;
-    end
-    // Rule 6: update only
-    else if (!w_sc_pred_req && w_sc_upd_req) begin
-      w_sc_grant_upd = 1'b1;
-    end
-    // Rule 7: neither -- no grant (implicit)
+    w_sc_grant_pred = w_sc_pred_req & sc_ready;
+    w_sc_grant_upd  = w_sc_upd_req & ~w_sc_pred_req;
   end
 
-  always_ff @(posedge clk) begin : sc_arb_cred_ff
+  // Cycles an update has waited, saturating two past the threshold so
+  // the hold is one cycle wide and the bubble it makes reaches p2.
+  always_ff @(posedge clk) begin : sc_arb_starve_ff
     if (!rstn) begin
-      r_sc_pred_credits <= SC_PRED_CRED_W'(SC_PRED_CREDITS);
-      r_sc_upd_credits  <= SC_UPD_CRED_W'(SC_UPD_CREDITS);
-      r_sc_starve_ctr   <= '0;
-    end else begin
-      if (w_sc_upd_req
-          && (r_sc_starve_ctr >= SC_STARVE_W'(SC_STARVE_THRESH))) begin
-        // Rule 2 fired: reset starve, reload upd_credits
-        r_sc_starve_ctr  <= '0;
-        r_sc_upd_credits <= SC_UPD_CRED_W'(SC_UPD_CREDITS);
-      end else if (w_sc_pred_req && w_sc_upd_req) begin
-        if ((r_sc_pred_credits > '0) && sc_ready) begin
-          // Rule 3 fired: dec pred_credits, inc starve
-          r_sc_pred_credits <= r_sc_pred_credits
-                             - SC_PRED_CRED_W'(1);
-          r_sc_starve_ctr   <= r_sc_starve_ctr + SC_STARVE_W'(1);
-        end else begin
-          // Rule 4 fired: reload all credits, reset starve
-          r_sc_pred_credits <= SC_PRED_CRED_W'(SC_PRED_CREDITS);
-          r_sc_upd_credits  <= SC_UPD_CRED_W'(SC_UPD_CREDITS);
-          r_sc_starve_ctr   <= '0;
-        end
-      end
-      // Rules 5, 6, 7: no credit changes
+      r_sc_starve_ctr <= '0;
+    end else if (w_sc_grant_upd) begin
+      r_sc_starve_ctr <= '0;
+    end else if (w_sc_upd_req &&
+                 (r_sc_starve_ctr < SC_STARVE_W'(SC_STARVE_THRESH + 2))) begin
+      r_sc_starve_ctr <= r_sc_starve_ctr + SC_STARVE_W'(1);
     end
   end
+
+  assign w_sc_hold = (r_sc_starve_ctr == SC_STARVE_W'(SC_STARVE_THRESH));
 
   // consumer_ready, driven from the real condition. SC is the
   // consumer of the TAGE p2 result (bp_arb_spec.md 4.7, 11 item C).
@@ -1231,9 +1453,10 @@ module bp_cluster (
                                | (sc_ready & ~w_sc_grant_upd);
 
   // Queue-status presented at the boundary. sc_uq_not_full is the
-  // sc.sv value, also consumed above by the arbiter. sc_upd_rdy is
-  // the section 4.4 accept: the update is taken only when granted.
-  assign sc_uq_not_full = w_sc_uq_not_full_int;
+  // sc.sv value, also consumed above by the arbiter, with the one-cycle
+  // starvation hold (BP-121). sc_upd_rdy is the section 4.4 accept:
+  // the update is taken only when granted.
+  assign sc_uq_not_full = w_sc_uq_not_full_int & ~w_sc_hold;
   assign sc_upd_rdy     = w_sc_upd_rdy_int
                         & {NUM_PRED_SLOTS{w_sc_grant_upd}};
 
@@ -1353,13 +1576,23 @@ module bp_cluster (
 
       // -- RAS p2 inputs. ras_pc_p2 is declared and unread (TD#101);
       //    it is driven from the staged request PC. The fall-through
-      //    address is the FTB pftAddr (interfaces 5.1).
+      //    address is the call's own end, the jump PC plus 2 or 4
+      //    (BP-121, TD#164, ruled by Jeff). It was the FTB pftAddr
+      //    (interfaces 5.1), which is the region's and is written by
+      //    whichever start of the region updated last.
       assign w_ras_pc_p2[gs]           = r_pc_p2;
-      assign w_ras_fall_through_p2[gs] = w_ftb_pft_addr_p2;
+      assign w_ras_fall_through_p2[gs] = w_jmp_ft_p2;
       assign w_ras_br_type_p2[gs]      = w_br_type_p2[gs];
 
-      // -- RAS p3 repair inputs: the registered p2 classification.
-      assign w_ras_pred_val_p3[gs]     = r_ras_val_p3[gs];
+      // -- RAS p3 repair inputs: the registered p2 classification,
+      //    qualified by p3 reachability, which the SC direction can
+      //    change (BP-121, TD#166). Before BP-121 this was the
+      //    registered p2 value r_ras_val_p3, so p2 and p3 never differed
+      //    and the repair never ran: an SC override that made a call
+      //    or a return reachable, or unreachable, left the RAS as p2
+      //    had left it.
+      assign w_ras_pred_val_p3[gs]     = r_val_p3 & r_brv_p3[gs]
+                                       & w_reach_p3[gs];
       assign w_ras_br_type_p3[gs]      = r_br_type_p3[gs];
 
       // -- Update fan-out by resolved branch type (7.2, FE-U9).
@@ -1448,6 +1681,10 @@ module bp_cluster (
     .ckpt_wr_idx       (w_ckpt_wr_idx),
     .rollback_valid    (w_rollback_valid),
     .rollback_ckpt_idx (w_rollback_ckpt_idx),
+    .rollback_corr     (w_rb_corr),
+    .rollback_n        (w_rb_n),
+    .rollback_tkn      (w_rb_tkn),
+    .rollback_pbit     (w_rb_pbit),
     .ghist_ptr         (ghist_ptr),
     .phist_ptr         (phist_ptr),
     .ckpt_ghist_ptr    (ckpt_ghist_ptr),
@@ -1521,6 +1758,7 @@ module bp_cluster (
     .ftb_is_call_p2        (w_ftb_is_call_p2),
     .ftb_is_ret_p2         (w_ftb_is_ret_p2),
     .ftb_is_jalr_p2        (w_ftb_is_jalr_p2),
+    .ftb_jmp_rvc_p2        (w_ftb_jmp_rvc_p2),
     .ftb_pft_addr_p2       (w_ftb_pft_addr_p2),
     .ftb_fastpath_p2       (w_ftb_fastpath_p2),
     .ftb_fastpath_en       (ftb_fastpath_en),
@@ -1538,6 +1776,7 @@ module bp_cluster (
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_flush_px          (ftb_flush_px)
   );
@@ -1640,7 +1879,8 @@ module bp_cluster (
     .ras_snapshot_p2      (w_ras_snapshot_p2),
     .ras_pred_val_p3      (w_ras_pred_val_p3),
     .ras_br_type_p3       (w_ras_br_type_p3),
-    .ras_restore_val      (ras_restore_val),
+    .ras_restore_val      (w_ras_restore_val),
+    .ras_p2_keep          (~w_kill_p2),
     .ras_restore_snapshot (ras_restore_snapshot),
     .ras_commit_val       (w_ras_commit_val),
     .ras_commit_br_type   (ras_commit_br_type),

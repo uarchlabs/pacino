@@ -114,6 +114,8 @@ module ftb_cntrl (
   output logic                          ftb_is_call_p2,
   output logic                          ftb_is_ret_p2,
   output logic                          ftb_is_jalr_p2,
+  // The jump is a 16-bit instruction (BP-121, TD#164).
+  output logic                          ftb_jmp_rvc_p2,
 
   output logic [VA_WIDTH-1:0]           ftb_pft_addr_p2,
 
@@ -139,6 +141,7 @@ module ftb_cntrl (
   input  logic                          ftb_upd_is_call_u0,
   input  logic                          ftb_upd_is_ret_u0,
   input  logic                          ftb_upd_is_jalr_u0,
+  input  logic                          ftb_upd_jmp_rvc_u0,
   input  logic [VA_WIDTH-1:0]           ftb_upd_pft_addr_u0,
 
   // -- flush (2.6; stub, IC-FTB-07)
@@ -198,6 +201,9 @@ module ftb_cntrl (
     logic                          is_call;
     logic                          is_ret;
     logic                          is_jalr;
+    // The jump is 16 bits: its fall-through is the jump PC + 2, else
+    // + 4 (BP-121, TD#164, ruled by Jeff; ftb_decisions.md 8).
+    logic                          is_rvc;
   } ftb_jmp_t;
 
   typedef struct packed {
@@ -392,6 +398,16 @@ module ftb_cntrl (
   logic                     fld_idx;
   logic                     fresh;
   logic                     upd_active;
+  // The carried way as it is NOW (BP-121, TD#163, ruled by Jeff): valid
+  // with the update's tag. The update reads that way anyway for its
+  // read-modify-write; checking its tag is not an associative re-lookup
+  // (IC-FTB-10). It replaces the predict-time hit: a carried miss whose
+  // way another update has since allocated with this tag merges into
+  // it instead of re-allocating over it (which discarded its other
+  // fields), and a carried hit whose way was since evicted and reused
+  // by another region allocates instead of writing this region's
+  // fields under the other region's tag.
+  logic                     upd_hit;
 
   assign upd_active = ftb_upd_valid_u0;
 
@@ -417,9 +433,12 @@ module ftb_cntrl (
       array_rd_data[ftb_upd_way_u0*FTB_RAM_ENTRY_WIDTH
                       +: FTB_RAM_ENTRY_WIDTH]);
 
+    // The carried way's current state decides hit or allocate (TD#163).
+    upd_hit = plru_rd_valid[ftb_upd_way_u0] & (upd_old.tag == upd_tag);
+
     // Base entry: keep the old entry on a hit (preserve untouched
     // fields), or a fresh zero entry on a miss-allocate (5.4).
-    upd_new       = ftb_upd_hit_u0 ? upd_old : '0;
+    upd_new       = upd_hit ? upd_old : '0;
     upd_new.tag   = upd_tag;
 
     // Fallthrough reduce (5.5, 8.1): pftAddr is the resolved end as a
@@ -532,6 +551,7 @@ module ftb_cntrl (
       upd_new.jmp.is_call = ftb_upd_is_call_u0;
       upd_new.jmp.is_ret  = ftb_upd_is_ret_u0;
       upd_new.jmp.is_jalr = ftb_upd_is_jalr_u0;
+      upd_new.jmp.is_rvc  = ftb_upd_jmp_rvc_u0;
     end
   end
 
@@ -589,6 +609,7 @@ module ftb_cntrl (
   logic [FTB_CONF_WIDTH-1:0] n_br1_conf;
   logic [VA_WIDTH-1:0]       n_br1_tgt;
   logic                      n_jmp_valid, n_is_call, n_is_ret, n_is_jalr;
+  logic                      n_jmp_rvc;
   logic [FTB_BR_POS_BITS-1:0] n_jmp_pos;
   logic [VA_WIDTH-1:0]       n_jmp_tgt;
   logic [VA_WIDTH-1:0]       n_pft;
@@ -621,9 +642,20 @@ module ftb_cntrl (
     // its region position lies in [k, k+16) of this lookup PC. That
     // hides branches before the start and branches past this block's
     // end that another start in the region recorded.
-    vis_br0 = sel_entry.br0.valid & in_window(sel_entry.br0.pos, k_p1);
-    vis_br1 = sel_entry.br1.valid & in_window(sel_entry.br1.pos, k_p1);
     vis_jmp = sel_entry.jmp.valid & in_window(sel_entry.jmp.pos, k_p1);
+    // A visible jump ENDS this start's block (it is always taken), so a
+    // conditional stored at a later region position is past this
+    // block's end: another start of the region recorded it, and R-1
+    // hides branches past the block's end. Before BP-121 only the
+    // window hid them, so a start whose block ends at a jump could
+    // report a later start's conditional in slot 0 and the jump in
+    // slot 1, out of program order (IC-FTB-16), and the cluster took
+    // the block's successor from a branch after the jump: a stream
+    // error (misp_call).
+    vis_br0 = sel_entry.br0.valid & in_window(sel_entry.br0.pos, k_p1)
+            & ~(vis_jmp & (sel_entry.br0.pos > sel_entry.jmp.pos));
+    vis_br1 = sel_entry.br1.valid & in_window(sel_entry.br1.pos, k_p1)
+            & ~(vis_jmp & (sel_entry.br1.pos > sel_entry.jmp.pos));
 
     // Compaction (4.6 O-3b). Storage is in ascending region position
     // (O-3a), so packing the visible fields in storage order puts the
@@ -658,6 +690,7 @@ module ftb_cntrl (
     n_is_call   = n_jmp_valid & sel_entry.jmp.is_call;
     n_is_ret    = n_jmp_valid & sel_entry.jmp.is_ret;
     n_is_jalr   = n_jmp_valid & sel_entry.jmp.is_jalr;
+    n_jmp_rvc   = n_jmp_valid & sel_entry.jmp.is_rvc;
 
     // Fallthrough reconstruct (4.5, 5.5): aligned region base plus
     // pftAddr in positions, no carry. Bounds checked against the
@@ -688,6 +721,7 @@ module ftb_cntrl (
   logic [FTB_CONF_WIDTH-1:0] q_br1_conf;
   logic [VA_WIDTH-1:0]       q_br1_tgt;
   logic                      q_jmp_valid, q_is_call, q_is_ret, q_is_jalr;
+  logic                      q_jmp_rvc;
   logic [FTB_BR_POS_BITS-1:0] q_jmp_pos;
   logic [VA_WIDTH-1:0]       q_jmp_tgt;
   logic [VA_WIDTH-1:0]       q_pft;
@@ -713,6 +747,7 @@ module ftb_cntrl (
       q_is_call   <= 1'b0;
       q_is_ret    <= 1'b0;
       q_is_jalr   <= 1'b0;
+      q_jmp_rvc   <= 1'b0;
       q_pft       <= '0;
     end else begin
       q_valid_p2  <= n_valid_p2;
@@ -734,6 +769,7 @@ module ftb_cntrl (
       q_is_call   <= n_is_call;
       q_is_ret    <= n_is_ret;
       q_is_jalr   <= n_is_jalr;
+      q_jmp_rvc   <= n_jmp_rvc;
       q_pft       <= n_pft;
     end
   end
@@ -769,6 +805,7 @@ module ftb_cntrl (
   assign ftb_is_call_p2          = q_is_call & flush_clr;
   assign ftb_is_ret_p2           = q_is_ret  & flush_clr;
   assign ftb_is_jalr_p2          = q_is_jalr & flush_clr;
+  assign ftb_jmp_rvc_p2          = q_jmp_rvc & flush_clr;
 
   assign ftb_pft_addr_p2         = q_pft;
 
@@ -803,7 +840,7 @@ module ftb_cntrl (
   // miss-allocate only. The valid-clear path (val_set = 0) is reserved
   // for the flush protocol and is NOT driven (IC-FTB-07).
   // ----------------------------------------------------------------
-  assign plru_val_we_n = ~(ftb_upd_valid_u0 & ~ftb_upd_hit_u0);
+  assign plru_val_we_n = ~(ftb_upd_valid_u0 & ~upd_hit);
   assign plru_val_addr = upd_set_idx;
   assign plru_val_set  = 1'b1;
 

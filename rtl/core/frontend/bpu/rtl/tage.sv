@@ -267,10 +267,10 @@ module tage #(
   logic resp_buf_full_w;
 
   // ----------------------------------------------------------------
-  // Credit arbiter registers
+  // Arbiter registers
   // ----------------------------------------------------------------
-  logic [PRED_CRED_W-1:0] pred_credits_r;
-  logic [UPD_CRED_W-1:0]  upd_credits_r;
+  // BP-121: the credit counters are retired (see the arbiter); the
+  // starvation count remains.
   logic [STARVE_W-1:0]     starve_ctr_r;
 
   // ----------------------------------------------------------------
@@ -288,7 +288,6 @@ module tage #(
                  && (pq_tail_r[PQ_IDX_W]
                      != pq_head_r[PQ_IDX_W]);
   assign pq_empty = (pq_head_r == pq_tail_r);
-  assign pq_not_full = !pq_full;
 
   always_ff @(posedge clk) begin : pq_ff
     if (!rstn) begin
@@ -330,6 +329,12 @@ module tage #(
   assign uq_empty = (uq_head_r == uq_tail_r);
   assign upd_rdy  = {NUM_PRED_SLOTS{!uq_full}};
 
+  // Not full, and no starving update asking for this p0 cycle
+  // (see the arbiter). Registered terms only.
+  assign pq_not_full = !pq_full &&
+                       !(!uq_empty &&
+                         (starve_ctr_r >= STARVE_W'(TAGE_STARVE_THRESH)));
+
   always_ff @(posedge clk) begin : uq_ff
     if (!rstn) begin
       uq_head_r <= '0;
@@ -355,69 +360,40 @@ module tage #(
   end
 
   // ----------------------------------------------------------------
-  // Credit arbiter: combinational grant logic
-  // Rules applied in priority order per spec section 4.5.
-  // Rule 1 (resp_buf_full blocks pred): encoded as guards on
-  // pred-granting rules 3 and 5.
+  // Arbiter: a prediction is never delayed by an update (BP-121,
+  // ruled by Jeff). The cluster reads the TAGE result at a fixed p2,
+  // matched by branch_id, so a prediction held back one cycle by an
+  // update grant (the 4.5 credit rules 3 and 4) is a lost prediction,
+  // and every later one with it: the queue then answers each request
+  // a cycle late until p0 idles. Measured before BP-121: 70 to 90
+  // percent of p2 blocks saw a late TAGE result.
+  //   rule 1  response buffer full: no prediction grant
+  //   pred    a prediction is presented or queued: grant it
+  //   upd     otherwise (none, or rule 1 blocks it) an update is
+  //           presented or queued: grant it
+  //   hold    an update that has waited TAGE_STARVE_THRESH cycles
+  //           deasserts pq_not_full for a cycle; the FTQ withholds the
+  //           p0 request (its H1 hold) and the update takes that cycle
+  // The credit counters of 4.5 are retired with rules 2 to 4.
   // ----------------------------------------------------------------
   always_comb begin : arb_comb
     arb_grant_pred = 1'b0;
     arb_grant_upd  = 1'b0;
-
-    // Rule 2: starvation override (highest priority)
-    if (uq_has_data_w
-        && (starve_ctr_r >= STARVE_W'(TAGE_STARVE_THRESH))) begin
+    if (pq_has_data_w && !resp_buf_full_w)
+      arb_grant_pred = 1'b1;
+    else if (uq_has_data_w)
       arb_grant_upd = 1'b1;
-    end
-    // Rules 3/4: both queues have data
-    else if (pq_has_data_w && uq_has_data_w) begin
-      if ((pred_credits_r > '0) && !resp_buf_full_w)
-        // Rule 3: pred has credits, RB not full
-        arb_grant_pred = 1'b1;
-      else
-        // Rule 4: pred credits exhausted (or RB full)
-        arb_grant_upd = 1'b1;
-    end
-    // Rule 5: PQ only (UQ empty)
-    else if (pq_has_data_w && !uq_has_data_w) begin
-      if (!resp_buf_full_w)
-        arb_grant_pred = 1'b1;
-      // resp_buf_full: no grant (rule 1 blocks pred)
-    end
-    // Rule 6: UQ only
-    else if (!pq_has_data_w && uq_has_data_w) begin
-      arb_grant_upd = 1'b1;
-    end
-    // Rule 7: both empty -- no grant (implicit)
   end
 
-  // ----------------------------------------------------------------
-  // Credit register updates (always_ff, conditions mirror arb_comb)
-  // ----------------------------------------------------------------
-  always_ff @(posedge clk) begin : arb_cred_ff
+  // Starvation count: cycles an update has waited. Reset on a grant.
+  always_ff @(posedge clk) begin : arb_starve_ff
     if (!rstn) begin
-      pred_credits_r <= PRED_CRED_W'(TAGE_PRED_CREDITS);
-      upd_credits_r  <= UPD_CRED_W'(TAGE_UPD_CREDITS);
-      starve_ctr_r   <= '0;
-    end else begin
-      if (uq_has_data_w
-          && (starve_ctr_r >= STARVE_W'(TAGE_STARVE_THRESH))) begin
-        // Rule 2 fired: reset starve, reload upd_credits
-        starve_ctr_r  <= '0;
-        upd_credits_r <= UPD_CRED_W'(TAGE_UPD_CREDITS);
-      end else if (pq_has_data_w && uq_has_data_w) begin
-        if ((pred_credits_r > '0) && !resp_buf_full_w) begin
-          // Rule 3 fired: dec pred_credits, inc starve
-          pred_credits_r <= pred_credits_r - PRED_CRED_W'(1);
-          starve_ctr_r   <= starve_ctr_r + STARVE_W'(1);
-        end else begin
-          // Rule 4 fired: reload all credits, reset starve
-          pred_credits_r <= PRED_CRED_W'(TAGE_PRED_CREDITS);
-          upd_credits_r  <= UPD_CRED_W'(TAGE_UPD_CREDITS);
-          starve_ctr_r   <= '0;
-        end
-      end
-      // Rules 5, 6, 7: no credit changes
+      starve_ctr_r <= '0;
+    end else if (arb_grant_upd) begin
+      starve_ctr_r <= '0;
+    end else if (uq_has_data_w &&
+                 (starve_ctr_r < STARVE_W'(TAGE_STARVE_THRESH))) begin
+      starve_ctr_r <= starve_ctr_r + STARVE_W'(1);
     end
   end
 

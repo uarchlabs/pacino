@@ -122,12 +122,16 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]   j_rsvw_idx [0:NUM_RESOLVE_PORTS-1];
   logic [TRX_SLOT_BITS-1:0]  j_rsv_sel  [0:NUM_RESOLVE_PORTS-1];
   bp_ftq_slot_t              j_rsv_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [VA_WIDTH-1:0]       j_rsv_pft  [0:NUM_RESOLVE_PORTS-1];  // BP-121
+  logic [NUM_RESOLVE_PORTS-1:0] j_rsv_end;                       // BP-121
   initial begin
     for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
       j_rsvw_idx[p] = '0;
       j_rsv_sel[p]  = '0;
       j_rsv_slot[p] = '0;
+      j_rsv_pft[p]  = '0;
     end
+    j_rsv_end = '0;
   end
   logic                      pd_redir_val;
   logic [FTQ_IDX_BITS-1:0]   pd_redir_idx;
@@ -260,6 +264,8 @@ module tb;
     .rsv_wr_idx          (j_rsvw_idx),
     .rsv_wr_sel          (j_rsv_sel),
     .rsv_wr_slot         (j_rsv_slot),
+    .rsv_wr_pft          (j_rsv_pft),
+    .rsv_wr_end          (j_rsv_end),
     .xlate_rd_idx        (j_rd_idx),
     .xlate_rd_pc         (j_xlate_pc),
     .fetch_rd_idx        (j_rd_idx),

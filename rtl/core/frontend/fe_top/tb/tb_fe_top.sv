@@ -64,6 +64,30 @@
 // RETURN_CALL) and how often the FTB jump field was trained by a jump
 // at a different position from the stored one (TD#156: two jumps of
 // one region taking turns in the one field).
+//
+// BP-121. Programs covering every predictor path the planning
+// documents describe (the program list is in run_prog below). One
+// program runs per simulation when +PROG=<name> is given, every
+// program otherwise; each is its own regression target. Without +PROG
+// the predictor tables carry from one program into the next, so the
+// counts of every program after the first depend on the order; the
+// sim_fe_top target therefore runs each program in its own
+// simulation. Every count
+// stops at the last retirement (TD#167): the 200-cycle drain after it
+// is not measured. Each program reports its cycles, its mispredicts,
+// the mispredicts after warm-up by branch type and by PC (a program
+// sets warm_e, the first expected entry after warm-up), and per
+// predictor the updates it received and the predictions of it the FTQ
+// used. THE RAS COMMIT IS CHECKED against the executed stream: every
+// retired call, return and return-call is queued with its link
+// address, and each ras_commit the cluster performs must be the next
+// one, in order, with the same type and, for a push, the same address.
+// A loop body whose path differs per iteration is emitted once per
+// iteration by the same emitter calls; re-emitting rewrites the same
+// bytes, and dry mode writes memory without appending to the stream.
+// +define+BASE_RTL compiles this file against the tree as BP-121
+// received it (no ftq_resolve_t.is_rvc, no ftb_cntrl upd_hit, no
+// corrected-history nets), for the before column of its measurements.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -71,7 +95,7 @@ import decode_pkg::*;
 
 module tb;
 
-  localparam int MAXE    = 4096;
+  localparam int MAXE    = 32768;
   localparam int TL_LAT  = 6;      // memory latency, request to beat 0
   localparam int L2T_LAT = 5;      // L2 TLB walk latency
 
@@ -96,6 +120,7 @@ module tb;
   logic [VA_WIDTH-1:0]         bkend_ftq_redir_pc;
   logic                        bkend_ftq_redir_self;
   ftq_redir_cause_e            bkend_ftq_redir_cause;
+  logic                        bkend_ftq_redir_taken;   // BP-121
   logic                        bkend_ftq_commit_val;
   logic [FTQ_PTR_BITS-1:0]     bkend_ftq_commit_idx;
   logic                        itlb_l2t_req_val;
@@ -171,8 +196,21 @@ module tb;
 
   always @(posedge clk) cyc <= rstn ? cyc + 1 : 0;
 
-  task automatic chk(input string nm, input logic cond);
-    if (cond) begin
+  // BP-121: the RAS commit check. ras_exp holds the RAS operations of
+  // the retired stream, in program order, with the link address a
+  // push writes; ras_got holds the commits the cluster performed.
+  typedef struct {
+    bp_br_type_e         t;
+    logic [VA_WIDTH-1:0] ra;
+    logic [VA_WIDTH-1:0] pc;
+  } rasev_t;
+  rasev_t                  ras_exp [$];
+  rasev_t                  ras_got [$];
+  int                      n_ras_ok;
+  int                      n_ras_bad;
+
+  task automatic chk(input string nm, input logic ok);
+    if (ok) begin
       pass_cnt++;
     end else begin
       fail_cnt++;
@@ -180,86 +218,8 @@ module tb;
     end
   endtask
 
-  // =================================================================
-  // Memory: bytes, physical.
-  // =================================================================
-  logic [7:0] mem [logic [PA_WIDTH-1:0]];
-
-  function automatic logic [7:0] rd8(input logic [PA_WIDTH-1:0] a);
-    return mem.exists(a) ? mem[a] : 8'h00;
-  endfunction
-
-  function automatic logic [63:0] rd64(input logic [PA_WIDTH-1:0] a);
-    logic [63:0] d;
-    for (int i = 0; i < 8; i++) d[8*i +: 8] = rd8(a + PA_WIDTH'(i));
-    return d;
-  endfunction
-
-  function automatic void wr64(input logic [PA_WIDTH-1:0] a,
-                               input logic [63:0] d);
-    for (int i = 0; i < 8; i++) mem[a + PA_WIDTH'(i)] = d[8*i +: 8];
-  endfunction
-
-  // =================================================================
-  // The address map the program writer uses. Bare: identity. Sv39:
-  // a table of 4 KiB pages this file also writes as PTEs.
-  // =================================================================
-  logic                  sv39;
-  logic [PA_WIDTH-1:0]   satp_root;
-  logic [PA_WIDTH-1:0]   pt_next;
-  logic [PPN_WIDTH-1:0]  vmap [logic [VA_WIDTH-13:0]];
-
-  function automatic logic [PA_WIDTH-1:0] va2pa(input logic [VA_WIDTH-1:0] va);
-    logic [VA_WIDTH-13:0] v;
-    if (!sv39) return va[PA_WIDTH-1:0];
-    v = va[VA_WIDTH-1:12];
-    if (!vmap.exists(v)) begin
-      $display("tb_fe_top: write to an unmapped VA %011h", va);
-      return '0;
-    end
-    return {vmap[v], va[11:0]};
-  endfunction
-
-  // A page table page, zeroed, from the bump allocator.
-  function automatic logic [PA_WIDTH-1:0] pt_alloc();
-    logic [PA_WIDTH-1:0] p;
-    p       = pt_next;
-    pt_next = pt_next + PA_WIDTH'('h1000);
-    for (int i = 0; i < 512; i++) wr64(p + PA_WIDTH'(8 * i), '0);
-    return p;
-  endfunction
-
-  // Map one 4 KiB page, V R X A D, supervisor (U clear).
   localparam logic [7:0] PTE_LEAF = 8'hCB;
   localparam logic [7:0] PTE_PTR  = 8'h01;
-
-  task automatic map4k(input logic [VA_WIDTH-1:0] va,
-                       input logic [PA_WIDTH-1:0] pa);
-    logic [PA_WIDTH-1:0] t;
-    logic [63:0]         pte;
-    logic [8:0]          vpn [0:2];
-    vpn[2] = va[38:30];
-    vpn[1] = va[29:21];
-    vpn[0] = va[20:12];
-    t = satp_root;
-    for (int l = 2; l > 0; l--) begin
-      pte = rd64(t + PA_WIDTH'(8 * vpn[l]));
-      if (!pte[0]) begin
-        logic [PA_WIDTH-1:0] n;
-        n   = pt_alloc();
-        pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
-        wr64(t + PA_WIDTH'(8 * vpn[l]), pte);
-      end
-      t = PA_WIDTH'(pte[53:10]) << 12;
-    end
-    wr64(t + PA_WIDTH'(8 * vpn[0]),
-         {10'd0, 44'(pa >> 12), 2'b00, PTE_LEAF});
-    vmap[va[VA_WIDTH-1:12]] = pa[PA_WIDTH-1:12];
-  endtask
-
-  // =================================================================
-  // The program writer and the expected stream.
-  // =================================================================
   typedef struct {
     logic [VA_WIDTH-1:0] pc;
     logic [31:0]         instr;      // expanded
@@ -271,214 +231,515 @@ module tb;
     ifu_fault_e          fault;      // fetch fault: trap to target
     logic [VA_WIDTH-1:0] fva;
   } ex_t;
-
-  ex_t ex [0:MAXE-1];
-  int  ne;
-
-  task automatic put_hw(input logic [VA_WIDTH-1:0] va,
-                        input logic [15:0] h);
-    logic [PA_WIDTH-1:0] pa;
-    pa = va2pa(va);
-    mem[pa]                 = h[7:0];
-    mem[pa + PA_WIDTH'(1)]  = h[15:8];
-  endtask
-
-  task automatic add_ex(input logic [VA_WIDTH-1:0] pc,
-                        input logic [31:0] w, input logic rvc,
-                        input bp_br_type_e bt, input logic tk,
-                        input logic [VA_WIDTH-1:0] tgt);
-    ex[ne].pc     = pc;
-    ex[ne].instr  = w;
-    ex[ne].rvc    = rvc;
-    ex[ne].btype  = bt;
-    ex[ne].taken  = tk;
-    ex[ne].target = tgt;
-    ex[ne].trap   = 1'b0;
-    ex[ne].fault  = IFU_FAULT_NONE;
-    ex[ne].fva    = '0;
-    ne++;
-  endtask
-
-  // Encoders.
-  function automatic logic [31:0] enc_jal(input logic [4:0] rd,
-                                          input int imm);
-    logic [20:0] o;
-    o = 21'(imm);
-    return {o[20], o[10:1], o[11], o[19:12], rd, 7'b1101111};
-  endfunction
-
-  function automatic logic [31:0] enc_br(input logic [2:0] f3,
-                                         input int imm);
-    logic [12:0] o;
-    o = 13'(imm);
-    return {o[12], o[10:5], 5'd0, 5'd0, f3, o[4:1], o[11], 7'b1100011};
-  endfunction
-
   localparam logic [31:0] ADDI_T0 = 32'h0012_8293;   // addi t0,t0,1
   localparam logic [15:0] CADDI   = 16'h0505;        // c.addi a0,1
   localparam logic [31:0] CADDI_X = 32'h0015_0513;   // its expansion
   localparam logic [31:0] RET     = 32'h0000_8067;   // jalr x0,0(ra)
   localparam logic [31:0] ECALL   = 32'h0000_0073;
 
-  // The write cursor and the instructions it emits. Each one is
-  // written and appended as executed.
-  logic [VA_WIDTH-1:0] wp;
+  // =================================================================
+  // The program writer (BP-121: a class, so its methods compile as
+  // functions of their own rather than inline at every call: with
+  // nineteen programs the inlined form produced an 18 MB C++ file).
+  // It owns the memory image, the address map and the expected
+  // stream; the module reads them through W.
+  // =================================================================
+  class pw_c;
+    // The members the module sets through W are given values here as
+    // well, so each has a driver inside the class (lint).
+    function new();
+      sv39      = 1'b0;
+      satp_root = '0;
+      pt_next   = '0;
+      ne        = 0;
+      dry       = 1'b0;
+      wp        = '0;
+      lfsr      = 16'h1;
+      for (int k = 0; k < 32; k++) fnv[k] = '0;
+    endfunction
 
-  task automatic i32(input logic [31:0] w);
-    put_hw(wp, w[15:0]);
-    put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, NO_BRANCH, 1'b0, '0);
-    wp = wp + VA_WIDTH'(4);
-  endtask
+    // =================================================================
+    // Memory: bytes, physical.
+    // =================================================================
+    logic [7:0] mem [logic [PA_WIDTH-1:0]];
 
-  task automatic i16();
-    put_hw(wp, CADDI);
-    add_ex(wp, CADDI_X, 1'b1, NO_BRANCH, 1'b0, '0);
-    wp = wp + VA_WIDTH'(2);
-  endtask
+    function logic [7:0] rd8(input logic [PA_WIDTH-1:0] a);
+      return mem.exists(a) ? mem[a] : 8'h00;
+    endfunction
 
-  // n instructions of mixed length, a fixed pattern.
-  task automatic mixed(input int n);
-    for (int k = 0; k < n; k++) begin
-      if ((k % 3) == 1) i32(ADDI_T0);
-      else              i16();
-    end
-  endtask
+    function logic [63:0] rd64(input logic [PA_WIDTH-1:0] a);
+      logic [63:0] d;
+      for (int i = 0; i < 8; i++) d[8*i +: 8] = rd8(a + PA_WIDTH'(i));
+      return d;
+    endfunction
 
-  // A conditional, beq x0,x0 (taken) or bne x0,x0 (not taken).
-  task automatic cond(input logic tk, input logic [VA_WIDTH-1:0] tgt);
-    logic [31:0] w;
-    w = enc_br(tk ? 3'b000 : 3'b001, int'(tgt - wp));
-    put_hw(wp, w[15:0]);
-    put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, COND, tk, tk ? tgt : wp + VA_WIDTH'(4));
-    wp = tk ? tgt : wp + VA_WIDTH'(4);
-  endtask
+    function void wr64(input logic [PA_WIDTH-1:0] a,
+                                 input logic [63:0] d);
+      for (int i = 0; i < 8; i++) mem[a + PA_WIDTH'(i)] = d[8*i +: 8];
+    endfunction
 
-  // jal rd, tgt. rd = x1 is a call.
-  task automatic jal(input logic [4:0] rd, input logic [VA_WIDTH-1:0] tgt);
-    logic [31:0] w;
-    w = enc_jal(rd, int'(tgt - wp));
-    put_hw(wp, w[15:0]);
-    put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, ((rd == 5'd1) || (rd == 5'd5)) ? DIRECT_CALL
-                                                       : DIRECT_UNC,
-           1'b1, tgt);
-    wp = tgt;
-  endtask
+    // =================================================================
+    // The address map the program writer uses. Bare: identity. Sv39:
+    // a table of 4 KiB pages this file also writes as PTEs.
+    // =================================================================
+    logic                  sv39;
+    logic [PA_WIDTH-1:0]   satp_root;
+    logic [PA_WIDTH-1:0]   pt_next;
+    logic [PPN_WIDTH-1:0]  vmap [logic [VA_WIDTH-13:0]];
 
-  // ret to the address the matching call linked.
-  task automatic ret(input logic [VA_WIDTH-1:0] link);
-    put_hw(wp, RET[15:0]);
-    put_hw(wp + VA_WIDTH'(2), RET[31:16]);
-    add_ex(wp, RET, 1'b0, RETURN, 1'b1, link);
-    wp = link;
-  endtask
-
-  // ecall, trapping to the handler.
-  task automatic ecall(input logic [VA_WIDTH-1:0] handler);
-    put_hw(wp, ECALL[15:0]);
-    put_hw(wp + VA_WIDTH'(2), ECALL[31:16]);
-    add_ex(wp, ECALL, 1'b0, NO_BRANCH, 1'b0, handler);
-    ex[ne-1].trap = 1'b1;
-    wp = handler;
-  endtask
-
-  // jal x0 to an address whose fetch faults: the JAL, then the
-  // faulting fetch, which traps to the handler. Nothing is written
-  // at the target.
-  task automatic jal_fault(input logic [VA_WIDTH-1:0] tgt,
-                           input ifu_fault_e f,
-                           input logic [VA_WIDTH-1:0] handler);
-    jal(5'd0, tgt);
-    add_ex(tgt, '0, 1'b0, NO_BRANCH, 1'b0, handler);
-    ex[ne-1].fault = f;
-    ex[ne-1].fva   = tgt;
-    wp = handler;
-  endtask
-
-  // The end: jal x0, 0. Appended once; the backend stops comparing
-  // after it.
-  task automatic halt();
-    logic [31:0] w;
-    w = enc_jal(5'd0, 0);
-    put_hw(wp, w[15:0]);
-    put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, DIRECT_UNC, 1'b1, wp);
-  endtask
-
-  // ---- BP-119 additions ---------------------------------------------
-  // A conditional on a register, bne rs1, x0 (the loop branch). Its
-  // outcome is the writer's: tk is this execution's direction.
-  function automatic logic [31:0] enc_bner(input logic [4:0] rs1,
-                                           input int imm);
-    logic [12:0] o;
-    o = 13'(imm);
-    return {o[12], o[10:5], 5'd0, rs1, 3'b001, o[4:1], o[11], 7'b1100011};
-  endfunction
-
-  function automatic logic [31:0] enc_jalr(input logic [4:0] rd,
-                                           input logic [4:0] rs1);
-    return {12'd0, rs1, 3'b000, rd, 7'b1100111};
-  endfunction
-
-  // The loop branch at the end of a loop body, written taken back to
-  // the body start; rep_iter appends the other iterations.
-  task automatic loop_br(input logic [VA_WIDTH-1:0] top);
-    logic [31:0] w;
-    w = enc_bner(5'd6, int'(top - wp));
-    put_hw(wp, w[15:0]);
-    put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, COND, 1'b1, top);
-  endtask
-
-  // Append iterations 2..n of the loop whose first iteration is the
-  // expected-stream range [e0, ne), its last entry the loop branch.
-  // Every iteration but the last takes the branch; the last falls
-  // through, and the write cursor continues after the branch.
-  task automatic rep_iter(input int e0, input int n);
-    int e1;
-    int eb;
-    e1 = ne;
-    eb = e1 - 1;
-    for (int it = 1; it < n; it++) begin
-      for (int e = e0; e < e1; e++) begin
-        ex[ne] = ex[e];
-        ne++;
+    function logic [PA_WIDTH-1:0] va2pa(input logic [VA_WIDTH-1:0] va);
+      logic [VA_WIDTH-13:0] v;
+      if (!sv39) return va[PA_WIDTH-1:0];
+      v = va[VA_WIDTH-1:12];
+      if (!vmap.exists(v)) begin
+        $display("tb_fe_top: write to an unmapped VA %011h", va);
+        return '0;
       end
-    end
-    // The final execution of the loop branch is not taken.
-    ex[ne-1].taken  = 1'b0;
-    ex[ne-1].target = ex[eb].pc + VA_WIDTH'(4);
-    if (n == 1) begin
-      ex[eb].taken  = 1'b0;
-      ex[eb].target = ex[eb].pc + VA_WIDTH'(4);
-    end
-    wp = ex[eb].pc + VA_WIDTH'(4);
-  endtask
+      return {vmap[v], va[11:0]};
+    endfunction
 
-  // An indirect jump or call through a register the writer has set:
-  // jalr rd, 0(rs1) to tgt. The type follows the RAS hint table
-  // (ras_decisions.md 2): rd and rs1 both link and unequal is
-  // RETURN_CALL; rd link alone a call; rs1 link alone a return.
-  task automatic jalr_to(input logic [4:0] rd, input logic [4:0] rs1,
-                         input logic [VA_WIDTH-1:0] tgt);
-    logic [31:0] w;
-    logic        rdl;
-    logic        rsl;
-    bp_br_type_e bt;
-    w   = enc_jalr(rd, rs1);
-    rdl = (rd == 5'd1) || (rd == 5'd5);
-    rsl = (rs1 == 5'd1) || (rs1 == 5'd5);
-    if (rdl && rsl && (rd != rs1)) bt = RETURN_CALL;
-    else if (rdl)                  bt = INDIRECT_CALL;
-    else if (rsl)                  bt = RETURN;
-    else                           bt = INDIRECT_NONRET;
-    put_hw(wp, w[15:0]);
-    put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, bt, 1'b1, tgt);
-    wp = tgt;
-  endtask
+    // A page table page, zeroed, from the bump allocator.
+    function logic [PA_WIDTH-1:0] pt_alloc();
+      logic [PA_WIDTH-1:0] p;
+      p       = pt_next;
+      pt_next = pt_next + PA_WIDTH'('h1000);
+      for (int i = 0; i < 512; i++) wr64(p + PA_WIDTH'(8 * i), '0);
+      return p;
+    endfunction
+
+    // Map one 4 KiB page, V R X A D, supervisor (U clear).
+
+    task map4k(input logic [VA_WIDTH-1:0] va,
+                         input logic [PA_WIDTH-1:0] pa);
+      logic [PA_WIDTH-1:0] t;
+      logic [63:0]         pte;
+      logic [8:0]          vpn [0:2];
+      vpn[2] = va[38:30];
+      vpn[1] = va[29:21];
+      vpn[0] = va[20:12];
+      t = satp_root;
+      for (int l = 2; l > 0; l--) begin
+        pte = rd64(t + PA_WIDTH'(8 * vpn[l]));
+        if (!pte[0]) begin
+          logic [PA_WIDTH-1:0] n;
+          n   = pt_alloc();
+          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
+          wr64(t + PA_WIDTH'(8 * vpn[l]), pte);
+        end
+        t = PA_WIDTH'(pte[53:10]) << 12;
+      end
+      wr64(t + PA_WIDTH'(8 * vpn[0]),
+           {10'd0, 44'(pa >> 12), 2'b00, PTE_LEAF});
+      vmap[va[VA_WIDTH-1:12]] = pa[PA_WIDTH-1:12];
+    endtask
+
+    // =================================================================
+    // The program writer and the expected stream.
+    // =================================================================
+
+    ex_t  ex [0:MAXE-1];
+    int   ne;
+    // Dry mode (BP-121): the emitters write memory and append nothing,
+    // for code that lies off this iteration's path.
+    logic dry;
+
+    task put_hw(input logic [VA_WIDTH-1:0] va,
+                          input logic [15:0] h);
+      logic [PA_WIDTH-1:0] pa;
+      pa = va2pa(va);
+      mem[pa]                 = h[7:0];
+      mem[pa + PA_WIDTH'(1)]  = h[15:8];
+    endtask
+
+    task add_ex(input logic [VA_WIDTH-1:0] pc,
+                          input logic [31:0] w, input logic rvc,
+                          input bp_br_type_e bt, input logic tk,
+                          input logic [VA_WIDTH-1:0] tgt);
+      if (dry) return;
+      if (ne >= MAXE) $fatal(1, "tb_fe_top: expected stream over MAXE");
+      ex[ne].pc     = pc;
+      ex[ne].instr  = w;
+      ex[ne].rvc    = rvc;
+      ex[ne].btype  = bt;
+      ex[ne].taken  = tk;
+      ex[ne].target = tgt;
+      ex[ne].trap   = 1'b0;
+      ex[ne].fault  = IFU_FAULT_NONE;
+      ex[ne].fva    = '0;
+      ne++;
+    endtask
+
+    // Encoders.
+    function logic [31:0] enc_jal(input logic [4:0] rd,
+                                            input int imm);
+      logic [20:0] o;
+      o = 21'(imm);
+      return {o[20], o[10:1], o[11], o[19:12], rd, 7'b1101111};
+    endfunction
+
+    function logic [31:0] enc_br(input logic [2:0] f3,
+                                           input int imm);
+      logic [12:0] o;
+      o = 13'(imm);
+      return {o[12], o[10:5], 5'd0, 5'd0, f3, o[4:1], o[11], 7'b1100011};
+    endfunction
+
+
+    // The write cursor and the instructions it emits. Each one is
+    // written and appended as executed.
+    logic [VA_WIDTH-1:0] wp;
+
+    task i32(input logic [31:0] w);
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, NO_BRANCH, 1'b0, '0);
+      wp = wp + VA_WIDTH'(4);
+    endtask
+
+    task i16();
+      put_hw(wp, CADDI);
+      add_ex(wp, CADDI_X, 1'b1, NO_BRANCH, 1'b0, '0);
+      wp = wp + VA_WIDTH'(2);
+    endtask
+
+    // n instructions of mixed length, a fixed pattern.
+    task mixed(input int n);
+      for (int k = 0; k < n; k++) begin
+        if ((k % 3) == 1) i32(ADDI_T0);
+        else              i16();
+      end
+    endtask
+
+    // A conditional, beq x0,x0 (taken) or bne x0,x0 (not taken).
+    task cond(input logic tk, input logic [VA_WIDTH-1:0] tgt);
+      logic [31:0] w;
+      w = enc_br(tk ? 3'b000 : 3'b001, int'(tgt - wp));
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, COND, tk, tk ? tgt : wp + VA_WIDTH'(4));
+      wp = tk ? tgt : wp + VA_WIDTH'(4);
+    endtask
+
+    // jal rd, tgt. rd = x1 is a call.
+    task jal(input logic [4:0] rd, input logic [VA_WIDTH-1:0] tgt);
+      logic [31:0] w;
+      w = enc_jal(rd, int'(tgt - wp));
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, ((rd == 5'd1) || (rd == 5'd5)) ? DIRECT_CALL
+                                                         : DIRECT_UNC,
+             1'b1, tgt);
+      wp = tgt;
+    endtask
+
+    // ret to the address the matching call linked.
+    task ret(input logic [VA_WIDTH-1:0] link);
+      put_hw(wp, RET[15:0]);
+      put_hw(wp + VA_WIDTH'(2), RET[31:16]);
+      add_ex(wp, RET, 1'b0, RETURN, 1'b1, link);
+      wp = link;
+    endtask
+
+    // ecall, trapping to the handler.
+    task ecall(input logic [VA_WIDTH-1:0] handler);
+      put_hw(wp, ECALL[15:0]);
+      put_hw(wp + VA_WIDTH'(2), ECALL[31:16]);
+      add_ex(wp, ECALL, 1'b0, NO_BRANCH, 1'b0, handler);
+      ex[ne-1].trap = 1'b1;
+      wp = handler;
+    endtask
+
+    // jal x0 to an address whose fetch faults: the JAL, then the
+    // faulting fetch, which traps to the handler. Nothing is written
+    // at the target.
+    task jal_fault(input logic [VA_WIDTH-1:0] tgt,
+                             input ifu_fault_e f,
+                             input logic [VA_WIDTH-1:0] handler);
+      jal(5'd0, tgt);
+      add_ex(tgt, '0, 1'b0, NO_BRANCH, 1'b0, handler);
+      ex[ne-1].fault = f;
+      ex[ne-1].fva   = tgt;
+      wp = handler;
+    endtask
+
+    // The end: jal x0, 0. Appended once; the backend stops comparing
+    // after it.
+    task halt();
+      logic [31:0] w;
+      w = enc_jal(5'd0, 0);
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, DIRECT_UNC, 1'b1, wp);
+    endtask
+
+    // ---- BP-119 additions ---------------------------------------------
+    // A conditional on a register, bne rs1, x0 (the loop branch). Its
+    // outcome is the writer's: tk is this execution's direction.
+    function logic [31:0] enc_bner(input logic [4:0] rs1,
+                                             input int imm);
+      logic [12:0] o;
+      o = 13'(imm);
+      return {o[12], o[10:5], 5'd0, rs1, 3'b001, o[4:1], o[11], 7'b1100011};
+    endfunction
+
+    function logic [31:0] enc_jalr(input logic [4:0] rd,
+                                             input logic [4:0] rs1);
+      return {12'd0, rs1, 3'b000, rd, 7'b1100111};
+    endfunction
+
+    // The loop branch at the end of a loop body, written taken back to
+    // the body start; rep_iter appends the other iterations.
+    task loop_br(input logic [VA_WIDTH-1:0] top);
+      logic [31:0] w;
+      w = enc_bner(5'd6, int'(top - wp));
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, COND, 1'b1, top);
+    endtask
+
+    // Append iterations 2..n of the loop whose first iteration is the
+    // expected-stream range [e0, ne), its last entry the loop branch.
+    // Every iteration but the last takes the branch; the last falls
+    // through, and the write cursor continues after the branch.
+    task rep_iter(input int e0, input int n);
+      int e1;
+      int eb;
+      e1 = ne;
+      eb = e1 - 1;
+      for (int it = 1; it < n; it++) begin
+        for (int e = e0; e < e1; e++) begin
+          ex[ne] = ex[e];
+          ne++;
+        end
+      end
+      // The final execution of the loop branch is not taken.
+      ex[ne-1].taken  = 1'b0;
+      ex[ne-1].target = ex[eb].pc + VA_WIDTH'(4);
+      if (n == 1) begin
+        ex[eb].taken  = 1'b0;
+        ex[eb].target = ex[eb].pc + VA_WIDTH'(4);
+      end
+      wp = ex[eb].pc + VA_WIDTH'(4);
+    endtask
+
+    // An indirect jump or call through a register the writer has set:
+    // jalr rd, 0(rs1) to tgt. The type follows the RAS hint table
+    // (ras_decisions.md 2): rd and rs1 both link and unequal is
+    // RETURN_CALL; rd link alone a call; rs1 link alone a return.
+    task jalr_to(input logic [4:0] rd, input logic [4:0] rs1,
+                           input logic [VA_WIDTH-1:0] tgt);
+      logic [31:0] w;
+      logic        rdl;
+      logic        rsl;
+      bp_br_type_e bt;
+      w   = enc_jalr(rd, rs1);
+      rdl = (rd == 5'd1) || (rd == 5'd5);
+      rsl = (rs1 == 5'd1) || (rs1 == 5'd5);
+      if (rdl && rsl && (rd != rs1)) bt = RETURN_CALL;
+      else if (rdl)                  bt = INDIRECT_CALL;
+      else if (rsl)                  bt = RETURN;
+      else                           bt = INDIRECT_NONRET;
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, bt, 1'b1, tgt);
+      wp = tgt;
+    endtask
+
+    // ---- BP-121 additions ---------------------------------------------
+    // A conditional whose outcome is this execution's: bne x6, x0, tgt
+    // written at wp, taken or not as tk says. Not taken continues at
+    // wp + 4; the bytes it skips when taken are the caller's to write.
+    task bcc(input logic tk, input logic [VA_WIDTH-1:0] tgt);
+      logic [31:0] w;
+      w = enc_bner(5'd6, int'(tgt - wp));
+      put_hw(wp, w[15:0]);
+      put_hw(wp + VA_WIDTH'(2), w[31:16]);
+      add_ex(wp, w, 1'b0, COND, tk, tk ? tgt : wp + VA_WIDTH'(4));
+      wp = tk ? tgt : wp + VA_WIDTH'(4);
+    endtask
+
+    // Fill [wp, to) with c.addi, dry: code the path skips this time.
+    // Written without the dry flag: c.addi halfwords, nothing appended.
+    task fill_dry(input logic [VA_WIDTH-1:0] to);
+      while (wp < to) begin
+        put_hw(wp, CADDI);
+        wp = wp + VA_WIDTH'(2);
+      end
+    endtask
+
+    // Pad with c.addi up to (not past) an address, appended.
+    task pad_to(input logic [VA_WIDTH-1:0] to);
+      while (wp < to) i16();
+    endtask
+
+    // Compressed control transfers (RVC). Each is written as its 16-bit
+    // encoding and appended with its 32-bit expansion, which is what
+    // decode delivers (s.instr). Encodings per the RVC quadrant 1 and 2
+    // formats; expansions: c.j -> jal x0; c.beqz / c.bnez rs1' -> beq /
+    // bne x(8+rs1'), x0; c.jr rs1 -> jalr x0, 0(rs1); c.jalr rs1 ->
+    // jalr x1, 0(rs1).
+    function logic [31:0] enc_brr(input logic [2:0] f3,
+                                            input logic [4:0] rs1,
+                                            input int imm);
+      logic [12:0] o;
+      o = 13'(imm);
+      return {o[12], o[10:5], 5'd0, rs1, f3, o[4:1], o[11], 7'b1100011};
+    endfunction
+
+    task cj(input logic [VA_WIDTH-1:0] tgt);
+      logic [11:0] o;
+      logic [15:0] h;
+      o = 12'(int'(tgt - wp));
+      h = {3'b101, o[11], o[4], o[9:8], o[10], o[6], o[7], o[3:1], o[5],
+           2'b01};
+      put_hw(wp, h);
+      add_ex(wp, enc_jal(5'd0, int'(tgt - wp)), 1'b1, DIRECT_UNC, 1'b1, tgt);
+      wp = tgt;
+    endtask
+
+    // c.bnez x8 (nz) or c.beqz x8, outcome tk.
+    task cbz(input logic nz, input logic tk,
+                       input logic [VA_WIDTH-1:0] tgt);
+      logic [8:0]  o;
+      logic [15:0] h;
+      o = 9'(int'(tgt - wp));
+      h = {nz ? 3'b111 : 3'b110, o[8], o[4:3], 3'b000, o[7:6], o[2:1], o[5],
+           2'b01};
+      put_hw(wp, h);
+      add_ex(wp, enc_brr(nz ? 3'b001 : 3'b000, 5'd8, int'(tgt - wp)), 1'b1,
+             COND, tk, tk ? tgt : wp + VA_WIDTH'(2));
+      wp = tk ? tgt : wp + VA_WIDTH'(2);
+    endtask
+
+    // c.jr rs1 to tgt: RETURN when rs1 links, else INDIRECT_NONRET.
+    task cjr(input logic [4:0] rs1, input logic [VA_WIDTH-1:0] tgt);
+      logic rsl;
+      rsl = (rs1 == 5'd1) || (rs1 == 5'd5);
+      put_hw(wp, {4'b1000, rs1, 5'd0, 2'b10});
+      add_ex(wp, enc_jalr(5'd0, rs1), 1'b1, rsl ? RETURN : INDIRECT_NONRET,
+             1'b1, tgt);
+      wp = tgt;
+    endtask
+
+    // c.jalr rs1 to tgt (rd = x1): RETURN_CALL when rs1 is x5, else a
+    // push-only call (ras_decisions.md 2).
+    task cjalr(input logic [4:0] rs1, input logic [VA_WIDTH-1:0] tgt);
+      put_hw(wp, {4'b1001, rs1, 5'd0, 2'b10});
+      add_ex(wp, enc_jalr(5'd1, rs1), 1'b1,
+             (rs1 == 5'd5) ? RETURN_CALL : INDIRECT_CALL, 1'b1, tgt);
+      wp = tgt;
+    endtask
+
+    // Bytes mixed(n) emits.
+    function int mixed_bytes(input int n);
+      int b;
+      b = 0;
+      for (int k = 0; k < n; k++) b += ((k % 3) == 1) ? 4 : 2;
+      return b;
+    endfunction
+
+    // A conditional at wp that, taken, skips the mixed(n) after it.
+    task cskip(input logic tk, input int n);
+      logic [VA_WIDTH-1:0] b;
+      logic [VA_WIDTH-1:0] e;
+      logic                d;
+      b = wp;
+      e = b + VA_WIDTH'(4 + mixed_bytes(n));
+      bcc(tk, e);
+      if (tk) begin
+        d   = dry;
+        dry = 1'b1;
+        wp  = b + VA_WIDTH'(4);
+        mixed(n);
+        dry = d;
+        wp  = e;
+      end else begin
+        mixed(n);
+      end
+    endtask
+    // A pseudo-random bit sequence (16-bit Galois LFSR), for a branch
+    // the predictors cannot learn.
+    logic [15:0] lfsr;
+    function logic lfsr_bit();
+      logic b;
+      b    = lfsr[0];
+      lfsr = {1'b0, lfsr[15:1]} ^ (b ? 16'hB400 : 16'h0000);
+      return b;
+    endfunction
+    // The back-edge JAL of ftbonly, written but off the path.
+    task d_jal_fill();
+      logic                d;
+      logic [VA_WIDTH-1:0] w;
+      w   = wp;
+      d   = dry;
+      dry = 1'b1;
+      wp  = w - VA_WIDTH'(4);
+      jal(5'd0, RESET_VECTOR + VA_WIDTH'('h1000));
+      dry = d;
+      wp  = w;
+    endtask
+    logic [VA_WIDTH-1:0] fnv [0:31];
+
+    task emit_nest(input int k, input int depth,
+                             input logic [VA_WIDTH-1:0] link);
+      logic [VA_WIDTH-1:0] l;
+      wp = fnv[k];
+      mixed(2);
+      if (k < depth) begin
+        l = wp + VA_WIDTH'(4);
+        jal(5'd1, fnv[k+1]);
+        emit_nest(k + 1, depth, l);
+        mixed(1);
+      end
+      ret(link);
+    endtask
+    task emit_rec(input logic [VA_WIDTH-1:0] f, input int n,
+                            input logic [VA_WIDTH-1:0] link);
+      wp = f;
+      mixed(2);
+      bcc(n == 0, f + VA_WIDTH'(16));
+      if (n > 0) begin
+        jal(5'd1, f);
+        emit_rec(f, n - 1, f + VA_WIDTH'(14));
+        i16();
+      end
+      ret(link);
+    endtask
+    // A loop exit: a conditional, taken on the last pass, over a JAL
+    // back to top. The JAL is written dry on the last pass.
+    task exit_or_jal(input logic last,
+                               input logic [VA_WIDTH-1:0] top);
+      logic [VA_WIDTH-1:0] b;
+      logic                d;
+      b = wp;
+      bcc(last, b + VA_WIDTH'(8));
+      if (!last) begin
+        jal(5'd0, top);
+      end else begin
+        d   = dry;
+        dry = 1'b1;
+        wp  = b + VA_WIDTH'(4);
+        jal(5'd0, top);
+        dry = d;
+        wp  = b + VA_WIDTH'(8);
+      end
+    endtask
+    // Write n bytes of c.addi at a, dry, keeping wp.
+    task fill_dry_at(input logic [VA_WIDTH-1:0] a, input int n);
+      logic [VA_WIDTH-1:0] w;
+      w  = wp;
+      wp = a;
+      fill_dry(a + VA_WIDTH'(n));
+      wp = w;
+    endtask
+
+  endclass
+
+  pw_c W = new;
+
+  // The warm-up boundary: mispredicts of expected entries from warm_e
+  // on are reported as after warm-up. Programs set it.
+  int warm_e;
 
   // =================================================================
   // The memory model: the L1I's l2-side link (FE-21).
@@ -555,7 +816,7 @@ module tb;
         l1i_mem_d_source = d_src;
         for (int b = 0; b < 32; b++) begin
           l1i_mem_d_data[8*b +: 8] =
-            rd8(q_addr[d_src] + PA_WIDTH'(32 * int'(d_beat) + b));
+            W.rd8(q_addr[d_src] + PA_WIDTH'(32 * int'(d_beat) + b));
         end
       end
     end
@@ -584,10 +845,10 @@ module tb;
     ppn  = '0;
     sz   = 3'b000;
     perm = '0;
-    t    = satp_root;
+    t    = W.satp_root;
     for (int l = 2; l >= 0; l--) begin
       vi  = vpn[9*l +: 9];
-      pte = rd64(t + PA_WIDTH'(8 * vi));
+      pte = W.rd64(t + PA_WIDTH'(8 * vi));
       if (!pte[0] || (!pte[1] && pte[2])) return;
       if (pte[1] || pte[3]) begin
         st   = 2'b00;
@@ -657,12 +918,16 @@ module tb;
   // =================================================================
   logic [VA_WIDTH-1:0] fstart [0:FTQ_DEPTH-1];
   int                  n_pd_redir;
+  // BP-121, TD#167: the measurement window. Set by the backend after
+  // every edge; high while a program runs and has not yet retired its
+  // last expected instruction, so no count includes the drain.
+  logic                meas;
 
   always @(posedge clk) begin : fetch_log
     if (rstn && dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
         !dut.ftq_ifu_flush_val)
       fstart[dut.ftq_ifu_idx] <= dut.ftq_ifu_start_pc;
-    if (rstn && dut.u_ftq.w_pd_redir_val && !bkend_ftq_redir_val)
+    if (meas && dut.u_ftq.w_pd_redir_val && !bkend_ftq_redir_val)
       n_pd_redir <= n_pd_redir + 1;
   end
 
@@ -684,9 +949,389 @@ module tb;
   int n_redir_p3;
   int n_nomap;
   int n_jmp_swap;
+  // BP-121: predictions the FTQ used, per predictor. Each counts the
+  // slots (or blocks) of a group the FTQ accepted (the shadow's ok_*,
+  // so a group for a squashed entry is not counted) whose recorded
+  // source is that predictor:
+  //   uBTB    p1 blocks the uBTB hit
+  //   LP      p1 slots whose direction the LP supplied
+  //   FTB     p2 groups the FTB answered (bpu_slot_val_p2)
+  //   TAGE    p2 conditional slots whose direction TAGE supplied
+  //   SC      p3 conditional slots SC answered (n_use_sc), and those
+  //           whose direction SC changed (n_sc_flip)
+  //   ITTAGE  p2 indirect slots whose target ITTAGE supplied
+  //   RAS     p1 and p2 return slots whose target the RAS supplied
+  int n_use_ubtb;
+  int n_use_lp;
+  int n_use_ftb;
+  int n_use_tage;
+  int n_use_sc;
+  int n_sc_flip;
+  int n_use_ittage;
+  int n_use_ras;
+  int n_u_ftb;
+  // BP-121: responses of the queued predictors at the stage the
+  // cluster reads them, for the p2 (TAGE, ITTAGE) or p3 (SC) block:
+  // on time (branch_id is the block's) or late (an older block's).
+  int n_tage_ok;
+  int n_tage_late;
+  int n_it_ok;
+  int n_it_late;
+  int n_sc_ok;
+  int n_sc_late;
+
+  // BP-121: p2 blocks whose history bundle (the branches on the path
+  // and their directions) differs from the bundle p1 wrote, with no p2
+  // redirect to correct it; and p2 redirects.
+  int          n_hist_mis;
+  logic [1:0]  p1_nb  [0:FTQ_DEPTH-1];
+  logic [1:0]  p1_tkn [0:FTQ_DEPTH-1];
+  always @(posedge clk) begin : hist_log
+    if (rstn && dut.u_bpu.r_val_p1) begin
+      p1_nb[dut.u_bpu.r_idx_p1]  <= dut.u_bpu.w_hist_num_branches;
+      p1_tkn[dut.u_bpu.r_idx_p1] <= dut.u_bpu.w_hist_pred_taken &
+                                    {dut.u_bpu.w_hist_num_branches >= 2'd2,
+                                     dut.u_bpu.w_hist_num_branches >= 2'd1};
+    end
+`ifndef BASE_RTL
+    if (meas && dut.u_bpu.r_val_p2 && dut.u_ftq.w_ok_blk_p2 &&
+        dut.u_bpu.w_ftb_valid_p2 && !dut.u_bpu.w_any_redir_p2 &&
+        ((p1_nb[dut.u_bpu.r_idx_p2] != dut.u_bpu.w_c2_n) ||
+         (p1_tkn[dut.u_bpu.r_idx_p2] != (dut.u_bpu.w_c2_tkn &
+            {dut.u_bpu.w_c2_n >= 2'd2, dut.u_bpu.w_c2_n >= 2'd1}))))
+      n_hist_mis <= n_hist_mis + 1;
+`endif
+  end
+
+  // BP-121, TD#161: a p3 slot write for an entry whose p2 slot group
+  // was not written this allocation (the FTB did not answer it), which
+  // overwrote the p1 slots with an empty view. Per index, whether the
+  // p2 group was written since the entry's p1 allocation.
+  logic p2_wr_seen [0:FTQ_DEPTH-1];
+  int   n_p3_no_p2;
+  always @(posedge clk) begin : p3_log
+    if (rstn && dut.u_ftq.w_ok_pred_p1) p2_wr_seen[dut.bpu_pred_idx_p1] <= 1'b0;
+    if (rstn && dut.u_ftq.w_ok_slot_p2) p2_wr_seen[dut.bpu_slot_idx_p2] <= 1'b1;
+    if (meas && dut.u_ftq.w_ok_slot_p3 && !p2_wr_seen[dut.bpu_slot_idx_p3])
+      n_p3_no_p2 <= n_p3_no_p2 + 1;
+  end
+
+  // BP-121: the cluster's own p2 redirect keeps the redirecting block's
+  // RAS operation (the restore is not applied to it). The cycle after a
+  // p2 redirect the FTQ took for a block that operated on the RAS, the
+  // RAS top must be the block's post-op snapshot (bpu_blk_ras_p2).
+  logic                    own_chk;
+  logic [RAS_PTR_BITS-1:0] own_tosr;
+  int                      n_own_ok;
+  int                      n_own_bad;
+  always @(posedge clk) begin : own_log
+    if (rstn && own_chk) begin
+      if (dut.u_bpu.u_ras.tosr == own_tosr) n_own_ok  <= n_own_ok + 1;
+      else                                  n_own_bad <= n_own_bad + 1;
+    end
+`ifndef BASE_RTL
+    own_chk  <= rstn && meas && dut.u_bpu.w_own_p2 &&
+                (dut.u_bpu.w_ras_pred_val_p2[0] ||
+                 dut.u_bpu.w_ras_pred_val_p2[1]);
+`else
+    own_chk  <= rstn && meas && dut.u_ftq.w_arm_win[4] &&
+                (dut.u_bpu.w_ras_pred_val_p2[0] ||
+                 dut.u_bpu.w_ras_pred_val_p2[1]);
+`endif
+    own_tosr <= dut.bpu_blk_ras_p2.tosr;
+  end
+
+  // BP-121, TD#149 measured: p3 repairs (the p3 RAS view of a block
+  // differs from its p2 operation), and backend restores that name an
+  // entry a p3 repair changed (its snapshot, written at p2, predates
+  // the repair).
+  logic p3_rep [0:FTQ_DEPTH-1];
+  int   n_p3_rep;
+  int   n_rest_rep;
+  always @(posedge clk) begin : rep_log
+    if (rstn && dut.u_ftq.w_ok_pred_p1) p3_rep[dut.bpu_pred_idx_p1] <= 1'b0;
+`ifndef BASE_RTL
+    if (rstn && dut.u_bpu.r_val_p3 &&
+        (((dut.u_bpu.w_ras_pred_val_p3[0] != dut.u_bpu.r_ras_val_p3[0]) &&
+          (dut.u_bpu.w_ras_br_type_p3[0] inside {DIRECT_CALL, INDIRECT_CALL,
+                                                 RETURN, RETURN_CALL})) ||
+         ((dut.u_bpu.w_ras_pred_val_p3[1] != dut.u_bpu.r_ras_val_p3[1]) &&
+          (dut.u_bpu.w_ras_br_type_p3[1] inside {DIRECT_CALL, INDIRECT_CALL,
+                                                 RETURN, RETURN_CALL})))) begin
+      p3_rep[dut.u_bpu.r_idx_p3] <= 1'b1;
+      if (meas) n_p3_rep <= n_p3_rep + 1;
+    end
+`endif
+    if (meas && dut.u_ftq.w_arm_win[1] && dut.ras_restore_val &&
+        p3_rep[dut.ftq_rollback_idx])
+      n_rest_rep <= n_rest_rep + 1;
+  end
+
+  int n_p2_blk;
+  // BP-121: FTB lookups an update took the read port from (TD#162),
+  // and p2 cycles in which a block the FTQ squashed still operated on
+  // the RAS (FE-14).
+  int n_ftb_drop;
+  int n_ras_sq;
+  always @(posedge clk) begin : resp_log
+    if (meas) begin
+      if (dut.u_bpu.r_val_p2) n_p2_blk <= n_p2_blk + 1;
+      if (dut.u_bpu.u_ftb.u_ftb_cntrl.valid_p1 &&
+          dut.u_bpu.u_ftb.u_ftb_cntrl.upd_active)
+        n_ftb_drop <= n_ftb_drop + 1;
+      if (dut.u_bpu.r_val_p2 && !dut.u_ftq.w_ok_blk_p2 &&
+          (dut.u_bpu.w_ras_pred_val_p2[0] || dut.u_bpu.w_ras_pred_val_p2[1]))
+        n_ras_sq <= n_ras_sq + 1;
+      if (dut.u_bpu.r_val_p2 && dut.u_bpu.w_tage_pred_rdy_p2[0]) begin
+        if (dut.u_bpu.w_tage_pred_meta_p2[0].branch_id == dut.u_bpu.r_idx_p2)
+          n_tage_ok <= n_tage_ok + 1;
+        else
+          n_tage_late <= n_tage_late + 1;
+      end
+      if (dut.u_bpu.r_val_p2 && dut.u_bpu.w_ittage_pred_rdy_p2[0]) begin
+        if (dut.u_bpu.w_ittage_pred_meta_p2[0].branch_id == dut.u_bpu.r_idx_p2)
+          n_it_ok <= n_it_ok + 1;
+        else
+          n_it_late <= n_it_late + 1;
+      end
+      if (dut.u_bpu.r_val_p3 && dut.u_bpu.w_sc_pred_rdy_p3[0]) begin
+        if (dut.u_bpu.w_sc_pred_meta_p3[0].branch_id == dut.u_bpu.r_idx_p3)
+          n_sc_ok <= n_sc_ok + 1;
+        else
+          n_sc_late <= n_sc_late + 1;
+      end
+    end
+  end
+
+  always @(posedge clk) begin : use_log
+    int lp;
+    int ras;
+    int tg;
+    int it;
+    int sc;
+    int fl;
+    lp  = 0;
+    ras = 0;
+    tg  = 0;
+    it  = 0;
+    sc  = 0;
+    fl  = 0;
+    if (meas) begin
+      if (dut.u_ftq.w_ok_pred_p1 && dut.u_bpu.r_ubtb_blk_p1.hit)
+        n_use_ubtb <= n_use_ubtb + 1;
+      if (dut.u_ftq.w_ok_slot_p2) n_use_ftb <= n_use_ftb + 1;
+      if (dut.u_bpu.w_ftb_upd_val_u0) n_u_ftb <= n_u_ftb + 1;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        if (dut.u_ftq.w_ok_pred_p1 && dut.bpu_pred_slot_p1[s].slot_valid) begin
+          if (dut.bpu_pred_slot_p1[s].pred_src == PRED_LOOP) lp++;
+          if (dut.bpu_pred_slot_p1[s].pred_src == PRED_RAS)  ras++;
+        end
+        if (dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_p2[s].slot_valid) begin
+          if (dut.bpu_slot_p2[s].pred_src == PRED_TAGE)   tg++;
+          if (dut.bpu_slot_p2[s].pred_src == PRED_ITTAGE) it++;
+          if (dut.bpu_slot_p2[s].pred_src == PRED_RAS)    ras++;
+        end
+        if (dut.u_ftq.w_ok_slot_p3 && dut.bpu_slot_p3[s].slot_valid &&
+            (dut.bpu_slot_p3[s].br_type == COND)) begin
+          if (dut.u_bpu.w_sc_hit_p3[s])                  sc++;
+          if (dut.bpu_slot_p3[s].pred_src == PRED_SC)    fl++;
+        end
+      end
+      n_use_lp     <= n_use_lp     + lp;
+      n_use_ras    <= n_use_ras    + ras;
+      n_use_tage   <= n_use_tage   + tg;
+      n_use_ittage <= n_use_ittage + it;
+      n_use_sc     <= n_use_sc     + sc;
+      n_sc_flip    <= n_sc_flip    + fl;
+    end
+  end
+
+  // BP-121: a cycle trace for diagnosis, +TRACE. One line per event:
+  // the p0 request, the p1 slots, the p2 and p3 groups the FTQ
+  // accepted, the redirect that won, the fetch request, the predecode
+  // redirect and the backend's redirect.
+  logic trace;
+  initial trace = $test$plusargs("TRACE");
+  // Per FTQ index, the last TAGE p2 view of the watched block.
+  logic [14:0] tg_prm [0:FTQ_DEPTH-1];
+  logic        tg_tkn [0:FTQ_DEPTH-1];
+  logic [11:0] tg_alc [0:FTQ_DEPTH-1];
+  logic [7:0]  tg_ghr [0:FTQ_DEPTH-1];
+  logic [1:0]  tg_sc  [0:FTQ_DEPTH-1];   // {SC answered, SC direction}
+  // The block start whose TAGE view the trace prints (+WATCH=<hex>).
+  logic [15:0] watch16;
+  initial begin
+    watch16 = '1;
+    void'($value$plusargs("WATCH=%h", watch16));
+  end
+
+  // The 8 newest history bits below the pointer, newest first.
+  function automatic logic [7:0] ghr_window(input logic [GHR_WIDTH-1:0] g,
+                                            input logic [GHIST_PTR_BITS-1:0] p);
+    logic [7:0] w;
+    for (int k = 0; k < 8; k++)
+      w[7-k] = g[(int'(p) - 1 - k + GHR_WIDTH) % GHR_WIDTH];
+    return w;
+  endfunction
+
+  function automatic string slot_str(input bp_ftq_slot_t s);
+    if (!s.slot_valid) return "-";
+    return $sformatf("%0d/p%0d/%s/%0h/s%0d", s.br_type, s.pos,
+                     s.taken ? "T" : "N", s.target[15:0], s.pred_src);
+  endfunction
+
+  always @(posedge clk) begin : trace_log
+    if (trace && rstn) begin
+      if (dut.ftq_pred_val_p0)
+        $display("%0d P0 pc %0h idx %0d", cyc, dut.ftq_pred_pc_p0[15:0],
+                 dut.ftq_pred_idx_p0);
+      if (dut.bpu_pred_val_p1)
+        $display("%0d P1 idx %0d ok %0d hit %0d pft %0h s0 %s s1 %s", cyc,
+                 dut.bpu_pred_idx_p1, dut.u_ftq.w_ok_pred_p1,
+                 dut.u_bpu.r_ubtb_blk_p1.hit, dut.bpu_pred_pft_p1[15:0],
+                 slot_str(dut.bpu_pred_slot_p1[0]),
+                 slot_str(dut.bpu_pred_slot_p1[1]));
+      if (dut.u_bpu.r_val_p2)
+        $display({"%0d P2 idx %0d ok %0d ftb %0d pft %0h s0 %s s1 %s",
+                  " r %0d/%0h %0d/%0h ras t%0d w%0d b%0d"}, cyc,
+                 dut.bpu_slot_idx_p2, dut.u_ftq.w_ok_blk_p2,
+                 dut.bpu_slot_val_p2, dut.bpu_blk_pft_p2[15:0],
+                 slot_str(dut.bpu_slot_p2[0]), slot_str(dut.bpu_slot_p2[1]),
+                 dut.bpu_redir_p2[0].valid,
+                 dut.bpu_redir_p2[0].target_pc[15:0],
+                 dut.bpu_redir_p2[1].valid,
+                 dut.bpu_redir_p2[1].target_pc[15:0],
+                 dut.bpu_blk_ras_p2.tosr, dut.bpu_blk_ras_p2.tosw,
+                 dut.bpu_blk_ras_p2.bos);
+      if (dut.u_bpu.r_val_p3)
+        $display("%0d P3 idx %0d ok %0d s0 %s s1 %s r %0d/%0h %0d/%0h", cyc,
+                 dut.bpu_slot_idx_p3, dut.u_ftq.w_ok_slot_p3,
+                 slot_str(dut.bpu_slot_p3[0]), slot_str(dut.bpu_slot_p3[1]),
+                 dut.bpu_redir_p3[0].valid,
+                 dut.bpu_redir_p3[0].target_pc[15:0],
+                 dut.bpu_redir_p3[1].valid,
+                 dut.bpu_redir_p3[1].target_pc[15:0]);
+      if (dut.u_ftq.w_redir_val)
+        $display({"%0d REDIR arm %b idx %0d self %0d pc %0h rb %0d/%0d",
+                  " ras %0d/%0d/%0d"}, cyc,
+                 dut.u_ftq.w_arm_win, dut.u_ftq.w_redir_idx,
+                 dut.u_ftq.w_redir_self, dut.ftq_pred_pc_p0[15:0],
+                 dut.ftq_rollback_val, dut.ftq_rollback_idx,
+                 dut.ras_restore_snapshot.tosr,
+                 dut.ras_restore_snapshot.tosw,
+                 dut.ras_restore_snapshot.bos);
+      if (dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy)
+        $display("%0d FETCH idx %0d start %0h next %0h tk %0d/%0d", cyc,
+                 dut.ftq_ifu_idx, dut.ftq_ifu_start_pc[15:0],
+                 dut.ftq_ifu_next_pc[15:0], dut.ftq_ifu_taken_val,
+                 dut.ftq_ifu_taken_pos);
+      if (dut.ftb_upd_valid_u0)
+        $display({"%0d FTBUPD pc %0h hit %0d way %0d br %0d/%0d tk %0d pos %0d",
+                  " jmp %0d c%0d r%0d j%0d pft %0h tgt %0h"}, cyc,
+                 dut.ftb_upd_pc_u0[15:0], dut.ftb_upd_hit_u0,
+                 dut.ftb_upd_way_u0, dut.ftb_upd_is_br_u0,
+                 dut.ftb_upd_br_idx_u0, dut.ftb_upd_taken_u0,
+                 dut.ftb_upd_pos_u0, dut.ftb_upd_is_jmp_u0,
+                 dut.ftb_upd_is_call_u0,
+                 dut.ftb_upd_is_ret_u0, dut.ftb_upd_is_jalr_u0,
+                 dut.ftb_upd_pft_addr_u0[15:0],
+                 dut.ftb_upd_jmp_target_u0[15:0]);
+      if (dut.ras_commit_val)
+        $display("%0d RASCOMMIT %0d ret %0h", cyc, dut.ras_commit_br_type,
+                 dut.ras_commit_ret_addr[15:0]);
+      for (int t = 0; t < NUM_PRED_SLOTS; t++) begin
+        if (dut.u_bpu.w_ittage_upd_val_u0[t])
+          $display({"%0d ITUPD s%0d hit %0d prm %0d/%0h alc %0d/%0h/%0h",
+                    " mis %0d tgt %0h ptgt %0h"}, cyc, t,
+                   dut.ittage_upd_inp_u0[t].ittage_pred_meta.ittage_hit,
+                   dut.ittage_upd_inp_u0[t].ittage_pred_meta.ittage_prm_comp,
+                   dut.ittage_upd_inp_u0[t].ittage_pred_meta.ittage_prm_idx,
+                   dut.ittage_upd_inp_u0[t].ittage_pred_meta.ittage_alc_comp,
+                   dut.ittage_upd_inp_u0[t].ittage_pred_meta.ittage_alc_idx,
+                   dut.ittage_upd_inp_u0[t].ittage_pred_meta.ittage_alc_tag,
+                   dut.ittage_upd_inp_u0[t].indir_mispredict,
+                   {dut.ittage_upd_inp_u0[t].resolved_target[14:0], 1'b0},
+                   {dut.ittage_upd_inp_u0[t].ittage_pred_meta
+                      .ittage_prm_tgt[14:0], 1'b0});
+      end
+      $display({"%0d TG p0v %0d p2v %0d idx2 %0d trdy %0d tbid %0d cr %0d",
+                " scgu %0d pqnf %0d scr %0d"}, cyc,
+               dut.u_bpu.w_req_val_p0, dut.u_bpu.r_val_p2, dut.u_bpu.r_idx_p2,
+               dut.u_bpu.w_tage_pred_rdy_p2[0],
+               dut.u_bpu.w_tage_pred_meta_p2[0].branch_id,
+               dut.u_bpu.w_tage_consumer_ready, dut.u_bpu.w_sc_grant_upd,
+               dut.u_bpu.tage_pq_not_full, dut.u_bpu.sc_ready);
+      if (dut.u_bpu.r_val_p2 && (dut.u_bpu.r_pc_p2[15:0] == watch16))
+        $display({"%0d TGP2 idx %0d rdy %0d bid %0d prm %0d/%0h alt %0d/%0h",
+                  " ctr %0d tkn %0d alc %0d/%0h use_prm %0d ghp %0d ghr %b"},
+                 cyc,
+                 dut.u_bpu.r_idx_p2, dut.u_bpu.w_tage_pred_rdy_p2[0],
+                 dut.u_bpu.w_tage_pred_meta_p2[0].branch_id,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_prm_comp,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_prm_idx,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_alt_comp,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_alt_idx,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_prm_ctr,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_pred_tkn,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_alc_comp,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_alc_idx,
+                 dut.u_bpu.w_tage_pred_meta_p2[0].tage_using_primary,
+                 dut.bpu_ghist_ptr,
+                 ghr_window(dut.bpu_ghr_buf, dut.bpu_ghist_ptr));
+      if (dut.u_bpu.r_val_p2 && (dut.u_bpu.r_pc_p2[15:0] == watch16)) begin
+        tg_prm[dut.u_bpu.r_idx_p2] <=
+          {dut.u_bpu.w_tage_pred_meta_p2[0].tage_prm_comp,
+           12'(dut.u_bpu.w_tage_pred_meta_p2[0].tage_prm_idx)};
+        tg_tkn[dut.u_bpu.r_idx_p2] <=
+          dut.u_bpu.w_tage_pred_meta_p2[0].tage_pred_tkn;
+        tg_alc[dut.u_bpu.r_idx_p2] <=
+          12'(dut.u_bpu.w_tage_pred_meta_p2[0].tage_alc_idx);
+        tg_ghr[dut.u_bpu.r_idx_p2] <=
+          ghr_window(dut.bpu_ghr_buf, dut.bpu_ghist_ptr);
+      end
+      if (dut.u_bpu.r_val_p3)
+        tg_sc[dut.u_bpu.r_idx_p3] <= {dut.u_bpu.w_sc_hit_p3[0],
+                                      dut.u_bpu.w_taken_p3[0]};
+      for (int t = 0; t < NUM_PRED_SLOTS; t++) begin
+        if (dut.u_bpu.w_tage_upd_val_u0[t])
+          $display({"%0d TGUPD s%0d bid %0d prm %0d/%0h alc %0d/%0h tkn %0d",
+                    " mis %0d"}, cyc, t,
+                   dut.tage_upd_inp_u0[t].tage_pred_meta.branch_id,
+                   dut.tage_upd_inp_u0[t].tage_pred_meta.tage_prm_comp,
+                   dut.tage_upd_inp_u0[t].tage_pred_meta.tage_prm_idx,
+                   dut.tage_upd_inp_u0[t].tage_pred_meta.tage_alc_comp,
+                   dut.tage_upd_inp_u0[t].tage_pred_meta.tage_alc_idx,
+                   dut.tage_upd_inp_u0[t].resolved_taken,
+                   dut.tage_upd_inp_u0[t].cond_mispredict);
+      end
+      if (dut.u_bpu.r_val_p2 && dut.u_bpu.w_ittage_pred_rdy_p2[0])
+        $display("%0d ITP2 idx %0d bid %0d hit %0d prm %0d/%0h alc %0d/%0h/%0h",
+                 cyc, dut.u_bpu.r_idx_p2,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].branch_id,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_hit,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_prm_comp,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_prm_idx,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_alc_comp,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_alc_idx,
+                 dut.u_bpu.w_ittage_pred_meta_p2[0].ittage_alc_tag);
+    end
+  end
+
+  // BP-121: every RAS commit the cluster performs (after its type
+  // qualification), compared in order with the retired stream by the
+  // backend below.
+  always @(posedge clk) begin : ras_commit_log
+    if (rstn && dut.u_bpu.w_ras_commit_val) begin
+      rasev_t g;
+      g.t  = dut.ras_commit_br_type;
+      g.ra = dut.ras_commit_ret_addr;
+      g.pc = '0;
+      ras_got.push_back(g);
+    end
+  end
 
   always @(posedge clk) begin : upd_log
-    if (rstn) begin
+    if (meas) begin
       n_u_ubtb   <= n_u_ubtb
                   + $countones({dut.u_bpu.w_ubtb_upd_u0[1].valid,
                                 dut.u_bpu.w_ubtb_upd_u0[0].valid});
@@ -722,7 +1367,11 @@ module tb;
       // way's readback and the update's region position.
       if (dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_valid_u0 &&
           dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_is_jmp_u0 &&
+`ifdef BASE_RTL
           dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_hit_u0 &&
+`else
+          dut.u_bpu.u_ftb.u_ftb_cntrl.upd_hit &&
+`endif
           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_old.jmp.valid &&
           (dut.u_bpu.u_ftb.u_ftb_cntrl.upd_old.jmp.pos !=
            dut.u_bpu.u_ftb.u_ftb_cntrl.upd_rpos))
@@ -755,6 +1404,13 @@ module tb;
   int                      n_mis_ras;
   int                      n_mis_watch;
   logic [VA_WIDTH-1:0]     watch_pc;
+  // BP-121: mispredicts after warm-up, by branch type (indexed by the
+  // bp_br_type_e encoding) and by PC; the PC's type is kept for the
+  // report.
+  int                      n_mis_warm;
+  int                      n_mis_type [0:7];
+  int                      mis_pc  [logic [VA_WIDTH-1:0]];
+  bp_br_type_e             mis_typ [logic [VA_WIDTH-1:0]];
   // A resolution queue, presented on port 0.
   ftq_resolve_t            rq [0:255];
   int                      rq_hd;
@@ -766,15 +1422,44 @@ module tb;
   logic [VA_WIDTH-1:0]     rd_pc;
   logic                    rd_self;
   ftq_redir_cause_e        rd_cause;
+  logic                    rd_taken;
+  // BP-121, the corrected history: a backend mispredict redirect of a
+  // conditional was driven last cycle (h_chk), with its direction.
+  // After the rollback the newest history bit must be that direction.
+  logic                    rd_cond;
+  logic                    h_chk;
+  logic                    h_dir;
+  int                      n_hist_ok;
+  int                      n_hist_bad;
 
+  // The taken target of a conditional, from its (expanded) B-type
+  // encoding: pc + the sign-extended immediate.
+  function automatic logic [VA_WIDTH-1:0] br_target(
+      input logic [VA_WIDTH-1:0] pc, input logic [31:0] w);
+    logic [12:0] imm;
+    imm = {w[31], w[7], w[30:25], w[11:8], 1'b0};
+    return pc + {{(VA_WIDTH-13){imm[12]}}, imm};
+  endfunction
+
+  // A resolution carries the RESOLVED TAKEN TARGET of a conditional
+  // whatever its direction (ftb_decisions.md 5.5, "conditional target:
+  // rewrite if the resolved taken target differs"). BP-121: before, a
+  // not-taken conditional resolved with its fall-through as target, so
+  // the FTB stored the fall-through and the next taken instance of the
+  // branch was fetched to it (hist: the alternating branch).
   task automatic resolve(input int e, input logic [FTQ_IDX_BITS-1:0] idx,
                          input logic [3:0] pos, input logic mis);
     rq[rq_tl % 256].ftq_idx    = idx;
     rq[rq_tl % 256].pos        = pos;
-    rq[rq_tl % 256].taken      = ex[e].taken;
-    rq[rq_tl % 256].target     = ex[e].target;
-    rq[rq_tl % 256].br_type    = ex[e].btype;
+    rq[rq_tl % 256].taken      = W.ex[e].taken;
+    rq[rq_tl % 256].target     = (W.ex[e].btype == COND)
+                               ? br_target(W.ex[e].pc, W.ex[e].instr)
+                               : W.ex[e].target;
+    rq[rq_tl % 256].br_type    = W.ex[e].btype;
     rq[rq_tl % 256].mispredict = mis;
+`ifndef BASE_RTL
+    rq[rq_tl % 256].is_rvc     = W.ex[e].rvc;
+`endif
     rq_tl++;
   endtask
 
@@ -818,6 +1503,8 @@ module tb;
     rd_pc    = pc;
     rd_self  = self;
     rd_cause = c;
+    rd_taken = 1'b0;
+    rd_cond  = 1'b0;
     // The pointer of entry idx: the current entry's, or one behind it
     // for a mispredict named by the previous entry's branch.
     kp = cur_ptr - FTQ_PTR_BITS'(FTQ_IDX_BITS'(cur_ptr[FTQ_IDX_BITS-1:0]
@@ -840,6 +1527,7 @@ module tb;
     bkend_ftq_redir_pc    = '0;
     bkend_ftq_redir_self  = 1'b0;
     bkend_ftq_redir_cause = RC_MISPREDICT;
+    bkend_ftq_redir_taken = 1'b0;
     bkend_ftq_commit_val  = 1'b0;
     bkend_ftq_commit_idx  = '0;
     bkend_ftq_rsv_val     = '0;
@@ -857,37 +1545,63 @@ module tb;
           s = pd_out[i];
           d = decode_bundle[i];
           if (!s.valid || stop) continue;
-          if (ep >= ne) continue;                 // past the end
-          if (s.start_pc != ex[ep].pc) begin
+          if (ep >= W.ne) continue;                 // past the end
+          if (s.start_pc != W.ex[ep].pc) begin
             stop = 1'b1;
             // A direct jump or call never has a wrong path after it:
             // predecode truncates the bundle at a JAL (M1, M3, IB-2),
             // so what follows one is its target. Only a conditional's
             // direction and an indirect's target can be wrong here.
-            if (cfi_pend && ((ex[cfi_e].btype == DIRECT_UNC) ||
-                             (ex[cfi_e].btype == DIRECT_CALL))) begin
+            if (cfi_pend && ((W.ex[cfi_e].btype == DIRECT_UNC) ||
+                             (W.ex[cfi_e].btype == DIRECT_CALL))) begin
               n_err++;
               $display("ERROR: [%s] pc %011h after a JAL at %011h",
-                       tname, s.start_pc, ex[cfi_e].pc);
+                       tname, s.start_pc, W.ex[cfi_e].pc);
             end else if (cfi_pend) begin
+              if (trace)
+                $display("%0d MISP pc %0h act %0d got %0h exp %0h e %0d", cyc,
+                         W.ex[cfi_e].pc[15:0], W.ex[cfi_e].taken,
+                         s.start_pc[15:0], W.ex[ep].pc[15:0], cfi_e);
               n_mispred++;
-              if ((ex[cfi_e].btype == RETURN) ||
-                  (ex[cfi_e].btype == RETURN_CALL))
+              if ((W.ex[cfi_e].btype == RETURN) ||
+                  (W.ex[cfi_e].btype == RETURN_CALL))
                 n_mis_ras++;
-              if (ex[cfi_e].pc == watch_pc) n_mis_watch++;
+              if (W.ex[cfi_e].pc == watch_pc) n_mis_watch++;
+              if (cfi_e >= warm_e) begin
+                n_mis_warm++;
+                n_mis_type[int'(W.ex[cfi_e].btype)]++;
+                if (mis_pc.exists(W.ex[cfi_e].pc))
+                  mis_pc[W.ex[cfi_e].pc]++;
+                else
+                  mis_pc[W.ex[cfi_e].pc] = 1;
+                mis_typ[W.ex[cfi_e].pc] = W.ex[cfi_e].btype;
+              end
               resolve(cfi_e, cfi_idx, cfi_pos, 1'b1);
               cfi_pend = 1'b0;
-              redirect(cfi_idx, cfi_pos, ex[ep].pc, 1'b0, RC_MISPREDICT);
+              redirect(cfi_idx, cfi_pos, W.ex[ep].pc, 1'b0, RC_MISPREDICT);
+              // The resolved direction rides with the redirect (BP-121).
+              rd_taken = W.ex[cfi_e].taken;
+              rd_cond  = (W.ex[cfi_e].btype == COND);
             end else begin
               n_err++;
               $display("%s", $sformatf(
                 {"ERROR: [%s] stream: got pc %011h exp %011h ",
                  "(entry %0d), not after a control transfer"},
-                tname, s.start_pc, ex[ep].pc, ep));
+                tname, s.start_pc, W.ex[ep].pc, ep));
             end
             continue;
           end
           // The expected instruction.
+          if (trace) $display("%0d RETIRE %0h idx %0d pos %0d e %0d", cyc,
+                              s.start_pc[15:0], s.ftq_idx, s.pos, ep);
+          if (trace && (W.ex[ep].btype == COND) &&
+              (fstart[s.ftq_idx][15:0] == watch16))
+            $display({"%0d WBR pc %0h act %0d tage %0d sc %b prm %0d/%0h",
+                      " alc %0h ghr %b"}, cyc,
+                     s.start_pc[15:0], W.ex[ep].taken, tg_tkn[s.ftq_idx],
+                     tg_sc[s.ftq_idx],
+                     tg_prm[s.ftq_idx][14:12], tg_prm[s.ftq_idx][11:0],
+                     tg_alc[s.ftq_idx], tg_ghr[s.ftq_idx]);
           n_retired++;
           if (cfi_pend) begin
             resolve(cfi_e, cfi_idx, cfi_pos, 1'b0);
@@ -896,8 +1610,8 @@ module tb;
           track_entry(s.ftq_idx);
           // A faulting slot has no encoding; no document says what
           // its is_rvc holds (reported, BP-118), so it is not checked.
-          if ((ex[ep].fault == IFU_FAULT_NONE) &&
-              (s.is_rvc != ex[ep].rvc)) begin
+          if ((W.ex[ep].fault == IFU_FAULT_NONE) &&
+              (s.is_rvc != W.ex[ep].rvc)) begin
             n_err++;
             $display("ERROR: [%s] pc %011h is_rvc %0d", tname, s.start_pc,
                      s.is_rvc);
@@ -915,9 +1629,9 @@ module tb;
                "name its block (start %011h)"}, tname, s.start_pc,
               s.ftq_idx, s.pos, fstart[s.ftq_idx]));
           end
-          if (ex[ep].fault != IFU_FAULT_NONE) begin
-            if ((s.fault_cause != ex[ep].fault) ||
-                (s.fault_va != ex[ep].fva)) begin
+          if (W.ex[ep].fault != IFU_FAULT_NONE) begin
+            if ((s.fault_cause != W.ex[ep].fault) ||
+                (s.fault_va != W.ex[ep].fva)) begin
               n_err++;
               $display("ERROR: [%s] pc %011h fault %0d va %011h", tname,
                        s.start_pc, s.fault_cause, s.fault_va);
@@ -926,34 +1640,82 @@ module tb;
             end
             n_trap++;
             stop = 1'b1;
-            redirect(s.ftq_idx, s.pos, ex[ep].target, 1'b1, RC_TRAP);
+            redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
             ep++;
             continue;
           end
           if ((s.fault_cause != IFU_FAULT_NONE) ||
-              (s.instr != ex[ep].instr)) begin
+              (s.instr != W.ex[ep].instr)) begin
             n_err++;
             $display("ERROR: [%s] pc %011h instr %08h exp %08h fault %0d",
-                     tname, s.start_pc, s.instr, ex[ep].instr,
+                     tname, s.start_pc, s.instr, W.ex[ep].instr,
                      s.fault_cause);
           end
-          if (ex[ep].trap) begin
+          if (W.ex[ep].trap) begin
             n_trap++;
             stop = 1'b1;
-            redirect(s.ftq_idx, s.pos, ex[ep].target, 1'b1, RC_TRAP);
+            redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
             ep++;
             continue;
           end
-          if (ex[ep].btype != NO_BRANCH) begin
+          if (W.ex[ep].btype != NO_BRANCH) begin
             cfi_pend = 1'b1;
             cfi_e    = ep;
             cfi_idx  = s.ftq_idx;
             cfi_pos  = s.pos;
           end
+          // The architectural RAS operation of this instruction, if any
+          // (ras_decisions.md 2): a call pushes its link, the address
+          // after it; a return pops; a return-call pops then pushes.
+          if ((W.ex[ep].btype == DIRECT_CALL)   ||
+              (W.ex[ep].btype == INDIRECT_CALL) ||
+              (W.ex[ep].btype == RETURN)        ||
+              (W.ex[ep].btype == RETURN_CALL)) begin
+            rasev_t ev;
+            ev.t  = W.ex[ep].btype;
+            ev.pc = W.ex[ep].pc;
+            ev.ra = W.ex[ep].pc + (W.ex[ep].rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
+            ras_exp.push_back(ev);
+          end
           ep++;
         end
       end
       #1;
+      // ---- the RAS commit check (BP-121) ------------------------
+      while ((ras_got.size() > 0) && (ras_exp.size() > 0)) begin
+        rasev_t g;
+        rasev_t x;
+        g = ras_got.pop_front();
+        x = ras_exp.pop_front();
+        if ((g.t != x.t) ||
+            ((x.t != RETURN) && (g.ra != x.ra))) begin
+          n_ras_bad++;
+          if (n_ras_bad <= 4) $display("%s", $sformatf(
+            {"ERROR: [%s] RAS commit %0d ret %011h, expected %0d ret ",
+             "%011h (the instruction at %011h)"}, tname, g.t, g.ra, x.t,
+            x.ra, x.pc));
+        end else begin
+          n_ras_ok++;
+        end
+      end
+      if (ras_got.size() > 0) begin
+        rasev_t g;
+        g = ras_got.pop_front();
+        n_ras_bad++;
+        if (n_ras_bad <= 4)
+          $display("ERROR: [%s] RAS commit %0d ret %011h with none retired",
+                   tname, g.t, g.ra);
+      end
+      meas = rstn && run_be && (ep < W.ne);
+      // ---- the history check (BP-121) --------------------------
+      if (h_chk) begin
+        if (dut.bpu_ghr_buf[dut.bpu_ghist_ptr - GHIST_PTR_BITS'(1)] == h_dir)
+          n_hist_ok++;
+        else
+          n_hist_bad++;
+      end
+      h_chk = rd_pend && rd_cond && (rd_cause == RC_MISPREDICT) && !rd_self;
+      h_dir = rd_taken;
       // ---- drive for the next cycle -----------------------------
       bkend_ftq_redir_val = rd_pend;
       if (rd_pend) begin
@@ -962,10 +1724,18 @@ module tb;
         bkend_ftq_redir_pc    = rd_pc;
         bkend_ftq_redir_self  = rd_self;
         bkend_ftq_redir_cause = rd_cause;
+        bkend_ftq_redir_taken = rd_taken;
       end
       rd_pend = 1'b0;
-      bkend_ftq_commit_val = wm_val;
-      bkend_ftq_commit_idx = wm;
+      // BP-121: an entry commits only after the resolutions of its
+      // branches were accepted (a branch resolves before it retires).
+      // The commit walk reads the entry's resolved slots (ftq_resolve
+      // writes them), so the watermark waits while the resolution
+      // queue holds anything.
+      if (rq_hd == rq_tl) begin
+        bkend_ftq_commit_val = wm_val;
+        bkend_ftq_commit_idx = wm;
+      end
       bkend_ftq_rsv_val[0] = (rq_hd != rq_tl);
       bkend_ftq_rsv[0]     = rq[rq_hd % 256];
       dec_ibuf_rdy         = rstn && run_be;
@@ -978,7 +1748,7 @@ module tb;
   task automatic reset_all(input logic use_sv39);
     rstn         = 1'b0;
     run_be       = 1'b0;
-    ne           = 0;
+    W.ne           = 0;
     ep           = 0;
     cfi_pend     = 1'b0;
     after_redir  = 1'b0;
@@ -994,6 +1764,45 @@ module tb;
     n_mis_ras    = 0;
     n_mis_watch  = 0;
     watch_pc     = '0;
+    n_mis_warm   = 0;
+    for (int t = 0; t < 8; t++) n_mis_type[t] = 0;
+    mis_pc.delete();
+    mis_typ.delete();
+    ras_exp.delete();
+    ras_got.delete();
+    n_ras_ok     = 0;
+    n_ras_bad    = 0;
+    n_hist_ok    = 0;
+    n_hist_bad   = 0;
+    h_chk        = 1'b0;
+    h_dir        = 1'b0;
+    warm_e       = 0;
+    W.dry          = 1'b0;
+    meas         = 1'b0;
+    n_use_ubtb   = 0;
+    n_use_lp     = 0;
+    n_use_ftb    = 0;
+    n_use_tage   = 0;
+    n_use_sc     = 0;
+    n_sc_flip    = 0;
+    n_use_ittage = 0;
+    n_use_ras    = 0;
+    n_u_ftb      = 0;
+    n_tage_ok    = 0;
+    n_tage_late  = 0;
+    n_it_ok      = 0;
+    n_it_late    = 0;
+    n_sc_ok      = 0;
+    n_sc_late    = 0;
+    n_p2_blk     = 0;
+    n_hist_mis   = 0;
+    n_ftb_drop   = 0;
+    n_ras_sq     = 0;
+    n_p3_no_p2   = 0;
+    n_p3_rep     = 0;
+    n_rest_rep   = 0;
+    n_own_ok     = 0;
+    n_own_bad    = 0;
     n_jmp_swap   = 0;
     n_fills      = 0;
     n_walks      = 0;
@@ -1012,12 +1821,12 @@ module tb;
     rq_hd        = 0;
     rq_tl        = 0;
     rd_pend      = 1'b0;
-    mem.delete();
-    vmap.delete();
-    sv39         = use_sv39;
-    satp_root    = PA_WIDTH'('h0_8F00_0000);
-    pt_next      = PA_WIDTH'('h0_8F00_1000);
-    for (int i = 0; i < 512; i++) wr64(satp_root + PA_WIDTH'(8 * i), '0);
+    W.mem.delete();
+    W.vmap.delete();
+    W.sv39         = use_sv39;
+    W.satp_root    = PA_WIDTH'('h0_8F00_0000);
+    W.pt_next      = PA_WIDTH'('h0_8F00_1000);
+    for (int i = 0; i < 512; i++) W.wr64(W.satp_root + PA_WIDTH'(8 * i), '0);
     for (int i = 0; i < FTQ_DEPTH; i++) fstart[i] = '0;
     // csr. Bare runs in M-mode; Sv39 runs in S-mode with ASID 1. PMP
     // entry 0 is NAPOT over all of memory with R, W and X, so S-mode
@@ -1062,23 +1871,26 @@ module tb;
   // Run until the whole stream has retired, then stop taking decode's
   // output so the front end backs up and nothing more retires, and
   // check that the FTQ commits through the watermark.
+  int cyc_run;
+
   task automatic run_and_check(input int max_cyc);
     int c;
     c = 0;
-    while ((ep < ne) && (c < max_cyc) && (n_err < 20)) begin
+    while ((ep < W.ne) && (c < max_cyc) && (n_err < 20)) begin
       @(posedge clk);
       #1;
       c++;
     end
+    cyc_run = c;
     run_be = 1'b0;
     repeat (200) @(posedge clk);
     #1;
     chk($sformatf("the whole stream retired: %0d of %0d in %0d cycles",
-                  ep, ne, c), ep == ne);
+                  ep, W.ne, c), ep == W.ne);
     chk($sformatf("no stream, decode or index error (%0d)", n_err),
         n_err == 0);
     chk("every retired instruction is the executed stream, in order",
-        n_retired == ne);
+        n_retired == W.ne);
     chk($sformatf("the FTQ committed through the watermark: ptr %0d wm %0d",
                   dut.u_ftq.w_commit_ptr, wm),
         wm_val && (dut.u_ftq.w_commit_ptr == wm + FTQ_PTR_BITS'(1)));
@@ -1100,6 +1912,64 @@ module tb;
              {"   %s: RAS mispredicts %0d; FTB jump field trained by a ",
               "jump at another position %0d"}, tname, n_mis_ras,
              n_jmp_swap));
+    // BP-121.
+    chk($sformatf("every RAS commit is the retired stream's (%0d ok, %0d bad)",
+                  n_ras_ok, n_ras_bad), n_ras_bad == 0);
+    chk($sformatf("every retired RAS operation committed (%0d left)",
+                  ras_exp.size()), ras_exp.size() == 0);
+    chk($sformatf("no late TAGE / ITTAGE / SC response (%0d %0d %0d)",
+                  n_tage_late, n_it_late, n_sc_late),
+        (n_tage_late == 0) && (n_it_late == 0) && (n_sc_late == 0));
+    chk($sformatf("no FTB lookup dropped by an FTB update (%0d)",
+                  n_ftb_drop), n_ftb_drop == 0);
+    chk($sformatf("no RAS operation by a squashed block (%0d)", n_ras_sq),
+        n_ras_sq == 0);
+    chk($sformatf("no p3 slot write without the p2 slot group (%0d)",
+                  n_p3_no_p2), n_p3_no_p2 == 0);
+    chk($sformatf({"a p2 redirect keeps its block's RAS operation ",
+                   "(%0d ok, %0d bad)"}, n_own_ok, n_own_bad),
+        n_own_bad == 0);
+    chk($sformatf({"after a conditional's mispredict the newest history ",
+                   "bit is its resolved direction (%0d ok, %0d bad)"},
+                  n_hist_ok, n_hist_bad), n_hist_bad == 0);
+    report();
+  endtask
+
+  // The BP-121 report: the program line the Results Capture table is
+  // built from, the after-warm-up breakdown, the PCs that mispredict
+  // more than once after warm-up, and per predictor the updates
+  // received and the predictions used.
+  task automatic report();
+    $display("%s", $sformatf(
+      {"   RESULT %s cycles %0d mispredicts %0d warm %0d [cond %0d ret %0d ",
+       "rc %0d ind %0d icall %0d] pd %0d p2 %0d p3 %0d warm_e %0d of %0d"},
+      tname, cyc_run, n_mispred, n_mis_warm, n_mis_type[int'(COND)],
+      n_mis_type[int'(RETURN)], n_mis_type[int'(RETURN_CALL)],
+      n_mis_type[int'(INDIRECT_NONRET)], n_mis_type[int'(INDIRECT_CALL)],
+      n_pd_redir, n_redir_p2, n_redir_p3, warm_e, W.ne));
+    foreach (mis_pc[p]) begin
+      if (mis_pc[p] > 1)
+        $display("   REPEAT %s pc %011h type %0d mispredicted %0d times",
+                 tname, p, mis_typ[p], mis_pc[p]);
+    end
+    $display("%s", $sformatf(
+      {"   PRED %s upd/used: uBTB %0d/%0d LP %0d/%0d FTB %0d/%0d ",
+       "TAGE %0d/%0d SC %0d/%0d(flip %0d) ITTAGE %0d/%0d RAS %0d/%0d"},
+      tname, n_u_ubtb, n_use_ubtb, n_u_lp, n_use_lp, n_u_ftb, n_use_ftb,
+      n_u_tage, n_use_tage, n_u_sc, n_use_sc, n_sc_flip, n_u_ittage,
+      n_use_ittage, n_u_ras, n_use_ras));
+    $display("%s", $sformatf(
+      {"   CHK %s RAS commits ok %0d; history after a mispredict ok %0d; ",
+       "own p2 redirect RAS ok %0d; p3 writes without p2 %0d; ",
+       "squashed RAS ops %0d; dropped FTB lookups %0d; p3 RAS repairs %0d, ",
+       "backend restores naming a repaired entry %0d"}, tname, n_ras_ok,
+      n_hist_ok, n_own_ok, n_p3_no_p2, n_ras_sq, n_ftb_drop, n_p3_rep,
+      n_rest_rep));
+    $display("%s", $sformatf(
+      {"   RESP %s on time/late: TAGE %0d/%0d ITTAGE %0d/%0d SC %0d/%0d ",
+       "p2 blocks %0d, history bundle changed at p2 without a ",
+       "redirect %0d"}, tname, n_tage_ok, n_tage_late, n_it_ok, n_it_late,
+      n_sc_ok, n_sc_late, n_p2_blk, n_hist_mis));
   endtask
 
   // =================================================================
@@ -1111,53 +1981,55 @@ module tb;
     tname = "bare";
     $display("-- %s --", tname);
     reset_all(1'b0);
-    wp = RESET_VECTOR;
+    W.wp = RESET_VECTOR;
     // Straight-line mixed 16- and 32-bit code, then a 32-bit
     // instruction straddling the line boundary at 0x40.
-    mixed(20);
-    while (wp != RESET_VECTOR + VA_WIDTH'('h3E)) i16();
-    i32(ADDI_T0);
-    mixed(5);
+    W.mixed(20);
+    while (W.wp != RESET_VECTOR + VA_WIDTH'('h3E)) W.i16();
+    W.i32(ADDI_T0);
+    W.mixed(5);
     // Never taken, then always taken.
-    cond(1'b0, wp + VA_WIDTH'('h40));
-    mixed(3);
-    cond(1'b1, RESET_VECTOR + VA_WIDTH'('h100));
-    mixed(4);
+    W.cond(1'b0, W.wp + VA_WIDTH'('h40));
+    W.mixed(3);
+    W.cond(1'b1, RESET_VECTOR + VA_WIDTH'('h100));
+    W.mixed(4);
     // JAL forward.
-    jal(5'd0, RESET_VECTOR + VA_WIDTH'('h180));
-    mixed(3);
+    W.jal(5'd0, RESET_VECTOR + VA_WIDTH'('h180));
+    W.mixed(3);
     // Call and return, three times to the same function.
     fn = RESET_VECTOR + VA_WIDTH'('h400);
     for (int k = 0; k < 3; k++) begin
-      link = wp + VA_WIDTH'(4);
-      jal(5'd1, fn);
-      mixed(4);
-      cond(1'b1, wp + VA_WIDTH'(8));        // a taken branch in it
-      i32(ADDI_T0);
-      ret(link);
-      mixed(2);
+      link = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, fn);
+      W.mixed(4);
+      W.cond(1'b1, W.wp + VA_WIDTH'(8));        // a taken branch in it
+      W.i32(ADDI_T0);
+      W.ret(link);
+      W.mixed(2);
     end
     // A 32-bit instruction straddling the page boundary at 0x1000.
-    jal(5'd0, RESET_VECTOR + VA_WIDTH'('hFF0));
-    while (wp != RESET_VECTOR + VA_WIDTH'('hFFE)) i16();
-    i32(ADDI_T0);
-    mixed(6);
+    W.jal(5'd0, RESET_VECTOR + VA_WIDTH'('hFF0));
+    while (W.wp != RESET_VECTOR + VA_WIDTH'('hFFE)) W.i16();
+    W.i32(ADDI_T0);
+    W.mixed(6);
     // An ecall: a trap redirect to the handler.
-    ecall(RESET_VECTOR + VA_WIDTH'('h2000));
-    mixed(4);
+    W.ecall(RESET_VECTOR + VA_WIDTH'('h2000));
+    W.mixed(4);
     // An access fault: a fetch just below main memory (MMU-15a)
     // faults with cause 1 and traps to the second handler. Within JAL
     // range of the handler.
-    jal_fault(VA_WIDTH'('h0_7FFF_F000), IFU_FAULT_ACCESS,
+    W.jal_fault(VA_WIDTH'('h0_7FFF_F000), IFU_FAULT_ACCESS,
               RESET_VECTOR + VA_WIDTH'('h3000));
-    mixed(5);
+    W.mixed(5);
     fn = RESET_VECTOR + VA_WIDTH'('h3400);
-    link = wp + VA_WIDTH'(4);
-    jal(5'd1, fn);
-    mixed(2);
-    ret(link);
-    mixed(2);
-    halt();
+    link = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, fn);
+    W.mixed(2);
+    W.ret(link);
+    W.mixed(2);
+    // BP-121: straight-line code; nothing is after warm-up.
+    warm_e = W.ne + 1;
+    W.halt();
     release_reset();
     run_and_check(20000);
     chk($sformatf("a predecode redirect occurred (%0d)", n_pd_redir),
@@ -1183,39 +2055,41 @@ module tb;
     // Three code pages, not physically contiguous, and a handler page.
     // b + 0x4000 is not mapped. All within JAL range of each other.
     b = VA_WIDTH'('h0_8001_0000);
-    map4k(b,                       PA_WIDTH'('h0_8100_0000));
-    map4k(b + VA_WIDTH'('h1000),   PA_WIDTH'('h0_8120_5000));
-    map4k(b + VA_WIDTH'('h2000),   PA_WIDTH'('h0_8100_7000));
-    map4k(VA_WIDTH'('h0_8002_0000), PA_WIDTH'('h0_8130_0000));
+    W.map4k(b,                       PA_WIDTH'('h0_8100_0000));
+    W.map4k(b + VA_WIDTH'('h1000),   PA_WIDTH'('h0_8120_5000));
+    W.map4k(b + VA_WIDTH'('h2000),   PA_WIDTH'('h0_8100_7000));
+    W.map4k(VA_WIDTH'('h0_8002_0000), PA_WIDTH'('h0_8130_0000));
     // The reset vector is fetched physically before any translation,
     // so it jumps to the program; under Sv39 that fetch is already
     // translated, so the reset vector page is mapped to itself.
-    map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
-    wp = RESET_VECTOR;
-    mixed(3);
-    jal(5'd0, b);
-    mixed(10);
-    cond(1'b1, b + VA_WIDTH'('h200));
-    mixed(3);
+    W.map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jal(5'd0, b);
+    W.mixed(10);
+    W.cond(1'b1, b + VA_WIDTH'('h200));
+    W.mixed(3);
     // A 32-bit instruction straddling into the next, discontiguous
     // page.
-    jal(5'd0, b + VA_WIDTH'('hFF0));
-    while (wp != b + VA_WIDTH'('hFFE)) i16();
-    i32(ADDI_T0);
-    mixed(4);
+    W.jal(5'd0, b + VA_WIDTH'('hFF0));
+    while (W.wp != b + VA_WIDTH'('hFFE)) W.i16();
+    W.i32(ADDI_T0);
+    W.mixed(4);
     fn = b + VA_WIDTH'('h2100);
     for (int k = 0; k < 2; k++) begin
-      link = wp + VA_WIDTH'(4);
-      jal(5'd1, fn);
-      mixed(3);
-      ret(link);
-      mixed(2);
+      link = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, fn);
+      W.mixed(3);
+      W.ret(link);
+      W.mixed(2);
     end
     // A page fault: a fetch from an unmapped VA, cause 12.
-    jal_fault(b + VA_WIDTH'('h4000), IFU_FAULT_PAGE,
+    W.jal_fault(b + VA_WIDTH'('h4000), IFU_FAULT_PAGE,
               VA_WIDTH'('h0_8002_0000));
-    mixed(6);
-    halt();
+    W.mixed(6);
+    // BP-121: straight-line code; nothing is after warm-up.
+    warm_e = W.ne + 1;
+    W.halt();
     release_reset();
     run_and_check(20000);
     chk($sformatf("the L2 TLB walked (%0d)", n_walks), n_walks > 0);
@@ -1242,33 +2116,35 @@ module tb;
     tname = "loops";
     $display("-- %s --", tname);
     reset_all(1'b0);
-    wp = RESET_VECTOR;
-    mixed(4);
+    W.wp = RESET_VECTOR;
+    W.mixed(4);
     fn   = RESET_VECTOR + VA_WIDTH'('h800);
-    otop = wp;
-    eo   = ne;
+    otop = W.wp;
+    eo   = W.ne;
     // Outer body, first iteration.
-    mixed(2);
-    itop = wp;
-    ei   = ne;
-    mixed(3);
-    loop_br(itop);
-    rep_iter(ei, 6);
-    cond(1'b1, wp + VA_WIDTH'(12));            // always taken, skips 8
-    mixed(2);
+    W.mixed(2);
+    itop = W.wp;
+    ei   = W.ne;
+    W.mixed(3);
+    W.loop_br(itop);
+    W.rep_iter(ei, 6);
+    W.cond(1'b1, W.wp + VA_WIDTH'(12));            // always taken, skips 8
+    W.mixed(2);
     // jalr x0, 0(x7): an indirect jump to a fixed target 0x40 ahead.
-    jalr_to(5'd0, 5'd7, wp + VA_WIDTH'('h40));
-    mixed(2);
+    W.jalr_to(5'd0, 5'd7, W.wp + VA_WIDTH'('h40));
+    W.mixed(2);
     // jalr x1, 0(x28): an indirect call to fn, which returns.
-    link = wp + VA_WIDTH'(4);
-    jalr_to(5'd1, 5'd28, fn);
-    mixed(3);
-    ret(link);
-    mixed(1);
-    loop_br(otop);
-    rep_iter(eo, 8);
-    mixed(3);
-    halt();
+    link = W.wp + VA_WIDTH'(4);
+    W.jalr_to(5'd1, 5'd28, fn);
+    W.mixed(3);
+    W.ret(link);
+    W.mixed(1);
+    W.loop_br(otop);
+    W.rep_iter(eo, 8);
+    // BP-121: after two outer iterations.
+    warm_e = eo + 2 * ((W.ne - eo) / 8);
+    W.mixed(3);
+    W.halt();
     release_reset();
     run_and_check(60000);
     chk($sformatf("the uBTB received updates (%0d)", n_u_ubtb), n_u_ubtb > 0);
@@ -1304,25 +2180,27 @@ module tb;
     tname = "coro";
     $display("-- %s --", tname);
     reset_all(1'b0);
-    wp = RESET_VECTOR;
-    mixed(3);
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
     b  = RESET_VECTOR + VA_WIDTH'('h600);
-    l  = wp;
-    e0 = ne;
-    jal(5'd5, b);                          // L
-    mixed(3);                              // B prologue
-    b1 = wp;
-    jalr_to(5'd1, 5'd5, l + VA_WIDTH'(4)); // B1: RETURN_CALL
-    mixed(2);                              // A at L+4
-    a1 = wp;
-    jalr_to(5'd5, 5'd1, b1 + VA_WIDTH'(4)); // A1: RETURN_CALL
-    mixed(2);                              // B at B1+4
-    jalr_to(5'd0, 5'd5, a1 + VA_WIDTH'(4)); // B2: RETURN
-    mixed(1);                              // A at A1+4
-    loop_br(l);
-    rep_iter(e0, 10);
-    mixed(3);
-    halt();
+    l  = W.wp;
+    e0 = W.ne;
+    W.jal(5'd5, b);                          // L
+    W.mixed(3);                              // B prologue
+    b1 = W.wp;
+    W.jalr_to(5'd1, 5'd5, l + VA_WIDTH'(4)); // B1: RETURN_CALL
+    W.mixed(2);                              // A at L+4
+    a1 = W.wp;
+    W.jalr_to(5'd5, 5'd1, b1 + VA_WIDTH'(4)); // A1: RETURN_CALL
+    W.mixed(2);                              // B at B1+4
+    W.jalr_to(5'd0, 5'd5, a1 + VA_WIDTH'(4)); // B2: RETURN
+    W.mixed(1);                              // A at A1+4
+    W.loop_br(l);
+    W.rep_iter(e0, 10);
+    // BP-121: after two iterations.
+    warm_e = e0 + 2 * ((W.ne - e0) / 10);
+    W.mixed(3);
+    W.halt();
     release_reset();
     run_and_check(40000);
     chk($sformatf("the p2 classification formed RETURN_CALL (%0d)",
@@ -1366,36 +2244,38 @@ module tb;
     tname = "calls";
     $display("-- %s --", tname);
     reset_all(1'b0);
-    wp  = RESET_VECTOR;
+    W.wp  = RESET_VECTOR;
     f   = RESET_VECTOR + VA_WIDTH'('h800);
     g   = RESET_VECTOR + VA_WIDTH'('hA00);
     h   = RESET_VECTOR + VA_WIDTH'('hC00);
-    mixed(3);
-    top = wp;
-    e0  = ne;
-    while (wp != RESET_VECTOR + VA_WIDTH'('h1C)) i16();
-    lm  = wp + VA_WIDTH'(4);
-    jal(5'd1, f);                          // main calls f
-    mixed(3);
-    while (wp != f + VA_WIDTH'('h1C)) i16();
-    lf1 = wp + VA_WIDTH'(4);
-    jal(5'd1, g);                          // f calls g
-    mixed(2);
-    ret(lf1);                              // g returns
-    mixed(1);
-    while (wp != f + VA_WIDTH'('h3C)) i16();
-    lf2 = wp + VA_WIDTH'(4);
-    jal(5'd1, h);                          // f calls h
-    mixed(2);
-    ret(lf2);                              // h returns
-    mixed(1);
-    watch_pc = wp;                         // f's return
-    ret(lm);                               // f returns to main
-    mixed(1);
-    loop_br(top);
-    rep_iter(e0, 6);
-    mixed(3);
-    halt();
+    W.mixed(3);
+    top = W.wp;
+    e0  = W.ne;
+    while (W.wp != RESET_VECTOR + VA_WIDTH'('h1C)) W.i16();
+    lm  = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, f);                          // main calls f
+    W.mixed(3);
+    while (W.wp != f + VA_WIDTH'('h1C)) W.i16();
+    lf1 = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, g);                          // f calls g
+    W.mixed(2);
+    W.ret(lf1);                              // g returns
+    W.mixed(1);
+    while (W.wp != f + VA_WIDTH'('h3C)) W.i16();
+    lf2 = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, h);                          // f calls h
+    W.mixed(2);
+    W.ret(lf2);                              // h returns
+    W.mixed(1);
+    watch_pc = W.wp;                         // f's return
+    W.ret(lm);                               // f returns to main
+    W.mixed(1);
+    W.loop_br(top);
+    W.rep_iter(e0, 6);
+    // BP-121: after two iterations.
+    warm_e = e0 + 2 * ((W.ne - e0) / 6);
+    W.mixed(3);
+    W.halt();
     release_reset();
     run_and_check(40000);
     // Reported, not checked: f's return still mispredicts in every
@@ -1409,14 +2289,603 @@ module tb;
   endtask
 
   // =================================================================
+  // BP-121 programs. Each loop is emitted once per iteration (see the
+  // file header); warm_e is set at the start of the first iteration
+  // counted as after warm-up.
+  // =================================================================
+
+
+
+  task automatic begin_prog(input string nm);
+    tname = nm;
+    $display("-- %s --", tname);
+    reset_all(1'b0);
+    W.wp = RESET_VECTOR;
+  endtask
+
+  task automatic end_prog(input int max_cyc);
+    W.halt();
+    if ($test$plusargs("DUMPEX")) begin
+      for (int e = 0; e < W.ne; e++)
+        $display("EX %0d pc %0h instr %08h rvc %0d bt %0d tk %0d tgt %0h", e,
+                 W.ex[e].pc[15:0], W.ex[e].instr, W.ex[e].rvc, W.ex[e].btype,
+                 W.ex[e].taken, W.ex[e].target[15:0]);
+    end
+    release_reset();
+    run_and_check(max_cyc);
+  endtask
+
+  // -----------------------------------------------------------------
+  // lp: a counted inner loop of 10 inside an outer loop of 12. The
+  // inner loop branch has the same trip count every time (the loop
+  // predictor's case).
+  // -----------------------------------------------------------------
+  task automatic p_lp();
+    logic [VA_WIDTH-1:0] otop;
+    logic [VA_WIDTH-1:0] itop;
+    begin_prog("lp");
+    W.mixed(3);
+    otop = W.wp;
+    for (int o = 0; o < 12; o++) begin
+      if (o == 4) warm_e = W.ne;
+      W.wp = otop;
+      W.mixed(2);
+      itop = W.wp;
+      for (int i = 0; i < 10; i++) begin
+        W.wp = itop;
+        W.mixed(3);
+        W.bcc(i != 9, itop);
+      end
+      W.mixed(2);
+      W.bcc(o != 11, otop);
+    end
+    W.mixed(3);
+    end_prog(80000);
+    // The LP trains here; whether it is trusted while iterations are in
+    // flight is the open LI4/TD#7 (left as specified, ruled by Jeff in
+    // BP-121), so its use is reported, not required.
+    chk($sformatf("lp: the LP trained (%0d updates; %0d directions used)",
+                  n_u_lp, n_use_lp), n_u_lp > 0);
+  endtask
+
+  // -----------------------------------------------------------------
+  // hist: two branches whose outcomes depend on history (TAGE). A
+  // alternates not taken / taken; B is not taken twice then taken.
+  // Neither is predictable from its own bias. 96 iterations, the second
+  // 48 after warm-up: TAGE allocates one tagged entry per history
+  // context on a mispredict, and the six contexts of the combined
+  // pattern take most of the first 48 to settle (measured: with a
+  // 16-iteration warm-up the period-3 branch still mispredicted 9 of
+  // 32; with 48, 3 mispredicts in 48 iterations, none repeating).
+  // -----------------------------------------------------------------
+  task automatic p_hist();
+    logic [VA_WIDTH-1:0] top;
+    begin_prog("hist");
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 96; it++) begin
+      if (it == 48) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      W.cskip((it % 2) == 1, 2);              // A
+      W.mixed(1);
+      W.cskip((it % 3) == 2, 2);              // B
+      W.mixed(1);
+      W.bcc(it != 95, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+    chk($sformatf("hist: TAGE supplied a direction (%0d)", n_use_tage),
+        n_use_tage > 0);
+  endtask
+
+  // -----------------------------------------------------------------
+  // twocond: two conditionals in one block, both slots. Each block
+  // sits alone in its 32-byte region, so no other start shares its
+  // FTB entry (the shared case is multistart's and region's). Block X:
+  // c1 never taken, c2 always taken. Block Y: c1 alternates, c2 never
+  // taken. X jumps to Y, Y to the loop branch.
+  // -----------------------------------------------------------------
+  task automatic p_twocond();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] x;
+    logic [VA_WIDTH-1:0] y;
+    logic [VA_WIDTH-1:0] back;
+    begin_prog("twocond");
+    x = RESET_VECTOR + VA_WIDTH'('h400);
+    y = RESET_VECTOR + VA_WIDTH'('h440);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 24; it++) begin
+      if (it == 8) warm_e = W.ne;
+      W.wp = top;
+      W.i16();
+      W.jal(5'd0, x);
+      back = top + VA_WIDTH'(6);
+      W.i16();
+      W.cskip(1'b0, 1);                     // X c1
+      W.cskip(1'b1, 1);                     // X c2
+      W.i16();
+      W.jal(5'd0, y);
+      W.i16();
+      W.cskip((it % 2) == 1, 1);            // Y c1
+      W.cskip(1'b0, 1);                     // Y c2
+      W.i16();
+      W.jal(5'd0, back);
+      W.mixed(1);
+      W.bcc(it != 23, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // ftbonly: eight blocks 0x800 apart, chained by taken conditionals.
+  // They share one uBTB set (pc[10:5]) of four ways and occupy eight
+  // FTB sets (pc[13:5]), so the FTB holds every branch and the uBTB
+  // cannot.
+  // -----------------------------------------------------------------
+  task automatic p_ftbonly();
+    logic [VA_WIDTH-1:0] b [0:7];
+    logic [VA_WIDTH-1:0] ex_pc;
+    begin_prog("ftbonly");
+    for (int k = 0; k < 8; k++)
+      b[k] = RESET_VECTOR + VA_WIDTH'('h1000 + k * 'h800);
+    W.mixed(3);
+    W.jal(5'd0, b[0]);
+    for (int it = 0; it < 16; it++) begin
+      if (it == 4) warm_e = W.ne;
+      for (int k = 0; k < 7; k++) begin
+        W.wp = b[k];
+        W.mixed(2);
+        W.bcc(1'b1, b[k+1]);
+      end
+      W.wp = b[7];
+      W.mixed(1);
+      ex_pc = W.wp + VA_WIDTH'(8);
+      W.bcc(it == 15, ex_pc);                 // exit on the last pass
+      if (it != 15) begin
+        W.jal(5'd0, b[0]);
+      end else begin
+        W.d_jal_fill();
+      end
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+
+  // -----------------------------------------------------------------
+  // nest: calls nested five deep, main -> f1 -> f2 -> f3 -> f4 -> f5.
+  // -----------------------------------------------------------------
+
+  task automatic p_nest();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] l;
+    begin_prog("nest");
+    for (int k = 1; k <= 5; k++)
+      W.fnv[k] = RESET_VECTOR + VA_WIDTH'('h400 + k * 'h100);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 12; it++) begin
+      if (it == 4) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      l = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, W.fnv[1]);
+      W.emit_nest(1, 5, l);
+      W.mixed(1);
+      W.bcc(it != 11, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // recur: one function calling itself six deep from one call site,
+  // so the RAS sees the same return address pushed again and again
+  // (the recursion counter, ras_decisions.md 5). Layout of f:
+  //   f+0   mixed(2)        6 bytes
+  //   f+6   beq -> f+16     taken at the bottom of the recursion
+  //   f+10  jal x1, f       link f+14
+  //   f+14  c.addi
+  //   f+16  ret
+  // -----------------------------------------------------------------
+
+  task automatic p_recur();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] l;
+    begin_prog("recur");
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    // The not-taken path of the bottom beq (f+10..f+16) is written by
+    // the first call; the taken bottom is written here too, dry.
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 10; it++) begin
+      if (it == 3) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      l = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, f);
+      W.emit_rec(f, 6, l);
+      W.mixed(1);
+      W.bcc(it != 9, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // deep: a chain of 18 distinct functions, f0 -> f1 -> ... -> f17,
+  // so 18 distinct return addresses are live: beyond the 15 usable
+  // speculative entries (the wrap, ras_decisions.md 3.2).
+  // -----------------------------------------------------------------
+  task automatic p_deep();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] l;
+    begin_prog("deep");
+    for (int k = 1; k <= 18; k++)
+      W.fnv[k] = RESET_VECTOR + VA_WIDTH'('h400 + k * 'h40);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 8; it++) begin
+      if (it == 3) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      l = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, W.fnv[1]);
+      W.emit_nest(1, 18, l);
+      W.mixed(1);
+      W.bcc(it != 7, top);
+    end
+    W.mixed(3);
+    end_prog(120000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // indir: an indirect jump and an indirect call whose targets
+  // alternate, each preceded by a conditional that alternates with
+  // them, so the target is a function of global history (ITTAGE).
+  // -----------------------------------------------------------------
+  task automatic p_indir();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] ta;
+    logic [VA_WIDTH-1:0] tb;
+    logic [VA_WIDTH-1:0] jn;
+    logic [VA_WIDTH-1:0] fa;
+    logic [VA_WIDTH-1:0] fb;
+    logic [VA_WIDTH-1:0] l;
+    logic                odd;
+    begin_prog("indir");
+    ta = RESET_VECTOR + VA_WIDTH'('h400);
+    tb = RESET_VECTOR + VA_WIDTH'('h480);
+    jn = RESET_VECTOR + VA_WIDTH'('h500);
+    fa = RESET_VECTOR + VA_WIDTH'('h600);
+    fb = RESET_VECTOR + VA_WIDTH'('h680);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 40; it++) begin
+      if (it == 16) warm_e = W.ne;
+      odd = (it % 2) == 1;
+      W.wp = top;
+      W.mixed(1);
+      W.cskip(odd, 1);
+      W.jalr_to(5'd0, 5'd7, odd ? ta : tb);   // indirect jump
+      if (odd) begin
+        W.mixed(2);
+        W.jal(5'd0, jn);
+      end else begin
+        W.mixed(1);
+        W.jal(5'd0, jn);
+      end
+      W.mixed(1);
+      W.cskip(!odd, 1);
+      l = W.wp + VA_WIDTH'(4);
+      W.jalr_to(5'd1, 5'd28, odd ? fa : fb);  // indirect call
+      if (odd) W.mixed(2);
+      else     W.mixed(1);
+      W.ret(l);
+      W.mixed(1);
+      // The loop back edge, a JAL to the top: the loop body spans
+      // several distant blocks.
+      W.exit_or_jal(it == 39, top);
+    end
+    W.mixed(3);
+    end_prog(120000);
+    chk($sformatf("indir: ITTAGE supplied a target (%0d)", n_use_ittage),
+        n_use_ittage > 0);
+  endtask
+
+  // -----------------------------------------------------------------
+  // region: two calls and a return in one 32-byte region (TD#161):
+  //   f+0x0  jal x1, g     link f+0x4
+  //   f+0x4  c.addi
+  //   f+0x6  jal x1, h     link f+0xA
+  //   f+0xA  c.addi
+  //   f+0xC  ret
+  // The three blocks of f (starts f, f+0x4, f+0xA) share one FTB entry.
+  // -----------------------------------------------------------------
+  task automatic p_region();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] g;
+    logic [VA_WIDTH-1:0] h;
+    logic [VA_WIDTH-1:0] l;
+    begin_prog("region");
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    g = RESET_VECTOR + VA_WIDTH'('hA00);
+    h = RESET_VECTOR + VA_WIDTH'('hC00);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 16; it++) begin
+      if (it == 4) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      l = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, f);
+      W.jal(5'd1, g);
+      W.mixed(1);
+      W.ret(f + VA_WIDTH'('h4));
+      W.i16();
+      W.jal(5'd1, h);
+      W.mixed(1);
+      W.ret(f + VA_WIDTH'('hA));
+      W.i16();
+      W.ret(l);
+      W.mixed(1);
+      W.bcc(it != 15, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // multistart: one region entered at two starts. Region R:
+  //   R+0x00  c.addi x2
+  //   R+0x04  c1, never taken          (seen from start R only)
+  //   R+0x08  c.addi x2
+  //   R+0x0C  c2, taken to R+0x18      (seen from both starts)
+  //   R+0x18  c.addi
+  //   R+0x1A  jal x0 back
+  // Even iterations enter at R, odd at R+0x08.
+  // -----------------------------------------------------------------
+  task automatic p_multistart();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] r;
+    logic [VA_WIDTH-1:0] cont;
+    logic [VA_WIDTH-1:0] j1;
+    logic [VA_WIDTH-1:0] j2;
+    begin_prog("multistart");
+    r = RESET_VECTOR + VA_WIDTH'('hC00);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 24; it++) begin
+      if (it == 8) warm_e = W.ne;
+      W.wp = top;
+      W.i16();
+      // Taken on odd iterations, to the jump to R+0x08.
+      j1 = W.wp + VA_WIDTH'(4);
+      j2 = j1 + VA_WIDTH'(4);
+      W.bcc((it % 2) == 1, j2);
+      if ((it % 2) == 0) begin
+        W.jal(5'd0, r);
+        W.i16();
+        W.i16();
+        W.bcc(1'b0, r + VA_WIDTH'('h8));       // c1
+      end else begin
+        W.jal(5'd0, r + VA_WIDTH'('h8));
+      end
+      W.i16();
+      W.i16();
+      W.bcc(1'b1, r + VA_WIDTH'('h18));       // c2
+      W.i16();
+      cont = j2 + VA_WIDTH'(4);
+      W.jal(5'd0, cont);
+      W.mixed(1);
+      W.bcc(it != 23, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+
+
+  // -----------------------------------------------------------------
+  // cross: a block crossing a 32-byte boundary, a 32-bit instruction
+  // straddling it, a conditional past it, and a call as the last
+  // instruction of the next region. Region X:
+  //   X+0x14  entered here (region offset 10)
+  //   X+0x1E  a 32-bit instruction straddling X+0x20
+  //   X+0x24  conditional, taken to X+0x30 (stored in X's entry at
+  //           region position 18, beyond the region)
+  //   X+0x3C  jal x1, fn: the last instruction of region X+0x20
+  // -----------------------------------------------------------------
+  task automatic p_cross();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] x;
+    logic [VA_WIDTH-1:0] fn;
+    begin_prog("cross");
+    x  = RESET_VECTOR + VA_WIDTH'('h900);
+    fn = RESET_VECTOR + VA_WIDTH'('hB00);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 16; it++) begin
+      if (it == 4) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(1);
+      W.jal(5'd0, x + VA_WIDTH'('h14));
+      W.i16();
+      W.i16();
+      W.i32(ADDI_T0);
+      W.i16();
+      W.i32(ADDI_T0);                          // X+0x1E, straddles
+      W.i16();
+      W.bcc(1'b1, x + VA_WIDTH'('h30));        // X+0x24
+      W.fill_dry_at(x + VA_WIDTH'('h28), 8);
+      W.pad_to(x + VA_WIDTH'('h3C));
+      W.jal(5'd1, fn);                         // X+0x3C
+      W.mixed(2);
+      W.ret(x + VA_WIDTH'('h40));
+      W.i16();
+      W.jal(5'd0, top + VA_WIDTH'(6));
+      // Back in the loop, after the JAL at top+2.
+      W.mixed(1);
+      W.bcc(it != 15, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // rvc: compressed control transfers among compressed and 32-bit
+  // code: c.bnez (alternating), c.jalr x1 (a call, link pc+2), c.jr x1
+  // (its return), c.j, and c.beqz as the loop branch.
+  // -----------------------------------------------------------------
+  task automatic p_rvc();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] fn;
+    logic [VA_WIDTH-1:0] l;
+    logic [VA_WIDTH-1:0] b;
+    begin_prog("rvc");
+    fn = RESET_VECTOR + VA_WIDTH'('h100);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 24; it++) begin
+      if (it == 8) warm_e = W.ne;
+      W.wp = top;
+      W.i16();
+      b = W.wp;
+      W.cbz(1'b1, (it % 2) == 1, b + VA_WIDTH'(4));   // skips one c.addi
+      if ((it % 2) == 0) W.i16();
+      else               W.fill_dry_at(b + VA_WIDTH'(2), 2);
+      W.i32(ADDI_T0);
+      l = W.wp + VA_WIDTH'(2);
+      W.cjalr(5'd1, fn);
+      W.i16();
+      W.i32(ADDI_T0);
+      W.cjr(5'd1, l);
+      W.i16();
+      b = W.wp;
+      W.cj(b + VA_WIDTH'(8));
+      W.fill_dry_at(b + VA_WIDTH'(2), 6);
+      W.i16();
+      W.cbz(1'b0, it != 23, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // misp_call: a conditional the predictors cannot learn (pseudo-
+  // random), then a call and its return (TD#162). After each backend
+  // mispredict of the conditional the call's block is the first block
+  // fetched.
+  // -----------------------------------------------------------------
+  task automatic p_misp_call();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] fn;
+    logic [VA_WIDTH-1:0] l;
+    begin_prog("misp_call");
+    W.lfsr = 16'hACE1;
+    fn   = RESET_VECTOR + VA_WIDTH'('h400);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 32; it++) begin
+      if (it == 8) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(1);
+      W.cskip(W.lfsr_bit(), 1);
+      l = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, fn);
+      W.mixed(2);
+      W.ret(l);
+      W.mixed(1);
+      W.bcc(it != 31, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // jals: a chain of twelve JALs to distinct blocks, run three times.
+  // On the first pass every JAL is new to the predictors and predecode
+  // redirects (M1).
+  // -----------------------------------------------------------------
+  task automatic p_jals();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] t;
+    begin_prog("jals");
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < 3; it++) begin
+      if (it == 1) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(1);
+      for (int k = 0; k < 12; k++) begin
+        t = RESET_VECTOR + VA_WIDTH'('h200 + k * 'h60);
+        W.jal(5'd0, t);
+        W.mixed(2);
+      end
+      W.jal(5'd0, top + VA_WIDTH'('h100));
+      W.wp = top + VA_WIDTH'('h100);
+      W.mixed(1);
+      W.bcc(it != 2, top);
+    end
+    W.mixed(3);
+    end_prog(80000);
+    chk($sformatf("jals: predecode redirected (%0d)", n_pd_redir),
+        n_pd_redir > 0);
+  endtask
+
+  // =================================================================
+  // Program selection. +PROG=<name> runs one program; without it,
+  // every program runs.
+  // =================================================================
+  task automatic run_prog(input string nm);
+    case (nm)
+      "bare":       p_bare();
+      "sv39":       p_sv39();
+      "loops":      p_loops();
+      "coro":       p_coro();
+      "calls":      p_calls();
+      "lp":         p_lp();
+      "hist":       p_hist();
+      "twocond":    p_twocond();
+      "ftbonly":    p_ftbonly();
+      "nest":       p_nest();
+      "recur":      p_recur();
+      "deep":       p_deep();
+      "indir":      p_indir();
+      "region":     p_region();
+      "multistart": p_multistart();
+      "cross":      p_cross();
+      "rvc":        p_rvc();
+      "misp_call":  p_misp_call();
+      "jals":       p_jals();
+      default: begin
+        fail_cnt++;
+        $display("FAIL: unknown program %s", nm);
+      end
+    endcase
+  endtask
+
+  string all_progs [0:18] = '{"bare", "sv39", "loops", "coro", "calls",
+                              "lp", "hist", "twocond", "ftbonly", "nest",
+                              "recur", "deep", "indir", "region",
+                              "multistart", "cross", "rvc", "misp_call",
+                              "jals"};
+
+  // =================================================================
   initial begin
+    string prog;
     pass_cnt = 0;
     fail_cnt = 0;
-    p_bare();
-    p_sv39();
-    p_loops();
-    p_coro();
-    p_calls();
+    if ($value$plusargs("PROG=%s", prog)) begin
+      run_prog(prog);
+    end else begin
+      foreach (all_progs[i]) run_prog(all_progs[i]);
+    end
     $display("tb_fe_top: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_fe_top: %0d checks failed", fail_cnt);
@@ -1427,7 +2896,7 @@ module tb;
   end
 
   initial begin
-    #3000000;
+    #30000000;
     $fatal(1, "tb_fe_top: timeout");
   end
 

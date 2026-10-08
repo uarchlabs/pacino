@@ -48,9 +48,11 @@ module tb;
   logic                        ftb_upd_is_call_u0;
   logic                        ftb_upd_is_ret_u0;
   logic                        ftb_upd_is_jalr_u0;
+  logic                        ftb_upd_jmp_rvc_u0;   // BP-121, TD#164
   logic [VA_WIDTH-1:0]         ftb_upd_pft_addr_u0;
 
   logic                        ftb_upd_from_skid;
+  logic                        issue_next;     // BP-121, TD#162
   logic                        skid_val;
   logic                        skid_wr;
   logic                        skid_issue;
@@ -84,8 +86,10 @@ module tb;
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_upd_from_skid     (ftb_upd_from_skid),
+    .issue_next            (issue_next),
     .skid_val              (skid_val),
     .skid_wr               (skid_wr),
     .skid_issue            (skid_issue),

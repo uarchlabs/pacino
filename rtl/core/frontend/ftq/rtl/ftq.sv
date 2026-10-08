@@ -140,6 +140,11 @@ module ftq (
   // ---- 9. history rollback, TD-FE-7, BP-102 ------------------------
   output logic                        ftq_rollback_val,
   output logic [FTQ_IDX_BITS-1:0]     ftq_rollback_idx,
+  // The corrected history bundle for a backend mispredict (BP-121).
+  output logic                        ftq_rollback_corr,
+  output logic [1:0]                  ftq_rollback_n,
+  output logic [1:0]                  ftq_rollback_tkn,
+  output logic [1:0]                  ftq_rollback_pbit,
 
   // ---- 8. RAS restore and commit -----------------------------------
   // ras_flush_val / _snapshot are NOT driven. They are declared on
@@ -192,6 +197,7 @@ module ftq (
   output logic                        ftb_upd_is_call_u0,
   output logic                        ftb_upd_is_ret_u0,
   output logic                        ftb_upd_is_jalr_u0,
+  output logic                        ftb_upd_jmp_rvc_u0,
   output logic [VA_WIDTH-1:0]         ftb_upd_pft_addr_u0,
 
   // =================================================================
@@ -243,6 +249,9 @@ module ftq (
   input  logic [VA_WIDTH-1:0]         bkend_ftq_redir_pc,
   input  logic                        bkend_ftq_redir_self,
   input  ftq_redir_cause_e            bkend_ftq_redir_cause,
+  // The resolved direction of the redirecting branch (BP-121, the
+  // corrected history rollback; bp_history_decisions.md 3.5).
+  input  logic                        bkend_ftq_redir_taken,
 
   // FTQ_PTR_BITS wide: it carries the wrap generation
   // (ftq_backend_interfaces.md 6, widened after BP-106).
@@ -357,8 +366,11 @@ module ftq (
   logic [FTQ_IDX_BITS-1:0]  w_rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
   logic [TRX_SLOT_BITS-1:0] w_rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1];
   bp_ftq_slot_t             w_rsv_wr_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [VA_WIDTH-1:0]      w_rsv_wr_pft  [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] w_rsv_wr_end;
 
   logic                     w_sched_from_skid;
+  logic                     w_sched_issue_next;
   logic                     w_sched_skid_val;
   logic                     w_sched_skid_wr;
   logic                     w_sched_skid_issue;
@@ -441,6 +453,9 @@ module ftq (
     .bkend_redir_pc     (bkend_ftq_redir_pc),
     .bkend_redir_self   (bkend_ftq_redir_self),
     .bkend_redir_cause  (bkend_ftq_redir_cause),
+    .bkend_redir_pos    (bkend_ftq_redir_pos),
+    .bkend_redir_taken  (bkend_ftq_redir_taken),
+    .redir_entry        (w_redir_entry),
     .pd_redir_val       (w_pd_redir_val),
     .pd_redir_idx       (w_pd_redir_idx),
     .pd_redir_pc        (w_pd_redir_pc),
@@ -458,6 +473,7 @@ module ftq (
     .sc_uq_not_full     (sc_uq_not_full),
     .h2_ftq_full        (ftq_full),
     .r1_fault_hold      (w_fault_hold),
+    .h3_ftb_upd         (w_sched_issue_next),
     .ftq_pred_val_p0    (ftq_pred_val_p0),
     .ftq_pred_pc_p0     (ftq_pred_pc_p0),
     .pred_pc_p1         (w_pred_pc_p1),
@@ -467,6 +483,10 @@ module ftq (
     .redir_cause        (w_redir_cause),
     .rollback_val       (ftq_rollback_val),
     .rollback_idx       (ftq_rollback_idx),
+    .rollback_corr      (ftq_rollback_corr),
+    .rollback_n         (ftq_rollback_n),
+    .rollback_tkn       (ftq_rollback_tkn),
+    .rollback_pbit      (ftq_rollback_pbit),
     .arm_win            (w_arm_win)
   );
 
@@ -558,6 +578,8 @@ module ftq (
     .rsv_wr_idx          (w_rsv_wr_idx),
     .rsv_wr_sel          (w_rsv_wr_sel),
     .rsv_wr_slot         (w_rsv_wr_slot),
+    .rsv_wr_pft          (w_rsv_wr_pft),
+    .rsv_wr_end          (w_rsv_wr_end),
     .xlate_rd_idx        (w_xlate_idx),
     .xlate_rd_pc         (w_xlate_pc),
     .fetch_rd_idx        (w_fetch_idx),
@@ -745,7 +767,9 @@ module ftq (
     .rsv_wr_val        (w_rsv_wr_val),
     .rsv_wr_idx        (w_rsv_wr_idx),
     .rsv_wr_sel        (w_rsv_wr_sel),
-    .rsv_wr_slot       (w_rsv_wr_slot)
+    .rsv_wr_slot       (w_rsv_wr_slot),
+    .rsv_wr_pft        (w_rsv_wr_pft),
+    .rsv_wr_end        (w_rsv_wr_end)
   );
 
   // -----------------------------------------------------------------
@@ -809,8 +833,10 @@ module ftq (
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_upd_from_skid     (w_sched_from_skid),
+    .issue_next            (w_sched_issue_next),
     .skid_val              (w_sched_skid_val),
     .skid_wr               (w_sched_skid_wr),
     .skid_issue            (w_sched_skid_issue),
@@ -831,11 +857,11 @@ module ftq (
   // instance, and exporting them would put diagnostic state on the
   // three specified interfaces.
   //
-  // bkend_ftq_redir_pos is a BACKEND port with no FTQ consumer. It
-  // locates the boundary within the entry, and every FTQ response to
-  // a redirect -- rewind, status clear, restore, flush -- acts on
-  // the ENTRY, not on a position inside it. Section 5 declares it;
-  // nothing in D1 through D5 reads it.
+  // bkend_ftq_redir_pos had no FTQ consumer until BP-121: every other
+  // FTQ response to a redirect -- rewind, status clear, restore, flush
+  // -- acts on the ENTRY. ftq_npc now reads it, with the resolved
+  // direction, to form the corrected history bundle (bp_history
+  // _decisions.md 3.5 reopened), and the redirect read entry with it.
   logic w_unused;
   assign w_unused = w_ptr_alias_full | w_walk_active |
                     |w_shadow_val    | w_wb_accept   | w_wb_drop_gen |
@@ -846,8 +872,8 @@ module ftq (
                     w_sched_skid_wr   | w_sched_skid_issue |
                     w_sched_drop_val  | w_sched_drop_high |
                     |w_sched_n_acc    | |w_sched_n_pend |
-                    w_sched_any_high  | |w_redir_entry |
-                    |w_commit_entry   | |bkend_ftq_redir_pos |
+                    w_sched_any_high  |
+                    |w_commit_entry   |
                     |w_shadow_ptr[0]  | |w_rsv_slot[0];
 
 endmodule : ftq

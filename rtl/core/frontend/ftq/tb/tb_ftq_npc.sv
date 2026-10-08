@@ -52,6 +52,14 @@ module tb;
   logic [VA_WIDTH-1:0]     bkend_redir_pc;
   logic                    bkend_redir_self;
   ftq_redir_cause_e        bkend_redir_cause;
+  // BP-121, the corrected history rollback.
+  logic [FTB_BR_POS_BITS-1:0] bkend_redir_pos;
+  logic                    bkend_redir_taken;
+  bp_ftq_entry_t           redir_entry;
+  logic                    rollback_corr;
+  logic [1:0]              rollback_n;
+  logic [1:0]              rollback_tkn;
+  logic [1:0]              rollback_pbit;
   logic                    pd_redir_val;
   logic [FTQ_IDX_BITS-1:0] pd_redir_idx;
   logic [VA_WIDTH-1:0]     pd_redir_pc;
@@ -69,6 +77,7 @@ module tb;
   logic                    sc_uq_not_full;
   logic                    h2_ftq_full;
   logic                    r1_fault_hold;
+  logic                    h3_ftb_upd;     // BP-121, TD#162
   logic                    ftq_pred_val_p0;
   logic [VA_WIDTH-1:0]     ftq_pred_pc_p0;
   logic [VA_WIDTH-1:0]     pred_pc_p1;
@@ -88,6 +97,9 @@ module tb;
     .bkend_redir_pc     (bkend_redir_pc),
     .bkend_redir_self   (bkend_redir_self),
     .bkend_redir_cause  (bkend_redir_cause),
+    .bkend_redir_pos    (bkend_redir_pos),
+    .bkend_redir_taken  (bkend_redir_taken),
+    .redir_entry        (redir_entry),
     .pd_redir_val       (pd_redir_val),
     .pd_redir_idx       (pd_redir_idx),
     .pd_redir_pc        (pd_redir_pc),
@@ -105,6 +117,7 @@ module tb;
     .sc_uq_not_full     (sc_uq_not_full),
     .h2_ftq_full        (h2_ftq_full),
     .r1_fault_hold      (r1_fault_hold),
+    .h3_ftb_upd         (h3_ftb_upd),
     .ftq_pred_val_p0    (ftq_pred_val_p0),
     .ftq_pred_pc_p0     (ftq_pred_pc_p0),
     .pred_pc_p1         (pred_pc_p1),
@@ -114,6 +127,10 @@ module tb;
     .redir_cause        (redir_cause),
     .rollback_val       (rollback_val),
     .rollback_idx       (rollback_idx),
+    .rollback_corr      (rollback_corr),
+    .rollback_n         (rollback_n),
+    .rollback_tkn       (rollback_tkn),
+    .rollback_pbit      (rollback_pbit),
     .arm_win            (arm_win)
   );
 
@@ -176,6 +193,7 @@ module tb;
     sc_uq_not_full     = 1'b1;
     h2_ftq_full        = 1'b0;
     r1_fault_hold      = 1'b0;
+    h3_ftb_upd         = 1'b0;
   endtask
 
   task automatic do_reset();
@@ -184,6 +202,9 @@ module tb;
     bkend_redir_pc    = PC_BKEND;
     bkend_redir_self  = 1'b0;
     bkend_redir_cause = RC_MISPREDICT;
+    bkend_redir_pos   = '0;
+    bkend_redir_taken = 1'b0;
+    redir_entry       = '0;
     pd_redir_idx      = '0;
     pd_redir_pc       = PC_PD;
     p3_redir_idx      = '0;

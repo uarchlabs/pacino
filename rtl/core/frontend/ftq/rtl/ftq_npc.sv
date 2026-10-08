@@ -77,6 +77,13 @@ module ftq_npc (
   input  logic [VA_WIDTH-1:0]      bkend_redir_pc,
   input  logic                     bkend_redir_self,
   input  ftq_redir_cause_e         bkend_redir_cause,
+  // BP-121 (bp_history_decisions.md 3.5 reopened, ruled by Jeff:
+  // correct on redirect). The position the redirect names, the
+  // resolved direction of the branch there, and the entry the rollback
+  // restores, from which the corrected history bundle is formed.
+  input  logic [FTB_BR_POS_BITS-1:0] bkend_redir_pos,
+  input  logic                     bkend_redir_taken,
+  input  bp_ftq_entry_t            redir_entry,
 
   // ---- arm 2, the predecode redirect, from ftq_ifu ----------------
   // Always RC_MISPREDICT in cause and always _self CLEAR: the
@@ -122,6 +129,12 @@ module ftq_npc (
   input  logic                     sc_uq_not_full,
   input  logic                     h2_ftq_full,
   input  logic                     r1_fault_hold,
+  // H3 (BP-121, TD#162, ruled by Jeff): the FTB update scheduler
+  // issues an update to the FTB next cycle. The request of this cycle
+  // would reach its FTB read at p1 in that cycle, where the update
+  // borrows the single read port and the lookup is dropped; it is
+  // withheld instead, one cycle per FTB update.
+  input  logic                     h3_ftb_upd,
 
   // ---- the p0 request, to bp_cluster -------------------------------
   output logic                     ftq_pred_val_p0,
@@ -162,6 +175,17 @@ module ftq_npc (
   // both structures are self-correcting from committed state.
   output logic                     rollback_val,
   output logic [FTQ_IDX_BITS-1:0]  rollback_idx,
+  // The corrected history bundle of the restored entry (BP-121), for a
+  // backend MISPREDICT redirect (_self clear): the entry's branches
+  // before the named position, which the execution passed not taken,
+  // then the named branch with its resolved direction; at most two
+  // bits, a bit's path bit from its PC. Clear for every other source:
+  // a p2 / p3 redirect's bundle is the cluster's, a predecode redirect
+  // and a trap restore past the bundle as before BP-121.
+  output logic                     rollback_corr,
+  output logic [1:0]               rollback_n,
+  output logic [1:0]               rollback_tkn,
+  output logic [1:0]               rollback_pbit,
 
   // ---- observation, for the bound properties -----------------------
   // The arm that won, one-hot, arms 1 to 5. Zero means arm 6, hold.
@@ -255,7 +279,8 @@ module ftq_npc (
     // 4.5. The hold gates the OUTPUT valid; the register retains
     // what it captured either way.
     w_hold = ~tage_pq_not_full | ~ittage_pq_not_full |
-             ~sc_uq_not_full    |  h2_ftq_full | r1_fault_hold;
+             ~sc_uq_not_full    |  h2_ftq_full | r1_fault_hold |
+             h3_ftb_upd;
 
     arm_win     = '0;
     redir_val   = 1'b0;
@@ -347,6 +372,40 @@ module ftq_npc (
   always_comb begin : restore
     rollback_val = redir_val && (redir_cause != RC_UNSPEC);
     rollback_idx = redir_self ? (redir_idx - 1'b1) : redir_idx;
+  end
+
+  // The corrected history bundle (BP-121, see the port comment). Reads
+  // the entry the rollback index addresses (ftq_entry's redirect read).
+  // Gated on arm_win, which the arbitration block drives, so this block
+  // is ordered after it.
+  always_comb begin : correction
+    logic [VA_WIDTH-1:0] bpc;
+    int                  n;
+    n             = 0;
+    bpc           = '0;
+    rollback_n    = 2'd0;
+    rollback_tkn  = 2'b00;
+    rollback_pbit = 2'b00;
+    rollback_corr = arm_win[1] && (bkend_redir_cause == RC_MISPREDICT) &&
+                    !bkend_redir_self;
+    if (rollback_corr) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        bpc = redir_entry.pc
+            + (VA_WIDTH'(redir_entry.slot[s].pos) << POS_OFFSET_BITS);
+        if (redir_entry.slot[s].slot_valid &&
+            (redir_entry.slot[s].pos < bkend_redir_pos) && (n < 1)) begin
+          rollback_tkn[n]  = 1'b0;
+          rollback_pbit[n] = bpc[2] ^ bpc[3];
+          n                = n + 1;
+        end
+      end
+      bpc = redir_entry.pc
+          + (VA_WIDTH'(bkend_redir_pos) << POS_OFFSET_BITS);
+      rollback_tkn[n]  = bkend_redir_taken;
+      rollback_pbit[n] = bpc[2] ^ bpc[3];
+      n                = n + 1;
+    end
+    rollback_n = 2'(n);
   end
 
   // -----------------------------------------------------------------

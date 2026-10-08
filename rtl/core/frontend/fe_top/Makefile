@@ -8,9 +8,12 @@
 #
 #   lint_fe_top     the structural top over every front-end unit and
 #                   the emitted L1I (FE-21), warnings on
-#   sim_fe_top      tb/tb_fe_top.sv: the programs of BP-118 Problem 8
+#   sim_fe_top      tb/tb_fe_top.sv: every program, in one simulation,
 #                   against a memory, an L2 TLB and a backend model,
 #                   with every unit's bound properties compiled in
+#   sim_fe_top_<p>  one program (+PROG=<p>), one per program of
+#                   FE_PROGS (BP-121): each is its own regression
+#                   target
 #   assert_labels   every property label of every assertion file the
 #                   sim model compiles is present in it
 #
@@ -166,7 +169,13 @@ SIM_SRCS := $(TOP_SRCS) $(ASSERT_SRCS)
 
 FE_PLUSARGS := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 
-.PHONY: all clean assert_labels lint_fe_top sim_fe_top
+# The tb_fe_top programs (BP-121), each run alone by sim_fe_top_<p>.
+FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
+            recur deep indir region multistart cross rvc misp_call jals
+FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
+
+.PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \
+        $(FE_PROG_TGTS)
 
 all: lint_fe_top sim_fe_top assert_labels
 
@@ -175,13 +184,36 @@ lint_fe_top:
 	$(Q)$(VERILATOR) --lint-only $(VER_FLAGS) $(COMMON) \
 	  --top-module fe_top $(TOP_SRCS) $(VSILENCE)
 
-sim_fe_top:
+build_fe_top:
 	@echo "[compiling]  tb_fe_top"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_fe_top \
 	  $(SIM_SRCS) $(TB_DIR)/tb_fe_top.sv $(VSILENCE)
-	@echo "[simulating] $(VER_OUT)_fe_top/Vtb"
-	$(Q)./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS)
+
+# Every program in its own simulation (BP-121): in one simulation the
+# predictor tables carry from one program into the next, so a program's
+# counts would depend on the programs before it. The totals line sums
+# the per-program check counts.
+sim_fe_top: build_fe_top
+	@echo "[simulating] $(VER_OUT)_fe_top/Vtb, each of $(FE_PROGS)"
+	$(Q)tp=0; tf=0; bad=0; \
+	for g in $(FE_PROGS); do \
+	  log=$(VER_OUT)_fe_top/sim_$$g.log; \
+	  ./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) +PROG=$$g > $$log 2>&1 \
+	    || bad=1; \
+	  cat $$log; \
+	  m=$$(grep -oE 'PASS=[0-9]+ FAIL=[0-9]+' $$log | tail -1); \
+	  if [ -z "$$m" ]; then bad=1; continue; fi; \
+	  p=$${m#PASS=}; p=$${p%% *}; f=$${m##*FAIL=}; \
+	  tp=$$((tp + p)); tf=$$((tf + f)); \
+	done; \
+	echo "sim_fe_top: $(words $(FE_PROGS)) programs, one simulation each"; \
+	echo "tb_fe_top: PASS=$$tp FAIL=$$tf"; \
+	test $$bad -eq 0 && test $$tf -eq 0
+
+$(FE_PROG_TGTS): sim_fe_top_%: build_fe_top
+	@echo "[simulating] $(VER_OUT)_fe_top/Vtb +PROG=$*"
+	$(Q)./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) +PROG=$*
 
 # Every label of every compiled assertion file must appear in the
 # generated model (the ifu Makefile's method, BP-116).
@@ -211,9 +243,10 @@ clean:
 # call and fails if a target defined in this file is in neither list.
 # Exclusions:
 #   all                 - aggregate.
+#   build_fe_top        - the compile step the sim targets run first.
 #   clean, regress_list - housekeeping and this plumbing.
-REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels
-REGRESS_EXCLUDE := all clean regress_list
+REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS)
+REGRESS_EXCLUDE := all build_fe_top clean regress_list
 
 .PHONY: regress_list
 regress_list:

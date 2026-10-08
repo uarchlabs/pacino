@@ -77,6 +77,7 @@ module ftq_ftb_sched #(
   output logic                        ftb_upd_is_call_u0,
   output logic                        ftb_upd_is_ret_u0,
   output logic                        ftb_upd_is_jalr_u0,
+  output logic                        ftb_upd_jmp_rvc_u0,
   output logic [VA_WIDTH-1:0]         ftb_upd_pft_addr_u0,
 
   // ---- observation, for the bound properties of 5.7.4 -------------
@@ -84,6 +85,12 @@ module ftq_ftb_sched #(
   // file binds by MODULE NAME against the port list and does not
   // reach into module internals (TD#109).
   output logic                        ftb_upd_from_skid,
+  // An update issues to the FTB NEXT cycle (BP-121, TD#162, ruled by
+  // Jeff). The output is registered, so the issue is known a cycle
+  // ahead; the FTQ withholds the p0 request of this cycle, whose FTB
+  // read at p1 the update would otherwise take (the FTB has one read
+  // port and an update borrows it, dropping that lookup).
+  output logic                        issue_next,
   output logic                        skid_val,
   output logic                        skid_wr,
   output logic                        skid_issue,
@@ -308,6 +315,9 @@ module ftq_ftb_sched #(
   assign ftb_upd_is_call_u0    = w_out_pl.is_call;
   assign ftb_upd_is_ret_u0     = w_out_pl.is_ret;
   assign ftb_upd_is_jalr_u0    = w_out_pl.is_jalr;
+  assign ftb_upd_jmp_rvc_u0    = w_out_pl.jmp_rvc;
   assign ftb_upd_pft_addr_u0   = w_out_pl.pft_addr;
+
+  assign issue_next = w_issue_val;
 
 endmodule : ftq_ftb_sched

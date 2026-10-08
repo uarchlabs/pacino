@@ -76,6 +76,7 @@ module tb;
   logic                       ftb_is_call_p2;
   logic                       ftb_is_ret_p2;
   logic                       ftb_is_jalr_p2;
+  logic                       ftb_jmp_rvc_p2;       // BP-121, TD#164
 
   logic [VA_WIDTH-1:0]        ftb_pft_addr_p2;
 
@@ -96,6 +97,10 @@ module tb;
   logic                       ftb_upd_is_call_u0;
   logic                       ftb_upd_is_ret_u0;
   logic                       ftb_upd_is_jalr_u0;
+  logic                       ftb_upd_jmp_rvc_u0;   // BP-121, TD#164
+  // The rvc bit the next upd_jmp carries (BP-121); 0 unless a test sets
+  // it.
+  logic                       jrvc_next;
   logic [VA_WIDTH-1:0]        ftb_upd_pft_addr_u0;
 
   logic                       ftb_flush_px;
@@ -127,6 +132,7 @@ module tb;
     .ftb_is_call_p2        (ftb_is_call_p2),
     .ftb_is_ret_p2         (ftb_is_ret_p2),
     .ftb_is_jalr_p2        (ftb_is_jalr_p2),
+    .ftb_jmp_rvc_p2        (ftb_jmp_rvc_p2),
     .ftb_pft_addr_p2       (ftb_pft_addr_p2),
     .ftb_fastpath_p2       (ftb_fastpath_p2),
     .ftb_fastpath_en       (ftb_fastpath_en),
@@ -144,6 +150,7 @@ module tb;
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_flush_px          (ftb_flush_px)
   );
@@ -245,6 +252,7 @@ module tb;
     ftb_upd_is_call_u0    = 1'b0;
     ftb_upd_is_ret_u0     = 1'b0;
     ftb_upd_is_jalr_u0    = 1'b0;
+    ftb_upd_jmp_rvc_u0    = 1'b0;
     ftb_upd_pft_addr_u0   = '0;
   endtask
 
@@ -306,6 +314,7 @@ module tb;
     ftb_upd_is_call_u0    = is_call;
     ftb_upd_is_ret_u0     = is_ret;
     ftb_upd_is_jalr_u0    = is_jalr;
+    ftb_upd_jmp_rvc_u0    = jrvc_next;
     ftb_upd_pos_u0        = pos;
     ftb_upd_pft_addr_u0   = pft;
     @(posedge clk); #1;      // write commits with valid still high
@@ -332,6 +341,7 @@ module tb;
     pred_pc_p0      = '0;
     ftb_fastpath_en = 1'b0;
     ftb_flush_px    = 1'b0;
+    jrvc_next       = 1'b0;
     upd_idle();
     repeat (3) @(posedge clk);
     rstn = 1'b1;
@@ -1129,6 +1139,84 @@ module tb;
     check("F4 same jump: pos kept (6), target is the latest",
           ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd6)
           && (ftb_jmp_target_p2 == base + VA_WIDTH'('h880)));
+
+    // =============================================================
+    // Group G (BP-121). Each case from reset and a driven sequence.
+    // =============================================================
+
+    // G1, TD#163: an update carrying a stale MISS (its prediction did
+    // not find the entry) names a way another update has since
+    // allocated with the same tag. It merges: the entry keeps the
+    // conditional the first update wrote and gains the jump. Before
+    // BP-121 the carried miss re-allocated a zeroed entry over it and
+    // the conditional was lost.
+    do_reset();
+    base = make_pc(26'h000710, 9'd150);
+    upd_br(base, 1'b0, 2'd1, 1'b0, 1'b1, base + VA_WIDTH'('h100), 4'd3,
+           base + VA_WIDTH'('d32));
+    upd_jmp(base, 1'b0, 2'd1, base + VA_WIDTH'('h900), 1'b0, 1'b0, 1'b0,
+            4'd9, base + VA_WIDTH'('d20));
+    predict(base);
+    check("G1 stale miss merges: the conditional (pos 3) is kept",
+          ftb_hit_p2 && ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd3));
+    check("G1 stale miss merges: the jump (pos 9) is added",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd9));
+
+    // G2, TD#163: an update carrying a stale HIT names a way that
+    // another region (same set, different tag) has since taken. It
+    // allocates: region A's entry holds only A's update. Before BP-121
+    // it wrote A's tag over region B's entry and kept B's jump, so A
+    // read B's jump.
+    do_reset();
+    base = make_pc(26'h000711, 9'd151);           // region A
+    pc   = make_pc(26'h000712, 9'd151);           // region B, same set
+    upd_br(base, 1'b0, 2'd2, 1'b0, 1'b1, base + VA_WIDTH'('h100), 4'd2,
+           base + VA_WIDTH'('d32));
+    upd_jmp(pc, 1'b0, 2'd2, pc + VA_WIDTH'('h700), 1'b0, 1'b0, 1'b0,
+            4'd5, pc + VA_WIDTH'('d14));          // B takes way 2
+    upd_br(base, 1'b1, 2'd2, 1'b0, 1'b1, base + VA_WIDTH'('h100), 4'd2,
+           base + VA_WIDTH'('d32));               // A's stale hit
+    predict(base);
+    check("G2 stale hit allocates: A has its conditional",
+          ftb_hit_p2 && ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd2));
+    check("G2 stale hit allocates: A does not read B's jump",
+          !ftb_jmp_valid_p2);
+
+    // G3, TD#164: the jump's rvc bit is stored and read back.
+    do_reset();
+    base = make_pc(26'h000713, 9'd152);
+    jrvc_next = 1'b1;
+    upd_jmp(base, 1'b0, 2'd0, base + VA_WIDTH'('h300), 1'b1, 1'b0, 1'b1,
+            4'd5, base + VA_WIDTH'('d12));
+    jrvc_next = 1'b0;
+    predict(base);
+    check("G3 a 16-bit jump reads rvc 1",
+          ftb_jmp_valid_p2 && ftb_jmp_rvc_p2);
+    upd_jmp(base, 1'b1, 2'd0, base + VA_WIDTH'('h300), 1'b1, 1'b0, 1'b1,
+            4'd5, base + VA_WIDTH'('d14));
+    predict(base);
+    check("G3 a 32-bit jump reads rvc 0",
+          ftb_jmp_valid_p2 && !ftb_jmp_rvc_p2);
+
+    // G4: a conditional stored after the jump of a start's block is past
+    // that block's end. From the region base the jump at pos 4 ends the
+    // block, so the conditional at pos 11 (recorded by a later start of
+    // the region) is hidden. Before BP-121 only the 16-position window
+    // hid fields, so it was reported in slot 0 with the jump after it.
+    do_reset();
+    base = make_pc(26'h000714, 9'd153);
+    upd_jmp(base, 1'b0, 2'd0, base + VA_WIDTH'('h400), 1'b1, 1'b0, 1'b0,
+            4'd4, base + VA_WIDTH'('d10));
+    upd_br(base + VA_WIDTH'('d14), 1'b1, 2'd0, 1'b0, 1'b1,
+           base + VA_WIDTH'('h40), 4'd4, base + VA_WIDTH'('d32));
+    predict(base);
+    check("G4 from the base: the jump (pos 4) is visible",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd4));
+    check("G4 from the base: the conditional past the jump is hidden",
+          !ftb_br0_valid_p2 && !ftb_br1_valid_p2);
+    predict(base + VA_WIDTH'('d14));
+    check("G4 from base+14: the conditional (pos 4) is visible",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd4));
 
     // -------------------------------------------------------------
     $display("=================================================");

@@ -71,6 +71,8 @@ module tb;
   bp_br_type_e         br_type_p3   [0:NUM_PRED_SLOTS-1];
 
   logic                restore_val;
+
+  logic                p2_keep;     // BP-121: p2 pass kept unless dropped
   bp_ras_snapshot_t    restore_snap;
 
   logic                commit_val;
@@ -99,6 +101,7 @@ module tb;
     .ras_pred_val_p3      (pred_val_p3),
     .ras_br_type_p3       (br_type_p3),
     .ras_restore_val      (restore_val),
+    .ras_p2_keep          (p2_keep),
     .ras_restore_snapshot (restore_snap),
     .ras_commit_val       (commit_val),
     .ras_commit_br_type   (commit_br_type),
@@ -186,7 +189,7 @@ module tb;
       pred_val_p3[s] = 1'b0; br_type_p3[s] = NO_BRANCH;
       prev_val[s]    = 1'b0; prev_typ[s]   = NO_BRANCH;
     end
-    restore_val = 1'b0; restore_snap = '0;
+    restore_val = 1'b0; restore_snap = '0; p2_keep = 1'b1;
     commit_val  = 1'b0; commit_br_type = NO_BRANCH;
     commit_ret_addr = '0; commit_snap = '0;
     flush_val   = 1'b0; flush_snap = '0;
@@ -1014,6 +1017,32 @@ module tb;
     force_p3(1'b1, RETURN_CALL, 1'b0, NO_BRANCH);
     tick();
     check("TC-33d AS BUILT p2 call / p3 RC: X on top, X not popped",
+          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+
+    // =============================================================
+    // TC-34 (BP-121, FE-14): ras_p2_keep low drops the p2 pass of a
+    // block a redirect squashed, while the p3 repair of the older
+    // block in the same cycle still applies (the cluster takes its own
+    // p3 redirect without a restore), and the dropped operation is
+    // registered as none, so the next cycle repairs nothing for it.
+    // X on the stack, B pushed at p2; next cycle p3 says B's block had
+    // no call (undo-push) while a squashed block pushes C at p2.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b1, DIRECT_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b1, DIRECT_CALL, ADDR_C, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    p2_keep = 1'b0;
+    tick();
+    p2_keep = 1'b1;
+    check("TC-34a B's push undone by the repair, C's push dropped: X on top",
+          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-34b the dropped push is not repaired a cycle later: X on top",
           (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
 
     // -------------------------------------------------------------

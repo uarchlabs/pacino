@@ -75,6 +75,8 @@ module tb;
   logic [FTQ_IDX_BITS-1:0] rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
   logic [TRX_SLOT_BITS-1:0] rsv_wr_sel [0:NUM_RESOLVE_PORTS-1];
   bp_ftq_slot_t            rsv_wr_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [VA_WIDTH-1:0]     rsv_wr_pft  [0:NUM_RESOLVE_PORTS-1];  // BP-121
+  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_end;                     // BP-121
 
   ftq_resolve dut (
     .clk               (clk),
@@ -109,7 +111,9 @@ module tb;
     .rsv_wr_val        (rsv_wr_val),
     .rsv_wr_idx        (rsv_wr_idx),
     .rsv_wr_sel        (rsv_wr_sel),
-    .rsv_wr_slot       (rsv_wr_slot)
+    .rsv_wr_slot       (rsv_wr_slot),
+    .rsv_wr_pft        (rsv_wr_pft),
+    .rsv_wr_end        (rsv_wr_end)
   );
 
   // The modelled entry and metadata arrays. Driven combinationally

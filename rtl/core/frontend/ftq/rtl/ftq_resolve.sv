@@ -221,7 +221,16 @@ module ftq_resolve (
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
   output logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1],
   output logic [TRX_SLOT_BITS-1:0] rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1],
-  output bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1]
+  output bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1],
+  // The resolved fall-through of the channel's branch, pc + 2 or + 4
+  // (BP-121, TD#164). ftq_entry writes it into pft_addr with a slot
+  // that resolved a taken jump.
+  output logic [VA_WIDTH-1:0]      rsv_wr_pft  [0:NUM_RESOLVE_PORTS-1],
+  // The resolved branch ends the executed block: it was taken, or it
+  // was mispredicted, so the backend redirects at it and the rest of
+  // the block is the wrong path (BP-121). ftq_entry clears the slots
+  // above it.
+  output logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_end
 );
 
 
@@ -255,6 +264,15 @@ module ftq_resolve (
   logic [FTQ_IDX_BITS-1:0]  r_ftb_idx [0:NUM_RESOLVE_PORTS-1];
   logic [FTB_BR_POS_BITS-1:0] r_ftb_pos [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_ftb_done;
+  // BP-121, TD#164 (ruled by Jeff). The resolved fall-through of the
+  // channel's branch, the branch PC plus its length, and whether the
+  // branch is a taken jump: a block a taken jump ends has that jump's
+  // end as its fall-through. Before BP-121 the FTB update and the RAS
+  // commit took the entry's PREDICTED pft_addr, which for a block
+  // whose first prediction knew no jump is the start plus one block,
+  // so the FTB was trained with that and never learned call + len.
+  logic [VA_WIDTH-1:0]      w_rft [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] w_jft;
 
   // Placement for a position naming no slot (ftq_ifu W1's rule): the
   // lowest slot free or at or after the position, else the last.
@@ -363,6 +381,14 @@ module ftq_resolve (
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
       rsv_slot[c] = w_slot_hit[c] ? w_map_slot[c] : w_plc_slot[c];
 
+      // The resolved fall-through (TD#164).
+      w_rft[c] = rsv_entry[c].pc
+               + (VA_WIDTH'(bkend_rsv[c].pos) << POS_OFFSET_BITS)
+               + (bkend_rsv[c].is_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
+      w_jft[c] = bkend_rsv[c].taken &&
+                 (bkend_rsv[c].br_type != COND) &&
+                 (bkend_rsv[c].br_type != NO_BRANCH);
+
       // R2 of ftq_entry_formats.md 3.1. The stored classification
       // against the resolved one, for a MAPPED branch only: a placed
       // branch has no stored classification of its own, and the
@@ -450,6 +476,9 @@ module ftq_resolve (
 
         upd_meta[rsv_slot[c]]  = rsv_meta[c][rsv_slot[c]];
         upd_entry[rsv_slot[c]] = rsv_entry[c];
+        // A taken jump ends the block at its own end (TD#164), the
+        // fall-through the uBTB update records.
+        if (w_jft[c]) upd_entry[rsv_slot[c]].pft_addr = w_rft[c];
         // A placed branch is presented in its slot, so ftq_upd_conv
         // reads its position (not the slot's previous occupant's).
         if (w_plc_val[c]) begin
@@ -516,7 +545,9 @@ module ftq_resolve (
       ftb_upd[c].way        = rsv_meta[c][rsv_slot[c]].ftb.way;
       ftb_upd[c].pos        = bkend_rsv[c].pos;
       ftb_upd[c].taken      = bkend_rsv[c].taken;
-      ftb_upd[c].pft_addr   = rsv_entry[c].pft_addr;
+      // The resolved fall-through for a block a taken jump ends, the
+      // predicted one otherwise (TD#164).
+      ftb_upd[c].pft_addr   = w_jft[c] ? w_rft[c] : rsv_entry[c].pft_addr;
 
       // A conditional fills a BRANCH field; everything else fills
       // the block's single JUMP field. br_idx names which
@@ -544,6 +575,7 @@ module ftq_resolve (
         (bkend_rsv[c].br_type == INDIRECT_CALL)   ||
         (bkend_rsv[c].br_type == RETURN)          ||
         (bkend_rsv[c].br_type == RETURN_CALL);
+      ftb_upd[c].jmp_rvc    = bkend_rsv[c].is_rvc;
     end
   end
 
@@ -551,13 +583,29 @@ module ftq_resolve (
   // The placement write. On acceptance only: a held resolution is
   // re-presented and placed again, and writing before acceptance
   // would make the retry map onto its own placement.
+  //
+  // A MAPPED RESOLUTION WRITES ITS SLOT TOO (BP-121). The commit walk
+  // (ftq_entry, ftq_decisions.md 5.4) commits the RAS operation of a
+  // taken call, return or return-call it finds in the entry's slots,
+  // and before BP-121 those slots held the PREDICTION for a mapped
+  // branch: a return-call the p1 view predicted not taken (an empty
+  // RAS top), or a slot the p3 write had emptied (TD#161), was never
+  // committed, and an executed branch kept its predicted direction.
+  // The resolution is the executed fact, so it replaces the slot; with
+  // the taken clear in ftq_entry, the slots of a committing entry are
+  // the executed block. Found by the BP-121 RAS commit check.
   // -----------------------------------------------------------------
   always_comb begin : place_write
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
-      rsv_wr_val[c]  = w_plc_val[c] & ftq_bkend_rsv_rdy[c];
+      rsv_wr_val[c]  = (w_plc_val[c] |
+                        (rsv_accept[c] & w_slot_hit[c] &
+                         (bkend_rsv[c].br_type != NO_BRANCH))) &
+                       ftq_bkend_rsv_rdy[c];
       rsv_wr_idx[c]  = bkend_rsv[c].ftq_idx;
       rsv_wr_sel[c]  = rsv_slot[c];
       rsv_wr_slot[c] = w_new_slot[c];
+      rsv_wr_pft[c]  = w_rft[c];
+      rsv_wr_end[c]  = bkend_rsv[c].taken | bkend_rsv[c].mispredict;
     end
   end
 

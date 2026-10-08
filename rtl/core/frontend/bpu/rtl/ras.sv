@@ -58,6 +58,11 @@ module ras (
 
   // ---- mispredict restore (IC-RAS-09) -----------------------------
   input  logic                ras_restore_val,
+  // The p2 pass of this cycle is on the path (BP-121, FE-14). Low when
+  // a redirect squashes the block at p2: the p2 operation is dropped
+  // and the p3 repair still applies (a p3 redirect, which the cluster
+  // takes without a restore).
+  input  logic                ras_p2_keep,
   input  bp_ras_snapshot_t    ras_restore_snapshot,
 
   // ---- commit (IC-RAS-10) -----------------------------------------
@@ -333,6 +338,10 @@ module ras (
 
   logic [RAS_PTR_BITS-1:0]   nxt_tosr;
   logic [RAS_PTR_BITS-1:0]   nxt_tosw;
+  // The state after the repair pass alone, for a cycle whose p2 pass
+  // is dropped (ras_p2_keep low).
+  logic [RAS_PTR_BITS-1:0]   rep_tosr;
+  logic [RAS_PTR_BITS-1:0]   rep_tosw;
 
   logic                      sp_we      [0:RAS_WR_PORTS-1];
   logic [RAS_PTR_BITS-1:0]   sp_waddr   [0:RAS_WR_PORTS-1];
@@ -366,6 +375,8 @@ module ras (
     is_push  = 1'b0;
     nxt_tosr = tosr;
     nxt_tosw = tosw;
+    rep_tosr = tosr;
+    rep_tosw = tosw;
 
     // Working state from the FF pointers.
     w      = '0;
@@ -473,6 +484,9 @@ module ras (
         end
       end
     end
+
+    rep_tosr = w.tosr;
+    rep_tosw = w.tosw;
 
     // -------- p2 pass (this cycle's prediction) --------------------
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
@@ -593,13 +607,16 @@ module ras (
         tosr <= ras_restore_snapshot.tosr;
         tosw <= ras_restore_snapshot.tosw;
       end else begin
-        tosr <= nxt_tosr;
-        tosw <= nxt_tosw;
+        tosr <= ras_p2_keep ? nxt_tosr : rep_tosr;
+        tosw <= ras_p2_keep ? nxt_tosw : rep_tosw;
         // Apply the repair writes, then the p2 writes, in port order
         // (the order the scan made them), so a later write to the
-        // same index supersedes an earlier one.
+        // same index supersedes an earlier one. The p2 ports are the
+        // upper half; dropped with the p2 pass.
         for (int p = 0; p < RAS_WR_PORTS; p++) begin
-          if (sp_we[p]) begin
+          if (sp_we[p] &&
+              (ras_p2_keep ||
+               (p < NUM_PRED_SLOTS * RAS_WR_PER_SLOT))) begin
             spec_ret_addr[sp_waddr[p]] <= sp_wdata_a[p];
             spec_rctr[sp_waddr[p]]     <= sp_wdata_r[p];
             spec_nos[sp_waddr[p]]      <= sp_wdata_n[p];
@@ -624,8 +641,12 @@ module ras (
       csp <= c_nxt;
 
       // ---- register p2 op and fallthrough for the p3 repair pass -
+      // An operation the restore or the squash dropped is registered
+      // as none, so the p3 pass does not repair what never happened
+      // (BP-121).
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        p3_op_q[s]       <= p2_op[s];
+        p3_op_q[s]       <= (ras_restore_val | ~ras_p2_keep) ? OP_NONE
+                                                             : p2_op[s];
         p3_fallthr_q[s]  <= ras_fall_through_p2[s];
         p3_pre_tosr_q[s] <= p2_pre_tosr[s];
       end

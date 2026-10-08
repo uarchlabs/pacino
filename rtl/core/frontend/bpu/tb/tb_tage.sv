@@ -7458,25 +7458,28 @@ module tb;
   endtask
 
   // ----------------------------------------------------------------
-  // TC-54  TB-ARB-08: Pred credits exhaust -> Rule 4 fires.
-  // TAGE_PRED_CREDITS=4, TAGE_STARVE_THRESH=8.
-  // Because PRED_CREDITS=4 < STARVE_THRESH=8, Rule 2 (starvation
-  // override) cannot fire naturally. Test exercises Rule 4 instead:
-  // after 4 pred grants with upd pending, credits=0 -> Rule 4 fires
-  // -> upd granted, credits reload. Documented in Results Capture.
-  // Procedure:
-  //   1. Issue pred+upd together (stg both) -> pred gets Rule 3,
-  //      upd enters UQ.
-  //   2. Hold stg_pred_val0=1 for 5 cycles total (4 credit dec
-  //      cycles + 1 Rule 4 cycle).
-  //   3. On cycle 5: pred_credits=0 -> Rule 4: upd granted.
-  //   4. Verify upd_rdy asserts and pred_credits reloads to 4.
+  // TC-54  TB-ARB-08 (BP-121, the arbitration ruled by Jeff): a
+  // prediction is never delayed by an update. An update waits while
+  // predictions are presented; after TAGE_STARVE_THRESH cycles of
+  // waiting pq_not_full deasserts; a producer that honours it presents
+  // no prediction and the update is granted.
+  // BEFORE BP-121 (credit rules 3 and 4) this test expected the update
+  // granted on cycle 5, after four prediction grants, delaying the
+  // fifth prediction, with upd_rdy_u1 high at cycle 5 and pred_credits
+  // reloaded to TAGE_PRED_CREDITS. Those two checks are replaced by the
+  // four below; the credit counters are retired.
   // ----------------------------------------------------------------
   task automatic arb_starve_tst(int verbose);
     int local_fails;
+    int early_upd;
+    int pq_low_cyc;
+    int granted;
     local_fails = 0;
+    early_upd   = 0;
+    pq_low_cyc  = -1;
+    granted     = 0;
 
-    // Issue pred and upd together (cycle 0): both stg set.
+    // Cycle 0: stage a prediction and an update together.
     stg_pred_inp0     = '0;
     stg_pred_inp0.pc  = VA_WIDTH'('hA00);
     stg_upd_inp0      = '0;
@@ -7485,33 +7488,52 @@ module tb;
     stg_upd_inp0.tage_pred_meta.tage_using_primary = 1'b1;
     stg_upd_val0      = 1'b1;
     stg_pred_val0     = 1'b1;
-    @(posedge clk); // cycle 0: stage both vals
+    @(posedge clk);
     stg_upd_val0  = 1'b0;
     stg_upd_inp0  = '0;
-    // Keep stg_pred_val0=1 for 5 more cycles (4 Rule3 + 1 Rule4)
-    @(posedge clk); // cycle 1: Rule3, credits 4->3, UQ enqueues
-    @(posedge clk); // cycle 2: Rule3, credits 3->2
-    @(posedge clk); // cycle 3: Rule3, credits 2->1
-    @(posedge clk); // cycle 4: Rule3, credits 1->0
-    @(posedge clk); // cycle 5: Rule4, upd granted, upd_rdy=1
+
+    // Keep predicting until pq_not_full deasserts, then stop, as the
+    // FTQ does (its H1 hold). No update may be granted while a
+    // prediction is presented.
+    for (int c = 1; c < 3 * TAGE_STARVE_THRESH; c++) begin
+      @(posedge clk);
+      #1;
+      if (u_dut.arb_grant_upd && tage_pred_val_p0[0]) early_upd++;
+      if ((pq_low_cyc < 0) && !u_dut.pq_not_full) begin
+        pq_low_cyc    = c;
+        stg_pred_val0 = 1'b0;
+        stg_pred_inp0 = '0;
+      end
+      if (tage_upd_rdy_u1[0]) granted = 1;
+    end
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
 
-    if (tage_upd_rdy_u1[0] !== 1'b1) begin
+    if (early_upd != 0) begin
       local_fails++;
-      $display("[FAIL] arb_starve_tst: upd_rdy=%0b exp=1",
-        tage_upd_rdy_u1[0]);
-    end else if (verbose != 0) begin
-      $display("[INFO] arb_starve_tst: upd_rdy=1 OK");
+      $display("[FAIL] arb_starve_tst: %0d update grants beside a prediction",
+        early_upd);
     end
-    // Verify pred_credits reloaded.
-    if (u_dut.pred_credits_r !== 3'(TAGE_PRED_CREDITS)) begin
+    // The update reaches the arbiter in cycle 0 (the staging register
+    // presents it then) and waits from that cycle, so its count reaches
+    // TAGE_STARVE_THRESH at the end of cycle THRESH-1: sampled after
+    // the edge of cycle THRESH-1.
+    if (pq_low_cyc != TAGE_STARVE_THRESH - 1) begin
       local_fails++;
-      $display("[FAIL] arb_starve_tst: credits=%0d exp=%0d",
-        u_dut.pred_credits_r, TAGE_PRED_CREDITS);
+      $display("[FAIL] arb_starve_tst: pq_not_full low at cycle %0d, exp %0d",
+        pq_low_cyc, TAGE_STARVE_THRESH - 1);
     end else if (verbose != 0) begin
-      $display("[INFO] arb_starve_tst: credits=%0d OK",
-        u_dut.pred_credits_r);
+      $display("[INFO] arb_starve_tst: pq_not_full low at cycle %0d OK",
+        pq_low_cyc);
+    end
+    if (granted == 0) begin
+      local_fails++;
+      $display("[FAIL] arb_starve_tst: the update was never granted");
+    end
+    if (u_dut.starve_ctr_r !== '0) begin
+      local_fails++;
+      $display("[FAIL] arb_starve_tst: starve count %0d after the grant",
+        u_dut.starve_ctr_r);
     end
 
     if (local_fails == 0)

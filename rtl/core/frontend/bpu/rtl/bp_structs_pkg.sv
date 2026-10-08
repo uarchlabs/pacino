@@ -530,6 +530,10 @@ package bp_structs_pkg;
     logic [VA_WIDTH-1:0]        target;     // resolved target
     bp_br_type_e                br_type;    // resolved type
     logic                       mispredict;
+    // The resolved instruction is 16 bits (BP-121, TD#164, ruled by
+    // Jeff). The backend knows its length; the FTQ forms the resolved
+    // fall-through of a taken jump from it, pc + 2 or + 4.
+    logic                       is_rvc;
   } ftq_resolve_t;
 
   // ftq_pd_info_t: one predecode slot of the IFU writeback.
@@ -747,8 +751,9 @@ package bp_structs_pkg;
   // ------------------------------------------------------------------
   // ftb_upd_t: the FTB update payload as one struct (BP-100).
   //
-  // The cluster boundary declares these same 14 fields FLAT, with no
-  // slot dimension and no ready (ftq_bpu_interfaces.md 8). The FTQ
+  // The cluster boundary declares these same 15 fields FLAT (14 until
+  // BP-121 added jmp_rvc, TD#164), with no slot dimension and no
+  // ready (ftq_bpu_interfaces.md 8). The FTQ
   // has two update channels and the FTB has one port, so
   // ftq_ftb_sched carries two of these and flattens the winner back
   // onto the cluster's flat group. The flat ports are NOT replaced:
@@ -771,6 +776,7 @@ package bp_structs_pkg;
     logic                       is_call;    // jump is a call
     logic                       is_ret;     // jump is a return
     logic                       is_jalr;    // jump is indirect
+    logic                       jmp_rvc;    // jump is 16-bit (TD#164)
     logic [VA_WIDTH-1:0]        pft_addr;   // block fall-through
   } ftb_upd_t;
 

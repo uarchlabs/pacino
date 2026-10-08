@@ -33,9 +33,12 @@
 //       third correction, later than both and superseding both for
 //       the slot it names.
 //   rsv placement (BP-119). ONE slot per resolution channel: a
-//       resolved branch the entry did not hold, placed by ftq_resolve.
-//       Architectural and the latest event for the slot, so it lands
-//       last.
+//       resolved branch the entry did not hold, placed by ftq_resolve,
+//       or since BP-121 the resolved branch the entry did hold,
+//       replacing its predicted slot. Architectural and the latest
+//       event for the slot, so it lands last. A slot written taken
+//       or mispredicted clears the slots above it (the executed block
+//       ends there).
 //
 // SAME-INDEX ORDER, resolved here because the array is this
 // module's state: pd > p3 > p2 > allocation on the SLOT array, and
@@ -152,6 +155,13 @@ module ftq_entry (
   input  logic [FTQ_IDX_BITS-1:0]   rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1],
   input  logic [TRX_SLOT_BITS-1:0]  rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1],
   input  bp_ftq_slot_t              rsv_wr_slot [0:NUM_RESOLVE_PORTS-1],
+  // The resolved fall-through of a taken jump, pc + 2 or + 4 (BP-121,
+  // TD#164). Written into pft_addr with a slot that resolved a taken
+  // jump: the block ended there, so its end is the jump's end, which
+  // the RAS commit pushes and the FTB update records.
+  input  logic [VA_WIDTH-1:0]       rsv_wr_pft  [0:NUM_RESOLVE_PORTS-1],
+  // The written slot ends the executed block: clear the slots above it.
+  input  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_end,
 
   // ---- reads -------------------------------------------------------
   input  logic [FTQ_IDX_BITS-1:0]   xlate_rd_idx,
@@ -332,10 +342,28 @@ module ftq_entry (
         end
       end
 
-      // rsv: the placed slot, last (see the header).
+      // rsv: the resolved slot, last (see the header). A slot that
+      // resolved TAKEN, or MISPREDICTED (the backend redirects at it and
+      // fetch continues in a new entry), ends the executed block, so
+      // every slot above it is off the path and is cleared, as the
+      // predecode kill does (BP-121): the commit walk then sees only
+      // executed branches.
       for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
         if (rsv_wr_val[p]) begin
           r_arr[rsv_wr_idx[p]].slot[rsv_wr_sel[p]] <= rsv_wr_slot[p];
+          if (rsv_wr_slot[p].taken &&
+              (rsv_wr_slot[p].br_type != COND) &&
+              (rsv_wr_slot[p].br_type != NO_BRANCH)) begin
+            r_arr[rsv_wr_idx[p]].pft_addr <= rsv_wr_pft[p];
+          end
+          if (rsv_wr_end[p]) begin
+            for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+              if (TRX_SLOT_BITS'(s) > rsv_wr_sel[p]) begin
+                r_arr[rsv_wr_idx[p]].slot[s].slot_valid <= 1'b0;
+                r_arr[rsv_wr_idx[p]].slot[s].taken      <= 1'b0;
+              end
+            end
+          end
         end
       end
     end

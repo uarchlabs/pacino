@@ -76,6 +76,11 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]    ckpt_wr_idx;
   logic                        rollback_valid;
   logic [FTQ_IDX_BITS-1:0]    rollback_ckpt_idx;
+  // BP-121: the corrected rollback (bp_history_decisions.md 3.5).
+  logic                        rollback_corr;
+  logic [1:0]                  rollback_n;
+  logic [1:0]                  rollback_tkn;
+  logic [1:0]                  rollback_pbit;
   logic [GHIST_PTR_BITS-1:0]  ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  phist_ptr;
   logic [GHIST_PTR_BITS-1:0]  ckpt_ghist_ptr;
@@ -97,6 +102,10 @@ module tb;
     .ckpt_wr_idx       (ckpt_wr_idx),
     .rollback_valid    (rollback_valid),
     .rollback_ckpt_idx (rollback_ckpt_idx),
+    .rollback_corr     (rollback_corr),
+    .rollback_n        (rollback_n),
+    .rollback_tkn      (rollback_tkn),
+    .rollback_pbit     (rollback_pbit),
     .ghist_ptr         (ghist_ptr),
     .phist_ptr         (phist_ptr),
     .ckpt_ghist_ptr    (ckpt_ghist_ptr),
@@ -125,6 +134,10 @@ module tb;
     ckpt_wr_idx       = '0;
     rollback_valid    = 1'b0;
     rollback_ckpt_idx = '0;
+    rollback_corr     = 1'b0;
+    rollback_n        = 2'd0;
+    rollback_tkn      = 2'b00;
+    rollback_pbit     = 2'b00;
   endtask
 
   task tick;
@@ -802,6 +815,70 @@ module tb;
     end
     pass_count++;
     $display("TC16 pass (BP-073 anchor: SC ST3 idx, wrap 64b = 0xC..0)");
+
+    // ---- TC17 (BP-121): the corrected rollback ----------------------
+    // bp_history_decisions.md 3.5, reopened and ruled by Jeff: correct
+    // on redirect. A two-bit bundle {1, 1} is checkpointed at index 4;
+    // the history moves on; a corrected rollback to index 4 with one
+    // bit, not taken, restores the pointer to the bundle's FIRST bit,
+    // writes the 0 there, and advances one: the pointer is the bundle
+    // start + 1 and the newest bit is 0. The folds match the golden
+    // recompute from the buffer. The entry's checkpoint is rewritten,
+    // so a plain rollback to index 4 afterwards returns to the same
+    // pointer. Then the same with two corrected bits {0, 1}.
+    do_reset();
+    begin
+      int k;
+      logic [GHIST_PTR_BITS-1:0] start_g;
+      for (k = 0; k < 10; k++) upd(1, nextbit(), 1'b0, '0, '0);
+      start_g      = ghist_ptr;
+      pred_taken   = 2'b11;
+      num_branches = 2'd2;
+      ckpt_wr_en   = 1'b1;
+      ckpt_wr_idx  = FTQ_IDX_BITS'(4);
+      tick();
+      drive_idle();
+      for (k = 0; k < 5; k++) upd(1, nextbit(), 1'b0, '0, '0);
+      rollback_valid    = 1'b1;
+      rollback_ckpt_idx = FTQ_IDX_BITS'(4);
+      rollback_corr     = 1'b1;
+      rollback_n        = 2'd1;
+      rollback_tkn      = 2'b00;
+      tick();
+      drive_idle();
+      tick();
+      if (ghist_ptr !== GHIST_PTR_BITS'(start_g + 1))
+        $fatal(1, "TC17 FAIL: corrected pointer %0d exp %0d", ghist_ptr,
+               start_g + 1);
+      if (ghr_buf[start_g] !== 1'b0)
+        $fatal(1, "TC17 FAIL: the corrected bit is not written");
+      check_all_folds("TC17a");
+      for (k = 0; k < 3; k++) upd(1, nextbit(), 1'b0, '0, '0);
+      rollback_valid    = 1'b1;
+      rollback_ckpt_idx = FTQ_IDX_BITS'(4);
+      tick();
+      drive_idle();
+      tick();
+      if (ghist_ptr !== GHIST_PTR_BITS'(start_g + 1))
+        $fatal(1, "TC17 FAIL: the checkpoint was not rewritten (%0d)",
+               ghist_ptr);
+      check_all_folds("TC17b");
+      rollback_valid    = 1'b1;
+      rollback_ckpt_idx = FTQ_IDX_BITS'(4);
+      rollback_corr     = 1'b1;
+      rollback_n        = 2'd2;
+      rollback_tkn      = 2'b10;   // bit 0 not taken, bit 1 taken
+      tick();
+      drive_idle();
+      tick();
+      if ((ghist_ptr !== GHIST_PTR_BITS'(start_g + 2)) ||
+          (ghr_buf[start_g] !== 1'b0) ||
+          (ghr_buf[GHIST_PTR_BITS'(start_g + 1)] !== 1'b1))
+        $fatal(1, "TC17 FAIL: two corrected bits (ptr %0d)", ghist_ptr);
+      check_all_folds("TC17c");
+    end
+    pass_count++;
+    $display("TC17 pass (BP-121 corrected rollback)");
 
     $display("----------------------------------------------------");
     $display("BP-072: %0d directed test cases passed", pass_count);

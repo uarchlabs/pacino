@@ -43,6 +43,18 @@ module bp_history
   // -- Rollback: restore pointer from internal checkpoint by index
   input  logic                         rollback_valid,
   input  logic [FTQ_IDX_BITS-1:0]     rollback_ckpt_idx,
+  // -- Corrected rollback (BP-121; bp_history_decisions.md 3.5
+  //    reopened and ruled by Jeff: correct on redirect). With
+  //    rollback_corr set the pointer is restored to the FIRST bit of
+  //    the named entry's bundle, rollback_n corrected bits are written
+  //    there (rollback_tkn, and rollback_pbit into the PHR), and the
+  //    pointer advances past them; the entry's checkpoint is rewritten
+  //    to match. Clear: the pointer is restored past the bundle as
+  //    before BP-121.
+  input  logic                         rollback_corr,
+  input  logic [1:0]                   rollback_n,      // 0, 1, 2
+  input  logic [1:0]                   rollback_tkn,
+  input  logic [1:0]                   rollback_pbit,
 
   // -- Current pointer outputs (module-owned, for FTQ build)
   output logic [GHIST_PTR_BITS-1:0]   ghist_ptr,
@@ -74,6 +86,9 @@ module bp_history
 
   logic [GHIST_PTR_BITS-1:0] ckpt_gptr [FTQ_DEPTH];
   logic [PHIST_PTR_BITS-1:0] ckpt_pptr [FTQ_DEPTH];
+  // The bundle size of each checkpoint, so the bundle's first bit is
+  // the checkpoint minus it (BP-121, the corrected rollback).
+  logic [1:0]                ckpt_nb   [FTQ_DEPTH];
 
   bp_folded_hist_t fh_r;
 
@@ -185,6 +200,7 @@ module bp_history
       for (idx_i = 0; idx_i < FTQ_DEPTH; idx_i++) begin
         ckpt_gptr[idx_i] <= {GHIST_PTR_BITS{1'b0}};
         ckpt_pptr[idx_i] <= {PHIST_PTR_BITS{1'b0}};
+        ckpt_nb[idx_i]   <= 2'd0;
       end
 
     end else if (rollback_valid) begin : rb_apply
@@ -200,74 +216,100 @@ module bp_history
       // fold_ghr recompute.
       logic [GHIST_PTR_BITS-1:0] rb_gptr;
       logic [PHIST_PTR_BITS-1:0] rb_pptr;
+      logic [GHIST_PTR_BITS-1:0] rb_gbase;
+      logic [PHIST_PTR_BITS-1:0] rb_pbase;
+      logic [GHR_WIDTH-1:0]      rb_ghr;
+      logic [PHR_WIDTH-1:0]      rb_phr;
       int                        rb_anchor;
       rb_gptr     = ckpt_gptr[rollback_ckpt_idx];
       rb_pptr     = ckpt_pptr[rollback_ckpt_idx];
+      rb_ghr      = ghr_mem;
+      rb_phr      = phr_mem;
+      // The corrected rollback (BP-121): back to the bundle's first
+      // bit, write the corrected bits, advance past them, and record
+      // the corrected bundle in the entry's checkpoint.
+      if (rollback_corr) begin
+        rb_gbase = rb_gptr - GHIST_PTR_BITS'(ckpt_nb[rollback_ckpt_idx]);
+        rb_pbase = rb_pptr - PHIST_PTR_BITS'(ckpt_nb[rollback_ckpt_idx]);
+        for (int k = 0; k < 2; k++) begin
+          if (k < int'(rollback_n)) begin
+            rb_ghr[(int'(rb_gbase) + k) % GHR_WIDTH] = rollback_tkn[k];
+            rb_phr[(int'(rb_pbase) + k) % PHR_WIDTH] = rollback_pbit[k];
+          end
+        end
+        rb_gptr = rb_gbase + GHIST_PTR_BITS'(rollback_n);
+        rb_pptr = rb_pbase + PHIST_PTR_BITS'(rollback_n);
+        ckpt_gptr[rollback_ckpt_idx] <= rb_gptr;
+        ckpt_pptr[rollback_ckpt_idx] <= rb_pptr;
+        ckpt_nb[rollback_ckpt_idx]   <= rollback_n;
+        ghr_mem <= rb_ghr;
+        phr_mem <= rb_phr;
+      end
       rb_anchor   = (int'(rb_gptr) - 1 + GHR_WIDTH) % GHR_WIDTH;
       ghist_ptr_r <= rb_gptr;
       phist_ptr_r <= rb_pptr;
       // TAGE T1
-      fh_r.tage_t1_idx_fh  <= TAGE_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.tage_t1_idx_fh  <= TAGE_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[1], TAGE_TBL_FH[1]));
-      fh_r.tage_t1_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.tage_t1_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[1], TAGE_TBL_FH1[1]));
-      fh_r.tage_t1_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.tage_t1_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[1], TAGE_TBL_FH2[1]));
       // TAGE T2
-      fh_r.tage_t2_idx_fh  <= TAGE_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.tage_t2_idx_fh  <= TAGE_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[2], TAGE_TBL_FH[2]));
-      fh_r.tage_t2_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.tage_t2_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[2], TAGE_TBL_FH1[2]));
-      fh_r.tage_t2_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.tage_t2_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[2], TAGE_TBL_FH2[2]));
       // TAGE T3
-      fh_r.tage_t3_idx_fh  <= TAGE_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.tage_t3_idx_fh  <= TAGE_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[3], TAGE_TBL_FH[3]));
-      fh_r.tage_t3_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.tage_t3_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[3], TAGE_TBL_FH1[3]));
-      fh_r.tage_t3_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.tage_t3_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[3], TAGE_TBL_FH2[3]));
       // TAGE T4
-      fh_r.tage_t4_idx_fh  <= TAGE_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.tage_t4_idx_fh  <= TAGE_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[4], TAGE_TBL_FH[4]));
-      fh_r.tage_t4_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.tage_t4_tag_fh1 <= TAGE_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[4], TAGE_TBL_FH1[4]));
-      fh_r.tage_t4_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.tage_t4_tag_fh2 <= TAGE_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, TAGE_TBL_HIST[4], TAGE_TBL_FH2[4]));
       // ITTAGE IT1
-      fh_r.it_t1_idx_fh    <= IT_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.it_t1_idx_fh    <= IT_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[1], IT_TBL_FH[1]));
-      fh_r.it_t1_tag_fh1   <= IT_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.it_t1_tag_fh1   <= IT_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[1], IT_TBL_FH1[1]));
-      fh_r.it_t1_tag_fh2   <= IT_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.it_t1_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[1], IT_TBL_FH2[1]));
       // ITTAGE IT2
-      fh_r.it_t2_idx_fh    <= IT_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.it_t2_idx_fh    <= IT_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[2], IT_TBL_FH[2]));
-      fh_r.it_t2_tag_fh1   <= IT_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.it_t2_tag_fh1   <= IT_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[2], IT_TBL_FH1[2]));
-      fh_r.it_t2_tag_fh2   <= IT_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.it_t2_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[2], IT_TBL_FH2[2]));
       // ITTAGE IT3
-      fh_r.it_t3_idx_fh    <= IT_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.it_t3_idx_fh    <= IT_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[3], IT_TBL_FH[3]));
-      fh_r.it_t3_tag_fh1   <= IT_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.it_t3_tag_fh1   <= IT_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[3], IT_TBL_FH1[3]));
-      fh_r.it_t3_tag_fh2   <= IT_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.it_t3_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[3], IT_TBL_FH2[3]));
       // ITTAGE IT4
-      fh_r.it_t4_idx_fh    <= IT_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.it_t4_idx_fh    <= IT_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[4], IT_TBL_FH[4]));
-      fh_r.it_t4_tag_fh1   <= IT_MAX_FH1'(fold_ghr(ghr_mem,
+      fh_r.it_t4_tag_fh1   <= IT_MAX_FH1'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[4], IT_TBL_FH1[4]));
-      fh_r.it_t4_tag_fh2   <= IT_MAX_FH2'(fold_ghr(ghr_mem,
+      fh_r.it_t4_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[4], IT_TBL_FH2[4]));
       // SC ST1-ST3 (H = W = SC_TBL_HIST)
-      fh_r.sc_t1_idx_fh    <= SC_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.sc_t1_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, SC_TBL_HIST[1], SC_TBL_HIST[1]));
-      fh_r.sc_t2_idx_fh    <= SC_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.sc_t2_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, SC_TBL_HIST[2], SC_TBL_HIST[2]));
-      fh_r.sc_t3_idx_fh    <= SC_MAX_FH'(fold_ghr(ghr_mem,
+      fh_r.sc_t3_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, SC_TBL_HIST[3], SC_TBL_HIST[3]));
 
     end else begin : nrm
@@ -628,6 +670,7 @@ module bp_history
       if (ckpt_wr_en) begin
         ckpt_gptr[ckpt_wr_idx] <= nxt_gptr;
         ckpt_pptr[ckpt_wr_idx] <= nxt_pptr;
+        ckpt_nb[ckpt_wr_idx]   <= num_branches;
         ckpt_ghist_ptr         <= nxt_gptr;
         ckpt_phist_ptr         <= nxt_pptr;
       end

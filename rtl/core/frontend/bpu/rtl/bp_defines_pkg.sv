@@ -205,8 +205,12 @@ package bp_defines_pkg;
       + 2 * (1 + FTB_BR_RPOS_BITS + FTB_BR_TGT_BITS
                + TAR_STAT_BITS + FTB_CONF_WIDTH)         // br0 + br1
       + (1 + FTB_BR_RPOS_BITS + FTB_JMP_TGT_BITS
-               + TAR_STAT_BITS + 3)                      // jump
+               + TAR_STAT_BITS + 4)                      // jump
       + PFTADDR_BITS;                                    // pftAddr
+  // The jump term's 4 type bits are isCall, isRet, isJalr and, since
+  // BP-121 (TD#164, ruled by Jeff), isRvc: the jump is a 16-bit
+  // instruction, so its fall-through is the jump PC + 2, else + 4. It
+  // read 3.
   // FTB_ENTRY_WIDTH and FTB_SET_WIDTH are the LOGICAL entry/set widths
   // (1 entry-valid + the data bits per way). The data array ftb_array
   // stores only the data bits per way (FTB_RAM_* below); the

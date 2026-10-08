@@ -221,8 +221,8 @@ module ittage (
   // ----------------------------------------------------------------
   // Credit arbiter registers
   // ----------------------------------------------------------------
-  logic [PRED_CRED_W-1:0] pred_credits_r;
-  logic [UPD_CRED_W-1:0]  upd_credits_r;
+  // BP-121: the credit counters are retired (see the arbiter); the
+  // starvation count remains.
   logic [STARVE_W-1:0]     starve_ctr_r;
 
   // ----------------------------------------------------------------
@@ -240,7 +240,6 @@ module ittage (
                  && (pq_tail_r[PQ_IDX_W]
                      != pq_head_r[PQ_IDX_W]);
   assign pq_empty   = (pq_head_r == pq_tail_r);
-  assign pq_not_full = !pq_full;
 
   always_ff @(posedge clk) begin : pq_ff
     if (!rstn) begin
@@ -280,6 +279,12 @@ module ittage (
                  && (uq_tail_r[UQ_IDX_W]
                      != uq_head_r[UQ_IDX_W]);
   assign uq_empty = (uq_head_r == uq_tail_r);
+
+  // Not full, and no starving update asking for this p0 cycle (see the
+  // arbiter, BP-121). Registered terms only.
+  assign pq_not_full = !pq_full &&
+                       !(!uq_empty &&
+                         (starve_ctr_r >= STARVE_W'(ITTAGE_STARVE_THRESH)));
   assign upd_rdy  = {NUM_PRED_SLOTS{!uq_full}};
 
   always_ff @(posedge clk) begin : uq_ff
@@ -306,74 +311,34 @@ module ittage (
   end
 
   // ----------------------------------------------------------------
-  // Credit arbiter: combinational grant logic
-  // Rules applied in priority order per bp_arb_spec.md section 4.5.
-  // Six active rules (Rule 1 eliminated with RB removal).
+  // Arbiter: a prediction is never delayed by an update (BP-121,
+  // ruled by Jeff), as in tage.sv: the cluster reads the ITTAGE result
+  // at a fixed p2, matched by branch_id, and a prediction held back by
+  // an update grant left every later result a cycle late.
+  //   pred    a prediction is presented or queued: grant it
+  //   upd     otherwise an update is presented or queued: grant it
+  //   hold    an update that has waited ITTAGE_STARVE_THRESH cycles
+  //           deasserts pq_not_full for a cycle (the FTQ's H1 hold)
+  // The credit counters of bp_arb_spec.md 4.5 are retired.
   // ----------------------------------------------------------------
   always_comb begin : arb_comb
     arb_grant_pred = 1'b0;
     arb_grant_upd  = 1'b0;
-
-    // Rule 2: starvation override (highest priority)
-    if (uq_has_data_w
-        && (starve_ctr_r
-            >= STARVE_W'(ITTAGE_STARVE_THRESH))) begin
-      arb_grant_upd = 1'b1;
-    end
-    // Rules 3/4: both queues have data
-    else if (pq_has_data_w && uq_has_data_w) begin
-      if (pred_credits_r > '0)
-        // Rule 3: pred has credits
-        arb_grant_pred = 1'b1;
-      else
-        // Rule 4: pred credits exhausted
-        arb_grant_upd = 1'b1;
-    end
-    // Rule 5: PQ only (UQ empty)
-    else if (pq_has_data_w && !uq_has_data_w) begin
+    if (pq_has_data_w)
       arb_grant_pred = 1'b1;
-    end
-    // Rule 6: UQ only
-    else if (!pq_has_data_w && uq_has_data_w) begin
+    else if (uq_has_data_w)
       arb_grant_upd = 1'b1;
-    end
-    // Rule 7: both empty -- no grant (implicit)
   end
 
-  // ----------------------------------------------------------------
-  // Credit register updates
-  // ----------------------------------------------------------------
-  always_ff @(posedge clk) begin : arb_cred_ff
+  // Starvation count: cycles an update has waited. Reset on a grant.
+  always_ff @(posedge clk) begin : arb_starve_ff
     if (!rstn) begin
-      pred_credits_r <=
-        PRED_CRED_W'(ITTAGE_PRED_CREDITS);
-      upd_credits_r  <=
-        UPD_CRED_W'(ITTAGE_UPD_CREDITS);
-      starve_ctr_r   <= '0;
-    end else begin
-      if (uq_has_data_w
-          && (starve_ctr_r
-              >= STARVE_W'(ITTAGE_STARVE_THRESH))) begin
-        // Rule 2 fired: reset starve, reload upd_credits
-        starve_ctr_r  <= '0;
-        upd_credits_r <= UPD_CRED_W'(ITTAGE_UPD_CREDITS);
-      end else if (pq_has_data_w && uq_has_data_w) begin
-        if (pred_credits_r > '0) begin
-          // Rule 3 fired: dec pred_credits, inc starve
-          pred_credits_r <=
-            pred_credits_r - PRED_CRED_W'(1);
-          starve_ctr_r   <=
-            starve_ctr_r + STARVE_W'(1);
-        end else begin
-          // Rule 4 fired: reload all credits, reset starve
-          pred_credits_r <=
-            PRED_CRED_W'(ITTAGE_PRED_CREDITS);
-          upd_credits_r  <=
-            UPD_CRED_W'(ITTAGE_UPD_CREDITS);
-          starve_ctr_r   <= '0;
-        end
-      end
-      // Rules 5, 6, 7: no credit changes
+      starve_ctr_r <= '0;
+    end else if (arb_grant_upd) begin
+      starve_ctr_r <= '0;
+    end else if (uq_has_data_w &&
+                 (starve_ctr_r < STARVE_W'(ITTAGE_STARVE_THRESH))) begin
+      starve_ctr_r <= starve_ctr_r + STARVE_W'(1);
     end
   end
 

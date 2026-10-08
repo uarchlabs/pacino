@@ -86,12 +86,11 @@ module tb;
   // VA_WIDTH bits on both sides.
   localparam logic [VA_WIDTH-1:0] BLK_SZ = VA_WIDTH'(FTB_BLOCK_BYTES);
 
-  // SC credit-arbiter counter widths, restated exactly as bp_cluster
-  // derives them, so the group A reset values and the group H counter
-  // checks are compared at the design's own widths (bp_arb_spec 4.5).
-  localparam int SC_PRED_CRED_W_TB = $clog2(SC_PRED_CREDITS + 1);
-  localparam int SC_UPD_CRED_W_TB  = $clog2(SC_UPD_CREDITS  + 1);
-  localparam int SC_STARVE_W_TB    = $clog2(SC_STARVE_THRESH + 1);
+  // SC arbiter starvation counter width, restated exactly as
+  // bp_cluster derives it (two past the threshold, BP-121), so the
+  // group A reset value and the group H counter checks are compared at
+  // the design's own width. The credit counters were retired by BP-121.
+  localparam int SC_STARVE_W_TB    = $clog2(SC_STARVE_THRESH + 3);
 
   // -----------------------------------------------------------------
   // DUT port signals (names match bp_cluster.sv)
@@ -153,6 +152,7 @@ module tb;
   logic                       ftb_upd_is_call_u0;
   logic                       ftb_upd_is_ret_u0;
   logic                       ftb_upd_is_jalr_u0;
+  logic                       ftb_upd_jmp_rvc_u0;   // BP-121, TD#164
   logic [VA_WIDTH-1:0]        ftb_upd_pft_addr_u0;
   logic                       ftb_flush_px;
 
@@ -174,6 +174,10 @@ module tb;
 
   logic                     ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx;
+  logic                     ftq_rollback_corr;    // BP-121
+  logic [1:0]               ftq_rollback_n;
+  logic [1:0]               ftq_rollback_tkn;
+  logic [1:0]               ftq_rollback_pbit;
 
   logic [GHIST_PTR_BITS-1:0] ghist_ptr;
   logic [PHIST_PTR_BITS-1:0] phist_ptr;
@@ -256,6 +260,7 @@ module tb;
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_flush_px          (ftb_flush_px),
     .tage_upd_val_u0       (tage_upd_val_u0),
@@ -274,6 +279,10 @@ module tb;
     .ras_flush_snapshot    (ras_flush_snapshot),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
+    .ftq_rollback_corr     (ftq_rollback_corr),
+    .ftq_rollback_n        (ftq_rollback_n),
+    .ftq_rollback_tkn      (ftq_rollback_tkn),
+    .ftq_rollback_pbit     (ftq_rollback_pbit),
     .ghist_ptr             (ghist_ptr),
     .phist_ptr             (phist_ptr),
     .ckpt_ghist_ptr        (ckpt_ghist_ptr),
@@ -488,6 +497,7 @@ module tb;
     ftb_upd_is_call_u0    = 1'b0;
     ftb_upd_is_ret_u0     = 1'b0;
     ftb_upd_is_jalr_u0    = 1'b0;
+    ftb_upd_jmp_rvc_u0    = 1'b0;
     ftb_upd_pft_addr_u0   = '0;
   endtask
 
@@ -518,6 +528,10 @@ module tb;
     ras_flush_snapshot    = '0;
     ftq_rollback_val      = 1'b0;
     ftq_rollback_idx      = '0;
+    ftq_rollback_corr     = 1'b0;
+    ftq_rollback_n        = 2'd0;
+    ftq_rollback_tkn      = 2'b00;
+    ftq_rollback_pbit     = 2'b00;
     tage_enable_aging     = 1'b0;
     tage_aging_interval   = 32'd0;
     ittage_enable_aging   = 1'b0;
@@ -780,9 +794,15 @@ module tb;
     ftb_upd_is_call_u0    = is_call;
     ftb_upd_is_ret_u0     = is_ret;
     ftb_upd_is_jalr_u0    = is_jalr;
+    ftb_upd_jmp_rvc_u0    = jrvc_next;
     ftb_upd_pft_addr_u0   = pft;
     ftb_pulse();
   endtask
+
+  // The jump's rvc bit for the next ftb_alloc_jmp (BP-121, TD#164): the
+  // RAS pushes the jump PC + 2 for a 16-bit jump, + 4 otherwise. A case
+  // modelling a compressed jump sets it for that install.
+  logic jrvc_next = 1'b0;
 
   // -----------------------------------------------------------------
   // Fixture: RAS commit push
@@ -954,16 +974,15 @@ module tb;
     chk("A3 checkpoint write enable resets low",
         dut.w_ckpt_wr_en === 1'b0);
 
-    // SC credit-arbiter counts. Named in bp_arb_spec.md 4.5
-    // Initialization; the arbiter is group H's subject and these are
-    // its start values.
-    chk("A3 SC pred credits reset to SC_PRED_CREDITS",
-        dut.r_sc_pred_credits ===
-          SC_PRED_CRED_W_TB'(SC_PRED_CREDITS));
-    chk("A3 SC upd credits reset to SC_UPD_CREDITS",
-        dut.r_sc_upd_credits === SC_UPD_CRED_W_TB'(SC_UPD_CREDITS));
+    // SC arbiter state. The arbiter is group H's subject. BP-121
+    // retired the credit counters with rules 2 to 4 of bp_arb_spec.md
+    // 4.5 (ruled by Jeff); two checks read them here ("A3 SC pred
+    // credits reset to SC_PRED_CREDITS", "A3 SC upd credits reset to
+    // SC_UPD_CREDITS") and are removed. The starve counter remains.
     chk("A3 SC starve counter resets to zero",
         dut.r_sc_starve_ctr === {SC_STARVE_W_TB{1'b0}});
+    chk("A3 no SC starvation hold out of reset",
+        dut.w_sc_hold === 1'b0);
     chk("A3 no SC grant out of reset",
         (dut.w_sc_grant_pred === 1'b0)
      && (dut.w_sc_grant_upd  === 1'b0));
@@ -1376,10 +1395,16 @@ module tb;
 
     // -- C1f. Indirect, ITTAGE hits -> ITTAGE target.
     //    The IT1 entry is written at the index and tag the DUT itself
-    //    computed for this PC. bp_history does not advance across
-    //    these requests (the uBTB misses, so num_branches is 0), so
-    //    the folded history the hash uses is identical for the seeding
-    //    request and the checking request.
+    //    computed for this PC, in the request's p0 cycle, before its
+    //    p1 read. BP-121: the hit is checked on that request's own p2.
+    //    It was checked on a second request, which relied on the
+    //    history not advancing between the two; under the corrected
+    //    rollback (bp_history_decisions.md 3.5, ruled by Jeff) the
+    //    first request's p2 redirect writes its bundle, the jump's one
+    //    bit, so the second request hashes with a different history.
+    //    The removed check was "C1f history held across the seeding
+    //    request" (ghist_ptr == 0); it is now "C1f the seeding request
+    //    hashes from the reset history" (ghist_ptr == 0 at its p0).
     do_reset();
     tage_bim_fill(2'b00);
     pc   = VA_WIDTH'('h00_0150_0000);
@@ -1391,14 +1416,9 @@ module tb;
     lp_clear_both(pc);
     req(pc, 6'h15);
     #1;                              // let the p0 hashes settle
-    ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'('h00_0000_7788)));
-    tick();
-    norq();
-    tick();
-    tick();                          // history did not advance
-    chk("C1f history held across the seeding request",
+    chk("C1f the seeding request hashes from the reset history",
         ghist_ptr === {GHIST_PTR_BITS{1'b0}});
-    req(pc, 6'h16);
+    ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'('h00_0000_7788)));
     tick();
     norq();
     tick();
@@ -1428,11 +1448,6 @@ module tb;
     tick();
     norq();
     tick();
-    tick();
-    req(pc, 6'h1D);
-    tick();
-    norq();
-    tick();
     chk("C1f2 ITTAGE reports a hit on the bit-38 GPA target",
         bpu_meta_ittage_p2[0].ittage_hit === 1'b1);
     chk("C1f2 bit-38 GPA target is stored whole, bits 40:39 clear",
@@ -1455,11 +1470,6 @@ module tb;
     req(pc, 6'h20);
     #1;                              // let the p0 hashes settle
     ittage_seed_it1_s0(it_tgt_enc(VA_WIDTH'(64'h180_0000_7788)));
-    tick();
-    norq();
-    tick();
-    tick();
-    req(pc, 6'h21);
     tick();
     norq();
     tick();
@@ -1721,6 +1731,7 @@ module tb;
     int                  mismatch_seen;
     int                  match_seen;
     int                  qstat_bad;
+    int                  sc_holds;
     logic [FTQ_IDX_BITS-1:0] idx_q;
 
     $display("---- GROUP D: p3 and supersession ----");
@@ -1814,7 +1825,19 @@ module tb;
     chk("D1c SC disabled: metadata write still valid",
         bpu_meta_val_p3 === 1'b1);
 
-    // -- D2. branch_id match rejecting a delayed response.
+    // -- D2. branch_id match and a delayed response.
+    //    BP-121 (the SC arbitration ruled by Jeff): the SC arbiter no
+    //    longer preempts a prediction for an update, so this stream,
+    //    which used to hold the TAGE response path on every rule-4
+    //    cycle, now produces NO delayed response. The checks below
+    //    were: "D2 delayed response constructed at the boundary"
+    //    (mismatched > 0; measured 28 mismatched, 4 matched) and "D2
+    //    queue status stayed not-full on every cycle" (3'b111 on all
+    //    40 cycles). They are now: every response matches its entry,
+    //    and sc_uq_not_full drops only for the one-cycle starvation
+    //    hold. The branch_id reject arm stays in the RTL as a guard and
+    //    is no longer reachable from the ports in this fixture.
+    //    The original description follows.
     //    Construction, per BP-093 binding decision 2: back-to-back
     //    requests with different FTQ indices while the TAGE response
     //    path is held. The hold is created at the boundary only: with
@@ -1856,6 +1879,7 @@ module tb;
     mismatch_seen = 0;
     match_seen    = 0;
     qstat_bad     = 0;
+    sc_holds      = 0;
     idx_q         = 6'h00;
     for (int i = 0; i < 40; i++) begin
       req(VA_WIDTH'('h00_0300_0000) + VA_WIDTH'(i * 32), idx_q);
@@ -1867,8 +1891,11 @@ module tb;
       // the single standing SC update request is granted by the credit
       // arbiter, so the SC update queue never backs up. A zero here is
       // a real failure, not an unknown-value probe.
-      if ({tage_pq_not_full, ittage_pq_not_full, sc_uq_not_full}
-          !== 3'b111) qstat_bad++;
+      // BP-121: the TAGE and ITTAGE queues never report full; the SC
+      // status drops for single cycles only (the starvation hold).
+      if ({tage_pq_not_full, ittage_pq_not_full} !== 2'b11) qstat_bad++;
+      if (!sc_uq_not_full && !dut.w_sc_hold) qstat_bad++;
+      if (!sc_uq_not_full) sc_holds++;
       if (dut.r_val_p2 === 1'b1 && dut.w_tage_pred_rdy_p2[0] === 1'b1)
       begin
         if (dut.w_tage_pred_meta_p2[0].branch_id !== dut.r_idx_p2) begin
@@ -1895,18 +1922,12 @@ module tb;
     sc_upd_val_u0        = '0;
     ubtb_upd_u0          = '0;
     chk("D2 at least one matched response observed", match_seen > 0);
-    if (mismatch_seen == 0) begin
-      $display(
-        "NOTE: D2 saw no delayed TAGE response at the boundary; the");
-      $display(
-        "      branch_id reject arm was not reached. Reported, not");
-      $display("      worked around (BP-093 decision 2).");
-      chk("D2 delayed response constructed at the boundary", 1'b0);
-    end else begin
-      chk("D2 delayed response constructed at the boundary", 1'b1);
-      $display("INFO: D2 matched %0d, mismatched %0d",
-               match_seen, mismatch_seen);
-    end
+    chk("D2 no delayed response under a standing SC update (BP-121)",
+        mismatch_seen == 0);
+    chk("D2 the standing SC update raised a starvation hold",
+        sc_holds > 0);
+    $display("INFO: D2 matched %0d, mismatched %0d, SC holds %0d",
+             match_seen, mismatch_seen, sc_holds);
     // The queue status the FTQ observes must stay legal throughout.
     //
     // BP-097. This check was !$isunknown of the three status bits. The
@@ -1916,7 +1937,7 @@ module tb;
     // left behind here. It now asserts the SPECIFIC value each bit
     // must hold, on every cycle of the D2 stream, and fails if any
     // cycle reports a full queue. Measured: 3'b111 on all 40 cycles.
-    chk("D2 queue status stayed not-full on every cycle",
+    chk("D2 queue status: full only for the SC starvation hold",
         qstat_bad == 0);
 
     sc_enable = 1'b0;
@@ -1935,6 +1956,8 @@ module tb;
     logic [GHIST_PTR_BITS-1:0] g0;
     logic [PHIST_PTR_BITS-1:0] p0;
     int                        sweep_pairs;
+    int                        lo_i;
+    int                        hi_i;
     int                        tie_seen;
     // Expected branch PCs, derived through slot_pc() so the position
     // granularity is not baked into a constant. The path bit is
@@ -1972,6 +1995,11 @@ module tb;
     chk_eq("TC-A pred_pc[0]", dut.w_hist_pred_pc[0], xpc0);
     chk_eq("TC-A pred_pc[1]", dut.w_hist_pred_pc[1], xpc1);
     chk("TC-A pred_taken", dut.w_hist_pred_taken === 2'b10);
+    // BP-121: the p1 successor of the not-taken slot 0 is the address
+    // fetched after it. Slot 1 is taken, so that is slot 1's target,
+    // not the block fall-through, which it was before BP-121.
+    chk_eq("TC-A p1 successor of not-taken slot 0 is slot 1's target",
+           dut.w_succ_p1[0], base + VA_WIDTH'('h200));
     chk("TC-A path_bit_0 is pc[3]^pc[2] of the slot 0 branch PC",
         dut.u_bp_history.path_bit_0 === (xpc0[3] ^ xpc0[2]));
     chk("TC-A path_bit_1 is pc[3]^pc[2] of the slot 1 branch PC",
@@ -1984,6 +2012,29 @@ module tb;
     chk("TC-A PHR took the two path bits in order",
         phr_buf[1:0] === {xpc1[3] ^ xpc1[2], xpc0[3] ^ xpc0[2]});
     chk("TC-A GHR took 0 then 1", ghr_buf[1:0] === 2'b10);
+
+    // -- TC-A2 (BP-121). Slot 0 taken: slot 1 is past the taken branch
+    //    and off the predicted path, so the history takes one bit, slot
+    //    0's. Before BP-121 slot 1 added its bit as well (two bits).
+    do_reset();
+    pc   = VA_WIDTH'('h00_0000_1000);
+    base = blk_base(pc);
+    e       = '0;
+    e.br0   = mk_cond(1'b1, 4'd1, base + VA_WIDTH'('h100), base, 1'b1);
+    e.br1   = mk_cond(1'b1, 4'd2, base + VA_WIDTH'('h200), base, 1'b1);
+    e.pft   = ub_pft_field(base + BLK_SZ, base);
+    ubtb_install(pc, e);
+    lp_clear_both(pc);
+    g0 = ghist_ptr;
+    req(pc, 6'h30);
+    tick();
+    norq();
+    chk("TC-A2 one history bit: the taken slot 0",
+        dut.w_hist_num_branches === 2'd1);
+    chk("TC-A2 the bit is taken", dut.w_hist_pred_taken[0] === 1'b1);
+    tick();
+    chk("TC-A2 ghist pointer advanced by 1",
+        ghist_ptr === GHIST_PTR_BITS'(g0 + 1));
 
     // -- TC-B. Same entry, unaligned request PC 0x101C, region offset
     //    28 bytes. The entry is shared by every PC in the 32-byte
@@ -2014,6 +2065,8 @@ module tb;
     //    bound is derived, so the sweep covers 2**FTB_BR_POS_BITS
     //    positions at whatever granularity the parameter carries.
     sweep_pairs = 0;
+    lo_i        = 0;
+    hi_i        = 0;
     for (int p0i = 0; p0i < (1 << FTB_BR_POS_BITS); p0i++) begin
       for (int p1i = 0; p1i < (1 << FTB_BR_POS_BITS); p1i++) begin
         do_reset();
@@ -2030,8 +2083,14 @@ module tb;
         req(pc, 6'h32);
         tick();
         norq();
-        xpc0 = base + VA_WIDTH'(p0i << BR_POS_SHIFT);
-        xpc1 = base + VA_WIDTH'(p1i << BR_POS_SHIFT);
+        // BP-121: the p1 slots are put in position order (FE-10), so
+        // slot 0 is the lower position. Before BP-121 slot 0 was br0
+        // whatever its position: xpc0 = base + (p0i << BR_POS_SHIFT),
+        // xpc1 = base + (p1i << BR_POS_SHIFT).
+        lo_i = (p1i < p0i) ? p1i : p0i;
+        hi_i = (p1i < p0i) ? p0i : p1i;
+        xpc0 = base + VA_WIDTH'(lo_i << BR_POS_SHIFT);
+        xpc1 = base + VA_WIDTH'(hi_i << BR_POS_SHIFT);
         chk_eq_q("TC-C slot_pc[0]", dut.w_slot_pc_p1[0], xpc0);
         chk_eq_q("TC-C slot_pc[1]", dut.w_slot_pc_p1[1], xpc1);
         chk_q("TC-C path_bit_0",
@@ -3143,6 +3202,18 @@ module tb;
     tick_snoop();      // idx at p3
   endtask
 
+  // Run the block at pc n times (BP-121). Under the corrected history
+  // rollback (bp_history_decisions.md 3.5, ruled by Jeff) a block whose
+  // p2 view redirects writes its branch bits into the history each
+  // time, as executing it would, so two predictions of the same block
+  // hash alike only once the history windows hold nothing else. With n
+  // above the longest ITTAGE history (IT_TBL_HIST) every ITTAGE window
+  // is the block's own bits. Indices run from 0x30.
+  task automatic hist_settle(input logic [VA_WIDTH-1:0] pc, input int n);
+    for (int i = 0; i < n; i++)
+      req_to_p3(pc, FTQ_IDX_BITS'(6'h30 + i));
+  endtask
+
   // req_to_p3 that also returns the target the cluster published for
   // slot 0 at p2, the cluster's own reconstruction of the target.
   task automatic req_to_p3_tgt(input  logic [VA_WIDTH-1:0]     pc,
@@ -3420,6 +3491,9 @@ module tb;
                   pft, 1'b0);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
+    // BP-121: settle the history first (hist_settle); the two
+    // predictions below relied on it not moving.
+    hist_settle(pc, IT_TBL_HIST[IT_NUM_TABLES-1] + 2);
 
     req_to_p3(pc, 6'h0A);
     it_hit_1 = ftq_ittage[6'h0A][0].ittage_hit;
@@ -3473,6 +3547,8 @@ module tb;
     ubtb_clear_set(pc);
     lp_clear_both(pc);
     it_res = VA_WIDTH'(64'h180_0000_9AA0);
+    // BP-121: settle the history first, as G2.
+    hist_settle(pc, IT_TBL_HIST[IT_NUM_TABLES-1] + 2);
 
     req_to_p3(pc, 6'h2A);
     chk("G2b first prediction misses in ITTAGE",
@@ -3645,7 +3721,12 @@ module tb;
     do_reset();
     ftq_clear();
     clr_upd_chans();
-    tage_bim_fill(2'b00);
+    // BP-121: the bimodal is filled TAKEN (it was 2'b00). TAGE's p2
+    // result now arrives on time (the arbitration ruled by Jeff) and
+    // supplies the conditional's direction (fe_decisions.md 3.3), so a
+    // not-taken bimodal turned the successor to the fall-through; this
+    // case passed before only because TAGE's result came late.
+    tage_bim_fill(2'b11);
     pc   = VA_WIDTH'('h00_0650_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -3791,36 +3872,37 @@ module tb;
   endtask
 
   // =================================================================
-  // GROUP H -- the SC credit arbiter (bp_arb_spec.md 4.5)
+  // GROUP H -- the SC arbiter (bp_arb_spec.md 4.5; BP-121)
   // =================================================================
   //
-  // Implemented in bp_cluster in session-063 and never tested; BP-093
-  // left lines 981-983, 994 and 1010-1014 uncovered. The grant
-  // signals, the credit counters and the starve counter are internal
-  // nets and consumer_ready is not a port, so this group reads inside
-  // the design by necessity. Nothing is FORCED except where a rule is
-  // unreachable from the ports, which is called out where it happens.
+  // BP-121 (ruled by Jeff): a prediction is never delayed by an update.
+  // An SC update granted while a block is at p2 held the TAGE result
+  // (consumer_ready) and left every later TAGE and SC result late for
+  // the cluster's fixed reads. The arbiter now grants:
+  //   pred  a block is at p2 and the SC RAMs are ready (rule 1 guard)
+  //   upd   no block is at p2 and an update is presented
+  //   hold  an update that has waited SC_STARVE_THRESH cycles drops
+  //         sc_uq_not_full for one cycle, so the FTQ withholds that p0
+  //         request and the update is granted when its bubble is at p2
+  // The credit counters and rules 2 to 4 are retired. Before BP-121
+  // this group checked them (H1 to H3 credit and starve moves, H4/H5
+  // the rule-3 run of SC_PRED_CREDITS grants then the rule-4 update
+  // grant with the credits reloaded, H6 the forced rule-2 override);
+  // those checks are removed and listed in the BP-121 Results Capture.
   //
   // The two request terms, restated from bp_cluster.sv:
   //   w_sc_pred_req = r_val_p2 & sc_enable
   //   w_sc_upd_req  = sc_enable & sc_uq_not_full
   //                 & |(sc_upd_val_u0 & sc_upd_rdy)
-  // so a prediction request is "a request is at the p2 stage" and an
-  // update request is "an SC update is presented". BP-119 dropped the
-  // w_upd_cond_u0 term from the update request (it read "& |(sc_upd_val
-  // _u0 & w_upd_cond_u0 & sc_upd_rdy)", "presented on a COND channel");
-  // the COND term still gates the SC write. Every case below presents
-  // its SC update on a COND channel, so no expected value moved.
-  // Each case below constructs exactly the occupancy its rule names
-  // and reads back the grant AND the counter effects the rule
-  // specifies.
   task automatic group_h();
     logic [VA_WIDTH-1:0] pc;
-    logic [SC_PRED_CRED_W_TB-1:0] cred_before;
-    logic [SC_STARVE_W_TB-1:0]    starve_before;
-    int                           rule3_cycles;
+    logic [SC_STARVE_W_TB-1:0] starve_before;
+    int                        early_upd;
+    int                        hold_cyc;
+    int                        hold_n;
+    int                        grant_cyc;
 
-    $display("---- GROUP H: SC credit arbiter ----");
+    $display("---- GROUP H: SC arbiter ----");
 
     // Common fixture. SC counters uniform so no SC result depends on
     // an index, and the bimodal uniform so TAGE is constant.
@@ -3832,32 +3914,23 @@ module tb;
     ubtb_clear_set(pc);
     lp_clear_both(pc);
 
-    // -- H1. Rule 7: neither queue non-empty -> NO grant, and no
-    //    counter moves. sc_enable is high, so this is genuinely
-    //    "no requests" rather than "SC switched off".
+    // -- H1. Neither request: no grant, the starve counter holds.
     sc_enable = 1'b1;
     norq();
     repeat (4) tick();
     #1;
-    chk("H1 rule 7: no prediction request", dut.w_sc_pred_req === 1'b0);
-    chk("H1 rule 7: no update request", dut.w_sc_upd_req === 1'b0);
-    chk("H1 rule 7: no prediction grant",
-        dut.w_sc_grant_pred === 1'b0);
-    chk("H1 rule 7: no update grant", dut.w_sc_grant_upd === 1'b0);
-    cred_before   = dut.r_sc_pred_credits;
+    chk("H1 no prediction request", dut.w_sc_pred_req === 1'b0);
+    chk("H1 no update request", dut.w_sc_upd_req === 1'b0);
+    chk("H1 no prediction grant", dut.w_sc_grant_pred === 1'b0);
+    chk("H1 no update grant", dut.w_sc_grant_upd === 1'b0);
     starve_before = dut.r_sc_starve_ctr;
     tick();
-    chk("H1 rule 7: pred credits unchanged",
-        dut.r_sc_pred_credits === cred_before);
-    chk("H1 rule 7: starve counter unchanged",
+    chk("H1 starve counter unchanged",
         dut.r_sc_starve_ctr === starve_before);
-    // consumer_ready with SC enabled, ready and no update grant.
     chk("H1 consumer_ready high: SC enabled, ready, no update grant",
         dut.w_tage_consumer_ready === 1'b1);
 
-    // -- H2. Rule 5: prediction only. Grant prediction UNCONDITIONALLY
-    //    and consume NO prediction credit -- that is what separates
-    //    rule 5 from rule 3.
+    // -- H2. Prediction only: granted.
     do_reset();
     clr_upd_chans();
     sc_enable = 1'b1;
@@ -3866,38 +3939,22 @@ module tb;
     norq();
     tick();                          // 0x20 at p2
     #1;
-    cred_before   = dut.r_sc_pred_credits;
     starve_before = dut.r_sc_starve_ctr;
-    chk("H2 rule 5: prediction request present",
-        dut.w_sc_pred_req === 1'b1);
-    chk("H2 rule 5: no update request", dut.w_sc_upd_req === 1'b0);
-    chk("H2 rule 5: prediction granted",
-        dut.w_sc_grant_pred === 1'b1);
-    chk("H2 rule 5: no update granted",
-        dut.w_sc_grant_upd === 1'b0);
-    chk("H2 rule 5: SC RAM port went to the prediction",
+    chk("H2 prediction request present", dut.w_sc_pred_req === 1'b1);
+    chk("H2 no update request", dut.w_sc_upd_req === 1'b0);
+    chk("H2 prediction granted", dut.w_sc_grant_pred === 1'b1);
+    chk("H2 no update granted", dut.w_sc_grant_upd === 1'b0);
+    chk("H2 SC RAM port went to the prediction",
         dut.w_tage_consumer_ready === 1'b1);
     tick();
-    chk("H2 rule 5 consumes NO prediction credit",
-        dut.r_sc_pred_credits === cred_before);
-    chk("H2 rule 5 does not move the starve counter",
+    chk("H2 a prediction does not move the starve counter",
         dut.r_sc_starve_ctr === starve_before);
 
-    // -- H2b. Rule 5's sc_ready guard, the arm BP-093 left uncovered.
-    //    Rule 1 of section 4.5 blocks a prediction grant when the
-    //    response path cannot take a result; sc.sv exposes no
-    //    response-buffer flag and bp_cluster uses sc_ready in its
-    //    place, which is low until the SC RAM init completes.
-    //
-    //    Under the sim plusargs sc_ready is strapped HIGH
-    //    (+SC_FAST_INIT=1 makes it a constant in sc.sv), so this arm
-    //    cannot be reached at the ports in this build. The fast-init
-    //    strap itself is cleared for the duration of this case so the
-    //    real sram_init walk drives sc_ready, and it is restored
-    //    immediately afterwards. Clearing the strap also re-enables
-    //    the init write path into the SC RAMs, so the strap is put
-    //    back BEFORE any later case seeds them; sc_fill runs again
-    //    after it.
+    // -- H2b. The rule 1 guard: sc_ready low blocks the prediction
+    //    grant. Under the sim plusargs sc_ready is strapped HIGH
+    //    (+SC_FAST_INIT=1), so the strap is cleared for this case and
+    //    the real sram_init walk drives sc_ready; it is restored before
+    //    any later case seeds the SC RAMs.
     dut.u_sc.fast_init_r = 1'b0;
     rstn = 1'b0;
     clr_upd_chans();
@@ -3912,16 +3969,14 @@ module tb;
     #1;
     chk("H2b the SC init walk is running, so sc_ready is low",
         sc_ready === 1'b0);
-    chk("H2b rule 5 still sees a prediction request",
+    chk("H2b a prediction request is present",
         dut.w_sc_pred_req === 1'b1);
-    chk("H2b rule 5 sees no update request",
-        dut.w_sc_upd_req === 1'b0);
+    chk("H2b no update request", dut.w_sc_upd_req === 1'b0);
     chk("H2b rule 1 guard blocks the prediction grant",
         dut.w_sc_grant_pred === 1'b0);
     chk("H2b no update grant either", dut.w_sc_grant_upd === 1'b0);
     chk("H2b consumer_ready drops while SC cannot take a result",
         dut.w_tage_consumer_ready === 1'b0);
-    // Restore the strap and rebuild the fixture.
     dut.u_sc.fast_init_r = 1'b1;
     sc_enable = 1'b0;
     do_reset();
@@ -3934,210 +3989,87 @@ module tb;
     chk("H2b sc_ready restored for the remaining cases",
         sc_ready === 1'b1);
 
-    // -- H3. Rule 6: update only. Grant update unconditionally, no
-    //    credit change. No request is in flight, so nothing occupies
-    //    the prediction side.
-    sc_enable      = 1'b1;
-    ubtb_upd_u0[0] = mk_upd(COND, 1'b0, pc);
+    // -- H3. Update only (no block at p2): granted at once.
+    sc_enable        = 1'b1;
+    ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     sc_upd_val_u0[0] = 1'b1;
     norq();
     #1;
-    cred_before   = dut.r_sc_pred_credits;
-    starve_before = dut.r_sc_starve_ctr;
-    chk("H3 rule 6: no prediction request",
-        dut.w_sc_pred_req === 1'b0);
-    chk("H3 rule 6: update request present",
-        dut.w_sc_upd_req === 1'b1);
-    chk("H3 rule 6: update granted", dut.w_sc_grant_upd === 1'b1);
-    chk("H3 rule 6: no prediction granted",
-        dut.w_sc_grant_pred === 1'b0);
-    chk("H3 rule 6: the accept is presented at the boundary",
+    chk("H3 no prediction request", dut.w_sc_pred_req === 1'b0);
+    chk("H3 update request present", dut.w_sc_upd_req === 1'b1);
+    chk("H3 update granted", dut.w_sc_grant_upd === 1'b1);
+    chk("H3 no prediction granted", dut.w_sc_grant_pred === 1'b0);
+    chk("H3 the accept is presented at the boundary",
         sc_upd_rdy[0] === 1'b1);
     chk("H3 consumer_ready drops when the RAM port goes to an update",
         dut.w_tage_consumer_ready === 1'b0);
     tick();
-    chk("H3 rule 6 leaves pred credits unchanged",
-        dut.r_sc_pred_credits === cred_before);
-    chk("H3 rule 6 leaves the starve counter unchanged",
-        dut.r_sc_starve_ctr === starve_before);
+    chk("H3 a granted update leaves the starve counter at zero",
+        dut.r_sc_starve_ctr === '0);
     clr_upd_chans();
     repeat (2) tick();
 
-    // -- H4 and H5. Rules 3 and 4, reached together by holding BOTH
-    //    requests for a run of cycles. Rule 3 grants the prediction
-    //    while credits remain, decrementing pred_credits and
-    //    incrementing starve_ctr on each grant. When the credits
-    //    reach zero rule 4 takes over: it grants the update and
-    //    RELOADS both credit counters and RESETS the starve counter.
-    //
-    //    The whole cycle therefore runs SC_PRED_CREDITS rule-3 grants
-    //    followed by one rule-4 grant, which is checked explicitly.
+    // -- H4. Both requests standing: the prediction wins every cycle
+    //    and the update waits; its count reaches SC_STARVE_THRESH and
+    //    sc_uq_not_full drops for ONE cycle. The testbench honours it
+    //    as the FTQ does (no request that cycle), the bubble reaches
+    //    p2 two cycles later, and the update is granted there.
     do_reset();
     clr_upd_chans();
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
-    sc_enable      = 1'b1;
-    ubtb_upd_u0[0] = mk_upd(COND, 1'b0, pc);
+    sc_enable        = 1'b1;
+    ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     sc_upd_val_u0[0] = 1'b1;
-
-    // Fill the pipe so a prediction stands at p2 every cycle.
     req(pc, 6'h22);
     tick();
     req(pc, 6'h23);
     tick();                          // 0x22 at p2: both requests up
     #1;
-    chk("H4 rule 3: both sides have a request",
-        (dut.w_sc_pred_req === 1'b1)
-     && (dut.w_sc_upd_req === 1'b1));
-    chk("H4 rule 3: credits are available",
-        dut.r_sc_pred_credits > '0);
-    chk("H4 rule 3: prediction wins while credits remain",
-        dut.w_sc_grant_pred === 1'b1);
-    chk("H4 rule 3: the update does not win",
-        dut.w_sc_grant_upd === 1'b0);
-    chk("H4 rule 3: the update is NOT accepted at the boundary",
+    chk("H4 both sides have a request",
+        (dut.w_sc_pred_req === 1'b1) && (dut.w_sc_upd_req === 1'b1));
+    chk("H4 the prediction wins", dut.w_sc_grant_pred === 1'b1);
+    chk("H4 the update does not win", dut.w_sc_grant_upd === 1'b0);
+    chk("H4 the update is NOT accepted at the boundary",
         sc_upd_rdy[0] === 1'b0);
-
-    rule3_cycles = 0;
-    begin
-      logic [SC_PRED_CRED_W_TB-1:0] c_prev;
-      logic [SC_STARVE_W_TB-1:0]    s_prev;
-      logic                         rule4_seen;
-      rule4_seen = 1'b0;
-
-      // Keep both requests standing and step through the credit run.
-      for (int i = 0; i < 2 * SC_PRED_CREDITS + 4; i++) begin
-        c_prev = dut.r_sc_pred_credits;
-        s_prev = dut.r_sc_starve_ctr;
-        if (dut.w_sc_grant_pred === 1'b1) begin
-          rule3_cycles++;
-          req(pc, FTQ_IDX_BITS'(6'h24 + i));
-          tick();
-          #1;
-          chk_q("H4 rule 3 decremented pred credits",
-                dut.r_sc_pred_credits ===
-                  SC_PRED_CRED_W_TB'(c_prev - 1));
-          chk_q("H4 rule 3 incremented the starve counter",
-                dut.r_sc_starve_ctr ===
-                  SC_STARVE_W_TB'(s_prev + 1));
-        end else if (dut.w_sc_grant_upd === 1'b1) begin
-          // Rule 4: credits exhausted with both sides requesting.
-          chk_q("H5 rule 4 fires only with the credits exhausted",
-                dut.r_sc_pred_credits === '0);
-          chk_q("H5 rule 4 accepts the update at the boundary",
-                sc_upd_rdy[0] === 1'b1);
-          chk_q("H5 rule 4 drops consumer_ready for that cycle",
-                dut.w_tage_consumer_ready === 1'b0);
-          req(pc, FTQ_IDX_BITS'(6'h24 + i));
-          tick();
-          #1;
-          chk_q("H5 rule 4 reloaded pred credits",
-                dut.r_sc_pred_credits ===
-                  SC_PRED_CRED_W_TB'(SC_PRED_CREDITS));
-          chk_q("H5 rule 4 reloaded upd credits",
-                dut.r_sc_upd_credits ===
-                  SC_UPD_CRED_W_TB'(SC_UPD_CREDITS));
-          chk_q("H5 rule 4 reset the starve counter",
-                dut.r_sc_starve_ctr === '0);
-          rule4_seen = 1'b1;
-        end else begin
-          req(pc, FTQ_IDX_BITS'(6'h24 + i));
-          tick();
-          #1;
-        end
+    early_upd = 0;
+    hold_cyc  = -1;
+    hold_n    = 0;
+    grant_cyc = -1;
+    for (int i = 0; i < SC_STARVE_THRESH + 8; i++) begin
+      if (dut.w_sc_grant_upd && dut.w_sc_pred_req) early_upd++;
+      if (dut.w_sc_hold) begin
+        hold_n++;
+        if (hold_cyc < 0) hold_cyc = i;
       end
-      chk("H4 rule 3 was taken SC_PRED_CREDITS times per cycle run",
-          rule3_cycles >= SC_PRED_CREDITS);
-      chk("H5 rule 4 was reached", rule4_seen === 1'b1);
-      $display("INFO: H4 rule-3 grants observed: %0d", rule3_cycles);
+      if ((grant_cyc < 0) && dut.w_sc_grant_upd) grant_cyc = i;
+      // The FTQ withholds p0 while sc_uq_not_full is low (H1 hold).
+      if (sc_uq_not_full) req(pc, FTQ_IDX_BITS'(6'h24 + i));
+      else                norq();
+      tick();
+      #1;
     end
-    norq();
-    clr_upd_chans();
-    repeat (2) tick();
-
-    // -- H5b. Rule 4's other entry condition: both requests with
-    //    sc_ready low takes the same arm, because the rule-3 test is
-    //    (credits > 0) AND sc_ready. Covered structurally by the
-    //    grant expression; the sc_ready term itself is proved in H2b.
-
-    // -- H6. Rule 2, the starvation override, and its counter
-    //    effects: reset starve_ctr, reload upd_credits.
-    //
-    //    TD#39 (bp_arb_spec.md 4.2) records that this rule may be
-    //    UNREACHABLE at the shipped parameters, and the run above
-    //    confirms it: SC_PRED_CREDITS is 4 and SC_STARVE_THRESH is 8,
-    //    starve_ctr only increments on a rule-3 grant, and rule 4
-    //    resets it once the four credits are spent -- so it tops out
-    //    at 4 and can never reach 8. The H4/H5 loop above observed
-    //    exactly that.
-    //
-    //    The rule IS implemented, so it is tested by seeding the
-    //    starve counter at the threshold and presenting an update
-    //    request. That is a forced start state, stated plainly: it
-    //    proves the implemented arm behaves as 4.5 rule 2 specifies,
-    //    NOT that the arm is reachable in traffic. Settling TD#39 is
-    //    a parameter decision, not a testbench one.
-    do_reset();
-    clr_upd_chans();
-    tage_bim_fill(2'b11);
-    sc_fill(6'b011111);
-    ubtb_clear_set(pc);
-    lp_clear_both(pc);
-    sc_enable = 1'b1;
-
-    chk("H6 TD#39: starve threshold is above the credit budget",
-        SC_STARVE_THRESH > SC_PRED_CREDITS);
-
-    // Seed the counter at the threshold and spend an update credit so
-    // the reload is observable as a change.
-    dut.r_sc_starve_ctr  = SC_STARVE_W_TB'(SC_STARVE_THRESH);
-    dut.r_sc_upd_credits = '0;
-    ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
-    sc_upd_val_u0[0] = 1'b1;
-    // Present a prediction as well, so rule 2's PRIORITY over rules 3
-    // and 4 is what is being read, not merely rule 6.
-    req(pc, 6'h30);
-    tick();
-    req(pc, 6'h31);
-    tick();
-    dut.r_sc_starve_ctr  = SC_STARVE_W_TB'(SC_STARVE_THRESH);
-    dut.r_sc_upd_credits = '0;
-    #1;
-    chk("H6 rule 2: both sides request, so rules 3/4 would apply",
-        (dut.w_sc_pred_req === 1'b1)
-     && (dut.w_sc_upd_req === 1'b1));
-    chk("H6 rule 2: the starve counter is at the threshold",
-        dut.r_sc_starve_ctr >= SC_STARVE_W_TB'(SC_STARVE_THRESH));
-    chk("H6 rule 2: the update wins on the starvation override",
-        dut.w_sc_grant_upd === 1'b1);
-    chk("H6 rule 2: the prediction is overridden",
-        dut.w_sc_grant_pred === 1'b0);
-    chk("H6 rule 2: consumer_ready drops for that cycle",
-        dut.w_tage_consumer_ready === 1'b0);
-    tick();
-    chk("H6 rule 2 reset the starve counter",
-        dut.r_sc_starve_ctr === '0);
-    chk("H6 rule 2 reloaded upd credits",
-        dut.r_sc_upd_credits === SC_UPD_CRED_W_TB'(SC_UPD_CREDITS));
+    chk("H4 no update grant while a block is at p2", early_upd == 0);
+    chk("H4 the starvation hold fired", hold_cyc >= 0);
+    chk("H4 the hold is one cycle wide", hold_n == 1);
+    chk("H4 the update is granted two cycles after the hold",
+        (grant_cyc >= 0) && (grant_cyc == hold_cyc + 2));
+    $display("INFO: H4 hold at %0d, update grant at %0d", hold_cyc,
+             grant_cyc);
     norq();
     clr_upd_chans();
     repeat (2) tick();
 
     // -- H7. consumer_ready, every arm of
     //      ~sc_enable | (sc_ready & ~w_sc_grant_upd)
-    //    SC disabled: the cluster does not wait on SC at all, so TAGE
-    //    is never held whatever the arbiter is doing.
     sc_enable = 1'b0;
     #1;
     chk("H7 consumer_ready is high whenever SC is disabled",
         dut.w_tage_consumer_ready === 1'b1);
     chk("H7 a disabled SC raises no requests",
-        (dut.w_sc_pred_req === 1'b0)
-     && (dut.w_sc_upd_req === 1'b0));
-
-    // SC enabled and ready with an update granted -> held.
+        (dut.w_sc_pred_req === 1'b0) && (dut.w_sc_upd_req === 1'b0));
     sc_enable        = 1'b1;
     ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     sc_upd_val_u0[0] = 1'b1;
@@ -4384,6 +4316,98 @@ module tb;
   endtask
 
   // =================================================================
+  // GROUP N -- the p3 RAS repair sees the p3 view (BP-121, TD#166)
+  // =================================================================
+  //
+  // A block holds a conditional in slot 0 and a direct call in slot 1
+  // (the jump field). When the p2 direction of the conditional makes the
+  // call unreachable and SC reverses it at p3, the call is on the path
+  // and its push must happen; the reverse case must undo the push p2
+  // made. Before BP-121 bp_cluster gave the repair the registered p2
+  // qualification (r_ras_val_p3), so p2 and p3 never differed and the
+  // repair never ran: N1 left the RAS empty and N2 kept the push.
+  task automatic group_n();
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] base;
+    logic [VA_WIDTH-1:0] pft;
+
+    $display("---- GROUP N: p3 RAS repair, TD#166 ----");
+
+    // -- N1. p2 taken (call unreachable), SC not taken: missed push.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);            // TAGE taken
+    sc_fill(6'b100000);              // SC strongly not taken
+    sc_enable = 1'b1;
+    pc   = VA_WIDTH'('h00_0a10_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d12);   // the call at pos 4 ends the block
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b1, 1'b0, 1'b0,
+                  pft, 1'b1);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    chk("N1 the RAS starts empty", dut.u_ras.tosr === dut.u_ras.bos);
+    req(pc, 6'h21);
+    tick();
+    norq();
+    tick();                          // at p2
+    chk("N1 p2: the conditional is taken", dut.w_taken_p2[0] === 1'b1);
+    chk("N1 p2: the call is in slot 1", dut.w_br_type_p2[1] === DIRECT_CALL);
+    chk("N1 p2: the call is not on the path, no push",
+        dut.w_ras_pred_val_p2[1] === 1'b0);
+    tick();                          // at p3
+    chk("N1 p3: SC reverses the conditional",
+        dut.w_taken_p3[0] === 1'b0);
+    chk("N1 p3: the call is on the p3 path",
+        dut.w_ras_pred_val_p3[1] === 1'b1);
+    tick();
+    chk("N1 the missed push was applied: one entry",
+        dut.u_ras.tosr !== dut.u_ras.bos);
+    chk_eq("N1 and it holds the call's return address",
+           dut.u_ras.spec_ret_addr[dut.u_ras.tosr], base + VA_WIDTH'('d12));
+
+    // -- N2. p2 not taken (call pushed), SC taken: undo the push.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);            // TAGE not taken
+    sc_fill(6'b011111);              // SC strongly taken
+    sc_enable = 1'b1;
+    pc   = VA_WIDTH'('h00_0a20_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d12);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ftb_alloc_jmp(pc, 2'd0, base + VA_WIDTH'('h600), 4'd4, 1'b1, 1'b0, 1'b0,
+                  pft, 1'b1);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    req(pc, 6'h22);
+    tick();
+    norq();
+    tick();                          // at p2
+    chk("N2 p2: the conditional is not taken", dut.w_taken_p2[0] === 1'b0);
+    chk("N2 p2: the call is on the path, pushed",
+        dut.w_ras_pred_val_p2[1] === 1'b1);
+    tick();                          // at p3
+    chk("N2 p3: SC reverses the conditional",
+        dut.w_taken_p3[0] === 1'b1);
+    chk("N2 p3: the call is off the p3 path",
+        dut.w_ras_pred_val_p3[1] === 1'b0);
+    tick();
+    chk("N2 the push was undone: the RAS is empty again",
+        dut.u_ras.tosr === dut.u_ras.bos);
+
+    sc_enable = 1'b0;
+    clr_upd_chans();
+    norq();
+    repeat (2) tick();
+    $display("---- GROUP N done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
   // GROUP M -- RETURN_CALL (TD#152) and the uBTB jump slot (TD#154),
   // BP-119
   // =================================================================
@@ -4431,8 +4455,13 @@ module tb;
     ftb_alloc_jmp(pc1, 2'd0, base + VA_WIDTH'('h600), 4'd2, 1'b1, 1'b0,
                   1'b0, pc1 + VA_WIDTH'(8), 1'b0);
     base = blk_base(pc2);
+    // c.jalr x5 is 16 bits: its rvc bit is set (BP-121, TD#164; the
+    // push is now the jump PC + 2 = pc2 + 4, where it was the pft
+    // argument, pc2 + 4).
+    jrvc_next = 1'b1;
     ftb_alloc_jmp(pc2, 2'd1, base + VA_WIDTH'('h700), 4'd1, 1'b1, 1'b1,
                   1'b1, pc2 + VA_WIDTH'(4), 1'b0);
+    jrvc_next = 1'b0;
     // BP-120: a third block, a plain RETURN at pos 3, in its own way.
     pc3 = VA_WIDTH'('h00_0972_0080);
     base = blk_base(pc3);
@@ -4722,6 +4751,7 @@ module tb;
     group_k();
     group_l();
     group_m();
+    group_n();
 
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

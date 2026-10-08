@@ -71,6 +71,7 @@ module ftb (
   output logic                          ftb_is_call_p2,
   output logic                          ftb_is_ret_p2,
   output logic                          ftb_is_jalr_p2,
+  output logic                          ftb_jmp_rvc_p2,
 
   output logic [VA_WIDTH-1:0]           ftb_pft_addr_p2,
 
@@ -96,6 +97,7 @@ module ftb (
   input  logic                          ftb_upd_is_call_u0,
   input  logic                          ftb_upd_is_ret_u0,
   input  logic                          ftb_upd_is_jalr_u0,
+  input  logic                          ftb_upd_jmp_rvc_u0,
   input  logic [VA_WIDTH-1:0]           ftb_upd_pft_addr_u0,
 
   // -- flush (2.6; stub, IC-FTB-07)
@@ -193,6 +195,7 @@ module ftb (
     .ftb_is_call_p2          (ftb_is_call_p2),
     .ftb_is_ret_p2           (ftb_is_ret_p2),
     .ftb_is_jalr_p2          (ftb_is_jalr_p2),
+    .ftb_jmp_rvc_p2          (ftb_jmp_rvc_p2),
     .ftb_pft_addr_p2         (ftb_pft_addr_p2),
 
     // fast-path output + enable
@@ -214,6 +217,7 @@ module ftb (
     .ftb_upd_is_call_u0      (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0       (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0      (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0      (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0     (ftb_upd_pft_addr_u0),
 
     // flush

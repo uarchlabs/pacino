@@ -90,6 +90,10 @@ module tb;
   sc_pred_meta_t            bpu_meta_sc_p3     [0:NUM_PRED_SLOTS-1];
   logic                     ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx;
+  logic                     ftq_rollback_corr;     // BP-121
+  logic [1:0]               ftq_rollback_n;
+  logic [1:0]               ftq_rollback_tkn;
+  logic [1:0]               ftq_rollback_pbit;
   logic                     ras_restore_val;
   bp_ras_snapshot_t         ras_restore_snapshot;
   logic                     ras_commit_val;
@@ -125,6 +129,7 @@ module tb;
   logic                     ftb_upd_is_call_u0;
   logic                     ftb_upd_is_ret_u0;
   logic                     ftb_upd_is_jalr_u0;
+  logic                     ftb_upd_jmp_rvc_u0;   // BP-121, TD#164
   logic [VA_WIDTH-1:0]      ftb_upd_pft_addr_u0;
 
   // ---- IFU boundary --------------------------------------------------
@@ -166,6 +171,7 @@ module tb;
   logic [VA_WIDTH-1:0]      bkend_ftq_redir_pc;
   logic                     bkend_ftq_redir_self;
   ftq_redir_cause_e         bkend_ftq_redir_cause;
+  logic                     bkend_ftq_redir_taken; // BP-121
   logic                     bkend_ftq_commit_val;
   logic [FTQ_PTR_BITS-1:0]  bkend_ftq_commit_idx;
 
@@ -213,6 +219,10 @@ module tb;
     .bpu_meta_sc_p3        (bpu_meta_sc_p3),
     .ftq_rollback_val      (ftq_rollback_val),
     .ftq_rollback_idx      (ftq_rollback_idx),
+    .ftq_rollback_corr     (ftq_rollback_corr),
+    .ftq_rollback_n        (ftq_rollback_n),
+    .ftq_rollback_tkn      (ftq_rollback_tkn),
+    .ftq_rollback_pbit     (ftq_rollback_pbit),
     .ras_restore_val       (ras_restore_val),
     .ras_restore_snapshot  (ras_restore_snapshot),
     .ras_commit_val        (ras_commit_val),
@@ -246,6 +256,7 @@ module tb;
     .ftb_upd_is_call_u0    (ftb_upd_is_call_u0),
     .ftb_upd_is_ret_u0     (ftb_upd_is_ret_u0),
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
+    .ftb_upd_jmp_rvc_u0    (ftb_upd_jmp_rvc_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftq_ifu_xlate_val     (ftq_ifu_xlate_val),
     .ftq_ifu_xlate_rdy     (ftq_ifu_xlate_rdy),
@@ -283,6 +294,7 @@ module tb;
     .bkend_ftq_redir_pc    (bkend_ftq_redir_pc),
     .bkend_ftq_redir_self  (bkend_ftq_redir_self),
     .bkend_ftq_redir_cause (bkend_ftq_redir_cause),
+    .bkend_ftq_redir_taken (bkend_ftq_redir_taken),
     .bkend_ftq_commit_val  (bkend_ftq_commit_val),
     .bkend_ftq_commit_idx  (bkend_ftq_commit_idx),
     .ftq_full              (ftq_full),
@@ -470,6 +482,7 @@ module tb;
     bkend_ftq_redir_pc    = '0;
     bkend_ftq_redir_self  = 1'b0;
     bkend_ftq_redir_cause = RC_MISPREDICT;
+    bkend_ftq_redir_taken = 1'b0;
     bkend_ftq_commit_val  = 1'b0;
     bkend_ftq_commit_idx  = '0;
     mdl_tkn_en            = 1'b0;
