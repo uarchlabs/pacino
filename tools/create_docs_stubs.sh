@@ -47,7 +47,6 @@ stub "frontend/bpu/dual_prediction.md"            "Dual Prediction"
 # Backend
 stub "backend/overview.md"                        "Backend Overview"
 stub "backend/decode/overview.md"                 "Decode"
-stub "backend/decode/rvc_expander.md"             "RVC Expander"
 stub "backend/decode/fusion_combiner.md"          "Fusion Combiner"
 stub "backend/decode/integer_decode.md"           "Integer Decode"
 stub "backend/decode/float_decode.md"             "Float Decode"

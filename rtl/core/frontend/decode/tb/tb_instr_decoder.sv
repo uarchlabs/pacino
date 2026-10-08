@@ -15,6 +15,8 @@
 //   is retired. T65 and T66 encoded the compressed-extension gating
 //   that DCD-20 deletes and are restated; T73 to T75 cover DCD-17 to
 //   DCD-19 and the DCD-18 pass-through.
+// BP-120 (TD#155): en_c and en_zcb are removed from ext_enable_t. T66
+//   and T65's en_c=0 case are removed with them (listed at T65).
 // ---------------------------------------------------------------------------
 // ===================================================================
 `default_nettype none
@@ -2046,54 +2048,20 @@ initial begin
     `CHECK_FIELD(0, is_illegal, 1'b0, "T64_fld_reg")
 
     // -----------------------------------------------------------------------
-    // T65: DCD-20, C is always enabled. RESTATED by BP-118.
-    //   Before TD#143 this drove a raw 16-bit c.addi word with en_c=0
-    //   and expected ILLEGAL from decode's compressed gating. DCD-20
-    //   deletes that gating: the IFU expands every compressed
-    //   instruction before the ibuf, so decode sees the 32-bit form
-    //   with is_rvc set. en_c=0 must not make it illegal.
-    //   c.addi x1, 1 -> ADDI x1, x1, 1, is_rvc=1.
+    // T65: DCD-20, C is always enabled. ext_enable has no C or Zcb enable
+    //   since BP-120 (TD#155): en_c and en_zcb are removed from
+    //   ext_enable_t. Removed with them: T65_c_en_c0_expanded (is_illegal
+    //   and alu_op, en_c=0), T66_zcb_en_zcb0_expanded (is_illegal and
+    //   alu_op, en_zcb=0 and en_c=0) and T66_zcb_base_reg (en_zcb=0). Each
+    //   checked that a zero enable had no effect; there is no enable to
+    //   zero. The RVA23_ENABLE regression stays.
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_c  = 1'b0;
-    clear_all();
-    drive(0, enc_i(12'd1, 5'd1, 3'b000, 5'd1, OPIMM));
-    pd_bundle[0].is_rvc = 1'b1;
-    @(posedge clk);
-    `CHECK_FIELD(0, is_illegal, 1'b0,    "T65_c_en_c0_expanded")
-    `CHECK_FIELD(0, alu_op,     ALU_ADD, "T65_c_en_c0_expanded")
-    // regression: en_c=1, expanded 32-bit ADDI (not ILLEGAL)
     ext_enable = RVA23_ENABLE;
     clear_all();
     // ADDI x1, x1, 1 (expanded c.addi x1, 1)
     drive(0, enc_i(12'd1, 5'd1, 3'b000, 5'd1, OPIMM));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T65_c_reg")
-
-    // -----------------------------------------------------------------------
-    // T66: DCD-20, Zcb is always enabled. RESTATED by BP-118.
-    //   Before TD#143 this drove a raw c.lbu word with en_zcb=0 and
-    //   expected ILLEGAL. After expansion decode cannot tell a Zcb
-    //   instruction from its base form. c.lbu x8, 0(x9) -> LBU x8,
-    //   0(x9), is_rvc=1, with en_zcb=0 and en_c=0: not illegal.
-    // Regression: base C expansion (ADDI) with en_zcb=0 -> not ILLEGAL
-    // -----------------------------------------------------------------------
-    ext_enable          = RVA23_ENABLE;
-    ext_enable.en_zcb   = 1'b0;
-    ext_enable.en_c     = 1'b0;
-    clear_all();
-    drive(0, enc_i(12'd0, 5'd9, 3'b100, 5'd8, OPLOAD));
-    pd_bundle[0].is_rvc = 1'b1;
-    @(posedge clk);
-    `CHECK_FIELD(0, is_illegal, 1'b0,    "T66_zcb_en_zcb0_expanded")
-    `CHECK_FIELD(0, alu_op,     ALU_LBU, "T66_zcb_en_zcb0_expanded")
-    ext_enable          = RVA23_ENABLE;
-    ext_enable.en_zcb   = 1'b0;
-    // regression: expanded ADDI (not Zcb pattern) -> not ILLEGAL
-    clear_all();
-    drive(0, enc_i(12'd2, 5'd1, 3'b000, 5'd1, OPIMM));
-    @(posedge clk);
-    `CHECK_FIELD(0, is_illegal, 1'b0, "T66_zcb_base_reg")
 
     // -----------------------------------------------------------------------
     // T67: en_v=0 -- vadd.vv (OP_VECTOR) -> ILLEGAL

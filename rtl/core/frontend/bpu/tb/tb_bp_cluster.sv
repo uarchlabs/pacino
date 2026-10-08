@@ -4389,7 +4389,10 @@ module tb;
   // =================================================================
   //
   // M1 the p2 classification forms RETURN_CALL from the FTB jump field
-  //    and the RAS pops then pushes for it at prediction.
+  //    and the RAS pops then pushes for it at prediction. Since BP-120
+  //    (TD#159) also: a return after it pops the return-call's entry
+  //    and follows its link to the entry below (here empty), not to
+  //    the slot the return-call popped.
   // M2 the RAS commit of RETURN_CALL is the return arm then the call
   //    arm (IC-RAS-10).
   // M3 a uBTB RETURN_CALL takes the RAS top as its p1 target.
@@ -4404,6 +4407,7 @@ module tb;
     ubtb_entry_t         e;
     logic [VA_WIDTH-1:0] pc1;
     logic [VA_WIDTH-1:0] pc2;
+    logic [VA_WIDTH-1:0] pc3;
     logic [VA_WIDTH-1:0] base;
     logic [VA_WIDTH-1:0] tgt;
     logic [VA_WIDTH-1:0] ra_a;
@@ -4429,10 +4433,17 @@ module tb;
     base = blk_base(pc2);
     ftb_alloc_jmp(pc2, 2'd1, base + VA_WIDTH'('h700), 4'd1, 1'b1, 1'b1,
                   1'b1, pc2 + VA_WIDTH'(4), 1'b0);
+    // BP-120: a third block, a plain RETURN at pos 3, in its own way.
+    pc3 = VA_WIDTH'('h00_0972_0080);
+    base = blk_base(pc3);
+    ftb_alloc_jmp(pc3, 2'd2, base + VA_WIDTH'('h500), 4'd3, 1'b0, 1'b1,
+                  1'b1, pc3 + VA_WIDTH'(8), 1'b0);
     ubtb_clear_set(pc1);
     ubtb_clear_set(pc2);
+    ubtb_clear_set(pc3);
     lp_clear_both(pc1);
     lp_clear_both(pc2);
+    lp_clear_both(pc3);
     chk("M1 the RAS starts empty",
         (dut.u_ras.tosr === dut.u_ras.bos) && (dut.u_ras.csp === '0));
     req(pc1, 6'h30);
@@ -4483,6 +4494,29 @@ module tb;
     chk("M1 p3 agrees with p2: no repair moved the pointers",
         (dut.u_ras.tosr === pre_tosw)
      && (dut.u_ras.tosw === pre_tosw + RAS_PTR_BITS'(1)));
+
+    // TD#159, BP-120 (ras_decisions.md 3.2, ruled session-075). The
+    // return-call's push links to the TOSR its pop left: BOS, empty.
+    // Before BP-120 a pop went to TOSR-1, here slot 1, the call entry
+    // the return-call had already popped, so a return after the
+    // return-call predicted pc1 + 8 a second time.
+    chk("M1 the return-call's entry links to the post-pop top (empty)",
+        dut.u_ras.spec_nos[pre_tosw] === dut.u_ras.bos);
+    req(pc3, 6'h33);
+    tick();
+    req(pc3, 6'h34);
+    tick();
+    norq();
+    chk("M1 a return after it is classified RETURN at p2",
+        dut.w_br_type_p2[0] === RETURN);
+    chk_eq("M1 and pops the return-call's own return address",
+           dut.w_ras_pop_addr_p2[0], pc2 + VA_WIDTH'(4));
+    tick();
+    chk("M1 that pop follows the link to empty (tosr == bos), not slot 1",
+        dut.u_ras.tosr === dut.u_ras.bos);
+    chk("M1 a second return finds both stacks empty: no RAS target",
+        (dut.w_br_type_p2[0] === RETURN)
+     && (dut.w_ras_pop_valid_p2[0] === 1'b0));
 
     // -- M2. Commit, IC-RAS-10: the return arm, then the call arm on
     //    the state the first leaves. With one committed entry the pop

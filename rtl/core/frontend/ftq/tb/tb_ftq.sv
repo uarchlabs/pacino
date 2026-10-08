@@ -30,6 +30,9 @@
 //      and the commit suppression -- which is ftq_npc's fan-out
 //   E  the commit walk frees entries and drives the RAS group,
 //      which is ftq_commit -> ftq_entry
+//   J  BP-120, TD#157: a resolution held by a TAGE or SC ready low
+//      trains the FTB once, counted at the FTB update port, through
+//      ftq_resolve, ftq_upd_conv and ftq_ftb_sched together
 //
 // THE CLUSTER IS MODELLED, because it has to be: the loop closes
 // through bp_cluster and ftq.sv does not instantiate it (7.1). The
@@ -1462,6 +1465,59 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // J. TD#157, BP-120. A resolution held for several cycles by a
+  //    TAGE ready low (hold_tage) or an SC ready low (the SC grant
+  //    withheld) is presented, then released. n_ftb counts the cycles
+  //    the FTB update port is valid; n_acc the cycles the channel is
+  //    accepted. Before BP-120 the scheduler took the FTB update every
+  //    cycle the resolution was held, so n_ftb was the cycles held + 1.
+  // -----------------------------------------------------------------
+  task automatic j_held(input logic hold_tage, output int n_ftb,
+                        output int n_acc);
+    logic acc;
+    do_reset();
+    repeat (6) tick();                     // entries 0.. allocate
+    bkend_ftq_rsv_val       = 2'b01;
+    bkend_ftq_rsv[0]        = '0;
+    bkend_ftq_rsv[0].ftq_idx = 6'd1;
+    bkend_ftq_rsv[0].pos     = FTB_BR_POS_BITS'(3);
+    bkend_ftq_rsv[0].taken   = 1'b1;
+    bkend_ftq_rsv[0].target  = VA_WIDTH'('h00_9A00_0000);
+    bkend_ftq_rsv[0].br_type = COND;
+    if (hold_tage) tage_upd_rdy = '0;
+    else           sc_upd_rdy   = '0;
+    n_ftb = 0;
+    n_acc = 0;
+    for (int k = 0; k < 12; k++) begin
+      if (k == 5) begin
+        tage_upd_rdy = '1;
+        sc_upd_rdy   = '1;
+      end
+      #1;
+      if (ftb_upd_valid_u0) n_ftb++;
+      acc = bkend_ftq_rsv_val[0] && ftq_bkend_rsv_rdy[0];
+      if (acc) n_acc++;
+      tick();
+      if (acc) bkend_ftq_rsv_val = '0;     // the backend withdraws
+    end
+  endtask
+
+  task automatic group_j();
+    int n_ftb;
+    int n_acc;
+    $display("-- J: the FTB trained once per held resolution, TD#157 --");
+    j_held(1'b1, n_ftb, n_acc);
+    // OLD (until BP-120): n_ftb == 6, one per cycle presented.
+    chk($sformatf("J1 held 5 cycles by TAGE: %0d FTB update(s), exp 1",
+                  n_ftb), n_ftb == 1);
+    chk($sformatf("J1 accepted once (%0d)", n_acc), n_acc == 1);
+    j_held(1'b0, n_ftb, n_acc);
+    chk($sformatf("J2 held 5 cycles by SC: %0d FTB update(s), exp 1",
+                  n_ftb), n_ftb == 1);
+    chk($sformatf("J2 accepted once (%0d)", n_acc), n_acc == 1);
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -1482,6 +1538,7 @@ module tb;
     group_g();
     group_h();
     group_i();
+    group_j();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

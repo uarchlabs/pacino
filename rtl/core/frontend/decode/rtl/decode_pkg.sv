@@ -12,22 +12,13 @@
 // RVA23 / RV64GC compliant.
 //
 // Instruction format and per-slot decode packet definitions.
-// Imported by rvc_expander and instr_decoder.
+// Imported by instr_decoder and fe_top.
 // ===================================================================
 
 package decode_pkg;
 
 // Number of decode slots
 localparam int SLOTS = 8;
-
-// Boundary mask bits per slot (2 bits each in fetch_mask)
-//   [1] valid   - slot contains a valid instruction start
-//   [0] is_rvc  - original instruction was 16-bit RVC (0 = 32-bit)
-// MASK_BITS is used only by rvc_expander; suppress UNUSEDPARAM for modules
-// that import this package but do not use this localparam.
-/* verilator lint_off UNUSEDPARAM */
-localparam int MASK_BITS = 2;
-/* verilator lint_on UNUSEDPARAM */
 
 // Instruction format encoding (RISC-V base formats)
 typedef enum logic [2:0] {
@@ -418,13 +409,15 @@ typedef enum logic [7:0] {
 // current enable state. Dependency enforcement (D requires F, etc.)
 // is a software/driver responsibility - not checked in RTL.
 // All bits are 1 at reset for the RVA23 profile.
+// C and Zcb have no enable: they are always enabled (dcd_decisions.md
+// DCD-20). The IFU expands every compressed instruction before the
+// ibuf, so decode cannot tell a compressed origin and nothing read
+// en_c or en_zcb; both were removed by BP-120 (TD#155).
 typedef struct packed {
   logic en_m;       // M   multiply/divide
   logic en_a;       // A   atomics
   logic en_f;       // F   single precision float
   logic en_d;       // D   double precision float
-  logic en_c;       // C   compressed (base)
-  logic en_zcb;     // Zcb additional compressed
   logic en_zba;     // Zba bitmanip address gen
   logic en_zbb;     // Zbb bitmanip basic
   logic en_zbs;     // Zbs bitmanip single bit

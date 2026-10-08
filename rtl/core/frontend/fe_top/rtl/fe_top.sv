@@ -169,6 +169,8 @@ module fe_top (
   input  logic [31:0]                 tage_aging_interval,
   input  logic                        ittage_enable_aging,
   input  logic [31:0]                 ittage_aging_interval,
+  // decode_pkg ext_enable_t. No C or Zcb enable since BP-120 (TD#155,
+  // DCD-20): two bits narrower.
   input  ext_enable_t                 ext_enable,
 
   // =================================================================

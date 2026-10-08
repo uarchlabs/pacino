@@ -13,7 +13,11 @@
 // (BP-064) pins TD #78 (undo-pop does not reverse a recursion pop).
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
 // then pushes (ras_decisions.md 2, RAS-DS1): at p2, in the p3 repair,
-// and at commit (IC-RAS-10).
+// and at commit (IC-RAS-10). TC-29 .. TC-33 (BP-120, TD#159) are the
+// next-on-stack link (ras_decisions.md 3.2, ruled session-075): the
+// pop-then-push sequence, the p3 repair rows on the link, the restore
+// after wrong-path pops and pushes, and the return-call pairings the
+// repair table does not specify.
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -21,7 +25,9 @@
 // push that would allocate on BOS (cold-start, or full wrap) skips to
 // BOS+1, so a single live entry is distinguishable from empty
 // (empty is TOSR==BOS). TOSW is monotonic across pops so popped
-// entries survive for pointer-only mispredict restore.
+// entries survive for pointer-only mispredict restore. Since BP-120 a
+// push writes TOSR into the new entry's nos and a pop sets TOSR to
+// the popped entry's nos (it read TOSR-1).
 //
 // p3 protocol (IC-RAS-11): ras_pred_val_p3 / ras_br_type_p3 are the
 // one-cycle-registered p2 inputs. drive() drives p3 from the previous
@@ -575,16 +581,23 @@ module tb;
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
     // NON-reversing outcome: the pre-pop recursion state is NOT
-    // recovered. The re-expose moves TOSR up a slot (1 -> 2) and does
-    // not restore the decremented recursion count at the held slot.
+    // recovered. Since BP-120 the undo-pop restores the TOSR the pop
+    // started from (ras_decisions.md 3.2: "undo-pop restores the
+    // pre-op TOSR"), which a recursion pop held, so TOSR stays at 1;
+    // the decremented recursion count is still not restored.
     check("TC-21 pins TD #78: rctr[1] NOT restored, stays 0 (count lost)",
           dut.spec_rctr[1] == 4'd0);
-    check("TC-21 pins TD #78: undo-pop moved tosr to 2, not restored to 1",
-          dut.tosr == 4'd2);
+    // OLD (BP-064 to BP-119): "TC-21 pins TD #78: undo-pop moved tosr
+    // to 2, not restored to 1", dut.tosr == 4'd2 (TOSR + 1).
+    check("TC-21 undo-pop restored the pre-pop tosr (1)",
+          dut.tosr == 4'd1);
     check("TC-21 pins TD #78: tosw held at 2 (no allocation on re-expose)",
           dut.tosw == 4'd2);
-    check("TC-21 pins TD #78: re-exposed top idx2 is empty (0), not ADDR_A",
-          dut.spec_ret_addr[2] == '0);
+    // OLD (BP-064 to BP-119): "TC-21 pins TD #78: re-exposed top idx2
+    // is empty (0), not ADDR_A", dut.spec_ret_addr[2] == '0 -- the
+    // TOSR + 1 slot.
+    check("TC-21 the top is A at idx1 again",
+          dut.spec_ret_addr[dut.tosr] == ADDR_A);
 
     // =============================================================
     // TC-22: RETURN_CALL at p2 -- pop, then push (RAS-DS1).
@@ -738,6 +751,270 @@ module tb;
     commit_op(RETURN_CALL, ADDR_B, 4'd0);
     check("TC-28 from empty: csp 0 -> 1", dut.csp == 5'd1);
     check("TC-28 from empty: commit[0]==B", dut.commit_ret_addr[0] == ADDR_B);
+
+    // =============================================================
+    // TC-29: TD#159. Push A, push B, pop, push C, pop, pop predicts
+    // A, then the stack is empty and the pop falls back to the commit
+    // stack (ras_decisions.md 3.2, ruled session-075). The commit
+    // stack is seeded with R first so the fallback is visible. Before
+    // BP-120 the pop after C returned to TOSR-1, the slot B was popped
+    // from, and predicted B.
+    // =============================================================
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    push_one(ADDR_A);                       // idx1, nos 0
+    push_one(ADDR_B);                       // idx2, nos 1
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-29 pop 1 predicts B", pop_addr_p2[0] == ADDR_B);
+    tick();
+    push_one(ADDR_C);                       // idx3, nos 1 (A)
+    check("TC-29 C allocated at idx3, links to A at idx1",
+          (dut.tosr == 4'd3) && (dut.spec_nos[3] == 4'd1));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-29 pop 2 predicts C", pop_addr_p2[0] == ADDR_C);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-29 pop 3 predicts A (was B before BP-120)",
+          pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-29 the stack is empty (tosr == bos)", dut.tosr == dut.bos);
+    check("TC-29 pop 4 falls back to the commit top R",
+          pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_R));
+    tick();
+    check("TC-29 the commit entry is not consumed", dut.csp == 5'd1);
+
+    // =============================================================
+    // TC-30: TC-29 with a recursion count on A. A is pushed twice
+    // (rctr 1). The pop after C pops A's count (TOSR holds at A), the
+    // next pops A itself and follows the link to empty, and the last
+    // falls back to R. Recursion counter rules (section 5) unchanged.
+    // =============================================================
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    push_one(ADDR_A);
+    push_one(ADDR_A);                       // rctr[1] 1
+    push_one(ADDR_B);                       // idx2
+    check("TC-30 seeded: A rctr 1 at idx1, B at idx2",
+          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd2));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();                                 // pop B
+    push_one(ADDR_C);                       // idx3, nos 1
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-30 pop C", pop_addr_p2[0] == ADDR_C);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-30 pop predicts A (was B before BP-120)",
+          pop_valid_p2[0] && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    check("TC-30 the recursion pop decremented A's count, tosr holds",
+          (dut.spec_rctr[1] == 4'd0) && (dut.tosr == 4'd1));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-30 pop predicts A again", pop_addr_p2[0] == ADDR_A);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-30 then empty: commit fallback R",
+          (dut.tosr == dut.bos) && pop_valid_p2[0]
+          && (pop_addr_p2[0] == ADDR_R));
+    tick();
+
+    // =============================================================
+    // TC-31: the p3 repair rows of ras_decisions.md 1 on the link.
+    // Each starts from A(1) B(2), pop B, then C pushed at idx3 with
+    // nos 1, so the entry below C is NOT C's index minus one -- the
+    // case where the TOSR+-1 rules and the link differ.
+    // =============================================================
+    // a. undo-pop (p2 pop, p3 none) restores the pre-op TOSR, 3.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_B);
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    push_one(ADDR_C);
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);   // p2 pop C
+    tick();
+    check("TC-31a pop followed the link: tosr 1", dut.tosr == 4'd1);
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-31a undo-pop restores the pre-op tosr 3 (C), not 2 (B)",
+          (dut.tosr == 4'd3) && (dut.spec_ret_addr[dut.tosr] == ADDR_C));
+    check("TC-31a tosw held at 4", dut.tosw == 4'd4);
+
+    // b. missed pop (p2 none, p3 pop) follows the link to A.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_B);
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    push_one(ADDR_C);
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    tick();                                 // registered op NONE
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, RETURN, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-31b missed pop follows nos: tosr 1 (A), not 2 (B)",
+          (dut.tosr == 4'd1) && (dut.spec_ret_addr[dut.tosr] == ADDR_A));
+
+    // c. undo-push (p2 push, p3 none) follows the pushed entry's nos.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_B);
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b1, DIRECT_CALL, ADDR_C, 1'b0, NO_BRANCH, '0);  // p2 push C
+    tick();
+    check("TC-31c C pushed at idx3", dut.tosr == 4'd3);
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-31c undo-push returns to the pre-push top, tosr 1 (A)",
+          (dut.tosr == 4'd1) && (dut.spec_ret_addr[dut.tosr] == ADDR_A));
+    check("TC-31c tosw stays monotonic at 4", dut.tosw == 4'd4);
+
+    // d. missed push (p2 none, p3 call) allocates the registered
+    //    fall-through at TOSW, linked to the current top.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_B);
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();                                 // tosr 1, tosw 3
+    drive(1'b0, NO_BRANCH, ADDR_C, 1'b0, NO_BRANCH, '0);
+    tick();                                 // registers C, op NONE
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, DIRECT_CALL, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-31d missed push: C at idx3, linked to A",
+          (dut.tosr == 4'd3) && (dut.spec_ret_addr[3] == ADDR_C)
+          && (dut.spec_nos[3] == 4'd1) && (dut.tosw == 4'd4));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-31d the pop after C predicts A", pop_addr_p2[0] == ADDR_A);
+    tick();
+
+    // =============================================================
+    // TC-32: a snapshot restore after wrong-path pops and pushes gives
+    // the pre-mispredict top exactly, and the stack below it, while
+    // the buffer has not wrapped (ras_decisions.md 3.2, 4.3). The
+    // snapshot is the p2 post-op snapshot of the C push, whose top
+    // links to A, not to the slot below it.
+    // =============================================================
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    push_one(ADDR_A);                       // idx1
+    push_one(ADDR_B);                       // idx2
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b1, DIRECT_CALL, ADDR_C, 1'b0, NO_BRANCH, '0);
+    #1;
+    restore_snap = snap_p2[0];              // {tosr 3, tosw 4, bos 0}
+    tick();
+    check("TC-32 snapshot taken: tosr 3 tosw 4 bos 0",
+          (restore_snap.tosr == 4'd3) && (restore_snap.tosw == 4'd4)
+          && (restore_snap.bos == 4'd0));
+    // Wrong path: pop C, pop A, push X, push Y, pop Y.
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    push_one(ADDR_X);
+    push_one(ADDR_B + VA_WIDTH'('h10));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-32 wrong path left tosr off the snapshot top",
+          dut.tosr != 4'd3);
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    restore_val = 1'b1;
+    tick();
+    restore_val = 1'b0;
+    check("TC-32 restore: pointers are the snapshot's",
+          (dut.tosr == 4'd3) && (dut.tosw == 4'd4) && (dut.bos == 4'd0));
+    check("TC-32 restore: the p0 top is C exactly",
+          tos_valid_p0[0] && (tos_addr_p0[0] == ADDR_C));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-32 pop after restore predicts C", pop_addr_p2[0] == ADDR_C);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-32 the next pop predicts A (was B before BP-120)",
+          pop_addr_p2[0] == ADDR_A);
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-32 then empty: commit fallback R",
+          (dut.tosr == dut.bos) && (pop_addr_p2[0] == ADDR_R));
+    tick();
+    restore_snap = '0;
+
+    // =============================================================
+    // TC-33: a RETURN_CALL paired at the other stage with a plain push
+    // or pop. ras_decisions.md 1 does not specify these rows; ras.sv
+    // takes its per-component repair steps. Each case seeds X at idx1
+    // and drives B as the fall-through of the p2 cycle, so the
+    // registered fall-through is B. The result the p3 type implies is
+    // stated beside each; two of the four are not it. In bp_cluster
+    // the p3 type is the registered p2 type, so these rows are reached
+    // only by force_p3 here. AS BUILT, BP-120.
+    // =============================================================
+    // a. p2 RETURN_CALL, p3 RETURN: the push is undone (the link
+    //    returns TOSR to the post-pop top, empty). p3 result: X
+    //    popped, stack empty. MATCHES.
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, RETURN, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-33a p2 RC / p3 RETURN: empty, as the pop alone",
+          dut.tosr == dut.bos);
+    // b. p2 RETURN, p3 RETURN_CALL: the missed push of B. p3 result:
+    //    X popped, B pushed over empty. MATCHES.
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b1, RETURN, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, RETURN_CALL, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-33b p2 RETURN / p3 RC: B on top, linked to empty",
+          (dut.tosr != dut.bos) && (dut.spec_ret_addr[dut.tosr] == ADDR_B)
+          && (dut.spec_nos[dut.tosr] == dut.bos));
+    // c. p2 RETURN_CALL, p3 call: the undo-pop restores the pre-op
+    //    TOSR, which drops the push as well. AS BUILT: X on top, B
+    //    not pushed. p3 result would be X with B pushed above it.
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, DIRECT_CALL, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-33c AS BUILT p2 RC / p3 call: X on top, B dropped",
+          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
+    // d. p2 call, p3 RETURN_CALL: the missed pop removes the pushed
+    //    B. AS BUILT: X on top. p3 result would be X popped and B
+    //    pushed over empty.
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b1, DIRECT_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, RETURN_CALL, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-33d AS BUILT p2 call / p3 RC: X on top, X not popped",
+          (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
 
     // -------------------------------------------------------------
     $display("=================================================");

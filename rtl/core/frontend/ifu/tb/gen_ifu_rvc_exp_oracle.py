@@ -18,10 +18,9 @@
 #   2. clang's integrated assembler re-encodes that text with C OFF,
 #      so every line becomes exactly one 32-bit word.
 #
-# Neither step reads tb_ifu_rvc_exp's reference (decode's
-# rvc_expander plus its spec_* corrections) or ifu_rvc_exp. The
-# expansion, the immediate scrambles and the 32-bit field placement
-# all come from LLVM.
+# Neither step reads ifu_rvc_exp, the module under test, or
+# tb_ifu_rvc_exp. The expansion, the immediate scrambles and the
+# 32-bit field placement all come from LLVM.
 #
 # WHERE LLVM IS NOT USED, the class says so and the expected value
 # comes from the specification (the RVC chapter's HINT and reserved

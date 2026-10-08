@@ -384,17 +384,19 @@ module ftb_cntrl (
   ftb_cond_t                fld_tmp;
   logic                     upd_v0;
   logic                     upd_v1;
+  logic                     upd_m0;
+  logic                     upd_m1;
+  logic                     slot_vis;
+  logic                     slot_fld;
   logic                     inplace;
   logic                     fld_idx;
   logic                     fresh;
-  logic                     jmp_fresh;
   logic                     upd_active;
 
   assign upd_active = ftb_upd_valid_u0;
 
   always_comb begin
     fld_tmp     = '0;
-    jmp_fresh   = 1'b0;
     upd_set_idx = ftb_upd_pc_u0[FTB_OFFSET_BITS +: FTB_IDX_BITS];
     upd_tag     = ftb_upd_pc_u0[FTB_OFFSET_BITS+FTB_IDX_BITS
                                   +: FTB_TAG_BITS];
@@ -427,45 +429,60 @@ module ftb_cntrl (
     // value (harmless).
     upd_new.pft   = upd_off[POS_OFFSET_BITS +: PFTADDR_BITS];
 
-    // Conditional field selection. ftb_upd_br_idx_u0 names a PORT
-    // slot as the update start saw it: the fields visible from that
-    // start, packed in ascending position (4.6 O-3b). Map it back to
-    // a storage field with the same window the read applies.
-    //   - slot 0 is the first visible field, slot 1 the second
-    //   - a slot that maps to a visible field is updated in place
-    //   - otherwise the branch is new to this start and fills a field:
-    //     an empty one first, else one this start cannot see (it
-    //     belongs to another start in the region)
+    // Conditional field selection (5.5, ruled session-075, TD#156).
+    // THE SAME BRANCH IS THE SAME REGION POSITION. The update maps to
+    // a storage field in this order:
+    //   1. a filled field whose stored region position equals the
+    //      update's is the same branch: updated in place (conf step,
+    //      target rewritten, position kept)
+    //   2. otherwise the update is a new branch of the region. It
+    //      fills an empty field first, br0 then br1
+    //   3. with both fields filled by other branches, it replaces the
+    //      field its port slot names. ftb_upd_br_idx_u0 names a PORT
+    //      slot as the update start saw it: the fields visible from
+    //      that start, packed in ascending position (4.6 O-3b), so it
+    //      maps back through the same window the read applies. A slot
+    //      naming no visible field replaces one this start cannot see
+    //      (it belongs to another start in the region)
+    // Cases 2 and 3 are a fill: position, weak conf and target are
+    // written, and the swap below restores the 5.4a order.
+    // Before BP-120 a slot that mapped to a visible field was updated
+    // in place whatever its stored position, so a different branch
+    // of the region stepped another branch's conf at the other's
+    // position.
     upd_v0 = upd_new.br0.valid & in_window(upd_new.br0.pos, upd_k);
     upd_v1 = upd_new.br1.valid & in_window(upd_new.br1.pos, upd_k);
+    upd_m0 = upd_new.br0.valid & (upd_new.br0.pos == upd_rpos);
+    upd_m1 = upd_new.br1.valid & (upd_new.br1.pos == upd_rpos);
 
+    // The field the port slot names, if any (case 3).
     if (ftb_upd_br_idx_u0 == 1'b0) begin
-      inplace = upd_v0 | upd_v1;
-      fld_idx = ~upd_v0;
+      slot_vis = upd_v0 | upd_v1;
+      slot_fld = ~upd_v0;
     end else begin
-      inplace = upd_v0 & upd_v1;
-      fld_idx = 1'b1;
-    end
-    if (!inplace) begin
-      if      (!upd_new.br0.valid) fld_idx = 1'b0;
-      else if (!upd_new.br1.valid) fld_idx = 1'b1;
-      else                         fld_idx = upd_v0;
+      slot_vis = upd_v0 & upd_v1;
+      slot_fld = 1'b1;
     end
 
-    // A hit with the selected field in place trains the bimodal conf
-    // toward the resolved outcome. A fill (miss-allocate, free field,
-    // or a field hidden from this start) takes the weak init in the
-    // observed direction (TKN -> 100, NTK -> 011) (5.4, conf section
-    // 3.2 / 7).
+    inplace = upd_m0 | upd_m1;
+    if      (inplace)            fld_idx = ~upd_m0;
+    else if (!upd_new.br0.valid) fld_idx = 1'b0;
+    else if (!upd_new.br1.valid) fld_idx = 1'b1;
+    else if (slot_vis)           fld_idx = slot_fld;
+    else                         fld_idx = upd_v0;
+
+    // The same branch trains the bimodal conf toward the resolved
+    // outcome. A fill (miss-allocate, free field, or a field another
+    // branch held) takes the weak init in the observed direction
+    // (TKN -> 100, NTK -> 011) (5.4, conf section 3.2 / 7).
     fld_old   = fld_idx ? upd_new.br1 : upd_new.br0;
     fresh     = ~inplace;
 
     fld_new.valid = 1'b1;
-    // Position is static per filled field (5.4 / 5.5): write the
-    // resolving branch's REGION position only when the field is first
-    // filled, keep the stored position on an in-place conf/target
-    // update.
-    fld_new.pos   = fresh ? upd_rpos : fld_old.pos;
+    // The update's region position. In place it equals the stored
+    // one (case 1), so the position of a filled field is static while
+    // the same branch holds it; a fill writes it (5.4, 5.5).
+    fld_new.pos   = upd_rpos;
     // Target base is the branch PC, region base plus the stored
     // position (4.6 O-1), so every start sharing the entry
     // reconstructs the same target.
@@ -493,16 +510,19 @@ module ftb_cntrl (
       upd_new.br1 = fld_tmp;
     end
 
-    // Jump field. Target rewritten unconditionally on every jump
-    // resolve (5.5, IC-FTB-01); type bits from the resolved jump.
-    // Static jump position: written as a region position only when
-    // the field is first filled, which includes a stored jump this
-    // start cannot see (another start's); preserved on an in-place
-    // jump-target rewrite.
-    jmp_fresh = ~(upd_new.jmp.valid & in_window(upd_new.jmp.pos, upd_k));
+    // Jump field. The field holds ONE jump (5.5, IC-FTB-01, ruled
+    // session-075, TD#156). Every jump resolve writes the whole field
+    // from the update: position, target (unconditionally, 5.5) and the
+    // type bits. A resolve of the stored jump (same region position)
+    // writes the position it already holds, so the position is static
+    // while that jump holds the field; a resolve of a different jump
+    // of the region replaces it. Before BP-120 the stored position
+    // was preserved whenever the stored jump was visible from the
+    // update's start, so two jumps of one region produced a field
+    // with one jump's type and target at the other's position.
     if (ftb_upd_is_jmp_u0) begin
       upd_new.jmp.valid   = 1'b1;
-      upd_new.jmp.pos     = jmp_fresh ? upd_rpos : upd_new.jmp.pos;
+      upd_new.jmp.pos     = upd_rpos;
       // Target base is the jump PC, region base plus the stored jump
       // position just settled above (4.2, TD#137).
       upd_new.jmp.tgt     = enc_jmp_disp(ftb_upd_jmp_target_u0,

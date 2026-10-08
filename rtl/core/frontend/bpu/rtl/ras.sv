@@ -11,9 +11,10 @@
 //
 // Single self-contained module. No synchronous SRAMs, no PQ/UQ, no
 // credit arbiter. Two register-file stacks:
-//   - Speculative stack: RAS_SPEC_ENTRIES, simple circular buffer.
-//     Pointers TOSR/TOSW/BOS, snapshotted into the FTQ for O(1)
-//     pointer-only mispredict recovery.
+//   - Speculative stack: RAS_SPEC_ENTRIES, circular buffer with a
+//     next-on-stack link (nos) per entry (ras_decisions.md 3.2, ruled
+//     session-075, TD#159). Pointers TOSR/TOSW/BOS, snapshotted into
+//     the FTQ for O(1) pointer-only mispredict recovery.
 //   - Commit stack: RAS_COMMIT_ENTRIES, conventional circular stack.
 //     Pointer CSP. Updated at retire. Empty fallback for pops.
 //
@@ -102,6 +103,11 @@ module ras (
   // -----------------------------------------------------------------
   logic [VA_WIDTH-1:0]       spec_ret_addr [0:RAS_SPEC_ENTRIES-1];
   logic [RAS_RCTR_WIDTH-1:0] spec_rctr     [0:RAS_SPEC_ENTRIES-1];
+  // Next on stack: the index of the entry below this one (3.2, ruled
+  // session-075, BP-120). Written by the push that allocates the
+  // entry, read by the pop that removes it. Internal; the snapshot
+  // stays three pointers (4.1).
+  logic [RAS_PTR_BITS-1:0]   spec_nos      [0:RAS_SPEC_ENTRIES-1];
 
   logic [VA_WIDTH-1:0]       commit_ret_addr [0:RAS_COMMIT_ENTRIES-1];
   logic [RAS_RCTR_WIDTH-1:0] commit_rctr     [0:RAS_COMMIT_ENTRIES-1];
@@ -120,8 +126,8 @@ module ras (
   // address used, per slot. Consumed by the p3 repair pass.
   logic [1:0]          p3_op_q      [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] p3_fallthr_q [0:NUM_PRED_SLOTS-1];
-  // TOSR before the slot's p2 operation. Read only to undo a whole
-  // RETURN_CALL (see the repair pass).
+  // TOSR before the slot's p2 operation. Read to undo a pop, alone or
+  // as the first half of a whole RETURN_CALL (see the repair pass).
   logic [RAS_PTR_BITS-1:0] p3_pre_tosr_q [0:NUM_PRED_SLOTS-1];
 
   // -----------------------------------------------------------------
@@ -177,17 +183,31 @@ module ras (
   // the just-pushed value, so a later-slot pop forwards it without an
   // array read.
   //
+  // THE LINK (ras_decisions.md 3.2, ruled session-075, TD#159). Each
+  // entry carries nos, the entry below it. A push writes the current
+  // TOSR into the new entry's nos; a pop that does not only decrement
+  // a recursion count sets TOSR to the popped entry's nos. Before
+  // BP-120 a pop moved TOSR to TOSR-1, which after a pop then a push
+  // is the slot just popped (TOSW only advances), so the correct path
+  // mispredicted: f calls g, g returns, f calls h, h returns, and f's
+  // return was predicted to g's return address. The working top
+  // carries its nos so a same-cycle pop after a push (IC-RAS-04)
+  // follows the link before the array holds it.
+  //
   // Three primitives act on the working state, each at most one array
   // write (ras_decisions.md 1, the repair label semantics):
   //   st_retract  remove the top: decrement its recursion count in
-  //               place, or move TOSR down one and reload the top.
-  //               The p2 pop, an undo-push and a missed pop.
-  //   st_reexpose move TOSR up one over the still-resident entry, no
-  //               write. An undo-pop.
-  //   st_push     allocate the fall-through at the frontier, or, with
-  //               recursion allowed and the top equal to it, increment
-  //               the top's count. The p2 push and a missed push (no
-  //               recursion, as before BP-119).
+  //               place, or move TOSR to the top's nos and reload the
+  //               top. The p2 pop, an undo-push and a missed pop.
+  //   st_restore  set TOSR to the value it held before the slot's p2
+  //               operation, no write. An undo-pop. Before BP-120 this
+  //               was st_reexpose, TOSR + 1, which is the pre-pop TOSR
+  //               only when the popped entry sat one slot above the
+  //               entry below it.
+  //   st_push     allocate the fall-through at the frontier with nos =
+  //               TOSR, or, with recursion allowed and the top equal to
+  //               it, increment the top's count. The p2 push and a
+  //               missed push (no recursion, as before BP-119).
   // RETURN_CALL is st_retract then st_push in one slot (RAS-DS1, pop
   // first). Before BP-119 3'b111 was a no-op here and at commit
   // (TD-DCD-2).
@@ -197,12 +217,14 @@ module ras (
     logic [RAS_PTR_BITS-1:0]   tosw;
     logic [VA_WIDTH-1:0]       top_addr;
     logic [RAS_RCTR_WIDTH-1:0] top_rctr;
+    logic [RAS_PTR_BITS-1:0]   top_nos;
     logic                      valid;
     // The array write the last primitive made, if any.
     logic                      we;
     logic [RAS_PTR_BITS-1:0]   waddr;
     logic [VA_WIDTH-1:0]       wdata_a;
     logic [RAS_RCTR_WIDTH-1:0] wdata_r;
+    logic [RAS_PTR_BITS-1:0]   wdata_n;
   } ras_ws_t;
 
   localparam logic [RAS_PTR_BITS-1:0]   PTR_ONE  = RAS_PTR_BITS'(1);
@@ -216,10 +238,12 @@ module ras (
     if (r.tosr != bos) begin
       r.top_addr = spec_ret_addr[r.tosr];
       r.top_rctr = spec_rctr[r.tosr];
+      r.top_nos  = spec_nos[r.tosr];
       r.valid    = 1'b1;
     end else begin
       r.top_addr = '0;
       r.top_rctr = '0;
+      r.top_nos  = '0;
       r.valid    = 1'b0;
     end
     return r;
@@ -236,10 +260,12 @@ module ras (
         r.waddr    = r.tosr;
         r.wdata_a  = r.top_addr;
         r.wdata_r  = r.top_rctr - RCTR_ONE;
+        r.wdata_n  = r.top_nos;
         r.top_rctr = r.wdata_r;
       end else begin
-        // TOSR decrements, no data overwritten.
-        r.tosr = r.tosr - PTR_ONE;
+        // TOSR follows the link to the entry below, no data
+        // overwritten. Before BP-120: TOSR - 1.
+        r.tosr = r.top_nos;
         r      = st_load(r);
       end
     end
@@ -247,16 +273,17 @@ module ras (
   endfunction
 
   // The popped entry is still resident (a pop does not overwrite the
-  // array), so it is re-exposed by moving TOSR back up one slot. No
-  // array write, TOSW unchanged (stays monotonic).
-  function automatic ras_ws_t st_reexpose(input ras_ws_t w);
+  // array), so it is re-exposed by restoring the TOSR the pop started
+  // from. No array write, TOSW unchanged (stays monotonic). A pop that
+  // only decremented a recursion count held TOSR, so this restores the
+  // same TOSR and the count stays decremented (TD #78).
+  function automatic ras_ws_t st_restore(
+      input ras_ws_t w, input logic [RAS_PTR_BITS-1:0] pre_tosr);
     ras_ws_t r;
-    r          = w;
-    r.we       = 1'b0;
-    r.tosr     = r.tosr + PTR_ONE;
-    r.top_addr = spec_ret_addr[r.tosr];
-    r.top_rctr = spec_rctr[r.tosr];
-    r.valid    = 1'b1;
+    r      = w;
+    r.we   = 1'b0;
+    r.tosr = pre_tosr;
+    r      = st_load(r);
     return r;
   endfunction
 
@@ -273,6 +300,7 @@ module ras (
       r.wdata_a  = r.top_addr;
       r.wdata_r  = (r.top_rctr == RCTR_MAX) ? RCTR_MAX
                                             : r.top_rctr + RCTR_ONE;
+      r.wdata_n  = r.top_nos;
       r.top_rctr = r.wdata_r;
     end else begin
       // Allocate at TOSW, TOSR = alloc, TOSW advances. The BOS index is
@@ -281,14 +309,23 @@ module ras (
       // at BOS+1 instead, so a single live entry stays distinct from
       // empty (TOSR == BOS). TOSW stays monotonic so popped entries
       // remain intact for pointer-only mispredict restore.
+      //
+      // The new entry links to the current TOSR, BOS when the stack is
+      // empty. On the sentinel skip it links to BOS instead: the skip
+      // is the circular wrap, the slots it reuses may be named by the
+      // links of older entries, and linking to BOS keeps the overflow
+      // effect of 3.2 -- one reachable entry, then the commit-stack
+      // fallback -- rather than a chain into overwritten slots.
       alloc      = (r.tosw == bos) ? (r.tosw + PTR_ONE) : r.tosw;
       r.waddr    = alloc;
       r.wdata_a  = ft;
       r.wdata_r  = '0;
+      r.wdata_n  = (r.tosw == bos) ? bos : r.tosr;
       r.tosr     = alloc;
       r.tosw     = alloc + PTR_ONE;
       r.top_addr = ft;
       r.top_rctr = '0;
+      r.top_nos  = r.wdata_n;
       r.valid    = 1'b1;
     end
     return r;
@@ -301,6 +338,7 @@ module ras (
   logic [RAS_PTR_BITS-1:0]   sp_waddr   [0:RAS_WR_PORTS-1];
   logic [VA_WIDTH-1:0]       sp_wdata_a [0:RAS_WR_PORTS-1];
   logic [RAS_RCTR_WIDTH-1:0] sp_wdata_r [0:RAS_WR_PORTS-1];
+  logic [RAS_PTR_BITS-1:0]   sp_wdata_n [0:RAS_WR_PORTS-1];
 
   logic [1:0]                p2_op       [0:NUM_PRED_SLOTS-1];
   logic [RAS_PTR_BITS-1:0]   p2_pre_tosr [0:NUM_PRED_SLOTS-1];
@@ -340,6 +378,7 @@ module ras (
       sp_waddr[p]   = '0;
       sp_wdata_a[p] = '0;
       sp_wdata_r[p] = '0;
+      sp_wdata_n[p] = '0;
     end
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       ras_pop_addr_p2[s]  = '0;
@@ -357,15 +396,25 @@ module ras (
     // at most two of the steps below write.
     //
     // A WHOLE RETURN_CALL TO UNDO (p2 popped then pushed, p3 says
-    // neither) is NOT the two undo primitives in reverse. The push
-    // allocated at TOSW, which after earlier pops lies above the
-    // post-pop TOSR plus one, so an undo-push retract would not return
-    // to the post-pop TOSR. TOSR is instead restored to its value
-    // before the operation, registered with the op. It is exact for
-    // the pointers because the RETURN_CALL is the only RAS operation
-    // in its block (FE-11): a taken branch ends the block. A recursion
-    // count the pop decremented, or the push incremented, is not
-    // restored -- the TD #78 limitation, as for an undo-pop.
+    // neither) restores TOSR to its value before the operation,
+    // registered with the op. It is exact for the pointers because the
+    // RETURN_CALL is the only RAS operation in its block (FE-11): a
+    // taken branch ends the block. A recursion count the pop
+    // decremented, or the push incremented, is not restored -- the
+    // TD #78 limitation, as for an undo-pop. An undo-pop alone restores
+    // the same registered TOSR (st_restore); a missed pop and an
+    // undo-push follow the link (st_retract).
+    //
+    // A RETURN_CALL PAIRED AT THE OTHER STAGE WITH A PLAIN PUSH OR POP
+    // is not specified (ras_decisions.md 1). It takes the per-component
+    // steps below. p2 RETURN_CALL / p3 pop undoes the push (the link
+    // returns TOSR to the post-pop top); p2 pop / p3 RETURN_CALL
+    // applies the missed push. Both give the p3 result. p2 RETURN_CALL
+    // / p3 push undoes the pop by restoring the pre-op TOSR, which also
+    // drops the push, and p2 push / p3 RETURN_CALL applies the missed
+    // pop to the pushed entry; neither gives the p3 result. Reported
+    // in BP-120. In bp_cluster the p3 type is the registered p2 type,
+    // so no pairing of differing ops reaches this pass there.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       s3_pop  = ras_pred_val_p3[s] &
                 ((ras_br_type_p3[s] == RETURN) |
@@ -391,12 +440,13 @@ module ras (
             sp_waddr[pi]   = w.waddr;
             sp_wdata_a[pi] = w.wdata_a;
             sp_wdata_r[pi] = w.wdata_r;
+            sp_wdata_n[pi] = w.wdata_n;
             n              = n + 1;
           end
         end
         // Undo a pop the p3 type does not have, or apply a missed one.
         if (q_pop & ~s3_pop) begin
-          w = st_reexpose(w);
+          w = st_restore(w, p3_pre_tosr_q[s]);
         end else if (~q_pop & s3_pop) begin
           w = st_retract(w);
           if (w.we && (n < RAS_WR_PER_SLOT)) begin
@@ -405,6 +455,7 @@ module ras (
             sp_waddr[pi]   = w.waddr;
             sp_wdata_a[pi] = w.wdata_a;
             sp_wdata_r[pi] = w.wdata_r;
+            sp_wdata_n[pi] = w.wdata_n;
             n              = n + 1;
           end
         end
@@ -417,6 +468,7 @@ module ras (
             sp_waddr[pi]   = w.waddr;
             sp_wdata_a[pi] = w.wdata_a;
             sp_wdata_r[pi] = w.wdata_r;
+            sp_wdata_n[pi] = w.wdata_n;
           end
         end
       end
@@ -453,6 +505,7 @@ module ras (
             sp_waddr[pi]   = w.waddr;
             sp_wdata_a[pi] = w.wdata_a;
             sp_wdata_r[pi] = w.wdata_r;
+            sp_wdata_n[pi] = w.wdata_n;
             n              = n + 1;
           end
         end
@@ -466,6 +519,7 @@ module ras (
         sp_waddr[pi]   = w.waddr;
         sp_wdata_a[pi] = w.wdata_a;
         sp_wdata_r[pi] = w.wdata_r;
+        sp_wdata_n[pi] = w.wdata_n;
       end
 
       // Post-op snapshot for this slot (BOS unchanged across p2).
@@ -519,6 +573,7 @@ module ras (
       for (int i = 0; i < RAS_SPEC_ENTRIES; i++) begin
         spec_ret_addr[i] <= '0;
         spec_rctr[i]     <= '0;
+        spec_nos[i]      <= '0;
       end
       for (int i = 0; i < RAS_COMMIT_ENTRIES; i++) begin
         commit_ret_addr[i] <= '0;
@@ -547,6 +602,7 @@ module ras (
           if (sp_we[p]) begin
             spec_ret_addr[sp_waddr[p]] <= sp_wdata_a[p];
             spec_rctr[sp_waddr[p]]     <= sp_wdata_r[p];
+            spec_nos[sp_waddr[p]]      <= sp_wdata_n[p];
           end
         end
       end

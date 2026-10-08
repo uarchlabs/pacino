@@ -46,7 +46,12 @@ module ftq_resolve_assert (
   input logic [NUM_PRED_SLOTS-1:0] upd_sc_val,
   input logic [NUM_PRED_SLOTS-1:0] upd_lp_val,
   input logic [NUM_PRED_SLOTS-1:0] upd_ittage_val,
-  input logic [NUM_PRED_SLOTS-1:0] upd_ubtb_val
+  input logic [NUM_PRED_SLOTS-1:0] upd_ubtb_val,
+  // BP-120, for R16 to R19.
+  input logic [NUM_RESOLVE_PORTS-1:0] ftb_sched_rdy,
+  input logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
+  input logic [FTQ_IDX_BITS-1:0] rsv_wr_idx [0:NUM_RESOLVE_PORTS-1],
+  input logic [TRX_SLOT_BITS-1:0] rsv_wr_sel [0:NUM_RESOLVE_PORTS-1]
 );
 
   genvar gc;
@@ -249,6 +254,127 @@ module ftq_resolve_assert (
     end
   endgenerate
 
+  // -----------------------------------------------------------------
+  // BP-120. TD#157, THE FTB TRAINED ONCE PER RESOLUTION, and TD#158,
+  // TWO RESOLUTIONS NEVER GIVEN ONE SLOT. Each is stated against a
+  // source the RTL does not drive: a model of the presentation built
+  // here from earlier cycles (R16, R17), or a program order this file
+  // derives itself from the pointers and the resolutions (R18).
+  // -----------------------------------------------------------------
+
+  // The presentation model. m_taken[c]: the scheduler has taken
+  // channel c's FTB update (presented with the scheduler ready) at
+  // some cycle of the CURRENT presentation, which is the run of cycles
+  // the backend holds one branch -- one entry index and position --
+  // valid, until the channel is accepted (A4). Built from the ports,
+  // cycle by cycle.
+  logic [NUM_RESOLVE_PORTS-1:0] m_taken;
+  ftq_resolve_t                 m_prev [0:NUM_RESOLVE_PORTS-1];
+
+  always_ff @(posedge clk or negedge rstn) begin
+    if (!rstn) begin
+      m_taken <= '0;
+      for (int c = 0; c < NUM_RESOLVE_PORTS; c++) m_prev[c] <= '0;
+    end else begin
+      for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+        m_prev[c]  <= bkend_rsv[c];
+        m_taken[c] <= bkend_rsv_val[c] && !ftq_bkend_rsv_rdy[c] &&
+                      (w_taken_now[c] || w_same_held[c]);
+      end
+    end
+  end
+
+  logic [NUM_RESOLVE_PORTS-1:0] w_taken_now;
+  logic [NUM_RESOLVE_PORTS-1:0] w_same_held;
+  always_comb begin
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      w_taken_now[c] = ftb_upd_val[c] && ftb_sched_rdy[c];
+      // Still the presentation m_taken describes: m_taken set means
+      // the channel was presented and not accepted last cycle, and the
+      // same resolution is presented now.
+      w_same_held[c] = m_taken[c] && bkend_rsv_val[c] &&
+                       (bkend_rsv[c].ftq_idx == m_prev[c].ftq_idx) &&
+                       (bkend_rsv[c].pos     == m_prev[c].pos);
+    end
+  end
+
+  // The program order of the two channels, derived here: the entry
+  // nearer commit_ptr is older; within one entry the lower position;
+  // then channel 0. Ages are wrap-aware, (idx - commit) modulo the
+  // queue, so the order holds across the array boundary.
+  logic [FTQ_IDX_BITS-1:0] w_age0;
+  logic [FTQ_IDX_BITS-1:0] w_age1;
+  logic                    w_ch1_older;
+  always_comb begin
+    w_age0 = bkend_rsv[0].ftq_idx - commit_ptr[FTQ_IDX_BITS-1:0];
+    w_age1 = bkend_rsv[1].ftq_idx - commit_ptr[FTQ_IDX_BITS-1:0];
+    w_ch1_older = (w_age1 < w_age0) ||
+                  ((w_age1 == w_age0) &&
+                   (bkend_rsv[1].pos < bkend_rsv[0].pos));
+  end
+
+  genvar gt;
+  generate
+    for (gt = 0; gt < NUM_RESOLVE_PORTS; gt++) begin : g_once
+
+      // R16 TD#157. Once the scheduler has taken a held resolution's
+      //     FTB update, the FTB update is not presented again for the
+      //     same presentation. Before BP-120 it was presented every
+      //     cycle the resolution was held for a predictor.
+      property p_ftb_once;
+        @(posedge clk) disable iff (!rstn)
+          w_same_held[gt] |-> !ftb_upd_val[gt];
+      endproperty
+      a_ftb_once: assert property (p_ftb_once)
+        else $error("R16 a held resolution trained the FTB again");
+
+      // R17 TD#157, the other half of "exactly once". An FTB-bound
+      //     live resolution is not accepted unless its FTB update was
+      //     taken this cycle or earlier in the presentation. An FE-5a
+      //     LOW drop is taken by the scheduler and counts.
+      property p_ftb_not_lost;
+        @(posedge clk) disable iff (!rstn)
+          (bkend_rsv_val[gt] && ftq_bkend_rsv_rdy[gt] && rsv_accept[gt] &&
+           (bkend_rsv[gt].br_type != NO_BRANCH)) |->
+            (w_taken_now[gt] || w_same_held[gt]);
+      endproperty
+      a_ftb_not_lost: assert property (p_ftb_not_lost)
+        else $error("R17 a resolution was accepted without its FTB update");
+
+    end
+  endgenerate
+
+  // R18 TD#158, ONE SLOT, ONE CHANNEL, OLDER FIRST. When both channels
+  //     are live and name the same slot, the younger in program order
+  //     (derived above) is not accepted, and the slot's update, when
+  //     formed, is the older's. Before BP-120 both were reported ready
+  //     and the later channel's payload overwrote the earlier's.
+  property p_slot_older_first;
+    @(posedge clk) disable iff (!rstn)
+      (rsv_accept[0] && rsv_accept[1] && (rsv_slot[0] == rsv_slot[1])) |->
+        (w_ch1_older ? !ftq_bkend_rsv_rdy[0] : !ftq_bkend_rsv_rdy[1]) &&
+        (!upd[rsv_slot[0]].valid ||
+         (w_ch1_older
+            ? ((upd[rsv_slot[0]].branch_id     == bkend_rsv[1].ftq_idx) &&
+               (upd[rsv_slot[0]].actual_target == bkend_rsv[1].target))
+            : ((upd[rsv_slot[0]].branch_id     == bkend_rsv[0].ftq_idx) &&
+               (upd[rsv_slot[0]].actual_target == bkend_rsv[0].target))));
+  endproperty
+  a_slot_older_first: assert property (p_slot_older_first)
+    else $error("R18 two resolutions were given one slot, or the younger first");
+
+  // R19 TD#158. Two placement writes in one cycle to one entry name
+  //     different slots, so the entry holds both. Before BP-120 the
+  //     two placements of one entry read the same bare entry and could
+  //     name the same free slot; the later write won.
+  property p_place_two_slots;
+    @(posedge clk) disable iff (!rstn)
+      (rsv_wr_val[0] && rsv_wr_val[1] && (rsv_wr_idx[0] == rsv_wr_idx[1]))
+        |-> (rsv_wr_sel[0] != rsv_wr_sel[1]);
+  endproperty
+  a_place_two_slots: assert property (p_place_two_slots)
+    else $error("R19 two placements of one entry took the same slot");
+
   // R15 REMOVED, BP-119. It read "(ftq_bkend_rsv_rdy == '0) |-> no
   //     upd valid": no update formed while no channel was ready. The
   //     predictor valids are now REQUESTS (ftq_resolve header): they
@@ -285,5 +411,9 @@ bind ftq_resolve ftq_resolve_assert u_assert (
   .upd_sc_val        (upd_sc_val),
   .upd_lp_val        (upd_lp_val),
   .upd_ittage_val    (upd_ittage_val),
-  .upd_ubtb_val      (upd_ubtb_val)
+  .upd_ubtb_val      (upd_ubtb_val),
+  .ftb_sched_rdy     (ftb_sched_rdy),
+  .rsv_wr_val        (rsv_wr_val),
+  .rsv_wr_idx        (rsv_wr_idx),
+  .rsv_wr_sel        (rsv_wr_sel)
 );

@@ -37,7 +37,6 @@ endif
 RTL_DIR  := rtl
 TB_DIR   := tb
 BPU_DIR  := ../bpu/rtl
-DEC_DIR  := ../decode/rtl
 VER_OUT  := obj
 
 VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing

@@ -44,6 +44,7 @@
 // TC15 read-during-write: prediction sees the pre-update state
 // TC16 TD#124: a block end 64 bytes above the region base
 // TC17 TD#125: two starts in one region sharing an entry
+// TC18 TD#156: the same branch is the same position (BP-120)
 // ===================================================================
 
 import bp_defines_pkg::*;
@@ -543,10 +544,14 @@ module tb;
             gold != {UBTB_CONF_WIDTH{1'b1}});
       check("TC08: fill pos", pred2[0].pos == 4'd3);
 
-      // Train taken past the top. Each update carries a DIFFERENT
-      // position: the stored position must not move once filled.
+      // Train taken past the top. Each update is the SAME branch,
+      // position 3, so the stored position stays put while conf steps.
+      // OLD stimulus (until BP-120): each update carried a DIFFERENT
+      // position, 4'd6, and the field kept 3. A different position is
+      // now a different branch that refills the field (ftb_decisions.md
+      // 5.5, TD#156; TC18). The expected values are unchanged.
       for (int i = 0; i < 6; i++) begin
-        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd6, blk_a + VA_WIDTH'('d32));
+        wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd3, blk_a + VA_WIDTH'('d32));
         look2(blk_a);
         gold = gold_step(gold, 1'b1);
         check($sformatf("TC08: taken step %0d conf", i),
@@ -562,8 +567,9 @@ module tb;
             pred2[0].br_taken == 1'b1);
 
       // Train not-taken down to the bottom, crossing the MSB flip.
+      // Same branch, position 3 (OLD stimulus 4'd6, as above).
       for (int i = 0; i < 10; i++) begin
-        wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 4'd6, blk_a + VA_WIDTH'('d32));
+        wr_cond(blk_a, 1'b0, 1'b0, tgt_a, 4'd3, blk_a + VA_WIDTH'('d32));
         look2(blk_a);
         gold = gold_step(gold, 1'b0);
         check($sformatf("TC08: ntk step %0d conf", i),
@@ -775,7 +781,11 @@ module tb;
       check("TC11b: seeded conf",
             pred2[0].conf == UBTB_CONF_INIT_TKN);
 
-      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd5,
+      // Channel 0 is the same branch, position 2. OLD stimulus (until
+      // BP-120): position 4'd5, which the field ignored; a different
+      // position is now a different branch (TD#156, TC18). The
+      // expected values are unchanged.
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd2,
                         blk_a + VA_WIDTH'('d32));
       upd2[1] = mk_jmp (blk_a, 1'b1, 1'b0, 1'b0, tgt_b, 4'd7,
                         blk_a + VA_WIDTH'('d32));
@@ -1013,6 +1023,86 @@ module tb;
       check("TC17: A s1 empty", pred2[1].valid == 1'b0);
     end
     tc_close("TC17");
+
+    // ==============================================================
+    // TC18 -- TD#156 (ubtb_interfaces.md Allocation and field writes,
+    //         ftb_decisions.md 5.5, ruled session-075). A filled field
+    //         keeps its position only for an update at the stored
+    //         region position. Every case is from one start at region
+    //         offset 0, so every stored field is visible to it; before
+    //         BP-120 a visible stored position was kept for any update.
+    // ==============================================================
+    tc_open("TC18 TD#156 the same branch is the same position");
+    begin
+      // a: two jumps of one region. J1 a RETURN_CALL at pos 4, J2 a
+      //    RETURN at pos 9 (the coro shape). After J2 the field is
+      //    J2's, position, type and target together; after J1 again,
+      //    J1's. The block end follows the jump that trained.
+      do_reset();
+      blk_a = mk_pc(57, TAG_BASE);
+      tgt_a = blk_a + VA_WIDTH'('h1200);
+      tgt_b = blk_a + VA_WIDTH'('h3400);
+      wr_jmp(blk_a, 1'b1, 1'b1, 1'b1, tgt_a, 4'd4, blk_a + VA_WIDTH'('d12));
+      look2(blk_a);
+      check("TC18a: J1 holds the field: RETURN_CALL at pos 4",
+            pred2[0].valid && (pred2[0].br_type == RETURN_CALL)
+            && (pred2[0].pos == 4'd4));
+      wr_jmp(blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 4'd9, blk_a + VA_WIDTH'('d22));
+      look2(blk_a);
+      check("TC18a: after J2 the position is J2's (9)",
+            pred2[0].valid && (pred2[0].pos == 4'd9));
+      check("TC18a: after J2 the type is J2's (RETURN)",
+            pred2[0].br_type == RETURN);
+      check("TC18a: after J2 the target is J2's",
+            pred2[0].target == tgt_b);
+      check("TC18a: after J2 the block end is J2's",
+            blk2.pft_addr == blk_a + VA_WIDTH'('d22));
+      wr_jmp(blk_a, 1'b1, 1'b1, 1'b1, tgt_a, 4'd4, blk_a + VA_WIDTH'('d12));
+      look2(blk_a);
+      check("TC18a: after J1 again: RETURN_CALL at pos 4, J1's target",
+            pred2[0].valid && (pred2[0].br_type == RETURN_CALL)
+            && (pred2[0].pos == 4'd4) && (pred2[0].target == tgt_a));
+      check("TC18a: after J1 again the block end is J1's",
+            blk2.pft_addr == blk_a + VA_WIDTH'('d12));
+
+      // b: a conditional at a new position updating a filled field.
+      //    br0 holds pos 3, trained taken to conf 6; a branch at pos 9
+      //    resolves not taken into br0. It is a new branch: pos 9,
+      //    weak not-taken conf, its own target. The uBTB does not
+      //    reorder (ubtb_interfaces.md). Before BP-120: pos 3 kept,
+      //    conf stepped 6 -> 5.
+      do_reset();
+      blk_a = mk_pc(58, TAG_BASE);
+      tgt_a = blk_a + VA_WIDTH'('h100);
+      tgt_b = blk_a + VA_WIDTH'('h900);
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd3, blk_a + VA_WIDTH'('d32));
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd3, blk_a + VA_WIDTH'('d32));
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd3, blk_a + VA_WIDTH'('d32));
+      look2(blk_a);
+      check("TC18b: set-up: br0 pos 3 conf INIT_TKN + 2",
+            pred2[0].valid && (pred2[0].pos == 4'd3)
+            && (pred2[0].conf == gold_step(gold_step(UBTB_CONF_INIT_TKN,
+                                                     1'b1), 1'b1)));
+      wr_cond(blk_a, 1'b0, 1'b0, tgt_b, 4'd9, blk_a + VA_WIDTH'('d32));
+      look2(blk_a);
+      check("TC18b: the new branch's position is written (9)",
+            pred2[0].valid && (pred2[0].pos == 4'd9));
+      check("TC18b: conf weak in the resolved direction",
+            pred2[0].conf == UBTB_CONF_INIT_NTK);
+      check("TC18b: its target is written", pred2[0].target == tgt_b);
+
+      // c: the same branch resolving again: conf steps, the target is
+      //    rewritten when it differs, the position is kept.
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd9, blk_a + VA_WIDTH'('d32));
+      look2(blk_a);
+      check("TC18c: same branch: conf steps",
+            pred2[0].conf == gold_step(UBTB_CONF_INIT_NTK, 1'b1));
+      check("TC18c: same branch: target rewritten",
+            pred2[0].target == tgt_a);
+      check("TC18c: same branch: position kept (9)",
+            pred2[0].valid && (pred2[0].pos == 4'd9));
+    end
+    tc_close("TC18");
 
     // ==============================================================
     // Verdict

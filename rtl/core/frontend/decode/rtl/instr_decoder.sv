@@ -33,8 +33,8 @@
 //           compressed instruction before the ibuf (IFU-1), so decode
 //           sees only 32-bit encodings and cannot tell which
 //           compressed extension one came from. The per-extension
-//           compressed gating that lived in decode_one is deleted;
-//           ext_enable.en_c and .en_zcb have no reader here.
+//           compressed gating that lived in decode_one is deleted,
+//           and ext_enable has no C or Zcb enable (BP-120, TD#155).
 //
 // Downstream interface note:
 //   - decode_bundle[8] connects directly to rename/dispatch stage

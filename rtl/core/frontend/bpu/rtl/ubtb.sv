@@ -251,19 +251,28 @@ module ubtb #(
   //
   // - the fall-through is reduced from the region base and rewritten
   //   on every update, with no carry (TD#124)
-  // - a conditional field that is occupied AND visible from this
-  //   update start steps its bimodal conf toward the resolved
-  //   direction and keeps its stored position. A free field, or one
-  //   whose stored position lies outside this start's window (it was
-  //   recorded by another start in the region), fills with the weak
-  //   init in the resolved direction and takes the REGION position
-  //   up.pos + k (ftb_decisions.md 4.6 R-2)
+  // - THE SAME BRANCH IS THE SAME REGION POSITION (ubtb_interfaces.md
+  //   Allocation and field writes, ftb_decisions.md 5.5, ruled
+  //   session-075, TD#156). The conditional field br_idx names holds
+  //   the same branch when it is occupied and its stored region
+  //   position equals the update's, up.pos + k (4.6 R-2): it steps its
+  //   bimodal conf toward the resolved direction and keeps its
+  //   position. Otherwise the update is a new branch, whether the
+  //   field is free or another branch held it, and it fills with the
+  //   weak init in the resolved direction and takes the update's
+  //   region position. The uBTB fills the field br_idx names and does
+  //   not reorder storage (the deliberate divergence from the FTB,
+  //   ubtb_interfaces.md)
   // - the target displacement is re-encoded on every resolve, so an
   //   unchanged target simply stores the same value and "rewrite the
   //   target if it differs" falls out
-  // - the jump field is written whenever is_jmp is set, and its
-  //   target is rewritten on every such resolve; its position follows
-  //   the same fill rule as a conditional field
+  // - the jump field holds one jump and is written whole whenever
+  //   is_jmp is set: position, target and type, so a resolve of a
+  //   different jump of the region replaces the stored one
+  // Before BP-120 a field visible from the update's start kept its
+  // stored position whatever branch resolved, so two branches of one
+  // region produced a field with one's target and type at the other's
+  // position.
   function automatic ubtb_entry_t apply_upd(
       input ubtb_entry_t ent,
       input ubtb_upd_t   up);
@@ -275,7 +284,6 @@ module ubtb #(
     logic [UBTB_BR_POS_BITS-1:0]  k;
     logic [UBTB_BR_RPOS_BITS-1:0] rpos;
     logic                         fresh;
-    logic                         jfresh;
 
     e    = ent;
     base = get_base(up.pc);
@@ -288,10 +296,11 @@ module ubtb #(
     e.pft = off[UBTB_POS_OFFSET_BITS +: UBTB_PFTADDR_BITS];
 
     fld_old = (up.br_idx == 1'b0) ? e.br0 : e.br1;
-    fresh   = ~(fld_old.valid & in_window(fld_old.pos, k));
+    fresh   = ~(fld_old.valid & (fld_old.pos == rpos));
 
     fld_new.valid = 1'b1;
-    fld_new.pos   = fresh ? rpos : fld_old.pos;
+    // In place the stored position equals rpos; a fill writes it.
+    fld_new.pos   = rpos;
     fld_new.tgt   = enc_br_disp(up.target, base);
     fld_new.stat  = br_stat(up.target, base);
     fld_new.conf  = fresh
@@ -303,10 +312,9 @@ module ubtb #(
       else                   e.br1 = fld_new;
     end
 
-    jfresh = ~(e.jmp.valid & in_window(e.jmp.pos, k));
     if (up.is_jmp) begin
       e.jmp.valid   = 1'b1;
-      e.jmp.pos     = jfresh ? rpos : e.jmp.pos;
+      e.jmp.pos     = rpos;
       e.jmp.tgt     = enc_jmp_disp(up.jmp_target, base);
       e.jmp.stat    = jmp_stat(up.jmp_target, base);
       e.jmp.is_call = up.is_call;

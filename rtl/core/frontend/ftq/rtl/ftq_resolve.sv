@@ -105,14 +105,47 @@
 // protecting a HIGH-value update from being dropped (5.7.3 S6). The
 // backend holds valid until accepted (A4) and a resolution is never
 // dropped for capacity.
+//
+// THE FTB IS TRAINED ONCE PER RESOLUTION (BP-120, TD#157). The FTB
+// update is presented to ftq_ftb_sched whatever the predictors'
+// readiness, because gating it on upd_acc would close a loop: the
+// fan-out presents the predictor requests only under the scheduler's
+// ready, the SC ready is a grant of the SC request (bp_cluster
+// sc_upd_rdy), upd_acc reads the SC ready, and the scheduler's ready
+// reads the FTB valid (5.7.3 S6). So a resolution held for a
+// predictor had its FTB update taken again every cycle it was
+// presented. The loop-free form needs state: r_ftb_done, one flop per
+// channel, set when the scheduler takes the channel's FTB update in a
+// cycle the channel is not accepted, held while the backend holds the
+// resolution (A4), and cleared when the channel is accepted or the
+// resolution is withdrawn. While it is set the FTB valid is not
+// presented. The flag names the branch it was set for (its entry index
+// and position, registered with it) and applies only while that branch
+// is presented: A4 says the backend can hold a resolution, not that it
+// cannot replace one, and a replacement must train the FTB. A LOW update the scheduler takes and drops (FE-5a) counts
+// as taken, as it did when it was presented once.
+//
+// TWO RESOLUTIONS, ONE SLOT (BP-120, TD#158). Two channels are never
+// given the same update slot in one cycle: the YOUNGER is held (its
+// ready low, nothing formed for it, its FTB update not presented) and
+// presented again; the older is served. Program order between the
+// channels: the entry nearer commit_ptr is older (the age the R3 live
+// test computes, wrap-aware); within one entry the lower position is
+// older; channel 0 breaks a tie of entry and position. Two unmapped
+// resolutions of one entry are placed in order: the younger's
+// placement sees the older's slot as filled (the entry as the older's
+// placement write will leave it), so the two take different slots when
+// the entry has room, and when it does not they collide and the
+// younger is held.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
 module ftq_resolve (
-  // COMBINATIONAL MODULE, for the same reason as ftq_ifu: the entry,
-  // the metadata and the pointers are owned elsewhere. clk and rstn
-  // are here for the concurrent SVA bound by module name.
+  // The entry, the metadata and the pointers are owned elsewhere, as
+  // for ftq_ifu. The one piece of state is r_ftb_done (TD#157, header);
+  // before BP-120 the module was combinational and clk and rstn were
+  // here only for the concurrent SVA bound by module name.
   input  logic                     clk,
   input  logic                     rstn,
 
@@ -191,6 +224,7 @@ module ftq_resolve (
   output bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1]
 );
 
+
   logic [FTQ_PTR_BITS-1:0] w_live_len;
   logic [FTQ_PTR_BITS-1:0] w_age [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_live;
@@ -200,6 +234,43 @@ module ftq_resolve (
   logic [NUM_RESOLVE_PORTS-1:0] w_plc_val;
   bp_ftq_slot_t             w_new_slot [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_rdy_pred;
+  // w_older[c][o]: channel o is presented, live and older than c.
+  logic [NUM_RESOLVE_PORTS-1:0] w_older [0:NUM_RESOLVE_PORTS-1];
+  // Placement by pass (TD#158): w_plc_pass[p][c] is channel c's slot
+  // with the pass p-1 placements of older channels of its entry in its
+  // view. Pass 0 reads the bare entry. A channel with k older channels
+  // has its final placement by pass k, so NUM_RESOLVE_PORTS passes
+  // settle every channel.
+  logic [TRX_SLOT_BITS-1:0] w_plc_pass [0:NUM_RESOLVE_PORTS-1]
+                                       [0:NUM_RESOLVE_PORTS-1];
+  // An older channel holds this channel's slot this cycle (TD#158).
+  logic [NUM_RESOLVE_PORTS-1:0] w_lose;
+  // The entry as one channel's placement sees it.
+  bp_ftq_entry_t            w_view;
+  // The scheduler took this channel's FTB update in an earlier cycle
+  // of the presentation that is still held (TD#157): the flag, the
+  // branch it was set for, and the flag qualified by that branch being
+  // the one presented now.
+  logic [NUM_RESOLVE_PORTS-1:0] r_ftb_done;
+  logic [FTQ_IDX_BITS-1:0]  r_ftb_idx [0:NUM_RESOLVE_PORTS-1];
+  logic [FTB_BR_POS_BITS-1:0] r_ftb_pos [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] w_ftb_done;
+
+  // Placement for a position naming no slot (ftq_ifu W1's rule): the
+  // lowest slot free or at or after the position, else the last.
+  // Descending so the lowest qualifying slot wins.
+  function automatic logic [TRX_SLOT_BITS-1:0] place_slot(
+      input bp_ftq_entry_t              e,
+      input logic [FTB_BR_POS_BITS-1:0] pos);
+    logic [TRX_SLOT_BITS-1:0] r;
+    r = TRX_SLOT_BITS'(NUM_PRED_SLOTS - 1);
+    for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
+      if (!e.slot[s].slot_valid || (e.slot[s].pos >= pos)) begin
+        r = TRX_SLOT_BITS'(s);
+      end
+    end
+    return r;
+  endfunction
 
   // -----------------------------------------------------------------
   // Intake: the live-window test and the position-to-slot mapping.
@@ -234,30 +305,11 @@ module ftq_resolve (
         end
       end
 
-      // Placement for a position naming no slot (ftq_ifu W1's rule):
-      // the lowest slot free or at or after the position, else the
-      // last. Descending so the lowest qualifying slot wins.
-      w_plc_slot[c]  = TRX_SLOT_BITS'(NUM_PRED_SLOTS - 1);
-      for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
-        if (!rsv_entry[c].slot[s].slot_valid ||
-            (rsv_entry[c].slot[s].pos >= bkend_rsv[c].pos)) begin
-          w_plc_slot[c] = TRX_SLOT_BITS'(s);
-        end
-      end
-      rsv_slot[c] = w_slot_hit[c] ? w_map_slot[c] : w_plc_slot[c];
-
       rsv_drop_sq[c] = bkend_rsv_val[c] & ~w_live[c];
       rsv_nomap[c]   = bkend_rsv_val[c] &  w_live[c] & ~w_slot_hit[c];
 
       // Every live resolution is accepted: mapped, or placed.
       rsv_accept[c]  = bkend_rsv_val[c] &  w_live[c];
-
-      // R2 of ftq_entry_formats.md 3.1. The stored classification
-      // against the resolved one, for a MAPPED branch only: a placed
-      // branch has no stored classification of its own, and the
-      // ruling trains the table predictors on it.
-      rsv_type_dis[c] = rsv_accept[c] && w_slot_hit[c] &&
-        (rsv_entry[c].slot[rsv_slot[c]].br_type != bkend_rsv[c].br_type);
 
       // The placed slot, as the entry will hold it.
       w_plc_val[c]               = rsv_nomap[c] &&
@@ -269,6 +321,67 @@ module ftq_resolve (
       w_new_slot[c].taken        = bkend_rsv[c].taken;
       w_new_slot[c].pos          = bkend_rsv[c].pos;
       w_new_slot[c].pred_src     = PRED_NONE;
+    end
+
+    // Program order between the channels (TD#158, header): the entry
+    // nearer commit_ptr, then the lower position, then the lower
+    // channel. Only presented, live channels take part.
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      for (int o = 0; o < NUM_RESOLVE_PORTS; o++) begin
+        w_older[c][o] = (o != c) && rsv_accept[o] && (
+          (w_age[o] < w_age[c]) ||
+          ((w_age[o] == w_age[c]) &&
+           ((bkend_rsv[o].pos < bkend_rsv[c].pos) ||
+            ((bkend_rsv[o].pos == bkend_rsv[c].pos) && (o < c)))));
+      end
+    end
+
+    // Placement, by pass (see w_plc_pass). A channel's view of its
+    // entry holds the placements older channels of the same entry make
+    // this cycle. Before BP-120 every channel read the bare entry, and
+    // two unmapped resolutions of one entry could take one free slot.
+    w_view = '0;
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      w_plc_pass[0][c] = place_slot(rsv_entry[c], bkend_rsv[c].pos);
+    end
+    for (int p = 1; p < NUM_RESOLVE_PORTS; p++) begin
+      for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+        w_view = rsv_entry[c];
+        for (int o = 0; o < NUM_RESOLVE_PORTS; o++) begin
+          if (w_older[c][o] && w_plc_val[o] &&
+              (bkend_rsv[o].ftq_idx == bkend_rsv[c].ftq_idx)) begin
+            w_view.slot[w_plc_pass[p-1][o]] = w_new_slot[o];
+          end
+        end
+        w_plc_pass[p][c] = place_slot(w_view, bkend_rsv[c].pos);
+      end
+    end
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      w_plc_slot[c] = w_plc_pass[NUM_RESOLVE_PORTS-1][c];
+    end
+
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      rsv_slot[c] = w_slot_hit[c] ? w_map_slot[c] : w_plc_slot[c];
+
+      // R2 of ftq_entry_formats.md 3.1. The stored classification
+      // against the resolved one, for a MAPPED branch only: a placed
+      // branch has no stored classification of its own, and the
+      // ruling trains the table predictors on it.
+      rsv_type_dis[c] = rsv_accept[c] && w_slot_hit[c] &&
+        (rsv_entry[c].slot[rsv_slot[c]].br_type != bkend_rsv[c].br_type);
+    end
+
+    // One slot, one channel (TD#158): a channel loses when an older
+    // channel names the same slot this cycle, whether or not the older
+    // one is accepted this cycle, so the younger never goes first.
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      w_lose[c] = 1'b0;
+      for (int o = 0; o < NUM_RESOLVE_PORTS; o++) begin
+        if (w_older[c][o] && rsv_accept[c] &&
+            (rsv_slot[o] == rsv_slot[c])) begin
+          w_lose[c] = 1'b1;
+        end
+      end
     end
   end
 
@@ -286,10 +399,12 @@ module ftq_resolve (
   // asserted only in a cycle SC grants an update (bp_cluster
   // sc_upd_rdy), so under that rule a resolution that trains no SC
   // could never be accepted once the readies were connected.
+  //
+  // A channel that loses its slot to an older one (TD#158) is held.
   always_comb begin : ready
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
       w_rdy_pred[c] = ~rsv_accept[c] | upd_acc[rsv_slot[c]];
-      ftq_bkend_rsv_rdy[c] = w_rdy_pred[c] & ftb_sched_rdy[c];
+      ftq_bkend_rsv_rdy[c] = w_rdy_pred[c] & ftb_sched_rdy[c] & ~w_lose[c];
     end
   end
 
@@ -320,10 +435,11 @@ module ftq_resolve (
     end
 
     // A request is formed for an accepted resolution whose FTB update
-    // the scheduler can take this cycle. NOT gated by upd_acc: see the
-    // header, THE PREDICTOR VALIDS ARE REQUESTS.
+    // the scheduler can take this cycle, unless an older channel holds
+    // its slot (TD#158). NOT gated by upd_acc: see the header, THE
+    // PREDICTOR VALIDS ARE REQUESTS.
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
-      if (rsv_accept[c] && ftb_sched_rdy[c]) begin
+      if (rsv_accept[c] && ftb_sched_rdy[c] && !w_lose[c]) begin
         upd[rsv_slot[c]].branch_id     = bkend_rsv[c].ftq_idx;
         upd[rsv_slot[c]].pc            = rsv_entry[c].pc;
         upd[rsv_slot[c]].actual_taken  = bkend_rsv[c].taken;
@@ -379,10 +495,18 @@ module ftq_resolve (
   // determines them at the prediction read and does not re-look-up
   // the tag at update, so they come out of the slow path unchanged.
   // They are scalar within the entry, so either slot's copy serves.
+  //
+  // Not presented while an older channel holds the slot (TD#158), nor
+  // once the scheduler has taken it for this held resolution (TD#157,
+  // r_ftb_done, header).
   always_comb begin : ftb_update
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      w_ftb_done[c]      = r_ftb_done[c] &&
+                           (r_ftb_idx[c] == bkend_rsv[c].ftq_idx) &&
+                           (r_ftb_pos[c] == bkend_rsv[c].pos);
       ftb_upd_val[c]     = rsv_accept[c] &&
-                           (bkend_rsv[c].br_type != NO_BRANCH);
+                           (bkend_rsv[c].br_type != NO_BRANCH) &&
+                           !w_lose[c] && !w_ftb_done[c];
       ftb_upd_hit[c]     = rsv_meta[c][rsv_slot[c]].ftb.hit;
       ftb_upd_mispred[c] = bkend_rsv[c].mispredict;
 
@@ -437,9 +561,29 @@ module ftq_resolve (
     end
   end
 
-  // clk and rstn are read by the bound properties, not by this
-  // module. See the port list.
-  logic w_unused;
-  assign w_unused = clk | rstn;
+  // -----------------------------------------------------------------
+  // The FTB taken once (TD#157, header). Set when the scheduler takes
+  // this channel's FTB update (presented, scheduler ready) and the
+  // channel is not accepted; held while the same branch stays
+  // presented and unaccepted; cleared on acceptance or withdrawal. The
+  // branch, entry index and position, is registered with the flag.
+  // -----------------------------------------------------------------
+  always_ff @(posedge clk or negedge rstn) begin : ftb_done
+    if (!rstn) begin
+      r_ftb_done <= '0;
+      for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+        r_ftb_idx[c] <= '0;
+        r_ftb_pos[c] <= '0;
+      end
+    end else begin
+      for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+        r_ftb_done[c] <= bkend_rsv_val[c] && !ftq_bkend_rsv_rdy[c] &&
+                         (w_ftb_done[c] ||
+                          (ftb_upd_val[c] && ftb_sched_rdy[c]));
+        r_ftb_idx[c]  <= bkend_rsv[c].ftq_idx;
+        r_ftb_pos[c]  <= bkend_rsv[c].pos;
+      end
+    end
+  end
 
 endmodule : ftq_resolve

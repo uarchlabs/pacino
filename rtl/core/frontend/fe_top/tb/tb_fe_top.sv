@@ -57,6 +57,13 @@
 // an update at the cluster (the valids after the cluster's own type
 // and ready gates), and the backend mispredict, predecode redirect and
 // p2 / p3 BPU redirect counts.
+//
+// BP-120. A fifth program, calls: main calls f, f calls g then h in
+// sequence and returns, in a loop (TD#159, the RAS link). Each program
+// also reports its RAS mispredicts (backend mispredicts of a RETURN or
+// RETURN_CALL) and how often the FTB jump field was trained by a jump
+// at a different position from the stored one (TD#156: two jumps of
+// one region taking turns in the one field).
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -676,6 +683,7 @@ module tb;
   int n_redir_p2;
   int n_redir_p3;
   int n_nomap;
+  int n_jmp_swap;
 
   always @(posedge clk) begin : upd_log
     if (rstn) begin
@@ -707,6 +715,18 @@ module tb;
       // (ftq_resolve rsv_nomap): it forms no update of any kind.
       if (dut.u_ftq.w_rsv_nomap[0] && ftq_bkend_rsv_rdy[0])
         n_nomap <= n_nomap + 1;
+      // BP-120, TD#156: an FTB jump update that hits an entry whose
+      // jump field holds a jump at a different region position. Since
+      // BP-120 the field is replaced; before, it kept the stored
+      // position. Read from ftb_cntrl's update decode: the carried
+      // way's readback and the update's region position.
+      if (dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_valid_u0 &&
+          dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_is_jmp_u0 &&
+          dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_hit_u0 &&
+          dut.u_bpu.u_ftb.u_ftb_cntrl.upd_old.jmp.valid &&
+          (dut.u_bpu.u_ftb.u_ftb_cntrl.upd_old.jmp.pos !=
+           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_rpos))
+        n_jmp_swap <= n_jmp_swap + 1;
     end
   end
 
@@ -730,6 +750,11 @@ module tb;
   int                      n_trap;
   int                      n_err;
   int                      n_fault_ok;
+  // BP-120: backend mispredicts of a return or a return-call, and of
+  // the instruction at watch_pc (a program sets it; zero matches none).
+  int                      n_mis_ras;
+  int                      n_mis_watch;
+  logic [VA_WIDTH-1:0]     watch_pc;
   // A resolution queue, presented on port 0.
   ftq_resolve_t            rq [0:255];
   int                      rq_hd;
@@ -846,6 +871,10 @@ module tb;
                        tname, s.start_pc, ex[cfi_e].pc);
             end else if (cfi_pend) begin
               n_mispred++;
+              if ((ex[cfi_e].btype == RETURN) ||
+                  (ex[cfi_e].btype == RETURN_CALL))
+                n_mis_ras++;
+              if (ex[cfi_e].pc == watch_pc) n_mis_watch++;
               resolve(cfi_e, cfi_idx, cfi_pos, 1'b1);
               cfi_pend = 1'b0;
               redirect(cfi_idx, cfi_pos, ex[ep].pc, 1'b0, RC_MISPREDICT);
@@ -962,6 +991,10 @@ module tb;
     n_trap       = 0;
     n_err        = 0;
     n_fault_ok   = 0;
+    n_mis_ras    = 0;
+    n_mis_watch  = 0;
+    watch_pc     = '0;
+    n_jmp_swap   = 0;
     n_fills      = 0;
     n_walks      = 0;
     n_pd_redir   = 0;
@@ -1063,6 +1096,10 @@ module tb;
               "RETURN_CALL at p2 %0d, committed %0d"}, tname, n_redir_p2,
              n_redir_p3, n_nomap, n_u_ubtb, n_u_lp, n_u_tage, n_u_sc,
              n_u_ittage, n_u_ras, n_rc_p2, n_rc_commit));
+    $display("%s", $sformatf(
+             {"   %s: RAS mispredicts %0d; FTB jump field trained by a ",
+              "jump at another position %0d"}, tname, n_mis_ras,
+             n_jmp_swap));
   endtask
 
   // =================================================================
@@ -1295,6 +1332,83 @@ module tb;
   endtask
 
   // =================================================================
+  // Program 5, calls (bare), BP-120, TD#159. Six iterations of:
+  //   main: jal x1, f            push Lm
+  //   f:    jal x1, g            push Lf1
+  //   g:    ret                  pop  -> Lf1
+  //   f:    jal x1, h            push Lf2
+  //   h:    ret                  pop  -> Lf2
+  //   f:    ret                  pop  -> Lm
+  //   main: bne x6, x0, top
+  // f's return follows a pop then a push. Before BP-120 the pop of
+  // Lf2 moved TOSR to TOSR-1, the slot Lf1 was popped from, so f's
+  // return was predicted to Lf1 (ras_decisions.md 3.2).
+  //
+  // THE LAYOUT KEEPS ONE JUMP PER FTB ENTRY. An FTB entry is indexed by
+  // the region of the block START and holds one jump (5.5, TD#156), and
+  // a block that starts at a return address runs on into the next
+  // region. So each call is the last instruction of its 32-byte region
+  // and its return address is the next region's start: main's call at
+  // +0x1C, f's at f+0x1C and f+0x3C, f's return at f+0x42, g's and h's
+  // returns at g+6 and h+6. Each block start then finds only its own
+  // jump, and the block end the FTB records is the call's return
+  // address, which is what the RAS pushes (IC-FTB-03).
+  // =================================================================
+  task automatic p_calls();
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] g;
+    logic [VA_WIDTH-1:0] h;
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] lm;
+    logic [VA_WIDTH-1:0] lf1;
+    logic [VA_WIDTH-1:0] lf2;
+    int                  e0;
+    tname = "calls";
+    $display("-- %s --", tname);
+    reset_all(1'b0);
+    wp  = RESET_VECTOR;
+    f   = RESET_VECTOR + VA_WIDTH'('h800);
+    g   = RESET_VECTOR + VA_WIDTH'('hA00);
+    h   = RESET_VECTOR + VA_WIDTH'('hC00);
+    mixed(3);
+    top = wp;
+    e0  = ne;
+    while (wp != RESET_VECTOR + VA_WIDTH'('h1C)) i16();
+    lm  = wp + VA_WIDTH'(4);
+    jal(5'd1, f);                          // main calls f
+    mixed(3);
+    while (wp != f + VA_WIDTH'('h1C)) i16();
+    lf1 = wp + VA_WIDTH'(4);
+    jal(5'd1, g);                          // f calls g
+    mixed(2);
+    ret(lf1);                              // g returns
+    mixed(1);
+    while (wp != f + VA_WIDTH'('h3C)) i16();
+    lf2 = wp + VA_WIDTH'(4);
+    jal(5'd1, h);                          // f calls h
+    mixed(2);
+    ret(lf2);                              // h returns
+    mixed(1);
+    watch_pc = wp;                         // f's return
+    ret(lm);                               // f returns to main
+    mixed(1);
+    loop_br(top);
+    rep_iter(e0, 6);
+    mixed(3);
+    halt();
+    release_reset();
+    run_and_check(40000);
+    // Reported, not checked: f's return still mispredicts in every
+    // iteration, before BP-120 and after, for reasons outside TD#159
+    // (the BP-120 Results Capture: the FTB lookup of the block after a
+    // redirect is dropped when an FTB update borrows the read port, so
+    // main's call is not pushed at p2). The RAS mispredict count is the
+    // before/after measure of the link.
+    $display("   %s: f's return mispredicted %0d times in 6 iterations",
+             tname, n_mis_watch);
+  endtask
+
+  // =================================================================
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
@@ -1302,6 +1416,7 @@ module tb;
     p_sv39();
     p_loops();
     p_coro();
+    p_calls();
     $display("tb_fe_top: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_fe_top: %0d checks failed", fail_cnt);

@@ -801,13 +801,19 @@ module tb;
     check("P1 jmp pos round-trip ==7", ftb_jmp_pos_p2 == 4'd7);
 
     // =============================================================
-    // P2: position static on in-place update -- resolve the same
-    // branch again with a DIFFERENT pos; stored position unchanged
-    // (5.5).
+    // P2: a DIFFERENT position is a different branch (5.5, ruled
+    // session-075, TD#156). Slot 0 resolves at pos 2 with both
+    // conditional fields filled (3 and 5): no stored position matches,
+    // so br0, the field slot 0 names, is refilled with pos 2. The
+    // same-position case is group F, F3.
+    // OLD (BP-066b, until BP-120): "P2 br0 pos static on in-place
+    // (still 3)", ftb_br0_pos_p2 == 4'd3 -- the stored position was
+    // kept for whatever branch resolved.
     // =============================================================
-    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd2, pc); // br0 in-place pos2
+    upd_br(pc, 1'b1, 2'd0, 1'b0, 1'b1, tgt, 4'd2, pc); // new branch pos2
     predict(pc);
-    check("P2 br0 pos static on in-place (still 3)", ftb_br0_pos_p2 == 4'd3);
+    check("P2 a different pos refills br0 (now 2)", ftb_br0_pos_p2 == 4'd2);
+    check("P2 and br1 keeps pos 5", ftb_br1_pos_p2 == 4'd5);
 
     // =============================================================
     // P3: reallocation overwrites position -- reallocate the field to
@@ -972,6 +978,157 @@ module tb;
           ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd1));
     check("J2 second start: edge-of-reach target is exact",
           ftb_jmp_target_p2 == j1);
+
+    // =============================================================
+    // F: THE SAME BRANCH IS THE SAME POSITION (ftb_decisions.md 5.5,
+    // IC-FTB-01, IC-FTB-15, ruled session-075, TD#156, BP-120). Every
+    // case starts from reset and a driven sequence, from one start at
+    // region offset 0 so every stored field is visible to it; the
+    // pre-BP-120 rule kept a visible stored position for any update.
+    // =============================================================
+
+    // F1: two jumps of one region at different positions. J1 is a
+    // RETURN_CALL at pos 4, J2 a RETURN at pos 9 (the coro shape,
+    // BP-119). After J2 trains, the field is J2's: position, type and
+    // target together, and the block end J2's. After J1 trains again
+    // it is J1's. Before BP-120 the field read J2's type and target at
+    // J1's position.
+    do_reset();
+    base = make_pc(26'h000701, 9'd140);
+    j1   = base + VA_WIDTH'('h1200);
+    j2   = base + VA_WIDTH'('h3400);
+    upd_jmp(base, 1'b0, 2'd1, j1, 1'b1, 1'b1, 1'b1, 4'd4,
+            base + VA_WIDTH'('d12));
+    predict(base);
+    check("F1 J1 holds the field: pos 4, call+ret+jalr",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd4) && ftb_is_call_p2
+          && ftb_is_ret_p2 && ftb_is_jalr_p2);
+    upd_jmp(base, 1'b1, 2'd1, j2, 1'b0, 1'b1, 1'b1, 4'd9,
+            base + VA_WIDTH'('d22));
+    predict(base);
+    check("F1 after J2: the position is J2's (9)",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd9));
+    check("F1 after J2: the type is J2's (return, not call)",
+          !ftb_is_call_p2 && ftb_is_ret_p2 && ftb_is_jalr_p2);
+    check("F1 after J2: the target is J2's, from J2's PC",
+          ftb_jmp_target_p2
+            == exp_jmp_tgt(j2, base + VA_WIDTH'(9 << POS_OFFSET_BITS)));
+    // 5.5: pftAddr recomputed when the boundary moves.
+    check("F1 after J2: the block end moved to J2's",
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d22));
+    upd_jmp(base, 1'b1, 2'd1, j1, 1'b1, 1'b1, 1'b1, 4'd4,
+            base + VA_WIDTH'('d12));
+    predict(base);
+    check("F1 after J1 again: pos 4, call+ret+jalr",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd4) && ftb_is_call_p2
+          && ftb_is_ret_p2 && ftb_is_jalr_p2);
+    check("F1 after J1 again: the target is J1's, from J1's PC",
+          ftb_jmp_target_p2
+            == exp_jmp_tgt(j1, base + VA_WIDTH'(4 << POS_OFFSET_BITS)));
+    check("F1 after J1 again: the block end moved back",
+          ftb_pft_addr_p2 == base + VA_WIDTH'('d12));
+
+    // F2: a conditional at a new position updating a filled field.
+    // br0 at pos 3 (taken, trained to conf 6) and br1 at pos 7. A
+    // branch at pos 9 resolves not taken on port slot 0, which names
+    // br0. It is a new branch: br0 is refilled with pos 9, conf weak
+    // not-taken, its own target, and the 5.4a order is restored by a
+    // swap, so the ports read the old br1 (pos 7, conf untouched) in
+    // slot 0 and the new branch in slot 1. Before BP-120 br0 was
+    // updated in place: pos 3 kept, conf stepped 6 -> 5.
+    do_reset();
+    base = make_pc(26'h000702, 9'd141);
+    tgt  = base + VA_WIDTH'('h500);
+    upd_br(base, 1'b0, 2'd2, 1'b0, 1'b1, tgt, 4'd3, base + VA_WIDTH'('d32));
+    train_br(base, 2'd2, 1'b0, 1'b1, 2, tgt, 4'd3, base + VA_WIDTH'('d32));
+    upd_br(base, 1'b1, 2'd2, 1'b1, 1'b0, base + VA_WIDTH'('h700), 4'd7,
+           base + VA_WIDTH'('d32));
+    predict(base);
+    check("F2 set-up: br0 pos 3 conf 6, br1 pos 7 conf 3",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd3)
+          && (ftb_br0_conf_p2 == 3'd6) && ftb_br1_valid_p2
+          && (ftb_br1_pos_p2 == 4'd7)
+          && (ftb_br1_conf_p2 == FTB_CONF_INIT_NTK));
+    upd_br(base, 1'b1, 2'd2, 1'b0, 1'b0, base + VA_WIDTH'('h900), 4'd9,
+           base + VA_WIDTH'('d32));
+    predict(base);
+    check("F2 slot 0 is the old br1, pos 7, conf untouched",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd7)
+          && (ftb_br0_conf_p2 == FTB_CONF_INIT_NTK));
+    check("F2 slot 0 target is the old br1's",
+          ftb_br0_target_p2 == base + VA_WIDTH'('h700));
+    check("F2 slot 1 is the new branch at pos 9",
+          ftb_br1_valid_p2 && (ftb_br1_pos_p2 == 4'd9));
+    check("F2 its conf is weak in the resolved direction (011)",
+          ftb_br1_conf_p2 == FTB_CONF_INIT_NTK);
+    check("F2 its target is written, from its own PC",
+          ftb_br1_target_p2 == exp_br_tgt(base + VA_WIDTH'('h900),
+                                 base + VA_WIDTH'(9 << POS_OFFSET_BITS)));
+    check("F2 the pos 3 branch is gone",
+          (ftb_br0_pos_p2 != 4'd3) && (ftb_br1_pos_p2 != 4'd3));
+
+    // F2b: a new position with a free field. br0 at pos 5 alone; a
+    // branch at pos 2 resolves on slot 0, which names br0. It fills
+    // the free field and the order is restored: slot 0 is the new
+    // branch (pos 2, weak taken), slot 1 the pos 5 branch with its
+    // conf. Before BP-120 br0 was updated in place at pos 5.
+    do_reset();
+    base = make_pc(26'h000703, 9'd142);
+    upd_br(base, 1'b0, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd5,
+           base + VA_WIDTH'('d32));
+    upd_br(base, 1'b1, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h200), 4'd2,
+           base + VA_WIDTH'('d32));
+    predict(base);
+    check("F2b slot 0 is the new branch: pos 2, weak taken",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd2)
+          && (ftb_br0_conf_p2 == FTB_CONF_INIT_TKN));
+    check("F2b slot 1 is the pos 5 branch, conf 011 untouched",
+          ftb_br1_valid_p2 && (ftb_br1_pos_p2 == 4'd5)
+          && (ftb_br1_conf_p2 == FTB_CONF_INIT_NTK));
+
+    // F3: the same branch resolving again: conf steps, the target is
+    // rewritten when it differs, the position is kept, as before
+    // BP-120. Then the pos 7 branch resolves on slot 0, the wrong
+    // port slot (an entry read before the order changed): the stored
+    // position, not the slot, names it, so br1 steps and br0 does not.
+    // Before BP-120 the slot named br0, which stepped in place.
+    do_reset();
+    base = make_pc(26'h000704, 9'd143);
+    upd_br(base, 1'b0, 2'd3, 1'b0, 1'b1, base + VA_WIDTH'('h100), 4'd3,
+           base + VA_WIDTH'('d32));
+    upd_br(base, 1'b1, 2'd3, 1'b1, 1'b0, base + VA_WIDTH'('h700), 4'd7,
+           base + VA_WIDTH'('d32));
+    upd_br(base, 1'b1, 2'd3, 1'b0, 1'b1, base + VA_WIDTH'('h180), 4'd3,
+           base + VA_WIDTH'('d32));
+    predict(base);
+    check("F3 same branch: conf steps 4 -> 5",
+          ftb_br0_conf_p2 == 3'd5);
+    check("F3 same branch: target rewritten",
+          ftb_br0_target_p2 == base + VA_WIDTH'('h180));
+    check("F3 same branch: position kept (3)",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd3));
+    upd_br(base, 1'b1, 2'd3, 1'b0, 1'b0, base + VA_WIDTH'('h700), 4'd7,
+           base + VA_WIDTH'('d32));
+    predict(base);
+    check("F3 pos 7 on slot 0: br1 steps 3 -> 2",
+          ftb_br1_valid_p2 && (ftb_br1_pos_p2 == 4'd7)
+          && (ftb_br1_conf_p2 == 3'd2));
+    check("F3 and br0 is untouched (pos 3, conf 5)",
+          ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd3)
+          && (ftb_br0_conf_p2 == 3'd5));
+
+    // F4: the same jump resolving again keeps its position and
+    // rewrites its target (5.5 jump target, IC-FTB-01).
+    do_reset();
+    base = make_pc(26'h000705, 9'd144);
+    upd_jmp(base, 1'b0, 2'd0, base + VA_WIDTH'('h800), 1'b0, 1'b0, 1'b1,
+            4'd6, base + VA_WIDTH'('d16));
+    upd_jmp(base, 1'b1, 2'd0, base + VA_WIDTH'('h880), 1'b0, 1'b0, 1'b1,
+            4'd6, base + VA_WIDTH'('d16));
+    predict(base);
+    check("F4 same jump: pos kept (6), target is the latest",
+          ftb_jmp_valid_p2 && (ftb_jmp_pos_p2 == 4'd6)
+          && (ftb_jmp_target_p2 == base + VA_WIDTH'('h880)));
 
     // -------------------------------------------------------------
     $display("=================================================");
