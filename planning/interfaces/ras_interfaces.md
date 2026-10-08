@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -445,14 +445,15 @@ Repair semantics: the push/pop labels denote stack-height
 restoration of resident entries, not fresh allocation or array
 clear. Undo-pop (p2=pop, p3=no-op) and undo-push (p2=push,
 p3=no-op) move TOSR over still-resident entries with no array
-write; from BP-120 undo-pop restores the pre-op TOSR and a missed
-pop follows the popped entry's next-on-stack link
-(ras_decisions.md 3.2, ruled session-075) (undo-push decrements an in-place recursion count when
-present). Only the missed-push case (p2=no-op, p3=push)
-allocates and writes a new frontier entry. Undo-pop does NOT
-reverse a recursion-decrement pop (TOSR held, rctr decremented):
-the re-expose moves TOSR by a slot and the decremented count is
-not recovered. See TD #78 and tb_ras TC-21.
+write (undo-push decrements an in-place recursion count when
+present). Since BP-120 undo-pop restores the pre-op TOSR, and
+undo-push and a missed pop follow the popped entry's next-on-stack
+link (ras_decisions.md 3.2). Only the missed-push case (p2=no-op,
+p3=push) allocates and writes a new frontier entry. Undo-pop does
+NOT reverse a recursion-decrement pop: the count is not recovered.
+See TD #78 and tb_ras TC-21. A return-call paired with a plain push
+or pop: ras_decisions.md 1, as built, two of four wrong, none
+reachable today.
 
 ### IC-RAS-12: Producer obligations (bp_cluster / FTQ)
 
@@ -649,3 +650,7 @@ On rstn deassert (active low, synchronous):
               commit built. IC-RAS-11: the two return-call repair
               rows, built; undo-pop and missed pop follow the
               next-on-stack link ruled in ras_decisions.md 3.2.
+
+  2026-10-08  session-075, after BP-120. IC-RAS-11: the repair on the
+              link, built; return-call pairings pointed to
+              ras_decisions.md 1.

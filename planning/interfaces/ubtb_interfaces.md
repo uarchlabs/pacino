@@ -6,7 +6,7 @@
  FILE:    ubtb_interfaces.md
  SOURCE:  various; session-063 rewrite
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -303,10 +303,10 @@ same entry; they write different fields of it.
                                   session-075). Jump field: rewrite
                                   the whole field. Conditional
                                   field: fill it as a new branch, as
-                                  the free-field row. AS BUILT BEFORE
-                                  THE RULING (BP-119), ubtb.sv kept
-                                  a visible stored position for a
-                                  different branch. TD#156, BP-120.
+                                  the free-field row. Built by
+                                  BP-120 (TD#156). The uBTB compares
+                                  only the field br_idx names; it
+                                  does not search the other field.
   Tag hit, field free           : fill it. conf starts weak in the
                                   resolved direction
                                   (UBTB_CONF_INIT_TKN /
@@ -371,6 +371,9 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-10-08  session-075, after BP-120. The position rule built;
+              only the field br_idx names is compared.
+
   2026-10-07  session-075, after BP-119. Allocation and field
               writes: a filled field keeps pos only for the same
               position; otherwise the jump field is rewritten or

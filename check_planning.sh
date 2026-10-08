@@ -36,7 +36,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   e3be8c359f3a
-PLAN  PROJECT_STATUS.md                 386847623a65
+PLAN  PROJECT_STATUS.md                 21c9abf0e06c
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -44,9 +44,9 @@ ARCH  bp_arb_spec.md                    0a402fc99ff0
 ARCH  bp_cluster.md                     bbfdeb78b28f
 ARCH  bp_history_decisions.md           632a8a57ceab
 ARCH  cachegen_decisions.md             ea488dd8c90d
-ARCH  dcd_decisions.md                  394010242eef
+ARCH  dcd_decisions.md                  e961051d9415
 ARCH  fe_decisions.md                   88a80661ae02
-ARCH  ftb_decisions.md            2729248c9732
+ARCH  ftb_decisions.md            1fd855a06d75
 ARCH  ftq_decisions.md            ba4da4970afa
 ARCH  ftq_entry_formats.md        3b0ef4d7d3ce
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
@@ -56,7 +56,7 @@ ARCH  itlb_decisions.md                 71e886e9787f
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  c43771704919
-ARCH  ras_decisions.md                  fcd0690157b3
+ARCH  ras_decisions.md                  7e5823b55075
 ARCH  sc_decisions.md                   d264a4ba07ed
 ARCH  sc_table_hash_rules.md            ef4c7e462412
 ARCH  sram_init.md                      62d9e6c2825c
@@ -84,9 +84,9 @@ INTF  ittage_table_interfaces.md        152940fce590
 INTF  tage_table_interfaces.md          c77c3b137298
 INTF  bp_history_interfaces.md          f799a4123d5b
 INTF  bpu_port_inventory.md             0add13030cb6
-INTF  ftb_interfaces.md           2aa244e735d8
-INTF  ftq_backend_interfaces.md   2084ef6fac90
-INTF  ftq_bpu_interfaces.md       47019bc0348b
+INTF  ftb_interfaces.md           d9a9b4918956
+INTF  ftq_backend_interfaces.md   9e35c62b81db
+INTF  ftq_bpu_interfaces.md       f6d0ef060e21
 INTF  ftq_ifu_interfaces.md       8d3732475aa5
 INTF  ifu_ibuf_interfaces.md      d1c8ae118057
 INTF  itlb_ifu_interfaces.md            57e989f8bfda
@@ -94,11 +94,11 @@ INTF  itlb_l2tlb_interfaces.md          5df4cb596827
 INTF  ittage_interfaces.md              7b90d2a1b3e3
 INTF  l1i_ifu_interfaces.md             4a7e8201e4f5
 INTF  loop_pred_interfaces.md           c20911b0ecc7
-INTF  ras_interfaces.md                 44dab78e9903
+INTF  ras_interfaces.md                 26c62e3047e6
 INTF  sc_interfaces.md                  c5913f89bc7c
 INTF  sc_table_interfaces.md            f64578d705ba
 INTF  tage_interfaces.md                1fc5cde68a3e
-INTF  ubtb_interfaces.md          07cf57224a15
+INTF  ubtb_interfaces.md          81c672ffe7c4
 
 
 EOF

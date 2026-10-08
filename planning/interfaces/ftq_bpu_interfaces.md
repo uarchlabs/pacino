@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -286,6 +286,15 @@ description of the named entry with the latest group received.
 `bpu_slot_val_p2` is `r_val_p2 & ftb_valid_p2`: the cluster has a
 corrected view only when the FTB answered. `bpu_slot_val_p3` is
 `r_val_p3`.
+
+DEFECT, TD#161, found by BP-120. Because `bpu_slot_val_p3` is not
+gated on the FTB having answered, the p3 write overwrites the p1
+slots with an empty view when the FTB missed at p2, and the FTQ then
+presented a block that is not its predecessor's successor: a stream
+error, also on the pre-BP-120 tree. The obvious fix (gate p3 on the
+registered p2 FTB valid) cleared it in a scratch copy but made coro
+commit 17 return-calls instead of 20, so the commit walk depends on
+the p3 write today. BP-121.
 
 THIS IS NOT A REDIRECT AND IS NOT GATED ON ONE. A redirect fires only
 when the p2 successor differs from the p1 successor. The case that
@@ -804,8 +813,15 @@ ready (bp_arb_spec.md). The SC-disabled rule is unchanged.
 
 The FTB update path through ftq_ftb_sched is unchanged and is not
 gated by the other predictors' readies, so a resolution held for a
-predictor is trained into the FTB again when it is presented again.
-That is a defect, TD#157.
+predictor was trained into the FTB again when it was presented
+again (TD#157). FIXED BY BP-120: ftq_resolve keeps one flag per
+channel, keyed by the branch's entry index and position, set when
+the scheduler takes the FTB update of a resolution not yet accepted,
+so it is presented to the FTB once. Gating the FTB valid without
+state would loop through the SC grant and the scheduler's ready. A
+low-value update the scheduler takes and drops (FE-5a) counts as
+taken. MEASURED: loops 51 -> 58 mispredicts; the repeated trainings
+had been stepping the FTB confidence extra times.
 
 | Predictor | Valid port        | Payload port    | Ready port      |
 |-----------|-------------------|-----------------|-----------------|
@@ -1246,4 +1262,8 @@ match it and to match this specification.
               SC grant stated; Ready column corrected to the
               accept readies; the FTB double-training defect
               recorded, TD#157.
+
+  2026-10-08  session-075, after BP-120. Section 8: TD#157 fixed and
+              measured. 4a: the p3 write erases the p1 slots when
+              the FTB missed, TD#161.
 ```

@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -323,8 +323,9 @@ TD#155  `en_c`, `en_zcb` and `MASK_BITS` in instr_decoder lose
         declared in decode_pkg.sv (`ext_enable_t`), so removing
         them is a package change; it narrows fe_top's ext_enable
         input and removes tb_instr_decoder's en_c=0 and en_zcb=0
-        cases. Not done by BP-119, which did not scope the
-        package; BP-120.
+        cases. CLOSED BY BP-120: removed; ext_enable_t and
+        fe_top's ext_enable are 16 bits; tb_instr_decoder 654 ->
+        649 checks.
 
 As built by BP-118, a faulting slot's decode packet is `valid` and
 the instruction bits only, no illegal and no vector decode, and it

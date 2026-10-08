@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -737,9 +737,17 @@ to a storage field through the same window. Built by BP-110.
                 region produced a field with one jump's type and
                 target at the other's position (coro: every
                 RETURN_CALL mispredicted). The conditional fields
-                kept their position the same way. Two jumps of one
-                region now take turns in the one jump field; that
-                costs accuracy, and is correct. TD#156, BP-120.
+                kept their position the same way. BUILT BY BP-120
+                (TD#156 closed). ftb_cntrl maps a conditional update
+                to a field in this order: a field at the update's
+                region position (either field; the same branch);
+                else a free field, br0 first; else the field the
+                port slot names; else the field hidden from this
+                start. MEASURED: coro's two jumps of the 0x600
+                region now take turns in the one jump field (9
+                times) and both still mispredict, 39 before and
+                after. Fixing that reopens 4.6, the sharing of one
+                entry by every start in a region: TD#168.
   conditional target: rewrite if the resolved taken target differs
                 from the stored offset.
   jump target:  rewrite on EVERY resolve of that jump, including when
@@ -1023,6 +1031,27 @@ region end, plus a full block, plus a straddling halfword pair:
          width is settled, not open. (Historical: last_may_be_rvi_call
          was eliminated; no straddle correction exists.)
 
+  FTB-5: OPEN, found by BP-120. Three defects, each needing a
+         ruling; BP-121 raises them in session.
+         TD#162 (2.4, IC-FTB-09). An update borrows the read port
+         and the prediction lookup of that cycle is DROPPED, not
+         retried. After a backend redirect the resolution's update
+         arrives as the redirect target is looked up, so that block
+         gets no p2 classification and no RAS operation (calls: f's
+         return mispredicts 6 of 6). PA recommends: retry the
+         dropped lookup the next cycle (p0 stalls one cycle).
+         TD#163 (5.1, IC-FTB-10). An update carrying a predict-time
+         miss allocates over the carried way even when that way now
+         holds the same tag, discarding its other fields. PA
+         recommends: on a carried miss, check the carried way's tag
+         (not an associative re-lookup) and merge if it matches.
+         TD#164 (IC-FTB-03). The RAS pushes ftb_pft_addr_p2, which
+         every start in the region shares (4.6), so the return
+         address is wrong when another start wrote pftAddr last. PA
+         recommends: the call's own position plus 2 or 4, with one
+         compressed-call bit added to the jump field (a format
+         change, section 8).
+
   FTB-2: Confidence-override interaction with the TAGE update/meta
          path. Flagged, not yet analyzed. Resolve at bp_cluster
          integration.
@@ -1084,6 +1113,11 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-10-08  session-075, after BP-120. 5.5: built, with the field
+              mapping order and the coro measurement. Defects found
+              by BP-120 recorded in section 9: TD#162, TD#163,
+              TD#164, TD#168.
+
   2026-10-07  session-075, after BP-119. 5.5: a filled field
               keeps its position only for the same branch; a
               different position rewrites the jump field or is a

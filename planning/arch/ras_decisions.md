@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -49,9 +49,17 @@ Note: push->pop and pop->push within one p2/p3 pair cannot occur.
 The two return-call rows were added after BP-119, which built them.
 The undo restores TOSR to its value before the p2 operation, held in
 a register (exact for the pointers by FE-11; a recursion count is
-not restored, the TD #78 limitation). A return-call paired at the
-other stage with a plain push or pop is not specified here; BP-120
-reports what ras.sv does with it.
+not restored, the TD #78 limitation).
+
+A return-call paired at the other stage with a plain push or pop is
+not specified. As built by BP-120 (tb_ras TC-33a..d):
+  p2=return-call, p3=return -> undo-push; gives the p3 result
+  p2=return, p3=return-call -> missed push; gives the p3 result
+  p2=return-call, p3=call   -> undo-pop; the push is lost; WRONG
+  p2=call, p3=return-call   -> missed pop retracts the push; WRONG
+None of the four can occur in the front end today: bp_cluster gives
+the repair the registered p2 type as the p3 type, so p2 and p3 never
+differ (TD#165, TD#166).
 
 Repair label semantics: the push/pop labels above denote
 stack-height restoration of resident entries, not fresh
@@ -73,8 +81,9 @@ allocation or array clear.
 Limitation (TD #78): undo-pop re-expose does NOT reverse a
 recursion-decrement pop. A pop that only decremented the
 recursion counter (TOSR held) leaves no recoverable pre-pop
-count; the re-expose moves TOSR by a slot instead. Pinned by
-tb_ras TC-21. See PROJECT_STATUS TD #78.
+count; since BP-120 the undo-pop restores the TOSR the pop held, and
+the count is not restored. This read "the re-expose moves TOSR by a
+slot instead". Pinned by tb_ras TC-21. See PROJECT_STATUS TD #78.
 
 RAS does not generate a redirect signal in the same sense as
 TAGE or SC. Its p0 TOS read is an input to the p1 prediction, which
@@ -307,7 +316,15 @@ push never overwrites a live entry. The p3 repair follows the link
 Rejected: pushing at TOSR+1 and dropping TOSW, which matches the
 session-050 wording but loses exact restore and rewrites the
 snapshot, sentinel and overflow rules. Cost 16 x 4 = 64 bits.
-BP-120, TD#159.
+BUILT BY BP-120 (TD#159 closed), in ras.sv with no port or package
+change. On the sentinel skip (the wrap) the new entry's nos is BOS,
+not TOSR, so the wrap leaves one reachable entry above BOS as the
+overflow effect below describes; nos = TOSR would link the entry
+into slots the wrap is reusing. That choice is the IA's, PROVISIONAL
+until Jeff rules (BP-121).
+
+MEASURED: no tb_fe_top number moved with the link alone. The RAS
+rarely operates at p2 in the integrated front end; see TD#162.
 
 Entry fields:
   ret_addr  : VA_WIDTH bits  -- PC+2 or PC+4 of instruction
@@ -941,4 +958,9 @@ Commit stack pointer width:
               the correct path after a pop then a push, TD#159.
               Ruled (Jeff): add the next-on-stack link; reverses
               session-050's simple buffer.
+
+  2026-10-08  session-075, after BP-120. 3.2: the link built; the
+              wrap links to BOS, provisional. 1: the four
+              return-call pairings as built, two wrong, none
+              reachable; TD #78 note restated for the restore.
 ```

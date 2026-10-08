@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, fe_decisions.md 7,
           ras_decisions.md 3.3 and 4.5, bp_structs_pkg.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -122,10 +122,14 @@ BP-119); it is not dropped.
 
 TWO RESOLUTIONS, ONE SLOT. Two resolution ports in one cycle can
 name the same slot index (in two entries), or two unmapped
-resolutions of one entry can be placed in the same free slot. As
-built (BP-119) the later write wins and both are reported accepted,
-so one update is lost. Not reachable in the front-end top today,
-which drives port 0 only. TD#158, BP-120.
+resolutions of one entry can be placed in the same free slot.
+Before BP-120 the later write won and both were reported accepted,
+so one update was lost (TD#158). FIXED BY BP-120: a resolution
+naming the slot of an OLDER resolution is held, whether or not the
+older is accepted that cycle, and two placements in one entry take
+program-order slots, the younger seeing the older's. OLDER means
+the entry nearer commit_ptr (wrap-aware), then the lower position,
+then port 0. A held resolution presents no FTB update.
 
 `bp_update_t` is unchanged. It is arrayed `[NUM_PRED_SLOTS-1:0]` and
 the slot IS the array index, so once the FTQ has resolved position to
@@ -528,6 +532,9 @@ Every one of these is unverifiable today. The backend does not exist.
 ## 12. Document History
 
 ```
+  2026-10-08  session-075, after BP-120. Section 4: TD#158 fixed;
+              the age rule.
+
   2026-10-07  session-075, after BP-119. Section 4: an unmapped
               position is placed and trained; two resolutions
               naming one slot lose an update, TD#158.

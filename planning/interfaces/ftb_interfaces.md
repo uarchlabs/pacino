@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -451,10 +451,10 @@ IC-FTB-01:
   resolve of a different jump of the region (a different position)
   rewrites the whole field: position, target, isCall, isRet, isJalr,
   and pftAddr if the boundary moves. Ruled session-075 (Jeff),
-  ftb_decisions.md 5.5. As built until BP-120, ftb_cntrl.sv keeps the
-  stored position whenever the stored jump is visible from the
-  update's start ("preserved on an in-place jump-target rewrite"),
-  which mixes two jumps in one field. TD#156.
+  ftb_decisions.md 5.5. Built by BP-120 (TD#156): every jump resolve
+  writes position, target and type. Before it, ftb_cntrl.sv kept the
+  stored position whenever the stored jump was visible from the
+  update's start, which mixed two jumps in one field.
 
 IC-FTB-02:
   ftb_fastpath_p2[i] is valid only when ftb_valid_p2 is asserted and
@@ -605,7 +605,8 @@ IC-FTB-15 (session-053, FTB-4 resolved):
   different branch: the jump field is rewritten whole (IC-FTB-01);
   a conditional field is filled as a new branch, with position,
   weak conf, target and the IC-FTB-16 order (ruled session-075,
-  ftb_decisions.md 5.5, TD#156). This read "static for the life of
+  ftb_decisions.md 5.5, which gives the field mapping order; built
+  by BP-120). This read "static for the life of
   a filled field ... reset only by reallocation". No stored
   field may be left write-only (0-stuffed) or read-only: a field is not
   "settled" until it has a named producer and consumer.
@@ -788,3 +789,7 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
               position only for the same branch (ruled, Jeff),
               TD#156. IC-FTB-03 and IC-FTB-11: stale "as built"
               notes brought to the BP-110 build.
+
+  2026-10-08  session-075, after BP-120. IC-FTB-01, IC-FTB-15: the
+              position rule built. Open defects TD#162 to TD#164 are
+              in ftb_decisions.md 9, FTB-5.
