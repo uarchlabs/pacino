@@ -32,6 +32,10 @@
 //   pd  predecode correction. ONE slot, from the IFU writeback. The
 //       third correction, later than both and superseding both for
 //       the slot it names.
+//   rsv placement (BP-119). ONE slot per resolution channel: a
+//       resolved branch the entry did not hold, placed by ftq_resolve.
+//       Architectural and the latest event for the slot, so it lands
+//       last.
 //
 // SAME-INDEX ORDER, resolved here because the array is this
 // module's state: pd > p3 > p2 > allocation on the SLOT array, and
@@ -143,6 +147,12 @@ module ftq_entry (
   input  bp_ftq_slot_t              pd_wr_slot,
   input  logic                      pd_wr_kill,
 
+  // ---- placement write, one slot per resolution channel (BP-119) --
+  input  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
+  input  logic [FTQ_IDX_BITS-1:0]   rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1],
+  input  logic [TRX_SLOT_BITS-1:0]  rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1],
+  input  bp_ftq_slot_t              rsv_wr_slot [0:NUM_RESOLVE_PORTS-1],
+
   // ---- reads -------------------------------------------------------
   input  logic [FTQ_IDX_BITS-1:0]   xlate_rd_idx,
   output logic [VA_WIDTH-1:0]       xlate_rd_pc,
@@ -227,9 +237,11 @@ module ftq_entry (
   // snapshot per entry is therefore sufficient and one payload per
   // commit step is all the scalar ras_commit_* group can carry.
   //
-  // A RAS operation is a taken CALL or RETURN. Every other resolved
-  // type touches no stack, so ras_commit_val stays low and the step
-  // frees the entry without a commit.
+  // A RAS operation is a taken CALL, RETURN or RETURN_CALL (the JALR
+  // that pops then pushes; the RAS applies both at commit, IC-RAS-10).
+  // Every other type touches no stack, so ras_commit_val stays low and
+  // the step frees the entry without a commit. Before BP-119 (TD#152)
+  // 3'b111 was not qualified and committed nothing.
   //
   // ras_commit_ret_addr IS DRIVEN FROM pft_addr. ras_decisions.md 8
   // names the source: ret_addr is call_pc + 2 or + 4, and "the FTB
@@ -255,7 +267,8 @@ module ftq_entry (
           commit_rd_entry.slot[s].taken &&
           ((commit_rd_entry.slot[s].br_type == DIRECT_CALL)   ||
            (commit_rd_entry.slot[s].br_type == INDIRECT_CALL) ||
-           (commit_rd_entry.slot[s].br_type == RETURN))) begin
+           (commit_rd_entry.slot[s].br_type == RETURN)        ||
+           (commit_rd_entry.slot[s].br_type == RETURN_CALL))) begin
         ras_commit_br_type = commit_rd_entry.slot[s].br_type;
         ras_commit_val     = commit_step_val;
       end
@@ -316,6 +329,13 @@ module ftq_entry (
               r_arr[pd_wr_idx].slot[s].taken      <= 1'b0;
             end
           end
+        end
+      end
+
+      // rsv: the placed slot, last (see the header).
+      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+        if (rsv_wr_val[p]) begin
+          r_arr[rsv_wr_idx[p]].slot[rsv_wr_sel[p]] <= rsv_wr_slot[p];
         end
       end
     end

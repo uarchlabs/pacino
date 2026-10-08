@@ -410,14 +410,19 @@ module ftq_ifu (
     // The predecode classification is two bits plus is_call and
     // is_ret (ftq_pd_info_t). Map it onto bp_br_type_e.
     //   00 not CFI, 01 branch, 10 jal, 11 jalr
+    // A JALR with both bits set is the pop-then-push of DCD-11,
+    // RETURN_CALL (DCD-11a, TD#152); before BP-119 is_ret was tested
+    // alone first and it mapped to RETURN.
     w_pd_is_cfi = w_pd_at_mis.valid && (w_pd_at_mis.br_type != 2'b00);
     unique case (w_pd_at_mis.br_type)
       2'b01:   w_pd_br_type = COND;
       2'b10:   w_pd_br_type = w_pd_at_mis.is_call ? DIRECT_CALL
                                                   : DIRECT_UNC;
-      2'b11:   w_pd_br_type = w_pd_at_mis.is_ret  ? RETURN
-                            : (w_pd_at_mis.is_call ? INDIRECT_CALL
-                                                   : INDIRECT_NONRET);
+      2'b11:   w_pd_br_type =
+                 (w_pd_at_mis.is_ret && w_pd_at_mis.is_call) ? RETURN_CALL
+               : w_pd_at_mis.is_ret  ? RETURN
+               : (w_pd_at_mis.is_call ? INDIRECT_CALL
+                                      : INDIRECT_NONRET);
       default: w_pd_br_type = NO_BRANCH;
     endcase
 

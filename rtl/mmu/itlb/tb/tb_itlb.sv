@@ -38,6 +38,8 @@
 //   M  two walks outstanding, responses out of order (depth 2 only)
 //   N  a held fault releases the tracker; an invalidate drops it
 //   P  the address check of Sv39 (bits 40:39 equal bit 38)
+//   R  a reserved page-size code (IL-7 3'b1xx) handled as a reserved
+//      status (IT-4): fault cause 1, nothing installed (BP-119)
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -52,8 +54,9 @@ module tb #(
                          ST_FAULT = 2'b10;
   localparam logic [1:0] L2_HIT = 2'b00, L2_FAULT = 2'b01,
                          L2_RETRY = 2'b10, L2_RSVD = 2'b11;
-  localparam logic [1:0] SZ4K = 2'd0, SZ64K = 2'd1, SZ2M = 2'd2,
-                         SZ1G = 2'd3;
+  // l2t_itlb_size, IL-7 (ruled session-075): 3'b1xx reserved.
+  localparam logic [2:0] SZ4K = 3'd0, SZ64K = 3'd1, SZ2M = 3'd2,
+                         SZ1G = 3'd3;
   localparam logic [1:0] PU = 2'd0, PS = 2'd1, PM = 2'd3;
   localparam logic [3:0] BARE = 4'd0, SV39 = 4'd8;
   localparam logic [1:0] OP_VMA = 2'd0, OP_VVMA = 2'd1, OP_GVMA = 2'd2;
@@ -97,7 +100,7 @@ module tb #(
   logic [1:0]              l2_rsp_tag;
   logic [1:0]              l2_rsp_st;
   logic [PPN_WIDTH-1:0]    l2_rsp_ppn;
-  logic [1:0]              l2_rsp_size;
+  logic [2:0]              l2_rsp_size;
   logic [PERM_WIDTH-1:0]   l2_rsp_perm;
   logic [1:0]              l2_rsp_pbmt;
   logic [CAUSE_WIDTH-1:0]  l2_rsp_cause;
@@ -175,7 +178,7 @@ module tb #(
     logic [VMID_WIDTH-1:0]  vmid;
     logic [ASID_WIDTH-1:0]  asid;
     logic [VW-1:0]          vbase;   // first 4 KiB VPN of the page
-    logic [1:0]             size;
+    logic [2:0]             size;
     logic [1:0]             st;      // L2_HIT or L2_FAULT
     logic [PPN_WIDTH-1:0]   ppn;     // as the PTE holds it
     logic [7:0]             perm;
@@ -206,12 +209,14 @@ module tb #(
   logic  inv_auto;
   logic  inv_met;
 
-  function automatic longint pages(input logic [1:0] sz);
+  // A reserved code covers the one VPN the mapping names.
+  function automatic longint pages(input logic [2:0] sz);
     case (sz)
       SZ4K:    return 1;
       SZ64K:   return 16;
       SZ2M:    return 512;
-      default: return 262144;
+      SZ1G:    return 262144;
+      default: return 1;
     endcase
   endfunction
 
@@ -231,7 +236,7 @@ module tb #(
 
   task automatic add_map(input logic v, input logic [VMID_WIDTH-1:0] vm,
                          input logic [ASID_WIDTH-1:0] as,
-                         input logic [VW-1:0] vb, input logic [1:0] sz,
+                         input logic [VW-1:0] vb, input logic [2:0] sz,
                          input logic [PPN_WIDTH-1:0] pn,
                          input logic [7:0] pm, input logic [1:0] pb,
                          input int lat);
@@ -906,6 +911,36 @@ module tb #(
        g_ppn == 24'h080500);
     ok("P4 V=1 G-only: L2 sees bit 40", last_vpn == 29'h1000_0000);
     ok("P5 no walk for P1, P2", l2_reqs == 1);
+
+    // ---- R: reserved page-size codes (IL-7, IT-4) ------------------------
+    // Each of the four reserved codes, from reset, on a mapping that is
+    // otherwise a legal executable 4 KiB-aligned hit. A reserved size
+    // is handled as a reserved status (F8): fault, cause 1, no GPA. The
+    // fault is not cached (as F2, F3): the next lookup misses and
+    // walks again. A 4 KiB neighbour mapped and installed first shows
+    // the array still serves legal entries after the reserved answer.
+    for (int r = 4; r < 8; r++) begin
+      string tn;
+      reset_all();
+      add_map(1'b0, '0, 16'd5, VA_A, 3'(r), 24'h080010, PX, 2'd0, 3);
+      add_map(1'b0, '0, 16'd5, VA_B, SZ4K,  24'h080020, PX, 2'd0, 2);
+      install(VA_B);
+      xlate(VA_A, m0);
+      tn = $sformatf("R1.%0d size %b: fault cause 1", r, 3'(r));
+      ok(tn, g_st == ST_FAULT && g_cause == 5'd1 && g_gpa == '0 &&
+         m0 >= 1);
+      n0 = l2_reqs;
+      look(VA_A);
+      tn = $sformatf("R2.%0d size %b: nothing installed", r, 3'(r));
+      ok(tn, g_st == ST_MISS);
+      idle(2);
+      tn = $sformatf("R3.%0d size %b: the next lookup walks", r, 3'(r));
+      ok(tn, l2_reqs == n0 + 1);
+      idle(6);
+      tn = $sformatf("R4.%0d size %b: legal entry still hits", r, 3'(r));
+      look(VA_B);
+      ok(tn, g_st == ST_HIT && g_ppn == 24'h080020);
+    end
 
     $display("tb_itlb (WALK_DEPTH=%0d): PASS=%0d FAIL=%0d", WALK_DEPTH,
              pass_cnt, fail_cnt);

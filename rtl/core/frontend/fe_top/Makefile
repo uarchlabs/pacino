@@ -117,6 +117,7 @@ FTQ_SRCS := \
   $(FTQ_DIR)/ftq_npc.sv \
   $(FTQ_DIR)/ftq_ifu.sv \
   $(FTQ_DIR)/ftq_resolve.sv \
+  $(FTQ_DIR)/ftq_upd_conv.sv \
   $(FTQ_DIR)/ftq_ftb_sched.sv \
   $(FTQ_DIR)/ftq.sv
 
@@ -153,6 +154,7 @@ ASSERT_SRCS := \
   $(FTQ_TB)/ftq_npc_assert.sv \
   $(FTQ_TB)/ftq_ifu_assert.sv \
   $(FTQ_TB)/ftq_resolve_assert.sv \
+  $(FTQ_TB)/ftq_upd_conv_assert.sv \
   $(FTQ_TB)/ftq_ftb_sched_assert.sv \
   $(IFU_TB)/ifu_xlate_assert.sv \
   $(IFU_TB)/ifu_f3_assert.sv \

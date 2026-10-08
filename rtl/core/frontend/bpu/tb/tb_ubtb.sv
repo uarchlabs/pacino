@@ -32,7 +32,7 @@
 // TC03 hit with only br0 occupied
 // TC04 hit with no field occupied -- successor is the fall-through
 // TC05 miss: same set, different tag; and a different set
-// TC06 jump field reported in a slot, all five jump types
+// TC06 jump field reported in a slot, all six jump types (BP-119)
 // TC07 jump placed in the lowest slot with no conditional field
 // TC08 conf trained to both saturation points; position held
 // TC09 target reconstruction, conditional and jump displacements
@@ -435,20 +435,24 @@ module tb;
     tc_close("TC05");
 
     // ==============================================================
-    // TC06 -- jump field reported in a slot, all five jump types
+    // TC06 -- jump field reported in a slot, all six jump types.
+    // [5] is RETURN_CALL, call+ret+jalr (ubtb_interfaces.md br_type,
+    // TD#152, BP-119): before BP-119 jmp_br_type tested is_ret first
+    // and reported it RETURN.
     // ==============================================================
     tc_open("TC06 jump types");
     begin
       // {is_call, is_ret, is_jalr} -> expected bp_br_type_e
-      bp_br_type_e exp_ty [5];
-      logic [2:0]  ty_bits[5];
+      bp_br_type_e exp_ty [6];
+      logic [2:0]  ty_bits[6];
       ty_bits[0] = 3'b100; exp_ty[0] = DIRECT_CALL;     // call
       ty_bits[1] = 3'b101; exp_ty[1] = INDIRECT_CALL;   // call+jalr
       ty_bits[2] = 3'b011; exp_ty[2] = RETURN;          // ret+jalr
       ty_bits[3] = 3'b001; exp_ty[3] = INDIRECT_NONRET; // jalr
       ty_bits[4] = 3'b000; exp_ty[4] = DIRECT_UNC;      // direct jmp
+      ty_bits[5] = 3'b111; exp_ty[5] = RETURN_CALL;     // call+ret+jalr
 
-      for (int i = 0; i < 5; i++) begin
+      for (int i = 0; i < 6; i++) begin
         do_reset();
         blk_a = mk_pc(11, TAG_BASE);
         tgt_a = blk_a + VA_WIDTH'('h400);

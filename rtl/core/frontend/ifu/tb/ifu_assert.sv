@@ -20,6 +20,10 @@
 //   U4  IFU-31        no new block is accepted for translation while a
 //                     lookup of a block the flush dropped is still in
 //                     flight, including the cycle its response arrives
+//   U5  TD#153        no line buffer reader count passes LB_RD_MAX,
+//                     the most blocks the pipeline lets read one slot
+//                     (BP-119). The counts are ifu_lbuf's state and
+//                     arrive on its rc_obs observation port
 //
 // U3 and U4 decide survival themselves, from ftq_ifu_flush_idx and
 // ftq_ifu_commit_ptr (IFU-28), and know which blocks the unit holds
@@ -31,7 +35,10 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module ifu_assert (
+module ifu_assert #(
+  parameter int LB_DEPTH  = 16,
+  parameter int LB_RD_MAX = 2 * LB_DEPTH + 1
+) (
   input logic                    clk,
   input logic                    rstn,
   input logic                    ftq_ifu_req_val,
@@ -56,7 +63,8 @@ module ifu_assert (
   input logic                    ifu_itlb_req_rdy,
   input logic                    ifu_itlb_tag,
   input logic                    itlb_ifu_rsp_val,
-  input logic                    itlb_ifu_tag
+  input logic                    itlb_ifu_tag,
+  input logic [$clog2(LB_RD_MAX+2)-1:0] lb_rc [0:LB_DEPTH-1]
 );
 
   logic [MAX_OUTSTANDING-1:0] r_id_out;   // L1I ids in flight
@@ -191,6 +199,27 @@ module ifu_assert (
       (ftq_ifu_xlate_val && ftq_ifu_xlate_rdy) |-> (r_xdead == 2'b00);
   endproperty
 
+  // U5  TD#153 (BP-119). No slot is read by more blocks than the
+  //     pipeline can hold. The bound is the derivation in ifu_lbuf's
+  //     header, not the count arithmetic: one reference per block,
+  //     every F1 block (2 * LB_DEPTH) plus the F0 block. A count above
+  //     it means a reference was added that no block holds, or one a
+  //     block gave back was not taken off. The count is one bit wider
+  //     than LB_RD_MAX needs, so the first value past the bound is
+  //     held, not wrapped, and this property sees it.
+  logic w_rc_over;
+
+  always_comb begin : rc_over
+    w_rc_over = 1'b0;
+    for (int s = 0; s < LB_DEPTH; s++)
+      if (32'(lb_rc[s]) > LB_RD_MAX) w_rc_over = 1'b1;
+  end
+
+  property p_lbuf_rc_bound;
+    @(posedge clk) disable iff (!rstn)
+      !w_rc_over;
+  endproperty
+
   a_l1i_id_reuse:   assert property (p_id_reused_after_rsp)
     else $error("U1 IF-7 an L1I identifier was reused before its response");
   a_gen_unchanged:  assert property (p_gen_unchanged)
@@ -199,11 +228,17 @@ module ifu_assert (
     else $error("U3 IFU-32 a writeback for a dropped block after the flush");
   a_no_xlate_dead:  assert property (p_no_xlate_while_dead)
     else $error("U4 IFU-31 a block accepted with a dead lookup in flight");
+  a_lbuf_rc_bound:  assert property (p_lbuf_rc_bound)
+    else $error("U5 TD#153 a line buffer reader count passed LB_RD_MAX %0d",
+                LB_RD_MAX);
 
 endmodule : ifu_assert
 
 // Bind BY MODULE NAME.
-bind ifu ifu_assert u_assert (
+bind ifu ifu_assert #(
+  .LB_DEPTH  (LB_DEPTH),
+  .LB_RD_MAX (LB_RD_MAX)
+) u_assert (
   .clk               (clk),
   .rstn              (rstn),
   .ftq_ifu_req_val   (ftq_ifu_req_val),
@@ -228,5 +263,7 @@ bind ifu ifu_assert u_assert (
   .ifu_itlb_req_rdy  (ifu_itlb_req_rdy),
   .ifu_itlb_tag      (ifu_itlb_tag),
   .itlb_ifu_rsp_val  (itlb_ifu_rsp_val),
-  .itlb_ifu_tag      (itlb_ifu_tag)
+  .itlb_ifu_tag      (itlb_ifu_tag),
+  .lb_rc             (w_lb_rc)
 );
+

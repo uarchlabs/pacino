@@ -6,13 +6,17 @@
 # Requires Verilator 5.048 ($(VERILATOR) from rtl/Vars.mk)
 #
 # Targets:
-#   lint_exp        - lint rvc_expander only
-#   lint_dec        - lint instr_decoder only
-#   lint            - lint both modules
-#   sim_exp         - build and run rvc_expander testbench
+#   lint_dec        - lint instr_decoder
+#   lint            - lint_dec
 #   sim_dec         - build and run instr_decoder testbench
-#   sim             - run sim_exp and sim_dec (existing targets)
+#   sim             - sim_dec
 #   sim_all         - run sim_dec and coverage
+#
+# BP-119 (TD#143): rvc_expander.sv, its testbench and the lint_exp and
+# sim_exp targets are deleted. Compressed expansion is the IFU's
+# (ifu_rvc_exp.sv), checked against the LLVM oracle by the ifu
+# Makefile's sim_ifu_rvc_exp; the coverage target credits C and Zcb
+# from ifu_rvc_exp.sv.
 #
 # BP-118 (TD#143): predecode.sv, its testbench and its two targets are
 # deleted. instr_decoder takes ifu_pd_pkt_t from bp_structs_pkg, so the
@@ -41,45 +45,24 @@ TOOLS           = ../../../../tools
 BPU_DIR         = ../bpu/rtl
 BP_PKG          = $(BPU_DIR)/bp_defines_pkg.sv $(BPU_DIR)/bp_structs_pkg.sv
 PKG             = rtl/decode_pkg.sv
-RTL_EXP         = rtl/rvc_expander.sv
 RTL_DEC         = rtl/instr_decoder.sv
-TB_EXP          = tb/tb_rvc_expander.sv
 TB_DEC          = tb/tb_instr_decoder.sv
-SIM_MAIN_EXP    = verilator/sim_main_exp.cpp
 SIM_MAIN_DEC    = verilator/sim_main.cpp
-OBJ_EXP         = obj_dir_exp
 OBJ_DEC         = obj_dir_dec
 
-.PHONY: lint lint_exp lint_dec \
-        sim sim_exp sim_dec sim_all \
+.PHONY: lint lint_dec \
+        sim sim_dec sim_all \
         coverage clean help
 
 all: lint sim sim_all
 
 # -- lint only
-lint_exp:
-	@echo "[linting]    $(PKG) $(RTL_EXP)"
-	$(Q)$(VERILATOR) --lint-only --sv -Wall $(PKG) $(RTL_EXP)
-
 lint_dec:
 	@echo "[linting]    $(BP_PKG) $(PKG) $(RTL_DEC)"
 	$(Q)$(VERILATOR) --lint-only --sv -Wall $(DEC_WFLAGS) \
 	    $(BP_PKG) $(PKG) $(RTL_DEC)
 
-lint: lint_exp lint_dec
-
-# -- build and run rvc_expander simulation
-sim_exp:
-	@echo "[compiling]  $(PKG) $(TB_EXP) $(RTL_EXP)"
-	$(Q)mkdir -p $(OBJ_EXP)
-	$(Q)$(VERILATOR) $(VERILATOR_FLAGS) \
-	    --top-module tb \
-	    --Mdir $(OBJ_EXP) \
-	    $(PKG) $(TB_EXP) $(RTL_EXP) \
-	    $(SIM_MAIN_EXP) \
-	    -o sim_exp
-	@echo "[simulating] $(OBJ_EXP)/sim_exp"
-	$(Q)./$(OBJ_EXP)/sim_exp
+lint: lint_dec
 
 # -- build and run instr_decoder simulation
 sim_dec:
@@ -94,8 +77,8 @@ sim_dec:
 	@echo "[simulating] $(OBJ_DEC)/sim_dec"
 	$(Q)./$(OBJ_DEC)/sim_dec
 
-# -- run sim_exp and sim_dec (existing combined target)
-sim: sim_exp sim_dec
+# -- run sim_dec (combined target kept for its callers)
+sim: sim_dec
 
 # -- run the instr_decoder testbench and the coverage check
 sim_all: sim_dec coverage
@@ -113,17 +96,15 @@ coverage:
 
 # -- remove build artifacts
 clean:
-	$(Q)rm -rf $(OBJ_EXP) $(OBJ_DEC)
+	$(Q)rm -rf $(OBJ_DEC)
 
 # -- print available targets
 help:
 	@echo "Targets:"
-	@echo "  lint_exp       - lint rvc_expander"
 	@echo "  lint_dec       - lint instr_decoder"
-	@echo "  lint           - lint both modules"
-	@echo "  sim_exp        - build and run rvc_expander testbench"
+	@echo "  lint           - lint_dec"
 	@echo "  sim_dec        - build and run instr_decoder testbench"
-	@echo "  sim            - run sim_exp and sim_dec"
+	@echo "  sim            - sim_dec"
 	@echo "  sim_all        - run sim_dec, coverage"
 	@echo "  coverage       - run RVA23 coverage check script"
 	@echo "  clean          - remove build artifacts"
@@ -137,8 +118,8 @@ help:
 #   help                    - prints the target list.
 #   clean, regress_list     - housekeeping and this plumbing.
 REGRESS_TARGETS := \
-  lint_exp lint_dec \
-  sim_exp sim_dec \
+  lint_dec \
+  sim_dec \
   coverage
 REGRESS_EXCLUDE := all lint sim sim_all help clean regress_list
 

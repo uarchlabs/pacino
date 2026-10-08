@@ -60,6 +60,8 @@ module ftq_entry_assert (
   input logic [TRX_SLOT_BITS-1:0] pd_wr_sel,
   input bp_ftq_slot_t             pd_wr_slot,
   input logic                     pd_wr_kill,
+  input logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
+  input logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx [0:NUM_RESOLVE_PORTS-1],
   input logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx,
   input logic [VA_WIDTH-1:0]      xlate_rd_pc
 );
@@ -76,6 +78,9 @@ module ftq_entry_assert (
   // SAME cycle as the pd write does not disarm it: the pd write is
   // last in ftq_entry's write block and lands over them.
   logic                     w_pd_overwritten;
+  // The placement write (BP-119) also replaces a slot of the entry.
+  logic                     w_rsv_same;
+  logic                     w_rsv_over;
   logic                     r_pd_val;
   logic                     r_pd_kill;
   logic [FTQ_IDX_BITS-1:0]  r_pd_idx;
@@ -90,7 +95,10 @@ module ftq_entry_assert (
       r_pd_sel  <= '0;
       r_pd_slot <= '0;
     end else if (pd_wr_val) begin
-      r_pd_val  <= 1'b1;
+      // A placement write to the same entry in the same cycle lands
+      // after it (ftq_entry, BP-119), so the predecode slot is not
+      // what the entry then holds: do not arm.
+      r_pd_val  <= !w_rsv_same;
       r_pd_kill <= pd_wr_kill;
       r_pd_idx  <= pd_wr_idx;
       r_pd_sel  <= pd_wr_sel;
@@ -101,9 +109,16 @@ module ftq_entry_assert (
   end
 
   always_comb begin : pd_disarm
+    w_rsv_same = 1'b0;
+    w_rsv_over = 1'b0;
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      w_rsv_same = w_rsv_same | (rsv_wr_val[p] && (rsv_wr_idx[p] == pd_wr_idx));
+      w_rsv_over = w_rsv_over | (rsv_wr_val[p] && (rsv_wr_idx[p] == r_pd_idx));
+    end
     w_pd_overwritten = (alloc_wr_val && (alloc_wr_idx == r_pd_idx)) ||
                        (p2_wr_val    && (p2_wr_idx    == r_pd_idx)) ||
-                       (p3_wr_val    && (p3_wr_idx    == r_pd_idx));
+                       (p3_wr_val    && (p3_wr_idx    == r_pd_idx)) ||
+                       w_rsv_over;
   end
 
   logic w_e8_bad;
@@ -192,7 +207,8 @@ module ftq_entry_assert (
       ras_commit_val |-> commit_step_val;
   endproperty
 
-  // E6  A RAS commit is a call or a return and nothing else. FE-11
+  // E6  A RAS commit is a call, a return or a return-call (TD#152,
+  //     BP-119) and nothing else. FE-11
   //     bounds it to one operation per entry; this bounds it to the
   //     operations that exist. A commit carrying COND or NO_BRANCH
   //     would push or pop the stack for a branch that touches it.
@@ -200,7 +216,8 @@ module ftq_entry_assert (
     @(posedge clk) disable iff (!rstn)
       ras_commit_val |-> (ras_commit_br_type == DIRECT_CALL)   ||
                          (ras_commit_br_type == INDIRECT_CALL) ||
-                         (ras_commit_br_type == RETURN);
+                         (ras_commit_br_type == RETURN)        ||
+                         (ras_commit_br_type == RETURN_CALL);
   endproperty
 
   // E7  The payload comes from the entry being freed. Stated on the
@@ -303,6 +320,8 @@ bind ftq_entry ftq_entry_assert u_assert (
   .pd_wr_sel           (pd_wr_sel),
   .pd_wr_slot          (pd_wr_slot),
   .pd_wr_kill          (pd_wr_kill),
+  .rsv_wr_val          (rsv_wr_val),
+  .rsv_wr_idx          (rsv_wr_idx),
   .xlate_rd_idx        (xlate_rd_idx),
   .xlate_rd_pc         (xlate_rd_pc)
 );

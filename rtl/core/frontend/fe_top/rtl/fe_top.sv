@@ -45,21 +45,22 @@
 //                the ones FE-20 does not list)
 //   maintenance  the ITLB invalidate port (FE-20, ITLB-14)
 //
+// THE UPDATE PATHS ARE ALL CONNECTED (BP-119, TD#151, TD#150). The
+// FTQ forms the per-predictor payloads (ftq_upd_conv inside ftq.sv)
+// and presents the section 8 ports name for name: ubtb_upd_u0,
+// lp_upd_*, tage_upd_*, ittage_upd_*, sc_upd_*. The cluster's per-slot
+// queue readies (tage_upd_rdy, ittage_upd_rdy, sc_upd_rdy) go to the
+// FTQ unchanged; the FTQ ANDs them per predictor. sc_enable reaches
+// both the cluster and the FTQ (the SC-disabled rule). The FTB update
+// (14 flat ports) and the RAS commit group are wired as before. Until
+// BP-119 only the FTB and the RAS trained here: the five inputs were
+// held inactive, the FTQ's bp_update_t outputs ended on wires, and its
+// three scalar readies were held high.
+//
 // NOT CONNECTED, AND WHY (each is a disagreement between units):
-//   - the per-predictor update payloads. ftq.sv presents bp_update_t
-//     with bp_ftq_meta_t and one valid vector per predictor;
-//     bp_cluster takes ubtb_upd_t, lp_upd_t, tage_upd_inp_t,
-//     ittage_upd_inp_t and sc_upd_inp_t. ftq_bpu_interfaces.md 8
-//     says the FTQ forms those payloads and no unit does, and the
-//     conversion is logic. The cluster's uBTB, loop, TAGE, ITTAGE
-//     and SC update inputs are held inactive here and the FTQ's
-//     update outputs end on wires. The FTB update (14 flat ports)
-//     and the RAS commit group match name for name and are wired.
-//   - the update-queue readies. ftq.sv takes one tage_upd_rdy_u1,
-//     ittage_upd_rdy_u1 and sc_upd_rdy_u1 bit; bp_cluster presents
-//     each as [NUM_PRED_SLOTS-1:0]. Joining them is a reduction.
-//     With the queued updates inactive, the FTQ's readies are held
-//     high and the cluster's end on wires.
+//   - the cluster's tage_upd_rdy_u1, ittage_upd_rdy_u1 and
+//     sc_upd_rdy_u1 end on wires. Each is the registered update valid
+//     ("update applied", tage_interfaces.md), not an accept ready.
 //   - ras_flush_val and ras_flush_snapshot. Redundant with the
 //     restore group and read by nothing (ras_decisions.md 4.4.2);
 //     held inactive. ftb_flush_px is held inactive for the same
@@ -115,7 +116,7 @@ module fe_top (
   input  logic [1:0]                  l2t_itlb_tag,
   input  logic [1:0]                  l2t_itlb_status,
   input  logic [PPN_WIDTH-1:0]        l2t_itlb_ppn,
-  input  logic [1:0]                  l2t_itlb_size,
+  input  logic [2:0]                  l2t_itlb_size,   // IL-7
   input  logic [PERM_WIDTH-1:0]       l2t_itlb_perm,
   input  logic [1:0]                  l2t_itlb_pbmt,
   input  logic [CAUSE_WIDTH-1:0]      l2t_itlb_cause,
@@ -253,21 +254,18 @@ module fe_top (
   logic                       ftb_upd_is_jalr_u0;
   logic [VA_WIDTH-1:0]        ftb_upd_pft_addr_u0;
 
-  // The FTQ's per-slot update outputs: NOT CONNECTED, see the header.
-  bp_update_t                 ftq_upd      [0:NUM_PRED_SLOTS-1];
-  bp_ftq_meta_t               ftq_upd_meta [0:NUM_PRED_SLOTS-1];
-  logic [NUM_PRED_SLOTS-1:0]  ftq_upd_ubtb_val;
-  logic [NUM_PRED_SLOTS-1:0]  ftq_upd_lp_val;
-  logic [NUM_PRED_SLOTS-1:0]  ftq_upd_tage_val;
-  logic [NUM_PRED_SLOTS-1:0]  ftq_upd_ittage_val;
-  logic [NUM_PRED_SLOTS-1:0]  ftq_upd_sc_val;
+  // The per-predictor update channels, FTQ -> BPU, section 8.
+  ubtb_upd_t [NUM_PRED_SLOTS-1:0] ubtb_upd_u0;
+  logic [NUM_PRED_SLOTS-1:0]  lp_upd_valid_p0;
+  lp_upd_t                    lp_upd_p0         [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0]  tage_upd_val_u0;
+  tage_upd_inp_t              tage_upd_inp_u0   [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0]  ittage_upd_val_u0;
+  ittage_upd_inp_t            ittage_upd_inp_u0 [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0]  sc_upd_val_u0;
+  sc_upd_inp_t                sc_upd_inp_u0     [0:NUM_PRED_SLOTS-1];
 
-  // The cluster's inactive update inputs and its unread outputs.
-  ubtb_upd_t [NUM_PRED_SLOTS-1:0] bpu_ubtb_upd_off;
-  lp_upd_t                    bpu_lp_upd_off     [0:NUM_PRED_SLOTS-1];
-  tage_upd_inp_t              bpu_tage_upd_off   [0:NUM_PRED_SLOTS-1];
-  ittage_upd_inp_t            bpu_ittage_upd_off [0:NUM_PRED_SLOTS-1];
-  sc_upd_inp_t                bpu_sc_upd_off     [0:NUM_PRED_SLOTS-1];
+  // The cluster's unread outputs, and its per-slot queue readies.
   logic [GHIST_PTR_BITS-1:0]  bpu_ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  bpu_phist_ptr;
   logic [GHR_WIDTH-1:0]       bpu_ghr_buf;
@@ -388,9 +386,9 @@ module fe_top (
     .bpu_meta_val_p3       (bpu_meta_val_p3),
     .bpu_meta_idx_p3       (bpu_meta_idx_p3),
     .bpu_meta_sc_p3        (bpu_meta_sc_p3),
-    .ubtb_upd_u0           (bpu_ubtb_upd_off),
-    .lp_upd_valid_p0       ('0),
-    .lp_upd_p0             (bpu_lp_upd_off),
+    .ubtb_upd_u0           (ubtb_upd_u0),
+    .lp_upd_valid_p0       (lp_upd_valid_p0),
+    .lp_upd_p0             (lp_upd_p0),
     .ftb_upd_valid_u0      (ftb_upd_valid_u0),
     .ftb_upd_pc_u0         (ftb_upd_pc_u0),
     .ftb_upd_hit_u0        (ftb_upd_hit_u0),
@@ -407,12 +405,12 @@ module fe_top (
     .ftb_upd_is_jalr_u0    (ftb_upd_is_jalr_u0),
     .ftb_upd_pft_addr_u0   (ftb_upd_pft_addr_u0),
     .ftb_flush_px          (1'b0),
-    .tage_upd_val_u0       ('0),
-    .tage_upd_inp_u0       (bpu_tage_upd_off),
-    .ittage_upd_val_u0     ('0),
-    .ittage_upd_inp_u0     (bpu_ittage_upd_off),
-    .sc_upd_val_u0         ('0),
-    .sc_upd_inp_u0         (bpu_sc_upd_off),
+    .tage_upd_val_u0       (tage_upd_val_u0),
+    .tage_upd_inp_u0       (tage_upd_inp_u0),
+    .ittage_upd_val_u0     (ittage_upd_val_u0),
+    .ittage_upd_inp_u0     (ittage_upd_inp_u0),
+    .sc_upd_val_u0         (sc_upd_val_u0),
+    .sc_upd_inp_u0         (sc_upd_inp_u0),
     .ras_restore_val       (ras_restore_val),
     .ras_restore_snapshot  (ras_restore_snapshot),
     .ras_commit_val        (ras_commit_val),
@@ -448,19 +446,6 @@ module fe_top (
     .sc_upd_rdy            (bpu_sc_upd_rdy),
     .sc_upd_rdy_u1         (bpu_sc_upd_rdy_u1)
   );
-
-  // The inactive payloads are constants. A generate loop indexes the
-  // unpacked arrays; it holds continuous assigns of zero only.
-  assign bpu_ubtb_upd_off = '0;
-  generate
-    genvar gs;
-    for (gs = 0; gs < NUM_PRED_SLOTS; gs++) begin : gen_upd_off
-      assign bpu_lp_upd_off[gs]     = '0;
-      assign bpu_tage_upd_off[gs]   = '0;
-      assign bpu_ittage_upd_off[gs] = '0;
-      assign bpu_sc_upd_off[gs]     = '0;
-    end
-  endgenerate
 
   // -----------------------------------------------------------------
   // The fetch target queue
@@ -512,16 +497,19 @@ module fe_top (
     .ras_commit_br_type    (ras_commit_br_type),
     .ras_commit_ret_addr   (ras_commit_ret_addr),
     .ras_commit_snapshot   (ras_commit_snapshot),
-    .upd                   (ftq_upd),
-    .upd_meta              (ftq_upd_meta),
-    .upd_ubtb_val          (ftq_upd_ubtb_val),
-    .upd_lp_val            (ftq_upd_lp_val),
-    .upd_tage_val          (ftq_upd_tage_val),
-    .upd_ittage_val        (ftq_upd_ittage_val),
-    .upd_sc_val            (ftq_upd_sc_val),
-    .tage_upd_rdy_u1       (1'b1),
-    .ittage_upd_rdy_u1     (1'b1),
-    .sc_upd_rdy_u1         (1'b1),
+    .sc_enable             (sc_enable),
+    .ubtb_upd_u0           (ubtb_upd_u0),
+    .lp_upd_valid_p0       (lp_upd_valid_p0),
+    .lp_upd_p0             (lp_upd_p0),
+    .tage_upd_val_u0       (tage_upd_val_u0),
+    .tage_upd_inp_u0       (tage_upd_inp_u0),
+    .ittage_upd_val_u0     (ittage_upd_val_u0),
+    .ittage_upd_inp_u0     (ittage_upd_inp_u0),
+    .sc_upd_val_u0         (sc_upd_val_u0),
+    .sc_upd_inp_u0         (sc_upd_inp_u0),
+    .tage_upd_rdy          (bpu_tage_upd_rdy),
+    .ittage_upd_rdy        (bpu_ittage_upd_rdy),
+    .sc_upd_rdy            (bpu_sc_upd_rdy),
     .ftb_upd_valid_u0      (ftb_upd_valid_u0),
     .ftb_upd_pc_u0         (ftb_upd_pc_u0),
     .ftb_upd_hit_u0        (ftb_upd_hit_u0),

@@ -54,14 +54,17 @@ module ftq_resolve_assert (
     for (gc = 0; gc < NUM_RESOLVE_PORTS; gc++) begin : g_chan
 
       // R1  Every presented resolution lands in EXACTLY ONE bucket:
-      //     accepted, reported as unmapped, or dropped as squashed.
-      //     A resolution that fell through all three would vanish
-      //     with no update formed and nothing said -- the silent
-      //     drop the acceptance criterion forbids.
+      //     accepted or dropped as squashed; an unmapped one is
+      //     accepted (placed, BP-119) and also reported. A resolution
+      //     that fell through both would vanish with no update formed
+      //     and nothing said -- the silent drop the acceptance
+      //     criterion forbids. This read "$onehot({accept, nomap,
+      //     drop_sq})" while an unmapped resolution formed nothing.
       property p_one_bucket;
         @(posedge clk) disable iff (!rstn)
           bkend_rsv_val[gc] |->
-            $onehot({rsv_accept[gc], rsv_nomap[gc], rsv_drop_sq[gc]});
+            $onehot({rsv_accept[gc], rsv_drop_sq[gc]}) &&
+            (!rsv_nomap[gc] || rsv_accept[gc]);
       endproperty
       a_one_bucket: assert property (p_one_bucket)
         else $error("R1 a resolution landed in no bucket, or in more than one");
@@ -75,15 +78,23 @@ module ftq_resolve_assert (
       a_no_bucket_idle: assert property (p_no_bucket_idle)
         else $error("R2 a bucket fired with no resolution presented");
 
-      // R3  An unmapped position forms NO update. There is no slot
-      //     whose metadata could train a predictor, so forming one
-      //     would train against another branch's captured state.
-      property p_nomap_forms_nothing;
+      // R3  An unmapped position is PLACED IN PROGRAM ORDER (BP-119):
+      //     the slot it takes holds no EARLIER branch of the entry,
+      //     unless every slot does (then it takes the last). Stated on
+      //     the entry the module read, not on its selection loop.
+      //     This read "an unmapped position forms NO update" before
+      //     the ruling to train the first execution.
+      property p_nomap_placed_in_order;
         @(posedge clk) disable iff (!rstn)
-          rsv_nomap[gc] |-> !ftb_upd_val[gc];
+          rsv_nomap[gc] |->
+            !(rsv_entry[gc].slot[rsv_slot[gc]].slot_valid &&
+              (rsv_entry[gc].slot[rsv_slot[gc]].pos < bkend_rsv[gc].pos))
+            || (rsv_slot[gc] == TRX_SLOT_BITS'(NUM_PRED_SLOTS - 1) &&
+                rsv_entry[gc].slot[0].slot_valid &&
+                (rsv_entry[gc].slot[0].pos < bkend_rsv[gc].pos));
       endproperty
-      a_nomap_forms_nothing: assert property (p_nomap_forms_nothing)
-        else $error("R3 an unmapped position formed an update");
+      a_nomap_placed_in_order: assert property (p_nomap_placed_in_order)
+        else $error("R3 an unmapped branch was placed out of order");
 
       // R4  R3 of backend_interfaces 7. A resolution naming a
       //     squashed entry forms nothing. This is NORMAL TRAFFIC,
@@ -238,25 +249,15 @@ module ftq_resolve_assert (
     end
   endgenerate
 
-  // R15 FE-5 and A4. When NO channel can be accepted, nothing is
-  //     enqueued to the predictors: the backend holds the resolution
-  //     and it is never dropped for capacity.
-  //
-  //     STATED ON THE bp_update_t FAN-OUT, NOT ON THE FTB CHANNEL,
-  //     and the difference is structural. ftq_ftb_sched's upd_rdy is
-  //     a FUNCTION of the valids presented to it (5.7.3 S6), so
-  //     gating ftb_upd_val on ftb_sched_rdy would close a
-  //     combinational loop through the scheduler. The FTB channel is
-  //     therefore presented unconditionally and the scheduler
-  //     answers; the queued predictors, whose readies come from
-  //     their own queues, are gated.
-  property p_no_update_when_not_rdy;
-    @(posedge clk) disable iff (!rstn)
-      (ftq_bkend_rsv_rdy == '0) |-> ((upd[0].valid == 1'b0) &&
-                                     (upd[1].valid == 1'b0));
-  endproperty
-  a_no_update_when_not_rdy: assert property (p_no_update_when_not_rdy)
-    else $error("R15 an update formed on a channel that was not ready");
+  // R15 REMOVED, BP-119. It read "(ftq_bkend_rsv_rdy == '0) |-> no
+  //     upd valid": no update formed while no channel was ready. The
+  //     predictor valids are now REQUESTS (ftq_resolve header): they
+  //     are qualified by the FTB scheduler's ready only, and
+  //     ftq_upd_conv gates them on the slot being accepted by every
+  //     predictor it trains. The guarantee R15 carried is the
+  //     converter's V1 and V2. Restated on the scheduler's ready it
+  //     would repeat the fan-out's own gate, which is not a check
+  //     (CLAUDE.md, assertions).
 
 endmodule : ftq_resolve_assert
 

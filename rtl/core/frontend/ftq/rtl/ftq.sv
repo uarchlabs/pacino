@@ -39,7 +39,7 @@
 // A fourth, ftq_icache, is DELIBERATELY NOT DEFINED. The ICache is
 // encapsulated behind the IFU (ftq_decisions.md 0).
 //
-// ELEVEN MODULES, one owner per piece of state (7.1):
+// TWELVE MODULES, one owner per piece of state (7.1):
 //
 //   ftq_ptr         alloc_ptr, xlate_ptr,
 //                   fetch_ptr                   5.1 5.2 5.5
@@ -52,6 +52,8 @@
 //   ftq_shadow      the response shadow         5.6
 //   ftq_ifu         request, flush, writeback   ftq_ifu_ifs
 //   ftq_resolve     resolution and fan-out      backend_ifs 4
+//   ftq_upd_conv    the per-predictor update
+//                   payloads and their ready    bpu_ifs 8 (BP-119)
 //   ftq_ftb_sched   the FTB update scheduler    5.7  (BP-100)
 //
 // THE CROSSING BETWEEN ftq_ptr AND ftq_commit RUNS BOTH WAYS.
@@ -152,17 +154,28 @@ module ftq (
   output logic [VA_WIDTH-1:0]         ras_commit_ret_addr,
   output bp_ras_snapshot_t            ras_commit_snapshot,
 
-  // ---- 8. updates, the per-slot channels ---------------------------
-  output bp_update_t                  upd [0:NUM_PRED_SLOTS-1],
-  output bp_ftq_meta_t                upd_meta [0:NUM_PRED_SLOTS-1],
-  output logic [NUM_PRED_SLOTS-1:0]   upd_ubtb_val,
-  output logic [NUM_PRED_SLOTS-1:0]   upd_lp_val,
-  output logic [NUM_PRED_SLOTS-1:0]   upd_tage_val,
-  output logic [NUM_PRED_SLOTS-1:0]   upd_ittage_val,
-  output logic [NUM_PRED_SLOTS-1:0]   upd_sc_val,
-  input  logic                        tage_upd_rdy_u1,
-  input  logic                        ittage_upd_rdy_u1,
-  input  logic                        sc_upd_rdy_u1,
+  // ---- 8. updates, the per-predictor channels (TD#151, BP-119) -----
+  // Formed by ftq_upd_conv from the resolved record. The readies are
+  // the cluster's per-slot queue readies (tage_upd_rdy and
+  // ittage_upd_rdy are queue-not-full; sc_upd_rdy is the SC credit
+  // arbiter's grant), ANDed per predictor (TD#150). sc_enable is the
+  // FE-20 configuration bit: with SC disabled no SC update is formed.
+  input  logic                        sc_enable,
+  output ubtb_upd_t [NUM_PRED_SLOTS-1:0] ubtb_upd_u0,
+  output logic [NUM_PRED_SLOTS-1:0]   lp_upd_valid_p0,
+  output lp_upd_t                     lp_upd_p0 [0:NUM_PRED_SLOTS-1],
+  output logic [NUM_PRED_SLOTS-1:0]   tage_upd_val_u0,
+  output tage_upd_inp_t               tage_upd_inp_u0
+                                        [0:NUM_PRED_SLOTS-1],
+  output logic [NUM_PRED_SLOTS-1:0]   ittage_upd_val_u0,
+  output ittage_upd_inp_t             ittage_upd_inp_u0
+                                        [0:NUM_PRED_SLOTS-1],
+  output logic [NUM_PRED_SLOTS-1:0]   sc_upd_val_u0,
+  output sc_upd_inp_t                 sc_upd_inp_u0
+                                        [0:NUM_PRED_SLOTS-1],
+  input  logic [NUM_PRED_SLOTS-1:0]   tage_upd_rdy,
+  input  logic [NUM_PRED_SLOTS-1:0]   ittage_upd_rdy,
+  input  logic [NUM_PRED_SLOTS-1:0]   sc_upd_rdy,
 
   // ---- 8. the FTB update, 14 flat ports, no slot dimension ---------
   output logic                        ftb_upd_valid_u0,
@@ -320,6 +333,16 @@ module ftq (
   logic                     w_wb_accept;
   logic                     w_wb_drop_gen;
 
+  bp_update_t               w_upd       [0:NUM_PRED_SLOTS-1];
+  bp_ftq_meta_t             w_upd_meta  [0:NUM_PRED_SLOTS-1];
+  bp_ftq_entry_t            w_upd_entry [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] w_upd_ubtb_val;
+  logic [NUM_PRED_SLOTS-1:0] w_upd_lp_val;
+  logic [NUM_PRED_SLOTS-1:0] w_upd_tage_val;
+  logic [NUM_PRED_SLOTS-1:0] w_upd_ittage_val;
+  logic [NUM_PRED_SLOTS-1:0] w_upd_sc_val;
+  logic [NUM_PRED_SLOTS-1:0] w_upd_acc;
+
   logic [NUM_RESOLVE_PORTS-1:0] w_ftb_upd_val;
   ftb_upd_t                 w_ftb_upd [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_ftb_upd_hit;
@@ -330,6 +353,10 @@ module ftq (
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_type_dis;
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_accept;
   logic [TRX_SLOT_BITS-1:0] w_rsv_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] w_rsv_wr_val;
+  logic [FTQ_IDX_BITS-1:0]  w_rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
+  logic [TRX_SLOT_BITS-1:0] w_rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1];
+  bp_ftq_slot_t             w_rsv_wr_slot [0:NUM_RESOLVE_PORTS-1];
 
   logic                     w_sched_from_skid;
   logic                     w_sched_skid_val;
@@ -527,6 +554,10 @@ module ftq (
     .pd_wr_sel           (w_pd_wr_sel),
     .pd_wr_slot          (w_pd_wr_slot),
     .pd_wr_kill          (w_pd_wr_kill),
+    .rsv_wr_val          (w_rsv_wr_val),
+    .rsv_wr_idx          (w_rsv_wr_idx),
+    .rsv_wr_sel          (w_rsv_wr_sel),
+    .rsv_wr_slot         (w_rsv_wr_slot),
     .xlate_rd_idx        (w_xlate_idx),
     .xlate_rd_pc         (w_xlate_pc),
     .fetch_rd_idx        (w_fetch_idx),
@@ -693,16 +724,15 @@ module ftq (
     .rsv_entry         (w_rsv_entry),
     .rsv_meta          (w_rsv_meta),
     .ftb_sched_rdy     (w_ftb_sched_rdy),
-    .tage_upd_rdy      (tage_upd_rdy_u1),
-    .ittage_upd_rdy    (ittage_upd_rdy_u1),
-    .sc_upd_rdy        (sc_upd_rdy_u1),
-    .upd               (upd),
-    .upd_ubtb_val      (upd_ubtb_val),
-    .upd_lp_val        (upd_lp_val),
-    .upd_tage_val      (upd_tage_val),
-    .upd_ittage_val    (upd_ittage_val),
-    .upd_sc_val        (upd_sc_val),
-    .upd_meta          (upd_meta),
+    .upd_acc           (w_upd_acc),
+    .upd               (w_upd),
+    .upd_ubtb_val      (w_upd_ubtb_val),
+    .upd_lp_val        (w_upd_lp_val),
+    .upd_tage_val      (w_upd_tage_val),
+    .upd_ittage_val    (w_upd_ittage_val),
+    .upd_sc_val        (w_upd_sc_val),
+    .upd_meta          (w_upd_meta),
+    .upd_entry         (w_upd_entry),
     .ftb_upd_val       (w_ftb_upd_val),
     .ftb_upd           (w_ftb_upd),
     .ftb_upd_hit       (w_ftb_upd_hit),
@@ -711,7 +741,44 @@ module ftq (
     .rsv_drop_sq       (w_rsv_drop_sq),
     .rsv_type_dis      (w_rsv_type_dis),
     .rsv_accept        (w_rsv_accept),
-    .rsv_slot          (w_rsv_slot)
+    .rsv_slot          (w_rsv_slot),
+    .rsv_wr_val        (w_rsv_wr_val),
+    .rsv_wr_idx        (w_rsv_wr_idx),
+    .rsv_wr_sel        (w_rsv_wr_sel),
+    .rsv_wr_slot       (w_rsv_wr_slot)
+  );
+
+  // -----------------------------------------------------------------
+  // ftq_upd_conv. The per-predictor update payloads, ftq_bpu_interfaces
+  // 8 (BP-119, TD#151). Takes ftq_resolve's per-slot record and
+  // requests, returns the per-slot acceptance ftq_resolve readies the
+  // channel on (TD#150).
+  // -----------------------------------------------------------------
+  ftq_upd_conv u_upd_conv (
+    .clk               (clk),
+    .rstn              (rstn),
+    .sc_enable         (sc_enable),
+    .upd               (w_upd),
+    .upd_meta          (w_upd_meta),
+    .upd_entry         (w_upd_entry),
+    .upd_ubtb_val      (w_upd_ubtb_val),
+    .upd_lp_val        (w_upd_lp_val),
+    .upd_tage_val      (w_upd_tage_val),
+    .upd_ittage_val    (w_upd_ittage_val),
+    .upd_sc_val        (w_upd_sc_val),
+    .upd_acc           (w_upd_acc),
+    .tage_upd_rdy      (tage_upd_rdy),
+    .ittage_upd_rdy    (ittage_upd_rdy),
+    .sc_upd_rdy        (sc_upd_rdy),
+    .ubtb_upd_u0       (ubtb_upd_u0),
+    .lp_upd_valid_p0   (lp_upd_valid_p0),
+    .lp_upd_p0         (lp_upd_p0),
+    .tage_upd_val_u0   (tage_upd_val_u0),
+    .tage_upd_inp_u0   (tage_upd_inp_u0),
+    .ittage_upd_val_u0 (ittage_upd_val_u0),
+    .ittage_upd_inp_u0 (ittage_upd_inp_u0),
+    .sc_upd_val_u0     (sc_upd_val_u0),
+    .sc_upd_inp_u0     (sc_upd_inp_u0)
   );
 
   // -----------------------------------------------------------------

@@ -52,11 +52,8 @@ PKG_SRCS := \
   $(BPU_DIR)/bp_defines_pkg.sv \
   $(BPU_DIR)/bp_structs_pkg.sv
 
-# decode's rvc_expander is the expander testbench's reference only. It
-# is never part of an RTL source list (BP-116 Binding Decisions).
-REF_SRCS := \
-  $(DEC_DIR)/decode_pkg.sv \
-  $(DEC_DIR)/rvc_expander.sv
+# decode's rvc_expander was the expander testbench's reference. BP-119
+# (TD#143) removed it; the LLVM oracle (oracle_ifu_rvc_exp) remains.
 
 EXP_SRCS   := $(PKG_SRCS) $(RTL_DIR)/ifu_rvc_exp.sv
 PD_SRCS    := $(PKG_SRCS) $(RTL_DIR)/ifu_predecode.sv
@@ -107,7 +104,7 @@ $(eval $(call lint_rule,ifu_f3,$(F3_SRCS)))
 $(eval $(call lint_rule,ifu_wb,$(WB_SRCS)))
 $(eval $(call lint_rule,ifu,$(IFU_SRCS)))
 
-SIM_SRCS_ifu_rvc_exp   := $(REF_SRCS) $(EXP_SRCS)
+SIM_SRCS_ifu_rvc_exp   := $(EXP_SRCS)
 SIM_SRCS_ifu_predecode := $(PD_SRCS)
 SIM_SRCS_ifu           := $(IFU_SRCS)
 

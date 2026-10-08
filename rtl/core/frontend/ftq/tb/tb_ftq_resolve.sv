@@ -44,9 +44,9 @@ module tb;
   bp_ftq_meta_t            rsv_meta   [0:NUM_RESOLVE_PORTS-1]
                                       [0:NUM_PRED_SLOTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] ftb_sched_rdy;
-  logic                    tage_upd_rdy;
-  logic                    ittage_upd_rdy;
-  logic                    sc_upd_rdy;
+  // ftq_upd_conv's per-slot acceptance (BP-119, TD#150). Before BP-119
+  // this module took the three queued predictors' scalar readies.
+  logic [NUM_PRED_SLOTS-1:0] upd_acc;
   bp_update_t              upd [0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0] upd_ubtb_val;
   logic [NUM_PRED_SLOTS-1:0] upd_lp_val;
@@ -54,6 +54,7 @@ module tb;
   logic [NUM_PRED_SLOTS-1:0] upd_ittage_val;
   logic [NUM_PRED_SLOTS-1:0] upd_sc_val;
   bp_ftq_meta_t            upd_meta [0:NUM_PRED_SLOTS-1];
+  bp_ftq_entry_t           upd_entry [0:NUM_PRED_SLOTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] ftb_upd_val;
   ftb_upd_t                ftb_upd [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] ftb_upd_hit;
@@ -63,6 +64,10 @@ module tb;
   logic [NUM_RESOLVE_PORTS-1:0] rsv_type_dis;
   logic [NUM_RESOLVE_PORTS-1:0] rsv_accept;
   logic [TRX_SLOT_BITS-1:0] rsv_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val;
+  logic [FTQ_IDX_BITS-1:0] rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
+  logic [TRX_SLOT_BITS-1:0] rsv_wr_sel [0:NUM_RESOLVE_PORTS-1];
+  bp_ftq_slot_t            rsv_wr_slot [0:NUM_RESOLVE_PORTS-1];
 
   ftq_resolve dut (
     .clk               (clk),
@@ -76,9 +81,7 @@ module tb;
     .rsv_entry         (rsv_entry),
     .rsv_meta          (rsv_meta),
     .ftb_sched_rdy     (ftb_sched_rdy),
-    .tage_upd_rdy      (tage_upd_rdy),
-    .ittage_upd_rdy    (ittage_upd_rdy),
-    .sc_upd_rdy        (sc_upd_rdy),
+    .upd_acc           (upd_acc),
     .upd               (upd),
     .upd_ubtb_val      (upd_ubtb_val),
     .upd_lp_val        (upd_lp_val),
@@ -86,6 +89,7 @@ module tb;
     .upd_ittage_val    (upd_ittage_val),
     .upd_sc_val        (upd_sc_val),
     .upd_meta          (upd_meta),
+    .upd_entry         (upd_entry),
     .ftb_upd_val       (ftb_upd_val),
     .ftb_upd           (ftb_upd),
     .ftb_upd_hit       (ftb_upd_hit),
@@ -94,7 +98,11 @@ module tb;
     .rsv_drop_sq       (rsv_drop_sq),
     .rsv_type_dis      (rsv_type_dis),
     .rsv_accept        (rsv_accept),
-    .rsv_slot          (rsv_slot)
+    .rsv_slot          (rsv_slot),
+    .rsv_wr_val        (rsv_wr_val),
+    .rsv_wr_idx        (rsv_wr_idx),
+    .rsv_wr_sel        (rsv_wr_sel),
+    .rsv_wr_slot       (rsv_wr_slot)
   );
 
   // The modelled entry and metadata arrays. Driven combinationally
@@ -212,9 +220,7 @@ module tb;
 
   task automatic all_rdy();
     ftb_sched_rdy  = '1;
-    tage_upd_rdy   = 1'b1;
-    ittage_upd_rdy = 1'b1;
-    sc_upd_rdy     = 1'b1;
+    upd_acc        = '1;
   endtask
 
   task automatic do_reset();
@@ -391,35 +397,82 @@ module tb;
       mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(11)),
       1'b1, 1);
 
-    // Position 7 names neither slot. The entry describes a
-    // different set of branches than the one that executed -- a
-    // stale or aliased FTB entry -- and it is NOT the same
-    // condition as a squashed entry.
+    // Position 7 names neither slot: the first execution of a branch
+    // the entry does not hold. BP-119 (ruled in session): it is
+    // REPORTED and PLACED in program order -- slot 1, the lowest slot
+    // at or after position 7 -- and trains as a mapped branch, the
+    // table predictors included, from that slot's metadata.
     present(0, 9, FTB_BR_POS_BITS'(7), COND, 1'b1,
             VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
     chk("C1 an unmapped position is REPORTED", rsv_nomap[0]);
     chk("C2 it is not reported as a squash",   !rsv_drop_sq[0]);
-    chk("C3 it is not accepted",               !rsv_accept[0]);
-    chk("C4 and it forms no FTB update",       !ftb_upd_val[0]);
-    chk("C5 and no predictor update",
-        (upd_tage_val == '0) && (upd_ubtb_val == '0) &&
-        (upd_ittage_val == '0) && (upd_sc_val == '0) &&
-        (upd_lp_val == '0));
+    // OLD (BP-107): !rsv_accept[0], "it is not accepted".
+    chk("C3 it is accepted (placed)",          rsv_accept[0]);
+    // OLD (BP-107): !ftb_upd_val[0], "it forms no FTB update".
+    chk("C4 it forms an FTB update for the slot it is placed in",
+        ftb_upd_val[0] && ftb_upd[0].is_br &&
+        (ftb_upd[0].br_idx == 1'b1) &&
+        (ftb_upd[0].pos == FTB_BR_POS_BITS'(7)));
+    // OLD (BP-107): every predictor valid 0, "no predictor update".
+    chk("C5 and trains slot 1: uBTB, TAGE, SC and the LP",
+        (upd_ubtb_val == 2'b10) && (upd_tage_val == 2'b10) &&
+        (upd_sc_val == 2'b10) && (upd_lp_val == 2'b10) &&
+        (upd_ittage_val == '0) && !rsv_type_dis[0]);
+    chk("C5a from slot 1's metadata, with the placed position",
+        (upd_meta[1].sc.branch_id == FTQ_IDX_BITS'(10)) &&
+        (upd_entry[1].slot[1].pos == FTB_BR_POS_BITS'(7)) &&
+        (upd_entry[1].slot[1].br_type == COND));
+    chk("C5b the placement is written into the entry on acceptance",
+        rsv_wr_val[0] && (rsv_wr_idx[0] == 6'd9) &&
+        (rsv_wr_sel[0] == 1'b1) && rsv_wr_slot[0].slot_valid &&
+        (rsv_wr_slot[0].pos == FTB_BR_POS_BITS'(7)) &&
+        (rsv_wr_slot[0].br_type == COND) && rsv_wr_slot[0].taken);
+    upd_acc = 2'b01;
+    settle();
+    chk("C5c not accepted (slot 1 not ready): no placement write",
+        !ftq_bkend_rsv_rdy[0] && !rsv_wr_val[0]);
+    upd_acc = 2'b11;
+
+    // Position 1, before both stored branches: slot 0, the lowest at
+    // or after it (the stored branch at 3 is displaced, as ftq_ifu
+    // W1 displaces).
+    present(0, 9, FTB_BR_POS_BITS'(1), COND, 1'b0,
+            VA_WIDTH'('h00_9400_0000), 1'b0);
+    settle();
+    chk("C5d a branch before both stored ones is placed in slot 0",
+        rsv_nomap[0] && (rsv_slot[0] == 1'b0) && (upd_tage_val == 2'b01));
+    // Position 13, after both: the last slot.
+    present(0, 9, FTB_BR_POS_BITS'(13), COND, 1'b0,
+            VA_WIDTH'('h00_9400_0000), 1'b0);
+    settle();
+    chk("C5e a branch after both stored ones takes the last slot",
+        rsv_nomap[0] && (rsv_slot[0] == 1'b1) && (upd_tage_val == 2'b10));
 
     // AN ENTRY WITH NO VALID SLOTS AT ALL. Allocation is
     // unconditional (5.2), so an entry exists for a block the p1
-    // predictors missed and no later stage corrected; a resolution
-    // for a branch in it maps to nothing.
+    // predictors missed and no later stage corrected. An indirect in
+    // it is placed in slot 0 and trains ITTAGE.
     put_entry(9,
       mk_slot(1'b0, '0, NO_BRANCH, '0),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b0, 0);
+    present(0, 9, FTB_BR_POS_BITS'(7), INDIRECT_NONRET, 1'b1,
+            VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
     chk("C6 an entry with no valid slots reports nomap",
         rsv_nomap[0]);
+    chk("C6a and places the branch in slot 0, training ITTAGE",
+        (rsv_slot[0] == 1'b0) && (upd_ittage_val == 2'b01) &&
+        (upd_ubtb_val == 2'b01) && ftb_upd_val[0] &&
+        ftb_upd[0].is_jalr && !ftb_upd[0].hit);
+    // A resolved NO_BRANCH is accepted and forms nothing, as before.
+    present(0, 9, FTB_BR_POS_BITS'(7), NO_BRANCH, 1'b0, '0, 1'b0);
+    settle();
+    chk("C6b a NO_BRANCH forms nothing and writes nothing",
+        rsv_accept[0] && !ftb_upd_val[0] && (upd_ubtb_val == '0) &&
+        !rsv_wr_val[0]);
 
-    // The two channels report independently: one maps, one does
-    // not, and the mapping one still forms its update.
+    // The two channels: one maps, one is placed; both update.
     put_entry(9,
       mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
@@ -428,9 +481,12 @@ module tb;
     present(1, 9, FTB_BR_POS_BITS'(12), COND, 1'b1,
             VA_WIDTH'('h00_9500_0000), 1'b0);
     settle();
-    chk("C7 one channel maps and the other reports",
-        rsv_accept[0] && rsv_nomap[1]);
-    chk("C8 the mapping channel still updates", ftb_upd_val[0]);
+    // OLD (BP-107): rsv_accept[0] && rsv_nomap[1], "one channel maps
+    // and the other reports" (and channel 1 formed nothing).
+    chk("C7 one channel maps and the other is placed, both accepted",
+        rsv_accept[0] && rsv_accept[1] && !rsv_nomap[0] && rsv_nomap[1]);
+    chk("C8 both update, in slots 0 and 1",
+        ftb_upd_val[0] && ftb_upd_val[1] && (upd_tage_val == 2'b11));
     clr();
   endtask
 
@@ -609,6 +665,11 @@ module tb;
         (upd[0].branch_id == 6'd21));
     chk("F6 the metadata goes with it",
         upd_meta[0].tage.branch_id == FTQ_IDX_BITS'(21));
+    chk("F6a and the entry, for ftq_upd_conv's pos and pft_addr",
+        (upd_entry[0].pc == m_entry[21].pc) &&
+        (upd_entry[0].pft_addr == m_entry[21].pft_addr) &&
+        (upd_entry[0].slot[0].pos == FTB_BR_POS_BITS'(4)) &&
+        (upd_entry[1] == '0));
 
     // indirect -> uBTB, FTB, ITTAGE.
     present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_NONRET, 1'b1,
@@ -718,28 +779,43 @@ module tb;
 
     // THE READY. FE-5: a full update queue stalls the update path
     // and the backend holds the resolution. A resolution is never
-    // dropped for capacity.
+    // dropped for capacity. BP-119 (TD#150): the predictor half of the
+    // ready is ftq_upd_conv's per-slot upd_acc, which ANDs the
+    // cluster's per-slot queue readies of the predictors the slot
+    // trains; tb_ftq_upd_conv groups D and E check that formation.
+    // Here: the channel follows upd_acc of ITS slot, and the requests
+    // stay presented so the converter (and SC's arbiter) can see them.
     chk("G9 ready with every queue free", &ftq_bkend_rsv_rdy);
 
-    tage_upd_rdy = 1'b0;
+    upd_acc = 2'b10;
     settle();
-    chk("G10 a full tage queue deasserts ready",
-        !ftq_bkend_rsv_rdy[0] && !ftq_bkend_rsv_rdy[1]);
-    chk("G11 and no update is formed",
-        !upd_tage_val[0] && !upd_ubtb_val[0]);
-    tage_upd_rdy = 1'b1;
-
-    ittage_upd_rdy = 1'b0;
+    // OLD (BP-107, scalar tage_upd_rdy low): !rdy[0] && !rdy[1].
+    chk("G10 slot 0 not accepted deasserts its channel only",
+        !ftq_bkend_rsv_rdy[0] && ftq_bkend_rsv_rdy[1]);
+    // OLD (BP-107): !upd_tage_val[0] && !upd_ubtb_val[0], no update
+    // formed. The valids are now requests; ftq_upd_conv gates them.
+    chk("G11 the requests stay presented to the converter",
+        upd_tage_val[0] && upd_ubtb_val[0] && upd[0].valid);
+    upd_acc = 2'b01;
     settle();
-    chk("G12 a full ittage queue deasserts ready",
-        !ftq_bkend_rsv_rdy[0]);
-    ittage_upd_rdy = 1'b1;
-
-    sc_upd_rdy = 1'b0;
+    // OLD (BP-107, scalar ittage_upd_rdy low): !rdy[0].
+    chk("G12 the other slot not accepted does not stall channel 0",
+        ftq_bkend_rsv_rdy[0]);
+    // OLD (BP-107, scalar sc_upd_rdy low): !rdy[0]. Earlier BP-119
+    // revision: an unmapped resolution needed no predictor (rdy[1]
+    // high with upd_acc 2'b00); it is now placed and trains.
+    present(1, 25, FTB_BR_POS_BITS'(9), COND, 1'b1,
+            VA_WIDTH'('h00_9900_0000), 1'b0);
+    upd_acc = 2'b01;
     settle();
-    chk("G13 a full sc queue deasserts ready",
-        !ftq_bkend_rsv_rdy[0]);
-    sc_upd_rdy = 1'b1;
+    chk("G13 a placed resolution waits on its placed slot (1)",
+        rsv_nomap[1] && (rsv_slot[1] == 1'b1) && !ftq_bkend_rsv_rdy[1]);
+    upd_acc = 2'b10;
+    settle();
+    chk("G13a and is ready once that slot is accepted",
+        ftq_bkend_rsv_rdy[1] && !ftq_bkend_rsv_rdy[0]);
+    clr_ch(1);
+    upd_acc = 2'b11;
 
     // THE SCHEDULER'S READY IS PER CHANNEL (5.7.3 S6): it deasserts
     // only to stop a HIGH-value FTB update being dropped, and it
@@ -760,18 +836,16 @@ module tb;
   //    Problem 7b, fe_decisions.md 7.2).
   // -----------------------------------------------------------------
   // F covers six encodings for the queued predictors. H adds
-  // DIRECT_CALL and the eighth encoding, 3'b111, and pins the FTB
-  // classification bits for every type, since that classification is
-  // what the next prediction of the block will use.
+  // DIRECT_CALL and the eighth encoding, RETURN_CALL at 3'b111, and
+  // checks the FTB classification bits for every type, since that
+  // classification is what the next prediction of the block will use.
   //
-  // 3'b111 IS RETURN_CALL, the JALR that pops then pushes. The
-  // package does not name it, so it is driven by cast. 7.2 rules it
-  // trains uBTB, FTB and RAS (pop, then push) and not ITTAGE. AS
-  // BUILT: uBTB yes, ITTAGE no, TAGE, SC and LP no, and the FTB is
-  // trained as a plain direct jump, is_call, is_ret and is_jalr all
-  // clear. The RAS half is the commit group (ftq_entry, tb_ftq_entry
-  // H1), which does not issue for it. Pinned so a change is visible;
-  // reported in BP-118 Results Capture.
+  // RETURN_CALL is the JALR that pops then pushes. 7.2 rules it trains
+  // uBTB, FTB and RAS (pop, then push) and not ITTAGE. BP-118 pinned
+  // 3'b111 as built (driven by cast; the FTB trained as a plain direct
+  // jump). BP-119 (TD#152) named it and trains the FTB with is_call,
+  // is_ret and is_jalr set; H9 carries the old value in a comment. The
+  // RAS half is the commit group (ftq_entry, tb_ftq_entry H8).
   task automatic group_h();
     bp_br_type_e bt;
     $display("-- H: fan-out of all eight encodings --");
@@ -820,12 +894,18 @@ module tb;
                !upd_ubtb_val[0] && !upd_ittage_val[0] && !upd_tage_val[0] &&
                !upd_sc_val[0] && !upd_lp_val[0] && !ftb_upd_val[0]);
         default: begin
-          chk("H8 3'b111: uBTB and FTB, not ITTAGE, TAGE, SC or LP",
+          // Unchanged by BP-119 (it read "H8 3'b111: ...").
+          chk("H8 RETURN_CALL: uBTB and FTB, not ITTAGE, TAGE, SC or LP",
+              (bt == RETURN_CALL) &&
               upd_ubtb_val[0] && ftb_upd_val[0] && !upd_ittage_val[0] &&
               !upd_tage_val[0] && !upd_sc_val[0] && !upd_lp_val[0]);
-          chk("H9 AS BUILT 3'b111 trains the FTB as a direct jump",
-              ftb_upd[0].is_jmp && !ftb_upd[0].is_call &&
-              !ftb_upd[0].is_ret && !ftb_upd[0].is_jalr);
+          // OLD (BP-118, as built): is_jmp && !is_call && !is_ret &&
+          // !is_jalr, "H9 AS BUILT 3'b111 trains the FTB as a direct
+          // jump".
+          chk("H9 RETURN_CALL trains the FTB as a call, a return, a JALR",
+              ftb_upd[0].is_jmp && ftb_upd[0].is_call &&
+              ftb_upd[0].is_ret && ftb_upd[0].is_jalr &&
+              !ftb_upd[0].is_br);
         end
       endcase
       clr();

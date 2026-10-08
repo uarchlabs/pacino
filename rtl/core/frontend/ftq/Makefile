@@ -4,7 +4,7 @@
 
 # Makefile -- fetch target queue
 #
-# TARGETS. Eleven modules, a lint and a sim for each, plus all and
+# TARGETS. Twelve modules, a lint and a sim for each, plus all and
 # clean. `all` is kept complete deliberately, but a run must still
 # ENUMERATE the targets rather than assume all covers them:
 #
@@ -18,6 +18,7 @@
 #   lint_ftq_npc         sim_ftq_npc          BP-107
 #   lint_ftq_ifu         sim_ftq_ifu          BP-107
 #   lint_ftq_resolve     sim_ftq_resolve      BP-107
+#   lint_ftq_upd_conv    sim_ftq_upd_conv     BP-119, TD#151
 #   lint_ftq             sim_ftq              BP-107, the unit
 #   assert_labels                             BP-116, TD#144
 include $(RVA_ROOT)/rtl/Vars.mk
@@ -131,6 +132,11 @@ RESOLVE_SRCS := \
   $(RTL_DIR)/ftq_resolve.sv \
   $(TB_DIR)/ftq_resolve_assert.sv
 
+UPD_CONV_SRCS := \
+  $(PKG_SRCS) \
+  $(RTL_DIR)/ftq_upd_conv.sv \
+  $(TB_DIR)/ftq_upd_conv_assert.sv
+
 # The unit. Every leaf and every assertion file, plus the structural
 # top. The order is packages first, then leaves, then ftq.sv.
 FTQ_SRCS := \
@@ -144,6 +150,7 @@ FTQ_SRCS := \
   $(RTL_DIR)/ftq_npc.sv          $(TB_DIR)/ftq_npc_assert.sv \
   $(RTL_DIR)/ftq_ifu.sv          $(TB_DIR)/ftq_ifu_assert.sv \
   $(RTL_DIR)/ftq_resolve.sv      $(TB_DIR)/ftq_resolve_assert.sv \
+  $(RTL_DIR)/ftq_upd_conv.sv     $(TB_DIR)/ftq_upd_conv_assert.sv \
   $(RTL_DIR)/ftq_ftb_sched.sv    $(TB_DIR)/ftq_ftb_sched_assert.sv \
   $(RTL_DIR)/ftq.sv
 
@@ -158,6 +165,7 @@ FTQ_SRCS := \
   lint_ftq_npc       sim_ftq_npc \
   lint_ftq_ifu       sim_ftq_ifu \
   lint_ftq_resolve   sim_ftq_resolve \
+  lint_ftq_upd_conv  sim_ftq_upd_conv \
   lint_ftq           sim_ftq \
   assert_labels
 
@@ -171,6 +179,7 @@ all: lint_ftq_ftb_sched sim_ftq_ftb_sched \
      lint_ftq_npc       sim_ftq_npc \
      lint_ftq_ifu       sim_ftq_ifu \
      lint_ftq_resolve   sim_ftq_resolve \
+     lint_ftq_upd_conv  sim_ftq_upd_conv \
      lint_ftq           sim_ftq \
      assert_labels
 
@@ -324,6 +333,21 @@ sim_ftq_resolve:
 	@echo "[simulating] $(VER_OUT)_ftq_resolve/Vtb"
 	$(Q)./$(VER_OUT)_ftq_resolve/Vtb
 
+# -- The update converter (ftq_upd_conv.sv, BP-119, TD#151).
+lint_ftq_upd_conv:
+	@echo "[linting]    ftq_upd_conv"
+	$(Q)$(VERILATOR) --lint-only $(VER_FLAGS) $(COMMON) \
+	  --top-module ftq_upd_conv \
+	  $(UPD_CONV_SRCS) $(VSILENCE)
+
+sim_ftq_upd_conv:
+	@echo "[compiling]  tb_ftq_upd_conv"
+	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_ftq_upd_conv \
+	  $(UPD_CONV_SRCS) $(TB_DIR)/tb_ftq_upd_conv.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ftq_upd_conv/Vtb"
+	$(Q)./$(VER_OUT)_ftq_upd_conv/Vtb
+
 # -- The unit (ftq.sv, structural top). Every leaf is elaborated
 #    under it and every bound property runs, so this target is also
 #    where the properties see the traffic the whole unit produces
@@ -355,7 +379,8 @@ sim_ftq:
 #    and on a tb/*_assert.sv that no model compiles.
 #    A kept tautology still passes: this guards removal, not meaning.
 LABEL_MODELS := ftq_ftb_sched ftq_ptr ftq_commit ftq_entry ftq_meta \
-                ftq_status ftq_shadow ftq_npc ftq_ifu ftq_resolve ftq
+                ftq_status ftq_shadow ftq_npc ftq_ifu ftq_resolve \
+                ftq_upd_conv ftq
 
 LABEL_SRCS_ftq_ftb_sched := $(SCHED_SRCS)
 LABEL_SRCS_ftq_ptr       := $(PTR_SRCS)
@@ -367,6 +392,7 @@ LABEL_SRCS_ftq_shadow    := $(SHADOW_SRCS)
 LABEL_SRCS_ftq_npc       := $(NPC_SRCS)
 LABEL_SRCS_ftq_ifu       := $(IFU_TB_SRCS)
 LABEL_SRCS_ftq_resolve   := $(RESOLVE_SRCS)
+LABEL_SRCS_ftq_upd_conv  := $(UPD_CONV_SRCS)
 LABEL_SRCS_ftq           := $(FTQ_SRCS)
 
 LABEL_ASSERT_FILES := $(sort $(wildcard $(TB_DIR)/*_assert.sv))
@@ -430,7 +456,7 @@ REGRESS_TARGETS := \
   lint_ftq_meta sim_ftq_meta lint_ftq_status sim_ftq_status \
   lint_ftq_shadow sim_ftq_shadow lint_ftq_npc sim_ftq_npc \
   lint_ftq_ifu sim_ftq_ifu lint_ftq_resolve sim_ftq_resolve \
-  lint_ftq sim_ftq assert_labels
+  lint_ftq_upd_conv sim_ftq_upd_conv lint_ftq sim_ftq assert_labels
 REGRESS_EXCLUDE := all clean regress_list
 
 .PHONY: regress_list

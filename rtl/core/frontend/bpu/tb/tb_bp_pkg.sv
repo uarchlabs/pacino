@@ -229,7 +229,9 @@ module tb;
     pass_count++;
 
     // --------------------------------------------------------------
-    // Enum distinctness: bp_br_type_e (7 values, must all differ)
+    // Enum distinctness: bp_br_type_e (8 values, must all differ).
+    // RETURN_CALL is the eighth, at 3'b111 (TD#152, BP-119); this
+    // read "7 values" before the package named it.
     // --------------------------------------------------------------
     if (COND == DIRECT_CALL || COND == INDIRECT_CALL ||
         COND == RETURN || COND == INDIRECT_NONRET ||
@@ -256,6 +258,15 @@ module tb;
     end
     if (DIRECT_UNC == NO_BRANCH) begin
       $fatal(1, "FAIL bp_br_type_e: DIRECT_UNC == NO_BRANCH");
+    end
+    if (RETURN_CALL == COND || RETURN_CALL == DIRECT_CALL ||
+        RETURN_CALL == INDIRECT_CALL || RETURN_CALL == RETURN ||
+        RETURN_CALL == INDIRECT_NONRET || RETURN_CALL == DIRECT_UNC ||
+        RETURN_CALL == NO_BRANCH) begin
+      $fatal(1, "FAIL bp_br_type_e: RETURN_CALL collides");
+    end
+    if (RETURN_CALL != 3'b111) begin
+      $fatal(1, "FAIL bp_br_type_e: RETURN_CALL is not 3'b111");
     end
     pass_count++;
 

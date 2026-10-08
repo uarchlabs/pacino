@@ -3191,6 +3191,8 @@ module tb;
                              u.is_jalr = 1'b1; end
       INDIRECT_NONRET: begin u.is_jmp = 1'b1; u.is_jalr = 1'b1; end
       DIRECT_UNC:      u.is_jmp = 1'b1;
+      RETURN_CALL:     begin u.is_jmp  = 1'b1; u.is_ret  = 1'b1;
+                             u.is_call = 1'b1; u.is_jalr = 1'b1; end
       default:         ;                    // NO_BRANCH: no bits set
     endcase
     return u;
@@ -3802,9 +3804,13 @@ module tb;
   // The two request terms, restated from bp_cluster.sv:
   //   w_sc_pred_req = r_val_p2 & sc_enable
   //   w_sc_upd_req  = sc_enable & sc_uq_not_full
-  //                 & |(sc_upd_val_u0 & w_upd_cond_u0 & sc_upd_rdy)
+  //                 & |(sc_upd_val_u0 & sc_upd_rdy)
   // so a prediction request is "a request is at the p2 stage" and an
-  // update request is "an SC update is presented on a COND channel".
+  // update request is "an SC update is presented". BP-119 dropped the
+  // w_upd_cond_u0 term from the update request (it read "& |(sc_upd_val
+  // _u0 & w_upd_cond_u0 & sc_upd_rdy)", "presented on a COND channel");
+  // the COND term still gates the SC write. Every case below presents
+  // its SC update on a COND channel, so no expected value moved.
   // Each case below constructs exactly the occupancy its rule names
   // and reads back the grant AND the counter effects the rule
   // specifies.
@@ -4219,8 +4225,9 @@ module tb;
   //
   // L1-L4 are TD#113 and the 4c group (ftq_bpu_interfaces.md 4c).
   // L5 is the LP ruling of ftq_bpu_interfaces.md 4 (Problem 7a).
-  // L6 pins the update fan-out of the eighth bp_br_type_e encoding,
-  // 3'b111, which the package does not name (Problem 7b).
+  // L6 is the update fan-out of the eighth bp_br_type_e encoding,
+  // RETURN_CALL at 3'b111. BP-118 pinned it as built (Problem 7b);
+  // BP-119 (TD#152) corrected it, the old values in comments.
   task automatic group_l();
     ubtb_entry_t         e;
     logic [VA_WIDTH-1:0] pc;
@@ -4333,32 +4340,27 @@ module tb;
            dut.w_succ_p1[1], pc + BLK_SZ);
     tick();
 
-    // -- L6. Problem 7b, PINNED AS BUILT. RETURN_CALL is the JALR that
-    //    pops then pushes; bp_br_type_e does not name it, so 3'b111
-    //    is driven by cast. The cluster derives the update type from
-    //    the payload's structural bits, and is_ret outranks is_call,
-    //    so the payload of a pop-then-push decodes as RETURN: the uBTB
-    //    is updated, ITTAGE, TAGE and SC are not. fe_decisions.md 7.2
-    //    also asks for a RAS pop then push; the RAS commit of 3'b111
-    //    is masked here and in ras.sv, so the RAS is NOT trained.
-    //    That is the reported gap, pinned so a change is visible.
+    // -- L6. RETURN_CALL, fe_decisions.md 7.2: uBTB, FTB and RAS (pop,
+    //    then push), not ITTAGE. BP-118 pinned 3'b111 as built (driven
+    //    by cast, the package did not name it); TD#152 (BP-119) fixed
+    //    it. The payload carries is_ret, is_call and is_jalr, and the
+    //    cluster's update decode now names RETURN_CALL before RETURN.
     do_reset();
     clr_upd_chans();
     sc_enable = 1'b1;
     pc = VA_WIDTH'('h00_0950_0000);
-    ubtb_upd_u0[0]         = mk_upd(RETURN, 1'b1, pc);
-    ubtb_upd_u0[0].is_call = 1'b1;
-    ubtb_upd_u0[0].is_jalr = 1'b1;
+    ubtb_upd_u0[0]    = mk_upd(RETURN_CALL, 1'b1, pc);
     tage_upd_val_u0   = 2'b01;
     ittage_upd_val_u0 = 2'b01;
     sc_upd_val_u0     = 2'b01;
     lp_upd_valid_p0   = 2'b01;
     ras_commit_val      = 1'b1;
-    ras_commit_br_type  = bp_br_type_e'(3'b111);
+    ras_commit_br_type  = RETURN_CALL;
     ras_commit_ret_addr = pc + VA_WIDTH'(4);
     #1;
-    chk("L6 a pop-then-push payload decodes as RETURN",
-        dut.w_upd_type_u0[0] === RETURN);
+    // OLD (BP-118, as built): w_upd_type_u0[0] === RETURN.
+    chk("L6 a pop-then-push payload decodes as RETURN_CALL",
+        dut.w_upd_type_u0[0] === RETURN_CALL);
     chk("L6 the uBTB is updated",
         dut.w_ubtb_upd_u0[0].valid === 1'b1);
     chk("L6 ITTAGE is not updated",
@@ -4367,8 +4369,10 @@ module tb;
         (dut.w_tage_upd_val_u0[0] === 1'b0)
      && (dut.w_sc_upd_val_u0[0] === 1'b0)
      && (dut.w_lp_upd_val_p0[0] === 1'b0));
-    chk("L6 AS BUILT the RAS commit of 3'b111 is masked",
-        dut.w_ras_commit_val === 1'b0);
+    // OLD (BP-118, as built): w_ras_commit_val === 1'b0, the RAS
+    // commit of 3'b111 masked.
+    chk("L6 the RAS commit of RETURN_CALL is applied",
+        dut.w_ras_commit_val === 1'b1);
     ras_commit_val     = 1'b0;
     ras_commit_br_type = NO_BRANCH;
     clr_upd_chans();
@@ -4376,6 +4380,280 @@ module tb;
     tick();
 
     $display("---- GROUP L done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
+  // GROUP M -- RETURN_CALL (TD#152) and the uBTB jump slot (TD#154),
+  // BP-119
+  // =================================================================
+  //
+  // M1 the p2 classification forms RETURN_CALL from the FTB jump field
+  //    and the RAS pops then pushes for it at prediction.
+  // M2 the RAS commit of RETURN_CALL is the return arm then the call
+  //    arm (IC-RAS-10).
+  // M3 a uBTB RETURN_CALL takes the RAS top as its p1 target.
+  // M4 a JAL held in the uBTB is predicted taken to its target at p1
+  //    and the FTB agrees, so no p2 redirect fires (TD#154).
+  // M5 the same for a direct call.
+  // M6 RETURN unchanged: taken only with a valid RAS top.
+  // Every case starts from reset; every table the case reads is
+  // written by it (uBTB set cleared then installed, FTB written
+  // through its update port, LP banks cleared).
+  task automatic group_m();
+    ubtb_entry_t         e;
+    logic [VA_WIDTH-1:0] pc1;
+    logic [VA_WIDTH-1:0] pc2;
+    logic [VA_WIDTH-1:0] base;
+    logic [VA_WIDTH-1:0] tgt;
+    logic [VA_WIDTH-1:0] ra_a;
+    logic [VA_WIDTH-1:0] ra_b;
+    logic [RAS_PTR_BITS-1:0] pre_tosr;
+    logic [RAS_PTR_BITS-1:0] pre_tosw;
+    bp_ras_snapshot_t    snap;
+
+    $display("---- GROUP M: RETURN_CALL and the uBTB jump slot, BP-119 ----");
+
+    // -- M1. A direct call block pushes its return address, then a
+    //    RETURN_CALL block (c.jalr x5, a coroutine switch) pops it as
+    //    its target and pushes its own return address. The FTB jump
+    //    field carries is_call, is_ret and is_jalr, as ftq_resolve now
+    //    trains it. The two blocks use different FTB ways so neither
+    //    install can displace the other.
+    j_reset();
+    pc1 = VA_WIDTH'('h00_0960_0000);
+    pc2 = VA_WIDTH'('h00_0971_0040);
+    base = blk_base(pc1);
+    ftb_alloc_jmp(pc1, 2'd0, base + VA_WIDTH'('h600), 4'd2, 1'b1, 1'b0,
+                  1'b0, pc1 + VA_WIDTH'(8), 1'b0);
+    base = blk_base(pc2);
+    ftb_alloc_jmp(pc2, 2'd1, base + VA_WIDTH'('h700), 4'd1, 1'b1, 1'b1,
+                  1'b1, pc2 + VA_WIDTH'(4), 1'b0);
+    ubtb_clear_set(pc1);
+    ubtb_clear_set(pc2);
+    lp_clear_both(pc1);
+    lp_clear_both(pc2);
+    chk("M1 the RAS starts empty",
+        (dut.u_ras.tosr === dut.u_ras.bos) && (dut.u_ras.csp === '0));
+    req(pc1, 6'h30);
+    tick();
+    req(pc2, 6'h31);
+    tick();
+    norq();
+    chk("M1 the first block is a direct call at p2",
+        dut.w_br_type_p2[0] === DIRECT_CALL);
+    tick();
+    // pc2 is at p2. The RAS holds pc1's push: derive the expected
+    // pointers from the state before the operation.
+    pre_tosr = dut.u_ras.tosr;
+    pre_tosw = dut.u_ras.tosw;
+    chk("M1 one entry pushed (tosr 1, tosw 2 from an empty stack)",
+        (pre_tosr === RAS_PTR_BITS'(1)) && (pre_tosw === RAS_PTR_BITS'(2)));
+    chk_eq("M1 and it holds the call's return address",
+           dut.u_ras.spec_ret_addr[pre_tosr], pc1 + VA_WIDTH'(8));
+    chk("M1 the FTB jump field forms RETURN_CALL at p2",
+        dut.w_br_type_p2[0] === RETURN_CALL);
+    chk("M1 the RAS is engaged for it",
+        dut.w_ras_pred_val_p2[0] === 1'b1);
+    chk("M1 the pop is valid",
+        dut.w_ras_pop_valid_p2[0] === 1'b1);
+    chk_eq("M1 the pop returns the call's return address",
+           dut.w_ras_pop_addr_p2[0], pc1 + VA_WIDTH'(8));
+    chk_eq("M1 and it is the slot's taken target",
+           dut.w_tkn_tgt_p2[0], pc1 + VA_WIDTH'(8));
+    chk("M1 taken, supplied by the RAS",
+        (dut.w_taken_p2[0] === 1'b1)
+     && (dut.w_pred_src_p2[0] === PRED_RAS));
+    // Pop: tosr 1 -> 0 (== bos, empty). Push: tosw 2 != bos, so the
+    // allocation is at 2; tosr 2, tosw 3.
+    chk("M1 the post-op snapshot is the pop then the push",
+        (dut.w_ras_snapshot_p2[0].tosr === pre_tosw)
+     && (dut.w_ras_snapshot_p2[0].tosw === pre_tosw + RAS_PTR_BITS'(1)));
+    tick();
+    chk("M1 after the edge the top is the pushed slot",
+        dut.u_ras.tosr === pre_tosw);
+    chk_eq("M1 holding the return-call's own return address",
+           dut.u_ras.spec_ret_addr[dut.u_ras.tosr], pc2 + VA_WIDTH'(4));
+    chk_eq("M1 and the p0 top of stack reads it",
+           dut.w_ras_tos_addr_p0[0], pc2 + VA_WIDTH'(4));
+    chk("M1 p3 carries RETURN_CALL and the op was pop then push",
+        (dut.r_br_type_p3[0] === RETURN_CALL)
+     && (dut.u_ras.p3_op_q[0] === 2'b11));
+    tick();
+    chk("M1 p3 agrees with p2: no repair moved the pointers",
+        (dut.u_ras.tosr === pre_tosw)
+     && (dut.u_ras.tosw === pre_tosw + RAS_PTR_BITS'(1)));
+
+    // -- M2. Commit, IC-RAS-10: the return arm, then the call arm on
+    //    the state the first leaves. With one committed entry the pop
+    //    takes CSP 1 -> 0 and the push writes at 0, CSP 0 -> 1: the
+    //    committed top is replaced in place.
+    do_reset();
+    ra_a = VA_WIDTH'('h00_0980_0010);
+    ra_b = VA_WIDTH'('h00_0980_0124);
+    ras_push_commit(ra_a);
+    chk("M2 one committed entry", (dut.u_ras.csp === 5'd1)
+     && (dut.u_ras.commit_ret_addr[0] === ra_a));
+    ras_commit_val      = 1'b1;
+    ras_commit_br_type  = RETURN_CALL;
+    ras_commit_ret_addr = ra_b;
+    ras_commit_snapshot = '0;
+    #1;
+    chk("M2 the cluster passes the RETURN_CALL commit to the RAS",
+        dut.w_ras_commit_val === 1'b1);
+    tick();
+    ras_commit_val      = 1'b0;
+    ras_commit_br_type  = NO_BRANCH;
+    ras_commit_ret_addr = '0;
+    #1;
+    chk("M2 CSP is level after a pop then a push",
+        dut.u_ras.csp === 5'd1);
+    chk_eq("M2 the committed top is the return-call's address",
+           dut.u_ras.commit_ret_addr[0], ra_b);
+    chk_eq("M2 and the p0 top of stack serves it",
+           dut.w_ras_tos_addr_p0[0], ra_b);
+    // On an empty commit stack the pop does nothing and the push
+    // writes at 0. BOS moves once, to the snapshot TOSR.
+    do_reset();
+    snap      = '0;
+    snap.tosr = RAS_PTR_BITS'(3);
+    ras_commit_val      = 1'b1;
+    ras_commit_br_type  = RETURN_CALL;
+    ras_commit_ret_addr = ra_b;
+    ras_commit_snapshot = snap;
+    tick();
+    ras_commit_val      = 1'b0;
+    ras_commit_br_type  = NO_BRANCH;
+    ras_commit_ret_addr = '0;
+    ras_commit_snapshot = '0;
+    #1;
+    chk("M2 empty commit stack: CSP 0 -> 1",
+        dut.u_ras.csp === 5'd1);
+    chk_eq("M2 the push wrote at 0",
+           dut.u_ras.commit_ret_addr[0], ra_b);
+    chk("M2 BOS took the commit snapshot TOSR",
+        dut.u_ras.bos === RAS_PTR_BITS'(3));
+
+    // -- M3. p1: a uBTB RETURN_CALL takes the RAS top as its target,
+    //    like a RETURN (IC-RAS-12). The stored jump target is stale
+    //    on purpose, so the two cannot be confused.
+    do_reset();
+    ras_push_commit(ra_a);
+    pc1  = VA_WIDTH'('h00_0990_0000);
+    base = blk_base(pc1);
+    e       = '0;
+    e.jmp   = mk_jmp(1'b1, 4'd1, base + VA_WIDTH'('h7C0), base,
+                     1'b1, 1'b1, 1'b1);
+    e.pft   = ub_pft_field(pc1 + VA_WIDTH'(4), base);
+    ubtb_install(pc1, e);
+    lp_clear_both(pc1);
+    req(pc1, 6'h32);
+    tick();
+    norq();
+    chk("M3 the uBTB reports RETURN_CALL",
+        dut.r_ubtb_pred_p1[0].br_type === RETURN_CALL);
+    chk("M3 p1 slot 0 is a taken RETURN_CALL from the RAS",
+        (bpu_pred_slot_p1[0].slot_valid === 1'b1)
+     && (bpu_pred_slot_p1[0].br_type === RETURN_CALL)
+     && (bpu_pred_slot_p1[0].taken === 1'b1)
+     && (bpu_pred_slot_p1[0].pred_src === PRED_RAS));
+    chk_eq("M3 its target is the RAS top",
+           bpu_pred_slot_p1[0].target, ra_a);
+
+    // -- M4. TD#154. A JAL (DIRECT_UNC) at pos 2 held in the uBTB and
+    //    in the FTB, the same target in both. p1 predicts it taken to
+    //    that target; p2 computes the same successor; no redirect.
+    j_reset();
+    pc1  = VA_WIDTH'('h00_09A0_0000);
+    base = blk_base(pc1);
+    tgt  = base + VA_WIDTH'('h840);
+    ftb_alloc_jmp(pc1, 2'd0, tgt, 4'd2, 1'b0, 1'b0, 1'b0,
+                  pc1 + VA_WIDTH'(8), 1'b0);
+    e       = '0;
+    e.jmp   = mk_jmp(1'b1, 4'd2, tgt, base, 1'b0, 1'b0, 1'b0);
+    e.pft   = ub_pft_field(pc1 + VA_WIDTH'(8), base);
+    ubtb_install(pc1, e);
+    lp_clear_both(pc1);
+    req(pc1, 6'h33);
+    tick();
+    norq();
+    chk("M4 the uBTB reports the JAL (DIRECT_UNC) in slot 0",
+        (dut.r_ubtb_pred_p1[0].valid === 1'b1)
+     && (dut.r_ubtb_pred_p1[0].br_type === DIRECT_UNC));
+    // OLD (pre-BP-119): taken === 1'b0, the uBTB br_taken of a jump.
+    chk("M4 p1 predicts the JAL taken",
+        (bpu_pred_slot_p1[0].slot_valid === 1'b1)
+     && (bpu_pred_slot_p1[0].taken === 1'b1)
+     && (bpu_pred_slot_p1[0].pred_src === PRED_UBTB));
+    chk_eq("M4 to its target", bpu_pred_slot_p1[0].target, tgt);
+    chk_eq("M4 so the p1 successor is the target", dut.w_succ_p1[0], tgt);
+    tick();
+    chk("M4 the FTB answered with the same jump",
+        (dut.w_ftb_valid_p2 === 1'b1)
+     && (dut.w_br_type_p2[0] === DIRECT_UNC));
+    chk("M4 no p2 redirect on either slot",
+        (bpu_redir_p2[0].valid === 1'b0)
+     && (bpu_redir_p2[1].valid === 1'b0));
+
+    // -- M5. The same for a direct call (JAL x1).
+    j_reset();
+    pc1  = VA_WIDTH'('h00_09B0_0000);
+    base = blk_base(pc1);
+    tgt  = base + VA_WIDTH'('h1C0);
+    ftb_alloc_jmp(pc1, 2'd0, tgt, 4'd2, 1'b1, 1'b0, 1'b0,
+                  pc1 + VA_WIDTH'(8), 1'b0);
+    e       = '0;
+    e.jmp   = mk_jmp(1'b1, 4'd2, tgt, base, 1'b1, 1'b0, 1'b0);
+    e.pft   = ub_pft_field(pc1 + VA_WIDTH'(8), base);
+    ubtb_install(pc1, e);
+    lp_clear_both(pc1);
+    req(pc1, 6'h34);
+    tick();
+    norq();
+    // OLD (pre-BP-119): taken === 1'b0.
+    chk("M5 p1 predicts the direct call taken",
+        (bpu_pred_slot_p1[0].br_type === DIRECT_CALL)
+     && (bpu_pred_slot_p1[0].taken === 1'b1));
+    chk_eq("M5 to its target", bpu_pred_slot_p1[0].target, tgt);
+    tick();
+    chk("M5 no p2 redirect on either slot",
+        (dut.w_br_type_p2[0] === DIRECT_CALL)
+     && (bpu_redir_p2[0].valid === 1'b0)
+     && (bpu_redir_p2[1].valid === 1'b0));
+
+    // -- M6. RETURN unchanged by TD#154: with the RAS empty it is not
+    //    taken at p1 (as before), with a valid RAS top it is taken to
+    //    that top.
+    do_reset();
+    pc1  = VA_WIDTH'('h00_09C0_0000);
+    base = blk_base(pc1);
+    e       = '0;
+    e.jmp   = mk_jmp(1'b1, 4'd1, base + VA_WIDTH'('h7C0), base,
+                     1'b0, 1'b1, 1'b1);
+    e.pft   = ub_pft_field(pc1 + VA_WIDTH'(4), base);
+    ubtb_install(pc1, e);
+    lp_clear_both(pc1);
+    req(pc1, 6'h35);
+    tick();
+    norq();
+    chk("M6 RETURN with no RAS top is not taken at p1",
+        (bpu_pred_slot_p1[0].br_type === RETURN)
+     && (bpu_pred_slot_p1[0].taken === 1'b0)
+     && (bpu_pred_slot_p1[0].pred_src === PRED_UBTB));
+    tick();
+    tick();
+    ras_push_commit(ra_a);
+    req(pc1, 6'h36);
+    tick();
+    norq();
+    chk("M6 RETURN with a RAS top is taken to it",
+        (bpu_pred_slot_p1[0].taken === 1'b1)
+     && (bpu_pred_slot_p1[0].pred_src === PRED_RAS)
+     && (bpu_pred_slot_p1[0].target === ra_a));
+    tick();
+    tick();
+
+    $display("---- GROUP M done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
   endtask
 
@@ -4409,6 +4687,7 @@ module tb;
     group_j();
     group_k();
     group_l();
+    group_m();
 
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

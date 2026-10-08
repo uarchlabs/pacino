@@ -230,11 +230,14 @@ module ubtb #(
     else    conf_step = (cur == '0) ? cur : cur - 1'b1;
   endfunction
 
-  // Decode the stored jump type bits to bp_br_type_e. A return is
-  // also a JALR, so is_ret is tested first; a call is indirect when
-  // is_jalr is also set (ubtb_interfaces.md, pred_p1 br_type).
+  // Decode the stored jump type bits to bp_br_type_e. is_ret and
+  // is_call both set is the JALR that pops then pushes, RETURN_CALL
+  // (ubtb_interfaces.md, pred_p1 br_type; TD#152), tested first. A
+  // return is also a JALR, so is_ret is tested next; a call is
+  // indirect when is_jalr is also set.
   function automatic bp_br_type_e jmp_br_type(input ubtb_jmp_t j);
-    if      (j.is_ret)  jmp_br_type = RETURN;
+    if      (j.is_ret && j.is_call) jmp_br_type = RETURN_CALL;
+    else if (j.is_ret)  jmp_br_type = RETURN;
     else if (j.is_call) jmp_br_type = j.is_jalr ? INDIRECT_CALL
                                                 : DIRECT_CALL;
     else if (j.is_jalr) jmp_br_type = INDIRECT_NONRET;

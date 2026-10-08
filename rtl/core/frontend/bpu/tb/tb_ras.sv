@@ -9,8 +9,11 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-21. TC-01 .. TC-20 from BP-063; TC-21
+// Directed cases TC-01 .. TC-28. TC-01 .. TC-20 from BP-063; TC-21
 // (BP-064) pins TD #78 (undo-pop does not reverse a recursion pop).
+// TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
+// then pushes (ras_decisions.md 2, RAS-DS1): at p2, in the p3 repair,
+// and at commit (IC-RAS-10).
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -582,6 +585,159 @@ module tb;
           dut.tosw == 4'd2);
     check("TC-21 pins TD #78: re-exposed top idx2 is empty (0), not ADDR_A",
           dut.spec_ret_addr[2] == '0);
+
+    // =============================================================
+    // TC-22: RETURN_CALL at p2 -- pop, then push (RAS-DS1).
+    // Seed A at idx1 (tosr 1, tosw 2). The pop returns A and leaves
+    // TOSR at BOS (empty); the push then allocates at TOSW = 2.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_A);
+    check("TC-22 seeded tosr==1 tosw==2",
+          (dut.tosr == 4'd1) && (dut.tosw == 4'd2));
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-22 the pop is valid", pop_valid_p2[0] == 1'b1);
+    check("TC-22 the pop returns A", pop_addr_p2[0] == ADDR_A);
+    check("TC-22 snap[0] is after the pop and the push (tosr 2)",
+          snap_p2[0].tosr == 4'd2);
+    check("TC-22 snap[0].tosw==3", snap_p2[0].tosw == 4'd3);
+    tick();
+    check("TC-22 tosr==2 after the edge", dut.tosr == 4'd2);
+    check("TC-22 spec[2]==B (the pushed return address)",
+          dut.spec_ret_addr[2] == ADDR_B);
+    check("TC-22 A still resident at idx1 (pop does not overwrite)",
+          dut.spec_ret_addr[1] == ADDR_A);
+    check("TC-22 p0 TOS reads B", tos_addr_p0[0] == ADDR_B);
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-22 p3 agrees with p2: no repair (tosr 2, tosw 3)",
+          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+
+    // =============================================================
+    // TC-23: RETURN_CALL with the speculative stack empty. The pop
+    // falls back to the commit top and does not consume it; the push
+    // allocates at BOS+1 (cold start).
+    // =============================================================
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    check("TC-23 commit seeded csp==1", dut.csp == 5'd1);
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-23 pop valid from the commit stack", pop_valid_p2[0] == 1'b1);
+    check("TC-23 pop addr is the commit top R", pop_addr_p2[0] == ADDR_R);
+    tick();
+    check("TC-23 push allocated at idx1: tosr 1, tosw 2",
+          (dut.tosr == 4'd1) && (dut.tosw == 4'd2));
+    check("TC-23 spec[1]==B", dut.spec_ret_addr[1] == ADDR_B);
+    check("TC-23 commit entry NOT consumed (csp==1)", dut.csp == 5'd1);
+
+    // =============================================================
+    // TC-24: RETURN_CALL over a recursion count -- TWO array writes in
+    // one slot. Seed A twice (rctr[1] 1). The pop decrements rctr[1]
+    // in place (TOSR holds at 1); the push of B != A allocates at
+    // TOSW = 2. Both writes must land.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_A);
+    check("TC-24 seeded rctr[1]==1 tosr==1 tosw==2",
+          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1)
+          && (dut.tosw == 4'd2));
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-24 the pop returns A", pop_addr_p2[0] == ADDR_A);
+    tick();
+    check("TC-24 write 1: rctr[1] decremented 1->0",
+          dut.spec_rctr[1] == 4'd0);
+    check("TC-24 write 1: spec[1] still A", dut.spec_ret_addr[1] == ADDR_A);
+    check("TC-24 write 2: spec[2]==B", dut.spec_ret_addr[2] == ADDR_B);
+    check("TC-24 tosr 2, tosw 3", (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+
+    // =============================================================
+    // TC-25: RETURN_CALL whose push equals the top the pop exposes:
+    // the push is a recursion increment, not an allocation. Seed A at
+    // idx1 and B at idx2. Pop B (tosr 2 -> 1, top A); push A matches
+    // the top, so rctr[1] 0 -> 1 and TOSR holds at 1.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_B);
+    check("TC-25 seeded tosr==2 tosw==3",
+          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+    drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-25 the pop returns B", pop_addr_p2[0] == ADDR_B);
+    tick();
+    check("TC-25 tosr==1 (recursion holds the exposed top)",
+          dut.tosr == 4'd1);
+    check("TC-25 rctr[1]==1", dut.spec_rctr[1] == 4'd1);
+    check("TC-25 tosw unchanged at 3", dut.tosw == 4'd3);
+
+    // =============================================================
+    // TC-26: p3 repair -- undo a whole RETURN_CALL (p2 pop+push, p3
+    // no-op). Seed X at idx1. The RETURN_CALL leaves tosr 2 (B),
+    // tosw 3. The undo restores the pre-op TOSR, 1 (X); TOSW stays
+    // monotonic at 3. Retracting the push then re-exposing the pop
+    // would land on 2, the slot the push wrote.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-26 pre-repair tosr==2 tosw==3",
+          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-26 tosr restored to the pre-op value (1)", dut.tosr == 4'd1);
+    check("TC-26 top is X again", dut.spec_ret_addr[dut.tosr] == ADDR_X);
+    check("TC-26 tosw held at 3", dut.tosw == 4'd3);
+    check("TC-26 p0 TOS reads X", tos_addr_p0[0] == ADDR_X);
+
+    // =============================================================
+    // TC-27: p3 repair -- a missed RETURN_CALL (p2 no-op, p3
+    // RETURN_CALL): the missed pop, then the missed push of the
+    // registered fall-through. Seed X at idx1 and idle one cycle so
+    // the registered op is NONE; that idle cycle presents B on the
+    // fall-through with no valid, which is what p3 registers.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_X);
+    drive(1'b0, NO_BRANCH, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-27 seeded tosr==1 tosw==2",
+          (dut.tosr == 4'd1) && (dut.tosw == 4'd2));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, RETURN_CALL, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-27 missed pop then missed push: tosr 2, tosw 3",
+          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+    check("TC-27 spec[2]==B (registered fall-through)",
+          dut.spec_ret_addr[2] == ADDR_B);
+    check("TC-27 p0 TOS reads B", tos_addr_p0[0] == ADDR_B);
+
+    // =============================================================
+    // TC-28: commit of RETURN_CALL (IC-RAS-10): the return arm, then
+    // the call arm on the CSP the first leaves; BOS once, from the
+    // commit snapshot.
+    // =============================================================
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_A, 4'd0);
+    commit_op(DIRECT_CALL, ADDR_C, 4'd0);
+    check("TC-28 seeded csp==2", dut.csp == 5'd2);
+    commit_op(RETURN_CALL, ADDR_B, 4'd5);
+    check("TC-28 csp level at 2 (pop then push)", dut.csp == 5'd2);
+    check("TC-28 committed top replaced: commit[1]==B",
+          dut.commit_ret_addr[1] == ADDR_B);
+    check("TC-28 entry below untouched: commit[0]==A",
+          dut.commit_ret_addr[0] == ADDR_A);
+    check("TC-28 bos took the snapshot tosr (5)", dut.bos == 4'd5);
+    // Empty commit stack: the pop does nothing, the push writes at 0.
+    do_reset();
+    commit_op(RETURN_CALL, ADDR_B, 4'd0);
+    check("TC-28 from empty: csp 0 -> 1", dut.csp == 5'd1);
+    check("TC-28 from empty: commit[0]==B", dut.commit_ret_addr[0] == ADDR_B);
 
     // -------------------------------------------------------------
     $display("=================================================");

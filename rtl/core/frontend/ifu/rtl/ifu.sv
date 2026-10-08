@@ -48,8 +48,9 @@ import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
 module ifu #(
-  parameter int LB_DEPTH = 16,              // TD-IFU-7
-  parameter int XQ_DEPTH = 4                // IFU-U5
+  parameter int LB_DEPTH  = 16,             // TD-IFU-7
+  parameter int LB_RD_MAX = 2 * LB_DEPTH + 1, // TD#153, 33
+  parameter int XQ_DEPTH  = 4               // IFU-U5
 ) (
   input  logic                     clk,
   input  logic                     rstn,
@@ -159,6 +160,8 @@ module ifu #(
   logic                     w_cons_use0;
   logic                     w_cons_use1;
   logic [$clog2(2*LB_DEPTH+1)-1:0] w_kill_cnt [0:LB_DEPTH-1];
+  // Line buffer reader counts, read only by ifu_assert U5 (TD#153).
+  logic [$clog2(LB_RD_MAX+2)-1:0]  w_lb_rc    [0:LB_DEPTH-1];
 
   // ---- F2 ----------------------------------------------------------------
   logic                     w_f2_val;
@@ -241,7 +244,7 @@ module ifu #(
     .xq_pop            (w_xq_pop)
   );
 
-  ifu_lbuf #(.LB_DEPTH(LB_DEPTH)) u_lbuf (
+  ifu_lbuf #(.LB_DEPTH(LB_DEPTH), .LB_RD_MAX(LB_RD_MAX)) u_lbuf (
     .clk              (clk),
     .rstn             (rstn),
     .flush            (ftq_ifu_flush_val),
@@ -270,7 +273,8 @@ module ifu #(
     .cons_val         (w_cons_val),
     .cons_use0        (w_cons_use0),
     .cons_use1        (w_cons_use1),
-    .kill_cnt         (w_kill_cnt)
+    .kill_cnt         (w_kill_cnt),
+    .rc_obs           (w_lb_rc)
   );
 
   ifu_fetch #(.LB_DEPTH(LB_DEPTH)) u_fetch (

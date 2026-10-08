@@ -1837,6 +1837,79 @@ module tb;
   endtask
 
   // =================================================================
+  // BP-119 (TD#153): the most blocks that can read one line buffer
+  // slot. A tight loop in one line: every block starts at the same
+  // line-aligned address, so each block after the first reuses the
+  // previous request's slot (TD-IFU-8). The line's response is held,
+  // so F2 consumes nothing: the F1 queue fills to BQ_DEPTH = 32 and
+  // the 33rd block attaches its reuse in F0 while the queue is full.
+  // The slot's count must then be exactly 2 * LB_DEPTH + 1 = 33, and
+  // no count may pass it. Released, every block is delivered and
+  // written back, with one L1I request for all of them.
+  // =================================================================
+  function automatic int lb_rc_max();
+    int n;
+    n = 0;
+    for (int s = 0; s < 16; s++)
+      if (int'(dut.u_lbuf.r_rc[s]) > n) n = int'(dut.u_lbuf.r_rc[s]);
+    return n;
+  endfunction
+
+  task automatic t_lbuf_max_readers();
+    localparam int NB  = 40;
+    localparam int MAX = 2 * 16 + 1;           // BQ_DEPTH + F0
+    logic [VA_WIDTH-1:0] b;
+    int c;
+    int peak;
+    int bq_at_peak;
+    int acc_at_peak;
+    tname = "lbuf_max_readers";
+    $display("-- %s --", tname);
+    reset_all();
+    b = VA_WIDTH'('h0_8030_0000);
+    fill_mixed(b, 64);
+    for (int k = 0; k < NB; k++)
+      add_blk(b, b + VA_WIDTH'(32), 1'b0, 0);
+    // The page is identity mapped, so the PA line is the VA line.
+    l1i_hold_ln[b[PA_WIDTH-1:L1I_OFFSET_BITS]] = 1'b1;
+    run  = 1'b1;
+    peak = 0;
+    bq_at_peak  = 0;
+    acc_at_peak = 0;
+    c = 0;
+    while (c < 200) begin
+      @(posedge clk);
+      #1;
+      if (lb_rc_max() > peak) begin
+        peak        = lb_rc_max();
+        bq_at_peak  = int'(dut.u_fetch.r_bq_cnt);
+        acc_at_peak = n_req_acc;
+      end
+      c++;
+    end
+    chk("one L1I request, nothing landed, nothing delivered",
+        (n_l1i_req == 1) && (n_l1i_rsp == 0) && (nrx == 0));
+    chk($sformatf("one slot reaches %0d readers, got %0d", MAX, peak),
+        peak == MAX);
+    chk($sformatf("at the peak the F1 queue is full (32), got %0d",
+                  bq_at_peak), bq_at_peak == 32);
+    chk($sformatf("at the peak 33 blocks are accepted, got %0d",
+                  acc_at_peak), acc_at_peak == MAX);
+    chk($sformatf("F0 holds the 33rd block: %0d accepted after 200 cycles",
+                  n_req_acc), n_req_acc == MAX);
+    chk("the count is still at the peak", lb_rc_max() == MAX);
+    l1i_hold_ln.delete();
+    run_and_check(800);
+    chk($sformatf("one L1I request for all %0d blocks: %0d", NB,
+                  n_l1i_req), n_l1i_req == 1);
+    // The slot stays reserved as the previous request (TD-IFU-8).
+    chk("every reference given back; only the previous request's slot "
+        , (lb_busy_cnt() <= 1) && (lb_rc_sum() == 0));
+    // That no count passes MAX at any cycle of the run is U5,
+    // a_lbuf_rc_bound in ifu_assert.sv, on ifu_lbuf rc_obs.
+  endtask
+
+  // =================================================================
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
@@ -1866,6 +1939,7 @@ module tb;
     t_flush_predecode();
     t_flush_f3(1'b0);
     t_flush_f3(1'b1);
+    t_lbuf_max_readers();
     $display("tb_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ifu: %0d checks failed", fail_cnt);

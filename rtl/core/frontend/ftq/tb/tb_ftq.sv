@@ -93,16 +93,21 @@ module tb;
   bp_br_type_e              ras_commit_br_type;
   logic [VA_WIDTH-1:0]      ras_commit_ret_addr;
   bp_ras_snapshot_t         ras_commit_snapshot;
-  bp_update_t               upd      [0:NUM_PRED_SLOTS-1];
-  bp_ftq_meta_t             upd_meta [0:NUM_PRED_SLOTS-1];
-  logic [NUM_PRED_SLOTS-1:0] upd_ubtb_val;
-  logic [NUM_PRED_SLOTS-1:0] upd_lp_val;
-  logic [NUM_PRED_SLOTS-1:0] upd_tage_val;
-  logic [NUM_PRED_SLOTS-1:0] upd_ittage_val;
-  logic [NUM_PRED_SLOTS-1:0] upd_sc_val;
-  logic                     tage_upd_rdy_u1;
-  logic                     ittage_upd_rdy_u1;
-  logic                     sc_upd_rdy_u1;
+  // Section 8 per-predictor update ports (BP-119, TD#151). The
+  // readies are the cluster's per-slot queue readies, held high here.
+  logic                     sc_enable;
+  ubtb_upd_t [NUM_PRED_SLOTS-1:0] ubtb_upd_u0;
+  logic [NUM_PRED_SLOTS-1:0] lp_upd_valid_p0;
+  lp_upd_t                  lp_upd_p0         [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] tage_upd_val_u0;
+  tage_upd_inp_t            tage_upd_inp_u0   [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] ittage_upd_val_u0;
+  ittage_upd_inp_t          ittage_upd_inp_u0 [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] sc_upd_val_u0;
+  sc_upd_inp_t              sc_upd_inp_u0     [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] tage_upd_rdy;
+  logic [NUM_PRED_SLOTS-1:0] ittage_upd_rdy;
+  logic [NUM_PRED_SLOTS-1:0] sc_upd_rdy;
   logic                     ftb_upd_valid_u0;
   logic [VA_WIDTH-1:0]      ftb_upd_pc_u0;
   logic                     ftb_upd_hit_u0;
@@ -211,16 +216,19 @@ module tb;
     .ras_commit_br_type    (ras_commit_br_type),
     .ras_commit_ret_addr   (ras_commit_ret_addr),
     .ras_commit_snapshot   (ras_commit_snapshot),
-    .upd                   (upd),
-    .upd_meta              (upd_meta),
-    .upd_ubtb_val          (upd_ubtb_val),
-    .upd_lp_val            (upd_lp_val),
-    .upd_tage_val          (upd_tage_val),
-    .upd_ittage_val        (upd_ittage_val),
-    .upd_sc_val            (upd_sc_val),
-    .tage_upd_rdy_u1       (tage_upd_rdy_u1),
-    .ittage_upd_rdy_u1     (ittage_upd_rdy_u1),
-    .sc_upd_rdy_u1         (sc_upd_rdy_u1),
+    .sc_enable             (sc_enable),
+    .ubtb_upd_u0           (ubtb_upd_u0),
+    .lp_upd_valid_p0       (lp_upd_valid_p0),
+    .lp_upd_p0             (lp_upd_p0),
+    .tage_upd_val_u0       (tage_upd_val_u0),
+    .tage_upd_inp_u0       (tage_upd_inp_u0),
+    .ittage_upd_val_u0     (ittage_upd_val_u0),
+    .ittage_upd_inp_u0     (ittage_upd_inp_u0),
+    .sc_upd_val_u0         (sc_upd_val_u0),
+    .sc_upd_inp_u0         (sc_upd_inp_u0),
+    .tage_upd_rdy          (tage_upd_rdy),
+    .ittage_upd_rdy        (ittage_upd_rdy),
+    .sc_upd_rdy            (sc_upd_rdy),
     .ftb_upd_valid_u0      (ftb_upd_valid_u0),
     .ftb_upd_pc_u0         (ftb_upd_pc_u0),
     .ftb_upd_hit_u0        (ftb_upd_hit_u0),
@@ -433,9 +441,10 @@ module tb;
     bpu_meta_idx_p2       = '0;
     bpu_meta_val_p3       = 1'b0;
     bpu_meta_idx_p3       = '0;
-    tage_upd_rdy_u1       = 1'b1;
-    ittage_upd_rdy_u1     = 1'b1;
-    sc_upd_rdy_u1         = 1'b1;
+    sc_enable             = 1'b1;
+    tage_upd_rdy          = '1;
+    ittage_upd_rdy        = '1;
+    sc_upd_rdy            = '1;
     ftq_ifu_xlate_rdy     = 1'b1;
     ftq_ifu_req_rdy       = 1'b1;
     k_mon_on              = 1'b0;
@@ -1388,6 +1397,21 @@ module tb;
     #1;
     chk_va("I4 the FTB update fall-through is the p2 value",
            dut.w_ftb_upd[0].pft_addr, I_PFT0);
+    // BP-119, TD#151: the same resolution reaches the uBTB update port
+    // through ftq_upd_conv, on the slot its position maps to, with the
+    // same fall-through and the direct-call bits, and no queued
+    // predictor is trained (fe_decisions.md 7.2).
+    chk("I4a the uBTB update is presented for the direct call",
+        ubtb_upd_u0[dut.w_rsv_slot[0]].valid
+     && ubtb_upd_u0[dut.w_rsv_slot[0]].is_jmp
+     && ubtb_upd_u0[dut.w_rsv_slot[0]].is_call
+     && !ubtb_upd_u0[dut.w_rsv_slot[0]].is_ret
+     && !ubtb_upd_u0[dut.w_rsv_slot[0]].is_jalr);
+    chk_va("I4b with the p2 fall-through",
+           ubtb_upd_u0[dut.w_rsv_slot[0]].pft_addr, I_PFT0);
+    chk("I4c and no queued predictor is trained",
+        (tage_upd_val_u0 == '0) && (ittage_upd_val_u0 == '0)
+     && (sc_upd_val_u0 == '0) && (lp_upd_valid_p0 == '0));
     tick();
     bkend_ftq_rsv_val = '0;
 

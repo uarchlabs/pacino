@@ -58,6 +58,11 @@ module tb;
   bp_ftq_slot_t             pd_wr_slot;
   logic                     pd_wr_kill;
 
+  logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val;
+  logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1];
+  logic [TRX_SLOT_BITS-1:0] rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1];
+  bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1];
+
   logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx;
   logic [VA_WIDTH-1:0]      xlate_rd_pc;
   logic [FTQ_IDX_BITS-1:0]  fetch_rd_idx;
@@ -103,6 +108,10 @@ module tb;
     .pd_wr_sel           (pd_wr_sel),
     .pd_wr_slot          (pd_wr_slot),
     .pd_wr_kill          (pd_wr_kill),
+    .rsv_wr_val          (rsv_wr_val),
+    .rsv_wr_idx          (rsv_wr_idx),
+    .rsv_wr_sel          (rsv_wr_sel),
+    .rsv_wr_slot         (rsv_wr_slot),
     .xlate_rd_idx        (xlate_rd_idx),
     .xlate_rd_pc         (xlate_rd_pc),
     .fetch_rd_idx        (fetch_rd_idx),
@@ -160,6 +169,7 @@ module tb;
     p3_wr_val       = 1'b0;
     pd_wr_val       = 1'b0;
     pd_wr_kill      = 1'b0;
+    rsv_wr_val      = '0;
     commit_step_val = 1'b0;
   endtask
 
@@ -208,7 +218,12 @@ module tb;
       p2_wr_slot[s]    = '0;
       p3_wr_slot[s]    = '0;
     end
-    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) rsv_rd_idx[p] = '0;
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      rsv_rd_idx[p]  = '0;
+      rsv_wr_idx[p]  = '0;
+      rsv_wr_sel[p]  = '0;
+      rsv_wr_slot[p] = '0;
+    end
     clr();
     repeat (4) tick();
     rstn = 1'b1;
@@ -695,10 +710,11 @@ module tb;
 
   // -----------------------------------------------------------------
   // H. The RAS commit of all eight bp_br_type_e encodings (BP-118,
-  //    Problem 7b). A taken slot of each type is committed. The calls
-  //    and the return commit; 3'b111, RETURN_CALL, which the package
-  //    does not name and fe_decisions.md 7.2 says pops then pushes,
-  //    does NOT commit AS BUILT -- pinned so a change is visible.
+  //    Problem 7b). A taken slot of each type is committed. The calls,
+  //    the return and RETURN_CALL (3'b111, the JALR that pops then
+  //    pushes, fe_decisions.md 7.2) commit. BP-118 pinned 3'b111 as NOT
+  //    committing, as built; BP-119 (TD#152) qualifies it, and H8
+  //    carries the old value in a comment.
   // -----------------------------------------------------------------
   task automatic group_h();
     bp_br_type_e bt;
@@ -718,14 +734,79 @@ module tb;
       commit_rd_idx   = 6'd50;
       commit_step_val = 1'b1;
       #1;
+      // OLD (BP-118, as built): RETURN_CALL absent from this list, so
+      // H8 expected "br_type 7 commits the RAS: 0".
       exp = (bt == DIRECT_CALL) || (bt == INDIRECT_CALL) ||
-            (bt == RETURN);
+            (bt == RETURN)      || (bt == RETURN_CALL);
       chk($sformatf("H%0d br_type %0d commits the RAS: %0d", t + 1, t,
                     exp),
           (ras_commit_val == exp) &&
           (!exp || (ras_commit_br_type == bt)));
+      // Hold the commit across an edge so the bound properties (E5 to
+      // E7) sample it; checked with #1 alone they never did (TD#109).
+      // BP-119.
+      tick();
       commit_step_val = 1'b0;
     end
+    clr();
+  endtask
+
+  // -----------------------------------------------------------------
+  // I. The placement write (BP-119): ftq_resolve places a resolved
+  //    branch the entry did not hold. One slot per channel, last in
+  //    the write order, and the commit walk then sees it.
+  // -----------------------------------------------------------------
+  task automatic group_i();
+    bp_ftq_slot_t ns;
+    $display("-- I: the placement write --");
+    do_reset();
+    alloc(40);
+    alloc(41);
+    // I1-I3: channel 1 places a taken RETURN_CALL in slot 1 of 40.
+    ns = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9A00_0000)), RETURN_CALL,
+                 1'b1, FTB_BR_POS_BITS'(7));
+    rsv_wr_val     = 2'b10;
+    rsv_wr_idx[1]  = 6'd40;
+    rsv_wr_sel[1]  = 1'b1;
+    rsv_wr_slot[1] = ns;
+    tick();
+    rsv_wr_val = '0;
+    fetch_rd_idx = 6'd40;
+    #1;
+    chk("I1 the placed slot lands", fetch_rd_entry.slot[1] == ns);
+    chk("I2 the other slot of the entry is untouched",
+        (fetch_rd_entry.slot[0].br_type == COND) &&
+        (fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(2)));
+    fetch_rd_idx = 6'd41;
+    #1;
+    chk("I3 no other entry is written",
+        fetch_rd_entry.slot[1].slot_valid == 1'b0);
+    commit_rd_idx   = 6'd40;
+    commit_step_val = 1'b1;
+    #1;
+    chk("I4 the commit walk sees the placed RETURN_CALL",
+        ras_commit_val && (ras_commit_br_type == RETURN_CALL));
+    tick();
+    commit_step_val = 1'b0;
+    // I5: same slot, same cycle, predecode and placement: the
+    //     placement (architectural, the latest event) wins.
+    pd_wr_val      = 1'b1;
+    pd_wr_idx      = 6'd41;
+    pd_wr_sel      = 1'b0;
+    pd_wr_slot     = mk_slot(1'b1, '0, DIRECT_UNC, 1'b1,
+                             FTB_BR_POS_BITS'(5));
+    rsv_wr_val     = 2'b01;
+    rsv_wr_idx[0]  = 6'd41;
+    rsv_wr_sel[0]  = 1'b0;
+    rsv_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9B00_0000)),
+                             COND, 1'b0, FTB_BR_POS_BITS'(3));
+    tick();
+    clr();
+    fetch_rd_idx = 6'd41;
+    #1;
+    chk("I5 the placement wins a same-cycle predecode write",
+        (fetch_rd_entry.slot[0].br_type == COND) &&
+        (fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(3)));
     clr();
   endtask
 
@@ -749,6 +830,7 @@ module tb;
     group_f();
     group_g();
     group_h();
+    group_i();
 
     $display("tb_ftq_entry: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

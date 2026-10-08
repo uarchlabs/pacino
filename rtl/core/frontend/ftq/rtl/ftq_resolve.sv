@@ -24,11 +24,24 @@
 // branches in a block can share one. It was ambiguous until the
 // field was widened on 2026-08-19.
 //
-// A POSITION NAMING NO SLOT IS REPORTED, not silently dropped. It
-// means the entry does not describe the branch that executed, which
-// is a real condition -- an FTB entry that is stale or aliased -- and
-// it is not the same thing as a squashed entry. rsv_nomap says so
-// per channel.
+// A POSITION NAMING NO SLOT IS PLACED AND TRAINED (BP-119, ruled in
+// session by Jeff). It is the first execution of a branch the entry
+// does not hold: the p2 slot correction carries only what the FTB
+// returned, and predecode writes a slot only on a structural
+// mispredict, which it raises for a JAL alone (ifu_f3 M1). Until
+// BP-119 such a resolution formed no update of any kind, so the FTB
+// could never learn a conditional or a JALR it did not already hold,
+// and TAGE, SC, LP and ITTAGE never trained in the integrated front
+// end. Now the branch is PLACED in a slot by the rule ftq_ifu W1 uses
+// for a branch predecode found -- program order: the lowest slot that
+// is free or holds a position at or after this one, else the last
+// slot -- and trained as a mapped branch: FTB (allocating on a miss,
+// with the hit and way carried in the slot's metadata), uBTB, and
+// the table predictors from that slot's metadata, with no R2
+// suppression (the ruling: train them on the first execution). The
+// placed slot is also written into the entry (rsv_wr_*), so the
+// commit walk sees a call or return it holds (ftq_entry 5.4).
+// rsv_nomap still reports the condition, per channel.
 //
 // WHAT R2 OF ftq_entry_formats.md 3.1 DOES. When the entry's stored
 // br_type for the mapped slot DISAGREES with the resolved br_type,
@@ -46,14 +59,29 @@
 //   indirect        uBTB, FTB, ITTAGE
 //   return          uBTB, FTB, RAS
 //   direct uncond   uBTB, FTB
+//   direct call     uBTB, FTB, RAS
+//   indirect call   uBTB, FTB, ITTAGE, RAS
+//   return-call     uBTB, FTB, RAS (pop, then push)
+//   no branch       none
 //
-// and the three encodings that table does not list follow from what
-// each predictor does (ftq_bpu_interfaces.md 8): NO_BRANCH forms no
-// update; DIRECT_CALL pushes RAS and updates uBTB and FTB;
-// INDIRECT_CALL updates ITTAGE for the target and RAS for the
-// return address. RAS is NOT updated from here -- its update is the
-// commit group, fed from the commit walk of 5.4 -- so a RETURN or a
-// CALL forms no RAS traffic on this path.
+// RETURN_CALL (3'b111, TD#152) trains the FTB with is_call, is_ret
+// and is_jalr all set, so the next prediction of the block classifies
+// it RETURN_CALL at p2; it does not train ITTAGE (7.2, FE-U9). Before
+// BP-119 3'b111 trained the FTB as a plain direct jump. RAS is NOT
+// updated from here -- its update is the commit group, fed from the
+// commit walk of 5.4 -- so a RETURN or a CALL forms no RAS traffic on
+// this path.
+//
+// THE PREDICTOR VALIDS ARE REQUESTS (BP-119, TD#150, TD#151). This
+// module presents, per slot, which predictors the resolution trains,
+// qualified by the FTB scheduler's ready for its channel but NOT by
+// any predictor's ready. ftq_upd_conv forms the per-predictor payloads
+// from them, gates each predictor's valid on the slot being accepted
+// by EVERY predictor it trains, and returns that acceptance on
+// upd_acc. The channel's ready is the scheduler's ready and upd_acc of
+// its slot. The valids are not gated here because the SC accept
+// (bp_cluster sc_upd_rdy) is a function of the SC valid: gating the
+// request on it would close a combinational loop.
 //
 // R3, THE SQUASHED RESOLUTION. A resolution naming an entry that has
 // been squashed is DROPPED SILENTLY. This is normal traffic, not an
@@ -109,12 +137,10 @@ module ftq_resolve (
   // ---- backpressure from the update path ---------------------------
   // ftb_sched_rdy is ftq_ftb_sched's upd_rdy: the scheduler owns
   // only the FTB reason for deasserting ready and the FTQ ANDs it
-  // with its others (5.7.4). The three queued predictors declare
-  // their own.
+  // with its others (5.7.4). upd_acc is ftq_upd_conv's: slot s's
+  // update is accepted by every predictor it trains (TD#150).
   input  logic [NUM_RESOLVE_PORTS-1:0] ftb_sched_rdy,
-  input  logic                     tage_upd_rdy,
-  input  logic                     ittage_upd_rdy,
-  input  logic                     sc_upd_rdy,
+  input  logic [NUM_PRED_SLOTS-1:0] upd_acc,
 
   // ---- update out, the per-slot channels ---------------------------
   // bp_update_t is arrayed by SLOT and the slot IS the array index
@@ -130,6 +156,11 @@ module ftq_resolve (
 
   // ---- the slow-path metadata that goes with each update -----------
   output bp_ftq_meta_t             upd_meta [0:NUM_PRED_SLOTS-1],
+  // ---- the fast-path entry that goes with each update --------------
+  // ftq_upd_conv reads the slot's pos and the block's pft_addr from it
+  // (ftq_bpu_interfaces.md 8: every payload field has a source in
+  // bp_update_t, bp_ftq_meta_t or the fast-path entry).
+  output bp_ftq_entry_t            upd_entry [0:NUM_PRED_SLOTS-1],
 
   // ---- update out, to ftq_ftb_sched --------------------------------
   // The scheduler takes the flat payload as one struct plus the two
@@ -149,13 +180,25 @@ module ftq_resolve (
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_drop_sq,
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_type_dis,
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_accept,
-  output logic [TRX_SLOT_BITS-1:0] rsv_slot [0:NUM_RESOLVE_PORTS-1]
+  output logic [TRX_SLOT_BITS-1:0] rsv_slot [0:NUM_RESOLVE_PORTS-1],
+
+  // ---- the placement write, to ftq_entry (BP-119) ------------------
+  // One slot of the named entry, written when a placed resolution is
+  // accepted (its channel ready), so the commit walk sees it.
+  output logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
+  output logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx  [0:NUM_RESOLVE_PORTS-1],
+  output logic [TRX_SLOT_BITS-1:0] rsv_wr_sel  [0:NUM_RESOLVE_PORTS-1],
+  output bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1]
 );
 
   logic [FTQ_PTR_BITS-1:0] w_live_len;
   logic [FTQ_PTR_BITS-1:0] w_age [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_live;
   logic [NUM_RESOLVE_PORTS-1:0] w_slot_hit;
+  logic [TRX_SLOT_BITS-1:0] w_map_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [TRX_SLOT_BITS-1:0] w_plc_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [NUM_RESOLVE_PORTS-1:0] w_plc_val;
+  bp_ftq_slot_t             w_new_slot [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_rdy_pred;
 
   // -----------------------------------------------------------------
@@ -181,41 +224,71 @@ module ftq_resolve (
 
       // Position to slot. Descending so the LOWEST matching slot
       // wins, though the mapping is exact and at most one can match.
-      rsv_slot[c]   = '0;
       w_slot_hit[c] = 1'b0;
+      w_map_slot[c] = '0;
       for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
         if (rsv_entry[c].slot[s].slot_valid &&
             (rsv_entry[c].slot[s].pos == bkend_rsv[c].pos)) begin
-          rsv_slot[c]   = TRX_SLOT_BITS'(s);
+          w_map_slot[c] = TRX_SLOT_BITS'(s);
           w_slot_hit[c] = 1'b1;
         end
       end
 
+      // Placement for a position naming no slot (ftq_ifu W1's rule):
+      // the lowest slot free or at or after the position, else the
+      // last. Descending so the lowest qualifying slot wins.
+      w_plc_slot[c]  = TRX_SLOT_BITS'(NUM_PRED_SLOTS - 1);
+      for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
+        if (!rsv_entry[c].slot[s].slot_valid ||
+            (rsv_entry[c].slot[s].pos >= bkend_rsv[c].pos)) begin
+          w_plc_slot[c] = TRX_SLOT_BITS'(s);
+        end
+      end
+      rsv_slot[c] = w_slot_hit[c] ? w_map_slot[c] : w_plc_slot[c];
+
       rsv_drop_sq[c] = bkend_rsv_val[c] & ~w_live[c];
       rsv_nomap[c]   = bkend_rsv_val[c] &  w_live[c] & ~w_slot_hit[c];
 
-      // An update is formed only for a live entry whose position
-      // mapped. A nomap is reported and forms nothing: there is no
-      // slot whose metadata could train a predictor.
-      rsv_accept[c]  = bkend_rsv_val[c] &  w_live[c] &  w_slot_hit[c];
+      // Every live resolution is accepted: mapped, or placed.
+      rsv_accept[c]  = bkend_rsv_val[c] &  w_live[c];
 
       // R2 of ftq_entry_formats.md 3.1. The stored classification
-      // against the resolved one.
-      rsv_type_dis[c] = rsv_accept[c] &&
+      // against the resolved one, for a MAPPED branch only: a placed
+      // branch has no stored classification of its own, and the
+      // ruling trains the table predictors on it.
+      rsv_type_dis[c] = rsv_accept[c] && w_slot_hit[c] &&
         (rsv_entry[c].slot[rsv_slot[c]].br_type != bkend_rsv[c].br_type);
+
+      // The placed slot, as the entry will hold it.
+      w_plc_val[c]               = rsv_nomap[c] &&
+                                   (bkend_rsv[c].br_type != NO_BRANCH);
+      w_new_slot[c]              = '0;
+      w_new_slot[c].slot_valid   = 1'b1;
+      w_new_slot[c].target       = bkend_rsv[c].target;
+      w_new_slot[c].br_type      = bkend_rsv[c].br_type;
+      w_new_slot[c].taken        = bkend_rsv[c].taken;
+      w_new_slot[c].pos          = bkend_rsv[c].pos;
+      w_new_slot[c].pred_src     = PRED_NONE;
     end
   end
 
   // -----------------------------------------------------------------
   // Ready. FE-5, FE-5a, backend_interfaces 4.
   // -----------------------------------------------------------------
-  // Every queued predictor's ready gates every channel: the update
-  // is formed for a slot, not for a channel, and a channel that
-  // could not enqueue would have to be held. The FTB scheduler's
-  // ready is already per channel (5.7.3 S6).
+  // A channel is ready when the FTB scheduler can take its FTB update
+  // (per channel, 5.7.3 S6) and, for a resolution that forms an
+  // update, when ftq_upd_conv reports its slot accepted by every
+  // predictor that slot trains (upd_acc, TD#150). A resolution that
+  // forms no update -- squashed or unmapped -- needs no predictor.
+  //
+  // Before BP-119 the three queued predictors' scalar readies gated
+  // every channel whatever it trained. The cluster's SC ready is
+  // asserted only in a cycle SC grants an update (bp_cluster
+  // sc_upd_rdy), so under that rule a resolution that trains no SC
+  // could never be accepted once the readies were connected.
   always_comb begin : ready
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
-      w_rdy_pred[c] = tage_upd_rdy & ittage_upd_rdy & sc_upd_rdy;
+      w_rdy_pred[c] = ~rsv_accept[c] | upd_acc[rsv_slot[c]];
       ftq_bkend_rsv_rdy[c] = w_rdy_pred[c] & ftb_sched_rdy[c];
     end
   end
@@ -238,6 +311,7 @@ module ftq_resolve (
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       upd[s]            = '0;
       upd_meta[s]       = '0;
+      upd_entry[s]      = '0;
       upd_ubtb_val[s]   = 1'b0;
       upd_lp_val[s]     = 1'b0;
       upd_tage_val[s]   = 1'b0;
@@ -245,8 +319,11 @@ module ftq_resolve (
       upd_sc_val[s]     = 1'b0;
     end
 
+    // A request is formed for an accepted resolution whose FTB update
+    // the scheduler can take this cycle. NOT gated by upd_acc: see the
+    // header, THE PREDICTOR VALIDS ARE REQUESTS.
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
-      if (rsv_accept[c] && ftq_bkend_rsv_rdy[c]) begin
+      if (rsv_accept[c] && ftb_sched_rdy[c]) begin
         upd[rsv_slot[c]].branch_id     = bkend_rsv[c].ftq_idx;
         upd[rsv_slot[c]].pc            = rsv_entry[c].pc;
         upd[rsv_slot[c]].actual_taken  = bkend_rsv[c].taken;
@@ -255,7 +332,13 @@ module ftq_resolve (
         upd[rsv_slot[c]].mispredicted  = bkend_rsv[c].mispredict;
         upd[rsv_slot[c]].valid         = 1'b1;
 
-        upd_meta[rsv_slot[c]] = rsv_meta[c][rsv_slot[c]];
+        upd_meta[rsv_slot[c]]  = rsv_meta[c][rsv_slot[c]];
+        upd_entry[rsv_slot[c]] = rsv_entry[c];
+        // A placed branch is presented in its slot, so ftq_upd_conv
+        // reads its position (not the slot's previous occupant's).
+        if (w_plc_val[c]) begin
+          upd_entry[rsv_slot[c]].slot[rsv_slot[c]] = w_new_slot[c];
+        end
 
         // uBTB updates on every resolved branch type that forms an
         // update at all. NO_BRANCH forms none.
@@ -266,7 +349,8 @@ module ftq_resolve (
         // its own branch type: TAGE, SC and LP train only on
         // conditionals, ITTAGE only on indirects, and INDIRECT_CALL
         // is an indirect for this purpose because it updates ITTAGE
-        // for the target (FE-U9, session-061).
+        // for the target (FE-U9, session-061). RETURN_CALL is not:
+        // its target is the RAS pop (7.2).
         if (!rsv_type_dis[c]) begin
           upd_tage_val[rsv_slot[c]] = (bkend_rsv[c].br_type == COND);
           upd_sc_val[rsv_slot[c]]   = (bkend_rsv[c].br_type == COND);
@@ -322,14 +406,34 @@ module ftq_resolve (
       ftb_upd[c].is_jmp     = (bkend_rsv[c].br_type != COND) &&
                               (bkend_rsv[c].br_type != NO_BRANCH);
       ftb_upd[c].jmp_target = bkend_rsv[c].target;
+      // RETURN_CALL is a call AND a return AND a JALR, the three bits
+      // the cluster's p2 classification reads it from (TD#152).
       ftb_upd[c].is_call    =
-        (bkend_rsv[c].br_type == DIRECT_CALL) ||
-        (bkend_rsv[c].br_type == INDIRECT_CALL);
-      ftb_upd[c].is_ret     = (bkend_rsv[c].br_type == RETURN);
+        (bkend_rsv[c].br_type == DIRECT_CALL)   ||
+        (bkend_rsv[c].br_type == INDIRECT_CALL) ||
+        (bkend_rsv[c].br_type == RETURN_CALL);
+      ftb_upd[c].is_ret     =
+        (bkend_rsv[c].br_type == RETURN)        ||
+        (bkend_rsv[c].br_type == RETURN_CALL);
       ftb_upd[c].is_jalr    =
         (bkend_rsv[c].br_type == INDIRECT_NONRET) ||
         (bkend_rsv[c].br_type == INDIRECT_CALL)   ||
-        (bkend_rsv[c].br_type == RETURN);
+        (bkend_rsv[c].br_type == RETURN)          ||
+        (bkend_rsv[c].br_type == RETURN_CALL);
+    end
+  end
+
+  // -----------------------------------------------------------------
+  // The placement write. On acceptance only: a held resolution is
+  // re-presented and placed again, and writing before acceptance
+  // would make the retry map onto its own placement.
+  // -----------------------------------------------------------------
+  always_comb begin : place_write
+    for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+      rsv_wr_val[c]  = w_plc_val[c] & ftq_bkend_rsv_rdy[c];
+      rsv_wr_idx[c]  = bkend_rsv[c].ftq_idx;
+      rsv_wr_sel[c]  = rsv_slot[c];
+      rsv_wr_slot[c] = w_new_slot[c];
     end
   end
 

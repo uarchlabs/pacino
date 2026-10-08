@@ -9,6 +9,11 @@ which instructions are covered, partially covered, or absent.
 
 Usage:
     python3 tools/check_rva23_coverage.py [--rtl-dir <dir>]
+        [--rvc-file <file>] [--rvc-oracle <file>]
+
+16-bit (C, Zcb) instructions are expanded in the IFU, not in decode
+(BP-118, TD#143), so their credit comes from the IFU expander,
+rtl/core/frontend/ifu/rtl/ifu_rvc_exp.sv (BP-119). See classify_instr.
 
 Output is ASCII only. No third-party packages required.
 
@@ -28,6 +33,12 @@ SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 OPCODES_DIR  = os.path.join(SCRIPT_DIR, 'riscv-opcodes', 'extensions')
 DEFAULT_RTL  = os.path.join(PROJECT_ROOT, 'rtl', 'core', 'frontend', 'decode', 'rtl')
+IFU_DIR      = os.path.join(PROJECT_ROOT, 'rtl', 'core', 'frontend', 'ifu')
+DEFAULT_RVC  = os.path.join(IFU_DIR, 'rtl', 'ifu_rvc_exp.sv')
+# The LLVM oracle tb_ifu_rvc_exp checks ifu_rvc_exp.sv against at every
+# 16-bit encoding and every position (sim_ifu_rvc_exp in the ifu
+# Makefile). Line format {class[7:0], expected[31:0]}, index = encoding.
+DEFAULT_ORC  = os.path.join(IFU_DIR, 'tb', 'ifu_rvc_exp_oracle.hex')
 
 # ---------------------------------------------------------------------------
 # RVA23U64 mandatory extensions
@@ -132,13 +143,15 @@ HANDLED_OPGROUPS = {
 #
 # Entries identified:
 #   TOOLS-001: c.sext.w is a pseudo-op alias for c.addiw with imm=0.
-#     rvc_expander.sv handles it via the C.ADDIW path (quadrant 1,
+#     The expander handles it via the C.ADDIW path (quadrant 1,
 #     funct3=001, rd!=0, imm=0). No explicit c.sext.w label exists.
+#     The expander was rvc_expander.sv until BP-119; it is now
+#     ifu_rvc_exp.sv.
 # ---------------------------------------------------------------------------
 
 KNOWN_SHARED_ENCODINGS = {
     # c.sext.w is $pseudo_op for rv64_c::c.addiw with imm=0.
-    # rvc_expander.sv handles the general C.ADDIW case; the imm=0
+    # ifu_rvc_exp.sv handles the general C.ADDIW case; the imm=0
     # specialisation is the c.sext.w encoding. (TOOLS-001)
     'c.sext.w': (
         'C.ADDIW',
@@ -173,7 +186,7 @@ KNOWN_SHARED_ENCODINGS = {
 #
 # Entries identified:
 #   TOOLS-001: c.zext.w is absent from rv_zcb (the 32-bit Zcb file).
-#     It IS present in rv64_zcb and in rvc_expander.sv, so it is already
+#     It IS present in rv64_zcb and in ifu_rvc_exp.sv, so it is already
 #     found by normal matching. This entry documents the rv_zcb gap and
 #     acts as a safety net if rv64_zcb is ever removed from the Zcb
 #     extension file list in RVA23_EXTENSIONS above.
@@ -184,7 +197,7 @@ KNOWN_OPCODES_FILE_GAPS = {
     # Entry is documentation and a safety net only. (TOOLS-001)
     'c.zext.w': (
         'ADD.UW rd,rd,x0',
-        'absent from rv_zcb; present in rv64_zcb and rvc_expander.sv',
+        'absent from rv_zcb; present in rv64_zcb and ifu_rvc_exp.sv',
         'TOOLS-001',
     ),
 }
@@ -199,6 +212,8 @@ class Instr:
         self.name      = name       # mnemonic string
         self.is_pseudo = is_pseudo  # True if $pseudo_op
         self.bits10    = bits10     # bits [1:0] (3 = 32-bit, else RVC)
+        self.match     = 0          # fixed encoding bits, value
+        self.mask      = 0          # fixed encoding bits, which
 
     @property
     def is_rvc(self):
@@ -278,11 +293,16 @@ def parse_extension_file(filepath, name_filter=None):
             # rather than the split '6..2=X 1..0=3' form.
             bits10  = None
             bits62  = None
+            match   = 0
+            mask    = 0
             for tok in tokens:
                 parsed = _parse_field(tok)
                 if parsed is None:
                     continue
                 hi, lo, val = parsed
+                width = hi - lo + 1
+                mask  |= ((1 << width) - 1) << lo
+                match |= (val & ((1 << width) - 1)) << lo
                 if hi == 1 and lo == 0:
                     bits10 = val
                 if hi == 6 and lo == 2:
@@ -304,6 +324,8 @@ def parse_extension_file(filepath, name_filter=None):
 
             instr         = Instr(mnemonic, is_pseudo, bits10)
             instr.opgroup = bits62
+            instr.match   = match
+            instr.mask    = mask
             instrs.append(instr)
 
     return instrs
@@ -312,10 +334,14 @@ def parse_extension_file(filepath, name_filter=None):
 # Load all RTL file content
 # ---------------------------------------------------------------------------
 
-def load_rtl(rtl_dir):
+def load_rtl(rtl_dir, extra_files=()):
     """
-    Load all .sv files from rtl_dir.
+    Load all .sv files from rtl_dir, plus each file in extra_files.
     Returns (combined_text, {filename: text}).
+
+    A mnemonic written with an optional suffix in parentheses, as
+    ifu_rvc_exp.sv writes "c.lh(u)" for c.lh and c.lhu, is expanded to
+    both forms in the combined text, so name_in_rtl() finds either.
     """
     files = {}
     for fname in os.listdir(rtl_dir):
@@ -323,8 +349,54 @@ def load_rtl(rtl_dir):
             fpath = os.path.join(rtl_dir, fname)
             with open(fpath, 'r') as fh:
                 files[fname] = fh.read()
+    for fpath in extra_files:
+        with open(fpath, 'r') as fh:
+            files[os.path.basename(fpath)] = fh.read()
     combined = '\n'.join(files.values())
+    combined = re.sub(r'\b([A-Za-z][\w.]*)\((\w+)\)',
+                      r'\1 \1\2', combined)
     return combined, files
+
+
+def load_rvc_oracle(path):
+    """
+    Load the ifu_rvc_exp oracle: {encoding: class}. Comment lines (//)
+    are skipped; line n of the data is encoding n.
+    """
+    classes = {}
+    n = 0
+    with open(path, 'r') as fh:
+        for raw in fh:
+            line = raw.strip()
+            if not line or line.startswith('//'):
+                continue
+            classes[n] = int(line[0:2], 16)
+            n += 1
+    return classes
+
+
+# Oracle classes for which the expander produces an instruction rather
+# than the reserved carrier or the defined illegal word (see the class
+# list in rtl/core/frontend/ifu/tb/gen_ifu_rvc_exp_oracle.py):
+# 1 LLVM, 4 HINT, 5 MOP, 7 MVALT. 2 RSV, 3 ILL0 and 6 RSVLLVM are not.
+ORC_EXPANDS = (1, 4, 5, 7)
+
+
+def rvc_by_encoding(instr, oracle):
+    """
+    True if some 16-bit encoding with instr's fixed fields is one the
+    expander turns into an instruction. The oracle classes the
+    encodings; sim_ifu_rvc_exp proves ifu_rvc_exp.sv produces the
+    oracle word at every one of them, so this is a statement about
+    the RTL, not about a comment in it.
+    """
+    if not oracle:
+        return False
+    for v in range(0x10000):
+        if (v & instr.mask) == instr.match:
+            if oracle.get(v, 0) in ORC_EXPANDS:
+                return True
+    return False
 
 
 def name_in_rtl(name, rtl_text):
@@ -387,22 +459,24 @@ def _check_exceptions(name, rtl_text):
 COVERED      = 'covered'
 COVERED_STAR = 'covered*'  # covered via exception table entry
 ROUTED       = 'routed'    # opcode class handled; full decode in FU
-PARTIAL_RVC  = 'rvc'       # RVC instruction; handled via rvc_expander
+PARTIAL_RVC  = 'rvc'       # RVC instruction; unused since BP-119
 MISSING      = 'missing'
 
 
 def classify_instr(instr, rtl_text):
     """
-    Return one of COVERED, ROUTED, PARTIAL_RVC, MISSING.
+    Return one of COVERED, ROUTED, MISSING.
+
+    A 16-bit instruction is COVERED when its mnemonic appears in the
+    sources (decode and ifu_rvc_exp.sv). The name test reads comments
+    and labels only, and ifu_rvc_exp.sv does not name every case arm:
+    the C.LW and C.LD arms of quadrant 0 carry no comment, which is
+    why BP-118 found c.lw and c.ld MISSING with ifu_rvc_exp.sv added.
+    Those fall to the encoding test in run_analysis (rvc_by_encoding).
     """
-    # 16-bit instructions -> check rvc_expander presence
     if instr.is_rvc:
-        # rvc_expander handles the full C extension expansion
-        # Zcb instructions are 16-bit but not all are in expander yet
         if name_in_rtl(instr.name, rtl_text):
             return COVERED
-        # C extension base - rvc_expander covers quadrant 0/1/2
-        # Zcb is new (c.lbu, c.lhu etc.) - check by name
         return MISSING
 
     # 32-bit instructions
@@ -419,14 +493,19 @@ def classify_instr(instr, rtl_text):
 # Main analysis
 # ---------------------------------------------------------------------------
 
-def run_analysis(rtl_dir, opcodes_dir, strict=False):
-    rtl_text, rtl_files = load_rtl(rtl_dir)
+def run_analysis(rtl_dir, opcodes_dir, strict=False, rvc_file=None,
+                 rvc_oracle=None):
+    extra = [rvc_file] if rvc_file else []
+    rtl_text, rtl_files = load_rtl(rtl_dir, extra)
+    oracle = load_rvc_oracle(rvc_oracle) if rvc_oracle else {}
 
     print('=' * 72)
     print('RVA23U64 Instruction Decoder Coverage Analysis')
     print('RTL directory  : {}'.format(rtl_dir))
     print('Opcodes source : {}'.format(opcodes_dir))
     print('RTL files      : {}'.format(', '.join(sorted(rtl_files.keys()))))
+    print('RVC oracle     : {}'.format(rvc_oracle if rvc_oracle
+                                       else 'none'))
     print('=' * 72)
 
     total_instrs       = 0
@@ -474,6 +553,11 @@ def run_analysis(rtl_dir, opcodes_dir, strict=False):
                     pseudo_list.append((ins.name, status))
                 else:
                     exc = _check_exceptions(ins.name, rtl_text)
+                    if not exc and ins.is_rvc and \
+                            rvc_by_encoding(ins, oracle):
+                        exc = ('covered by encoding: expanded by '
+                               'ifu_rvc_exp.sv (sim_ifu_rvc_exp, '
+                               'oracle)')
                     if exc:
                         covered_star_list.append((ins.name, exc))
                     else:
@@ -488,6 +572,11 @@ def run_analysis(rtl_dir, opcodes_dir, strict=False):
                     covered_list.append(ins.name)
                 else:
                     exc = _check_exceptions(ins.name, rtl_text)
+                    if not exc and ins.is_rvc and \
+                            rvc_by_encoding(ins, oracle):
+                        exc = ('covered by encoding: expanded by '
+                               'ifu_rvc_exp.sv (sim_ifu_rvc_exp, '
+                               'oracle)')
                     if exc:
                         covered_star_list.append((ins.name, exc))
                     else:
@@ -684,6 +773,16 @@ def main():
         help='Treat ROUTED instructions as MISSING (exit 1). '
              'Default: ROUTED is correct by design and does not '
              'trigger failure.')
+    parser.add_argument(
+        '--rvc-file',
+        default=DEFAULT_RVC,
+        help='The IFU expander source, credited for C and Zcb '
+             '(default: {})'.format(DEFAULT_RVC))
+    parser.add_argument(
+        '--rvc-oracle',
+        default=DEFAULT_ORC,
+        help='The expander oracle for the encoding test '
+             '(default: {})'.format(DEFAULT_ORC))
     args = parser.parse_args()
 
     if not os.path.isdir(args.opcodes_dir):
@@ -697,7 +796,13 @@ def main():
               '{}'.format(args.rtl_dir))
         return 1
 
-    return run_analysis(args.rtl_dir, args.opcodes_dir, args.strict)
+    for path in (args.rvc_file, args.rvc_oracle):
+        if not os.path.isfile(path):
+            print('ERROR: file not found: {}'.format(path))
+            return 1
+
+    return run_analysis(args.rtl_dir, args.opcodes_dir, args.strict,
+                        args.rvc_file, args.rvc_oracle)
 
 
 if __name__ == '__main__':

@@ -20,7 +20,8 @@
 // Pipeline (p-stage names; planning docs use equivalent s-stage):
 //   p0: combinational TOS read (initial prediction fallback).
 //   p2: FTB-confirmed push/pop, two slots, slot 0 before slot 1,
-//       with slot0=call / slot1=return same-cycle bypass.
+//       with slot0=call / slot1=return same-cycle bypass. RETURN_CALL
+//       pops then pushes in one slot (RAS-DS1, TD#152).
 //   p3: repair pass, inverse op when p3 FTB type disagrees with the
 //       registered p2 op (speculative stack only).
 //
@@ -78,15 +79,23 @@ module ras (
 
   // p2 operation encoding, registered into the p3 pipeline so the
   // p3 repair can compare the actual p2 op against the p3 FTB type.
-  localparam logic [1:0] OP_NONE = 2'b00;
-  localparam logic [1:0] OP_PUSH = 2'b01;
-  localparam logic [1:0] OP_POP  = 2'b10;
+  // Bit 1 is the pop, bit 0 the push, so RETURN_CALL is both
+  // (OP_POPPUSH, RAS-DS1: the pop first, then the push).
+  localparam logic [1:0] OP_NONE    = 2'b00;
+  localparam logic [1:0] OP_PUSH    = 2'b01;
+  localparam logic [1:0] OP_POP     = 2'b10;
+  localparam logic [1:0] OP_POPPUSH = 2'b11;
 
-  // Number of speculative-stack write requests produced per cycle:
-  // one per slot for the p3 repair pass plus one per slot for the
-  // p2 pass. Repair requests occupy [0 .. NUM_PRED_SLOTS-1], p2
-  // requests occupy [NUM_PRED_SLOTS .. 2*NUM_PRED_SLOTS-1].
-  localparam int RAS_WR_PORTS = 2 * NUM_PRED_SLOTS;
+  // Speculative-stack write ports. Each pass (the p3 repair, then the
+  // p2 operation) can write the array twice per slot: a RETURN_CALL
+  // pop that only decrements a recursion count writes at TOSR, and the
+  // push that follows writes at the frontier. Port index
+  //   (pass * NUM_PRED_SLOTS + slot) * 2 + n
+  // with pass 0 the repair and pass 1 the p2 operation, and n the
+  // order of the write within the slot. Writes are applied in index
+  // order, which is the order the scan makes them.
+  localparam int RAS_WR_PER_SLOT = 2;
+  localparam int RAS_WR_PORTS    = 2 * NUM_PRED_SLOTS * RAS_WR_PER_SLOT;
 
   // -----------------------------------------------------------------
   // Register-file storage and pointers
@@ -111,6 +120,9 @@ module ras (
   // address used, per slot. Consumed by the p3 repair pass.
   logic [1:0]          p3_op_q      [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] p3_fallthr_q [0:NUM_PRED_SLOTS-1];
+  // TOSR before the slot's p2 operation. Read only to undo a whole
+  // RETURN_CALL (see the repair pass).
+  logic [RAS_PTR_BITS-1:0] p3_pre_tosr_q [0:NUM_PRED_SLOTS-1];
 
   // -----------------------------------------------------------------
   // Commit-stack top (read-only fallback for empty speculative pops)
@@ -153,7 +165,7 @@ module ras (
 
   // -----------------------------------------------------------------
   // Speculative scan: p3 repair (of the previous cycle's op) followed
-  // by this cycle's p2 push/pop, processed slot 0 before slot 1.
+  // by this cycle's p2 operation, processed slot 0 before slot 1.
   //
   // The scan walks working pointer state, reading FF outputs (tosr,
   // tosw, bos and the arrays) so it is classified nba_sequent. It
@@ -161,10 +173,127 @@ module ras (
   // pointer state, the p2 pop outputs, the post-op snapshots, and the
   // p2 op codes to be registered for the p3 pass.
   //
-  // Same-cycle bypass (IC-RAS-04): the working top (w_top_addr) holds
+  // Same-cycle bypass (IC-RAS-04): the working top (w.top_addr) holds
   // the just-pushed value, so a later-slot pop forwards it without an
   // array read.
+  //
+  // Three primitives act on the working state, each at most one array
+  // write (ras_decisions.md 1, the repair label semantics):
+  //   st_retract  remove the top: decrement its recursion count in
+  //               place, or move TOSR down one and reload the top.
+  //               The p2 pop, an undo-push and a missed pop.
+  //   st_reexpose move TOSR up one over the still-resident entry, no
+  //               write. An undo-pop.
+  //   st_push     allocate the fall-through at the frontier, or, with
+  //               recursion allowed and the top equal to it, increment
+  //               the top's count. The p2 push and a missed push (no
+  //               recursion, as before BP-119).
+  // RETURN_CALL is st_retract then st_push in one slot (RAS-DS1, pop
+  // first). Before BP-119 3'b111 was a no-op here and at commit
+  // (TD-DCD-2).
   // -----------------------------------------------------------------
+  typedef struct packed {
+    logic [RAS_PTR_BITS-1:0]   tosr;
+    logic [RAS_PTR_BITS-1:0]   tosw;
+    logic [VA_WIDTH-1:0]       top_addr;
+    logic [RAS_RCTR_WIDTH-1:0] top_rctr;
+    logic                      valid;
+    // The array write the last primitive made, if any.
+    logic                      we;
+    logic [RAS_PTR_BITS-1:0]   waddr;
+    logic [VA_WIDTH-1:0]       wdata_a;
+    logic [RAS_RCTR_WIDTH-1:0] wdata_r;
+  } ras_ws_t;
+
+  localparam logic [RAS_PTR_BITS-1:0]   PTR_ONE  = RAS_PTR_BITS'(1);
+  localparam logic [RAS_RCTR_WIDTH-1:0] RCTR_ONE = RAS_RCTR_WIDTH'(1);
+
+  // Reload the working top from the array at the working TOSR. TOSR
+  // equal to BOS is empty.
+  function automatic ras_ws_t st_load(input ras_ws_t w);
+    ras_ws_t r;
+    r = w;
+    if (r.tosr != bos) begin
+      r.top_addr = spec_ret_addr[r.tosr];
+      r.top_rctr = spec_rctr[r.tosr];
+      r.valid    = 1'b1;
+    end else begin
+      r.top_addr = '0;
+      r.top_rctr = '0;
+      r.valid    = 1'b0;
+    end
+    return r;
+  endfunction
+
+  function automatic ras_ws_t st_retract(input ras_ws_t w);
+    ras_ws_t r;
+    r    = w;
+    r.we = 1'b0;
+    if (r.valid) begin
+      if (r.top_rctr != '0) begin
+        // Recursion outstanding: decrement the count, TOSR holds.
+        r.we       = 1'b1;
+        r.waddr    = r.tosr;
+        r.wdata_a  = r.top_addr;
+        r.wdata_r  = r.top_rctr - RCTR_ONE;
+        r.top_rctr = r.wdata_r;
+      end else begin
+        // TOSR decrements, no data overwritten.
+        r.tosr = r.tosr - PTR_ONE;
+        r      = st_load(r);
+      end
+    end
+    return r;
+  endfunction
+
+  // The popped entry is still resident (a pop does not overwrite the
+  // array), so it is re-exposed by moving TOSR back up one slot. No
+  // array write, TOSW unchanged (stays monotonic).
+  function automatic ras_ws_t st_reexpose(input ras_ws_t w);
+    ras_ws_t r;
+    r          = w;
+    r.we       = 1'b0;
+    r.tosr     = r.tosr + PTR_ONE;
+    r.top_addr = spec_ret_addr[r.tosr];
+    r.top_rctr = spec_rctr[r.tosr];
+    r.valid    = 1'b1;
+    return r;
+  endfunction
+
+  function automatic ras_ws_t st_push(input ras_ws_t             w,
+                                      input logic [VA_WIDTH-1:0] ft,
+                                      input logic                recur);
+    ras_ws_t                 r;
+    logic [RAS_PTR_BITS-1:0] alloc;
+    r  = w;
+    r.we = 1'b1;
+    if (recur & r.valid & (ft == r.top_addr)) begin
+      // Recursion: increment rctr at TOSR, saturate, no advance.
+      r.waddr    = r.tosr;
+      r.wdata_a  = r.top_addr;
+      r.wdata_r  = (r.top_rctr == RCTR_MAX) ? RCTR_MAX
+                                            : r.top_rctr + RCTR_ONE;
+      r.top_rctr = r.wdata_r;
+    end else begin
+      // Allocate at TOSW, TOSR = alloc, TOSW advances. The BOS index is
+      // a sentinel: when the write pointer would land on BOS (only at
+      // cold start after reset, or on a full circular wrap), allocate
+      // at BOS+1 instead, so a single live entry stays distinct from
+      // empty (TOSR == BOS). TOSW stays monotonic so popped entries
+      // remain intact for pointer-only mispredict restore.
+      alloc      = (r.tosw == bos) ? (r.tosw + PTR_ONE) : r.tosw;
+      r.waddr    = alloc;
+      r.wdata_a  = ft;
+      r.wdata_r  = '0;
+      r.tosr     = alloc;
+      r.tosw     = alloc + PTR_ONE;
+      r.top_addr = ft;
+      r.top_rctr = '0;
+      r.valid    = 1'b1;
+    end
+    return r;
+  endfunction
+
   logic [RAS_PTR_BITS-1:0]   nxt_tosr;
   logic [RAS_PTR_BITS-1:0]   nxt_tosw;
 
@@ -173,37 +302,38 @@ module ras (
   logic [VA_WIDTH-1:0]       sp_wdata_a [0:RAS_WR_PORTS-1];
   logic [RAS_RCTR_WIDTH-1:0] sp_wdata_r [0:RAS_WR_PORTS-1];
 
-  logic [1:0]                p2_op [0:NUM_PRED_SLOTS-1];
+  logic [1:0]                p2_op       [0:NUM_PRED_SLOTS-1];
+  logic [RAS_PTR_BITS-1:0]   p2_pre_tosr [0:NUM_PRED_SLOTS-1];
 
-  always_comb begin
-    // Working pointer state and working top-of-stack view.
-    logic [RAS_PTR_BITS-1:0]   w_tosr;
-    logic [RAS_PTR_BITS-1:0]   w_tosw;
-    logic [VA_WIDTH-1:0]       w_top_addr;
-    logic [RAS_RCTR_WIDTH-1:0] w_top_rctr;
-    logic                      w_valid;
-    logic                      s3_call;
-    logic                      s3_ret;
-    logic                      s3_noop;
-    logic                      rep_push;
-    logic                      rep_pop;
-    logic                      is_push;
-    logic                      is_pop;
-    logic [RAS_PTR_BITS-1:0]   w_alloc;
+  always_comb begin : scan
+    ras_ws_t w;
+    int      n;       // writes made so far by this slot in this pass
+    int      pi;      // write port index
+    logic    s3_pop;
+    logic    s3_push;
+    logic    q_pop;
+    logic    q_push;
+    logic    is_pop;
+    logic    is_push;
 
-    // Defaults.
-    w_tosr  = tosr;
-    w_tosw  = tosw;
-    w_alloc = tosw;
-    if (tosr != bos) begin
-      w_top_addr = spec_ret_addr[tosr];
-      w_top_rctr = spec_rctr[tosr];
-      w_valid    = 1'b1;
-    end else begin
-      w_top_addr = '0;
-      w_top_rctr = '0;
-      w_valid    = 1'b0;
-    end
+    // Defaults for every variable the loops assign, so no control path
+    // leaves one unassigned.
+    n        = 0;
+    pi       = 0;
+    s3_pop   = 1'b0;
+    s3_push  = 1'b0;
+    q_pop    = 1'b0;
+    q_push   = 1'b0;
+    is_pop   = 1'b0;
+    is_push  = 1'b0;
+    nxt_tosr = tosr;
+    nxt_tosw = tosw;
+
+    // Working state from the FF pointers.
+    w      = '0;
+    w.tosr = tosr;
+    w.tosw = tosw;
+    w      = st_load(w);
 
     for (int p = 0; p < RAS_WR_PORTS; p++) begin
       sp_we[p]      = 1'b0;
@@ -216,163 +346,161 @@ module ras (
       ras_pop_valid_p2[s] = 1'b0;
       ras_snapshot_p2[s]  = '0;
       p2_op[s]            = OP_NONE;
+      p2_pre_tosr[s]      = '0;
     end
 
     // -------- p3 repair pass (corrects the prior cycle's op) -------
-    // Repair table (IC-RAS-11). push->pop and pop->push within one
-    // p2/p3 pair cannot occur, so they are not handled here.
+    // Repair table (IC-RAS-11), applied per component of the op: a
+    // missed pop is applied before a missed push (RAS-DS1), each with
+    // the primitive the table names. push->pop and pop->push within
+    // one p2/p3 pair cannot occur (p3 is the registered p2 type), so
+    // at most two of the steps below write.
+    //
+    // A WHOLE RETURN_CALL TO UNDO (p2 popped then pushed, p3 says
+    // neither) is NOT the two undo primitives in reverse. The push
+    // allocated at TOSW, which after earlier pops lies above the
+    // post-pop TOSR plus one, so an undo-push retract would not return
+    // to the post-pop TOSR. TOSR is instead restored to its value
+    // before the operation, registered with the op. It is exact for
+    // the pointers because the RETURN_CALL is the only RAS operation
+    // in its block (FE-11): a taken branch ends the block. A recursion
+    // count the pop decremented, or the push incremented, is not
+    // restored -- the TD #78 limitation, as for an undo-pop.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      s3_call = ras_pred_val_p3[s] &
-                ((ras_br_type_p3[s] == DIRECT_CALL) |
-                 (ras_br_type_p3[s] == INDIRECT_CALL));
-      s3_ret  = ras_pred_val_p3[s] & (ras_br_type_p3[s] == RETURN);
-      s3_noop = ~s3_call & ~s3_ret;
+      s3_pop  = ras_pred_val_p3[s] &
+                ((ras_br_type_p3[s] == RETURN) |
+                 (ras_br_type_p3[s] == RETURN_CALL));
+      s3_push = ras_pred_val_p3[s] &
+                ((ras_br_type_p3[s] == DIRECT_CALL)   |
+                 (ras_br_type_p3[s] == INDIRECT_CALL) |
+                 (ras_br_type_p3[s] == RETURN_CALL));
+      q_pop   = (p3_op_q[s] == OP_POP)  | (p3_op_q[s] == OP_POPPUSH);
+      q_push  = (p3_op_q[s] == OP_PUSH) | (p3_op_q[s] == OP_POPPUSH);
+      n       = 0;
 
-      rep_pop  = ras_rst_done &
-                 (((p3_op_q[s] == OP_PUSH) & s3_noop) |
-                  ((p3_op_q[s] == OP_NONE) & s3_ret));
-      rep_push = ras_rst_done &
-                 (((p3_op_q[s] == OP_POP)  & s3_noop) |
-                  ((p3_op_q[s] == OP_NONE) & s3_call));
-
-      if (rep_pop) begin
-        if (w_valid) begin
-          if (w_top_rctr != '0) begin
-            // Undo by decrementing the recursion counter.
-            sp_we[s]      = 1'b1;
-            sp_waddr[s]   = w_tosr;
-            sp_wdata_a[s] = w_top_addr;
-            sp_wdata_r[s] = w_top_rctr -
-                            {{(RAS_RCTR_WIDTH-1){1'b0}}, 1'b1};
-            w_top_rctr    = sp_wdata_r[s];
-          end else begin
-            w_tosr = w_tosr - {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
-            if (w_tosr != bos) begin
-              w_top_addr = spec_ret_addr[w_tosr];
-              w_top_rctr = spec_rctr[w_tosr];
-              w_valid    = 1'b1;
-            end else begin
-              w_top_addr = '0;
-              w_top_rctr = '0;
-              w_valid    = 1'b0;
-            end
+      if (ras_rst_done & q_pop & q_push & ~s3_pop & ~s3_push) begin
+        w.tosr = p3_pre_tosr_q[s];
+        w      = st_load(w);
+      end else if (ras_rst_done) begin
+        // Undo a push the p3 type does not have.
+        if (q_push & ~s3_push) begin
+          w = st_retract(w);
+          if (w.we) begin
+            pi             = (s * RAS_WR_PER_SLOT) + n;
+            sp_we[pi]      = 1'b1;
+            sp_waddr[pi]   = w.waddr;
+            sp_wdata_a[pi] = w.wdata_a;
+            sp_wdata_r[pi] = w.wdata_r;
+            n              = n + 1;
           end
         end
-      end else if (rep_push) begin
-        // rep_push covers two distinct repairs that need different
-        // handling:
-        if (p3_op_q[s] == OP_POP) begin
-          // Undo an erroneous p2 pop. The popped entry is still
-          // resident (pop does not overwrite the array), so re-expose
-          // it by moving TOSR back up one slot and reloading its
-          // address/rctr. TOSR-only: no array write, TOSW unchanged
-          // (stays monotonic). This restores the pre-pop top.
-          w_tosr     = w_tosr + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
-          w_top_addr = spec_ret_addr[w_tosr];
-          w_top_rctr = spec_rctr[w_tosr];
-          w_valid    = 1'b1;
-        end else begin
-          // Apply a missed push: allocate the registered fallthrough
-          // at the frontier. Skip the BOS sentinel slot so a single
-          // live entry stays distinct from empty (TOSR==BOS).
-          w_alloc       = (w_tosw == bos)
-                          ? (w_tosw + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1})
-                          : w_tosw;
-          sp_we[s]      = 1'b1;
-          sp_waddr[s]   = w_alloc;
-          sp_wdata_a[s] = p3_fallthr_q[s];
-          sp_wdata_r[s] = '0;
-          w_tosr        = w_alloc;
-          w_tosw        = w_alloc + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
-          w_top_addr    = p3_fallthr_q[s];
-          w_top_rctr    = '0;
-          w_valid       = 1'b1;
+        // Undo a pop the p3 type does not have, or apply a missed one.
+        if (q_pop & ~s3_pop) begin
+          w = st_reexpose(w);
+        end else if (~q_pop & s3_pop) begin
+          w = st_retract(w);
+          if (w.we && (n < RAS_WR_PER_SLOT)) begin
+            pi             = (s * RAS_WR_PER_SLOT) + n;
+            sp_we[pi]      = 1'b1;
+            sp_waddr[pi]   = w.waddr;
+            sp_wdata_a[pi] = w.wdata_a;
+            sp_wdata_r[pi] = w.wdata_r;
+            n              = n + 1;
+          end
+        end
+        // Apply a missed push: allocate the registered fall-through.
+        if (~q_push & s3_push) begin
+          w = st_push(w, p3_fallthr_q[s], 1'b0);
+          if (n < RAS_WR_PER_SLOT) begin
+            pi             = (s * RAS_WR_PER_SLOT) + n;
+            sp_we[pi]      = 1'b1;
+            sp_waddr[pi]   = w.waddr;
+            sp_wdata_a[pi] = w.wdata_a;
+            sp_wdata_r[pi] = w.wdata_r;
+          end
         end
       end
     end
 
-    // -------- p2 push/pop pass (this cycle's prediction) -----------
+    // -------- p2 pass (this cycle's prediction) --------------------
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      is_push = ras_rst_done & ras_pred_val_p2[s] &
-                ((ras_br_type_p2[s] == DIRECT_CALL) |
-                 (ras_br_type_p2[s] == INDIRECT_CALL));
       is_pop  = ras_rst_done & ras_pred_val_p2[s] &
-                (ras_br_type_p2[s] == RETURN);
+                ((ras_br_type_p2[s] == RETURN) |
+                 (ras_br_type_p2[s] == RETURN_CALL));
+      is_push = ras_rst_done & ras_pred_val_p2[s] &
+                ((ras_br_type_p2[s] == DIRECT_CALL)   |
+                 (ras_br_type_p2[s] == INDIRECT_CALL) |
+                 (ras_br_type_p2[s] == RETURN_CALL));
+      p2_op[s]       = is_pop ? (is_push ? OP_POPPUSH : OP_POP)
+                              : (is_push ? OP_PUSH    : OP_NONE);
+      p2_pre_tosr[s] = w.tosr;
+      n              = 0;
 
-      if (is_push) begin
-        p2_op[s] = OP_PUSH;
-        if (w_valid & (ras_fall_through_p2[s] == w_top_addr)) begin
-          // Recursion: increment rctr at TOSR, saturate, no advance.
-          sp_we[NUM_PRED_SLOTS + s]      = 1'b1;
-          sp_waddr[NUM_PRED_SLOTS + s]   = w_tosr;
-          sp_wdata_a[NUM_PRED_SLOTS + s] = w_top_addr;
-          sp_wdata_r[NUM_PRED_SLOTS + s] = (w_top_rctr == RCTR_MAX)
-              ? RCTR_MAX
-              : w_top_rctr + {{(RAS_RCTR_WIDTH-1){1'b0}}, 1'b1};
-          w_top_rctr = sp_wdata_r[NUM_PRED_SLOTS + s];
-        end else begin
-          // Normal push: allocate at TOSW, TOSR=alloc, TOSW advances.
-          // The BOS index is a sentinel: when the write pointer would
-          // land on BOS (only at cold-start after reset, or on a full
-          // circular wrap), allocate at BOS+1 instead. This keeps a
-          // single live entry distinguishable from empty, since empty
-          // is detected as TOSR==BOS. TOSW stays monotonic so popped
-          // entries remain intact for pointer-only mispredict restore.
-          w_alloc = (w_tosw == bos)
-                    ? (w_tosw + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1})
-                    : w_tosw;
-          sp_we[NUM_PRED_SLOTS + s]      = 1'b1;
-          sp_waddr[NUM_PRED_SLOTS + s]   = w_alloc;
-          sp_wdata_a[NUM_PRED_SLOTS + s] = ras_fall_through_p2[s];
-          sp_wdata_r[NUM_PRED_SLOTS + s] = '0;
-          w_tosr     = w_alloc;
-          w_tosw     = w_alloc + {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
-          w_top_addr = ras_fall_through_p2[s];
-          w_top_rctr = '0;
-          w_valid    = 1'b1;
-        end
-      end else if (is_pop) begin
-        p2_op[s] = OP_POP;
-        if (~w_valid) begin
+      // The pop first (RAS-DS1). It supplies the predicted target.
+      if (is_pop) begin
+        if (~w.valid) begin
           // Empty speculative stack: commit-stack fallback, not
           // consumed. Valid only if the commit stack is non-empty.
           ras_pop_addr_p2[s]  = commit_top_addr;
           ras_pop_valid_p2[s] = commit_top_valid;
         end else begin
-          ras_pop_addr_p2[s]  = w_top_addr;
+          ras_pop_addr_p2[s]  = w.top_addr;
           ras_pop_valid_p2[s] = 1'b1;
-          if (w_top_rctr != '0) begin
-            // Recursion outstanding: decrement rctr, TOSR holds.
-            sp_we[NUM_PRED_SLOTS + s]      = 1'b1;
-            sp_waddr[NUM_PRED_SLOTS + s]   = w_tosr;
-            sp_wdata_a[NUM_PRED_SLOTS + s] = w_top_addr;
-            sp_wdata_r[NUM_PRED_SLOTS + s] = w_top_rctr -
-                            {{(RAS_RCTR_WIDTH-1){1'b0}}, 1'b1};
-            w_top_rctr = sp_wdata_r[NUM_PRED_SLOTS + s];
-          end else begin
-            // Normal pop: TOSR decrements, no data overwritten.
-            w_tosr = w_tosr - {{(RAS_PTR_BITS-1){1'b0}}, 1'b1};
-            if (w_tosr != bos) begin
-              w_top_addr = spec_ret_addr[w_tosr];
-              w_top_rctr = spec_rctr[w_tosr];
-              w_valid    = 1'b1;
-            end else begin
-              w_top_addr = '0;
-              w_top_rctr = '0;
-              w_valid    = 1'b0;
-            end
+          w = st_retract(w);
+          if (w.we) begin
+            pi             = ((NUM_PRED_SLOTS + s) * RAS_WR_PER_SLOT) + n;
+            sp_we[pi]      = 1'b1;
+            sp_waddr[pi]   = w.waddr;
+            sp_wdata_a[pi] = w.wdata_a;
+            sp_wdata_r[pi] = w.wdata_r;
+            n              = n + 1;
           end
         end
       end
 
+      // Then the push, applied to the state the pop left.
+      if (is_push) begin
+        w = st_push(w, ras_fall_through_p2[s], 1'b1);
+        pi             = ((NUM_PRED_SLOTS + s) * RAS_WR_PER_SLOT) + n;
+        sp_we[pi]      = 1'b1;
+        sp_waddr[pi]   = w.waddr;
+        sp_wdata_a[pi] = w.wdata_a;
+        sp_wdata_r[pi] = w.wdata_r;
+      end
+
       // Post-op snapshot for this slot (BOS unchanged across p2).
-      ras_snapshot_p2[s].tosr = w_tosr;
-      ras_snapshot_p2[s].tosw = w_tosw;
+      ras_snapshot_p2[s].tosr = w.tosr;
+      ras_snapshot_p2[s].tosw = w.tosw;
       ras_snapshot_p2[s].bos  = bos;
     end
 
-    nxt_tosr = w_tosr;
-    nxt_tosw = w_tosw;
+    nxt_tosr = w.tosr;
+    nxt_tosw = w.tosw;
+  end
+
+  // -----------------------------------------------------------------
+  // Commit stack (IC-RAS-10, ras_decisions.md 3.3). A return
+  // decrements CSP; a call writes at CSP and advances it. RETURN_CALL
+  // is the return arm then the call arm, the second applied to the
+  // CSP the first leaves, so it overwrites the committed top in place
+  // (RAS-DS1). Reads csp (a flop) -> nba_sequent.
+  // -----------------------------------------------------------------
+  logic                           c_pop;
+  logic                           c_push;
+  logic [RAS_COMMIT_PTR_BITS-1:0] c_mid;
+  logic [RAS_COMMIT_PTR_BITS-1:0] c_nxt;
+
+  always_comb begin : commit_arms
+    c_pop  = ras_commit_val &
+             ((ras_commit_br_type == RETURN) |
+              (ras_commit_br_type == RETURN_CALL));
+    c_push = ras_commit_val &
+             ((ras_commit_br_type == DIRECT_CALL)   |
+              (ras_commit_br_type == INDIRECT_CALL) |
+              (ras_commit_br_type == RETURN_CALL));
+    c_mid  = (c_pop && (csp != '0))
+               ? (csp - RAS_COMMIT_PTR_BITS'(1)) : csp;
+    c_nxt  = c_push ? (c_mid + RAS_COMMIT_PTR_BITS'(1)) : c_mid;
   end
 
   // -----------------------------------------------------------------
@@ -397,8 +525,9 @@ module ras (
         commit_rctr[i]     <= '0;
       end
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        p3_op_q[s]      <= OP_NONE;
-        p3_fallthr_q[s] <= '0;
+        p3_op_q[s]       <= OP_NONE;
+        p3_fallthr_q[s]  <= '0;
+        p3_pre_tosr_q[s] <= '0;
       end
     end else begin
       ras_rst_done <= 1'b1;
@@ -411,8 +540,9 @@ module ras (
       end else begin
         tosr <= nxt_tosr;
         tosw <= nxt_tosw;
-        // Apply repair writes [0..N-1] then p2 writes [N..2N-1] so
-        // that a same-index p2 write supersedes the repair write.
+        // Apply the repair writes, then the p2 writes, in port order
+        // (the order the scan made them), so a later write to the
+        // same index supersedes an earlier one.
         for (int p = 0; p < RAS_WR_PORTS; p++) begin
           if (sp_we[p]) begin
             spec_ret_addr[sp_waddr[p]] <= sp_wdata_a[p];
@@ -424,31 +554,24 @@ module ras (
       // ---- committed boundary (BOS): restore > commit > hold -----
       if (ras_restore_val) begin
         bos <= ras_restore_snapshot.bos;
-      end else if (ras_commit_val &
-                   ((ras_commit_br_type == DIRECT_CALL) |
-                    (ras_commit_br_type == INDIRECT_CALL) |
-                    (ras_commit_br_type == RETURN))) begin
-        // Committing entry's post-op TOSR is the new boundary.
+      end else if (c_pop | c_push) begin
+        // Committing entry's post-op TOSR is the new boundary. Once
+        // for a RETURN_CALL (IC-RAS-10).
         bos <= ras_commit_snapshot.tosr;
       end
 
       // ---- commit stack (independent of restore / p2) ------------
-      if (ras_commit_val) begin
-        if ((ras_commit_br_type == DIRECT_CALL) |
-            (ras_commit_br_type == INDIRECT_CALL)) begin
-          commit_ret_addr[csp] <= ras_commit_ret_addr;
-          commit_rctr[csp]     <= '0;
-          csp <= csp + {{(RAS_COMMIT_PTR_BITS-1){1'b0}}, 1'b1};
-        end else if (ras_commit_br_type == RETURN) begin
-          if (csp != '0)
-            csp <= csp - {{(RAS_COMMIT_PTR_BITS-1){1'b0}}, 1'b1};
-        end
+      if (c_push) begin
+        commit_ret_addr[c_mid] <= ras_commit_ret_addr;
+        commit_rctr[c_mid]     <= '0;
       end
+      csp <= c_nxt;
 
       // ---- register p2 op and fallthrough for the p3 repair pass -
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-        p3_op_q[s]      <= p2_op[s];
-        p3_fallthr_q[s] <= ras_fall_through_p2[s];
+        p3_op_q[s]       <= p2_op[s];
+        p3_fallthr_q[s]  <= ras_fall_through_p2[s];
+        p3_pre_tosr_q[s] <= p2_pre_tosr[s];
       end
     end
   end

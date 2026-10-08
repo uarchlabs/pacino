@@ -47,12 +47,26 @@
 // in flight (IF-6). The previous-request register is dropped when its
 // slot is left with no reader, so no later block reuses a line whose
 // only readers were dropped.
+//
+// THE READER COUNT (TD#153, BP-119). A slot is held by at most one
+// reference per block (a block's two lines are different slots), and
+// the blocks that can hold one are every block in the F1 queue,
+// BQ_DEPTH = 2 * LB_DEPTH, plus the block in F0, which attaches its
+// reuse while the queue is full. The maximum is 2 * LB_DEPTH + 1, 33
+// at the default, and a tight loop in one line reaches it (tb_ifu
+// lbuf_max_readers). LB_RD_MAX is that bound and sizes the count. The
+// width holds one more than LB_RD_MAX, so a count driven past the
+// bound is seen as that value rather than as a wrap. rc_obs carries
+// the counts to U5 in ifu_assert.sv, which fires on such a value.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
 module ifu_lbuf #(
-  parameter int LB_DEPTH = 16                // TD-IFU-7
+  parameter int LB_DEPTH  = 16,              // TD-IFU-7
+  // Most blocks that can read one slot at once, TD#153: the F1 queue
+  // plus F0. 33 at the default.
+  parameter int LB_RD_MAX = 2 * LB_DEPTH + 1
 ) (
   input  logic                     clk,
   input  logic                     rstn,
@@ -92,11 +106,15 @@ module ifu_lbuf #(
   input  logic                     cons_use1,
 
   // ---- references dropped by a flush, from ifu_fetch ---------------
-  input  logic [$clog2(2*LB_DEPTH+1)-1:0] kill_cnt [0:LB_DEPTH-1]
+  input  logic [$clog2(2*LB_DEPTH+1)-1:0] kill_cnt [0:LB_DEPTH-1],
+
+  // ---- observation, for the bound properties (TD#109) -------------
+  // The per-slot reader counts. Read by ifu_assert U5 and nothing else.
+  output logic [$clog2(LB_RD_MAX+2)-1:0] rc_obs [0:LB_DEPTH-1]
 );
 
   localparam int SB = $clog2(LB_DEPTH);
-  localparam int CB = $clog2(2 * LB_DEPTH + 1);   // refcount width
+  localparam int CB = $clog2(LB_RD_MAX + 2);      // refcount width
 
   logic [MAX_OUTSTANDING-1:0] r_id_busy;
   logic [SB-1:0]              r_id_slot [0:MAX_OUTSTANDING-1];
@@ -147,6 +165,11 @@ module ifu_lbuf #(
     prev_slot = r_prev_slot;
   end
 
+  // The counts as they stand, for the bound properties.
+  always_comb begin : obs
+    for (int s = 0; s < LB_DEPTH; s++) rc_obs[s] = r_rc[s];
+  end
+
   // The F2 read port, its own block: rd_slot depends on nothing here
   // and the reads feed back into ifu_fetch's F2 valid.
   always_comb begin : rd_port
@@ -178,7 +201,7 @@ module ifu_lbuf #(
       if (cons_val && cons_use1 && (rd_slot1 == SB'(s))) begin
         w_rc_nx[s] = w_rc_nx[s] - CB'(1);
       end
-      w_rc_nx[s]     = w_rc_nx[s] - kill_cnt[s];
+      w_rc_nx[s]     = w_rc_nx[s] - CB'(kill_cnt[s]);
     end
 
     // The previous request: replaced by an allocation, or dropped by a
@@ -199,6 +222,14 @@ module ifu_lbuf #(
   // -----------------------------------------------------------------
   // State.
   // -----------------------------------------------------------------
+  // A bound below the derived maximum would let a legal stream drive
+  // a count past it.
+  initial begin
+    if (LB_RD_MAX < 2 * LB_DEPTH + 1)
+      $error("LB_RD_MAX %0d is below the reader maximum 2*LB_DEPTH+1",
+             LB_RD_MAX);
+  end
+
   always_ff @(posedge clk or negedge rstn) begin : seq
     if (!rstn) begin
       r_id_busy   <= '0;                 // IF-26: all sixteen free

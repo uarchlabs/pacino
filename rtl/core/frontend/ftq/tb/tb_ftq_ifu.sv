@@ -118,6 +118,17 @@ module tb;
   logic [TRX_SLOT_BITS-1:0]  pd_wr_sel;
   bp_ftq_slot_t              pd_wr_slot;
   logic                      pd_wr_kill;
+  // ftq_entry's placement write (BP-119), idle in this bench.
+  logic [FTQ_IDX_BITS-1:0]   j_rsvw_idx [0:NUM_RESOLVE_PORTS-1];
+  logic [TRX_SLOT_BITS-1:0]  j_rsv_sel  [0:NUM_RESOLVE_PORTS-1];
+  bp_ftq_slot_t              j_rsv_slot [0:NUM_RESOLVE_PORTS-1];
+  initial begin
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      j_rsvw_idx[p] = '0;
+      j_rsv_sel[p]  = '0;
+      j_rsv_slot[p] = '0;
+    end
+  end
   logic                      pd_redir_val;
   logic [FTQ_IDX_BITS-1:0]   pd_redir_idx;
   logic [VA_WIDTH-1:0]       pd_redir_pc;
@@ -245,6 +256,10 @@ module tb;
     .pd_wr_sel           (pd_wr_sel),
     .pd_wr_slot          (pd_wr_slot),
     .pd_wr_kill          (pd_wr_kill),
+    .rsv_wr_val          ('0),
+    .rsv_wr_idx          (j_rsvw_idx),
+    .rsv_wr_sel          (j_rsv_sel),
+    .rsv_wr_slot         (j_rsv_slot),
     .xlate_rd_idx        (j_rd_idx),
     .xlate_rd_pc         (j_xlate_pc),
     .fetch_rd_idx        (j_rd_idx),
@@ -766,6 +781,15 @@ module tb;
     settle();
     chk("D23 a plain JALR is INDIRECT_NONRET",
         pd_wr_slot.br_type == INDIRECT_NONRET);
+    // BP-119, TD#152: is_call AND is_ret is the JALR whose rd and rs1
+    // are both link registers and unequal (DCD-11), RETURN_CALL. Before
+    // BP-119 is_ret was tested first and it mapped to RETURN.
+    ifu_ftq_pd[1] = mk_pd(1'b1, 1'b0, 2'b11, 1'b1, 1'b1);
+    settle();
+    chk("D23a a JALR with is_call and is_ret is a RETURN_CALL",
+        pd_wr_slot.br_type == RETURN_CALL);
+    chk_va("D23b and, a JALR, does not take the predecode target",
+           pd_wr_slot.target, TGT0);
 
     // A CONDITIONAL predecode found is not proved taken. Predecode
     // cannot know a direction, and TAGE and SC own it.

@@ -148,6 +148,10 @@ rtl/mmu/itlb/obj_itlb_d2/
 rtl/mmu/itlb/obj_labels/
 rtl/mmu/pmp/obj_pmp_pma_chk/
 
+rtl/core/frontend/ftq/obj_ftq_upd_conv/
+rtl/core/frontend/ftq/obj_labels_ftq_upd_conv/
+
+
 # --------------------------------------------------------------------
 # docs
 site/

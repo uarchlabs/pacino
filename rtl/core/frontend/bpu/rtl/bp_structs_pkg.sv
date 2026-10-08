@@ -74,21 +74,25 @@ package bp_structs_pkg;
   // Enumerations
   // ----------------------------------------------------------------
 
-  // Branch type encoding, 3b.
+  // Branch type encoding, 3b, all eight codes named.
   // Used in bp_ftq_slot_t.br_type and bp_update_t.br_type.
-  // RETURN excludes C.JALR, and excludes a JALR whose rd is also
-  // a link register. Without that exclusion a JALR rd=x1 rs1=x1
-  // would satisfy both the call and the return rule, and the
-  // three-way FTB/RAS/ITTAGE split is mutually exclusive.
-  // See planning/arch/ras_decisions.md section 2.
+  // Link means x1 or x5 (ras_decisions.md section 2, the hint table):
+  //   RETURN       JALR rs1 link, rd not link (C.JR rs1 link). Pop.
+  //   RETURN_CALL  JALR rd and rs1 both link and unequal (C.JALR
+  //                rs1=x5). Pop, then push (RAS-DS1, DCD-11a).
+  //   JALR rd and rs1 both link and EQUAL is a call: push only.
+  // RETURN_CALL is one classification owned by the RAS, which performs
+  // two operations; it is not a call and a return split between two
+  // predictors, so the RAS / ITTAGE split stays mutually exclusive.
   typedef enum logic [2:0] {
-    COND            = 3'b000, // conditional branch (JAL/B-type)
+    COND            = 3'b000, // conditional branch (B-type)
     DIRECT_CALL     = 3'b001, // direct call: JAL rd=x1 or x5
-    INDIRECT_CALL   = 3'b010, // indirect call: JALR rd=x1 or x5
-    RETURN          = 3'b011, // return: JALR/C.JR rs1=x1/x5
+    INDIRECT_CALL   = 3'b010, // indirect call: JALR rd link, push only
+    RETURN          = 3'b011, // return: JALR/C.JR rs1 link, rd not link
     INDIRECT_NONRET = 3'b100, // indirect JALR, not call, not return
     DIRECT_UNC      = 3'b101, // direct unconditional: JAL rd!=link
-    NO_BRANCH       = 3'b110  // no branch in prediction block
+    NO_BRANCH       = 3'b110, // no branch in prediction block
+    RETURN_CALL     = 3'b111  // JALR rd, rs1 both link, unequal
   } bp_br_type_e;
 
   // Prediction source: which predictor supplied the final result.

@@ -700,11 +700,28 @@ module bp_cluster (
           w_slot_p1[s].pos        = ubtb_slot_hit
                                       ? r_ubtb_pred_p1[s].pos : '0;
         end else if (r_ubtb_pred_p1[s].valid) begin
+          // Direction. br_taken is the conf MSB and is meaningful only
+          // for COND (ubtb_interfaces.md, consumer obligations); ubtb.sv
+          // drives it 0 on the jump slot. A jump is unconditional, so
+          // DIRECT_UNC, DIRECT_CALL, INDIRECT_CALL and INDIRECT_NONRET
+          // are taken to the stored target (TD#154). Before BP-119
+          // this read br_taken for every type, so the uBTB never
+          // predicted a taken jump and the FTB redirected at p2. A
+          // RETURN or RETURN_CALL is taken only on the RAS arm below,
+          // as RETURN always was.
           w_slot_p1[s].slot_valid = 1'b1;
-          w_slot_p1[s].taken      = r_ubtb_pred_p1[s].br_taken;
+          case (r_ubtb_pred_p1[s].br_type)
+            COND:                w_slot_p1[s].taken =
+                                   r_ubtb_pred_p1[s].br_taken;
+            RETURN, RETURN_CALL: w_slot_p1[s].taken = 1'b0;
+            default:             w_slot_p1[s].taken = 1'b1;
+          endcase
           w_slot_p1[s].br_type    = r_ubtb_pred_p1[s].br_type;
           w_slot_p1[s].pos        = r_ubtb_pred_p1[s].pos;
-          if ((r_ubtb_pred_p1[s].br_type == RETURN)
+          // A RETURN_CALL's pop supplies its target like a RETURN's
+          // (IC-RAS-12, RAS-DS1).
+          if (((r_ubtb_pred_p1[s].br_type == RETURN)
+               || (r_ubtb_pred_p1[s].br_type == RETURN_CALL))
               && r_ras_tos_val_p1[s]) begin
             w_slot_p1[s].target   = r_ras_tos_addr_p1[s];
             w_slot_p1[s].taken    = 1'b1;
@@ -825,8 +842,13 @@ module bp_cluster (
 
     blk_val = r_val_p2 & w_ftb_valid_p2;
 
-    // FTB jump-field structural classification.
-    if (w_ftb_is_ret_p2)
+    // FTB jump-field structural classification. is_ret and is_call
+    // both set is RETURN_CALL, the JALR that pops then pushes
+    // (ras_decisions.md 2, RAS-DS1; TD#152), and is tested before the
+    // RETURN arm, which would otherwise take it.
+    if (w_ftb_is_ret_p2 & w_ftb_is_call_p2)
+      jmp_type = RETURN_CALL;
+    else if (w_ftb_is_ret_p2)
       jmp_type = RETURN;
     else if (w_ftb_is_call_p2 & w_ftb_is_jalr_p2)
       jmp_type = INDIRECT_CALL;
@@ -877,8 +899,9 @@ module bp_cluster (
         w_reach_p2[s] = w_reach_p2[s-1] & ~w_taken_p2[s-1];
     end
 
-    // RAS p2 qualification. ras.sv acts on DIRECT_CALL, INDIRECT_CALL
-    // and RETURN only; every other type is a no-op inside the module.
+    // RAS p2 qualification. ras.sv pushes on DIRECT_CALL and
+    // INDIRECT_CALL, pops on RETURN, and pops then pushes on
+    // RETURN_CALL; every other type is a no-op inside the module.
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       w_ras_pred_val_p2[s] = blk_val & w_br_val_p2[s] & w_reach_p2[s];
     end
@@ -891,7 +914,8 @@ module bp_cluster (
   // predictor outputs, so the block is nba_sequent.
   //
   // Target source by branch type (fe_decisions.md 3.3):
-  //   return       RAS pop address
+  //   return       RAS pop address; RETURN_CALL too, its pop supplies
+  //                the target (IC-RAS-12, RAS-DS1)
   //   indirect     ITTAGE target
   //   conditional  direction from TAGE selects branch target or the
   //                fall-through address
@@ -926,7 +950,7 @@ module bp_cluster (
           w_tkn_tgt_p2[s]  = w_ftb_br_target_p2[s];
           w_pred_src_p2[s] = w_tage_hit_p2[s] ? PRED_TAGE : PRED_FTB;
         end
-        RETURN: begin
+        RETURN, RETURN_CALL: begin
           w_tkn_tgt_p2[s] = w_ras_pop_valid_p2[s]
                               ? w_ras_pop_addr_p2[s]
                               : w_ftb_jmp_target_p2;
@@ -1122,10 +1146,20 @@ module bp_cluster (
   // tage_pred_rdy_p2: tage.sv already qualifies that output with
   // consumer_ready, and consumer_ready is an output of this arbiter,
   // so using it as an input would close a combinational loop.
+  //
+  // The update request is an SC update PRESENTED on a slot whose SC
+  // queue is ready. It does not read the channel's update type
+  // (w_upd_cond_u0): the FTQ presents an SC update only for a
+  // conditional (ftq_upd_conv), and the type is decoded from the uBTB
+  // payload, whose valid is the FTQ's acceptance of the slot, which in
+  // turn waits on this arbiter's grant (sc_upd_rdy). Reading the type
+  // here closed that loop at whole-variable granularity in fe_top
+  // (BP-119). The COND qualification still gates the SC write itself
+  // (w_sc_upd_val_u0), so a non-conditional SC valid can never write
+  // SC; at most it requests the port.
   assign w_sc_pred_req = r_val_p2 & sc_enable;
   assign w_sc_upd_req  = sc_enable & w_sc_uq_not_full_int
-                       & (|(sc_upd_val_u0 & w_upd_cond_u0
-                            & w_sc_upd_rdy_int));
+                       & (|(sc_upd_val_u0 & w_sc_upd_rdy_int));
 
   // Rule 1 of section 4.5 blocks prediction grants when the response
   // path cannot take a result. sc.sv exposes no response-buffer full
@@ -1212,10 +1246,12 @@ module bp_cluster (
   // resolved facts, and rederiving it here keeps the uBTB fan-out and
   // the FTB fan-out reading the SAME facts, so the two cannot
   // diverge. Arm order matches ubtb.sv jmp_br_type and the p2 FTB
-  // classification above, with is_br outranking is_jmp.
+  // classification above, with is_br outranking is_jmp and is_ret
+  // with is_call (RETURN_CALL, TD#152) outranking is_ret alone.
   function automatic bp_br_type_e upd_br_type(input ubtb_upd_t u);
     if      (u.is_br)    upd_br_type = COND;
     else if (!u.is_jmp)  upd_br_type = NO_BRANCH;
+    else if (u.is_ret && u.is_call) upd_br_type = RETURN_CALL;
     else if (u.is_ret)   upd_br_type = RETURN;
     else if (u.is_call)  upd_br_type = u.is_jalr ? INDIRECT_CALL
                                                  : DIRECT_CALL;
@@ -1250,11 +1286,13 @@ module bp_cluster (
                           & (ftb_upd_is_br_u0 | ftb_upd_is_jmp_u0);
 
   // RAS commit carries its own resolved branch type. Both call
-  // encodings push and RETURN pops; every other type is a no-op.
+  // encodings push, RETURN pops and RETURN_CALL pops then pushes
+  // (IC-RAS-10); every other type is a no-op.
   assign w_ras_commit_val = ras_commit_val
                           & ((ras_commit_br_type == DIRECT_CALL)
                            | (ras_commit_br_type == INDIRECT_CALL)
-                           | (ras_commit_br_type == RETURN));
+                           | (ras_commit_br_type == RETURN)
+                           | (ras_commit_br_type == RETURN_CALL));
 
   // ----------------------------------------------------------------
   // Per-slot wiring (generate style described in the file header)
@@ -1334,6 +1372,8 @@ module bp_cluster (
       assign w_upd_type_u0[gs]  = upd_br_type(ubtb_upd_u0[gs]);
       assign w_upd_any_u0[gs]   = (w_upd_type_u0[gs] != NO_BRANCH);
       assign w_upd_cond_u0[gs]  = (w_upd_type_u0[gs] == COND);
+      // RETURN_CALL is not indirect here: its target comes from the
+      // RAS pop and it does not train ITTAGE (fe_decisions.md 7.2).
       assign w_upd_ind_u0[gs]   =
                      (w_upd_type_u0[gs] == INDIRECT_NONRET)
                    | (w_upd_type_u0[gs] == INDIRECT_CALL);

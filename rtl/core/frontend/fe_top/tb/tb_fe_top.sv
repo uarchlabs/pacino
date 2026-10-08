@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Jeff Nye, uarchlabs.com
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
-// Testbench for fe_top (BP-118 Problem 8). The front end runs
+// Testbench for fe_top (BP-118 Problem 8, BP-119). The front end runs
 // programs end to end against models of everything outside its
 // boundary (fe_decisions.md FE-17, FE-20):
 //
@@ -43,6 +43,20 @@
 // bundle at one (M1, M3, IB-2), so a JAL's successor is its target. A
 // mismatch anywhere else is a stream error, a duplicated, skipped or
 // invented instruction, and fails the run.
+//
+// BP-119. Every update path is connected (TD#151), so the predictors
+// train. Two programs are added: loops (nested counted loops with a
+// conditional, an indirect jump and an indirect call in the body, so
+// the uBTB, LP, TAGE, SC and ITTAGE all receive updates and then
+// predict trained) and coro (two coroutines switching by return-call,
+// jalr x1, 0(x5) and jalr x5, 0(x1), TD#152, in a loop). A loop is
+// written to memory once and its execution appended to the expected
+// stream once per iteration (rep_iter); the loop branch's direction
+// per iteration is known to the writer, as every other outcome is.
+// Each program reports, per predictor, the cycles in which it received
+// an update at the cluster (the valids after the cluster's own type
+// and ready gates), and the backend mispredict, predecode redirect and
+// p2 / p3 BPU redirect counts.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -50,7 +64,7 @@ import decode_pkg::*;
 
 module tb;
 
-  localparam int MAXE    = 1024;
+  localparam int MAXE    = 4096;
   localparam int TL_LAT  = 6;      // memory latency, request to beat 0
   localparam int L2T_LAT = 5;      // L2 TLB walk latency
 
@@ -88,7 +102,7 @@ module tb;
   logic [1:0]                  l2t_itlb_tag;
   logic [1:0]                  l2t_itlb_status;
   logic [PPN_WIDTH-1:0]        l2t_itlb_ppn;
-  logic [1:0]                  l2t_itlb_size;
+  logic [2:0]                  l2t_itlb_size;   // IL-7
   logic [PERM_WIDTH-1:0]       l2t_itlb_perm;
   logic [1:0]                  l2t_itlb_pbmt;
   logic [CAUSE_WIDTH-1:0]      l2t_itlb_cause;
@@ -340,7 +354,9 @@ module tb;
     w = enc_jal(rd, int'(tgt - wp));
     put_hw(wp, w[15:0]);
     put_hw(wp + VA_WIDTH'(2), w[31:16]);
-    add_ex(wp, w, 1'b0, (rd == 5'd1) ? DIRECT_CALL : DIRECT_UNC, 1'b1, tgt);
+    add_ex(wp, w, 1'b0, ((rd == 5'd1) || (rd == 5'd5)) ? DIRECT_CALL
+                                                       : DIRECT_UNC,
+           1'b1, tgt);
     wp = tgt;
   endtask
 
@@ -382,6 +398,79 @@ module tb;
     put_hw(wp, w[15:0]);
     put_hw(wp + VA_WIDTH'(2), w[31:16]);
     add_ex(wp, w, 1'b0, DIRECT_UNC, 1'b1, wp);
+  endtask
+
+  // ---- BP-119 additions ---------------------------------------------
+  // A conditional on a register, bne rs1, x0 (the loop branch). Its
+  // outcome is the writer's: tk is this execution's direction.
+  function automatic logic [31:0] enc_bner(input logic [4:0] rs1,
+                                           input int imm);
+    logic [12:0] o;
+    o = 13'(imm);
+    return {o[12], o[10:5], 5'd0, rs1, 3'b001, o[4:1], o[11], 7'b1100011};
+  endfunction
+
+  function automatic logic [31:0] enc_jalr(input logic [4:0] rd,
+                                           input logic [4:0] rs1);
+    return {12'd0, rs1, 3'b000, rd, 7'b1100111};
+  endfunction
+
+  // The loop branch at the end of a loop body, written taken back to
+  // the body start; rep_iter appends the other iterations.
+  task automatic loop_br(input logic [VA_WIDTH-1:0] top);
+    logic [31:0] w;
+    w = enc_bner(5'd6, int'(top - wp));
+    put_hw(wp, w[15:0]);
+    put_hw(wp + VA_WIDTH'(2), w[31:16]);
+    add_ex(wp, w, 1'b0, COND, 1'b1, top);
+  endtask
+
+  // Append iterations 2..n of the loop whose first iteration is the
+  // expected-stream range [e0, ne), its last entry the loop branch.
+  // Every iteration but the last takes the branch; the last falls
+  // through, and the write cursor continues after the branch.
+  task automatic rep_iter(input int e0, input int n);
+    int e1;
+    int eb;
+    e1 = ne;
+    eb = e1 - 1;
+    for (int it = 1; it < n; it++) begin
+      for (int e = e0; e < e1; e++) begin
+        ex[ne] = ex[e];
+        ne++;
+      end
+    end
+    // The final execution of the loop branch is not taken.
+    ex[ne-1].taken  = 1'b0;
+    ex[ne-1].target = ex[eb].pc + VA_WIDTH'(4);
+    if (n == 1) begin
+      ex[eb].taken  = 1'b0;
+      ex[eb].target = ex[eb].pc + VA_WIDTH'(4);
+    end
+    wp = ex[eb].pc + VA_WIDTH'(4);
+  endtask
+
+  // An indirect jump or call through a register the writer has set:
+  // jalr rd, 0(rs1) to tgt. The type follows the RAS hint table
+  // (ras_decisions.md 2): rd and rs1 both link and unequal is
+  // RETURN_CALL; rd link alone a call; rs1 link alone a return.
+  task automatic jalr_to(input logic [4:0] rd, input logic [4:0] rs1,
+                         input logic [VA_WIDTH-1:0] tgt);
+    logic [31:0] w;
+    logic        rdl;
+    logic        rsl;
+    bp_br_type_e bt;
+    w   = enc_jalr(rd, rs1);
+    rdl = (rd == 5'd1) || (rd == 5'd5);
+    rsl = (rs1 == 5'd1) || (rs1 == 5'd5);
+    if (rdl && rsl && (rd != rs1)) bt = RETURN_CALL;
+    else if (rdl)                  bt = INDIRECT_CALL;
+    else if (rsl)                  bt = RETURN;
+    else                           bt = INDIRECT_NONRET;
+    put_hw(wp, w[15:0]);
+    put_hw(wp + VA_WIDTH'(2), w[31:16]);
+    add_ex(wp, w, 1'b0, bt, 1'b1, tgt);
+    wp = tgt;
   endtask
 
   // =================================================================
@@ -472,21 +561,21 @@ module tb;
   int                   w_due  [0:3];
   logic [1:0]           w_st   [0:3];
   logic [PPN_WIDTH-1:0] w_ppn  [0:3];
-  logic [1:0]           w_sz   [0:3];
+  logic [2:0]           w_sz   [0:3];
   logic [7:0]           w_perm [0:3];
   int                   n_walks;
 
   assign itlb_l2t_req_rdy = rstn;
 
   task automatic walk(input logic [VA_WIDTH-13:0] vpn, output logic [1:0] st,
-                      output logic [PPN_WIDTH-1:0] ppn, output logic [1:0] sz,
+                      output logic [PPN_WIDTH-1:0] ppn, output logic [2:0] sz,
                       output logic [7:0] perm);
     logic [PA_WIDTH-1:0] t;
     logic [63:0]         pte;
     logic [8:0]          vi;
     st   = 2'b01;                 // fault, cause 12
     ppn  = '0;
-    sz   = 2'b00;
+    sz   = 3'b000;
     perm = '0;
     t    = satp_root;
     for (int l = 2; l >= 0; l--) begin
@@ -496,7 +585,9 @@ module tb;
       if (pte[1] || pte[3]) begin
         st   = 2'b00;
         ppn  = PPN_WIDTH'(pte[53:10]);
-        sz   = (l == 2) ? 2'b11 : ((l == 1) ? 2'b10 : 2'b00);
+        // IL-7: 000 4 KiB, 010 2 MiB, 011 1 GiB (this model returns
+        // no 64 KiB page and no reserved code).
+        sz   = (l == 2) ? 3'b011 : ((l == 1) ? 3'b010 : 3'b000);
         perm = pte[7:0];
         return;
       end
@@ -566,6 +657,57 @@ module tb;
       fstart[dut.ftq_ifu_idx] <= dut.ftq_ifu_start_pc;
     if (rstn && dut.u_ftq.w_pd_redir_val && !bkend_ftq_redir_val)
       n_pd_redir <= n_pd_redir + 1;
+  end
+
+  // =================================================================
+  // BP-119: what the predictors received, and the BPU redirects. The
+  // counts are the valids AFTER the cluster's own gates (type and
+  // queue ready), i.e. updates the predictor accepted, one per slot
+  // per cycle.
+  // =================================================================
+  int n_u_ubtb;
+  int n_u_lp;
+  int n_u_tage;
+  int n_u_ittage;
+  int n_u_sc;
+  int n_u_ras;
+  int n_rc_p2;
+  int n_rc_commit;
+  int n_redir_p2;
+  int n_redir_p3;
+  int n_nomap;
+
+  always @(posedge clk) begin : upd_log
+    if (rstn) begin
+      n_u_ubtb   <= n_u_ubtb
+                  + $countones({dut.u_bpu.w_ubtb_upd_u0[1].valid,
+                                dut.u_bpu.w_ubtb_upd_u0[0].valid});
+      n_u_lp     <= n_u_lp     + $countones(dut.u_bpu.w_lp_upd_val_p0);
+      n_u_tage   <= n_u_tage   + $countones(dut.u_bpu.w_tage_upd_val_u0);
+      n_u_ittage <= n_u_ittage + $countones(dut.u_bpu.w_ittage_upd_val_u0);
+      n_u_sc     <= n_u_sc     + $countones(dut.u_bpu.w_sc_upd_val_u0);
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        if (dut.u_bpu.w_ras_pred_val_p2[s] &&
+            (dut.u_bpu.w_br_type_p2[s] == RETURN_CALL))
+          n_rc_p2 <= n_rc_p2 + 1;
+      end
+      if (dut.u_bpu.w_ras_commit_val) n_u_ras <= n_u_ras + 1;
+      if (dut.u_bpu.w_ras_commit_val &&
+          (dut.ras_commit_br_type == RETURN_CALL))
+        n_rc_commit <= n_rc_commit + 1;
+      // A p2 or p3 redirect the FTQ accepted: the stage group is
+      // live (w_ok_redir_*) and a slot of it redirects.
+      if (dut.u_ftq.w_ok_redir_p2 &&
+          (dut.bpu_redir_p2[0].valid || dut.bpu_redir_p2[1].valid))
+        n_redir_p2 <= n_redir_p2 + 1;
+      if (dut.u_ftq.w_ok_redir_p3 &&
+          (dut.bpu_redir_p3[0].valid || dut.bpu_redir_p3[1].valid))
+        n_redir_p3 <= n_redir_p3 + 1;
+      // A resolution whose position names no slot of its entry
+      // (ftq_resolve rsv_nomap): it forms no update of any kind.
+      if (dut.u_ftq.w_rsv_nomap[0] && ftq_bkend_rsv_rdy[0])
+        n_nomap <= n_nomap + 1;
+    end
   end
 
   // =================================================================
@@ -823,6 +965,17 @@ module tb;
     n_fills      = 0;
     n_walks      = 0;
     n_pd_redir   = 0;
+    n_u_ubtb     = 0;
+    n_u_lp       = 0;
+    n_u_tage     = 0;
+    n_u_ittage   = 0;
+    n_u_sc       = 0;
+    n_u_ras      = 0;
+    n_rc_p2      = 0;
+    n_rc_commit  = 0;
+    n_redir_p2   = 0;
+    n_redir_p3   = 0;
+    n_nomap      = 0;
     rq_hd        = 0;
     rq_tl        = 0;
     rd_pend      = 1'b0;
@@ -903,6 +1056,13 @@ module tb;
               "fills, %0d walks, commit ptr %0d"}, tname, n_retired, c,
              n_mispred, n_trap, n_pd_redir, rq_tl, n_fills, n_walks,
              dut.u_ftq.w_commit_ptr));
+    $display("%s", $sformatf(
+             {"   %s: redirects p2 %0d p3 %0d, unmapped resolutions %0d; ",
+              "updates received uBTB %0d ",
+              "LP %0d TAGE %0d SC %0d ITTAGE %0d, RAS commits %0d; ",
+              "RETURN_CALL at p2 %0d, committed %0d"}, tname, n_redir_p2,
+             n_redir_p3, n_nomap, n_u_ubtb, n_u_lp, n_u_tage, n_u_sc,
+             n_u_ittage, n_u_ras, n_rc_p2, n_rc_commit));
   endtask
 
   // =================================================================
@@ -1029,11 +1189,119 @@ module tb;
   endtask
 
   // =================================================================
+  // Program 3, loops (bare). An outer loop of 8 iterations around an
+  // inner counted loop of 6, so the inner loop branch runs the same
+  // trip count again and again (the LP's case). The outer body holds
+  // a conditional that is always taken (TAGE, SC), an indirect jump
+  // and an indirect call to a function that returns (ITTAGE, RAS).
+  // =================================================================
+  task automatic p_loops();
+    logic [VA_WIDTH-1:0] otop;
+    logic [VA_WIDTH-1:0] itop;
+    logic [VA_WIDTH-1:0] fn;
+    logic [VA_WIDTH-1:0] link;
+    int                  eo;
+    int                  ei;
+    tname = "loops";
+    $display("-- %s --", tname);
+    reset_all(1'b0);
+    wp = RESET_VECTOR;
+    mixed(4);
+    fn   = RESET_VECTOR + VA_WIDTH'('h800);
+    otop = wp;
+    eo   = ne;
+    // Outer body, first iteration.
+    mixed(2);
+    itop = wp;
+    ei   = ne;
+    mixed(3);
+    loop_br(itop);
+    rep_iter(ei, 6);
+    cond(1'b1, wp + VA_WIDTH'(12));            // always taken, skips 8
+    mixed(2);
+    // jalr x0, 0(x7): an indirect jump to a fixed target 0x40 ahead.
+    jalr_to(5'd0, 5'd7, wp + VA_WIDTH'('h40));
+    mixed(2);
+    // jalr x1, 0(x28): an indirect call to fn, which returns.
+    link = wp + VA_WIDTH'(4);
+    jalr_to(5'd1, 5'd28, fn);
+    mixed(3);
+    ret(link);
+    mixed(1);
+    loop_br(otop);
+    rep_iter(eo, 8);
+    mixed(3);
+    halt();
+    release_reset();
+    run_and_check(60000);
+    chk($sformatf("the uBTB received updates (%0d)", n_u_ubtb), n_u_ubtb > 0);
+    chk($sformatf("the LP received updates (%0d)", n_u_lp), n_u_lp > 0);
+    chk($sformatf("TAGE received updates (%0d)", n_u_tage), n_u_tage > 0);
+    chk($sformatf("SC received updates (%0d)", n_u_sc), n_u_sc > 0);
+    chk($sformatf("ITTAGE received updates (%0d)", n_u_ittage),
+        n_u_ittage > 0);
+    chk($sformatf("the RAS committed (%0d)", n_u_ras), n_u_ras > 0);
+  endtask
+
+  // =================================================================
+  // Program 4, coro (bare). Two coroutines, A (the loop) and B,
+  // switching by RETURN_CALL. Each iteration:
+  //   L:   jal  x5, B            call, x5 = L+4 (push L+4)
+  //   B:   ...                   B's prologue
+  //   B1:  jalr x1, 0(x5)        RETURN_CALL: to L+4, x1 = B1+4
+  //   L+4: ...
+  //   A1:  jalr x5, 0(x1)        RETURN_CALL: to B1+4, x5 = A1+4
+  //   B1+4: ...
+  //   B2:  jalr x0, 0(x5)        RETURN: to A1+4
+  //   A1+4: ... bne x6, x0, L
+  // The stack is level across the iteration: a push, two pop-then-
+  // pushes, a pop. Each RETURN_CALL's target is the other coroutine's
+  // resume address, the top of the stack.
+  // =================================================================
+  task automatic p_coro();
+    logic [VA_WIDTH-1:0] l;
+    logic [VA_WIDTH-1:0] b;
+    logic [VA_WIDTH-1:0] b1;
+    logic [VA_WIDTH-1:0] a1;
+    int                  e0;
+    tname = "coro";
+    $display("-- %s --", tname);
+    reset_all(1'b0);
+    wp = RESET_VECTOR;
+    mixed(3);
+    b  = RESET_VECTOR + VA_WIDTH'('h600);
+    l  = wp;
+    e0 = ne;
+    jal(5'd5, b);                          // L
+    mixed(3);                              // B prologue
+    b1 = wp;
+    jalr_to(5'd1, 5'd5, l + VA_WIDTH'(4)); // B1: RETURN_CALL
+    mixed(2);                              // A at L+4
+    a1 = wp;
+    jalr_to(5'd5, 5'd1, b1 + VA_WIDTH'(4)); // A1: RETURN_CALL
+    mixed(2);                              // B at B1+4
+    jalr_to(5'd0, 5'd5, a1 + VA_WIDTH'(4)); // B2: RETURN
+    mixed(1);                              // A at A1+4
+    loop_br(l);
+    rep_iter(e0, 10);
+    mixed(3);
+    halt();
+    release_reset();
+    run_and_check(40000);
+    chk($sformatf("the p2 classification formed RETURN_CALL (%0d)",
+                  n_rc_p2), n_rc_p2 > 0);
+    chk($sformatf("the RAS committed RETURN_CALLs (%0d, 2 per iteration)",
+                  n_rc_commit), n_rc_commit == 20);
+  endtask
+
+  // =================================================================
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
     p_bare();
     p_sv39();
+    p_loops();
+    p_coro();
     $display("tb_fe_top: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_fe_top: %0d checks failed", fail_cnt);

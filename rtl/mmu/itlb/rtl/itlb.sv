@@ -94,6 +94,12 @@
 // is not 1, 12 or 20 is passed on as cause 1: the IT-4 rule, applied
 // on this side.
 //
+// PAGE SIZE (IL-7, ruled session-075). l2t_itlb_size is three bits:
+// 000 4 KiB, 001 64 KiB, 010 2 MiB, 011 1 GiB, 1xx reserved. A hit
+// whose size is reserved names no page this ITLB can hold, so it is
+// handled as a reserved status is: nothing is installed and the walk
+// is held as a fault with cause 1, answered on the re-request (BP-119).
+//
 // INVALIDATE (ITLB-13, ITLB-13a, ITLB-13b, ITLB-14). One cycle, no
 // ready. Op field, rs1/rs2 nonzero flags, the address page and the
 // ASID and VMID:
@@ -164,7 +170,7 @@ module itlb #(
   input  logic [1:0]               l2t_itlb_tag,
   input  logic [1:0]               l2t_itlb_status,
   input  logic [PPN_WIDTH-1:0]     l2t_itlb_ppn,
-  input  logic [1:0]               l2t_itlb_size,    // IL-7
+  input  logic [2:0]               l2t_itlb_size,    // IL-7
   input  logic [PERM_WIDTH-1:0]    l2t_itlb_perm,
   input  logic [1:0]               l2t_itlb_pbmt,
   input  logic [CAUSE_WIDTH-1:0]   l2t_itlb_cause,
@@ -211,10 +217,12 @@ module itlb #(
   localparam logic [1:0] L2_FAULT = 2'b01;
   localparam logic [1:0] L2_RETRY = 2'b10;
 
-  // l2t_itlb_size, IL-7 (proposed encoding).
-  localparam logic [1:0] SZ_4K  = 2'b00;
-  localparam logic [1:0] SZ_64K = 2'b01;
-  localparam logic [1:0] SZ_2M  = 2'b10;
+  // l2t_itlb_size, IL-7. 3'b1xx is reserved and never stored.
+  localparam logic [2:0] SZ_4K  = 3'b000;
+  localparam logic [2:0] SZ_64K = 3'b001;
+  localparam logic [2:0] SZ_2M  = 3'b010;
+  localparam logic [2:0] SZ_1G  = 3'b011;
+  localparam int         SZ_RSV = 2;       // the reserved-code bit
 
   // Exception codes, IT-6.
   localparam logic [CAUSE_WIDTH-1:0] CAUSE_ACCESS = CAUSE_WIDTH'(1);
@@ -258,7 +266,7 @@ module itlb #(
     logic [ASID_WIDTH-1:0] asid;
     logic [VMID_WIDTH-1:0] vmid;
     logic [VW-1:0]         vpn;
-    logic [1:0]            size;
+    logic [2:0]            size;
     logic [PPN_WIDTH-1:0]  ppn;
     logic [PERM_WIDTH-1:0] perm;
     logic [1:0]            pbmt;
@@ -275,13 +283,16 @@ module itlb #(
     logic [GPA_WIDTH-1:0]   gpa;
   } trk_t;
 
-  // The VPN bits a page size leaves out of the compare.
-  function automatic logic [VW-1:0] size_mask(input logic [1:0] sz);
+  // The VPN bits a page size leaves out of the compare. A reserved
+  // code is never installed, so it cannot reach here from an entry;
+  // it masks nothing.
+  function automatic logic [VW-1:0] size_mask(input logic [2:0] sz);
     case (sz)
       SZ_4K:   return VW'(0);
       SZ_64K:  return VW'(18'h0000F);
       SZ_2M:   return VW'(18'h001FF);
-      default: return VW'(18'h3FFFF);
+      SZ_1G:   return VW'(18'h3FFFF);
+      default: return VW'(0);
     endcase
   endfunction
 
@@ -325,6 +336,7 @@ module itlb #(
   logic [TI-1:0]         w_flt_idx;
   logic                  w_flt_take;  // the held fault answered now
   logic                  w_rsp_ok;    // an L2 response for a live tag
+  logic                  w_l2_hit;    // an L2 hit with a size IL-7 names
   logic [VW-1:0]         w_smask;
   logic                  w_alloc;
   logic [TI-1:0]         w_alloc_idx;
@@ -525,7 +537,9 @@ module itlb #(
     // A response is taken only for a slot that exists and is OUT.
     w_rsp_ok    = l2t_itlb_rsp_val && (32'(l2t_itlb_tag) < WALK_DEPTH) &&
                   (r_trk[l2t_itlb_tag].st == T_OUT);
-    w_install   = w_rsp_ok && (l2t_itlb_status == L2_HIT) &&
+    // A hit with a reserved size is not a hit (IL-7, IT-4).
+    w_l2_hit    = (l2t_itlb_status == L2_HIT) && !l2t_itlb_size[SZ_RSV];
+    w_install   = w_rsp_ok && w_l2_hit &&
                   !r_trk[l2t_itlb_tag].kill && !bkend_itlb_inv_val;
     w_inst_ent      = '0;
     w_inst_ent.val  = 1'b1;
@@ -617,19 +631,20 @@ module itlb #(
           r_trk[l2t_itlb_tag].st   <= T_FREE;
           r_trk[l2t_itlb_tag].kill <= 1'b0;
         end else begin
-          case (l2t_itlb_status)
-            L2_HIT:   r_trk[l2t_itlb_tag].st <= T_FREE;
-            L2_RETRY: r_trk[l2t_itlb_tag].st <= T_REQ;
-            default: begin                       // fault or reserved
-              r_trk[l2t_itlb_tag].st    <= T_FLT;
-              r_trk[l2t_itlb_tag].cause <=
-                ((l2t_itlb_status == L2_FAULT) &&
-                 ((l2t_itlb_cause == CAUSE_PAGE) ||
-                  (l2t_itlb_cause == CAUSE_GUEST)))
-                  ? l2t_itlb_cause : CAUSE_ACCESS;
-              r_trk[l2t_itlb_tag].gpa   <= l2t_itlb_gpa;
-            end
-          endcase
+          // A hit with a reserved size takes the fault arm, cause 1.
+          if (w_l2_hit) begin
+            r_trk[l2t_itlb_tag].st <= T_FREE;
+          end else if (l2t_itlb_status == L2_RETRY) begin
+            r_trk[l2t_itlb_tag].st <= T_REQ;
+          end else begin                         // fault or reserved
+            r_trk[l2t_itlb_tag].st    <= T_FLT;
+            r_trk[l2t_itlb_tag].cause <=
+              ((l2t_itlb_status == L2_FAULT) &&
+               ((l2t_itlb_cause == CAUSE_PAGE) ||
+                (l2t_itlb_cause == CAUSE_GUEST)))
+                ? l2t_itlb_cause : CAUSE_ACCESS;
+            r_trk[l2t_itlb_tag].gpa   <= l2t_itlb_gpa;
+          end
         end
       end
       if (w_alloc) begin
