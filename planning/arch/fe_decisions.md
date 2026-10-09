@@ -84,7 +84,7 @@ document does not restate them.
   predecode              dcd_decisions.md
   instruction buffer     ibuf_decisions.md
   instruction TLB        itlb_decisions.md
-  L2 TLB and walker      mmu_decisions.md
+  page table walker      mmu_decisions.md (no L2 TLB now)
   FTQ internals          ftq_decisions.md, ftq_entry_formats.md
   predictors             one document per predictor
 ```
@@ -1382,12 +1382,16 @@ emitted graph and is not a front end connection.
                            the L1I's up_i port into the l2, which
                            is a cachegen topology edge.
 
-         translation       the ITLB to the shared L2 TLB, and that
-                           alone. The IFU to the ITLB,
-                           itlb_ifu_interfaces.md, is INTERNAL:
-                           FE-U10 puts the ITLB inside the top, a
-                           sibling of the IFU. itlb_decisions.md
-                           and mmu_decisions.md.
+         translation       the ITLB to the page table walker, and
+                           that alone (itlb_l2tlb_interfaces.md).
+                           There is no L2 TLB now and the walker
+                           is outside the top (mmu_decisions.md
+                           MMU-1, MMU-1a, session-077); this read
+                           "the ITLB to the shared L2 TLB". The
+                           IFU to the ITLB, itlb_ifu_interfaces.md,
+                           is INTERNAL: FE-U10 puts the ITLB inside
+                           the top, a sibling of the IFU.
+                           itlb_decisions.md and mmu_decisions.md.
 
          uncached          NO LONGER A GROUP. Uncached fetch goes
                            through the L1I marked uncached
@@ -1440,7 +1444,11 @@ create one.
          csr           V, the current privilege, satp, vsatp and
                        hgatp ASID, VMID and MODE fields, and the
                        pmpcfg and pmpaddr registers. ITLB-17 and
-                       MMU-11a. The CSR file does not exist.
+                       MMU-11a. The CSR file does not exist. The
+                       walker is outside the top and takes its own
+                       CSR group (mmu_decisions.md MMU-24a); this
+                       group does not carry the roots or the
+                       envcfg bits. Session-077.
 
          config        the cluster configuration: sc_enable,
                        ftb_fastpath_en (G25), tage_enable_aging,
@@ -1480,8 +1488,10 @@ create one.
   FE-U10 CLOSED by the FE-16 ruling. The ITLB is inside the front
          end top, a sibling of the IFU on the same reasoning:
          written RTL, serving the IFU alone, self contained. The
-         boundary falls between the ITLB and the shared L2 TLB,
-         which serves the data side and is outside. FE-17 is
+         boundary falls between the ITLB and the shared translation
+         level, which serves the data side and is outside: the
+         page table walker, with no L2 TLB now (mmu_decisions.md
+         MMU-1, session-077; this named the L2 TLB). FE-17 is
          written for that reading.
 ```
 
@@ -1733,4 +1743,9 @@ create one.
   2026-10-09  session-076, ruling (Jeff). FE-17: the uncached group
               is gone (IFU-21 reversed); the maintenance path from
               commit is part of the backend group.
+
+  2026-10-09  session-077, rulings (Jeff). FE-17 and FE-U10: the
+              translation group goes to the page table walker,
+              outside the top; there is no L2 TLB (MMU-1 reversed).
+              FE-20: the walker's CSRs are its own group.
 ```

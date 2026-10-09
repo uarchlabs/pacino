@@ -6,7 +6,7 @@
  FILE:    itlb_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -15,9 +15,10 @@ issue order and the sections are topical, so they do not run in
 numeric order: section 7 runs ITLB-13, ITLB-13a, ITLB-14, ITLB-13b.
 Session-072.
 
-Scope is the L1 instruction TLB only. The shared L2 TLB, the page
-table walker, and the PMP and PMA checkers are in
-`mmu_decisions.md`. This document names the ITLB side of each
+Scope is the L1 instruction TLB only. The page table walker and
+the PMP and PMA checkers are in `mmu_decisions.md`. There is no L2
+TLB now: an ITLB miss goes to the walker directly (MMU-1, reversed
+session-077). This document names the ITLB side of each
 boundary and does not restate the other side.
 
 The ITLB is written from this document. cachegen currently does
@@ -122,7 +123,9 @@ ITLB-10a A WALK FAULT IS HELD in its tracker slot until the IFU
          fault. Under ITLB-9 the requester re-requests rather than
          waiting, so the fault has to be kept for it. An invalidate
          drops held faults (ITLB-14). Built by BP-118, accepted
-         session-075 (Jeff).
+         session-075 (Jeff). The held fault keeps everything the
+         walker returned with it: the cause, the GPA and its
+         implicit-access kind (IL-11a, IL-11b, IT-6c); session-077.
 
 ITLB-U1 CLOSED session-075 (Jeff) by ITLB-15. The question was
         the depth of the in-flight walk tracker. One outstanding
@@ -132,10 +135,12 @@ ITLB-U1 CLOSED session-075 (Jeff) by ITLB-15. The question was
         bounded by how many transactions the l2 slave accepts,
         TD#118.
 
-ITLB-15 The walk tracker depth is a parameter, default 1. The l2
-        serialises walks (TD#118, MMU-U2), so more buys nothing
-        until that is fixed. IL-1's two-bit tag allows up to four
-        and is not tied to this value.
+ITLB-15 The walk tracker depth is a parameter, default 1. The
+        walker performs one walk at a time (MMU-U2, ruled
+        session-077), so more buys nothing until it performs more.
+        IL-1's two-bit tag allows up to four and is not tied to
+        this value. This read "The l2 serialises walks (TD#118,
+        MMU-U2)".
 
 ---
 
@@ -372,10 +377,12 @@ IF-8      The gate condition. IF-23 and IF-24 behind it already
           separate fault from miss.
 TD#115    Closed by this document.
 IT-*      The IFU boundary is `itlb_ifu_interfaces.md`.
-IL-*      The L2 TLB boundary is `itlb_l2tlb_interfaces.md`.
+IL-*      The walker boundary is `itlb_l2tlb_interfaces.md`; there
+          is no L2 TLB now (MMU-1).
           IL-5 is deliberately the opposite of ITLB-8: a miss
           there holds the transaction open rather than ending it.
-TD#118    Bounds ITLB-U1.
+TD#118    Bounded ITLB-U1, now closed. The walker has its own
+          memory port (MMU-2), so TD#118 bounds only the L2 plan.
 
 ---
 
@@ -434,4 +441,9 @@ TD#118    Bounds ITLB-U1.
 
   2026-10-07  session-075, after BP-119. ITLB-3: a reserved size
               code is not installed and is handled as IT-4.
+
+  2026-10-09  session-077. No L2 TLB: the scope paragraph and
+              ITLB-15 name the walker as the ITLB's server
+              (MMU-1 reversed, MMU-U2 one walk). ITLB-10a: a held
+              fault keeps its GPA and implicit-access kind.
 ```

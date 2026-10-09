@@ -25,8 +25,9 @@ results. It is not F0 of the fetch pipeline. Nothing in this
 document depends on which of the two it is, but a reader placing
 these ports in the fetch stages would put them in the wrong
 pipeline. The ITLB's own
-miss path into the shared L2 TLB is not here; it is
-`itlb_l2tlb_interfaces.md`.
+miss path into the page table walker is not here; it is
+`itlb_l2tlb_interfaces.md`. This read "into the shared L2 TLB";
+there is no L2 TLB now (mmu_decisions.md MMU-1), session-077.
 
 ---
 
@@ -44,6 +45,7 @@ miss path into the shared L2 TLB is not here; it is
   itlb_ifu_ppn   [PPN_WIDTH-1:0]          ITLB -> IFU
   itlb_ifu_cause [CAUSE_WIDTH-1:0]        ITLB -> IFU
   itlb_ifu_gpa   [GPA_WIDTH-1:0]          ITLB -> IFU
+  itlb_ifu_gpa_imp [1:0]                  ITLB -> IFU
   itlb_ifu_pma   [PMA_WIDTH-1:0]          ITLB -> IFU
 ```
 
@@ -119,9 +121,20 @@ IT-6b Nothing about the translation regime is on this port. The
 
       IT DOES NOT READ THE ROOT POINTERS. The ITLB does not walk,
       so `satp.PPN`, `vsatp.PPN` and `hgatp.PPN` are no use to it.
-      They belong to the walker inside the L2 TLB,
-      `itlb_l2tlb_interfaces.md` IL-3c. An earlier revision of
-      this rule had the ITLB read all three.
+      They belong to the walker, `itlb_l2tlb_interfaces.md` IL-3c
+      and mmu_decisions.md MMU-24a. An earlier revision of this
+      rule had the ITLB read all three; until session-077 this
+      placed the walker inside an L2 TLB.
+
+IT-6c `itlb_ifu_gpa_imp` is the implicit-access kind of
+      `itlb_l2tlb_interfaces.md` IL-11b, valid with IT-6a: 2'b00
+      the fetch's own guest physical address, 2'b01 an implicit
+      read of a VS-stage page table, 2'b10 an implicit write of
+      one, 2'b11 reserved. The ITLB passes it through from the
+      walker, holding it with a held fault (ITLB-10a). The IFU
+      carries it into `ifu_pd_pkt_t` beside the GPA (DCD-16); the
+      backend needs it for htinst (mmu_decisions.md MMU-29). Added
+      session-077 (Jeff).
 
 IT-5 is a departure from how ITLB-11 is worded. That rule has the
 ITLB return the fault cause and the faulting virtual address
@@ -217,8 +230,10 @@ IT-15 SFENCE.VMA does not cross this boundary. ITLB-14 gives the
 ## 8. Open
 
 None here. Two items elsewhere bear on this port without changing
-it: ITLB-U1, the in-flight walk tracker depth, bounded by TD#118,
-since IT-9 holds at any depth. IFU-U5, the translation queue depth
+it: the in-flight walk tracker depth, ITLB-U1, closed by ITLB-15 at a
+parameter of 1 with the walker performing one walk at a time
+(MMU-U2), and IT-9 holds at any depth. This read "bounded by
+TD#118"; session-077. IFU-U5, the translation queue depth
 that sets how far ahead of the fetch pipeline these requests are
 issued, was closed session-074 at a parameter of 4; a page-crossing
 block issues its two lookups on successive cycles (IFU-25, IT-1).
@@ -239,3 +254,16 @@ IFU-7     Two lookups per block, IT-1 and IT-2.
 IFU-21    The uncached path IT-11 selects.
 MMU-13    The attributes of IT-10.
 IB-9      Where the cause and VA are paired.
+MMU-29    The implicit-access kind of IT-6c.
+
+---
+
+## 10. Document History
+
+```
+  2026-10-09  session-077, rulings (Jeff). IT-6c and
+              itlb_ifu_gpa_imp, the implicit-access kind. Section 1
+              and IT-6b: the walker is the ITLB's server, with no
+              L2 TLB (MMU-1 reversed). This document had no history
+              section; its earlier changes are in PROJECT_STATUS.
+```

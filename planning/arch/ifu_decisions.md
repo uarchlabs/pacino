@@ -74,9 +74,10 @@ IFU-2  Each slot delivered to the ibuf is an `ifu_pd_pkt_t`,
        whose fields are `dcd_decisions.md` DCD-16 and
        `ifu_ibuf_interfaces.md` 4: the expanded instruction, its
        start PC, its position within the prediction block, its
-       FTQ index, its fault cause, faulting VA and faulting GPA,
-       is_rvc, its control flow classification, is_vsetvl and
-       needs_vtype. Declared in `bp_structs_pkg`, BP-115.
+       FTQ index, its fault cause, faulting VA and faulting GPA
+       with the GPA's implicit-access kind, is_rvc, its control
+       flow classification, is_vsetvl and needs_vtype. Declared in
+       `bp_structs_pkg`, BP-115; the kind added session-077.
 
 This read "its position within the buffer" and "its FTQ pointer",
 and did not list the faulting VA that IFU-2a refers to. The
@@ -97,7 +98,10 @@ IFU-2a A slot whose cause is an instruction guest-page fault, cause
        comes back on the translation port, IT-6a, because the IFU
        never had it. Shtvala requires `htval` to be written with
        it. The virtual address of IFU-2 is still carried for
-       `stval` and `vstval` under Shvstvala.
+       `stval` and `vstval` under Shvstvala. The GPA's
+       implicit-access kind comes with it (IT-6c) and is carried
+       the same way; the backend needs it for htinst
+       (mmu_decisions.md MMU-29). Session-077.
 
 H is mandatory in RVA23 through Sha, so the guest case is not
 optional and the GPA field is not conditional on a build option.
@@ -291,13 +295,15 @@ IFU-24  The translation pipeline is driven by its own pointer
 IFU-25  The translation queue holds, per block: the physical
         address, the PMA attributes of IT-10, the fault cause and
         status of IT-4, and the guest physical address of IT-6a
-        when the cause is 20. F0 reads the head.
+        with its implicit-access kind of IT-6c when the cause is
+        20. F0 reads the head. The kind added session-077.
 
         A BLOCK THAT CROSSES A PAGE HOLDS TWO RESULTS in its one
         entry: the second page's physical address, PMA attributes,
-        fault cause and GPA, valid only for a crossing block and
-        filled by a second ITLB lookup in the next cycle. A fault
-        on the second page belongs to the positions in it (DCD-15).
+        fault cause, GPA and its kind, valid only for a crossing
+        block and filled by a second ITLB lookup in the next cycle.
+        A fault on the second page belongs to the positions in it
+        (DCD-15).
         Ruled session-074 (Jeff). Ending blocks at page boundaries
         instead would change built BPU and FTQ block semantics for
         an event on well under 1% of sequential blocks.
@@ -685,3 +691,15 @@ TD#136    Carries TD-IFU-10.
 TD#118    The IFU outstanding-request depth has no real target
           until the l2 transaction limit is known. Not yet
           recorded as a decision.
+MMU-29    The implicit-access kind of IFU-2a and IFU-25.
+
+---
+
+## 11. Document History
+
+```
+  2026-10-09  session-077, ruling (Jeff). IFU-2, IFU-2a and IFU-25
+              carry the implicit-access kind of a guest physical
+              address (MMU-29). This document had no history
+              section; its earlier changes are in PROJECT_STATUS.
+```

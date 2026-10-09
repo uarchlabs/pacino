@@ -12,10 +12,12 @@
 
 Owns the MMU-N, TD-MMU-N and MMU-UN registries.
 
-Scope is the shared L2 TLB, the page table walker, and the PMP and
-PMA checkers. The L1 instruction TLB is in `itlb_decisions.md`. The
-L1 data TLB does not exist. Everything here is shared I and D by
-construction, which is why it is not in the ITLB document.
+Scope is the page table walker and the PMP and PMA checkers. There
+is no L2 TLB now (MMU-1, session-077); what this document says about
+one is the plan for when it is added. The L1 instruction TLB is in
+`itlb_decisions.md`. The L1 data TLB does not exist. Everything here
+is shared I and D by construction, which is why it is not in the
+ITLB document.
 
 ---
 
@@ -25,34 +27,62 @@ construction, which is why it is not in the ITLB document.
 U4 was unrecommended and the recommendation was made and ruled in
 the same session.
 
-The L2 TLB and the walker are written from this document, the way
-the bpu and the ftq were written from theirs. They are not cachegen
-nodes. What L1I-U3 reaches into cachegen for is one thing only: the
-l2 must accept a third master, and the l2 is emitted. That is
-MMU-U3.
+The walker is written from this document, the way the bpu and the
+ftq were written from theirs. It is not a cachegen node. What L1I-U3
+reaches into cachegen for is one thing only, and only once an L2
+exists: the l2 must accept a third master, and the l2 is emitted.
+That is MMU-U3.
+
+MMU-1 WAS REVERSED session-077: there is no L2 TLB now, and the ITLB
+is the walker's client directly.
 
 ---
 
 ## 2. Topology
 
-MMU-1  One shared L2 TLB serving the instruction and data sides.
-       The page table walker is inside it.
+MMU-1  THERE IS NO L2 TLB NOW. An ITLB miss goes directly to the
+       page table walker. The walker is shared by the instruction
+       and data sides; the DTLB, when it exists, is its second
+       client. An L2 TLB is a later performance step, added with
+       the DTLB and placed behind the same client port
+       (itlb_l2tlb_interfaces.md). RULED session-077 (Jeff),
+       REVERSING the session-069 rule, which read "One shared L2
+       TLB serving the instruction and data sides. The page table
+       walker is inside it."
 
-MMU-2  It drives a TileLink master port into l2, alongside up_i
-       and up_d.
+MMU-1a THE WALKER IS OUTSIDE THE FRONT-END TOP, at rtl/mmu/ptw.
+       It is shared I and D, and FE-U10 puts the front-end
+       boundary between the ITLB and the shared translation level.
+       tb_fe_top instantiates the front-end top and the walker
+       beside it. Ruled session-077 (Jeff).
 
-MMU-3  The L1 TLBs are clients. A client miss is presented to the
-       L2 TLB; an L2 TLB miss starts a walk.
+MMU-2  The walker reaches memory through its own port,
+       `ptw_mem_interfaces.md`: an 8-byte read and an 8-byte
+       compare-and-swap. A testbench memory model answers it,
+       sharing one memory image with the model that answers the
+       L1I's memory port (fe_decisions.md FE-21). THE L2 PLAN
+       STANDS: when an L2 exists the walker's traffic goes on a
+       master edge into it, alongside up_i and up_d, and
+       icache_decisions.md L1I-25 rests on that. Ruled session-077
+       (Jeff). This read "It drives a TileLink master port into
+       l2, alongside up_i and up_d."
 
-The D side has no client yet. MMU-1 is built with one client and
-the second arrives with the DTLB.
+MMU-3  The L1 TLBs are clients of the walker, on the port of
+       `itlb_l2tlb_interfaces.md`. A client miss is presented to
+       the walker and starts a walk. This read "A client miss is
+       presented to the L2 TLB; an L2 TLB miss starts a walk."
 
-MMU-U1 L2 TLB entry count, associativity and page-size handling.
-       Not addressed by L1I-U3, which named the topology only.
-       Comparable points: Neoverse N1 and N2 at 1280 entries
-       5-way, Neoverse V2 and Cortex X2 at 2048 8-way, Zen 2 with
-       a split 512-entry 8-way L2 ITLB and 2048-entry 12-way L2
-       DTLB. Unresolved.
+The D side has no client yet. The walker is built with one client
+and the second arrives with the DTLB.
+
+MMU-U1 CLOSED session-077 by MMU-1: there is no L2 TLB to size.
+       Its geometry, and how a set-associative array holds a
+       64 KiB NAPOT entry (MMU-U7), are decided when the L2 TLB is
+       added. It read: "L2 TLB entry count, associativity and
+       page-size handling. Comparable points: Neoverse N1 and N2
+       at 1280 entries 5-way, Neoverse V2 and Cortex X2 at 2048
+       8-way, Zen 2 with a split 512-entry 8-way L2 ITLB and
+       2048-entry 12-way L2 DTLB."
 
 ---
 
@@ -61,13 +91,18 @@ MMU-U1 L2 TLB entry count, associativity and page-size handling.
 MMU-4  The walker issues physical addresses directly. They do not
        pass through any L1 TLB.
 
-MMU-5  Walk reads go out on the MMU-2 master edge.
+MMU-5  Walk reads and the Svadu update of MMU-8 go out on the
+       MMU-2 port. This read "Walk reads go out on the MMU-2
+       master edge."
 
-MMU-U2 How many walks may be outstanding. The l2 slave holds one
-       transaction, TD#118, so concurrent walks serialise there
-       until that is fixed. This bounds `itlb_decisions.md`
-       ITLB-U1. Unresolved, and should be ruled after TD#118
-       rather than before.
+MMU-U2 CLOSED session-077 (Jeff). THE WALKER PERFORMS ONE WALK AT
+       A TIME. A client request that arrives while a walk is in
+       progress is answered retry (itlb_l2tlb_interfaces.md IL-6).
+       This matches the ITLB's tracker depth of 1 (ITLB-15). More
+       concurrent walks are a later performance step, measured
+       with the TD#128 harness. It read: "How many walks may be
+       outstanding. The l2 slave holds one transaction, TD#118, so
+       concurrent walks serialise there until that is fixed."
 
 ---
 
@@ -106,10 +141,9 @@ MMU-21 The walk is NESTED, not sequential. Every address the
        G-stage walks, one per VS-stage PTE fetch plus one for the
        final guest physical address.
 
-MMU-21 is the reason MMU-U2, the outstanding walk count, matters
-more than it did. A single two-stage walk occupies the walker for
-far longer than a single-stage one, and TD#118 serialises the
-memory accesses underneath it.
+MMU-21 is the reason the outstanding walk count matters more than
+it did. A single two-stage walk occupies the walker for far longer
+than a single-stage one. MMU-U2 is ruled at one walk for now.
 
 MMU-22 The MMU raises a GUEST page fault when the G-stage fails
        and an ordinary page fault when the VS-stage or a
@@ -143,6 +177,36 @@ MMU-26 THE WALKER CHECKS G-STAGE PERMISSIONS and returns cause 20
        because privilege changes without a fence. Ruled
        session-075 (Jeff).
 
+MMU-24a THE WALKER'S CSR INPUTS ARE ITS OWN INPUT GROUP. The
+        walker is outside the front-end top (MMU-1a), so the
+        front-end csr group of fe_decisions.md FE-20 does not reach
+        it. Its group carries satp, vsatp and hgatp PPN and MODE,
+        menvcfg and henvcfg ADUE and PBMTE, and the PMP registers
+        for its checker (MMU-11a). The CSR file does not exist; the
+        testbench drives the group. Ruled session-077 (Jeff).
+
+MMU-24b THE ROOT POINTERS ALWAYS FIT. The CSR file implements
+        `satp.PPN` and `hgatp.PPN` at PPN_WIDTH bits and
+        `vsatp.PPN` at GPA_WIDTH - 12 = 29 bits, the bits above
+        read-only zero. The privileged specification lets satp.PPN
+        hold fewer than all physical page numbers, and the hgatp
+        fields are WARL; vsatp.PPN is narrowed on the same footing
+        as satp.PPN, whose role it takes at V=1. A root can then
+        never name an address this implementation cannot form, and
+        MMU-28 applies to PTEs only. No CSR file exists, so this is
+        an obligation on it, and the walker's root inputs are
+        declared at those widths. Ruled session-077 (Jeff).
+
+MMU-27 THE SIZE OF A TWO-STAGE TRANSLATION is the SMALLER of the
+       VS-stage leaf size and the G-stage leaf size for the final
+       guest physical address, and the PPN returned is the final
+       supervisor physical page at that size
+       (itlb_l2tlb_interfaces.md IL-7). This holds for the 64 KiB
+       NAPOT size at either stage: if the smaller size is 64 KiB,
+       PA[15:12] equals VA[15:12] through both stages, so the
+       ITLB's PPN[3:0] substitution (MMU-U7) is right. Stated
+       session-077; no document had said it.
+
 The line between MMU-24 and MMU-25 is that identity is a property
 of one request and the regime is not. A root pointer is not
 something one request has and another does not.
@@ -151,7 +215,12 @@ something one request has and another does not.
 
 ## 4. A and D bits
 
-MMU-6  Both Svade and Svadu are supported.
+MMU-6  Both Svade and Svadu are supported. CONFIRMED session-077
+       (Jeff), after a session-076 recommendation to narrow to
+       Svade alone. Svade is mandatory in RVA23S64 and Svadu is an
+       expansion option (rva23-profile.adoc); with ADUE clear the
+       hardware behaves exactly as Svade, so supporting both loses
+       nothing.
 
 MMU-7  `menvcfg.ADUE` selects the behaviour at runtime. With ADUE
        clear the walker raises a page fault when A is clear on
@@ -161,29 +230,70 @@ MMU-7  `menvcfg.ADUE` selects the behaviour at runtime. With ADUE
 MMU-7a For a `V=1` access, `henvcfg.ADUE` selects the behaviour of
        the VS-stage. `menvcfg.ADUE` continues to govern the
        G-stage. The two stages of one nested walk can therefore
-       be under different rules at the same time.
+       be under different rules at the same time. `henvcfg.ADUE`
+       is read-only zero when `menvcfg.ADUE` is zero (machine
+       ISA, menvcfg); that is the CSR file's rule, and the walker
+       reads both bits as given.
 
-MMU-8  The Svadu update is atomic with respect to other harts. The
-       walker performs it as a read-modify-write that cannot be
-       split.
+MMU-8  THE SVADU UPDATE IS A COMPARE AND STORE, the privileged
+       translation algorithm's step 9. When ADUE selects Svadu for
+       the stage and the leaf PTE has A clear (fetch never needs
+       D), the walker:
+         - checks that a STORE to the PTE passes PMP and PMA
+           (MMU-10d, MMU-12a); otherwise access fault, cause 1;
+         - compares the PTE it read against memory and, if they
+           are equal, stores the PTE with A set, as ONE atomic
+           operation on the MMU-2 port (ptw_mem_interfaces.md);
+         - if they are not equal, restarts the walk from step 2.
+       Every check of the leaf is made before the update. The
+       translation is returned to the client only after the update
+       has completed, so the update precedes the fetch that needed
+       it in the global order, as the specification requires.
+       The walker also holds the D update for the data-side client;
+       until a DTLB exists it is checked at walker unit level only.
+       This read "The Svadu update is atomic with respect to other
+       harts. The walker performs it as a read-modify-write that
+       cannot be split." A read-modify-write does not compare, and
+       the compare is what stops the walker setting A on a PTE
+       software changed after it was read. Corrected session-077.
 
-MMU-9  The MMU-2 master edge is not read-only. MMU-8 requires the
-       edge to carry an atomic operation, so the edge's TileLink
-       conformance level must include atomics and cannot be
-       Get-only.
+MMU-8a UNDER H, a VS-stage PTE is in guest physical memory, so its
+       update is a store through the G-stage. The G-stage leaf
+       must grant write, checked as an implicit store at user
+       level (MMU-26), and the update sets the G-stage leaf's A
+       and D under `menvcfg.ADUE`, or raises a guest-page fault
+       under Svade at the G-stage. A failure is cause 20, reported
+       for the original access type, with implicit-access kind
+       WRITE (MMU-29). Stated session-077 from the hypervisor
+       chapter, two-stage address translation.
 
-MMU-9 is the reason MMU-6 is recorded here and not left implicit.
-Svade alone would have permitted a read-only edge. Supporting both
-fixes the port type. Because the far end of that port is the
-emitted l2, it is also the one place this module reaches into
-cachegen. See MMU-U3.
+MMU-8b SPECULATION. A walk for a wrong-path fetch may set A: the
+       specification permits A updates as a result of speculation,
+       and permits a VS-stage A update only when the effective
+       mode is VS or VU, which every `V=1` fetch is. The G-stage D
+       set by a VS-stage update may be speculative only when the
+       G-stage PTE grants write, which MMU-8a requires anyway. A
+       walk killed by an invalidate (ITLB-14) may already have set
+       A; that is permitted. Stated session-077.
 
-MMU-U3 Two parts. Whether the MMU-8 atomic is a TileLink AMO on
-       the MMU-2 port or a reservation pair. And whether the l2,
-       which is emitted, needs a schema or emitter change to
-       accept a third master and to carry that atomic on it.
-       The second part is a cachegen question and is the only
-       one in this document. Unresolved.
+MMU-9  The MMU-2 port is not read-only: it carries the
+       compare-and-swap of MMU-8. Supporting Svadu fixes the port
+       type, which is why MMU-6 is recorded here and not left
+       implicit; Svade alone would have permitted a read-only
+       port. This read that the edge's TileLink conformance level
+       must include atomics; that is the L2 plan, MMU-U3.
+
+MMU-U3 OPEN, MOVED TO THE L2 WORK (session-077). Two parts. How the
+       compare-and-swap of MMU-8 is carried when the walker's port
+       goes into an L2 (MMU-2): TileLink's atomic operations, as
+       the PA recalls them, include no compare-and-swap, so either
+       the L2 adds one or the walker builds it from another
+       primitive; check the TileLink specification before the L2
+       task. And whether the emitted l2 needs a schema or emitter
+       change to accept a third master. Neither is needed while a
+       testbench answers the port. This read "Whether the MMU-8
+       atomic is a TileLink AMO on the MMU-2 port or a reservation
+       pair."
 
 ---
 
@@ -216,6 +326,16 @@ MMU-10c THE IFU NEVER CHECKS. It CONSUMES a result that arrived
         with the translation. IT-12 says the results are consumed
         by the IFU before it issues an L1I request; that is
         consumption, not evaluation.
+
+MMU-10d THE WALKER'S ACCESSES ARE CHECKED AT PRIVILEGE S, whatever
+        the current privilege: the machine ISA, PMP and paging,
+        gives the effective privilege of implicit page-table
+        accesses as S. A PTE read is checked as a read and the
+        Svadu update of MMU-8 as a write. The checker therefore
+        takes an access type and a privilege; the walker's
+        instance always presents S. The walker's instance sits in
+        rtl/mmu/ptw. Ruled session-077 (Jeff), checked against
+        machine.adoc.
 
 Two sites are forced, not chosen. MMU-4 has walk addresses bypass
 the L1 TLBs, so a single checker at the L1 boundary would leave
@@ -252,8 +372,26 @@ MMU-U4 CLOSED session-070. Smepmp is NOT mandatory in RVA23S64.
 
 ## 6. PMA
 
-MMU-12 PMA is checked on the final translated physical address
-       only, not on the virtual address and not mid-walk.
+MMU-12 PMA IS CHECKED ON EVERY PHYSICAL ACCESS: the final
+       translated address of a fetch (ITLB-12), and every PTE read
+       and every Svadu update the walker makes. The privileged
+       translation algorithm raises an access fault of the
+       original access type when a PTE access violates a PMA or
+       PMP check (steps 2 and 9); for a fetch that is cause 1. Not
+       on the virtual address. This read "PMA is checked on the
+       final translated physical address only, not on the virtual
+       address and not mid-walk", which the specification
+       contradicts. Corrected session-077.
+
+MMU-12a PAGE TABLES MUST BE IN A REGION THAT IS CACHEABLE AND
+        COHERENT (MMU-13 bits [0] and [1]). A PTE read or update
+        anywhere else is an access fault, cause 1. Legal: the
+        machine ISA lets each region say which hardware page-table
+        reads and writes it supports, Ssccptr requires them only in
+        cacheable, coherent main memory, and Svadu requires page
+        tables in memory with hardware page-table write access and
+        RsrvEventual, which Ziccrse gives main memory. Ruled
+        session-077 (Jeff).
 
 MMU-13 The attributes carried per region are cacheable, coherent,
        executable and idempotent. Wherever they travel as a
@@ -397,11 +535,12 @@ MMU-U7 SVNAPOT IS MANDATORY AND IS NOWHERE IN THIS TREE.
        updated session-071.
 
        THIS DOCUMENT HAS NO L2 TLB PAGE-SIZE DECISION TO CONTRADICT.
-       MMU-1 states the topology only. L2 TLB entry count,
-       associativity and page-size handling are MMU-U1, unresolved.
-       So Svnapot enlarges MMU-U1 rather than overturning anything
-       decided here, and it is the L1 side, ITLB-3 and IL-7, that
-       carries a stated three.
+       There is no L2 TLB now (MMU-1, session-077); its entry count,
+       associativity and page-size handling are decided when it is
+       added (MMU-U1, closed). So Svnapot enlarges that later work
+       rather than overturning anything decided here, and it is the
+       L1 side, ITLB-3 and IL-7, that carries a stated three. This
+       read "are MMU-U1, unresolved".
 
        IT REACHES THE G-STAGE, NOT ONLY THE TLB ARRAYS. Privileged
        11.1.7 states that when the hypervisor extension is
@@ -436,10 +575,11 @@ MMU-U7 SVNAPOT IS MANDATORY AND IS NOWHERE IN THIS TREE.
        off. The test plan must cover a 64 KiB mapping at each stage
        and every reserved N encoding.
 
-       STILL OPEN, in MMU-U1: how the set-associative L2 TLB holds a
-       NAPOT entry. The published precedent (Rocket, arXiv
-       2406.17802) drops VPN[3:0] from the index. It read "Two
-       decisions, then ... Unresolved." 
+       MOVED TO THE L2 TLB WORK (MMU-1, MMU-U1 closed session-077):
+       how a set-associative L2 TLB holds a NAPOT entry. The
+       published precedent (Rocket, arXiv 2406.17802) drops
+       VPN[3:0] from the index. It read "Two decisions, then ...
+       Unresolved."
 
 ---
 
@@ -458,26 +598,61 @@ MMU-16a Guest page fault exists because H is mandatory. It is not
         an optional third case to be dropped when H is absent,
         because H is not absent.
 
-MMU-U9  A PTE PPN WIDER THAN THE IMPLEMENTED PHYSICAL ADDRESS IS
-        NOT CHECKED ANYWHERE. A Sv39 PTE carries a 44-bit PPN
-        field. PA_WIDTH is 36 (`l1i_ifu_interfaces.md` IF-1), so
-        PPN_WIDTH is 24, ruled session-073. Nothing in this
-        document faults a PTE whose PPN has a bit set above bit
-        23, at either stage, so such a PTE would be truncated to
-        an address this implementation can form and the walk
-        would continue as if nothing were wrong. The same gap
-        applies to the `satp.PPN`, `vsatp.PPN` and `hgatp.PPN`
-        roots of IL-3c.
+MMU-U9  CLOSED session-077 by MMU-28 to MMU-30, after reading the
+        ratified supervisor and hypervisor chapters. It read: "A PTE
+        PPN WIDER THAN THE IMPLEMENTED PHYSICAL ADDRESS IS NOT
+        CHECKED ANYWHERE. ... Both a page fault at the stage that
+        read the PTE (cause 12 or 20) and an access fault from the
+        MMU-10 PMP check (cause 1) are defensible." The roots are
+        MMU-24b.
 
-        NOT RULED, and the cause is the open part. Both a page
-        fault at the stage that read the PTE (cause 12 or 20,
-        MMU-16) and an access fault from the MMU-10 PMP check
-        (cause 1) are defensible, and which the ratified
-        privileged specification permits or requires for an
-        unimplemented PPN bit has NOT been checked against the
-        document. Check it before ruling; MMU-U4 and MMU-U5 were
-        both decided from an unread list and both had to be
-        redone. Raised session-073 from TD#122.
+MMU-28  A PPN IS NEVER TRUNCATED. The supervisor chapter states that
+        the translation algorithm does not admit ignoring
+        high-order PPN bits on an implementation with fewer
+        physical address bits. Bits 53:10 of a Sv39 PTE are all
+        PPN, so a large PPN is not a reserved-bit page fault. The
+        walker reads all 44 PPN bits of every PTE:
+          - a PTE whose PPN is a SUPERVISOR physical page (single
+            stage, or G-stage): a bit set above bit 23 names an
+            address outside every PMA region, so the access made
+            with it -- the next PTE read, or the fetch -- is an
+            access fault, cause 1;
+          - a PTE whose PPN is a GUEST physical page (VS-stage): a
+            guest physical address with a bit set above bit 40 is a
+            guest-page fault, cause 20 (Sv39x4, hypervisor
+            chapter).
+        The checks fall where the algorithm's steps put them, so a
+        page fault found earlier in the walk is reported first. The
+        ITLB is never filled with a truncated PPN. Ruled
+        session-077 (Jeff).
+
+MMU-29  THE IMPLICIT-ACCESS KIND. A guest-page fault the walker
+        raises carries, beside its guest physical address
+        (MMU-23), a two-bit kind:
+          2'b00  the GPA is the fetch's own guest physical address
+          2'b01  an implicit READ of a VS-stage page table
+          2'b10  an implicit WRITE of one, the Svadu update (MMU-8a)
+          2'b11  reserved
+        Shtvala makes htval carry the faulting guest physical
+        address, including for an implicit access, and the
+        hypervisor chapter then forbids htinst zero: it must be the
+        pseudoinstruction 0x00003000 (64-bit read) or 0x00003020
+        (64-bit write). The backend chooses htinst from this kind;
+        the front end carries it (itlb_l2tlb_interfaces.md IL-11b,
+        itlb_ifu_interfaces.md IT-6c, dcd_decisions.md DCD-16).
+        Ruled session-077 (Jeff).
+
+MMU-30  A GUEST PHYSICAL ADDRESS THAT DOES NOT FIT. When the faulting
+        guest physical address has a bit set above bit 40 (MMU-28),
+        the GPA returned is 0 and the kind of MMU-29 is still
+        given. The hypervisor chapter lets htval be written with
+        zero, and with htval zero htinst may be zero, so the backend
+        reads the kind only for a non-zero GPA. Whether this meets
+        Shtvala's "in all circumstances permitted by the ISA" is an
+        interpretation, recorded as one: htval is a WARL register
+        that need hold only a subset of guest physical addresses,
+        and this address is outside the 41-bit guest space. Ruled
+        session-077 (Jeff).
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
 faulting virtual address for page-fault, access-fault and
@@ -500,9 +675,16 @@ which attributed to Sstvala more than it says. Session-072.
 
 ## 8. Maintenance
 
-MMU-17 SFENCE.VMA invalidates L2 TLB entries by the same forms as
-       the L1 TLBs. A walk in flight when an invalidate arrives is
-       completed and its result is not installed.
+MMU-17 THE WALKER HOLDS NO TRANSLATION, so it has no invalidate
+       port while there is no L2 TLB. A walk in progress when the
+       ITLB receives an invalidate completes, and the ITLB discards
+       its result (ITLB-14, IL-13, IL-14). Ruled session-077 (Jeff)
+       with MMU-1.
+
+       WHEN AN L2 TLB IS ADDED: SFENCE.VMA invalidates its entries
+       by the same forms as the L1 TLBs, and a walk in flight when
+       an invalidate arrives is completed and its result is not
+       installed. This read so of the L2 TLB as built.
 
        THE FORMS ARE `itlb_decisions.md` ITLB-13, WHICH STATES ALL
        FOUR EXPLICITLY. The one worth knowing before implementing
@@ -516,12 +698,15 @@ MMU-17 SFENCE.VMA invalidates L2 TLB entries by the same forms as
 MMU-17a H adds two more. HFENCE.VVMA invalidates VS-stage
         translations for the current VMID, by VA and by ASID.
         HFENCE.GVMA invalidates G-stage translations, by guest
-        physical address and by VMID. Both reach the L2 TLB on the
-        same port as SFENCE.VMA, MMU-18, distinguished by an
-        operation field rather than by a separate port.
+        physical address and by VMID. Both reach the ITLB on its
+        port, ITLB-14, with an operation field; when an L2 TLB is
+        added they reach it the same way, MMU-18, distinguished by
+        an operation field rather than by a separate port. This
+        read as of a built L2 TLB; session-077.
 
-MMU-18 The invalidate port is a distinct port. It is written with
-       the module.
+MMU-18 The L2 TLB's invalidate port, when it is added, is a
+       distinct port written with the module. This read as of a
+       built L2 TLB; session-077.
 
 MMU-17 and MMU-17a name three instructions; the five Svinval
 instructions are handled by MMU-U8 below. Session-071.
@@ -559,31 +744,25 @@ MMU-U8 SVINVAL IS MANDATORY AND IS NOT IN MMU-17 OR MMU-17a.
        outside the TLBs belongs to the backend.
 
 TD#119 does not reach this document. That gap stops the emitted
-L1I from carrying an invalidate port. The L2 TLB is written, so
-its port is written with it.
+L1I from carrying an invalidate port.
 
 ---
 
 ## 9. Open
 
-MMU-U1  L2 TLB geometry. Section 2. Two-stage translation makes
-        this larger than it looked: entries are tagged by VMID as
-        well as ASID, and G-stage and VS-stage entries may share
-        the array or be split. It also holds the L2 TLB half of
-        MMU-U7: how a set-associative array holds a 64 KiB NAPOT
-        entry.
-MMU-U2  Outstanding walk count. Section 3.
-MMU-U3  Atomic form, and the l2 third-master change. Section 4.
+MMU-U1  CLOSED session-077 by MMU-1: no L2 TLB now. Section 2.
+MMU-U2  CLOSED session-077: one walk at a time. Section 3.
+MMU-U3  The L2 half of the Svadu atomic, and the l2 third-master
+        change. Moved to the L2 work. Section 4.
 MMU-U4  CLOSED session-070. Smepmp is not mandatory. Section 5.
 MMU-U5  CLOSED session-070. Svpbmt is mandatory. Section 6.
 MMU-U6  CLOSED session-071. Most restrictive of region and both
         PBMTs. Section 6.
 MMU-U7  CLOSED session-071 for the L1 TLB and the walker; the L2
-        TLB half is MMU-U1. Section 6a.
+        TLB half moved to the L2 TLB work (MMU-1). Section 6a.
 MMU-U8  CLOSED session-071. Svinval as the fence equivalents.
         Section 8.
-MMU-U9  A PTE PPN above the implemented 24 bits is unchecked.
-        Section 7. Raised session-073.
+MMU-U9  CLOSED session-077 by MMU-28 to MMU-30. Section 7.
 
 ---
 
@@ -592,14 +771,15 @@ MMU-U9  A PTE PPN above the implemented 24 bits is unchecked.
 L1I-U3    Ruled session-069 as recommended. MMU-1 to MMU-3.
 L1I-U4    Ruled session-069. MMU-10 to MMU-16.
 L1I-21    Bound by MMU-14.
-ITLB-U1   Bounded by MMU-U2.
+ITLB-U1   Closed by ITLB-15; MMU-U2 closed at one walk.
 ITLB-12   Gates the request; MMU-10 site 1. It no longer depends
           on MMU-14, which read "Depends on MMU-14" until
           session-071.
 IL-*      The client boundary is `itlb_l2tlb_interfaces.md`.
           Written to be instantiated twice; the DTLB is the
           second client.
-TD#118    Bounds MMU-U2.
+TD#118    No longer bounds the walker, which has its own port
+          (MMU-2). It bounds the L2 plan.
 
 ---
 
@@ -702,4 +882,22 @@ TD#118    Bounds MMU-U2.
               memory is never executable, enforced on the region
               table parameter. MMU-14: the uncached path goes
               through the L1I without allocating (IFU-21 reversed).
+
+  2026-10-09  session-077, rulings (Jeff), for BP-123. MMU-1
+              REVERSED: no L2 TLB now; the walker serves the ITLB
+              directly, outside the front-end top (MMU-1a), on its
+              own memory port (MMU-2, ptw_mem_interfaces.md). MMU-6
+              confirmed, full Svadu. MMU-U1 and MMU-U2 closed (one
+              walk at a time). MMU-U9 closed by MMU-28 to MMU-30,
+              checked against the ratified supervisor and
+              hypervisor chapters. MMU-24a, MMU-24b, MMU-27,
+              MMU-12a, MMU-10d added.
+
+              Corrected against the specification: MMU-8 is a
+              compare and store, not a read-modify-write; MMU-12
+              checks PMA on every walker access, not on the final
+              address only; MMU-8a and MMU-8b state the H and
+              speculation rules. MMU-17 and MMU-18 restated for a
+              walker with no translation cache. MMU-U3 moved to
+              the L2 work.
 ```

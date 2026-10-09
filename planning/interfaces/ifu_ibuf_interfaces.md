@@ -6,7 +6,7 @@
  FILE:    ifu_ibuf_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -103,6 +103,10 @@ Each slot carries `ifu_pd_pkt_t` as defined in
   fault_va     the faulting virtual address
   fault_gpa    the faulting guest physical address, valid only on
                a guest-page fault
+  fault_gpa_imp  the GPA's implicit-access kind, valid with
+               fault_gpa: 00 the fetch's own GPA, 01 an implicit
+               read of a VS-stage page table, 10 an implicit write
+               of one, 11 reserved. DCD-16, session-077
   is_rvc       the instruction was a 16-bit encoding; expansion
                erases the length
   br_type      DCD-7: 00 not a CFI, 01 branch, 10 JAL, 11 JALR;
@@ -125,7 +129,10 @@ IB-9  The fault fields are per slot, not per block. The
 
 IB-9a Three causes, not two. H is mandatory in RVA23 through Sha,
       so a guest-page fault is a normal outcome and its guest
-      physical address rides here for Shtvala. MMU-16.
+      physical address rides here for Shtvala. MMU-16. Its
+      implicit-access kind rides with it, because htinst must be a
+      pseudoinstruction when htval holds the GPA of an implicit
+      access (mmu_decisions.md MMU-29). Session-077.
 
 IB-9b On a slot that faulted at fetch only valid, start_pc, pos,
       ftq_idx and the fault fields mean anything; the rest of the
@@ -134,8 +141,9 @@ IB-9b On a slot that faulted at fetch only valid, start_pc, pos,
 
 `vtype_hazard` is not on this port. It is an intra-bundle property
 and the ibuf regroups instructions across bundle boundaries, so a
-value computed before the ibuf is wrong after it. TD-DCD-1, open
-as DCD-U1.
+value computed before the ibuf is wrong after it. TD-DCD-1; decode
+computes it, DCD-17, which closed DCD-U1 session-075. This read
+"open as DCD-U1"; session-077.
 
 ---
 
@@ -217,6 +225,9 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-09  session-077. Section 4 and IB-9a: fault_gpa_imp, the
+              implicit-access kind (MMU-29). The vtype_hazard note
+              no longer calls DCD-U1 open.
   2026-10-07  session-075. IB-9b: what a faulting slot carries.
   2026-10-06  session-075. IB-13: the predecode arm at K+1 is built
               by BP-117, TD#146 closed.
@@ -241,6 +252,7 @@ IFU-23    Uncached, IB-10.
 DCD-7     The classification carried in section 4.
 DCD-12    Start and range, folded into IB-2.
 DCD-16    Defines the payload.
+MMU-29    The implicit-access kind of fault_gpa_imp.
 IBUF-4    The ready rule, IB-6.
 IBUF-5    Uncached as an ordinary write, IB-10.
 IBUF-8    The backend clear. IBUF-8a and IBUF-8b are the two

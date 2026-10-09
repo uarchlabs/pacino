@@ -6,7 +6,7 @@
  FILE:    dcd_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -203,7 +203,9 @@ DCD-14 The predecoder does not test the prediction. It reports
 DCD-15 A faulting position is reported with `fault_val` and
        `fault_pos` in the block view, and with the cause, the
        faulting virtual address, and on a guest page fault the
-       faulting guest physical address, in the bundle view.
+       faulting guest physical address and its implicit-access
+       kind, in the bundle view. The kind was added session-077
+       (mmu_decisions.md MMU-29).
 
 The cause field carries three causes, not two, plus none:
 instruction access fault, instruction page fault and instruction
@@ -222,9 +224,18 @@ under IFU-20.
 DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        32-bit instruction, the start PC, the position within the
        prediction block, the FTQ index, the fault cause, the faulting
-       virtual address, the faulting guest physical address,
+       virtual address, the faulting guest physical address, the
+       implicit-access kind of that guest physical address,
        `is_rvc`, the control flow classification of DCD-7, and
        `is_vsetvl` and `needs_vtype`.
+
+       THE IMPLICIT-ACCESS KIND is two bits, valid on a guest page
+       fault: 2'b00 the fetch's own guest physical address, 2'b01
+       an implicit read of a VS-stage page table, 2'b10 an
+       implicit write of one, 2'b11 reserved
+       (itlb_ifu_interfaces.md IT-6c). The backend needs it to
+       write htinst (mmu_decisions.md MMU-29). Added session-077
+       (Jeff); a package change, built by BP-123.
 
        The last two are per-instruction and belong here by
        TD-DCD-1; the enumeration did not carry them while
@@ -239,15 +250,15 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
 
 DCD-16a A SLOT THAT FAULTED AT FETCH carries only `valid`, the
         start PC, the FTQ index, the position and the fault fields
-        (cause, faulting VA, faulting GPA). Every other field on it
-        -- the instruction, `is_rvc`, the DCD-7 classification,
-        `is_vsetvl`, `needs_vtype` -- is meaningless, and neither
-        decode nor the backend may read it. The faulting
-        instruction never executes, so nothing needs its length or
-        class: the trap is taken from the fault fields. Ruled
-        session-075 (Jeff); the IFU drives `is_rvc` from the
-        faulting halfword today, which this makes harmless rather
-        than wrong. Found by BP-118.
+        (cause, faulting VA, faulting GPA and its kind). Every
+        other field on it -- the instruction, `is_rvc`, the DCD-7
+        classification, `is_vsetvl`, `needs_vtype` -- is
+        meaningless, and neither decode nor the backend may read
+        it. The faulting instruction never executes, so nothing
+        needs its length or class: the trap is taken from the
+        fault fields. Ruled session-075 (Jeff); the IFU drives
+        `is_rvc` from the faulting halfword today, which this makes
+        harmless rather than wrong. Found by BP-118.
 
 The start PC and the position are both present and are not
 redundant. Expansion breaks the correspondence between them,
@@ -370,3 +381,15 @@ IBUF-9    The 8-wide read port that sets the decode bundle of
           DCD-17.
 TD#143    DCD-17 to DCD-20 built by BP-118; rvc_expander.sv
           retires in BP-119.
+MMU-29    The implicit-access kind of DCD-16.
+
+---
+
+## 13. Document History
+
+```
+  2026-10-09  session-077, ruling (Jeff). DCD-15, DCD-16 and DCD-16a
+              carry the implicit-access kind of a guest physical
+              address. This document had no history section; its
+              earlier changes are in PROJECT_STATUS.
+```

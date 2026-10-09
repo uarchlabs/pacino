@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -498,7 +498,8 @@ planning/
                              TD-IBUF-N, IBUF-UN
     itlb_decisions.md        L1 ITLB. Owns ITLB-N, TD-ITLB-N,
                              ITLB-UN
-    mmu_decisions.md         shared L2 TLB, walker, PMP, PMA.
+    mmu_decisions.md         page table walker, PMP, PMA; no
+                             L2 TLB now (MMU-1, session-077).
                              Owns MMU-N, TD-MMU-N, MMU-UN
     ras_decisions.md
     sc_decisions.md
@@ -543,7 +544,9 @@ planning/
                              Owns IF-N, TD-IF-N, IF-UN
     ifu_ibuf_interfaces.md   Owns IB-N
     itlb_ifu_interfaces.md   Owns IT-N
-    itlb_l2tlb_interfaces.md Owns IL-N
+    itlb_l2tlb_interfaces.md ITLB to walker. Owns IL-N
+    ptw_mem_interfaces.md    walker to memory, session-077.
+                             Owns WM-N
   testbenches/
     manual_tb_decisions.md
     sc_tb_decisions.md

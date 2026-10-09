@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,83 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-077: decisions for BP-123, and BP-123 written. Documents only.
+
+No task was run and no RTL changed. BP-123 IS WRITTEN AND NOT RUN:
+one end-state task, the IFU completion (TD#119, TD#135, TD#136), the
+page table walker, and the RVA23 Z* checks. Every decision it needs
+was ruled first; the task carries none.
+
+RULED (Jeff), the walker:
+  MMU-1 REVERSED. No L2 TLB now; an ITLB miss goes to the walker
+    directly. The walker is shared I and D, outside the front-end
+    top, at rtl/mmu/ptw (MMU-1a). An L2 TLB is a later step, with
+    the DTLB, behind the same port. MMU-U1 closed.
+  MMU-U2: one walk at a time; a request while busy is answered
+    retry (IL-6).
+  MMU-2: the walker has its own memory port, 8-byte READ and
+    compare-and-swap, answered by tb_fe_top's memory model from one
+    image shared with the L1I's (ptw_mem_interfaces.md, new). The
+    L2 plan stands for later; MMU-U3 moves to the L2 work.
+  MMU-6 CONFIRMED: full Svadu, not Svade alone. Svade is mandatory
+    and Svadu an expansion option in RVA23S64; with ADUE clear the
+    hardware behaves exactly as Svade. The decoder track's Svadu
+    statement stands.
+  MMU-U9 CLOSED, checked against the ratified supervisor and
+    hypervisor chapters (MMU-28): a PPN is never truncated. A
+    supervisor physical page above bit 23 is an access fault, cause
+    1; a guest physical address above bit 40 is a guest-page fault,
+    cause 20. MMU-30: a GPA that does not fit is returned as 0.
+  MMU-24b: the CSR file holds satp.PPN and hgatp.PPN at 24 bits and
+    vsatp.PPN at 29, so a root always fits.
+  MMU-12a: page tables only in cacheable coherent memory; elsewhere
+    an access fault, cause 1.
+  MMU-29: a guest-page fault carries a two-bit implicit-access kind
+    (fetch GPA, implicit read, implicit write) beside its GPA,
+    because Shtvala makes htval non-zero for implicit accesses and
+    htinst must then be a pseudoinstruction. New on the ITLB-walker
+    port (l2t_itlb_gpa_imp), the IFU-ITLB port (itlb_ifu_gpa_imp)
+    and in ifu_pd_pkt_t: a package change, built by BP-123.
+  IL port names keep l2t; the server is the walker.
+
+CORRECTED against the specification, PA-direct, no task number:
+  MMU-8 is a compare and store (step 9), not a read-modify-write;
+    a mismatch restarts the walk.
+  MMU-12 checked PMA on the final address only; the translation
+    algorithm checks PMA and PMP on every PTE access.
+  MMU-10d: walker accesses are PMP-checked at privilege S
+    (machine.adoc, PMP and paging).
+  MMU-8a, MMU-8b: the H and speculation rules for the update.
+  MMU-27: a two-stage translation's size is the smaller stage's.
+  MMU-17, MMU-18: no invalidate port on a walker that caches
+    nothing.
+  The session-076 handoff justified the walker by "RISC-V has no
+    software TLB refill". The supervisor chapter permits refill
+    from an M-mode trap handler. The walker is a design choice for
+    this core, not a profile requirement.
+  Open Items row 1 no longer says TOOLS-003 is open; it ran
+    session-068.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md, mmu_decisions.md,
+itlb_decisions.md, ifu_decisions.md, dcd_decisions.md,
+fe_decisions.md, itlb_l2tlb_interfaces.md, itlb_ifu_interfaces.md,
+ifu_ibuf_interfaces.md, ptw_mem_interfaces.md (new).
+
+BP-123 grants (Jeff): BP-121's, with write access to rtl/mmu/ added
+for the walker and the PMP/PMA checker.
+
+Specification sources read this session: rva23-profile.adoc, and
+the ratified privileged supervisor, hypervisor and machine chapters
+(riscv-isa-manual, src/priv).
+
+For Jeff, carried from session-076: drop
+rtl/core/frontend/decode/obj_dir_pre from the root .gitignore.
+
+Next free: BP-124, INFRA-014, TOOLS-007, TD#171. BP-123 is written,
+not yet issued.
 
 ---
 ## Session-076: BP-121 recorded; BP-122 run. Nothing left open.
@@ -2459,7 +2536,7 @@ it only documented current behavior.
 |                         |             |                   | hit. Closes TD#115. Session-071:  |
 |                         |             |                   | this read "all three Sv39 page    |
 |                         |             |                   | sizes".                           |
-| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..25,   |
+| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..30,   |
 |                         |             |                   | MMU-U1..U8 (U6, U7, U8 added      |
 |                         |             |                   | session-070: Svpbmt precedence,   |
 |                         |             |                   | Svnapot, Svinval. U4 and U5       |
@@ -2468,13 +2545,17 @@ it only documented current behavior.
 |                         |             |                   | Smepmp not mandatory, Svpbmt      |
 |                         |             |                   | mandatory). U6, U7 (L1 TLB and    |
 |                         |             |                   | walker) and U8 CLOSED             |
-|                         |             |                   | session-071; U7's L2 TLB half is  |
-|                         |             |                   | in U1.                            |
-|                         |             |                   | Shared L2 TLB and                 |
-|                         |             |                   | walker, Svade and Svadu both,     |
-|                         |             |                   | PMP at two sites, PMA on the      |
-|                         |             |                   | final PA only. Written RTL, not   |
-|                         |             |                   | a cachegen node.                  |
+|                         |             |                   | session-071; U7's L2 TLB half     |
+|                         |             |                   | moved to the L2 TLB work.         |
+|                         |             |                   | Session-077: NO L2 TLB NOW (MMU-1 |
+|                         |             |                   | reversed); the walker serves the  |
+|                         |             |                   | ITLB, on its own memory port.     |
+|                         |             |                   | Svade and Svadu both (MMU-6       |
+|                         |             |                   | confirmed), PMP at two sites, PMA |
+|                         |             |                   | on every access (MMU-12           |
+|                         |             |                   | corrected). U1, U2, U9 closed; U3 |
+|                         |             |                   | moved to the L2 work. Written     |
+|                         |             |                   | RTL, not a cachegen node.         |
 | ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13.    |
 |                         |             |                   | IB-U1 CLOSED as IB-12 -- this row |
 |                         |             |                   | listed it open while the Shared   |
@@ -2491,7 +2572,14 @@ it only documented current behavior.
 |                         |             |                   | transaction open, the opposite of |
 |                         |             |                   | ITLB-8. No open item. Written to  |
 |                         |             |                   | be instantiated twice; the DTLB   |
-|                         |             |                   | is the second client.             |
+|                         |             |                   | is the second client. Session-077:|
+|                         |             |                   | the server is the walker; names   |
+|                         |             |                   | keep l2t; l2t_itlb_gpa_imp added. |
+| ptw_mem_interfaces.md   | Draft       | --                | Created session-077. WM-1..13.    |
+|                         |             |                   | The walker's memory port: 8-byte  |
+|                         |             |                   | READ and CAS, one outstanding,    |
+|                         |             |                   | answered by tb_fe_top's memory    |
+|                         |             |                   | model. No open item.              |
 | ifu                     | Working     | tb_ifu, tb_ifu_*  | Built BP-116, session-074: ifu,   |
 |                         |             |                   | ifu_xlate, ifu_fetch, ifu_lbuf,   |
 |                         |             |                   | ifu_rvc_exp, ifu_predecode,       |
@@ -2523,9 +2611,13 @@ it only documented current behavior.
 |                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
 |                         |             |                   | grain (MMU-11), region table      |
 |                         |             |                   | parameter (MMU-15a). 60 checks.   |
-| l2_tlb + walker         | Not started | --                | Written RTL from mmu_decisions.md.|
-|                         |             |                   | Shared I and D; the DTLB does not |
-|                         |             |                   | exist, so one client today.       |
+| page table walker       | Not started | --                | Written RTL from mmu_decisions.md,|
+|                         |             |                   | rtl/mmu/ptw, outside the front    |
+|                         |             |                   | end top. Shared I and D; the DTLB |
+|                         |             |                   | does not exist, so one client     |
+|                         |             |                   | today. BP-123. There is no L2 TLB |
+|                         |             |                   | (MMU-1 reversed session-077); this|
+|                         |             |                   | row read "l2_tlb + walker".       |
 | frontend top            | Working     | tb_fe_top         | Built BP-118. 19 programs since   |
 |                         |             |                   | BP-121, each its own regression   |
 |                         |             |                   | target sim_fe_top_<p>, each       |
@@ -3630,7 +3722,9 @@ assessment of each document. Correct any that are wrong.
 |          |                                         | tools/bin,          |
 |          |                                         | spike_check 50/50.  |
 |          |                                         | Not in regress.     |
-|          |                                         | TOOLS-003 open.     |
+|          |                                         | This read "TOOLS-003|
+|          |                                         | open"; it ran       |
+|          |                                         | session-068.        |
 | 2        | DECODE-012 pre-decode restructure       | Defer to fetch unit |
 | 3        | Whisper ISS lock-step validation        | Post-pipeline       |
 | 4        | Cleanup CLI-001,002,004,008,011,012,TI7 | Complete.           |
@@ -4200,11 +4294,14 @@ unless noted.
           64 KiB Svnapot size (session-071, MMU-U7), ASID tagged,
           1-cycle hit. Closes TD#115.
     - planning/arch/mmu_decisions.md                  Draft
-        - Created session-069. MMU-1..25, MMU-U1..U8 -- U6, U7
+        - Created session-069. MMU-1..30, MMU-U1..U9 -- U6, U7
           and U8 added session-070 (Svpbmt precedence, Svnapot,
-          Svinval), U4 and U5 closed the same session. Shared
-          L2 TLB and walker, Svade and Svadu both, PMP at two
-          sites, PMA on the final PA only.
+          Svinval), U4 and U5 closed the same session. Session-077:
+          no L2 TLB now, the walker serves the ITLB directly on its
+          own memory port; Svade and Svadu both; PMP at two sites;
+          PMA on every walker access; U1, U2 and U9 closed, U3
+          moved to the L2 work. This read "Shared L2 TLB and
+          walker ... PMA on the final PA only".
     - planning/interfaces/ifu_ibuf_interfaces.md      Draft
         - Created session-069. IB-1..13. IB-U1 closed as IB-12.
     - planning/interfaces/itlb_ifu_interfaces.md      Draft
@@ -4215,7 +4312,11 @@ unless noted.
         - Created session-069. IL-1..14. Two-bit tag. A miss
           holds the transaction open, the opposite of ITLB-8.
           No open item. Written to be instantiated twice; the
-          DTLB is the second client.
+          DTLB is the second client. Session-077: the walker is
+          the server.
+    - planning/interfaces/ptw_mem_interfaces.md       Draft
+        - Created session-077. WM-1..13. The walker's memory
+          port, answered by a testbench until an L2 exists.
     - planning/arch/bp_history_decisions.md           Draft
         - Session-069: 3.4 corrected. Checkpoint restore is NOT
           mispredict-only; it applies to every redirect naming an
