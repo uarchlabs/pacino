@@ -57,8 +57,14 @@ RULED for the IFU completion task, BP-123 (Jeff):
     coherence (L1I-25). Checked against the ratified Svpbmt text.
   TD-L1I-2 closed (cbo.inval routed, IF-41). FE-17: the uncached
   boundary group is gone.
-  BP-123 WRITTEN: FENCE.I, cbo.inval, uncached fetch (TD#119, 135,
-  136).
+  BP-123 TO BE WRITTEN in session-077 (Jeff): one end-state task
+  for the IFU completion (TD#119, 135, 136), the MMU walker (RVA23S64
+  needs a hardware walk; the L2 TLB and walker are not started), and
+  the RVA23 Z* checks (Zcb, Zcmop, Zimop, prefetch.i, Ziccif). A
+  session-076 draft covering the IFU only was discarded. Decisions
+  first: reverse MMU-1 (no L2 TLB now), narrow MMU-6 to Svade, check
+  MMU-U9 against the privileged text, and how the walker reaches
+  memory. session_handoff-077, Job 1.
 
 BP-121 recorded in the planning documents, documents only:
 
