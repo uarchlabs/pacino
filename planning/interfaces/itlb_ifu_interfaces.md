@@ -6,7 +6,7 @@
  FILE:    itlb_ifu_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -163,11 +163,15 @@ IT-10 `itlb_ifu_pma` returns the attributes of MMU-13 on a hit,
       come from the region table alone.
 
 IT-11 The IFU reads cacheable and idempotent to decide the path. A
-      fetch uses the L1I only when both are set; otherwise it takes
-      the uncached path of IFU-21 and does not reach the L1I
-      (MMU-14). So a page marked NC or IO by its PTE never reaches
-      the L1I. This read "The IFU reads idempotent" against the
-      region alone. Session-071.
+      fetch with both set is an ordinary L1I request; otherwise it
+      is an UNCACHED L1I request (ifu_decisions.md IFU-21,
+      l1i_ifu_interfaces.md IF-44), presented only under the commit
+      gate of IFU-22, and never allocates in the L1I (MMU-14). So a
+      page marked NC or IO never allocates in the L1I. This read
+      "otherwise it takes the uncached path of IFU-21 and does not
+      reach the L1I"; IFU-21 reversed session-076. Before that it
+      read "The IFU reads idempotent" against the region alone.
+      Session-071.
 
 IT-12 A PMP or PMA failure arrives ON THIS RESPONSE as status
       fault, cause 1. The checker instance beside the ITLB

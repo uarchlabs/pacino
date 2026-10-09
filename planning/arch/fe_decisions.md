@@ -1369,8 +1369,9 @@ emitted graph and is not a front end connection.
 ### 15.3 The boundary
 
 ```
-  FE-17  THREE groups cross the front end boundary, and one
-         listed here does not. This read "Four groups cross",
+  FE-17  TWO groups cross the front end boundary, and one listed
+         here does not. This read THREE until session-076, when the
+         uncached group ceased to exist (IFU-21 reversed). This read "Four groups cross",
          counting a row it then calls not a boundary group, and
          placed the IFU-to-ITLB path on the boundary when FE-U10
          puts the ITLB inside the top. Corrected session-070.
@@ -1388,14 +1389,21 @@ emitted graph and is not a front end connection.
                            sibling of the IFU. itlb_decisions.md
                            and mmu_decisions.md.
 
-         uncached          the IFU's second instruction source,
-                           IFU-21. It does not pass through the
-                           L1I.
+         uncached          NO LONGER A GROUP. Uncached fetch goes
+                           through the L1I marked uncached
+                           (ifu_decisions.md IFU-21, reversed
+                           session-076), so it leaves by up_i like
+                           any fetch. This row read "the IFU's
+                           second instruction source, IFU-21. It
+                           does not pass through the L1I."
 
-         backend           decode to rename and dispatch, and the
-                           FTQ to the backend for resolution,
-                           redirect and commit.
-                           ftq_backend_interfaces.md.
+         backend           decode to rename and dispatch; the FTQ
+                           to the backend for resolution, redirect
+                           and commit (ftq_backend_interfaces.md);
+                           and the commit stage to the IFU for
+                           FENCE.I and cbo.inval
+                           (l1i_ifu_interfaces.md 11, built by
+                           BP-123).
 ```
 
 The backend group is two unrelated paths that happen to share a
@@ -1711,14 +1719,18 @@ create one.
               is placed at resolution and trains every predictor of
               its row. FE-20: sc_enable also goes to the FTQ.
 
-  2026-10-09  session-076, recording BP-122. 3.2: the LP's p2
-              re-read is a direction source at p2. 3.3: a trusted
-              LP outranks SC, TAGE and FTB (ruled). 7.2: built.
-              2.1: the p1 LP direction is an early guess.
-
   2026-10-08  session-076, PA-direct correction recording BP-121.
               2.4: per-slot successors chained (D5, D15). 7.2: the
               loop predictor reads before it writes (ruled after
               BP-121, TD#169). FE-10: p1 slots in position order
               (D12). FE-14: the squash as built (D8, D9).
+
+  2026-10-09  session-076, recording BP-122. 3.2: the LP's p2
+              re-read is a direction source at p2. 3.3: a trusted
+              LP outranks SC, TAGE and FTB (ruled). 7.2: built.
+              2.1: the p1 LP direction is an early guess.
+
+  2026-10-09  session-076, ruling (Jeff). FE-17: the uncached group
+              is gone (IFU-21 reversed); the maintenance path from
+              commit is part of the backend group.
 ```

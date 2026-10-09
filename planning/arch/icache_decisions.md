@@ -8,7 +8,7 @@
           docs/superscalar_ooo_survey.md (NOT IN THE TREE,
           see section 1); INFRA-012; TOOLS-003
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -50,7 +50,7 @@ cited here as stubs" until session-071:
                             decode
 ```
 
-REGISTRIES. This file owns L1I-1 through L1I-23, TD-L1I-1 through
+REGISTRIES. This file owns L1I-1 through L1I-25, TD-L1I-1 through
 TD-L1I-9, and the items L1I-U1 through L1I-U7. OPEN: L1I-U7.
 L1I-U5 closed session-074. L1I-U1 is closed; L1I-U2, L1I-U3 and
 L1I-U4 were RULED session-069 (section 10.1, itlb_decisions.md,
@@ -352,6 +352,36 @@ the tag still matches, but it is state nobody owns.
 The buffer is specified in `ifu_decisions.md`, not here. What this
 document fixes is that the L1I does not have one.
 
+### 4.2a Uncached requests
+
+```
+  L1I-24  THE CORE REQUEST CARRIES AN UNCACHED BIT. A request with
+          it set is a miss whatever the tags hold, is filled from
+          the L2 like any miss, is answered like any request, and
+          is NOT written into the array: no allocation and no
+          replacement update. A cacheable request merged onto the
+          same MSHR (L1I-13) still allocates. The bit is never set
+          with the prefetch bit of L1I-21 (MMU-14). Port:
+          l1i_ifu_interfaces.md IF-44. RULED session-076 (Jeff),
+          with ifu_decisions.md IFU-21 reversed to route uncached
+          fetch through the L1I.
+  L1I-25  THE L2 MAY HOLD A LINE FETCHED UNCACHED. Correct while
+          the L2 is the point of coherence: every agent reaches
+          memory through it (up_i, up_d, and the walker edge of
+          mmu_decisions.md MMU-2). An agent that writes memory
+          without passing through the L2, such as a DMA master,
+          reopens this. RULED session-076 (Jeff).
+```
+
+Forcing the miss means a line left in the array by a cacheable alias
+of the same physical page is not returned for the uncached access.
+Aliases with different cacheability are software's responsibility
+under Svpbmt, which prescribes fence iorw,iorw; cbo.flush; fence
+iorw,iorw between such accesses. Checked session-076 against the
+ratified Svpbmt text. That text does not make it correct for a cache
+to hold a non-cacheable line that a later non-cacheable write
+bypasses, which is why L1I-25 states its condition.
+
 ### 4.3 Ordering and alignment
 
 ```
@@ -541,12 +571,17 @@ DRIVERS:
       L1I-3
 ```
 
-M2 IS NOT FULLY SPECIFIED. Whether `cbo.inval` on an instruction
-cache reaches the L1I at all depends on `menvcfg.CBIE` and on how
-the execution environment is configured -- the privileged
-architecture permits the instruction to trap or to be remapped to a
-flush. TD-L1I-2 carries it. The port exists either way; what is
-undecided is what drives it.
+M2 IS ROUTED. Whether `cbo.inval` reaches an instruction cache is
+not fixed by the architecture, and pacino routes it
+(l1i_ifu_interfaces.md IF-41); the CBIE trap and remap are resolved
+in the backend before the port. This read "M2 IS NOT FULLY
+SPECIFIED ... what is undecided is what drives it"; TD-L1I-2
+closed session-076.
+
+L1I-18 IS BUILT IN THE PACINO RTL, NOT IN CACHEGEN, by
+cachegen_decisions.md CG-4: BP-123 copies the emitted l1i into
+rtl/core/frontend/icache and adds the maintenance ports there, with
+the uncached bit of L1I-24. CG-5 brings cachegen to match later.
 
 ---
 
@@ -784,11 +819,16 @@ Session-071.
             or the schema must carry inclusion on the pair rather
             than on each node. Schema question, not an l1i one.
 
-  TD-L1I-2  cbo.inval reaching the L1I depends on menvcfg.CBIE and
-            on the execution environment. Section 7 M2 specifies
-            the port; what drives it is unverified. Check against
-            the privileged specification before the IFU-side
-            maintenance path is built.
+  TD-L1I-2  CLOSED. cbo.inval is ROUTED to the I-side,
+            l1i_ifu_interfaces.md IF-41 (ruled session-068), and
+            the CBIE gate is resolved in the backend before the
+            port (13.1, assumption A5). This entry was not updated
+            when IF-41 was ruled; found by ifu_notes.md 7, closed
+            session-076. It read: "cbo.inval reaching the L1I
+            depends on menvcfg.CBIE and on the execution
+            environment ... Check against the privileged
+            specification before the IFU-side maintenance path is
+            built."
 
   TD-L1I-3  prefetch_arbitration does not exist in the
             configuration schema. Section 8.1 states the policy;
@@ -1007,4 +1047,11 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
               depth 16, one slot per identifier). Section 6: the
               IFU issue policy is written, so the merge cases are
               named; 4 targets stands, unmeasured.
+
+  2026-10-09  session-076, rulings (Jeff). 4.2a: L1I-24, the
+              uncached request bit, no allocation; L1I-25, the L2
+              may hold an uncached line while it is the point of
+              coherence (Svpbmt checked). Section 7: M2 routed,
+              TD-L1I-2 closed; L1I-18 built in the pacino RTL under
+              CG-4.
 ```

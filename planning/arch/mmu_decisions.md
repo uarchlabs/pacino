@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -268,9 +268,10 @@ MMU-14 Non-idempotent regions are never fetched speculatively and
        not the region table's alone: a fetch uses the L1I only
        when the effective type is cacheable and idempotent, and
        otherwise takes the uncached path of `ifu_decisions.md`
-       IFU-21. So a page marked NC or IO never allocates in the
-       L1I. Session-071; this read "Non-idempotent regions" against
-       the region table only.
+       IFU-21, which since session-076 goes through the L1I marked
+       uncached and does not allocate (icache_decisions.md L1I-24).
+       So a page marked NC or IO never allocates in the L1I. Session-071; this
+       read "Non-idempotent regions" against the region table only.
 
 MMU-15 PMA comes from a static region table fixed at
        configuration, one entry per address range.
@@ -298,6 +299,18 @@ MMU-15a THE REGION TABLE IS A PARAMETER OF THE CHECKER, and its
         not yet placed. The table classifies addresses and costs
         no storage, so a later device map changes the parameter
         and nothing else.
+
+MMU-15b NON-IDEMPOTENT MEMORY IS NEVER EXECUTABLE. The region
+        table of MMU-15a never marks a region executable unless it
+        is also idempotent, and the checker rejects such a parameter
+        at elaboration. An instruction fetch therefore never reads a
+        device. The only uncached fetch is from main memory whose
+        PTE makes it NC or IO (MMU-U6), and a whole-line read there
+        has no side effect, so the uncached path needs no narrow
+        read. RULED session-076 (Jeff). Closes ifu_decisions.md
+        IFU-U4. A later device map that wants executable device
+        memory, such as a boot ROM, places it in an idempotent
+        region.
 
 `itlb_decisions.md` ITLB-12 gates the REQUEST: the PMP permission
 check, the PMA executable check and the PMA idempotent read all
@@ -684,4 +697,9 @@ TD#118    Bounds MMU-U2.
   2026-10-07  session-075, after BP-118. MMU-10a built. MMU-11:
               the PMP grain is 4 KiB. MMU-19a: M-mode fetch is not
               translated.
+
+  2026-10-09  session-076, rulings (Jeff). MMU-15b: non-idempotent
+              memory is never executable, enforced on the region
+              table parameter. MMU-14: the uncached path goes
+              through the L1I without allocating (IFU-21 reversed).
 ```

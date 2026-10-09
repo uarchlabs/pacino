@@ -6,7 +6,7 @@
  FILE:    ifu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -303,9 +303,11 @@ IFU-25  The translation queue holds, per block: the physical
         an event on well under 1% of sequential blocks.
 
 IFU-26  A block whose effective type is not both cacheable and
-        idempotent is marked in the queue and is not issued to the
-        L1I. It takes the uncached path of IFU-21. MMU-14 and IT-11;
-        the effective type includes the PTE's PBMT
+        idempotent is marked in the queue and is issued to the L1I
+        as an UNCACHED request (IFU-21), under the commit gate of
+        IFU-22. This read "is not issued to the L1I. It takes the
+        uncached path of IFU-21"; IFU-21 was reversed session-076. MMU-14 and
+        IT-11; the effective type includes the PTE's PBMT
         (mmu_decisions.md MMU-U6). This read "translates to a
         non-idempotent region". Session-071.
 
@@ -507,8 +509,9 @@ IFU-32 THE GENERATION BOUND. After the flush cycle the IFU presents
        sufficient (IFU-20, ftq_ifu_interfaces.md 6.1), and an
        assertion checks it.
 
-TD#135 (uncached) and TD#136 (maintenance) stay stubbed. A request
-presented in a flush cycle is still ignored (IFU-20).
+TD#135 (uncached) and TD#136 (maintenance) stayed stubbed after
+BP-118; BP-123 builds both (section 7, l1i_ifu_interfaces.md 10 and
+11). A request presented in a flush cycle is still ignored (IFU-20).
 
 The fault takes two paths and they carry different things. The
 architectural exception travels with the instruction to the
@@ -533,13 +536,28 @@ MMU-14 forbids speculating into it, and a memory mapped device
 must not see a read for an instruction that is not on the
 committed path.
 
-IFU-21 The IFU has a second instruction source for uncached
-       fetch, separate from the L1I. The L1I is not involved.
+IFU-21 UNCACHED FETCH GOES THROUGH THE L1I, MARKED UNCACHED.
+       The request carries ifu_l1i_req_uncached
+       (l1i_ifu_interfaces.md IF-44); the L1I serves it from the L2
+       whatever its tags hold and does not allocate the line
+       (icache_decisions.md L1I-24). RULED session-076 (Jeff),
+       REVERSING the session-069 rule, which read "The IFU has a
+       second instruction source for uncached fetch, separate from
+       the L1I. The L1I is not involved." The L1I's miss path
+       already does what an uncached fetch needs; a second source
+       would duplicate it as a second memory port, a second response
+       path and a second L2 client. TD#135.
 
 IFU-22 The FTQ drives its commit pointer to the IFU continuously.
        The IFU compares the index of the uncached block against
        it and issues the bus transaction only when every earlier
        instruction has committed.
+
+IFU-22 and IFU-23 STAND under the new IFU-21 (confirmed
+session-076, Jeff): the uncached request is presented only when
+every earlier instruction has committed, and its instructions are
+delivered one at a time, each after the previous has committed.
+They are the no-speculation rule MMU-14 requires.
 
 The IFU cannot learn this any other way. Stopping fetch is what
 allows the pipeline to drain, but the drain takes an unknown
@@ -555,19 +573,25 @@ PMA result at F2". Session-074.
 
 IFU-23 Uncached fetch returns one instruction at a time. It is
        sent to the ibuf alone, and the IFU waits for it to commit
-       before issuing the next.
+       before issuing the next. Since the request returns a whole
+       line (IFU-U4), the next instruction may come from the line
+       the IFU already holds or from a new uncached request; either
+       meets this rule.
 
 TD-IFU-4  CLOSED. `ftq_ifu_commit_ptr` was added to the fetch
           request group by BP-114 (TD#142). It is a driven value,
           not a query with a response, so it adds no handshake.
           This read that ftq_ifu.sv has no commit pointer output.
 
-IFU-U4 Bus width and the split it forces. XiangShan's MMIO bus is
-       8 bytes and aligned, so a 32-bit instruction whose address
-       ends in 3'b110 takes two transactions, and the second
-       needs its own ITLB lookup and PMP check because it can
-       cross a page. Pacino's uncached bus width is not set.
-       Unresolved.
+IFU-U4 CLOSED session-076 (Jeff). An uncached fetch reads a whole
+       L1I line, because pacino never executes from non-idempotent
+       physical memory (mmu_decisions.md MMU-15b). The only uncached
+       fetch is then from main memory whose PTE marks it NC or IO,
+       where reading the bytes around the instruction has no side
+       effect. No narrow bus and no split transaction. This read
+       "Bus width and the split it forces. XiangShan's MMIO bus is
+       8 bytes ... Pacino's uncached bus width is not set.
+       Unresolved."
 
 ---
 
@@ -620,7 +644,7 @@ TD-IFU-10 MOVED to TD#136. The maintenance path of
 
 ## 9. Open
 
-IFU-U4  Uncached bus width. Section 7.
+IFU-U4  CLOSED session-076. Section 7, MMU-15b.
 IFU-U6  Instruction prefetch. L1I-19 puts the requester in the IFU
         and ftq_decisions.md 6.1 defers prefetch. Nothing is built;
         ifu_l1i_req_prefetch is driven 0. DEFERRED, session-074.
@@ -643,7 +667,9 @@ IT-*      The translation boundary is `itlb_ifu_interfaces.md`.
 L1I-3     PIPT. The reason F0 cannot start a translation.
 L1I-5     2-cycle hit, tag compare after the array read. Stays
           in the fetch path under the IFU-23a placement.
-MMU-14    Requires the uncached path of section 7.
+MMU-14    Requires the uncached path of section 7, which goes
+          through the L1I since session-076 (IFU-21).
+MMU-15b   No execution from non-idempotent memory; closes IFU-U4.
 IFU-7     Two lines means up to two ITLB lookups per block.
           `itlb_ifu_interfaces.md` carries both.
 IF-8      NOT amended. It is a gate condition -- issue only on a

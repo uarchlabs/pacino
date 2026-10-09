@@ -44,7 +44,21 @@ obj/ or waves.fst. No package change.
   The IA proposed dropping lp_pred_t's unread snapshot fields, a
     package change that only shrinks the FTQ meta. Not a defect.
     Jeff: leave it. Not tracked.
-  Next free: BP-123, INFRA-014, TOOLS-007, TD#171.
+  Next free: BP-124, INFRA-014, TOOLS-007, TD#171.
+
+RULED for the IFU completion task, BP-123 (Jeff):
+  1 Uncached fetch goes through the L1I marked uncached, without
+    allocating; IFU-21 reversed. IFU-22 and IFU-23 stand.
+  2 Non-idempotent memory is never executable (MMU-15b); IFU-U4
+    closed.
+  3 The L1I is changed in the pacino RTL (rtl/core/frontend/icache),
+    not in cachegen (CG-4, CG-D1).
+  4 The L2 may hold an uncached line while it is the point of
+    coherence (L1I-25). Checked against the ratified Svpbmt text.
+  TD-L1I-2 closed (cbo.inval routed, IF-41). FE-17: the uncached
+  boundary group is gone.
+  BP-123 WRITTEN: FENCE.I, cbo.inval, uncached fetch (TD#119, 135,
+  136).
 
 BP-121 recorded in the planning documents, documents only:
 
@@ -3028,6 +3042,11 @@ assessment of each document. Correct any that are wrong.
 |     |          | commit to IFU. Section 12 lists five assumptions about   |
 |     |          | the producer, all unverifiable because no backend        |
 |     |          | document exists.                                         |
+|     |          | RULED session-076 (Jeff): built in the pacino RTL, not   |
+|     |          | in cachegen. BP-123 copies the emitted l1i into          |
+|     |          | rtl/core/frontend/icache and adds the ports there        |
+|     |          | (cachegen_decisions.md CG-4, CG-D1); cachegen catches up |
+|     |          | under CG-5. BP-123.                                      |
 | 120 | icache   | OPEN, replacement quality, not correctness. TOOLS-005    |
 |     |          | reported both rather than hiding them.                   |
 |     |          |                                                          |
@@ -3276,6 +3295,14 @@ assessment of each document. Correct any that are wrong.
 |     |          |                                                          |
 |     |          | Ruled session-073 (Jeff): deferred with TD#134. A ruling |
 |     |          | on the port comes before the RTL.                        |
+|     |          | RULED session-076 (Jeff): uncached fetch goes THROUGH    |
+|     |          | THE L1I, marked uncached: forced miss, no allocation     |
+|     |          | (L1I-24, IF-44), reversing IFU-21's separate source.     |
+|     |          | IFU-22 and IFU-23 (commit gate, one instruction at a     |
+|     |          | time) stand. Non-idempotent memory is never executable   |
+|     |          | (MMU-15b), so a whole-line read is safe and IFU-U4 is    |
+|     |          | closed. The L2 may hold the line while it is the point   |
+|     |          | of coherence (L1I-25, Svpbmt checked). BP-123.           |
 | 136 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE IFU HALF OF  |
 |     |          | FENCE.I AND CBO.INVAL. ifu_notes.md 6.9. The IFU routes  |
 |     |          | the maintenance operation and gates the post-fence       |
@@ -3293,6 +3320,9 @@ assessment of each document. Correct any that are wrong.
 |     |          | Ruled session-073 (Jeff): deferred with TD#134.          |
 |     |          | Also, from TD#116: the producer of l1i_ifu_interfaces.md |
 |     |          | 11 is the backend commit stage, which has no document.   |
+|     |          | RULED session-076: no longer blocked; BP-123 builds it   |
+|     |          | against the pacino l1i copy (TD#119). The commit-side    |
+|     |          | producer is modelled by tb_fe_top's backend.             |
 
 | 137 | ftb      | CLOSED BP-111 (session-073). ftb_cntrl encodes,          |
 |     |          | status-checks and reconstructs the jump target from the  |

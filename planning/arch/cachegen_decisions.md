@@ -6,7 +6,7 @@
  FILE:    cachegen_decisions.md
  SOURCE:  session-074
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -133,10 +133,27 @@ CG-G6 NO TLB SUPPORT. The ITLB and the L2 TLB are written RTL
       TileLink edge into the l2 (L1I-U3), a topology change the
       generated l2 must accept.
 
+CG-G8 NO UNCACHED REQUEST. The core link has one request
+      qualifier, prefetch (custom.request_qualifiers, TOOLS-004).
+      icache_decisions.md L1I-24 needs a second, uncached, that
+      forces a miss and suppresses allocation. Ruled session-076.
+
 CG-G7 PACKAGE TIE. pacino declares the L1I parameters in
       bp_defines_pkg; the emitted l1i_pkg is checked equal at
       elaboration (TD#122, TD-IF-1, session-074). Generating
       l1i_pkg from pacino's parameters would remove the check.
+
+---
+
+## 4a. Departures under CG-4
+
+CG-D1 BP-123 copies the emitted l1i into rtl/core/frontend/icache
+      and changes it there: the maintenance ports of CG-G2 and the
+      uncached bit of CG-G8. The copy is under tools/regress.sh, so
+      the pacino l1i is regressed; CG-G1, the emitted output, is
+      not closed by it. CG-5 compares the copy against cachegen and
+      records any further difference here. Ruled session-076
+      (Jeff).
 
 ---
 
@@ -159,4 +176,18 @@ TD#118    CG-G3.
 TD#119    CG-G2.
 TD#120    CG-G5.
 TD#122    CG-G7.
-TD#136    Waits on CG-G2.
+TD#136    Waits on CG-G2 in cachegen; built in the pacino RTL by
+          BP-123 under CG-D1.
+L1I-24    The uncached request, CG-G8.
+
+---
+
+## 7. Document History
+
+```
+  2026-10-09  session-076. CG-G8, the uncached request qualifier.
+              Section 4a: CG-D1, BP-123 changes the pacino l1i in
+              rtl/core/frontend/icache under CG-4. This document had
+              no history section; its earlier changes are in
+              PROJECT_STATUS.
+```

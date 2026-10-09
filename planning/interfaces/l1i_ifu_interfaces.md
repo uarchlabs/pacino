@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-10-01
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -23,8 +23,9 @@ this file specifies PORTS. Where a behaviour is already decided there
 it is cited by its L1I number and not restated.
 
 The IFU side of every port here is BUILT by BP-116 (session-074),
-except the maintenance ports of sections 10 and 11, which are
-deferred (TD#136). The L1I is a generated module; since TOOLS-004
+except the maintenance ports of sections 10 and 11 (TD#136) and
+ifu_l1i_req_uncached (IF-44, added session-076), which BP-123
+builds. The L1I is a generated module; since TOOLS-004
 and TOOLS-005 its emitted core port carries the 512-bit line,
 sixteen identifiers and sixteen fills at the l1i boundary (section
 14.3), and the maintenance ports of sections 10 and 11 are still not
@@ -202,9 +203,11 @@ BP-109 and BP-115 made it.
   ifu_l1i_req_id      [REQ_ID_BITS-1:0]        NEW
   ifu_l1i_req_paddr   [PA_WIDTH-1:0]           NEW
   ifu_l1i_req_prefetch                         NEW   L1I-21
+  ifu_l1i_req_uncached                         NEW   L1I-24
 ```
 
-Five wires and two buses. There is no read/write strobe, no write
+Six wires and two buses (five until session-076 added
+ifu_l1i_req_uncached). There is no read/write strobe, no write
 data and no byte enable: the L1I is read only (L1I-15, section 7 of
 `icache_decisions.md`), so a request is always a read and a field
 saying so would carry one constant value.
@@ -275,6 +278,20 @@ choice and not a limitation; section 14 records it.
          accepted it is answered like any other request, on the
          same identifier space, with the same response and the
          same latency, and a miss remains invisible (IF-19).
+```
+
+### 4.5 Uncached requests
+
+```
+  IF-44  ifu_l1i_req_uncached high marks an UNCACHED request:
+         icache_decisions.md L1I-24. It is otherwise an ordinary
+         request on the ports of 4.1 -- line aligned (IF-5), one
+         identifier, one line returned (section 5). The IFU sets it
+         for a block whose effective type is not both cacheable and
+         idempotent (itlb_ifu_interfaces.md IT-11) and presents it
+         only under the commit gate of ifu_decisions.md IFU-22. It
+         is never high with ifu_l1i_req_prefetch. Ruled session-076
+         (Jeff), with IFU-21 reversed.
 ```
 
 `icache_decisions.md` 8.1 splits across the boundary. P1, demand
@@ -1132,6 +1149,11 @@ The earlier check cited `tools/cachegen/tools/jnutils/ncurses/`
 `rva23.md`, a cachegen working file outside planning/ that
 PROJECT_CORE.md does not list. Session-072.
 
+BP-123 CLOSES THE GAP IN THE PACINO RTL, under cachegen_decisions.md
+CG-4: the l1i is copied to rtl/core/frontend/icache and the ports of
+sections 10 and 11 are added there. cachegen keeps the gap below
+until CG-5. Session-076.
+
 THE GAP IS UNCHANGED BY THIS FILE. L1I-18 has no hardware
 (`icache_decisions.md` TD-L1I-8, TD#119), and section 14.3 E7
 confirms it: no generated node emits
@@ -1251,4 +1273,9 @@ sees a 2-byte boundary.
               BP-115, and TD-IF-1 is closed. After BP-116: the
               header records the IFU side as built; a repeated
               paragraph in section 2 removed.
+
+  2026-10-09  session-076. 4.1 and 4.5: ifu_l1i_req_uncached and
+              IF-44 (IFU-21 reversed, L1I-24). Header and section
+              18: the maintenance ports are built in the pacino RTL
+              by BP-123 under CG-4.
 ```
