@@ -222,8 +222,8 @@ Each entry holds two conditional branch fields and one jump field
 (2+1). No Xiangshan-style field sharing. Two conditional branches with
 no jump fill both conditional fields directly.
 
-Entry fields (logical entry, FTB_ENTRY_WIDTH = 113 bits/way; 110
-until the stored position widened, 4.6):
+Entry fields (logical entry; the width is stated in section 8
+only):
 
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
@@ -233,7 +233,8 @@ until the stored position widened, 4.6):
   conditional branch 1   -- valid, position, target, conf[2:0]
   jump field             -- valid, position, target (reconstructed full
                             VA_WIDTH from a stored displacement, 4.2),
-                            isCall, isRet, isJalr
+                            isCall, isRet, isJalr, rvc (the jump is a
+                            compressed instruction; 5.5, BP-121)
   fallthrough            -- pftAddr (6 bits, no carry; 5.5, 8)
 
 position is STORED region-relative in FTB_BR_RPOS_BITS, 5 bits, and
@@ -255,11 +256,12 @@ is no always_taken bit -- it was removed (session-053); conf is the sole
 per-branch direction state. See ftb_confidence_override_rules.md.
 
 Storage partition. The entry-level valid bit (1 per way) is the only
-field physically relocated to ftb_plru. The remaining 112 bits -- tag,
+field physically relocated to ftb_plru. The remaining bits -- tag,
 both conditional fields, the jump field, and the fallthrough -- are
 stored in ftb_array (FTB_RAM_ENTRY_WIDTH, section 8, which is the
 only place the widths are stated; this line read 105, stale since
-BP-099 -- session-070). The per-field
+BP-099 -- session-070; then 112, stale since BP-121 --
+session-076). The per-field
 valid bits of br0/br1/jump stay in the RAM entry; they are don't-care
 while the entry-valid (in ftb_plru) is 0, so they need no reset. The
 entry-valid gates the whole entry.
@@ -287,7 +289,7 @@ the mispredict redirect catches at resolve. Architectural addresses
 may not truncate; a predictor tag may. Pinning also kept
 FTB_ENTRY_WIDTH at 110 and the RAM widths untouched, so sim_ftb's
 99 checks stand against the tag change. 4.6 widens the stored
-positions separately, to 113. Section 8 is the sole home of the arithmetic.
+positions separately. Section 8 is the sole home of the arithmetic.
 
 THE TAG NO LONGER COVERS THE WHOLE UPPER VA. At 26 bits over a
 9-bit index and 5 offset bits it spans VA[39:14]. BIT 40 IS
@@ -508,6 +510,12 @@ base. TD#125.
        outside that window reports invalid. That hides branches
        before the start and branches past this block's end that an
        earlier start recorded.
+       A field whose stored position lies past this start's visible
+       jump is hidden as well: the jump ends the block, so nothing
+       after it belongs to the block. BUILT by BP-121 (D4), recorded
+       session-076. Before it, a conditional that another start had
+       recorded past the jump was reported in slot 0 with the jump
+       after it.
   R-2  The conversion is INSIDE the FTB (and the uBTB,
        ubtb_interfaces.md). ftb_cntrl adds k to ftb_upd_pos_u0 at
        the write, from the update PC, and subtracts k at the read,
@@ -578,6 +586,12 @@ UNDER TD#125, each a consequence of (R):
        Ruled session-073; ubtb_interfaces.md states each
        divergence and is the home for it.
 
+       KEPT, session-075 (Jeff, BP-121 decision 7). Sharing one
+       entry, and so one jump field, among every start in a region
+       makes two jumps of one region take turns in that field.
+       BP-121 measured the cost and Jeff kept 4.6; TD#168 holds the
+       numbers. Not to be reopened unless Jeff reopens it.
+
 ---
 
 ## 5. Allocation and Update
@@ -612,6 +626,19 @@ way is overwritten; on a carried miss, the carried victim way is
 allocated (data to ftb_array, valid set in ftb_plru). This matches
 Xiangshan (writeWay/hit carried in the prediction meta) and removes a
 second tag lookup on the update path. See ftb_interfaces.md IC-FTB-10.
+
+THE CARRIED HIT/MISS IS CHECKED, IN BOTH DIRECTIONS. RULED
+session-075 (Jeff, BP-121 decision 2, TD#163), BUILT by BP-121
+(D11). Another write can land in the set between the prediction
+read and the update, so the carried result can be stale. At the
+update ftb_cntrl reads the carried way's tag and entry-valid (a
+read of one way, not an associative re-lookup) and recomputes the
+hit: the carried way is valid and its tag matches the update. A
+carried miss whose way now holds the same tag merges into it rather
+than overwriting its other fields. A carried hit whose way now
+holds a different block allocates rather than writing into that
+block's entry. Before BP-121 a stale miss overwrote a live entry of
+the same block and discarded its other fields.
 
 ### 5.2  Track every branch, not just taken ones
 
@@ -649,7 +676,8 @@ costs prediction accuracy, never correctness.
 A carried victim can go stale if another write lands in the same set
 between the prediction read and the update. This is tolerated: an
 occasional suboptimal eviction costs prediction accuracy, never
-correctness. Same stance as Xiangshan.
+correctness. Same stance as Xiangshan. The carried hit/miss itself
+is checked at the update (5.1).
 
 The victim is the tree-PLRU choice. Allocation does not preferentially
 fill an invalid way first; an invalid way is simply a low-value
@@ -724,7 +752,8 @@ to a storage field through the same window. Built by BP-110.
                 not kept for it:
                   jump field: the whole field is rewritten from the
                     update -- position, target, isCall, isRet,
-                    isJalr -- and pftAddr if the boundary moves.
+                    isJalr, rvc (since BP-121) -- and pftAddr if
+                    the boundary moves.
                   conditional field: the update is a new branch, as
                     the free-field case of 5.1 and 5.4: position
                     written, conf initialised weak in the resolved
@@ -757,6 +786,19 @@ to a storage field through the same window. Built by BP-110.
                 The stored target must stay current. Do NOT gate this
                 write on "ITTAGE missed" -- write it whenever the jump
                 resolves. See 4.2.
+  rvc:          the jump field's one-bit compressed flag, written
+                with the jump's type from ftb_upd_jmp_rvc_u0, which
+                carries the backend resolution's is_rvc
+                (ftq_backend_interfaces.md 4). RULED session-075
+                (Jeff, BP-121 decision 3, TD#164), BUILT by BP-121
+                (D3). For a block that ends at its jump, the RAS push
+                and the block fall-through are the jump's own PC
+                (block start plus its position) plus 2 when rvc is
+                set, else plus 4. They are NOT pftAddr: pftAddr is
+                shared by every start in the region (4.6) and holds
+                whichever start's block end was written last, so it
+                is not this jump's return address. The bit is a
+                package change (section 8).
   fallthrough (pftAddr): recomputed on any update that MOVES
                 the block boundary -- a branch added to a free field,
                 the terminating branch changing, or block truncation
@@ -764,6 +806,12 @@ to a storage field through the same window. Built by BP-110.
                 block end relative to THE ALIGNED REGION BASE (5.5),
                 at the same write as the other fields. Not rewritten
                 when the boundary is unchanged.
+                The block end on the update port is the RESOLVED
+                one: the FTQ rewrites the entry's pft_addr at the
+                resolution of a taken jump (ftq_entry_formats.md 2).
+                Before BP-121 (D3) the update carried the predicted
+                fall-through, so the FTB was trained with its own
+                prediction.
 
 All of the above are writes into the ftb_array entry (the carried way).
 The entry-valid in ftb_plru is unchanged on an in-place update -- it
@@ -833,6 +881,14 @@ region base, which one carry bit cannot express. 5.5, TD#124.
 
 Since a call is a taken branch and terminates the block, that
 end IS the return address the RAS needs.
+
+SUPERSEDED, session-076. That holds for one start, but pftAddr is
+shared by every start in a region (4.6), so the RAS pushed whichever
+start's end was written last (TD#164). Since BP-121 the return
+address is the call's own PC plus 2 or 4, from the jump field's rvc
+bit (5.5). The elimination of the straddle bit stands: the call's
+PC plus its length is right whether or not the call straddles the
+block boundary.
 
 `ras_decisions.md` 8 described the eliminated +2 correction until
 session-069 and has been corrected.
@@ -932,14 +988,21 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
 
-  FTB_ENTRY_WIDTH (logical, per way) = 113 bits:
+  FTB_ENTRY_WIDTH (logical, per way) = 114 bits:
     1   valid          -- held in ftb_plru (flops), not ftb_array
   + 26  tag
   + 2 * (1 + 5 + 13 + 2 + 3)       = 48   br0 + br1 (valid,pos,tgt,
                                           stat,conf -- no always_taken)
-  + (1 + 5 + 21 + 2 + 3)           = 32   jump (valid,pos,tgt,stat,type)
+  + (1 + 5 + 21 + 2 + 3 + 1)       = 33   jump (valid,pos,tgt,stat,type,
+                                          rvc)
   + 6                              =  6   pftAddr (no carry bit)
-    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 452 bits (logical).
+    FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 456 bits (logical).
+
+THE BP-121 DELTA IS ONE BIT, 113 to 114: the jump field's rvc bit
+(5.5, TD#164). In bp_defines_pkg.sv the jump term went from
+TAR_STAT_BITS + 3 to TAR_STAT_BITS + 4. The FTB lint and simulation
+targets passed in BP-121's regression; BP-121 does not mention the
+elaboration check itself. Recorded session-076.
 
 The session-071 delta is three bits, 110 to 113, one each on the
 stored br0, br1 and jump positions, which widen from FTB_BR_POS_BITS
@@ -962,10 +1025,10 @@ always_taken removal of session-053 and is correct for its date.
 RAM entry width (what ftb_array actually stores -- the logical entry
 minus the relocated entry-valid):
 
-  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 112 bits/way.
+  FTB_RAM_ENTRY_WIDTH = FTB_ENTRY_WIDTH - 1 = 113 bits/way.
     The br0/br1/jump FIELD-valid bits remain in the RAM entry; only the
     ENTRY-level valid moves to ftb_plru.
-  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 448 bits.
+  FTB_RAM_SET_WIDTH = FTB_WAYS * FTB_RAM_ENTRY_WIDTH = 452 bits.
 
 ftb_array is sized at FTB_RAM_* (data only). ftb_plru holds, per set,
 FTB_WAYS entry-valid bits + PLRU_BITS tree-PLRU bits = 7 bits
@@ -1031,26 +1094,25 @@ region end, plus a full block, plus a straddling halfword pair:
          width is settled, not open. (Historical: last_may_be_rvi_call
          was eliminated; no straddle correction exists.)
 
-  FTB-5: OPEN, found by BP-120. Three defects, each needing a
-         ruling; BP-121 raises them in session.
+  FTB-5: CLOSED by BP-121 (session-075), recorded session-076.
+         Three defects found by BP-120, each ruled by Jeff during
+         BP-121's run and built in it:
          TD#162 (2.4, IC-FTB-09). An update borrows the read port
-         and the prediction lookup of that cycle is DROPPED, not
-         retried. After a backend redirect the resolution's update
-         arrives as the redirect target is looked up, so that block
-         gets no p2 classification and no RAS operation (calls: f's
-         return mispredicts 6 of 6). PA recommends: retry the
-         dropped lookup the next cycle (p0 stalls one cycle).
-         TD#163 (5.1, IC-FTB-10). An update carrying a predict-time
-         miss allocates over the carried way even when that way now
-         holds the same tag, discarding its other fields. PA
-         recommends: on a carried miss, check the carried way's tag
-         (not an associative re-lookup) and merge if it matches.
-         TD#164 (IC-FTB-03). The RAS pushes ftb_pft_addr_p2, which
-         every start in the region shares (4.6), so the return
-         address is wrong when another start wrote pftAddr last. PA
-         recommends: the call's own position plus 2 or 4, with one
-         compressed-call bit added to the jump field (a format
-         change, section 8).
+         and the prediction lookup of that cycle was dropped, so
+         after a backend redirect the redirect target's block got
+         no p2 classification and no RAS operation. RULED: hold p0
+         in the cycle before an FTB update issues (ftq_decisions.md
+         4.5 H4). One p0 bubble per FTB update. The IA recommended
+         this option and counted it as the PA's FTB-5
+         recommendation, which read "retry the dropped lookup the
+         next cycle (p0 stalls one cycle)".
+         TD#163 (5.1, IC-FTB-10). RULED: the carried way is checked
+         in both directions (5.1). The PA had recommended the
+         stale-miss half only.
+         TD#164 (IC-FTB-03). RULED: an rvc bit in the jump field
+         and is_rvc in the backend resolution; the RAS push and the
+         fall-through of a block ending at its jump are the jump PC
+         plus 2 or 4 (5.5, section 8). As the PA recommended.
 
   FTB-2: Confidence-override interaction with the TAGE update/meta
          path. Flagged, not yet analyzed. Resolve at bp_cluster
@@ -1093,7 +1155,8 @@ region end, plus a full block, plus a straddling halfword pair:
   bp_cluster.md       -- pipeline staging, override chain, FTQ entry
                          contents, decoupled frontend.
 
-  ras_decisions.md    -- RAS consumes the FTB fallthrough as
+  ras_decisions.md    -- RAS pushes the jump PC plus 2 or 4 (5.5),
+                         which the cluster drives on
                          ras_fall_through; FTB jump target is the RAS
                          fallback when RAS is empty.
 
@@ -1113,6 +1176,19 @@ region end, plus a full block, plus a straddling halfword pair:
 ## 11. Document History
 
 ```
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              4.6 R-1: a field past the start's visible jump is
+              hidden (D4); 4.6 kept (TD#168). 5.1: the carried
+              hit/miss checked both ways (TD#163). 5.5: the jump
+              field's rvc bit; the RAS push and the jump block's
+              fall-through are the jump PC plus 2 or 4; the update
+              carries the resolved block end (TD#164). 6: the
+              pftAddr return-address claim superseded. 8: entry
+              113 -> 114, RAM entry 112 -> 113, sets 452 -> 456 and
+              448 -> 452. 9: FTB-5 closed, with the recommendation
+              history. 4: stale 112 and 113
+              removed from prose.
+
   2026-10-08  session-075, after BP-120. 5.5: built, with the field
               mapping order and the coro measurement. Defects found
               by BP-120 recorded in section 9: TD#162, TD#163,

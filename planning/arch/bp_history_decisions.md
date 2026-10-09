@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -164,8 +164,8 @@ range 0-2, per PROJECT_STATUS).
 
 pred_pc is the block START plus that branch's in-block position,
 pos << POS_OFFSET_BITS, with pos counted from the block start (not
-the 32-byte-aligned base, which bp_cluster.sv uses; TD#125,
-session-071), and the ports are indexed by BRANCH NUMBER
+the 32-byte-aligned base, which bp_cluster.sv used until BP-110
+removed it; TD#125, closed), and the ports are indexed by BRANCH NUMBER
 after the cluster compacts its valid slots, not by slot number.
 
 AN EARLIER REVISION OF THIS LINE SAID THE FETCH-BLOCK PC. It was
@@ -275,69 +275,52 @@ noise for predicting inside it. That argues for a separate handler
 history, which nothing in this design proposes, rather than for
 zeroing. Session-069.
 
-### 3.5  Imprecise GHR across a redirect (DECIDED)
+### 3.5  History corrected on a redirect (DECIDED, REVERSED)
 
-DECISION: the restored history is IMPRECISE and is accepted as
-such. No mechanism writes a corrected branch direction back into
-the buffer.
+DECISION: the history is CORRECTED on a redirect. RULED
+session-075 (Jeff, BP-121 decision 8), BUILT by BP-121 (D14, D16).
+This reverses the decision recorded here from session-069 to
+session-075, that the restored history was imprecise and accepted
+as such.
 
-WHAT IS IMPRECISE. The checkpoint stores the POST-advance pointer
-(section 7), so restoring the entry named by a redirect
-(`ftq_backend_interfaces.md` D1) puts the pointer past both of that
-bundle's bits. Those bits hold PREDICTED directions. Two are wrong
-after a mispredict:
+THE RULE. The rollback carries a correction with the index. On
+rollback bp_history restores the pointer to the FIRST bit of the
+named bundle rather than past its last, writes the corrected bits,
+and rewrites that entry's checkpoint. The correction is formed by
+ftq_npc for a backend redirect, from bkend_ftq_redir_pos and
+bkend_ftq_redir_taken (ftq_backend_interfaces.md 5), and by the
+cluster for its own p2 and p3 redirects. It reaches the cluster on
+ports BP-121 writes as ftq_rollback_corr/_n/_tkn/_pbit
+(ftq_bpu_interfaces.md 9). Their widths and the
+meaning of each are not recorded in BP-121; bp_history_interfaces.md
+is their home and states them once they are read from the RTL.
+OPEN, session-076.
 
-```
-  the mispredicted branch's own bit   holds the predicted
-                                      direction, not the resolved
-                                      one
-  the slot 1 bit                      present for a branch that is
-                                      off the corrected path, when
-                                      slot 0 was the mispredict and
-                                      resolves taken
-```
+HISTORY STOPS AT THE FIRST TAKEN SLOT (D16). A bundle writes one bit
+per slot up to and including its first taken slot and none after
+it, since a slot after a taken slot is off the path. Before BP-121
+the p1 history wrote a bit for a slot past a taken one, which the
+p2 and p3 corrected bundle then repaired.
 
-They are wrong until they shift out, which is H predictions, where
-H is the HISTORY LENGTH of the longest table -- 119 for TAGE T4
-(TAGE_TBL_HIST, tage_interfaces.md Overview). This read "64 at the
-longest fold"; 64 is SC's longest FOLD WIDTH (SC_TBL_FH[3]), a
-different quantity. Session-070.
+WHAT WAS IMPRECISE. The checkpoint stores the POST-advance pointer
+(section 7), so restoring the named entry put the pointer past both
+of the bundle's bits, which held PREDICTED directions: the
+mispredicted branch's own bit, and a slot 1 bit for a branch off the
+corrected path. They stayed wrong for H predictions, H being the
+history length of the longest table (119, TAGE T4). The old text
+argued that no fix was possible without a port change; BP-121 made
+that port change, the alternative this section had recorded as not
+taken.
 
-The cost is ACCURACY ONLY. The GHR is a predictor
-input; no architectural state depends on it.
+CHECKED: after a conditional's mispredict the newest history bit is
+its resolved direction, in every tb_fe_top program, and tb_bp_history
+TC17. Reverting the correction fails the tb_fe_top check (BP-121
+m13).
 
-WHY IT CANNOT BE FIXED WITHOUT A PORT CHANGE. Rollback supplies an
-index and nothing else (section 2.2, section 7: no pointer value is
-driven in), so there is no input a corrected direction could arrive
-on. And the checkpoint carries a pointer only, not num_branches
-(section 7), so there is no way to address the bundle's first bit
-rather than past its last.
-
-THE ALTERNATIVE NOT TAKEN, recorded for future analysis. Rollback
-carries the corrected direction and a slot indicator alongside the
-index. The module restores to the bundle's FIRST bit rather than
-past its last, writes the corrected direction, and advances by one,
-leaving the off-path slot 1 bit unwritten. That requires the slot
-count section 7 declined to store, or an equivalent way to locate
-the bundle's first bit, and it changes the rollback port.
-
-Section 7 already rejected a pre-advance checkpoint, but on
-different grounds: locating the newest bit for the FOLD RECOMPUTE
-ANCHOR, not correction. That objection does not settle this one and
-should not be cited as if it did.
-
-WHY THIS IS NOT TECHNICAL DEBT. It is a choice between two valid
-designs, not a known-wrong thing carried until it can be fixed.
-What it lacks is a number: the accuracy cost has never been
-measured, and the decision rests on reasoning rather than
-evidence. That is the same shape as G15, and it is carried in
-section 9 the same way.
-
-Section 3.4 needs reading with this. Its claim that a redirect
-targets a bundle boundary and not an intra-bundle slot is what
-makes the imprecision invisible: a slot 0 mispredict IS an
-intra-bundle event, and bundle granularity is why it cannot be
-expressed. Session-069.
+NOT RECORDED BY BP-121: how bp_history locates the bundle's first
+bit, given that the checkpoint carries a pointer and no slot count
+(section 7). Read bp_history.sv before relying on section 7's
+"no pointer value is driven in" or on this section for that detail.
 
 ### 3.6  RTL fix: if / else-if for the slot cases
 
@@ -599,7 +582,9 @@ section and matches bp_history_interfaces.md (Checkpoint Timing).
 Read (rollback): the rollback index selects ckpt_gptr[idx] /
 ckpt_pptr[idx]; the module loads the live pointer from it and
 recomputes folds (section 2.2, section 5). No pointer value is
-driven in.
+driven in. Since BP-121 the rollback also carries a correction:
+the pointer goes to the bundle's first bit, the corrected bits are
+written and the checkpoint is rewritten (3.5).
 
 Contamination model (unchanged from BP-002 TC8): ghr_mem and
 phr_mem are not cleared on rollback. Entries written after the
@@ -692,7 +677,10 @@ not a hashed fold) have no folds.
        where other modules use NUM_PRED_SLOTS. Deferred,
        INFRA-011. Opened in bp_history_interfaces.md session-064.
 
-  HI8: PERFORMANCE MEASUREMENT, not a correctness gate and not
+  HI8: CLOSED session-076 by ruling: the history is corrected on
+       a redirect (3.5, BP-121 decision 8), so the cost below is
+       no longer paid. The text that follows is the record.
+       PERFORMANCE MEASUREMENT, not a correctness gate and not
        technical debt (section 3.5, session-069). The accuracy
        cost of the imprecise GHR across a redirect: two wrong bits
        surviving H predictions after every mispredict. Measure
@@ -899,3 +887,10 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
 
   2026-09-20  session-072. E22: Document History sorted into date order;
               newer entries had been appended at the wrong end.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              3.5 REVERSED: the history is corrected on a redirect,
+              with the checkpoint rewritten, and stops at the first
+              taken slot (decision 8, D14, D16). HI8 closed. 3.2:
+              the aligned-base note brought to BP-110 (TD#125). 7:
+              the rollback read notes the correction.

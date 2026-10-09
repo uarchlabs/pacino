@@ -27,7 +27,9 @@ supersedes it. Session-072.
 ## 1. Module Overview
 
 Single module ras.sv owns:
-- Speculative stack (16 entries, simple circular buffer)
+- Speculative stack (16 entries, circular buffer with a
+  next-on-stack link per entry, ras_decisions.md 3.2; this read
+  "simple circular buffer")
 - Commit stack (32 entries, conventional circular stack)
 - Push/pop logic per prediction slot. AT MOST ONE SLOT CARRIES A
   RAS OPERATION: a RAS operation is a taken branch and ends the
@@ -126,8 +128,11 @@ module ras (
   input  logic          ras_pred_val_p2[0:NUM_PRED_SLOTS-1],
   input  bp_br_type_e   ras_br_type_p2[0:NUM_PRED_SLOTS-1],
 
-  // FTB fallthrough address per slot.
-  // Pushed as ret_addr on call. RAS does not compute PC+2/+4.
+  // Return address per slot: the call PC plus 2 or 4, formed by
+  // the cluster from the FTB jump position and rvc bit (BP-121,
+  // TD#164). Pushed as ret_addr on call. RAS does not compute
+  // PC+2/+4. The name is historical: it carried the FTB
+  // fall-through until BP-121.
   input  logic [VA_WIDTH-1:0] ras_fall_through_p2[0:NUM_PRED_SLOTS-1],
 
   // Branch PC per slot. Declared in ras.sv, not read. See TD #101.
@@ -154,6 +159,15 @@ module ras (
   // ----------------------------------------------------------
   input  logic          ras_pred_val_p3[0:NUM_PRED_SLOTS-1],
   input  bp_br_type_e   ras_br_type_p3[0:NUM_PRED_SLOTS-1],
+
+  // ----------------------------------------------------------
+  // p2 keep (BP-121, D8; fe_decisions.md FE-14). Low when the
+  // block at p2 is squashed by a redirect: its p2 push or pop is
+  // not written, and its p3 operation is registered as none.
+  // DECLARATION TO BE CONFIRMED against ras.sv: BP-121 names the
+  // port, not its width. Session-076.
+  // ----------------------------------------------------------
+  input  logic          ras_p2_keep,
 
   // ----------------------------------------------------------
   // Mispredict restore (driven by FTQ)
@@ -218,7 +232,8 @@ Access pattern: entry.ras.tosr, entry.ras.tosw, entry.ras.bos
 
 ## 6. Prediction Interface
 
-### Producer: FTB (branch type and fallthrough address)
+### Producer: bp_cluster (FTB branch type; return address from the
+###           FTB jump position and rvc bit)
 ### Consumer: RAS
 
 ### Timing
@@ -233,10 +248,11 @@ p2: ras_pred_val_p2 and ras_br_type_p2 valid.
        ras_pop_addr_p2, ras_pop_valid_p2, ras_snapshot_p2
        all valid combinationally in p2.
 
-p3: ras_pred_val_p3 and ras_br_type_p3 are the
-       registered p2 inputs. Repair logic compares p3
-       FTB prediction against the p2 operation applied
-       and executes the inverse if they disagree.
+p3: ras_br_type_p3 is the registered p2 type;
+       ras_pred_val_p3 is qualified by p3 reachability
+       (BP-121, IC-RAS-12). Repair logic compares the p3
+       view against the p2 operation applied and executes
+       the inverse if they disagree.
 ```
 
 ### Semantics
@@ -331,7 +347,9 @@ increment rctr at TOSR rather than allocating a new entry.
 TOSW does not advance.
 
 On pop: if rctr at TOSR > 0, decrement rctr without moving
-TOSR. If rctr == 0, pop normally (TOSR decrements).
+TOSR. If rctr == 0, pop normally (TOSR follows the entry's
+next-on-stack link, ras_decisions.md 3.2; this read "TOSR
+decrements").
 
 Saturation: rctr saturates at (2^RAS_RCTR_WIDTH - 1) = 15.
 Additional pushes beyond saturation are suppressed.
@@ -393,6 +411,9 @@ push/pop is applied.
 
 Only pointer state is restored. Circular buffer data is
 not cleared. See ras_decisions.md section 4.3.
+
+bp_cluster does not assert the restore for its own p2 or p3
+redirect (ras_decisions.md 4.3, BP-121 D9).
 
 ### IC-RAS-10: Commit stack update
 
@@ -462,6 +483,13 @@ reachable today.
   prediction, not from predecode or decode.
 - Must present ras_br_type_p3[s] as the registered version
   of ras_br_type_p2[s] from the previous cycle.
+- Must qualify ras_pred_val_p3[s] by p3 reachability, which
+  uses the SC direction: r_val_p3 & r_brv_p3 & w_reach_p3.
+  BUILT by BP-121 (D10, TD#166). Given the registered p2
+  qualification, the p3 view never differed from p2 and the
+  repair never ran.
+- Must drive ras_p2_keep low for a block at p2 that a redirect
+  squashes (FE-14, BP-121 D8).
 - Must write ras_snapshot_p2[NUM_PRED_SLOTS-1] into
   bp_ftq_entry_t.ras for EVERY valid p2 block, through
   ftq_bpu_interfaces.md 4c, whether or not ras_pred_val_p2 was
@@ -471,7 +499,9 @@ reachable today.
 - Must assert ras_restore_val for one cycle on a redirect and
   present the FTQ snapshot of the entry the redirect names
   (ftq_backend_interfaces.md 5 D2). This read "the mispredicted
-  entry". Session-071.
+  entry". Session-071. Not for the cluster's own p2 or p3
+  redirect, whose block keeps its operation (ras_decisions.md
+  4.3, BP-121 D9).
 - Must assert ras_commit_val when a call- or return-
   containing FTQ entry commits.
 - Must set pred_src = PRED_RAS in bp_ftq_entry_t when RAS
@@ -518,8 +548,9 @@ prediction the FTQ acts on". Session-071.
 ### 9.1  Return address sourcing
 
 ret_addr pushed to the speculative stack comes from
-ras_fall_through_p2[s] (FTB-provided fallthrough address).
-RAS does not independently compute PC+2 or PC+4.
+ras_fall_through_p2[s], the call PC plus 2 or 4 formed by the
+cluster (BP-121, TD#164). This read "FTB-provided fallthrough
+address". RAS does not independently compute PC+2 or PC+4.
 See ras_decisions.md section 8.
 
 ### 9.2  Combinational paths in p2
@@ -654,3 +685,11 @@ On rstn deassert (active low, synchronous):
   2026-10-08  session-075, after BP-120. IC-RAS-11: the repair on the
               link, built; return-call pairings pointed to
               ras_decisions.md 1.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              1: linked buffer, not simple. 4: ras_p2_keep (D8),
+              declaration to be confirmed; ras_fall_through_p2
+              carries the call PC plus 2 or 4 (TD#164). 6, IC-RAS-12:
+              p3 qualified by p3 reachability (D10); no restore on
+              the cluster's own redirect (D9). IC-RAS-05: TOSR
+              follows the link. 9.1: push source.

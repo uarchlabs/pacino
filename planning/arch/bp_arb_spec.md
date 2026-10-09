@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -202,9 +202,10 @@ update compete for the RAM inputs.  This is the competing stage:
   Prediction:  p0 presents RAM read address (flopped input).
   Update:      u0 presents RAM write address and data (flopped).
 
-Only one transaction may own the competing stage per cycle.  A
-credit-based arbiter selects from a Prediction Queue (PQ) and an
-Update Queue (UQ) placed in front of each predictor.
+Only one transaction may own the competing stage per cycle.  An
+arbiter selects from a Prediction Queue (PQ) and an Update Queue
+(UQ) placed in front of each predictor. It was credit-based until
+BP-121 (section 4.5).
 
 ### 4.2  Common arbitration parameters (per predictor)
 
@@ -224,7 +225,7 @@ reference instance.
   // Response buffer depth
   localparam int TAGE_RESP_BUF_DEPTH  = 2;
 
-  // Credit arbiter
+  // Credit arbiter (no counter uses the credits since BP-121, 4.5)
   localparam int TAGE_PRED_CREDITS    = 4;
   localparam int TAGE_UPD_CREDITS     = 1;
   localparam int TAGE_STARVE_THRESH   = 8;
@@ -233,14 +234,15 @@ reference instance.
 FTB, LP, and ITTAGE have analogous parameter sets with their own
 prefix and independently chosen values.
 
-Note, TD#39: PRED_CREDITS = 4 is less than STARVE_THRESH = 8, so the
-section 4.5 rule 2 starvation override is unreachable in ordinary
-traffic at these values -- rule 4 reloads the credits and resets the
-starve counter before the counter can reach the threshold. The rule
-IS tested: BP-094 group H test H6 seeds the counter to reach it
-(4.5, TD#73). Only whether the parameter relationship is intentional
-is still open. This read "may be unreachable ... before writing
-arbiter tests". Session-070.
+The credit parameters (<PRED>_PRED_CREDITS, <PRED>_UPD_CREDITS) no
+longer drive any counter: BP-121 removed the credit counters
+(section 4.5). <PRED>_STARVE_THRESH still sets the starvation hold.
+
+Note, TD#39, MOOT since BP-121: PRED_CREDITS = 4 was less than
+STARVE_THRESH = 8, so the old rule 2 starvation override was
+unreachable in ordinary traffic. The rules it concerned are
+replaced (4.5). This read as an open parameter question.
+Session-076.
 
 ### 4.3  Prediction Queue (PQ)
 
@@ -291,11 +293,23 @@ out-of-order machine, so updates are enqueued and delivered in
 resolution order (FE-6). The two write ports and the backpressure
 behaviour are retained as written.
 
-### 4.5  Credit Arbiter
+### 4.5  Arbiter: a prediction is never delayed
+
+RULED session-075 (Jeff, BP-121 decision 5), BUILT by BP-121 (D6)
+for TAGE and ITTAGE in their units and for SC in bp_cluster. RULES 2
+TO 4 ARE REPLACED. They were a credit scheme in which an update
+could be granted ahead of a waiting prediction. In the integrated
+front end that delayed the TAGE, ITTAGE and SC responses for 70 to
+90 percent of p2 blocks; a late response is discarded by branch_id,
+so those blocks lost the prediction. The credit counters are
+removed.
+
+The rule, in one line: a prediction is never delayed; an update is
+granted only in a cycle with no prediction presented; and after
+<PRED>_STARVE_THRESH cycles of a waiting update, the predictor's
+queue-ready drops for one cycle so that such a cycle occurs.
 
 Initialization:
-  pred_credits = <PRED>_PRED_CREDITS
-  upd_credits  = <PRED>_UPD_CREDITS
   starve_ctr   = 0
 
 Per-cycle grant logic (priority order):
@@ -304,38 +318,48 @@ Per-cycle grant logic (priority order):
      blocked; do not issue a new prediction.
      Note: rule 1 does not block update grants.
 
-  2. Starvation override: UQ non-empty AND
-     starve_ctr >= <PRED>_STARVE_THRESH:
-       Grant update.  Reset starve_ctr.
-       Reload upd_credits = <PRED>_UPD_CREDITS.
+  2. Starvation hold: UQ non-empty AND starve_ctr reaches
+     <PRED>_STARVE_THRESH: the queue-ready drops for one
+     cycle -- tage_pq_not_full or ittage_pq_not_full, and
+     sc_uq_not_full for SC -- so no prediction is presented
+     in a following cycle and rule 6 grants the update.
+     starve_ctr resets when the update is granted. The exact
+     cycle on which the ready drops is as built (tb_tage
+     TC-54 checks it at STARVE_THRESH - 1).
 
-  3. Both queues non-empty, pred_credits > 0:
-       Grant prediction.
-       Decrement pred_credits.
-       Increment starve_ctr.
+  3. Both a prediction and an update present: grant the
+     prediction. The waiting update counts toward the
+     starvation hold; how starve_ctr counts is as built.
 
-  4. Both queues non-empty, pred_credits == 0:
-       Grant update.
-       Reload pred_credits = <PRED>_PRED_CREDITS.
-       Reload upd_credits  = <PRED>_UPD_CREDITS.
-       Reset starve_ctr.
+  4. RETIRED by BP-121 (the credit-exhausted update grant).
 
   5. PQ non-empty only:
        Grant prediction unconditionally.
-       Do not consume prediction credits.
+       (This read "Do not consume prediction credits"; there
+       are no credits since BP-121.)
 
   6. UQ non-empty only:
        Grant update unconditionally.
 
   7. Both empty: no grant.
 
-These rules are IMPLEMENTED for SC inside bp_cluster (session-063).
-All seven are TESTED: TD#73 closed by BP-094 group H, which covers
-the seven grant rules plus tage consumer_ready, hierarchically in
-tb_bp_cluster. TD#39 was folded into that closure; its residual is a
-parameter decision (section 4.2), not a test gap. The untested
-residual of TD#73 is concurrent pred+upd for TAGE and ITTAGE, which
-does not involve SC.
+FOR SC the arbiter is in bp_cluster. A prediction presented means a
+block at p2 that TAGE answers, squashed or not (r_tv_p2, BP-121
+D13), so an SC update is never granted under a live TAGE result.
+An SC update grant had dropped consumer_ready under a live TAGE
+result (4.7) before BP-121.
+
+TESTED as replaced: tb_tage TC-54 (arb_starve_tst) and the
+concurrent tests, and tb_bp_cluster group H rewritten (H1 no grant,
+H2 prediction granted, H2b sc_ready guard, H3 update alone granted,
+H4 prediction wins every cycle and the update is granted after the
+one-cycle hold). The concurrent pred+upd residual of TD#73 is covered
+for TAGE by tb_tage's concurrent tests; BP-121 does not say whether
+ITTAGE has its own.
+
+This section read "Credit Arbiter" with the seven credit rules,
+IMPLEMENTED for SC in bp_cluster (session-063) and tested by BP-094
+group H (TD#73). Replaced session-076.
 
 ### 4.6  Competing stage register
 
@@ -379,8 +403,8 @@ Handshake:
 ### 4.8  Same-entry conflict resolution
 
 When a prediction and an update targeting the same RAM entry
-are both pending, prediction is granted first per the credit
-rules (section 4.5, rule 3).  The prediction reads pre-update
+are both pending, prediction is granted first (section 4.5,
+rule 3).  The prediction reads pre-update
 state.  The update is granted in a subsequent cycle.
 
 
@@ -402,7 +426,9 @@ state.  The update is granted in a subsequent cycle.
   Notes:       FTB updates on every resolved prediction block, not
                only on mispredictions.  UQ drain rate may be
                higher than TAGE.  Size UQ_DEPTH accordingly.
-               As shipped, ftb.sv declares 42 flat ports and no
+               As shipped, ftb.sv declares 42 flat ports
+               (before BP-121 added ftb_jmp_rvc_p2 and
+               ftb_upd_jmp_rvc_u0) and no
                PQ, UQ or arbiter; the parameters above are not
                instantiated.
 
@@ -490,9 +516,9 @@ state.  The update is granted in a subsequent cycle.
                TAGE and SC have separate update queues and 
                prediction response queues. This is a change
                from the previous version.
-               The SC credit arbiter is IMPLEMENTED in bp_cluster
-               (session-063) and TESTED (TD#73 closed, BP-094
-               group H). The arbiter does not exist at the unit
+               The SC arbiter is IMPLEMENTED in bp_cluster
+               (session-063), and its rules were replaced by
+               BP-121 (section 4.5). The arbiter does not exist at the unit
                level: sc.sv stubs the arbitration-layer ports,
                sc_uq_not_full = 1'b1 and sc_upd_rdy = all-ones,
                and builds no SC UQ. The SC_UQ_DEPTH and
@@ -509,7 +535,7 @@ one pipeline stage (p3) after TAGE p2.
 
 SC tables are single-port RAMs. SC prediction (read, p2->p3) and SC
 update (write, u0/u1) compete for the one RAM port. The section 4.5
-credit arbiter governs that contention unchanged. SC's prediction
+arbiter governs that contention unchanged. SC's prediction
 transactions are drawn from the TAGE response buffer (acting as SC's
 PQ); SC's update transactions are drawn from the SC UQ. SC does not
 instantiate an independent prediction FIFO.
@@ -579,12 +605,14 @@ tage_pred_meta_p2[s].tage_extd_ctr
 
 These are p2 signals and do not require staging.
 
-The SC prediction-side credit arbiter draws its prediction
+The SC prediction-side arbiter draws its prediction
 transactions from the TAGE response buffer (which acts as SC's PQ)
 and its update transactions from the SC UQ. Section 4.5 arbitration
 applies unchanged. When the arbiter grants an SC update and stalls an
 SC prediction, the TAGE response buffer head is held, which
-backpressures TAGE (see section 11 item C).
+backpressures TAGE (see section 11 item C). SINCE BP-121 THAT CASE
+DOES NOT ARISE: an SC update is granted only when no prediction is
+presented (4.5).
 
 ### 6.2  SC Update Request Communication
 
@@ -798,7 +826,9 @@ task file, not here.
      Deferred until TAGE is fully validated.
      Placeholder in section 5.4.6
 
-  J. TD#39. PRED_CREDITS < STARVE_THRESH, so the section 4.5
+  J. MOOT, BP-121 (session-076): the credit rules are replaced
+     (4.5), so the parameter relationship below no longer exists.
+     TD#39. PRED_CREDITS < STARVE_THRESH, so the section 4.5
      rule 2 starvation override is unreachable in ordinary traffic
      at the current parameter values. IT IS NOT UNTESTABLE AND THE
      TESTS ARE WRITTEN: TD#73 closed by BP-094 group H, which
@@ -920,3 +950,11 @@ task file, not here.
   2026-10-07  session-075, after BP-119. 6.2: the SC update request
               is an SC update presented; the SC ready is a grant
               that depends on it.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              4.5: rules 2-4 replaced; a prediction is never
+              delayed, an update is granted with no prediction
+              presented, and a starvation hold drops the
+              queue-ready for one cycle (decision 5, D6, D13). The
+              credit counters are removed. 4.1, 4.2, 4.8, 5.5, 6,
+              6.1: credit wording. TD#39 and item J moot.

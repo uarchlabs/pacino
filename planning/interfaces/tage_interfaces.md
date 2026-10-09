@@ -6,7 +6,7 @@
  FILE:    tage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -351,7 +351,12 @@ tage_upd_rdy_u1[s]    -- flopped version of tage_upd_val_u0[s].
 pq_not_full           -- asserted when the prediction queue has
                           room to accept a new prediction request.
                           Consumer must gate tage_pred_val_p0
-                          on this signal. Pending rename to
+                          on this signal. Since BP-121 it also
+                          drops for one cycle as the starvation
+                          hold, so that a waiting update finds a
+                          cycle with no prediction
+                          (bp_arb_spec.md 4.5). A prediction is
+                          never delayed by an update. Pending rename to
                           tage_pq_not_full per TD #49 (lower case;
                           this read tage_PQ_not_full, session-072)
                           -- this

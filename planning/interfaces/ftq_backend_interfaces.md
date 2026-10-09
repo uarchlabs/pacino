@@ -89,8 +89,17 @@ branch.
     logic [VA_WIDTH-1:0]        target;    // resolved target
     bp_br_type_e                br_type;   // resolved type
     logic                       mispredict;
+    logic                       is_rvc;    // compressed instruction
   } ftq_resolve_t;
 ```
+
+`is_rvc` WAS ADDED BY BP-121 (TD#164, ruled session-075). The
+backend sets it when the resolved instruction is a compressed one.
+The FTQ uses it for the resolved fall-through of a taken jump
+(ftq_entry_formats.md 2) and passes it to the FTB's jump field
+(ftb_interfaces.md ftb_upd_jmp_rvc_u0). Its position
+in the packed struct is as bp_structs_pkg.sv declares it; the
+listing above shows the fields, not their order.
 
 THE BACKEND NAMES A POSITION, NOT A SLOT. Prediction slots are a
 predictor concept: they are the two branch fields of one FTB block
@@ -167,6 +176,7 @@ been squashed; see section 7 rule R3.
   bkend_ftq_redir_val                                      NEW
   bkend_ftq_redir_idx    [FTQ_IDX_BITS-1:0]                NEW
   bkend_ftq_redir_pos    [FTB_BR_POS_BITS-1:0]             NEW
+  bkend_ftq_redir_taken                                    NEW
   bkend_ftq_redir_pc     [VA_WIDTH-1:0]                    NEW
   bkend_ftq_redir_self                                     NEW
   bkend_ftq_redir_cause  ftq_redir_cause_e                 NEW
@@ -197,6 +207,13 @@ instruction is squashed too, which is the trap case.
 squashes every entry after that index, and the entry itself when
 `_self` is set.
 
+`bkend_ftq_redir_taken` is the resolved direction of the branch at
+`_pos`. ftq_npc uses `_pos` and `_taken` to form the history
+correction it drives with the rollback (D1; ftq_bpu_interfaces.md
+9). Added by BP-121 (D14, decision 8). Its width as built is to be
+confirmed against fe_top.sv; listed here without one, as a single
+direction.
+
 The FTQ's response:
 
 ```
@@ -205,6 +222,11 @@ The FTQ's response:
       ftq_rollback_val / ftq_rollback_idx on bp_cluster. The FTQ
       presents the INDEX; the cluster reads its own copy of that
       entry's checkpoint. Added by BP-102; see section 8.
+      Since BP-121 the rollback also carries a history
+      correction formed from _pos and bkend_ftq_redir_taken, and
+      bp_history writes the corrected bits rather than keeping
+      the predicted ones (bp_history_decisions.md 3.5,
+      ftq_bpu_interfaces.md 9).
   D2  restore the RAS from bp_ras_snapshot_t in that entry, on
       ras_restore_val / ras_restore_snapshot, which do exist.
   D3  NOTHING ADDITIONAL FOR THE RAS. D2 is the whole of it on
@@ -444,6 +466,11 @@ cannot: it does not read the FTQ.
 This was the same class of defect as TD-FE-6 and was found the same
 way, by writing down what the FTQ would have to drive.
 
+BP-121 ADDED A HISTORY CORRECTION to this group, on ports it writes
+as ftq_rollback_corr/_n/_tkn/_pbit (ftq_bpu_interfaces.md 9, which
+owns them). The index form above is
+unchanged.
+
 ---
 
 ## 9. What this makes decidable
@@ -485,11 +512,12 @@ Every one of these is unverifiable today. The backend does not exist.
   A1  CONFIRMED 2026-08-19. Instructions carry their FTQ index and
       in-block position from the IFU through to resolution and
       retirement: FTQ_IDX_BITS + FTB_BR_POS_BITS = 6 + 4 = 10 bits
-      per in-flight instruction. It read 9, which was correct until
-      BP-099 took FTB_BR_POS_BITS from 3 to 4 for the C extension.
-      Corrected session-070; the 2026-08-19 history entry keeps 9,
-      which was right when written. Section 4 and section 6 both depend on
-      it. XiangShan does the same (ftqPtr and ftqOffset in
+      per in-flight instruction, and 11 since BP-121 added
+      ftq_resolve_t.is_rvc (section 4, TD#164). It read 9, which
+      was correct until BP-099 took FTB_BR_POS_BITS from 3 to 4
+      for the C extension. Corrected session-070; the 2026-08-19 history entry
+      keeps 9, which was right when written. Section 4 and section 6 both
+      depend on it. XiangShan does the same (ftqPtr and ftqOffset in
       FetchToIBuffer).
   A2  Retirement is in order, so a commit watermark is meaningful.
   A3  At most two branches resolve per cycle. Section 4 sizes the
@@ -503,6 +531,14 @@ Every one of these is unverifiable today. The backend does not exist.
       does not arbitrate between backend redirects.
   A6  The trap vector is supplied by the backend on
       bkend_ftq_redir_pc. The FTQ reads no CSR.
+  A7  ADOPTED session-075 (Jeff, BP-121 decision 9). The backend
+      commits an entry only after every resolution naming it has
+      been accepted (ftq_bkend_rsv_rdy). The commit walk reads the
+      entry's slots for the RAS commit (section 6), and a
+      resolution not yet accepted has not yet written its slot.
+      BP-121's testbench backend holds commit this way. The
+      alternative, the FTQ tracking pending resolutions per entry,
+      was not taken.
 ```
 
 ---
@@ -610,4 +646,10 @@ Every one of these is unverifiable today. The backend does not exist.
 
   2026-09-20  session-072. E22: Document History sorted into date order;
               newer entries had been appended at the wrong end.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              4: ftq_resolve_t.is_rvc (TD#164). 5:
+              bkend_ftq_redir_taken; D1 carries the history
+              correction (decision 8). 8: the correction ports. 10:
+              A1 is 11 bits; A7 adopted (decision 9).
 ```

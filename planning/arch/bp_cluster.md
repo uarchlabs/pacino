@@ -7,7 +7,7 @@
  FILE:    bp_cluster.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 ---
@@ -66,13 +66,13 @@ Prediction blocks are unaligned (`ftq_decisions.md` 4.7,
 `ifu_decisions.md` IFU-6), and a miss does not resync the stream to
 a 32-byte boundary.
 
-AS BUILT, bp_cluster.sv forms both the miss successor and the branch
-PC from the 32-byte-ALIGNED base: the successor is aligned base +
-FTB_BLOCK_BYTES, and the branch PC aligned base + (pos <<
-POS_OFFSET_BITS) with pos start-relative. Both are wrong for a block
-that does not start on a 32-byte boundary. The branch PC is block
-START + (pos << POS_OFFSET_BITS) (ftb_decisions.md 4.6 R-2). TD#125,
-session-071 RTL read.
+BUILT by BP-110 (TD#125, closed): bp_cluster.sv no longer forms any
+in-block address from the aligned base, the miss successor is lookup
+PC + 32, and the branch PC is block START + (pos << POS_OFFSET_BITS)
+(ftb_decisions.md 4.6 R-2). This read "AS BUILT, bp_cluster.sv forms
+both the miss successor and the branch PC from the 32-byte-ALIGNED
+base", from the session-071 RTL read; stale since BP-110.
+Session-076.
 
 ---
 
@@ -116,6 +116,10 @@ session-071 RTL read.
            lp_pred_is_loop is set; the target comes from the uBTB
            entry (ftq_bpu_interfaces.md 4). Does not participate in
            the p2/p3 override chain.
+- Status:  BP-121 measured no LP prediction used in any program. The
+           update rule is ruled to change (read before write, with
+           the speculative iteration count): loop_pred_interfaces.md
+           Ruled Change, TD#169, BP-122.
 
 ### FTB (Fetch Target Buffer, aka BTB)
 - Size:    2048 entries, 4-way associative, 512 sets
@@ -189,6 +193,12 @@ session-071 RTL read.
            Threshold: dynamically adapted at runtime (O-GEHL scheme,
            TC counter), not a fixed design-time value and not CSR-
            configurable. See sc_decisions.md sections 9-10, G7.
+- Arbitration: the SC arbiter is in bp_cluster. Since BP-121 a
+           prediction is never delayed and an SC update is granted
+           only with no block at p2 that TAGE answers
+           (bp_arb_spec.md 4.5). The SC request is formed for every
+           block TAGE answers at p2, squashed or not (r_tv_p2,
+           BP-121 D13).
 
 - Tables:
     ST0: 512 entries, direct mapped, 6b wide, hist=0b
@@ -206,13 +216,12 @@ session-071 RTL read.
            non-return). Target stored directly in the ITTAGE tables --
            no base+offset secondary LUT. Active only when FTB
            identifies branch type as indirect.
-- Target:  38b, the upper 38 bits of a Sv39 VA. Bit 0 is always zero
-           for instruction alignment and is not stored.
-           IT_MAX_TGT_WIDTH = 38, NOT widened for VA_WIDTH 41:
-           predictor storage may mispredict where an architectural
-           address may not (fe_decisions.md FE-19). The
-           reconstruction must zero-extend rather than sign-extend;
-           TD#122. See ittage_interfaces.md.
+- Target:  40b, VA[40:1]. Bit 0 is always zero for instruction
+           alignment and is not stored. IT_MAX_TGT_WIDTH = 40 and the
+           reconstruction is {stored, 1'b0}; no target bit is
+           inferred by extension. Built by BP-111 (TD#132, closed).
+           This read "38b ... must zero-extend; TD#122", stale since
+           BP-111. Session-076. See ittage_interfaces.md.
 - Tables:
     IT1: 2 banks x 256 entries, FH=4b,  FH1=4b,  FH2=4b,  hist=4b
     IT2: 2 banks x 256 entries, FH=8b,  FH1=8b,  FH2=8b,  hist=8b
@@ -223,10 +232,12 @@ session-071 RTL read.
 ### RAS (Return Address Stack)
 Dual-stack, static partition: 16 speculative + 32 commit entries,
 pointer-only snapshot recovery. Push and pop at p2, type-gated on the
-FTB branch type; p3 applies an inverse repair when the p3 view
-disagrees with p2. Outside the conditional override chain: RAS
-supplies the target for a return, ITTAGE for every other indirect
-JALR, and the FTB target is the ITTAGE-miss fallback, not a third arm.
+FTB branch type; p3 applies an inverse repair when the p3 view,
+qualified by p3 reachability, disagrees with p2 (BP-121, TD#166).
+The pushed return address is the call PC plus 2 or 4 from the FTB
+jump field's rvc bit (BP-121, TD#164). Outside the conditional
+override chain: RAS supplies the target for a return, ITTAGE for every other
+indirect JALR, and the FTB target is the ITTAGE-miss fallback, not a third arm.
 
 ras_decisions.md is the one home for all of it: role and repair table
 1, call and return detection with the full JALR hint table 2, the
@@ -307,6 +318,9 @@ Two redirect points downstream of p1:
                TAGE overrides FTB direction (conditional only).
                RAS and ITTAGE are type-gated, not in the
                TAGE/FTB override chain.
+               The per-slot successor is chained from the highest
+               slot down, and a slot after a taken slot raises no
+               redirect (ftq_bpu_interfaces.md 6, BP-121 D5, D15).
 
   p3_redirect: fires when SC CHANGES THE SUCCESSOR the cluster
                published at p2 -- not whenever SC overrides the
@@ -352,6 +366,10 @@ removed. An earlier revision read "One update channel: upd_ch[0]
 only", which reads as a structural difference. Corrected
 session-070.
 
+THE p1 SLOTS ARE IN POSITION ORDER. The uBTB does not reorder its
+slots, so bp_cluster swaps a uBTB slot 1 that lies below slot 0
+(fe_decisions.md FE-10, BP-121 D12).
+
 When dual_pred_en=1:
   - Both br0 and br1 reported per block.
   - Both update channels carry traffic: upd_ch[0] and upd_ch[1].
@@ -375,13 +393,18 @@ GHR (Global History Register):
   Pointer: ghist_ptr (GHIST_PTR_BITS = 8b), OWNED BY bp_history
   Update: speculative on each prediction. Write pred_taken into
           buffer at ghist_ptr position, one write per active
-          prediction slot in priority order.
+          prediction slot in priority order, stopping at the
+          first taken slot (BP-121 D16).
   Restore: on redirect, bp_history restores its own pointer from
            the checkpoint the rollback INDEX names. No pointer
            value is supplied from outside. bp_history_decisions.md
            2 and 10, bp_history_interfaces.md Pointer Ownership.
            This read "driven externally" and "accept new ghist_ptr
            from external logic". Session-070.
+           Since BP-121 the rollback also carries a correction:
+           bp_history restores to the bundle's first bit, writes
+           the corrected bits and rewrites the checkpoint
+           (bp_history_decisions.md 3.5).
            Recompute all folded histories from buffer contents.
 
 PHR (Path History Register):
@@ -733,3 +756,13 @@ Raw observations to be captured in docs/observations/ during BP work.
 
   2026-09-20  session-072. D28: bp_structs_pkg.sv carries no s2 or s3
               label; the conversion was verified session-070.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              Block width: the aligned-base note brought to BP-110
+              (TD#125). Loop Predictor: status and TD#169. SC:
+              arbitration (D6, D13). ITTAGE: target 40b, VA[40:1]
+              (BP-111, TD#132). RAS: p3 reachability, push address.
+              Redirect Architecture: chained successors (D5, D15).
+              Dual Prediction Mode: p1 slots in position order
+              (D12). History Module: first taken slot (D16) and the
+              correction on rollback (D14).

@@ -16,6 +16,53 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-076: BP-121 recorded in the planning documents. Documents only.
+
+PA-DIRECT CORRECTION, no task number. BP-121's nine rulings, its
+sixteen fixes and the loop-predictor ruling made after it are now
+in the documents that own each rule. Every changed file is in
+check_planning.sh with its new checksum.
+  Rules replaced:
+    bp_arb_spec.md 4.5: a prediction is never delayed; an update is
+      granted with no prediction presented; a starvation hold drops
+      the queue-ready for one cycle. Credit counters removed. TD#39
+      moot.
+    bp_history_decisions.md 3.5: history corrected on a redirect,
+      the checkpoint rewritten, history stops at the first taken
+      slot. HI8 closed.
+    ftq_backend_interfaces.md A7 adopted. It is a new assumption;
+      the document had A1 to A6.
+  Backend contract: ftq_resolve_t.is_rvc (A1 now 11 bits),
+    bkend_ftq_redir_taken, A7, the history correction on the
+    rollback.
+  FTB entry 113 -> 114 bits (jump rvc), RAM entry 112 -> 113, sets
+    456 and 452. FTB-5 closed. ftq_decisions.md 4.5 gains H4, the
+    hold before an FTB update.
+  Loop predictor: the ruling is in loop_pred_interfaces.md (Ruled
+    Change), with a pointer from fe_decisions.md 7.2. LI4 ruled.
+  Stale text corrected in passing: the ITTAGE target in
+    bp_cluster.md and ittage_interfaces.md (40 bits since BP-111,
+    TD#132); the aligned-base notes in bp_cluster.md,
+    ftq_entry_formats.md and bp_history_decisions.md (BP-110,
+    TD#125); ras_interfaces.md "simple circular buffer" and "TOSR
+    decrements"; ras_decisions.md 8 on pftAddr and TD#124.
+
+NOT RECORDED, needs the RTL. BP-121 names these and does not state
+them; each document marks the gap:
+  - the full names, widths and meaning of the ports BP-121 writes
+    as ftq_rollback_corr/_n/_tkn/_pbit. Their home,
+    bp_history_interfaces.md, was not available this session;
+  - the ras_p2_keep declaration;
+  - the bkend_ftq_redir_taken width;
+  - whether ftq_npc holds on sc_uq_not_full (ftq_decisions.md 4.5);
+  - how w_jmp_ft_p2 enters bp_cluster's w_pft_p2;
+  - how bp_history finds a bundle's first bit with no slot count in
+    the checkpoint.
+QUESTION FOR JEFF: the loop-predictor ruling has slot 1 win on a
+shared entry, but under TI6 each slot has its own bank, so the two
+slots never share an entry (TD#169).
+
+---
 ## Session-075: BP-117 to BP-121. The front end reaches its end state.
 
 BP-121 RUN, COMPLETE (Jeff). The first task written as an end state,
@@ -1484,6 +1531,11 @@ it only documented current behavior.
 |                         |             |                   | and 8 per block until BP-099     |
 |                         |             |                   | widened it for the RVA23 C       |
 |                         |             |                   | extension.                       |
+|                         |             |                   | BP-121: FTB jump term            |
+|                         |             |                   | TAR_STAT_BITS + 3 -> + 4, the    |
+|                         |             |                   | jump rvc bit (TD#164); entry     |
+|                         |             |                   | 114, RAM entry 113               |
+|                         |             |                   | (ftb_decisions.md 8).            |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -1530,6 +1582,9 @@ it only documented current behavior.
 |                         |             |                   | typedef MOVED up the file (SV    |
 |                         |             |                   | declare-before-use); fields      |
 |                         |             |                   | unchanged.                       |
+|                         |             |                   | BP-121: ftq_resolve_t.is_rvc and |
+|                         |             |                   | ftb_upd_t.jmp_rvc (TD#164); the  |
+|                         |             |                   | FTB update is 15 flat fields.    |
 | bp_pkg.sv               | Deprecated  | --                | Deleted.                         |
 | bp_history.sv           | Complete    | tb_bp_history     | Module-owned pointer (BP-069).   |
 |                         |             |                   | Fold geometry corrected (BP-071);|
@@ -1563,6 +1618,12 @@ it only documented current behavior.
 |                         |             |                   | ... a constant"; blocks are NOT  |
 |                         |             |                   | aligned. Session-070.            |
 |                         |             |                   | Watchdog added BP-097.           |
+|                         |             |                   | BP-121: history corrected on     |
+|                         |             |                   | rollback and the checkpoint      |
+|                         |             |                   | rewritten (D14;                  |
+|                         |             |                   | bp_history_decisions.md 3.5      |
+|                         |             |                   | reversed); tb_bp_history TC17.   |
+|                         |             |                   | No property added (TD#170).      |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -1640,6 +1701,12 @@ it only documented current behavior.
 |                         |             |                   | CLOSED_TECH_DEBT row 12 credits  |
 |                         |             |                   | BP-018, not BP-091. Nothing      |
 |                         |             |                   | pending. Watchdog added BP-097.  |
+|                         |             |                   | BP-121: trains in every program, |
+|                         |             |                   | 1193 updates, and no prediction  |
+|                         |             |                   | is used. Read before write ruled |
+|                         |             |                   | after BP-121: TD#169, BP-122,    |
+|                         |             |                   | loop_pred_interfaces.md Ruled    |
+|                         |             |                   | Change.                          |
 | loop_pred_interfaces.md | Draft       | --                | SESSION-064 BP-091: corrected to |
 |                         |             |                   | the delivered ports. 17 doc-vs-  |
 |                         |             |                   | RTL findings recorded before any |
@@ -1709,6 +1776,12 @@ it only documented current behavior.
 |                         |             |                   | SESSION-064: sim_tage 106/0,     |
 |                         |             |                   | sim_tage_fast 106/0, from a      |
 |                         |             |                   | harness that can now fail.       |
+|                         |             |                   | BP-121: arbitration replaced, a  |
+|                         |             |                   | prediction is never delayed,     |
+|                         |             |                   | starvation hold on pq_not_full,  |
+|                         |             |                   | credit counters removed (D6,     |
+|                         |             |                   | bp_arb_spec.md 4.5); tb_tage     |
+|                         |             |                   | TC-54.                           |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
 |                         | BOUND, LIVE | sim_tage_fast     | TD#109 CLOSED BP-096: the bind   |
 |                         |             | sim_tage_tasks    | named an INSTANCE (bind u_dut)   |
@@ -1784,6 +1857,9 @@ it only documented current behavior.
 |                         |             |                   | Session-061: IT5 fold ports wired|
 |                         |             |                   | to bp_history outputs never      |
 |                         |             |                   | driven (permanently 0). TD#102.  |
+|                         |             |                   | BP-121: arbitration replaced as  |
+|                         |             |                   | in tage.sv (D6). sim_ittage      |
+|                         |             |                   | 222/0.                           |
 | ras_decisions.md        | Draft       | --                | Created session-050. G5/G6/G8/G17|
 |                         |             |                   | recorded. Session-061:           |
 |                         |             |                   | RAS_COMMIT_PTR_BITS correction.  |
@@ -1808,6 +1884,11 @@ it only documented current behavior.
 |                         |             |                   | push, TD#159.                    |
 |                         |             |                   | BP-120: next-on-stack link       |
 |                         |             |                   | (TD#159); tb_ras 163 checks.     |
+|                         |             |                   | BP-121: ras_p2_keep, a squashed  |
+|                         |             |                   | block at p2 performs no          |
+|                         |             |                   | operation (D8), tb_ras TC-34;    |
+|                         |             |                   | the wrap to BOS confirmed by     |
+|                         |             |                   | Jeff. sim_ras 165/0.             |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -1822,6 +1903,13 @@ it only documented current behavior.
 |                         |             |                   | TD#156 (found BP-119).           |
 |                         |             |                   | BP-120: TD#156 built; tb_ftb 153 |
 |                         |             |                   | checks. TD#162, TD#163 open.     |
+|                         |             |                   | BP-121: TD#162 and TD#163        |
+|                         |             |                   | closed; the carried way checked  |
+|                         |             |                   | both ways (D11); a field past    |
+|                         |             |                   | the start's visible jump hidden  |
+|                         |             |                   | (D4); jump rvc bit (TD#164).     |
+|                         |             |                   | Entry 114, RAM entry 113.        |
+|                         |             |                   | sim_ftb 162/0.                   |
 | ftb.sv                  | Complete    | tb_ftb            | Structural top. sim_ftb 99/0.    |
 |                         |             | sim_ftb           | Stale fastpath_en comment, TD#104|
 | sc_decisions.md         | Draft       | --                | Created session-056. Corrected   |
@@ -1898,6 +1986,21 @@ it only documented current behavior.
 |                         |             |                   | (BP-099), 1795 (BP-102). The     |
 |                         |             |                   | 973 above is the BP-097 figure   |
 |                         |             |                   | and is historical, not current.  |
+|                         |             |                   | BP-121: p3 slot write gated on   |
+|                         |             |                   | the FTB answer (D1); successors  |
+|                         |             |                   | chained, no redirect from an     |
+|                         |             |                   | unreachable slot (D5, D15); SC   |
+|                         |             |                   | arbitration replaced and the SC  |
+|                         |             |                   | request from r_tv_p2 (D6, D13);  |
+|                         |             |                   | FE-14 squash and no RAS restore  |
+|                         |             |                   | on its own redirect (D8, D9); p3 |
+|                         |             |                   | RAS reachability (D10); p1 slots |
+|                         |             |                   | in position order (D12); history |
+|                         |             |                   | correction on rollback (D14);    |
+|                         |             |                   | history stops at the first taken |
+|                         |             |                   | slot (D16); RAS push is the jump |
+|                         |             |                   | PC plus 2 or 4 (D3).             |
+|                         |             |                   | sim_bp_cluster 1978/0.           |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
 |                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
@@ -2125,6 +2228,13 @@ it only documented current behavior.
 |                         |             |                   | registered path would halve. All |
 |                         |             |                   | ten ordered arm pairs exercised. |
 |                         |             |                   | sim_ftq_npc 66/0.                |
+|                         |             |                   | BP-121: holds p0 the cycle       |
+|                         |             |                   | before an FTB update             |
+|                         |             |                   | (ftq_decisions.md 4.5 H4,        |
+|                         |             |                   | TD#162, D7); drives the history  |
+|                         |             |                   | correction for a backend         |
+|                         |             |                   | redirect (D14). No property      |
+|                         |             |                   | added for these (TD#170).        |
 | ftq_entry.sv            | Complete    | tb_ftq_entry      | BP-107. Fast path, 224b x 64 as  |
 |                         |             |                   | built; 228b under TD#122.        |
 |                         |             |                   | FOUR write ports in FE-3 order,  |
@@ -2133,6 +2243,12 @@ it only documented current behavior.
 |                         |             |                   | because the qualification lives  |
 |                         |             |                   | in the entry. Resets only the 64 |
 |                         |             |                   | valid bits. sim_ftq_entry 48/0.  |
+|                         |             |                   | BP-121: clears the slots above a |
+|                         |             |                   | resolved end (D2); pft_addr      |
+|                         |             |                   | rewritten at resolution of a     |
+|                         |             |                   | taken jump (D3). sim_ftq_entry   |
+|                         |             |                   | 72/0. No property added for      |
+|                         |             |                   | these (TD#170).                  |
 | ftq_meta.sv             | Complete    | tb_ftq_meta       | BP-107. Slow path, 421b x 2 slots|
 |                         |             |                   | x 64, UNPACKED; TD-FE-2 still    |
 |                         |             |                   | deferred. Two disjoint write     |
@@ -2186,6 +2302,13 @@ it only documented current behavior.
 |                         |             |                   | TD#158.                          |
 |                         |             |                   | BP-120: TD#157 and TD#158 fixed; |
 |                         |             |                   | properties R16 to R19.           |
+|                         |             |                   | BP-121: writes every resolved    |
+|                         |             |                   | slot (D2) and the resolved       |
+|                         |             |                   | fall-through of a taken jump     |
+|                         |             |                   | (D3); is_rvc to the FTB.         |
+|                         |             |                   | sim_ftq_resolve 121/0. No        |
+|                         |             |                   | property added for these         |
+|                         |             |                   | (TD#170).                        |
 | ftq_upd_conv.sv         | Complete    | tb_ftq_upd_conv   | BP-119, TD#151. Forms the        |
 |                         |             |                   | per-predictor update payloads    |
 |                         |             |                   | from bp_update_t, bp_ftq_meta_t  |
@@ -2403,6 +2526,10 @@ assessment of each document. Correct any that are wrong.
 |    | Seznec uses SLIM structure. Inline    | migrate to SLIM-style external  |
 |    | fields have no defined                | structure. See rollback test    |
 |    | checkpoint/rollback path.             | items #69/#70.                  |
+|    |                                       | RULED session-075 (Jeff): built |
+|    |                                       | with the loop predictor's       |
+|    |                                       | read-before-write update,       |
+|    |                                       | TD#169, BP-122.                 |
 | 16 | ALLOC_DATA_WIDTH padding when         | Resolve at T0 implementation    |
 |    | THIS_ < MAX_ -- unused bits between   |                                 |
 |    | EPC and TAG fields.                   |                                 |
@@ -2440,6 +2567,11 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | dead code kept for parameter    |
 |    |                                       | flexibility. Parameter choice,  |
 |    |                                       | not a testbench problem.        |
+|    |                                       | CLOSED, MOOT session-076.       |
+|    |                                       | BP-121 replaced the credit      |
+|    |                                       | rules (bp_arb_spec.md 4.5); the |
+|    |                                       | parameter relationship no       |
+|    |                                       | longer exists.                  |
 | 40 | TB-ARB-05 spec discrepancy.           | bp_arb_spec.md testbench section|
 |    | Old "backpressure 2 cycles" note did  | (was 10.1) removed session-057; |
 |    | not match TAGE_UQ_DEPTH=8.            | tb requirements now live in the |
@@ -2892,6 +3024,8 @@ assessment of each document. Correct any that are wrong.
 |     |          | three citations now point here. The sc.sv comments are   |
 |     |          | a two-line edit whenever an SC task next opens.          |
 |     |          |                                                          |
+|     |          | BP-121 replaced the credit rules (bp_arb_spec.md 4.5);   |
+|     |          | the unit-level queue is still absent.                    |
 | 124 | ftb/ubtb | CLOSED BP-110 (session-073). pftAddr is six bits from    |
 |     |          | the aligned region base with NO CARRY, in the FTB and    |
 |     |          | the uBTB. ubtb_pred_t.carry is deleted and nothing       |
@@ -3384,6 +3518,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | LI4), restored on a redirect, is built with it. Reverses |
 |     |          | BP-121 decision 6. The entry count is bounded by         |
 |     |          | physical design at the target frequency.                 |
+|     |          | QUESTION, session-076: "slot 1 wins" presumes both slots |
+|     |          | can write one entry; under TI6 the banks are per slot    |
+|     |          | (loop_pred_interfaces.md Ruled Change). BP-122 needs the |
+|     |          | answer.                                                  |
 | 170 | frontend | OPEN; BP-122. BP-121's 16 fixes are covered by tb_fe_top |
 |     |          | and unit testbench checks, each shown failing when       |
 |     |          | reverted, but no property was added. Units with property |

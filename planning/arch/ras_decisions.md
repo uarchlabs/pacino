@@ -57,9 +57,14 @@ not specified. As built by BP-120 (tb_ras TC-33a..d):
   p2=return, p3=return-call -> missed push; gives the p3 result
   p2=return-call, p3=call   -> undo-pop; the push is lost; WRONG
   p2=call, p3=return-call   -> missed pop retracts the push; WRONG
-None of the four can occur in the front end today: bp_cluster gives
-the repair the registered p2 type as the p3 type, so p2 and p3 never
-differ (TD#165, TD#166).
+None of the four could occur before BP-121: bp_cluster gave the
+repair the registered p2 qualification as the p3 one, so p2 and p3
+never differed (TD#166). SINCE BP-121 (D10, TD#166 closed) the p3
+view is qualified by p3 reachability, which uses the SC direction:
+ras_pred_val_p3 = r_val_p3 & r_brv_p3 & w_reach_p3. The p3 view now
+differs from p2 when SC reverses a direction that skips or reaches a
+call or return, and the repair runs. The two wrong pairings remain
+TD#165; none of BP-121's 19 programs reached them.
 
 Repair label semantics: the push/pop labels above denote
 stack-height restoration of resident entries, not fresh
@@ -129,7 +134,8 @@ p2_redirect: fires when the successor the cluster would publish
   Corrected session-070. For return branches, the redirect target is
   ras_pop_addr_p2.
 
-p3_redirect: RAS p3 = p2 registered. Stack repair applied at
+p3_redirect: RAS p3 = p2 registered, qualified by p3
+  reachability (section 1, BP-121). Stack repair applied at
   p3 if p3 structural prediction disagrees with p2 (see repair
   table above). The repair restores stack height of resident
   entries; it does not allocate (except the missed-push case)
@@ -320,11 +326,14 @@ BUILT BY BP-120 (TD#159 closed), in ras.sv with no port or package
 change. On the sentinel skip (the wrap) the new entry's nos is BOS,
 not TOSR, so the wrap leaves one reachable entry above BOS as the
 overflow effect below describes; nos = TOSR would link the entry
-into slots the wrap is reusing. That choice is the IA's, PROVISIONAL
-until Jeff rules (BP-121).
+into slots the wrap is reusing. CONFIRMED session-075 (Jeff, BP-121
+decision 4); this read "the IA's, PROVISIONAL until Jeff rules".
+BP-121's deep program, a chain of 18 calls, takes the wrap.
 
 MEASURED: no tb_fe_top number moved with the link alone. The RAS
-rarely operates at p2 in the integrated front end; see TD#162.
+rarely operated at p2 in the integrated front end because of TD#162,
+which BP-121 closed; across BP-121's programs it now supplies 2089
+used return targets (BP-121 per-predictor table).
 
 Entry fields:
   ret_addr  : VA_WIDTH bits  -- PC+2 or PC+4 of instruction
@@ -456,7 +465,8 @@ that consumed or produced the RAS state is issued", and
 ras_interfaces.md IC-RAS-12 gated the write per slot on
 ras_pred_val_p2, which left the p1 value in a block with no FTB
 result. Whether the p3 repair of section 1 also needs to rewrite the
-snapshot is open (ftq_bpu_interfaces.md 4c).
+snapshot is open (ftq_bpu_interfaces.md 4c, TD#149, measured by
+BP-121 and left open).
 
 ### 4.3  Restore on mispredict
 
@@ -471,6 +481,19 @@ circular buffer data is not cleared -- restoration is pointer-
 only. Subsequent pushes and pops write into slots above the
 restored TOSR, which may overwrite stale speculative data from
 the wrong path. This is correct behavior.
+
+NO RESTORE ON THE CLUSTER'S OWN REDIRECT. When the redirect is the
+cluster's own p2 or p3 redirect, the restore is not applied: the
+redirecting block survives its own redirect (fe_decisions.md
+FE-14), and its own push or pop already stands, so a restore would
+undo it. bp_cluster masks the input: w_ras_restore_val =
+ras_restore_val & ~(w_own_p2 | w_own_p3). BUILT by BP-121 (D9).
+
+A SQUASHED BLOCK OPERATES NOTHING. A block younger than a redirect
+is squashed (FE-14) and performs no RAS operation: its p2 push or
+pop is not written and its p3 operation is registered as none, on
+ras_p2_keep (ras_interfaces.md Port List). BUILT by BP-121 (D8).
+Before it, blocks younger than a redirect still pushed and popped.
 
 ### 4.4  Restore on flush -- DECIDED, RAS-3 CLOSED
 
@@ -757,8 +780,15 @@ after the call:
   - Full-width RVI call (4b): ret_addr = call_pc + 4
   - Compressed RVC call (2b): ret_addr = call_pc + 2
 
-The FTB fallThroughAddr field provides this value. The RAS uses it
-directly and does not independently compute PC+2 or PC+4.
+The cluster computes this value and drives it on
+ras_fall_through_p2: the call's own PC plus 2 when the FTB jump
+field's rvc bit is set, else plus 4 (ftb_decisions.md 5.5,
+ftb_interfaces.md IC-FTB-03). The RAS writes what it is given and
+does not compute PC+2 or PC+4. RULED session-075 (Jeff, BP-121
+decision 3, TD#164), BUILT by BP-121 (D3). This read "The FTB
+fallThroughAddr field provides this value". pftAddr is shared by
+every start in a region (ftb_decisions.md 4.6), so it held whichever
+start's block end was written last.
 
 NO STRADDLE CORRECTION EXISTS. An earlier revision of this section
 said a +2 correction applies for full-width RVI calls truncated at
@@ -766,18 +796,14 @@ a prediction block boundary. That was the `last_may_be_rvi_call`
 mechanism, which `ftb_decisions.md` 6 ELIMINATED; FTB-1 records
 that no straddle correction exists. Corrected session-069.
 
-It is eliminated rather than forgotten because `pft_addr` carries
-the TRUE instruction end, not a value clamped at the block
-boundary. A call is a taken branch and terminates the block, so
-the fall-through IS the address after the call. The encoding
-reaches past the block: under the session-070 ruling `pftAddr` is
-six bits measured from the ALIGNED REGION BASE, covering 0 to 126
-bytes, with no carry bit (`ftb_decisions.md` 5.5, 8.1). A 32-bit
-call beginning at the block's last halfword ends at block start
-plus 34 and is representable wherever the block starts within its
-region. An earlier revision gave this as "`pftAddr` = 1 with carry
-set", which holds only for an aligned block start. TD#124 tracks
-the RTL, which is still 5 bits plus carry.
+It is eliminated rather than forgotten because the call's own PC
+plus its length is the address after the call whether or not the
+call straddles the block boundary, so no correction is needed. A
+32-bit call beginning at the block's last halfword returns to its PC
+plus 4. Until BP-121 this paragraph made the same argument through
+`pft_addr`, which was true for one start and not for a region shared
+by several (TD#164); the six-bit, no-carry encoding it cited was
+built by BP-110 (TD#124, closed).
 
 The straddle case is real, not hypothetical: `ifu_decisions.md`
 IFU-8 covers 34 bytes and 17 halfword positions for exactly this
@@ -963,4 +989,12 @@ Commit stack pointer width:
               wrap links to BOS, provisional. 1: the four
               return-call pairings as built, two wrong, none
               reachable; TD #78 note restated for the restore.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              1, 1.2: p3 qualified by p3 reachability (D10,
+              TD#166). 3.2: wrap to BOS confirmed (decision 4);
+              TD#162 closed. 4.2: TD#149 measured. 4.3: no restore
+              on the cluster's own redirect (D9); a squashed block
+              performs no RAS operation (D8). 8: the return address
+              is the call PC plus 2 or 4 (TD#164).
 ```

@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -295,7 +295,8 @@ the p1 successor combinational is the expected implementation.
 
 ### 4.5 Hold conditions
 
-`r_next_val` deasserts and `r_next_pc` holds when either:
+`r_next_val` deasserts and `r_next_pc` holds when any of these
+holds:
 
 ```
   H1  a queued predictor cannot accept a request: any of
@@ -313,7 +314,23 @@ the p1 successor combinational is the expected implementation.
       that faulted would queue work that will not be fetched.
       Applies only INSIDE the live window -- a stale bit on a
       committed entry does not hold.
+  H4  an FTB update issues in the next cycle (ftq_ftb_sched's
+      issue_next). The update takes the FTB's single read port,
+      and a lookup presented in that cycle was dropped (TD#162,
+      ftb_interfaces.md IC-FTB-09). RULED session-075 (Jeff,
+      BP-121 decision 1), BUILT by BP-121 (D7). The RTL signal
+      in ftq_npc.sv is h3_ftb_upd; the H numbers here are this
+      document's, not the RTL's. Costs one p0 bubble per FTB
+      update.
 ```
+
+H1 AFTER BP-121, TO BE CHECKED. BP-121 (D6) made the starvation hold
+of bp_arb_spec.md 4.5 drop tage_pq_not_full or ittage_pq_not_full
+for one cycle, which H1 already covers, and for SC drop
+sc_uq_not_full for one cycle. H1 above excludes sc_uq_not_full and
+says the SC ties it to 1'b1. Whether ftq_npc now holds on
+sc_uq_not_full is not recorded in BP-121; read ftq_npc.sv before
+relying on H1 for SC. Session-076.
 
 NOT a hold condition: `ftq_ifu_req_rdy` low. The IFU being unable to
 accept a fetch does not stop the FTQ predicting ahead. That is the
@@ -585,6 +602,15 @@ session-070.
 An entry cannot be freed before its RAS commit is issued: the commit
 payload reads `bp_ras_snapshot_t` out of the entry. Commit and free
 are therefore the same pointer, not two.
+
+THE WALK COMMITS ONLY WHAT EXECUTED. It reads the RAS operation from
+the entry's slots, so the slots must hold what resolved. Since
+BP-121 (D2) every resolution writes its slot and clears the slots
+above a resolved end (ftq_entry_formats.md 2), and the backend
+commits an entry only after every resolution naming it is accepted
+(ftq_backend_interfaces.md 10 A7, ruled session-075). Before BP-121
+the walk committed calls that never executed and missed return-calls
+predicted not taken (TD#161).
 
 ras_decisions.md 4.5 rules restore > commit > hold for BOS, so the
 FTQ SUPPRESSES the RAS commit it would have issued in a cycle where a
@@ -1466,4 +1492,9 @@ Section 1 counts six, since session-074.
 
   2026-10-07  session-075, after BP-119. 7.1: ftq_upd_conv added;
               ftq_resolve places an unmapped branch.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              4.5: H4, hold p0 the cycle before an FTB update
+              (TD#162, D7); H1 flagged for the SC starvation hold.
+              5.4: the walk commits only what executed (D2, A7).
 ```

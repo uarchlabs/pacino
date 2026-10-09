@@ -7,7 +7,7 @@
  FILE:    loop_pred_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -283,6 +283,7 @@ Evaluated on every lookup, in priority order:
                  All captured from lp_pred_t at predict time.
                  The update path uses these directly. No
                  re-read of the table is performed.
+                 RULED TO CHANGE, TD#169: see Ruled Change below.
 
 ### Write path selection
 
@@ -359,6 +360,48 @@ subset of the taken-branch case.
 
 ---
 
+## Ruled Change: read before write (TD#169, BP-122)
+
+RULED session-075 (Jeff), after BP-121, reversing BP-121 decision 6
+("leave as specified"). NOT YET BUILT; BP-122.
+
+WHY. In BP-121 the loop predictor received 1193 updates across 19
+programs and none of its predictions was used. Each update rewrites
+the entry from the snapshot captured at prediction (Update behavior
+above, Producer obligations), and many iterations of a loop are
+predicted before the first update lands, so the snapshots are stale
+and the count never settles. Every loop exit mispredicts.
+
+THE RULE.
+  - The update reads the entry before it writes it. This is allowed
+    for the loop predictor because its table is flops, not RAM
+    (fe_decisions.md 2.1). Single cycle, no bubble.
+  - Slot 1 wins when both slots name one entry in the same cycle.
+  - A prediction in the same cycle as an update to its entry sees
+    the old value, as the Read-during-write contract above already
+    says.
+  - Each prediction carries its iteration number, so the order in
+    which updates arrive does not matter.
+  - The speculative iteration count (curs, curs_v; LI4, TD#7) is
+    built with it, and restored on a redirect (PROJECT_STATUS
+    TD#169).
+  - Physical design bounds the entry count at the target frequency.
+    The added logic costs FMAX; the cost is accepted.
+
+WHAT IT REPLACES when built: the producer obligation "No
+recomputation at update" and the field note "No re-read of the
+table is performed" above.
+
+QUESTION FOR JEFF, session-076. "Slot 1 wins when both slots name
+one entry" presumes the two slots can write one entry. Under TI6
+the table is one bank per slot and a write to one bank cannot change
+another (Module Parameters above; LI3 closed on that basis), so two
+slots never name one entry. Either BP-122 shares the table between
+slots, or the slot-1 rule applies to something other than an entry
+in one bank. Not ruled; BP-122 needs the answer.
+
+---
+
 ## Miss Signaling Contract
 
 The loop predictor has no miss output port. Miss is implied
@@ -393,10 +436,15 @@ redirect, and does not communicate miss reason externally.
 |     | cycle                                     | slot; there is   |
 |     |                                           | no shared write  |
 |     |                                           | port to arbitrate|
-| LI4 | curs/curs_v speculative iteration         | Technical debt #7.|
-|     | tracking -- rollback policy not           | Resolve at bp_cluster impl.|
-|     | defined. Seznec uses external SLIM        |                  |
-|     | structure for this purpose.               |                  |
+| LI4 | curs/curs_v speculative iteration         | RULED session-075|
+|     | tracking -- rollback policy not           | (Jeff): built    |
+|     | defined. Seznec uses external SLIM        | with the read-   |
+|     | structure for this purpose.               | before-write     |
+|     |                                           | update, TD#169,  |
+|     |                                           | BP-122. TD#7.    |
+|     |                                           | This read        |
+|     |                                           | "Resolve at      |
+|     |                                           | bp_cluster impl".|
 | LI5 | Allocation policy -- allocates    | DECIDED: backward branch filter  |
 |     | on backward branches only.        | required. Only upd_valid with    |
 |     | Forward branches do not trigger   | actual_taken=1 and target <      |
@@ -409,3 +457,15 @@ redirect, and does not communicate miss reason externally.
 |     |                                           | bp_ftq_meta_t lp |
 |     |                                           | member is now    |
 |     |                                           | lp_pred_t.       |
+
+---
+
+## Document History
+
+  2026-10-08  session-076, PA-direct correction recording the ruling
+              made after BP-121. Ruled Change: read before write,
+              slot 1 wins, each prediction carries its iteration
+              number, speculative iteration count built with it
+              (TD#169, BP-122); the question of slot 1 under TI6
+              raised. LI4 ruled. This document had no history
+              section; earlier changes are in PROJECT_STATUS.

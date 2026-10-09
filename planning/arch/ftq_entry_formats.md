@@ -6,7 +6,7 @@
  FILE:    ftq_entry_formats.md
  SOURCE:  bp_structs_pkg.sv, fe_decisions.md sections 4.1 and 4.2
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -66,6 +66,16 @@ ftq_entry placement port `rsv_wr_*`, added by BP-119. The placement
 write is last in ftq_entry's write order, so it overrides a predecode
 write to the same entry in the same cycle.
 
+SINCE BP-121 (D2) ftq_resolve writes EVERY resolved slot, mapped or
+placed (`rsv_wr_val`), and ftq_entry clears the slots above a
+resolved end, the position of a taken or mispredicted resolution
+(`rsv_wr_end`). The entry then holds what executed rather than what
+was predicted, which the commit walk relies on (ftq_decisions.md
+5.4). Before it, a resolution of an already-mapped slot did not
+write the entry and slots after a taken or mispredicted branch were
+not cleared, so the walk committed calls that never executed and
+missed return-calls predicted not taken (TD#161).
+
 Block scalar fields, one per entry:
 
 ```
@@ -111,7 +121,8 @@ port; the FTB and the uBTB store positions region-relative and
 convert at their own boundary (ftb_decisions.md 4.6, session-071).
 The cluster also uses it to form the branch PC reported to
 bp_history: block START plus `pos << POS_OFFSET_BITS` -- not the
-32-byte-aligned base, which bp_cluster.sv uses (TD#125) -- which is two
+32-byte-aligned base, which bp_cluster.sv used until BP-110 removed
+it (TD#125, closed) -- which is two
 bytes per position at the values in bp_defines_pkg.sv (BP-092a,
 rescaled by BP-099). Stated as the shift rather than a literal
 multiplier so it cannot drift from the position width again.
@@ -123,7 +134,9 @@ every valid block from `bpu_blk_ras_p2`, the state after both slots'
 operations (ftq_bpu_interfaces.md 4c, ras_decisions.md 4.2). No
 restore reads the p1 value. Session-071, ruled.
 
-`pft_addr` IS A p1 VALUE AND, AS BUILT, NOTHING CORRECTS IT. Written
+`pft_addr` WAS A p1 VALUE THAT NOTHING CORRECTED, until BP-118
+(below); this read "IS A p1 VALUE AND, AS BUILT, NOTHING CORRECTS
+IT". Written
 once from `bpu_pred_pft_p1`, and the p2/p3 groups of
 ftq_bpu_interfaces.md 4a carry `bp_ftq_slot_t` only.
 On a uBTB miss the p1 value is the FULL block end, so the very case
@@ -136,6 +149,16 @@ block-scalar group gains `bpu_blk_pft_p2`, and the FTQ rewrites
 from `bpu_blk_ras_p2`. The value is the not-taken term of the
 cluster's own p2 successor. ftq_bpu_interfaces.md 4c is the owner;
 no second field is added here. BP-118.
+
+A THIRD WRITER, AT RESOLUTION. Since BP-121 (D3, TD#164, ruled
+session-075) ftq_resolve rewrites `pft_addr` when it accepts the
+resolution of a taken jump (`rsv_wr_pft`) with the resolved
+fall-through, which the resolution's `is_rvc` makes formable. The
+same value goes to the FTB on `ftb_upd_pft_addr_u0`, so the FTB
+learns the resolved block end rather than its own prediction. The
+RAS commit return address is read from this field
+(ftq_bpu_interfaces.md 4c names it as a reader), so it now reads
+the resolved value.
 
 `pft_addr` is block scalar as well: it is the address fetched after
 this block when no slot in it is taken, one value per entry. It is
@@ -583,4 +606,11 @@ path touches none of those.
               execution of a branch the entry does not hold; it is
               placed and trained, R2 applying only to a mapped
               branch (ruled, Jeff).
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              Section 2: every resolution writes its slot and the
+              slots above a resolved end are cleared (D2); pft_addr
+              is rewritten at the resolution of a taken jump (D3,
+              TD#164); the aligned-base note brought to BP-110;
+              the "IS A p1 VALUE" heading brought to BP-118.
 ```

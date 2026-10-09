@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -25,20 +25,18 @@ question: it fires only when the successor the cluster would publish
 differs from the one its own p1 stage registers hold
 (fe_decisions.md FE-4 and 2.5). ITTAGE does not predict direction
 -- it predicts
-a 38-bit target address (upper 38 bits of a Sv39 VA; bit 0 is always
-zero for instruction alignment and is not stored). THE FIELD CANNOT
-EXPRESS A 41-BIT GUEST PHYSICAL ADDRESS and is deliberately not
-widened: predictor storage may mispredict where an architectural
-address may not (fe_decisions.md FE-19). What must change is the
-RECONSTRUCTION, which sign-extends today and must zero-extend --
-Sv39x4 requires bits 63:41 to be zero, so sign extension corrupts
-any GPA with bit 38 set. TD#122.
+a 40-bit target, VA[40:1]; bit 0 is always zero for instruction
+alignment and is not stored. IT_MAX_TGT_WIDTH and IT_TBL_TGT_WIDTH
+are 40 and the reconstruction is {stored, 1'b0}: no target bit is
+inferred by extension. Built by BP-111 (TD#132, closed).
 
-ZERO EXTENSION IS UNCONDITIONAL, so a reconstructed target always
-carries bits 40:39 = 00, which a sign-extending regime would
-reject for a target with bit 38 set. That is a mispredict, caught
-at resolve, not an illegal architectural address; fe_decisions.md
-FE-19 holds the regimes and the reasoning. Session-072.
+AN EARLIER REVISION described a 38-bit field (VA[38:1]) that was
+deliberately not widened, with a reconstruction that had to
+zero-extend (TD#122). BP-109 found that no extension rule is right
+for both a V=1 guest physical address and a V=0 Sv39 kernel address,
+and that a wrong entry could not be corrected by any update; BP-111
+widened the field instead (PROJECT_STATUS TD#132). Stale since
+BP-111; corrected session-076.
 
 Five active tables: IT1-IT5. No IT0 base table. IT0 index position
 in parameter arrays is a placeholder only and is never instantiated.
@@ -412,7 +410,12 @@ ittage_upd_rdy_u1[s]  -- flopped version of ittage_upd_val_u0[s].
 pq_not_full           -- asserted when the prediction queue has
                           room to accept a new prediction request.
                           Consumer must gate ittage_pred_val_p0
-                          on this signal. Pending rename to
+                          on this signal. Since BP-121 it also
+                          drops for one cycle as the starvation
+                          hold, so that a waiting update finds a
+                          cycle with no prediction
+                          (bp_arb_spec.md 4.5). A prediction is
+                          never delayed by an update. Pending rename to
                           ittage_pq_not_full TD #49
 
 upd_rdy               -- asserted when the update queue is not

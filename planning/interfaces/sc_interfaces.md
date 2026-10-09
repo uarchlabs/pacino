@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -324,7 +324,9 @@ the update path; the update does not re-read the tables.
 
 SC tables are single-port RAMs. SC prediction (read, p2->p3) and SC
 update (write, u0/u1) compete for the one RAM port. The bp_arb_spec.md
-section 4.5 credit arbiter governs that contention.
+section 4.5 arbiter governs that contention: a prediction is never
+delayed, and an update is granted only with no block at p2 that
+TAGE answers. It was a credit arbiter until BP-121.
 
 SC has no independent prediction FIFO. The TAGE response buffer
 (TAGE_RESP_BUF_DEPTH) is SC's prediction-side storage and acts as
@@ -339,14 +341,17 @@ session-071); each entry covers both slots
 (bp_arb_spec.md section 6.2). This is the target arbitration model.
 At the unit level (sc.sv, as shipped) the UQ is not built and the
 arbitration-layer ports are stubbed: sc_uq_not_full is tied to 1'b1
-and sc_upd_rdy is tied to all-ones. The credit arbiter itself is
-implemented and tested in bp_cluster (bp_arb_spec.md 4.5; TD#73
-closed by BP-094 group H). The unit-level gap is TD#123. TD#73 and
-TD#94 are closed and neither covered building the queue.
+and sc_upd_rdy is tied to all-ones. The arbiter itself is
+implemented and tested in bp_cluster (bp_arb_spec.md 4.5; group H,
+rewritten by BP-121). At the cluster, sc_uq_not_full drops for one
+cycle as the starvation hold (BP-121 D6); sc.sv was not changed.
+The unit-level gap is TD#123. TD#73 and TD#94 are closed and
+neither covered building the queue.
 
 When the SC arbiter grants an update and stalls a prediction, the
 TAGE response buffer head is held, backpressuring TAGE
-(bp_arb_spec.md section 11 item C).
+(bp_arb_spec.md section 11 item C). SINCE BP-121 THAT CASE DOES NOT
+ARISE: an update is granted only when no prediction is presented.
 
 ---
 
@@ -464,4 +469,9 @@ conditional branches.
               post-execute resolution, not commit, per FE-6; the
               sentence was carried from bp_arb_spec.md 6.2, which
               now carries the same note.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              Arbitration Model: the credit arbiter replaced
+              (bp_arb_spec.md 4.5, decision 5); the starvation hold
+              on sc_uq_not_full at the cluster.
 ```

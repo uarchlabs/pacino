@@ -99,18 +99,25 @@ block's window reports invalid, and the surviving fields are NOT
 compacted onto the slots and NOT reordered in storage. Slot 0 stays
 br0. The FTB does compact (4.6 O-3b); the uBTB does not.
 
-Three consequences, all accepted:
+Three consequences, accepted when ruled (session-073); BP-121
+found the second was not harmless (below):
   - with br0 hidden and br1 visible, slot 0 is EMPTY and slot 1
     carries the block's first branch.
   - a visible jump takes slot 0 ahead of br1, so the p1 slot order
     can invert. The FTB corrects the order at p2, and FE-3 already
     has a later stage supersede the whole p1 prediction.
+    NOT HARMLESS, found by BP-121 (D12): a uBTB slot 1 below slot 0
+    sent the block to the later branch's target (twocond). bp_cluster
+    now swaps the two p1 slots into position order
+    (fe_decisions.md FE-10). The uBTB itself is unchanged.
   - br_idx on the update port names the STORAGE field, not a port
     slot as ftb_upd_br_idx_u0 does. A field hidden from the update's
     start is refilled with that start's branch rather than kept.
 
 The uBTB is a p1 guess that p2 replaces, so slot-order inversion
-costs accuracy for one cycle and nothing else. Compaction would have
+was expected to cost accuracy for one cycle and nothing else. BP-121
+showed it could send a block to the wrong target, and the cluster
+now restores the order at p1 (above). Compaction would have
 bought consistency with the FTB at the price of a second set of
 window rules in a module whose output is always superseded.
 
@@ -371,6 +378,10 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              Lookup: the p1 slot-order inversion was not harmless;
+              bp_cluster swaps the p1 slots (D12).
+
   2026-10-08  session-075, after BP-120. The position rule built;
               only the field br_idx names is compared.
 

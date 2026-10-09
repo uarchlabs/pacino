@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-07
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -252,6 +252,11 @@ back from the entry rather than resampled from the cluster.
 
 Both slots are predicted at p1. The selection chooses which slot's
 target is the successor; it does not gate whether a slot is predicted.
+
+The per-slot successor the redirect comparison uses follows the same
+order: chained from the highest slot down, and a slot after a taken
+slot is unreachable and raises no redirect (ftq_bpu_interfaces.md 6,
+BUILT by BP-121, D5 and D15).
 
 The selection is re-evaluated whenever a redirect rewrites a slot.
 
@@ -516,6 +521,12 @@ slice and the resolved outcome; that decision is predictor-internal.
 The update path uses the metadata captured at predict. It does not
 recompute predictor state from the PC or the history.
 
+EXCEPT THE LOOP PREDICTOR. RULED session-075 (Jeff), after BP-121,
+reversing BP-121 decision 6: the loop predictor's update reads the
+entry before writing it, which its table allows because it is flops,
+not RAM. TD#169, BP-122. loop_pred_interfaces.md is the home of the
+rule.
+
 A slot off the executed path never resolves and forms no update.
 
 ### 7.3 Enqueue
@@ -702,6 +713,11 @@ Proposed numbering. Stated here for the first time; not carried from
          FTB block. The slot is the array index; no slot identifier
          field is carried. The index is ORDERED as of IC-FTB-16:
          slot 0 is the block's first branch in program order.
+         THAT HOLDS AT p1 AS WELL. The uBTB does not reorder its
+         slots (ruled session-073, ubtb_interfaces.md), so a uBTB
+         slot 1 can lie below slot 0. bp_cluster swaps the two p1
+         slots into position order. BUILT by BP-121 (D12); before
+         it such a block was sent to the later branch's target.
 
   FE-11  At most one RAS-OPERATING INSTRUCTION occurs per block. A
          RAS operation is a taken branch, so one in slot 0 ends the
@@ -740,6 +756,16 @@ Proposed numbering. Stated here for the first time; not carried from
          and are not evidence of unfinished work. See
          ras_decisions.md 4.4.2 for the RAS half and
          ftb_interfaces.md 2.6 for the FTB half.
+
+         AS BUILT by BP-121 (D8, D9), which found the squash was
+         not applied: blocks younger than a redirect still
+         performed RAS operations. The block at p1 is squashed by
+         any rollback. The block at p2 survives only its own p2
+         redirect; a squashed block at p2 performs no RAS
+         operation (ras_p2_keep). The RAS restore is not applied
+         when the rollback is the cluster's own p2 or p3 redirect,
+         because the redirecting block's own operation stands
+         (ras_decisions.md 4.3).
 
   FE-13  The cluster publishes its view of every slot on every
          prediction, at p2 and again at p3, not only when a redirect
@@ -1668,4 +1694,10 @@ create one.
               the ruling that a branch its FTQ entry does not hold
               is placed at resolution and trains every predictor of
               its row. FE-20: sc_enable also goes to the FTQ.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              2.4: per-slot successors chained (D5, D15). 7.2: the
+              loop predictor reads before it writes (ruled after
+              BP-121, TD#169). FE-10: p1 slots in position order
+              (D12). FE-14: the squash as built (D8, D9).
 ```

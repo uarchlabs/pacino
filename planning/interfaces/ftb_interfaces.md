@@ -178,6 +178,13 @@ fields of the one indexed entry, not two slots.
                            the ITTAGE-miss fallback, section 4.2.
                            An earlier revision said "three-way JALR
                            split (FTB / RAS / ITTAGE)".
+  output logic                  ftb_jmp_rvc_p2
+                        -- 1 = the jump is a compressed instruction (2
+                           bytes), 0 = 4 bytes. The cluster forms the
+                           RAS push and the fall-through of a block
+                           ending at its jump as the jump PC plus 2 or
+                           4 (IC-FTB-03, ftb_decisions.md 5.5). Added
+                           by BP-121 (TD#164).
 
   -- fallthrough (block end)
   output logic [VA_WIDTH-1:0]   ftb_pft_addr_p2
@@ -199,8 +206,13 @@ fields of the one indexed entry, not two slots.
                            session-069 had never reached the RTL.
                            The uBTB does NOT have this check; see
                            ubtb_interfaces.md.
-                           Authoritative for the cluster; RAS push
-                           uses this value (IC-FTB-03).
+                           The fall-through of a block with no
+                           visible jump. For a block ending at its
+                           jump, the fall-through and the RAS push
+                           are the jump PC plus 2 or 4 instead
+                           (IC-FTB-03). This read "Authoritative for
+                           the cluster; RAS push uses this value";
+                           session-076.
 
 ### 2.4 Fast-path (direction bypass) (to override logic, p2)
 
@@ -241,6 +253,8 @@ IC-FTB-05).
                            block hit in FTB at predict time. Guides
                            the write: overwrite the carried way on a
                            hit, allocate the carried victim on a miss.
+                           Checked against the carried way at the
+                           write (IC-FTB-10).
   input  logic [FTB_WAY_BITS-1:0] ftb_upd_way_u0
                         -- carried writeWay from the prediction read.
                            ftb_cntrl does NOT re-look-up the tag
@@ -307,6 +321,12 @@ IC-FTB-05).
   input  logic                  ftb_upd_is_call_u0
   input  logic                  ftb_upd_is_ret_u0
   input  logic                  ftb_upd_is_jalr_u0
+  input  logic                  ftb_upd_jmp_rvc_u0
+                        -- 1 = the resolved jump is a compressed
+                           instruction, from the backend resolution's
+                           is_rvc (ftq_backend_interfaces.md 4).
+                           Written to the jump field's rvc bit with
+                           the type. Added by BP-121 (TD#164).
 
   -- block boundary
   input  logic [VA_WIDTH-1:0]   ftb_upd_pft_addr_u0
@@ -316,6 +336,11 @@ IC-FTB-05).
                            to the ALIGNED REGION BASE, not the block
                            start, six bits, no carry
                            (ftb_decisions.md 5.4/5.5, TD#124).
+                           It is the RESOLVED block end: the FTQ
+                           rewrites the entry's pft_addr at the
+                           resolution of a taken jump
+                           (ftq_entry_formats.md 2). Before BP-121
+                           it carried the predicted end.
 
 There is no last_may_be_rvi_call port. The bit was eliminated
 (ftb_decisions.md section 6).
@@ -450,10 +475,10 @@ IC-FTB-01:
   region position rewrites target and type and keeps the position. A
   resolve of a different jump of the region (a different position)
   rewrites the whole field: position, target, isCall, isRet, isJalr,
-  and pftAddr if the boundary moves. Ruled session-075 (Jeff),
-  ftb_decisions.md 5.5. Built by BP-120 (TD#156): every jump resolve
-  writes position, target and type. Before it, ftb_cntrl.sv kept the
-  stored position whenever the stored jump was visible from the
+  rvc (since BP-121), and pftAddr if the boundary moves. Ruled
+  session-075 (Jeff), ftb_decisions.md 5.5. Built by BP-120 (TD#156): every
+  jump resolve writes position, target and type. Before it, ftb_cntrl.sv kept
+  the stored position whenever the stored jump was visible from the
   update's start, which mixed two jumps in one field.
 
 IC-FTB-02:
@@ -462,8 +487,14 @@ IC-FTB-02:
   fast-path on an FTB miss or an empty conditional field.
 
 IC-FTB-03:
-  ftb_pft_addr_p2 is the authoritative fallthrough for the cluster.
-  RAS uses this value as the pushed return address (ras_fall_through).
+  ftb_pft_addr_p2 is the fall-through of a block with no visible
+  jump. For a block ending at its jump, the fall-through and the
+  pushed return address (ras_fall_through) are the jump PC plus 2
+  when ftb_jmp_rvc_p2 is set, else plus 4. RULED session-075 (Jeff,
+  BP-121 decision 3, TD#164), BUILT by BP-121 (D3). This read "RAS
+  uses this value as the pushed return address": pftAddr is shared
+  by every start in a region (ftb_decisions.md 4.6), so the push
+  took whichever start's end was written last.
   No straddle correction is applied. The value is BOUNDS CHECKED
   (ftb_decisions.md 4.5, FTB-G1, FTB-G3), built by BP-110 (2.3).
   This entry said "as built, ftb_cntrl.sv line 500 reconstructs
@@ -538,6 +569,13 @@ IC-FTB-09 (resolved, 2026-08-19):
   (This item also covered the prediction-vs-update read port sharing
   surfaced in BP-066; that half is unaffected.)
 
+  READ PORT SHARING, TD#162. An update borrows the read port, and
+  the prediction lookup of that cycle was dropped (found by
+  BP-120). RULED session-075 (Jeff, BP-121 decision 1), BUILT by
+  BP-121 (D7): ftq_npc holds p0 in the cycle before an FTB update
+  issues, so no lookup is dropped (ftq_decisions.md 4.5 H4). One p0
+  bubble per FTB update.
+
 IC-FTB-10 (resolved, session-052):
   Update-side way selection. ftb_cntrl does NOT re-look-up the tag on
   update. The predicted way (writeWay) and the hit result are
@@ -550,6 +588,13 @@ IC-FTB-10 (resolved, session-052):
   of the entry for the conf/target read-modify-write is still required
   and permitted -- IC-FTB-10 forbids the associative re-lookup, not the
   carried-way read.
+
+  THE CARRIED HIT/MISS IS CHECKED, BOTH WAYS. RULED session-075
+  (Jeff, BP-121 decision 2, TD#163), BUILT by BP-121 (D11). The
+  write recomputes the hit from that carried-way read: the way is
+  valid and its tag matches. A stale miss on a same-tag way merges;
+  a stale hit on a way now holding another block allocates.
+  ftb_decisions.md 5.1.
 
 IC-FTB-11 (resolved session-052, REOPENED session-070):
   Fallthrough reconstruction error. Ruled OUT in session-052 because
@@ -708,9 +753,10 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
                          contents, decoupled frontend, pipeline advance,
                          update-channel arbitration, keeping TAGE/SC
                          trained under the FTB fast-path (FTB-2).
-  ras_decisions.md    -- RAS consumes ftb_pft_addr_p2 as the pushed
-                         return address; ftb_jmp_target_p2 is the
-                         RAS-empty fallback.
+  ras_decisions.md    -- RAS pushes the jump PC plus 2 or 4, formed
+                         by the cluster from ftb_jmp_pos_p2 and
+                         ftb_jmp_rvc_p2 (IC-FTB-03);
+                         ftb_jmp_target_p2 is the RAS-empty fallback.
   ittage              -- ftb_jmp_target_p2 is the ITTAGE-miss fallback
                          (ITTAGE has no IT0 base table).
   bp_defines_pkg.sv   -- all FTB parameters in section 5.
@@ -793,3 +839,11 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
   2026-10-08  session-075, after BP-120. IC-FTB-01, IC-FTB-15: the
               position rule built. Open defects TD#162 to TD#164 are
               in ftb_decisions.md 9, FTB-5.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              2.3: ftb_jmp_rvc_p2; ftb_pft_addr_p2 no longer the RAS
+              push. 2.5: ftb_upd_jmp_rvc_u0; ftb_upd_pft_addr_u0 is
+              the resolved end. IC-FTB-01: rvc in the rewrite list.
+              IC-FTB-03: push source (TD#164). IC-FTB-09: hold p0
+              before an update (TD#162). IC-FTB-10: carried way
+              checked both ways (TD#163). 6: ras line.

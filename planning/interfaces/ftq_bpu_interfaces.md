@@ -285,16 +285,18 @@ description of the named entry with the latest group received.
 
 `bpu_slot_val_p2` is `r_val_p2 & ftb_valid_p2`: the cluster has a
 corrected view only when the FTB answered. `bpu_slot_val_p3` is
-`r_val_p3`.
+`r_val_p3 & r_ftb_ans_p3`: gated the same way, on the FTB having
+answered that block at p2.
 
-DEFECT, TD#161, found by BP-120. Because `bpu_slot_val_p3` is not
-gated on the FTB having answered, the p3 write overwrites the p1
-slots with an empty view when the FTB missed at p2, and the FTQ then
-presented a block that is not its predecessor's successor: a stream
-error, also on the pre-BP-120 tree. The obvious fix (gate p3 on the
-registered p2 FTB valid) cleared it in a scratch copy but made coro
-commit 17 return-calls instead of 20, so the commit walk depends on
-the p3 write today. BP-121.
+TD#161, found by BP-120, CLOSED by BP-121 (D1, D2). `bpu_slot_val_p3`
+was `r_val_p3`, so when the FTB missed at p2 the p3 write overwrote
+the p1 slots with an empty view and the FTQ presented a block that
+was not its predecessor's successor: a stream error. Gating p3 alone
+broke the commit walk, which depended on the p3 write. BP-121 fixed
+that dependence as well: every resolution now writes its slot and
+clears the slots above a resolved end (ftq_entry_formats.md 2), and
+the backend commits an entry only after its resolutions are
+accepted (ftq_backend_interfaces.md 10 A7).
 
 THIS IS NOT A REDIRECT AND IS NOT GATED ON ONE. A redirect fires only
 when the p2 successor differs from the p1 successor. The case that
@@ -390,6 +392,10 @@ pre-repair state, and a later restore to this entry restores a
 slightly wrong stack. The RAS is a predictor, so the cost is
 accuracy, not correctness. The fix, if measurement asks for it, is
 a p3 snapshot write. Raised session-071; this read OPEN.
+MEASURED by BP-121: no return mispredict after warm-up is
+attributable to it (PROJECT_STATUS TD#149). Left open. Since
+BP-121 the p3 repair runs when SC changes reachability
+(ras_decisions.md 1, TD#166), which it did not before.
 
 `bpu_blk_pft_p2` IS THE CORRECTED FALL-THROUGH, TD#113. It is the
 same not-taken address the cluster uses as the not-taken term of its
@@ -400,6 +406,11 @@ forward when it does not. The FTQ writes it into
 `bpu_blk_val_p2`, exactly as it writes `bpu_blk_ras_p2`. RULED
 session-075 (Jeff). Built by BP-118: the net is `w_pft_p2` in
 bp_cluster.sv, `w_ftb_valid_p2 ? w_ftb_pft_addr_p2 : r_pft_p1_p2`.
+SINCE BP-121 (D3, TD#164), for a block ending at its jump the p2
+fall-through is the jump PC plus 2 or 4 (`w_jmp_ft_p2`), not the
+FTB's shared pftAddr (ftb_interfaces.md IC-FTB-03). The expression
+above is as BP-118 built it; how BP-121 folded `w_jmp_ft_p2` into
+it is not recorded and is to be read from bp_cluster.sv.
 
 ONE SOURCE FOR BOTH. Because the value written into the entry and the
 value the p2 redirect comparison reads are the same net, the entry's
@@ -436,8 +447,12 @@ ftb declares 42 flat ports. The p2 outputs the cluster consumes:
   ftb_br1_conf_p2    ftb_br1_target_p2
   ftb_jmp_valid_p2   ftb_jmp_pos_p2    ftb_jmp_target_p2
   ftb_is_call_p2     ftb_is_ret_p2     ftb_is_jalr_p2
+  ftb_jmp_rvc_p2
   ftb_pft_addr_p2    ftb_fastpath_p2 [1:0]
 ```
+
+`ftb_jmp_rvc_p2` was added by BP-121 (TD#164), with the update input
+`ftb_upd_jmp_rvc_u0`; the port count above predates both.
 
 br0 maps to slot 0 and br1 to slot 1 at the cluster boundary. That
 mapping is PROGRAM ORDERED as of IC-FTB-16: the update path fills br0
@@ -574,7 +589,14 @@ sc p3 output:
   ras_snapshot_p2     bp_ras_snapshot_t per slot  out
   ras_pred_val_p3     logic             per slot  in
   ras_br_type_p3      bp_br_type_e      per slot  in
+  ras_p2_keep         see ras_interfaces.md     in   BP-121
 ```
+
+Since BP-121: `ras_fall_through_p2` carries the call PC plus 2 or 4,
+not the FTB fall-through (TD#164); `ras_pred_val_p3` is qualified by
+p3 reachability, not the registered p2 value (TD#166); and
+`ras_p2_keep` stops a squashed block at p2 from operating the RAS
+(D8). ras_interfaces.md is the home of each.
 
 The top of stack is presented at p0. The push or pop executes at p2
 once `ras_br_type_p2` carries the FTB classification.
@@ -644,6 +666,17 @@ fetch past a boundary the FTB had already contradicted.
 The p3 comparison is against the p2-corrected value, not the raw p1
 prediction, so a p3 redirect fires only when SC changes the value
 the cluster published at p2.
+
+SUCCESSORS ARE CHAINED FROM THE HIGHEST SLOT DOWN, at p1, p2 and
+p3. The last slot's not-taken successor is the block fall-through;
+every lower slot's not-taken successor is the next slot's
+successor. A slot after a taken slot is not reachable and raises no
+redirect (`w_reach_p2`, and the same at p3, where reachability uses
+the SC direction). This is fe_decisions.md 2.4 applied per slot: the
+first taken slot ends the block. BUILT by BP-121 (D5 at p2 and p3,
+D15 at p1). Before it a not-taken slot's successor was the block
+fall-through even when a later slot was taken, and an unreachable
+slot could redirect: stream errors in cross, deep and ftbonly.
 
 A redirect from a later stage supersedes an earlier redirect for the
 same entry index and slot. Supersession does not cross slots.
@@ -827,7 +860,7 @@ had been stepping the FTB confidence extra times.
 |-----------|-------------------|-----------------|-----------------|
 | ubtb      | in ubtb_upd_t     | upd_u0          | none            |
 | loop_pred | upd_valid_p0      | upd_p0          | none            |
-| ftb       | ftb_upd_valid_u0  | 14 flat ports   | none            |
+| ftb       | ftb_upd_valid_u0  | 15 flat ports   | none            |
 | tage      | tage_upd_val_u0   | tage_upd_inp_u0 | tage_upd_rdy    |
 | ittage    | ittage_upd_val_u0 | ittage_upd_inp  | ittage_upd_rdy  |
 | sc        | sc_upd_val_u0     | sc_upd_inp_u0   | sc_upd_rdy      |
@@ -839,11 +872,13 @@ Notes:
 - loop_pred update ports carry a p0 suffix, not u0. They are
   per-slot as of BP-091, at both the module and the cluster
   boundary (`lp_upd_valid_p0`, `lp_upd_p0`).
-- ftb update is 14 flat ports: ftb_upd_pc_u0, ftb_upd_hit_u0,
+- ftb update is 15 flat ports: ftb_upd_pc_u0, ftb_upd_hit_u0,
   ftb_upd_way_u0, ftb_upd_is_br_u0, ftb_upd_br_idx_u0,
   ftb_upd_taken_u0, ftb_upd_target_u0, ftb_upd_pos_u0,
   ftb_upd_is_jmp_u0, ftb_upd_jmp_target_u0, ftb_upd_is_call_u0,
-  ftb_upd_is_ret_u0, ftb_upd_is_jalr_u0, ftb_upd_pft_addr_u0.
+  ftb_upd_is_ret_u0, ftb_upd_is_jalr_u0, ftb_upd_jmp_rvc_u0,
+  ftb_upd_pft_addr_u0. ftb_upd_jmp_rvc_u0 was added by BP-121
+  (TD#164), with ftb_upd_t.jmp_rvc. This read 14.
 - ras update is the commit group: ras_commit_val,
   ras_commit_br_type, ras_commit_ret_addr, ras_commit_snapshot.
 - ftb and ras have no slot dimension on their update ports.
@@ -989,6 +1024,28 @@ not decide this winner. FE-3 still orders p3 over p2 between
 themselves. The FTQ presents the INDEX of the entry whose
 end-of-block pointer state is to be restored, not the pointer values
 (ftq_decisions.md 3.2, ftq_backend_interfaces.md 8).
+
+HISTORY CORRECTION, BP-121 (D14). RULED session-075 (Jeff, BP-121
+decision 8), replacing bp_history_decisions.md 3.5. The rollback
+also carries a correction, on further cluster inputs that BP-121
+writes as ftq_rollback_corr/_n/_tkn/_pbit. Read here as the four
+names below; the expansion is to be confirmed against the RTL:
+
+```
+  ftq_rollback_corr
+  ftq_rollback_n
+  ftq_rollback_tkn
+  ftq_rollback_pbit
+```
+
+ftq_npc drives them for a backend redirect, from
+`bkend_ftq_redir_pos` and `bkend_ftq_redir_taken`
+(ftq_backend_interfaces.md 5); the cluster forms the same correction
+for its own p2 and p3 redirects. bp_history restores to the named
+bundle's first bit, writes the corrected bits and rewrites that
+entry's checkpoint. THE WIDTHS AND THE MEANING OF EACH PORT ARE NOT
+RECORDED IN BP-121 and are not stated here until read from the RTL;
+OPEN, session-076. bp_history_interfaces.md is their home.
 
 A rollback SUPPRESSES the checkpoint write in the same cycle:
 bp_history writes the checkpoint from its normal-update branch,
@@ -1266,4 +1323,14 @@ match it and to match this specification.
   2026-10-08  session-075, after BP-120. Section 8: TD#157 fixed and
               measured. 4a: the p3 write erases the p1 slots when
               the FTB missed, TD#161.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              4a: bpu_slot_val_p3 gated on the FTB answer, TD#161
+              closed (D1, D2). 4c: TD#149 measured; the p2
+              fall-through of a jump block is the jump PC plus 2 or
+              4 (D3). 6: successors chained from the highest slot,
+              no redirect from an unreachable slot (D5, D15). 8:
+              15 FTB update ports. 9: the history correction ports
+              (D14), widths open. 5.1, 5.4: ftb_jmp_rvc_p2 and the
+              RAS port changes noted.
 ```
