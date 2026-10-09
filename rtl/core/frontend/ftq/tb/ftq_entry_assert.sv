@@ -62,6 +62,13 @@ module ftq_entry_assert (
   input logic                     pd_wr_kill,
   input logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val,
   input logic [FTQ_IDX_BITS-1:0]  rsv_wr_idx [0:NUM_RESOLVE_PORTS-1],
+  // BP-122, E11 to E13.
+  input logic [TRX_SLOT_BITS-1:0] rsv_wr_sel [0:NUM_RESOLVE_PORTS-1],
+  input bp_ftq_slot_t             rsv_wr_slot [0:NUM_RESOLVE_PORTS-1],
+  input logic [VA_WIDTH-1:0]      rsv_wr_pft [0:NUM_RESOLVE_PORTS-1],
+  input logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_end,
+  input logic                     blk_wr_val,
+  input logic [FTQ_IDX_BITS-1:0]  blk_wr_idx,
   input logic [FTQ_IDX_BITS-1:0]  xlate_rd_idx,
   input logic [VA_WIDTH-1:0]      xlate_rd_pc
 );
@@ -154,6 +161,105 @@ module ftq_entry_assert (
       if ((w_port_idx[p] == xlate_rd_idx) &&
           (w_port_ent[p].pc != xlate_rd_pc)) begin
         w_e10_bad = 1'b1;
+      end
+    end
+  end
+
+  // ---------------------------------------------------------------
+  // BP-122 (TD#170): the resolution write of BP-121, armed and read
+  // back the way E8 and E9 read back the predecode write. Per channel,
+  // the last resolution write is armed until a later write to its
+  // index replaces what it wrote: an allocation (the whole entry), a
+  // p2 or p3 slot group, a predecode write, or another resolution
+  // write. A write of the other channel to the same index in the same
+  // cycle lands after channel 0's (ftq_entry's port order), so channel
+  // 0 does not arm then. The fall-through half is also disarmed by the
+  // p2 block-scalar write, which rewrites pft_addr.
+  // ---------------------------------------------------------------
+  logic                     r_rs_val  [0:NUM_RESOLVE_PORTS-1];
+  logic                     r_rs_pval [0:NUM_RESOLVE_PORTS-1];
+  logic                     r_rs_end  [0:NUM_RESOLVE_PORTS-1];
+  logic [FTQ_IDX_BITS-1:0]  r_rs_idx  [0:NUM_RESOLVE_PORTS-1];
+  logic [TRX_SLOT_BITS-1:0] r_rs_sel  [0:NUM_RESOLVE_PORTS-1];
+  bp_ftq_slot_t             r_rs_slot [0:NUM_RESOLVE_PORTS-1];
+  logic [VA_WIDTH-1:0]      r_rs_pft  [0:NUM_RESOLVE_PORTS-1];
+  logic                     w_rs_over [0:NUM_RESOLVE_PORTS-1];
+  logic                     w_rs_late [0:NUM_RESOLVE_PORTS-1];
+
+  always_comb begin : rs_disarm
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      w_rs_over[p] = (alloc_wr_val && (alloc_wr_idx == r_rs_idx[p])) ||
+                     (p2_wr_val    && (p2_wr_idx    == r_rs_idx[p])) ||
+                     (p3_wr_val    && (p3_wr_idx    == r_rs_idx[p])) ||
+                     (pd_wr_val    && (pd_wr_idx    == r_rs_idx[p]));
+      w_rs_late[p] = 1'b0;
+      for (int q = 0; q < NUM_RESOLVE_PORTS; q++) begin
+        if (rsv_wr_val[q] && (rsv_wr_idx[q] == r_rs_idx[p]))
+          w_rs_over[p] = 1'b1;
+        if ((q > p) && rsv_wr_val[q] && (rsv_wr_idx[q] == rsv_wr_idx[p]))
+          w_rs_late[p] = 1'b1;
+      end
+    end
+  end
+
+  always_ff @(posedge clk or negedge rstn) begin : rs_hist
+    if (!rstn) begin
+      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+        r_rs_val[p]  <= 1'b0;
+        r_rs_pval[p] <= 1'b0;
+        r_rs_end[p]  <= 1'b0;
+        r_rs_idx[p]  <= '0;
+        r_rs_sel[p]  <= '0;
+        r_rs_slot[p] <= '0;
+        r_rs_pft[p]  <= '0;
+      end
+    end else begin
+      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+        if (rsv_wr_val[p]) begin
+          r_rs_val[p]  <= !w_rs_late[p];
+          r_rs_pval[p] <= !w_rs_late[p] && rsv_wr_slot[p].taken &&
+                          (rsv_wr_slot[p].br_type != COND) &&
+                          (rsv_wr_slot[p].br_type != NO_BRANCH);
+          r_rs_end[p]  <= rsv_wr_end[p];
+          r_rs_idx[p]  <= rsv_wr_idx[p];
+          r_rs_sel[p]  <= rsv_wr_sel[p];
+          r_rs_slot[p] <= rsv_wr_slot[p];
+          r_rs_pft[p]  <= rsv_wr_pft[p];
+        end else begin
+          if (w_rs_over[p]) begin
+            r_rs_val[p]  <= 1'b0;
+            r_rs_pval[p] <= 1'b0;
+          end
+          if (blk_wr_val && (blk_wr_idx == r_rs_idx[p]))
+            r_rs_pval[p] <= 1'b0;
+        end
+      end
+    end
+  end
+
+  logic w_e11_bad;
+  logic w_e12_bad;
+  logic w_e13_bad;
+
+  always_comb begin : rs_checks
+    w_e11_bad = 1'b0;
+    w_e12_bad = 1'b0;
+    w_e13_bad = 1'b0;
+    for (int q = 0; q < NUM_RESOLVE_PORTS; q++) begin
+      for (int p = 0; p < NUM_EPORTS; p++) begin
+        if (r_rs_val[q] && (w_port_idx[p] == r_rs_idx[q])) begin
+          if (w_port_ent[p].slot[r_rs_sel[q]] != r_rs_slot[q])
+            w_e12_bad = 1'b1;
+          for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+            if (r_rs_end[q] && (TRX_SLOT_BITS'(s) > r_rs_sel[q]) &&
+                (w_port_ent[p].slot[s].slot_valid ||
+                 w_port_ent[p].slot[s].taken))
+              w_e11_bad = 1'b1;
+          end
+        end
+        if (r_rs_pval[q] && (w_port_idx[p] == r_rs_idx[q]) &&
+            (w_port_ent[p].pft_addr != r_rs_pft[q]))
+          w_e13_bad = 1'b1;
       end
     end
   end
@@ -291,6 +397,40 @@ module ftq_entry_assert (
   a_xlate_pc_agrees:   assert property (p_xlate_pc_agrees)
     else $error("E10 the xlate read port returned a foreign pc");
 
+  // E11 BP-121 D2 (m02), TD#170. A resolution that ENDS the executed
+  //     block (taken, or mispredicted: the backend redirects at it)
+  //     clears every slot above it: the rest of the block is the wrong
+  //     path, so the commit walk must not find a call or return there.
+  //     Read back while the write is armed, as E8 is.
+  property p_rsv_end_kills_above;
+    @(posedge clk) disable iff (!rstn)
+      !w_e11_bad;
+  endproperty
+
+  // E12 BP-121 D2 (m02), TD#170. The resolution's slot LANDS: until a
+  //     later write replaces it, the entry holds the resolved slot,
+  //     mapped or placed.
+  property p_rsv_write_lands;
+    @(posedge clk) disable iff (!rstn)
+      !w_e12_bad;
+  endproperty
+
+  // E13 BP-121 D3, TD#164 (m03), TD#170. A resolution of a TAKEN JUMP
+  //     rewrites the entry's fall-through with the jump's own end, so
+  //     the RAS commit of a call pushes the call's return address.
+  //     Before BP-121 the entry kept its predicted fall-through.
+  property p_rsv_jump_ft_lands;
+    @(posedge clk) disable iff (!rstn)
+      !w_e13_bad;
+  endproperty
+
+  a_rsv_end_kills_above: assert property (p_rsv_end_kills_above)
+    else $error("E11 a resolved block end left a slot above it valid");
+  a_rsv_write_lands:     assert property (p_rsv_write_lands)
+    else $error("E12 the resolution slot write did not land");
+  a_rsv_jump_ft_lands:   assert property (p_rsv_jump_ft_lands)
+    else $error("E13 a taken jump did not rewrite the fall-through");
+
 endmodule : ftq_entry_assert
 
 // Bind BY MODULE NAME.
@@ -322,6 +462,12 @@ bind ftq_entry ftq_entry_assert u_assert (
   .pd_wr_kill          (pd_wr_kill),
   .rsv_wr_val          (rsv_wr_val),
   .rsv_wr_idx          (rsv_wr_idx),
+  .rsv_wr_sel          (rsv_wr_sel),
+  .rsv_wr_slot         (rsv_wr_slot),
+  .rsv_wr_pft          (rsv_wr_pft),
+  .rsv_wr_end          (rsv_wr_end),
+  .blk_wr_val          (blk_wr_val),
+  .blk_wr_idx          (blk_wr_idx),
   .xlate_rd_idx        (xlate_rd_idx),
   .xlate_rd_pc         (xlate_rd_pc)
 );

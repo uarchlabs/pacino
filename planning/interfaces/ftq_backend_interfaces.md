@@ -210,9 +210,9 @@ squashes every entry after that index, and the entry itself when
 `bkend_ftq_redir_taken` is the resolved direction of the branch at
 `_pos`. ftq_npc uses `_pos` and `_taken` to form the history
 correction it drives with the rollback (D1; ftq_bpu_interfaces.md
-9). Added by BP-121 (D14, decision 8). Its width as built is to be
-confirmed against fe_top.sv; listed here without one, as a single
-direction.
+9). Added by BP-121 (D14, decision 8). One bit, on fe_top and the
+ftq; read only on an RC_MISPREDICT with _self clear. Since BP-122
+it also forms the loop predictor's rollback slot bits.
 
 The FTQ's response:
 
@@ -652,4 +652,7 @@ Every one of these is unverifiable today. The backend does not exist.
               bkend_ftq_redir_taken; D1 carries the history
               correction (decision 8). 8: the correction ports. 10:
               A1 is 11 bits; A7 adopted (decision 9).
+
+  2026-10-09  session-076, recording BP-122. 5:
+              bkend_ftq_redir_taken is one bit (as built).
 ```

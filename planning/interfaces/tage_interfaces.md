@@ -439,8 +439,12 @@ ON DIRECTION there IS a priority chain, because the FTB, TAGE and
 SC all produce that one quantity:
 
 ```
-SC (p3) > TAGE (p2) > FTB (p2)
+LP (p2, trusted) > SC (p3) > TAGE (p2) > FTB (p2)
 ```
+
+The LP term was added by BP-122 (ruled session-076,
+fe_decisions.md 3.3): a trusted p2 loop direction is the slot's
+direction, over TAGE.
 
 ftb_confidence_override_rules.md 4.3 states it in those terms, and
 its section 8 table is explicit that the FTB always SUBMITS a
@@ -454,7 +458,8 @@ are still requested and still trained
 (ftb_confidence_override_rules.md 4.2 and 6).
 
 WHAT IS NOT RANKED is everything else. The uBTB and LP at p1 produce
-a whole prediction that a later stage supersedes; targets come from
+a whole prediction that a later stage supersedes (the LP's p2
+direction, above, is ranked); targets come from
 RAS for a return, ITTAGE for an indirect with the FTB target on an
 ITTAGE miss, FTB otherwise, selected by branch type and hit. There
 is no ordering among those beyond stage order, FE-3.

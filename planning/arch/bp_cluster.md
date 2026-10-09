@@ -28,14 +28,17 @@ Predictors: uBTB, Loop, FTB, TAGE, SC, ITTAGE, RAS.
 Override order (conditional branch direction and target):
   uBTB (p1) -> FTB, TAGE (p2) -> SC (p3)
   ON DIRECTION this IS a ranking: SC > TAGE > FTB, all three produce
-  that one quantity, suspended per branch when the FTB fast path
+  that one quantity, with a trusted loop prediction above all three
+  since BP-122 (fe_decisions.md 3.3), suspended per branch when the
+  FTB fast path
   fires (ftb_confidence_override_rules.md 4.3, 4.2). ON EVERYTHING
   ELSE it is stage order, not a ranking: a later stage supersedes an
   earlier one (FE-3, fe_decisions.md 12, narrowed session-070), and
   targets are selected by branch type.
   Loop predictor overrides uBTB at p1 when trusted, that is when
-  lp_pred_is_loop is set (Loop Predictor above). Loop predictor does
-  not participate after p1.
+  lp_pred_is_loop is set (Loop Predictor above). Since BP-122 its p2
+  re-read is also the slot's direction at p2 and p3 when trusted.
+  This read "Loop predictor does not participate after p1".
   ITTAGE and RAS are outside this ordering (type-gated, see below).
 
 ---
@@ -116,10 +119,10 @@ Session-076.
            lp_pred_is_loop is set; the target comes from the uBTB
            entry (ftq_bpu_interfaces.md 4). Does not participate in
            the p2/p3 override chain.
-- Status:  BP-121 measured no LP prediction used in any program. The
-           update rule is ruled to change (read before write, with
-           the speculative iteration count): loop_pred_interfaces.md
-           Ruled Change, TD#169, BP-122.
+- Status:  BUILT by BP-122 (TD#169): read before write, the
+           speculative count advanced at p2 with a per-FTQ-entry
+           checkpoint, and a trusted p2 direction over TAGE and SC.
+           Used in lp and loops. loop_pred_interfaces.md.
 
 ### FTB (Fetch Target Buffer, aka BTB)
 - Size:    2048 entries, 4-way associative, 512 sets

@@ -60,6 +60,8 @@ module tb;
   logic [1:0]              rollback_n;
   logic [1:0]              rollback_tkn;
   logic [1:0]              rollback_pbit;
+  logic [NUM_PRED_SLOTS-1:0] rollback_slot_ex;   // BP-122
+  logic [NUM_PRED_SLOTS-1:0] rollback_slot_tkn;  // BP-122
   logic                    pd_redir_val;
   logic [FTQ_IDX_BITS-1:0] pd_redir_idx;
   logic [VA_WIDTH-1:0]     pd_redir_pc;
@@ -131,6 +133,8 @@ module tb;
     .rollback_n         (rollback_n),
     .rollback_tkn       (rollback_tkn),
     .rollback_pbit      (rollback_pbit),
+    .rollback_slot_ex   (rollback_slot_ex),
+    .rollback_slot_tkn  (rollback_slot_tkn),
     .arm_win            (arm_win)
   );
 
@@ -610,6 +614,71 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // F. The corrected bundle of a backend mispredict (BP-121, D14) and
+  //    the rollback entry's slots for the loop predictor (BP-122,
+  //    TD#169). The entry holds a conditional at position 2 (slot 0)
+  //    and one at position 6 (slot 1).
+  // -----------------------------------------------------------------
+  task automatic group_f();
+    $display("-- F: the corrected bundle and the rollback slots --");
+    do_reset();
+    redir_entry                    = '0;
+    redir_entry.pc                 = VA_WIDTH'('h0000_8000_0100);
+    redir_entry.slot[0].slot_valid = 1'b1;
+    redir_entry.slot[0].br_type    = COND;
+    redir_entry.slot[0].pos        = FTB_BR_POS_BITS'(2);
+    redir_entry.slot[1].slot_valid = 1'b1;
+    redir_entry.slot[1].br_type    = COND;
+    redir_entry.slot[1].pos        = FTB_BR_POS_BITS'(6);
+
+    // The slot-1 conditional mispredicted, resolved taken: slot 0 was
+    // passed not taken.
+    bkend_redir_val   = 1'b1;
+    bkend_redir_idx   = 6'd12;
+    bkend_redir_self  = 1'b0;
+    bkend_redir_cause = RC_MISPREDICT;
+    bkend_redir_pos   = FTB_BR_POS_BITS'(6);
+    bkend_redir_taken = 1'b1;
+    settle();
+    chk("F1 the bundle is two bits",
+        rollback_corr && (rollback_n == 2'd2) && (rollback_tkn == 2'b10));
+    chk("F2 both slots executed, slot 1 taken",
+        (rollback_slot_ex == 2'b11) && (rollback_slot_tkn == 2'b10));
+
+    // The slot-0 conditional mispredicted, resolved not taken: slot 1
+    // is past it and did not execute in this entry.
+    bkend_redir_pos   = FTB_BR_POS_BITS'(2);
+    bkend_redir_taken = 1'b0;
+    settle();
+    chk("F3 the bundle is one bit",
+        rollback_corr && (rollback_n == 2'd1) && (rollback_tkn == 2'b00));
+    chk("F4 slot 0 executed not taken, slot 1 did not execute",
+        (rollback_slot_ex == 2'b01) && (rollback_slot_tkn == 2'b00));
+
+    // A jump in slot 1 is not a conditional: no loop-predictor slot.
+    redir_entry.slot[1].br_type = DIRECT_UNC;
+    bkend_redir_pos   = FTB_BR_POS_BITS'(6);
+    bkend_redir_taken = 1'b1;
+    settle();
+    chk("F5 a non-conditional slot is not marked",
+        rollback_slot_ex == 2'b01);
+
+    // _self set (a trap) and a predecode redirect carry no bundle.
+    bkend_redir_self = 1'b1;
+    settle();
+    chk("F6 _self set: no bundle, no slots",
+        !rollback_corr && (rollback_slot_ex == 2'b00));
+    clr();
+    bkend_redir_self = 1'b0;
+    pd_redir_val     = 1'b1;
+    pd_redir_idx     = 6'd13;
+    settle();
+    chk("F7 predecode: no bundle, no slots",
+        !rollback_corr && (rollback_slot_ex == 2'b00));
+    clr();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -626,6 +695,7 @@ module tb;
     group_c();
     group_d();
     group_e();
+    group_f();
 
     $display("tb_ftq_npc: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

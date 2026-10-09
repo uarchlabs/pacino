@@ -30,8 +30,8 @@
 //      group the update path cannot work at all: tage_upd_inp_t,
 //      ittage_upd_inp_t and sc_upd_inp_t each embed the matching
 //      predict-time metadata, and those values exist only at predict
-//      time. The loop predictor finalizes at p1; its result is
-//      registered and presented in the p2 group unchanged -- the lp
+//      time. The loop predictor re-reads its entry at p2 (BP-122)
+//      and that p2 result is presented in the p2 group -- the lp
 //      member of bp_ftq_meta_t is lp_pred_t itself, so no field map
 //      stands between the two (TD#106). The FTB metadata is scalar
 //      within the entry and the same values are written into every
@@ -55,7 +55,7 @@
 // Pipeline stage assignment:
 //   p0  indices and addresses to the RAMs; RAS top-of-stack read
 //   p1  uBTB and loop_pred outputs; prediction formed; FTQ allocates
-//   p2  FTB, TAGE, ITTAGE, RAS
+//   p2  FTB, TAGE, ITTAGE, RAS; the loop predictor re-read (BP-122)
 //   p3  SC
 //   u0  update address and write data to the RAMs
 //   u1  RAM write completes
@@ -254,6 +254,12 @@ module bp_cluster (
   input  logic [1:0]                      ftq_rollback_n,
   input  logic [1:0]                      ftq_rollback_tkn,
   input  logic [1:0]                      ftq_rollback_pbit,
+  // The rollback entry's slots for the loop predictor's restore
+  // (BP-122, TD#169): slot s is a conditional the backend mispredict
+  // executed, and its resolved direction. Qualified by
+  // ftq_rollback_corr, as the history bundle is.
+  input  logic [NUM_PRED_SLOTS-1:0]       ftq_rollback_slot_ex,
+  input  logic [NUM_PRED_SLOTS-1:0]       ftq_rollback_slot_tkn,
 
   // ---- section 9: history pointer and buffer outputs --------------
   output logic [GHIST_PTR_BITS-1:0]       ghist_ptr,
@@ -348,6 +354,18 @@ module bp_cluster (
   logic [VA_WIDTH-1:0]             w_lp_pred_pc_p0 [0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0]       w_lp_pred_val_p0;
   lp_pred_t                        w_lp_pred_p1    [0:NUM_PRED_SLOTS-1];
+  // BP-122 (TD#169, ruled by Jeff): the p2 re-read of each bank, the
+  // authoritative LP prediction. A trusted one supplies the direction
+  // of its conditional slot at p2 and is not overridden by SC at p3.
+  lp_pred_t                        w_lp_pred_p2    [0:NUM_PRED_SLOTS-1];
+  logic                            w_lp_use_p2     [0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0]       w_lp_spec_val_p2;
+  logic [NUM_PRED_SLOTS-1:0]       w_lp_spec_tkn_p2;
+  logic                            w_lp_rst_val;
+  logic [FTQ_IDX_BITS-1:0]         w_lp_rst_idx;
+  logic [NUM_PRED_SLOTS-1:0]       w_lp_rst_ex;
+  logic [NUM_PRED_SLOTS-1:0]       w_lp_rst_tkn;
+  logic                            w_lp_inv;
 
   // ----------------------------------------------------------------
   // Internal nets: FTB p2 results
@@ -461,10 +479,10 @@ module bp_cluster (
   // The p1 block fall-through carried forward. It is the p2 not-taken
   // term when the FTB does not answer (ftq_bpu_interfaces.md 4c).
   logic [VA_WIDTH-1:0]     r_pft_p1_p2;
-  // The loop predictor finalizes at p1. Its result is registered here
-  // and presented in the p2 metadata group so the FTQ performs one
-  // slow-path write per entry rather than two.
-  lp_pred_t                r_lp_pred_p2 [0:NUM_PRED_SLOTS-1];
+  // The p2 metadata group carries the loop predictor's p2 re-read,
+  // w_lp_pred_p2 (BP-122). It carried the registered p1 result,
+  // r_lp_pred_p2, which held the count read at p0, before the blocks
+  // ahead had advanced it.
 
   // p2 -> p3
   logic                    r_val_p3;
@@ -478,6 +496,9 @@ module bp_cluster (
   // The p2 slot description carried to p3 so the SC direction can be
   // applied to it without rebuilding the slot (TD-FE-6).
   bp_ftq_slot_t            r_slot_p3    [0:NUM_PRED_SLOTS-1];
+  // The slot's p2 direction came from a trusted loop predictor
+  // (BP-122): SC does not override it at p3 (ruled by Jeff).
+  logic                    r_lp_use_p3  [0:NUM_PRED_SLOTS-1];
   // The FTB answered this block at p2 (BP-121, TD#161). The p3 slot
   // group is the p2 group with the SC direction applied, so it exists
   // only when the p2 group did.
@@ -633,13 +654,13 @@ module bp_cluster (
         r_ras_tos_val_p1[s]  <= 1'b0;
         r_slot_p2[s]         <= '0;
         r_succ_p1_p2[s]      <= '0;
-        r_lp_pred_p2[s]      <= '0;
         r_br_type_p3[s]      <= NO_BRANCH;
         r_ras_val_p3[s]      <= 1'b0;
         r_brv_p3[s]          <= 1'b0;
         r_taken_p3[s]        <= 1'b0;
         r_tkn_tgt_p3[s]      <= '0;
         r_slot_p3[s]         <= '0;
+        r_lp_use_p3[s]       <= 1'b0;
       end
     end else begin
       // -- p0 -> p1. The uBTB results are combinational from the p0 PC
@@ -669,9 +690,6 @@ module bp_cluster (
       //    the value every p2 redirect compares against (FE-4). The
       //    per-slot p1 successor travels with it: it is the reduced
       //    form of that prediction and must describe the same block.
-      //    The loop result is registered here for the p2 metadata
-      //    group; loop_pred.pred_p1 is valid in the p1 cycle. It is
-      //    carried per slot: every slot has a loop producer.
       // FE-14: a stage whose block a redirect squashed is withheld,
       // so no predictor, and in particular not the RAS, acts on it
       // (BP-121; before, the squashed block still pushed or popped the
@@ -687,7 +705,6 @@ module bp_cluster (
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         r_slot_p2[s]    <= w_slot_p1[s];
         r_succ_p1_p2[s] <= w_succ_p1[s];
-        r_lp_pred_p2[s] <= w_lp_pred_p1[s];
       end
 
       // -- p2 -> p3. ras_pred_val_p3 and ras_br_type_p3 are the
@@ -707,6 +724,7 @@ module bp_cluster (
         r_taken_p3[s]   <= w_taken_p2[s];
         r_tkn_tgt_p3[s] <= w_tkn_tgt_p2[s];
         r_slot_p3[s]    <= w_slot_p2[s];
+        r_lp_use_p3[s]  <= w_lp_use_p2[s];
       end
     end
   end
@@ -974,17 +992,25 @@ module bp_cluster (
       w_pos_p2[s]      = '0;
       w_tage_hit_p2[s] = w_tage_pred_rdy_p2[s]
                        & (w_tage_pred_meta_p2[s].branch_id == r_idx_p2);
+      w_lp_use_p2[s]   = 1'b0;
 
       if (blk_val && w_ftb_br_valid_p2[s]) begin
-        // Conditional branch. TAGE supplies the direction at p2 when
-        // its response matches this entry; the FTB direction stands
-        // otherwise (fe_decisions.md 3.3).
+        // Conditional branch. A trusted loop predictor supplies the
+        // direction at p2 (BP-122, ruled by Jeff: LP over SC over
+        // TAGE); otherwise TAGE does when its response matches this
+        // entry, and the FTB direction stands when neither does
+        // (fe_decisions.md 3.3). Bank s of the loop predictor
+        // describes the conditional in slot s of the entry, which is
+        // this FTB slot.
         w_br_type_p2[s] = COND;
         w_br_val_p2[s]  = 1'b1;
         w_pos_p2[s]     = w_ftb_br_pos_p2[s];
-        w_taken_p2[s]   = w_tage_hit_p2[s]
-                            ? w_tage_pred_meta_p2[s].tage_pred_tkn
-                            : w_ftb_br_taken_p2[s];
+        w_lp_use_p2[s]  = w_lp_pred_p2[s].lp_pred_is_loop;
+        w_taken_p2[s]   = w_lp_use_p2[s]
+                            ? w_lp_pred_p2[s].lp_pred_taken
+                            : (w_tage_hit_p2[s]
+                               ? w_tage_pred_meta_p2[s].tage_pred_tkn
+                               : w_ftb_br_taken_p2[s]);
       end else if (blk_val && w_ftb_jmp_valid_p2 && !jmp_placed) begin
         jmp_placed      = 1'b1;
         w_br_type_p2[s] = jmp_type;
@@ -1064,7 +1090,8 @@ module bp_cluster (
       case (w_br_type_p2[s])
         COND: begin
           w_tkn_tgt_p2[s]  = w_ftb_br_target_p2[s];
-          w_pred_src_p2[s] = w_tage_hit_p2[s] ? PRED_TAGE : PRED_FTB;
+          w_pred_src_p2[s] = w_lp_use_p2[s]   ? PRED_LOOP
+                           : w_tage_hit_p2[s] ? PRED_TAGE : PRED_FTB;
         end
         RETURN, RETURN_CALL: begin
           w_tkn_tgt_p2[s] = w_ras_pop_valid_p2[s]
@@ -1201,7 +1228,10 @@ module bp_cluster (
       w_sc_hit_p3[s] = w_sc_pred_rdy_p3[s] & sc_enable
                      & (w_sc_pred_meta_p3[s].branch_id == r_idx_p3);
 
-      w_taken_p3[s]  = ((r_br_type_p3[s] == COND) & w_sc_hit_p3[s])
+      // SC does not override a direction the loop predictor supplied
+      // at p2 (BP-122, ruled by Jeff).
+      w_taken_p3[s]  = ((r_br_type_p3[s] == COND) & w_sc_hit_p3[s]
+                        & ~r_lp_use_p3[s])
                          ? w_sc_pred_meta_p3[s].sc_pred_tkn
                          : r_taken_p3[s];
     end
@@ -1244,7 +1274,8 @@ module bp_cluster (
       w_slot_p3[s] = r_slot_p3[s];
 
       if (r_val_p3 & r_slot_p3[s].slot_valid
-          & (r_slot_p3[s].br_type == COND) & w_sc_hit_p3[s]) begin
+          & (r_slot_p3[s].br_type == COND) & w_sc_hit_p3[s]
+          & ~r_lp_use_p3[s]) begin
         w_slot_p3[s].taken = w_sc_pred_meta_p3[s].sc_pred_tkn;
         if (w_sc_pred_meta_p3[s].sc_pred_tkn != r_slot_p3[s].taken)
           w_slot_p3[s].pred_src = PRED_SC;
@@ -1327,6 +1358,42 @@ module bp_cluster (
       w_rb_n    = ftq_rollback_n;
       w_rb_tkn  = ftq_rollback_tkn;
       w_rb_pbit = ftq_rollback_pbit;
+    end
+  end
+
+  // The loop predictor's speculative count on a redirect (BP-122,
+  // TD#169, LI4; restore option A, ruled by Jeff):
+  //   p3 redirect   the redirecting entry's banks re-advanced from its
+  //                 checkpoint by the p3 directions. The only younger
+  //                 blocks are at p2 and p1, squashed before their
+  //                 advance, so nothing else is restored.
+  //   p2 redirect   nothing: the p2 block advances by its own p2
+  //                 direction and the block at p1 has not advanced.
+  //   FTQ rollback  (backend, predecode, trap) the rollback entry's
+  //                 banks re-advanced by the resolved directions when
+  //                 the FTQ supplies them (a backend mispredict), and
+  //                 every other count marked unknown: the squashed
+  //                 blocks may have advanced any entry.
+  // A p3 redirect the FTQ does not echo restores as the history does.
+  always_comb begin : lp_rst_comb
+    w_lp_rst_val = 1'b0;
+    w_lp_rst_idx = r_idx_p3;
+    w_lp_rst_ex  = '0;
+    w_lp_rst_tkn = '0;
+    w_lp_inv     = 1'b0;
+    if (w_own_p3 || (!ftq_rollback_val && w_any_redir_p3)) begin
+      w_lp_rst_val = 1'b1;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        w_lp_rst_ex[s]  = r_val_p3 & r_brv_p3[s]
+                        & (r_br_type_p3[s] == COND) & w_reach_p3[s];
+        w_lp_rst_tkn[s] = w_taken_p3[s];
+      end
+    end else if (ftq_rollback_val && !w_own_p2) begin
+      w_lp_rst_val = ftq_rollback_corr;
+      w_lp_rst_idx = ftq_rollback_idx;
+      w_lp_rst_ex  = ftq_rollback_slot_ex;
+      w_lp_rst_tkn = ftq_rollback_slot_tkn;
+      w_lp_inv     = 1'b1;
     end
   end
 
@@ -1634,15 +1701,23 @@ module bp_cluster (
       //    ITTAGE are the predictor outputs passed through. The FTB
       //    values are scalar within the entry, so the same three go
       //    into every slot's copy (7.3). The loop metadata is that
-      //    slot's own registered p1 loop result: after the TD#105
-      //    retrofit every slot has a loop producer and a bank of its
-      //    own, so each slot carries its own table coordinates.
+      //    slot's own p2 loop re-read (BP-122): every slot has a loop
+      //    producer and a bank of its own, so each slot carries its
+      //    own table coordinates and its own iteration number.
       assign bpu_meta_tage_p2[gs]        = w_tage_pred_meta_p2[gs];
       assign bpu_meta_ittage_p2[gs]      = w_ittage_pred_meta_p2[gs];
       assign bpu_meta_ftb_p2[gs].hit     = w_ftb_hit_p2;
       assign bpu_meta_ftb_p2[gs].way     = w_ftb_way_p2;
       assign bpu_meta_ftb_p2[gs].jmp_pos = w_ftb_jmp_pos_p2;
-      assign bpu_meta_lp_p2[gs]          = r_lp_pred_p2[gs];
+      assign bpu_meta_lp_p2[gs]          = w_lp_pred_p2[gs];
+
+      // -- Loop predictor advance at p2 (BP-122): the p2 direction of
+      //    the conditional in slot gs, for a block that is on the path
+      //    (not squashed this cycle) and a slot that is reachable.
+      assign w_lp_spec_val_p2[gs] = r_val_p2 & ~w_kill_p2 & w_br_val_p2[gs]
+                                  & (w_br_type_p2[gs] == COND)
+                                  & w_reach_p2[gs];
+      assign w_lp_spec_tkn_p2[gs] = w_taken_p2[gs];
 
       // -- Prediction metadata, p3 group (interfaces 7.2). The SC
       //    predictor output passed through.
@@ -1726,6 +1801,16 @@ module bp_cluster (
     .pred_pc_p0    (w_lp_pred_pc_p0),
     .pred_valid_p0 (w_lp_pred_val_p0),
     .pred_p1       (w_lp_pred_p1),
+    .pred_p2       (w_lp_pred_p2),
+    .spec_ck_p2    (r_val_p2),
+    .spec_idx_p2   (r_idx_p2),
+    .spec_val_p2   (w_lp_spec_val_p2),
+    .spec_tkn_p2   (w_lp_spec_tkn_p2),
+    .rst_val       (w_lp_rst_val),
+    .rst_idx       (w_lp_rst_idx),
+    .rst_ex        (w_lp_rst_ex),
+    .rst_tkn       (w_lp_rst_tkn),
+    .inv_val       (w_lp_inv),
     .upd_p0        (lp_upd_p0),
     .upd_valid_p0  (w_lp_upd_val_p0)
   );

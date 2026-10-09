@@ -34,7 +34,8 @@ prediction cluster.
 Pipeline stage: p2 output. p0 send, p1 registered, p2 valid.
 
 Override, by quantity. ON DIRECTION there is a ranking: SC > TAGE >
-FTB, suspended per branch when the fast path fires
+FTB, with a trusted loop prediction above all three since BP-122
+(fe_decisions.md 3.3), suspended per branch when the fast path fires
 (ftb_confidence_override_rules.md 4.3, 4.2). ON TARGET there is not:
 RAS supplies it for a return, ITTAGE for an indirect with the FTB
 target standing on an ITTAGE miss, FTB otherwise -- selected by

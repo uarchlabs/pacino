@@ -20,6 +20,13 @@ endif
 
 JOBS ?= 1
 
+# BP-122: no target leaves a file outside an obj_* build directory.
+# sim builds into $(VER_OUT) and removes it after the run (the obj_*
+# directories of the other targets are kept for incremental builds).
+# sim_tage_manual writes waves.fst, which surf.sh opens, only when
+# asked: make sim_tage_manual FST=1.
+FST ?= 0
+
 .DEFAULT_GOAL := all
 
 RTL_DIR  := rtl
@@ -107,17 +114,19 @@ sim:
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(TB_DIR)/tb_bp_pkg.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)/Vtb"
-	$(Q)./$(VER_OUT)/Vtb
+	$(Q)./$(VER_OUT)/Vtb; rc=$$?; rm -rf $(VER_OUT); exit $$rc
 
 sim_history:
 	@echo "[compiling]  tb_bp_history"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
+	  -Wno-SYNCASYNCNET --assert \
 	  --Mdir $(VER_OUT)_hist \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/bp_history.sv \
+	  $(TB_DIR)/bp_history_assert.sv \
 	  $(TB_DIR)/tb_bp_history.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_hist/Vtb"
 	$(Q)./$(VER_OUT)_hist/Vtb
@@ -151,10 +160,12 @@ sim_loop_pred:
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  -Wno-VARHIDDEN \
 	  --top-module tb \
+	  -Wno-SYNCASYNCNET --assert \
 	  --Mdir $(VER_OUT)_loop_pred \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/loop_pred.sv \
+	  $(TB_DIR)/loop_pred_assert.sv \
 	  $(TB_DIR)/tb_loop_pred.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_loop_pred/Vtb"
 	$(Q)./$(VER_OUT)_loop_pred/Vtb
@@ -577,6 +588,13 @@ BP_CLUSTER_SRCS := \
   $(RTL_DIR)/ras.sv \
   $(RTL_DIR)/bp_cluster.sv
 
+# The property files of the cluster's leaves that have one (BP-122,
+# TD#170), elaborated by sim_bp_cluster with --assert.
+BP_CLUSTER_ASSERT := \
+  $(TB_DIR)/bp_history_assert.sv \
+  $(TB_DIR)/loop_pred_assert.sv \
+  $(TB_DIR)/ras_assert.sv
+
 BP_CLUSTER_PLUSARGS := \
   +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 
@@ -587,8 +605,10 @@ sim_bp_cluster:
 	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module tb \
+	  --assert \
 	  --Mdir $(VER_OUT)_bp_cluster \
 	  $(BP_CLUSTER_SRCS) \
+	  $(BP_CLUSTER_ASSERT) \
 	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_bp_cluster/Vtb"
 	$(Q)./$(VER_OUT)_bp_cluster/Vtb $(BP_CLUSTER_PLUSARGS)
@@ -598,10 +618,12 @@ sim_ras:
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
+	  -Wno-SYNCASYNCNET --assert \
 	  --Mdir $(VER_OUT)_ras \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/ras.sv \
+	  $(TB_DIR)/ras_assert.sv \
 	  $(TB_DIR)/tb_ras.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ras/Vtb"
 	$(Q)./$(VER_OUT)_ras/Vtb
@@ -717,7 +739,7 @@ sim_tage_manual:
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage_manual.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_manual/Vtb"
-	$(Q)./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=1
+	$(Q)./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=$(FST)
 
 clean:
 	$(Q)rm -rf $(VER_OUT) \
@@ -765,10 +787,12 @@ cov_history:
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --coverage-line \
 	  --top-module tb \
+	  -Wno-SYNCASYNCNET --assert \
 	  --Mdir obj_dir_cov_history \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/bp_history.sv \
+	  $(TB_DIR)/bp_history_assert.sv \
 	  $(TB_DIR)/tb_bp_history.sv $(VSILENCE)
 	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_history/Vtb__main.cpp
@@ -817,10 +841,12 @@ cov_loop_pred:
 	  -Wno-VARHIDDEN \
 	  --coverage-line \
 	  --top-module tb \
+	  -Wno-SYNCASYNCNET --assert \
 	  --Mdir obj_dir_cov_loop_pred \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/loop_pred.sv \
+	  $(TB_DIR)/loop_pred_assert.sv \
 	  $(TB_DIR)/tb_loop_pred.sv $(VSILENCE)
 	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_loop_pred/Vtb__main.cpp

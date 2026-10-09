@@ -375,6 +375,55 @@ module ftq_resolve_assert (
   a_place_two_slots: assert property (p_place_two_slots)
     else $error("R19 two placements of one entry took the same slot");
 
+  // R20, R21 (BP-122, TD#170): the BP-121 fixes in this unit.
+  genvar gw;
+  generate
+    for (gw = 0; gw < NUM_RESOLVE_PORTS; gw++) begin : g_bp121
+
+      // R20 BP-121 D2 (m02). EVERY accepted resolution of a branch
+      //     writes its slot of the entry it names, at the slot its
+      //     position maps or is placed to, on the cycle its channel is
+      //     ready -- a mapped one too. Before BP-121 only a placed
+      //     (unmapped) resolution wrote, so a mapped slot kept its
+      //     PREDICTION and the commit walk committed what the front
+      //     end guessed, not what executed. Stated from the resolution
+      //     and the acceptance, not from the write enable's terms.
+      property p_every_resolved_slot_written;
+        @(posedge clk) disable iff (!rstn)
+          (rsv_accept[gw] && ftq_bkend_rsv_rdy[gw] &&
+           (bkend_rsv[gw].br_type != NO_BRANCH)) |->
+            rsv_wr_val[gw] &&
+            (rsv_wr_idx[gw] == bkend_rsv[gw].ftq_idx) &&
+            (rsv_wr_sel[gw] == rsv_slot[gw]);
+      endproperty
+      a_every_rsv_written: assert property (p_every_resolved_slot_written)
+        else $error("R20 an accepted resolution did not write its slot");
+
+      // R21 BP-121 D3, TD#164 (m03). The FTB update of a TAKEN JUMP
+      //     carries that jump's own end as the block fall-through: the
+      //     update's block PC, plus the jump's position, plus its
+      //     length (2 for a compressed jump). The value is derived
+      //     here from three other fields of the same payload, which
+      //     the FTB stores separately and which must agree. Before
+      //     BP-121 it was the entry's PREDICTED fall-through, which for
+      //     a block first predicted without the jump is the start plus
+      //     one block, so the FTB learned that and the RAS pushed it.
+      property p_jump_ft_is_jump_end;
+        @(posedge clk) disable iff (!rstn)
+          (ftb_upd_val[gw] && bkend_rsv[gw].taken &&
+           (bkend_rsv[gw].br_type != COND) &&
+           (bkend_rsv[gw].br_type != NO_BRANCH)) |->
+            (ftb_upd[gw].pft_addr ==
+             ftb_upd[gw].pc
+             + (VA_WIDTH'(ftb_upd[gw].pos) << POS_OFFSET_BITS)
+             + (ftb_upd[gw].jmp_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4)));
+      endproperty
+      a_jump_ft_is_jump_end: assert property (p_jump_ft_is_jump_end)
+        else $error("R21 a taken jump trained the FTB with another end");
+
+    end
+  endgenerate
+
   // R15 REMOVED, BP-119. It read "(ftq_bkend_rsv_rdy == '0) |-> no
   //     upd valid": no update formed while no channel was ready. The
   //     predictor valids are now REQUESTS (ftq_resolve header): they

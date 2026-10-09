@@ -6,7 +6,7 @@
  FILE:    planning/arch/ftb_confidence_override_rules.md
  SOURCE:  session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -140,7 +140,14 @@ override and do not stall for SC."
 When ftb_fastpath_en = 0, or conf is not saturated, the fast-path does
 not fire: FTB submits its direction (3.1) but waits for TAGE/SC and is
 overridden as normal. The priority is the standard chain
-SC > TAGE > FTB on direction.
+LP (trusted) > SC > TAGE > FTB on direction.
+
+THE LOOP PREDICTOR TERM, since BP-122 (ruled session-076,
+fe_decisions.md 3.3). A trusted p2 loop direction is the slot's
+direction at p2, over TAGE, and SC does not override it at p3. As
+BP-122 reports the build, the trusted LP direction is the slot's
+direction at p2 without qualification, so it also stands over an FTB
+fast-path direction for that branch.
 
 ---
 
@@ -226,6 +233,8 @@ time". Session-072.
 |                                             |  as normal)         |
 | FTB hit, en=0 (any conf)                    | TAGE/SC (override   |
 |                                             |  as normal)         |
+| Trusted p2 loop prediction (any of the      | LP (BP-122, 4.3)    |
+|  above)                                     |                     |
 
 The table is per conditional branch (br0 and br1 evaluate
 independently). FTB always SUBMITS a direction (conf MSB); the table is
@@ -312,3 +321,7 @@ Tests must cover:
 
   2026-09-20  session-072. D29: the history section notes that
               older entries use the retired s-labels.
+
+  2026-10-09  session-076, recording BP-122. 4.3 and 8: a trusted
+              loop prediction outranks SC, TAGE and FTB, including
+              the fast path as built (ruled; fe_decisions.md 3.3).

@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -72,11 +72,11 @@ bp_defines_pkg.sv.
   rollback_valid    : input  logic                  -- restore enable
   rollback_ckpt_idx : input  logic [FTQ_IDX_BITS-1:0]
 
-  -- Rollback history correction (BP-121, D14). NOT LISTED: BP-121
-  -- names the cluster-boundary ports as ftq_rollback_corr/_n/_tkn/
-  -- _pbit and does not give bp_history's own port names or any
-  -- width. BP-122 reports the declarations as built; they are
-  -- recorded here then. See Rollback Interface.
+  -- Rollback history correction (BP-121, D14; declared by BP-122)
+  rollback_corr     : input  logic                  -- corrected bundle
+  rollback_n        : input  logic [1:0]            -- bits, 0 to 2
+  rollback_tkn      : input  logic [1:0]            -- their directions
+  rollback_pbit     : input  logic [1:0]            -- their path bits
 
   -- Current pointer outputs (module-owned, for FTQ construction)
   ghist_ptr    : output logic [GHIST_PTR_BITS-1:0]
@@ -301,10 +301,13 @@ only advance, rollback by index, FTQ visibility vs ownership).
   rewrites that entry's checkpoint. The correction comes from
   ftq_npc for a backend redirect (from bkend_ftq_redir_pos and
   bkend_ftq_redir_taken) and from the cluster for its own p2 and
-  p3 redirects. The ports, their widths and the meaning of each are
-  NOT RECORDED: BP-121 does not state them, and BP-122 reports
-  them. Until then the rollback text above describes the index
-  half only.
+  p3 redirects; the cluster muxes one onto the ports:
+
+    rollback_corr = 1  -- restore to the bundle's first bit, write
+                          rollback_n bits (directions rollback_tkn,
+                          bit 0 oldest; path bits rollback_pbit into
+                          the PHR), advance, rewrite the checkpoint.
+    rollback_corr = 0  -- restore past the bundle, as above.
 
   Scope: rollback (checkpoint-restore) applies to RC_MISPREDICT,
   RC_TRAP and RC_REPLAY -- every backend redirect cause that names
@@ -525,8 +528,12 @@ and the module-owned pointer decision.
   2026-10-08  session-076, PA-direct correction recording BP-121.
               Port List and Rollback Interface: the history
               correction on rollback (D14); its ports not yet
-              recorded, BP-122 reports them. Producer obligations:
+              recorded. Producer obligations:
               num_branches stops at the first taken branch (D16);
               the FTQ rollback arm named; the aligned-base note
               brought to BP-110 (TD#125).
+
+  2026-10-09  session-076, recording BP-122. Port List and Rollback
+              Interface: rollback_corr/_n/_tkn/_pbit declared, as
+              built.
 ```

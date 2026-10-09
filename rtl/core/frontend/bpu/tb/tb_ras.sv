@@ -1045,6 +1045,23 @@ module tb;
     check("TC-34b the dropped push is not repaired a cycle later: X on top",
           (dut.tosr == 4'd1) && (dut.spec_ret_addr[1] == ADDR_X));
 
+    // =============================================================
+    // TC-35 (BP-122, TD#170): ras_p2_keep low with no p3 repair in the
+    // cycle. The squashed block's push is dropped and nothing else
+    // moves the pointers: the empty stack stays empty. Exercises the
+    // ras_assert RS1 property in the cycle it covers.
+    // =============================================================
+    do_reset();
+    drive(1'b1, DIRECT_CALL, ADDR_C, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    p2_keep = 1'b0;
+    tick();
+    p2_keep = 1'b1;
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    check("TC-35 a dropped push with no repair leaves the pointers",
+          (dut.tosr == '0) && (dut.tosw == '0));
+    tick();  // the edge at which RS1 samples the dropped cycle
+
     // -------------------------------------------------------------
     $display("=================================================");
     $display("tb_ras: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);

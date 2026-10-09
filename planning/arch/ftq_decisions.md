@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -324,13 +324,16 @@ holds:
       update.
 ```
 
-H1 AFTER BP-121, TO BE CHECKED. BP-121 (D6) made the starvation hold
-of bp_arb_spec.md 4.5 drop tage_pq_not_full or ittage_pq_not_full
-for one cycle, which H1 already covers, and for SC drop
-sc_uq_not_full for one cycle. H1 above excludes sc_uq_not_full and
-says the SC ties it to 1'b1. Whether ftq_npc now holds on
-sc_uq_not_full is not recorded in BP-121; read ftq_npc.sv before
-relying on H1 for SC. Session-076.
+H1 INCLUDES sc_uq_NOT_FULL SINCE BP-121 (read from the RTL by
+BP-122). The starvation hold of bp_arb_spec.md 4.5 drops
+tage_pq_not_full, ittage_pq_not_full or, for SC, sc_uq_not_full for
+one cycle, and ftq_npc holds on all three: w_hold =
+~tage_pq_not_full | ~ittage_pq_not_full | ~sc_uq_not_full |
+h2_ftq_full | r1_fault_hold | h3_ftb_upd. Withholding that p0
+request leaves no block at p2 two cycles later, and the SC arbiter
+grants the waiting update. H1's text above, which excludes
+sc_uq_not_full because sc.sv ties it to 1'b1, describes sc.sv; at
+the cluster boundary the signal is the arbiter's. Session-076.
 
 NOT a hold condition: `ftq_ifu_req_rdy` low. The IFU being unable to
 accept a fetch does not stop the FTQ predicting ahead. That is the
@@ -1497,4 +1500,7 @@ Section 1 counts six, since session-074.
               4.5: H4, hold p0 the cycle before an FTB update
               (TD#162, D7); H1 flagged for the SC starvation hold.
               5.4: the walk commits only what executed (D2, A7).
+
+  2026-10-09  session-076, recording BP-122. 4.5: H1 holds on
+              sc_uq_not_full, as built.
 ```

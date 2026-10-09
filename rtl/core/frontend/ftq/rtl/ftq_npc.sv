@@ -186,6 +186,14 @@ module ftq_npc (
   output logic [1:0]               rollback_n,
   output logic [1:0]               rollback_tkn,
   output logic [1:0]               rollback_pbit,
+  // The rollback entry's conditional slots the backend mispredict
+  // executed, and their resolved directions (BP-122, TD#169): the
+  // loop predictor re-advances its speculative count of each from the
+  // entry's checkpoint. A slot before the named position was passed
+  // not taken; the named slot took bkend_redir_taken; a later slot
+  // did not execute. Qualified by rollback_corr.
+  output logic [NUM_PRED_SLOTS-1:0] rollback_slot_ex,
+  output logic [NUM_PRED_SLOTS-1:0] rollback_slot_tkn,
 
   // ---- observation, for the bound properties -----------------------
   // The arm that won, one-hot, arms 1 to 5. Zero means arm 6, hold.
@@ -406,6 +414,26 @@ module ftq_npc (
       n                = n + 1;
     end
     rollback_n = 2'(n);
+  end
+
+  // The loop predictor's view of the same bundle (BP-122): which slot
+  // of the entry each executed conditional occupies. Gated on
+  // arm_win like the block above.
+  always_comb begin : correction_slots
+    logic corr;
+    corr              = arm_win[1] && (bkend_redir_cause == RC_MISPREDICT) &&
+                        !bkend_redir_self;
+    rollback_slot_ex  = '0;
+    rollback_slot_tkn = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (corr && redir_entry.slot[s].slot_valid &&
+          (redir_entry.slot[s].br_type == COND) &&
+          (redir_entry.slot[s].pos <= bkend_redir_pos)) begin
+        rollback_slot_ex[s]  = 1'b1;
+        rollback_slot_tkn[s] = (redir_entry.slot[s].pos == bkend_redir_pos)
+                               && bkend_redir_taken;
+      end
+    end
   end
 
   // -----------------------------------------------------------------

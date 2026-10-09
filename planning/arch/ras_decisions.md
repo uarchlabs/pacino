@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -25,9 +25,10 @@ RAS predicts the target of return-type indirect branches
 
 Pipeline stage: p2 push/pop, p3 registered.
 Override: RAS supplies the TARGET for a return and takes no part in
-the direction ranking (SC > TAGE > FTB on direction,
-ftb_confidence_override_rules.md 4.3). It is type-gated -- active
-only when FTB identifies the branch type as return. An earlier
+the direction ranking (SC > TAGE > FTB on direction, with a
+trusted loop prediction above all three since BP-122,
+fe_decisions.md 3.3; ftb_confidence_override_rules.md 4.3). It is type-gated
+-- active only when FTB identifies the branch type as return. An earlier
 revision placed it "outside the conditional branch override chain
 (SC > TAGE > FTB > uBTB)", which compresses a direction ranking and
 a target selection into one chain. fe_decisions.md 12, narrowed
@@ -63,8 +64,17 @@ never differed (TD#166). SINCE BP-121 (D10, TD#166 closed) the p3
 view is qualified by p3 reachability, which uses the SC direction:
 ras_pred_val_p3 = r_val_p3 & r_brv_p3 & w_reach_p3. The p3 view now
 differs from p2 when SC reverses a direction that skips or reaches a
-call or return, and the repair runs. The two wrong pairings remain
-TD#165; none of BP-121's 19 programs reached them.
+call or return, and the repair runs.
+
+TD#165 CLOSED session-076 (Jeff), UNREACHABLE BY CONSTRUCTION. The
+two wrong pairings need the p2 and p3 TYPES of one slot to differ.
+The p3 type is the registered p2 type (IC-RAS-12), so they never
+do; only the p3 qualification differs since BP-121, and that gives
+a plain undo or a plain missed operation, which are right. BP-122
+confirmed it from the RTL. IF THE p3 TYPE IS EVER TAKEN FROM
+ANYWHERE BUT THE REGISTERED p2 TYPE, these two rows become
+reachable and must be fixed first: ras.sv gets them wrong today
+(tb_ras TC-33c, d).
 
 Repair label semantics: the push/pop labels above denote
 stack-height restoration of resident entries, not fresh
@@ -997,4 +1007,8 @@ Commit stack pointer width:
               on the cluster's own redirect (D9); a squashed block
               performs no RAS operation (D8). 8: the return address
               is the call PC plus 2 or 4 (TD#164).
+
+  2026-10-09  session-076. 1: TD#165 closed as unreachable by
+              construction (Jeff), with the condition that would
+              reopen it.
 ```

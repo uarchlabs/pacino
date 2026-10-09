@@ -152,7 +152,7 @@ FTQ_SRCS := \
   $(RTL_DIR)/ftq_resolve.sv      $(TB_DIR)/ftq_resolve_assert.sv \
   $(RTL_DIR)/ftq_upd_conv.sv     $(TB_DIR)/ftq_upd_conv_assert.sv \
   $(RTL_DIR)/ftq_ftb_sched.sv    $(TB_DIR)/ftq_ftb_sched_assert.sv \
-  $(RTL_DIR)/ftq.sv
+  $(RTL_DIR)/ftq.sv              $(TB_DIR)/ftq_assert.sv
 
 .PHONY: all clean \
   lint_ftq_ftb_sched sim_ftq_ftb_sched \

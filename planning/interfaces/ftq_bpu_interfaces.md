@@ -409,8 +409,12 @@ bp_cluster.sv, `w_ftb_valid_p2 ? w_ftb_pft_addr_p2 : r_pft_p1_p2`.
 SINCE BP-121 (D3, TD#164), for a block ending at its jump the p2
 fall-through is the jump PC plus 2 or 4 (`w_jmp_ft_p2`), not the
 FTB's shared pftAddr (ftb_interfaces.md IC-FTB-03). The expression
-above is as BP-118 built it; how BP-121 folded `w_jmp_ft_p2` into
-it is not recorded and is to be read from bp_cluster.sv.
+above is as BP-118 built it. AS BUILT by BP-121 (read by BP-122):
+`w_pft_p2` is `r_pft_p1_p2` when the FTB did not answer, else
+`w_jmp_ft_p2` when the FTB holds a jump visible from this start,
+else `ftb_pft_addr_p2`; `w_jmp_ft_p2 = r_pc_p2 + (ftb_jmp_pos_p2 <<
+POS_OFFSET_BITS) + (ftb_jmp_rvc_p2 ? 2 : 4)`, which is also the RAS
+push address.
 
 ONE SOURCE FOR BOTH. Because the value written into the entry and the
 value the p2 redirect comparison reads are the same net, the entry's
@@ -1027,25 +1031,37 @@ end-of-block pointer state is to be restored, not the pointer values
 
 HISTORY CORRECTION, BP-121 (D14). RULED session-075 (Jeff, BP-121
 decision 8), replacing bp_history_decisions.md 3.5. The rollback
-also carries a correction, on further cluster inputs that BP-121
-writes as ftq_rollback_corr/_n/_tkn/_pbit. Read here as the four
-names below; the expansion is to be confirmed against the RTL:
+also carries a correction. As built (BP-121; declarations reported
+by BP-122):
 
 ```
-  ftq_rollback_corr
-  ftq_rollback_n
-  ftq_rollback_tkn
-  ftq_rollback_pbit
+  input logic                      ftq_rollback_corr
+      -- the rollback carries a corrected bundle (backend
+         RC_MISPREDICT with _self clear only)
+  input logic [1:0]                ftq_rollback_n
+      -- number of bundle bits, 0 to 2
+  input logic [1:0]                ftq_rollback_tkn
+      -- direction of each bit, bit 0 oldest: slots before the named
+         one 0, the named one its resolved direction
+  input logic [1:0]                ftq_rollback_pbit
+      -- path bit (pc[2] ^ pc[3]) of each branch in the bundle
+  input logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_ex
+      -- slot s of the rollback entry is a conditional the backend
+         mispredict executed (BP-122, for the loop predictor)
+  input logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_tkn
+      -- its resolved direction (BP-122)
 ```
 
 ftq_npc drives them for a backend redirect, from
 `bkend_ftq_redir_pos` and `bkend_ftq_redir_taken`
 (ftq_backend_interfaces.md 5); the cluster forms the same correction
-for its own p2 and p3 redirects. bp_history restores to the named
-bundle's first bit, writes the corrected bits and rewrites that
-entry's checkpoint. THE WIDTHS AND THE MEANING OF EACH PORT ARE NOT
-RECORDED IN BP-121 and are not stated here until read from the RTL;
-OPEN, session-076. bp_history_interfaces.md is their home.
+for its own p2 and p3 redirects, and muxes one or the other onto
+bp_history's rollback_corr/_n/_tkn/_pbit (bp_history_interfaces.md).
+bp_history restores to the named bundle's first bit, writes the
+corrected bits and rewrites that entry's checkpoint. The two slot
+inputs drive the loop predictor's restore
+(loop_pred_interfaces.md). The ftq top and ftq_npc drive all six;
+fe_top has no port change.
 
 A rollback SUPPRESSES the checkpoint write in the same cycle:
 bp_history writes the checkpoint from its normal-update branch,
@@ -1333,4 +1349,8 @@ match it and to match this specification.
               15 FTB update ports. 9: the history correction ports
               (D14), widths open. 5.1, 5.4: ftb_jmp_rvc_p2 and the
               RAS port changes noted.
+
+  2026-10-09  session-076, recording BP-122. 4c: w_pft_p2 as built.
+              9: the correction ports declared; the loop predictor's
+              rollback slot bits added.
 ```

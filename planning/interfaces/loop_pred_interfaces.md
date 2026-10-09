@@ -7,7 +7,7 @@
  FILE:    loop_pred_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -19,8 +19,11 @@ The Loop Predictor is a 256-entry 4-way associative predictor per
 prediction slot. It fires at p1 alongside uBTB and provides a
 direction prediction for branches detected as constant-iteration
 loops. It overrides uBTB at p1 when lp_pred_is_loop=1, which
-requires confidence at maximum (cnf == LP_CONF_LEVEL). It does not
-participate in the p2/p3 override chain.
+requires confidence at maximum (cnf == LP_CONF_LEVEL) and, since
+BP-122, a known speculative count. SINCE BP-122 IT ALSO PREDICTS AT
+p2: a trusted p2 direction (pred_p2) is the slot's direction at p2
+and p3, over TAGE and SC (ruled session-076, fe_decisions.md 3.3).
+This read "It does not participate in the p2/p3 override chain".
 
 Override control (not this module) makes the final p1 mux
 decision. The loop predictor exposes lp_pred_is_loop and the
@@ -90,6 +93,31 @@ from ubtb.sv.
   upd_p0        : input  lp_upd_t
                                 [0:NUM_PRED_SLOTS-1] -- post-execute
   upd_valid_p0  : input  logic [NUM_PRED_SLOTS-1:0]  -- post-execute
+```
+
+Added by BP-122 (TD#169), as built:
+
+```
+  pred_p2      : output lp_pred_t [0:NUM_PRED_SLOTS-1] -- p2 re-read
+                 of the p1 lookup: current count (the iteration
+                 number), trust and direction
+  spec_ck_p2   : input  logic                      -- write the
+                 checkpoint of the p2 block
+  spec_idx_p2  : input  logic [FTQ_IDX_BITS-1:0]   -- its FTQ index
+  spec_val_p2  : input  logic [NUM_PRED_SLOTS-1:0] -- advance bank
+                 s's p2 entry (a reachable conditional of a live p2
+                 block)
+  spec_tkn_p2  : input  logic [NUM_PRED_SLOTS-1:0] -- its p2
+                 direction
+  rst_val      : input  logic                      -- restore from
+                 the checkpoint of rst_idx
+  rst_idx      : input  logic [FTQ_IDX_BITS-1:0]   -- the FTQ entry
+  rst_ex       : input  logic [NUM_PRED_SLOTS-1:0] -- slot s
+                 executed (re-advance) or not (put back)
+  rst_tkn      : input  logic [NUM_PRED_SLOTS-1:0] -- its corrected
+                 direction
+  inv_val      : input  logic                      -- mark every
+                 count unknown (an FTQ-raised rollback)
 ```
 
 Slot dimension style follows the tage, ittage, sc and ras ports of
@@ -283,7 +311,8 @@ Evaluated on every lookup, in priority order:
                  All captured from lp_pred_t at predict time.
                  The update path uses these directly. No
                  re-read of the table is performed.
-                 RULED TO CHANGE, TD#169: see Ruled Change below.
+                 SUPERSEDED by BP-122: see Read before write and
+                 the speculative count, below.
 
 ### Write path selection
 
@@ -360,10 +389,11 @@ subset of the taken-branch case.
 
 ---
 
-## Ruled Change: read before write (TD#169, BP-122)
+## Read before write and the speculative count (TD#169)
 
 RULED session-075 (Jeff), after BP-121, reversing BP-121 decision 6
-("leave as specified"). NOT YET BUILT; BP-122.
+("leave as specified"). BUILT by BP-122. Where this section and the
+Update behavior and field notes above disagree, this section holds.
 
 WHY. In BP-121 the loop predictor received 1193 updates across 19
 programs and none of its predictions was used. Each update rewrites
@@ -392,9 +422,46 @@ THE RULE.
   - Physical design bounds the entry count at the target frequency.
     The added logic costs FMAX; the cost is accepted.
 
-WHAT IT REPLACES when built: the producer obligation "No
-recomputation at update" and the field note "No re-read of the
-table is performed" above.
+AS BUILT by BP-122:
+  - THE COUNT. The speculative count advances at p2 by the p2
+    direction, after the p2 re-read (pred_p2). p1 keeps the early
+    guess from the p0 read, which can be up to two iterations stale
+    in a one-block loop; p2 corrects it, at the cost of a p2
+    redirect at a loop exit rather than a backend mispredict. An
+    allocated entry's count is unknown (curs_v clear) until its
+    first exit; a taken advance or a restore of an unknown count
+    keeps it unknown. A prediction is trusted only with cnf ==
+    LP_CONF_LEVEL and a known count.
+  - THE CHECKPOINT is in loop_pred, per bank, FTQ_DEPTH deep,
+    written at p2 for the p2 block (as bp_history keeps its own).
+  - RESTORE, option A, RULED session-076 (Jeff): a redirect restores
+    the redirecting block's own entry exactly from its checkpoint
+    (executed not taken -> 0; executed taken -> count + 1; not
+    executed -> put back), and an FTQ-raised rollback marks every
+    other count unknown. A p3 redirect restores as it rolls back the
+    history. A restore of an entry since replaced writes nothing.
+    Cost: a loop whose run contains an unrelated backend or
+    predecode redirect loses one exit to resynchronise. Option B
+    (invalidate only entries a squashed block advanced) gave the same
+    lp and loops results on a scratch copy and costs about 4 kbit.
+  - THE UPDATE looks the tag up again (a stale carried way still
+    finds the entry; a replaced entry is not written), recomputes
+    the victim, and trains from the carried lp_curs / lp_curs_v:
+      taken at a known count >= past_itr  -> cnf = 0
+      exit at a known count == past_itr   -> cnf++, age = max
+      exit otherwise                      -> cnf = 0,
+                                             past_itr = count
+      unknown carried count               -> trains nothing
+    These replace Update behavior cases 1 to 5 above, and the
+    producer obligation "No recomputation at update" and the field
+    note "No re-read of the table is performed".
+  - Of lp_pred_t's snapshot fields the update reads lp_idx, lp_tag,
+    lp_curs and lp_curs_v only. No package change was made.
+
+MEASURED (BP-122, lengthened lp and loops, ruled): the LP supplied
+94 p1 and 86 p2 directions in lp and 56 and 49 in loops (0 before);
+lp's exit mispredicted at most once after warm-up (6 times before).
+The LP is trusted after five exits at the earliest.
 
 ---
 
@@ -432,13 +499,12 @@ redirect, and does not communicate miss reason externally.
 |     | cycle                                     | slot; there is   |
 |     |                                           | no shared write  |
 |     |                                           | port to arbitrate|
-| LI4 | curs/curs_v speculative iteration         | RULED session-075|
-|     | tracking -- rollback policy not           | (Jeff): built    |
-|     | defined. Seznec uses external SLIM        | with the read-   |
-|     | structure for this purpose.               | before-write     |
-|     |                                           | update, TD#169,  |
-|     |                                           | BP-122. TD#7.    |
-|     |                                           | This read        |
+| LI4 | curs/curs_v speculative iteration         | CLOSED by BP-122.|
+|     | tracking -- rollback policy not           | Checkpoint per   |
+|     | defined. Seznec uses external SLIM        | FTQ entry,       |
+|     | structure for this purpose.               | restore option A |
+|     |                                           | (ruled). TD#7,   |
+|     |                                           | TD#169. This read|
 |     |                                           | "Resolve at      |
 |     |                                           | bp_cluster impl".|
 | LI5 | Allocation policy -- allocates    | DECIDED: backward branch filter  |
@@ -464,3 +530,9 @@ redirect, and does not communicate miss reason externally.
               iteration number, speculative iteration count built
               with it (TD#169, BP-122). LI4 ruled. This document had no history
               section; earlier changes are in PROJECT_STATUS.
+
+  2026-10-09  session-076, recording BP-122. Overview: the LP
+              predicts at p2 and outranks TAGE and SC (ruled). Port
+              List: the BP-122 ports. Read before write: built, with
+              the count, checkpoint, restore option A (ruled) and
+              the update rules. LI4 closed.

@@ -145,6 +145,10 @@ module ftq (
   output logic [1:0]                  ftq_rollback_n,
   output logic [1:0]                  ftq_rollback_tkn,
   output logic [1:0]                  ftq_rollback_pbit,
+  // BP-122: the rollback entry's executed conditional slots and their
+  // resolved directions, for the loop predictor's restore.
+  output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_slot_ex,
+  output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_slot_tkn,
 
   // ---- 8. RAS restore and commit -----------------------------------
   // ras_flush_val / _snapshot are NOT driven. They are declared on
@@ -487,6 +491,8 @@ module ftq (
     .rollback_n         (ftq_rollback_n),
     .rollback_tkn       (ftq_rollback_tkn),
     .rollback_pbit      (ftq_rollback_pbit),
+    .rollback_slot_ex   (ftq_rollback_slot_ex),
+    .rollback_slot_tkn  (ftq_rollback_slot_tkn),
     .arm_win            (w_arm_win)
   );
 

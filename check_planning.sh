@@ -21,7 +21,8 @@
 # files updated in session-076 (PROJECT_STATUS.md, bp_arb_spec.md,
 # bp_cluster.md, bp_history_decisions.md, bp_history_interfaces.md,
 # fe_decisions.md,
-# ftb_decisions.md, ftb_interfaces.md, ftq_backend_interfaces.md,
+# ftb_confidence_override_rules.md, ftb_decisions.md,
+# ftb_interfaces.md, ftq_backend_interfaces.md,
 # ftq_bpu_interfaces.md, ftq_decisions.md, ftq_entry_formats.md,
 # ittage_interfaces.md, loop_pred_interfaces.md, ras_decisions.md,
 # ras_interfaces.md, sc_interfaces.md, tage_interfaces.md,
@@ -44,18 +45,18 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   e3be8c359f3a
-PLAN  PROJECT_STATUS.md                 c51726348064
+PLAN  PROJECT_STATUS.md                 1c07332f6cfb
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
-ARCH  bp_arb_spec.md                    0f431fbaad0b
-ARCH  bp_cluster.md                     9c174de4ffe5
-ARCH  bp_history_decisions.md           ff109293c851
+ARCH  bp_arb_spec.md                    5582b13af4fc
+ARCH  bp_cluster.md                     187952e94e30
+ARCH  bp_history_decisions.md           9d39b17222ec
 ARCH  cachegen_decisions.md             ea488dd8c90d
 ARCH  dcd_decisions.md                  e961051d9415
-ARCH  fe_decisions.md                   b1617951b5e8
-ARCH  ftb_decisions.md            21eba3fa5063
-ARCH  ftq_decisions.md            eedc1fcdb066
+ARCH  fe_decisions.md                   1d274caf3e00
+ARCH  ftb_decisions.md            a6b8e397e78d
+ARCH  ftq_decisions.md            cca4aed5e94d
 ARCH  ftq_entry_formats.md        2301dd3f97e2
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
 ARCH  icache_decisions.md               dee12ddc7206
@@ -64,7 +65,7 @@ ARCH  itlb_decisions.md                 71e886e9787f
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  c43771704919
-ARCH  ras_decisions.md                  9d49da2f6b43
+ARCH  ras_decisions.md                  c59c656a2b5f
 ARCH  sc_decisions.md                   d264a4ba07ed
 ARCH  sc_table_hash_rules.md            ef4c7e462412
 ARCH  sram_init.md                      62d9e6c2825c
@@ -80,7 +81,7 @@ ARCH  ittage_cntrl_use_update_rules.md  b729da8f6a79
 ARCH  ittage_table_entry_formats.md  abee67476ca8
 ARCH  tage_cntrl_ctr_update_rules.md    1674f0129d91
 ARCH  tage_cntrl_use_update_rules.md    d1dc910897a2
-ARCH  ftb_confidence_override_rules.md  889aa69be146
+ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
@@ -90,22 +91,22 @@ VERF  tage_coverage_plan.md             07a285114196
 
 INTF  ittage_table_interfaces.md        152940fce590
 INTF  tage_table_interfaces.md          c77c3b137298
-INTF  bp_history_interfaces.md          e9519149c4d1
+INTF  bp_history_interfaces.md          9456f916e7d4
 INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           cd521eb2f07d
-INTF  ftq_backend_interfaces.md   b22bf7cb48fd
-INTF  ftq_bpu_interfaces.md       a552718ef2eb
+INTF  ftq_backend_interfaces.md   1c425156a6e7
+INTF  ftq_bpu_interfaces.md       4a169d510a90
 INTF  ftq_ifu_interfaces.md       8d3732475aa5
 INTF  ifu_ibuf_interfaces.md      d1c8ae118057
 INTF  itlb_ifu_interfaces.md            57e989f8bfda
 INTF  itlb_l2tlb_interfaces.md          5df4cb596827
 INTF  ittage_interfaces.md              43f50427b6a7
 INTF  l1i_ifu_interfaces.md             4a7e8201e4f5
-INTF  loop_pred_interfaces.md           56486578fb0a
-INTF  ras_interfaces.md                 21c78c8cd869
-INTF  sc_interfaces.md                  7e602739bf5c
+INTF  loop_pred_interfaces.md           f1eb16c7ce58
+INTF  ras_interfaces.md                 2c75f3d57bb0
+INTF  sc_interfaces.md                  8a747bc6aaea
 INTF  sc_table_interfaces.md            f64578d705ba
-INTF  tage_interfaces.md                d29323b3bac3
+INTF  tage_interfaces.md                e25a37204743
 INTF  ubtb_interfaces.md          b7ed4eddefa8
 
 

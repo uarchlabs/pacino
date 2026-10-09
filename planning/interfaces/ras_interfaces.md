@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -161,11 +161,12 @@ module ras (
   input  bp_br_type_e   ras_br_type_p3[0:NUM_PRED_SLOTS-1],
 
   // ----------------------------------------------------------
-  // p2 keep (BP-121, D8; fe_decisions.md FE-14). Low when the
-  // block at p2 is squashed by a redirect: its p2 push or pop is
-  // not written, and its p3 operation is registered as none.
-  // DECLARATION TO BE CONFIRMED against ras.sv: BP-121 names the
-  // port, not its width. Session-076.
+  // p2 keep (BP-121, D8; fe_decisions.md FE-14). One bit. High
+  // when this cycle's p2 pass is on the path. Low drops the p2
+  // operation (pointer and array writes) and registers it as
+  // none for p3; the p3 repair still applies. Driven by
+  // bp_cluster as ~w_kill_p2, w_kill_p2 = ftq_rollback_val &
+  // ~w_own_p2. Declaration reported by BP-122.
   // ----------------------------------------------------------
   input  logic          ras_p2_keep,
 
@@ -473,8 +474,10 @@ link (ras_decisions.md 3.2). Only the missed-push case (p2=no-op,
 p3=push) allocates and writes a new frontier entry. Undo-pop does
 NOT reverse a recursion-decrement pop: the count is not recovered.
 See TD #78 and tb_ras TC-21. A return-call paired with a plain push
-or pop: ras_decisions.md 1, as built, two of four wrong, none
-reachable today.
+or pop: ras_decisions.md 1, as built, two of four wrong, unreachable
+by construction because ras_br_type_p3 is the registered p2 type
+(TD#165 closed session-076; ras_decisions.md 1 states what would
+reopen it).
 
 ### IC-RAS-12: Producer obligations (bp_cluster / FTQ)
 
@@ -515,8 +518,9 @@ reachable today.
 ## 8. Override Chain Position
 
 RAS supplies the TARGET for a return. It takes no part in the
-direction ranking, which is SC > TAGE > FTB on direction and is
-suspended per branch when the FTB fast path fires
+direction ranking, which is SC > TAGE > FTB on direction (a trusted
+loop prediction above all three since BP-122, fe_decisions.md 3.3)
+and is suspended per branch when the FTB fast path fires
 (ftb_confidence_override_rules.md 4.3, 4.2). Target is selected by
 branch type, not ranked. An earlier revision read "RAS sits outside
 the conditional branch override chain: SC > TAGE > FTB > uBTB",
@@ -693,3 +697,7 @@ On rstn deassert (active low, synchronous):
               p3 qualified by p3 reachability (D10); no restore on
               the cluster's own redirect (D9). IC-RAS-05: TOSR
               follows the link. 9.1: push source.
+
+  2026-10-09  session-076. 4: ras_p2_keep declared (one bit, as
+              built, reported by BP-122). IC-RAS-11: TD#165 closed,
+              unreachable by construction.

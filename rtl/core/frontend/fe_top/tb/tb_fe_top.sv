@@ -67,11 +67,11 @@
 //
 // BP-121. Programs covering every predictor path the planning
 // documents describe (the program list is in run_prog below). One
-// program runs per simulation when +PROG=<name> is given, every
-// program otherwise; each is its own regression target. Without +PROG
-// the predictor tables carry from one program into the next, so the
-// counts of every program after the first depend on the order; the
-// sim_fe_top target therefore runs each program in its own
+// program runs per simulation, named by +PROG=<name>; each is its own
+// regression target. BP-122 removed the mode that ran every program in
+// one simulation without +PROG: the predictor tables carried from one
+// program into the next, so the counts of every program after the
+// first depended on the order. sim_fe_top runs each program in its own
 // simulation. Every count
 // stops at the last retirement (TD#167): the 200-cycle drain after it
 // is not measured. Each program reports its cycles, its mispredicts,
@@ -954,7 +954,9 @@ module tb;
   // so a group for a squashed entry is not counted) whose recorded
   // source is that predictor:
   //   uBTB    p1 blocks the uBTB hit
-  //   LP      p1 slots whose direction the LP supplied
+  //   LP      p1 slots whose direction the LP supplied, and (BP-122)
+  //           p2 slots whose direction the LP supplied (n_use_lp2),
+  //           the direction the entry keeps: SC does not override it
   //   FTB     p2 groups the FTB answered (bpu_slot_val_p2)
   //   TAGE    p2 conditional slots whose direction TAGE supplied
   //   SC      p3 conditional slots SC answered (n_use_sc), and those
@@ -963,6 +965,9 @@ module tb;
   //   RAS     p1 and p2 return slots whose target the RAS supplied
   int n_use_ubtb;
   int n_use_lp;
+  // BP-122: p2 conditional slots whose direction the loop predictor
+  // supplied (the LP wins at p2 and p3 when trusted, ruled by Jeff).
+  int n_use_lp2;
   int n_use_ftb;
   int n_use_tage;
   int n_use_sc;
@@ -1067,6 +1072,37 @@ module tb;
       n_rest_rep <= n_rest_rep + 1;
   end
 
+  // BP-122 (ruled by Jeff: the LP wins at p2 and p3): a slot whose p2
+  // direction the loop predictor supplied keeps it at p3. Per index,
+  // the LP slots of the p2 group the FTQ accepted and their direction;
+  // the p3 group of the same index must agree and must not name SC.
+  logic [NUM_PRED_SLOTS-1:0] lp2_src [0:FTQ_DEPTH-1];
+  logic [NUM_PRED_SLOTS-1:0] lp2_tkn [0:FTQ_DEPTH-1];
+  int                        n_lp_kept;
+  int                        n_lp_bad;
+  always @(posedge clk) begin : lp_keep_log
+    if (rstn && dut.u_ftq.w_ok_pred_p1) lp2_src[dut.bpu_pred_idx_p1] <= '0;
+    if (rstn && dut.u_ftq.w_ok_slot_p2) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        lp2_src[dut.bpu_slot_idx_p2][s] <=
+          dut.bpu_slot_p2[s].slot_valid &&
+          (dut.bpu_slot_p2[s].pred_src == PRED_LOOP);
+        lp2_tkn[dut.bpu_slot_idx_p2][s] <= dut.bpu_slot_p2[s].taken;
+      end
+    end
+    if (meas && dut.u_ftq.w_ok_slot_p3) begin
+      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+        if (lp2_src[dut.bpu_slot_idx_p3][s]) begin
+          if ((dut.bpu_slot_p3[s].taken == lp2_tkn[dut.bpu_slot_idx_p3][s])
+              && (dut.bpu_slot_p3[s].pred_src != PRED_SC))
+            n_lp_kept <= n_lp_kept + 1;
+          else
+            n_lp_bad  <= n_lp_bad + 1;
+        end
+      end
+    end
+  end
+
   int n_p2_blk;
   // BP-121: FTB lookups an update took the read port from (TD#162),
   // and p2 cycles in which a block the FTQ squashed still operated on
@@ -1105,12 +1141,14 @@ module tb;
 
   always @(posedge clk) begin : use_log
     int lp;
+    int lp2;
     int ras;
     int tg;
     int it;
     int sc;
     int fl;
     lp  = 0;
+    lp2 = 0;
     ras = 0;
     tg  = 0;
     it  = 0;
@@ -1128,6 +1166,7 @@ module tb;
         end
         if (dut.u_ftq.w_ok_slot_p2 && dut.bpu_slot_p2[s].slot_valid) begin
           if (dut.bpu_slot_p2[s].pred_src == PRED_TAGE)   tg++;
+          if (dut.bpu_slot_p2[s].pred_src == PRED_LOOP)   lp2++;
           if (dut.bpu_slot_p2[s].pred_src == PRED_ITTAGE) it++;
           if (dut.bpu_slot_p2[s].pred_src == PRED_RAS)    ras++;
         end
@@ -1138,6 +1177,7 @@ module tb;
         end
       end
       n_use_lp     <= n_use_lp     + lp;
+      n_use_lp2    <= n_use_lp2    + lp2;
       n_use_ras    <= n_use_ras    + ras;
       n_use_tage   <= n_use_tage   + tg;
       n_use_ittage <= n_use_ittage + it;
@@ -1781,6 +1821,9 @@ module tb;
     meas         = 1'b0;
     n_use_ubtb   = 0;
     n_use_lp     = 0;
+    n_use_lp2    = 0;
+    n_lp_kept    = 0;
+    n_lp_bad     = 0;
     n_use_ftb    = 0;
     n_use_tage   = 0;
     n_use_sc     = 0;
@@ -1929,6 +1972,8 @@ module tb;
     chk($sformatf({"a p2 redirect keeps its block's RAS operation ",
                    "(%0d ok, %0d bad)"}, n_own_ok, n_own_bad),
         n_own_bad == 0);
+    chk($sformatf({"an LP direction at p2 is kept at p3 (%0d ok, %0d bad)"},
+                  n_lp_kept, n_lp_bad), n_lp_bad == 0);
     chk($sformatf({"after a conditional's mispredict the newest history ",
                    "bit is its resolved direction (%0d ok, %0d bad)"},
                   n_hist_ok, n_hist_bad), n_hist_bad == 0);
@@ -1953,18 +1998,20 @@ module tb;
                  tname, p, mis_typ[p], mis_pc[p]);
     end
     $display("%s", $sformatf(
-      {"   PRED %s upd/used: uBTB %0d/%0d LP %0d/%0d FTB %0d/%0d ",
+      {"   PRED %s upd/used: uBTB %0d/%0d LP %0d/%0d/%0d FTB %0d/%0d ",
        "TAGE %0d/%0d SC %0d/%0d(flip %0d) ITTAGE %0d/%0d RAS %0d/%0d"},
-      tname, n_u_ubtb, n_use_ubtb, n_u_lp, n_use_lp, n_u_ftb, n_use_ftb,
+      tname, n_u_ubtb, n_use_ubtb, n_u_lp, n_use_lp, n_use_lp2, n_u_ftb,
+      n_use_ftb,
       n_u_tage, n_use_tage, n_u_sc, n_use_sc, n_sc_flip, n_u_ittage,
       n_use_ittage, n_u_ras, n_use_ras));
     $display("%s", $sformatf(
       {"   CHK %s RAS commits ok %0d; history after a mispredict ok %0d; ",
        "own p2 redirect RAS ok %0d; p3 writes without p2 %0d; ",
        "squashed RAS ops %0d; dropped FTB lookups %0d; p3 RAS repairs %0d, ",
-       "backend restores naming a repaired entry %0d"}, tname, n_ras_ok,
+       "backend restores naming a repaired entry %0d; LP p2 directions ",
+       "kept at p3 %0d, not kept %0d"}, tname, n_ras_ok,
       n_hist_ok, n_own_ok, n_p3_no_p2, n_ras_sq, n_ftb_drop, n_p3_rep,
-      n_rest_rep));
+      n_rest_rep, n_lp_kept, n_lp_bad));
     $display("%s", $sformatf(
       {"   RESP %s on time/late: TAGE %0d/%0d ITTAGE %0d/%0d SC %0d/%0d ",
        "p2 blocks %0d, history bundle changed at p2 without a ",
@@ -2106,6 +2153,23 @@ module tb;
   // a conditional that is always taken (TAGE, SC), an indirect jump
   // and an indirect call to a function that returns (ITTAGE, RAS).
   // =================================================================
+  // BP-122, TD#169: the loop predictor's end state in lp and loops.
+  // It supplies directions the entry keeps (p2), and the inner loop's
+  // branch at br_pc mispredicts at most once after warm-up.
+  localparam int LOOPS_OUTER = 14;
+  localparam int LOOPS_WARM  = 8;
+  localparam int LP_OUTER    = 16;
+  localparam int LP_WARM     = 8;
+
+  task automatic lp_end_chk(input logic [VA_WIDTH-1:0] br_pc);
+    int n;
+    n = mis_pc.exists(br_pc) ? mis_pc[br_pc] : 0;
+    chk($sformatf("%s: the LP supplied p2 directions (%0d)", tname,
+                  n_use_lp2), n_use_lp2 > 0);
+    chk($sformatf("%s: the loop exit at %011h mispredicted %0d times %s",
+                  tname, br_pc, n, "after warm-up (at most 1)"), n <= 1);
+  endtask
+
   task automatic p_loops();
     logic [VA_WIDTH-1:0] otop;
     logic [VA_WIDTH-1:0] itop;
@@ -2140,9 +2204,12 @@ module tb;
     W.ret(link);
     W.mixed(1);
     W.loop_br(otop);
-    W.rep_iter(eo, 8);
-    // BP-121: after two outer iterations.
-    warm_e = eo + 2 * ((W.ne - eo) / 8);
+    // BP-122 (ruled by Jeff): 14 outer iterations, warm-up after 8. The
+    // loop predictor is trusted after five exits of the inner loop at
+    // the earliest (one with no count, one to learn it, three
+    // confirmations); BP-121 ran 8 and warmed up after 2.
+    W.rep_iter(eo, LOOPS_OUTER);
+    warm_e = eo + LOOPS_WARM * ((W.ne - eo) / LOOPS_OUTER);
     W.mixed(3);
     W.halt();
     release_reset();
@@ -2154,6 +2221,7 @@ module tb;
     chk($sformatf("ITTAGE received updates (%0d)", n_u_ittage),
         n_u_ittage > 0);
     chk($sformatf("the RAS committed (%0d)", n_u_ras), n_u_ras > 0);
+    lp_end_chk(VA_WIDTH'(RESET_VECTOR) + VA_WIDTH'('h18));
   endtask
 
   // =================================================================
@@ -2326,8 +2394,10 @@ module tb;
     begin_prog("lp");
     W.mixed(3);
     otop = W.wp;
-    for (int o = 0; o < 12; o++) begin
-      if (o == 4) warm_e = W.ne;
+    // BP-122 (ruled by Jeff): 16 outer iterations, warm-up at 8 (12 and
+    // 4 before); see LOOPS_OUTER.
+    for (int o = 0; o < LP_OUTER; o++) begin
+      if (o == LP_WARM) warm_e = W.ne;
       W.wp = otop;
       W.mixed(2);
       itop = W.wp;
@@ -2337,15 +2407,13 @@ module tb;
         W.bcc(i != 9, itop);
       end
       W.mixed(2);
-      W.bcc(o != 11, otop);
+      W.bcc(o != LP_OUTER - 1, otop);
     end
     W.mixed(3);
     end_prog(80000);
-    // The LP trains here; whether it is trusted while iterations are in
-    // flight is the open LI4/TD#7 (left as specified, ruled by Jeff in
-    // BP-121), so its use is reported, not required.
     chk($sformatf("lp: the LP trained (%0d updates; %0d directions used)",
                   n_u_lp, n_use_lp), n_u_lp > 0);
+    lp_end_chk(VA_WIDTH'(RESET_VECTOR) + VA_WIDTH'('h16));
   endtask
 
   // -----------------------------------------------------------------
@@ -2881,10 +2949,19 @@ module tb;
     string prog;
     pass_cnt = 0;
     fail_cnt = 0;
+    // BP-122: one program per simulation. The mode that ran every
+    // program in one simulation carried the RAM predictor tables from
+    // one program into the next: the FTB array has no reset, and the
+    // TAGE, ITTAGE and SC tables are filled once, at time 0, by the
+    // FAST_INIT plusargs every run uses. It is removed rather than given
+    // a table reset, which the RTL does not have and the testbench would
+    // have to force into every RAM. sim_fe_top runs each program alone.
     if ($value$plusargs("PROG=%s", prog)) begin
       run_prog(prog);
     end else begin
-      foreach (all_progs[i]) run_prog(all_progs[i]);
+      fail_cnt++;
+      $display("FAIL: +PROG=<name> is required; programs:");
+      foreach (all_progs[i]) $display("  %s", all_progs[i]);
     end
     $display("tb_fe_top: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

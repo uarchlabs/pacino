@@ -234,6 +234,8 @@ module fe_top (
   logic [1:0]                 ftq_rollback_n;
   logic [1:0]                 ftq_rollback_tkn;
   logic [1:0]                 ftq_rollback_pbit;
+  logic [NUM_PRED_SLOTS-1:0]  ftq_rollback_slot_ex;   // BP-122
+  logic [NUM_PRED_SLOTS-1:0]  ftq_rollback_slot_tkn;  // BP-122
   logic [GHIST_PTR_BITS-1:0]  ckpt_ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  ckpt_phist_ptr;
   logic                       ras_restore_val;
@@ -436,6 +438,8 @@ module fe_top (
     .ftq_rollback_n        (ftq_rollback_n),
     .ftq_rollback_tkn      (ftq_rollback_tkn),
     .ftq_rollback_pbit     (ftq_rollback_pbit),
+    .ftq_rollback_slot_ex  (ftq_rollback_slot_ex),
+    .ftq_rollback_slot_tkn (ftq_rollback_slot_tkn),
     .ghist_ptr             (bpu_ghist_ptr),
     .phist_ptr             (bpu_phist_ptr),
     .ckpt_ghist_ptr        (ckpt_ghist_ptr),
@@ -510,6 +514,8 @@ module fe_top (
     .ftq_rollback_n        (ftq_rollback_n),
     .ftq_rollback_tkn      (ftq_rollback_tkn),
     .ftq_rollback_pbit     (ftq_rollback_pbit),
+    .ftq_rollback_slot_ex  (ftq_rollback_slot_ex),
+    .ftq_rollback_slot_tkn (ftq_rollback_slot_tkn),
     .ras_restore_val       (ras_restore_val),
     .ras_restore_snapshot  (ras_restore_snapshot),
     .ras_commit_val        (ras_commit_val),

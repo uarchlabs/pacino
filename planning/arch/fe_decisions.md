@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -179,7 +179,10 @@ entry (ftq_bpu_interfaces.md 4, which owns this mux). The uBTB slot
 valid is pred_p1[s].valid. This keyed the mux on an "LP output
 valid" and said both predictors assert a valid. Session-072.
 
-The LP or uBTB predictions are not sources for redirects since they both are the 1st prediction in the pipeline. 
+The LP or uBTB p1 predictions are not sources for redirects since they both are the 1st prediction in the pipeline.
+Since BP-122 the LP also re-reads at p2, and that p2 direction can
+raise a p2 redirect (3.2, 3.3); the p1 LP direction is an early
+guess that p2 corrects.
 
 When neither the LP nor the uBTB hits, the slot carries no prediction.
 The successor PC for that case is defined in section 2.4.
@@ -363,11 +366,15 @@ The port specification is ftq_bpu_interfaces.md section 6.
 ### 3.2 Sources
 
 ```
-  p2   FTB, TAGE, ITTAGE, RAS
+  p2   FTB, TAGE, ITTAGE, RAS, LP (its p2 re-read, BP-122)
   p3   SC
 ```
 
-The uBTB and the LP are not redirect sources since they form the initial predictions.
+The uBTB is not a redirect source since it forms the initial
+prediction. THE LP IS ONE SINCE BP-122: its p2 re-read (pred_p2)
+supplies a trusted direction at p2, which can change the successor
+and so raise a p2 redirect (3.3). This read "The uBTB and the LP are
+not redirect sources".
 
 ### 3.3 Direction and target
 
@@ -403,6 +410,15 @@ TAGE overrides the FTB direction on conditional branches only. At p3 the SC may
 override the TAGE direction; the FTB result is still available, so both
 target candidates are present when the SC direction selects between
 them. 
+
+A TRUSTED LOOP PREDICTION OUTRANKS ALL THREE. RULED session-076
+(Jeff, BP-122 decision 2), BUILT by BP-122: a trusted p2 loop
+direction is the slot's direction at p2, over TAGE, and SC does not
+override it at p3. The direction ranking is LP (trusted) > SC > TAGE
+> FTB. Before this ruling TAGE and SC overrode the LP's p1
+direction, so a correct loop exit could never remove the
+mispredict. As built, the trusted LP direction also stands over an
+FTB fast-path direction (ftb_confidence_override_rules.md 4.3).
 
 A redirect rewrites its slot. The block's successor PC is then re-derived 
 across all slots per section 2.4.
@@ -524,8 +540,8 @@ recompute predictor state from the PC or the history.
 EXCEPT THE LOOP PREDICTOR. RULED session-075 (Jeff), after BP-121,
 reversing BP-121 decision 6: the loop predictor's update reads the
 entry before writing it, which its table allows because it is flops,
-not RAM. TD#169, BP-122. loop_pred_interfaces.md is the home of the
-rule.
+not RAM. BUILT by BP-122 (TD#169). loop_pred_interfaces.md is the
+home of the rule.
 
 A slot off the executed path never resolves and forms no update.
 
@@ -1694,6 +1710,11 @@ create one.
               the ruling that a branch its FTQ entry does not hold
               is placed at resolution and trains every predictor of
               its row. FE-20: sc_enable also goes to the FTQ.
+
+  2026-10-09  session-076, recording BP-122. 3.2: the LP's p2
+              re-read is a direction source at p2. 3.3: a trusted
+              LP outranks SC, TAGE and FTB (ruled). 7.2: built.
+              2.1: the p1 LP direction is an early guess.
 
   2026-10-08  session-076, PA-direct correction recording BP-121.
               2.4: per-slot successors chained (D5, D15). 7.2: the

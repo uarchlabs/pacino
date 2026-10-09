@@ -94,6 +94,8 @@ module tb;
   logic [1:0]               ftq_rollback_n;
   logic [1:0]               ftq_rollback_tkn;
   logic [1:0]               ftq_rollback_pbit;
+  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_ex;   // BP-122
+  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_tkn;  // BP-122
   logic                     ras_restore_val;
   bp_ras_snapshot_t         ras_restore_snapshot;
   logic                     ras_commit_val;
@@ -223,6 +225,8 @@ module tb;
     .ftq_rollback_n        (ftq_rollback_n),
     .ftq_rollback_tkn      (ftq_rollback_tkn),
     .ftq_rollback_pbit     (ftq_rollback_pbit),
+    .ftq_rollback_slot_ex  (ftq_rollback_slot_ex),
+    .ftq_rollback_slot_tkn (ftq_rollback_slot_tkn),
     .ras_restore_val       (ras_restore_val),
     .ras_restore_snapshot  (ras_restore_snapshot),
     .ras_commit_val        (ras_commit_val),

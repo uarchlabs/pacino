@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -289,12 +289,13 @@ named bundle rather than past its last, writes the corrected bits,
 and rewrites that entry's checkpoint. The correction is formed by
 ftq_npc for a backend redirect, from bkend_ftq_redir_pos and
 bkend_ftq_redir_taken (ftq_backend_interfaces.md 5), and by the
-cluster for its own p2 and p3 redirects. It reaches the cluster on
-ports BP-121 writes as ftq_rollback_corr/_n/_tkn/_pbit
-(ftq_bpu_interfaces.md 9). Their widths and the
-meaning of each are not recorded in BP-121; bp_history_interfaces.md
-is their home and states them once they are read from the RTL.
-OPEN, session-076.
+cluster for its own p2 and p3 redirects. It reaches bp_history on
+rollback_corr, rollback_n, rollback_tkn and rollback_pbit, declared
+in bp_history_interfaces.md (the cluster-boundary ports are
+ftq_bpu_interfaces.md 9). rollback_n is the number of the bundle's
+bits; read with the post-advance checkpoint it locates the bundle's
+first bit, so the checkpoint needs no slot count (PA reading of the
+declarations BP-122 reported).
 
 HISTORY STOPS AT THE FIRST TAKEN SLOT (D16). A bundle writes one bit
 per slot up to and including its first taken slot and none after
@@ -889,3 +890,6 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               taken slot (decision 8, D14, D16). HI8 closed. 3.2:
               the aligned-base note brought to BP-110 (TD#125). 7:
               the rollback read notes the correction.
+
+  2026-10-09  session-076, recording BP-122. 3.5: the correction
+              ports named; rollback_n locates the first bit.

@@ -159,6 +159,10 @@ ASSERT_SRCS := \
   $(FTQ_TB)/ftq_resolve_assert.sv \
   $(FTQ_TB)/ftq_upd_conv_assert.sv \
   $(FTQ_TB)/ftq_ftb_sched_assert.sv \
+  $(FTQ_TB)/ftq_assert.sv \
+  $(BPU_TB)/bp_history_assert.sv \
+  $(BPU_TB)/loop_pred_assert.sv \
+  $(BPU_TB)/ras_assert.sv \
   $(IFU_TB)/ifu_xlate_assert.sv \
   $(IFU_TB)/ifu_f3_assert.sv \
   $(IFU_TB)/ifu_assert.sv \

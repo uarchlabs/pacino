@@ -126,8 +126,9 @@ For indirect branches:
 Note: fe_decisions.md section 12, narrowed session-070, rejects the
 chains as written but NOT the direction ranking inside the first one.
 ON DIRECTION, SC > TAGE > FTB is real: all three produce that one
-quantity, and the ranking is suspended per branch when the FTB fast
-path fires (ftb_confidence_override_rules.md 4.3, 4.2). The rest is
+quantity, a trusted loop prediction ranks above all three since
+BP-122 (fe_decisions.md 3.3), and the ranking is suspended per branch when the
+FTB fast path fires (ftb_confidence_override_rules.md 4.3, 4.2). The rest is
 not ranked: br_type selects the RAS for a return and the ITTAGE for
 an indirect, so the two are never both consulted for one branch, and
 redirects supersede by stage order (FE-3). The rows are retained here

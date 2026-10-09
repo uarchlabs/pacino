@@ -178,6 +178,8 @@ module tb;
   logic [1:0]               ftq_rollback_n;
   logic [1:0]               ftq_rollback_tkn;
   logic [1:0]               ftq_rollback_pbit;
+  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_ex;   // BP-122
+  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_tkn;  // BP-122
 
   logic [GHIST_PTR_BITS-1:0] ghist_ptr;
   logic [PHIST_PTR_BITS-1:0] phist_ptr;
@@ -283,6 +285,8 @@ module tb;
     .ftq_rollback_n        (ftq_rollback_n),
     .ftq_rollback_tkn      (ftq_rollback_tkn),
     .ftq_rollback_pbit     (ftq_rollback_pbit),
+    .ftq_rollback_slot_ex  (ftq_rollback_slot_ex),
+    .ftq_rollback_slot_tkn (ftq_rollback_slot_tkn),
     .ghist_ptr             (ghist_ptr),
     .phist_ptr             (phist_ptr),
     .ckpt_ghist_ptr        (ckpt_ghist_ptr),
@@ -532,6 +536,8 @@ module tb;
     ftq_rollback_n        = 2'd0;
     ftq_rollback_tkn      = 2'b00;
     ftq_rollback_pbit     = 2'b00;
+    ftq_rollback_slot_ex  = '0;
+    ftq_rollback_slot_tkn = '0;
     tage_enable_aging     = 1'b0;
     tage_aging_interval   = 32'd0;
     ittage_enable_aging   = 1'b0;
@@ -629,6 +635,8 @@ module tb;
     end
   endtask
 
+  // BP-122: the prediction reads the speculative count, curs, so the
+  // fixture installs the count as curs, valid, as well as curr_itr.
   task automatic lp_install(input int s,
                             input logic [VA_WIDTH-1:0] pc,
                             input logic [LP_CNF_BITS-1:0] cnf,
@@ -640,6 +648,8 @@ module tb;
     e.tag      = lp_tag(pc);
     e.cnf      = cnf;
     e.curr_itr = curr;
+    e.curs     = curr;
+    e.curs_v   = 1'b1;
     e.past_itr = past;
     e.age      = '1;
     lp_clear_set(s, pc);
@@ -2615,10 +2625,12 @@ module tb;
         bpu_meta_lp_p2[1].lp_idx === lp_idx(pc));
     chk("F1 lp slots are not crossed",
         bpu_meta_lp_p2[0] !== bpu_meta_lp_p2[1]);
-    chk("F1 lp slot0 equals the registered p1 loop result",
-        bpu_meta_lp_p2[0] === dut.r_lp_pred_p2[0]);
-    chk("F1 lp slot1 equals the registered p1 loop result",
-        bpu_meta_lp_p2[1] === dut.r_lp_pred_p2[1]);
+    // BP-122: the p2 group carries the loop predictor's p2 re-read (it
+    // carried the registered p1 result, r_lp_pred_p2, before).
+    chk("F1 lp slot0 equals the p2 loop re-read",
+        bpu_meta_lp_p2[0] === dut.w_lp_pred_p2[0]);
+    chk("F1 lp slot1 equals the p2 loop re-read",
+        bpu_meta_lp_p2[1] === dut.w_lp_pred_p2[1]);
 
     // -- F2. The p3 group. bpu_meta_val_p3 asserts whether or not SC
     //    is enabled; the sc member is the predictor output.
@@ -4408,6 +4420,200 @@ module tb;
   endtask
 
   // =================================================================
+  // GROUP O -- the loop predictor at p2 and p3, its speculative count
+  // and its restore (BP-122, TD#169; ruled by Jeff: the LP wins at p2
+  // and p3, restore option A)
+  // =================================================================
+  //
+  // O1 a trusted LP entry supplies the p2 direction of its slot over
+  //    TAGE, and the p2 block advances the count (1 -> 2)
+  // O2 SC does not override a slot the LP supplied at p2
+  // O3 a trusted LP exit (count == trip count) is not taken at p2 over
+  //    a taken TAGE, and the exit makes the count 0, known
+  // O4 an FTQ rollback with the executed slot not taken restores the
+  //    entry from its checkpoint (count 0, known) and makes every
+  //    other count unknown
+  // O5 a p3 redirect (SC reverses an untrusted LP slot) re-advances
+  //    the entry from its checkpoint by the p3 direction
+  // Every case starts from reset; the uBTB set and both LP banks of the
+  // PC are cleared, the FTB entry is written through its update port.
+  task automatic group_o();
+    logic [VA_WIDTH-1:0]    pc;
+    logic [VA_WIDTH-1:0]    pcx;
+    logic [VA_WIDTH-1:0]    base;
+    logic [VA_WIDTH-1:0]    pft;
+    logic [LP_IDX_BITS-1:0] li;
+
+    $display("---- GROUP O: loop predictor at p2 / p3, BP-122 ----");
+
+    // -- O1. LP over TAGE at p2, and the advance.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);            // TAGE not taken
+    pc   = VA_WIDTH'('h00_0b10_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d32);
+    li   = lp_idx(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    lp_install(0, pc, LP_CNF_BITS'(LP_CONF_LEVEL), 14'd1, 14'd4);
+    req(pc, 6'h31);
+    tick();
+    norq();
+    tick();                          // at p2
+    chk("O1 p2: TAGE answered not taken",
+        dut.w_tage_hit_p2[0] && !dut.w_tage_pred_meta_p2[0].tage_pred_tkn);
+    chk("O1 p2: the trusted LP supplies the direction: taken",
+        dut.w_taken_p2[0] === 1'b1);
+    chk("O1 p2: the slot records the LP as its source",
+        bpu_slot_p2[0].pred_src === PRED_LOOP);
+    chk("O1 p2: the carried iteration number is 1",
+        bpu_meta_lp_p2[0].lp_curs === 14'd1);
+    tick();
+    chk("O1 the p2 block advanced the count to 2",
+        (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd2) &&
+        dut.u_loop_pred.g_slot[0].mem[li][0].curs_v);
+
+    // -- O2. SC does not override the LP slot.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);            // TAGE taken
+    sc_fill(6'b100000);              // SC strongly not taken
+    sc_enable = 1'b1;
+    pc   = VA_WIDTH'('h00_0b20_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d32);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    lp_install(0, pc, LP_CNF_BITS'(LP_CONF_LEVEL), 14'd1, 14'd4);
+    req(pc, 6'h32);
+    tick();
+    norq();
+    tick();                          // at p2
+    chk("O2 p2: the LP supplies taken", dut.w_lp_use_p2[0] === 1'b1);
+    tick();                          // at p3
+    chk("O2 p3: SC answered not taken",
+        dut.w_sc_hit_p3[0] && !dut.w_sc_pred_meta_p3[0].sc_pred_tkn);
+    chk("O2 p3: the LP direction stands", dut.w_taken_p3[0] === 1'b1);
+    chk("O2 p3: no p3 redirect", dut.w_any_redir_p3 === 1'b0);
+    chk("O2 p3: the slot keeps the LP as its source",
+        bpu_slot_p3[0].pred_src === PRED_LOOP);
+    sc_enable = 1'b0;
+
+    // -- O3. The trusted exit over a taken TAGE.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);            // TAGE taken
+    pc   = VA_WIDTH'('h00_0b30_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d32);
+    li   = lp_idx(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    lp_install(0, pc, LP_CNF_BITS'(LP_CONF_LEVEL), 14'd4, 14'd4);
+    req(pc, 6'h33);
+    tick();
+    norq();
+    tick();                          // at p2
+    chk("O3 p2: the trusted exit is not taken", dut.w_taken_p2[0] === 1'b0);
+    chk("O3 p2: the slot records the LP",
+        bpu_slot_p2[0].pred_src === PRED_LOOP);
+    tick();
+    chk("O3 the exit made the count 0, known",
+        (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd0) &&
+        dut.u_loop_pred.g_slot[0].mem[li][0].curs_v);
+
+    // -- O4. The FTQ rollback: restore the named entry, invalidate the
+    //    rest. pcx holds a known count in bank 1 that the squash may
+    //    have advanced.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);
+    pc   = VA_WIDTH'('h00_0b40_0000);
+    pcx  = VA_WIDTH'('h00_0b48_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d32);
+    li   = lp_idx(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    lp_clear_both(pcx);
+    lp_install(0, pc, LP_CNF_BITS'(1), 14'd3, 14'd9);
+    lp_install(1, pcx, LP_CNF_BITS'(1), 14'd5, 14'd9);
+    req(pc, 6'h34);
+    tick();
+    norq();
+    tick();                          // at p2: advances taken, 3 -> 4
+    tick();
+    chk("O4 pre: the block advanced the count to 4",
+        dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd4);
+    ftq_rollback_val      = 1'b1;
+    ftq_rollback_idx      = 6'h34;
+    ftq_rollback_corr     = 1'b1;
+    ftq_rollback_n        = 2'd1;
+    ftq_rollback_tkn      = 2'b00;
+    ftq_rollback_slot_ex  = 2'b01;
+    ftq_rollback_slot_tkn = 2'b00;
+    tick();
+    ftq_rollback_val      = 1'b0;
+    ftq_rollback_corr     = 1'b0;
+    ftq_rollback_n        = 2'd0;
+    ftq_rollback_slot_ex  = '0;
+    chk("O4 the named entry: re-advanced not taken from 3: 0, known",
+        (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd0) &&
+        dut.u_loop_pred.g_slot[0].mem[li][0].curs_v);
+    chk("O4 every other count is unknown",
+        dut.u_loop_pred.g_slot[1].mem[lp_idx(pcx)][0].curs_v === 1'b0);
+
+    // -- O5. The p3 restore: an untrusted LP slot, TAGE taken at p2
+    //    (count 2 -> 3), SC not taken at p3: a p3 redirect, and the
+    //    entry is re-advanced from its checkpoint (2) not taken: 0.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);
+    sc_fill(6'b100000);
+    sc_enable = 1'b1;
+    pc   = VA_WIDTH'('h00_0b50_0000);
+    base = blk_base(pc);
+    pft  = base + VA_WIDTH'('d32);
+    li   = lp_idx(pc);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
+                   1'b0);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    lp_install(0, pc, LP_CNF_BITS'(1), 14'd2, 14'd9);
+    req(pc, 6'h35);
+    tick();
+    norq();
+    tick();                          // at p2
+    chk("O5 p2: TAGE supplies taken (LP untrusted)",
+        (dut.w_taken_p2[0] === 1'b1) && !dut.w_lp_use_p2[0]);
+    tick();                          // at p3
+    chk("O5 p3: SC reverses the slot, a p3 redirect",
+        (dut.w_taken_p3[0] === 1'b0) && dut.w_any_redir_p3);
+    chk("O5 p3: the p2 advance had made the count 3",
+        dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd3);
+    tick();
+    chk("O5 the p3 restore: from the checkpoint (2), not taken: 0, known",
+        (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd0) &&
+        dut.u_loop_pred.g_slot[0].mem[li][0].curs_v);
+    sc_enable = 1'b0;
+
+    clr_upd_chans();
+    norq();
+    repeat (2) tick();
+    $display("---- GROUP O done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
   // GROUP M -- RETURN_CALL (TD#152) and the uBTB jump slot (TD#154),
   // BP-119
   // =================================================================
@@ -4752,6 +4958,7 @@ module tb;
     group_l();
     group_m();
     group_n();
+    group_o();
 
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

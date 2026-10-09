@@ -37,7 +37,18 @@ module ftq_npc_assert (
   input ftq_redir_cause_e        redir_cause,
   input logic                    rollback_val,
   input logic [FTQ_IDX_BITS-1:0] rollback_idx,
-  input logic [5:1]              arm_win
+  input logic [5:1]              arm_win,
+  // BP-122, N11 and N12 (TD#170).
+  input ftq_redir_cause_e        bkend_redir_cause,
+  input logic                    bkend_redir_self,
+  input logic [FTB_BR_POS_BITS-1:0] bkend_redir_pos,
+  input logic                    bkend_redir_taken,
+  input bp_ftq_entry_t           redir_entry,
+  input logic                    rollback_corr,
+  input logic [1:0]              rollback_n,
+  input logic [1:0]              rollback_tkn,
+  input logic [NUM_PRED_SLOTS-1:0] rollback_slot_ex,
+  input logic [NUM_PRED_SLOTS-1:0] rollback_slot_tkn
 );
 
   // A REGISTERED COPY OF THE PRESENTED PC, not $past. pred_pc_p1 is
@@ -169,6 +180,78 @@ module ftq_npc_assert (
         (redir_self ? (redir_idx - 1'b1) : redir_idx));
   endproperty
 
+  // N11 BP-121 D14 (m13), bp_history_decisions.md 3.5 as ruled, and
+  //     TD#170. A backend MISPREDICT redirect (_self clear) carries
+  //     the corrected history bundle of its entry: the branches of the
+  //     entry before the named position, which execution passed not
+  //     taken, then the named branch with its resolved direction; at
+  //     most two bits. The expected length is counted here from the
+  //     entry the redirect read port returns.
+  logic [1:0] w_n_exp;
+  always_comb begin : n_exp
+    int nb;
+    nb = 0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (redir_entry.slot[s].slot_valid &&
+          (redir_entry.slot[s].pos < bkend_redir_pos))
+        nb++;
+    end
+    w_n_exp = (nb >= 1) ? 2'd2 : 2'd1;
+  end
+
+  property p_mispredict_bundle;
+    @(posedge clk) disable iff (!rstn)
+      (bkend_redir_val && (bkend_redir_cause == RC_MISPREDICT) &&
+       !bkend_redir_self) |->
+        rollback_corr && (rollback_n == w_n_exp) &&
+        // the newest bit: index n-1, which is n[1] for n in {1, 2}
+        (rollback_tkn[rollback_n[1]] == bkend_redir_taken) &&
+        ((rollback_n != 2'd2) || !rollback_tkn[0]);
+  endproperty
+
+  // N12 BP-122 (TD#169). The rollback slots for the loop predictor:
+  //     a slot is marked executed only under a corrected bundle, and
+  //     only a conditional at or before the named position; only the
+  //     named slot can be marked taken, and only with the resolved
+  //     direction; the named slot, when the entry holds it as a
+  //     conditional, is marked.
+  property p_slot_ex_bounded(int s);
+    @(posedge clk) disable iff (!rstn)
+      rollback_slot_ex[s] |->
+        rollback_corr && redir_entry.slot[s].slot_valid &&
+        (redir_entry.slot[s].br_type == COND) &&
+        (redir_entry.slot[s].pos <= bkend_redir_pos);
+  endproperty
+
+  property p_slot_tkn_named(int s);
+    @(posedge clk) disable iff (!rstn)
+      rollback_slot_tkn[s] |->
+        rollback_slot_ex[s] && bkend_redir_taken &&
+        (redir_entry.slot[s].pos == bkend_redir_pos);
+  endproperty
+
+  property p_named_slot_marked(int s);
+    @(posedge clk) disable iff (!rstn)
+      (rollback_corr && redir_entry.slot[s].slot_valid &&
+       (redir_entry.slot[s].br_type == COND) &&
+       (redir_entry.slot[s].pos == bkend_redir_pos)) |->
+        rollback_slot_ex[s] && (rollback_slot_tkn[s] == bkend_redir_taken);
+  endproperty
+
+  a_mispredict_bundle:      assert property (p_mispredict_bundle)
+    else $error("N11 a backend mispredict carried a wrong history bundle");
+  a_slot_ex_bounded_s0:     assert property (p_slot_ex_bounded(0))
+    else $error("N12 slot 0 marked executed outside the bundle");
+  a_slot_ex_bounded_s1:     assert property (p_slot_ex_bounded(1))
+    else $error("N12 slot 1 marked executed outside the bundle");
+  a_slot_tkn_named_s0:      assert property (p_slot_tkn_named(0))
+    else $error("N12 slot 0 marked taken but not the named branch");
+  a_slot_tkn_named_s1:      assert property (p_slot_tkn_named(1))
+    else $error("N12 slot 1 marked taken but not the named branch");
+  a_named_slot_marked_s0:   assert property (p_named_slot_marked(0))
+    else $error("N12 the named slot 0 was not marked");
+  a_named_slot_marked_s1:   assert property (p_named_slot_marked(1))
+    else $error("N12 the named slot 1 was not marked");
   a_one_arm:                assert property (p_one_arm)
     else $error("N1 more than one redirect arm won");
   a_redir_is_arm_1_to_4:    assert property (p_redir_is_arm_1_to_4)
@@ -212,5 +295,15 @@ bind ftq_npc ftq_npc_assert u_assert (
   .redir_cause        (redir_cause),
   .rollback_val       (rollback_val),
   .rollback_idx       (rollback_idx),
-  .arm_win            (arm_win)
+  .arm_win            (arm_win),
+  .bkend_redir_cause  (bkend_redir_cause),
+  .bkend_redir_self   (bkend_redir_self),
+  .bkend_redir_pos    (bkend_redir_pos),
+  .bkend_redir_taken  (bkend_redir_taken),
+  .redir_entry        (redir_entry),
+  .rollback_corr      (rollback_corr),
+  .rollback_n         (rollback_n),
+  .rollback_tkn       (rollback_tkn),
+  .rollback_slot_ex   (rollback_slot_ex),
+  .rollback_slot_tkn  (rollback_slot_tkn)
 );
