@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-08
  CONTACT: Jeff Nye
 ```
 
@@ -71,6 +71,12 @@ bp_defines_pkg.sv.
   -- Rollback (redirect recovery, by checkpoint index)
   rollback_valid    : input  logic                  -- restore enable
   rollback_ckpt_idx : input  logic [FTQ_IDX_BITS-1:0]
+
+  -- Rollback history correction (BP-121, D14). NOT LISTED: BP-121
+  -- names the cluster-boundary ports as ftq_rollback_corr/_n/_tkn/
+  -- _pbit and does not give bp_history's own port names or any
+  -- width. BP-122 reports the declarations as built; they are
+  -- recorded here then. See Rollback Interface.
 
   -- Current pointer outputs (module-owned, for FTQ construction)
   ghist_ptr    : output logic [GHIST_PTR_BITS-1:0]
@@ -164,14 +170,19 @@ only advance, rollback by index, FTQ visibility vs ownership).
 ### Producer obligations
 
   - Drive num_branches to the count of branches in the bundle
-    (0, 1, or 2). Do not drive 3.
+    (0, 1, or 2), counting up to and including the first taken
+    branch and none after it: a branch after a taken one is off
+    the path. Do not drive 3. The stop at the first taken branch
+    was BUILT by BP-121 (D16); before it the p1 bundle counted a
+    branch past a taken one.
   - pred_taken[n] / pred_pc[n] valid for each branch n <
     num_branches. The index is the branch number after
     compaction, not the prediction slot number.
   - pred_pc is the BRANCH PC: the block START plus that branch's
     in-block position, TWO bytes per position, pos counted from the
     block start. Not the 32-byte-aligned base, which bp_cluster.sv
-    uses (TD#125, session-071). It is not the prediction block
+    used until BP-110 removed it (TD#125, closed). It is not the
+    prediction block
     PC. This read "four bytes per position", which
     BP-099 superseded when POS_OFFSET_BITS went to 1 for the C
     extension; the granularity note below, ftq_bpu_interfaces.md
@@ -262,7 +273,7 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
 ## Rollback Interface
 
-### Producer: BP cluster redirect logic (branch mispredict)
+### Producer: BP cluster: its own p2/p3 redirects and the FTQ rollback
 ### Consumer: bp_history (restore pointer by index, recompute folds)
 
 ### Timing
@@ -282,6 +293,18 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
   Rollback supplies an INDEX, not a pointer. The module restores
   the pointer from its own checkpoint array.
+
+  HISTORY CORRECTION, since BP-121 (D14; bp_history_decisions.md
+  3.5, ruled session-075). The rollback also carries a correction.
+  The module restores the pointer to the FIRST bit of the named
+  bundle rather than past its last, writes the corrected bits, and
+  rewrites that entry's checkpoint. The correction comes from
+  ftq_npc for a backend redirect (from bkend_ftq_redir_pos and
+  bkend_ftq_redir_taken) and from the cluster for its own p2 and
+  p3 redirects. The ports, their widths and the meaning of each are
+  NOT RECORDED: BP-121 does not state them, and BP-122 reports
+  them. Until then the rollback text above describes the index
+  half only.
 
   Scope: rollback (checkpoint-restore) applies to RC_MISPREDICT,
   RC_TRAP and RC_REPLAY -- every backend redirect cause that names
@@ -314,9 +337,13 @@ only advance, rollback by index, FTQ visibility vs ownership).
     entry: RC_MISPREDICT, RC_TRAP and RC_REPLAY. This read
     "branch-mispredict redirects only ... route exception/interrupt
     redirects through the history reinit path". Session-070.
-  - bp_cluster drives rollback from the derived redirect. When
-    both stages redirect in the same cycle the p3 index wins,
-    matching the supersession rule.
+  - bp_cluster drives rollback from the derived redirect and from
+    the FTQ (ftq_rollback_val / ftq_rollback_idx, which outrank
+    both cluster arms; ftq_bpu_interfaces.md 9). When both stages
+    redirect in the same cycle the p3 index wins, matching the
+    supersession rule.
+  - Present the history correction with every rollback that has
+    one (BP-121).
 
 ---
 
@@ -494,4 +521,12 @@ and the module-owned pointer decision.
 
   2026-09-20  session-072. E15: the history code fence, open
               since the section was written, is closed.
+
+  2026-10-08  session-076, PA-direct correction recording BP-121.
+              Port List and Rollback Interface: the history
+              correction on rollback (D14); its ports not yet
+              recorded, BP-122 reports them. Producer obligations:
+              num_branches stops at the first taken branch (D16);
+              the FTQ rollback arm named; the aligned-base note
+              brought to BP-110 (TD#125).
 ```

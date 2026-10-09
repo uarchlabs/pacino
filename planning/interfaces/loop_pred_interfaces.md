@@ -376,7 +376,11 @@ THE RULE.
   - The update reads the entry before it writes it. This is allowed
     for the loop predictor because its table is flops, not RAM
     (fe_decisions.md 2.1). Single cycle, no bubble.
-  - Slot 1 wins when both slots name one entry in the same cycle.
+  - The table stays one bank per slot (TI6). Each slot predicts from
+    and updates only its own bank, so two slots never read or write
+    one entry, and two predictions of one loop in one cycle do not
+    interact. The ruling's "slot 1 wins on a shared entry" has no
+    case to apply to. Confirmed session-076 (Jeff).
   - A prediction in the same cycle as an update to its entry sees
     the old value, as the Read-during-write contract above already
     says.
@@ -391,14 +395,6 @@ THE RULE.
 WHAT IT REPLACES when built: the producer obligation "No
 recomputation at update" and the field note "No re-read of the
 table is performed" above.
-
-QUESTION FOR JEFF, session-076. "Slot 1 wins when both slots name
-one entry" presumes the two slots can write one entry. Under TI6
-the table is one bank per slot and a write to one bank cannot change
-another (Module Parameters above; LI3 closed on that basis), so two
-slots never name one entry. Either BP-122 shares the table between
-slots, or the slot-1 rule applies to something other than an entry
-in one bank. Not ruled; BP-122 needs the answer.
 
 ---
 
@@ -464,8 +460,7 @@ redirect, and does not communicate miss reason externally.
 
   2026-10-08  session-076, PA-direct correction recording the ruling
               made after BP-121. Ruled Change: read before write,
-              slot 1 wins, each prediction carries its iteration
-              number, speculative iteration count built with it
-              (TD#169, BP-122); the question of slot 1 under TI6
-              raised. LI4 ruled. This document had no history
+              per-slot banks kept, each prediction carries its
+              iteration number, speculative iteration count built
+              with it (TD#169, BP-122). LI4 ruled. This document had no history
               section; earlier changes are in PROJECT_STATUS.

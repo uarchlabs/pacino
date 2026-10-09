@@ -317,11 +317,6 @@ its resolved direction, in every tb_fe_top program, and tb_bp_history
 TC17. Reverting the correction fails the tb_fe_top check (BP-121
 m13).
 
-NOT RECORDED BY BP-121: how bp_history locates the bundle's first
-bit, given that the checkpoint carries a pointer and no slot count
-(section 7). Read bp_history.sv before relying on section 7's
-"no pointer value is driven in" or on this section for that detail.
-
 ### 3.6  RTL fix: if / else-if for the slot cases
 
 The RTL applies num_branches>=1 and num_branches==2 as two

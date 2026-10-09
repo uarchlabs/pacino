@@ -47,20 +47,22 @@ check_planning.sh with its new checksum.
     TD#125); ras_interfaces.md "simple circular buffer" and "TOSR
     decrements"; ras_decisions.md 8 on pftAddr and TD#124.
 
-NOT RECORDED, needs the RTL. BP-121 names these and does not state
-them; each document marks the gap:
+NOT RECORDED. BP-121 names these and does not state them; each
+document marks the gap, and BP-122 reports the declarations as
+built (the IA's job, not a grep for Jeff):
   - the full names, widths and meaning of the ports BP-121 writes
     as ftq_rollback_corr/_n/_tkn/_pbit. Their home,
     bp_history_interfaces.md, was not available this session;
   - the ras_p2_keep declaration;
   - the bkend_ftq_redir_taken width;
   - whether ftq_npc holds on sc_uq_not_full (ftq_decisions.md 4.5);
-  - how w_jmp_ft_p2 enters bp_cluster's w_pft_p2;
-  - how bp_history finds a bundle's first bit with no slot count in
-    the checkpoint.
-QUESTION FOR JEFF: the loop-predictor ruling has slot 1 win on a
-shared entry, but under TI6 each slot has its own bank, so the two
-slots never share an entry (TD#169).
+  - how w_jmp_ft_p2 enters bp_cluster's w_pft_p2.
+PA ERROR, BP-121: the task asked for every package change with its
+reason but not every port added or changed with its declaration.
+BP-122 and later tasks require it.
+LOOP PREDICTOR, confirmed (Jeff): the banks stay one per slot (TI6),
+so no two predictions or updates share an entry; "slot 1 wins" has
+no case to apply to.
 
 ---
 ## Session-075: BP-117 to BP-121. The front end reaches its end state.
@@ -3518,10 +3520,9 @@ assessment of each document. Correct any that are wrong.
 |     |          | LI4), restored on a redirect, is built with it. Reverses |
 |     |          | BP-121 decision 6. The entry count is bounded by         |
 |     |          | physical design at the target frequency.                 |
-|     |          | QUESTION, session-076: "slot 1 wins" presumes both slots |
-|     |          | can write one entry; under TI6 the banks are per slot    |
-|     |          | (loop_pred_interfaces.md Ruled Change). BP-122 needs the |
-|     |          | answer.                                                  |
+|     |          | Confirmed session-076 (Jeff): the banks stay one per     |
+|     |          | slot (TI6), so no two slots share an entry and the       |
+|     |          | slot-1 rule has no case to apply to.                     |
 | 170 | frontend | OPEN; BP-122. BP-121's 16 fixes are covered by tb_fe_top |
 |     |          | and unit testbench checks, each shown failing when       |
 |     |          | reverted, but no property was added. Units with property |

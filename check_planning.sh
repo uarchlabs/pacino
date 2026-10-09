@@ -19,7 +19,8 @@
 # bp_arb_spec.md, ftb_decisions.md, ras_decisions.md,
 # ras_interfaces.md, ubtb_interfaces.md, ftb_interfaces.md), and the
 # files updated in session-076 (PROJECT_STATUS.md, bp_arb_spec.md,
-# bp_cluster.md, bp_history_decisions.md, fe_decisions.md,
+# bp_cluster.md, bp_history_decisions.md, bp_history_interfaces.md,
+# fe_decisions.md,
 # ftb_decisions.md, ftb_interfaces.md, ftq_backend_interfaces.md,
 # ftq_bpu_interfaces.md, ftq_decisions.md, ftq_entry_formats.md,
 # ittage_interfaces.md, loop_pred_interfaces.md, ras_decisions.md,
@@ -43,13 +44,13 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   e3be8c359f3a
-PLAN  PROJECT_STATUS.md                 f5ac3e415d86
+PLAN  PROJECT_STATUS.md                 c51726348064
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
 ARCH  bp_arb_spec.md                    0f431fbaad0b
 ARCH  bp_cluster.md                     9c174de4ffe5
-ARCH  bp_history_decisions.md           c82abad4113c
+ARCH  bp_history_decisions.md           ff109293c851
 ARCH  cachegen_decisions.md             ea488dd8c90d
 ARCH  dcd_decisions.md                  e961051d9415
 ARCH  fe_decisions.md                   b1617951b5e8
@@ -89,7 +90,7 @@ VERF  tage_coverage_plan.md             07a285114196
 
 INTF  ittage_table_interfaces.md        152940fce590
 INTF  tage_table_interfaces.md          c77c3b137298
-INTF  bp_history_interfaces.md          f799a4123d5b
+INTF  bp_history_interfaces.md          e9519149c4d1
 INTF  bpu_port_inventory.md             0add13030cb6
 INTF  ftb_interfaces.md           cd521eb2f07d
 INTF  ftq_backend_interfaces.md   b22bf7cb48fd
@@ -100,7 +101,7 @@ INTF  itlb_ifu_interfaces.md            57e989f8bfda
 INTF  itlb_l2tlb_interfaces.md          5df4cb596827
 INTF  ittage_interfaces.md              43f50427b6a7
 INTF  l1i_ifu_interfaces.md             4a7e8201e4f5
-INTF  loop_pred_interfaces.md           9c54a201ff2a
+INTF  loop_pred_interfaces.md           56486578fb0a
 INTF  ras_interfaces.md                 21c78c8cd869
 INTF  sc_interfaces.md                  7e602739bf5c
 INTF  sc_table_interfaces.md            f64578d705ba
