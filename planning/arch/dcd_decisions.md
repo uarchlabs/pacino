@@ -231,8 +231,11 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        prediction block, the FTQ index, the fault cause, the faulting
        virtual address, the faulting guest physical address, the
        implicit-access kind of that guest physical address,
-       `is_rvc`, the control flow classification of DCD-7, and
-       `is_vsetvl` and `needs_vtype`.
+       `is_rvc`, and the control flow classification of DCD-7.
+       `is_vsetvl` and `needs_vtype` are REMOVED from it (TD#148):
+       decode computes its own (DCD-17) and nothing read the IFU's.
+       RULED session-077 (Jeff), after BP-124; removed by BP-125.
+       The two paragraphs below record why they were carried.
 
        THE FAULTING GPA IS FAULT_GPA_WIDTH = 56 BITS, the widest
        guest physical address a walk can form (a 44-bit VS-stage
@@ -267,7 +270,8 @@ DCD-16a A SLOT THAT FAULTED AT FETCH carries only `valid`, the
         start PC, the FTQ index, the position and the fault fields
         (cause, faulting VA, faulting GPA and its kind). Every
         other field on it -- the instruction, `is_rvc`, the DCD-7
-        classification, `is_vsetvl`, `needs_vtype` -- is
+        classification (and, until BP-125, `is_vsetvl` and
+        `needs_vtype`) -- is
         meaningless, and neither decode nor the backend may read
         it. The faulting instruction never executes, so nothing
         needs its length or class: the trap is taken from the
@@ -344,7 +348,9 @@ DCD-20 C AND Zcb ARE ALWAYS ENABLED. After expansion in the IFU
 
 TD#148  `is_vsetvl` and `needs_vtype` in `ifu_pd_pkt_t` have no
         reader once DCD-17 is built. Left in place so BP-118 needs
-        no change to `bp_structs_pkg`.
+        no change to `bp_structs_pkg`. Removal ruled session-077
+        (Jeff): BP-125 removes them from the struct, ifu_predecode
+        and the ibuf.
 
 TD#155  `en_c`, `en_zcb` and `MASK_BITS` in instr_decoder lose
         their readers with the gating DCD-20 deletes. They are
@@ -364,22 +370,25 @@ instruction bits meaningless too; decode reads none of them.
 
 ## 10b. Decode representation and legality -- session-077
 
-RULED session-077 (Jeff), from the PA's R1 to R14, after BP-123,
-except the PA additions listed below, which await Jeff's
-confirmation. The decoder mapped FP, AMO and CSR instructions onto placeholder
+RULED session-077 (Jeff), from the PA's R1 to R14, after BP-123. The
+decoder mapped FP, AMO and CSR instructions onto placeholder
 operations before BP-123, and BP-123 (D4) mapped the SYSTEM fences,
 HLV/HLVX/HSV, WRS and FLH/FSH onto the representation already used
 for their class, so a backend could not tell those operations apart.
 Reading the decoder in session-077 also found reserved encodings in
 those spaces accepted, which RVA23 recommends raising illegal. BUILT
-by BP-124.
+by BP-124 (session-077): alu_op_t 8 bits, values 107 to 185 as
+DCD-22 lists them, the seven decode_pkt_t fields after is_illegal,
+Zvbb at 189 to 198; tb_instr_decoder 1323 checks; sim_dec_sweep
+458752 encodings.
 
-PA ADDITIONS, drafted session-077 and pending Jeff's confirmation:
+PA ADDITIONS, drafted session-077 and built by BP-124 as written:
 DCD-24's vector paragraph and its is_fp, is_load and is_store rule;
 DCD-25's zero-extended CSR address, the vtype immediates and the
 vsetivli AVL; DCD-33; the vector part of DCD-34; DCD-35; the
-operation names and order of DCD-22. BP-124 builds them as written
-here.
+operation names and order of DCD-22. Jeff accepted BP-124's
+decisions D1 to D9 (session-077), recorded in DCD-24, DCD-25,
+DCD-32 and DCD-36.
 
 The specification references, checked session-077: a reserved
 encoding's behaviour is UNSPECIFIED and raising illegal-instruction
@@ -454,8 +463,15 @@ DCD-24 OPERAND REGISTER FILES (R4). `decode_pkt_t` gains `rd_is_fp`,
        `uses_rd`, `uses_rs1`, `uses_rs2` and `uses_rs3` are exact
        per operation: a unary FP operation (FSQRT, FCVT_*, FMV_*,
        FCLASS, FROUND, FROUNDNX, FCVTMOD_W_D) does not use rs2, and
-       FLI uses no source register. `is_fp` means the operation
-       executes in the FP unit.
+       FLI uses no source register; rs3 is zero for every operation
+       but the four FMAs. `is_fp` means the operation executes in
+       the FP unit, so an FP load or store has `is_fp` clear and
+       names its FP register with `rd_is_fp` or `rs2_is_fp`
+       (BP-124 D2). LR sets `is_load` only, SC `is_store` only, an
+       AMO both, a CBO neither (D3). `is_csr` is set for the six
+       CSR operations and for ECALL, EBREAK, SRET, MRET and WFI,
+       and clear for the fences, WRS, HLV/HSV and MOP (D6).
+       Accepted session-077 (Jeff).
 
        FOR A VECTOR INSTRUCTION these fields describe its SCALAR
        register operands only; its vector register operands are in
@@ -482,7 +498,9 @@ DCD-25 IMMEDIATES THAT SIT IN A REGISTER FIELD go in `imm`, because
        constant index in `imm[4:0]`; an OPIVI 5-bit immediate in
        `imm`, sign- or zero-extended as the specification defines
        for that instruction, and vror.vi's 6-bit immediate, whose
-       bit 5 is instruction bit 26, in `imm[5:0]` zero-extended; the
+       bit 5 is instruction bit 26, in `imm[5:0]` zero-extended;
+       vmv<nr>r.v's register-count field zero-extended (BP-124 D9,
+       accepted); the
        vtype immediate of vsetvli (zimm[10:0]) and vsetivli
        (zimm[9:0]) in `imm[10:0]` zero-extended, reserved bits
        included, so vill can be formed downstream; and vsetivli's
@@ -513,7 +531,11 @@ DCD-28 AMO LEGALITY (R7). Legal: funct3 010 (W) and 011 (D), with
 
 DCD-29 FENCES AND CBO (R8). MISC_MEM funct3 000 is ALU_FENCE for
        every fm, pred, succ, rs1 and rd: the specification requires
-       reserved configurations to be treated as FENCE. funct3 001
+       reserved configurations to be treated as FENCE. fm, pred and
+       succ travel in imm[11:0] zero-extended, a reserved
+       configuration's raw fields included; the backend executes
+       a reserved configuration as FENCE with fm 0000 (RV32I).
+       BP-124 D4, accepted session-077 (Jeff). funct3 001
        is ALU_FENCE_I, its imm, rs1 and rd ignored as Zifencei
        requires. funct3 010 is the CBO operation of imm (0, 1, 2,
        4), any other imm illegal, and rd not x0 illegal (DCD-31).
@@ -534,9 +556,37 @@ DCD-31 SYSTEM RESERVED FIELDS ARE ILLEGAL (R12). rd not x0 in
        SFENCE.INVAL.IR.
 
 DCD-32 VECTOR RESERVED ENCODINGS ARE ILLEGAL (R13): every encoding
-       that decodes to VOTHER or to the VMEM default, and a store
-       with lumop 10000. Other reserved vector encodings found are
-       reported for a ruling, not changed.
+       that decodes to VOTHER or to the VMEM default, and any store,
+       segment or not, with sumop 10000 (built by BP-124).
+
+       EVERY OTHER RESERVED VECTOR ENCODING IS ILLEGAL TOO. RULED
+       session-077 (Jeff), after BP-124, which found 24742 in its
+       sweep (rule VRSV) and reported them as this rule then said.
+       The classes, from the V 1.0 text BP-124 cites:
+       - mew = 1 (EEW 128 and above), every load and store form
+       - a unit-stride segment load or store whose lumop/sumop is
+         neither 00000 nor 10000
+       - a whole-register load or store with vm 0, NFIELDS other
+         than 1, 2, 4 or 8, mew 1, or (store) width not 000
+       - vlm.v or vsm.v with vm 0, width not 000, or mew 1
+       - vsetvl with bits 30:25 not zero
+       - vadc and vsbc with vm 1
+       - vmv.v.v/x/i and vfmv.v.f with vs2 not v0
+       - vmv.s.x and vfmv.s.f with vs2 not v0 or vm 0
+       - vfmv.f.s with vs1 not 0 or vm 0; vmv.x.s with vm 0
+       - vmv<nr>r.v with vm 0 or a register count other than 1, 2,
+         4 or 8
+       - vcompress.vm and the eight mask-logical operations with
+         vm 0
+       - vid.v with vs2 not v0
+       - VFUNARY0 selectors 00100, 00101 and 01101 (the last is
+         Zvfbfmin's vfwcvtbf16.f.f.v, not implemented)
+       This read: "Other reserved vector encodings found are
+       reported for a ruling, not changed." BP-124 D7 classed every
+       lumop 01000 encoding as whole-register, reserved NFIELDS
+       included; those fall under the third class. Built by
+       BP-125. An illegal vector word carries a zero vector packet
+       (DCD-36).
 
 DCD-33 ZVBB IS DECODED, one v_op_class per instruction, appended
        after VOP_VSOXSEG in this order with the values 189 to 198:
@@ -548,6 +598,12 @@ DCD-33 ZVBB IS DECODED, one v_op_class per instruction, appended
        made it illegal. Added session-077 by the PA; flagged for
        Jeff.
 
+DCD-36 AN ILLEGAL PACKET carries ALU_ILL and nothing else: no
+       register (uses_* clear, the fields zero), no immediate, no
+       is_* flag, no FP field, and a zero vector packet, so rename
+       and dispatch see only the trap. BP-124 D5, accepted
+       session-077 (Jeff).
+
 DCD-34 VERIFICATION (R14). Legality and classification are checked
        against a disassembler oracle, spike-dasm, the disassembler the
        decoder work has used, with --isa naming exactly the implemented
@@ -556,15 +612,21 @@ DCD-34 VERIFICATION (R14). Legality and classification are checked
        Directed decoder tests take each word from clang -c (RISC-V
        target, the same extension set) and confirm it with spike-dasm.
        This read "an LLVM disassembler oracle, as BP-117 checked the
-       expander, with --mattr": the PA took LLVM from the BP-117 record
-       without checking the system, which has no LLVM (Jeff,
-       session-077). spike-dasm and clang replaced it session-077
-       (Jeff). The sweep covers every funct and selector field of OP_FP,
-       the four FMA opcodes, AMO, MISC_MEM, SYSTEM, and, because of
-       DCD-32 and DCD-33, OP_VECTOR and the vector forms of LOAD-FP and
-       STORE-FP. Each disagreement is resolved against the ratified
-       specification and listed. The sweep over the vector space was
-       added by the PA with DCD-33.
+       expander, with --mattr". spike-dasm and clang replaced it
+       session-077 (Jeff). BP-124 found LLVM installed off PATH, in the
+       embecosm toolchain under /usr/local, which the expander oracle
+       uses (TD#147); this note said the system had no LLVM. BUILT by
+       BP-124: sim_dec_sweep compares the decoder against
+       tb/dec_dasm_oracle.txt (458752 encodings, including all eight
+       LOAD-FP and STORE-FP widths), oracle_dec_sweep regenerates it
+       with tb/gen_dec_dasm_oracle.py, and asm_dec_words re-checks the
+       216 directed words with clang and spike-dasm. The out-of-repo
+       tool path is TD#176. The sweep covers every funct and selector
+       field of OP_FP, the four FMA opcodes, AMO, MISC_MEM, SYSTEM, and,
+       because of DCD-32 and DCD-33, OP_VECTOR and the vector forms of
+       LOAD-FP and STORE-FP. Each disagreement is resolved against the
+       ratified specification and listed. The sweep over the vector
+       space was added by the PA with DCD-33.
 
 DCD-35 THE Zimop COMMENTS are corrected: Zicfiss, an RVA23
        expansion option this design does not implement, redefines
@@ -644,4 +706,17 @@ MMU-23    FAULT_GPA_WIDTH, DCD-16.
               spike-dasm and directed words come from clang -c; the
               LLVM oracle is withdrawn, there being no LLVM on the
               system.
+
+  2026-10-10  session-077, after BP-124, rulings (Jeff). 10b built;
+              the PA additions accepted as built. BP-124's D2 to D7
+              and D9 accepted: DCD-24 (FP load/store is_fp, LR/SC/AMO
+              marking, is_csr, rs3), DCD-29 (the FENCE immediate),
+              DCD-36 (the illegal packet). DCD-32: every reserved
+              vector encoding is illegal, the VRSV classes listed;
+              built by BP-125. DCD-34: built; LLVM is installed off
+              PATH, so the "no LLVM" note is corrected.
+
+  2026-10-10  session-077, ruling (Jeff). DCD-16 and TD#148:
+              is_vsetvl and needs_vtype leave ifu_pd_pkt_t; removed
+              by BP-125.
 ```

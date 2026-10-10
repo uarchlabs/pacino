@@ -129,7 +129,7 @@ IL-3d THE ACCESS TYPE AND THE PRIVILEGE travel with the request,
       `itlb_l2t_priv` is 2'b00 U or 2'b01 S, with `itlb_l2t_v`
       the effective privilege the walker checks a leaf's U bit
       against before setting A (MMU-8c). Ruled session-077 (Jeff);
-      built by BP-124. 2'b10 (reserved) and 2'b11 (M) are never
+      BUILT by BP-124. 2'b10 (reserved) and 2'b11 (M) are never
       presented. SUM and MXR join the request with the DTLB.
 
 IL-3b A `V=1` request commits the walker to a NESTED walk,
@@ -259,7 +259,7 @@ IL-11a The faulting GUEST PHYSICAL address IS returned on
        carries every faulting GPA whole (mmu_decisions.md MMU-23).
        For kind 00 (IL-11b) the walker returns the page and the
        IFU fills the offset. Ruled session-077 (Jeff), after
-       BP-123; built by BP-124. This read "It is 0 when the
+       BP-123; BUILT by BP-124. This read "It is 0 when the
        faulting guest physical address does not fit GPA_WIDTH
        (MMU-30)"; MMU-30 is withdrawn.
 
@@ -353,4 +353,6 @@ MMU-31    The G-stage-only permission byte, IL-8.
               IL-11a: l2t_itlb_gpa is FAULT_GPA_WIDTH = 56, the
               zero sentinel withdrawn. IL-8: the G-stage-only
               permission byte.
+
+  2026-10-10  session-077, after BP-124. IL-3d and IL-11a built.
 ```

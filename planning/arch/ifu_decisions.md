@@ -75,9 +75,11 @@ IFU-2  Each slot delivered to the ibuf is an `ifu_pd_pkt_t`,
        `ifu_ibuf_interfaces.md` 4: the expanded instruction, its
        start PC, its position within the prediction block, its
        FTQ index, its fault cause, faulting VA and faulting GPA
-       with the GPA's implicit-access kind, is_rvc, its control
-       flow classification, is_vsetvl and needs_vtype. Declared in
-       `bp_structs_pkg`, BP-115; the kind added session-077.
+       with the GPA's implicit-access kind, is_rvc, and its control
+       flow classification. Declared in `bp_structs_pkg`, BP-115;
+       the kind added session-077. is_vsetvl and needs_vtype were
+       also carried until BP-125 removes them (dcd_decisions.md
+       TD#148, ruled session-077).
 
 This read "its position within the buffer" and "its FTQ pointer",
 and did not list the faulting VA that IFU-2a refers to. The
@@ -115,7 +117,7 @@ IFU-2a A slot whose cause is an instruction guest-page fault, cause
        (D5) with an exception for a GPA of 0, MMU-30's sentinel;
        RULED session-077 (Jeff), after BP-123, without the
        exception, MMU-30 being withdrawn; the width and the
-       unconditional fill built by BP-124.
+       unconditional fill BUILT by BP-124.
 
 H is mandatory in RVA23 through Sha, so the guest case is not
 optional and the GPA field is not conditional on a build option.
@@ -312,7 +314,7 @@ IFU-25  The translation queue holds, per block: the physical
         with its implicit-access kind of IT-6c when the cause is
         20. F0 reads the head. The kind added session-077. The GPA
         is FAULT_GPA_WIDTH = 56 bits in both results (IFU-2a);
-        session-077, after BP-123, built by BP-124.
+        session-077, after BP-123, BUILT by BP-124.
 
         A BLOCK THAT CROSSES A PAGE HOLDS TWO RESULTS in its one
         entry: the second page's physical address, PMA attributes,
@@ -747,4 +749,9 @@ MMU-23    FAULT_GPA_WIDTH, the width of the GPA of IFU-2a and
               entry, as BP-123 built it (D1). TD-IFU-8: the register
               IF-36 clears (Assumption 2, for Jeff to confirm).
               6.1: TD#135 and TD#136 built.
+
+  2026-10-10  session-077, after BP-124. IFU-2a and IFU-25 built:
+              the 56-bit GPA and the unconditional kind-00 fill.
+  2026-10-10  session-077, ruling (Jeff). IFU-2: is_vsetvl and
+              needs_vtype leave ifu_pd_pkt_t (TD#148, BP-125).
 ```

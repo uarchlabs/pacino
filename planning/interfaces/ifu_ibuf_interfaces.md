@@ -105,7 +105,7 @@ Each slot carries `ifu_pd_pkt_t` as defined in
                a guest-page fault; FAULT_GPA_WIDTH = 56 bits, and
                for kind 00 the whole address, offset included
                (mmu_decisions.md MMU-23, ifu_decisions.md IFU-2a).
-               Session-077, after BP-123; built by BP-124
+               Session-077, after BP-123; BUILT by BP-124
   fault_gpa_imp  the GPA's implicit-access kind, valid with
                fault_gpa: 00 the fetch's own GPA, 01 an implicit
                read of a VS-stage page table, 10 an implicit write
@@ -116,8 +116,9 @@ Each slot carries `ifu_pd_pkt_t` as defined in
                the ftq_pd_info_t encoding, not bp_br_type_e
   is_call      DCD-7 and DCD-11
   is_ret       DCD-7 and DCD-11
-  is_vsetvl    per-instruction, from DCD-16
-  needs_vtype  per-instruction, from DCD-16
+  is_vsetvl    REMOVED by BP-125 (TD#148): decode computes its
+  needs_vtype  own (DCD-17) and nothing read these. Ruled
+               session-077 (Jeff)
 ```
 
 IB-8  `start_pc` and `pos` are both carried and neither derives
@@ -229,6 +230,10 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-10  session-077, ruling (Jeff). Section 4: is_vsetvl and
+              needs_vtype removed by BP-125 (TD#148).
+  2026-10-10  session-077, after BP-124. Section 4: fault_gpa built
+              at 56 bits.
   2026-10-09  session-077, after BP-123, ruling (Jeff). Section 4:
               fault_gpa is FAULT_GPA_WIDTH = 56 (MMU-23). IB-10
               built.

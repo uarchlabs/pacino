@@ -491,6 +491,16 @@ On `ifu_ftq_mis_val`, the FTQ:
       the predecode info, target from ifu_ftq_target when predecode
       computed one. pred_src becomes PRED_NONE -- no predictor
       supplied this, and the field is diagnostic (TD-FE-4).
+
+      FOR A CONDITIONAL BRANCH taken keeps the entry's prediction;
+      only the target is corrected. Predecode cannot know a
+      conditional's direction (section 6, ifu_decisions.md IFU-18),
+      so an M3 on a predicted-taken conditional corrects where it
+      goes, not whether it goes. RULED session-077 (Jeff), after
+      BP-124, which found W1 writing taken = 0 for it, so the
+      successor became the fall-through (performance, not
+      correctness: the backend corrects it). Built by BP-125,
+      TD#174.
   W2  writes ifu_ftq_mis_pos straight into bp_ftq_slot_t.pos. The
       two widths are equal and the conversion is the identity
       (section 3). It was a lossy shift until the position field
@@ -528,9 +538,14 @@ On `ifu_ftq_mis_val`, the FTQ:
       length of the instruction at mis_pos, 2 or 4. The next
       uncached instruction is thereby the next entry, which IFU-22
       gates at F0. Built by BP-123 (D1), accepted session-077
-      (Jeff); tb_ftq_ifu K2 fails when it is ignored. What W1 and
-      W2 write for the slot at mis_pos under uc_end is not recorded
-      in BP-123's Results Capture; BP-124 reports it.
+      (Jeff); tb_ftq_ifu K2 fails when it is ignored. As BP-124
+      reported from the RTL: the writeback is a predecode redirect
+      in every other respect. W1 rewrites the slot at mis_pos as
+      for any predecode redirect (for the usual non-CFI first
+      instruction, invalid, NO_BRANCH, not taken, and every later
+      slot killed); W2 writes pos = mis_pos; the flush index is
+      K+1; ftq_ifu forms the successor (w_corr_succ in
+      predecode_correct) and ftq_npc selects it on arm 2.
 ```
 
 NO PREDICTOR UPDATE IS FORMED FROM PREDECODE. Updates remain
@@ -792,4 +807,9 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
   2026-10-09  session-077, after BP-123, ruling (Jeff). 6:
               ifu_ftq_uc_end. 7 W3U: the uncached successor. Both as
               BP-123 built them (D1, ifu_decisions.md IFU-23b).
+
+  2026-10-10  session-077, after BP-124, ruling (Jeff). 7 W1: a
+              conditional keeps the entry's taken; built by BP-125.
+              7 W3U: what BP-124 reported, replacing "BP-124 reports
+              it".
 ```

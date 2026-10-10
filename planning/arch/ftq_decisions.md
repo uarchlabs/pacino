@@ -253,9 +253,10 @@ mis_pos + the length of the instruction at mis_pos, 2 or 4
 (ftq_ifu_interfaces.md 7 W3U), so the next uncached instruction is
 the next entry and IFU-22 gates it at F0. Every uncached instruction
 after a block's first therefore costs one arm-2 redirect. Built by
-BP-123 (D1), accepted session-077 (Jeff). Its flush index and what
-W1 and W2 write for the slot under uc_end are not in BP-123's Results
-Capture; BP-124 reports them.
+BP-123 (D1), accepted session-077 (Jeff). As BP-124 reported, the
+flush index is K+1, as for any predecode redirect, and W1 and W2
+treat the slot as for any predecode redirect
+(ftq_ifu_interfaces.md 7 W3U).
 
 ### 4.3 The priority is age order, not an axiom
 
@@ -1286,9 +1287,10 @@ BP-123 added one more, from ifu_decisions.md IFU-23b:
   (IFU)       -> ftq.sv      ifu_ftq_uc_end, the uncached-end bit of
               -> ftq_ifu     the writeback (ftq_ifu_interfaces.md 6),
                              selecting the W3U successor on arm 2
-                             (4.2). Which leaf forms W3U, ftq_ifu or
-                             ftq_npc, is not in BP-123's Results
-                             Capture; BP-124 reports it
+                             (4.2). ftq_ifu forms W3U, as
+                             w_corr_succ in predecode_correct, and
+                             ftq_npc only selects it on arm 2
+                             (BP-124)
 ```
 
 Section 1 counts six, since session-074.
@@ -1532,4 +1534,7 @@ Section 1 counts six, since session-074.
               carries the W3U uncached successor (IFU-23b, D1). 7.5:
               ifu_ftq_uc_end. Section 0: FE-1 through FE-21, section
               15. 6.1: section 1 counts six read ports, not five.
+
+  2026-10-10  session-077, after BP-124. 4.2: the W3U flush index is
+              K+1. 7.5: ftq_ifu forms W3U.
 ```

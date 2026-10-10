@@ -161,7 +161,7 @@ MMU-23 Shtvala: `htval` is written with the faulting guest
        `itlb_ifu_gpa`, both declared `[FAULT_GPA_WIDTH-1:0]`, and
        in `ifu_pd_pkt_t.fault_gpa`. GPA_WIDTH stays 41 everywhere
        else: it is the width of an address that translates. RULED
-       session-077 (Jeff), after BP-123; built by BP-124. This read
+       session-077 (Jeff), after BP-123; BUILT by BP-124. This read
        "IT IS GPA_WIDTH = 41 BITS (MMU-20)", which left a GPA above
        bit 40 with no representation; MMU-30 papered over it with a
        zero sentinel that collides with guest page 0 (BP-123,
@@ -203,8 +203,12 @@ MMU-26a THE WALKER CHECKS THE PRIVILEGE-INDEPENDENT LEAF
         G-stage U and the access type. Built by BP-123 (D8). D8's
         other half, U against the privilege left to the ITLB alone,
         is modified by MMU-8c (session-077, Jeff). This read "R for
-        a load (with the DTLB)" as well, which D8 does not say; R
-        for a read is the DTLB's case and is added with it.
+        a load (with the DTLB)" as well, which D8 does not say. R
+        FOR A READ IS CHECKED NOW, with MXR clear until the DTLB
+        presents it, so a read on an execute-only leaf never sets A
+        on an access that faults: BUILT by BP-124 (D1), accepted
+        session-077 (Jeff). This read that R for a read "is added
+        with" the DTLB.
 
 MMU-24a THE WALKER'S CSR INPUTS ARE ITS OWN INPUT GROUP. The
         walker is outside the front-end top (MMU-1a), so the
@@ -226,7 +230,7 @@ MMU-24c THE REQUEST CARRIES THE ACCESS TYPE AND THE PRIVILEGE.
         update of MMU-8. Built by BP-123 (D2) on the walker only,
         accepted session-077 (Jeff); tb_fe_top ties it to execute.
         BP-124 has the ITLB drive it, always execute, and fe_top
-        carry it, as itlb_l2tlb_interfaces.md 2 lists it.
+        carry it (BUILT), as itlb_l2tlb_interfaces.md 2 lists it.
         `itlb_l2t_priv [1:0]` (2'b00 U, 2'b01 S; 2'b10 is reserved and 2'b11 is
         M, neither ever presented, M-mode fetch being untranslated, MMU-19a)
         together with `itlb_l2t_v` is the effective privilege the walk checks U
@@ -351,13 +355,15 @@ MMU-8c THE WALKER SETS A ONLY ON A PERMITTED ACCESS. Before the
         translated by the G-stage, which the hypervisor chapter adds at the end
         of the VS-stage walk, so a G-stage fault on that GPA may follow a VS A
         update (permitted, MMU-8b). RULED session-077 (Jeff), after BP-123;
-        built by BP-124. Until the DTLB adds SUM to the request (MMU-24c), a
+        BUILT by BP-124. Until the DTLB adds SUM to the request (MMU-24c), a
         read or write request's U check is made with SUM clear, the
         architectural result for that value; added by the PA, flagged for Jeff,
         so that tb_ptw's read and store cases have a defined U rule. BP-123
         built the walker with the U check left to the ITLB alone (D8), so a
-        fetch that faulted on U could leave A set (BP-123, risk 2); whether its
-        other checks precede the update is for BP-124 to establish.
+        fetch that faulted on U could leave A set (BP-123, risk 2). BP-124
+        showed the walker's other checks already preceded the update
+        (reversions B3, B4), added the U and R checks, and binds W11 in
+        ptw_assert: no CAS on a leaf that fails a check.
 
         The ITLB holds a walk fault for the re-request (ITLB-10a);
         because this fault depends on the privilege, every held
@@ -1023,4 +1029,8 @@ TD#118    No longer bounds the walker, which has its own port
               reserved; the walker's cause follows the access type.
               MMU-26a: no R check was built. MMU-24a: the held CSR
               group is BP-123's Assumption 7, for Jeff.
+
+  2026-10-10  session-077, after BP-124 (Jeff). MMU-8c, MMU-23,
+              MMU-24c and MMU-30's removal built; MMU-26a: R for a
+              read is checked now, MXR clear (BP-124 D1, accepted).
 ```

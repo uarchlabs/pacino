@@ -136,7 +136,11 @@ ITLB-10b A HELD FAULT RECORDS THE PRIVILEGE AND V it was raised at.
          matches is answered with the held fault as ITLB-10a says.
          Every held fault is tagged, whatever its cause, so the
          rule has no per-cause case. RULED session-077 (Jeff),
-         after BP-123; built by BP-124.
+         after BP-123; BUILT by BP-124. As built, a held fault for
+         the same page is dropped when a request at another
+         privilege or V is answered miss; ASID and VMID do not enter
+         the condition, since a change of V changes which one is
+         compared (BP-124 Assumption 6).
 
 ITLB-U1 CLOSED session-075 (Jeff) by ITLB-15. The question was
         the depth of the in-flight walk tracker. One outstanding
@@ -223,7 +227,7 @@ ITLB-16 THE PTE PERMISSION CHECK IS MADE ON EVERY HIT, against
         (mmu_decisions.md MMU-8c), so a walk never sets A on a
         leaf this check would fault. The check on every hit stands:
         privilege changes without a fence. Ruled session-077
-        (Jeff); built by BP-124.
+        (Jeff); BUILT by BP-124.
 
 ITLB-17 The ITLB reads its translation regime from a CSR input
         group on the front-end boundary: V, the current privilege,
@@ -235,7 +239,11 @@ ITLB-17 The ITLB reads its translation regime from a CSR input
         (itlb_l2tlb_interfaces.md IL-3d, mmu_decisions.md MMU-24c).
         The ITLB presents execute on `itlb_l2t_acc` and its current
         privilege from this group on `itlb_l2t_priv`, with V on
-        `itlb_l2t_v`. Ruled session-077 (Jeff); built by BP-124.
+        `itlb_l2t_v`. Ruled session-077 (Jeff); BUILT by BP-124.
+        As built, `itlb_l2t_priv` is the privilege recorded when the
+        miss allocated its tracker slot, the one the walk is for and
+        the one a held fault is tagged with; it is not re-read while
+        the request waits (BP-124 Assumption 5).
         BP-123 built `itlb_l2t_acc` on the walker only (D2), tied to
         execute in tb_fe_top.
 
@@ -486,4 +494,8 @@ TD#118    Bounded ITLB-U1, now closed. The walker has its own
               setting A (MMU-8c). ITLB-10b: a held fault records
               the privilege and V. ITLB-17: the walk request carries
               the access type and the privilege.
+
+  2026-10-10  session-077, after BP-124. ITLB-10b and ITLB-17
+              built, with the drop condition and the recorded
+              privilege as built (Assumptions 6 and 5).
 ```

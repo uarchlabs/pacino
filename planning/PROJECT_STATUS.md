@@ -16,6 +16,80 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-077, after BP-124: BP-124 recorded; BP-125 written.
+
+BP-124 RUN, COMPLETE (Jeff). 2h15m (IA estimate), no compaction,
+83% context. regress.sh 153 targets PASS (149 plus
+sim_fe_top_pt_upriv, sim_dec_sweep, oracle_dec_sweep and
+asm_dec_words). 87 reversions, each on its own scratch copy of
+rtl/, all caught; W11 and W12 shown to fire.
+  Built: FAULT_GPA_WIDTH = 56 from the walker to ifu_pd_pkt_t, MMU-30
+    gone, the kind-00 offset filled for guest page 0 too; every leaf
+    check before an A/D update, causes by access type, the ITLB
+    driving itlb_l2t_acc and itlb_l2t_priv, held faults tagged; the
+    decode representation and legality of DCD-21 to DCD-35 with Zvbb.
+    TD#171 CLOSED.
+  Defects fixed, each with a check that failed first: whole-register
+    vector loads and stores decoded as segment operations; a segment
+    store with sumop 10000 accepted; rs3 not zeroed outside the FMAs;
+    BP-123 risks 1 and 2.
+  Counts: tb_ptw 526 -> 807 (12 properties); tb_itlb 135/138 ->
+    147/150; tb_ifu 734 -> 738; tb_instr_decoder 863 -> 1323;
+    sim_dec_sweep 458752 encodings; tb_fe_top 35 -> 36 programs,
+    689 -> 714 checks. Every earlier program equals its baseline but
+    pt_faults_h, which gained the guest-page-0 case.
+  Results Capture error: its sweep total says 233504 legal and 225248
+    illegal; its own per-space figures sum to 233644 and 225108.
+  OUT OF GRANT: the IA ran llvm-objdump twice in Problem 0 to check
+    clang, and reported it. No git command beyond regress.sh's.
+  LLVM IS INSTALLED, off PATH: llvm-objdump (LLVM 21), clang-21 and
+    riscv64-unknown-elf-objcopy in /usr/local/riscv-embecosm-embedded-
+    ubuntu2204-20250309/bin, used by oracle_ifu_rvc_exp (TD#147) and,
+    for clang, asm_dec_words. The BP-117 record and BP-123's report
+    were right.
+
+RULED after BP-124 (Jeff):
+  BP-124's decisions D1 to D9 ACCEPTED (Jeff: "I accept the IA
+    decisions on the unguided design elements"): the R check on a
+    read (MMU-26a), FP load/store is_fp clear, LR/SC/AMO marking, the
+    FENCE immediate, the illegal packet (DCD-36), is_csr, the
+    whole-register classing, the sweep's spike-dasm dependency, and
+    the Zfa .S gate. Recorded in dcd_decisions.md and
+    mmu_decisions.md. BP-124's Assumptions 5 and 6 (ITLB-17, ITLB-10b)
+    are recorded as built.
+  W1 FOR A CONDITIONAL KEEPS THE ENTRY'S TAKEN; only the target is
+    corrected (ftq_ifu_interfaces.md 7 W1, IFU-18). BP-124 found W1
+    writing taken = 0 under M3. TD#174, BP-125.
+  EVERY RESERVED VECTOR ENCODING IS ILLEGAL, the 24742 BP-124 listed
+    (DCD-32, the classes listed there). TD#175, BP-125.
+  TD#147: option 2, one configurable path for out-of-repo tools,
+    carried by TD#176: scrub the LLVM tools from the necessary tools,
+    and add a definitive path environment variable to Vars.mk for
+    necessary tools that do not reside in the repo. The embecosm
+    toolchain will never be in the repo because of its size, and
+    there will be others like it. No change to GNU or LLVM tools
+    now.
+
+BP-125 WRITTEN: TD#174 and TD#175, and, added by Jeff, TD#172,
+TD#148 and the three FTQ items carried since BP-117 (session-075).
+The removal of is_vsetvl and needs_vtype from ifu_pd_pkt_t (TD#148)
+is recorded in dcd_decisions.md DCD-16, ifu_decisions.md IFU-2 and
+ifu_ibuf_interfaces.md 4.
+
+PA ERROR, mine: I accepted "no LLVM on the system" without evidence
+and wrote it into DCD-34 and the PA error above; BP-124 found it
+installed off PATH. Both corrected.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, dcd_decisions.md, mmu_decisions.md,
+itlb_decisions.md, ifu_decisions.md, itlb_l2tlb_interfaces.md,
+itlb_ifu_interfaces.md, ifu_ibuf_interfaces.md,
+ftq_ifu_interfaces.md, ftq_decisions.md.
+
+Next free: BP-126, INFRA-014, TOOLS-007, TD#177. BP-125 is written,
+not yet issued.
+
+---
 ## Session-077, after BP-123: BP-123 recorded; BP-124 written.
 
 BP-123 RUN, COMPLETE (Jeff), the IA's eight decisions since ruled
@@ -105,8 +179,9 @@ has no directed test), TD#173 (the CG-5 tasks for the copy).
 PA ERRORS, mine, session-077:
   R14 and BP-124 used LLVM: an llvm-objdump oracle sweep, on the
     strength of the BP-117 record (session-075, TD#147) and BP-123's
-    report, neither checked against the system, which has no LLVM
-    (Jeff). I also made llvm-mc a BP-124 requirement and grant,
+    report, neither checked against the system. (This read "which
+    has no LLVM (Jeff)"; BP-124 found LLVM installed off PATH.) I
+    also made llvm-mc a BP-124 requirement and grant,
     sourced from nothing, and left it off the list of additions for
     Jeff. Corrected (Jeff): spike-dasm is the sweep oracle and checks
     every directed test word; clang -c assembles the directed words.
@@ -604,7 +679,7 @@ check_spike_decode.py points there; spike_check 50/50. The IA
 corrected the mop.r.0 encoding in tools/rva23_insn_ref.c. tools/ is
 not under regress.sh.
 
-Carried from BP-117, not yet tasked:
+Carried from BP-117, not yet tasked (tasked in BP-125, session-077):
   no check pins the FTQ entry after an M1 JAL ahead of a predicted
        taken slot
   tb_ftq drives no p2 or p3 redirect, so the 1-cycle row is unmeasured
@@ -1726,10 +1801,13 @@ it only documented current behavior.
 |                         |             |                   | BP-120 (TD#155). BP-123 decoded  |
 |                         |             |                   | Zba, Zbb, Zbs, Zicond, Zimop,    |
 |                         |             |                   | Zawrs, the SYSTEM fences,        |
-|                         |             |                   | HLV/HSV and FLH/FSH; 863 checks. |
-|                         |             |                   | Its representation and legality  |
-|                         |             |                   | are DCD-21 to DCD-35, built by   |
-|                         |             |                   | BP-124 (TD#171). Was Complete.   |
+|                         |             |                   | HLV/HSV and FLH/FSH. BP-124      |
+|                         |             |                   | built DCD-21 to DCD-35 and Zvbb: |
+|                         |             |                   | 1323 checks, sim_dec_sweep       |
+|                         |             |                   | 458752 encodings against spike-  |
+|                         |             |                   | dasm. BP-125 makes every         |
+|                         |             |                   | reserved vector encoding illegal |
+|                         |             |                   | (TD#175). Was Complete.          |
 | rvc_expander.sv         | Deprecated  | --                | Deleted by BP-119 with           |
 |                         |             |                   | tb_rvc_expander (TD#143,         |
 |                         |             |                   | TD#145). ifu_rvc_exp is the      |
@@ -1738,10 +1816,11 @@ it only documented current behavior.
 |                         |             |                   | of it remain in decode_pkg.sv,   |
 |                         |             |                   | gen_ifu_rvc_exp_oracle.py and    |
 |                         |             |                   | create_docs_stubs.sh, TD#155.    |
-| decode_pkg.sv           | Working     | --                | All decode structs. alu_op_t 7   |
-|                         |             |                   | bits since BP-123; 8 bits and    |
-|                         |             |                   | the DCD-22 to DCD-25, DCD-30 and |
-|                         |             |                   | DCD-33 fields by BP-124. Was     |
+| decode_pkg.sv           | Working     | --                | All decode structs. alu_op_t 8   |
+|                         |             |                   | bits (BP-124), values 107 to 185 |
+|                         |             |                   | added; decode_pkt_t gains seven  |
+|                         |             |                   | fields after is_illegal; Zvbb    |
+|                         |             |                   | v_op_class 189 to 198. Was       |
 |                         |             |                   | Complete.                        |
 | bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
 |                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
@@ -2756,7 +2835,9 @@ it only documented current behavior.
 |                         |             |                   | fetch, one instruction per FTQ    |
 |                         |             |                   | entry, IFU-23b) and TD#136 (the   |
 |                         |             |                   | maintenance path); tb_ifu 734     |
-|                         |             |                   | checks, 16 properties.            |
+|                         |             |                   | checks, 16 properties. BP-124:    |
+|                         |             |                   | the 56-bit GPA and the kind-00    |
+|                         |             |                   | fill; 738 checks.                 |
 |                         |             |                   | Status was "Unit tested", not one |
 |                         |             |                   | of the five values; session-075.  |
 | ibuf                    | Working     | tb_ibuf           | Built BP-118,                     |
@@ -2776,6 +2857,9 @@ it only documented current behavior.
 |                         |             |                   | ITLB-16 on G-stage-only entries   |
 |                         |             |                   | and added the kind (IT-6c); 135   |
 |                         |             |                   | checks at depth 1, 138 at 2.      |
+|                         |             |                   | BP-124: drives itlb_l2t_acc and   |
+|                         |             |                   | itlb_l2t_priv, tags held faults   |
+|                         |             |                   | (ITLB-10b); 147 and 150 checks.   |
 | pmp_pma_chk             | Working     | tb_pmp_pma_chk    | Built BP-118, rtl/mmu/pmp. The    |
 |                         |             |                   | one checker of MMU-10a: 16 PMP    |
 |                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
@@ -2794,15 +2878,17 @@ it only documented current behavior.
 |                         |             |                   | PMA on every access. tb_ptw 526   |
 |                         |             |                   | checks, 10 properties. Shared I   |
 |                         |             |                   | and D; one client today. No L2    |
-|                         |             |                   | TLB (MMU-1 reversed). BP-124 adds |
-|                         |             |                   | the leaf checks before A (MMU-8c) |
-|                         |             |                   | and the 56-bit GPA. Was Not       |
-|                         |             |                   | started.                          |
-| frontend top            | Working     | tb_fe_top         | Built BP-118. 35 programs since   |
-|                         |             |                   | BP-123 (19 before), each its own  |
-|                         |             |                   | regression target sim_fe_top_<p>, |
-|                         |             |                   | each retiring exactly; 689 checks |
-|                         |             |                   | after BP-123. Every predictor     |
+|                         |             |                   | TLB (MMU-1 reversed). BP-124      |
+|                         |             |                   | added every leaf check before A   |
+|                         |             |                   | (MMU-8c), causes by access type   |
+|                         |             |                   | and the 56-bit GPA: 807 checks,   |
+|                         |             |                   | 12 properties. Was Not started.   |
+| frontend top            | Working     | tb_fe_top         | Built BP-118. 36 programs since   |
+|                         |             |                   | BP-124 (19 before BP-123), each   |
+|                         |             |                   | its own regression target         |
+|                         |             |                   | sim_fe_top_<p>, each retiring     |
+|                         |             |                   | exactly; 714 checks after BP-124. |
+|                         |             |                   | Every predictor                   |
 |                         |             |                   | trains and every one is used, the |
 |                         |             |                   | loop predictor since BP-122.      |
 |                         |             |                   | Remaining accuracy loss is        |
@@ -3768,10 +3854,16 @@ assessment of each document. Correct any that are wrong.
 |     |          | (RVC_ORACLE_TC in the ifu Makefile). On a machine        |
 |     |          | without it regress.sh goes red. Either accept and record |
 |     |          | that dependency, or make the path configurable. BP-117.  |
+|     |          | RULED session-077 (Jeff): option 2, a configurable path; |
+|     |          | carried by TD#176 (a Vars.mk path variable for out-of-   |
+|     |          | repo tools). BP-124 found the tools off PATH in the      |
+|     |          | embecosm directory; asm_dec_words now depends on its     |
+|     |          | clang-21 too.                                            |
 | 148 | ifu      | OPEN. is_vsetvl and needs_vtype in ifu_pd_pkt_t have no  |
 |     |          | reader once decode computes its own (dcd_decisions.md    |
 |     |          | DCD-17). Kept so BP-118 needs no bp_structs_pkg change.  |
 |     |          | Remove them from the struct, ifu_predecode and the ibuf. |
+|     |          | RULED session-077 (Jeff): removed by BP-125.             |
 | 149 | bpu, ftq | OPEN, MEASURED by BP-121. The p3 RAS repair: after SC    |
 |     |          | reverses a slot at p3 the entry holds the pre-repair     |
 |     |          | snapshot. Repairs: recur 14, rvc 9, misp_call 16;        |
@@ -3900,7 +3992,8 @@ assessment of each document. Correct any that are wrong.
 |     |          | (H1 fires first under the same mutation); H2 holds in    |
 |     |          | every run. RS1 fires in tb_ras only; the case does not   |
 |     |          | occur in the 19 programs.                                |
-| 171 | decode   | OPEN, BP-124. The three rulings after BP-123 as one      |
+| 171 | decode   | CLOSED by BP-124 (session-077). The three rulings after  |
+|     |          | BP-123 as one                                            |
 |     |          | task: the decode representation and legality             |
 |     |          | (dcd_decisions.md DCD-21 to DCD-35, the PA's R1 to R14,  |
 |     |          | with the PA additions 10b lists, pending Jeff);          |
@@ -3915,11 +4008,34 @@ assessment of each document. Correct any that are wrong.
 |     |          | (the second term of fil_alloc) has no directed test; a   |
 |     |          | merge on any earlier cycle is proven. BP-123 Deferred    |
 |     |          | Work 2. Performance only: if it fails, a cacheable line  |
-|     |          | is not allocated.                                        |
+|     |          | is not allocated. Tasked in BP-125 (session-077).        |
 | 173 | icache   | OPEN, cachegen. The CG-5 comparison and gap-fixing tasks |
 |     |          | for the pacino copy: CG-G2, CG-G8 and CG-G9 to CG-G11,   |
 |     |          | from BP-123's eleven differences. Carries the emission   |
 |     |          | half of TD#119.                                          |
+| 174 | ftq      | OPEN, BP-125. W1 for a conditional keeps the entry's     |
+|     |          | taken and corrects only the target                       |
+|     |          | (ftq_ifu_interfaces.md 7 W1, IFU-18; ruled session-077,  |
+|     |          | Jeff). BP-124 found ftq_ifu's predecode_correct writing  |
+|     |          | taken = 0 for a conditional under M3, so the successor   |
+|     |          | became the fall-through. Performance, not correctness.   |
+| 175 | decode   | OPEN, BP-125. Every reserved vector encoding is illegal  |
+|     |          | (dcd_decisions.md DCD-32, ruled session-077, Jeff): the  |
+|     |          | 24742 encodings BP-124's sweep reported under rule VRSV, |
+|     |          | by the classes DCD-32 lists. The sweep expectation and   |
+|     |          | its tests follow.                                        |
+| 176 | tools    | OPEN. Scrub the LLVM tools from the necessary tools, and |
+|     |          | add a definitive path environment variable to Vars.mk    |
+|     |          | for necessary tools that do not reside in the repo       |
+|     |          | (Jeff, session-077). The embecosm toolchain will never   |
+|     |          | be in the repo because of its size, and there will be    |
+|     |          | others like it. Today oracle_ifu_rvc_exp runs llvm-      |
+|     |          | objdump, clang-21 and riscv64-unknown-elf-objcopy, and   |
+|     |          | asm_dec_words runs clang-21, all from /usr/local/riscv-  |
+|     |          | embecosm-embedded-ubuntu2204-20250309/bin                |
+|     |          | (RVC_ORACLE_TC, ifu Makefile line 137). Carries TD#147   |
+|     |          | (option 2, ruled). No GNU or LLVM change until this TD   |
+|     |          | is tasked.                                               |
 
 ---
 

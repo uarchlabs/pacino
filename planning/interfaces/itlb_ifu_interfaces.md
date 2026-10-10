@@ -114,7 +114,7 @@ IT-6a `itlb_ifu_gpa` carries the faulting GUEST PHYSICAL address
       For kind 00 the ITLB passes the walker's page and the IFU
       fills the offset (ifu_decisions.md IFU-2a). This was
       [GPA_WIDTH-1:0]. Ruled session-077 (Jeff), after BP-123;
-      built by BP-124.
+      BUILT by BP-124.
 
 IT-6b Nothing about the translation regime is on this port. The
       IFU presents a virtual address and no more.
@@ -274,4 +274,6 @@ MMU-29    The implicit-access kind of IT-6c.
 
   2026-10-09  session-077, after BP-123, ruling (Jeff). IT-6a:
               itlb_ifu_gpa is FAULT_GPA_WIDTH = 56.
+
+  2026-10-10  session-077, after BP-124. IT-6a built.
 ```
