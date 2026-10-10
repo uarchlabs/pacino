@@ -20,6 +20,10 @@
 // PACINO CHANGES (BP-123, CG-D1): req_unc, the uncached lookup, and
 // inv_en / inv_all / inv_set, the invalidate, are passed to l1i_ctrl;
 // the metadata array's inv_all is wired.
+//
+// PACINO CHANGES (BP-125, TD#172): fil_rpl, an install that also moves
+// the replacement state, is passed to l1i_ctrl and on to the metadata
+// array's fp port.
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -57,7 +61,8 @@ module l1i_bank (
   input  logic  fil_valid,
   input  l1i_addr_t fil_line,
   input  l1i_way_t  fil_way,
-  input  l1i_line_t fil_data
+  input  l1i_line_t fil_data,
+  input  logic  fil_rpl         // BP-125, L1I-24
 );
 
   l1i_set_t        meta_rd_set;
@@ -72,6 +77,9 @@ module l1i_bank (
   logic        meta_rp_en;
   l1i_set_t        meta_rp_set;
   l1i_repl_state_t meta_rp_val;
+  logic        meta_fp_en;
+  l1i_set_t        meta_fp_set;
+  l1i_way_t        meta_fp_way;
   logic        meta_inv_en;
   logic        meta_inv_all;
   l1i_set_t        meta_inv_set;
@@ -98,6 +106,9 @@ module l1i_bank (
     .rp_en         (meta_rp_en),
     .rp_set        (meta_rp_set),
     .rp_val        (meta_rp_val),
+    .fp_en         (meta_fp_en),
+    .fp_set        (meta_fp_set),
+    .fp_way        (meta_fp_way),
     .inv_en        (meta_inv_en),
     .inv_all       (meta_inv_all),
     .inv_set       (meta_inv_set)
@@ -136,6 +147,7 @@ module l1i_bank (
     .fil_line      (fil_line),
     .fil_way       (fil_way),
     .fil_data      (fil_data),
+    .fil_rpl       (fil_rpl),
     .meta_rd_set   (meta_rd_set),
     .meta_rd_tag   (meta_rd_tag),
     .meta_rd_valid (meta_rd_valid),
@@ -148,6 +160,9 @@ module l1i_bank (
     .meta_rp_en    (meta_rp_en),
     .meta_rp_set   (meta_rp_set),
     .meta_rp_val   (meta_rp_val),
+    .meta_fp_en    (meta_fp_en),
+    .meta_fp_set   (meta_fp_set),
+    .meta_fp_way   (meta_fp_way),
     .meta_inv_en   (meta_inv_en),
     .meta_inv_all  (meta_inv_all),
     .meta_inv_set  (meta_inv_set),

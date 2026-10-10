@@ -586,7 +586,7 @@ package bp_structs_pkg;
   //
   // There is no vtype_hazard field. It is an intra-bundle property
   // and the ibuf regroups instructions across bundles, so it cannot
-  // be computed before the ibuf (TD-DCD-1, open as DCD-U1).
+  // be computed before the ibuf
   typedef struct packed {
     logic                       valid;       // IB-3
     logic [31:0]                instr;       // expanded
@@ -608,8 +608,6 @@ package bp_structs_pkg;
     logic [1:0]                 br_type;     // DCD-7
     logic                       is_call;
     logic                       is_ret;
-    logic                       is_vsetvl;
-    logic                       needs_vtype;
   } ifu_pd_pkt_t;
 
   // ----------------------------------------------------------------

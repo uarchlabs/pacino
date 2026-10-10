@@ -52,12 +52,9 @@
 // (B-type) and JAL (J-type), modulo 2**VA_WIDTH. JALR's target field
 // is driven zero and carries no meaning.
 //
-// is_vsetvl is OP-V with funct3 111 (vsetvli, vsetivli, vsetvl).
-// needs_vtype is every other OP-V instruction and every vector load
-// and store (LOAD-FP / STORE-FP with a vector width encoding). This
-// over-marks the whole-register moves, loads and stores, which do not
-// read vtype; over-marking is safe for a dependency the rename stage
-// resolves (CLAUDE.md, vtype policy). See the Results Capture.
+// NO VTYPE MARKS. is_vsetvl and needs_vtype were produced here and
+// carried in ifu_pd_pkt_t until BP-125 (TD#148, dcd_decisions.md
+// DCD-16): decode computes its own (DCD-17) and nothing read these.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -72,17 +69,12 @@ module ifu_predecode (
   output logic [1:0]           br_type     [0:FTQ_PD_WIDTH-1],
   output logic [FTQ_PD_WIDTH-1:0] is_call,
   output logic [FTQ_PD_WIDTH-1:0] is_ret,
-  output logic [VA_WIDTH-1:0]  target      [0:FTQ_PD_WIDTH-1],
-  output logic [FTQ_PD_WIDTH-1:0] is_vsetvl,
-  output logic [FTQ_PD_WIDTH-1:0] needs_vtype
+  output logic [VA_WIDTH-1:0]  target      [0:FTQ_PD_WIDTH-1]
 );
 
   localparam int NPOS    = FTQ_PD_WIDTH;          // 16
   localparam int NLEVELS = $clog2(FTQ_PD_WIDTH);  // 4
 
-  localparam logic [6:0] OP_LOADFP  = 7'b0000111;
-  localparam logic [6:0] OP_STOREFP = 7'b0100111;
-  localparam logic [6:0] OP_V       = 7'b1010111;
   localparam logic [6:0] OP_BRANCH  = 7'b1100011;
   localparam logic [6:0] OP_JALR    = 7'b1100111;
   localparam logic [6:0] OP_JAL     = 7'b1101111;
@@ -130,7 +122,7 @@ module ifu_predecode (
   end
 
   // -----------------------------------------------------------------
-  // Classification, target and vtype marks, per position.
+  // Classification and target, per position.
   // -----------------------------------------------------------------
   function automatic logic is_link(input logic [4:0] r);
     return (r == 5'd1) || (r == 5'd5);
@@ -179,14 +171,6 @@ module ifu_predecode (
         end else begin
           target[gp] = '0;
         end
-
-        is_vsetvl[gp]   = (w_op == OP_V) && (w_f3 == 3'b111);
-        // Vector memory widths are 000, 101, 110 and 111; 001 to 100
-        // are the scalar FLH/FLW/FLD/FLQ widths.
-        needs_vtype[gp] = ((w_op == OP_V) && (w_f3 != 3'b111)) ||
-                          (((w_op == OP_LOADFP) || (w_op == OP_STOREFP))
-                           && ((w_f3 == 3'b000) || (w_f3 == 3'b101) ||
-                               (w_f3[2:1] == 2'b11)));
       end
     end
   endgenerate

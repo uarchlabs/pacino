@@ -71,32 +71,18 @@ int fail_count;
 
 // ---------------------------------------------------------------------------
 // make_pd_pkt: wrap a raw 32-bit instruction into ifu_pd_pkt_t
-// Sets valid=1 and fault_cause=IFU_FAULT_NONE. is_vsetvl and
-// needs_vtype are computed from opcode/funct3 the way the IFU
-// predecoder marks them (DCD-16), so the bundle looks like real ibuf
-// output; decode does not read them (DCD-17, TD#148). The remaining
-// fields are zero; T75 drives them.
+// Sets valid=1 and fault_cause=IFU_FAULT_NONE. The remaining fields
+// are zero; T75 drives them. ifu_pd_pkt_t carries no is_vsetvl or
+// needs_vtype since BP-125 (TD#148): decode computes its own (DCD-17).
 // ---------------------------------------------------------------------------
 function automatic ifu_pd_pkt_t make_pd_pkt(
     input logic [31:0] instr
 );
     ifu_pd_pkt_t pkt;
-    logic [6:0]  opc;
-    logic [2:0]  f3;
-    logic        vec_w;
     pkt             = '0;
     pkt.valid       = 1'b1;
     pkt.instr       = instr;
     pkt.fault_cause = IFU_FAULT_NONE;
-    opc             = instr[6:0];
-    f3              = instr[14:12];
-    // vector memory width: funct3 in {000,101,110,111}
-    vec_w = (f3 == 3'b000) | (f3 == 3'b101) |
-            (f3 == 3'b110) | (f3 == 3'b111);
-    pkt.is_vsetvl   = (opc == 7'b1010111) & (f3 == 3'b111);
-    pkt.needs_vtype = ((opc == 7'b1010111) & (f3 != 3'b111)) |
-                      ((opc == 7'b0000111) & vec_w)           |
-                      ((opc == 7'b0100111) & vec_w);
     return pkt;
 endfunction
 
@@ -2316,25 +2302,23 @@ initial begin
     @(posedge clk);
     check_hazard(8'b0000_0000, "T73c_vsetvl_after_user");
 
-    // T73d: decode's OWN classification, not the IFU bits. Slot 0
-    //   vsetvli; slot 1 vl1re8.v with the IFU needs_vtype over-mark
-    //   set (DCD-16): decode clears needs_vtype on whole-register
-    //   forms, so no hazard. Slot 2 vle32.v with the IFU needs_vtype
-    //   forced 0: decode marks it, hazard set.
+    // T73d: decode's OWN classification. Slot 0 vsetvli; slot 1
+    //   vl1re8.v: decode clears needs_vtype on whole-register forms, so
+    //   no hazard. Slot 2 vle32.v: decode marks it, hazard set. Until
+    //   BP-125 the IFU's needs_vtype bits in ifu_pd_pkt_t were forced
+    //   the other way here; BP-125 removed them (TD#148).
     clear_all();
     drive(0, enc_vsetvli(5'd1, 5'd2, 3'b010, 3'b000, 1'b1, 1'b0));
     drive(1, enc_vl1rev(5'd3, 5'd4));
-    pd_bundle[1].needs_vtype = 1'b1;
     drive(2, enc_vle32v(5'd7, 5'd8, 1'b1));
-    pd_bundle[2].needs_vtype = 1'b0;
     @(posedge clk);
     check_hazard(8'b0000_0100, "T73d_own_needs_vtype");
 
-    // T73e: an IFU is_vsetvl bit on a scalar slot is not a vsetvl.
-    //   Slot 0 ADDI with pd.is_vsetvl forced 1, slot 1 vadd.vv.
+    // T73e: a scalar slot is not a vsetvl. Slot 0 ADDI, slot 1
+    //   vadd.vv. Until BP-125 slot 0 also carried an IFU is_vsetvl bit
+    //   forced 1; ifu_pd_pkt_t no longer has it (TD#148).
     clear_all();
     drive(0, enc_i(12'd7, 5'd2, 3'b000, 5'd6, OPIMM));
-    pd_bundle[0].is_vsetvl = 1'b1;
     drive(1, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
     @(posedge clk);
     check_hazard(8'b0000_0000, "T73e_own_is_vsetvl");
@@ -2426,8 +2410,6 @@ initial begin
         pd_bundle[k].br_type     = k[1:0];
         pd_bundle[k].is_call     = k[1];
         pd_bundle[k].is_ret      = k[2];
-        pd_bundle[k].is_vsetvl   = ~k[0];
-        pd_bundle[k].needs_vtype = ~k[1];
     end
     @(posedge clk);
     for (int k = 0; k < SLOTS; k++) begin
@@ -2595,6 +2577,9 @@ initial begin
     //   is_branch and is_jump clear, and is_vector. Each enable named in
     //   g (bit i is the i-th field of ext_enable_t, en_m first) is then
     //   cleared alone and the word must decode illegal.
+    //   BP-125 adds, for each DCD-32 class, a reserved word after its
+    //   nearest legal word, and checks that an illegal word's vector
+    //   packet is zero (DCD-36).
     // -----------------------------------------------------------------------
     begin
         typedef struct {
@@ -3477,6 +3462,130 @@ initial begin
                   "vwsll.vi v2, v4, 31",
                   ALU_VEC, VOP_VWSLL, 4'b0000, 3'b000, 2'd0, 2'd0,
                   6'b000000, 32'h0000001f, 16'h2000});
+    // BP-125 (DCD-32, TD#175): one reserved encoding of each DCD-32
+    // class, illegal with a zero vector packet (DCD-36), each after
+    // its nearest legal encoding: the same instruction with the
+    // field at its defined value.
+    tw.push_back('{32'h02050087, "vle8.v v1, (a0)",
+                  "vle8.v v1, (a0)",
+                  ALU_VEC, VOP_VLE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h12050087, ".insn i 0x07, 0, v1, 0x120(a0)",
+                  "vle128.v v1, (a0)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h22050087, "vlseg2e8.v v1, (a0)",
+                  "vlseg2e8.v v1, (a0)",
+                  ALU_VEC, VOP_VLSEG, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h22150087, ".insn i 0x07, 0, v1, 0x221(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h22850107, "vl2re8.v v2, (a0)",
+                  "vl2re8.v v2, (a0)",
+                  ALU_VEC, VOP_VLWHOLE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h42850107, ".insn i 0x07, 0, v2, 0x428(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h62850227, "vs4r.v v4, (a0)",
+                  "vs4r.v v4, (a0)",
+                  ALU_VEC, VOP_VSWHOLE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b010000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h62855227, ".insn s 0x27, 5, x8, 0x624(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h02b50087, "vlm.v v1, (a0)",
+                  "vlm.v v1, (a0)",
+                  ALU_VEC, VOP_VLM, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00b50087, ".insn i 0x07, 0, v1, 0x00b(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h80c5f557, "vsetvl a0, a1, a2",
+                  "vsetvl a0, a1, a2",
+                  ALU_VEC, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h82c5f557, ".insn r 0x57, 7, 0x41, a0, a1, a2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h402180d7, "vadc.vvm v1, v2, v3, v0",
+                  "vadc.vvm v1, v2, v3, v0",
+                  ALU_VEC, VOP_VADC, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h422180d7, ".insn r 0x57, 0, 0x21, v1, v3, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h5e0180d7, "vmv.v.v v1, v3",
+                  "vmv.v.v v1, v3",
+                  ALU_VEC, VOP_VMV, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h5e2180d7, ".insn r 0x57, 0, 0x2f, v1, v3, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h420560d7, "vmv.s.x v1, a0",
+                  "vmv.s.x v1, a0",
+                  ALU_VEC, VOP_VMV_SX, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h422560d7, ".insn r 0x57, 6, 0x21, v1, a0, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h42302557, "vmv.x.s a0, v3",
+                  "vmv.x.s a0, v3",
+                  ALU_VEC, VOP_VMV_XS, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h40302557, ".insn r 0x57, 2, 0x20, a0, x0, v3",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h9e40b157, "vmv2r.v v2, v4",
+                  "vmv2r.v v2, v4",
+                  ALU_VEC, VOP_VMVNR, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000001, 16'h0000});
+    tw.push_back('{32'h9e413157, ".insn r 0x57, 3, 0x4f, v2, x2, v4",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h6621a0d7, "vmand.mm v1, v2, v3",
+                  "vmand.mm v1, v2, v3",
+                  ALU_VEC, VOP_VMAND, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h6421a0d7, ".insn r 0x57, 2, 0x32, v1, v3, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h5208a0d7, "vid.v v1",
+                  "vid.v v1",
+                  ALU_VEC, VOP_VID, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h5228a0d7, ".insn r 0x57, 2, 0x29, v1, x17, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4a2010d7, "vfcvt.xu.f.v v1, v2",
+                  "vfcvt.xu.f.v v1, v2",
+                  ALU_VEC, VOP_VFCVT, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4a2210d7, ".insn r 0x57, 1, 0x25, v1, x4, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4a2610d7, "vfwcvt.f.f.v v1, v2",
+                  "vfwcvt.f.f.v v1, v2",
+                  ALU_VEC, VOP_VFWCVT_FF, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4a2690d7, ".insn r 0x57, 1, 0x25, v1, x13, v2",
+                  "vfwcvtbf16.f.f.v v1, v2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
         foreach (tw[k]) begin
             decode_pkt_t     d;
             vec_decode_pkt_t v;
@@ -3508,7 +3617,10 @@ initial begin
                  (d.rs3 == (tw[k].u[0] ? w[31:27] : 5'd0)) &&
                  !d.is_branch && !d.is_jump &&
                  (is_vector[0] == (tw[k].op == ALU_VEC)) &&
-                 ((tw[k].op != ALU_VEC) || (v.v_op_class == tw[k].vop));
+                 ((tw[k].op != ALU_VEC) || (v.v_op_class == tw[k].vop)) &&
+                 // DCD-36 (BP-125): an illegal word's vector packet is
+                 // zero
+                 (!ill || (v == '0));
             if (!ok) begin
                 $display("%s", $sformatf(
                     {"FAIL [%s] ill %0d alu %0d vop %0d u %b f %b fm %0d ",
@@ -3555,9 +3667,20 @@ initial begin
     //   is_hlvx, appended after is_illegal in that order, so is_hlvx is
     //   the packet's bit 0 and is_illegal bit 9. The expected values are
     //   DCD-22's list and DCD-33's, written here.
+    //   BP-125 (TD#148, DCD-16): ifu_pd_pkt_t holds the DCD-16 fields and
+    //   no is_vsetvl or needs_vtype: its width is the sum of those
+    //   fields' widths, and is_ret, the last of them, is bit 0.
     // -----------------------------------------------------------------------
     begin
         decode_pkt_t lp;
+        ifu_pd_pkt_t pp;
+        ck78("$bits(ifu_pd_pkt_t)", $bits(ifu_pd_pkt_t),
+             1 + 32 + VA_WIDTH + FTQ_PD_POS_BITS + FTQ_IDX_BITS +
+             $bits(ifu_fault_e) + VA_WIDTH + FAULT_GPA_WIDTH + 2 + 1 + 2 +
+             1 + 1);
+        pp        = '0;
+        pp.is_ret = 1'b1;
+        ck78("ifu_pd_pkt_t is_ret is bit 0", int'(pp[7:0]), 1);
         ck78("$bits(alu_op_t)", $bits(alu_op_t), 8);
         ck78("ALU_ADD", int'(ALU_ADD), 0);
         ck78("ALU_CSRRW", int'(ALU_CSRRW), 49);

@@ -465,6 +465,157 @@ module tb;
     end
   endtask
 
+  // A cacheable request merged onto an uncached register, in the cycle
+  // that register's fill lands (BP-125, TD#172; L1I-24, IF-44a) or
+  // earlier. The set is full and line 0 is the tree-PLRU victim (cold
+  // fill of ways 0 to 7, as plru_run's control shows). An uncached
+  // request to line 0 names line 0's own way; memory then changes to
+  // version 1 and the cacheable request merges onto the register. L1I-24
+  // makes the merged request allocate: the fill is installed, so a later
+  // hit returns version 1 (run "inst"), and the replacement state moves
+  // as for any cacheable access, so a ninth line evicts some other line
+  // and line 0 still hits (run "repl"). Each is its own run from reset:
+  // the install check's hit would itself move the replacement state.
+  //
+  // THE FILL'S OWN CYCLE. The memory model completes a line on its
+  // second D beat; l1i_mem_mst registers the line, so the fill lands in
+  // the cycle after that beat's handshake. The cacheable request is
+  // presented in exactly that cycle and accepted at its edge. l1i_mshr
+  // still holds the register as not yet returned in that cycle, so the
+  // request merges, and fil_alloc's second term is what installs the
+  // fill. Observed at the ports: the request is accepted in the
+  // presentation cycle, one Get is made for both, and the fill installs.
+  task automatic unc_merge_fill(input string nm, input logic fill_cyc,
+                                input logic repl);
+    int v;
+    int g0;
+    int e_cyc;
+    int a_cyc;
+    logic last;
+    logic rdy_at;
+    reset_all(nm);
+    for (int k = 0; k < 8; k++) fetch(4'(k), same_set(k), 1'b0, v);
+    g0 = gets(lnof(same_set(0)));
+    lat[lnof(same_set(0))] = 12;
+    issue(8, same_set(0), 1'b1);                        // uncached
+    ver[lnof(same_set(0))] = 1;                         // before the fill
+    if (fill_cyc) begin
+      // Wait for the handshake of the line's last D beat.
+      last  = 1'b0;
+      e_cyc = 0;
+      for (int t = 0; (t < 100) && !last; t++) begin
+        @(posedge clk);
+        last  = mem_d_valid && mem_d_ready && d_beat;
+        e_cyc = cyc;
+        #1;
+      end
+      // The fill lands in this cycle: present the cacheable request.
+      core_valid    = 1'b1;
+      core_id       = 4'd9;
+      core_addr     = same_set(0);
+      core_uncached = 1'b0;
+      r_got[9]      = 1'b0;
+      rdy_at        = core_ready;
+      @(posedge clk);
+      a_cyc = cyc;
+      #1;
+      core_valid = 1'b0;
+      chk("the last beat was seen", last);
+      chk($sformatf("accepted in the fill's cycle (beat %0d, accept %0d)",
+                    e_cyc, a_cyc), rdy_at && (a_cyc == e_cyc + 1));
+    end else begin
+      repeat (3) @(posedge clk);
+      #1;
+      issue(9, same_set(0), 1'b0);                      // merges early
+    end
+    wait_rsp(8);
+    wait_rsp(9);
+    chk("one fill for both", gets(lnof(same_set(0))) == g0 + 1);
+    chk("both answered with the new line",
+        (r_data[8] == line_val(lnof(same_set(0)), 1)) &&
+        (r_data[9] == line_val(lnof(same_set(0)), 1)));
+    if (!repl) begin
+      fetch(10, same_set(0), 1'b0, v);
+      chk("the fill was installed: a hit",
+          gets(lnof(same_set(0))) == g0 + 1);
+      chk($sformatf("of the new line, version 1 (%0d)", v), v == 1);
+    end else begin
+      fetch(11, same_set(8), 1'b0, v);                 // a ninth line
+      chk("the ninth line was fetched", gets(lnof(same_set(8))) == 1);
+      g0 = gets(lnof(same_set(0)));
+      fetch(12, same_set(0), 1'b0, v);
+      chk("the replacement state moved: line 0 was not the victim",
+          gets(lnof(same_set(0))) == g0);
+    end
+  endtask
+
+  // THE SAME SET MOVED TWICE IN ONE CYCLE (BP-125). The install's
+  // replacement update and a lookup's compare-stage update can name one
+  // set in one cycle: a cacheable hit to line 4 of the set is accepted
+  // in the cycle of the fill's last beat, so its compare stage is the
+  // fill's own cycle, in which the merged request makes the install
+  // move way 0. Both updates must land. From the cold-filled set, whose
+  // victim is way 0: way 0 moved alone leaves way 4 the victim; way 4
+  // then way 0 leaves way 6. So the ninth line evicts line 6 and line 4
+  // still hits; with either update lost it evicts line 4 or line 0.
+  task automatic unc_merge_fill_cmp();
+    int v;
+    int g4;
+    int g6;
+    logic first;
+    reset_all("unc_merge_fill_cycle_cmp");
+    for (int k = 0; k < 8; k++) fetch(4'(k), same_set(k), 1'b0, v);
+    lat[lnof(same_set(0))] = 12;
+    issue(8, same_set(0), 1'b1);                        // uncached
+    // Wait for the handshake of the line's FIRST D beat; the last beat
+    // is the next cycle and the fill lands the cycle after that.
+    first = 1'b0;
+    for (int t = 0; (t < 100) && !first; t++) begin
+      @(posedge clk);
+      first = mem_d_valid && mem_d_ready && !d_beat;
+      #1;
+    end
+    chk("the first beat was seen", first);
+    // The last beat's cycle: a cacheable hit to line 4 of the set.
+    core_valid    = 1'b1;
+    core_id       = 4'd13;
+    core_addr     = same_set(4);
+    core_uncached = 1'b0;
+    r_got[13]     = 1'b0;
+    @(posedge clk);
+    chk("the hit was accepted in the last beat's cycle",
+        core_ready && mem_d_valid && d_beat);
+    #1;
+    // The fill's own cycle: the cacheable request merges.
+    core_id       = 4'd9;
+    core_addr     = same_set(0);
+    r_got[9]      = 1'b0;
+    @(posedge clk);
+    chk("the merge was accepted in the fill's cycle", core_ready);
+    #1;
+    core_valid = 1'b0;
+    wait_rsp(13);
+    wait_rsp(8);
+    wait_rsp(9);
+    chk("line 4 hit", gets(lnof(same_set(4))) == 1);
+    fetch(11, same_set(8), 1'b0, v);                    // a ninth line
+    g4 = gets(lnof(same_set(4)));
+    g6 = gets(lnof(same_set(6)));
+    fetch(12, same_set(4), 1'b0, v);
+    chk("both updates landed: line 4 was not the victim",
+        gets(lnof(same_set(4))) == g4);
+    fetch(14, same_set(6), 1'b0, v);
+    chk("line 6 was the victim", gets(lnof(same_set(6))) == g6 + 1);
+  endtask
+
+  task automatic t_unc_merge_fill();
+    unc_merge_fill("unc_merge_fill_cycle_inst",  1'b1, 1'b0);
+    unc_merge_fill("unc_merge_fill_cycle_repl",  1'b1, 1'b1);
+    unc_merge_fill("unc_merge_before_fill_inst", 1'b0, 1'b0);
+    unc_merge_fill("unc_merge_before_fill_repl", 1'b0, 1'b1);
+    unc_merge_fill_cmp();
+  endtask
+
   // =================================================================
   // Maintenance (IF-28 to IF-32, IF-42).
   // =================================================================
@@ -620,6 +771,7 @@ module tb;
     t_unc_plru();
     t_unc_merge();
     t_unc_merge_resident();
+    t_unc_merge_fill();
     t_inv_all();
     t_inv_idle_timing();
     t_inv_line();

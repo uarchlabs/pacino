@@ -57,20 +57,82 @@ RULES = {
          "decode illegal; spike-dasm decodes"),
     2:  ("RM", "static rm 101 or 110 is reserved (unprivileged F chapter, "
          "rounding modes; DCD-27)", "decode illegal; spike-dasm decodes"),
-    3:  ("VRSV", "a reserved vector encoding decode classifies as the "
-         "instruction it is with the reserved field at its defined value "
-         "(V 1.0; riscv-opcodes rv_v fixes the field); DCD-32 reports it "
-         "for a ruling and decode is not changed",
-         "decode legal; spike-dasm unknown or a reserved form; listed for "
-         "Jeff"),
+    3:  ("VRSV", "a reserved vector encoding: a field V 1.0 fixes or "
+         "reserves is not at its defined value (riscv-opcodes rv_v fixes "
+         "the field); DCD-32 makes every one illegal (ruled session-077, "
+         "BP-125)",
+         "decode illegal; spike-dasm unknown or a reserved form"),
 }
 
+# The DCD-32 classes of rule VRSV, in DCD-32's order. An encoding is
+# counted under the class of the form its normalized word decodes to;
+# the mew class takes the memory forms that have no class of their own
+# (unit-stride, strided, indexed, segment, fault-only-first), so a
+# whole-register or vlm / vsm encoding with mew = 1 counts under its
+# own form's class. See vrsv_class.
+VRSV_CLASSES = {
+    1:  "mew = 1 (EEW 128 and above), every load and store form",
+    2:  "unit-stride segment load / store, lumop/sumop not 00000 or 10000",
+    3:  "whole-register load / store: vm 0, NFIELDS not 1/2/4/8, mew 1, "
+        "or (store) width not 000",
+    4:  "vlm.v / vsm.v: vm 0, width not 000, or mew 1",
+    5:  "vsetvl with bits 30:25 not zero",
+    6:  "vadc / vsbc with vm 1",
+    7:  "vmv.v.v/x/i, vfmv.v.f with vs2 not v0",
+    8:  "vmv.s.x, vfmv.s.f with vs2 not v0 or vm 0",
+    9:  "vfmv.f.s with vs1 not 0 or vm 0; vmv.x.s with vm 0",
+    10: "vmv<nr>r.v with vm 0 or a register count not 1, 2, 4, 8",
+    11: "vcompress.vm and the eight mask-logical operations with vm 0",
+    12: "vid.v with vs2 not v0",
+    13: "VFUNARY0 selectors 00100, 00101, 01101",
+}
+VCLS = {}
+
+
+def vrsv_class(w, nm):
+    """The DCD-32 class of a VRSV encoding w whose form is nm."""
+    op = w & 0x7F
+    f6 = (w >> 26) & 0x3F
+    if op in (0x07, 0x27):
+        if nm in ("VOP_VLWHOLE", "VOP_VSWHOLE"):
+            return 3
+        if nm in ("VOP_VLM", "VOP_VSM"):
+            return 4
+        if "lum" in vrsv_norm(w):
+            return 2
+        return 1
+    f3 = (w >> 12) & 7
+    if f3 == 7:
+        return 5
+    if nm in ("VOP_VADC", "VOP_VSBC"):
+        return 6
+    if nm == "VOP_VMV" or (nm == "VOP_VFMV" and f6 == 0x17):
+        return 7
+    if nm == "VOP_VMV_SX" or (nm == "VOP_VFMV" and f6 == 0x10):
+        return 8
+    if nm in ("VOP_VFMV_FS", "VOP_VMV_XS"):
+        return 9
+    if nm == "VOP_VMVNR":
+        return 10
+    if nm in ("VOP_VCOMPRESS", "VOP_VMANDN", "VOP_VMAND", "VOP_VMOR",
+              "VOP_VMXOR", "VOP_VMORN", "VOP_VMNAND", "VOP_VMNOR",
+              "VOP_VMXNOR"):
+        return 11
+    if nm == "VOP_VID":
+        return 12
+    if nm in ("VOP_VFCVT", "VOP_VFWCVT"):
+        return 13
+    sys.exit("expect: no DCD-32 class for %08x (%s)" % (w, nm))
+
 # ---------------------------------------------------------------------
-# VRSV. The vector fields V 1.0 fixes or reserves that decode does not
-# check (DCD-32 keeps them, for a ruling). An encoding spike-dasm calls
-# unknown, or a reserved form (EEW above 64, Zvfbfmin's VFUNARY0 slot),
-# whose normalized word -- the reserved field at its defined value -- is
-# an implemented instruction, is expected to decode as that instruction.
+# VRSV. The vector fields V 1.0 fixes or reserves. An encoding
+# spike-dasm calls unknown, or a reserved form (EEW above 64, Zvfbfmin's
+# VFUNARY0 slot), whose normalized word -- the reserved field at its
+# defined value -- is an implemented instruction, is a reserved
+# encoding of that instruction, and DCD-32 makes it illegal (BP-125).
+# BP-124 expected it to decode as that instruction, which DCD-32 then
+# kept for a ruling. The normalized word names the form, and so the
+# DCD-32 class the encoding is counted under (vrsv_class).
 # Each entry: (opcode, funct3, funct6, condition) -> normalization.
 #   vm1   vm set to 1 (the field must be 1)     vm0  vm set to 0
 #   vs2   vs2 set to 0                          vs1  vs1 set to 0
@@ -427,7 +489,8 @@ def expect(word, text, avals, vvals, norm_text):
                         "+".join(st for st in steps
                                  if apply_norm(word, [st]) != word),
                         re.sub(r"\d+", "N", nm_m), nm)
-                    return 0, 1, vvals[nm], 3
+                    VCLS[word] = vrsv_class(word, nm)
+                    return 1, 0, 0, 3
         return 1, 0, 0, 0
     if m.startswith("v"):
         nm, ni, wide = vec_op(m, vvals)
@@ -437,11 +500,12 @@ def expect(word, text, avals, vvals, norm_text):
         if nm is None:
             sys.exit("expect: no table entry for %08x %s" % (word, text))
         if wide:
-            # EEW above 64 (mew=1) is reserved in V 1.0; decode ignores
-            # mew and classifies it as the EEW 8..64 form (rule VRSV).
+            # EEW above 64 (mew=1) is reserved in V 1.0, as is Zvfbfmin's
+            # VFUNARY0 slot; DCD-32 makes both illegal (rule VRSV).
             WHY[word] = "mew/bf16 slot %s (%s)" % (
                 re.sub(r"\d+", "N", m), nm)
-            return 0, 1, vvals[nm], 3
+            VCLS[word] = vrsv_class(word, nm)
+            return 1, 0, 0, 3
         return 0, 1, vvals[nm], 0
     nm, ni = scalar_op(m)
     if ni is not None:
@@ -547,6 +611,19 @@ def main():
     for k in sorted(detail):
         lines.append("  %-5s %-9s %-44s %6d  %08x" % (
             RULES[k[0]][0], k[1], k[2], detail[k][0], detail[k][1]))
+    # BP-125: rule VRSV by DCD-32 class (count, first encoding).
+    cc = {}
+    for w in sorted(VCLS):
+        c = VCLS[w]
+        if c not in cc:
+            cc[c] = [0, w]
+        cc[c][0] += 1
+    lines.append("rule VRSV by DCD-32 class (count, first encoding), "
+                 "total %d:" % sum(v[0] for v in cc.values()))
+    for c in sorted(VRSV_CLASSES):
+        n, w0 = cc.get(c, [0, 0])
+        lines.append("  class %2d %6d  %08x  %s" % (c, n, w0,
+                                                    VRSV_CLASSES[c]))
     print("\n".join(lines[:5 + len(sp_n) + 1]))
     if rpt:
         open(rpt, "w", encoding="ascii").write("\n".join(lines) + "\n")

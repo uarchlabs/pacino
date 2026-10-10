@@ -95,6 +95,8 @@ module l1i_ctrl (
   input  l1i_addr_t fil_line,
   input  l1i_way_t  fil_way,
   input  l1i_line_t fil_data,
+  // BP-125 (L1I-24): the install also moves the replacement state
+  input  logic  fil_rpl,
 
   // the metadata array
   output l1i_set_t  meta_rd_set,
@@ -109,6 +111,9 @@ module l1i_ctrl (
   output logic  meta_rp_en,
   output l1i_set_t  meta_rp_set,
   output l1i_repl_state_t meta_rp_val,
+  output logic  meta_fp_en,
+  output l1i_set_t  meta_fp_set,
+  output l1i_way_t  meta_fp_way,
   output logic  meta_inv_en,
   output logic  meta_inv_all,
   output l1i_set_t  meta_inv_set,
@@ -275,6 +280,16 @@ module l1i_ctrl (
   assign meta_wr_way   = fil_way;
   assign meta_wr_tag   = l1i_tag_of(fil_line);
   assign meta_wr_valid = 1'b1;
+
+  // BP-125 (L1I-24, TD#172). The one install that also moves the
+  // replacement state: a cacheable request merged onto a register
+  // whose lookup was uncached, and so moved nothing in the compare
+  // stage above. The way is the install's. This is a second writer of
+  // the replacement state beside the compare stage; the array orders
+  // the two when they name one set in one cycle.
+  assign meta_fp_en    = fil_valid && fil_rpl;
+  assign meta_fp_set   = l1i_set_of(fil_line);
+  assign meta_fp_way   = fil_way;
 
   assign data_wr_en    = fil_valid;
   assign data_wr_set   = l1i_set_of(fil_line);

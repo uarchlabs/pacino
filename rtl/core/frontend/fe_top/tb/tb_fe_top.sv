@@ -1307,6 +1307,12 @@ module tb;
   // =================================================================
   logic [VA_WIDTH-1:0] fstart [0:FTQ_DEPTH-1];
   int                  n_pd_redir;
+  // BP-125 (TD#174): predecode redirects whose mis_pos names a
+  // conditional with uc_end clear. Predecode reports a conditional at
+  // mis_pos only under M3 (M1 names a JAL, M2 a non-CFI, M4 an
+  // unfetched position), so these are the M3 writebacks W1 now
+  // rewrites with the entry's taken kept.
+  int                  n_m3_cond;
   // BP-121, TD#167: the measurement window. Set by the backend after
   // every edge; high while a program runs and has not yet retired its
   // last expected instruction, so no count includes the drain.
@@ -1329,6 +1335,11 @@ module tb;
       fstart[dut.ftq_ifu_idx] <= dut.ftq_ifu_start_pc;
     if (meas && dut.u_ftq.w_pd_redir_val && !bkend_ftq_redir_val)
       n_pd_redir <= n_pd_redir + 1;
+    if (meas && dut.u_ftq.w_pd_redir_val && !bkend_ftq_redir_val &&
+        !dut.ifu_ftq_uc_end &&
+        dut.ifu_ftq_pd[dut.ifu_ftq_mis_pos].valid &&
+        (dut.ifu_ftq_pd[dut.ifu_ftq_mis_pos].br_type == 2'b01))
+      n_m3_cond <= n_m3_cond + 1;
     if (!rstn) begin
       fseen  <= '0;
       wbseen <= '0;
@@ -2547,6 +2558,7 @@ module tb;
     n_fills      = 0;
     n_walks      = 0;
     n_pd_redir   = 0;
+    n_m3_cond    = 0;
     n_u_ubtb     = 0;
     n_u_lp       = 0;
     n_u_tage     = 0;
@@ -2818,6 +2830,9 @@ module tb;
       n_mis_type[int'(RETURN)], n_mis_type[int'(RETURN_CALL)],
       n_mis_type[int'(INDIRECT_NONRET)], n_mis_type[int'(INDIRECT_CALL)],
       n_pd_redir, n_redir_p2, n_redir_p3, warm_e, W.ne));
+    // BP-125: the M3 conditional writebacks (n_m3_cond).
+    $display("   M3COND %s %0d of %0d predecode redirects", tname, n_m3_cond,
+             n_pd_redir);
     foreach (mis_pc[p]) begin
       if (mis_pc[p] > 1)
         $display("   REPEAT %s pc %011h type %0d mispredicted %0d times",

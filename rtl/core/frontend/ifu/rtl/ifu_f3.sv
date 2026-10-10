@@ -154,8 +154,6 @@ module ifu_f3 (
   input  logic [FTQ_PD_WIDTH-1:0]  p_call,
   input  logic [FTQ_PD_WIDTH-1:0]  p_ret,
   input  logic [VA_WIDTH-1:0]      p_tgt   [0:FTQ_PD_WIDTH-1],
-  input  logic [FTQ_PD_WIDTH-1:0]  p_vset,
-  input  logic [FTQ_PD_WIDTH-1:0]  p_vtype,
 
   // ---- ifu_ibuf_interfaces.md 2 ------------------------------------
   output logic                     ifu_ibuf_val,
@@ -398,8 +396,6 @@ module ifu_f3 (
       ifu_ibuf_slot[i].br_type     = w_br[i];
       ifu_ibuf_slot[i].is_call     = p_call[i] && !w_has_f[i];
       ifu_ibuf_slot[i].is_ret      = p_ret[i]  && !w_has_f[i];
-      ifu_ibuf_slot[i].is_vsetvl   = p_vset[i] && !w_has_f[i];
-      ifu_ibuf_slot[i].needs_vtype = p_vtype[i] && !w_has_f[i];
     end
 
     // ---- the writeback fields ------------------------------------------

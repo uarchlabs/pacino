@@ -23,7 +23,8 @@
 //   D  DCD-4 to DCD-6 starts: an unaligned block start, mixed
 //      lengths, all 16-bit, all 32-bit, a 32-bit start at position
 //      15 taking position 16, and first_tail
-//   E  is_vsetvl and needs_vtype
+//   E  (removed by BP-125, TD#148: is_vsetvl and needs_vtype are no
+//      longer predecoded; decode computes its own, DCD-17)
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -43,14 +44,11 @@ module tb;
   logic [NPD-1:0]      is_call;
   logic [NPD-1:0]      is_ret;
   logic [VA_WIDTH-1:0] target  [0:FTQ_PD_WIDTH-1];
-  logic [NPD-1:0]      is_vsetvl;
-  logic [NPD-1:0]      needs_vtype;
 
   ifu_predecode dut (
     .hw (hw), .exp (expw), .pc (pc), .first_tail (first_tail),
     .start (start), .is_rvc (is_rvc), .br_type (br_type),
-    .is_call (is_call), .is_ret (is_ret), .target (target),
-    .is_vsetvl (is_vsetvl), .needs_vtype (needs_vtype)
+    .is_call (is_call), .is_ret (is_ret), .target (target)
   );
 
   int pass_cnt;
@@ -364,32 +362,6 @@ module tb;
     chk("D a tail is never a start", start[0] && !start[1] && start[2]);
   endtask
 
-  // -----------------------------------------------------------------
-  // E. vtype marks.
-  // -----------------------------------------------------------------
-  task automatic group_e();
-    $display("-- E: vtype marks --");
-    clear(VA_WIDTH'('h80006000));
-    put32(32'h0D00_7057);    // vsetvli x0, x0, e32
-    put32(32'hC000_7057);    // vsetivli
-    put32(32'h8000_7057);    // vsetvl
-    put32(32'h0200_0057);    // vadd.vv v0, v0, v0
-    put32(32'h0200_6007);    // vle32.v v0, (x0)
-    put32(32'h0000_2007);    // flw f0, 0(x0)
-    put32(32'h0000_3007);    // fld f0, 0(x0)
-    put32(32'h0200_7027);    // vse64.v v0, (x0)
-    settle();
-    chk("E vsetvli is_vsetvl, not needs_vtype",
-        is_vsetvl[0] && !needs_vtype[0]);
-    chk("E vsetivli is_vsetvl",  is_vsetvl[2]);
-    chk("E vsetvl is_vsetvl",    is_vsetvl[4]);
-    chk("E vadd.vv needs_vtype", needs_vtype[6] && !is_vsetvl[6]);
-    chk("E vle32.v needs_vtype", needs_vtype[8]);
-    chk("E flw is neither",      !needs_vtype[10] && !is_vsetvl[10]);
-    chk("E fld is neither",      !needs_vtype[12] && !is_vsetvl[12]);
-    chk("E vse64.v needs_vtype", needs_vtype[14]);
-  endtask
-
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
@@ -397,7 +369,6 @@ module tb;
     group_b();
     group_c();
     group_d();
-    group_e();
     $display("tb_ifu_predecode: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ifu_predecode: %0d checks failed", fail_cnt);

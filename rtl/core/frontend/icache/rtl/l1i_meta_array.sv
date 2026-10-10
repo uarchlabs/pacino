@@ -29,6 +29,10 @@
 // PACINO CHANGES (BP-123, CG-D1): inv_all clears every valid bit and
 // every replacement state in one cycle (l1i_ifu_interfaces.md IF-42),
 // beside inv_en's one set, which now carries invalidate_line.
+//
+// PACINO CHANGES (BP-125, TD#172): fp_en / fp_set / fp_way, the
+// replacement update of an install whose lookup did not move it (a
+// cacheable request merged onto an uncached register, L1I-24).
 //--------------------------------------------------------------------
 // The import is at file scope and before the module, which is what
 // the project verilog style asks for. Verilator's IMPORTSTAR objects
@@ -59,6 +63,12 @@ module l1i_meta_array (
   input  logic  rp_en,
   input  l1i_set_t  rp_set,
   input  l1i_repl_state_t rp_val,
+
+  // the replacement update of an install (BP-125): the way is made
+  // most recently used in its set
+  input  logic  fp_en,
+  input  l1i_set_t  fp_set,
+  input  l1i_way_t  fp_way,
 
   // invalidate every way of one set, the post reset walk; and
   // every set at once, the invalidate_all of L1I-18 (BP-123)
@@ -114,6 +124,13 @@ module l1i_meta_array (
         repl_mem[inv_set] <= L1iReplReset;
       end
       if(rp_en)  repl_mem[rp_set]  <= rp_val;
+      // BP-125. After the compare stage's write, so that when both name
+      // one set in one cycle the install's way is moved on top of the
+      // compare stage's value and neither update is lost.
+      if(fp_en)
+        repl_mem[fp_set] <= l1i_repl_update(
+            (rp_en && (rp_set == fp_set)) ? rp_val : repl_mem[fp_set],
+            fp_way);
     end
   end
 

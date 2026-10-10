@@ -15,11 +15,9 @@
 //   DCD-17  vtype_hazard is computed here, per slot: an earlier valid
 //           slot of this bundle is a vsetvl form and this slot needs
 //           vtype. The two facts come from decode's own vector
-//           classification (vec_decode_bundle), not from the
-//           is_vsetvl / needs_vtype bits of ifu_pd_pkt_t: decode's
-//           are exact and the IFU's needs_vtype over-marks the
-//           whole-register forms (DCD-16). Those two input bits have
-//           no reader here (TD#148).
+//           classification (vec_decode_bundle). ifu_pd_pkt_t carried
+//           the IFU's is_vsetvl / needs_vtype, which had no reader
+//           here, until BP-125 removed them (TD#148, DCD-16).
 //   DCD-18  pd_bundle is passed through to pd_out unchanged, beside
 //           the decode packets. The PC, FTQ index, position, fault
 //           fields and is_rvc reach rename this way.
@@ -66,7 +64,11 @@
 //     fields, 001 FENCE.I, 010 the four CBOs with rd x0, the rest
 //     illegal; the SYSTEM forms with rd (and rs1) x0 as DCD-31 lists;
 //     a vector encoding that decodes to VOTHER or to the VMEM default,
-//     or a store with lumop 10000, is illegal
+//     or a store with lumop 10000, is illegal; BP-125 adds every other
+//     reserved vector encoding DCD-32 lists (mew 1, the reserved fields
+//     of the segment, whole-register and mask loads and stores, and of
+//     vsetvl, vadc/vsbc, the moves, vmv<nr>r, vcompress, the mask
+//     logicals, vid and VFUNARY0), each made VMEM or VOTHER
 //   - Zvbb is decoded, gated by en_v (DCD-33)
 // An illegal instruction is ALU_ILL with no register, no immediate and
 // no is_* flag, and its vector packet is zero.
@@ -243,13 +245,29 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
     else
         pkt.vs3 = inst[11:7];  // source data vector register (store)
 
+    // DCD-32 (BP-125): mew = 1 is EEW 128 and above, reserved for every
+    // load and store form: the VMEM default, illegal. The class tests
+    // below see mew = 0 only.
+    if (inst[28]) begin
+        pkt.v_op_class = VMEM;
+        return pkt;
+    end
+
     // Whole-register load / store: unit-stride with lumop / sumop 01000.
     // nf encodes the register count less one (vl1r..vl8r, vs1r..vs8r),
     // so this is decided BEFORE the segment test below. BP-124: with nf
     // not 0 these were classed as segment operations (vl2re8.v decoded
     // as vlseg2e8.v), found by the oracle sweep. They transfer whole
     // registers whatever vtype holds: no vtype dependency.
+    // DCD-32 (BP-125): vm must be 1, NFIELDS 1, 2, 4 or 8 (nf 0, 1, 3,
+    // 7), and a store's width 000; anything else is reserved, the VMEM
+    // default.
     if ((mop == 2'b00) && (inst[24:20] == 5'b01000)) begin
+        if (!inst[25] || !(nf inside {3'd0, 3'd1, 3'd3, 3'd7}) ||
+            (is_store && (inst[14:12] != 3'b000))) begin
+            pkt.v_op_class = VMEM;
+            return pkt;
+        end
         pkt.v_op_class  = is_store ? VOP_VSWHOLE : VOP_VLWHOLE;
         pkt.needs_vtype = 1'b0;
         return pkt;
@@ -269,8 +287,14 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
     // to determine fields-per-segment at issue time.
     if (nf != 3'b000) begin
         case (mop)
+            // DCD-32 (BP-125): a unit-stride segment access is lumop
+            // 00000, or a load's 10000 (fault-only-first); every other
+            // lumop / sumop is reserved, the VMEM default. A store's
+            // 10000 is decided above.
             2'b00: pkt.v_op_class =
-                       is_store ? VOP_VSSEG   : VOP_VLSEG;
+                       ((inst[24:20] != 5'b00000) &&
+                        (is_store || (inst[24:20] != 5'b10000))) ? VMEM
+                     : is_store ? VOP_VSSEG   : VOP_VLSEG;
             2'b10: pkt.v_op_class =
                        is_store ? VOP_VSSSEG  : VOP_VLSSEG;
             2'b01: pkt.v_op_class =
@@ -289,8 +313,13 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
             case (inst[24:20])
                 5'b00000: // vle*/vse* normal unit-stride
                     pkt.v_op_class = is_store ? VOP_VSE     : VOP_VLE;
-                5'b01011: // vlm.v / vsm.v  (mask; vm=1 always)
-                    pkt.v_op_class = is_store ? VOP_VSM     : VOP_VLM;
+                // vlm.v / vsm.v: vm 1 and width 000 are fixed; any
+                // other value is reserved, the VMEM default (DCD-32,
+                // BP-125)
+                5'b01011:
+                    pkt.v_op_class = (!inst[25] ||
+                                      (inst[14:12] != 3'b000)) ? VMEM
+                                   : is_store ? VOP_VSM : VOP_VLM;
                 // 5'b01000 whole-register and a store's 5'b10000 are
                 // decided above
                 5'b10000: // vle*ff fault-only-first (load only)
@@ -318,6 +347,54 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
     return pkt;
 endfunction
 /* verilator lint_on UNUSEDSIGNAL */
+
+// ---------------------------------------------------------------------------
+// The reserved fields of an OP-V instruction, DCD-32 (BP-125). c is the
+// class decode_vec_one gave the word; the field each class fixes, from
+// the V 1.0 text (BP-125 Results Capture):
+//   VOP_VADC, VOP_VSBC     vm 0 (vm 1 is reserved)
+//   VOP_VMV                vs2 v0 (vmv.v.v/x/i; vm 1 by the class)
+//   VOP_VFMV               vs2 v0; vfmv.s.f (funct6 010000) also vm 1
+//   VOP_VMV_SX             vs2 v0 and vm 1
+//   VOP_VFMV_FS            vs1 0 and vm 1
+//   VOP_VMV_XS             vm 1 (vs1 0 by the class)
+//   VOP_VMVNR              vm 1, and the register count less one (the
+//                          vs1 field) 0, 1, 3 or 7
+//   VOP_VCOMPRESS and the  vm 1
+//   eight mask-logical
+//   VOP_VID                vs2 v0
+//   VOP_VFCVT, VOP_VFWCVT  VFUNARY0 selectors 00100, 00101 (vfcvt) and
+//                          01101 (Zvfbfmin's vfwcvtbf16.f.f.v, not
+//                          implemented) are reserved
+// ---------------------------------------------------------------------------
+function automatic logic vec_rsv_field(input logic [31:0]  inst,
+                                       input v_op_class_t  c);
+    logic       vm;
+    logic [4:0] vs1;
+    logic [4:0] vs2;
+    vm  = inst[25];
+    vs1 = inst[19:15];
+    vs2 = inst[24:20];
+    case (c)
+        VOP_VADC, VOP_VSBC:      return vm;
+        VOP_VMV:                 return vs2 != 5'd0;
+        VOP_VFMV:                return (vs2 != 5'd0) ||
+                                        ((inst[31:26] == 6'h10) && !vm);
+        VOP_VMV_SX:              return (vs2 != 5'd0) || !vm;
+        VOP_VFMV_FS:             return (vs1 != 5'd0) || !vm;
+        VOP_VMV_XS:              return !vm;
+        VOP_VMVNR:               return !vm ||
+                                        !(vs1 inside {5'd0, 5'd1, 5'd3,
+                                                      5'd7});
+        VOP_VCOMPRESS, VOP_VMANDN, VOP_VMAND, VOP_VMOR, VOP_VMXOR,
+        VOP_VMORN, VOP_VMNAND, VOP_VMNOR, VOP_VMXNOR:
+                                 return !vm;
+        VOP_VID:                 return vs2 != 5'd0;
+        VOP_VFCVT:               return vs1 inside {5'b00100, 5'b00101};
+        VOP_VFWCVT:              return vs1 == 5'b01101;
+        default:                 return 1'b0;
+    endcase
+endfunction
 
 /* verilator lint_off UNUSEDSIGNAL */
 /* verilator lint_off VARHIDDEN */
@@ -370,6 +447,10 @@ function automatic vec_decode_pkt_t decode_vec_one(
         //   2'b10 -> vsetvl   (31:30=10): vtype from rs2 register
         pkt.is_vsetvl  = 1'b1;
         pkt.v_op_class = VCFG;
+        // DCD-32 (BP-125): vsetvl fixes bits 30:25 at zero; bit 30 is
+        // zero by the selection, so bits 29:25 not zero are reserved.
+        if ((inst[31:30] == 2'b10) && (inst[29:25] != 5'b00000))
+            pkt.v_op_class = VOTHER;
 
         if (!inst[31] || inst[30]) begin
             // vsetvli or vsetivli: vtype encoded in immediate
@@ -870,6 +951,11 @@ function automatic vec_decode_pkt_t decode_vec_one(
             default: pkt.v_op_class = VOTHER;
 
         endcase
+
+        // DCD-32 (BP-125): a field V 1.0 fixes for the instruction just
+        // classified, not at its defined value, is reserved; VOTHER,
+        // illegal. vec_rsv_field names each.
+        if (vec_rsv_field(inst, pkt.v_op_class)) pkt.v_op_class = VOTHER;
     end
 
     return pkt;

@@ -1006,7 +1006,7 @@ module tb;
         if (e.flt[i] == IFU_FAULT_NONE) begin
           if ((s.instr != e.instr[i]) || (s.is_rvc != e.rvc[i]) ||
               (s.br_type != e.br[i]) || (s.is_call != e.call[i]) ||
-              (s.is_ret != e.ret[i]) || s.is_vsetvl || s.needs_vtype)
+              (s.is_ret != e.ret[i]))
           begin
             ok = 1'b0;
             why = $sformatf("%s slot %0d instr %08h/%08h class", why, i,

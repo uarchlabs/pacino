@@ -33,6 +33,10 @@
 // write with a slot above it valid, held across an edge and read
 // back. Group J makes one from a real writeback.
 //
+// BP-125 adds group L, W1 under M3 for a conditional and for a JAL
+// (TD#174), and group M, the entry after an M1 JAL that lies before
+// the predicted-taken slot.
+//
 // BP-112 adds two groups:
 //
 //   the flush index by cause, TD#126     -> group F
@@ -1347,6 +1351,173 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // L (BP-125, TD#174): W1 under M3. The predicted-taken slot names a
+  // direct transfer whose target predecode computes differently. For
+  // a CONDITIONAL the entry's taken stands and only the target is
+  // corrected (ftq_ifu_interfaces.md 7 W1, IFU-18), so the successor
+  // is the corrected target, not the fall-through. A non-conditional
+  // M3 is unchanged. Each correction is written into u_entry and read
+  // back, and the stored entry is presented on the fetch request so
+  // its successor is the one ftq_ifu_next_pc derives from it.
+  // Expected values are this file's.
+  // -----------------------------------------------------------------
+  task automatic l_m3(input string nm, input bp_br_type_e bt,
+                      input logic [1:0] pd_bt);
+    bp_ftq_slot_t exp_s0;
+    do_reset();
+    // Slot 0: predicted taken at position 4 with the wrong target.
+    // Slot 1: a later not-taken conditional, killed by the rewrite.
+    j_alloc_slot[0] = mk_slot(1'b1, TGT0, bt, 1'b1, FTB_BR_POS_BITS'(4));
+    j_alloc_slot[1] = mk_slot(1'b1, TGT1, COND, 1'b0,
+                              FTB_BR_POS_BITS'(9));
+    j_alloc_idx     = 6'd10;
+    j_alloc_val     = 1'b1;
+    j_rd_idx        = 6'd10;
+    settle();
+    j_alloc_val     = 1'b0;
+
+    pdwb_entry       = j_fetch_e;
+    pdwb_entry.pft_addr = BLK_PFT;
+    gen_pdwb         = 1'b1;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd10;
+    wb_rcvd_pdwb     = 1'b0;
+    ifu_ftq_pd[4]    = mk_pd(1'b1, 1'b0, pd_bt, 1'b0, 1'b0);
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(4);
+    ifu_ftq_target   = PD_TGT;
+    ifu_ftq_pdwb_val = 1'b1;
+    #1;
+    chk($sformatf("%s1 the slot written is slot 0", nm),
+        pd_wr_val && (pd_wr_sel == TRX_SLOT_BITS'(0)));
+    chk($sformatf("%s2 the slot keeps taken", nm),
+        pd_wr_slot.slot_valid && pd_wr_slot.taken &&
+        (pd_wr_slot.br_type == bt));
+    chk_va($sformatf("%s3 the target is corrected", nm),
+           pd_wr_slot.target, PD_TGT);
+    chk_va($sformatf("%s4 the redirect goes to the corrected target", nm),
+           pd_redir_pc, PD_TGT);
+    settle();
+    clr_wb();
+    settle();
+
+    exp_s0            = '0;
+    exp_s0.slot_valid = 1'b1;
+    exp_s0.target     = PD_TGT;
+    exp_s0.br_type    = bt;
+    exp_s0.taken      = 1'b1;
+    exp_s0.pos        = FTB_BR_POS_BITS'(4);
+    exp_s0.pred_src   = PRED_NONE;
+    chk($sformatf("%s5 the stored slot 0 is the corrected branch", nm),
+        j_fetch_e.slot[0] == exp_s0);
+    chk($sformatf("%s6 the stored slot 1 is killed", nm),
+        !j_fetch_e.slot[1].slot_valid && !j_fetch_e.slot[1].taken);
+    fetch_entry   = j_fetch_e;
+    fetch_pending = 1'b1;
+    #1;
+    chk_va($sformatf("%s7 the stored entry's successor is the target", nm),
+           ftq_ifu_next_pc, PD_TGT);
+    chk($sformatf("%s8 and it ends at position 4", nm),
+        ftq_ifu_taken_val && (ftq_ifu_taken_pos == FTB_BR_POS_BITS'(4)));
+    fetch_pending = 1'b0;
+    settle();
+  endtask
+
+  task automatic group_l();
+    $display("-- L: W1 under M3 --");
+    l_m3("L", COND, 2'b01);              // a conditional
+    l_m3("LJ", DIRECT_UNC, 2'b10);       // a JAL, unchanged
+  endtask
+
+  // -----------------------------------------------------------------
+  // M (BP-125, carried since BP-117): the entry after an M1 writeback
+  // whose JAL lies BEFORE the predicted-taken position. W1 places the
+  // JAL at the lowest slot that is invalid or whose position is at or
+  // after mis_pos, and kills every slot above it; W3's successor is
+  // the JAL's target. Two placements, each read back from u_entry:
+  //   M1-M6   slot 0 is a not-taken conditional at 2, slot 1 the
+  //           predicted-taken conditional at 9; the JAL at 5 replaces
+  //           slot 1 and slot 0 stands
+  //   M7-M12  slot 0 is the predicted-taken conditional at 6, slot 1 a
+  //           conditional at 11; the JAL at 3 replaces slot 0 and
+  //           slot 1 is killed
+  // -----------------------------------------------------------------
+  task automatic m_m1(input string nm, input int n0,
+                      input bp_ftq_slot_t s0, input bp_ftq_slot_t s1,
+                      input int jal_pos, input int exp_sel);
+    bp_ftq_slot_t exp_j;
+    do_reset();
+    j_alloc_slot[0] = s0;
+    j_alloc_slot[1] = s1;
+    j_alloc_idx     = 6'd12;
+    j_alloc_val     = 1'b1;
+    j_rd_idx        = 6'd12;
+    settle();
+    j_alloc_val     = 1'b0;
+
+    pdwb_entry       = j_fetch_e;
+    pdwb_entry.pft_addr = BLK_PFT;
+    gen_pdwb         = 1'b1;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd12;
+    wb_rcvd_pdwb     = 1'b0;
+    ifu_ftq_pd[jal_pos] = mk_pd(1'b1, 1'b0, 2'b10, 1'b0, 1'b0);
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(jal_pos);
+    ifu_ftq_target   = PD_TGT;
+    ifu_ftq_pdwb_val = 1'b1;
+    #1;
+    chk_va($sformatf("%s%0d the redirect goes to the JAL's target", nm, n0),
+           pd_redir_pc, PD_TGT);
+    settle();
+    clr_wb();
+    settle();
+
+    exp_j            = '0;
+    exp_j.slot_valid = 1'b1;
+    exp_j.target     = PD_TGT;
+    exp_j.br_type    = DIRECT_UNC;
+    exp_j.taken      = 1'b1;
+    exp_j.pos        = FTB_BR_POS_BITS'(jal_pos);
+    exp_j.pred_src   = PRED_NONE;
+    chk($sformatf("%s%0d the JAL is stored in slot %0d", nm, n0 + 1,
+                  exp_sel), j_fetch_e.slot[exp_sel] == exp_j);
+    if (exp_sel == 0) begin
+      chk($sformatf("%s%0d slot 1 above it is killed", nm, n0 + 2),
+          !j_fetch_e.slot[1].slot_valid && !j_fetch_e.slot[1].taken);
+      chk($sformatf("%s%0d slot 1's other fields are untouched", nm,
+                    n0 + 3),
+          (j_fetch_e.slot[1].target == s1.target) &&
+          (j_fetch_e.slot[1].pos == s1.pos));
+    end else begin
+      chk($sformatf("%s%0d slot 0 below it stands", nm, n0 + 2),
+          j_fetch_e.slot[0] == s0);
+      chk($sformatf("%s%0d slot 0 is still not taken", nm, n0 + 3),
+          j_fetch_e.slot[0].slot_valid && !j_fetch_e.slot[0].taken);
+    end
+    fetch_entry   = j_fetch_e;
+    fetch_pending = 1'b1;
+    #1;
+    chk_va($sformatf("%s%0d the stored entry's successor is the JAL's target",
+                     nm, n0 + 4), ftq_ifu_next_pc, PD_TGT);
+    chk($sformatf("%s%0d and the block ends at the JAL", nm, n0 + 5),
+        ftq_ifu_taken_val &&
+        (ftq_ifu_taken_pos == FTB_BR_POS_BITS'(jal_pos)));
+    fetch_pending = 1'b0;
+    settle();
+  endtask
+
+  task automatic group_m();
+    $display("-- M: the entry after an M1 JAL before the taken slot --");
+    m_m1("M", 1,
+         mk_slot(1'b1, TGT0, COND, 1'b0, FTB_BR_POS_BITS'(2)),
+         mk_slot(1'b1, TGT1, COND, 1'b1, FTB_BR_POS_BITS'(9)), 5, 1);
+    m_m1("M", 7,
+         mk_slot(1'b1, TGT0, COND, 1'b1, FTB_BR_POS_BITS'(6)),
+         mk_slot(1'b1, TGT1, COND, 1'b0, FTB_BR_POS_BITS'(11)), 3, 0);
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -1369,6 +1540,8 @@ module tb;
     group_i();
     group_j();
     group_k();
+    group_l();
+    group_m();
 
     $display("tb_ftq_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

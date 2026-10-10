@@ -211,6 +211,8 @@ module ftq_ifu (
 
   logic [TRX_SLOT_BITS-1:0] w_sel;
   logic                     w_sel_found;
+  // The entry predicted the instruction at mis_pos taken (W1).
+  logic                     w_ent_taken;
 
   // -----------------------------------------------------------------
   // Section 4.1. The translation request.
@@ -434,25 +436,10 @@ module ftq_ifu (
     // (section 6), so the entry's own target stands.
     w_pd_has_target = w_pd_is_cfi && (w_pd_at_mis.br_type != 2'b11);
 
-    w_new_slot.slot_valid = w_pd_is_cfi;
-    w_new_slot.br_type    = w_pd_br_type;
-    // Predecode proves a direction only for an unconditional. A
-    // conditional's direction it cannot know, and TAGE and SC
-    // already own it (section 6), so the entry's prediction stands
-    // for the COND case.
-    w_new_slot.taken      = w_pd_is_cfi && (w_pd_br_type != COND);
-    w_new_slot.target     = w_pd_has_target ? ifu_ftq_target
-                          : pdwb_entry.slot[0].target;
-    // W2. The identity conversion, guarded: if the two position
-    // widths ever diverge again this drives zero rather than
-    // silently truncating, and the guard is the record of why.
-    w_new_slot.pos        = (FTQ_PD_POS_BITS == FTB_BR_POS_BITS)
-                          ? FTB_BR_POS_BITS'(ifu_ftq_mis_pos) : '0;
-    w_new_slot.pred_src   = PRED_NONE;
-    w_new_slot.confidence = '0;
-
     // Program-order slot placement. Descending so the lowest
-    // qualifying slot is assigned last and wins.
+    // qualifying slot is assigned last and wins. Placed before the
+    // slot is built: a conditional's taken is read from the slot it
+    // replaces (W1, below).
     w_sel       = '0;
     w_sel_found = 1'b0;
     for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--) begin
@@ -469,6 +456,36 @@ module ftq_ifu (
     if (!w_sel_found) begin
       w_sel = TRX_SLOT_BITS'(NUM_PRED_SLOTS - 1);
     end
+
+    // The entry's own prediction for the instruction at mis_pos: the
+    // slot being replaced names that position and is predicted taken.
+    // Under M3 this is the predicted-taken slot.
+    w_ent_taken = pdwb_entry.slot[w_sel].slot_valid &&
+                  pdwb_entry.slot[w_sel].taken &&
+                  (pdwb_entry.slot[w_sel].pos ==
+                     FTB_BR_POS_BITS'(ifu_ftq_mis_pos));
+
+    w_new_slot.slot_valid = w_pd_is_cfi;
+    w_new_slot.br_type    = w_pd_br_type;
+    // Predecode proves a direction only for an unconditional. A
+    // conditional's direction it cannot know, and TAGE and SC
+    // already own it (section 6, IFU-18), so for the COND case taken
+    // keeps the entry's prediction and only the target is corrected:
+    // an M3 on a predicted-taken conditional changes where it goes,
+    // not whether it goes (W1, ruled session-077, BP-125, TD#174).
+    // This wrote taken = 0 for every conditional, so the successor
+    // of an M3 conditional became the fall-through.
+    w_new_slot.taken      = w_pd_is_cfi &&
+                            ((w_pd_br_type != COND) || w_ent_taken);
+    w_new_slot.target     = w_pd_has_target ? ifu_ftq_target
+                          : pdwb_entry.slot[0].target;
+    // W2. The identity conversion, guarded: if the two position
+    // widths ever diverge again this drives zero rather than
+    // silently truncating, and the guard is the record of why.
+    w_new_slot.pos        = (FTQ_PD_POS_BITS == FTB_BR_POS_BITS)
+                          ? FTB_BR_POS_BITS'(ifu_ftq_mis_pos) : '0;
+    w_new_slot.pred_src   = PRED_NONE;
+    w_new_slot.confidence = '0;
 
     // The corrected array, used only to re-derive the successor.
     // ftq_entry applies the same correction to its own copy from

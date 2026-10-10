@@ -227,8 +227,6 @@ module ifu #(
   logic [FTQ_PD_WIDTH-1:0]  w_p_call;
   logic [FTQ_PD_WIDTH-1:0]  w_p_ret;
   logic [VA_WIDTH-1:0]      w_p_tgt  [0:FTQ_PD_WIDTH-1];
-  logic [FTQ_PD_WIDTH-1:0]  w_p_vset;
-  logic [FTQ_PD_WIDTH-1:0]  w_p_vtype;
 
   // ---- WB --------------------------------------------------------------
   logic                     w_wb_load;
@@ -410,9 +408,7 @@ module ifu #(
     .br_type     (w_p_br),
     .is_call     (w_p_call),
     .is_ret      (w_p_ret),
-    .target      (w_p_tgt),
-    .is_vsetvl   (w_p_vset),
-    .needs_vtype (w_p_vtype)
+    .target      (w_p_tgt)
   );
 
   ifu_f3 u_f3 (
@@ -449,8 +445,6 @@ module ifu #(
     .p_call        (w_p_call),
     .p_ret         (w_p_ret),
     .p_tgt         (w_p_tgt),
-    .p_vset        (w_p_vset),
-    .p_vtype       (w_p_vtype),
     .ifu_ibuf_val  (ifu_ibuf_val),
     .ifu_ibuf_en   (ifu_ibuf_en),
     .ifu_ibuf_slot (ifu_ibuf_slot),

@@ -60,6 +60,12 @@
 //   - the qualifier is never set with 'prefetch' (MMU-14); a request
 //     carrying both is reported
 //
+// PACINO CHANGES (BP-125, TD#172): a register taken uncached looked up
+// with no replacement update, so when a cacheable request merged onto
+// it makes the fill install (L1I-24), the install itself moves the
+// replacement state, b_fil_rpl, as the cacheable lookup it stands for
+// would have. Without it the installed line stayed the set's victim.
+//
 // MAINTENANCE (L1I-18, l1i_ifu_interfaces.md IF-30, IF-31). hold
 // takes ready down while an invalidate is in progress; busy_any says
 // whether any register is in use (the drain of invalidate_all), and
@@ -120,6 +126,8 @@ module l1i_mshr (
   output l1i_addr_t   b_fil_line  [2],
   output l1i_way_t    b_fil_way   [2],
   output l1i_line_t   b_fil_data  [2],
+  // the install also moves the replacement state (BP-125)
+  output logic    b_fil_rpl   [2],
 
   // the memory side. One fill may issue every cycle the
   // link accepts one, up to L1iMshrs outstanding, and a
@@ -353,6 +361,11 @@ module l1i_mshr (
       b_fil_line[b]  = e_line[m_rsp_src];
       b_fil_way[b]   = e_way [m_rsp_src];
       b_fil_data[b]  = m_rsp_data;
+      // BP-125: a register taken uncached looked up without moving the
+      // replacement state; an install from it is a merged cacheable
+      // request's, which moves it here (L1I-24). A register taken
+      // cacheable moved it at its own lookup.
+      b_fil_rpl[b]   = b_fil_valid[b] && e_unc[m_rsp_src];
     end
   end
 

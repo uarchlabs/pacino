@@ -129,6 +129,7 @@ module l1i (
   l1i_addr_t b_fil_line  [NBnk];
   l1i_way_t  b_fil_way   [NBnk];
   l1i_line_t b_fil_data  [NBnk];
+  logic  b_fil_rpl   [NBnk];      // BP-125
 
   // THE DOWNSTREAM SIDE IS THE MISS HANDLING FILE'S. No
   // bank presents to it, so there is no arbitration here
@@ -207,6 +208,7 @@ module l1i (
     .b_fil_line  (b_fil_line),
     .b_fil_way   (b_fil_way),
     .b_fil_data  (b_fil_data),
+    .b_fil_rpl   (b_fil_rpl),
     .m_req_valid (m_req_valid),
     .m_req_ready (m_req_ready),
     .m_req_addr  (m_req_addr),
@@ -269,7 +271,8 @@ module l1i (
       .fil_valid  (b_fil_valid[b]),
       .fil_line   (b_fil_line[b]),
       .fil_way    (b_fil_way[b]),
-      .fil_data   (b_fil_data[b])
+      .fil_data   (b_fil_data[b]),
+      .fil_rpl    (b_fil_rpl[b])
     );
   end : g_bank
 

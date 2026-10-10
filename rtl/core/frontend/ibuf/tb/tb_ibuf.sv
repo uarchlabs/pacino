@@ -113,8 +113,6 @@ module tb;
     p.br_type     = i[2:1];
     p.is_call     = b[0];
     p.is_ret      = b[1];
-    p.is_vsetvl   = i[2];
-    p.needs_vtype = i[3];
     return p;
   endfunction
 

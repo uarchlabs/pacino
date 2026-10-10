@@ -33,6 +33,9 @@
 //   J  BP-120, TD#157: a resolution held by a TAGE or SC ready low
 //      trains the FTB once, counted at the FTB update port, through
 //      ftq_resolve, ftq_upd_conv and ftq_ftb_sched together
+//   K  BP-125: a p2 and a p3 redirect, and the cycles from the
+//      redirect to the first translation request for the flush index
+//      F = K (ftq_decisions.md 5.1, whose p2, p3 row was inferred)
 //
 // THE CLUSTER IS MODELLED, because it has to be: the loop closes
 // through bp_cluster and ftq.sv does not instantiate it (7.1). The
@@ -1538,6 +1541,108 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // K. A p2 and a p3 redirect (BP-125). ftq_decisions.md 5.1 counts
+  //    from the redirect cycle to the first cycle the translation
+  //    request for the flush index F is presented, and gives p2 and p3
+  //    1 cycle, inferred: F is K, an entry whose p1 content is already
+  //    written. G5, G11 and G16 measure the other rows the same way
+  //    (xlate_wait). K is the entry the cluster model holds at p2
+  //    (r_mdl_idx_p2), so the redirect passes ftq_shadow's stage test;
+  //    for p3 it is that entry one cycle later. The slot correction
+  //    group of the same stage rides with it, as the cluster presents
+  //    both (ftq_bpu_interfaces.md 4a): slot 0 taken to the target.
+  //    The request presented in the redirect cycle belongs to the old
+  //    stream and is discarded (ftq_ifu_interfaces.md 5), so the
+  //    count starts the cycle after.
+  // -----------------------------------------------------------------
+  localparam logic [VA_WIDTH-1:0] K_P2_TGT = VA_WIDTH'('h00_C200_0000);
+  localparam logic [VA_WIDTH-1:0] K_P3_TGT = VA_WIDTH'('h00_C300_0000);
+  // The measured latency, cycles, pinned by K4 and K11.
+  localparam int K_LAT = 1;
+
+  task automatic k_redirect(input string nm, input int n0,
+                            input logic p3,
+                            input logic [VA_WIDTH-1:0] tgt);
+    logic [FTQ_IDX_BITS-1:0] k;
+    logic [FTQ_IDX_BITS-1:0] f_idx;
+    logic [VA_WIDTH-1:0]     k_pc;
+    bp_ftq_slot_t            ts;
+    int                      lat;
+    do_reset();
+    repeat (20) tick();
+    k = r_mdl_idx_p2;
+    if (p3) tick();                      // the same entry, now at p3
+    chk($sformatf("K%0d %s: the stream is running, entry %0d at p2",
+                  n0, nm, k), r_mdl_val_p2);
+    ts            = '0;
+    ts.slot_valid = 1'b1;
+    ts.taken      = 1'b1;
+    ts.br_type    = DIRECT_UNC;
+    ts.target     = tgt;
+    ts.pos        = FTB_BR_POS_BITS'(2);
+    ts.pred_src   = PRED_FTB;
+    if (p3) begin
+      bpu_slot_val_p3       = 1'b1;
+      bpu_slot_idx_p3       = k;
+      bpu_slot_p3[0]        = ts;
+      bpu_redir_idx_p3      = k;
+      bpu_redir_p3[0].valid     = 1'b1;
+      bpu_redir_p3[0].target_pc = tgt;
+    end else begin
+      bpu_slot_val_p2       = 1'b1;
+      bpu_slot_idx_p2       = k;
+      bpu_slot_p2[0]        = ts;
+      bpu_redir_idx_p2      = k;
+      bpu_redir_p2[0].valid     = 1'b1;
+      bpu_redir_p2[0].target_pc = tgt;
+    end
+    #1;
+    chk($sformatf("K%0d %s: the flush is at F = K = %0d (got %0d)", n0 + 1,
+                  nm, k, ftq_ifu_flush_idx),
+        ftq_ifu_flush_val && (ftq_ifu_flush_idx == k));
+    chk_va($sformatf("K%0d %s: the target is requested at K+1", n0 + 2, nm),
+           ftq_pred_pc_p0, tgt);
+    tick();
+    bpu_slot_val_p2  = 1'b0;
+    bpu_slot_val_p3  = 1'b0;
+    bpu_slot_p2[0]   = '0;
+    bpu_slot_p3[0]   = '0;
+    bpu_redir_p2[0]  = '0;
+    bpu_redir_p3[0]  = '0;
+    #1;
+    xlate_wait(k, lat);
+    k_pc = ftq_ifu_xlate_pc;
+    $display("  K %s: F = %0d translated %0d cycle(s) after the redirect",
+             nm, k, lat);
+    chk($sformatf("K%0d %s: F is translated %0d cycle(s) after the %s",
+                  n0 + 3, nm, lat, "redirect (5.1 inferred 1)"),
+        lat == K_LAT);
+    // K survives, corrected: its next fetch request carries the
+    // corrected prediction. fetch_ptr may still be behind K (5.5 R1
+    // leaves it), so the older entries are fetched first.
+    f_idx = '1;
+    for (int c = 0; c < 16; c++) begin
+      if (ftq_ifu_req_val && (ftq_ifu_idx == k)) begin
+        f_idx = k;
+        break;
+      end
+      tick();
+    end
+    chk($sformatf("K%0d %s: entry K is fetched again", n0 + 4, nm),
+        f_idx == k);
+    chk_va($sformatf("K%0d %s: from the block's own start", n0 + 5, nm),
+           ftq_ifu_start_pc, k_pc);
+    chk_va($sformatf("K%0d %s: ending at the corrected target", n0 + 6, nm),
+           ftq_ifu_next_pc, tgt);
+  endtask
+
+  task automatic group_k();
+    $display("-- K: p2 and p3 redirects, the latency to translate F --");
+    k_redirect("p2", 1, 1'b0, K_P2_TGT);
+    k_redirect("p3", 8, 1'b1, K_P3_TGT);
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -1559,6 +1664,7 @@ module tb;
     group_h();
     group_i();
     group_j();
+    group_k();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
