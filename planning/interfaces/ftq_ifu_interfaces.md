@@ -499,8 +499,12 @@ On `ifu_ftq_mis_val`, the FTQ:
       goes, not whether it goes. RULED session-077 (Jeff), after
       BP-124, which found W1 writing taken = 0 for it, so the
       successor became the fall-through (performance, not
-      correctness: the backend corrects it). Built by BP-125,
-      TD#174.
+      correctness: the backend corrects it). BUILT by BP-125,
+      TD#174 closed: the entry's taken is the taken of the slot W1
+      replaces when that slot is valid at mis_pos (under M3, the
+      predicted-taken slot), else not taken; pred_src stays
+      PRED_NONE and confidence 0 (D5). tb_ftq_ifu group L. No
+      tb_fe_top program produces such a writeback.
   W2  writes ifu_ftq_mis_pos straight into bp_ftq_slot_t.pos. The
       two widths are equal and the conversion is the identity
       (section 3). It was a lossy shift until the position field
@@ -812,4 +816,7 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               conditional keeps the entry's taken; built by BP-125.
               7 W3U: what BP-124 reported, replacing "BP-124 reports
               it".
+
+  2026-10-10  session-077, after BP-125. 7 W1: the conditional
+              paragraph built, TD#174 closed.
 ```

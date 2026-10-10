@@ -151,7 +151,15 @@ CG-G9 THE UNCACHED MERGE POLICY. Beyond CG-G8's qualifier, the
       request merging only onto a register sure to fetch from
       memory, a cacheable merge setting allocation, and the
       resident way named for an uncached access. Found by BP-123
-      (D6, differences 4 and 5), recorded session-077.
+      (D6, differences 4 and 5), recorded session-077. BP-125 added
+      to it: a fill from a register taken uncached updates the
+      replacement state, through a second writer port on
+      l1i_meta_array (fp_en, fp_set, fp_way) fed from l1i_mshr
+      (b_fil_rpl) through l1i_bank and l1i_ctrl. That is a second
+      writer of the replacement state for this case, which CG-G5
+      describes as needing an arbiter no field describes; the copy
+      merges the two same-cycle updates instead (icache_decisions.md
+      L1I-24).
 
 CG-G10 THE EMITTED TESTBENCH'S EXIT STATUS. The emitted l1i_tb
       finishes the same way whether cg_report returns failures or
@@ -230,4 +238,7 @@ TD#173    The CG-5 comparison and gap-fixing tasks for CG-D1.
   2026-10-09  session-077, after BP-123, rulings (Jeff). CG-D1
               built. CG-G9 to CG-G11 from BP-123's difference list.
               CG-G6: the walker, not an L2 TLB.
+
+  2026-10-10  session-077, after BP-125. CG-G9: the install-time
+              replacement update, a further difference for CG-5.
 ```

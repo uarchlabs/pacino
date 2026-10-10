@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,82 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-077, after BP-125: BP-125 recorded.
+
+BP-125 RUN, COMPLETE (Jeff). 1h09m, no compaction, 45% context,
+claude-opus-5-5 low. regress.sh 153 targets PASS, 0 warnings. 33
+reversions on a scratch copy of rtl/: 31 caught as named (E2 and E4
+after a rerun with Verilator's error limit raised); E5 (the ftq_ptr
+rewind) was caught by K11 to K14, not by its named K4, because in the
+p2 run xlate_ptr is already at K; C5 was not caught (below). Every
+tb_fe_top program equals its baseline in retired instructions, cycles
+and mispredicts; M3 conditional writebacks are 0 in all 36.
+  Built: W1 for a conditional keeps the taken of the slot it replaces
+    when that slot is valid at mis_pos and corrects only the target
+    (ftq_ifu_interfaces.md 7 W1, TD#174); the 13 DCD-32 classes of
+    reserved vector encodings illegal, 24742 in all (TD#175); the
+    same-cycle cacheable merge test (TD#172); is_vsetvl and
+    needs_vtype gone from ifu_pd_pkt_t, ifu_predecode, ifu_f3 and ifu,
+    192 -> 190 bits, T78 checks the width (TD#148); the three BP-117
+    FTQ items: tb_ftq_ifu group M (the entry after an M1 JAL ahead of
+    the predicted-taken slot), tb_ftq group K (p2 and p3 redirect to
+    translation measured at 1 cycle, ftq_decisions.md 5.1), and the
+    // OLD: lines removed from ftq.sv.
+  Defect found and fixed, with checks that failed first: a cacheable
+    request merged onto an uncached MSHR installed the line but never
+    updated the replacement state, so the line stayed the set's next
+    victim, for a merge in the fill's cycle or earlier. Fixed by an
+    install-time update, a second writer on l1i_meta_array (fp_en,
+    fp_set, fp_way), driven through l1i_ctrl (meta_fp_en, meta_fp_set,
+    meta_fp_way), l1i_bank (fil_rpl) and l1i_mshr (b_fil_rpl).
+    L1I-24, IF-44a, CG-G9.
+  Counts: tb_ftq_ifu 209 -> 237 (L +16, M +12); tb_ftq 135 -> 149
+    (K +14); tb_instr_decoder 1323 -> 1355 (T77 +30 words, T78 +2);
+    asm_dec_words 216 -> 246 words (492/0); sim_dec_sweep 458752/0,
+    expected legal 233644 -> 208902; tb_l1i 164 -> 250;
+    tb_ifu_predecode 71 -> 63 (group E removed with the outputs it
+    checked). tb_ifu 738, tb_ibuf 52 and sim_fe_top 714 unchanged.
+  Results Capture finding: BP-124's sweep total (233504 legal, 225248
+    illegal) is off by 140, as recorded after BP-124; BP-125's
+    baseline log gives 233644 and 225108.
+  No git command beyond regress.sh's.
+
+RULED after BP-125 (Jeff):
+  BP-125's decisions D1 to D5 ACCEPTED (Jeff: "I accept the
+    provisional decisions"): D1 the install-time replacement update
+    (L1I-24, CG-G9); D2 a reserved encoding counts under the class of
+    its form (DCD-32); D3 reserved forms marked VMEM or VOTHER, no new
+    v_op_class value; D4 T73d and T73e keep their hazard checks,
+    tb_ifu_predecode group E removed; D5 the rewritten conditional
+    keeps pred_src PRED_NONE and confidence 0.
+  C5 GETS A TD: the gate meta_fp_en = fil_valid && fil_rpl, which
+    keeps a cacheable register's own install from updating the
+    replacement state a second time, has no check. TD#177.
+  bp_structs_pkg.sv's ifu_pd_pkt_t header still called DCD-U1 open
+    (BP-125 Other Notes); Jeff fixed it in the repo.
+
+Noted, no TD opened: no tb_fe_top program exercises an M3
+conditional, so Part A is checked at unit level only (BP-125
+Deferred Work 3); the sweep holds most register fields at {0,1}, and
+the T77 words cover other register values (BP-125 risk 2).
+
+Closed: TD#148, TD#172, TD#174, TD#175, and the three FTQ items
+carried since BP-117. Opened: TD#177.
+
+PA ERROR, mine: DCD-32's vsetvl class read "bits 30:25", copied
+unchecked from BP-124's report. Bit 30 set is vsetivli, so 30:25
+would have made every vsetivli illegal. BP-125 built 29:25. Corrected
+in DCD-32, and every other DCD-32 class checked against riscv-opcodes
+rv_v; no other class was wrong.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, dcd_decisions.md, ifu_decisions.md,
+ifu_ibuf_interfaces.md, icache_decisions.md, l1i_ifu_interfaces.md,
+cachegen_decisions.md, ftq_decisions.md, ftq_ifu_interfaces.md.
+
+Next free: BP-126, INFRA-014, TOOLS-007, TD#178.
 
 ---
 ## Session-077, after BP-124: BP-124 recorded; BP-125 written.
@@ -679,7 +755,8 @@ check_spike_decode.py points there; spike_check 50/50. The IA
 corrected the mop.r.0 encoding in tools/rva23_insn_ref.c. tools/ is
 not under regress.sh.
 
-Carried from BP-117, not yet tasked (tasked in BP-125, session-077):
+Carried from BP-117, DONE by BP-125 (session-077): tb_ftq_ifu group M,
+tb_ftq group K (1 cycle measured), OLD lines removed:
   no check pins the FTQ entry after an M1 JAL ahead of a predicted
        taken slot
   tb_ftq drives no p2 or p3 redirect, so the 1-cycle row is unmeasured
@@ -1804,10 +1881,15 @@ it only documented current behavior.
 |                         |             |                   | HLV/HSV and FLH/FSH. BP-124      |
 |                         |             |                   | built DCD-21 to DCD-35 and Zvbb: |
 |                         |             |                   | 1323 checks, sim_dec_sweep       |
-|                         |             |                   | 458752 encodings against spike-  |
-|                         |             |                   | dasm. BP-125 makes every         |
-|                         |             |                   | reserved vector encoding illegal |
-|                         |             |                   | (TD#175). Was Complete.          |
+|                         |             |                   | 458752 encodings against         |
+|                         |             |                   | spike-dasm. BP-125 made every    |
+|                         |             |                   | reserved vector encoding of the  |
+|                         |             |                   | 13 DCD-32 classes illegal        |
+|                         |             |                   | (TD#175, 24742 in the sweep):    |
+|                         |             |                   | 1355 checks, sim_dec_sweep       |
+|                         |             |                   | expects 208902 legal;            |
+|                         |             |                   | asm_dec_words 246 words. Was     |
+|                         |             |                   | Complete.                        |
 | rvc_expander.sv         | Deprecated  | --                | Deleted by BP-119 with           |
 |                         |             |                   | tb_rvc_expander (TD#143,         |
 |                         |             |                   | TD#145). ifu_rvc_exp is the      |
@@ -2546,11 +2628,16 @@ it only documented current behavior.
 |                         |             |                   | logic: a rename, an alias, and a |
 |                         |             |                   | termination for leaf observation |
 |                         |             |                   | nets. Does NOT instantiate       |
-|                         |             |                   | bp_cluster. NO ASSERTION FILE and|
-|                         |             |                   | should not have one: it holds no |
-|                         |             |                   | invariant, and all 73 leaf       |
-|                         |             |                   | properties run under its target  |
-|                         |             |                   | anyway. sim_ftq 56/0.            |
+|                         |             |                   | bp_cluster. NO ASSERTION FILE    |
+|                         |             |                   | and should not have one: it      |
+|                         |             |                   | holds no invariant, and all 73   |
+|                         |             |                   | leaf properties run under its    |
+|                         |             |                   | target anyway. sim_ftq 56/0.     |
+|                         |             |                   | BP-125 removed the // OLD:       |
+|                         |             |                   | comment lines and added tb_ftq   |
+|                         |             |                   | group K, the p2 and p3 redirect  |
+|                         |             |                   | latency, 1 cycle measured:       |
+|                         |             |                   | sim_ftq 149/0.                   |
 | ftq_ptr.sv              | Complete    | tb_ftq_ptr        | BP-106, retrofitted BP-107.      |
 |                         |             |                   | alloc_ptr and fetch_ptr. NO      |
 |                         |             |                   | xlate_ptr: ftq_decisions.md 5.1  |
@@ -2638,14 +2725,20 @@ it only documented current behavior.
 |                         |             |                   | which stages a redirect clears is|
 |                         |             |                   | an age compare. sim_ftq_shadow   |
 |                         |             |                   | 44/0.                            |
-| ftq_ifu.sv              | Complete    | tb_ftq_ifu        | BP-107. Request, flush, writeback|
-|                         |             |                   | and the predecode correction. The|
-|                         |             |                   | 6.1 one-bit generation test drops|
-|                         |             |                   | a stale writeback ENTIRELY. Slot |
+| ftq_ifu.sv              | Complete    | tb_ftq_ifu        | BP-107. Request, flush,          |
+|                         |             |                   | writeback and the predecode      |
+|                         |             |                   | correction. The 6.1 one-bit      |
+|                         |             |                   | generation test drops a stale    |
+|                         |             |                   | writeback ENTIRELY. Slot         |
 |                         |             |                   | placement is PROGRAM ORDER with  |
 |                         |             |                   | every slot above killed. NO      |
 |                         |             |                   | update port at all, which is how |
 |                         |             |                   | FE-8 is met. sim_ftq_ifu 67/0.   |
+|                         |             |                   | BP-125: W1 for a conditional     |
+|                         |             |                   | keeps the taken of the slot it   |
+|                         |             |                   | replaces at mis_pos (TD#174);    |
+|                         |             |                   | groups L and M; sim_ftq_ifu      |
+|                         |             |                   | 237/0.                           |
 | ftq_resolve.sv          | Complete    | tb_ftq_resolve    | BP-107. Resolution intake,       |
 |                         |             |                   | position-to-slot mapping and the |
 |                         |             |                   | fe_decisions 7.2 fan-out.        |
@@ -2727,8 +2820,16 @@ it only documented current behavior.
 |                         |             |                   | first. tb_l1i 164 checks, 5       |
 |                         |             |                   | properties; l1i_tb 67. Eleven     |
 |                         |             |                   | differences from the emission,    |
-|                         |             |                   | for CG-5 (TD#173). Same-cycle     |
-|                         |             |                   | merge untested, TD#172.           |
+|                         |             |                   | for CG-5 (TD#173). BP-125 tested  |
+|                         |             |                   | the same-cycle merge (TD#172      |
+|                         |             |                   | closed) and fixed a merged        |
+|                         |             |                   | cacheable install that did not    |
+|                         |             |                   | update the replacement state: an  |
+|                         |             |                   | install-time update, a second     |
+|                         |             |                   | writer on l1i_meta_array. tb_l1i  |
+|                         |             |                   | 250 checks. The gate against a    |
+|                         |             |                   | second update for a cacheable     |
+|                         |             |                   | install is unchecked, TD#177.     |
 | ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..27,   |
 |                         |             |                   | TD-IFU-1, 4, 5 and 7..10;         |
 |                         |             |                   | IFU-U4, IFU-U5. TD-IFU-2, -3 and  |
@@ -2837,9 +2938,13 @@ it only documented current behavior.
 |                         |             |                   | maintenance path); tb_ifu 734     |
 |                         |             |                   | checks, 16 properties. BP-124:    |
 |                         |             |                   | the 56-bit GPA and the kind-00    |
-|                         |             |                   | fill; 738 checks.                 |
-|                         |             |                   | Status was "Unit tested", not one |
-|                         |             |                   | of the five values; session-075.  |
+|                         |             |                   | fill; 738 checks. BP-125 removed  |
+|                         |             |                   | is_vsetvl and needs_vtype from    |
+|                         |             |                   | ifu_predecode, ifu_f3 and ifu     |
+|                         |             |                   | (TD#148); tb_ifu_predecode 71 ->  |
+|                         |             |                   | 63. Status was "Unit tested", not |
+|                         |             |                   | one of the five values;           |
+|                         |             |                   | session-075.                      |
 | ibuf                    | Working     | tb_ibuf           | Built BP-118,                     |
 |                         |             |                   | rtl/core/frontend/ibuf: depth 64, |
 |                         |             |                   | 8-wide read, one ready, cleared   |
@@ -2888,11 +2993,13 @@ it only documented current behavior.
 |                         |             |                   | its own regression target         |
 |                         |             |                   | sim_fe_top_<p>, each retiring     |
 |                         |             |                   | exactly; 714 checks after BP-124. |
-|                         |             |                   | Every predictor                   |
-|                         |             |                   | trains and every one is used, the |
-|                         |             |                   | loop predictor since BP-122.      |
-|                         |             |                   | Remaining accuracy loss is        |
-|                         |             |                   | TD#168, kept by ruling.           |
+|                         |             |                   | BP-125 added an M3 conditional    |
+|                         |             |                   | writeback count per program, 0 in |
+|                         |             |                   | all 36. Every predictor trains    |
+|                         |             |                   | and every one is used, the loop   |
+|                         |             |                   | predictor since BP-122. Remaining |
+|                         |             |                   | accuracy loss is TD#168, kept by  |
+|                         |             |                   | ruling.                           |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -3859,11 +3966,14 @@ assessment of each document. Correct any that are wrong.
 |     |          | repo tools). BP-124 found the tools off PATH in the      |
 |     |          | embecosm directory; asm_dec_words now depends on its     |
 |     |          | clang-21 too.                                            |
-| 148 | ifu      | OPEN. is_vsetvl and needs_vtype in ifu_pd_pkt_t have no  |
-|     |          | reader once decode computes its own (dcd_decisions.md    |
-|     |          | DCD-17). Kept so BP-118 needs no bp_structs_pkg change.  |
-|     |          | Remove them from the struct, ifu_predecode and the ibuf. |
-|     |          | RULED session-077 (Jeff): removed by BP-125.             |
+| 148 | ifu      | CLOSED by BP-125 (session-077): removed from             |
+|     |          | ifu_pd_pkt_t (192 -> 190 bits), ifu_predecode, ifu_f3    |
+|     |          | and ifu; T78 checks the width. Was: is_vsetvl and        |
+|     |          | needs_vtype in ifu_pd_pkt_t have no reader once decode   |
+|     |          | computes its own (dcd_decisions.md DCD-17). Kept so      |
+|     |          | BP-118 needs no bp_structs_pkg change. Remove them from  |
+|     |          | the struct, ifu_predecode and the ibuf. RULED            |
+|     |          | session-077 (Jeff): removed by BP-125.                   |
 | 149 | bpu, ftq | OPEN, MEASURED by BP-121. The p3 RAS repair: after SC    |
 |     |          | reverses a slot at p3 the entry holds the pre-repair     |
 |     |          | snapshot. Repairs: recur 14, rvc 9, misp_call 16;        |
@@ -4003,23 +4113,30 @@ assessment of each document. Correct any that are wrong.
 |     |          | sets A, with itlb_l2t_priv and itlb_l2t_acc driven by    |
 |     |          | the ITLB and held faults tagged (MMU-8c, MMU-24c,        |
 |     |          | ITLB-10b). Package changes in all three packages.        |
-| 172 | icache   | OPEN, verification. The L1I-24 merge of a cacheable      |
-|     |          | request onto an uncached MSHR in the fill's own cycle    |
-|     |          | (the second term of fil_alloc) has no directed test; a   |
-|     |          | merge on any earlier cycle is proven. BP-123 Deferred    |
-|     |          | Work 2. Performance only: if it fails, a cacheable line  |
-|     |          | is not allocated. Tasked in BP-125 (session-077).        |
+| 172 | icache   | CLOSED by BP-125 (session-077): tb_l1i unc_merge_fill,   |
+|     |          | which fails with fil_alloc's second term removed. It     |
+|     |          | found a defect, fixed: a merged cacheable install did    |
+|     |          | not update the replacement state (L1I-24). Was: The      |
+|     |          | L1I-24 merge of a cacheable request onto an uncached     |
+|     |          | MSHR in the fill's own cycle (the second term of         |
+|     |          | fil_alloc) has no directed test; a merge on any earlier  |
+|     |          | cycle is proven. BP-123 Deferred Work 2. Performance     |
+|     |          | only: if it fails, a cacheable line is not allocated.    |
+|     |          | Tasked in BP-125 (session-077).                          |
 | 173 | icache   | OPEN, cachegen. The CG-5 comparison and gap-fixing tasks |
 |     |          | for the pacino copy: CG-G2, CG-G8 and CG-G9 to CG-G11,   |
 |     |          | from BP-123's eleven differences. Carries the emission   |
 |     |          | half of TD#119.                                          |
-| 174 | ftq      | OPEN, BP-125. W1 for a conditional keeps the entry's     |
-|     |          | taken and corrects only the target                       |
-|     |          | (ftq_ifu_interfaces.md 7 W1, IFU-18; ruled session-077,  |
-|     |          | Jeff). BP-124 found ftq_ifu's predecode_correct writing  |
-|     |          | taken = 0 for a conditional under M3, so the successor   |
-|     |          | became the fall-through. Performance, not correctness.   |
-| 175 | decode   | OPEN, BP-125. Every reserved vector encoding is illegal  |
+| 174 | ftq      | CLOSED by BP-125 (session-077): tb_ftq_ifu group L. Was: |
+|     |          | W1 for a conditional keeps the entry's taken and         |
+|     |          | corrects only the target (ftq_ifu_interfaces.md 7 W1,    |
+|     |          | IFU-18; ruled session-077, Jeff). BP-124 found ftq_ifu's |
+|     |          | predecode_correct writing taken = 0 for a conditional    |
+|     |          | under M3, so the successor became the fall-through.      |
+|     |          | Performance, not correctness.                            |
+| 175 | decode   | CLOSED by BP-125 (session-077): 24742 illegal by class,  |
+|     |          | sim_dec_sweep expects 208902 legal, T77 +30 words. Was:  |
+|     |          | Every reserved vector encoding is illegal                |
 |     |          | (dcd_decisions.md DCD-32, ruled session-077, Jeff): the  |
 |     |          | 24742 encodings BP-124's sweep reported under rule VRSV, |
 |     |          | by the classes DCD-32 lists. The sweep expectation and   |
@@ -4036,6 +4153,15 @@ assessment of each document. Correct any that are wrong.
 |     |          | (RVC_ORACLE_TC, ifu Makefile line 137). Carries TD#147   |
 |     |          | (option 2, ruled). No GNU or LLVM change until this TD   |
 |     |          | is tasked.                                               |
+| 177 | icache   | OPEN, verification. The L1I-24 install-time replacement  |
+|     |          | update is gated to installs from a register taken        |
+|     |          | uncached: meta_fp_en = fil_valid && fil_rpl in l1i_ctrl, |
+|     |          | so a cacheable register's install does not update the    |
+|     |          | replacement state a second time after its lookup did.    |
+|     |          | BP-125 reversion C5 removed the gate and no check        |
+|     |          | failed: no test has an access to the set between a       |
+|     |          | cacheable miss's lookup and its fill. Needs that test.   |
+|     |          | BP-125 Deferred Work 2; ruled a TD session-077 (Jeff).   |
 
 ---
 

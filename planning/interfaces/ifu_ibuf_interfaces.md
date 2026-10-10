@@ -118,7 +118,7 @@ Each slot carries `ifu_pd_pkt_t` as defined in
   is_ret       DCD-7 and DCD-11
   is_vsetvl    REMOVED by BP-125 (TD#148): decode computes its
   needs_vtype  own (DCD-17) and nothing read these. Ruled
-               session-077 (Jeff)
+               session-077 (Jeff); built, 192 -> 190 bits
 ```
 
 IB-8  `start_pc` and `pos` are both carried and neither derives
@@ -230,6 +230,8 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-10  session-077, after BP-125. Section 4: the removal
+              built.
   2026-10-10  session-077, ruling (Jeff). Section 4: is_vsetvl and
               needs_vtype removed by BP-125 (TD#148).
   2026-10-10  session-077, after BP-124. Section 4: fault_gpa built

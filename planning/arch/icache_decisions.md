@@ -376,7 +376,22 @@ document fixes is that the L1I does not have one.
           names that line's way, so a merged cacheable fill installs
           over it, not beside it. Built by BP-123 (D6), accepted
           session-077 (Jeff). The merge in the fill's own cycle has
-          no directed test; TD#172.
+          a directed test since BP-125 (tb_l1i unc_merge_fill),
+          TD#172 closed.
+
+          ALLOCATES INCLUDES THE REPLACEMENT UPDATE. BP-125 found a
+          cacheable request merged onto an uncached MSHR installing
+          the line without moving the replacement state: the
+          uncached lookup skips the update, the merged request makes
+          no lookup, and the fill wrote none, so the installed line
+          stayed the set's next victim. Fixed at the install: a fill
+          from a register taken uncached updates the replacement
+          state for its way, through a second writer on the meta
+          array beside the compare stage; when both name one set in
+          one cycle the install's way is applied on top of the
+          compare stage's value. A cacheable register's own install
+          makes no second update. BUILT by BP-125 (D1), accepted
+          session-077 (Jeff). That gate has no check; TD#177.
   L1I-25  THE L2 MAY HOLD A LINE FETCHED UNCACHED. Correct while
           the L2 is the point of coherence: every agent reaches
           memory through it (up_i, up_d, and the walker edge of
@@ -1076,4 +1091,9 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
               BP-123 built it (D6), with its untested same-cycle
               case, TD#172. TD-L1I-8: the Zicbom gap closed in the
               pacino RTL.
+
+  2026-10-10  session-077, after BP-125. L1I-24: the same-cycle
+              merge tested (TD#172 closed); a merged cacheable
+              install now updates the replacement state (D1), its
+              no-second-update gate untested, TD#177.
 ```

@@ -317,7 +317,9 @@ choice and not a limitation; section 14 records it.
          access to a resident line names that line's way, so a
          merged cacheable fill installs over it, not beside it. None
          of this is visible at this boundary (IF-19, IF-20). Built
-         by BP-123 (D6), accepted session-077 (Jeff).
+         by BP-123 (D6), accepted session-077 (Jeff). A merged
+         cacheable fill also updates the replacement state
+         (icache_decisions.md L1I-24), built by BP-125.
 ```
 
 `icache_decisions.md` 8.1 splits across the boundary. P1, demand
@@ -1332,4 +1334,7 @@ sees a 2-byte boundary.
               emission's core_ names. IF-30 inclusive of the done
               cycle; IF-36 names what is cleared (BP-123
               Assumptions 3 and 2, as built, for Jeff to confirm).
+
+  2026-10-10  session-077, after BP-125. IF-44a: a merged cacheable
+              fill updates the replacement state (L1I-24).
 ```

@@ -480,7 +480,7 @@ redirect cycle to the first cycle the translation request for F is
 presented:
 
 ```
-  p2, p3                          1 cycle    not measured
+  p2, p3                          1 cycle    tb_ftq K4, K11, BP-125
   predecode                       2 cycles   tb_ftq G5, BP-117
   backend                         2 cycles   tb_ftq G11, G16
 ```
@@ -489,8 +489,9 @@ When F is the redirect target block itself -- the backend case, and
 the predecode case since BP-117 put F at K+1 -- its p1 content write
 lands at the end of the first cycle, so there is nothing to translate
 until then. For p2 and p3, F is K, an entry that already has content,
-so the request can go out a cycle sooner. That row is inferred, not
-measured: tb_ftq drives no p2 or p3 redirect. ifu_decisions.md IFU-27
+so the request can go out a cycle sooner. MEASURED by BP-125 at 1
+cycle for both (tb_ftq group K); this read that the row is inferred,
+since tb_ftq drove no p2 or p3 redirect. ifu_decisions.md IFU-27
 carries the same table.
 
 This table read "front-end (p2, p3, predecode) 1 cycle, tb_ftq G5"
@@ -1138,7 +1139,8 @@ unrelated registers splits.
 ```
 
 `ftq.sv` does NOT instantiate `bp_cluster`. The BPU is a separate
-unit; a front-end top above both wires them together.
+unit; a front-end top above both wires them together. The `// OLD:`
+comment lines BP-117 left in `ftq.sv` were removed by BP-125.
 
 ### 7.2 Why the pointers split
 
@@ -1537,4 +1539,7 @@ Section 1 counts six, since session-074.
 
   2026-10-10  session-077, after BP-124. 4.2: the W3U flush index is
               K+1. 7.5: ftq_ifu forms W3U.
+
+  2026-10-10  session-077, after BP-125. 5.1: the p2, p3 row is
+              measured, 1 cycle. 7.1: ftq.sv's OLD lines removed.
 ```

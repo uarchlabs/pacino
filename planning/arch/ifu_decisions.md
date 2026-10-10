@@ -78,8 +78,8 @@ IFU-2  Each slot delivered to the ibuf is an `ifu_pd_pkt_t`,
        with the GPA's implicit-access kind, is_rvc, and its control
        flow classification. Declared in `bp_structs_pkg`, BP-115;
        the kind added session-077. is_vsetvl and needs_vtype were
-       also carried until BP-125 removes them (dcd_decisions.md
-       TD#148, ruled session-077).
+       also carried until BP-125 removed them (dcd_decisions.md
+       TD#148, ruled session-077; ifu_pd_pkt_t 192 -> 190 bits).
 
 This read "its position within the buffer" and "its FTQ pointer",
 and did not list the faulting VA that IFU-2a refers to. The
@@ -349,7 +349,7 @@ IFU-27  On a redirect both pipelines are flushed of everything at
         translation request for the flush index F:
 
 ```
-          p2, p3          1 cycle     not measured
+          p2, p3          1 cycle     BP-125, tb_ftq K4, K11
           predecode       2 cycles    BP-117, tb_ftq G5
           backend         2 cycles    BP-113, tb_ftq G11, G16
 ```
@@ -358,9 +358,10 @@ IFU-27  On a redirect both pipelines are flushed of everything at
         BP-117 put F at K+1, F is the redirect target block and its
         p1 content write lands at the end of the redirect cycle, so
         there is nothing to translate until then. A p2 or p3
-        redirect corrects K, which already has content; that row
-        is inferred, since tb_ftq drives no p2 or p3 redirect.
-        ftq_decisions.md 5.1 carries the same table.
+        redirect corrects K, which already has content; BP-125
+        measured that row at 1 cycle (this read that it is inferred,
+        since tb_ftq drove no p2 or p3 redirect). ftq_decisions.md
+        5.1 carries the same table.
 
         This read "front-end (p2, p3, predecode) 1 cycle" from
         BP-113, measured while predecode still flushed at K.
@@ -754,4 +755,7 @@ MMU-23    FAULT_GPA_WIDTH, the width of the GPA of IFU-2a and
               the 56-bit GPA and the unconditional kind-00 fill.
   2026-10-10  session-077, ruling (Jeff). IFU-2: is_vsetvl and
               needs_vtype leave ifu_pd_pkt_t (TD#148, BP-125).
+
+  2026-10-10  session-077, after BP-125. IFU-27: the p2, p3 row
+              measured, 1 cycle. IFU-2: the two fields removed.
 ```

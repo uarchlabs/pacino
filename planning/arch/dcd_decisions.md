@@ -234,8 +234,9 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        `is_rvc`, and the control flow classification of DCD-7.
        `is_vsetvl` and `needs_vtype` are REMOVED from it (TD#148):
        decode computes its own (DCD-17) and nothing read the IFU's.
-       RULED session-077 (Jeff), after BP-124; removed by BP-125.
-       The two paragraphs below record why they were carried.
+       RULED session-077 (Jeff), after BP-124; REMOVED by BP-125,
+       ifu_pd_pkt_t 192 -> 190 bits (T78 checks the width). The two
+       paragraphs below record why they were carried.
 
        THE FAULTING GPA IS FAULT_GPA_WIDTH = 56 BITS, the widest
        guest physical address a walk can form (a 44-bit VS-stage
@@ -349,8 +350,8 @@ DCD-20 C AND Zcb ARE ALWAYS ENABLED. After expansion in the IFU
 TD#148  `is_vsetvl` and `needs_vtype` in `ifu_pd_pkt_t` have no
         reader once DCD-17 is built. Left in place so BP-118 needs
         no change to `bp_structs_pkg`. Removal ruled session-077
-        (Jeff): BP-125 removes them from the struct, ifu_predecode
-        and the ibuf.
+        (Jeff). CLOSED by BP-125: removed from the struct,
+        ifu_predecode, ifu_f3 and every reader.
 
 TD#155  `en_c`, `en_zcb` and `MASK_BITS` in instr_decoder lose
         their readers with the gating DCD-20 deletes. They are
@@ -569,7 +570,8 @@ DCD-32 VECTOR RESERVED ENCODINGS ARE ILLEGAL (R13): every encoding
        - a whole-register load or store with vm 0, NFIELDS other
          than 1, 2, 4 or 8, mew 1, or (store) width not 000
        - vlm.v or vsm.v with vm 0, width not 000, or mew 1
-       - vsetvl with bits 30:25 not zero
+       - vsetvl with bits 29:25 not zero (bit 31 set and bit 30
+         clear is vsetvl; bit 30 set is vsetivli)
        - vadc and vsbc with vm 1
        - vmv.v.v/x/i and vfmv.v.f with vs2 not v0
        - vmv.s.x and vfmv.s.f with vs2 not v0 or vm 0
@@ -584,9 +586,24 @@ DCD-32 VECTOR RESERVED ENCODINGS ARE ILLEGAL (R13): every encoding
        This read: "Other reserved vector encodings found are
        reported for a ruling, not changed." BP-124 D7 classed every
        lumop 01000 encoding as whole-register, reserved NFIELDS
-       included; those fall under the third class. Built by
-       BP-125. An illegal vector word carries a zero vector packet
-       (DCD-36).
+       included; those fall under the third class. An illegal
+       vector word carries a zero vector packet (DCD-36).
+
+       BUILT by BP-125, TD#175 closed: a reserved memory form
+       decodes as VMEM and a reserved OP-V form as VOTHER, so the
+       existing illegal path applies (D3). Counts by class, each
+       encoding counted under the class of its form (D2; the
+       classes overlap on mew): mew 15168, segment lumop/sumop 7168,
+       whole-register 236, vlm/vsm 30, vsetvl 1178, vadc/vsbc 190,
+       vmv.v/vfmv.v.f 136, vmv.s.x/vfmv.s.f 144, vfmv.f.s/vmv.x.s 76,
+       vmv<nr>r 66, vcompress and mask-logical 342, vid.v 2,
+       VFUNARY0 6; total 24742. CORRECTED session-077: the vsetvl
+       class read "bits 30:25", copied by the PA from BP-124's report
+       without checking the encoding; bit 30 set is vsetivli, so
+       that text would have made half the vsetivli encodings
+       illegal. BP-125 built bits 29:25. Checked against
+       riscv-opcodes rv_v, every other class matches its fixed
+       fields.
 
 DCD-33 ZVBB IS DECODED, one v_op_class per instruction, appended
        after VOP_VSOXSEG in this order with the values 189 to 198:
@@ -620,13 +637,17 @@ DCD-34 VERIFICATION (R14). Legality and classification are checked
        tb/dec_dasm_oracle.txt (458752 encodings, including all eight
        LOAD-FP and STORE-FP widths), oracle_dec_sweep regenerates it
        with tb/gen_dec_dasm_oracle.py, and asm_dec_words re-checks the
-       216 directed words with clang and spike-dasm. The out-of-repo
-       tool path is TD#176. The sweep covers every funct and selector
-       field of OP_FP, the four FMA opcodes, AMO, MISC_MEM, SYSTEM, and,
-       because of DCD-32 and DCD-33, OP_VECTOR and the vector forms of
-       LOAD-FP and STORE-FP. Each disagreement is resolved against the
-       ratified specification and listed. The sweep over the vector
-       space was added by the PA with DCD-33.
+       216 directed words with clang and spike-dasm (246 since BP-125).
+       The out-of-repo tool path is TD#176. Since DCD-32's classes
+       became illegal (BP-125) the sweep expects 208902 legal and 249850
+       illegal. BP-124's Results Capture gave its totals as 233504 and
+       225248; its per-space figures sum to 233644 and 225108. The sweep
+       covers every funct and selector field of OP_FP, the four FMA
+       opcodes, AMO, MISC_MEM, SYSTEM, and, because of DCD-32 and
+       DCD-33, OP_VECTOR and the vector forms of LOAD-FP and STORE-FP.
+       Each disagreement is resolved against the ratified specification
+       and listed. The sweep over the vector space was added by the PA
+       with DCD-33.
 
 DCD-35 THE Zimop COMMENTS are corrected: Zicfiss, an RVA23
        expansion option this design does not implement, redefines
@@ -719,4 +740,10 @@ MMU-23    FAULT_GPA_WIDTH, DCD-16.
   2026-10-10  session-077, ruling (Jeff). DCD-16 and TD#148:
               is_vsetvl and needs_vtype leave ifu_pd_pkt_t; removed
               by BP-125.
+
+  2026-10-10  session-077, after BP-125. DCD-32 built, TD#175
+              closed, with the per-class counts; its vsetvl class
+              corrected from bits 30:25 to 29:25 (PA error). DCD-34:
+              the sweep's totals. DCD-16 and TD#148: the removal
+              built, 192 -> 190 bits.
 ```
