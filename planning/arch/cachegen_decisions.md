@@ -128,8 +128,9 @@ CG-G5 REPLACEMENT TIMING. The replacement state moves in the
       time needs two writers of one port and an arbiter no field
       describes. TD#120.
 
-CG-G6 NO TLB SUPPORT. The ITLB and the L2 TLB are written RTL
-      (itlb_decisions.md, mmu_decisions.md). The walker needs a
+CG-G6 NO TLB SUPPORT. The ITLB and the walker are written RTL
+      (itlb_decisions.md, mmu_decisions.md); there is no L2 TLB
+      (MMU-1, reversed session-077). The walker needs a
       TileLink edge into the l2 (L1I-U3), a topology change the
       generated l2 must accept.
 
@@ -143,6 +144,28 @@ CG-G7 PACKAGE TIE. pacino declares the L1I parameters in
       elaboration (TD#122, TD-IF-1, session-074). Generating
       l1i_pkg from pacino's parameters would remove the check.
 
+CG-G9 THE UNCACHED MERGE POLICY. Beyond CG-G8's qualifier, the
+      pacino l1i's MSHR file carries the merge policy of
+      icache_decisions.md L1I-24 and l1i_ifu_interfaces.md IF-44a:
+      per-register taken-uncached and allocate state, an uncached
+      request merging only onto a register sure to fetch from
+      memory, a cacheable merge setting allocation, and the
+      resident way named for an uncached access. Found by BP-123
+      (D6, differences 4 and 5), recorded session-077.
+
+CG-G10 THE EMITTED TESTBENCH'S EXIT STATUS. The emitted l1i_tb
+      finishes the same way whether cg_report returns failures or
+      not, so its exit status does not carry the result. The pacino
+      copy adds $fatal on failure, as CLAUDE.md requires of a
+      testbench. Found by BP-123 (difference 9), recorded
+      session-077.
+
+CG-G11 THE EMITTED MAKEFILE AND FILE LIST. The pacino copy uses its
+      own Makefile. The emitted l1i.f lists pe_port_pkg,
+      pe_port_i_pkg and the tl_* packages, which nothing in the l1i
+      imports; only cgen_tl_pkg is needed. Found by BP-123
+      (difference 11), recorded session-077.
+
 ---
 
 ## 4a. Departures under CG-4
@@ -154,6 +177,18 @@ CG-D1 BP-123 copies the emitted l1i into rtl/core/frontend/icache
       not closed by it. CG-5 compares the copy against cachegen and
       records any further difference here. Ruled session-076
       (Jeff).
+
+      BUILT by BP-123, accepted session-077 (Jeff). The unchanged
+      copy passed the emitted testbench as sim_l1i_emitted before
+      any edit. BP-123's Results Capture lists eleven differences
+      between the copy and the emission. CG-G2, CG-G8, CG-G9,
+      CG-G10 and CG-G11 cover nine of them. The other two are not
+      gaps: difference 1, each copied file's header carrying a
+      COPIED block in place of the GENERATED block, is provenance;
+      difference 10, tb_l1i and the two assertion files, is
+      pacino's own verification, which CG-5's comparison records
+      without requiring cachegen to emit it. The CG-5 tasks are
+      TD#173.
 
 ---
 
@@ -176,9 +211,10 @@ TD#118    CG-G3.
 TD#119    CG-G2.
 TD#120    CG-G5.
 TD#122    CG-G7.
-TD#136    Waits on CG-G2 in cachegen; built in the pacino RTL by
-          BP-123 under CG-D1.
-L1I-24    The uncached request, CG-G8.
+TD#136    Built in the pacino RTL by BP-123 under CG-D1 and closed
+          session-077; cachegen still waits on CG-G2.
+L1I-24    The uncached request, CG-G8; its merge policy, CG-G9.
+TD#173    The CG-5 comparison and gap-fixing tasks for CG-D1.
 
 ---
 
@@ -190,4 +226,8 @@ L1I-24    The uncached request, CG-G8.
               rtl/core/frontend/icache under CG-4. This document had
               no history section; its earlier changes are in
               PROJECT_STATUS.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). CG-D1
+              built. CG-G9 to CG-G11 from BP-123's difference list.
+              CG-G6: the walker, not an L2 TLB.
 ```

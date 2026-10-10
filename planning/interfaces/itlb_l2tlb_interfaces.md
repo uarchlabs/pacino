@@ -48,6 +48,8 @@ instantiated twice.
   itlb_l2t_vmid  [VMID_WIDTH-1:0]         ITLB  -> L2TLB
   itlb_l2t_v                              ITLB  -> L2TLB
   itlb_l2t_tag   [1:0]                    ITLB  -> L2TLB
+  itlb_l2t_acc   [1:0]                    ITLB  -> L2TLB
+  itlb_l2t_priv  [1:0]                    ITLB  -> L2TLB
 
   l2t_itlb_rsp_val                        L2TLB -> ITLB
   l2t_itlb_tag   [1:0]                    L2TLB -> ITLB
@@ -57,7 +59,7 @@ instantiated twice.
   l2t_itlb_perm  [PERM_WIDTH-1:0]         L2TLB -> ITLB
   l2t_itlb_pbmt  [1:0]                    L2TLB -> ITLB
   l2t_itlb_cause [CAUSE_WIDTH-1:0]        L2TLB -> ITLB
-  l2t_itlb_gpa   [GPA_WIDTH-1:0]          L2TLB -> ITLB
+  l2t_itlb_gpa   [FAULT_GPA_WIDTH-1:0]    L2TLB -> ITLB
   l2t_itlb_gpa_imp [1:0]                  L2TLB -> ITLB
 ```
 
@@ -116,6 +118,19 @@ IL-3a The VMID and the V bit travel with it for the same reason.
       H is mandatory in RVA23 through Sha, so a request is either
       a `V=0` single-stage translation or a `V=1` two-stage one,
       and a two-stage request names its guest. ITLB-4a.
+
+IL-3d THE ACCESS TYPE AND THE PRIVILEGE travel with the request,
+      as identity does, because they are properties of one
+      request (mmu_decisions.md MMU-24c). `itlb_l2t_acc` is 0
+      read, 1 write, 2 execute, 3 reserved; the ITLB always
+      presents execute. BP-123 built it on the walker only (D2),
+      tied to execute in tb_fe_top, accepted session-077; BP-124
+      has the ITLB drive it and fe_top carry it.
+      `itlb_l2t_priv` is 2'b00 U or 2'b01 S, with `itlb_l2t_v`
+      the effective privilege the walker checks a leaf's U bit
+      against before setting A (MMU-8c). Ruled session-077 (Jeff);
+      built by BP-124. 2'b10 (reserved) and 2'b11 (M) are never
+      presented. SUM and MXR join the request with the DTLB.
 
 IL-3b A `V=1` request commits the walker to a NESTED walk,
       MMU-21, which is several times the work of a single-stage
@@ -181,13 +196,17 @@ IL-7  `l2t_itlb_size` names which page size the translation
 IL-7a For a `V=1` translation the size is the SMALLER of the two
       stages' leaf sizes, and the PPN is the final supervisor
       physical page at that size (mmu_decisions.md MMU-27).
-      Session-077.
+      Session-077. Built by BP-123: the PPN is the final page for
+      the request's address (D7, accepted session-077).
 
 IL-8  `l2t_itlb_perm` carries the PTE permission and attribute
       bits the ITLB must hold to answer later hits without asking
       again. Included are the executable, user and global bits.
       The global bit sets the ITLB entry's global flag of
-      ITLB-4.
+      ITLB-4. For a G-stage-only translation (V=1, vsatp.MODE
+      Bare) it is the G-stage leaf's byte with G cleared, and the
+      ITLB does not apply ITLB-16 to it (mmu_decisions.md MMU-31).
+      Built by BP-123 (D7), accepted session-077.
 
 IL-9  The PMA attributes of MMU-13 are not returned here. They
       come from the static region table and are a function of the
@@ -236,8 +255,13 @@ IL-11a The faulting GUEST PHYSICAL address IS returned on
        produced inside the nested walk. Shtvala requires `htval`
        to carry it. This is the one address that travels back on
        this port, and it continues to the IFU as
-       `itlb_ifu_gpa`, IT-6a. It is 0 when the faulting guest
-       physical address does not fit GPA_WIDTH (MMU-30).
+       `itlb_ifu_gpa`, IT-6a. It is FAULT_GPA_WIDTH = 56 bits and
+       carries every faulting GPA whole (mmu_decisions.md MMU-23).
+       For kind 00 (IL-11b) the walker returns the page and the
+       IFU fills the offset. Ruled session-077 (Jeff), after
+       BP-123; built by BP-124. This read "It is 0 when the
+       faulting guest physical address does not fit GPA_WIDTH
+       (MMU-30)"; MMU-30 is withdrawn.
 
 IL-11b `l2t_itlb_gpa_imp` says what the GPA is, valid on a guest
        page fault only: 2'b00 the fetch's own guest physical
@@ -306,7 +330,9 @@ MMU-18    The L2 TLB invalidate port, when there is one, IL-12.
 MMU-1     No L2 TLB now; the walker is the server, section 1.
 MMU-27    The two-stage size, IL-7a.
 MMU-29    The implicit-access kind, IL-11b.
-MMU-30    The GPA that does not fit, IL-11a.
+MMU-23    FAULT_GPA_WIDTH, IL-11a.
+MMU-24c   The access type and privilege, IL-3d.
+MMU-31    The G-stage-only permission byte, IL-8.
 
 ---
 
@@ -320,4 +346,11 @@ MMU-30    The GPA that does not fit, IL-11a.
               source. IL-1, IL-3b, IL-5, IL-6, IL-12 and IL-13
               restated for a walker. This document had no history
               section; its earlier changes are in PROJECT_STATUS.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). IL-3d:
+              itlb_l2t_acc as BP-123 built it (on the walker only;
+              BP-124 has the ITLB drive it), and itlb_l2t_priv.
+              IL-11a: l2t_itlb_gpa is FAULT_GPA_WIDTH = 56, the
+              zero sentinel withdrawn. IL-8: the G-stage-only
+              permission byte.
 ```

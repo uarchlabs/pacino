@@ -127,6 +127,17 @@ ITLB-10a A WALK FAULT IS HELD in its tracker slot until the IFU
          walker returned with it: the cause, the GPA and its
          implicit-access kind (IL-11a, IL-11b, IT-6c); session-077.
 
+ITLB-10b A HELD FAULT RECORDS THE PRIVILEGE AND V it was raised at.
+         The walker's U check depends on them (mmu_decisions.md
+         MMU-8c), so a fault raised at one privilege is not the
+         answer at another. A re-request whose privilege or V
+         differs from the held fault's drops the held fault and
+         issues a new walk at the current privilege; one that
+         matches is answered with the held fault as ITLB-10a says.
+         Every held fault is tagged, whatever its cause, so the
+         rule has no per-cause case. RULED session-077 (Jeff),
+         after BP-123; built by BP-124.
+
 ITLB-U1 CLOSED session-075 (Jeff) by ITLB-15. The question was
         the depth of the in-flight walk tracker. One outstanding
         walk makes ITLB-8 mean only that hits continue during a
@@ -200,11 +211,33 @@ ITLB-16 THE PTE PERMISSION CHECK IS MADE ON EVERY HIT, against
         does not depend on the current privilege, and the walker
         checks it and returns cause 20 (mmu_decisions.md MMU-26).
 
+        THIS CHECK APPLIES ONLY WHEN A SINGLE-STAGE OR VS-STAGE
+        LEAF EXISTS. A G-stage-only entry (V=1, vsatp.MODE Bare)
+        holds the G-stage leaf's byte with G cleared (IL-8,
+        mmu_decisions.md MMU-31); a G-stage leaf always has U set,
+        so applying this check faulted every VS-mode fetch through
+        such an entry. Found and fixed by BP-123 (D7), accepted
+        session-077 (Jeff). This read as applying to every hit.
+
+        THE WALKER ALSO CHECKS U, ONCE, BEFORE IT SETS A
+        (mmu_decisions.md MMU-8c), so a walk never sets A on a
+        leaf this check would fault. The check on every hit stands:
+        privilege changes without a fence. Ruled session-077
+        (Jeff); built by BP-124.
+
 ITLB-17 The ITLB reads its translation regime from a CSR input
         group on the front-end boundary: V, the current privilege,
         satp ASID and MODE, vsatp ASID and MODE, hgatp VMID and
         MODE. It holds no CSR of its own. fe_decisions.md FE-20.
         Ruled session-075 (Jeff).
+
+        A WALK REQUEST CARRIES THE ACCESS TYPE AND THE PRIVILEGE
+        (itlb_l2tlb_interfaces.md IL-3d, mmu_decisions.md MMU-24c).
+        The ITLB presents execute on `itlb_l2t_acc` and its current
+        privilege from this group on `itlb_l2t_priv`, with V on
+        `itlb_l2t_v`. Ruled session-077 (Jeff); built by BP-124.
+        BP-123 built `itlb_l2t_acc` on the walker only (D2), tied to
+        execute in tb_fe_top.
 
 ## 6. Check placement
 
@@ -446,4 +479,11 @@ TD#118    Bounded ITLB-U1, now closed. The walker has its own
               ITLB-15 name the walker as the ITLB's server
               (MMU-1 reversed, MMU-U2 one walk). ITLB-10a: a held
               fault keeps its GPA and implicit-access kind.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). ITLB-16
+              applies only when a single-stage or VS-stage leaf
+              exists (D7), and the walker also checks U before
+              setting A (MMU-8c). ITLB-10b: a held fault records
+              the privilege and V. ITLB-17: the walk request carries
+              the access type and the privilege.
 ```

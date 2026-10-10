@@ -44,7 +44,7 @@ there is no L2 TLB now (mmu_decisions.md MMU-1), session-077.
   itlb_ifu_status [1:0]                   ITLB -> IFU
   itlb_ifu_ppn   [PPN_WIDTH-1:0]          ITLB -> IFU
   itlb_ifu_cause [CAUSE_WIDTH-1:0]        ITLB -> IFU
-  itlb_ifu_gpa   [GPA_WIDTH-1:0]          ITLB -> IFU
+  itlb_ifu_gpa   [FAULT_GPA_WIDTH-1:0]    ITLB -> IFU
   itlb_ifu_gpa_imp [1:0]                  ITLB -> IFU
   itlb_ifu_pma   [PMA_WIDTH-1:0]          ITLB -> IFU
 ```
@@ -110,6 +110,11 @@ IT-6a `itlb_ifu_gpa` carries the faulting GUEST PHYSICAL address
       `htval` to be written with it, and unlike the virtual
       address of IT-5 the IFU never had it: it is produced inside
       the walk. So it returns here and IT-5 does not apply to it.
+      It is FAULT_GPA_WIDTH = 56 bits (mmu_decisions.md MMU-23).
+      For kind 00 the ITLB passes the walker's page and the IFU
+      fills the offset (ifu_decisions.md IFU-2a). This was
+      [GPA_WIDTH-1:0]. Ruled session-077 (Jeff), after BP-123;
+      built by BP-124.
 
 IT-6b Nothing about the translation regime is on this port. The
       IFU presents a virtual address and no more.
@@ -266,4 +271,7 @@ MMU-29    The implicit-access kind of IT-6c.
               and IT-6b: the walker is the ITLB's server, with no
               L2 TLB (MMU-1 reversed). This document had no history
               section; its earlier changes are in PROJECT_STATUS.
+
+  2026-10-09  session-077, after BP-123, ruling (Jeff). IT-6a:
+              itlb_ifu_gpa is FAULT_GPA_WIDTH = 56.
 ```

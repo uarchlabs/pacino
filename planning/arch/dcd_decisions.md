@@ -21,9 +21,14 @@ instruction encoding, immediate format and register field named
 here. This document does not restate them. It contains only what
 the specification does not decide.
 
-`instr_decoder.sv` is not in scope for its instruction decode. It
-is Complete and decodes what the ibuf hands it, `ifu_pd_pkt_t` since
-BP-118; section 10a holds the rules for that boundary.
+`instr_decoder.sv`'s instruction ENCODINGS are not in scope: they
+are the specification's. What the specification does not decide IS
+in scope: the boundary of section 10a, and since session-077 the
+representation decode hands rename, and which encodings decode
+treats as illegal, section 10b. This read "instr_decoder.sv is not
+in scope for its instruction decode. It is Complete", which left
+the representation undecided; BP-123 found the decoder rejecting
+mandatory instructions and mapping others onto placeholders.
 
 The RVC expander is not in scope either. Its encodings are the
 compressed-instruction chapter of the specification, and the
@@ -229,16 +234,26 @@ DCD-16 `ifu_pd_pkt_t` carries, per slot: valid, the expanded
        `is_rvc`, the control flow classification of DCD-7, and
        `is_vsetvl` and `needs_vtype`.
 
+       THE FAULTING GPA IS FAULT_GPA_WIDTH = 56 BITS, the widest
+       guest physical address a walk can form (a 44-bit VS-stage
+       PPN plus the page offset), so every faulting GPA is carried
+       whole and none is replaced by a sentinel
+       (mmu_decisions.md MMU-23, MMU-30 withdrawn). Ruled
+       session-077 (Jeff); a package change, built by BP-124. For
+       kind 00 the IFU fills the page offset from the faulting
+       halfword's virtual address (ifu_decisions.md IFU-2a).
+
        THE IMPLICIT-ACCESS KIND is two bits, valid on a guest page
        fault: 2'b00 the fetch's own guest physical address, 2'b01
        an implicit read of a VS-stage page table, 2'b10 an
        implicit write of one, 2'b11 reserved
        (itlb_ifu_interfaces.md IT-6c). The backend needs it to
        write htinst (mmu_decisions.md MMU-29). Added session-077
-       (Jeff); a package change, built by BP-123.
+       (Jeff); a package change, BUILT by BP-123 as
+       `logic [1:0] fault_gpa_imp`.
 
-       The last two are per-instruction and belong here by
-       TD-DCD-1; the enumeration did not carry them while
+       `is_vsetvl` and `needs_vtype` are per-instruction and belong
+       here by TD-DCD-1; the enumeration did not carry them while
        ifu_ibuf_interfaces.md 4 listed them as coming from this
        rule. `vtype_hazard` is NOT here, TD-DCD-1. Session-072.
 
@@ -289,9 +304,11 @@ TD-DCD-1  The vtype fields of the old `predecode_pkt_t` are
 
 RULED session-075 (Jeff). BUILT by BP-118. What decode does once it
 takes `ifu_pd_pkt_t` from the ibuf read port (IBUF-9) instead of
-`predecode_pkt_t`. Section 1 keeps `instr_decoder.sv`'s instruction
-decode out of scope, since that is the specification's; these four
-rules are its boundary, which the specification does not decide.
+`predecode_pkt_t`. Section 1 keeps the instruction ENCODINGS out of
+scope, since they are the specification's; these four rules are its
+boundary, which the specification does not decide. This read that
+section 1 keeps the instruction decode out of scope, true until
+section 10b (session-077).
 
 DCD-17 `vtype_hazard` IS COMPUTED IN DECODE. For each of the 8
        decode slots it is set when an earlier valid slot in the
@@ -345,6 +362,214 @@ instruction bits meaningless too; decode reads none of them.
 
 ---
 
+## 10b. Decode representation and legality -- session-077
+
+RULED session-077 (Jeff), from the PA's R1 to R14, after BP-123,
+except the PA additions listed below, which await Jeff's
+confirmation. The decoder mapped FP, AMO and CSR instructions onto placeholder
+operations before BP-123, and BP-123 (D4) mapped the SYSTEM fences,
+HLV/HLVX/HSV, WRS and FLH/FSH onto the representation already used
+for their class, so a backend could not tell those operations apart.
+Reading the decoder in session-077 also found reserved encodings in
+those spaces accepted, which RVA23 recommends raising illegal. BUILT
+by BP-124.
+
+PA ADDITIONS, drafted session-077 and pending Jeff's confirmation:
+DCD-24's vector paragraph and its is_fp, is_load and is_store rule;
+DCD-25's zero-extended CSR address, the vtype immediates and the
+vsetivli AVL; DCD-33; the vector part of DCD-34; DCD-35; the
+operation names and order of DCD-22. BP-124 builds them as written
+here.
+
+The specification references, checked session-077: a reserved
+encoding's behaviour is UNSPECIFIED and raising illegal-instruction
+is valid behaviour (unprivileged, RV32I; F chapter); RVA23 strongly
+recommends illegal-instruction for unimplemented opcodes
+(rva23-profile.adoc, RVA23U64 and RVA23S64 Recommendations); a
+reserved FENCE configuration SHALL be treated as FENCE (RV32I), and
+the unused fields of FENCE.I shall be ignored (Zifencei); Zfhmin is
+FLH, FSH, FMV.X.H, FMV.H.X, FCVT.S.H, FCVT.H.S, and with D FCVT.D.H
+and FCVT.H.D (zfhmin.adoc); Zfa's .H forms need Zfh, FMVH.X.D and
+FMVP.D.X are RV32 only, and Zfa depends on F (zfa.adoc).
+
+DCD-21 THE PRINCIPLE (R1). `alu_op` and the decoded fields of
+       `decode_pkt_t` fully identify every scalar operation, its
+       operands' register files and its legality. No downstream
+       unit re-decodes the instruction word for any of these.
+       `instr` stays in the packet for traps (stval) and debug, not
+       as a decode source. For a vector instruction `v_op_class`
+       identifies the operation and `alu_op` is ALU_VEC.
+
+DCD-22 `alu_op_t` IS 8 BITS (R2). Values 0 to 106 keep their values;
+       ALU_ILL stays 63. Three are RENAMED to their exact meaning,
+       values unchanged: ALU_FLD (56) -> ALU_FLOAD, ALU_FSD (57) ->
+       ALU_FSTORE, ALU_CSR (49) -> ALU_CSRRW. ALU_FMADD (58) keeps
+       its name and now means FMADD only. The new operations are
+       appended from 107 in this order:
+
+```
+  ALU_VEC
+  FP      ALU_FMSUB ALU_FNMSUB ALU_FNMADD
+          ALU_FADD ALU_FSUB ALU_FMUL ALU_FDIV ALU_FSQRT
+          ALU_FSGNJ ALU_FSGNJN ALU_FSGNJX ALU_FMIN ALU_FMAX
+          ALU_FCVT_W ALU_FCVT_WU ALU_FCVT_L ALU_FCVT_LU
+          ALU_FCVT_FW ALU_FCVT_FWU ALU_FCVT_FL ALU_FCVT_FLU
+          ALU_FCVT_FF ALU_FMV_XF ALU_FMV_FX
+          ALU_FEQ ALU_FLT ALU_FLE ALU_FCLASS
+  Zfa     ALU_FLI ALU_FMINM ALU_FMAXM ALU_FROUND ALU_FROUNDNX
+          ALU_FCVTMOD_W_D ALU_FLEQ ALU_FLTQ
+  A       ALU_LR_W ALU_LR_D ALU_SC_W ALU_SC_D
+          ALU_AMOSWAP_W ALU_AMOSWAP_D ALU_AMOADD_W ALU_AMOADD_D
+          ALU_AMOXOR_W ALU_AMOXOR_D ALU_AMOAND_W ALU_AMOAND_D
+          ALU_AMOOR_W ALU_AMOOR_D ALU_AMOMIN_W ALU_AMOMIN_D
+          ALU_AMOMAX_W ALU_AMOMAX_D ALU_AMOMINU_W ALU_AMOMINU_D
+          ALU_AMOMAXU_W ALU_AMOMAXU_D
+  fences  ALU_FENCE_I ALU_CBO_INVAL ALU_CBO_CLEAN ALU_CBO_FLUSH
+          ALU_CBO_ZERO ALU_SFENCE_VMA ALU_SINVAL_VMA
+          ALU_SFENCE_W_INVAL ALU_SFENCE_INVAL_IR ALU_HFENCE_VVMA
+          ALU_HFENCE_GVMA ALU_HINVAL_VVMA ALU_HINVAL_GVMA
+  Zawrs   ALU_WRS_NTO ALU_WRS_STO
+  Zicsr   ALU_CSRRS ALU_CSRRC ALU_CSRRWI ALU_CSRRSI ALU_CSRRCI
+```
+
+       79 operations, 107 to 185. ALU_FENCE (55) is FENCE, with
+       FENCE.TSO and PAUSE, which are FENCE configurations.
+
+DCD-23 FP PRECISION IS A FIELD (R3). `decode_pkt_t` gains
+       `fp_fmt [1:0]` and `fp_src_fmt [1:0]`, encoded 2'b00 S,
+       2'b01 D, 2'b10 H, 2'b11 unused. `fp_fmt` is the instruction's
+       fmt field (bits 26:25) for OP-FP and the four FMA opcodes, so
+       for a conversion to or from an integer, a move, a compare or
+       a classify it is the precision of the FP operand, and for
+       ALU_FCVT_FF the destination; for an FP load or store it is
+       the width of the memory datum. `fp_src_fmt` is the source
+       precision of ALU_FCVT_FF only, from instruction bits 21:20
+       (rs2[1:0]). Both
+       are zero for a non-FP operation. The rounding mode stays in
+       `funct3`. This read "for a conversion, of the destination",
+       which left FCVT.W.S and FCVT.W.D indistinguishable.
+
+DCD-24 OPERAND REGISTER FILES (R4). `decode_pkt_t` gains `rd_is_fp`,
+       `rs1_is_fp` and `rs2_is_fp`; rs3 is always an FP register.
+       `uses_rd`, `uses_rs1`, `uses_rs2` and `uses_rs3` are exact
+       per operation: a unary FP operation (FSQRT, FCVT_*, FMV_*,
+       FCLASS, FROUND, FROUNDNX, FCVTMOD_W_D) does not use rs2, and
+       FLI uses no source register. `is_fp` means the operation
+       executes in the FP unit.
+
+       FOR A VECTOR INSTRUCTION these fields describe its SCALAR
+       register operands only; its vector register operands are in
+       `vec_decode_pkt_t`. OPIVX and OPMVX read GPR rs1; OPFVF reads
+       FPR rs1; vmv.x.s, vcpop.m, vfirst.m and the vsetvl forms
+       write GPR rd; vfmv.f.s writes FPR rd; vsetvl reads GPR rs1
+       and rs2, vsetvli GPR rs1, vsetivli neither; a vector load or
+       store reads GPR rs1, and GPR rs2 when strided. Every other
+       vector instruction uses no scalar register. For every vector
+       instruction `is_fp` is clear (it executes in the vector
+       unit), `is_load` is set for a vector load and `is_store` for
+       a vector store, and `is_branch`, `is_jump` and `is_csr` are
+       clear. Added session-077 by the PA as R4's consequence for
+       vector instructions, whose scalar packet set uses_rd,
+       uses_rs1 and uses_rs2 for every instruction; flagged for
+       Jeff.
+
+DCD-25 IMMEDIATES THAT SIT IN A REGISTER FIELD go in `imm`, because
+       decode zeroes an unused register field: the CSRRxI zimm in
+       `imm[16:12]` beside the CSR address in `imm[11:0]`, for all
+       six CSR operations the address ZERO-extended and `imm[31:17]`
+       zero, `imm[16:12]` zero for the register forms (the decoder
+       sign-extended the address as an I-type immediate); the FLI
+       constant index in `imm[4:0]`; an OPIVI 5-bit immediate in
+       `imm`, sign- or zero-extended as the specification defines
+       for that instruction, and vror.vi's 6-bit immediate, whose
+       bit 5 is instruction bit 26, in `imm[5:0]` zero-extended; the
+       vtype immediate of vsetvli (zimm[10:0]) and vsetivli
+       (zimm[9:0]) in `imm[10:0]` zero-extended, reserved bits
+       included, so vill can be formed downstream; and vsetivli's
+       AVL, uimm[4:0], in `imm[20:16]`. The decoder zeroes rs1 for
+       CSRRWI, CSRRSI and CSRRCI, losing the zimm, and would lose
+       vsetivli's AVL once DCD-24 clears its uses_rs1; found
+       session-077, PA additions.
+
+DCD-26 FP LEGALITY (R5). Legal, each gated by its enable: F (en_f),
+       D (en_d), Zfhmin as quoted above (en_zfhmin; the D-dependent
+       pair also en_d), Zfa's .S and .D forms and FCVTMOD.W.D
+       (en_zfa; the .D forms also en_d). Illegal: every other .H
+       operation (Zfh is not implemented), Zfa's .H forms,
+       FMVH.X.D and FMVP.D.X (RV32 only), every Q form, and
+       FCVTMOD.W.D with an rm other than 001 (RTZ), which zfa.adoc
+       reserves.
+
+DCD-27 STATIC ROUNDING MODE 101 OR 110 IS ILLEGAL (R6), in every
+       instruction whose encoding has an rm field. Dynamic rm with
+       an invalid frm is raised at execute, not here.
+
+DCD-28 AMO LEGALITY (R7). Legal: funct3 010 (W) and 011 (D), with
+       funct5 LR 00010 (rs2 must be x0), SC 00011, AMOSWAP 00001,
+       AMOADD 00000, AMOXOR 00100, AMOAND 01100, AMOOR 01000,
+       AMOMIN 10000, AMOMAX 10100, AMOMINU 11000, AMOMAXU 11100.
+       Every other width (Zabha) and funct5 (AMOCAS, Zacas) is
+       illegal. aq and rl travel in `funct7`.
+
+DCD-29 FENCES AND CBO (R8). MISC_MEM funct3 000 is ALU_FENCE for
+       every fm, pred, succ, rs1 and rd: the specification requires
+       reserved configurations to be treated as FENCE. funct3 001
+       is ALU_FENCE_I, its imm, rs1 and rd ignored as Zifencei
+       requires. funct3 010 is the CBO operation of imm (0, 1, 2,
+       4), any other imm illegal, and rd not x0 illegal (DCD-31).
+       funct3 011 to 111 is illegal. The SYSTEM fence forms are the
+       ALU_SFENCE/SINVAL/HFENCE/HINVAL operations of DCD-22.
+
+DCD-30 WRS, HLV, CSR (R9, R10, R11). WRS.NTO and WRS.STO are their
+       own operations. HLV, HLVX and HSV keep the width-exact load
+       and store operations, with `is_load` or `is_store`, and set
+       new packet bits `is_hlsv` (a virtual-machine access) and,
+       for HLVX, `is_hlvx` (read with execute permission). The six
+       CSR instructions are six operations.
+
+DCD-31 SYSTEM RESERVED FIELDS ARE ILLEGAL (R12). rd not x0 in
+       ECALL, EBREAK, MRET, SRET, WFI, WRS, the SFENCE, SINVAL,
+       HFENCE and HINVAL forms and CBO; rs1 not x0 in ECALL,
+       EBREAK, MRET, SRET, WFI, WRS, SFENCE.W.INVAL and
+       SFENCE.INVAL.IR.
+
+DCD-32 VECTOR RESERVED ENCODINGS ARE ILLEGAL (R13): every encoding
+       that decodes to VOTHER or to the VMEM default, and a store
+       with lumop 10000. Other reserved vector encodings found are
+       reported for a ruling, not changed.
+
+DCD-33 ZVBB IS DECODED, one v_op_class per instruction, appended
+       after VOP_VSOXSEG in this order with the values 189 to 198:
+       VOP_VANDN, VOP_VBREV, VOP_VBREV8, VOP_VREV8, VOP_VCLZ,
+       VOP_VCTZ, VOP_VCPOP_V (VOP_VCPOP is vcpop.m), VOP_VROL,
+       VOP_VROR and VOP_VWSLL, gated by en_v, each with is_vector and
+       needs_vtype set. Zvbb is mandatory in RVA23U64
+       and the decoder had no entry for it, so DCD-32 would have
+       made it illegal. Added session-077 by the PA; flagged for
+       Jeff.
+
+DCD-34 VERIFICATION (R14). Legality and classification are checked
+       against an LLVM disassembler oracle, as BP-117 checked the
+       expander, with --mattr naming exactly the implemented
+       extensions (every RVA23U64 and RVA23S64 mandatory extension
+       that has instructions, H and Svinval among them, and no
+       optional one). The sweep covers every funct and selector
+       field of OP_FP, the four FMA opcodes, AMO, MISC_MEM, SYSTEM,
+       and, because of DCD-32 and DCD-33, OP_VECTOR and the vector
+       forms of LOAD-FP and STORE-FP. Each disagreement is resolved
+       against the ratified specification and listed. The sweep
+       over the vector space was added by the PA with DCD-33.
+
+DCD-35 THE Zimop COMMENTS are corrected: Zicfiss, an RVA23
+       expansion option this design does not implement, redefines
+       some MOP encodings. decode_pkg.sv reads "(no extension
+       redefines them in RVA23)" and instr_decoder.sv "no RVA23
+       extension redefines them" (BP-123); both become "no
+       extension this design implements redefines them; Zicfiss, an
+       RVA23 option not implemented, redefines some".
+
+---
+
 ## 11. Open
 
 DCD-U1  CLOSED session-075 by DCD-17: decode. It asked where
@@ -382,6 +607,7 @@ IBUF-9    The 8-wide read port that sets the decode bundle of
 TD#143    DCD-17 to DCD-20 built by BP-118; rvc_expander.sv
           retires in BP-119.
 MMU-29    The implicit-access kind of DCD-16.
+MMU-23    FAULT_GPA_WIDTH, DCD-16.
 
 ---
 
@@ -392,4 +618,19 @@ MMU-29    The implicit-access kind of DCD-16.
               carry the implicit-access kind of a guest physical
               address. This document had no history section; its
               earlier changes are in PROJECT_STATUS.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). Section 1:
+              the representation and legality are in scope. DCD-16:
+              the GPA is FAULT_GPA_WIDTH = 56; the kind is built.
+              Section 10b, DCD-21 to DCD-35, from R1 to R14. DCD-24's
+              vector paragraph, DCD-33 (Zvbb) and the vector part
+              of DCD-34 were added by the PA and flagged.
+
+  2026-10-09  session-077, after review of the BP-124 draft. DCD-23:
+              fp_fmt is the encoding's fmt field. DCD-24: is_fp,
+              is_load and is_store for vector instructions. DCD-25:
+              the vtype immediates and the vsetivli AVL. DCD-26:
+              FCVTMOD.W.D needs rm 001. DCD-35: the exact comment
+              text. 10b lists the PA additions pending Jeff. 10a's
+              scope sentence; DCD-16's "last two".
 ```

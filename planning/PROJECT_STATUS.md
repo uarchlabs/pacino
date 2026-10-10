@@ -16,12 +16,129 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-077, after BP-123: BP-123 recorded; BP-124 written.
+
+BP-123 RUN, COMPLETE (Jeff), the IA's eight decisions since ruled
+(below; it marked D1 to D7 provisional). 2h44m, one compaction.
+regress.sh 149 targets PASS. 91 reversions, each applied alone to a
+copy of rtl/ outside the tree, all caught. 16 new tb_fe_top
+programs, each its own target (the Results Capture says "Seventeen";
+it lists 16). tb_fe_top 35 programs, sim_fe_top 689 checks. 18 of
+the 19 earlier programs equal their baseline; sv39 retires the same
+54 instructions with the same 3 mispredicts in 309 cycles, not 206:
+its 7 walks are RTL walks now.
+  Built: the pacino L1I copy at rtl/core/frontend/icache with the
+    maintenance ports and the uncached request (CG-D1); the IFU's
+    maintenance and uncached paths; the walker at rtl/mmu/ptw (526
+    checks, 10 properties); the implicit-access kind to
+    ifu_pd_pkt_t; the MMU-15b elaboration check. TD#119, TD#135,
+    TD#136 CLOSED.
+  Defects found in existing RTL and fixed, each with a check that
+    failed first: ITLB-16 applied to G-stage-only translations, so
+    every VS-mode fetch through one faulted; the checker accepted an
+    executable non-idempotent region; decode rejected every Zba, Zbb
+    and Zbs instruction except sh1add, which it decoded as a plain ADD
+    (so four Zcb instructions trapped), and Zimop, Zicond, Zawrs,
+    the Zicbop prefetches with Zicbop off, SFENCE.VMA, Svinval,
+    HFENCE.GVMA, HINVAL, HLV/HLVX/HSV, FLH and FSH, and matched
+    HFENCE.VVMA on the wrong funct7 (test T72 had the same error).
+  Package changes: ifu_pd_pkt_t.fault_gpa_imp; alu_op_t 6 -> 7 bits,
+    values 0 to 63 unchanged.
+  Results Capture error: its Zimop note says no RVA23 extension
+    redefines the MOPs. Zicfiss, an expansion option not implemented
+    here, does (DCD-35).
+  GIT: the IA ran one git command outside the grant, git diff --stat
+    prompts/BP-123.md, and reported it. .claude/settings.local.json
+    carries "ask": ["Bash(git *)"] and it did not prompt (Jeff).
+
+RULED after BP-123 (Jeff):
+  D1 one uncached instruction per FTQ entry, ifu_ftq_uc_end and W3U;
+    D2 the walker's access-type input; D3 PBMTE per stage; D6 the
+    L1I-24 merge policy; D7 the G-stage-only permission byte:
+    ACCEPTED AS BUILT (IFU-23b, ftq_ifu_interfaces.md 6 and 7 W3U,
+    MMU-24c, MMU-U6, IF-44a, MMU-31). D2's port was built on the
+    walker only, tied in tb_fe_top; BP-124 has the ITLB drive it, a
+    PA addition listed below.
+  NOT RULED, recorded as built for Jeff to confirm: BP-123's
+    Assumptions 2 (IF-36 clears the previous-request register), 3
+    (IF-30 includes the done cycle) and 7 (the walker holds its CSR
+    group for a walk, MMU-24a).
+  D5 MODIFIED, ITEM 1: the faulting GPA is FAULT_GPA_WIDTH = 56 bits
+    and the kind-00 offset fill is unconditional; MMU-30's zero
+    sentinel is WITHDRAWN (it collided with guest page 0; BP-123
+    risk 1). MMU-23, IFU-2a, DCD-16, IT-6a, IL-11a. A package change.
+  D8 MODIFIED, ITEM 2: the walker checks U against the request's
+    privilege before it sets A, with a new port itlb_l2t_priv, and a
+    held fault records the privilege and V (BP-123 risk 2). MMU-8c,
+    MMU-24c, IL-3d, ITLB-10b; ITLB-16 stands.
+  D4 SUPERSEDED, ITEM 3: the decode representation and legality, the
+    PA's R1 to R14, recorded as dcd_decisions.md DCD-21 to DCD-35.
+    alu_op_t 8 bits; FP precision and operand register files as
+    fields; exact uses_*; FP, AMO, fence, CBO, SYSTEM and vector
+    legality; an LLVM oracle sweep. Three parts were added by the PA
+    and are FLAGGED for Jeff: DCD-24's vector scalar-operand
+    paragraph, DCD-33 (Zvbb decoded) and the vector part of DCD-34.
+    Found while drafting: decode zeroes rs1 when it is unused, so
+    CSRRWI, CSRRSI and CSRRCI lose their zimm, and it sign-extends a
+    CSR address (DCD-25). PA additions, also for Jeff to confirm
+    before BP-124 is issued (dcd_decisions.md 10b lists them): the
+    renames and the order of the 79 new operations (DCD-22); fp_fmt
+    as the encoding's fmt field (DCD-23); is_fp, is_load and is_store
+    for vector instructions (DCD-24); the CSR address zero-extended,
+    the vtype immediates and the vsetivli AVL in imm (DCD-25);
+    FCVTMOD.W.D with rm other than RTZ illegal (DCD-26); the Zvbb
+    names and values (DCD-33); DCD-35's comment text; in MMU-8c,
+    every leaf check before the A/D update (not U alone) and a read
+    or write's U check made with SUM clear until the DTLB adds it;
+    in MMU-24c, the ITLB driving itlb_l2t_acc (D2 was built walker
+    only) and the walker's cause following the access type.
+  Items 1, 2 and 3 are ONE task, BP-124, written: no choice is left
+    to the IA, and for that task the session-075 ruling item 4 (the
+    IA takes its recommended option provisionally) is replaced: a
+    choice the task does not settle is recorded and left unbuilt.
+    TD#171.
+
+Opened: TD#171 (BP-124), TD#172 (the L1I same-cycle cacheable merge
+has no directed test), TD#173 (the CG-5 tasks for the copy).
+
+PA ERRORS, mine, session-077:
+  BP-123 said "every decision the task needs was ruled before it was
+    written". Eight were not: the IFU-23 mechanism, the access-type
+    port, MMU-U6 with its stages crossed (which I had read past), the
+    G-stage-only permission byte, and the rest of D1 to D8.
+  MMU-30, which I recommended, left a guest page 0 fault without its
+    offset, a Shtvala gap. MMU-26's "instead" left the walker setting
+    A on a fetch that then faults on U.
+  BP-123 was issued granting "the git calls tools/regress.sh makes,
+    and no other", which reads as permission to run those commands.
+    The wording is now: the IA runs no git command; it may run
+    tools/regress.sh, which makes git calls of its own; that grant is
+    to run the script, not any command it contains. The amendment to
+    the session-075 ruling, item 3 below, awaits Jeff.
+  I read parts of fe_decisions.md and machine.adoc, not all of them,
+    before ruling from them; both are now read in full. I raised a
+    handoff Jeff had not asked about.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, dcd_decisions.md, mmu_decisions.md,
+itlb_decisions.md, ifu_decisions.md, icache_decisions.md,
+cachegen_decisions.md, fe_decisions.md, itlb_l2tlb_interfaces.md,
+itlb_ifu_interfaces.md, ifu_ibuf_interfaces.md,
+l1i_ifu_interfaces.md, ftq_ifu_interfaces.md, ftq_decisions.md
+(4.2 arm 2 carries the W3U successor; 7.5 gains ifu_ftq_uc_end;
+section 0's registry range and 6.1's read-port count were stale).
+
+Next free: BP-125, INFRA-014, TOOLS-007, TD#174. BP-124 is written,
+not yet issued.
+
+---
 ## Session-077: decisions for BP-123, and BP-123 written. Documents only.
 
 No task was run and no RTL changed. BP-123 IS WRITTEN AND NOT RUN:
 one end-state task, the IFU completion (TD#119, TD#135, TD#136), the
 page table walker, and the RVA23 Z* checks. Every decision it needs
-was ruled first; the task carries none.
+was ruled first; the task carries none. THAT WAS FALSE: BP-123 raised
+eight (D1 to D8), recorded above.
 
 RULED (Jeff), the walker:
   MMU-1 REVERSED. No L2 TLB now; an ITLB miss goes to the walker
@@ -43,6 +160,7 @@ RULED (Jeff), the walker:
     supervisor physical page above bit 23 is an access fault, cause
     1; a guest physical address above bit 40 is a guest-page fault,
     cause 20. MMU-30: a GPA that does not fit is returned as 0.
+    WITHDRAWN after BP-123: the GPA is carried at 56 bits (MMU-23).
   MMU-24b: the CSR file holds satp.PPN and hgatp.PPN at 24 bits and
     vsatp.PPN at 29, so a root always fits.
   MMU-12a: page tables only in cacheable coherent memory; elsewhere
@@ -90,7 +208,7 @@ For Jeff, carried from session-076: drop
 rtl/core/frontend/decode/obj_dir_pre from the root .gitignore.
 
 Next free: BP-124, INFRA-014, TOOLS-007, TD#171. BP-123 is written,
-not yet issued.
+not yet issued. (Superseded above.)
 
 ---
 ## Session-076: BP-121 recorded; BP-122 run. Nothing left open.
@@ -1589,10 +1707,16 @@ it only documented current behavior.
 | predecode.sv            | Deprecated  | --                | Deleted by BP-118 with           |
 |                         |             |                   | tb_predecode and predecode_pkt_t |
 |                         |             |                   | (TD#143).                        |
-| instr_decoder.sv        | Complete    | tb_instr_decoder  | Takes ifu_pd_pkt_t since BP-118  |
+| instr_decoder.sv        | Working     | tb_instr_decoder  | Takes ifu_pd_pkt_t since BP-118  |
 |                         |             |                   | (DCD-17 to DCD-20). en_c,        |
 |                         |             |                   | en_zcb, MASK_BITS removed by     |
-|                         |             |                   | BP-120 (TD#155). 649 checks.     |
+|                         |             |                   | BP-120 (TD#155). BP-123 decoded  |
+|                         |             |                   | Zba, Zbb, Zbs, Zicond, Zimop,    |
+|                         |             |                   | Zawrs, the SYSTEM fences,        |
+|                         |             |                   | HLV/HSV and FLH/FSH; 863 checks. |
+|                         |             |                   | Its representation and legality  |
+|                         |             |                   | are DCD-21 to DCD-35, built by   |
+|                         |             |                   | BP-124 (TD#171). Was Complete.   |
 | rvc_expander.sv         | Deprecated  | --                | Deleted by BP-119 with           |
 |                         |             |                   | tb_rvc_expander (TD#143,         |
 |                         |             |                   | TD#145). ifu_rvc_exp is the      |
@@ -1601,7 +1725,11 @@ it only documented current behavior.
 |                         |             |                   | of it remain in decode_pkg.sv,   |
 |                         |             |                   | gen_ifu_rvc_exp_oracle.py and    |
 |                         |             |                   | create_docs_stubs.sh, TD#155.    |
-| decode_pkg.sv           | Complete    | --                | All decode structs               |
+| decode_pkg.sv           | Working     | --                | All decode structs. alu_op_t 7   |
+|                         |             |                   | bits since BP-123; 8 bits and    |
+|                         |             |                   | the DCD-22 to DCD-25, DCD-30 and |
+|                         |             |                   | DCD-33 fields by BP-124. Was     |
+|                         |             |                   | Complete.                        |
 | bp_defines_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE parameters       |
 |                         |             |                   | complete. IT_TBL_TGT_WIDTH added.|
 |                         |             |                   | RAS params added BP-062:         |
@@ -2483,8 +2611,9 @@ it only documented current behavior.
 |                         |             |                   | remains. Sixteen identifiers are  |
 |                         |             |                   | the flow control and the response |
 |                         |             |                   | carries no ready. Sections 10 and |
-|                         |             |                   | 11, the maintenance ports, are    |
-|                         |             |                   | specified and unbuilt.            |
+|                         |             |                   | 11, the maintenance ports, and    |
+|                         |             |                   | IF-44 built by BP-123 in the      |
+|                         |             |                   | pacino copy; not emitted (CG-5).  |
 | l1i (cachegen node)     | Emitted     | l1i_tb            | TOOLS-004 and TOOLS-005. Not      |
 |                         |             |                   | hand-written RTL: emitted by      |
 |                         |             |                   | tools/cachegen from               |
@@ -2493,7 +2622,21 @@ it only documented current behavior.
 |                         |             |                   | sixteen fills in flight. The      |
 |                         |             |                   | maintenance ports of              |
 |                         |             |                   | l1i_ifu_interfaces.md 10 are NOT  |
-|                         |             |                   | emitted; TD#119.                  |
+|                         |             |                   | emitted; TD#119. Since BP-123     |
+|                         |             |                   | pacino uses its copy, row icache. |
+| icache (pacino l1i)     | Working     | tb_l1i, l1i_tb    | Built BP-123,                     |
+|                         |             |                   | rtl/core/frontend/icache: the     |
+|                         |             |                   | cachegen l1i copied, then the     |
+|                         |             |                   | maintenance ports (drain then     |
+|                         |             |                   | clear, IF-28 to IF-32, IF-42) and |
+|                         |             |                   | the uncached request (L1I-24,     |
+|                         |             |                   | IF-44a) added. The unchanged copy |
+|                         |             |                   | passed the emitted testbench      |
+|                         |             |                   | first. tb_l1i 164 checks, 5       |
+|                         |             |                   | properties; l1i_tb 67. Eleven     |
+|                         |             |                   | differences from the emission,    |
+|                         |             |                   | for CG-5 (TD#173). Same-cycle     |
+|                         |             |                   | merge untested, TD#172.           |
 | ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..27,   |
 |                         |             |                   | TD-IFU-1, 4, 5 and 7..10;         |
 |                         |             |                   | IFU-U4, IFU-U5. TD-IFU-2, -3 and  |
@@ -2502,8 +2645,9 @@ it only documented current behavior.
 |                         |             |                   | Expansion and predecode in the    |
 |                         |             |                   | IFU, unaligned 34-byte block over |
 |                         |             |                   | 17 halfword positions, 16 slots   |
-|                         |             |                   | to the ibuf, uncached fetch on    |
-|                         |             |                   | its own source. TWO PIPELINES:    |
+|                         |             |                   | to the ibuf, uncached fetch       |
+|                         |             |                   | through the L1I (IFU-21 reversed  |
+|                         |             |                   | session-076). TWO PIPELINES:      |
 |                         |             |                   | a translation pipeline driven by  |
 |                         |             |                   | ftq xlate_ptr, and the five-stage |
 |                         |             |                   | fetch pipeline F0..F3+WB, joined  |
@@ -2513,7 +2657,9 @@ it only documented current behavior.
 |                         |             |                   | does not close it: the line       |
 |                         |             |                   | buffer, issue policy, reorder     |
 |                         |             |                   | buffer and maintenance path are   |
-|                         |             |                   | uncovered. TD-IFU-7..10.          |
+|                         |             |                   | uncovered. TD-IFU-7..10. TD#116   |
+|                         |             |                   | closed session-074; IFU-23b and   |
+|                         |             |                   | the 56-bit GPA session-077.       |
 | dcd_decisions.md        | Draft       | --                | Created session-069. DCD-1..16,   |
 |                         |             |                   | TD-DCD-1..2, DCD-U1..U2. One      |
 |                         |             |                   | predecoder, two views:            |
@@ -2536,7 +2682,8 @@ it only documented current behavior.
 |                         |             |                   | hit. Closes TD#115. Session-071:  |
 |                         |             |                   | this read "all three Sv39 page    |
 |                         |             |                   | sizes".                           |
-| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..30,   |
+| mmu_decisions.md        | Draft       | --                | Created session-069. MMU-1..31    |
+|                         |             |                   | (MMU-30 withdrawn session-077),   |
 |                         |             |                   | MMU-U1..U8 (U6, U7, U8 added      |
 |                         |             |                   | session-070: Svpbmt precedence,   |
 |                         |             |                   | Svnapot, Svinval. U4 and U5       |
@@ -2555,7 +2702,10 @@ it only documented current behavior.
 |                         |             |                   | on every access (MMU-12           |
 |                         |             |                   | corrected). U1, U2, U9 closed; U3 |
 |                         |             |                   | moved to the L2 work. Written     |
-|                         |             |                   | RTL, not a cachegen node.         |
+|                         |             |                   | RTL, not a cachegen node. After   |
+|                         |             |                   | BP-123: the faulting GPA is 56    |
+|                         |             |                   | bits (MMU-23); U is checked       |
+|                         |             |                   | before A is set (MMU-8c).         |
 | ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13.    |
 |                         |             |                   | IB-U1 CLOSED as IB-12 -- this row |
 |                         |             |                   | listed it open while the Shared   |
@@ -2589,7 +2739,11 @@ it only documented current behavior.
 |                         |             |                   | BP-118 built TD#134, the flush    |
 |                         |             |                   | with requests in flight (IFU-28   |
 |                         |             |                   | to IFU-32); tb_ifu 575 checks.    |
-|                         |             |                   | TD#135 and TD#136 stay stubbed.   |
+|                         |             |                   | BP-123 built TD#135 (uncached     |
+|                         |             |                   | fetch, one instruction per FTQ    |
+|                         |             |                   | entry, IFU-23b) and TD#136 (the   |
+|                         |             |                   | maintenance path); tb_ifu 734     |
+|                         |             |                   | checks, 16 properties.            |
 |                         |             |                   | Status was "Unit tested", not one |
 |                         |             |                   | of the five values; session-075.  |
 | ibuf                    | Working     | tb_ibuf           | Built BP-118,                     |
@@ -2605,24 +2759,37 @@ it only documented current behavior.
 |                         |             |                   | 1, 116 at 2. l2t_itlb_size        |
 |                         |             |                   | widened to 3 bits by BP-119       |
 |                         |             |                   | (IL-7); a reserved size code is   |
-|                         |             |                   | handled as IT-4.                  |
+|                         |             |                   | handled as IT-4. BP-123 fixed     |
+|                         |             |                   | ITLB-16 on G-stage-only entries   |
+|                         |             |                   | and added the kind (IT-6c); 135   |
+|                         |             |                   | checks at depth 1, 138 at 2.      |
 | pmp_pma_chk             | Working     | tb_pmp_pma_chk    | Built BP-118, rtl/mmu/pmp. The    |
 |                         |             |                   | one checker of MMU-10a: 16 PMP    |
 |                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
 |                         |             |                   | grain (MMU-11), region table      |
 |                         |             |                   | parameter (MMU-15a). 60 checks.   |
-| page table walker       | Not started | --                | Written RTL from mmu_decisions.md,|
-|                         |             |                   | rtl/mmu/ptw, outside the front    |
-|                         |             |                   | end top. Shared I and D; the DTLB |
-|                         |             |                   | does not exist, so one client     |
-|                         |             |                   | today. BP-123. There is no L2 TLB |
-|                         |             |                   | (MMU-1 reversed session-077); this|
-|                         |             |                   | row read "l2_tlb + walker".       |
-| frontend top            | Working     | tb_fe_top         | Built BP-118. 19 programs since   |
-|                         |             |                   | BP-121, each its own regression   |
-|                         |             |                   | target sim_fe_top_<p>, each       |
-|                         |             |                   | retiring exactly; 289 checks      |
-|                         |             |                   | after BP-122. Every predictor     |
+|                         |             |                   | BP-123: an executable region that |
+|                         |             |                   | is not idempotent is rejected at  |
+|                         |             |                   | elaboration (MMU-15b), shown by   |
+|                         |             |                   | lint_neg_pma, lint_neg_pma_dflt.  |
+| page table walker       | Working     | tb_ptw            | Built BP-123, rtl/mmu/ptw,        |
+|                         |             |                   | outside the front end top;        |
+|                         |             |                   | tb_fe_top instantiates it beside  |
+|                         |             |                   | fe_top. Sv39 and nested Sv39x4,   |
+|                         |             |                   | Svade and Svadu with compare-and- |
+|                         |             |                   | store, Svnapot, Svpbmt, PMP and   |
+|                         |             |                   | PMA on every access. tb_ptw 526   |
+|                         |             |                   | checks, 10 properties. Shared I   |
+|                         |             |                   | and D; one client today. No L2    |
+|                         |             |                   | TLB (MMU-1 reversed). BP-124 adds |
+|                         |             |                   | the leaf checks before A (MMU-8c) |
+|                         |             |                   | and the 56-bit GPA. Was Not       |
+|                         |             |                   | started.                          |
+| frontend top            | Working     | tb_fe_top         | Built BP-118. 35 programs since   |
+|                         |             |                   | BP-123 (19 before), each its own  |
+|                         |             |                   | regression target sim_fe_top_<p>, |
+|                         |             |                   | each retiring exactly; 689 checks |
+|                         |             |                   | after BP-123. Every predictor     |
 |                         |             |                   | trains and every one is used, the |
 |                         |             |                   | loop predictor since BP-122.      |
 |                         |             |                   | Remaining accuracy loss is        |
@@ -3125,8 +3292,9 @@ assessment of each document. Correct any that are wrong.
 |     |          |                                                          |
 |     |          | The miss throughput the IFU would be built against is    |
 |     |          | the l2 number, not the l1i number.                       |
-| 119 | icache   | OPEN, RVA23. No generated node emits an invalidate port  |
-|     |          | of any kind, so icache_decisions.md L1I-18 has no        |
+| 119 | icache   | CLOSED by BP-123 in the pacino RTL (end of row). As      |
+|     |          | raised: no generated node emits an invalidate port of    |
+|     |          | any kind, so icache_decisions.md L1I-18 has no           |
 |     |          | hardware. Zicbom is mandatory in RVA23U64 and Zifencei   |
 |     |          | in RVA23S64, which pacino is.                            |
 |     |          |                                                          |
@@ -3145,6 +3313,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | rtl/core/frontend/icache and adds the ports there        |
 |     |          | (cachegen_decisions.md CG-4, CG-D1); cachegen catches up |
 |     |          | under CG-5. BP-123.                                      |
+|     |          | CLOSED by BP-123 (session-077): the ports are built in   |
+|     |          | the pacino copy, rtl/core/frontend/icache, and tb_fe_top |
+|     |          | fencei and cboinval cover FENCE.I and cbo.inval end to   |
+|     |          | end. The emission still lacks them: TD#173 (CG-5).       |
 | 120 | icache   | OPEN, replacement quality, not correctness. TOOLS-005    |
 |     |          | reported both rather than hiding them.                   |
 |     |          |                                                          |
@@ -3380,7 +3552,7 @@ assessment of each document. Correct any that are wrong.
 |     |          | is held to acceptance and its response discarded         |
 |     |          | (IFU-29a); the straddle register survives only with the  |
 |     |          | block after it (IFU-28a).                                |
-| 135 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE UNCACHED     |
+| 135 | ifu      | CLOSED, BP-123. THE UNCACHED                             |
 |     |          | FETCH PATH. ifu_notes.md 6.8, MMU-14, IT-11, IFU-21. A   |
 |     |          | fetch whose effective memory type is not cacheable and   |
 |     |          | idempotent never reaches the L1I and takes the uncached  |
@@ -3401,7 +3573,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | (MMU-15b), so a whole-line read is safe and IFU-U4 is    |
 |     |          | closed. The L2 may hold the line while it is the point   |
 |     |          | of coherence (L1I-25, Svpbmt checked). BP-123.           |
-| 136 | ifu      | OPEN, IFU, DEFERRED TO ITS OWN SESSION. THE IFU HALF OF  |
+|     |          | CLOSED by BP-123 (session-077): one uncached instruction |
+|     |          | per FTQ entry (IFU-23b, D1), under the IFU-22 gate; uc_nc|
+|     |          | and uc_io programs.                                      |
+| 136 | ifu      | CLOSED, BP-123. THE IFU HALF OF                          |
 |     |          | FENCE.I AND CBO.INVAL. ifu_notes.md 6.9. The IFU routes  |
 |     |          | the maintenance operation and gates the post-fence       |
 |     |          | restart on the acknowledgements (l1i_ifu_interfaces.md   |
@@ -3421,6 +3596,9 @@ assessment of each document. Correct any that are wrong.
 |     |          | RULED session-076: no longer blocked; BP-123 builds it   |
 |     |          | against the pacino l1i copy (TD#119). The commit-side    |
 |     |          | producer is modelled by tb_fe_top's backend.             |
+|     |          | CLOSED by BP-123 (session-077): IF-33 to IF-37 and IF-41 |
+|     |          | built, the line buffer cleared after done (IF-36), the   |
+|     |          | group across fe_top; fencei and cboinval programs.       |
 
 | 137 | ftb      | CLOSED BP-111 (session-073). ftb_cntrl encodes,          |
 |     |          | status-checks and reconstructs the jump target from the  |
@@ -3709,6 +3887,26 @@ assessment of each document. Correct any that are wrong.
 |     |          | (H1 fires first under the same mutation); H2 holds in    |
 |     |          | every run. RS1 fires in tb_ras only; the case does not   |
 |     |          | occur in the 19 programs.                                |
+| 171 | decode   | OPEN, BP-124. The three rulings after BP-123 as one      |
+|     |          | task: the decode representation and legality             |
+|     |          | (dcd_decisions.md DCD-21 to DCD-35, the PA's R1 to R14,  |
+|     |          | with the PA additions 10b lists, pending Jeff);          |
+|     |          | FAULT_GPA_WIDTH = 56 and the unconditional kind-00       |
+|     |          | offset (MMU-23, MMU-30 withdrawn); every leaf check,     |
+|     |          | U against the privilege included, before the walker      |
+|     |          | sets A, with itlb_l2t_priv and itlb_l2t_acc driven by    |
+|     |          | the ITLB and held faults tagged (MMU-8c, MMU-24c,        |
+|     |          | ITLB-10b). Package changes in all three packages.        |
+| 172 | icache   | OPEN, verification. The L1I-24 merge of a cacheable      |
+|     |          | request onto an uncached MSHR in the fill's own cycle    |
+|     |          | (the second term of fil_alloc) has no directed test; a   |
+|     |          | merge on any earlier cycle is proven. BP-123 Deferred    |
+|     |          | Work 2. Performance only: if it fails, a cacheable line  |
+|     |          | is not allocated.                                        |
+| 173 | icache   | OPEN, cachegen. The CG-5 comparison and gap-fixing tasks |
+|     |          | for the pacino copy: CG-G2, CG-G8 and CG-G9 to CG-G11,   |
+|     |          | from BP-123's eleven differences. Carries the emission   |
+|     |          | half of TD#119.                                          |
 
 ---
 

@@ -54,7 +54,7 @@ MMU-1a THE WALKER IS OUTSIDE THE FRONT-END TOP, at rtl/mmu/ptw.
        It is shared I and D, and FE-U10 puts the front-end
        boundary between the ITLB and the shared translation level.
        tb_fe_top instantiates the front-end top and the walker
-       beside it. Ruled session-077 (Jeff).
+       beside it. Ruled session-077 (Jeff). BUILT by BP-123.
 
 MMU-2  The walker reaches memory through its own port,
        `ptw_mem_interfaces.md`: an 8-byte read and an 8-byte
@@ -152,12 +152,28 @@ MMU-22 The MMU raises a GUEST page fault when the G-stage fails
 
 MMU-23 Shtvala: `htval` is written with the faulting guest
        physical address on a guest page fault. The MMU produces
-       that address; the trap path writes it. IT IS GPA_WIDTH = 41
-       BITS (MMU-20), and it travels on `l2t_itlb_gpa` and
-       `itlb_ifu_gpa`, both declared `[GPA_WIDTH-1:0]`. GPA_WIDTH
-       and the other ITLB widths are in bp_defines_pkg since
-       BP-109 (TD#122). This read that they were defined nowhere.
-       Session-074.
+       that address; the trap path writes it. THE FAULTING GPA IS
+       FAULT_GPA_WIDTH = 56 BITS, not GPA_WIDTH: a VS-stage PTE
+       carries a 44-bit PPN, so a walk can form a guest physical
+       address of up to 56 bits that faults under Sv39x4 (MMU-28),
+       and Shtvala requires htval to carry it in all circumstances
+       the ISA permits. It travels on `l2t_itlb_gpa` and
+       `itlb_ifu_gpa`, both declared `[FAULT_GPA_WIDTH-1:0]`, and
+       in `ifu_pd_pkt_t.fault_gpa`. GPA_WIDTH stays 41 everywhere
+       else: it is the width of an address that translates. RULED
+       session-077 (Jeff), after BP-123; built by BP-124. This read
+       "IT IS GPA_WIDTH = 41 BITS (MMU-20)", which left a GPA above
+       bit 40 with no representation; MMU-30 papered over it with a
+       zero sentinel that collides with guest page 0 (BP-123,
+       risk 1). Before session-074 it read that the widths were
+       defined nowhere.
+
+       For kind 00 (MMU-29) the walker returns the faulting GPA's
+       page and the IFU fills the page offset from the faulting
+       halfword's virtual address (ifu_decisions.md IFU-2a). For
+       kinds 01 and 10 the GPA is the guest physical address of
+       the VS-stage PTE. Built by BP-123 (D5); unconditional since
+       the sentinel is gone.
 
 MMU-24 The MMU reads the translation regime from the CSR file
        directly: `satp.PPN` for a single-stage root, `vsatp.PPN`
@@ -173,9 +189,22 @@ MMU-26 THE WALKER CHECKS G-STAGE PERMISSIONS and returns cause 20
        user-mode access, so the result does not depend on the
        current privilege and can be decided once, at walk time.
        VS-stage and single-stage permissions are checked by the L1
-       TLB on every hit instead (itlb_decisions.md ITLB-16),
-       because privilege changes without a fence. Ruled
-       session-075 (Jeff).
+       TLB on every hit (itlb_decisions.md ITLB-16), because
+       privilege changes without a fence. Ruled session-075 (Jeff).
+
+       THE WALKER ALSO CHECKS THEM, ONCE, BEFORE IT SETS A
+       (MMU-8c). The ITLB's check on every hit stands; the
+       walker's check exists so a walk never sets A on a PTE whose
+       permission check fails. Session-077. This said the L1 TLB
+       checks them "instead".
+
+MMU-26a THE WALKER CHECKS THE PRIVILEGE-INDEPENDENT LEAF
+        PERMISSIONS: X for a fetch and W for a store, and at the
+        G-stage U and the access type. Built by BP-123 (D8). D8's
+        other half, U against the privilege left to the ITLB alone,
+        is modified by MMU-8c (session-077, Jeff). This read "R for
+        a load (with the DTLB)" as well, which D8 does not say; R
+        for a read is the DTLB's case and is added with it.
 
 MMU-24a THE WALKER'S CSR INPUTS ARE ITS OWN INPUT GROUP. The
         walker is outside the front-end top (MMU-1a), so the
@@ -184,6 +213,36 @@ MMU-24a THE WALKER'S CSR INPUTS ARE ITS OWN INPUT GROUP. The
         menvcfg and henvcfg ADUE and PBMTE, and the PMP registers
         for its checker (MMU-11a). The CSR file does not exist; the
         testbench drives the group. Ruled session-077 (Jeff).
+        The walker samples the group when a walk starts and holds
+        it for that walk: a walk that began under one regime may
+        complete under it (supervisor chapter, satp: translations
+        that began while satp was active need not terminate when it
+        changes). Built by BP-123 (its Assumption 7); recorded
+        session-077 for Jeff to confirm.
+
+MMU-24c THE REQUEST CARRIES THE ACCESS TYPE AND THE PRIVILEGE.
+        `itlb_l2t_acc [1:0]` (0 read, 1 write, 2 execute, 3
+        reserved) selects the leaf permission of MMU-26a and the D
+        update of MMU-8. Built by BP-123 (D2) on the walker only,
+        accepted session-077 (Jeff); tb_fe_top ties it to execute.
+        BP-124 has the ITLB drive it, always execute, and fe_top
+        carry it, as itlb_l2tlb_interfaces.md 2 lists it.
+        `itlb_l2t_priv [1:0]` (2'b00 U, 2'b01 S; 2'b10 is reserved and 2'b11 is
+        M, neither ever presented, M-mode fetch being untranslated, MMU-19a)
+        together with `itlb_l2t_v` is the effective privilege the walk checks U
+        against (MMU-8c). The ITLB presents its own current privilege from its
+        CSR group (ITLB-17). RULED session-077 (Jeff), after BP-123; built by
+        BP-124. SUM and MXR, which a DTLB request will also need, are added with
+        the DTLB: nothing would drive them before it exists.
+
+        THE CAUSE FOLLOWS THE ACCESS TYPE, as the privileged
+        specification numbers them: a page fault is 12, 13 or 15
+        for execute, read or write; a guest-page fault 20, 21 or
+        23; an access fault 1, 5 or 7. The ITLB sees only 1, 12 and
+        20 (MMU-16), since it presents execute. Added session-077 by
+        the PA so that tb_ptw's read and store cases have defined
+        causes; flagged for Jeff. Having the ITLB drive
+        `itlb_l2t_acc` (above) is likewise a PA addition, flagged.
 
 MMU-24b THE ROOT POINTERS ALWAYS FIT. The CSR file implements
         `satp.PPN` and `hgatp.PPN` at PPN_WIDTH bits and
@@ -275,6 +334,35 @@ MMU-8b SPECULATION. A walk for a wrong-path fetch may set A: the
        G-stage PTE grants write, which MMU-8a requires anyway. A
        walk killed by an invalidate (ITLB-14) may already have set
        A; that is permitted. Stated session-077.
+
+MMU-8c THE WALKER SETS A ONLY ON A PERMITTED ACCESS. Before the
+        update of MMU-8 on a leaf, EVERY check the translation algorithm makes
+        on that leaf before step 9 has passed: the reserved-encoding checks
+        (MMU-U6, MMU-U7), the permission checks of MMU-26a, the
+        misaligned-superpage check (these three are a PA addition beyond the
+        ruling, flagged for Jeff), and the leaf's U bit against the request's
+        privilege and V (MMU-24c): a fetch at U or VU needs U set; a fetch at S
+        or VS needs U clear (SUM does not apply to fetch). On a failure it
+        returns the fault and writes nothing. This is the order of the
+        privileged translation algorithm: the permission checks are steps 6 to 8
+        and the A/D update is step 9, and a speculative walk behaves as a
+        non-speculative one except that it sets no D and raises no exception
+        (supervisor chapter). A VS-stage leaf's A is set before its GPA is
+        translated by the G-stage, which the hypervisor chapter adds at the end
+        of the VS-stage walk, so a G-stage fault on that GPA may follow a VS A
+        update (permitted, MMU-8b). RULED session-077 (Jeff), after BP-123;
+        built by BP-124. Until the DTLB adds SUM to the request (MMU-24c), a
+        read or write request's U check is made with SUM clear, the
+        architectural result for that value; added by the PA, flagged for Jeff,
+        so that tb_ptw's read and store cases have a defined U rule. BP-123
+        built the walker with the U check left to the ITLB alone (D8), so a
+        fetch that faulted on U could leave A set (BP-123, risk 2); whether its
+        other checks precede the update is for BP-124 to establish.
+
+        The ITLB holds a walk fault for the re-request (ITLB-10a);
+        because this fault depends on the privilege, every held
+        fault records the privilege and V it was raised at
+        (ITLB-10b).
 
 MMU-9  The MMU-2 port is not read-only: it carries the
        compare-and-swap of MMU-8. Supporting Svadu fixes the port
@@ -506,12 +594,17 @@ MMU-U6 CLOSED session-071 (Jeff). THE EFFECTIVE MEMORY TYPE IS
        non-PMA PBMT.
 
        WALKER OBLIGATIONS, beside the Svnapot ones of MMU-U7:
-       PBMT = 3 is reserved and raises a page fault; with
-       menvcfg.PBMTE clear, or henvcfg.PBMTE clear for the G-stage,
-       bits 62-61 of a leaf PTE must be zero and a non-zero value
-       raises a page fault; bits 62-61 of a non-leaf PTE are
-       reserved. Cause 12 at a single or VS stage, 20 at the
-       G-stage (MMU-16).
+       PBMT = 3 is reserved and raises a page fault; with PBMTE
+       clear, bits 62-61 of a leaf PTE must be zero and a non-zero
+       value raises a page fault; bits 62-61 of a non-leaf PTE are
+       reserved. THE PBMTE BIT IS PER STAGE: menvcfg.PBMTE governs
+       single-stage and G-stage translation, henvcfg.PBMTE the
+       VS-stage (machine chapter, menvcfg; hypervisor chapter,
+       henvcfg). Cause 12 at a single or VS stage, 20 at the
+       G-stage (MMU-16). This read "with menvcfg.PBMTE clear, or
+       henvcfg.PBMTE clear for the G-stage", which has the stages
+       crossed; BP-123 built it as the specification says (D3) and
+       the PA had read past it. Corrected session-077.
 
        It read: "Which wins, and what happens when the PTE names a
        type the region does not support, is not decided." 
@@ -598,7 +691,8 @@ MMU-16a Guest page fault exists because H is mandatory. It is not
         an optional third case to be dropped when H is absent,
         because H is not absent.
 
-MMU-U9  CLOSED session-077 by MMU-28 to MMU-30, after reading the
+MMU-U9  CLOSED session-077 by MMU-28 and MMU-29 (MMU-30, a zero
+        sentinel, was withdrawn after BP-123), after reading the
         ratified supervisor and hypervisor chapters. It read: "A PTE
         PPN WIDER THAN THE IMPLEMENTED PHYSICAL ADDRESS IS NOT
         CHECKED ANYWHERE. ... Both a page fault at the stage that
@@ -642,16 +736,25 @@ MMU-29  THE IMPLICIT-ACCESS KIND. A guest-page fault the walker
         itlb_ifu_interfaces.md IT-6c, dcd_decisions.md DCD-16).
         Ruled session-077 (Jeff).
 
-MMU-30  A GUEST PHYSICAL ADDRESS THAT DOES NOT FIT. When the faulting
-        guest physical address has a bit set above bit 40 (MMU-28),
-        the GPA returned is 0 and the kind of MMU-29 is still
-        given. The hypervisor chapter lets htval be written with
-        zero, and with htval zero htinst may be zero, so the backend
-        reads the kind only for a non-zero GPA. Whether this meets
-        Shtvala's "in all circumstances permitted by the ISA" is an
-        interpretation, recorded as one: htval is a WARL register
-        that need hold only a subset of guest physical addresses,
-        and this address is outside the 41-bit guest space. Ruled
+MMU-30  WITHDRAWN session-077 (Jeff), after BP-123. The faulting
+        GPA is carried whole at FAULT_GPA_WIDTH = 56 (MMU-23), so
+        no GPA needs a sentinel. It read: "When the faulting guest
+        physical address has a bit set above bit 40 (MMU-28), the
+        GPA returned is 0 ... Whether this meets Shtvala's 'in all
+        circumstances permitted by the ISA' is an interpretation."
+        BP-123 found the sentinel collides with guest page 0, where
+        a kind-00 fault's GPA is also 0 and htval would lose the
+        offset (risk 1).
+
+MMU-31  A G-STAGE-ONLY TRANSLATION (V=1, vsatp.MODE Bare) has no
+        single-stage or VS-stage leaf. The walker returns the
+        G-stage leaf's permission byte with G cleared, and the ITLB
+        applies ITLB-16 only when a single-stage or VS-stage leaf
+        exists: a G-stage leaf always has U set, so applying it
+        faulted every VS-mode fetch through such an entry (found and
+        fixed by BP-123). A single-stage PPN is the leaf PTE's; a
+        two-stage PPN is the final supervisor physical page for the
+        request's address (MMU-27). Built by BP-123 (D7), accepted
         session-077 (Jeff).
 
 Sstvala is mandatory in RVA23S64 and requires stval to carry the
@@ -762,7 +865,9 @@ MMU-U7  CLOSED session-071 for the L1 TLB and the walker; the L2
         TLB half moved to the L2 TLB work (MMU-1). Section 6a.
 MMU-U8  CLOSED session-071. Svinval as the fence equivalents.
         Section 8.
-MMU-U9  CLOSED session-077 by MMU-28 to MMU-30. Section 7.
+MMU-U9  CLOSED session-077 by MMU-28 and MMU-29; MMU-30
+        withdrawn after BP-123 for MMU-23's full-width GPA.
+        Section 7.
 
 ---
 
@@ -900,4 +1005,22 @@ TD#118    No longer bounds the walker, which has its own port
               speculation rules. MMU-17 and MMU-18 restated for a
               walker with no translation cache. MMU-U3 moved to
               the L2 work.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). MMU-1a
+              built. MMU-23: the faulting GPA is FAULT_GPA_WIDTH =
+              56, the kind-00 offset filled by the IFU; MMU-30
+              withdrawn. MMU-8c and MMU-24c: the walker checks U
+              against the request's privilege before setting A.
+              MMU-26a, MMU-31 and the access type of MMU-24c as
+              BP-123 built them (D7, D8, D2). MMU-24a: the CSR group
+              is held for a walk. MMU-U6: PBMTE is per stage, which
+              this document had crossed (D3).
+
+  2026-10-09  session-077, after review of the BP-124 draft. MMU-8c:
+              every leaf check precedes the A/D update, not U alone;
+              a read or write's U check uses SUM clear. MMU-24c:
+              itlb_l2t_acc was built on the walker only; 2'b10 is
+              reserved; the walker's cause follows the access type.
+              MMU-26a: no R check was built. MMU-24a: the held CSR
+              group is BP-123's Assumption 7, for Jeff.
 ```

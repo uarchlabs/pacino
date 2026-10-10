@@ -89,9 +89,11 @@ document does not restate them.
   predictors             one document per predictor
 ```
 
-The L1I is emitted by cachegen rather than written, and is
-specified in icache_decisions.md. FE-16 keeps it inside the front
-end top as a sibling of the IFU, per L1I-2.
+The L1I is specified in icache_decisions.md. Its RTL is the pacino
+copy of the cachegen emission at rtl/core/frontend/icache
+(cachegen_decisions.md CG-D1, built by BP-123); this read that it
+"is emitted by cachegen rather than written". FE-16 keeps it inside
+the front end top as a sibling of the IFU, per L1I-2.
 
 ---
 
@@ -1332,7 +1334,9 @@ the level above both. It closes TD#117.
          bp_cluster, ftq, the IFU, the L1I, THE ITLB, the ibuf and
          decode, and wires them. It holds no state and makes no
          decision. The ITLB is inside by FE-U10 and was missing
-         from this list; session-070.
+         from this list; session-070. THE L1I INSTANCE IS THE PACINO
+         COPY at rtl/core/frontend/icache (FE-21, CG-D1). Built by
+         BP-123, accepted session-077 (Jeff).
          The same rule ftq_decisions.md 7 applies to ftq.sv
          applies here.
 ```
@@ -1360,11 +1364,13 @@ An earlier revision of FE-16 put the L1I outside the front end
 altogether. It was written session-069 and contradicted L1I-2,
 which predates it. L1I-2 is the ruling.
 
-The L1I is emitted by cachegen from `testcases/pacino` rather than
-written, so its source is the emitter and the configuration, not a
-file in the front end tree. That is a build fact and does not move
-the module. Its port into the l2, up_i, is a topology edge of the
-emitted graph and is not a front end connection.
+The L1I's source is the pacino copy of the cachegen emission, in
+the front end tree at rtl/core/frontend/icache, since BP-123
+(FE-21). This read that its source "is the emitter and the
+configuration, not a file in the front end tree". Either is a build
+fact and does not move the module. Its port into the l2, named
+`mem` (FE-21; this read `up_i`), is a topology edge and is not a
+front end connection.
 
 ### 15.3 The boundary
 
@@ -1379,8 +1385,8 @@ emitted graph and is not a front end connection.
          instruction       NOT a boundary group. The IFU to L1I
                            path, l1i_ifu_interfaces.md, is INTERNAL
                            to the top under FE-16. What crosses is
-                           the L1I's up_i port into the l2, which
-                           is a cachegen topology edge.
+                           the L1I's l2-side port, `mem` (FE-21;
+                           this read `up_i`), a topology edge.
 
          translation       the ITLB to the page table walker, and
                            that alone (itlb_l2tlb_interfaces.md).
@@ -1396,8 +1402,8 @@ emitted graph and is not a front end connection.
          uncached          NO LONGER A GROUP. Uncached fetch goes
                            through the L1I marked uncached
                            (ifu_decisions.md IFU-21, reversed
-                           session-076), so it leaves by up_i like
-                           any fetch. This row read "the IFU's
+                           session-076), so it leaves by the L1I's
+                           `mem` port like any fetch. This row read "the IFU's
                            second instruction source, IFU-21. It
                            does not pass through the L1I."
 
@@ -1407,7 +1413,7 @@ emitted graph and is not a front end connection.
                            and the commit stage to the IFU for
                            FENCE.I and cbo.inval
                            (l1i_ifu_interfaces.md 11, built by
-                           BP-123).
+                           BP-123, accepted session-077).
 ```
 
 The backend group is two unrelated paths that happen to share a
@@ -1480,6 +1486,18 @@ create one.
          l1i_ifu_interfaces.md; widths agree and fe_top maps them
          one to one. This read `up_i`. BUILT by BP-118 as
          rtl/core/frontend/fe_top. Session-075.
+
+         SUPERSEDED by cachegen_decisions.md CG-D1. Since BP-123
+         fe_top and rtl/core/frontend/l1i_param_chk instantiate the
+         pacino copy at rtl/core/frontend/icache, and nothing in
+         rtl/ compiles the emission under tools/. The copy keeps the
+         emission's names: `mem` for the l2-side port and `core_*`
+         for the core port, including core_uncached and the
+         core_inv_* group, which fe_top maps one to one to
+         l1i_ifu_interfaces.md (10.1). Its l2-side port still leaves
+         the top, and tb_fe_top's memory model answers it from the
+         image that also answers the walker (ptw_mem_interfaces.md
+         WM-10). Built by BP-123, accepted session-077 (Jeff).
 ```
 
 ### 15.5 Unresolved
@@ -1748,4 +1766,11 @@ create one.
               translation group goes to the page table walker,
               outside the top; there is no L2 TLB (MMU-1 reversed).
               FE-20: the walker's CSRs are its own group.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). FE-15 and
+              15.2: the L1I instance is the pacino copy. FE-17: the
+              commit-to-IFU maintenance path built. FE-21 superseded
+              by CG-D1. The front-end units list no longer calls the
+              L1I emitted rather than written. 15.2 and FE-17 name
+              the L1I's l2-side port `mem` (FE-21), not up_i.
 ```

@@ -7,7 +7,7 @@
  SOURCE:  ftq_decisions.md, ftq_entry_formats.md, ftb_decisions.md,
           bp_defines_pkg.sv, ia_context/background/xs_ifu_ftq.md
  STATUS:  DRAFT
- UPDATED: 2026-10-06
+ UPDATED: 2026-10-09
  CONTACT: Jeff Nye
 ```
 
@@ -345,7 +345,15 @@ fetched bytes.
   ifu_ftq_target       [VA_WIDTH-1:0]               NEW
   ifu_ftq_fault_val                                 NEW
   ifu_ftq_fault_pos    [FTQ_PD_POS_BITS-1:0]        NEW
+  ifu_ftq_uc_end                                          IFU-23b
 ```
+
+`ifu_ftq_uc_end` is set with `ifu_ftq_mis_val` when an UNCACHED
+block delivered only its first instruction and would have delivered
+more (ifu_decisions.md IFU-23b): mis_pos names that instruction and
+section 7 W3U gives the successor. It is never set on a cached
+block. Built by BP-123 (D1) in ifu.sv, ftq.sv and ftq_ifu.sv,
+accepted session-077 (Jeff).
 
 `ftq_pd_info_t` is per predecode slot, the shape of XiangShan's
 `PreDecodeInfo`:
@@ -515,6 +523,14 @@ On `ifu_ftq_mis_val`, the FTQ:
   W4  restores the history pointers and the RAS snapshot from this
       entry, the same restore a p2 or p3 redirect performs
       (ftq_decisions.md 3.2).
+  W3U WHEN ifu_ftq_uc_end IS SET, the successor of W3 is not
+      re-derived across the slots: it is start + 2 * mis_pos + the
+      length of the instruction at mis_pos, 2 or 4. The next
+      uncached instruction is thereby the next entry, which IFU-22
+      gates at F0. Built by BP-123 (D1), accepted session-077
+      (Jeff); tb_ftq_ifu K2 fails when it is ignored. What W1 and
+      W2 write for the slot at mis_pos under uc_end is not recorded
+      in BP-123's Results Capture; BP-124 reports it.
 ```
 
 NO PREDICTOR UPDATE IS FORMED FROM PREDECODE. Updates remain
@@ -772,4 +788,8 @@ POS_OFFSET_BITS rescaled from 2 to 1 on its own.
               M1 and 7 W3 built, TD#146 closed; 6 gains the M1
               priority (Jeff); 4.1 latency is two cycles for a
               predecode redirect as well as a backend one.
+
+  2026-10-09  session-077, after BP-123, ruling (Jeff). 6:
+              ifu_ftq_uc_end. 7 W3U: the uncached successor. Both as
+              BP-123 built them (D1, ifu_decisions.md IFU-23b).
 ```

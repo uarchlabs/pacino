@@ -28,11 +28,11 @@ what it holds for restore.
 ```
 
 Registries stay in `fe_decisions.md` and are NOT duplicated here.
-Front-end invariants are FE-1 through FE-19, technical debt is
+Front-end invariants are FE-1 through FE-21, technical debt is
 TD-FE-1 through TD-FE-8, and open items are FE-U1 through FE-U11,
-all
-in `fe_decisions.md` sections 11, 13 and 14. This file cites them by
-number.
+all in `fe_decisions.md` sections 11, 13, 14 and 15. This file cites
+them by number. This read FE-1 through FE-19 and sections 11, 13 and
+14; FE-15 to FE-21 are in section 15. Session-077.
 
 The FTQ has three logical external interfaces, all specified:
 
@@ -238,12 +238,24 @@ Priority, highest first:
   0  reset               the reset vector (4.7)
   1  backend redirect    bkend_ftq_redir_pc
   2  predecode redirect  derived from the IFU writeback,
-                         ftq_ifu_interfaces.md 7 W3
+                         ftq_ifu_interfaces.md 7 W3, or W3U when
+                         ifu_ftq_uc_end is set
   3  p3 redirect         bpu_redir_p3[s].target_pc
   4  p2 redirect         bpu_redir_p2[s].target_pc
   5  p1 successor        selection across slots, fe_decisions.md 2.4
   6  hold                retain r_next_pc, deassert r_next_val (4.5)
 ```
+
+ARM 2 ALSO CARRIES THE UNCACHED SUCCESSOR. When a writeback sets
+`ifu_ftq_uc_end` with `ifu_ftq_mis_val` (ifu_decisions.md IFU-23b),
+the successor is not re-derived across the slots: it is start + 2 *
+mis_pos + the length of the instruction at mis_pos, 2 or 4
+(ftq_ifu_interfaces.md 7 W3U), so the next uncached instruction is
+the next entry and IFU-22 gates it at F0. Every uncached instruction
+after a block's first therefore costs one arm-2 redirect. Built by
+BP-123 (D1), accepted session-077 (Jeff). Its flush index and what
+W1 and W2 write for the slot under uc_end are not in BP-123's Results
+Capture; BP-124 reports them.
 
 ### 4.3 The priority is age order, not an axiom
 
@@ -1070,7 +1082,8 @@ IMPACTED IF PREFETCH IS LATER WANTED:
                          Session-070
   ftq_decisions.md 5.5   the rewind rule gains a pointer
   fast-path read ports   a further reader of bp_ftq_entry_t, on top
-                         of the five of section 1
+                         of the six of section 1. This read "five";
+                         section 1 counts six since session-074
   a new interface        FTQ to prefetcher, or an extension of
                          ftq_ifu_interfaces.md
   redirect fan-out       the prefetcher must be told to drop stale
@@ -1265,6 +1278,17 @@ BP-113 added two more, both from 5.2's redirect-cycle allocation:
                              when a squash is applied, and without it
                              the shadow's index test squashes the
                              target's own p1 write
+```
+
+BP-123 added one more, from ifu_decisions.md IFU-23b:
+
+```
+  (IFU)       -> ftq.sv      ifu_ftq_uc_end, the uncached-end bit of
+              -> ftq_ifu     the writeback (ftq_ifu_interfaces.md 6),
+                             selecting the W3U successor on arm 2
+                             (4.2). Which leaf forms W3U, ftq_ifu or
+                             ftq_npc, is not in BP-123's Results
+                             Capture; BP-124 reports it
 ```
 
 Section 1 counts six, since session-074.
@@ -1503,4 +1527,9 @@ Section 1 counts six, since session-074.
 
   2026-10-09  session-076, recording BP-122. 4.5: H1 holds on
               sc_uq_not_full, as built.
+
+  2026-10-09  session-077, after BP-123, ruling (Jeff). 4.2: arm 2
+              carries the W3U uncached successor (IFU-23b, D1). 7.5:
+              ifu_ftq_uc_end. Section 0: FE-1 through FE-21, section
+              15. 6.1: section 1 counts six read ports, not five.
 ```

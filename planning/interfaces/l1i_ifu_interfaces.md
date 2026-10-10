@@ -25,7 +25,11 @@ it is cited by its L1I number and not restated.
 The IFU side of every port here is BUILT by BP-116 (session-074),
 except the maintenance ports of sections 10 and 11 (TD#136) and
 ifu_l1i_req_uncached (IF-44, added session-076), which BP-123
-builds. The L1I is a generated module; since TOOLS-004
+BUILT, accepted session-077 (Jeff). BP-123 also built the L1I side
+of both in the pacino copy of the L1I at rtl/core/frontend/icache
+(cachegen_decisions.md CG-D1). What follows describes the cachegen
+emission, which CG-5 brings up to the copy. The L1I is a generated
+module; since TOOLS-004
 and TOOLS-005 its emitted core port carries the 512-bit line,
 sixteen identifiers and sixteen fills at the l1i boundary (section
 14.3), and the maintenance ports of sections 10 and 11 are still not
@@ -140,7 +144,12 @@ them, BP-115.
   PERM_WIDTH       BP-109             (no counterpart)     8
   CAUSE_WIDTH      BP-109             (no counterpart)     5
   PMA_WIDTH        BP-109             (no counterpart)     4
+  FAULT_GPA_WIDTH  BP-124             (no counterpart)    56
 ```
+
+FAULT_GPA_WIDTH was added session-077, after BP-123: the width of a
+faulting guest physical address (mmu_decisions.md MMU-23), which
+can exceed GPA_WIDTH. It is declared by BP-124.
 
 The rows below MAX_OUTSTANDING were added session-070, GVPN_WIDTH
 session-073. The ITLB interfaces declare ports against every one of
@@ -171,12 +180,18 @@ ALL NINE NOW HAVE VALUES, ruled session-073. Their sources:
                   coherent, executable, idempotent. IT-10 returns
                   the EFFECTIVE four. The PBMT of IL-9a is a
                   separate two-bit field and is not this
+  FAULT_GPA_WIDTH
+              56  MMU-23: a VS-stage PTE's 44-bit PPN can form a
+                  56-bit guest physical address that faults, and
+                  Shtvala requires htval to carry it. Session-077
 ```
 
 A PTE PPN field is 44 bits in Sv39 and PPN_WIDTH is 24, so a PTE
 whose PPN has any bit set above bit 23 names a physical address
-this implementation cannot form. Nothing in `mmu_decisions.md`
-says the walker faults it. Open, raised session-073.
+this implementation cannot form. Raised session-073, when nothing
+in `mmu_decisions.md` said the walker faults it. CLOSED by
+mmu_decisions.md MMU-28 (session-077): the walker raises an access
+fault and never truncates a PPN. Built by BP-123.
 
 `l1i_pkg` carries REQ_ID_BITS and MAX_OUTSTANDING as L1iReqIdBits
 and L1iMaxOutstanding since TOOLS-004, which also added L1iMshrs,
@@ -292,6 +307,17 @@ choice and not a limitation; section 14 records it.
          only under the commit gate of ifu_decisions.md IFU-22. It
          is never high with ifu_l1i_req_prefetch. Ruled session-076
          (Jeff), with IFU-21 reversed.
+
+  IF-44a MERGING AN UNCACHED REQUEST (icache_decisions.md L1I-24).
+         An uncached request merges only onto an MSHR whose line is
+         sure to come from memory, so it is never answered from the
+         array; otherwise it takes its own MSHR. A cacheable request
+         prefers an MSHR that will allocate, and one that merges
+         onto an uncached MSHR makes that fill allocate. An uncached
+         access to a resident line names that line's way, so a
+         merged cacheable fill installs over it, not beside it. None
+         of this is visible at this boundary (IF-19, IF-20). Built
+         by BP-123 (D6), accepted session-077 (Jeff).
 ```
 
 `icache_decisions.md` 8.1 splits across the boundary. P1, demand
@@ -565,6 +591,12 @@ drive one piece of hardware.
 There is no flush port. There is nothing to flush: the L1I is read
 only, holds no dirty state and has no write path to the L2.
 
+THE L1I KEEPS THE EMISSION'S NAMES on its own side. The pacino copy
+of the L1I names these ports core_inv_val, core_inv_rdy,
+core_inv_all, core_inv_addr and core_inv_done, and the request
+qualifier of IF-44 core_uncached; fe_top maps them one to one to
+the names above. Built by BP-123, accepted session-077 (Jeff).
+
 ### 10.2 Rules
 
 ```
@@ -584,7 +616,10 @@ only, holds no dirty state and has no write path to the L2.
   IF-30  FETCH DOES NOT PROCEED WHILE AN INVALIDATE IS IN FLIGHT.
          From the cycle a maintenance operation is accepted until
          the cycle l1i_ifu_inv_done is asserted, the L1I holds
-         ifu_l1i_req_rdy low and accepts no new request.
+         ifu_l1i_req_rdy low and accepts no new request. The range
+         is INCLUSIVE of the done cycle: ready may rise the cycle
+         after done. As BP-123 built it (its Assumption 3);
+         recorded session-077 for Jeff to confirm.
 
   IF-31  l1i_ifu_inv_done IS NOT ASSERTED UNTIL EVERY FILL THE
          INVALIDATE MUST DEFEAT HAS LANDED OR BEEN DISCARDED, and
@@ -702,6 +737,15 @@ commit can.
          therefore repopulated by the next response to land --
          which is D1's defect one layer up, on the structure D2
          exists to cover.
+
+         WHAT IS CLEARED is the line the IFU can serve without an
+         L1I request: the previous-request register of
+         ifu_decisions.md TD-IFU-8. Slots held by blocks in flight
+         belong to blocks younger than the maintenance instruction.
+         After FENCE.I the restart flushes them (ifu_decisions.md
+         IFU-28); after cbo.inval software has no fetch-coherence
+         guarantee (13.2). As BP-123 built it (its Assumption 2);
+         recorded session-077 for Jeff to confirm.
 
   IF-37  cmt_ifu_maint_val and the fetch request path are
          independent at this boundary. The IFU may still be holding
@@ -1149,12 +1193,14 @@ The earlier check cited `tools/cachegen/tools/jnutils/ncurses/`
 `rva23.md`, a cachegen working file outside planning/ that
 PROJECT_CORE.md does not list. Session-072.
 
-BP-123 CLOSES THE GAP IN THE PACINO RTL, under cachegen_decisions.md
+BP-123 CLOSED THE GAP IN THE PACINO RTL, under cachegen_decisions.md
 CG-4: the l1i is copied to rtl/core/frontend/icache and the ports of
-sections 10 and 11 are added there. cachegen keeps the gap below
-until CG-5. Session-076.
+sections 10 and 11 are added there, with tb_fe_top's fencei and
+cboinval programs. Accepted session-077 (Jeff). cachegen keeps the
+gap below until CG-5; the pacino front end no longer uses the
+emission (fe_decisions.md FE-21). Session-076, built session-077.
 
-THE GAP IS UNCHANGED BY THIS FILE. L1I-18 has no hardware
+FOR THE EMISSION ONLY, THE GAP IS UNCHANGED BY THIS FILE. L1I-18 has no hardware
 (`icache_decisions.md` TD-L1I-8, TD#119), and section 14.3 E7
 confirms it: no generated node emits
 an invalidate port of any kind. This file specifies the ports; it
@@ -1278,4 +1324,12 @@ sees a 2-byte boundary.
               IF-44 (IFU-21 reversed, L1I-24). Header and section
               18: the maintenance ports are built in the pacino RTL
               by BP-123 under CG-4.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). Header and
+              section 18: built. 3.1: FAULT_GPA_WIDTH 56 (MMU-23);
+              the PPN-above-bit-23 note closed by MMU-28. IF-44a:
+              the merge policy (D6). 10.1: the L1I side keeps the
+              emission's core_ names. IF-30 inclusive of the done
+              cycle; IF-36 names what is cleared (BP-123
+              Assumptions 3 and 2, as built, for Jeff to confirm).
 ```

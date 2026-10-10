@@ -364,7 +364,19 @@ document fixes is that the L1I does not have one.
           with the prefetch bit of L1I-21 (MMU-14). Port:
           l1i_ifu_interfaces.md IF-44. RULED session-076 (Jeff),
           with ifu_decisions.md IFU-21 reversed to route uncached
-          fetch through the L1I.
+          fetch through the L1I. BUILT by BP-123.
+
+          THE MERGE POLICY (l1i_ifu_interfaces.md IF-44a). An
+          uncached request merges only onto an MSHR whose line is
+          sure to come from memory, so it is never answered from the
+          array; otherwise it takes its own MSHR. A cacheable
+          request prefers an MSHR that allocates, and sets
+          allocation on the one it merges onto, including in the
+          fill's own cycle. An uncached access to a resident line
+          names that line's way, so a merged cacheable fill installs
+          over it, not beside it. Built by BP-123 (D6), accepted
+          session-077 (Jeff). The merge in the fill's own cycle has
+          no directed test; TD#172.
   L1I-25  THE L2 MAY HOLD A LINE FETCHED UNCACHED. Correct while
           the L2 is the point of coherence: every agent reaches
           memory through it (up_i, up_d, and the walker edge of
@@ -579,9 +591,11 @@ SPECIFIED ... what is undecided is what drives it"; TD-L1I-2
 closed session-076.
 
 L1I-18 IS BUILT IN THE PACINO RTL, NOT IN CACHEGEN, by
-cachegen_decisions.md CG-4: BP-123 copies the emitted l1i into
-rtl/core/frontend/icache and adds the maintenance ports there, with
-the uncached bit of L1I-24. CG-5 brings cachegen to match later.
+cachegen_decisions.md CG-4: BP-123 copied the emitted l1i into
+rtl/core/frontend/icache and added the maintenance ports there, with
+the uncached bit of L1I-24; tb_fe_top's fencei and cboinval programs
+cover M1 and M2 end to end. BUILT by BP-123, accepted session-077
+(Jeff). CG-5 brings cachegen to match later (TD#173).
 
 ---
 
@@ -870,8 +884,10 @@ Session-071.
 
             NOT DELIVERED END TO END: the sixteen fills serialise at
             the l2, whose up_i slave holds one transaction, TD#118.
-            THE Zicbom HALF IS AN RVA23 GAP, not a preference:
-            L1I-18 has no hardware, TD#119.
+            THE Zicbom HALF WAS AN RVA23 GAP, not a preference:
+            L1I-18 had no hardware, TD#119. CLOSED in the pacino RTL
+            by BP-123 (section 7); the emission still lacks it until
+            CG-5. Session-077.
 
             This read "PARTLY CLOSED by TOOLS-004" with the three
             TOOLS-005 items as remaining. Session-071.
@@ -1054,4 +1070,10 @@ ftq_ifu_interfaces.md 8 and PROJECT_STATUS.md are all amended.
               coherence (Svpbmt checked). Section 7: M2 routed,
               TD-L1I-2 closed; L1I-18 built in the pacino RTL under
               CG-4.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). L1I-24 and
+              section 7 built; L1I-24 gains the merge policy as
+              BP-123 built it (D6), with its untested same-cycle
+              case, TD#172. TD-L1I-8: the Zicbom gap closed in the
+              pacino RTL.
 ```

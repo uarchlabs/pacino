@@ -103,6 +103,20 @@ IFU-2a A slot whose cause is an instruction guest-page fault, cause
        the same way; the backend needs it for htinst
        (mmu_decisions.md MMU-29). Session-077.
 
+       THE GPA IS FAULT_GPA_WIDTH = 56 BITS (mmu_decisions.md
+       MMU-23), on IT-6a, in the queue of IFU-25 and in
+       `ifu_pd_pkt_t.fault_gpa`. For kind 00 the walker returns
+       the faulting page and the IFU fills `fault_gpa[11:0]` from
+       the faulting halfword's virtual address, ALWAYS, so the
+       field is the faulting guest physical address itself; the
+       trap path forms htval from it (htval holds the GPA shifted
+       right by 2). For kinds 01 and 10 the field is the VS-stage
+       PTE's guest physical address, unchanged. Built by BP-123
+       (D5) with an exception for a GPA of 0, MMU-30's sentinel;
+       RULED session-077 (Jeff), after BP-123, without the
+       exception, MMU-30 being withdrawn; the width and the
+       unconditional fill built by BP-124.
+
 H is mandatory in RVA23 through Sha, so the guest case is not
 optional and the GPA field is not conditional on a build option.
 
@@ -296,7 +310,9 @@ IFU-25  The translation queue holds, per block: the physical
         address, the PMA attributes of IT-10, the fault cause and
         status of IT-4, and the guest physical address of IT-6a
         with its implicit-access kind of IT-6c when the cause is
-        20. F0 reads the head. The kind added session-077.
+        20. F0 reads the head. The kind added session-077. The GPA
+        is FAULT_GPA_WIDTH = 56 bits in both results (IFU-2a);
+        session-077, after BP-123, built by BP-124.
 
         A BLOCK THAT CROSSES A PAGE HOLDS TWO RESULTS in its one
         entry: the second page's physical address, PMA attributes,
@@ -516,8 +532,9 @@ IFU-32 THE GENERATION BOUND. After the flush cycle the IFU presents
        assertion checks it.
 
 TD#135 (uncached) and TD#136 (maintenance) stayed stubbed after
-BP-118; BP-123 builds both (section 7, l1i_ifu_interfaces.md 10 and
-11). A request presented in a flush cycle is still ignored (IFU-20).
+BP-118; BP-123 BUILT both (section 7, l1i_ifu_interfaces.md 10 and
+11), accepted session-077 (Jeff). A request presented in a flush
+cycle is still ignored (IFU-20).
 
 The fault takes two paths and they carry different things. The
 architectural exception travels with the instruction to the
@@ -584,6 +601,21 @@ IFU-23 Uncached fetch returns one instruction at a time. It is
        the IFU already holds or from a new uncached request; either
        meets this rule.
 
+IFU-23b HOW IFU-23 IS MET: EACH UNCACHED INSTRUCTION IS ITS OWN FTQ
+        ENTRY. F3 delivers an uncached block's first instruction
+        alone. When the block would deliver more, the writeback
+        marks that position with `mis_val` and `mis_pos` and sets
+        `ifu_ftq_uc_end` (ftq_ifu_interfaces.md 6); the FTQ takes
+        the successor as start + 2 * mis_pos + the instruction's
+        length, 2 or 4 (ftq_ifu_interfaces.md 7, W3U). The next
+        instruction is then the next entry, and IFU-22 gates it at
+        F0 against the commit pointer like any uncached block. A
+        JALR is delivered alone with no redirect: its target is
+        unknown to the IFU, so its successor is the backend's.
+        This is XiangShan's MMIO scheme. The alternative,
+        per-instruction commit visibility inside the IFU, has no
+        port. Built by BP-123 (D1), accepted session-077 (Jeff).
+
 TD-IFU-4  CLOSED. `ftq_ifu_commit_ptr` was added to the fetch
           request group by BP-114 (TD#142). It is a driven value,
           not a query with a response, so it adds no handshake.
@@ -630,7 +662,10 @@ TD-IFU-8  CLOSED. Issue is in order, oldest first, whenever a
           request; it shares no identifier, which may already be
           retired. A slot frees when its last block is consumed.
           One comparator catches the common case, consecutive
-          blocks in one line. So two
+          blocks in one line. The previous-request register is
+          what l1i_ifu_interfaces.md IF-36 clears after a
+          maintenance operation's done, as BP-123 built it (its
+          Assumption 2, for Jeff to confirm). So two
           sequential blocks make one L1I request, and what merges
           in the L1I MSHRs is a redirect back to a line in flight
           or a non-consecutive repeat.
@@ -692,6 +727,8 @@ TD#118    The IFU outstanding-request depth has no real target
           until the l2 transaction limit is known. Not yet
           recorded as a decision.
 MMU-29    The implicit-access kind of IFU-2a and IFU-25.
+MMU-23    FAULT_GPA_WIDTH, the width of the GPA of IFU-2a and
+          IFU-25.
 
 ---
 
@@ -702,4 +739,12 @@ MMU-29    The implicit-access kind of IFU-2a and IFU-25.
               carry the implicit-access kind of a guest physical
               address (MMU-29). This document had no history
               section; its earlier changes are in PROJECT_STATUS.
+
+  2026-10-09  session-077, after BP-123, rulings (Jeff). IFU-2a:
+              the GPA is FAULT_GPA_WIDTH = 56 and the kind-00
+              offset fill is unconditional. IFU-25: the queue's GPA
+              width. IFU-23b: one uncached instruction per FTQ
+              entry, as BP-123 built it (D1). TD-IFU-8: the register
+              IF-36 clears (Assumption 2, for Jeff to confirm).
+              6.1: TD#135 and TD#136 built.
 ```

@@ -102,7 +102,10 @@ Each slot carries `ifu_pd_pkt_t` as defined in
   fault_cause  access fault, page fault, guest-page fault, none
   fault_va     the faulting virtual address
   fault_gpa    the faulting guest physical address, valid only on
-               a guest-page fault
+               a guest-page fault; FAULT_GPA_WIDTH = 56 bits, and
+               for kind 00 the whole address, offset included
+               (mmu_decisions.md MMU-23, ifu_decisions.md IFU-2a).
+               Session-077, after BP-123; built by BP-124
   fault_gpa_imp  the GPA's implicit-access kind, valid with
                fault_gpa: 00 the fetch's own GPA, 01 an implicit
                read of a VS-stage page table, 10 an implicit write
@@ -151,7 +154,8 @@ computes it, DCD-17, which closed DCD-U1 session-075. This read
 
 IB-10 An uncached fetch is an ordinary transfer with one bit set
       in `ifu_ibuf_en`. There is no separate port and no separate
-      protocol. IFU-23 and IBUF-5.
+      protocol. IFU-23 and IBUF-5. Built by BP-123 (ifu_decisions.md
+      IFU-23b).
 
 The IFU's serialisation for uncached fetch happens before this
 boundary. By the time a block is offered here the ordering
@@ -225,6 +229,9 @@ None. IB-U1 closed session-069 as IB-12.
 ## 8. Document History
 
 ```
+  2026-10-09  session-077, after BP-123, ruling (Jeff). Section 4:
+              fault_gpa is FAULT_GPA_WIDTH = 56 (MMU-23). IB-10
+              built.
   2026-10-09  session-077. Section 4 and IB-9a: fault_gpa_imp, the
               implicit-access kind (MMU-29). The vtype_hazard note
               no longer calls DCD-U1 open.
@@ -253,6 +260,7 @@ DCD-7     The classification carried in section 4.
 DCD-12    Start and range, folded into IB-2.
 DCD-16    Defines the payload.
 MMU-29    The implicit-access kind of fault_gpa_imp.
+MMU-23    The width of fault_gpa.
 IBUF-4    The ready rule, IB-6.
 IBUF-5    Uncached as an ordinary write, IB-10.
 IBUF-8    The backend clear. IBUF-8a and IBUF-8b are the two
