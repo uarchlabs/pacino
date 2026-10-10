@@ -70,6 +70,18 @@
 // A request presented in a flush cycle is ignored (ftq_ifu_interfaces
 // .md 5, TD#138). No fresh L1I request is presented in a flush cycle;
 // a held one stays presented.
+//
+// UNCACHED (IFU-21, IFU-22, IFU-26; l1i_ifu_interfaces.md IF-44;
+// BP-123, TD#135). A block the translation queue marks uncached (its
+// effective type is not both cacheable and idempotent, IT-11) is not
+// matched at F0 -- no reuse decision, no request, no push -- until
+// ftq_ifu_commit_ptr equals its index, i.e. every older FTQ entry has
+// committed (IFU-22). Its L1I requests then carry
+// ifu_l1i_req_uncached, never with the prefetch bit (always 0 here),
+// and reuse of the previous request's line is allowed (IFU-23: "from
+// the line the IFU already holds or from a new uncached request"). The
+// mark travels with the block to F3, which delivers its first
+// instruction alone (IFU-23).
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -100,9 +112,12 @@ module ifu_fetch #(
   input  logic [PPN_WIDTH-1:0]     xq_ppn0,
   input  ifu_fault_e               xq_fault0,
   input  logic [GPA_WIDTH-1:0]     xq_gpa0,
+  input  logic [1:0]               xq_imp0,
   input  logic [PPN_WIDTH-1:0]     xq_ppn1,
   input  ifu_fault_e               xq_fault1,
   input  logic [GPA_WIDTH-1:0]     xq_gpa1,
+  input  logic [1:0]               xq_imp1,
+  input  logic                     xq_uc,
   output logic                     xq_pop,
 
   // ---- ifu_lbuf --------------------------------------------------------
@@ -136,6 +151,7 @@ module ifu_fetch #(
   output logic [REQ_ID_BITS-1:0]   ifu_l1i_req_id,
   output logic [PA_WIDTH-1:0]      ifu_l1i_req_paddr,
   output logic                     ifu_l1i_req_prefetch,
+  output logic                     ifu_l1i_req_uncached,  // IF-44
 
   // ---- F2, to ifu_f3 -------------------------------------------------
   output logic                     f2_val,
@@ -152,6 +168,9 @@ module ifu_fetch #(
   output logic [VA_WIDTH-1:0]      f2_pc   [0:FTQ_PD_WIDTH],
   output logic [GPA_WIDTH-1:0]     f2_gpa0,
   output logic [GPA_WIDTH-1:0]     f2_gpa1,
+  output logic [1:0]               f2_imp0,
+  output logic [1:0]               f2_imp1,
+  output logic                     f2_uc,
   output logic [FTQ_PD_WIDTH-1:0]  f2_rng
 );
 
@@ -186,6 +205,9 @@ module ifu_fetch #(
     logic [GPA_WIDTH-1:0] gpa0;
     ifu_fault_e           fault1;
     logic [GPA_WIDTH-1:0] gpa1;
+    logic [1:0]           imp0;
+    logic [1:0]           imp1;
+    logic                 uc;       // IFU-26
   } blk_t;
 
   // ---- F0 ----------------------------------------------------------
@@ -203,6 +225,7 @@ module ifu_fetch #(
   logic [REQ_ID_BITS-1:0] r_pend_id;
   logic [SB-1:0]       r_pend_slot;
   logic [LINE_W-1:0]   r_pend_line;
+  logic                r_pend_unc;
   logic                r_zomb;         // dropped, request still held
 
   // ---- F1 ------------------------------------------------------------
@@ -213,6 +236,7 @@ module ifu_fetch #(
 
   // ---- F0 this cycle ----------------------------------------------
   logic                w_match;
+  logic                w_uc_gate;
   logic                w_two;
   logic [LINE_W-1:0]   w_line0;
   logic [LINE_W-1:0]   w_line1;
@@ -249,9 +273,11 @@ module ifu_fetch #(
 
   always_comb begin : f0
     // A zombie takes no new work, and nothing is matched in a flush
-    // cycle, so no reuse, allocation or push happens then.
+    // cycle, so no reuse, allocation or push happens then. An uncached
+    // block waits until every older FTQ entry has committed (IFU-22).
+    w_uc_gate = !xq_uc || (commit_ptr == r_f0.idx);
     w_match = r_f0_val && !r_zomb && !flush && xq_val &&
-              (xq_idx == r_f0.idx);
+              (xq_idx == r_f0.idx) && w_uc_gate;
     w_two   = r_f0.start_pc[L1I_OFFSET_BITS-1];   // upper half, IFU-7
     w_line0 = {xq_ppn0, r_f0.start_pc[11:L1I_OFFSET_BITS]};
     w_line1 = xq_cross ? {xq_ppn1, (12-L1I_OFFSET_BITS)'(0)}
@@ -287,6 +313,7 @@ module ifu_fetch #(
                                     : (w_fresh_which ? w_line1 : w_line0)),
                             L1I_OFFSET_BITS'(0)};
     ifu_l1i_req_prefetch = 1'b0;          // prefetch is not in scope
+    ifu_l1i_req_uncached = r_pend ? r_pend_unc : xq_uc;
     alloc_val  = w_fresh;
     alloc_line = w_fresh_which ? w_line1 : w_line0;
 
@@ -314,6 +341,9 @@ module ifu_fetch #(
     w_push_blk.gpa0   = xq_gpa0;
     w_push_blk.fault1 = xq_cross ? xq_fault1 : IFU_FAULT_NONE;
     w_push_blk.gpa1   = xq_gpa1;
+    w_push_blk.imp0   = xq_imp0;
+    w_push_blk.imp1   = xq_imp1;
+    w_push_blk.uc     = xq_uc;
 
     ftq_ifu_req_rdy = !r_f0_val || w_push;
     w_accept        = ftq_ifu_req_val && ftq_ifu_req_rdy && !flush;
@@ -408,6 +438,9 @@ module ifu_fetch #(
     f2_taken_pos = w_hd.rq.taken_pos;
     f2_gpa0      = w_hd.gpa0;
     f2_gpa1      = w_hd.gpa1;
+    f2_imp0      = w_hd.imp0;
+    f2_imp1      = w_hd.imp1;
+    f2_uc        = w_hd.uc;
 
     // IFU-8: seventeen halfwords from the block offset.
     w_off = w_hd.rq.start_pc[L1I_OFFSET_BITS-1:0];
@@ -465,6 +498,7 @@ module ifu_fetch #(
       r_pend_id    <= '0;
       r_pend_slot  <= '0;
       r_pend_line  <= '0;
+      r_pend_unc   <= 1'b0;
       r_zomb       <= 1'b0;
       r_bq_rd      <= '0;
       r_bq_wr      <= '0;
@@ -543,6 +577,7 @@ module ifu_fetch #(
           r_pend_id    <= alloc_id;
           r_pend_slot  <= alloc_slot;
           r_pend_line  <= w_fresh_which ? w_line1 : w_line0;
+          r_pend_unc   <= xq_uc;
         end else if (w_fire) begin
           r_pend <= 1'b0;
         end

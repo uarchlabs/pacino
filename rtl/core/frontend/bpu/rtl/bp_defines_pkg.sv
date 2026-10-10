@@ -506,8 +506,9 @@ package bp_defines_pkg;
   localparam int   L1I_OFFSET_BITS = $clog2(L1I_LINE_BYTES); // = 6
   parameter  int   MAX_OUTSTANDING = 16;   // L1I-10, IF-6
   localparam int   REQ_ID_BITS     = $clog2(MAX_OUTSTANDING); // = 4
-  // cmt_ifu_maint_op encoding. No l1i_pkg counterpart: the emitted
-  // L1I has no maintenance port (TD#119).
+  // cmt_ifu_maint_op encoding. No l1i_pkg counterpart: the L1I's
+  // maintenance port (BP-123) takes an inv_all bit, which the IFU
+  // derives from this encoding.
   localparam logic MAINT_FENCE_I   = 1'b0; // l1i_ifu_interfaces 11.2
   localparam logic MAINT_CBO_INVAL = 1'b1; // l1i_ifu_interfaces 11.2
 

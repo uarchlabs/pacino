@@ -107,6 +107,7 @@ module tb;
     p.fault_cause = ifu_fault_e'(i % 4);
     p.fault_va    = ~p.start_pc;
     p.fault_gpa   = GPA_WIDTH'(b * 977 + i);
+    p.fault_gpa_imp = 2'(b + i);                   // BP-123, DCD-16
     p.is_rvc      = i[0];
     p.br_type     = i[2:1];
     p.is_call     = b[0];

@@ -20,11 +20,15 @@
 //                  prediction check and the ibuf vector. IFU-5,
 //                  IFU-11, IFU-12, IFU-15
 //   ifu_wb         the WB register. IFU-13, IFU-14, IFU-19, IFU-20
+//   ifu_maint      the maintenance path, commit to IFU to L1I.
+//                  l1i_ifu_interfaces.md 10 and 11, IF-28 to IF-37
+//                  (BP-123, TD#136)
 //
-// THE FOUR BOUNDARIES carry the port names of ftq_ifu_interfaces.md
+// THE FIVE BOUNDARIES carry the port names of ftq_ifu_interfaces.md
 // (with ftq_ifu.sv's port list authoritative for names and widths),
-// l1i_ifu_interfaces.md 4 and 5, itlb_ifu_interfaces.md 2 and
-// ifu_ibuf_interfaces.md 2.
+// l1i_ifu_interfaces.md 4, 5 and 10, itlb_ifu_interfaces.md 2,
+// ifu_ibuf_interfaces.md 2, and the commit stage's maintenance group
+// of l1i_ifu_interfaces.md 11.
 //
 // THE FLUSH (IFU-28 to IFU-32, TD#134, BP-118) is applied by each
 // owner from ftq_ifu_flush_idx and ftq_ifu_commit_ptr: a block older
@@ -35,14 +39,18 @@
 // it is loaded only from an F3 transfer, which never happens in a
 // flush cycle, and F3 keeps only survivors (IFU-32).
 //
-// NOT BUILT, by ruling (BP-116 Binding Decisions):
-//   TD#135  the uncached path (IFU-21 to IFU-23). IFU-26 marking is
-//           built; ifu_fetch_assert fires if a marked block reaches F0
-//   TD#136  maintenance. The ports of l1i_ifu_interfaces.md 10 and 11
-//           are not declared
-//   prefetch  ifu_l1i_req_prefetch is driven 0
-// ftq_ifu_commit_ptr is read for the flush ages; its IFU-22 use waits
-// on TD#135.
+// UNCACHED FETCH (IFU-21 to IFU-23, IFU-26; BP-123, TD#135). A block
+// the translation pipeline marks uncached is issued to the L1I with
+// ifu_l1i_req_uncached only when ftq_ifu_commit_ptr equals its index
+// (IFU-22, ifu_fetch), and F3 delivers its first instruction alone,
+// ending the block after it with ifu_ftq_uc_end (IFU-23, ifu_f3).
+//
+// MAINTENANCE (BP-123, TD#136). ifu_maint carries FENCE.I and
+// cbo.inval from the commit stage to the L1I and clears the line
+// buffer's reusable line after the L1I's done (IF-36).
+//
+// NOT BUILT, by ruling: prefetch (IFU-U6). ifu_l1i_req_prefetch is
+// driven 0.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -89,6 +97,7 @@ module ifu #(
   output logic [VA_WIDTH-1:0]      ifu_ftq_target,
   output logic                     ifu_ftq_fault_val,
   output logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos,
+  output logic                     ifu_ftq_uc_end,   // IFU-23, BP-123
 
   // ---- l1i_ifu_interfaces.md 4 and 5 -------------------------------
   output logic                     ifu_l1i_req_val,
@@ -96,10 +105,25 @@ module ifu #(
   output logic [REQ_ID_BITS-1:0]   ifu_l1i_req_id,
   output logic [PA_WIDTH-1:0]      ifu_l1i_req_paddr,
   output logic                     ifu_l1i_req_prefetch,
+  output logic                     ifu_l1i_req_uncached,  // IF-44
   input  logic                     l1i_ifu_rsp_val,
   input  logic [REQ_ID_BITS-1:0]   l1i_ifu_rsp_id,
   input  logic [L1I_LINE_BITS-1:0] l1i_ifu_rsp_data,
   input  logic                     l1i_ifu_rsp_err,
+
+  // ---- l1i_ifu_interfaces.md 10, maintenance to the L1I ------------
+  output logic                     ifu_l1i_inv_val,
+  input  logic                     ifu_l1i_inv_rdy,
+  output logic                     ifu_l1i_inv_all,
+  output logic [PA_WIDTH-1:0]      ifu_l1i_inv_paddr,
+  input  logic                     l1i_ifu_inv_done,
+
+  // ---- l1i_ifu_interfaces.md 11, maintenance from commit -----------
+  input  logic                     cmt_ifu_maint_val,
+  output logic                     cmt_ifu_maint_rdy,
+  input  logic                     cmt_ifu_maint_op,
+  input  logic [PA_WIDTH-1:0]      cmt_ifu_maint_paddr,
+  output logic                     ifu_cmt_maint_ack,
 
   // ---- itlb_ifu_interfaces.md 2 ------------------------------------
   output logic                     ifu_itlb_req_val,
@@ -112,6 +136,7 @@ module ifu #(
   input  logic [PPN_WIDTH-1:0]     itlb_ifu_ppn,
   input  logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause,
   input  logic [GPA_WIDTH-1:0]     itlb_ifu_gpa,
+  input  logic [1:0]               itlb_ifu_gpa_imp, // IT-6c
   input  logic [PMA_WIDTH-1:0]     itlb_ifu_pma,
 
   // ---- ifu_ibuf_interfaces.md 2 ------------------------------------
@@ -131,9 +156,11 @@ module ifu #(
   logic [PPN_WIDTH-1:0]     w_xq_ppn0;
   ifu_fault_e               w_xq_fault0;
   logic [GPA_WIDTH-1:0]     w_xq_gpa0;
+  logic [1:0]               w_xq_imp0;
   logic [PPN_WIDTH-1:0]     w_xq_ppn1;
   ifu_fault_e               w_xq_fault1;
   logic [GPA_WIDTH-1:0]     w_xq_gpa1;
+  logic [1:0]               w_xq_imp1;
   logic                     w_xq_uc;
   logic                     w_xq_pop;
 
@@ -178,7 +205,15 @@ module ifu #(
   logic [VA_WIDTH-1:0]      w_f2_pc  [0:FTQ_PD_WIDTH];
   logic [GPA_WIDTH-1:0]     w_f2_gpa0;
   logic [GPA_WIDTH-1:0]     w_f2_gpa1;
+  logic [1:0]               w_f2_imp0;
+  logic [1:0]               w_f2_imp1;
+  logic                     w_f2_uc;
   logic [FTQ_PD_WIDTH-1:0]  w_f2_rng;
+
+  // ---- the IF-36 clear -------------------------------------------------
+  logic                     w_lb_clr_val;
+  logic                     w_lb_clr_all;
+  logic [PA_WIDTH-1:L1I_OFFSET_BITS] w_lb_clr_line;
 
   // ---- F3, expander and predecoder ------------------------------------
   logic [15:0]              w_f3_hw  [0:FTQ_PD_WIDTH];
@@ -208,6 +243,7 @@ module ifu #(
   logic [VA_WIDTH-1:0]      w_wb_target;
   logic                     w_wb_fault_val;
   logic [FTQ_PD_POS_BITS-1:0] w_wb_fault_pos;
+  logic                     w_wb_uc_end;
 
   ifu_xlate #(.XQ_DEPTH(XQ_DEPTH)) u_xlate (
     .clk               (clk),
@@ -229,6 +265,7 @@ module ifu #(
     .itlb_ifu_ppn      (itlb_ifu_ppn),
     .itlb_ifu_cause    (itlb_ifu_cause),
     .itlb_ifu_gpa      (itlb_ifu_gpa),
+    .itlb_ifu_gpa_imp  (itlb_ifu_gpa_imp),
     .itlb_ifu_pma      (itlb_ifu_pma),
     .xq_val            (w_xq_val),
     .xq_idx            (w_xq_idx),
@@ -237,9 +274,11 @@ module ifu #(
     .xq_ppn0           (w_xq_ppn0),
     .xq_fault0         (w_xq_fault0),
     .xq_gpa0           (w_xq_gpa0),
+    .xq_imp0           (w_xq_imp0),
     .xq_ppn1           (w_xq_ppn1),
     .xq_fault1         (w_xq_fault1),
     .xq_gpa1           (w_xq_gpa1),
+    .xq_imp1           (w_xq_imp1),
     .xq_uc             (w_xq_uc),
     .xq_pop            (w_xq_pop)
   );
@@ -274,6 +313,9 @@ module ifu #(
     .cons_use0        (w_cons_use0),
     .cons_use1        (w_cons_use1),
     .kill_cnt         (w_kill_cnt),
+    .clr_val          (w_lb_clr_val),
+    .clr_all          (w_lb_clr_all),
+    .clr_line         (w_lb_clr_line),
     .rc_obs           (w_lb_rc)
   );
 
@@ -297,9 +339,12 @@ module ifu #(
     .xq_ppn0              (w_xq_ppn0),
     .xq_fault0            (w_xq_fault0),
     .xq_gpa0              (w_xq_gpa0),
+    .xq_imp0              (w_xq_imp0),
     .xq_ppn1              (w_xq_ppn1),
     .xq_fault1            (w_xq_fault1),
     .xq_gpa1              (w_xq_gpa1),
+    .xq_imp1              (w_xq_imp1),
+    .xq_uc                (w_xq_uc),
     .xq_pop               (w_xq_pop),
     .alloc_val            (w_alloc_val),
     .alloc_line           (w_alloc_line),
@@ -328,6 +373,7 @@ module ifu #(
     .ifu_l1i_req_id       (ifu_l1i_req_id),
     .ifu_l1i_req_paddr    (ifu_l1i_req_paddr),
     .ifu_l1i_req_prefetch (ifu_l1i_req_prefetch),
+    .ifu_l1i_req_uncached (ifu_l1i_req_uncached),
     .f2_val               (w_f2_val),
     .f2_rdy               (w_f2_rdy),
     .f2_idx               (w_f2_idx),
@@ -342,6 +388,9 @@ module ifu #(
     .f2_pc                (w_f2_pc),
     .f2_gpa0              (w_f2_gpa0),
     .f2_gpa1              (w_f2_gpa1),
+    .f2_imp0              (w_f2_imp0),
+    .f2_imp1              (w_f2_imp1),
+    .f2_uc                (w_f2_uc),
     .f2_rng               (w_f2_rng)
   );
 
@@ -386,6 +435,9 @@ module ifu #(
     .f2_pc         (w_f2_pc),
     .f2_gpa0       (w_f2_gpa0),
     .f2_gpa1       (w_f2_gpa1),
+    .f2_imp0       (w_f2_imp0),
+    .f2_imp1       (w_f2_imp1),
+    .f2_uc         (w_f2_uc),
     .f2_rng        (w_f2_rng),
     .f3_hw         (w_f3_hw),
     .f3_pc         (w_f3_pc),
@@ -414,7 +466,8 @@ module ifu #(
     .wb_mis_pos    (w_wb_mis_pos),
     .wb_target     (w_wb_target),
     .wb_fault_val  (w_wb_fault_val),
-    .wb_fault_pos  (w_wb_fault_pos)
+    .wb_fault_pos  (w_wb_fault_pos),
+    .wb_uc_end     (w_wb_uc_end)
   );
 
   ifu_wb u_wb (
@@ -433,6 +486,7 @@ module ifu #(
     .wb_target         (w_wb_target),
     .wb_fault_val      (w_wb_fault_val),
     .wb_fault_pos      (w_wb_fault_pos),
+    .wb_uc_end         (w_wb_uc_end),
     .ifu_ftq_pdwb_val  (ifu_ftq_pdwb_val),
     .ifu_ftq_pdwb_idx  (ifu_ftq_pdwb_idx),
     .ifu_ftq_pdwb_gen  (ifu_ftq_pdwb_gen),
@@ -444,7 +498,26 @@ module ifu #(
     .ifu_ftq_mis_pos   (ifu_ftq_mis_pos),
     .ifu_ftq_target    (ifu_ftq_target),
     .ifu_ftq_fault_val (ifu_ftq_fault_val),
-    .ifu_ftq_fault_pos (ifu_ftq_fault_pos)
+    .ifu_ftq_fault_pos (ifu_ftq_fault_pos),
+    .ifu_ftq_uc_end    (ifu_ftq_uc_end)
+  );
+
+  ifu_maint u_maint (
+    .clk                 (clk),
+    .rstn                (rstn),
+    .cmt_ifu_maint_val   (cmt_ifu_maint_val),
+    .cmt_ifu_maint_rdy   (cmt_ifu_maint_rdy),
+    .cmt_ifu_maint_op    (cmt_ifu_maint_op),
+    .cmt_ifu_maint_paddr (cmt_ifu_maint_paddr),
+    .ifu_cmt_maint_ack   (ifu_cmt_maint_ack),
+    .ifu_l1i_inv_val     (ifu_l1i_inv_val),
+    .ifu_l1i_inv_rdy     (ifu_l1i_inv_rdy),
+    .ifu_l1i_inv_all     (ifu_l1i_inv_all),
+    .ifu_l1i_inv_paddr   (ifu_l1i_inv_paddr),
+    .l1i_ifu_inv_done    (l1i_ifu_inv_done),
+    .lb_clr_val          (w_lb_clr_val),
+    .lb_clr_all          (w_lb_clr_all),
+    .lb_clr_line         (w_lb_clr_line)
   );
 
 endmodule : ifu

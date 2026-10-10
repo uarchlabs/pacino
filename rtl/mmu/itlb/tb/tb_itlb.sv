@@ -105,6 +105,8 @@ module tb #(
   logic [1:0]              l2_rsp_pbmt;
   logic [CAUSE_WIDTH-1:0]  l2_rsp_cause;
   logic [GPA_WIDTH-1:0]    l2_rsp_gpa;
+  logic [1:0]              l2_rsp_imp;
+  logic [1:0]              rsp_imp;
 
   logic                    c_v;
   logic [1:0]              c_priv;
@@ -134,6 +136,7 @@ module tb #(
     .itlb_ifu_ppn          (rsp_ppn),
     .itlb_ifu_cause        (rsp_cause),
     .itlb_ifu_gpa          (rsp_gpa),
+    .itlb_ifu_gpa_imp      (rsp_imp),
     .itlb_ifu_pma          (rsp_pma),
     .itlb_l2t_req_val      (l2_req_val),
     .itlb_l2t_req_rdy      (l2_req_rdy),
@@ -151,6 +154,7 @@ module tb #(
     .l2t_itlb_pbmt         (l2_rsp_pbmt),
     .l2t_itlb_cause        (l2_rsp_cause),
     .l2t_itlb_gpa          (l2_rsp_gpa),
+    .l2t_itlb_gpa_imp      (l2_rsp_imp),
     .csr_itlb_v            (c_v),
     .csr_itlb_priv         (c_priv),
     .csr_itlb_satp_mode    (c_satp_mode),
@@ -185,6 +189,7 @@ module tb #(
     logic [1:0]             pbmt;
     logic [CAUSE_WIDTH-1:0] cause;
     logic [GPA_WIDTH-1:0]   gpa;
+    logic [1:0]             imp;
     int                     lat;
     int                     retries;
   } map_t;
@@ -243,7 +248,7 @@ module tb #(
     map_t m;
     m.v = v; m.vmid = vm; m.asid = as; m.vbase = vb; m.size = sz;
     m.st = L2_HIT; m.ppn = pn; m.perm = pm; m.pbmt = pb;
-    m.cause = '0; m.gpa = '0; m.lat = lat; m.retries = 0;
+    m.cause = '0; m.gpa = '0; m.imp = '0; m.lat = lat; m.retries = 0;
     maps.push_back(m);
   endtask
 
@@ -254,7 +259,8 @@ module tb #(
     m.v = c_v; m.vmid = c_vmid;
     m.asid = c_v ? c_vsatp_asid : c_satp_asid;
     m.vbase = vb; m.size = SZ4K; m.st = st; m.ppn = '0; m.perm = 8'h00;
-    m.pbmt = '0; m.cause = cs; m.gpa = ga; m.lat = lat; m.retries = 0;
+    m.pbmt = '0; m.cause = cs; m.gpa = ga; m.imp = 2'b00; m.lat = lat;
+    m.retries = 0;
     maps.push_back(m);
   endtask
 
@@ -302,6 +308,7 @@ module tb #(
     l2_rsp_pbmt  = '0;
     l2_rsp_cause = '0;
     l2_rsp_gpa   = '0;
+    l2_rsp_imp   = '0;
     if (rstn) begin
       int best;
       best = -1;
@@ -334,6 +341,7 @@ module tb #(
           l2_rsp_pbmt  = maps[p.mi].pbmt;
           l2_rsp_cause = maps[p.mi].cause;
           l2_rsp_gpa   = maps[p.mi].gpa;
+          l2_rsp_imp   = maps[p.mi].imp;
         end
       end
     end
@@ -577,6 +585,17 @@ module tb #(
        g_gpa == 41'h1_2345_6789A);
     ok("F5 V=1 walk carries V and VMID", last_v == 1'b1 &&
        last_vmid == 14'd3);
+    // BP-123, IT-6c, ITLB-10a: the held fault keeps the GPA's kind.
+    for (int k = 0; k < 3; k++) begin
+      reset_all();
+      c_v = 1'b1;
+      add_fault(VA_B, L2_FAULT, 5'd20, 41'h0_0004_2AB8, 3);
+      maps[maps.size()-1].imp = 2'(k);
+      xlate(VA_B, m0);
+      ok($sformatf("F5b.%0d cause 20 carries its kind %0d", k, k),
+         g_st == ST_FAULT && g_cause == 5'd20 && rsp_imp == 2'(k) &&
+         g_gpa == 41'h0_0004_2AB8);
+    end
     reset_all();
     add_fault(VA_C, L2_FAULT, 5'd1, 41'h0_0000_0FFF, 3);
     xlate(VA_C, m0);
@@ -911,6 +930,26 @@ module tb #(
        g_ppn == 24'h080500);
     ok("P4 V=1 G-only: L2 sees bit 40", last_vpn == 29'h1000_0000);
     ok("P5 no walk for P1, P2", l2_reqs == 1);
+    // BP-123. A G-stage-only translation (vsatp Bare) has no VS-stage
+    // leaf: the walker returns the G-stage leaf, U set (MMU-26), and
+    // ITLB-16's VS-level rule must not apply. Before BP-123 every
+    // VS-mode fetch through such an entry faulted cause 12.
+    reset_all();
+    c_v = 1'b1; c_vsatp_mode = BARE; c_priv = 2'd1;          // VS-mode
+    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080600, PXU, 2'd0, 2);
+    xlate(VA_A, m0);
+    ok("P6 G-only entry, U set, hits in VS-mode", g_st == ST_HIT &&
+       g_ppn == 24'h080600);
+    c_priv = 2'd0;                                            // VU-mode
+    look(VA_A);
+    ok("P7 and in VU-mode", g_st == ST_HIT && g_ppn == 24'h080600);
+    // With a VS-stage the rule applies: a U page faults in VS-mode.
+    reset_all();
+    c_v = 1'b1; c_priv = 2'd1;
+    add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080600, PXU, 2'd0, 2);
+    xlate(VA_A, m0);
+    ok("P8 with vsatp Sv39 a U page faults in VS-mode", g_st == ST_FAULT &&
+       g_cause == 5'd12);
 
     // ---- R: reserved page-size codes (IL-7, IT-4) ------------------------
     // Each of the four reserved codes, from reset, on a mapping that is

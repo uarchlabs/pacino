@@ -92,12 +92,16 @@ module tb;
     .pmp_cfg (cfgg), .pmp_addr (adrg),
     .chk_pmp_ok (okg), .chk_pma (ag), .chk_fault (fg));
 
-  // A device region below main memory: executable, nothing else.
+  // A ROM region below main memory: executable and idempotent, neither
+  // cacheable nor coherent. BP-123: this was 4'b0100, executable and
+  // not idempotent, which MMU-15b forbids and the checker now rejects
+  // at elaboration (lint_neg_pma); MMU-15b puts executable device
+  // memory such as a boot ROM in an idempotent region.
   pmp_pma_chk #(
     .PMA_REGIONS (2),
     .PMA_BASE    ({36'h0_8000_0000, 36'h0_1000_0000}),
     .PMA_TOP     ({36'hF_FFFF_FFFF, 36'h0_1000_0FFF}),
-    .PMA_ATTR    ({4'b1111,         4'b0100})
+    .PMA_ATTR    ({4'b1111,         4'b1100})
   ) u2r (
     .chk_pa (pa), .chk_acc (acc), .chk_priv (prv), .chk_pbmt (pbmt),
     .pmp_cfg (cfg2), .pmp_addr (adr2),
@@ -299,8 +303,8 @@ module tb;
     // ---- J: a two-region table ---------------------------------------
     cfg2[0] = NAP | R | W | X;
     adr2[0] = '1;
-    chk("J1 device base",          2, 36'h0_1000_0000, PS, 1, 0, 4'b0100);
-    chk("J2 device top byte",      2, 36'h0_1000_0FFF, PS, 1, 0, 4'b0100);
+    chk("J1 device base",          2, 36'h0_1000_0000, PS, 1, 0, 4'b1100);
+    chk("J2 device top byte",      2, 36'h0_1000_0FFF, PS, 1, 0, 4'b1100);
     chk("J3 above device",         2, 36'h0_1000_1000, PS, 1, 1, NO);
     chk("J4 main memory",          2, 36'h0_8000_0000, PS, 1, 0, MM);
     pbmt = 2'd0;

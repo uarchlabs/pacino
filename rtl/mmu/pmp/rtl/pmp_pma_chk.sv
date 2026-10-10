@@ -62,6 +62,12 @@
 // that is not executable. A read or write is faulted by the PMP
 // only; MMU-13 has no readable or writable attribute.
 //
+// NON-IDEMPOTENT MEMORY IS NEVER EXECUTABLE (MMU-15b, BP-123). A region
+// table that marks any region -- or the default for addresses in no
+// region -- executable but not idempotent is rejected at elaboration
+// with $error, so a lint or a build of it fails. The Makefile's
+// lint_neg_pma target is that rejection, seen every run.
+//
 // Written as single continuous assigns over one function so no
 // assign reads another (CLAUDE.md, combinational logic style).
 // ===================================================================
@@ -134,6 +140,21 @@ module pmp_pma_chk #(
 
   initial begin
     if (PMP_GRAN_LG2 < 2) $error("pmp_pma_chk: PMP_GRAN_LG2 below 2");
+  end
+
+  // MMU-15b: an elaboration-time rejection, one generate branch per
+  // offending region.
+  for (genvar k = 0; k < PMA_REGIONS; k++) begin : g_pma_x_idem
+    if (PMA_ATTR[k][PMA_EXECUTABLE] && !PMA_ATTR[k][PMA_IDEMPOTENT])
+    begin : g_reject
+      $error("pmp_pma_chk: MMU-15b region %0d is executable %s", k,
+             "but not idempotent");
+    end
+  end
+  if (PMA_DFLT[PMA_EXECUTABLE] && !PMA_DFLT[PMA_IDEMPOTENT])
+  begin : g_dflt_reject
+    $error("pmp_pma_chk: MMU-15b the default is executable %s",
+           "but not idempotent");
   end
 
   // -----------------------------------------------------------------

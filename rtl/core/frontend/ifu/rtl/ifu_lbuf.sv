@@ -48,6 +48,19 @@
 // slot is left with no reader, so no later block reuses a line whose
 // only readers were dropped.
 //
+// THE CLEAR (l1i_ifu_interfaces.md IF-36, BP-123). A line in this
+// buffer can be served without an L1I request only through the
+// previous-request register: a later block reuses that slot's line
+// (TD-IFU-8). Every other slot is read only by the blocks that hold a
+// reference to it, all fetched before the clear and younger than the
+// maintenance instruction. So the clear drops the previous request
+// (on FENCE.I always, on cbo.inval when it names that line), and no
+// block fetched after it can be answered from a line the L1I
+// invalidated. ifu_maint drives it in the cycle l1i_ifu_inv_done is
+// seen, never earlier (IF-36: a draining response must not refill
+// it). An allocation in the same cycle is newer than the clear and
+// wins.
+//
 // THE READER COUNT (TD#153, BP-119). A slot is held by at most one
 // reference per block (a block's two lines are different slots), and
 // the blocks that can hold one are every block in the F1 queue,
@@ -107,6 +120,11 @@ module ifu_lbuf #(
 
   // ---- references dropped by a flush, from ifu_fetch ---------------
   input  logic [$clog2(2*LB_DEPTH+1)-1:0] kill_cnt [0:LB_DEPTH-1],
+
+  // ---- the IF-36 clear, from ifu_maint (BP-123) ----------------------
+  input  logic                     clr_val,
+  input  logic                     clr_all,
+  input  logic [PA_WIDTH-1:L1I_OFFSET_BITS] clr_line,
 
   // ---- observation, for the bound properties (TD#109) -------------
   // The per-slot reader counts. Read by ifu_assert U5 and nothing else.
@@ -205,10 +223,12 @@ module ifu_lbuf #(
     end
 
     // The previous request: replaced by an allocation, or dropped by a
-    // flush that leaves its slot with no reader.
+    // flush that leaves its slot with no reader, or by the IF-36 clear.
     w_prev_val_nx  = w_alloc ? 1'b1
                    : ((flush && (w_rc_nx[r_prev_slot] == '0)) ? 1'b0
-                                                              : r_prev_val);
+                   : ((clr_val && (clr_all || (clr_line == r_prev_line)))
+                                                            ? 1'b0
+                                                            : r_prev_val));
     w_prev_slot_nx = w_alloc ? alloc_slot : r_prev_slot;
 
     for (int s = 0; s < LB_DEPTH; s++) begin

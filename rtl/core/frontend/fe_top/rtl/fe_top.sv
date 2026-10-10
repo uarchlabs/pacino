@@ -16,9 +16,11 @@
 //   u_bpu    bp_cluster       the predictors
 //   u_ftq    ftq              the fetch target queue
 //   u_ifu    ifu              translation and fetch pipelines
-//   u_l1i    l1i              the cachegen emission under
-//                             tools/cachegen/output/l1i, used as
-//                             emitted, a SIBLING of the IFU (L1I-2)
+//   u_l1i    l1i              the pacino L1I, rtl/core/frontend/icache:
+//                             the cachegen emission copied into the
+//                             tree and changed there (BP-123,
+//                             cachegen_decisions.md CG-D1), a SIBLING
+//                             of the IFU (L1I-2)
 //   u_itlb   itlb             with its PMP/PMA checker inside
 //                             (MMU-10a)
 //   u_ibuf   ibuf             the instruction buffer
@@ -28,16 +30,22 @@
 //   instruction  the L1I's l2-side link, emitted as interface 'mem'
 //                on link tl_l1i_l2 (FE-17 and FE-21 call it up_i).
 //                Prefixed l1i_mem_ here; a testbench answers it.
-//   translation  the ITLB to the shared L2 TLB, itlb_l2t_* and
-//                l2t_itlb_*
-//   uncached     IFU-21. NOT PRESENT: the IFU declares no uncached
-//                port (TD#135), so there is nothing to bring out
+//   translation  the ITLB to the page table walker, itlb_l2t_* and
+//                l2t_itlb_* (the names keep l2t; there is no L2 TLB,
+//                mmu_decisions.md MMU-1, MMU-1a). The walker is outside
+//                this top; tb_fe_top instantiates it beside it
+//   uncached     NOT A GROUP (FE-17): uncached fetch goes through the
+//                L1I marked uncached (IFU-21 reversed session-076) and
+//                leaves by the L1I's link like any fetch
 //   backend      decode's output to rename, qualified by the ibuf
 //                read ready dec_ibuf_rdy (FE-20), and the FTQ's
 //                resolution, redirect and commit groups
 //                (ftq_backend_interfaces.md). The backend redirect
 //                valid also clears the ibuf (IBUF-13), the one net
-//                with two consumers here
+//                with two consumers here. And the commit stage's
+//                maintenance group to the IFU, cmt_ifu_maint_* and
+//                ifu_cmt_maint_ack (l1i_ifu_interfaces.md 11, FE-17,
+//                BP-123)
 //   csr          V, privilege, satp / vsatp / hgatp fields, pmpcfg
 //                and pmpaddr, into the ITLB (FE-20, ITLB-17)
 //   config       the cluster's configuration inputs, and decode's
@@ -106,7 +114,18 @@ module fe_top (
   input  logic [FTQ_PTR_BITS-1:0]     bkend_ftq_commit_idx,
 
   // =================================================================
-  // translation: ITLB to the shared L2 TLB, itlb_l2tlb_interfaces.md
+  // backend: the commit stage to the IFU, FENCE.I and cbo.inval
+  // (l1i_ifu_interfaces.md 11, FE-17; BP-123)
+  // =================================================================
+  input  logic                        cmt_ifu_maint_val,
+  output logic                        cmt_ifu_maint_rdy,
+  input  logic                        cmt_ifu_maint_op,
+  input  logic [PA_WIDTH-1:0]         cmt_ifu_maint_paddr,
+  output logic                        ifu_cmt_maint_ack,
+
+  // =================================================================
+  // translation: the ITLB to the page table walker,
+  // itlb_l2tlb_interfaces.md
   // =================================================================
   output logic                        itlb_l2t_req_val,
   input  logic                        itlb_l2t_req_rdy,
@@ -124,9 +143,11 @@ module fe_top (
   input  logic [1:0]                  l2t_itlb_pbmt,
   input  logic [CAUSE_WIDTH-1:0]      l2t_itlb_cause,
   input  logic [GPA_WIDTH-1:0]        l2t_itlb_gpa,
+  input  logic [1:0]                  l2t_itlb_gpa_imp,  // IL-11b
 
   // =================================================================
-  // instruction: the L1I's l2-side link, as emitted (FE-21)
+  // instruction: the L1I's l2-side link, as emitted (FE-21); the
+  // pacino L1I keeps the emission's link unchanged
   // =================================================================
   output logic                        l1i_mem_a_valid,
   input  logic                        l1i_mem_a_ready,
@@ -322,16 +343,24 @@ module fe_top (
   logic [VA_WIDTH-1:0]        ifu_ftq_target;
   logic                       ifu_ftq_fault_val;
   logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos;
+  logic                       ifu_ftq_uc_end;
 
   // -----------------------------------------------------------------
-  // IFU <-> L1I, l1i_ifu_interfaces.md 4 and 5. The emitted L1I
-  // names its core link core_*; the IFU's names are kept here.
+  // IFU <-> L1I, l1i_ifu_interfaces.md 4, 5 and 10. The L1I names its
+  // core link core_* as the emission does; the IFU's names are kept
+  // here.
   // -----------------------------------------------------------------
   logic                       ifu_l1i_req_val;
   logic                       ifu_l1i_req_rdy;
   logic [REQ_ID_BITS-1:0]     ifu_l1i_req_id;
   logic [PA_WIDTH-1:0]        ifu_l1i_req_paddr;
   logic                       ifu_l1i_req_prefetch;
+  logic                       ifu_l1i_req_uncached;
+  logic                       ifu_l1i_inv_val;
+  logic                       ifu_l1i_inv_rdy;
+  logic                       ifu_l1i_inv_all;
+  logic [PA_WIDTH-1:0]        ifu_l1i_inv_paddr;
+  logic                       l1i_ifu_inv_done;
   logic                       l1i_ifu_rsp_val;
   logic [REQ_ID_BITS-1:0]     l1i_ifu_rsp_id;
   logic [L1I_LINE_BITS-1:0]   l1i_ifu_rsp_data;
@@ -350,6 +379,7 @@ module fe_top (
   logic [PPN_WIDTH-1:0]       itlb_ifu_ppn;
   logic [CAUSE_WIDTH-1:0]     itlb_ifu_cause;
   logic [GPA_WIDTH-1:0]       itlb_ifu_gpa;
+  logic [1:0]                 itlb_ifu_gpa_imp;
   logic [PMA_WIDTH-1:0]       itlb_ifu_pma;
 
   // -----------------------------------------------------------------
@@ -578,6 +608,7 @@ module fe_top (
     .ifu_ftq_target        (ifu_ftq_target),
     .ifu_ftq_fault_val     (ifu_ftq_fault_val),
     .ifu_ftq_fault_pos     (ifu_ftq_fault_pos),
+    .ifu_ftq_uc_end        (ifu_ftq_uc_end),
     .bkend_ftq_rsv_val     (bkend_ftq_rsv_val),
     .bkend_ftq_rsv         (bkend_ftq_rsv),
     .ftq_bkend_rsv_rdy     (ftq_bkend_rsv_rdy),
@@ -627,15 +658,27 @@ module fe_top (
     .ifu_ftq_target        (ifu_ftq_target),
     .ifu_ftq_fault_val     (ifu_ftq_fault_val),
     .ifu_ftq_fault_pos     (ifu_ftq_fault_pos),
+    .ifu_ftq_uc_end        (ifu_ftq_uc_end),
     .ifu_l1i_req_val       (ifu_l1i_req_val),
     .ifu_l1i_req_rdy       (ifu_l1i_req_rdy),
     .ifu_l1i_req_id        (ifu_l1i_req_id),
     .ifu_l1i_req_paddr     (ifu_l1i_req_paddr),
     .ifu_l1i_req_prefetch  (ifu_l1i_req_prefetch),
+    .ifu_l1i_req_uncached  (ifu_l1i_req_uncached),
     .l1i_ifu_rsp_val       (l1i_ifu_rsp_val),
     .l1i_ifu_rsp_id        (l1i_ifu_rsp_id),
     .l1i_ifu_rsp_data      (l1i_ifu_rsp_data),
     .l1i_ifu_rsp_err       (l1i_ifu_rsp_err),
+    .ifu_l1i_inv_val       (ifu_l1i_inv_val),
+    .ifu_l1i_inv_rdy       (ifu_l1i_inv_rdy),
+    .ifu_l1i_inv_all       (ifu_l1i_inv_all),
+    .ifu_l1i_inv_paddr     (ifu_l1i_inv_paddr),
+    .l1i_ifu_inv_done      (l1i_ifu_inv_done),
+    .cmt_ifu_maint_val     (cmt_ifu_maint_val),
+    .cmt_ifu_maint_rdy     (cmt_ifu_maint_rdy),
+    .cmt_ifu_maint_op      (cmt_ifu_maint_op),
+    .cmt_ifu_maint_paddr   (cmt_ifu_maint_paddr),
+    .ifu_cmt_maint_ack     (ifu_cmt_maint_ack),
     .ifu_itlb_req_val      (ifu_itlb_req_val),
     .ifu_itlb_req_rdy      (ifu_itlb_req_rdy),
     .ifu_itlb_vpn          (ifu_itlb_vpn),
@@ -646,6 +689,7 @@ module fe_top (
     .itlb_ifu_ppn          (itlb_ifu_ppn),
     .itlb_ifu_cause        (itlb_ifu_cause),
     .itlb_ifu_gpa          (itlb_ifu_gpa),
+    .itlb_ifu_gpa_imp      (itlb_ifu_gpa_imp),
     .itlb_ifu_pma          (itlb_ifu_pma),
     .ifu_ibuf_val          (ifu_ibuf_val),
     .ifu_ibuf_en           (ifu_ibuf_en),
@@ -654,8 +698,9 @@ module fe_top (
   );
 
   // -----------------------------------------------------------------
-  // The L1I, as emitted (FE-16, FE-21). Its core link is the IFU's
-  // l1i_ifu_interfaces.md 4 and 5 port under the emitted names.
+  // The L1I (FE-16; rtl/core/frontend/icache, BP-123). Its core link
+  // is the IFU's l1i_ifu_interfaces.md 4, 5 and 10 port under the
+  // emission's core_ names, one to one.
   // -----------------------------------------------------------------
   l1i u_l1i (
     .clk           (clk),
@@ -664,11 +709,17 @@ module fe_top (
     .core_addr     (ifu_l1i_req_paddr),
     .core_id       (ifu_l1i_req_id),
     .core_prefetch (ifu_l1i_req_prefetch),
+    .core_uncached (ifu_l1i_req_uncached),
     .core_rdata    (l1i_ifu_rsp_data),
     .core_ready    (ifu_l1i_req_rdy),
     .core_rvalid   (l1i_ifu_rsp_val),
     .core_rid      (l1i_ifu_rsp_id),
     .core_rerr     (l1i_ifu_rsp_err),
+    .core_inv_val  (ifu_l1i_inv_val),
+    .core_inv_rdy  (ifu_l1i_inv_rdy),
+    .core_inv_all  (ifu_l1i_inv_all),
+    .core_inv_addr (ifu_l1i_inv_paddr),
+    .core_inv_done (l1i_ifu_inv_done),
     .mem_a_valid   (l1i_mem_a_valid),
     .mem_a_ready   (l1i_mem_a_ready),
     .mem_a_opcode  (l1i_mem_a_opcode),
@@ -707,6 +758,7 @@ module fe_top (
     .itlb_ifu_ppn          (itlb_ifu_ppn),
     .itlb_ifu_cause        (itlb_ifu_cause),
     .itlb_ifu_gpa          (itlb_ifu_gpa),
+    .itlb_ifu_gpa_imp      (itlb_ifu_gpa_imp),
     .itlb_ifu_pma          (itlb_ifu_pma),
     .itlb_l2t_req_val      (itlb_l2t_req_val),
     .itlb_l2t_req_rdy      (itlb_l2t_req_rdy),
@@ -724,6 +776,7 @@ module fe_top (
     .l2t_itlb_pbmt         (l2t_itlb_pbmt),
     .l2t_itlb_cause        (l2t_itlb_cause),
     .l2t_itlb_gpa          (l2t_itlb_gpa),
+    .l2t_itlb_gpa_imp      (l2t_itlb_gpa_imp),
     .csr_itlb_v            (csr_itlb_v),
     .csr_itlb_priv         (csr_itlb_priv),
     .csr_itlb_satp_mode    (csr_itlb_satp_mode),

@@ -238,6 +238,7 @@ module ftq (
   input  logic [VA_WIDTH-1:0]         ifu_ftq_target,
   input  logic                        ifu_ftq_fault_val,
   input  logic [FTQ_PD_POS_BITS-1:0]  ifu_ftq_fault_pos,
+  input  logic                        ifu_ftq_uc_end,     // BP-123
 
   // =================================================================
   // Backend boundary, ftq_backend_interfaces.md
@@ -721,6 +722,7 @@ module ftq (
     .ifu_ftq_target    (ifu_ftq_target),
     .ifu_ftq_fault_val (ifu_ftq_fault_val),
     .ifu_ftq_fault_pos (ifu_ftq_fault_pos),
+    .ifu_ftq_uc_end    (ifu_ftq_uc_end),
     .wb_set_val        (w_wb_set_val),
     .wb_set_idx        (w_wb_set_idx),
     .fault_set_val     (w_fault_set_val),

@@ -150,6 +150,12 @@ rtl/mmu/pmp/obj_pmp_pma_chk/
 rtl/core/frontend/ftq/obj_ftq_upd_conv/
 rtl/core/frontend/ftq/obj_labels_ftq_upd_conv/
 
+rtl/core/frontend/icache/obj_l1i/
+rtl/core/frontend/icache/obj_l1i_emitted/
+rtl/mmu/pmp/obj_lint_neg_pma/
+rtl/mmu/pmp/obj_lint_neg_pma_dflt/
+rtl/mmu/ptw/obj_ptw/
+
 
 # --------------------------------------------------------------------
 # docs

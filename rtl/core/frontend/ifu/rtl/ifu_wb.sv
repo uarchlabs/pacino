@@ -40,6 +40,7 @@ module ifu_wb (
   input  logic [VA_WIDTH-1:0]      wb_target,
   input  logic                     wb_fault_val,
   input  logic [FTQ_PD_POS_BITS-1:0] wb_fault_pos,
+  input  logic                     wb_uc_end,        // BP-123
 
   // ---- ftq_ifu_interfaces.md 6 -------------------------------------
   output logic                     ifu_ftq_pdwb_val,
@@ -53,7 +54,10 @@ module ifu_wb (
   output logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_mis_pos,
   output logic [VA_WIDTH-1:0]      ifu_ftq_target,
   output logic                     ifu_ftq_fault_val,
-  output logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos
+  output logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos,
+  // An uncached block ends after the instruction at mis_pos (IFU-23,
+  // BP-123): the FTQ's successor is the next sequential instruction.
+  output logic                     ifu_ftq_uc_end
 );
 
   always_ff @(posedge clk or negedge rstn) begin : seq
@@ -69,6 +73,7 @@ module ifu_wb (
       ifu_ftq_target    <= '0;
       ifu_ftq_fault_val <= 1'b0;
       ifu_ftq_fault_pos <= '0;
+      ifu_ftq_uc_end    <= 1'b0;
       for (int i = 0; i < FTQ_PD_WIDTH; i++) ifu_ftq_pd[i] <= '0;
     end else begin
       ifu_ftq_pdwb_val <= wb_load && !flush;
@@ -83,6 +88,7 @@ module ifu_wb (
         ifu_ftq_target    <= wb_target;
         ifu_ftq_fault_val <= wb_fault_val;
         ifu_ftq_fault_pos <= wb_fault_pos;
+        ifu_ftq_uc_end    <= wb_uc_end;
         for (int i = 0; i < FTQ_PD_WIDTH; i++) ifu_ftq_pd[i] <= wb_pd[i];
       end
     end

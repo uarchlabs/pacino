@@ -9,10 +9,16 @@
 //
 //   memory    one byte array. It answers the L1I's l2-side TileLink
 //             link (Get, two 256-bit AccessAckData beats per 64-byte
-//             line) and holds the page tables the L2 TLB model walks
-//   L2 TLB    walks Sv39 from the satp root this file sets, in that
-//             memory, and answers the ITLB with the IL-4 status, the
-//             IL-7 size, the PTE low byte as perm and the PBMT
+//             line) and the page table walker's memory port (8-byte
+//             READ and CAS, ptw_mem_interfaces.md) from the one image
+//             (WM-10), with a PTE change before a CAS (WM-11), an error
+//             on a chosen access (WM-12) and variable ready and latency
+//             (WM-13)
+//   walker    BP-123: the RTL page table walker, rtl/mmu/ptw,
+//             instantiated beside the front-end top (MMU-1a) and
+//             connected on the itlb_l2t_* group; its CSR group is driven
+//             here (MMU-24a). This was a behavioural Sv39 walk with a
+//             fixed latency
 //   backend   takes decode's output whenever the ibuf presents it,
 //             compares it in order against the program's executed
 //             stream, resolves every control transfer it retires,
@@ -88,6 +94,23 @@
 // +define+BASE_RTL compiles this file against the tree as BP-121
 // received it (no ftq_resolve_t.is_rvc, no ftb_cntrl upd_hit, no
 // corrected-history nets), for the before column of its measurements.
+//
+// BP-123. Programs for maintenance (fencei, cboinval), uncached fetch
+// (uc_nc, uc_io), the walker (pt_*) and the RVA23 extensions that reach
+// fetch and decode (zstar). The backend model gained: memory patches a
+// store applies when it retires (self-modifying code); the commit
+// stage's FENCE.I / cbo.inval handshake, holding the restart until the
+// IFU's ack (l1i_ifu_interfaces.md 11, A1); a CSR write that changes
+// the walker's envcfg bits and restarts; the GPA and its kind on a
+// guest-page fault; decode's operation and predecode's class per
+// instruction where a program names them; and an EAGER commit mode for
+// the uncached programs, which commits the entry of the last retired
+// instruction as soon as nothing is in flight to the backend and
+// resolves a block-ending branch against the block the FTQ fetched after
+// it. Every program checks, every cycle, that no uncached request is
+// presented before every older instruction has committed or off the
+// path, that no uncached line is written into the L1I, and that an
+// uncached instruction is delivered alone.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -97,7 +120,6 @@ module tb;
 
   localparam int MAXE    = 32768;
   localparam int TL_LAT  = 6;      // memory latency, request to beat 0
-  localparam int L2T_LAT = 5;      // L2 TLB walk latency
 
   logic clk;
   logic rstn;
@@ -139,6 +161,12 @@ module tb;
   logic [1:0]                  l2t_itlb_pbmt;
   logic [CAUSE_WIDTH-1:0]      l2t_itlb_cause;
   logic [GPA_WIDTH-1:0]        l2t_itlb_gpa;
+  logic [1:0]                  l2t_itlb_gpa_imp;      // BP-123
+  logic                        cmt_ifu_maint_val;     // BP-123
+  logic                        cmt_ifu_maint_rdy;
+  logic                        cmt_ifu_maint_op;
+  logic [PA_WIDTH-1:0]         cmt_ifu_maint_paddr;
+  logic                        ifu_cmt_maint_ack;
   logic                        l1i_mem_a_valid;
   logic                        l1i_mem_a_ready;
   logic [2:0]                  l1i_mem_a_opcode;
@@ -188,6 +216,41 @@ module tb;
 
   fe_top dut (.*);
 
+  // ---- the page table walker, beside the top (MMU-1a, BP-123) -------
+  logic [1:0]                  itlb_l2t_acc;
+  logic                        ptw_mem_req_val;
+  logic                        ptw_mem_req_rdy;
+  logic                        ptw_mem_req_op;
+  logic [PA_WIDTH-1:0]         ptw_mem_req_paddr;
+  logic [63:0]                 ptw_mem_req_cmp;
+  logic [63:0]                 ptw_mem_req_swap;
+  logic                        mem_ptw_rsp_val;
+  logic [63:0]                 mem_ptw_rsp_data;
+  logic                        mem_ptw_rsp_err;
+  logic [3:0]                  csr_ptw_satp_mode;
+  logic [PPN_WIDTH-1:0]        csr_ptw_satp_ppn;
+  logic [3:0]                  csr_ptw_vsatp_mode;
+  logic [GPA_WIDTH-13:0]       csr_ptw_vsatp_ppn;
+  logic [3:0]                  csr_ptw_hgatp_mode;
+  logic [PPN_WIDTH-1:0]        csr_ptw_hgatp_ppn;
+  logic                        csr_ptw_menvcfg_adue;
+  logic                        csr_ptw_henvcfg_adue;
+  logic                        csr_ptw_menvcfg_pbmte;
+  logic                        csr_ptw_henvcfg_pbmte;
+  logic [15:0][7:0]            csr_ptw_pmpcfg;
+  logic [15:0][PA_WIDTH-3:0]   csr_ptw_pmpaddr;
+
+  // The ITLB's requests are fetches (the walker's access type, see
+  // ptw.sv's header).
+  assign itlb_l2t_acc = 2'd2;
+
+  ptw u_ptw (.*);
+
+  // The walker reads the same PMP registers the ITLB does: one CSR
+  // file, two inputs (MMU-11a, MMU-24a).
+  assign csr_ptw_pmpcfg  = csr_itlb_pmpcfg;
+  assign csr_ptw_pmpaddr = csr_itlb_pmpaddr;
+
   // ---- bookkeeping ----------------------------------------------------
   int    pass_cnt;
   int    fail_cnt;
@@ -230,12 +293,28 @@ module tb;
     logic                trap;       // ecall: trap to target
     ifu_fault_e          fault;      // fetch fault: trap to target
     logic [VA_WIDTH-1:0] fva;
+    // BP-123.
+    logic [GPA_WIDTH-1:0] fgpa;      // cause 20: the faulting GPA
+    logic [1:0]          fimp;       // and its implicit-access kind
+    int                  maint;      // 1 FENCE.I, 2 cbo.inval, at commit
+    logic [PA_WIDTH-1:0] mpa;        // cbo.inval's physical address
+    int                  p0;         // memory patches applied when it
+    int                  pn;         //   retires: [p0, p0 + pn)
+    int                  aluop;      // decode's alu_op, -1 unchecked
   } ex_t;
   localparam logic [31:0] ADDI_T0 = 32'h0012_8293;   // addi t0,t0,1
   localparam logic [15:0] CADDI   = 16'h0505;        // c.addi a0,1
   localparam logic [31:0] CADDI_X = 32'h0015_0513;   // its expansion
   localparam logic [31:0] RET     = 32'h0000_8067;   // jalr x0,0(ra)
   localparam logic [31:0] ECALL   = 32'h0000_0073;
+  // BP-123.
+  localparam logic [31:0] FENCEI  = 32'h0000_100F;   // fence.i
+  localparam logic [31:0] SW_A0   = 32'h0005_2023;   // sw x0, 0(a0)
+  localparam logic [15:0] CNOP    = 16'h0001;        // c.nop
+  localparam logic [31:0] CNOP_X  = 32'h0000_0013;   // addi x0, x0, 0
+  localparam logic [31:0] ADDI_T1 = 32'h0013_0313;   // addi t1,t1,1
+  // PTE flag bytes, D A G U X W R V.
+  localparam logic [7:0] F_URWXAD = 8'hDF;           // a G-stage leaf
 
   // =================================================================
   // The program writer (BP-121: a class, so its methods compile as
@@ -256,6 +335,13 @@ module tb;
       wp        = '0;
       lfsr      = 16'h1;
       for (int k = 0; k < 32; k++) fnv[k] = '0;
+      h2        = 1'b0;
+      g_bare    = 1'b0;
+      hg_root   = '0;
+      vs_root   = '0;
+      gpt_next  = '0;
+      patching  = 1'b0;
+      nowrite   = 1'b0;
     endfunction
 
     // =================================================================
@@ -289,7 +375,7 @@ module tb;
 
     function logic [PA_WIDTH-1:0] va2pa(input logic [VA_WIDTH-1:0] va);
       logic [VA_WIDTH-13:0] v;
-      if (!sv39) return va[PA_WIDTH-1:0];
+      if (!sv39 && !h2) return va[PA_WIDTH-1:0];
       v = va[VA_WIDTH-1:12];
       if (!vmap.exists(v)) begin
         $display("tb_fe_top: write to an unmapped VA %011h", va);
@@ -346,7 +432,13 @@ module tb;
     task put_hw(input logic [VA_WIDTH-1:0] va,
                           input logic [15:0] h);
       logic [PA_WIDTH-1:0] pa;
+      if (nowrite) return;                  // BP-123, see below
       pa = va2pa(va);
+      if (patching) begin
+        pat_a.push_back(pa);
+        pat_h.push_back(h);
+        return;
+      end
       mem[pa]                 = h[7:0];
       mem[pa + PA_WIDTH'(1)]  = h[15:8];
     endtask
@@ -366,6 +458,13 @@ module tb;
       ex[ne].trap   = 1'b0;
       ex[ne].fault  = IFU_FAULT_NONE;
       ex[ne].fva    = '0;
+      ex[ne].fgpa   = '0;
+      ex[ne].fimp   = '0;
+      ex[ne].maint  = 0;
+      ex[ne].mpa    = '0;
+      ex[ne].p0     = 0;
+      ex[ne].pn     = 0;
+      ex[ne].aluop  = -1;
       ne++;
     endtask
 
@@ -733,6 +832,236 @@ module tb;
       wp = w;
     endtask
 
+    // =================================================================
+    // BP-123 additions.
+    // =================================================================
+    // SELF-MODIFYING CODE. A store's memory effect is a list of
+    // halfword patches applied when the store retires. patching: the
+    // emitters' writes are collected into the list instead of memory.
+    // nowrite: the emitters append to the stream and write nothing, for
+    // the new code as it executes after the fence (memory holds the old
+    // code until the store retires).
+    logic                patching;
+    logic                nowrite;
+    logic [PA_WIDTH-1:0] pat_a [$];
+    logic [15:0]         pat_h [$];
+
+    // A store, sw x0, 0(a0): retiring it applies the patches written
+    // between store() and store_end().
+    int st_e;
+    task store();
+      i32(SW_A0);
+      st_e           = ne - 1;
+      ex[st_e].p0    = pat_a.size();
+      patching       = 1'b1;
+    endtask
+    task store_end();
+      patching       = 1'b0;
+      ex[st_e].pn    = pat_a.size() - ex[st_e].p0;
+    endtask
+
+    // FENCE.I and cbo.inval: the backend drives the commit-stage
+    // maintenance port when one retires and restarts after the ack.
+    task fence_i();
+      i32(FENCEI);
+      ex[ne-1].maint = 1;
+    endtask
+    // A CSR write that changes the walker's envcfg bits when it
+    // retires; fetch then restarts after it, as after a FENCE.I, so no
+    // younger walk runs under the old value. csrrw x0, menvcfg, t0.
+    // act_* hold the new values, indexed by the entry's p0.
+    logic act_madue [$];
+    logic act_hadue [$];
+    logic act_mpbmte [$];
+    logic act_hpbmte [$];
+    task csr_env(input logic madue, input logic hadue,
+                 input logic mpbmte, input logic hpbmte);
+      i32({12'h30A, 5'd5, 3'b001, 5'd0, 7'b1110011});
+      ex[ne-1].maint = 3;
+      ex[ne-1].p0    = act_madue.size();
+      act_madue.push_back(madue);
+      act_hadue.push_back(hadue);
+      act_mpbmte.push_back(mpbmte);
+      act_hpbmte.push_back(hpbmte);
+    endtask
+
+    task cbo_inval(input logic [4:0] rs1, input logic [PA_WIDTH-1:0] pa);
+      i32({12'h000, rs1, 3'b010, 5'b00000, 7'b0001111});
+      ex[ne-1].maint = 2;
+      ex[ne-1].mpa   = pa;
+    endtask
+
+    // An indirect jump, jalr x0, 0(t2), to an address whose fetch
+    // faults: reaches any target, where jal_fault reaches +-1 MiB.
+    task jr_fault(input logic [VA_WIDTH-1:0] tgt, input ifu_fault_e f,
+                  input logic [VA_WIDTH-1:0] handler);
+      jalr_to(5'd0, 5'd7, tgt);
+      add_ex(tgt, '0, 1'b0, NO_BRANCH, 1'b0, handler);
+      ex[ne-1].fault = f;
+      ex[ne-1].fva   = tgt;
+      wp = handler;
+    endtask
+    task jr_gfault(input logic [VA_WIDTH-1:0] tgt,
+                   input logic [GPA_WIDTH-1:0] gpa, input logic [1:0] imp,
+                   input logic [VA_WIDTH-1:0] handler);
+      jr_fault(tgt, IFU_FAULT_GUEST_PAGE, handler);
+      ex[ne-1].fgpa = gpa;
+      ex[ne-1].fimp = imp;
+    endtask
+
+    // A fetch fault with its guest physical address and kind.
+    task jal_gfault(input logic [VA_WIDTH-1:0] tgt,
+                    input logic [GPA_WIDTH-1:0] gpa, input logic [1:0] imp,
+                    input logic [VA_WIDTH-1:0] handler);
+      jal_fault(tgt, IFU_FAULT_GUEST_PAGE, handler);
+      ex[ne-1].fgpa = gpa;
+      ex[ne-1].fimp = imp;
+    endtask
+
+    // ---- PTEs ----------------------------------------------------------
+    function logic [63:0] mk_pte(input logic [43:0] ppn,
+                                 input logic [7:0] f,
+                                 input logic [1:0] pbmt, input logic n);
+      return {n, pbmt, 7'd0, ppn, 2'b00, f};
+    endfunction
+
+    // The PA of the single-stage PTE for va at a level, creating the
+    // non-leaf tables above it. A non-leaf already present is followed.
+    function logic [PA_WIDTH-1:0] s_slot(input logic [VA_WIDTH-1:0] va,
+                                         input int lvl);
+      logic [PA_WIDTH-1:0] t;
+      logic [63:0]         pte;
+      logic [8:0]          vi;
+      t = satp_root;
+      for (int l = 2; l > lvl; l--) begin
+        vi  = va[12 + 9*l +: 9];
+        pte = rd64(t + PA_WIDTH'(8 * vi));
+        if (!pte[0]) begin
+          logic [PA_WIDTH-1:0] n;
+          n   = pt_alloc();
+          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
+          wr64(t + PA_WIDTH'(8 * vi), pte);
+        end
+        t = PA_WIDTH'(pte[53:10]) << 12;
+      end
+      vi = va[12 + 9*lvl +: 9];
+      return t + PA_WIDTH'(8 * vi);
+    endfunction
+
+    // UNCACHED PAGES (PBMT NC or IO): their PPNs, for the allocation
+    // check, and their VA pages, for the delivery check.
+    logic uc_ppn [logic [PPN_WIDTH-1:0]];
+    logic uc_vpn [logic [VA_WIDTH-13:0]];
+
+    // A 4 KiB single-stage page with a PBMT.
+    task map4k_pbmt(input logic [VA_WIDTH-1:0] va,
+                    input logic [PA_WIDTH-1:0] pa, input logic [1:0] pbmt);
+      wr64(s_slot(va, 0), mk_pte(44'(pa >> 12), PTE_LEAF, pbmt, 1'b0));
+      vmap[va[VA_WIDTH-1:12]] = pa[PA_WIDTH-1:12];
+      if (pbmt != 2'b00) begin
+        uc_ppn[pa[PA_WIDTH-1:12]]   = 1'b1;
+        uc_vpn[va[VA_WIDTH-1:12]]   = 1'b1;
+      end
+    endtask
+
+    // ---- two-stage (V=1, vsatp Sv39, hgatp Sv39x4) ---------------------
+    // The G-stage root is 16 KiB at hg_root. VS-stage tables live in
+    // guest physical memory: each has a GPA from gpt_next and an SPA
+    // from pt_alloc, mapped by a G-stage leaf. gmap is GPA page -> SPA
+    // page; vmap is VA page -> SPA page, for writing code.
+    logic                  h2;
+    logic [PA_WIDTH-1:0]   hg_root;
+    logic [GPA_WIDTH-1:0]  vs_root;       // GPA of the VS root
+    logic [GPA_WIDTH-1:0]  gpt_next;
+    logic [PPN_WIDTH-1:0]  gmap [logic [GPA_WIDTH-13:0]];
+
+    // The PA of the G-stage PTE for a guest page at a level.
+    function logic [PA_WIDTH-1:0] g_slot(input logic [GPA_WIDTH-13:0] gp,
+                                         input int lvl);
+      logic [PA_WIDTH-1:0] t;
+      logic [63:0]         pte;
+      logic [10:0]         gi;
+      t = hg_root;
+      for (int l = 2; l > lvl; l--) begin
+        gi  = (l == 2) ? gp[28:18] : {2'b00, gp[9*l +: 9]};
+        pte = rd64(t + PA_WIDTH'(8 * gi));
+        if (!pte[0]) begin
+          logic [PA_WIDTH-1:0] n;
+          n   = pt_alloc();
+          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
+          wr64(t + PA_WIDTH'(8 * gi), pte);
+        end
+        t = PA_WIDTH'(pte[53:10]) << 12;
+      end
+      gi = (lvl == 2) ? gp[28:18] : {2'b00, gp[9*lvl +: 9]};
+      return t + PA_WIDTH'(8 * gi);
+    endfunction
+
+    // A 4 KiB G-stage leaf, U R W X A D unless told otherwise.
+    function void g_map(input logic [GPA_WIDTH-13:0] gp,
+                        input logic [PA_WIDTH-1:0] spa,
+                        input logic [63:0] leaf);
+      wr64(g_slot(gp, 0), leaf);
+      gmap[gp] = spa[PA_WIDTH-1:12];
+    endfunction
+
+    // hgatp Bare (VS-stage only): a GPA is the SPA, and no G-stage
+    // leaf is written.
+    logic                  g_bare;
+
+    // A VS-stage table page: a GPA, an SPA, and the G-stage leaf.
+    function logic [GPA_WIDTH-1:0] vs_alloc();
+      logic [GPA_WIDTH-1:0] g;
+      logic [PA_WIDTH-1:0]  p;
+      if (g_bare) begin
+        p = pt_alloc();
+        gmap[(GPA_WIDTH-12)'(p[PA_WIDTH-1:12])] = p[PA_WIDTH-1:12];
+        return GPA_WIDTH'(p);
+      end
+      g        = gpt_next;
+      gpt_next = gpt_next + GPA_WIDTH'('h1000);
+      p        = pt_alloc();
+      g_map(g[GPA_WIDTH-1:12], p,
+            mk_pte(44'(p >> 12), F_URWXAD, 2'b00, 1'b0));
+      return g;
+    endfunction
+
+    function logic [PA_WIDTH-1:0] g2s(input logic [GPA_WIDTH-1:0] g);
+      return {gmap[g[GPA_WIDTH-1:12]], g[11:0]};
+    endfunction
+
+    // The SPA of the VS-stage PTE for va at a level.
+    function logic [PA_WIDTH-1:0] vs_slot(input logic [VA_WIDTH-1:0] va,
+                                          input int lvl);
+      logic [GPA_WIDTH-1:0] t;
+      logic [63:0]          pte;
+      logic [8:0]           vi;
+      t = vs_root;
+      for (int l = 2; l > lvl; l--) begin
+        vi  = va[12 + 9*l +: 9];
+        pte = rd64(g2s(t + GPA_WIDTH'(8 * vi)));
+        if (!pte[0]) begin
+          logic [GPA_WIDTH-1:0] n;
+          n   = vs_alloc();
+          pte = {10'd0, 44'(n >> 12), 2'b00, PTE_PTR};
+          wr64(g2s(t + GPA_WIDTH'(8 * vi)), pte);
+        end
+        t = GPA_WIDTH'(pte[53:10]) << 12;
+      end
+      vi = va[12 + 9*lvl +: 9];
+      return g2s(t + GPA_WIDTH'(8 * vi));
+    endfunction
+
+    // A two-stage 4 KiB mapping VA -> GPA -> SPA, both leaves ordinary.
+    task h_map4k(input logic [VA_WIDTH-1:0] va,
+                 input logic [GPA_WIDTH-1:0] gpa,
+                 input logic [PA_WIDTH-1:0] spa);
+      g_map(gpa[GPA_WIDTH-1:12], spa,
+            mk_pte(44'(spa >> 12), F_URWXAD, 2'b00, 1'b0));
+      wr64(vs_slot(va, 0), mk_pte(44'(gpa >> 12), PTE_LEAF, 2'b00, 1'b0));
+      vmap[va[VA_WIDTH-1:12]] = spa[PA_WIDTH-1:12];
+    endtask
+
   endclass
 
   pw_c W = new;
@@ -823,92 +1152,125 @@ module tb;
   end
 
   // =================================================================
-  // The L2 TLB model: an Sv39 walk of this memory.
+  // The walker's memory port (ptw_mem_interfaces.md, BP-123). It reads
+  // and writes the same image as the L1I's link above (WM-10). WM-11:
+  // the PTE at chg_pa is overwritten with chg_val just before the next
+  // CAS to it. WM-12: a read or CAS of err_pa is answered with
+  // mem_ptw_rsp_err, once. WM-13: ready falls on a pattern and the
+  // latency varies over [pw_lat_min, pw_lat_max].
   // =================================================================
-  logic                 w_val  [0:3];
-  int                   w_due  [0:3];
-  logic [1:0]           w_st   [0:3];
-  logic [PPN_WIDTH-1:0] w_ppn  [0:3];
-  logic [2:0]           w_sz   [0:3];
-  logic [7:0]           w_perm [0:3];
-  int                   n_walks;
+  int                  n_walks;
+  int                  n_pw_acc;
+  int                  n_pw_cas;
+  int                  n_pw_err;
+  int                  n_pw_chg;
+  int                  pw_lat_min;
+  int                  pw_lat_max;
+  int                  pw_rdy_pat;
+  logic                err_arm;
+  logic [PA_WIDTH-1:0] err_pa;
+  logic                chg_arm;
+  logic [PA_WIDTH-1:0] chg_pa;
+  logic [63:0]         chg_val;
+  int                  n_pw_bad;     // WM-1, WM-3 seen broken
 
-  assign itlb_l2t_req_rdy = rstn;
+  // Walks whose VPN lies in [walk_lo, walk_hi), for the NAPOT and
+  // invalidate programs; and the invalidate-during-a-walk trigger: the
+  // first walk for inv_vpn arms an ITLB invalidate (all, ITLB-14) four
+  // cycles later, and the cycle it fires records whether the walker was
+  // still walking.
+  logic [VA_WIDTH-13:0] walk_lo;
+  logic [VA_WIDTH-13:0] walk_hi;
+  int                   n_walk_rng;
+  logic [VA_WIDTH-13:0] walk2_lo;
+  logic [VA_WIDTH-13:0] walk2_hi;
+  int                   n_walk_rng2;
+  logic                 inv_watch;
+  logic [VA_WIDTH-13:0] inv_vpn;
+  int                   inv_at;
+  int                   n_inv_fired;
+  int                   n_inv_busy;
 
-  task automatic walk(input logic [VA_WIDTH-13:0] vpn, output logic [1:0] st,
-                      output logic [PPN_WIDTH-1:0] ppn, output logic [2:0] sz,
-                      output logic [7:0] perm);
-    logic [PA_WIDTH-1:0] t;
-    logic [63:0]         pte;
-    logic [8:0]          vi;
-    st   = 2'b01;                 // fault, cause 12
-    ppn  = '0;
-    sz   = 3'b000;
-    perm = '0;
-    t    = W.satp_root;
-    for (int l = 2; l >= 0; l--) begin
-      vi  = vpn[9*l +: 9];
-      pte = W.rd64(t + PA_WIDTH'(8 * vi));
-      if (!pte[0] || (!pte[1] && pte[2])) return;
-      if (pte[1] || pte[3]) begin
-        st   = 2'b00;
-        ppn  = PPN_WIDTH'(pte[53:10]);
-        // IL-7: 000 4 KiB, 010 2 MiB, 011 1 GiB (this model returns
-        // no 64 KiB page and no reserved code).
-        sz   = (l == 2) ? 3'b011 : ((l == 1) ? 3'b010 : 3'b000);
-        perm = pte[7:0];
-        return;
-      end
-      t = PA_WIDTH'(pte[53:10]) << 12;
+  always @(posedge clk) begin : walk_count
+    if (rstn && itlb_l2t_req_val && itlb_l2t_req_rdy) begin
+      n_walks <= n_walks + 1;
+      if ((itlb_l2t_vpn >= walk_lo) && (itlb_l2t_vpn < walk_hi))
+        n_walk_rng <= n_walk_rng + 1;
+      if ((itlb_l2t_vpn >= walk2_lo) && (itlb_l2t_vpn < walk2_hi))
+        n_walk_rng2 <= n_walk_rng2 + 1;
     end
-  endtask
+  end
 
-  initial begin : l2t_model
-    logic                 s_req;
-    logic [1:0]           s_tag;
-    logic [VA_WIDTH-13:0] s_vpn;
-    int                   r;
-    l2t_itlb_rsp_val = 1'b0;
-    l2t_itlb_tag     = '0;
-    l2t_itlb_status  = '0;
-    l2t_itlb_ppn     = '0;
-    l2t_itlb_size    = '0;
-    l2t_itlb_perm    = '0;
-    l2t_itlb_pbmt    = '0;
-    l2t_itlb_cause   = '0;
-    l2t_itlb_gpa     = '0;
-    for (int i = 0; i < 4; i++) w_val[i] = 1'b0;
+  initial begin : ptw_mem
+    logic                s_acc;
+    logic                s_op;
+    logic [PA_WIDTH-1:0] s_pa;
+    logic [63:0]         s_cmp;
+    logic [63:0]         s_swap;
+    logic                o_val;
+    int                  o_due;
+    logic                o_op;
+    logic [PA_WIDTH-1:0] o_pa;
+    logic [63:0]         o_cmp;
+    logic [63:0]         o_swap;
+    logic [63:0]         old;
+    int                  rc;
+    ptw_mem_req_rdy  = 1'b0;
+    mem_ptw_rsp_val  = 1'b0;
+    mem_ptw_rsp_data = '0;
+    mem_ptw_rsp_err  = 1'b0;
+    o_val            = 1'b0;
+    rc               = 0;
     forever begin
       @(posedge clk);
-      s_req = rstn && itlb_l2t_req_val && itlb_l2t_req_rdy;
-      s_tag = itlb_l2t_tag;
-      s_vpn = itlb_l2t_vpn;
+      s_acc  = rstn && ptw_mem_req_val && ptw_mem_req_rdy;
+      s_op   = ptw_mem_req_op;
+      s_pa   = ptw_mem_req_paddr;
+      s_cmp  = ptw_mem_req_cmp;
+      s_swap = ptw_mem_req_swap;
       #1;
-      l2t_itlb_rsp_val = 1'b0;
+      mem_ptw_rsp_val = 1'b0;
+      mem_ptw_rsp_err = 1'b0;
       if (!rstn) begin
-        for (int i = 0; i < 4; i++) w_val[i] = 1'b0;
+        o_val = 1'b0;
       end else begin
-        r = -1;
-        for (int i = 0; i < 4; i++)
-          if (w_val[i] && (w_due[i] <= cyc) && (r < 0)) r = i;
-        if (r >= 0) begin
-          w_val[r]         = 1'b0;
-          l2t_itlb_rsp_val = 1'b1;
-          l2t_itlb_tag     = 2'(r);
-          l2t_itlb_status  = w_st[r];
-          l2t_itlb_ppn     = w_ppn[r];
-          l2t_itlb_size    = w_sz[r];
-          l2t_itlb_perm    = w_perm[r];
-          l2t_itlb_cause   = (w_st[r] == 2'b01) ? CAUSE_WIDTH'(12) : '0;
+        if (o_val && (o_due <= cyc)) begin
+          o_val           = 1'b0;
+          mem_ptw_rsp_val = 1'b1;
+          if (err_arm && (o_pa == err_pa)) begin
+            err_arm          = 1'b0;
+            mem_ptw_rsp_err  = 1'b1;
+            mem_ptw_rsp_data = 64'hBAD0_BAD0_BAD0_BAD0;
+            n_pw_err++;
+          end else begin
+            if (o_op && chg_arm && (o_pa == chg_pa)) begin
+              chg_arm = 1'b0;
+              W.wr64(o_pa, chg_val);
+              n_pw_chg++;
+            end
+            old              = W.rd64(o_pa);
+            mem_ptw_rsp_data = old;
+            if (o_op && (old == o_cmp)) W.wr64(o_pa, o_swap);
+          end
         end
-        if (s_req) begin
-          w_val[s_tag] = 1'b1;
-          w_due[s_tag] = cyc + L2T_LAT;
-          walk(s_vpn, w_st[s_tag], w_ppn[s_tag], w_sz[s_tag],
-               w_perm[s_tag]);
-          n_walks++;
+        if (s_acc) begin
+          if (s_pa[2:0] != 3'b000) n_pw_bad++;          // WM-1
+          if (o_val) n_pw_bad++;                         // WM-3
+          o_val  = 1'b1;
+          o_op   = s_op;
+          o_pa   = s_pa;
+          o_cmp  = s_cmp;
+          o_swap = s_swap;
+          o_due  = cyc + pw_lat_min +
+                   ((pw_lat_max > pw_lat_min)
+                      ? int'($urandom % (pw_lat_max - pw_lat_min + 1)) : 0);
+          n_pw_acc++;
+          if (s_op) n_pw_cas++;
         end
       end
+      // WM-13: ready from a counter, never from the request (WM-2).
+      rc++;
+      ptw_mem_req_rdy = rstn && ((pw_rdy_pat == 0) || ((rc % pw_rdy_pat) == 0));
     end
   end
 
@@ -923,12 +1285,43 @@ module tb;
   // last expected instruction, so no count includes the drain.
   logic                meas;
 
+  // BP-123: per index, a fetch of it since the last flush that covered
+  // it (fseen), and the IFU's writeback of it since then (wbseen). The
+  // eager backend resolves a branch from them; see the backend model.
+  logic [FTQ_DEPTH-1:0] fseen;
+  logic [FTQ_DEPTH-1:0] wbseen;
+
+  function automatic logic fl_covers(input logic [FTQ_IDX_BITS-1:0] i);
+    return FTQ_IDX_BITS'(i - dut.ftq_ifu_commit_ptr) >=
+           FTQ_IDX_BITS'(dut.ftq_ifu_flush_idx - dut.ftq_ifu_commit_ptr);
+  endfunction
+
   always @(posedge clk) begin : fetch_log
     if (rstn && dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
         !dut.ftq_ifu_flush_val)
       fstart[dut.ftq_ifu_idx] <= dut.ftq_ifu_start_pc;
     if (meas && dut.u_ftq.w_pd_redir_val && !bkend_ftq_redir_val)
       n_pd_redir <= n_pd_redir + 1;
+    if (!rstn) begin
+      fseen  <= '0;
+      wbseen <= '0;
+    end else begin
+      for (int i = 0; i < FTQ_DEPTH; i++) begin
+        if (dut.ftq_ifu_flush_val && fl_covers(FTQ_IDX_BITS'(i))) begin
+          fseen[i]  <= 1'b0;
+          wbseen[i] <= 1'b0;
+        end else begin
+          if (dut.ftq_ifu_req_val && dut.ftq_ifu_req_rdy &&
+              (dut.ftq_ifu_idx == FTQ_IDX_BITS'(i))) begin
+            fseen[i]  <= 1'b1;
+            wbseen[i] <= 1'b0;
+          end
+          if (dut.ifu_ftq_pdwb_val &&
+              (dut.ifu_ftq_pdwb_idx == FTQ_IDX_BITS'(i)))
+            wbseen[i] <= 1'b1;
+        end
+      end
+    end
   end
 
   // =================================================================
@@ -1471,6 +1864,113 @@ module tb;
   logic                    h_dir;
   int                      n_hist_ok;
   int                      n_hist_bad;
+  // BP-123. The commit stage's maintenance: an operation retired and
+  // waiting for its ack (mt_pend), presented and not yet taken
+  // (mt_req), and the restart it holds. Delivery is not taken while
+  // one is pending: the restart follows the ack (A1).
+  logic                    mt_pend;
+  logic                    mt_req;
+  int                      mt_e;
+  logic [FTQ_IDX_BITS-1:0] mt_idx;
+  logic [3:0]              mt_pos;
+  int                      n_maint;
+  int                      n_maint_drain;   // L1I busy when it took one
+  // Eager commit: commit the entry of the last retired instruction as
+  // soon as nothing is in flight to the backend, and resolve a branch
+  // that ended its block without waiting for the next instruction.
+  // Uncached fetch needs it (IFU-22: an entry waits for every older one
+  // to commit). Off for the BP-121 programs, so their timing is
+  // unchanged.
+  logic                    eager;
+  logic                    cm_all;      // every retired entry committed
+  int                      n_eager_res;
+  int                      n_patch;
+  int                      n_csrw;
+
+  // =================================================================
+  // BP-123, Problem 4. Every cycle of every program:
+  //   - an uncached L1I request is presented only when every retired
+  //     instruction's entry has been committed, and only for the line
+  //     of the next instruction to retire, or the line after it
+  //     (IFU-22: nothing older is uncommitted; nothing off the path)
+  //   - no fill is written into the L1I array for a line on an NC or
+  //     IO page (L1I-24, MMU-14)
+  //   - an ibuf transfer holding an instruction from an NC or IO page
+  //     holds that one instruction alone (IFU-23), and every retired
+  //     instruction's entry has committed
+  // The sources are the testbench's own: its retirement and commit
+  // state, its page attributes and its expected stream.
+  // =================================================================
+  int n_uc_req;
+  int n_uc_bad;
+  int n_uc_fill_bad;
+  int n_uc_dlv;
+  int n_uc_dlv_bad;
+
+  function automatic logic [PA_WIDTH-1:L1I_OFFSET_BITS] va_line(
+      input logic [VA_WIDTH-1:0] va);
+    logic [VA_WIDTH-13:0] v;
+    logic [PA_WIDTH-1:0]  pa;
+    v = va[VA_WIDTH-1:12];
+    if ((W.sv39 || W.h2) && !W.vmap.exists(v)) return '1;
+    pa = W.va2pa(va);
+    return pa[PA_WIDTH-1:L1I_OFFSET_BITS];
+  endfunction
+
+  initial begin : uc_checks
+    logic [PA_WIDTH-1:L1I_OFFSET_BITS] rl;
+    logic [VA_WIDTH-1:0]               pc;
+    int                                n;
+    logic                              uc;
+    forever begin
+    @(posedge clk);
+    if (rstn && run_be) begin
+      if (dut.ifu_l1i_req_val && dut.ifu_l1i_req_uncached) begin
+        n_uc_req++;
+        rl = dut.ifu_l1i_req_paddr[PA_WIDTH-1:L1I_OFFSET_BITS];
+        pc = W.ex[(ep < W.ne) ? ep : 0].pc;
+        if (!cm_all || (ep >= W.ne) ||
+            !((rl == va_line(pc)) ||
+              (rl == va_line({pc[VA_WIDTH-1:6], 6'd0} + VA_WIDTH'(64))))) begin
+          n_uc_bad++;
+          if (n_uc_bad <= 4)
+            $display("%s", $sformatf(
+              {"ERROR: [%s] uncached request %09h: committed %0d, ",
+               "next pc %011h"}, tname, dut.ifu_l1i_req_paddr, cm_all, pc));
+        end
+      end
+      for (int b = 0; b < 2; b++) begin
+        if (dut.u_l1i.u_mshr.b_fil_valid[b] &&
+            W.uc_ppn.exists(
+              dut.u_l1i.u_mshr.b_fil_line[b][PA_WIDTH-1:12])) begin
+          n_uc_fill_bad++;
+          $display("ERROR: [%s] an uncached line %09h was written into the L1I",
+                   tname, dut.u_l1i.u_mshr.b_fil_line[b]);
+        end
+      end
+      if (dut.ifu_ibuf_val && dut.ibuf_ifu_rdy) begin
+        n  = 0;
+        uc = 1'b0;
+        for (int i = 0; i < FTQ_PD_WIDTH; i++) begin
+          if (dut.ifu_ibuf_en[i]) begin
+            n++;
+            if (W.uc_vpn.exists(dut.ifu_ibuf_slot[i].start_pc[VA_WIDTH-1:12]))
+              uc = 1'b1;
+          end
+        end
+        if (uc) begin
+          n_uc_dlv++;
+          if ((n != 1) || !cm_all) begin
+            n_uc_dlv_bad++;
+            $display("%s", $sformatf(
+              {"ERROR: [%s] uncached delivery of %0d instructions, ",
+               "committed %0d"}, tname, n, cm_all));
+          end
+        end
+      end
+    end
+    end
+  end
 
   // The taken target of a conditional, from its (expanded) B-type
   // encoding: pc + the sign-extended immediate.
@@ -1574,12 +2074,61 @@ module tb;
     bkend_ftq_rsv[0]      = '0;
     bkend_ftq_rsv[1]      = '0;
     dec_ibuf_rdy          = 1'b0;
+    cmt_ifu_maint_val     = 1'b0;
+    cmt_ifu_maint_op      = 1'b0;
+    cmt_ifu_maint_paddr   = '0;
     forever begin
       @(posedge clk);
       // ---- sample at the edge -----------------------------------
       if (rstn && bkend_ftq_rsv_val[0] && ftq_bkend_rsv_rdy[0]) rq_hd++;
       stop  = 1'b0;
-      prsnt = rstn && run_be && dec_ibuf_rdy && !bkend_ftq_redir_val;
+      prsnt = rstn && run_be && dec_ibuf_rdy && !bkend_ftq_redir_val &&
+              !mt_pend;
+      // BP-123: the maintenance handshake, sampled at the edge.
+      if (rstn && mt_req && cmt_ifu_maint_val && cmt_ifu_maint_rdy)
+        mt_req = 1'b0;
+      // An invalidate the L1I took with fills in flight: the drain of
+      // IF-31 had something to wait for.
+      if (rstn && dut.ifu_l1i_inv_val && dut.ifu_l1i_inv_rdy &&
+          dut.u_l1i.mt_busy_any)
+        n_maint_drain++;
+      if (rstn && mt_pend && !mt_req && ifu_cmt_maint_ack) begin
+        mt_pend = 1'b0;
+        stop    = 1'b1;
+        redirect(mt_idx, mt_pos, W.ex[mt_e].pc + VA_WIDTH'(4), 1'b1,
+                 RC_REPLAY);
+      end
+      // BP-123, eager mode. With nothing presented this cycle, a branch
+      // that ended its block is resolved against the block the FTQ
+      // fetched after it (its predicted successor), once that block was
+      // fetched after the branch's own writeback, as a backend resolves
+      // a branch against the FTQ's predicted target. Then the entry of
+      // the last retired instruction commits.
+      if (prsnt && eager && !pd_out[0].valid && cfi_pend && (ep < W.ne) &&
+          fseen[FTQ_IDX_BITS'(cfi_idx + 1)] && wbseen[cfi_idx]) begin
+        n_eager_res++;
+        if (fstart[FTQ_IDX_BITS'(cfi_idx + 1)] == W.ex[ep].pc) begin
+          resolve(cfi_e, cfi_idx, cfi_pos, 1'b0);
+          cfi_pend = 1'b0;
+        end else begin
+          n_mispred++;
+          if (cfi_e >= warm_e) begin
+            n_mis_warm++;
+            n_mis_type[int'(W.ex[cfi_e].btype)]++;
+          end
+          resolve(cfi_e, cfi_idx, cfi_pos, 1'b1);
+          cfi_pend = 1'b0;
+          redirect(cfi_idx, cfi_pos, W.ex[ep].pc, 1'b0, RC_MISPREDICT);
+          rd_taken = W.ex[cfi_e].taken;
+          rd_cond  = (W.ex[cfi_e].btype == COND);
+          stop     = 1'b1;
+        end
+      end
+      if (prsnt && eager && !pd_out[0].valid && !cfi_pend && cur_val &&
+          !after_redir) begin
+        wm     = cur_ptr;
+        wm_val = 1'b1;
+      end
       if (prsnt) begin
         for (int i = 0; i < SLOTS; i++) begin
           s = pd_out[i];
@@ -1661,6 +2210,21 @@ module tb;
             $display("ERROR: [%s] pc %011h decode raised illegal", tname,
                      s.start_pc);
           end
+          // BP-123: decode's operation, where the program names one.
+          if ((W.ex[ep].aluop >= 0) && (int'(d.alu_op) != W.ex[ep].aluop)) begin
+            n_err++;
+            $display("ERROR: [%s] pc %011h instr %08h alu_op %0d exp %0d",
+                     tname, s.start_pc, s.instr, d.alu_op, W.ex[ep].aluop);
+          end
+          // BP-123: predecode classes a non-control-transfer as none
+          // (prefetch.i is an ORI, Zicbop).
+          if ((W.ex[ep].fault == IFU_FAULT_NONE) &&
+              (W.ex[ep].btype == NO_BRANCH) && !W.ex[ep].trap &&
+              (s.br_type != 2'b00)) begin
+            n_err++;
+            $display("ERROR: [%s] pc %011h instr %08h predecode class %0d",
+                     tname, s.start_pc, s.instr, s.br_type);
+          end
           if (fstart[s.ftq_idx] + VA_WIDTH'(2 * int'(s.pos)) != s.start_pc)
           begin
             n_err++;
@@ -1671,10 +2235,17 @@ module tb;
           end
           if (W.ex[ep].fault != IFU_FAULT_NONE) begin
             if ((s.fault_cause != W.ex[ep].fault) ||
-                (s.fault_va != W.ex[ep].fva)) begin
+                (s.fault_va != W.ex[ep].fva) ||
+                ((W.ex[ep].fault == IFU_FAULT_GUEST_PAGE) &&
+                 ((s.fault_gpa != W.ex[ep].fgpa) ||
+                  (s.fault_gpa_imp != W.ex[ep].fimp)))) begin
               n_err++;
-              $display("ERROR: [%s] pc %011h fault %0d va %011h", tname,
-                       s.start_pc, s.fault_cause, s.fault_va);
+              $display("%s", $sformatf(
+                {"ERROR: [%s] pc %011h fault %0d va %011h gpa %011h ",
+                 "kind %0d; expected %0d %011h %011h %0d"}, tname,
+                s.start_pc, s.fault_cause, s.fault_va, s.fault_gpa,
+                s.fault_gpa_imp, W.ex[ep].fault, W.ex[ep].fva,
+                W.ex[ep].fgpa, W.ex[ep].fimp));
             end else begin
               n_fault_ok++;
             end
@@ -1695,6 +2266,41 @@ module tb;
             n_trap++;
             stop = 1'b1;
             redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
+            ep++;
+            continue;
+          end
+          // BP-123. A store's memory effect lands as it retires.
+          for (int k = 0; k < W.ex[ep].pn; k++) begin
+            W.mem[W.pat_a[W.ex[ep].p0 + k]] =
+              W.pat_h[W.ex[ep].p0 + k][7:0];
+            W.mem[W.pat_a[W.ex[ep].p0 + k] + PA_WIDTH'(1)] =
+              W.pat_h[W.ex[ep].p0 + k][15:8];
+            n_patch++;
+          end
+          // BP-123. FENCE.I or cbo.inval: nothing after it is taken
+          // until the IFU acknowledges, then fetch restarts after it
+          // (l1i_ifu_interfaces.md 11, A1).
+          if (W.ex[ep].maint == 3) begin
+            // A CSR write: the new envcfg bits, then the restart.
+            csr_ptw_menvcfg_adue  = W.act_madue[W.ex[ep].p0];
+            csr_ptw_henvcfg_adue  = W.act_hadue[W.ex[ep].p0];
+            csr_ptw_menvcfg_pbmte = W.act_mpbmte[W.ex[ep].p0];
+            csr_ptw_henvcfg_pbmte = W.act_hpbmte[W.ex[ep].p0];
+            n_csrw++;
+            stop = 1'b1;
+            redirect(s.ftq_idx, s.pos, W.ex[ep].pc + VA_WIDTH'(4), 1'b1,
+                     RC_REPLAY);
+            ep++;
+            continue;
+          end
+          if (W.ex[ep].maint != 0) begin
+            stop    = 1'b1;
+            mt_pend = 1'b1;
+            mt_req  = 1'b1;
+            mt_e    = ep;
+            mt_idx  = s.ftq_idx;
+            mt_pos  = s.pos;
+            n_maint++;
             ep++;
             continue;
           end
@@ -1756,6 +2362,21 @@ module tb;
       end
       h_chk = rd_pend && rd_cond && (rd_cause == RC_MISPREDICT) && !rd_self;
       h_dir = rd_taken;
+      // ---- BP-123: the invalidate-during-a-walk trigger ----------
+      bkend_itlb_inv_val = 1'b0;
+      if (rstn && inv_watch && (inv_at < 0) && itlb_l2t_req_val &&
+          itlb_l2t_req_rdy && (itlb_l2t_vpn == inv_vpn))
+        inv_at = cyc + 4;
+      if (rstn && (inv_at >= 0) && (cyc >= inv_at)) begin
+        bkend_itlb_inv_val    = 1'b1;
+        bkend_itlb_inv_op     = 2'd0;              // VMA, all
+        bkend_itlb_inv_rs1_nz = 1'b0;
+        bkend_itlb_inv_rs2_nz = 1'b0;
+        inv_at    = -1;
+        inv_watch = 1'b0;
+        n_inv_fired++;
+        if (u_ptw.r_st != u_ptw.S_IDLE) n_inv_busy++;
+      end
       // ---- drive for the next cycle -----------------------------
       bkend_ftq_redir_val = rd_pend;
       if (rd_pend) begin
@@ -1778,7 +2399,18 @@ module tb;
       end
       bkend_ftq_rsv_val[0] = (rq_hd != rq_tl);
       bkend_ftq_rsv[0]     = rq[rq_hd % 256];
-      dec_ibuf_rdy         = rstn && run_be;
+      dec_ibuf_rdy         = rstn && run_be && !mt_pend;
+      // BP-123.
+      cmt_ifu_maint_val    = mt_req;
+      cmt_ifu_maint_op     = (W.ex[mt_e].maint == 1) ? MAINT_FENCE_I
+                                                     : MAINT_CBO_INVAL;
+      cmt_ifu_maint_paddr  = W.ex[mt_e].mpa;
+      // Every entry with a retired instruction has been committed (as
+      // driven to the FTQ this cycle).
+      cm_all = !cur_val ||
+               (wm_val && bkend_ftq_commit_val &&
+                (bkend_ftq_commit_idx == wm) &&
+                (after_redir || (wm == cur_ptr)));
     end
   end
 
@@ -1864,6 +2496,59 @@ module tb;
     rq_hd        = 0;
     rq_tl        = 0;
     rd_pend      = 1'b0;
+    // BP-123.
+    mt_pend       = 1'b0;
+    mt_req        = 1'b0;
+    mt_e          = 0;
+    n_maint       = 0;
+    n_maint_drain = 0;
+    eager         = 1'b0;
+    cm_all        = 1'b1;
+    n_eager_res   = 0;
+    n_patch       = 0;
+    n_csrw        = 0;
+    n_uc_req      = 0;
+    n_uc_bad      = 0;
+    n_uc_fill_bad = 0;
+    n_uc_dlv      = 0;
+    n_uc_dlv_bad  = 0;
+    n_pw_acc      = 0;
+    n_pw_cas      = 0;
+    n_pw_err      = 0;
+    n_pw_chg      = 0;
+    n_pw_bad      = 0;
+    pw_lat_min    = 2;
+    pw_lat_max    = 2;
+    pw_rdy_pat    = 0;
+    err_arm       = 1'b0;
+    err_pa        = '0;
+    chg_arm       = 1'b0;
+    chg_pa        = '0;
+    chg_val       = '0;
+    W.pat_a.delete();
+    W.pat_h.delete();
+    W.act_madue.delete();
+    W.act_hadue.delete();
+    W.act_mpbmte.delete();
+    W.act_hpbmte.delete();
+    W.patching    = 1'b0;
+    W.nowrite     = 1'b0;
+    W.uc_ppn.delete();
+    W.uc_vpn.delete();
+    W.h2          = 1'b0;
+    W.g_bare      = 1'b0;
+    W.gmap.delete();
+    walk_lo       = '0;
+    walk_hi       = '0;
+    n_walk_rng    = 0;
+    walk2_lo      = '0;
+    walk2_hi      = '0;
+    n_walk_rng2   = 0;
+    inv_watch     = 1'b0;
+    inv_vpn       = '0;
+    inv_at        = -1;
+    n_inv_fired   = 0;
+    n_inv_busy    = 0;
     W.mem.delete();
     W.vmap.delete();
     W.sv39         = use_sv39;
@@ -1886,6 +2571,17 @@ module tb;
     csr_itlb_pmpaddr    = '0;
     csr_itlb_pmpcfg[0]  = 8'h1F;
     csr_itlb_pmpaddr[0] = '1;
+    // The walker's CSR group (MMU-24a), BP-123: the same regime.
+    csr_ptw_satp_mode     = csr_itlb_satp_mode;
+    csr_ptw_satp_ppn      = PPN_WIDTH'(W.satp_root >> 12);
+    csr_ptw_vsatp_mode    = '0;
+    csr_ptw_vsatp_ppn     = '0;
+    csr_ptw_hgatp_mode    = '0;
+    csr_ptw_hgatp_ppn     = '0;
+    csr_ptw_menvcfg_adue  = 1'b0;
+    csr_ptw_henvcfg_adue  = 1'b0;
+    csr_ptw_menvcfg_pbmte = 1'b1;
+    csr_ptw_henvcfg_pbmte = 1'b1;
     // config
     sc_enable             = 1'b1;
     ftb_fastpath_en       = 1'b0;
@@ -1902,6 +2598,47 @@ module tb;
     bkend_itlb_inv_vpn    = '0;
     bkend_itlb_inv_asid   = '0;
     bkend_itlb_inv_vmid   = '0;
+  endtask
+
+  // BP-123. The two-stage regime: V=1 in VS-mode, vsatp Sv39 and hgatp
+  // Sv39x4, ASID 1 and VMID 3. The G-stage root is 16 KiB at
+  // 0x8E00_0000; VS-stage tables take GPAs from 0xC000_0000. The reset
+  // vector is mapped VA = GPA = SPA.
+  task automatic set_h2();
+    W.h2       = 1'b1;
+    W.hg_root  = PA_WIDTH'('h0_8E00_0000);
+    for (int i = 0; i < 2048; i++) W.wr64(W.hg_root + PA_WIDTH'(8 * i), '0);
+    W.gpt_next = GPA_WIDTH'('h0_C000_0000);
+    W.vs_root  = W.vs_alloc();
+    csr_itlb_v            = 1'b1;
+    csr_itlb_priv         = 2'd1;
+    csr_itlb_satp_mode    = 4'd0;
+    csr_itlb_vsatp_mode   = 4'd8;
+    csr_itlb_vsatp_asid   = ASID_WIDTH'(1);
+    csr_itlb_hgatp_mode   = 4'd8;
+    csr_itlb_hgatp_vmid   = VMID_WIDTH'(3);
+    csr_ptw_satp_mode     = 4'd0;
+    csr_ptw_vsatp_mode    = 4'd8;
+    csr_ptw_vsatp_ppn     = (GPA_WIDTH-12)'(W.vs_root >> 12);
+    csr_ptw_hgatp_mode    = 4'd8;
+    csr_ptw_hgatp_ppn     = PPN_WIDTH'(W.hg_root >> 12);
+    W.h_map4k(RESET_VECTOR, GPA_WIDTH'(RESET_VECTOR), PA_WIDTH'(RESET_VECTOR));
+  endtask
+
+  // A PMP entry over one naturally aligned 4 KiB page (NAPOT), with the
+  // permission bits given (R 1, W 2, X 4). Lower entries win.
+  task automatic pmp_page(input int k, input logic [PA_WIDTH-1:0] pa,
+                          input logic [2:0] rwx);
+    csr_itlb_pmpcfg[k]  = {5'b00011, rwx};           // A = NAPOT
+    csr_itlb_pmpaddr[k] = (PA_WIDTH-2)'(pa >> 2) | (PA_WIDTH-2)'('h1FF);
+  endtask
+
+  // The last PMP entry an S-mode fetch and walk may use: everything.
+  task automatic pmp_all(input int k);
+    csr_itlb_pmpcfg[0]  = 8'h00;
+    csr_itlb_pmpaddr[0] = '0;
+    csr_itlb_pmpcfg[k]  = 8'h1F;
+    csr_itlb_pmpaddr[k] = '1;
   endtask
 
   task automatic release_reset();
@@ -1938,6 +2675,24 @@ module tb;
                   dut.u_ftq.w_commit_ptr, wm),
         wm_val && (dut.u_ftq.w_commit_ptr == wm + FTQ_PTR_BITS'(1)));
     chk("every resolution was accepted", rq_hd == rq_tl);
+    // BP-123, Problem 4, every program.
+    chk($sformatf({"no uncached request before older commits or off ",
+                   "the path (%0d of %0d)"}, n_uc_bad, n_uc_req),
+        n_uc_bad == 0);
+    chk($sformatf("no uncached line written into the L1I (%0d)", n_uc_fill_bad),
+        n_uc_fill_bad == 0);
+    chk($sformatf({"uncached instructions delivered one at a time ",
+                   "(%0d bad of %0d)"}, n_uc_dlv_bad, n_uc_dlv),
+        n_uc_dlv_bad == 0);
+    chk($sformatf("the walker's memory port kept WM-1 and WM-3 (%0d)",
+                  n_pw_bad), n_pw_bad == 0);
+    $display("%s", $sformatf(
+      {"   BP123 %s: uncached requests %0d, uncached deliveries %0d; ",
+       "maintenance %0d (drained %0d); walks %0d, walker accesses %0d, ",
+       "CAS %0d, changed %0d, errors %0d; eager resolutions %0d, ",
+       "CSR writes %0d, faults checked %0d"}, tname, n_uc_req, n_uc_dlv,
+      n_maint, n_maint_drain, n_walks, n_pw_acc, n_pw_cas, n_pw_chg,
+      n_pw_err, n_eager_res, n_csrw, n_fault_ok));
     $display("%s", $sformatf(
              {"   %s: %0d retired in %0d cycles, %0d mispredicts, %0d ",
               "traps, %0d predecode redirects, %0d resolutions, %0d L1I ",
@@ -2906,6 +3661,932 @@ module tb;
         n_pd_redir > 0);
   endtask
 
+
+  // =================================================================
+  // BP-123 programs: maintenance (Problem 4).
+  // =================================================================
+  // A function at f, its old body six c.addi and a return. It is called
+  // twice, so the L1I and the IFU's line buffer hold it. Then one store
+  // rewrites it (three addi t1 and the return), the maintenance
+  // operation retires (FENCE.I, or cbo.inval of its line), and the
+  // function is called again: the stream expects the NEW body. A
+  // stale fetch delivers the old one and fails the stream check.
+  task automatic smc_fn(input logic [VA_WIDTH-1:0] f, input int calls);
+    logic [VA_WIDTH-1:0] link;
+    for (int k = 0; k < calls; k++) begin
+      link = W.wp + VA_WIDTH'(4);
+      W.jal(5'd1, f);
+      for (int i = 0; i < 6; i++) W.i16();
+      W.ret(link);
+    end
+  endtask
+
+  task automatic smc_store(input logic [VA_WIDTH-1:0] f);
+    logic [VA_WIDTH-1:0] w;
+    logic                d;
+    W.store();
+    w     = W.wp;
+    d     = W.dry;
+    W.dry = 1'b1;
+    W.wp  = f;
+    for (int i = 0; i < 3; i++) W.i32(ADDI_T1);
+    W.ret(f);
+    W.dry = d;
+    W.wp  = w;
+    W.store_end();
+  endtask
+
+  task automatic smc_call_new(input logic [VA_WIDTH-1:0] f);
+    logic [VA_WIDTH-1:0] link;
+    link = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, f);
+    W.nowrite = 1'b1;
+    for (int i = 0; i < 3; i++) W.i32(ADDI_T1);
+    W.ret(link);
+    W.nowrite = 1'b0;
+  endtask
+
+  // op 1 FENCE.I, 2 cbo.inval of the function's line. Phase 1 plain;
+  // phase 2 with a mispredicted branch just before the operation and
+  // cold code after it, so the IFU has fetches in flight when the L1I
+  // takes the invalidate.
+  task automatic p_smc(input int op);
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] g;
+    begin_prog(op == 1 ? "fencei" : "cboinval");
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    g = RESET_VECTOR + VA_WIDTH'('hC40);
+    W.mixed(3);
+    smc_fn(f, 2);
+    W.mixed(2);
+    smc_store(f);
+    W.mixed(2);
+    if (op == 1) W.fence_i();
+    else         W.cbo_inval(5'd10, PA_WIDTH'(f));
+    W.mixed(2);
+    smc_call_new(f);
+    W.mixed(2);
+    // Phase 2.
+    smc_fn(g, 2);
+    smc_store(g);
+    W.cskip(1'b1, 1);                       // taken, cold: mispredicted
+    if (op == 1) W.fence_i();
+    else         W.cbo_inval(5'd10, PA_WIDTH'(g) + PA_WIDTH'('h24));
+    W.mixed(60);                            // cold lines after it
+    smc_call_new(g);
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(20000);
+    chk($sformatf("two maintenance operations retired (%0d)", n_maint),
+        n_maint == 2);
+    chk($sformatf("two stores applied their patches (%0d)", n_patch),
+        n_patch == 2 * 8);
+    chk($sformatf("an invalidate drained fills in flight (%0d)",
+                  n_maint_drain), n_maint_drain > 0);
+    chk($sformatf("a backend mispredict occurred (%0d)", n_mispred),
+        n_mispred > 0);
+  endtask
+
+  // =================================================================
+  // BP-123 programs: uncached fetch under Sv39 (Problem 4).
+  // =================================================================
+  // A cacheable code page c, and a page u mapped with PBMT NC (1) or IO
+  // (2). Branches into u, within it (taken and not, a jump, a counted
+  // loop) and out of it; a call into u and a return out. Every
+  // instruction from u must be fetched uncached, one at a time, after
+  // everything older has committed (the per-cycle checks), and never
+  // allocated in the L1I.
+  task automatic p_uc(input logic [1:0] pbmt);
+    logic [VA_WIDTH-1:0] c;
+    logic [VA_WIDTH-1:0] u;
+    logic [VA_WIDTH-1:0] link;
+    logic [VA_WIDTH-1:0] top;
+    int                  e0;
+    int                  nu;
+    tname = (pbmt == 2'd1) ? "uc_nc" : "uc_io";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    eager = 1'b1;
+    c = VA_WIDTH'('h0_8001_0000);
+    u = VA_WIDTH'('h0_8001_1000);
+    W.map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
+    W.map4k(c, PA_WIDTH'('h0_8100_0000));
+    W.map4k_pbmt(u, PA_WIDTH'('h0_8120_3000), pbmt);
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jal(5'd0, c);
+    W.mixed(4);
+    W.jal(5'd0, u + VA_WIDTH'('h10));       // into u
+    W.mixed(3);
+    W.cskip(1'b1, 2);                       // within: taken
+    W.mixed(2);
+    W.cskip(1'b0, 1);                       // within: not taken
+    W.jal(5'd0, u + VA_WIDTH'('h200));      // within: a jump
+    top = W.wp;
+    e0  = W.ne;
+    W.mixed(2);
+    W.loop_br(top);
+    W.rep_iter(e0, 3);                      // within: a loop
+    W.mixed(2);
+    W.jal(5'd0, c + VA_WIDTH'('h200));      // out of u
+    W.mixed(3);
+    link = W.wp + VA_WIDTH'(4);
+    W.jal(5'd1, u + VA_WIDTH'('h400));      // a call into u
+    W.mixed(2);
+    W.ret(link);                            // a return out of it
+    W.mixed(2);
+    nu = 0;
+    for (int e = 0; e < W.ne; e++)
+      if (W.uc_vpn.exists(W.ex[e].pc[VA_WIDTH-1:12])) nu++;
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf("uncached requests were made (%0d)", n_uc_req),
+        n_uc_req > 0);
+    chk($sformatf("every instruction from the page came alone (%0d of %0d)",
+                  n_uc_dlv, nu), n_uc_dlv == nu);
+  endtask
+
+
+  // =================================================================
+  // BP-123 programs: the page table walker in RTL (Problem 4).
+  // =================================================================
+  // Address map of the walker programs. Code c and handlers h, mapped
+  // ordinarily; fault and test targets each in its own 2 MiB region,
+  // T(k), reached by an indirect jump. Handlers h + 0x40 * k.
+  localparam logic [VA_WIDTH-1:0] PC_C = VA_WIDTH'('h0_8001_0000);
+  localparam logic [VA_WIDTH-1:0] PC_H = VA_WIDTH'('h0_8002_0000);
+  localparam logic [PA_WIDTH-1:0] PA_C = PA_WIDTH'('h0_8100_0000);
+  localparam logic [PA_WIDTH-1:0] PA_H = PA_WIDTH'('h0_8130_0000);
+  localparam logic [GPA_WIDTH-1:0] GP_C = GPA_WIDTH'('h0_1001_0000);
+  localparam logic [GPA_WIDTH-1:0] GP_H = GPA_WIDTH'('h0_1002_0000);
+
+  // A Svnapot 64 KiB PTE PPN for a page in the region: PPN[3:0] = 1000.
+  function automatic logic [43:0] napot(input logic [43:0] page);
+    return {page[43:4], 4'b1000};
+  endfunction
+
+  function automatic logic [VA_WIDTH-1:0] tgt(input int k);
+    return VA_WIDTH'('h0_8040_0000) + VA_WIDTH'(k) * VA_WIDTH'('h20_0000) +
+           VA_WIDTH'('h10);
+  endfunction
+  function automatic logic [VA_WIDTH-1:0] hnd(input int k);
+    return PC_H + VA_WIDTH'(k * 'h40);
+  endfunction
+
+  task automatic map_ch();
+    if (W.h2) begin
+      W.h_map4k(PC_C, GP_C, PA_C);
+      W.h_map4k(PC_H, GP_H, PA_H);
+    end else begin
+      W.map4k(RESET_VECTOR, PA_WIDTH'(RESET_VECTOR));
+      W.map4k(PC_C, PA_C);
+      W.map4k(PC_H, PA_H);
+    end
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jal(5'd0, PC_C);
+    W.mixed(2);
+  endtask
+
+  // A two-stage mapping with chosen leaves: VA page -> GPA page by a
+  // VS-stage leaf, GPA page -> SPA page by a G-stage leaf.
+  task automatic h_map(input logic [VA_WIDTH-1:0] va,
+                       input logic [GPA_WIDTH-1:0] gpa,
+                       input logic [PA_WIDTH-1:0] spa,
+                       input logic [63:0] vs_leaf, input logic [63:0] g_leaf);
+    W.wr64(W.g_slot(gpa[GPA_WIDTH-1:12], 0), g_leaf);
+    W.gmap[gpa[GPA_WIDTH-1:12]] = spa[PA_WIDTH-1:12];
+    W.wr64(W.vs_slot(va, 0), vs_leaf);
+    W.vmap[va[VA_WIDTH-1:12]] = spa[PA_WIDTH-1:12];
+  endtask
+
+  // The GPA of the VS-stage level-0 table that maps va, and the SPA of
+  // the G-stage leaf that maps that table page.
+  function automatic logic [GPA_WIDTH-1:0] vs_l0_gpa(
+      input logic [VA_WIDTH-1:0] va);
+    logic [63:0] p;
+    p = W.rd64(W.vs_slot(va, 1));
+    return GPA_WIDTH'(p[53:10]) << 12;
+  endfunction
+
+  // A short body at a target, then an indirect jump to a handler.
+  task automatic run_at(input logic [VA_WIDTH-1:0] at,
+                        input logic [VA_WIDTH-1:0] back);
+    W.jalr_to(5'd0, 5'd7, at);
+    W.mixed(4);
+    W.jalr_to(5'd0, 5'd7, back);
+    W.mixed(2);
+  endtask
+
+  // ---- single stage: every fault cause and every cause-1 source -------
+  task automatic p_pt_faults_s();
+    logic [PA_WIDTH-1:0] a;
+    tname = "pt_faults_s";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    csr_ptw_menvcfg_adue = 1'b1;
+    pmp_all(2);
+    map_ch();
+    // 0 cause 12: nothing mapped.
+    W.jr_fault(tgt(0), IFU_FAULT_PAGE, hnd(0));
+    W.mixed(2);
+    // 1 cause 1: PMP denies the read of the level-0 table.
+    a = W.s_slot(tgt(1), 0);
+    W.wr64(a, W.mk_pte(44'h8_1400, PTE_LEAF, 2'b00, 1'b0));
+    pmp_page(0, a, 3'b000);
+    W.jr_fault(tgt(1), IFU_FAULT_ACCESS, hnd(1));
+    W.mixed(2);
+    // 2 cause 1: PMP denies the Svadu write (the table page is R only).
+    a = W.s_slot(tgt(2), 0);
+    W.wr64(a, W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    pmp_page(1, a, 3'b001);
+    W.jr_fault(tgt(2), IFU_FAULT_ACCESS, hnd(2));
+    W.mixed(2);
+    // 3 cause 1: a level-0 table outside cacheable coherent memory.
+    W.wr64(W.s_slot(tgt(3), 1), W.mk_pte(44'h4_0000, PTE_PTR, 2'b00, 1'b0));
+    W.wr64(PA_WIDTH'('h0_4000_0000) + PA_WIDTH'(8 * tgt(3)[20:12]),
+           W.mk_pte(44'h8_1420, PTE_LEAF, 2'b00, 1'b0));
+    W.jr_fault(tgt(3), IFU_FAULT_ACCESS, hnd(3));
+    W.mixed(2);
+    // 4 cause 1: a leaf PPN above bit 23.
+    W.wr64(W.s_slot(tgt(4), 0),
+           W.mk_pte(44'h100_0000 | 44'h8_1430, PTE_LEAF, 2'b00, 1'b0));
+    W.jr_fault(tgt(4), IFU_FAULT_ACCESS, hnd(4));
+    W.mixed(2);
+    // 5 cause 1: a non-leaf PPN above bit 23.
+    W.wr64(W.s_slot(tgt(5), 1),
+           W.mk_pte(44'h100_0000 | 44'h8_F100, PTE_PTR, 2'b00, 1'b0));
+    W.jr_fault(tgt(5), IFU_FAULT_ACCESS, hnd(5));
+    W.mixed(2);
+    // 6 cause 1: the memory port answers the leaf read with an error.
+    a = W.s_slot(tgt(6), 0);
+    W.wr64(a, W.mk_pte(44'h8_1440, PTE_LEAF, 2'b00, 1'b0));
+    err_pa  = a;
+    err_arm = 1'b1;
+    W.jr_fault(tgt(6), IFU_FAULT_ACCESS, hnd(6));
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf("all seven faults reached decode (%0d)", n_fault_ok),
+        n_fault_ok == 7);
+    chk($sformatf("the memory error was returned (%0d)", n_pw_err),
+        n_pw_err == 1);
+  endtask
+
+  // ---- two stage: cause 20 of each kind, the GPA width, 12 and 1 -------
+  task automatic p_pt_faults_h();
+    logic [GPA_WIDTH-1:0] g;
+    logic [GPA_WIDTH-1:0] tg;
+    logic [PA_WIDTH-1:0]  a;
+    tname = "pt_faults_h";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    set_h2();
+    csr_ptw_menvcfg_adue = 1'b1;
+    csr_ptw_henvcfg_adue = 1'b1;
+    pmp_all(2);
+    map_ch();
+    // 0 kind 00: the final GPA is not mapped by the G-stage.
+    g = GPA_WIDTH'('h0_2000_0000);
+    W.wr64(W.vs_slot(tgt(0), 0), W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0));
+    W.jr_gfault(tgt(0), g | GPA_WIDTH'('h10), 2'b00, hnd(0));
+    W.mixed(2);
+    // 1 kind 01: a VS-stage table page is not mapped by the G-stage.
+    tg = GPA_WIDTH'('h0_2100_0000);
+    W.wr64(W.vs_slot(tgt(1), 1), W.mk_pte(44'(tg >> 12), PTE_PTR, 2'b00, 1'b0));
+    W.jr_gfault(tgt(1), tg + GPA_WIDTH'(8 * tgt(1)[20:12]), 2'b01, hnd(1));
+    W.mixed(2);
+    // 2 kind 10: the VS leaf needs A; the G-stage leaf of its table page
+    // grants no write.
+    g = GPA_WIDTH'('h0_2200_0000);
+    h_map(tgt(2), g, PA_WIDTH'('h0_8140_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1400, F_URWXAD, 2'b00, 1'b0));
+    tg = vs_l0_gpa(tgt(2));
+    W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
+           W.mk_pte(44'(W.g2s(tg) >> 12), 8'hDB, 2'b00, 1'b0));
+    W.jr_gfault(tgt(2), tg + GPA_WIDTH'(8 * tgt(2)[20:12]), 2'b10, hnd(2));
+    W.mixed(2);
+    // 3 a VS leaf whose GPA has a bit above 40: GPA 0, kind 00.
+    W.wr64(W.vs_slot(tgt(3), 0),
+           W.mk_pte(44'h2000_0123, PTE_LEAF, 2'b00, 1'b0));
+    W.jr_gfault(tgt(3), '0, 2'b00, hnd(3));
+    W.mixed(2);
+    // 4 a VS non-leaf whose GPA has a bit above 40: GPA 0, kind 01.
+    W.wr64(W.vs_slot(tgt(4), 1),
+           W.mk_pte(44'h2000_0041, PTE_PTR, 2'b00, 1'b0));
+    W.jr_gfault(tgt(4), '0, 2'b01, hnd(4));
+    W.mixed(2);
+    // 5 cause 12: a VS leaf with W and not R.
+    W.wr64(W.vs_slot(tgt(5), 0),
+           W.mk_pte(44'h1234, 8'hC5, 2'b00, 1'b0));
+    W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(5));
+    W.mixed(2);
+    // 6 cause 1: a G-stage leaf PPN above bit 23.
+    g = GPA_WIDTH'('h0_2400_0000);
+    h_map(tgt(6), g, PA_WIDTH'('h0_8140_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+          W.mk_pte(44'h100_8140, F_URWXAD, 2'b00, 1'b0));
+    W.jr_fault(tgt(6), IFU_FAULT_ACCESS, hnd(6));
+    W.mixed(2);
+    // 7 cause 1: a memory error on the G-stage leaf read.
+    g = GPA_WIDTH'('h0_2600_0000);
+    h_map(tgt(7), g, PA_WIDTH'('h0_8141_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1410, F_URWXAD, 2'b00, 1'b0));
+    err_pa  = W.g_slot(g[GPA_WIDTH-1:12], 0);
+    err_arm = 1'b1;
+    W.jr_fault(tgt(7), IFU_FAULT_ACCESS, hnd(7));
+    W.mixed(2);
+    // 8 cause 1: PMP denies the read of a G-stage table page.
+    g = GPA_WIDTH'('h0_2800_0000);
+    h_map(tgt(8), g, PA_WIDTH'('h0_8142_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1420, F_URWXAD, 2'b00, 1'b0));
+    a = W.g_slot(g[GPA_WIDTH-1:12], 0);
+    pmp_page(0, a, 3'b000);
+    W.jr_fault(tgt(8), IFU_FAULT_ACCESS, hnd(8));
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(40000);
+    chk($sformatf("all nine faults reached decode (%0d)", n_fault_ok),
+        n_fault_ok == 9);
+  endtask
+
+  // ---- Svnapot, single stage: one walk serves the 64 KiB page ----------
+  task automatic p_pt_napot_s();
+    logic [VA_WIDTH-1:0] n;
+    logic [PA_WIDTH-1:0] pa;
+    tname = "pt_napot_s";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    map_ch();
+    n  = VA_WIDTH'('h0_8010_0000);
+    pa = PA_WIDTH'('h0_8150_0000);
+    for (int i = 0; i < 16; i++) begin
+      W.wr64(W.s_slot(n + VA_WIDTH'(i * 'h1000), 0),
+             W.mk_pte(napot(44'(pa[PA_WIDTH-1:12])), PTE_LEAF, 2'b00, 1'b1));
+      W.vmap[n[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
+        pa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
+    end
+    walk_lo = n[VA_WIDTH-1:12];
+    walk_hi = n[VA_WIDTH-1:12] + (VA_WIDTH-12)'(16);
+    run_at(n + VA_WIDTH'('h10), PC_C + VA_WIDTH'('h100));
+    run_at(n + VA_WIDTH'('h5010), PC_C + VA_WIDTH'('h200));
+    run_at(n + VA_WIDTH'('hF030), PC_C + VA_WIDTH'('h300));
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf("one walk for three pages of the 64 KiB page (%0d)",
+                  n_walk_rng), n_walk_rng == 1);
+  endtask
+
+  // ---- Svnapot and MMU-27, two stage ------------------------------------
+  task automatic p_pt_napot_h();
+    logic [VA_WIDTH-1:0]  va;
+    logic [GPA_WIDTH-1:0] ga;
+    logic [PA_WIDTH-1:0]  sa;
+    tname = "pt_napot_h";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    set_h2();
+    map_ch();
+    // A: VS 4 KiB leaves into a G-stage 64 KiB NAPOT page. Each 4 KiB
+    // page walks (the smaller size wins, MMU-27).
+    va = VA_WIDTH'('h0_8010_0000);
+    ga = GPA_WIDTH'('h0_3000_0000);
+    sa = PA_WIDTH'('h0_8150_0000);
+    for (int i = 0; i < 16; i++)
+      W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(i), 0),
+             W.mk_pte(napot(44'(sa[PA_WIDTH-1:12])), F_URWXAD, 2'b00, 1'b1));
+    for (int i = 0; i < 16; i += 3) begin
+      W.wr64(W.vs_slot(va + VA_WIDTH'(i * 'h1000), 0),
+             W.mk_pte(44'(ga[GPA_WIDTH-1:12]) + 44'(i), PTE_LEAF, 2'b00, 1'b0));
+      W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
+        sa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
+    end
+    walk_lo = va[VA_WIDTH-1:12];
+    walk_hi = va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(16);
+    run_at(va + VA_WIDTH'('h10), PC_C + VA_WIDTH'('h100));
+    run_at(va + VA_WIDTH'('h3010), PC_C + VA_WIDTH'('h140));
+    // B: a VS 64 KiB NAPOT page over G-stage 4 KiB leaves.
+    va = VA_WIDTH'('h0_8020_0000);
+    ga = GPA_WIDTH'('h0_3010_0000);
+    sa = PA_WIDTH'('h0_8160_0000);
+    for (int i = 0; i < 16; i++) begin
+      W.wr64(W.vs_slot(va + VA_WIDTH'(i * 'h1000), 0),
+             W.mk_pte(napot(44'(ga[GPA_WIDTH-1:12])), PTE_LEAF, 2'b00, 1'b1));
+      W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(i), 0),
+             W.mk_pte(44'(sa[PA_WIDTH-1:12]) + 44'(i), F_URWXAD, 2'b00, 1'b0));
+      W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
+        sa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
+    end
+    run_at(va + VA_WIDTH'('h10), PC_C + VA_WIDTH'('h180));
+    run_at(va + VA_WIDTH'('h7010), PC_C + VA_WIDTH'('h1C0));
+    // C: NAPOT at both stages: 64 KiB, one walk for the page.
+    va = VA_WIDTH'('h0_8030_0000);
+    walk2_lo = va[VA_WIDTH-1:12];
+    walk2_hi = va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(16);
+    ga = GPA_WIDTH'('h0_3020_0000);
+    sa = PA_WIDTH'('h0_8170_0000);
+    for (int i = 0; i < 16; i++) begin
+      W.wr64(W.vs_slot(va + VA_WIDTH'(i * 'h1000), 0),
+             W.mk_pte(napot(44'(ga[GPA_WIDTH-1:12])), PTE_LEAF, 2'b00, 1'b1));
+      W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(i), 0),
+             W.mk_pte(napot(44'(sa[PA_WIDTH-1:12])), F_URWXAD, 2'b00, 1'b1));
+      W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(i)] =
+        sa[PA_WIDTH-1:12] + PPN_WIDTH'(i);
+    end
+    run_at(va + VA_WIDTH'('h10), PC_C + VA_WIDTH'('h200));
+    run_at(va + VA_WIDTH'('h9010), PC_C + VA_WIDTH'('h240));
+    // D: a VS 2 MiB leaf over a G-stage 4 KiB leaf.
+    va = VA_WIDTH'('h0_8060_0000);
+    ga = GPA_WIDTH'('h0_3040_0000);
+    sa = PA_WIDTH'('h0_8180_3000);
+    W.wr64(W.vs_slot(va, 1), W.mk_pte(44'(ga >> 12), PTE_LEAF, 2'b00, 1'b0));
+    W.wr64(W.g_slot(ga[GPA_WIDTH-1:12] + (GPA_WIDTH-12)'(5), 0),
+           W.mk_pte(44'(sa >> 12), F_URWXAD, 2'b00, 1'b0));
+    W.vmap[va[VA_WIDTH-1:12] + (VA_WIDTH-12)'(5)] = sa[PA_WIDTH-1:12];
+    run_at(va + VA_WIDTH'('h5010), PC_C + VA_WIDTH'('h280));
+    // E: a VS 4 KiB leaf over a G-stage 2 MiB leaf.
+    va = VA_WIDTH'('h0_8080_0000);
+    ga = GPA_WIDTH'('h0_3080_7000);
+    sa = PA_WIDTH'('h0_81A0_0000);
+    W.wr64(W.vs_slot(va, 0), W.mk_pte(44'(ga >> 12), PTE_LEAF, 2'b00, 1'b0));
+    W.wr64(W.g_slot(ga[GPA_WIDTH-1:12], 1),
+           W.mk_pte(44'(sa[PA_WIDTH-1:12]), F_URWXAD, 2'b00, 1'b0));
+    W.vmap[va[VA_WIDTH-1:12]] = sa[PA_WIDTH-1:12] + PPN_WIDTH'(7);
+    run_at(va + VA_WIDTH'('h10), PC_C + VA_WIDTH'('h2C0));
+    // The A region again: a second page of A walks again (4 KiB size),
+    // the C region's second page did not (64 KiB): counted below.
+    warm_e = W.ne + 1;
+    end_prog(40000);
+    chk($sformatf("G-stage NAPOT under VS 4 KiB: two walks (%0d)",
+                  n_walk_rng), n_walk_rng == 2);
+    chk($sformatf("NAPOT at both stages: one walk for two pages (%0d)",
+                  n_walk_rng2), n_walk_rng2 == 1);
+  endtask
+
+
+  // ---- reserved encodings and PBMTE, single stage ------------------------
+  // Every reserved Svnapot encoding (N set with PPN[3:0] other than
+  // 1000, N on a superpage, N on a non-leaf), PBMT 3, PBMT on a
+  // non-leaf; then, after a CSR write clears menvcfg.PBMTE, a leaf with
+  // PBMT NC. Each is a page fault, cause 12.
+  task automatic p_pt_rsv_s();
+    int                  k;
+    logic [VA_WIDTH-1:0] t;
+    tname = "pt_rsv_s";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    map_ch();
+    k = 0;
+    for (int lo = 0; lo < 16; lo++) begin
+      if (lo == 8) continue;
+      t = VA_WIDTH'('h0_8040_0000) + VA_WIDTH'(lo * 'h1000) + VA_WIDTH'('h10);
+      W.wr64(W.s_slot(t, 0),
+             W.mk_pte({40'h0_0000_8142, 4'(lo)}, PTE_LEAF, 2'b00, 1'b1));
+      W.jr_fault(t, IFU_FAULT_PAGE, hnd(k));
+      W.mixed(1);
+      k++;
+    end
+    // N on a 2 MiB leaf.
+    W.wr64(W.s_slot(tgt(1), 1), W.mk_pte(44'h8_1608, PTE_LEAF, 2'b00, 1'b1));
+    W.jr_fault(tgt(1), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(1);
+    // N on a non-leaf.
+    W.wr64(W.s_slot(tgt(2), 1), W.mk_pte(44'h8_F108, PTE_PTR, 2'b00, 1'b1));
+    W.jr_fault(tgt(2), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(1);
+    // PBMT 3 on a leaf.
+    W.wr64(W.s_slot(tgt(3), 0), W.mk_pte(44'h8_1430, PTE_LEAF, 2'd3, 1'b0));
+    W.jr_fault(tgt(3), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(1);
+    // PBMT on a non-leaf.
+    W.wr64(W.s_slot(tgt(4), 1), W.mk_pte(44'h8_F110, PTE_PTR, 2'd1, 1'b0));
+    W.jr_fault(tgt(4), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(1);
+    // menvcfg.PBMTE cleared: PBMT NC on a leaf is reserved.
+    W.csr_env(1'b0, 1'b0, 1'b0, 1'b1);
+    W.mixed(1);
+    W.wr64(W.s_slot(tgt(5), 0), W.mk_pte(44'h8_1450, PTE_LEAF, 2'd1, 1'b0));
+    W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(40000);
+    chk($sformatf("all %0d faults reached decode (%0d)", k, n_fault_ok),
+        n_fault_ok == k);
+    chk($sformatf("the CSR write retired (%0d)", n_csrw), n_csrw == 1);
+  endtask
+
+  // ---- reserved encodings and PBMTE, two stage ----------------------------
+  // At the VS-stage every reserved Svnapot encoding and PBMT 3 is a page
+  // fault, 12; at the G-stage the same are guest-page faults, 20, kind
+  // 00 with the GPA. Then henvcfg.PBMTE clear makes a VS PBMT a page
+  // fault, and menvcfg.PBMTE clear a G-stage PBMT a guest-page fault.
+  task automatic p_pt_rsv_h();
+    int                   k;
+    logic [VA_WIDTH-1:0]  t;
+    logic [GPA_WIDTH-1:0] g;
+    tname = "pt_rsv_h";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    set_h2();
+    map_ch();
+    k = 0;
+    for (int lo = 0; lo < 16; lo++) begin
+      if (lo == 8) continue;
+      // VS-stage N reserved.
+      t = VA_WIDTH'('h0_8040_0000) + VA_WIDTH'(lo * 'h1000) + VA_WIDTH'('h10);
+      W.wr64(W.vs_slot(t, 0),
+             W.mk_pte({40'h0_0000_0123, 4'(lo)}, PTE_LEAF, 2'b00, 1'b1));
+      W.jr_fault(t, IFU_FAULT_PAGE, hnd(k++));
+      W.mixed(1);
+      // G-stage N reserved.
+      t = VA_WIDTH'('h0_8060_0000) + VA_WIDTH'(lo * 'h1000) + VA_WIDTH'('h10);
+      g = GPA_WIDTH'('h0_3000_0000) + GPA_WIDTH'(lo * 'h1000);
+      h_map(t, g, PA_WIDTH'('h0_8150_0000),
+            W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+            W.mk_pte({40'h0_0000_8150, 4'(lo)}, F_URWXAD, 2'b00, 1'b1));
+      W.jr_gfault(t, g | GPA_WIDTH'('h10), 2'b00, hnd(k++));
+      W.mixed(1);
+    end
+    // VS PBMT 3.
+    W.wr64(W.vs_slot(tgt(3), 0), W.mk_pte(44'h0_0124, PTE_LEAF, 2'd3, 1'b0));
+    W.jr_fault(tgt(3), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(1);
+    // G PBMT 3.
+    g = GPA_WIDTH'('h0_3100_0000);
+    h_map(tgt(4), g, PA_WIDTH'('h0_8151_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1510, F_URWXAD, 2'd3, 1'b0));
+    W.jr_gfault(tgt(4), g | GPA_WIDTH'('h10), 2'b00, hnd(k++));
+    W.mixed(1);
+    // henvcfg.PBMTE clear: a VS PBMT NC is reserved, menvcfg's stays set.
+    W.csr_env(1'b0, 1'b0, 1'b1, 1'b0);
+    W.mixed(1);
+    W.wr64(W.vs_slot(tgt(5), 0), W.mk_pte(44'h0_0125, PTE_LEAF, 2'd1, 1'b0));
+    W.jr_fault(tgt(5), IFU_FAULT_PAGE, hnd(k++));
+    W.mixed(1);
+    // menvcfg.PBMTE clear: a G-stage PBMT NC is reserved.
+    W.csr_env(1'b0, 1'b0, 1'b0, 1'b1);
+    W.mixed(1);
+    g = GPA_WIDTH'('h0_3200_0000);
+    h_map(tgt(6), g, PA_WIDTH'('h0_8152_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1520, F_URWXAD, 2'd1, 1'b0));
+    W.jr_gfault(tgt(6), g | GPA_WIDTH'('h10), 2'b00, hnd(k++));
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(60000);
+    chk($sformatf("all %0d faults reached decode (%0d)", k, n_fault_ok),
+        n_fault_ok == k);
+    chk($sformatf("two CSR writes retired (%0d)", n_csrw), n_csrw == 2);
+  endtask
+
+  // ---- Svade and Svadu, single stage --------------------------------------
+  // menvcfg.ADUE clear: a leaf with A clear faults (Svade). After a CSR
+  // write sets it, the walker sets A by compare and swap and the fetch
+  // proceeds; then the memory model sets A in a PTE between the walk's
+  // read and its CAS (WM-11), the CAS fails and the walk restarts.
+  task automatic p_pt_ad_s();
+    logic [PA_WIDTH-1:0] a1;
+    logic [PA_WIDTH-1:0] a2;
+    tname = "pt_ad_s";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    map_ch();
+    W.wr64(W.s_slot(tgt(0), 0),
+           W.mk_pte(44'h8_1400, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    W.jr_fault(tgt(0), IFU_FAULT_PAGE, hnd(0));
+    W.mixed(1);
+    W.csr_env(1'b1, 1'b0, 1'b1, 1'b1);
+    W.mixed(1);
+    a1 = W.s_slot(tgt(1), 0);
+    W.wr64(a1, W.mk_pte(44'h8_1410, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    W.vmap[tgt(1)[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1410);
+    run_at(tgt(1), hnd(1));
+    a2 = W.s_slot(tgt(2), 0);
+    W.wr64(a2, W.mk_pte(44'h8_1420, PTE_LEAF & 8'hBF, 2'b00, 1'b0));
+    W.vmap[tgt(2)[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1420);
+    chg_arm = 1'b1;
+    chg_pa  = a2;
+    chg_val = W.mk_pte(44'h8_1420, PTE_LEAF, 2'b00, 1'b0);
+    run_at(tgt(2), hnd(2));
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk("Svade: the A-clear leaf faulted", n_fault_ok == 1);
+    chk("Svadu: the walker set A in memory",
+        W.rd64(a1) == W.mk_pte(44'h8_1410, (PTE_LEAF & 8'hBF) | 8'h40,
+                               2'b00, 1'b0));
+    chk($sformatf({"WM-11: the PTE changed before the CAS (%0d) and ",
+                   "the walk restarted"}, n_pw_chg),
+        (n_pw_chg == 1) && (n_pw_cas == 2));
+  endtask
+
+  // ---- Svade and Svadu, two stage -------------------------------------------
+  task automatic p_pt_ad_h();
+    logic [GPA_WIDTH-1:0] g;
+    logic [GPA_WIDTH-1:0] tg;
+    logic [PA_WIDTH-1:0]  gl;
+    logic [PA_WIDTH-1:0]  vl;
+    logic [PA_WIDTH-1:0]  gl5;
+    logic [PA_WIDTH-1:0]  vl1;
+    logic [PA_WIDTH-1:0]  gl1;
+    tname = "pt_ad_h";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    set_h2();
+    csr_ptw_menvcfg_adue = 1'b1;
+    csr_ptw_henvcfg_adue = 1'b1;
+    map_ch();
+    // 1 (h 1, m 1): the VS update writes through the G-stage and sets
+    // the G-stage D of the VS table page (MMU-8a), then executes.
+    g = GPA_WIDTH'('h0_2000_0000);
+    h_map(tgt(1), g, PA_WIDTH'('h0_8140_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1400, F_URWXAD, 2'b00, 1'b0));
+    tg  = vs_l0_gpa(tgt(1));
+    gl1 = W.g_slot(tg[GPA_WIDTH-1:12], 0);
+    W.wr64(gl1, W.mk_pte(44'(W.g2s(tg) >> 12), 8'h5F, 2'b00, 1'b0)); // D clear
+    vl1 = W.vs_slot(tgt(1), 0);
+    run_at(tgt(1), hnd(1));
+    // 2 (h 1, m 1): the G-stage leaf of the VS table page grants no
+    // write: guest-page fault, kind 10.
+    g = GPA_WIDTH'('h0_2200_0000);
+    h_map(tgt(2), g, PA_WIDTH'('h0_8141_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1410, F_URWXAD, 2'b00, 1'b0));
+    tg = vs_l0_gpa(tgt(2));
+    W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
+           W.mk_pte(44'(W.g2s(tg) >> 12), 8'hDB, 2'b00, 1'b0));
+    W.jr_gfault(tgt(2), tg + GPA_WIDTH'(8 * tgt(2)[20:12]), 2'b10, hnd(2));
+    W.mixed(1);
+    // 3 (h 1, m 0): the VS-stage is Svadu, the G-stage Svade: the G D
+    // the update needs faults, kind 10.
+    W.csr_env(1'b0, 1'b1, 1'b1, 1'b1);
+    W.mixed(1);
+    g = GPA_WIDTH'('h0_2400_0000);
+    h_map(tgt(3), g, PA_WIDTH'('h0_8142_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1420, F_URWXAD, 2'b00, 1'b0));
+    tg = vs_l0_gpa(tgt(3));
+    W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
+           W.mk_pte(44'(W.g2s(tg) >> 12), 8'h5F, 2'b00, 1'b0));       // D clear
+    W.jr_gfault(tgt(3), tg + GPA_WIDTH'(8 * tgt(3)[20:12]), 2'b10, hnd(3));
+    W.mixed(1);
+    // 4, 5 (h 0, m 1): the VS-stage is Svade, the G-stage Svadu.
+    W.csr_env(1'b1, 1'b0, 1'b1, 1'b1);
+    W.mixed(1);
+    g = GPA_WIDTH'('h0_2600_0000);
+    h_map(tgt(4), g, PA_WIDTH'('h0_8143_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1430, F_URWXAD, 2'b00, 1'b0));
+    W.jr_fault(tgt(4), IFU_FAULT_PAGE, hnd(4));
+    W.mixed(1);
+    g   = GPA_WIDTH'('h0_2800_0000);
+    h_map(tgt(5), g, PA_WIDTH'('h0_8144_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1440, 8'h9F, 2'b00, 1'b0));                  // A clear
+    gl5 = W.g_slot(g[GPA_WIDTH-1:12], 0);
+    run_at(tgt(5), hnd(5));
+    // 6 (h 1, m 1): the VS leaf changes before its CAS (WM-11).
+    W.csr_env(1'b1, 1'b1, 1'b1, 1'b1);
+    W.mixed(1);
+    g = GPA_WIDTH'('h0_2A00_0000);
+    h_map(tgt(6), g, PA_WIDTH'('h0_8145_0000),
+          W.mk_pte(44'(g >> 12), PTE_LEAF & 8'hBF, 2'b00, 1'b0),
+          W.mk_pte(44'h8_1450, F_URWXAD, 2'b00, 1'b0));
+    vl      = W.vs_slot(tgt(6), 0);
+    chg_arm = 1'b1;
+    chg_pa  = vl;
+    chg_val = W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0);
+    run_at(tgt(6), hnd(6));
+    warm_e = W.ne + 1;
+    end_prog(60000);
+    chk($sformatf("three faults (%0d)", n_fault_ok), n_fault_ok == 3);
+    chk("the VS update set the VS leaf's A",
+        W.rd64(vl1)[6] == 1'b1);
+    chk("and the G-stage D of its table page",
+        W.rd64(gl1)[7] == 1'b1);
+    chk("G-stage Svadu set the code page's G leaf A",
+        W.rd64(gl5)[6] == 1'b1);
+    chk($sformatf("WM-11 restart (%0d)", n_pw_chg), n_pw_chg == 1);
+  endtask
+
+  // ---- an ITLB invalidate while a walk is in progress ---------------------
+  // ITLB-14, IL-13, IL-14: the walk completes and is answered, the ITLB
+  // installs nothing from it, and the next lookup walks again.
+  task automatic p_pt_inv();
+    tname = "pt_inv";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    pw_lat_min = 10;
+    pw_lat_max = 10;
+    map_ch();
+    W.map4k(tgt(1) - VA_WIDTH'('h10), PA_WIDTH'('h0_8140_0000));
+    walk_lo   = tgt(1)[VA_WIDTH-1:12];
+    walk_hi   = tgt(1)[VA_WIDTH-1:12] + (VA_WIDTH-12)'(1);
+    inv_watch = 1'b1;
+    inv_vpn   = tgt(1)[VA_WIDTH-1:12];
+    run_at(tgt(1), hnd(1));
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf({"the invalidate fired while the walker was walking ",
+                   "(%0d of %0d)"}, n_inv_busy, n_inv_fired),
+        (n_inv_fired == 1) && (n_inv_busy == 1));
+    chk($sformatf("the page was walked again (%0d walks)", n_walk_rng),
+        n_walk_rng >= 2);
+  endtask
+
+
+  // =================================================================
+  // BP-123, Problem 5: the RVA23 extensions that reach fetch and
+  // decode. Every Zcb encoding, every C.MOP.n (Zcmop), every MOP.R.n
+  // and MOP.RR.n (Zimop) and the three Zicbop prefetches, through the
+  // expander, predecode, the ibuf and decode. A 16-bit encoding's
+  // expected expansion is the LLVM oracle's (ifu/tb/
+  // ifu_rvc_exp_oracle.hex, BP-117), not this file's; decode must not
+  // raise illegal and must give the named operation; predecode must
+  // class none of them as a control transfer.
+  // =================================================================
+  logic [39:0] rvc_orc [0:65535];
+
+  task automatic zc(input logic [15:0] c, input alu_op_t op);
+    W.put_hw(W.wp, c);
+    W.add_ex(W.wp, rvc_orc[c][31:0], 1'b1, NO_BRANCH, 1'b0, '0);
+    W.ex[W.ne-1].aluop = int'(op);
+    W.wp = W.wp + VA_WIDTH'(2);
+  endtask
+
+  task automatic z32(input logic [31:0] w, input alu_op_t op);
+    W.i32(w);
+    W.ex[W.ne-1].aluop = int'(op);
+  endtask
+
+  task automatic p_zstar();
+    int n_zcb;
+    int n_cls;
+    begin_prog("zstar");
+    $readmemh("../ifu/tb/ifu_rvc_exp_oracle.hex", rvc_orc);
+    W.mixed(2);
+    n_zcb = 0;
+    n_cls = 0;
+    // Zcb. c.lbu, c.lhu, c.lh, c.sb, c.sh (quadrant 0); c.zext.b,
+    // c.sext.b, c.zext.h, c.sext.h, c.zext.w, c.not, c.mul (quadrant 1).
+    for (int x = 0; x < 256; x++) begin           // rs1', uimm, rd'/rs2'
+      logic [2:0] r1;
+      logic [1:0] ui;
+      logic [2:0] r2;
+      r1 = x[7:5];
+      ui = x[4:3];
+      r2 = x[2:0];
+      zc({6'b100000, r1, ui, r2, 2'b00}, ALU_LBU);
+      zc({6'b100010, r1, ui, r2, 2'b00}, ALU_SB);
+      n_zcb += 2;
+      if (!ui[1]) begin
+        zc({6'b100001, r1, 1'b0, ui[0], r2, 2'b00}, ALU_LHU);
+        zc({6'b100001, r1, 1'b1, ui[0], r2, 2'b00}, ALU_LH);
+        zc({6'b100011, r1, 1'b0, ui[0], r2, 2'b00}, ALU_SH);
+        n_zcb += 3;
+      end
+    end
+    for (int r = 0; r < 8; r++) begin
+      zc({6'b100111, 3'(r), 5'b11000, 2'b01}, ALU_ANDI);    // c.zext.b
+      zc({6'b100111, 3'(r), 5'b11001, 2'b01}, ALU_SEXTB);
+      zc({6'b100111, 3'(r), 5'b11010, 2'b01}, ALU_ZEXTH);
+      zc({6'b100111, 3'(r), 5'b11011, 2'b01}, ALU_SEXTH);
+      zc({6'b100111, 3'(r), 5'b11100, 2'b01}, ALU_ADDUW);   // c.zext.w
+      zc({6'b100111, 3'(r), 5'b11101, 2'b01}, ALU_XOR);     // c.not
+      n_zcb += 6;
+      for (int r2 = 0; r2 < 8; r2++) begin
+        zc({6'b100111, 3'(r), 2'b10, 3'(r2), 2'b01}, ALU_MUL);
+        n_zcb++;
+      end
+    end
+    for (int e = 0; e < W.ne; e++) begin
+      logic [15:0] c;
+      c = {W.rd8(W.va2pa(W.ex[e].pc) + PA_WIDTH'(1)),
+           W.rd8(W.va2pa(W.ex[e].pc))};
+      if (W.ex[e].rvc && (W.ex[e].aluop >= 0) && (rvc_orc[c][39:32] == 8'd1))
+        n_cls++;
+    end
+    // Zcmop: C.MOP.n, n = 1, 3, ..., 15: c.lui's space with rd = n,
+    // nzimm 0. The oracle's class 5: the canonical NOP.
+    for (int n = 1; n < 16; n += 2)
+      zc({3'b011, 1'b0, 5'(n), 5'b00000, 2'b01}, ALU_ADD);
+    // Zimop: MOP.R.n, n = 0..31, and MOP.RR.n, n = 0..7, rd a0, rs1 a1,
+    // rs2 a2: write zero to rd.
+    for (int n = 0; n < 32; n++)
+      z32({1'b1, 1'(n >> 4), 2'b00, 2'(n >> 2), 4'b0111, 2'(n), 5'd11,
+           3'b100, 5'd10, 7'b1110011}, ALU_MOP);
+    for (int n = 0; n < 8; n++)
+      z32({1'b1, 1'(n >> 2), 2'b00, 2'(n), 1'b1, 5'd12, 5'd11, 3'b100,
+           5'd10, 7'b1110011}, ALU_MOP);
+    // Zicbop: prefetch.i, .r, .w 64(a1) (LLVM's words): the ORI HINT.
+    z32(32'h0405_E013, ALU_OR);
+    z32(32'h0415_E013, ALU_OR);
+    z32(32'h0435_E013, ALU_OR);
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(40000);
+    chk($sformatf("every Zcb encoding ran (%0d)", n_zcb), n_zcb == 1008);
+    chk($sformatf("each expansion is the LLVM oracle's, class 1 (%0d)", n_cls),
+        n_cls == 1008);
+  endtask
+
+
+  // ---- the other two vsatp / hgatp combinations, end to end -------------
+  // G-stage only (vsatp Bare, hgatp Sv39x4): the fetch address is the
+  // GPA, 41 bits (FE-19, MMU-20), and the walker returns the G-stage
+  // leaf; the ITLB's VS-level permission rule has no leaf to read
+  // (ITLB-16, fixed by BP-123). Code runs at a GPA with bit 40 set,
+  // and an unmapped GPA is a guest-page fault, kind 00.
+  task automatic p_pt_gonly();
+    logic [VA_WIDTH-1:0] hi;
+    tname = "pt_gonly";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    set_h2();
+    csr_itlb_vsatp_mode = 4'd0;
+    csr_ptw_vsatp_mode  = 4'd0;
+    W.vmap.delete();
+
+    W.g_map(RESET_VECTOR[VA_WIDTH-1:12], PA_WIDTH'(RESET_VECTOR),
+            W.mk_pte(44'(RESET_VECTOR >> 12), F_URWXAD, 2'b00, 1'b0));
+    W.vmap[RESET_VECTOR[VA_WIDTH-1:12]] = PPN_WIDTH'(RESET_VECTOR >> 12);
+    W.g_map(PC_C[VA_WIDTH-1:12], PA_C, W.mk_pte(44'(PA_C >> 12), F_URWXAD,
+                                               2'b00, 1'b0));
+    W.vmap[PC_C[VA_WIDTH-1:12]] = PA_C[PA_WIDTH-1:12];
+    W.g_map(PC_H[VA_WIDTH-1:12], PA_H, W.mk_pte(44'(PA_H >> 12), F_URWXAD,
+                                               2'b00, 1'b0));
+    W.vmap[PC_H[VA_WIDTH-1:12]] = PA_H[PA_WIDTH-1:12];
+    hi = VA_WIDTH'('h100_8000_3000);                // GPA bit 40
+    W.g_map(hi[VA_WIDTH-1:12], PA_WIDTH'('h0_8145_0000),
+            W.mk_pte(44'h8_1450, F_URWXAD, 2'b00, 1'b0));
+    W.vmap[hi[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1450);
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jal(5'd0, PC_C);
+    W.mixed(4);
+    run_at(hi + VA_WIDTH'('h20), PC_C + VA_WIDTH'('h100));
+    W.jr_gfault(VA_WIDTH'('h0_8070_0010), GPA_WIDTH'('h0_8070_0010), 2'b00,
+                hnd(1));
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf("the guest-page fault reached decode (%0d)", n_fault_ok),
+        n_fault_ok == 1);
+  endtask
+
+  // VS-stage only (vsatp Sv39, hgatp Bare): a GPA is the SPA. A VS leaf
+  // whose PPN names an address above PA_WIDTH is then an access fault
+  // (MMU-28 for a supervisor physical page; there is no G-stage to give
+  // a guest-page fault), and an invalid leaf a page fault.
+  task automatic p_pt_vsonly();
+    tname = "pt_vsonly";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    W.h2     = 1'b1;
+    W.g_bare = 1'b1;
+    W.vs_root = W.vs_alloc();
+    csr_itlb_v            = 1'b1;
+    csr_itlb_priv         = 2'd1;
+    csr_itlb_satp_mode    = 4'd0;
+    csr_itlb_vsatp_mode   = 4'd8;
+    csr_itlb_vsatp_asid   = ASID_WIDTH'(1);
+    csr_itlb_hgatp_mode   = 4'd0;
+    csr_itlb_hgatp_vmid   = VMID_WIDTH'(3);
+    csr_ptw_satp_mode     = 4'd0;
+    csr_ptw_vsatp_mode    = 4'd8;
+    csr_ptw_vsatp_ppn     = (GPA_WIDTH-12)'(W.vs_root >> 12);
+    csr_ptw_hgatp_mode    = 4'd0;
+
+    W.wr64(W.vs_slot(RESET_VECTOR, 0),
+           W.mk_pte(44'(RESET_VECTOR >> 12), PTE_LEAF, 2'b00, 1'b0));
+    W.vmap[RESET_VECTOR[VA_WIDTH-1:12]] = PPN_WIDTH'(RESET_VECTOR >> 12);
+    W.wr64(W.vs_slot(PC_C, 0),
+           W.mk_pte(44'(PA_C >> 12), PTE_LEAF, 2'b00, 1'b0));
+    W.vmap[PC_C[VA_WIDTH-1:12]] = PA_C[PA_WIDTH-1:12];
+    W.wr64(W.vs_slot(PC_H, 0),
+           W.mk_pte(44'(PA_H >> 12), PTE_LEAF, 2'b00, 1'b0));
+    W.vmap[PC_H[VA_WIDTH-1:12]] = PA_H[PA_WIDTH-1:12];
+    W.wp = RESET_VECTOR;
+    W.mixed(3);
+    W.jal(5'd0, PC_C);
+    W.mixed(4);
+    W.wr64(W.vs_slot(tgt(1), 0),
+           W.mk_pte(44'h100_8140, PTE_LEAF, 2'b00, 1'b0));
+    W.jr_fault(tgt(1), IFU_FAULT_ACCESS, hnd(1));
+    W.mixed(2);
+    W.wr64(W.vs_slot(tgt(2), 0), W.mk_pte(44'h8_1410, 8'hC5, 2'b00, 1'b0));
+    W.jr_fault(tgt(2), IFU_FAULT_PAGE, hnd(2));
+    W.mixed(2);
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf("both faults reached decode (%0d)", n_fault_ok),
+        n_fault_ok == 2);
+  endtask
+
   // =================================================================
   // Program selection. +PROG=<name> runs one program; without it,
   // every program runs.
@@ -2931,6 +4612,22 @@ module tb;
       "rvc":        p_rvc();
       "misp_call":  p_misp_call();
       "jals":       p_jals();
+      "fencei":     p_smc(1);
+      "cboinval":   p_smc(2);
+      "uc_nc":      p_uc(2'd1);
+      "uc_io":      p_uc(2'd2);
+      "pt_faults_s": p_pt_faults_s();
+      "pt_faults_h": p_pt_faults_h();
+      "pt_napot_s": p_pt_napot_s();
+      "pt_napot_h": p_pt_napot_h();
+      "pt_rsv_s":   p_pt_rsv_s();
+      "pt_rsv_h":   p_pt_rsv_h();
+      "pt_ad_s":    p_pt_ad_s();
+      "pt_ad_h":    p_pt_ad_h();
+      "pt_inv":     p_pt_inv();
+      "zstar":      p_zstar();
+      "pt_gonly":   p_pt_gonly();
+      "pt_vsonly":  p_pt_vsonly();
       default: begin
         fail_cnt++;
         $display("FAIL: unknown program %s", nm);
@@ -2938,11 +4635,15 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:18] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:34] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "deep", "indir", "region",
                               "multistart", "cross", "rvc", "misp_call",
-                              "jals"};
+                              "jals", "fencei", "cboinval", "uc_nc",
+                              "uc_io", "pt_faults_s", "pt_faults_h",
+                              "pt_napot_s", "pt_napot_h", "pt_rsv_s",
+                              "pt_rsv_h", "pt_ad_s", "pt_ad_h", "pt_inv",
+                              "zstar", "pt_gonly", "pt_vsonly"};
 
   // =================================================================
   initial begin

@@ -24,6 +24,15 @@
 //                     the most blocks the pipeline lets read one slot
 //                     (BP-119). The counts are ifu_lbuf's state and
 //                     arrive on its rc_obs observation port
+//   U6  IFU-22        an uncached L1I request is presented only while
+//                     the FTQ's commit pointer names the block F0
+//                     holds, the last one accepted on the fetch port
+//                     (BP-123)
+//   U7  IF-34, IF-35  one maintenance operation at a time from the
+//                     commit stage, and its ack only after the L1I's
+//                     done for it (BP-123)
+//   U8  IF-28, IF-36  the IFU presents an L1I invalidate only for a
+//                     taken commit operation, one at a time (BP-123)
 //
 // U3 and U4 decide survival themselves, from ftq_ifu_flush_idx and
 // ftq_ifu_commit_ptr (IFU-28), and know which blocks the unit holds
@@ -57,6 +66,13 @@ module ifu_assert #(
   input logic                    ifu_l1i_req_val,
   input logic                    ifu_l1i_req_rdy,
   input logic [REQ_ID_BITS-1:0]  ifu_l1i_req_id,
+  input logic                    ifu_l1i_req_uncached,
+  input logic                    cmt_ifu_maint_val,
+  input logic                    cmt_ifu_maint_rdy,
+  input logic                    ifu_cmt_maint_ack,
+  input logic                    ifu_l1i_inv_val,
+  input logic                    ifu_l1i_inv_rdy,
+  input logic                    l1i_ifu_inv_done,
   input logic                    l1i_ifu_rsp_val,
   input logic [REQ_ID_BITS-1:0]  l1i_ifu_rsp_id,
   input logic                    ifu_itlb_req_val,
@@ -79,6 +95,13 @@ module ifu_assert #(
   // lookups a flush made dead.
   logic [FTQ_IDX_BITS-1:0]    r_xblk;
   logic [1:0]                 r_xdead;
+  // U6. The block most recently accepted on the fetch port: F0's.
+  logic [FTQ_IDX_BITS-1:0]    r_f0_idx;
+  // U7, U8. A commit operation taken; its L1I invalidate taken; the
+  // L1I's done for it seen.
+  logic                       r_mop;
+  logic                       r_minv;
+  logic                       r_mdone;
 
   logic       w_l1i_fire;
   logic       w_itlb_fire;
@@ -116,7 +139,20 @@ module ifu_assert #(
       r_dead_gen <= '0;
       r_xblk     <= '0;
       r_xdead    <= '0;
+      r_f0_idx   <= '0;
+      r_mop      <= 1'b0;
+      r_minv     <= 1'b0;
+      r_mdone    <= 1'b0;
     end else begin
+      if (w_facc) r_f0_idx <= ftq_ifu_idx;
+      if (ifu_cmt_maint_ack) begin
+        r_mop   <= 1'b0;
+        r_minv  <= 1'b0;
+        r_mdone <= 1'b0;
+      end
+      if (cmt_ifu_maint_val && cmt_ifu_maint_rdy) r_mop <= 1'b1;
+      if (ifu_l1i_inv_val && ifu_l1i_inv_rdy)     r_minv <= 1'b1;
+      if (l1i_ifu_inv_done && r_minv)             r_mdone <= 1'b1;
       for (int i = 0; i < MAX_OUTSTANDING; i++) begin
         if (w_l1i_fire && (ifu_l1i_req_id == REQ_ID_BITS'(i)))
           r_id_out[i] <= 1'b1;
@@ -220,6 +256,39 @@ module ifu_assert #(
       !w_rc_over;
   endproperty
 
+  // U6  IFU-22 (BP-123). F0's block is the last accepted on the fetch
+  //     port (F0 takes one block at a time); a held zombie request is
+  //     still that block's, since F0 takes nothing while it is held.
+  property p_uc_after_commit;
+    @(posedge clk) disable iff (!rstn)
+      (ifu_l1i_req_val && ifu_l1i_req_uncached) |->
+        (ftq_ifu_commit_ptr == r_f0_idx);
+  endproperty
+
+  // U7  IF-34, IF-35 (BP-123).
+  property p_maint_one;
+    @(posedge clk) disable iff (!rstn)
+      r_mop |-> !(cmt_ifu_maint_val && cmt_ifu_maint_rdy);
+  endproperty
+  property p_ack_after_done;
+    @(posedge clk) disable iff (!rstn)
+      ifu_cmt_maint_ack |-> (r_mop && r_mdone);
+  endproperty
+
+  // U8  IF-28 (BP-123).
+  property p_inv_for_op;
+    @(posedge clk) disable iff (!rstn)
+      ifu_l1i_inv_val |-> (r_mop && !r_minv);
+  endproperty
+
+  a_uc_after_commit: assert property (p_uc_after_commit)
+    else $error("U6 IFU-22 an uncached request before older entries commit");
+  a_maint_one:      assert property (p_maint_one)
+    else $error("U7 IF-34 a second maintenance operation taken");
+  a_ack_after_done: assert property (p_ack_after_done)
+    else $error("U7 IF-35 maintenance ack before the L1I's done");
+  a_inv_for_op:     assert property (p_inv_for_op)
+    else $error("U8 IF-28 an L1I invalidate with no operation to serve");
   a_l1i_id_reuse:   assert property (p_id_reused_after_rsp)
     else $error("U1 IF-7 an L1I identifier was reused before its response");
   a_gen_unchanged:  assert property (p_gen_unchanged)
@@ -257,6 +326,13 @@ bind ifu ifu_assert #(
   .ifu_l1i_req_val   (ifu_l1i_req_val),
   .ifu_l1i_req_rdy   (ifu_l1i_req_rdy),
   .ifu_l1i_req_id    (ifu_l1i_req_id),
+  .ifu_l1i_req_uncached (ifu_l1i_req_uncached),
+  .cmt_ifu_maint_val (cmt_ifu_maint_val),
+  .cmt_ifu_maint_rdy (cmt_ifu_maint_rdy),
+  .ifu_cmt_maint_ack (ifu_cmt_maint_ack),
+  .ifu_l1i_inv_val   (ifu_l1i_inv_val),
+  .ifu_l1i_inv_rdy   (ifu_l1i_inv_rdy),
+  .l1i_ifu_inv_done  (l1i_ifu_inv_done),
   .l1i_ifu_rsp_val   (l1i_ifu_rsp_val),
   .l1i_ifu_rsp_id    (l1i_ifu_rsp_id),
   .ifu_itlb_req_val  (ifu_itlb_req_val),

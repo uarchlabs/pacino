@@ -29,8 +29,10 @@ module ifu_xlate_assert (
   input logic                 itlb_ifu_rsp_val,
   input logic                 itlb_ifu_tag,
   input logic                 xq_val,
+  input logic [FTQ_IDX_BITS-1:0] xq_idx,
   input logic                 xq_uc,
-  input logic                 xq_pop
+  input logic                 xq_pop,
+  input logic [FTQ_IDX_BITS-1:0] ftq_ifu_commit_ptr
 );
 
   // IT-16: the lookup VPN is the fetch address above the page offset.
@@ -109,12 +111,15 @@ module ifu_xlate_assert (
          (itlb_ifu_rsp_val && (itlb_ifu_tag == ifu_itlb_tag)));
   endproperty
 
-  // T3  TD#135 STUB. The uncached path is not built, so a block IFU-26
-  //     marked must never be taken by F0. The testbench returns only
-  //     cacheable, idempotent PMAs; this fires if that changes.
+  // T3  IFU-22 (BP-123; it was the TD#135 stub "a marked block never
+  //     reaches F0"). A block IFU-26 marked uncached leaves the queue
+  //     for F0's fetch only when the FTQ's commit pointer names it:
+  //     every older entry has committed. The pop is the fetch side's
+  //     (ifu_fetch), the mark and the index this module's queue head,
+  //     the pointer the FTQ's.
   property p_no_uncached_at_f0;
     @(posedge clk) disable iff (!rstn)
-      (xq_val && xq_pop) |-> !xq_uc;
+      (xq_val && xq_pop && xq_uc) |-> (xq_idx == ftq_ifu_commit_ptr);
   endproperty
 
   // T4  IT-16, IT-1, IT-2 (TD#146, BP-117). Every lookup carries the
@@ -135,7 +140,7 @@ module ifu_xlate_assert (
   a_itlb_tag_free:   assert property (p_tag_free_on_issue)
     else $error("T2 IT-14 an ITLB lookup reused a tag in flight");
   a_no_uncached_f0:  assert property (p_no_uncached_at_f0)
-    else $error("T3 TD#135 a marked uncached block reached F0");
+    else $error("T3 IFU-22 an uncached block left before older commits");
   a_itlb_vpn_page:   assert property (p_lookup_vpn_is_block_page)
     else $error("T4 IT-16 the lookup VPN is not the block's page");
 
@@ -156,6 +161,8 @@ bind ifu_xlate ifu_xlate_assert u_assert (
   .itlb_ifu_rsp_val  (itlb_ifu_rsp_val),
   .itlb_ifu_tag      (itlb_ifu_tag),
   .xq_val            (xq_val),
+  .xq_idx            (xq_idx),
   .xq_uc             (xq_uc),
-  .xq_pop            (xq_pop)
+  .xq_pop            (xq_pop),
+  .ftq_ifu_commit_ptr (ftq_ifu_commit_ptr)
 );

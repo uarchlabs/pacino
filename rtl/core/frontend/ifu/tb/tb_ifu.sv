@@ -52,6 +52,14 @@
 // lookup and response. A delivered block k is still checked against
 // blk[k]: after a flush, rx[k] for k at or past the flush position
 // must be the corrected block, which a delivered dropped block fails.
+//
+// BP-123. The ITLB model returns a PMA and a GPA implicit-access kind
+// per page. The L1I model answers the maintenance port of
+// l1i_ifu_interfaces.md 10 (ready, then done a set number of cycles
+// after acceptance) and logs the uncached bit of every request. The
+// reference fills in the fetch GPA's offset (kind 2'b00, IFU-2a).
+// t_maint (FENCE.I, cbo.inval: IF-33 to IF-37), t_uncached (IFU-22,
+// IFU-23, IF-44) and t_gpa_kind (IT-6c, DCD-16) are the BP-123 tests.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -97,6 +105,19 @@ module tb;
   logic [VA_WIDTH-1:0]      ifu_ftq_target;
   logic                     ifu_ftq_fault_val;
   logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos;
+  logic                     ifu_ftq_uc_end;
+  logic                     ifu_l1i_req_uncached;
+  logic                     ifu_l1i_inv_val;
+  logic                     ifu_l1i_inv_rdy;
+  logic                     ifu_l1i_inv_all;
+  logic [PA_WIDTH-1:0]      ifu_l1i_inv_paddr;
+  logic                     l1i_ifu_inv_done;
+  logic                     cmt_ifu_maint_val;
+  logic                     cmt_ifu_maint_rdy;
+  logic                     cmt_ifu_maint_op;
+  logic [PA_WIDTH-1:0]      cmt_ifu_maint_paddr;
+  logic                     ifu_cmt_maint_ack;
+  logic [1:0]               itlb_ifu_gpa_imp;
   logic                     ifu_l1i_req_val;
   logic                     ifu_l1i_req_rdy;
   logic [REQ_ID_BITS-1:0]   ifu_l1i_req_id;
@@ -146,6 +167,8 @@ module tb;
     ifu_fault_e           fault;
     logic [GPA_WIDTH-1:0] gpa;
     int                   misses;
+    logic [PMA_WIDTH-1:0] pma;      // BP-123, effective attributes
+    logic [1:0]           imp;      // BP-123, the GPA's kind
   } page_t;
 
   page_t                 pmap   [logic [LKV-1:0]];
@@ -198,8 +221,25 @@ module tb;
     p.fault  = f;
     p.gpa    = gpa;
     p.misses = misses;
+    p.pma    = 4'b1111;
+    p.imp    = 2'b00;
     pmap[vpn_of(va)] = p;
   endtask
+
+  // BP-123. A mapped page's effective PMA and its GPA's kind.
+  task automatic page_attr(input logic [VA_WIDTH-1:0] va,
+                           input logic [PMA_WIDTH-1:0] pma,
+                           input logic [1:0] imp);
+    page_t p;
+    p     = pmap[vpn_of(va)];
+    p.pma = pma;
+    p.imp = imp;
+    pmap[vpn_of(va)] = p;
+  endtask
+
+  function automatic logic [1:0] imp_of(input logic [VA_WIDTH-1:0] va);
+    return pmap.exists(vpn_of(va)) ? pmap[vpn_of(va)].imp : 2'b00;
+  endfunction
 
   // Instructions are written through the page map; the page must be
   // non-faulting. exp_of records each start's expansion.
@@ -359,6 +399,7 @@ module tb;
     itlb_ifu_ppn     = '0;
     itlb_ifu_cause   = '0;
     itlb_ifu_gpa     = '0;
+    itlb_ifu_gpa_imp = '0;
     itlb_ifu_pma     = '0;
     forever begin
       @(posedge clk);
@@ -392,6 +433,7 @@ module tb;
           n_itlb_rsp = n_itlb_rsp + 1;
           itlb_ifu_cause   = '0;
           itlb_ifu_gpa     = '0;
+          itlb_ifu_gpa_imp = '0;
           itlb_ifu_ppn     = v[PPN_WIDTH-1:0];
           itlb_ifu_pma     = 4'b1111;
           itlb_ifu_status  = 2'b00;
@@ -408,12 +450,14 @@ module tb;
                 IFU_FAULT_ACCESS: itlb_ifu_cause = CAUSE_WIDTH'(1);
                 IFU_FAULT_PAGE:   itlb_ifu_cause = CAUSE_WIDTH'(12);
                 default: begin
-                  itlb_ifu_cause = CAUSE_WIDTH'(20);
-                  itlb_ifu_gpa   = pg.gpa;
+                  itlb_ifu_cause   = CAUSE_WIDTH'(20);
+                  itlb_ifu_gpa     = pg.gpa;
+                  itlb_ifu_gpa_imp = pg.imp;
                 end
               endcase
             end else begin
               itlb_ifu_ppn = pg.ppn;
+              itlb_ifu_pma = pg.pma;
             end
           end
         end
@@ -459,7 +503,66 @@ module tb;
   int    n_l1i_rsp;
   logic [REQ_ID_BITS-1:0] rsp_id_log [0:255];
 
-  assign ifu_l1i_req_rdy = rstn && !l1i_rdy_low;
+  assign ifu_l1i_req_rdy = rstn && !l1i_rdy_low && !inv_busy;
+
+  // BP-123. The maintenance port: taken when idle, done inv_lat cycles
+  // later. Ready is low meanwhile (IF-30). Every operation and every
+  // request's uncached bit is logged.
+  int                  inv_lat;
+  logic                inv_busy;
+  int                  inv_due;
+  int                  n_inv;
+  logic                inv_all_log [0:15];
+  logic [PA_WIDTH-1:0] inv_pa_log  [0:15];
+  int                  inv_done_cyc;
+  logic                req_unc_log [0:255];
+  logic                req_pf_log  [0:255];
+
+  assign ifu_l1i_inv_rdy = rstn && !inv_busy;
+
+  initial begin : inv_model
+    logic s_take;
+    inv_busy         = 1'b0;
+    l1i_ifu_inv_done = 1'b0;
+    forever begin
+      @(posedge clk);
+      s_take = rstn && ifu_l1i_inv_val && ifu_l1i_inv_rdy;
+      #1;
+      l1i_ifu_inv_done = 1'b0;
+      if (!rstn) begin
+        inv_busy = 1'b0;
+      end else begin
+        if (inv_busy && (cyc >= inv_due)) begin
+          inv_busy         = 1'b0;
+          l1i_ifu_inv_done = 1'b1;
+          inv_done_cyc     = cyc;
+        end
+        if (s_take) begin
+          inv_busy = 1'b1;
+          inv_due  = cyc + inv_lat;
+          if (n_inv < 16) begin
+            inv_all_log[n_inv] = ifu_l1i_inv_all;
+            inv_pa_log[n_inv]  = ifu_l1i_inv_paddr;
+          end
+          n_inv++;
+        end
+      end
+    end
+  end
+
+  // BP-123, Ziccif. In stamp mode every response is a fresh line of
+  // sixteen addi words, each carrying the response's stamp in BOTH
+  // halves: rd = stamp[4:0] in the low halfword, imm = stamp in the high
+  // one. An instruction assembled from two reads has rd != imm[4:0].
+  logic l1i_stamp;
+  int   stamp;
+
+  function automatic logic [L1I_LINE_BITS-1:0] stamp_line(input int st);
+    logic [L1I_LINE_BITS-1:0] d;
+    for (int w = 0; w < 16; w++)
+      d[32*w +: 32] = {12'(st), 5'd0, 3'b000, 5'(st), 7'b0010011};
+    return d;
+  endfunction
 
   function automatic logic [L1I_LINE_BITS-1:0] line_data(
       input logic [PA_WIDTH-1:0] pa);
@@ -484,6 +587,8 @@ module tb;
     logic s_fire;
     logic [REQ_ID_BITS-1:0] s_id;
     logic [PA_WIDTH-1:0]    s_pa;
+    logic                   s_unc;
+    logic                   s_pf;
     int idle;
     idle             = 0;
     l1i_ifu_rsp_val  = 1'b0;
@@ -495,6 +600,8 @@ module tb;
       s_fire = rstn && ifu_l1i_req_val && ifu_l1i_req_rdy;
       s_id   = ifu_l1i_req_id;
       s_pa   = ifu_l1i_req_paddr;
+      s_unc  = ifu_l1i_req_uncached;
+      s_pf   = ifu_l1i_req_prefetch;
       #1;
       l1i_ifu_rsp_val = 1'b0;
       if (!rstn) begin
@@ -534,7 +641,13 @@ module tb;
           q_val[pick]      = 1'b0;
           l1i_ifu_rsp_val  = 1'b1;
           l1i_ifu_rsp_id   = q_id[pick];
-          l1i_ifu_rsp_data = line_data(q_pa[pick]);
+          if (l1i_stamp) begin
+            stamp = stamp + 1;
+            if (stamp[4:0] == 5'd0) stamp = stamp + 1;   // rd nonzero
+            l1i_ifu_rsp_data = stamp_line(stamp);
+          end else begin
+            l1i_ifu_rsp_data = line_data(q_pa[pick]);
+          end
           l1i_ifu_rsp_err  =
             err_ln.exists(q_pa[pick][PA_WIDTH-1:L1I_OFFSET_BITS]);
           if (n_l1i_rsp < 256) rsp_id_log[n_l1i_rsp] = q_id[pick];
@@ -552,7 +665,11 @@ module tb;
               break;
             end
           end
-          if (n_l1i_req < 256) req_pa_log[n_l1i_req] = s_pa;
+          if (n_l1i_req < 256) begin
+            req_pa_log[n_l1i_req]  = s_pa;
+            req_unc_log[n_l1i_req] = s_unc;
+            req_pf_log[n_l1i_req]  = s_pf;
+          end
           l1i_seq   = l1i_seq + 1;
           n_l1i_req = n_l1i_req + 1;
         end
@@ -584,6 +701,7 @@ module tb;
   logic [VA_WIDTH-1:0] wb_tgt [0:MAXB-1];
   logic           wb_fltv [0:MAXB-1];
   logic [3:0]     wb_fltp [0:MAXB-1];
+  logic           wb_uce  [0:MAXB-1];   // BP-123, ifu_ftq_uc_end
   int   n_stall_cyc;
   int   n_hold_ok;
   int   n_hold_bad;
@@ -640,6 +758,7 @@ module tb;
             wb_tgt[nwb]  = ifu_ftq_target;
             wb_fltv[nwb] = ifu_ftq_fault_val;
             wb_fltp[nwb] = ifu_ftq_fault_pos;
+            wb_uce[nwb]  = ifu_ftq_uc_end;
           end
           nwb = nwb + 1;
         end
@@ -755,6 +874,11 @@ module tb;
         e.fva[p] = e.pc[p] + VA_WIDTH'(2);
         e.fgpa[p] = (hf[p+1] == IFU_FAULT_GUEST_PAGE) ? hg[p+1] : '0;
       end
+      // BP-123, IFU-2a: the fetch's own GPA carries the faulting
+      // halfword's page offset; an implicit access's is as returned.
+      if ((e.flt[p] == IFU_FAULT_GUEST_PAGE) && (imp_of(e.fva[p]) == 2'b00) &&
+          (e.fgpa[p] != '0))
+        e.fgpa[p][11:0] = e.fva[p][11:0];
       if ((e.flt[p] != IFU_FAULT_NONE) && base[p] && !e.flt_val) begin
         e.flt_val = 1'b1;
         e.flt_pos = p;
@@ -965,6 +1089,13 @@ module tb;
     l1i_hold_all   = 1'b0;
     l1i_rdy_low    = 1'b0;
     n_l1i_rsp      = 0;
+    inv_lat        = 6;
+    n_inv          = 0;
+    l1i_stamp      = 1'b0;
+    stamp          = 0;
+    cmt_ifu_maint_val   = 1'b0;
+    cmt_ifu_maint_op    = 1'b0;
+    cmt_ifu_maint_paddr = '0;
     l1i_hold_ln.delete();
     pmap.delete();
     mem_hw.delete();
@@ -1157,9 +1288,11 @@ module tb;
         (rx_slot[1][0].fault_cause == IFU_FAULT_ACCESS));
     chk("cause 12 on the first page",
         (nrx > 2) && (rx_slot[2][0].fault_cause == IFU_FAULT_PAGE));
+    // BP-123: the fetch's own GPA (kind 00) carries the VA's offset,
+    // 0x030 here (IFU-2a). This read 'h1_2345_6000, the page alone.
     chk("cause 20 on the first page carries the GPA",
         (nrx > 3) && (rx_slot[3][0].fault_cause == IFU_FAULT_GUEST_PAGE) &&
-        (rx_slot[3][0].fault_gpa == GPA_WIDTH'('h1_2345_6000)));
+        (rx_slot[3][0].fault_gpa == GPA_WIDTH'('h1_2345_6030)));
     chk("a faulting first page issues no L1I request (one line in all)",
         n_l1i_req == 1);
   endtask
@@ -1910,6 +2043,318 @@ module tb;
   endtask
 
   // =================================================================
+  // BP-123 tests.
+  // =================================================================
+  // One commit-stage operation: present it until taken, then wait for
+  // the ack. Cycles are the #1-after-edge cycle numbers.
+  task automatic maint(input logic op, input logic [PA_WIDTH-1:0] pa,
+                       output int c_ack);
+    int t;
+    cmt_ifu_maint_val   = 1'b1;
+    cmt_ifu_maint_op    = op;
+    cmt_ifu_maint_paddr = pa;
+    do @(posedge clk); while (!cmt_ifu_maint_rdy);
+    #1;
+    cmt_ifu_maint_val = 1'b0;
+    chk("IF-34: no second operation is taken while one is in flight",
+        !cmt_ifu_maint_rdy);
+    t     = 0;
+    c_ack = -1;
+    while ((c_ack < 0) && (t < 200)) begin
+      if (ifu_cmt_maint_ack) c_ack = cyc;
+      @(posedge clk);
+      #1;
+      t++;
+    end
+    chk("IF-35: the operation is acknowledged", c_ack >= 0);
+    chk("IF-35: the ack is one cycle wide", !ifu_cmt_maint_ack);
+  endtask
+
+  // FENCE.I and cbo.inval (l1i_ifu_interfaces.md 10, 11; IF-33 to
+  // IF-37, IF-41). The line buffer's reusable line is what the IFU
+  // holds: a block in the line of the previous request reuses it
+  // without an L1I request (TD-IFU-8). After FENCE.I, and after
+  // cbo.inval of that line, the next block in it must request again;
+  // after cbo.inval of another line it still reuses. Every block here
+  // starts in the lower half of line b, so it needs that line alone
+  // (IFU-7).
+  task automatic t_maint();
+    logic [VA_WIDTH-1:0] b;
+    int c_ack;
+    tname = "maint";
+    $display("-- %s --", tname);
+    reset_all();
+    b = VA_WIDTH'('h0_8010_0000);
+    fill_mixed(b, 64);
+    add_blk(b, b + VA_WIDTH'(16), 1'b0, 0);
+    add_blk(b + VA_WIDTH'(16), b + VA_WIDTH'(32), 1'b0, 0);
+    run_and_check(300);
+    chk($sformatf("two blocks in one line make one request (%0d)",
+                  n_l1i_req), n_l1i_req == 1);
+
+    maint(MAINT_FENCE_I, PA_WIDTH'('h0_dead_beef), c_ack);
+    chk("FENCE.I presents inv_all", (n_inv == 1) && inv_all_log[0]);
+    chk($sformatf("FENCE.I ack the cycle after done (%0d, %0d)", c_ack,
+                  inv_done_cyc), c_ack == inv_done_cyc + 1);
+    add_blk(b, b + VA_WIDTH'(16), 1'b0, 0);
+    run_and_check(300, 2);
+    chk($sformatf("after FENCE.I the line is requested again (%0d)",
+                  n_l1i_req), n_l1i_req == 2);
+
+    maint(MAINT_CBO_INVAL, PA_WIDTH'(b) + PA_WIDTH'('h1000), c_ack);
+    chk("cbo.inval presents its line, not inv_all",
+        (n_inv == 2) && !inv_all_log[1] &&
+        (inv_pa_log[1] == PA_WIDTH'(b) + PA_WIDTH'('h1000)));
+    add_blk(b + VA_WIDTH'(16), b + VA_WIDTH'(32), 1'b0, 0);
+    run_and_check(300, 3);
+    chk($sformatf("cbo.inval of another line keeps the reuse (%0d)",
+                  n_l1i_req), n_l1i_req == 2);
+
+    maint(MAINT_CBO_INVAL, PA_WIDTH'(b) + PA_WIDTH'('h24), c_ack);
+    chk("cbo.inval passes its address unaligned (IF-29)",
+        inv_pa_log[2] == PA_WIDTH'(b) + PA_WIDTH'('h24));
+    add_blk(b, b + VA_WIDTH'(16), 1'b0, 0);
+    run_and_check(300, 4);
+    chk($sformatf("cbo.inval of the line clears the reuse (%0d)",
+                  n_l1i_req), n_l1i_req == 3);
+
+    // IF-34: a second operation presented while one is in flight is
+    // taken only after the first is acknowledged.
+    begin
+      int t;
+      int c1;
+      int tk2;
+      int a1;
+      cmt_ifu_maint_val   = 1'b1;
+      cmt_ifu_maint_op    = MAINT_FENCE_I;
+      cmt_ifu_maint_paddr = '0;
+      do @(posedge clk); while (!cmt_ifu_maint_rdy);
+      c1 = cyc;
+      #1;
+      cmt_ifu_maint_op    = MAINT_CBO_INVAL;       // the second, held
+      cmt_ifu_maint_paddr = PA_WIDTH'(b);
+      t   = 0;
+      tk2 = -1;
+      a1  = -1;
+      while ((tk2 < 0) && (t < 200)) begin
+        @(posedge clk);
+        if (ifu_cmt_maint_ack && (a1 < 0)) a1 = cyc;
+        if (cmt_ifu_maint_rdy) tk2 = cyc;
+        #1;
+        t++;
+      end
+      cmt_ifu_maint_val = 1'b0;
+      chk($sformatf("IF-34: the second taken after the first's ack (%0d > %0d)",
+                    tk2, a1), (a1 > c1) && (tk2 > a1));
+      t = 0;
+      while (!ifu_cmt_maint_ack && (t < 200)) begin
+        @(posedge clk);
+        #1;
+        t++;
+      end
+      chk("IF-34: the second is acknowledged", ifu_cmt_maint_ack);
+    end
+  endtask
+
+  // Uncached fetch (IFU-21 to IFU-23, IFU-26, IF-44). Blocks on an NC
+  // page (then an IO page) wait for the commit pointer to name them,
+  // are requested uncached, and deliver one instruction each; a block
+  // that would deliver more ends after the first with uc_end.
+  task automatic t_uncached(input logic [PMA_WIDTH-1:0] pma,
+                            input string nm);
+    logic [VA_WIDTH-1:0] b;
+    int c;
+    tname = nm;
+    $display("-- %s --", tname);
+    reset_all();
+    b = VA_WIDTH'('h0_8020_0000);
+    map_page(b, b[PA_WIDTH-1:12], IFU_FAULT_NONE, 0, '0);
+    page_attr(b, pma, 2'b00);
+    fill_mixed(b, 32);
+    put32(b + VA_WIDTH'(16), 32'h0002_8067);    // jalr x0, 0(x5)
+    idx0 = 5;
+    add_blk(b, b + VA_WIDTH'(32), 1'b0, 0);                    // idx 5
+    cptr = FTQ_IDX_BITS'(4);
+    run = 1'b1;
+    repeat (40) @(posedge clk);
+    #1;
+    chk("IFU-22: nothing requested before older entries commit",
+        (n_l1i_req == 0) && (nrx == 0));
+    cptr = FTQ_IDX_BITS'(5);
+    c = 0;
+    while (((nrx < 1) || (nwb < 1)) && (c < 200)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    chk($sformatf({"the block is requested once (%0d), uncached (%0d), ",
+                   "not a prefetch (%0d)"},
+                  n_l1i_req, req_unc_log[0], req_pf_log[0]),
+        (n_l1i_req == 1) && req_unc_log[0] && !req_pf_log[0]);
+    chk($sformatf("IFU-23: one instruction delivered (%04h)", rx_en[0]),
+        (nrx == 1) && (rx_en[0] == 16'h0001) &&
+        (rx_slot[0][0].instr == 32'h0015_0513));
+    chk("the block ends after it: mis at 0 with uc_end, range cut",
+        (nwb == 1) && wb_misv[0] && (wb_misp[0] == 4'd0) && wb_uce[0] &&
+        (wb_rng[0] == 16'h0001));
+
+    // The next instruction is the next entry's block: gated on its own
+    // commit, served from the line already held (IFU-23).
+    add_blk(b + VA_WIDTH'(2), b + VA_WIDTH'(32), 1'b0, 0);     // idx 6
+    repeat (30) @(posedge clk);
+    #1;
+    chk("the next entry waits for this one to commit", nrx == 1);
+    cptr = FTQ_IDX_BITS'(6);
+    c = 0;
+    while (((nrx < 2) || (nwb < 2)) && (c < 200)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    chk("the next instruction alone, from the held line",
+        (nrx == 2) && (rx_en[1] == 16'h0001) &&
+        (rx_slot[1][0].instr == ADDI) && (n_l1i_req == 1) && wb_uce[1]);
+
+    // A JALR first: delivered alone, but no redirect is written; its
+    // successor is the backend's (jalr x0, 0(x5) at b+16, written at
+    // set-up).
+    add_blk(b + VA_WIDTH'(16), b + VA_WIDTH'(32), 1'b0, 0);    // idx 7
+    cptr = FTQ_IDX_BITS'(7);
+    c = 0;
+    while (((nrx < 3) || (nwb < 3)) && (c < 200)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    chk($sformatf({"a JALR first: delivered alone, no mis, no uc_end ",
+                   "(nrx %0d en %04h uce %0d mis %0d rng %04h)"}, nrx,
+                  rx_en[2], wb_uce[2], wb_misv[2], wb_rng[2]),
+        (nrx == 3) && (rx_en[2] == 16'h0001) && !wb_uce[2] &&
+        !wb_misv[2] && (wb_rng[2] == 16'h0001));
+
+    // A block whose first instruction is its last: no uc_end.
+    add_blk(b + VA_WIDTH'(30), b + VA_WIDTH'(32), 1'b0, 0);    // idx 8
+    cptr = FTQ_IDX_BITS'(8);
+    c = 0;
+    while (((nrx < 4) || (nwb < 4)) && (c < 200)) begin
+      @(posedge clk);
+      #1;
+      c++;
+    end
+    chk("a one-instruction block ends normally, no uc_end",
+        (nrx == 4) && (rx_en[3] == 16'h0001) && !wb_uce[3] && !wb_misv[3]);
+    run = 1'b0;
+  endtask
+
+
+  // Ziccif (BP-123, Problem 5). rva23-profile.adoc: instruction fetch of
+  // a naturally aligned 32-bit instruction is atomic. Every 32-bit
+  // aligned word lies inside one 64-byte line, and the IFU takes both
+  // halfwords of a position from the one line buffer slot holding that
+  // line, so no delivered instruction is made from two reads. Blocks
+  // here start in every 4-byte offset class of a line that matters:
+  // inside one line, in the upper half (two lines, two responses), and
+  // reusing the previous request's line; a FENCE.I runs between two
+  // halves of the stream and the lines are fetched again. Every
+  // response is stamped (stamp mode): an instruction whose halves came
+  // from different responses fails rd == imm[4:0].
+  task automatic t_ziccif();
+    logic [VA_WIDTH-1:0] b;
+    int c;
+    int n_chk;
+    int n_bad;
+    int n_two;
+    int c_ack;
+    tname = "ziccif";
+    $display("-- %s --", tname);
+    reset_all();
+    l1i_stamp = 1'b1;
+    b = VA_WIDTH'('h0_8040_0000);
+    for (int k = 0; k < 2; k++) begin
+      add_blk(b + VA_WIDTH'('h000), b + VA_WIDTH'('h020), 1'b0, 0);
+      add_blk(b + VA_WIDTH'('h020), b + VA_WIDTH'('h040), 1'b0, 0);
+      add_blk(b + VA_WIDTH'('h034), b + VA_WIDTH'('h054), 1'b0, 0);
+      add_blk(b + VA_WIDTH'('h054), b + VA_WIDTH'('h074), 1'b0, 0);
+      add_blk(b + VA_WIDTH'('h0F8), b + VA_WIDTH'('h118), 1'b0, 0);
+      add_blk(b + VA_WIDTH'('h118), b + VA_WIDTH'('h138), 1'b0, 0);
+      run = 1'b1;
+      c   = 0;
+      while (((nrx < nblk) || (nwb < nblk)) && (c < 600)) begin
+        @(posedge clk);
+        #1;
+        c++;
+      end
+      run = 1'b0;
+      if (k == 0) maint(MAINT_FENCE_I, '0, c_ack);
+    end
+    n_chk = 0;
+    n_bad = 0;
+    n_two = 0;
+    for (int k = 0; k < nrx && k < MAXB; k++) begin
+      logic [11:0] s0;
+      logic        two;
+      s0  = rx_slot[k][0].instr[31:20];
+      two = 1'b0;
+      for (int i = 0; i < NPD; i++) begin
+        if (rx_en[k][i]) begin
+          n_chk++;
+          if ((rx_slot[k][i].instr[11:7] != rx_slot[k][i].instr[24:20]) ||
+              (rx_slot[k][i].instr[6:0] != 7'b0010011) ||
+              rx_slot[k][i].is_rvc) n_bad++;
+          if (rx_slot[k][i].instr[31:20] != s0) two = 1'b1;
+        end
+      end
+      if (two) n_two++;
+    end
+    chk($sformatf("all %0d blocks delivered", nblk), nrx == nblk);
+    chk($sformatf("no aligned 32-bit instruction from two reads (%0d of %0d)",
+                  n_bad, n_chk), (n_bad == 0) && (n_chk > 0));
+    chk($sformatf("blocks spanning two responses were exercised (%0d)", n_two),
+        n_two > 0);
+    chk("the FENCE.I between the halves was acknowledged", c_ack >= 0);
+  endtask
+
+  // The GPA's implicit-access kind reaches ifu_pd_pkt_t (IT-6c, DCD-16).
+  task automatic t_gpa_kind();
+    logic [VA_WIDTH-1:0] b [0:2];
+    logic [GPA_WIDTH-1:0] g [0:2];
+    tname = "gpa_kind";
+    $display("-- %s --", tname);
+    reset_all();
+    b[0] = VA_WIDTH'('h0_8030_0040);
+    b[1] = VA_WIDTH'('h0_8031_0080);
+    b[2] = VA_WIDTH'('h0_8032_00C0);
+    g[0] = GPA_WIDTH'('h0_0123_4000);        // the fetch's page
+    g[1] = GPA_WIDTH'('h0_0004_2AB8);        // a VS PTE's address
+    g[2] = GPA_WIDTH'('h0_0004_3FF0);
+    for (int k = 0; k < 3; k++) begin
+      map_page(b[k], '0, IFU_FAULT_GUEST_PAGE, 0, g[k]);
+      page_attr(b[k], 4'b1111, 2'(k));
+      add_blk(b[k], b[k] + VA_WIDTH'(32), 1'b0, 0);
+    end
+    run_and_check(400);
+    chk("kind 00: the fetch's GPA with the VA's offset",
+        (rx_slot[0][0].fault_gpa_imp == 2'b00) &&
+        (rx_slot[0][0].fault_gpa == GPA_WIDTH'('h0_0123_4040)));
+    chk("kind 01: an implicit read, the PTE address as returned",
+        (rx_slot[1][0].fault_gpa_imp == 2'b01) &&
+        (rx_slot[1][0].fault_gpa == g[1]));
+    chk("kind 10: an implicit write, the PTE address as returned",
+        (rx_slot[2][0].fault_gpa_imp == 2'b10) &&
+        (rx_slot[2][0].fault_gpa == g[2]));
+    // MMU-30: a GPA that does not fit is returned 0 and stays 0.
+    reset_all();
+    b[0] = VA_WIDTH'('h0_8033_0050);
+    map_page(b[0], '0, IFU_FAULT_GUEST_PAGE, 0, '0);
+    page_attr(b[0], 4'b1111, 2'b00);
+    add_blk(b[0], b[0] + VA_WIDTH'(32), 1'b0, 0);
+    run_and_check(400);
+    chk("MMU-30: a GPA of 0 (does not fit) stays 0, no offset added",
+        (rx_slot[0][0].fault_cause == IFU_FAULT_GUEST_PAGE) &&
+        (rx_slot[0][0].fault_gpa == '0));
+  endtask
+
+  // =================================================================
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
@@ -1940,6 +2385,11 @@ module tb;
     t_flush_f3(1'b0);
     t_flush_f3(1'b1);
     t_lbuf_max_readers();
+    t_maint();
+    t_uncached(4'b1110, "uncached_nc");     // NC: not cacheable
+    t_uncached(4'b0110, "uncached_io");     // IO: neither
+    t_gpa_kind();
+    t_ziccif();
     $display("tb_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ifu: %0d checks failed", fail_cnt);

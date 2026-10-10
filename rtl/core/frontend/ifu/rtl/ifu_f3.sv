@@ -77,6 +77,39 @@
 // register holds the leading halfword; under IFU-8 the instruction is
 // already complete, so only the tail address is needed. See the
 // Results Capture.
+//
+// THE GPA KIND (IFU-2a, DCD-16, BP-123). A guest-page fault carries its
+// halfword's page's implicit-access kind (IT-6c) beside the GPA. For
+// the fetch's own GPA (kind 2'b00) the walker returns the page; the
+// offset within it is the faulting halfword's VA offset (the two
+// stages translate pages, so GPA[11:0] = VA[11:0]), and it is filled
+// in here so fault_gpa is the faulting GPA itself. A GPA of 0 is left
+// 0: it is mmu_decisions.md MMU-30's "does not fit in 41 bits", and an
+// offset added to it would make it look like a real address (found by
+// tb_fe_top pt_faults_h). For an implicit access (2'b01, 2'b10) it is
+// the VS-stage PTE's address as returned.
+//
+// UNCACHED, ONE INSTRUCTION AT A TIME (IFU-23, BP-123, TD#135). A block
+// marked uncached (IFU-26) reached F0 only when every older FTQ entry
+// had committed (IFU-22, ifu_fetch). Here only its FIRST valid
+// instruction is delivered. When the block would otherwise deliver
+// more (w_uc_cut), the writeback's range and cfi are cut after that
+// instruction and no straddle is recorded, and the block is ENDED after
+// it: mis_val at its position with ifu_ftq_uc_end set, so the FTQ
+// redirects to the next sequential instruction, the start of the next
+// entry, which in turn waits at F0 for this entry to commit. The
+// writeback keeps the instruction's own predecode (a conditional keeps
+// its target).
+//   - a JALR is the exception: it always transfers, to a target only
+//     the backend knows, so nothing after it is on the path and its
+//     successor is the backend's to resolve. It is delivered alone and
+//     no redirect is written (mis_val clear, no uc_end), as for a JALR
+//     in a cacheable block. Ending it at the sequential address would
+//     contradict the taken JALR slot the FTQ writes (ftq_ifu_assert
+//     I6 caught this in tb_fe_top uc_nc).
+// When the block already ends at that instruction -- a predicted taken
+// branch, a mispredict found there, a fault there, or no later
+// instruction -- the writeback is unchanged.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -103,6 +136,9 @@ module ifu_f3 (
   input  logic [VA_WIDTH-1:0]      f2_pc   [0:FTQ_PD_WIDTH],
   input  logic [GPA_WIDTH-1:0]     f2_gpa0,
   input  logic [GPA_WIDTH-1:0]     f2_gpa1,
+  input  logic [1:0]               f2_imp0,
+  input  logic [1:0]               f2_imp1,
+  input  logic                     f2_uc,
   input  logic [FTQ_PD_WIDTH-1:0]  f2_rng,
 
   // ---- to and from the expander and predecoder ---------------------
@@ -137,7 +173,8 @@ module ifu_f3 (
   output logic [FTQ_PD_POS_BITS-1:0] wb_mis_pos,
   output logic [VA_WIDTH-1:0]      wb_target,
   output logic                     wb_fault_val,
-  output logic [FTQ_PD_POS_BITS-1:0] wb_fault_pos
+  output logic [FTQ_PD_POS_BITS-1:0] wb_fault_pos,
+  output logic                     wb_uc_end       // BP-123
 );
 
   localparam int NPD  = FTQ_PD_WIDTH;        // 16
@@ -161,6 +198,9 @@ module ifu_f3 (
   logic [VA_WIDTH-1:0]        r_pc  [0:NPOS-1];
   logic [GPA_WIDTH-1:0]       r_gpa0;
   logic [GPA_WIDTH-1:0]       r_gpa1;
+  logic [1:0]                 r_imp0;
+  logic [1:0]                 r_imp1;
+  logic                       r_uc;
   logic [NPD-1:0]             r_rng;
 
   // ---- the straddle register -----------------------------------------
@@ -179,6 +219,7 @@ module ifu_f3 (
   ifu_fault_e                 w_ifault [0:NPD-1];
   logic [VA_WIDTH-1:0]        w_fva    [0:NPD-1];
   logic [GPA_WIDTH-1:0]       w_fgpa   [0:NPD-1];
+  logic [1:0]                 w_fimp   [0:NPD-1];
   logic [NPD-1:0]             w_has_f;
   logic [NPD-1:0]             w_range;
   logic [NPD-1:0]             w_valid;
@@ -197,6 +238,11 @@ module ifu_f3 (
   logic [FTQ_PD_POS_BITS-1:0] w_tp;
   logic                       w_m1_val;
   logic [FTQ_PD_POS_BITS-1:0] w_m1_pos;
+  logic [NPD-1:0]             w_en;       // the normal ibuf enables
+  logic                       w_p0_val;   // the first valid start
+  logic [FTQ_PD_POS_BITS-1:0] w_p0;
+  logic                       w_uc_cut;   // deliver an uncached p0 alone
+  logic                       w_uc_end;   // and end the block after it
 
   always_comb begin : f3
     for (int i = 0; i < NPOS; i++) f3_hw[i] = r_hw[i];
@@ -209,16 +255,26 @@ module ifu_f3 (
         w_ifault[i] = r_hwf[i];
         w_fva[i]    = r_pc[i];
         w_fgpa[i]   = r_hwpg[i] ? r_gpa1 : r_gpa0;
+        w_fimp[i]   = r_hwpg[i] ? r_imp1 : r_imp0;
       end else if (!p_rvc[i] && (r_hwf[i+1] != IFU_FAULT_NONE)) begin
         w_ifault[i] = r_hwf[i+1];
         w_fva[i]    = r_pc[i] + VA_WIDTH'(2);
         w_fgpa[i]   = r_hwpg[i+1] ? r_gpa1 : r_gpa0;
+        w_fimp[i]   = r_hwpg[i+1] ? r_imp1 : r_imp0;
       end else begin
         w_ifault[i] = IFU_FAULT_NONE;
         w_fva[i]    = '0;
         w_fgpa[i]   = '0;
+        w_fimp[i]   = '0;
       end
-      if (w_ifault[i] != IFU_FAULT_GUEST_PAGE) w_fgpa[i] = '0;
+      if (w_ifault[i] != IFU_FAULT_GUEST_PAGE) begin
+        w_fgpa[i] = '0;
+        w_fimp[i] = '0;
+      end else if ((w_fimp[i] == 2'b00) && (w_fgpa[i] != '0)) begin
+        // The fetch's own GPA: the page from the walk, the offset from
+        // the faulting halfword. 0 is MMU-30's value (see the header).
+        w_fgpa[i][11:0] = w_fva[i][11:0];
+      end
       w_has_f[i] = (w_ifault[i] != IFU_FAULT_NONE);
     end
 
@@ -296,8 +352,28 @@ module ifu_f3 (
         w_last_pos = FTQ_PD_POS_BITS'(i);
       end
     end
+    // ---- uncached: the first valid start, and whether more follow ----
+    for (int i = 0; i < NPD; i++) begin
+      w_en[i] = w_valid[i] &&
+                (!w_mis_val || (FTQ_PD_POS_BITS'(i) <= w_mis_pos));
+    end
+    w_p0_val = 1'b0;
+    w_p0     = '0;
+    for (int i = NPD - 1; i >= 0; i--) begin
+      if (w_valid[i]) begin
+        w_p0_val = 1'b1;
+        w_p0     = FTQ_PD_POS_BITS'(i);
+      end
+    end
+    w_uc_cut = 1'b0;
+    for (int i = 0; i < NPD; i++) begin
+      if (r_uc && w_p0_val && w_en[i] && (FTQ_PD_POS_BITS'(i) > w_p0))
+        w_uc_cut = 1'b1;
+    end
+    w_uc_end = w_uc_cut && (w_br[w_p0] != PD_JALR);
+
     w_strad_set = !r_taken_val && !w_mis_val && !w_fault_val &&
-                  w_last_val && !p_rvc[w_last_pos] &&
+                  !w_uc_cut && w_last_val && !p_rvc[w_last_pos] &&
                   ((r_pc[{1'b0, w_last_pos}] + VA_WIDTH'(2)) == r_next_pc);
 
     // ---- the ibuf vector -----------------------------------------------
@@ -305,8 +381,8 @@ module ifu_f3 (
     w_xfer       = ifu_ibuf_val && ibuf_ifu_rdy;
     f2_rdy       = (!r_val || w_xfer) && !flush;
     for (int i = 0; i < NPD; i++) begin
-      ifu_ibuf_en[i] = w_valid[i] &&
-                       (!w_mis_val || (FTQ_PD_POS_BITS'(i) <= w_mis_pos));
+      ifu_ibuf_en[i] = w_en[i] &&
+                       (!w_uc_cut || (FTQ_PD_POS_BITS'(i) == w_p0));
       ifu_ibuf_slot[i].valid       = 1'b0;               // IB-3
       ifu_ibuf_slot[i].instr       = x_exp[i];
       ifu_ibuf_slot[i].start_pc    = r_pc[i];
@@ -315,6 +391,7 @@ module ifu_f3 (
       ifu_ibuf_slot[i].fault_cause = w_ifault[i];
       ifu_ibuf_slot[i].fault_va    = w_fva[i];
       ifu_ibuf_slot[i].fault_gpa   = w_fgpa[i];
+      ifu_ibuf_slot[i].fault_gpa_imp = w_fimp[i];
       ifu_ibuf_slot[i].is_rvc      = p_rvc[i];
       ifu_ibuf_slot[i].br_type     = w_br[i];
       ifu_ibuf_slot[i].is_call     = p_call[i] && !w_has_f[i];
@@ -343,6 +420,18 @@ module ifu_f3 (
                  : (w_cfi_val ? p_tgt[w_cfi_pos] : '0);
     wb_fault_val = w_fault_val;
     wb_fault_pos = w_fault_pos;
+    wb_uc_end    = w_uc_end;
+    if (w_uc_cut) begin
+      // IFU-23: only p0 was delivered.
+      for (int i = 0; i < NPD; i++)
+        wb_range[i] = w_range[i] && (FTQ_PD_POS_BITS'(i) <= w_p0);
+      wb_cfi_val   = w_cfi_val && (w_cfi_pos == w_p0);
+      wb_fault_val = 1'b0;      // a fault after p0 is the next block's
+      // The block ends after p0; a JALR's successor is the backend's.
+      wb_mis_val   = w_uc_end;
+      wb_mis_pos   = w_p0;
+      wb_target    = p_tgt[w_p0];
+    end
   end
 
   // -----------------------------------------------------------------
@@ -360,6 +449,9 @@ module ifu_f3 (
       r_hwpg      <= '0;
       r_gpa0      <= '0;
       r_gpa1      <= '0;
+      r_imp0      <= '0;
+      r_imp1      <= '0;
+      r_uc        <= 1'b0;
       r_rng       <= '0;
       for (int i = 0; i < NPOS; i++) begin
         r_hw[i]  <= '0;
@@ -394,6 +486,9 @@ module ifu_f3 (
           r_hwpg      <= f2_hwpg;
           r_gpa0      <= f2_gpa0;
           r_gpa1      <= f2_gpa1;
+          r_imp0      <= f2_imp0;
+          r_imp1      <= f2_imp1;
+          r_uc        <= f2_uc;
           r_rng       <= f2_rng;
           for (int i = 0; i < NPOS; i++) begin
             r_hw[i]  <= f2_hw[i];

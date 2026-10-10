@@ -2133,18 +2133,24 @@ initial begin
     `CHECK_FIELD(0, is_illegal, 1'b0, "T71_sh1add_reg")
 
     // -----------------------------------------------------------------------
-    // T72: en_h=0 -- HFENCE.VVMA (f7=0100001, f3=000) -> ILLEGAL
-    //   OP_SYSTEM, rd=0, any rs1/rs2
+    // T72: en_h=0 -- HFENCE.VVMA (f7=0010001, f3=000) -> ILLEGAL
+    //   OP_SYSTEM, rd=0, any rs1/rs2. BP-123: this encoded funct7
+    //   0100001, as the decoder did; the encoding (privileged spec, H
+    //   chapter; LLVM assembles hfence.vvma a0, a1 as 0x22b50073) is
+    //   0010001. 0100001 is not an instruction and is illegal.
     // -----------------------------------------------------------------------
     ext_enable        = RVA23_ENABLE;
     ext_enable.en_h   = 1'b0;
     clear_all();
-    drive(0, enc_r(7'b0100001, 5'd1, 5'd2, 3'b000, 5'd0, OPSYSTEM));
+    drive(0, enc_r(7'b0010001, 5'd1, 5'd2, 3'b000, 5'd0, OPSYSTEM));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T72_hfence_en_h0")
     ext_enable = RVA23_ENABLE;
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T72_hfence_reg")
+    drive(0, enc_r(7'b0100001, 5'd1, 5'd2, 3'b000, 5'd0, OPSYSTEM));
+    @(posedge clk);
+    `CHECK_FIELD(0, is_illegal, 1'b1, "T72_not_hfence")
 
     // -----------------------------------------------------------------------
     // T73: DCD-17, vtype_hazard computed in decode, per 8-slot bundle.
@@ -2290,6 +2296,7 @@ initial begin
                                  ^ VA_WIDTH'(k);
         pd_bundle[k].fault_gpa   = GPA_WIDTH'(64'h1_5555_0000)
                                  ^ GPA_WIDTH'(k << 4);
+        pd_bundle[k].fault_gpa_imp = 2'(k + 1);    // BP-123, DCD-16
         pd_bundle[k].is_rvc      = k[0];
         pd_bundle[k].br_type     = k[1:0];
         pd_bundle[k].is_call     = k[1];
@@ -2305,6 +2312,138 @@ initial begin
             fail_count++;
         end else
             pass_count++;
+    end
+
+
+    // -----------------------------------------------------------------------
+    // T76 (BP-123, Problem 5): RVA23 instructions this decoder rejected.
+    //   The words are LLVM's (clang -march=rv64...zba_zbb_zbs_zicond_
+    //   zimop_zicbop_zawrs_svinval_h_zfhmin, then llvm-objdump), not
+    //   derived from the decoder. Each must decode legal to its own
+    //   operation; with its extension's enable clear, a gated one is
+    //   illegal. a0 = x10, a1 = x11, a2 = x12.
+    // -----------------------------------------------------------------------
+    begin
+        typedef struct {
+            logic [31:0] w;
+            alu_op_t     op;
+            int          gate;   // 0 none, 1 zba, 2 zbb, 3 zbs, 4 h,
+                                 // 5 zfhmin
+            string       nm;
+        } t76_t;
+        t76_t t [$];
+        t.push_back('{32'h60459513, ALU_SEXTB,    2, "sext.b"});
+        t.push_back('{32'h60559513, ALU_SEXTH,    2, "sext.h"});
+        t.push_back('{32'h0805c53b, ALU_ZEXTH,    2, "zext.h"});
+        t.push_back('{32'h08c5853b, ALU_ADDUW,    1, "add.uw"});
+        t.push_back('{32'h20c5a533, ALU_SH1ADD,   1, "sh1add"});
+        t.push_back('{32'h20c5c533, ALU_SH2ADD,   1, "sh2add"});
+        t.push_back('{32'h20c5e533, ALU_SH3ADD,   1, "sh3add"});
+        t.push_back('{32'h20c5a53b, ALU_SH1ADDUW, 1, "sh1add.uw"});
+        t.push_back('{32'h20c5c53b, ALU_SH2ADDUW, 1, "sh2add.uw"});
+        t.push_back('{32'h20c5e53b, ALU_SH3ADDUW, 1, "sh3add.uw"});
+        t.push_back('{32'h0835951b, ALU_SLLIUW,   1, "slli.uw"});
+        t.push_back('{32'h40c5f533, ALU_ANDN,     2, "andn"});
+        t.push_back('{32'h40c5e533, ALU_ORN,      2, "orn"});
+        t.push_back('{32'h40c5c533, ALU_XNOR,     2, "xnor"});
+        t.push_back('{32'h60059513, ALU_CLZ,      2, "clz"});
+        t.push_back('{32'h6005951b, ALU_CLZW,     2, "clzw"});
+        t.push_back('{32'h60159513, ALU_CTZ,      2, "ctz"});
+        t.push_back('{32'h6015951b, ALU_CTZW,     2, "ctzw"});
+        t.push_back('{32'h60259513, ALU_CPOP,     2, "cpop"});
+        t.push_back('{32'h6025951b, ALU_CPOPW,    2, "cpopw"});
+        t.push_back('{32'h0ac5e533, ALU_MAX,      2, "max"});
+        t.push_back('{32'h0ac5f533, ALU_MAXU,     2, "maxu"});
+        t.push_back('{32'h0ac5c533, ALU_MIN,      2, "min"});
+        t.push_back('{32'h0ac5d533, ALU_MINU,     2, "minu"});
+        t.push_back('{32'h60c59533, ALU_ROL,      2, "rol"});
+        t.push_back('{32'h60c5953b, ALU_ROLW,     2, "rolw"});
+        t.push_back('{32'h60c5d533, ALU_ROR,      2, "ror"});
+        t.push_back('{32'h6035d513, ALU_RORI,     2, "rori"});
+        t.push_back('{32'h6035d51b, ALU_RORIW,    2, "roriw"});
+        t.push_back('{32'h60c5d53b, ALU_RORW,     2, "rorw"});
+        t.push_back('{32'h2875d513, ALU_ORCB,     2, "orc.b"});
+        t.push_back('{32'h6b85d513, ALU_REV8,     2, "rev8"});
+        t.push_back('{32'h48c59533, ALU_BCLR,     3, "bclr"});
+        t.push_back('{32'h48359513, ALU_BCLRI,    3, "bclri"});
+        t.push_back('{32'h48c5d533, ALU_BEXT,     3, "bext"});
+        t.push_back('{32'h4835d513, ALU_BEXTI,    3, "bexti"});
+        t.push_back('{32'h68c59533, ALU_BINV,     3, "binv"});
+        t.push_back('{32'h68359513, ALU_BINVI,    3, "binvi"});
+        t.push_back('{32'h28c59533, ALU_BSET,     3, "bset"});
+        t.push_back('{32'h28359513, ALU_BSETI,    3, "bseti"});
+        t.push_back('{32'h0ec5d533, ALU_CZEROEQZ, 0, "czero.eqz"});
+        t.push_back('{32'h0ec5f533, ALU_CZERONEZ, 0, "czero.nez"});
+        t.push_back('{32'h81c5c573, ALU_MOP,      0, "mop.r.0"});
+        t.push_back('{32'hcdf5c573, ALU_MOP,      0, "mop.r.31"});
+        t.push_back('{32'h82c5c573, ALU_MOP,      0, "mop.rr.0"});
+        t.push_back('{32'hcec5c573, ALU_MOP,      0, "mop.rr.7"});
+        t.push_back('{32'h0405e013, ALU_OR,       0, "prefetch.i"});
+        t.push_back('{32'h0415e013, ALU_OR,       0, "prefetch.r"});
+        t.push_back('{32'h0435e013, ALU_OR,       0, "prefetch.w"});
+        t.push_back('{32'h00d00073, ALU_WFI,      0, "wrs.nto"});
+        t.push_back('{32'h01d00073, ALU_WFI,      0, "wrs.sto"});
+        t.push_back('{32'h12b50073, ALU_FENCE,    0, "sfence.vma"});
+        t.push_back('{32'h16b50073, ALU_FENCE,    0, "sinval.vma"});
+        t.push_back('{32'h18000073, ALU_FENCE,    0, "sfence.w.inval"});
+        t.push_back('{32'h18100073, ALU_FENCE,    0, "sfence.inval.ir"});
+        t.push_back('{32'h22b50073, ALU_FENCE,    4, "hfence.vvma"});
+        t.push_back('{32'h62b50073, ALU_FENCE,    4, "hfence.gvma"});
+        t.push_back('{32'h26b50073, ALU_FENCE,    4, "hinval.vvma"});
+        t.push_back('{32'h66b50073, ALU_FENCE,    4, "hinval.gvma"});
+        t.push_back('{32'h6005c573, ALU_LB,       4, "hlv.b"});
+        t.push_back('{32'h6015c573, ALU_LBU,      4, "hlv.bu"});
+        t.push_back('{32'h6405c573, ALU_LH,       4, "hlv.h"});
+        t.push_back('{32'h6415c573, ALU_LHU,      4, "hlv.hu"});
+        t.push_back('{32'h6435c573, ALU_LHU,      4, "hlvx.hu"});
+        t.push_back('{32'h6805c573, ALU_LW,       4, "hlv.w"});
+        t.push_back('{32'h6835c573, ALU_LWU,      4, "hlvx.wu"});
+        t.push_back('{32'h6815c573, ALU_LWU,      4, "hlv.wu"});
+        t.push_back('{32'h6c05c573, ALU_LD,       4, "hlv.d"});
+        t.push_back('{32'h62a5c073, ALU_SB,       4, "hsv.b"});
+        t.push_back('{32'h66a5c073, ALU_SH,       4, "hsv.h"});
+        t.push_back('{32'h6aa5c073, ALU_SW,       4, "hsv.w"});
+        t.push_back('{32'h6ea5c073, ALU_SD,       4, "hsv.d"});
+        t.push_back('{32'h00059507, ALU_FLD,      5, "flh"});
+        t.push_back('{32'h00a59027, ALU_FSD,      5, "fsh"});
+        foreach (t[k]) begin
+            ext_enable = RVA23_ENABLE;
+            clear_all();
+            drive(0, t[k].w);
+            @(posedge clk);
+            `CHECK_FIELD(0, is_illegal, 1'b0, {"T76_legal_", t[k].nm})
+            `CHECK_FIELD(0, alu_op, t[k].op, {"T76_op_", t[k].nm})
+            if (t[k].gate != 0) begin
+                case (t[k].gate)
+                    1: ext_enable.en_zba    = 1'b0;
+                    2: ext_enable.en_zbb    = 1'b0;
+                    3: ext_enable.en_zbs    = 1'b0;
+                    4: ext_enable.en_h      = 1'b0;
+                    default: ext_enable.en_zfhmin = 1'b0;
+                endcase
+                @(posedge clk);
+                `CHECK_FIELD(0, is_illegal, 1'b1, {"T76_gated_", t[k].nm})
+            end
+        end
+        // Zimop writes rd and reads nothing; the unary bitmanip forms
+        // read rs1 only.
+        ext_enable = RVA23_ENABLE;
+        clear_all();
+        drive(0, 32'hcec5c573);                         // mop.rr.7 a0
+        @(posedge clk);
+        `CHECK_FIELD(0, uses_rd,  1'b1, "T76_mop_rd")
+        `CHECK_FIELD(0, uses_rs1, 1'b0, "T76_mop_no_rs1")
+        `CHECK_FIELD(0, uses_rs2, 1'b0, "T76_mop_no_rs2")
+        `CHECK_FIELD(0, rd,       5'd10, "T76_mop_rd_field")
+        drive(0, 32'h60459513);                         // sext.b a0, a1
+        @(posedge clk);
+        `CHECK_FIELD(0, uses_rs2, 1'b0, "T76_sextb_no_rs2")
+        // Zicbop off: prefetch.i is still the ORI HINT, legal.
+        ext_enable.en_zicbop = 1'b0;
+        drive(0, 32'h0405e013);
+        @(posedge clk);
+        `CHECK_FIELD(0, is_illegal, 1'b0, "T76_prefetch_i_zicbop_off")
+        ext_enable = RVA23_ENABLE;
     end
 
     // -----------------------------------------------------------------------

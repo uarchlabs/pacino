@@ -8,8 +8,9 @@
 #
 #   lint_fe_top     the structural top over every front-end unit and
 #                   the emitted L1I (FE-21), warnings on
-#   sim_fe_top      tb/tb_fe_top.sv: every program, in one simulation,
-#                   against a memory, an L2 TLB and a backend model,
+#   sim_fe_top      tb/tb_fe_top.sv: every program, each in its own
+#                   simulation, against a memory model, the page table
+#                   walker (rtl/mmu/ptw, BP-123) and a backend model,
 #                   with every unit's bound properties compiled in
 #   sim_fe_top_<p>  one program (+PROG=<p>), one per program of
 #                   FE_PROGS (BP-121): each is its own regression
@@ -17,10 +18,11 @@
 #   assert_labels   every property label of every assertion file the
 #                   sim model compiles is present in it
 #
-# THE L1I IS THE CACHEGEN EMISSION, read from its emitted path and
-# never edited (FE-21). import/l1i/ is an older emission and is not
-# used. The emitted files carry their own lint waivers in source and
-# pass -Wall here with nothing waived on their behalf.
+# THE L1I IS THE PACINO COPY in rtl/core/frontend/icache (BP-123,
+# cachegen_decisions.md CG-D1): the cachegen emission copied into the
+# tree and changed there. Nothing under tools/ is compiled. Its files
+# carry their own lint waivers in source and pass -Wall here with
+# nothing waived on their behalf.
 RVA_ROOT ?= $(abspath ../../../..)
 include $(RVA_ROOT)/rtl/Vars.mk
 
@@ -51,9 +53,10 @@ COMP_DIR := $(RVA_ROOT)/rtl/lib/rtl
 ITLB_DIR := $(RVA_ROOT)/rtl/mmu/itlb/rtl
 ITLB_TB  := $(RVA_ROOT)/rtl/mmu/itlb/tb
 PMP_DIR  := $(RVA_ROOT)/rtl/mmu/pmp/rtl
-CG_OUT   := $(RVA_ROOT)/tools/cachegen/output
-L1I_DIR  := $(CG_OUT)/l1i/rtl
-CG_PKG   := $(CG_OUT)/pacino/rtl
+PTW_DIR  := $(RVA_ROOT)/rtl/mmu/ptw/rtl
+PTW_TB   := $(RVA_ROOT)/rtl/mmu/ptw/tb
+L1I_DIR  := $(FE_DIR)/icache/rtl
+L1I_TB   := $(FE_DIR)/icache/tb
 VER_OUT  := obj
 
 VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
@@ -70,12 +73,11 @@ PKG_SRCS := \
   $(BPU_DIR)/bp_structs_pkg.sv \
   $(DEC_DIR)/decode_pkg.sv
 
-# The emitted L1I, in the order of its own filelist (l1i.f).
+# The L1I, in the order of the emitted filelist (l1i.f), with the
+# BP-123 maintenance control. cgen_tl_pkg is the one shared emitted
+# package it imports.
 L1I_SRCS := \
-  $(CG_PKG)/cgen_tl_pkg.sv \
-  $(CG_PKG)/pe_port_pkg.sv \
-  $(CG_PKG)/pe_port_i_pkg.sv \
-  $(CG_PKG)/tl_l1i_l2_pkg.sv \
+  $(L1I_DIR)/cgen_tl_pkg.sv \
   $(L1I_DIR)/l1i_pkg.sv \
   $(L1I_DIR)/l1i_core_slv.sv \
   $(L1I_DIR)/l1i_mem_mst.sv \
@@ -84,6 +86,7 @@ L1I_SRCS := \
   $(L1I_DIR)/l1i_ctrl.sv \
   $(L1I_DIR)/l1i_bank.sv \
   $(L1I_DIR)/l1i_mshr.sv \
+  $(L1I_DIR)/l1i_maint.sv \
   $(L1I_DIR)/l1i.sv
 
 BPU_SRCS := \
@@ -132,6 +135,7 @@ IFU_SRCS := \
   $(IFU_DIR)/ifu_predecode.sv \
   $(IFU_DIR)/ifu_f3.sv \
   $(IFU_DIR)/ifu_wb.sv \
+  $(IFU_DIR)/ifu_maint.sv \
   $(IFU_DIR)/ifu.sv
 
 UNIT_SRCS := \
@@ -144,6 +148,9 @@ UNIT_SRCS := \
   $(DEC_DIR)/instr_decoder.sv
 
 TOP_SRCS := $(PKG_SRCS) $(L1I_SRCS) $(UNIT_SRCS) $(RTL_DIR)/fe_top.sv
+
+# The walker is outside the top (MMU-1a); tb_fe_top instantiates it.
+PTW_SRCS := $(PTW_DIR)/ptw.sv
 
 # Every unit's bound properties, by module name (TD#109), so the
 # integration runs under each unit's own rules.
@@ -167,15 +174,23 @@ ASSERT_SRCS := \
   $(IFU_TB)/ifu_f3_assert.sv \
   $(IFU_TB)/ifu_assert.sv \
   $(IBUF_TB)/ibuf_assert.sv \
-  $(ITLB_TB)/itlb_assert.sv
+  $(ITLB_TB)/itlb_assert.sv \
+  $(L1I_TB)/l1i_assert.sv \
+  $(L1I_TB)/l1i_mshr_assert.sv \
+  $(PTW_TB)/ptw_assert.sv
 
-SIM_SRCS := $(TOP_SRCS) $(ASSERT_SRCS)
+SIM_SRCS := $(TOP_SRCS) $(PTW_SRCS) $(ASSERT_SRCS)
 
 FE_PLUSARGS := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 
 # The tb_fe_top programs (BP-121), each run alone by sim_fe_top_<p>.
+# BP-123 added fencei to pt_inv: maintenance, uncached fetch and the
+# page table walker in RTL.
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
-            recur deep indir region multistart cross rvc misp_call jals
+            recur deep indir region multistart cross rvc misp_call jals \
+            fencei cboinval uc_nc uc_io pt_faults_s pt_faults_h \
+            pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
+            zstar pt_gonly pt_vsonly
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \

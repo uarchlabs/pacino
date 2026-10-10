@@ -162,6 +162,7 @@ module tb;
   logic [VA_WIDTH-1:0]      ifu_ftq_target;
   logic                     ifu_ftq_fault_val;
   logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos;
+  logic                       ifu_ftq_uc_end;
 
   // ---- backend boundary ----------------------------------------------
   logic [NUM_RESOLVE_PORTS-1:0] bkend_ftq_rsv_val;
@@ -289,6 +290,7 @@ module tb;
     .ifu_ftq_target        (ifu_ftq_target),
     .ifu_ftq_fault_val     (ifu_ftq_fault_val),
     .ifu_ftq_fault_pos     (ifu_ftq_fault_pos),
+    .ifu_ftq_uc_end        (ifu_ftq_uc_end),
     .bkend_ftq_rsv_val     (bkend_ftq_rsv_val),
     .bkend_ftq_rsv         (bkend_ftq_rsv),
     .ftq_bkend_rsv_rdy     (ftq_bkend_rsv_rdy),
@@ -479,6 +481,7 @@ module tb;
     ifu_ftq_target        = '0;
     ifu_ftq_fault_val     = 1'b0;
     ifu_ftq_fault_pos     = '0;
+    ifu_ftq_uc_end        = 1'b0;
     bkend_ftq_rsv_val     = '0;
     bkend_ftq_redir_val   = 1'b0;
     bkend_ftq_redir_idx   = '0;

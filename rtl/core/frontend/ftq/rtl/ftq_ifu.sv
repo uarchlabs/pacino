@@ -156,6 +156,9 @@ module ftq_ifu (
   input  logic [VA_WIDTH-1:0]      ifu_ftq_target,
   input  logic                     ifu_ftq_fault_val,
   input  logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos,
+  // BP-123, ifu_decisions.md IFU-23: an uncached block ends after the
+  // instruction at mis_pos; see W3U below.
+  input  logic                     ifu_ftq_uc_end,
 
   // ---- to ftq_status, W2 and W3 ------------------------------------
   output logic                     wb_set_val,
@@ -489,6 +492,18 @@ module ftq_ifu (
       if (w_corr_slot[s].slot_valid && w_corr_slot[s].taken) begin
         w_corr_succ = w_corr_slot[s].target;
       end
+    end
+    // W3U (BP-123). An uncached block delivers one instruction and ends
+    // after it (IFU-23): fetch resumes at the next sequential
+    // instruction, the entry's start plus two bytes per position plus
+    // the instruction's length, so that instruction is the next entry
+    // and waits for this one to commit (IFU-22). The slot rewrite of W1
+    // stands -- a conditional at mis_pos keeps its own target -- only
+    // the successor differs.
+    if (ifu_ftq_uc_end) begin
+      w_corr_succ = pdwb_entry.pc +
+                    VA_WIDTH'({ifu_ftq_mis_pos, 1'b0}) +
+                    (w_pd_at_mis.is_rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
     end
   end
 

@@ -29,12 +29,14 @@
 // THE QUEUE (IFU-25, IFU-U5) is XQ_DEPTH entries, default 4, in
 // order. Per block: the index and pc, whether the block crosses a
 // page, and per page the PPN, the fault (as ifu_fault_e), the GPA of
-// a guest-page fault and the uncached mark of IFU-26. The page-1
-// fields are meaningful only for a crossing block.
+// a guest-page fault with its implicit-access kind (IT-6c, BP-123)
+// and the uncached mark of IFU-26. The page-1 fields are meaningful
+// only for a crossing block.
 //
 // IFU-26. A block is MARKED when a page it uses that hit is not both
-// cacheable and idempotent (IT-11). The uncached path is TD#135 and
-// is not built: an assertion fires if a marked block reaches F0.
+// cacheable and idempotent (IT-11). ifu_fetch issues a marked block
+// to the L1I as an uncached request under the commit gate of IFU-22
+// (BP-123, TD#135).
 //
 // FLUSH (IFU-27, IFU-28, IFU-31; ftq_ifu_interfaces.md 5; TD#134,
 // BP-118). A block SURVIVES when it is older than the flush index F,
@@ -98,6 +100,7 @@ module ifu_xlate #(
   input  logic [PPN_WIDTH-1:0]     itlb_ifu_ppn,
   input  logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause,
   input  logic [GPA_WIDTH-1:0]     itlb_ifu_gpa,
+  input  logic [1:0]               itlb_ifu_gpa_imp, // IT-6c
   input  logic [PMA_WIDTH-1:0]     itlb_ifu_pma,
 
   // ---- the queue head, to the fetch side ----------------------------
@@ -108,9 +111,11 @@ module ifu_xlate #(
   output logic [PPN_WIDTH-1:0]     xq_ppn0,
   output ifu_fault_e               xq_fault0,
   output logic [GPA_WIDTH-1:0]     xq_gpa0,
+  output logic [1:0]               xq_imp0,
   output logic [PPN_WIDTH-1:0]     xq_ppn1,
   output ifu_fault_e               xq_fault1,
   output logic [GPA_WIDTH-1:0]     xq_gpa1,
+  output logic [1:0]               xq_imp1,
   output logic                     xq_uc,
   input  logic                     xq_pop
 );
@@ -145,6 +150,7 @@ module ifu_xlate #(
     logic [PPN_WIDTH-1:0] ppn;
     ifu_fault_e           fault;
     logic [GPA_WIDTH-1:0] gpa;
+    logic [1:0]           imp;     // gpa's implicit-access kind, IT-6c
     logic                 uc;      // hit, not cacheable and idempotent
   } pg_res_t;
 
@@ -213,6 +219,7 @@ module ifu_xlate #(
     // ---- the response, IT-3 / IT-4 / IT-7 ---------------------------
     w_rsp_final   = itlb_ifu_rsp_val && (itlb_ifu_status != ST_MISS);
     w_rsp_res.gpa = '0;
+    w_rsp_res.imp = '0;
     w_rsp_res.uc  = 1'b0;
     if (itlb_ifu_status == ST_HIT) begin
       w_rsp_res.fault = IFU_FAULT_NONE;
@@ -221,7 +228,10 @@ module ifu_xlate #(
     end else begin
       // 2'b10 fault; 2'b11 is reserved and treated as a fault.
       w_rsp_res.fault = map_cause(itlb_ifu_cause);
-      if (itlb_ifu_cause == CAUSE_GUEST) w_rsp_res.gpa = itlb_ifu_gpa;
+      if (itlb_ifu_cause == CAUSE_GUEST) begin
+        w_rsp_res.gpa = itlb_ifu_gpa;
+        w_rsp_res.imp = itlb_ifu_gpa_imp;
+      end
     end
     w_rsp_res.ppn = (itlb_ifu_status == ST_HIT) ? itlb_ifu_ppn : '0;
 
@@ -305,9 +315,11 @@ module ifu_xlate #(
     xq_ppn0   = r_q[r_rd].pg0.ppn;
     xq_fault0 = r_q[r_rd].pg0.fault;
     xq_gpa0   = r_q[r_rd].pg0.gpa;
+    xq_imp0   = r_q[r_rd].pg0.imp;
     xq_ppn1   = r_q[r_rd].pg1.ppn;
     xq_fault1 = r_q[r_rd].pg1.fault;
     xq_gpa1   = r_q[r_rd].pg1.gpa;
+    xq_imp1   = r_q[r_rd].pg1.imp;
     // IFU-26. A faulting page is never fetched and does not mark.
     xq_uc     = (r_q[r_rd].pg0.uc &&
                  (r_q[r_rd].pg0.fault == IFU_FAULT_NONE)) ||

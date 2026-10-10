@@ -109,6 +109,7 @@ module tb;
   logic [VA_WIDTH-1:0]       ifu_ftq_target;
   logic                      ifu_ftq_fault_val;
   logic [FTQ_PD_POS_BITS-1:0] ifu_ftq_fault_pos;
+  logic                       ifu_ftq_uc_end;
   logic                      wb_set_val;
   logic [FTQ_IDX_BITS-1:0]   wb_set_idx;
   logic                      fault_set_val;
@@ -185,6 +186,7 @@ module tb;
     .ifu_ftq_target    (ifu_ftq_target),
     .ifu_ftq_fault_val (ifu_ftq_fault_val),
     .ifu_ftq_fault_pos (ifu_ftq_fault_pos),
+    .ifu_ftq_uc_end    (ifu_ftq_uc_end),
     .wb_set_val        (wb_set_val),
     .wb_set_idx        (wb_set_idx),
     .fault_set_val     (fault_set_val),
@@ -447,6 +449,7 @@ module tb;
     ifu_ftq_mis_pos   = '0;
     ifu_ftq_target    = '0;
     ifu_ftq_fault_pos = '0;
+    ifu_ftq_uc_end    = 1'b0;
     for (int i = 0; i < FTQ_PD_WIDTH; i++) begin
       ifu_ftq_pd[i] = mk_pd(1'b0, 1'b0, 2'b00, 1'b0, 1'b0);
     end
@@ -1288,6 +1291,62 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // K (BP-123): an uncached block ends after its first instruction
+  // (IFU-23). The writeback names it at mis_pos with uc_end; the
+  // successor is the next sequential instruction, start + 2 * pos +
+  // its length, whatever the slots say. A conditional there keeps its
+  // own target in the rewritten slot.
+  // -----------------------------------------------------------------
+  task automatic group_k();
+    $display("-- K: the uncached end of a block --");
+    do_reset();
+    gen_pdwb         = 1'b1;
+    ifu_ftq_pdwb_gen = 1'b1;
+    ifu_ftq_pdwb_idx = 6'd9;
+    wb_rcvd_pdwb     = 1'b0;
+    pdwb_entry = mk_entry(6'd9,
+                   mk_slot(1'b1, TGT0, COND, 1'b1, FTB_BR_POS_BITS'(7)),
+                   mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0));
+    // A 32-bit non-CFI instruction at position 2.
+    ifu_ftq_pd[2]    = mk_pd(1'b1, 1'b0, 2'b00, 1'b0, 1'b0);
+    ifu_ftq_mis_val  = 1'b1;
+    ifu_ftq_mis_pos  = FTQ_PD_POS_BITS'(2);
+    ifu_ftq_target   = '0;
+    ifu_ftq_uc_end   = 1'b1;
+    ifu_ftq_pdwb_val = 1'b1;
+    settle();
+    chk   ("K1 a redirect is derived", pd_redir_val);
+    chk_va("K2 to the next instruction, start + 4 + 4", pd_redir_pc,
+           BLK_PC + VA_WIDTH'(8));
+    chk   ("K3 the predicted slot after it is killed", pd_wr_kill &&
+           (pd_wr_sel == TRX_SLOT_BITS'(0)) && !pd_wr_slot.slot_valid);
+    // A compressed instruction at position 5.
+    ifu_ftq_pd[5]   = mk_pd(1'b1, 1'b1, 2'b00, 1'b0, 1'b0);
+    ifu_ftq_mis_pos = FTQ_PD_POS_BITS'(5);
+    settle();
+    chk_va("K4 a 16-bit instruction: start + 10 + 2", pd_redir_pc,
+           BLK_PC + VA_WIDTH'(12));
+    // A conditional at position 0, predicted not taken (no slot names
+    // it): the slot records it with its own target.
+    ifu_ftq_pd[0]   = mk_pd(1'b1, 1'b0, 2'b01, 1'b0, 1'b0);
+    ifu_ftq_mis_pos = FTQ_PD_POS_BITS'(0);
+    ifu_ftq_target  = PD_TGT;
+    settle();
+    chk_va("K5 a conditional: still the next instruction", pd_redir_pc,
+           BLK_PC + VA_WIDTH'(4));
+    chk   ("K6 its slot keeps the branch target, not taken",
+           pd_wr_slot.slot_valid && (pd_wr_slot.br_type == COND) &&
+           !pd_wr_slot.taken && (pd_wr_slot.target == PD_TGT));
+    // Without uc_end the same writeback runs to the fall-through.
+    ifu_ftq_uc_end = 1'b0;
+    settle();
+    chk_va("K7 without uc_end: the corrected successor", pd_redir_pc,
+           BLK_PFT);
+    clr_wb();
+    settle();
+  endtask
+
+  // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
   initial begin
@@ -1309,6 +1368,7 @@ module tb;
     group_h();
     group_i();
     group_j();
+    group_k();
 
     $display("tb_ftq_ifu: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

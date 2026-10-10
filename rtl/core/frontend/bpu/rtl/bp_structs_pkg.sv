@@ -596,6 +596,11 @@ package bp_structs_pkg;
     ifu_fault_e                 fault_cause;
     logic [VA_WIDTH-1:0]        fault_va;
     logic [GPA_WIDTH-1:0]       fault_gpa;   // cause 20 only
+    // The GPA's implicit-access kind, cause 20 only (DCD-16, IFU-2a,
+    // mmu_decisions.md MMU-29): 2'b00 the fetch's own GPA, 2'b01 an
+    // implicit read of a VS-stage page table, 2'b10 an implicit write
+    // of one (the Svadu update), 2'b11 reserved. BP-123.
+    logic [1:0]                 fault_gpa_imp;
     logic                       is_rvc;      // 16-bit encoding
     logic [1:0]                 br_type;     // DCD-7
     logic                       is_call;

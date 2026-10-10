@@ -75,6 +75,17 @@
 // S-mode (VS) U set faults. SUM and MXR do not apply to fetch. The A
 // bit is the walker's (Svade faults it, Svadu sets it, MMU-7), and
 // G-stage permissions are the walker's too (MMU-26).
+// THE CHECK APPLIES ONLY WHEN THERE IS A SINGLE-STAGE OR VS-STAGE
+// LEAF: V=0 under satp Sv39, or V=1 under vsatp Sv39. With V=1 and
+// vsatp Bare the translation is the G-stage alone, whose leaf always
+// has U set (every G-stage access is a user-mode one, MMU-26) and is
+// checked by the walker; ITLB-16's VS-level rule has no leaf to read
+// and would fault every VS-mode fetch. BP-123 found and fixed this
+// (tb_itlb P6, P7).
+//
+// THE GPA KIND (IT-6c, IL-11b, BP-123). l2t_itlb_gpa_imp is held with
+// a walk's fault beside its GPA (ITLB-10a) and returned on
+// itlb_ifu_gpa_imp with it, on a cause-20 answer.
 //
 // WALK TRACKER (ITLB-8, ITLB-10, ITLB-15). WALK_DEPTH slots, default
 // 1, at most 4 by the two-bit tag of IL-1; the slot number is the
@@ -156,6 +167,7 @@ module itlb #(
   output logic [PPN_WIDTH-1:0]     itlb_ifu_ppn,
   output logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause,
   output logic [GPA_WIDTH-1:0]     itlb_ifu_gpa,
+  output logic [1:0]               itlb_ifu_gpa_imp, // IT-6c
   output logic [PMA_WIDTH-1:0]     itlb_ifu_pma,
 
   // ---- itlb_l2tlb_interfaces.md 2 ----------------------------------
@@ -175,6 +187,7 @@ module itlb #(
   input  logic [1:0]               l2t_itlb_pbmt,
   input  logic [CAUSE_WIDTH-1:0]   l2t_itlb_cause,
   input  logic [GPA_WIDTH-1:0]     l2t_itlb_gpa,
+  input  logic [1:0]               l2t_itlb_gpa_imp, // IL-11b
 
   // ---- CSR input group, ITLB-17, MMU-11a, fe_decisions.md FE-20 ----
   input  logic                     csr_itlb_v,
@@ -281,6 +294,7 @@ module itlb #(
     logic [VW-1:0]          vpn;
     logic [CAUSE_WIDTH-1:0] cause;
     logic [GPA_WIDTH-1:0]   gpa;
+    logic [1:0]             imp;
   } trk_t;
 
   // The VPN bits a page size leaves out of the compare. A reserved
@@ -434,9 +448,11 @@ module itlb #(
     end
 
     // -- the IFU response ---------------------------------------------
-    perm_bad = !w_hit_ent.perm[P_X] ||
-               ((csr_itlb_priv == PRV_U) && !w_hit_ent.perm[P_U]) ||
-               ((csr_itlb_priv == PRV_S) &&  w_hit_ent.perm[P_U]);
+    // ITLB-16 needs a single-stage or VS-stage leaf (see the header).
+    perm_bad = w_sv39 &&
+               (!w_hit_ent.perm[P_X] ||
+                ((csr_itlb_priv == PRV_U) && !w_hit_ent.perm[P_U]) ||
+                ((csr_itlb_priv == PRV_S) &&  w_hit_ent.perm[P_U]));
     sx_bad   = w_sv39 &&
                (r_rq_vpn[VW-1:VW-2] != {2{r_rq_vpn[VW-3]}});
     pa_bad   = |r_rq_vpn[VW-1:PA_HI];
@@ -447,6 +463,7 @@ module itlb #(
     itlb_ifu_ppn     = '0;
     itlb_ifu_cause   = '0;
     itlb_ifu_gpa     = '0;
+    itlb_ifu_gpa_imp = '0;
     itlb_ifu_pma     = '0;
     w_alloc          = 1'b0;
     w_flt_take       = 1'b0;
@@ -479,8 +496,10 @@ module itlb #(
       w_flt_take      = r_rq_val;
       itlb_ifu_status = ST_FAULT;
       itlb_ifu_cause  = r_trk[w_flt_idx].cause;
-      if (r_trk[w_flt_idx].cause == CAUSE_GUEST)
-        itlb_ifu_gpa  = r_trk[w_flt_idx].gpa;
+      if (r_trk[w_flt_idx].cause == CAUSE_GUEST) begin
+        itlb_ifu_gpa     = r_trk[w_flt_idx].gpa;
+        itlb_ifu_gpa_imp = r_trk[w_flt_idx].imp;
+      end
     end else begin
       itlb_ifu_status = ST_MISS;
       w_alloc         = r_rq_val && !w_inflight;
@@ -644,6 +663,7 @@ module itlb #(
                 (l2t_itlb_cause == CAUSE_GUEST)))
                 ? l2t_itlb_cause : CAUSE_ACCESS;
             r_trk[l2t_itlb_tag].gpa   <= l2t_itlb_gpa;
+            r_trk[l2t_itlb_tag].imp   <= l2t_itlb_gpa_imp;
           end
         end
       end
@@ -656,6 +676,7 @@ module itlb #(
         r_trk[w_alloc_idx].vpn   <= r_rq_vpn;
         r_trk[w_alloc_idx].cause <= '0;
         r_trk[w_alloc_idx].gpa   <= '0;
+        r_trk[w_alloc_idx].imp   <= '0;
       end
       // An invalidate releases every slot (IL-13, IL-14).
       if (bkend_itlb_inv_val) begin

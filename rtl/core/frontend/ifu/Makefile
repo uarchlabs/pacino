@@ -14,6 +14,7 @@
 #   lint_ifu_fetch                            F0 to F2
 #   lint_ifu_f3                               F3
 #   lint_ifu_wb                               WB
+#   lint_ifu_maint                            maintenance (BP-123)
 #   lint_ifu             sim_ifu              the unit
 #   assert_labels                             BP-116, TD#144
 #   oracle_ifu_rvc_exp                        BP-117, the expander oracle
@@ -63,6 +64,7 @@ FETCH_SRCS := $(PKG_SRCS) $(RTL_DIR)/ifu_fetch.sv
 F3_SRCS    := $(PKG_SRCS) $(RTL_DIR)/ifu_f3.sv \
               $(TB_DIR)/ifu_f3_assert.sv
 WB_SRCS    := $(PKG_SRCS) $(RTL_DIR)/ifu_wb.sv
+MAINT_SRCS := $(PKG_SRCS) $(RTL_DIR)/ifu_maint.sv
 
 # The unit: packages, every leaf and assertion file, then the top.
 IFU_SRCS := \
@@ -74,15 +76,16 @@ IFU_SRCS := \
   $(RTL_DIR)/ifu_predecode.sv \
   $(RTL_DIR)/ifu_f3.sv         $(TB_DIR)/ifu_f3_assert.sv \
   $(RTL_DIR)/ifu_wb.sv \
+  $(RTL_DIR)/ifu_maint.sv \
   $(RTL_DIR)/ifu.sv            $(TB_DIR)/ifu_assert.sv
 
 .PHONY: all clean assert_labels oracle_ifu_rvc_exp \
   lint_ifu_rvc_exp lint_ifu_predecode lint_ifu_xlate lint_ifu_lbuf \
-  lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu \
+  lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu_maint lint_ifu \
   sim_ifu_rvc_exp sim_ifu_predecode sim_ifu
 
 all: lint_ifu_rvc_exp lint_ifu_predecode lint_ifu_xlate lint_ifu_lbuf \
-     lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu \
+     lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu_maint lint_ifu \
      sim_ifu_rvc_exp sim_ifu_predecode sim_ifu assert_labels \
      oracle_ifu_rvc_exp
 
@@ -101,6 +104,7 @@ $(eval $(call lint_rule,ifu_lbuf,$(LBUF_SRCS)))
 $(eval $(call lint_rule,ifu_fetch,$(FETCH_SRCS)))
 $(eval $(call lint_rule,ifu_f3,$(F3_SRCS)))
 $(eval $(call lint_rule,ifu_wb,$(WB_SRCS)))
+$(eval $(call lint_rule,ifu_maint,$(MAINT_SRCS)))
 $(eval $(call lint_rule,ifu,$(IFU_SRCS)))
 
 SIM_SRCS_ifu_rvc_exp   := $(EXP_SRCS)
@@ -202,7 +206,7 @@ clean:
 #   clean, regress_list - housekeeping and this plumbing.
 REGRESS_TARGETS := \
   lint_ifu_rvc_exp lint_ifu_predecode lint_ifu_xlate lint_ifu_lbuf \
-  lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu \
+  lint_ifu_fetch lint_ifu_f3 lint_ifu_wb lint_ifu_maint lint_ifu \
   sim_ifu_rvc_exp sim_ifu_predecode sim_ifu assert_labels \
   oracle_ifu_rvc_exp
 REGRESS_EXCLUDE := all clean regress_list
