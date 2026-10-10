@@ -57,7 +57,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 a966e6d5a11e
+PLAN  PROJECT_STATUS.md                 b1a6119efea4
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 

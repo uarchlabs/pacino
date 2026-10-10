@@ -92,16 +92,20 @@ RULED after BP-123 (Jeff):
     or write's U check made with SUM clear until the DTLB adds it;
     in MMU-24c, the ITLB driving itlb_l2t_acc (D2 was built walker
     only) and the walker's cause following the access type.
-  Items 1, 2 and 3 are ONE task, BP-124, written: no choice is left
-    to the IA, and for that task the session-075 ruling item 4 (the
-    IA takes its recommended option provisionally) is replaced: a
-    choice the task does not settle is recorded and left unbuilt.
-    TD#171.
+  Items 1, 2 and 3 are ONE task, BP-124, written: every choice the
+    PA can foresee is made, and one that turns up anyway follows the
+    session-075 ruling item 4: the IA takes its recommended option,
+    builds it, records it as provisional, and Jeff confirms or
+    reverses after. TD#171.
 
 Opened: TD#171 (BP-124), TD#172 (the L1I same-cycle cacheable merge
 has no directed test), TD#173 (the CG-5 tasks for the copy).
 
 PA ERRORS, mine, session-077:
+  A BP-124 draft replaced the session-075 ruling item 4 with a rule
+    that left an unsettled choice unbuilt and the task in-progress,
+    and this section recorded that as Jeff's ruling. Jeff had not
+    ruled it; it changed the plan and added iterations. Reverted.
   BP-123 said "every decision the task needs was ruled before it was
     written". Eight were not: the IFU-23 mechanism, the access-type
     port, MMU-U6 with its stages crossed (which I had read past), the
