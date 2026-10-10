@@ -549,16 +549,22 @@ DCD-33 ZVBB IS DECODED, one v_op_class per instruction, appended
        Jeff.
 
 DCD-34 VERIFICATION (R14). Legality and classification are checked
-       against an LLVM disassembler oracle, as BP-117 checked the
-       expander, with --mattr naming exactly the implemented
-       extensions (every RVA23U64 and RVA23S64 mandatory extension
-       that has instructions, H and Svinval among them, and no
-       optional one). The sweep covers every funct and selector
-       field of OP_FP, the four FMA opcodes, AMO, MISC_MEM, SYSTEM,
-       and, because of DCD-32 and DCD-33, OP_VECTOR and the vector
-       forms of LOAD-FP and STORE-FP. Each disagreement is resolved
-       against the ratified specification and listed. The sweep
-       over the vector space was added by the PA with DCD-33.
+       against a disassembler oracle, spike-dasm, the disassembler the
+       decoder work has used, with --isa naming exactly the implemented
+       extensions (every RVA23U64 and RVA23S64 mandatory extension that
+       has instructions, H and Svinval among them, and no optional one).
+       Directed decoder tests take each word from clang -c (RISC-V
+       target, the same extension set) and confirm it with spike-dasm.
+       This read "an LLVM disassembler oracle, as BP-117 checked the
+       expander, with --mattr": the PA took LLVM from the BP-117 record
+       without checking the system, which has no LLVM (Jeff,
+       session-077). spike-dasm and clang replaced it session-077
+       (Jeff). The sweep covers every funct and selector field of OP_FP,
+       the four FMA opcodes, AMO, MISC_MEM, SYSTEM, and, because of
+       DCD-32 and DCD-33, OP_VECTOR and the vector forms of LOAD-FP and
+       STORE-FP. Each disagreement is resolved against the ratified
+       specification and listed. The sweep over the vector space was
+       added by the PA with DCD-33.
 
 DCD-35 THE Zimop COMMENTS are corrected: Zicfiss, an RVA23
        expansion option this design does not implement, redefines
@@ -633,4 +639,9 @@ MMU-23    FAULT_GPA_WIDTH, DCD-16.
               FCVTMOD.W.D needs rm 001. DCD-35: the exact comment
               text. 10b lists the PA additions pending Jeff. 10a's
               scope sentence; DCD-16's "last two".
+
+  2026-10-10  session-077, ruling (Jeff). DCD-34: the oracle is
+              spike-dasm and directed words come from clang -c; the
+              LLVM oracle is withdrawn, there being no LLVM on the
+              system.
 ```

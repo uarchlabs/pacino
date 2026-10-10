@@ -111,11 +111,11 @@ module ifu_fetch #(
   input  logic                     xq_cross,
   input  logic [PPN_WIDTH-1:0]     xq_ppn0,
   input  ifu_fault_e               xq_fault0,
-  input  logic [GPA_WIDTH-1:0]     xq_gpa0,
+  input  logic [FAULT_GPA_WIDTH-1:0] xq_gpa0,
   input  logic [1:0]               xq_imp0,
   input  logic [PPN_WIDTH-1:0]     xq_ppn1,
   input  ifu_fault_e               xq_fault1,
-  input  logic [GPA_WIDTH-1:0]     xq_gpa1,
+  input  logic [FAULT_GPA_WIDTH-1:0] xq_gpa1,
   input  logic [1:0]               xq_imp1,
   input  logic                     xq_uc,
   output logic                     xq_pop,
@@ -166,8 +166,8 @@ module ifu_fetch #(
   output ifu_fault_e               f2_hwf  [0:FTQ_PD_WIDTH],
   output logic [FTQ_PD_WIDTH:0]    f2_hwpg,
   output logic [VA_WIDTH-1:0]      f2_pc   [0:FTQ_PD_WIDTH],
-  output logic [GPA_WIDTH-1:0]     f2_gpa0,
-  output logic [GPA_WIDTH-1:0]     f2_gpa1,
+  output logic [FAULT_GPA_WIDTH-1:0] f2_gpa0,
+  output logic [FAULT_GPA_WIDTH-1:0] f2_gpa1,
   output logic [1:0]               f2_imp0,
   output logic [1:0]               f2_imp1,
   output logic                     f2_uc,
@@ -202,9 +202,9 @@ module ifu_fetch #(
     logic                 use1;
     logic [SB-1:0]        slot1;
     ifu_fault_e           fault0;
-    logic [GPA_WIDTH-1:0] gpa0;
+    logic [FAULT_GPA_WIDTH-1:0] gpa0;
     ifu_fault_e           fault1;
-    logic [GPA_WIDTH-1:0] gpa1;
+    logic [FAULT_GPA_WIDTH-1:0] gpa1;
     logic [1:0]           imp0;
     logic [1:0]           imp1;
     logic                 uc;       // IFU-26

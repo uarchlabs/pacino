@@ -37,32 +37,39 @@
 //           and ext_enable has no C or Zcb enable (BP-120, TD#155).
 //
 // BP-123 (Problem 5). Zba, Zbb and Zbs are decoded in full, each to its
-// own operation (alu_op_t widened to 7 bits) and gated by en_zba,
-// en_zbb and en_zbs; four Zcb instructions expand to Zbb and Zba
-// forms (c.sext.b, c.sext.h, c.zext.h -> sext.b, sext.h, zext.h;
-// c.zext.w -> add.uw), and those were illegal here, as every Zba, Zbb
-// and Zbs instruction was except sh1add, decoded as a plain ADD.
-// Zicond czero.eqz / czero.nez are decoded (mandatory in RVA23U64, no
-// enable). Zimop MOP.R.n and MOP.RR.n (SYSTEM, funct3 100) decode to
-// ALU_MOP, which writes zero to rd and reads nothing: no RVA23
-// extension redefines them. ORI with rd = x0 is legal whatever
-// en_zicbop says: it is the encoding of the Zicbop prefetches and,
-// without Zicbop, an ORI HINT, which executes as a no-op; it was
-// illegal with en_zicbop clear.
+// own operation and gated by en_zba, en_zbb and en_zbs; four Zcb
+// instructions expand to Zbb and Zba forms (c.sext.b, c.sext.h, c.zext.h
+// -> sext.b, sext.h, zext.h; c.zext.w -> add.uw). Zicond czero.eqz /
+// czero.nez are decoded (mandatory in RVA23U64, no enable). ORI with
+// rd = x0 is legal whatever en_zicbop says: it is the encoding of the
+// Zicbop prefetches and, without Zicbop, an ORI HINT.
 //
-// BP-123, the rest of the RVA23 instructions this decoder rejected,
-// each mapped onto the representation it already used for its class:
-//   - SFENCE.VMA, SINVAL.VMA, SFENCE.W.INVAL, SFENCE.INVAL.IR, and with
-//     en_h HFENCE.VVMA, HFENCE.GVMA, HINVAL.VVMA, HINVAL.GVMA: ALU_FENCE
-//     with rs1 and rs2 read, funct7 and rs2 naming the operation (the
-//     HFENCE.VVMA entry matched funct7 0100001; the encoding is
-//     0010001, so it was illegal)
-//   - with en_h, HLV.B/BU/H/HU/W/WU/D, HLVX.HU/WU and HSV.B/H/W/D: the
-//     load or store operation of their width, is_load or is_store, the
-//     SYSTEM opcode marking the virtual-machine access
-//   - Zawrs WRS.NTO and WRS.STO: ALU_WFI, the wait class
-//   - Zfhmin FLH and FSH (with en_zfhmin): ALU_FLD and ALU_FSD, the
-//     placeholders FLW and FSW already use
+// BP-124, dcd_decisions.md section 10b (DCD-21 to DCD-35). decode hands
+// rename a complete representation:
+//   - alu_op names every scalar operation exactly (DCD-21, DCD-22): the
+//     FP operations, Zfa, LR/SC and the AMOs, FENCE.I, the CBOs, the
+//     SYSTEM fences, Svinval, HFENCE/HINVAL, WRS.NTO/STO and the six CSR
+//     operations each have their own value. Every vector instruction is
+//     ALU_VEC and v_op_class names it. HLV, HLVX and HSV keep the
+//     width-exact load and store operations with is_hlsv, and is_hlvx
+//     for HLVX (DCD-30)
+//   - fp_fmt and fp_src_fmt give the precision (DCD-23); rd_is_fp,
+//     rs1_is_fp and rs2_is_fp the register files, and uses_rd .. rs3 are
+//     exact per operation (DCD-24); for a vector instruction they
+//     describe its scalar operands only
+//   - imm carries the immediates that sit in register fields (DCD-25)
+//   - legality (DCD-26 to DCD-32): F, D, Zfhmin and Zfa's .S/.D forms
+//     by their enables, every other .H form, Zfa's .H forms, FMVH.X.D,
+//     FMVP.D.X and every Q form illegal; a static rm of 101 or 110
+//     illegal; FCVTMOD.W.D only with rm 001; the AMOs of A only (W and
+//     D, LR with rs2 x0); MISC-MEM funct3 000 is FENCE whatever its
+//     fields, 001 FENCE.I, 010 the four CBOs with rd x0, the rest
+//     illegal; the SYSTEM forms with rd (and rs1) x0 as DCD-31 lists;
+//     a vector encoding that decodes to VOTHER or to the VMEM default,
+//     or a store with lumop 10000, is illegal
+//   - Zvbb is decoded, gated by en_v (DCD-33)
+// An illegal instruction is ALU_ILL with no register, no immediate and
+// no is_* flag, and its vector packet is zero.
 //
 // Downstream interface note:
 //   - decode_bundle[8] connects directly to rename/dispatch stage
@@ -171,10 +178,9 @@ endfunction
 
 // ---------------------------------------------------------------------------
 // Single-slot vector decode function
-// Returns a vec_decode_pkt_t for one instruction slot.
-// Only OP_VECTOR (0x57) instructions produce a non-zero packet.
-// Vector memory instructions (vle*/vse* etc.) use opcodes 0x07/0x27 and
-// are currently misidentified as FP loads/stores. Fix is in DECODE-008.
+// Returns a vec_decode_pkt_t for one instruction slot: OP_VECTOR (0x57)
+// and the vector forms of LOAD-FP / STORE-FP (0x07 / 0x27, DECODE-008)
+// produce a packet; every other word a zero one.
 //
 // RVV field positions (all OP_VECTOR instructions):
 //   vd    = inst[11:7]   vs1   = inst[19:15]
@@ -237,6 +243,26 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
     else
         pkt.vs3 = inst[11:7];  // source data vector register (store)
 
+    // Whole-register load / store: unit-stride with lumop / sumop 01000.
+    // nf encodes the register count less one (vl1r..vl8r, vs1r..vs8r),
+    // so this is decided BEFORE the segment test below. BP-124: with nf
+    // not 0 these were classed as segment operations (vl2re8.v decoded
+    // as vlseg2e8.v), found by the oracle sweep. They transfer whole
+    // registers whatever vtype holds: no vtype dependency.
+    if ((mop == 2'b00) && (inst[24:20] == 5'b01000)) begin
+        pkt.v_op_class  = is_store ? VOP_VSWHOLE : VOP_VLWHOLE;
+        pkt.needs_vtype = 1'b0;
+        return pkt;
+    end
+
+    // A unit-stride store with sumop 10000 is reserved (there is no
+    // fault-only-first store): the VMEM default, illegal (DCD-32),
+    // segment or not.
+    if (is_store && (mop == 2'b00) && (inst[24:20] == 5'b10000)) begin
+        pkt.v_op_class = VMEM;
+        return pkt;
+    end
+
     // Segment ops: nf>0 selects VOP_*SEG variant by addressing mode.
     // nf is stored as nfields-1 in inst[31:29]; nf=0 is non-segment,
     // nf=1 means 2 fields, nf=7 means 8 fields. LSU reads pkt.nf
@@ -265,10 +291,10 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
                     pkt.v_op_class = is_store ? VOP_VSE     : VOP_VLE;
                 5'b01011: // vlm.v / vsm.v  (mask; vm=1 always)
                     pkt.v_op_class = is_store ? VOP_VSM     : VOP_VLM;
-                5'b01000: // vl1r..8r / vs1r..8r whole-register
-                    pkt.v_op_class = is_store ? VOP_VSWHOLE : VOP_VLWHOLE;
+                // 5'b01000 whole-register and a store's 5'b10000 are
+                // decided above
                 5'b10000: // vle*ff fault-only-first (load only)
-                    pkt.v_op_class = is_store ? VOP_VSE     : VOP_VLFF;
+                    pkt.v_op_class = VOP_VLFF;
                 default: pkt.v_op_class = VMEM;
             endcase
         end
@@ -288,14 +314,6 @@ function automatic vec_decode_pkt_t decode_vec_mem_one(
         end
         default: pkt.v_op_class = VMEM;
     endcase
-
-    // Whole-register ops transfer nreg x VLEN/8 bytes regardless of
-    // vtype state: no SEW, LMUL, or vl dependency. Clear needs_vtype
-    // here after the MOP decode has assigned v_op_class.
-    if (pkt.v_op_class == VOP_VLWHOLE ||
-        pkt.v_op_class == VOP_VSWHOLE) begin
-        pkt.needs_vtype = 1'b0;
-    end
 
     return pkt;
 endfunction
@@ -549,13 +567,20 @@ function automatic vec_decode_pkt_t decode_vec_one(
                             default: pkt.v_op_class = VOTHER;
                         endcase
                     end
-                    // 0x12: vzext/vsext, even sub->vzext, odd sub->vsext
+                    // 0x12: vzext/vsext, even sub->vzext, odd sub->vsext;
+                    // Zvbb's unary forms at 0x08 to 0x0e (BP-124)
                     6'h12: begin
                         case (inst[19:15])
                             5'd2, 5'd4, 5'd6:
                                 pkt.v_op_class = VOP_VZEXT;
                             5'd3, 5'd5, 5'd7:
                                 pkt.v_op_class = VOP_VSEXT;
+                            5'h08: pkt.v_op_class = VOP_VBREV8;
+                            5'h09: pkt.v_op_class = VOP_VREV8;
+                            5'h0a: pkt.v_op_class = VOP_VBREV;
+                            5'h0c: pkt.v_op_class = VOP_VCLZ;
+                            5'h0d: pkt.v_op_class = VOP_VCTZ;
+                            5'h0e: pkt.v_op_class = VOP_VCPOP_V;
                             default: pkt.v_op_class = VOTHER;
                         endcase
                     end
@@ -679,6 +704,7 @@ function automatic vec_decode_pkt_t decode_vec_one(
             3'b000: begin
                 case (f6)
                     6'h00: pkt.v_op_class = VOP_VADD;
+                    6'h01: pkt.v_op_class = VOP_VANDN;       // Zvbb
                     6'h02: pkt.v_op_class = VOP_VSUB;
                     6'h04: pkt.v_op_class = VOP_VMINU;
                     6'h05: pkt.v_op_class = VOP_VMIN;
@@ -696,6 +722,8 @@ function automatic vec_decode_pkt_t decode_vec_one(
                     6'h12: pkt.v_op_class = VOP_VSBC;
                     // 0x13: vmsbc.vvm (vm=0) and vmsbc.vv (vm=1)
                     6'h13: pkt.v_op_class = VOP_VMSBC;
+                    6'h14: pkt.v_op_class = VOP_VROR;        // Zvbb
+                    6'h15: pkt.v_op_class = VOP_VROL;        // Zvbb
                     // 0x17: vmerge (vm=0) vs vmv.v.v (vm=1)
                     6'h17: pkt.v_op_class =
                                inst[25] ? VOP_VMV : VOP_VMERGE;
@@ -722,6 +750,7 @@ function automatic vec_decode_pkt_t decode_vec_one(
                     6'h2f: pkt.v_op_class = VOP_VNCLIP;
                     6'h30: pkt.v_op_class = VOP_VWREDSUMU;
                     6'h31: pkt.v_op_class = VOP_VWREDSUM;
+                    6'h35: pkt.v_op_class = VOP_VWSLL;       // Zvbb
                     default: pkt.v_op_class = VOTHER;
                 endcase
             end
@@ -734,6 +763,7 @@ function automatic vec_decode_pkt_t decode_vec_one(
             3'b100: begin
                 case (f6)
                     6'h00: pkt.v_op_class = VOP_VADD;
+                    6'h01: pkt.v_op_class = VOP_VANDN;       // Zvbb
                     6'h02: pkt.v_op_class = VOP_VSUB;
                     6'h03: pkt.v_op_class = VOP_VRSUB;
                     6'h04: pkt.v_op_class = VOP_VMINU;
@@ -752,6 +782,8 @@ function automatic vec_decode_pkt_t decode_vec_one(
                     6'h12: pkt.v_op_class = VOP_VSBC;
                     // 0x13: vmsbc.vxm (vm=0) and vmsbc.vx (vm=1)
                     6'h13: pkt.v_op_class = VOP_VMSBC;
+                    6'h14: pkt.v_op_class = VOP_VROR;        // Zvbb
+                    6'h15: pkt.v_op_class = VOP_VROL;        // Zvbb
                     // 0x17: vmerge.vxm (vm=0) vs vmv.v.x (vm=1)
                     6'h17: pkt.v_op_class =
                                inst[25] ? VOP_VMV : VOP_VMERGE;
@@ -778,6 +810,7 @@ function automatic vec_decode_pkt_t decode_vec_one(
                     6'h2e: pkt.v_op_class = VOP_VNCLIPU;
                     6'h2f: pkt.v_op_class = VOP_VNCLIP;
                     // 0x30/0x31 (vwredsumu/vwredsum) not in OPIVX
+                    6'h35: pkt.v_op_class = VOP_VWSLL;       // Zvbb
                     default: pkt.v_op_class = VOTHER;
                 endcase
             end
@@ -801,6 +834,9 @@ function automatic vec_decode_pkt_t decode_vec_one(
                     6'h10: pkt.v_op_class = VOP_VADC;
                     // 0x11: vmadc.vim (vm=0) and vmadc.vi (vm=1)
                     6'h11: pkt.v_op_class = VOP_VMADC;
+                    // Zvbb vror.vi: funct6 0x14 and 0x15, bit 26 is
+                    // the immediate's bit 5
+                    6'h14, 6'h15: pkt.v_op_class = VOP_VROR;
                     // 0x17: vmerge.vim (vm=0) vs vmv.v.i (vm=1)
                     6'h17: pkt.v_op_class =
                                inst[25] ? VOP_VMV : VOP_VMERGE;
@@ -826,6 +862,7 @@ function automatic vec_decode_pkt_t decode_vec_one(
                     6'h2d: pkt.v_op_class = VOP_VNSRA;
                     6'h2e: pkt.v_op_class = VOP_VNCLIPU;
                     6'h2f: pkt.v_op_class = VOP_VNCLIP;
+                    6'h35: pkt.v_op_class = VOP_VWSLL;       // Zvbb
                     default: pkt.v_op_class = VOTHER;
                 endcase
             end
@@ -841,19 +878,587 @@ endfunction
 /* verilator lint_on UNUSEDSIGNAL */
 
 // ---------------------------------------------------------------------------
+// Scalar decode helpers (BP-124, dcd_decisions.md 10b)
+// ---------------------------------------------------------------------------
+
+// The precision encodings of fmt (instruction bits 26:25) and of
+// fp_fmt / fp_src_fmt (DCD-23): 2'b00 S, 2'b01 D, 2'b10 H, 2'b11 Q in
+// the instruction and unused in the packet.
+localparam logic [1:0] FP_S = 2'b00;
+localparam logic [1:0] FP_D = 2'b01;
+localparam logic [1:0] FP_H = 2'b10;
+
+// A static rounding mode of 101 or 110 is reserved (DCD-27). 111 is
+// dynamic; an invalid frm is raised at execute, not here.
+function automatic logic rm_bad(input logic [2:0] rm);
+    return (rm == 3'b101) || (rm == 3'b110);
+endfunction
+
+// An F or D operation of the base extensions at precision fmt: S needs
+// en_f, D needs en_d. H is Zfh's, which is not implemented, and Q is
+// not implemented (DCD-26).
+/* verilator lint_off VARHIDDEN */
+function automatic logic fp_base_ok(input logic [1:0]  fmt,
+                                    input ext_enable_t ext_enable);
+    return ((fmt == FP_S) && ext_enable.en_f) ||
+           ((fmt == FP_D) && ext_enable.en_d);
+endfunction
+
+// A Zfa operation at precision fmt: .S needs en_zfa, .D also en_d; the
+// .H forms need Zfh and are illegal (DCD-26).
+function automatic logic fp_zfa_ok(input logic [1:0]  fmt,
+                                   input ext_enable_t ext_enable);
+    return ((fmt == FP_S) && ext_enable.en_zfa) ||
+           ((fmt == FP_D) && ext_enable.en_zfa && ext_enable.en_d);
+endfunction
+
+// ---------------------------------------------------------------------------
+// The four FMA opcodes (R4-type). DCD-22, DCD-23, DCD-26, DCD-27.
+// ---------------------------------------------------------------------------
+/* verilator lint_off UNUSEDSIGNAL */
+function automatic decode_pkt_t dec_fma(input decode_pkt_t p,
+                                        input logic [31:0]  inst,
+                                        input ext_enable_t  ext_enable);
+    decode_pkt_t pkt;
+    pkt          = p;
+    pkt.fmt      = FMT_R;               // R4 is encoded similarly
+    pkt.is_fp    = 1'b1;
+    pkt.uses_rd  = 1'b1;
+    pkt.uses_rs1 = 1'b1;
+    pkt.uses_rs2 = 1'b1;
+    pkt.uses_rs3 = 1'b1;
+    pkt.rd_is_fp  = 1'b1;
+    pkt.rs1_is_fp = 1'b1;
+    pkt.rs2_is_fp = 1'b1;
+    pkt.fp_fmt   = inst[26:25];
+    case (inst[6:0])
+        OP_MADD:  pkt.alu_op = ALU_FMADD;
+        OP_MSUB:  pkt.alu_op = ALU_FMSUB;
+        OP_NMSUB: pkt.alu_op = ALU_FNMSUB;
+        default:  pkt.alu_op = ALU_FNMADD;
+    endcase
+    if (!fp_base_ok(inst[26:25], ext_enable) || rm_bad(inst[14:12]))
+        pkt.is_illegal = 1'b1;
+    return pkt;
+endfunction
+
+// ---------------------------------------------------------------------------
+// OP-FP. DCD-22 to DCD-27. funct5 [31:27], fmt [26:25], rs2 [24:20]
+// (a selector for the unary forms), rm / funct3 [14:12].
+// ---------------------------------------------------------------------------
+function automatic decode_pkt_t dec_opfp(input decode_pkt_t p,
+                                         input logic [31:0]  inst,
+                                         input ext_enable_t  ext_enable);
+    decode_pkt_t pkt;
+    logic [4:0]  f5;
+    logic [1:0]  fmt;
+    logic [4:0]  sel;       // the rs2 field
+    logic [2:0]  f3;
+    logic        ok;        // legal encoding and enabled
+    logic        has_rm;    // the encoding has an rm field (DCD-27)
+    pkt  = p;
+    f5   = inst[31:27];
+    fmt  = inst[26:25];
+    sel  = inst[24:20];
+    f3   = inst[14:12];
+    ok   = 1'b0;
+    has_rm = 1'b0;
+    pkt.fmt    = FMT_R;
+    pkt.is_fp  = 1'b1;
+    pkt.fp_fmt = fmt;
+    // Most forms: FP destination and FP sources rs1, rs2.
+    pkt.uses_rd   = 1'b1;
+    pkt.uses_rs1  = 1'b1;
+    pkt.rd_is_fp  = 1'b1;
+    pkt.rs1_is_fp = 1'b1;
+    unique case (f5)
+        5'b00000, 5'b00001, 5'b00010, 5'b00011: begin
+            case (f5[1:0])
+                2'b00:   pkt.alu_op = ALU_FADD;
+                2'b01:   pkt.alu_op = ALU_FSUB;
+                2'b10:   pkt.alu_op = ALU_FMUL;
+                default: pkt.alu_op = ALU_FDIV;
+            endcase
+            pkt.uses_rs2  = 1'b1;
+            pkt.rs2_is_fp = 1'b1;
+            has_rm = 1'b1;
+            ok = fp_base_ok(fmt, ext_enable);
+        end
+        5'b01011: begin                          // FSQRT, unary
+            pkt.alu_op = ALU_FSQRT;
+            has_rm = 1'b1;
+            ok = fp_base_ok(fmt, ext_enable) && (sel == 5'd0);
+        end
+        5'b00100: begin                          // FSGNJ, FSGNJN, FSGNJX
+            pkt.uses_rs2  = 1'b1;
+            pkt.rs2_is_fp = 1'b1;
+            case (f3)
+                3'b000:  pkt.alu_op = ALU_FSGNJ;
+                3'b001:  pkt.alu_op = ALU_FSGNJN;
+                default: pkt.alu_op = ALU_FSGNJX;
+            endcase
+            ok = fp_base_ok(fmt, ext_enable) && (f3 <= 3'b010);
+        end
+        5'b00101: begin                          // FMIN, FMAX; Zfa M forms
+            pkt.uses_rs2  = 1'b1;
+            pkt.rs2_is_fp = 1'b1;
+            case (f3)
+                3'b000:  pkt.alu_op = ALU_FMIN;
+                3'b001:  pkt.alu_op = ALU_FMAX;
+                3'b010:  pkt.alu_op = ALU_FMINM;
+                default: pkt.alu_op = ALU_FMAXM;
+            endcase
+            ok = (f3 <= 3'b001) ? fp_base_ok(fmt, ext_enable) :
+                 (f3 <= 3'b011) ? fp_zfa_ok(fmt, ext_enable)  : 1'b0;
+        end
+        5'b01000: begin                          // FCVT.fmt.fmt, FROUND*
+            has_rm = 1'b1;
+            if (sel == 5'b00100 || sel == 5'b00101) begin
+                pkt.alu_op = (sel[0]) ? ALU_FROUNDNX : ALU_FROUND;
+                ok = fp_zfa_ok(fmt, ext_enable);
+            end else begin
+                // fmt is the destination, rs2[1:0] the source (DCD-23).
+                // The pairs F, D and Zfhmin define; Q and same-precision
+                // conversions are not defined (DCD-26).
+                pkt.alu_op     = ALU_FCVT_FF;
+                pkt.fp_src_fmt = sel[1:0];
+                unique case ({fmt, sel})
+                    {FP_S, 5'd1}, {FP_D, 5'd0}:          // S<->D
+                        ok = ext_enable.en_d;
+                    {FP_S, 5'd2}, {FP_H, 5'd0}:          // S<->H
+                        ok = ext_enable.en_zfhmin;
+                    {FP_D, 5'd2}, {FP_H, 5'd1}:          // D<->H
+                        ok = ext_enable.en_zfhmin && ext_enable.en_d;
+                    default: ok = 1'b0;
+                endcase
+            end
+        end
+        5'b10100: begin                          // compares; Zfa quiet
+            pkt.uses_rs2  = 1'b1;
+            pkt.rs2_is_fp = 1'b1;
+            pkt.rd_is_fp  = 1'b0;
+            case (f3)
+                3'b000:  pkt.alu_op = ALU_FLE;
+                3'b001:  pkt.alu_op = ALU_FLT;
+                3'b010:  pkt.alu_op = ALU_FEQ;
+                3'b100:  pkt.alu_op = ALU_FLEQ;
+                default: pkt.alu_op = ALU_FLTQ;
+            endcase
+            ok = (f3 <= 3'b010) ? fp_base_ok(fmt, ext_enable) :
+                 (f3 == 3'b100 || f3 == 3'b101) ?
+                     fp_zfa_ok(fmt, ext_enable) : 1'b0;
+        end
+        5'b11000: begin                          // FP -> integer
+            pkt.rd_is_fp = 1'b0;
+            if (sel == 5'b01000) begin
+                // FCVTMOD.W.D: D only, rm 001 (RTZ); zfa.adoc reserves
+                // every other rm (DCD-26).
+                pkt.alu_op = ALU_FCVTMOD_W_D;
+                ok = (fmt == FP_D) && ext_enable.en_zfa && ext_enable.en_d &&
+                     (f3 == 3'b001);
+            end else begin
+                has_rm = 1'b1;
+                case (sel[1:0])
+                    2'b00:   pkt.alu_op = ALU_FCVT_W;
+                    2'b01:   pkt.alu_op = ALU_FCVT_WU;
+                    2'b10:   pkt.alu_op = ALU_FCVT_L;
+                    default: pkt.alu_op = ALU_FCVT_LU;
+                endcase
+                ok = fp_base_ok(fmt, ext_enable) && (sel[4:2] == 3'b000);
+            end
+        end
+        5'b11010: begin                          // integer -> FP
+            pkt.rs1_is_fp = 1'b0;
+            has_rm = 1'b1;
+            case (sel[1:0])
+                2'b00:   pkt.alu_op = ALU_FCVT_FW;
+                2'b01:   pkt.alu_op = ALU_FCVT_FWU;
+                2'b10:   pkt.alu_op = ALU_FCVT_FL;
+                default: pkt.alu_op = ALU_FCVT_FLU;
+            endcase
+            ok = fp_base_ok(fmt, ext_enable) && (sel[4:2] == 3'b000);
+        end
+        5'b11100: begin                          // FMV.X.fmt, FCLASS
+            pkt.rd_is_fp = 1'b0;
+            if (f3 == 3'b000) begin
+                // FMV.X.W, FMV.X.D, and FMV.X.H (Zfhmin). FMVH.X.D
+                // (rs2 1) is RV32 only (DCD-26).
+                pkt.alu_op = ALU_FMV_XF;
+                ok = (sel == 5'd0) &&
+                     (fp_base_ok(fmt, ext_enable) ||
+                      ((fmt == FP_H) && ext_enable.en_zfhmin));
+            end else begin
+                pkt.alu_op = ALU_FCLASS;
+                ok = (f3 == 3'b001) && (sel == 5'd0) &&
+                     fp_base_ok(fmt, ext_enable);
+            end
+        end
+        5'b11110: begin                          // FMV.fmt.X, FLI
+            if (sel == 5'd1) begin
+                // FLI: the constant index is the rs1 field; no source
+                // register (DCD-24, DCD-25).
+                pkt.alu_op    = ALU_FLI;
+                pkt.uses_rs1  = 1'b0;
+                pkt.rs1_is_fp = 1'b0;
+                pkt.imm       = {27'd0, inst[19:15]};
+                ok = (f3 == 3'b000) && fp_zfa_ok(fmt, ext_enable);
+            end else begin
+                pkt.alu_op    = ALU_FMV_FX;
+                pkt.rs1_is_fp = 1'b0;
+                ok = (f3 == 3'b000) && (sel == 5'd0) &&
+                     (fp_base_ok(fmt, ext_enable) ||
+                      ((fmt == FP_H) && ext_enable.en_zfhmin));
+            end
+        end
+        default: ok = 1'b0;                      // FMVP.D.X (RV32) and
+                                                 // every other funct5
+    endcase
+    if (!ok || (has_rm && rm_bad(f3)))
+        pkt.is_illegal = 1'b1;
+    return pkt;
+endfunction
+
+// ---------------------------------------------------------------------------
+// AMO. DCD-28: W and D, the eleven A operations; LR needs rs2 = x0.
+// Zabha's widths and Zacas's AMOCAS are illegal. aq and rl travel in
+// funct7. LR reads memory, SC writes it, an AMO does both.
+// ---------------------------------------------------------------------------
+function automatic decode_pkt_t dec_amo(input decode_pkt_t p,
+                                       input logic [31:0]  inst,
+                                       input ext_enable_t  ext_enable);
+    decode_pkt_t pkt;
+    logic        d;
+    logic        ok;
+    pkt = p;
+    pkt.fmt      = FMT_R;
+    pkt.uses_rd  = 1'b1;
+    pkt.uses_rs1 = 1'b1;
+    pkt.uses_rs2 = 1'b1;
+    pkt.is_load  = 1'b1;
+    pkt.is_store = 1'b1;
+    d  = inst[12];
+    ok = ext_enable.en_a &&
+         ((inst[14:12] == 3'b010) || (inst[14:12] == 3'b011));
+    unique case (inst[31:27])
+        5'b00010: begin
+            pkt.alu_op   = d ? ALU_LR_D : ALU_LR_W;
+            pkt.uses_rs2 = 1'b0;
+            pkt.is_store = 1'b0;
+            ok = ok && (inst[24:20] == 5'd0);
+        end
+        5'b00011: begin
+            pkt.alu_op  = d ? ALU_SC_D : ALU_SC_W;
+            pkt.is_load = 1'b0;
+        end
+        5'b00001: pkt.alu_op = d ? ALU_AMOSWAP_D : ALU_AMOSWAP_W;
+        5'b00000: pkt.alu_op = d ? ALU_AMOADD_D  : ALU_AMOADD_W;
+        5'b00100: pkt.alu_op = d ? ALU_AMOXOR_D  : ALU_AMOXOR_W;
+        5'b01100: pkt.alu_op = d ? ALU_AMOAND_D  : ALU_AMOAND_W;
+        5'b01000: pkt.alu_op = d ? ALU_AMOOR_D   : ALU_AMOOR_W;
+        5'b10000: pkt.alu_op = d ? ALU_AMOMIN_D  : ALU_AMOMIN_W;
+        5'b10100: pkt.alu_op = d ? ALU_AMOMAX_D  : ALU_AMOMAX_W;
+        5'b11000: pkt.alu_op = d ? ALU_AMOMINU_D : ALU_AMOMINU_W;
+        5'b11100: pkt.alu_op = d ? ALU_AMOMAXU_D : ALU_AMOMAXU_W;
+        default:  ok = 1'b0;
+    endcase
+    if (!ok) pkt.is_illegal = 1'b1;
+    return pkt;
+endfunction
+
+// ---------------------------------------------------------------------------
+// MISC-MEM. DCD-29: funct3 000 is FENCE for every fm, pred, succ, rs1
+// and rd (a reserved configuration is treated as FENCE, RV32I); fm,
+// pred and succ travel in imm[11:0], zero-extended. 001 is FENCE.I,
+// its imm, rs1 and rd ignored (Zifencei). 010 is the CBO of imm (0
+// inval, 1 clean, 2 flush, 4 zero) with rd = x0 (DCD-31); 011 to 111
+// are illegal.
+// ---------------------------------------------------------------------------
+function automatic decode_pkt_t dec_misc_mem(input decode_pkt_t p,
+                                             input logic [31:0]  inst,
+                                             input ext_enable_t  ext_enable);
+    decode_pkt_t pkt;
+    logic        ok;
+    pkt = p;
+    pkt.fmt = FMT_I;
+    ok  = 1'b1;
+    unique case (inst[14:12])
+        3'b000: begin
+            // fm, pred and succ are fields, not a number: zero-extended,
+            // as DCD-25 places a CSR address (BP-124).
+            pkt.alu_op = ALU_FENCE;
+            pkt.imm    = {20'd0, inst[31:20]};
+        end
+        3'b001: pkt.alu_op = ALU_FENCE_I;
+        3'b010: begin
+            pkt.uses_rs1 = 1'b1;
+            unique case (inst[31:20])
+                12'd0: begin
+                    pkt.alu_op = ALU_CBO_INVAL;
+                    ok = ext_enable.en_zicbom;
+                end
+                12'd1: begin
+                    pkt.alu_op = ALU_CBO_CLEAN;
+                    ok = ext_enable.en_zicbom;
+                end
+                12'd2: begin
+                    pkt.alu_op = ALU_CBO_FLUSH;
+                    ok = ext_enable.en_zicbom;
+                end
+                12'd4: begin
+                    pkt.alu_op = ALU_CBO_ZERO;
+                    ok = ext_enable.en_zicboz;
+                end
+                default: ok = 1'b0;
+            endcase
+            if (inst[11:7] != 5'd0) ok = 1'b0;   // DCD-31
+        end
+        default: ok = 1'b0;
+    endcase
+    if (!ok) pkt.is_illegal = 1'b1;
+    return pkt;
+endfunction
+
+// ---------------------------------------------------------------------------
+// SYSTEM. DCD-29 to DCD-31.
+//   funct3 000  ECALL, EBREAK, SRET, MRET, WFI, WRS.NTO, WRS.STO (rd and
+//               rs1 x0); SFENCE.VMA, SINVAL.VMA, and with en_h
+//               HFENCE.VVMA, HFENCE.GVMA, HINVAL.VVMA, HINVAL.GVMA (rd
+//               x0); SFENCE.W.INVAL, SFENCE.INVAL.IR (rd and rs1 x0)
+//   funct3 100  HLV, HLVX, HSV (en_h): the width-exact load and store
+//               operations with is_hlsv, and is_hlvx for HLVX (DCD-30);
+//               Zimop MOP.R.n and MOP.RR.n
+//   otherwise   the six CSR operations (en_zicsr); the CSR address in
+//               imm[11:0] zero-extended, the CSRRxI zimm in imm[16:12]
+//               (DCD-25)
+// Every other encoding is illegal.
+// ---------------------------------------------------------------------------
+function automatic decode_pkt_t dec_system(input decode_pkt_t p,
+                                           input logic [31:0]  inst,
+                                           input ext_enable_t  ext_enable);
+    decode_pkt_t pkt;
+    logic        ok;
+    logic        rd0;
+    logic        rs10;
+    logic [6:0]  f7;
+    logic [4:0]  r2;
+    pkt  = p;
+    pkt.fmt = FMT_I;
+    ok   = 1'b1;
+    rd0  = (inst[11:7]  == 5'd0);
+    rs10 = (inst[19:15] == 5'd0);
+    f7   = inst[31:25];
+    r2   = inst[24:20];
+    if (inst[14:12] == 3'b000) begin
+        unique casez ({f7, r2})
+            12'h000: begin pkt.alu_op = ALU_ECALL;  pkt.is_csr = 1'b1; end
+            12'h001: begin pkt.alu_op = ALU_EBREAK; pkt.is_csr = 1'b1; end
+            12'h102: begin pkt.alu_op = ALU_SRET;   pkt.is_csr = 1'b1; end
+            12'h302: begin pkt.alu_op = ALU_MRET;   pkt.is_csr = 1'b1; end
+            12'h105: begin pkt.alu_op = ALU_WFI;    pkt.is_csr = 1'b1; end
+            12'h00D: pkt.alu_op = ALU_WRS_NTO;
+            12'h01D: pkt.alu_op = ALU_WRS_STO;
+            12'b0001001_?????, 12'b0001011_?????,
+            12'b0010001_?????, 12'b0110001_?????,
+            12'b0010011_?????, 12'b0110011_?????: begin
+                pkt.uses_rs1 = 1'b1;
+                pkt.uses_rs2 = 1'b1;
+                unique case (f7)
+                    7'b0001001: pkt.alu_op = ALU_SFENCE_VMA;
+                    7'b0001011: pkt.alu_op = ALU_SINVAL_VMA;
+                    7'b0010001: pkt.alu_op = ALU_HFENCE_VVMA;
+                    7'b0110001: pkt.alu_op = ALU_HFENCE_GVMA;
+                    7'b0010011: pkt.alu_op = ALU_HINVAL_VVMA;
+                    default:    pkt.alu_op = ALU_HINVAL_GVMA;
+                endcase
+                // The H forms need en_h (f7[5] or f7[4] set).
+                if ((f7[5] || f7[4]) && !ext_enable.en_h) ok = 1'b0;
+            end
+            12'b0001100_00000: pkt.alu_op = ALU_SFENCE_W_INVAL;
+            12'b0001100_00001: pkt.alu_op = ALU_SFENCE_INVAL_IR;
+            default: ok = 1'b0;
+        endcase
+        // DCD-31: rd x0 for every funct3 000 form; rs1 x0 except for
+        // the forms that read rs1 (the SFENCE, SINVAL, HFENCE and
+        // HINVAL address forms).
+        if (!rd0) ok = 1'b0;
+        if (!pkt.uses_rs1 && !rs10) ok = 1'b0;
+    end else if (inst[14:12] == 3'b100) begin
+        if (f7[6]) begin
+            // Zimop. MOP.R.n: 1 n4 00 n3 n2 0111 n1 n0 rs1 100 rd;
+            // MOP.RR.n: 1 n2 00 n1 n0 1 rs2 rs1 100 rd. Both write zero
+            // to rd and read nothing: no extension this design implements
+            // redefines them; Zicfiss, an RVA23 option not implemented,
+            // redefines some.
+            pkt.alu_op  = ALU_MOP;
+            pkt.uses_rd = 1'b1;
+            ok = (f7[4:3] == 2'b00) &&            // bits 29:28
+                 (f7[0] || (inst[25:22] == 4'b0111));
+        end else begin
+            pkt.is_hlsv  = 1'b1;
+            pkt.uses_rs1 = 1'b1;
+            ok = ext_enable.en_h && (f7[6:3] == 4'b0110);
+            if (!f7[0]) begin
+                // HLV.B/BU 0110000, HLV.H/HU/HLVX.HU 0110010,
+                // HLV.W/WU/HLVX.WU 0110100, HLV.D 0110110; rs2 selects
+                // 0 signed, 1 unsigned, 3 HLVX.
+                pkt.is_load = 1'b1;
+                pkt.uses_rd = 1'b1;
+                pkt.is_hlvx = (r2 == 5'd3);
+                unique case ({f7[2:1], r2})
+                    {2'b00, 5'd0}: pkt.alu_op = ALU_LB;
+                    {2'b00, 5'd1}: pkt.alu_op = ALU_LBU;
+                    {2'b01, 5'd0}: pkt.alu_op = ALU_LH;
+                    {2'b01, 5'd1},
+                    {2'b01, 5'd3}: pkt.alu_op = ALU_LHU;
+                    {2'b10, 5'd0}: pkt.alu_op = ALU_LW;
+                    {2'b10, 5'd1},
+                    {2'b10, 5'd3}: pkt.alu_op = ALU_LWU;
+                    {2'b11, 5'd0}: pkt.alu_op = ALU_LD;
+                    default:       ok = 1'b0;
+                endcase
+            end else begin
+                // HSV.B/H/W/D 0110001/0110011/0110101/0110111, rd x0.
+                pkt.is_store = 1'b1;
+                pkt.uses_rs2 = 1'b1;
+                case (f7[2:1])
+                    2'b00:   pkt.alu_op = ALU_SB;
+                    2'b01:   pkt.alu_op = ALU_SH;
+                    2'b10:   pkt.alu_op = ALU_SW;
+                    default: pkt.alu_op = ALU_SD;
+                endcase
+                if (!rd0) ok = 1'b0;
+            end
+        end
+    end else begin
+        // Zicsr. funct3 001/010/011 read rs1, 101/110/111 the zimm.
+        pkt.is_csr  = 1'b1;
+        pkt.uses_rd = 1'b1;
+        pkt.uses_rs1 = !inst[14];
+        pkt.imm = {15'd0, inst[14] ? inst[19:15] : 5'd0, inst[31:20]};
+        case (inst[14:12])
+            3'b001:  pkt.alu_op = ALU_CSRRW;
+            3'b010:  pkt.alu_op = ALU_CSRRS;
+            3'b011:  pkt.alu_op = ALU_CSRRC;
+            3'b101:  pkt.alu_op = ALU_CSRRWI;
+            3'b110:  pkt.alu_op = ALU_CSRRSI;
+            default: pkt.alu_op = ALU_CSRRCI;
+        endcase
+        ok = ext_enable.en_zicsr;
+    end
+    if (!ok) pkt.is_illegal = 1'b1;
+    return pkt;
+endfunction
+
+// ---------------------------------------------------------------------------
+// A vector instruction's scalar packet. DCD-21, DCD-24, DCD-25, DCD-32.
+// v is decode_vec_one's packet for the same word. alu_op is ALU_VEC and
+// v_op_class names the operation. Only the SCALAR register operands
+// are described here:
+//   OPIVX, OPMVX         GPR rs1
+//   OPFVF                FPR rs1
+//   vmv.x.s, vcpop.m,    GPR rd
+//   vfirst.m
+//   vfmv.f.s             FPR rd
+//   vsetvl               GPR rd, rs1, rs2; vsetvli GPR rd, rs1;
+//                        vsetivli GPR rd
+//   loads, stores        GPR rs1, and GPR rs2 when strided
+// is_load / is_store mark a vector load / store; is_fp is clear. An
+// encoding that decodes to VOTHER or to the VMEM default is illegal
+// (DCD-32), as is every vector encoding with en_v clear.
+// ---------------------------------------------------------------------------
+function automatic decode_pkt_t dec_vec(input decode_pkt_t     p,
+                                        input logic [31:0]      inst,
+                                        input ext_enable_t      ext_enable,
+                                        input vec_decode_pkt_t  v);
+    decode_pkt_t pkt;
+    logic [5:0]  f6;
+    pkt = p;
+    f6  = inst[31:26];
+    pkt.fmt    = FMT_R;
+    pkt.alu_op = ALU_VEC;
+    if (!ext_enable.en_v || !v.is_vector ||
+        (v.v_op_class == VOTHER) || (v.v_op_class == VMEM)) begin
+        pkt.is_illegal = 1'b1;
+        return pkt;
+    end
+    if (inst[6:0] != OP_VECTOR) begin
+        // LOAD-FP / STORE-FP vector forms. mop 10 is strided.
+        pkt.is_load  = (inst[6:0] == OP_LOAD_FP);
+        pkt.is_store = (inst[6:0] == OP_STORE_FP);
+        pkt.uses_rs1 = 1'b1;
+        pkt.uses_rs2 = (inst[27:26] == 2'b10);
+        return pkt;
+    end
+    unique case (inst[14:12])
+        3'b111: begin                            // OPCFG
+            pkt.uses_rd = 1'b1;
+            if (!inst[31]) begin
+                // vsetvli: zimm[10:0] in imm[10:0], reserved bits
+                // included, so vill can be formed downstream (DCD-25).
+                pkt.uses_rs1 = 1'b1;
+                pkt.imm      = {21'd0, inst[30:20]};
+            end else if (inst[30]) begin
+                // vsetivli: zimm[9:0] in imm[10:0], the AVL uimm[4:0]
+                // in imm[20:16]; no source register.
+                pkt.imm = {11'd0, inst[19:15], 6'd0, inst[29:20]};
+            end else begin
+                pkt.uses_rs1 = 1'b1;                 // vsetvl
+                pkt.uses_rs2 = 1'b1;
+            end
+        end
+        3'b100, 3'b110: pkt.uses_rs1 = 1'b1;     // OPIVX, OPMVX
+        3'b101: begin                            // OPFVF
+            pkt.uses_rs1  = 1'b1;
+            pkt.rs1_is_fp = 1'b1;
+        end
+        3'b010: begin                            // OPMVV
+            if (v.v_op_class inside {VOP_VMV_XS, VOP_VCPOP, VOP_VFIRST})
+                pkt.uses_rd = 1'b1;
+        end
+        3'b001: begin                            // OPFVV
+            if (v.v_op_class == VOP_VFMV_FS) begin
+                pkt.uses_rd  = 1'b1;
+                pkt.rd_is_fp = 1'b1;
+            end
+        end
+        3'b011: begin                            // OPIVI, DCD-25
+            if (f6[5:1] == 5'b01010)
+                // vror.vi: six bits, bit 5 is instruction bit 26.
+                pkt.imm = {26'd0, inst[26], inst[19:15]};
+            else if (f6 inside {6'h0c, 6'h0e, 6'h0f, 6'h25, 6'h27, 6'h28,
+                                6'h29, 6'h2a, 6'h2b, 6'h2c, 6'h2d, 6'h2e,
+                                6'h2f, 6'h35})
+                // zimm5: vrgather, vslideup, vslidedown, the shifts and
+                // narrowing clips, vwsll; vmv<nr>r's field (0 to 7)
+                pkt.imm = {27'd0, inst[19:15]};
+            else
+                // simm5: every other OPIVI instruction
+                pkt.imm = {{27{inst[19]}}, inst[19:15]};
+        end
+        default: ;                               // OPIVV: no scalar
+    endcase
+    return pkt;
+endfunction
+/* verilator lint_on UNUSEDSIGNAL */
+/* verilator lint_on VARHIDDEN */
+
+// ---------------------------------------------------------------------------
 // Single-slot decode function
+// v is decode_vec_one's packet for the same word (dec_vec reads it).
 // ---------------------------------------------------------------------------
 /* verilator lint_off UNUSEDSIGNAL */
 /* verilator lint_off VARHIDDEN */
 function automatic decode_pkt_t decode_one(
-    input logic [31:0]  inst,
-    input logic         valid,
-    input ext_enable_t  ext_enable
+    input logic [31:0]      inst,
+    input logic             valid,
+    input ext_enable_t      ext_enable,
+    input vec_decode_pkt_t  v
 );
     decode_pkt_t pkt;
     logic [6:0] op;
     logic [2:0] f3;
     logic [6:0] f7;
+    logic       vmem;   // LOAD-FP / STORE-FP with a vector width
 
     // Zero out to avoid latches
     pkt          = '0;
@@ -865,12 +1470,14 @@ function automatic decode_pkt_t decode_one(
     op  = inst[6:0];
     f3  = inst[14:12];
     f7  = inst[31:25];
+    vmem = (f3 == 3'b000) || (f3 == 3'b101) ||
+           (f3 == 3'b110) || (f3 == 3'b111);
 
     pkt.opcode  = op;
     pkt.rd      = inst[11:7];
     pkt.rs1     = inst[19:15];
     pkt.rs2     = inst[24:20];
-    pkt.rs3     = inst[31:27]; // FMA only, others ignore
+    pkt.rs3     = inst[31:27]; // zeroed below unless uses_rs3
     pkt.funct3  = f3;
     pkt.funct7  = f7;
 
@@ -897,115 +1504,49 @@ function automatic decode_pkt_t decode_one(
                 3'b100: pkt.alu_op = ALU_LBU;
                 3'b101: pkt.alu_op = ALU_LHU;
                 3'b110: pkt.alu_op = ALU_LWU;
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
         end
 
         // ------------------------------------------------------------------
-        // LOAD-FP  (I-type) - FLD/FLW scalar FP, or vector load
-        // DECODE-008: width 3'b000/101/110/111 -> vector memory load
-        // Width 3'b011 -> FLD (D ext); width 3'b010 -> FLW (F ext)
+        // LOAD-FP: a vector load (width 000/101/110/111, DECODE-008) or
+        // FLH (001, en_zfhmin), FLW (010, en_f), FLD (011, en_d). FLQ
+        // (100) is not implemented. ALU_FLOAD; fp_fmt is the datum's
+        // width (DCD-23); rd is an FP register, rs1 a GPR (DCD-24).
         // ------------------------------------------------------------------
         OP_LOAD_FP: begin
-            if (f3 == 3'b000 || f3 == 3'b101 ||
-                f3 == 3'b110 || f3 == 3'b111) begin
-                // Vector memory load; vec_decode_bundle carries full detail
-                // rs1=base GPR; rs2=stride GPR for strided mode (mop=2'b10)
-                if (!ext_enable.en_v) begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end else begin
-                    pkt.is_load  = 1'b1;
-                    pkt.uses_rs1 = 1'b1;
-                    pkt.uses_rs2 = (inst[27:26] == 2'b10);
-                    pkt.alu_op   = ALU_ADD; // placeholder; LSU reads vec pkt
-                end
+            if (vmem) begin
+                pkt = dec_vec(pkt, inst, ext_enable, v);
             end else begin
-                // Scalar FP load
                 pkt.fmt      = FMT_I;
                 pkt.imm      = imm_i(inst);
+                pkt.alu_op   = ALU_FLOAD;
                 pkt.is_load  = 1'b1;
-                pkt.is_fp    = 1'b1;
                 pkt.uses_rd  = 1'b1;
                 pkt.uses_rs1 = 1'b1;
-                if (f3 == 3'b011) begin // FLD (D extension)
-                    if (!ext_enable.en_d) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else
-                        pkt.alu_op = ALU_FLD;
-                end else if (f3 == 3'b010) begin // FLW (F extension)
-                    if (!ext_enable.en_f) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else
-                        pkt.alu_op = ALU_FLD; // placeholder
-                end else if (f3 == 3'b001) begin // FLH (Zfhmin, BP-123)
-                    if (!ext_enable.en_zfhmin) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else
-                        pkt.alu_op = ALU_FLD; // placeholder
-                end else begin
-                    pkt.alu_op     = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                pkt.rd_is_fp = 1'b1;
+                unique case (f3)
+                    3'b001: begin
+                        pkt.fp_fmt = FP_H;
+                        if (!ext_enable.en_zfhmin) pkt.is_illegal = 1'b1;
+                    end
+                    3'b010: begin
+                        pkt.fp_fmt = FP_S;
+                        if (!ext_enable.en_f) pkt.is_illegal = 1'b1;
+                    end
+                    3'b011: begin
+                        pkt.fp_fmt = FP_D;
+                        if (!ext_enable.en_d) pkt.is_illegal = 1'b1;
+                    end
+                    default: pkt.is_illegal = 1'b1;
+                endcase
             end
         end
 
         // ------------------------------------------------------------------
-        // MISC-MEM  (FENCE / FENCE.I / CBO)
-        // funct3=010 selects CBO instructions; inst[24:20] selects op:
-        //   0=cbo.inval  1=cbo.clean  2=cbo.flush  (Zicbom)
-        //   4=cbo.zero                               (Zicboz)
+        // MISC-MEM  (FENCE / FENCE.I / CBO), DCD-29
         // ------------------------------------------------------------------
-        OP_MISC_MEM: begin
-            pkt.fmt = FMT_I;
-            if (f3 == 3'b010) begin
-                // CBO instructions: rs1=base address, no destination
-                pkt.uses_rs1 = 1'b1;
-                case (inst[24:20])
-                    5'b00000: begin // cbo.inval
-                        if (!ext_enable.en_zicbom) begin
-                            pkt.alu_op    = ALU_ILL;
-                            pkt.is_illegal = 1'b1;
-                        end else
-                            pkt.alu_op = ALU_FENCE;
-                    end
-                    5'b00001: begin // cbo.clean
-                        if (!ext_enable.en_zicbom) begin
-                            pkt.alu_op    = ALU_ILL;
-                            pkt.is_illegal = 1'b1;
-                        end else
-                            pkt.alu_op = ALU_FENCE;
-                    end
-                    5'b00010: begin // cbo.flush
-                        if (!ext_enable.en_zicbom) begin
-                            pkt.alu_op    = ALU_ILL;
-                            pkt.is_illegal = 1'b1;
-                        end else
-                            pkt.alu_op = ALU_FENCE;
-                    end
-                    5'b00100: begin // cbo.zero
-                        if (!ext_enable.en_zicboz) begin
-                            pkt.alu_op    = ALU_ILL;
-                            pkt.is_illegal = 1'b1;
-                        end else
-                            pkt.alu_op = ALU_FENCE;
-                    end
-                    default: begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end
-                endcase
-            end else begin
-                // FENCE / FENCE.I: base ISA, never ILLEGAL
-                pkt.alu_op = ALU_FENCE;
-            end
-        end
+        OP_MISC_MEM: pkt = dec_misc_mem(pkt, inst, ext_enable);
 
         // ------------------------------------------------------------------
         // OP-IMM  (I-type): ADDI, SLTI, SLTIU, XORI, ORI, ANDI,
@@ -1039,10 +1580,8 @@ function automatic decode_pkt_t decode_one(
                         pkt.alu_op = ALU_BSETI;
                     else if (f7[6:1] == 6'b011010)
                         pkt.alu_op = ALU_BINVI;
-                    else begin
-                        pkt.alu_op    = ALU_ILL;
+                    else
                         pkt.is_illegal = 1'b1;
-                    end
                 end
                 3'b010: begin pkt.alu_op = ALU_SLT;  pkt.imm = imm_i(inst); end
                 3'b011: begin pkt.alu_op = ALU_SLTU; pkt.imm = imm_i(inst); end
@@ -1063,10 +1602,8 @@ function automatic decode_pkt_t decode_one(
                         pkt.alu_op = ALU_REV8;
                     else if (f7[6:1] == 6'b010010)
                         pkt.alu_op = ALU_BEXTI;
-                    else begin
-                        pkt.alu_op    = ALU_ILL;
+                    else
                         pkt.is_illegal = 1'b1;
-                    end
                 end
                 3'b110: begin
                     // ORI. With rd = x0 it is the encoding of the
@@ -1077,10 +1614,7 @@ function automatic decode_pkt_t decode_one(
                     pkt.imm    = imm_i(inst);
                 end
                 3'b111: begin pkt.alu_op = ALU_ANDI; pkt.imm = imm_i(inst); end
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
         end
 
@@ -1117,10 +1651,8 @@ function automatic decode_pkt_t decode_one(
                         pkt.alu_op = ALU_CTZW;
                     else if ({f7, inst[24:20]} == 12'b0110000_00010)
                         pkt.alu_op = ALU_CPOPW;
-                    else begin
-                        pkt.alu_op    = ALU_ILL;
+                    else
                         pkt.is_illegal = 1'b1;
-                    end
                 end
                 3'b101: begin
                     pkt.imm = imm_shamt(inst);
@@ -1130,15 +1662,10 @@ function automatic decode_pkt_t decode_one(
                         pkt.alu_op = ALU_SRAW;
                     else if (f7 == 7'b0110000)
                         pkt.alu_op = ALU_RORIW;          // Zbb, BP-123
-                    else begin
-                        pkt.alu_op    = ALU_ILL;
+                    else
                         pkt.is_illegal = 1'b1;
-                    end
                 end
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
         end
 
@@ -1156,69 +1683,47 @@ function automatic decode_pkt_t decode_one(
                 3'b001: pkt.alu_op = ALU_SH;
                 3'b010: pkt.alu_op = ALU_SW;
                 3'b011: pkt.alu_op = ALU_SD;
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
         end
 
         // ------------------------------------------------------------------
-        // STORE-FP  (S-type) - FSD/FSW scalar FP, or vector store
-        // DECODE-008: width 3'b000/101/110/111 -> vector memory store
-        // Width 3'b011 -> FSD (D ext); width 3'b010 -> FSW (F ext)
+        // STORE-FP: a vector store, or FSH / FSW / FSD as LOAD-FP.
+        // ALU_FSTORE; rs2 is an FP register, rs1 a GPR (DCD-24).
         // ------------------------------------------------------------------
         OP_STORE_FP: begin
-            if (f3 == 3'b000 || f3 == 3'b101 ||
-                f3 == 3'b110 || f3 == 3'b111) begin
-                // Vector memory store; vec_decode_bundle carries full detail
-                // rs1=base GPR; rs2=stride GPR for strided mode (mop=2'b10)
-                if (!ext_enable.en_v) begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end else begin
-                    pkt.is_store = 1'b1;
-                    pkt.uses_rs1 = 1'b1;
-                    pkt.uses_rs2 = (inst[27:26] == 2'b10);
-                    pkt.alu_op   = ALU_ADD; // placeholder; LSU reads vec pkt
-                end
+            if (vmem) begin
+                pkt = dec_vec(pkt, inst, ext_enable, v);
             end else begin
-                // Scalar FP store
-                pkt.fmt      = FMT_S;
-                pkt.imm      = imm_s(inst);
-                pkt.is_store = 1'b1;
-                pkt.is_fp    = 1'b1;
-                pkt.uses_rs1 = 1'b1;
-                pkt.uses_rs2 = 1'b1;
-                if (f3 == 3'b011) begin // FSD (D extension)
-                    if (!ext_enable.en_d) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else
-                        pkt.alu_op = ALU_FSD;
-                end else if (f3 == 3'b010) begin // FSW (F extension)
-                    if (!ext_enable.en_f) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else
-                        pkt.alu_op = ALU_FSD; // placeholder
-                end else if (f3 == 3'b001) begin // FSH (Zfhmin, BP-123)
-                    if (!ext_enable.en_zfhmin) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else
-                        pkt.alu_op = ALU_FSD; // placeholder
-                end else begin
-                    pkt.alu_op     = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                pkt.fmt       = FMT_S;
+                pkt.imm       = imm_s(inst);
+                pkt.alu_op    = ALU_FSTORE;
+                pkt.is_store  = 1'b1;
+                pkt.uses_rs1  = 1'b1;
+                pkt.uses_rs2  = 1'b1;
+                pkt.rs2_is_fp = 1'b1;
+                unique case (f3)
+                    3'b001: begin
+                        pkt.fp_fmt = FP_H;
+                        if (!ext_enable.en_zfhmin) pkt.is_illegal = 1'b1;
+                    end
+                    3'b010: begin
+                        pkt.fp_fmt = FP_S;
+                        if (!ext_enable.en_f) pkt.is_illegal = 1'b1;
+                    end
+                    3'b011: begin
+                        pkt.fp_fmt = FP_D;
+                        if (!ext_enable.en_d) pkt.is_illegal = 1'b1;
+                    end
+                    default: pkt.is_illegal = 1'b1;
+                endcase
             end
         end
 
         // ------------------------------------------------------------------
         // OP  (R-type): ADD/SUB, SLL, SLT, SLTU, XOR, SRL/SRA, OR, AND,
         //               MUL, MULH, MULHSU, MULHU, DIV, DIVU, REM, REMU,
-        //               sh1add (Zba)
+        //               Zba, Zbb, Zbs, Zicond
         // ------------------------------------------------------------------
         OP_REG: begin
             pkt.fmt      = FMT_R;
@@ -1267,16 +1772,10 @@ function automatic decode_pkt_t decode_one(
                 // Zicond (BP-123)
                 10'b0000111_101: pkt.alu_op = ALU_CZEROEQZ;
                 10'b0000111_111: pkt.alu_op = ALU_CZERONEZ;
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
             // M extension gating: funct7=0000001 covers all M-ext ops
-            if (f7 == 7'b0000001 && !ext_enable.en_m) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end
+            if (f7 == 7'b0000001 && !ext_enable.en_m) pkt.is_illegal = 1'b1;
         end
 
         // ------------------------------------------------------------------
@@ -1315,73 +1814,29 @@ function automatic decode_pkt_t decode_one(
                 10'b0010000_110: pkt.alu_op = ALU_SH3ADDUW;
                 // Zbb (BP-123): zext.h (rs2 = 0), rolw, rorw
                 10'b0000100_100: begin
-                    if (inst[24:20] == 5'b00000) begin
-                        pkt.alu_op   = ALU_ZEXTH;
-                        pkt.uses_rs2 = 1'b0;
-                    end else begin
-                        pkt.alu_op    = ALU_ILL;
+                    if (inst[24:20] == 5'b00000)
+                        pkt.alu_op = ALU_ZEXTH;
+                    else
                         pkt.is_illegal = 1'b1;
-                    end
                 end
                 10'b0110000_001: pkt.alu_op = ALU_ROLW;
                 10'b0110000_101: pkt.alu_op = ALU_RORW;
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
             // M extension gating: funct7=0000001 covers all 32-bit M ops
-            if (f7 == 7'b0000001 && !ext_enable.en_m) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end
+            if (f7 == 7'b0000001 && !ext_enable.en_m) pkt.is_illegal = 1'b1;
         end
 
         // ------------------------------------------------------------------
         // FP fused multiply-add (R4-type): FMADD, FMSUB, FNMSUB, FNMADD
-        // inst[26:25] fmt: 00=S (F extension), 01=D (D extension)
         // ------------------------------------------------------------------
-        OP_MADD, OP_MSUB, OP_NMSUB, OP_NMADD: begin
-            pkt.fmt      = FMT_R; // R4 is encoded similarly
-            pkt.imm      = 32'b0;
-            pkt.alu_op   = ALU_FMADD;
-            pkt.is_fp    = 1'b1;
-            pkt.uses_rd  = 1'b1;
-            pkt.uses_rs1 = 1'b1;
-            pkt.uses_rs2 = 1'b1;
-            pkt.uses_rs3 = 1'b1;
-            if (inst[26:25] > 2'b01) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end else if (inst[26:25] == 2'b00 && !ext_enable.en_f) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end else if (inst[26:25] == 2'b01 && !ext_enable.en_d) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end
-        end
+        OP_MADD, OP_MSUB, OP_NMSUB, OP_NMADD:
+            pkt = dec_fma(pkt, inst, ext_enable);
 
         // ------------------------------------------------------------------
-        // OP-FP  (R-type, FP ALU)
-        // Decode only funct7 - full FP decode is a separate FP unit concern
-        // Gate: ILLEGAL if neither F nor D extension is enabled
+        // OP-FP  (R-type, FP ALU), DCD-22 to DCD-27
         // ------------------------------------------------------------------
-        OP_FP: begin
-            if (!ext_enable.en_f && !ext_enable.en_d) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end else begin
-                pkt.fmt   = FMT_R;
-                pkt.is_fp = 1'b1;
-                // Flag as FP; route to FP unit for full decode
-                // uses_rs1/rs2/rd depend on specific op - mark conservatively
-                pkt.uses_rd  = 1'b1;
-                pkt.uses_rs1 = 1'b1;
-                pkt.uses_rs2 = 1'b1;
-                pkt.alu_op   = ALU_FLD; // placeholder; FP unit re-decodes
-            end
-        end
+        OP_FP: pkt = dec_opfp(pkt, inst, ext_enable);
 
         // ------------------------------------------------------------------
         // BRANCH  (B-type)
@@ -1399,10 +1854,7 @@ function automatic decode_pkt_t decode_one(
                 3'b101: pkt.alu_op = ALU_BGE;
                 3'b110: pkt.alu_op = ALU_BLTU;
                 3'b111: pkt.alu_op = ALU_BGEU;
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
+                default: pkt.is_illegal = 1'b1;
             endcase
         end
 
@@ -1416,10 +1868,7 @@ function automatic decode_pkt_t decode_one(
             pkt.is_jump  = 1'b1;
             pkt.uses_rd  = 1'b1;
             pkt.uses_rs1 = 1'b1;
-            if (f3 != 3'b000) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end
+            if (f3 != 3'b000) pkt.is_illegal = 1'b1;
         end
 
         // ------------------------------------------------------------------
@@ -1434,210 +1883,25 @@ function automatic decode_pkt_t decode_one(
         end
 
         // ------------------------------------------------------------------
-        // SYSTEM  (I-type): ECALL, EBREAK, CSR*, MRET, SRET, WFI
+        // SYSTEM, DCD-29 to DCD-31
         // ------------------------------------------------------------------
-        OP_SYSTEM: begin
-            pkt.fmt    = FMT_I;
-            pkt.is_csr = 1'b1;
-            // Include inst[24:20] in key to distinguish ECALL from EBREAK:
-            // ECALL  0x00000073: inst[24:20]=00000, inst[19:15]=00000
-            // EBREAK 0x00100073: inst[24:20]=00001, inst[19:15]=00000
-            unique casez ({f7, inst[24:20], inst[19:15], f3})
-                // ECALL
-                20'b0000000_00000_00000_000: begin
-                    pkt.alu_op = ALU_ECALL;
-                end
-                // EBREAK
-                20'b0000000_00001_00000_000: begin
-                    pkt.alu_op = ALU_EBREAK;
-                end
-                // MRET
-                20'b0011000_00010_00000_000: begin
-                    pkt.alu_op = ALU_MRET;
-                end
-                // SRET
-                20'b0001000_00010_00000_000: begin
-                    pkt.alu_op = ALU_SRET;
-                end
-                // WFI
-                20'b0001000_00101_00000_000: begin
-                    pkt.alu_op = ALU_WFI;
-                end
-                // Zawrs (BP-123): WRS.NTO imm 0x00D, WRS.STO imm 0x01D
-                20'b0000000_01101_00000_000,
-                20'b0000000_11101_00000_000: begin
-                    pkt.is_csr = 1'b0;
-                    pkt.alu_op = ALU_WFI;
-                end
-                // Address-translation fences (BP-123): SFENCE.VMA
-                // 0001001, SINVAL.VMA 0001011; SFENCE.W.INVAL and
-                // SFENCE.INVAL.IR 0001100 with rs2 0 and 1, rs1 0
-                20'b0001001_?????_?????_000,
-                20'b0001011_?????_?????_000,
-                20'b0001100_0000?_00000_000: begin
-                    pkt.is_csr   = 1'b0;
-                    pkt.alu_op   = ALU_FENCE;   // placeholder
-                    pkt.uses_rs1 = 1'b1;
-                    pkt.uses_rs2 = 1'b1;
-                end
-                // HFENCE.VVMA 0010001, HFENCE.GVMA 0110001, HINVAL.VVMA
-                // 0010011, HINVAL.GVMA 0110011 (H extension). BP-123:
-                // this matched 0100001 for HFENCE.VVMA, not its encoding.
-                20'b0010001_?????_?????_000,
-                20'b0110001_?????_?????_000,
-                20'b0010011_?????_?????_000,
-                20'b0110011_?????_?????_000: begin
-                    pkt.is_csr = 1'b0;
-                    if (!ext_enable.en_h) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else begin
-                        pkt.alu_op   = ALU_FENCE; // placeholder
-                        pkt.uses_rs1 = 1'b1;
-                        pkt.uses_rs2 = 1'b1;
-                    end
-                end
-                // H virtual-machine loads (BP-123), funct3 100, rs2
-                // field selects the variant: HLV.B 0110000/00000,
-                // HLV.BU 0110000/00001, HLV.H 0110010/00000, HLV.HU
-                // 0110010/00001, HLVX.HU 0110010/00011, HLV.W
-                // 0110100/00000, HLVX.WU 0110100/00011, HLV.WU
-                // 0110100/00001, HLV.D 0110110/00000
-                20'b0110000_0000?_?????_100,
-                20'b0110010_0000?_?????_100,
-                20'b0110010_00011_?????_100,
-                20'b0110100_0000?_?????_100,
-                20'b0110100_00011_?????_100,
-                20'b0110110_00000_?????_100: begin
-                    pkt.is_csr = 1'b0;
-                    if (!ext_enable.en_h) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else begin
-                        pkt.is_load  = 1'b1;
-                        pkt.uses_rd  = 1'b1;
-                        pkt.uses_rs1 = 1'b1;
-                        unique case ({f7[2:1], inst[21:20]})
-                            4'b00_00: pkt.alu_op = ALU_LB;
-                            4'b00_01: pkt.alu_op = ALU_LBU;
-                            4'b01_00: pkt.alu_op = ALU_LH;
-                            4'b01_01: pkt.alu_op = ALU_LHU;
-                            4'b01_11: pkt.alu_op = ALU_LHU;   // HLVX.HU
-                            4'b10_00: pkt.alu_op = ALU_LW;
-                            4'b10_01: pkt.alu_op = ALU_LWU;
-                            4'b10_11: pkt.alu_op = ALU_LWU;   // HLVX.WU
-                            default:  pkt.alu_op = ALU_LD;
-                        endcase
-                    end
-                end
-                // H virtual-machine stores (BP-123): HSV.B 0110001,
-                // HSV.H 0110011, HSV.W 0110101, HSV.D 0110111, rd 0
-                20'b0110001_?????_?????_100,
-                20'b0110011_?????_?????_100,
-                20'b0110101_?????_?????_100,
-                20'b0110111_?????_?????_100: begin
-                    pkt.is_csr = 1'b0;
-                    if (!ext_enable.en_h || (inst[11:7] != 5'b00000)) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else begin
-                        pkt.is_store = 1'b1;
-                        pkt.uses_rs1 = 1'b1;
-                        pkt.uses_rs2 = 1'b1;
-                        unique case (f7[2:1])
-                            2'b00:   pkt.alu_op = ALU_SB;
-                            2'b01:   pkt.alu_op = ALU_SH;
-                            2'b10:   pkt.alu_op = ALU_SW;
-                            default: pkt.alu_op = ALU_SD;
-                        endcase
-                    end
-                end
-                // Zimop (BP-123), funct3 100. MOP.R.n:
-                //   1 n4 00 n3 n2 0111 n1 n0 rs1 100 rd 1110011
-                // MOP.RR.n:
-                //   1 n2 00 n1 n0 1 rs2 rs1 100 rd 1110011
-                // Both write zero to rd and read nothing; no RVA23
-                // extension redefines them.
-                20'b1?00??0_111??_?????_100,
-                20'b1?00??1_?????_?????_100: begin
-                    pkt.is_csr  = 1'b0;
-                    pkt.alu_op  = ALU_MOP;
-                    pkt.imm     = '0;
-                    pkt.uses_rd = 1'b1;
-                end
-                // CSR instructions (funct3 != 0) - Zicsr extension
-                20'b???????_?????_?????_001,
-                20'b???????_?????_?????_010,
-                20'b???????_?????_?????_011,
-                20'b???????_?????_?????_101,
-                20'b???????_?????_?????_110,
-                20'b???????_?????_?????_111: begin
-                    if (!ext_enable.en_zicsr) begin
-                        pkt.alu_op    = ALU_ILL;
-                        pkt.is_illegal = 1'b1;
-                    end else begin
-                        pkt.alu_op   = ALU_CSR;
-                        pkt.imm      = imm_i(inst); // CSR address in imm[11:0]
-                        pkt.uses_rd  = 1'b1;
-                        pkt.uses_rs1 = (f3[2] == 1'b0); // CSRRx uses rs1
-                        // CSRRXI (funct3[2]=1) uses zimm, not rs1
-                    end
-                end
-                default: begin
-                    pkt.alu_op    = ALU_ILL;
-                    pkt.is_illegal = 1'b1;
-                end
-            endcase
-        end
+        OP_SYSTEM: pkt = dec_system(pkt, inst, ext_enable);
 
         // ------------------------------------------------------------------
-        // OP-V  (opcode 0x57) - RVV vector instructions
-        // Scalar packet provides opcode and raw register fields only.
-        // Full vector decode is in vec_decode_bundle via decode_vec_one().
-        // alu_op is a placeholder; the vector unit ignores it and uses
-        // vec_decode_bundle exclusively.
-        // vsetvl/vsetvli/vsetivli write a scalar rd - uses_rd is set.
-        // For vector arithmetic, uses_rd is set conservatively; rename
-        // will see is_vector and route to the vector unit instead.
+        // OP-V  (opcode 0x57), DCD-21, DCD-24, DCD-25, DCD-32
         // ------------------------------------------------------------------
-        OP_VECTOR: begin
-            if (!ext_enable.en_v) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end else begin
-                pkt.fmt      = FMT_R;
-                pkt.uses_rd  = 1'b1;
-                pkt.uses_rs1 = 1'b1;
-                pkt.uses_rs2 = 1'b1;
-                pkt.alu_op   = ALU_ADD; // placeholder; VU reads vec pkt
-            end
-        end
+        OP_VECTOR: pkt = dec_vec(pkt, inst, ext_enable, v);
 
         // ------------------------------------------------------------------
-        // AMO  (R-type) - A extension required by RVA23
-        // Route to load-store unit; full AMO decode done there
+        // AMO  (R-type), DCD-28
         // ------------------------------------------------------------------
-        OP_AMO: begin
-            if (!ext_enable.en_a) begin
-                pkt.alu_op    = ALU_ILL;
-                pkt.is_illegal = 1'b1;
-            end else begin
-                pkt.fmt      = FMT_R;
-                pkt.is_load  = 1'b1;  // consumes data from memory
-                pkt.is_store = 1'b1;  // writes result to memory
-                pkt.uses_rd  = 1'b1;
-                pkt.uses_rs1 = 1'b1;
-                pkt.uses_rs2 = 1'b1;
-                pkt.alu_op   = ALU_ADD; // placeholder; AMO unit re-decodes f7
-            end
-        end
+        OP_AMO: pkt = dec_amo(pkt, inst, ext_enable);
 
         // ------------------------------------------------------------------
         // Illegal / unknown opcode
         // ------------------------------------------------------------------
         default: begin
-            pkt.alu_op    = ALU_ILL;
-            pkt.fmt       = FMT_ILL;
+            pkt.fmt        = FMT_ILL;
             pkt.is_illegal = 1'b1;
         end
     endcase
@@ -1656,20 +1920,45 @@ function automatic decode_pkt_t decode_one(
          !ext_enable.en_zbb) ||
         ((pkt.alu_op inside {ALU_BCLR, ALU_BCLRI, ALU_BEXT, ALU_BEXTI,
                              ALU_BINV, ALU_BINVI, ALU_BSET, ALU_BSETI}) &&
-         !ext_enable.en_zbs)) begin
-        pkt.alu_op     = ALU_ILL;
+         !ext_enable.en_zbs))
         pkt.is_illegal = 1'b1;
-    end
     // The unary forms read rs1 only.
     if (pkt.alu_op inside {ALU_CLZ, ALU_CLZW, ALU_CTZ, ALU_CTZW, ALU_CPOP,
                            ALU_CPOPW, ALU_SEXTB, ALU_SEXTH, ALU_ZEXTH,
                            ALU_ORCB, ALU_REV8})
         pkt.uses_rs2 = 1'b0;
 
-    // Zero unused register fields so rename sees clean operands
+    // An illegal instruction is one operation, ALU_ILL: it uses no
+    // register, carries no immediate and sets no is_* flag, so rename
+    // and dispatch see only the trap (BP-124).
+    if (pkt.is_illegal) begin
+        pkt.alu_op     = ALU_ILL;
+        pkt.imm        = '0;
+        pkt.is_branch  = 1'b0;
+        pkt.is_jump    = 1'b0;
+        pkt.is_load    = 1'b0;
+        pkt.is_store   = 1'b0;
+        pkt.is_csr     = 1'b0;
+        pkt.is_fp      = 1'b0;
+        pkt.uses_rd    = 1'b0;
+        pkt.uses_rs1   = 1'b0;
+        pkt.uses_rs2   = 1'b0;
+        pkt.uses_rs3   = 1'b0;
+        pkt.fp_fmt     = '0;
+        pkt.fp_src_fmt = '0;
+        pkt.rd_is_fp   = 1'b0;
+        pkt.rs1_is_fp  = 1'b0;
+        pkt.rs2_is_fp  = 1'b0;
+        pkt.is_hlsv    = 1'b0;
+        pkt.is_hlvx    = 1'b0;
+    end
+
+    // Zero unused register fields so rename sees clean operands. rs3 is
+    // zero for every operation but the four FMAs (decode_pkt_t).
     if (!pkt.uses_rd)  pkt.rd  = 5'h0;
     if (!pkt.uses_rs1) pkt.rs1 = 5'h0;
     if (!pkt.uses_rs2) pkt.rs2 = 5'h0;
+    if (!pkt.uses_rs3) pkt.rs3 = 5'h0;
 
     return pkt;
 endfunction
@@ -1698,12 +1987,17 @@ always_comb begin : decode_comb
             decode_bundle[s].instr = pd_bundle[s].instr;
             vec_decode_bundle[s]   = '0;
         end else begin
-            decode_bundle[s]     = decode_one(pd_bundle[s].instr,
-                                              pd_bundle[s].valid,
-                                              ext_enable);
             vec_decode_bundle[s] = decode_vec_one(pd_bundle[s].instr,
                                                   pd_bundle[s].valid,
                                                   ext_enable);
+            decode_bundle[s]     = decode_one(pd_bundle[s].instr,
+                                              pd_bundle[s].valid,
+                                              ext_enable,
+                                              vec_decode_bundle[s]);
+            // DCD-32: an illegal vector encoding has no vector packet,
+            // so it is not steered to the vector unit and neither
+            // raises nor seeds a vtype hazard (BP-124).
+            if (decode_bundle[s].is_illegal) vec_decode_bundle[s] = '0;
         end
 
         is_vector[s] = vec_decode_bundle[s].is_vector;

@@ -185,12 +185,12 @@ FE_PLUSARGS := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 
 # The tb_fe_top programs (BP-121), each run alone by sim_fe_top_<p>.
 # BP-123 added fencei to pt_inv: maintenance, uncached fetch and the
-# page table walker in RTL.
+# page table walker in RTL. BP-124 added pt_upriv (MMU-8c, ITLB-10b).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
             recur deep indir region multistart cross rvc misp_call jals \
             fencei cboinval uc_nc uc_io pt_faults_s pt_faults_h \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \
-            zstar pt_gonly pt_vsonly
+            zstar pt_gonly pt_vsonly pt_upriv
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \

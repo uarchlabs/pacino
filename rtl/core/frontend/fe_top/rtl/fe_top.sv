@@ -134,6 +134,8 @@ module fe_top (
   output logic [VMID_WIDTH-1:0]       itlb_l2t_vmid,
   output logic                        itlb_l2t_v,
   output logic [1:0]                  itlb_l2t_tag,
+  output logic [1:0]                  itlb_l2t_acc,    // IL-3d, BP-124
+  output logic [1:0]                  itlb_l2t_priv,   // IL-3d, BP-124
   input  logic                        l2t_itlb_rsp_val,
   input  logic [1:0]                  l2t_itlb_tag,
   input  logic [1:0]                  l2t_itlb_status,
@@ -142,7 +144,7 @@ module fe_top (
   input  logic [PERM_WIDTH-1:0]       l2t_itlb_perm,
   input  logic [1:0]                  l2t_itlb_pbmt,
   input  logic [CAUSE_WIDTH-1:0]      l2t_itlb_cause,
-  input  logic [GPA_WIDTH-1:0]        l2t_itlb_gpa,
+  input  logic [FAULT_GPA_WIDTH-1:0]  l2t_itlb_gpa,    // IL-11a, MMU-23
   input  logic [1:0]                  l2t_itlb_gpa_imp,  // IL-11b
 
   // =================================================================
@@ -378,7 +380,7 @@ module fe_top (
   logic [1:0]                 itlb_ifu_status;
   logic [PPN_WIDTH-1:0]       itlb_ifu_ppn;
   logic [CAUSE_WIDTH-1:0]     itlb_ifu_cause;
-  logic [GPA_WIDTH-1:0]       itlb_ifu_gpa;
+  logic [FAULT_GPA_WIDTH-1:0] itlb_ifu_gpa;
   logic [1:0]                 itlb_ifu_gpa_imp;
   logic [PMA_WIDTH-1:0]       itlb_ifu_pma;
 
@@ -767,6 +769,8 @@ module fe_top (
     .itlb_l2t_vmid         (itlb_l2t_vmid),
     .itlb_l2t_v            (itlb_l2t_v),
     .itlb_l2t_tag          (itlb_l2t_tag),
+    .itlb_l2t_acc          (itlb_l2t_acc),
+    .itlb_l2t_priv         (itlb_l2t_priv),
     .l2t_itlb_rsp_val      (l2t_itlb_rsp_val),
     .l2t_itlb_tag          (l2t_itlb_tag),
     .l2t_itlb_status       (l2t_itlb_status),

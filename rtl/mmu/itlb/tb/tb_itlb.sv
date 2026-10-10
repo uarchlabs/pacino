@@ -40,6 +40,15 @@
 //   P  the address check of Sv39 (bits 40:39 equal bit 38)
 //   R  a reserved page-size code (IL-7 3'b1xx) handled as a reserved
 //      status (IT-4): fault cause 1, nothing installed (BP-119)
+//   Q  a held fault records the privilege and V of its walk (ITLB-10b,
+//      BP-124): re-requested at the same privilege it is answered from
+//      the hold; at another privilege or V it is dropped and a new walk
+//      is issued at the current privilege
+//
+// BP-124. The GPA is FAULT_GPA_WIDTH bits on both ports (MMU-23); F4
+// and F5b use GPAs above bit 40. Every L2 request is checked to present
+// execute on itlb_l2t_acc and the privilege of its miss on
+// itlb_l2t_priv (IL-3d, ITLB-17).
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -86,7 +95,7 @@ module tb #(
   logic [1:0]              rsp_st;
   logic [PPN_WIDTH-1:0]    rsp_ppn;
   logic [CAUSE_WIDTH-1:0]  rsp_cause;
-  logic [GPA_WIDTH-1:0]    rsp_gpa;
+  logic [FAULT_GPA_WIDTH-1:0] rsp_gpa;
   logic [PMA_WIDTH-1:0]    rsp_pma;
 
   logic                    l2_req_val;
@@ -96,6 +105,8 @@ module tb #(
   logic [VMID_WIDTH-1:0]   l2_req_vmid;
   logic                    l2_req_v;
   logic [1:0]              l2_req_tag;
+  logic [1:0]              l2_req_acc;
+  logic [1:0]              l2_req_priv;
   logic                    l2_rsp_val;
   logic [1:0]              l2_rsp_tag;
   logic [1:0]              l2_rsp_st;
@@ -104,7 +115,7 @@ module tb #(
   logic [PERM_WIDTH-1:0]   l2_rsp_perm;
   logic [1:0]              l2_rsp_pbmt;
   logic [CAUSE_WIDTH-1:0]  l2_rsp_cause;
-  logic [GPA_WIDTH-1:0]    l2_rsp_gpa;
+  logic [FAULT_GPA_WIDTH-1:0] l2_rsp_gpa;
   logic [1:0]              l2_rsp_imp;
   logic [1:0]              rsp_imp;
 
@@ -145,6 +156,8 @@ module tb #(
     .itlb_l2t_vmid         (l2_req_vmid),
     .itlb_l2t_v            (l2_req_v),
     .itlb_l2t_tag          (l2_req_tag),
+    .itlb_l2t_acc          (l2_req_acc),
+    .itlb_l2t_priv         (l2_req_priv),
     .l2t_itlb_rsp_val      (l2_rsp_val),
     .l2t_itlb_tag          (l2_rsp_tag),
     .l2t_itlb_status       (l2_rsp_st),
@@ -188,7 +201,7 @@ module tb #(
     logic [7:0]             perm;
     logic [1:0]             pbmt;
     logic [CAUSE_WIDTH-1:0] cause;
-    logic [GPA_WIDTH-1:0]   gpa;
+    logic [FAULT_GPA_WIDTH-1:0] gpa;
     logic [1:0]             imp;
     int                     lat;
     int                     retries;
@@ -200,6 +213,8 @@ module tb #(
   logic  [ASID_WIDTH-1:0] last_asid;
   logic  [VMID_WIDTH-1:0] last_vmid;
   logic  last_v;
+  logic  [1:0] last_priv;
+  int    n_bad_acc;                  // L2 requests not presenting execute
 
   typedef struct {
     logic [1:0] tag;
@@ -254,7 +269,8 @@ module tb #(
 
   task automatic add_fault(input logic [VW-1:0] vb, input logic [1:0] st,
                            input logic [CAUSE_WIDTH-1:0] cs,
-                           input logic [GPA_WIDTH-1:0] ga, input int lat);
+                           input logic [FAULT_GPA_WIDTH-1:0] ga,
+                           input int lat);
     map_t m;
     m.v = c_v; m.vmid = c_vmid;
     m.asid = c_v ? c_vsatp_asid : c_satp_asid;
@@ -273,6 +289,7 @@ module tb #(
     if (!rstn) begin
       pend.delete();
       l2_reqs = 0;
+      n_bad_acc = 0;
       cyc     = 0;
     end else begin
       cyc++;
@@ -282,6 +299,8 @@ module tb #(
         l2_reqs++;
         last_vpn = l2_req_vpn; last_asid = l2_req_asid;
         last_vmid = l2_req_vmid; last_v = l2_req_v;
+        last_priv = l2_req_priv;
+        if (l2_req_acc != 2'd2) n_bad_acc++;     // IL-3d, ITLB-17
         mi = find_map(l2_req_vpn, l2_req_v, l2_req_vmid, l2_req_asid);
         p.tag   = l2_req_tag;
         p.mi    = mi;
@@ -357,7 +376,7 @@ module tb #(
   logic [1:0]             g_st;
   logic [PPN_WIDTH-1:0]   g_ppn;
   logic [CAUSE_WIDTH-1:0] g_cause;
-  logic [GPA_WIDTH-1:0]   g_gpa;
+  logic [FAULT_GPA_WIDTH-1:0] g_gpa;
   logic [PMA_WIDTH-1:0]   g_pma;
 
   task automatic ok(input string nm, input logic c);
@@ -515,6 +534,8 @@ module tb #(
     ok("B2 one walk requested", l2_reqs == 1);
     ok("B3 L2 request identity", last_vpn == VA_A && last_asid == 16'd5 &&
        last_v == 1'b0);
+    ok("B3a L2 request: execute, at the miss's privilege (S)",
+       n_bad_acc == 0 && last_priv == PS);
     xlate(VA_A, m0);
     ok("B4 hit after the walk", g_st == ST_HIT && g_ppn == 24'h080010 &&
        g_pma == MM && g_cause == 5'd0);
@@ -579,25 +600,27 @@ module tb #(
     idle(6);
     reset_all();
     c_v = 1'b1;
-    add_fault(VA_B, L2_FAULT, 5'd20, 41'h1_2345_6789A, 3);
+    // MMU-23 (BP-124): a GPA above bit 40 passes through whole.
+    add_fault(VA_B, L2_FAULT, 5'd20, 56'h80_0001_2345_6789, 3);
     xlate(VA_B, m0);
     ok("F4 cause 20 with GPA", g_st == ST_FAULT && g_cause == 5'd20 &&
-       g_gpa == 41'h1_2345_6789A);
+       g_gpa == 56'h80_0001_2345_6789);
     ok("F5 V=1 walk carries V and VMID", last_v == 1'b1 &&
        last_vmid == 14'd3);
     // BP-123, IT-6c, ITLB-10a: the held fault keeps the GPA's kind.
     for (int k = 0; k < 3; k++) begin
       reset_all();
       c_v = 1'b1;
-      add_fault(VA_B, L2_FAULT, 5'd20, 41'h0_0004_2AB8, 3);
+      add_fault(VA_B, L2_FAULT, 5'd20, 56'h0_0004_2AB8 | (56'(k) << 50),
+                3);
       maps[maps.size()-1].imp = 2'(k);
       xlate(VA_B, m0);
       ok($sformatf("F5b.%0d cause 20 carries its kind %0d", k, k),
          g_st == ST_FAULT && g_cause == 5'd20 && rsp_imp == 2'(k) &&
-         g_gpa == 41'h0_0004_2AB8);
+         g_gpa == (56'h0_0004_2AB8 | (56'(k) << 50)));
     end
     reset_all();
-    add_fault(VA_C, L2_FAULT, 5'd1, 41'h0_0000_0FFF, 3);
+    add_fault(VA_C, L2_FAULT, 5'd1, 56'h0_0000_0FFF, 3);
     xlate(VA_C, m0);
     ok("F6 cause 1, no GPA", g_st == ST_FAULT && g_cause == 5'd1 &&
        g_gpa == '0);
@@ -913,6 +936,63 @@ module tb #(
     ok("N2 invalidate dropped the held fault", g_st == ST_MISS);
     idle(2);
     ok("N3 and a new walk starts", l2_reqs == n0 + 1);
+    idle(6);
+
+    // ---- Q: ITLB-10b, a held fault records the privilege and V -----------
+    // Same privilege: answered from the hold, no new walk. The walk was
+    // presented at U, the privilege of the miss.
+    reset_all();
+    c_priv = PU;
+    add_fault(VA_A, L2_FAULT, 5'd12, '0, 2);
+    look(VA_A);
+    idle(6);
+    ok("Q1 the walk presented U", last_priv == PU && n_bad_acc == 0);
+    n0 = l2_reqs;
+    look(VA_A);
+    ok("Q2 same privilege: the held fault answers", g_st == ST_FAULT &&
+       g_cause == 5'd12);
+    idle(2);
+    ok("Q3 same privilege: no new walk", l2_reqs == n0);
+    // Another privilege: the held fault is dropped, a new walk at S.
+    reset_all();
+    c_priv = PU;
+    add_fault(VA_A, L2_FAULT, 5'd12, '0, 2);
+    look(VA_A);
+    idle(6);
+    c_priv = PS;
+    n0 = l2_reqs;
+    look(VA_A);
+    ok("Q4 other privilege: not answered from the hold", g_st == ST_MISS);
+    idle(2);
+    ok("Q5 other privilege: a new walk", l2_reqs == n0 + 1);
+    ok("Q6 the new walk presents S", last_priv == PS);
+    xlate(VA_A, m0);
+    ok("Q7 the new walk's own fault answers", g_st == ST_FAULT &&
+       g_cause == 5'd12);
+    // Let the last S request drain before the privilege changes, so no
+    // request is answered at U except Q8's own.
+    idle(2);
+    c_priv = PU;
+    n0 = l2_reqs;
+    look(VA_A);
+    ok("Q8 the U fault was dropped, not kept", g_st == ST_MISS);
+    idle(2);
+    ok("Q9 and U walks again", l2_reqs == n0 + 1 && last_priv == PU);
+    idle(6);
+    // Another V: dropped too. A guest-page fault held at V=1 is not the
+    // answer at V=0.
+    reset_all();
+    c_v = 1'b1;
+    add_fault(VA_B, L2_FAULT, 5'd20, 56'h0_0004_2000, 2);
+    look(VA_B);
+    idle(6);
+    c_v = 1'b0;
+    n0 = l2_reqs;
+    look(VA_B);
+    ok("Q10 other V: not answered from the hold", g_st == ST_MISS);
+    idle(2);
+    ok("Q11 other V: a new walk at V=0", l2_reqs == n0 + 1 &&
+       last_v == 1'b0);
     idle(6);
 
     // ---- P: Sv39 address check --------------------------------------------

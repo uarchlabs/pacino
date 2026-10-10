@@ -135,7 +135,7 @@ module ifu #(
   input  logic [1:0]               itlb_ifu_status,
   input  logic [PPN_WIDTH-1:0]     itlb_ifu_ppn,
   input  logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause,
-  input  logic [GPA_WIDTH-1:0]     itlb_ifu_gpa,
+  input  logic [FAULT_GPA_WIDTH-1:0] itlb_ifu_gpa,
   input  logic [1:0]               itlb_ifu_gpa_imp, // IT-6c
   input  logic [PMA_WIDTH-1:0]     itlb_ifu_pma,
 
@@ -155,11 +155,11 @@ module ifu #(
   logic                     w_xq_cross;
   logic [PPN_WIDTH-1:0]     w_xq_ppn0;
   ifu_fault_e               w_xq_fault0;
-  logic [GPA_WIDTH-1:0]     w_xq_gpa0;
+  logic [FAULT_GPA_WIDTH-1:0] w_xq_gpa0;
   logic [1:0]               w_xq_imp0;
   logic [PPN_WIDTH-1:0]     w_xq_ppn1;
   ifu_fault_e               w_xq_fault1;
-  logic [GPA_WIDTH-1:0]     w_xq_gpa1;
+  logic [FAULT_GPA_WIDTH-1:0] w_xq_gpa1;
   logic [1:0]               w_xq_imp1;
   logic                     w_xq_uc;
   logic                     w_xq_pop;
@@ -203,8 +203,8 @@ module ifu #(
   ifu_fault_e               w_f2_hwf [0:FTQ_PD_WIDTH];
   logic [FTQ_PD_WIDTH:0]    w_f2_hwpg;
   logic [VA_WIDTH-1:0]      w_f2_pc  [0:FTQ_PD_WIDTH];
-  logic [GPA_WIDTH-1:0]     w_f2_gpa0;
-  logic [GPA_WIDTH-1:0]     w_f2_gpa1;
+  logic [FAULT_GPA_WIDTH-1:0] w_f2_gpa0;
+  logic [FAULT_GPA_WIDTH-1:0] w_f2_gpa1;
   logic [1:0]               w_f2_imp0;
   logic [1:0]               w_f2_imp1;
   logic                     w_f2_uc;

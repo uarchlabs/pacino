@@ -506,14 +506,122 @@ function automatic logic [31:0] enc_vloxsegv(
     return {nf, 1'b0, 2'b11, vm, vs2, rs1, width, vd, OPLOADFP};
 endfunction
 
+// ck78: one T78 layout check (BP-124).
+task automatic ck78(input string nm, input int got, input int exp);
+    if (got != exp) begin
+        $display("FAIL [T78 %s] got %0d exp %0d", nm, got, exp);
+        fail_count++;
+    end else begin
+        pass_count++;
+    end
+endtask
+
+// ---------------------------------------------------------------------------
+// The oracle sweep (BP-124 Problem 4, DCD-34). +SWEEP=<file> runs only
+// this: the file is dec_sweep_expect.py's expectation of every encoding
+// in tb/dec_dasm_oracle.txt (spike-dasm's text, with the table from each
+// mnemonic to its operation and the named rules that resolve each
+// disagreement with spike-dasm). Each line is {word, illegal, vector,
+// op, rule}. Every word is decoded with RVA23_ENABLE, eight per bundle,
+// and must match: illegal with no vector packet, or legal with the
+// operation (alu_op, or ALU_VEC and v_op_class for a vector word).
+// ---------------------------------------------------------------------------
+localparam int SW_MAX   = 524288;
+localparam int SW_RULES = 4;
+logic [63:0] sw_mem [0:SW_MAX-1];
+
+task automatic run_sweep(input string fn);
+    int n;
+    int n_bad;
+    int n_rule [0:SW_RULES-1];
+    int n_ill;
+    int n_leg;
+    logic sw_all;    // +SWEEP_ALL: print every mismatch, not the first 40
+    sw_all = $test$plusargs("SWEEP_ALL");
+    for (int i = 0; i < SW_MAX; i++) sw_mem[i] = '1;
+    $readmemh(fn, sw_mem);
+    for (int r = 0; r < SW_RULES; r++) n_rule[r] = 0;
+    n     = 0;
+    n_bad = 0;
+    n_ill = 0;
+    n_leg = 0;
+    ext_enable = RVA23_ENABLE;
+    while ((n < SW_MAX) && (sw_mem[n] != '1)) begin
+        int k;
+        clear_all();
+        k = 0;
+        while ((k < SLOTS) && (n + k < SW_MAX) && (sw_mem[n + k] != '1)) begin
+            drive(k, sw_mem[n + k][63:32]);
+            k++;
+        end
+        #1;
+        for (int s = 0; s < k; s++) begin
+            logic [63:0] e;
+            logic        ok;
+            e = sw_mem[n + s];
+            if (e[31:28] != 4'd0)
+                ok = decode_bundle[s].is_illegal && !is_vector[s] &&
+                     (decode_bundle[s].alu_op == ALU_ILL);
+            else if (e[27:24] != 4'd0)
+                ok = !decode_bundle[s].is_illegal && is_vector[s] &&
+                     (decode_bundle[s].alu_op == ALU_VEC) &&
+                     (8'(vec_decode_bundle[s].v_op_class) == e[23:16]);
+            else
+                ok = !decode_bundle[s].is_illegal && !is_vector[s] &&
+                     (8'(decode_bundle[s].alu_op) == e[23:16]);
+            if (int'(e[15:0]) < SW_RULES) n_rule[int'(e[15:0])]++;
+            if (e[31:28] != 4'd0) n_ill++;
+            else                  n_leg++;
+            if (!ok) begin
+                n_bad++;
+                if ((n_bad <= 40) || sw_all)
+                    $display("%s", $sformatf(
+                        {"FAIL [sweep] %08h exp ill %0d vec %0d op %0d ",
+                         "rule %0d; got ill %0d vec %0d alu %0d vop %0d"},
+                        e[63:32], e[31:28], e[27:24], e[23:16], e[15:0],
+                        decode_bundle[s].is_illegal, is_vector[s],
+                        decode_bundle[s].alu_op,
+                        vec_decode_bundle[s].v_op_class));
+                fail_count++;
+            end else begin
+                pass_count++;
+            end
+        end
+        n += k;
+        @(posedge clk);
+    end
+    $display("sweep: %0d encodings, %0d expected legal, %0d illegal", n,
+             n_leg, n_ill);
+    for (int r = 0; r < SW_RULES; r++)
+        $display("sweep: rule %0d decided %0d encodings", r, n_rule[r]);
+    if (n == 0) begin
+        $display("FAIL [sweep] no encodings read from %s", fn);
+        fail_count++;
+    end
+endtask
+
 // ---------------------------------------------------------------------------
 // Test cases
 // ---------------------------------------------------------------------------
 initial begin
+    string sw_file;
     pass_count   = 0;
     fail_count   = 0;
     ext_enable   = RVA23_ENABLE; // all extensions enabled by default
     pd_bundle    = '{default: '0};
+
+    if ($value$plusargs("SWEEP=%s", sw_file)) begin
+        run_sweep(sw_file);
+        $display("instr_decoder sweep: PASS=%0d  FAIL=%0d", pass_count,
+                 fail_count);
+        if (fail_count != 0) begin
+            $display("STATUS: FAIL");
+            $fatal(1, "tb_instr_decoder: sweep, %0d mismatches", fail_count);
+        end else begin
+            $display("STATUS: PASS");
+            $finish;
+        end
+    end
 
     // -----------------------------------------------------------------------
     // T1: All slots invalid - valid=0
@@ -1233,16 +1341,18 @@ initial begin
     end
 
     // -----------------------------------------------------------------------
-    // T39: OPIVV unrecognized funct6 -> VOTHER
-    //   funct6=0x01 is unused in OPIVV (and OPIVX/OPIVI)
+    // T39: OPIVV unrecognized funct6 -> VOTHER, which is illegal with a
+    //   zero vector packet (DCD-32, BP-124)
+    //   funct6=0x01 is vandn.vv (Zvbb, DCD-33, BP-124); it was unused
     //   funct6=0x08 is unused in OPIVV
     // -----------------------------------------------------------------------
     clear_all();
     drive(0, {6'h01, 1'b1, 5'd3, 5'd2, 3'b000, 5'd1, OPVECTOR});
     drive(1, {6'h08, 1'b1, 5'd3, 5'd2, 3'b000, 5'd1, OPVECTOR});
     @(posedge clk);
-    `CHECK_VEC(0, v_op_class, VOTHER, "T39_OPIVV_undef_f6_0x01")
-    `CHECK_VEC(1, v_op_class, VOTHER, "T39_OPIVV_undef_f6_0x08")
+    `CHECK_VEC(0, v_op_class, VOP_VANDN, "T39_OPIVV_f6_0x01_vandn")
+    `CHECK_FIELD(1, is_illegal, 1'b1, "T39_OPIVV_undef_f6_0x08")
+    `CHECK_VEC(1, is_vector, 1'b0, "T39_OPIVV_undef_f6_0x08")
 
     // -----------------------------------------------------------------------
     // T40: 8-wide DECODE-005 bundle - verify all slots decode independently
@@ -1435,8 +1545,10 @@ initial begin
     `CHECK_VEC(3, v_op_class, VOP_VRSUB,   "T45_reg_vrsub_vx")
     `CHECK_VEC(4, v_op_class, VOP_VRSUB,   "T45_reg_vrsub_vi")
     `CHECK_VEC(5, v_op_class, VOP_VREDSUM, "T45_reg_OPMVV_vredsum")
-    `CHECK_VEC(6, v_op_class, VOTHER,      "T45_reg_OPMVX_undef_f6")
-    `CHECK_VEC(7, v_op_class, VOTHER,      "T45_OPFVV_undef_f6_0x11")
+    `CHECK_FIELD(6, is_illegal, 1'b1, "T45_reg_OPMVX_undef_f6")
+    `CHECK_VEC(6, is_vector, 1'b0, "T45_reg_OPMVX_undef_f6")
+    `CHECK_FIELD(7, is_illegal, 1'b1, "T45_OPFVV_undef_f6_0x11")
+    `CHECK_VEC(7, is_vector, 1'b0, "T45_OPFVV_undef_f6_0x11")
 
     // -----------------------------------------------------------------------
     // T46: VOP_VFMV_FS technical debt regression (DECODE-007)
@@ -1578,7 +1690,8 @@ initial begin
     `CHECK_VEC(1, v_op_class, VOP_VWMACCU,  "T50_OPMVV_vwmaccu")
     `CHECK_VEC(2, v_op_class, VOP_VWMACCSU, "T50_OPMVV_vwmaccsu")
     `CHECK_VEC(3, v_op_class, VOP_VWMACCUS, "T50_OPMVX_vwmaccus")
-    `CHECK_VEC(4, v_op_class, VOTHER,        "T50_OPMVV_vwmaccus_undef")
+    `CHECK_FIELD(4, is_illegal, 1'b1, "T50_OPMVV_vwmaccus_undef")
+    `CHECK_VEC(4, is_vector, 1'b0, "T50_OPMVV_vwmaccus_undef")
 
     // -----------------------------------------------------------------------
     // T51: vmv.x.s / vmv.s.x scalar move forms
@@ -1636,7 +1749,8 @@ initial begin
     `CHECK_VEC(2, v_op_class, VOP_VMSBF, "T52_OPMVV_vmsbf")
     `CHECK_VEC(3, v_op_class, VOP_VMSOF, "T52_OPMVV_vmsof")
     `CHECK_VEC(4, v_op_class, VOP_VMSIF, "T52_OPMVV_vmsif")
-    `CHECK_VEC(5, v_op_class, VOTHER,    "T52_OPMVV_0x14_sub0_undef")
+    `CHECK_FIELD(5, is_illegal, 1'b1, "T52_OPMVV_0x14_sub0_undef")
+    `CHECK_VEC(5, is_vector, 1'b0, "T52_OPMVV_0x14_sub0_undef")
     if (!vec_decode_bundle[0].needs_vtype) begin
         $display("FAIL [T52_viota_needs_vtype] needs_vtype=0");
         fail_count++;
@@ -1674,7 +1788,8 @@ initial begin
     `CHECK_VEC(4, v_op_class, VOP_VAADDU,        "T53_s4_vaaddu_vx")
     `CHECK_VEC(5, v_op_class, VOP_VSLIDE1UP_X,  "T53_s5_vslide1up_vx")
     `CHECK_VEC(6, v_op_class, VOP_VWMACC,        "T53_s6_vwmacc_vx")
-    `CHECK_VEC(7, v_op_class, VOTHER,             "T53_s7_OPMVV_undef_3e")
+    `CHECK_FIELD(7, is_illegal, 1'b1, "T53_s7_OPMVV_undef_3e")
+    `CHECK_VEC(7, is_vector, 1'b0, "T53_s7_OPMVV_undef_3e")
     // OPMVX slots (4-6): vs1 must be zero
     for (int s = 4; s <= 6; s++) begin
         if (vec_decode_bundle[s].vs1 !== 5'b0) begin
@@ -1709,10 +1824,14 @@ initial begin
     drive(2, {6'h00, 1'b1, 5'd3, 5'd2, 3'b110, 5'd1, OPVECTOR});
     drive(3, {6'h15, 1'b1, 5'd3, 5'd2, 3'b110, 5'd1, OPVECTOR});
     @(posedge clk);
-    `CHECK_VEC(0, v_op_class, VOTHER, "T54_OPMVV_f6_3e_undef")
-    `CHECK_VEC(1, v_op_class, VOTHER, "T54_OPMVV_f6_28_undef")
-    `CHECK_VEC(2, v_op_class, VOTHER, "T54_OPMVX_f6_00_undef")
-    `CHECK_VEC(3, v_op_class, VOTHER, "T54_OPMVX_f6_15_undef")
+    `CHECK_FIELD(0, is_illegal, 1'b1, "T54_OPMVV_f6_3e_undef")
+    `CHECK_VEC(0, is_vector, 1'b0, "T54_OPMVV_f6_3e_undef")
+    `CHECK_FIELD(1, is_illegal, 1'b1, "T54_OPMVV_f6_28_undef")
+    `CHECK_VEC(1, is_vector, 1'b0, "T54_OPMVV_f6_28_undef")
+    `CHECK_FIELD(2, is_illegal, 1'b1, "T54_OPMVX_f6_00_undef")
+    `CHECK_VEC(2, is_vector, 1'b0, "T54_OPMVX_f6_00_undef")
+    `CHECK_FIELD(3, is_illegal, 1'b1, "T54_OPMVX_f6_15_undef")
+    `CHECK_VEC(3, is_vector, 1'b0, "T54_OPMVX_f6_15_undef")
 
     // -----------------------------------------------------------------------
     // T55: DECODE-008 vector unit-stride loads all EEW widths
@@ -1810,8 +1929,11 @@ initial begin
         $display("PASS [T56_fld_reg] is_vector=0 FLD scalar path intact");
         pass_count++;
     end
-    if (decode_bundle[6].is_fp !== 1'b1) begin
-        $display("FAIL [T56_fld_reg] is_fp should be 1 for FLD");
+    // BP-124 (DCD-24): an FP load executes in the load unit, so is_fp
+    // is clear; rd_is_fp names its FP destination. This read is_fp = 1.
+    if ((decode_bundle[6].is_fp !== 1'b0) ||
+        (decode_bundle[6].rd_is_fp !== 1'b1)) begin
+        $display("FAIL [T56_fld_reg] FLD is_fp 0 and rd_is_fp 1");
         fail_count++;
     end else
         pass_count++;
@@ -1828,8 +1950,9 @@ initial begin
         $display("PASS [T56_fsd_reg] is_vector=0 FSD scalar path intact");
         pass_count++;
     end
-    if (decode_bundle[7].is_fp !== 1'b1) begin
-        $display("FAIL [T56_fsd_reg] is_fp should be 1 for FSD");
+    if ((decode_bundle[7].is_fp !== 1'b0) ||
+        (decode_bundle[7].rs2_is_fp !== 1'b1)) begin
+        $display("FAIL [T56_fsd_reg] FSD is_fp 0 and rs2_is_fp 1");
         fail_count++;
     end else
         pass_count++;
@@ -1862,15 +1985,17 @@ initial begin
         end else
             pass_count++;
     end
-    // Scalar FP slots: is_vector=0, is_fp=1, not illegal
+    // Scalar FP slots: is_vector=0, an FP load (ALU_FLOAD, rd_is_fp;
+    // is_fp clear, DCD-24, BP-124), not illegal
     for (int s = 4; s < 8; s++) begin
         if (is_vector[s]) begin
             $display("FAIL [T57_mix] slot%0d: expected is_vector=0", s);
             fail_count++;
         end else
             pass_count++;
-        if (!decode_bundle[s].is_fp) begin
-            $display("FAIL [T57_mix] slot%0d: expected is_fp=1", s);
+        if (decode_bundle[s].is_fp || !decode_bundle[s].rd_is_fp ||
+            (decode_bundle[s].alu_op != ALU_FLOAD)) begin
+            $display("FAIL [T57_mix] slot%0d: expected an FP load", s);
             fail_count++;
         end else
             pass_count++;
@@ -2246,7 +2371,7 @@ initial begin
     pd_bundle[1].fault_va    = VA_WIDTH'(64'h1_2345_6782);
     pd_bundle[2].fault_cause = IFU_FAULT_GUEST_PAGE;
     pd_bundle[2].fault_va    = VA_WIDTH'(64'h0_4000_0ffe);
-    pd_bundle[2].fault_gpa   = GPA_WIDTH'(64'h1_ffff_f000);
+    pd_bundle[2].fault_gpa   = FAULT_GPA_WIDTH'(64'h80_0001_ffff_f000);
     drive(4, enc_vadd_vv(5'd3, 5'd4, 5'd5, 1'b1));
     pd_bundle[4].fault_cause = IFU_FAULT_PAGE;
     @(posedge clk);
@@ -2294,8 +2419,8 @@ initial begin
         pd_bundle[k].fault_cause = ifu_fault_e'(k % 4);
         pd_bundle[k].fault_va    = VA_WIDTH'(64'h0_abcd_0000)
                                  ^ VA_WIDTH'(k);
-        pd_bundle[k].fault_gpa   = GPA_WIDTH'(64'h1_5555_0000)
-                                 ^ GPA_WIDTH'(k << 4);
+        pd_bundle[k].fault_gpa   = FAULT_GPA_WIDTH'(64'h40_0001_5555_0000)
+                                 ^ FAULT_GPA_WIDTH'(k << 4);
         pd_bundle[k].fault_gpa_imp = 2'(k + 1);    // BP-123, DCD-16
         pd_bundle[k].is_rvc      = k[0];
         pd_bundle[k].br_type     = k[1:0];
@@ -2322,6 +2447,10 @@ initial begin
     //   derived from the decoder. Each must decode legal to its own
     //   operation; with its extension's enable clear, a gated one is
     //   illegal. a0 = x10, a1 = x11, a2 = x12.
+    //   BP-124: the SYSTEM fences, Svinval, HFENCE/HINVAL and WRS have
+    //   their own operations (DCD-22); FLH and FSH are ALU_FLOAD and
+    //   ALU_FSTORE (renamed from ALU_FLD and ALU_FSD). T77 covers them
+    //   with words from clang and spike-dasm.
     // -----------------------------------------------------------------------
     begin
         typedef struct {
@@ -2381,16 +2510,18 @@ initial begin
         t.push_back('{32'h0405e013, ALU_OR,       0, "prefetch.i"});
         t.push_back('{32'h0415e013, ALU_OR,       0, "prefetch.r"});
         t.push_back('{32'h0435e013, ALU_OR,       0, "prefetch.w"});
-        t.push_back('{32'h00d00073, ALU_WFI,      0, "wrs.nto"});
-        t.push_back('{32'h01d00073, ALU_WFI,      0, "wrs.sto"});
-        t.push_back('{32'h12b50073, ALU_FENCE,    0, "sfence.vma"});
-        t.push_back('{32'h16b50073, ALU_FENCE,    0, "sinval.vma"});
-        t.push_back('{32'h18000073, ALU_FENCE,    0, "sfence.w.inval"});
-        t.push_back('{32'h18100073, ALU_FENCE,    0, "sfence.inval.ir"});
-        t.push_back('{32'h22b50073, ALU_FENCE,    4, "hfence.vvma"});
-        t.push_back('{32'h62b50073, ALU_FENCE,    4, "hfence.gvma"});
-        t.push_back('{32'h26b50073, ALU_FENCE,    4, "hinval.vvma"});
-        t.push_back('{32'h66b50073, ALU_FENCE,    4, "hinval.gvma"});
+        t.push_back('{32'h00d00073, ALU_WRS_NTO,  0, "wrs.nto"});
+        t.push_back('{32'h01d00073, ALU_WRS_STO,  0, "wrs.sto"});
+        t.push_back('{32'h12b50073, ALU_SFENCE_VMA, 0, "sfence.vma"});
+        t.push_back('{32'h16b50073, ALU_SINVAL_VMA, 0, "sinval.vma"});
+        t.push_back('{32'h18000073, ALU_SFENCE_W_INVAL, 0,
+                     "sfence.w.inval"});
+        t.push_back('{32'h18100073, ALU_SFENCE_INVAL_IR, 0,
+                     "sfence.inval.ir"});
+        t.push_back('{32'h22b50073, ALU_HFENCE_VVMA, 4, "hfence.vvma"});
+        t.push_back('{32'h62b50073, ALU_HFENCE_GVMA, 4, "hfence.gvma"});
+        t.push_back('{32'h26b50073, ALU_HINVAL_VVMA, 4, "hinval.vvma"});
+        t.push_back('{32'h66b50073, ALU_HINVAL_GVMA, 4, "hinval.gvma"});
         t.push_back('{32'h6005c573, ALU_LB,       4, "hlv.b"});
         t.push_back('{32'h6015c573, ALU_LBU,      4, "hlv.bu"});
         t.push_back('{32'h6405c573, ALU_LH,       4, "hlv.h"});
@@ -2404,8 +2535,8 @@ initial begin
         t.push_back('{32'h66a5c073, ALU_SH,       4, "hsv.h"});
         t.push_back('{32'h6aa5c073, ALU_SW,       4, "hsv.w"});
         t.push_back('{32'h6ea5c073, ALU_SD,       4, "hsv.d"});
-        t.push_back('{32'h00059507, ALU_FLD,      5, "flh"});
-        t.push_back('{32'h00a59027, ALU_FSD,      5, "fsh"});
+        t.push_back('{32'h00059507, ALU_FLOAD,      5, "flh"});
+        t.push_back('{32'h00a59027, ALU_FSTORE,      5, "fsh"});
         foreach (t[k]) begin
             ext_enable = RVA23_ENABLE;
             clear_all();
@@ -2444,6 +2575,1113 @@ initial begin
         @(posedge clk);
         `CHECK_FIELD(0, is_illegal, 1'b0, "T76_prefetch_i_zicbop_off")
         ext_enable = RVA23_ENABLE;
+    end
+
+    // -----------------------------------------------------------------------
+    // T77 (BP-124, dcd_decisions.md DCD-21 to DCD-33): the representation
+    //   and legality. Each entry is a word, the source clang -c assembled
+    //   it from (RISC-V target, -march the extension set of DCD-34,
+    //   .option norvc), and spike-dasm's text for it; make asm_dec_words
+    //   (tb/chk_dec_words.py) assembles every source and disassembles
+    //   every word and fails on any difference. spike-dasm does not print
+    //   a static rounding mode, prints FLI's FP destination with an
+    //   integer register name, and prints fence.tso as fence rw,rw; the
+    //   rm, the register and fm are clang's.
+    //   Each word is decoded with RVA23_ENABLE and every field is checked:
+    //   alu_op (ALU_ILL for an illegal word), v_op_class for a vector
+    //   word, uses_rd/rs1/rs2/rs3, rd/rs1/rs2_is_fp, fp_fmt, fp_src_fmt,
+    //   is_load, is_store, is_fp, is_csr, is_hlsv, is_hlvx, imm, the
+    //   register fields (the word's when used, else zero), funct7,
+    //   is_branch and is_jump clear, and is_vector. Each enable named in
+    //   g (bit i is the i-th field of ext_enable_t, en_m first) is then
+    //   cleared alone and the word must decode illegal.
+    // -----------------------------------------------------------------------
+    begin
+        typedef struct {
+            logic [31:0] w;
+            string       a;      // the source clang assembled
+            string       d;      // spike-dasm's text
+            alu_op_t     op;     // ALU_ILL: illegal
+            v_op_class_t vop;    // checked when op is ALU_VEC
+            logic [3:0]  u;      // uses_rd, uses_rs1, uses_rs2, uses_rs3
+            logic [2:0]  f;      // rd_is_fp, rs1_is_fp, rs2_is_fp
+            logic [1:0]  fm;     // fp_fmt
+            logic [1:0]  sf;     // fp_src_fmt
+            logic [5:0]  k;      // is_load, is_store, is_fp, is_csr,
+                                 // is_hlsv, is_hlvx
+            logic [31:0] imm;
+            logic [15:0] g;      // the enables that gate it
+        } tw_t;
+        tw_t tw [$];
+    tw.push_back('{32'h00c5f553, "fadd.s fa0, fa1, fa2",
+                  "fadd.s fa0, fa1, fa2",
+                  ALU_FADD, VCFG, 4'b1110, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h02c5f553, "fadd.d fa0, fa1, fa2, dyn",
+                  "fadd.d fa0, fa1, fa2",
+                  ALU_FADD, VCFG, 4'b1110, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h0ac58553, "fsub.d fa0, fa1, fa2, rne",
+                  "fsub.d fa0, fa1, fa2",
+                  ALU_FSUB, VCFG, 4'b1110, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h10c59553, "fmul.s fa0, fa1, fa2, rtz",
+                  "fmul.s fa0, fa1, fa2",
+                  ALU_FMUL, VCFG, 4'b1110, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h1ac5a553, "fdiv.d fa0, fa1, fa2, rdn",
+                  "fdiv.d fa0, fa1, fa2",
+                  ALU_FDIV, VCFG, 4'b1110, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h5805b553, "fsqrt.s fa0, fa1, rup",
+                  "fsqrt.s fa0, fa1",
+                  ALU_FSQRT, VCFG, 4'b1100, 3'b110, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h5a05c553, "fsqrt.d fa0, fa1, rmm",
+                  "fsqrt.d fa0, fa1",
+                  ALU_FSQRT, VCFG, 4'b1100, 3'b110, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h20c58553, "fsgnj.s fa0, fa1, fa2",
+                  "fsgnj.s fa0, fa1, fa2",
+                  ALU_FSGNJ, VCFG, 4'b1110, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h22c59553, "fsgnjn.d fa0, fa1, fa2",
+                  "fsgnjn.d fa0, fa1, fa2",
+                  ALU_FSGNJN, VCFG, 4'b1110, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h20c5a553, "fsgnjx.s fa0, fa1, fa2",
+                  "fsgnjx.s fa0, fa1, fa2",
+                  ALU_FSGNJX, VCFG, 4'b1110, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h2ac58553, "fmin.d fa0, fa1, fa2",
+                  "fmin.d fa0, fa1, fa2",
+                  ALU_FMIN, VCFG, 4'b1110, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h28c59553, "fmax.s fa0, fa1, fa2",
+                  "fmax.s fa0, fa1, fa2",
+                  ALU_FMAX, VCFG, 4'b1110, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'hc0059553, "fcvt.w.s a0, fa1, rtz",
+                  "fcvt.w.s a0, fa1",
+                  ALU_FCVT_W, VCFG, 4'b1100, 3'b010, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'hc215f553, "fcvt.wu.d a0, fa1",
+                  "fcvt.wu.d a0, fa1",
+                  ALU_FCVT_WU, VCFG, 4'b1100, 3'b010, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'hc025f553, "fcvt.l.s a0, fa1",
+                  "fcvt.l.s a0, fa1",
+                  ALU_FCVT_L, VCFG, 4'b1100, 3'b010, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'hc235f553, "fcvt.lu.d a0, fa1",
+                  "fcvt.lu.d a0, fa1",
+                  ALU_FCVT_LU, VCFG, 4'b1100, 3'b010, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'hd005f553, "fcvt.s.w fa0, a1",
+                  "fcvt.s.w fa0, a1",
+                  ALU_FCVT_FW, VCFG, 4'b1100, 3'b100, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'hd2158553, "fcvt.d.wu fa0, a1",
+                  "fcvt.d.wu fa0, a1",
+                  ALU_FCVT_FWU, VCFG, 4'b1100, 3'b100, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'hd025f553, "fcvt.s.l fa0, a1",
+                  "fcvt.s.l fa0, a1",
+                  ALU_FCVT_FL, VCFG, 4'b1100, 3'b100, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'hd235f553, "fcvt.d.lu fa0, a1",
+                  "fcvt.d.lu fa0, a1",
+                  ALU_FCVT_FLU, VCFG, 4'b1100, 3'b100, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h4015f553, "fcvt.s.d fa0, fa1",
+                  "fcvt.s.d fa0, fa1",
+                  ALU_FCVT_FF, VCFG, 4'b1100, 3'b110, 2'd0, 2'd1,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h42058553, "fcvt.d.s fa0, fa1",
+                  "fcvt.d.s fa0, fa1",
+                  ALU_FCVT_FF, VCFG, 4'b1100, 3'b110, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'he0058553, "fmv.x.w a0, fa1",
+                  "fmv.x.w a0, fa1",
+                  ALU_FMV_XF, VCFG, 4'b1100, 3'b010, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'he2058553, "fmv.x.d a0, fa1",
+                  "fmv.x.d a0, fa1",
+                  ALU_FMV_XF, VCFG, 4'b1100, 3'b010, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'hf0058553, "fmv.w.x fa0, a1",
+                  "fmv.w.x fa0, a1",
+                  ALU_FMV_FX, VCFG, 4'b1100, 3'b100, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'hf2058553, "fmv.d.x fa0, a1",
+                  "fmv.d.x fa0, a1",
+                  ALU_FMV_FX, VCFG, 4'b1100, 3'b100, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'ha0c5a553, "feq.s a0, fa1, fa2",
+                  "feq.s a0, fa1, fa2",
+                  ALU_FEQ, VCFG, 4'b1110, 3'b011, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'ha2c59553, "flt.d a0, fa1, fa2",
+                  "flt.d a0, fa1, fa2",
+                  ALU_FLT, VCFG, 4'b1110, 3'b011, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'ha0c58553, "fle.s a0, fa1, fa2",
+                  "fle.s a0, fa1, fa2",
+                  ALU_FLE, VCFG, 4'b1110, 3'b011, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'he2059553, "fclass.d a0, fa1",
+                  "fclass.d a0, fa1",
+                  ALU_FCLASS, VCFG, 4'b1100, 3'b010, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h68c5f543, "fmadd.s fa0, fa1, fa2, fa3",
+                  "fmadd.s fa0, fa1, fa2, fa3",
+                  ALU_FMADD, VCFG, 4'b1111, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h6ac58547, "fmsub.d fa0, fa1, fa2, fa3, rne",
+                  "fmsub.d fa0, fa1, fa2, fa3",
+                  ALU_FMSUB, VCFG, 4'b1111, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h68c5f54b, "fnmsub.s fa0, fa1, fa2, fa3",
+                  "fnmsub.s fa0, fa1, fa2, fa3",
+                  ALU_FNMSUB, VCFG, 4'b1111, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0004});
+    tw.push_back('{32'h6ac5f54f, "fnmadd.d fa0, fa1, fa2, fa3",
+                  "fnmadd.d fa0, fa1, fa2, fa3",
+                  ALU_FNMADD, VCFG, 4'b1111, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0008});
+    tw.push_back('{32'h00c5a507, "flw fa0, 12(a1)",
+                  "flw fa0, 12(a1)",
+                  ALU_FLOAD, VCFG, 4'b1100, 3'b100, 2'd0, 2'd0,
+                  6'b100000, 32'h0000000c, 16'h0004});
+    tw.push_back('{32'hff85b507, "fld fa0, -8(a1)",
+                  "fld fa0, -8(a1)",
+                  ALU_FLOAD, VCFG, 4'b1100, 3'b100, 2'd1, 2'd0,
+                  6'b100000, 32'hfffffff8, 16'h0008});
+    tw.push_back('{32'h00c5aa27, "fsw fa2, 20(a1)",
+                  "fsw fa2, 20(a1)",
+                  ALU_FSTORE, VCFG, 4'b0110, 3'b001, 2'd0, 2'd0,
+                  6'b010000, 32'h00000014, 16'h0004});
+    tw.push_back('{32'hfec5b827, "fsd fa2, -16(a1)",
+                  "fsd fa2, -16(a1)",
+                  ALU_FSTORE, VCFG, 4'b0110, 3'b001, 2'd1, 2'd0,
+                  6'b010000, 32'hfffffff0, 16'h0008});
+    tw.push_back('{32'h00659507, "flh fa0, 6(a1)",
+                  "flh fa0, 6(a1)",
+                  ALU_FLOAD, VCFG, 4'b1100, 3'b100, 2'd2, 2'd0,
+                  6'b100000, 32'h00000006, 16'h0080});
+    tw.push_back('{32'hfec59f27, "fsh fa2, -2(a1)",
+                  "fsh fa2, -2(a1)",
+                  ALU_FSTORE, VCFG, 4'b0110, 3'b001, 2'd2, 2'd0,
+                  6'b010000, 32'hfffffffe, 16'h0080});
+    tw.push_back('{32'he4058553, "fmv.x.h a0, fa1",
+                  "fmv.x.h a0, fa1",
+                  ALU_FMV_XF, VCFG, 4'b1100, 3'b010, 2'd2, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0080});
+    tw.push_back('{32'hf4058553, "fmv.h.x fa0, a1",
+                  "fmv.h.x fa0, a1",
+                  ALU_FMV_FX, VCFG, 4'b1100, 3'b100, 2'd2, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0080});
+    tw.push_back('{32'h40258553, "fcvt.s.h fa0, fa1",
+                  "fcvt.s.h fa0, fa1",
+                  ALU_FCVT_FF, VCFG, 4'b1100, 3'b110, 2'd0, 2'd2,
+                  6'b001000, 32'h00000000, 16'h0080});
+    tw.push_back('{32'h4405f553, "fcvt.h.s fa0, fa1",
+                  "fcvt.h.s fa0, fa1",
+                  ALU_FCVT_FF, VCFG, 4'b1100, 3'b110, 2'd2, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0080});
+    tw.push_back('{32'h42258553, "fcvt.d.h fa0, fa1",
+                  "fcvt.d.h fa0, fa1",
+                  ALU_FCVT_FF, VCFG, 4'b1100, 3'b110, 2'd1, 2'd2,
+                  6'b001000, 32'h00000000, 16'h0088});
+    tw.push_back('{32'h4415f553, "fcvt.h.d fa0, fa1",
+                  "fcvt.h.d fa0, fa1",
+                  ALU_FCVT_FF, VCFG, 4'b1100, 3'b110, 2'd2, 2'd1,
+                  6'b001000, 32'h00000000, 16'h0088});
+    tw.push_back('{32'hf01d0553, "fli.s fa0, 0x1p+7",
+                  "fli.s a0, 128.0",
+                  ALU_FLI, VCFG, 4'b1000, 3'b100, 2'd0, 2'd0,
+                  6'b001000, 32'h0000001a, 16'h0100});
+    tw.push_back('{32'hf21f05d3, "fli.d fa1, inf",
+                  "fli.d a1, inf",
+                  ALU_FLI, VCFG, 4'b1000, 3'b100, 2'd1, 2'd0,
+                  6'b001000, 32'h0000001e, 16'h0108});
+    tw.push_back('{32'h28c5a553, "fminm.s fa0, fa1, fa2",
+                  "fminm.s fa0, fa1, fa2",
+                  ALU_FMINM, VCFG, 4'b1110, 3'b111, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0100});
+    tw.push_back('{32'h2ac5b553, "fmaxm.d fa0, fa1, fa2",
+                  "fmaxm.d fa0, fa1, fa2",
+                  ALU_FMAXM, VCFG, 4'b1110, 3'b111, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0108});
+    tw.push_back('{32'h4045b553, "fround.s fa0, fa1, rup",
+                  "fround.s fa0, fa1",
+                  ALU_FROUND, VCFG, 4'b1100, 3'b110, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0100});
+    tw.push_back('{32'h4255f553, "froundnx.d fa0, fa1",
+                  "froundnx.d fa0, fa1",
+                  ALU_FROUNDNX, VCFG, 4'b1100, 3'b110, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0108});
+    tw.push_back('{32'hc2859553, "fcvtmod.w.d a0, fa1, rtz",
+                  "fcvtmod.w.d a0, fa1, rtz",
+                  ALU_FCVTMOD_W_D, VCFG, 4'b1100, 3'b010, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0108});
+    tw.push_back('{32'ha0c5c553, "fleq.s a0, fa1, fa2",
+                  "fleq.s a0, fa1, fa2",
+                  ALU_FLEQ, VCFG, 4'b1110, 3'b011, 2'd0, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0100});
+    tw.push_back('{32'ha2c5d553, "fltq.d a0, fa1, fa2",
+                  "fltq.d a0, fa1, fa2",
+                  ALU_FLTQ, VCFG, 4'b1110, 3'b011, 2'd1, 2'd0,
+                  6'b001000, 32'h00000000, 16'h0108});
+    tw.push_back('{32'h04c5f553, ".insn r 0x53, 7, 0x02, fa0, fa1, fa2",
+                  "fadd.h fa0, fa1, fa2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h24c58553, ".insn r 0x53, 0, 0x12, fa0, fa1, fa2",
+                  "fsgnj.h fa0, fa1, fa2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'hd405f553, ".insn r 0x53, 7, 0x6a, a0, fa1, x0",
+                  "fcvt.h.w fa0, a1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'he4059553, ".insn r 0x53, 1, 0x72, a0, fa1, x0",
+                  "fclass.h a0, fa1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'hf4108553, ".insn r 0x53, 0, 0x7a, fa0, x1, x1",
+                  "fli.h a0, min",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h2cc5a553, ".insn r 0x53, 2, 0x16, fa0, fa1, fa2",
+                  "fminm.h fa0, fa1, fa2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'he2158553, ".insn r 0x53, 0, 0x71, a0, fa1, x1",
+                  "fmvh.x.d a0, fa1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'hb2c58553, ".insn r 0x53, 0, 0x59, fa0, a1, a2",
+                  "fmvp.d.x fa0, a1, a2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h06c5f553, ".insn r 0x53, 7, 0x03, fa0, fa1, fa2",
+                  "fadd.q fa0, fa1, fa2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0005c507, ".insn i 0x07, 4, fa0, 0(a1)",
+                  "flq fa0, 0(a1)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00c5c027, ".insn s 0x27, 4, fa2, 0(a1)",
+                  "fsq fa2, 0(a1)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4035f553, ".insn r 0x53, 7, 0x20, fa0, fa1, x3",
+                  "fcvt.s.q fa0, fa1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'hc2858553, ".insn r 0x53, 0, 0x61, a0, fa1, x8",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'hc285f553, ".insn r 0x53, 7, 0x61, a0, fa1, x8",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00c5d553, ".insn r 0x53, 5, 0x00, fa0, fa1, fa2",
+                  "fadd.s fa0, fa1, fa2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h02c5e553, ".insn r 0x53, 6, 0x01, fa0, fa1, fa2",
+                  "fadd.d fa0, fa1, fa2",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h6ac5e543, ".insn r4 0x43, 6, 1, fa0, fa1, fa2, fa3",
+                  "fmadd.d fa0, fa1, fa2, fa3",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'hc005d553, ".insn r 0x53, 5, 0x60, a0, fa1, x0",
+                  "fcvt.w.s a0, fa1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4205e553, ".insn r 0x53, 6, 0x21, fa0, fa1, x0",
+                  "fcvt.d.s fa0, fa1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4045d553, ".insn r 0x53, 5, 0x20, fa0, fa1, x4",
+                  "fround.s fa0, fa1",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h58158553, ".insn r 0x53, 0, 0x2c, fa0, fa1, x1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h20c5b553, ".insn r 0x53, 3, 0x10, fa0, fa1, fa2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h1005a52f, "lr.w a0, (a1)",
+                  "lr.w a0, (a1)",
+                  ALU_LR_W, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h1005b52f, "lr.d a0, (a1)",
+                  "lr.d a0, (a1)",
+                  ALU_LR_D, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h18c5a52f, "sc.w a0, a2, (a1)",
+                  "sc.w a0, a2, (a1)",
+                  ALU_SC_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b010000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h1ec5b52f, "sc.d.aqrl a0, a2, (a1)",
+                  "sc.d.aqrl a0, a2, (a1)",
+                  ALU_SC_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b010000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h0ec5a52f, "amoswap.w.aqrl a0, a2, (a1)",
+                  "amoswap.w.aqrl a0, a2, (a1)",
+                  ALU_AMOSWAP_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h08c5b52f, "amoswap.d a0, a2, (a1)",
+                  "amoswap.d a0, a2, (a1)",
+                  ALU_AMOSWAP_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h00c5a52f, "amoadd.w a0, a2, (a1)",
+                  "amoadd.w a0, a2, (a1)",
+                  ALU_AMOADD_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h02c5b52f, "amoadd.d.rl a0, a2, (a1)",
+                  "amoadd.d.rl a0, a2, (a1)",
+                  ALU_AMOADD_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h20c5a52f, "amoxor.w a0, a2, (a1)",
+                  "amoxor.w a0, a2, (a1)",
+                  ALU_AMOXOR_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h20c5b52f, "amoxor.d a0, a2, (a1)",
+                  "amoxor.d a0, a2, (a1)",
+                  ALU_AMOXOR_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h60c5a52f, "amoand.w a0, a2, (a1)",
+                  "amoand.w a0, a2, (a1)",
+                  ALU_AMOAND_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h60c5b52f, "amoand.d a0, a2, (a1)",
+                  "amoand.d a0, a2, (a1)",
+                  ALU_AMOAND_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h40c5a52f, "amoor.w a0, a2, (a1)",
+                  "amoor.w a0, a2, (a1)",
+                  ALU_AMOOR_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h40c5b52f, "amoor.d a0, a2, (a1)",
+                  "amoor.d a0, a2, (a1)",
+                  ALU_AMOOR_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h80c5a52f, "amomin.w a0, a2, (a1)",
+                  "amomin.w a0, a2, (a1)",
+                  ALU_AMOMIN_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h80c5b52f, "amomin.d a0, a2, (a1)",
+                  "amomin.d a0, a2, (a1)",
+                  ALU_AMOMIN_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'ha0c5a52f, "amomax.w a0, a2, (a1)",
+                  "amomax.w a0, a2, (a1)",
+                  ALU_AMOMAX_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'ha0c5b52f, "amomax.d a0, a2, (a1)",
+                  "amomax.d a0, a2, (a1)",
+                  ALU_AMOMAX_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'hc0c5a52f, "amominu.w a0, a2, (a1)",
+                  "amominu.w a0, a2, (a1)",
+                  ALU_AMOMINU_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'hc0c5b52f, "amominu.d a0, a2, (a1)",
+                  "amominu.d a0, a2, (a1)",
+                  ALU_AMOMINU_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'he0c5a52f, "amomaxu.w a0, a2, (a1)",
+                  "amomaxu.w a0, a2, (a1)",
+                  ALU_AMOMAXU_W, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'he0c5b52f, "amomaxu.d a0, a2, (a1)",
+                  "amomaxu.d a0, a2, (a1)",
+                  ALU_AMOMAXU_D, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b110000, 32'h00000000, 16'h0002});
+    tw.push_back('{32'h00c5852f, ".insn r 0x2f, 0, 0x00, a0, a1, a2",
+                  "amoadd.b a0, a2, (a1)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h08c5952f, ".insn r 0x2f, 1, 0x04, a0, a1, a2",
+                  "amoswap.h a0, a2, (a1)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h28c5a52f, ".insn r 0x2f, 2, 0x14, a0, a1, a2",
+                  "amocas.w a0, a2, (a1)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h1015a52f, ".insn r 0x2f, 2, 0x08, a0, a1, x1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00c5c52f, ".insn r 0x2f, 4, 0x00, a0, a1, a2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0310000f, "fence rw, w",
+                  "fence rw,w",
+                  ALU_FENCE, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000031, 16'h0000});
+    tw.push_back('{32'h8330000f, "fence.tso",
+                  "fence rw,rw",
+                  ALU_FENCE, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000833, 16'h0000});
+    tw.push_back('{32'h0100000f, "pause",
+                  "pause",
+                  ALU_FENCE, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000010, 16'h0000});
+    tw.push_back('{32'h7ff5850f, ".insn i 0x0f, 0, a0, a1, 0x7ff",
+                  "fence iorw,iorw",
+                  ALU_FENCE, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h000007ff, 16'h0000});
+    tw.push_back('{32'h0000100f, "fence.i",
+                  "fence.i",
+                  ALU_FENCE_I, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0055950f, ".insn i 0x0f, 1, a0, a1, 5",
+                  "fence.i",
+                  ALU_FENCE_I, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0005200f, "cbo.inval (a0)",
+                  "cbo.inval (a0)",
+                  ALU_CBO_INVAL, VCFG, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0400});
+    tw.push_back('{32'h0015200f, "cbo.clean (a0)",
+                  "cbo.clean (a0)",
+                  ALU_CBO_CLEAN, VCFG, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0400});
+    tw.push_back('{32'h0025200f, "cbo.flush (a0)",
+                  "cbo.flush (a0)",
+                  ALU_CBO_FLUSH, VCFG, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0400});
+    tw.push_back('{32'h0045200f, "cbo.zero (a0)",
+                  "cbo.zero (a0)",
+                  ALU_CBO_ZERO, VCFG, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h1000});
+    tw.push_back('{32'h0035200f, ".insn i 0x0f, 2, x0, a0, 3",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0015258f, ".insn i 0x0f, 2, a1, a0, 1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0005300f, ".insn i 0x0f, 3, x0, a0, 0",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0005700f, ".insn i 0x0f, 7, x0, a0, 0",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00000073, "ecall",
+                  "ecall",
+                  ALU_ECALL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00100073, "ebreak",
+                  "ebreak",
+                  ALU_EBREAK, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h10200073, "sret",
+                  "sret",
+                  ALU_SRET, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h30200073, "mret",
+                  "mret",
+                  ALU_MRET, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h10500073, "wfi",
+                  "wfi",
+                  ALU_WFI, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00d00073, "wrs.nto",
+                  "wrs.nto",
+                  ALU_WRS_NTO, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h01d00073, "wrs.sto",
+                  "wrs.sto",
+                  ALU_WRS_STO, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h12b50073, "sfence.vma a0, a1",
+                  "sfence.vma a0, a1",
+                  ALU_SFENCE_VMA, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h16b50073, "sinval.vma a0, a1",
+                  "sinval.vma a0, a1",
+                  ALU_SINVAL_VMA, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h18000073, "sfence.w.inval",
+                  "sfence.w.inval",
+                  ALU_SFENCE_W_INVAL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h18100073, "sfence.inval.ir",
+                  "sfence.inval.ir",
+                  ALU_SFENCE_INVAL_IR, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h22b50073, "hfence.vvma a0, a1",
+                  "hfence.vvma a0, a1",
+                  ALU_HFENCE_VVMA, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h62b50073, "hfence.gvma a0, a1",
+                  "hfence.gvma a0, a1",
+                  ALU_HFENCE_GVMA, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h26b50073, "hinval.vvma a0, a1",
+                  "hinval.vvma a0, a1",
+                  ALU_HINVAL_VVMA, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h66b50073, "hinval.gvma a0, a1",
+                  "hinval.gvma a0, a1",
+                  ALU_HINVAL_GVMA, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6005c573, "hlv.b a0, (a1)",
+                  "hlv.b a0, (a1)",
+                  ALU_LB, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6015c573, "hlv.bu a0, (a1)",
+                  "hlv.bu a0, (a1)",
+                  ALU_LBU, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6405c573, "hlv.h a0, (a1)",
+                  "hlv.h a0, (a1)",
+                  ALU_LH, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6415c573, "hlv.hu a0, (a1)",
+                  "hlv.hu a0, (a1)",
+                  ALU_LHU, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6435c573, "hlvx.hu a0, (a1)",
+                  "hlvx.hu a0, (a1)",
+                  ALU_LHU, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100011, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6805c573, "hlv.w a0, (a1)",
+                  "hlv.w a0, (a1)",
+                  ALU_LW, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6815c573, "hlv.wu a0, (a1)",
+                  "hlv.wu a0, (a1)",
+                  ALU_LWU, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6835c573, "hlvx.wu a0, (a1)",
+                  "hlvx.wu a0, (a1)",
+                  ALU_LWU, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100011, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6c05c573, "hlv.d a0, (a1)",
+                  "hlv.d a0, (a1)",
+                  ALU_LD, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b100010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h62c5c073, "hsv.b a2, (a1)",
+                  "hsv.b a2, (a1)",
+                  ALU_SB, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b010010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h66c5c073, "hsv.h a2, (a1)",
+                  "hsv.h a2, (a1)",
+                  ALU_SH, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b010010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6ac5c073, "hsv.w a2, (a1)",
+                  "hsv.w a2, (a1)",
+                  ALU_SW, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b010010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h6ec5c073, "hsv.d a2, (a1)",
+                  "hsv.d a2, (a1)",
+                  ALU_SD, VCFG, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b010010, 32'h00000000, 16'h8000});
+    tw.push_back('{32'h7c059573, "csrrw a0, 0x7c0, a1",
+                  "csrrw a0, unknown_7c0, a1",
+                  ALU_CSRRW, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h000007c0, 16'h0200});
+    tw.push_back('{32'h8005a573, "csrrs a0, 0x800, a1",
+                  "csrrs a0, unknown_800, a1",
+                  ALU_CSRRS, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000800, 16'h0200});
+    tw.push_back('{32'hfff5b573, "csrrc a0, 0xfff, a1",
+                  "csrrc a0, unknown_fff, a1",
+                  ALU_CSRRC, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00000fff, 16'h0200});
+    tw.push_back('{32'h8002d573, "csrrwi a0, 0x800, 5",
+                  "csrrwi a0, unknown_800, 5",
+                  ALU_CSRRWI, VCFG, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00005800, 16'h0200});
+    tw.push_back('{32'hc00fe573, "csrrsi a0, 0xc00, 31",
+                  "csrrsi a0, cycle, 31",
+                  ALU_CSRRSI, VCFG, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h0001fc00, 16'h0200});
+    tw.push_back('{32'hfff0f573, "csrrci a0, 0xfff, 1",
+                  "csrrci a0, unknown_fff, 1",
+                  ALU_CSRRCI, VCFG, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000100, 32'h00001fff, 16'h0200});
+    tw.push_back('{32'h00000573, ".insn i 0x73, 0, a0, x0, 0",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00158073, ".insn i 0x73, 0, x0, a1, 1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h30200573, ".insn i 0x73, 0, a0, x0, 0x302",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h10258073, ".insn i 0x73, 0, x0, a1, 0x102",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h10500573, ".insn i 0x73, 0, a0, x0, 0x105",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h00d58073, ".insn i 0x73, 0, x0, a1, 0x00d",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h12b50673, ".insn r 0x73, 0, 0x09, a2, a0, a1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h16b50673, ".insn r 0x73, 0, 0x0b, a2, a0, a1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h22b50673, ".insn r 0x73, 0, 0x11, a2, a0, a1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h18050073, ".insn r 0x73, 0, 0x0c, x0, a0, x0",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h18100673, ".insn r 0x73, 0, 0x0c, a2, x0, x1",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h62c5c573, ".insn r 0x73, 4, 0x31, a0, a1, a2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h7b200073, ".insn i 0x73, 0, x0, x0, 0x7b2",
+                  "dret",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h70200073, ".insn i 0x73, 0, x0, x0, 0x702",
+                  "mnret (args unknown)",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h022180d7, "vadd.vv v1, v2, v3",
+                  "vadd.vv v1, v2, v3",
+                  ALU_VEC, VOP_VADD, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h022540d7, "vadd.vx v1, v2, a0",
+                  "vadd.vx v1, v2, a0",
+                  ALU_VEC, VOP_VADD, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h962560d7, "vmul.vx v1, v2, a0",
+                  "vmul.vx v1, v2, a0",
+                  ALU_VEC, VOP_VMUL, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h022550d7, "vfadd.vf v1, v2, fa0",
+                  "vfadd.vf v1, v2, fa0",
+                  ALU_VEC, VOP_VFADD, 4'b0100, 3'b010, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h5e0540d7, "vmv.v.x v1, a0",
+                  "vmv.v.x v1, a0",
+                  ALU_VEC, VOP_VMV, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h42302557, "vmv.x.s a0, v3",
+                  "vmv.x.s a0, v3",
+                  ALU_VEC, VOP_VMV_XS, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h42282557, "vcpop.m a0, v2",
+                  "vcpop.m a0, v2",
+                  ALU_VEC, VOP_VCPOP, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h4028a557, "vfirst.m a0, v2, v0.t",
+                  "vfirst.m a0, v2, v0.t",
+                  ALU_VEC, VOP_VFIRST, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h42201557, "vfmv.f.s fa0, v2",
+                  "vfmv.f.s fa0, v2",
+                  ALU_VEC, VOP_VFMV_FS, 4'b1000, 3'b100, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h420550d7, "vfmv.s.f v1, fa0",
+                  "vfmv.s.f v1, fa0",
+                  ALU_VEC, VOP_VFMV, 4'b0100, 3'b010, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h80c5f557, "vsetvl a0, a1, a2",
+                  "vsetvl a0, a1, a2",
+                  ALU_VEC, VCFG, 4'b1110, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0db5f557, "vsetvli a0, a1, e64, m8, ta, ma",
+                  "vsetvli a0, a1, e64, m8, ta, ma",
+                  ALU_VEC, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h000000db, 16'h0000});
+    tw.push_back('{32'h7ff5f557, "vsetvli a0, a1, 0x7ff",
+                  "vsetvli a0, a1, 0x7ff",
+                  ALU_VEC, VCFG, 4'b1100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h000007ff, 16'h0000});
+    tw.push_back('{32'hc00ff557, "vsetivli a0, 31, e8, m1, tu, mu",
+                  "vsetivli a0, 31, e8, m1, tu, mu",
+                  ALU_VEC, VCFG, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h001f0000, 16'h0000});
+    tw.push_back('{32'hfff8f557, "vsetivli a0, 17, 0x3ff",
+                  "vsetivli a0, 17, 0x3ff",
+                  ALU_VEC, VCFG, 4'b1000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h001103ff, 16'h0000});
+    tw.push_back('{32'h02056087, "vle32.v v1, (a0)",
+                  "vle32.v v1, (a0)",
+                  ALU_VEC, VOP_VLE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0ab56087, "vlse32.v v1, (a0), a1",
+                  "vlse32.v v1, (a0), a1",
+                  ALU_VEC, VOP_VLSE, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h06256087, "vluxei32.v v1, (a0), v2",
+                  "vluxei32.v v1, (a0), v2",
+                  ALU_VEC, VOP_VLUXE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h020501a7, "vse8.v v3, (a0)",
+                  "vse8.v v3, (a0)",
+                  ALU_VEC, VOP_VSE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b010000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h0ab571a7, "vsse64.v v3, (a0), a1",
+                  "vsse64.v v3, (a0), a1",
+                  ALU_VEC, VOP_VSSE, 4'b0110, 3'b000, 2'd0, 2'd0,
+                  6'b010000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h22850107, "vl2re8.v v2, (a0)",
+                  "vl2re8.v v2, (a0)",
+                  ALU_VEC, VOP_VLWHOLE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b100000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h62850227, "vs4r.v v4, (a0)",
+                  "vs4r.v v4, (a0)",
+                  ALU_VEC, VOP_VSWHOLE, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b010000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h022830d7, "vadd.vi v1, v2, -16",
+                  "vadd.vi v1, v2, -16",
+                  ALU_VEC, VOP_VADD, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'hfffffff0, 16'h0000});
+    tw.push_back('{32'h0e27b0d7, "vrsub.vi v1, v2, 15",
+                  "vrsub.vi v1, v2, 15",
+                  ALU_VEC, VOP_VRSUB, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h0000000f, 16'h0000});
+    tw.push_back('{32'h8222b0d7, "vsaddu.vi v1, v2, 5",
+                  "vsaddu.vi v1, v2, 5",
+                  ALU_VEC, VOP_VSADDU, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000005, 16'h0000});
+    tw.push_back('{32'h3a2fb0d7, "vslideup.vi v1, v2, 31",
+                  "vslideup.vi v1, v2, 31",
+                  ALU_VEC, VOP_VSLIDEUP, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h0000001f, 16'h0000});
+    tw.push_back('{32'hb22a30d7, "vnsrl.wi v1, v2, 20",
+                  "vnsrl.wi v1, v2, 20",
+                  ALU_VEC, VOP_VNSRL, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000014, 16'h0000});
+    tw.push_back('{32'h3228b0d7, "vrgather.vi v1, v2, 17",
+                  "vrgather.vi v1, v2, 17",
+                  ALU_VEC, VOP_VRGATHER, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000011, 16'h0000});
+    tw.push_back('{32'h222180d7, ".insn r 0x57, 0, 0x11, v1, v3, v2",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h02150087, ".insn i 0x07, 0, v1, 0x021(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h030501a7, ".insn s 0x27, 0, a6, 0x023(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h230501a7, ".insn s 0x27, 0, a6, 0x223(a0)",
+                  "unknown",
+                  ALU_ILL, VCFG, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h0000});
+    tw.push_back('{32'h062180d7, "vandn.vv v1, v2, v3",
+                  "vandn.vv v1, v2, v3",
+                  ALU_VEC, VOP_VANDN, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h062540d7, "vandn.vx v1, v2, a0",
+                  "vandn.vx v1, v2, a0",
+                  ALU_VEC, VOP_VANDN, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h4a2520d7, "vbrev.v v1, v2",
+                  "vbrev.v v1, v2",
+                  ALU_VEC, VOP_VBREV, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h4a2420d7, "vbrev8.v v1, v2",
+                  "vbrev8.v v1, v2",
+                  ALU_VEC, VOP_VBREV8, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h4824a0d7, "vrev8.v v1, v2, v0.t",
+                  "vrev8.v v1, v2, v0.t",
+                  ALU_VEC, VOP_VREV8, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h4a2620d7, "vclz.v v1, v2",
+                  "vclz.v v1, v2",
+                  ALU_VEC, VOP_VCLZ, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h4a26a0d7, "vctz.v v1, v2",
+                  "vctz.v v1, v2",
+                  ALU_VEC, VOP_VCTZ, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h4a2720d7, "vcpop.v v1, v2",
+                  "vcpop.v v1, v2",
+                  ALU_VEC, VOP_VCPOP_V, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h562180d7, "vrol.vv v1, v2, v3",
+                  "vrol.vv v1, v2, v3",
+                  ALU_VEC, VOP_VROL, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h562540d7, "vrol.vx v1, v2, a0",
+                  "vrol.vx v1, v2, a0",
+                  ALU_VEC, VOP_VROL, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h522180d7, "vror.vv v1, v2, v3",
+                  "vror.vv v1, v2, v3",
+                  ALU_VEC, VOP_VROR, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h522540d7, "vror.vx v1, v2, a0",
+                  "vror.vx v1, v2, a0",
+                  ALU_VEC, VOP_VROR, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'h562fb0d7, "vror.vi v1, v2, 63",
+                  "vror.vi v1, v2, 63",
+                  ALU_VEC, VOP_VROR, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h0000003f, 16'h2000});
+    tw.push_back('{32'h5620b0d7, "vror.vi v1, v2, 33",
+                  "vror.vi v1, v2, 33",
+                  ALU_VEC, VOP_VROR, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000021, 16'h2000});
+    tw.push_back('{32'h5223b0d7, "vror.vi v1, v2, 7",
+                  "vror.vi v1, v2, 7",
+                  ALU_VEC, VOP_VROR, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000007, 16'h2000});
+    tw.push_back('{32'hd6430157, "vwsll.vv v2, v4, v6",
+                  "vwsll.vv v2, v4, v6",
+                  ALU_VEC, VOP_VWSLL, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'hd6454157, "vwsll.vx v2, v4, a0",
+                  "vwsll.vx v2, v4, a0",
+                  ALU_VEC, VOP_VWSLL, 4'b0100, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h00000000, 16'h2000});
+    tw.push_back('{32'hd64fb157, "vwsll.vi v2, v4, 31",
+                  "vwsll.vi v2, v4, 31",
+                  ALU_VEC, VOP_VWSLL, 4'b0000, 3'b000, 2'd0, 2'd0,
+                  6'b000000, 32'h0000001f, 16'h2000});
+        foreach (tw[k]) begin
+            decode_pkt_t     d;
+            vec_decode_pkt_t v;
+            logic            ill;
+            logic            ok;
+            logic [31:0]     w;
+            string           nm;
+            w   = tw[k].w;
+            nm  = $sformatf("T77 %08h %s", w, tw[k].a);
+            ill = (tw[k].op == ALU_ILL);
+            ext_enable = RVA23_ENABLE;
+            clear_all();
+            drive(0, w);
+            #1;
+            d  = decode_bundle[0];
+            v  = vec_decode_bundle[0];
+            ok = d.valid && (d.is_illegal == ill) && (d.alu_op == tw[k].op) &&
+                 (d.opcode == w[6:0]) && (d.funct7 == w[31:25]) &&
+                 ({d.uses_rd, d.uses_rs1, d.uses_rs2, d.uses_rs3} ==
+                  tw[k].u) &&
+                 ({d.rd_is_fp, d.rs1_is_fp, d.rs2_is_fp} == tw[k].f) &&
+                 (d.fp_fmt == tw[k].fm) && (d.fp_src_fmt == tw[k].sf) &&
+                 ({d.is_load, d.is_store, d.is_fp, d.is_csr, d.is_hlsv,
+                   d.is_hlvx} == tw[k].k) &&
+                 (d.imm == tw[k].imm) &&
+                 (d.rd  == (tw[k].u[3] ? w[11:7]  : 5'd0)) &&
+                 (d.rs1 == (tw[k].u[2] ? w[19:15] : 5'd0)) &&
+                 (d.rs2 == (tw[k].u[1] ? w[24:20] : 5'd0)) &&
+                 (d.rs3 == (tw[k].u[0] ? w[31:27] : 5'd0)) &&
+                 !d.is_branch && !d.is_jump &&
+                 (is_vector[0] == (tw[k].op == ALU_VEC)) &&
+                 ((tw[k].op != ALU_VEC) || (v.v_op_class == tw[k].vop));
+            if (!ok) begin
+                $display("%s", $sformatf(
+                    {"FAIL [%s] ill %0d alu %0d vop %0d u %b f %b fm %0d ",
+                     "sf %0d k %b imm %h rd %0d rs1 %0d rs2 %0d rs3 %0d"},
+                    nm, d.is_illegal, d.alu_op, v.v_op_class,
+                    {d.uses_rd, d.uses_rs1, d.uses_rs2, d.uses_rs3},
+                    {d.rd_is_fp, d.rs1_is_fp, d.rs2_is_fp}, d.fp_fmt,
+                    d.fp_src_fmt, {d.is_load, d.is_store, d.is_fp,
+                    d.is_csr, d.is_hlsv, d.is_hlvx}, d.imm, d.rd, d.rs1,
+                    d.rs2, d.rs3));
+                fail_count++;
+            end else begin
+                pass_count++;
+            end
+            // The gates: each enable cleared alone makes it illegal.
+            for (int i = 0; i < 16; i++) begin
+                if (tw[k].g[i]) begin
+                    ext_enable = RVA23_ENABLE;
+                    ext_enable[15 - i] = 1'b0;
+                    #1;
+                    if (!decode_bundle[0].is_illegal ||
+                        (decode_bundle[0].alu_op != ALU_ILL) ||
+                        is_vector[0]) begin
+                        $display("FAIL [%s] legal with enable %0d clear", nm,
+                                 i);
+                        fail_count++;
+                    end else begin
+                        pass_count++;
+                    end
+                end
+            end
+        end
+        ext_enable = RVA23_ENABLE;
+        @(posedge clk);
+    end
+
+    // -----------------------------------------------------------------------
+    // T78 (BP-124): the representation's layout. alu_op_t is 8 bits;
+    //   values 0 to 106 keep theirs, ALU_ILL is 63, ALU_CSRRW, ALU_FLOAD
+    //   and ALU_FSTORE (renamed) keep 49, 56 and 57, and the 79
+    //   operations of DCD-22 are 107 to 185 in its order. The Zvbb
+    //   classes are 189 to 198 in DCD-33's order. decode_pkt_t gains
+    //   fp_fmt, fp_src_fmt, rd_is_fp, rs1_is_fp, rs2_is_fp, is_hlsv and
+    //   is_hlvx, appended after is_illegal in that order, so is_hlvx is
+    //   the packet's bit 0 and is_illegal bit 9. The expected values are
+    //   DCD-22's list and DCD-33's, written here.
+    // -----------------------------------------------------------------------
+    begin
+        decode_pkt_t lp;
+        ck78("$bits(alu_op_t)", $bits(alu_op_t), 8);
+        ck78("ALU_ADD", int'(ALU_ADD), 0);
+        ck78("ALU_CSRRW", int'(ALU_CSRRW), 49);
+        ck78("ALU_FLOAD", int'(ALU_FLOAD), 56);
+        ck78("ALU_FSTORE", int'(ALU_FSTORE), 57);
+        ck78("ALU_FMADD", int'(ALU_FMADD), 58);
+        ck78("ALU_ILL", int'(ALU_ILL), 63);
+        ck78("ALU_MOP", int'(ALU_MOP), 106);
+        ck78("ALU_VEC", int'(ALU_VEC), 107);
+        ck78("ALU_FMSUB", int'(ALU_FMSUB), 108);
+        ck78("ALU_FNMSUB", int'(ALU_FNMSUB), 109);
+        ck78("ALU_FNMADD", int'(ALU_FNMADD), 110);
+        ck78("ALU_FADD", int'(ALU_FADD), 111);
+        ck78("ALU_FSUB", int'(ALU_FSUB), 112);
+        ck78("ALU_FMUL", int'(ALU_FMUL), 113);
+        ck78("ALU_FDIV", int'(ALU_FDIV), 114);
+        ck78("ALU_FSQRT", int'(ALU_FSQRT), 115);
+        ck78("ALU_FSGNJ", int'(ALU_FSGNJ), 116);
+        ck78("ALU_FSGNJN", int'(ALU_FSGNJN), 117);
+        ck78("ALU_FSGNJX", int'(ALU_FSGNJX), 118);
+        ck78("ALU_FMIN", int'(ALU_FMIN), 119);
+        ck78("ALU_FMAX", int'(ALU_FMAX), 120);
+        ck78("ALU_FCVT_W", int'(ALU_FCVT_W), 121);
+        ck78("ALU_FCVT_WU", int'(ALU_FCVT_WU), 122);
+        ck78("ALU_FCVT_L", int'(ALU_FCVT_L), 123);
+        ck78("ALU_FCVT_LU", int'(ALU_FCVT_LU), 124);
+        ck78("ALU_FCVT_FW", int'(ALU_FCVT_FW), 125);
+        ck78("ALU_FCVT_FWU", int'(ALU_FCVT_FWU), 126);
+        ck78("ALU_FCVT_FL", int'(ALU_FCVT_FL), 127);
+        ck78("ALU_FCVT_FLU", int'(ALU_FCVT_FLU), 128);
+        ck78("ALU_FCVT_FF", int'(ALU_FCVT_FF), 129);
+        ck78("ALU_FMV_XF", int'(ALU_FMV_XF), 130);
+        ck78("ALU_FMV_FX", int'(ALU_FMV_FX), 131);
+        ck78("ALU_FEQ", int'(ALU_FEQ), 132);
+        ck78("ALU_FLT", int'(ALU_FLT), 133);
+        ck78("ALU_FLE", int'(ALU_FLE), 134);
+        ck78("ALU_FCLASS", int'(ALU_FCLASS), 135);
+        ck78("ALU_FLI", int'(ALU_FLI), 136);
+        ck78("ALU_FMINM", int'(ALU_FMINM), 137);
+        ck78("ALU_FMAXM", int'(ALU_FMAXM), 138);
+        ck78("ALU_FROUND", int'(ALU_FROUND), 139);
+        ck78("ALU_FROUNDNX", int'(ALU_FROUNDNX), 140);
+        ck78("ALU_FCVTMOD_W_D", int'(ALU_FCVTMOD_W_D), 141);
+        ck78("ALU_FLEQ", int'(ALU_FLEQ), 142);
+        ck78("ALU_FLTQ", int'(ALU_FLTQ), 143);
+        ck78("ALU_LR_W", int'(ALU_LR_W), 144);
+        ck78("ALU_LR_D", int'(ALU_LR_D), 145);
+        ck78("ALU_SC_W", int'(ALU_SC_W), 146);
+        ck78("ALU_SC_D", int'(ALU_SC_D), 147);
+        ck78("ALU_AMOSWAP_W", int'(ALU_AMOSWAP_W), 148);
+        ck78("ALU_AMOSWAP_D", int'(ALU_AMOSWAP_D), 149);
+        ck78("ALU_AMOADD_W", int'(ALU_AMOADD_W), 150);
+        ck78("ALU_AMOADD_D", int'(ALU_AMOADD_D), 151);
+        ck78("ALU_AMOXOR_W", int'(ALU_AMOXOR_W), 152);
+        ck78("ALU_AMOXOR_D", int'(ALU_AMOXOR_D), 153);
+        ck78("ALU_AMOAND_W", int'(ALU_AMOAND_W), 154);
+        ck78("ALU_AMOAND_D", int'(ALU_AMOAND_D), 155);
+        ck78("ALU_AMOOR_W", int'(ALU_AMOOR_W), 156);
+        ck78("ALU_AMOOR_D", int'(ALU_AMOOR_D), 157);
+        ck78("ALU_AMOMIN_W", int'(ALU_AMOMIN_W), 158);
+        ck78("ALU_AMOMIN_D", int'(ALU_AMOMIN_D), 159);
+        ck78("ALU_AMOMAX_W", int'(ALU_AMOMAX_W), 160);
+        ck78("ALU_AMOMAX_D", int'(ALU_AMOMAX_D), 161);
+        ck78("ALU_AMOMINU_W", int'(ALU_AMOMINU_W), 162);
+        ck78("ALU_AMOMINU_D", int'(ALU_AMOMINU_D), 163);
+        ck78("ALU_AMOMAXU_W", int'(ALU_AMOMAXU_W), 164);
+        ck78("ALU_AMOMAXU_D", int'(ALU_AMOMAXU_D), 165);
+        ck78("ALU_FENCE_I", int'(ALU_FENCE_I), 166);
+        ck78("ALU_CBO_INVAL", int'(ALU_CBO_INVAL), 167);
+        ck78("ALU_CBO_CLEAN", int'(ALU_CBO_CLEAN), 168);
+        ck78("ALU_CBO_FLUSH", int'(ALU_CBO_FLUSH), 169);
+        ck78("ALU_CBO_ZERO", int'(ALU_CBO_ZERO), 170);
+        ck78("ALU_SFENCE_VMA", int'(ALU_SFENCE_VMA), 171);
+        ck78("ALU_SINVAL_VMA", int'(ALU_SINVAL_VMA), 172);
+        ck78("ALU_SFENCE_W_INVAL", int'(ALU_SFENCE_W_INVAL), 173);
+        ck78("ALU_SFENCE_INVAL_IR", int'(ALU_SFENCE_INVAL_IR), 174);
+        ck78("ALU_HFENCE_VVMA", int'(ALU_HFENCE_VVMA), 175);
+        ck78("ALU_HFENCE_GVMA", int'(ALU_HFENCE_GVMA), 176);
+        ck78("ALU_HINVAL_VVMA", int'(ALU_HINVAL_VVMA), 177);
+        ck78("ALU_HINVAL_GVMA", int'(ALU_HINVAL_GVMA), 178);
+        ck78("ALU_WRS_NTO", int'(ALU_WRS_NTO), 179);
+        ck78("ALU_WRS_STO", int'(ALU_WRS_STO), 180);
+        ck78("ALU_CSRRS", int'(ALU_CSRRS), 181);
+        ck78("ALU_CSRRC", int'(ALU_CSRRC), 182);
+        ck78("ALU_CSRRWI", int'(ALU_CSRRWI), 183);
+        ck78("ALU_CSRRSI", int'(ALU_CSRRSI), 184);
+        ck78("ALU_CSRRCI", int'(ALU_CSRRCI), 185);
+        ck78("VOP_VANDN", int'(VOP_VANDN), 189);
+        ck78("VOP_VBREV", int'(VOP_VBREV), 190);
+        ck78("VOP_VBREV8", int'(VOP_VBREV8), 191);
+        ck78("VOP_VREV8", int'(VOP_VREV8), 192);
+        ck78("VOP_VCLZ", int'(VOP_VCLZ), 193);
+        ck78("VOP_VCTZ", int'(VOP_VCTZ), 194);
+        ck78("VOP_VCPOP_V", int'(VOP_VCPOP_V), 195);
+        ck78("VOP_VROL", int'(VOP_VROL), 196);
+        ck78("VOP_VROR", int'(VOP_VROR), 197);
+        ck78("VOP_VWSLL", int'(VOP_VWSLL), 198);
+        // The appended fields, LSB up: is_hlvx 0, is_hlsv 1, rs2_is_fp 2,
+        // rs1_is_fp 3, rd_is_fp 4, fp_src_fmt 6:5, fp_fmt 8:7, and
+        // is_illegal 9 before them.
+        lp = '0;
+        lp.is_hlvx  = 1'b1;
+        ck78("is_hlvx at 0", int'(lp[8:0]), 1);
+        lp = '0;
+        lp.is_hlsv  = 1'b1;
+        ck78("is_hlsv at 1", int'(lp[8:0]), 2);
+        lp = '0;
+        lp.rs2_is_fp = 1'b1;
+        ck78("rs2_is_fp at 2", int'(lp[8:0]), 4);
+        lp = '0;
+        lp.rs1_is_fp = 1'b1;
+        ck78("rs1_is_fp at 3", int'(lp[8:0]), 8);
+        lp = '0;
+        lp.rd_is_fp  = 1'b1;
+        ck78("rd_is_fp at 4", int'(lp[8:0]), 16);
+        lp = '0;
+        lp.fp_src_fmt = 2'b11;
+        ck78("fp_src_fmt 6:5", int'(lp[8:0]), 96);
+        lp = '0;
+        lp.fp_fmt   = 2'b11;
+        ck78("fp_fmt 8:7", int'(lp[8:0]), 384);
+        lp = '0;
+        lp.is_illegal = 1'b1;
+        ck78("is_illegal at 9", int'(lp[9:0]), 512);
     end
 
     // -----------------------------------------------------------------------

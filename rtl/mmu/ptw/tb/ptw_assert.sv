@@ -3,12 +3,16 @@
 // Copyright (c) 2026 Jeff Nye, uarchlabs.com
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
-// Concurrent SVA for ptw (BP-123). ptw_mem_interfaces.md WM-1 to WM-8;
-// itlb_l2tlb_interfaces.md IL-4, IL-6, IL-11b; mmu_decisions.md
-// MMU-7, MMU-10d, MMU-12a, MMU-29.
+// Concurrent SVA for ptw (BP-123, BP-124). ptw_mem_interfaces.md WM-1
+// to WM-8; itlb_l2tlb_interfaces.md IL-3d, IL-4, IL-6, IL-11b;
+// mmu_decisions.md MMU-7, MMU-8c, MMU-10d, MMU-12a, MMU-24c, MMU-29.
 //
-// BOUND BY MODULE NAME (TD#109). Every input is a ptw port; no
-// hierarchical reference.
+// BOUND BY MODULE NAME (TD#109). Every input is a ptw port, except the
+// four walker registers W11 reads (BP-124): the level of each stage's
+// PTE, where the memory response goes (which stage a CAS updates) and
+// the G-stage access type. They name WHICH leaf a CAS updates; the
+// checks W11 makes on that leaf are its own, evaluated on the CAS's
+// compare value. No hierarchical reference.
 //
 // Each property compares a port against something this file derives
 // itself: the walks and memory accesses it has seen taken and not yet
@@ -41,6 +45,17 @@
 //                        A set and no other bit cleared (MMU-8)
 //   W10 a_retry_busy     a retry answers a request taken while another
 //                        walk was in progress (IL-6)
+//   W11 a_cas_permitted  no CAS that sets A or D is presented for a
+//                        leaf that fails any check MMU-8c names: the
+//                        reserved encodings (V, W without R, bits
+//                        60:54, PBMT 3 or PBMTE clear, N), the
+//                        misaligned superpage, the access type, and U
+//                        (at a single or VS stage against the request's
+//                        privilege; at the G-stage, set). This file
+//                        evaluates them on the compare value (BP-124)
+//   W12 a_priv_legal     no request is accepted with itlb_l2t_priv
+//                        2'b10 (reserved) or 2'b11 (M) (IL-3d,
+//                        MMU-24c; BP-124)
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -62,6 +77,7 @@ module ptw_assert #(
   input logic                    itlb_l2t_req_rdy,
   input logic                    itlb_l2t_v,
   input logic [1:0]              itlb_l2t_acc,
+  input logic [1:0]              itlb_l2t_priv,
   input logic [1:0]              itlb_l2t_tag,
   input logic                    l2t_itlb_rsp_val,
   input logic [1:0]              l2t_itlb_tag,
@@ -76,6 +92,13 @@ module ptw_assert #(
   input logic [63:0]             ptw_mem_req_cmp,
   input logic [63:0]             ptw_mem_req_swap,
   input logic                    mem_ptw_rsp_val,
+  input logic                    csr_ptw_menvcfg_pbmte,
+  input logic                    csr_ptw_henvcfg_pbmte,
+  // W11: which leaf a CAS updates (see the header)
+  input logic [1:0]              w_s_lvl,
+  input logic [1:0]              w_g_lvl,
+  input logic [1:0]              w_m_ret,
+  input logic [1:0]              w_g_acc,
   input logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][7:0]
                                  csr_ptw_pmpcfg,
   input logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][PA_WIDTH-3:0]
@@ -84,14 +107,53 @@ module ptw_assert #(
 
   localparam logic [1:0] ST_HIT   = 2'b00;
   localparam logic [1:0] ST_RETRY = 2'b10;
+  localparam logic [1:0] ACC_R    = 2'd0;
   localparam logic [1:0] ACC_W    = 2'd1;
+  localparam logic [1:0] ACC_X    = 2'd2;
+  localparam logic [1:0] PRV_U    = 2'd0;
+  localparam logic [1:0] MR_SCAS  = 2'd2;   // the walker's mret_e
+  localparam logic [1:0] MR_GCAS  = 2'd3;
+  localparam int P_V = 0;
+  localparam int P_R = 1;
+  localparam int P_W = 2;
+  localparam int P_X = 3;
+  localparam int P_U = 4;
   localparam int P_A = 6;
   localparam int P_D = 7;
+  localparam int P_N = 63;
+
+  // W11. Does leaf PTE p, at level lvl, fail a check the translation
+  // algorithm makes before the A/D update (MMU-8c)? g is the G-stage
+  // (U must be set, every access a user one, MMU-26); otherwise U is
+  // checked against priv (U needs U set, S needs it clear).
+  function automatic logic leaf_bad(input logic [63:0] p,
+                                    input logic [1:0]  lvl,
+                                    input logic        g,
+                                    input logic [1:0]  acc,
+                                    input logic [1:0]  priv,
+                                    input logic        pbmte);
+    logic bad;
+    bad = !p[P_V] || (!p[P_R] && p[P_W]) || (p[60:54] != '0) ||
+          !(p[P_R] || p[P_X]);
+    bad = bad || (p[62:61] == 2'd3) || (!pbmte && (p[62:61] != 2'd0));
+    bad = bad || (p[P_N] && ((lvl != 2'd0) || (p[13:10] != 4'b1000)));
+    bad = bad || ((lvl == 2'd2) && (p[27:10] != '0)) ||
+                 ((lvl == 2'd1) && (p[18:10] != '0));
+    bad = bad || ((acc == ACC_X) && !p[P_X]) ||
+                 ((acc == ACC_R) && !p[P_R]) ||
+                 ((acc == ACC_W) && !p[P_W]);
+    if (g) bad = bad || !p[P_U];
+    else   bad = bad || ((priv == PRV_U) ? !p[P_U] : p[P_U]);
+    return bad;
+  endfunction
 
   // ---- the walk in progress, from the client port ----------------------
   logic       r_busy;       // a walk was taken and is not answered
   logic       r_v;
   logic [1:0] r_acc;
+  logic [1:0] r_priv;
+  logic       r_s_pbmte;    // PBMTE of the single / VS stage, at take
+  logic       r_g_pbmte;
   logic [1:0] r_tag;
   logic       r_rty;        // a request taken while busy, unanswered
   logic [1:0] r_rty_tag;
@@ -139,6 +201,9 @@ module ptw_assert #(
       r_busy    <= 1'b0;
       r_v       <= 1'b0;
       r_acc     <= '0;
+      r_priv    <= '0;
+      r_s_pbmte <= 1'b0;
+      r_g_pbmte <= 1'b0;
       r_tag     <= '0;
       r_rty     <= 1'b0;
       r_rty_tag <= '0;
@@ -160,6 +225,12 @@ module ptw_assert #(
             r_busy <= 1'b1;
             r_v    <= itlb_l2t_v;
             r_acc  <= itlb_l2t_acc;
+            r_priv <= itlb_l2t_priv;
+            // MMU-U6: menvcfg for single-stage and the G-stage,
+            // henvcfg for the VS-stage.
+            r_s_pbmte <= itlb_l2t_v ? csr_ptw_henvcfg_pbmte
+                                    : csr_ptw_menvcfg_pbmte;
+            r_g_pbmte <= csr_ptw_menvcfg_pbmte;
             r_tag  <= itlb_l2t_tag;
           end else begin
             // taken in the cycle the walk is answered: still busy then
@@ -261,6 +332,32 @@ module ptw_assert #(
   a_retry_busy: assert property (p_retry_busy)
     else $error("W10 walker retry with no request taken while busy");
 
+  // W11 (MMU-8c). A CAS updates the leaf it compares against: the
+  // single / VS-stage leaf (MR_SCAS) at its level, against the request's
+  // access type and privilege, or the G-stage leaf (MR_GCAS) at its
+  // level, against the G-stage access type.
+  property p_cas_permitted;
+    @(posedge clk) disable iff (!rstn)
+      (ptw_mem_req_val && ptw_mem_req_op) |->
+        ((w_m_ret == MR_GCAS)
+           ? !leaf_bad(ptw_mem_req_cmp, w_g_lvl, 1'b1, w_g_acc, r_priv,
+                       r_g_pbmte)
+           : ((w_m_ret == MR_SCAS) &&
+              !leaf_bad(ptw_mem_req_cmp, w_s_lvl, 1'b0, r_acc, r_priv,
+                        r_s_pbmte)));
+  endproperty
+  a_cas_permitted: assert property (p_cas_permitted)
+    else $error("W11 walker CAS sets A or D on a leaf that fails a check");
+
+  // W12 (IL-3d). Only U and S are presented; M-mode fetch is not
+  // translated (MMU-19a).
+  property p_priv_legal;
+    @(posedge clk) disable iff (!rstn)
+      w_take |-> (itlb_l2t_priv inside {2'b00, 2'b01});
+  endproperty
+  a_priv_legal: assert property (p_priv_legal)
+    else $error("W12 walk request with a reserved or M privilege");
+
 endmodule : ptw_assert
 
 // Bind BY MODULE NAME.
@@ -279,6 +376,7 @@ bind ptw ptw_assert #(
   .itlb_l2t_req_rdy  (itlb_l2t_req_rdy),
   .itlb_l2t_v        (itlb_l2t_v),
   .itlb_l2t_acc      (itlb_l2t_acc),
+  .itlb_l2t_priv     (itlb_l2t_priv),
   .itlb_l2t_tag      (itlb_l2t_tag),
   .l2t_itlb_rsp_val  (l2t_itlb_rsp_val),
   .l2t_itlb_tag      (l2t_itlb_tag),
@@ -293,6 +391,12 @@ bind ptw ptw_assert #(
   .ptw_mem_req_cmp   (ptw_mem_req_cmp),
   .ptw_mem_req_swap  (ptw_mem_req_swap),
   .mem_ptw_rsp_val   (mem_ptw_rsp_val),
+  .csr_ptw_menvcfg_pbmte (csr_ptw_menvcfg_pbmte),
+  .csr_ptw_henvcfg_pbmte (csr_ptw_henvcfg_pbmte),
+  .w_s_lvl           (r_s_lvl),
+  .w_g_lvl           (r_g_lvl),
+  .w_m_ret           (r_m_ret),
+  .w_g_acc           (r_g_acc),
   .csr_ptw_pmpcfg    (csr_ptw_pmpcfg),
   .csr_ptw_pmpaddr   (csr_ptw_pmpaddr)
 );

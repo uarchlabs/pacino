@@ -36,132 +36,246 @@ typedef enum logic [2:0] {
 // BP-123 widened this from 6 to 7 bits: the 6-bit space was full and
 // Zba, Zbb, Zbs, Zicond and Zimop (all mandatory in RVA23U64) had no
 // operation. Values 0 to 63 are unchanged; ALU_ILL stays 63.
-typedef enum logic [6:0] {
-    ALU_ADD    = 7'd0,
-    ALU_SUB    = 7'd1,
-    ALU_SLL    = 7'd2,
-    ALU_SRL    = 7'd3,
-    ALU_SRA    = 7'd4,
-    ALU_AND    = 7'd5,
-    ALU_OR     = 7'd6,
-    ALU_XOR    = 7'd7,
-    ALU_SLT    = 7'd8,
-    ALU_SLTU   = 7'd9,
-    ALU_ADDW   = 7'd10,
-    ALU_SUBW   = 7'd11,
-    ALU_SLLW   = 7'd12,
-    ALU_SRLW   = 7'd13,
-    ALU_SRAW   = 7'd14,
-    ALU_LUI    = 7'd15,
-    ALU_AUIPC  = 7'd16,
-    ALU_JAL    = 7'd17,
-    ALU_JALR   = 7'd18,
-    ALU_BEQ    = 7'd19,
-    ALU_BNE    = 7'd20,
-    ALU_BLT    = 7'd21,
-    ALU_BGE    = 7'd22,
-    ALU_BLTU   = 7'd23,
-    ALU_BGEU   = 7'd24,
-    ALU_LB     = 7'd25,
-    ALU_LH     = 7'd26,
-    ALU_LW     = 7'd27,
-    ALU_LD     = 7'd28,
-    ALU_LBU    = 7'd29,
-    ALU_LHU    = 7'd30,
-    ALU_LWU    = 7'd31,
-    ALU_SB     = 7'd32,
-    ALU_SH     = 7'd33,
-    ALU_SW     = 7'd34,
-    ALU_SD     = 7'd35,
-    ALU_MUL    = 7'd36,
-    ALU_MULH   = 7'd37,
-    ALU_MULHSU = 7'd38,
-    ALU_MULHU  = 7'd39,
-    ALU_DIV    = 7'd40,
-    ALU_DIVU   = 7'd41,
-    ALU_REM    = 7'd42,
-    ALU_REMU   = 7'd43,
-    ALU_MULW   = 7'd44,
-    ALU_DIVW   = 7'd45,
-    ALU_DIVUW  = 7'd46,
-    ALU_REMW   = 7'd47,
-    ALU_REMUW  = 7'd48,
-    ALU_CSR    = 7'd49,
-    ALU_ECALL  = 7'd50,
-    ALU_EBREAK = 7'd51,
-    ALU_MRET   = 7'd52,
-    ALU_SRET   = 7'd53,
-    ALU_WFI    = 7'd54,
-    ALU_FENCE  = 7'd55,
-    ALU_FLD    = 7'd56,
-    ALU_FSD    = 7'd57,
-    ALU_FMADD  = 7'd58,
-    ALU_SLLI   = 7'd59,
-    ALU_SRLI   = 7'd60,
-    ALU_SRAI   = 7'd61,
-    ALU_ANDI   = 7'd62,
-    ALU_ILL    = 7'd63,
+// BP-124 (dcd_decisions.md DCD-21, DCD-22): 8 bits. Every scalar
+// operation is named exactly, so no downstream unit re-decodes the
+// instruction word. Values 0 to 106 keep their values; ALU_ILL stays
+// 63; ALU_CSR, ALU_FLD and ALU_FSD are renamed ALU_CSRRW, ALU_FLOAD and
+// ALU_FSTORE, values unchanged; ALU_FMADD now means FMADD only. The 79
+// operations of DCD-22 are appended, 107 to 185, in its order. ALU_FENCE
+// (55) is FENCE, FENCE.TSO and PAUSE, which are FENCE configurations.
+// HLV, HLVX and HSV use the width-exact load and store operations with
+// is_hlsv (and is_hlvx) set (DCD-30).
+typedef enum logic [7:0] {
+    ALU_ADD    = 8'd0,
+    ALU_SUB    = 8'd1,
+    ALU_SLL    = 8'd2,
+    ALU_SRL    = 8'd3,
+    ALU_SRA    = 8'd4,
+    ALU_AND    = 8'd5,
+    ALU_OR     = 8'd6,
+    ALU_XOR    = 8'd7,
+    ALU_SLT    = 8'd8,
+    ALU_SLTU   = 8'd9,
+    ALU_ADDW   = 8'd10,
+    ALU_SUBW   = 8'd11,
+    ALU_SLLW   = 8'd12,
+    ALU_SRLW   = 8'd13,
+    ALU_SRAW   = 8'd14,
+    ALU_LUI    = 8'd15,
+    ALU_AUIPC  = 8'd16,
+    ALU_JAL    = 8'd17,
+    ALU_JALR   = 8'd18,
+    ALU_BEQ    = 8'd19,
+    ALU_BNE    = 8'd20,
+    ALU_BLT    = 8'd21,
+    ALU_BGE    = 8'd22,
+    ALU_BLTU   = 8'd23,
+    ALU_BGEU   = 8'd24,
+    ALU_LB     = 8'd25,
+    ALU_LH     = 8'd26,
+    ALU_LW     = 8'd27,
+    ALU_LD     = 8'd28,
+    ALU_LBU    = 8'd29,
+    ALU_LHU    = 8'd30,
+    ALU_LWU    = 8'd31,
+    ALU_SB     = 8'd32,
+    ALU_SH     = 8'd33,
+    ALU_SW     = 8'd34,
+    ALU_SD     = 8'd35,
+    ALU_MUL    = 8'd36,
+    ALU_MULH   = 8'd37,
+    ALU_MULHSU = 8'd38,
+    ALU_MULHU  = 8'd39,
+    ALU_DIV    = 8'd40,
+    ALU_DIVU   = 8'd41,
+    ALU_REM    = 8'd42,
+    ALU_REMU   = 8'd43,
+    ALU_MULW   = 8'd44,
+    ALU_DIVW   = 8'd45,
+    ALU_DIVUW  = 8'd46,
+    ALU_REMW   = 8'd47,
+    ALU_REMUW  = 8'd48,
+    ALU_CSRRW  = 8'd49,  // CSRRW; BP-124 renamed from ALU_CSR
+    ALU_ECALL  = 8'd50,
+    ALU_EBREAK = 8'd51,
+    ALU_MRET   = 8'd52,
+    ALU_SRET   = 8'd53,
+    ALU_WFI    = 8'd54,
+    ALU_FENCE  = 8'd55,
+    ALU_FLOAD  = 8'd56,  // FLH, FLW, FLD; was ALU_FLD (BP-124)
+    ALU_FSTORE = 8'd57,  // FSH, FSW, FSD; was ALU_FSD (BP-124)
+    ALU_FMADD  = 8'd58,  // FMADD only (BP-124)
+    ALU_SLLI   = 8'd59,
+    ALU_SRLI   = 8'd60,
+    ALU_SRAI   = 8'd61,
+    ALU_ANDI   = 8'd62,
+    ALU_ILL    = 8'd63,
     // ---- BP-123 additions -------------------------------------------
     // Zba
-    ALU_SH1ADD   = 7'd64,
-    ALU_SH2ADD   = 7'd65,
-    ALU_SH3ADD   = 7'd66,
-    ALU_ADDUW    = 7'd67,
-    ALU_SH1ADDUW = 7'd68,
-    ALU_SH2ADDUW = 7'd69,
-    ALU_SH3ADDUW = 7'd70,
-    ALU_SLLIUW   = 7'd71,
+    ALU_SH1ADD   = 8'd64,
+    ALU_SH2ADD   = 8'd65,
+    ALU_SH3ADD   = 8'd66,
+    ALU_ADDUW    = 8'd67,
+    ALU_SH1ADDUW = 8'd68,
+    ALU_SH2ADDUW = 8'd69,
+    ALU_SH3ADDUW = 8'd70,
+    ALU_SLLIUW   = 8'd71,
     // Zbb
-    ALU_ANDN     = 7'd72,
-    ALU_ORN      = 7'd73,
-    ALU_XNOR     = 7'd74,
-    ALU_CLZ      = 7'd75,
-    ALU_CLZW     = 7'd76,
-    ALU_CTZ      = 7'd77,
-    ALU_CTZW     = 7'd78,
-    ALU_CPOP     = 7'd79,
-    ALU_CPOPW    = 7'd80,
-    ALU_MAX      = 7'd81,
-    ALU_MAXU     = 7'd82,
-    ALU_MIN      = 7'd83,
-    ALU_MINU     = 7'd84,
-    ALU_SEXTB    = 7'd85,
-    ALU_SEXTH    = 7'd86,
-    ALU_ZEXTH    = 7'd87,
-    ALU_ROL      = 7'd88,
-    ALU_ROLW     = 7'd89,
-    ALU_ROR      = 7'd90,
-    ALU_RORI     = 7'd91,
-    ALU_RORIW    = 7'd92,
-    ALU_RORW     = 7'd93,
-    ALU_ORCB     = 7'd94,
-    ALU_REV8     = 7'd95,
+    ALU_ANDN     = 8'd72,
+    ALU_ORN      = 8'd73,
+    ALU_XNOR     = 8'd74,
+    ALU_CLZ      = 8'd75,
+    ALU_CLZW     = 8'd76,
+    ALU_CTZ      = 8'd77,
+    ALU_CTZW     = 8'd78,
+    ALU_CPOP     = 8'd79,
+    ALU_CPOPW    = 8'd80,
+    ALU_MAX      = 8'd81,
+    ALU_MAXU     = 8'd82,
+    ALU_MIN      = 8'd83,
+    ALU_MINU     = 8'd84,
+    ALU_SEXTB    = 8'd85,
+    ALU_SEXTH    = 8'd86,
+    ALU_ZEXTH    = 8'd87,
+    ALU_ROL      = 8'd88,
+    ALU_ROLW     = 8'd89,
+    ALU_ROR      = 8'd90,
+    ALU_RORI     = 8'd91,
+    ALU_RORIW    = 8'd92,
+    ALU_RORW     = 8'd93,
+    ALU_ORCB     = 8'd94,
+    ALU_REV8     = 8'd95,
     // Zbs
-    ALU_BCLR     = 7'd96,
-    ALU_BCLRI    = 7'd97,
-    ALU_BEXT     = 7'd98,
-    ALU_BEXTI    = 7'd99,
-    ALU_BINV     = 7'd100,
-    ALU_BINVI    = 7'd101,
-    ALU_BSET     = 7'd102,
-    ALU_BSETI    = 7'd103,
+    ALU_BCLR     = 8'd96,
+    ALU_BCLRI    = 8'd97,
+    ALU_BEXT     = 8'd98,
+    ALU_BEXTI    = 8'd99,
+    ALU_BINV     = 8'd100,
+    ALU_BINVI    = 8'd101,
+    ALU_BSET     = 8'd102,
+    ALU_BSETI    = 8'd103,
     // Zicond
-    ALU_CZEROEQZ = 7'd104,
-    ALU_CZERONEZ = 7'd105,
+    ALU_CZEROEQZ = 8'd104,
+    ALU_CZERONEZ = 8'd105,
     // Zimop: MOP.R.n and MOP.RR.n write zero to rd and read nothing
-    // (no extension redefines them in RVA23)
-    ALU_MOP      = 7'd106
+    // (no extension this design implements redefines them; Zicfiss, an
+    // RVA23 option not implemented, redefines some)
+    ALU_MOP      = 8'd106,
+    // ---- BP-124 additions (dcd_decisions.md DCD-22), 107 to 185 ----
+    // Every vector instruction; v_op_class names the operation (DCD-21)
+    ALU_VEC         = 8'd107,
+    // FP (DCD-22); fp_fmt and fp_src_fmt give the precision (DCD-23)
+    ALU_FMSUB       = 8'd108,
+    ALU_FNMSUB      = 8'd109,
+    ALU_FNMADD      = 8'd110,
+    ALU_FADD        = 8'd111,
+    ALU_FSUB        = 8'd112,
+    ALU_FMUL        = 8'd113,
+    ALU_FDIV        = 8'd114,
+    ALU_FSQRT       = 8'd115,
+    ALU_FSGNJ       = 8'd116,
+    ALU_FSGNJN      = 8'd117,
+    ALU_FSGNJX      = 8'd118,
+    ALU_FMIN        = 8'd119,
+    ALU_FMAX        = 8'd120,
+    ALU_FCVT_W      = 8'd121,
+    ALU_FCVT_WU     = 8'd122,
+    ALU_FCVT_L      = 8'd123,
+    ALU_FCVT_LU     = 8'd124,
+    ALU_FCVT_FW     = 8'd125,
+    ALU_FCVT_FWU    = 8'd126,
+    ALU_FCVT_FL     = 8'd127,
+    ALU_FCVT_FLU    = 8'd128,
+    ALU_FCVT_FF     = 8'd129,
+    ALU_FMV_XF      = 8'd130,
+    ALU_FMV_FX      = 8'd131,
+    ALU_FEQ         = 8'd132,
+    ALU_FLT         = 8'd133,
+    ALU_FLE         = 8'd134,
+    ALU_FCLASS      = 8'd135,
+    // Zfa
+    ALU_FLI         = 8'd136,
+    ALU_FMINM       = 8'd137,
+    ALU_FMAXM       = 8'd138,
+    ALU_FROUND      = 8'd139,
+    ALU_FROUNDNX    = 8'd140,
+    ALU_FCVTMOD_W_D = 8'd141,
+    ALU_FLEQ        = 8'd142,
+    ALU_FLTQ        = 8'd143,
+    // A: LR, SC and the AMOs, W and D; aq and rl travel in funct7
+    ALU_LR_W        = 8'd144,
+    ALU_LR_D        = 8'd145,
+    ALU_SC_W        = 8'd146,
+    ALU_SC_D        = 8'd147,
+    ALU_AMOSWAP_W   = 8'd148,
+    ALU_AMOSWAP_D   = 8'd149,
+    ALU_AMOADD_W    = 8'd150,
+    ALU_AMOADD_D    = 8'd151,
+    ALU_AMOXOR_W    = 8'd152,
+    ALU_AMOXOR_D    = 8'd153,
+    ALU_AMOAND_W    = 8'd154,
+    ALU_AMOAND_D    = 8'd155,
+    ALU_AMOOR_W     = 8'd156,
+    ALU_AMOOR_D     = 8'd157,
+    ALU_AMOMIN_W    = 8'd158,
+    ALU_AMOMIN_D    = 8'd159,
+    ALU_AMOMAX_W    = 8'd160,
+    ALU_AMOMAX_D    = 8'd161,
+    ALU_AMOMINU_W   = 8'd162,
+    ALU_AMOMINU_D   = 8'd163,
+    ALU_AMOMAXU_W   = 8'd164,
+    ALU_AMOMAXU_D   = 8'd165,
+    // fences: Zifencei, Zicbom, Zicboz, the SYSTEM fences, Svinval, H
+    ALU_FENCE_I     = 8'd166,
+    ALU_CBO_INVAL   = 8'd167,
+    ALU_CBO_CLEAN   = 8'd168,
+    ALU_CBO_FLUSH   = 8'd169,
+    ALU_CBO_ZERO    = 8'd170,
+    ALU_SFENCE_VMA  = 8'd171,
+    ALU_SINVAL_VMA  = 8'd172,
+    ALU_SFENCE_W_INVAL = 8'd173,
+    ALU_SFENCE_INVAL_IR = 8'd174,
+    ALU_HFENCE_VVMA = 8'd175,
+    ALU_HFENCE_GVMA = 8'd176,
+    ALU_HINVAL_VVMA = 8'd177,
+    ALU_HINVAL_GVMA = 8'd178,
+    // Zawrs
+    ALU_WRS_NTO     = 8'd179,
+    ALU_WRS_STO     = 8'd180,
+    // Zicsr: ALU_CSRRW is 49
+    ALU_CSRRS       = 8'd181,
+    ALU_CSRRC       = 8'd182,
+    ALU_CSRRWI      = 8'd183,
+    ALU_CSRRSI      = 8'd184,
+    ALU_CSRRCI      = 8'd185
 } alu_op_t;
 
 // Per-instruction decode packet.
 // Passed as an 8-element array from instr_decoder to rename/dispatch.
 //
 // Downstream interface impact:
-//   - rename stage reads uses_rd/rs1/rs2/rs3 to perform register renaming
-//   - dispatch reads alu_op and is_* flags to route to functional units
-//   - rs3 is non-zero only for FMA-class FP instructions
-//   - imm is already sign-extended to 32 bits; rename widens to 64 bits
-//   - is_illegal should cause a trap in the dispatch stage
+//   - rename stage reads uses_rd/rs1/rs2/rs3 to perform register
+//     renaming; they are exact per operation (DCD-24), and an unused
+//     register field is zero
+//   - rd_is_fp, rs1_is_fp and rs2_is_fp name the register file of each
+//     used operand; rs3 is always an FP register (DCD-24)
+//   - for a vector instruction these describe its SCALAR operands only;
+//     its vector operands are in vec_decode_pkt_t (DCD-24)
+//   - dispatch reads alu_op and is_* flags to route to functional units;
+//     is_fp means the operation executes in the FP unit (DCD-24)
+//   - rs3 is non-zero only for the four FMA operations
+//   - imm: the I, S, B, U or J immediate sign-extended to 32 bits, or an
+//     immediate that sits in a register field, placed as DCD-25 states:
+//     a CSR address zero-extended in imm[11:0] with the CSRRxI zimm in
+//     imm[16:12]; the FLI index in imm[4:0]; an OPIVI immediate sign- or
+//     zero-extended (vror.vi's six bits in imm[5:0]); the vtype
+//     immediate of vsetvli / vsetivli in imm[10:0] and vsetivli's AVL in
+//     imm[20:16]. A FENCE carries fm, pred and succ in imm[11:0],
+//     zero-extended. rename widens to 64 bits
+//   - fp_fmt / fp_src_fmt: 2'b00 S, 2'b01 D, 2'b10 H (DCD-23); zero for
+//     a non-FP operation
+//   - is_illegal should cause a trap in the dispatch stage; an illegal
+//     packet uses no register and sets no is_* flag
 typedef struct packed {
     logic        valid;      // slot contains a valid decoded instruction
     logic [31:0] instr;      // expanded 32b instruction word (post-RVC)
@@ -169,10 +283,10 @@ typedef struct packed {
     logic [4:0]  rd;
     logic [4:0]  rs1;
     logic [4:0]  rs2;
-    logic [4:0]  rs3;        // FMADD/FMSUB only; zero for all others
+    logic [4:0]  rs3;        // the FMA operations only; zero for others
     logic [2:0]  funct3;
-    logic [6:0]  funct7;
-    logic [31:0] imm;        // sign-extended immediate
+    logic [6:0]  funct7;     // aq and rl of an AMO in [1:0] (DCD-28)
+    logic [31:0] imm;        // see above (DCD-25)
     instr_fmt_t  fmt;
     alu_op_t     alu_op;
     logic        is_branch;
@@ -186,6 +300,14 @@ typedef struct packed {
     logic        uses_rs2;
     logic        uses_rs3;
     logic        is_illegal;
+    // ---- BP-124 (DCD-23, DCD-24, DCD-30), appended in this order ----
+    logic [1:0]  fp_fmt;     // the instruction's fmt, or the datum width
+    logic [1:0]  fp_src_fmt; // ALU_FCVT_FF's source, rs2[1:0]
+    logic        rd_is_fp;   // rd is an FP register
+    logic        rs1_is_fp;
+    logic        rs2_is_fp;
+    logic        is_hlsv;    // HLV, HLVX, HSV: a virtual-machine access
+    logic        is_hlvx;    // HLVX: read with execute permission
 } decode_pkt_t;
 
 
@@ -206,7 +328,7 @@ typedef struct packed {
 //   OPFVV/OPFVF (DECODE-006): VOP_VFADD..VOP_VFWNMSAC (71-123)
 //   DECODE-007 additions: VOP_VFMV_FS..VOP_VSLIDE1DOWN_X (124-167)
 //
-// Width is 8 bits to accommodate 168 entries (0-167).
+// Width is 8 bits; the values run to 198 (BP-124, Zvbb, DCD-33).
 //
 // OPMVX operand note (funct3=3'b110):
 //   vs1 is set to zero in vec_decode_pkt_t for all OPMVX instructions.
@@ -453,7 +575,19 @@ typedef enum logic [7:0] {
     VOP_VLUXSEG    = 8'd185, // unordered indexed segment load
     VOP_VSUXSEG    = 8'd186, // unordered indexed segment store
     VOP_VLOXSEG    = 8'd187, // ordered indexed segment load
-    VOP_VSOXSEG    = 8'd188  // ordered indexed segment store
+    VOP_VSOXSEG    = 8'd188, // ordered indexed segment store
+    // -- BP-124: Zvbb (dcd_decisions.md DCD-33), gated by en_v --
+    VOP_VANDN      = 8'd189, // vandn.vv/vx    OPIVV/OPIVX funct6=0x01
+    VOP_VBREV      = 8'd190, // vbrev.v        OPMVV 0x12 vs1=0x0a
+    VOP_VBREV8     = 8'd191, // vbrev8.v       OPMVV 0x12 vs1=0x08
+    VOP_VREV8      = 8'd192, // vrev8.v        OPMVV 0x12 vs1=0x09
+    VOP_VCLZ       = 8'd193, // vclz.v         OPMVV 0x12 vs1=0x0c
+    VOP_VCTZ       = 8'd194, // vctz.v         OPMVV 0x12 vs1=0x0d
+    VOP_VCPOP_V    = 8'd195, // vcpop.v        OPMVV 0x12 vs1=0x0e
+                             // (VOP_VCPOP is vcpop.m)
+    VOP_VROL       = 8'd196, // vrol.vv/vx     funct6=0x15
+    VOP_VROR       = 8'd197, // vror.vv/vx funct6=0x14; vror.vi 0x14/0x15
+    VOP_VWSLL      = 8'd198  // vwsll.vv/vx/vi funct6=0x35
 } v_op_class_t;
 
 // Extension enable/disable control.
@@ -533,6 +667,9 @@ typedef struct packed {
     //   VOP_VFMV_FS (124) = vfmv.f.s  OPFVV tech-debt fix
     // DECODE-008/009: vector memory VOP_VLE..VOP_VSOXSEG (168-188)
     //   From opcode 0x07/0x27; VMEM class; segment ops complete
+    // BP-124 Zvbb: VOP_VANDN..VOP_VWSLL (189-198). A vector encoding
+    // that decodes to VOTHER or to the VMEM default is illegal (DCD-32)
+    // and its vector packet is zero.
     v_op_class_t v_op_class;
 } vec_decode_pkt_t;
 

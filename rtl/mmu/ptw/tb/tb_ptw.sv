@@ -24,6 +24,16 @@
 // derived here from the tables the test wrote, not read from the DUT.
 //
 // The data-side D update (MMU-8) is covered here: itlb_l2t_acc = W.
+//
+// BP-124. itlb_l2t_priv (IL-3d) is driven from req_priv, S unless a
+// test sets it. The faulting GPA is FAULT_GPA_WIDTH bits and is
+// returned whole (MMU-23): h_gpa_bit55_leaf and h_gpa_bit55_nonleaf.
+// The cause follows the access type (MMU-24c). Every check MMU-8c names
+// is made before the A/D update: t_leaf_checks fails each, at each
+// stage it applies to, on a leaf with A clear under Svadu, and checks
+// the fault, that no CAS was issued and that the PTE is unchanged.
+// t_causes: the access-fault and guest-page-fault causes of a read
+// and a store (5, 7, 21, 23).
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -44,6 +54,7 @@ module tb;
   logic                     itlb_l2t_v;
   logic [1:0]               itlb_l2t_tag;
   logic [1:0]               itlb_l2t_acc;
+  logic [1:0]               itlb_l2t_priv;
   logic                     l2t_itlb_rsp_val;
   logic [1:0]               l2t_itlb_tag;
   logic [1:0]               l2t_itlb_status;
@@ -52,7 +63,7 @@ module tb;
   logic [PERM_WIDTH-1:0]    l2t_itlb_perm;
   logic [1:0]               l2t_itlb_pbmt;
   logic [CAUSE_WIDTH-1:0]   l2t_itlb_cause;
-  logic [GPA_WIDTH-1:0]     l2t_itlb_gpa;
+  logic [FAULT_GPA_WIDTH-1:0] l2t_itlb_gpa;
   logic [1:0]               l2t_itlb_gpa_imp;
   logic                     ptw_mem_req_val;
   logic                     ptw_mem_req_rdy;
@@ -82,6 +93,8 @@ module tb;
   localparam logic [1:0] ACC_R = 2'd0;
   localparam logic [1:0] ACC_W = 2'd1;
   localparam logic [1:0] ACC_X = 2'd2;
+  localparam logic [1:0] PRV_U = 2'd0;
+  localparam logic [1:0] PRV_S = 2'd1;
   localparam logic [1:0] ST_HIT   = 2'b00;
   localparam logic [1:0] ST_FAULT = 2'b01;
   localparam logic [1:0] ST_RETRY = 2'b10;
@@ -109,6 +122,7 @@ module tb;
   int    pass_cnt;
   int    fail_cnt;
   string tname;
+  logic [1:0] req_priv;   // itlb_l2t_priv of the next walk (BP-124)
 
   task automatic chk(input string nm, input logic ok);
     if (ok) begin
@@ -295,6 +309,8 @@ module tb;
     itlb_l2t_v       = 1'b0;
     itlb_l2t_tag     = '0;
     itlb_l2t_acc     = ACC_X;
+    itlb_l2t_priv    = PRV_S;
+    req_priv         = PRV_S;
     mem.delete();
     lat_min = 2;
     lat_max = 2;
@@ -334,7 +350,7 @@ module tb;
   logic [7:0]             r_perm;
   logic [1:0]             r_pbmt;
   logic [CAUSE_WIDTH-1:0] r_cause;
-  logic [GPA_WIDTH-1:0]   r_gpa;
+  logic [FAULT_GPA_WIDTH-1:0] r_gpa;
   logic [1:0]             r_imp;
   logic [1:0]             r_tag;
   int                     n_rsp;
@@ -363,6 +379,7 @@ module tb;
     itlb_l2t_v       = v;
     itlb_l2t_vpn     = vpn;
     itlb_l2t_acc     = acc;
+    itlb_l2t_priv    = req_priv;
     itlb_l2t_tag     = 2'd1;
     do @(posedge clk); while (!itlb_l2t_req_rdy);
     #1;
@@ -390,15 +407,23 @@ module tb;
     chk($sformatf("%s: pbmt %0d exp %0d", nm, r_pbmt, pbmt), r_pbmt == pbmt);
   endtask
 
+  // A guest-page fault whose GPA fits GPA_WIDTH, zero-extended.
+  task automatic exp_gpf41(input string nm,
+                           input logic [GPA_WIDTH-1:0] gpa,
+                           input logic [1:0] imp);
+    exp_gpf(nm, FAULT_GPA_WIDTH'(gpa), imp);
+  endtask
+
   task automatic exp_flt(input string nm, input logic [CAUSE_WIDTH-1:0] c);
     chk($sformatf("%s: fault (st %0d)", nm, r_st), r_st == ST_FAULT);
     chk($sformatf("%s: cause %0d exp %0d", nm, r_cause, c), r_cause == c);
   endtask
 
-  task automatic exp_gpf(input string nm, input logic [GPA_WIDTH-1:0] gpa,
+  task automatic exp_gpf(input string nm,
+                         input logic [FAULT_GPA_WIDTH-1:0] gpa,
                          input logic [1:0] imp);
     exp_flt(nm, CAUSE_WIDTH'(20));
-    chk($sformatf("%s: gpa %011h exp %011h", nm, r_gpa, gpa), r_gpa == gpa);
+    chk($sformatf("%s: gpa %014h exp %014h", nm, r_gpa, gpa), r_gpa == gpa);
     chk($sformatf("%s: kind %0d exp %0d", nm, r_imp, imp), r_imp == imp);
   endtask
 
@@ -566,12 +591,12 @@ module tb;
     setup("s_svade_store");
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RWXA));
     walk(1'b0, 29'(VA), ACC_W);
-    exp_flt("Svade store, D clear", 12);
+    exp_flt("Svade store, D clear", 15);         // MMU-24c
     setup("s_store_no_w");
     csr_ptw_menvcfg_adue = 1'b1;
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RX));
     walk(1'b0, 29'(VA), ACC_W);
-    exp_flt("store to a page without W", 12);
+    exp_flt("store to a page without W", 15);    // MMU-24c
     chk("store without W: no CAS", n_cas == 0);
 
     // WM-11: memory changes the PTE before the CAS; the walk restarts
@@ -878,7 +903,7 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte_x(44'h8_4564, F_URXA, 2'd0, 1'b1));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("reserved N at the G-stage", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("reserved N at the G-stage", {GP_CODE, 12'h000}, 2'b00);
   endtask
 
   // Guest-page faults of each kind, PBMT, U and the GPA width.
@@ -887,13 +912,13 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), 64'd0);
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("unmapped final GPA", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("unmapped final GPA", {GP_CODE, 12'h000}, 2'b00);
 
     setup2("h_gpf_read");
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_VT1[8:0]), 64'd0);           // VS level-1 table
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("unmapped VS table page", {GP_VT1, 12'h000} +
+    exp_gpf41("unmapped VS table page", {GP_VT1, 12'h000} +
             41'(8 * VA[17:9]), 2'b01);
 
     setup2("h_gpf_write");
@@ -902,7 +927,7 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RX));                 // VS A clear
     wrw(G0 + 36'(8 * GP_VT0[8:0]), pte(44'(SP_VT0 >> 12), F_URXA)); // no W
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("G leaf without W for the VS update",
+    exp_gpf41("G leaf without W for the VS update",
             {GP_VT0, 12'h000} + 41'(8 * VA[8:0]), 2'b10);
     chk("no W: VS PTE unchanged",
         rdw(SP_VT0 + 36'(8 * VA[8:0])) == pte(44'(GP_CODE), F_RX));
@@ -911,23 +936,48 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte(44'(SP_CODE), F_RXAD));  // U clear
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("G leaf with U clear", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("G leaf with U clear", {GP_CODE, 12'h000}, 2'b00);
 
     setup2("h_g_no_x");
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte(44'(SP_CODE), 8'hD3)); // U R A D
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("G leaf without X for the fetch", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("G leaf without X for the fetch", {GP_CODE, 12'h000}, 2'b00);
 
+    // MMU-23 (BP-124): a GPA above bit 40 is returned whole. MMU-30's
+    // zero is withdrawn. Kind 00: the leaf's page, bits 11:0 zero.
     setup2("h_gpa_wide_leaf");
     vspath(pte(44'h2000_0123, F_RXAD));              // GPA bit 41
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("VS leaf GPA above bit 40", '0, 2'b00);
+    exp_gpf("VS leaf GPA above bit 40", {44'h2000_0123, 12'h000}, 2'b00);
 
+    setup2("h_gpa_bit55_leaf");
+    vspath(pte(44'h800_0000_0123, F_RXAD));          // GPA bit 55
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_gpf("VS leaf GPA bit 55", {44'h800_0000_0123, 12'h000}, 2'b00);
+    chk("bit 55 leaf: the GPA's bit 55 is set", r_gpa[55]);
+
+    // Kind 01: the GPA of the VS PTE the next level would read.
     setup2("h_gpa_wide_nonleaf");
     wrw(SP_VT2 + 36'(8 * VA[26:18]), pte(44'h2000_0041, F_PTR));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("VS non-leaf GPA above bit 40", '0, 2'b01);
+    exp_gpf("VS non-leaf GPA above bit 40",
+            {44'h2000_0041, 12'h000} + 56'(8 * VA[17:9]), 2'b01);
+
+    setup2("h_gpa_bit55_nonleaf");
+    wrw(SP_VT2 + 36'(8 * VA[26:18]), pte(44'h800_0000_0041, F_PTR));
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_gpf("VS non-leaf GPA bit 55",
+            {44'h800_0000_0041, 12'h000} + 56'(8 * VA[17:9]), 2'b01);
+    chk("bit 55 non-leaf: the GPA's bit 55 is set", r_gpa[55]);
+
+    // The same at level 1: the GPA indexes with VA[8:0].
+    setup2("h_gpa_bit55_nonleaf_l1");
+    wrw(SP_VT2 + 36'(8 * VA[26:18]), pte(44'(GP_VT1), F_PTR));
+    wrw(SP_VT1 + 36'(8 * VA[17:9]),  pte(44'h800_0000_0042, F_PTR));
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_gpf("VS level-1 non-leaf GPA bit 55",
+            {44'h800_0000_0042, 12'h000} + 56'(8 * VA[8:0]), 2'b01);
 
     setup2("h_g_ppn_wide");
     vspath(pte(44'(GP_CODE), F_RXAD));
@@ -946,13 +996,13 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte_x(44'(SP_CODE), F_URXA, 2'd2, 1'b0));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("G PBMT with menvcfg.PBMTE clear", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("G PBMT with menvcfg.PBMTE clear", {GP_CODE, 12'h000}, 2'b00);
 
     setup2("h_g_pbmt_rsv");
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte_x(44'(SP_CODE), F_URXA, 2'd3, 1'b0));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("G PBMT 3", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("G PBMT 3", {GP_CODE, 12'h000}, 2'b00);
 
     setup2("h_pbmt_max");
     vspath(pte_x(44'(GP_CODE), F_RXAD, 2'd1, 1'b0));         // NC
@@ -1001,7 +1051,7 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RX));
     wrw(gl, pte(44'(SP_VT0 >> 12), F_URWXA));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("Svade at G for the VS update", {GP_VT0, 12'h000} +
+    exp_gpf41("Svade at G for the VS update", {GP_VT0, 12'h000} +
             41'(8 * VA[8:0]), 2'b10);
     chk("h1 m0: no CAS", n_cas == 0);
 
@@ -1022,7 +1072,7 @@ module tb;
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte(44'(SP_CODE), F_URX));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf("Svade at G, fetch", {GP_CODE, 12'h000}, 2'b00);
+    exp_gpf41("Svade at G, fetch", {GP_CODE, 12'h000}, 2'b00);
 
     // Svadu at the G-stage for the fetch's own GPA, with a mismatch.
     setup2("h_g_svadu_mismatch");
@@ -1048,6 +1098,222 @@ module tb;
   endtask
 
   // =================================================================
+  // MMU-8c (BP-124). Every check the algorithm makes on a leaf comes
+  // before its A/D update. Each case below enables Svadu at the stage
+  // of the leaf under test, gives that leaf A clear, makes exactly one
+  // check fail, and checks the fault, that NO CAS was issued and that
+  // the leaf in memory is unchanged.
+  // =================================================================
+  localparam logic [7:0] F_URX_NA = 8'h1B;          // U R X, A clear
+
+  // A single-stage leaf at level lvl (0, or 1 for a 2 MiB leaf).
+  task automatic lc_s(input string nm, input logic [63:0] leaf,
+                      input logic [1:0] lvl, input logic [1:0] acc,
+                      input logic [1:0] priv, input logic pbmte,
+                      input int cause);
+    logic [PA_WIDTH-1:0] la;
+    setup(nm);
+    csr_ptw_menvcfg_adue  = 1'b1;
+    csr_ptw_menvcfg_pbmte = pbmte;
+    req_priv = priv;
+    if (lvl == 2'd0) begin
+      path3(T2, T1, T0, VA, leaf);
+      la = T0 + 36'(8 * VA[8:0]);
+    end else begin
+      wrw(T2 + 36'(8 * VA[26:18]), pte(44'(T1 >> 12), F_PTR));
+      wrw(T1 + 36'(8 * VA[17:9]), leaf);
+      la = T1 + 36'(8 * VA[17:9]);
+    end
+    walk(1'b0, 29'(VA), acc);
+    exp_flt(nm, CAUSE_WIDTH'(cause));
+    chk({nm, ": no CAS"}, n_cas == 0);
+    chk({nm, ": leaf unchanged"}, rdw(la) == leaf);
+  endtask
+
+  // A VS-stage leaf (nested, hgatp Sv39x4), at level 0 or 1. The
+  // G-stage leaves of the VS table pages have A and D, so the only
+  // update a walk could make is the VS leaf's.
+  task automatic lc_vs(input string nm, input logic [63:0] leaf,
+                       input logic [1:0] lvl, input logic [1:0] acc,
+                       input logic [1:0] priv, input logic pbmte,
+                       input int cause);
+    logic [PA_WIDTH-1:0] la;
+    setup2(nm);
+    csr_ptw_henvcfg_adue  = 1'b1;
+    csr_ptw_menvcfg_adue  = 1'b1;
+    csr_ptw_henvcfg_pbmte = pbmte;
+    req_priv = priv;
+    if (lvl == 2'd0) begin
+      vspath(leaf);
+      la = SP_VT0 + 36'(8 * VA[8:0]);
+    end else begin
+      wrw(SP_VT2 + 36'(8 * VA[26:18]), pte(44'(GP_VT1), F_PTR));
+      wrw(SP_VT1 + 36'(8 * VA[17:9]), leaf);
+      la = SP_VT1 + 36'(8 * VA[17:9]);
+    end
+    walk(1'b1, 29'(VA), acc);
+    exp_flt(nm, CAUSE_WIDTH'(cause));
+    chk({nm, ": no CAS"}, n_cas == 0);
+    chk({nm, ": leaf unchanged"}, rdw(la) == leaf);
+  endtask
+
+  // A G-stage leaf for the fetch's own GPA. The VS leaf has A and D,
+  // so it needs no update; menvcfg.ADUE is set for the G-stage. lvl 1
+  // maps guest page 0x200 (a 2 MiB G leaf in G1[1]); lvl 0 replaces
+  // the G leaf of GP_CODE.
+  task automatic lc_g(input string nm, input logic [63:0] leaf,
+                      input logic [1:0] lvl, input logic pbmte);
+    logic [PA_WIDTH-1:0]        la;
+    logic [28:0]                gp;
+    setup2(nm);
+    csr_ptw_menvcfg_adue  = 1'b1;
+    csr_ptw_menvcfg_pbmte = pbmte;
+    if (lvl == 2'd0) begin
+      gp = GP_CODE;
+      vspath(pte(44'(GP_CODE), F_RXAD));
+      la = G0 + 36'(8 * GP_CODE[8:0]);
+    end else begin
+      gp = 29'h200;
+      vspath(pte(44'h200, F_RXAD));
+      la = G1 + 36'(8 * 11'h1);
+    end
+    wrw(la, leaf);
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_gpf41(nm, {gp, 12'h000}, 2'b00);
+    chk({nm, ": no CAS"}, n_cas == 0);
+    chk({nm, ": leaf unchanged"}, rdw(la) == leaf);
+  endtask
+
+  // MMU-24c (BP-124): the access fault and the guest-page fault take
+  // the cause of the original access type, as the page fault does.
+  task automatic t_causes();
+    for (int a = 0; a < 2; a++) begin
+      // PMP denies the read of the level-0 table: 5 for a read, 7 for a
+      // store.
+      setup(a == 0 ? "c_pmp_read_r" : "c_pmp_read_w");
+      path3(T2, T1, T0, VA, pte(44'h8_2345, 8'hCF));  // D A X W R V
+      csr_ptw_pmpcfg[0]  = 8'h18;
+      csr_ptw_pmpaddr[0] = 34'((T0 >> 2) | 36'h1FF);
+      csr_ptw_pmpcfg[1]  = 8'h1F;
+      csr_ptw_pmpaddr[1] = '1;
+      walk(1'b0, 29'(VA), a == 0 ? ACC_R : ACC_W);
+      exp_flt(tname, a == 0 ? 5 : 7);
+      // The final GPA is unmapped by the G-stage: 21 for a read, 23
+      // for a store, kind 00.
+      setup2(a == 0 ? "c_gpf_r" : "c_gpf_w");
+      vspath(pte(44'(GP_CODE), 8'hCF));
+      wrw(G0 + 36'(8 * GP_CODE[8:0]), 64'd0);
+      walk(1'b1, 29'(VA), a == 0 ? ACC_R : ACC_W);
+      exp_flt(tname, a == 0 ? 21 : 23);
+      chk({tname, ": kind 00, the page"}, (r_imp == 2'b00) &&
+          (r_gpa == FAULT_GPA_WIDTH'({GP_CODE, 12'h000})));
+    end
+  endtask
+
+  task automatic t_leaf_checks();
+    // ---- U against the privilege (MMU-8c, ITLB-16) ----------------
+    lc_s("lc_s_u_fetch_ucl", pte(44'h8_2345, F_RX), 0, ACC_X, PRV_U,
+         1'b1, 12);                                  // U fetch, U clear
+    lc_s("lc_s_s_fetch_uset", pte(44'h8_2345, F_URX_NA), 0, ACC_X, PRV_S,
+         1'b1, 12);                                  // S fetch, U set
+    lc_vs("lc_vs_vu_fetch_ucl", pte(44'(GP_CODE), F_RX), 0, ACC_X, PRV_U,
+          1'b1, 12);                                 // VU fetch, U clear
+    lc_vs("lc_vs_vs_fetch_uset", pte(44'(GP_CODE), F_URX_NA), 0, ACC_X,
+          PRV_S, 1'b1, 12);                          // VS fetch, U set
+    lc_s("lc_s_s_read_uset", pte(44'h8_2345, F_URX_NA), 0, ACC_R, PRV_S,
+         1'b1, 13);                                  // SUM clear
+    lc_s("lc_s_s_store_uset", pte(44'h8_2345, F_URWX), 0, ACC_W,
+         PRV_S, 1'b1, 15);                           // SUM clear
+    // The permitted cases, so the U rule is not "always fault": a U
+    // fetch from a U leaf and an S fetch from a non-U leaf update A.
+    setup("lc_s_u_fetch_uset_ok");
+    csr_ptw_menvcfg_adue = 1'b1;
+    req_priv = PRV_U;
+    path3(T2, T1, T0, VA, pte(44'h8_2345, F_URX_NA));
+    walk(1'b0, 29'(VA), ACC_X);
+    exp_hit("U fetch from a U leaf", 24'h8_2345, SZ_4K, 2'd0);
+    chk("U fetch from a U leaf: A set by one CAS", (n_cas == 1) &&
+        (rdw(T0 + 36'(8 * VA[8:0])) == pte(44'h8_2345, F_URXA)));
+    setup2("lc_vs_vu_fetch_uset_ok");
+    csr_ptw_henvcfg_adue = 1'b1;
+    csr_ptw_menvcfg_adue = 1'b1;
+    req_priv = PRV_U;
+    vspath(pte(44'(GP_CODE), F_URX_NA));
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_hit("VU fetch from a U leaf", SP_CODE, SZ_4K, 2'd0);
+    chk("VU fetch from a U leaf: A set",
+        rdw(SP_VT0 + 36'(8 * VA[8:0])) == pte(44'(GP_CODE), F_URXA));
+
+    // ---- the access type (MMU-26a) --------------------------------
+    lc_s("lc_s_no_x", pte(44'h8_2345, 8'h03), 0, ACC_X, PRV_S, 1'b1, 12);
+    lc_s("lc_s_no_w", pte(44'h8_2345, F_RX), 0, ACC_W, PRV_S, 1'b1, 15);
+    lc_s("lc_s_no_r", pte(44'h8_2345, 8'h09), 0, ACC_R, PRV_S, 1'b1, 13);
+    lc_vs("lc_vs_no_x", pte(44'(GP_CODE), 8'h03), 0, ACC_X, PRV_S, 1'b1,
+          12);
+    lc_vs("lc_vs_no_w", pte(44'(GP_CODE), F_RX), 0, ACC_W, PRV_S, 1'b1,
+          15);
+    lc_vs("lc_vs_no_r", pte(44'(GP_CODE), 8'h09), 0, ACC_R, PRV_S, 1'b1,
+          13);
+    lc_g("lc_g_no_x", pte(44'(SP_CODE), 8'h13), 0, 1'b1);   // U R, A clear
+    lc_g("lc_g_no_u", pte(44'(SP_CODE), F_RX), 0, 1'b1);    // R X, A clear
+    // A G leaf without R for the implicit read of a VS table page:
+    // kind 01, and nothing is updated.
+    setup2("lc_g_no_r_implicit");
+    csr_ptw_menvcfg_adue = 1'b1;
+    vspath(pte(44'(GP_CODE), F_RXAD));
+    wrw(G0 + 36'(8 * GP_VT1[8:0]), pte(44'(SP_VT1 >> 12), 8'h19)); // U X
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_gpf41("G leaf without R, VS table read",
+            {GP_VT1, 12'h000} + 41'(8 * VA[17:9]), 2'b01);
+    chk("no R implicit: no CAS", n_cas == 0);
+    chk("no R implicit: leaf unchanged",
+        rdw(G0 + 36'(8 * GP_VT1[8:0])) == pte(44'(SP_VT1 >> 12), 8'h19));
+    // A G leaf without W for the VS update. The leaf is read first (R
+    // granted, A set, so no update for the read); the write needs W
+    // and D: neither is set and nothing is stored.
+    setup2("lc_g_no_w_update");
+    csr_ptw_henvcfg_adue = 1'b1;
+    csr_ptw_menvcfg_adue = 1'b1;
+    vspath(pte(44'(GP_CODE), F_RX));                 // VS A clear
+    wrw(G0 + 36'(8 * GP_VT0[8:0]), pte(44'(SP_VT0 >> 12), F_URXA));
+    walk(1'b1, 29'(VA), ACC_X);
+    exp_gpf41("G leaf without W, VS update",
+            {GP_VT0, 12'h000} + 41'(8 * VA[8:0]), 2'b10);
+    chk("no W update: no CAS", n_cas == 0);
+    chk("no W update: G leaf unchanged",
+        rdw(G0 + 36'(8 * GP_VT0[8:0])) == pte(44'(SP_VT0 >> 12), F_URXA));
+    chk("no W update: VS leaf unchanged",
+        rdw(SP_VT0 + 36'(8 * VA[8:0])) == pte(44'(GP_CODE), F_RX));
+
+    // ---- reserved encodings (MMU-U6, MMU-U7) ----------------------
+    lc_s("lc_s_pbmt3", pte_x(44'h8_2345, F_RX, 2'd3, 1'b0), 0, ACC_X,
+         PRV_S, 1'b1, 12);
+    lc_s("lc_s_pbmte", pte_x(44'h8_2345, F_RX, 2'd1, 1'b0), 0, ACC_X,
+         PRV_S, 1'b0, 12);
+    lc_s("lc_s_napot_rsv", pte_x(44'h8_2344, F_RX, 2'd0, 1'b1), 0, ACC_X,
+         PRV_S, 1'b1, 12);
+    lc_s("lc_s_rsv_bits", pte(44'h8_2345, F_RX) | (64'd1 << 57), 0,
+         ACC_X, PRV_S, 1'b1, 12);
+    lc_vs("lc_vs_pbmt3", pte_x(44'(GP_CODE), F_RX, 2'd3, 1'b0), 0, ACC_X,
+          PRV_S, 1'b1, 12);
+    lc_vs("lc_vs_pbmte", pte_x(44'(GP_CODE), F_RX, 2'd1, 1'b0), 0, ACC_X,
+          PRV_S, 1'b0, 12);
+    lc_vs("lc_vs_napot_rsv", pte_x(44'h0124, F_RX, 2'd0, 1'b1), 0, ACC_X,
+          PRV_S, 1'b1, 12);
+    lc_g("lc_g_pbmt3", pte_x(44'(SP_CODE), F_URX_NA, 2'd3, 1'b0), 0, 1'b1);
+    lc_g("lc_g_pbmte", pte_x(44'(SP_CODE), F_URX_NA, 2'd1, 1'b0), 0, 1'b0);
+    lc_g("lc_g_napot_rsv", pte_x(44'h8_4564, F_URX_NA, 2'd0, 1'b1), 0,
+         1'b1);
+
+    // ---- the misaligned superpage ---------------------------------
+    lc_s("lc_s_misaligned", pte(44'h8_2201, F_RX), 1, ACC_X, PRV_S, 1'b1,
+         12);
+    lc_vs("lc_vs_misaligned", pte(44'h201, F_RX), 1, ACC_X, PRV_S, 1'b1,
+          12);
+    lc_g("lc_g_misaligned", pte(44'h8_4401, F_URX_NA), 1, 1'b1);
+  endtask
+
+  // =================================================================
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
@@ -1066,6 +1332,8 @@ module tb;
     t_h_size();
     t_h_faults();
     t_h_ad();
+    t_leaf_checks();
+    t_causes();
     $display("tb_ptw: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_ptw: %0d checks failed", fail_cnt);

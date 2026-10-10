@@ -156,6 +156,9 @@ rtl/mmu/pmp/obj_lint_neg_pma/
 rtl/mmu/pmp/obj_lint_neg_pma_dflt/
 rtl/mmu/ptw/obj_ptw/
 
+rtl/core/frontend/decode/obj_dir_oracle/
+rtl/core/frontend/decode/obj_dir_sweep/
+rtl/core/frontend/decode/obj_dir_words/
 
 # --------------------------------------------------------------------
 # docs

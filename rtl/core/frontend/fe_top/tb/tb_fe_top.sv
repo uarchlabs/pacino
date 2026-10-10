@@ -160,7 +160,7 @@ module tb;
   logic [PERM_WIDTH-1:0]       l2t_itlb_perm;
   logic [1:0]                  l2t_itlb_pbmt;
   logic [CAUSE_WIDTH-1:0]      l2t_itlb_cause;
-  logic [GPA_WIDTH-1:0]        l2t_itlb_gpa;
+  logic [FAULT_GPA_WIDTH-1:0]  l2t_itlb_gpa;     // MMU-23, BP-124
   logic [1:0]                  l2t_itlb_gpa_imp;      // BP-123
   logic                        cmt_ifu_maint_val;     // BP-123
   logic                        cmt_ifu_maint_rdy;
@@ -217,7 +217,10 @@ module tb;
   fe_top dut (.*);
 
   // ---- the page table walker, beside the top (MMU-1a, BP-123) -------
+  // itlb_l2t_acc and itlb_l2t_priv are the ITLB's (IL-3d), carried by
+  // fe_top (BP-124); BP-123 tied the access type here.
   logic [1:0]                  itlb_l2t_acc;
+  logic [1:0]                  itlb_l2t_priv;
   logic                        ptw_mem_req_val;
   logic                        ptw_mem_req_rdy;
   logic                        ptw_mem_req_op;
@@ -239,10 +242,6 @@ module tb;
   logic                        csr_ptw_henvcfg_pbmte;
   logic [15:0][7:0]            csr_ptw_pmpcfg;
   logic [15:0][PA_WIDTH-3:0]   csr_ptw_pmpaddr;
-
-  // The ITLB's requests are fetches (the walker's access type, see
-  // ptw.sv's header).
-  assign itlb_l2t_acc = 2'd2;
 
   ptw u_ptw (.*);
 
@@ -294,19 +293,23 @@ module tb;
     ifu_fault_e          fault;      // fetch fault: trap to target
     logic [VA_WIDTH-1:0] fva;
     // BP-123.
-    logic [GPA_WIDTH-1:0] fgpa;      // cause 20: the faulting GPA
+    logic [FAULT_GPA_WIDTH-1:0] fgpa; // cause 20: the faulting GPA
     logic [1:0]          fimp;       // and its implicit-access kind
     int                  maint;      // 1 FENCE.I, 2 cbo.inval, at commit
     logic [PA_WIDTH-1:0] mpa;        // cbo.inval's physical address
     int                  p0;         // memory patches applied when it
     int                  pn;         //   retires: [p0, p0 + pn)
     int                  aluop;      // decode's alu_op, -1 unchecked
+    // BP-124: the privilege after it retires and redirects (a trap
+    // taken to S, or an xRET), -1 unchanged.
+    int                  npriv;
   } ex_t;
   localparam logic [31:0] ADDI_T0 = 32'h0012_8293;   // addi t0,t0,1
   localparam logic [15:0] CADDI   = 16'h0505;        // c.addi a0,1
   localparam logic [31:0] CADDI_X = 32'h0015_0513;   // its expansion
   localparam logic [31:0] RET     = 32'h0000_8067;   // jalr x0,0(ra)
   localparam logic [31:0] ECALL   = 32'h0000_0073;
+  localparam logic [31:0] SRET    = 32'h1020_0073;   // BP-124, pt_upriv
   // BP-123.
   localparam logic [31:0] FENCEI  = 32'h0000_100F;   // fence.i
   localparam logic [31:0] SW_A0   = 32'h0005_2023;   // sw x0, 0(a0)
@@ -465,6 +468,7 @@ module tb;
       ex[ne].p0     = 0;
       ex[ne].pn     = 0;
       ex[ne].aluop  = -1;
+      ex[ne].npriv  = -1;
       ne++;
     endtask
 
@@ -544,8 +548,24 @@ module tb;
       put_hw(wp, ECALL[15:0]);
       put_hw(wp + VA_WIDTH'(2), ECALL[31:16]);
       add_ex(wp, ECALL, 1'b0, NO_BRANCH, 1'b0, handler);
-      ex[ne-1].trap = 1'b1;
+      ex[ne-1].trap  = 1'b1;
+      ex[ne-1].aluop = int'(ALU_ECALL);
       wp = handler;
+    endtask
+
+    // BP-124. sret to tgt at privilege p (sepc and sstatus.SPP as the
+    // program needs them; no register file is modelled). The backend
+    // takes it like a trap: at retirement it sets csr_itlb_priv and
+    // redirects to tgt. The front end sees a non-CFI and runs on
+    // sequentially until then.
+    task sret_to(input logic [VA_WIDTH-1:0] tgt, input logic [1:0] p);
+      put_hw(wp, SRET[15:0]);
+      put_hw(wp + VA_WIDTH'(2), SRET[31:16]);
+      add_ex(wp, SRET, 1'b0, NO_BRANCH, 1'b0, tgt);
+      ex[ne-1].trap  = 1'b1;
+      ex[ne-1].npriv = int'(p);
+      ex[ne-1].aluop = int'(ALU_SRET);
+      wp = tgt;
     endtask
 
     // jal x0 to an address whose fetch faults: the JAL, then the
@@ -862,9 +882,12 @@ module tb;
 
     // FENCE.I and cbo.inval: the backend drives the commit-stage
     // maintenance port when one retires and restarts after the ack.
+    // BP-124: each names decode's operation (DCD-22), which the
+    // backend checks as it retires.
     task fence_i();
       i32(FENCEI);
       ex[ne-1].maint = 1;
+      ex[ne-1].aluop = int'(ALU_FENCE_I);
     endtask
     // A CSR write that changes the walker's envcfg bits when it
     // retires; fetch then restarts after it, as after a FENCE.I, so no
@@ -878,6 +901,7 @@ module tb;
                  input logic mpbmte, input logic hpbmte);
       i32({12'h30A, 5'd5, 3'b001, 5'd0, 7'b1110011});
       ex[ne-1].maint = 3;
+      ex[ne-1].aluop = int'(ALU_CSRRW);
       ex[ne-1].p0    = act_madue.size();
       act_madue.push_back(madue);
       act_hadue.push_back(hadue);
@@ -888,6 +912,7 @@ module tb;
     task cbo_inval(input logic [4:0] rs1, input logic [PA_WIDTH-1:0] pa);
       i32({12'h000, rs1, 3'b010, 5'b00000, 7'b0001111});
       ex[ne-1].maint = 2;
+      ex[ne-1].aluop = int'(ALU_CBO_INVAL);
       ex[ne-1].mpa   = pa;
     endtask
 
@@ -902,7 +927,8 @@ module tb;
       wp = handler;
     endtask
     task jr_gfault(input logic [VA_WIDTH-1:0] tgt,
-                   input logic [GPA_WIDTH-1:0] gpa, input logic [1:0] imp,
+                   input logic [FAULT_GPA_WIDTH-1:0] gpa,
+                   input logic [1:0] imp,
                    input logic [VA_WIDTH-1:0] handler);
       jr_fault(tgt, IFU_FAULT_GUEST_PAGE, handler);
       ex[ne-1].fgpa = gpa;
@@ -911,7 +937,8 @@ module tb;
 
     // A fetch fault with its guest physical address and kind.
     task jal_gfault(input logic [VA_WIDTH-1:0] tgt,
-                    input logic [GPA_WIDTH-1:0] gpa, input logic [1:0] imp,
+                    input logic [FAULT_GPA_WIDTH-1:0] gpa,
+                    input logic [1:0] imp,
                     input logic [VA_WIDTH-1:0] handler);
       jal_fault(tgt, IFU_FAULT_GUEST_PAGE, handler);
       ex[ne-1].fgpa = gpa;
@@ -1886,6 +1913,40 @@ module tb;
   int                      n_eager_res;
   int                      n_patch;
   int                      n_csrw;
+  // BP-124, pt_upriv: the page up_vpn's walks and the ITLB's ITLB-10b
+  // drop of a held fault for it.
+  logic [VA_WIDTH-13:0]    up_vpn;
+  logic                    up_wval;     // a walk for up_vpn in progress
+  logic [1:0]              up_wpriv;    //   its privilege
+  int                      n_up_wu_flt; // walks at U answered fault
+  int                      n_up_ws_hit; // walks at S answered hit
+  int                      n_up_drop;   // held faults dropped (ITLB-10b)
+
+  // =================================================================
+  // BP-124, pt_upriv. The walks for up_vpn by privilege, from the walk
+  // port (one walk at a time, MMU-U2, so the next answer that is not a
+  // retry is this walk's), and the ITLB's drop of a held fault for it:
+  // a re-request answered miss while a fault held for up_vpn at another
+  // privilege or V is dropped (itlb.sv w_rq_miss, w_flt_drop).
+  // =================================================================
+  always @(posedge clk) begin
+    if (rstn && itlb_l2t_req_val && itlb_l2t_req_rdy &&
+        (itlb_l2t_vpn == up_vpn)) begin
+      up_wval  <= 1'b1;
+      up_wpriv <= itlb_l2t_priv;
+    end
+    if (rstn && up_wval && l2t_itlb_rsp_val && (l2t_itlb_status != 2'b10))
+    begin
+      up_wval <= 1'b0;
+      if ((up_wpriv == 2'd0) && (l2t_itlb_status == 2'b01))
+        n_up_wu_flt <= n_up_wu_flt + 1;
+      if ((up_wpriv == 2'd1) && (l2t_itlb_status == 2'b00))
+        n_up_ws_hit <= n_up_ws_hit + 1;
+    end
+    if (rstn && dut.u_itlb.w_rq_miss && (dut.u_itlb.w_flt_drop != '0) &&
+        (dut.u_itlb.r_rq_vpn == up_vpn))
+      n_up_drop <= n_up_drop + 1;
+  end
 
   // =================================================================
   // BP-123, Problem 4. Every cycle of every program:
@@ -2251,6 +2312,8 @@ module tb;
             end
             n_trap++;
             stop = 1'b1;
+            // BP-124: a trap taken to S (pt_upriv).
+            if (W.ex[ep].npriv >= 0) csr_itlb_priv = 2'(W.ex[ep].npriv);
             redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
             ep++;
             continue;
@@ -2265,6 +2328,8 @@ module tb;
           if (W.ex[ep].trap) begin
             n_trap++;
             stop = 1'b1;
+            // BP-124: an ecall to S or an sret to U (pt_upriv).
+            if (W.ex[ep].npriv >= 0) csr_itlb_priv = 2'(W.ex[ep].npriv);
             redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
             ep++;
             continue;
@@ -2507,6 +2572,12 @@ module tb;
     n_eager_res   = 0;
     n_patch       = 0;
     n_csrw        = 0;
+    up_vpn        = '1;
+    up_wval       = 1'b0;
+    up_wpriv      = '0;
+    n_up_wu_flt   = 0;
+    n_up_ws_hit   = 0;
+    n_up_drop     = 0;
     n_uc_req      = 0;
     n_uc_bad      = 0;
     n_uc_fill_bad = 0;
@@ -3949,12 +4020,14 @@ module tb;
     // 0 kind 00: the final GPA is not mapped by the G-stage.
     g = GPA_WIDTH'('h0_2000_0000);
     W.wr64(W.vs_slot(tgt(0), 0), W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0));
-    W.jr_gfault(tgt(0), g | GPA_WIDTH'('h10), 2'b00, hnd(0));
+    W.jr_gfault(tgt(0), FAULT_GPA_WIDTH'(g | GPA_WIDTH'('h10)), 2'b00, hnd(0));
     W.mixed(2);
     // 1 kind 01: a VS-stage table page is not mapped by the G-stage.
     tg = GPA_WIDTH'('h0_2100_0000);
     W.wr64(W.vs_slot(tgt(1), 1), W.mk_pte(44'(tg >> 12), PTE_PTR, 2'b00, 1'b0));
-    W.jr_gfault(tgt(1), tg + GPA_WIDTH'(8 * tgt(1)[20:12]), 2'b01, hnd(1));
+    W.jr_gfault(tgt(1),
+                FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(1)[20:12])),
+                2'b01, hnd(1));
     W.mixed(2);
     // 2 kind 10: the VS leaf needs A; the G-stage leaf of its table page
     // grants no write.
@@ -3965,17 +4038,23 @@ module tb;
     tg = vs_l0_gpa(tgt(2));
     W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
            W.mk_pte(44'(W.g2s(tg) >> 12), 8'hDB, 2'b00, 1'b0));
-    W.jr_gfault(tgt(2), tg + GPA_WIDTH'(8 * tgt(2)[20:12]), 2'b10, hnd(2));
+    W.jr_gfault(tgt(2),
+                FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(2)[20:12])),
+                2'b10, hnd(2));
     W.mixed(2);
-    // 3 a VS leaf whose GPA has a bit above 40: GPA 0, kind 00.
+    // 3 a VS leaf whose GPA has a bit above 40: the whole GPA, kind 00,
+    //   the offset filled by the IFU (MMU-23, IFU-2a; BP-124: this was
+    //   MMU-30's GPA 0). PPN bit 43 set, so GPA bit 55.
     W.wr64(W.vs_slot(tgt(3), 0),
-           W.mk_pte(44'h2000_0123, PTE_LEAF, 2'b00, 1'b0));
-    W.jr_gfault(tgt(3), '0, 2'b00, hnd(3));
+           W.mk_pte(44'h800_0000_0123, PTE_LEAF, 2'b00, 1'b0));
+    W.jr_gfault(tgt(3), {44'h800_0000_0123, tgt(3)[11:0]}, 2'b00, hnd(3));
     W.mixed(2);
-    // 4 a VS non-leaf whose GPA has a bit above 40: GPA 0, kind 01.
+    // 4 a VS non-leaf whose GPA has a bit above 40: the whole GPA of the
+    //   VS PTE the next level reads, kind 01 (BP-124: was GPA 0).
     W.wr64(W.vs_slot(tgt(4), 1),
            W.mk_pte(44'h2000_0041, PTE_PTR, 2'b00, 1'b0));
-    W.jr_gfault(tgt(4), '0, 2'b01, hnd(4));
+    W.jr_gfault(tgt(4), {44'h2000_0041, 12'h000} +
+                FAULT_GPA_WIDTH'(8 * tgt(4)[20:12]), 2'b01, hnd(4));
     W.mixed(2);
     // 5 cause 12: a VS leaf with W and not R.
     W.wr64(W.vs_slot(tgt(5), 0),
@@ -4007,10 +4086,22 @@ module tb;
     pmp_page(0, a, 3'b000);
     W.jr_fault(tgt(8), IFU_FAULT_ACCESS, hnd(8));
     W.mixed(2);
+    // 9 kind 00 on GUEST PAGE 0, at a non-zero offset (BP-124). The VS
+    //   leaf maps the target to GPA page 0, whose G-stage leaf is
+    //   written invalid here; fault_gpa is the offset alone. Under
+    //   MMU-30 a GPA of 0 was left 0, the collision of BP-123 risk 1.
+    begin
+      logic [VA_WIDTH-1:0] t9;
+      t9 = tgt(9) + VA_WIDTH'('h7A4);
+      W.wr64(W.g_slot('0, 0), 64'd0);
+      W.wr64(W.vs_slot(t9, 0), W.mk_pte(44'h0, PTE_LEAF, 2'b00, 1'b0));
+      W.jr_gfault(t9, FAULT_GPA_WIDTH'(t9[11:0]), 2'b00, hnd(9));
+      W.mixed(2);
+    end
     warm_e = W.ne + 1;
     end_prog(40000);
-    chk($sformatf("all nine faults reached decode (%0d)", n_fault_ok),
-        n_fault_ok == 9);
+    chk($sformatf("all ten faults reached decode (%0d)", n_fault_ok),
+        n_fault_ok == 10);
   endtask
 
   // ---- Svnapot, single stage: one walk serves the 64 KiB page ----------
@@ -4207,7 +4298,7 @@ module tb;
       h_map(t, g, PA_WIDTH'('h0_8150_0000),
             W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
             W.mk_pte({40'h0_0000_8150, 4'(lo)}, F_URWXAD, 2'b00, 1'b1));
-      W.jr_gfault(t, g | GPA_WIDTH'('h10), 2'b00, hnd(k++));
+      W.jr_gfault(t, FAULT_GPA_WIDTH'(g | GPA_WIDTH'('h10)), 2'b00, hnd(k++));
       W.mixed(1);
     end
     // VS PBMT 3.
@@ -4219,7 +4310,8 @@ module tb;
     h_map(tgt(4), g, PA_WIDTH'('h0_8151_0000),
           W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
           W.mk_pte(44'h8_1510, F_URWXAD, 2'd3, 1'b0));
-    W.jr_gfault(tgt(4), g | GPA_WIDTH'('h10), 2'b00, hnd(k++));
+    W.jr_gfault(tgt(4),
+                FAULT_GPA_WIDTH'(g | GPA_WIDTH'('h10)), 2'b00, hnd(k++));
     W.mixed(1);
     // henvcfg.PBMTE clear: a VS PBMT NC is reserved, menvcfg's stays set.
     W.csr_env(1'b0, 1'b0, 1'b1, 1'b0);
@@ -4234,7 +4326,8 @@ module tb;
     h_map(tgt(6), g, PA_WIDTH'('h0_8152_0000),
           W.mk_pte(44'(g >> 12), PTE_LEAF, 2'b00, 1'b0),
           W.mk_pte(44'h8_1520, F_URWXAD, 2'd1, 1'b0));
-    W.jr_gfault(tgt(6), g | GPA_WIDTH'('h10), 2'b00, hnd(k++));
+    W.jr_gfault(tgt(6),
+                FAULT_GPA_WIDTH'(g | GPA_WIDTH'('h10)), 2'b00, hnd(k++));
     W.mixed(2);
     warm_e = W.ne + 1;
     end_prog(60000);
@@ -4319,7 +4412,9 @@ module tb;
     tg = vs_l0_gpa(tgt(2));
     W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
            W.mk_pte(44'(W.g2s(tg) >> 12), 8'hDB, 2'b00, 1'b0));
-    W.jr_gfault(tgt(2), tg + GPA_WIDTH'(8 * tgt(2)[20:12]), 2'b10, hnd(2));
+    W.jr_gfault(tgt(2),
+                FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(2)[20:12])),
+                2'b10, hnd(2));
     W.mixed(1);
     // 3 (h 1, m 0): the VS-stage is Svadu, the G-stage Svade: the G D
     // the update needs faults, kind 10.
@@ -4332,7 +4427,9 @@ module tb;
     tg = vs_l0_gpa(tgt(3));
     W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
            W.mk_pte(44'(W.g2s(tg) >> 12), 8'h5F, 2'b00, 1'b0));       // D clear
-    W.jr_gfault(tgt(3), tg + GPA_WIDTH'(8 * tgt(3)[20:12]), 2'b10, hnd(3));
+    W.jr_gfault(tgt(3),
+                FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(3)[20:12])),
+                2'b10, hnd(3));
     W.mixed(1);
     // 4, 5 (h 0, m 1): the VS-stage is Svade, the G-stage Svadu.
     W.csr_env(1'b1, 1'b0, 1'b1, 1'b1);
@@ -4529,7 +4626,8 @@ module tb;
     W.jal(5'd0, PC_C);
     W.mixed(4);
     run_at(hi + VA_WIDTH'('h20), PC_C + VA_WIDTH'('h100));
-    W.jr_gfault(VA_WIDTH'('h0_8070_0010), GPA_WIDTH'('h0_8070_0010), 2'b00,
+    W.jr_gfault(VA_WIDTH'('h0_8070_0010),
+                FAULT_GPA_WIDTH'(GPA_WIDTH'('h0_8070_0010)), 2'b00,
                 hnd(1));
     W.mixed(2);
     warm_e = W.ne + 1;
@@ -4588,6 +4686,87 @@ module tb;
   endtask
 
   // =================================================================
+  // ---- BP-124: U against the privilege before A (MMU-8c), and a held
+  // fault is the answer only at its own privilege (ITLB-10b) ----------
+  // Under Svadu (menvcfg.ADUE set), single stage:
+  //   0  at U, a fetch from a U-clear page with A clear: cause 12, the
+  //      trap taken to S, A still clear in memory
+  //   1  at S, a fetch from a U-set page with A clear: cause 12, A
+  //      still clear
+  //   2  at U, the block after a JAL that ends the U code page falls
+  //      into page p2 (U clear, A clear) on the wrong path: the ITLB
+  //      walks it at U and the walk faults; the predecode redirect has
+  //      flushed the block, so the fault is held and not collected.
+  //      After an ecall to S, a fetch at S of p2 must drop the held U
+  //      fault, walk at S and execute; that walk sets p2's A
+  // The U code page is U set with A and D set.
+  localparam logic [VA_WIDTH-1:0] PC_U = VA_WIDTH'('h0_8003_0000);
+  localparam logic [PA_WIDTH-1:0] PA_U = PA_WIDTH'('h0_8170_0000);
+
+  task automatic p_pt_upriv();
+    logic [PA_WIDTH-1:0] a0;
+    logic [PA_WIDTH-1:0] a1;
+    logic [PA_WIDTH-1:0] a2;
+    logic [VA_WIDTH-1:0] p2;
+    logic [63:0]         l0;
+    logic [63:0]         l1;
+    logic [63:0]         l2;
+    tname = "pt_upriv";
+    $display("-- %s --", tname);
+    reset_all(1'b1);
+    csr_ptw_menvcfg_adue = 1'b1;                     // Svadu
+    map_ch();
+    W.wr64(W.s_slot(PC_U, 0), W.mk_pte(44'(PA_U >> 12), PTE_LEAF | 8'h10,
+                                       2'b00, 1'b0));
+    W.vmap[PC_U[VA_WIDTH-1:12]] = PA_U[PA_WIDTH-1:12];
+    p2 = PC_U + VA_WIDTH'('h1000);
+    a0 = W.s_slot(tgt(0), 0);
+    a1 = W.s_slot(tgt(1), 0);
+    a2 = W.s_slot(p2, 0);
+    l0 = W.mk_pte(44'h8_1400, PTE_LEAF & 8'hBF, 2'b00, 1'b0);        // A
+    l1 = W.mk_pte(44'h8_1410, (PTE_LEAF & 8'hBF) | 8'h10, 2'b00, 1'b0);
+    l2 = W.mk_pte(44'h8_1420, PTE_LEAF & 8'hBF, 2'b00, 1'b0);
+    W.wr64(a0, l0);
+    W.wr64(a1, l1);
+    W.wr64(a2, l2);
+    W.vmap[p2[VA_WIDTH-1:12]] = PPN_WIDTH'(24'h8_1420);
+    up_vpn = p2[VA_WIDTH-1:12];
+    // 0: to U, then a fetch from the U-clear page.
+    W.sret_to(PC_U + VA_WIDTH'('h100), 2'd0);
+    W.mixed(2);
+    W.jr_fault(tgt(0), IFU_FAULT_PAGE, hnd(0));
+    W.ex[W.ne-1].npriv = 1;                          // the trap, to S
+    W.mixed(2);
+    // 1: at S, a fetch from the U-set page.
+    W.jr_fault(tgt(1), IFU_FAULT_PAGE, hnd(1));
+    W.mixed(2);
+    // 2: to U at the last 32-byte block of the U page, which ends with
+    // a JAL back into the page; the fall-through block is p2.
+    W.sret_to(PC_U + VA_WIDTH'('hFE0), 2'd0);
+    for (int i = 0; i < 7; i++) W.i32(ADDI_T0);
+    W.jal(5'd0, PC_U + VA_WIDTH'('h200));
+    W.mixed(2);
+    W.ecall(hnd(2));
+    W.ex[W.ne-1].npriv = 1;                          // to S
+    W.mixed(2);
+    run_at(p2 + VA_WIDTH'('h10), hnd(3));
+    warm_e = W.ne + 1;
+    end_prog(30000);
+    chk($sformatf("both privilege faults reached decode (%0d)",
+                  n_fault_ok), n_fault_ok == 2);
+    chk("0: a U fetch from a U-clear page left A clear",
+        W.rd64(a0) == l0);
+    chk("1: an S fetch from a U-set page left A clear",
+        W.rd64(a1) == l1);
+    chk($sformatf("2: p2 was walked at U and faulted (%0d)", n_up_wu_flt),
+        n_up_wu_flt >= 1);
+    chk($sformatf("2: the held U fault was dropped at S (%0d)", n_up_drop),
+        n_up_drop >= 1);
+    chk($sformatf("2: p2 was walked at S and hit (%0d)", n_up_ws_hit),
+        n_up_ws_hit == 1);
+    chk("2: the S walk set p2's A", W.rd64(a2) == (l2 | 64'h40));
+  endtask
+
   // Program selection. +PROG=<name> runs one program; without it,
   // every program runs.
   // =================================================================
@@ -4628,6 +4807,7 @@ module tb;
       "zstar":      p_zstar();
       "pt_gonly":   p_pt_gonly();
       "pt_vsonly":  p_pt_vsonly();
+      "pt_upriv":   p_pt_upriv();
       default: begin
         fail_cnt++;
         $display("FAIL: unknown program %s", nm);
@@ -4635,7 +4815,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:34] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:35] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "deep", "indir", "region",
                               "multistart", "cross", "rvc", "misp_call",
@@ -4643,7 +4823,8 @@ module tb;
                               "uc_io", "pt_faults_s", "pt_faults_h",
                               "pt_napot_s", "pt_napot_h", "pt_rsv_s",
                               "pt_rsv_h", "pt_ad_s", "pt_ad_h", "pt_inv",
-                              "zstar", "pt_gonly", "pt_vsonly"};
+                              "zstar", "pt_gonly", "pt_vsonly",
+                              "pt_upriv"};
 
   // =================================================================
   initial begin

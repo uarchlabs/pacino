@@ -99,7 +99,7 @@ module ifu_xlate #(
   input  logic [1:0]               itlb_ifu_status,
   input  logic [PPN_WIDTH-1:0]     itlb_ifu_ppn,
   input  logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause,
-  input  logic [GPA_WIDTH-1:0]     itlb_ifu_gpa,
+  input  logic [FAULT_GPA_WIDTH-1:0] itlb_ifu_gpa,
   input  logic [1:0]               itlb_ifu_gpa_imp, // IT-6c
   input  logic [PMA_WIDTH-1:0]     itlb_ifu_pma,
 
@@ -110,11 +110,11 @@ module ifu_xlate #(
   output logic                     xq_cross,
   output logic [PPN_WIDTH-1:0]     xq_ppn0,
   output ifu_fault_e               xq_fault0,
-  output logic [GPA_WIDTH-1:0]     xq_gpa0,
+  output logic [FAULT_GPA_WIDTH-1:0] xq_gpa0,
   output logic [1:0]               xq_imp0,
   output logic [PPN_WIDTH-1:0]     xq_ppn1,
   output ifu_fault_e               xq_fault1,
-  output logic [GPA_WIDTH-1:0]     xq_gpa1,
+  output logic [FAULT_GPA_WIDTH-1:0] xq_gpa1,
   output logic [1:0]               xq_imp1,
   output logic                     xq_uc,
   input  logic                     xq_pop
@@ -149,7 +149,7 @@ module ifu_xlate #(
   typedef struct packed {
     logic [PPN_WIDTH-1:0] ppn;
     ifu_fault_e           fault;
-    logic [GPA_WIDTH-1:0] gpa;
+    logic [FAULT_GPA_WIDTH-1:0] gpa;
     logic [1:0]           imp;     // gpa's implicit-access kind, IT-6c
     logic                 uc;      // hit, not cacheable and idempotent
   } pg_res_t;

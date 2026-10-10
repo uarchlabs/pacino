@@ -520,6 +520,11 @@ package bp_defines_pkg;
   // declarations using them are itlb_ifu_interfaces.md 2 and
   // itlb_l2tlb_interfaces.md 2.
   parameter int GPA_WIDTH   = 41; // MMU-20, Sv39x4 guest physical
+  // The FAULTING guest physical address, MMU-23 (BP-124): a VS-stage
+  // PTE holds a 44-bit PPN, so a walk can form a 56-bit GPA that faults
+  // under Sv39x4, and Shtvala needs it whole. Only the faulting GPA is
+  // this wide; an address that translates is GPA_WIDTH.
+  parameter int FAULT_GPA_WIDTH = 56; // MMU-23, 44-bit PPN + offset
   parameter int GVPN_WIDTH  = 29; // G-stage VPN, GPA_WIDTH - 12
   parameter int VPN_WIDTH   = 27; // Sv39 VA, three levels of nine
   parameter int PPN_WIDTH   = PA_WIDTH - 12; // PA_WIDTH - 12, from IF-1's 36

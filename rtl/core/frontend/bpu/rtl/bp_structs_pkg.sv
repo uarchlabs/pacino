@@ -595,7 +595,10 @@ package bp_structs_pkg;
     logic [FTQ_IDX_BITS-1:0]    ftq_idx;
     ifu_fault_e                 fault_cause;
     logic [VA_WIDTH-1:0]        fault_va;
-    logic [GPA_WIDTH-1:0]       fault_gpa;   // cause 20 only
+    // The faulting guest physical address, cause 20 only. Whole, at
+    // FAULT_GPA_WIDTH (MMU-23); for kind 00 the IFU fills [11:0] from
+    // the faulting halfword's VA (IFU-2a). BP-124.
+    logic [FAULT_GPA_WIDTH-1:0] fault_gpa;
     // The GPA's implicit-access kind, cause 20 only (DCD-16, IFU-2a,
     // mmu_decisions.md MMU-29): 2'b00 the fetch's own GPA, 2'b01 an
     // implicit read of a VS-stage page table, 2'b10 an implicit write

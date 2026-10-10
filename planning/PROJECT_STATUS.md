@@ -75,7 +75,8 @@ RULED after BP-123 (Jeff):
     PA's R1 to R14, recorded as dcd_decisions.md DCD-21 to DCD-35.
     alu_op_t 8 bits; FP precision and operand register files as
     fields; exact uses_*; FP, AMO, fence, CBO, SYSTEM and vector
-    legality; an LLVM oracle sweep. Three parts were added by the PA
+    legality; an oracle sweep, against spike-dasm since R14 was
+    corrected (below). Three parts were added by the PA
     and are FLAGGED for Jeff: DCD-24's vector scalar-operand
     paragraph, DCD-33 (Zvbb decoded) and the vector part of DCD-34.
     Found while drafting: decode zeroes rs1 when it is unused, so
@@ -102,6 +103,14 @@ Opened: TD#171 (BP-124), TD#172 (the L1I same-cycle cacheable merge
 has no directed test), TD#173 (the CG-5 tasks for the copy).
 
 PA ERRORS, mine, session-077:
+  R14 and BP-124 used LLVM: an llvm-objdump oracle sweep, on the
+    strength of the BP-117 record (session-075, TD#147) and BP-123's
+    report, neither checked against the system, which has no LLVM
+    (Jeff). I also made llvm-mc a BP-124 requirement and grant,
+    sourced from nothing, and left it off the list of additions for
+    Jeff. Corrected (Jeff): spike-dasm is the sweep oracle and checks
+    every directed test word; clang -c assembles the directed words.
+    BP-124 Problem 0 reports what oracle_ifu_rvc_exp actually runs.
   A BP-124 draft replaced the session-075 ruling item 4 with a rule
     that left an unsettled choice unbuilt and the task in-progress,
     and this section recorded that as Jeff's ruling. Jeff had not

@@ -85,7 +85,16 @@
 //
 // THE GPA KIND (IT-6c, IL-11b, BP-123). l2t_itlb_gpa_imp is held with
 // a walk's fault beside its GPA (ITLB-10a) and returned on
-// itlb_ifu_gpa_imp with it, on a cause-20 answer.
+// itlb_ifu_gpa_imp with it, on a cause-20 answer. The GPA is
+// FAULT_GPA_WIDTH bits on both ports and in the hold, passed through
+// whole (MMU-23, IL-11a, IT-6a; BP-124).
+//
+// THE WALK REQUEST (IL-3d, ITLB-17; BP-124). itlb_l2t_acc is always
+// execute. itlb_l2t_priv is the privilege the walk is for, the current
+// privilege of the CSR group when the miss allocated its slot (2'b00 U
+// or 2'b01 S; an M-mode fetch is physical and never walks), presented
+// with the slot's V on itlb_l2t_v. The walker checks the leaf's U bit
+// against them before it sets A (MMU-8c).
 //
 // WALK TRACKER (ITLB-8, ITLB-10, ITLB-15). WALK_DEPTH slots, default
 // 1, at most 4 by the two-bit tag of IL-1; the slot number is the
@@ -99,6 +108,12 @@
 //          answered on the re-request. A FLT slot is also free for a
 //          new miss to take, so a fault nobody re-requests (its block
 //          was flushed, IFU-31) cannot hold the tracker.
+//          EVERY HELD FAULT RECORDS THE PRIVILEGE AND V its walk was
+//          for (ITLB-10b, BP-124): the walker's U check depends on
+//          them (MMU-8c). A re-request of the held page answers with
+//          the fault only at the same privilege and V; at another, the
+//          held fault is dropped and the re-request is a miss that
+//          starts a new walk at the current privilege.
 // L2 responses (IL-4): hit installs and frees; fault goes to FLT;
 // retry goes back to REQ and is asked again (IL-6). A reserved
 // status is taken as a fault with cause 1, and a fault whose cause
@@ -166,7 +181,7 @@ module itlb #(
   output logic [1:0]               itlb_ifu_status,
   output logic [PPN_WIDTH-1:0]     itlb_ifu_ppn,
   output logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause,
-  output logic [GPA_WIDTH-1:0]     itlb_ifu_gpa,
+  output logic [FAULT_GPA_WIDTH-1:0] itlb_ifu_gpa, // IT-6a, MMU-23
   output logic [1:0]               itlb_ifu_gpa_imp, // IT-6c
   output logic [PMA_WIDTH-1:0]     itlb_ifu_pma,
 
@@ -178,6 +193,8 @@ module itlb #(
   output logic [VMID_WIDTH-1:0]    itlb_l2t_vmid,
   output logic                     itlb_l2t_v,
   output logic [1:0]               itlb_l2t_tag,
+  output logic [1:0]               itlb_l2t_acc,     // IL-3d, execute
+  output logic [1:0]               itlb_l2t_priv,    // IL-3d, ITLB-17
   input  logic                     l2t_itlb_rsp_val,
   input  logic [1:0]               l2t_itlb_tag,
   input  logic [1:0]               l2t_itlb_status,
@@ -186,7 +203,7 @@ module itlb #(
   input  logic [PERM_WIDTH-1:0]    l2t_itlb_perm,
   input  logic [1:0]               l2t_itlb_pbmt,
   input  logic [CAUSE_WIDTH-1:0]   l2t_itlb_cause,
-  input  logic [GPA_WIDTH-1:0]     l2t_itlb_gpa,
+  input  logic [FAULT_GPA_WIDTH-1:0] l2t_itlb_gpa, // IL-11a, MMU-23
   input  logic [1:0]               l2t_itlb_gpa_imp, // IL-11b
 
   // ---- CSR input group, ITLB-17, MMU-11a, fe_decisions.md FE-20 ----
@@ -265,6 +282,8 @@ module itlb #(
 
   localparam int PA_HI = PA_WIDTH - 12;   // = PPN_WIDTH
 
+  localparam logic [1:0] ACC_X = 2'd2;    // itlb_l2t_acc, IL-3d
+
   initial begin
     if (WALK_DEPTH < 1 || WALK_DEPTH > 4)
       $error("itlb: WALK_DEPTH must be 1 to 4 (IL-1 two-bit tag)");
@@ -289,11 +308,12 @@ module itlb #(
     logic [1:0]             st;
     logic                   kill;
     logic                   v;
+    logic [1:0]             priv;   // the walk's privilege, ITLB-10b
     logic [ASID_WIDTH-1:0]  asid;
     logic [VMID_WIDTH-1:0]  vmid;
     logic [VW-1:0]          vpn;
     logic [CAUSE_WIDTH-1:0] cause;
-    logic [GPA_WIDTH-1:0]   gpa;
+    logic [FAULT_GPA_WIDTH-1:0] gpa;
     logic [1:0]             imp;
   } trk_t;
 
@@ -348,6 +368,8 @@ module itlb #(
   logic                  w_inflight;  // a live walk for this request
   logic                  w_flt_hit;
   logic [TI-1:0]         w_flt_idx;
+  logic [3:0]            w_flt_drop;  // held faults of another priv / V
+  logic                  w_rq_miss;   // this request answered miss
   logic                  w_flt_take;  // the held fault answered now
   logic                  w_rsp_ok;    // an L2 response for a live tag
   logic                  w_l2_hit;    // an L2 hit with a size IL-7 names
@@ -433,6 +455,7 @@ module itlb #(
     w_inflight = 1'b0;
     w_flt_hit  = 1'b0;
     w_flt_idx  = '0;
+    w_flt_drop = '0;
     for (int t = 0; t < WALK_DEPTH; t++) begin
       live = (r_trk[t].v == csr_itlb_v) &&
              (r_trk[t].asid == w_asid) &&
@@ -441,10 +464,18 @@ module itlb #(
       if (live && !r_trk[t].kill &&
           ((r_trk[t].st == T_REQ) || (r_trk[t].st == T_OUT)))
         w_inflight = 1'b1;
-      if (live && (r_trk[t].st == T_FLT) && !w_flt_hit) begin
+      // ITLB-10b: a held fault answers only at its own privilege and V.
+      if (live && (r_trk[t].st == T_FLT) &&
+          (r_trk[t].priv == csr_itlb_priv) && !w_flt_hit) begin
         w_flt_hit = 1'b1;
         w_flt_idx = TI'(t);
       end
+      // A held fault of this page at another privilege or V is dropped
+      // when the page is re-requested and walks again (ITLB-10b).
+      if ((r_trk[t].st == T_FLT) && (r_trk[t].vpn == r_rq_vpn) &&
+          ((r_trk[t].v != csr_itlb_v) ||
+           (r_trk[t].priv != csr_itlb_priv)))
+        w_flt_drop[t] = 1'b1;
     end
 
     // -- the IFU response ---------------------------------------------
@@ -467,6 +498,7 @@ module itlb #(
     itlb_ifu_pma     = '0;
     w_alloc          = 1'b0;
     w_flt_take       = 1'b0;
+    w_rq_miss        = 1'b0;
 
     if (w_phys) begin
       if (pa_bad || w_chk_fault) begin
@@ -503,6 +535,7 @@ module itlb #(
     end else begin
       itlb_ifu_status = ST_MISS;
       w_alloc         = r_rq_val && !w_inflight;
+      w_rq_miss       = r_rq_val;
     end
     if (!r_rq_val) begin
       itlb_ifu_status = ST_MISS;
@@ -547,6 +580,8 @@ module itlb #(
     itlb_l2t_asid = r_trk[w_l2_idx].asid;
     itlb_l2t_vmid = r_trk[w_l2_idx].vmid;
     itlb_l2t_v    = r_trk[w_l2_idx].v;
+    itlb_l2t_priv = r_trk[w_l2_idx].priv;
+    itlb_l2t_acc  = ACC_X;
     itlb_l2t_tag  = w_l2_idx;
     w_l2_fire     = itlb_l2t_req_val && itlb_l2t_req_rdy &&
                     !bkend_itlb_inv_val;
@@ -644,6 +679,14 @@ module itlb #(
 
       // ---- tracker -------------------------------------------------------
       if (w_flt_take) r_trk[w_flt_idx].st <= T_FREE;
+      // ITLB-10b: a re-request at another privilege or V, answered
+      // miss, drops the held fault; the allocation below (a later
+      // assignment) may then reuse its slot for the new walk.
+      if (w_rq_miss) begin
+        for (int t = 0; t < WALK_DEPTH; t++) begin
+          if (w_flt_drop[t]) r_trk[t].st <= T_FREE;
+        end
+      end
       if (w_l2_fire) r_trk[w_l2_idx].st <= T_OUT;
       if (w_rsp_ok) begin
         if (r_trk[l2t_itlb_tag].kill || bkend_itlb_inv_val) begin
@@ -671,6 +714,7 @@ module itlb #(
         r_trk[w_alloc_idx].st    <= T_REQ;
         r_trk[w_alloc_idx].kill  <= 1'b0;
         r_trk[w_alloc_idx].v     <= csr_itlb_v;
+        r_trk[w_alloc_idx].priv  <= csr_itlb_priv;
         r_trk[w_alloc_idx].asid  <= w_asid;
         r_trk[w_alloc_idx].vmid  <= csr_itlb_hgatp_vmid;
         r_trk[w_alloc_idx].vpn   <= r_rq_vpn;

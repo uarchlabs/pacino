@@ -136,7 +136,7 @@ module tb;
   logic [1:0]               itlb_ifu_status;
   logic [PPN_WIDTH-1:0]     itlb_ifu_ppn;
   logic [CAUSE_WIDTH-1:0]   itlb_ifu_cause;
-  logic [GPA_WIDTH-1:0]     itlb_ifu_gpa;
+  logic [FAULT_GPA_WIDTH-1:0]     itlb_ifu_gpa;
   logic [PMA_WIDTH-1:0]     itlb_ifu_pma;
   logic                     ifu_ibuf_val;
   logic [FTQ_PD_WIDTH-1:0]  ifu_ibuf_en;
@@ -165,7 +165,7 @@ module tb;
   typedef struct {
     logic [PPN_WIDTH-1:0] ppn;
     ifu_fault_e           fault;
-    logic [GPA_WIDTH-1:0] gpa;
+    logic [FAULT_GPA_WIDTH-1:0] gpa;
     int                   misses;
     logic [PMA_WIDTH-1:0] pma;      // BP-123, effective attributes
     logic [1:0]           imp;      // BP-123, the GPA's kind
@@ -188,7 +188,7 @@ module tb;
   function automatic void xlate_va(input  logic [VA_WIDTH-1:0] va,
                                    output ifu_fault_e          f,
                                    output logic [PA_WIDTH-1:0] pa,
-                                   output logic [GPA_WIDTH-1:0] gpa);
+                                   output logic [FAULT_GPA_WIDTH-1:0] gpa);
     logic [LKV-1:0] v;
     v   = vpn_of(va);
     gpa = '0;
@@ -215,7 +215,7 @@ module tb;
   task automatic map_page(input logic [VA_WIDTH-1:0] va,
                           input logic [PPN_WIDTH-1:0] ppn,
                           input ifu_fault_e f, input int misses,
-                          input logic [GPA_WIDTH-1:0] gpa);
+                          input logic [FAULT_GPA_WIDTH-1:0] gpa);
     page_t p;
     p.ppn    = ppn;
     p.fault  = f;
@@ -245,7 +245,7 @@ module tb;
   // non-faulting. exp_of records each start's expansion.
   task automatic put32(input logic [VA_WIDTH-1:0] va,
                        input logic [31:0] w);
-    ifu_fault_e f; logic [PA_WIDTH-1:0] pa; logic [GPA_WIDTH-1:0] g;
+    ifu_fault_e f; logic [PA_WIDTH-1:0] pa; logic [FAULT_GPA_WIDTH-1:0] g;
     logic [PA_WIDTH-1:0] pa2;
     xlate_va(va, f, pa, g);
     mem_hw[pa[PA_WIDTH-1:1]] = w[15:0];
@@ -256,7 +256,7 @@ module tb;
 
   task automatic put16(input logic [VA_WIDTH-1:0] va,
                        input logic [15:0] c, input logic [31:0] e);
-    ifu_fault_e f; logic [PA_WIDTH-1:0] pa; logic [GPA_WIDTH-1:0] g;
+    ifu_fault_e f; logic [PA_WIDTH-1:0] pa; logic [FAULT_GPA_WIDTH-1:0] g;
     xlate_va(va, f, pa, g);
     mem_hw[pa[PA_WIDTH-1:1]] = c;
     exp_of[pa[PA_WIDTH-1:1]] = e;
@@ -784,7 +784,7 @@ module tb;
     logic [VA_WIDTH-1:0] pc    [0:NPD-1];
     ifu_fault_e          flt   [0:NPD-1];
     logic [VA_WIDTH-1:0] fva   [0:NPD-1];
-    logic [GPA_WIDTH-1:0] fgpa [0:NPD-1];
+    logic [FAULT_GPA_WIDTH-1:0] fgpa [0:NPD-1];
     logic [NPD-1:0]      rvc;
     logic [1:0]          br    [0:NPD-1];
     logic [NPD-1:0]      call;
@@ -815,7 +815,7 @@ module tb;
   task automatic ref_block(input blk_t b, output exp_t e);
     logic [15:0]          hw  [0:NPOS-1];
     ifu_fault_e           hf  [0:NPOS-1];
-    logic [GPA_WIDTH-1:0] hg  [0:NPOS-1];
+    logic [FAULT_GPA_WIDTH-1:0] hg  [0:NPOS-1];
     logic [PA_WIDTH-1:0]  hpa [0:NPOS-1];
     logic [VA_WIDTH-1:0]  va;
     logic [PA_WIDTH-1:0]  pa;
@@ -876,8 +876,8 @@ module tb;
       end
       // BP-123, IFU-2a: the fetch's own GPA carries the faulting
       // halfword's page offset; an implicit access's is as returned.
-      if ((e.flt[p] == IFU_FAULT_GUEST_PAGE) && (imp_of(e.fva[p]) == 2'b00) &&
-          (e.fgpa[p] != '0))
+      // BP-124: for every kind-00 GPA, 0 included (MMU-30 withdrawn).
+      if ((e.flt[p] == IFU_FAULT_GUEST_PAGE) && (imp_of(e.fva[p]) == 2'b00))
         e.fgpa[p][11:0] = e.fva[p][11:0];
       if ((e.flt[p] != IFU_FAULT_NONE) && base[p] && !e.flt_val) begin
         e.flt_val = 1'b1;
@@ -1275,7 +1275,7 @@ module tb;
     map_page(b, '0, IFU_FAULT_PAGE, 0, '0);
     add_blk(b, b + VA_WIDTH'(32), 1'b0, 0);
     b = VA_WIDTH'('h0_8008_0030);
-    map_page(b, '0, IFU_FAULT_GUEST_PAGE, 0, GPA_WIDTH'('h1_2345_6000));
+    map_page(b, '0, IFU_FAULT_GUEST_PAGE, 0, FAULT_GPA_WIDTH'('h1_2345_6000));
     add_blk(b, b + VA_WIDTH'(32), 1'b0, 0);
     itlb_lat[1] = 3;                       // tag 1 returns after tag 0
     run_and_check(600);
@@ -1292,7 +1292,7 @@ module tb;
     // 0x030 here (IFU-2a). This read 'h1_2345_6000, the page alone.
     chk("cause 20 on the first page carries the GPA",
         (nrx > 3) && (rx_slot[3][0].fault_cause == IFU_FAULT_GUEST_PAGE) &&
-        (rx_slot[3][0].fault_gpa == GPA_WIDTH'('h1_2345_6030)));
+        (rx_slot[3][0].fault_gpa == FAULT_GPA_WIDTH'('h1_2345_6030)));
     chk("a faulting first page issues no L1I request (one line in all)",
         n_l1i_req == 1);
   endtask
@@ -2317,16 +2317,16 @@ module tb;
   // The GPA's implicit-access kind reaches ifu_pd_pkt_t (IT-6c, DCD-16).
   task automatic t_gpa_kind();
     logic [VA_WIDTH-1:0] b [0:2];
-    logic [GPA_WIDTH-1:0] g [0:2];
+    logic [FAULT_GPA_WIDTH-1:0] g [0:2];
     tname = "gpa_kind";
     $display("-- %s --", tname);
     reset_all();
     b[0] = VA_WIDTH'('h0_8030_0040);
     b[1] = VA_WIDTH'('h0_8031_0080);
     b[2] = VA_WIDTH'('h0_8032_00C0);
-    g[0] = GPA_WIDTH'('h0_0123_4000);        // the fetch's page
-    g[1] = GPA_WIDTH'('h0_0004_2AB8);        // a VS PTE's address
-    g[2] = GPA_WIDTH'('h0_0004_3FF0);
+    g[0] = FAULT_GPA_WIDTH'('h0_0123_4000);        // the fetch's page
+    g[1] = FAULT_GPA_WIDTH'('h0_0004_2AB8);        // a VS PTE's address
+    g[2] = FAULT_GPA_WIDTH'('h0_0004_3FF0);
     for (int k = 0; k < 3; k++) begin
       map_page(b[k], '0, IFU_FAULT_GUEST_PAGE, 0, g[k]);
       page_attr(b[k], 4'b1111, 2'(k));
@@ -2335,23 +2335,36 @@ module tb;
     run_and_check(400);
     chk("kind 00: the fetch's GPA with the VA's offset",
         (rx_slot[0][0].fault_gpa_imp == 2'b00) &&
-        (rx_slot[0][0].fault_gpa == GPA_WIDTH'('h0_0123_4040)));
+        (rx_slot[0][0].fault_gpa == FAULT_GPA_WIDTH'('h0_0123_4040)));
     chk("kind 01: an implicit read, the PTE address as returned",
         (rx_slot[1][0].fault_gpa_imp == 2'b01) &&
         (rx_slot[1][0].fault_gpa == g[1]));
     chk("kind 10: an implicit write, the PTE address as returned",
         (rx_slot[2][0].fault_gpa_imp == 2'b10) &&
         (rx_slot[2][0].fault_gpa == g[2]));
-    // MMU-30: a GPA that does not fit is returned 0 and stays 0.
+    // BP-124 (MMU-23, IFU-2a; MMU-30 withdrawn). A kind-00 fault on
+    // guest page 0 is a real GPA: its offset is filled. BP-123 left a
+    // GPA of 0 unfilled, MMU-30's sentinel.
     reset_all();
     b[0] = VA_WIDTH'('h0_8033_0050);
     map_page(b[0], '0, IFU_FAULT_GUEST_PAGE, 0, '0);
     page_attr(b[0], 4'b1111, 2'b00);
     add_blk(b[0], b[0] + VA_WIDTH'(32), 1'b0, 0);
     run_and_check(400);
-    chk("MMU-30: a GPA of 0 (does not fit) stays 0, no offset added",
+    chk("guest page 0, kind 00: fault_gpa is the offset",
         (rx_slot[0][0].fault_cause == IFU_FAULT_GUEST_PAGE) &&
-        (rx_slot[0][0].fault_gpa == '0));
+        (rx_slot[0][0].fault_gpa == FAULT_GPA_WIDTH'('h050)));
+    // A GPA with bit 55 set is carried whole, offset filled.
+    reset_all();
+    b[0] = VA_WIDTH'('h0_8034_0064);
+    map_page(b[0], '0, IFU_FAULT_GUEST_PAGE, 0,
+             FAULT_GPA_WIDTH'('h80_0000_1234_5000));
+    page_attr(b[0], 4'b1111, 2'b00);
+    add_blk(b[0], b[0] + VA_WIDTH'(32), 1'b0, 0);
+    run_and_check(400);
+    chk("GPA bit 55, kind 00: whole, with the offset",
+        (rx_slot[0][0].fault_cause == IFU_FAULT_GUEST_PAGE) &&
+        (rx_slot[0][0].fault_gpa == FAULT_GPA_WIDTH'('h80_0000_1234_5064)));
   endtask
 
   // =================================================================

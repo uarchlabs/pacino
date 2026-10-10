@@ -3,7 +3,7 @@
 // Copyright (c) 2026 Jeff Nye, uarchlabs.com
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
-// Page table walker (BP-123). mmu_decisions.md MMU-1 to MMU-30;
+// Page table walker (BP-123, BP-124). mmu_decisions.md MMU-1 to MMU-31;
 // client port itlb_l2tlb_interfaces.md IL-1 to IL-14; memory port
 // ptw_mem_interfaces.md WM-1 to WM-9.
 //
@@ -52,27 +52,42 @@
 //   - leaf: PBMT 3 (reserved), or PBMT non-zero with PBMTE clear
 //     (MMU-U6). PBMTE is menvcfg's for single-stage and G-stage and
 //     henvcfg's for the VS-stage (privileged 3.1.18 and 20.2.13; spike
-//     mmu.cc agrees). mmu_decisions.md MMU-U6 reads "henvcfg.PBMTE
-//     clear for the G-stage"; reported                page fault
+//     mmu.cc agrees)                                 page fault
 //   - leaf with N set: only level 0 with PPN[3:0] = 4'b1000 is
 //     defined (Svnapot, 64 KiB); every other N encoding is reserved
 //     (MMU-U7)                                       page fault
 //   - leaf superpage whose low PPN bits are not zero (misaligned)
 //                                                    page fault
-//   - fetch: X clear. The U-against-privilege check of a single-stage
-//     or VS-stage leaf is the ITLB's, on every hit (MMU-26, ITLB-16)
-//                                                    page fault
-//   - store (the data-side client, MMU-8): W clear    page fault
+//   - the access type (MMU-26a): X clear for a fetch, W clear for a
+//     store, R clear for a read (MXR clear: no client presents MXR
+//     until the DTLB, MMU-24c)                       page fault
+//   - U against the request's privilege (MMU-8c, BP-124), on a
+//     single-stage or VS-stage leaf: itlb_l2t_priv U (with itlb_l2t_v
+//     set, VU) needs U set; S (VS) needs U clear, for a fetch because
+//     SUM does not apply to fetch, for a read or write because SUM is
+//     taken clear until the DTLB adds it (MMU-24c)   page fault
+//     The ITLB still checks U on every hit (ITLB-16): privilege changes
+//     without a fence. This check exists so a walk never sets A on a
+//     leaf the access is not permitted to use.
 //   - A clear, or a store with D clear:
 //       ADUE clear (Svade)                           page fault
 //       ADUE set (Svadu)                             the update below
-// At the G-stage every page fault is a GUEST page fault, cause 20
-// (MMU-22), and the leaf must also have U set and grant the access
-// type, as a user-mode access (MMU-26): X for the fetch's own GPA, R
-// for a VS-stage PTE read, W for the VS-stage update (MMU-8a).
+// EVERY CHECK ABOVE IS MADE BEFORE THE A/D UPDATE (MMU-8c): a leaf that
+// fails one is answered with the fault and nothing is written. The
+// privileged algorithm makes the leaf checks (steps 6 to 8) before the
+// A/D update (step 9).
+// At the G-stage every page fault is a GUEST page fault (MMU-22), and
+// the leaf must also have U set and grant the access type, as a
+// user-mode access (MMU-26): X for the fetch's own GPA, R for a
+// VS-stage PTE read, W for the VS-stage update (MMU-8a).
 // ADUE is menvcfg's for single-stage and G-stage, henvcfg's for the
 // VS-stage (MMU-7, MMU-7a); the two stages of one nested walk may be
 // under different rules.
+//
+// THE CAUSE FOLLOWS THE ACCESS TYPE (MMU-24c): a page fault is 12, 13
+// or 15 for execute, read or write, a guest-page fault 20, 21 or 23,
+// an access fault 1, 5 or 7. An implicit access (a PTE read, an
+// update) faults with the cause of the original access.
 //
 // THE SVADU UPDATE IS A COMPARE AND STORE (MMU-8, WM-5). The walker
 // checks that a store to the PTE passes PMP and PMA (MMU-10d, MMU-12a)
@@ -91,19 +106,19 @@
 // EVERY ACCESS IS CHECKED BEFORE IT IS PRESENTED (MMU-10d, MMU-12,
 // MMU-12a, WM-8): PMP at privilege S, as a read for a PTE read and as
 // a write for a CAS, and PMA cacheable and coherent (MMU-13 bits 0 and
-// 1). A failure is an access fault, cause 1, and nothing is presented.
-// An address that cannot be formed in PA_WIDTH bits is refused the same
-// way (MMU-28). A memory-port error is cause 1 too (WM-7).
+// 1). A failure is an access fault and nothing is presented. An
+// address that cannot be formed in PA_WIDTH bits is refused the same
+// way (MMU-28). A memory-port error is an access fault too (WM-7).
 //
 // A PPN IS NEVER TRUNCATED (MMU-28). All 44 PPN bits of every PTE are
 // read:
 //   - a supervisor physical page (single-stage, or G-stage, or a
 //     VS-stage PTE when hgatp is Bare) with a bit set above bit
 //     PPN_WIDTH-1: the access made with it, the next PTE read or the
-//     fetch, is an access fault, cause 1
+//     fetch, is an access fault
 //   - a guest physical page (VS-stage with hgatp Sv39x4) with a bit
-//     set above GPA bit 40: a guest-page fault, cause 20, with GPA 0
-//     (MMU-30) and the kind of the access that needed it
+//     set above GPA bit 40: a guest-page fault with the kind of the
+//     access that needed it, and the GPA WHOLE (MMU-23, BP-124)
 // The fetch's own address is checked after the leaf's A update, where
 // the algorithm puts the access it makes.
 //
@@ -118,18 +133,20 @@
 //          leaf's with G cleared (there is no VS-stage leaf, and the G
 //          bit of a G-stage PTE is not a global mapping). pbmt is the
 //          more restrictive of the two stages' (MMU-U6, IL-9a)
-//   fault  cause 1, 12 or 20 (MMU-16). On cause 20 gpa is the faulting
-//          guest physical address -- the VS-stage PTE address for an
-//          implicit access, the fetch's page for the fetch's own -- or 0
-//          when it does not fit 41 bits (MMU-30), and gpa_imp is the
-//          kind (MMU-29): 00 the fetch's GPA, 01 an implicit read of a
-//          VS-stage PTE, 10 an implicit write of one
+//   fault  the cause of MMU-24c. On a guest-page fault gpa is the
+//          faulting guest physical address at FAULT_GPA_WIDTH = 56 bits,
+//          never replaced by a sentinel (MMU-23; MMU-30, a zero for a
+//          GPA above bit 40, is withdrawn, BP-124): for kind 00 the
+//          fetch's page, bits 11:0 zero (the IFU fills the offset,
+//          IFU-2a); for kinds 01 and 10 the VS-stage PTE's GPA. gpa_imp
+//          is the kind (MMU-29): 00 the fetch's GPA, 01 an implicit
+//          read of a VS-stage PTE, 10 an implicit write of one
 //   retry  IL-6
 //
-// THE ACCESS TYPE. itlb_l2t_acc is not on itlb_l2tlb_interfaces.md 2:
-// the walker needs it for the D update of a data-side client (MMU-8)
-// and for the G-stage permission of the final GPA. The ITLB's request
-// is always a fetch and tb_fe_top ties it to ACC_X. Reported (BP-123).
+// THE REQUEST (IL-3d, MMU-24c). itlb_l2t_acc is the access type (0
+// read, 1 write, 2 execute); itlb_l2t_priv with itlb_l2t_v the
+// effective privilege the U check uses, 2'b00 U or 2'b01 S. The ITLB
+// drives both (BP-124); 2'b10 and 2'b11 are never presented.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -156,7 +173,8 @@ module ptw #(
   input  logic [VMID_WIDTH-1:0]    itlb_l2t_vmid,
   input  logic                     itlb_l2t_v,
   input  logic [1:0]               itlb_l2t_tag,
-  input  logic [1:0]               itlb_l2t_acc,     // see header
+  input  logic [1:0]               itlb_l2t_acc,     // IL-3d
+  input  logic [1:0]               itlb_l2t_priv,    // IL-3d, MMU-24c
   output logic                     l2t_itlb_rsp_val,
   output logic [1:0]               l2t_itlb_tag,
   output logic [1:0]               l2t_itlb_status,
@@ -165,7 +183,7 @@ module ptw #(
   output logic [PERM_WIDTH-1:0]    l2t_itlb_perm,
   output logic [1:0]               l2t_itlb_pbmt,
   output logic [CAUSE_WIDTH-1:0]   l2t_itlb_cause,
-  output logic [GPA_WIDTH-1:0]     l2t_itlb_gpa,
+  output logic [FAULT_GPA_WIDTH-1:0] l2t_itlb_gpa,  // IL-11a, MMU-23
   output logic [1:0]               l2t_itlb_gpa_imp, // IL-11b
 
   // ---- memory, ptw_mem_interfaces.md 3 -------------------------------
@@ -202,6 +220,7 @@ module ptw #(
   localparam int VW   = VA_WIDTH - 12;        // 29, the request page
   localparam int GPW  = GPA_WIDTH - 12;       // 29, a guest page
   localparam int PTEP = 44;                   // PTE PPN field, 53:10
+  localparam int FGW  = FAULT_GPA_WIDTH;      // 56, a faulting GPA
 
   // l2t_itlb_status, IL-4.
   localparam logic [1:0] ST_HIT   = 2'b00;
@@ -214,10 +233,17 @@ module ptw #(
   localparam logic [2:0] SZ_2M  = 3'b010;
   localparam logic [2:0] SZ_1G  = 3'b011;
 
-  // Exception codes, MMU-16.
-  localparam logic [CAUSE_WIDTH-1:0] CAUSE_ACCESS = CAUSE_WIDTH'(1);
-  localparam logic [CAUSE_WIDTH-1:0] CAUSE_PAGE   = CAUSE_WIDTH'(12);
-  localparam logic [CAUSE_WIDTH-1:0] CAUSE_GUEST  = CAUSE_WIDTH'(20);
+  // Exception codes by access type, MMU-16 and MMU-24c: execute,
+  // read (load) and write (store).
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_ACC_X = CAUSE_WIDTH'(1);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_ACC_R = CAUSE_WIDTH'(5);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_ACC_W = CAUSE_WIDTH'(7);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_PF_X  = CAUSE_WIDTH'(12);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_PF_R  = CAUSE_WIDTH'(13);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_PF_W  = CAUSE_WIDTH'(15);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_GPF_X = CAUSE_WIDTH'(20);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_GPF_R = CAUSE_WIDTH'(21);
+  localparam logic [CAUSE_WIDTH-1:0] CAUSE_GPF_W = CAUSE_WIDTH'(23);
 
   // Implicit-access kind, MMU-29.
   localparam logic [1:0] IMP_FETCH = 2'b00;
@@ -229,6 +255,7 @@ module ptw #(
   localparam logic [1:0] ACC_W = 2'd1;
   localparam logic [1:0] ACC_X = 2'd2;
 
+  localparam logic [1:0] PRV_U = 2'd0;        // itlb_l2t_priv, IL-3d
   localparam logic [1:0] PRV_S = 2'd1;        // MMU-10d
 
   localparam logic [3:0] MODE_BARE = 4'd0;
@@ -297,6 +324,7 @@ module ptw #(
   logic [VW-1:0]           r_vpn;
   logic [1:0]              r_tag;
   logic [1:0]              r_acc;
+  logic [1:0]              r_priv;     // the request's privilege, IL-3d
   logic                    r_s_on;     // a single or VS stage walk
   logic                    r_g_on;     // V=1 and hgatp Sv39x4
   logic [PPN_WIDTH-1:0]    r_satp_ppn;
@@ -345,7 +373,7 @@ module ptw #(
   logic [PERM_WIDTH-1:0]   r_rsp_perm;
   logic [1:0]              r_rsp_pbmt;
   logic [CAUSE_WIDTH-1:0]  r_rsp_cause;
-  logic [GPA_WIDTH-1:0]    r_rsp_gpa;
+  logic [FGW-1:0]          r_rsp_gpa;
   logic [1:0]              r_rsp_imp;
   logic                    r_rty_val;
   logic [1:0]              r_rty_tag;
@@ -412,14 +440,32 @@ module ptw #(
     return (a > b) ? a : b;
   endfunction
 
+  // The cause of each fault kind for the request's access type
+  // (MMU-24c). A reserved access type is answered as execute.
+  function automatic logic [CAUSE_WIDTH-1:0] c_acc(input logic [1:0] a);
+    return (a == ACC_R) ? CAUSE_ACC_R :
+           (a == ACC_W) ? CAUSE_ACC_W : CAUSE_ACC_X;
+  endfunction
+
+  function automatic logic [CAUSE_WIDTH-1:0] c_pf(input logic [1:0] a);
+    return (a == ACC_R) ? CAUSE_PF_R :
+           (a == ACC_W) ? CAUSE_PF_W : CAUSE_PF_X;
+  endfunction
+
+  function automatic logic [CAUSE_WIDTH-1:0] c_gpf(input logic [1:0] a);
+    return (a == ACC_R) ? CAUSE_GPF_R :
+           (a == ACC_W) ? CAUSE_GPF_W : CAUSE_GPF_X;
+  endfunction
+
   // -----------------------------------------------------------------
   // The single / VS-stage PTE, evaluated.
   // -----------------------------------------------------------------
-  logic                    ws_pf;       // a page fault, cause 12
+  logic                    ws_pf;       // a page fault, MMU-24c
   logic                    ws_leaf;
   logic [PTEP-1:0]         ws_ppn;
   logic                    ws_next_wide;  // the next page cannot be formed
   logic                    ws_next_gwide; // a GPA above bit 40
+  logic [FGW-1:0]          ws_next_gpa;   // the next VS PTE's GPA, whole
   logic                    ws_upd;      // A, or A and D, to be set
   logic [PTEP-1:0]         ws_page;     // the translated page
   logic [2:0]              ws_size;
@@ -450,10 +496,23 @@ module ptw #(
     ws_page = (ws_ppn & ~mask) | (PTEP'(r_vpn) & mask);
     ws_size = lvl_size(r_s_lvl, napot);
 
+    // The access type (MMU-26a; R with MXR clear) and U against the
+    // request's privilege (MMU-8c): U and VU need U set, S and VS need
+    // it clear (SUM does not apply to fetch, and is taken clear for a
+    // read or write until the DTLB presents it, MMU-24c).
     perm_bad = ((r_acc == ACC_X) && !r_s_pte[P_X]) ||
-               ((r_acc == ACC_W) && !r_s_pte[P_W]);
+               ((r_acc == ACC_R) && !r_s_pte[P_R]) ||
+               ((r_acc == ACC_W) && !r_s_pte[P_W]) ||
+               ((r_priv == PRV_U) ? !r_s_pte[P_U] : r_s_pte[P_U]);
     need_a   = !r_s_pte[P_A];
     need_d   = (r_acc == ACC_W) && !r_s_pte[P_D];
+
+    // A non-leaf's next table, as a guest physical address: the PTE the
+    // next level reads (an implicit READ). Formed whole, for a fault on
+    // a GPA above bit 40 (MMU-23, MMU-28).
+    ws_next_gpa = ({12'd0, ws_ppn} << 12) +
+                  FGW'({(r_s_lvl == 2'd2) ? r_vpn[17:9] : r_vpn[8:0],
+                        3'b000});
 
     ws_pf  = 1'b0;
     ws_upd = 1'b0;
@@ -625,6 +684,7 @@ module ptw #(
       r_vpn        <= '0;
       r_tag        <= '0;
       r_acc        <= ACC_X;
+      r_priv       <= PRV_S;
       r_s_on       <= 1'b0;
       r_g_on       <= 1'b0;
       r_satp_ppn   <= '0;
@@ -684,6 +744,7 @@ module ptw #(
             r_vpn       <= itlb_l2t_vpn;
             r_tag       <= itlb_l2t_tag;
             r_acc       <= itlb_l2t_acc;
+            r_priv      <= itlb_l2t_priv;
             r_satp_ppn  <= csr_ptw_satp_ppn;
             r_vsatp_ppn <= csr_ptw_vsatp_ppn;
             r_hgatp_ppn <= csr_ptw_hgatp_ppn;
@@ -719,7 +780,7 @@ module ptw #(
             // Physical: never asked by the ITLB. Identity, 4 KiB.
             if (|r_vpn[VW-1:PPN_WIDTH]) begin
               r_rsp_st    <= ST_FAULT;
-              r_rsp_cause <= CAUSE_ACCESS;
+              r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
               r_rsp_imp   <= '0;
             end else begin
@@ -747,7 +808,7 @@ module ptw #(
             r_st        <= S_G_START;
           end else if (|w_s_addr[63:PA_WIDTH]) begin
             r_rsp_st    <= ST_FAULT;          // MMU-28
-            r_rsp_cause <= CAUSE_ACCESS;
+            r_rsp_cause <= c_acc(r_acc);
             r_rsp_gpa   <= '0;
             r_rsp_imp   <= '0;
             r_st        <= S_RSP;
@@ -769,7 +830,7 @@ module ptw #(
         S_G_ADDR: begin
           if (|w_g_addr[63:PA_WIDTH]) begin
             r_rsp_st    <= ST_FAULT;          // MMU-28
-            r_rsp_cause <= CAUSE_ACCESS;
+            r_rsp_cause <= c_acc(r_acc);
             r_rsp_gpa   <= '0;
             r_rsp_imp   <= '0;
             r_st        <= S_RSP;
@@ -787,7 +848,7 @@ module ptw #(
         S_ISSUE: begin
           if (w_chk_bad) begin
             r_rsp_st    <= ST_FAULT;          // MMU-10d, MMU-12a
-            r_rsp_cause <= CAUSE_ACCESS;
+            r_rsp_cause <= c_acc(r_acc);
             r_rsp_gpa   <= '0;
             r_rsp_imp   <= '0;
             r_st        <= S_RSP;
@@ -800,7 +861,7 @@ module ptw #(
           if (mem_ptw_rsp_val) begin
             if (mem_ptw_rsp_err) begin
               r_rsp_st    <= ST_FAULT;        // WM-7
-              r_rsp_cause <= CAUSE_ACCESS;
+              r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
               r_rsp_imp   <= '0;
               r_st        <= S_RSP;
@@ -843,22 +904,23 @@ module ptw #(
         S_S_EVAL: begin
           if (ws_pf) begin
             r_rsp_st    <= ST_FAULT;
-            r_rsp_cause <= CAUSE_PAGE;
+            r_rsp_cause <= c_pf(r_acc);
             r_rsp_gpa   <= '0;
             r_rsp_imp   <= '0;
             r_st        <= S_RSP;
           end else if (!ws_leaf) begin
             if (r_g_on && ws_next_gwide) begin
-              // MMU-28, MMU-30: the next VS-stage table's GPA does not
-              // fit; its read is the implicit access that faults.
+              // MMU-28: the next VS-stage table's GPA does not fit 41
+              // bits; its read is the implicit access that faults, and
+              // its GPA is returned whole (MMU-23).
               r_rsp_st    <= ST_FAULT;
-              r_rsp_cause <= CAUSE_GUEST;
-              r_rsp_gpa   <= '0;
+              r_rsp_cause <= c_gpf(r_acc);
+              r_rsp_gpa   <= ws_next_gpa;
               r_rsp_imp   <= IMP_READ;
               r_st        <= S_RSP;
             end else if (!r_g_on && ws_next_wide) begin
               r_rsp_st    <= ST_FAULT;        // MMU-28
-              r_rsp_cause <= CAUSE_ACCESS;
+              r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
               r_rsp_imp   <= '0;
               r_st        <= S_RSP;
@@ -899,7 +961,7 @@ module ptw #(
             // Single stage: the fetch's own address (MMU-28).
             if (ws_next_wide) begin
               r_rsp_st    <= ST_FAULT;
-              r_rsp_cause <= CAUSE_ACCESS;
+              r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
               r_rsp_imp   <= '0;
             end else begin
@@ -914,7 +976,7 @@ module ptw #(
             // VS-stage only: GPA = SPA.
             if (ws_next_wide) begin
               r_rsp_st    <= ST_FAULT;
-              r_rsp_cause <= CAUSE_ACCESS;
+              r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
               r_rsp_imp   <= '0;
             end else begin
@@ -926,10 +988,11 @@ module ptw #(
             end
             r_st <= S_RSP;
           end else if (ws_next_gwide) begin
-            // MMU-28, MMU-30: the fetch's GPA does not fit 41 bits.
+            // MMU-28: the fetch's GPA does not fit 41 bits. Its page is
+            // returned whole, bits 11:0 zero (MMU-23, IFU-2a).
             r_rsp_st    <= ST_FAULT;
-            r_rsp_cause <= CAUSE_GUEST;
-            r_rsp_gpa   <= '0;
+            r_rsp_cause <= c_gpf(r_acc);
+            r_rsp_gpa   <= {ws_page, 12'h000};
             r_rsp_imp   <= IMP_FETCH;
             r_st        <= S_RSP;
           end else begin
@@ -945,14 +1008,14 @@ module ptw #(
         S_G_EVAL: begin
           if (wg_gpf) begin
             r_rsp_st    <= ST_FAULT;
-            r_rsp_cause <= CAUSE_GUEST;
-            r_rsp_gpa   <= r_g_gpa;
+            r_rsp_cause <= c_gpf(r_acc);
+            r_rsp_gpa   <= FGW'(r_g_gpa);
             r_rsp_imp   <= r_g_kind;
             r_st        <= S_RSP;
           end else if (!wg_leaf) begin
             if (wg_next_wide) begin
               r_rsp_st    <= ST_FAULT;        // MMU-28
-              r_rsp_cause <= CAUSE_ACCESS;
+              r_rsp_cause <= c_acc(r_acc);
               r_rsp_gpa   <= '0;
               r_rsp_imp   <= '0;
               r_st        <= S_RSP;
@@ -974,7 +1037,7 @@ module ptw #(
             // implementation cannot form; the access made with it, the
             // VS-stage PTE access or the fetch, is an access fault.
             r_rsp_st    <= ST_FAULT;
-            r_rsp_cause <= CAUSE_ACCESS;
+            r_rsp_cause <= c_acc(r_acc);
             r_rsp_gpa   <= '0;
             r_rsp_imp   <= '0;
             r_st        <= S_RSP;

@@ -83,10 +83,12 @@
 // the fetch's own GPA (kind 2'b00) the walker returns the page; the
 // offset within it is the faulting halfword's VA offset (the two
 // stages translate pages, so GPA[11:0] = VA[11:0]), and it is filled
-// in here so fault_gpa is the faulting GPA itself. A GPA of 0 is left
-// 0: it is mmu_decisions.md MMU-30's "does not fit in 41 bits", and an
-// offset added to it would make it look like a real address (found by
-// tb_fe_top pt_faults_h). For an implicit access (2'b01, 2'b10) it is
+// in here ALWAYS, so fault_gpa is the faulting GPA itself, at
+// FAULT_GPA_WIDTH bits, whole (mmu_decisions.md MMU-23, IFU-2a). BP-124
+// removed BP-123's exception for a GPA of 0, MMU-30's sentinel for a
+// GPA above bit 40, which is withdrawn: the walker now returns such a
+// GPA whole, and a fault on guest page 0 is a real GPA whose offset is
+// filled like any other. For an implicit access (2'b01, 2'b10) it is
 // the VS-stage PTE's address as returned.
 //
 // UNCACHED, ONE INSTRUCTION AT A TIME (IFU-23, BP-123, TD#135). A block
@@ -134,8 +136,8 @@ module ifu_f3 (
   input  ifu_fault_e               f2_hwf  [0:FTQ_PD_WIDTH],
   input  logic [FTQ_PD_WIDTH:0]    f2_hwpg,
   input  logic [VA_WIDTH-1:0]      f2_pc   [0:FTQ_PD_WIDTH],
-  input  logic [GPA_WIDTH-1:0]     f2_gpa0,
-  input  logic [GPA_WIDTH-1:0]     f2_gpa1,
+  input  logic [FAULT_GPA_WIDTH-1:0] f2_gpa0,
+  input  logic [FAULT_GPA_WIDTH-1:0] f2_gpa1,
   input  logic [1:0]               f2_imp0,
   input  logic [1:0]               f2_imp1,
   input  logic                     f2_uc,
@@ -196,8 +198,8 @@ module ifu_f3 (
   ifu_fault_e                 r_hwf [0:NPOS-1];
   logic [NPOS-1:0]            r_hwpg;
   logic [VA_WIDTH-1:0]        r_pc  [0:NPOS-1];
-  logic [GPA_WIDTH-1:0]       r_gpa0;
-  logic [GPA_WIDTH-1:0]       r_gpa1;
+  logic [FAULT_GPA_WIDTH-1:0] r_gpa0;
+  logic [FAULT_GPA_WIDTH-1:0] r_gpa1;
   logic [1:0]                 r_imp0;
   logic [1:0]                 r_imp1;
   logic                       r_uc;
@@ -218,7 +220,7 @@ module ifu_f3 (
   // ---- this cycle ----------------------------------------------------
   ifu_fault_e                 w_ifault [0:NPD-1];
   logic [VA_WIDTH-1:0]        w_fva    [0:NPD-1];
-  logic [GPA_WIDTH-1:0]       w_fgpa   [0:NPD-1];
+  logic [FAULT_GPA_WIDTH-1:0] w_fgpa   [0:NPD-1];
   logic [1:0]                 w_fimp   [0:NPD-1];
   logic [NPD-1:0]             w_has_f;
   logic [NPD-1:0]             w_range;
@@ -270,9 +272,9 @@ module ifu_f3 (
       if (w_ifault[i] != IFU_FAULT_GUEST_PAGE) begin
         w_fgpa[i] = '0;
         w_fimp[i] = '0;
-      end else if ((w_fimp[i] == 2'b00) && (w_fgpa[i] != '0)) begin
+      end else if (w_fimp[i] == 2'b00) begin
         // The fetch's own GPA: the page from the walk, the offset from
-        // the faulting halfword. 0 is MMU-30's value (see the header).
+        // the faulting halfword, for every kind-00 fault (IFU-2a).
         w_fgpa[i][11:0] = w_fva[i][11:0];
       end
       w_has_f[i] = (w_ifault[i] != IFU_FAULT_NONE);
