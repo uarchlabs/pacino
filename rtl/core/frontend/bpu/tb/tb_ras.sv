@@ -17,7 +17,8 @@
 // next-on-stack link (ras_decisions.md 3.2, ruled session-075): the
 // pop-then-push sequence, the p3 repair rows on the link, the restore
 // after wrong-path pops and pushes, and the return-call pairings the
-// repair table does not specify.
+// repair table does not specify. TC-36 and TC-37 (BP-126, TD#121)
+// are the full commit stack: 32 pushes read non-empty.
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -60,7 +61,6 @@ module tb;
 
   logic                pred_val_p2  [0:NUM_PRED_SLOTS-1];
   bp_br_type_e         br_type_p2   [0:NUM_PRED_SLOTS-1];
-  logic [VA_WIDTH-1:0] pc_p2        [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] fall_p2      [0:NUM_PRED_SLOTS-1];
 
   logic [VA_WIDTH-1:0] pop_addr_p2  [0:NUM_PRED_SLOTS-1];
@@ -93,7 +93,6 @@ module tb;
     .ras_tos_valid_p0     (tos_valid_p0),
     .ras_pred_val_p2      (pred_val_p2),
     .ras_br_type_p2       (br_type_p2),
-    .ras_pc_p2            (pc_p2),
     .ras_fall_through_p2  (fall_p2),
     .ras_pop_addr_p2      (pop_addr_p2),
     .ras_pop_valid_p2     (pop_valid_p2),
@@ -143,7 +142,6 @@ module tb;
     pred_val_p3[1] = prev_val[1]; br_type_p3[1] = prev_typ[1];
     pred_val_p2[0] = v0; br_type_p2[0] = t0; fall_p2[0] = f0;
     pred_val_p2[1] = v1; br_type_p2[1] = t1; fall_p2[1] = f1;
-    pc_p2[0] = '0; pc_p2[1] = '0;
   endtask
 
   // Override p3 explicitly (deliberate p2/p3 disagreement).
@@ -185,7 +183,6 @@ module tb;
     rstn = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       pred_val_p2[s] = 1'b0; br_type_p2[s] = NO_BRANCH; fall_p2[s] = '0;
-      pc_p2[s]       = '0;
       pred_val_p3[s] = 1'b0; br_type_p3[s] = NO_BRANCH;
       prev_val[s]    = 1'b0; prev_typ[s]   = NO_BRANCH;
     end
@@ -204,6 +201,12 @@ module tb;
     drive(1'b1, DIRECT_CALL, a, 1'b0, NO_BRANCH, '0);
     tick();
   endtask
+
+  // TC-36 / TC-37 commit-stack test address: base plus 4 per push.
+  function automatic logic [VA_WIDTH-1:0] cs_ad(input int base,
+                                                input int i);
+    return VA_WIDTH'(base + 4 * i);
+  endfunction
 
   // -----------------------------------------------------------------
   // Test addresses
@@ -1061,6 +1064,65 @@ module tb;
     check("TC-35 a dropped push with no repair leaves the pointers",
           (dut.tosr == '0) && (dut.tosw == '0));
     tick();  // the edge at which RS1 samples the dropped cycle
+
+    // =============================================================
+    // TC-36 (BP-126, TD#121): a FULL commit stack is not empty. 32
+    // commit pushes with no pop fill the stack and wrap CSP to 0. The
+    // stack must still read non-empty: the p0 read and the empty-pop
+    // fallback take the last entry pushed, and a commit pop from the
+    // full state exposes the entry below it (ras_decisions.md 3.3).
+    // Before BP-126 the wrapped CSP == 0 read as EMPTY.
+    // =============================================================
+    do_reset();
+    for (int i = 0; i < RAS_COMMIT_ENTRIES; i++)
+      commit_op(DIRECT_CALL, cs_ad(32'h4_0000, i), 4'd0);
+    #1;
+    check("TC-36a full commit stack: p0 TOS valid", tos_valid_p0[0] == 1'b1);
+    check("TC-36b full commit stack: p0 TOS is the last push",
+          tos_addr_p0[0] == cs_ad(32'h4_0000, RAS_COMMIT_ENTRIES-1));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);   // speculative empty
+    #1;
+    check("TC-36c empty-pop fallback valid from the full stack",
+          pop_valid_p2[0] == 1'b1);
+    check("TC-36d empty-pop fallback is the last push",
+          pop_addr_p2[0] == cs_ad(32'h4_0000, RAS_COMMIT_ENTRIES-1));
+    tick();
+    commit_op(RETURN, '0, 4'd0);                     // commit pop
+    #1;
+    check("TC-36e after one commit pop: still valid", tos_valid_p0[0] == 1'b1);
+    check("TC-36f after one commit pop: the 31st push is on top",
+          tos_addr_p0[0] == cs_ad(32'h4_0000, RAS_COMMIT_ENTRIES-2));
+
+    // =============================================================
+    // TC-37 (BP-126, TD#121): past full. A 33rd push overwrites the
+    // oldest entry (conventional circular stack, no fault, 3.3) and
+    // the stack stays non-empty; 32 pops then empty it, the last
+    // valid top being the second push, since the first was lost.
+    // =============================================================
+    do_reset();
+    for (int i = 0; i <= RAS_COMMIT_ENTRIES; i++)
+      commit_op(DIRECT_CALL, cs_ad(32'h5_0000, i), 4'd0);
+    #1;
+    check("TC-37a 33 pushes: TOS valid, the 33rd push",
+          (tos_valid_p0[0] == 1'b1) &&
+          (tos_addr_p0[0] == cs_ad(32'h5_0000, RAS_COMMIT_ENTRIES)));
+    for (int i = 0; i < RAS_COMMIT_ENTRIES - 1; i++)
+      commit_op(RETURN, '0, 4'd0);
+    #1;
+    check("TC-37b 31 pops: one entry left, the second push",
+          (tos_valid_p0[0] == 1'b1) &&
+          (tos_addr_p0[0] == VA_WIDTH'('h5_0000 + 4)));
+    commit_op(RETURN, '0, 4'd0);
+    #1;
+    check("TC-37c 32 pops: empty", tos_valid_p0[0] == 1'b0);
+    commit_op(RETURN, '0, 4'd0);                     // pop on empty
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);
+    #1;
+    check("TC-37d a pop on empty is ignored: one push reads back",
+          (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_R));
+    commit_op(RETURN, '0, 4'd0);
+    #1;
+    check("TC-37e and one pop empties it again", tos_valid_p0[0] == 1'b0);
 
     // -------------------------------------------------------------
     $display("=================================================");

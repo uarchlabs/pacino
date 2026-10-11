@@ -37,7 +37,17 @@
 // TC4 update       -- drive one update, check sc_upd_rdy_u1 and that
 //                     each addressed counter stepped (sat_sc) via
 //                     mem[b][row], both slots.
-// TC5 arb stubs    -- sc_uq_not_full / sc_upd_rdy safe constants.
+// TC5 full queue   -- (BP-126, TD#123) with no grant, 8 updates fill
+//                     the SC update queue: sc_uq_not_full drops, the
+//                     ninth is refused and held, and on the grant every
+//                     accepted update reaches the tables in order, the
+//                     ninth last. It replaces the stub-constant check.
+// TC6 two writes   -- (BP-126) both slots written into one queue entry
+//                     in one cycle, both applied when it drains.
+//
+// The tb plays the bp_cluster arbiter: sc_uq_rd_en is held high (an
+// update granted whenever one is queued) except where a test holds it
+// low to fill the queue.
 // ===================================================================
 `default_nettype none
 
@@ -81,6 +91,8 @@ module tb;
 
   logic                        sc_uq_not_full;
   logic [P_SLOTS-1:0]          sc_upd_rdy;
+  logic                        sc_uq_has_data;
+  logic                        sc_uq_rd_en;
 
   logic                        sc_enable;
   logic                        sc_ready;
@@ -107,6 +119,8 @@ module tb;
     .sc_upd_rdy_u1   (sc_upd_rdy_u1),
     .sc_uq_not_full  (sc_uq_not_full),
     .sc_upd_rdy      (sc_upd_rdy),
+    .sc_uq_has_data  (sc_uq_has_data),
+    .sc_uq_rd_en     (sc_uq_rd_en),
     .sc_enable       (sc_enable),
     .sc_ready        (sc_ready)
   );
@@ -122,7 +136,8 @@ module tb;
   int _gate        = 1;
   int _prediction  = 1;
   int _update      = 1;
-  int _arb_stub    = 1;
+  int _full_queue  = 1;
+  int _two_writes  = 1;
 
   // ----------------------------------------------------------------
   // Generic width-masked check (mirrors tb_sc_cntrl). 64-bit formals
@@ -280,6 +295,7 @@ module tb;
     sc_t2_idx_fh_p2 = '0;
     sc_t3_idx_fh_p2 = '0;
     sc_enable       = 1'b1;
+    sc_uq_rd_en     = 1'b1;
   endtask
 
   // ----------------------------------------------------------------
@@ -346,6 +362,7 @@ module tb;
 
     chkw("TC2 pred not accepted", P_SLOTS, sc_pred_rdy_p3, 0);
     chkw("TC2 upd  not accepted", P_SLOTS, sc_upd_rdy_u1, 0);
+    chkw("TC2 upd  refused by the queue", P_SLOTS, sc_upd_rdy, 0);
 
     tage_pred_rdy_p2 = '0;
     sc_upd_val_u0    = '0;
@@ -531,11 +548,123 @@ module tb;
   endtask
 
   // ================================================================
-  // TC5: arbitration stubs are safe constants.
+  // Queue tests (BP-126, TD#123). One slot-0 update whose every table
+  // index is qidx and whose captured counter is k, sc_wrong forced, so
+  // sc_cntrl writes sat(k + 1) into each table at qidx. The value
+  // written comes from the update's own meta, not the RAM, so the
+  // counter at qidx after each write names the update that wrote it.
   // ================================================================
-  task automatic test_arb_stub();
-    chkw("TC5 sc_uq_not_full", 1, sc_uq_not_full, 1);
-    chkw("TC5 sc_upd_rdy",     P_SLOTS, sc_upd_rdy, 2'b11);
+  task automatic q_upd(input logic [P_SLOTS-1:0] val, input int k0,
+                       input int k1);
+    sc_upd_val_u0 = val;
+    for (int s = 0; s < P_SLOTS; s++) begin
+      sc_upd_inp_u0[s]                              = '0;
+      sc_upd_inp_u0[s].resolved_taken               = 1'b1;
+      sc_upd_inp_u0[s].sc_pred_meta.sc_lcl_pred_tkn = 1'b0;
+      sc_upd_inp_u0[s].sc_pred_meta.sc_abs_sum      = 10'd50;
+      sc_upd_inp_u0[s].sc_pred_meta.sc_chooser      = CHOOSE_NONE;
+      for (int t = 0; t < NT; t++) begin
+        sc_upd_inp_u0[s].sc_pred_meta.sc_upd_idx[t] =
+          (s == 0) ? 10'h031 : 10'h052;
+        sc_upd_inp_u0[s].sc_pred_meta.sc_upd_ctr[t] =
+          SC_MAX_DATA_WIDTH'((s == 0) ? k0 : k1);
+      end
+    end
+  endtask
+
+  // ================================================================
+  // TC5: a full queue. No grant: eight updates are accepted one per
+  // cycle (sc_upd_rdy high each cycle, nothing reaches the tables),
+  // then sc_uq_not_full and sc_upd_rdy drop and a ninth is refused
+  // and held for several cycles. With the grant restored each update
+  // drains in order, one per cycle; the ninth is accepted once there
+  // is room and is applied last.
+  // ================================================================
+  task automatic test_full_queue();
+    logic [SC_MAX_CTR_WIDTH-1:0] start0;
+    int                          k;
+    int                          n_acc9;
+
+    clr_inputs();
+    @(posedge clk); #1;
+    chkw("TC5 queue empty, not full at start", 2,
+         {sc_uq_not_full, sc_uq_has_data}, 2'b10);
+    start0 = tbl_rd(0, 0, 10'h031);
+    sc_uq_rd_en = 1'b0;
+    for (k = 1; k <= SC_UQ_DEPTH; k++) begin
+      q_upd(2'b01, k, 0);
+      #1;
+      chkw($sformatf("TC5 update %0d accepted", k), P_SLOTS,
+           sc_upd_rdy, 2'b11);
+      @(posedge clk); #1;
+    end
+    // Ninth presented and held by the tb (the producer, FE-5).
+    q_upd(2'b01, SC_UQ_DEPTH + 1, 0);
+    #1;
+    chkw("TC5 full: sc_uq_not_full low", 1, sc_uq_not_full, 0);
+    chkw("TC5 full: ninth refused (sc_upd_rdy low)", P_SLOTS,
+         sc_upd_rdy, 0);
+    chkw("TC5 full: has data", 1, sc_uq_has_data, 1);
+    repeat (3) begin
+      @(posedge clk); #1;
+      chkw("TC5 held: still refused", P_SLOTS, sc_upd_rdy, 0);
+      chkw("TC5 held: nothing applied", P_SLOTS, sc_upd_rdy_u1, 0);
+    end
+    chkw("TC5 held: table untouched", SC_MAX_CTR_WIDTH,
+         tbl_rd(0, 0, 10'h031), start0);
+    // Grant. Update k drains in cycle k and writes k + 1. The tb keeps
+    // presenting the ninth until the queue accepts it.
+    sc_uq_rd_en = 1'b1;
+    n_acc9      = 0;
+    for (k = 1; k <= SC_UQ_DEPTH + 1; k++) begin
+      #1;
+      if ((n_acc9 == 0) && (sc_upd_rdy == 2'b11)) n_acc9 = k;
+      @(posedge clk); #1;
+      if (n_acc9 != 0) sc_upd_val_u0 = '0;
+      chkw($sformatf("TC5 drain %0d applied", k), 1, sc_upd_rdy_u1[0], 1);
+      for (int t = 0; t < NT; t++)
+        chkw($sformatf("TC5 drain %0d in order, table %0d", k, t),
+             SC_MAX_CTR_WIDTH, tbl_rd(t, 0, 10'h031),
+             ref_sat_sc(6'(k), +1));
+    end
+    // Room appears the cycle after the first drain, from the
+    // registered pointers: the ninth is accepted in drain cycle 2.
+    chkw("TC5 the ninth was accepted only after the first drain", 1,
+         n_acc9 == 2, 1);
+    @(posedge clk); #1;
+    chkw("TC5 drained: empty, nothing more applied", 3,
+         {sc_uq_has_data, sc_upd_rdy_u1}, 3'b000);
+    clr_inputs();
+  endtask
+
+  // ================================================================
+  // TC6: two writes in one cycle. Both slots enqueue into one entry
+  // with no grant, then drain together: both slots' counters step.
+  // ================================================================
+  task automatic test_two_writes();
+    clr_inputs();
+    @(posedge clk); #1;
+    sc_uq_rd_en = 1'b0;
+    q_upd(2'b11, 20, 23);
+    #1;
+    chkw("TC6 both slots accepted in one cycle", P_SLOTS, sc_upd_rdy,
+         2'b11);
+    @(posedge clk); #1;
+    sc_upd_val_u0 = '0;
+    chkw("TC6 queued, not applied", P_SLOTS, sc_upd_rdy_u1, 0);
+    chkw("TC6 one entry queued", 1, sc_uq_has_data, 1);
+    sc_uq_rd_en = 1'b1;
+    @(posedge clk); #1;
+    chkw("TC6 both slots applied", P_SLOTS, sc_upd_rdy_u1, 2'b11);
+    for (int t = 0; t < NT; t++) begin
+      chkw($sformatf("TC6 slot 0 table %0d", t), SC_MAX_CTR_WIDTH,
+           tbl_rd(t, 0, 10'h031), ref_sat_sc(6'd20, +1));
+      chkw($sformatf("TC6 slot 1 table %0d", t), SC_MAX_CTR_WIDTH,
+           tbl_rd(t, 1, 10'h052), ref_sat_sc(6'd23, +1));
+    end
+    @(posedge clk); #1;
+    chkw("TC6 queue empty after the drain", 1, sc_uq_has_data, 0);
+    clr_inputs();
   endtask
 
   // ----------------------------------------------------------------
@@ -573,7 +702,8 @@ module tb;
     if (_init_check != 0) test_init_check();
     if (_prediction != 0) test_prediction();
     if (_update     != 0) test_update();
-    if (_arb_stub   != 0) test_arb_stub();
+    if (_full_queue != 0) test_full_queue();
+    if (_two_writes != 0) test_two_writes();
 
     @(posedge clk); #1;
     $display("--------------------------------------------");

@@ -346,6 +346,10 @@ package bp_defines_pkg;
   localparam int TAGE_MAX_FH2 = 7;
 
   localparam int TAGE_SRAM_INIT_VALUE = 0;
+  // T0 (tage_bim) reset value: 2'b10, weakly taken (TD#103, BP-126).
+  // The tagged tables keep TAGE_SRAM_INIT_VALUE. tage.sv drives this
+  // value on the T0 init write data; tage_bim's fast init uses it.
+  localparam int TAGE_T0_SRAM_INIT_VALUE = 2;
   localparam int TAGE_UAON_THRES      = 8; // UAON threshold value
   localparam int TAGE_UAON_WIDTH      = 4;
   localparam int TAGE_TBL_SEL_WIDTH   = $clog2(TAGE_NUM_TABLES); // = 3

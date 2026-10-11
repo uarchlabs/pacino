@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -586,7 +586,6 @@ sc p3 output:
   ras_tos_valid_p0    logic             per slot  out
   ras_pred_val_p2     logic             per slot  in
   ras_br_type_p2      bp_br_type_e      per slot  in
-  ras_pc_p2           [VA_WIDTH-1:0]    per slot  in   TD#101
   ras_fall_through_p2 [VA_WIDTH-1:0]    per slot  in
   ras_pop_addr_p2     [VA_WIDTH-1:0]    per slot  out
   ras_pop_valid_p2    logic             per slot  out
@@ -617,8 +616,8 @@ DCD-11). One enum per slot still suffices: the case is two
 operations on one instruction, not two classifications. The p3 pair
 takes the registered p2 classification.
 
-`ras_pc_p2` is declared and unread (TD#101). The cluster drives it
-from the staged p2 PC.
+`ras_pc_p2` was declared and unread (TD#101); BP-126 removed it from
+ras.sv and the cluster.
 
 RAS p2 operations are qualified by reachability across slots: a
 taken branch ends the block, so a later slot is off the predicted
@@ -843,10 +842,16 @@ The FTQ also takes `sc_enable` (FE-20).
 
 Handshake. A slot's update is accepted when every predictor it
 trains is ready; no predictor is given a partial update. The
-cluster's readies are per slot and ANDed per predictor. The SC ready
-is a grant from the cluster's update arbitration and depends on the
-SC valid, so the FTQ presents the SC valid before it sees the SC
-ready (bp_arb_spec.md). The SC-disabled rule is unchanged.
+cluster's readies are per slot and ANDed per predictor. The SC-
+disabled rule is unchanged.
+
+THE SC READY IS THE SC UPDATE QUEUE'S ROOM, since BP-126 (TD#123,
+P-3, confirmed session-077): sc_upd_rdy is the queue's room and
+sc_enable, and an update the queue accepts waits there for the
+arbiter's grant (bp_arb_spec.md 4.5, 5.5). Until BP-126 the SC ready
+was the arbiter's grant and depended on the SC valid, so the FTQ
+presented the SC valid before it saw the ready (BP-119); that
+dependence is gone.
 
 The FTB update path through ftq_ftb_sched is unchanged and is not
 gated by the other predictors' readies, so a resolution held for a
@@ -923,6 +928,10 @@ Queue status ports, driven out of the cluster:
   ittage  ittage_pq_not_full, ittage_upd_rdy, ittage_upd_rdy_u1
   sc      sc_uq_not_full, sc_upd_rdy, sc_upd_rdy_u1
 ```
+
+Since BP-126 the cluster's `sc_uq_not_full` is the SC update queue's
+room with the one-cycle starvation hold, and `sc_upd_rdy` the queue's
+room (bp_arb_spec.md 4.5).
 
 tage and ittage declare `pq_not_full` and `upd_rdy` with no
 predictor prefix. The cluster boundary adds the prefix so the two
@@ -1208,9 +1217,11 @@ match it and to match this specification.
 13. bp_history uses literal `[1:0]` and `[2]` where other modules
     use NUM_PRED_SLOTS. Deferred. Recorded INFRA-011.
 
-14. bp_history does not generate the ITTAGE IT5 folds. ittage.sv
+14. CLOSED, BP-126 (TD#102). bp_history generates the IT5 folds, in
+    the rollback recompute and both steps, as for IT1 to IT4. It
+    read: bp_history does not generate the ITTAGE IT5 folds; ittage.sv
     wires `it_t5_idx_fh`, `tag_fh1` and `tag_fh2` to outputs that
-    are never driven, so IT5 indexes on PC alone. TD#102.
+    are never driven, so IT5 indexes on PC alone.
 
 ---
 
@@ -1353,4 +1364,10 @@ match it and to match this specification.
   2026-10-09  session-076, recording BP-122. 4c: w_pft_p2 as built.
               9: the correction ports declared; the loop predictor's
               rollback slot bits added.
+
+  2026-10-10  session-077, after BP-126. 5.4: ras_pc_p2 removed
+              (TD#101). 8: the SC ready is the SC update queue's room,
+              not the grant (TD#123, P-3); the cluster's
+              sc_uq_not_full includes the queue full. 10 item 14
+              closed (TD#102).
 ```

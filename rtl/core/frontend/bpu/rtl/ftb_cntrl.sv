@@ -41,8 +41,13 @@
 //
 // RAM entry layout (ftb_entry_t below, private to ftb_cntrl): the
 // ftb_decisions.md 8 entry in section 8 order minus the relocated
-// entry-valid, FTB_RAM_ENTRY_WIDTH bits. Section 8 is the sole home of
-// the widths and their sum; they are not restated here.
+// entry-valid, FTB_RAM_ENTRY_WIDTH bits. Widths, from section 8, the
+// sole home of the field widths and their sum:
+//   - entry (logical, FTB_ENTRY_WIDTH):       114 bits per way,
+//     including the entry-valid held in ftb_plru
+//   - RAM entry (FTB_RAM_ENTRY_WIDTH):        113 bits per way, the
+//     entry minus the entry-valid; what ftb_array stores
+// The elaboration check below holds $bits(ftb_entry_t) to the second.
 //   tag
 //   br0{valid,pos,tgt,stat,conf}
 //   br1{valid,pos,tgt,stat,conf}

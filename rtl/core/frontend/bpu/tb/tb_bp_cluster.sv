@@ -22,6 +22,14 @@
 //   D  p3 and supersession    D1 D2
 //   E  history                TC-A..TC-G, E1 E2 E3
 //   F  metadata               F1 F2 F3
+//   (G H I J K L M N O follow; see each group's header)
+//
+// BP-126 adds, across every group: the FOLD monitor (an independent
+// history model traced through every TAGE, ITTAGE and SC ST1-ST3
+// hash, TD#69/70/84/102) and, under sim_bp_cluster_init (no fast-init
+// plusarg), a wait for the sram_init walks on every reset with the
+// first reset's T0 / IT5 / ST0 contents checked (TD#67/68). Group H
+// gains H8, the SC update queue full at the boundary (TD#123).
 //
 // Fixture policy (BP-093 binding decision 3). A predictor response
 // that a cluster test needs as an input is established by writing that
@@ -581,11 +589,63 @@ module tb;
     end
   endtask
 
+  // BP-126 (TD#67, TD#68): sim_bp_cluster_init runs with no fast-init
+  // plusarg, so every reset starts the TAGE, ITTAGE and SC sram_init
+  // walks. do_reset waits for all three readies (immediate under the
+  // plusargs) before any fixture writes a table, and on the first reset
+  // checks, before the first prediction, that every entry of one table
+  // per predictor holds its sram_init.md value: T0 (2'b10, TD#103),
+  // IT5 and ST0 (zero). The walk is TAGE's, 2^TAGE_MAX_IDX_WIDTH.
+  localparam int RDY_WAIT = (1 << TAGE_MAX_IDX_WIDTH) + 16;
+  localparam int IT5_ENTRIES = IT_TBL_ENTRIES[5] / 2;
+  localparam int T0_ROWS     = (1 << TAGE_TBL_IDX[0]) / 2;
+  localparam int ST0_ROWS    = SC_TBL_ENTRIES[0] / 2;
+  bit init_chk_done = 1'b0;
+  int n_resets      = 0;
+
+  task automatic init_chk();
+    int t0_bad, it5_bad, st0_bad;
+    t0_bad = 0; it5_bad = 0; st0_bad = 0;
+    for (int b = 0; b < 2; b++) begin
+      for (int i = 0; i < T0_ROWS; i++) begin
+        if (dut.u_tage.u_tage_bim.u_ram_s0.mem[b][i] !== 2'b10) t0_bad++;
+        if (dut.u_tage.u_tage_bim.u_ram_s1.mem[b][i] !== 2'b10) t0_bad++;
+      end
+      for (int i = 0; i < IT5_ENTRIES; i++) begin
+        if (dut.u_ittage.gen_ittage_tables[5].gen_active.u_table
+              .u_ram_s0.mem[b][i] != '0) it5_bad++;
+        if (dut.u_ittage.gen_ittage_tables[5].gen_active.u_table
+              .u_ram_s1.mem[b][i] != '0) it5_bad++;
+      end
+      for (int i = 0; i < ST0_ROWS; i++) begin
+        if (dut.u_sc.gen_st[0].u_st.u_ram_s0.mem[b][i] != '0) st0_bad++;
+        if (dut.u_sc.gen_st[0].u_st.u_ram_s1.mem[b][i] != '0) st0_bad++;
+      end
+    end
+    chk("INIT every T0 entry is 2'b10 (weakly taken) after init",
+        t0_bad == 0);
+    chk("INIT every IT5 entry is zero after init", it5_bad == 0);
+    chk("INIT every SC ST0 entry is zero after init", st0_bad == 0);
+  endtask
+
   task automatic do_reset();
+    int w;
     rstn = 1'b0;
     init_inputs();
     repeat (4) tick();
     rstn = 1'b1;
+    w = 0;
+    while (!(tage_rdy && ittage_rdy && sc_ready) && (w < RDY_WAIT)) begin
+      tick();
+      w++;
+    end
+    if (!(tage_rdy && ittage_rdy && sc_ready))
+      $fatal(1, "tb_bp_cluster: predictor readies low after reset");
+    n_resets++;
+    if (!init_chk_done) begin
+      init_chk();
+      init_chk_done = 1'b1;
+    end
     ittage_clear_all();
     repeat (3) tick();
   endtask
@@ -1734,6 +1794,7 @@ module tb;
   // =================================================================
   // GROUP D -- p3 and supersession
   // =================================================================
+  logic d2_sc_acc;   // D2: the SC update accepted this cycle (BP-126)
   task automatic group_d();
     logic [VA_WIDTH-1:0] pc;
     logic [VA_WIDTH-1:0] base;
@@ -1884,7 +1945,9 @@ module tb;
     // update itself stays inactive (valid low).
     ubtb_upd_u0[0].valid = 1'b0;
     ubtb_upd_u0[0].is_br = 1'b1;
-    sc_upd_val_u0[0]     = 1'b1;
+    // BP-126: presented at i == 2 below, once the stream occupies p2,
+    // so the one update cannot be granted in the pipeline-fill bubble.
+    sc_upd_val_u0[0]     = 1'b0;
 
     mismatch_seen = 0;
     match_seen    = 0;
@@ -1894,7 +1957,15 @@ module tb;
     for (int i = 0; i < 40; i++) begin
       req(VA_WIDTH'('h00_0300_0000) + VA_WIDTH'(i * 32), idx_q);
       idx_q = idx_q + 6'd1;
+      // BP-126: the SC update queue exists (TD#123), so the producer
+      // withdraws its one update once the queue accepts it (FE-5).
+      // Presented every cycle it would be eight updates, not one, and
+      // fill the queue. The accepted update waits in the queue under
+      // the prediction stream, so the starvation hold still occurs.
+      if (i == 2) sc_upd_val_u0[0] = 1'b1;
+      d2_sc_acc = sc_upd_val_u0[0] & sc_upd_rdy[0];
       tick();
+      if (d2_sc_acc) sc_upd_val_u0[0] = 1'b0;
       // BP-097. Sampled EVERY cycle of the stream, not once at the
       // end. No queue in this fixture can fill: the tage and ittage
       // prediction queues are drained by the cluster every cycle, and
@@ -3315,6 +3386,7 @@ module tb;
     ubtb_upd_t           u;
 
     $display("---- GROUP G: closed predict-update loop ----");
+    mon_in_g = 1'b1;
 
     // -- G0. Update fan-out by resolved branch type (fe_decisions 7.2
     //    plus the three encodings that table does not list). The
@@ -3879,6 +3951,7 @@ module tb;
            bpu_redir_p2[0].target_pc, VA_WIDTH'('h00_0000_D440));
 
     clr_upd_chans();
+    mon_in_g = 1'b0;
     $display("---- GROUP G done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
   endtask
@@ -3903,9 +3976,14 @@ module tb;
   // those checks are removed and listed in the BP-121 Results Capture.
   //
   // The two request terms, restated from bp_cluster.sv:
-  //   w_sc_pred_req = r_val_p2 & sc_enable
-  //   w_sc_upd_req  = sc_enable & sc_uq_not_full
-  //                 & |(sc_upd_val_u0 & sc_upd_rdy)
+  //   w_sc_pred_req = r_tv_p2 & sc_enable
+  //   w_sc_upd_req  = sc_enable & sc_uq_has_data
+  // BP-126 (TD#123): sc.sv has an SC update queue. sc_upd_rdy is its
+  // room, not the grant, so an update is accepted into the queue and
+  // waits there for the grant; sc_uq_has_data (queued or presented)
+  // is the update request.
+  logic h2b_fi_save;   // H2b: the SC fast-init strap before the case
+  int   h8_acc, h8_low; // H8: accepts, and full cycles seen
   task automatic group_h();
     logic [VA_WIDTH-1:0] pc;
     logic [SC_STARVE_W_TB-1:0] starve_before;
@@ -3967,6 +4045,7 @@ module tb;
     //    (+SC_FAST_INIT=1), so the strap is cleared for this case and
     //    the real sram_init walk drives sc_ready; it is restored before
     //    any later case seeds the SC RAMs.
+    h2b_fi_save          = dut.u_sc.fast_init_r;
     dut.u_sc.fast_init_r = 1'b0;
     rstn = 1'b0;
     clr_upd_chans();
@@ -3989,7 +4068,7 @@ module tb;
     chk("H2b no update grant either", dut.w_sc_grant_upd === 1'b0);
     chk("H2b consumer_ready drops while SC cannot take a result",
         dut.w_tage_consumer_ready === 1'b0);
-    dut.u_sc.fast_init_r = 1'b1;
+    dut.u_sc.fast_init_r = h2b_fi_save;   // BP-126: the run's own mode
     sc_enable = 1'b0;
     do_reset();
     clr_upd_chans();
@@ -4044,8 +4123,16 @@ module tb;
         (dut.w_sc_pred_req === 1'b1) && (dut.w_sc_upd_req === 1'b1));
     chk("H4 the prediction wins", dut.w_sc_grant_pred === 1'b1);
     chk("H4 the update does not win", dut.w_sc_grant_upd === 1'b0);
-    chk("H4 the update is NOT accepted at the boundary",
-        sc_upd_rdy[0] === 1'b0);
+    // BP-126: the queue accepts the update (it has room) while the
+    // grant goes to the prediction. The producer withdraws it once
+    // accepted (FE-5), so exactly one update waits in the queue.
+    chk("H4 the update is accepted into the SC update queue",
+        sc_upd_rdy[0] === 1'b1);
+    tick();
+    sc_upd_val_u0[0] = 1'b0;
+    #1;
+    chk("H4 the accepted update waits in the queue, not granted",
+        (dut.w_sc_uq_has_data === 1'b1) && (dut.w_sc_grant_upd === 1'b0));
     early_upd = 0;
     hold_cyc  = -1;
     hold_n    = 0;
@@ -4068,6 +4155,8 @@ module tb;
     chk("H4 the hold is one cycle wide", hold_n == 1);
     chk("H4 the update is granted two cycles after the hold",
         (grant_cyc >= 0) && (grant_cyc == hold_cyc + 2));
+    chk("H4 the grant drained the queue (BP-126)",
+        dut.w_sc_uq_has_data === 1'b0);
     $display("INFO: H4 hold at %0d, update grant at %0d", hold_cyc,
              grant_cyc);
     norq();
@@ -4093,6 +4182,49 @@ module tb;
     #1;
     chk("H7 removing the update request releases TAGE",
         dut.w_tage_consumer_ready === 1'b1);
+
+    // -- H8 (BP-126, TD#123). A full SC update queue at the boundary.
+    //    A block at p2 every cycle (the testbench ignores the hold, so
+    //    no update is ever granted) and a new update presented every
+    //    cycle it is accepted: after SC_UQ_DEPTH accepts the queue is
+    //    full, so sc_upd_rdy and sc_uq_not_full drop and stay low
+    //    outside the one-cycle starvation hold. With the stream
+    //    stopped the queue drains and both rise again.
+    do_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b11);
+    sc_fill(6'b011111);
+    ubtb_clear_set(pc);
+    lp_clear_both(pc);
+    sc_enable        = 1'b1;
+    ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
+    h8_acc = 0;
+    for (int i = 0; i < SC_UQ_DEPTH + 6; i++) begin
+      req(pc, FTQ_IDX_BITS'(6'h30 + i));
+      // From i == 2 a block is at p2 every cycle, so nothing drains.
+      sc_upd_val_u0[0] = (i >= 2);
+      #1;
+      if (sc_upd_val_u0[0] && sc_upd_rdy[0]) h8_acc++;
+      tick();
+    end
+    #1;
+    chk("H8 the queue accepted exactly SC_UQ_DEPTH updates",
+        h8_acc == SC_UQ_DEPTH);
+    h8_low = 0;
+    for (int i = 0; i < 4; i++) begin
+      req(pc, FTQ_IDX_BITS'(6'h10 + i));
+      #1;
+      if (!sc_upd_rdy[0] && !sc_uq_not_full && !dut.w_sc_hold) h8_low++;
+      tick();
+    end
+    chk("H8 full queue: sc_upd_rdy and sc_uq_not_full low, not the hold",
+        h8_low == 4);
+    norq();
+    sc_upd_val_u0[0] = 1'b0;
+    repeat (SC_UQ_DEPTH + 4) tick();
+    #1;
+    chk("H8 drained: sc_uq_not_full and sc_upd_rdy high again",
+        sc_uq_not_full && sc_upd_rdy[0] && !dut.w_sc_uq_has_data);
 
     sc_enable = 1'b0;
     clr_upd_chans();
@@ -4927,6 +5059,248 @@ module tb;
   endtask
 
   // =================================================================
+  // FOLD MONITOR -- the folds traced through every table's hash
+  // (BP-126; TD#69, TD#70, TD#84, TD#102)
+  // =================================================================
+  //
+  // An independent model of the global history, written here from
+  // bp_history_decisions.md and never read from bp_history's state:
+  //   - the history is AGE-indexed, m_h[0] the newest bit (6.1), not a
+  //     circular buffer with a pointer;
+  //   - a bundle shifts in pred_taken[0] then pred_taken[1] for
+  //     num_branches = 1 or 2 (3.1, 3.3);
+  //   - a checkpoint is a copy of the whole history before and after
+  //     the bundle written with it (3.4, 7), not a pointer;
+  //   - a rollback restores the copy after the named bundle; a
+  //     corrected rollback restores the copy before it, shifts in the
+  //     rollback_n corrected bits and rewrites the entry's checkpoint
+  //     (3.5); a rollback drops that cycle's bundle (4).
+  // Its inputs are the cluster's nets that drive bp_history: the
+  // formed prediction (w_hist_*), the checkpoint write and the
+  // rollback with its correction (w_rollback_*, w_rb_*).
+  //
+  // From the model the monitor computes each fold by the canonical
+  // definition (6.2: age i XORs into position (i + W - 1) mod W) and
+  // each table's index and tag by the hash rules:
+  //   TAGE T1-T4, ITTAGE IT1-IT5 (tage_ / ittage_table_hash_rules.md)
+  //     idx = ((PC >> PC_HASH_SHIFT) ^ fh)[IDX-1:0]
+  //     tag = ((PC >> IDX) ^ fh1 ^ (fh2 << 1))[TAG-1:0]
+  //   SC ST1-ST3 (sc_table_hash_rules.md), at p2 from the folds of the
+  //   block's p0 cycle, inp_pc_p2 = PC[VA_WIDTH-1:1]:
+  //     idx = ((inp_pc_p2 >> PC_HASH_SHIFT) ^ fh)[IDX-1:0]
+  // PC is the cluster request PC (ftq_pred_pc_p0), both slots. Every
+  // prediction the tables are presented is compared, in every group,
+  // with the index and tag the table itself produces; the counts and
+  // the first prediction after each rollback and each corrected
+  // rollback are reported and checked at the end of the run.
+  localparam int MH_W = 256;
+
+  logic [MH_W-1:0] m_h;
+  logic [MH_W-1:0] m_ck_pre  [FTQ_DEPTH];
+  logic [MH_W-1:0] m_ck_post [FTQ_DEPTH];
+
+  // p0 -> p2 staging of the request for the SC comparison.
+  logic                   m_v_p1, m_v_p2;
+  logic [VA_WIDTH-1:0]    m_pc_p1, m_pc_p2;
+  logic [SC_MAX_FH-1:0]   m_scfh_p1 [1:3];
+  logic [SC_MAX_FH-1:0]   m_scfh_p2 [1:3];
+
+  int  mon_cmp_tage, mon_cmp_it, mon_cmp_sc, mon_cmp_g, mon_bad;
+  int  mon_tage_late, mon_it_late;
+  int  mon_rb_first, mon_rbc_first;
+  bit  mon_rb_pend, mon_rbc_pend, mon_in_g;
+
+  function automatic logic [63:0] m_fold(input logic [MH_W-1:0] h,
+                                         input int H, input int W);
+    logic [63:0] acc;
+    acc = '0;
+    for (int i = 0; i < H; i++)
+      if (h[i]) acc[(i + W - 1) % W] = ~acc[(i + W - 1) % W];
+    return acc;
+  endfunction
+
+  function automatic logic [MH_W-1:0] m_shift(input logic [MH_W-1:0] h,
+                                              input logic b);
+    return {h[MH_W-2:0], b};
+  endfunction
+
+  // Index and tag hash, tagged tables (TAGE, ITTAGE). fh, fh1, fh2 are
+  // the W-bit folds zero-extended.
+  function automatic logic [63:0] m_idx(input logic [VA_WIDTH-1:0] pc,
+                                        input logic [63:0] fh,
+                                        input int idx_w);
+    logic [63:0] v;
+    v = 64'(pc >> PC_HASH_SHIFT) ^ fh;
+    return v & ((64'd1 << idx_w) - 64'd1);
+  endfunction
+
+  function automatic logic [63:0] m_tag(input logic [VA_WIDTH-1:0] pc,
+                                        input logic [63:0] fh1,
+                                        input logic [63:0] fh2,
+                                        input int idx_w, input int tag_w);
+    logic [63:0] v;
+    v = 64'(pc >> idx_w) ^ fh1 ^ (fh2 << 1);
+    return v & ((64'd1 << tag_w) - 64'd1);
+  endfunction
+
+  task automatic mon_fail(input string nm, input logic [63:0] got,
+                          input logic [63:0] exp);
+    mon_bad++;
+    if (mon_bad <= 12)
+      $display("FAIL: FOLD %s got %0h exp %0h (t=%0t)", nm, got, exp,
+               $time);
+  endtask
+
+  // Model update and p0 -> p2 staging, at the edge, from the values of
+  // the cycle that ends. Blocking: testbench state, read mid-cycle.
+  /* verilator lint_off BLKSEQ */
+  always @(posedge clk) begin : mon_model
+    logic [MH_W-1:0] pre;
+    if (!rstn) begin
+      m_h    = '0;
+      m_v_p1 = 1'b0;
+      m_v_p2 = 1'b0;
+      for (int i = 0; i < FTQ_DEPTH; i++) begin
+        m_ck_pre[i]  = '0;
+        m_ck_post[i] = '0;
+      end
+    end else begin
+      m_v_p2  = m_v_p1;
+      m_pc_p2 = m_pc_p1;
+      for (int t = 1; t <= 3; t++) m_scfh_p2[t] = m_scfh_p1[t];
+      m_v_p1  = dut.w_req_val_p0;
+      m_pc_p1 = ftq_pred_pc_p0;
+      for (int t = 1; t <= 3; t++)
+        m_scfh_p1[t] = SC_MAX_FH'(m_fold(m_h, SC_TBL_HIST[t],
+                                         SC_TBL_HIST[t]));
+      if (dut.w_rollback_valid) begin
+        if (dut.w_rb_corr) begin
+          m_h = m_ck_pre[dut.w_rollback_ckpt_idx];
+          for (int k = 0; k < 2; k++)
+            if (k < int'(dut.w_rb_n)) m_h = m_shift(m_h, dut.w_rb_tkn[k]);
+          m_ck_post[dut.w_rollback_ckpt_idx] = m_h;
+          mon_rbc_pend = 1'b1;
+        end else begin
+          m_h = m_ck_post[dut.w_rollback_ckpt_idx];
+          mon_rb_pend = 1'b1;
+        end
+      end else begin
+        pre = m_h;
+        if (dut.w_hist_num_branches >= 2'd1)
+          m_h = m_shift(m_h, dut.w_hist_pred_taken[0]);
+        if (dut.w_hist_num_branches == 2'd2)
+          m_h = m_shift(m_h, dut.w_hist_pred_taken[1]);
+        if (dut.w_ckpt_wr_en) begin
+          m_ck_pre[dut.w_ckpt_wr_idx]  = pre;
+          m_ck_post[dut.w_ckpt_wr_idx] = m_h;
+        end
+      end
+    end
+  end
+
+  // Comparison, mid-cycle, after every input has settled.
+  always @(negedge clk) begin : mon_cmp
+    logic [63:0] e, g, f0, f1, f2;
+    bit          cmp;
+    if (rstn) begin
+      cmp = 1'b0;
+      // TAGE T1-T4: the table must be presented this request now (a
+      // prediction is never delayed, bp_arb_spec.md 4.5).
+      if (dut.w_req_val_p0) begin
+        if (dut.u_tage.arb_grant_pred &&
+            (dut.u_tage.cntrl_pred_inp_p0[0].pc === ftq_pred_pc_p0) &&
+            (dut.u_tage.cntrl_pred_inp_p0[1].pc === ftq_pred_pc_p0)) begin
+          for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+            for (int t = 1; t < TAGE_NUM_TABLES; t++) begin
+              f0 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH[t]);
+              f1 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH1[t]);
+              f2 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH2[t]);
+              e = m_idx(ftq_pred_pc_p0, f0, TAGE_TBL_IDX[t]);
+              g = 64'(dut.u_tage.w_idx_p0[t][s]);
+              if (g !== e)
+                mon_fail($sformatf("tage T%0d s%0d idx", t, s), g, e);
+              e = m_tag(ftq_pred_pc_p0, f1, f2, TAGE_TBL_IDX[t],
+                        TAGE_TBL_TAG[t]);
+              g = 64'(dut.u_tage.w_tag_p0[t][s]);
+              if (g !== e)
+                mon_fail($sformatf("tage T%0d s%0d tag", t, s), g, e);
+            end
+          end
+          mon_cmp_tage++;
+          cmp = 1'b1;
+        end else begin
+          mon_tage_late++;
+        end
+        // ITTAGE IT1-IT5.
+        if (dut.u_ittage.arb_grant_pred &&
+            (dut.u_ittage.cntrl_pred_inp_p0[0].pc === ftq_pred_pc_p0) &&
+            (dut.u_ittage.cntrl_pred_inp_p0[1].pc === ftq_pred_pc_p0)) begin
+          for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+            for (int t = 1; t < IT_NUM_TABLES; t++) begin
+              f0 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH[t]);
+              f1 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH1[t]);
+              f2 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH2[t]);
+              e = m_idx(ftq_pred_pc_p0, f0, IT_TBL_IDX[t]);
+              g = 64'(dut.u_ittage.tbl_idx_hash_p0[t][s]);
+              if (g !== e)
+                mon_fail($sformatf("ittage IT%0d s%0d idx", t, s), g, e);
+              e = m_tag(ftq_pred_pc_p0, f1, f2, IT_TBL_IDX[t],
+                        IT_TBL_TAG[t]);
+              g = 64'(dut.u_ittage.tbl_tag_hash_p0[t][s]);
+              if (g !== e)
+                mon_fail($sformatf("ittage IT%0d s%0d tag", t, s), g, e);
+            end
+          end
+          mon_cmp_it++;
+          cmp = 1'b1;
+        end else begin
+          mon_it_late++;
+        end
+      end
+      // SC ST1-ST3 at p2, from the folds of the block's p0 cycle.
+      if (m_v_p2) begin
+        for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+          for (int t = 1; t <= 3; t++) begin
+            e = 64'(SC_MAX_FH'(m_pc_p2[VA_WIDTH-1:1]) >> PC_HASH_SHIFT)
+              ^ 64'(m_scfh_p2[t]);
+            e = e & ((64'd1 << SC_TBL_IDX[t]) - 64'd1);
+            g = 64'(dut.u_sc.w_idx_hash_p2[t][s]);
+            if (g !== e)
+              mon_fail($sformatf("sc ST%0d s%0d idx", t, s), g, e);
+          end
+        end
+        mon_cmp_sc++;
+      end
+      if (cmp) begin
+        if (mon_in_g)     mon_cmp_g++;
+        if (mon_rb_pend)  begin mon_rb_first++;  mon_rb_pend  = 1'b0; end
+        if (mon_rbc_pend) begin mon_rbc_first++; mon_rbc_pend = 1'b0; end
+      end
+    end
+  end
+
+  /* verilator lint_on BLKSEQ */
+
+  task automatic mon_report();
+    $display("INFO: FOLD monitor: TAGE %0d, ITTAGE %0d, SC %0d predictions",
+             mon_cmp_tage, mon_cmp_it, mon_cmp_sc);
+    $display("INFO: FOLD monitor: group G %0d, first after rollback %0d,",
+             mon_cmp_g, mon_rb_first);
+    $display("INFO: FOLD monitor: first after corrected rollback %0d,",
+             mon_rbc_first);
+    $display("INFO: FOLD monitor: not presented at once TAGE %0d ITTAGE %0d",
+             mon_tage_late, mon_it_late);
+    chk("FOLD every table's index and tag matches the model", mon_bad == 0);
+    chk("FOLD TAGE, ITTAGE and SC predictions compared",
+        (mon_cmp_tage > 0) && (mon_cmp_it > 0) && (mon_cmp_sc > 0));
+    chk("FOLD the group G closed loop compared", mon_cmp_g > 0);
+    chk("FOLD first prediction after a rollback compared",
+        mon_rb_first > 0);
+    chk("FOLD first prediction after a corrected rollback compared",
+        mon_rbc_first > 0);
+  endtask
+
+  // =================================================================
   // Main
   // =================================================================
   initial begin
@@ -4960,6 +5334,8 @@ module tb;
     group_n();
     group_o();
 
+    mon_report();
+    $display("INFO: %0d resets", n_resets);
     $display("tb_bp_cluster: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin
       $fatal(1, "tb_bp_cluster: %0d checks failed", fail_cnt);
@@ -4980,8 +5356,16 @@ module tb;
   // normal completion measured at 13000 time units in this session;
   // 200000 keeps the numeral the cycle form used and matches the
   // #200000 bound the sc and tage_table testbenches carry.
+  //
+  // BP-126: with no fast-init plusarg every reset waits for the sram_init
+  // walk, and the run resets about 400 times (group E's position sweep
+  // alone resets 256 times), so the limit grows by 600 walks.
   initial begin
-    #200000;
+    int fi;
+    fi = 0;
+    void'($value$plusargs("TAGE_FAST_INIT=%d", fi));
+    if (fi != 0) #200000;
+    else         #(200000 + 600 * RDY_WAIT * 10);
     $fatal(1, "tb_bp_cluster: timeout");
   end
 

@@ -579,8 +579,9 @@ module tage #(
   // ================================================================
   // sram_init: one shared instance for all table instances.
   // DATA_WIDTH=ALLOC_DATA_W (16b) covers tage_table T1-T4 entry.
-  // tbl_ri_wd[TAGE_TBL_CTR[0]-1:0] sliced for tage_bim (2b CTR).
-  // INIT_VAL='0 initializes all table entries to zero on reset.
+  // INIT_VAL=TAGE_SRAM_INIT_VALUE initializes the tagged tables. T0
+  // takes TAGE_T0_SRAM_INIT_VALUE (2'b10, weakly taken, TD#103) on the
+  // same walk; see the tage_bim instance.
   // ================================================================
   sram_init #(
     .NUM_ENTRIES (1 << TAGE_MAX_IDX_WIDTH),
@@ -608,7 +609,9 @@ module tage #(
   // T0: tage_bim instance (outside generate).
   // Parameters bound from TAGE_TBL_* at index 0.
   // hit_p1: not present; w_hit_p1[0] driven constant 1 above.
-  // tbl_ri_wd: sliced to TAGE_TBL_CTR[0]=2b (bim entry width).
+  // tbl_ri_wd: the T0 reset value, TAGE_T0_SRAM_INIT_VALUE (2'b10,
+  // weakly taken, TD#103), not the tagged tables' walk data. The walk
+  // address and write enable are shared.
   // tage_pred_inp_p0: routed from arbitration (cntrl_pred_inp_p0).
   // ================================================================
   tage_bim #(
@@ -630,7 +633,7 @@ module tage #(
     .tbl_ri_active    (tbl_ri_active),
     .tbl_ri_wr        (tbl_ri_wr),
     .tbl_ri_wa        (tbl_ri_wa),
-    .tbl_ri_wd        (tbl_ri_wd[TAGE_TBL_CTR[0]-1:0]),
+    .tbl_ri_wd        (TAGE_TBL_CTR[0]'(TAGE_T0_SRAM_INIT_VALUE)),
     .rstn             (rstn),
     .clk              (clk),
     .idx_hash_p0      (w_idx_p0[0])

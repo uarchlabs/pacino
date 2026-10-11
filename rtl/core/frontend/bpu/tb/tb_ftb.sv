@@ -359,6 +359,22 @@ module tb;
   logic [VA_WIDTH-1:0] j1, j2;
   logic [VA_WIDTH-1:0] jpc;
   logic [VA_WIDTH-1:0] s6_pc [0:4];
+  logic [VA_WIDTH-1:0] b1pc;   // B1 cases: the br1 branch PC
+
+  // -----------------------------------------------------------------
+  // B1 set-up (BP-126, TD#81): an entry with br0 at pos 0 (taken) and
+  // the branch under test in br1 at pos B1_POS, written as a free
+  // field (S4's mechanism) with direction d. Its PC, the base of its
+  // target, is the block start plus B1_POS halfwords.
+  // -----------------------------------------------------------------
+  localparam logic [FTB_BR_POS_BITS-1:0] B1_POS = 4'd4;
+  task automatic b1_setup(input logic [VA_WIDTH-1:0]     p,
+                          input logic [FTB_WAY_BITS-1:0] way,
+                          input logic                    d,
+                          input logic [VA_WIDTH-1:0]     t1);
+    upd_br(p, 1'b0, way, 1'b0, 1'b1, p + VA_WIDTH'('h40), 4'd0, p);
+    upd_br(p, 1'b1, way, 1'b1, d, t1, B1_POS, p);
+  endtask
 
   // -----------------------------------------------------------------
   // Stimulus
@@ -1217,6 +1233,196 @@ module tb;
     predict(base + VA_WIDTH'('d14));
     check("G4 from base+14: the conditional (pos 4) is visible",
           ftb_br0_valid_p2 && (ftb_br0_pos_p2 == 4'd4));
+
+    // =============================================================
+    // B1: br1 counterparts (BP-126, TD#81). Each br0-alone directed
+    // case above whose rule is the same for br1 is repeated with the
+    // branch under test in br1 (b1_setup). Cases with no br0/br1
+    // specific rule are not repeated: S1 and FP4's miss half check
+    // both fastpath bits already; S4 is the br1 not-taken init (the
+    // br1 half of S5 and of D3's not-taken half); S6, S7, S9-S11 and
+    // P/R/J/F/G are entry, jump or position rules.
+    // =============================================================
+    // B1-S2: allocate-then-hit, br1 valid, target round-trip.
+    do_reset();
+    pc   = make_pc(26'h000B01, 9'd200);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    tgt  = b1pc + VA_WIDTH'('h100);
+    b1_setup(pc, 2'd2, 1'b1, tgt);
+    predict(pc);
+    check("B1-S2 valid on hit, way 2", ftb_valid_p2 && (ftb_way_p2 == 2'd2));
+    check("B1-S2 br1 valid",            ftb_br1_valid_p2 == 1'b1);
+    check("B1-S2 br1 target round-trip",
+          ftb_br1_target_p2 == exp_br_tgt(tgt, b1pc));
+
+    // B1-S3: update in place, br1 conf steps 4 -> 5, no realloc.
+    check("B1-S3 br1 alloc conf==INIT_TKN",
+          ftb_br1_conf_p2 == FTB_CONF_INIT_TKN);
+    upd_br(pc, 1'b1, 2'd2, 1'b1, 1'b1, tgt, B1_POS, pc);
+    predict(pc);
+    check("B1-S3 in-place: way unchanged, valid",
+          (ftb_way_p2 == 2'd2) && ftb_valid_p2);
+    check("B1-S3 br1 conf stepped 4->5", ftb_br1_conf_p2 == 3'd5);
+    check("B1-S3 br0 untouched (conf INIT_TKN)",
+          ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
+
+    // B1-S8: br1 target encode from its own PC: in range, the fit
+    // boundary, negative, and overflow wrapping per the encode.
+    do_reset();
+    pc   = make_pc(26'h000B08, 9'd201);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    b1_setup(pc, 2'd0, 1'b1, b1pc + VA_WIDTH'('h400));
+    predict(pc);
+    check("B1-S8 in-range +0x400 lossless",
+          ftb_br1_target_p2 == b1pc + VA_WIDTH'('h400));
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, b1pc + VA_WIDTH'('h0FFF), B1_POS, pc);
+    predict(pc);
+    check("B1-S8 max in-range +0xFFF lossless",
+          ftb_br1_target_p2 == b1pc + VA_WIDTH'('h0FFF));
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, b1pc - VA_WIDTH'('h400), B1_POS, pc);
+    predict(pc);
+    check("B1-S8 negative in-range -0x400 lossless",
+          ftb_br1_target_p2 == b1pc - VA_WIDTH'('h400));
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, b1pc + VA_WIDTH'('h1000), B1_POS, pc);
+    predict(pc);
+    check("B1-S8 overflow +0x1000 wraps per encode",
+          ftb_br1_target_p2 == exp_br_tgt(b1pc + VA_WIDTH'('h1000), b1pc));
+    check("B1-S8 overflow read-back != true target",
+          ftb_br1_target_p2 != (b1pc + VA_WIDTH'('h1000)));
+
+    // B1-D1: br1 direction is its conf MSB, both polarities.
+    do_reset();
+    pc   = make_pc(26'h000B11, 9'd202);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    tgt  = b1pc + VA_WIDTH'('h40);
+    b1_setup(pc, 2'd0, 1'b1, tgt);                     // conf 4
+    predict(pc);
+    check("B1-D1 MSB=1 -> taken", ftb_br1_taken_p2 == 1'b1);
+    check("B1-D1 taken == valid & conf MSB",
+          ftb_br1_taken_p2 ==
+            (ftb_br1_valid_p2 & ftb_br1_conf_p2[FTB_CONF_WIDTH-1]));
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b0, tgt, B1_POS, pc);  // 4 -> 3
+    predict(pc);
+    check("B1-D1 MSB=0 -> not-taken", ftb_br1_taken_p2 == 1'b0);
+    check("B1-D1 not-taken == valid & conf MSB",
+          ftb_br1_taken_p2 ==
+            (ftb_br1_valid_p2 & ftb_br1_conf_p2[FTB_CONF_WIDTH-1]));
+
+    // B1-D2: br1 saturates at 111 and at 000, no wrap.
+    do_reset();
+    pc   = make_pc(26'h000B12, 9'd203);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    tgt  = b1pc + VA_WIDTH'('h40);
+    b1_setup(pc, 2'd0, 1'b1, tgt);
+    train_br(pc, 2'd0, 1'b1, 1'b1, 4, tgt, B1_POS, pc); // 4 -> 7, +1
+    predict(pc);
+    check("B1-D2 taken saturates at 111, no wrap",
+          ftb_br1_conf_p2 == CONF_SAT_T);
+    train_br(pc, 2'd0, 1'b1, 1'b0, 8, tgt, B1_POS, pc); // 7 -> 0, +1
+    predict(pc);
+    check("B1-D2 not-taken saturates at 000, no wrap",
+          ftb_br1_conf_p2 == CONF_SAT_N);
+
+    // B1-D3: br1 taken alloc -> INIT_TKN; a fresh br1 does not fast-path
+    // (both directions, en=1).
+    do_reset();
+    ftb_fastpath_en = 1'b1;
+    pc   = make_pc(26'h000B13, 9'd204);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    b1_setup(pc, 2'd0, 1'b1, b1pc + VA_WIDTH'('h40));
+    predict(pc);
+    check("B1-D3 br1 taken init conf==3'b100",
+          ftb_br1_conf_p2 == FTB_CONF_INIT_TKN);
+    check("B1-D3 fresh taken br1 does NOT fast-path",
+          ftb_fastpath_p2[1] == 1'b0);
+    pc   = make_pc(26'h000B14, 9'd205);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    b1_setup(pc, 2'd0, 1'b0, b1pc + VA_WIDTH'('h40));
+    predict(pc);
+    check("B1-D3 br1 ntkn init conf==3'b011",
+          ftb_br1_conf_p2 == FTB_CONF_INIT_NTK);
+    check("B1-D3 fresh ntkn br1 does NOT fast-path",
+          ftb_fastpath_p2[1] == 1'b0);
+    ftb_fastpath_en = 1'b0;
+
+    // B1-D4: br1 self-correction: 111 fires, 110 stops, 111 again.
+    do_reset();
+    pc   = make_pc(26'h000B15, 9'd206);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    tgt  = b1pc + VA_WIDTH'('h40);
+    b1_setup(pc, 2'd0, 1'b1, tgt);
+    train_br(pc, 2'd0, 1'b1, 1'b1, 3, tgt, B1_POS, pc); // -> 7
+    ftb_fastpath_en = 1'b1;
+    predict(pc);
+    check("B1-D4 br1 saturated, fast-path[1] fires",
+          (ftb_br1_conf_p2 == CONF_SAT_T) && (ftb_fastpath_p2[1] == 1'b1));
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b0, tgt, B1_POS, pc); // 7 -> 6
+    predict(pc);
+    check("B1-D4 mispredict 111->110, fast-path[1] stops",
+          (ftb_br1_conf_p2 == 3'd6) && (ftb_fastpath_p2[1] == 1'b0));
+    upd_br(pc, 1'b1, 2'd0, 1'b1, 1'b1, tgt, B1_POS, pc); // 6 -> 7
+    predict(pc);
+    check("B1-D4 re-saturates, fast-path[1] fires again",
+          (ftb_br1_conf_p2 == CONF_SAT_T) && (ftb_fastpath_p2[1] == 1'b1));
+    ftb_fastpath_en = 1'b0;
+
+    // B1-D5: reallocation resets br1 conf to the new weak init.
+    do_reset();
+    pcA = make_pc(26'h000B1A, 9'd207);
+    pcB = make_pc(26'h000B1B, 9'd207);    // same set, different tag
+    b1pc = pcA + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    b1_setup(pcA, 2'd0, 1'b1, b1pc + VA_WIDTH'('h40));
+    train_br(pcA, 2'd0, 1'b1, 1'b1, 3, b1pc + VA_WIDTH'('h40), B1_POS, pcA);
+    predict(pcA);
+    check("B1-D5 A br1 saturated before realloc",
+          ftb_br1_conf_p2 == CONF_SAT_T);
+    b1pc = pcB + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    upd_br(pcB, 1'b0, 2'd0, 1'b0, 1'b1, pcB + VA_WIDTH'('h40), 4'd0, pcB);
+    upd_br(pcB, 1'b1, 2'd0, 1'b1, 1'b0, b1pc + VA_WIDTH'('h40), B1_POS, pcB);
+    predict(pcB);
+    check("B1-D5 B br1 conf == new weak init (011)",
+          ftb_br1_valid_p2 && (ftb_br1_conf_p2 == FTB_CONF_INIT_NTK));
+    predict(pcA);
+    check("B1-D5 A evicted by realloc", ftb_valid_p2 == 1'b0);
+
+    // B1-FP1, FP2, FP3, FP5: br1 fast-path only with en=1, conf
+    // saturated, valid and br1_valid; direction-only (target intact).
+    do_reset();
+    pc   = make_pc(26'h000B21, 9'd208);
+    b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
+    tgt  = b1pc + VA_WIDTH'('h300);
+    b1_setup(pc, 2'd0, 1'b1, tgt);
+    ftb_fastpath_en = 1'b1;
+    predict(pc);
+    check("B1-FP3 no fire when br1 unsaturated (==4)",
+          (ftb_br1_conf_p2 == FTB_CONF_INIT_TKN) && !ftb_fastpath_p2[1]);
+    train_br(pc, 2'd0, 1'b1, 1'b1, 3, tgt, B1_POS, pc); // -> 7
+    predict(pc);
+    check("B1-FP1 fast-path[1] fires: valid+br1_valid+sat+en",
+          ftb_valid_p2 && ftb_br1_valid_p2 && (ftb_br1_conf_p2 == CONF_SAT_T)
+          && (ftb_fastpath_p2[1] == 1'b1));
+    check("B1-FP1 br0 unsaturated: fast-path[0] clear",
+          ftb_fastpath_p2[0] == 1'b0);
+    check("B1-FP5 br1 target intact under fast-path",
+          ftb_br1_target_p2 == tgt);
+    ftb_fastpath_en = 1'b0;
+    predict(pc);
+    check("B1-FP2 no fire at en=0, br1 still saturated",
+          (ftb_br1_conf_p2 == CONF_SAT_T) && !ftb_fastpath_p2[1]);
+
+    // B1-FP4: an empty br1 field never fast-paths, even with br0
+    // saturated and en=1.
+    do_reset();
+    pc  = make_pc(26'h000B24, 9'd209);
+    tgt = pc + VA_WIDTH'('h40);
+    upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
+    train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // br0 -> 7
+    ftb_fastpath_en = 1'b1;
+    predict(pc);
+    check("B1-FP4 empty br1 field invalid", ftb_br1_valid_p2 == 1'b0);
+    check("B1-FP4 empty br1: fast-path[1] clear, br0 fires",
+          (ftb_fastpath_p2[1] == 1'b0) && (ftb_fastpath_p2[0] == 1'b1));
+    ftb_fastpath_en = 1'b0;
 
     // -------------------------------------------------------------
     $display("=================================================");

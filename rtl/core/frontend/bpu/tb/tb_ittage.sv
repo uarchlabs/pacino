@@ -69,8 +69,15 @@ module tb;
   // that exits through $fatal(1), never $finish.
   // Limit: normal completion measured at 7415 time units (741 cycles
   // at the 10-unit period) in this session. 4x rounded up -> 30000.
+  // BP-126: without +ITTAGE_FAST_INIT every reset (the initial one and
+  // the do_reset calls, 20 in all) waits for the sram_init walk; the
+  // limit grows by 24 walks of 10-unit cycles.
   initial begin
-    #30000;
+    int fi;
+    fi = 0;
+    void'($value$plusargs("ITTAGE_FAST_INIT=%d", fi));
+    if (fi != 0) #30000;
+    else         #(30000 + 24 * ((1 << IT_MAX_IDX_WIDTH) + 16) * 10);
     $fatal(1, "tb_ittage: TIMEOUT watchdog expired");
   end
 
@@ -297,8 +304,39 @@ module tb;
     end
   endtask
 
+  // Cycles to wait for ittage_rdy: the sram_init walk of every index
+  // (no +ITTAGE_FAST_INIT, BP-126 TD#68) plus margin. It was 200, which
+  // only the fast-init path met.
+  localparam int IT_RDY_WAIT = (1 << IT_MAX_IDX_WIDTH) + 16;
+
+  // Every entry of every table, both slot RAMs, both banks, holds the
+  // init value after the walk or the fast init (sram_init.md; zero,
+  // IT_SRAM_INIT_VALUE). BP-126, TD#68. Returns the mismatch count.
+  `define IT_INIT_CHK(T) \
+    for (int b = 0; b < 2; b++) \
+      for (int i = 0; i < IT_TBL_ENTRIES[T] / 2; i++) begin \
+        if (dut.gen_ittage_tables[T].gen_active.u_table.u_ram_s0 \
+              .mem[b][i] != '0) errs++; \
+        if (dut.gen_ittage_tables[T].gen_active.u_table.u_ram_s1 \
+              .mem[b][i] != '0) errs++; \
+      end
+  task automatic tc_init_chk();
+    int errs;
+    errs = 0;
+    `IT_INIT_CHK(1)
+    `IT_INIT_CHK(2)
+    `IT_INIT_CHK(3)
+    `IT_INIT_CHK(4)
+    `IT_INIT_CHK(5)
+    chk("INIT every IT1-IT5 entry holds the init value (0)",
+        64'(errs), 64'd0);
+  endtask
+  `undef IT_INIT_CHK
+
   // do_reset: apply reset pulse; wait for ittage_rdy.
-  // RAM contents are preserved (fast_init runs at time 0 only).
+  // With +ITTAGE_FAST_INIT=1 RAM contents are preserved (fast_init runs
+  // at time 0 only); without it the reset restarts the sram_init walk,
+  // which clears every table (BP-126).
   // UAON registers reset to IT_UAON_THRES; monitor counters reset.
   task automatic do_reset();
     automatic int t;
@@ -308,9 +346,11 @@ module tb;
     rstn = 1'b1;
     t    = 0;
     @(posedge clk);
-    while (!ittage_rdy && t < 200) begin
+    while (!ittage_rdy && t < IT_RDY_WAIT) begin
       @(posedge clk); t++;
     end
+    if (!ittage_rdy)
+      $fatal(1, "tb_ittage: ittage_rdy never asserted after reset");
     repeat(2) @(posedge clk);
   endtask
 
@@ -2484,11 +2524,12 @@ module tb;
     repeat(5) @(posedge clk);
     rstn = 1'b1;
 
-    // Wait for ittage_rdy (immediate with +ITTAGE_FAST_INIT=1)
+    // Wait for ittage_rdy: immediate with +ITTAGE_FAST_INIT=1, after
+    // the sram_init walk without it (sim_ittage, BP-126).
     @(posedge clk);
     begin
       automatic int tout = 0;
-      while (!ittage_rdy && tout < 200) begin
+      while (!ittage_rdy && tout < IT_RDY_WAIT) begin
         @(posedge clk); tout++;
       end
     end
@@ -2496,6 +2537,8 @@ module tb;
     if (!ittage_rdy)
       $fatal(1, "tb_ittage: ittage_rdy never asserted");
     $display("ittage_rdy asserted -- starting tests");
+    // Before the first prediction: every table holds its init value.
+    tc_init_chk();
     repeat(2) @(posedge clk);
 
     tc_p01();

@@ -46,7 +46,17 @@
 # the files updated in session-077 after BP-125 (PROJECT_STATUS.md,
 # dcd_decisions.md, ifu_decisions.md, ifu_ibuf_interfaces.md,
 # icache_decisions.md, l1i_ifu_interfaces.md, cachegen_decisions.md,
-# ftq_decisions.md, ftq_ifu_interfaces.md).
+# ftq_decisions.md, ftq_ifu_interfaces.md), and the file updated when
+# BP-126 was written and after it ran (PROJECT_STATUS.md), and the
+# files updated in session-077 after BP-126 (PROJECT_STATUS.md,
+# tage_cntrl_decisions.md, tage_cntrl_ctr_update_rules.md,
+# sram_init.md, ras_decisions.md, ras_interfaces.md,
+# ftq_bpu_interfaces.md, bpu_port_inventory.md, bp_arb_spec.md,
+# sc_interfaces.md, bp_history_interfaces.md, ftb_interfaces.md,
+# tage_coverage_plan.md), and the files updated when BP-127 was
+# written (PROJECT_STATUS.md, sc_table_hash_rules.md,
+# sc_table_interfaces.md, bp_history_interfaces.md,
+# tage_coverage_plan.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -65,11 +75,11 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 8b32d590c398
+PLAN  PROJECT_STATUS.md                 6831656c159c
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
-ARCH  bp_arb_spec.md                    5582b13af4fc
+ARCH  bp_arb_spec.md                    3825786d7590
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           9d39b17222ec
 ARCH  cachegen_decisions.md             de8bfe4e9845
@@ -85,13 +95,13 @@ ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  73c0fd5a76e5
-ARCH  ras_decisions.md                  c59c656a2b5f
+ARCH  ras_decisions.md                  42cdff8708f4
 ARCH  sc_decisions.md                   d264a4ba07ed
-ARCH  sc_table_hash_rules.md            ef4c7e462412
-ARCH  sram_init.md                      62d9e6c2825c
+ARCH  sc_table_hash_rules.md            cedf2eed2696
+ARCH  sram_init.md                      d6cefefe7fc5
 ARCH  tage_cntrl_uaon_update_rules.md   be55531dd5c0
 ARCH  tage_cntrl_alloc_rules.md         3a22df5e85f3
-ARCH  tage_cntrl_decisions.md           e784fba208cd
+ARCH  tage_cntrl_decisions.md           e3a2fc69279b
 ARCH  tage_table_entry_formats.md       bfd6ee8f1d3d
 ARCH  tage_table_hash_rules.md          d829daf22e1c
 ARCH  ittage_table_hash_rules.md        e9d7d77217dc
@@ -99,7 +109,7 @@ ARCH  ittage_table_hash_rules.md        e9d7d77217dc
 ARCH  ittage_cntrl_alloc_rules.md       a61a19c81fa5
 ARCH  ittage_cntrl_use_update_rules.md  b729da8f6a79
 ARCH  ittage_table_entry_formats.md  abee67476ca8
-ARCH  tage_cntrl_ctr_update_rules.md    1674f0129d91
+ARCH  tage_cntrl_ctr_update_rules.md    167b3434ac09
 ARCH  tage_cntrl_use_update_rules.md    d1dc910897a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
@@ -107,15 +117,15 @@ TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                7e3a2f535d9b
 TEST  manual_tb_decisions.md            9ac8ad00f83e
-VERF  tage_coverage_plan.md             07a285114196
+VERF  tage_coverage_plan.md             497bc9a790a3
 
 INTF  ittage_table_interfaces.md        152940fce590
 INTF  tage_table_interfaces.md          c77c3b137298
-INTF  bp_history_interfaces.md          9456f916e7d4
-INTF  bpu_port_inventory.md             0add13030cb6
-INTF  ftb_interfaces.md           cd521eb2f07d
+INTF  bp_history_interfaces.md          bf599226c271
+INTF  bpu_port_inventory.md             d6d9e24420b3
+INTF  ftb_interfaces.md           12d47fb5ddbc
 INTF  ftq_backend_interfaces.md   1c425156a6e7
-INTF  ftq_bpu_interfaces.md       4a169d510a90
+INTF  ftq_bpu_interfaces.md       ebd5a1a0e08f
 INTF  ftq_ifu_interfaces.md       2cecf4e55ced
 INTF  ifu_ibuf_interfaces.md      ab4d4051748b
 INTF  itlb_ifu_interfaces.md            ab489f6db489
@@ -124,9 +134,9 @@ INTF  ptw_mem_interfaces.md            053eb7faf457
 INTF  ittage_interfaces.md              43f50427b6a7
 INTF  l1i_ifu_interfaces.md             85f362d1da4d
 INTF  loop_pred_interfaces.md           f1eb16c7ce58
-INTF  ras_interfaces.md                 2c75f3d57bb0
-INTF  sc_interfaces.md                  8a747bc6aaea
-INTF  sc_table_interfaces.md            f64578d705ba
+INTF  ras_interfaces.md                 a3029b6fb4e6
+INTF  sc_interfaces.md                  66e1eefd2866
+INTF  sc_table_interfaces.md            b442b10dab0f
 INTF  tage_interfaces.md                e25a37204743
 INTF  ubtb_interfaces.md          b7ed4eddefa8
 

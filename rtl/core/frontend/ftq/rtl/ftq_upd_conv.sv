@@ -36,15 +36,14 @@
 // apply whatever they are given, so a partial acceptance would apply
 // the update twice when the backend re-presents the resolution.
 //
-// THE SC READY IS DIFFERENT AND IS WHY THE ORDER BELOW MATTERS. The
-// cluster asserts sc_upd_rdy only in a cycle its credit arbiter grants
-// SC an update, and the arbiter grants only a presented update
-// (bp_cluster sc_arb_comb). So the SC valid is presented when every
-// OTHER predictor the slot requests is ready -- never gated by the SC
-// ready itself, which would close a combinational loop and leave both
-// low -- and the slot is accepted when, in addition, SC granted it.
-// tage_upd_rdy and ittage_upd_rdy are queue-not-full and depend on no
-// valid.
+// THE SC READY. Until BP-126 the cluster asserted sc_upd_rdy only in a
+// cycle its arbiter granted SC a presented update, so gating the SC
+// valid on it would have closed a combinational loop. Since BP-126
+// (TD#123) sc_upd_rdy is the SC update queue's room and, like
+// tage_upd_rdy and ittage_upd_rdy, depends on no valid. The order
+// below is kept: the SC valid is presented when every OTHER predictor
+// the slot requests is ready, and the slot is accepted when, in
+// addition, the SC queue takes it.
 //
 // THE SC-DISABLED RULE (ftq_bpu_interfaces.md 7.2, FE-U6): when SC is
 // disabled the FTQ forms no SC update, and the slot does not wait on

@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_ctr_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -56,6 +56,16 @@ label differs. So 13a and 17.1, and 13b and 15.1, describe the same
 movement under different labels. The values are unchanged; this
 note was added session-072 because the legend defined both groups
 only as "action for" a counter.
+
+BP-126 (session-077) found tage_cntrl stepping the tagged counters
+numerically by correctness: INC when correct, DEC when wrong. Under
+direction = CTR[2] a correct not-taken entry then moved toward taken
+(011 became 100). Fixed to step toward the resolved direction (D-1,
+confirmed by Jeff). That is what this table says under the legend
+above, so no row changes. BP-126 read the copy of the table in
+tb_tage_manual_tasks.svh, which carries no legend, took pACT and aACT
+INC as a numeric increment, and reported the two documents in
+conflict (its PD-16). They agree.
 
 ```
 diff  = `tage_prm_tkn` != `tage_alt_tkn`

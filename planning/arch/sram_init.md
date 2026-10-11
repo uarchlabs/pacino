@@ -6,7 +6,7 @@
  FILE:    planning/arch/sram_init.md
  SOURCE:  session-043
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -120,6 +120,12 @@ Each branch predictor typically has a separate fast init plus arg.
 TAGE_SRAM_INIT_VALUE is a parameter specific to a TAGE table module.
 Each table module will have a similar parameter.
 
+TAGE HAS TWO INIT VALUES since BP-126 (TD#103). The tagged tables
+T1-T4 take TAGE_SRAM_INIT_VALUE (0) on the walk and in their fast
+init. T0 (tage_bim) takes TAGE_T0_SRAM_INIT_VALUE (2, weakly taken):
+tage.sv drives it as the tage_bim walk data, and tage_bim's fast init
+writes it. Both are in bp_defines_pkg.sv.
+
 The RAM_ENTRIES is specific to the RAM used in the table module.
 
 ### Sample parent module initial statement
@@ -148,6 +154,11 @@ and sets fast_init_r. It then muxes all tbl_ri_* outputs:
   assign tage_rdy      = fast_init_r ? 1'b1 : ri_rdy_raw;
 
 The tbl_* signals are routed to the table modules as needed.
+
+The tie-offs above are the sram_init outputs. Since BP-126 the write
+data tage.sv routes to tage_bim on the walk is
+TAGE_T0_SRAM_INIT_VALUE, not ri_wd_raw; the tagged tables keep
+ri_wd_raw. As built; tage.sv is the reference.
 
 This suppresses sram_init outputs at the top level. sram_init
 still runs its full internal state machine; its outputs are

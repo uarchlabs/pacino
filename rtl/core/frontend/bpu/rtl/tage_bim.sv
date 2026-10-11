@@ -73,6 +73,8 @@ module tage_bim #(
   // Fast init: write bw_ram mem arrays at time zero via
   // hierarchical reference. Active only when +TAGE_FAST_INIT=1.
   // bw_ram mem is 2D: mem[BANKS][ENTRIES]. Loop covers both banks.
+  // The value is TAGE_T0_SRAM_INIT_VALUE, 2'b10 weakly taken (TD#103),
+  // the same value tage.sv drives on the walk.
   initial begin
     int fast_init;
     fast_init = 0;
@@ -81,9 +83,9 @@ module tage_bim #(
       for (int b = 0; b < 2; b++) begin
         for (int i = 0; i < RAM_ENTRIES; i++) begin
           u_ram_s0.mem[b][i] =
-            THIS_CTR_WIDTH'(TAGE_SRAM_INIT_VALUE);
+            THIS_CTR_WIDTH'(TAGE_T0_SRAM_INIT_VALUE);
           u_ram_s1.mem[b][i] =
-            THIS_CTR_WIDTH'(TAGE_SRAM_INIT_VALUE);
+            THIS_CTR_WIDTH'(TAGE_T0_SRAM_INIT_VALUE);
         end
       end
     end

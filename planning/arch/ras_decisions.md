@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -403,10 +403,12 @@ Entry fields:
 
 Pointer:
   CSP  -- Commit Stack Pointer: the NEXT FREE slot. The top is at
-          CSP-1 and empty is CSP == 0, as stated below and as the
-          overflow rule requires (CSP wraps to 0 on the 32nd
-          consecutive push). This line read "points to current
-          top", which contradicts both. Session-070.
+          CSP-1. This line read "points to current top", which
+          contradicts that. Session-070.
+  Count -- occupancy, 0 to RAS_COMMIT_ENTRIES, beside CSP
+          (RAS_COMMIT_PTR_BITS + 1 bits). EMPTY IS THE COUNT AT 0.
+          Added by BP-126 (TD#121). Before it empty was CSP == 0,
+          which a full stack also reads after the wrap.
 
 Update: when a call-containing prediction block commits from
 the FTQ, the return address is pushed onto the commit stack
@@ -429,16 +431,19 @@ the push arm, advancing CSP, while saying it commits as the net
 effect of a pop and a push.
 
 Overflow condition: CSP is a free pointer with no base
-register. Empty is CSP == 0, the top is at CSP-1, and overflow
-is the wrap of CSP to 0 on the 32nd consecutive commit push.
-No fault is raised.
+register and wraps on the 32nd consecutive commit push. A call
+committed on a full stack overwrites the oldest entry and the
+count holds at 32. A return committed on an empty stack does
+nothing. No fault is raised.
 
-Overflow effect: the wrap makes a FULL commit stack read as
-EMPTY -- commit_top_valid deasserts, so the p0 TOS read and
-the speculative-empty pop fallback lose their source until CSP
-advances again. Accepted, not guarded: a lost fallback yields
-no prediction rather than a wrong one. Rebalance the 16/32
-split per the 3.1 revisit trigger if this is measured. TD #121.
+Overflow effect: a full stack reads NON-EMPTY. commit_top_valid
+stays asserted, so the p0 TOS read and the speculative-empty pop
+fallback keep their source. After more than 32 consecutive pushes
+the oldest entries are lost, and 32 pops empty the stack. BUILT by
+BP-126, TD#121 CLOSED (tb_ras TC-36, TC-37). This read "the wrap
+makes a FULL commit stack read as EMPTY ... Accepted, not guarded";
+the 16/32 sizes are unchanged and the rebalance trigger of 3.1
+stands on its own. Session-077.
 
 ---
 
@@ -852,6 +857,8 @@ Total snapshot width = 3 * RAS_PTR_BITS = 12b per FTQ entry.
 Commit stack pointer width:
   RAS_COMMIT_PTR_BITS = $clog2(RAS_COMMIT_ENTRIES) = 5b
   Already present in bp_defines_pkg.sv.
+  The occupancy count of 3.3 is RAS_COMMIT_PTR_BITS + 1 bits
+  (BP-126); no package parameter names it.
 
 ---
 
@@ -1011,4 +1018,10 @@ Commit stack pointer width:
   2026-10-09  session-076. 1: TD#165 closed as unreachable by
               construction (Jeff), with the condition that would
               reopen it.
+
+  2026-10-10  session-077, after BP-126. 3.3: empty is the
+              occupancy count at 0; a full commit stack reads
+              non-empty; a call on a full stack overwrites the
+              oldest entry, a return on an empty one does nothing.
+              TD#121 closed. 9: the count's width.
 ```

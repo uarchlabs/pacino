@@ -6,7 +6,7 @@
  FILE:    bpu_port_inventory.md
  SOURCE:  INFRA-011
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -18,6 +18,10 @@ names, and BP-091 made loop_pred per-slot and renamed pred_p0 to
 pred_p1 (TD#105). Sections 3 to 8 are as read by INFRA-011 and
 have not been re-verified. A fresh read is the only way to make
 this file an RTL fact again.
+
+Session-077, from BP-126's Results Capture, not re-read from the RTL:
+ras lost ras_pc_p2 (TD#101) and sc gained sc_uq_has_data and
+sc_uq_rd_en (TD#123). Sections 6 and 7 and Coverage are updated.
 
 ---
 
@@ -242,6 +246,8 @@ Doc: planning/interfaces/sc_interfaces.md
 | sc_upd_rdy_u1     | out | [NUM_PRED_SLOTS-1:0] | u1    | ARRAY  | OK  |
 | sc_uq_not_full    | out | logic                | NONE  | SCALAR | OK  |
 | sc_upd_rdy        | out | [NUM_PRED_SLOTS-1:0] | NONE  | ARRAY  | OK  |
+| sc_uq_has_data    | out | logic                | NONE  | SCALAR | OK  |
+| sc_uq_rd_en       | in  | logic                | NONE  | SCALAR | OK  |
 | sc_enable         | in  | logic                | NONE  | SCALAR | OK  |
 | sc_ready          | out | logic                | NONE  | SCALAR | OK  |
 
@@ -251,6 +257,10 @@ Notes:
   the port name (sc.sv:60, 63, 71, 75).
 - inp_pc_p2 is declared [VA_WIDTH-1:1], not [VA_WIDTH-1:0]
   (sc.sv:63). Transcribed as declared.
+- sc_uq_has_data and sc_uq_rd_en added by BP-126 (TD#123): the SC
+  update queue's request and the arbiter's drain grant
+  (sc_interfaces.md). Their positions in the port block are not
+  recorded. sc_uq_not_full and sc_upd_rdy are now the queue's room.
 
 EXTRA: none
 
@@ -269,7 +279,6 @@ Doc: planning/interfaces/ras_interfaces.md
 | ras_tos_valid_p0     | out | logic             | p0    | ARRAY  | OK  |
 | ras_pred_val_p2      | in  | logic             | p2    | ARRAY  | OK  |
 | ras_br_type_p2       | in  | bp_br_type_e      | p2    | ARRAY  | OK  |
-| ras_pc_p2            | in  | [VA_WIDTH-1:0]    | p2    | ARRAY  | OK  |
 | ras_fall_through_p2  | in  | [VA_WIDTH-1:0]    | p2    | ARRAY  | OK  |
 | ras_pop_addr_p2      | out | [VA_WIDTH-1:0]    | p2    | ARRAY  | OK  |
 | ras_pop_valid_p2     | out | logic             | p2    | ARRAY  | OK  |
@@ -288,8 +297,9 @@ Doc: planning/interfaces/ras_interfaces.md
 Notes:
 - All ARRAY rows use the unpacked slot dimension
   [0:NUM_PRED_SLOTS-1] after the port name (ras.sv:38-55).
-- ras_pc_p2 is declared but not read in ras.sv. TD #101. The
-  document records the same condition (ras_interfaces.md:118).
+- ras_pc_p2, declared and unread, was removed by BP-126 (TD#101),
+  from ras.sv and ras_interfaces.md. The line numbers above predate
+  the removal.
 
 EXTRA: none
 
@@ -365,6 +375,11 @@ since line numbers move. Session-072.
 Eight modules, 140 ports read from the RTL port declaration blocks
 at INFRA-011: ubtb 5, loop_pred 7, ftb 42, tage 16, ittage 15, sc
 18, ras 21, bp_history 16. With blk_p1, ubtb is 6 and the total
-141 (session-071, from the records).
+141 (session-071, from the records). After BP-126, sc is 20 and ras
+20, total 142 (session-077, from the records). Ports added since
+INFRA-011 and not listed here: ftb_jmp_rvc_p2 and ftb_upd_jmp_rvc_u0
+(BP-121), ras_p2_keep (BP-121), and bp_history's rollback_corr,
+rollback_n, rollback_tkn and rollback_pbit (BP-121, BP-122); the
+counts above exclude them.
 All eighteen Context Loaded paths were present on
 disk. No port row required UNKNOWN.

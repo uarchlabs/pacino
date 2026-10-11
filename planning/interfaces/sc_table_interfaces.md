@@ -6,7 +6,7 @@
  FILE:    sc_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -290,7 +290,9 @@ tbl_ri_wd      ram write data. When tbl_ri_active is asserted,
 ```
 sc_pred_val_p2[s]  enables the bw_ram read for slot s. Produced by
                    sc top level.
-inp_pc_p2[s]       staged branch PC for slot s. Used locally to
+inp_pc_p2[s]       staged prediction block start PC, the same on
+                   every slot (this read "staged branch PC";
+                   session-077). Used locally to
                    derive the index hash via sc_idx_hash
                    (sc_table_hash_rules.md). Produced by the BP
                    cluster staging path (sc_interfaces.md).
@@ -316,7 +318,8 @@ idx_hash_p2[s]     the index computed at p2 from inp_pc_p2 and
 ```
 sc_pred_val_p2[s]  enables the bw_ram read for slot s. Produced by
                    sc top level.
-inp_pc_p2[s]       staged branch PC for slot s. sc_brimli uses
+inp_pc_p2[s]       staged prediction block start PC, the same on
+                   every slot. sc_brimli uses
                    inp_pc_p2[s][15:6] as the get_br_imli_idx PC
                    input (sc_decisions.md section 12). Produced by
                    the BP cluster staging path.

@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -63,7 +63,13 @@ T0 is the base table. It has no valid bit, no tag, no useful bit.
 tage_cntrl treats T0 output as always-hit. T0 taken_p1 is
 unconditionally valid as the fallback direction.
 
-T0 uses a 2b saturating counter. Weak states are 01 and 10. T0 initializes to 00 (strongly not taken), per TAGE_SRAM_INIT_VALUE=0 in bp_defines_pkg.sv.
+T0 uses a 2b saturating counter. Weak states are 01 and 10. T0
+initializes to 10 (weakly taken), TAGE_T0_SRAM_INIT_VALUE = 2 in
+bp_defines_pkg.sv; the tagged tables T1-T4 initialize to 0
+(TAGE_SRAM_INIT_VALUE). BP-126, TD#103. This read "T0 initializes to
+00 (strongly not taken), per TAGE_SRAM_INIT_VALUE=0", which recorded
+the RTL before BP-126, not the intent (PROJECT_STATUS.md, session-061
+CONFLICT TO RESOLVE note, resolved). Session-077.
 
 T0 is the provider when no tagged table hits (ADR-001,
 tage_cntrl_ctr_update_rules.md), and use_alt_on_na does not apply
@@ -231,6 +237,14 @@ See tage_cntrl_ctr_update_rules.md for the full table.
 resolved_taken is supplied at update time via tage_upd_inp_t.
 pred_diff is recomputed at update from tage_prm_tkn and
 tage_alt_tkn stored in meta.
+
+Every tagged CTR step moves the counter toward the resolved
+direction: INC on taken, DEC on not-taken, saturating. That is the
+table read with its legend (INC strengthens, DEC weakens, in the
+entry's current direction). Before BP-126 tage_cntrl stepped the
+tagged counters numerically by correctness, so a correct not-taken
+entry moved toward taken (011 became 100). Fixed by BP-126 (D-1),
+confirmed session-077 (Jeff). Which counter steps is unchanged.
 
 Summary:
 ```

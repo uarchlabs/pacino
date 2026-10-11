@@ -16,6 +16,198 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-077, after BP-126: BP-127 written.
+
+BP-127 WRITTEN (Jeff), not yet issued: PD-17 only. The SC index PC term
+is PC[9:1]; the SC no longer shifts its PC (ruled, Jeff; SC only).
+Written in sc_table_hash_rules.md, with sc_table_interfaces.md: both
+called inp_pc_p2 the "staged branch PC"; it is the block start PC,
+the same on both slots (ftq_bpu_interfaces.md 3).
+  PD-17 STANDS (Jeff, "one task", after the corrected reasoning
+    below).
+
+WITHDRAWN (Jeff): the ST2/ST3 fold change. The PA opened TD#179,
+wrote a fold-width fix into six planning documents and made it part
+of BP-127 on an answer to a different question. The SC works as
+built and Jeff had not ruled the change. TD#179 deleted and free;
+sc_decisions.md, bp_history_decisions.md, bp_history_interfaces.md
+and bp_cluster.md restored, sc_table_hash_rules.md and
+sc_table_interfaces.md carry PD-17 alone. The observation stays
+below, not tasked.
+
+tage_coverage_plan.md, PA-direct (Jeff): CP-01, CP-02, CU-01 and CU-02
+cite the T0 CTR rows correctly: 13c,13d; 13a,13b; 13b,13d; 13a,13c.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, sc_table_hash_rules.md,
+sc_table_interfaces.md, bp_history_interfaces.md (restored to its
+post-PD-12 form), tage_coverage_plan.md.
+
+Next free: BP-128, INFRA-014, TOOLS-007, TD#179. BP-127 is written,
+not yet issued.
+
+---
+## Session-077, after BP-126: BP-126 recorded.
+
+BP-126 RUN, COMPLETE (Jeff). 1h57m, no compaction, 68% context,
+claude-opus-5-5 default. regress.sh 155 targets PASS, 0 warnings (153
+plus sim_ittage_fast and sim_bp_cluster_init). 27 reversions on a
+scratch copy of the final tree, all caught. Every tb_fe_top program
+retires the same instruction count.
+  Built: IT5 folds (TD#102); T0 resets to 2'b10 with a new package
+    constant TAGE_T0_SRAM_INIT_VALUE = 2, the tagged tables at 0
+    (TD#103); a RAS commit-stack occupancy count (TD#121); the SC
+    update queue in sc.sv, 8 entries of one update cycle each, with
+    ports sc_uq_has_data and sc_uq_rd_en, drained by the cluster
+    arbiter, the 4.5 rules unchanged (TD#123); ras_pc_p2 removed
+    (TD#101); the FTB header comments (TD#104).
+  Verified: sim_tage already ran the sram_init walk, sim_ittage now
+    does, sim_ittage_fast and sim_bp_cluster_init are new, each with
+    an init check (TD#67, TD#68, TD#75); the tb_bp_cluster FOLD
+    monitor checks every TAGE, ITTAGE IT1-IT5 and SC ST1-ST3 index
+    and tag against a history model of its own (TD#69, TD#70, TD#84);
+    trx_type is stable, a negative result (TD#37); Verilator 5.048
+    ignores covergroups (TD#38); 35 br1 checks in tb_ftb (TD#81);
+    TAGE RTL coverage per file, every uncovered line explained
+    (TD#100).
+  Defect found and fixed (D-1): tage_cntrl stepped the tagged CTRs by
+    correctness, so a correct not-taken entry moved toward taken (011
+    became 100). They now step toward the resolved direction
+    (tage_table_entry_formats.md). 16 tb_tage tests and 16
+    tb_tage_manual rows re-derived. BP-126 reported
+    tage_cntrl_ctr_update_rules.md's row table as saying the old rule
+    for the not-taken rows (PD-16). It does not: read with its legend
+    (session-072), INC strengthens and DEC weakens in the entry's
+    current direction, so every row steps toward the resolved
+    direction. BP-126 read the copy in tb_tage_manual_tasks.svh,
+    which has no legend.
+  Test debt fixed: five tb_tage tests relied on T0's reset value and
+    uaon_dec_restore_tst on the test before it.
+  Counts: sim_ras 166 -> 177; sim_sc 55 -> 144, sim_sc_fast 52 ->
+    140; sim_ittage 222 -> 223; sim_bp_cluster 1998 -> 2011; sim_ftb
+    162 -> 197; sim_fe_top 714 unchanged.
+  tb_fe_top figures changed through three items, attributed by
+    removing each from the final tree: T0 (loops -81 cycles, lp -58,
+    hist +5 mispredicts), the SC queue (hist -12 mispredicts, recur
+    -7, region +14, misp_call +6) and D-1 (-3 to +1). The IT5 folds
+    and the RAS count changed no figure; why IT5 changes none was not
+    investigated.
+  Outside the grants, reported: a grep over planning/interfaces
+    printed two lines of bpu_port_inventory.md, which was not in the
+    manifest; the v5.048 Changes file was fetched from
+    raw.githubusercontent.com, not github.com as granted. No git
+    command beyond regress.sh's.
+
+RULED after BP-126 (Jeff):
+  PD-1 to PD-16 ACCEPTED, the planning-document changes in BP-126's
+    Results Capture: tage_cntrl_decisions.md (T0), this file's
+    CONFLICT TO RESOLVE note, sram_init.md, ras_decisions.md 3.3,
+    ras_interfaces.md, ftq_bpu_interfaces.md (ras_pc_p2, 10 item 14),
+    bpu_port_inventory.md, bp_arb_spec.md 4.5 and 5.5,
+    sc_interfaces.md, bp_history_interfaces.md HI6,
+    ftb_interfaces.md 2.4, tage_coverage_plan.md, and reconciling
+    tage_cntrl_ctr_update_rules.md with tage_table_entry_formats.md.
+    ALL APPLIED, session-077. PD-16 is a note in
+    tage_cntrl_ctr_update_rules.md and tage_cntrl_decisions.md; no
+    row changes (above).
+    PA additions, consequences of P-3 the PDs did not name:
+    ftq_bpu_interfaces.md 8 and bp_arb_spec.md 6.2 said the SC ready
+    is the arbiter's grant and depends on the SC valid; both now say
+    it is the UQ's room. bpu_port_inventory.md section 6 gains
+    sc_uq_has_data and sc_uq_rd_en, and its Coverage counts note the
+    ports added since INFRA-011.
+  D-1 (P-1) CONFIRMED: the tagged CTRs step toward the resolved
+    direction. P-2 CONFIRMED: sim_ittage on the walk, sim_ittage_fast
+    on the fast init. P-3 CONFIRMED: the SC queue interface, an entry
+    holding both slots, an update refused and held before sc_ready,
+    the cluster's sc_upd_rdy the queue's room and sc_enable.
+  PD-17, which PC bits the SC index takes: THE PROSE ACCEPTED (Jeff).
+    sc_table_hash_rules.md's formula shifts inp_pc_p2 = PC[VA_WIDTH-1:1]
+    by PC_HASH_SHIFT (2), so the index starts at PC[3]; its prose says
+    the shift drops "the instruction offset", PC[0] alone with the C
+    extension. Under the prose the SC index starts at PC[1]: SC stops
+    shifting its PC. SC only; TAGE and ITTAGE keep PC_HASH_SHIFT.
+    PA ERROR IN THE RECOMMENDATION. I argued that bits 2:1 separate
+    BRANCHES the formula makes share an entry. The SC PC is the BLOCK
+    START, the same for both slots (ftq_bpu_interfaces.md 3: one staged
+    p2 copy drives sc.inp_pc_p2 per slot); the two branches of a block
+    are separated by their per-slot RAMs, not by PC bits.
+    sc_table_hash_rules.md and sc_table_interfaces.md call inp_pc_p2
+    the "staged branch PC", which is wrong, and I took it from them.
+    What the prose changes: the nine index bits move from PC[11:3] to
+    PC[9:1]. ST0, a PC slice with no fold, then separates blocks whose
+    starts differ in bits 2:1 (blocks start at any halfword) and
+    aliases blocks 1 KiB apart instead of 4 KiB. ST1-ST3 XOR the same
+    PC bits with their folds. A trade, unmeasured either way.
+    Not yet written: the document edits and the task wait on Jeff
+    after this correction. Since written, BP-127 (above).
+  OBSERVATION, not tasked (Jeff: the SC works as built): ST2 AND ST3 ARE THE
+    SAME TABLE. SC_TBL_FH = SC_TBL_HIST = {0, 4, 16, 64}, so each SC fold is
+    as wide as its history (H = W, no compression). The canonical fold
+    (bp_history_decisions.md 6.2) places age i at posmap(i) = (i + W - 1) mod
+    W: the newest outcome (age 0) at bit W-1, age i at bit i-1 otherwise.
+    sc_idx_hash casts (pc ^ fh) to THIS_INDEX_BITS (9), keeping fh[8:0], which
+    for ST2 (W 16) and ST3 (W 64) alike is ages 1 to 9. The PC term is the
+    same for both, so ST2 and ST3 compute the same index on every prediction.
+    Both initialize to SC_SRAM_INIT_VALUE and take the same update at that
+    index (sc_decisions.md 10), so their counters stay equal: the sum counts
+    ST2 twice and ST3 adds nothing. No SC table sees the newest outcome but
+    ST1 (W 4: ages 0 to 3). ST2 uses 9 of its 16 history bits, ST3 9 of its
+    64, and 55 bits of the ST3 fold are staged p0 to p2 unused. Assumed: the
+    cluster zero-extends each fold into the low bits of its SC_MAX_FH-wide
+    port; not checked against the RTL. The root is sc_decisions.md 7 and
+    sc_table_interfaces.md, which define SC_TBL_HIST as a duplicate of
+    SC_TBL_FH, where TAGE and ITTAGE fold a longer history into an index-wide
+    FH. BP-126's FOLD monitor checks the index against the hash rule, so it
+    passes.
+
+Closed: TD#37, TD#38, TD#67, TD#68, TD#69, TD#70, TD#75, TD#81, TD#84,
+TD#100, TD#101, TD#102, TD#103, TD#104, TD#121, TD#123.
+
+Documents changed after BP-126, every one in check_planning.sh with
+its new checksum: PROJECT_STATUS.md, tage_cntrl_decisions.md,
+tage_cntrl_ctr_update_rules.md, sram_init.md, ras_decisions.md,
+ras_interfaces.md, ftq_bpu_interfaces.md, bpu_port_inventory.md,
+bp_arb_spec.md, sc_interfaces.md, bp_history_interfaces.md,
+ftb_interfaces.md, tage_coverage_plan.md.
+
+Noted, no TD opened: region's +14 mispredicts from the SC queue, for
+when SC tuning (TD#93) is opened; tb_tage's older tests change their
+inputs in the same time step as the sampling edge, a latent race
+(BP-126 Deferred Work).
+
+Next free: BP-127, INFRA-014, TOOLS-007, TD#179. (Superseded above.)
+
+---
+## Session-077, after BP-125: BP-126 written; TD#178 recorded.
+
+BP-126 WRITTEN (Jeff: one task for every predictor RTL and predictor
+verification item): TD#102, TD#103, TD#121, TD#123, TD#101 and
+TD#104, and TD#67, TD#68, TD#69, TD#70, TD#84, TD#37, TD#38, TD#75,
+TD#81 and TD#100. Not yet issued.
+  PA CHOICES IN BP-126, for Jeff to confirm before it is issued:
+    T0 resets to 2'b10 and the tagged tables are unchanged (TD#103);
+    a full RAS commit stack reads non-empty with the 16/32 sizes
+    unchanged, the encoding the IA's, so TD#121 no longer waits on
+    the rebalance; the SC update queue built as bp_arb_spec.md 5.5
+    specifies (TD#123); ras_pc_p2 removed unless a planning document
+    gives it a use (TD#101); TAGE coverage judged per RTL file with
+    its denominator, every RTL line covered or explained (TD#100);
+    Verilator issue 7099 and the v5.048 Changes file added to the
+    task's network grant (TD#38).
+  NOT READ BY THE PA: the predictor planning documents in BP-126's
+    manifest. The task is drafted from PROJECT_STATUS.md's TD rows,
+    module rows and sections; each fact it takes from them is listed
+    in its Background for the IA to check against the tree.
+
+TD#178 OPENED (Jeff): the CSR definition, csr_decisions.md, which
+will hold the enable bits FE-20's config group carries today and
+FE-U6. Implemented after BP-126.
+
+Next free: BP-127, INFRA-014, TOOLS-007, TD#179. BP-126 is written,
+not yet issued. (Superseded above.)
+
+---
 ## Session-077, after BP-125: BP-125 recorded.
 
 BP-125 RUN, COMPLETE (Jeff). 1h09m, no compaction, 45% context,
@@ -89,7 +281,7 @@ checksum: PROJECT_STATUS.md, dcd_decisions.md, ifu_decisions.md,
 ifu_ibuf_interfaces.md, icache_decisions.md, l1i_ifu_interfaces.md,
 cachegen_decisions.md, ftq_decisions.md, ftq_ifu_interfaces.md.
 
-Next free: BP-126, INFRA-014, TOOLS-007, TD#178.
+Next free: BP-126, INFRA-014, TOOLS-007, TD#178. (Superseded above.)
 
 ---
 ## Session-077, after BP-124: BP-124 recorded; BP-125 written.
@@ -1862,6 +2054,8 @@ TAGE_SRAM_INIT_VALUE changed to 2), tage_cntrl_decisions.md's T0 init
 line must be updated again to match. Do not treat the session-061 doc
 correction as having settled the "what should T0 init to" question --
 it only documented current behavior.
+RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
+= 2; tage_cntrl_decisions.md's T0 line is PD-1.
 
 ---
 
@@ -1960,6 +2154,8 @@ it only documented current behavior.
 |                         |             |                   | jump rvc bit (TD#164); entry     |
 |                         |             |                   | 114, RAM entry 113               |
 |                         |             |                   | (ftb_decisions.md 8).            |
+|                         |             |                   | BP-126: TAGE_T0_SRAM_INIT_VALUE  |
+|                         |             |                   | = 2 added (TD#103).              |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -2048,6 +2244,8 @@ it only documented current behavior.
 |                         |             |                   | bp_history_decisions.md 3.5      |
 |                         |             |                   | reversed); tb_bp_history TC17.   |
 |                         |             |                   | No property added (TD#170).      |
+|                         |             |                   | BP-126: IT5 folds generated,     |
+|                         |             |                   | TD#102 closed.                   |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -2180,6 +2378,9 @@ it only documented current behavior.
 |                         |             |                   | init corrected to 00 to MATCH    |
 |                         |             |                   | CURRENT RTL (see TD#103 conflict,|
 |                         |             |                   | top of file).                    |
+|                         |             |                   | TD#103 closed by BP-126; the T0  |
+|                         |             |                   | init line is PD-1, applied       |
+|                         |             |                   | session-077.                     |
 | bw_ram / sat_alu        | Complete    | tb_components     | COMP-001 PASS                    |
 | dual_lm1                | Complete    | tb_components     | COMP-002 now uses generate       |
 | sram_init.sv            | Complete    | tb_components     | COMP-003. The RTL module. The    |
@@ -2201,6 +2402,11 @@ it only documented current behavior.
 |                         |             |                   | meta_p1 member read live off p0. |
 |                         |             |                   | No port, struct or other member  |
 |                         |             |                   | timing changed.                  |
+|                         |             |                   | BP-126: TD#103 closed. The       |
+|                         |             |                   | tagged CTRs step toward the      |
+|                         |             |                   | resolved direction (D-1, P-1     |
+|                         |             |                   | confirmed); they stepped by      |
+|                         |             |                   | correctness.                     |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | Session-060 BP-081: FIFOs retyped|
 |                         |             |                   | off cond_pred_*.                 |
@@ -2291,6 +2497,10 @@ it only documented current behavior.
 |                         |             |                   | BP-121: arbitration replaced as  |
 |                         |             |                   | in tage.sv (D6). sim_ittage      |
 |                         |             |                   | 222/0.                           |
+|                         |             |                   | BP-126: IT5 folds driven         |
+|                         |             |                   | (TD#102). sim_ittage runs the    |
+|                         |             |                   | sram_init walk, sim_ittage_fast  |
+|                         |             |                   | the fast init; 223/0 each.       |
 | ras_decisions.md        | Draft       | --                | Created session-050. G5/G6/G8/G17|
 |                         |             |                   | recorded. Session-061:           |
 |                         |             |                   | RAS_COMMIT_PTR_BITS correction.  |
@@ -2323,6 +2533,11 @@ it only documented current behavior.
 |                         |             |                   | BP-122: property RS1, tb_ras     |
 |                         |             |                   | TC-35. sim_ras 166/0. TD#165     |
 |                         |             |                   | closed as unreachable.           |
+|                         |             |                   | BP-126: ras_pc_p2 removed        |
+|                         |             |                   | (TD#101); occupancy count, a     |
+|                         |             |                   | full commit stack reads          |
+|                         |             |                   | non-empty (TD#121). sim_ras      |
+|                         |             |                   | 177/0.                           |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -2344,8 +2559,13 @@ it only documented current behavior.
 |                         |             |                   | (D4); jump rvc bit (TD#164).     |
 |                         |             |                   | Entry 114, RAM entry 113.        |
 |                         |             |                   | sim_ftb 162/0.                   |
+|                         |             |                   | BP-126: header states the        |
+|                         |             |                   | widths, TD#104 closed.           |
 | ftb.sv                  | Complete    | tb_ftb            | Structural top. sim_ftb 99/0.    |
 |                         |             | sim_ftb           | Stale fastpath_en comment, TD#104|
+|                         |             |                   | BP-126: header corrected, TD#104 |
+|                         |             |                   | closed; 35 br1 checks, sim_ftb   |
+|                         |             |                   | 197/0.                           |
 | sc_decisions.md         | Draft       | --                | Created session-056. Corrected   |
 |                         |             |                   | 057. s12 br_imli_mode parameter  |
 |                         |             |                   | (059).                           |
@@ -2365,6 +2585,12 @@ it only documented current behavior.
 |                         |             |                   | sc_ready is strapped constant    |
 |                         |             |                   | under +SC_FAST_INIT -- see the   |
 |                         |             |                   | Open Items note.                 |
+|                         |             |                   | BP-126: the update queue is      |
+|                         |             |                   | built (TD#123): sc_uq_not_full   |
+|                         |             |                   | and sc_upd_rdy are its room, new |
+|                         |             |                   | ports sc_uq_has_data and         |
+|                         |             |                   | sc_uq_rd_en. sim_sc 144/0,       |
+|                         |             |                   | sim_sc_fast 140/0.               |
 | sc_interfaces.md        | Complete    | --                | Written session-058. Session-061:|
 |                         |             |                   | Arbitration Model corrected.     |
 | sc_table_interfaces.md  | Complete    | --                | Written session-058.             |
@@ -2441,6 +2667,10 @@ it only documented current behavior.
 |                         |             |                   | count advance, checkpoint, p3    |
 |                         |             |                   | and FTQ-rollback restore wired.  |
 |                         |             |                   | sim_bp_cluster 1998/0 (group O). |
+|                         |             |                   | BP-126: drains the SC queue;     |
+|                         |             |                   | FOLD monitor and init_chk;       |
+|                         |             |                   | sim_bp_cluster 2011/0,           |
+|                         |             |                   | sim_bp_cluster_init 2011/0.      |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
 |                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
@@ -3075,15 +3305,35 @@ assessment of each document. Correct any that are wrong.
 | 18 | Definition of T0 fields/behavior      | Prediction side closed          |
 |    |                                       | Update side pending T0          |
 |    |                                       | implementation                  |
-| 37 | trx_type forwarded combinationally    | Investigate before closing.     |
-|    | from arb_grant_upd instead of from    | When concurrent pred+upd tests  |
-|    | registered arb_trx_r.trx_type.        | are added (arb item #73),       |
-|    | Verify grant signal stability through | verify grant stability through  |
-|    | tage_cntrl pipeline under concurrent  | the pipeline. If unstable,      |
-|    | pred+upd.                             | promote arb_trx_r.trx_type and  |
-|    |                                       | adjust write-enable timing.     |
-| 38 | Verilator 5.048 covergroup #7099      | Re-check #7099 status in 5.048  |
-|    | status not yet verified.              | release notes before closing.   |
+| 37 | trx_type forwarded combinationally    | CLOSED by BP-126 (session-077), |
+|    | from arb_grant_upd instead of from    | negative result: trx_type is    |
+|    | registered arb_trx_r.trx_type.        | used only at entry (pred_val_p1 |
+|    | Verify grant signal stability through | takes pred_val_p0 and not       |
+|    | tage_cntrl pipeline under concurrent  | trx_type; the write strobes act |
+|    | pred+upd.                             | at u0 in the grant cycle).      |
+|    |                                       | tb_tage trx_stab monitor and    |
+|    |                                       | trx_stab_tst, 0 violations.     |
+|    |                                       | Was: Investigate before         |
+|    |                                       | closing. When concurrent        |
+|    |                                       | pred+upd tests are added (arb   |
+|    |                                       | item #73), verify grant         |
+|    |                                       | stability through the pipeline. |
+|    |                                       | If unstable, promote            |
+|    |                                       | arb_trx_r.trx_type and adjust   |
+|    |                                       | write-enable timing. Tasked in  |
+|    |                                       | BP-126 (session-077).           |
+| 38 | Verilator 5.048 covergroup #7099      | CLOSED by BP-126 (session-077): |
+|    | status not yet verified.              | Verilator 5.048 does not        |
+|    |                                       | support covergroups; each is    |
+|    |                                       | ignored with COVERIGN and       |
+|    |                                       | records no coverage. Issue 7099 |
+|    |                                       | closed 2026-06-06 through       |
+|    |                                       | #7117, after 5.048              |
+|    |                                       | (2026-04-26). Revisit on an     |
+|    |                                       | upgrade past #7117. Was:        |
+|    |                                       | Re-check #7099 status in 5.048  |
+|    |                                       | release notes before closing.   |
+|    |                                       | Tasked in BP-126 (session-077). |
 | 39 | Rule 2 starvation override            | ANSWERED BP-094, needs a        |
 |    | reachability.                         | DECISION. Measured: SC_PRED_    |
 |    | SC_PRED_CREDITS=4 <                   | CREDITS=4 and rule 4 resets the |
@@ -3143,26 +3393,56 @@ assessment of each document. Correct any that are wrong.
 |    | top in tage and ittage.                | structural only. New arb module |
 |    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
 |    |                                        | sequence with arb test #73.     |
-| 67 | tage sram_init non-fast path.          | All tests used +FAST_INIT,      |
-|    | Untested here; confirm not elsewhere.  | bypassing real sram_init        |
-|    | SESSION-064: now extends to the        | cycling. Confirm the COMP tests |
-|    | CLUSTER -- sim_bp_cluster and          | cover the non-fast path; do not |
-|    | cov_bp_cluster pass all three          | assume. A plusarg running a     |
-|    | fast-init plusargs.                    | SHORT init walk rather than none|
-|    |                                        | would also make the SC arbiter  |
-|    |                                        | rule-1 guard reachable from the |
-|    |                                        | ports (see BP-094 H2b).         |
-| 68 | ittage sram_init non-fast path.        | Same as #67.                    |
-| 69 | tage rollback / history recompute.     | G20/G21/G22 RESOLVED            |
-|    | Dark; tracks arch TBDs.                | session-054. Fold recompute     |
-|    |                                        | proven in-sim BP-072. Rollback  |
-|    |                                        | STIMULUS now exists AND is      |
-|    |                                        | exercised: tb_bp_cluster E1/E2  |
-|    |                                        | drive checkpoint and rollback   |
-|    |                                        | through the cluster. The tage-  |
-|    |                                        | side recompute is still not     |
-|    |                                        | checked end to end. See TD #7.  |
-| 70 | ittage rollback / history recompute.   | Same as #69 for ittage.         |
+| 67 | tage sram_init non-fast path.          | CLOSED by BP-126 (session-077): |
+|    | Untested here; confirm not elsewhere.  | sim_tage already ran the        |
+|    | SESSION-064: now extends to the        | sram_init walk; tage_rdy_tst    |
+|    | CLUSTER -- sim_bp_cluster and          | checks every T0 to T4 entry     |
+|    | cov_bp_cluster pass all three          | after it. New                   |
+|    | fast-init plusargs.                    | sim_bp_cluster_init runs all    |
+|    |                                        | three walks, the same 2011      |
+|    |                                        | checks as sim_bp_cluster. Was:  |
+|    |                                        | All tests used +FAST_INIT,      |
+|    |                                        | bypassing real sram_init        |
+|    |                                        | cycling. Confirm the COMP tests |
+|    |                                        | cover the non-fast path; do not |
+|    |                                        | assume. A plusarg running a     |
+|    |                                        | SHORT init walk rather than     |
+|    |                                        | none would also make the SC     |
+|    |                                        | arbiter rule-1 guard reachable  |
+|    |                                        | from the ports (see BP-094      |
+|    |                                        | H2b). Tasked in BP-126          |
+|    |                                        | (session-077).                  |
+| 68 | ittage sram_init non-fast path.        | CLOSED by BP-126 (session-077): |
+|    |                                        | sim_ittage now runs the walk    |
+|    |                                        | and new sim_ittage_fast the     |
+|    |                                        | fast init (P-2, confirmed);     |
+|    |                                        | tb_ittage checks every IT1-IT5  |
+|    |                                        | entry after init. Was: Same as  |
+|    |                                        | #67. Tasked in BP-126           |
+|    |                                        | (session-077).                  |
+| 69 | tage rollback / history recompute.     | CLOSED by BP-126 (session-077): |
+|    | Dark; tracks arch TBDs.                | the tb_bp_cluster FOLD monitor, |
+|    |                                        | a history model of its own,     |
+|    |                                        | checks every TAGE T1-T4 index   |
+|    |                                        | and tag on every prediction and |
+|    |                                        | on the first after each         |
+|    |                                        | rollback and corrected          |
+|    |                                        | rollback. Was: G20/G21/G22      |
+|    |                                        | RESOLVED session-054. Fold      |
+|    |                                        | recompute proven in-sim BP-072. |
+|    |                                        | Rollback STIMULUS now exists    |
+|    |                                        | AND is exercised: tb_bp_cluster |
+|    |                                        | E1/E2 drive checkpoint and      |
+|    |                                        | rollback through the cluster.   |
+|    |                                        | The tage-side recompute is      |
+|    |                                        | still not checked end to end.   |
+|    |                                        | See TD #7. Tasked in BP-126     |
+|    |                                        | (session-077).                  |
+| 70 | ittage rollback / history recompute.   | CLOSED by BP-126 (session-077): |
+|    |                                        | the FOLD monitor, as #69, for   |
+|    |                                        | ITTAGE IT1-IT5. Was: Same as    |
+|    |                                        | #69 for ittage. Tasked in       |
+|    |                                        | BP-126 (session-077).           |
 | 73 | Arbitration layer behavioral test.     | CLOSED BP-094 group H. All      |
 |    | Pairs with refactor #52.               | seven bp_arb_spec 4.5 grant     |
 |    |                                        | rules plus tage consumer_ready  |
@@ -3180,9 +3460,13 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | TAGE/ITTAGE is covered by group |
 |    |                                        | G only for the loop it drives.  |
 |    |                                        | Reduction work in #1.           |
-| 75 | ittage has no fast versions of the     | The equivalent TAGE target is   |
-|    | ittage sim targets.                    | sim_tage_fast. Create           |
-|    |                                        | sim_ittage_fast.                |
+| 75 | ittage has no fast versions of the     | CLOSED by BP-126 (session-077): |
+|    | ittage sim targets.                    | sim_ittage_fast,                |
+|    |                                        | +ITTAGE_FAST_INIT=1, 223/0.     |
+|    |                                        | Was: The equivalent TAGE target |
+|    |                                        | is sim_tage_fast. Create        |
+|    |                                        | sim_ittage_fast. Tasked in      |
+|    |                                        | BP-126 (session-077).           |
 | 77 | scrub prompts and redact any absolute  | Not a design TD; tools and infra|
 |    | path not using the RVA_ROOT env var    | task, possibly manual.          |
 | 78 | RAS p3 undo-pop does not reverse a   | LEAVE AS-IS. BP-064 pins the   |
@@ -3201,15 +3485,25 @@ assessment of each document. Correct any that are wrong.
 | 80 | FTB confidence hysteresis tuning.    | FTB_CONF_WIDTH is the knob.     |
 |    |                                      | Revisit at bp_cluster SPEC      |
 |    |                                      | numbers.                        |
-| 81 | tb_ftb coverage skews to br0.        | Optional symmetric br1 augment. |
-|    |                                      | Not a blocker; sim_ftb 99/0.    |
+| 81 | tb_ftb coverage skews to br0.        | CLOSED by BP-126 (session-077): |
+|    |                                      | 35 br1 checks (B1-*), sim_ftb   |
+|    |                                      | 162 -> 197. Was: Optional       |
+|    |                                      | symmetric br1 augment. Not a    |
+|    |                                      | blocker; sim_ftb 99/0. Tasked   |
+|    |                                      | in BP-126 (session-077).        |
 | 82 | bp_history if/else-if slot cleanup.  | decisions.md 3.5. Fold into the |
 |    |                                      | next bp_history RTL touch. No   |
 |    |                                      | behavior change.                |
 | 83 | bp_history decisions.md s6.6 origin  | Fill the Xiangshan commit sha / |
 |    | citation placeholders.               | date. Manual, low priority.     |
-| 84 | Producer/consumer end-to-end fold    | BP-073 proved the fold VALUE    |
-|    | check.                               | against the canonical           |
+| 84 | Producer/consumer end-to-end fold    | CLOSED by BP-126 (session-077): |
+|    | check.                               | the FOLD monitor traces the     |
+|    |                                      | folds through the TAGE, ITTAGE  |
+|    |                                      | and SC ST1-ST3 index and tag    |
+|    |                                      | hashes. Which PC bits the SC    |
+|    |                                      | index takes is open (PD-17).    |
+|    |                                      | Was: BP-073 proved the fold     |
+|    |                                      | VALUE against the canonical     |
 |    |                                      | definition; it did NOT run that |
 |    |                                      | fold through the TAGE/ITTAGE    |
 |    |                                      | table index hash. Cluster       |
@@ -3218,6 +3512,7 @@ assessment of each document. Correct any that are wrong.
 |    |                                      | closed loop, but the FOLD is    |
 |    |                                      | still not traced through the    |
 |    |                                      | hash. SC ST1-ST3 additional.    |
+|    |                                      | Tasked in BP-126 (session-077). |
 | 85 | bp_structs_pkg.sv                    | Review BPU structures for       |
 |    |                                      | field sharing and storage/flop  |
 |    |                                      | opportunities.                  |
@@ -3289,51 +3584,71 @@ assessment of each document. Correct any that are wrong.
 |    |           | exists TODAY. 60 of 184 prompt files fail that on        |
 |    |           | historical manifests. CI must validate only the file     |
 |    |           | being run, not the prompts tree.                         |
-| 100 | tage     | tage line coverage below the previously-stated >90%.     |
+| 100 | tage     | CLOSED by BP-126 (session-077): per-file table, cov_tage |
+|     |          | RTL 588/614, every uncovered RTL line explained. The low |
+|     |          | headline was the counting: an .info line counts only     |
+|     |          | when every point on it is hit in every instance. Was:    |
+|     |          | tage line coverage below the previously-stated >90%.     |
 |     |          | MEASURED BP-097: cov_tage 73.8% (6418/8700),             |
 |     |          | cov_tage_table 79.5% (399/502), cov_bpu 79.1%            |
 |     |          | (9032/11419). The cov_tage denominator moved 8468 ->     |
 |     |          | 8700 when BP-096 added tage_assert.sv to that compile,   |
 |     |          | so 73.7 -> 73.8 is a new baseline, not a coverage        |
-|     |          | change. The prior 6242/8468 predates that.               |
-|     |          | The TD#109 caveat is retired: the assertions ARE bound   |
-|     |          | in cov_tage and tage_assert.sv is 10/10 there.           |
-|     |          | STILL UNRESOLVED: genuine under-coverage or accounting   |
-|     |          | artifact. Data, not a resolution: 8043 of cov_tage's     |
-|     |          | 8700 lines are tb_tage.sv, so the headline is dominated  |
-|     |          | by testbench lines; DUT-only is near 90%. In             |
-|     |          | cov_tage_table, tage_table.sv alone is 155/172 = 90.1%,  |
-|     |          | so the 90.1% in TAGE_DECOMP_LOG.md and                   |
-|     |          | tage_coverage_plan.md is the DUT-only figure, not a      |
-|     |          | stale one. Any conclusion must state its denominator.    |
-|     |          | CAUTION: BP-097's per-file table does not sum to 8700    |
-|     |          | and its RTL-only subtotal excludes a file it lists.      |
-|     |          | Re-derive per-file numbers before using them.            |
-| 101 | ras.sv   | Declares input ras_pc_p2, unread in the module.          |
-|     |          | bp_cluster drives it from the staged p2 PC. Confirm      |
-|     |          | needed or remove from ras.sv and tb_ras.sv.              |
-| 102 | bp_history.sv | Does not generate IT5 folds. ittage.sv wires        |
+|     |          | change. The prior 6242/8468 predates that. The TD#109    |
+|     |          | caveat is retired: the assertions ARE bound in cov_tage  |
+|     |          | and tage_assert.sv is 10/10 there. STILL UNRESOLVED:     |
+|     |          | genuine under-coverage or accounting artifact. Data, not |
+|     |          | a resolution: 8043 of cov_tage's 8700 lines are          |
+|     |          | tb_tage.sv, so the headline is dominated by testbench    |
+|     |          | lines; DUT-only is near 90%. In cov_tage_table,          |
+|     |          | tage_table.sv alone is 155/172 = 90.1%, so the 90.1% in  |
+|     |          | TAGE_DECOMP_LOG.md and tage_coverage_plan.md is the      |
+|     |          | DUT-only figure, not a stale one. Any conclusion must    |
+|     |          | state its denominator. CAUTION: BP-097's per-file table  |
+|     |          | does not sum to 8700 and its RTL-only subtotal excludes  |
+|     |          | a file it lists. Re-derive per-file numbers before using |
+|     |          | them. Tasked in BP-126 (session-077).                    |
+| 101 | ras.sv   | CLOSED by BP-126 (session-077): removed from ras.sv,     |
+|     |          | tb_ras.sv and bp_cluster; no planning document gives it  |
+|     |          | a use. Was: Declares input ras_pc_p2, unread in the      |
+|     |          | module. bp_cluster drives it from the staged p2 PC.      |
+|     |          | Confirm needed or remove from ras.sv and tb_ras.sv.      |
+|     |          | Tasked in BP-126 (session-077).                          |
+| 102 | bp_history.sv | CLOSED by BP-126 (session-077): bp_history          |
+|     |          | generates the IT5 folds in the rollback recompute and    |
+|     |          | both steps; tb_bp_history and the FOLD monitor check     |
+|     |          | them. No tb_fe_top figure changed. Was: Does not         |
+|     |          | generate IT5 folds. ittage.sv wires                      |
 |     |          | it_t5_idx_fh/tag_fh1/tag_fh2 to bp_history outputs that  |
 |     |          | are never driven -- permanently 0. IT5 has real history  |
 |     |          | (IT_TBL_HIST[5]=32, FH=9, FH1=9, FH2=8). Consequence:    |
 |     |          | IT5 indexes on PC alone, so the longest-history ITTAGE   |
-|     |          | table contributes no history and duplicates a short-     |
-|     |          | history table. Prediction accuracy loss, not a           |
+|     |          | table contributes no history and duplicates a            |
+|     |          | short-history table. Prediction accuracy loss, not a     |
 |     |          | correctness break. Add IT5 fold generation (same pattern |
 |     |          | as IT1-IT4). Recorded in bp_history_interfaces.md as HI6 |
-|     |          | and ftq_bpu_interfaces.md section 10 item 14.            |
-| 103 | tage     | tage initializes T0 to 00 (strongly not taken). Intended |
-|     |          | is weakly taken, b10. Impacts TAGE_SRAM_INIT_VALUE use   |
-|     |          | with sram_init. When this closes, update                 |
-|     |          | tage_cntrl_decisions.md's T0 init line again (see the    |
-|     |          | conflict note at the top of this file).                  |
-| 104 | ftb      | Two stale RTL header comments (INFRA-008). Comment-only: |
-|     |          |   - ftb_cntrl.sv: "107 bits/way". The entry is 112       |
-|     |          |     (ftb_decisions.md, sole home); this read 105, the    |
-|     |          |     pre-BP-099 width, and 109 was superseded s-071.      |
-|     |          |   - ftb.sv: ftb_fastpath_en "beyond the interface draft",|
-|     |          |     it is a documented top input.                        |
-|     |          | Fold into the first FTB-touching RTL task.               |
+|     |          | and ftq_bpu_interfaces.md section 10 item 14. Tasked in  |
+|     |          | BP-126 (session-077).                                    |
+| 103 | tage     | CLOSED by BP-126 (session-077): T0 resets to 2'b10 on    |
+|     |          | the walk and fast-init paths, TAGE_T0_SRAM_INIT_VALUE =  |
+|     |          | 2 (new); the tagged tables keep TAGE_SRAM_INIT_VALUE =   |
+|     |          | 0. Was: tage initializes T0 to 00 (strongly not taken).  |
+|     |          | Intended is weakly taken, b10. Impacts                   |
+|     |          | TAGE_SRAM_INIT_VALUE use with sram_init. When this       |
+|     |          | closes, update tage_cntrl_decisions.md's T0 init line    |
+|     |          | again (see the conflict note at the top of this file).   |
+|     |          | Tasked in BP-126 (session-077).                          |
+| 104 | ftb      | CLOSED by BP-126 (session-077): ftb_cntrl.sv states      |
+|     |          | entry 114 and RAM entry 113 bits per way; ftb.sv         |
+|     |          | describes ftb_fastpath_en as a documented input, source  |
+|     |          | G25, TD#178. Was: Two stale RTL header comments          |
+|     |          | (INFRA-008). Comment-only: - ftb_cntrl.sv: "107          |
+|     |          | bits/way". The entry is 112 (ftb_decisions.md, sole      |
+|     |          | home); this read 105, the pre-BP-099 width, and 109 was  |
+|     |          | superseded s-071. - ftb.sv: ftb_fastpath_en "beyond the  |
+|     |          | interface draft", it is a documented top input. Fold     |
+|     |          | into the first FTB-touching RTL task. Tasked in BP-126   |
+|     |          | (session-077).                                           |
 | 105 | loop_pred| CLOSED BP-091 (session-064). Dual-slot retrofit,         |
 |     |          | per-slot banks, pred_p0 -> pred_p1 rename, bp_cluster    |
 |     |          | rewired. The cluster boundary ports lp_upd_valid_p0 and  |
@@ -3537,39 +3852,45 @@ assessment of each document. Correct any that are wrong.
 |     |          | The alternative, moving the state when the fill lands,   |
 |     |          | needs two writers of one port and an arbiter no          |
 |     |          | configuration field describes.                           |
-| 121 | ras.sv   | Commit stack encodes empty as CSP == 0, so a full 32-    |
-|     |          | entry stack reads as EMPTY after the wrap: the p0 read   |
-|     |          | and the empty-pop fallback lose their source. Entries    |
-|     |          | intact, only the valid is wrong -- degrades fallback     |
-|     |          | quality, never mispredicts. Wrap flag or 6-bit CSP.      |
-|     |          | Decide with the 16/32 rebalance. ras_decisions.md 3.3.   |
+| 121 | ras.sv   | CLOSED by BP-126 (session-077): an occupancy count       |
+|     |          | beside CSP; a full stack reads non-empty; a call on a    |
+|     |          | full stack overwrites the oldest entry and the count     |
+|     |          | holds at 32; a return on an empty stack does nothing.    |
+|     |          | Was: Commit stack encodes empty as CSP == 0, so a full   |
+|     |          | 32-entry stack reads as EMPTY after the wrap: the p0     |
+|     |          | read and the empty-pop fallback lose their source.       |
+|     |          | Entries intact, only the valid is wrong -- degrades      |
+|     |          | fallback quality, never mispredicts. Wrap flag or 6-bit  |
+|     |          | CSP. Decide with the 16/32 rebalance. ras_decisions.md   |
+|     |          | 3.3. Tasked in BP-126 (session-077).                     |
 | 122 | frontend | CLOSED session-074. VA_WIDTH 41 and the nine ITLB/MMU    |
 |     |          | widths built by BP-109; the six L1I names declared in    |
 |     |          | bp_defines_pkg and checked against l1i_pkg by            |
 |     |          | rtl/core/frontend/l1i_param_chk (lint, lint_neg) by      |
 |     |          | BP-115. PPN_WIDTH is PA_WIDTH - 12.                      |
-| 123 | sc       | OPEN. THE SC UQ IS NOT BUILT AT THE UNIT LEVEL.          |
-|     |          | bp_arb_spec.md 5.5 specifies SC_UQ_DEPTH=8 and           |
-|     |          | SC_UQ_WR_PORTS=2, and sc_interfaces.md calls the         |
-|     |          | separate SC update queue the target arbitration model.   |
-|     |          | sc.sv builds neither: it assigns sc_uq_not_full = 1'b1   |
-|     |          | and sc_upd_rdy = all-ones under a comment naming them    |
-|     |          | arbitration-layer stubs.                                 |
-|     |          |                                                          |
+| 123 | sc       | CLOSED by BP-126 (session-077): sc.sv builds the update  |
+|     |          | queue, 8 entries of one update cycle each, both slots;   |
+|     |          | new ports sc_uq_has_data and sc_uq_rd_en (P-3,           |
+|     |          | confirmed). sim_sc 55 -> 144. Was: OPEN. THE SC UQ IS    |
+|     |          | NOT BUILT AT THE UNIT LEVEL. bp_arb_spec.md 5.5          |
+|     |          | specifies SC_UQ_DEPTH=8 and SC_UQ_WR_PORTS=2, and        |
+|     |          | sc_interfaces.md calls the separate SC update queue the  |
+|     |          | target arbitration model. sc.sv builds neither: it       |
+|     |          | assigns sc_uq_not_full = 1'b1 and sc_upd_rdy = all-ones  |
+|     |          | under a comment naming them arbitration-layer stubs.     |
 |     |          | The credit arbiter itself IS implemented and tested, in  |
 |     |          | bp_cluster: TD#73 closed by BP-094 group H covering all  |
 |     |          | seven bp_arb_spec 4.5 grant rules. Only the unit-level   |
-|     |          | queue is absent.                                         |
+|     |          | queue is absent.  RAISED session-070 because closing     |
+|     |          | TD#73 and TD#94 orphaned it. Neither was ever about      |
+|     |          | building the queue, yet bp_arb_spec.md, sc_interfaces.md |
+|     |          | and sc.sv (lines 30-32 and 148) all named them as the    |
+|     |          | deferral. Those three citations now point here. The      |
+|     |          | sc.sv comments are a two-line edit whenever an SC task   |
+|     |          | next opens.  BP-121 replaced the credit rules            |
+|     |          | (bp_arb_spec.md 4.5); the unit-level queue is still      |
+|     |          | absent. Tasked in BP-126 (session-077).                  |
 |     |          |                                                          |
-|     |          | RAISED session-070 because closing TD#73 and TD#94       |
-|     |          | orphaned it. Neither was ever about building the queue,  |
-|     |          | yet bp_arb_spec.md, sc_interfaces.md and sc.sv (lines    |
-|     |          | 30-32 and 148) all named them as the deferral. Those     |
-|     |          | three citations now point here. The sc.sv comments are   |
-|     |          | a two-line edit whenever an SC task next opens.          |
-|     |          |                                                          |
-|     |          | BP-121 replaced the credit rules (bp_arb_spec.md 4.5);   |
-|     |          | the unit-level queue is still absent.                    |
 | 124 | ftb/ubtb | CLOSED BP-110 (session-073). pftAddr is six bits from    |
 |     |          | the aligned region base with NO CARRY, in the FTB and    |
 |     |          | the uBTB. ubtb_pred_t.carry is deleted and nothing       |
@@ -4162,6 +4483,17 @@ assessment of each document. Correct any that are wrong.
 |     |          | failed: no test has an access to the set between a       |
 |     |          | cacheable miss's lookup and its fill. Needs that test.   |
 |     |          | BP-125 Deferred Work 2; ruled a TD session-077 (Jeff).   |
+| 178 | csr      | OPEN, definition. A CSR definition, in a new planning    |
+|     |          | file csr_decisions.md, which will own the enable and     |
+|     |          | configuration bits that now stand in for a CSR file that |
+|     |          | does not exist: FE-20's config group (sc_enable,         |
+|     |          | ftb_fastpath_en (G25), tage_enable_aging,                |
+|     |          | tage_aging_interval, ittage_enable_aging,                |
+|     |          | ittage_aging_interval and decode's ext_enable) and       |
+|     |          | FE-U6, the SC enable's behaviour (bp_arb_spec.md 0).     |
+|     |          | Whether it also covers FE-20's csr group (V, privilege,  |
+|     |          | satp, vsatp, hgatp, pmpcfg, pmpaddr) is decided when it  |
+|     |          | is tasked. Implemented after BP-126 (Jeff, session-077). |
 
 ---
 
@@ -4191,6 +4523,9 @@ assessment of each document. Correct any that are wrong.
 | 7        | Verilator upgrade to post-covergroup    | Upgraded to 5.048.  |
 |          | release                                 | Covergroup #7099    |
 |          |                                         | re-check pending.   |
+|          |                                         | DONE BP-126: 5.048  |
+|          |                                         | ignores covergroups |
+|          |                                         | (TD#38).            |
 | 8        | Investigate mutation testing            | STANDING PRACTICE.  |
 |          |                                         | BP-083, BP-086,     |
 |          |                                         | BP-090, BP-091,     |
@@ -4586,10 +4921,11 @@ Key decisions for quick reference:
   PC, indexed by BRANCH NUMBER after compaction. Fold
   geometry canonical in bp_history_decisions.md s6. ITTAGE
   IT5 has real folded history but bp_history does not
-  generate it -- TD#102 open.
+  generate it -- TD#102 open. GENERATED since BP-126.
 - TAGE entry: T0 2b CTR only, T1-T4 valid+tag+EPC+useful+CTR
   (tage_table_entry_formats.md; EPC was missing, session-072).
-  T0 init value under review, TD#103 open.
+  T0 init value under review, TD#103 open. T0 resets to 10
+  since BP-126.
 - Predictor metadata: every member of tage_pred_meta_t,
   branch_id included, describes the request that produced it
   and is staged to p2 together (BP-094). ITTAGE was inspected
@@ -4862,6 +5198,7 @@ unless noted.
       now and tage_assert.sv is 10/10 there.
     - Directed validation complete. sim_tage 106/0.
     - Remaining deferred: #69 rollback, #67 sram_init non-fast,
+      (#69, #67, #100, #103 closed by BP-126)
       #74 dual-slot, #100 coverage, #103 T0 init.
     - Formal validation not started.
 - Tage planning documents all Complete EXCEPT
@@ -4880,12 +5217,14 @@ unless noted.
   it.
 - Remaining deferred: #69/#70 rollback, #43 CTR width, #75
   sim_ittage_fast, #68 sram_init non-fast, #102 IT5 fold
+  (#69/#70, #75, #68, #102 closed by BP-126)
   generation.
 
 ### RAS decomposition
 - RTL: ras.sv complete (BP-062), tb_ras.sv complete (BP-063),
   sim_ras 87/0.
-- TD #78 pinned, TD #79 deferred, TD #101 open.
+- TD #78 pinned, TD #79 deferred, TD #101 open. TD#101 closed
+  by BP-126.
 - Session-064: FE-11 proven end to end in tb_bp_cluster E4.
   The p1 snapshot is the state that block starts from at p2,
   checked one cycle apart against the RAS pointer registers.
@@ -4914,7 +5253,7 @@ unless noted.
     - #91 / #92 CLOSED (PC, phr and the three index folds all
       staged p0->p2).
     - #89 / #90 still open.
-    - #84 end-to-end fold check still open -- group G drives a
+    - #84 CLOSED by BP-126 (FOLD monitor). Was: still open -- group G drives a
       closed SC loop but does not trace a fold through the
       index hash.
 - Session-064: the SC credit arbiter is tested (group H), the
@@ -4947,7 +5286,7 @@ unless noted.
   RECORDED identity above and any test written to the old form.
   Confirm BP-093 TC-A..TC-G sweep the new mapping.
 - Open / deferred: HI2, HI6 (= TD#102), HI7, #82, #83, #84,
-  #69/#70.
+  #69/#70. HI6, #84 and #69/#70 closed by BP-126.
 - HI5 (= G23) CLOSED session-070. G23 resolved it: the checkpoint
   is a FIELD of the FTQ entry, so a slot is reclaimed with the
   entry at commit and there is no separate protocol

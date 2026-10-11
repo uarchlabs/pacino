@@ -672,11 +672,21 @@ module tage_cntrl #(
   // Both-T0 path (rows 13a-d): INC/DEC T0 CTR (2b saturating).
   //   T0 CTR is stored in prm_ctr[TAGE_TBL_CTR[0]-1:0].
   //   prm_ctr[2] is always 0 for T0; direction from prm_tkn.
-  // Tagged prm path: INC when prm correct, DEC when wrong.
-  //   Also INC prm when using alt, pred_diff, prm correct.
-  // Tagged alt path: INC when alt correct, DEC when wrong.
-  //   Only INC alt when using prm if pred_diff and alt correct.
+  // Tagged CTRs step TOWARD THE RESOLVED DIRECTION, INC on taken and
+  // DEC on not-taken, saturating (tage_table_entry_formats.md, CTR
+  // field usage; direction is CTR[2]). BP-126: they stepped by
+  // correctness (INC correct, DEC wrong), which is the same for an
+  // entry predicting taken and the reverse for one predicting
+  // not-taken: a correct not-taken 011 became 100 (taken).
+  //   Provider prm: prm steps. Provider alt: alt steps, and prm steps
+  //   if pred_diff and prm right. Provider prm: alt steps if pred_diff
+  //   and alt right. Which counter steps is unchanged.
   // ----------------------------------------------------------------
+  function automatic logic [2:0] ctr_step(input logic [2:0] c,
+                                          input logic       tkn);
+    return tkn ? ((c == 3'b111) ? 3'b111 : c + 3'b001)
+               : ((c == 3'b000) ? 3'b000 : c - 3'b001);
+  endfunction
 
   always_comb begin : ctr_upd_comb
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
@@ -716,54 +726,28 @@ module tage_cntrl #(
           // -- Primary CTR update (prm_comp > 0)
           if (u_prm_tagged[s]) begin
             if (u_using_prm[s]) begin
-              // Provider = prm: INC correct, DEC wrong
-              u_prm_ctr_wr[s] = 1'b1;
-              if (u_prm_crt[s]) begin
-                u_prm_ctr_nxt[s] =
-                  (u_prm_ctr[s] == 3'b111)
-                    ? 3'b111
-                    : u_prm_ctr[s] + 3'b001;
-              end else begin
-                u_prm_ctr_nxt[s] =
-                  (u_prm_ctr[s] == 3'b000)
-                    ? 3'b000
-                    : u_prm_ctr[s] - 3'b001;
-              end
+              // Provider = prm: step toward the outcome
+              u_prm_ctr_wr[s]  = 1'b1;
+              u_prm_ctr_nxt[s] = ctr_step(u_prm_ctr[s], u_resolved[s]);
             end else begin
-              // Provider = alt: INC prm if pred_diff and prm right
+              // Provider = alt: step prm if pred_diff and prm right
               if (u_pred_diff[s] && u_prm_crt[s]) begin
-                u_prm_ctr_wr[s] = 1'b1;
-                u_prm_ctr_nxt[s] =
-                  (u_prm_ctr[s] == 3'b111)
-                    ? 3'b111
-                    : u_prm_ctr[s] + 3'b001;
+                u_prm_ctr_wr[s]  = 1'b1;
+                u_prm_ctr_nxt[s] = ctr_step(u_prm_ctr[s], u_resolved[s]);
               end
             end
           end
           // -- Alt CTR update (alt_comp > 0)
           if (u_alt_tagged[s]) begin
             if (!u_using_prm[s]) begin
-              // Provider = alt: INC correct, DEC wrong
-              u_alt_ctr_wr[s] = 1'b1;
-              if (u_alt_crt[s]) begin
-                u_alt_ctr_nxt[s] =
-                  (u_alt_ctr[s] == 3'b111)
-                    ? 3'b111
-                    : u_alt_ctr[s] + 3'b001;
-              end else begin
-                u_alt_ctr_nxt[s] =
-                  (u_alt_ctr[s] == 3'b000)
-                    ? 3'b000
-                    : u_alt_ctr[s] - 3'b001;
-              end
+              // Provider = alt: step toward the outcome
+              u_alt_ctr_wr[s]  = 1'b1;
+              u_alt_ctr_nxt[s] = ctr_step(u_alt_ctr[s], u_resolved[s]);
             end else begin
-              // Provider = prm: INC alt if pred_diff and alt right
+              // Provider = prm: step alt if pred_diff and alt right
               if (u_pred_diff[s] && u_alt_crt[s]) begin
-                u_alt_ctr_wr[s] = 1'b1;
-                u_alt_ctr_nxt[s] =
-                  (u_alt_ctr[s] == 3'b111)
-                    ? 3'b111
-                    : u_alt_ctr[s] + 3'b001;
+                u_alt_ctr_wr[s]  = 1'b1;
+                u_alt_ctr_nxt[s] = ctr_step(u_alt_ctr[s], u_resolved[s]);
               end
             end
           end

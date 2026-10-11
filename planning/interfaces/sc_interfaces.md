@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -98,9 +98,11 @@ input  logic             [NUM_PRED_SLOTS-1:0] sc_upd_val_u0
 input  sc_upd_inp_t      sc_upd_inp_u0[0:NUM_PRED_SLOTS-1]
 output logic             [NUM_PRED_SLOTS-1:0] sc_upd_rdy_u1
 
-// arbitration status outputs
+// arbitration status outputs, and the SC UQ's arbiter handshake
 output logic                      sc_uq_not_full
 output logic [NUM_PRED_SLOTS-1:0] sc_upd_rdy
+output logic                      sc_uq_has_data
+input  logic                      sc_uq_rd_en
 
 // CSR enable
 input  logic                                  sc_enable
@@ -290,7 +292,21 @@ sc_upd_rdy_u1[s] = 1  -- update applied for slot s.
 sc_uq_not_full        -- asserted when the SC update queue has room.
                          Consumer must gate sc_upd_val_u0 on this
                          signal.
+sc_upd_rdy[s]         -- the UQ has room and sc_ready is set. The
+                         same value on every slot. An update is
+                         accepted when presented with sc_upd_rdy set;
+                         the producer holds it otherwise (FE-5).
+sc_uq_has_data        -- the UQ is non-empty or an update is
+                         presented to it. The arbiter's SC update
+                         request.
+sc_uq_rd_en           -- the arbiter's SC update grant. Pops the UQ
+                         head into sc_cntrl, or passes the presented
+                         update through when the UQ is empty
+                         (bp_arb_spec.md 4.4 bypass).
 ```
+
+The four signals above are as BP-126 built them (TD#123, P-3,
+confirmed session-077). sc_uq_has_data and sc_uq_rd_en are new.
 
 ### Update behavior
 
@@ -340,15 +356,17 @@ UQs are separate. A single resolved conditional branch enqueues one
 TAGE UQ entry and one SC UQ entry at post-execute resolution, not
 commit (fe_decisions.md FE-6 and section 12; this read "commit",
 session-071); each entry covers both slots
-(bp_arb_spec.md section 6.2). This is the target arbitration model.
-At the unit level (sc.sv, as shipped) the UQ is not built and the
-arbitration-layer ports are stubbed: sc_uq_not_full is tied to 1'b1
-and sc_upd_rdy is tied to all-ones. The arbiter itself is
-implemented and tested in bp_cluster (bp_arb_spec.md 4.5; group H,
-rewritten by BP-121). At the cluster, sc_uq_not_full drops for one
-cycle as the starvation hold (BP-121 D6); sc.sv was not changed.
-The unit-level gap is TD#123. TD#73 and TD#94 are closed and
-neither covered building the queue.
+(bp_arb_spec.md section 6.2).
+
+THE UQ IS BUILT in sc.sv by BP-126 (TD#123): SC_UQ_DEPTH entries,
+each one update cycle of both slots (SC_UQ_WR_PORTS slot writes),
+with the handshake of Update Interface above. The arbiter is in
+bp_cluster (bp_arb_spec.md 4.5; group H, rewritten by BP-121, H4 and
+H8 by BP-126). At the cluster, sc_uq_not_full is the UQ's room with
+the one-cycle starvation hold (BP-121 D6), and sc_upd_rdy is the
+UQ's room and sc_enable. This read that sc.sv built no UQ and tied
+sc_uq_not_full to 1'b1 and sc_upd_rdy to all-ones, the TD#123 gap.
+Session-077.
 
 When the SC arbiter grants an update and stalls a prediction, the
 TAGE response buffer head is held, backpressuring TAGE
@@ -363,9 +381,11 @@ Output sc_ready indicates the RAM initialization cycles have
 completed. It ties to the ready output of the sram_init module.
 
 No prediction or update cycles begin before sc_ready is asserted. SC
-ignores prediction and update requests when sc_ready is deasserted.
-Upstream logic must comprehend this condition. See sc_decisions.md
-section 13.
+ignores prediction requests when sc_ready is deasserted. An update
+presented before sc_ready is refused (sc_upd_rdy low) and held by the
+producer, since BP-126; this read that SC ignores update requests
+too. Upstream logic must comprehend this condition. See
+sc_decisions.md section 13.
 
 ---
 
@@ -477,4 +497,10 @@ conditional branches.
               Arbitration Model: the credit arbiter replaced
               (bp_arb_spec.md 4.5, decision 5); the starvation hold
               on sc_uq_not_full at the cluster.
+
+  2026-10-10  session-077, after BP-126. Port List and Update
+              Interface: sc_uq_has_data and sc_uq_rd_en; the UQ's
+              readies (TD#123, P-3). Arbitration Model: the UQ
+              built. RAM Init Interface: an update before sc_ready
+              is refused and held.
 ```

@@ -9,7 +9,7 @@
 // -------------------------------------------------------------------
 // Branch predictor history module.
 // Owns GHR (256b) and PHR (32b) circular buffers plus all folded
-// histories for TAGE T1-T4, ITTAGE IT1-IT4, and SC ST1-ST3.
+// histories for TAGE T1-T4, ITTAGE IT1-IT5, and SC ST1-ST3.
 // Pointer is module-owned: internal GHR/PHR pointer registers
 // advance by num_branches each cycle and are exposed as registered
 // outputs (BP-069). Buffer and checkpoint storage live here.
@@ -304,6 +304,13 @@ module bp_history
         rb_anchor, IT_TBL_HIST[4], IT_TBL_FH1[4]));
       fh_r.it_t4_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
         rb_anchor, IT_TBL_HIST[4], IT_TBL_FH2[4]));
+      // ITTAGE IT5
+      fh_r.it_t5_idx_fh    <= IT_MAX_FH'(fold_ghr(rb_ghr,
+        rb_anchor, IT_TBL_HIST[5], IT_TBL_FH[5]));
+      fh_r.it_t5_tag_fh1   <= IT_MAX_FH1'(fold_ghr(rb_ghr,
+        rb_anchor, IT_TBL_HIST[5], IT_TBL_FH1[5]));
+      fh_r.it_t5_tag_fh2   <= IT_MAX_FH2'(fold_ghr(rb_ghr,
+        rb_anchor, IT_TBL_HIST[5], IT_TBL_FH2[5]));
       // SC ST1-ST3 (H = W = SC_TBL_HIST)
       fh_r.sc_t1_idx_fh    <= SC_MAX_FH'(fold_ghr(rb_ghr,
         rb_anchor, SC_TBL_HIST[1], SC_TBL_HIST[1]));
@@ -438,6 +445,19 @@ module bp_history
           64'(fh_r.it_t4_tag_fh2), pred_taken[0],
           ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[4]+GHR_WIDTH) % GHR_WIDTH],
           IT_TBL_HIST[4], IT_TBL_FH2[4]));
+        // ITTAGE IT5
+        fh_r.it_t5_idx_fh  <= IT_MAX_FH'(fold_step(
+          64'(fh_r.it_t5_idx_fh), pred_taken[0],
+          ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+          IT_TBL_HIST[5], IT_TBL_FH[5]));
+        fh_r.it_t5_tag_fh1 <= IT_MAX_FH1'(fold_step(
+          64'(fh_r.it_t5_tag_fh1), pred_taken[0],
+          ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+          IT_TBL_HIST[5], IT_TBL_FH1[5]));
+        fh_r.it_t5_tag_fh2 <= IT_MAX_FH2'(fold_step(
+          64'(fh_r.it_t5_tag_fh2), pred_taken[0],
+          ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+          IT_TBL_HIST[5], IT_TBL_FH2[5]));
         // SC ST1-ST3 (H = W = SC_TBL_HIST)
         fh_r.sc_t1_idx_fh  <= SC_MAX_FH'(fold_step(
           64'(fh_r.sc_t1_idx_fh), pred_taken[0],
@@ -638,6 +658,28 @@ module bp_history
           pred_taken[1],
           ghr_mem[(int'(ghist_ptr_r)+1-IT_TBL_HIST[4]+GHR_WIDTH) % GHR_WIDTH],
           IT_TBL_HIST[4], IT_TBL_FH2[4]));
+        // ITTAGE IT5
+        fh_r.it_t5_idx_fh  <= IT_MAX_FH'(fold_step(
+          fold_step(64'(fh_r.it_t5_idx_fh), pred_taken[0],
+            ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+            IT_TBL_HIST[5], IT_TBL_FH[5]),
+          pred_taken[1],
+          ghr_mem[(int'(ghist_ptr_r)+1-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+          IT_TBL_HIST[5], IT_TBL_FH[5]));
+        fh_r.it_t5_tag_fh1 <= IT_MAX_FH1'(fold_step(
+          fold_step(64'(fh_r.it_t5_tag_fh1), pred_taken[0],
+            ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+            IT_TBL_HIST[5], IT_TBL_FH1[5]),
+          pred_taken[1],
+          ghr_mem[(int'(ghist_ptr_r)+1-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+          IT_TBL_HIST[5], IT_TBL_FH1[5]));
+        fh_r.it_t5_tag_fh2 <= IT_MAX_FH2'(fold_step(
+          fold_step(64'(fh_r.it_t5_tag_fh2), pred_taken[0],
+            ghr_mem[(int'(ghist_ptr_r)-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+            IT_TBL_HIST[5], IT_TBL_FH2[5]),
+          pred_taken[1],
+          ghr_mem[(int'(ghist_ptr_r)+1-IT_TBL_HIST[5]+GHR_WIDTH) % GHR_WIDTH],
+          IT_TBL_HIST[5], IT_TBL_FH2[5]));
         // SC ST1-ST3 (H = W = SC_TBL_HIST)
         fh_r.sc_t1_idx_fh  <= SC_MAX_FH'(fold_step(
           fold_step(64'(fh_r.sc_t1_idx_fh), pred_taken[0],

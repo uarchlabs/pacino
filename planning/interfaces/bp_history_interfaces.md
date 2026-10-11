@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -389,11 +389,12 @@ only advance, rollback by index, FTQ visibility vs ownership).
     copy-paste artifact from SC's real BrIMLI table (ST4) and was
     removed session-061.
 
-    bp_history.sv DOES NOT CURRENTLY GENERATE the IT5 folds.
-    ittage.sv wires it_t5_idx_fh / tag_fh1 / tag_fh2 to outputs
-    that are never driven, so they read permanently zero and IT5
-    indexes on PC alone. TD#102 tracks the RTL gap. This is a
-    prediction-accuracy loss, not a correctness break.
+    bp_history.sv GENERATES the IT5 folds since BP-126 (TD#102,
+    HI6 closed): in the rollback and corrected-rollback recompute
+    and in both steps, as for IT1-IT4, so a rollback restores them
+    and a redirect corrects them by the same recompute. Before it
+    ittage.sv read IT5 fold outputs that were never driven, and IT5
+    indexed on PC alone.
 
   SC folds (one index fold per table with history, ST1-ST3):
     sc_t1_idx_fh  -- width = SC_TBL_FH[1] = 4b
@@ -487,8 +488,8 @@ only advance, rollback by index, FTQ visibility vs ownership).
 |     | commit: the checkpoint is a FIELD of the  | G23.             |
 |     | FTQ entry, reclaimed with it. No separate | ftq_decisions.md |
 |     | protocol.                                 | 5.8, 5.3.        |
-| HI6 | IT5 fold generation missing in            | TD#102 open.     |
-|     | bp_history.sv. IT5 has real history but   |                  |
+| HI6 | IT5 fold generation missing in            | CLOSED BP-126.   |
+|     | bp_history.sv. IT5 has real history but   | TD#102 closed.   |
 |     | its three fold outputs are never driven.  |                  |
 | HI7 | Ports use literal [1:0] and [2] where     | Deferred.        |
 |     | other modules use NUM_PRED_SLOTS.         | INFRA-011.       |
@@ -536,4 +537,7 @@ and the module-owned pointer decision.
   2026-10-09  session-076, recording BP-122. Port List and Rollback
               Interface: rollback_corr/_n/_tkn/_pbit declared, as
               built.
+
+  2026-10-10  session-077, after BP-126. IT5 folds generated
+              (TD#102); HI6 closed.
 ```

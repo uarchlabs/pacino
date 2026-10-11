@@ -79,9 +79,10 @@
 // from them, gates each predictor's valid on the slot being accepted
 // by EVERY predictor it trains, and returns that acceptance on
 // upd_acc. The channel's ready is the scheduler's ready and upd_acc of
-// its slot. The valids are not gated here because the SC accept
-// (bp_cluster sc_upd_rdy) is a function of the SC valid: gating the
-// request on it would close a combinational loop.
+// its slot. The valids are not gated here: the SC accept (bp_cluster
+// sc_upd_rdy) was a function of the SC valid until BP-126, and gating
+// the request on it would have closed a combinational loop. Since
+// BP-126 it is the SC update queue's room (TD#123).
 //
 // R3, THE SQUASHED RESOLUTION. A resolution naming an entry that has
 // been squashed is DROPPED SILENTLY. This is normal traffic, not an
@@ -110,8 +111,9 @@
 // update is presented to ftq_ftb_sched whatever the predictors'
 // readiness, because gating it on upd_acc would close a loop: the
 // fan-out presents the predictor requests only under the scheduler's
-// ready, the SC ready is a grant of the SC request (bp_cluster
-// sc_upd_rdy), upd_acc reads the SC ready, and the scheduler's ready
+// ready, the SC ready was a grant of the SC request until BP-126
+// (bp_cluster sc_upd_rdy; since then the SC queue's room), upd_acc
+// reads the SC ready, and the scheduler's ready
 // reads the FTB valid (5.7.3 S6). So a resolution held for a
 // predictor had its FTB update taken again every cycle it was
 // presented. The loop-free form needs state: r_ftb_done, one flop per
@@ -421,10 +423,11 @@ module ftq_resolve (
   // forms no update -- squashed or unmapped -- needs no predictor.
   //
   // Before BP-119 the three queued predictors' scalar readies gated
-  // every channel whatever it trained. The cluster's SC ready is
-  // asserted only in a cycle SC grants an update (bp_cluster
-  // sc_upd_rdy), so under that rule a resolution that trains no SC
-  // could never be accepted once the readies were connected.
+  // every channel whatever it trained. The cluster's SC ready was
+  // then asserted only in a cycle SC granted an update (bp_cluster
+  // sc_upd_rdy; the SC queue's room since BP-126), so under that rule
+  // a resolution that trains no SC could never be accepted once the
+  // readies were connected.
   //
   // A channel that loses its slot to an older one (TD#158) is held.
   always_comb begin : ready

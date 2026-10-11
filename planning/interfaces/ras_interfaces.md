@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -134,9 +134,6 @@ module ras (
   // PC+2/+4. The name is historical: it carried the FTB
   // fall-through until BP-121.
   input  logic [VA_WIDTH-1:0] ras_fall_through_p2[0:NUM_PRED_SLOTS-1],
-
-  // Branch PC per slot. Declared in ras.sv, not read. See TD #101.
-  input  logic [VA_WIDTH-1:0] ras_pc_p2 [0:NUM_PRED_SLOTS-1],
 
   // ----------------------------------------------------------
   // p2: Prediction outputs
@@ -582,7 +579,8 @@ force nba_sequent classification. See CLAUDE.md.
 
 On rstn deassert (active low, synchronous):
   - TOSR, TOSW, BOS all reset to 0.
-  - CSP resets to 0.
+  - CSP and the commit-stack occupancy count reset to 0
+    (ras_decisions.md 3.3; the count since BP-126).
   - All rctr fields reset to 0.
   - All ret_addr fields in both stacks reset to 0.
   - ras_pop_valid_p2 and ras_tos_valid_p0 deassert on
@@ -701,3 +699,8 @@ On rstn deassert (active low, synchronous):
   2026-10-09  session-076. 4: ras_p2_keep declared (one bit, as
               built, reported by BP-122). IC-RAS-11: TD#165 closed,
               unreachable by construction.
+
+  2026-10-10  session-077, after BP-126. 4: ras_pc_p2 removed from
+              the port list; BP-126 removed it from ras.sv, tb_ras
+              and bp_cluster (TD#101). It was declared and unread. 10:
+              the commit-stack occupancy count resets with CSP.

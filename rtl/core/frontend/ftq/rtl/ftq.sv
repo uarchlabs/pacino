@@ -166,9 +166,10 @@ module ftq (
   // ---- 8. updates, the per-predictor channels (TD#151, BP-119) -----
   // Formed by ftq_upd_conv from the resolved record. The readies are
   // the cluster's per-slot queue readies (tage_upd_rdy and
-  // ittage_upd_rdy are queue-not-full; sc_upd_rdy is the SC credit
-  // arbiter's grant), ANDed per predictor (TD#150). sc_enable is the
-  // FE-20 configuration bit: with SC disabled no SC update is formed.
+  // ittage_upd_rdy are queue-not-full; sc_upd_rdy is the SC update
+  // queue's room since BP-126, the SC arbiter's grant before it), ANDed
+  // per predictor (TD#150). sc_enable is the FE-20 configuration bit:
+  // with SC disabled no SC update is formed.
   input  logic                        sc_enable,
   output ubtb_upd_t [NUM_PRED_SLOTS-1:0] ubtb_upd_u0,
   output logic [NUM_PRED_SLOTS-1:0]   lp_upd_valid_p0,

@@ -6,7 +6,7 @@
  FILE:    planning/interfaces/ftb_interfaces.md
  SOURCE:  ftb_decisions.md (canonical), session-051/052/053
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -220,8 +220,12 @@ fields of the one indexed entry, not two slots.
                         -- 1 = fast-path enabled; a saturated conf may
                            bypass the TAGE/SC direction wait/override.
                            0 = disabled, FTB is always overridable
-                           (ordinary BTB). Source TBD at bp_cluster
-                           (confidence doc section 10). Renamed from the
+                           (ordinary BTB). A cluster input whose
+                           source is undecided: G25 (PROJECT_STATUS.md
+                           BP Cluster Open TBDs, fe_decisions.md
+                           FE-20); its CSR is TD#178. This read
+                           "Source TBD at bp_cluster (confidence doc
+                           section 10)"; session-077. Renamed from the
                            former chicken_bit_enable (inverse sense:
                            1 enables the optimization).
   output logic [1:0]            ftb_fastpath_p2
@@ -847,3 +851,6 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
               IC-FTB-03: push source (TD#164). IC-FTB-09: hold p0
               before an update (TD#162). IC-FTB-10: carried way
               checked both ways (TD#163). 6: ras line.
+
+  2026-10-10  session-077, after BP-126. 2.4: ftb_fastpath_en's
+              source is G25, its CSR TD#178.

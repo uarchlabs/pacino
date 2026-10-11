@@ -31,8 +31,9 @@
 // to all three.
 //
 // ftb_fastpath_en (added to ftb_cntrl in BP-066) is threaded from the
-// top boundary straight to ftb_cntrl. It is a top port beyond the
-// current ftb_interfaces.md draft (source TBD, confidence doc 10).
+// top boundary straight to ftb_cntrl. It is a documented FTB input
+// (ftb_interfaces.md 2.4) and a cluster input whose source is
+// undecided, G25 (fe_decisions.md); the CSR that drives it is TD#178.
 // ===================================================================
 `ifndef FTB_SV
 `define FTB_SV
@@ -78,8 +79,8 @@ module ftb (
   // -- confidence fast-path (2.4); bit0 br0, bit1 br1
   output logic [1:0]                    ftb_fastpath_p2,
 
-  // -- global fast-path enable (confidence section 5/10; 1 enables the
-  //    bypass; top port beyond the current interface draft, source TBD)
+  // -- global fast-path enable (ftb_interfaces.md 2.4; 1 enables the
+  //    bypass; a cluster input, source undecided, G25)
   input  logic                          ftb_fastpath_en,
 
   // -- update port (2.5; post-execute, single port)

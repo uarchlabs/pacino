@@ -145,6 +145,9 @@ module tb;
   int _arb_rb_full_blocks_pred_tst  = 1;
   int _arb_pred_credits_reset_tst   = 1;
   int _arb_starve_tst               = 1;
+  int _trx_stab_tst                 = 1;   // BP-126, TD#37
+  int _ctr_dir_tst                  = 1;   // BP-126, CTR direction
+  int _cov_gap_tst                  = 1;   // BP-126, TD#100
   int _slot1_t1_write_tst           = 1;
   int _slot1_t2_write_tst           = 1;
   int _fh_sel_t3_t4_tst             = 1;
@@ -421,7 +424,8 @@ module tb;
   //    T0: u_dut.u_tage_bim.u_ram_s0/s1.mem[b][i]
   //    T1-T4: gen_tage_tbl[N].u_tage_tbl.u_ram_s0/s1.mem[b][i]
   //    (N must be a constant for Verilator; loops unrolled.)
-  //    Expected: '0 (TAGE_SRAM_INIT_VALUE = 0).
+  //    Expected: T0 2'b10 weakly taken (TD#103, BP-126), a literal
+  //    here, not the package constant; T1-T4 '0, unchanged.
   // e. When fast_init==0: verify elapsed <
   //    (1<<TAGE_MAX_IDX_WIDTH)+4.
   // f. When fast_init==1: verify elapsed < 8 (bypass check).
@@ -443,6 +447,9 @@ module tb;
       + TAGE_MAX_CTR_WIDTH + TAGE_MAX_VAL_WIDTH; // = 8
     localparam int ALLOC_DATA_W =
       CNTRL_BITS_W + TAGE_MAX_TAG_WIDTH;   // = 16
+    // T0's reset value, weakly taken (TD#103). Restated as a literal
+    // so a package change cannot move the check with the RTL.
+    localparam logic [1:0] T0_INIT_EXP = 2'b10;
     logic [TAGE_TBL_CTR[0]-1:0] bim_s0_v;
     logic [TAGE_TBL_CTR[0]-1:0] bim_s1_v;
     logic [ALLOC_DATA_W-1:0]    tbl_s0_v;
@@ -480,20 +487,21 @@ module tb;
     // ----------------------------------------------------------
     // d. Check T0 (tage_bim) bw_ram mem entries.
     // RAM_ENTRIES = (1 << TAGE_TBL_IDX[0]) / 2 = 1024.
-    // Expected: TAGE_TBL_CTR[0]'(TAGE_SRAM_INIT_VALUE) = 2'b00.
+    // Expected: 2'b10, weakly taken (TD#103, BP-126), on the walk
+    // and on the fast-init path alike.
     // ----------------------------------------------------------
     re = (1 << TAGE_TBL_IDX[0]) / 2;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
         bim_s0_v = u_dut.u_tage_bim.u_ram_s0.mem[b][i];
-        if (bim_s0_v !== '0) begin
+        if (bim_s0_v !== T0_INIT_EXP) begin
           local_fails++;
           if (verbose != 0)
             $display("[FAIL] T0 s0 b=%0d i=%0d val=0x%0h",
               b, i, bim_s0_v);
         end
         bim_s1_v = u_dut.u_tage_bim.u_ram_s1.mem[b][i];
-        if (bim_s1_v !== '0) begin
+        if (bim_s1_v !== T0_INIT_EXP) begin
           local_fails++;
           if (verbose != 0)
             $display("[FAIL] T0 s1 b=%0d i=%0d val=0x%0h",
@@ -876,7 +884,7 @@ module tb;
   //         resolved_taken=0 mispredict=1.
   // USE fires on T1 (pred_diff=1 using_prm=1) but sats at 00.
   // Expected: T1 s0 mem[0][5] = 16'h0007 (CTR 100->011)
-  //           T2 s0 mem[0][7] = 16'h000B (CTR 100->101).
+  //           T2 s0 mem[0][7] = 16'h0007 (CTR 100->011) (BP-126).
   // ----------------------------------------------------------------
   task automatic upd_prm_dec_alt_inc_tst(int verbose);
     int              local_fails;
@@ -944,7 +952,8 @@ module tb;
         rd_t1);
     end
 
-    if (rd_t2 !== 16'h000B) begin
+    // BP-126: alt right steps toward the outcome (NT): 100->011.
+    if (rd_t2 !== 16'h0007) begin
       local_fails++;
       if (verbose != 0)
         $display(
@@ -1314,11 +1323,11 @@ module tb;
   // Struct: prm_comp=1 alt_comp=3 prm_idx=11'h01A alt_idx=11'h018
   //         prm_tkn=0 alt_tkn=1 (pred_diff=1) using_primary=0
   //         alt_useful=01 resolved_taken=0 mispredict=1.
-  // CTR row 9: DEC alt (T3 100->011), INC prm (T1 100->101).
+  // CTR row 9: DEC alt (T3 100->011), prm right (T1 100->011) (BP-126).
   // USE row 6: DEC alt USE (01->00). EPC=00.
   // Expected: T3 s0 mem[0][24] = 16'h0007
   //           ({TAG=0,EPC=00,USE=00,CTR=011,VAL=1}).
-  //           T1 s0 mem[0][26] = 16'h000B (CTR 100->101).
+  //           T1 s0 mem[0][26] = 16'h0007 (CTR 100->011) (BP-126).
   // ----------------------------------------------------------------
   task automatic upd_use_alt_dec_tst(int verbose);
     int              local_fails;
@@ -1382,7 +1391,8 @@ module tb;
         "[INFO] upd_use_alt_dec_tst: T3[0][24]=0x%04h OK", rd_t3);
     end
 
-    if (rd_t1 !== 16'h000B) begin
+    // BP-126: prm right steps toward the outcome (NT): 100->011.
+    if (rd_t1 !== 16'h0007) begin
       local_fails++;
       if (verbose != 0)
         $display(
@@ -1410,11 +1420,11 @@ module tb;
   //         prm_ctr=100 alt_ctr=101 prm_tkn=1 alt_tkn=0
   //         (pred_diff=1) pred_strong=0 using_primary=1
   //         resolved_taken=0 mispredict=1 (prm wrong, alt correct).
-  // CTR row 3: DEC prm (T1 100->011), INC alt (T2 101->110).
+  // CTR row 3: DEC prm (T1 100->011), alt right (T2 101->100) (BP-126).
   // USE row 4: DEC prm USE (00 sats->00). EPC=00.
   // UAON: prm_wrong && alt_correct && !pred_strong -> INC (0->1).
   // Expected: T1 s0 mem[0][32] = 16'h0007 (CTR=011).
-  //           T2 s0 mem[0][32] = 16'h000D (CTR=110).
+  //           T2 s0 mem[0][32] = 16'h0009 (CTR=100) (BP-126).
   //           uaon[0]: 0 -> 1.
   // ----------------------------------------------------------------
   task automatic upd_uaon_inc_tst(int verbose);
@@ -1506,7 +1516,8 @@ module tb;
         "[INFO] upd_uaon_inc_tst: T1[0][32]=0x%04h OK", rd_t1);
     end
 
-    if (rd_t2 !== 16'h000D) begin
+    // BP-126: alt right steps toward the outcome (NT): 101->100.
+    if (rd_t2 !== 16'h0009) begin
       local_fails++;
       if (verbose != 0)
         $display(
@@ -1533,10 +1544,10 @@ module tb;
   //         prm_ctr=011 alt_ctr=011 prm_tkn=0 alt_tkn=1
   //         (pred_diff=1) pred_strong=0 using_primary=1
   //         prm_useful=00 resolved_taken=0 mispredict=0.
-  // CTR row 2: INC prm (T1 011->100). No alt CTR write.
+  // CTR row 2: prm (T1 011->010) (BP-126). No alt CTR write.
   // USE row 3: INC prm USE (00->01). EPC=00.
   // UAON: prm_correct && alt_wrong && !pred_strong -> DEC (1->0).
-  // Expected: T1 s0 mem[0][34] = 16'h0019 (CTR=100, USE=01).
+  // Expected: T1 s0 mem[0][34] = 16'h0015 (CTR=010, USE=01).
   //           uaon[0]: 1 -> 0.
   // ----------------------------------------------------------------
   task automatic upd_uaon_dec_tst(int verbose);
@@ -1609,7 +1620,8 @@ module tb;
         "[INFO] upd_uaon_dec_tst: post uaon=0x%0h OK", uaon_post);
     end
 
-    if (rd_t1 !== 16'h0019) begin
+    // BP-126: prm steps toward the outcome (NT): 011->010, USE 01.
+    if (rd_t1 !== 16'h0015) begin
       local_fails++;
       if (verbose != 0)
         $display(
@@ -3059,7 +3071,8 @@ module tb;
   // PC=0x05500: idx=0x540=1344 bank=1 row=320 tag=0x0A.
   // Pre-load: T1 mem[1][320]=0x0A19 (CTR=100 USE=01 EPC=0).
   //           T2 mem[1][320]=0 (VALID=0, alloc candidate).
-  //           T0/T3/T4 at idx 1344=0 (FAST_INIT).
+  //           T0/T3/T4 at idx 1344=0, seeded (BP-126: T0 resets to
+  //           2b10, TD#103, so the reset value is not relied on).
   // ----------------------------------------------------------------
   task automatic rt_mispredict_alloc_tst(int verbose);
     int              local_fails;
@@ -3076,6 +3089,10 @@ module tb;
     // TAG=0x0A EPC=0 USE=01 CTR=100 VALID=1.
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][320]
       = 16'h0A19;
+    u_dut.u_tage_bim.u_ram_s0.mem[1][320]               = 2'b00;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][320] = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][320] = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][320] = 16'h0000;
     if (verbose != 0)
       $display(
         "[INFO] rt_mispredict_alloc_tst: T1 mem[1][320]=0A19");
@@ -3539,7 +3556,7 @@ module tb;
   //           T3/T4 mem[1][512]=0x0010 (USE=01 VALID=0)
   //           prevents allocation when mispredict=1.
   // After: T2 CTR 101->100 USE 01->00 -> 0x1709.
-  //        T1 CTR 011->100 (alt INC, pred_diff=1) -> 0x1709.
+  //        T1 CTR 011->010 (alt right, pred_diff=1) -> 0x1705 (BP-126).
   // ----------------------------------------------------------------
   task automatic rt_ctr_rows3_4_tst(int verbose);
     int              local_fails;
@@ -3669,7 +3686,8 @@ module tb;
         "[FAIL] rt_ctr_rows3_4_tst: T2=0x%04h exp=1709",
         rd_t2);
     end
-    if (rd_t1 !== 16'h1709) begin
+    // BP-126: alt right steps toward the outcome (NT): T1 011->010.
+    if (rd_t1 !== 16'h1705) begin
       local_fails++;
       $display(
         "[FAIL] rt_ctr_rows3_4_tst: T1=0x%04h exp=1709",
@@ -4101,7 +4119,7 @@ module tb;
   // pred_diff: T2 CTR[2]=0, T1 CTR[2]=1 -> pred_diff=1.
   // resolved_taken=0, cond_mispredict=1, alt wrong.
   // After: T1 CTR 100->011 USE 01->00 -> 0x2807.
-  //        T2 CTR 011->100 USE unchanged -> 0x2809.
+  //        T2 CTR 011->010 USE unchanged -> 0x2805 (BP-126).
   // UAON: prm_correct=1, alt_wrong=1 -> DEC. uaon[0]: 8->7.
   // Restore uaon[0]=4'h0 before re-predict.
   // ----------------------------------------------------------------
@@ -4226,7 +4244,8 @@ module tb;
         "[FAIL] rt_ctr_rows9_10_tst: T1=0x%04h exp=2807",
         rd_t1);
     end
-    if (rd_t2 !== 16'h2809) begin
+    // BP-126: prm right steps toward the outcome (NT): T2 011->010.
+    if (rd_t2 !== 16'h2805) begin
       local_fails++;
       $display(
         "[FAIL] rt_ctr_rows9_10_tst: T2=0x%04h exp=2809",
@@ -4263,7 +4282,8 @@ module tb;
         "[FAIL] rt_ctr_rows9_10_tst: repred prm=%0d exp=2",
         meta2.tage_prm_comp);
     end
-    if (meta2.tage_prm_ctr !== 3'b100) begin
+    // BP-126: the re-predict reads the stepped T2 CTR, 010.
+    if (meta2.tage_prm_ctr !== 3'b010) begin
       local_fails++;
       $display(
         "[FAIL] rt_ctr_rows9_10_tst: repred ctr=%03b exp=100",
@@ -5515,7 +5535,7 @@ module tb;
   // First predict: using_prm=1 (uaon<threshold).
   // Update: resolved_taken=0 cond_mispredict=1.
   //   prm(T2) wrong alt(T1) correct pred_strong=0.
-  //   UAON INC 7->8. CTR row 3: T2 DEC T1 INC.
+  //   UAON INC 7->8. CTR row 3: T2 DEC, T1 010->001 (BP-126).
   // Re-predict: using_prm=0 (uaon=8>=threshold T2 CTR=011
   //   still boundary).
   // ----------------------------------------------------------------
@@ -5666,7 +5686,8 @@ module tb;
         "[FAIL] uaon_threshold_cross_tst: T2=0x%04h exp=0107",
         rd_t2);
     end
-    if (rd_t1 !== 16'h0107) begin
+    // BP-126: alt right steps toward the outcome (NT): T1 010->001.
+    if (rd_t1 !== 16'h0103) begin
       local_fails++;
       $display(
         "[FAIL] uaon_threshold_cross_tst: T1=0x%04h exp=0107",
@@ -5726,7 +5747,7 @@ module tb;
   // Second predict: using_prm=0 (uaon=8 T2 CTR=011 boundary).
   // Update: resolved_taken=0 cond_mispredict=1.
   //   alt(T1) wrong prm(T2) correct pred_strong=0.
-  //   UAON DEC 8->7. CTR row 9: T2 INC T1 DEC.
+  //   UAON DEC 8->7. CTR row 9: T2 011->010 (BP-126), T1 DEC.
   // Re-predict: using_prm=1 (uaon=7<threshold restored).
   // ----------------------------------------------------------------
   task automatic uaon_dec_restore_tst(int verbose);
@@ -5743,8 +5764,13 @@ module tb;
     local_fails = 0;
 
     // Step 1: Write T1 CTR=100 to set up TC-41 direction.
-    // T2[0][704] is already 16'h0107 (CTR=011) from TC-40.
+    // T2[0][704] = 16'h0107 (CTR=011) and uaon[0] = 8 are the TC-40
+    // results; BP-126 seeds them so this case does not depend on
+    // TC-40 having run first (CLAUDE.md, no test order dependency).
     // Write T1[0][704]=16'h0109: CTR=100 (boundary taken).
+    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][704]
+      = 16'h0107;
+    u_dut.u_tage_cntrl.uaon[0] = 4'h8;
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][704]
       = 16'h0109;
     if (verbose != 0) begin
@@ -5863,7 +5889,8 @@ module tb;
         "[FAIL] uaon_dec_restore_tst: uaon=0x%0h exp=7",
         uaon_post);
     end
-    if (rd_t2 !== 16'h0109) begin
+    // BP-126: prm right steps toward the outcome (NT): T2 011->010.
+    if (rd_t2 !== 16'h0105) begin
       local_fails++;
       $display(
         "[FAIL] uaon_dec_restore_tst: T2=0x%04h exp=0109",
@@ -6424,7 +6451,9 @@ module tb;
       = 16'h0000;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][192]
       = 16'h0000;
-    // T0 at bank=1 row=192: FAST_INIT 2b00 (CTR[1]=0).
+    // T0 at bank=1 row=192: seeded 2b00 (CTR[1]=0). It relied on the
+    // reset value until T0 reset to 2b10 (TD#103, BP-126).
+    u_dut.u_tage_bim.u_ram_s0.mem[1][192] = 2'b00;
     // T1 CTR[2]=1, T0 CTR[1]=0 -> pred_diff=1.
     // Table 7 row 4 applies (pred_diff=1, using_prm=1,
     // mispredict=1): DEC prm USE. EPC updated to lcl_epoch.
@@ -6664,7 +6693,9 @@ module tb;
       = 16'h0000;
     u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][320]
       = 16'h0000;
-    // T0 at bank=1 row=320: FAST_INIT 2b00 (CTR[1]=0).
+    // T0 at bank=1 row=320: seeded 2b00 (CTR[1]=0). It relied on the
+    // reset value until T0 reset to 2b10 (TD#103, BP-126).
+    u_dut.u_tage_bim.u_ram_s0.mem[1][320] = 2'b00;
     // T1 CTR[2]=1, T0 CTR[1]=0 -> pred_diff=1.
     // Table 7 row 4 applies.
 
@@ -7050,6 +7081,477 @@ module tb;
     else
       $display("[FAIL] arb_upd_only_tst: %0d failures",
         local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // TD#37 (BP-126): grant stability through the tage_cntrl pipeline.
+  // trx_type is the combinational arbiter grant (arb_grant_upd), not
+  // the registered arb_trx_r. The rule: each stage acts on the
+  // transaction type granted when that transaction entered the
+  // pipeline. This monitor runs through the whole of tb_tage and
+  // compares every stage with the grant it recorded at entry (an
+  // earlier cycle, the arbiter's state, not tage_cntrl's):
+  //   u0  a table write strobe fires only in an update-granted cycle
+  //   p1  pred_val_p1 is the p0 valid of a prediction-granted cycle,
+  //       zero after an update-granted one
+  //   p2  pred_val_p2 / tage_pred_rdy_p2 is that p1 valid, one later
+  //   u1  tage_upd_rdy_u1 is the u0 valid of an update-granted cycle
+  // A type that changed mid-pipeline would fail p1, p2 or u1.
+  // ----------------------------------------------------------------
+  logic                      ts_gp_q, ts_gu_q;      // grants, c-1
+  logic [NUM_PRED_SLOTS-1:0] ts_pv_q, ts_uv_q;      // valids, c-1
+  logic [NUM_PRED_SLOTS-1:0] ts_p1_q;               // p1 valid, c-1
+  logic                      ts_q_ok;               // c-1 recorded
+  int                        ts_bad, ts_n_pred, ts_n_upd, ts_n_wr;
+  int                        ts_n_pu, ts_n_up;      // grant changes
+
+  function automatic logic ts_any_wr();
+    logic w;
+    w = 1'b0;
+    for (int t = 0; t < TAGE_NUM_TABLES; t++)
+      w = w | (|u_dut.u_tage_cntrl.t_prm_ctr_wr_u0[t])
+            | (|u_dut.u_tage_cntrl.t_alt_ctr_wr_u0[t])
+            | (|u_dut.u_tage_cntrl.t_use_wr_u0[t])
+            | (|u_dut.u_tage_cntrl.t_epc_wr_u0[t])
+            | (|u_dut.u_tage_cntrl.t_alc_wr_u0[t]);
+    return w;
+  endfunction
+
+  task automatic ts_fail(input string nm);
+    ts_bad++;
+    if (ts_bad <= 8) $display("[FAIL] trx_stab: %s at cycle %0d", nm,
+                              cycle_cnt);
+  endtask
+
+  /* verilator lint_off BLKSEQ */
+  always @(posedge clk) begin : ts_mon
+    logic gp, gu, wr;
+    if (!rstn) begin
+      ts_q_ok = 1'b0;
+    end else begin
+      gp = u_dut.arb_grant_pred;
+      gu = u_dut.arb_grant_upd;
+      wr = ts_any_wr();
+      if (gp && gu) ts_fail("both grants in one cycle");
+      if (wr && !gu) ts_fail("u0 write strobe without an update grant");
+      if (wr) ts_n_wr++;
+      if (ts_q_ok) begin
+        if (u_dut.u_tage_cntrl.pred_val_p1 !==
+            (ts_gp_q ? ts_pv_q : '0))
+          ts_fail("p1 valid is not the type granted at entry");
+        if (u_dut.u_tage_cntrl.pred_val_p2 !== ts_p1_q)
+          ts_fail("p2 valid does not follow p1");
+        if (tage_upd_rdy_u1 !== (ts_gu_q ? ts_uv_q : '0))
+          ts_fail("u1 ready is not the type granted at entry");
+        if (ts_gp_q && gu) ts_n_pu++;
+        if (ts_gu_q && gp) ts_n_up++;
+      end
+      if (gp) ts_n_pred++;
+      if (gu) ts_n_upd++;
+      ts_gp_q = gp;
+      ts_gu_q = gu;
+      ts_pv_q = u_dut.u_tage_cntrl.tage_pred_val_p0;
+      ts_uv_q = u_dut.u_tage_cntrl.tage_upd_val_u0;
+      ts_p1_q = u_dut.u_tage_cntrl.pred_val_p1;
+      ts_q_ok = 1'b1;
+    end
+  end
+  /* verilator lint_on BLKSEQ */
+
+  // Directed stimulus for the monitor: a prediction and an update in
+  // the same cycle, then in consecutive cycles both ways, then a run
+  // that alternates. T0-only updates (prm_comp 0) to rows away from
+  // the prediction rows; each update's T0 write is read back.
+  task automatic ts_upd(input logic [10:0] idx);
+    tage_upd_inp_t   u;
+    tage_pred_meta_t m;
+    m                    = '0;
+    m.tage_prm_idx       = idx;
+    m.tage_prm_comp      = 3'd0;
+    m.tage_prm_ctr       = 3'b010;
+    m.tage_prm_tkn       = 1'b0;
+    m.tage_using_primary = 1'b1;
+    u                    = '0;
+    u.tage_pred_meta     = m;
+    u.resolved_taken     = 1'b1;
+    u.cond_mispredict    = 1'b1;
+    stg_upd_inp0 = u;
+    stg_upd_val0 = 1'b1;
+  endtask
+
+  task automatic ts_pred(input logic [VA_WIDTH-1:0] pc,
+                         input logic [5:0] bid);
+    tage_pred_inp_t i;
+    i           = '0;
+    i.pc        = pc;
+    i.branch_id = bid;
+    stg_pred_inp0 = i;
+    stg_pred_val0 = 1'b1;
+  endtask
+
+  task automatic ts_clk();
+    @(posedge clk);
+    #1;
+  endtask
+
+  task automatic ts_idle();
+    stg_pred_val0 = 1'b0;
+    stg_upd_val0  = 1'b0;
+    stg_pred_inp0 = '0;
+    stg_upd_inp0  = '0;
+  endtask
+
+  task automatic trx_stab_tst(int verbose);
+    int local_fails;
+    int bad0, pu0, up0, np0, nu0;
+    local_fails = 0;
+    bad0 = ts_bad; pu0 = ts_n_pu; up0 = ts_n_up;
+    np0  = ts_n_pred; nu0 = ts_n_upd;
+    // T0 rows written by the updates start at 2'b10 (seeded).
+    for (int k = 0; k < 6; k++)
+      u_dut.u_tage_bim.u_ram_s0.mem[0][700 + k] = 2'b10;
+    // Stimulus changes #1 after an edge, so the staging flops sample
+    // it at the next edge without a race against this process.
+    ts_clk();
+    // 1. Same cycle.
+    ts_pred(VA_WIDTH'('h2000), 6'h10); ts_upd(11'd700);
+    ts_clk(); ts_idle();
+    repeat (4) ts_clk();
+    // 2. Update then prediction.
+    ts_upd(11'd701); ts_clk();
+    ts_idle(); ts_pred(VA_WIDTH'('h2040), 6'h11); ts_clk();
+    ts_idle(); repeat (4) ts_clk();
+    // 3. Prediction then update.
+    ts_pred(VA_WIDTH'('h2080), 6'h12); ts_clk();
+    ts_idle(); ts_upd(11'd702); ts_clk();
+    ts_idle(); repeat (4) ts_clk();
+    // 4. Alternating, then both in one cycle followed by a prediction,
+    //    then drain.
+    ts_pred(VA_WIDTH'('h20C0), 6'h13); ts_clk();
+    ts_idle(); ts_upd(11'd703); ts_clk();
+    ts_idle(); ts_pred(VA_WIDTH'('h2100), 6'h14); ts_clk();
+    ts_idle(); ts_upd(11'd704); ts_clk();
+    ts_pred(VA_WIDTH'('h2140), 6'h15); ts_upd(11'd705); ts_clk();
+    ts_idle(); ts_pred(VA_WIDTH'('h2180), 6'h16); ts_clk();
+    ts_idle(); repeat (6) ts_clk();
+    // Every update applied: INC 10 -> 11 (resolved taken).
+    for (int k = 0; k < 6; k++)
+      if (u_dut.u_tage_bim.u_ram_s0.mem[0][700 + k] !== 2'b11) begin
+        local_fails++;
+        $display("[FAIL] trx_stab_tst: T0 row %0d = %02b exp 11",
+                 700 + k, u_dut.u_tage_bim.u_ram_s0.mem[0][700 + k]);
+      end
+    if (ts_bad != bad0) local_fails++;
+    if ((ts_n_pu == pu0) || (ts_n_up == up0)) begin
+      local_fails++;
+      $display("[FAIL] trx_stab_tst: grant change not exercised");
+    end
+    if (verbose != 0)
+      $display("[INFO] trx_stab_tst: pred %0d upd %0d pu %0d up %0d",
+               ts_n_pred - np0, ts_n_upd - nu0, ts_n_pu - pu0,
+               ts_n_up - up0);
+    if (local_fails == 0)
+      $display("[PASS] trx_stab_tst: 0 failures");
+    else
+      $display("[FAIL] trx_stab_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // ctr_dir_tst (BP-126): a tagged CTR steps toward the RESOLVED
+  // direction (tage_table_entry_formats.md, CTR field usage; direction
+  // is CTR[2], tage_cntrl_decisions.md CTR Encoding), for an entry
+  // predicting not-taken as for one predicting taken. Before BP-126
+  // tage_cntrl stepped by correctness (INC correct, DEC wrong), so a
+  // not-taken entry moved away from a not-taken outcome: 011 -> 100 on
+  // a correct prediction. Update-only cases on slot 0; each preloads
+  // its entries (VALID=1, tag/USE/EPC 0) and reads the CTR back.
+  // ----------------------------------------------------------------
+  function automatic logic [2:0] cd_ctr(input int t, input int row);
+    logic [15:0] v;
+    case (t)
+      1: v = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row];
+      2: v = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row];
+      default: v = '0;
+    endcase
+    return v[3:1];
+  endfunction
+
+  task automatic cd_case(input string nm,
+                         input int prm_t, input logic [2:0] prm_c,
+                         input int alt_t, input logic [2:0] alt_c,
+                         input logic using_prm, input logic res,
+                         input int row, input int chk_t,
+                         input logic [2:0] exp, inout int fails);
+    tage_pred_meta_t m;
+    tage_upd_inp_t   u;
+    if (prm_t == 1) u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row]
+                      = {12'h000, prm_c, 1'b1};
+    if (alt_t == 2) u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row]
+                      = {12'h000, alt_c, 1'b1};
+    m                    = '0;
+    m.tage_prm_idx       = 11'(row);
+    m.tage_alt_idx       = 11'(row);
+    m.tage_prm_comp      = 3'(prm_t);
+    m.tage_alt_comp      = 3'(alt_t);
+    m.tage_prm_ctr       = prm_c;
+    m.tage_alt_ctr       = alt_c;
+    m.tage_prm_tkn       = prm_c[2];
+    m.tage_alt_tkn       = alt_c[2];
+    m.tage_using_primary = using_prm;
+    u                    = '0;
+    u.tage_pred_meta     = m;
+    u.resolved_taken     = res;
+    u.cond_mispredict    = ((using_prm ? prm_c[2] : alt_c[2]) != res);
+    ts_clk();
+    stg_upd_inp0 = u;
+    stg_upd_val0 = 1'b1;
+    ts_clk();
+    stg_upd_val0 = 1'b0;
+    stg_upd_inp0 = '0;
+    repeat (3) ts_clk();
+    if (cd_ctr(chk_t, row) !== exp) begin
+      fails++;
+      $display("[FAIL] ctr_dir_tst: %s ctr=%03b exp=%03b", nm,
+               cd_ctr(chk_t, row), exp);
+    end
+  endtask
+
+  task automatic ctr_dir_tst(int verbose);
+    int local_fails;
+    local_fails = 0;
+    // Provider = primary T1, alt T0.
+    cd_case("prm NT correct 011->010", 1, 3'b011, 0, 3'b000, 1'b1, 1'b0,
+            110, 1, 3'b010, local_fails);
+    cd_case("prm NT wrong   011->100", 1, 3'b011, 0, 3'b000, 1'b1, 1'b1,
+            111, 1, 3'b100, local_fails);
+    cd_case("prm NT correct 000 sat ", 1, 3'b000, 0, 3'b000, 1'b1, 1'b0,
+            112, 1, 3'b000, local_fails);
+    cd_case("prm T correct  100->101", 1, 3'b100, 0, 3'b000, 1'b1, 1'b1,
+            113, 1, 3'b101, local_fails);
+    cd_case("prm T wrong    100->011", 1, 3'b100, 0, 3'b000, 1'b1, 1'b0,
+            114, 1, 3'b011, local_fails);
+    // Provider = alternate T2 (primary T1 not used).
+    cd_case("alt NT correct 010->001", 1, 3'b010, 2, 3'b010, 1'b0, 1'b0,
+            115, 2, 3'b001, local_fails);
+    cd_case("alt NT wrong   010->011", 1, 3'b010, 2, 3'b010, 1'b0, 1'b1,
+            116, 2, 3'b011, local_fails);
+    // Provider = alt T2 (taken), primary T1 not-taken and right, so
+    // pred_diff: the primary is strengthened toward the outcome.
+    cd_case("prm NT right under alt 001->000", 1, 3'b001, 2, 3'b100,
+            1'b0, 1'b0, 117, 1, 3'b000, local_fails);
+    // Provider = primary T1 (taken, right), alt T2 not-taken: the alt
+    // only steps when it is right; here the provider's step.
+    cd_case("alt NT right under prm 010->001", 1, 3'b100, 2, 3'b010,
+            1'b1, 1'b0, 118, 2, 3'b001, local_fails);
+    // Provider = primary T1 (not-taken, wrong), alt T2 taken and right:
+    // the alt steps toward the taken outcome, 100 -> 101.
+    cd_case("alt T right under prm 100->101", 1, 3'b011, 2, 3'b100,
+            1'b1, 1'b1, 119, 2, 3'b101, local_fails);
+    if (local_fails == 0)
+      $display("[PASS] ctr_dir_tst: 0 failures");
+    else
+      $display("[FAIL] ctr_dir_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ----------------------------------------------------------------
+  // cov_gap_tst (BP-126, TD#100): the RTL lines cov_tage reported
+  // uncovered that are reachable. Coverage counts a line only when
+  // every point on it is hit in EVERY tage_table instance, so each
+  // path is driven in every table that missed it:
+  //   A. slot 1 allocation into T1-T4 (tage_table slot 1 alloc
+  //      address, data and byte-enable arms)
+  //   B. slot 0 allocation into T4
+  //   C. slot 1 primary CTR, USE and EPC write in T1-T4
+  //   D. slot 0 primary CTR write in T3
+  //   F. slot 0 primary CTR, USE and EPC write in T4
+  //   G. slot 1 alternate-provider CTR write in T1-T3
+  //   E. the aging interval counting down to zero (tage_cntrl)
+  // Update-only cases; each preloads what it reads and checks the
+  // written entry {TAG, EPC, USE, CTR, VAL} against the rule.
+  // ----------------------------------------------------------------
+  function automatic logic [15:0] cg_rd(input int t, input int s,
+                                        input int row);
+    logic [15:0] v;
+    v = '0;
+    case ({t[2:0], s[0]})
+      4'b001_0: v = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row];
+      4'b001_1: v = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][row];
+      4'b010_0: v = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row];
+      4'b010_1: v = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][row];
+      4'b011_0: v = u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][row];
+      4'b011_1: v = u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[0][row];
+      4'b100_0: v = u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][row];
+      4'b100_1: v = u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[0][row];
+      default:  v = '0;
+    endcase
+    return v;
+  endfunction
+
+  task automatic cg_wr(input int t, input int s, input int row,
+                       input logic [15:0] v);
+    case ({t[2:0], s[0]})
+      4'b001_0: u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row] = v;
+      4'b001_1: u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][row] = v;
+      4'b010_0: u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row] = v;
+      4'b010_1: u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][row] = v;
+      4'b011_0: u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][row] = v;
+      4'b011_1: u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[0][row] = v;
+      4'b100_0: u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][row] = v;
+      4'b100_1: u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[0][row] = v;
+      default: ;
+    endcase
+  endtask
+
+  // One update on slot s.
+  task automatic cg_upd(input int s, input tage_pred_meta_t m,
+                        input logic res, input logic misp);
+    tage_upd_inp_t u;
+    u                 = '0;
+    u.tage_pred_meta  = m;
+    u.resolved_taken  = res;
+    u.cond_mispredict = misp;
+    ts_clk();
+    if (s == 0) begin stg_upd_inp0 = u; stg_upd_val0 = 1'b1; end
+    else        begin stg_upd_inp1 = u; stg_upd_val1 = 1'b1; end
+    ts_clk();
+    stg_upd_val0 = 1'b0; stg_upd_inp0 = '0;
+    stg_upd_val1 = 1'b0; stg_upd_inp1 = '0;
+    repeat (3) ts_clk();
+  endtask
+
+  task automatic cg_chk(input string nm, input logic [15:0] got,
+                        input logic [15:0] exp, inout int fails);
+    if (got !== exp) begin
+      fails++;
+      $display("[FAIL] cov_gap_tst: %s = 0x%04h exp 0x%04h", nm, got, exp);
+    end
+  endtask
+
+  task automatic cov_gap_tst(int verbose);
+    int              local_fails;
+    tage_pred_meta_t m;
+    logic [1:0]      ep_save0, ep_save1;
+    local_fails = 0;
+    ep_save0 = u_dut.u_tage_cntrl.lcl_epoch[0];
+    ep_save1 = u_dut.u_tage_cntrl.lcl_epoch[1];
+    // Distinct epochs so the EPC written is attributable to the slot.
+    u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b01;
+    u_dut.u_tage_cntrl.lcl_epoch[1] = 2'b10;
+    // A, B. Allocation: mispredict, primary T0 (< TAGE_MAX_TBL),
+    // alc_comp = k. Entry {alc_tag, lcl_epoch, USE 00, CTR 100, 1}
+    // (tage_cntrl_decisions.md: allocated entries init to 100).
+    for (int k = 1; k <= 4; k++) begin
+      for (int sl = 0; sl < 2; sl++) begin
+        if ((sl == 0) && (k != 4)) continue;
+        cg_wr(k, sl, 300 + k, 16'h0000);
+        m              = '0;
+        m.tage_prm_idx = 11'd1800;           // T0 row, away from 300s
+        m.tage_alc_comp = 3'(k);
+        m.tage_alc_idx = 11'(300 + k);
+        m.tage_alc_tag = 8'(8'hA0 + k);
+        m.tage_using_primary = 1'b1;         // ADR-001: T0 provides
+        cg_upd(sl, m, 1'b1, 1'b1);
+        cg_chk($sformatf("A/B alloc T%0d slot %0d", k, sl),
+               cg_rd(k, sl, 300 + k),
+               {8'(8'hA0 + k), (sl == 0) ? 2'b01 : 2'b10, 2'b00,
+                3'b100, 1'b1}, local_fails);
+      end
+    end
+    // C. Slot 1 primary provides (alt T0), taken and right, pred_diff:
+    // CTR 100 -> 101, USE 01 -> 10, EPC = lcl_epoch[1].
+    for (int k = 1; k <= 4; k++) begin
+      cg_wr(k, 1, 320 + k, {8'h33, 2'b00, 2'b01, 3'b100, 1'b1});
+      m                    = '0;
+      m.tage_prm_idx       = 11'(320 + k);
+      m.tage_prm_comp      = 3'(k);
+      m.tage_prm_ctr       = 3'b100;
+      m.tage_prm_tkn       = 1'b1;
+      m.tage_alt_tkn       = 1'b0;
+      m.tage_prm_useful    = 2'b01;
+      m.tage_using_primary = 1'b1;
+      cg_upd(1, m, 1'b1, 1'b0);
+      cg_chk($sformatf("C prm CTR/USE/EPC T%0d slot 1", k),
+             cg_rd(k, 1, 320 + k),
+             {8'h33, 2'b10, 2'b10, 3'b101, 1'b1}, local_fails);
+    end
+    // F. Slot 0 primary T4, the C case: CTR 100 -> 101, USE 01 -> 10,
+    // EPC = lcl_epoch[0].
+    cg_wr(4, 0, 324, {8'h33, 2'b00, 2'b01, 3'b100, 1'b1});
+    m                    = '0;
+    m.tage_prm_idx       = 11'd324;
+    m.tage_prm_comp      = 3'd4;
+    m.tage_prm_ctr       = 3'b100;
+    m.tage_prm_tkn       = 1'b1;
+    m.tage_alt_tkn       = 1'b0;
+    m.tage_prm_useful    = 2'b01;
+    m.tage_using_primary = 1'b1;
+    cg_upd(0, m, 1'b1, 1'b0);
+    cg_chk("F prm CTR/USE/EPC T4 slot 0", cg_rd(4, 0, 324),
+           {8'h33, 2'b01, 2'b10, 3'b101, 1'b1}, local_fails);
+    // G. Slot 1 alternate provides, Tk under primary T(k+1), taken and
+    // right, no pred_diff: alt CTR 100 -> 101. T4 is never the
+    // alternate (the alternate is a shorter history than the primary).
+    for (int k = 1; k <= 3; k++) begin
+      cg_wr(k, 1, 340 + k, {8'h55, 2'b00, 2'b00, 3'b100, 1'b1});
+      m                    = '0;
+      m.tage_prm_idx       = 11'd1900;
+      m.tage_alt_idx       = 11'(340 + k);
+      m.tage_prm_comp      = 3'(k + 1);
+      m.tage_alt_comp      = 3'(k);
+      m.tage_prm_ctr       = 3'b100;
+      m.tage_alt_ctr       = 3'b100;
+      m.tage_prm_tkn       = 1'b1;
+      m.tage_alt_tkn       = 1'b1;
+      m.tage_using_primary = 1'b0;
+      cg_upd(1, m, 1'b1, 1'b0);
+      cg_chk($sformatf("G alt CTR T%0d slot 1", k), cg_rd(k, 1, 340 + k),
+             {8'h55, 2'b00, 2'b00, 3'b101, 1'b1}, local_fails);
+    end
+    // D. Slot 0 primary T3, not-taken and right, no pred_diff: CTR
+    // 011 -> 010 (toward the outcome), USE and EPC untouched.
+    cg_wr(3, 0, 330, {8'h44, 2'b00, 2'b00, 3'b011, 1'b1});
+    m                    = '0;
+    m.tage_prm_idx       = 11'd330;
+    m.tage_prm_comp      = 3'd3;
+    m.tage_prm_ctr       = 3'b011;
+    m.tage_using_primary = 1'b1;
+    cg_upd(0, m, 1'b0, 1'b0);
+    cg_chk("D prm CTR T3 slot 0", cg_rd(3, 0, 330),
+           {8'h44, 2'b00, 2'b00, 3'b010, 1'b1}, local_fails);
+    // E. Aging interval 2: each slot-0 prediction counts it down; the
+    // one that finds it at zero advances the epoch and reloads it
+    // (tage_cntrl aging_ff; coverage plan CE-09).
+    u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b00;
+    u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'd2;
+    tage_aging_interval = 32'd2;
+    tage_enable_aging   = 1'b1;
+    for (int n = 1; n <= 3; n++) begin
+      ts_pred(VA_WIDTH'('h3400 + 4 * n), 6'(n)); ts_clk();
+      ts_idle(); repeat (4) ts_clk();
+      if (u_dut.u_tage_cntrl.lcl_aging_interval[0] !==
+          ((n == 3) ? 32'd2 : 32'(2 - n))) begin
+        local_fails++;
+        $display("[FAIL] cov_gap_tst: E interval after %0d = %0d", n,
+                 u_dut.u_tage_cntrl.lcl_aging_interval[0]);
+      end
+      if (u_dut.u_tage_cntrl.lcl_epoch[0] !== ((n == 3) ? 2'b01 : 2'b00))
+      begin
+        local_fails++;
+        $display("[FAIL] cov_gap_tst: E epoch after %0d = %0d", n,
+                 u_dut.u_tage_cntrl.lcl_epoch[0]);
+      end
+    end
+    tage_enable_aging   = 1'b0;
+    tage_aging_interval = 32'd0;
+    u_dut.u_tage_cntrl.lcl_epoch[0] = ep_save0;
+    u_dut.u_tage_cntrl.lcl_epoch[1] = ep_save1;
+    if (local_fails == 0)
+      $display("[PASS] cov_gap_tst: 0 failures");
+    else
+      $display("[FAIL] cov_gap_tst: %0d failures", local_fails);
     total_fails += local_fails;
   endtask
 
@@ -7684,6 +8186,12 @@ module tb;
       arb_pred_credits_reset_tst(verbose);
     if (_arb_starve_tst != 0)
       arb_starve_tst(verbose);
+    if (_trx_stab_tst != 0)
+      trx_stab_tst(verbose);
+    if (_ctr_dir_tst != 0)
+      ctr_dir_tst(verbose);
+    if (_cov_gap_tst != 0)
+      cov_gap_tst(verbose);
 
     // BP-026 coverage gap tests (TC-55 through TC-60).
     if (_slot1_t1_write_tst != 0)
@@ -7816,6 +8324,12 @@ module tb;
     // v5.048 reports as exit 0, so a red run of this suite came back
     // GREEN to make. $fatal(1) is the only accepted failure exit
     // (same finding as BP-086 in tb_ubtb).
+    // TD#37 monitor over the whole run (BP-126).
+    $display("[INFO] trx_stab monitor: %0d pred grants, %0d upd grants,",
+             ts_n_pred, ts_n_upd);
+    $display("[INFO] trx_stab monitor: %0d write cycles, %0d violations",
+             ts_n_wr, ts_bad);
+    if (ts_bad != 0) total_fails += ts_bad;
     if (total_fails == 0) begin
       $display("[PASS] BP-061: all tests passed");
       $finish(0);
@@ -7830,8 +8344,8 @@ module tb;
   // TC-55  slot1_t1_write_tst: CU-11 slot 1 T1 tagged write.
   // norm_we_s1 must assert in the T1 instance for slot 1 update.
   // Pre-load T1 s1 mem[0][80]=0x0007 (CTR=011 prm_tkn=0 VAL=1).
-  // Update: prm_comp=1 prm_idx=80 resolved=0 correct -> INC CTR.
-  // Expect CTR 011->100 -> 0x0009.
+  // Update: prm_comp=1 prm_idx=80 resolved=0 correct.
+  // Expect CTR 011->010 -> 0x0005 (BP-126: toward the outcome).
   // ----------------------------------------------------------------
   task automatic slot1_t1_write_tst(int verbose);
     int              local_fails;
@@ -7893,7 +8407,8 @@ module tb;
       $display(
         "[FAIL] slot1_t1_write_tst: norm_we_s1=0 exp=1");
     end
-    if (rd_s1 !== 16'h0009) begin
+    // BP-126: CTR steps toward the outcome (NT): 011->010.
+    if (rd_s1 !== 16'h0005) begin
       local_fails++;
       $display(
         "[FAIL] slot1_t1_write_tst: s1[0][80]=0x%04h exp=0009",
@@ -7912,8 +8427,8 @@ module tb;
   // TC-56  slot1_t2_write_tst: CU-11 slot 1 T2 tagged write.
   // norm_we_s1 must assert in the T2 instance for slot 1 update.
   // Pre-load T2 s1 mem[0][90]=0x0007 (CTR=011 prm_tkn=0 VAL=1).
-  // Update: prm_comp=2 prm_idx=90 resolved=0 correct -> INC CTR.
-  // Expect CTR 011->100 -> 0x0009.
+  // Update: prm_comp=2 prm_idx=90 resolved=0 correct.
+  // Expect CTR 011->010 -> 0x0005 (BP-126: toward the outcome).
   // ----------------------------------------------------------------
   task automatic slot1_t2_write_tst(int verbose);
     int              local_fails;
@@ -7972,7 +8487,8 @@ module tb;
       $display(
         "[FAIL] slot1_t2_write_tst: norm_we_s1=0 exp=1");
     end
-    if (rd_s1 !== 16'h0009) begin
+    // BP-126: CTR steps toward the outcome (NT): 011->010.
+    if (rd_s1 !== 16'h0005) begin
       local_fails++;
       $display(
         "[FAIL] slot1_t2_write_tst: s1[0][90]=0x%04h exp=0009",
@@ -8198,8 +8714,8 @@ module tb;
   // With pred_diff=0 (prm_tkn==alt_tkn) no USE side-effect.
   // Pre-load T2 s0 mem[0][95]=0x0007 (CTR=011 VAL=1 TAG=00).
   // Update: alt_comp=2 alt_idx=95 using_primary=0 resolved=0.
-  // alt_crt=(0==0)=1 -> INC alt CTR 011->100.
-  // Expect T2 s0 mem[0][95]=0x0009.
+  // Provider alt, resolved NT: alt CTR 011->010 (BP-126: toward the outcome).
+  // Expect T2 s0 mem[0][95]=0x0005.
   // ----------------------------------------------------------------
   task automatic alt_ctr_s0_write_tst(int verbose);
     int              local_fails;
@@ -8247,7 +8763,8 @@ module tb;
         "[INFO] alt_ctr_s0_write_tst: T2 s0[0][95]=0x%04h",
         rd_t2);
 
-    if (rd_t2 !== 16'h0009) begin
+    // BP-126: alt CTR steps toward the outcome (NT): 011->010.
+    if (rd_t2 !== 16'h0005) begin
       local_fails++;
       $display(
         "[FAIL] alt_ctr_s0_write_tst: T2[0][95]=0x%04h exp=0009",
@@ -8730,13 +9247,17 @@ module tb;
         meta.tage_prm_ctr);
     end
 
-    // Update: resolved_taken=1 (wrong, prm_tkn=0),
-    // cond_mispredict=1. CTR DEC at min: (000==000)?000:000-1
-    // = 000 (sat).
+    // Update: resolved_taken=0 (correct, prm_tkn=0),
+    // cond_mispredict=0. CTR steps toward not-taken at min:
+    // 000 -> 000 (sat). BP-126: this case drove a WRONG taken
+    // outcome, which reached 000 - 1 only because the CTR stepped by
+    // correctness; it steps toward the outcome
+    // (tage_table_entry_formats.md), so the not-taken outcome is the
+    // one that tests the minimum.
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
-    upd_inp.resolved_taken  = 1'b1;
-    upd_inp.cond_mispredict = 1'b1;
+    upd_inp.resolved_taken  = 1'b0;
+    upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
     @(posedge clk);
@@ -8790,6 +9311,9 @@ module tb;
     // TAG=0x01 EPC=00 USE=11 CTR=111 VAL=1 -> 0x013F.
     u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][896]
       = 16'h013F;
+    // T0 bank=0 row=896: seeded 2b00 so alt_tkn=0 (pred_diff=1). It
+    // relied on the reset value until T0 reset to 2b10 (TD#103).
+    u_dut.u_tage_bim.u_ram_s0.mem[0][896] = 2'b00;
     if (verbose != 0)
       $display(
         "[INFO] use_t1_max_sat_tst: T1 s0 mem[0][896]=013F");
@@ -9288,7 +9812,7 @@ module tb;
   // Note: ctr_upd_comb INCs alt CTR when pred_diff=1 and
   // alt_crt=1 (alt_tkn=0==resolved=0), even when using_prm=1.
   // Expected T2: 0x0789 EPC=10 USE=00 CTR=100 VAL=1.
-  // Expected T1: 0x0719 alt INC CTR(011->100) EPC=00 USE=01.
+  // Expected T1: 0x0715 alt right CTR(011->010) EPC=00 USE=01 (BP-126).
   // Expected T3: 0x07D8 unchanged.
   // ---------------------------------------------------------------
   task automatic epc_prm_misp_tst(int verbose);
@@ -9352,7 +9876,8 @@ module tb;
       local_fails++;
       $display("[FAIL] epc_prm_misp_tst:  T2=0x%04h exp=0x0789", rd_t2);
     end
-    if (rd_t1 !== 16'h0719) begin
+    // BP-126: alt right steps toward the outcome (NT): T1 011->010.
+    if (rd_t1 !== 16'h0715) begin
       local_fails++;
       $display("[FAIL] epc_prm_misp_tst:  T1=0x%04h exp=0x0719", rd_t1);
     end
@@ -9374,7 +9899,7 @@ module tb;
   // Proves: alt_match arm of epc_we_s0 (HAND-FIX-001 path) writes
   // EPC to lcl_epoch. using_primary forced 0 after capture.
   // Same seeds as TC-69. resolved=0 -> alt correct (alt_tkn=0).
-  // Expected T1: 0x0799 EPC=10 USE=01 CTR=100 VAL=1.
+  // Expected T1: 0x0795 EPC=10 USE=01 CTR=010 VAL=1 (BP-126).
   // Expected T2: 0x071B unchanged (prm_crt=0 blocks prm CTR write).
   // Expected T3: 0x07D8 unchanged.
   // ---------------------------------------------------------------
@@ -9437,7 +9962,8 @@ module tb;
     if (verbose != 0)
       $display("[INFO] epc_alt_match_tst:  T1=0x%04h T2=0x%04h T3=0x%04h",
         rd_t1, rd_t2, rd_t3);
-    if (rd_t1 !== 16'h0799) begin
+    // BP-126: alt CTR steps toward the outcome (NT): T1 011->010.
+    if (rd_t1 !== 16'h0795) begin
       local_fails++;
       $display("[FAIL] epc_alt_match_tst:  T1=0x%04h exp=0x0799", rd_t1);
     end
@@ -9462,7 +9988,7 @@ module tb;
   // Table 7 row 6: DIFF=1 TTM=0 UP=0 MISP=1 -> uWR=1 DEC ALT.
   // alt_match path, alt wrong. resolved=1 (alt_tkn=0 -> wrong).
   // ctr_upd_comb DECs alt CTR when !using_prm (both INC and DEC).
-  // Expected T1: 0x0785 EPC=10 USE=00 CTR=010 VAL=1.
+  // Expected T1: 0x0789 EPC=10 USE=00 CTR=100 VAL=1 (BP-126).
   // Expected T2: 0x071D prm correct INC CTR(101->110) EPC=00.
   // Expected T3: 0x07D8 unchanged.
   // ---------------------------------------------------------------
@@ -9525,7 +10051,8 @@ module tb;
     if (verbose != 0)
       $display("[INFO] epc_alt_misp_tst:  T1=0x%04h T2=0x%04h T3=0x%04h",
         rd_t1, rd_t2, rd_t3);
-    if (rd_t1 !== 16'h0785) begin
+    // BP-126: alt CTR steps toward the outcome (T): T1 011->100.
+    if (rd_t1 !== 16'h0789) begin
       local_fails++;
       $display("[FAIL] epc_alt_misp_tst:  T1=0x%04h exp=0x0785", rd_t1);
     end
@@ -12198,20 +12725,21 @@ module tb;
   //
   // Step 1: seed + predict. Verify T2=prm T1=alt T3=alc_cand.
   // Step 2: CTR+EPC+USE update (rule 2.1 CTR, Table7 row3 USE).
-  //   resolved=0 correct -> T2 CTR 010->011, USE 01->10.
-  //   EPC written as lcl_epoch=0 (unchanged). T2=0x4527.
+  //   resolved=0 correct -> T2 CTR 010->001, USE 01->10.
+  //   EPC written as lcl_epoch=0 (unchanged). T2=0x4523.
+  //   BP-126: the CTR steps toward the outcome, so T2 is no longer
+  //   weak after step 2 and steps 3 to 5 below read as follows.
   // Step 3: USE update via UAON (Table7 row5, CTR row8.2).
-  //   uaon[0]=0xF, T2 CTR=011 boundary -> UAON fires using_prm=0.
-  //   resolved=1 misp=0: T1 USE 10->11, T1 CTR 101->110.
-  //   T2 CTR/EPC intact (prm_crt=0 blocks prm CTR; USE->T1 only).
-  //   T1=0x453D. T2=0x4527 (unchanged).
+  //   uaon[0]=0xF, but T2 CTR=001 is not weak: using_prm=1.
+  //   resolved=1 misp=0: T2 CTR 001->010 USE 10->11; T1 alt right
+  //   with pred_diff, CTR 101->110. T1=0x452D. T2=0x4535.
   // Step 4: alloc mispredict. prm_comp(T2)<T4 -> alloc T3.
   //   uaon[0]=0: UAON suppressed, using_prm=1. resolved=1 misp=1.
   //   T3 alloc CTR=100 USE=00 EPC=00 TAG=0x45 v=1 -> 0x4509.
-  //   T2 CTR DEC 011->010, USE DEC 10->01 (rule4 pACT=DEC).
-  //   T1 CTR INC 110->111 (rule4 aACT=INC).
+  //   T2 CTR 010->011 (toward taken), USE DEC 11->10.
+  //   T1 CTR 110->111 (alt right, toward taken).
   //   T4 interference ref unchanged -> 0x127B.
-  // Step 5: final readback: T1=0x453F T2=0x4515 T3=0x4509
+  // Step 5: final readback: T1=0x452F T2=0x4527 T3=0x4509
   //         T4=0x127B. No cross-path corruption.
   // ----------------------------------------------------------------
   task automatic capstone_rt_tst(int verbose);
@@ -12293,12 +12821,14 @@ module tb;
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
     if (verbose != 0)
-      $display("[INFO] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4527"
+      $display("[INFO] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4523"
         , rd_t2);
     // T2: CTR=011 USE=10 EPC=00 TAG=0x45 v=1 -> 0x4527
-    if (rd_t2 !== 16'h4527) begin
+    // BP-126: T2 provider NT, correct: CTR steps toward the outcome,
+    // 010 -> 001 (strengthened, not to the 011 boundary), USE 01->10.
+    if (rd_t2 !== 16'h4523) begin
       local_fails++;
-      $display("[FAIL] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4527"
+      $display("[FAIL] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4523"
         , rd_t2);
     end
     @(posedge clk);
@@ -12325,9 +12855,12 @@ module tb;
         "[INFO] capstone_rt_tst step3 pred: up=%0b prm_tkn=%0b alt_tkn=%0b",
         meta.tage_using_primary,
         meta.tage_prm_tkn, meta.tage_alt_tkn);
-    if (meta.tage_using_primary !== 1'b0) begin
+    // BP-126: T2 is at 001 after step 2, not weak, so use_alt_on_na
+    // cannot fire and the primary provides. It reached 011 only when
+    // a correct not-taken update incremented it.
+    if (meta.tage_using_primary !== 1'b1) begin
       local_fails++;
-      $display("[FAIL] capstone_rt_tst step3: using_primary=%0b exp=0",
+      $display("[FAIL] capstone_rt_tst step3: using_primary=%0b exp=1",
         meta.tage_using_primary);
     end
     upd_inp                 = '0;
@@ -12346,22 +12879,25 @@ module tb;
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
     if (verbose != 0) begin
-      $display("[INFO] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x453D"
+      $display("[INFO] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x452D"
         , rd_t1);
       $display(
-        "[INFO] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4527 (intact)",
+        "[INFO] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4535",
         rd_t2);
     end
     // T1: CTR=110 USE=11 EPC=00 TAG=0x45 v=1 -> 0x453D
-    if (rd_t1 !== 16'h453D) begin
+    // BP-126: primary T2 provides; resolved taken: T2 steps 001->010,
+    // USE 10->11 (misp=0 as driven); T1 alt right with pred_diff steps
+    // toward the outcome, 101->110: T1=0x452D, T2=0x4535.
+    if (rd_t1 !== 16'h452D) begin
       local_fails++;
-      $display("[FAIL] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x453D"
+      $display("[FAIL] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x452D"
         , rd_t1);
     end
     // T2 must be unchanged from step 2 (no cross-path write)
-    if (rd_t2 !== 16'h4527) begin
+    if (rd_t2 !== 16'h4535) begin
       local_fails++;
-      $display("[FAIL] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4527"
+      $display("[FAIL] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4535"
         , rd_t2);
     end
     @(posedge clk);
@@ -12418,9 +12954,9 @@ module tb;
     rd_t4 =
       u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512];
     if (verbose != 0) begin
-      $display("[INFO] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x453F"
+      $display("[INFO] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x452F"
         , rd_t1);
-      $display("[INFO] capstone_rt_tst step5: T2[0][512]=0x%04h exp=0x4515"
+      $display("[INFO] capstone_rt_tst step5: T2[0][512]=0x%04h exp=0x4527"
         , rd_t2);
       $display("[INFO] capstone_rt_tst step5: T3[0][512]=0x%04h exp=0x4509"
         , rd_t3);
@@ -12428,15 +12964,17 @@ module tb;
         , rd_t4);
     end
     // T1: CTR=111 USE=11 EPC=00 TAG=0x45 v=1 -> 0x453F
-    if (rd_t1 !== 16'h453F) begin
+    // BP-126: step 4 mispredict, resolved taken: T2 010->011 USE
+    // 11->10; T1 alt right 110->111: T1=0x452F, T2=0x4527.
+    if (rd_t1 !== 16'h452F) begin
       local_fails++;
-      $display("[FAIL] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x453F"
+      $display("[FAIL] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x452F"
         , rd_t1);
     end
     // T2: CTR=010 USE=01 EPC=00 TAG=0x45 v=1 -> 0x4515 (seed)
-    if (rd_t2 !== 16'h4515) begin
+    if (rd_t2 !== 16'h4527) begin
       local_fails++;
-      $display("[FAIL] capstone_rt_tst step5: T2[0][512]=0x%04h exp=0x4515"
+      $display("[FAIL] capstone_rt_tst step5: T2[0][512]=0x%04h exp=0x4527"
         , rd_t2);
     end
     // T3: alloc CTR=100 USE=00 EPC=00 TAG=0x45 v=1 -> 0x4509

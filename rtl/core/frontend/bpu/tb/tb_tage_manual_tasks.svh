@@ -219,7 +219,8 @@ task automatic tage_use_test(
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 1; pexp_entry.useful = 0;
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 3; pexp_entry.useful = 0;
   aexp_entry.ctr    = 2; aexp_entry.useful = 2;
   check_ctr_row("UR4",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -265,7 +266,8 @@ task automatic tage_use_test(
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 3; pexp_entry.useful = 1;
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 1; pexp_entry.useful = 1;
   aexp_entry.ctr    = 0; aexp_entry.useful = 1;
   check_ctr_row("UR6",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -279,6 +281,13 @@ endtask
 // TAGE CTR table manual checks 
 // -------------------------------------------------------------------
 // This exercises each row of the CTR update table.
+// BP-126 (provisional, for Jeff): the expected CTRs below step
+// toward the resolved direction RT, INC on taken and DEC on
+// not-taken (tage_table_entry_formats.md, CTR field usage). The
+// pACT / aACT columns copied here read INC / DEC by correctness,
+// which is the same for a provider predicting taken and the reverse
+// for one predicting not-taken; the rows whose expected value moved
+// carry a BP-126 note. The 13a-13d T0 rows already step toward RT.
 // ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT Comments
 // 1.1  1  1  1  1   1  0  >0   >0   INC  —    —     Provider = primary, predicted taken correctly     |
 // 1.2  1  1  1  0   1  1  >0   >0   INC  —    —     Provider = primary, predicted taken correctly     |
@@ -461,7 +470,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //ERROR HERE: should be 1
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //ERROR HERE: should be 1
   aexp_entry.ctr    = 1; aexp_entry.useful = 0;
   check_ctr_row("R2.1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -482,7 +492,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //ERROR HERE: should be 1
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //ERROR HERE: should be 1
   aexp_entry.ctr    = 1; aexp_entry.useful = 0;
   check_ctr_row("R2.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -503,8 +514,9 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
+  // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
-  aexp_entry.ctr    = 2; aexp_entry.useful = 0; //POSSIBLE ERROR
+  aexp_entry.ctr    = 0; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R3",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -524,7 +536,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 2; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R4",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -566,7 +579,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 1; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R6",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -629,8 +643,9 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
+  // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 2; pexp_entry.useful = 0; //POSSIBLE ERROR
-  aexp_entry.ctr    = 2; aexp_entry.useful = 0; //POSSIBLE ERROR
+  aexp_entry.ctr    = 0; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R8.1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -650,8 +665,9 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
+  // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 2; pexp_entry.useful = 0; //POSSIBLE ERROR
-  aexp_entry.ctr    = 2; aexp_entry.useful = 1; //POSSIBLE ERROR
+  aexp_entry.ctr    = 0; aexp_entry.useful = 1; //POSSIBLE ERROR
   check_ctr_row("R8.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -671,7 +687,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 0; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("RX",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -692,8 +709,9 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
+  // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
-  aexp_entry.ctr    = 0; aexp_entry.useful = 0; //POSSIBLE ERROR
+  aexp_entry.ctr    = 2; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R10",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -734,8 +752,9 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
+  // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 2; pexp_entry.useful = 0; //POSSIBLE ERROR
-  aexp_entry.ctr    = 0; aexp_entry.useful = 0; //POSSIBLE ERROR
+  aexp_entry.ctr    = 2; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R12",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -901,7 +920,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 1; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R15.1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -922,7 +942,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 1; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R15.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -985,7 +1006,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 3; pexp_entry.useful = 0; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 1; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R17.1",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
@@ -1006,7 +1028,8 @@ task automatic tage_ctr_test(
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
-  pexp_entry.ctr    = 3; pexp_entry.useful = 1; //POSSIBLE ERROR
+  // BP-126: CTRs step toward the resolved direction (RT).
+  pexp_entry.ctr    = 1; pexp_entry.useful = 1; //POSSIBLE ERROR
   aexp_entry.ctr    = 1; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R17.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 

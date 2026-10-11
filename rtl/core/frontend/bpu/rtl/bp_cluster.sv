@@ -41,7 +41,7 @@
 //      update payload (is_br, is_jmp, is_ret, is_call, is_jalr) --
 //      the same facts the FTB update fan-out reads, so the two
 //      cannot diverge. ubtb_upd_t carries no branch-type field.
-//   5. the SC credit arbiter and the queue-status consumption
+//   5. the SC arbiter and the queue-status consumption
 //
 // uBTB interface. ubtb.sv reports one entry per lookup: pred_p1 is
 // the per-slot view and blk_p1 is the entry-scoped sideband carrying
@@ -436,7 +436,6 @@ module bp_cluster (
   logic                w_ras_tos_valid_p0    [0:NUM_PRED_SLOTS-1];
   logic                w_ras_pred_val_p2     [0:NUM_PRED_SLOTS-1];
   bp_br_type_e         w_ras_br_type_p2      [0:NUM_PRED_SLOTS-1];
-  logic [VA_WIDTH-1:0] w_ras_pc_p2           [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_ras_fall_through_p2 [0:NUM_PRED_SLOTS-1];
   logic [VA_WIDTH-1:0] w_ras_pop_addr_p2     [0:NUM_PRED_SLOTS-1];
   logic                w_ras_pop_valid_p2    [0:NUM_PRED_SLOTS-1];
@@ -590,10 +589,11 @@ module bp_cluster (
   logic                           w_ras_commit_val;
 
   // ----------------------------------------------------------------
-  // SC credit arbiter nets
+  // SC arbiter nets (the SC update queue is in sc.sv, BP-126)
   // ----------------------------------------------------------------
   logic                      w_sc_uq_not_full_int;
   logic [NUM_PRED_SLOTS-1:0] w_sc_upd_rdy_int;
+  logic                      w_sc_uq_has_data;
   logic                      w_sc_pred_req;
   logic                      w_sc_upd_req;
   logic                      w_sc_grant_pred;
@@ -1440,41 +1440,39 @@ module bp_cluster (
   end
 
   // ================================================================
-  // SC credit arbiter (bp_arb_spec.md 4.5, 5.5, 6.1)
+  // SC arbiter (bp_arb_spec.md 4.5, 5.5, 6.1)
   // ================================================================
-  // sc.sv stubs its arbitration layer; the real arbiter lands here
-  // (TD#73, TD#94). The SC tables are single port: an SC prediction
-  // (p2 -> p3 read) and an SC update (u0 write) contend for that one
-  // port and the section 4.5 credit rules pick one per cycle.
+  // The arbiter is here; the SC update queue is in sc.sv (BP-126,
+  // TD#123; section 5.5). The SC tables are single port: an SC
+  // prediction (p2 -> p3 read) and an SC update (u0 write) contend for
+  // that one port and the section 4.5 rules pick one per cycle.
   //
-  // Queue depth. SC has no prediction FIFO of its own -- the TAGE
-  // response buffer is its PQ (section 6.1) -- and the cluster does
-  // not add an update FIFO: the producer holds valid until accepted
-  // (section 4.4 handshake, FE-5), so the FTQ is the holding element
-  // and a bypass-only queue is the degenerate legal case of section
-  // 4.3/4.4. "Queue non-empty" is therefore "a request is presented".
+  // Queues. SC has no prediction FIFO of its own -- the TAGE response
+  // buffer is its PQ (section 6.1). Its update queue is sc.sv's,
+  // SC_UQ_DEPTH entries: sc_uq_has_data is "UQ non-empty" for the rules
+  // below, the update grant drains the head into sc_cntrl on
+  // sc_uq_rd_en, and the queue's readies are its occupancy. Before
+  // BP-126 no queue existed and the producer held each update until
+  // this arbiter granted it.
   //
   // The prediction request is the p2 request (r_tv_p2), not
   // tage_pred_rdy_p2: tage.sv already qualifies that output with
   // consumer_ready, and consumer_ready is an output of this arbiter,
   // so using it as an input would close a combinational loop.
   //
-  // The update request is an SC update PRESENTED on a slot whose SC
-  // queue is ready. It does not read the channel's update type
-  // (w_upd_cond_u0): the FTQ presents an SC update only for a
-  // conditional (ftq_upd_conv), and the type is decoded from the uBTB
-  // payload, whose valid is the FTQ's acceptance of the slot, which in
-  // turn waits on this arbiter's grant (sc_upd_rdy). Reading the type
-  // here closed that loop at whole-variable granularity in fe_top
-  // (BP-119). The COND qualification still gates the SC write itself
-  // (w_sc_upd_val_u0), so a non-conditional SC valid can never write
-  // SC; at most it requests the port.
+  // The update request is the SC update queue non-empty, or an
+  // update presented to it (sc.sv sc_uq_has_data). The update is
+  // presented to the queue gated by the channel's conditional type
+  // (w_sc_upd_val_u0). That type is decoded from the uBTB payload,
+  // whose valid is the FTQ's acceptance of the slot, which waits on
+  // sc_upd_rdy; since BP-126 sc_upd_rdy is the queue's occupancy and
+  // reads no grant, so no loop closes (BP-119 found one when the ready
+  // was the grant).
   // BP-121: r_tv_p2, the request TAGE answers at p2 whether or not
   // the cluster squashed its block (FE-14), so an SC update is never
   // granted under a TAGE result. It was r_val_p2.
   assign w_sc_pred_req = r_tv_p2 & sc_enable;
-  assign w_sc_upd_req  = sc_enable & w_sc_uq_not_full_int
-                       & (|(sc_upd_val_u0 & w_sc_upd_rdy_int));
+  assign w_sc_upd_req  = sc_enable & w_sc_uq_has_data;
 
   // The grant (BP-121, ruled by Jeff): a prediction is never delayed
   // by an update. TAGE hands its p2 result to SC in the same cycle
@@ -1520,12 +1518,14 @@ module bp_cluster (
                                | (sc_ready & ~w_sc_grant_upd);
 
   // Queue-status presented at the boundary. sc_uq_not_full is the
-  // sc.sv value, also consumed above by the arbiter, with the one-cycle
-  // starvation hold (BP-121). sc_upd_rdy is the section 4.4 accept:
-  // the update is taken only when granted.
+  // sc.sv queue's, with the one-cycle starvation hold (BP-121): a full
+  // queue, like a starving update, withholds the FTQ's p0 request so
+  // that a cycle with no prediction lets the update drain. sc_upd_rdy
+  // is the section 4.4 accept, the queue's room (BP-126); with SC
+  // disabled no SC update is formed and it reads low as before.
   assign sc_uq_not_full = w_sc_uq_not_full_int & ~w_sc_hold;
   assign sc_upd_rdy     = w_sc_upd_rdy_int
-                        & {NUM_PRED_SLOTS{w_sc_grant_upd}};
+                        & {NUM_PRED_SLOTS{sc_enable}};
 
   // ================================================================
   // Helper functions
@@ -1641,13 +1641,12 @@ module bp_cluster (
       //    Staged p0 -> p2 by the cluster stage registers.
       assign w_sc_inp_pc_p2[gs] = r_pc_p2[VA_WIDTH-1:1];
 
-      // -- RAS p2 inputs. ras_pc_p2 is declared and unread (TD#101);
-      //    it is driven from the staged request PC. The fall-through
-      //    address is the call's own end, the jump PC plus 2 or 4
+      // -- RAS p2 inputs. ras_pc_p2 was removed by BP-126 (TD#101):
+      //    no planning document gave the RAS a use for it. The
+      //    fall-through address is the call's own end, the jump PC plus 2 or 4
       //    (BP-121, TD#164, ruled by Jeff). It was the FTB pftAddr
       //    (interfaces 5.1), which is the region's and is written by
       //    whichever start of the region updated last.
-      assign w_ras_pc_p2[gs]           = r_pc_p2;
       assign w_ras_fall_through_p2[gs] = w_jmp_ft_p2;
       assign w_ras_br_type_p2[gs]      = w_br_type_p2[gs];
 
@@ -1737,8 +1736,7 @@ module bp_cluster (
       assign w_sc_upd_val_u0[gs]     = sc_upd_val_u0[gs]
                                      & w_upd_cond_u0[gs]
                                      & w_sc_upd_rdy_int[gs]
-                                     & sc_enable
-                                     & w_sc_grant_upd;
+                                     & sc_enable;
 
     end
   endgenerate
@@ -1891,9 +1889,8 @@ module bp_cluster (
   );
 
   // ----------------------------------------------------------------
-  // ITTAGE (p2). folded_hist takes bp_folded_hist_t whole. bp_history
-  // does not generate the IT5 folds ittage.sv consumes; those fields
-  // read zero (TD#102, not in scope).
+  // ITTAGE (p2). folded_hist takes bp_folded_hist_t whole, IT1 to IT5
+  // folds all generated by bp_history (IT5 since BP-126, TD#102).
   // ----------------------------------------------------------------
   ittage u_ittage (
     .clk                   (clk),
@@ -1941,6 +1938,8 @@ module bp_cluster (
     .sc_upd_rdy_u1     (sc_upd_rdy_u1),
     .sc_uq_not_full    (w_sc_uq_not_full_int),
     .sc_upd_rdy        (w_sc_upd_rdy_int),
+    .sc_uq_has_data    (w_sc_uq_has_data),
+    .sc_uq_rd_en       (w_sc_grant_upd),
     .sc_enable         (sc_enable),
     .sc_ready          (sc_ready)
   );
@@ -1957,7 +1956,6 @@ module bp_cluster (
     .ras_tos_valid_p0     (w_ras_tos_valid_p0),
     .ras_pred_val_p2      (w_ras_pred_val_p2),
     .ras_br_type_p2       (w_ras_br_type_p2),
-    .ras_pc_p2            (w_ras_pc_p2),
     .ras_fall_through_p2  (w_ras_fall_through_p2),
     .ras_pop_addr_p2      (w_ras_pop_addr_p2),
     .ras_pop_valid_p2     (w_ras_pop_valid_p2),

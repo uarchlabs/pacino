@@ -325,6 +325,13 @@ module tb;
         {ctx, ".it_t4_fh1"});
     chk(64'(folded.it_t4_tag_fh2), IT_TBL_HIST[4], IT_TBL_FH2[4],
         {ctx, ".it_t4_fh2"});
+    // ITTAGE IT5 (TD#102, BP-126): same rule, IT5 geometry
+    chk(64'(folded.it_t5_idx_fh),  IT_TBL_HIST[5], IT_TBL_FH[5],
+        {ctx, ".it_t5_idx"});
+    chk(64'(folded.it_t5_tag_fh1), IT_TBL_HIST[5], IT_TBL_FH1[5],
+        {ctx, ".it_t5_fh1"});
+    chk(64'(folded.it_t5_tag_fh2), IT_TBL_HIST[5], IT_TBL_FH2[5],
+        {ctx, ".it_t5_fh2"});
     // SC ST1-ST3 (idx only, H = W)
     chk(64'(folded.sc_t1_idx_fh), SC_TBL_HIST[1], SC_TBL_HIST[1],
         {ctx, ".sc_t1_idx"});

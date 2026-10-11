@@ -27,11 +27,19 @@
 // Prediction and update valids entering sc_cntrl are gated on sc_ready
 // so no prediction or update proceeds before RAM init completes.
 //
-// Arbitration-layer ports (sc_uq_not_full, sc_upd_rdy) have no producer
-// in this unit (SC UQ / credit arbiter deferred to bp_cluster, TD#73/
-// #94). They are presented and stubbed with safe constants. sc_enable
-// is presented but not internally qualified (IC-SC-05); the cluster
-// gates SC consumption.
+// SC update queue (BP-126, TD#123; bp_arb_spec.md 4.4, 5.5, 6.2,
+// sc_interfaces.md Arbitration Model). A FIFO of SC_UQ_DEPTH entries
+// in front of sc_cntrl, each entry one update cycle of both slots
+// (SC_UQ_WR_PORTS = NUM_PRED_SLOTS slot writes). sc_upd_rdy and
+// sc_uq_not_full are the queue's occupancy: an update is accepted only
+// when the queue has room, and a refused one is held by its producer
+// (FE-5). The arbiter is in bp_cluster (4.5): it reads sc_uq_has_data
+// as "UQ non-empty" and grants the SC RAM port to an update on
+// sc_uq_rd_en, which pops the head into sc_cntrl, or passes the
+// incoming update through when the queue is empty (4.4 bypass).
+// Entries leave in the order they entered. sc_enable is presented but
+// not internally qualified (IC-SC-05); the cluster gates SC
+// consumption.
 //
 // NUM_PRED_SLOTS shadows bp_defines_pkg::NUM_PRED_SLOTS. sc_cntrl,
 // sc_table and sc_brimli each shadow it too. -Wno-VARHIDDEN required.
@@ -75,9 +83,17 @@ module sc #(
   input  sc_upd_inp_t                 sc_upd_inp_u0[0:NUM_PRED_SLOTS-1],
   output logic [NUM_PRED_SLOTS-1:0]   sc_upd_rdy_u1,
 
-  // -- arbitration status outputs (stubbed; no UQ in this unit)
+  // -- SC update queue status and drain (bp_arb_spec.md 4.4, 5.5)
+  //    sc_uq_not_full: the queue has room for one more entry.
+  //    sc_upd_rdy:     per slot, the incoming update is accepted.
+  //    sc_uq_has_data: an update is queued or presented (UQ non-empty
+  //                    for the 4.5 arbiter, which is in bp_cluster).
+  //    sc_uq_rd_en:    the arbiter's update grant: the head (or the
+  //                    incoming update, queue empty) goes to sc_cntrl.
   output logic                        sc_uq_not_full,
   output logic [NUM_PRED_SLOTS-1:0]   sc_upd_rdy,
+  output logic                        sc_uq_has_data,
+  input  logic                        sc_uq_rd_en,
 
   // -- CSR enable (presented, not internally qualified; IC-SC-05)
   input  logic                        sc_enable,
@@ -136,19 +152,81 @@ module sc #(
   // ----------------------------------------------------------------
   logic [NUM_PRED_SLOTS-1:0]   pred_rdy_p2_gated;
   logic [NUM_PRED_SLOTS-1:0]   upd_val_u0_gated;
+  sc_upd_inp_t                 upd_inp_u0_q[0:NUM_PRED_SLOTS-1];
 
   assign pred_rdy_p2_gated = tage_pred_rdy_p2 & {NUM_PRED_SLOTS{sc_ready}};
-  assign upd_val_u0_gated  = sc_upd_val_u0    & {NUM_PRED_SLOTS{sc_ready}};
 
   // ----------------------------------------------------------------
-  // Arbitration-layer stubs (no SC UQ / credit arbiter in this unit).
-  // sc_uq_not_full: no queue yet -> always room.
-  // sc_upd_rdy: safe constant. With no UQ the update channel always
-  //   has room; drive all-ones (parallels tage upd_rdy when uq never
-  //   full). Do not build a UQ (TD#73/#94).
+  // SC update queue (TD#123). Binary head/tail with a wrap bit; full
+  // and empty from registered pointers only, so the readies depend on
+  // no valid. One entry holds both slots' valids and payloads.
   // ----------------------------------------------------------------
-  assign sc_uq_not_full = 1'b1;
-  assign sc_upd_rdy     = {NUM_PRED_SLOTS{1'b1}};
+  localparam int UQ_IDX_W = $clog2(SC_UQ_DEPTH);
+  localparam int UQ_PTR_W = UQ_IDX_W + 1;
+
+  if (SC_UQ_WR_PORTS != NUM_PRED_SLOTS) begin : g_uq_wr_chk
+    $error("sc: SC_UQ_WR_PORTS must equal NUM_PRED_SLOTS");
+  end
+
+  sc_upd_inp_t               uq_inp_mem[SC_UQ_DEPTH][0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] uq_val_mem[SC_UQ_DEPTH];
+  logic [UQ_PTR_W-1:0]       uq_head_r, uq_tail_r;
+  logic                      uq_full, uq_empty;
+  logic                      uq_in_val;   // an update is presented
+  logic                      uq_acc;      // the update is accepted
+  logic                      uq_drain;    // the grant, RAMs ready
+  logic                      uq_bypass;   // empty: incoming to sc_cntrl
+
+  assign uq_full   = (uq_tail_r[UQ_IDX_W-1:0] == uq_head_r[UQ_IDX_W-1:0])
+                  && (uq_tail_r[UQ_IDX_W] != uq_head_r[UQ_IDX_W]);
+  assign uq_empty  = (uq_head_r == uq_tail_r);
+  assign uq_in_val = |sc_upd_val_u0;
+  // Accepted only with room and the RAMs initialised: before sc_ready
+  // the update is refused and held, not dropped (sc_interfaces.md RAM
+  // Init Interface; FE-5).
+  assign uq_acc    = uq_in_val & ~uq_full & sc_ready;
+  assign uq_drain  = sc_uq_rd_en & sc_ready;
+  assign uq_bypass = uq_empty & uq_drain;
+
+  assign sc_uq_not_full = ~uq_full;
+  assign sc_upd_rdy     = {NUM_PRED_SLOTS{~uq_full & sc_ready}};
+  assign sc_uq_has_data = ~uq_empty | (uq_in_val & sc_ready);
+
+  always_ff @(posedge clk) begin : uq_ff
+    if (!rstn) begin
+      uq_head_r <= '0;
+      uq_tail_r <= '0;
+    end else begin
+      if (uq_drain && !uq_empty)
+        uq_head_r <= uq_head_r + UQ_PTR_W'(1);
+      // Enqueue unless the update passes straight through.
+      if (uq_acc && !uq_bypass) begin
+        for (int s = 0; s < NUM_PRED_SLOTS; s++)
+          uq_inp_mem[uq_tail_r[UQ_IDX_W-1:0]][s] <= sc_upd_inp_u0[s];
+        uq_val_mem[uq_tail_r[UQ_IDX_W-1:0]] <= sc_upd_val_u0;
+        uq_tail_r <= uq_tail_r + UQ_PTR_W'(1);
+      end
+    end
+  end
+
+  // The update sc_cntrl sees: the head on a grant, or the incoming
+  // update when the queue is empty. Nothing without a grant.
+  always_comb begin : uq_out_comb
+    upd_val_u0_gated = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      upd_inp_u0_q[s] = '0;
+    if (uq_drain) begin
+      if (uq_empty) begin
+        upd_val_u0_gated = sc_upd_val_u0;
+        for (int s = 0; s < NUM_PRED_SLOTS; s++)
+          upd_inp_u0_q[s] = sc_upd_inp_u0[s];
+      end else begin
+        upd_val_u0_gated = uq_val_mem[uq_head_r[UQ_IDX_W-1:0]];
+        for (int s = 0; s < NUM_PRED_SLOTS; s++)
+          upd_inp_u0_q[s] = uq_inp_mem[uq_head_r[UQ_IDX_W-1:0]][s];
+      end
+    end
+  end
 
   // sc_enable is presented but not consumed here (IC-SC-05). Kept as
   // a documented, unqualified input; the cluster gates consumption.
@@ -227,7 +305,7 @@ module sc #(
     .sc_pred_rdy_p3   (sc_pred_rdy_p3),
     .sc_pred_meta_p3  (sc_pred_meta_p3),
     .sc_upd_val_u0    (upd_val_u0_gated),
-    .sc_upd_inp_u0    (sc_upd_inp_u0),
+    .sc_upd_inp_u0    (upd_inp_u0_q),
     .sc_upd_rdy_u1    (sc_upd_rdy_u1),
     .t_sc_pred_val_p2 (w_sc_pred_val_p2),
     .t_inp_pc_p2      (w_inp_pc_p2),

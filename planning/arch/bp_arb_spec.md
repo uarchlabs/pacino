@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -350,6 +350,14 @@ D13), so an SC update is never granted under a live TAGE result.
 An SC update grant had dropped consumer_ready under a live TAGE
 result (4.7) before BP-121.
 
+SINCE BP-126 (TD#123, P-3, confirmed session-077) the SC update
+request is the SC UQ non-empty or an update presented to it
+(sc_uq_has_data), and the grant drains the UQ (sc_uq_rd_en). The
+cluster's sc_uq_not_full drops when the UQ is full as well as for
+the one-cycle starvation hold of rule 2. The cluster's sc_upd_rdy is
+the UQ's room (and sc_enable), not the grant. The rules above are
+unchanged.
+
 TESTED as replaced: tb_tage TC-54 (arb_starve_tst) and the
 concurrent tests, and tb_bp_cluster group H rewritten (H1 no grant,
 H2 prediction granted, H2b sc_ready guard, H3 update alone granted,
@@ -519,14 +527,18 @@ state.  The update is granted in a subsequent cycle.
                from the previous version.
                The SC arbiter is IMPLEMENTED in bp_cluster
                (session-063), and its rules were replaced by
-               BP-121 (section 4.5). The arbiter does not exist at the unit
-               level: sc.sv stubs the arbitration-layer ports,
-               sc_uq_not_full = 1'b1 and sc_upd_rdy = all-ones,
-               and builds no SC UQ. The SC_UQ_DEPTH and
-               SC_UQ_WR_PORTS values above therefore describe the
-               target model, not sc.sv as shipped. That gap is TD#123:
-               TD#73 and TD#94 are closed and neither covered
-               building the UQ.
+               BP-121 (section 4.5).
+               THE SC UQ IS BUILT in sc.sv by BP-126 (TD#123):
+               SC_UQ_DEPTH entries, each one update cycle of both
+               slots (SC_UQ_WR_PORTS slot writes). sc_upd_rdy and
+               sc_uq_not_full are its room, and sc_upd_rdy is also
+               low before sc_ready. sc_uq_has_data and sc_uq_rd_en
+               connect it to the bp_cluster arbiter. An empty UQ
+               passes a granted update through (4.4 bypass). This
+               read that sc.sv stubbed the arbitration-layer ports
+               (sc_uq_not_full = 1'b1, sc_upd_rdy = all-ones) and
+               built no SC UQ, so the values above described the
+               target model only. Session-077.
 
 ## 6. Statistical Corrector (SC) -- Chained Predictor
 
@@ -637,6 +649,12 @@ depends on the SC valid, and the FTQ presents the SC valid before it
 sees the ready (ftq_bpu_interfaces.md 8). Changed by BP-119: the
 request was formed from the conditional-channel valid, which made a
 combinational loop once the FTQ gated its valids on the readies.
+
+SUPERSEDED by BP-126 (TD#123, P-3): the request is sc_uq_has_data,
+the UQ non-empty or an update presented to it, and the SC ready
+returned to the FTQ is the UQ's room, which does not depend on the
+SC valid. The paragraph above is the BP-119 to BP-125 state.
+Session-077.
 
 ## 7. Non-RAM Predictors
 
@@ -959,3 +977,8 @@ task file, not here.
               queue-ready for one cycle (decision 5, D6, D13). The
               credit counters are removed. 4.1, 4.2, 4.8, 5.5, 6,
               6.1: credit wording. TD#39 and item J moot.
+
+  2026-10-10  session-077, after BP-126. 4.5: the SC request,
+              grant and readies with the SC UQ (TD#123, P-3). 5.5:
+              the SC UQ built. 6.2: the BP-119 request and ready
+              superseded.

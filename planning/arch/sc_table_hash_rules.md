@@ -6,7 +6,7 @@
  FILE:    sc_table_hash_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-19
+ UPDATED: 2026-10-10
  CONTACT: Jeff Nye
 ```
 
@@ -30,13 +30,15 @@ All widths are in bp_defines_pkg.sv. That file is authoritative.
 ## Parameter references
 
 ```
-PC_HASH_SHIFT      = 2         (bp_defines_pkg.sv)
 VA_WIDTH         = 41        (bp_defines_pkg.sv; fe_decisions.md FE-19,
                               TD#122. This read 40. Session-071)
 SC_TBL_IDX[0:4]  = {9,9,9,9,10}  (bp_defines_pkg.sv)
 SC_MAX_IDX_WIDTH = 10        (bp_defines_pkg.sv)
 SC_MAX_FH        = 64        (bp_defines_pkg.sv)
 ```
+
+The SC does not use PC_HASH_SHIFT (PD-17, BP-127). This list gave
+PC_HASH_SHIFT = 2. TAGE and ITTAGE keep it.
 
 THIS_INDEX_BITS is the per-table index width, set at instantiation
 from SC_TBL_IDX[THIS_TABLE]. For ST0-ST3 it is 9. For ST4 it is 10.
@@ -49,7 +51,12 @@ THIS_TABLE is the per-table identifier, 0-4, set at instantiation.
 ### Inputs
 
 ```
-inp_pc_p2[s]      staged branch PC, [VA_WIDTH-1:1] (sc_interfaces.md).
+inp_pc_p2[s]      the staged prediction BLOCK START PC, [VA_WIDTH-1:1]
+                  (sc_interfaces.md). The cluster drives every slot
+                  from one staged copy (ftq_bpu_interfaces.md 3), so
+                  both slots carry the same value; the slots are
+                  separated by their own RAMs (sc_decisions.md 6).
+                  This read "staged branch PC". Session-077.
 fh_idx_ext        the per-table index fold, [SC_MAX_FH-1:0], selected
                   by THIS_TABLE.
 ```
@@ -77,12 +84,23 @@ defensive.
 
 ```
 logic [THIS_INDEX_BITS-1:0] hashed_index =
-  THIS_INDEX_BITS'((inp_pc_p2[s] >> PC_HASH_SHIFT) ^ fh_idx_ext);
+  THIS_INDEX_BITS'(inp_pc_p2[s] ^ fh_idx_ext);
 ```
 
-The PC is right-shifted by PC_HASH_SHIFT (2) to drop the instruction
-offset. The shifted PC is XORed with the fold. The result is
-truncated to THIS_INDEX_BITS by the cast.
+The index drops only the instruction offset. With the C extension
+that is PC[0], and inp_pc_p2 already starts at PC[1], so the PC is not
+shifted: for a 9-bit index the PC term is PC[9:1]. ST0 is that slice
+alone. The PC is XORed with the fold and the result truncated to
+THIS_INDEX_BITS by the cast.
+
+RULED session-077 (Jeff, PD-17): the prose of this section stands
+over its formula. The formula read
+THIS_INDEX_BITS'((inp_pc_p2[s] >> PC_HASH_SHIFT) ^ fh_idx_ext) with
+PC_HASH_SHIFT = 2, which on a PC that already starts at PC[1] dropped
+PC[2:1] and started the index at PC[3]. The nine PC bits move from
+PC[11:3] to PC[9:1]: blocks whose starts differ in bits 2:1 no longer
+share entries, and ST0 aliases blocks 1 KiB apart where it aliased
+4 KiB apart. Unmeasured either way. BUILT by BP-127.
 
 ---
 ## get_br_imli_idx (ST4, sc_brimli)

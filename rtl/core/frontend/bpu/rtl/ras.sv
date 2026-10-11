@@ -16,7 +16,9 @@
 //     session-075, TD#159). Pointers TOSR/TOSW/BOS, snapshotted into
 //     the FTQ for O(1) pointer-only mispredict recovery.
 //   - Commit stack: RAS_COMMIT_ENTRIES, conventional circular stack.
-//     Pointer CSP. Updated at retire. Empty fallback for pops.
+//     Pointer CSP and an occupancy count, so a full stack is not read
+//     as empty (BP-126, TD#121). Updated at retire. Empty fallback for
+//     pops.
 //
 // Pipeline (p-stage names; planning docs use equivalent s-stage):
 //   p0: combinational TOS read (initial prediction fallback).
@@ -43,7 +45,6 @@ module ras (
   // ---- p2 prediction inputs (one per slot) ------------------------
   input  logic                ras_pred_val_p2     [0:NUM_PRED_SLOTS-1],
   input  bp_br_type_e         ras_br_type_p2      [0:NUM_PRED_SLOTS-1],
-  input  logic [VA_WIDTH-1:0] ras_pc_p2           [0:NUM_PRED_SLOTS-1],
   input  logic [VA_WIDTH-1:0] ras_fall_through_p2 [0:NUM_PRED_SLOTS-1],
 
   // ---- p2 prediction outputs (one per slot) -----------------------
@@ -121,6 +122,11 @@ module ras (
   logic [RAS_PTR_BITS-1:0]        tosw; // top-of-stack write (free)
   logic [RAS_PTR_BITS-1:0]        bos;  // committed boundary
   logic [RAS_COMMIT_PTR_BITS-1:0] csp;  // commit free pointer
+  // Commit-stack occupancy, 0 to RAS_COMMIT_ENTRIES (BP-126, TD#121).
+  // CSP alone wraps to 0 on the 32nd push and could not tell a full
+  // stack from an empty one. Empty is c_cnt == 0.
+  localparam int RAS_COMMIT_CNT_BITS = RAS_COMMIT_PTR_BITS + 1;
+  logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt;
 
   // Registered "reset complete" valid. Reading this FF in the scan
   // always_comb forces nba_sequent classification (see CLAUDE.md
@@ -137,7 +143,8 @@ module ras (
 
   // -----------------------------------------------------------------
   // Commit-stack top (read-only fallback for empty speculative pops)
-  // CSP is a free pointer: top entry is at CSP-1, empty when CSP==0.
+  // CSP is a free pointer: top entry is at CSP-1. Empty is the count
+  // at zero, not CSP == 0, which a full stack also reaches (TD#121).
   // Reads csp/commit_ret_addr (FF outputs) -> nba_sequent.
   // -----------------------------------------------------------------
   logic                           commit_top_valid;
@@ -145,7 +152,7 @@ module ras (
   logic [VA_WIDTH-1:0]            commit_top_addr;
 
   always_comb begin
-    commit_top_valid = (csp != '0);
+    commit_top_valid = (c_cnt != '0);
     commit_top_idx   = csp - {{(RAS_COMMIT_PTR_BITS-1){1'b0}}, 1'b1};
     commit_top_addr  = commit_ret_addr[commit_top_idx];
   end
@@ -552,11 +559,16 @@ module ras (
   // is the return arm then the call arm, the second applied to the
   // CSP the first leaves, so it overwrites the committed top in place
   // (RAS-DS1). Reads csp (a flop) -> nba_sequent.
+  // A return on an empty stack (count 0) leaves it unchanged. A call
+  // on a full stack overwrites the oldest entry, CSP wrapping past it,
+  // and the count holds at RAS_COMMIT_ENTRIES (no fault, 3.3).
   // -----------------------------------------------------------------
   logic                           c_pop;
   logic                           c_push;
   logic [RAS_COMMIT_PTR_BITS-1:0] c_mid;
   logic [RAS_COMMIT_PTR_BITS-1:0] c_nxt;
+  logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt_mid;
+  logic [RAS_COMMIT_CNT_BITS-1:0] c_cnt_nxt;
 
   always_comb begin : commit_arms
     c_pop  = ras_commit_val &
@@ -566,9 +578,14 @@ module ras (
              ((ras_commit_br_type == DIRECT_CALL)   |
               (ras_commit_br_type == INDIRECT_CALL) |
               (ras_commit_br_type == RETURN_CALL));
-    c_mid  = (c_pop && (csp != '0))
+    c_mid  = (c_pop && (c_cnt != '0))
                ? (csp - RAS_COMMIT_PTR_BITS'(1)) : csp;
     c_nxt  = c_push ? (c_mid + RAS_COMMIT_PTR_BITS'(1)) : c_mid;
+    c_cnt_mid = (c_pop && (c_cnt != '0))
+                  ? (c_cnt - RAS_COMMIT_CNT_BITS'(1)) : c_cnt;
+    c_cnt_nxt = (c_push &&
+                 (c_cnt_mid != RAS_COMMIT_CNT_BITS'(RAS_COMMIT_ENTRIES)))
+                  ? (c_cnt_mid + RAS_COMMIT_CNT_BITS'(1)) : c_cnt_mid;
   end
 
   // -----------------------------------------------------------------
@@ -583,6 +600,7 @@ module ras (
       tosw <= '0;
       bos  <= '0;
       csp  <= '0;
+      c_cnt <= '0;
       ras_rst_done <= 1'b0;
       for (int i = 0; i < RAS_SPEC_ENTRIES; i++) begin
         spec_ret_addr[i] <= '0;
@@ -638,7 +656,8 @@ module ras (
         commit_ret_addr[c_mid] <= ras_commit_ret_addr;
         commit_rctr[c_mid]     <= '0;
       end
-      csp <= c_nxt;
+      csp   <= c_nxt;
+      c_cnt <= c_cnt_nxt;
 
       // ---- register p2 op and fallthrough for the p3 repair pass -
       // An operation the restore or the squash dropped is registered

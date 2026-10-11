@@ -160,6 +160,9 @@ rtl/core/frontend/decode/obj_dir_oracle/
 rtl/core/frontend/decode/obj_dir_sweep/
 rtl/core/frontend/decode/obj_dir_words/
 
+rtl/core/frontend/bpu/obj_bp_cluster_init/
+rtl/core/frontend/bpu/obj_ittage_fast/
+
 # --------------------------------------------------------------------
 # docs
 site/

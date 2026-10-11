@@ -45,7 +45,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_sc sim_sc sim_sc_fast \
         lint_ittage_table sim_ittage_table \
         lint_ittage_cntrl sim_ittage_cntrl \
-        lint_ittage sim_ittage \
+        lint_ittage sim_ittage sim_ittage_fast \
         lint_tage_cntrl lint_tage \
         lint_ras sim_ras \
         lint_ftb_array \
@@ -54,7 +54,7 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_ftb \
         sim_ftb \
         lint_bp_cluster \
-        sim_bp_cluster \
+        sim_bp_cluster sim_bp_cluster_init \
         sim_tage sim_tage_fast sim_tage_tasks sim_tage_manual clean
 
 all: lint  \
@@ -422,6 +422,10 @@ lint_ittage:
 	  $(RTL_DIR)/ittage_cntrl.sv \
 	  $(RTL_DIR)/ittage.sv $(VSILENCE)
 
+# sim_ittage runs the real sram_init walk, no plusarg, as sim_tage
+# does; sim_ittage_fast is the +ITTAGE_FAST_INIT=1 twin, as
+# sim_tage_fast is for tage (BP-126, TD#68, TD#75). Before BP-126
+# sim_ittage ran fast-init and no target ran the ITTAGE walk.
 sim_ittage:
 	@echo "[compiling]  tb_ittage"
 	$(Q)$(VERILATOR) --binary \
@@ -440,7 +444,27 @@ sim_ittage:
 	  $(TB_DIR)/ittage_assert.sv \
 	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ittage/Vtb"
-	$(Q)./$(VER_OUT)_ittage/Vtb +ITTAGE_FAST_INIT=1
+	$(Q)./$(VER_OUT)_ittage/Vtb
+
+sim_ittage_fast:
+	@echo "[compiling]  tb_ittage (fast init)"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module tb \
+	  --Mdir $(VER_OUT)_ittage_fast \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(COMP_DIR)/bw_ram.sv \
+	  $(COMP_DIR)/sram_init.sv \
+	  $(RTL_DIR)/ittage_table.sv \
+	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage.sv \
+	  $(TB_DIR)/ittage_assert.sv \
+	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_ittage_fast/Vtb"
+	$(Q)./$(VER_OUT)_ittage_fast/Vtb +ITTAGE_FAST_INIT=1
 
 lint_tage_cntrl:
 	@echo "[linting]    tage_cntrl"
@@ -612,6 +636,25 @@ sim_bp_cluster:
 	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_bp_cluster/Vtb"
 	$(Q)./$(VER_OUT)_bp_cluster/Vtb $(BP_CLUSTER_PLUSARGS)
+
+# The same testbench with no fast-init plusarg (BP-126, TD#67, TD#68):
+# every TAGE, ITTAGE and SC table is initialised by its sram_init walk
+# after every reset, and the first reset checks T0, IT5 and ST0 against
+# their sram_init.md values before the first prediction.
+sim_bp_cluster_init:
+	@echo "[compiling]  tb_bp_cluster (sram_init walk)"
+	$(Q)$(VERILATOR) --binary \
+	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
+	  -Wno-VARHIDDEN \
+	  -Wno-SYNCASYNCNET \
+	  --top-module tb \
+	  --assert \
+	  --Mdir $(VER_OUT)_bp_cluster_init \
+	  $(BP_CLUSTER_SRCS) \
+	  $(BP_CLUSTER_ASSERT) \
+	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
+	@echo "[simulating] $(VER_OUT)_bp_cluster_init/Vtb"
+	$(Q)./$(VER_OUT)_bp_cluster_init/Vtb
 
 sim_ras:
 	@echo "[compiling]  tb_ras"
@@ -890,6 +933,9 @@ cov_tage_table:
 	  $(COV_DIR)/tage_table/coverage.info
 	@echo "[coverage]   tage_table HTML at $(COV_DIR)/tage_table/html/index.html"
 
+# cov_tage runs tb_tage twice, on the sram_init walk and on the fast
+# init, and merges the two, so the fast-init blocks of tage_bim and
+# tage_table are measured too (BP-126, TD#100).
 cov_tage:
 	@echo "[compiling]  cov tb_tage"
 	$(Q)$(VERILATOR) --binary \
@@ -914,9 +960,14 @@ cov_tage:
 	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_tage/Vtb__main.cpp
 	$(Q)make -C obj_dir_cov_tage -f Vtb.mk
-	$(Q)mkdir -p $(COV_DIR)/tage/html
-	@echo "[simulating] cov_tage"
-	$(Q)cd $(COV_DIR)/tage && $(CURDIR)/obj_dir_cov_tage/Vtb
+	$(Q)mkdir -p $(COV_DIR)/tage/html $(COV_DIR)/tage/walk \
+	  $(COV_DIR)/tage/fast
+	@echo "[simulating] cov_tage (sram_init walk, then +TAGE_FAST_INIT=1)"
+	$(Q)cd $(COV_DIR)/tage/walk && $(CURDIR)/obj_dir_cov_tage/Vtb
+	$(Q)cd $(COV_DIR)/tage/fast && \
+	  $(CURDIR)/obj_dir_cov_tage/Vtb +TAGE_FAST_INIT=1
+	$(Q)verilator_coverage --write $(COV_DIR)/tage/coverage.dat \
+	  $(COV_DIR)/tage/walk/coverage.dat $(COV_DIR)/tage/fast/coverage.dat
 	$(Q)verilator_coverage \
 	  --write-info $(COV_DIR)/tage/coverage.info \
 	  $(COV_DIR)/tage/coverage.dat
@@ -1010,9 +1061,9 @@ REGRESS_TARGETS := \
   lint_ftb_cntrl lint_ftb lint_bp_cluster \
   sim sim_history sim_ubtb sim_loop_pred sim_tage_table sim_sc_table \
   sim_sc_table_fast sim_sc_brimli sim_sc_brimli_fast sim_sc_cntrl sim_sc \
-  sim_sc_fast sim_ittage_table sim_ittage_cntrl sim_ittage \
-  sim_bp_cluster sim_ras sim_ftb sim_tage sim_tage_fast sim_tage_tasks \
-  sim_tage_manual \
+  sim_sc_fast sim_ittage_table sim_ittage_cntrl sim_ittage sim_ittage_fast \
+  sim_bp_cluster sim_bp_cluster_init sim_ras sim_ftb sim_tage sim_tage_fast \
+  sim_tage_tasks sim_tage_manual \
   cov_history cov_ubtb cov_loop_pred cov_tage_table cov_tage \
   cov_bp_cluster cov_bpu
 REGRESS_EXCLUDE := \
