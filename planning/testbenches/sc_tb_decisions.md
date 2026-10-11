@@ -6,7 +6,7 @@
  FILE:    sc_tb_decisions.md
  SOURCE:  session-058
  STATUS:  DRAFT
- UPDATED: 2026-07-01
+ UPDATED: 2026-10-11
  CONTACT: Jeff Nye
 ```
 
@@ -24,11 +24,13 @@ testbench.
   THIS_ENTRIES, THIS_FH) at instantiation from the SC_TBL_* arrays
   in bp_defines_pkg.sv.
 - ST0-ST3 share one RTL module; the tb parameterization supports
-  targeting any of the four. tb_sc_table.sv instantiates only ST1
-  (hashed index, non-zero fold; P_THIS_TABLE=1). ST0 (unhashed,
-  fold tied zero) is NOT currently instantiated -- no ST0 instance
-  or parameter-override run exists. Coverage gap: ST0's zero-fold
-  path is untested at the unit level.
+  targeting any of the four. tb_sc_table.sv instantiates ST1 (hashed
+  index, non-zero fold; P_THIS_TABLE=1) as u_dut and, since BP-127,
+  ST0 (THIS_TABLE=0) as u_st0. u_st0 shares u_dut's prediction and
+  RAM-init inputs, has its update inputs tied off, and its
+  idx_hash_p2 is checked by TC7. This read that ST0 was not
+  instantiated and that its zero-fold path was an untested coverage
+  gap; the ST0 index path is now checked. Session-077.
 - tbl_ri_* are DUT input ports. The unit tb drives them directly.
   There is no sram_init instance and no sc_ready at this level;
   those live in sc.sv.
@@ -110,9 +112,14 @@ THIS_TABLE-range assert (unreachable for a valid instantiation).
 - Rule source: sc_table_hash_rules.md (sc_idx_hash).
 - Drive inp_pc_p2[s] and idx_fh_p2. Compute the expected index
   independently in the tb:
-    exp_idx = THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_idx_ext)
-  where fh_idx_ext = 0 for ST0, idx_fh_p2 for ST1-ST3.
+    exp_idx = THIS_INDEX_BITS'(inp_pc_p2 ^ fh_idx_ext)
+  where inp_pc_p2 = PC[VA_WIDTH-1:1], unshifted (PD-17, BP-127), and
+  fh_idx_ext = 0 for ST0, idx_fh_p2 for ST1-ST3. This read
+  THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_idx_ext). Session-077.
 - Verify idx_hash_p2[s] == exp_idx.
+- PC term (BP-127, TC7): two block starts differing only in PC bits
+  2:1 give different indices; ST0's index is PC[9:1], checked
+  against literal expected values rather than the tb's own model.
 - Seed a known counter at exp_idx, deassert the write, read at p2
   the following cycle, verify ctr_p3[s] at p3 matches the seeded
   value. Prediction and update are phase-exclusive; seed and read

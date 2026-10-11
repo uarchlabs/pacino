@@ -56,7 +56,8 @@
 # tage_coverage_plan.md), and the files updated when BP-127 was
 # written (PROJECT_STATUS.md, sc_table_hash_rules.md,
 # sc_table_interfaces.md, bp_history_interfaces.md,
-# tage_coverage_plan.md).
+# tage_coverage_plan.md), and the files updated after BP-127
+# (PROJECT_STATUS.md, sc_tb_decisions.md, sc_table_hash_rules.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -75,7 +76,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 6831656c159c
+PLAN  PROJECT_STATUS.md                 03aa459ee323
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -97,7 +98,7 @@ ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  73c0fd5a76e5
 ARCH  ras_decisions.md                  42cdff8708f4
 ARCH  sc_decisions.md                   d264a4ba07ed
-ARCH  sc_table_hash_rules.md            cedf2eed2696
+ARCH  sc_table_hash_rules.md            3954fc46bace
 ARCH  sram_init.md                      d6cefefe7fc5
 ARCH  tage_cntrl_uaon_update_rules.md   be55531dd5c0
 ARCH  tage_cntrl_alloc_rules.md         3a22df5e85f3
@@ -115,7 +116,7 @@ ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
-TEST  sc_tb_decisions.md                7e3a2f535d9b
+TEST  sc_tb_decisions.md                85577a58ad65
 TEST  manual_tb_decisions.md            9ac8ad00f83e
 VERF  tage_coverage_plan.md             497bc9a790a3
 

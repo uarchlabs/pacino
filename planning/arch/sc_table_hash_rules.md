@@ -100,7 +100,14 @@ PC_HASH_SHIFT = 2, which on a PC that already starts at PC[1] dropped
 PC[2:1] and started the index at PC[3]. The nine PC bits move from
 PC[11:3] to PC[9:1]: blocks whose starts differ in bits 2:1 no longer
 share entries, and ST0 aliases blocks 1 KiB apart where it aliased
-4 KiB apart. Unmeasured either way. BUILT by BP-127.
+4 KiB apart. BUILT by BP-127.
+
+MEASURED by BP-127 on tb_fe_top: 6 of 36 programs change, every one
+retiring exactly. Mispredicts: hist 27 -> 22, lp 10 -> 8, misp_call
+23 -> 22, ftbonly 10 -> 11, multistart 6 -> 7, recur 28 -> 28.
+hist and lp gain from blocks no longer sharing on bits 2:1; ftbonly,
+whose copies sit 2 KiB apart, now shares ST0 entries in groups of up
+to 9 through the 1 KiB alias.
 
 ---
 ## get_br_imli_idx (ST4, sc_brimli)

@@ -182,8 +182,8 @@ module tb;
     logic [SC_MAX_FH-1:0] fh_ext;
     logic [SC_TBL_IDX[0]-1:0] idx9;   // ST0-ST3 are 9-bit
     fh_ext = (t == 0) ? '0 : fh;      // ST0 unhashed (SC_TBL_FH[0]=0)
-    idx9   = SC_TBL_IDX[0]'(
-               (SC_MAX_FH'(pc) >> PC_HASH_SHIFT) ^ fh_ext);
+    // pc is inp_pc_p2 = PC[VA_WIDTH-1:1], not shifted (PD-17).
+    idx9   = SC_TBL_IDX[0]'(SC_MAX_FH'(pc) ^ fh_ext);
     calc_sc_idx = SC_MAX_IDX_WIDTH'(idx9);   // zero-extend to the bus
   endfunction
 
@@ -398,8 +398,8 @@ module tb;
 
     // Prediction stimulus (distinct PCs per slot).
     clr_inputs();
-    inp_pc_p2[0]    = (VA_WIDTH-1)'('h0000_0044);   // pc>>2 = 0x11
-    inp_pc_p2[1]    = (VA_WIDTH-1)'('h0000_0088);   // pc>>2 = 0x22
+    inp_pc_p2[0]    = (VA_WIDTH-1)'('h0000_0044);   // PC[9:1] = 0x044
+    inp_pc_p2[1]    = (VA_WIDTH-1)'('h0000_0088);   // PC[9:1] = 0x088
     sc_t1_idx_fh_p2 = 64'd5;
     sc_t2_idx_fh_p2 = 64'd10;
     sc_t3_idx_fh_p2 = 64'd3;

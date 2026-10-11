@@ -30,6 +30,9 @@
 // plusarg), a wait for the sram_init walks on every reset with the
 // first reset's T0 / IT5 / ST0 contents checked (TD#67/68). Group H
 // gains H8, the SC update queue full at the boundary (TD#123).
+// BP-127 (PD-17): the monitor's SC index takes inp_pc_p2 = PC[VA_WIDTH-
+// 1:1] unshifted, so the PC term is PC[9:1], and it now covers ST0 (the
+// PC term alone, no fold) beside ST1-ST3.
 //
 // Fixture policy (BP-093 binding decision 3). A predictor response
 // that a cluster test needs as an input is established by writing that
@@ -5085,9 +5088,10 @@ module tb;
   //   TAGE T1-T4, ITTAGE IT1-IT5 (tage_ / ittage_table_hash_rules.md)
   //     idx = ((PC >> PC_HASH_SHIFT) ^ fh)[IDX-1:0]
   //     tag = ((PC >> IDX) ^ fh1 ^ (fh2 << 1))[TAG-1:0]
-  //   SC ST1-ST3 (sc_table_hash_rules.md), at p2 from the folds of the
-  //   block's p0 cycle, inp_pc_p2 = PC[VA_WIDTH-1:1]:
-  //     idx = ((inp_pc_p2 >> PC_HASH_SHIFT) ^ fh)[IDX-1:0]
+  //   SC ST0-ST3 (sc_table_hash_rules.md), at p2 from the folds of the
+  //   block's p0 cycle, inp_pc_p2 = PC[VA_WIDTH-1:1], not shifted
+  //   (PD-17), fh = 0 for ST0:
+  //     idx = (inp_pc_p2 ^ fh)[IDX-1:0]
   // PC is the cluster request PC (ftq_pred_pc_p0), both slots. Every
   // prediction the tables are presented is compared, in every group,
   // with the index and tag the table itself produces; the counts and
@@ -5257,12 +5261,14 @@ module tb;
           mon_it_late++;
         end
       end
-      // SC ST1-ST3 at p2, from the folds of the block's p0 cycle.
+      // SC ST0-ST3 at p2, from the folds of the block's p0 cycle. The
+      // PC term is inp_pc_p2 = PC[VA_WIDTH-1:1] unshifted (PD-17); ST0
+      // has no fold.
       if (m_v_p2) begin
         for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-          for (int t = 1; t <= 3; t++) begin
-            e = 64'(SC_MAX_FH'(m_pc_p2[VA_WIDTH-1:1]) >> PC_HASH_SHIFT)
-              ^ 64'(m_scfh_p2[t]);
+          for (int t = 0; t <= 3; t++) begin
+            e = 64'(SC_MAX_FH'(m_pc_p2[VA_WIDTH-1:1]))
+              ^ ((t == 0) ? 64'd0 : 64'(m_scfh_p2[t]));
             e = e & ((64'd1 << SC_TBL_IDX[t]) - 64'd1);
             g = 64'(dut.u_sc.w_idx_hash_p2[t][s]);
             if (g !== e)

@@ -40,7 +40,9 @@ package bp_defines_pkg;
   parameter logic [VA_WIDTH-1:0] RESET_VECTOR = VA_WIDTH'('h8000_0000);
   parameter int FETCH_BLOCK_BYTES = 64;  // fetch block size in bytes
   // PC_HASH_SHIFT: the low PC bits dropped before a predictor index
-  // or tag hash. TAGE, ITTAGE and SC all form (pc >> PC_HASH_SHIFT).
+  // or tag hash. TAGE and ITTAGE form (pc >> PC_HASH_SHIFT). The SC
+  // does not: its index takes inp_pc_p2 = PC[VA_WIDTH-1:1] unshifted
+  // (sc_table_hash_rules.md sc_idx_hash, PD-17, BP-127).
   // This is a HASH parameter. Changing it rehashes every table and
   // invalidates all stored state and all tuning, so it is not a free
   // knob. It is NOT the in-block position granularity; that is

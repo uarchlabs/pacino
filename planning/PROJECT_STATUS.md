@@ -16,6 +16,47 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-077, after BP-127: BP-127 recorded.
+
+BP-127 RUN, COMPLETE (Jeff). 32m, no compaction, 18% context,
+claude-opus-5-5 low. regress.sh 155 targets PASS, 0 warnings, no
+target added. 6 reversions on copies of the final tree, all caught;
+the starting tree with the new testbenches fails, twice, as required.
+  Built: PD-17. sc_table's index is THIS_INDEX_BITS'(inp_pc_p2 ^
+    fold), so the PC term is PC[9:1] and ST0's index is PC[9:1]; the
+    SC no longer reads PC_HASH_SHIFT. The one package change is the
+    bp_defines_pkg.sv comment on PC_HASH_SHIFT, which names TAGE and
+    ITTAGE only. No port changed.
+  Verified: tb_sc_table gains an ST0 instance (u_st0) and TC7, two
+    block starts differing only in PC bits 2:1 against literal
+    indices; tb_sc and the tb_bp_cluster FOLD monitor model the new
+    rule, and the monitor now covers ST0 as well as ST1-ST3.
+  Counts: sim_sc_table and sim_sc_table_fast 6 -> 7; every other count
+    unchanged.
+  tb_fe_top: every program retires exactly; 6 of 36 change, all from
+    the index line (putting it back restores all 36 baselines).
+    Mispredicts hist 27 -> 22, lp 10 -> 8, misp_call 23 -> 22, ftbonly
+    10 -> 11, multistart 6 -> 7, recur 28 -> 28; cycles hist -18, lp
+    -31, misp_call -17, multistart -28, recur +2.
+  No defect found, no decision taken, no git command beyond
+    regress.sh's, nothing read outside the grants.
+
+RULED after BP-127 (Jeff): PD-1 to PD-4 ACCEPTED and applied:
+  sc_tb_decisions.md (ST0 is instantiated and checked; the expected
+  index drops the shift), this entry, and sc_table_hash_rules.md's
+  RULED paragraph citing the measured figures.
+  The next PA session scrubs every pending TD (Jeff).
+
+Noted, no TD opened: ftbonly shows the 1 KiB ST0 alias, its 2 KiB
+copies sharing entries in groups of up to 9 (BP-127 Deferred Work).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, sc_tb_decisions.md,
+sc_table_hash_rules.md.
+
+Next free: BP-128, INFRA-014, TOOLS-007, TD#179.
+
+---
 ## Session-077, after BP-126: BP-127 written.
 
 BP-127 WRITTEN (Jeff), not yet issued: PD-17 only. The SC index PC term
@@ -44,7 +85,7 @@ sc_table_interfaces.md, bp_history_interfaces.md (restored to its
 post-PD-12 form), tage_coverage_plan.md.
 
 Next free: BP-128, INFRA-014, TOOLS-007, TD#179. BP-127 is written,
-not yet issued.
+not yet issued. (Superseded above.)
 
 ---
 ## Session-077, after BP-126: BP-126 recorded.
@@ -2570,6 +2611,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 057. s12 br_imli_mode parameter  |
 |                         |             |                   | (059).                           |
 | sc_table.sv             | Complete    | tb_sc_table       | ST0-ST3. sim_sc_table 6/0.       |
+|                         |             |                   | BP-127: index PC term PC[9:1],   |
+|                         |             |                   | no PC_HASH_SHIFT (PD-17); ST0    |
+|                         |             |                   | instance and TC7; sim_sc_table   |
+|                         |             |                   | 7/0.                             |
 | sc_brimli.sv            | Complete    | tb_sc_brimli      | ST4 BrIMLI. sim_sc_brimli 7/0.   |
 | sc_cntrl.sv             | Complete    | tb_sc_cntrl       | sim_sc_cntrl 98/0. SESSION-064:  |
 |                         |             |                   | READ and CONFIRMED (BP-094) that |
@@ -2596,7 +2641,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | sc_table_interfaces.md  | Complete    | --                | Written session-058.             |
 | sc_table_hash_rules.md  | Complete    | --                | Written session-058.             |
 | sc_tb_decisions.md      | Complete    | --                | Session-061: ST0 tb coverage gap |
-|                         |             |                   | noted.                           |
+|                         |             |                   | noted. Closed by BP-127 (u_st0,  |
+|                         |             |                   | TC7).                            |
 | SC (unit)               | Complete    | --                | Remaining unit item:             |
 |                         |             |                   | sc_coverage_plan.md. Cluster     |
 |                         |             |                   | prereqs: #89/#90 open; #87/#88   |

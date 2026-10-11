@@ -10,6 +10,9 @@
 // Self-checking unit testbench for sc_table (ST0-ST3).
 // DUT instantiated directly as u_dut with the ST1 parameters
 // (THIS_TABLE=1, hashed index, non-zero fold). NUM_PRED_SLOTS=2.
+// A second instance, u_st0, has the ST0 parameters (THIS_TABLE=0, no
+// fold). It shares u_dut's prediction and RAM-init inputs; its update
+// inputs are tied off. Only its idx_hash_p2 is checked (TC7).
 //
 // sc_table is a counter-only RAM table: combinational index hash at
 // p2, one-cycle bw_ram read (ctr_p3 at p3), whole-word update write
@@ -33,6 +36,9 @@
 // TC4: slot independence-- slot 0 and slot 1 write disjoint RAMs.
 // TC5: tbl_ri override  -- init path wins, concurrent update dropped.
 // TC6: bank decomposition- index[8]=0 -> bank 0, index[8]=1 -> bank 1.
+// TC7: SC index PC term -- ST0 index is PC[9:1], ST1 is PC[9:1] ^ fold,
+//                          for two block starts that differ only in
+//                          PC bits 2:1 (PD-17, BP-127). Literal values.
 // ===================================================================
 `default_nettype none
 
@@ -126,6 +132,53 @@ module tb;
   );
 
   // ----------------------------------------------------------------
+  // ST0 instance (TC7). Same prediction and RAM-init inputs as u_dut;
+  // the update path is tied off. The fold port is driven (ST0 ignores
+  // it: THIS_TABLE=0 selects a zero fold inside sc_table).
+  // ----------------------------------------------------------------
+  localparam int P0_INDEX_BITS = SC_TBL_IDX[0];      // 9
+  localparam int P0_CTR_WIDTH  = SC_TBL_CTR[0];
+  localparam int P0_ENTRIES    = SC_TBL_ENTRIES[0];
+  localparam int P0_FH         = SC_TBL_FH[0];       // 0
+
+  logic [P0_CTR_WIDTH-1:0]   st0_ctr_p3[0:P_NUM_SLOTS-1];
+  logic [P0_INDEX_BITS-1:0]  st0_idx_hash_p2[0:P_NUM_SLOTS-1];
+  logic [P0_CTR_WIDTH-1:0]   st0_ctr_wd_u0[0:P_NUM_SLOTS-1];
+  logic [P0_INDEX_BITS-1:0]  st0_upd_index_u0[0:P_NUM_SLOTS-1];
+
+  always_comb begin : st0_upd_tie
+    for (int s = 0; s < P_NUM_SLOTS; s++) begin
+      st0_ctr_wd_u0[s]    = '0;
+      st0_upd_index_u0[s] = '0;
+    end
+  end
+
+  sc_table #(
+    .THIS_TABLE     (0),
+    .THIS_INDEX_BITS(P0_INDEX_BITS),
+    .THIS_CTR_WIDTH (P0_CTR_WIDTH),
+    .THIS_ENTRIES   (P0_ENTRIES),
+    .THIS_FH        (P0_FH),
+    .NUM_PRED_SLOTS (P_NUM_SLOTS)
+  ) u_st0 (
+    .ctr_p3        (st0_ctr_p3),
+    .idx_hash_p2   (st0_idx_hash_p2),
+    .sc_pred_val_p2(sc_pred_val_p2),
+    .inp_pc_p2     (inp_pc_p2),
+    .idx_fh_p2     (idx_fh_p2),
+    .sc_upd_val_u0 ('0),
+    .ctr_wd_u0     (st0_ctr_wd_u0),
+    .ctr_wr_u0     ('0),
+    .upd_index_u0  (st0_upd_index_u0),
+    .tbl_ri_active (tbl_ri_active),
+    .tbl_ri_wr     (tbl_ri_wr),
+    .tbl_ri_wa     (P0_INDEX_BITS'(tbl_ri_wa)),
+    .tbl_ri_wd     (tbl_ri_wd),
+    .rstn          (rstn),
+    .clk           (clk)
+  );
+
+  // ----------------------------------------------------------------
   // Pass / fail counters
   // ----------------------------------------------------------------
   int pass_cnt;
@@ -140,17 +193,18 @@ module tb;
   int _slot_indep  = 1;
   int _tbl_ri      = 1;
   int _bank_decomp = 1;
+  int _pc_term     = 1;
 
   // ----------------------------------------------------------------
   // Index hash reference. Mirrors sc_idx_hash for ST1:
-  //   idx = THIS_INDEX_BITS'((SC_MAX_FH'(pc) >> PC_HASH_SHIFT) ^ fh)
+  //   idx = THIS_INDEX_BITS'(SC_MAX_FH'(pc) ^ fh)
+  // pc is inp_pc_p2 = PC[VA_WIDTH-1:1], not shifted (PD-17).
   // fh_ext = idx_fh_p2 for ST1-ST3.
   // ----------------------------------------------------------------
   function automatic logic [P_INDEX_BITS-1:0] calc_idx(
       input logic [VA_WIDTH-1:1]  pc,
       input logic [SC_MAX_FH-1:0] fh);
-    calc_idx = P_INDEX_BITS'(
-      (SC_MAX_FH'(pc) >> PC_HASH_SHIFT) ^ fh);
+    calc_idx = P_INDEX_BITS'(SC_MAX_FH'(pc) ^ fh);
   endfunction
 
   // ----------------------------------------------------------------
@@ -299,8 +353,8 @@ module tb;
     logic [P_INDEX_BITS-1:0] eidx0, eidx1;
     logic [P_CTR_WIDTH-1:0]  seed0, seed1;
     logic ihok, rdok;
-    pc0   = (VA_WIDTH-1)'('h0000_0044);   // (pc>>2)=0x11
-    pc1   = (VA_WIDTH-1)'('h0000_0060);   // (pc>>2)=0x18
+    pc0   = (VA_WIDTH-1)'('h0000_0044);   // PC 0x88, PC[9:1]=0x044
+    pc1   = (VA_WIDTH-1)'('h0000_0060);   // PC 0xC0, PC[9:1]=0x060
     fh    = 64'h0000_0000_0000_0005;
     eidx0 = calc_idx(pc0, fh);
     eidx1 = calc_idx(pc1, fh);
@@ -505,6 +559,61 @@ module tb;
   endtask
 
   // ----------------------------------------------------------------
+  // TC7: SC index PC term (sc_table_hash_rules.md sc_idx_hash, PD-17).
+  // inp_pc_p2 is the block start PC[VA_WIDTH-1:1], the same on both
+  // slots. Two block starts that differ only in PC bits 2:1:
+  //   A = 0x8000_0A40   PC[9:1] = 0x120
+  //   B = 0x8000_0A46   PC[9:1] = 0x123
+  // Expected values are literals worked from the PCs by hand, not from
+  // a model of the RTL:
+  //   ST0 (no fold)      A -> 9'h120   B -> 9'h123
+  //   ST1 (fold 0x005)   A -> 9'h125   B -> 9'h126
+  // Under the starting rule (PC[11:3]) A and B both gave ST0 9'h148.
+  // A non-zero fold is driven on the shared port; ST0 must ignore it.
+  // ----------------------------------------------------------------
+  task automatic test_pc_term(input int vb);
+    localparam logic [VA_WIDTH-1:0] PC_A = VA_WIDTH'('h8000_0A40);
+    localparam logic [VA_WIDTH-1:0] PC_B = VA_WIDTH'('h8000_0A46);
+    localparam logic [SC_MAX_FH-1:0] FH  = SC_MAX_FH'('h005);
+    logic [P0_INDEX_BITS-1:0] g0a [0:P_NUM_SLOTS-1];
+    logic [P0_INDEX_BITS-1:0] g0b [0:P_NUM_SLOTS-1];
+    logic [P_INDEX_BITS-1:0]  g1a [0:P_NUM_SLOTS-1];
+    logic [P_INDEX_BITS-1:0]  g1b [0:P_NUM_SLOTS-1];
+    int   errs;
+    errs = 0;
+
+    drive_pred(PC_A[VA_WIDTH-1:1], PC_A[VA_WIDTH-1:1], FH);
+    #1;
+    g0a = st0_idx_hash_p2;
+    g1a = idx_hash_p2;
+    drive_pred(PC_B[VA_WIDTH-1:1], PC_B[VA_WIDTH-1:1], FH);
+    #1;
+    g0b = st0_idx_hash_p2;
+    g1b = idx_hash_p2;
+    clr_pred();
+
+    for (int s = 0; s < P_NUM_SLOTS; s++) begin
+      if (g0a[s] !== 9'h120) errs++;
+      if (g0b[s] !== 9'h123) errs++;
+      if (g1a[s] !== 9'h125) errs++;
+      if (g1b[s] !== 9'h126) errs++;
+      if (vb != 0 || errs != 0)
+        $display("[info] TC7 s%0d ST0 A=%0h B=%0h ST1 A=%0h B=%0h",
+                 s, g0a[s], g0b[s], g1a[s], g1b[s]);
+    end
+
+    if (errs == 0) begin
+      $display("[PASS] TC7: SC index PC term is PC[9:1] (ST0, ST1)");
+      pass_cnt++;
+    end else begin
+      $display(
+        "[FAIL] TC7: %0d mismatches; exp ST0 120/123, ST1 125/126",
+        errs);
+      fail_cnt++;
+    end
+  endtask
+
+  // ----------------------------------------------------------------
   // Main sequence
   // ----------------------------------------------------------------
   int fast_init;
@@ -542,10 +651,11 @@ module tb;
     if (_slot_indep  != 0) test_slot_indep(verbose);
     if (_tbl_ri      != 0) test_tbl_ri(verbose);
     if (_bank_decomp != 0) test_bank_decomp(verbose);
+    if (_pc_term     != 0) test_pc_term(verbose);
 
     @(posedge clk); #1;
     $display("--------------------------------------------");
-    $display("Results: %0d PASS  %0d FAIL  (of 6 TCs)",
+    $display("Results: %0d PASS  %0d FAIL  (of 7 TCs)",
              pass_cnt, fail_cnt);
     if (fail_cnt != 0)
       $fatal(1, "TESTBENCH FAILED");

@@ -27,7 +27,10 @@
 // tbl_ri_active + tbl_ri_wr: RAM-init path overrides all writes.
 //
 // Index hash: sc_idx_hash (planning/arch/sc_table_hash_rules.md).
-//   hashed_index = THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_idx_ext)
+//   hashed_index = THIS_INDEX_BITS'(inp_pc_p2[s] ^ fh_idx_ext)
+//   inp_pc_p2 is the block start PC[VA_WIDTH-1:1], so the PC term of a
+//   9-bit index is PC[9:1]; only the instruction offset PC[0] is
+//   dropped (PD-17, BP-127). The SC does not use PC_HASH_SHIFT.
 //   fh_idx_ext is idx_fh_p2 for ST1-ST3; ST0 ties idx_fh_p2 to zero
 //   at the instance. No re-hash on the update path.
 //
@@ -81,11 +84,6 @@ module sc_table #(
   input  logic                        clk
 );
 
-  // The index hash shift is bp_defines_pkg::PC_HASH_SHIFT, visible
-  // through the file-scope wildcard import. The explicit local alias
-  // that stood here is removed: it shadowed the package name with
-  // the same value and served no purpose.
-
   // Two banks per RAM; index MSB selects bank, lower bits the row.
   localparam int NUM_BANKS   = 2;
   localparam int RAM_ENTRIES = THIS_ENTRIES / NUM_BANKS;
@@ -100,8 +98,9 @@ module sc_table #(
   //   fh_idx_ext selected by THIS_TABLE:
   //     ST0 -> 0 (SC_TBL_FH[0]=0, unhashed PC slice)
   //     ST1-ST3 -> idx_fh_p2 (per-table fold selected in sc.sv)
-  //   hashed_index = THIS_INDEX_BITS'((pc >> PC_HASH_SHIFT) ^ fh_ext)
-  // Slot 0 and slot 1 are independent (separate pc inputs).
+  //   hashed_index = THIS_INDEX_BITS'(inp_pc_p2[s] ^ fh_ext)
+  // inp_pc_p2 starts at PC[1]; it is not shifted (PD-17). Both slots
+  // carry the same block start PC; their RAMs separate them.
   // ============================================================
   logic [SC_MAX_FH-1:0]       fh_idx_ext;
   logic [THIS_INDEX_BITS-1:0] idx_hash[0:NUM_PRED_SLOTS-1];
@@ -124,11 +123,11 @@ module sc_table #(
       end
     endcase
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      // Widen the PC slice to the fold width before the shift/XOR so
-      // both operands share the SC_MAX_FH context. Result truncated
-      // to THIS_INDEX_BITS by the cast.
+      // Widen the PC to the fold width before the XOR so both
+      // operands share the SC_MAX_FH context. Result truncated to
+      // THIS_INDEX_BITS by the cast.
       idx_hash[s] = THIS_INDEX_BITS'(
-        (SC_MAX_FH'(inp_pc_p2[s]) >> PC_HASH_SHIFT) ^ fh_idx_ext);
+        SC_MAX_FH'(inp_pc_p2[s]) ^ fh_idx_ext);
     end
   end
 
