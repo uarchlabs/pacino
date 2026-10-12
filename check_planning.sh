@@ -84,11 +84,11 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 b3500bcee150
+PLAN  PROJECT_STATUS.md                 d7f065cd5275
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
-ARCH  bp_arb_spec.md                    73b8984a974f
+ARCH  bp_arb_spec.md                    2c98a9d4f798
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845

@@ -26,7 +26,8 @@
 //       with slot0=call / slot1=return same-cycle bypass. RETURN_CALL
 //       pops then pushes in one slot (RAS-DS1, TD#152).
 //   p3: repair pass, inverse op when p3 FTB type disagrees with the
-//       registered p2 op (speculative stack only).
+//       registered p2 op (speculative stack only). An undo reverses the
+//       recursion counts the p2 op changed (BP-133, TD #78).
 //
 // See planning/arch/ras_decisions.md and
 // planning/interfaces/ras_interfaces.md.
@@ -140,6 +141,16 @@ module ras (
   // TOSR before the slot's p2 operation. Read to undo a pop, alone or
   // as the first half of a whole RETURN_CALL (see the repair pass).
   logic [RAS_PTR_BITS-1:0] p3_pre_tosr_q [0:NUM_PRED_SLOTS-1];
+  // The recursion counts the slot's p2 operation changed (BP-133, TD
+  // #78), so an undo reverses them as well as the pointers:
+  //   p3_pop_dec_q  the pop decremented the count at the pre-op TOSR
+  //                 (TOSR held) instead of following the link.
+  //   p3_push_inc_q the push incremented the count at p3_inc_ptr_q (the
+  //                 TOSR the push found) instead of allocating. Not set
+  //                 when the count was saturated and did not move.
+  logic                    p3_pop_dec_q  [0:NUM_PRED_SLOTS-1];
+  logic                    p3_push_inc_q [0:NUM_PRED_SLOTS-1];
+  logic [RAS_PTR_BITS-1:0] p3_inc_ptr_q  [0:NUM_PRED_SLOTS-1];
 
   // -----------------------------------------------------------------
   // Commit-stack top (read-only fallback for empty speculative pops)
@@ -288,7 +299,8 @@ module ras (
   // array), so it is re-exposed by restoring the TOSR the pop started
   // from. No array write, TOSW unchanged (stays monotonic). A pop that
   // only decremented a recursion count held TOSR, so this restores the
-  // same TOSR and the count stays decremented (TD #78).
+  // same TOSR; the count is put back by st_rctr_adj (BP-133, TD #78;
+  // before BP-133 it stayed decremented).
   function automatic ras_ws_t st_restore(
       input ras_ws_t w, input logic [RAS_PTR_BITS-1:0] pre_tosr);
     ras_ws_t r;
@@ -296,6 +308,37 @@ module ras (
     r.we   = 1'b0;
     r.tosr = pre_tosr;
     r      = st_load(r);
+    return r;
+  endfunction
+
+  // Step the recursion count of the entry at ptr by one, up (inc) or
+  // down, with one array write. The undo of a count the p2 operation
+  // changed (BP-133, TD #78). The working top is used when ptr is the
+  // working TOSR, so a count the same pass changed is seen; any other
+  // entry is read from the array. No step past 0 or RCTR_MAX.
+  function automatic ras_ws_t st_rctr_adj(
+      input ras_ws_t w, input logic [RAS_PTR_BITS-1:0] ptr,
+      input logic inc);
+    ras_ws_t                   r;
+    logic [RAS_RCTR_WIDTH-1:0] c;
+    r    = w;
+    r.we = 1'b0;
+    if (r.valid && (ptr == r.tosr)) begin
+      c         = r.top_rctr;
+      r.wdata_a = r.top_addr;
+      r.wdata_n = r.top_nos;
+    end else begin
+      c         = spec_rctr[ptr];
+      r.wdata_a = spec_ret_addr[ptr];
+      r.wdata_n = spec_nos[ptr];
+    end
+    if (inc ? (c != RCTR_MAX) : (c != '0)) begin
+      r.we      = 1'b1;
+      r.waddr   = ptr;
+      r.wdata_r = inc ? (c + RCTR_ONE) : (c - RCTR_ONE);
+      if (r.valid && (ptr == r.tosr))
+        r.top_rctr = r.wdata_r;
+    end
     return r;
   endfunction
 
@@ -358,6 +401,9 @@ module ras (
 
   logic [1:0]                p2_op       [0:NUM_PRED_SLOTS-1];
   logic [RAS_PTR_BITS-1:0]   p2_pre_tosr [0:NUM_PRED_SLOTS-1];
+  logic                      p2_pop_dec  [0:NUM_PRED_SLOTS-1];
+  logic                      p2_push_inc [0:NUM_PRED_SLOTS-1];
+  logic [RAS_PTR_BITS-1:0]   p2_inc_ptr  [0:NUM_PRED_SLOTS-1];
 
   always_comb begin : scan
     ras_ws_t w;
@@ -404,6 +450,9 @@ module ras (
       ras_snapshot_p2[s]  = '0;
       p2_op[s]            = OP_NONE;
       p2_pre_tosr[s]      = '0;
+      p2_pop_dec[s]       = 1'b0;
+      p2_push_inc[s]      = 1'b0;
+      p2_inc_ptr[s]       = '0;
     end
 
     // -------- p3 repair pass (corrects the prior cycle's op) -------
@@ -418,10 +467,13 @@ module ras (
     // registered with the op. It is exact for the pointers because the
     // RETURN_CALL is the only RAS operation in its block (FE-11): a
     // taken branch ends the block. A recursion count the pop
-    // decremented, or the push incremented, is not restored -- the
-    // TD #78 limitation, as for an undo-pop. An undo-pop alone restores
-    // the same registered TOSR (st_restore); a missed pop and an
-    // undo-push follow the link (st_retract).
+    // decremented is incremented back, and a count the push
+    // incremented is decremented back; when both are the same entry
+    // (the pop held TOSR and the push matched it) they cancel (BP-133,
+    // TD #78; before BP-133 neither count was restored). An undo-pop
+    // alone restores the same registered TOSR (st_restore) and puts
+    // back a count its pop decremented; a missed pop and an undo-push
+    // follow the link or decrement a count (st_retract).
     //
     // A RETURN_CALL PAIRED AT THE OTHER STAGE WITH A PLAIN PUSH OR POP
     // is not specified (ras_decisions.md 1). It takes the per-component
@@ -448,6 +500,18 @@ module ras (
       if (ras_rst_done & q_pop & q_push & ~s3_pop & ~s3_push) begin
         w.tosr = p3_pre_tosr_q[s];
         w      = st_load(w);
+        if (p3_pop_dec_q[s] != p3_push_inc_q[s]) begin
+          w = p3_pop_dec_q[s] ? st_rctr_adj(w, p3_pre_tosr_q[s], 1'b1)
+                              : st_rctr_adj(w, p3_inc_ptr_q[s], 1'b0);
+          if (w.we) begin
+            pi             = (s * RAS_WR_PER_SLOT) + n;
+            sp_we[pi]      = 1'b1;
+            sp_waddr[pi]   = w.waddr;
+            sp_wdata_a[pi] = w.wdata_a;
+            sp_wdata_r[pi] = w.wdata_r;
+            sp_wdata_n[pi] = w.wdata_n;
+          end
+        end
       end else if (ras_rst_done) begin
         // Undo a push the p3 type does not have.
         if (q_push & ~s3_push) begin
@@ -465,6 +529,18 @@ module ras (
         // Undo a pop the p3 type does not have, or apply a missed one.
         if (q_pop & ~s3_pop) begin
           w = st_restore(w, p3_pre_tosr_q[s]);
+          if (p3_pop_dec_q[s]) begin
+            w = st_rctr_adj(w, p3_pre_tosr_q[s], 1'b1);
+            if (w.we && (n < RAS_WR_PER_SLOT)) begin
+              pi             = (s * RAS_WR_PER_SLOT) + n;
+              sp_we[pi]      = 1'b1;
+              sp_waddr[pi]   = w.waddr;
+              sp_wdata_a[pi] = w.wdata_a;
+              sp_wdata_r[pi] = w.wdata_r;
+              sp_wdata_n[pi] = w.wdata_n;
+              n              = n + 1;
+            end
+          end
         end else if (~q_pop & s3_pop) begin
           w = st_retract(w);
           if (w.we && (n < RAS_WR_PER_SLOT)) begin
@@ -519,6 +595,7 @@ module ras (
         end else begin
           ras_pop_addr_p2[s]  = w.top_addr;
           ras_pop_valid_p2[s] = 1'b1;
+          p2_pop_dec[s]       = (w.top_rctr != '0);
           w = st_retract(w);
           if (w.we) begin
             pi             = ((NUM_PRED_SLOTS + s) * RAS_WR_PER_SLOT) + n;
@@ -534,6 +611,10 @@ module ras (
 
       // Then the push, applied to the state the pop left.
       if (is_push) begin
+        // The recursion arm of st_push, when it moves the count.
+        p2_push_inc[s] = w.valid & (ras_fall_through_p2[s] == w.top_addr)
+                       & (w.top_rctr != RCTR_MAX);
+        p2_inc_ptr[s]  = w.tosr;
         w = st_push(w, ras_fall_through_p2[s], 1'b1);
         pi             = ((NUM_PRED_SLOTS + s) * RAS_WR_PER_SLOT) + n;
         sp_we[pi]      = 1'b1;
@@ -615,6 +696,9 @@ module ras (
         p3_op_q[s]       <= OP_NONE;
         p3_fallthr_q[s]  <= '0;
         p3_pre_tosr_q[s] <= '0;
+        p3_pop_dec_q[s]  <= 1'b0;
+        p3_push_inc_q[s] <= 1'b0;
+        p3_inc_ptr_q[s]  <= '0;
       end
     end else begin
       ras_rst_done <= 1'b1;
@@ -668,6 +752,9 @@ module ras (
                                                              : p2_op[s];
         p3_fallthr_q[s]  <= ras_fall_through_p2[s];
         p3_pre_tosr_q[s] <= p2_pre_tosr[s];
+        p3_pop_dec_q[s]  <= p2_pop_dec[s];
+        p3_push_inc_q[s] <= p2_push_inc[s];
+        p3_inc_ptr_q[s]  <= p2_inc_ptr[s];
       end
     end
   end

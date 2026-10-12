@@ -16,6 +16,22 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-078, after BP-132: rulings on the remaining front-end TDs.
+
+Jeff, session-078:
+- TD#40 CLOSED. The note it named was removed session-057.
+- TD#178 (the CSR definition) is done after the remaining front-end
+  TDs below are closed.
+- TD#43 CLOSED: the ITTAGE confidence counter stays 3 bits.
+- TD#18, 78, 79, 89 and 90 go into one IA task (BP-133, WRITTEN,
+  not yet issued). For each the IA finds out, proposes, and implements a
+  provisional fix if one is needed; for 89 and 90 it makes the change
+  and records every tb_fe_top program's cycles and mispredicts before
+  and after, at 1 and 2 slots.
+- TD#97 CLOSED: the shared upstream queue is not built and not needed.
+  bp_arb_spec.md 8.2 and 11.D say so.
+
+---
 ## Session-078, after BP-132: the front-end clean-up batch recorded.
 
 BP-132 RUN, COMPLETE (Jeff). 54m34s. regress.sh 265 targets PASS (was
@@ -3768,10 +3784,12 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | rules (bp_arb_spec.md 4.5); the |
 |    |                                       | parameter relationship no       |
 |    |                                       | longer exists.                  |
-| 40 | TB-ARB-05 spec discrepancy.           | bp_arb_spec.md testbench section|
-|    | Old "backpressure 2 cycles" note did  | (was 10.1) removed session-057; |
-|    | not match TAGE_UQ_DEPTH=8.            | tb requirements now live in the |
-|    | No RTL risk.                          | implementing task file.         |
+| 40 | TB-ARB-05 spec discrepancy.           | CLOSED session-078 (Jeff). The  |
+|    | Old "backpressure 2 cycles" note did  | note is gone. Was:              |
+|    | not match TAGE_UQ_DEPTH=8.            | bp_arb_spec.md testbench section|
+|    | No RTL risk.                          | (was 10.1) removed session-057; |
+|    |                                       | tb requirements now live in the |
+|    |                                       | implementing task file.         |
 | 42 | Pipeline diagram shows ITTAGE at s3,  | CLOSED session-070. The SC      |
 |    | should be s2 (alongside FTB, TAGE).   | gate is met and bp_cluster.md   |
 |    |                                       | is corrected at all three sites: |
@@ -3787,7 +3805,9 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | ittage_cntrl.sv declare only    |
 |    |                                       | _p2 and contain no _p3 signal.  |
 |    |                                       | #65 is CLOSED, BP-054           |
-| 43 | Reduce ITTAGE CTR width 3b -> 2b.     | Impacts bp_defines_pkg.sv,      |
+| 43 | Reduce ITTAGE CTR width 3b -> 2b.     | CLOSED session-078 (Jeff). The  |
+|    |                                       | counter stays 3 bits; no change.|
+|    |                                       | Was: impacts bp_defines_pkg.sv, |
 |    |                                       | ittage_table_interfaces.md, RTL |
 |    |                                       | and testbenches.                |
 | 49 | Arb queue status pin renaming.         | pq_not_full/upd_rdy ->          |
@@ -3979,8 +3999,13 @@ assessment of each document. Correct any that are wrong.
 |    |           | on any predictor. The _px and ras_flush_* ports are      |
 |    |           | REDUNDANT and retained; read ras_decisions.md 4.4.2      |
 |    |           | before re-raising this.                                  |
-| 97 | bp_arb    | To determine whether a shared upstream PQ broadcasting   |
-|    |           | to all predictor PQs is implemented. Deferred.           |
+| 97 | bp_arb    | CLOSED session-078 (Jeff). Not built and not needed:     |
+|    |           | fetch presents each request straight to each predictor's |
+|    |           | own queue (bp_arb_spec.md 8.1), and the cluster gates it |
+|    |           | on the TAGE and ITTAGE queues (bp_cluster.sv p0). A      |
+|    |           | queue in front of those queues adds nothing. Was: to     |
+|    |           | determine whether a shared upstream PQ broadcasting to   |
+|    |           | all predictor PQs is implemented. Deferred.              |
 | 99 | bpu       | CLOSED TOOLS-006 (session-073). tools/regress.sh runs   |
 |    |           | every target of every rtl/ Makefile (78), fails on an    |
 |    |           | unclassified target, and is gated at push by            |
@@ -5731,6 +5756,7 @@ unless noted.
 - Remaining deferred: #69/#70 rollback, #43 CTR width, #75
   sim_ittage_fast, #68 sram_init non-fast, #102 IT5 fold
   (#69/#70, #75, #68, #102 closed by BP-126)
+  (#43 closed session-078, the counter stays 3 bits)
   generation.
 
 ### RAS decomposition

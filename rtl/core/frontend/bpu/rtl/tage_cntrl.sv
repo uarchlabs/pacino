@@ -680,11 +680,32 @@ module tage_cntrl #(
   //   Provider prm: prm steps. Provider alt: alt steps, and prm steps
   //   if pred_diff and prm right. Provider prm: alt steps if pred_diff
   //   and alt right. Which counter steps is unchanged.
+  // T0 as the alternate (prm tagged, alt_comp 0): T0 steps only when
+  //   use_alt_on_na chose it (using_primary 0), as the provider, by the
+  //   2b rule of rows 13a-d. BP-133 (TD#18), provisional rows 19.1-19.8:
+  //   the CTR table has no row for this case, and before BP-133 T0 was
+  //   not written when it provided. Rows 14-17 (using_primary 1) leave
+  //   T0 unchanged.
   // ----------------------------------------------------------------
   function automatic logic [2:0] ctr_step(input logic [2:0] c,
                                           input logic       tkn);
     return tkn ? ((c == 3'b111) ? 3'b111 : c + 3'b001)
                : ((c == 3'b000) ? 3'b000 : c - 3'b001);
+  endfunction
+
+  // T0 step: the 2b counter in the low bits of a zero-padded CTR field,
+  // saturating, toward the resolved direction (rows 13a-d, 19.1-19.8).
+  localparam int T0_CTR_W = TAGE_TBL_CTR[0];
+  function automatic logic [TAGE_MAX_CTR_WIDTH-1:0] t0_step(
+    input logic [TAGE_MAX_CTR_WIDTH-1:0] c,
+    input logic                          tkn);
+    logic [T0_CTR_W-1:0] c0;
+    c0 = c[T0_CTR_W-1:0];
+    if (tkn)
+      c0 = (c0 == {T0_CTR_W{1'b1}}) ? c0 : c0 + 1'b1;
+    else
+      c0 = (c0 == '0) ? c0 : c0 - 1'b1;
+    return TAGE_MAX_CTR_WIDTH'(c0);
   endfunction
 
   always_comb begin : ctr_upd_comb
@@ -703,23 +724,7 @@ module tage_cntrl #(
           // Rows 13a-d: CTR moves toward resolved direction.
           // INC toward 2'b11 when resolved_taken=1 (rows 13b,13d).
           // DEC toward 2'b00 when resolved_taken=0 (rows 13a,13c).
-          if (u_resolved[s]) begin
-            // INC T0 CTR toward taken (rows 13b,13d)
-            u_t0_ctr_nxt[s] =
-              (u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0] == 2'b11)
-                ? TAGE_MAX_CTR_WIDTH'(2'b11)
-                : TAGE_MAX_CTR_WIDTH'(
-                    u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0]
-                    + 2'b01);
-          end else begin
-            // DEC T0 CTR toward not-taken (rows 13a,13c)
-            u_t0_ctr_nxt[s] =
-              (u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0] == 2'b00)
-                ? TAGE_MAX_CTR_WIDTH'(2'b00)
-                : TAGE_MAX_CTR_WIDTH'(
-                    u_prm_ctr[s][TAGE_TBL_CTR[0]-1:0]
-                    - 2'b01);
-          end
+          u_t0_ctr_nxt[s] = t0_step(u_prm_ctr[s], u_resolved[s]);
         end else begin
           // At least one tagged provider
           // -- Primary CTR update (prm_comp > 0)
@@ -735,6 +740,13 @@ module tage_cntrl #(
                 u_prm_ctr_nxt[s] = ctr_step(u_prm_ctr[s], u_resolved[s]);
               end
             end
+          end
+          // -- T0 as the provider through use_alt_on_na (alt_comp 0,
+          // using_primary 0): T0 steps toward the outcome (rows
+          // 19.1-19.8, BP-133). Carried on the alt bus to tage_bim.
+          if (!u_alt_tagged[s] && !u_using_prm[s]) begin
+            u_alt_ctr_wr[s]  = 1'b1;
+            u_alt_ctr_nxt[s] = t0_step(u_alt_ctr[s], u_resolved[s]);
           end
           // -- Alt CTR update (alt_comp > 0)
           if (u_alt_tagged[s]) begin
@@ -859,7 +871,9 @@ module tage_cntrl #(
 
       for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : gen_tbl_s
         // CTR write strobes: per-table, gated by trx_type and match.
-        // T0 uses the prm_ctr_wr path; T0 is never an alt provider.
+        // T0 uses the prm_ctr_wr path as the primary (both_t0) and the
+        // alt_ctr_wr path as the alternate chosen by use_alt_on_na
+        // (BP-133). u_alt_ctr_wr is never set with both_t0.
         assign t_prm_ctr_wr_u0[t][s] =
           trx_type &&
           ((t == 0)
@@ -867,11 +881,8 @@ module tage_cntrl #(
             : (u_prm_ctr_wr[s] &&
                (TAGE_TBL_SEL_WIDTH'(t) == u_prm_comp[s])));
         assign t_alt_ctr_wr_u0[t][s] =
-          trx_type &&
-          ((t == 0)
-            ? 1'b0
-            : (u_alt_ctr_wr[s] &&
-               (TAGE_TBL_SEL_WIDTH'(t) == u_alt_comp[s])));
+          trx_type && u_alt_ctr_wr[s] &&
+          (TAGE_TBL_SEL_WIDTH'(t) == u_alt_comp[s]);
 
         // USE/EPC write strobes
         assign t_use_wr_u0[t][s] =

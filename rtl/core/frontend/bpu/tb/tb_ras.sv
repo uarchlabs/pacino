@@ -9,8 +9,9 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-28. TC-01 .. TC-20 from BP-063; TC-21
-// (BP-064) pins TD #78 (undo-pop does not reverse a recursion pop).
+// Directed cases TC-01 .. TC-39. TC-01 .. TC-20 from BP-063; TC-21
+// (BP-064) pinned TD #78 (undo-pop did not reverse a recursion pop)
+// until BP-133 fixed it.
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
 // then pushes (ras_decisions.md 2, RAS-DS1): at p2, in the p3 repair,
 // and at commit (IC-RAS-10). TC-29 .. TC-33 (BP-120, TD#159) are the
@@ -18,7 +19,12 @@
 // pop-then-push sequence, the p3 repair rows on the link, the restore
 // after wrong-path pops and pushes, and the return-call pairings the
 // repair table does not specify. TC-36 and TC-37 (BP-126, TD#121)
-// are the full commit stack: 32 pushes read non-empty.
+// are the full commit stack: 32 pushes read non-empty. BP-133 (TD
+// #78) changed TC-21 from a pin of the non-reversing undo-pop to a
+// check that the undo restores the recursion count, and added TC-38
+// (the undo of a whole RETURN_CALL restores the counts it changed) and
+// TC-39 (TD #79: the commit stack keeps recursion depth as repeated
+// entries).
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -230,6 +236,10 @@ module tb;
   localparam logic [VA_WIDTH-1:0] ADDR_R = VA_WIDTH'('h00_000A_0000);
 
   logic [VA_WIDTH-1:0] fill_addr [0:15];
+
+  // Saturated recursion count (TC-38d).
+  localparam logic [RAS_RCTR_WIDTH-1:0] RCTR_MAX_TB =
+    {RAS_RCTR_WIDTH{1'b1}};
 
   // -----------------------------------------------------------------
   // Stimulus
@@ -581,56 +591,61 @@ module tb;
     check("TC-20 deasserted when both empty", tos_valid_p0[0] == 1'b0);
 
     // =============================================================
-    // TC-21: TD #78 pin -- undo-pop does NOT reverse a recursion
-    // pop. Seed a recursion entry so the p2 pop is a recursion-
-    // decrement (TOSR held, rctr decremented) rather than a TOSR-
-    // moving pop. The p3 undo-pop re-expose then moves TOSR up a
-    // slot (re-exposing a stale/empty frontier slot) instead of
-    // restoring the lost recursion count at the held slot. This
-    // pins the CURRENT non-reversing behavior; it is not a fix.
-    // Modeled on TC-17 but with a recursion-decrement pop in p2.
-    // See ras_decisions.md section 1.2 and PROJECT_STATUS TD #78.
+    // TC-21: TD #78 -- undo-pop reverses a recursion pop (BP-133).
+    // Seed a recursion entry so the p2 pop is a recursion-decrement
+    // (TOSR held, rctr decremented) rather than a TOSR-moving pop. The
+    // p3 undo-pop restores the pre-pop TOSR and increments the count
+    // back. BP-064 to BP-132 pinned the non-reversing behavior: the
+    // count stayed decremented (rctr[1] == 0 after the undo). Modeled
+    // on TC-17 but with a recursion-decrement pop in p2.
+    // See ras_decisions.md section 1 and PROJECT_STATUS TD #78.
     // =============================================================
     do_reset();
     push_one(ADDR_A);                       // idx1, rctr=0, tosw=2
     // Second push of ADDR_A -> recursion: rctr[1] 0->1, TOSR holds.
     drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
     tick();
-    check("TC-21 pins TD #78: seeded recursion rctr[1]==1",
-          dut.spec_rctr[1] == 4'd1);
-    check("TC-21 pins TD #78: seeded tosr==1 (recursion holds top)",
-          dut.tosr == 4'd1);
+    check("TC-21 seeded recursion rctr[1]==1", dut.spec_rctr[1] == 4'd1);
+    check("TC-21 seeded tosr==1 (recursion holds top)", dut.tosr == 4'd1);
     // p2 RETURN with p3 agreeing (drive) -> recursion-decrement pop:
     // rctr[1] 1->0, TOSR holds at 1 (TOSR not moved by this pop).
     drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
     tick();
-    check("TC-21 pins TD #78: recursion pop decremented rctr[1] 1->0",
+    check("TC-21 recursion pop decremented rctr[1] 1->0",
           dut.spec_rctr[1] == 4'd0);
-    check("TC-21 pins TD #78: recursion pop held tosr at 1",
-          dut.tosr == 4'd1);
+    check("TC-21 recursion pop held tosr at 1", dut.tosr == 4'd1);
     // Repair cycle: p2 idle, p3 forced no-op so it disagrees with the
-    // registered OP_POP -> undo-pop re-expose fires.
+    // registered OP_POP -> undo-pop fires.
     drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
     force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
     tick();
-    // NON-reversing outcome: the pre-pop recursion state is NOT
-    // recovered. Since BP-120 the undo-pop restores the TOSR the pop
-    // started from (ras_decisions.md 3.2: "undo-pop restores the
-    // pre-op TOSR"), which a recursion pop held, so TOSR stays at 1;
-    // the decremented recursion count is still not restored.
-    check("TC-21 pins TD #78: rctr[1] NOT restored, stays 0 (count lost)",
-          dut.spec_rctr[1] == 4'd0);
+    // OLD (BP-064 to BP-132): "TC-21 pins TD #78: rctr[1] NOT
+    // restored, stays 0 (count lost)", dut.spec_rctr[1] == 4'd0.
+    check("TC-21 undo-pop restored the recursion count, rctr[1]==1",
+          dut.spec_rctr[1] == 4'd1);
     // OLD (BP-064 to BP-119): "TC-21 pins TD #78: undo-pop moved tosr
     // to 2, not restored to 1", dut.tosr == 4'd2 (TOSR + 1).
     check("TC-21 undo-pop restored the pre-pop tosr (1)",
           dut.tosr == 4'd1);
-    check("TC-21 pins TD #78: tosw held at 2 (no allocation on re-expose)",
+    check("TC-21 tosw held at 2 (no allocation on the undo)",
           dut.tosw == 4'd2);
     // OLD (BP-064 to BP-119): "TC-21 pins TD #78: re-exposed top idx2
     // is empty (0), not ADDR_A", dut.spec_ret_addr[2] == '0 -- the
     // TOSR + 1 slot.
     check("TC-21 the top is A at idx1 again",
           dut.spec_ret_addr[dut.tosr] == ADDR_A);
+    // Both recursion levels pop again: A, A, then empty.
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-21 first pop after the undo returns A",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-21 second pop after the undo returns A",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    check("TC-21 two pops empty the stack", dut.tosr == dut.bos);
 
     // =============================================================
     // TC-22: RETURN_CALL at p2 -- pop, then push (RAS-DS1).
@@ -1150,6 +1165,111 @@ module tb;
     commit_op(RETURN, '0, 4'd0);
     #1;
     check("TC-37e and one pop empties it again", tos_valid_p0[0] == 1'b0);
+
+    // =============================================================
+    // TC-38 (BP-133, TD #78): the undo of a whole RETURN_CALL (p2
+    // pop+push, p3 no-op) restores the recursion counts its pop and
+    // push changed, as well as the pre-op TOSR (TC-26).
+    // a. The pop decremented a count, the push allocated: the count is
+    //    incremented back. Seed A twice (idx1 rctr 1), RETURN_CALL with
+    //    fall-through B: the pop takes rctr[1] 1->0 holding TOSR, the
+    //    push allocates B at idx2.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_A);
+    check("TC-38a seeded rctr[1]==1 tosr==1",
+          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
+    drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-38a pre-repair: rctr[1]==0, B on top at idx2",
+          (dut.spec_rctr[1] == 4'd0) && (dut.tosr == 4'd2) &&
+          (dut.spec_ret_addr[2] == ADDR_B));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    // Before BP-133: tosr 1 and rctr[1] 0 (one recursion level lost).
+    check("TC-38a undo: tosr 1, rctr[1] restored to 1",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1));
+    // b. The pop moved TOSR, the push incremented the count of the
+    //    entry below: the count is decremented back. Seed A (idx1),
+    //    then X (idx2). RETURN_CALL with fall-through A pops X (TOSR to
+    //    idx1, A) and the push matches A: rctr[1] 0->1.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_X);
+    drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-38b pre-repair: tosr 1, rctr[1]==1",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    // Before BP-133: tosr 2 and rctr[1] 1 (a level that never was).
+    check("TC-38b undo: tosr 2 (X), rctr[1] restored to 0",
+          (dut.tosr == 4'd2) && (dut.spec_rctr[1] == 4'd0) &&
+          (dut.spec_ret_addr[2] == ADDR_X));
+    // c. Both on one entry: seed A twice (rctr[1] 1), RETURN_CALL with
+    //    fall-through A: the pop takes rctr[1] to 0 holding TOSR, the
+    //    push matches A and takes it back to 1. The undo changes no
+    //    count.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_A);
+    drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-38c pre-repair: tosr 1, rctr[1]==1, tosw 2",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1) &&
+          (dut.tosw == 4'd2));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-38c undo: tosr 1, rctr[1] still 1",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == 4'd1));
+    // d. A saturated count the push could not move is not decremented
+    //    by the undo. Seed A with rctr 15 through the push path (one
+    //    allocation, 15 recursion pushes), X above it, then the b case.
+    do_reset();
+    for (int i = 0; i <= int'(RCTR_MAX_TB); i++)
+      push_one(ADDR_A);
+    check("TC-38d seeded rctr[1]==15", dut.spec_rctr[1] == RCTR_MAX_TB);
+    push_one(ADDR_X);
+    drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-38d pre-repair: tosr 1, rctr[1] held at 15",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-38d undo: tosr 2, rctr[1] still 15",
+          (dut.tosr == 4'd2) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+
+    // =============================================================
+    // TC-39 (BP-133, TD #79): the commit stack has no recursion
+    // compression; each committed call is its own entry, so recursion
+    // depth is kept as repeated entries and the fallback reads it at
+    // depth. Commit A then B three times (B calling itself), then pop
+    // with the speculative stack empty: B, B, B, A, empty. The commit
+    // rctr field is written zero and read by nothing.
+    // =============================================================
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_A, 4'd0);
+    for (int i = 0; i < 3; i++)
+      commit_op(DIRECT_CALL, ADDR_B, 4'd0);
+    check("TC-39 four committed calls, four entries",
+          int'(dut.c_cnt) == 4);
+    for (int i = 0; i < 3; i++) begin
+      #1;
+      check($sformatf("TC-39 fallback at depth %0d is B", 4 - i),
+            (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_B));
+      commit_op(RETURN, '0, 4'd0);
+    end
+    #1;
+    check("TC-39 fallback at depth 1 is A",
+          (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_A));
+    commit_op(RETURN, '0, 4'd0);
+    #1;
+    check("TC-39 then empty", tos_valid_p0[0] == 1'b0);
 
     // -------------------------------------------------------------
     $display("=================================================");

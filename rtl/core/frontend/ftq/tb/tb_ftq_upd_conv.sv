@@ -25,7 +25,8 @@
 //   B  all eight bp_br_type_e encodings on both slots: which
 //      predictors receive the update and the uBTB structural bits
 //   C  every payload field of every predictor against values this
-//      file derives (branch PC, mispredict flags, SC range)
+//      file derives (branch PC, mispredict flags, SC range); C10
+//      (BP-133) the SC range and backward flag on every slot
 //   D  TD#150: a queue ready held low on ONE slot stalls the
 //      predictor on both slots; a type that does not train it is not
 //      stalled
@@ -429,6 +430,29 @@ module tb;
         sc_upd_inp_u0[HS].backwards_branch === 1'b0);
     chk("C6 metadata follows the record (pattern B)",
         tage_upd_inp_u0[HS].tage_pred_meta === upd_meta[HS].tage);
+
+    // C10 (BP-133, TD#89, TD#90): on every slot, a NOT-TAKEN backward
+    // conditional whose branch PC is in the next 64-byte region from
+    // its block start. backwards_branch is the sign of the taken target
+    // whatever the direction (the backend carries the taken target of a
+    // conditional either way, ftb_decisions.md 5.5), and branch_range is
+    // the BRANCH pc's bits 15:6, not the block start's. Both come from
+    // the resolution and the FTQ entry; the FTB stores neither.
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      do_reset();
+      pc  = VA_WIDTH'('h00_8300_0038);
+      bpc = br_pc(pc, FTB_BR_POS_BITS'(6));         // 0x..0044
+      tgt = bpc - VA_WIDTH'('h100);
+      present(s, COND, pc, FTB_BR_POS_BITS'(6), 1'b0, tgt,
+              pc + VA_WIDTH'(32), PAT_A);
+      settle();
+      chk($sformatf("C10 slot %0d SC valid", s), sc_upd_val_u0[s] === 1'b1);
+      chk($sformatf("C10 slot %0d backwards_branch set, not taken", s),
+          sc_upd_inp_u0[s].backwards_branch === 1'b1);
+      chk($sformatf("C10 slot %0d branch_range is the branch PC's", s),
+          (sc_upd_inp_u0[s].branch_range === bpc[15:6])
+       && (sc_upd_inp_u0[s].branch_range !== pc[15:6]));
+    end
 
     // C7-C9: an indirect on slot 0. ITTAGE fields and indir_mispredict
     // for a hit that was right, a hit that was wrong, and a miss.

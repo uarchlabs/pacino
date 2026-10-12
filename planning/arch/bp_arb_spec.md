@@ -757,9 +757,11 @@ This is simpler than a shared upstream PQ and is appropriate
 given the small metadata size of LP and the independent
 sizing of each predictor.
 
-### 8.2  Future: shared upstream PQ
+### 8.2  Shared upstream PQ: not built
 
-This is now recorded as TD #97.
+A single queue in front of every predictor's PQ is not built and not
+needed: each request goes straight to each predictor's own queue
+(8.1). TD #97 CLOSED, session-078 (Jeff).
 
 ## 9. RTL changes
 
@@ -794,7 +796,8 @@ task file, not here.
 
   D. Shared upstream PQ.
 
-     This is TD #97.
+     CLOSED, session-078 (Jeff). Not built and not needed (8.2).
+     This was TD #97.
 
      OLD: Deferred.  Option B (independent PQs) used initially.
      Revisit before LP integration if timing or fan-out
@@ -997,3 +1000,6 @@ task file, not here.
               <pred>_uq_not_full (TD#49). 5.3, 5.4: the TAGE and
               ITTAGE arbitration is in tage_arb.sv and ittage_arb.sv
               (TD#52).
+
+  2026-10-12  session-078, TD#97 closed (Jeff). 8.2 and 11.D: the
+              shared upstream PQ is not built and not needed.

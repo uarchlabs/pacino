@@ -13,7 +13,10 @@
 // (NUM_PRED_SLOTS, 1 or 2; u_ram_s0 / u_ram_s1 before BP-128).
 // No tag, no useful, no EPC, no allocation, no folded history.
 // Prediction: inputs at p0, outputs at p1 (1-cycle latency).
-// Update: write gated by THIS_TABLE == prm_tbl_sel_u0.
+// Update: write gated by THIS_TABLE == prm_tbl_sel_u0 (T0 is the
+// primary, rows 13a-d) or THIS_TABLE == alt_tbl_sel_u0 (T0 is the
+// alternate and use_alt_on_na chose it, BP-133 TD#18, provisional rows
+// 19.1-19.8). tage_cntrl never drives both at T0 in one slot.
 // tbl_ri_active + tbl_ri_wr: RAM-init overrides all writes.
 //
 // This requires manual validation checks
@@ -49,6 +52,11 @@ module tage_bim #(
   input  logic [THIS_CTR_WIDTH-1:0]    prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
   input  logic [NUM_PRED_SLOTS-1:0]    prm_ctr_wr_u0,
   input  logic [TBL_SEL_WIDTH-1:0]     prm_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [THIS_CTR_WIDTH-1:0]    alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1],
+  input  logic [NUM_PRED_SLOTS-1:0]    alt_ctr_wr_u0,
+  input  logic [TBL_SEL_WIDTH-1:0]     alt_tbl_sel_u0[0:NUM_PRED_SLOTS-1],
+  // upd_index_u0: the prm index when T0 is the prm target, else the alt
+  // index (muxed in tage.sv, as for tage_table)
   input  logic [THIS_INDEX_BITS-1:0]   upd_index_u0[0:NUM_PRED_SLOTS-1],
   // -- RAM initialization
   input  logic                         tbl_ri_active,
@@ -87,6 +95,7 @@ module tage_bim #(
     logic [ALLOC_DATA_WIDTH-1:0]  ram_dout;
 
     logic ctr_match, ctr_we;
+    logic alt_match, alt_we;
 
     // Fast init: write the bw_ram mem array at time zero via
     // hierarchical reference. Active only when +TAGE_FAST_INIT=1.
@@ -110,17 +119,20 @@ module tage_bim #(
     assign ctr_match = (prm_tbl_sel_u0[s] == THIS_TBL_SEL);
     assign ctr_we    = tage_upd_val_u0[s]
                      & prm_ctr_wr_u0[s] & ctr_match;
+    assign alt_match = (alt_tbl_sel_u0[s] == THIS_TBL_SEL);
+    assign alt_we    = tage_upd_val_u0[s]
+                     & alt_ctr_wr_u0[s] & alt_match;
 
     // T0 entry is all CTR bits. Every write enables all bits.
-    assign ram_wen_n  = ~(ctr_we | ri_we);
-    assign ram_bweb_n = (ctr_we | ri_we)
+    assign ram_wen_n  = ~(ctr_we | alt_we | ri_we);
+    assign ram_bweb_n = (ctr_we | alt_we | ri_we)
                       ? {ALLOC_DATA_WIDTH{1'b0}}
                       : {ALLOC_DATA_WIDTH{1'b1}};
 
     always_comb begin : addr_mux
       if (tbl_ri_active)
         ram_addr = tbl_ri_wa;
-      else if (ctr_we)
+      else if (ctr_we | alt_we)
         ram_addr = upd_index_u0[s];
       else
         ram_addr =
@@ -133,6 +145,8 @@ module tage_bim #(
         ram_din = tbl_ri_wd;
       else if (ctr_we)
         ram_din = prm_ctr_wd_u0[s];
+      else if (alt_we)
+        ram_din = alt_ctr_wd_u0[s];
     end
 
     bw_ram #(

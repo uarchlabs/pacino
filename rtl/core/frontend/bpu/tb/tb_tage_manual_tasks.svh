@@ -1033,6 +1033,42 @@ task automatic tage_ctr_test(
   aexp_entry.ctr    = 1; aexp_entry.useful = 0; //POSSIBLE ERROR
   check_ctr_row("R17.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
+// -------------------------------------------------------------
+// ROWS 19.1-19.8 (BP-133, TD#18, provisional; not in
+// tage_cntrl_ctr_update_rules.md). Primary tagged (T4), alternate T0,
+// use_alt_on_na chose T0 (UP=0). T0 is the provider and steps toward
+// RT by the 2b rule of rows 13a-d; the primary steps toward RT only on
+// pred_diff with the primary right (the rows 9/10 rule). T0 at aidx is
+// the T0 written; T0 at pidx is seeded 2'b11 and must not change (the
+// tage.sv index mux picks the alt index for T0 here).
+// ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT  T0       PCTR
+// 19.1 0  1  1  1   0  1  >0   0    --   n/a  INC    01->10   2->2
+// 19.2 0  1  1  0   1  1  >0   0    --   n/a  INC    11->11   2->2
+// 19.3 0  0  0  0   0  0  >0   0    --   n/a  DEC    01->00   2->2
+// 19.4 0  0  0  1   1  0  >0   0    --   n/a  DEC    00->00   2->2
+// 19.5 0  1  0  1   0  1  >0   0    INC  n/a  DEC    01->00   2->1
+// 19.6 0  0  1  1   1  0  >0   0    INC  n/a  INC    01->10   2->3
+// 19.7 0  1  0  0   1  1  >0   0    --   n/a  DEC    10->01   2->2
+// 19.8 0  0  1  0   0  0  >0   0    --   n/a  INC    10->11   2->2
+// pACT INC is the strengthen of the legend: toward RT.
+// -------------------------------------------------------------
+  t0_alt_row("R19.1",1,1,0,1,2'b01,2'b10,3'b010,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.2",1,1,1,1,2'b11,2'b11,3'b010,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.3",0,0,0,0,2'b01,2'b00,3'b010,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.4",0,0,1,0,2'b00,2'b00,3'b010,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.5",1,0,0,1,2'b01,2'b00,3'b001,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.6",0,1,1,0,2'b01,2'b10,3'b011,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.7",1,0,1,1,2'b10,2'b01,3'b010,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.8",0,1,0,0,2'b10,2'b11,3'b010,pcomp,pidx,aidx,pentry,
+             pred_meta,upd_data,errs,v);
+
   // END
   stop_test(this_test,errs);
   tb_pf(this_test,errs);
@@ -1060,6 +1096,58 @@ task automatic check_ctr_row_t0(
   tage_ram_entry_t r;
   tage_ram_read(0, t0idx, r);
   tage_cmp_ram_entry_t0({label," T0   "}, t0idx, t0exp, r, errs, v);
+endtask
+// -------------------------------------------------------------------
+// t0_alt_row: one of rows 19.1-19.8 (BP-133). Seeds the primary entry
+// at pidx, T0 at aidx (t0_init) and T0 at pidx (2'b11), sends one
+// update with UP=0, alt_comp=0 and the T0 counter in tage_alt_ctr, then
+// checks the primary CTR, T0 at aidx (t0_exp) and T0 at pidx
+// (unchanged).
+// -------------------------------------------------------------------
+task automatic t0_alt_row(
+  input string           label,
+  input logic            pred_tkn,
+  input logic            resolved_taken,
+  input logic            prm_tkn,
+  input logic            alt_tkn,
+  input logic [1:0]      t0_init,
+  input logic [1:0]      t0_exp,
+  input logic [2:0]      pctr_exp,
+  input int              pcomp, pidx, aidx,
+  input tage_ram_entry_t pentry,
+  inout tage_pred_meta_t meta,
+  inout tage_upd_inp_t   upd,
+  inout int              errs,
+  input int              v
+);
+  tage_ram_entry_t t0e, r, pexp;
+  logic [TAGE_MAX_CTR_WIDTH-1:0] actr_save;
+
+  tb_info({"CTR ROW ", label});
+  tage_ram_write(pcomp, pidx, pentry);
+  t0e     = '0;
+  t0e.ctr = TAGE_MAX_CTR_WIDTH'(t0_init);
+  reset_t0_entry(aidx, t0e);
+  t0e.ctr = 3'b011;
+  reset_t0_entry(pidx, t0e);
+
+  actr_save          = meta.tage_alt_ctr;
+  meta.tage_alt_ctr  = TAGE_MAX_CTR_WIDTH'(t0_init);
+  //                   UP PT        RT              pT       aT
+  set_ctr_row(meta, upd, 0, pred_tkn, resolved_taken, prm_tkn, alt_tkn,
+              pcomp, 0);
+  tage_update('{default: upd}, NUM_PRED_SLOTS'(1), errs);
+  meta.tage_alt_ctr  = actr_save;
+
+  pexp        = pentry;
+  pexp.ctr    = pctr_exp;
+  pexp.useful = 0;
+  tage_ram_read(pcomp, pidx, r);
+  tage_cmp_ram_entry({label," PCOMP"}, pcomp, pidx, pexp, r, errs, v);
+  t0e.ctr = TAGE_MAX_CTR_WIDTH'(t0_exp);
+  check_ctr_row_t0({label," alt"}, aidx, t0e, errs, v);
+  t0e.ctr = 3'b011;
+  check_ctr_row_t0({label," prm"}, pidx, t0e, errs, v);
 endtask
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------

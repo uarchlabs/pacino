@@ -193,6 +193,7 @@ module tage (
   // Update input slices: MAX_*-wide buses sliced to THIS_* widths.
   logic [TAGE_TBL_IDX[0]-1:0] bim_upd_idx_u0[0:NUM_PRED_SLOTS-1];
   logic [TAGE_TBL_CTR[0]-1:0] bim_prm_ctr_wd_u0[0:NUM_PRED_SLOTS-1];
+  logic [TAGE_TBL_CTR[0]-1:0] bim_alt_ctr_wd_u0[0:NUM_PRED_SLOTS-1];
 
   // T0 hit: T0 (tage_bim) has no tag match; always hits.
   // Drive constant 1 for all slots.
@@ -206,11 +207,17 @@ module tage (
     // Layout: [0]=VAL=1, [3:1]=CTR(2b padded to 3b), [7:4]=0.
     assign w_cntrl_bits_p1[0][s] =
       {5'b0, bim_cntrl_p1[s], 1'b1};
-    // Slice update index: MAX_IDX -> TAGE_TBL_IDX[0]=11 (same).
-    assign bim_upd_idx_u0[s] = w_upd_index_u0[s][TAGE_TBL_IDX[0]-1:0];
+    // Slice update index: MAX_IDX -> TAGE_TBL_IDX[0]=11 (same). The
+    // prm index when T0 is the prm target, else the alt index (BP-133,
+    // TD#18: T0 is written as the alternate), as for gen_tage_tbl.
+    assign bim_upd_idx_u0[s] = (w_prm_tbl_sel_u0[s] == '0)
+      ? w_upd_index_u0[s][TAGE_TBL_IDX[0]-1:0]
+      : w_alt_upd_index_u0[s][TAGE_TBL_IDX[0]-1:0];
     // Slice CTR write data: MAX_CTR=3 -> TAGE_TBL_CTR[0]=2.
     assign bim_prm_ctr_wd_u0[s] =
       w_prm_ctr_wd_u0[s][TAGE_TBL_CTR[0]-1:0];
+    assign bim_alt_ctr_wd_u0[s] =
+      w_alt_ctr_wd_u0[s][TAGE_TBL_CTR[0]-1:0];
     // T0 has no tag. Drive w_tag_p0[0] to zero for every slot.
     assign w_tag_p0[0][s] = '0;
   end
@@ -348,6 +355,9 @@ module tage (
     .prm_ctr_wd_u0    (bim_prm_ctr_wd_u0),
     .prm_ctr_wr_u0    (w_prm_ctr_wr_u0[0]),
     .prm_tbl_sel_u0   (w_prm_tbl_sel_u0),
+    .alt_ctr_wd_u0    (bim_alt_ctr_wd_u0),
+    .alt_ctr_wr_u0    (w_alt_ctr_wr_u0[0]),
+    .alt_tbl_sel_u0   (w_alt_tbl_sel_u0),
     .upd_index_u0     (bim_upd_idx_u0),
     .tbl_ri_active    (tbl_ri_active),
     .tbl_ri_wr        (tbl_ri_wr),
