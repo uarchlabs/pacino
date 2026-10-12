@@ -61,7 +61,9 @@
 # and the files updated in session-078 (PROJECT_STATUS.md,
 # tage_table_interfaces.md), and the files updated in session-078
 # after BP-130 (PROJECT_STATUS.md, bp_history_interfaces.md,
-# bp_history_decisions.md, ftq_bpu_interfaces.md).
+# bp_history_decisions.md, ftq_bpu_interfaces.md), and the files
+# updated after BP-131 (PROJECT_STATUS.md, ftb_decisions.md,
+# ubtb_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -80,7 +82,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 7a58686e7233
+PLAN  PROJECT_STATUS.md                 396b677683db
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -90,7 +92,7 @@ ARCH  bp_history_decisions.md           f6a327aecf90
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   0ec67f83aa96
-ARCH  ftb_decisions.md            a6b8e397e78d
+ARCH  ftb_decisions.md            5872deda6dc9
 ARCH  ftq_decisions.md            4e77292e528d
 ARCH  ftq_entry_formats.md        2301dd3f97e2
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
@@ -143,7 +145,7 @@ INTF  ras_interfaces.md                 a3029b6fb4e6
 INTF  sc_interfaces.md                  66e1eefd2866
 INTF  sc_table_interfaces.md            b442b10dab0f
 INTF  tage_interfaces.md                e25a37204743
-INTF  ubtb_interfaces.md          b7ed4eddefa8
+INTF  ubtb_interfaces.md          bc467c5fe340
 
 
 EOF

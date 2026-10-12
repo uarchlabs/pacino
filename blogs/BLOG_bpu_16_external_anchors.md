@@ -437,5 +437,7 @@ high-performance OOO processors. He has contributed RTL to Pentium 4, ARM V7,  T
 virtualization. He is the author of Pacino and the uarchlabs methodology documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
+
+*Updated w/ ticfinder.*
 <!-- ticfinder_on -->
 

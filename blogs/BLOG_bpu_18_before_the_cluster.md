@@ -364,4 +364,7 @@ virtualization. He is the author of Pacino and the uarchlabs methodology
 documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
+
+*Updated w/ ticfinder.*
+
 <!-- ticfinder_on -->

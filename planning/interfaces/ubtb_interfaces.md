@@ -6,7 +6,7 @@
  FILE:    ubtb_interfaces.md
  SOURCE:  various; session-063 rewrite
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -321,6 +321,13 @@ same entry; they write different fields of it.
   Tag miss                      : allocate. The evicted way is the
                                   round-robin write pointer.
 
+ONE BRANCH CAN BE STORED IN BOTH CONDITIONAL FIELDS. A consequence
+of comparing only the field br_idx names: a branch updated once
+through slot 0 and once through slot 1 fills both. MEASURED by BP-131
+(session-078): 82 times at NUM_PRED_SLOTS = 2 (hist 54, twocond 15,
+multistart 13). Not a fault against this rule; a cost of it. Deferred
+to TD#179 (Jeff).
+
 The jump target is rewritten on every resolve of that jump, whether
 or not ITTAGE or RAS supplies the runtime target.
 
@@ -331,7 +338,8 @@ A block containing a third conditional branch ends at the second
 conditional. The third branch becomes the first branch of the next
 block and gets its own entry on a separate lookup. Branches are
 never dropped; the block is split. The uBTB stores whatever boundary
-the update path supplies in pft_addr.
+the update path supplies in pft_addr. NOT BUILT: no update path
+supplies a split boundary (ftb_decisions.md 3, TD#179).
 
 ### Read-during-write contract
 
@@ -378,6 +386,11 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-10-12  session-078, after BP-131. Allocation and field writes:
+              one branch can fill both conditional fields, measured
+              82 times at two slots; the block split is not built.
+              Both deferred to TD#179.
+
   2026-10-08  session-076, PA-direct correction recording BP-121.
               Lookup: the p1 slot-order inversion was not harmless;
               bp_cluster swaps the p1 slots (D12).

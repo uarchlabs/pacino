@@ -6,7 +6,7 @@
  FILE:    ftb_decisions.md
  SOURCE:  session-051 / session-052 / session-053
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -214,6 +214,30 @@ is split.
 Cost of the split: that block becomes two prediction blocks, two lookups
 instead of one, on that path. This only happens with three or more
 conditional branches in one 32-byte block, which is rare.
+
+THE SPLIT IS NOT BUILT, at either slot count (found session-078).
+ftb_cntrl.sv, with both conditional fields holding other branches,
+REPLACES a field (5.5 field mapping, cases 3 and 4), and the block
+end written is the update's, not one ending at the held branches.
+The uBTB fills the field the update names. Nothing shortens the
+block. The rule above also does not count the jump: a jump behind
+two conditionals is stored but no prediction slot reports it, and
+at NUM_PRED_SLOTS = 1 a block's second branch of any kind is never
+reported (BP-128 D2).
+
+MEASURED by BP-131 (session-078, tb_fe_top, 36 programs): blocks with
+more branches than slots, 9 at two slots (all twocond, two
+conditionals and a jump) and 243 at one slot; cases 3 and 4 never
+occur, no test region holds three conditionals. A split end would
+differ from another start's recorded end in every such block with
+one (228 of 228 at one slot): with the shared entry (4.6, TD#168) a
+split adds contention for the one pftAddr. The tb_fe_top programs
+are directed tests, too small to settle this.
+
+DEFERRED to TD#179 (Jeff, session-078), with the entry shape (2+1,
+or NUM_PRED_SLOTS fields with a shared last field as XiangShan), the
+region sharing of TD#168 and the training point, until the
+performance analysis against compiled benchmarks.
 
 ---
 
@@ -1415,4 +1439,8 @@ region end, plus a full block, plus a straddling halfword pair:
 
   2026-09-20  session-072. D29: the history section notes that older
               entries use the retired s-labels.
+
+  2026-10-12  session-078, after BP-131. Section 3: the split is not
+              built at either slot count; BP-131's measurement
+              recorded; deferred to TD#179 (Jeff).
 ```

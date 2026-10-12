@@ -16,6 +16,61 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-078, after BP-131: the slot measurements recorded.
+
+BP-131 RUN, COMPLETE (Jeff). 48m. Measurement only; nothing in the tree
+changed (counters in a scratch copy of tb_fe_top). regress.sh 261 PASS
+before and after; the instrumented runs reproduce every program's
+figures. Every number below is from tb_fe_top, 36 programs, at two
+slots / one slot; details in prompts/BP-131.md.
+  Blocks with more branches than slots: 9 / 243. At two slots all 9 are
+    twocond (two conditionals and a jump): the third branch is stored
+    but no slot reports it. The FTB never replaced a stored conditional
+    (no test region holds three conditionals).
+  Wrong training at one slot: 312 BP-119 placements trained TAGE, SC,
+    LP or ITTAGE from another branch's slot metadata (27 at two slots).
+  Mispredicts at a position no slot held: 429 / 537; most with room in
+    the entry (423 / 391), the branch not in the entry or not visible.
+  Mispredict cost, redirect to the next correct instruction at decode:
+    mean 11.1 / 11.3 cycles, max 20, in the 21 ordinary programs;
+    uncached fetch 17; page-walk programs 90 (the walk).
+  Region sharing (TD#168): 73 of 260 FTB entries used by more than one
+    block start (up to 6); 92% of block-end changes made by a different
+    start than the last writer; 608 of 1521 jump updates replaced a
+    different jump. A split's block end would differ from another
+    start's recorded end in every case (8 of 8 / 228 of 228).
+  uBTB: one branch stored in both conditional fields 82 times at two
+    slots (it compares only the field it is told to fill). The BP-119
+    placement displaced a later branch while a slot was free 31 times
+    at two slots. Both follow their written rules; neither is a fault.
+  Training point: wrong-path training cannot be measured (the tb_fe_top
+    backend resolves only retired instructions, in order). Resolve to
+    commit: mean 6.4 / 5.0 cycles, max 24; 1566 / 1252 branches had
+    their FTB region read again before commit, 876 / 736 of them after
+    the resolution had changed the entry.
+  Not a bug: no hardware fault and no assertion fired.
+
+JUDGED (Jeff): the tb_fe_top programs are directed tests (15 to 1064
+retired instructions, 2846 resolved branches in all, 260 of 2048 FTB
+entries used, hand-written, an in-order backend that never runs the
+wrong path). They are not representative enough to drive these
+microarchitecture decisions. The next phases are performance analysis
+against compiled benchmarks.
+
+DEFERRED (Jeff) to TD#179, kept open for every remaining one- and
+two-slot change: the block split and the entry shape, region sharing
+(TD#168), the uBTB duplicate fill, the BP-119 placement rule, and
+training at resolve or at commit. Recorded also at ftb_decisions.md 3
+and ubtb_interfaces.md so they are not rediscovered.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ftb_decisions.md (3: the split not built,
+the measurement, deferred), ubtb_interfaces.md (the duplicate fill and
+the unbuilt split).
+
+Next free: BP-132, INFRA-014, TOOLS-007, TD#180.
+
+---
 ## Session-078, after BP-130: BP-128, BP-129 and BP-130 recorded.
 
 NUM_PRED_SLOTS works at 1 and 2 (TD#1 closed). Three tasks, each run
@@ -115,7 +170,7 @@ bp_history_decisions.md, ftq_bpu_interfaces.md.
     one-source macro), and the interface documents that name
     u_ram_s0 / u_ram_s1. They wait for the D2 and D3 rulings.
 
-Next free: BP-131, INFRA-014, TOOLS-007, TD#180.
+Next free: BP-131, INFRA-014, TOOLS-007, TD#180. (Superseded above.)
 
 ---
 ## Session-078: TD scrub begun. TD#5, TD#16, TD#17 closed.
@@ -4688,6 +4743,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | misp_call's repeating conditional (0x0a), which is       |
 |     |          | pseudo-random by construction and cannot be learned.     |
 |     |          | Tasks report neither as open.                            |
+|     |          | MEASURED again by BP-131 (session-078): 73 of 260 FTB    |
+|     |          | entries used by more than one start; 92% of block-end    |
+|     |          | changes made by another start; 608 jump replacements.    |
+|     |          | Revisited with TD#179 (Jeff).                            |
 | 169 | bpu      | CLOSED by BP-122 (session-076). The loop predictor reads |
 |     |          | the entry before writing it, trains from the iteration   |
 |     |          | number each prediction carries, advances a speculative   |
@@ -4779,18 +4838,30 @@ assessment of each document. Correct any that are wrong.
 |     |          | Whether it also covers FE-20's csr group (V, privilege,  |
 |     |          | satp, vsatp, hgatp, pmpcfg, pmpaddr) is decided when it  |
 |     |          | is tasked. Implemented after BP-126 (Jeff, session-077). |
-| 179 | bpu, ftq | OPEN, PERFORMANCE STUDY. Performance at NUM_PRED_SLOTS = |
-|     |          | 1 (BP-128). A block's second branch is not predicted     |
-|     |          | (BP-128 D2), and ftq_resolve places the unslotted        |
-|     |          | branch's resolution in slot 0 (BP-119 rule), where it    |
-|     |          | trains the first branch's predictor entries. In          |
-|     |          | tb_fe_top loops the loop predictor never becomes trusted |
-|     |          | at 1, and its two loop-predictor checks are gated off at |
-|     |          | 1 (BP-128 D4); the cause is inferred, not traced. Cycles |
-|     |          | at 2 slots and at 1, after BP-130: twocond 533 and 952,  |
-|     |          | indir 1164 and 1668, hist 871 and 1057, loops 453 and    |
-|     |          | 536. The block split (BP-128 D2, on hold) would remove   |
-|     |          | the first cause. Opened session-078 (Jeff).              |
+| 179 | bpu, ftq | OPEN, DEFERRED (Jeff, session-078) to the performance    |
+|     |          | analysis against compiled benchmarks; holds every        |
+|     |          | remaining one- and two-slot change. Opened as the        |
+|     |          | performance at NUM_PRED_SLOTS = 1 (BP-128): a block's    |
+|     |          | second branch is not predicted (BP-128 D2), and its      |
+|     |          | resolution is placed in slot 0 (BP-119 rule), training   |
+|     |          | the first branch's predictor entries; the loops loop-    |
+|     |          | predictor checks are gated off at 1 (D4). Cycles at 2    |
+|     |          | slots and at 1, after BP-130: twocond 533 and 952, indir |
+|     |          | 1164 and 1668, hist 871 and 1057, loops 453 and 536.     |
+|     |          | ITEMS, measured by BP-131 (two slots / one slot): (1)    |
+|     |          | the block split of ftb_decisions.md 3, never built, and  |
+|     |          | the entry shape (2+1, or NUM_PRED_SLOTS fields with a    |
+|     |          | shared last field as XiangShan); over-capacity blocks 9  |
+|     |          | / 243. (2) Region sharing, TD#168: 92% of block-end      |
+|     |          | changes by another start, 608 jump replacements; a split |
+|     |          | end conflicts with another start's end in every case.    |
+|     |          | (3) The uBTB stores one branch in both fields, 82 at two |
+|     |          | slots. (4) The BP-119 placement: 27 / 312 trainings from |
+|     |          | another branch's metadata, and 31 displacements with a   |
+|     |          | slot free at two slots. (5) Training at resolve or at    |
+|     |          | commit (XiangShan: commit); wrong-path training not      |
+|     |          | measurable with tb_fe_top. The tb_fe_top programs are    |
+|     |          | not representative enough to decide these (Jeff).        |
 
 ---
 
