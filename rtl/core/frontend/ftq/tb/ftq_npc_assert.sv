@@ -45,8 +45,8 @@ module ftq_npc_assert (
   input logic                    bkend_redir_taken,
   input bp_ftq_entry_t           redir_entry,
   input logic                    rollback_corr,
-  input logic [1:0]              rollback_n,
-  input logic [1:0]              rollback_tkn,
+  input logic [PRED_CNT_BITS-1:0] rollback_n,
+  input logic [NUM_PRED_SLOTS-1:0] rollback_tkn,
   input logic [NUM_PRED_SLOTS-1:0] rollback_slot_ex,
   input logic [NUM_PRED_SLOTS-1:0] rollback_slot_tkn
 );
@@ -202,9 +202,14 @@ module ftq_npc_assert (
   //     the corrected history bundle of its entry: the branches of the
   //     entry before the named position, which execution passed not
   //     taken, then the named branch with its resolved direction; at
-  //     most two bits. The expected length is counted here from the
-  //     entry the redirect read port returns.
-  logic [1:0] w_n_exp;
+  //     most NUM_PRED_SLOTS bits, so at most NUM_PRED_SLOTS - 1 of the
+  //     not-taken ones (BP-129: at one slot the named branch's bit
+  //     alone, provisional). The expected length is counted here from
+  //     the entry the redirect read port returns; the newest bit, index
+  //     n - 1, and the bits below it are picked out by position.
+  logic [PRED_CNT_BITS-1:0] w_n_exp;
+  logic                     w_tkn_last;
+  logic                     w_tkn_older;
   always_comb begin : n_exp
     int nb;
     nb = 0;
@@ -213,7 +218,15 @@ module ftq_npc_assert (
           (redir_entry.slot[s].pos < bkend_redir_pos))
         nb++;
     end
-    w_n_exp = (nb >= 1) ? 2'd2 : 2'd1;
+    if (nb > NUM_PRED_SLOTS - 1) nb = NUM_PRED_SLOTS - 1;
+    w_n_exp     = PRED_CNT_BITS'(nb + 1);
+    w_tkn_last  = 1'b0;
+    w_tkn_older = 1'b0;
+    for (int k = 0; k < NUM_PRED_SLOTS; k++) begin
+      if (k == int'(rollback_n) - 1) w_tkn_last  = rollback_tkn[k];
+      if (k <  int'(rollback_n) - 1) w_tkn_older = w_tkn_older |
+                                                   rollback_tkn[k];
+    end
   end
 
   property p_mispredict_bundle;
@@ -221,9 +234,7 @@ module ftq_npc_assert (
       (bkend_redir_val && (bkend_redir_cause == RC_MISPREDICT) &&
        !bkend_redir_self) |->
         rollback_corr && (rollback_n == w_n_exp) &&
-        // the newest bit: index n-1, which is n[1] for n in {1, 2}
-        (rollback_tkn[rollback_n[1]] == bkend_redir_taken) &&
-        ((rollback_n != 2'd2) || !rollback_tkn[0]);
+        (w_tkn_last == bkend_redir_taken) && !w_tkn_older;
   endproperty
 
   // N12 BP-122 (TD#169). The rollback slots for the loop predictor:

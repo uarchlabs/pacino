@@ -34,6 +34,11 @@
 //     - rollback recompute: folded == fold_ref(ghr_buf, ghist_ptr-1)
 //   after the pointer is restored. incremental == fold_ref AND
 //   recompute == fold_ref together prove incremental == recompute.
+//
+// BP-129: the per-branch ports are NUM_PRED_SLOTS entries and the
+// counts PRED_CNT_BITS wide. A case that needs a second branch in one
+// bundle (TC3, the by-2 step of TC5, TC7, TC8, TC9, the two-bit
+// correction of TC17) runs at two slots and prints SKIP at one.
 // ===================================================================
 module tb;
   import bp_defines_pkg::*;
@@ -69,18 +74,18 @@ module tb;
   // DUT signals (BP-069 interface: pointer is a module OUTPUT, the
   // testbench drives NO pointer; rollback supplies an index)
   // ----------------------------------------------------------------
-  logic [1:0]                  pred_taken;
-  logic [VA_WIDTH-1:0]         pred_pc [2];
-  logic [1:0]                  num_branches;
+  logic [NUM_PRED_SLOTS-1:0]   pred_taken;
+  logic [VA_WIDTH-1:0]         pred_pc [NUM_PRED_SLOTS];
+  logic [PRED_CNT_BITS-1:0]    num_branches;
   logic                        ckpt_wr_en;
   logic [FTQ_IDX_BITS-1:0]    ckpt_wr_idx;
   logic                        rollback_valid;
   logic [FTQ_IDX_BITS-1:0]    rollback_ckpt_idx;
   // BP-121: the corrected rollback (bp_history_decisions.md 3.5).
   logic                        rollback_corr;
-  logic [1:0]                  rollback_n;
-  logic [1:0]                  rollback_tkn;
-  logic [1:0]                  rollback_pbit;
+  logic [PRED_CNT_BITS-1:0]    rollback_n;
+  logic [NUM_PRED_SLOTS-1:0]   rollback_tkn;
+  logic [NUM_PRED_SLOTS-1:0]   rollback_pbit;
   logic [GHIST_PTR_BITS-1:0]  ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  phist_ptr;
   logic [GHIST_PTR_BITS-1:0]  ckpt_ghist_ptr;
@@ -121,23 +126,33 @@ module tb;
   int pass_count;    // directed test cases passed
   int fold_checks;   // individual golden fold comparisons passed
   int anchor_checks; // BP-073 external-reference anchor comparisons
+  int skip_count;    // BP-129: cases or parts skipped at one slot
+
+  // BP-129: the branch index of a bundle's second branch. At one slot
+  // it is 0, so a write to it elaborates; every use is under
+  // NUM_PRED_SLOTS > 1.
+  localparam int HS = NUM_PRED_SLOTS - 1;
 
   // ----------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------
   task drive_idle;
-    pred_taken        = 2'b00;
-    pred_pc[0]        = '0;
-    pred_pc[1]        = '0;
-    num_branches      = 2'd0;
+    pred_taken        = '0;
+    for (int b = 0; b < NUM_PRED_SLOTS; b++) pred_pc[b] = '0;
+    num_branches      = '0;
     ckpt_wr_en        = 1'b0;
     ckpt_wr_idx       = '0;
     rollback_valid    = 1'b0;
     rollback_ckpt_idx = '0;
     rollback_corr     = 1'b0;
-    rollback_n        = 2'd0;
-    rollback_tkn      = 2'b00;
-    rollback_pbit     = 2'b00;
+    rollback_n        = '0;
+    rollback_tkn      = '0;
+    rollback_pbit     = '0;
+  endtask
+
+  task automatic skip(input string nm);
+    skip_count++;
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
   endtask
 
   task tick;
@@ -349,10 +364,17 @@ module tb;
     input logic [VA_WIDTH-1:0] pc0,
     input logic [VA_WIDTH-1:0] pc1
   );
-    pred_taken   = {s1, s0};
-    pred_pc[0]   = pc0;
-    pred_pc[1]   = pc1;
-    num_branches = nb[1:0];
+    if (nb > NUM_PRED_SLOTS)
+      $fatal(1, "upd: %0d branches, NUM_PRED_SLOTS is %0d", nb,
+             NUM_PRED_SLOTS);
+    pred_taken    = '0;
+    pred_taken[0] = s0;
+    pred_pc[0]    = pc0;
+    if (NUM_PRED_SLOTS > 1) begin
+      pred_taken[HS] = s1;
+      pred_pc[HS]    = pc1;
+    end
+    num_branches = PRED_CNT_BITS'(nb);
     tick();
     drive_idle();
   endtask
@@ -373,6 +395,7 @@ module tb;
     pass_count    = 0;
     fold_checks   = 0;
     anchor_checks = 0;
+    skip_count    = 0;
     lfsr          = 32'hACE1_2345;
     drive_idle();
     rstn = 1'b0;
@@ -405,17 +428,19 @@ module tb;
     $display("TC2 pass (single write, ptr=1)");
 
     // ---- TC3: dual branch write, slot0 at ptr, slot1 at ptr+1 ---
-    do_reset();
-    upd(2, 1'b0, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0)); // slot0=0, slot1=1
-    if (ghr_buf[0] !== 1'b0)
-      $fatal(1, "TC3 FAIL: ghr_buf[0] expected 0");
-    if (ghr_buf[1] !== 1'b1)
-      $fatal(1, "TC3 FAIL: ghr_buf[1] expected 1");
-    if (ghist_ptr !== 8'd2)
-      $fatal(1, "TC3 FAIL: ghist_ptr expected 2, got %0d", ghist_ptr);
-    check_all_folds("TC3");
-    pass_count++;
-    $display("TC3 pass (dual write, ptr=2)");
+    if (NUM_PRED_SLOTS > 1) begin
+      do_reset();
+      upd(2, 1'b0, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0)); // slot0=0, slot1=1
+      if (ghr_buf[0] !== 1'b0)
+        $fatal(1, "TC3 FAIL: ghr_buf[0] expected 0");
+      if (ghr_buf[1] !== 1'b1)
+        $fatal(1, "TC3 FAIL: ghr_buf[1] expected 1");
+      if (ghist_ptr !== 8'd2)
+        $fatal(1, "TC3 FAIL: ghist_ptr expected 2, got %0d", ghist_ptr);
+      check_all_folds("TC3");
+      pass_count++;
+      $display("TC3 pass (dual write, ptr=2)");
+    end else skip("TC3 (dual write)");
 
     // ---- TC4: PHR path bit write --------------------------------
     do_reset();
@@ -446,12 +471,14 @@ module tb;
     upd(1, 1'b1, 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
     if (ghist_ptr !== 8'd1)
       $fatal(1, "TC5 FAIL: nb=1 ptr expected 1");
-    // by 2
-    upd(2, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
-    if (ghist_ptr !== 8'd3)
-      $fatal(1, "TC5 FAIL: nb=2 ptr expected 3");
-    if (ghr_buf[1] !== 1'b1 || ghr_buf[2] !== 1'b1)
-      $fatal(1, "TC5 FAIL: nb=2 slot0@1 slot1@2 not written");
+    // by 2 (BP-129: two slots only)
+    if (NUM_PRED_SLOTS > 1) begin
+      upd(2, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
+      if (ghist_ptr !== 8'd3)
+        $fatal(1, "TC5 FAIL: nb=2 ptr expected 3");
+      if (ghr_buf[1] !== 1'b1 || ghr_buf[2] !== 1'b1)
+        $fatal(1, "TC5 FAIL: nb=2 slot0@1 slot1@2 not written");
+    end else skip("TC5 by 2");
     check_all_folds("TC5");
     pass_count++;
     $display("TC5 pass (num_branches semantics)");
@@ -476,16 +503,16 @@ module tb;
     // ---- TC7: dual-slot equivalence, TD #74 centerpiece ---------
     // Random dual bundles; slot1 frequently differs from slot0. After
     // each bundle the incremental folded must equal the one golden.
-    do_reset();
-    begin
+    if (NUM_PRED_SLOTS > 1) begin
       int k;
+      do_reset();
       for (k = 0; k < 300; k++) begin
         upd(2, nextbit(), nextbit(), VA_WIDTH'('h0), VA_WIDTH'('h0));
         check_all_folds("TC7");
       end
-    end
-    pass_count++;
-    $display("TC7 pass (dual-slot equivalence, incremental==golden)");
+      pass_count++;
+      $display("TC7 pass (dual-slot equivalence, incremental==golden)");
+    end else skip("TC7 (dual-slot equivalence)");
 
     // ---- TC8: dual-slot incremental == recompute (TD #74) -------
     // Drive dual bundles, checkpoint a bundle, idle (no contamination
@@ -493,68 +520,72 @@ module tb;
     // the recompute equals BOTH the golden and the captured
     // incremental value. incr==golden AND recompute==golden together
     // prove incremental==recompute in simulation.
-    do_reset();
-    begin
-      int k;
-      logic [TAGE_MAX_FH-1:0] inc_t4;
-      logic [SC_MAX_FH-1:0]   inc_sc3;
-      // prime well past the longest window so T4/SC3 are meaningful
-      for (k = 0; k < 80; k++) upd(2, nextbit(), nextbit(), '0, '0);
-      // checkpointed dual bundle, slot1 differs from slot0
-      pred_taken   = 2'b01;        // slot0=1, slot1=0
-      num_branches = 2'd2;
-      ckpt_wr_en   = 1'b1;
-      ckpt_wr_idx  = FTQ_IDX_BITS'(9);
-      tick();
-      drive_idle();
-      check_all_folds("TC8.incr");
-      inc_t4  = folded.tage_t4_idx_fh;
-      inc_sc3 = folded.sc_t3_idx_fh;
-      // idle (no writes -> window not contaminated)
-      repeat(2) tick();
-      // rollback to the checkpoint
-      rollback_valid    = 1'b1;
-      rollback_ckpt_idx = FTQ_IDX_BITS'(9);
-      tick();
-      rollback_valid = 1'b0;
-      tick();
-      check_all_folds("TC8.recompute");
-      if (folded.tage_t4_idx_fh !== inc_t4)
-        $fatal(1, "TC8 FAIL: T4 recompute %h != incremental %h",
-               folded.tage_t4_idx_fh, inc_t4);
-      if (folded.sc_t3_idx_fh !== inc_sc3)
-        $fatal(1, "TC8 FAIL: SC ST3 recompute %h != incremental %h",
-               folded.sc_t3_idx_fh, inc_sc3);
-    end
-    pass_count++;
-    $display("TC8 pass (dual-slot incremental==recompute, T4 + SC ST3)");
+    if (NUM_PRED_SLOTS > 1) begin
+      do_reset();
+      begin
+        int k;
+        logic [TAGE_MAX_FH-1:0] inc_t4;
+        logic [SC_MAX_FH-1:0]   inc_sc3;
+        // prime well past the longest window so T4/SC3 are meaningful
+        for (k = 0; k < 80; k++) upd(2, nextbit(), nextbit(), '0, '0);
+        // checkpointed dual bundle, slot1 differs from slot0
+        pred_taken   = NUM_PRED_SLOTS'(2'b01);  // slot0=1, slot1=0
+        num_branches = PRED_CNT_BITS'(2);
+        ckpt_wr_en   = 1'b1;
+        ckpt_wr_idx  = FTQ_IDX_BITS'(9);
+        tick();
+        drive_idle();
+        check_all_folds("TC8.incr");
+        inc_t4  = folded.tage_t4_idx_fh;
+        inc_sc3 = folded.sc_t3_idx_fh;
+        // idle (no writes -> window not contaminated)
+        repeat(2) tick();
+        // rollback to the checkpoint
+        rollback_valid    = 1'b1;
+        rollback_ckpt_idx = FTQ_IDX_BITS'(9);
+        tick();
+        rollback_valid = 1'b0;
+        tick();
+        check_all_folds("TC8.recompute");
+        if (folded.tage_t4_idx_fh !== inc_t4)
+          $fatal(1, "TC8 FAIL: T4 recompute %h != incremental %h",
+                 folded.tage_t4_idx_fh, inc_t4);
+        if (folded.sc_t3_idx_fh !== inc_sc3)
+          $fatal(1, "TC8 FAIL: SC ST3 recompute %h != incremental %h",
+                 folded.sc_t3_idx_fh, inc_sc3);
+      end
+      pass_count++;
+      $display("TC8 pass (dual-slot incremental==recompute, T4 + SC ST3)");
+    end else skip("TC8 (dual-slot incremental==recompute)");
 
     // ---- TC9: dual bundle crossing the GHR_WIDTH boundary -------
     // Advance to ptr=255, then a dual bundle: slot0 at 255, slot1 at
     // 0 (wrap). Golden must still hold across the wrap.
-    do_reset();
-    begin
-      int guard;
-      guard = 0;
-      while (ghist_ptr != 8'(GHR_WIDTH-1) && guard < 1000) begin
-        upd(1, nextbit(), 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
-        guard++;
+    if (NUM_PRED_SLOTS > 1) begin
+      do_reset();
+      begin
+        int guard;
+        guard = 0;
+        while (ghist_ptr != 8'(GHR_WIDTH-1) && guard < 1000) begin
+          upd(1, nextbit(), 1'b0, VA_WIDTH'('h0), VA_WIDTH'('h0));
+          guard++;
+        end
+        if (ghist_ptr !== 8'(GHR_WIDTH-1))
+          $fatal(1, "TC9 FAIL: could not reach ptr=255");
+        // dual bundle across the boundary
+        upd(2, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
+        if (ghr_buf[GHR_WIDTH-1] !== 1'b1)
+          $fatal(1, "TC9 FAIL: slot0 @255 not written");
+        if (ghr_buf[0] !== 1'b1)
+          $fatal(1, "TC9 FAIL: slot1 wrap @0 not written");
+        if (ghist_ptr !== 8'd1)
+          $fatal(1, "TC9 FAIL: ptr expected 1 after wrap, got %0d",
+                 ghist_ptr);
+        check_all_folds("TC9");
       end
-      if (ghist_ptr !== 8'(GHR_WIDTH-1))
-        $fatal(1, "TC9 FAIL: could not reach ptr=255");
-      // dual bundle across the boundary
-      upd(2, 1'b1, 1'b1, VA_WIDTH'('h0), VA_WIDTH'('h0));
-      if (ghr_buf[GHR_WIDTH-1] !== 1'b1)
-        $fatal(1, "TC9 FAIL: slot0 @255 not written");
-      if (ghr_buf[0] !== 1'b1)
-        $fatal(1, "TC9 FAIL: slot1 wrap @0 not written");
-      if (ghist_ptr !== 8'd1)
-        $fatal(1, "TC9 FAIL: ptr expected 1 after wrap, got %0d",
-               ghist_ptr);
-      check_all_folds("TC9");
-    end
-    pass_count++;
-    $display("TC9 pass (dual bundle crosses GHR_WIDTH boundary)");
+      pass_count++;
+      $display("TC9 pass (dual bundle crosses GHR_WIDTH boundary)");
+    end else skip("TC9 (dual bundle crosses GHR_WIDTH boundary)");
 
     // ---- TC10: checkpoint + rollback by index (req 6) -----------
     // Checkpoint reports the POST-advance pointer; rollback restores
@@ -569,9 +600,9 @@ module tb;
       // a checkpointed single bundle at index 3
       pre_g        = ghist_ptr;
       pre_p        = phist_ptr;
-      pred_taken   = 2'b01;
+      pred_taken   = NUM_PRED_SLOTS'(2'b01);
       pred_pc[0]   = VA_WIDTH'('h4);
-      num_branches = 2'd1;
+      num_branches = PRED_CNT_BITS'(1);
       ckpt_wr_en   = 1'b1;
       ckpt_wr_idx  = FTQ_IDX_BITS'(3);
       tick();
@@ -608,8 +639,8 @@ module tb;
       logic [GHR_WIDTH-1:0]      ghr_before;
       for (k = 0; k < 20; k++) upd(1, nextbit(), 1'b0, '0, '0);
       // checkpoint at index 7
-      pred_taken   = 2'b01;
-      num_branches = 2'd1;
+      pred_taken   = NUM_PRED_SLOTS'(2'b01);
+      num_branches = PRED_CNT_BITS'(1);
       ckpt_wr_en   = 1'b1;
       ckpt_wr_idx  = FTQ_IDX_BITS'(7);
       tick();
@@ -617,8 +648,8 @@ module tb;
       g_at_ck = ckpt_ghist_ptr;  // post-advance ckpt value
       // diverge a little, also write a different ckpt slot (5)
       for (k = 0; k < 4; k++) upd(1, nextbit(), 1'b0, '0, '0);
-      pred_taken   = 2'b01;
-      num_branches = 2'd1;
+      pred_taken   = NUM_PRED_SLOTS'(2'b01);
+      num_branches = PRED_CNT_BITS'(1);
       ckpt_wr_en   = 1'b1;
       ckpt_wr_idx  = FTQ_IDX_BITS'(5);
       tick();
@@ -627,8 +658,9 @@ module tb;
       ghr_before = ghr_buf;
       // SAME-CYCLE rollback(idx 7) + prediction(nb=2) + ckpt write(5).
       // Rollback must win: no GHR write, no ckpt(5) overwrite.
-      pred_taken        = 2'b11;
-      num_branches      = 2'd2;
+      // BP-129: a full bundle, NUM_PRED_SLOTS taken branches.
+      pred_taken        = '1;
+      num_branches      = PRED_CNT_BITS'(NUM_PRED_SLOTS);
       ckpt_wr_en        = 1'b1;
       ckpt_wr_idx       = FTQ_IDX_BITS'(5);
       rollback_valid    = 1'b1;
@@ -668,8 +700,8 @@ module tb;
       bp_folded_hist_t pre_fold;
       for (k = 0; k < 30; k++) upd(1, nextbit(), 1'b0, '0, '0);
       // checkpoint at index 2
-      pred_taken   = 2'b01;
-      num_branches = 2'd1;
+      pred_taken   = NUM_PRED_SLOTS'(2'b01);
+      num_branches = PRED_CNT_BITS'(1);
       ckpt_wr_en   = 1'b1;
       ckpt_wr_idx  = FTQ_IDX_BITS'(2);
       tick();
@@ -702,11 +734,11 @@ module tb;
       logic [GHIST_PTR_BITS-1:0] g6;
       for (k = 0; k < 8; k++) upd(1, nextbit(), 1'b0, '0, '0);
       // checkpoint idx 2
-      pred_taken   = 2'b01; num_branches = 2'd1;
+      pred_taken   = NUM_PRED_SLOTS'(2'b01); num_branches = PRED_CNT_BITS'(1);
       ckpt_wr_en   = 1'b1; ckpt_wr_idx = FTQ_IDX_BITS'(2);
       tick(); drive_idle();
       // checkpoint idx 6
-      pred_taken   = 2'b01; num_branches = 2'd1;
+      pred_taken   = NUM_PRED_SLOTS'(2'b01); num_branches = PRED_CNT_BITS'(1);
       ckpt_wr_en   = 1'b1; ckpt_wr_idx = FTQ_IDX_BITS'(6);
       tick(); drive_idle();
       g6 = ckpt_ghist_ptr;  // post-advance value stored at idx 6
@@ -839,8 +871,9 @@ module tb;
       logic [GHIST_PTR_BITS-1:0] start_g;
       for (k = 0; k < 10; k++) upd(1, nextbit(), 1'b0, '0, '0);
       start_g      = ghist_ptr;
-      pred_taken   = 2'b11;
-      num_branches = 2'd2;
+      // BP-129: a full bundle, NUM_PRED_SLOTS taken branches.
+      pred_taken   = '1;
+      num_branches = PRED_CNT_BITS'(NUM_PRED_SLOTS);
       ckpt_wr_en   = 1'b1;
       ckpt_wr_idx  = FTQ_IDX_BITS'(4);
       tick();
@@ -849,8 +882,8 @@ module tb;
       rollback_valid    = 1'b1;
       rollback_ckpt_idx = FTQ_IDX_BITS'(4);
       rollback_corr     = 1'b1;
-      rollback_n        = 2'd1;
-      rollback_tkn      = 2'b00;
+      rollback_n        = PRED_CNT_BITS'(1);
+      rollback_tkn      = '0;
       tick();
       drive_idle();
       tick();
@@ -870,19 +903,22 @@ module tb;
         $fatal(1, "TC17 FAIL: the checkpoint was not rewritten (%0d)",
                ghist_ptr);
       check_all_folds("TC17b");
-      rollback_valid    = 1'b1;
-      rollback_ckpt_idx = FTQ_IDX_BITS'(4);
-      rollback_corr     = 1'b1;
-      rollback_n        = 2'd2;
-      rollback_tkn      = 2'b10;   // bit 0 not taken, bit 1 taken
-      tick();
-      drive_idle();
-      tick();
-      if ((ghist_ptr !== GHIST_PTR_BITS'(start_g + 2)) ||
-          (ghr_buf[start_g] !== 1'b0) ||
-          (ghr_buf[GHIST_PTR_BITS'(start_g + 1)] !== 1'b1))
-        $fatal(1, "TC17 FAIL: two corrected bits (ptr %0d)", ghist_ptr);
-      check_all_folds("TC17c");
+      // BP-129: two corrected bits need a second slot.
+      if (NUM_PRED_SLOTS > 1) begin
+        rollback_valid    = 1'b1;
+        rollback_ckpt_idx = FTQ_IDX_BITS'(4);
+        rollback_corr     = 1'b1;
+        rollback_n        = PRED_CNT_BITS'(2);
+        rollback_tkn      = NUM_PRED_SLOTS'(2'b10); // bit 0 nt, bit 1 t
+        tick();
+        drive_idle();
+        tick();
+        if ((ghist_ptr !== GHIST_PTR_BITS'(start_g + 2)) ||
+            (ghr_buf[start_g] !== 1'b0) ||
+            (ghr_buf[GHIST_PTR_BITS'(start_g + 1)] !== 1'b1))
+          $fatal(1, "TC17 FAIL: two corrected bits (ptr %0d)", ghist_ptr);
+        check_all_folds("TC17c");
+      end else skip("TC17c (two corrected bits)");
     end
     pass_count++;
     $display("TC17 pass (BP-121 corrected rollback)");
@@ -891,6 +927,8 @@ module tb;
     $display("BP-072: %0d directed test cases passed", pass_count);
     $display("BP-072: %0d golden fold comparisons passed", fold_checks);
     $display("BP-073: %0d external anchor checks passed", anchor_checks);
+    $display("BP-129: %0d cases or parts skipped at NUM_PRED_SLOTS %0d",
+             skip_count, NUM_PRED_SLOTS);
     $display("BP-072: ALL TESTS PASSED");
     $display("BP-073: ALL EXTERNAL ANCHORS MATCH (TAGE T1, IT1, SC ST3)");
     $finish;

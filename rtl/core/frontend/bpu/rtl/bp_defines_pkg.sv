@@ -91,6 +91,12 @@ package bp_defines_pkg;
   // zero-width vector ($clog2(1) == 0 -> [-1:0] is illegal).
   localparam int TRX_SLOT_BITS = (NUM_PRED_SLOTS > 1) ?
                                    $clog2(NUM_PRED_SLOTS) : 1;
+  // PRED_CNT_BITS: width of a count of predicted branches, 0 to
+  // NUM_PRED_SLOTS inclusive (BP-129): bp_history's num_branches and
+  // rollback_n, its per-entry bundle size, and the rollback bundle
+  // count from the FTQ and the cluster. A derived WIDTH, not a knob.
+  // = 2 at two slots, 1 at one.
+  localparam int PRED_CNT_BITS = $clog2(NUM_PRED_SLOTS + 1);
   parameter int FTQ_CONF_BITS     = 4;  // confidence field width (TBD)
 
   // FTQ slot index width: $clog2(64) = 6

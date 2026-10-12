@@ -25,9 +25,9 @@ module bp_history_assert (
   input logic                      rollback_valid,
   input logic [FTQ_IDX_BITS-1:0]   rollback_ckpt_idx,
   input logic                      rollback_corr,
-  input logic [1:0]                rollback_n,
-  input logic [1:0]                rollback_tkn,
-  input logic [1:0]                rollback_pbit,
+  input logic [PRED_CNT_BITS-1:0]  rollback_n,
+  input logic [NUM_PRED_SLOTS-1:0] rollback_tkn,
+  input logic [NUM_PRED_SLOTS-1:0] rollback_pbit,
   input logic [GHIST_PTR_BITS-1:0] ghist_ptr,
   input logic [PHIST_PTR_BITS-1:0] phist_ptr,
   input logic [GHR_WIDTH-1:0]      ghr_buf,
@@ -36,9 +36,9 @@ module bp_history_assert (
 
   // The corrected rollback of the cycle before.
   logic                    r_corr;
-  logic [1:0]              r_n;
-  logic [1:0]              r_tkn;
-  logic [1:0]              r_pbit;
+  logic [PRED_CNT_BITS-1:0]  r_n;
+  logic [NUM_PRED_SLOTS-1:0] r_tkn;
+  logic [NUM_PRED_SLOTS-1:0] r_pbit;
   // The checkpoint a corrected rollback rewrote, armed until the
   // checkpoint of that index is written again at allocation.
   logic                    r_ck_val;
@@ -61,7 +61,7 @@ module bp_history_assert (
       r_plain_hit <= 1'b0;
     end else begin
       r_corr      <= rollback_valid && rollback_corr &&
-                     (rollback_n != 2'd0);
+                     (rollback_n != '0);
       r_n         <= rollback_n;
       r_tkn       <= rollback_tkn;
       r_pbit      <= rollback_pbit;
@@ -87,18 +87,29 @@ module bp_history_assert (
 
   // H1  BP-121 D14 (m13). After a corrected rollback the newest
   //     history bits are the corrected bundle: the bit just below the
-  //     live pointer is the bundle's last direction, and with two bits
-  //     the one below it is the first; the same for the path bits.
-  //     Before BP-121 the pointer was restored past the predicted
-  //     bundle, so the mispredicted direction stayed in the history.
+  //     live pointer is the bundle's last direction, and each earlier
+  //     bit of the bundle is one further below, bundle bit k at
+  //     pointer - n + k; the same for the path bits. Before BP-121 the
+  //     pointer was restored past the predicted bundle, so the
+  //     mispredicted direction stayed in the history. BP-129: the
+  //     bundle is up to NUM_PRED_SLOTS bits; the last bit is checked
+  //     at either slot count.
+  logic w_bundle_ok;
+  always_comb begin : bundle_ok
+    w_bundle_ok = 1'b1;
+    for (int k = 0; k < NUM_PRED_SLOTS; k++) begin
+      if (k < int'(r_n)) begin
+        if (ghr_buf[ghist_ptr - GHIST_PTR_BITS'(int'(r_n) - k)] != r_tkn[k])
+          w_bundle_ok = 1'b0;
+        if (phr_buf[phist_ptr - PHIST_PTR_BITS'(int'(r_n) - k)] != r_pbit[k])
+          w_bundle_ok = 1'b0;
+      end
+    end
+  end
+
   property p_corrected_newest;
     @(posedge clk) disable iff (!rstn)
-      r_corr |->
-        (ghr_buf[ghist_ptr - GHIST_PTR_BITS'(1)] == r_tkn[r_n[1]]) &&
-        (phr_buf[phist_ptr - PHIST_PTR_BITS'(1)] == r_pbit[r_n[1]]) &&
-        ((r_n != 2'd2) ||
-         ((ghr_buf[ghist_ptr - GHIST_PTR_BITS'(2)] == r_tkn[0]) &&
-          (phr_buf[phist_ptr - PHIST_PTR_BITS'(2)] == r_pbit[0])));
+      r_corr |-> w_bundle_ok;
   endproperty
 
   // H2  BP-121 D14. The corrected rollback REWRITES the entry's

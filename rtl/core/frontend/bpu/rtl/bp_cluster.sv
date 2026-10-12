@@ -251,9 +251,9 @@ module bp_cluster (
   // The cluster forms the correction itself for its own p2 / p3
   // redirect.
   input  logic                            ftq_rollback_corr,
-  input  logic [1:0]                      ftq_rollback_n,
-  input  logic [1:0]                      ftq_rollback_tkn,
-  input  logic [1:0]                      ftq_rollback_pbit,
+  input  logic [PRED_CNT_BITS-1:0]        ftq_rollback_n,
+  input  logic [NUM_PRED_SLOTS-1:0]       ftq_rollback_tkn,
+  input  logic [NUM_PRED_SLOTS-1:0]       ftq_rollback_pbit,
   // The rollback entry's slots for the loop predictor's restore
   // (BP-122, TD#169): slot s is a conditional the backend mispredict
   // executed, and its resolved direction. Qualified by
@@ -321,9 +321,11 @@ module bp_cluster (
   // ----------------------------------------------------------------
   bp_folded_hist_t            w_folded;
 
-  logic [1:0]                 w_hist_pred_taken;
-  logic [VA_WIDTH-1:0]        w_hist_pred_pc [2];
-  logic [1:0]                 w_hist_num_branches;
+  // One entry per predicted branch (BP-129): NUM_PRED_SLOTS entries
+  // and a count of 0 to NUM_PRED_SLOTS.
+  logic [NUM_PRED_SLOTS-1:0]  w_hist_pred_taken;
+  logic [VA_WIDTH-1:0]        w_hist_pred_pc [NUM_PRED_SLOTS];
+  logic [PRED_CNT_BITS-1:0]   w_hist_num_branches;
   logic                       w_ckpt_wr_en;
   logic [FTQ_IDX_BITS-1:0]    w_ckpt_wr_idx;
   logic                       w_rollback_valid;
@@ -331,15 +333,15 @@ module bp_cluster (
   // The corrected bundle to the history (BP-121): from the p2 or p3
   // view for this cluster's own redirect, else the FTQ's.
   logic                       w_rb_corr;
-  logic [1:0]                 w_rb_n;
-  logic [1:0]                 w_rb_tkn;
-  logic [1:0]                 w_rb_pbit;
-  logic [1:0]                 w_c2_n;
-  logic [1:0]                 w_c2_tkn;
-  logic [1:0]                 w_c2_pbit;
-  logic [1:0]                 w_c3_n;
-  logic [1:0]                 w_c3_tkn;
-  logic [1:0]                 w_c3_pbit;
+  logic [PRED_CNT_BITS-1:0]   w_rb_n;
+  logic [NUM_PRED_SLOTS-1:0]  w_rb_tkn;
+  logic [NUM_PRED_SLOTS-1:0]  w_rb_pbit;
+  logic [PRED_CNT_BITS-1:0]   w_c2_n;
+  logic [NUM_PRED_SLOTS-1:0]  w_c2_tkn;
+  logic [NUM_PRED_SLOTS-1:0]  w_c2_pbit;
+  logic [PRED_CNT_BITS-1:0]   w_c3_n;
+  logic [NUM_PRED_SLOTS-1:0]  w_c3_tkn;
+  logic [NUM_PRED_SLOTS-1:0]  w_c3_pbit;
 
   // ----------------------------------------------------------------
   // Internal nets: uBTB and loop_pred p1 results
@@ -894,12 +896,11 @@ module bp_cluster (
     // -- bp_history prediction update, from the formed prediction.
     //    bp_history indexes pred_taken and pred_pc by branch number,
     //    not by slot number, so the valid slots are compacted down.
-    //    Its ports are literal [1:0] and [2] (INFRA-011 item 10), so
-    //    at most two branches are reported.
-    w_hist_pred_taken   = 2'b00;
-    w_hist_pred_pc[0]   = '0;
-    w_hist_pred_pc[1]   = '0;
-    w_hist_num_branches = 2'b00;
+    //    Its ports are NUM_PRED_SLOTS entries (BP-129, INFRA-011 item
+    //    10), so every slot's branch can be reported.
+    w_hist_pred_taken   = '0;
+    for (int b = 0; b < NUM_PRED_SLOTS; b++) w_hist_pred_pc[b] = '0;
+    w_hist_num_branches = '0;
     nb                  = 0;
     //    Only the branches on the predicted path: none after a taken one
     //    (BP-121, with the corrected rollback; before, a slot past a
@@ -908,14 +909,15 @@ module bp_cluster (
     //    the one a correct prediction of the same block writes).
     tkn_seen = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      if (w_slot_p1[s].slot_valid && (nb < 2) && !tkn_seen) begin
+      if (w_slot_p1[s].slot_valid && (nb < NUM_PRED_SLOTS) && !tkn_seen)
+      begin
         w_hist_pred_taken[nb] = w_slot_p1[s].taken;
         w_hist_pred_pc[nb]    = w_slot_pc_p1[s];
         nb                    = nb + 1;
         tkn_seen              = w_slot_p1[s].taken;
       end
     end
-    w_hist_num_branches = 2'(nb);
+    w_hist_num_branches = PRED_CNT_BITS'(nb);
   end
 
   // -- p1 cluster outputs. Allocation is unconditional: an entry is
@@ -1405,18 +1407,18 @@ module bp_cluster (
     int                  n;
     n         = 0;
     stop      = ~r_val_p2;
-    w_c2_tkn  = 2'b00;
-    w_c2_pbit = 2'b00;
+    w_c2_tkn  = '0;
+    w_c2_pbit = '0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       bpc = r_pc_p2 + (VA_WIDTH'(w_pos_p2[s]) << POS_OFFSET_BITS);
-      if (!stop && w_br_val_p2[s] && (n < 2)) begin
+      if (!stop && w_br_val_p2[s] && (n < NUM_PRED_SLOTS)) begin
         w_c2_tkn[n]  = w_taken_p2[s];
         w_c2_pbit[n] = bpc[2] ^ bpc[3];
         n            = n + 1;
         stop         = w_taken_p2[s];
       end
     end
-    w_c2_n = 2'(n);
+    w_c2_n = PRED_CNT_BITS'(n);
   end
 
   always_comb begin : rb_corr_p3
@@ -1425,18 +1427,18 @@ module bp_cluster (
     int                  n;
     n         = 0;
     stop      = ~r_val_p3;
-    w_c3_tkn  = 2'b00;
-    w_c3_pbit = 2'b00;
+    w_c3_tkn  = '0;
+    w_c3_pbit = '0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       bpc = r_pc_p3 + (VA_WIDTH'(r_slot_p3[s].pos) << POS_OFFSET_BITS);
-      if (!stop && r_brv_p3[s] && (n < 2)) begin
+      if (!stop && r_brv_p3[s] && (n < NUM_PRED_SLOTS)) begin
         w_c3_tkn[n]  = w_taken_p3[s];
         w_c3_pbit[n] = bpc[2] ^ bpc[3];
         n            = n + 1;
         stop         = w_taken_p3[s];
       end
     end
-    w_c3_n = 2'(n);
+    w_c3_n = PRED_CNT_BITS'(n);
   end
 
   // ================================================================

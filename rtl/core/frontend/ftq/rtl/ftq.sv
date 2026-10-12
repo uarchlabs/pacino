@@ -142,9 +142,9 @@ module ftq (
   output logic [FTQ_IDX_BITS-1:0]     ftq_rollback_idx,
   // The corrected history bundle for a backend mispredict (BP-121).
   output logic                        ftq_rollback_corr,
-  output logic [1:0]                  ftq_rollback_n,
-  output logic [1:0]                  ftq_rollback_tkn,
-  output logic [1:0]                  ftq_rollback_pbit,
+  output logic [PRED_CNT_BITS-1:0]    ftq_rollback_n,
+  output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_tkn,
+  output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_pbit,
   // BP-122: the rollback entry's executed conditional slots and their
   // resolved directions, for the loop predictor's restore.
   output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_slot_ex,

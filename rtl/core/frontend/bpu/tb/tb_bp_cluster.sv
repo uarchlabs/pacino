@@ -186,9 +186,9 @@ module tb;
   logic                     ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx;
   logic                     ftq_rollback_corr;    // BP-121
-  logic [1:0]               ftq_rollback_n;
-  logic [1:0]               ftq_rollback_tkn;
-  logic [1:0]               ftq_rollback_pbit;
+  logic [PRED_CNT_BITS-1:0] ftq_rollback_n;      // BP-129
+  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_tkn;
+  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_pbit;
   logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_ex;   // BP-122
   logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_tkn;  // BP-122
 
@@ -596,9 +596,9 @@ module tb;
     ftq_rollback_val      = 1'b0;
     ftq_rollback_idx      = '0;
     ftq_rollback_corr     = 1'b0;
-    ftq_rollback_n        = 2'd0;
-    ftq_rollback_tkn      = 2'b00;
-    ftq_rollback_pbit     = 2'b00;
+    ftq_rollback_n        = '0;
+    ftq_rollback_tkn      = '0;
+    ftq_rollback_pbit     = '0;
     ftq_rollback_slot_ex  = '0;
     ftq_rollback_slot_tkn = '0;
     tage_enable_aging     = 1'b0;
@@ -2135,19 +2135,21 @@ module tb;
     chk2_eq("TC-A slot_pc[1]", dut.w_slot_pc_p1[S1], xpc1);
     // BP-128: TC-A is a two-branch block. At one slot only br0 is
     // reported, so every check of the second branch is chk2.
-    chk2("TC-A num_branches", dut.w_hist_num_branches === 2'd2);
+    chk2("TC-A num_branches",
+         dut.w_hist_num_branches === PRED_CNT_BITS'(2));
     chk_eq("TC-A pred_pc[0]", dut.w_hist_pred_pc[0], xpc0);
-    chk2_eq("TC-A pred_pc[1]", dut.w_hist_pred_pc[1], xpc1);
-    chk2("TC-A pred_taken", dut.w_hist_pred_taken === 2'b10);
+    chk2_eq("TC-A pred_pc[1]", dut.w_hist_pred_pc[S1], xpc1);
+    chk2("TC-A pred_taken",
+         dut.w_hist_pred_taken === NUM_PRED_SLOTS'(2'b10));
     // BP-121: the p1 successor of the not-taken slot 0 is the address
     // fetched after it. Slot 1 is taken, so that is slot 1's target,
     // not the block fall-through, which it was before BP-121.
     chk2_eq("TC-A p1 successor of not-taken slot 0 is slot 1's target",
             dut.w_succ_p1[0], base + VA_WIDTH'('h200));
     chk("TC-A path_bit_0 is pc[3]^pc[2] of the slot 0 branch PC",
-        dut.u_bp_history.path_bit_0 === (xpc0[3] ^ xpc0[2]));
+        dut.u_bp_history.path_bit[0] === (xpc0[3] ^ xpc0[2]));
     chk2("TC-A path_bit_1 is pc[3]^pc[2] of the slot 1 branch PC",
-         dut.u_bp_history.path_bit_1 === (xpc1[3] ^ xpc1[2]));
+         dut.u_bp_history.path_bit[S1] === (xpc1[3] ^ xpc1[2]));
     tick();
     chk2("TC-A ghist pointer advanced by 2",
          ghist_ptr === GHIST_PTR_BITS'(g0 + 2));
@@ -2174,7 +2176,7 @@ module tb;
     tick();
     norq();
     chk("TC-A2 one history bit: the taken slot 0",
-        dut.w_hist_num_branches === 2'd1);
+        dut.w_hist_num_branches === PRED_CNT_BITS'(1));
     chk("TC-A2 the bit is taken", dut.w_hist_pred_taken[0] === 1'b1);
     tick();
     chk("TC-A2 ghist pointer advanced by 1",
@@ -2203,7 +2205,8 @@ module tb;
     chk2_eq("TC-B slot_pc[1] zero, branch before the start",
             dut.w_slot_pc_p1[S1], VA_WIDTH'('h0));
     chk_eq("TC-B pred_pc[0] zero", dut.w_hist_pred_pc[0], VA_WIDTH'('h0));
-    chk_eq("TC-B pred_pc[1] zero", dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
+    chk2_eq("TC-B pred_pc[1] zero", dut.w_hist_pred_pc[S1],
+            VA_WIDTH'('h0));
 
     // -- TC-C. Position sweep, every pair of in-block positions. The
     //    bound is derived, so the sweep covers 2**FTB_BR_POS_BITS
@@ -2240,9 +2243,9 @@ module tb;
         chk_eq_q("TC-C slot_pc[0]", dut.w_slot_pc_p1[0], xpc0);
         chk2_eq_q("TC-C slot_pc[1]", dut.w_slot_pc_p1[S1], xpc1);
         chk_q("TC-C path_bit_0",
-              dut.u_bp_history.path_bit_0 === (xpc0[3] ^ xpc0[2]));
+              dut.u_bp_history.path_bit[0] === (xpc0[3] ^ xpc0[2]));
         chk2_q("TC-C path_bit_1",
-               dut.u_bp_history.path_bit_1 === (xpc1[3] ^ xpc1[2]));
+               dut.u_bp_history.path_bit[S1] === (xpc1[3] ^ xpc1[2]));
         sweep_pairs++;
       end
     end
@@ -2266,11 +2269,12 @@ module tb;
     chk2_eq("TC-D slot_pc[1]", dut.w_slot_pc_p1[S1], slot_pc(pc, 4'd5));
     // BP-128: at one slot br1 is not reported, so the block carries
     // no branch and the compaction checks are chk2.
-    chk2("TC-D num_branches", dut.w_hist_num_branches === 2'd1);
+    chk2("TC-D num_branches",
+         dut.w_hist_num_branches === PRED_CNT_BITS'(1));
     chk2_eq("TC-D/E3 slot-1 branch presented at branch index 0",
             dut.w_hist_pred_pc[0], slot_pc(pc, 4'd5));
-    chk_eq("TC-D pred_pc[1] untouched",
-           dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
+    chk2_eq("TC-D pred_pc[1] untouched",
+            dut.w_hist_pred_pc[S1], VA_WIDTH'('h0));
     chk2("TC-D/E3 that branch's direction at index 0",
          dut.w_hist_pred_taken[0] === 1'b1);
 
@@ -2286,9 +2290,10 @@ module tb;
     norq();
     chk_eq("TC-E slot_pc[0] zero", dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
     chk2_eq("TC-E slot_pc[1] zero", dut.w_slot_pc_p1[S1], VA_WIDTH'('h0));
-    chk("TC-E num_branches zero", dut.w_hist_num_branches === 2'd0);
+    chk("TC-E num_branches zero", dut.w_hist_num_branches === '0);
     chk_eq("TC-E pred_pc[0] zero", dut.w_hist_pred_pc[0], VA_WIDTH'('h0));
-    chk_eq("TC-E pred_pc[1] zero", dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
+    chk2_eq("TC-E pred_pc[1] zero", dut.w_hist_pred_pc[S1],
+            VA_WIDTH'('h0));
     tick();
     chk("TC-E ghist pointer held", ghist_ptr === g0);
     chk("TC-E phist pointer held", phist_ptr === p0);
@@ -2345,8 +2350,8 @@ module tb;
     chk_eq("TC-G slot_pc[0] is zero for a slot with no branch",
            dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
     chk("TC-G no branch is reported to bp_history",
-        dut.w_hist_num_branches === 2'd0);
-    chk("TC-G path bit is 0", dut.u_bp_history.path_bit_0 === 1'b0);
+        dut.w_hist_num_branches === '0);
+    chk("TC-G path bit is 0", dut.u_bp_history.path_bit[0] === 1'b0);
 
     // -- E1. Checkpoint write at allocation. The checkpoint holds the
     //    POST-advance pointer pair for the allocated index.
@@ -4766,14 +4771,14 @@ module tb;
     ftq_rollback_val      = 1'b1;
     ftq_rollback_idx      = 6'h34;
     ftq_rollback_corr     = 1'b1;
-    ftq_rollback_n        = 2'd1;
-    ftq_rollback_tkn      = 2'b00;
+    ftq_rollback_n        = PRED_CNT_BITS'(1);
+    ftq_rollback_tkn      = '0;
     ftq_rollback_slot_ex  = NUM_PRED_SLOTS'(1); // BP-128
     ftq_rollback_slot_tkn = '0;
     tick();
     ftq_rollback_val      = 1'b0;
     ftq_rollback_corr     = 1'b0;
-    ftq_rollback_n        = 2'd0;
+    ftq_rollback_n        = '0;
     ftq_rollback_slot_ex  = '0;
     chk("O4 the named entry: re-advanced not taken from 3: 0, known",
         (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd0) &&
@@ -5145,8 +5150,9 @@ module tb;
   // bp_history_decisions.md and never read from bp_history's state:
   //   - the history is AGE-indexed, m_h[0] the newest bit (6.1), not a
   //     circular buffer with a pointer;
-  //   - a bundle shifts in pred_taken[0] then pred_taken[1] for
-  //     num_branches = 1 or 2 (3.1, 3.3);
+  //   - a bundle shifts in pred_taken[0], then pred_taken[1] and on,
+  //     one bit per branch for num_branches = 1 to NUM_PRED_SLOTS
+  //     (3.1, 3.3);
   //   - a checkpoint is a copy of the whole history before and after
   //     the bundle written with it (3.4, 7), not a pointer;
   //   - a rollback restores the copy after the named bundle; a
@@ -5255,7 +5261,7 @@ module tb;
       if (dut.w_rollback_valid) begin
         if (dut.w_rb_corr) begin
           m_h = m_ck_pre[dut.w_rollback_ckpt_idx];
-          for (int k = 0; k < 2; k++)
+          for (int k = 0; k < NUM_PRED_SLOTS; k++)
             if (k < int'(dut.w_rb_n)) m_h = m_shift(m_h, dut.w_rb_tkn[k]);
           m_ck_post[dut.w_rollback_ckpt_idx] = m_h;
           mon_rbc_pend = 1'b1;
@@ -5265,10 +5271,9 @@ module tb;
         end
       end else begin
         pre = m_h;
-        if (dut.w_hist_num_branches >= 2'd1)
-          m_h = m_shift(m_h, dut.w_hist_pred_taken[0]);
-        if (dut.w_hist_num_branches == 2'd2)
-          m_h = m_shift(m_h, dut.w_hist_pred_taken[1]);
+        for (int b = 0; b < NUM_PRED_SLOTS; b++)
+          if (b < int'(dut.w_hist_num_branches))
+            m_h = m_shift(m_h, dut.w_hist_pred_taken[b]);
         if (dut.w_ckpt_wr_en) begin
           m_ck_pre[dut.w_ckpt_wr_idx]  = pre;
           m_ck_post[dut.w_ckpt_wr_idx] = m_h;

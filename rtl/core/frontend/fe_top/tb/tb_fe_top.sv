@@ -1419,22 +1419,32 @@ module tb;
   // BP-121: p2 blocks whose history bundle (the branches on the path
   // and their directions) differs from the bundle p1 wrote, with no p2
   // redirect to correct it; and p2 redirects.
-  int          n_hist_mis;
-  logic [1:0]  p1_nb  [0:FTQ_DEPTH-1];
-  logic [1:0]  p1_tkn [0:FTQ_DEPTH-1];
+  // BP-129: one direction bit per predicted branch, NUM_PRED_SLOTS
+  // bits, and a count of 0 to NUM_PRED_SLOTS. A direction is compared
+  // only below the count (nb_mask).
+  int                        n_hist_mis;
+  logic [PRED_CNT_BITS-1:0]  p1_nb  [0:FTQ_DEPTH-1];
+  logic [NUM_PRED_SLOTS-1:0] p1_tkn [0:FTQ_DEPTH-1];
+
+  function automatic logic [NUM_PRED_SLOTS-1:0] nb_mask(
+    input logic [PRED_CNT_BITS-1:0] n);
+    logic [NUM_PRED_SLOTS-1:0] m;
+    for (int b = 0; b < NUM_PRED_SLOTS; b++) m[b] = (b < int'(n));
+    return m;
+  endfunction
+
   always @(posedge clk) begin : hist_log
     if (rstn && dut.u_bpu.r_val_p1) begin
       p1_nb[dut.u_bpu.r_idx_p1]  <= dut.u_bpu.w_hist_num_branches;
       p1_tkn[dut.u_bpu.r_idx_p1] <= dut.u_bpu.w_hist_pred_taken &
-                                    {dut.u_bpu.w_hist_num_branches >= 2'd2,
-                                     dut.u_bpu.w_hist_num_branches >= 2'd1};
+                                    nb_mask(dut.u_bpu.w_hist_num_branches);
     end
 `ifndef BASE_RTL
     if (meas && dut.u_bpu.r_val_p2 && dut.u_ftq.w_ok_blk_p2 &&
         dut.u_bpu.w_ftb_valid_p2 && !dut.u_bpu.w_any_redir_p2 &&
         ((p1_nb[dut.u_bpu.r_idx_p2] != dut.u_bpu.w_c2_n) ||
          (p1_tkn[dut.u_bpu.r_idx_p2] != (dut.u_bpu.w_c2_tkn &
-            {dut.u_bpu.w_c2_n >= 2'd2, dut.u_bpu.w_c2_n >= 2'd1}))))
+            nb_mask(dut.u_bpu.w_c2_n)))))
       n_hist_mis <= n_hist_mis + 1;
 `endif
   end
