@@ -63,7 +63,9 @@
 # after BP-130 (PROJECT_STATUS.md, bp_history_interfaces.md,
 # bp_history_decisions.md, ftq_bpu_interfaces.md), and the files
 # updated after BP-131 (PROJECT_STATUS.md, ftb_decisions.md,
-# ubtb_interfaces.md).
+# ubtb_interfaces.md), and the files updated after BP-132
+# (PROJECT_STATUS.md, tage_interfaces.md, ittage_interfaces.md,
+# bp_arb_spec.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -82,13 +84,13 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 396b677683db
+PLAN  PROJECT_STATUS.md                 b3500bcee150
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
-ARCH  bp_arb_spec.md                    3825786d7590
+ARCH  bp_arb_spec.md                    73b8984a974f
 ARCH  bp_cluster.md                     187952e94e30
-ARCH  bp_history_decisions.md           f6a327aecf90
+ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   0ec67f83aa96
@@ -138,13 +140,13 @@ INTF  ifu_ibuf_interfaces.md      ab4d4051748b
 INTF  itlb_ifu_interfaces.md            ab489f6db489
 INTF  itlb_l2tlb_interfaces.md          bed8d1ddacae
 INTF  ptw_mem_interfaces.md            053eb7faf457
-INTF  ittage_interfaces.md              43f50427b6a7
+INTF  ittage_interfaces.md              14f901826cca
 INTF  l1i_ifu_interfaces.md             85f362d1da4d
 INTF  loop_pred_interfaces.md           f1eb16c7ce58
 INTF  ras_interfaces.md                 a3029b6fb4e6
 INTF  sc_interfaces.md                  66e1eefd2866
 INTF  sc_table_interfaces.md            b442b10dab0f
-INTF  tage_interfaces.md                e25a37204743
+INTF  tage_interfaces.md                615b4bcc5243
 INTF  ubtb_interfaces.md          bc467c5fe340
 
 

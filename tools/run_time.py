@@ -8,9 +8,11 @@
 # Wall-clock run time of the LAST /run task in a Claude Code session.
 #   start: the user entry holding <command-name>/run</command-name>
 #   end:   the last assistant entry before the next prompt the user
-#          typed. Background-task notifications, system reminders and
-#          the /run expansion (same timestamp as start) are not prompts,
-#          so time spent waiting on a regression is counted.
+#          typed. Background-task notifications, system reminders,
+#          scheduled-wakeup prompts (turnOrigin "scheduled", written by
+#          the model's own ScheduleWakeup) and the /run expansion (same
+#          timestamp as start) are not prompts, so time spent waiting on
+#          a regression is counted.
 # Prints: Run time: <1h.10m.6s> (<start> -> <end>, /run <ID>)
 # Exits 1 when the file is unreadable or holds no /run.
 import json, re, sys
@@ -51,6 +53,8 @@ t0 = E[start]['timestamp']
 t1 = None
 for e in E[start + 1:]:
     if e.get('type') == 'user' and e.get('timestamp') != t0:
+        if e.get('turnOrigin') == 'scheduled' or 'scheduledTaskId' in e:
+            continue
         t = text(e).lstrip()
         if t and not t.startswith(('<task-notification>',
                                    '<system-reminder>')):

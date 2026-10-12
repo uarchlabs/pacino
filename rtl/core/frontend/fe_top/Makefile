@@ -121,9 +121,11 @@ BPU_SRCS := \
   $(BPU_DIR)/tage_bim.sv \
   $(BPU_DIR)/tage_table.sv \
   $(BPU_DIR)/tage_cntrl.sv \
+  $(BPU_DIR)/tage_arb.sv \
   $(BPU_DIR)/tage.sv \
   $(BPU_DIR)/ittage_table.sv \
   $(BPU_DIR)/ittage_cntrl.sv \
+  $(BPU_DIR)/ittage_arb.sv \
   $(BPU_DIR)/ittage.sv \
   $(BPU_DIR)/sc_table.sv \
   $(BPU_DIR)/sc_brimli.sv \

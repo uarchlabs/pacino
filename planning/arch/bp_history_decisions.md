@@ -581,12 +581,13 @@ This section defines the mapping, not the values.
 
 ### 6.6  Origin
 
-	The geometry above originates in the Seznec's O-GEHL and TAGE predictors as
-implemented by Xiangshan in their FoldedHistory implementation (newest bit
-folded in at the high end, leaving bit removed at (H-1) mod W, one definition
-shared by update and recompute). It was captured into this section as the
-project's own contract from commit <XS-COMMIT-SHA> (<XS-CAPTURE-DATE>) so the
-definition does not depend on an external, mutable source.  
+The geometry above is the standard folded-history compression of the
+O-GEHL and TAGE predictors (newest bit folded in at the high end, leaving
+bit removed at (H-1) mod W, one definition shared by update and
+recompute). This section is the project's own contract; it cites no
+external implementation. An earlier revision credited one implementation
+and left its commit and date as placeholders; both were removed
+session-078 (Jeff, TD#83).
 
 ---
 
@@ -948,4 +949,5 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
               2026-10-09 reading was wrong); the correction is at most
               two bits at either slot count (ruled, built by BP-130).
               3.6 done (BP-129). 7: ckpt_nb recorded. 9: HI7 and the
-              3.6 item closed.
+              3.6 item closed. 6.6: the external implementation
+              citation and its placeholders removed (Jeff, TD#83).

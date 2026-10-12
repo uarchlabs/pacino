@@ -22,10 +22,13 @@
 # %Warning line. Failures are compared with ROOT/tools/known_failures.txt
 # (missing file = empty). Line format:
 #   <makefile dir> <target> TD#<n> <description>
-# with # comments and blank lines ignored.
+# with # comments and blank lines ignored. The third field must be
+# TD#<n> or TD#? (BP-132, TD#130); a line without one, or with fewer
+# than three fields, is reported as malformed and waives nothing.
 #
 # Exit 0 only when every failing target is listed there, every listed
-# target still fails, and no Makefile has a regression-set error.
+# target still fails, no listed line is malformed, and no Makefile has
+# a regression-set error.
 # Logs are kept in a temp directory whose path is printed at the end.
 
 set -u
@@ -60,10 +63,18 @@ fi
 # -- known failures: key "<dir> <target>" -> TD field
 declare -A KNOWN_TD=()
 declare -A KNOWN_SEEN=()
+BAD_KNOWN=()    # malformed known_failures.txt lines
 if [ -f "$KNOWN_FILE" ]; then
+  kline=0
   while read -r kdir ktgt ktd _; do
+    kline=$((kline + 1))
     case "$kdir" in ''|\#*) continue ;; esac
-    KNOWN_TD["$kdir $ktgt"]=${ktd:-TD#?}
+    if [ -z "$ktgt" ] || ! [[ "$ktd" =~ ^TD#([0-9]+|\?)$ ]]; then
+      msg="line $kline: '$kdir ${ktgt:-<no target>} ${ktd:-<no TD>}'"
+      BAD_KNOWN+=("$msg: the third field must be TD#<n> or TD#?")
+      continue
+    fi
+    KNOWN_TD["$kdir $ktgt"]=$ktd
   done < "$KNOWN_FILE"
 fi
 
@@ -109,7 +120,54 @@ check_counts() {
   if [ -n "$m" ]; then echo "${m%% *}/0"; return; fi
   m=$(grep -oP 'RESULTS: \d+ error\(s\)' "$log" | tail -1)
   if [ -n "$m" ]; then m=${m#RESULTS: }; echo "-/${m%% *}"; return; fi
+  # BP-132 (TD#130): three testbenches print no total of their own.
+  # tb_bp_history (sim_history, cov_history) prints three counts of
+  # passed checks and stops at the first failure ($fatal), so the
+  # total is their sum with no failure count.
+  local hist_re='^BP-07[23]: \d+ (directed test cases|golden fold '
+  hist_re+='comparisons|external anchor checks) passed'
+  m=$(grep -oP "$hist_re" "$log" | grep -oP ': \d+' | tr -d ': ')
+  if [ -n "$m" ]; then
+    p=0; for x in $m; do p=$((p + x)); done; echo "$p/0"; return
+  fi
+  # tb_tage (sim_tage, sim_tage_fast, cov_tage) prints one result per
+  # test, "[PASS] <name>_tst: 0 failures" or "[FAIL] <name>_tst: <n>
+  # failures": the figure is tests passed / tests failed.
+  p=$(grep -cP '^\[PASS\] \w+_tst: 0 failures' "$log")
+  f=$(grep -cP '^\[FAIL\] \w+_tst: \d+ failures' "$log")
+  if [ $((p + f)) -gt 0 ]; then echo "$p/$f"; return; fi
+  # tb_tage_tasks prints one result per test, "<name>: PASS" through
+  # its tb_info, "<name>: FAIL" through its tb_error.
+  p=$(grep -cP '^\[INFO\]\s+t=\d+ \w+: PASS$' "$log")
+  f=$(grep -cP '^\[ERROR\]\s+t=\d+ \w+: FAIL$' "$log")
+  if [ $((p + f)) -gt 0 ]; then echo "$p/$f"; return; fi
   echo "-"
+}
+
+# Check counts of a log that holds several cov_* sub-runs (cov_bpu runs
+# five as prerequisites and then merges them). Each sub-run starts at a
+# "[compiling]  cov tb_<name>" line. Prints "<sum> <name>=<p/f> ..." or
+# nothing when the log has fewer than two sub-runs. A sub-run with no
+# count adds nothing to the sum and is listed as "-".
+sub_counts() {
+  local log=$1 dir n i nm c p f sp=0 sf=0 subs=""
+  [ "$(grep -c '^\[compiling\]  cov ' "$log")" -ge 2 ] || return 0
+  dir=$(mktemp -d "${TMPDIR:-/tmp}/regress_sub.XXXXXX")
+  awk -v d="$dir" '/^\[compiling\]  cov /{n++; print $NF > (d "/name." n)}
+    n {print > (d "/part." n)}' "$log"
+  n=$(ls "$dir"/part.* | wc -l)
+  for ((i = 1; i <= n; i++)); do
+    nm=$(cat "$dir/name.$i")
+    c=$(check_counts "$dir/part.$i")
+    subs+=" ${nm#tb_}=$c"
+    if [ "$c" != "-" ]; then
+      p=${c%/*}; f=${c#*/}
+      [ "$p" != "-" ] && sp=$((sp + p))
+      sf=$((sf + f))
+    fi
+  done
+  rm -rf "$dir"
+  echo "$sp/$sf$subs"
 }
 
 mapfile -t MAKEFILES < <(find "$ROOT/rtl" \
@@ -184,6 +242,11 @@ for mf in "${MAKEFILES[@]}"; do
     warns=$(grep -c '^%Warning' "$log")
     errs=$(grep -c '^%Error' "$log")
     checks=$(check_counts "$log")
+    subs=$(sub_counts "$log")
+    if [ -n "$subs" ]; then
+      checks=${subs%% *}
+      subs=${subs#* }
+    fi
     N_RUN=$((N_RUN + 1))
 
     key="$rel $t"
@@ -206,6 +269,7 @@ for mf in "${MAKEFILES[@]}"; do
     [ -n "${KNOWN_TD[$key]:-}" ] && KNOWN_SEEN[$key]=1
     SUMMARY+=("$(printf '  %-10s %-22s rc=%-3s warn=%-2s err=%-2s %-11s %4ss' \
       "$result" "$t" "$rc" "$warns" "$errs" "$checks" "$secs")")
+    [ -n "$subs" ] && SUMMARY+=("             sum of sub-runs:$subs")
   done
   SUMMARY+=("  time $(( $(date +%s) - T_MF0 ))s")
 done
@@ -229,8 +293,9 @@ echo "------------------------------------------------------------------"
 echo "targets run: $N_RUN   total time: ${T_ALL}s"
 echo "new failures: ${#FAIL_NEW[@]}   known failures: ${#FAIL_KNOWN[@]}" \
      "  now passing: ${#NOW_PASSES[@]}   stale entries: ${#STALE_KNOWN[@]}" \
-     "  set errors: ${#SET_ERRORS[@]}"
+     "  malformed entries: ${#BAD_KNOWN[@]}   set errors: ${#SET_ERRORS[@]}"
 for x in "${SET_ERRORS[@]}";  do echo "REGRESS-SET ERROR: $x"; done
+for x in "${BAD_KNOWN[@]}";   do echo "MALFORMED KNOWN-FAILURE ENTRY: $x"; done
 for x in "${FAIL_NEW[@]}";    do echo "FAIL: $x"; done
 for x in "${FAIL_KNOWN[@]}";  do echo "known failure: $x"; done
 for x in "${NOW_PASSES[@]}";  do echo "KNOWN FAILURE NOW PASSES: $x"; done
@@ -238,7 +303,8 @@ for x in "${STALE_KNOWN[@]}"; do echo "STALE KNOWN-FAILURE ENTRY: $x"; done
 echo "logs: $LOG_DIR"
 
 if [ ${#SET_ERRORS[@]} -ne 0 ] || [ ${#FAIL_NEW[@]} -ne 0 ] || \
-   [ ${#NOW_PASSES[@]} -ne 0 ] || [ ${#STALE_KNOWN[@]} -ne 0 ]; then
+   [ ${#NOW_PASSES[@]} -ne 0 ] || [ ${#STALE_KNOWN[@]} -ne 0 ] || \
+   [ ${#BAD_KNOWN[@]} -ne 0 ]; then
   echo "RESULT: FAIL"
   exit 1
 fi

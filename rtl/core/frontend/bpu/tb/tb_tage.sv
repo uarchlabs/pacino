@@ -2686,7 +2686,7 @@ module tb;
   // g_slot[S1].u_ram mem[0][70]=16h0007 (CTR=011 VAL=1).
   // g_slot[0].u_ram mem[0][70]=16h000F (CTR=111 VAL=1 sentinel).
   // CTR increment 011->100: expect g_slot[S1].u_ram = 16h0009.
-  // g_slot[0].u_ram must remain 16h000F. upd_rdy[0] must be 0.
+  // g_slot[0].u_ram must remain 16h000F. tage_upd_rdy_u1[0] must be 0.
   // ----------------------------------------------------------------
   task automatic slot1_upd_tst(int verbose);
     int              local_fails;
@@ -7033,7 +7033,7 @@ module tb;
 
   // ----------------------------------------------------------------
   // TC-48  TB-ARB-02: Update only, no predictions in flight.
-  // Verify: update completes in u0+u1, upd_rdy asserts.
+  // Verify: update completes in u0+u1, tage_upd_rdy_u1 asserts.
   // Uses T0 update: prm_comp=0 prm_idx=11'h280 (row 640).
   // Pre-load: T0 s0 mem[0][640] = 2b01 (NT weak).
   // After upd (resolved_taken=1 mispredict): expect CTR inc -> 2b10.
@@ -7071,7 +7071,7 @@ module tb;
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640];
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
-      $display("[FAIL] arb_upd_only_tst: upd_rdy=%0b exp=1",
+      $display("[FAIL] arb_upd_only_tst: tage_upd_rdy_u1=%0b exp=1",
         tage_upd_rdy_u1[0]);
     end
     if (rd_t0 !== 2'b10) begin
@@ -7137,8 +7137,8 @@ module tb;
     if (!rstn) begin
       ts_q_ok = 1'b0;
     end else begin
-      gp = u_dut.arb_grant_pred;
-      gu = u_dut.arb_grant_upd;
+      gp = u_dut.u_tage_arb.arb_grant_pred;
+      gu = u_dut.u_tage_arb.arb_grant_upd;
       wr = ts_any_wr();
       if (gp && gu) ts_fail("both grants in one cycle");
       if (wr && !gu) ts_fail("u0 write strobe without an update grant");
@@ -7638,7 +7638,7 @@ module tb;
     end
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
-      $display("[FAIL] arb_concurrent_pred_wins_tst: upd_rdy=%0b",
+      $display("[FAIL] arb_concurrent_pred_wins_tst: tage_upd_rdy_u1=%0b",
         tage_upd_rdy_u1[0]);
     end
     if (local_fails == 0)
@@ -7710,7 +7710,7 @@ module tb;
     end
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
-      $display("[FAIL] arb_concurrent_upd_wins_tst: upd_rdy=%0b",
+      $display("[FAIL] arb_concurrent_upd_wins_tst: tage_upd_rdy_u1=%0b",
         tage_upd_rdy_u1[0]);
     end
     // Upd: INC from 10 -> 11 expected (resolved_taken=1).
@@ -7740,7 +7740,7 @@ module tb;
   // TAGE_UQ_DEPTH=8 >> 4 entries so no backpressure expected.
   // Spec note: spec says "backpressure for 2 cycles" but with
   // UQ_DEPTH=8 and 4 updates no backpressure occurs (see Results).
-  // Verify: all 4 completions (2 x upd_rdy[1:0]=2b11) occur.
+  // Verify: all 4 completions (2 x tage_upd_rdy_u1[1:0]=2b11) occur.
   // ----------------------------------------------------------------
   task automatic arb_upd_burst_tst(int verbose);
     int            local_fails;
@@ -7770,9 +7770,9 @@ module tb;
     upd1.cond_mispredict = 1'b0;
 
     // Cycle A: drive both slots simultaneously (2 upds).
-    // With UQ empty: bypass fires immediately; upd_rdy fires
+    // With UQ empty: bypass fires immediately; tage_upd_rdy_u1 fires
     // at cycle B (one cycle after bypass). Keep stg=1 so cycle
-    // B also bypasses and upd_rdy fires at cycle C.
+    // B also bypasses and tage_upd_rdy_u1 fires at cycle C.
     stg_upd_inp0 = upd0;
     stg_upd_inp1 = upd1;
     stg_upd_val0 = 1'b1;
@@ -7812,8 +7812,8 @@ module tb;
   //   1. consumer_ready=0 to prevent RB drain.
   //   2. Issue 2 predictions to fill RB (resp_buf_full=1 after).
   //   3. Hold stg_pred_val0=1 for PQ_DEPTH+1 cycles: PQ fills.
-  //   4. Verify pq_not_full===0.
-  //   5. consumer_ready=1, drain, verify pq_not_full reasserts.
+  //   4. Verify tage_pq_not_full===0.
+  //   5. consumer_ready=1, drain, verify tage_pq_not_full reasserts.
   // ----------------------------------------------------------------
   task automatic arb_rb_full_blocks_pred_tst(int verbose);
     int local_fails;
@@ -7850,7 +7850,7 @@ module tb;
 
     if (verbose != 0)
       $display("[INFO] arb_rb_full_blocks_pred_tst: rbfull=%0b",
-        u_dut.resp_buf_full_w);
+        u_dut.u_tage_arb.resp_buf_full_w);
 
     // Hold pred stg for PQ_DEPTH+1 cycles to fill PQ.
     stg_pred_inp0.pc = VA_WIDTH'('hAF0);
@@ -7860,10 +7860,10 @@ module tb;
     stg_pred_inp0 = '0;
     @(posedge clk);
 
-    if (u_dut.pq_not_full !== 1'b0) begin
+    if (u_dut.tage_pq_not_full !== 1'b0) begin
       local_fails++;
       $display("[FAIL] arb_rb_full_blocks_pred_tst: nf=%0b exp=0",
-        u_dut.pq_not_full);
+        u_dut.tage_pq_not_full);
     end else if (verbose != 0) begin
       $display("[INFO] arb_rb_full_blocks_pred_tst: nf=0 OK");
     end
@@ -7874,10 +7874,10 @@ module tb;
     drain_cyc = (TAGE_PQ_DEPTH + 2) * 4;
     repeat (drain_cyc) @(posedge clk);
 
-    if (u_dut.pq_not_full !== 1'b1) begin
+    if (u_dut.tage_pq_not_full !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_rb_full_blocks_pred_tst: nf=%0b exp=1",
-        u_dut.pq_not_full);
+        u_dut.tage_pq_not_full);
     end else if (verbose != 0) begin
       $display("[INFO] arb_rb_full_blocks_pred_tst: nf=1 OK");
     end
@@ -7897,7 +7897,7 @@ module tb;
   //   2. Fill RB: issue 2 preds, wait for results to enter RB.
   //   3. Verify resp_buf_full=1.
   //   4. Issue concurrent pred+upd: check grant_pred=0, grant_upd=1.
-  //   5. Verify upd_rdy fires. consumer_ready=1 to clean up.
+  //   5. Verify tage_upd_rdy_u1 fires. consumer_ready=1 to clean up.
   // ----------------------------------------------------------------
   task automatic arb_pred_credits_reset_tst(int verbose);
     int local_fails;
@@ -7933,10 +7933,10 @@ module tb;
     @(posedge clk); // extra: rb enqueues slot 2
     // RB full now.
 
-    if (u_dut.resp_buf_full_w !== 1'b1) begin
+    if (u_dut.u_tage_arb.resp_buf_full_w !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_pred_credits_reset_tst: rbfull=%0b",
-        u_dut.resp_buf_full_w);
+        u_dut.u_tage_arb.resp_buf_full_w);
     end
 
     // Issue concurrent pred + upd; pred must be blocked.
@@ -7949,17 +7949,17 @@ module tb;
     stg_upd_val0     = 1'b1;
     @(posedge clk);
     // Verify grant_pred blocked, grant_upd asserted.
-    if (u_dut.arb_grant_pred !== 1'b0) begin
+    if (u_dut.u_tage_arb.arb_grant_pred !== 1'b0) begin
       local_fails++;
       $display("[FAIL] arb_pred_credits_reset_tst: gp=%0b exp=0",
-        u_dut.arb_grant_pred);
+        u_dut.u_tage_arb.arb_grant_pred);
     end else if (verbose != 0) begin
       $display("[INFO] arb_pred_credits_reset_tst: gp=0 OK");
     end
-    if (u_dut.arb_grant_upd !== 1'b1) begin
+    if (u_dut.u_tage_arb.arb_grant_upd !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_pred_credits_reset_tst: gu=%0b exp=1",
-        u_dut.arb_grant_upd);
+        u_dut.u_tage_arb.arb_grant_upd);
     end else if (verbose != 0) begin
       $display("[INFO] arb_pred_credits_reset_tst: gu=1 OK");
     end
@@ -7969,7 +7969,7 @@ module tb;
     stg_upd_inp0  = '0;
 
     @(posedge clk);
-    // upd_rdy should assert one cycle later.
+    // tage_upd_rdy_u1 should assert one cycle later.
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_pred_credits_reset_tst: ur=%0b exp=1",
@@ -7994,7 +7994,7 @@ module tb;
   // TC-54  TB-ARB-08 (BP-121, the arbitration ruled by Jeff): a
   // prediction is never delayed by an update. An update waits while
   // predictions are presented; after TAGE_STARVE_THRESH cycles of
-  // waiting pq_not_full deasserts; a producer that honours it presents
+  // waiting tage_pq_not_full deasserts; a producer that honours it presents
   // no prediction and the update is granted.
   // BEFORE BP-121 (credit rules 3 and 4) this test expected the update
   // granted on cycle 5, after four prediction grants, delaying the
@@ -8025,14 +8025,14 @@ module tb;
     stg_upd_val0  = 1'b0;
     stg_upd_inp0  = '0;
 
-    // Keep predicting until pq_not_full deasserts, then stop, as the
+    // Keep predicting until tage_pq_not_full deasserts, then stop, as the
     // FTQ does (its H1 hold). No update may be granted while a
     // prediction is presented.
     for (int c = 1; c < 3 * TAGE_STARVE_THRESH; c++) begin
       @(posedge clk);
       #1;
-      if (u_dut.arb_grant_upd && tage_pred_val_p0[0]) early_upd++;
-      if ((pq_low_cyc < 0) && !u_dut.pq_not_full) begin
+      if (u_dut.u_tage_arb.arb_grant_upd && tage_pred_val_p0[0]) early_upd++;
+      if ((pq_low_cyc < 0) && !u_dut.tage_pq_not_full) begin
         pq_low_cyc    = c;
         stg_pred_val0 = 1'b0;
         stg_pred_inp0 = '0;
@@ -8053,20 +8053,21 @@ module tb;
     // the edge of cycle THRESH-1.
     if (pq_low_cyc != TAGE_STARVE_THRESH - 1) begin
       local_fails++;
-      $display("[FAIL] arb_starve_tst: pq_not_full low at cycle %0d, exp %0d",
+      $display(
+        "[FAIL] arb_starve_tst: tage_pq_not_full low at cycle %0d, exp %0d",
         pq_low_cyc, TAGE_STARVE_THRESH - 1);
     end else if (verbose != 0) begin
-      $display("[INFO] arb_starve_tst: pq_not_full low at cycle %0d OK",
+      $display("[INFO] arb_starve_tst: tage_pq_not_full low at cycle %0d OK",
         pq_low_cyc);
     end
     if (granted == 0) begin
       local_fails++;
       $display("[FAIL] arb_starve_tst: the update was never granted");
     end
-    if (u_dut.starve_ctr_r !== '0) begin
+    if (u_dut.u_tage_arb.starve_ctr_r !== '0) begin
       local_fails++;
       $display("[FAIL] arb_starve_tst: starve count %0d after the grant",
-        u_dut.starve_ctr_r);
+        u_dut.u_tage_arb.starve_ctr_r);
     end
 
     if (local_fails == 0)
@@ -9215,7 +9216,7 @@ module tb;
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
       $display(
-        "[FAIL] ctr_t1_max_sat_tst: upd_rdy=%0b exp=1",
+        "[FAIL] ctr_t1_max_sat_tst: tage_upd_rdy_u1=%0b exp=1",
         tage_upd_rdy_u1[0]);
     end
 
@@ -9667,7 +9668,7 @@ module tb;
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
       $display(
-        "[FAIL] no_alloc_candidate_tst: upd_rdy=%0b exp=1",
+        "[FAIL] no_alloc_candidate_tst: tage_upd_rdy_u1=%0b exp=1",
         tage_upd_rdy_u1[0]);
     end
 
@@ -9749,7 +9750,7 @@ module tb;
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
       $display(
-        "[FAIL] no_ram_write_upd_tst: upd_rdy=%0b exp=1",
+        "[FAIL] no_ram_write_upd_tst: tage_upd_rdy_u1=%0b exp=1",
         tage_upd_rdy_u1[0]);
     end
 

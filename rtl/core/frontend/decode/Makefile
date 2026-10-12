@@ -65,7 +65,6 @@ SIM_MAIN_DEC    = verilator/sim_main.cpp
 OBJ_DEC         = obj_dir_dec
 # BP-124: the oracle sweep and the directed-word check.
 SPIKE_DASM      = $(abspath $(TOOLS))/bin/spike-dasm
-CLANG_TC       ?= /usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin
 SWEEP_ORACLE    = tb/dec_dasm_oracle.txt
 OBJ_SWEEP       = obj_dir_sweep
 OBJ_ORACLE      = obj_dir_oracle
@@ -125,11 +124,16 @@ oracle_dec_sweep:
 	$(Q)cmp $(SWEEP_ORACLE) $(OBJ_ORACLE)/dec_dasm_oracle.txt
 	@echo "oracle_dec_sweep: PASS, $(SWEEP_ORACLE) matches spike-dasm"
 
-# -- the directed test words, assembled and disassembled (BP-124)
+# -- the directed test words, assembled and disassembled (BP-124).
+#    clang is the one out-of-repo tool, from $(RVA_EXT_TOOLS)
+#    (rtl/Vars.mk, BP-132, TD#176); the target fails naming the
+#    variable if it is absent.
 asm_dec_words:
 	@echo "[assembling] tb_instr_decoder directed words"
+	$(Q)$(call need_ext_tool,asm_dec_words,clang)
 	$(Q)mkdir -p $(OBJ_WORDS)
-	$(Q)python3 -I -B tb/chk_dec_words.py $(CLANG_TC)/clang $(SPIKE_DASM) \
+	$(Q)python3 -I -B tb/chk_dec_words.py $(RVA_EXT_TOOLS)/clang \
+	    $(SPIKE_DASM) \
 	    $(TB_DEC) $(OBJ_WORDS)
 
 # -- run sim_dec (combined target kept for its callers)

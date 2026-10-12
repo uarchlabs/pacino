@@ -11,12 +11,20 @@
 # THE ORACLE IS LLVM, not a model written in this project. For every
 # 16-bit encoding (bits [1:0] != 2'b11, 49152 of them):
 #
+#   0. clang's integrated assembler places it, as a raw .insn, in the
+#      .text of an object file (BP-132; before it, GNU objcopy wrapped
+#      the raw bytes, and the oracle is the same file either way).
 #   1. llvm-objdump decodes it for riscv64 with C, Zcb and Zcmop on.
 #      Its instruction printer UNCOMPRESSES an RVC instruction through
 #      LLVM's own compress-pattern table before printing, so the text
 #      it prints is LLVM's 32-bit expansion, not a 16-bit form.
 #   2. clang's integrated assembler re-encodes that text with C OFF,
-#      so every line becomes exactly one 32-bit word.
+#      so every line becomes exactly one 32-bit word, read from the
+#      object's .text by the ELF reader below.
+#
+# THE TOOLS ARE llvm-objdump AND clang, from the directory given as the
+# first argument (the ifu Makefile passes $(RVA_EXT_TOOLS), rtl/Vars.mk,
+# BP-132, TD#176). Nothing else outside the repository is run.
 #
 # Neither step reads ifu_rvc_exp, the module under test, or
 # tb_ifu_rvc_exp. The expansion, the immediate scrambles and the
@@ -80,6 +88,9 @@ CLS_NAME = ["NA", "LLVM", "RSV", "ILL0", "HINT", "MOP", "RSVLLVM",
 # c.sspopchk are pseudo-ops on c.mop.1 and c.mop.5.
 DIS_ATTR = "+c,+m,+f,+d,+zba,+zbb,+zcb,+zcmop"
 ASM_ARCH = "rv64imafd_zba_zbb"
+# Step 0's object: the same extension set as DIS_ATTR. The bytes are
+# raw .insn words; the set only names the target.
+RAW_ARCH = "rv64imfdc_zba_zbb_zcb_zcmop"
 
 ABI = {
     "zero": 0, "ra": 1, "sp": 2, "gp": 3, "tp": 4, "t0": 5, "t1": 6,
@@ -92,6 +103,23 @@ ABI = {
 
 LINE_RE = re.compile(r"^\s*([0-9a-f]+):\s+([0-9a-f]{4})\s+(\S+)\s*(.*)$")
 TGT_RE = re.compile(r"0x([0-9a-f]+) <[^>]*>")
+
+
+def text_bytes(obj):
+    """The .text section of an ELF64 little-endian object."""
+    d = open(obj, "rb").read()
+    if d[:4] != b"\x7fELF" or d[4] != 2 or d[5] != 1:
+        sys.exit("oracle: " + obj + " is not an ELF64 LE object")
+    shoff = struct.unpack_from("<Q", d, 0x28)[0]
+    esz, num, sx = struct.unpack_from("<HHH", d, 0x3A)
+    secs = [struct.unpack_from("<IIQQQQIIQQ", d, shoff + i * esz)
+            for i in range(num)]
+    so = secs[sx][4]
+    for sh in secs:
+        nm = d[so + sh[0]:d.index(b"\0", so + sh[0])].decode("ascii")
+        if nm == ".text":
+            return d[sh[4]:sh[4] + sh[5]]
+    sys.exit("oracle: no .text section in " + obj)
 
 
 def run(cmd):
@@ -165,19 +193,23 @@ def main():
     if len(sys.argv) != 3:
         sys.exit("usage: gen_ifu_rvc_exp_oracle.py <tc bin> <out.hex>")
     tc, out_path = sys.argv[1], sys.argv[2]
-    for t in ("llvm-objdump", "clang", "riscv64-unknown-elf-objcopy"):
+    for t in ("llvm-objdump", "clang"):
         if not os.access(os.path.join(tc, t), os.X_OK):
-            sys.exit("oracle: " + t + " not found in " + tc)
+            sys.exit("oracle: " + t + " not found in " + tc +
+                     " (RVA_EXT_TOOLS, rtl/Vars.mk)")
 
     encs = [c for c in range(65536) if (c & 3) != 3]
     work = tempfile.mkdtemp(prefix="rvc_oracle.")
-    binf = os.path.join(work, "c.bin")
+    rawf = os.path.join(work, "c.s")
     elf = os.path.join(work, "c.o")
-    with open(binf, "wb") as f:
-        f.write(b"".join(struct.pack("<H", c) for c in encs))
-    run([os.path.join(tc, "riscv64-unknown-elf-objcopy"), "-I", "binary",
-         "-O", "elf64-littleriscv", "-B", "riscv", "--rename-section",
-         ".data=.text,contents,alloc,load,readonly,code", binf, elf])
+    with open(rawf, "w") as f:
+        f.write("\t.option rvc\n\t.text\n_start:\n")
+        for c in encs:
+            f.write("\t.insn 0x%04x\n" % c)
+    run([os.path.join(tc, "clang"), "--target=riscv64-unknown-elf",
+         "-march=" + RAW_ARCH, "-mno-relax", "-c", rawf, "-o", elf])
+    if text_bytes(elf) != b"".join(struct.pack("<H", c) for c in encs):
+        sys.exit("oracle: the object's .text is not the 16-bit encodings")
 
     dis_a = disasm(tc, elf, True)
     dis_n = disasm(tc, elf, False)
@@ -222,16 +254,13 @@ def main():
 
     src = os.path.join(work, "x.s")
     obj = os.path.join(work, "x.o")
-    raw = os.path.join(work, "x.bin")
     with open(src, "w") as f:
         f.write("\t.option norvc\n\t.text\n")
         for _, t in asm:
             f.write("\t" + t + "\n")
     run([os.path.join(tc, "clang"), "--target=riscv64-unknown-elf",
          "-march=" + ASM_ARCH, "-mno-relax", "-c", src, "-o", obj])
-    run([os.path.join(tc, "riscv64-unknown-elf-objcopy"), "-O", "binary",
-         "-j", ".text", obj, raw])
-    data = open(raw, "rb").read()
+    data = text_bytes(obj)
     if len(data) != 4 * len(asm):
         sys.exit("oracle: %d bytes for %d lines; a line did not encode "
                  "to one 32-bit word" % (len(data), len(asm)))

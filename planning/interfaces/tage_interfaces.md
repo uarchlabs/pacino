@@ -6,7 +6,7 @@
  FILE:    tage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -90,12 +90,10 @@ input  tage_upd_inp_t    tage_upd_inp_u0[0:NUM_PRED_SLOTS-1]
 output logic             [NUM_PRED_SLOTS-1:0] tage_upd_rdy_u1
 
 
-// arbitration status outputs
-// pending rename per TD #49:
-//   pq_not_full -> tage_pq_not_full
-//   upd_rdy     -> tage_uq_not_full
-output logic                      pq_not_full
-output logic [NUM_PRED_SLOTS-1:0] upd_rdy
+// arbitration status outputs, driven by tage_arb (BP-132)
+// renamed by BP-132 (TD#49): were pq_not_full and upd_rdy
+output logic                      tage_pq_not_full
+output logic [NUM_PRED_SLOTS-1:0] tage_uq_not_full
 
 // aging control -- shared across both slots
 input  logic                                  tage_enable_aging
@@ -348,7 +346,7 @@ tage_upd_rdy_u1[s]    -- flopped version of tage_upd_val_u0[s].
                           Retained as placeholder for future
                           backpressure if required.
 
-pq_not_full           -- asserted when the prediction queue has
+tage_pq_not_full      -- asserted when the prediction queue has
                           room to accept a new prediction request.
                           Consumer must gate tage_pred_val_p0
                           on this signal. Since BP-121 it also
@@ -356,24 +354,23 @@ pq_not_full           -- asserted when the prediction queue has
                           hold, so that a waiting update finds a
                           cycle with no prediction
                           (bp_arb_spec.md 4.5). A prediction is
-                          never delayed by an update. Pending rename to
-                          tage_pq_not_full per TD #49 (lower case;
-                          this read tage_PQ_not_full, session-072)
-                          -- this
-                          line said tage_uq_not_full, which is
-                          the rename for upd_rdy, not for this
-                          port. The port list above has it right.
-                          Corrected session-070.
+                          never delayed by an update. Was
+                          pq_not_full; renamed by BP-132 (TD#49).
 
-upd_rdy               -- asserted when the update queue is not
+tage_uq_not_full      -- asserted when the update queue is not
                           full. Consumer must gate
-                          tage_upd_val_u0 on this signal.
-                          Pending rename to tage_uq_not_full
-                          per TD #49.
+                          tage_upd_val_u0 on this signal. Was
+                          upd_rdy; renamed by BP-132 (TD#49).
+                          bp_cluster connects it to its own port
+                          tage_upd_rdy, which keeps that name
+                          (ruled, Jeff, session-078).
 
-                          The three ittage_* names in this block
-                          were copied from the ITTAGE document.
-                          Corrected session-070.
+                          Both are driven by tage_arb.sv, the
+                          TAGE arbitration (PQ, UQ, arbiter,
+                          response buffer), a submodule of
+                          tage.sv since BP-132 (TD#52); tage.sv
+                          is structural apart from the fast-init
+                          muxes and the per-table index select.
 
 ```
 

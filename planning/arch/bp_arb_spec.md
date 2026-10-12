@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -278,9 +278,11 @@ Structure:
 
 Handshake (producer side):
   - Commit presents upd_val[s] and upd_inp[s] per slot.
-  - UQ asserts upd_rdy[s] per slot when accepted.
-  - When UQ full, upd_rdy deasserts.  Commit holds valid
-    until accepted.
+  - UQ asserts <pred>_uq_not_full[s] per slot when accepted
+    (tage_uq_not_full, ittage_uq_not_full; this read upd_rdy,
+    the names before BP-132, TD#49).
+  - When UQ full, <pred>_uq_not_full deasserts.  Commit holds
+    valid until accepted.
 
 Handshake (arbiter side):
   - Arbiter asserts uq_rd_en on grant.
@@ -486,6 +488,11 @@ state.  The update is granted in a subsequent cycle.
                No tage_redir_val_p2 port exists.
   Notes:       TAGE response buffer holds tage_pred_meta_t.
                SC prediction chains from that buffer (section 6).
+               BUILT in tage_arb.sv, a submodule of tage.sv:
+               PQ, UQ, arbiter, starvation count, competing-stage
+               mux, bp_arb_trx_t register and response buffer
+               (BP-132, TD#52). Its status outputs are
+               tage_pq_not_full and tage_uq_not_full (TD#49).
                TAGE and SC have separate UQ buffers. This is a change
                from the previous where the UQ entry was shared.
 
@@ -498,6 +505,9 @@ state.  The update is granted in a subsequent cycle.
   Note: ITTAGE_RESP_BUF_DEPTH is vestigial -- the response buffer
   was removed (BP-038b, ittage.sv). ITTAGE has no independent
   prediction response FIFO at the unit level.
+  BUILT in ittage_arb.sv, a submodule of ittage.sv: PQ, UQ,
+  arbiter and starvation count (BP-132, TD#52). Its status
+  outputs are ittage_pq_not_full and ittage_uq_not_full (TD#49).
   Pred input:  ittage_pred_inp_t
   Upd input:   ittage_upd_inp_t
   Pred output: ittage_pred_meta_t
@@ -982,3 +992,8 @@ task file, not here.
               grant and readies with the SC UQ (TD#123, P-3). 5.5:
               the SC UQ built. 6.2: the BP-119 request and ready
               superseded.
+
+  2026-10-12  session-078, after BP-132. 4.4: the UQ ready is
+              <pred>_uq_not_full (TD#49). 5.3, 5.4: the TAGE and
+              ITTAGE arbitration is in tage_arb.sv and ittage_arb.sv
+              (TD#52).

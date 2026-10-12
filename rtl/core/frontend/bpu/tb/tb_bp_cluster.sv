@@ -5291,7 +5291,7 @@ module tb;
       // TAGE T1-T4: the table must be presented this request now (a
       // prediction is never delayed, bp_arb_spec.md 4.5).
       if (dut.w_req_val_p0) begin
-        if (dut.u_tage.arb_grant_pred &&
+        if (dut.u_tage.u_tage_arb.arb_grant_pred &&
             (dut.u_tage.cntrl_pred_inp_p0[0].pc === ftq_pred_pc_p0) &&
             (dut.u_tage.cntrl_pred_inp_p0[S1].pc === ftq_pred_pc_p0)) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
@@ -5316,7 +5316,7 @@ module tb;
           mon_tage_late++;
         end
         // ITTAGE IT1-IT5.
-        if (dut.u_ittage.arb_grant_pred &&
+        if (dut.u_ittage.u_ittage_arb.arb_grant_pred &&
             (dut.u_ittage.cntrl_pred_inp_p0[0].pc === ftq_pred_pc_p0) &&
             (dut.u_ittage.cntrl_pred_inp_p0[S1].pc === ftq_pred_pc_p0)) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin

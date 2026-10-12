@@ -284,11 +284,11 @@ module bp_cluster (
   output logic                            ittage_rdy,
   output logic                            sc_ready,
   // Queue status, presented at the boundary. tage and ittage declare
-  // pq_not_full / upd_rdy unprefixed (TD#49); the cluster boundary
-  // prefixes them so the two groups are distinguishable. These are
-  // the back-pressure the FTQ observes: the cluster has no request
-  // ready output, so the FTQ must not present a request while a
-  // pq_not_full is low (bp_arb_spec.md 8.1).
+  // <p>_pq_not_full / <p>_uq_not_full (TD#49, BP-132); the cluster
+  // presents the UQ status as <p>_upd_rdy. These are the
+  // back-pressure the FTQ observes: the cluster has no request ready
+  // output, so the FTQ must not present a request while a
+  // <p>_pq_not_full is low (bp_arb_spec.md 8.1).
   output logic                            tage_pq_not_full,
   output logic [NUM_PRED_SLOTS-1:0]       tage_upd_rdy,
   output logic [NUM_PRED_SLOTS-1:0]       tage_upd_rdy_u1,
@@ -612,7 +612,7 @@ module bp_cluster (
   // p0: request qualification (bp_arb_spec.md 8.1, FE-5)
   // ================================================================
   // The RAM-based predictors with a prediction queue are tage and
-  // ittage; both export pq_not_full. A request is presented to the
+  // ittage; both export <p>_pq_not_full. A request is presented to the
   // whole cluster only when every such queue can accept it, so no
   // prediction is dropped and the predictors stay in lockstep. The
   // queue-status ports are also presented at the boundary: the FTQ
@@ -1881,8 +1881,8 @@ module bp_cluster (
     .tage_upd_val_u0     (w_tage_upd_val_u0),
     .tage_upd_inp_u0     (tage_upd_inp_u0),
     .tage_upd_rdy_u1     (tage_upd_rdy_u1),
-    .pq_not_full         (tage_pq_not_full),
-    .upd_rdy             (tage_upd_rdy),
+    .tage_pq_not_full    (tage_pq_not_full),
+    .tage_uq_not_full    (tage_upd_rdy),
     .tage_enable_aging   (tage_enable_aging),
     .tage_aging_interval (tage_aging_interval),
     .consumer_ready      (w_tage_consumer_ready),
@@ -1904,8 +1904,8 @@ module bp_cluster (
     .ittage_upd_val_u0     (w_ittage_upd_val_u0),
     .ittage_upd_inp_u0     (ittage_upd_inp_u0),
     .ittage_upd_rdy_u1     (ittage_upd_rdy_u1),
-    .pq_not_full           (ittage_pq_not_full),
-    .upd_rdy               (ittage_upd_rdy),
+    .ittage_pq_not_full    (ittage_pq_not_full),
+    .ittage_uq_not_full    (ittage_upd_rdy),
     .ittage_enable_aging   (ittage_enable_aging),
     .ittage_aging_interval (ittage_aging_interval),
     .folded_hist           (w_folded),

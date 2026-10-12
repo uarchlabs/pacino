@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-08
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -126,13 +126,10 @@ input  logic              [NUM_PRED_SLOTS-1:0] ittage_upd_val_u0
 input  ittage_upd_inp_t   ittage_upd_inp_u0[0:NUM_PRED_SLOTS-1]
 output logic              [NUM_PRED_SLOTS-1:0] ittage_upd_rdy_u1
 
-// arbitration status outputs
-// pending rename per TD #49:
-//   pq_not_full -> ittage_pq_not_full
-//   upd_rdy     -> ittage_uq_not_full
-//
-output logic                      pq_not_full
-output logic [NUM_PRED_SLOTS-1:0] upd_rdy
+// arbitration status outputs, driven by ittage_arb (BP-132)
+// renamed by BP-132 (TD#49): were pq_not_full and upd_rdy
+output logic                      ittage_pq_not_full
+output logic [NUM_PRED_SLOTS-1:0] ittage_uq_not_full
 
 // aging control -- shared across both slots
 input  logic                                   ittage_enable_aging
@@ -407,7 +404,7 @@ ittage_upd_rdy_u1[s]  -- flopped version of ittage_upd_val_u0[s].
                           Retained as placeholder for future
                           backpressure if required.
 
-pq_not_full           -- asserted when the prediction queue has
+ittage_pq_not_full    -- asserted when the prediction queue has
                           room to accept a new prediction request.
                           Consumer must gate ittage_pred_val_p0
                           on this signal. Since BP-121 it also
@@ -415,14 +412,21 @@ pq_not_full           -- asserted when the prediction queue has
                           hold, so that a waiting update finds a
                           cycle with no prediction
                           (bp_arb_spec.md 4.5). A prediction is
-                          never delayed by an update. Pending rename to
-                          ittage_pq_not_full TD #49
+                          never delayed by an update. Was
+                          pq_not_full; renamed by BP-132 (TD#49).
 
-upd_rdy               -- asserted when the update queue is not
+ittage_uq_not_full    -- asserted when the update queue is not
                           full. Consumer must gate
-                          ittage_upd_val_u0 on this signal.
-                          Pending rename to ittage_uq_not_full
-                          per TD #49.
+                          ittage_upd_val_u0 on this signal. Was
+                          upd_rdy; renamed by BP-132 (TD#49).
+                          bp_cluster connects it to its own port
+                          ittage_upd_rdy, which keeps that name
+                          (ruled, Jeff, session-078).
+
+                          Both are driven by ittage_arb.sv, the
+                          ITTAGE arbitration (PQ, UQ, arbiter; no
+                          response buffer), a submodule of
+                          ittage.sv since BP-132 (TD#52).
 
 ### Update Behavior
 

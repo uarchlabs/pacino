@@ -30,8 +30,8 @@ module tb;
   logic [NPS-1:0]        ittage_upd_val_u0;
   ittage_upd_inp_t       ittage_upd_inp_u0[0:NPS-1];
   logic [NPS-1:0]        ittage_upd_rdy_u1;
-  logic                  pq_not_full;
-  logic [NPS-1:0]        upd_rdy;
+  logic                  ittage_pq_not_full;
+  logic [NPS-1:0]        ittage_uq_not_full;
   logic                  ittage_enable_aging;
   logic [31:0]           ittage_aging_interval;
   bp_folded_hist_t       folded_hist;
@@ -50,8 +50,8 @@ module tb;
     .ittage_upd_val_u0    (ittage_upd_val_u0),
     .ittage_upd_inp_u0    (ittage_upd_inp_u0),
     .ittage_upd_rdy_u1    (ittage_upd_rdy_u1),
-    .pq_not_full          (pq_not_full),
-    .upd_rdy              (upd_rdy),
+    .ittage_pq_not_full   (ittage_pq_not_full),
+    .ittage_uq_not_full   (ittage_uq_not_full),
     .ittage_enable_aging  (ittage_enable_aging),
     .ittage_aging_interval(ittage_aging_interval),
     .folded_hist          (folded_hist),
@@ -106,9 +106,9 @@ module tb;
         mon_prdy1_cnt  <= mon_prdy1_cnt + 1;
       if (ittage_upd_rdy_u1[0])
         mon_u1_0_cnt   <= mon_u1_0_cnt  + 1;
-      if (!pq_not_full)
+      if (!ittage_pq_not_full)
         mon_saw_pq_full <= 1'b1;
-      if (!upd_rdy[0])
+      if (!ittage_uq_not_full[0])
         mon_saw_uq_full <= 1'b1;
     end
   end
@@ -196,13 +196,13 @@ module tb;
     end
   endtask
 
-  // do_pred: gate on pq_not_full, drive 1-cycle pred on slot
+  // do_pred: gate on ittage_pq_not_full, drive 1-cycle pred on slot
   task automatic do_pred(
     input logic [VA_WIDTH-1:0]     pc,
     input logic [FTQ_IDX_BITS-1:0] bid,
     input int                      slot
   );
-    while (!pq_not_full) @(posedge clk);
+    while (!ittage_pq_not_full) @(posedge clk);
     @(posedge clk);
     ittage_pred_val_p0                 = NPS'(1 << slot);
     ittage_pred_inp_p0[slot].pc        = pc;
@@ -212,12 +212,13 @@ module tb;
     for (int s = 0; s < NPS; s++) ittage_pred_inp_p0[s] = '0;  // BP-128
   endtask
 
-  // do_upd: gate on upd_rdy, drive 1-cycle update on slot, wait u1
+  // do_upd: gate on ittage_uq_not_full, drive 1-cycle update on slot,
+  // wait u1
   task automatic do_upd(
     input ittage_upd_inp_t inp,
     input int              slot
   );
-    while (!upd_rdy[slot]) @(posedge clk);
+    while (!ittage_uq_not_full[slot]) @(posedge clk);
     @(posedge clk);
     ittage_upd_val_u0          = NPS'(1 << slot);
     ittage_upd_inp_u0[slot]    = inp;
@@ -653,18 +654,19 @@ module tb;
     clr();
     u_start    = mon_u1_0_cnt;
     upd_driven = 0;
-    // 30-cycle window: pred competition + 4 upds when upd_rdy asserts
+    // 30-cycle window: pred competition + 4 upds when
+    // ittage_uq_not_full asserts
     for (int i = 0; i < 30; i++) begin
       @(posedge clk);
       ittage_pred_val_p0 =
-        pq_not_full ? NPS'(1) : NPS'(0);
-      if (pq_not_full) begin
+        ittage_pq_not_full ? NPS'(1) : NPS'(0);
+      if (ittage_pq_not_full) begin
         ittage_pred_inp_p0[0].pc        =
           VA_WIDTH'('h0002_0000) + VA_WIDTH'(i * 32);
         ittage_pred_inp_p0[0].branch_id =
           FTQ_IDX_BITS'('h30 + i);
       end
-      if (upd_driven < 4 && upd_rdy[0]) begin
+      if (upd_driven < 4 && ittage_uq_not_full[0]) begin
         ittage_upd_val_u0      = NPS'(1);
         ittage_upd_inp_u0[0]   = '0;
         upd_driven++;
@@ -699,7 +701,7 @@ module tb;
     // Drive both pred and upd for 30 cycles
     for (int i = 0; i < 30; i++) begin
       @(posedge clk);
-      if (pq_not_full) begin
+      if (ittage_pq_not_full) begin
         ittage_pred_val_p0 = NPS'(1);
         ittage_pred_inp_p0[0].pc        =
           VA_WIDTH'('h0003_0000) + VA_WIDTH'(i * 32);
@@ -708,7 +710,7 @@ module tb;
       end else begin
         ittage_pred_val_p0 = '0;
       end
-      if (upd_rdy[0]) begin
+      if (ittage_uq_not_full[0]) begin
         ittage_upd_val_u0    = NPS'(1);
         ittage_upd_inp_u0[0] = '0;
       end else begin

@@ -60,8 +60,8 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
         lint_sc sim_sc sim_sc_fast \
         lint_ittage_table sim_ittage_table \
         lint_ittage_cntrl sim_ittage_cntrl \
-        lint_ittage sim_ittage sim_ittage_fast \
-        lint_tage_cntrl lint_tage \
+        lint_ittage_arb lint_ittage sim_ittage sim_ittage_fast \
+        lint_tage_cntrl lint_tage_arb lint_tage \
         lint_ras sim_ras \
         lint_ftb_array \
         lint_ftb_plru \
@@ -88,8 +88,10 @@ all: lint  \
      sim_sc_fast \
      lint_ittage_table \
      lint_ittage_cntrl \
+     lint_ittage_arb \
      lint_ittage \
      lint_tage_cntrl \
+     lint_tage_arb \
      lint_tage \
      lint_ras \
      lint_ftb_array \
@@ -411,6 +413,16 @@ sim_ittage_cntrl:
 	@echo "[simulating] $(VER_OUT)_ittage_cntrl/Vtb"
 	$(Q)./$(VER_OUT)_ittage_cntrl/Vtb
 
+# The ITTAGE arbitration layer (BP-132, TD#52), moved out of ittage.sv.
+lint_ittage_arb:
+	@echo "[linting]    ittage_arb"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  --top-module ittage_arb \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/ittage_arb.sv $(VSILENCE)
+
 lint_ittage:
 	@echo "[linting]    ittage"
 	$(Q)$(VERILATOR) --lint-only \
@@ -423,6 +435,7 @@ lint_ittage:
 	  $(COMP_DIR)/sram_init.sv \
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage_arb.sv \
 	  $(RTL_DIR)/ittage.sv $(VSILENCE)
 
 # sim_ittage runs the real sram_init walk, no plusarg, as sim_tage
@@ -442,6 +455,7 @@ sim_ittage:
 	  $(COMP_DIR)/sram_init.sv \
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage_arb.sv \
 	  $(RTL_DIR)/ittage.sv \
 	  $(TB_DIR)/ittage_assert.sv \
 	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
@@ -461,6 +475,7 @@ sim_ittage_fast:
 	  $(COMP_DIR)/sram_init.sv \
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage_arb.sv \
 	  $(RTL_DIR)/ittage.sv \
 	  $(TB_DIR)/ittage_assert.sv \
 	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
@@ -475,6 +490,16 @@ lint_tage_cntrl:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/tage_cntrl.sv $(VSILENCE)
+
+# The TAGE arbitration layer (BP-132, TD#52), moved out of tage.sv.
+lint_tage_arb:
+	@echo "[linting]    tage_arb"
+	$(Q)$(VERILATOR) --lint-only \
+	  $(VER_FLAGS) \
+	  --top-module tage_arb \
+	  $(RTL_DIR)/bp_defines_pkg.sv \
+	  $(RTL_DIR)/bp_structs_pkg.sv \
+	  $(RTL_DIR)/tage_arb.sv $(VSILENCE)
 
 # VARHIDDEN (BP-128): tb_tage.sv tasks declare an argument named verbose,
 #   which shadows the module variable of that name. That is its only
@@ -496,6 +521,7 @@ lint_tage:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
@@ -576,9 +602,11 @@ lint_bp_cluster:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(RTL_DIR)/ittage_table.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(RTL_DIR)/ittage_arb.sv \
 	  $(RTL_DIR)/ittage.sv \
 	  $(RTL_DIR)/sc_table.sv \
 	  $(RTL_DIR)/sc_brimli.sv \
@@ -607,9 +635,11 @@ BP_CLUSTER_SRCS := \
   $(RTL_DIR)/tage_bim.sv \
   $(RTL_DIR)/tage_table.sv \
   $(RTL_DIR)/tage_cntrl.sv \
+  $(RTL_DIR)/tage_arb.sv \
   $(RTL_DIR)/tage.sv \
   $(RTL_DIR)/ittage_table.sv \
   $(RTL_DIR)/ittage_cntrl.sv \
+  $(RTL_DIR)/ittage_arb.sv \
   $(RTL_DIR)/ittage.sv \
   $(RTL_DIR)/sc_table.sv \
   $(RTL_DIR)/sc_brimli.sv \
@@ -713,6 +743,7 @@ sim_tage:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
@@ -739,6 +770,7 @@ sim_tage_fast:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
@@ -761,6 +793,7 @@ sim_tage_tasks:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tage_assert_bind.sv \
@@ -788,6 +821,7 @@ sim_tage_manual:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage_manual.sv $(VSILENCE)
@@ -969,6 +1003,7 @@ cov_tage:
 	  $(RTL_DIR)/tage_bim.sv \
 	  $(RTL_DIR)/tage_table.sv \
 	  $(RTL_DIR)/tage_cntrl.sv \
+	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
@@ -1068,8 +1103,9 @@ clean_cov: clean_cov_tage clean_cov_tage_table \
 # targets stay at 2 and have none.
 SLOT1_BASE := \
   lint lint_loop_pred lint_tage_table lint_sc_table lint_sc_brimli \
-  lint_sc_cntrl lint_sc lint_ittage_table lint_ittage_cntrl lint_ittage \
-  lint_tage_cntrl lint_tage lint_ras lint_ftb_array lint_ftb_plru \
+  lint_sc_cntrl lint_sc lint_ittage_table lint_ittage_cntrl lint_ittage_arb \
+  lint_ittage lint_tage_cntrl lint_tage_arb lint_tage lint_ras lint_ftb_array \
+  lint_ftb_plru \
   lint_ftb_cntrl lint_ftb lint_bp_cluster \
   sim sim_history sim_ubtb sim_loop_pred sim_tage_table sim_sc_table \
   sim_sc_table_fast sim_sc_brimli sim_sc_brimli_fast sim_sc_cntrl sim_sc \
@@ -1094,8 +1130,9 @@ $(SLOT1_TGTS): %_1slot:
 #   regress_list        - this plumbing.
 REGRESS_TARGETS := \
   lint lint_loop_pred lint_tage_table lint_sc_table lint_sc_brimli \
-  lint_sc_cntrl lint_sc lint_ittage_table lint_ittage_cntrl lint_ittage \
-  lint_tage_cntrl lint_tage lint_ras lint_ftb_array lint_ftb_plru \
+  lint_sc_cntrl lint_sc lint_ittage_table lint_ittage_cntrl lint_ittage_arb \
+  lint_ittage lint_tage_cntrl lint_tage_arb lint_tage lint_ras lint_ftb_array \
+  lint_ftb_plru \
   lint_ftb_cntrl lint_ftb lint_bp_cluster \
   sim sim_history sim_ubtb sim_loop_pred sim_tage_table sim_sc_table \
   sim_sc_table_fast sim_sc_brimli sim_sc_brimli_fast sim_sc_cntrl sim_sc \

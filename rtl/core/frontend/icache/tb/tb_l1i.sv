@@ -617,6 +617,61 @@ module tb;
   endtask
 
   // =================================================================
+  // Install-time replacement (BP-132, TD#177; L1I-24).
+  // =================================================================
+  // A CACHEABLE MISS MOVES THE REPLACEMENT STATE ONCE, in its compare
+  // stage, and not again when its fill installs: l1i_ctrl gates the
+  // install-time update (meta_fp_en) to a register whose lookup was
+  // uncached. The test puts an access to the set between a cacheable
+  // miss's lookup and its fill, so a second update at the fill would
+  // undo that access's.
+  //
+  // The set is cold-filled with lines 0 to 7 in ways 0 to 7 (D-40,
+  // lowest invalid way first). The expected victims below are the
+  // l1i_pkg replacement tables walked by hand from that state (the
+  // tables are the encoding the control uses, D-39):
+  //   cold fill, ways 0..7                     victim way 0
+  //   line 8 misses, compare moves way 0       victim way 4
+  //   line 4 hits, moves way 4                 victim way 2
+  //   line 8's fill installs in way 0:
+  //     no update (the gate)                   victim way 2
+  //     a second update of way 0 (no gate)     victim way 6
+  // Line 9, a tenth line, then evicts line 2 with the gate and line 6
+  // without it. The hit to line 4 must be answered before line 8's
+  // fill: line 8's fill is held for HOLD cycles and the order is
+  // checked, not assumed.
+  task automatic t_fill_rpl();
+    localparam int HOLD = 20;
+    int v;
+    reset_all("fill_rpl_once");
+    for (int k = 0; k < 8; k++) fetch(4'(k), same_set(k), 1'b0, v);
+    for (int k = 0; k < 8; k++)
+      chk($sformatf("cold fill: line %0d fetched once", k),
+          gets(lnof(same_set(k))) == 1);
+    lat[lnof(same_set(8))] = HOLD;
+    issue(8, same_set(8), 1'b0);                       // cacheable miss
+    repeat (2) @(posedge clk);
+    #1;
+    fetch(9, same_set(4), 1'b0, v);                    // hit, same set
+    chk("line 4 hit: no Get", gets(lnof(same_set(4))) == 1);
+    chk("line 4 answered before line 8's fill", !r_got[8]);
+    wait_rsp(8);
+    chk("line 8 fetched once", gets(lnof(same_set(8))) == 1);
+    fetch(10, same_set(9), 1'b0, v);                   // a tenth line
+    chk("line 9 fetched once", gets(lnof(same_set(9))) == 1);
+    // Hits first: a hit moves the replacement state but evicts nothing.
+    fetch(11, same_set(6), 1'b0, v);
+    chk("line 6 still hits: the fill did not move the state again",
+        gets(lnof(same_set(6))) == 1);
+    fetch(12, same_set(8), 1'b0, v);
+    chk("line 8 was installed: a hit", gets(lnof(same_set(8))) == 1);
+    fetch(13, same_set(2), 1'b0, v);
+    chk("line 2 was the victim of line 9", gets(lnof(same_set(2))) == 2);
+    fetch(14, same_set(0), 1'b0, v);
+    chk("line 0 was the victim of line 8", gets(lnof(same_set(0))) == 2);
+  endtask
+
+  // =================================================================
   // Maintenance (IF-28 to IF-32, IF-42).
   // =================================================================
   task automatic t_inv_all();
@@ -772,6 +827,7 @@ module tb;
     t_unc_merge();
     t_unc_merge_resident();
     t_unc_merge_fill();
+    t_fill_rpl();
     t_inv_all();
     t_inv_idle_timing();
     t_inv_line();

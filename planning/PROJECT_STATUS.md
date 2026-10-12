@@ -16,6 +16,44 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-078, after BP-132: the front-end clean-up batch recorded.
+
+BP-132 RUN, COMPLETE (Jeff). 54m34s. regress.sh 265 targets PASS (was
+261: lint_tage_arb, lint_ittage_arb and their _1slot twins). Every
+tb_fe_top program's figures equal the baseline at 2 and 1 slots; every
+check count is unchanged except sim_l1i 250 -> 281 (the new test) and
+the totals regress.sh can now read. All provisional decisions ACCEPTED
+(Jeff), including the cluster boundary keeping tage_upd_rdy /
+ittage_upd_rdy.
+  TD#176 with TD#147: RVA_EXT_TOOLS in rtl/Vars.mk for the out-of-repo
+    toolchain; GNU objcopy no longer needed.
+  TD#130: regress.sh reads the six missing totals, sums cov_bpu, and
+    fails on a malformed known_failures.txt line.
+  TD#129: rtl/Makefile all and cov retired, clean reaches every unit.
+  TD#131: explained, ccache.
+  TD#177: tb_l1i t_fill_rpl.
+  TD#49: TAGE and ITTAGE queue-status pins renamed.
+  TD#52: arbitration in tage_arb.sv and ittage_arb.sv.
+  TD#77: no prompt needed a change.
+All nine CLOSED in Technical Debt.
+
+NEW TABLE, Performance / Verification Debt (Jeff), after Technical Debt.
+Moved there, numbers kept: TD#80, 85, 86, 93, 98, 118, 120, 128, 133,
+149, 150, 168, 179. OPENED there: TD#180 (tools/cov_table.py misses
+tage_arb.sv) and TD#181 (the bpu coverage targets run the 5.020
+verilator_coverage on 5.048 data), both for the formal verification
+coverage exercise. TD numbers are issued from one sequence across
+both tables.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, tage_interfaces.md, ittage_interfaces.md
+(port lists and semantics: the renamed pins, driven by tage_arb /
+ittage_arb), bp_arb_spec.md (4.4 the UQ ready named; 5.3, 5.4 the
+arbitration modules).
+
+Next free: BP-133, INFRA-014, TOOLS-007, TD#182.
+
+---
 ## Session-078, after BP-131: the slot measurements recorded.
 
 BP-131 RUN, COMPLETE (Jeff). 48m. Measurement only; nothing in the tree
@@ -68,7 +106,14 @@ checksum: PROJECT_STATUS.md, ftb_decisions.md (3: the split not built,
 the measurement, deferred), ubtb_interfaces.md (the duplicate fill and
 the unbuilt split).
 
-Next free: BP-132, INFRA-014, TOOLS-007, TD#180.
+Later in session-078 (Jeff): TD#82 CLOSED; D3 and D5 ACCEPTED (above);
+TD#83 CLOSED, bp_history_decisions.md 6.6 no longer cites an external
+implementation. BP-132 WRITTEN, not yet issued: the front-end clean-up
+batch (TD#49, 52, 77, 129, 130, 131, 147 with 176, 177). Not in it:
+TD#178 (a planning document, PA and Jeff), TD#40 (needs a closing
+ruling; the note it named was removed session-057).
+
+Next free: BP-133, INFRA-014, TOOLS-007, TD#180. (Superseded above.)
 
 ---
 ## Session-078, after BP-130: BP-128, BP-129 and BP-130 recorded.
@@ -105,12 +150,14 @@ the slot macro.
         consideration; no FTQ, FTB or uBTB slot change until ruled.
         Found: the ftb_decisions.md 3 split is not built at either
         slot count. BP-131 is not written.
-    D3  ubtb's N_SLOTS parameter: OPEN.
+    D3  ubtb's N_SLOTS parameter: ACCEPTED as is (Jeff).
     D4  tb_fe_top loops skips its two loop-predictor checks at 1:
         ACCEPTED (Jeff); the performance at one slot is TD#179.
     D5  the 1-slot ftq assert_labels skips three ftq_entry_assert
         labels (a_ras_needs_step, a_ras_type, a_ras_snapshot_src) in
-        the tb_ftq_ifu model only: OPEN.
+        the tb_ftq_ifu model only, where commit_step_val is tied
+        to 0 and Verilator removes them at one slot; still checked
+        in the tb_ftq_entry and tb_ftq models: ACCEPTED (Jeff).
 
 BP-129 RUN, COMPLETE (D1). 68m. regress.sh 261 PASS. bp_history's
 prediction inputs (pred_taken, pred_pc, num_branches), its rollback
@@ -152,7 +199,7 @@ ACCEPTED (Jeff).
 CLOSED (Jeff): TD#4, moot: predecode.sv was deleted by BP-118.
 CLOSED: TD#1, by BP-128.
 OPENED: TD#179, the performance study at NUM_PRED_SLOTS = 1.
-TD#82: done by BP-129; closing is Jeff's.
+TD#82: done by BP-129, CLOSED (Jeff).
 
 Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, bp_history_interfaces.md,
@@ -2502,6 +2549,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Session-061: IT5 BrIMLI/no-folds |
 |                         |             |                   | claim removed. Header still      |
 |                         |             |                   | DRAFT pending s6.6 sha + HI2.    |
+|                         |             |                   | Session-078: s6.6 citation       |
+|                         |             |                   | removed (TD#83 closed).          |
 |                         |             |                   | HI5 CLOSED session-070 by G23.   |
 |                         |             |                   | Session-078: 3, 3.1 sized ports; |
 |                         |             |                   | 3.5 first bit from ckpt_nb       |
@@ -2696,6 +2745,20 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | TC-54.                           |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | BP-132: arbitration (PQ, UQ,     |
+|                         |             |                   | arbiter, starvation count,       |
+|                         |             |                   | response buffer) moved to        |
+|                         |             |                   | tage_arb.sv; queue-status pins   |
+|                         |             |                   | tage_pq_not_full /               |
+|                         |             |                   | tage_uq_not_full (TD#49, TD#52). |
+| tage_arb.sv             | Complete    | lint_tage_arb     | BP-132 (TD#52). TAGE PQ, UQ,     |
+|                         |             |                   | arbiter, starvation count,       |
+|                         |             |                   | competing-stage mux,             |
+|                         |             |                   | bp_arb_trx_t register and        |
+|                         |             |                   | response buffer, moved verbatim  |
+|                         |             |                   | from tage.sv. Tested through     |
+|                         |             |                   | sim_tage and tb_bp_cluster group |
+|                         |             |                   | H.                               |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
 |                         | BOUND, LIVE | sim_tage_fast     | TD#109 CLOSED BP-096: the bind   |
 |                         |             | sim_tage_tasks    | named an INSTANCE (bind u_dut)   |
@@ -2780,6 +2843,16 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (TD#102). sim_ittage runs the    |
 |                         |             |                   | sram_init walk, sim_ittage_fast  |
 |                         |             |                   | the fast init; 223/0 each.       |
+|                         |             |                   | BP-132: arbitration moved to     |
+|                         |             |                   | ittage_arb.sv; pins              |
+|                         |             |                   | ittage_pq_not_full /             |
+|                         |             |                   | ittage_uq_not_full (TD#49,       |
+|                         |             |                   | TD#52).                          |
+| ittage_arb.sv           | Complete    | lint_ittage_arb   | BP-132 (TD#52). ITTAGE PQ, UQ,   |
+|                         |             |                   | arbiter and starvation count; no |
+|                         |             |                   | response buffer (BP-038b).       |
+|                         |             |                   | Tested through sim_ittage and    |
+|                         |             |                   | tb_bp_cluster group H.           |
 | ras_decisions.md        | Draft       | --                | Created session-050. G5/G6/G8/G17|
 |                         |             |                   | recorded. Session-061:           |
 |                         |             |                   | RAS_COMMIT_PTR_BITS correction.  |
@@ -3368,6 +3441,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 250 checks. The gate against a    |
 |                         |             |                   | second update for a cacheable     |
 |                         |             |                   | install is unchecked, TD#177.     |
+|                         |             |                   | BP-132: t_fill_rpl, the install-  |
+|                         |             |                   | time replacement test; sim_l1i    |
+|                         |             |                   | 281 checks; TD#177 closed.        |
 | ifu_decisions.md        | Draft       | --                | Created session-069. IFU-1..27,   |
 |                         |             |                   | TD-IFU-1, 4, 5 and 7..10;         |
 |                         |             |                   | IFU-U4, IFU-U5. TD-IFU-2, -3 and  |
@@ -3725,10 +3801,23 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | so the rename inside tage.sv and|
 |    |                                        | ittage.sv is cosmetic alignment,|
 |    |                                        | not a blocker.                  |
+|    |                                        | CLOSED by BP-132 (session-078): |
+|    |                                        | pins renamed tage_pq_not_full / |
+|    |                                        | tage_uq_not_full and the ittage_|
+|    |                                        | pair in tage and ittage and     |
+|    |                                        | every reference; the bp_cluster |
+|    |                                        | boundary keeps tage_upd_rdy /   |
+|    |                                        | ittage_upd_rdy (ruled, Jeff).   |
 | 52 | Move arb logic into submodule out of   | Top modules should be           |
 |    | top in tage and ittage.                | structural only. New arb module |
 |    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
 |    |                                        | sequence with arb test #73.     |
+|    |                                        | CLOSED by BP-132 (session-078): |
+|    |                                        | arbitration in tage_arb.sv and  |
+|    |                                        | ittage_arb.sv; the tops keep the|
+|    |                                        | fast-init muxes and the per-    |
+|    |                                        | table index select. Group H 2011|
+|    |                                        | / 1431 unchanged.               |
 | 67 | tage sram_init non-fast path.          | CLOSED by BP-126 (session-077): |
 |    | Untested here; confirm not elsewhere.  | sim_tage already ran the        |
 |    | SESSION-064: now extends to the        | sram_init walk; tage_rdy_tst    |
@@ -3805,6 +3894,11 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | BP-126 (session-077).           |
 | 77 | scrub prompts and redact any absolute  | Not a design TD; tools and infra|
 |    | path not using the RVA_ROOT env var    | task, possibly manual.          |
+|    |                                        | CLOSED by BP-132 (session-078): |
+|    |                                        | no prompt changed; every        |
+|    |                                        | absolute repo path in prompts/  |
+|    |                                        | is a record of a past session   |
+|    |                                        | (ruled, Jeff).                  |
 | 78 | RAS p3 undo-pop does not reverse a   | LEAVE AS-IS. BP-064 pins the   |
 |    | recursion pop.                       | current non-reversing behavior. |
 |    |                                      | Revisit at bp_cluster           |
@@ -3818,9 +3912,6 @@ assessment of each document. Correct any that are wrong.
 |    |                                      | Real fix needs a recursion-count|
 |    |                                      | source on the commit interface. |
 |    |                                      | Decide at FTQ integration.      |
-| 80 | FTB confidence hysteresis tuning.    | FTB_CONF_WIDTH is the knob.     |
-|    |                                      | Revisit at bp_cluster SPEC      |
-|    |                                      | numbers.                        |
 | 81 | tb_ftb coverage skews to br0.        | CLOSED by BP-126 (session-077): |
 |    |                                      | 35 br1 checks (B1-*), sim_ftb   |
 |    |                                      | 162 -> 197. Was: Optional       |
@@ -3830,12 +3921,16 @@ assessment of each document. Correct any that are wrong.
 | 82 | bp_history if/else-if slot cleanup.  | decisions.md 3.5. Fold into the |
 |    |                                      | next bp_history RTL touch. No   |
 |    |                                      | behavior change.                |
-|    |                                      | DONE by BP-129 (session-078):   |
-|    |                                      | one loop over branches, each    |
-|    |                                      | case assigns the folds once.    |
-|    |                                      | Closing is Jeff's.              |
-| 83 | bp_history decisions.md s6.6 origin  | Fill the Xiangshan commit sha / |
-|    | citation placeholders.               | date. Manual, low priority.     |
+|    |                                      | CLOSED by BP-129 (session-078,  |
+|    |                                      | Jeff): one loop over branches,  |
+|    |                                      | each case assigns the folds     |
+|    |                                      | once.                           |
+| 83 | bp_history decisions.md s6.6 origin  | CLOSED session-078 (Jeff): the  |
+|    | citation placeholders.               | external citation and its       |
+|    |                                      | placeholders removed; the       |
+|    |                                      | geometry is the standard        |
+|    |                                      | O-GEHL / TAGE folding. Was:     |
+|    |                                      | fill the commit sha / date.     |
 | 84 | Producer/consumer end-to-end fold    | CLOSED by BP-126 (session-077): |
 |    | check.                               | the FOLD monitor traces the     |
 |    |                                      | folds through the TAGE, ITTAGE  |
@@ -3853,13 +3948,6 @@ assessment of each document. Correct any that are wrong.
 |    |                                      | still not traced through the    |
 |    |                                      | hash. SC ST1-ST3 additional.    |
 |    |                                      | Tasked in BP-126 (session-077). |
-| 85 | bp_structs_pkg.sv                    | Review BPU structures for       |
-|    |                                      | field sharing and storage/flop  |
-|    |                                      | opportunities.                  |
-| 86 | sc_cntrl 8x-weighted TAGE term.      | The current sum includes        |
-|    |                                      | tage_extd_ctr at weight 1. The  |
-|    |                                      | 8x variant is deferred to PD /  |
-|    |                                      | perf. Related: #93.             |
 | 87 | tage strong/medium/weak decode       | CLOSED BP-081 (session-060).    |
 | 88 | tage_extd_ctr generation             | CLOSED BP-081 (session-060).    |
 | 89 | ftb       | Change the FTB definition to store 20 additional bits.   |
@@ -3874,14 +3962,6 @@ assessment of each document. Correct any that are wrong.
 | 92 | bpc/sc    | CLOSED session-063 for the PC and phr; the three SC      |
 |    |           | index folds were staged BP-090 and bp_arb_spec.md 6.1    |
 |    |           | now names them (session-064). FULLY CLOSED.              |
-| 93 | sc        | SC efficacy and threshold/band tuning -- deferred        |
-|    |           | investigation. Open questions at PD/perf: does SC earn   |
-|    |           | its area/power; the SC_THRSH_MID=10 / SC_THRSH_MAX=512   |
-|    |           | seeds vs achievable |sum|~322; the vlo/vvlo band split   |
-|    |           | (local, not O-GEHL); the 8x TAGE term (#86) interaction. |
-|    |           | Refs: O-GEHL ISCA 2005; Storage-Free Confidence HPCA     |
-|    |           | 2011; TAGE-LSC MICRO 2011. Gate any SC die-area          |
-|    |           | commitment on this.                                      |
 | 94 | bp_arb_spec | CLOSED BP-081. Session-064: 6.1 now names the SC       |
 |    |           | index folds; 3.4 and 5.x annotated so the                |
 |    |           | <pred>_redir_* names are not read as ports.              |
@@ -3901,10 +3981,6 @@ assessment of each document. Correct any that are wrong.
 |    |           | before re-raising this.                                  |
 | 97 | bp_arb    | To determine whether a shared upstream PQ broadcasting   |
 |    |           | to all predictor PQs is implemented. Deferred.           |
-| 98 | sc_cntrl  | sc_cntrl shared scalar state under dual-slot update.     |
-|    |           | TEMPORARY (BP-077): lowest-indexed valid update slot     |
-|    |           | drives the shared threshold/TC/chooser/BrIMLI            |
-|    |           | adaptation. Evaluate at PD/perf. Related: #93, #86.      |
 | 99 | bpu       | CLOSED TOOLS-006 (session-073). tools/regress.sh runs   |
 |    |           | every target of every rtl/ Makefile (78), fails on an    |
 |    |           | unclassified target, and is gated at push by            |
@@ -4137,22 +4213,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | have never been elaborated together and the loop between |
 |     |          | them is closed only inside tb_ftq's modelled cluster.    |
 |     |          | Carried from session-067 and unchanged.                  |
-| 118 | icache   | OPEN. L1I-23 is not achieved end to end. Sixteen fills   |
-|     |          | are in flight at the l1i boundary, measured by TOOLS-005 |
-|     |          | T14, and serialise at the l2: l2_up_i_slv is a four-     |
-|     |          | state machine with one source latched per transaction.   |
-|     |          | It keys d_source correctly, so nothing is broken.        |
-|     |          |                                                          |
-|     |          | Two changes close it. The l2 slave adapter needs a per-  |
-|     |          | source record rather than one source_q, and the l2 needs |
-|     |          | the pipelined control TOOLS-005 built for the l1i.       |
-|     |          | cachegen cannot express the first: NodeCtx::nonblocking  |
-|     |          | reads outstanding_requests off a custom link and returns |
-|     |          | false for TileLink, and no field says how many           |
-|     |          | transactions a TileLink slave end accepts.               |
-|     |          |                                                          |
-|     |          | The miss throughput the IFU would be built against is    |
-|     |          | the l2 number, not the l1i number.                       |
 | 119 | icache   | CLOSED by BP-123 in the pacino RTL (end of row). As      |
 |     |          | raised: no generated node emits an invalidate port of    |
 |     |          | any kind, so icache_decisions.md L1I-18 has no           |
@@ -4178,20 +4238,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | the pacino copy, rtl/core/frontend/icache, and tb_fe_top |
 |     |          | fencei and cboinval cover FENCE.I and cbo.inval end to   |
 |     |          | end. The emission still lacks them: TD#173 (CG-5).       |
-| 120 | icache   | OPEN, replacement quality, not correctness. TOOLS-005    |
-|     |          | reported both rather than hiding them.                   |
-|     |          |                                                          |
-|     |          |   - the replacement state moves in the compare stage, so |
-|     |          |     two accesses to one set in consecutive cycles both   |
-|     |          |     read the pre-update state                            |
-|     |          |   - two outstanding misses to one set may pick the same  |
-|     |          |     victim way, in which case the second fill overwrites |
-|     |          |     the first                                            |
-|     |          |                                                          |
-|     |          | Both requesters get the line they asked for either way.  |
-|     |          | The alternative, moving the state when the fill lands,   |
-|     |          | needs two writers of one port and an arbiter no          |
-|     |          | configuration field describes.                           |
 | 121 | ras.sv   | CLOSED by BP-126 (session-077): an occupancy count       |
 |     |          | beside CSP; a full stack reads non-empty; a call on a    |
 |     |          | full stack overwrites the oldest entry and the count     |
@@ -4326,13 +4372,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | built FTQ predated its own specification. Found by the   |
 |     |          | session-071 IA read.                                     |
 
-| 128 | bp_history | History geometry sizing -- deferred investigation.     |
-|     |            | GHR_WIDTH=256, PHR_WIDTH=32, the per-table fold depths |
-|     |            | and the PHR bit selection (pc[2]^pc[3]) are unmeasured |
-|     |            | and carry no derivation in this tree. Assess when the  |
-|     |            | IFU is complete and can drive a performance measurement|
-|     |            | harness. Gate any history-storage area commitment on   |
-|     |            | this.                                                  |
 | 129 | build    | OPEN. THE TOP-LEVEL rtl/Makefile IS STILL NOT COMPLETE.  |
 |     |          | Session-073 added ftq to its `all` and `clean`, but      |
 |     |          | `cov` reaches only bpu cov_bpu, so cov_bp_cluster is     |
@@ -4340,6 +4379,9 @@ assessment of each document. Correct any that are wrong.
 |     |          | Either complete the top-level targets or retire them in  |
 |     |          | favour of tools/regress.sh, which runs every target of   |
 |     |          | every unit. Nothing depends on them today.               |
+|     |          | CLOSED by BP-132 (session-078): rtl/Makefile all and cov |
+|     |          | RETIRED (they name tools/regress.sh and exit 1); clean   |
+|     |          | reaches all 12 units (ruled, Jeff).                      |
 | 130 | tools    | OPEN. regress.sh REPORTING GAPS. None affect pass/fail;  |
 |     |          | all are display or validation, found by TOOLS-006.       |
 |     |          |   - six targets print no check total the parser reads:   |
@@ -4354,6 +4396,11 @@ assessment of each document. Correct any that are wrong.
 |     |          |     first description word in the TD column.             |
 |     |          |   - the stale-entry path (an entry naming a target that  |
 |     |          |     was not run) is implemented but never injected.      |
+|     |          | CLOSED by BP-132 (session-078): the six targets parsed   |
+|     |          | (tb_tage and cov_tage count tests, not checks), cov_bpu  |
+|     |          | is the sum of its sub-runs, the known_failures.txt TD    |
+|     |          | field validated (a malformed line fails the run), stale  |
+|     |          | and malformed paths exercised.                           |
 | 131 | decode   | OPEN, UNEXPLAINED. THE DECODE SUITE GOT 3x FASTER AND    |
 |     |          | NOBODY KNOWS WHY. Session-073: after lib and decode were |
 |     |          | moved from Verilator 5.020 (found on PATH) to the        |
@@ -4366,6 +4413,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | compare `make -n` output and the verilated build under   |
 |     |          | both versions. Low risk, but an unexplained factor of    |
 |     |          | three in a suite is not a fact until it is explained.    |
+|     |          | CLOSED by BP-132 (session-078): EXPLAINED, ccache. The   |
+|     |          | 5.048 install sets OBJCACHE ?= ccache, 5.020's does not; |
+|     |          | uncached 5.048 is not faster. Decode builds about 42 s   |
+|     |          | cold, 4 s warm: state the cache with any decode time.    |
 | 132 | bpu      | CLOSED BP-111 (session-073). The ITTAGE target field     |
 |     |          | holds VA[40:1]. IT_MAX_TGT_WIDTH and IT_TBL_TGT_WIDTH    |
 |     |          | are 40, the reconstruction is {stored, 1'b0}, and NO     |
@@ -4396,22 +4447,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | stopped being predicted. Found by BP-109. misc/prop1.md  |
 |     |          | keeps the rejected alternatives.                         |
 
-| 133 | frontend | OPEN, PERFORMANCE STUDY. DOES DELIVERING TWO PREDICTION  |
-|     |          | BLOCKS PER CYCLE BUY ANYTHING? Ruled session-073 (Jeff): |
-|     |          | the front end delivers ONE prediction block per cycle.   |
-|     |          | One 32-byte block carries two branch slots, which is     |
-|     |          | judged sufficient. ftq_ifu_interfaces.md 8 item 2 closes |
-|     |          | on that ruling.                                          |
-|     |          |                                                          |
-|     |          | What is deferred here is the measurement, not the        |
-|     |          | design: whether two blocks per cycle would raise         |
-|     |          | delivered instructions per cycle enough to pay for two   |
-|     |          | FTQ requests per cycle and the second set of ports. Not  |
-|     |          | IFU-internal if it is ever done.                         |
-|     |          |                                                          |
-|     |          | Assess with the same harness as TD#128, once the IFU is  |
-|     |          | complete and something can drive it. Gate any two-block  |
-|     |          | commitment on this.                                      |
 | 134 | ifu      | CLOSED by BP-118 (session-075). IFU-28 to IFU-32 built;  |
 |     |          | ifu_assert U3 restated as the IFU-32 check and U4 added  |
 |     |          | for IFU-31. Two rules the documents did not state,       |
@@ -4627,6 +4662,7 @@ assessment of each document. Correct any that are wrong.
 |     |          | repo tools). BP-124 found the tools off PATH in the      |
 |     |          | embecosm directory; asm_dec_words now depends on its     |
 |     |          | clang-21 too.                                            |
+|     |          | CLOSED by BP-132 (session-078), with TD#176.             |
 | 148 | ifu      | CLOSED by BP-125 (session-077): removed from             |
 |     |          | ifu_pd_pkt_t (192 -> 190 bits), ifu_predecode, ifu_f3    |
 |     |          | and ifu; T78 checks the width. Was: is_vsetvl and        |
@@ -4635,21 +4671,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | BP-118 needs no bp_structs_pkg change. Remove them from  |
 |     |          | the struct, ifu_predecode and the ibuf. RULED            |
 |     |          | session-077 (Jeff): removed by BP-125.                   |
-| 149 | bpu, ftq | OPEN, MEASURED by BP-121. The p3 RAS repair: after SC    |
-|     |          | reverses a slot at p3 the entry holds the pre-repair     |
-|     |          | snapshot. Repairs: recur 14, rvc 9, misp_call 16;        |
-|     |          | restores naming a repaired entry: recur 1, rvc 2,        |
-|     |          | misp_call 9; no return mispredict after warm-up          |
-|     |          | attributable. Fix if measured worse.                     |
-| 150 | ftq, bpu | OPEN, DEFERRED. The AND is built (BP-119, ftq_upd_conv). |
-|     |          | bp_cluster gives each queued predictor (TAGE, ITTAGE,    |
-|     |          | SC) a ready per slot; the converter ANDs them, so a full |
-|     |          | queue on either slot stalls both update channels for     |
-|     |          | that predictor. Correct: FE-5 holds, nothing is dropped. |
-|     |          | Costs throughput only when one slot's queue fills and    |
-|     |          | the other's does not. Fix if measured: accept each slot  |
-|     |          | independently, which needs ftq_resolve to hold a partly  |
-|     |          | accepted resolution pair. Ruled session-075 (Jeff).      |
 | 151 | ftq, bpu | CLOSED by BP-119 (session-075). ftq_upd_conv, inside the |
 |     |          | FTQ, forms every per-predictor payload; every field      |
 |     |          | sourced. Integration found that a branch its FTQ entry   |
@@ -4733,20 +4754,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | retirement. sim_main_predecode.cpp still unused          |
 |     |          | (BP-122).                                                |
 |     |          | sim_main_predecode.cpp deleted by BP-122.                |
-| 168 | bpu      | KEPT by ruling (Jeff, session-075, BP-121 decision 7:    |
-|     |          | keep ftb_decisions.md 4.6). NOT OPEN WORK. Every start   |
-|     |          | in a region shares one FTB entry with one jump field, so |
-|     |          | two jumps of one region take turns. MEASURED (BP-121 and |
-|     |          | BP-122, unchanged, mispredicts after warm-up / total):   |
-|     |          | deep 91/146, nest 41/62, region 25/37, coro 25/32, recur |
-|     |          | 21/33, nearly all returns. Also not open work:           |
-|     |          | misp_call's repeating conditional (0x0a), which is       |
-|     |          | pseudo-random by construction and cannot be learned.     |
-|     |          | Tasks report neither as open.                            |
-|     |          | MEASURED again by BP-131 (session-078): 73 of 260 FTB    |
-|     |          | entries used by more than one start; 92% of block-end    |
-|     |          | changes made by another start; 608 jump replacements.    |
-|     |          | Revisited with TD#179 (Jeff).                            |
 | 169 | bpu      | CLOSED by BP-122 (session-076). The loop predictor reads |
 |     |          | the entry before writing it, trains from the iteration   |
 |     |          | number each prediction carries, advances a speculative   |
@@ -4818,6 +4825,11 @@ assessment of each document. Correct any that are wrong.
 |     |          | (RVC_ORACLE_TC, ifu Makefile line 137). Carries TD#147   |
 |     |          | (option 2, ruled). No GNU or LLVM change until this TD   |
 |     |          | is tasked.                                               |
+|     |          | CLOSED by BP-132 (session-078): RVA_EXT_TOOLS in         |
+|     |          | rtl/Vars.mk, default the embecosm bin directory;         |
+|     |          | oracle_ifu_rvc_exp needs llvm-objdump and clang (objcopy |
+|     |          | dropped, oracle byte-identical), asm_dec_words clang; a  |
+|     |          | missing tool fails naming the variable.                  |
 | 177 | icache   | OPEN, verification. The L1I-24 install-time replacement  |
 |     |          | update is gated to installs from a register taken        |
 |     |          | uncached: meta_fp_en = fil_valid && fil_rpl in l1i_ctrl, |
@@ -4827,6 +4839,8 @@ assessment of each document. Correct any that are wrong.
 |     |          | failed: no test has an access to the set between a       |
 |     |          | cacheable miss's lookup and its fill. Needs that test.   |
 |     |          | BP-125 Deferred Work 2; ruled a TD session-077 (Jeff).   |
+|     |          | CLOSED by BP-132 (session-078): tb_l1i t_fill_rpl, 31    |
+|     |          | checks (sim_l1i 250 -> 281); fails with the gate removed.|
 | 178 | csr      | OPEN, definition. A CSR definition, in a new planning    |
 |     |          | file csr_decisions.md, which will own the enable and     |
 |     |          | configuration bits that now stand in for a CSR file that |
@@ -4838,6 +4852,123 @@ assessment of each document. Correct any that are wrong.
 |     |          | Whether it also covers FE-20's csr group (V, privilege,  |
 |     |          | satp, vsatp, hgatp, pmpcfg, pmpaddr) is decided when it  |
 |     |          | is tasked. Implemented after BP-126 (Jeff, session-077). |
+
+---
+
+## Performance / Verification Debt
+
+Opened session-078 (Jeff). Debt that waits for the performance
+analysis against compiled benchmarks, or for the formal verification
+and coverage effort, rather than for a design or clean-up task. Rows
+keep their TD numbers and were moved here from Technical Debt; TD
+numbers are issued from one sequence across both tables.
+
+| #   | Unit     | Item and status                                          |
+|-----|----------|----------------------------------------------------------|
+| 80 | FTB confidence hysteresis tuning.    | FTB_CONF_WIDTH is the knob.     |
+|    |                                      | Revisit at bp_cluster SPEC      |
+|    |                                      | numbers.                        |
+| 85 | bp_structs_pkg.sv                    | Review BPU structures for       |
+|    |                                      | field sharing and storage/flop  |
+|    |                                      | opportunities.                  |
+| 86 | sc_cntrl 8x-weighted TAGE term.      | The current sum includes        |
+|    |                                      | tage_extd_ctr at weight 1. The  |
+|    |                                      | 8x variant is deferred to PD /  |
+|    |                                      | perf. Related: #93.             |
+| 93 | sc        | SC efficacy and threshold/band tuning -- deferred        |
+|    |           | investigation. Open questions at PD/perf: does SC earn   |
+|    |           | its area/power; the SC_THRSH_MID=10 / SC_THRSH_MAX=512   |
+|    |           | seeds vs achievable |sum|~322; the vlo/vvlo band split   |
+|    |           | (local, not O-GEHL); the 8x TAGE term (#86) interaction. |
+|    |           | Refs: O-GEHL ISCA 2005; Storage-Free Confidence HPCA     |
+|    |           | 2011; TAGE-LSC MICRO 2011. Gate any SC die-area          |
+|    |           | commitment on this.                                      |
+| 98 | sc_cntrl  | sc_cntrl shared scalar state under dual-slot update.     |
+|    |           | TEMPORARY (BP-077): lowest-indexed valid update slot     |
+|    |           | drives the shared threshold/TC/chooser/BrIMLI            |
+|    |           | adaptation. Evaluate at PD/perf. Related: #93, #86.      |
+| 118 | icache   | OPEN. L1I-23 is not achieved end to end. Sixteen fills   |
+|     |          | are in flight at the l1i boundary, measured by TOOLS-005 |
+|     |          | T14, and serialise at the l2: l2_up_i_slv is a four-     |
+|     |          | state machine with one source latched per transaction.   |
+|     |          | It keys d_source correctly, so nothing is broken.        |
+|     |          |                                                          |
+|     |          | Two changes close it. The l2 slave adapter needs a per-  |
+|     |          | source record rather than one source_q, and the l2 needs |
+|     |          | the pipelined control TOOLS-005 built for the l1i.       |
+|     |          | cachegen cannot express the first: NodeCtx::nonblocking  |
+|     |          | reads outstanding_requests off a custom link and returns |
+|     |          | false for TileLink, and no field says how many           |
+|     |          | transactions a TileLink slave end accepts.               |
+|     |          |                                                          |
+|     |          | The miss throughput the IFU would be built against is    |
+|     |          | the l2 number, not the l1i number.                       |
+| 120 | icache   | OPEN, replacement quality, not correctness. TOOLS-005    |
+|     |          | reported both rather than hiding them.                   |
+|     |          |                                                          |
+|     |          |   - the replacement state moves in the compare stage, so |
+|     |          |     two accesses to one set in consecutive cycles both   |
+|     |          |     read the pre-update state                            |
+|     |          |   - two outstanding misses to one set may pick the same  |
+|     |          |     victim way, in which case the second fill overwrites |
+|     |          |     the first                                            |
+|     |          |                                                          |
+|     |          | Both requesters get the line they asked for either way.  |
+|     |          | The alternative, moving the state when the fill lands,   |
+|     |          | needs two writers of one port and an arbiter no          |
+|     |          | configuration field describes.                           |
+| 128 | bp_history | History geometry sizing -- deferred investigation.     |
+|     |            | GHR_WIDTH=256, PHR_WIDTH=32, the per-table fold depths |
+|     |            | and the PHR bit selection (pc[2]^pc[3]) are unmeasured |
+|     |            | and carry no derivation in this tree. Assess when the  |
+|     |            | IFU is complete and can drive a performance measurement|
+|     |            | harness. Gate any history-storage area commitment on   |
+|     |            | this.                                                  |
+| 133 | frontend | OPEN, PERFORMANCE STUDY. DOES DELIVERING TWO PREDICTION  |
+|     |          | BLOCKS PER CYCLE BUY ANYTHING? Ruled session-073 (Jeff): |
+|     |          | the front end delivers ONE prediction block per cycle.   |
+|     |          | One 32-byte block carries two branch slots, which is     |
+|     |          | judged sufficient. ftq_ifu_interfaces.md 8 item 2 closes |
+|     |          | on that ruling.                                          |
+|     |          |                                                          |
+|     |          | What is deferred here is the measurement, not the        |
+|     |          | design: whether two blocks per cycle would raise         |
+|     |          | delivered instructions per cycle enough to pay for two   |
+|     |          | FTQ requests per cycle and the second set of ports. Not  |
+|     |          | IFU-internal if it is ever done.                         |
+|     |          |                                                          |
+|     |          | Assess with the same harness as TD#128, once the IFU is  |
+|     |          | complete and something can drive it. Gate any two-block  |
+|     |          | commitment on this.                                      |
+| 149 | bpu, ftq | OPEN, MEASURED by BP-121. The p3 RAS repair: after SC    |
+|     |          | reverses a slot at p3 the entry holds the pre-repair     |
+|     |          | snapshot. Repairs: recur 14, rvc 9, misp_call 16;        |
+|     |          | restores naming a repaired entry: recur 1, rvc 2,        |
+|     |          | misp_call 9; no return mispredict after warm-up          |
+|     |          | attributable. Fix if measured worse.                     |
+| 150 | ftq, bpu | OPEN, DEFERRED. The AND is built (BP-119, ftq_upd_conv). |
+|     |          | bp_cluster gives each queued predictor (TAGE, ITTAGE,    |
+|     |          | SC) a ready per slot; the converter ANDs them, so a full |
+|     |          | queue on either slot stalls both update channels for     |
+|     |          | that predictor. Correct: FE-5 holds, nothing is dropped. |
+|     |          | Costs throughput only when one slot's queue fills and    |
+|     |          | the other's does not. Fix if measured: accept each slot  |
+|     |          | independently, which needs ftq_resolve to hold a partly  |
+|     |          | accepted resolution pair. Ruled session-075 (Jeff).      |
+| 168 | bpu      | KEPT by ruling (Jeff, session-075, BP-121 decision 7:    |
+|     |          | keep ftb_decisions.md 4.6). NOT OPEN WORK. Every start   |
+|     |          | in a region shares one FTB entry with one jump field, so |
+|     |          | two jumps of one region take turns. MEASURED (BP-121 and |
+|     |          | BP-122, unchanged, mispredicts after warm-up / total):   |
+|     |          | deep 91/146, nest 41/62, region 25/37, coro 25/32, recur |
+|     |          | 21/33, nearly all returns. Also not open work:           |
+|     |          | misp_call's repeating conditional (0x0a), which is       |
+|     |          | pseudo-random by construction and cannot be learned.     |
+|     |          | Tasks report neither as open.                            |
+|     |          | MEASURED again by BP-131 (session-078): 73 of 260 FTB    |
+|     |          | entries used by more than one start; 92% of block-end    |
+|     |          | changes made by another start; 608 jump replacements.    |
+|     |          | Revisited with TD#179 (Jeff).                            |
 | 179 | bpu, ftq | OPEN, DEFERRED (Jeff, session-078) to the performance    |
 |     |          | analysis against compiled benchmarks; holds every        |
 |     |          | remaining one- and two-slot change. Opened as the        |
@@ -4862,6 +4993,20 @@ assessment of each document. Correct any that are wrong.
 |     |          | commit (XiangShan: commit); wrong-path training not      |
 |     |          | measurable with tb_fe_top. The tb_fe_top programs are    |
 |     |          | not representative enough to decide these (Jeff).        |
+| 180 | tools    | OPEN, VERIFICATION. tools/cov_table.py's tage and bpu    |
+|     |          | rows list tage.sv only; since BP-132 the TAGE            |
+|     |          | arbitration lines are in tage_arb.sv, so TAGE coverage   |
+|     |          | misses them. ITTAGE is not in the table. Found by BP-132 |
+|     |          | (Deferred Work 1). For the formal verification coverage  |
+|     |          | exercise (Jeff, session-078).                            |
+| 181 | bpu      | OPEN, VERIFICATION. The bpu cov_* targets run            |
+|     |          | verilator_coverage from PATH, which is /usr/local/bin    |
+|     |          | v5.020, on coverage data written by the 5.048 build.     |
+|     |          | tools/bin holds the 5.048 verilator_coverage; proposed   |
+|     |          | $(RVA_ROOT)/tools/bin/verilator_coverage in the bpu      |
+|     |          | Makefile, which changes the coverage reports. Found by   |
+|     |          | BP-132 (Deferred Work 2). For the formal verification    |
+|     |          | coverage exercise (Jeff, session-078).                   |
 
 ---
 
@@ -5654,8 +5799,8 @@ unless noted.
   RECORDED identity above and any test written to the old form.
   Confirm BP-093 TC-A..TC-G sweep the new mapping.
 - Open / deferred: HI2, HI6 (= TD#102), HI7, #82, #83, #84,
-  #69/#70. HI6, #84 and #69/#70 closed by BP-126. HI7 closed and
-  #82 done by BP-129 (session-078).
+  #69/#70. HI6, #84 and #69/#70 closed by BP-126. HI7 and #82
+  closed by BP-129, #83 closed (session-078).
 - HI5 (= G23) CLOSED session-070. G23 resolved it: the checkpoint
   is a FIELD of the FTQ entry, so a slot is reclaimed with the
   entry at commit and there is no separate protocol

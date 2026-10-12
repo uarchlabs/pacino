@@ -58,8 +58,8 @@ module tb;
   logic [NUM_PRED_SLOTS-1:0] tage_upd_val_u0;
   tage_upd_inp_t             tage_upd_inp_u0[0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0] tage_upd_rdy_u1;
-  logic                      pq_not_full;
-  logic [NUM_PRED_SLOTS-1:0] upd_rdy;
+  logic                      tage_pq_not_full;
+  logic [NUM_PRED_SLOTS-1:0] tage_uq_not_full;
   logic                      tage_enable_aging;
   logic [31:0]               tage_aging_interval;
   logic                      consumer_ready;
@@ -334,8 +334,8 @@ module tb;
     .tage_upd_val_u0     (tage_upd_val_u0),
     .tage_upd_inp_u0     (tage_upd_inp_u0),
     .tage_upd_rdy_u1     (tage_upd_rdy_u1),
-    .pq_not_full         (pq_not_full),
-    .upd_rdy             (upd_rdy),
+    .tage_pq_not_full    (tage_pq_not_full),
+    .tage_uq_not_full    (tage_uq_not_full),
     .tage_enable_aging   (tage_enable_aging),
     .tage_aging_interval (tage_aging_interval),
     .consumer_ready      (consumer_ready),
