@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-11
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,108 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-078, after BP-130: BP-128, BP-129 and BP-130 recorded.
+
+NUM_PRED_SLOTS works at 1 and 2 (TD#1 closed). Three tasks, each run
+and complete (Jeff); the bpu, ftq and fe_top RTL now builds and
+passes at both slot counts.
+
+BP-128 RUN, COMPLETE (TD#1). regress.sh 261 targets PASS (was 155):
+106 new <target>_1slot targets, each shown to fail when built without
+the slot macro.
+  Built: NUM_PRED_SLOTS is set in bp_defines_pkg.sv from the macro
+    BP_NUM_PRED_SLOTS, 2 when undefined; BP_EXPECT_PRED_SLOTS is an
+    elaboration check a 1-slot target sets beside it. No module has a
+    slot count of its own; ubtb keeps a parameter, renamed N_SLOTS,
+    defaulting to the package value (D3). TAGE_UQ_WR_PORTS,
+    SC_UQ_WR_PORTS and ITTAGE_UQ_WR_PORTS = NUM_PRED_SLOTS. The copied
+    slot-0 / slot-1 blocks of tage_table, tage_bim, ittage_table,
+    sc_table and sc_brimli are one generate loop per slot, so their
+    slot RAMs (g_slot[s].u_ram) exist only for the slots built.
+  Found: ittage_table ignored the package slot count; tb_loop_pred
+    reported a false PASS. Both fixed.
+  tb_fe_top: all 36 programs retire exactly at 1. At 2, 150 of 155
+    logs identical to the baseline; the other five differ only in
+    coverage line totals.
+  Decisions D1 to D5, ruled (Jeff) or open:
+    D1  the history bundle and the FTQ rollback ports were left two
+        wide: FIX (Jeff). Done by BP-129 and BP-130 below.
+    D2  at 1 a block's second branch is not predicted, and ftq_resolve
+        places its resolution in slot 0: MUST BE FIXED (Jeff), by the
+        FTB / uBTB block split of ftb_decisions.md 3, a standalone
+        task. ON HOLD (Jeff, session-078): the entry shape at one
+        slot and whether the split is built at two slots are under
+        consideration; no FTQ, FTB or uBTB slot change until ruled.
+        Found: the ftb_decisions.md 3 split is not built at either
+        slot count. BP-131 is not written.
+    D3  ubtb's N_SLOTS parameter: OPEN.
+    D4  tb_fe_top loops skips its two loop-predictor checks at 1:
+        ACCEPTED (Jeff); the performance at one slot is TD#179.
+    D5  the 1-slot ftq assert_labels skips three ftq_entry_assert
+        labels (a_ras_needs_step, a_ras_type, a_ras_snapshot_src) in
+        the tb_ftq_ifu model only: OPEN.
+
+BP-129 RUN, COMPLETE (D1). 68m. regress.sh 261 PASS. bp_history's
+prediction inputs (pred_taken, pred_pc, num_branches), its rollback
+inputs, ckpt_nb, and the FTQ rollback outputs through ftq, fe_top and
+bp_cluster sized by NUM_PRED_SLOTS; new package width PRED_CNT_BITS =
+$clog2(NUM_PRED_SLOTS + 1). bp_history's two slot blocks became one
+loop over branches (fold_all_step), which is the 3.6 if / else-if
+cleanup (TD#82). At 2 every width, check count and tb_fe_top figure
+is unchanged. HI7 (INFRA-011 item 10) closed.
+  Found: at 1 the FTQ's correction after a backend mispredict can be
+    two bits (slot 0 not taken, then a branch held in no slot), 72
+    times in 7 tb_fe_top programs. BP-129 kept the mispredicted bit
+    alone, provisionally; six programs mispredicted more at 1 (indir
+    71 to 86).
+
+RULED (Jeff): the correction carries up to TWO bits at either slot
+count; the cap stays at two, since a third prediction slot would be a
+much larger change to the RAMs.
+
+BP-130 RUN, COMPLETE. 36m. regress.sh 261 PASS. The correction path
+is two bits at either slot count, ftq_npc through ftq, fe_top and
+bp_cluster to bp_history, with bp_history's ckpt_nb; package widths
+RB_CORR_BITS = 2 and RB_CNT_BITS = 2 added. At 1 all 72 two-bit
+corrections reach the history and every tb_fe_top program is back to
+its figures before BP-129 (loops 536 / 23, hist 1057 / 42, twocond
+952 / 36, indir 1668 / 71, multistart 647 / 19, rvc 747 / 18). At 2
+nothing changed. H1 and N11 each shown to fire at 1 on a two-bit
+correction. Provisional decisions (zero-extension of the cluster's
+p2 / p3 bundles, two package names, ckpt_nb at RB_CNT_BITS):
+ACCEPTED (Jeff).
+  Found: bp_history_decisions.md 3.5 and 7 said the checkpoint stores
+    a pointer only; it has stored the bundle size ckpt_nb since
+    BP-121. Corrected below.
+  Noted: N11 checks the correction's directions, not its path bits;
+    tb_ftq_npc F1a checks both at one slot. sim_fe_top_1slot takes
+    186 s against 22 s at two slots; the regression is now 13 to 18
+    minutes (Jeff is changing how run time is recorded).
+
+CLOSED (Jeff): TD#4, moot: predecode.sv was deleted by BP-118.
+CLOSED: TD#1, by BP-128.
+OPENED: TD#179, the performance study at NUM_PRED_SLOTS = 1.
+TD#82: done by BP-129; closing is Jeff's.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, bp_history_interfaces.md,
+bp_history_decisions.md, ftq_bpu_interfaces.md.
+  bp_history_interfaces.md: parameters, ports sized (BP-129) and the
+    two-bit correction (BP-130); the stored bundle size recorded; HI7
+    closed.
+  bp_history_decisions.md: 3, 3.1 sized ports; 3.5 corrected (the
+    first bit comes from ckpt_nb, not rollback_n) and the two-bit
+    rule; 3.6 done; 7 corrected; HI7 closed.
+  ftq_bpu_interfaces.md: 9 widths and the two-bit rule; 10 item 13
+    closed.
+  Not yet changed: ubtb_interfaces.md (Module Parameters still names
+    NUM_PRED_SLOTS; ubtb takes N_SLOTS, D3), fe_decisions.md (the
+    one-source macro), and the interface documents that name
+    u_ram_s0 / u_ram_s1. They wait for the D2 and D3 rulings.
+
+Next free: BP-131, INFRA-014, TOOLS-007, TD#180.
 
 ---
 ## Session-078: TD scrub begun. TD#5, TD#16, TD#17 closed.
@@ -2232,6 +2334,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (ftb_decisions.md 8).            |
 |                         |             |                   | BP-126: TAGE_T0_SRAM_INIT_VALUE  |
 |                         |             |                   | = 2 added (TD#103).              |
+|                         |             |                   | BP-128: NUM_PRED_SLOTS from the  |
+|                         |             |                   | macro BP_NUM_PRED_SLOTS (default |
+|                         |             |                   | 2) with the BP_EXPECT_PRED_SLOTS |
+|                         |             |                   | elaboration check; the           |
+|                         |             |                   | UQ_WR_PORTS = NUM_PRED_SLOTS.    |
+|                         |             |                   | BP-129: PRED_CNT_BITS. BP-130:   |
+|                         |             |                   | RB_CORR_BITS = 2, RB_CNT_BITS =  |
+|                         |             |                   | 2.                               |
 | bp_structs_pkg.sv       | Complete    | tb_bp_pkg         | TAGE and ITTAGE structs complete.|
 |                         |             |                   | IT5 fold fields present in       |
 |                         |             |                   | struct (II1); generation gap in  |
@@ -2322,6 +2432,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | No property added (TD#170).      |
 |                         |             |                   | BP-126: IT5 folds generated,     |
 |                         |             |                   | TD#102 closed.                   |
+|                         |             |                   | BP-129: ports sized by           |
+|                         |             |                   | NUM_PRED_SLOTS; one loop over    |
+|                         |             |                   | branches (fold_all_step), TD#82, |
+|                         |             |                   | HI7 closed. BP-130: correction   |
+|                         |             |                   | ports and ckpt_nb two bits at    |
+|                         |             |                   | either slot count. sim_history   |
+|                         |             |                   | 17 / 21450 / 3 at 2, 13 / 12330  |
+|                         |             |                   | / 3 at 1.                        |
 | bp_history_decisions.md | Draft       | --                | Created session-054. Resolves    |
 |                         |             |                   | G20/G21/G22. s6 canonical Fold   |
 |                         |             |                   | Definition (session-055). s7     |
@@ -2330,6 +2448,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | claim removed. Header still      |
 |                         |             |                   | DRAFT pending s6.6 sha + HI2.    |
 |                         |             |                   | HI5 CLOSED session-070 by G23.   |
+|                         |             |                   | Session-078: 3, 3.1 sized ports; |
+|                         |             |                   | 3.5 first bit from ckpt_nb       |
+|                         |             |                   | (corrected) and the two-bit      |
+|                         |             |                   | correction; 3.6 done; 7          |
+|                         |             |                   | corrected; HI7 closed.           |
 | bp_history_interfaces.md| Draft       | --                | Rewritten session-054. Checkpoint|
 |                         |             |                   | Timing consistent with s7        |
 |                         |             |                   | (BP-074). SESSION-064: pred_pc   |
@@ -2341,6 +2464,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | "no folds" claim replaced with   |
 |                         |             |                   | real geometry + TD#102. HI6, HI7 |
 |                         |             |                   | opened.                          |
+|                         |             |                   | Session-078: ports sized         |
+|                         |             |                   | (BP-129); correction two bits    |
+|                         |             |                   | (BP-130); ckpt_nb recorded; HI7  |
+|                         |             |                   | closed.                          |
 | ubtb.sv                 | Complete    | tb_ubtb           | SESSION-063 BP-086: REWRITTEN to |
 |                         |             | sim_ubtb          | the single-lookup block          |
 |                         |             |                   | descriptor model. One index, one |
@@ -2369,6 +2496,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | TD#156.                          |
 |                         |             |                   | BP-120: TD#156 built; tb_ubtb    |
 |                         |             |                   | 296 checks.                      |
+|                         |             |                   | BP-128: parameter renamed        |
+|                         |             |                   | N_SLOTS, default the package     |
+|                         |             |                   | value; tb_ubtb builds one at 1   |
+|                         |             |                   | and one at 2 (D3 open).          |
 | ubtb_interfaces.md      | Draft       | --                | SESSION-063: REWRITTEN for the   |
 |                         |             |                   | single-lookup model. UI1 closed  |
 |                         |             |                   | (pred_pc+32 retired). UI4 closed |
@@ -2412,6 +2543,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Properties LP1, LP2.             |
 |                         |             |                   | sim_loop_pred 9408/0. TD#169     |
 |                         |             |                   | closed.                          |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | loop_pred_interfaces.md | Draft       | --                | SESSION-064 BP-091: corrected to |
 |                         |             |                   | the delivered ports. 17 doc-vs-  |
 |                         |             |                   | RTL findings recorded before any |
@@ -2470,7 +2603,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | tage_hash.sv            | Complete    | tb_tage_hash      | BP-006 abandoned.                |
 | tage_table.sv           | Complete    | tb_tage_table     | BP-007 through BP-012 complete.  |
 |                         |             |                   | Signal naming debt #17 pending.  |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | tage_bim.sv             | Complete    | --                | BP-009b complete.                |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | tage_cntrl.sv           | Complete    | --                | BP-008a/b, BP-012, BP-045.       |
 |                         |             |                   | BUG-003 fixed BP-057.            |
 |                         |             |                   | Session-060 BP-081: TD#87 decode |
@@ -2488,6 +2625,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | resolved direction (D-1, P-1     |
 |                         |             |                   | confirmed); they stepped by      |
 |                         |             |                   | correctness.                     |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | Session-060 BP-081: FIFOs retyped|
 |                         |             |                   | off cond_pred_*.                 |
@@ -2500,6 +2639,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | credit counters removed (D6,     |
 |                         |             |                   | bp_arb_spec.md 4.5); tb_tage     |
 |                         |             |                   | TC-54.                           |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | tage_assert.sv          | Complete    | sim_tage          | ADR-001 and row 18 assertions.   |
 |                         | BOUND, LIVE | sim_tage_fast     | TD#109 CLOSED BP-096: the bind   |
 |                         |             | sim_tage_tasks    | named an INSTANCE (bind u_dut)   |
@@ -2563,6 +2704,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | sim_ittage_table 32/0, ENFORCED  |
 |                         |             |                   | from BP-095 (harness fixed and   |
 |                         |             |                   | watchdog now fatal).             |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | ittage_cntrl.sv         | Complete    | tb_ittage_cntrl   | BP-034/035/036/044/048/051-053.  |
 |                         |             |                   | 147 tests passing, ENFORCED from |
 |                         |             |                   | BP-095. Confirmed BP-094 to      |
@@ -2655,13 +2798,19 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | no PC_HASH_SHIFT (PD-17); ST0    |
 |                         |             |                   | instance and TC7; sim_sc_table   |
 |                         |             |                   | 7/0.                             |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | sc_brimli.sv            | Complete    | tb_sc_brimli      | ST4 BrIMLI. sim_sc_brimli 7/0.   |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | sc_cntrl.sv             | Complete    | tb_sc_cntrl       | sim_sc_cntrl 98/0. SESSION-064:  |
 |                         |             |                   | READ and CONFIRMED (BP-094) that |
 |                         |             |                   | sc_pred_meta_p3.branch_id is     |
 |                         |             |                   | copied from the staged TAGE meta,|
 |                         |             |                   | so fixing TAGE fixed SC. No SC   |
 |                         |             |                   | change was needed.               |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | sc.sv                   | Complete    | tb_sc             | sim_sc 55/0, sim_sc_fast 52/0.   |
 |                         |             |                   | Arb ports stubbed at unit level; |
 |                         |             |                   | the real credit arbiter now lives|
@@ -2676,6 +2825,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | ports sc_uq_has_data and         |
 |                         |             |                   | sc_uq_rd_en. sim_sc 144/0,       |
 |                         |             |                   | sim_sc_fast 140/0.               |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | sc_interfaces.md        | Complete    | --                | Written session-058. Session-061:|
 |                         |             |                   | Arbitration Model corrected.     |
 | sc_table_interfaces.md  | Complete    | --                | Written session-058.             |
@@ -2757,6 +2908,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | FOLD monitor and init_chk;       |
 |                         |             |                   | sim_bp_cluster 2011/0,           |
 |                         |             |                   | sim_bp_cluster_init 2011/0.      |
+|                         |             |                   | BP-128: passes at NUM_PRED_SLOTS |
+|                         |             |                   | 1 and 2; 1431/0 at 1. BP-129:    |
+|                         |             |                   | history ports sized by           |
+|                         |             |                   | NUM_PRED_SLOTS. BP-130:          |
+|                         |             |                   | correction path two bits.        |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
 |                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
@@ -2803,6 +2959,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Three INFRA-012 citations are a  |
 |                         |             |                   | label for PA-direct session-064  |
 |                         |             |                   | corrections; no such task ran.   |
+|                         |             |                   | Session-078: 9 bp_history and    |
+|                         |             |                   | correction widths (BP-129,       |
+|                         |             |                   | BP-130); 10 item 13 closed.      |
 | fe_decisions.md         | Draft       | --                | Created session-062. Front-end   |
 |                         |             |                   | theory of operation. SESSION-064:|
 |                         |             |                   | RAS top of stack corrected to p0 |
@@ -2938,6 +3097,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | ITS TARGETS ARE NOT IN THE BPU   |
 |                         |             |                   | 47. The ftq unit is 22 targets   |
 |                         |             |                   | and 670 checks as of BP-107.     |
+|                         |             |                   | BP-128: elaborates and passes at |
+|                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | ftq.sv                  | Complete    | tb_ftq            | BP-107. Structural top, 7.1 and  |
 |                         |             |                   | 7.3. No state, no always block.  |
 |                         |             |                   | Three assigns, none of them      |
@@ -3000,6 +3161,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | for the loop predictor;          |
 |                         |             |                   | properties N11, N12. sim_ftq_npc |
 |                         |             |                   | 73/0.                            |
+|                         |             |                   | BP-129, BP-130: the correction   |
+|                         |             |                   | is at most two bits at either    |
+|                         |             |                   | slot count (one not-taken bit,   |
+|                         |             |                   | then the named branch).          |
+|                         |             |                   | sim_ftq_npc 73/0 at 2, 69/0 at   |
+|                         |             |                   | 1.                               |
 | ftq_entry.sv            | Complete    | tb_ftq_entry      | BP-107. Fast path, 224b x 64 as  |
 |                         |             |                   | built; 228b under TD#122.        |
 |                         |             |                   | FOUR write ports in FE-3 order,  |
@@ -3316,6 +3483,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | predictor since BP-122. Remaining |
 |                         |             |                   | accuracy loss is TD#168, kept by  |
 |                         |             |                   | ruling.                           |
+|                         |             |                   | BP-128: every program also at     |
+|                         |             |                   | NUM_PRED_SLOTS 1 (_1slot          |
+|                         |             |                   | targets), retiring exactly; 712   |
+|                         |             |                   | checks at 1. One-slot figures     |
+|                         |             |                   | after BP-130 are TD#179's.        |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -3354,9 +3526,17 @@ assessment of each document. Correct any that are wrong.
 
 | # | Item                                   | Resolution path                 |
 |---|----------------------------------------|---------------------------------|
-| 1  | NUM_PRED_SLOTS=1 reduction.           | Cleanup session after TAGE      |
-|    | Generate removal and NUM_PRED_SLOTS=1 | complete. Dual-slot *testing*   |
-|    | tests pending.                        | tracked separately in #74.      |
+| 1  | NUM_PRED_SLOTS=1 reduction.           | CLOSED by BP-128 (session-078). |
+|    | Generate removal and NUM_PRED_SLOTS=1 | NUM_PRED_SLOTS is 1 or 2 from   |
+|    | tests pending.                        | BP_NUM_PRED_SLOTS in            |
+|    |                                       | bp_defines_pkg.sv; every bpu,   |
+|    |                                       | ftq and fe_top target passes at |
+|    |                                       | both, 106 _1slot targets in the |
+|    |                                       | regression. History widths      |
+|    |                                       | BP-129, BP-130. Was: Cleanup    |
+|    |                                       | session after TAGE complete.    |
+|    |                                       | Dual-slot *testing* tracked     |
+|    |                                       | separately in #74.              |
 |    | SESSION-064: NEW BLOCKER.             | tb_bp_cluster indexes generate  |
 |    |                                       | blocks by literal and $fatal(1)s|
 |    |                                       | at elaboration if the package   |
@@ -3366,7 +3546,10 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | elaborate at 1 (BP-091).        |
 | 2  | Instruction fusion                    | Deferred to rename/dispatch     |
 | 3  | UOP expansion for RVV segments        | Policy TBD at vector execution  |
-| 4  | predecode.sv clk/rstn unused          | Resolve at pipeline stage assign|
+| 4  | predecode.sv clk/rstn unused          | CLOSED session-078 (Jeff), moot:|
+|    |                                       | predecode.sv deleted by BP-118  |
+|    |                                       | (TD#143). Was: Resolve at       |
+|    |                                       | pipeline stage assign.          |
 | 5  | v_op_class_t (decode_pkg.sv), 8 bits  | CLOSED session-078 (Jeff),      |
 |    | since BP-124. Values 1 (was VALU_INT, | accepted. Reserved in the type; |
 |    | DECODE-007) and 2 (was VALU_FP,       | renumbering moves every VOP     |
@@ -3592,6 +3775,10 @@ assessment of each document. Correct any that are wrong.
 | 82 | bp_history if/else-if slot cleanup.  | decisions.md 3.5. Fold into the |
 |    |                                      | next bp_history RTL touch. No   |
 |    |                                      | behavior change.                |
+|    |                                      | DONE by BP-129 (session-078):   |
+|    |                                      | one loop over branches, each    |
+|    |                                      | case assigns the folds once.    |
+|    |                                      | Closing is Jeff's.              |
 | 83 | bp_history decisions.md s6.6 origin  | Fill the Xiangshan commit sha / |
 |    | citation placeholders.               | date. Manual, low priority.     |
 | 84 | Producer/consumer end-to-end fold    | CLOSED by BP-126 (session-077): |
@@ -4592,6 +4779,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | Whether it also covers FE-20's csr group (V, privilege,  |
 |     |          | satp, vsatp, hgatp, pmpcfg, pmpaddr) is decided when it  |
 |     |          | is tasked. Implemented after BP-126 (Jeff, session-077). |
+| 179 | bpu, ftq | OPEN, PERFORMANCE STUDY. Performance at NUM_PRED_SLOTS = |
+|     |          | 1 (BP-128). A block's second branch is not predicted     |
+|     |          | (BP-128 D2), and ftq_resolve places the unslotted        |
+|     |          | branch's resolution in slot 0 (BP-119 rule), where it    |
+|     |          | trains the first branch's predictor entries. In          |
+|     |          | tb_fe_top loops the loop predictor never becomes trusted |
+|     |          | at 1, and its two loop-predictor checks are gated off at |
+|     |          | 1 (BP-128 D4); the cause is inferred, not traced. Cycles |
+|     |          | at 2 slots and at 1, after BP-130: twocond 533 and 952,  |
+|     |          | indir 1164 and 1668, hist 871 and 1057, loops 453 and    |
+|     |          | 536. The block split (BP-128 D2, on hold) would remove   |
+|     |          | the first cause. Opened session-078 (Jeff).              |
 
 ---
 
@@ -5038,8 +5237,8 @@ Key decisions for quick reference:
   IMPLEMENTED IN bp_cluster and TESTED (BP-094 group H). CSR
   sc_enable gates SC participation and the cluster does not
   wait on SC when it is disabled.
-- NUM_PRED_SLOTS=2 is the default. Reduction to 1 deferred
-  (debt #1).
+- NUM_PRED_SLOTS=2 is the default; 1 is supported since BP-128
+  (debt #1 closed), set from BP_NUM_PRED_SLOTS in bp_defines_pkg.sv.
 - Port naming convention: <signal>_<pipestage>. The eight
   modules do NOT all follow it; variance recorded in
   bpu_port_inventory.md and ftq_bpu_interfaces.md section 2.
@@ -5384,7 +5583,8 @@ unless noted.
   RECORDED identity above and any test written to the old form.
   Confirm BP-093 TC-A..TC-G sweep the new mapping.
 - Open / deferred: HI2, HI6 (= TD#102), HI7, #82, #83, #84,
-  #69/#70. HI6, #84 and #69/#70 closed by BP-126.
+  #69/#70. HI6, #84 and #69/#70 closed by BP-126. HI7 closed and
+  #82 done by BP-129 (session-078).
 - HI5 (= G23) CLOSED session-070. G23 resolved it: the checkpoint
   is a FIELD of the FTQ entry, so a slot is reclaimed with the
   entry at commit and there is no separate protocol

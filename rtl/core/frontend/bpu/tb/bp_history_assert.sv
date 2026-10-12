@@ -25,9 +25,9 @@ module bp_history_assert (
   input logic                      rollback_valid,
   input logic [FTQ_IDX_BITS-1:0]   rollback_ckpt_idx,
   input logic                      rollback_corr,
-  input logic [PRED_CNT_BITS-1:0]  rollback_n,
-  input logic [NUM_PRED_SLOTS-1:0] rollback_tkn,
-  input logic [NUM_PRED_SLOTS-1:0] rollback_pbit,
+  input logic [RB_CNT_BITS-1:0]    rollback_n,
+  input logic [RB_CORR_BITS-1:0]   rollback_tkn,
+  input logic [RB_CORR_BITS-1:0]   rollback_pbit,
   input logic [GHIST_PTR_BITS-1:0] ghist_ptr,
   input logic [PHIST_PTR_BITS-1:0] phist_ptr,
   input logic [GHR_WIDTH-1:0]      ghr_buf,
@@ -36,9 +36,9 @@ module bp_history_assert (
 
   // The corrected rollback of the cycle before.
   logic                    r_corr;
-  logic [PRED_CNT_BITS-1:0]  r_n;
-  logic [NUM_PRED_SLOTS-1:0] r_tkn;
-  logic [NUM_PRED_SLOTS-1:0] r_pbit;
+  logic [RB_CNT_BITS-1:0]    r_n;
+  logic [RB_CORR_BITS-1:0]   r_tkn;
+  logic [RB_CORR_BITS-1:0]   r_pbit;
   // The checkpoint a corrected rollback rewrote, armed until the
   // checkpoint of that index is written again at allocation.
   logic                    r_ck_val;
@@ -91,13 +91,13 @@ module bp_history_assert (
   //     bit of the bundle is one further below, bundle bit k at
   //     pointer - n + k; the same for the path bits. Before BP-121 the
   //     pointer was restored past the predicted bundle, so the
-  //     mispredicted direction stayed in the history. BP-129: the
-  //     bundle is up to NUM_PRED_SLOTS bits; the last bit is checked
-  //     at either slot count.
+  //     mispredicted direction stayed in the history. BP-130: the
+  //     bundle is up to RB_CORR_BITS (2) bits at either slot count,
+  //     and every bit of it is checked.
   logic w_bundle_ok;
   always_comb begin : bundle_ok
     w_bundle_ok = 1'b1;
-    for (int k = 0; k < NUM_PRED_SLOTS; k++) begin
+    for (int k = 0; k < RB_CORR_BITS; k++) begin
       if (k < int'(r_n)) begin
         if (ghr_buf[ghist_ptr - GHIST_PTR_BITS'(int'(r_n) - k)] != r_tkn[k])
           w_bundle_ok = 1'b0;

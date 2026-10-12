@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -971,10 +971,16 @@ bp_history carries no stage suffix on any port.
 Driven by the cluster at p1, from the formed prediction:
 
 ```
-  pred_taken    [1:0]              bit n = branch n
-  pred_pc       [VA_WIDTH-1:0] [2] one per branch, after compaction
-  num_branches  [1:0]              count, 0 to 2
+  pred_taken    [NUM_PRED_SLOTS-1:0]          bit n = branch n
+  pred_pc       [VA_WIDTH-1:0] [NUM_PRED_SLOTS]
+                                              one per branch, after
+                                              compaction
+  num_branches  [PRED_CNT_BITS-1:0]           count, 0 to
+                                              NUM_PRED_SLOTS
 ```
+
+Sized by NUM_PRED_SLOTS since BP-129 (session-078); at two slots
+they are the former [1:0], [2] and [1:0].
 
 bp_history indexes these by BRANCH NUMBER, not by slot number, so
 the cluster compacts the valid slots down before presenting them. A
@@ -1047,12 +1053,12 @@ by BP-122):
   input logic                      ftq_rollback_corr
       -- the rollback carries a corrected bundle (backend
          RC_MISPREDICT with _self clear only)
-  input logic [1:0]                ftq_rollback_n
+  input logic [RB_CNT_BITS-1:0]    ftq_rollback_n
       -- number of bundle bits, 0 to 2
-  input logic [1:0]                ftq_rollback_tkn
+  input logic [RB_CORR_BITS-1:0]   ftq_rollback_tkn
       -- direction of each bit, bit 0 oldest: slots before the named
          one 0, the named one its resolved direction
-  input logic [1:0]                ftq_rollback_pbit
+  input logic [RB_CORR_BITS-1:0]   ftq_rollback_pbit
       -- path bit (pc[2] ^ pc[3]) of each branch in the bundle
   input logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_ex
       -- slot s of the rollback entry is a conditional the backend
@@ -1071,6 +1077,19 @@ corrected bits and rewrites that entry's checkpoint. The two slot
 inputs drive the loop predictor's restore
 (loop_pred_interfaces.md). The ftq top and ftq_npc drive all six;
 fe_top has no port change.
+
+THE CORRECTION IS AT MOST TWO BITS at either slot count (Jeff,
+session-078; built by BP-130): at most one not-taken bit for a slot
+of the entry before the named position, then the named branch's
+bit. RB_CORR_BITS = 2 and RB_CNT_BITS = 2 are bp_defines_pkg's,
+fixed, not derived from NUM_PRED_SLOTS. At one slot a backend
+mispredict of a branch held in no slot (BP-128 D2) carries slot 0's
+not-taken bit and its own. The cluster's p2 / p3 corrections are at
+most NUM_PRED_SLOTS bits and are zero-extended to RB_CORR_BITS in
+its mux. ftq_rollback_slot_ex / _slot_tkn stay NUM_PRED_SLOTS. BP-129
+had sized the three bundle ports by NUM_PRED_SLOTS and limited the
+correction to NUM_PRED_SLOTS bits, provisionally; BP-130 replaced
+that.
 
 A rollback SUPPRESSES the checkpoint write in the same cycle:
 bp_history writes the checkpoint from its normal-update branch,
@@ -1214,8 +1233,11 @@ match it and to match this specification.
 
 ### bp_history
 
-13. bp_history uses literal `[1:0]` and `[2]` where other modules
-    use NUM_PRED_SLOTS. Deferred. Recorded INFRA-011.
+13. CLOSED, BP-129 (session-078). bp_history's prediction ports are
+    sized by NUM_PRED_SLOTS and PRED_CNT_BITS; the correction ports
+    are RB_CORR_BITS / RB_CNT_BITS (BP-130). It read: bp_history uses
+    literal `[1:0]` and `[2]` where other modules use NUM_PRED_SLOTS,
+    deferred, INFRA-011.
 
 14. CLOSED, BP-126 (TD#102). bp_history generates the IT5 folds, in
     the rollback recompute and both steps, as for IT1 to IT4. It
@@ -1370,4 +1392,11 @@ match it and to match this specification.
               not the grant (TD#123, P-3); the cluster's
               sc_uq_not_full includes the queue full. 10 item 14
               closed (TD#102).
+
+  2026-10-12  session-078, after BP-128 to BP-130. 9: the
+              bp_history prediction ports sized by NUM_PRED_SLOTS
+              (BP-129); the correction ports RB_CNT_BITS /
+              RB_CORR_BITS and the correction at most two bits at
+              either slot count (ruled, built by BP-130). 10 item 13
+              closed.
 ```

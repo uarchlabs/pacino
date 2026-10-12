@@ -6,7 +6,7 @@
  FILE:    bp_history_decisions.md
  SOURCE:  session-054
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -135,7 +135,11 @@ Decision: two branches update history in ONE cycle, applied as a
 combined slot-0-then-slot-1 fold. This is the resolution of HI1
 (NUM_PRED_SLOTS=2). The interface DRAFT's single
 pred_valid/pred_taken/pred_pc is superseded; the RTL ports are
-pred_taken[1:0], pred_pc[2], num_branches[1:0].
+pred_taken[NUM_PRED_SLOTS-1:0], pred_pc[NUM_PRED_SLOTS] and
+num_branches[PRED_CNT_BITS-1:0] (BP-129; they read [1:0], [2] and
+[1:0], which is their width at NUM_PRED_SLOTS = 2). At
+NUM_PRED_SLOTS = 1 a bundle holds one branch and this section's
+dual-slot case does not arise.
 
 ### 3.1  num_branches semantics
 
@@ -153,8 +157,11 @@ pred_taken[1:0], pred_pc[2], num_branches[1:0].
                        advances by 2.
 
 ghist_ptr / phist_ptr here are the internal pointer registers
-(section 2), not inputs. Value 3 is undefined (num_branches valid
-range 0-2, per PROJECT_STATUS).
+(section 2), not inputs. A count above NUM_PRED_SLOTS is undefined
+(3 at two slots; at one slot the port is one bit). num_branches = 2
+exists only at NUM_PRED_SLOTS = 2. The RTL writes branch b, for
+each b below num_branches, at ghist_ptr + b with one fold step per
+branch in branch order, in one loop (BP-129, which also did 3.6).
 
 ### 3.2  Write content
 
@@ -292,10 +299,36 @@ bkend_ftq_redir_taken (ftq_backend_interfaces.md 5), and by the
 cluster for its own p2 and p3 redirects. It reaches bp_history on
 rollback_corr, rollback_n, rollback_tkn and rollback_pbit, declared
 in bp_history_interfaces.md (the cluster-boundary ports are
-ftq_bpu_interfaces.md 9). rollback_n is the number of the bundle's
-bits; read with the post-advance checkpoint it locates the bundle's
-first bit, so the checkpoint needs no slot count (PA reading of the
-declarations BP-122 reported).
+ftq_bpu_interfaces.md 9). rollback_n is the number of corrected
+bits written. The bundle's FIRST bit is located from the
+checkpoint and a stored bundle size, ckpt_nb, one per entry: the
+first bit is the post-advance checkpoint minus ckpt_nb. ckpt_nb is
+num_branches at the checkpoint write and rollback_n after a
+corrected rollback rewrites the entry. The RTL has stored it since
+BP-121.
+
+THIS READ "rollback_n ... read with the post-advance checkpoint it
+locates the bundle's first bit, so the checkpoint needs no slot
+count (PA reading of the declarations BP-122 reported)". The PA
+reading was wrong: rollback_n is the count of the corrected
+bundle, not the predicted one, and the RTL locates the first bit
+from ckpt_nb. Found by BP-130, corrected session-078.
+
+THE CORRECTION IS AT MOST TWO BITS at either slot count. RULED
+session-078 (Jeff), BUILT by BP-130: at most one not-taken bit for
+a branch of the entry before the redirecting one, then the
+redirecting branch's resolved bit. The correction ports are
+RB_CORR_BITS = 2 wide, with the count RB_CNT_BITS, at either
+NUM_PRED_SLOTS; ckpt_nb is RB_CNT_BITS. At one slot a backend
+mispredict of a branch held in no slot (BP-128 D2) carries two
+bits for an entry whose prediction wrote one, and both reach the
+history. BP-129 had limited the correction to NUM_PRED_SLOTS bits,
+provisionally, and that dropped the not-taken bit: six tb_fe_top
+programs mispredicted more at one slot (indir 71 to 86). BP-130
+restored every one-slot figure to its value before BP-129. Not one
+more bit than the number of slots: at two slots the correction
+stays at two, and a branch past both slots is not represented
+(the cap at two is Jeff's, session-078).
 
 HISTORY STOPS AT THE FIRST TAKEN SLOT (D16). A bundle writes one bit
 per slot up to and including its first taken slot and none after
@@ -319,6 +352,11 @@ TC17. Reverting the correction fails the tb_fe_top check (BP-121
 m13).
 
 ### 3.6  RTL fix: if / else-if for the slot cases
+
+DONE by BP-129 (session-078). The two slot blocks are one loop
+over branch number calling one fold step per branch
+(fold_all_step), so each case assigns the fold registers once. The
+text below is the record.
 
 The RTL applies num_branches>=1 and num_branches==2 as two
 separate if blocks that both assign the fold registers. On
@@ -567,13 +605,19 @@ and exposes it on ckpt_ghist_ptr / ckpt_phist_ptr for FTQ entry
 construction.
 
 Checkpoint timing is POST-advance (ratified -- see History 2026-06-26).
-The checkpoint carries a pointer only, not num_branches. Storing the
+The rollback anchor needs only the pointer. Storing the
 post-advance pointer puts the newest history bit of the bundle at
 ckpt - 1 whether the bundle held one branch or two, so the rollback
 recompute anchors uniformly at ckpt - 1 (section 2.2). A pre-advance
 snapshot would require also storing the slot count to locate the
 newest bit. This supersedes the earlier pre-advance wording in this
 section and matches bp_history_interfaces.md (Checkpoint Timing).
+
+THE CHECKPOINT ALSO STORES A BUNDLE SIZE, ckpt_nb, since BP-121: the
+corrected rollback needs the bundle's FIRST bit, which is the
+checkpoint minus ckpt_nb (3.5). This paragraph read "The checkpoint
+carries a pointer only, not num_branches", true for the anchor and
+untrue of the entry since BP-121. Corrected session-078.
 
 Read (rollback): the rollback index selects ckpt_gptr[idx] /
 ckpt_pptr[idx]; the module loads the live pointer from it and
@@ -669,9 +713,11 @@ not a hashed fold) have no folds.
        session-064 and listed here 2026-09-17 so this file is not
        read as holding the whole HI registry.
 
-  HI7: OPEN, and NOT OWNED HERE. Ports use literal [1:0] and [2]
-       where other modules use NUM_PRED_SLOTS. Deferred,
-       INFRA-011. Opened in bp_history_interfaces.md session-064.
+  HI7: CLOSED by BP-129 (session-078). The ports are sized by
+       NUM_PRED_SLOTS and PRED_CNT_BITS; the correction ports are
+       RB_CORR_BITS / RB_CNT_BITS (BP-130). It read: ports use
+       literal [1:0] and [2] where other modules use
+       NUM_PRED_SLOTS, deferred, INFRA-011.
 
   HI8: CLOSED session-076 by ruling: the history is corrected on
        a redirect (3.5, BP-121 decision 8), so the cost below is
@@ -722,8 +768,9 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
     - DRAFT obligation "must not assert rollback + pred together"
       relaxed to "rollback wins" (section 4)
 
-  RTL fix (section 3.6): convert the slot cases to if / else-if.
-  Directed, apply at TD #74. No behavior change.
+  RTL fix (section 3.6): DONE by BP-129 (session-078), one loop
+  over branches. It read: convert the slot cases to if / else-if,
+  directed, apply at TD #74.
 
   Downstream tasks (not doc edits, sequenced after this doc):
     - TD #74: dual-slot directed test. Proves the section 3.3
@@ -893,3 +940,12 @@ bp_history_interfaces.md. Check BOTH before issuing a number.
 
   2026-10-09  session-076, recording BP-122. 3.5: the correction
               ports named; rollback_n locates the first bit.
+
+  2026-10-12  session-078, after BP-128 to BP-130. 3, 3.1: the
+              ports sized by NUM_PRED_SLOTS (BP-129), one loop over
+              branches. 3.5: the first bit is located from the stored
+              bundle size ckpt_nb, not from rollback_n (the
+              2026-10-09 reading was wrong); the correction is at most
+              two bits at either slot count (ruled, built by BP-130).
+              3.6 done (BP-129). 7: ckpt_nb recorded. 9: HI7 and the
+              3.6 item closed.

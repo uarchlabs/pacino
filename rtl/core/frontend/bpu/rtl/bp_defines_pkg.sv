@@ -93,10 +93,20 @@ package bp_defines_pkg;
                                    $clog2(NUM_PRED_SLOTS) : 1;
   // PRED_CNT_BITS: width of a count of predicted branches, 0 to
   // NUM_PRED_SLOTS inclusive (BP-129): bp_history's num_branches and
-  // rollback_n, its per-entry bundle size, and the rollback bundle
-  // count from the FTQ and the cluster. A derived WIDTH, not a knob.
+  // the cluster's p2 / p3 bundle counts. A derived WIDTH, not a knob.
   // = 2 at two slots, 1 at one.
   localparam int PRED_CNT_BITS = $clog2(NUM_PRED_SLOTS + 1);
+  // RB_CORR_BITS: the most bits the corrected history bundle of a
+  // rollback carries, at either slot count (BP-130, ruled
+  // session-078): at most one not-taken bit, then the redirecting
+  // branch's bit. Fixed by that ruling, NOT derived from
+  // NUM_PRED_SLOTS. Sizes rollback_tkn / _pbit from ftq_npc through
+  // the FTQ, fe_top and the cluster into bp_history.
+  // RB_CNT_BITS: width of that bundle's count, 0 to RB_CORR_BITS
+  // inclusive: rollback_n, and bp_history's per-entry bundle size,
+  // which holds either num_branches or rollback_n. = 2.
+  localparam int RB_CORR_BITS = 2;
+  localparam int RB_CNT_BITS  = $clog2(RB_CORR_BITS + 1);
   parameter int FTQ_CONF_BITS     = 4;  // confidence field width (TBD)
 
   // FTQ slot index width: $clog2(64) = 6

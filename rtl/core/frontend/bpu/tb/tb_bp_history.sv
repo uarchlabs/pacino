@@ -37,8 +37,10 @@
 //
 // BP-129: the per-branch ports are NUM_PRED_SLOTS entries and the
 // counts PRED_CNT_BITS wide. A case that needs a second branch in one
-// bundle (TC3, the by-2 step of TC5, TC7, TC8, TC9, the two-bit
-// correction of TC17) runs at two slots and prints SKIP at one.
+// bundle (TC3, the by-2 step of TC5, TC7, TC8, TC9) runs at two slots
+// and prints SKIP at one. BP-130: the rollback correction is
+// RB_CORR_BITS (2) bits at either slot count, so TC17's two-bit
+// correction runs at one slot too.
 // ===================================================================
 module tb;
   import bp_defines_pkg::*;
@@ -83,9 +85,9 @@ module tb;
   logic [FTQ_IDX_BITS-1:0]    rollback_ckpt_idx;
   // BP-121: the corrected rollback (bp_history_decisions.md 3.5).
   logic                        rollback_corr;
-  logic [PRED_CNT_BITS-1:0]    rollback_n;
-  logic [NUM_PRED_SLOTS-1:0]   rollback_tkn;
-  logic [NUM_PRED_SLOTS-1:0]   rollback_pbit;
+  logic [RB_CNT_BITS-1:0]      rollback_n;
+  logic [RB_CORR_BITS-1:0]     rollback_tkn;
+  logic [RB_CORR_BITS-1:0]     rollback_pbit;
   logic [GHIST_PTR_BITS-1:0]  ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  phist_ptr;
   logic [GHIST_PTR_BITS-1:0]  ckpt_ghist_ptr;
@@ -882,7 +884,7 @@ module tb;
       rollback_valid    = 1'b1;
       rollback_ckpt_idx = FTQ_IDX_BITS'(4);
       rollback_corr     = 1'b1;
-      rollback_n        = PRED_CNT_BITS'(1);
+      rollback_n        = RB_CNT_BITS'(1);
       rollback_tkn      = '0;
       tick();
       drive_idle();
@@ -903,22 +905,23 @@ module tb;
         $fatal(1, "TC17 FAIL: the checkpoint was not rewritten (%0d)",
                ghist_ptr);
       check_all_folds("TC17b");
-      // BP-129: two corrected bits need a second slot.
-      if (NUM_PRED_SLOTS > 1) begin
-        rollback_valid    = 1'b1;
-        rollback_ckpt_idx = FTQ_IDX_BITS'(4);
-        rollback_corr     = 1'b1;
-        rollback_n        = PRED_CNT_BITS'(2);
-        rollback_tkn      = NUM_PRED_SLOTS'(2'b10); // bit 0 nt, bit 1 t
-        tick();
-        drive_idle();
-        tick();
-        if ((ghist_ptr !== GHIST_PTR_BITS'(start_g + 2)) ||
-            (ghr_buf[start_g] !== 1'b0) ||
-            (ghr_buf[GHIST_PTR_BITS'(start_g + 1)] !== 1'b1))
-          $fatal(1, "TC17 FAIL: two corrected bits (ptr %0d)", ghist_ptr);
-        check_all_folds("TC17c");
-      end else skip("TC17c (two corrected bits)");
+      // BP-130: two corrected bits at either slot count. At one slot
+      // the checkpoint was written with a one-branch bundle and
+      // rewritten with one corrected bit (TC17a); the two bits start
+      // at the same first bit.
+      rollback_valid    = 1'b1;
+      rollback_ckpt_idx = FTQ_IDX_BITS'(4);
+      rollback_corr     = 1'b1;
+      rollback_n        = RB_CNT_BITS'(2);
+      rollback_tkn      = RB_CORR_BITS'(2'b10); // bit 0 nt, bit 1 t
+      tick();
+      drive_idle();
+      tick();
+      if ((ghist_ptr !== GHIST_PTR_BITS'(start_g + 2)) ||
+          (ghr_buf[start_g] !== 1'b0) ||
+          (ghr_buf[GHIST_PTR_BITS'(start_g + 1)] !== 1'b1))
+        $fatal(1, "TC17 FAIL: two corrected bits (ptr %0d)", ghist_ptr);
+      check_all_folds("TC17c");
     end
     pass_count++;
     $display("TC17 pass (BP-121 corrected rollback)");

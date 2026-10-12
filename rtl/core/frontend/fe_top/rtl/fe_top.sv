@@ -254,9 +254,9 @@ module fe_top (
   logic                       ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]    ftq_rollback_idx;
   logic                       ftq_rollback_corr;
-  logic [PRED_CNT_BITS-1:0]   ftq_rollback_n;      // BP-129
-  logic [NUM_PRED_SLOTS-1:0]  ftq_rollback_tkn;
-  logic [NUM_PRED_SLOTS-1:0]  ftq_rollback_pbit;
+  logic [RB_CNT_BITS-1:0]     ftq_rollback_n;      // BP-130
+  logic [RB_CORR_BITS-1:0]    ftq_rollback_tkn;
+  logic [RB_CORR_BITS-1:0]    ftq_rollback_pbit;
   logic [NUM_PRED_SLOTS-1:0]  ftq_rollback_slot_ex;   // BP-122
   logic [NUM_PRED_SLOTS-1:0]  ftq_rollback_slot_tkn;  // BP-122
   logic [GHIST_PTR_BITS-1:0]  ckpt_ghist_ptr;

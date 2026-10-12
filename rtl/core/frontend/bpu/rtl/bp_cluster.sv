@@ -249,11 +249,12 @@ module bp_cluster (
   // of bits, their directions and path bits (BP-121; bp_history
   // _decisions.md 3.5 reopened, ruled by Jeff: correct on redirect).
   // The cluster forms the correction itself for its own p2 / p3
-  // redirect.
+  // redirect. Up to RB_CORR_BITS (2) bits at either slot count
+  // (BP-130).
   input  logic                            ftq_rollback_corr,
-  input  logic [PRED_CNT_BITS-1:0]        ftq_rollback_n,
-  input  logic [NUM_PRED_SLOTS-1:0]       ftq_rollback_tkn,
-  input  logic [NUM_PRED_SLOTS-1:0]       ftq_rollback_pbit,
+  input  logic [RB_CNT_BITS-1:0]          ftq_rollback_n,
+  input  logic [RB_CORR_BITS-1:0]         ftq_rollback_tkn,
+  input  logic [RB_CORR_BITS-1:0]         ftq_rollback_pbit,
   // The rollback entry's slots for the loop predictor's restore
   // (BP-122, TD#169): slot s is a conditional the backend mispredict
   // executed, and its resolved direction. Qualified by
@@ -331,11 +332,15 @@ module bp_cluster (
   logic                       w_rollback_valid;
   logic [FTQ_IDX_BITS-1:0]    w_rollback_ckpt_idx;
   // The corrected bundle to the history (BP-121): from the p2 or p3
-  // view for this cluster's own redirect, else the FTQ's.
+  // view for this cluster's own redirect, else the FTQ's. BP-130: the
+  // bundle to the history is RB_CORR_BITS wide at either slot count.
+  // The p2 / p3 bundles are formed from predicted slots, so they hold
+  // at most NUM_PRED_SLOTS bits and stay that wide; rb_corr_mux
+  // zero-extends them.
   logic                       w_rb_corr;
-  logic [PRED_CNT_BITS-1:0]   w_rb_n;
-  logic [NUM_PRED_SLOTS-1:0]  w_rb_tkn;
-  logic [NUM_PRED_SLOTS-1:0]  w_rb_pbit;
+  logic [RB_CNT_BITS-1:0]     w_rb_n;
+  logic [RB_CORR_BITS-1:0]    w_rb_tkn;
+  logic [RB_CORR_BITS-1:0]    w_rb_pbit;
   logic [PRED_CNT_BITS-1:0]   w_c2_n;
   logic [NUM_PRED_SLOTS-1:0]  w_c2_tkn;
   logic [NUM_PRED_SLOTS-1:0]  w_c2_pbit;
@@ -1347,14 +1352,14 @@ module bp_cluster (
   always_comb begin : rb_corr_mux
     if (w_own_p3 || (!ftq_rollback_val && w_any_redir_p3)) begin
       w_rb_corr = 1'b1;
-      w_rb_n    = w_c3_n;
-      w_rb_tkn  = w_c3_tkn;
-      w_rb_pbit = w_c3_pbit;
+      w_rb_n    = RB_CNT_BITS'(w_c3_n);
+      w_rb_tkn  = RB_CORR_BITS'(w_c3_tkn);
+      w_rb_pbit = RB_CORR_BITS'(w_c3_pbit);
     end else if (w_own_p2 || (!ftq_rollback_val && w_any_redir_p2)) begin
       w_rb_corr = 1'b1;
-      w_rb_n    = w_c2_n;
-      w_rb_tkn  = w_c2_tkn;
-      w_rb_pbit = w_c2_pbit;
+      w_rb_n    = RB_CNT_BITS'(w_c2_n);
+      w_rb_tkn  = RB_CORR_BITS'(w_c2_tkn);
+      w_rb_pbit = RB_CORR_BITS'(w_c2_pbit);
     end else begin
       w_rb_corr = ftq_rollback_corr;
       w_rb_n    = ftq_rollback_n;

@@ -140,11 +140,12 @@ module ftq (
   // ---- 9. history rollback, TD-FE-7, BP-102 ------------------------
   output logic                        ftq_rollback_val,
   output logic [FTQ_IDX_BITS-1:0]     ftq_rollback_idx,
-  // The corrected history bundle for a backend mispredict (BP-121).
+  // The corrected history bundle for a backend mispredict (BP-121),
+  // up to RB_CORR_BITS (2) bits at either slot count (BP-130).
   output logic                        ftq_rollback_corr,
-  output logic [PRED_CNT_BITS-1:0]    ftq_rollback_n,
-  output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_tkn,
-  output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_pbit,
+  output logic [RB_CNT_BITS-1:0]      ftq_rollback_n,
+  output logic [RB_CORR_BITS-1:0]     ftq_rollback_tkn,
+  output logic [RB_CORR_BITS-1:0]     ftq_rollback_pbit,
   // BP-122: the rollback entry's executed conditional slots and their
   // resolved directions, for the loop predictor's restore.
   output logic [NUM_PRED_SLOTS-1:0]   ftq_rollback_slot_ex,

@@ -59,7 +59,9 @@
 # tage_coverage_plan.md), and the files updated after BP-127
 # (PROJECT_STATUS.md, sc_tb_decisions.md, sc_table_hash_rules.md),
 # and the files updated in session-078 (PROJECT_STATUS.md,
-# tage_table_interfaces.md).
+# tage_table_interfaces.md), and the files updated in session-078
+# after BP-130 (PROJECT_STATUS.md, bp_history_interfaces.md,
+# bp_history_decisions.md, ftq_bpu_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -78,13 +80,13 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 f208dbd3f0ea
+PLAN  PROJECT_STATUS.md                 7a58686e7233
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
 ARCH  bp_arb_spec.md                    3825786d7590
 ARCH  bp_cluster.md                     187952e94e30
-ARCH  bp_history_decisions.md           9d39b17222ec
+ARCH  bp_history_decisions.md           f6a327aecf90
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   0ec67f83aa96
@@ -124,11 +126,11 @@ VERF  tage_coverage_plan.md             497bc9a790a3
 
 INTF  ittage_table_interfaces.md        152940fce590
 INTF  tage_table_interfaces.md          adfbd02af482
-INTF  bp_history_interfaces.md          bf599226c271
+INTF  bp_history_interfaces.md          b7cb5aa4c164
 INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           12d47fb5ddbc
 INTF  ftq_backend_interfaces.md   1c425156a6e7
-INTF  ftq_bpu_interfaces.md       ebd5a1a0e08f
+INTF  ftq_bpu_interfaces.md       004c794a38ff
 INTF  ftq_ifu_interfaces.md       2cecf4e55ced
 INTF  ifu_ibuf_interfaces.md      ab4d4051748b
 INTF  itlb_ifu_interfaces.md            ab489f6db489

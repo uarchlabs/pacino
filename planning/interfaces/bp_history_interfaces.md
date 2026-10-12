@@ -6,7 +6,7 @@
  FILE:    bp_history_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -49,7 +49,16 @@ bp_defines_pkg.sv.
   PHIST_PTR_BITS = 5     -- pointer into PHR buffer
   FTQ_DEPTH      = 64    -- number of checkpoint slots
   FTQ_IDX_BITS   = 6     -- index into checkpoint array
-  NUM_PRED_SLOTS = 2     -- branches updated per cycle (0,1,2)
+  NUM_PRED_SLOTS = 2     -- prediction slots, 1 or 2 (BP-128);
+                            branches per update 0 to NUM_PRED_SLOTS
+  PRED_CNT_BITS  = 2     -- $clog2(NUM_PRED_SLOTS + 1); 1 at one
+                            slot. Width of num_branches (BP-129)
+  RB_CORR_BITS   = 2     -- bits of a history correction, 2 at
+                            either slot count, not derived from
+                            NUM_PRED_SLOTS (BP-130, session-078)
+  RB_CNT_BITS    = 2     -- $clog2(RB_CORR_BITS + 1). Width of
+                            rollback_n and of the stored bundle
+                            size (BP-130)
 
 ---
 
@@ -60,9 +69,10 @@ bp_defines_pkg.sv.
 
   -- Prediction update (one bundle per cycle, indexed by BRANCH
   --                    number, not by slot number)
-  num_branches : input  logic [1:0]                 -- 0, 1, or 2
-  pred_taken   : input  logic [1:0]                 -- bit n = branch n
-  pred_pc      : input  logic [VA_WIDTH-1:0] [2]    -- per-branch PC
+  num_branches : input  logic [PRED_CNT_BITS-1:0]   -- 0 to NUM_PRED_SLOTS
+  pred_taken   : input  logic [NUM_PRED_SLOTS-1:0]  -- bit n = branch n
+  pred_pc      : input  logic [VA_WIDTH-1:0]
+                              [NUM_PRED_SLOTS]      -- per-branch PC
 
   -- Checkpoint write
   ckpt_wr_en   : input  logic                       -- write enable
@@ -72,11 +82,17 @@ bp_defines_pkg.sv.
   rollback_valid    : input  logic                  -- restore enable
   rollback_ckpt_idx : input  logic [FTQ_IDX_BITS-1:0]
 
-  -- Rollback history correction (BP-121, D14; declared by BP-122)
+  -- Rollback history correction (BP-121, D14; declared by BP-122;
+  --                               widths BP-130)
   rollback_corr     : input  logic                  -- corrected bundle
-  rollback_n        : input  logic [1:0]            -- bits, 0 to 2
-  rollback_tkn      : input  logic [1:0]            -- their directions
-  rollback_pbit     : input  logic [1:0]            -- their path bits
+  rollback_n        : input  logic [RB_CNT_BITS-1:0]  -- bits, 0 to 2
+  rollback_tkn      : input  logic [RB_CORR_BITS-1:0] -- their directions
+  rollback_pbit     : input  logic [RB_CORR_BITS-1:0] -- their path bits
+
+  At NUM_PRED_SLOTS = 2 every width above is the former [1:0] or
+  [2]. At 1 the three prediction-update ports are one entry wide
+  and the four correction ports keep their two-bit width (BP-129,
+  BP-130).
 
   -- Current pointer outputs (module-owned, for FTQ construction)
   ghist_ptr    : output logic [GHIST_PTR_BITS-1:0]
@@ -110,7 +126,8 @@ Interface" below.
 
 bp_history owns the live GHR and PHR pointers as internal
 registers and advances them itself. The pointer advances by
-num_branches each cycle (0, 1, or 2), modulo buffer width. The
+num_branches each cycle (0 to NUM_PRED_SLOTS), modulo buffer
+width. The
 advance is sequential only: reset and checkpoint-restore are the
 only events that load a non-incremented value. There is no
 external pointer-load path.
@@ -126,7 +143,8 @@ only advance, rollback by index, FTQ visibility vs ownership).
 
 ## Prediction Update Interface
 
-### Producer: BP cluster (one bundle per cycle, up to two branches)
+### Producer: BP cluster (one bundle per cycle, up to NUM_PRED_SLOTS
+###           branches)
 ### Consumer: bp_history (GHR/PHR advance, folds update)
 
 ### Timing
@@ -149,7 +167,10 @@ only advance, rollback by index, FTQ visibility vs ownership).
                        steps, branch 0 first. Pointer advances
                        by 2.
 
-  num_branches = 3 is undefined (valid range 0-2).
+  num_branches = 2 exists only at NUM_PRED_SLOTS = 2. A count above
+  NUM_PRED_SLOTS is undefined: 3 at two slots; at one slot the port
+  is one bit and cannot carry one. The RTL writes branches 0 to
+  num_branches - 1 in one loop over branch number (BP-129).
 
   GHR write (per active branch n):
     ghr_mem[ptr_n] <= pred_taken[n]
@@ -170,9 +191,9 @@ only advance, rollback by index, FTQ visibility vs ownership).
 ### Producer obligations
 
   - Drive num_branches to the count of branches in the bundle
-    (0, 1, or 2), counting up to and including the first taken
-    branch and none after it: a branch after a taken one is off
-    the path. Do not drive 3. The stop at the first taken branch
+    (0 to NUM_PRED_SLOTS), counting up to and including the first
+    taken branch and none after it: a branch after a taken one is
+    off the path. Do not drive a count above NUM_PRED_SLOTS. The stop at the first taken branch
     was BUILT by BP-121 (D16); before it the p1 bundle counted a
     branch past a taken one.
   - pred_taken[n] / pred_pc[n] valid for each branch n <
@@ -249,10 +270,15 @@ only advance, rollback by index, FTQ visibility vs ownership).
                      into checkpoint slot ckpt_wr_idx, and expose
                      them on ckpt_ghist_ptr / ckpt_phist_ptr.
 
-  Checkpoint stores: GHR pointer (8b) + PHR pointer (5b) only.
-  Folded histories are NOT stored per checkpoint slot. On
-  rollback, folds are recomputed from buffer contents at the
-  restored pointer (G15).
+  Checkpoint stores: GHR pointer (8b) + PHR pointer (5b), and
+  the bundle size ckpt_nb (RB_CNT_BITS), the number of history
+  bits the entry holds: num_branches at the write, rollback_n
+  after a corrected rollback. The corrected rollback finds the
+  bundle's first bit as the checkpoint minus ckpt_nb. ckpt_nb has
+  been stored since BP-121; this line read "pointer only" until
+  session-078. Folded histories are NOT stored per checkpoint
+  slot. On rollback, folds are recomputed from buffer contents at
+  the restored pointer (G15).
 
   Granularity is the bundle: one checkpoint per accepted
   prediction bundle, not per branch. There is no checkpoint
@@ -308,6 +334,17 @@ only advance, rollback by index, FTQ visibility vs ownership).
                           bit 0 oldest; path bits rollback_pbit into
                           the PHR), advance, rewrite the checkpoint.
     rollback_corr = 0  -- restore past the bundle, as above.
+
+  THE CORRECTION IS AT MOST TWO BITS, at either slot count (Jeff,
+  session-078; built by BP-130): at most one not-taken bit for a
+  branch of the entry before the redirecting one, then the
+  redirecting branch's resolved bit. At one slot a backend
+  mispredict of a branch held in no slot (BP-128 D2) gives two
+  bits for an entry whose prediction wrote one; both are written
+  and ckpt_nb becomes 2. BP-129 had limited the correction to
+  NUM_PRED_SLOTS bits, provisionally; BP-130 replaced that. The
+  cluster's own p2 / p3 corrections are at most NUM_PRED_SLOTS
+  bits and are zero-extended to RB_CORR_BITS.
 
   Scope: rollback (checkpoint-restore) applies to RC_MISPREDICT,
   RC_TRAP and RC_REPLAY -- every backend redirect cause that names
@@ -491,8 +528,11 @@ only advance, rollback by index, FTQ visibility vs ownership).
 | HI6 | IT5 fold generation missing in            | CLOSED BP-126.   |
 |     | bp_history.sv. IT5 has real history but   | TD#102 closed.   |
 |     | its three fold outputs are never driven.  |                  |
-| HI7 | Ports use literal [1:0] and [2] where     | Deferred.        |
-|     | other modules use NUM_PRED_SLOTS.         | INFRA-011.       |
+| HI7 | Ports used literal [1:0] and [2] where    | CLOSED BP-129    |
+|     | other modules use NUM_PRED_SLOTS.         | (session-078).   |
+|     |                                           | Correction ports |
+|     |                                           | RB_CORR_BITS,    |
+|     |                                           | BP-130.          |
 
 See bp_history_decisions.md for the full resolution of HI1/HI3/HI4
 and the module-owned pointer decision.
@@ -540,4 +580,13 @@ and the module-owned pointer decision.
 
   2026-10-10  session-077, after BP-126. IT5 folds generated
               (TD#102); HI6 closed.
+
+  2026-10-12  session-078, after BP-128 to BP-130. Module
+              Parameters: NUM_PRED_SLOTS 1 or 2; PRED_CNT_BITS,
+              RB_CORR_BITS, RB_CNT_BITS. Port List: the prediction
+              ports sized by NUM_PRED_SLOTS (BP-129), the correction
+              ports two bits at either slot count (BP-130). The
+              correction is at most two bits (ruled session-078).
+              Checkpoint: the stored bundle size ckpt_nb, there since
+              BP-121, recorded; it read "pointer only". HI7 closed.
 ```

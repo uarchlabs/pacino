@@ -186,9 +186,9 @@ module tb;
   logic                     ftq_rollback_val;
   logic [FTQ_IDX_BITS-1:0]  ftq_rollback_idx;
   logic                     ftq_rollback_corr;    // BP-121
-  logic [PRED_CNT_BITS-1:0] ftq_rollback_n;      // BP-129
-  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_tkn;
-  logic [NUM_PRED_SLOTS-1:0] ftq_rollback_pbit;
+  logic [RB_CNT_BITS-1:0]   ftq_rollback_n;      // BP-130
+  logic [RB_CORR_BITS-1:0]  ftq_rollback_tkn;
+  logic [RB_CORR_BITS-1:0]  ftq_rollback_pbit;
   logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_ex;   // BP-122
   logic [NUM_PRED_SLOTS-1:0] ftq_rollback_slot_tkn;  // BP-122
 
@@ -4771,7 +4771,7 @@ module tb;
     ftq_rollback_val      = 1'b1;
     ftq_rollback_idx      = 6'h34;
     ftq_rollback_corr     = 1'b1;
-    ftq_rollback_n        = PRED_CNT_BITS'(1);
+    ftq_rollback_n        = RB_CNT_BITS'(1);
     ftq_rollback_tkn      = '0;
     ftq_rollback_slot_ex  = NUM_PRED_SLOTS'(1); // BP-128
     ftq_rollback_slot_tkn = '0;
@@ -5261,7 +5261,7 @@ module tb;
       if (dut.w_rollback_valid) begin
         if (dut.w_rb_corr) begin
           m_h = m_ck_pre[dut.w_rollback_ckpt_idx];
-          for (int k = 0; k < NUM_PRED_SLOTS; k++)
+          for (int k = 0; k < RB_CORR_BITS; k++)
             if (k < int'(dut.w_rb_n)) m_h = m_shift(m_h, dut.w_rb_tkn[k]);
           m_ck_post[dut.w_rollback_ckpt_idx] = m_h;
           mon_rbc_pend = 1'b1;

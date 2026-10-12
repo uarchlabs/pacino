@@ -178,19 +178,20 @@ module ftq_npc (
   // The corrected history bundle of the restored entry (BP-121), for a
   // backend MISPREDICT redirect (_self clear): the entry's branches
   // before the named position, which the execution passed not taken,
-  // then the named branch with its resolved direction; at most
-  // NUM_PRED_SLOTS bits, a bit's path bit from its PC. Clear for every
-  // other source: a p2 / p3 redirect's bundle is the cluster's, a
-  // predecode redirect and a trap restore past the bundle as before
-  // BP-121.
-  // At most NUM_PRED_SLOTS - 1 not-taken bits come before the named
-  // branch's bit (BP-129, provisional): when more slots of the entry
-  // sit before the named position the earliest are kept, and at one
-  // slot the bundle is the named branch's bit alone.
+  // then the named branch with its resolved direction; a bit's path
+  // bit from its PC. Clear for every other source: a p2 / p3
+  // redirect's bundle is the cluster's, a predecode redirect and a
+  // trap restore past the bundle as before BP-121.
+  // At most RB_CORR_BITS (2) bits at either slot count, so at most one
+  // not-taken bit before the named branch's bit (BP-130, ruled
+  // session-078): when more slots of the entry sit before the named
+  // position the earliest is kept. At one slot the named branch may be
+  // held in no slot (BP-128 D2); the bundle is then slot 0's not-taken
+  // bit, when slot 0 sits before it, and the named branch's bit.
   output logic                     rollback_corr,
-  output logic [PRED_CNT_BITS-1:0] rollback_n,
-  output logic [NUM_PRED_SLOTS-1:0] rollback_tkn,
-  output logic [NUM_PRED_SLOTS-1:0] rollback_pbit,
+  output logic [RB_CNT_BITS-1:0]   rollback_n,
+  output logic [RB_CORR_BITS-1:0]  rollback_tkn,
+  output logic [RB_CORR_BITS-1:0]  rollback_pbit,
   // The rollback entry's conditional slots the backend mispredict
   // executed, and their resolved directions (BP-122, TD#169): the
   // loop predictor re-advances its speculative count of each from the
@@ -407,7 +408,7 @@ module ftq_npc (
             + (VA_WIDTH'(redir_entry.slot[s].pos) << POS_OFFSET_BITS);
         if (redir_entry.slot[s].slot_valid &&
             (redir_entry.slot[s].pos < bkend_redir_pos) &&
-            (n < NUM_PRED_SLOTS - 1)) begin
+            (n < RB_CORR_BITS - 1)) begin
           rollback_tkn[n]  = 1'b0;
           rollback_pbit[n] = bpc[2] ^ bpc[3];
           n                = n + 1;
@@ -419,7 +420,7 @@ module ftq_npc (
       rollback_pbit[n] = bpc[2] ^ bpc[3];
       n                = n + 1;
     end
-    rollback_n = PRED_CNT_BITS'(n);
+    rollback_n = RB_CNT_BITS'(n);
   end
 
   // The loop predictor's view of the same bundle (BP-122): which slot

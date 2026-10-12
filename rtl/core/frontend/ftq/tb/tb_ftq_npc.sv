@@ -57,9 +57,9 @@ module tb;
   logic                    bkend_redir_taken;
   bp_ftq_entry_t           redir_entry;
   logic                    rollback_corr;
-  logic [PRED_CNT_BITS-1:0] rollback_n;           // BP-129
-  logic [NUM_PRED_SLOTS-1:0] rollback_tkn;
-  logic [NUM_PRED_SLOTS-1:0] rollback_pbit;
+  logic [RB_CNT_BITS-1:0]   rollback_n;           // BP-130
+  logic [RB_CORR_BITS-1:0]  rollback_tkn;
+  logic [RB_CORR_BITS-1:0]  rollback_pbit;
   logic [NUM_PRED_SLOTS-1:0] rollback_slot_ex;   // BP-122
   logic [NUM_PRED_SLOTS-1:0] rollback_slot_tkn;  // BP-122
   logic                    pd_redir_val;
@@ -668,27 +668,30 @@ module tb;
       bkend_redir_taken = 1'b1;
       settle();
       chk("F1 the bundle is two bits",
-          rollback_corr && (rollback_n == PRED_CNT_BITS'(2)) &&
-          (rollback_tkn == NUM_PRED_SLOTS'(2'b10)));
+          rollback_corr && (rollback_n == RB_CNT_BITS'(2)) &&
+          (rollback_tkn == RB_CORR_BITS'(2'b10)));
       chk("F2 both slots executed, slot 1 taken",
           (rollback_slot_ex  == NUM_PRED_SLOTS'(2'b11)) &&
           (rollback_slot_tkn == NUM_PRED_SLOTS'(2'b10)));
     end else begin
-      logic [VA_WIDTH-1:0] bpc;
+      logic [VA_WIDTH-1:0] bpc0;
+      logic [VA_WIDTH-1:0] bpc6;
       skip("F1 the bundle is two bits");
       skip("F2 both slots executed, slot 1 taken");
-      // BP-129 (provisional): at one slot the conditional at position
-      // 6 is held in no slot (BP-128 D2). Its mispredict leaves slot 0
-      // before it, passed not taken, and the bundle is the named
-      // branch's bit alone: its direction and its path bit.
+      // BP-130 (ruled session-078): at one slot the conditional at
+      // position 6 is held in no slot (BP-128 D2). Its mispredict
+      // leaves slot 0 before it, passed not taken, and the bundle is
+      // two bits at either slot count: bit 0 slot 0's, not taken, bit 1
+      // the named branch's, taken; each with its own path bit.
       bkend_redir_pos   = FTB_BR_POS_BITS'(6);
       bkend_redir_taken = 1'b1;
       settle();
-      bpc = redir_entry.pc + (VA_WIDTH'(6) << POS_OFFSET_BITS);
-      chk("F1a one slot: the bundle is the named branch's bit alone",
-          rollback_corr && (rollback_n == PRED_CNT_BITS'(1)) &&
-          (rollback_tkn == NUM_PRED_SLOTS'(1)) &&
-          (rollback_pbit == NUM_PRED_SLOTS'(bpc[2] ^ bpc[3])));
+      bpc0 = redir_entry.pc + (VA_WIDTH'(2) << POS_OFFSET_BITS);
+      bpc6 = redir_entry.pc + (VA_WIDTH'(6) << POS_OFFSET_BITS);
+      chk("F1a one slot: the bundle is two bits, slot 0 nt, then taken",
+          rollback_corr && (rollback_n == RB_CNT_BITS'(2)) &&
+          (rollback_tkn == RB_CORR_BITS'(2'b10)) &&
+          (rollback_pbit == {bpc6[2] ^ bpc6[3], bpc0[2] ^ bpc0[3]}));
     end
 
     // The slot-0 conditional mispredicted, resolved not taken: slot 1
@@ -697,7 +700,7 @@ module tb;
     bkend_redir_taken = 1'b0;
     settle();
     chk("F3 the bundle is one bit",
-        rollback_corr && (rollback_n == PRED_CNT_BITS'(1)) &&
+        rollback_corr && (rollback_n == RB_CNT_BITS'(1)) &&
         (rollback_tkn == '0));
     chk("F4 slot 0 executed not taken, slot 1 did not execute",
         (rollback_slot_ex  == NUM_PRED_SLOTS'(2'b01)) &&

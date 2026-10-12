@@ -1,6 +1,7 @@
 Purpose: You are to report how much context was used in the current
-session as a single percentage, and the number of compactions, and
-write a file with context usage information.
+session as a single percentage, the number of compactions, and the
+run time of the last /run task, and write a file with context usage
+information.
 
 This output file will be manually inserted into the correct prompt.
 
@@ -26,9 +27,16 @@ These are the explicit steps, in order :
    count in the console. If the transcript cannot be found or read,
    report the error and stop. Do not estimate the count from the
    conversation.
-3. write context usage to new file context-report.md to the root of
-   the repo. The first line after the heading is:
+3. Measure the run time of the last /run task in the same transcript
+   file by running:
+     ./tools/run_time.py <transcript path>
+   Report its output line in the console. If the tool exits non-zero,
+   report its error and stop. Do not estimate the run time from the
+   conversation or from file timestamps.
+4. write context usage to new file context-report.md to the root of
+   the repo. The first lines after the heading are:
      Compactions: <integer>
+     Run time: <output of step 3>
    followed by the usage from /context.
-4. Overwrite any previous context-report.md file.
-5. Execute the prompt exactly as written.
+5. Overwrite any previous context-report.md file.
+6. Execute the prompt exactly as written.

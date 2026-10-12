@@ -52,9 +52,10 @@ module bp_history
   //    to match. Clear: the pointer is restored past the bundle as
   //    before BP-121.
   input  logic                         rollback_corr,
-  input  logic [PRED_CNT_BITS-1:0]     rollback_n,   // 0..NUM_PRED_SLOTS
-  input  logic [NUM_PRED_SLOTS-1:0]    rollback_tkn,
-  input  logic [NUM_PRED_SLOTS-1:0]    rollback_pbit,
+  //    BP-130: up to RB_CORR_BITS (2) bits at either slot count.
+  input  logic [RB_CNT_BITS-1:0]       rollback_n,   // 0..RB_CORR_BITS
+  input  logic [RB_CORR_BITS-1:0]      rollback_tkn,
+  input  logic [RB_CORR_BITS-1:0]      rollback_pbit,
 
   // -- Current pointer outputs (module-owned, for FTQ build)
   output logic [GHIST_PTR_BITS-1:0]   ghist_ptr,
@@ -87,8 +88,10 @@ module bp_history
   logic [GHIST_PTR_BITS-1:0] ckpt_gptr [FTQ_DEPTH];
   logic [PHIST_PTR_BITS-1:0] ckpt_pptr [FTQ_DEPTH];
   // The bundle size of each checkpoint, so the bundle's first bit is
-  // the checkpoint minus it (BP-121, the corrected rollback).
-  logic [PRED_CNT_BITS-1:0]  ckpt_nb   [FTQ_DEPTH];
+  // the checkpoint minus it (BP-121, the corrected rollback). Written
+  // with num_branches at allocation and with rollback_n by a corrected
+  // rollback, so RB_CNT_BITS wide (BP-130).
+  logic [RB_CNT_BITS-1:0]    ckpt_nb   [FTQ_DEPTH];
 
   bp_folded_hist_t fh_r;
 
@@ -356,7 +359,7 @@ module bp_history
       if (rollback_corr) begin
         rb_gbase = rb_gptr - GHIST_PTR_BITS'(ckpt_nb[rollback_ckpt_idx]);
         rb_pbase = rb_pptr - PHIST_PTR_BITS'(ckpt_nb[rollback_ckpt_idx]);
-        for (int k = 0; k < NUM_PRED_SLOTS; k++) begin
+        for (int k = 0; k < RB_CORR_BITS; k++) begin
           if (k < int'(rollback_n)) begin
             rb_ghr[(int'(rb_gbase) + k) % GHR_WIDTH] = rollback_tkn[k];
             rb_phr[(int'(rb_pbase) + k) % PHR_WIDTH] = rollback_pbit[k];
@@ -491,7 +494,7 @@ module bp_history
       if (ckpt_wr_en) begin
         ckpt_gptr[ckpt_wr_idx] <= nxt_gptr;
         ckpt_pptr[ckpt_wr_idx] <= nxt_pptr;
-        ckpt_nb[ckpt_wr_idx]   <= num_branches;
+        ckpt_nb[ckpt_wr_idx]   <= RB_CNT_BITS'(num_branches);
         ckpt_ghist_ptr         <= nxt_gptr;
         ckpt_phist_ptr         <= nxt_pptr;
       end
