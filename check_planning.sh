@@ -65,7 +65,8 @@
 # updated after BP-131 (PROJECT_STATUS.md, ftb_decisions.md,
 # ubtb_interfaces.md), and the files updated after BP-132
 # (PROJECT_STATUS.md, tage_interfaces.md, ittage_interfaces.md,
-# bp_arb_spec.md).
+# bp_arb_spec.md), and the file updated in session-079
+# (PROJECT_STATUS.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -84,7 +85,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 d7f065cd5275
+PLAN  PROJECT_STATUS.md                 7034237dd6b6
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 

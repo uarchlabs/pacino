@@ -16,6 +16,19 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-079: closed TD rows reordered. Documents only.
+
+PA-DIRECT CORRECTION, session-079 (Jeff). Twelve Technical Debt rows
+recorded their closure at the end of the row and began with the
+open-state text, so they read as open. Each now begins with its
+closure, then any ruling it carried, then "Was:" and the original
+text, unchanged: TD#7, 39, 49, 52, 77, 82, 129, 130, 131, 147, 176,
+177. TD#18 stays open.
+
+Documents changed, in check_planning.sh with its new checksum:
+PROJECT_STATUS.md.
+
+---
 ## Session-078, after BP-132: rulings on the remaining front-end TDs.
 
 Jeff, session-078:
@@ -3703,17 +3716,18 @@ assessment of each document. Correct any that are wrong.
 |    | DECODE-006) unassigned, marked        | value for no gain. Was: ENUM    |
 |    | reserved in the enum.                 | hole at 7'd2 (VALU_FP).         |
 | 6  | vtype_hazard intra-bundle policy      | TBD at rename/dispatch          |
-| 7  | curs/curs_v rollback undefined.       | Resolve at bp_cluster impl or   |
-|    | Seznec uses SLIM structure. Inline    | migrate to SLIM-style external  |
-|    | fields have no defined                | structure. See rollback test    |
-|    | checkpoint/rollback path.             | items #69/#70.                  |
-|    |                                       | RULED session-075 (Jeff): built |
+| 7  | curs/curs_v rollback undefined.       | CLOSED by BP-122 (session-076): |
+|    | Seznec uses SLIM structure. Inline    | checkpoint per FTQ entry,       |
+|    | fields have no defined                | restore option A. TD#169.       |
+|    | checkpoint/rollback path.             | RULED session-075 (Jeff): built |
 |    |                                       | with the loop predictor's       |
 |    |                                       | read-before-write update,       |
 |    |                                       | TD#169, BP-122.                 |
-|    |                                       | CLOSED by BP-122 (session-076): |
-|    |                                       | checkpoint per FTQ entry,       |
-|    |                                       | restore option A. TD#169.       |
+|    |                                       | Was:                            |
+|    |                                       | Resolve at bp_cluster impl or   |
+|    |                                       | migrate to SLIM-style external  |
+|    |                                       | structure. See rollback test    |
+|    |                                       | items #69/#70.                  |
 | 16 | ALLOC_DATA_WIDTH padding when         | CLOSED session-078 (Jeff). No   |
 |    | THIS_ < MAX_ -- unused bits between   | instance exists: T0 is          |
 |    | EPC and TAG fields.                   | tage_bim.sv, not a tage_table   |
@@ -3762,10 +3776,16 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | Re-check #7099 status in 5.048  |
 |    |                                       | release notes before closing.   |
 |    |                                       | Tasked in BP-126 (session-077). |
-| 39 | Rule 2 starvation override            | ANSWERED BP-094, needs a        |
-|    | reachability.                         | DECISION. Measured: SC_PRED_    |
-|    | SC_PRED_CREDITS=4 <                   | CREDITS=4 and rule 4 resets the |
-|    | SC_STARVE_THRESH=8.                   | starve counter after 4 grants,  |
+| 39 | Rule 2 starvation override            | CLOSED, MOOT session-076.       |
+|    | reachability.                         | BP-121 replaced the credit      |
+|    | SC_PRED_CREDITS=4 <                   | rules (bp_arb_spec.md 4.5); the |
+|    | SC_STARVE_THRESH=8.                   | parameter relationship no       |
+|    |                                       | longer exists.                  |
+|    |                                       | Was:                            |
+|    |                                       | ANSWERED BP-094, needs a        |
+|    |                                       | DECISION. Measured: SC_PRED_    |
+|    |                                       | CREDITS=4 and rule 4 resets the |
+|    |                                       | starve counter after 4 grants,  |
 |    |                                       | so starve_ctr tops out at 4 and |
 |    |                                       | NEVER reaches 8. The override is|
 |    |                                       | unreachable in traffic. Group H |
@@ -3779,11 +3799,6 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | dead code kept for parameter    |
 |    |                                       | flexibility. Parameter choice,  |
 |    |                                       | not a testbench problem.        |
-|    |                                       | CLOSED, MOOT session-076.       |
-|    |                                       | BP-121 replaced the credit      |
-|    |                                       | rules (bp_arb_spec.md 4.5); the |
-|    |                                       | parameter relationship no       |
-|    |                                       | longer exists.                  |
 | 40 | TB-ARB-05 spec discrepancy.           | CLOSED session-078 (Jeff). The  |
 |    | Old "backpressure 2 cycles" note did  | note is gone. Was:              |
 |    | not match TAGE_UQ_DEPTH=8.            | bp_arb_spec.md testbench section|
@@ -3810,7 +3825,15 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | Was: impacts bp_defines_pkg.sv, |
 |    |                                       | ittage_table_interfaces.md, RTL |
 |    |                                       | and testbenches.                |
-| 49 | Arb queue status pin renaming.         | pq_not_full/upd_rdy ->          |
+| 49 | Arb queue status pin renaming.         | CLOSED by BP-132 (session-078): |
+|    |                                        | pins renamed tage_pq_not_full / |
+|    |                                        | tage_uq_not_full and the ittage_|
+|    |                                        | pair in tage and ittage and     |
+|    |                                        | every reference; the bp_cluster |
+|    |                                        | boundary keeps tage_upd_rdy /   |
+|    |                                        | ittage_upd_rdy (ruled, Jeff).   |
+|    |                                        | Was:                            |
+|    |                                        | pq_not_full/upd_rdy ->          |
 |    |                                        | tage_pq_not_full/tage_uq_not_   |
 |    |                                        | full and ittage_ equivalents.   |
 |    |                                        | Scope: RTL, tb, bp_arb_spec.md, |
@@ -3821,23 +3844,17 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | so the rename inside tage.sv and|
 |    |                                        | ittage.sv is cosmetic alignment,|
 |    |                                        | not a blocker.                  |
-|    |                                        | CLOSED by BP-132 (session-078): |
-|    |                                        | pins renamed tage_pq_not_full / |
-|    |                                        | tage_uq_not_full and the ittage_|
-|    |                                        | pair in tage and ittage and     |
-|    |                                        | every reference; the bp_cluster |
-|    |                                        | boundary keeps tage_upd_rdy /   |
-|    |                                        | ittage_upd_rdy (ruled, Jeff).   |
-| 52 | Move arb logic into submodule out of   | Top modules should be           |
-|    | top in tage and ittage.                | structural only. New arb module |
-|    | (Refactor; pairs with #73 test.)       | for tage and ittage. Co-        |
-|    |                                        | sequence with arb test #73.     |
-|    |                                        | CLOSED by BP-132 (session-078): |
-|    |                                        | arbitration in tage_arb.sv and  |
-|    |                                        | ittage_arb.sv; the tops keep the|
+| 52 | Move arb logic into submodule out of   | CLOSED by BP-132 (session-078): |
+|    | top in tage and ittage.                | arbitration in tage_arb.sv and  |
+|    | (Refactor; pairs with #73 test.)       | ittage_arb.sv; the tops keep the|
 |    |                                        | fast-init muxes and the per-    |
 |    |                                        | table index select. Group H 2011|
 |    |                                        | / 1431 unchanged.               |
+|    |                                        | Was:                            |
+|    |                                        | Top modules should be           |
+|    |                                        | structural only. New arb module |
+|    |                                        | for tage and ittage. Co-        |
+|    |                                        | sequence with arb test #73.     |
 | 67 | tage sram_init non-fast path.          | CLOSED by BP-126 (session-077): |
 |    | Untested here; confirm not elsewhere.  | sim_tage already ran the        |
 |    | SESSION-064: now extends to the        | sram_init walk; tage_rdy_tst    |
@@ -3912,13 +3929,14 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | is sim_tage_fast. Create        |
 |    |                                        | sim_ittage_fast. Tasked in      |
 |    |                                        | BP-126 (session-077).           |
-| 77 | scrub prompts and redact any absolute  | Not a design TD; tools and infra|
-|    | path not using the RVA_ROOT env var    | task, possibly manual.          |
-|    |                                        | CLOSED by BP-132 (session-078): |
-|    |                                        | no prompt changed; every        |
+| 77 | scrub prompts and redact any absolute  | CLOSED by BP-132 (session-078): |
+|    | path not using the RVA_ROOT env var    | no prompt changed; every        |
 |    |                                        | absolute repo path in prompts/  |
 |    |                                        | is a record of a past session   |
 |    |                                        | (ruled, Jeff).                  |
+|    |                                        | Was:                            |
+|    |                                        | Not a design TD; tools and infra|
+|    |                                        | task, possibly manual.          |
 | 78 | RAS p3 undo-pop does not reverse a   | LEAVE AS-IS. BP-064 pins the   |
 |    | recursion pop.                       | current non-reversing behavior. |
 |    |                                      | Revisit at bp_cluster           |
@@ -3938,13 +3956,14 @@ assessment of each document. Correct any that are wrong.
 |    |                                      | symmetric br1 augment. Not a    |
 |    |                                      | blocker; sim_ftb 99/0. Tasked   |
 |    |                                      | in BP-126 (session-077).        |
-| 82 | bp_history if/else-if slot cleanup.  | decisions.md 3.5. Fold into the |
-|    |                                      | next bp_history RTL touch. No   |
-|    |                                      | behavior change.                |
-|    |                                      | CLOSED by BP-129 (session-078,  |
+| 82 | bp_history if/else-if slot cleanup.  | CLOSED by BP-129 (session-078,  |
 |    |                                      | Jeff): one loop over branches,  |
 |    |                                      | each case assigns the folds     |
 |    |                                      | once.                           |
+|    |                                      | Was:                            |
+|    |                                      | decisions.md 3.5. Fold into the |
+|    |                                      | next bp_history RTL touch. No   |
+|    |                                      | behavior change.                |
 | 83 | bp_history decisions.md s6.6 origin  | CLOSED session-078 (Jeff): the  |
 |    | citation placeholders.               | external citation and its       |
 |    |                                      | placeholders removed; the       |
@@ -4397,17 +4416,24 @@ assessment of each document. Correct any that are wrong.
 |     |          | built FTQ predated its own specification. Found by the   |
 |     |          | session-071 IA read.                                     |
 
-| 129 | build    | OPEN. THE TOP-LEVEL rtl/Makefile IS STILL NOT COMPLETE.  |
+| 129 | build    | CLOSED by BP-132 (session-078): rtl/Makefile all and cov |
+|     |          | RETIRED (they name tools/regress.sh and exit 1); clean   |
+|     |          | reaches all 12 units (ruled, Jeff).                      |
+|     |          | Was:                                                     |
+|     |          | OPEN. THE TOP-LEVEL rtl/Makefile IS STILL NOT COMPLETE.  |
 |     |          | Session-073 added ftq to its `all` and `clean`, but      |
 |     |          | `cov` reaches only bpu cov_bpu, so cov_bp_cluster is     |
 |     |          | unreachable from the top. Found by TOOLS-006.            |
 |     |          | Either complete the top-level targets or retire them in  |
 |     |          | favour of tools/regress.sh, which runs every target of   |
 |     |          | every unit. Nothing depends on them today.               |
-|     |          | CLOSED by BP-132 (session-078): rtl/Makefile all and cov |
-|     |          | RETIRED (they name tools/regress.sh and exit 1); clean   |
-|     |          | reaches all 12 units (ruled, Jeff).                      |
-| 130 | tools    | OPEN. regress.sh REPORTING GAPS. None affect pass/fail;  |
+| 130 | tools    | CLOSED by BP-132 (session-078): the six targets parsed   |
+|     |          | (tb_tage and cov_tage count tests, not checks), cov_bpu  |
+|     |          | is the sum of its sub-runs, the known_failures.txt TD    |
+|     |          | field validated (a malformed line fails the run), stale  |
+|     |          | and malformed paths exercised.                           |
+|     |          | Was:                                                     |
+|     |          | OPEN. regress.sh REPORTING GAPS. None affect pass/fail;  |
 |     |          | all are display or validation, found by TOOLS-006.       |
 |     |          |   - six targets print no check total the parser reads:   |
 |     |          |     sim_history, sim_tage, sim_tage_fast, cov_history,   |
@@ -4421,12 +4447,12 @@ assessment of each document. Correct any that are wrong.
 |     |          |     first description word in the TD column.             |
 |     |          |   - the stale-entry path (an entry naming a target that  |
 |     |          |     was not run) is implemented but never injected.      |
-|     |          | CLOSED by BP-132 (session-078): the six targets parsed   |
-|     |          | (tb_tage and cov_tage count tests, not checks), cov_bpu  |
-|     |          | is the sum of its sub-runs, the known_failures.txt TD    |
-|     |          | field validated (a malformed line fails the run), stale  |
-|     |          | and malformed paths exercised.                           |
-| 131 | decode   | OPEN, UNEXPLAINED. THE DECODE SUITE GOT 3x FASTER AND    |
+| 131 | decode   | CLOSED by BP-132 (session-078): EXPLAINED, ccache. The   |
+|     |          | 5.048 install sets OBJCACHE ?= ccache, 5.020's does not; |
+|     |          | uncached 5.048 is not faster. Decode builds about 42 s   |
+|     |          | cold, 4 s warm: state the cache with any decode time.    |
+|     |          | Was:                                                     |
+|     |          | OPEN, UNEXPLAINED. THE DECODE SUITE GOT 3x FASTER AND    |
 |     |          | NOBODY KNOWS WHY. Session-073: after lib and decode were |
 |     |          | moved from Verilator 5.020 (found on PATH) to the        |
 |     |          | project's 5.048, decode wall time fell 90 s -> 29 s.     |
@@ -4438,10 +4464,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | compare `make -n` output and the verilated build under   |
 |     |          | both versions. Low risk, but an unexplained factor of    |
 |     |          | three in a suite is not a fact until it is explained.    |
-|     |          | CLOSED by BP-132 (session-078): EXPLAINED, ccache. The   |
-|     |          | 5.048 install sets OBJCACHE ?= ccache, 5.020's does not; |
-|     |          | uncached 5.048 is not faster. Decode builds about 42 s   |
-|     |          | cold, 4 s warm: state the cache with any decode time.    |
 | 132 | bpu      | CLOSED BP-111 (session-073). The ITTAGE target field     |
 |     |          | holds VA[40:1]. IT_MAX_TGT_WIDTH and IT_TBL_TGT_WIDTH    |
 |     |          | are 40, the reconstruction is {stored, 1'b0}, and NO     |
@@ -4677,17 +4699,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | K+1, keyed on arm_win; C5 M1 on a JAL before the taken   |
 |     |          | position, never JALR, outranking M2-M4 (Jeff); C19       |
 |     |          | ifu_itlb_vpn [VA_WIDTH-13:0] on both lookups.            |
-| 147 | ifu      | OPEN. oracle_ifu_rvc_exp, a regress target, runs LLVM    |
-|     |          | from a toolchain at a fixed /usr/local path              |
-|     |          | (RVC_ORACLE_TC in the ifu Makefile). On a machine        |
-|     |          | without it regress.sh goes red. Either accept and record |
-|     |          | that dependency, or make the path configurable. BP-117.  |
+| 147 | ifu      | CLOSED by BP-132 (session-078), with TD#176.             |
 |     |          | RULED session-077 (Jeff): option 2, a configurable path; |
 |     |          | carried by TD#176 (a Vars.mk path variable for out-of-   |
 |     |          | repo tools). BP-124 found the tools off PATH in the      |
 |     |          | embecosm directory; asm_dec_words now depends on its     |
 |     |          | clang-21 too.                                            |
-|     |          | CLOSED by BP-132 (session-078), with TD#176.             |
+|     |          | Was:                                                     |
+|     |          | OPEN. oracle_ifu_rvc_exp, a regress target, runs LLVM    |
+|     |          | from a toolchain at a fixed /usr/local path              |
+|     |          | (RVC_ORACLE_TC in the ifu Makefile). On a machine        |
+|     |          | without it regress.sh goes red. Either accept and record |
+|     |          | that dependency, or make the path configurable. BP-117.  |
 | 148 | ifu      | CLOSED by BP-125 (session-077): removed from             |
 |     |          | ifu_pd_pkt_t (192 -> 190 bits), ifu_predecode, ifu_f3    |
 |     |          | and ifu; T78 checks the width. Was: is_vsetvl and        |
@@ -4838,7 +4861,13 @@ assessment of each document. Correct any that are wrong.
 |     |          | 24742 encodings BP-124's sweep reported under rule VRSV, |
 |     |          | by the classes DCD-32 lists. The sweep expectation and   |
 |     |          | its tests follow.                                        |
-| 176 | tools    | OPEN. Scrub the LLVM tools from the necessary tools, and |
+| 176 | tools    | CLOSED by BP-132 (session-078): RVA_EXT_TOOLS in         |
+|     |          | rtl/Vars.mk, default the embecosm bin directory;         |
+|     |          | oracle_ifu_rvc_exp needs llvm-objdump and clang (objcopy |
+|     |          | dropped, oracle byte-identical), asm_dec_words clang; a  |
+|     |          | missing tool fails naming the variable.                  |
+|     |          | Was:                                                     |
+|     |          | OPEN. Scrub the LLVM tools from the necessary tools, and |
 |     |          | add a definitive path environment variable to Vars.mk    |
 |     |          | for necessary tools that do not reside in the repo       |
 |     |          | (Jeff, session-077). The embecosm toolchain will never   |
@@ -4850,12 +4879,10 @@ assessment of each document. Correct any that are wrong.
 |     |          | (RVC_ORACLE_TC, ifu Makefile line 137). Carries TD#147   |
 |     |          | (option 2, ruled). No GNU or LLVM change until this TD   |
 |     |          | is tasked.                                               |
-|     |          | CLOSED by BP-132 (session-078): RVA_EXT_TOOLS in         |
-|     |          | rtl/Vars.mk, default the embecosm bin directory;         |
-|     |          | oracle_ifu_rvc_exp needs llvm-objdump and clang (objcopy |
-|     |          | dropped, oracle byte-identical), asm_dec_words clang; a  |
-|     |          | missing tool fails naming the variable.                  |
-| 177 | icache   | OPEN, verification. The L1I-24 install-time replacement  |
+| 177 | icache   | CLOSED by BP-132 (session-078): tb_l1i t_fill_rpl, 31    |
+|     |          | checks (sim_l1i 250 -> 281); fails with the gate removed.|
+|     |          | Was:                                                     |
+|     |          | OPEN, verification. The L1I-24 install-time replacement  |
 |     |          | update is gated to installs from a register taken        |
 |     |          | uncached: meta_fp_en = fil_valid && fil_rpl in l1i_ctrl, |
 |     |          | so a cacheable register's install does not update the    |
@@ -4864,8 +4891,6 @@ assessment of each document. Correct any that are wrong.
 |     |          | failed: no test has an access to the set between a       |
 |     |          | cacheable miss's lookup and its fill. Needs that test.   |
 |     |          | BP-125 Deferred Work 2; ruled a TD session-077 (Jeff).   |
-|     |          | CLOSED by BP-132 (session-078): tb_l1i t_fill_rpl, 31    |
-|     |          | checks (sim_l1i 250 -> 281); fails with the gate removed.|
 | 178 | csr      | OPEN, definition. A CSR definition, in a new planning    |
 |     |          | file csr_decisions.md, which will own the enable and     |
 |     |          | configuration bits that now stand in for a CSR file that |
