@@ -15,8 +15,8 @@
 // Prediction logic complete: BP-008a-2.
 // Update logic added in BP-008b.
 //
-// NUM_PRED_SLOTS shadows bp_defines_pkg::NUM_PRED_SLOTS.
-// -Wno-VARHIDDEN required for this module.
+// The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128); the
+// module takes no slot parameter of its own.
 //
 // This requires manual verification checks
 // ===================================================================
@@ -29,7 +29,6 @@ import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
 module tage_cntrl #(
-  parameter  int NUM_PRED_SLOTS   = 2,
   // Derived: do not override
   localparam int CNTRL_BITS_WIDTH = TAGE_MAX_EPC_WIDTH + TAGE_MAX_USE_WIDTH
                                   + TAGE_MAX_CTR_WIDTH + TAGE_MAX_VAL_WIDTH,

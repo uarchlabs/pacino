@@ -79,6 +79,17 @@ module tb;
     #1;
   endtask
 
+  // BP-128. A check that needs a second slot or a second read port
+  // (NUM_RESOLVE_PORTS is NUM_PRED_SLOTS) runs only at two slots. HS
+  // and HP name slot 1 and port 1 at two slots and stay in range at
+  // one, where the check is skipped and says so.
+  localparam int HS = NUM_PRED_SLOTS - 1;
+  localparam int HP = NUM_RESOLVE_PORTS - 1;
+
+  task automatic skip(input string nm);
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
   // Every write carries a value derived from its index and slot, so
   // a read of the wrong entry or the wrong slot is visible as a
   // value and not merely as an inequality. branch_id is the field
@@ -148,8 +159,10 @@ module tb;
     #1;
     chk("A1 tage slot 0 read back",
         rd_meta[0][0].tage.branch_id == FTQ_IDX_BITS'(21));
-    chk("A2 tage slot 1 read back",
-        rd_meta[0][1].tage.branch_id == FTQ_IDX_BITS'(22));
+    if (NUM_PRED_SLOTS > 1)
+      chk("A2 tage slot 1 read back",
+          rd_meta[0][HS].tage.branch_id == FTQ_IDX_BITS'(22));
+    else skip("A2 tage slot 1 read back");
     chk("A3 ittage read back",
         rd_meta[0][0].ittage.branch_id == FTQ_IDX_BITS'(29));
     chk("A4 lp read back",
@@ -159,11 +172,16 @@ module tb;
         rd_meta[0][0].ftb.way == FTB_WAY_BITS'(21));
     chk("A7 sc slot 0 read back",
         rd_meta[0][0].sc.branch_id == FTQ_IDX_BITS'(33));
-    chk("A8 sc slot 1 read back",
-        rd_meta[0][1].sc.branch_id == FTQ_IDX_BITS'(34));
-    chk("A9 the sc direction is per slot",
-        !rd_meta[0][0].sc.sc_pred_tkn &&
-         rd_meta[0][1].sc.sc_pred_tkn);
+    if (NUM_PRED_SLOTS > 1) begin
+      chk("A8 sc slot 1 read back",
+          rd_meta[0][HS].sc.branch_id == FTQ_IDX_BITS'(34));
+      chk("A9 the sc direction is per slot",
+          !rd_meta[0][0].sc.sc_pred_tkn &&
+           rd_meta[0][HS].sc.sc_pred_tkn);
+    end else begin
+      skip("A8 sc slot 1 read back");
+      skip("A9 the sc direction is per slot");
+    end
   endtask
 
   // -----------------------------------------------------------------
@@ -242,44 +260,58 @@ module tb;
     // The two channels naming DIFFERENT entries is the case one read
     // port cannot serve, and the reason ftq_meta has two.
     rd_idx[0] = 6'd2;
-    rd_idx[1] = 6'd50;
+    if (NUM_RESOLVE_PORTS > 1) rd_idx[HP] = 6'd50;
     #1;
     chk("C1 port 0 reads its entry",
         rd_meta[0][0].tage.branch_id == FTQ_IDX_BITS'(10));
-    chk("C2 port 1 reads its entry",
-        rd_meta[1][0].tage.branch_id == FTQ_IDX_BITS'(20));
+    if (NUM_RESOLVE_PORTS > 1)
+      chk("C2 port 1 reads its entry",
+          rd_meta[HP][0].tage.branch_id == FTQ_IDX_BITS'(20));
+    else skip("C2 port 1 reads its entry");
     chk("C3 port 0 sc",
         rd_meta[0][0].sc.branch_id == FTQ_IDX_BITS'(11));
-    chk("C4 port 1 sc",
-        rd_meta[1][0].sc.branch_id == FTQ_IDX_BITS'(21));
+    if (NUM_RESOLVE_PORTS > 1)
+      chk("C4 port 1 sc",
+          rd_meta[HP][0].sc.branch_id == FTQ_IDX_BITS'(21));
+    else skip("C4 port 1 sc");
 
     // Swapped, so a port hard-wired to one index fails.
-    rd_idx[0] = 6'd50;
-    rd_idx[1] = 6'd2;
-    #1;
-    chk("C5 the ports swap",
-        (rd_meta[0][0].tage.branch_id == FTQ_IDX_BITS'(20)) &&
-        (rd_meta[1][0].tage.branch_id == FTQ_IDX_BITS'(10)));
+    if (NUM_RESOLVE_PORTS > 1) begin
+      rd_idx[0]  = 6'd50;
+      rd_idx[HP] = 6'd2;
+      #1;
+      chk("C5 the ports swap",
+          (rd_meta[0][0].tage.branch_id == FTQ_IDX_BITS'(20)) &&
+          (rd_meta[HP][0].tage.branch_id == FTQ_IDX_BITS'(10)));
 
-    // Both naming ONE entry agree. This is what property M1 states.
-    rd_idx[0] = 6'd50;
-    rd_idx[1] = 6'd50;
-    #1;
-    chk("C6 both ports on one entry agree",
-        rd_meta[0][0] === rd_meta[1][0]);
+      // Both naming ONE entry agree. This is what property M1 states.
+      rd_idx[0]  = 6'd50;
+      rd_idx[HP] = 6'd50;
+      #1;
+      chk("C6 both ports on one entry agree",
+          rd_meta[0][0] === rd_meta[HP][0]);
+    end else begin
+      skip("C5 the ports swap");
+      skip("C6 both ports on one entry agree");
+    end
 
     // A write to one entry does not disturb the other. 421 bits per
     // slot and two slots per entry; a decode that ignored a bit of
     // the index would alias 2 and 50 only through a wider pattern,
     // so the whole array is swept in group D.
+    // BP-128: at one port, C8 reads entry 50 on port 0 after C7.
     wr_p2(2, 44);
     rd_idx[0] = 6'd2;
-    rd_idx[1] = 6'd50;
+    if (NUM_RESOLVE_PORTS > 1) rd_idx[HP] = 6'd50;
     #1;
     chk("C7 the rewrite landed",
         rd_meta[0][0].tage.branch_id == FTQ_IDX_BITS'(44));
+    if (NUM_RESOLVE_PORTS == 1) begin
+      rd_idx[0] = 6'd50;
+      #1;
+    end
     chk("C8 the other entry survived",
-        rd_meta[1][0].tage.branch_id == FTQ_IDX_BITS'(20));
+        rd_meta[HP][0].tage.branch_id == FTQ_IDX_BITS'(20));
   endtask
 
   // -----------------------------------------------------------------
@@ -301,8 +333,10 @@ module tb;
         rd_idx[0] = FTQ_IDX_BITS'(i);
         #1;
         if (rd_meta[0][0].tage.branch_id !== FTQ_IDX_BITS'(i)) bad++;
-        if (rd_meta[0][1].tage.branch_id !==
-              FTQ_IDX_BITS'(i + 1)) bad++;
+        // BP-128: slot 1 is checked only at two slots.
+        if ((NUM_PRED_SLOTS > 1) &&
+            (rd_meta[0][HS].tage.branch_id !==
+               FTQ_IDX_BITS'(i + 1))) bad++;
         if (rd_meta[0][0].sc.branch_id !==
               FTQ_IDX_BITS'(i + 1)) bad++;
       end
@@ -317,8 +351,10 @@ module tb;
     pass_cnt = 0;
     fail_cnt = 0;
 
-    if (FTQ_DEPTH != 64 || NUM_PRED_SLOTS != 2) begin
-      $fatal(1, "tb_ftq_meta: written for FTQ_DEPTH 64, slots 2");
+    // BP-128: written for one or two slots; the checks that need two
+    // are skipped at one.
+    if (FTQ_DEPTH != 64) begin
+      $fatal(1, "tb_ftq_meta: written for FTQ_DEPTH 64");
     end
 
     do_reset();

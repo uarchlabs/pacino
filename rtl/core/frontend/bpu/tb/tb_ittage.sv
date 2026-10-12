@@ -17,7 +17,7 @@ import bp_structs_pkg::*;
 
 module tb;
 
-  localparam int NPS  = NUM_PRED_SLOTS; // 2
+  localparam int NPS  = NUM_PRED_SLOTS; // 1 or 2 (BP-128)
 
   // ----------------------------------------------------------------
   // DUT port signals
@@ -101,7 +101,8 @@ module tb;
     end else begin
       if (ittage_pred_rdy_p2[0])
         mon_prdy0_cnt  <= mon_prdy0_cnt + 1;
-      if (ittage_pred_rdy_p2[1])
+      // BP-128: slot 1 only at two slots; NPS-1 is slot 1 when it is.
+      if ((NPS > 1) && ittage_pred_rdy_p2[NPS-1])
         mon_prdy1_cnt  <= mon_prdy1_cnt + 1;
       if (ittage_upd_rdy_u1[0])
         mon_u1_0_cnt   <= mon_u1_0_cnt  + 1;
@@ -208,8 +209,7 @@ module tb;
     ittage_pred_inp_p0[slot].branch_id = bid;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
-    ittage_pred_inp_p0[0] = '0;
-    ittage_pred_inp_p0[1] = '0;
+    for (int s = 0; s < NPS; s++) ittage_pred_inp_p0[s] = '0;  // BP-128
   endtask
 
   // do_upd: gate on upd_rdy, drive 1-cycle update on slot, wait u1
@@ -251,14 +251,15 @@ module tb;
   // ================================================================
   // bw_write: backdoor write to ittage_table RAM.
   // tbl : 1-5 (IT1-IT5).
-  // slot: 0 -> u_ram_s0 (pred slot 0), 1 -> u_ram_s1 (pred slot 1).
+  // slot: 0 -> g_slot[0].u_ram (pred slot 0), 1 -> g_slot[1].u_ram
+  //       (pred slot 1; through g_s1, present only at two slots).
   // bank: MSB of full index hash (0 or 1).
   // ent : remaining index bits (0..RAM_ENTRIES-1).
   // Entry packing: VAL[0],CTR[3:1],USE[5:4],EPC[7:6],
   //   TGT[E_TGT_HI:E_TGT_LO], TAG[E_W*-1:E_TAG_LO].
   // Tag is built at the IT5 width; the write truncates to table width.
   // Backdoor path: dut.gen_ittage_tables[T].gen_active.u_table
-  //   .u_ram_s{slot}.mem[bank][ent].
+  //   .g_slot[slot].u_ram.mem[bank][ent].
   // ================================================================
   task automatic bw_write(
     input int tbl, input int slot,
@@ -281,28 +282,66 @@ module tb;
     if (slot == 0) begin
       case (tbl)
         // IT1/IT2: TAG IT_TBL_TAG[1] -> d[E_W12-1:0]
-        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W12-1:0];
-        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W12-1:0];
+        1: dut.gen_ittage_tables[1].gen_active.u_table.g_slot[0].u_ram.mem[bank][ent] = d[E_W12-1:0];
+        2: dut.gen_ittage_tables[2].gen_active.u_table.g_slot[0].u_ram.mem[bank][ent] = d[E_W12-1:0];
         // IT3/IT4: TAG IT_TBL_TAG[3] -> d[E_W34-1:0]
-        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W34-1:0];
-        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W34-1:0];
+        3: dut.gen_ittage_tables[3].gen_active.u_table.g_slot[0].u_ram.mem[bank][ent] = d[E_W34-1:0];
+        4: dut.gen_ittage_tables[4].gen_active.u_table.g_slot[0].u_ram.mem[bank][ent] = d[E_W34-1:0];
         // IT5: TAG IT_TBL_TAG[5] -> d[E_W5-1:0]
-        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s0.mem[bank][ent] = d[E_W5-1:0];
+        5: dut.gen_ittage_tables[5].gen_active.u_table.g_slot[0].u_ram.mem[bank][ent] = d[E_W5-1:0];
         default:
           $display("  WARN: bw_write: invalid tbl %0d", tbl);
       endcase
     end else begin
+      g_s1.wr(tbl, bank, ent, d);   // BP-128: slot 1 RAM, if present
+    end
+  endtask
+
+  // BP-128: the slot 1 RAMs exist only at NUM_PRED_SLOTS 2. g_s1.wr and
+  // g_s1.rd reach them; at 1 they are stubs that are never called.
+  if (NUM_PRED_SLOTS > 1) begin : g_s1
+    task automatic wr(input int tbl, input int bank, input int ent,
+                      input logic [E_W5-1:0] d);
       case (tbl)
-        1: dut.gen_ittage_tables[1].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W12-1:0];
-        2: dut.gen_ittage_tables[2].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W12-1:0];
-        3: dut.gen_ittage_tables[3].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W34-1:0];
-        4: dut.gen_ittage_tables[4].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W34-1:0];
-        5: dut.gen_ittage_tables[5].gen_active.u_table.u_ram_s1.mem[bank][ent] = d[E_W5-1:0];
+        1: dut.gen_ittage_tables[1].gen_active.u_table.g_slot[1].u_ram
+             .mem[bank][ent] = d[E_W12-1:0];
+        2: dut.gen_ittage_tables[2].gen_active.u_table.g_slot[1].u_ram
+             .mem[bank][ent] = d[E_W12-1:0];
+        3: dut.gen_ittage_tables[3].gen_active.u_table.g_slot[1].u_ram
+             .mem[bank][ent] = d[E_W34-1:0];
+        4: dut.gen_ittage_tables[4].gen_active.u_table.g_slot[1].u_ram
+             .mem[bank][ent] = d[E_W34-1:0];
+        5: dut.gen_ittage_tables[5].gen_active.u_table.g_slot[1].u_ram
+             .mem[bank][ent] = d[E_W5-1:0];
         default:
           $display("  WARN: bw_write: invalid tbl %0d", tbl);
       endcase
-    end
-  endtask
+    endtask
+    function automatic logic [E_W5-1:0] rd(input int tbl, input int bank,
+                                            input int ent);
+      case (tbl)
+        1: rd = E_W5'(dut.gen_ittage_tables[1].gen_active.u_table
+                        .g_slot[1].u_ram.mem[bank][ent]);
+        2: rd = E_W5'(dut.gen_ittage_tables[2].gen_active.u_table
+                        .g_slot[1].u_ram.mem[bank][ent]);
+        3: rd = E_W5'(dut.gen_ittage_tables[3].gen_active.u_table
+                        .g_slot[1].u_ram.mem[bank][ent]);
+        4: rd = E_W5'(dut.gen_ittage_tables[4].gen_active.u_table
+                        .g_slot[1].u_ram.mem[bank][ent]);
+        5: rd = E_W5'(dut.gen_ittage_tables[5].gen_active.u_table
+                        .g_slot[1].u_ram.mem[bank][ent]);
+        default: rd = '0;
+      endcase
+    endfunction
+  end else begin : g_s1
+    task automatic wr(input int tbl, input int bank, input int ent,
+                      input logic [E_W5-1:0] d);
+    endtask
+    function automatic logic [E_W5-1:0] rd(input int tbl, input int bank,
+                                            input int ent);
+      rd = '0;
+    endfunction
+  end
 
   // Cycles to wait for ittage_rdy: the sram_init walk of every index
   // (no +ITTAGE_FAST_INIT, BP-126 TD#68) plus margin. It was 200, which
@@ -315,10 +354,9 @@ module tb;
   `define IT_INIT_CHK(T) \
     for (int b = 0; b < 2; b++) \
       for (int i = 0; i < IT_TBL_ENTRIES[T] / 2; i++) begin \
-        if (dut.gen_ittage_tables[T].gen_active.u_table.u_ram_s0 \
+        if (dut.gen_ittage_tables[T].gen_active.u_table.g_slot[0].u_ram \
               .mem[b][i] != '0) errs++; \
-        if (dut.gen_ittage_tables[T].gen_active.u_table.u_ram_s1 \
-              .mem[b][i] != '0) errs++; \
+        if ((NPS > 1) && (g_s1.rd(T, b, i) != '0)) errs++; \
       end
   task automatic tc_init_chk();
     int errs;
@@ -364,8 +402,12 @@ module tb;
     wait_prdy(0);
     chk("P01:rdy0",
       64'(ittage_pred_rdy_p2[0]),                        64'h1);
-    chk("P01:rdy1",
-      64'(ittage_pred_rdy_p2[1]),                        64'h0);
+    // Slot 1 idle: needs two slots (BP-128).
+    if (NPS > 1)
+      chk("P01:rdy1",
+        64'(ittage_pred_rdy_p2[NPS-1]),                  64'h0);
+    else
+      $display("SKIP P01:rdy1: needs NUM_PRED_SLOTS > 1");
     chk("P01:hit",
       64'(ittage_pred_meta_p2[0].ittage_hit),            64'h0);
     chk("P01:prm_comp",
@@ -382,32 +424,33 @@ module tb;
   endtask
 
   // ================================================================
-  // TC-P02: No-hit, both slots
+  // TC-P02: No-hit, both slots. Needs two slots: skipped at 1, and
+  // written with NPS-1 for slot 1 so it elaborates at 1 (BP-128).
   // ================================================================
   task automatic tc_p02();
     $display("-- TC-P02 No-hit both slots");
     clr();
     @(posedge clk);
-    ittage_pred_val_p0              = 2'b11;
+    ittage_pred_val_p0              = '1;
     ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_2000);
     ittage_pred_inp_p0[0].branch_id = 6'h02;
-    ittage_pred_inp_p0[1].pc        = VA_WIDTH'('h0000_2020);
-    ittage_pred_inp_p0[1].branch_id = 6'h03;
+    ittage_pred_inp_p0[NPS-1].pc    = VA_WIDTH'('h0000_2020);
+    ittage_pred_inp_p0[NPS-1].branch_id = 6'h03;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
-    ittage_pred_inp_p0[0] = '0;
-    ittage_pred_inp_p0[1] = '0;
+    ittage_pred_inp_p0[0]     = '0;
+    ittage_pred_inp_p0[NPS-1] = '0;
     wait_prdy(0);
     chk("P02:rdy",
       64'(ittage_pred_rdy_p2),                           64'h3);
     chk("P02:hit0",
       64'(ittage_pred_meta_p2[0].ittage_hit),            64'h0);
     chk("P02:hit1",
-      64'(ittage_pred_meta_p2[1].ittage_hit),            64'h0);
+      64'(ittage_pred_meta_p2[NPS-1].ittage_hit),        64'h0);
     chk("P02:bid0",
       64'(ittage_pred_meta_p2[0].branch_id),             64'h02);
     chk("P02:bid1",
-      64'(ittage_pred_meta_p2[1].branch_id),             64'h03);
+      64'(ittage_pred_meta_p2[NPS-1].branch_id),         64'h03);
     @(posedge clk);
   endtask
 
@@ -545,10 +588,10 @@ module tb;
     u_start = mon_u1_0_cnt;
     upd = '0;
     @(posedge clk);
-    ittage_pred_val_p0              = 2'b01;
+    ittage_pred_val_p0              = NPS'(1);
     ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_5000);
     ittage_pred_inp_p0[0].branch_id = 6'h20;
-    ittage_upd_val_u0               = 2'b01;
+    ittage_upd_val_u0               = NPS'(1);
     ittage_upd_inp_u0[0]            = upd;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
@@ -577,10 +620,10 @@ module tb;
     upd.resolved_target  = IT_MAX_TGT_WIDTH'('h0_0000_4000);
     upd.indir_mispredict = 1'b0;
     @(posedge clk);
-    ittage_pred_val_p0              = 2'b01;
+    ittage_pred_val_p0              = NPS'(1);
     ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_3000);
     ittage_pred_inp_p0[0].branch_id = 6'h07;
-    ittage_upd_val_u0               = 2'b01;
+    ittage_upd_val_u0               = NPS'(1);
     ittage_upd_inp_u0[0]            = upd;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
@@ -614,7 +657,7 @@ module tb;
     for (int i = 0; i < 30; i++) begin
       @(posedge clk);
       ittage_pred_val_p0 =
-        pq_not_full ? 2'b01 : 2'b00;
+        pq_not_full ? NPS'(1) : NPS'(0);
       if (pq_not_full) begin
         ittage_pred_inp_p0[0].pc        =
           VA_WIDTH'('h0002_0000) + VA_WIDTH'(i * 32);
@@ -622,11 +665,11 @@ module tb;
           FTQ_IDX_BITS'('h30 + i);
       end
       if (upd_driven < 4 && upd_rdy[0]) begin
-        ittage_upd_val_u0      = 2'b01;
+        ittage_upd_val_u0      = NPS'(1);
         ittage_upd_inp_u0[0]   = '0;
         upd_driven++;
       end else begin
-        ittage_upd_val_u0 = 2'b00;
+        ittage_upd_val_u0 = '0;
       end
     end
     ittage_pred_val_p0 = '0;
@@ -657,7 +700,7 @@ module tb;
     for (int i = 0; i < 30; i++) begin
       @(posedge clk);
       if (pq_not_full) begin
-        ittage_pred_val_p0 = 2'b01;
+        ittage_pred_val_p0 = NPS'(1);
         ittage_pred_inp_p0[0].pc        =
           VA_WIDTH'('h0003_0000) + VA_WIDTH'(i * 32);
         ittage_pred_inp_p0[0].branch_id =
@@ -666,7 +709,7 @@ module tb;
         ittage_pred_val_p0 = '0;
       end
       if (upd_rdy[0]) begin
-        ittage_upd_val_u0    = 2'b01;
+        ittage_upd_val_u0    = NPS'(1);
         ittage_upd_inp_u0[0] = '0;
       end else begin
         ittage_upd_val_u0 = '0;
@@ -699,18 +742,18 @@ module tb;
     // Cycle A: pred+upd simultaneously; pred grant (Rule 3),
     //          upd enqueued (not bypassed since grant went to pred).
     @(posedge clk);
-    ittage_pred_val_p0              = 2'b01;
+    ittage_pred_val_p0              = NPS'(1);
     ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0004_0000);
     ittage_pred_inp_p0[0].branch_id = 6'h08;
-    ittage_upd_val_u0               = 2'b01;
+    ittage_upd_val_u0               = NPS'(1);
     ittage_upd_inp_u0[0]            = '0;
     // Cycle A+1: 2nd pred only; UQ has 1 entry -> Rule 3 again.
     //            After this grant: pred_credits=0, starve_ctr=2.
     @(posedge clk);
-    ittage_pred_val_p0              = 2'b01;
+    ittage_pred_val_p0              = NPS'(1);
     ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0004_0020);
     ittage_pred_inp_p0[0].branch_id = 6'h09;
-    ittage_upd_val_u0               = 2'b00;
+    ittage_upd_val_u0               = '0;
     ittage_upd_inp_u0[0]            = '0;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
@@ -741,10 +784,10 @@ module tb;
     upd.indir_mispredict = 1'b0;
     // Issue pred+upd simultaneously; pred wins first (Rule 3)
     @(posedge clk);
-    ittage_pred_val_p0              = 2'b01;
+    ittage_pred_val_p0              = NPS'(1);
     ittage_pred_inp_p0[0].pc        = VA_WIDTH'('h0000_3000);
     ittage_pred_inp_p0[0].branch_id = 6'h0A;
-    ittage_upd_val_u0               = 2'b01;
+    ittage_upd_val_u0               = NPS'(1);
     ittage_upd_inp_u0[0]            = upd;
     @(posedge clk);
     ittage_pred_val_p0    = '0;
@@ -1625,9 +1668,9 @@ module tb;
       automatic logic [E_W12-1:0] it2_ent, it1_ent;
       automatic logic [IT_MAX_TGT_WIDTH-1:0] it2_tgt, it1_tgt;
       it2_ent = dut.gen_ittage_tables[2].gen_active
-                  .u_table.u_ram_s0.mem[1][64];
+                  .u_table.g_slot[0].u_ram.mem[1][64];
       it1_ent = dut.gen_ittage_tables[1].gen_active
-                  .u_table.u_ram_s0.mem[1][64];
+                  .u_table.g_slot[0].u_ram.mem[1][64];
       it2_tgt = it2_ent[E_TGT_HI:E_TGT_LO];
       it1_tgt = it1_ent[E_TGT_HI:E_TGT_LO];
       chk("TGT-B-ext:prm_tgt_post", 64'(it2_tgt), 64'h0_0000_B000);
@@ -1683,9 +1726,9 @@ module tb;
       automatic logic [E_W12-1:0] it2_ent, it1_ent;
       automatic logic [1:0]  it2_epc, it1_epc;
       it2_ent = dut.gen_ittage_tables[2].gen_active
-                  .u_table.u_ram_s0.mem[0][0];
+                  .u_table.g_slot[0].u_ram.mem[0][0];
       it1_ent = dut.gen_ittage_tables[1].gen_active
-                  .u_table.u_ram_s0.mem[0][0];
+                  .u_table.g_slot[0].u_ram.mem[0][0];
       it2_epc = it2_ent[7:6];
       it1_epc = it1_ent[7:6];
       chk("EPC-UP1:prv_epc_written",
@@ -1746,9 +1789,9 @@ module tb;
       automatic logic [E_W12-1:0] it2_ent, it1_ent;
       automatic logic [1:0]  it2_epc, it1_epc;
       it2_ent = dut.gen_ittage_tables[2].gen_active
-                  .u_table.u_ram_s0.mem[0][0];
+                  .u_table.g_slot[0].u_ram.mem[0][0];
       it1_ent = dut.gen_ittage_tables[1].gen_active
-                  .u_table.u_ram_s0.mem[0][0];
+                  .u_table.g_slot[0].u_ram.mem[0][0];
       it2_epc = it2_ent[7:6];
       it1_epc = it1_ent[7:6];
       chk("EPC-UP0:prv_epc_written",
@@ -1767,8 +1810,7 @@ module tb;
     input int                          slot,
     input logic [IT_UAON_WIDTH-1:0]    val
   );
-    if (slot == 0) dut.u_cntrl.uaon[0] = val;
-    else           dut.u_cntrl.uaon[1] = val;
+    dut.u_cntrl.uaon[slot] = val;   // BP-128: was [0] / [1] by slot
   endtask
 
   // ================================================================
@@ -2105,7 +2147,7 @@ module tb;
     bw_write(2, 0, 0, 0, 1'b1, 3'h2, 2'h1, 2'h0, TGT_S, 11'h0B0);
     bw_write(1, 0, 0, 0, 1'b0, 3'h0, 2'h0, 2'h0, IT_MAX_TGT_WIDTH'('h0), 11'h0);
     // Drive pred_val; arbiter grants immediately (PQ empty, bypass).
-    ittage_pred_val_p0              = 2'b01;
+    ittage_pred_val_p0              = NPS'(1);
     ittage_pred_inp_p0[0].pc        = PC_P;
     ittage_pred_inp_p0[0].branch_id = 6'hCC;
     // Edge A: pred_val_p1 registered; meta_p2_r from previous
@@ -2229,7 +2271,7 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P2:it3_ctr",
         64'(e3[3:1]),  64'h3);
       chk("RT01-P2:it3_epc",
@@ -2241,7 +2283,7 @@ module tb;
     begin
       automatic logic [E_W12-1:0] e1;
       e1 = dut.gen_ittage_tables[1].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P2:it1_epc_nc",
         64'(e1[7:6]),  64'(S1_EPC));
     end
@@ -2268,7 +2310,7 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P3:ctr_post",
         64'(e3[3:1]),  64'h2);
       chk("RT01-P3:use_post",
@@ -2309,7 +2351,7 @@ module tb;
       automatic logic [E_W34-1:0] e4;
       automatic logic [IT_TBL_TAG[4]-1:0] t4;
       e4 = dut.gen_ittage_tables[4].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       t4 = e4[E_W34-1:E_TAG_LO];
       chk("RT01-P4:alc_val",
         64'(e4[0]),    64'h1);
@@ -2329,7 +2371,7 @@ module tb;
     begin
       automatic logic [E_W5-1:0] e5;
       e5 = dut.gen_ittage_tables[5].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P4:ref_ctr",
         64'(e5[3:1]),   64'(R5_CTR));
       chk("RT01-P4:ref_use",
@@ -2345,7 +2387,7 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P4:it3_ctr_null",
         64'(e3[3:1]),  64'h0);
       chk("RT01-P4:it3_tgt_wr",
@@ -2374,7 +2416,7 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P5A:ctr_post",
         64'(e3[3:1]),  64'h1);           // DEC 2->1
       chk("RT01-P5A:tgt_nc",
@@ -2402,7 +2444,7 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P5B:tgt_wr",
         64'(e3[E_TGT_HI:E_TGT_LO]), 64'h0_0000_EE00); // replaced with resolved
     end
@@ -2414,7 +2456,7 @@ module tb;
     begin
       automatic logic [E_W12-1:0] e1;
       e1 = dut.gen_ittage_tables[1].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P6:it1_val",
         64'(e1[0]),     64'h1);
       chk("RT01-P6:it1_ctr",
@@ -2434,7 +2476,7 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       chk("RT01-P6:it3_val",
         64'(e3[0]),     64'h1);
       chk("RT01-P6:it3_ctr",
@@ -2490,9 +2532,9 @@ module tb;
     begin
       automatic logic [E_W34-1:0] e3, e4;
       e3 = dut.gen_ittage_tables[3].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       e4 = dut.gen_ittage_tables[4].gen_active
-             .u_table.u_ram_s0.mem[0][0];
+             .u_table.g_slot[0].u_ram.mem[0][0];
       $display("  TGT40 IT3 tgt 0x%0h IT4 tgt 0x%0h expected 0x%0h",
                e3[E_TGT_HI:E_TGT_LO], e4[E_TGT_HI:E_TGT_LO], RES_ST);
       chk("TGT40:it3_tgt_wr",  64'(e3[E_TGT_HI:E_TGT_LO]), RES_ST);
@@ -2542,7 +2584,8 @@ module tb;
     repeat(2) @(posedge clk);
 
     tc_p01();
-    tc_p02();
+    if (NPS > 1) tc_p02();   // needs two slots (BP-128)
+    else $display("SKIP TC-P02 no-hit both slots: needs NUM_PRED_SLOTS > 1");
     tc_p03();
     tc_p04();
     tc_arb_01();
@@ -2620,9 +2663,7 @@ module tb;
 
 endmodule : tb
 
-bind ittage ittage_assert #(
-    .NUM_PRED_SLOTS(NUM_PRED_SLOTS)
-  ) u_ittage_assert (
+bind ittage ittage_assert u_ittage_assert (
     .clk                  (clk),
     .rstn                 (rstn),
     .ittage_pred_rdy_p2   (ittage_pred_rdy_p2),

@@ -57,7 +57,9 @@
 # written (PROJECT_STATUS.md, sc_table_hash_rules.md,
 # sc_table_interfaces.md, bp_history_interfaces.md,
 # tage_coverage_plan.md), and the files updated after BP-127
-# (PROJECT_STATUS.md, sc_tb_decisions.md, sc_table_hash_rules.md).
+# (PROJECT_STATUS.md, sc_tb_decisions.md, sc_table_hash_rules.md),
+# and the files updated in session-078 (PROJECT_STATUS.md,
+# tage_table_interfaces.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -76,7 +78,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 03aa459ee323
+PLAN  PROJECT_STATUS.md                 f208dbd3f0ea
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -121,7 +123,7 @@ TEST  manual_tb_decisions.md            9ac8ad00f83e
 VERF  tage_coverage_plan.md             497bc9a790a3
 
 INTF  ittage_table_interfaces.md        152940fce590
-INTF  tage_table_interfaces.md          c77c3b137298
+INTF  tage_table_interfaces.md          adfbd02af482
 INTF  bp_history_interfaces.md          bf599226c271
 INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           12d47fb5ddbc

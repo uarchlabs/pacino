@@ -52,7 +52,10 @@ import bp_structs_pkg::*;
 module tb;
 
   // ----------------------------------------------------------------
-  // DUT: NUM_PRED_SLOTS=2 (primary)
+  // DUT: N_SLOTS=2 (primary). tb_ubtb builds one uBTB at each slot
+  // count whatever the package NUM_PRED_SLOTS is (BP-128): the module
+  // takes its slot count as a parameter, so both are tested in every
+  // build.
   // ----------------------------------------------------------------
   logic                clk;
   logic                rstn;
@@ -62,7 +65,7 @@ module tb;
   ubtb_blk_t           blk2;
   ubtb_upd_t  [1:0]    upd2;
 
-  ubtb #(.NUM_PRED_SLOTS(2)) dut2 (
+  ubtb #(.N_SLOTS(2)) dut2 (
     .clk        (clk),
     .rstn       (rstn),
     .pred_pc_p0 (pred_pc2),
@@ -72,14 +75,14 @@ module tb;
   );
 
   // ----------------------------------------------------------------
-  // DUT: NUM_PRED_SLOTS=1 (TC12)
+  // DUT: N_SLOTS=1 (TC12)
   // ----------------------------------------------------------------
   logic [VA_WIDTH-1:0] pred_pc1;
   ubtb_pred_t [0:0]    pred1;
   ubtb_blk_t           blk1;
   ubtb_upd_t  [0:0]    upd1;
 
-  ubtb #(.NUM_PRED_SLOTS(1)) dut1 (
+  ubtb #(.N_SLOTS(1)) dut1 (
     .clk        (clk),
     .rstn       (rstn),
     .pred_pc_p0 (pred_pc1),

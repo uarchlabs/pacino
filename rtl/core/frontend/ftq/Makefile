@@ -21,6 +21,7 @@
 #   lint_ftq_upd_conv    sim_ftq_upd_conv     BP-119, TD#151
 #   lint_ftq             sim_ftq              BP-107, the unit
 #   assert_labels                             BP-116, TD#144
+#   <t>_1slot  every target above at NUM_PRED_SLOTS = 1     BP-128
 include $(RVA_ROOT)/rtl/Vars.mk
 
 ifeq ($(VERBOSE),1)
@@ -39,7 +40,22 @@ TB_DIR   := tb
 BPU_DIR  := ../bpu/rtl
 VER_OUT  := obj
 
-VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
+# -- Slot count (BP-128, TD#1) -------------------------------------
+# NUM_PRED_SLOTS is set in bp_defines_pkg.sv from the macro
+# BP_NUM_PRED_SLOTS, 2 when it is not defined. SLOT_DEFS is empty for
+# every target below, so each builds at 2. Each <target>_1slot (end of
+# file) runs <target> in a sub-make with SLOT_DEFS = SLOT1_DEFS and
+# VER_OUT = $(VER_OUT)_1slot, so a 1-slot build never shares an object
+# directory with a 2-slot one. BP_EXPECT_PRED_SLOTS=1 makes the package
+# stop elaboration unless NUM_PRED_SLOTS is 1, so a 1-slot target fails
+# if BP_NUM_PRED_SLOTS does not reach it. To see that, build one with
+# the slot macro removed:
+#   make lint_ftq_1slot SLOT1_DEFS=+define+BP_EXPECT_PRED_SLOTS=1
+SLOT1_DEFS := +define+BP_NUM_PRED_SLOTS=1 +define+BP_EXPECT_PRED_SLOTS=1
+SLOT_DEFS  ?=
+
+VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing \
+                   $(SLOT_DEFS)
 SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 
 # -Wno-SYNCASYNCNET: rstn is an async reset on the flops of every
@@ -403,6 +419,23 @@ LABEL_UNCOMPILED   := $(filter-out \
 LABEL_RE := ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:
 LABEL_RE := $(LABEL_RE)[[:space:]]*assert[[:space:]]+property
 
+# LABELS NOT IN A 1-SLOT MODEL (BP-128). With SLOT_DEFS set (the
+# _1slot twin) these labels are not looked up and are reported as
+# SKIP. LABEL_1SLOT_GATED are the properties that need a second slot
+# or channel and are in a generate if (NUM_PRED_SLOTS > 1) block.
+# LABEL_1SLOT_INERT_<model> are properties a model cannot exercise
+# at either slot count because its testbench ties the antecedent off
+# (tb_ftq_ifu ties ftq_entry's commit_step_val to 0, so E5 to E7 are
+# inert there); at one slot Verilator also folds them away. At two
+# slots both lists are empty and every label is looked up.
+LABEL_1SLOT_GATED := a_ports_agree a_slot_ex_bounded_s1 \
+  a_slot_tkn_named_s1 a_named_slot_marked_s1 a_slot_older_first \
+  a_place_two_slots a_write_kills_above a_rsv_end_kills_above
+LABEL_1SLOT_INERT_ftq_ifu := a_ras_needs_step a_ras_type \
+  a_ras_snapshot_src
+label_skip = $(if $(strip $(SLOT_DEFS)),$(LABEL_1SLOT_GATED) \
+  $(LABEL_1SLOT_INERT_$(1)))
+
 # One model: verilate, then look up each label of each assertion file
 # it compiles. $(1) model, $(2) its sources. Shell variables tot, mis
 # accumulate across models.
@@ -412,6 +445,9 @@ label_sh = $(VERILATOR) --cc $(VER_FLAGS) $(SIM_EXTRA_FLAGS) $(COMMON) \
   n=0; m=0; \
   for f in $(filter %_assert.sv,$(2)); do \
     for l in $$(sed -nE 's/$(LABEL_RE).*/\1/p' $$f); do \
+      case " $(strip $(call label_skip,$(1))) " in *" $$l "*) \
+        echo "SKIP: $$l is not in a 1-slot tb_$(1) model"; \
+        continue;; esac; \
       n=$$((n+1)); \
       if ! grep -qF ".$$l\"" $(VER_OUT)_labels_$(1)/*.cpp; then \
         echo "MISSING: $$l ($$f) is not in the tb_$(1) model"; \
@@ -444,6 +480,23 @@ clean:
 	@echo "[cleaning]   ftq"
 	$(Q)rm -rf $(VER_OUT)*
 
+# -- 1-slot targets (BP-128, TD#1) -----------------------------------
+# One per lint and sim target and for assert_labels, named
+# <target>_1slot: the same recipe at NUM_PRED_SLOTS = 1 (see SLOT1_DEFS
+# at the top of the file).
+SLOT1_BASE := \
+  lint_ftq_ftb_sched sim_ftq_ftb_sched lint_ftq_ptr sim_ftq_ptr \
+  lint_ftq_commit sim_ftq_commit lint_ftq_entry sim_ftq_entry \
+  lint_ftq_meta sim_ftq_meta lint_ftq_status sim_ftq_status \
+  lint_ftq_shadow sim_ftq_shadow lint_ftq_npc sim_ftq_npc \
+  lint_ftq_ifu sim_ftq_ifu lint_ftq_resolve sim_ftq_resolve \
+  lint_ftq_upd_conv sim_ftq_upd_conv lint_ftq sim_ftq assert_labels
+SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
+
+.PHONY: $(SLOT1_TGTS)
+$(SLOT1_TGTS): %_1slot:
+	$(Q)$(MAKE) $* SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT)_1slot
+
 # -- Regression plumbing (TOOLS-006) ----------------------------------
 # tools/regress.sh runs every REGRESS_TARGETS entry with its own make
 # call and fails if a target defined in this file is in neither list.
@@ -456,7 +509,8 @@ REGRESS_TARGETS := \
   lint_ftq_meta sim_ftq_meta lint_ftq_status sim_ftq_status \
   lint_ftq_shadow sim_ftq_shadow lint_ftq_npc sim_ftq_npc \
   lint_ftq_ifu sim_ftq_ifu lint_ftq_resolve sim_ftq_resolve \
-  lint_ftq_upd_conv sim_ftq_upd_conv lint_ftq sim_ftq assert_labels
+  lint_ftq_upd_conv sim_ftq_upd_conv lint_ftq sim_ftq assert_labels \
+  $(SLOT1_TGTS)
 REGRESS_EXCLUDE := all clean regress_list
 
 .PHONY: regress_list

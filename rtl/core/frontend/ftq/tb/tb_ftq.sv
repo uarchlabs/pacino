@@ -1413,7 +1413,7 @@ module tb;
     chk("I3 entry 0 records the p2 RAS snapshot",
         dut.u_entry.r_arr[0].ras.tosw == RAS_PTR_BITS'(4));
 
-    bkend_ftq_rsv_val                 = 2'b01;
+    bkend_ftq_rsv_val                 = NUM_RESOLVE_PORTS'(2'b01);
     bkend_ftq_rsv[0]                  = '0;
     bkend_ftq_rsv[0].ftq_idx          = 6'd0;
     bkend_ftq_rsv[0].pos              = FTB_BR_POS_BITS'(2);
@@ -1500,7 +1500,7 @@ module tb;
     logic acc;
     do_reset();
     repeat (6) tick();                     // entries 0.. allocate
-    bkend_ftq_rsv_val       = 2'b01;
+    bkend_ftq_rsv_val       = NUM_RESOLVE_PORTS'(2'b01);
     bkend_ftq_rsv[0]        = '0;
     bkend_ftq_rsv[0].ftq_idx = 6'd1;
     bkend_ftq_rsv[0].pos     = FTB_BR_POS_BITS'(3);
@@ -1649,8 +1649,12 @@ module tb;
     pass_cnt = 0;
     fail_cnt = 0;
 
-    if (FTQ_DEPTH != 64 || NUM_PRED_SLOTS != 2) begin
-      $fatal(1, "tb_ftq: written for FTQ_DEPTH 64, slots 2");
+    // BP-128: written for one or two slots. The cluster model drives
+    // slot 0 only and the backend model channel 0 only (the two-bit
+    // channel valids are cast to NUM_RESOLVE_PORTS), so no check here
+    // needs a second slot.
+    if (FTQ_DEPTH != 64) begin
+      $fatal(1, "tb_ftq: written for FTQ_DEPTH 64");
     end
 
     do_reset();

@@ -331,6 +331,22 @@ module tb;
   int fail_cnt;
   int force_fail;
 
+  // BP-128 (TD#1): the testbench runs at NUM_PRED_SLOTS 1 and 2. S1 is
+  // the highest slot: 1 at two slots, 0 at one. Every reference to
+  // slot 1 is written [S1] or g_slot[S1], so it elaborates at one slot,
+  // where a constant [1] would be out of range and g_slot[1] does not
+  // exist. A fixture that writes every slot's RAM writes slot 0 twice
+  // at one slot. A check that only means something with two slots goes
+  // through chk2 / chk2_eq (below) or sits under NUM_PRED_SLOTS > 1,
+  // and at one slot prints SKIP with its name instead of counting.
+  localparam int S1 = (NUM_PRED_SLOTS > 1) ? 1 : 0;
+  int skip_cnt;
+
+  task automatic skip(input string nm);
+    skip_cnt++;
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
   // Loud check: prints on pass and on fail. Used for named cases.
   task automatic chk(input string nm, input logic cond);
     if (cond) begin
@@ -371,6 +387,42 @@ module tb;
     end else begin
       fail_cnt++;
       $display("FAIL: %s  got %010h exp %010h", nm, got, exp);
+    end
+  endtask
+
+  // BP-128: checks that only mean something with two slots. At two
+  // slots each is exactly chk / chk_eq / chk_q / chk_eq_q; at one it
+  // prints SKIP with its name and counts nothing.
+  task automatic chk2(input string nm, input logic cond);
+    if (NUM_PRED_SLOTS > 1) chk(nm, cond);
+    else                    skip(nm);
+  endtask
+
+  // The quiet form is used inside sweeps: at one slot it prints its
+  // SKIP line once per name, not once per sweep point.
+  bit skip_q_seen [string];
+
+  task automatic chk2_q(input string nm, input logic cond);
+    if (NUM_PRED_SLOTS > 1) chk_q(nm, cond);
+    else if (!skip_q_seen.exists(nm)) begin
+      skip_q_seen[nm] = 1'b1;
+      skip(nm);
+    end
+  endtask
+
+  task automatic chk2_eq(input string nm, input logic [VA_WIDTH-1:0] got,
+                         input logic [VA_WIDTH-1:0] exp);
+    if (NUM_PRED_SLOTS > 1) chk_eq(nm, got, exp);
+    else                    skip(nm);
+  endtask
+
+  task automatic chk2_eq_q(input string nm,
+                           input logic [VA_WIDTH-1:0] got,
+                           input logic [VA_WIDTH-1:0] exp);
+    if (NUM_PRED_SLOTS > 1) chk_eq_q(nm, got, exp);
+    else if (!skip_q_seen.exists(nm)) begin
+      skip_q_seen[nm] = 1'b1;
+      skip(nm);
     end
   endtask
 
@@ -567,27 +619,27 @@ module tb;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < 128; i++) begin
         dut.u_ittage.gen_ittage_tables[1].gen_active.u_table
-           .u_ram_s0.mem[b][i] = '0;
+           .g_slot[0].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[1].gen_active.u_table
-           .u_ram_s1.mem[b][i] = '0;
+           .g_slot[S1].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[2].gen_active.u_table
-           .u_ram_s0.mem[b][i] = '0;
+           .g_slot[0].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[2].gen_active.u_table
-           .u_ram_s1.mem[b][i] = '0;
+           .g_slot[S1].u_ram.mem[b][i] = '0;
       end
       for (int i = 0; i < 256; i++) begin
         dut.u_ittage.gen_ittage_tables[3].gen_active.u_table
-           .u_ram_s0.mem[b][i] = '0;
+           .g_slot[0].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[3].gen_active.u_table
-           .u_ram_s1.mem[b][i] = '0;
+           .g_slot[S1].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[4].gen_active.u_table
-           .u_ram_s0.mem[b][i] = '0;
+           .g_slot[0].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[4].gen_active.u_table
-           .u_ram_s1.mem[b][i] = '0;
+           .g_slot[S1].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[5].gen_active.u_table
-           .u_ram_s0.mem[b][i] = '0;
+           .g_slot[0].u_ram.mem[b][i] = '0;
         dut.u_ittage.gen_ittage_tables[5].gen_active.u_table
-           .u_ram_s1.mem[b][i] = '0;
+           .g_slot[S1].u_ram.mem[b][i] = '0;
       end
     end
   endtask
@@ -611,18 +663,20 @@ module tb;
     t0_bad = 0; it5_bad = 0; st0_bad = 0;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < T0_ROWS; i++) begin
-        if (dut.u_tage.u_tage_bim.u_ram_s0.mem[b][i] !== 2'b10) t0_bad++;
-        if (dut.u_tage.u_tage_bim.u_ram_s1.mem[b][i] !== 2'b10) t0_bad++;
+        if (dut.u_tage.u_tage_bim.g_slot[0].u_ram.mem[b][i] !== 2'b10)
+          t0_bad++;
+        if (dut.u_tage.u_tage_bim.g_slot[S1].u_ram.mem[b][i] !== 2'b10)
+          t0_bad++;
       end
       for (int i = 0; i < IT5_ENTRIES; i++) begin
         if (dut.u_ittage.gen_ittage_tables[5].gen_active.u_table
-              .u_ram_s0.mem[b][i] != '0) it5_bad++;
+              .g_slot[0].u_ram.mem[b][i] != '0) it5_bad++;
         if (dut.u_ittage.gen_ittage_tables[5].gen_active.u_table
-              .u_ram_s1.mem[b][i] != '0) it5_bad++;
+              .g_slot[S1].u_ram.mem[b][i] != '0) it5_bad++;
       end
       for (int i = 0; i < ST0_ROWS; i++) begin
-        if (dut.u_sc.gen_st[0].u_st.u_ram_s0.mem[b][i] != '0) st0_bad++;
-        if (dut.u_sc.gen_st[0].u_st.u_ram_s1.mem[b][i] != '0) st0_bad++;
+        if (dut.u_sc.gen_st[0].u_st.g_slot[0].u_ram.mem[b][i] != '0) st0_bad++;
+        if (dut.u_sc.gen_st[0].u_st.g_slot[S1].u_ram.mem[b][i] != '0) st0_bad++;
       end
     end
     chk("INIT every T0 entry is 2'b10 (weakly taken) after init",
@@ -688,13 +742,16 @@ module tb;
   // Fixture: loop_pred
   // -----------------------------------------------------------------
   // g_slot is a generate loop, so the bank index must be a literal.
-  // NUM_PRED_SLOTS is 2 at the shipped geometry; a third slot would
-  // need a third arm here and the elaboration check below fires.
+  // NUM_PRED_SLOTS is 1 or 2; a third slot would need a third arm here
+  // and the elaboration check below fires. BP-128: at one slot there
+  // is no bank 1, so a bank-1 clear or install does nothing (g_slot[S1]
+  // is g_slot[0] there and must not be written for bank 1).
   task automatic lp_clear_set(input int s,
                               input logic [VA_WIDTH-1:0] pc);
+    if (s >= NUM_PRED_SLOTS) return;
     for (int w = 0; w < LP_TBL_WAYS; w++) begin
       if (s == 0) dut.u_loop_pred.g_slot[0].mem[lp_idx(pc)][w] = '0;
-      else        dut.u_loop_pred.g_slot[1].mem[lp_idx(pc)][w] = '0;
+      else        dut.u_loop_pred.g_slot[S1].mem[lp_idx(pc)][w] = '0;
     end
   endtask
 
@@ -706,6 +763,7 @@ module tb;
                             input logic [LP_ITR_BITS-1:0] curr,
                             input logic [LP_ITR_BITS-1:0] past);
     lp_entry_t e;
+    if (s >= NUM_PRED_SLOTS) return;  // BP-128: no such bank
     e          = '0;
     e.v        = 1'b1;
     e.tag      = lp_tag(pc);
@@ -717,7 +775,7 @@ module tb;
     e.age      = '1;
     lp_clear_set(s, pc);
     if (s == 0) dut.u_loop_pred.g_slot[0].mem[lp_idx(pc)][0] = e;
-    else        dut.u_loop_pred.g_slot[1].mem[lp_idx(pc)][0] = e;
+    else        dut.u_loop_pred.g_slot[S1].mem[lp_idx(pc)][0] = e;
   endtask
 
   task automatic lp_clear_both(input logic [VA_WIDTH-1:0] pc);
@@ -731,10 +789,10 @@ module tb;
           dut.u_loop_pred.g_slot[0].req_idx === lp_idx(pc));
     chk_q({nm, " lp tag derivation s0"},
           dut.u_loop_pred.g_slot[0].req_tag === lp_tag(pc));
-    chk_q({nm, " lp idx derivation s1"},
-          dut.u_loop_pred.g_slot[1].req_idx === lp_idx(pc));
-    chk_q({nm, " lp tag derivation s1"},
-          dut.u_loop_pred.g_slot[1].req_tag === lp_tag(pc));
+    chk2_q({nm, " lp idx derivation s1"},
+           dut.u_loop_pred.g_slot[S1].req_idx === lp_idx(pc));
+    chk2_q({nm, " lp tag derivation s1"},
+           dut.u_loop_pred.g_slot[S1].req_tag === lp_tag(pc));
   endtask
 
   // -----------------------------------------------------------------
@@ -749,8 +807,8 @@ module tb;
   task automatic tage_bim_fill(input logic [TAGE_TBL_CTR[0]-1:0] ctr);
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < BIM_ENTRIES; i++) begin
-        dut.u_tage.u_tage_bim.u_ram_s0.mem[b][i] = ctr;
-        dut.u_tage.u_tage_bim.u_ram_s1.mem[b][i] = ctr;
+        dut.u_tage.u_tage_bim.g_slot[0].u_ram.mem[b][i] = ctr;
+        dut.u_tage.u_tage_bim.g_slot[S1].u_ram.mem[b][i] = ctr;
       end
     end
   endtask
@@ -764,18 +822,18 @@ module tb;
   task automatic sc_fill(input logic [SC_MAX_CTR_WIDTH-1:0] ctr);
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < SC03_ENTRIES; i++) begin
-        dut.u_sc.gen_st[0].u_st.u_ram_s0.mem[b][i] = ctr;
-        dut.u_sc.gen_st[0].u_st.u_ram_s1.mem[b][i] = ctr;
-        dut.u_sc.gen_st[1].u_st.u_ram_s0.mem[b][i] = ctr;
-        dut.u_sc.gen_st[1].u_st.u_ram_s1.mem[b][i] = ctr;
-        dut.u_sc.gen_st[2].u_st.u_ram_s0.mem[b][i] = ctr;
-        dut.u_sc.gen_st[2].u_st.u_ram_s1.mem[b][i] = ctr;
-        dut.u_sc.gen_st[3].u_st.u_ram_s0.mem[b][i] = ctr;
-        dut.u_sc.gen_st[3].u_st.u_ram_s1.mem[b][i] = ctr;
+        dut.u_sc.gen_st[0].u_st.g_slot[0].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[0].u_st.g_slot[S1].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[1].u_st.g_slot[0].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[1].u_st.g_slot[S1].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[2].u_st.g_slot[0].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[2].u_st.g_slot[S1].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[3].u_st.g_slot[0].u_ram.mem[b][i] = ctr;
+        dut.u_sc.gen_st[3].u_st.g_slot[S1].u_ram.mem[b][i] = ctr;
       end
       for (int i = 0; i < SC4_ENTRIES; i++) begin
-        dut.u_sc.u_st4.u_ram_s0.mem[b][i] = ctr;
-        dut.u_sc.u_st4.u_ram_s1.mem[b][i] = ctr;
+        dut.u_sc.u_st4.g_slot[0].u_ram.mem[b][i] = ctr;
+        dut.u_sc.u_st4.g_slot[S1].u_ram.mem[b][i] = ctr;
       end
     end
   endtask
@@ -813,7 +871,7 @@ module tb;
     w[IT_CB_W-1 -: IT_MAX_TGT_WIDTH]    = tgt;             // target
     w[IT1_ALC-1 -: IT1_TAG]             = tg[IT1_TAG-1:0]; // tag
     dut.u_ittage.gen_ittage_tables[1].gen_active.u_table
-       .u_ram_s0.mem[ix[IT1_IDX-1]][ix[IT1_IDX-2:0]] = w;
+       .g_slot[0].u_ram.mem[ix[IT1_IDX-1]][ix[IT1_IDX-2:0]] = w;
   endtask
 
   // -----------------------------------------------------------------
@@ -974,18 +1032,18 @@ module tb;
         bpu_pred_idx_p1 === {FTQ_IDX_BITS{1'b0}});
     chk("A3 slot0 valid resets low",
         bpu_pred_slot_p1[0].slot_valid === 1'b0);
-    chk("A3 slot1 valid resets low",
-        bpu_pred_slot_p1[1].slot_valid === 1'b0);
+    chk2("A3 slot1 valid resets low",
+         bpu_pred_slot_p1[S1].slot_valid === 1'b0);
     chk("A3 slot0 pred_src resets to PRED_NONE",
         bpu_pred_slot_p1[0].pred_src === PRED_NONE);
-    chk("A3 slot1 pred_src resets to PRED_NONE",
-        bpu_pred_slot_p1[1].pred_src === PRED_NONE);
+    chk2("A3 slot1 pred_src resets to PRED_NONE",
+         bpu_pred_slot_p1[S1].pred_src === PRED_NONE);
     chk("A3 slot0 taken resets low",
         bpu_pred_slot_p1[0].taken === 1'b0);
     chk("A3 slot0 pos resets to zero",
         bpu_pred_slot_p1[0].pos === {FTB_BR_POS_BITS{1'b0}});
-    chk("A3 slot1 pos resets to zero",
-        bpu_pred_slot_p1[1].pos === {FTB_BR_POS_BITS{1'b0}});
+    chk2("A3 slot1 pos resets to zero",
+         bpu_pred_slot_p1[S1].pos === {FTB_BR_POS_BITS{1'b0}});
     // ras.sv resets tosr, tosw and bos to zero, so the FE-11 snapshot
     // published at p1 is all zero out of reset.
     chk("A3 RAS snapshot tosr resets to zero",
@@ -1008,12 +1066,12 @@ module tb;
         bpu_redir_idx_p3 === {FTQ_IDX_BITS{1'b0}});
     chk("A3 slot0 p2 redirect resets low",
         bpu_redir_p2[0].valid === 1'b0);
-    chk("A3 slot1 p2 redirect resets low",
-        bpu_redir_p2[1].valid === 1'b0);
+    chk2("A3 slot1 p2 redirect resets low",
+         bpu_redir_p2[S1].valid === 1'b0);
     chk("A3 slot0 p3 redirect resets low",
         bpu_redir_p3[0].valid === 1'b0);
-    chk("A3 slot1 p3 redirect resets low",
-        bpu_redir_p3[1].valid === 1'b0);
+    chk2("A3 slot1 p3 redirect resets low",
+         bpu_redir_p3[S1].valid === 1'b0);
 
     // Update-accept enables. Nothing has been presented, so every
     // per-slot accept and every u1 echo must be low.
@@ -1099,16 +1157,16 @@ module tb;
     chk_lp_hash("B1a", pc);
     chk("B1 slot0 taken by uBTB (no slot-0 exception in play)",
         bpu_pred_slot_p1[0].pred_src === PRED_UBTB);
-    chk("B1 slot1 taken by loop_pred",
-        bpu_pred_slot_p1[1].pred_src === PRED_LOOP);
-    chk("B1 slot1 direction is the loop direction",
-        bpu_pred_slot_p1[1].taken === 1'b1);
-    chk("B1 slot1 br_type forced COND by loop_pred",
-        bpu_pred_slot_p1[1].br_type === COND);
-    chk_eq("B1 slot1 target still the uBTB entry target",
-           bpu_pred_slot_p1[1].target, base + VA_WIDTH'('h200));
-    chk("B1 slot1 pos survives the loop_pred override",
-        bpu_pred_slot_p1[1].pos === 4'd2);
+    chk2("B1 slot1 taken by loop_pred",
+         bpu_pred_slot_p1[S1].pred_src === PRED_LOOP);
+    chk2("B1 slot1 direction is the loop direction",
+         bpu_pred_slot_p1[S1].taken === 1'b1);
+    chk2("B1 slot1 br_type forced COND by loop_pred",
+         bpu_pred_slot_p1[S1].br_type === COND);
+    chk2_eq("B1 slot1 target still the uBTB entry target",
+            bpu_pred_slot_p1[S1].target, base + VA_WIDTH'('h200));
+    chk2("B1 slot1 pos survives the loop_pred override",
+         bpu_pred_slot_p1[S1].pos === 4'd2);
 
     //    Case 2: loop_pred claims slot 0 only. Proves the rule is
     //    symmetric and that slot 1 falls back to the uBTB.
@@ -1123,8 +1181,8 @@ module tb;
         bpu_pred_slot_p1[0].pred_src === PRED_LOOP);
     chk("B1 slot0 loop exit predicts not taken",
         bpu_pred_slot_p1[0].taken === 1'b0);
-    chk("B1 slot1 falls back to uBTB",
-        bpu_pred_slot_p1[1].pred_src === PRED_UBTB);
+    chk2("B1 slot1 falls back to uBTB",
+         bpu_pred_slot_p1[S1].pred_src === PRED_UBTB);
 
     //    Case 3: an untrusted loop entry (confidence below max) does
     //    not win. Pins the trust rule rather than mere presence.
@@ -1135,12 +1193,12 @@ module tb;
     req(pc, 6'h03);
     tick();
     norq();
-    chk("B1 untrusted loop entry does not win slot 1",
-        bpu_pred_slot_p1[1].pred_src === PRED_UBTB);
-    chk("B1 untrusted loop entry still reports a table hit",
-        dut.w_lp_pred_p1[1].lp_hit === 1'b1);
-    chk("B1 untrusted loop entry is not trusted",
-        dut.w_lp_pred_p1[1].lp_pred_is_loop === 1'b0);
+    chk2("B1 untrusted loop entry does not win slot 1",
+         bpu_pred_slot_p1[S1].pred_src === PRED_UBTB);
+    chk2("B1 untrusted loop entry still reports a table hit",
+         dut.w_lp_pred_p1[S1].lp_hit === 1'b1);
+    chk2("B1 untrusted loop entry is not trusted",
+         dut.w_lp_pred_p1[S1].lp_pred_is_loop === 1'b0);
 
     // -- B2. Entry hit against slot valid.
     //    Case a: entry hits, no slot carries a branch. A legal state.
@@ -1156,8 +1214,8 @@ module tb;
     norq();
     chk("B2a entry hit with no valid slot: slot0 invalid",
         bpu_pred_slot_p1[0].slot_valid === 1'b0);
-    chk("B2a entry hit with no valid slot: slot1 invalid",
-        bpu_pred_slot_p1[1].slot_valid === 1'b0);
+    chk2("B2a entry hit with no valid slot: slot1 invalid",
+         bpu_pred_slot_p1[S1].slot_valid === 1'b0);
     chk("B2a prediction still allocated",
         bpu_pred_val_p1 === 1'b1);
     chk_eq("B2a fall-through comes from the hit entry",
@@ -1176,8 +1234,8 @@ module tb;
     norq();
     chk("B2b miss: slot0 invalid",
         bpu_pred_slot_p1[0].slot_valid === 1'b0);
-    chk("B2b miss: slot1 invalid",
-        bpu_pred_slot_p1[1].slot_valid === 1'b0);
+    chk2("B2b miss: slot1 invalid",
+         bpu_pred_slot_p1[S1].slot_valid === 1'b0);
     chk("B2b miss: pred_src NONE",
         bpu_pred_slot_p1[0].pred_src === PRED_NONE);
     chk("B2b miss: blk hit clear",
@@ -1198,10 +1256,10 @@ module tb;
     norq();
     chk("B2c slot0 invalid on a hit entry",
         bpu_pred_slot_p1[0].slot_valid === 1'b0);
-    chk("B2c slot1 valid on the same entry",
-        bpu_pred_slot_p1[1].slot_valid === 1'b1);
-    chk("B2c slot1 taken from the entry conf MSB",
-        bpu_pred_slot_p1[1].taken === 1'b1);
+    chk2("B2c slot1 valid on the same entry",
+         bpu_pred_slot_p1[S1].slot_valid === 1'b1);
+    chk2("B2c slot1 taken from the entry conf MSB",
+         bpu_pred_slot_p1[S1].taken === 1'b1);
 
     // -- B3. pos propagation from ubtb_pred_t into bp_ftq_slot_t.
     do_reset();
@@ -1217,7 +1275,7 @@ module tb;
     tick();
     norq();
     chk("B3 slot0 pos propagated", bpu_pred_slot_p1[0].pos === 4'd3);
-    chk("B3 slot1 pos propagated", bpu_pred_slot_p1[1].pos === 4'd7);
+    chk2("B3 slot1 pos propagated", bpu_pred_slot_p1[S1].pos === 4'd7);
 
     // -- B4. RAS engagement at p1 on a uBTB RETURN. The top of stack
     //    is read at p0 and registered; the target must be that value
@@ -1343,8 +1401,8 @@ module tb;
         dut.w_tage_pred_rdy_p2[0] === 1'b1);
     chk("C0 TAGE p2 branch_id is the index of ITS OWN request",
         dut.w_tage_pred_meta_p2[0].branch_id === 6'h0C);
-    chk("C0 slot 1 carries the same entry's branch_id",
-        dut.w_tage_pred_meta_p2[1].branch_id === 6'h0C);
+    chk2("C0 slot 1 carries the same entry's branch_id",
+         dut.w_tage_pred_meta_p2[S1].branch_id === 6'h0C);
     chk("C0 the cluster branch_id guard accepts that response",
         dut.w_tage_hit_p2[0] === 1'b1);
     chk("C0 the metadata published to the FTQ names this entry",
@@ -1666,8 +1724,8 @@ module tb;
     tick();
     chk("C2 slot0 raises no p2 redirect",
         bpu_redir_p2[0].valid === 1'b0);
-    chk("C2 slot1 raises no p2 redirect",
-        bpu_redir_p2[1].valid === 1'b0);
+    chk2("C2 slot1 raises no p2 redirect",
+         bpu_redir_p2[S1].valid === 1'b0);
     chk_eq("C2 successor is the shared fall-through",
            bpu_redir_p2[0].target_pc, pft);
 
@@ -2074,28 +2132,30 @@ module tb;
     xpc0 = slot_pc(pc, 4'd1);
     xpc1 = slot_pc(pc, 4'd2);
     chk_eq("TC-A slot_pc[0]", dut.w_slot_pc_p1[0], xpc0);
-    chk_eq("TC-A slot_pc[1]", dut.w_slot_pc_p1[1], xpc1);
-    chk("TC-A num_branches", dut.w_hist_num_branches === 2'd2);
+    chk2_eq("TC-A slot_pc[1]", dut.w_slot_pc_p1[S1], xpc1);
+    // BP-128: TC-A is a two-branch block. At one slot only br0 is
+    // reported, so every check of the second branch is chk2.
+    chk2("TC-A num_branches", dut.w_hist_num_branches === 2'd2);
     chk_eq("TC-A pred_pc[0]", dut.w_hist_pred_pc[0], xpc0);
-    chk_eq("TC-A pred_pc[1]", dut.w_hist_pred_pc[1], xpc1);
-    chk("TC-A pred_taken", dut.w_hist_pred_taken === 2'b10);
+    chk2_eq("TC-A pred_pc[1]", dut.w_hist_pred_pc[1], xpc1);
+    chk2("TC-A pred_taken", dut.w_hist_pred_taken === 2'b10);
     // BP-121: the p1 successor of the not-taken slot 0 is the address
     // fetched after it. Slot 1 is taken, so that is slot 1's target,
     // not the block fall-through, which it was before BP-121.
-    chk_eq("TC-A p1 successor of not-taken slot 0 is slot 1's target",
-           dut.w_succ_p1[0], base + VA_WIDTH'('h200));
+    chk2_eq("TC-A p1 successor of not-taken slot 0 is slot 1's target",
+            dut.w_succ_p1[0], base + VA_WIDTH'('h200));
     chk("TC-A path_bit_0 is pc[3]^pc[2] of the slot 0 branch PC",
         dut.u_bp_history.path_bit_0 === (xpc0[3] ^ xpc0[2]));
-    chk("TC-A path_bit_1 is pc[3]^pc[2] of the slot 1 branch PC",
-        dut.u_bp_history.path_bit_1 === (xpc1[3] ^ xpc1[2]));
+    chk2("TC-A path_bit_1 is pc[3]^pc[2] of the slot 1 branch PC",
+         dut.u_bp_history.path_bit_1 === (xpc1[3] ^ xpc1[2]));
     tick();
-    chk("TC-A ghist pointer advanced by 2",
-        ghist_ptr === GHIST_PTR_BITS'(g0 + 2));
-    chk("TC-A phist pointer advanced by 2",
-        phist_ptr === PHIST_PTR_BITS'(p0 + 2));
-    chk("TC-A PHR took the two path bits in order",
-        phr_buf[1:0] === {xpc1[3] ^ xpc1[2], xpc0[3] ^ xpc0[2]});
-    chk("TC-A GHR took 0 then 1", ghr_buf[1:0] === 2'b10);
+    chk2("TC-A ghist pointer advanced by 2",
+         ghist_ptr === GHIST_PTR_BITS'(g0 + 2));
+    chk2("TC-A phist pointer advanced by 2",
+         phist_ptr === PHIST_PTR_BITS'(p0 + 2));
+    chk2("TC-A PHR took the two path bits in order",
+         phr_buf[1:0] === {xpc1[3] ^ xpc1[2], xpc0[3] ^ xpc0[2]});
+    chk2("TC-A GHR took 0 then 1", ghr_buf[1:0] === 2'b10);
 
     // -- TC-A2 (BP-121). Slot 0 taken: slot 1 is past the taken branch
     //    and off the predicted path, so the history takes one bit, slot
@@ -2140,8 +2200,8 @@ module tb;
         dut.r_ubtb_blk_p1.hit === 1'b1);
     chk_eq("TC-B slot_pc[0] zero, branch before the start",
            dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
-    chk_eq("TC-B slot_pc[1] zero, branch before the start",
-           dut.w_slot_pc_p1[1], VA_WIDTH'('h0));
+    chk2_eq("TC-B slot_pc[1] zero, branch before the start",
+            dut.w_slot_pc_p1[S1], VA_WIDTH'('h0));
     chk_eq("TC-B pred_pc[0] zero", dut.w_hist_pred_pc[0], VA_WIDTH'('h0));
     chk_eq("TC-B pred_pc[1] zero", dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
 
@@ -2171,16 +2231,18 @@ module tb;
         // slot 0 is the lower position. Before BP-121 slot 0 was br0
         // whatever its position: xpc0 = base + (p0i << BR_POS_SHIFT),
         // xpc1 = base + (p1i << BR_POS_SHIFT).
-        lo_i = (p1i < p0i) ? p1i : p0i;
+        // BP-128: at one slot the uBTB reports br0 alone and nothing
+        // is reordered, so slot 0 is br0 whatever br1's position.
+        lo_i = ((NUM_PRED_SLOTS > 1) && (p1i < p0i)) ? p1i : p0i;
         hi_i = (p1i < p0i) ? p0i : p1i;
         xpc0 = base + VA_WIDTH'(lo_i << BR_POS_SHIFT);
         xpc1 = base + VA_WIDTH'(hi_i << BR_POS_SHIFT);
         chk_eq_q("TC-C slot_pc[0]", dut.w_slot_pc_p1[0], xpc0);
-        chk_eq_q("TC-C slot_pc[1]", dut.w_slot_pc_p1[1], xpc1);
+        chk2_eq_q("TC-C slot_pc[1]", dut.w_slot_pc_p1[S1], xpc1);
         chk_q("TC-C path_bit_0",
               dut.u_bp_history.path_bit_0 === (xpc0[3] ^ xpc0[2]));
-        chk_q("TC-C path_bit_1",
-              dut.u_bp_history.path_bit_1 === (xpc1[3] ^ xpc1[2]));
+        chk2_q("TC-C path_bit_1",
+               dut.u_bp_history.path_bit_1 === (xpc1[3] ^ xpc1[2]));
         sweep_pairs++;
       end
     end
@@ -2201,14 +2263,16 @@ module tb;
     norq();
     chk_eq("TC-D slot_pc[0] is zero on an invalid slot",
            dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
-    chk_eq("TC-D slot_pc[1]", dut.w_slot_pc_p1[1], slot_pc(pc, 4'd5));
-    chk("TC-D num_branches", dut.w_hist_num_branches === 2'd1);
-    chk_eq("TC-D/E3 slot-1 branch presented at branch index 0",
-           dut.w_hist_pred_pc[0], slot_pc(pc, 4'd5));
+    chk2_eq("TC-D slot_pc[1]", dut.w_slot_pc_p1[S1], slot_pc(pc, 4'd5));
+    // BP-128: at one slot br1 is not reported, so the block carries
+    // no branch and the compaction checks are chk2.
+    chk2("TC-D num_branches", dut.w_hist_num_branches === 2'd1);
+    chk2_eq("TC-D/E3 slot-1 branch presented at branch index 0",
+            dut.w_hist_pred_pc[0], slot_pc(pc, 4'd5));
     chk_eq("TC-D pred_pc[1] untouched",
            dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
-    chk("TC-D/E3 that branch's direction at index 0",
-        dut.w_hist_pred_taken[0] === 1'b1);
+    chk2("TC-D/E3 that branch's direction at index 0",
+         dut.w_hist_pred_taken[0] === 1'b1);
 
     // -- TC-E. No branch in the block. bp_history holds.
     do_reset();
@@ -2221,7 +2285,7 @@ module tb;
     tick();
     norq();
     chk_eq("TC-E slot_pc[0] zero", dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
-    chk_eq("TC-E slot_pc[1] zero", dut.w_slot_pc_p1[1], VA_WIDTH'('h0));
+    chk2_eq("TC-E slot_pc[1] zero", dut.w_slot_pc_p1[S1], VA_WIDTH'('h0));
     chk("TC-E num_branches zero", dut.w_hist_num_branches === 2'd0);
     chk_eq("TC-E pred_pc[0] zero", dut.w_hist_pred_pc[0], VA_WIDTH'('h0));
     chk_eq("TC-E pred_pc[1] zero", dut.w_hist_pred_pc[1], VA_WIDTH'('h0));
@@ -2305,14 +2369,19 @@ module tb;
     chk("E1 checkpoint index is the allocated index",
         dut.w_ckpt_wr_idx === 6'h2A);
     tick();
+    // BP-128: the block reports one history bit per slot holding a
+    // branch, br0 and br1 at two slots, br0 alone at one, so the
+    // post-advance pointer is NUM_PRED_SLOTS (2 as before at two).
     chk("E1 checkpoint stored the post-advance ghist pointer",
-        dut.u_bp_history.ckpt_gptr[6'h2A] === GHIST_PTR_BITS'(2));
+        dut.u_bp_history.ckpt_gptr[6'h2A]
+          === GHIST_PTR_BITS'(NUM_PRED_SLOTS));
     chk("E1 checkpoint stored the post-advance phist pointer",
-        dut.u_bp_history.ckpt_pptr[6'h2A] === PHIST_PTR_BITS'(2));
+        dut.u_bp_history.ckpt_pptr[6'h2A]
+          === PHIST_PTR_BITS'(NUM_PRED_SLOTS));
     chk("E1 checkpoint exposed on ckpt_ghist_ptr",
-        ckpt_ghist_ptr === GHIST_PTR_BITS'(2));
+        ckpt_ghist_ptr === GHIST_PTR_BITS'(NUM_PRED_SLOTS));
     chk("E1 checkpoint exposed on ckpt_phist_ptr",
-        ckpt_phist_ptr === PHIST_PTR_BITS'(2));
+        ckpt_phist_ptr === PHIST_PTR_BITS'(NUM_PRED_SLOTS));
 
     // -- E2. Rollback on redirect.
     //
@@ -2651,60 +2720,60 @@ module tb;
     // tage member
     chk("F1 tage slot0 branch_id is this entry",
         bpu_meta_tage_p2[0].branch_id === 6'h2C);
-    chk("F1 tage slot1 branch_id is this entry",
-        bpu_meta_tage_p2[1].branch_id === 6'h2C);
+    chk2("F1 tage slot1 branch_id is this entry",
+         bpu_meta_tage_p2[S1].branch_id === 6'h2C);
     chk("F1 tage slot0 direction is the seeded bimodal direction",
         bpu_meta_tage_p2[0].tage_pred_tkn === 1'b1);
     chk("F1 tage slot0 metadata equals the predictor output",
         bpu_meta_tage_p2[0] === dut.w_tage_pred_meta_p2[0]);
-    chk("F1 tage slot1 metadata equals the predictor output",
-        bpu_meta_tage_p2[1] === dut.w_tage_pred_meta_p2[1]);
+    chk2("F1 tage slot1 metadata equals the predictor output",
+         bpu_meta_tage_p2[S1] === dut.w_tage_pred_meta_p2[S1]);
 
     // ittage member
     chk("F1 ittage slot0 branch_id is this entry",
         bpu_meta_ittage_p2[0].branch_id === 6'h2C);
     chk("F1 ittage slot0 metadata equals the predictor output",
         bpu_meta_ittage_p2[0] === dut.w_ittage_pred_meta_p2[0]);
-    chk("F1 ittage slot1 metadata equals the predictor output",
-        bpu_meta_ittage_p2[1] === dut.w_ittage_pred_meta_p2[1]);
+    chk2("F1 ittage slot1 metadata equals the predictor output",
+         bpu_meta_ittage_p2[S1] === dut.w_ittage_pred_meta_p2[S1]);
 
     // ftb member: scalar within the entry, same value in every slot
     chk("F1 ftb hit slot0",  bpu_meta_ftb_p2[0].hit === 1'b1);
     chk("F1 ftb way slot0",  bpu_meta_ftb_p2[0].way === 2'd2);
     chk("F1 ftb jmp_pos slot0",
         bpu_meta_ftb_p2[0].jmp_pos === 4'd6);
-    chk("F1 ftb member replicated into slot1",
-        bpu_meta_ftb_p2[1] === bpu_meta_ftb_p2[0]);
+    chk2("F1 ftb member replicated into slot1",
+         bpu_meta_ftb_p2[S1] === bpu_meta_ftb_p2[0]);
 
     // lp member: per slot, each carrying its own snapshot
     chk("F1 lp slot0 confidence is slot 0's own",
         bpu_meta_lp_p2[0].lp_conf ===
           LP_CNF_BITS'(LP_CONF_LEVEL));
-    chk("F1 lp slot1 confidence is slot 1's own",
-        bpu_meta_lp_p2[1].lp_conf === LP_CNF_BITS'(1));
-    chk("F1 lp slot1 is NOT zero-driven",
-        bpu_meta_lp_p2[1] !== '0);
+    chk2("F1 lp slot1 confidence is slot 1's own",
+         bpu_meta_lp_p2[S1].lp_conf === LP_CNF_BITS'(1));
+    chk2("F1 lp slot1 is NOT zero-driven",
+         bpu_meta_lp_p2[S1] !== '0);
     chk("F1 lp slot0 past_itr", bpu_meta_lp_p2[0].lp_past_itr === 14'd4);
-    chk("F1 lp slot1 past_itr", bpu_meta_lp_p2[1].lp_past_itr === 14'd9);
+    chk2("F1 lp slot1 past_itr", bpu_meta_lp_p2[S1].lp_past_itr === 14'd9);
     chk("F1 lp slot0 curr_itr", bpu_meta_lp_p2[0].lp_curr_itr === 14'd1);
-    chk("F1 lp slot1 curr_itr", bpu_meta_lp_p2[1].lp_curr_itr === 14'd7);
+    chk2("F1 lp slot1 curr_itr", bpu_meta_lp_p2[S1].lp_curr_itr === 14'd7);
     chk("F1 lp slot0 hit",  bpu_meta_lp_p2[0].lp_hit === 1'b1);
-    chk("F1 lp slot1 hit",  bpu_meta_lp_p2[1].lp_hit === 1'b1);
+    chk2("F1 lp slot1 hit",  bpu_meta_lp_p2[S1].lp_hit === 1'b1);
     chk("F1 lp slot0 trusted", bpu_meta_lp_p2[0].lp_pred_is_loop === 1'b1);
-    chk("F1 lp slot1 untrusted",
-        bpu_meta_lp_p2[1].lp_pred_is_loop === 1'b0);
+    chk2("F1 lp slot1 untrusted",
+         bpu_meta_lp_p2[S1].lp_pred_is_loop === 1'b0);
     chk("F1 lp slot0 index is that bank's index",
         bpu_meta_lp_p2[0].lp_idx === lp_idx(pc));
-    chk("F1 lp slot1 index is that bank's index",
-        bpu_meta_lp_p2[1].lp_idx === lp_idx(pc));
-    chk("F1 lp slots are not crossed",
-        bpu_meta_lp_p2[0] !== bpu_meta_lp_p2[1]);
+    chk2("F1 lp slot1 index is that bank's index",
+         bpu_meta_lp_p2[S1].lp_idx === lp_idx(pc));
+    chk2("F1 lp slots are not crossed",
+         bpu_meta_lp_p2[0] !== bpu_meta_lp_p2[S1]);
     // BP-122: the p2 group carries the loop predictor's p2 re-read (it
     // carried the registered p1 result, r_lp_pred_p2, before).
     chk("F1 lp slot0 equals the p2 loop re-read",
         bpu_meta_lp_p2[0] === dut.w_lp_pred_p2[0]);
-    chk("F1 lp slot1 equals the p2 loop re-read",
-        bpu_meta_lp_p2[1] === dut.w_lp_pred_p2[1]);
+    chk2("F1 lp slot1 equals the p2 loop re-read",
+         bpu_meta_lp_p2[S1] === dut.w_lp_pred_p2[S1]);
 
     // -- F2. The p3 group. bpu_meta_val_p3 asserts whether or not SC
     //    is enabled; the sc member is the predictor output.
@@ -2714,8 +2783,8 @@ module tb;
     chk("F2 p3 metadata index", bpu_meta_idx_p3 === 6'h2C);
     chk("F2 sc slot0 metadata equals the predictor output",
         bpu_meta_sc_p3[0] === dut.w_sc_pred_meta_p3[0]);
-    chk("F2 sc slot1 metadata equals the predictor output",
-        bpu_meta_sc_p3[1] === dut.w_sc_pred_meta_p3[1]);
+    chk2("F2 sc slot1 metadata equals the predictor output",
+         bpu_meta_sc_p3[S1] === dut.w_sc_pred_meta_p3[S1]);
 
     do_reset();
     tage_bim_fill(2'b11);
@@ -2958,14 +3027,14 @@ module tb;
   task automatic tage_clear_all();
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < (1 << (TAGE_TBL_IDX[1] - 1)); i++) begin
-        dut.u_tage.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        dut.u_tage.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        dut.u_tage.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
       end
     end
   endtask
@@ -3407,9 +3476,9 @@ module tb;
 
     // NO_BRANCH: forms NO update anywhere, even with valid high.
     ubtb_upd_u0[0]    = mk_upd(NO_BRANCH, 1'b1, pc);
-    tage_upd_val_u0   = 2'b01;
-    ittage_upd_val_u0 = 2'b01;
-    sc_upd_val_u0     = 2'b01;
+    tage_upd_val_u0   = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
+    ittage_upd_val_u0 = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
+    sc_upd_val_u0     = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
     #1;
     chk("G0 NO_BRANCH decoded", dut.w_upd_type_u0[0] === NO_BRANCH);
     chk("G0 NO_BRANCH forms no update at all",
@@ -4407,16 +4476,16 @@ module tb;
     req(pc, 6'h24);
     tick();
     norq();
-    chk("L5 the loop entry is trusted",
-        dut.w_lp_pred_p1[1].lp_pred_is_loop === 1'b1);
-    chk("L5 the uBTB slot is not valid",
-        dut.r_ubtb_pred_p1[1].valid === 1'b0);
-    chk("L5 so slot 1 carries no prediction",
-        (bpu_pred_slot_p1[1].slot_valid === 1'b0)
-     && (bpu_pred_slot_p1[1].taken === 1'b0)
-     && (bpu_pred_slot_p1[1].pred_src === PRED_NONE));
-    chk_eq("L5 and the p1 successor is the fall-through",
-           dut.w_succ_p1[1], pc + BLK_SZ);
+    chk2("L5 the loop entry is trusted",
+         dut.w_lp_pred_p1[S1].lp_pred_is_loop === 1'b1);
+    chk2("L5 the uBTB slot is not valid",
+         dut.r_ubtb_pred_p1[S1].valid === 1'b0);
+    chk2("L5 so slot 1 carries no prediction",
+         (bpu_pred_slot_p1[S1].slot_valid === 1'b0)
+      && (bpu_pred_slot_p1[S1].taken === 1'b0)
+      && (bpu_pred_slot_p1[S1].pred_src === PRED_NONE));
+    chk2_eq("L5 and the p1 successor is the fall-through",
+            dut.w_succ_p1[S1], pc + BLK_SZ);
     tick();
 
     // -- L6. RETURN_CALL, fe_decisions.md 7.2: uBTB, FTB and RAS (pop,
@@ -4429,10 +4498,10 @@ module tb;
     sc_enable = 1'b1;
     pc = VA_WIDTH'('h00_0950_0000);
     ubtb_upd_u0[0]    = mk_upd(RETURN_CALL, 1'b1, pc);
-    tage_upd_val_u0   = 2'b01;
-    ittage_upd_val_u0 = 2'b01;
-    sc_upd_val_u0     = 2'b01;
-    lp_upd_valid_p0   = 2'b01;
+    tage_upd_val_u0   = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
+    ittage_upd_val_u0 = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
+    sc_upd_val_u0     = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
+    lp_upd_valid_p0   = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
     ras_commit_val      = 1'b1;
     ras_commit_br_type  = RETURN_CALL;
     ras_commit_ret_addr = pc + VA_WIDTH'(4);
@@ -4501,19 +4570,24 @@ module tb;
     norq();
     tick();                          // at p2
     chk("N1 p2: the conditional is taken", dut.w_taken_p2[0] === 1'b1);
-    chk("N1 p2: the call is in slot 1", dut.w_br_type_p2[1] === DIRECT_CALL);
-    chk("N1 p2: the call is not on the path, no push",
-        dut.w_ras_pred_val_p2[1] === 1'b0);
+    // BP-128: the call is the jump behind br0, which only a second
+    // slot carries. At one slot it is not predicted, so N1 and N2's
+    // RAS checks of it are chk2.
+    chk2("N1 p2: the call is in slot 1",
+         dut.w_br_type_p2[S1] === DIRECT_CALL);
+    chk2("N1 p2: the call is not on the path, no push",
+         dut.w_ras_pred_val_p2[S1] === 1'b0);
     tick();                          // at p3
     chk("N1 p3: SC reverses the conditional",
         dut.w_taken_p3[0] === 1'b0);
-    chk("N1 p3: the call is on the p3 path",
-        dut.w_ras_pred_val_p3[1] === 1'b1);
+    chk2("N1 p3: the call is on the p3 path",
+         dut.w_ras_pred_val_p3[S1] === 1'b1);
     tick();
-    chk("N1 the missed push was applied: one entry",
-        dut.u_ras.tosr !== dut.u_ras.bos);
-    chk_eq("N1 and it holds the call's return address",
-           dut.u_ras.spec_ret_addr[dut.u_ras.tosr], base + VA_WIDTH'('d12));
+    chk2("N1 the missed push was applied: one entry",
+         dut.u_ras.tosr !== dut.u_ras.bos);
+    chk2_eq("N1 and it holds the call's return address",
+            dut.u_ras.spec_ret_addr[dut.u_ras.tosr],
+            base + VA_WIDTH'('d12));
 
     // -- N2. p2 not taken (call pushed), SC taken: undo the push.
     do_reset();
@@ -4535,13 +4609,13 @@ module tb;
     norq();
     tick();                          // at p2
     chk("N2 p2: the conditional is not taken", dut.w_taken_p2[0] === 1'b0);
-    chk("N2 p2: the call is on the path, pushed",
-        dut.w_ras_pred_val_p2[1] === 1'b1);
+    chk2("N2 p2: the call is on the path, pushed",
+         dut.w_ras_pred_val_p2[S1] === 1'b1);
     tick();                          // at p3
     chk("N2 p3: SC reverses the conditional",
         dut.w_taken_p3[0] === 1'b1);
-    chk("N2 p3: the call is off the p3 path",
-        dut.w_ras_pred_val_p3[1] === 1'b0);
+    chk2("N2 p3: the call is off the p3 path",
+         dut.w_ras_pred_val_p3[S1] === 1'b0);
     tick();
     chk("N2 the push was undone: the RAS is empty again",
         dut.u_ras.tosr === dut.u_ras.bos);
@@ -4694,8 +4768,8 @@ module tb;
     ftq_rollback_corr     = 1'b1;
     ftq_rollback_n        = 2'd1;
     ftq_rollback_tkn      = 2'b00;
-    ftq_rollback_slot_ex  = 2'b01;
-    ftq_rollback_slot_tkn = 2'b00;
+    ftq_rollback_slot_ex  = NUM_PRED_SLOTS'(1); // BP-128
+    ftq_rollback_slot_tkn = '0;
     tick();
     ftq_rollback_val      = 1'b0;
     ftq_rollback_corr     = 1'b0;
@@ -4704,8 +4778,8 @@ module tb;
     chk("O4 the named entry: re-advanced not taken from 3: 0, known",
         (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd0) &&
         dut.u_loop_pred.g_slot[0].mem[li][0].curs_v);
-    chk("O4 every other count is unknown",
-        dut.u_loop_pred.g_slot[1].mem[lp_idx(pcx)][0].curs_v === 1'b0);
+    chk2("O4 every other count is unknown",
+         dut.u_loop_pred.g_slot[S1].mem[lp_idx(pcx)][0].curs_v === 1'b0);
 
     // -- O5. The p3 restore: an untrusted LP slot, TAGE taken at p2
     //    (count 2 -> 3), SC not taken at p3: a p3 redirect, and the
@@ -4995,9 +5069,10 @@ module tb;
     chk("M4 the FTB answered with the same jump",
         (dut.w_ftb_valid_p2 === 1'b1)
      && (dut.w_br_type_p2[0] === DIRECT_UNC));
+    // BP-128: follows the slot count; at one slot slot 0 alone.
     chk("M4 no p2 redirect on either slot",
         (bpu_redir_p2[0].valid === 1'b0)
-     && (bpu_redir_p2[1].valid === 1'b0));
+     && ((NUM_PRED_SLOTS == 1) || (bpu_redir_p2[S1].valid === 1'b0)));
 
     // -- M5. The same for a direct call (JAL x1).
     j_reset();
@@ -5023,7 +5098,7 @@ module tb;
     chk("M5 no p2 redirect on either slot",
         (dut.w_br_type_p2[0] === DIRECT_CALL)
      && (bpu_redir_p2[0].valid === 1'b0)
-     && (bpu_redir_p2[1].valid === 1'b0));
+     && ((NUM_PRED_SLOTS == 1) || (bpu_redir_p2[S1].valid === 1'b0)));
 
     // -- M6. RETURN unchanged by TD#154: with the RAS empty it is not
     //    taken at p1 (as before), with a valid RAS top it is taken to
@@ -5213,7 +5288,7 @@ module tb;
       if (dut.w_req_val_p0) begin
         if (dut.u_tage.arb_grant_pred &&
             (dut.u_tage.cntrl_pred_inp_p0[0].pc === ftq_pred_pc_p0) &&
-            (dut.u_tage.cntrl_pred_inp_p0[1].pc === ftq_pred_pc_p0)) begin
+            (dut.u_tage.cntrl_pred_inp_p0[S1].pc === ftq_pred_pc_p0)) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
             for (int t = 1; t < TAGE_NUM_TABLES; t++) begin
               f0 = m_fold(m_h, TAGE_TBL_HIST[t], TAGE_TBL_FH[t]);
@@ -5238,7 +5313,7 @@ module tb;
         // ITTAGE IT1-IT5.
         if (dut.u_ittage.arb_grant_pred &&
             (dut.u_ittage.cntrl_pred_inp_p0[0].pc === ftq_pred_pc_p0) &&
-            (dut.u_ittage.cntrl_pred_inp_p0[1].pc === ftq_pred_pc_p0)) begin
+            (dut.u_ittage.cntrl_pred_inp_p0[S1].pc === ftq_pred_pc_p0)) begin
           for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
             for (int t = 1; t < IT_NUM_TABLES; t++) begin
               f0 = m_fold(m_h, IT_TBL_HIST[t], IT_TBL_FH[t]);
@@ -5315,9 +5390,13 @@ module tb;
     force_fail = 0;
     void'($value$plusargs("FORCE_FAIL=%d", force_fail));
 
-    if (NUM_PRED_SLOTS != 2) begin
+    skip_cnt   = 0;
+
+    // BP-128: the NUM_PRED_SLOTS == 2 refusal is removed; 1 and 2 are
+    // the ruled values (session-078).
+    if ((NUM_PRED_SLOTS != 1) && (NUM_PRED_SLOTS != 2)) begin
       $fatal(1,
-        "tb_bp_cluster: written for NUM_PRED_SLOTS == 2, got %0d",
+        "tb_bp_cluster: written for NUM_PRED_SLOTS 1 or 2, got %0d",
         NUM_PRED_SLOTS);
     end
 

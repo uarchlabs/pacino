@@ -107,18 +107,35 @@ module ftq_npc_assert (
   //     A REGISTERED IMPLEMENTATION FAILS THIS AND PASSES EVERY
   //     FUNCTIONAL TEST. That is why the property exists.
   //
-  //     Written against slots 0 and 1 by name rather than as a
-  //     loop: NUM_PRED_SLOTS is 2 and 5.6 and FE-10 both treat the
-  //     count as fixed by the FTB block shape, not as a knob.
+  //     BP-128: the expected successor is p1_succ_exp, the target of
+  //     the lowest valid taken slot, else the fall-through, over
+  //     NUM_PRED_SLOTS (1 or 2). At 2 it is the expression this
+  //     property wrote by name for slots 0 and 1 before BP-128. The
+  //     slots are repacked first: a property cannot pass an unpacked
+  //     array to a function.
+  logic [NUM_PRED_SLOTS-1:0]               w_p1_tkn;
+  logic [NUM_PRED_SLOTS-1:0][VA_WIDTH-1:0] w_p1_tgt;
+
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_p1_pack
+    assign w_p1_tkn[s] = p1_slot[s].slot_valid && p1_slot[s].taken;
+    assign w_p1_tgt[s] = p1_slot[s].target;
+  end
+
+  function automatic logic [VA_WIDTH-1:0] p1_succ_exp(
+      input logic [NUM_PRED_SLOTS-1:0]               tkn,
+      input logic [NUM_PRED_SLOTS-1:0][VA_WIDTH-1:0] tgt,
+      input logic [VA_WIDTH-1:0]                     pft);
+    logic [VA_WIDTH-1:0] nxt;
+    nxt = pft;
+    for (int s = NUM_PRED_SLOTS - 1; s >= 0; s--)
+      if (tkn[s]) nxt = tgt[s];
+    return nxt;
+  endfunction
+
   property p_p1_combinational;
     @(posedge clk) disable iff (!rstn)
       arm_win[5] |->
-        (ftq_pred_pc_p0 ==
-          ((p1_slot[0].slot_valid && p1_slot[0].taken)
-             ? p1_slot[0].target
-             : (p1_slot[1].slot_valid && p1_slot[1].taken)
-               ? p1_slot[1].target
-               : p1_pft_addr));
+        (ftq_pred_pc_p0 == p1_succ_exp(w_p1_tkn, w_p1_tgt, p1_pft_addr));
   endproperty
 
   // N4a Arm 5 is the p1 arm. Stated separately so N4's same-cycle
@@ -240,18 +257,26 @@ module ftq_npc_assert (
 
   a_mispredict_bundle:      assert property (p_mispredict_bundle)
     else $error("N11 a backend mispredict carried a wrong history bundle");
+  // BP-128: the slot 1 forms of N12 exist only with a slot 1; each is
+  // in its own generate block, in its place in the list.
   a_slot_ex_bounded_s0:     assert property (p_slot_ex_bounded(0))
     else $error("N12 slot 0 marked executed outside the bundle");
-  a_slot_ex_bounded_s1:     assert property (p_slot_ex_bounded(1))
-    else $error("N12 slot 1 marked executed outside the bundle");
+  if (NUM_PRED_SLOTS > 1) begin : g_n12_ex_s1
+    a_slot_ex_bounded_s1:   assert property (p_slot_ex_bounded(1))
+      else $error("N12 slot 1 marked executed outside the bundle");
+  end
   a_slot_tkn_named_s0:      assert property (p_slot_tkn_named(0))
     else $error("N12 slot 0 marked taken but not the named branch");
-  a_slot_tkn_named_s1:      assert property (p_slot_tkn_named(1))
-    else $error("N12 slot 1 marked taken but not the named branch");
+  if (NUM_PRED_SLOTS > 1) begin : g_n12_tkn_s1
+    a_slot_tkn_named_s1:    assert property (p_slot_tkn_named(1))
+      else $error("N12 slot 1 marked taken but not the named branch");
+  end
   a_named_slot_marked_s0:   assert property (p_named_slot_marked(0))
     else $error("N12 the named slot 0 was not marked");
-  a_named_slot_marked_s1:   assert property (p_named_slot_marked(1))
-    else $error("N12 the named slot 1 was not marked");
+  if (NUM_PRED_SLOTS > 1) begin : g_n12_mark_s1
+    a_named_slot_marked_s1: assert property (p_named_slot_marked(1))
+      else $error("N12 the named slot 1 was not marked");
+  end
   a_one_arm:                assert property (p_one_arm)
     else $error("N1 more than one redirect arm won");
   a_redir_is_arm_1_to_4:    assert property (p_redir_is_arm_1_to_4)

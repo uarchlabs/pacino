@@ -173,6 +173,17 @@ module tb;
     end
   endtask
 
+  // BP-128. A check that needs a second slot runs only at two slots.
+  // HS names slot 1 at two slots and stays in range at one, where the
+  // check is skipped and says so. PC_HS is slot HS's p1 target.
+  localparam int HS = NUM_PRED_SLOTS - 1;
+  localparam logic [VA_WIDTH-1:0] PC_HS =
+    (NUM_PRED_SLOTS > 1) ? PC_S1 : PC_S0;
+
+  task automatic skip(input string nm);
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
   task automatic tick();
     @(posedge clk);
     #1;
@@ -313,18 +324,24 @@ module tb;
 
     // Change the p1 group again, still with no edge. The output
     // must follow within the cycle.
-    set_p1(1);
-    #1;
-    chk_va("B6 slot 1 taken selects its target, SAME CYCLE",
-           ftq_pred_pc_p0, PC_S1);
+    // BP-128: B6 and B7 need a slot 1.
+    if (NUM_PRED_SLOTS > 1) begin
+      set_p1(HS);
+      #1;
+      chk_va("B6 slot 1 taken selects its target, SAME CYCLE",
+             ftq_pred_pc_p0, PC_S1);
 
-    // fe_decisions.md 2.4 is priority ordered: slot 0 first. With
-    // BOTH taken, slot 0 wins -- a taken branch ends the block, so
-    // slot 1 is off the path.
-    set_p1(0);
-    p1_slot[1].taken = 1'b1;
-    #1;
-    chk_va("B7 both taken, slot 0 wins", ftq_pred_pc_p0, PC_S0);
+      // fe_decisions.md 2.4 is priority ordered: slot 0 first. With
+      // BOTH taken, slot 0 wins -- a taken branch ends the block, so
+      // slot 1 is off the path.
+      set_p1(0);
+      p1_slot[HS].taken = 1'b1;
+      #1;
+      chk_va("B7 both taken, slot 0 wins", ftq_pred_pc_p0, PC_S0);
+    end else begin
+      skip("B6 slot 1 taken selects its target, SAME CYCLE");
+      skip("B7 both taken, slot 0 wins");
+    end
 
     // Neither taken: the fall-through, which arrives on
     // bpu_pred_pft_p1 and is the third arm of 2.4.
@@ -462,14 +479,16 @@ module tb;
     do_reset();
 
     // Establish a non-reset PC so the retention check is not
-    // comparing against the reset value.
-    set_p1(1);
+    // comparing against the reset value. BP-128: from the highest
+    // slot, HS, whose target PC_HS is PC_S1 at two slots and PC_S0 at
+    // one.
+    set_p1(HS);
     settle();
     tick();
     clr();
     settle();
     chk_va("D1 the PC advanced off the reset vector",
-           ftq_pred_pc_p0, PC_S1);
+           ftq_pred_pc_p0, PC_HS);
     chk("D2 requested with no hold", ftq_pred_val_p0);
 
     // H1, each of the three queues in turn. 4.5 names all three and
@@ -477,7 +496,7 @@ module tb;
     tage_pq_not_full = 1'b0;
     settle();
     chk   ("D3 H1 tage deasserts the request", !ftq_pred_val_p0);
-    chk_va("D4 and the PC is retained", ftq_pred_pc_p0, PC_S1);
+    chk_va("D4 and the PC is retained", ftq_pred_pc_p0, PC_HS);
     no_hold();
 
     ittage_pq_not_full = 1'b0;
@@ -494,7 +513,7 @@ module tb;
     h2_ftq_full = 1'b1;
     settle();
     chk   ("D7 H2 full deasserts the request", !ftq_pred_val_p0);
-    chk_va("D8 and the PC is retained", ftq_pred_pc_p0, PC_S1);
+    chk_va("D8 and the PC is retained", ftq_pred_pc_p0, PC_HS);
 
     // THE PC SURVIVES A LONG HOLD. This is the half a naive
     // implementation loses: deasserting the valid while letting the
@@ -502,11 +521,11 @@ module tb;
     // with no other symptom.
     repeat (10) tick();
     chk_va("D9 the PC survives ten held cycles",
-           ftq_pred_pc_p0, PC_S1);
+           ftq_pred_pc_p0, PC_HS);
     no_hold();
     settle();
     chk   ("D10 the request resumes", ftq_pred_val_p0);
-    chk_va("D11 with the PC it was holding", ftq_pred_pc_p0, PC_S1);
+    chk_va("D11 with the PC it was holding", ftq_pred_pc_p0, PC_HS);
 
     // R1, the fault hold of ftq_entry_formats.md 4.3. NOT one of
     // 4.5's two, and it is reported as a documentation gap; it is
@@ -514,7 +533,7 @@ module tb;
     r1_fault_hold = 1'b1;
     settle();
     chk   ("D12 R1 fault holds the request", !ftq_pred_val_p0);
-    chk_va("D13 and retains the PC", ftq_pred_pc_p0, PC_S1);
+    chk_va("D13 and retains the PC", ftq_pred_pc_p0, PC_HS);
     no_hold();
 
     // A REDIRECT IS PRESENTED DURING A HOLD. The hold gates the
@@ -604,9 +623,11 @@ module tb;
     clr();
     p3_redir_val      = 1'b1;
     p3_redir_idx      = 6'd32;
-    p3_redir[1].valid = 1'b1;
+    p3_redir[HS].valid = 1'b1;
     settle();
-    chk("E14 a p3 redirect from slot 1 restores",
+    // BP-128: from slot HS, slot 0 at one slot.
+    chk((NUM_PRED_SLOTS > 1) ? "E14 a p3 redirect from slot 1 restores"
+                             : "E14 a p3 redirect from slot 0 restores",
         rollback_val && (rollback_idx == 6'd32));
     chk("E15 and takes that slot's target",
         ftq_pred_pc_p0 === PC_P3);
@@ -627,9 +648,14 @@ module tb;
     redir_entry.slot[0].slot_valid = 1'b1;
     redir_entry.slot[0].br_type    = COND;
     redir_entry.slot[0].pos        = FTB_BR_POS_BITS'(2);
-    redir_entry.slot[1].slot_valid = 1'b1;
-    redir_entry.slot[1].br_type    = COND;
-    redir_entry.slot[1].pos        = FTB_BR_POS_BITS'(6);
+    // BP-128: slot 1, and F1, F2 and F5, which use it, need a slot 1.
+    // The slot vectors below are cast to NUM_PRED_SLOTS: at two slots
+    // the cast changes nothing, at one it keeps slot 0's bit.
+    if (NUM_PRED_SLOTS > 1) begin
+      redir_entry.slot[HS].slot_valid = 1'b1;
+      redir_entry.slot[HS].br_type    = COND;
+      redir_entry.slot[HS].pos        = FTB_BR_POS_BITS'(6);
+    end
 
     // The slot-1 conditional mispredicted, resolved taken: slot 0 was
     // passed not taken.
@@ -637,13 +663,20 @@ module tb;
     bkend_redir_idx   = 6'd12;
     bkend_redir_self  = 1'b0;
     bkend_redir_cause = RC_MISPREDICT;
-    bkend_redir_pos   = FTB_BR_POS_BITS'(6);
-    bkend_redir_taken = 1'b1;
-    settle();
-    chk("F1 the bundle is two bits",
-        rollback_corr && (rollback_n == 2'd2) && (rollback_tkn == 2'b10));
-    chk("F2 both slots executed, slot 1 taken",
-        (rollback_slot_ex == 2'b11) && (rollback_slot_tkn == 2'b10));
+    if (NUM_PRED_SLOTS > 1) begin
+      bkend_redir_pos   = FTB_BR_POS_BITS'(6);
+      bkend_redir_taken = 1'b1;
+      settle();
+      chk("F1 the bundle is two bits",
+          rollback_corr && (rollback_n == 2'd2) &&
+          (rollback_tkn == 2'b10));
+      chk("F2 both slots executed, slot 1 taken",
+          (rollback_slot_ex  == NUM_PRED_SLOTS'(2'b11)) &&
+          (rollback_slot_tkn == NUM_PRED_SLOTS'(2'b10)));
+    end else begin
+      skip("F1 the bundle is two bits");
+      skip("F2 both slots executed, slot 1 taken");
+    end
 
     // The slot-0 conditional mispredicted, resolved not taken: slot 1
     // is past it and did not execute in this entry.
@@ -653,28 +686,31 @@ module tb;
     chk("F3 the bundle is one bit",
         rollback_corr && (rollback_n == 2'd1) && (rollback_tkn == 2'b00));
     chk("F4 slot 0 executed not taken, slot 1 did not execute",
-        (rollback_slot_ex == 2'b01) && (rollback_slot_tkn == 2'b00));
+        (rollback_slot_ex  == NUM_PRED_SLOTS'(2'b01)) &&
+        (rollback_slot_tkn == NUM_PRED_SLOTS'(2'b00)));
 
     // A jump in slot 1 is not a conditional: no loop-predictor slot.
-    redir_entry.slot[1].br_type = DIRECT_UNC;
-    bkend_redir_pos   = FTB_BR_POS_BITS'(6);
-    bkend_redir_taken = 1'b1;
-    settle();
-    chk("F5 a non-conditional slot is not marked",
-        rollback_slot_ex == 2'b01);
+    if (NUM_PRED_SLOTS > 1) begin
+      redir_entry.slot[HS].br_type = DIRECT_UNC;
+      bkend_redir_pos   = FTB_BR_POS_BITS'(6);
+      bkend_redir_taken = 1'b1;
+      settle();
+      chk("F5 a non-conditional slot is not marked",
+          rollback_slot_ex == NUM_PRED_SLOTS'(2'b01));
+    end else skip("F5 a non-conditional slot is not marked");
 
     // _self set (a trap) and a predecode redirect carry no bundle.
     bkend_redir_self = 1'b1;
     settle();
     chk("F6 _self set: no bundle, no slots",
-        !rollback_corr && (rollback_slot_ex == 2'b00));
+        !rollback_corr && (rollback_slot_ex == NUM_PRED_SLOTS'(2'b00)));
     clr();
     bkend_redir_self = 1'b0;
     pd_redir_val     = 1'b1;
     pd_redir_idx     = 6'd13;
     settle();
     chk("F7 predecode: no bundle, no slots",
-        !rollback_corr && (rollback_slot_ex == 2'b00));
+        !rollback_corr && (rollback_slot_ex == NUM_PRED_SLOTS'(2'b00)));
     clr();
   endtask
 
@@ -685,9 +721,8 @@ module tb;
     pass_cnt = 0;
     fail_cnt = 0;
 
-    if (NUM_PRED_SLOTS != 2) begin
-      $fatal(1, "tb_ftq_npc: written for NUM_PRED_SLOTS == 2");
-    end
+    // BP-128: written for one or two slots; the checks that need two
+    // are skipped at one.
 
     do_reset();
     group_a();

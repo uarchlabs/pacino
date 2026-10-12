@@ -462,14 +462,13 @@ module tb;
   task automatic tc_age_01();
     $display("--- TC-AGE-01 ---");
     age_reset(32'd100, 1'b0);
-    chk32("AGE01 interval[0] reset",
-          dut.lcl_aging_interval[0], 32'd100);
-    chk32("AGE01 interval[1] reset",
-          dut.lcl_aging_interval[1], 32'd100);
-    chk2("AGE01 epoch[0] reset",
-         dut.lcl_epoch[0], 2'b00);
-    chk2("AGE01 epoch[1] reset",
-         dut.lcl_epoch[1], 2'b00);
+    // Every slot (BP-128: literal [0] and [1] before).
+    for (int s = 0; s < NPS; s++)
+      chk32($sformatf("AGE01 interval[%0d] reset", s),
+            dut.lcl_aging_interval[s], 32'd100);
+    for (int s = 0; s < NPS; s++)
+      chk2($sformatf("AGE01 epoch[%0d] reset", s),
+           dut.lcl_epoch[s], 2'b00);
   endtask
 
   // ================================================================
@@ -836,41 +835,43 @@ module tb;
   // ================================================================
   // TC-PRED-06: Dual-slot independent operation
   // Slot 0: IT5 hits. Slot 1: IT2 hits. No cross-slot effect.
+  // Needs two slots: skipped at NUM_PRED_SLOTS 1, and written with
+  // NPS-1 for slot 1 so it elaborates at 1 (BP-128).
   // ================================================================
   task automatic tc_pred_06();
     ittage_pred_meta_t m0, m1;
     logic r0, r1;
     $display("--- TC-PRED-06 ---");
     clr();
-    ittage_pred_val_p0            = 2'b11;
+    ittage_pred_val_p0            = '1;
     ittage_pred_inp_p0[0].pc      = VA_WIDTH'('h0);
     ittage_pred_inp_p0[0].branch_id = '0;
-    ittage_pred_inp_p0[1].pc      = VA_WIDTH'('h0);
-    ittage_pred_inp_p0[1].branch_id = '0;
+    ittage_pred_inp_p0[NPS-1].pc  = VA_WIDTH'('h0);
+    ittage_pred_inp_p0[NPS-1].branch_id = '0;
     // Drive tbl_hit_p1 BEFORE p0->p1 posedge so Verilator's
     // nba_sequent at that edge sees the correct table results.
     tbl_hit_p1[5][0]        = 1'b1;
-    tbl_hit_p1[2][1]        = 1'b1;
+    tbl_hit_p1[2][NPS-1]        = 1'b1;
     tbl_cntrl_bits_p1[5][0] = mk_cb(1'b1, 3'b111, 2'b11,
                                 2'b00, IT_MAX_TGT_WIDTH'('h0000_0000_CCCC));
     tbl_pred_tgt_p1[5][0]   = IT_MAX_TGT_WIDTH'('h0000_0000_CCCC);
-    tbl_cntrl_bits_p1[2][1] = mk_cb(1'b1, 3'b001, 2'b00,
+    tbl_cntrl_bits_p1[2][NPS-1] = mk_cb(1'b1, 3'b001, 2'b00,
                                 2'b00, IT_MAX_TGT_WIDTH'('h0000_0000_DDDD));
-    tbl_pred_tgt_p1[2][1]   = IT_MAX_TGT_WIDTH'('h0000_0000_DDDD);
+    tbl_pred_tgt_p1[2][NPS-1]   = IT_MAX_TGT_WIDTH'('h0000_0000_DDDD);
     @(posedge clk); #1;
     ittage_pred_val_p0      = '0;
     // Hold hit/cntrl/tgt stable until meta_p2_reg latches.
     @(posedge clk); #1;
     m0 = ittage_pred_meta_p2[0];
-    m1 = ittage_pred_meta_p2[1];
+    m1 = ittage_pred_meta_p2[NPS-1];
     r0 = ittage_pred_rdy_p2[0];
-    r1 = ittage_pred_rdy_p2[1];
+    r1 = ittage_pred_rdy_p2[NPS-1];
     tbl_hit_p1[5][0]        = 1'b0;
-    tbl_hit_p1[2][1]        = 1'b0;
+    tbl_hit_p1[2][NPS-1]        = 1'b0;
     tbl_cntrl_bits_p1[5][0] = '0;
     tbl_pred_tgt_p1[5][0]   = '0;
-    tbl_cntrl_bits_p1[2][1] = '0;
-    tbl_pred_tgt_p1[2][1]   = '0;
+    tbl_cntrl_bits_p1[2][NPS-1] = '0;
+    tbl_pred_tgt_p1[2][NPS-1]   = '0;
     clr();
     chk3("PRED06 s0 prm_comp", m0.ittage_prm_comp,   3'(5));
     chk1("PRED06 s0 hit",      m0.ittage_hit,         1'b1);
@@ -1120,10 +1121,10 @@ module tb;
   task automatic tc_uaon_01();
     $display("--- TC-UAON-01 ---");
     do_reset();
-    chk4("UAON01 uaon[0] reset",
-         dut.uaon[0], 4'(IT_UAON_THRES));
-    chk4("UAON01 uaon[1] reset",
-         dut.uaon[1], 4'(IT_UAON_THRES));
+    // Every slot (BP-128: literal [0] and [1] before).
+    for (int s = 0; s < NPS; s++)
+      chk4($sformatf("UAON01 uaon[%0d] reset", s),
+           dut.uaon[s], 4'(IT_UAON_THRES));
   endtask
 
   // ================================================================
@@ -1633,7 +1634,8 @@ module tb;
     tc_pred_03();
     tc_pred_04();
     tc_pred_05();
-    tc_pred_06();
+    if (NPS > 1) tc_pred_06();   // needs two slots (BP-128)
+    else $display("SKIP TC-PRED-06 dual-slot: needs NUM_PRED_SLOTS > 1");
 
     tc_upd_01();
     tc_upd_02();

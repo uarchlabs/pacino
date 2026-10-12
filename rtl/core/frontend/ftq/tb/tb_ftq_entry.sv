@@ -167,6 +167,17 @@ module tb;
     #1;
   endtask
 
+  // BP-128. A check that needs a second slot or a second resolution
+  // port (NUM_RESOLVE_PORTS is NUM_PRED_SLOTS) runs only at two slots.
+  // HS and HP name slot 1 and port 1 at two slots and stay in range at
+  // one, where the check is skipped and says so.
+  localparam int HS = NUM_PRED_SLOTS - 1;
+  localparam int HP = NUM_RESOLVE_PORTS - 1;
+
+  task automatic skip(input string nm);
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
   task automatic clr();
     alloc_wr_val    = 1'b0;
     blk_wr_val      = 1'b0;
@@ -253,7 +264,8 @@ module tb;
     alloc_wr_slot[0]   = mk_slot(1'b1,
                            VA_WIDTH'(VA_WIDTH'('h00_9000_0000) + idx * 64),
                            COND, 1'b0, FTB_BR_POS_BITS'(2));
-    alloc_wr_slot[1]   = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+    if (NUM_PRED_SLOTS > 1)
+      alloc_wr_slot[HS] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
     alloc_wr_val = 1'b0;
   endtask
@@ -294,8 +306,10 @@ module tb;
            fetch_rd_entry.ras.bos  == RAS_PTR_BITS'(9));
     chk_va("A9 slot 0 target landed", fetch_rd_entry.slot[0].target,
            VA_WIDTH'(VA_WIDTH'('h00_9000_0000) + 7 * 64));
-    chk   ("A10 slot 1 is invalid",
-           !fetch_rd_entry.slot[1].slot_valid);
+    if (NUM_PRED_SLOTS > 1)
+      chk ("A10 slot 1 is invalid",
+           !fetch_rd_entry.slot[HS].slot_valid);
+    else skip("A10 slot 1 is invalid");
 
     // AND NO OTHER ENTRY WAS TOUCHED. A write that landed in every
     // location, or in a location the index did not name, passes
@@ -322,7 +336,7 @@ module tb;
     pdwb_rd_idx   = 6'd3;
     commit_rd_idx = 6'd4;
     rsv_rd_idx[0] = 6'd5;
-    rsv_rd_idx[1] = 6'd0;
+    if (NUM_RESOLVE_PORTS > 1) rsv_rd_idx[HP] = 6'd0;
     #1;
     chk_va("B1 fetch port",   fetch_rd_entry.pc,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 1 * 32));
@@ -334,8 +348,10 @@ module tb;
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 4 * 32));
     chk_va("B5 resolve port 0", rsv_rd_entry[0].pc,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 5 * 32));
-    chk_va("B6 resolve port 1", rsv_rd_entry[1].pc,
-           VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 0 * 32));
+    if (NUM_RESOLVE_PORTS > 1)
+      chk_va("B6 resolve port 1", rsv_rd_entry[HP].pc,
+             VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 0 * 32));
+    else skip("B6 resolve port 1");
 
     // The translation port (BP-112, ftq_ifu_interfaces.md 4.1). The
     // block start pc only, at its own index, independent of the
@@ -358,11 +374,13 @@ module tb;
 
     // TWO RESOLUTION PORTS NAMING ONE ENTRY agree. Both branches of
     // one block resolving together is ordinary traffic.
-    rsv_rd_idx[0] = 6'd3;
-    rsv_rd_idx[1] = 6'd3;
-    #1;
-    chk("B8 two resolve ports on one entry agree",
-        rsv_rd_entry[0].pc === rsv_rd_entry[1].pc);
+    if (NUM_RESOLVE_PORTS > 1) begin
+      rsv_rd_idx[0]  = 6'd3;
+      rsv_rd_idx[HP] = 6'd3;
+      #1;
+      chk("B8 two resolve ports on one entry agree",
+          rsv_rd_entry[0].pc === rsv_rd_entry[HP].pc);
+    end else skip("B8 two resolve ports on one entry agree");
   endtask
 
   // -----------------------------------------------------------------
@@ -382,8 +400,9 @@ module tb;
     p2_wr_idx     = 6'd11;
     p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_A000_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(4));
-    p2_wr_slot[1] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_A000_1000)),
-                            DIRECT_UNC, 1'b0, FTB_BR_POS_BITS'(9));
+    if (NUM_PRED_SLOTS > 1)
+      p2_wr_slot[HS] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_A000_1000)),
+                               DIRECT_UNC, 1'b0, FTB_BR_POS_BITS'(9));
     tick();
     p2_wr_val = 1'b0;
 
@@ -393,8 +412,10 @@ module tb;
            VA_WIDTH'(VA_WIDTH'('h00_A000_0000)));
     chk   ("C2 p2 rewrote slot 0 pos",
            fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(4));
-    chk   ("C3 p2 made slot 1 valid",
-           fetch_rd_entry.slot[1].slot_valid);
+    if (NUM_PRED_SLOTS > 1)
+      chk ("C3 p2 made slot 1 valid",
+           fetch_rd_entry.slot[HS].slot_valid);
+    else skip("C3 p2 made slot 1 valid");
     chk_va("C4 block pc untouched by p2", fetch_rd_entry.pc,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 11 * 32));
     chk   ("C5 checkpoint untouched by p2",
@@ -411,7 +432,8 @@ module tb;
     p3_wr_idx     = 6'd11;
     p3_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_C000_0000)),
                             COND, 1'b0, FTB_BR_POS_BITS'(4));
-    p3_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+    if (NUM_PRED_SLOTS > 1)
+      p3_wr_slot[HS] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
     clr();
     #1;
@@ -428,7 +450,8 @@ module tb;
     p2_wr_idx     = 6'd12;
     p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_D000_0000)),
                             COND, 1'b1, FTB_BR_POS_BITS'(1));
-    p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+    if (NUM_PRED_SLOTS > 1)
+      p2_wr_slot[HS] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     p3_wr_val     = 1'b1;
     p3_wr_idx     = 6'd11;
     p3_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_E000_0000)),
@@ -458,35 +481,45 @@ module tb;
     p2_wr_idx     = 6'd20;
     p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9100_0000)),
                             COND, 1'b0, FTB_BR_POS_BITS'(3));
-    p2_wr_slot[1] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9200_0000)),
-                            COND, 1'b1, FTB_BR_POS_BITS'(11));
+    if (NUM_PRED_SLOTS > 1)
+      p2_wr_slot[HS] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9200_0000)),
+                               COND, 1'b1, FTB_BR_POS_BITS'(11));
     tick();
     p2_wr_val = 1'b0;
     fetch_rd_idx = 6'd20;
     #1;
-    chk("D1 both slots valid before the correction",
-        fetch_rd_entry.slot[0].slot_valid &&
-        fetch_rd_entry.slot[1].slot_valid);
+    if (NUM_PRED_SLOTS > 1) begin
+      chk("D1 both slots valid before the correction",
+          fetch_rd_entry.slot[0].slot_valid &&
+          fetch_rd_entry.slot[HS].slot_valid);
 
-    // Predecode found an unconditional at position 5, which is
-    // after slot 0 and before slot 1. It goes in slot 1 and there
-    // is nothing above it to kill -- but the kill still fires and
-    // must not disturb slot 0.
-    pd_wr_val  = 1'b1;
-    pd_wr_idx  = 6'd20;
-    pd_wr_sel  = TRX_SLOT_BITS'(1);
-    pd_wr_slot = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9300_0000)),
-                         DIRECT_UNC, 1'b1, FTB_BR_POS_BITS'(5));
-    pd_wr_kill = 1'b1;
-    tick();
-    clr();
-    #1;
-    chk_va("D2 the named slot was rewritten",
-           fetch_rd_entry.slot[1].target, VA_WIDTH'(VA_WIDTH'('h00_9300_0000)));
-    chk   ("D3 the named slot took the predecode type",
-           fetch_rd_entry.slot[1].br_type == DIRECT_UNC);
-    chk_va("D4 the slot below is untouched",
-           fetch_rd_entry.slot[0].target, VA_WIDTH'(VA_WIDTH'('h00_9100_0000)));
+      // Predecode found an unconditional at position 5, which is
+      // after slot 0 and before slot 1. It goes in slot 1 and there
+      // is nothing above it to kill -- but the kill still fires and
+      // must not disturb slot 0.
+      pd_wr_val  = 1'b1;
+      pd_wr_idx  = 6'd20;
+      pd_wr_sel  = TRX_SLOT_BITS'(HS);
+      pd_wr_slot = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9300_0000)),
+                           DIRECT_UNC, 1'b1, FTB_BR_POS_BITS'(5));
+      pd_wr_kill = 1'b1;
+      tick();
+      clr();
+      #1;
+      chk_va("D2 the named slot was rewritten",
+             fetch_rd_entry.slot[HS].target,
+             VA_WIDTH'(VA_WIDTH'('h00_9300_0000)));
+      chk   ("D3 the named slot took the predecode type",
+             fetch_rd_entry.slot[HS].br_type == DIRECT_UNC);
+      chk_va("D4 the slot below is untouched",
+             fetch_rd_entry.slot[0].target,
+             VA_WIDTH'(VA_WIDTH'('h00_9100_0000)));
+    end else begin
+      skip("D1 both slots valid before the correction");
+      skip("D2 the named slot was rewritten");
+      skip("D3 the named slot took the predecode type");
+      skip("D4 the slot below is untouched");
+    end
 
     // Now the kill has work: correct slot 0 and slot 1 must go.
     pd_wr_val  = 1'b1;
@@ -500,10 +533,15 @@ module tb;
     #1;
     chk_va("D5 slot 0 rewritten", fetch_rd_entry.slot[0].target,
            VA_WIDTH'(VA_WIDTH'('h00_9400_0000)));
-    chk   ("D6 slot 1 killed",
-           !fetch_rd_entry.slot[1].slot_valid);
-    chk   ("D7 slot 1 not taken after the kill",
-           !fetch_rd_entry.slot[1].taken);
+    if (NUM_PRED_SLOTS > 1) begin
+      chk ("D6 slot 1 killed",
+           !fetch_rd_entry.slot[HS].slot_valid);
+      chk ("D7 slot 1 not taken after the kill",
+           !fetch_rd_entry.slot[HS].taken);
+    end else begin
+      skip("D6 slot 1 killed");
+      skip("D7 slot 1 not taken after the kill");
+    end
     chk_va("D8 the block pc survives the correction",
            fetch_rd_entry.pc,
            VA_WIDTH'(VA_WIDTH'('h00_8000_0000) + 20 * 32));
@@ -530,7 +568,8 @@ module tb;
     p2_wr_idx     = 6'd30;
     p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9500_0000)),
                             DIRECT_CALL, 1'b1, FTB_BR_POS_BITS'(6));
-    p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+    if (NUM_PRED_SLOTS > 1)
+      p2_wr_slot[HS] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
     p2_wr_val = 1'b0;
     commit_step_val = 1'b1;
@@ -683,7 +722,8 @@ module tb;
     p2_wr_idx     = 6'd41;
     p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9500_0000)),
                             DIRECT_CALL, 1'b1, FTB_BR_POS_BITS'(8));
-    p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+    if (NUM_PRED_SLOTS > 1)
+      p2_wr_slot[HS] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
     tick();
     p2_wr_val       = 1'b0;
     commit_rd_idx   = 6'd41;
@@ -735,7 +775,8 @@ module tb;
       p2_wr_idx     = 6'd50;
       p2_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9800_0000)),
                               bt, 1'b1, FTB_BR_POS_BITS'(4));
-      p2_wr_slot[1] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
+      if (NUM_PRED_SLOTS > 1)
+        p2_wr_slot[HS] = mk_slot(1'b0, '0, NO_BRANCH, 1'b0, '0);
       tick();
       p2_wr_val       = 1'b0;
       commit_rd_idx   = 6'd50;
@@ -770,24 +811,33 @@ module tb;
     alloc(40);
     alloc(41);
     // I1-I3: channel 1 places a taken RETURN_CALL in slot 1 of 40.
+    // BP-128: at one slot, channel 0 places it in slot 0 (HP, HS);
+    // I2 needs a second slot, and I3 reads the alloc value of slot 0
+    // of entry 41, which at two slots is the empty slot 1.
     ns = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9A00_0000)), RETURN_CALL,
                  1'b1, FTB_BR_POS_BITS'(7));
-    rsv_wr_val     = 2'b10;
-    rsv_wr_idx[1]  = 6'd40;
-    rsv_wr_sel[1]  = 1'b1;
-    rsv_wr_slot[1] = ns;
+    rsv_wr_val      = '0;
+    rsv_wr_val[HP]  = 1'b1;
+    rsv_wr_idx[HP]  = 6'd40;
+    rsv_wr_sel[HP]  = TRX_SLOT_BITS'(HS);
+    rsv_wr_slot[HP] = ns;
     tick();
     rsv_wr_val = '0;
     fetch_rd_idx = 6'd40;
     #1;
-    chk("I1 the placed slot lands", fetch_rd_entry.slot[1] == ns);
-    chk("I2 the other slot of the entry is untouched",
-        (fetch_rd_entry.slot[0].br_type == COND) &&
-        (fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(2)));
+    chk("I1 the placed slot lands", fetch_rd_entry.slot[HS] == ns);
+    if (NUM_PRED_SLOTS > 1)
+      chk("I2 the other slot of the entry is untouched",
+          (fetch_rd_entry.slot[0].br_type == COND) &&
+          (fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(2)));
+    else skip("I2 the other slot of the entry is untouched");
     fetch_rd_idx = 6'd41;
     #1;
     chk("I3 no other entry is written",
-        fetch_rd_entry.slot[1].slot_valid == 1'b0);
+        (NUM_PRED_SLOTS > 1)
+          ? (fetch_rd_entry.slot[HS].slot_valid == 1'b0)
+          : ((fetch_rd_entry.slot[0].br_type == COND) &&
+             (fetch_rd_entry.slot[0].pos == FTB_BR_POS_BITS'(2))));
     commit_rd_idx   = 6'd40;
     commit_step_val = 1'b1;
     #1;
@@ -802,7 +852,8 @@ module tb;
     pd_wr_sel      = 1'b0;
     pd_wr_slot     = mk_slot(1'b1, '0, DIRECT_UNC, 1'b1,
                              FTB_BR_POS_BITS'(5));
-    rsv_wr_val     = 2'b01;
+    rsv_wr_val     = '0;
+    rsv_wr_val[0]  = 1'b1;
     rsv_wr_idx[0]  = 6'd41;
     rsv_wr_sel[0]  = 1'b0;
     rsv_wr_slot[0] = mk_slot(1'b1, VA_WIDTH'(VA_WIDTH'('h00_9B00_0000)),
@@ -824,8 +875,10 @@ module tb;
     pass_cnt = 0;
     fail_cnt = 0;
 
-    if (FTQ_DEPTH != 64 || NUM_PRED_SLOTS != 2) begin
-      $fatal(1, "tb_ftq_entry: written for FTQ_DEPTH 64, slots 2");
+    // BP-128: written for one or two slots; the checks that need two
+    // are skipped at one.
+    if (FTQ_DEPTH != 64) begin
+      $fatal(1, "tb_ftq_entry: written for FTQ_DEPTH 64");
     end
 
     do_reset();

@@ -9,8 +9,8 @@
 // -------------------------------------------------------------------
 // Self-checking unit testbench for sc_brimli (ST4, BrIMLI table).
 // DUT instantiated directly as u_dut with the ST4 parameters
-// (THIS_TABLE=4, get_br_imli_idx index, 10-bit index, 1024 entries).
-// NUM_PRED_SLOTS=2.
+// (THIS_TABLE=4, get_br_imli_idx index, 10-bit index, 1024 entries),
+// at the package NUM_PRED_SLOTS, 1 or 2 (BP-128).
 //
 // sc_brimli is a counter-only RAM table: combinational get_br_imli_idx
 // index at p2, one-cycle bw_ram read (ctr_p3 at p3), whole-word update
@@ -33,7 +33,8 @@
 // plusarg the tb drives the tbl_ri override path to init.
 //
 // Hierarchical RAM content is checked through the two named bw_ram
-// instances: u_dut.u_ram_s0.mem[b][row], u_dut.u_ram_s1.mem[b][row].
+// instances: u_dut.g_slot[s].u_ram.mem[b][row]. Slot 1 is read through
+// g_s1, which exists only at NUM_PRED_SLOTS 2 (BP-128).
 // bw_ram mem is 2D mem[BANKS][ENTRIES]. For ST4: bank = index[9],
 // row = index[8:0], 512 rows/bank.
 //
@@ -43,6 +44,7 @@
 // TC4: update write     -- whole-word write, no other entry moves,
 //                          no write when val=0 or wr=0.
 // TC5: slot independence-- slot 0 and slot 1 write disjoint RAMs.
+//                          Needs two slots; skipped at 1 (BP-128).
 // TC6: tbl_ri override  -- init path wins, concurrent update dropped.
 // TC7: bank decomposition- index[9]=0 -> bank 0, index[9]=1 -> bank 1.
 // ===================================================================
@@ -60,7 +62,7 @@ module tb;
   localparam int P_INDEX_BITS  = SC_TBL_IDX[4];      // 10
   localparam int P_CTR_WIDTH   = SC_TBL_CTR[4];      // 6
   localparam int P_ENTRIES     = SC_TBL_ENTRIES[4];  // 1024
-  localparam int P_NUM_SLOTS   = NUM_PRED_SLOTS;     // 2
+  localparam int P_NUM_SLOTS   = NUM_PRED_SLOTS;     // 1 or 2
 
   // Derived widths matching the sc_brimli localparams.
   // The SC entry is the counter only: no tag/USE/EPC/valid.
@@ -125,7 +127,6 @@ module tb;
     .THIS_INDEX_BITS(P_INDEX_BITS),
     .THIS_CTR_WIDTH (P_CTR_WIDTH),
     .THIS_ENTRIES   (P_ENTRIES),
-    .NUM_PRED_SLOTS (P_NUM_SLOTS),
     .BR_IMLI_MODE   (IDX_IMLI_PHR)
   ) u_dut (
     .ctr_p3        (ctr_p3),
@@ -154,7 +155,6 @@ module tb;
     .THIS_INDEX_BITS(P_INDEX_BITS),
     .THIS_CTR_WIDTH (P_CTR_WIDTH),
     .THIS_ENTRIES   (P_ENTRIES),
-    .NUM_PRED_SLOTS (P_NUM_SLOTS),
     .BR_IMLI_MODE   (IDX_PHR_ONLY)
   ) u_dut_phr (
     .ctr_p3        (ctr_p3_phr),
@@ -183,7 +183,6 @@ module tb;
     .THIS_INDEX_BITS(P_INDEX_BITS),
     .THIS_CTR_WIDTH (P_CTR_WIDTH),
     .THIS_ENTRIES   (P_ENTRIES),
-    .NUM_PRED_SLOTS (P_NUM_SLOTS),
     .BR_IMLI_MODE   (IDX_IMLI_ONLY)
   ) u_dut_imli (
     .ctr_p3        (ctr_p3_imli),
@@ -255,9 +254,23 @@ module tb;
     logic [ROW_BITS-1:0]  row;
     b   = idx[P_INDEX_BITS-1];
     row = idx[ROW_BITS-1:0];
-    if (s == 0) ram_rd = u_dut.u_ram_s0.mem[b][row];
-    else        ram_rd = u_dut.u_ram_s1.mem[b][row];
+    if (s == 0) ram_rd = u_dut.g_slot[0].u_ram.mem[b][row];
+    else        ram_rd = g_s1.rd(b, row);
   endfunction
+
+  // BP-128: slot 1's RAM exists only at NUM_PRED_SLOTS 2. g_s1.rd reads
+  // it; at 1 the stub is never called (every slot-1 read is gated).
+  if (NUM_PRED_SLOTS > 1) begin : g_s1
+    function automatic logic [ALLOC_DATA_W-1:0] rd(
+        input logic b, input logic [ROW_BITS-1:0] row);
+      rd = u_dut.g_slot[1].u_ram.mem[b][row];
+    endfunction
+  end else begin : g_s1
+    function automatic logic [ALLOC_DATA_W-1:0] rd(
+        input logic b, input logic [ROW_BITS-1:0] row);
+      rd = '0;
+    endfunction
+  end
 
   // ----------------------------------------------------------------
   // Stimulus helpers
@@ -297,7 +310,8 @@ module tb;
     clr_upd();
     clr_ri();
     inp_pc_p2[0] = pc0;
-    inp_pc_p2[1] = pc1;
+    // BP-128: slot 1 only at two slots (loop, so no constant index).
+    for (int s = 1; s < P_NUM_SLOTS; s++) inp_pc_p2[s] = pc1;
     sc_phr_p2    = phr;
     br_imli      = imli;
   endtask
@@ -316,19 +330,22 @@ module tb;
     clr_upd();
   endtask
 
-  // Dual-slot write in the same cycle.
+  // Dual-slot write in the same cycle. At one slot (BP-128) only the
+  // slot 0 half is driven.
   task automatic wr_entry2(
       input logic [P_INDEX_BITS-1:0] i0,
       input logic [P_CTR_WIDTH-1:0]  d0,
       input logic [P_INDEX_BITS-1:0] i1,
       input logic [P_CTR_WIDTH-1:0]  d1);
     clr_ri();
-    sc_upd_val_u0   = 2'b11;
-    ctr_wr_u0       = 2'b11;
+    sc_upd_val_u0   = '1;
+    ctr_wr_u0       = '1;
     upd_index_u0[0] = i0;
     ctr_wd_u0[0]    = d0;
-    upd_index_u0[1] = i1;
-    ctr_wd_u0[1]    = d1;
+    for (int s = 1; s < P_NUM_SLOTS; s++) begin
+      upd_index_u0[s] = i1;
+      ctr_wd_u0[s]    = d1;
+    end
     @(posedge clk); #1;
     clr_upd();
   endtask
@@ -370,8 +387,9 @@ module tb;
     errs = 0;
     for (int b = 0; b < NUM_BANKS; b++) begin
       for (int i = 0; i < RAM_ENTRIES; i++) begin
-        if (u_dut.u_ram_s0.mem[b][i] !== INIT_VAL) errs++;
-        if (u_dut.u_ram_s1.mem[b][i] !== INIT_VAL) errs++;
+        if (u_dut.g_slot[0].u_ram.mem[b][i] !== INIT_VAL) errs++;
+        if (P_NUM_SLOTS > 1 &&
+            g_s1.rd(b[0], ROW_BITS'(i)) !== INIT_VAL) errs++;
       end
     end
     if (errs == 0) begin
@@ -412,15 +430,18 @@ module tb;
     // Index check (combinational at p2).
     drive_pred(pc0, pc1, phr, imli);
     #1;
-    ihok = (idx_hash_p2[0] === eidx0) &&
-           (idx_hash_p2[1] === eidx1);
+    // BP-128: slot s > 0 is checked only where it exists.
+    ihok = (idx_hash_p2[0] === eidx0);
+    for (int s = 1; s < P_NUM_SLOTS; s++)
+      ihok = ihok && (idx_hash_p2[s] === eidx1);
 
     // Seed both entries, then read back on the prediction path.
     wr_entry2(eidx0, seed0, eidx1, seed1);
     drive_pred(pc0, pc1, phr, imli);
     @(posedge clk); #1;
-    rdok = (ctr_p3[0] === seed0) &&
-           (ctr_p3[1] === seed1);
+    rdok = (ctr_p3[0] === seed0);
+    for (int s = 1; s < P_NUM_SLOTS; s++)
+      rdok = rdok && (ctr_p3[s] === seed1);
     clr_pred();
 
     if (ihok && rdok) begin
@@ -429,8 +450,8 @@ module tb;
     end else begin
       $display(
         "[FAIL] TC2: ih=%b idx=%0h/%0h(exp %0h/%0h) rd=%b c=%0h/%0h",
-        ihok, idx_hash_p2[0], idx_hash_p2[1], eidx0, eidx1,
-        rdok, ctr_p3[0], ctr_p3[1]);
+        ihok, idx_hash_p2[0], idx_hash_p2[P_NUM_SLOTS-1], eidx0, eidx1,
+        rdok, ctr_p3[0], ctr_p3[P_NUM_SLOTS-1]);
       fail_cnt++;
     end
   endtask
@@ -614,20 +635,22 @@ module tb;
     tbl_ri_wa       = iri;
     tbl_ri_wd       = dri;
     // Concurrent update request (must be dropped).
-    sc_upd_val_u0   = 2'b11;
-    ctr_wr_u0       = 2'b11;
-    upd_index_u0[0] = iup;
-    ctr_wd_u0[0]    = dup;
-    upd_index_u0[1] = iup;
-    ctr_wd_u0[1]    = dup;
+    sc_upd_val_u0   = '1;
+    ctr_wr_u0       = '1;
+    for (int s = 0; s < P_NUM_SLOTS; s++) begin
+      upd_index_u0[s] = iup;
+      ctr_wd_u0[s]    = dup;
+    end
     @(posedge clk); #1;
     clr_ri();
     clr_upd();
 
     ok = (ram_rd(0, iri) === dri)       &&  // RI won, slot 0 RAM
-         (ram_rd(1, iri) === dri)       &&  // RI won, slot 1 RAM
-         (ram_rd(0, iup) === INIT_VAL)  &&  // update suppressed
-         (ram_rd(1, iup) === INIT_VAL);
+         (ram_rd(0, iup) === INIT_VAL);     // update suppressed
+    // BP-128: the slot 1 RAM only at two slots.
+    if (P_NUM_SLOTS > 1)
+      ok = ok && (ram_rd(1, iri) === dri)   // RI won, slot 1 RAM
+              && (ram_rd(1, iup) === INIT_VAL);
 
     if (ok) begin
       $display("[PASS] TC6: tbl_ri override");
@@ -635,8 +658,8 @@ module tb;
     end else begin
       $display(
         "[FAIL] TC6: ri0=%0h ri1=%0h up0=%0h up1=%0h",
-        ram_rd(0, iri), ram_rd(1, iri),
-        ram_rd(0, iup), ram_rd(1, iup));
+        ram_rd(0, iri), ram_rd(P_NUM_SLOTS-1, iri),
+        ram_rd(0, iup), ram_rd(P_NUM_SLOTS-1, iup));
       fail_cnt++;
     end
   endtask
@@ -658,8 +681,8 @@ module tb;
     wr_entry(0, ilo, dlo);
     wr_entry(0, ihi, dhi);
 
-    ok = (u_dut.u_ram_s0.mem[0][ROW_BITS'('h020)] === dlo) &&
-         (u_dut.u_ram_s0.mem[1][ROW_BITS'('h020)] === dhi);
+    ok = (u_dut.g_slot[0].u_ram.mem[0][ROW_BITS'('h020)] === dlo) &&
+         (u_dut.g_slot[0].u_ram.mem[1][ROW_BITS'('h020)] === dhi);
 
     if (ok) begin
       $display("[PASS] TC7: bank decomposition");
@@ -667,8 +690,8 @@ module tb;
     end else begin
       $display(
         "[FAIL] TC7: bank0[0x20]=%0h(exp %0h) bank1[0x20]=%0h(exp %0h)",
-        u_dut.u_ram_s0.mem[0][ROW_BITS'('h020)], dlo,
-        u_dut.u_ram_s0.mem[1][ROW_BITS'('h020)], dhi);
+        u_dut.g_slot[0].u_ram.mem[0][ROW_BITS'('h020)], dlo,
+        u_dut.g_slot[0].u_ram.mem[1][ROW_BITS'('h020)], dhi);
       fail_cnt++;
     end
   endtask
@@ -683,7 +706,7 @@ module tb;
 
     // sc_pred_val_p2 is unconnected in the DUT; tie it high and do
     // not test it (BP-075a binding decision).
-    sc_pred_val_p2 = 2'b11;
+    sc_pred_val_p2 = '1;
     rstn           = 1'b0;
     clr_upd();
     clr_pred();
@@ -709,14 +732,18 @@ module tb;
     if (_pred_read   != 0) test_pred_read(verbose);
     if (_mode_cov    != 0) test_mode_cov(verbose);
     if (_upd_write   != 0) test_upd_write(verbose);
-    if (_slot_indep  != 0) test_slot_indep(verbose);
+    // TC5 needs two slots (BP-128).
+    if (_slot_indep  != 0) begin
+      if (P_NUM_SLOTS > 1) test_slot_indep(verbose);
+      else $display("SKIP TC5 slot independence: needs NUM_PRED_SLOTS > 1");
+    end
     if (_tbl_ri      != 0) test_tbl_ri(verbose);
     if (_bank_decomp != 0) test_bank_decomp(verbose);
 
     @(posedge clk); #1;
     $display("--------------------------------------------");
-    $display("Results: %0d PASS  %0d FAIL  (of 7 TCs)",
-             pass_cnt, fail_cnt);
+    $display("Results: %0d PASS  %0d FAIL  (of %0d TCs)",
+             pass_cnt, fail_cnt, (P_NUM_SLOTS > 1) ? 7 : 6);
     if (fail_cnt != 0)
       $fatal(1, "TESTBENCH FAILED");
     else

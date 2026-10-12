@@ -41,8 +41,8 @@
 // not internally qualified (IC-SC-05); the cluster gates SC
 // consumption.
 //
-// NUM_PRED_SLOTS shadows bp_defines_pkg::NUM_PRED_SLOTS. sc_cntrl,
-// sc_table and sc_brimli each shadow it too. -Wno-VARHIDDEN required.
+// The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128): sc and
+// its children take no slot parameter of their own.
 // sram_init uses an async reset; rstn also feeds the sync flops in
 // sc_cntrl, so -Wno-SYNCASYNCNET is required (same as tage/ittage).
 // ===================================================================
@@ -55,7 +55,6 @@ import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
 module sc #(
-  parameter int NUM_PRED_SLOTS = bp_defines_pkg::NUM_PRED_SLOTS,
   // BrIMLI ST4 index mode is a compile-time selector (sc_decisions.md
   // section 12), passed down to the sc_brimli ST4 instance. Not a port.
   parameter br_imli_mode_e SC_BR_IMLI_MODE = IDX_IMLI_PHR
@@ -290,9 +289,7 @@ module sc #(
   // sc_cntrl: SC control / logic layer (BP-077). All SC-top-facing
   // valids are gated on sc_ready.
   // ================================================================
-  sc_cntrl #(
-    .NUM_PRED_SLOTS   (NUM_PRED_SLOTS)
-  ) u_sc_cntrl (
+  sc_cntrl u_sc_cntrl (
     .clk              (clk),
     .rstn             (rstn),
     .tage_pred_rdy_p2 (pred_rdy_p2_gated),
@@ -350,8 +347,7 @@ module sc #(
         .THIS_INDEX_BITS(SC_TBL_IDX[t]),
         .THIS_CTR_WIDTH (SC_TBL_CTR[t]),
         .THIS_ENTRIES   (SC_TBL_ENTRIES[t]),
-        .THIS_FH        (SC_TBL_FH[t]),
-        .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
+        .THIS_FH        (SC_TBL_FH[t])
       ) u_st (
         .ctr_p3        (w_ctr_p3[t]),
         .idx_hash_p2   (st_idx_hash_p2),
@@ -382,7 +378,6 @@ module sc #(
     .THIS_INDEX_BITS(SC_TBL_IDX[ST4]),
     .THIS_CTR_WIDTH (SC_TBL_CTR[ST4]),
     .THIS_ENTRIES   (SC_TBL_ENTRIES[ST4]),
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS),
     .BR_IMLI_MODE   (SC_BR_IMLI_MODE)
   ) u_st4 (
     .ctr_p3        (w_ctr_p3[ST4]),

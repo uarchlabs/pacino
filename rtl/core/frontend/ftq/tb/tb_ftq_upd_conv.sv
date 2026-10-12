@@ -136,6 +136,16 @@ module tb;
 
   // A concurrent property samples at posedge clk; present the state
   // across an edge so the bound properties see it (TD#109).
+  // BP-128. A check that needs a second slot runs only at two slots.
+  // HS names slot 1 at two slots and slot 0 at one; groups C and E
+  // check slot HS, which is slot 1 at two slots as before. A skipped
+  // check says so.
+  localparam int HS = NUM_PRED_SLOTS - 1;
+
+  task automatic skip(input string nm);
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
   task automatic settle();
     #1;
     @(posedge clk);
@@ -277,13 +287,13 @@ module tb;
     $display("-- A: idle --");
     do_reset();
     chk("A1 nothing presented to any predictor",
-        (ubtb_upd_u0[0].valid === 1'b0) && (ubtb_upd_u0[1].valid === 1'b0)
+        (ubtb_upd_u0[0].valid === 1'b0) && (ubtb_upd_u0[HS].valid === 1'b0)
      && (lp_upd_valid_p0 === '0) && (tage_upd_val_u0 === '0)
      && (ittage_upd_val_u0 === '0) && (sc_upd_val_u0 === '0));
     chk("A2 a slot with no request is accepted", upd_acc === '1);
     chk("A3 no payload without a record",
         (ubtb_upd_u0 === '0) && (lp_upd_p0[0] === '0)
-     && (tage_upd_inp_u0[0] === '0) && (sc_upd_inp_u0[1] === '0));
+     && (tage_upd_inp_u0[0] === '0) && (sc_upd_inp_u0[HS] === '0));
   endtask
 
   // -----------------------------------------------------------------
@@ -319,12 +329,15 @@ module tb;
             {ubtb_upd_u0[s].is_br, ubtb_upd_u0[s].is_jmp,
              ubtb_upd_u0[s].is_call, ubtb_upd_u0[s].is_ret,
              ubtb_upd_u0[s].is_jalr} === b);
-        chk($sformatf("B slot %0d %s: the other slot is untouched",
-                      s, bt.name()),
-            (ubtb_upd_u0[1-s] === '0) && (lp_upd_valid_p0[1-s] === 1'b0)
-         && (tage_upd_val_u0[1-s] === 1'b0)
-         && (ittage_upd_val_u0[1-s] === 1'b0)
-         && (sc_upd_val_u0[1-s] === 1'b0));
+        if (NUM_PRED_SLOTS > 1)
+          chk($sformatf("B slot %0d %s: the other slot is untouched",
+                        s, bt.name()),
+              (ubtb_upd_u0[HS-s] === '0) && (lp_upd_valid_p0[HS-s] === 1'b0)
+           && (tage_upd_val_u0[HS-s] === 1'b0)
+           && (ittage_upd_val_u0[HS-s] === 1'b0)
+           && (sc_upd_val_u0[HS-s] === 1'b0));
+        else skip($sformatf("B slot %0d %s: the other slot is untouched",
+                            s, bt.name()));
       end
     end
   endtask
@@ -345,75 +358,77 @@ module tb;
     tgt = VA_WIDTH'('h00_8124_FF80);
     pft = pc + VA_WIDTH'(18);
     bpc = br_pc(pc, FTB_BR_POS_BITS'(6));
-    present(1, COND, pc, FTB_BR_POS_BITS'(6), 1'b1, tgt, pft, PAT_A);
-    upd_meta[1].tage.tage_pred_tkn = 1'b0;     // TAGE said not taken
-    upd_meta[1].sc.sc_pred_tkn     = 1'b1;     // SC said taken
+    present(HS, COND, pc, FTB_BR_POS_BITS'(6), 1'b1, tgt, pft, PAT_A);
+    upd_meta[HS].tage.tage_pred_tkn = 1'b0;     // TAGE said not taken
+    upd_meta[HS].sc.sc_pred_tkn     = 1'b1;     // SC said taken
     settle();
     // uBTB, every field.
-    chk("C1 uBTB valid", ubtb_upd_u0[1].valid === 1'b1);
-    chk_va("C1 uBTB pc is the block start", ubtb_upd_u0[1].pc, pc);
-    chk("C1 uBTB is_br, br_idx 1 (slot 1), br_taken",
-        (ubtb_upd_u0[1].is_br === 1'b1) && (ubtb_upd_u0[1].br_idx === 1'b1)
-     && (ubtb_upd_u0[1].br_taken === 1'b1));
-    chk_va("C1 uBTB target", ubtb_upd_u0[1].target, tgt);
-    chk("C1 uBTB pos is the entry's", ubtb_upd_u0[1].pos === 4'd6);
+    chk("C1 uBTB valid", ubtb_upd_u0[HS].valid === 1'b1);
+    chk_va("C1 uBTB pc is the block start", ubtb_upd_u0[HS].pc, pc);
+    chk($sformatf("C1 uBTB is_br, br_idx %0d (slot %0d), br_taken", HS,
+                  HS),
+        (ubtb_upd_u0[HS].is_br === 1'b1)
+     && (ubtb_upd_u0[HS].br_idx === 1'(HS))
+     && (ubtb_upd_u0[HS].br_taken === 1'b1));
+    chk_va("C1 uBTB target", ubtb_upd_u0[HS].target, tgt);
+    chk("C1 uBTB pos is the entry's", ubtb_upd_u0[HS].pos === 4'd6);
     chk_va("C1 uBTB jmp_target is the resolved target",
-           ubtb_upd_u0[1].jmp_target, tgt);
-    chk_va("C1 uBTB pft_addr is the entry's", ubtb_upd_u0[1].pft_addr, pft);
+           ubtb_upd_u0[HS].jmp_target, tgt);
+    chk_va("C1 uBTB pft_addr is the entry's", ubtb_upd_u0[HS].pft_addr, pft);
     // LP.
-    chk("C2 LP valid", lp_upd_valid_p0[1] === 1'b1);
+    chk("C2 LP valid", lp_upd_valid_p0[HS] === 1'b1);
     chk_va("C2 LP pc is the BRANCH pc (start + 2*pos)",
-           lp_upd_p0[1].pc, bpc);
-    chk_va("C2 LP target", lp_upd_p0[1].target, tgt);
-    chk("C2 LP actual_taken", lp_upd_p0[1].actual_taken === 1'b1);
+           lp_upd_p0[HS].pc, bpc);
+    chk_va("C2 LP target", lp_upd_p0[HS].target, tgt);
+    chk("C2 LP actual_taken", lp_upd_p0[HS].actual_taken === 1'b1);
     chk("C2 LP table coordinates are the predict-time metadata",
-        (lp_upd_p0[1].lp_idx === upd_meta[1].lp.lp_idx)
-     && (lp_upd_p0[1].lp_tag === upd_meta[1].lp.lp_tag)
-     && (lp_upd_p0[1].lp_way === upd_meta[1].lp.lp_way)
-     && (lp_upd_p0[1].lp_hit === upd_meta[1].lp.lp_hit)
-     && (lp_upd_p0[1].lp_pred_is_loop === upd_meta[1].lp.lp_pred_is_loop)
-     && (lp_upd_p0[1].lp_pred_taken === upd_meta[1].lp.lp_pred_taken)
-     && (lp_upd_p0[1].lp_age === upd_meta[1].lp.lp_age)
-     && (lp_upd_p0[1].lp_conf === upd_meta[1].lp.lp_conf)
-     && (lp_upd_p0[1].lp_past_itr === upd_meta[1].lp.lp_past_itr)
-     && (lp_upd_p0[1].lp_curr_itr === upd_meta[1].lp.lp_curr_itr)
-     && (lp_upd_p0[1].lp_curs === upd_meta[1].lp.lp_curs)
-     && (lp_upd_p0[1].lp_curs_v === upd_meta[1].lp.lp_curs_v)
-     && (lp_upd_p0[1].lp_victim === upd_meta[1].lp.lp_victim));
+        (lp_upd_p0[HS].lp_idx === upd_meta[HS].lp.lp_idx)
+     && (lp_upd_p0[HS].lp_tag === upd_meta[HS].lp.lp_tag)
+     && (lp_upd_p0[HS].lp_way === upd_meta[HS].lp.lp_way)
+     && (lp_upd_p0[HS].lp_hit === upd_meta[HS].lp.lp_hit)
+     && (lp_upd_p0[HS].lp_pred_is_loop === upd_meta[HS].lp.lp_pred_is_loop)
+     && (lp_upd_p0[HS].lp_pred_taken === upd_meta[HS].lp.lp_pred_taken)
+     && (lp_upd_p0[HS].lp_age === upd_meta[HS].lp.lp_age)
+     && (lp_upd_p0[HS].lp_conf === upd_meta[HS].lp.lp_conf)
+     && (lp_upd_p0[HS].lp_past_itr === upd_meta[HS].lp.lp_past_itr)
+     && (lp_upd_p0[HS].lp_curr_itr === upd_meta[HS].lp.lp_curr_itr)
+     && (lp_upd_p0[HS].lp_curs === upd_meta[HS].lp.lp_curs)
+     && (lp_upd_p0[HS].lp_curs_v === upd_meta[HS].lp.lp_curs_v)
+     && (lp_upd_p0[HS].lp_victim === upd_meta[HS].lp.lp_victim));
     // TAGE.
-    chk("C3 TAGE valid", tage_upd_val_u0[1] === 1'b1);
-    chk("C3 TAGE metadata", tage_upd_inp_u0[1].tage_pred_meta
-                            === upd_meta[1].tage);
-    chk("C3 TAGE resolved_taken", tage_upd_inp_u0[1].resolved_taken
+    chk("C3 TAGE valid", tage_upd_val_u0[HS] === 1'b1);
+    chk("C3 TAGE metadata", tage_upd_inp_u0[HS].tage_pred_meta
+                            === upd_meta[HS].tage);
+    chk("C3 TAGE resolved_taken", tage_upd_inp_u0[HS].resolved_taken
                                   === 1'b1);
     chk("C3 TAGE cond_mispredict: TAGE said not taken, it was taken",
-        tage_upd_inp_u0[1].cond_mispredict === 1'b1);
+        tage_upd_inp_u0[HS].cond_mispredict === 1'b1);
     // SC.
-    chk("C4 SC valid", sc_upd_val_u0[1] === 1'b1);
-    chk("C4 SC metadata", sc_upd_inp_u0[1].sc_pred_meta === upd_meta[1].sc);
-    chk("C4 SC resolved_taken", sc_upd_inp_u0[1].resolved_taken === 1'b1);
+    chk("C4 SC valid", sc_upd_val_u0[HS] === 1'b1);
+    chk("C4 SC metadata", sc_upd_inp_u0[HS].sc_pred_meta === upd_meta[HS].sc);
+    chk("C4 SC resolved_taken", sc_upd_inp_u0[HS].resolved_taken === 1'b1);
     chk("C4 SC cond_mispredict: SC said taken, it was taken",
-        sc_upd_inp_u0[1].cond_mispredict === 1'b0);
+        sc_upd_inp_u0[HS].cond_mispredict === 1'b0);
     chk("C4 SC backwards_branch: target below the branch PC",
-        sc_upd_inp_u0[1].backwards_branch === 1'b1);
+        sc_upd_inp_u0[HS].backwards_branch === 1'b1);
     chk("C4 SC branch_range is branch PC bits 15:6",
-        sc_upd_inp_u0[1].branch_range === bpc[15:6]);
-    chk("C5 ITTAGE not requested, not valid", ittage_upd_val_u0[1] === 1'b0);
+        sc_upd_inp_u0[HS].branch_range === bpc[15:6]);
+    chk("C5 ITTAGE not requested, not valid", ittage_upd_val_u0[HS] === 1'b0);
 
     // C6: the same branch forward and not taken; TAGE right, SC wrong.
     tgt = pc + VA_WIDTH'('h200);
-    present(1, COND, pc, FTB_BR_POS_BITS'(6), 1'b0, tgt, pft, PAT_B);
-    upd_meta[1].tage.tage_pred_tkn = 1'b0;
-    upd_meta[1].sc.sc_pred_tkn     = 1'b1;
+    present(HS, COND, pc, FTB_BR_POS_BITS'(6), 1'b0, tgt, pft, PAT_B);
+    upd_meta[HS].tage.tage_pred_tkn = 1'b0;
+    upd_meta[HS].sc.sc_pred_tkn     = 1'b1;
     settle();
     chk("C6 TAGE cond_mispredict clear when TAGE was right",
-        tage_upd_inp_u0[1].cond_mispredict === 1'b0);
+        tage_upd_inp_u0[HS].cond_mispredict === 1'b0);
     chk("C6 SC cond_mispredict set when SC was wrong",
-        sc_upd_inp_u0[1].cond_mispredict === 1'b1);
+        sc_upd_inp_u0[HS].cond_mispredict === 1'b1);
     chk("C6 SC backwards_branch clear for a forward target",
-        sc_upd_inp_u0[1].backwards_branch === 1'b0);
+        sc_upd_inp_u0[HS].backwards_branch === 1'b0);
     chk("C6 metadata follows the record (pattern B)",
-        tage_upd_inp_u0[1].tage_pred_meta === upd_meta[1].tage);
+        tage_upd_inp_u0[HS].tage_pred_meta === upd_meta[HS].tage);
 
     // C7-C9: an indirect on slot 0. ITTAGE fields and indir_mispredict
     // for a hit that was right, a hit that was wrong, and a miss.
@@ -459,60 +474,78 @@ module tb;
     $display("-- D: per-slot readies ANDed per predictor --");
 
     // D1: TAGE queue full on slot 1 only; a conditional on slot 0.
-    do_reset();
-    present(0, COND, PC0, FTB_BR_POS_BITS'(3), 1'b1,
-            VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(8), PAT_A);
-    tage_upd_rdy = 2'b01;
-    settle();
-    chk("D1 slot 0 not accepted though its own TAGE ready is high",
-        upd_acc[0] === 1'b0);
-    chk("D1 nothing presented for slot 0: uBTB, LP, TAGE",
-        (ubtb_upd_u0[0].valid === 1'b0) && (lp_upd_valid_p0[0] === 1'b0)
-     && (tage_upd_val_u0[0] === 1'b0));
-    chk("D1 and SC is not asked (no grant can be taken)",
-        sc_upd_val_u0[0] === 1'b0);
-    tage_upd_rdy = 2'b11;
-    settle();
-    chk("D1 both TAGE readies high: accepted, all presented",
-        (upd_acc[0] === 1'b1) && (ubtb_upd_u0[0].valid === 1'b1)
-     && (lp_upd_valid_p0[0] === 1'b1) && (tage_upd_val_u0[0] === 1'b1)
-     && (sc_upd_val_u0[0] === 1'b1));
+    // BP-128: D1 and D2 are a slot not accepted on the OTHER slot's
+    // queue; they need a second slot.
+    if (NUM_PRED_SLOTS > 1) begin
+      do_reset();
+      present(0, COND, PC0, FTB_BR_POS_BITS'(3), 1'b1,
+              VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(8), PAT_A);
+      tage_upd_rdy = NUM_PRED_SLOTS'(2'b01);
+      settle();
+      chk("D1 slot 0 not accepted though its own TAGE ready is high",
+          upd_acc[0] === 1'b0);
+      chk("D1 nothing presented for slot 0: uBTB, LP, TAGE",
+          (ubtb_upd_u0[0].valid === 1'b0) && (lp_upd_valid_p0[0] === 1'b0)
+       && (tage_upd_val_u0[0] === 1'b0));
+      chk("D1 and SC is not asked (no grant can be taken)",
+          sc_upd_val_u0[0] === 1'b0);
+      tage_upd_rdy = NUM_PRED_SLOTS'(2'b11);
+      settle();
+      chk("D1 both TAGE readies high: accepted, all presented",
+          (upd_acc[0] === 1'b1) && (ubtb_upd_u0[0].valid === 1'b1)
+       && (lp_upd_valid_p0[0] === 1'b1) && (tage_upd_val_u0[0] === 1'b1)
+       && (sc_upd_val_u0[0] === 1'b1));
 
-    // D2: ITTAGE queue full on slot 0 only; an indirect call on slot 1.
-    do_reset();
-    present(1, INDIRECT_CALL, PC0, FTB_BR_POS_BITS'(9), 1'b1,
-            VA_WIDTH'('h00_9000_0000), PC0 + VA_WIDTH'(20), PAT_B);
-    ittage_upd_rdy = 2'b10;
-    settle();
-    chk("D2 slot 1 not accepted on slot 0's full ITTAGE queue",
-        (upd_acc[1] === 1'b0) && (ittage_upd_val_u0[1] === 1'b0)
-     && (ubtb_upd_u0[1].valid === 1'b0));
-    ittage_upd_rdy = 2'b11;
-    settle();
-    chk("D2 accepted once both are ready",
-        (upd_acc[1] === 1'b1) && (ittage_upd_val_u0[1] === 1'b1)
-     && (ubtb_upd_u0[1].valid === 1'b1));
+      // D2: ITTAGE queue full on slot 0 only; an indirect call on slot 1.
+      do_reset();
+      present(HS, INDIRECT_CALL, PC0, FTB_BR_POS_BITS'(9), 1'b1,
+              VA_WIDTH'('h00_9000_0000), PC0 + VA_WIDTH'(20), PAT_B);
+      ittage_upd_rdy = NUM_PRED_SLOTS'(2'b10);
+      settle();
+      chk("D2 slot 1 not accepted on slot 0's full ITTAGE queue",
+          (upd_acc[HS] === 1'b0) && (ittage_upd_val_u0[HS] === 1'b0)
+       && (ubtb_upd_u0[HS].valid === 1'b0));
+      ittage_upd_rdy = NUM_PRED_SLOTS'(2'b11);
+      settle();
+      chk("D2 accepted once both are ready",
+          (upd_acc[HS] === 1'b1) && (ittage_upd_val_u0[HS] === 1'b1)
+       && (ubtb_upd_u0[HS].valid === 1'b1));
 
-    // D3: a type that trains no queued predictor does not wait on one.
+      // D3: a type that trains no queued predictor does not wait on one.
+    end else begin
+      skip("D1 slot 0 not accepted though its own TAGE ready is high");
+      skip("D1 nothing presented for slot 0: uBTB, LP, TAGE");
+      skip("D1 and SC is not asked (no grant can be taken)");
+      skip("D1 both TAGE readies high: accepted, all presented");
+      skip("D2 slot 1 not accepted on slot 0's full ITTAGE queue");
+      skip("D2 accepted once both are ready");
+    end
+
     do_reset();
     present(0, DIRECT_UNC, PC0, FTB_BR_POS_BITS'(1), 1'b1,
             VA_WIDTH'('h00_8000_0800), PC0 + VA_WIDTH'(6), PAT_A);
-    tage_upd_rdy   = 2'b00;
-    ittage_upd_rdy = 2'b00;
+    tage_upd_rdy   = '0;
+    ittage_upd_rdy = '0;
     m_sc_grant     = 1'b0;
     settle();
     chk("D3 a JAL is accepted with every queue full",
         (upd_acc[0] === 1'b1) && (ubtb_upd_u0[0].valid === 1'b1));
 
-    // D4: the SC queue ready low on one slot (the arbiter would grant).
-    do_reset();
-    present(0, COND, PC0, FTB_BR_POS_BITS'(3), 1'b0,
-            VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(8), PAT_A);
-    m_sc_rdy_int = 2'b01;
-    settle();
-    chk("D4 SC asked, its slot-1 ready low: slot 0 not accepted",
-        (sc_upd_val_u0[0] === 1'b1) && (upd_acc[0] === 1'b0)
-     && (tage_upd_val_u0[0] === 1'b0) && (ubtb_upd_u0[0].valid === 1'b0));
+    // BP-128: D4 is slot 0 held by slot 1's SC ready; it needs a
+    // second slot.
+    if (NUM_PRED_SLOTS > 1) begin
+      // D4: the SC queue ready low on one slot (the arbiter would grant).
+      do_reset();
+      present(0, COND, PC0, FTB_BR_POS_BITS'(3), 1'b0,
+              VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(8), PAT_A);
+      m_sc_rdy_int = NUM_PRED_SLOTS'(2'b01);
+      settle();
+      chk("D4 SC asked, its slot-1 ready low: slot 0 not accepted",
+          (sc_upd_val_u0[0] === 1'b1) && (upd_acc[0] === 1'b0)
+       && (tage_upd_val_u0[0] === 1'b0) && (ubtb_upd_u0[0].valid === 1'b0));
+    end else begin
+      skip("D4 SC asked, its slot-1 ready low: slot 0 not accepted");
+    end
   endtask
 
   // -----------------------------------------------------------------
@@ -521,23 +554,23 @@ module tb;
   task automatic group_e();
     $display("-- E: the SC grant --");
     do_reset();
-    present(1, COND, PC0, FTB_BR_POS_BITS'(4), 1'b1,
+    present(HS, COND, PC0, FTB_BR_POS_BITS'(4), 1'b1,
             VA_WIDTH'('h00_8000_0100), PC0 + VA_WIDTH'(10), PAT_B);
     m_sc_grant = 1'b0;        // the arbiter gives the port to a prediction
     settle();
     chk("E1 the SC update is presented, so the arbiter sees a request",
-        sc_upd_val_u0[1] === 1'b1);
+        sc_upd_val_u0[HS] === 1'b1);
     chk("E1 not granted: the slot is not accepted",
-        upd_acc[1] === 1'b0);
+        upd_acc[HS] === 1'b0);
     chk("E1 and no other predictor takes it",
-        (tage_upd_val_u0[1] === 1'b0) && (lp_upd_valid_p0[1] === 1'b0)
-     && (ubtb_upd_u0[1].valid === 1'b0));
+        (tage_upd_val_u0[HS] === 1'b0) && (lp_upd_valid_p0[HS] === 1'b0)
+     && (ubtb_upd_u0[HS].valid === 1'b0));
     m_sc_grant = 1'b1;
     settle();
     chk("E2 granted: accepted and every predictor takes it",
-        (upd_acc[1] === 1'b1) && (sc_upd_val_u0[1] === 1'b1)
-     && (sc_upd_rdy === 2'b11) && (tage_upd_val_u0[1] === 1'b1)
-     && (lp_upd_valid_p0[1] === 1'b1) && (ubtb_upd_u0[1].valid === 1'b1));
+        (upd_acc[HS] === 1'b1) && (sc_upd_val_u0[HS] === 1'b1)
+     && (sc_upd_rdy === '1) && (tage_upd_val_u0[HS] === 1'b1)
+     && (lp_upd_valid_p0[HS] === 1'b1) && (ubtb_upd_u0[HS].valid === 1'b1));
   endtask
 
   // -----------------------------------------------------------------
@@ -568,31 +601,39 @@ module tb;
   // -----------------------------------------------------------------
   task automatic group_t();
     $display("-- T: two slots in one cycle --");
-    do_reset();
-    present(0, COND, PC0, FTB_BR_POS_BITS'(2), 1'b1,
-            VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(30), PAT_A);
-    present(1, COND, PC0, FTB_BR_POS_BITS'(11), 1'b0,
-            VA_WIDTH'('h00_8000_0400), PC0 + VA_WIDTH'(30), PAT_B);
-    settle();
-    chk("T1 both accepted", upd_acc === 2'b11);
-    chk("T1 both slots train TAGE, SC and the LP",
-        (tage_upd_val_u0 === 2'b11) && (sc_upd_val_u0 === 2'b11)
-     && (lp_upd_valid_p0 === 2'b11));
-    chk("T1 each carries its own direction and branch PC",
-        (tage_upd_inp_u0[0].resolved_taken === 1'b1)
-     && (tage_upd_inp_u0[1].resolved_taken === 1'b0)
-     && (lp_upd_p0[0].pc === br_pc(PC0, 4'd2))
-     && (lp_upd_p0[1].pc === br_pc(PC0, 4'd11)));
-    chk("T1 br_idx names the slot", (ubtb_upd_u0[0].br_idx === 1'b0)
-                                 && (ubtb_upd_u0[1].br_idx === 1'b1));
+    // BP-128: group T is one conditional per slot; it needs two.
+    if (NUM_PRED_SLOTS > 1) begin
+      do_reset();
+      present(0, COND, PC0, FTB_BR_POS_BITS'(2), 1'b1,
+              VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(30), PAT_A);
+      present(HS, COND, PC0, FTB_BR_POS_BITS'(11), 1'b0,
+              VA_WIDTH'('h00_8000_0400), PC0 + VA_WIDTH'(30), PAT_B);
+      settle();
+      chk("T1 both accepted", upd_acc === NUM_PRED_SLOTS'(2'b11));
+      chk("T1 both slots train TAGE, SC and the LP",
+          (tage_upd_val_u0 === NUM_PRED_SLOTS'(2'b11))
+       && (sc_upd_val_u0 === NUM_PRED_SLOTS'(2'b11))
+       && (lp_upd_valid_p0 === NUM_PRED_SLOTS'(2'b11)));
+      chk("T1 each carries its own direction and branch PC",
+          (tage_upd_inp_u0[0].resolved_taken === 1'b1)
+       && (tage_upd_inp_u0[HS].resolved_taken === 1'b0)
+       && (lp_upd_p0[0].pc === br_pc(PC0, 4'd2))
+       && (lp_upd_p0[HS].pc === br_pc(PC0, 4'd11)));
+      chk("T1 br_idx names the slot", (ubtb_upd_u0[0].br_idx === 1'b0)
+                                   && (ubtb_upd_u0[HS].br_idx === 1'(HS)));
+    end else begin
+      skip("T1 both accepted");
+      skip("T1 both slots train TAGE, SC and the LP");
+      skip("T1 each carries its own direction and branch PC");
+      skip("T1 br_idx names the slot");
+    end
   endtask
 
   initial begin
     pass_cnt = 0;
     fail_cnt = 0;
-    if (NUM_PRED_SLOTS != 2) begin
-      $fatal(1, "tb_ftq_upd_conv: written for two slots");
-    end
+    // BP-128: written for one or two slots; the checks that need two
+    // are skipped at one.
     group_a();
     group_b();
     group_c();

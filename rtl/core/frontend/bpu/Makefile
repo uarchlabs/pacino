@@ -34,7 +34,22 @@ TB_DIR   := tb
 COMP_DIR := ../../../lib/rtl
 VER_OUT  := obj
 
-VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
+# -- Slot count (BP-128, TD#1) -------------------------------------
+# NUM_PRED_SLOTS is set in bp_defines_pkg.sv from the macro
+# BP_NUM_PRED_SLOTS, 2 when it is not defined. SLOT_DEFS is empty for
+# every target below, so each builds at 2. Each <target>_1slot (end of
+# file) runs <target> in a sub-make with SLOT_DEFS = SLOT1_DEFS and
+# VER_OUT = $(VER_OUT)_1slot, so a 1-slot build never shares an object
+# directory with a 2-slot one. BP_EXPECT_PRED_SLOTS=1 makes the package
+# stop elaboration unless NUM_PRED_SLOTS is 1, so a 1-slot target fails
+# if BP_NUM_PRED_SLOTS does not reach it. To see that, build one with
+# the slot macro removed:
+#   make lint_bp_cluster_1slot SLOT1_DEFS=+define+BP_EXPECT_PRED_SLOTS=1
+SLOT1_DEFS := +define+BP_NUM_PRED_SLOTS=1 +define+BP_EXPECT_PRED_SLOTS=1
+SLOT_DEFS  ?=
+
+VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing \
+                   $(SLOT_DEFS)
 SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 
 .PHONY: all lint sim sim_history sim_ubtb lint_loop_pred sim_loop_pred \
@@ -135,7 +150,6 @@ sim_ubtb:
 	@echo "[compiling]  tb_ubtb"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_ubtb \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -145,6 +159,9 @@ sim_ubtb:
 	@echo "[simulating] $(VER_OUT)_ubtb/Vtb"
 	$(Q)./$(VER_OUT)_ubtb/Vtb
 
+# VARHIDDEN (BP-128): loop_pred.sv declares module parameters LP_TBL_ENTRIES
+#   to LP_CONF_LEVEL with the names of bp_defines_pkg parameters. That is
+#   its only remaining cause; no module shadows NUM_PRED_SLOTS.
 lint_loop_pred:
 	@echo "[linting]    loop_pred"
 	$(Q)$(VERILATOR) --lint-only \
@@ -154,6 +171,9 @@ lint_loop_pred:
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/loop_pred.sv $(VSILENCE)
 
+# VARHIDDEN (BP-128): loop_pred.sv declares module parameters LP_TBL_ENTRIES
+#   to LP_CONF_LEVEL with the names of bp_defines_pkg parameters. That is
+#   its only remaining cause; no module shadows NUM_PRED_SLOTS.
 sim_loop_pred:
 	@echo "[compiling]  tb_loop_pred"
 	$(Q)$(VERILATOR) --binary \
@@ -174,7 +194,6 @@ lint_tage_table:
 	@echo "[linting]    tage_table"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
@@ -184,7 +203,6 @@ sim_tage_table:
 	@echo "[compiling]  tb_tage_table"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_tage_table \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -199,7 +217,6 @@ lint_sc_table:
 	@echo "[linting]    sc_table"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
@@ -209,7 +226,6 @@ sim_sc_table:
 	@echo "[compiling]  tb_sc_table"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc_table \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -224,7 +240,6 @@ sim_sc_table_fast:
 	@echo "[compiling]  tb_sc_table (fast init)"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc_table_fast \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -239,7 +254,6 @@ lint_sc_brimli:
 	@echo "[linting]    sc_brimli"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
@@ -249,7 +263,6 @@ sim_sc_brimli:
 	@echo "[compiling]  tb_sc_brimli"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc_brimli \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -264,7 +277,6 @@ sim_sc_brimli_fast:
 	@echo "[compiling]  tb_sc_brimli (fast init)"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc_brimli_fast \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -279,7 +291,6 @@ lint_sc_cntrl:
 	@echo "[linting]    sc_cntrl"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/sc_cntrl.sv $(VSILENCE)
@@ -288,7 +299,6 @@ sim_sc_cntrl:
 	@echo "[compiling]  tb_sc_cntrl"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc_cntrl \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -298,13 +308,13 @@ sim_sc_cntrl:
 	@echo "[simulating] $(VER_OUT)_sc_cntrl/Vtb"
 	$(Q)./$(VER_OUT)_sc_cntrl/Vtb
 
-# -- SC structural top (sc.sv). VARHIDDEN: table THIS_* params shadow
-#    package params. SYNCASYNCNET: sram_init async reset + sync flops.
+# -- SC structural top (sc.sv). SYNCASYNCNET: sram_init async reset +
+#    sync flops. VARHIDDEN removed in BP-128: its cause was the sc,
+#    sc_cntrl, sc_table and sc_brimli NUM_PRED_SLOTS parameters.
 lint_sc:
 	@echo "[linting]    sc"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module sc \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -320,7 +330,6 @@ sim_sc:
 	@echo "[compiling]  tb_sc"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc \
@@ -340,7 +349,6 @@ sim_sc_fast:
 	@echo "[compiling]  tb_sc (fast init)"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_sc_fast \
@@ -360,7 +368,6 @@ lint_ittage_table:
 	@echo "[linting]    ittage_table"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(COMP_DIR)/bw_ram.sv \
@@ -370,7 +377,6 @@ sim_ittage_table:
 	@echo "[compiling]  tb_ittage_table"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_ittage_table \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -385,7 +391,6 @@ lint_ittage_cntrl:
 	@echo "[linting]    ittage_cntrl"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module ittage_cntrl \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
@@ -397,7 +402,6 @@ sim_ittage_cntrl:
 	@echo "[compiling]  tb_ittage_cntrl"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_ittage_cntrl \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -411,7 +415,6 @@ lint_ittage:
 	@echo "[linting]    ittage"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module ittage \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
@@ -430,7 +433,6 @@ sim_ittage:
 	@echo "[compiling]  tb_ittage"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_ittage \
@@ -450,7 +452,6 @@ sim_ittage_fast:
 	@echo "[compiling]  tb_ittage (fast init)"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-SYNCASYNCNET \
 	  --top-module tb \
 	  --Mdir $(VER_OUT)_ittage_fast \
@@ -470,12 +471,14 @@ lint_tage_cntrl:
 	@echo "[linting]    tage_cntrl"
 	$(Q)$(VERILATOR) --lint-only \
 	  $(VER_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/tage_cntrl.sv $(VSILENCE)
 
+# VARHIDDEN (BP-128): tb_tage.sv tasks declare an argument named verbose,
+#   which shadows the module variable of that name. That is its only
+#   remaining cause; no module shadows NUM_PRED_SLOTS.
 lint_tage:
 	@echo "[linting]    tage"
 	$(Q)$(VERILATOR) --lint-only \
@@ -543,8 +546,11 @@ lint_ftb:
 	  $(RTL_DIR)/ftb.sv $(VSILENCE)
 
 # -- BP cluster top (bp_cluster.sv, BP-085).
-#    VARHIDDEN:    tage/sc/ubtb NUM_PRED_SLOTS shadows the package
-#                  parameter of the same name.
+#    VARHIDDEN:    loop_pred.sv module parameters LP_TBL_ENTRIES to
+#                  LP_CONF_LEVEL shadow the bp_defines_pkg parameters
+#                  of the same names. Until BP-128 the comment named
+#                  the tage/sc/ubtb NUM_PRED_SLOTS parameters; BP-128
+#                  removed those (ubtb's is renamed N_SLOTS).
 #    SYNCASYNCNET: sram_init async reset + sync flops in the tage,
 #                  ittage and sc leaf logic (same as lint_tage).
 #    UNDRIVEN removed in BP-085: the section 4 p1 prediction outputs
@@ -687,6 +693,9 @@ sim_ftb:
 	@echo "[simulating] $(VER_OUT)_ftb/Vtb"
 	$(Q)./$(VER_OUT)_ftb/Vtb
 
+# VARHIDDEN (BP-128): tb_tage.sv tasks declare an argument named verbose,
+#   which shadows the module variable of that name. That is its only
+#   remaining cause; no module shadows NUM_PRED_SLOTS.
 sim_tage:
 	@echo "[compiling]  tb_tage"
 	$(Q)$(VERILATOR) --binary \
@@ -710,6 +719,9 @@ sim_tage:
 	@echo "[simulating] $(VER_OUT)_tage/Vtb"
 	$(Q)./$(VER_OUT)_tage/Vtb
 
+# VARHIDDEN (BP-128): tb_tage.sv tasks declare an argument named verbose,
+#   which shadows the module variable of that name. That is its only
+#   remaining cause; no module shadows NUM_PRED_SLOTS.
 sim_tage_fast:
 	@echo "[compiling]  tb_tage (fast init)"
 	$(Q)$(VERILATOR) --binary \
@@ -737,7 +749,6 @@ sim_tage_tasks:
 	@echo "[compiling]  tb_tage_tasks"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
 	  -Wno-SYNCASYNCNET \
 	  -Wno-WIDTHTRUNC \
@@ -761,7 +772,6 @@ sim_tage_manual:
 	@echo "[compiling]  tb_tage_manual"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  -Wno-UNDRIVEN \
 	  -Wno-SYNCASYNCNET \
 	  -Wno-PINMISSING \
@@ -786,6 +796,7 @@ sim_tage_manual:
 
 clean:
 	$(Q)rm -rf $(VER_OUT) \
+	  $(VER_OUT)_1slot* \
 	  $(VER_OUT)_hist \
 	  $(VER_OUT)_ubtb \
 	  $(VER_OUT)_loop_pred \
@@ -855,7 +866,6 @@ cov_ubtb:
 	@echo "[compiling]  cov tb_ubtb"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --coverage-line \
 	  --top-module tb \
 	  --Mdir obj_dir_cov_ubtb \
@@ -877,6 +887,9 @@ cov_ubtb:
 	  $(COV_DIR)/ubtb/coverage.info
 	@echo "[coverage]   ubtb HTML at $(COV_DIR)/ubtb/html/index.html"
 
+# VARHIDDEN (BP-128): loop_pred.sv declares module parameters LP_TBL_ENTRIES
+#   to LP_CONF_LEVEL with the names of bp_defines_pkg parameters. That is
+#   its only remaining cause; no module shadows NUM_PRED_SLOTS.
 cov_loop_pred:
 	@echo "[compiling]  cov tb_loop_pred"
 	$(Q)$(VERILATOR) --binary \
@@ -909,7 +922,6 @@ cov_tage_table:
 	@echo "[compiling]  cov tb_tage_table"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
-	  -Wno-VARHIDDEN \
 	  --coverage-line \
 	  --top-module tb \
 	  --Mdir obj_dir_cov_tage_table \
@@ -936,6 +948,9 @@ cov_tage_table:
 # cov_tage runs tb_tage twice, on the sram_init walk and on the fast
 # init, and merges the two, so the fast-init blocks of tage_bim and
 # tage_table are measured too (BP-126, TD#100).
+# VARHIDDEN (BP-128): tb_tage.sv tasks declare an argument named verbose,
+#   which shadows the module variable of that name. That is its only
+#   remaining cause; no module shadows NUM_PRED_SLOTS.
 cov_tage:
 	@echo "[compiling]  cov tb_tage"
 	$(Q)$(VERILATOR) --binary \
@@ -976,6 +991,9 @@ cov_tage:
 	  $(COV_DIR)/tage/coverage.info
 	@echo "[coverage]   tage HTML at $(COV_DIR)/tage/html/index.html"
 
+# VARHIDDEN (BP-128): loop_pred.sv declares module parameters LP_TBL_ENTRIES
+#   to LP_CONF_LEVEL with the names of bp_defines_pkg parameters. That is
+#   its only remaining cause; no module shadows NUM_PRED_SLOTS.
 cov_bp_cluster:
 	@echo "[compiling]  cov tb_bp_cluster"
 	$(Q)$(VERILATOR) --binary \
@@ -1044,6 +1062,26 @@ clean_cov: clean_cov_tage clean_cov_tage_table \
   clean_cov_loop_pred clean_cov_history \
   clean_cov_ubtb clean_cov_bp_cluster clean_cov_bpu
 
+# -- 1-slot targets (BP-128, TD#1) -----------------------------------
+# One per lint and sim target, named <target>_1slot: the same recipe at
+# NUM_PRED_SLOTS = 1 (see SLOT1_DEFS at the top of the file). The cov_*
+# targets stay at 2 and have none.
+SLOT1_BASE := \
+  lint lint_loop_pred lint_tage_table lint_sc_table lint_sc_brimli \
+  lint_sc_cntrl lint_sc lint_ittage_table lint_ittage_cntrl lint_ittage \
+  lint_tage_cntrl lint_tage lint_ras lint_ftb_array lint_ftb_plru \
+  lint_ftb_cntrl lint_ftb lint_bp_cluster \
+  sim sim_history sim_ubtb sim_loop_pred sim_tage_table sim_sc_table \
+  sim_sc_table_fast sim_sc_brimli sim_sc_brimli_fast sim_sc_cntrl sim_sc \
+  sim_sc_fast sim_ittage_table sim_ittage_cntrl sim_ittage sim_ittage_fast \
+  sim_bp_cluster sim_bp_cluster_init sim_ras sim_ftb sim_tage sim_tage_fast \
+  sim_tage_tasks sim_tage_manual
+SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
+
+.PHONY: $(SLOT1_TGTS)
+$(SLOT1_TGTS): %_1slot:
+	$(Q)$(MAKE) $* SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT)_1slot
+
 # -- Regression plumbing (TOOLS-006) ----------------------------------
 # tools/regress.sh runs every REGRESS_TARGETS entry with its own make
 # call and fails if a target defined in this file is in neither list.
@@ -1065,7 +1103,8 @@ REGRESS_TARGETS := \
   sim_bp_cluster sim_bp_cluster_init sim_ras sim_ftb sim_tage sim_tage_fast \
   sim_tage_tasks sim_tage_manual \
   cov_history cov_ubtb cov_loop_pred cov_tage_table cov_tage \
-  cov_bp_cluster cov_bpu
+  cov_bp_cluster cov_bpu \
+  $(SLOT1_TGTS)
 REGRESS_EXCLUDE := \
   all clean clean_cov clean_cov_tage clean_cov_tage_table \
   clean_cov_loop_pred clean_cov_history clean_cov_ubtb \

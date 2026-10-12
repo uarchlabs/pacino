@@ -44,9 +44,14 @@ module ftq_meta_assert (
   //     Written over the slots explicitly rather than comparing the
   //     unpacked arrays, because an unpacked array equality is not
   //     what the two-state comparison in a property gives.
+  //
+  //     BP-128: M1 needs two read ports. NUM_RESOLVE_PORTS is
+  //     NUM_PRED_SLOTS, so at one slot there is one port, nothing to
+  //     agree with, and M1 is not elaborated.
   genvar gs;
   generate
-    for (gs = 0; gs < NUM_PRED_SLOTS; gs++) begin : g_slot
+    for (gs = 0; gs < NUM_PRED_SLOTS && NUM_RESOLVE_PORTS > 1;
+         gs++) begin : g_slot
       property p_ports_agree;
         @(posedge clk) disable iff (!rstn)
           (rd_idx[0] == rd_idx[1]) |->

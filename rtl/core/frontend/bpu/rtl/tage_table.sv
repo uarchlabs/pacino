@@ -7,9 +7,9 @@
 // DATE:    2026-05-21
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
-// Parameterized TAGE predictor table. Wraps two bw_ram instances
-// to support dual prediction slots (NUM_PRED_SLOTS=2).
-// RAM0 -> slot 0, RAM1 -> slot 1. Selection is structural.
+// Parameterized TAGE predictor table. Wraps one bw_ram instance per
+// prediction slot, g_slot[s].u_ram for slot s (NUM_PRED_SLOTS, 1 or
+// 2). Selection is structural.
 // Instantiate once per TAGE table (T0-T4) with per-table params.
 //
 // Entry layout (bit 0 = LSB):
@@ -46,7 +46,6 @@ module tage_table #(
   parameter  int THIS_USE_WIDTH  = 2,
   parameter  int THIS_CTR_WIDTH  = 3,
   parameter  int THIS_VAL_WIDTH  = 1,
-  parameter  int NUM_PRED_SLOTS  = 2,
   parameter  int TBL_SEL_WIDTH   = TAGE_TBL_SEL_WIDTH,
   // Derived - do not override
   // cntrl_bits_p1 width: VAL+CTR+USE+EPC at MAX widths.
@@ -124,7 +123,7 @@ module tage_table #(
   //         tag  = (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
   //         lower THIS_TAG_BITS.
   // folded_hist is //NOT USED on T0 per interface convention.
-  // Slot 0 and slot 1 are independent (separate pc inputs).
+  // The slots are independent (separate pc inputs).
   // ============================================================
   // The index hash shift is bp_defines_pkg::PC_HASH_SHIFT. It was a
   // hardcoded local of 2 here, shadowing the package and commented
@@ -138,8 +137,8 @@ module tage_table #(
   logic [VA_WIDTH-1:0] fh2_ext;    // tag fh2, extended
 
   // Locally derived prediction hashes.
-  logic [THIS_INDEX_BITS-1:0] idx_hash[0:1]; // index per slot
-  logic [TAGE_MAX_TAG_WIDTH-1:0]   tag_hash[0:1]; // tag per slot
+  logic [THIS_INDEX_BITS-1:0]    idx_hash[0:NUM_PRED_SLOTS-1];
+  logic [TAGE_MAX_TAG_WIDTH-1:0] tag_hash[0:NUM_PRED_SLOTS-1];
 
   // Folded history field selection by THIS_TABLE.
   // T0: folded_hist NOT USED -- fields default to 0.
@@ -176,33 +175,6 @@ module tage_table #(
     endcase
   end
 
-  // Index hash: T0 uses pc[PC_HASH_SHIFT +: THIS_INDEX_BITS].
-  // T1-T4: (pc >> PC_HASH_SHIFT) ^ fh_idx_ext,
-  //         truncated to THIS_INDEX_BITS.
-  assign idx_hash[0] = (THIS_TABLE == 0)
-    ? tage_pred_inp_p0[0].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS]
-    : THIS_INDEX_BITS'(
-        (tage_pred_inp_p0[0].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
-  assign idx_hash[1] = (THIS_TABLE == 0)
-    ? tage_pred_inp_p0[1].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS]
-    : THIS_INDEX_BITS'(
-        (tage_pred_inp_p0[1].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
-
-  // Tag hash: (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
-  // truncated to THIS_TAG_BITS, zero-extended to TAGE_MAX_TAG_WIDTH.
-  assign tag_hash[0] = TAGE_MAX_TAG_WIDTH'(THIS_TAG_BITS'(
-    (tage_pred_inp_p0[0].pc >> THIS_INDEX_BITS)
-    ^ fh1_ext ^ (fh2_ext << 1)));
-  assign tag_hash[1] = TAGE_MAX_TAG_WIDTH'(THIS_TAG_BITS'(
-    (tage_pred_inp_p0[1].pc >> THIS_INDEX_BITS)
-    ^ fh1_ext ^ (fh2_ext << 1)));
-
-  // Expose hash outputs (combinational, p0).
-  assign idx_hash_p0[0] = idx_hash[0];
-  assign idx_hash_p0[1] = idx_hash[1];
-  assign tag_hash_p0[0] = tag_hash[0];
-  assign tag_hash_p0[1] = tag_hash[1];
-
   // Constant table selector for this instance.
   localparam logic [TBL_SEL_WIDTH-1:0] THIS_TBL_SEL =
     TBL_SEL_WIDTH'(THIS_TABLE);
@@ -216,291 +188,184 @@ module tage_table #(
                           + THIS_USE_WIDTH
                           + THIS_EPC_WIDTH;
 
-  // p0 -> p1 registered tag hash (one per slot).
-  logic [TAGE_MAX_TAG_WIDTH-1:0] tag_hash_p1[0:1];
-
-  // Shared RAM-init write enable. Both slots see the same
+  // Shared RAM-init write enable. Every slot sees the same
   // tbl_ri signals.
   logic ri_we;
   assign ri_we = tbl_ri_active & tbl_ri_wr;
 
-  // Fast init: write bw_ram mem arrays at time zero via
-  // hierarchical reference. Active only when +TAGE_FAST_INIT=1.
-  // bw_ram mem is 2D: mem[BANKS][ENTRIES]. Loop covers both banks.
-  initial begin
-    int fast_init;
-    fast_init = 0;
-    void'($value$plusargs("TAGE_FAST_INIT=%d", fast_init));
-    if (fast_init != 0) begin
-      for (int b = 0; b < 2; b++) begin
-        for (int i = 0; i < RAM_ENTRIES; i++) begin
-          u_ram_s0.mem[b][i] =
-            ALLOC_DATA_WIDTH'(TAGE_SRAM_INIT_VALUE);
-          u_ram_s1.mem[b][i] =
-            ALLOC_DATA_WIDTH'(TAGE_SRAM_INIT_VALUE);
+  // ============================================================
+  // One hash, RAM and output set per slot (BP-128: the slot 0 and
+  // slot 1 blocks were two copies; the loop follows NUM_PRED_SLOTS).
+  // Slot s is g_slot[s]; its RAM g_slot[s].u_ram was u_ram_s0 /
+  // u_ram_s1, and its enables g_slot[s].norm_we etc. were norm_we_s0
+  // / norm_we_s1.
+  // ============================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_slot
+    logic [THIS_INDEX_BITS-1:0]  ram_addr;
+    logic [ALLOC_DATA_WIDTH-1:0] ram_din;
+    logic [ALLOC_DATA_WIDTH-1:0] ram_bweb_n;
+    logic                        ram_wen_n;
+    logic [ALLOC_DATA_WIDTH-1:0] ram_dout;
+
+    logic prm_match, alt_match, alc_match;
+    logic prm_ctr_we, alt_ctr_we;
+    logic use_we, epc_we, alc_we, norm_we;
+
+    // p0 -> p1 registered tag hash.
+    logic [TAGE_MAX_TAG_WIDTH-1:0] tag_hash_p1;
+
+    // Index hash: T0 uses pc[PC_HASH_SHIFT +: THIS_INDEX_BITS].
+    // T1-T4: (pc >> PC_HASH_SHIFT) ^ fh_idx_ext,
+    //         truncated to THIS_INDEX_BITS.
+    assign idx_hash[s] = (THIS_TABLE == 0)
+      ? tage_pred_inp_p0[s].pc[PC_HASH_SHIFT +: THIS_INDEX_BITS]
+      : THIS_INDEX_BITS'(
+          (tage_pred_inp_p0[s].pc >> PC_HASH_SHIFT) ^ fh_idx_ext);
+
+    // Tag hash: (pc >> THIS_INDEX_BITS) ^ fh1 ^ (fh2 << 1),
+    // truncated to THIS_TAG_BITS, zero-extended to TAGE_MAX_TAG_WIDTH.
+    assign tag_hash[s] = TAGE_MAX_TAG_WIDTH'(THIS_TAG_BITS'(
+      (tage_pred_inp_p0[s].pc >> THIS_INDEX_BITS)
+      ^ fh1_ext ^ (fh2_ext << 1)));
+
+    // Expose hash outputs (combinational, p0).
+    assign idx_hash_p0[s] = idx_hash[s];
+    assign tag_hash_p0[s] = tag_hash[s];
+
+    // Fast init: write the bw_ram mem array at time zero via
+    // hierarchical reference. Active only when +TAGE_FAST_INIT=1.
+    // bw_ram mem is 2D: mem[BANKS][ENTRIES]. Loop covers both banks.
+    initial begin
+      int fast_init;
+      fast_init = 0;
+      void'($value$plusargs("TAGE_FAST_INIT=%d", fast_init));
+      if (fast_init != 0) begin
+        for (int b = 0; b < NUM_BANKS; b++) begin
+          for (int i = 0; i < RAM_ENTRIES; i++) begin
+            u_ram.mem[b][i] =
+              ALLOC_DATA_WIDTH'(TAGE_SRAM_INIT_VALUE);
+          end
         end
       end
     end
-  end
 
-  // ============================================================
-  // Slot 0
-  // ============================================================
-  logic [THIS_INDEX_BITS-1:0]  ram_addr_s0;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_din_s0;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_bweb_n_s0;
-  logic                        ram_wen_n_s0;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_dout_s0;
-
-  logic prm_match_s0, alt_match_s0, alc_match_s0;
-  logic prm_ctr_we_s0, alt_ctr_we_s0;
-  logic use_we_s0, epc_we_s0, alc_we_s0, norm_we_s0;
-
-  // All write-enables in one always_comb to avoid evaluation-order
-  // ambiguity with cascaded assign statements in the simulator.
-  // prm_match_s0 must be computed before use_we_s0/epc_we_s0.
-  // (HAND-FIX-001 root cause corrected here.)
-  always_comb begin : we_s0
-    prm_match_s0  = (prm_tbl_sel_u0[0] == THIS_TBL_SEL);
-    alt_match_s0  = (alt_tbl_sel_u0[0] == THIS_TBL_SEL);
-    // alc_match: table match AND not zero (no-alloc sentinel).
-    alc_match_s0  = (alc_tbl_sel_u0[0] == THIS_TBL_SEL)
-                  & (alc_tbl_sel_u0[0] != '0);
-    prm_ctr_we_s0 = tage_upd_val_u0[0]
-                  & prm_ctr_wr_u0[0] & prm_match_s0;
-    alt_ctr_we_s0 = tage_upd_val_u0[0]
-                  & alt_ctr_wr_u0[0] & alt_match_s0;
-    // USE/EPC: prm OR alt match (HAND-FIX-001 intent).
-    use_we_s0     = tage_upd_val_u0[0]
-                  & use_wr_u0[0]
-                  & (prm_match_s0 | alt_match_s0);
-    epc_we_s0     = tage_upd_val_u0[0]
-                  & epc_wr_u0[0]
-                  & (prm_match_s0 | alt_match_s0);
-    alc_we_s0     = tage_upd_val_u0[0]
-                  & alc_wr_u0[0] & alc_match_s0;
-    norm_we_s0    = prm_ctr_we_s0 | alt_ctr_we_s0
-                  | use_we_s0 | epc_we_s0 | alc_we_s0;
-  end
-
-  assign ram_wen_n_s0 = ~(norm_we_s0 | ri_we);
-
-
-  always_comb begin : addr_mux_s0
-    if (tbl_ri_active)
-      ram_addr_s0 = tbl_ri_wa;
-    else if (alc_we_s0)
-      ram_addr_s0 = alc_index_u0[0];
-    else if (norm_we_s0)
-      ram_addr_s0 = upd_index_u0[0];
-    else
-      ram_addr_s0 = idx_hash[0];
-  end
-
-  always_comb begin : din_mux_s0
-    ram_din_s0 = {ALLOC_DATA_WIDTH{1'b0}};
-    if (tbl_ri_active) begin
-      ram_din_s0 = tbl_ri_wd;
-    end else if (alc_we_s0) begin
-      ram_din_s0 = alc_wd_u0[0];
-    end else begin
-      // Independent per-field: any combination of enables is legal.
-      if (prm_ctr_we_s0)
-        ram_din_s0[CTR_MSB:CTR_LSB] = prm_ctr_wd_u0[0];
-      else if (alt_ctr_we_s0)
-        ram_din_s0[CTR_MSB:CTR_LSB] = alt_ctr_wd_u0[0];
-      if (use_we_s0)
-        ram_din_s0[USE_MSB:USE_LSB] = use_wd_u0[0];
-      if (epc_we_s0)
-        ram_din_s0[EPC_MSB:EPC_LSB] = epc_wd_u0[0];
+    // All write-enables in one always_comb to avoid evaluation-order
+    // ambiguity with cascaded assign statements in the simulator.
+    // prm_match must be computed before use_we/epc_we.
+    // (HAND-FIX-001 root cause corrected here.)
+    always_comb begin : we
+      prm_match  = (prm_tbl_sel_u0[s] == THIS_TBL_SEL);
+      alt_match  = (alt_tbl_sel_u0[s] == THIS_TBL_SEL);
+      // alc_match: table match AND not zero (no-alloc sentinel).
+      alc_match  = (alc_tbl_sel_u0[s] == THIS_TBL_SEL)
+                 & (alc_tbl_sel_u0[s] != '0);
+      prm_ctr_we = tage_upd_val_u0[s]
+                 & prm_ctr_wr_u0[s] & prm_match;
+      alt_ctr_we = tage_upd_val_u0[s]
+                 & alt_ctr_wr_u0[s] & alt_match;
+      // USE/EPC: prm OR alt match (HAND-FIX-001 intent).
+      use_we     = tage_upd_val_u0[s]
+                 & use_wr_u0[s]
+                 & (prm_match | alt_match);
+      epc_we     = tage_upd_val_u0[s]
+                 & epc_wr_u0[s]
+                 & (prm_match | alt_match);
+      alc_we     = tage_upd_val_u0[s]
+                 & alc_wr_u0[s] & alc_match;
+      norm_we    = prm_ctr_we | alt_ctr_we
+                 | use_we | epc_we | alc_we;
     end
-  end
 
-  always_comb begin : bweb_mux_s0
-    ram_bweb_n_s0 = {ALLOC_DATA_WIDTH{1'b1}};
-    if (ri_we || alc_we_s0) begin
-      ram_bweb_n_s0 = {ALLOC_DATA_WIDTH{1'b0}};
-    end else begin
-      if (prm_ctr_we_s0 || alt_ctr_we_s0) begin
-        for (int i = CTR_LSB; i <= CTR_MSB; i++)
-          ram_bweb_n_s0[i] = 1'b0;
-      end
-      if (use_we_s0) begin
-        for (int i = USE_LSB; i <= USE_MSB; i++)
-          ram_bweb_n_s0[i] = 1'b0;
-      end
-      if (epc_we_s0) begin
-        for (int i = EPC_LSB; i <= EPC_MSB; i++)
-          ram_bweb_n_s0[i] = 1'b0;
+    assign ram_wen_n = ~(norm_we | ri_we);
+
+    always_comb begin : addr_mux
+      if (tbl_ri_active)
+        ram_addr = tbl_ri_wa;
+      else if (alc_we)
+        ram_addr = alc_index_u0[s];
+      else if (norm_we)
+        ram_addr = upd_index_u0[s];
+      else
+        ram_addr = idx_hash[s];
+    end
+
+    always_comb begin : din_mux
+      ram_din = {ALLOC_DATA_WIDTH{1'b0}};
+      if (tbl_ri_active) begin
+        ram_din = tbl_ri_wd;
+      end else if (alc_we) begin
+        ram_din = alc_wd_u0[s];
+      end else begin
+        // Independent per-field: any combination of enables is legal.
+        if (prm_ctr_we)
+          ram_din[CTR_MSB:CTR_LSB] = prm_ctr_wd_u0[s];
+        else if (alt_ctr_we)
+          ram_din[CTR_MSB:CTR_LSB] = alt_ctr_wd_u0[s];
+        if (use_we)
+          ram_din[USE_MSB:USE_LSB] = use_wd_u0[s];
+        if (epc_we)
+          ram_din[EPC_MSB:EPC_LSB] = epc_wd_u0[s];
       end
     end
-  end
 
-  bw_ram #(
-    .ENTRIES(RAM_ENTRIES),
-    .WIDTH  (ALLOC_DATA_WIDTH),
-    .BANKS  (NUM_BANKS)
-  ) u_ram_s0 (
-    .clk      (clk),
-    .addr     (ram_addr_s0[THIS_INDEX_BITS-2:0]),
-    .bank_addr(ram_addr_s0[THIS_INDEX_BITS-1]),
-    .wen_n    (ram_wen_n_s0),
-    .bweb_n   (ram_bweb_n_s0),
-    .din      (ram_din_s0),
-    .dout     (ram_dout_s0)
-  );
-
-  always_ff @(posedge clk) begin : tag_p1_s0
-    if (!rstn)
-      tag_hash_p1[0] <= '0;
-    else
-      tag_hash_p1[0] <= tag_hash[0];
-  end
-
-  assign hit_p1[0] = ram_dout_s0[VAL_LSB] &
-      (ram_dout_s0[TAG_MSB:TAG_LSB] ==
-       tag_hash_p1[0][THIS_TAG_BITS-1:0]);
-
-  assign taken_p1[0] = ram_dout_s0[CTR_MSB];
-
-  // cntrl_bits_p1[0]: VAL at [0], CTR at [CB_CTR_H:1],
-  // USE at [CB_USE_H:CB_CTR_H+1], EPC at [CB_EPC_H:CB_USE_H+1].
-  always_comb begin : cntrl_out_s0
-    cntrl_bits_p1[0] = {CNTRL_BITS_WIDTH{1'b0}};
-    cntrl_bits_p1[0][0]              = ram_dout_s0[VAL_LSB];
-    cntrl_bits_p1[0][CB_CTR_H:1]     = ram_dout_s0[CTR_MSB:CTR_LSB];
-    cntrl_bits_p1[0][CB_USE_H:CB_CTR_H+1] =
-        ram_dout_s0[USE_MSB:USE_LSB];
-    cntrl_bits_p1[0][CB_EPC_H:CB_USE_H+1] =
-        ram_dout_s0[EPC_MSB:EPC_LSB];
-  end
-
-  // ============================================================
-  // Slot 1
-  // ============================================================
-  logic [THIS_INDEX_BITS-1:0]  ram_addr_s1;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_din_s1;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_bweb_n_s1;
-  logic                        ram_wen_n_s1;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_dout_s1;
-
-  logic prm_match_s1, alt_match_s1, alc_match_s1;
-  logic prm_ctr_we_s1, alt_ctr_we_s1;
-  logic use_we_s1, epc_we_s1, alc_we_s1, norm_we_s1;
-
-  // All write-enables in one always_comb (same fix as s0).
-  always_comb begin : we_s1
-    prm_match_s1  = (prm_tbl_sel_u0[1] == THIS_TBL_SEL);
-    alt_match_s1  = (alt_tbl_sel_u0[1] == THIS_TBL_SEL);
-    // alc_match: table match AND not zero (no-alloc sentinel).
-    alc_match_s1  = (alc_tbl_sel_u0[1] == THIS_TBL_SEL)
-                  & (alc_tbl_sel_u0[1] != '0);
-    prm_ctr_we_s1 = tage_upd_val_u0[1]
-                  & prm_ctr_wr_u0[1] & prm_match_s1;
-    alt_ctr_we_s1 = tage_upd_val_u0[1]
-                  & alt_ctr_wr_u0[1] & alt_match_s1;
-    // USE/EPC: prm OR alt match (HAND-FIX-001 intent).
-    use_we_s1     = tage_upd_val_u0[1]
-                  & use_wr_u0[1]
-                  & (prm_match_s1 | alt_match_s1);
-    epc_we_s1     = tage_upd_val_u0[1]
-                  & epc_wr_u0[1]
-                  & (prm_match_s1 | alt_match_s1);
-    alc_we_s1     = tage_upd_val_u0[1]
-                  & alc_wr_u0[1] & alc_match_s1;
-    norm_we_s1    = prm_ctr_we_s1 | alt_ctr_we_s1
-                  | use_we_s1 | epc_we_s1 | alc_we_s1;
-  end
-
-  assign ram_wen_n_s1 = ~(norm_we_s1 | ri_we);
-
-  always_comb begin : addr_mux_s1
-    if (tbl_ri_active)
-      ram_addr_s1 = tbl_ri_wa;
-    else if (alc_we_s1)
-      ram_addr_s1 = alc_index_u0[1];
-    else if (norm_we_s1)
-      ram_addr_s1 = upd_index_u0[1];
-    else
-      ram_addr_s1 = idx_hash[1];
-  end
-
-  always_comb begin : din_mux_s1
-    ram_din_s1 = {ALLOC_DATA_WIDTH{1'b0}};
-    if (tbl_ri_active) begin
-      ram_din_s1 = tbl_ri_wd;
-    end else if (alc_we_s1) begin
-      ram_din_s1 = alc_wd_u0[1];
-    end else begin
-      // Independent per-field: any combination of enables is legal.
-      if (prm_ctr_we_s1)
-        ram_din_s1[CTR_MSB:CTR_LSB] = prm_ctr_wd_u0[1];
-      else if (alt_ctr_we_s1)
-        ram_din_s1[CTR_MSB:CTR_LSB] = alt_ctr_wd_u0[1];
-      if (use_we_s1)
-        ram_din_s1[USE_MSB:USE_LSB] = use_wd_u0[1];
-      if (epc_we_s1)
-        ram_din_s1[EPC_MSB:EPC_LSB] = epc_wd_u0[1];
-    end
-  end
-
-  always_comb begin : bweb_mux_s1
-    ram_bweb_n_s1 = {ALLOC_DATA_WIDTH{1'b1}};
-    if (ri_we || alc_we_s1) begin
-      ram_bweb_n_s1 = {ALLOC_DATA_WIDTH{1'b0}};
-    end else begin
-      if (prm_ctr_we_s1 || alt_ctr_we_s1) begin
-        for (int i = CTR_LSB; i <= CTR_MSB; i++)
-          ram_bweb_n_s1[i] = 1'b0;
-      end
-      if (use_we_s1) begin
-        for (int i = USE_LSB; i <= USE_MSB; i++)
-          ram_bweb_n_s1[i] = 1'b0;
-      end
-      if (epc_we_s1) begin
-        for (int i = EPC_LSB; i <= EPC_MSB; i++)
-          ram_bweb_n_s1[i] = 1'b0;
+    always_comb begin : bweb_mux
+      ram_bweb_n = {ALLOC_DATA_WIDTH{1'b1}};
+      if (ri_we || alc_we) begin
+        ram_bweb_n = {ALLOC_DATA_WIDTH{1'b0}};
+      end else begin
+        if (prm_ctr_we || alt_ctr_we) begin
+          for (int i = CTR_LSB; i <= CTR_MSB; i++)
+            ram_bweb_n[i] = 1'b0;
+        end
+        if (use_we) begin
+          for (int i = USE_LSB; i <= USE_MSB; i++)
+            ram_bweb_n[i] = 1'b0;
+        end
+        if (epc_we) begin
+          for (int i = EPC_LSB; i <= EPC_MSB; i++)
+            ram_bweb_n[i] = 1'b0;
+        end
       end
     end
-  end
 
-  bw_ram #(
-    .ENTRIES(RAM_ENTRIES),
-    .WIDTH  (ALLOC_DATA_WIDTH),
-    .BANKS  (NUM_BANKS)
-  ) u_ram_s1 (
-    .clk      (clk),
-    .addr     (ram_addr_s1[THIS_INDEX_BITS-2:0]),
-    .bank_addr(ram_addr_s1[THIS_INDEX_BITS-1]),
-    .wen_n    (ram_wen_n_s1),
-    .bweb_n   (ram_bweb_n_s1),
-    .din      (ram_din_s1),
-    .dout     (ram_dout_s1)
-  );
+    bw_ram #(
+      .ENTRIES(RAM_ENTRIES),
+      .WIDTH  (ALLOC_DATA_WIDTH),
+      .BANKS  (NUM_BANKS)
+    ) u_ram (
+      .clk      (clk),
+      .addr     (ram_addr[THIS_INDEX_BITS-2:0]),
+      .bank_addr(ram_addr[THIS_INDEX_BITS-1]),
+      .wen_n    (ram_wen_n),
+      .bweb_n   (ram_bweb_n),
+      .din      (ram_din),
+      .dout     (ram_dout)
+    );
 
-  always_ff @(posedge clk) begin : tag_p1_s1
-    if (!rstn)
-      tag_hash_p1[1] <= '0;
-    else
-      tag_hash_p1[1] <= tag_hash[1];
-  end
+    always_ff @(posedge clk) begin : tag_p1
+      if (!rstn)
+        tag_hash_p1 <= '0;
+      else
+        tag_hash_p1 <= tag_hash[s];
+    end
 
-  assign hit_p1[1] = ram_dout_s1[VAL_LSB] &
-      (ram_dout_s1[TAG_MSB:TAG_LSB] ==
-       tag_hash_p1[1][THIS_TAG_BITS-1:0]);
+    assign hit_p1[s] = ram_dout[VAL_LSB] &
+        (ram_dout[TAG_MSB:TAG_LSB] ==
+         tag_hash_p1[THIS_TAG_BITS-1:0]);
 
-  assign taken_p1[1] = ram_dout_s1[CTR_MSB];
+    assign taken_p1[s] = ram_dout[CTR_MSB];
 
-  // cntrl_bits_p1[1]: VAL at [0], CTR at [CB_CTR_H:1],
-  // USE at [CB_USE_H:CB_CTR_H+1], EPC at [CB_EPC_H:CB_USE_H+1].
-  always_comb begin : cntrl_out_s1
-    cntrl_bits_p1[1] = {CNTRL_BITS_WIDTH{1'b0}};
-    cntrl_bits_p1[1][0]              = ram_dout_s1[VAL_LSB];
-    cntrl_bits_p1[1][CB_CTR_H:1]     = ram_dout_s1[CTR_MSB:CTR_LSB];
-    cntrl_bits_p1[1][CB_USE_H:CB_CTR_H+1] =
-        ram_dout_s1[USE_MSB:USE_LSB];
-    cntrl_bits_p1[1][CB_EPC_H:CB_USE_H+1] =
-        ram_dout_s1[EPC_MSB:EPC_LSB];
+    // cntrl_bits_p1[s]: VAL at [0], CTR at [CB_CTR_H:1],
+    // USE at [CB_USE_H:CB_CTR_H+1], EPC at [CB_EPC_H:CB_USE_H+1].
+    always_comb begin : cntrl_out
+      cntrl_bits_p1[s] = {CNTRL_BITS_WIDTH{1'b0}};
+      cntrl_bits_p1[s][0]              = ram_dout[VAL_LSB];
+      cntrl_bits_p1[s][CB_CTR_H:1]     = ram_dout[CTR_MSB:CTR_LSB];
+      cntrl_bits_p1[s][CB_USE_H:CB_CTR_H+1] =
+          ram_dout[USE_MSB:USE_LSB];
+      cntrl_bits_p1[s][CB_EPC_H:CB_USE_H+1] =
+          ram_dout[EPC_MSB:EPC_LSB];
+    end
   end
 
 endmodule : tage_table

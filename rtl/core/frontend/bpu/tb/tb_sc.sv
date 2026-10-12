@@ -8,15 +8,17 @@
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Self-checking integration testbench for the SC structural top (sc).
-// DUT instantiated directly as u_dut. NUM_PRED_SLOTS=2. This drives a
+// DUT instantiated directly as u_dut, at the package NUM_PRED_SLOTS (1
+// or 2, BP-128). This drives a
 // full prediction through the REAL tables (ST0-ST3 sc_table, ST4
 // sc_brimli) into sc_cntrl and back, drives an update, and exercises
 // both init modes and the sc_ready gate.
 //
 // Table RAM contents are reached by hierarchical reference through the
 // named bw_ram instances inside each table:
-//   ST0-ST3: u_dut.gen_st[t].u_st.u_ram_s{0,1}.mem[bank][row]
-//   ST4    : u_dut.u_st4.u_ram_s{0,1}.mem[bank][row]
+//   ST0-ST3: u_dut.gen_st[t].u_st.g_slot[s].u_ram.mem[bank][row]
+//   ST4    : u_dut.u_st4.g_slot[s].u_ram.mem[bank][row]
+// Slot 1 is reached through g_s1, present only at two slots (BP-128).
 // bank/row split (sc_table_interfaces.md): ST0-ST3 bank=idx[8],
 // row=idx[7:0]; ST4 bank=idx[9], row=idx[8:0].
 //
@@ -43,7 +45,9 @@
 //                     accepted update reaches the tables in order, the
 //                     ninth last. It replaces the stub-constant check.
 // TC6 two writes   -- (BP-126) both slots written into one queue entry
-//                     in one cycle, both applied when it drains.
+//                     in one cycle, both applied when it drains. Needs
+//                     two slots; skipped at 1 (BP-128), as are the TC3
+//                     slot 1 checks.
 //
 // The tb plays the bp_cluster arbiter: sc_uq_rd_en is held high (an
 // update granted whenever one is queued) except where a test holds it
@@ -56,7 +60,9 @@ import bp_structs_pkg::*;
 
 module tb;
 
-  localparam int P_SLOTS = NUM_PRED_SLOTS;   // 2
+  localparam int P_SLOTS = NUM_PRED_SLOTS;   // 1 or 2
+  // Every slot asserted, the 2'b11 of the two-slot build (BP-128).
+  localparam logic [P_SLOTS-1:0] ALL_SLOTS = {P_SLOTS{1'b1}};
   localparam int NT      = SC_NUM_TABLES;    // 5
   localparam int ST4     = SC_NUM_TABLES-1;  // 4
 
@@ -100,9 +106,7 @@ module tb;
   // ----------------------------------------------------------------
   // DUT instantiation
   // ----------------------------------------------------------------
-  sc #(
-    .NUM_PRED_SLOTS(P_SLOTS)
-  ) u_dut (
+  sc u_dut (
     .clk             (clk),
     .rstn            (rstn),
     .tage_pred_rdy_p2(tage_pred_rdy_p2),
@@ -241,17 +245,17 @@ module tb;
     if (t == ST4) begin b = idx[9]; row = int'(idx[8:0]); end
     else          begin b = idx[8]; row = int'(idx[7:0]); end
     v = '0;
+    // BP-128: slot 0 directly; slot 1 through g_s1, which exists only
+    // at NUM_PRED_SLOTS 2.
+    if (s != 0) v = g_s1.rd(t, b, row);
+    else
     case (t)
-      0: v = (s == 0) ? u_dut.gen_st[0].u_st.u_ram_s0.mem[b][row]
-                      : u_dut.gen_st[0].u_st.u_ram_s1.mem[b][row];
-      1: v = (s == 0) ? u_dut.gen_st[1].u_st.u_ram_s0.mem[b][row]
-                      : u_dut.gen_st[1].u_st.u_ram_s1.mem[b][row];
-      2: v = (s == 0) ? u_dut.gen_st[2].u_st.u_ram_s0.mem[b][row]
-                      : u_dut.gen_st[2].u_st.u_ram_s1.mem[b][row];
-      3: v = (s == 0) ? u_dut.gen_st[3].u_st.u_ram_s0.mem[b][row]
-                      : u_dut.gen_st[3].u_st.u_ram_s1.mem[b][row];
-      4: v = (s == 0) ? u_dut.u_st4.u_ram_s0.mem[b][row]
-                      : u_dut.u_st4.u_ram_s1.mem[b][row];
+      0: v = u_dut.gen_st[0].u_st.g_slot[0].u_ram.mem[b][row];
+      1: v = u_dut.gen_st[1].u_st.g_slot[0].u_ram.mem[b][row];
+      2: v = u_dut.gen_st[2].u_st.g_slot[0].u_ram.mem[b][row];
+      3: v = u_dut.gen_st[3].u_st.g_slot[0].u_ram.mem[b][row];
+      4: v = u_dut.u_st4.g_slot[0].u_ram.mem[b][row];
+      default: v = '0;
     endcase
     tbl_rd = v;
   endfunction
@@ -265,19 +269,52 @@ module tb;
     int   row;
     if (t == ST4) begin b = idx[9]; row = int'(idx[8:0]); end
     else          begin b = idx[8]; row = int'(idx[7:0]); end
+    if (s != 0) g_s1.wr(t, b, row, data);
+    else
     case (t)
-      0: if (s == 0) u_dut.gen_st[0].u_st.u_ram_s0.mem[b][row] = data;
-         else        u_dut.gen_st[0].u_st.u_ram_s1.mem[b][row] = data;
-      1: if (s == 0) u_dut.gen_st[1].u_st.u_ram_s0.mem[b][row] = data;
-         else        u_dut.gen_st[1].u_st.u_ram_s1.mem[b][row] = data;
-      2: if (s == 0) u_dut.gen_st[2].u_st.u_ram_s0.mem[b][row] = data;
-         else        u_dut.gen_st[2].u_st.u_ram_s1.mem[b][row] = data;
-      3: if (s == 0) u_dut.gen_st[3].u_st.u_ram_s0.mem[b][row] = data;
-         else        u_dut.gen_st[3].u_st.u_ram_s1.mem[b][row] = data;
-      4: if (s == 0) u_dut.u_st4.u_ram_s0.mem[b][row] = data;
-         else        u_dut.u_st4.u_ram_s1.mem[b][row] = data;
+      0: u_dut.gen_st[0].u_st.g_slot[0].u_ram.mem[b][row] = data;
+      1: u_dut.gen_st[1].u_st.g_slot[0].u_ram.mem[b][row] = data;
+      2: u_dut.gen_st[2].u_st.g_slot[0].u_ram.mem[b][row] = data;
+      3: u_dut.gen_st[3].u_st.g_slot[0].u_ram.mem[b][row] = data;
+      4: u_dut.u_st4.g_slot[0].u_ram.mem[b][row] = data;
+      default: ;
     endcase
   endtask
+
+  // BP-128: the slot 1 RAMs exist only at NUM_PRED_SLOTS 2. At 1 the
+  // stubs are never called: every slot-1 access is gated.
+  if (NUM_PRED_SLOTS > 1) begin : g_s1
+    function automatic logic [SC_MAX_CTR_WIDTH-1:0] rd(
+        input int t, input logic b, input int row);
+      case (t)
+        0: rd = u_dut.gen_st[0].u_st.g_slot[1].u_ram.mem[b][row];
+        1: rd = u_dut.gen_st[1].u_st.g_slot[1].u_ram.mem[b][row];
+        2: rd = u_dut.gen_st[2].u_st.g_slot[1].u_ram.mem[b][row];
+        3: rd = u_dut.gen_st[3].u_st.g_slot[1].u_ram.mem[b][row];
+        4: rd = u_dut.u_st4.g_slot[1].u_ram.mem[b][row];
+        default: rd = '0;
+      endcase
+    endfunction
+    task automatic wr(input int t, input logic b, input int row,
+                      input logic [SC_MAX_CTR_WIDTH-1:0] data);
+      case (t)
+        0: u_dut.gen_st[0].u_st.g_slot[1].u_ram.mem[b][row] = data;
+        1: u_dut.gen_st[1].u_st.g_slot[1].u_ram.mem[b][row] = data;
+        2: u_dut.gen_st[2].u_st.g_slot[1].u_ram.mem[b][row] = data;
+        3: u_dut.gen_st[3].u_st.g_slot[1].u_ram.mem[b][row] = data;
+        4: u_dut.u_st4.g_slot[1].u_ram.mem[b][row] = data;
+        default: ;
+      endcase
+    endtask
+  end else begin : g_s1
+    function automatic logic [SC_MAX_CTR_WIDTH-1:0] rd(
+        input int t, input logic b, input int row);
+      rd = '0;
+    endfunction
+    task automatic wr(input int t, input logic b, input int row,
+                      input logic [SC_MAX_CTR_WIDTH-1:0] data);
+    endtask
+  end
 
   // ----------------------------------------------------------------
   // Clear all driven inputs
@@ -347,13 +384,13 @@ module tb;
     // Precondition: sc_ready must still be low.
     chkw("TC2 ready low during seq", 1, sc_ready, 0);
 
-    tage_pred_rdy_p2 = 2'b11;
+    tage_pred_rdy_p2 = ALL_SLOTS;
     for (int s = 0; s < P_SLOTS; s++) begin
       tage_pred_meta_p2[s]              = '0;
       tage_pred_meta_p2[s].tage_pred_tkn = 1'b1;
       inp_pc_p2[s]                      = (VA_WIDTH-1)'('h0000_0040);
     end
-    sc_upd_val_u0 = 2'b11;
+    sc_upd_val_u0 = ALL_SLOTS;
     for (int s = 0; s < P_SLOTS; s++) begin
       sc_upd_inp_u0[s]                = '0;
       sc_upd_inp_u0[s].resolved_taken = 1'b1;
@@ -399,7 +436,9 @@ module tb;
     // Prediction stimulus (distinct PCs per slot).
     clr_inputs();
     inp_pc_p2[0]    = (VA_WIDTH-1)'('h0000_0044);   // PC[9:1] = 0x044
-    inp_pc_p2[1]    = (VA_WIDTH-1)'('h0000_0088);   // PC[9:1] = 0x088
+    // BP-128: slot 1 only at two slots (loop: no constant index).
+    for (int s = 1; s < P_SLOTS; s++)
+      inp_pc_p2[s]  = (VA_WIDTH-1)'('h0000_0088);   // PC[9:1] = 0x088
     sc_t1_idx_fh_p2 = 64'd5;
     sc_t2_idx_fh_p2 = 64'd10;
     sc_t3_idx_fh_p2 = 64'd3;
@@ -413,7 +452,7 @@ module tb;
       end
 
     // Present the prediction meta at p2.
-    tage_pred_rdy_p2 = 2'b11;
+    tage_pred_rdy_p2 = ALL_SLOTS;
     // slot 0: agree (tage_tkn = 1)
     tage_pred_meta_p2[0]                  = '0;
     tage_pred_meta_p2[0].tage_extd_ctr    = '0;
@@ -422,12 +461,14 @@ module tb;
     tage_pred_meta_p2[0].tage_pred_tkn    = 1'b1;
     tage_pred_meta_p2[0].branch_id        = 6'd9;
     // slot 1: differ (tage_tkn = 0)
-    tage_pred_meta_p2[1]                  = '0;
-    tage_pred_meta_p2[1].tage_extd_ctr    = '0;
-    tage_pred_meta_p2[1].tage_pred_strong = 1'b0;
-    tage_pred_meta_p2[1].tage_pred_medium = 1'b0;
-    tage_pred_meta_p2[1].tage_pred_tkn    = 1'b0;
-    tage_pred_meta_p2[1].branch_id        = 6'd21;
+    for (int s = 1; s < P_SLOTS; s++) begin
+      tage_pred_meta_p2[s]                  = '0;
+      tage_pred_meta_p2[s].tage_extd_ctr    = '0;
+      tage_pred_meta_p2[s].tage_pred_strong = 1'b0;
+      tage_pred_meta_p2[s].tage_pred_medium = 1'b0;
+      tage_pred_meta_p2[s].tage_pred_tkn    = 1'b0;
+      tage_pred_meta_p2[s].branch_id        = 6'd21;
+    end
 
     // p2 -> p3: clock once; the SC result forms combinationally at p3.
     @(posedge clk); #1;
@@ -448,15 +489,21 @@ module tb;
     chkw("TC3 s0 branch_id", FTQ_IDX_BITS,
          sc_pred_meta_p3[0].branch_id, 9);
 
-    // -- slot 1 (general differ -> override)
-    chkw("TC3 s1 rdy",      1, sc_pred_rdy_p3[1], 1);
-    chkw("TC3 s1 sum",      SC_LSUM_BITS,
-         sc_pred_meta_p3[1].sc_sum, exp_sum);
-    chkw("TC3 s1 lcl_tkn",  1, sc_pred_meta_p3[1].sc_lcl_pred_tkn, 1);
-    chkw("TC3 s1 final",    1, sc_pred_meta_p3[1].sc_pred_tkn, 1);
-    chkw("TC3 s1 override", 1, sc_pred_meta_p3[1].sc_override, 1);
-    chkw("TC3 s1 chooser",  2,
-         sc_pred_meta_p3[1].sc_chooser, CHOOSE_NONE);
+    // -- slot 1 (general differ -> override). Needs two slots (BP-128):
+    //    index P_SLOTS-1 is slot 1 whenever this runs.
+    if (P_SLOTS > 1) begin
+      chkw("TC3 s1 rdy",      1, sc_pred_rdy_p3[P_SLOTS-1], 1);
+      chkw("TC3 s1 sum",      SC_LSUM_BITS,
+           sc_pred_meta_p3[P_SLOTS-1].sc_sum, exp_sum);
+      chkw("TC3 s1 lcl_tkn",  1,
+           sc_pred_meta_p3[P_SLOTS-1].sc_lcl_pred_tkn, 1);
+      chkw("TC3 s1 final",    1, sc_pred_meta_p3[P_SLOTS-1].sc_pred_tkn, 1);
+      chkw("TC3 s1 override", 1, sc_pred_meta_p3[P_SLOTS-1].sc_override, 1);
+      chkw("TC3 s1 chooser",  2,
+           sc_pred_meta_p3[P_SLOTS-1].sc_chooser, CHOOSE_NONE);
+    end else begin
+      $display("SKIP TC3 s1 (general differ): needs NUM_PRED_SLOTS > 1");
+    end
 
     // -- captured per-table index / counter meta (both slots)
     for (int t = 0; t < NT; t++)
@@ -490,7 +537,7 @@ module tb;
 
     // slot 0: resolved taken -> +1; slot 1: resolved not-taken -> -1.
     ures[0] = 1'b1;
-    ures[1] = 1'b0;
+    for (int s = 1; s < P_SLOTS; s++) ures[s] = 1'b0;
 
     // Per-table indices (distinct, covering both banks) and counters
     // (covering saturation at SC_CTR_MAX / SC_CTR_MIN).
@@ -500,19 +547,21 @@ module tb;
     uidx[2][0] = 10'h01B; uctr[2][0] = -6'sd5;   // -> -4
     uidx[3][0] = 10'h112; uctr[3][0] =  6'sd0;   // -> +1
     uidx[4][0] = 10'h254; uctr[4][0] = -6'sd32;  // -> -31 (ST4 bank1)
-    // slot 1
-    uidx[0][1] = 10'h022; uctr[0][1] = -6'sd3;   // -> -4
-    uidx[1][1] = 10'h027; uctr[1][1] = -6'sd32;  // sat -> -32
-    uidx[2][1] = 10'h128; uctr[2][1] =  6'sd5;   // -> +4
-    uidx[3][1] = 10'h021; uctr[3][1] =  6'sd0;   // -> -1
-    uidx[4][1] = 10'h157; uctr[4][1] =  6'sd31;  // -> +30 (ST4 bank0)
+    // slot 1 (BP-128: only at two slots; loop, no constant index)
+    for (int s = 1; s < P_SLOTS; s++) begin
+      uidx[0][s] = 10'h022; uctr[0][s] = -6'sd3;   // -> -4
+      uidx[1][s] = 10'h027; uctr[1][s] = -6'sd32;  // sat -> -32
+      uidx[2][s] = 10'h128; uctr[2][s] =  6'sd5;   // -> +4
+      uidx[3][s] = 10'h021; uctr[3][s] =  6'sd0;   // -> -1
+      uidx[4][s] = 10'h157; uctr[4][s] =  6'sd31;  // -> +30 (ST4 bank0)
+    end
 
     // Land just after an edge with the request deasserted.
     clr_inputs();
     @(posedge clk); #1;
 
     // Build both slot update bundles. sc_wrong forced on each slot.
-    sc_upd_val_u0 = 2'b11;
+    sc_upd_val_u0 = ALL_SLOTS;
     for (int s = 0; s < P_SLOTS; s++) begin
       sc_upd_inp_u0[s]                                = '0;
       sc_upd_inp_u0[s].sc_pred_meta.sc_lcl_pred_tkn   = ~ures[s];
@@ -531,7 +580,7 @@ module tb;
 
     // One posedge commits the RAM writes and loads sc_upd_rdy_u1.
     @(posedge clk); #1;
-    chkw("TC4 upd_rdy_u1", P_SLOTS, sc_upd_rdy_u1, 2'b11);
+    chkw("TC4 upd_rdy_u1", P_SLOTS, sc_upd_rdy_u1, ALL_SLOTS);
 
     // Deassert the request before any further edge (single write).
     sc_upd_val_u0 = '0;
@@ -592,14 +641,14 @@ module tb;
     start0 = tbl_rd(0, 0, 10'h031);
     sc_uq_rd_en = 1'b0;
     for (k = 1; k <= SC_UQ_DEPTH; k++) begin
-      q_upd(2'b01, k, 0);
+      q_upd(P_SLOTS'(1), k, 0);
       #1;
       chkw($sformatf("TC5 update %0d accepted", k), P_SLOTS,
-           sc_upd_rdy, 2'b11);
+           sc_upd_rdy, ALL_SLOTS);
       @(posedge clk); #1;
     end
     // Ninth presented and held by the tb (the producer, FE-5).
-    q_upd(2'b01, SC_UQ_DEPTH + 1, 0);
+    q_upd(P_SLOTS'(1), SC_UQ_DEPTH + 1, 0);
     #1;
     chkw("TC5 full: sc_uq_not_full low", 1, sc_uq_not_full, 0);
     chkw("TC5 full: ninth refused (sc_upd_rdy low)", P_SLOTS,
@@ -618,7 +667,7 @@ module tb;
     n_acc9      = 0;
     for (k = 1; k <= SC_UQ_DEPTH + 1; k++) begin
       #1;
-      if ((n_acc9 == 0) && (sc_upd_rdy == 2'b11)) n_acc9 = k;
+      if ((n_acc9 == 0) && (sc_upd_rdy == ALL_SLOTS)) n_acc9 = k;
       @(posedge clk); #1;
       if (n_acc9 != 0) sc_upd_val_u0 = '0;
       chkw($sformatf("TC5 drain %0d applied", k), 1, sc_upd_rdy_u1[0], 1);
@@ -645,17 +694,17 @@ module tb;
     clr_inputs();
     @(posedge clk); #1;
     sc_uq_rd_en = 1'b0;
-    q_upd(2'b11, 20, 23);
+    q_upd(ALL_SLOTS, 20, 23);
     #1;
     chkw("TC6 both slots accepted in one cycle", P_SLOTS, sc_upd_rdy,
-         2'b11);
+         ALL_SLOTS);
     @(posedge clk); #1;
     sc_upd_val_u0 = '0;
     chkw("TC6 queued, not applied", P_SLOTS, sc_upd_rdy_u1, 0);
     chkw("TC6 one entry queued", 1, sc_uq_has_data, 1);
     sc_uq_rd_en = 1'b1;
     @(posedge clk); #1;
-    chkw("TC6 both slots applied", P_SLOTS, sc_upd_rdy_u1, 2'b11);
+    chkw("TC6 both slots applied", P_SLOTS, sc_upd_rdy_u1, ALL_SLOTS);
     for (int t = 0; t < NT; t++) begin
       chkw($sformatf("TC6 slot 0 table %0d", t), SC_MAX_CTR_WIDTH,
            tbl_rd(t, 0, 10'h031), ref_sat_sc(6'd20, +1));
@@ -703,7 +752,11 @@ module tb;
     if (_prediction != 0) test_prediction();
     if (_update     != 0) test_update();
     if (_full_queue != 0) test_full_queue();
-    if (_two_writes != 0) test_two_writes();
+    // TC6 needs two slots (BP-128).
+    if (_two_writes != 0) begin
+      if (P_SLOTS > 1) test_two_writes();
+      else $display("SKIP TC6 two writes: needs NUM_PRED_SLOTS > 1");
+    end
 
     @(posedge clk); #1;
     $display("--------------------------------------------");

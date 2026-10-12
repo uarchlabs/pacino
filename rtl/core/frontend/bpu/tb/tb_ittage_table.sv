@@ -10,6 +10,8 @@
 // Self-checking testbench for ittage_table.
 // DUT parameters: IT1 (THIS_TABLE=1, IDX_BITS=8, TAG_BITS=8).
 // folded_hist=0 throughout; +ITTAGE_FAST_INIT=1 required.
+// At NUM_PRED_SLOTS 1 the slot 1 hash checks and TC-DUAL are skipped
+// (BP-128); every other check is on slot 0.
 //
 // This needs to be crossed checked against the manual testbench results
 // ===================================================================
@@ -51,34 +53,36 @@ module tb;
     forever #5 clk = ~clk;
   end
 
-  // DUT signals
-  logic [1:0]                  hit_p1;
-  logic [IT_MAX_TGT_WIDTH-1:0] pred_tgt_p1[0:1];
-  logic [CBITS_W-1:0]          cntrl_bits_p1[0:1];
-  logic [THIS_INDEX_BITS-1:0]  idx_hash_p0[0:1];
-  logic [IT_MAX_TAG_WIDTH-1:0] tag_hash_p0[0:1];
-  logic [1:0]                  ittage_pred_val_p0;
-  ittage_pred_inp_t            ittage_pred_inp_p0[0:1];
+  // DUT signals. Sized by the package NUM_PRED_SLOTS (BP-128): they
+  // were literal [1:0] / [0:1].
+  localparam int NS = NUM_PRED_SLOTS;
+  logic [NS-1:0]                  hit_p1;
+  logic [IT_MAX_TGT_WIDTH-1:0] pred_tgt_p1[0:NS-1];
+  logic [CBITS_W-1:0]          cntrl_bits_p1[0:NS-1];
+  logic [THIS_INDEX_BITS-1:0]  idx_hash_p0[0:NS-1];
+  logic [IT_MAX_TAG_WIDTH-1:0] tag_hash_p0[0:NS-1];
+  logic [NS-1:0]                  ittage_pred_val_p0;
+  ittage_pred_inp_t            ittage_pred_inp_p0[0:NS-1];
   bp_folded_hist_t             folded_hist;
-  logic [1:0]                  ittage_upd_val_u0;
-  logic [THIS_CTR_WIDTH-1:0]   prm_ctr_wd_u0[0:1];
-  logic [THIS_CTR_WIDTH-1:0]   alt_ctr_wd_u0[0:1];
-  logic [THIS_USE_WIDTH-1:0]   use_wd_u0[0:1];
-  logic [THIS_EPC_WIDTH-1:0]   epc_wd_u0[0:1];
-  logic [IT_MAX_TGT_WIDTH-1:0] tgt_wd_u0[0:1];
-  logic [ALC_W-1:0]            alc_wd_u0[0:1];
-  logic [1:0]                  prm_ctr_wr_u0;
-  logic [1:0]                  alt_ctr_wr_u0;
-  logic [1:0]                  use_wr_u0;
-  logic [1:0]                  epc_wr_u0;
-  logic [1:0]                  prm_tgt_wr_u0;
-  logic [1:0]                  alt_tgt_wr_u0;
-  logic [1:0]                  alc_wr_u0;
-  logic [TBL_SEL_W-1:0]        prm_tbl_sel_u0[0:1];
-  logic [TBL_SEL_W-1:0]        alt_tbl_sel_u0[0:1];
-  logic [TBL_SEL_W-1:0]        alc_tbl_sel_u0[0:1];
-  logic [THIS_INDEX_BITS-1:0]  upd_index_u0[0:1];
-  logic [THIS_INDEX_BITS-1:0]  alc_index_u0[0:1];
+  logic [NS-1:0]                  ittage_upd_val_u0;
+  logic [THIS_CTR_WIDTH-1:0]   prm_ctr_wd_u0[0:NS-1];
+  logic [THIS_CTR_WIDTH-1:0]   alt_ctr_wd_u0[0:NS-1];
+  logic [THIS_USE_WIDTH-1:0]   use_wd_u0[0:NS-1];
+  logic [THIS_EPC_WIDTH-1:0]   epc_wd_u0[0:NS-1];
+  logic [IT_MAX_TGT_WIDTH-1:0] tgt_wd_u0[0:NS-1];
+  logic [ALC_W-1:0]            alc_wd_u0[0:NS-1];
+  logic [NS-1:0]                  prm_ctr_wr_u0;
+  logic [NS-1:0]                  alt_ctr_wr_u0;
+  logic [NS-1:0]                  use_wr_u0;
+  logic [NS-1:0]                  epc_wr_u0;
+  logic [NS-1:0]                  prm_tgt_wr_u0;
+  logic [NS-1:0]                  alt_tgt_wr_u0;
+  logic [NS-1:0]                  alc_wr_u0;
+  logic [TBL_SEL_W-1:0]        prm_tbl_sel_u0[0:NS-1];
+  logic [TBL_SEL_W-1:0]        alt_tbl_sel_u0[0:NS-1];
+  logic [TBL_SEL_W-1:0]        alc_tbl_sel_u0[0:NS-1];
+  logic [THIS_INDEX_BITS-1:0]  upd_index_u0[0:NS-1];
+  logic [THIS_INDEX_BITS-1:0]  alc_index_u0[0:NS-1];
   logic                        tbl_ri_active;
   logic                        tbl_ri_wr;
   logic [THIS_INDEX_BITS-1:0]  tbl_ri_wa;
@@ -178,21 +182,21 @@ module tb;
     tbl_ri_wa                   = 0;
     tbl_ri_wd                   = 0;
     folded_hist                 = '0;
-    ittage_pred_inp_p0[0].pc        = 0;
-    ittage_pred_inp_p0[0].branch_id = 0;
-    ittage_pred_inp_p0[1].pc        = 0;
-    ittage_pred_inp_p0[1].branch_id = 0;
-    prm_ctr_wd_u0[0]  = 0; prm_ctr_wd_u0[1]  = 0;
-    alt_ctr_wd_u0[0]  = 0; alt_ctr_wd_u0[1]  = 0;
-    use_wd_u0[0]      = 0; use_wd_u0[1]      = 0;
-    epc_wd_u0[0]      = 0; epc_wd_u0[1]      = 0;
-    tgt_wd_u0[0]      = 0; tgt_wd_u0[1]      = 0;
-    alc_wd_u0[0]      = 0; alc_wd_u0[1]      = 0;
-    prm_tbl_sel_u0[0] = 0; prm_tbl_sel_u0[1] = 0;
-    alt_tbl_sel_u0[0] = 0; alt_tbl_sel_u0[1] = 0;
-    alc_tbl_sel_u0[0] = 0; alc_tbl_sel_u0[1] = 0;
-    upd_index_u0[0]   = 0; upd_index_u0[1]   = 0;
-    alc_index_u0[0]   = 0; alc_index_u0[1]   = 0;
+    for (int s = 0; s < NS; s++) begin   // BP-128: every slot
+      ittage_pred_inp_p0[s].pc        = 0;
+      ittage_pred_inp_p0[s].branch_id = 0;
+      prm_ctr_wd_u0[s]  = 0;
+      alt_ctr_wd_u0[s]  = 0;
+      use_wd_u0[s]      = 0;
+      epc_wd_u0[s]      = 0;
+      tgt_wd_u0[s]      = 0;
+      alc_wd_u0[s]      = 0;
+      prm_tbl_sel_u0[s] = 0;
+      alt_tbl_sel_u0[s] = 0;
+      alc_tbl_sel_u0[s] = 0;
+      upd_index_u0[s]   = 0;
+      alc_index_u0[s]   = 0;
+    end
     pass_cnt = 0;
     fail_cnt = 0;
 
@@ -206,16 +210,21 @@ module tb;
     // TC-HASH: Combinatorial hash verification (no clock)
     // --------------------------------------------------------
     ittage_pred_inp_p0[0].pc = PC_A;
-    ittage_pred_inp_p0[1].pc = PC_C;
+    // BP-128: slot 1 only at two slots; NS-1 is slot 1 when it runs.
+    if (NS > 1) ittage_pred_inp_p0[NS-1].pc = PC_C;
     #1;
     check_w("TC-HASH idx_hash_p0[0]",
             64'(idx_hash_p0[0]), 64'h10);
     check_w("TC-HASH tag_hash_p0[0]",
             64'(tag_hash_p0[0]), 64'h010);
-    check_w("TC-HASH idx_hash_p0[1]",
-            64'(idx_hash_p0[1]), 64'h50);
-    check_w("TC-HASH tag_hash_p0[1]",
-            64'(tag_hash_p0[1]), 64'h001);
+    if (NS > 1) begin
+      check_w("TC-HASH idx_hash_p0[1]",
+              64'(idx_hash_p0[NS-1]), 64'h50);
+      check_w("TC-HASH tag_hash_p0[1]",
+              64'(tag_hash_p0[NS-1]), 64'h001);
+    end else begin
+      $display("SKIP TC-HASH slot 1: needs NUM_PRED_SLOTS > 1");
+    end
 
     // --------------------------------------------------------
     // TC-ALLOC-HIT: Allocate at idx=0x10 (PC_A), predict hit
@@ -414,27 +423,34 @@ module tb;
     // Slot 0: tag=0x00, tgt=0xAA, epc=1, use=1, ctr=5, val=1
     // Slot 1: tag=0x00, tgt=0xBB, epc=2, use=2, ctr=2, val=1
     // --------------------------------------------------------
-    ittage_upd_val_u0    = 2'b11;
-    alc_wr_u0            = 2'b11;
-    alc_tbl_sel_u0[0]    = TBL_SEL_W'(1);
-    alc_tbl_sel_u0[1]    = TBL_SEL_W'(1);
-    alc_index_u0[0]      = 8'h20;
-    alc_index_u0[1]      = 8'h20;
-    alc_wd_u0[0] = {8'h00, IT_MAX_TGT_WIDTH'('hAA), 2'b01, 2'b01, 3'b101, 1'b1};
-    alc_wd_u0[1] = {8'h00, IT_MAX_TGT_WIDTH'('hBB), 2'b10, 2'b10, 3'b010, 1'b1};
-    ittage_pred_inp_p0[0].pc = PC_E;
-    ittage_pred_inp_p0[1].pc = PC_E;
-    @(posedge clk); #1;
-    ittage_upd_val_u0 = 0;
-    alc_wr_u0         = 0;
-    // Predict both slots
-    @(posedge clk); #1;
-    check("TC-DUAL hit_p1[0]", hit_p1[0], 1'b1);
-    check("TC-DUAL hit_p1[1]", hit_p1[1], 1'b1);
-    check_w("TC-DUAL pred_tgt_p1[0]",
-            64'(pred_tgt_p1[0]), 64'hAA);
-    check_w("TC-DUAL pred_tgt_p1[1]",
-            64'(pred_tgt_p1[1]), 64'hBB);
+    // Needs two slots (BP-128); NS-1 is slot 1 whenever it runs.
+    if (NS > 1) begin
+      ittage_upd_val_u0    = '1;
+      alc_wr_u0            = '1;
+      alc_tbl_sel_u0[0]    = TBL_SEL_W'(1);
+      alc_tbl_sel_u0[NS-1] = TBL_SEL_W'(1);
+      alc_index_u0[0]      = 8'h20;
+      alc_index_u0[NS-1]   = 8'h20;
+      alc_wd_u0[0]    = {8'h00, IT_MAX_TGT_WIDTH'('hAA), 2'b01, 2'b01,
+                         3'b101, 1'b1};
+      alc_wd_u0[NS-1] = {8'h00, IT_MAX_TGT_WIDTH'('hBB), 2'b10, 2'b10,
+                         3'b010, 1'b1};
+      ittage_pred_inp_p0[0].pc    = PC_E;
+      ittage_pred_inp_p0[NS-1].pc = PC_E;
+      @(posedge clk); #1;
+      ittage_upd_val_u0 = 0;
+      alc_wr_u0         = 0;
+      // Predict both slots
+      @(posedge clk); #1;
+      check("TC-DUAL hit_p1[0]", hit_p1[0], 1'b1);
+      check("TC-DUAL hit_p1[1]", hit_p1[NS-1], 1'b1);
+      check_w("TC-DUAL pred_tgt_p1[0]",
+              64'(pred_tgt_p1[0]), 64'hAA);
+      check_w("TC-DUAL pred_tgt_p1[1]",
+              64'(pred_tgt_p1[NS-1]), 64'hBB);
+    end else begin
+      $display("SKIP TC-DUAL: needs NUM_PRED_SLOTS > 1");
+    end
 
     // BP-095: a failing run must exit non-zero. Verilator v5.048
     // maps $finish(1) onto exit status 0, so the failure exit is

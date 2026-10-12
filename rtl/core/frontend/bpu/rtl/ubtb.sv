@@ -69,14 +69,19 @@ import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
 module ubtb #(
-  parameter int NUM_PRED_SLOTS = 1
+  // N_SLOTS: the slot count of this instance. It defaults to
+  // bp_defines_pkg::NUM_PRED_SLOTS; tb_ubtb overrides it to build one
+  // uBTB at each of 1 and 2 in one simulation. Renamed from
+  // NUM_PRED_SLOTS, which shadowed the package parameter, and no longer
+  // a literal 1 (BP-128).
+  parameter int N_SLOTS = NUM_PRED_SLOTS
 )(
   input  logic                             clk,
   input  logic                             rstn,
   input  logic [VA_WIDTH-1:0]              pred_pc_p0,
-  output ubtb_pred_t [NUM_PRED_SLOTS-1:0]  pred_p1,
+  output ubtb_pred_t [N_SLOTS-1:0]  pred_p1,
   output ubtb_blk_t                        blk_p1,
-  input  ubtb_upd_t  [NUM_PRED_SLOTS-1:0]  upd_u0
+  input  ubtb_upd_t  [N_SLOTS-1:0]  upd_u0
 );
 
   // ----------------------------------------------------------------
@@ -384,10 +389,10 @@ module ubtb #(
       blk_p1.hit      = 1'b1;
       blk_p1.pft_addr = recon_pft(p_ent.pft, p_base);
 
-      for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      for (int s = 0; s < N_SLOTS; s++) begin
         // Slot 0 takes br0, slot 1 takes br1, each only when visible
         // from this lookup PC. A slot above 1 carries no conditional
-        // field (NUM_PRED_SLOTS 3+ is undefined per
+        // field (N_SLOTS 3+ is undefined per
         // ubtb_interfaces.md 2).
         if (s == 0) begin
           p_cfld = p_ent.br0;
@@ -431,19 +436,19 @@ module ubtb #(
   // write different fields of it: the channels are merged here, in
   // channel order, and only the last channel targeting a given
   // (set, way) actually writes.
-  logic                     u_act    [NUM_PRED_SLOTS];
-  logic [UBTB_IDX_BITS-1:0] u_idx    [NUM_PRED_SLOTS];
-  logic [UBTB_TAG_BITS-1:0] u_tag    [NUM_PRED_SLOTS];
-  logic [VA_WIDTH-1:0]      u_base   [NUM_PRED_SLOTS];
-  logic                     u_hit    [NUM_PRED_SLOTS];
-  logic [WR_PTR_BITS-1:0]   u_way    [NUM_PRED_SLOTS];
-  ubtb_entry_t              u_new    [NUM_PRED_SLOTS];
+  logic                     u_act    [N_SLOTS];
+  logic [UBTB_IDX_BITS-1:0] u_idx    [N_SLOTS];
+  logic [UBTB_TAG_BITS-1:0] u_tag    [N_SLOTS];
+  logic [VA_WIDTH-1:0]      u_base   [N_SLOTS];
+  logic                     u_hit    [N_SLOTS];
+  logic [WR_PTR_BITS-1:0]   u_way    [N_SLOTS];
+  ubtb_entry_t              u_new    [N_SLOTS];
   ubtb_entry_t              u_ent;
-  logic                     u_wr     [NUM_PRED_SLOTS];
+  logic                     u_wr     [N_SLOTS];
 
   always_comb begin
     // Pass 1: per-channel address decode and way search.
-    for (int u = 0; u < NUM_PRED_SLOTS; u++) begin
+    for (int u = 0; u < N_SLOTS; u++) begin
       u_act[u]  = upd_u0[u].valid;
       u_idx[u]  = get_idx(upd_u0[u].pc);
       u_tag[u]  = get_tag(upd_u0[u].pc);
@@ -468,11 +473,11 @@ module ubtb #(
     // earlier channel this cycle already rewrote this exact entry --
     // same set, same way, same tag -- that channel's field writes are
     // replayed first, so both survive in the single write below.
-    for (int u = 0; u < NUM_PRED_SLOTS; u++) begin
+    for (int u = 0; u < N_SLOTS; u++) begin
       u_ent       = u_hit[u] ? mem[u_idx[u]][u_way[u]] : '0;
       u_ent.valid = 1'b1;
       u_ent.tag   = u_tag[u];
-      for (int k = 0; k < NUM_PRED_SLOTS; k++) begin
+      for (int k = 0; k < N_SLOTS; k++) begin
         if (k < u && u_act[k] && u_idx[k] == u_idx[u]
             && u_way[k] == u_way[u] && u_tag[k] == u_tag[u]) begin
           u_ent = apply_upd(u_ent, upd_u0[k]);
@@ -485,9 +490,9 @@ module ubtb #(
     // the same set and way already carries this channel's result
     // forward (or, on a tag conflict at one way, deliberately
     // overrides it), so only the last such channel drives the array.
-    for (int u = 0; u < NUM_PRED_SLOTS; u++) begin
+    for (int u = 0; u < N_SLOTS; u++) begin
       u_wr[u] = u_act[u];
-      for (int k = 0; k < NUM_PRED_SLOTS; k++) begin
+      for (int k = 0; k < N_SLOTS; k++) begin
         if (k > u && u_act[k] && u_idx[k] == u_idx[u]
             && u_way[k] == u_way[u]) begin
           u_wr[u] = 1'b0;
@@ -514,7 +519,7 @@ module ubtb #(
         wr_ptr[s] <= '0;
       end
     end else begin
-      for (int u = 0; u < NUM_PRED_SLOTS; u++) begin
+      for (int u = 0; u < N_SLOTS; u++) begin
         if (u_wr[u]) begin
           mem[u_idx[u]][u_way[u]] <= u_new[u];
           if (!u_hit[u]) begin

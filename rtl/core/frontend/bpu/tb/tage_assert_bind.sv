@@ -6,9 +6,7 @@
 // FILE: tage_assert_bind.sv
 // Include in sim Makefile only. Not for synthesis.
 // ===================================================================
-bind tage tage_assert #(
-  .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-) u_tage_assert (
+bind tage tage_assert u_tage_assert (
   .clk               (clk),
   .rstn              (rstn),
   .tage_pred_rdy_p2  (tage_pred_rdy_p2),

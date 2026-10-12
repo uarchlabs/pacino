@@ -96,6 +96,11 @@ module tb;
 
   int pass_count;
 
+  // S1: slot 1. The slot 1 checks run only at NUM_PRED_SLOTS 2
+  // (BP-128); S1 is NUM_PRED_SLOTS-1 so the one-slot build has no
+  // constant out-of-range index. At one slot they print a SKIP line.
+  localparam int S1 = NUM_PRED_SLOTS - 1;
+
   initial begin
     pass_count = 0;
 
@@ -329,14 +334,17 @@ module tb;
     entry_a.slot[0].pred_src   = PRED_TAGE;
     entry_a.slot[0].confidence = {FTQ_CONF_BITS{1'b1}};
 
-    // Slot 1 driven with a distinct value in every field.
-    entry_a.slot[1].slot_valid = 1'b1;
-    entry_a.slot[1].target     = SLOT1_TGT;
-    entry_a.slot[1].br_type    = RETURN;
-    entry_a.slot[1].taken      = 1'b0;
-    entry_a.slot[1].pos        = SLOT1_POS;
-    entry_a.slot[1].pred_src   = PRED_RAS;
-    entry_a.slot[1].confidence = SLOT1_CONF;
+    // Slot 1 driven with a distinct value in every field (two slots
+    // only, BP-128).
+    if (NUM_PRED_SLOTS > 1) begin
+      entry_a.slot[S1].slot_valid = 1'b1;
+      entry_a.slot[S1].target     = SLOT1_TGT;
+      entry_a.slot[S1].br_type    = RETURN;
+      entry_a.slot[S1].taken      = 1'b0;
+      entry_a.slot[S1].pos        = SLOT1_POS;
+      entry_a.slot[S1].pred_src   = PRED_RAS;
+      entry_a.slot[S1].confidence = SLOT1_CONF;
+    end
 
     entry_b = entry_a;
 
@@ -360,16 +368,20 @@ module tb;
     end
     pass_count++;
 
-    if (entry_a.slot[1].slot_valid !== 1'b1 ||
-        entry_a.slot[1].target     !== SLOT1_TGT ||
-        entry_a.slot[1].br_type    !== RETURN ||
-        entry_a.slot[1].taken      !== 1'b0 ||
-        entry_a.slot[1].pos        !== SLOT1_POS ||
-        entry_a.slot[1].pred_src   !== PRED_RAS ||
-        entry_a.slot[1].confidence !== SLOT1_CONF) begin
-      $fatal(1, "FAIL slot[1] read-back: written values not returned");
+    if (NUM_PRED_SLOTS > 1) begin
+      if (entry_a.slot[S1].slot_valid !== 1'b1 ||
+          entry_a.slot[S1].target     !== SLOT1_TGT ||
+          entry_a.slot[S1].br_type    !== RETURN ||
+          entry_a.slot[S1].taken      !== 1'b0 ||
+          entry_a.slot[S1].pos        !== SLOT1_POS ||
+          entry_a.slot[S1].pred_src   !== PRED_RAS ||
+          entry_a.slot[S1].confidence !== SLOT1_CONF) begin
+        $fatal(1, "FAIL slot[1] read-back: written values not returned");
+      end
+      pass_count++;
+    end else begin
+      $display("SKIP slot[1] read-back: needs NUM_PRED_SLOTS > 1");
     end
-    pass_count++;
 
     // --------------------------------------------------------------
     // Slot independence: rewriting one slot leaves the other slot and
@@ -384,38 +396,43 @@ module tb;
     entry_a.slot[0].pred_src   = PRED_FTB;
     entry_a.slot[0].confidence = {FTQ_CONF_BITS{1'b0}};
 
-    if (entry_a.slot[1] !== entry_b.slot[1]) begin
-      $fatal(1, "FAIL independence: slot[0] write disturbed slot[1]");
-    end
-    pass_count++;
+    // The cross-slot independence checks need two slots (BP-128).
+    if (NUM_PRED_SLOTS > 1) begin
+      if (entry_a.slot[S1] !== entry_b.slot[S1]) begin
+        $fatal(1, "FAIL independence: slot[0] write disturbed slot[1]");
+      end
+      pass_count++;
 
-    entry_a.slot[1].slot_valid = 1'b0;
-    entry_a.slot[1].target     = {VA_WIDTH{1'b0}};
-    entry_a.slot[1].br_type    = NO_BRANCH;
-    entry_a.slot[1].taken      = 1'b0;
-    entry_a.slot[1].pos        = SLOT1_POS2;
-    entry_a.slot[1].pred_src   = PRED_NONE;
-    entry_a.slot[1].confidence = {FTQ_CONF_BITS{1'b0}};
+      entry_a.slot[S1].slot_valid = 1'b0;
+      entry_a.slot[S1].target     = {VA_WIDTH{1'b0}};
+      entry_a.slot[S1].br_type    = NO_BRANCH;
+      entry_a.slot[S1].taken      = 1'b0;
+      entry_a.slot[S1].pos        = SLOT1_POS2;
+      entry_a.slot[S1].pred_src   = PRED_NONE;
+      entry_a.slot[S1].confidence = {FTQ_CONF_BITS{1'b0}};
 
-    if (entry_a.slot[0].slot_valid !== 1'b0 ||
-        entry_a.slot[0].target     !== SLOT0_TGT2 ||
-        entry_a.slot[0].br_type    !== DIRECT_UNC ||
-        entry_a.slot[0].taken      !== 1'b0 ||
-        entry_a.slot[0].pos        !== SLOT0_POS2 ||
-        entry_a.slot[0].pred_src   !== PRED_FTB ||
-        entry_a.slot[0].confidence !== {FTQ_CONF_BITS{1'b0}}) begin
-      $fatal(1, "FAIL independence: slot[1] write disturbed slot[0]");
-    end
-    pass_count++;
+      if (entry_a.slot[0].slot_valid !== 1'b0 ||
+          entry_a.slot[0].target     !== SLOT0_TGT2 ||
+          entry_a.slot[0].br_type    !== DIRECT_UNC ||
+          entry_a.slot[0].taken      !== 1'b0 ||
+          entry_a.slot[0].pos        !== SLOT0_POS2 ||
+          entry_a.slot[0].pred_src   !== PRED_FTB ||
+          entry_a.slot[0].confidence !== {FTQ_CONF_BITS{1'b0}}) begin
+        $fatal(1, "FAIL independence: slot[1] write disturbed slot[0]");
+      end
+      pass_count++;
 
-    // Slot 1's second pos write must also land. The check above
-    // proves the slot 0 rewrite; this proves the slot 1 rewrite, so
-    // neither second write is taken on faith.
-    if (entry_a.slot[1].pos !== SLOT1_POS2) begin
-      $fatal(1, "FAIL slot[1].pos rewrite: got %0d, want %0d",
-             entry_a.slot[1].pos, SLOT1_POS2);
+      // Slot 1's second pos write must also land. The check above
+      // proves the slot 0 rewrite; this proves the slot 1 rewrite, so
+      // neither second write is taken on faith.
+      if (entry_a.slot[S1].pos !== SLOT1_POS2) begin
+        $fatal(1, "FAIL slot[1].pos rewrite: got %0d, want %0d",
+               entry_a.slot[S1].pos, SLOT1_POS2);
+      end
+      pass_count++;
+    end else begin
+      $display("SKIP slot independence (3 checks): needs NUM_PRED_SLOTS > 1");
     end
-    pass_count++;
 
     if (entry_a.pc        !== entry_b.pc        ||
         entry_a.pft_addr  !== entry_b.pft_addr  ||

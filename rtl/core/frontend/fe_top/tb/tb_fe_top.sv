@@ -1466,9 +1466,9 @@ module tb;
       else                                  n_own_bad <= n_own_bad + 1;
     end
 `ifndef BASE_RTL
+    // Any slot operated on the RAS (BP-128: the OR of slots 0 and 1).
     own_chk  <= rstn && meas && dut.u_bpu.w_own_p2 &&
-                (dut.u_bpu.w_ras_pred_val_p2[0] ||
-                 dut.u_bpu.w_ras_pred_val_p2[1]);
+                dut.u_bpu.w_ras_pred_val_p2.or();
 `else
     own_chk  <= rstn && meas && dut.u_ftq.w_arm_win[4] &&
                 (dut.u_bpu.w_ras_pred_val_p2[0] ||
@@ -1485,15 +1485,17 @@ module tb;
   int   n_p3_rep;
   int   n_rest_rep;
   always @(posedge clk) begin : rep_log
+    logic rep;   // some slot's p3 RAS view differs from its p2 one
     if (rstn && dut.u_ftq.w_ok_pred_p1) p3_rep[dut.bpu_pred_idx_p1] <= 1'b0;
 `ifndef BASE_RTL
-    if (rstn && dut.u_bpu.r_val_p3 &&
-        (((dut.u_bpu.w_ras_pred_val_p3[0] != dut.u_bpu.r_ras_val_p3[0]) &&
-          (dut.u_bpu.w_ras_br_type_p3[0] inside {DIRECT_CALL, INDIRECT_CALL,
-                                                 RETURN, RETURN_CALL})) ||
-         ((dut.u_bpu.w_ras_pred_val_p3[1] != dut.u_bpu.r_ras_val_p3[1]) &&
-          (dut.u_bpu.w_ras_br_type_p3[1] inside {DIRECT_CALL, INDIRECT_CALL,
-                                                 RETURN, RETURN_CALL})))) begin
+    // Over every slot (BP-128: slots 0 and 1 written out).
+    rep = 1'b0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      rep = rep ||
+            ((dut.u_bpu.w_ras_pred_val_p3[s] != dut.u_bpu.r_ras_val_p3[s]) &&
+             (dut.u_bpu.w_ras_br_type_p3[s] inside {DIRECT_CALL, INDIRECT_CALL,
+                                                    RETURN, RETURN_CALL}));
+    if (rstn && dut.u_bpu.r_val_p3 && rep) begin
       p3_rep[dut.u_bpu.r_idx_p3] <= 1'b1;
       if (meas) n_p3_rep <= n_p3_rep + 1;
     end
@@ -1547,7 +1549,7 @@ module tb;
           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_active)
         n_ftb_drop <= n_ftb_drop + 1;
       if (dut.u_bpu.r_val_p2 && !dut.u_ftq.w_ok_blk_p2 &&
-          (dut.u_bpu.w_ras_pred_val_p2[0] || dut.u_bpu.w_ras_pred_val_p2[1]))
+          dut.u_bpu.w_ras_pred_val_p2.or())   // any slot (BP-128)
         n_ras_sq <= n_ras_sq + 1;
       if (dut.u_bpu.r_val_p2 && dut.u_bpu.w_tage_pred_rdy_p2[0]) begin
         if (dut.u_bpu.w_tage_pred_meta_p2[0].branch_id == dut.u_bpu.r_idx_p2)
@@ -1651,6 +1653,12 @@ module tb;
                      s.taken ? "T" : "N", s.target[15:0], s.pred_src);
   endfunction
 
+  // The trace prints slots 0 and 1 (BP-128). At NUM_PRED_SLOTS 1 there
+  // is no slot 1: S1 is NUM_PRED_SLOTS-1, slot 1 at two slots and an
+  // index the trace does not print at one ("-" and a redirect of 0).
+  localparam int S1 = NUM_PRED_SLOTS - 1;
+  localparam bit HAS_S1 = (NUM_PRED_SLOTS > 1);
+
   always @(posedge clk) begin : trace_log
     if (trace && rstn) begin
       if (dut.ftq_pred_val_p0)
@@ -1661,27 +1669,29 @@ module tb;
                  dut.bpu_pred_idx_p1, dut.u_ftq.w_ok_pred_p1,
                  dut.u_bpu.r_ubtb_blk_p1.hit, dut.bpu_pred_pft_p1[15:0],
                  slot_str(dut.bpu_pred_slot_p1[0]),
-                 slot_str(dut.bpu_pred_slot_p1[1]));
+                 HAS_S1 ? slot_str(dut.bpu_pred_slot_p1[S1]) : "-");
       if (dut.u_bpu.r_val_p2)
         $display({"%0d P2 idx %0d ok %0d ftb %0d pft %0h s0 %s s1 %s",
                   " r %0d/%0h %0d/%0h ras t%0d w%0d b%0d"}, cyc,
                  dut.bpu_slot_idx_p2, dut.u_ftq.w_ok_blk_p2,
                  dut.bpu_slot_val_p2, dut.bpu_blk_pft_p2[15:0],
-                 slot_str(dut.bpu_slot_p2[0]), slot_str(dut.bpu_slot_p2[1]),
+                 slot_str(dut.bpu_slot_p2[0]),
+                 HAS_S1 ? slot_str(dut.bpu_slot_p2[S1]) : "-",
                  dut.bpu_redir_p2[0].valid,
                  dut.bpu_redir_p2[0].target_pc[15:0],
-                 dut.bpu_redir_p2[1].valid,
-                 dut.bpu_redir_p2[1].target_pc[15:0],
+                 HAS_S1 && dut.bpu_redir_p2[S1].valid,
+                 HAS_S1 ? dut.bpu_redir_p2[S1].target_pc[15:0] : 16'h0,
                  dut.bpu_blk_ras_p2.tosr, dut.bpu_blk_ras_p2.tosw,
                  dut.bpu_blk_ras_p2.bos);
       if (dut.u_bpu.r_val_p3)
         $display("%0d P3 idx %0d ok %0d s0 %s s1 %s r %0d/%0h %0d/%0h", cyc,
                  dut.bpu_slot_idx_p3, dut.u_ftq.w_ok_slot_p3,
-                 slot_str(dut.bpu_slot_p3[0]), slot_str(dut.bpu_slot_p3[1]),
+                 slot_str(dut.bpu_slot_p3[0]),
+                 HAS_S1 ? slot_str(dut.bpu_slot_p3[S1]) : "-",
                  dut.bpu_redir_p3[0].valid,
                  dut.bpu_redir_p3[0].target_pc[15:0],
-                 dut.bpu_redir_p3[1].valid,
-                 dut.bpu_redir_p3[1].target_pc[15:0]);
+                 HAS_S1 && dut.bpu_redir_p3[S1].valid,
+                 HAS_S1 ? dut.bpu_redir_p3[S1].target_pc[15:0] : 16'h0);
       if (dut.u_ftq.w_redir_val)
         $display({"%0d REDIR arm %b idx %0d self %0d pc %0h rb %0d/%0d",
                   " ras %0d/%0d/%0d"}, cyc,
@@ -1802,10 +1812,20 @@ module tb;
   end
 
   always @(posedge clk) begin : upd_log
+    // Per-slot terms over every slot (BP-128: slots 0 and 1 written out).
+    int   nub;
+    logic r2;
+    logic r3;
+    nub = 0;
+    r2  = 1'b0;
+    r3  = 1'b0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (dut.u_bpu.w_ubtb_upd_u0[s].valid) nub++;
+      r2 = r2 || dut.bpu_redir_p2[s].valid;
+      r3 = r3 || dut.bpu_redir_p3[s].valid;
+    end
     if (meas) begin
-      n_u_ubtb   <= n_u_ubtb
-                  + $countones({dut.u_bpu.w_ubtb_upd_u0[1].valid,
-                                dut.u_bpu.w_ubtb_upd_u0[0].valid});
+      n_u_ubtb   <= n_u_ubtb   + nub;
       n_u_lp     <= n_u_lp     + $countones(dut.u_bpu.w_lp_upd_val_p0);
       n_u_tage   <= n_u_tage   + $countones(dut.u_bpu.w_tage_upd_val_u0);
       n_u_ittage <= n_u_ittage + $countones(dut.u_bpu.w_ittage_upd_val_u0);
@@ -1821,11 +1841,9 @@ module tb;
         n_rc_commit <= n_rc_commit + 1;
       // A p2 or p3 redirect the FTQ accepted: the stage group is
       // live (w_ok_redir_*) and a slot of it redirects.
-      if (dut.u_ftq.w_ok_redir_p2 &&
-          (dut.bpu_redir_p2[0].valid || dut.bpu_redir_p2[1].valid))
+      if (dut.u_ftq.w_ok_redir_p2 && r2)
         n_redir_p2 <= n_redir_p2 + 1;
-      if (dut.u_ftq.w_ok_redir_p3 &&
-          (dut.bpu_redir_p3[0].valid || dut.bpu_redir_p3[1].valid))
+      if (dut.u_ftq.w_ok_redir_p3 && r3)
         n_redir_p3 <= n_redir_p3 + 1;
       // A resolution whose position names no slot of its entry
       // (ftq_resolve rsv_nomap): it forms no update of any kind.
@@ -2143,8 +2161,8 @@ module tb;
     bkend_ftq_commit_val  = 1'b0;
     bkend_ftq_commit_idx  = '0;
     bkend_ftq_rsv_val     = '0;
-    bkend_ftq_rsv[0]      = '0;
-    bkend_ftq_rsv[1]      = '0;
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++)   // BP-128: [0], [1]
+      bkend_ftq_rsv[p]    = '0;
     dec_ibuf_rdy          = 1'b0;
     cmt_ifu_maint_val     = 1'b0;
     cmt_ifu_maint_op      = 1'b0;
@@ -3062,7 +3080,22 @@ module tb;
     chk($sformatf("ITTAGE received updates (%0d)", n_u_ittage),
         n_u_ittage > 0);
     chk($sformatf("the RAS committed (%0d)", n_u_ras), n_u_ras > 0);
-    lp_end_chk(VA_WIDTH'(RESET_VECTOR) + VA_WIDTH'('h18));
+    // BP-128 (provisional, decision 5): two-slot only. The inner loop
+    // branch (+0x18) and the always-taken conditional after it (+0x1c)
+    // are two conditionals of one block. At NUM_PRED_SLOTS 1 the second
+    // has no slot: it mispredicts every outer iteration, and ftq_resolve
+    // places its resolution in the last slot (BP-119 rule), the loop
+    // branch's, so the LP never becomes trusted for +0x18. The lp
+    // program, whose loop branch is alone in its block, keeps both
+    // checks at one slot.
+    if (NUM_PRED_SLOTS > 1) begin
+      lp_end_chk(VA_WIDTH'(RESET_VECTOR) + VA_WIDTH'('h18));
+    end else begin
+      $display("SKIP %s: the LP supplied p2 directions: %s", tname,
+               "needs NUM_PRED_SLOTS > 1");
+      $display("SKIP %s: the loop exit mispredicted at most once: %s",
+               tname, "needs NUM_PRED_SLOTS > 1");
+    end
   endtask
 
   // =================================================================

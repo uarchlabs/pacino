@@ -51,11 +51,41 @@ package bp_defines_pkg;
   // significant, so a shift of 2 discards a bit that distinguishes
   // two RVC instructions. Whether 1 predicts better is unmeasured.
   parameter int PC_HASH_SHIFT     =  2;
-  // NUM_PRED_SLOTS: 1 = single prediction, 2 = dual 
+  // NUM_PRED_SLOTS: 1 = single prediction, 2 = dual (TD#1, BP-128).
   // Elaboration-time parameter; not a runtime signal.
   // Update channel array bp_update_t [NUM_PRED_SLOTS-1:0] is declared
   // at instantiation, not inside bp_update_t.
-  parameter int NUM_PRED_SLOTS    = 2;
+  // ONE SOURCE (ruled session-078): the value comes from the macro
+  // BP_NUM_PRED_SLOTS, 2 when it is not defined. A 1-slot build passes
+  // +define+BP_NUM_PRED_SLOTS=1 to Verilator. No module carries a
+  // default of its own; every slot count in rtl/ reads this one.
+`ifndef BP_NUM_PRED_SLOTS
+`define BP_NUM_PRED_SLOTS 2
+`endif
+  parameter int NUM_PRED_SLOTS    = `BP_NUM_PRED_SLOTS;
+
+  // Elaboration checks on the slot count (BP-128). A constant function
+  // that reaches $fatal stops elaboration, which a package cannot do
+  // with a generate-scope $error.
+  //   - NUM_PRED_SLOTS must be 1 or 2 (ruled session-078).
+  //   - BP_EXPECT_PRED_SLOTS, when defined, must equal it. A 1-slot
+  //     regression target defines it beside BP_NUM_PRED_SLOTS, so that
+  //     target fails to build if the slot macro does not reach the
+  //     package and the default of 2 is elaborated instead.
+  function automatic int pred_slots_chk(int n, int expect_n);
+    if ((n != 1) && (n != 2))
+      $fatal(1, "bp_defines_pkg: NUM_PRED_SLOTS %0d is not 1 or 2", n);
+    if ((expect_n != 0) && (n != expect_n))
+      $fatal(1, "bp_defines_pkg: NUM_PRED_SLOTS %0d, expected %0d", n,
+             expect_n);
+    return n;
+  endfunction
+`ifdef BP_EXPECT_PRED_SLOTS
+  localparam int PRED_SLOTS_CHK = pred_slots_chk(NUM_PRED_SLOTS,
+                                                 `BP_EXPECT_PRED_SLOTS);
+`else
+  localparam int PRED_SLOTS_CHK = pred_slots_chk(NUM_PRED_SLOTS, 0);
+`endif
   // TRX_SLOT_BITS: slot index width for bp_arb_trx_t.
   // Clamped to 1 when NUM_PRED_SLOTS == 1 to prevent a
   // zero-width vector ($clog2(1) == 0 -> [-1:0] is illegal).
@@ -361,7 +391,7 @@ package bp_defines_pkg;
   // ----------------------------------------------------------------
   localparam int TAGE_PQ_DEPTH       = 8;
   localparam int TAGE_UQ_DEPTH       = 8;
-  localparam int TAGE_UQ_WR_PORTS    = 2;
+  localparam int TAGE_UQ_WR_PORTS    = NUM_PRED_SLOTS; // one per slot
   localparam int TAGE_RESP_BUF_DEPTH = 2;
   localparam int TAGE_PRED_CREDITS   = 4;
   localparam int TAGE_UPD_CREDITS    = 1;
@@ -425,7 +455,7 @@ package bp_defines_pkg;
   // ----------------------------------------------------------------
   localparam int SC_PQ_DEPTH       = 0; //not used
   localparam int SC_UQ_DEPTH       = 8;
-  localparam int SC_UQ_WR_PORTS    = 2;
+  localparam int SC_UQ_WR_PORTS    = NUM_PRED_SLOTS; // one per slot
   localparam int SC_RESP_BUF_DEPTH = 2;
   localparam int SC_PRED_CREDITS   = 4;
   localparam int SC_UPD_CREDITS    = 1;
@@ -475,7 +505,7 @@ package bp_defines_pkg;
   // ----------------------------------------------------------------
   localparam int ITTAGE_PQ_DEPTH       = 4;
   localparam int ITTAGE_UQ_DEPTH       = 2;
-  localparam int ITTAGE_UQ_WR_PORTS    = 2;
+  localparam int ITTAGE_UQ_WR_PORTS    = NUM_PRED_SLOTS; // one per slot
   localparam int ITTAGE_RESP_BUF_DEPTH = 2;
   localparam int ITTAGE_PRED_CREDITS   = 2;
   localparam int ITTAGE_UPD_CREDITS    = 1;

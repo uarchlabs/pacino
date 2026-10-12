@@ -27,9 +27,10 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module loop_pred_assert #(
-  parameter int NUM_PRED_SLOTS = 1
-) (
+// The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128): no slot
+// parameter of its own. At 1, HI is 0 and the slot NUM_PRED_SLOTS-1
+// properties check slot 0 a second time.
+module loop_pred_assert (
   input logic                      clk,
   input logic                      rstn,
   input lp_pred_t                  pred_p2     [0:NUM_PRED_SLOTS-1],
@@ -111,7 +112,7 @@ module loop_pred_assert #(
 endmodule : loop_pred_assert
 
 // Bind BY MODULE NAME.
-bind loop_pred loop_pred_assert #(.NUM_PRED_SLOTS(NUM_PRED_SLOTS))
+bind loop_pred loop_pred_assert
   u_assert (
   .clk          (clk),
   .rstn         (rstn),

@@ -8,11 +8,11 @@
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Self-checking unit testbench for sc_cntrl (SC control layer).
-// DUT instantiated directly as u_dut. NUM_PRED_SLOTS=2. The five SC
-// tables are NOT instantiated (sc_cntrl is logic only, BP-077); the
-// tb drives the table read ports (t_ctr_p3, t_idx_hash_p2) and
-// samples the table write ports (t_ctr_wd_u0, t_ctr_wr_u0,
-// t_upd_index_u0) directly.
+// DUT instantiated directly as u_dut, at the package NUM_PRED_SLOTS (1
+// or 2, BP-128). The five SC tables are NOT instantiated (sc_cntrl is
+// logic only, BP-077); the tb drives the table read ports (t_ctr_p3,
+// t_idx_hash_p2) and samples the table write ports (t_ctr_wd_u0,
+// t_ctr_wr_u0, t_upd_index_u0) directly.
 //
 // Prediction is a two-phase drive: tage_pred_meta_p2 and
 // t_idx_hash_p2 are presented at p2 and clocked; t_ctr_p3 is then
@@ -42,7 +42,7 @@ import bp_structs_pkg::*;
 
 module tb;
 
-  localparam int P_SLOTS = NUM_PRED_SLOTS;   // 2
+  localparam int P_SLOTS = NUM_PRED_SLOTS;   // 1 or 2
   localparam int NT      = SC_NUM_TABLES;    // 5
 
   // ----------------------------------------------------------------
@@ -90,9 +90,7 @@ module tb;
   // ----------------------------------------------------------------
   // DUT instantiation
   // ----------------------------------------------------------------
-  sc_cntrl #(
-    .NUM_PRED_SLOTS(P_SLOTS)
-  ) u_dut (
+  sc_cntrl u_dut (
     .clk             (clk),
     .rstn            (rstn),
     .tage_pred_rdy_p2(tage_pred_rdy_p2),
@@ -330,17 +328,18 @@ module tb;
     end
 
     // Negative case: ctr all -5 -> val -9 each, sum=-45, abs=45, lcl=0
+    // On the last slot (BP-128): slot 1 at two slots, slot 0 at one.
     clr_inputs();
     for (int t = 0; t < NT; t++) begin p_ctr[t]=-6'sd5; p_idx[t]='0; end
     p_extd=5'sd0; p_strong=0; p_medium=0; p_tage_tkn=1; p_bid=6'd0;
-    do_predict(1);
+    do_predict(P_SLOTS-1);
     exp_sum = -45;
     chkw("TC1 neg sc_sum",  SC_LSUM_BITS,
-         sc_pred_meta_p3[1].sc_sum, exp_sum);
+         sc_pred_meta_p3[P_SLOTS-1].sc_sum, exp_sum);
     chkw("TC1 neg abs_sum", SC_LSUM_BITS,
-         sc_pred_meta_p3[1].sc_abs_sum, 45);
+         sc_pred_meta_p3[P_SLOTS-1].sc_abs_sum, 45);
     chkw("TC1 neg lcl_tkn", 1,
-         sc_pred_meta_p3[1].sc_lcl_pred_tkn, 0);
+         sc_pred_meta_p3[P_SLOTS-1].sc_lcl_pred_tkn, 0);
   endtask
 
   // ================================================================

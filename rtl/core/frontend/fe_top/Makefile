@@ -17,6 +17,8 @@
 #                   target
 #   assert_labels   every property label of every assertion file the
 #                   sim model compiles is present in it
+#   <t>_1slot       target <t> at NUM_PRED_SLOTS = 1, one per target
+#                   above (BP-128)
 #
 # THE L1I IS THE PACINO COPY in rtl/core/frontend/icache (BP-123,
 # cachegen_decisions.md CG-D1): the cachegen emission copied into the
@@ -59,11 +61,28 @@ L1I_DIR  := $(FE_DIR)/icache/rtl
 L1I_TB   := $(FE_DIR)/icache/tb
 VER_OUT  := obj
 
-VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
+# -- Slot count (BP-128, TD#1) -------------------------------------
+# NUM_PRED_SLOTS is set in bp_defines_pkg.sv from the macro
+# BP_NUM_PRED_SLOTS, 2 when it is not defined. SLOT_DEFS is empty for
+# every target below, so each builds at 2. Each <target>_1slot (end of
+# file) runs <target> in a sub-make with SLOT_DEFS = SLOT1_DEFS and
+# VER_OUT = $(VER_OUT)_1slot, so a 1-slot build never shares an object
+# directory with a 2-slot one. BP_EXPECT_PRED_SLOTS=1 makes the package
+# stop elaboration unless NUM_PRED_SLOTS is 1, so a 1-slot target fails
+# if BP_NUM_PRED_SLOTS does not reach it. To see that, build one with
+# the slot macro removed:
+#   make lint_fe_top_1slot SLOT1_DEFS=+define+BP_EXPECT_PRED_SLOTS=1
+SLOT1_DEFS := +define+BP_NUM_PRED_SLOTS=1 +define+BP_EXPECT_PRED_SLOTS=1
+SLOT_DEFS  ?=
+
+VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing \
+                   $(SLOT_DEFS)
 SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 
-# VARHIDDEN: the tage, sc and ubtb NUM_PRED_SLOTS parameters shadow
-# the package parameter (as lint_bp_cluster). SYNCASYNCNET: async
+# VARHIDDEN: the loop_pred.sv module parameters LP_TBL_ENTRIES to
+# LP_CONF_LEVEL shadow the bp_defines_pkg parameters of the same names
+# (as lint_bp_cluster). Until BP-128 this named the tage, sc and ubtb
+# NUM_PRED_SLOTS parameters, which BP-128 removed. SYNCASYNCNET: async
 # rstn with disable iff in the bound properties, and sram_init.
 # --assert so the bound properties are elaborated (TD#109).
 COMMON := -Wno-VARHIDDEN -Wno-SYNCASYNCNET --assert
@@ -239,11 +258,25 @@ $(FE_PROG_TGTS): sim_fe_top_%: build_fe_top
 LABEL_RE := ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:
 LABEL_RE := $(LABEL_RE)[[:space:]]*assert[[:space:]]+property
 
+# LABELS NOT IN A 1-SLOT MODEL (BP-128). With SLOT_DEFS set (the
+# _1slot twin) these are not looked up and are reported as SKIP: the
+# ftq properties that need a second slot or channel and sit in a
+# generate if (NUM_PRED_SLOTS > 1) block (the ftq Makefile's
+# LABEL_1SLOT_GATED). At two slots the list is empty and every label
+# is looked up.
+LABEL_1SLOT_GATED := a_ports_agree a_slot_ex_bounded_s1 \
+  a_slot_tkn_named_s1 a_named_slot_marked_s1 a_slot_older_first \
+  a_place_two_slots a_write_kills_above a_rsv_end_kills_above
+LABEL_SKIP := $(if $(strip $(SLOT_DEFS)),$(LABEL_1SLOT_GATED))
+
 assert_labels: sim_fe_top
 	@echo "[checking]   assertion labels in the tb_fe_top model"
 	$(Q)n=0; m=0; \
 	for f in $(ASSERT_SRCS); do \
 	  for l in $$(sed -nE 's/$(LABEL_RE).*/\1/p' $$f); do \
+	    case " $(LABEL_SKIP) " in *" $$l "*) \
+	      echo "SKIP: $$l is not in a 1-slot tb_fe_top model"; \
+	      continue;; esac; \
 	    n=$$((n+1)); \
 	    if ! grep -qF ".$$l\"" $(VER_OUT)_fe_top/*.cpp; then \
 	      echo "MISSING: $$l ($$f)"; m=$$((m+1)); \
@@ -257,6 +290,17 @@ clean:
 	@echo "[cleaning]   fe_top"
 	$(Q)rm -rf $(VER_OUT)*
 
+# -- 1-slot targets (BP-128, TD#1) -----------------------------------
+# One per target of REGRESS_TARGETS, named <target>_1slot: the same
+# recipe at NUM_PRED_SLOTS = 1 (see SLOT1_DEFS at the top of the file).
+# sim_fe_top_<p>_1slot is program <p> at one slot.
+SLOT1_BASE := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS)
+SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
+
+.PHONY: $(SLOT1_TGTS)
+$(SLOT1_TGTS): %_1slot:
+	$(Q)$(MAKE) $* SLOT_DEFS="$(SLOT1_DEFS)" VER_OUT=$(VER_OUT)_1slot
+
 # -- Regression plumbing (TOOLS-006) ----------------------------------
 # tools/regress.sh runs every REGRESS_TARGETS entry with its own make
 # call and fails if a target defined in this file is in neither list.
@@ -264,7 +308,8 @@ clean:
 #   all                 - aggregate.
 #   build_fe_top        - the compile step the sim targets run first.
 #   clean, regress_list - housekeeping and this plumbing.
-REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS)
+REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
+                   $(SLOT1_TGTS)
 REGRESS_EXCLUDE := all build_fe_top clean regress_list
 
 .PHONY: regress_list

@@ -67,8 +67,8 @@
 //   out t_ctr_wr_u0      [table][slot]  counter write strobe
 //   out t_upd_index_u0   [table][slot]  captured index (no re-hash)
 //
-// NUM_PRED_SLOTS shadows bp_defines_pkg::NUM_PRED_SLOTS.
-// -Wno-VARHIDDEN required for this module.
+// The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128); the
+// module takes no slot parameter of its own.
 // ===================================================================
 `ifndef SC_CNTRL_SV
 `define SC_CNTRL_SV
@@ -78,9 +78,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module sc_cntrl #(
-  parameter int NUM_PRED_SLOTS = bp_defines_pkg::NUM_PRED_SLOTS
-) (
+module sc_cntrl (
   input  logic                        clk,
   input  logic                        rstn,
 

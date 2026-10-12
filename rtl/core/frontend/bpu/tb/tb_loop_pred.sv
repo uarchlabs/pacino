@@ -90,9 +90,7 @@ module tb;
   lp_upd_t                   upd_p0     [0:NUM_PRED_SLOTS-1];
   logic [NUM_PRED_SLOTS-1:0] upd_valid_p0;
 
-  loop_pred #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) dut (
+  loop_pred dut (
     .clk           (clk),
     .rstn          (rstn),
     .pred_pc_p0    (pred_pc_p0),
@@ -283,8 +281,8 @@ module tb;
   endtask
 
   // Write one entry directly (a known driven state). g_slot is a
-  // generate loop, so the bank index is a literal; the package value
-  // of NUM_PRED_SLOTS is 2 and a third slot fails elaboration below.
+  // generate loop, so the bank index is a literal; NUM_PRED_SLOTS is 1
+  // or 2 (BP-128) and a third slot fails elaboration below.
   task automatic seed(
     input int                     sl,
     input logic [VA_WIDTH-1:0]    pc,
@@ -1500,8 +1498,16 @@ module tb;
 
     // -- Slot retrofit set (TC14-TC17).
     $display("---- slot retrofit set ----");
-    tc14();
-    tc14b();
+    // TC14 and TC14B compare one slot against another: at one slot
+    // they have no pair to check and are skipped (BP-128). TC15 and
+    // TC16 run per slot and check slot 0 alone at one slot.
+    if (NUM_PRED_SLOTS > 1) begin
+      tc14();
+      tc14b();
+    end else begin
+      $display("SKIP TC14 slot independence: needs NUM_PRED_SLOTS > 1");
+      $display("SKIP TC14B live decoy: needs NUM_PRED_SLOTS > 1");
+    end
     tc15();
     tc16();
     tc17();

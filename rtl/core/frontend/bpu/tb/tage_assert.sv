@@ -18,9 +18,9 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 
-module tage_assert #(
-  parameter int NUM_PRED_SLOTS = 2
-) (
+// The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128): no slot
+// parameter of its own.
+module tage_assert (
   input logic                          clk,
   input logic                          rstn,
   input logic [NUM_PRED_SLOTS-1:0]     tage_pred_rdy_p2,

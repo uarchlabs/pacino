@@ -79,8 +79,10 @@ module loop_pred #(
   parameter int LP_AGE_BITS    = 8,
   parameter int LP_N_SETS      = LP_TBL_ENTRIES / LP_TBL_WAYS,
   parameter int LP_IDX_BITS    = $clog2(LP_N_SETS),
-  parameter int LP_CONF_LEVEL  = (1 << LP_CNF_BITS) - 1,
-  parameter int NUM_PRED_SLOTS = 1
+  parameter int LP_CONF_LEVEL  = (1 << LP_CNF_BITS) - 1
+  // The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128): no slot
+  // parameter of its own. It had one, defaulting to 1, that bp_cluster
+  // overrode with the package value.
 ) (
   input  logic                      clk,
   input  logic                      rstn,

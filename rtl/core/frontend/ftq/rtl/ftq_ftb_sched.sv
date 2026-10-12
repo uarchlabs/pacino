@@ -39,9 +39,12 @@ module ftq_ftb_sched #(
   // Number of update channels. The rule of 5.7.3 is written for the
   // two-channel case and the skid is one deep; NUM_UPD_CHAN is a
   // parameter so the width is named rather than literal, not so the
-  // module generalises. Named NUM_UPD_CHAN and not NUM_PRED_SLOTS
-  // so it does not shadow the package parameter (VARHIDDEN).
-  parameter int NUM_UPD_CHAN = 2
+  // module generalises beyond two. One channel (NUM_PRED_SLOTS 1) is
+  // the same rule with no second new update. Named NUM_UPD_CHAN and
+  // not NUM_PRED_SLOTS so it does not shadow the package parameter
+  // (VARHIDDEN). Its default is the package value, not a literal 2
+  // (BP-128).
+  parameter int NUM_UPD_CHAN = NUM_RESOLVE_PORTS
 ) (
   input  logic                        clk,
   input  logic                        rstn,
@@ -166,7 +169,10 @@ module ftq_ftb_sched #(
   // HIGH, so a channel that would be the one dropped AND is HIGH is
   // not accepted at all: its ready deasserts and the backend holds
   // it.
-  logic [$clog2(NUM_UPD_CHAN+1)-1:0] w_rank [0:NUM_UPD_CHAN-1];
+  // w_rank is as wide as w_n_new_allowed, which it is compared with
+  // (BP-128). At two channels both are 2 bits, as before; at one,
+  // $clog2(NUM_UPD_CHAN+1) gave w_rank 1 bit against 2.
+  logic [$clog2(NUM_UPD_CHAN+2)-1:0] w_rank [0:NUM_UPD_CHAN-1];
   logic [$clog2(NUM_UPD_CHAN+2)-1:0] w_n_new_allowed;
 
   always_comb begin : rank_and_ready

@@ -56,7 +56,10 @@ module tb;
   localparam int P_THIS_USE_WIDTH  = 2;
   localparam int P_THIS_CTR_WIDTH  = 3;
   localparam int P_THIS_VAL_WIDTH  = 1;
-  localparam int P_NUM_PRED_SLOTS  = 2;
+  localparam int P_NUM_PRED_SLOTS  = NUM_PRED_SLOTS; // BP-128
+  // S1: the highest slot (BP-128). Slot 1 at two slots; at one it is
+  // slot 0, and every check that reads it is skipped.
+  localparam int S1 = P_NUM_PRED_SLOTS - 1;
   localparam int P_TBL_SEL_WIDTH   = TAGE_TBL_SEL_WIDTH;
 
   // Derived widths matching DUT localparams
@@ -218,7 +221,6 @@ module tb;
     .THIS_USE_WIDTH (P_THIS_USE_WIDTH),
     .THIS_CTR_WIDTH (P_THIS_CTR_WIDTH),
     .THIS_VAL_WIDTH (P_THIS_VAL_WIDTH),
-    .NUM_PRED_SLOTS (P_NUM_PRED_SLOTS),
     .TBL_SEL_WIDTH  (P_TBL_SEL_WIDTH)
   ) u_dut (
     .hit_p1          (hit_p1),
@@ -329,31 +331,31 @@ module tb;
   //   -> cntrl_bits_p1[1] = F5h, taken=0.
   // ----------------------------------------------------------------
   task automatic slot1_unit_write_tst();
-    do_alc_wr(1, 11'h050, DATA_TC14_PRE);
-    tage_upd_val_u0[1] = 1'b1;
-    prm_ctr_wr_u0[1]   = 1'b1;
-    use_wr_u0[1]       = 1'b1;
-    epc_wr_u0[1]       = 1'b1;
-    prm_tbl_sel_u0[1]  = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
-    upd_index_u0[1]    = 11'h050;
-    prm_ctr_wd_u0[1]   = 3'b010;
-    use_wd_u0[1]       = 2'b11;
-    epc_wd_u0[1]       = 2'b11;
+    do_alc_wr(S1, 11'h050, DATA_TC14_PRE);
+    tage_upd_val_u0[S1] = 1'b1;
+    prm_ctr_wr_u0[S1]   = 1'b1;
+    use_wr_u0[S1]       = 1'b1;
+    epc_wr_u0[S1]       = 1'b1;
+    prm_tbl_sel_u0[S1]  = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
+    upd_index_u0[S1]    = 11'h050;
+    prm_ctr_wd_u0[S1]   = 3'b010;
+    use_wd_u0[S1]       = 2'b11;
+    epc_wd_u0[S1]       = 2'b11;
     @(posedge clk); #1;
-    norm_we_s1_seen = (u_dut.norm_we_s1 === 1'b1);
+    norm_we_s1_seen = (u_dut.g_slot[S1].norm_we === 1'b1);
     clr_upd(1);
-    do_pred(1, PC_TC14_S1);
+    do_pred(S1, PC_TC14_S1);
     if (norm_we_s1_seen === 1'b1 &&
-        hit_p1[1]        === 1'b1 &&
-        taken_p1[1]      === 1'b0 &&
-        cntrl_bits_p1[1] === 8'hF5) begin
+        hit_p1[S1]        === 1'b1 &&
+        taken_p1[S1]      === 1'b0 &&
+        cntrl_bits_p1[S1] === 8'hF5) begin
       $display("[PASS] TC14: slot 1 write paths");
       pass_cnt++;
     end else begin
       $display(
         "[FAIL] TC14: we=%b hit=%b taken=%b cntrl=%h (exp 1 1 0 F5)",
-        norm_we_s1_seen, hit_p1[1],
-        taken_p1[1], cntrl_bits_p1[1]);
+        norm_we_s1_seen, hit_p1[S1],
+        taken_p1[S1], cntrl_bits_p1[S1]);
       fail_cnt++;
     end
   endtask
@@ -398,24 +400,24 @@ module tb;
   // Expected cntrl: epc=00, use=00, ctr=000, val=1 -> 8'h01.
   // ----------------------------------------------------------------
   task automatic alt_ctr_s1_write_tst();
-    do_alc_wr(1, 11'h070, DATA_TC16_PRE);
-    tage_upd_val_u0[1] = 1'b1;
-    alt_ctr_wr_u0[1]   = 1'b1;
-    alt_tbl_sel_u0[1]  = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
-    upd_index_u0[1]    = 11'h070;
-    alt_ctr_wd_u0[1]   = 3'b000;
+    do_alc_wr(S1, 11'h070, DATA_TC16_PRE);
+    tage_upd_val_u0[S1] = 1'b1;
+    alt_ctr_wr_u0[S1]   = 1'b1;
+    alt_tbl_sel_u0[S1]  = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
+    upd_index_u0[S1]    = 11'h070;
+    alt_ctr_wd_u0[S1]   = 3'b000;
     @(posedge clk); #1;
     clr_upd(1);
-    do_pred(1, PC_TC16_S1);
-    if (hit_p1[1]        === 1'b1 &&
-        taken_p1[1]      === 1'b0 &&
-        cntrl_bits_p1[1] === 8'h01) begin
+    do_pred(S1, PC_TC16_S1);
+    if (hit_p1[S1]        === 1'b1 &&
+        taken_p1[S1]      === 1'b0 &&
+        cntrl_bits_p1[S1] === 8'h01) begin
       $display("[PASS] TC16: alt CTR write slot 1");
       pass_cnt++;
     end else begin
       $display(
         "[FAIL] TC16: hit=%b taken=%b cntrl=%h (exp 1 0 01)",
-        hit_p1[1], taken_p1[1], cntrl_bits_p1[1]);
+        hit_p1[S1], taken_p1[S1], cntrl_bits_p1[S1]);
       fail_cnt++;
     end
   endtask
@@ -432,8 +434,8 @@ module tb;
     tbl_ri_wa     = '0;
     tbl_ri_wd     = '0;
     folded_hist   = '0;
-    clr_upd(0); clr_upd(1);
-    clr_pred(0); clr_pred(1);
+    clr_upd(0); clr_upd(S1);
+    clr_pred(0); clr_pred(S1);
     norm_we_s1_seen = 1'b0;
 
     // Reset sequence
@@ -647,66 +649,73 @@ module tb;
       fail_cnt++;
     end
 
-    // ============================================================
-    // TC9: slot 1 independent read
-    // Write different entries to idx=0x055 in each slot's RAM.
-    // Slot 0: tag=AC, ctr=111(T) data=AC0Fh
-    // Slot 1: tag=BC, ctr=000(NT) data=BC01h
-    // Predict slot 0 -> hit=1, taken=1.
-    // Predict slot 1 -> hit=1, taken=0.
-    // ============================================================
-    tage_upd_val_u0     = 2'b11;
-    alc_wr_u0           = 2'b11;
-    alc_tbl_sel_u0[0]   = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
-    alc_tbl_sel_u0[1]   = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
-    alc_index_u0[0]     = 11'h055;
-    alc_index_u0[1]     = 11'h055;
-    alc_wd_u0[0]        = DATA_TC9_S0;
-    alc_wd_u0[1]        = DATA_TC9_S1;
-    @(posedge clk); #1;
-    clr_upd(0); clr_upd(1);
-    // Predict slot 0 only
-    do_pred(0, PC_TC9_S0);
-    if (hit_p1[0] !== 1'b1 || taken_p1[0] !== 1'b1) begin
-      $display("[FAIL] TC9 slot0: hit=%b taken=%b (exp 1 1)",
-               hit_p1[0], taken_p1[0]);
-      fail_cnt++;
-    end
-    // Predict slot 1 only
-    do_pred(1, PC_TC9_S1);
-    if (hit_p1[1] === 1'b1 && taken_p1[1] === 1'b0) begin
-      $display("[PASS] TC9: slot 1 independent read");
-      pass_cnt++;
-    end else begin
-      $display("[FAIL] TC9 slot1: hit=%b taken=%b (exp 1 0)",
-               hit_p1[1], taken_p1[1]);
-      fail_cnt++;
-    end
+    // BP-128: meaningful only with two slots; skipped at one.
+    if (NUM_PRED_SLOTS > 1) begin
+      // ============================================================
+      // TC9: slot 1 independent read
+      // Write different entries to idx=0x055 in each slot's RAM.
+      // Slot 0: tag=AC, ctr=111(T) data=AC0Fh
+      // Slot 1: tag=BC, ctr=000(NT) data=BC01h
+      // Predict slot 0 -> hit=1, taken=1.
+      // Predict slot 1 -> hit=1, taken=0.
+      // ============================================================
+      tage_upd_val_u0     = '1;
+      alc_wr_u0           = '1;
+      alc_tbl_sel_u0[0]   = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
+      alc_tbl_sel_u0[S1]   = P_TBL_SEL_WIDTH'(P_THIS_TABLE);
+      alc_index_u0[0]     = 11'h055;
+      alc_index_u0[S1]     = 11'h055;
+      alc_wd_u0[0]        = DATA_TC9_S0;
+      alc_wd_u0[S1]        = DATA_TC9_S1;
+      @(posedge clk); #1;
+      clr_upd(0); clr_upd(S1);
+      // Predict slot 0 only
+      do_pred(0, PC_TC9_S0);
+      if (hit_p1[0] !== 1'b1 || taken_p1[0] !== 1'b1) begin
+        $display("[FAIL] TC9 slot0: hit=%b taken=%b (exp 1 1)",
+                 hit_p1[0], taken_p1[0]);
+        fail_cnt++;
+      end
+      // Predict slot 1 only
+      do_pred(S1, PC_TC9_S1);
+      if (hit_p1[S1] === 1'b1 && taken_p1[S1] === 1'b0) begin
+        $display("[PASS] TC9: slot 1 independent read");
+        pass_cnt++;
+      end else begin
+        $display("[FAIL] TC9 slot1: hit=%b taken=%b (exp 1 0)",
+                 hit_p1[S1], taken_p1[S1]);
+        fail_cnt++;
+      end
 
-    // ============================================================
-    // TC10: dual slot simultaneous predict
-    // Entries from TC9 still at idx=0x055.
-    // Each slot uses its own PC encoding a different tag.
-    // fh=0: tag_s0 = pc_s0[18:11]=0xAC, tag_s1 = pc_s1[18:11]=0xBC
-    // Both tage_pred_val_p0 asserted same cycle.
-    // Expected: hit[1:0]=2'b11, taken[0]=1, taken[1]=0.
-    // ============================================================
-    tage_pred_val_p0              = 2'b11;
-    tage_pred_inp_p0[0].pc        = PC_TC9_S0;
-    tage_pred_inp_p0[0].branch_id = '0;
-    tage_pred_inp_p0[1].pc        = PC_TC9_S1;
-    tage_pred_inp_p0[1].branch_id = '0;
-    folded_hist                   = '0;
-    @(posedge clk); #1;
-    clr_pred(0); clr_pred(1);
-    if (hit_p1[0] === 1'b1 && taken_p1[0] === 1'b1 &&
-        hit_p1[1] === 1'b1 && taken_p1[1] === 1'b0) begin
-      $display("[PASS] TC10: dual slot simultaneous predict");
-      pass_cnt++;
+      // ============================================================
+      // TC10: dual slot simultaneous predict
+      // Entries from TC9 still at idx=0x055.
+      // Each slot uses its own PC encoding a different tag.
+      // fh=0: tag_s0 = pc_s0[18:11]=0xAC, tag_s1 = pc_s1[18:11]=0xBC
+      // Both tage_pred_val_p0 asserted same cycle.
+      // Expected: hit[1:0]=2'b11, taken[0]=1, taken[S1]=0.
+      // ============================================================
+      tage_pred_val_p0              = '1;
+      tage_pred_inp_p0[0].pc        = PC_TC9_S0;
+      tage_pred_inp_p0[0].branch_id = '0;
+      tage_pred_inp_p0[S1].pc        = PC_TC9_S1;
+      tage_pred_inp_p0[S1].branch_id = '0;
+      folded_hist                   = '0;
+      @(posedge clk); #1;
+      clr_pred(0); clr_pred(S1);
+      if (hit_p1[0] === 1'b1 && taken_p1[0] === 1'b1 &&
+          hit_p1[S1] === 1'b1 && taken_p1[S1] === 1'b0) begin
+        $display("[PASS] TC10: dual slot simultaneous predict");
+        pass_cnt++;
+      end else begin
+        $display("[FAIL] TC10: h0=%b t0=%b h1=%b t1=%b (exp 1 1 1 0)",
+                 hit_p1[0], taken_p1[0], hit_p1[S1], taken_p1[S1]);
+        fail_cnt++;
+      end
     end else begin
-      $display("[FAIL] TC10: h0=%b t0=%b h1=%b t1=%b (exp 1 1 1 0)",
-               hit_p1[0], taken_p1[0], hit_p1[1], taken_p1[1]);
-      fail_cnt++;
+      $display("SKIP TC9 slot 1 independent read: needs NUM_PRED_SLOTS > 1");
+      $display(
+        "SKIP TC10 dual slot simultaneous predict: needs NUM_PRED_SLOTS > 1");
     end
 
     // ============================================================
@@ -762,28 +771,39 @@ module tb;
       fail_cnt++;
     end
 
-    // ============================================================
-    // TC14: slot 1 write paths
-    // ============================================================
-    slot1_unit_write_tst();
+    // BP-128: meaningful only with two slots; skipped at one.
+    if (NUM_PRED_SLOTS > 1) begin
+      // ============================================================
+      // TC14: slot 1 write paths
+      // ============================================================
+      slot1_unit_write_tst();
+    end else begin
+      $display("SKIP TC14 slot 1 write paths: needs NUM_PRED_SLOTS > 1");
+    end
 
     // ============================================================
     // TC15: epc_we_s0 slot 0
     // ============================================================
     epc_s0_write_tst();
 
-    // ============================================================
-    // TC16: alt CTR write slot 1
-    // ============================================================
-    alt_ctr_s1_write_tst();
+    // BP-128: meaningful only with two slots; skipped at one.
+    if (NUM_PRED_SLOTS > 1) begin
+      // ============================================================
+      // TC16: alt CTR write slot 1
+      // ============================================================
+      alt_ctr_s1_write_tst();
+    end else begin
+      $display("SKIP TC16 alt CTR write slot 1: needs NUM_PRED_SLOTS > 1");
+    end
 
     // ============================================================
     // Summary
     // ============================================================
     @(posedge clk); #1;
     $display("--------------------------------------------");
-    $display("Results: %0d PASS  %0d FAIL  (of 15 TCs)",
-             pass_cnt, fail_cnt);
+    // BP-128: TC9, TC10, TC14 and TC16 are skipped at one slot.
+    $display("Results: %0d PASS  %0d FAIL  (of %0d TCs)",
+             pass_cnt, fail_cnt, (NUM_PRED_SLOTS > 1) ? 15 : 11);
     if (fail_cnt != 0)
       $fatal(1, "TESTBENCH FAILED");
     else

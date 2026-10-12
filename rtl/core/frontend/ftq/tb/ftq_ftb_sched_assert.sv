@@ -29,7 +29,9 @@
 // NEXT issue comes from the skid.
 // ===================================================================
 module ftq_ftb_sched_assert #(
-  parameter int NUM_UPD_CHAN = 2
+  // The bind passes ftq_ftb_sched's NUM_UPD_CHAN. The default is the
+  // package value, not a literal 2 (BP-128).
+  parameter int NUM_UPD_CHAN = bp_defines_pkg::NUM_RESOLVE_PORTS
 ) (
   input logic                        clk,
   input logic                        rstn,

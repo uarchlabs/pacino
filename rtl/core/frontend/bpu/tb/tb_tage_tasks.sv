@@ -21,7 +21,10 @@ import bp_structs_pkg::*;
 
 module tb;
 
-  localparam int NUM_PRED_SLOTS = 2;
+  // The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128); the
+  // local of 2 that shadowed it is removed. S1 is the highest slot:
+  // slot 1 at two slots, slot 0 at one.
+  localparam int S1 = NUM_PRED_SLOTS - 1;
 
   // -- tage_ram_entry_t: testbench-local struct for RAM access tasks.
   // Fields at TAGE_MAX_* widths from bp_defines_pkg.
@@ -61,11 +64,9 @@ module tb;
   logic                            tage_rdy;
 
   // ----------------------------------------------------------------
-  // DUT instantiation: tage #(.NUM_PRED_SLOTS(2))
+  // DUT instantiation: tage, at the package NUM_PRED_SLOTS
   // ----------------------------------------------------------------
-  tage #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_dut (
+  tage u_dut (
     .clk                 (clk),
     .rstn                (rstn),
     .tage_pred_val_p0    (tage_pred_val_p0),
@@ -132,8 +133,7 @@ module tb;
   logic [NUM_PRED_SLOTS-1:0] stg_pred_val;
   initial begin
     stg_pred_val    = '0;
-    stg_pred_inp[0] = '0;
-    stg_pred_inp[1] = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) stg_pred_inp[s] = '0;
   end
 
   // -- Staging variables: update path
@@ -141,23 +141,22 @@ module tb;
   logic [NUM_PRED_SLOTS-1:0] stg_upd_val;
   initial begin
     stg_upd_val    = '0;
-    stg_upd_inp[0] = '0;
-    stg_upd_inp[1] = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) stg_upd_inp[s] = '0;
   end
 
   // -- Synchronous drivers: NBA propagation for struct-typed arrays
   always_ff @(posedge clk) begin : pred_stg_ff
-    tage_pred_val_p0[0] <= stg_pred_val[0];
-    tage_pred_val_p0[1] <= stg_pred_val[1];
-    tage_pred_inp_p0[0] <= stg_pred_inp[0];
-    tage_pred_inp_p0[1] <= stg_pred_inp[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      tage_pred_val_p0[s] <= stg_pred_val[s];
+      tage_pred_inp_p0[s] <= stg_pred_inp[s];
+    end
   end
 
   always_ff @(posedge clk) begin : upd_stg_ff
-    tage_upd_val_u0[0] <= stg_upd_val[0];
-    tage_upd_val_u0[1] <= stg_upd_val[1];
-    tage_upd_inp_u0[0] <= stg_upd_inp[0];
-    tage_upd_inp_u0[1] <= stg_upd_inp[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      tage_upd_val_u0[s] <= stg_upd_val[s];
+      tage_upd_inp_u0[s] <= stg_upd_inp[s];
+    end
   end
 
   // ================================================================
@@ -186,9 +185,10 @@ module tb;
 
   // tage_ram_write: write tage_ram_entry_t into tbl at idx.
   // idx is the full 11-bit address: bank=idx[10], row=idx[9:0].
-  // T0 (tage_bim): 2-bit CTR only; writes both u_ram_s0 and u_ram_s1.
-  // T1-T4: 16-bit entry; packed layout matches tage_ram_entry_t.
-  // Both slot RAMs written so either slot prediction path sees value.
+  // T0 (tage_bim): 2-bit CTR only. T1-T4: 16-bit entry; packed layout
+  // matches tage_ram_entry_t. Every slot RAM is written so any slot's
+  // prediction path sees the value: g_slot[0] and g_slot[S1] (BP-128;
+  // at one slot both name slot 0, which is written twice).
   task automatic tage_ram_write(
     input int              tbl,
     input int              idx,
@@ -204,31 +204,39 @@ module tb;
                entry.ctr, entry.valid};
     case (tbl)
       0: begin
-        u_dut.u_tage_bim.u_ram_s0.mem[bank][row] = bim_raw;
-        u_dut.u_tage_bim.u_ram_s1.mem[bank][row] = bim_raw;
+        u_dut.u_tage_bim.g_slot[0].u_ram.mem[bank][row] = bim_raw;
+        u_dut.u_tage_bim.g_slot[S1].u_ram.mem[bank][row] = bim_raw;
       end
       1: begin
-        u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[bank][row] = tbl_raw;
-        u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram
+          .mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram
+          .mem[bank][row] = tbl_raw;
       end
       2: begin
-        u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[bank][row] = tbl_raw;
-        u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram
+          .mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram
+          .mem[bank][row] = tbl_raw;
       end
       3: begin
-        u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[bank][row] = tbl_raw;
-        u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram
+          .mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram
+          .mem[bank][row] = tbl_raw;
       end
       4: begin
-        u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[bank][row] = tbl_raw;
-        u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram
+          .mem[bank][row] = tbl_raw;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram
+          .mem[bank][row] = tbl_raw;
       end
       default: ;
     endcase
   endtask
 
   // tage_ram_read: read tage_ram_entry_t from tbl at idx.
-  // Reads u_ram_s0 (slot 0 RAM). bank=idx[10], row=idx[9:0].
+  // Reads g_slot[0].u_ram (slot 0 RAM). bank=idx[10], row=idx[9:0].
   task automatic tage_ram_read(
     input  int              tbl,
     input  int              idx,
@@ -243,23 +251,27 @@ module tb;
     case (tbl)
       0: begin
         bim_raw        =
-          u_dut.u_tage_bim.u_ram_s0.mem[bank][row];
+          u_dut.u_tage_bim.g_slot[0].u_ram.mem[bank][row];
         entry.ctr[1:0] = bim_raw;
       end
       1: begin
-        tbl_raw = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[bank][row];
+        tbl_raw =
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
         entry = tage_ram_entry_t'(tbl_raw);
       end
       2: begin
-        tbl_raw = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[bank][row];
+        tbl_raw =
+          u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
         entry = tage_ram_entry_t'(tbl_raw);
       end
       3: begin
-        tbl_raw = u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[bank][row];
+        tbl_raw =
+          u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
         entry = tage_ram_entry_t'(tbl_raw);
       end
       4: begin
-        tbl_raw = u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[bank][row];
+        tbl_raw =
+          u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
         entry = tage_ram_entry_t'(tbl_raw);
       end
       default: ;
@@ -274,15 +286,14 @@ module tb;
   // Poll tage_pred_rdy_p2 up to 16 cycles.
   // Capture tage_pred_meta_p2 when rdy asserts.
   task automatic tage_predict(
-    input  tage_pred_inp_t  inp[0:1],
-    input  logic [1:0]      val,
-    output tage_pred_meta_t meta[0:1],
-    output logic [1:0]      rdy,
+    input  tage_pred_inp_t            inp[0:NUM_PRED_SLOTS-1],
+    input  logic [NUM_PRED_SLOTS-1:0] val,
+    output tage_pred_meta_t           meta[0:NUM_PRED_SLOTS-1],
+    output logic [NUM_PRED_SLOTS-1:0] rdy,
     inout  integer          errs
   );
     int timeout;
-    stg_pred_inp[0] = inp[0];
-    stg_pred_inp[1] = inp[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) stg_pred_inp[s] = inp[s];
     stg_pred_val    = val;
     @(posedge clk); // staging FF fires, DUT sees inputs at p0
     stg_pred_val = '0; // deassert; takes effect next posedge
@@ -294,8 +305,7 @@ module tb;
     if (!(|tage_pred_rdy_p2))
       tb_error("tage_predict: timeout waiting for rdy_p2", errs);
     rdy     = tage_pred_rdy_p2;
-    meta[0] = tage_pred_meta_p2[0];
-    meta[1] = tage_pred_meta_p2[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) meta[s] = tage_pred_meta_p2[s];
     @(posedge clk); // advance past the rdy cycle
   endtask
 
@@ -307,13 +317,12 @@ module tb;
   // Poll tage_upd_rdy_u1 up to 16 cycles.
   // Wait one additional cycle for pipeline to settle.
   task automatic tage_update(
-    input tage_upd_inp_t inp[0:1],
-    input logic [1:0]    val,
+    input tage_upd_inp_t            inp[0:NUM_PRED_SLOTS-1],
+    input logic [NUM_PRED_SLOTS-1:0] val,
     inout integer        errs
   );
     int timeout;
-    stg_upd_inp[0] = inp[0];
-    stg_upd_inp[1] = inp[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) stg_upd_inp[s] = inp[s];
     stg_upd_val    = val;
     @(posedge clk); // staging FF fires, DUT sees inputs at u0
     stg_upd_val = '0; // deassert; takes effect next posedge
@@ -396,11 +405,11 @@ module tb;
     localparam int                  TEST_IDX = 1165; // bank=1, row=141
 
     tage_ram_entry_t wr_entry;
-    tage_pred_inp_t  pred_inp[0:1];
-    tage_pred_meta_t meta1[0:1];
-    tage_pred_meta_t meta2[0:1];
-    tage_upd_inp_t   upd_inp[0:1];
-    logic [1:0]      rdy;
+    tage_pred_inp_t            pred_inp[0:NUM_PRED_SLOTS-1];
+    tage_pred_meta_t           meta1[0:NUM_PRED_SLOTS-1];
+    tage_pred_meta_t           meta2[0:NUM_PRED_SLOTS-1];
+    tage_upd_inp_t             upd_inp[0:NUM_PRED_SLOTS-1];
+    logic [NUM_PRED_SLOTS-1:0] rdy;
     int              local_errs;
 
     local_errs = 0;
@@ -416,26 +425,24 @@ module tb;
     tage_ram_write(TEST_TBL, TEST_IDX, wr_entry);
 
     // -- Steps 2-4: prediction slot 0, capture meta
-    pred_inp[0]           = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) pred_inp[s] = '0;
     pred_inp[0].pc        = TEST_PC;
     pred_inp[0].branch_id = '0;
-    pred_inp[1]           = '0;
-    tage_predict(pred_inp, 2'b01, meta1, rdy, local_errs);
+    tage_predict(pred_inp, NUM_PRED_SLOTS'(1), meta1, rdy, local_errs);
 
     // -- Step 3: verify rdy[0] asserted
     if (!rdy[0])
       tb_error("round_trip: pred1 rdy[0] not asserted", local_errs);
 
     // -- Step 5: update using captured meta
-    upd_inp[0]                 = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) upd_inp[s] = '0;
     upd_inp[0].tage_pred_meta  = meta1[0];
     upd_inp[0].resolved_taken  = 1'b1;
     upd_inp[0].cond_mispredict = 1'b1; // predicted NT, resolved T
-    upd_inp[1]                 = '0;
-    tage_update(upd_inp, 2'b01, local_errs);
+    tage_update(upd_inp, NUM_PRED_SLOTS'(1), local_errs);
 
     // -- Steps 6-7: second prediction, verify rdy
-    tage_predict(pred_inp, 2'b01, meta2, rdy, local_errs);
+    tage_predict(pred_inp, NUM_PRED_SLOTS'(1), meta2, rdy, local_errs);
     if (!rdy[0])
       tb_error("round_trip: pred2 rdy[0] not asserted", local_errs);
 

@@ -298,21 +298,6 @@ module ftq_resolve_assert (
     end
   end
 
-  // The program order of the two channels, derived here: the entry
-  // nearer commit_ptr is older; within one entry the lower position;
-  // then channel 0. Ages are wrap-aware, (idx - commit) modulo the
-  // queue, so the order holds across the array boundary.
-  logic [FTQ_IDX_BITS-1:0] w_age0;
-  logic [FTQ_IDX_BITS-1:0] w_age1;
-  logic                    w_ch1_older;
-  always_comb begin
-    w_age0 = bkend_rsv[0].ftq_idx - commit_ptr[FTQ_IDX_BITS-1:0];
-    w_age1 = bkend_rsv[1].ftq_idx - commit_ptr[FTQ_IDX_BITS-1:0];
-    w_ch1_older = (w_age1 < w_age0) ||
-                  ((w_age1 == w_age0) &&
-                   (bkend_rsv[1].pos < bkend_rsv[0].pos));
-  end
-
   genvar gt;
   generate
     for (gt = 0; gt < NUM_RESOLVE_PORTS; gt++) begin : g_once
@@ -344,36 +329,61 @@ module ftq_resolve_assert (
     end
   endgenerate
 
-  // R18 TD#158, ONE SLOT, ONE CHANNEL, OLDER FIRST. When both channels
-  //     are live and name the same slot, the younger in program order
-  //     (derived above) is not accepted, and the slot's update, when
-  //     formed, is the older's. Before BP-120 both were reported ready
-  //     and the later channel's payload overwrote the earlier's.
-  property p_slot_older_first;
-    @(posedge clk) disable iff (!rstn)
-      (rsv_accept[0] && rsv_accept[1] && (rsv_slot[0] == rsv_slot[1])) |->
-        (w_ch1_older ? !ftq_bkend_rsv_rdy[0] : !ftq_bkend_rsv_rdy[1]) &&
-        (!upd[rsv_slot[0]].valid ||
-         (w_ch1_older
-            ? ((upd[rsv_slot[0]].branch_id     == bkend_rsv[1].ftq_idx) &&
-               (upd[rsv_slot[0]].actual_target == bkend_rsv[1].target))
-            : ((upd[rsv_slot[0]].branch_id     == bkend_rsv[0].ftq_idx) &&
-               (upd[rsv_slot[0]].actual_target == bkend_rsv[0].target))));
-  endproperty
-  a_slot_older_first: assert property (p_slot_older_first)
-    else $error("R18 two resolutions were given one slot, or the younger first");
+  // BP-128: the channel order, R18 and R19 compare channel 0 with
+  // channel 1 and exist only with two resolution channels
+  // (NUM_RESOLVE_PORTS is NUM_PRED_SLOTS). At one slot they are not
+  // elaborated: there is no second channel to order or to collide.
+  if (NUM_RESOLVE_PORTS > 1) begin : g_two_chan
+    // The program order of the two channels, derived here: the entry
+    // nearer commit_ptr is older; within one entry the lower position;
+    // then channel 0. Ages are wrap-aware, (idx - commit) modulo the
+    // queue, so the order holds across the array boundary.
+    logic [FTQ_IDX_BITS-1:0] w_age0;
+    logic [FTQ_IDX_BITS-1:0] w_age1;
+    logic                    w_ch1_older;
+    always_comb begin
+      w_age0 = bkend_rsv[0].ftq_idx - commit_ptr[FTQ_IDX_BITS-1:0];
+      w_age1 = bkend_rsv[1].ftq_idx - commit_ptr[FTQ_IDX_BITS-1:0];
+      w_ch1_older = (w_age1 < w_age0) ||
+                    ((w_age1 == w_age0) &&
+                     (bkend_rsv[1].pos < bkend_rsv[0].pos));
+    end
 
-  // R19 TD#158. Two placement writes in one cycle to one entry name
-  //     different slots, so the entry holds both. Before BP-120 the
-  //     two placements of one entry read the same bare entry and could
-  //     name the same free slot; the later write won.
-  property p_place_two_slots;
-    @(posedge clk) disable iff (!rstn)
-      (rsv_wr_val[0] && rsv_wr_val[1] && (rsv_wr_idx[0] == rsv_wr_idx[1]))
-        |-> (rsv_wr_sel[0] != rsv_wr_sel[1]);
-  endproperty
-  a_place_two_slots: assert property (p_place_two_slots)
-    else $error("R19 two placements of one entry took the same slot");
+    // R18 TD#158, ONE SLOT, ONE CHANNEL, OLDER FIRST. When both
+    //     channels are live and name the same slot, the younger in
+    //     program order (derived above) is not accepted, and the slot's
+    //     update, when formed, is the older's. Before BP-120 both were
+    //     reported ready and the later channel's payload overwrote the
+    //     earlier's.
+    property p_slot_older_first;
+      @(posedge clk) disable iff (!rstn)
+        (rsv_accept[0] && rsv_accept[1] &&
+         (rsv_slot[0] == rsv_slot[1])) |->
+          (w_ch1_older ? !ftq_bkend_rsv_rdy[0] : !ftq_bkend_rsv_rdy[1]) &&
+          (!upd[rsv_slot[0]].valid ||
+           (w_ch1_older
+              ? ((upd[rsv_slot[0]].branch_id     == bkend_rsv[1].ftq_idx) &&
+                 (upd[rsv_slot[0]].actual_target == bkend_rsv[1].target))
+              : ((upd[rsv_slot[0]].branch_id     == bkend_rsv[0].ftq_idx) &&
+                 (upd[rsv_slot[0]].actual_target == bkend_rsv[0].target))));
+    endproperty
+    a_slot_older_first: assert property (p_slot_older_first)
+      else $error({"R18 two resolutions were given one slot, ",
+                   "or the younger first"});
+
+    // R19 TD#158. Two placement writes in one cycle to one entry name
+    //     different slots, so the entry holds both. Before BP-120 the
+    //     two placements of one entry read the same bare entry and
+    //     could name the same free slot; the later write won.
+    property p_place_two_slots;
+      @(posedge clk) disable iff (!rstn)
+        (rsv_wr_val[0] && rsv_wr_val[1] &&
+         (rsv_wr_idx[0] == rsv_wr_idx[1]))
+          |-> (rsv_wr_sel[0] != rsv_wr_sel[1]);
+    endproperty
+    a_place_two_slots: assert property (p_place_two_slots)
+      else $error("R19 two placements of one entry took the same slot");
+  end : g_two_chan
 
   // R20, R21 (BP-122, TD#170): the BP-121 fixes in this unit.
   genvar gw;

@@ -129,6 +129,11 @@ module tb;
   // -----------------------------------------------------------------
   // p2 -> p3 pipeline shadow
   // -----------------------------------------------------------------
+  // S1: slot 1 in the dual-slot cases, which run only at two slots
+  // (BP-128). It is NUM_PRED_SLOTS-1 so the one-slot build has no
+  // constant out-of-range index.
+  localparam int S1 = NUM_PRED_SLOTS - 1;
+
   logic        prev_val [0:NUM_PRED_SLOTS-1];
   bp_br_type_e prev_typ [0:NUM_PRED_SLOTS-1];
 
@@ -138,10 +143,14 @@ module tb;
       input logic [VA_WIDTH-1:0] f0,
       input logic                v1, input bp_br_type_e t1,
       input logic [VA_WIDTH-1:0] f1);
+    // BP-128: the slot 1 operands apply only at two slots (a loop, so
+    // the build at one slot has no constant out-of-range index).
     pred_val_p3[0] = prev_val[0]; br_type_p3[0] = prev_typ[0];
-    pred_val_p3[1] = prev_val[1]; br_type_p3[1] = prev_typ[1];
     pred_val_p2[0] = v0; br_type_p2[0] = t0; fall_p2[0] = f0;
-    pred_val_p2[1] = v1; br_type_p2[1] = t1; fall_p2[1] = f1;
+    for (int s = 1; s < NUM_PRED_SLOTS; s++) begin
+      pred_val_p3[s] = prev_val[s]; br_type_p3[s] = prev_typ[s];
+      pred_val_p2[s] = v1; br_type_p2[s] = t1; fall_p2[s] = f1;
+    end
   endtask
 
   // Override p3 explicitly (deliberate p2/p3 disagreement).
@@ -149,15 +158,18 @@ module tb;
       input logic v0, input bp_br_type_e t0,
       input logic v1, input bp_br_type_e t1);
     pred_val_p3[0] = v0; br_type_p3[0] = t0;
-    pred_val_p3[1] = v1; br_type_p3[1] = t1;
+    for (int s = 1; s < NUM_PRED_SLOTS; s++) begin   // BP-128
+      pred_val_p3[s] = v1; br_type_p3[s] = t1;
+    end
   endtask
 
   // Advance one clock; remember this cycle's p2 for next cycle's p3.
   task automatic tick();
     @(posedge clk);
     #1;
-    prev_val[0] = pred_val_p2[0]; prev_typ[0] = br_type_p2[0];
-    prev_val[1] = pred_val_p2[1]; prev_typ[1] = br_type_p2[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin   // BP-128
+      prev_val[s] = pred_val_p2[s]; prev_typ[s] = br_type_p2[s];
+    end
   endtask
 
   // Drive a commit event for one cycle (p2 idle), then settle.
@@ -235,10 +247,13 @@ module tb;
     check("TC-01 tosr==0", dut.tosr == '0);
     check("TC-01 tosw==0", dut.tosw == '0);
     check("TC-01 bos==0",  dut.bos  == '0);
-    check("TC-01 pop_valid_p2[0]==0", pop_valid_p2[0] == 1'b0);
-    check("TC-01 pop_valid_p2[1]==0", pop_valid_p2[1] == 1'b0);
-    check("TC-01 tos_valid_p0[0]==0", tos_valid_p0[0] == 1'b0);
-    check("TC-01 tos_valid_p0[1]==0", tos_valid_p0[1] == 1'b0);
+    // Every slot (BP-128: literal [0] and [1] before).
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      check($sformatf("TC-01 pop_valid_p2[%0d]==0", s),
+            pop_valid_p2[s] == 1'b0);
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      check($sformatf("TC-01 tos_valid_p0[%0d]==0", s),
+            tos_valid_p0[s] == 1'b0);
 
     // =============================================================
     // TC-02: Single push slot 0
@@ -268,75 +283,81 @@ module tb;
     check("TC-03 snap[0].tosw==2", snap_p2[0].tosw == 4'd2);
     tick();
 
-    // =============================================================
-    // TC-04: Dual push (call/call). Seed one entry first so the
-    // cold-start sentinel skip does not perturb the +2 advance.
-    // =============================================================
-    do_reset();
-    push_one(ADDR_X);                       // tosr=1, tosw=2
-    begin
-      logic [RAS_PTR_BITS-1:0] tosw_before;
-      tosw_before = dut.tosw;
-      drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, DIRECT_CALL, ADDR_B);
+    // TC-04 .. TC-07 drive both slots in one cycle: they need two slots
+    // (BP-128). S1 is slot 1 whenever they run.
+    if (NUM_PRED_SLOTS > 1) begin
+      // =============================================================
+      // TC-04: Dual push (call/call). Seed one entry first so the
+      // cold-start sentinel skip does not perturb the +2 advance.
+      // =============================================================
+      do_reset();
+      push_one(ADDR_X);                       // tosr=1, tosw=2
+      begin
+        logic [RAS_PTR_BITS-1:0] tosw_before;
+        tosw_before = dut.tosw;
+        drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, DIRECT_CALL, ADDR_B);
+        tick();
+        check("TC-04 TOSW advanced by 2",
+              (dut.tosw - tosw_before) == 4'd2);
+        // Slot 0 -> idx2, slot 1 -> idx3 (in order).
+        check("TC-04 spec[2]==ADDR_A", dut.spec_ret_addr[2] == ADDR_A);
+        check("TC-04 spec[3]==ADDR_B", dut.spec_ret_addr[3] == ADDR_B);
+        check("TC-04 tosr==3 (top is B)", dut.tosr == 4'd3);
+      end
+
+      // =============================================================
+      // TC-05: Dual pop (return/return). Seed two entries.
+      // =============================================================
+      do_reset();
+      push_one(ADDR_A);                       // idx1
+      push_one(ADDR_B);                       // idx2, tosr=2
+      drive(1'b1, RETURN, '0, 1'b1, RETURN, '0);
+      #1;
+      // Slot 0 pops current top (B); slot 1 pops next (A).
+      check("TC-05 pop_valid_p2[0]==1", pop_valid_p2[0] == 1'b1);
+      check("TC-05 pop_addr_p2[0]==ADDR_B (top)", pop_addr_p2[0] == ADDR_B);
+      check("TC-05 pop_valid_p2[1]==1", pop_valid_p2[S1] == 1'b1);
+      check("TC-05 pop_addr_p2[1]==ADDR_A (next)", pop_addr_p2[S1] == ADDR_A);
       tick();
-      check("TC-04 TOSW advanced by 2",
-            (dut.tosw - tosw_before) == 4'd2);
-      // Slot 0 -> idx2, slot 1 -> idx3 (in order).
-      check("TC-04 spec[2]==ADDR_A", dut.spec_ret_addr[2] == ADDR_A);
-      check("TC-04 spec[3]==ADDR_B", dut.spec_ret_addr[3] == ADDR_B);
-      check("TC-04 tosr==3 (top is B)", dut.tosr == 4'd3);
+
+      // =============================================================
+      // TC-06: Call then return (slot0=call, slot1=return). Bypass.
+      // =============================================================
+      do_reset();
+      drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, RETURN, '0);
+      #1;
+      // slot1 pop must receive slot0's pushed address via bypass, not
+      // from the array (array not yet written this cycle).
+      check("TC-06 pop_valid_p2[1]==1", pop_valid_p2[S1] == 1'b1);
+      check("TC-06 pop_addr_p2[1]==ADDR_A (bypass)",
+            pop_addr_p2[S1] == ADDR_A);
+      check("TC-06 array idx1 not yet written (pre-edge)",
+            dut.spec_ret_addr[1] != ADDR_A);
+      // slot1 snapshot: entry present (tosw=2) but TOSR back to pre-push.
+      check("TC-06 snap[1].tosr==0 (pre-push)", snap_p2[S1].tosr == 4'd0);
+      check("TC-06 snap[1].tosw==2 (entry present)",
+            snap_p2[S1].tosw == 4'd2);
+      tick();
+      check("TC-06 spec[1]==ADDR_A after edge", dut.spec_ret_addr[1] == ADDR_A);
+
+      // =============================================================
+      // TC-07: Return then call (slot0=return, slot1=call). Seed one.
+      // =============================================================
+      do_reset();
+      push_one(ADDR_X);                       // idx1, tosr=1, tosw=2
+      drive(1'b1, RETURN, '0, 1'b1, DIRECT_CALL, ADDR_B);
+      #1;
+      check("TC-07 pop_valid_p2[0]==1", pop_valid_p2[0] == 1'b1);
+      check("TC-07 pop_addr_p2[0]==ADDR_X", pop_addr_p2[0] == ADDR_X);
+      // slot1 push lands at frontier (idx2); no bypass.
+      check("TC-07 snap[1].tosr==2 (push at new TOSW)",
+            snap_p2[S1].tosr == 4'd2);
+      check("TC-07 snap[1].tosw==3", snap_p2[S1].tosw == 4'd3);
+      tick();
+      check("TC-07 spec[2]==ADDR_B", dut.spec_ret_addr[2] == ADDR_B);
+    end else begin
+      $display("SKIP TC-04 .. TC-07 dual-slot: needs NUM_PRED_SLOTS > 1");
     end
-
-    // =============================================================
-    // TC-05: Dual pop (return/return). Seed two entries.
-    // =============================================================
-    do_reset();
-    push_one(ADDR_A);                       // idx1
-    push_one(ADDR_B);                       // idx2, tosr=2
-    drive(1'b1, RETURN, '0, 1'b1, RETURN, '0);
-    #1;
-    // Slot 0 pops current top (B); slot 1 pops next (A).
-    check("TC-05 pop_valid_p2[0]==1", pop_valid_p2[0] == 1'b1);
-    check("TC-05 pop_addr_p2[0]==ADDR_B (top)", pop_addr_p2[0] == ADDR_B);
-    check("TC-05 pop_valid_p2[1]==1", pop_valid_p2[1] == 1'b1);
-    check("TC-05 pop_addr_p2[1]==ADDR_A (next)", pop_addr_p2[1] == ADDR_A);
-    tick();
-
-    // =============================================================
-    // TC-06: Call then return (slot0=call, slot1=return). Bypass.
-    // =============================================================
-    do_reset();
-    drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, RETURN, '0);
-    #1;
-    // slot1 pop must receive slot0's pushed address via bypass, not
-    // from the array (array not yet written this cycle).
-    check("TC-06 pop_valid_p2[1]==1", pop_valid_p2[1] == 1'b1);
-    check("TC-06 pop_addr_p2[1]==ADDR_A (bypass)",
-          pop_addr_p2[1] == ADDR_A);
-    check("TC-06 array idx1 not yet written (pre-edge)",
-          dut.spec_ret_addr[1] != ADDR_A);
-    // slot1 snapshot: entry present (tosw=2) but TOSR back to pre-push.
-    check("TC-06 snap[1].tosr==0 (pre-push)", snap_p2[1].tosr == 4'd0);
-    check("TC-06 snap[1].tosw==2 (entry present)",
-          snap_p2[1].tosw == 4'd2);
-    tick();
-    check("TC-06 spec[1]==ADDR_A after edge", dut.spec_ret_addr[1] == ADDR_A);
-
-    // =============================================================
-    // TC-07: Return then call (slot0=return, slot1=call). Seed one.
-    // =============================================================
-    do_reset();
-    push_one(ADDR_X);                       // idx1, tosr=1, tosw=2
-    drive(1'b1, RETURN, '0, 1'b1, DIRECT_CALL, ADDR_B);
-    #1;
-    check("TC-07 pop_valid_p2[0]==1", pop_valid_p2[0] == 1'b1);
-    check("TC-07 pop_addr_p2[0]==ADDR_X", pop_addr_p2[0] == ADDR_X);
-    // slot1 push lands at frontier (idx2); no bypass.
-    check("TC-07 snap[1].tosr==2 (push at new TOSW)",
-          snap_p2[1].tosr == 4'd2);
-    check("TC-07 snap[1].tosw==3", snap_p2[1].tosw == 4'd3);
-    tick();
-    check("TC-07 spec[2]==ADDR_B", dut.spec_ret_addr[2] == ADDR_B);
 
     // =============================================================
     // TC-08: Recursion counter increment
@@ -392,19 +413,25 @@ module tb;
     check("TC-10 rctr stays at max after extra push",
           dut.spec_rctr[1] == {RAS_RCTR_WIDTH{1'b1}});
 
-    // =============================================================
-    // TC-11: Snapshot slot 0 vs slot 1 in a dual push.
-    // Seed one entry to avoid cold-start sentinel skip.
-    // =============================================================
-    do_reset();
-    push_one(ADDR_X);                       // tosr=1, tosw=2
-    drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, DIRECT_CALL, ADDR_B);
-    #1;
-    check("TC-11 snap[0].tosr==2 (post slot0)", snap_p2[0].tosr == 4'd2);
-    check("TC-11 snap[0].tosw==3 (post slot0)", snap_p2[0].tosw == 4'd3);
-    check("TC-11 snap[1].tosr==3 (post both)",  snap_p2[1].tosr == 4'd3);
-    check("TC-11 snap[1].tosw==4 (post both)",  snap_p2[1].tosw == 4'd4);
-    tick();
+    // TC-11 drive both slots in one cycle: they need two slots
+    // (BP-128). S1 is slot 1 whenever they run.
+    if (NUM_PRED_SLOTS > 1) begin
+      // =============================================================
+      // TC-11: Snapshot slot 0 vs slot 1 in a dual push.
+      // Seed one entry to avoid cold-start sentinel skip.
+      // =============================================================
+      do_reset();
+      push_one(ADDR_X);                       // tosr=1, tosw=2
+      drive(1'b1, DIRECT_CALL, ADDR_A, 1'b1, DIRECT_CALL, ADDR_B);
+      #1;
+      check("TC-11 snap[0].tosr==2 (post slot0)", snap_p2[0].tosr == 4'd2);
+      check("TC-11 snap[0].tosw==3 (post slot0)", snap_p2[0].tosw == 4'd3);
+      check("TC-11 snap[1].tosr==3 (post both)",  snap_p2[S1].tosr == 4'd3);
+      check("TC-11 snap[1].tosw==4 (post both)",  snap_p2[S1].tosw == 4'd4);
+      tick();
+    end else begin
+      $display("SKIP TC-11 dual-slot snapshot: needs NUM_PRED_SLOTS > 1");
+    end
 
     // =============================================================
     // TC-12: Mispredict restore (pointer-only, blocks p2).

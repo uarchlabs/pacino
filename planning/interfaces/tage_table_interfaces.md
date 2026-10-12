@@ -6,7 +6,7 @@
  FILE:    tage_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-11
  CONTACT: Jeff Nye
 ```
  
@@ -492,27 +492,35 @@ alt_ctr_wr_u0[s]   this is the write signal for the alternative ctr. This is
                 this is produced by tage_cntrl.
 
 use_wr_u0[s]       this is the write signal for the use field. This is
-                gated by THIS_TABLE compared to prm_tbl_sel_u0.
+                gated by THIS_TABLE compared to prm_tbl_sel_u0 OR
+                alt_tbl_sel_u0. tage_cntrl raises it only for the
+                table Table 7 selects (see below).
                 this is produced by tage_cntrl.
 
-epc_wr_u0[s]       this is the write signal for the epc field. This is
-                gated by THIS_TABLE compared to prm_tbl_sel_u0.
+epc_wr_u0[s]       this is the write signal for the epc field. It is
+                gated as use_wr_u0 is.
                 this is produced by tage_cntrl.
 
-THE ONE USEFUL GATE AND TABLE 7's PRM/ALT SELECT ARE THE SAME
-WRITE. tage_cntrl_use_update_rules.md Table 7 sends the useful
-write to the ALT component when tage_using_primary is 0, while
-use_wr_u0 and epc_wr_u0 carry a single table gate. There is no
-second gate because prm_tbl_sel_u0 and upd_index_u0 are driven by
-tage_cntrl, which presents the component and index Table 7
-selects: the primary when tage_using_primary is 1, the alternate
-when it is 0. prm_ctr_wr_u0 is not asserted in the second case --
-the CTR write is alt_ctr_wr_u0, gated on alt_tbl_sel_u0 -- so the
-primary selector is free to carry the alternate for the useful and
-epoch write. The CTR strobes need two selectors because TAGE may
-write both components' CTRs in one update; the useful write is
-always one component. Neither document supersedes the other.
-Session-072; ittage_table_interfaces.md carries the same note.
+THE USEFUL AND EPOCH WRITE GOES TO ONE COMPONENT, the one
+tage_cntrl_use_update_rules.md Table 7 selects: the primary when
+tage_using_primary is 1, the alternate when it is 0. tage_cntrl
+raises use_wr_u0 and epc_wr_u0 only for that table, and tage_table
+opens the write on a match against either selector, prm_tbl_sel_u0
+or alt_tbl_sel_u0. The address is upd_index_u0, which tage.sv
+selects per table instance (upd_index_u0 below). The alternate is
+always a lower table than the primary, so a table named as the
+alternate never matches prm_tbl_sel_u0 and receives the alternate
+index. The CTR strobes need two selectors because TAGE may write
+both components' CTRs in one update, in two different tables; the
+useful write is always one component.
+
+This note read that prm_tbl_sel_u0 and upd_index_u0 carry the
+component Table 7 selects, and use_wr_u0 and epc_wr_u0 above read
+as gated on prm_tbl_sel_u0 alone. tage_cntrl drives prm_tbl_sel_u0
+and its index bus from the primary in every case. Corrected against
+tage_cntrl.sv, tage.sv and tage_table.sv, session-078.
+ittage_table_interfaces.md carries the original note; it has not
+been checked against the ITTAGE RTL.
 
 alc_wr_u0[s]       this is the write signal for an entry allocation. This is
                 gated by THIS_TABLE compared to alc_tbl_sel_u0.
@@ -524,8 +532,13 @@ prm_tbl_sel_u0[s]  this is the primary component index used to select
 alt_tbl_sel_u0[s]  this is the alternative component index used to 
                    select a TAGE table this is produced by tage_cntrl.
 
-upd_index_u0[s]    this is used to access the ram entry
-                   this is produced by tage_cntrl.
+upd_index_u0[s]    this is the index of the ctr, use and epc writes.
+                   tage_cntrl produces the primary index and the
+                   alternate index on separate buses; tage.sv
+                   selects one for each table instance: the primary
+                   when THIS_TABLE equals prm_tbl_sel_u0[s], the
+                   alternate otherwise. This read "produced by
+                   tage_cntrl". Session-078.
 
 alc_tbl_sel_u0[s]  this is the component index used to select a TAGE table
                    for allocation this is produced by tage_cntrl.

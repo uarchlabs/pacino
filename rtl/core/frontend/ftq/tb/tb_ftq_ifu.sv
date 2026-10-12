@@ -403,7 +403,17 @@ module tb;
     return p;
   endfunction
 
-  // A whole entry with named slots.
+  // BP-128. A check that needs a second slot runs only at two slots.
+  // HS names slot 1 at two slots and stays in range at one, where the
+  // check is skipped and says so.
+  localparam int HS = NUM_PRED_SLOTS - 1;
+
+  task automatic skip(input string nm);
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
+  // A whole entry with named slots. At one slot s1 is not stored
+  // (BP-128): a slot 1 write would land outside the packed array.
   function automatic bp_ftq_entry_t mk_entry(
       input logic [FTQ_IDX_BITS-1:0] idx,
       input bp_ftq_slot_t            s0,
@@ -415,7 +425,7 @@ module tb;
     e.branch_id  = idx;
     e.valid      = 1'b1;
     e.slot[0]    = s0;
-    e.slot[1]    = s1;
+    if (NUM_PRED_SLOTS > 1) e.slot[HS] = s1;
     return e;
   endfunction
 
@@ -531,22 +541,28 @@ module tb;
            ftq_ifu_taken_pos == FTB_BR_POS_BITS'(3));
     chk_va("A10 next_pc is the slot target", ftq_ifu_next_pc, TGT0);
 
-    // TAKEN SLOT 1 ONLY.
-    fetch_entry = mk_entry(6'd5,
-                    mk_slot(1'b1, TGT0, COND, 1'b0,
-                            FTB_BR_POS_BITS'(3)),
-                    mk_slot(1'b1, TGT1, COND, 1'b1,
-                            FTB_BR_POS_BITS'(9)));
-    settle();
-    chk   ("A11 slot 1 supplies the successor",
-           ftq_ifu_taken_pos == FTB_BR_POS_BITS'(9));
-    chk_va("A12 and its target", ftq_ifu_next_pc, TGT1);
+    // TAKEN SLOT 1 ONLY. BP-128: A11 to A13 need a slot 1.
+    if (NUM_PRED_SLOTS > 1) begin
+      fetch_entry = mk_entry(6'd5,
+                      mk_slot(1'b1, TGT0, COND, 1'b0,
+                              FTB_BR_POS_BITS'(3)),
+                      mk_slot(1'b1, TGT1, COND, 1'b1,
+                              FTB_BR_POS_BITS'(9)));
+      settle();
+      chk   ("A11 slot 1 supplies the successor",
+             ftq_ifu_taken_pos == FTB_BR_POS_BITS'(9));
+      chk_va("A12 and its target", ftq_ifu_next_pc, TGT1);
 
-    // BOTH TAKEN: slot 0 wins. Program order -- a taken branch ends
-    // the block, so slot 1 is off the path.
-    fetch_entry.slot[0].taken = 1'b1;
-    settle();
-    chk_va("A13 both taken, slot 0 wins", ftq_ifu_next_pc, TGT0);
+      // BOTH TAKEN: slot 0 wins. Program order -- a taken branch ends
+      // the block, so slot 1 is off the path.
+      fetch_entry.slot[0].taken = 1'b1;
+      settle();
+      chk_va("A13 both taken, slot 0 wins", ftq_ifu_next_pc, TGT0);
+    end else begin
+      skip("A11 slot 1 supplies the successor");
+      skip("A12 and its target");
+      skip("A13 both taken, slot 0 wins");
+    end
 
     // ftq_ifu_req_rdy is NOT a condition on the request. It is the
     // IFU's acceptance, consumed by ftq_ptr to advance fetch_ptr.
@@ -703,7 +719,9 @@ module tb;
     // M1. The block was predicted to have no taken branch and
     // predecode found a JAL at position 6. Slot 0 holds a
     // not-taken conditional at position 3, so program order puts
-    // the JAL in slot 1.
+    // the JAL in slot 1. BP-128: at one slot no slot is free or at
+    // or after position 6, so W1's last-slot arm puts it in slot 0,
+    // the last slot (HS); D2 checks that arm there.
     pdwb_entry = mk_entry(6'd8,
                    mk_slot(1'b1, TGT0, COND, 1'b0,
                            FTB_BR_POS_BITS'(3)),
@@ -715,8 +733,9 @@ module tb;
     ifu_ftq_pdwb_val = 1'b1;
     settle();
     chk   ("D1 the entry is corrected", pd_wr_val);
-    chk   ("D2 in program order, slot 1",
-           pd_wr_sel == TRX_SLOT_BITS'(1));
+    chk   ((NUM_PRED_SLOTS > 1) ? "D2 in program order, slot 1"
+                                : "D2 no slot free, the last slot",
+           pd_wr_sel == TRX_SLOT_BITS'(HS));
     chk   ("D3 the slot is valid",      pd_wr_slot.slot_valid);
     chk   ("D4 the type is the JAL",
            pd_wr_slot.br_type == DIRECT_UNC);
@@ -1251,16 +1270,19 @@ module tb;
 
     j_alloc_slot[0] = mk_slot(1'b1, TGT0, COND, 1'b1,
                               FTB_BR_POS_BITS'(3));
-    j_alloc_slot[1] = mk_slot(1'b1, TGT1, COND, 1'b1,
-                              FTB_BR_POS_BITS'(9));
+    if (NUM_PRED_SLOTS > 1)
+      j_alloc_slot[HS] = mk_slot(1'b1, TGT1, COND, 1'b1,
+                                 FTB_BR_POS_BITS'(9));
     j_alloc_idx     = 6'd8;
     j_alloc_val     = 1'b1;
     j_rd_idx        = 6'd8;
     settle();
     j_alloc_val     = 1'b0;
-    chk("J1 entry 8 allocated with both slots valid",
+    // BP-128: at one slot, J1 checks the one slot.
+    chk((NUM_PRED_SLOTS > 1) ? "J1 entry 8 allocated with both slots valid"
+                             : "J1 entry 8 allocated with its slot valid",
         j_fetch_e.valid && j_fetch_e.slot[0].slot_valid &&
-        j_fetch_e.slot[1].slot_valid);
+        j_fetch_e.slot[HS].slot_valid);
 
     // The writeback, against the entry as allocated.
     pdwb_entry       = j_fetch_e;
@@ -1286,11 +1308,16 @@ module tb;
     exp_s0.pred_src   = PRED_NONE;
     chk("J2 slot 0 holds the predecode JAL",
         j_fetch_e.slot[0] == exp_s0);
-    chk("J3 slot 1 is killed: not valid, not taken",
-        !j_fetch_e.slot[1].slot_valid && !j_fetch_e.slot[1].taken);
-    chk("J4 slot 1's other fields are untouched",
-        (j_fetch_e.slot[1].target == TGT1) &&
-        (j_fetch_e.slot[1].pos == FTB_BR_POS_BITS'(9)));
+    if (NUM_PRED_SLOTS > 1) begin
+      chk("J3 slot 1 is killed: not valid, not taken",
+          !j_fetch_e.slot[HS].slot_valid && !j_fetch_e.slot[HS].taken);
+      chk("J4 slot 1's other fields are untouched",
+          (j_fetch_e.slot[HS].target == TGT1) &&
+          (j_fetch_e.slot[HS].pos == FTB_BR_POS_BITS'(9)));
+    end else begin
+      skip("J3 slot 1 is killed: not valid, not taken");
+      skip("J4 slot 1's other fields are untouched");
+    end
     settle();
   endtask
 
@@ -1368,8 +1395,9 @@ module tb;
     // Slot 0: predicted taken at position 4 with the wrong target.
     // Slot 1: a later not-taken conditional, killed by the rewrite.
     j_alloc_slot[0] = mk_slot(1'b1, TGT0, bt, 1'b1, FTB_BR_POS_BITS'(4));
-    j_alloc_slot[1] = mk_slot(1'b1, TGT1, COND, 1'b0,
-                              FTB_BR_POS_BITS'(9));
+    if (NUM_PRED_SLOTS > 1)
+      j_alloc_slot[HS] = mk_slot(1'b1, TGT1, COND, 1'b0,
+                                 FTB_BR_POS_BITS'(9));
     j_alloc_idx     = 6'd10;
     j_alloc_val     = 1'b1;
     j_rd_idx        = 6'd10;
@@ -1410,8 +1438,10 @@ module tb;
     exp_s0.pred_src   = PRED_NONE;
     chk($sformatf("%s5 the stored slot 0 is the corrected branch", nm),
         j_fetch_e.slot[0] == exp_s0);
-    chk($sformatf("%s6 the stored slot 1 is killed", nm),
-        !j_fetch_e.slot[1].slot_valid && !j_fetch_e.slot[1].taken);
+    if (NUM_PRED_SLOTS > 1)
+      chk($sformatf("%s6 the stored slot 1 is killed", nm),
+          !j_fetch_e.slot[HS].slot_valid && !j_fetch_e.slot[HS].taken);
+    else skip($sformatf("%s6 the stored slot 1 is killed", nm));
     fetch_entry   = j_fetch_e;
     fetch_pending = 1'b1;
     #1;
@@ -1448,7 +1478,7 @@ module tb;
     bp_ftq_slot_t exp_j;
     do_reset();
     j_alloc_slot[0] = s0;
-    j_alloc_slot[1] = s1;
+    if (NUM_PRED_SLOTS > 1) j_alloc_slot[HS] = s1;
     j_alloc_idx     = 6'd12;
     j_alloc_val     = 1'b1;
     j_rd_idx        = 6'd12;
@@ -1482,13 +1512,18 @@ module tb;
     exp_j.pred_src   = PRED_NONE;
     chk($sformatf("%s%0d the JAL is stored in slot %0d", nm, n0 + 1,
                   exp_sel), j_fetch_e.slot[exp_sel] == exp_j);
-    if (exp_sel == 0) begin
+    if ((exp_sel == 0) && (NUM_PRED_SLOTS == 1)) begin
+      // BP-128: at one slot there is no slot 1 above it.
+      skip($sformatf("%s%0d slot 1 above it is killed", nm, n0 + 2));
+      skip($sformatf("%s%0d slot 1's other fields are untouched", nm,
+                     n0 + 3));
+    end else if (exp_sel == 0) begin
       chk($sformatf("%s%0d slot 1 above it is killed", nm, n0 + 2),
-          !j_fetch_e.slot[1].slot_valid && !j_fetch_e.slot[1].taken);
+          !j_fetch_e.slot[HS].slot_valid && !j_fetch_e.slot[HS].taken);
       chk($sformatf("%s%0d slot 1's other fields are untouched", nm,
                     n0 + 3),
-          (j_fetch_e.slot[1].target == s1.target) &&
-          (j_fetch_e.slot[1].pos == s1.pos));
+          (j_fetch_e.slot[HS].target == s1.target) &&
+          (j_fetch_e.slot[HS].pos == s1.pos));
     end else begin
       chk($sformatf("%s%0d slot 0 below it stands", nm, n0 + 2),
           j_fetch_e.slot[0] == s0);
@@ -1509,9 +1544,14 @@ module tb;
 
   task automatic group_m();
     $display("-- M: the entry after an M1 JAL before the taken slot --");
-    m_m1("M", 1,
-         mk_slot(1'b1, TGT0, COND, 1'b0, FTB_BR_POS_BITS'(2)),
-         mk_slot(1'b1, TGT1, COND, 1'b1, FTB_BR_POS_BITS'(9)), 5, 1);
+    // BP-128: M1 to M6 place the JAL in slot 1 below a slot 1 that was
+    // predicted taken; they need a slot 1.
+    if (NUM_PRED_SLOTS > 1)
+      m_m1("M", 1,
+           mk_slot(1'b1, TGT0, COND, 1'b0, FTB_BR_POS_BITS'(2)),
+           mk_slot(1'b1, TGT1, COND, 1'b1, FTB_BR_POS_BITS'(9)), 5, 1);
+    else
+      for (int i = 1; i <= 6; i++) skip($sformatf("M%0d (M1-M6)", i));
     m_m1("M", 7,
          mk_slot(1'b1, TGT0, COND, 1'b1, FTB_BR_POS_BITS'(6)),
          mk_slot(1'b1, TGT1, COND, 1'b0, FTB_BR_POS_BITS'(11)), 3, 0);

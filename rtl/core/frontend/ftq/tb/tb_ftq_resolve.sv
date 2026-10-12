@@ -164,6 +164,20 @@ module tb;
     #1;
   endtask
 
+  // BP-128. A check that needs a second slot or a second resolution
+  // channel (NUM_RESOLVE_PORTS is NUM_PRED_SLOTS) runs only at two
+  // slots. HS and HP name slot 1 and channel 1 at two slots and stay
+  // in range at one; a literal two-bit vector is cast to the slot
+  // count, which changes nothing at two. A skipped check says so.
+  localparam int HS = NUM_PRED_SLOTS - 1;
+  localparam int HP = NUM_RESOLVE_PORTS - 1;
+  localparam logic [NUM_PRED_SLOTS-1:0] HS_ONEHOT =
+    NUM_PRED_SLOTS'(1 << HS);
+
+  task automatic skip(input string nm);
+    $display("SKIP %s: needs NUM_PRED_SLOTS > 1", nm);
+  endtask
+
   function automatic bp_ftq_slot_t mk_slot(
       input logic                       sv,
       input logic [VA_WIDTH-1:0]        tgt,
@@ -194,7 +208,7 @@ module tb;
     m_entry[idx].branch_id = FTQ_IDX_BITS'(idx);
     m_entry[idx].valid     = 1'b1;
     m_entry[idx].slot[0]   = s0;
-    m_entry[idx].slot[1]   = s1;
+    if (NUM_PRED_SLOTS > 1) m_entry[idx].slot[HS] = s1;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       m_meta[idx][s]                 = '0;
       m_meta[idx][s].ftb.hit         = hit;
@@ -284,8 +298,10 @@ module tb;
     chk("A2 a live mapped resolution is accepted", rsv_accept[0]);
     chk("A3 and nothing else fires",
         !rsv_nomap[0] && !rsv_drop_sq[0]);
-    chk("A4 the other channel is idle",
-        !rsv_accept[1] && !rsv_nomap[1] && !rsv_drop_sq[1]);
+    if (NUM_RESOLVE_PORTS > 1)
+      chk("A4 the other channel is idle",
+          !rsv_accept[HP] && !rsv_nomap[HP] && !rsv_drop_sq[HP]);
+    else skip("A4 the other channel is idle");
 
     // R6, and it is checked continuously by the modelled arrays:
     // the read index IS the resolution's index, so the entry that
@@ -320,11 +336,13 @@ module tb;
     chk("B1 the lower position maps to slot 0",
         rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(0)));
 
-    present(0, 9, FTB_BR_POS_BITS'(11), INDIRECT_NONRET, 1'b1,
-            VA_WIDTH'('h00_9200_0000), 1'b0);
-    settle();
-    chk("B2 the higher position maps to slot 1",
-        rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(1)));
+    if (NUM_PRED_SLOTS > 1) begin
+      present(0, 9, FTB_BR_POS_BITS'(11), INDIRECT_NONRET, 1'b1,
+              VA_WIDTH'('h00_9200_0000), 1'b0);
+      settle();
+      chk("B2 the higher position maps to slot 1",
+          rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)));
+    end else skip("B2 the higher position maps to slot 1");
 
     // ADJACENT POSITIONS. The mapping is EXACT because positions
     // are unique within an entry -- one per 2-byte slot, so no two
@@ -340,11 +358,13 @@ module tb;
     settle();
     chk("B3 adjacent positions separate, slot 0",
         rsv_slot[0] == TRX_SLOT_BITS'(0));
-    present(0, 9, FTB_BR_POS_BITS'(7), COND, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    settle();
-    chk("B4 adjacent positions separate, slot 1",
-        rsv_slot[0] == TRX_SLOT_BITS'(1));
+    if (NUM_PRED_SLOTS > 1) begin
+      present(0, 9, FTB_BR_POS_BITS'(7), COND, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      settle();
+      chk("B4 adjacent positions separate, slot 1",
+          rsv_slot[0] == TRX_SLOT_BITS'(HS));
+    end else skip("B4 adjacent positions separate, slot 1");
 
     // POSITION 0 AND POSITION 15, the two ends of the field.
     put_entry(9,
@@ -355,10 +375,12 @@ module tb;
             VA_WIDTH'('h00_9000_0000), 1'b0);
     settle();
     chk("B5 position 0 maps", rsv_slot[0] == TRX_SLOT_BITS'(0));
-    present(0, 9, FTB_BR_POS_BITS'(15), COND, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    settle();
-    chk("B6 position 15 maps", rsv_slot[0] == TRX_SLOT_BITS'(1));
+    if (NUM_PRED_SLOTS > 1) begin
+      present(0, 9, FTB_BR_POS_BITS'(15), COND, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      settle();
+      chk("B6 position 15 maps", rsv_slot[0] == TRX_SLOT_BITS'(HS));
+    end else skip("B6 position 15 maps");
 
     // AN INVALID SLOT AT A MATCHING POSITION does not map. Slot
     // validity is part of the match: a slot the FTB never filled
@@ -382,17 +404,23 @@ module tb;
       mk_slot(1'b1, VA_WIDTH'('h00_9200_0000), COND, FTB_BR_POS_BITS'(5)),
       mk_slot(1'b1, VA_WIDTH'('h00_9300_0000), COND, FTB_BR_POS_BITS'(13)),
       1'b0, 3);
-    present(0, 9,  FTB_BR_POS_BITS'(8),  COND, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    present(1, 20, FTB_BR_POS_BITS'(5),  COND, 1'b0,
-            VA_WIDTH'('h00_9200_0000), 1'b1);
-    settle();
-    chk   ("B8 channel 0 maps to slot 1",
-           rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(1)));
-    chk   ("B9 channel 1 maps to slot 0",
-           rsv_accept[1] && (rsv_slot[1] == TRX_SLOT_BITS'(0)));
-    chk_va("B10 and each read its own entry", rsv_entry[1].pc,
-           VA_WIDTH'(BASE_PC + 20 * 32));
+    if (NUM_RESOLVE_PORTS > 1) begin
+      present(0, 9,  FTB_BR_POS_BITS'(8),  COND, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      present(HP, 20, FTB_BR_POS_BITS'(5),  COND, 1'b0,
+              VA_WIDTH'('h00_9200_0000), 1'b1);
+      settle();
+      chk   ("B8 channel 0 maps to slot 1",
+             rsv_accept[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)));
+      chk   ("B9 channel 1 maps to slot 0",
+             rsv_accept[HP] && (rsv_slot[HP] == TRX_SLOT_BITS'(0)));
+      chk_va("B10 and each read its own entry", rsv_entry[HP].pc,
+             VA_WIDTH'(BASE_PC + 20 * 32));
+    end else begin
+      skip("B8 channel 0 maps to slot 1");
+      skip("B9 channel 1 maps to slot 0");
+      skip("B10 and each read its own entry");
+    end
     clr();
   endtask
 
@@ -412,7 +440,9 @@ module tb;
     // the entry does not hold. BP-119 (ruled in session): it is
     // REPORTED and PLACED in program order -- slot 1, the lowest slot
     // at or after position 7 -- and trains as a mapped branch, the
-    // table predictors included, from that slot's metadata.
+    // table predictors included, from that slot's metadata. BP-128:
+    // at one slot no slot is at or after 7 and it takes the last
+    // slot, slot 0; C4 to C5c follow slot HS.
     present(0, 9, FTB_BR_POS_BITS'(7), COND, 1'b1,
             VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
@@ -423,27 +453,31 @@ module tb;
     // OLD (BP-107): !ftb_upd_val[0], "it forms no FTB update".
     chk("C4 it forms an FTB update for the slot it is placed in",
         ftb_upd_val[0] && ftb_upd[0].is_br &&
-        (ftb_upd[0].br_idx == 1'b1) &&
+        (ftb_upd[0].br_idx == 1'(HS)) &&
         (ftb_upd[0].pos == FTB_BR_POS_BITS'(7)));
     // OLD (BP-107): every predictor valid 0, "no predictor update".
-    chk("C5 and trains slot 1: uBTB, TAGE, SC and the LP",
-        (upd_ubtb_val == 2'b10) && (upd_tage_val == 2'b10) &&
-        (upd_sc_val == 2'b10) && (upd_lp_val == 2'b10) &&
+    chk($sformatf("C5 and trains slot %0d: uBTB, TAGE, SC and the LP",
+                  HS),
+        (upd_ubtb_val == HS_ONEHOT) && (upd_tage_val == HS_ONEHOT) &&
+        (upd_sc_val == HS_ONEHOT) && (upd_lp_val == HS_ONEHOT) &&
         (upd_ittage_val == '0) && !rsv_type_dis[0]);
-    chk("C5a from slot 1's metadata, with the placed position",
-        (upd_meta[1].sc.branch_id == FTQ_IDX_BITS'(10)) &&
-        (upd_entry[1].slot[1].pos == FTB_BR_POS_BITS'(7)) &&
-        (upd_entry[1].slot[1].br_type == COND));
+    chk($sformatf("C5a from slot %0d's metadata, with the placed position",
+                  HS),
+        (upd_meta[HS].sc.branch_id == FTQ_IDX_BITS'(9 + HS)) &&
+        (upd_entry[HS].slot[HS].pos == FTB_BR_POS_BITS'(7)) &&
+        (upd_entry[HS].slot[HS].br_type == COND));
     chk("C5b the placement is written into the entry on acceptance",
         rsv_wr_val[0] && (rsv_wr_idx[0] == 6'd9) &&
-        (rsv_wr_sel[0] == 1'b1) && rsv_wr_slot[0].slot_valid &&
+        (rsv_wr_sel[0] == TRX_SLOT_BITS'(HS)) &&
+        rsv_wr_slot[0].slot_valid &&
         (rsv_wr_slot[0].pos == FTB_BR_POS_BITS'(7)) &&
         (rsv_wr_slot[0].br_type == COND) && rsv_wr_slot[0].taken);
-    upd_acc = 2'b01;
+    upd_acc = ~HS_ONEHOT;
     settle();
-    chk("C5c not accepted (slot 1 not ready): no placement write",
+    chk($sformatf("C5c not accepted (slot %0d not ready): %s", HS,
+                  "no placement write"),
         !ftq_bkend_rsv_rdy[0] && !rsv_wr_val[0]);
-    upd_acc = 2'b11;
+    upd_acc = '1;
 
     // Position 1, before both stored branches: slot 0, the lowest at
     // or after it (the stored branch at 3 is displaced, as ftq_ifu
@@ -452,13 +486,15 @@ module tb;
             VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
     chk("C5d a branch before both stored ones is placed in slot 0",
-        rsv_nomap[0] && (rsv_slot[0] == 1'b0) && (upd_tage_val == 2'b01));
+        rsv_nomap[0] && (rsv_slot[0] == 1'b0) &&
+        (upd_tage_val == NUM_PRED_SLOTS'(2'b01)));
     // Position 13, after both: the last slot.
     present(0, 9, FTB_BR_POS_BITS'(13), COND, 1'b0,
             VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
     chk("C5e a branch after both stored ones takes the last slot",
-        rsv_nomap[0] && (rsv_slot[0] == 1'b1) && (upd_tage_val == 2'b10));
+        rsv_nomap[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)) &&
+        (upd_tage_val == HS_ONEHOT));
 
     // AN ENTRY WITH NO VALID SLOTS AT ALL. Allocation is
     // unconditional (5.2), so an entry exists for a block the p1
@@ -473,8 +509,9 @@ module tb;
     chk("C6 an entry with no valid slots reports nomap",
         rsv_nomap[0]);
     chk("C6a and places the branch in slot 0, training ITTAGE",
-        (rsv_slot[0] == 1'b0) && (upd_ittage_val == 2'b01) &&
-        (upd_ubtb_val == 2'b01) && ftb_upd_val[0] &&
+        (rsv_slot[0] == 1'b0) &&
+        (upd_ittage_val == NUM_PRED_SLOTS'(2'b01)) &&
+        (upd_ubtb_val == NUM_PRED_SLOTS'(2'b01)) && ftb_upd_val[0] &&
         ftb_upd[0].is_jalr && !ftb_upd[0].hit);
     // A resolved NO_BRANCH is accepted and forms nothing, as before.
     present(0, 9, FTB_BR_POS_BITS'(7), NO_BRANCH, 1'b0, '0, 1'b0);
@@ -487,17 +524,23 @@ module tb;
     put_entry(9,
       mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(3)),
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
-    present(0, 9, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            VA_WIDTH'('h00_9000_0000), 1'b0);
-    present(1, 9, FTB_BR_POS_BITS'(12), COND, 1'b1,
-            VA_WIDTH'('h00_9500_0000), 1'b0);
-    settle();
-    // OLD (BP-107): rsv_accept[0] && rsv_nomap[1], "one channel maps
-    // and the other reports" (and channel 1 formed nothing).
-    chk("C7 one channel maps and the other is placed, both accepted",
-        rsv_accept[0] && rsv_accept[1] && !rsv_nomap[0] && rsv_nomap[1]);
-    chk("C8 both update, in slots 0 and 1",
-        ftb_upd_val[0] && ftb_upd_val[1] && (upd_tage_val == 2'b11));
+    if (NUM_RESOLVE_PORTS > 1) begin
+      present(0, 9, FTB_BR_POS_BITS'(3), COND, 1'b1,
+              VA_WIDTH'('h00_9000_0000), 1'b0);
+      present(HP, 9, FTB_BR_POS_BITS'(12), COND, 1'b1,
+              VA_WIDTH'('h00_9500_0000), 1'b0);
+      settle();
+      // OLD (BP-107): rsv_accept[0] && rsv_nomap[1], "one channel maps
+      // and the other reports" (and channel 1 formed nothing).
+      chk("C7 one channel maps and the other is placed, both accepted",
+          rsv_accept[0] && rsv_accept[HP] && !rsv_nomap[0] &&
+          rsv_nomap[HP]);
+      chk("C8 both update, in slots 0 and 1",
+          ftb_upd_val[0] && ftb_upd_val[HP] && (upd_tage_val == '1));
+    end else begin
+      skip("C7 one channel maps and the other is placed, both accepted");
+      skip("C8 both update, in slots 0 and 1");
+    end
     clr();
   endtask
 
@@ -567,6 +610,9 @@ module tb;
   // -----------------------------------------------------------------
   // E. THE FTB UPDATE, UNCHANGED. Problem 6's third criterion.
   // -----------------------------------------------------------------
+  localparam logic [FTB_BR_POS_BITS-1:0] E_POS =
+    FTB_BR_POS_BITS'((NUM_PRED_SLOTS > 1) ? 11 : 3);
+
   task automatic group_e();
     $display("-- E: the FTB update --");
     do_reset();
@@ -576,7 +622,9 @@ module tb;
       mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(11)),
       1'b1, 2);
 
-    present(0, 17, FTB_BR_POS_BITS'(11), COND, 1'b1,
+    // BP-128: the branch of slot HS, position 11 at two slots and 3
+    // at one, so E11's br_idx is the mapped slot at either.
+    present(0, 17, E_POS, COND, 1'b1,
             VA_WIDTH'('h00_ABCD_0000), 1'b1);
     settle();
     chk   ("E1 the update is presented",  ftb_upd_val[0]);
@@ -586,7 +634,7 @@ module tb;
     chk_va("E4 the target passes through", ftb_upd[0].target,
            VA_WIDTH'('h00_ABCD_0000));
     chk   ("E5 the position passes through",
-           ftb_upd[0].pos == FTB_BR_POS_BITS'(11));
+           ftb_upd[0].pos == E_POS);
     chk_va("E6 the fall-through is the entry's",
            ftb_upd[0].pft_addr,
            VA_WIDTH'(BASE_PC + 17 * 32 + 32));
@@ -606,7 +654,7 @@ module tb;
     // slot 0 at the cluster boundary.
     chk("E10 a conditional sets is_br",
         ftb_upd[0].is_br && !ftb_upd[0].is_jmp);
-    chk("E11 br_idx is the mapped slot", ftb_upd[0].br_idx == 1'b1);
+    chk("E11 br_idx is the mapped slot", ftb_upd[0].br_idx == 1'(HS));
 
     // A JUMP fills the jump field instead.
     present(0, 17, FTB_BR_POS_BITS'(3), DIRECT_UNC, 1'b1,
@@ -669,7 +717,7 @@ module tb;
         upd_ubtb_val[0] && ftb_upd_val[0]);
     chk("F3 and NOT ittage",              !upd_ittage_val[0]);
     chk("F4 the payload is on the mapped slot",
-        upd[0].valid && !upd[1].valid);
+        upd[0].valid && ((NUM_PRED_SLOTS == 1) || !upd[HS].valid));
     chk("F5 the payload carries the resolution",
         (upd[0].actual_taken == 1'b1) &&
         (upd[0].br_type == COND) &&
@@ -680,76 +728,11 @@ module tb;
         (upd_entry[0].pc == m_entry[21].pc) &&
         (upd_entry[0].pft_addr == m_entry[21].pft_addr) &&
         (upd_entry[0].slot[0].pos == FTB_BR_POS_BITS'(4)) &&
-        (upd_entry[1] == '0));
+        ((NUM_PRED_SLOTS == 1) || (upd_entry[HS] == '0)));
 
-    // indirect -> uBTB, FTB, ITTAGE.
-    present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_NONRET, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    settle();
-    chk("F7 an indirect updates ittage",  upd_ittage_val[1]);
-    chk("F8 and not tage, sc or lp",
-        !upd_tage_val[1] && !upd_sc_val[1] && !upd_lp_val[1]);
-    chk("F9 and the uBTB and the FTB",
-        upd_ubtb_val[1] && ftb_upd_val[0]);
-    chk("F10 on slot 1, which is where the position mapped",
-        upd[1].valid && !upd[0].valid);
-
-    // INDIRECT_CALL takes the indirect arm: it updates ITTAGE for
-    // the TARGET (FE-U9). Its RAS push reads the fast-path
-    // snapshot, not the metadata, so no RAS traffic forms here.
-    m_entry[21].slot[1].br_type = INDIRECT_CALL;
-    present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_CALL, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    settle();
-    chk("F11 an indirect call updates ittage", upd_ittage_val[1]);
-
-    // return -> uBTB, FTB, RAS. The RAS update is the COMMIT group,
-    // fed from the commit walk of 5.4, so a return forms no
-    // predictor update on this path at all.
-    m_entry[21].slot[1].br_type = RETURN;
-    present(0, 21, FTB_BR_POS_BITS'(12), RETURN, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    settle();
-    chk("F12 a return updates the uBTB and the FTB",
-        upd_ubtb_val[1] && ftb_upd_val[0]);
-    chk("F13 and no queued predictor",
-        !upd_tage_val[1] && !upd_sc_val[1] &&
-        !upd_lp_val[1]   && !upd_ittage_val[1]);
-
-    // direct unconditional -> uBTB, FTB only.
-    m_entry[21].slot[1].br_type = DIRECT_UNC;
-    present(0, 21, FTB_BR_POS_BITS'(12), DIRECT_UNC, 1'b1,
-            VA_WIDTH'('h00_9100_0000), 1'b0);
-    settle();
-    chk("F14 a direct unconditional updates the uBTB and FTB only",
-        upd_ubtb_val[1] && ftb_upd_val[0] &&
-        !upd_tage_val[1] && !upd_ittage_val[1]);
-
-    // NO_BRANCH forms NO update at all.
-    m_entry[21].slot[1].br_type = NO_BRANCH;
-    present(0, 21, FTB_BR_POS_BITS'(12), NO_BRANCH, 1'b0,
-            VA_WIDTH'('h0), 1'b0);
-    settle();
-    chk("F15 NO_BRANCH forms no update",
-        !upd_ubtb_val[1] && !ftb_upd_val[0]);
-
-    // BOTH CHANNELS AT ONCE, on the two slots of one entry. This is
-    // the ordinary two-per-cycle case ftq_ftb_sched exists for.
-    put_entry(21,
-      mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(4)),
-      mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(12)),
-      1'b1, 0);
-    present(0, 21, FTB_BR_POS_BITS'(4),  COND, 1'b1,
-            VA_WIDTH'('h00_9000_0000), 1'b0);
-    present(1, 21, FTB_BR_POS_BITS'(12), COND, 1'b0,
-            VA_WIDTH'('h00_9100_0000), 1'b1);
-    settle();
-    chk("F16 both slots update in one cycle",
-        upd[0].valid && upd[1].valid);
-    chk("F17 each carries its own direction",
-        upd[0].actual_taken && !upd[1].actual_taken);
-    chk("F18 both FTB channels are presented",
-        ftb_upd_val[0] && ftb_upd_val[1]);
+    // F7 to F18 resolve slot 1 and both channels (BP-128): at one
+    // slot the stub in g_two skips them.
+    g_two.group_f_slot1();
     clr();
   endtask
 
@@ -798,43 +781,54 @@ module tb;
     // stay presented so the converter (and SC's arbiter) can see them.
     chk("G9 ready with every queue free", &ftq_bkend_rsv_rdy);
 
-    upd_acc = 2'b10;
+    upd_acc = NUM_PRED_SLOTS'(2'b10);
     settle();
     // OLD (BP-107, scalar tage_upd_rdy low): !rdy[0] && !rdy[1].
-    chk("G10 slot 0 not accepted deasserts its channel only",
-        !ftq_bkend_rsv_rdy[0] && ftq_bkend_rsv_rdy[1]);
+    if (NUM_RESOLVE_PORTS > 1)
+      chk("G10 slot 0 not accepted deasserts its channel only",
+          !ftq_bkend_rsv_rdy[0] && ftq_bkend_rsv_rdy[HP]);
+    else skip("G10 slot 0 not accepted deasserts its channel only");
     // OLD (BP-107): !upd_tage_val[0] && !upd_ubtb_val[0], no update
     // formed. The valids are now requests; ftq_upd_conv gates them.
     chk("G11 the requests stay presented to the converter",
         upd_tage_val[0] && upd_ubtb_val[0] && upd[0].valid);
-    upd_acc = 2'b01;
-    settle();
-    // OLD (BP-107, scalar ittage_upd_rdy low): !rdy[0].
-    chk("G12 the other slot not accepted does not stall channel 0",
-        ftq_bkend_rsv_rdy[0]);
-    // OLD (BP-107, scalar sc_upd_rdy low): !rdy[0]. Earlier BP-119
-    // revision: an unmapped resolution needed no predictor (rdy[1]
-    // high with upd_acc 2'b00); it is now placed and trains.
-    present(1, 25, FTB_BR_POS_BITS'(9), COND, 1'b1,
-            VA_WIDTH'('h00_9900_0000), 1'b0);
-    upd_acc = 2'b01;
-    settle();
-    chk("G13 a placed resolution waits on its placed slot (1)",
-        rsv_nomap[1] && (rsv_slot[1] == 1'b1) && !ftq_bkend_rsv_rdy[1]);
-    upd_acc = 2'b10;
-    settle();
-    chk("G13a and is ready once that slot is accepted",
-        ftq_bkend_rsv_rdy[1] && !ftq_bkend_rsv_rdy[0]);
-    clr_ch(1);
-    upd_acc = 2'b11;
+    // BP-128: G12 to G14 need a second slot and channel.
+    if (NUM_PRED_SLOTS > 1) begin
+      upd_acc = NUM_PRED_SLOTS'(2'b01);
+      settle();
+      // OLD (BP-107, scalar ittage_upd_rdy low): !rdy[0].
+      chk("G12 the other slot not accepted does not stall channel 0",
+          ftq_bkend_rsv_rdy[0]);
+      // OLD (BP-107, scalar sc_upd_rdy low): !rdy[0]. Earlier BP-119
+      // revision: an unmapped resolution needed no predictor (rdy[1]
+      // high with upd_acc 2'b00); it is now placed and trains.
+      present(HP, 25, FTB_BR_POS_BITS'(9), COND, 1'b1,
+              VA_WIDTH'('h00_9900_0000), 1'b0);
+      upd_acc = NUM_PRED_SLOTS'(2'b01);
+      settle();
+      chk("G13 a placed resolution waits on its placed slot (1)",
+          rsv_nomap[HP] && (rsv_slot[HP] == TRX_SLOT_BITS'(HS)) &&
+          !ftq_bkend_rsv_rdy[HP]);
+      upd_acc = NUM_PRED_SLOTS'(2'b10);
+      settle();
+      chk("G13a and is ready once that slot is accepted",
+          ftq_bkend_rsv_rdy[HP] && !ftq_bkend_rsv_rdy[0]);
+      clr_ch(HP);
+      upd_acc = '1;
 
-    // THE SCHEDULER'S READY IS PER CHANNEL (5.7.3 S6): it deasserts
-    // only to stop a HIGH-value FTB update being dropped, and it
-    // does so for one channel at a time.
-    ftb_sched_rdy = 2'b01;
-    settle();
-    chk("G14 the scheduler ready is per channel",
-        ftq_bkend_rsv_rdy[0] && !ftq_bkend_rsv_rdy[1]);
+      // THE SCHEDULER'S READY IS PER CHANNEL (5.7.3 S6): it deasserts
+      // only to stop a HIGH-value FTB update being dropped, and it
+      // does so for one channel at a time.
+      ftb_sched_rdy = NUM_RESOLVE_PORTS'(2'b01);
+      settle();
+      chk("G14 the scheduler ready is per channel",
+          ftq_bkend_rsv_rdy[0] && !ftq_bkend_rsv_rdy[HP]);
+    end else begin
+      skip("G12 the other slot not accepted does not stall channel 0");
+      skip("G13 a placed resolution waits on its placed slot (1)");
+      skip("G13a and is ready once that slot is accepted");
+      skip("G14 the scheduler ready is per channel");
+    end
     all_rdy();
     settle();
     chk("G15 ready recovers", &ftq_bkend_rsv_rdy);
@@ -945,11 +939,11 @@ module tb;
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
     present(0, 40, FTB_BR_POS_BITS'(3), COND, 1'b1,
             VA_WIDTH'('h00_9400_0000), 1'b0);
-    upd_acc = 2'b00;
+    upd_acc = '0;
     n_ftb = 0;
     n_acc = 0;
     for (int k = 0; k < 5; k++) begin
-      if (k == 4) upd_acc = 2'b11;
+      if (k == 4) upd_acc = '1;
       #1;
       if (ftb_upd_val[0] && ftb_sched_rdy[0]) n_ftb++;
       if (ftq_bkend_rsv_rdy[0]) n_acc++;
@@ -974,13 +968,13 @@ module tb;
       mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b0, 1);
     present(0, 41, FTB_BR_POS_BITS'(5), COND, 1'b1,
             VA_WIDTH'('h00_9410_0000), 1'b1);
-    upd_acc       = 2'b00;
-    ftb_sched_rdy = 2'b10;
+    upd_acc       = '0;
+    ftb_sched_rdy = NUM_RESOLVE_PORTS'(2'b10);
     n_ftb = 0;
     n_acc = 0;
     for (int k = 0; k < 6; k++) begin
-      if (k == 2) ftb_sched_rdy = 2'b11;
-      if (k == 5) upd_acc = 2'b11;
+      if (k == 2) ftb_sched_rdy = '1;
+      if (k == 5) upd_acc = '1;
       #1;
       if (ftb_upd_val[0] && ftb_sched_rdy[0]) n_ftb++;
       if (ftq_bkend_rsv_rdy[0]) n_acc++;
@@ -1004,7 +998,7 @@ module tb;
       1'b1, 2);
     present(0, 42, FTB_BR_POS_BITS'(2), COND, 1'b1,
             VA_WIDTH'('h00_9420_0000), 1'b0);
-    upd_acc = 2'b00;
+    upd_acc = '0;
     settle();
     chk("I3 the first branch's FTB update is not presented again",
         !ftb_upd_val[0]);
@@ -1013,187 +1007,301 @@ module tb;
     #1;
     chk("I3 the replacing branch's FTB update is presented",
         ftb_upd_val[0] && (ftb_upd[0].pos == FTB_BR_POS_BITS'(9)));
-    upd_acc = 2'b11;
+    upd_acc = '1;
     clr();
     settle();
   endtask
 
   // -----------------------------------------------------------------
-  // J. TD#158, BP-120: two resolutions, one slot. Both channels are
-  //    driven. tick_wr plays ftq_entry's placement write port.
+  // BP-128. The checks that resolve slot 1 or drive both channels at
+  // once: F7 to F18 and group J. They are unchanged, moved into tasks
+  // of g_two so that at one slot, where they are not elaborated, the
+  // stub of the same name skips each by name instead.
   // -----------------------------------------------------------------
-  // Apply the placement writes presented this cycle to the modelled
-  // entries at the edge, as ftq_entry does.
-  task automatic tick_wr();
-    logic [NUM_RESOLVE_PORTS-1:0] v;
-    logic [FTQ_IDX_BITS-1:0]  ix [0:NUM_RESOLVE_PORTS-1];
-    logic [TRX_SLOT_BITS-1:0] sl [0:NUM_RESOLVE_PORTS-1];
-    bp_ftq_slot_t             sd [0:NUM_RESOLVE_PORTS-1];
-    #1;
-    v = rsv_wr_val;
-    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
-      ix[p] = rsv_wr_idx[p];
-      sl[p] = rsv_wr_sel[p];
-      sd[p] = rsv_wr_slot[p];
-    end
-    @(posedge clk);
-    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
-      if (v[p]) m_entry[ix[p]].slot[sl[p]] = sd[p];
-    end
-    #1;
-  endtask
+  if (NUM_PRED_SLOTS > 1) begin : g_two
+    // F7 to F18, called from group_f with entry 21 as group_f left it.
+    task automatic group_f_slot1();
+      // indirect -> uBTB, FTB, ITTAGE.
+      present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_NONRET, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      settle();
+      chk("F7 an indirect updates ittage",  upd_ittage_val[1]);
+      chk("F8 and not tage, sc or lp",
+          !upd_tage_val[1] && !upd_sc_val[1] && !upd_lp_val[1]);
+      chk("F9 and the uBTB and the FTB",
+          upd_ubtb_val[1] && ftb_upd_val[0]);
+      chk("F10 on slot 1, which is where the position mapped",
+          upd[1].valid && !upd[0].valid);
 
-  task automatic group_j();
-    int n10;
-    int n12;
-    $display("-- J: two resolutions, one slot, TD#158 --");
+      // INDIRECT_CALL takes the indirect arm: it updates ITTAGE for
+      // the TARGET (FE-U9). Its RAS push reads the fast-path
+      // snapshot, not the metadata, so no RAS traffic forms here.
+      m_entry[21].slot[1].br_type = INDIRECT_CALL;
+      present(0, 21, FTB_BR_POS_BITS'(12), INDIRECT_CALL, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      settle();
+      chk("F11 an indirect call updates ittage", upd_ittage_val[1]);
 
-    // J1. Two ports, two entries, positions that map to the same slot
-    //     index (0) in one cycle. Channel 1 names the OLDER entry (10,
-    //     nearer commit_ptr 0) and channel 0 the younger (12), so the
-    //     channel number is not the order. Both are delivered, the
-    //     older first, over two cycles. Before BP-120 both were ready
-    //     in the first cycle and upd[0] carried one of them.
-    do_reset();
-    put_entry(10,
-      mk_slot(1'b1, VA_WIDTH'('h00_9500_0000), COND, FTB_BR_POS_BITS'(3)),
-      mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
-    put_entry(12,
-      mk_slot(1'b1, VA_WIDTH'('h00_9520_0000), COND, FTB_BR_POS_BITS'(5)),
-      mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
-    present(0, 12, FTB_BR_POS_BITS'(5), COND, 1'b1,
-            VA_WIDTH'('h00_9520_0000), 1'b0);
-    present(1, 10, FTB_BR_POS_BITS'(3), COND, 1'b0,
-            VA_WIDTH'('h00_9500_0000), 1'b0);
-    #1;
-    chk("J1 both map to slot 0", (rsv_slot[0] == 1'b0) &&
-        (rsv_slot[1] == 1'b0) && rsv_accept[0] && rsv_accept[1]);
-    chk("J1 cycle 1: the older (channel 1, entry 10) is served",
-        ftq_bkend_rsv_rdy[1] && upd[0].valid &&
-        (upd[0].branch_id == 6'd10));
-    chk("J1 cycle 1: the younger is held, nothing formed for it",
-        !ftq_bkend_rsv_rdy[0] && !ftb_upd_val[0] && ftb_upd_val[1]);
-    n10 = 0;
-    n12 = 0;
-    for (int k = 0; k < 3; k++) begin
+      // return -> uBTB, FTB, RAS. The RAS update is the COMMIT group,
+      // fed from the commit walk of 5.4, so a return forms no
+      // predictor update on this path at all.
+      m_entry[21].slot[1].br_type = RETURN;
+      present(0, 21, FTB_BR_POS_BITS'(12), RETURN, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      settle();
+      chk("F12 a return updates the uBTB and the FTB",
+          upd_ubtb_val[1] && ftb_upd_val[0]);
+      chk("F13 and no queued predictor",
+          !upd_tage_val[1] && !upd_sc_val[1] &&
+          !upd_lp_val[1]   && !upd_ittage_val[1]);
+
+      // direct unconditional -> uBTB, FTB only.
+      m_entry[21].slot[1].br_type = DIRECT_UNC;
+      present(0, 21, FTB_BR_POS_BITS'(12), DIRECT_UNC, 1'b1,
+              VA_WIDTH'('h00_9100_0000), 1'b0);
+      settle();
+      chk("F14 a direct unconditional updates the uBTB and FTB only",
+          upd_ubtb_val[1] && ftb_upd_val[0] &&
+          !upd_tage_val[1] && !upd_ittage_val[1]);
+
+      // NO_BRANCH forms NO update at all.
+      m_entry[21].slot[1].br_type = NO_BRANCH;
+      present(0, 21, FTB_BR_POS_BITS'(12), NO_BRANCH, 1'b0,
+              VA_WIDTH'('h0), 1'b0);
+      settle();
+      chk("F15 NO_BRANCH forms no update",
+          !upd_ubtb_val[1] && !ftb_upd_val[0]);
+
+      // BOTH CHANNELS AT ONCE, on the two slots of one entry. This is
+      // the ordinary two-per-cycle case ftq_ftb_sched exists for.
+      put_entry(21,
+        mk_slot(1'b1, VA_WIDTH'('h00_9000_0000), COND, FTB_BR_POS_BITS'(4)),
+        mk_slot(1'b1, VA_WIDTH'('h00_9100_0000), COND, FTB_BR_POS_BITS'(12)),
+        1'b1, 0);
+      present(0, 21, FTB_BR_POS_BITS'(4),  COND, 1'b1,
+              VA_WIDTH'('h00_9000_0000), 1'b0);
+      present(1, 21, FTB_BR_POS_BITS'(12), COND, 1'b0,
+              VA_WIDTH'('h00_9100_0000), 1'b1);
+      settle();
+      chk("F16 both slots update in one cycle",
+          upd[0].valid && upd[1].valid);
+      chk("F17 each carries its own direction",
+          upd[0].actual_taken && !upd[1].actual_taken);
+      chk("F18 both FTB channels are presented",
+          ftb_upd_val[0] && ftb_upd_val[1]);
+    endtask
+
+    // -----------------------------------------------------------------
+    // J. TD#158, BP-120: two resolutions, one slot. Both channels are
+    //    driven. tick_wr plays ftq_entry's placement write port.
+    // -----------------------------------------------------------------
+    // Apply the placement writes presented this cycle to the modelled
+    // entries at the edge, as ftq_entry does.
+    task automatic tick_wr();
+      logic [NUM_RESOLVE_PORTS-1:0] v;
+      logic [FTQ_IDX_BITS-1:0]  ix [0:NUM_RESOLVE_PORTS-1];
+      logic [TRX_SLOT_BITS-1:0] sl [0:NUM_RESOLVE_PORTS-1];
+      bp_ftq_slot_t             sd [0:NUM_RESOLVE_PORTS-1];
       #1;
-      if (upd[0].valid && (upd[0].branch_id == 6'd10) &&
-          ftq_bkend_rsv_rdy[1]) n10++;
-      if (upd[0].valid && (upd[0].branch_id == 6'd12) &&
-          ftq_bkend_rsv_rdy[0]) n12++;
-      // The backend model: an accepted channel withdraws.
+      v = rsv_wr_val;
+      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+        ix[p] = rsv_wr_idx[p];
+        sl[p] = rsv_wr_sel[p];
+        sd[p] = rsv_wr_slot[p];
+      end
       @(posedge clk);
-      if (ftq_bkend_rsv_rdy[1]) clr_ch(1);
-      if (ftq_bkend_rsv_rdy[0]) clr_ch(0);
+      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+        if (v[p]) m_entry[ix[p]].slot[sl[p]] = sd[p];
+      end
       #1;
-    end
-    chk($sformatf("J1 both updates delivered over two cycles (%0d, %0d)",
-                  n10, n12), (n10 == 1) && (n12 == 1));
-    clr();
+    endtask
 
-    // J1b. The order is wrap-aware. commit_ptr 60: entry 62 is older
-    //      than entry 2 though its index is larger.
-    do_reset();
-    commit_ptr = FTQ_PTR_BITS'(60);
-    alloc_ptr  = FTQ_PTR_BITS'(60 + FTQ_DEPTH);
-    put_entry(62,
-      mk_slot(1'b1, VA_WIDTH'('h00_9600_0000), COND, FTB_BR_POS_BITS'(4)),
-      mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
-    put_entry(2,
-      mk_slot(1'b1, VA_WIDTH'('h00_9620_0000), COND, FTB_BR_POS_BITS'(1)),
-      mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
-    present(0, 2, FTB_BR_POS_BITS'(1), COND, 1'b1,
-            VA_WIDTH'('h00_9620_0000), 1'b0);
-    present(1, 62, FTB_BR_POS_BITS'(4), COND, 1'b1,
-            VA_WIDTH'('h00_9600_0000), 1'b0);
-    settle();
-    chk("J1b across the wrap entry 62 is older and is served first",
-        ftq_bkend_rsv_rdy[1] && !ftq_bkend_rsv_rdy[0] &&
-        (upd[0].branch_id == 6'd62));
-    clr();
+    task automatic group_j();
+      int n10;
+      int n12;
+      $display("-- J: two resolutions, one slot, TD#158 --");
 
-    // J2. Two unmapped resolutions of one entry in one cycle. Entry 14
-    //     holds no branch. Channel 0 resolves position 9, channel 1
-    //     position 4 (older, lower position). The older takes slot 0
-    //     and the younger, seeing it filled, slot 1: both trained in
-    //     one cycle, and the entry holds both. Before BP-120 both took
-    //     slot 0 and the later write won.
-    do_reset();
-    put_entry(14, mk_slot(1'b0, '0, NO_BRANCH, '0),
-              mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b0, 3);
-    present(0, 14, FTB_BR_POS_BITS'(9), COND, 1'b1,
-            VA_WIDTH'('h00_9700_0000), 1'b1);
-    present(1, 14, FTB_BR_POS_BITS'(4), COND, 1'b0,
-            VA_WIDTH'('h00_9710_0000), 1'b1);
-    #1;
-    chk("J2 both unmapped", rsv_nomap[0] && rsv_nomap[1]);
-    chk("J2 placed in two slots: position 4 in 0, position 9 in 1",
-        (rsv_slot[1] == 1'b0) && (rsv_slot[0] == 1'b1));
-    chk("J2 both trained in one cycle: both ready, both FTB updates",
-        ftq_bkend_rsv_rdy[0] && ftq_bkend_rsv_rdy[1] &&
-        ftb_upd_val[0] && ftb_upd_val[1]);
-    chk("J2 each slot carries its own branch",
-        upd[0].valid && (upd[0].actual_target == VA_WIDTH'('h00_9710_0000))
-     && upd[1].valid && (upd[1].actual_target == VA_WIDTH'('h00_9700_0000)));
-    chk("J2 two placement writes, two slots",
-        rsv_wr_val[0] && rsv_wr_val[1] && (rsv_wr_sel[0] != rsv_wr_sel[1]));
-    tick_wr();
-    clr();
-    #1;
-    chk("J2 the entry holds both: slot 0 position 4, slot 1 position 9",
-        m_entry[14].slot[0].slot_valid &&
-        (m_entry[14].slot[0].pos == FTB_BR_POS_BITS'(4)) &&
-        m_entry[14].slot[1].slot_valid &&
-        (m_entry[14].slot[1].pos == FTB_BR_POS_BITS'(9)));
+      // J1. Two ports, two entries, positions that map to the same slot
+      //     index (0) in one cycle. Channel 1 names the OLDER entry (10,
+      //     nearer commit_ptr 0) and channel 0 the younger (12), so the
+      //     channel number is not the order. Both are delivered, the
+      //     older first, over two cycles. Before BP-120 both were ready
+      //     in the first cycle and upd[0] carried one of them.
+      do_reset();
+      put_entry(10,
+        mk_slot(1'b1, VA_WIDTH'('h00_9500_0000), COND, FTB_BR_POS_BITS'(3)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
+      put_entry(12,
+        mk_slot(1'b1, VA_WIDTH'('h00_9520_0000), COND, FTB_BR_POS_BITS'(5)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 1);
+      present(0, 12, FTB_BR_POS_BITS'(5), COND, 1'b1,
+              VA_WIDTH'('h00_9520_0000), 1'b0);
+      present(1, 10, FTB_BR_POS_BITS'(3), COND, 1'b0,
+              VA_WIDTH'('h00_9500_0000), 1'b0);
+      #1;
+      chk("J1 both map to slot 0", (rsv_slot[0] == 1'b0) &&
+          (rsv_slot[1] == 1'b0) && rsv_accept[0] && rsv_accept[1]);
+      chk("J1 cycle 1: the older (channel 1, entry 10) is served",
+          ftq_bkend_rsv_rdy[1] && upd[0].valid &&
+          (upd[0].branch_id == 6'd10));
+      chk("J1 cycle 1: the younger is held, nothing formed for it",
+          !ftq_bkend_rsv_rdy[0] && !ftb_upd_val[0] && ftb_upd_val[1]);
+      n10 = 0;
+      n12 = 0;
+      for (int k = 0; k < 3; k++) begin
+        #1;
+        if (upd[0].valid && (upd[0].branch_id == 6'd10) &&
+            ftq_bkend_rsv_rdy[1]) n10++;
+        if (upd[0].valid && (upd[0].branch_id == 6'd12) &&
+            ftq_bkend_rsv_rdy[0]) n12++;
+        // The backend model: an accepted channel withdraws.
+        @(posedge clk);
+        if (ftq_bkend_rsv_rdy[1]) clr_ch(1);
+        if (ftq_bkend_rsv_rdy[0]) clr_ch(0);
+        #1;
+      end
+      chk($sformatf("J1 both updates delivered over two cycles (%0d, %0d)",
+                    n10, n12), (n10 == 1) && (n12 == 1));
+      clr();
 
-    // J2b. No room for both. Entry 16 holds position 1 in slot 0 and
-    //      slot 1 is free. Channel 0 resolves position 3 (older),
-    //      channel 1 position 5. The older takes slot 1; the younger,
-    //      seeing both slots hold earlier branches, takes the last
-    //      slot too, and is held. Next cycle it is placed alone, in the
-    //      last slot (ftq_ifu W1's rule), after the older's write.
-    do_reset();
-    put_entry(16,
-      mk_slot(1'b1, VA_WIDTH'('h00_9800_0000), COND, FTB_BR_POS_BITS'(1)),
-      mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
-    present(0, 16, FTB_BR_POS_BITS'(3), COND, 1'b1,
-            VA_WIDTH'('h00_9810_0000), 1'b0);
-    present(1, 16, FTB_BR_POS_BITS'(5), COND, 1'b1,
-            VA_WIDTH'('h00_9820_0000), 1'b0);
-    #1;
-    chk("J2b the older takes slot 1 and is served",
-        (rsv_slot[0] == 1'b1) && ftq_bkend_rsv_rdy[0] && rsv_wr_val[0]);
-    chk("J2b the younger collides on slot 1 and is held",
-        (rsv_slot[1] == 1'b1) && !ftq_bkend_rsv_rdy[1] && !rsv_wr_val[1]
-        && !ftb_upd_val[1]);
-    tick_wr();
-    clr_ch(0);
-    #1;
-    chk("J2b next cycle the younger is served alone",
-        ftq_bkend_rsv_rdy[1] && rsv_wr_val[1] && ftb_upd_val[1]);
-    clr();
+      // J1b. The order is wrap-aware. commit_ptr 60: entry 62 is older
+      //      than entry 2 though its index is larger.
+      do_reset();
+      commit_ptr = FTQ_PTR_BITS'(60);
+      alloc_ptr  = FTQ_PTR_BITS'(60 + FTQ_DEPTH);
+      put_entry(62,
+        mk_slot(1'b1, VA_WIDTH'('h00_9600_0000), COND, FTB_BR_POS_BITS'(4)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
+      put_entry(2,
+        mk_slot(1'b1, VA_WIDTH'('h00_9620_0000), COND, FTB_BR_POS_BITS'(1)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
+      present(0, 2, FTB_BR_POS_BITS'(1), COND, 1'b1,
+              VA_WIDTH'('h00_9620_0000), 1'b0);
+      present(1, 62, FTB_BR_POS_BITS'(4), COND, 1'b1,
+              VA_WIDTH'('h00_9600_0000), 1'b0);
+      settle();
+      chk("J1b across the wrap entry 62 is older and is served first",
+          ftq_bkend_rsv_rdy[1] && !ftq_bkend_rsv_rdy[0] &&
+          (upd[0].branch_id == 6'd62));
+      clr();
 
-    // J3. Unchanged: two ports, two entries, DIFFERENT slots, both
-    //     served in one cycle (as group F and G13).
-    do_reset();
-    put_entry(20,
-      mk_slot(1'b1, VA_WIDTH'('h00_9900_0000), COND, FTB_BR_POS_BITS'(2)),
-      mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
-    put_entry(21,
-      mk_slot(1'b1, VA_WIDTH'('h00_9910_0000), COND, FTB_BR_POS_BITS'(1)),
-      mk_slot(1'b1, VA_WIDTH'('h00_9920_0000), COND, FTB_BR_POS_BITS'(8)),
-      1'b1, 1);
-    present(0, 20, FTB_BR_POS_BITS'(2), COND, 1'b1,
-            VA_WIDTH'('h00_9900_0000), 1'b0);
-    present(1, 21, FTB_BR_POS_BITS'(8), COND, 1'b1,
-            VA_WIDTH'('h00_9920_0000), 1'b0);
-    settle();
-    chk("J3 different slots: both served in one cycle",
-        (rsv_slot[0] == 1'b0) && (rsv_slot[1] == 1'b1) &&
-        (&ftq_bkend_rsv_rdy) && (&ftb_upd_val) &&
-        (upd[0].branch_id == 6'd20) && (upd[1].branch_id == 6'd21));
-    clr();
-  endtask
+      // J2. Two unmapped resolutions of one entry in one cycle. Entry 14
+      //     holds no branch. Channel 0 resolves position 9, channel 1
+      //     position 4 (older, lower position). The older takes slot 0
+      //     and the younger, seeing it filled, slot 1: both trained in
+      //     one cycle, and the entry holds both. Before BP-120 both took
+      //     slot 0 and the later write won.
+      do_reset();
+      put_entry(14, mk_slot(1'b0, '0, NO_BRANCH, '0),
+                mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b0, 3);
+      present(0, 14, FTB_BR_POS_BITS'(9), COND, 1'b1,
+              VA_WIDTH'('h00_9700_0000), 1'b1);
+      present(1, 14, FTB_BR_POS_BITS'(4), COND, 1'b0,
+              VA_WIDTH'('h00_9710_0000), 1'b1);
+      #1;
+      chk("J2 both unmapped", rsv_nomap[0] && rsv_nomap[1]);
+      chk("J2 placed in two slots: position 4 in 0, position 9 in 1",
+          (rsv_slot[1] == 1'b0) && (rsv_slot[0] == 1'b1));
+      chk("J2 both trained in one cycle: both ready, both FTB updates",
+          ftq_bkend_rsv_rdy[0] && ftq_bkend_rsv_rdy[1] &&
+          ftb_upd_val[0] && ftb_upd_val[1]);
+      chk("J2 each slot carries its own branch",
+          upd[0].valid && (upd[0].actual_target == VA_WIDTH'('h00_9710_0000))
+       && upd[1].valid && (upd[1].actual_target == VA_WIDTH'('h00_9700_0000)));
+      chk("J2 two placement writes, two slots",
+          rsv_wr_val[0] && rsv_wr_val[1] && (rsv_wr_sel[0] != rsv_wr_sel[1]));
+      tick_wr();
+      clr();
+      #1;
+      chk("J2 the entry holds both: slot 0 position 4, slot 1 position 9",
+          m_entry[14].slot[0].slot_valid &&
+          (m_entry[14].slot[0].pos == FTB_BR_POS_BITS'(4)) &&
+          m_entry[14].slot[1].slot_valid &&
+          (m_entry[14].slot[1].pos == FTB_BR_POS_BITS'(9)));
+
+      // J2b. No room for both. Entry 16 holds position 1 in slot 0 and
+      //      slot 1 is free. Channel 0 resolves position 3 (older),
+      //      channel 1 position 5. The older takes slot 1; the younger,
+      //      seeing both slots hold earlier branches, takes the last
+      //      slot too, and is held. Next cycle it is placed alone, in the
+      //      last slot (ftq_ifu W1's rule), after the older's write.
+      do_reset();
+      put_entry(16,
+        mk_slot(1'b1, VA_WIDTH'('h00_9800_0000), COND, FTB_BR_POS_BITS'(1)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
+      present(0, 16, FTB_BR_POS_BITS'(3), COND, 1'b1,
+              VA_WIDTH'('h00_9810_0000), 1'b0);
+      present(1, 16, FTB_BR_POS_BITS'(5), COND, 1'b1,
+              VA_WIDTH'('h00_9820_0000), 1'b0);
+      #1;
+      chk("J2b the older takes slot 1 and is served",
+          (rsv_slot[0] == 1'b1) && ftq_bkend_rsv_rdy[0] && rsv_wr_val[0]);
+      chk("J2b the younger collides on slot 1 and is held",
+          (rsv_slot[1] == 1'b1) && !ftq_bkend_rsv_rdy[1] && !rsv_wr_val[1]
+          && !ftb_upd_val[1]);
+      tick_wr();
+      clr_ch(0);
+      #1;
+      chk("J2b next cycle the younger is served alone",
+          ftq_bkend_rsv_rdy[1] && rsv_wr_val[1] && ftb_upd_val[1]);
+      clr();
+
+      // J3. Unchanged: two ports, two entries, DIFFERENT slots, both
+      //     served in one cycle (as group F and G13).
+      do_reset();
+      put_entry(20,
+        mk_slot(1'b1, VA_WIDTH'('h00_9900_0000), COND, FTB_BR_POS_BITS'(2)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 0);
+      put_entry(21,
+        mk_slot(1'b1, VA_WIDTH'('h00_9910_0000), COND, FTB_BR_POS_BITS'(1)),
+        mk_slot(1'b1, VA_WIDTH'('h00_9920_0000), COND, FTB_BR_POS_BITS'(8)),
+        1'b1, 1);
+      present(0, 20, FTB_BR_POS_BITS'(2), COND, 1'b1,
+              VA_WIDTH'('h00_9900_0000), 1'b0);
+      present(1, 21, FTB_BR_POS_BITS'(8), COND, 1'b1,
+              VA_WIDTH'('h00_9920_0000), 1'b0);
+      settle();
+      chk("J3 different slots: both served in one cycle",
+          (rsv_slot[0] == 1'b0) && (rsv_slot[1] == 1'b1) &&
+          (&ftq_bkend_rsv_rdy) && (&ftb_upd_val) &&
+          (upd[0].branch_id == 6'd20) && (upd[1].branch_id == 6'd21));
+      clr();
+    endtask
+  end else begin : g_two
+    task automatic group_f_slot1();
+      skip("F7 an indirect updates ittage");
+      skip("F8 and not tage, sc or lp");
+      skip("F9 and the uBTB and the FTB");
+      skip("F10 on slot 1, which is where the position mapped");
+      skip("F11 an indirect call updates ittage");
+      skip("F12 a return updates the uBTB and the FTB");
+      skip("F13 and no queued predictor");
+      skip("F14 a direct unconditional updates the uBTB and FTB only");
+      skip("F15 NO_BRANCH forms no update");
+      skip("F16 both slots update in one cycle");
+      skip("F17 each carries its own direction");
+      skip("F18 both FTB channels are presented");
+    endtask
+
+    task automatic group_j();
+      $display("-- J: two resolutions, one slot, TD#158 --");
+      skip("J1 both map to slot 0");
+      skip("J1 cycle 1: the older (channel 1, entry 10) is served");
+      skip("J1 cycle 1: the younger is held, nothing formed for it");
+      skip("J1 both updates delivered over two cycles");
+      skip("J1b across the wrap entry 62 is older and is served first");
+      skip("J2 both unmapped");
+      skip("J2 placed in two slots: position 4 in 0, position 9 in 1");
+      skip("J2 both trained in one cycle: both ready, both FTB updates");
+      skip("J2 each slot carries its own branch");
+      skip("J2 two placement writes, two slots");
+      skip("J2 the entry holds both: slot 0 position 4, slot 1 position 9");
+      skip("J2b the older takes slot 1 and is served");
+      skip("J2b the younger collides on slot 1 and is held");
+      skip("J2b next cycle the younger is served alone");
+      skip("J3 different slots: both served in one cycle");
+    endtask
+  end : g_two
 
   // -----------------------------------------------------------------
   // Run
@@ -1202,8 +1310,10 @@ module tb;
     pass_cnt = 0;
     fail_cnt = 0;
 
-    if (NUM_RESOLVE_PORTS != 2 || NUM_PRED_SLOTS != 2) begin
-      $fatal(1, "tb_ftq_resolve: written for two ports, two slots");
+    // BP-128: written for one or two slots (and as many ports); the
+    // checks that need two are skipped at one.
+    if (NUM_RESOLVE_PORTS != NUM_PRED_SLOTS) begin
+      $fatal(1, "tb_ftq_resolve: written for one port per slot");
     end
 
     do_reset();
@@ -1216,7 +1326,7 @@ module tb;
     group_g();
     group_h();
     group_i();
-    group_j();
+    g_two.group_j();
 
     $display("tb_ftq_resolve: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

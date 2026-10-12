@@ -390,8 +390,12 @@ module ftq_entry_assert (
     else $error("E6 a RAS commit for a type with no stack op");
   a_ras_snapshot_src:  assert property (p_ras_snapshot_src)
     else $error("E7 the RAS payload is not the freed entry's");
-  a_write_kills_above: assert property (p_write_kills_above)
-    else $error("E8 a predecode slot write did not kill above it");
+  // BP-128: E8 and E11 need a slot above the written one, so they
+  // exist only at two slots; at one there is nothing above to kill.
+  if (NUM_PRED_SLOTS > 1) begin : g_e8
+    a_write_kills_above: assert property (p_write_kills_above)
+      else $error("E8 a predecode slot write did not kill above it");
+  end
   a_pd_write_lands:    assert property (p_pd_write_lands)
     else $error("E9 the predecode slot write did not land");
   a_xlate_pc_agrees:   assert property (p_xlate_pc_agrees)
@@ -424,8 +428,11 @@ module ftq_entry_assert (
       !w_e13_bad;
   endproperty
 
-  a_rsv_end_kills_above: assert property (p_rsv_end_kills_above)
-    else $error("E11 a resolved block end left a slot above it valid");
+  if (NUM_PRED_SLOTS > 1) begin : g_e11
+    a_rsv_end_kills_above: assert property (p_rsv_end_kills_above)
+      else $error({"E11 a resolved block end left a slot above it ",
+                   "valid"});
+  end
   a_rsv_write_lands:     assert property (p_rsv_write_lands)
     else $error("E12 the resolution slot write did not land");
   a_rsv_jump_ft_lands:   assert property (p_rsv_jump_ft_lands)

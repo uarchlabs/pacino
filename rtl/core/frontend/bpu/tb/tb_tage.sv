@@ -221,7 +221,12 @@ module tb;
   // ----------------------------------------------------------------
   // DUT parameters and signals
   // ----------------------------------------------------------------
-  localparam int NUM_PRED_SLOTS = 2;
+  // The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128); the
+  // local of 2 that shadowed it is removed. S1 is the highest slot:
+  // slot 1 at two slots, slot 0 at one. Every slot 1 reference below
+  // is written [S1] so it elaborates at one slot; a check that means
+  // something only with two slots is skipped there.
+  localparam int S1 = NUM_PRED_SLOTS - 1;
 
   logic clk;
   logic rstn;
@@ -265,9 +270,7 @@ module tb;
   // ----------------------------------------------------------------
   // DUT instantiation
   // ----------------------------------------------------------------
-  tage #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_dut (
+  tage u_dut (
     .clk                 (clk),
     .rstn                (rstn),
     .tage_pred_val_p0    (tage_pred_val_p0),
@@ -299,9 +302,7 @@ module tb;
   // scope, so it needs the explicit hierarchical path. Only
   // no_ram_write_upd_tst (CE-06, TC-68) raises it -- that test
   // drives a deliberately invalid update packet.
-  bind tage tage_assert #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_tage_assert (
+  bind tage tage_assert u_tage_assert (
     .clk               (clk),
     .rstn              (rstn),
     .tage_pred_rdy_p2  (tage_pred_rdy_p2),
@@ -381,9 +382,12 @@ module tb;
   // activity flags so the struct-field combo chain re-evaluates.
   always_ff @(posedge clk) begin
     tage_upd_inp_u0[0] <= stg_upd_inp0;
-    tage_upd_inp_u0[1] <= stg_upd_inp1;
     tage_upd_val_u0[0] <= stg_upd_val0;
-    tage_upd_val_u0[1] <= stg_upd_val1;
+    // BP-128: slot 1 is driven only when it exists.
+    if (NUM_PRED_SLOTS > 1) begin
+      tage_upd_inp_u0[S1] <= stg_upd_inp1;
+      tage_upd_val_u0[S1] <= stg_upd_val1;
+    end
   end
 
   // ----------------------------------------------------------------
@@ -410,8 +414,11 @@ module tb;
   always_ff @(posedge clk) begin
     tage_pred_val_p0[0] <= stg_pred_val0;
     tage_pred_inp_p0[0] <= stg_pred_inp0;
-    tage_pred_val_p0[1] <= stg_pred_val1;
-    tage_pred_inp_p0[1] <= stg_pred_inp1;
+    // BP-128: slot 1 is driven only when it exists.
+    if (NUM_PRED_SLOTS > 1) begin
+      tage_pred_val_p0[S1] <= stg_pred_val1;
+      tage_pred_inp_p0[S1] <= stg_pred_inp1;
+    end
   end
 
   // ----------------------------------------------------------------
@@ -421,8 +428,8 @@ module tb;
   // c. Spin on posedge clk until tage_rdy or watchdog expires.
   //    Watchdog: (1 << TAGE_MAX_IDX_WIDTH) + 16 cycles.
   // d. Check all bw_ram mem entries via hierarchical reference.
-  //    T0: u_dut.u_tage_bim.u_ram_s0/s1.mem[b][i]
-  //    T1-T4: gen_tage_tbl[N].u_tage_tbl.u_ram_s0/s1.mem[b][i]
+  //    T0: u_dut.u_tage_bim.g_slot[0].u_ram/s1.mem[b][i]
+  //    T1-T4: gen_tage_tbl[N].u_tage_tbl.g_slot[0].u_ram/s1.mem[b][i]
   //    (N must be a constant for Verilator; loops unrolled.)
   //    Expected: T0 2'b10 weakly taken (TD#103, BP-126), a literal
   //    here, not the package constant; T1-T4 '0, unchanged.
@@ -493,14 +500,14 @@ module tb;
     re = (1 << TAGE_TBL_IDX[0]) / 2;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
-        bim_s0_v = u_dut.u_tage_bim.u_ram_s0.mem[b][i];
+        bim_s0_v = u_dut.u_tage_bim.g_slot[0].u_ram.mem[b][i];
         if (bim_s0_v !== T0_INIT_EXP) begin
           local_fails++;
           if (verbose != 0)
             $display("[FAIL] T0 s0 b=%0d i=%0d val=0x%0h",
               b, i, bim_s0_v);
         end
-        bim_s1_v = u_dut.u_tage_bim.u_ram_s1.mem[b][i];
+        bim_s1_v = u_dut.u_tage_bim.g_slot[S1].u_ram.mem[b][i];
         if (bim_s1_v !== T0_INIT_EXP) begin
           local_fails++;
           if (verbose != 0)
@@ -522,7 +529,7 @@ module tb;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
         tbl_s0_v =
-          u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[b][i];
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[b][i];
         if (tbl_s0_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -530,7 +537,7 @@ module tb;
               b, i, tbl_s0_v);
         end
         tbl_s1_v =
-          u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[b][i];
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[b][i];
         if (tbl_s1_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -545,7 +552,7 @@ module tb;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
         tbl_s0_v =
-          u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[b][i];
+          u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[b][i];
         if (tbl_s0_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -553,7 +560,7 @@ module tb;
               b, i, tbl_s0_v);
         end
         tbl_s1_v =
-          u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[b][i];
+          u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[b][i];
         if (tbl_s1_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -568,7 +575,7 @@ module tb;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
         tbl_s0_v =
-          u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[b][i];
+          u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[b][i];
         if (tbl_s0_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -576,7 +583,7 @@ module tb;
               b, i, tbl_s0_v);
         end
         tbl_s1_v =
-          u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[b][i];
+          u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[b][i];
         if (tbl_s1_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -591,7 +598,7 @@ module tb;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
         tbl_s0_v =
-          u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[b][i];
+          u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[b][i];
         if (tbl_s0_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -599,7 +606,7 @@ module tb;
               b, i, tbl_s0_v);
         end
         tbl_s1_v =
-          u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[b][i];
+          u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[b][i];
         if (tbl_s1_v !== '0) begin
           local_fails++;
           if (verbose != 0)
@@ -672,7 +679,7 @@ module tb;
     local_fails = 0;
 
     // Pre-load T0 s0 bank 0 row 4.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][4] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][4] = 2'b10;
     if (verbose != 0)
       $display(
         "[INFO] upd_t0_inc_tst: pre T0 s0 mem[0][4]=2b10");
@@ -705,7 +712,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
 
-    rd_val = u_dut.u_tage_bim.u_ram_s0.mem[0][4];
+    rd_val = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][4];
 
     if (rd_val !== 2'b11) begin
       local_fails++;
@@ -745,7 +752,7 @@ module tb;
     local_fails = 0;
 
     // Pre-load T0 s0 bank 0 row 8.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][8] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][8] = 2'b10;
     if (verbose != 0)
       $display(
         "[INFO] upd_t0_dec_tst: pre T0 s0 mem[0][8]=2b10");
@@ -775,7 +782,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
 
-    rd_val = u_dut.u_tage_bim.u_ram_s0.mem[0][8];
+    rd_val = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][8];
 
     if (rd_val !== 2'b01) begin
       local_fails++;
@@ -817,7 +824,7 @@ module tb;
     local_fails = 0;
 
     // Pre-load T1 s0 bank 0 row 2.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][2]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][2]
       = 16'h0007;
     if (verbose != 0)
       $display(
@@ -850,7 +857,7 @@ module tb;
     @(posedge clk);
 
     rd_val =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][2];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][2];
 
     if (rd_val !== 16'h0009) begin
       local_fails++;
@@ -896,9 +903,9 @@ module tb;
     local_fails = 0;
 
     // Pre-load T1 s0 bank 0 row 5 and T2 s0 bank 0 row 7.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][5]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][5]
       = 16'h0009;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][7]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][7]
       = 16'h0009;
     if (verbose != 0) begin
       $display(
@@ -936,9 +943,9 @@ module tb;
     @(posedge clk);
 
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][5];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][5];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][7];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][7];
 
     if (rd_t1 !== 16'h0007) begin
       local_fails++;
@@ -996,7 +1003,7 @@ module tb;
     local_fails = 0;
 
     // Pre-load T2 s0 bank 0 row 9.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][9]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][9]
       = 16'h0009;
     if (verbose != 0)
       $display(
@@ -1028,7 +1035,7 @@ module tb;
     @(posedge clk);
 
     rd_val =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][9];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][9];
 
     if (rd_val !== 16'h000B) begin
       local_fails++;
@@ -1074,7 +1081,7 @@ module tb;
     local_fails = 0;
 
     // Pre-load T1 s0 bank 0 row 3.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][3]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][3]
       = 16'h0019;
     if (verbose != 0)
       $display(
@@ -1107,7 +1114,7 @@ module tb;
     @(posedge clk);
 
     rd_val =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][3];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][3];
 
     if (rd_val !== 16'h002B) begin
       local_fails++;
@@ -1153,9 +1160,9 @@ module tb;
 
     // Pre-load T2 s0 bank 0 row 11 (alloc target).
     // Pre-load T1 s0 bank 0 row 1  (prm DEC target).
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][11]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][11]
       = 16'hBEEF;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][1]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][1]
       = 16'h0009;
     if (verbose != 0) begin
       $display(
@@ -1193,7 +1200,7 @@ module tb;
     @(posedge clk);
 
     rd_val =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][11];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][11];
 
     if (rd_val !== 16'hAA09) begin
       local_fails++;
@@ -1239,9 +1246,9 @@ module tb;
 
     local_fails = 0;
 
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][16]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][16]
       = 16'h0019;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][18]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][18]
       = 16'h0009;
     if (verbose != 0) begin
       $display(
@@ -1277,9 +1284,9 @@ module tb;
     @(posedge clk);
 
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][16];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][16];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][18];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][18];
 
     if (rd_t2 !== 16'h002B) begin
       local_fails++;
@@ -1338,9 +1345,9 @@ module tb;
 
     local_fails = 0;
 
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][24]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][24]
       = 16'h0019;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][26]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][26]
       = 16'h0009;
     if (verbose != 0) begin
       $display(
@@ -1376,9 +1383,9 @@ module tb;
     @(posedge clk);
 
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][24];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][24];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][26];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][26];
 
     if (rd_t3 !== 16'h0007) begin
       local_fails++;
@@ -1438,9 +1445,9 @@ module tb;
 
     local_fails = 0;
 
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][32]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][32]
       = 16'h0009;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][32]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][32]
       = 16'h000B;
     if (verbose != 0) begin
       $display(
@@ -1479,9 +1486,9 @@ module tb;
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][32];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][32];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][32];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][32];
 
     if (uaon_pre !== 4'h0) begin
       local_fails++;
@@ -1560,7 +1567,7 @@ module tb;
 
     local_fails = 0;
 
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][34]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][34]
       = 16'h0007;
     if (verbose != 0)
       $display(
@@ -1596,7 +1603,7 @@ module tb;
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][34];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][34];
 
     if (uaon_pre !== 4'h1) begin
       local_fails++;
@@ -1665,7 +1672,7 @@ module tb;
     local_fails = 0;
 
     // -- Part 1: T1 3b CTR at max (111). --
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][40]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40]
       = 16'h000F;
     if (verbose != 0)
       $display(
@@ -1693,7 +1700,7 @@ module tb;
     @(posedge clk);
 
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][40];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40];
 
     if (rd_t1 !== 16'h000F) begin
       local_fails++;
@@ -1707,7 +1714,7 @@ module tb;
     end
 
     // -- Part 2: T0 2b CTR at max (11). --
-    u_dut.u_tage_bim.u_ram_s0.mem[0][40] = 2'b11;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][40] = 2'b11;
     if (verbose != 0)
       $display(
         "[INFO] upd_ctr_max_sat_tst: pre T0[0][40]=2b11");
@@ -1732,7 +1739,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
 
-    rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[0][40];
+    rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][40];
 
     if (rd_t0 !== 2'b11) begin
       local_fails++;
@@ -1780,7 +1787,7 @@ module tb;
     local_fails = 0;
 
     // -- Part 1: T1 3b CTR at min (000). --
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][42]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][42]
       = 16'h0001;
     if (verbose != 0)
       $display(
@@ -1808,7 +1815,7 @@ module tb;
     @(posedge clk);
 
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][42];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][42];
 
     if (rd_t1 !== 16'h0001) begin
       local_fails++;
@@ -1822,7 +1829,7 @@ module tb;
     end
 
     // -- Part 2: T0 2b CTR at min (00). --
-    u_dut.u_tage_bim.u_ram_s0.mem[0][42] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][42] = 2'b00;
     if (verbose != 0)
       $display(
         "[INFO] upd_ctr_min_sat_tst: pre T0[0][42]=2b00");
@@ -1847,7 +1854,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
 
-    rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[0][42];
+    rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][42];
 
     if (rd_t0 !== 2'b00) begin
       local_fails++;
@@ -1893,9 +1900,9 @@ module tb;
 
     local_fails = 0;
 
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][48]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][48]
       = 16'hBEEF;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][49]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][49]
       = 16'h000F;
     if (verbose != 0) begin
       $display(
@@ -1931,9 +1938,9 @@ module tb;
     @(posedge clk);
 
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][48];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][48];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][49];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][49];
 
     if (rd_t2 !== 16'hBEEF) begin
       local_fails++;
@@ -1983,7 +1990,7 @@ module tb;
     local_fails = 0;
 
     // Pre-load T0 bank 0 row 128 with CTR=2b11.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][128] = 2'b11;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][128] = 2'b11;
     if (verbose != 0)
       $display(
         "[INFO] pred_t0_only_tst: T0 mem[0][128]=2b11");
@@ -2089,7 +2096,7 @@ module tb;
 
     // Pre-load T1 bank 1 row 256.
     // Entry: TAG=0x42 EPC=0 USE=0 CTR=101 VAL=1 = 0x420B.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h420B;
     if (verbose != 0)
       $display(
@@ -2192,11 +2199,11 @@ module tb;
 
     // Pre-load T1 bank 1 row 256: weak not-taken.
     // TAG=0x42 EPC=0 USE=0 CTR=011 VAL=1 = 0x4207.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h4207;
     // Pre-load T2 bank 1 row 256: strong taken.
     // TAG=0x42 EPC=0 USE=0 CTR=101 VAL=1 = 0x420B.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h420B;
     if (verbose != 0)
       $display(
@@ -2305,11 +2312,11 @@ module tb;
 
     // Pre-load T2 bank 0 row 512: primary, weak taken.
     // TAG=0x45 EPC=0 USE=0 CTR=100 VAL=1 = 0x4509.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4509;
     // Pre-load T1 bank 0 row 512: alt, weak not-taken.
     // TAG=0x45 EPC=0 USE=0 CTR=011 VAL=1 = 0x4507.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4507;
     // Set uaon[0] >= threshold (bit[3]=1).
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
@@ -2572,12 +2579,12 @@ module tb;
 
   // ----------------------------------------------------------------
   // slot1_pred_tst
-  // Slot 1 prediction symmetry. Verifies slot 1 reads u_ram_s1
-  // and not u_ram_s0.
+  // Slot 1 prediction symmetry. Verifies slot 1 reads g_slot[S1].u_ram
+  // and not g_slot[0].u_ram.
   // PC=0x5000: T1 idx=11h400 (bank=1 row=0) tag=0x0A with fh=0.
-  // u_ram_s1 mem[1][0]=16h0A09 (TAG=0x0A CTR=100 VAL=1).
-  // u_ram_s0 mem[1][0]=16h0A0F (TAG=0x0A CTR=111 VAL=1 sentinel).
-  // Contamination: prm_ctr=3b111 if slot 1 reads u_ram_s0.
+  // g_slot[S1].u_ram mem[1][0]=16h0A09 (TAG=0x0A CTR=100 VAL=1).
+  // g_slot[0].u_ram mem[1][0]=16h0A0F (TAG=0x0A CTR=111 VAL=1 sentinel).
+  // Contamination: prm_ctr=3b111 if slot 1 reads g_slot[0].u_ram.
   // Expected: rdy[1]=1 rdy[0]=0 prm_comp=1 prm_ctr=3b100 tkn=1.
   // ----------------------------------------------------------------
   task automatic slot1_pred_tst(int verbose);
@@ -2590,11 +2597,11 @@ module tb;
     // Pre-load T1 slot 1 RAM bank=1 row=0: matching tagged entry.
     // T1 entry layout: [15:8]=TAG [7:6]=EPC [5:4]=USE [3:1]=CTR [0]=VAL
     // 16'h0A09: TAG=0x0A EPC=0 USE=0 CTR=100(weakest taken) VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[1][0]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[1][0]
       = 16'h0A09;
     // Pre-load T1 slot 0 RAM same address as contamination sentinel.
     // 16'h0A0F: TAG=0x0A EPC=0 USE=0 CTR=111(strong taken) VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][0]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][0]
       = 16'h0A0F;
     if (verbose != 0) begin
       $display(
@@ -2617,12 +2624,12 @@ module tb;
     @(posedge clk);
 
     // Read p2 outputs for slot 1.
-    meta1 = tage_pred_meta_p2[1];
+    meta1 = tage_pred_meta_p2[S1];
 
     if (verbose != 0) begin
       $display(
         "[INFO] slot1_pred_tst: rdy[1]=%0b rdy[0]=%0b",
-        tage_pred_rdy_p2[1],
+        tage_pred_rdy_p2[S1],
         tage_pred_rdy_p2[0]);
       $display(
         "[INFO] slot1_pred_tst: prm=%0d ctr=%03b tkn=%0b",
@@ -2631,11 +2638,11 @@ module tb;
         meta1.tage_pred_tkn);
     end
 
-    if (tage_pred_rdy_p2[1] !== 1'b1) begin
+    if (tage_pred_rdy_p2[S1] !== 1'b1) begin
       local_fails++;
       $display(
         "[FAIL] slot1_pred_tst: rdy[1]=%0b exp=1",
-        tage_pred_rdy_p2[1]);
+        tage_pred_rdy_p2[S1]);
     end
     if (tage_pred_rdy_p2[0] !== 1'b0) begin
       local_fails++;
@@ -2649,7 +2656,7 @@ module tb;
         "[FAIL] slot1_pred_tst: prm_comp=%0d exp=1",
         meta1.tage_prm_comp);
     end
-    // prm_ctr=100 from u_ram_s1; contamination gives 111 from s0.
+    // prm_ctr=100 from g_slot[S1].u_ram; contamination gives 111 from s0.
     if (meta1.tage_prm_ctr !== 3'b100) begin
       local_fails++;
       $display(
@@ -2673,13 +2680,13 @@ module tb;
 
   // ----------------------------------------------------------------
   // slot1_upd_tst
-  // Slot 1 update symmetry. Verifies slot 1 update writes u_ram_s1
-  // and not u_ram_s0.
+  // Slot 1 update symmetry. Verifies slot 1 update writes g_slot[S1].u_ram
+  // and not g_slot[0].u_ram.
   // T1 prm_idx=11h046 (bank=0 row=70).
-  // u_ram_s1 mem[0][70]=16h0007 (CTR=011 VAL=1).
-  // u_ram_s0 mem[0][70]=16h000F (CTR=111 VAL=1 sentinel).
-  // CTR increment 011->100: expect u_ram_s1 = 16h0009.
-  // u_ram_s0 must remain 16h000F. upd_rdy[0] must be 0.
+  // g_slot[S1].u_ram mem[0][70]=16h0007 (CTR=011 VAL=1).
+  // g_slot[0].u_ram mem[0][70]=16h000F (CTR=111 VAL=1 sentinel).
+  // CTR increment 011->100: expect g_slot[S1].u_ram = 16h0009.
+  // g_slot[0].u_ram must remain 16h000F. upd_rdy[0] must be 0.
   // ----------------------------------------------------------------
   task automatic slot1_upd_tst(int verbose);
     int              local_fails;
@@ -2691,10 +2698,10 @@ module tb;
     local_fails = 0;
 
     // Pre-load T1 slot 1 RAM bank=0 row=70: CTR=011 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][70]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][70]
       = 16'h0007;
     // Pre-load T1 slot 0 RAM same address as sentinel: CTR=111 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][70]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][70]
       = 16'h000F;
     if (verbose != 0) begin
       $display(
@@ -2730,16 +2737,16 @@ module tb;
     stg_upd_inp1 = '0;
     @(posedge clk);
 
-    // After second posedge: upd_rdy_u1[1]=1, RAM written.
+    // After second posedge: upd_rdy_u1[S1]=1, RAM written.
     rd_s1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][70];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][70];
     rd_s0 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][70];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][70];
 
     if (verbose != 0) begin
       $display(
         "[INFO] slot1_upd_tst: rdy[1]=%0b rdy[0]=%0b",
-        tage_upd_rdy_u1[1],
+        tage_upd_rdy_u1[S1],
         tage_upd_rdy_u1[0]);
       $display(
         "[INFO] slot1_upd_tst: s1 mem[0][70]=16h%04h",
@@ -2749,11 +2756,11 @@ module tb;
         rd_s0);
     end
 
-    if (tage_upd_rdy_u1[1] !== 1'b1) begin
+    if (tage_upd_rdy_u1[S1] !== 1'b1) begin
       local_fails++;
       $display(
         "[FAIL] slot1_upd_tst: rdy[1]=%0b exp=1",
-        tage_upd_rdy_u1[1]);
+        tage_upd_rdy_u1[S1]);
     end
     if (tage_upd_rdy_u1[0] !== 1'b0) begin
       local_fails++;
@@ -2803,7 +2810,7 @@ module tb;
     local_fails = 0;
 
     // Step 1: Pre-load T0 bank=0 row=120 with CTR=2b10.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][120] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][120] = 2'b10;
     if (verbose != 0)
       $display(
         "[INFO] rt_correct_t0_tst: pre T0 mem[0][120]=2b10");
@@ -2855,7 +2862,7 @@ module tb;
     @(posedge clk);
 
     // Step 5: Verify RAM: T0 CTR=2b11 (INC: 10->11, rule 13d).
-    rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[0][120];
+    rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][120];
     if (verbose != 0)
       $display(
         "[INFO] rt_correct_t0_tst: post T0 mem[0][120]=2b%02b",
@@ -2929,10 +2936,10 @@ module tb;
 
     // Step 1: Pre-load.
     // T1 bank=0 row=576: TAG=0x05 EPC=0 USE=01 CTR=101 VALID=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][576]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][576]
       = 16'h051B;
     // T0 bank=0 row=576: CTR=2b00 (not-taken, preds_diff=1).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][576] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][576] = 2'b00;
     if (verbose != 0) begin
       $display(
         "[INFO] rt_correct_tagged_tst: T1 mem[0][576]=051B");
@@ -3010,7 +3017,7 @@ module tb;
     // T1: TAG=0x05 EPC=0 USE=10 CTR=110 VALID=1 = 0x052D.
     // CTR 101->110 (row 16); USE 01->10 (Table 7 row 3).
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][576];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][576];
     if (verbose != 0)
       $display(
         "[INFO] rt_correct_tagged_tst: post T1[0][576]=0x%04h",
@@ -3087,12 +3094,12 @@ module tb;
 
     // Step 1: Pre-load T1 bank=1 row=320.
     // TAG=0x0A EPC=0 USE=01 CTR=100 VALID=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][320]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][320]
       = 16'h0A19;
-    u_dut.u_tage_bim.u_ram_s0.mem[1][320]               = 2'b00;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][320] = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][320] = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][320] = 16'h0000;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][320]               = 2'b00;
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][320] = 16'h0000;
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][320] = 16'h0000;
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][320] = 16'h0000;
     if (verbose != 0)
       $display(
         "[INFO] rt_mispredict_alloc_tst: T1 mem[1][320]=0A19");
@@ -3145,9 +3152,9 @@ module tb;
 
     // Step 5: Verify RAM.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][320];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][320];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][320];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][320];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_mispredict_alloc_tst: T1[1][320]=0x%04h",
@@ -3229,7 +3236,7 @@ module tb;
 
     // Step 1: Pre-load T4 bank=1 row=832.
     // TAG=0x0F EPC=0 USE=01 CTR=100 VALID=1.
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][832]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][832]
       = 16'h0F19;
     if (verbose != 0)
       $display(
@@ -3284,13 +3291,13 @@ module tb;
 
     // Step 5: Verify RAM.
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][832];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][832];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][832];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][832];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][832];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][832];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][832];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][832];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_no_alloc_last_tbl_tst: T4[1][832]=0x%04h",
@@ -3391,10 +3398,10 @@ module tb;
 
     // Step 1: Pre-load. T2=prm(comp=2), T1=alt(comp=1).
     // T2 bank=1 row=64: TAG=0x12 EPC=0 USE=00 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][64]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][64]
       = 16'h120B;
     // T1 bank=1 row=64: TAG=0x12 EPC=0 USE=00 CTR=011 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][64]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][64]
       = 16'h1207;
     if (verbose != 0) begin
       $display(
@@ -3480,9 +3487,9 @@ module tb;
     // T2 final: TAG=0x12 EPC=0 USE=01 CTR=110 VAL=1 = 0x121D.
     // T1: unchanged = 0x1207.
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][64];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][64];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][64];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][64];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows1_2_tst: post T2[1][64]=0x%04h",
@@ -3571,15 +3578,15 @@ module tb;
 
     // Step 1: Pre-load.
     // T2 bank=1 row=512: TAG=0x17 EPC=0 USE=01 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h171B;
     // T1 bank=1 row=512: TAG=0x17 EPC=0 USE=00 CTR=011 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h1707;
     // T3/T4: USE=01 to block alloc when mispredict=1.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0010;
     if (verbose != 0) begin
       $display(
@@ -3669,9 +3676,9 @@ module tb;
     // T2: CTR 101->100 (prm DEC), USE 01->00 (Table 7 r4).
     // T2 final: 0x1709. T1: 011->100 (alt INC) -> 0x1709.
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows3_4_tst: post T2[1][512]=0x%04h",
@@ -3758,15 +3765,15 @@ module tb;
 
     // Step 1: Pre-load.
     // T2 bank=0 row=0: TAG=0x18 EPC=0 USE=00 CTR=100 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][0]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][0]
       = 16'h1809;
     // T1 bank=0 row=0: TAG=0x18 EPC=0 USE=00 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][0]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][0]
       = 16'h180B;
     // T3/T4: USE=01 to block alloc when mispredict=1.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][0]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][0]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][0]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][0]
       = 16'h0010;
     if (verbose != 0) begin
       $display(
@@ -3856,9 +3863,9 @@ module tb;
     // T2: CTR 100->011 (prm DEC); USE unchanged (pred_diff=0).
     // T2 final: 0x1807. T1 unchanged: 0x180B.
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][0];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][0];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][0];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][0];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows5_6_tst: post T2[0][0]=0x%04h",
@@ -3947,10 +3954,10 @@ module tb;
 
     // Step 1: Pre-load.
     // T2 bank=0 row=256: TAG=0x24 EPC=0 USE=00 CTR=100 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][256]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][256]
       = 16'h2409;
     // T1 bank=0 row=256: TAG=0x24 EPC=0 USE=00 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][256]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][256]
       = 16'h240B;
     // Write uaon[0]=8 to force UAON to fire on T2 CTR=100.
     u_dut.u_tage_cntrl.uaon[0] = 4'h8;
@@ -4030,9 +4037,9 @@ module tb;
     // T1: CTR 101->110 (alt INC, rows 7/8). USE unchanged.
     // T1 final: 0x240D. T2 unchanged: 0x2409.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][256];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][256];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][256];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][256];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows7_8_tst: post T1[0][256]=0x%04h",
@@ -4136,15 +4143,15 @@ module tb;
 
     // Step 1: Pre-load.
     // T2 bank=0 row=384: TAG=0x28 EPC=0 USE=00 CTR=011 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][384]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][384]
       = 16'h2807;
     // T1 bank=0 row=384: TAG=0x28 EPC=0 USE=01 CTR=100 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][384]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][384]
       = 16'h2819;
     // T3/T4: USE=01 to block alloc when mispredict=1.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][384]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][384]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][384]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][384]
       = 16'h0010;
     // Write uaon[0]=8 to force UAON on T2 CTR=011 boundary.
     u_dut.u_tage_cntrl.uaon[0] = 4'h8;
@@ -4227,9 +4234,9 @@ module tb;
     // T1: CTR 100->011 USE 01->00 (alt DEC, rows 9/10).
     // T1 final: 0x2807. T2: CTR 011->100 -> 0x2809.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][384];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][384];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][384];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][384];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows9_10_tst: post T1[0][384]=0x%04h",
@@ -4337,15 +4344,15 @@ module tb;
 
     // Step 1: Pre-load.
     // T2 bank=1 row=256: TAG=0x3E EPC=0 USE=00 CTR=100 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h3E09;
     // T1 bank=1 row=256: TAG=0x3E EPC=0 USE=01 CTR=100 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h3E19;
     // T3/T4: USE=01 to block alloc when mispredict=1.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][256]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][256]
       = 16'h0010;
     // Write uaon[0]=8 to force UAON on T2 CTR=100 boundary.
     u_dut.u_tage_cntrl.uaon[0] = 4'h8;
@@ -4428,9 +4435,9 @@ module tb;
     // T1: CTR 100->011 USE 01 unchanged (pred_diff=0).
     // T1 final: 0x3E17. T2 unchanged: 0x3E09.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][256];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][256];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][256];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][256];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows11_12_tst: post T1[1][256]=0x%04h",
@@ -4525,17 +4532,17 @@ module tb;
 
     // Step 1: Pre-load.
     // T0 bank=0 row=100: CTR=2'b01 (weakly not-taken).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][100] = 2'b01;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][100] = 2'b01;
     // T1-T4 bank=0 row=100: USE=01 VALID=0.
     // USE=01 -> ueff=01 -> not an allocation candidate.
     // VALID=0 -> no tag hit during prediction.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][100]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][100]
       = 16'h0010;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][100]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][100]
       = 16'h0010;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][100]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][100]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][100]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][100]
       = 16'h0010;
     if (verbose != 0) begin
       $display(
@@ -4611,7 +4618,7 @@ module tb;
 
     // Step 5: Verify T0 BIM RAM.
     // u_resolved=1 -> INC: 01->10. mem[0][100]=2'b10.
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][100];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][100];
     if (verbose != 0)
       $display(
         "[INFO] rt_ctr_row13b_tst: post T0[0][100]=2b%02b",
@@ -4689,17 +4696,17 @@ module tb;
 
     // Step 1: Pre-load.
     // T0 bank=0 row=200: CTR=2'b10 (weakly taken).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][200] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][200] = 2'b10;
     // T1-T4 bank=0 row=200: USE=01 VALID=0.
     // USE=01 -> ueff=01 -> not an allocation candidate.
     // VALID=0 -> no tag hit during prediction.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h0010;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h0010;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h0010;
     if (verbose != 0) begin
       $display(
@@ -4775,7 +4782,7 @@ module tb;
 
     // Step 5: Verify T0 BIM RAM.
     // CTR 10->01. BIM mem[0][200]=2'b01.
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][200];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][200];
     if (verbose != 0)
       $display(
         "[INFO] rt_ctr_row13c_tst: post T0[0][200]=2b%02b",
@@ -4857,7 +4864,7 @@ module tb;
     // T0 bank=0 row=288: CTR=2'b01 (weakly not-taken).
     // T1-T4 not pre-loaded: FAST_INIT gives VALID=0 (no
     // tag hit). cond_mispredict=0 suppresses allocation.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][288] = 2'b01;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][288] = 2'b01;
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_row13a_tst: T0 mem[0][288]=2b01");
@@ -4932,7 +4939,7 @@ module tb;
 
     // Step 5: Verify T0 BIM RAM.
     // u_resolved=0 -> DEC: 01->00. mem[0][288]=2'b00.
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][288];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][288];
     if (verbose != 0)
       $display(
         "[INFO] rt_ctr_row13a_tst: post T0[0][288]=2b%02b",
@@ -5013,7 +5020,7 @@ module tb;
     // T0 bank=0 row=384: CTR=2'b10 (weakly taken).
     // T1-T4 not pre-loaded: FAST_INIT gives VALID=0 (no
     // tag hit). cond_mispredict=0 suppresses allocation.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][384] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][384] = 2'b10;
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_row13d_tst: T0 mem[0][384]=2b10");
@@ -5088,7 +5095,7 @@ module tb;
 
     // Step 5: Verify T0 BIM RAM.
     // CTR 10->11. BIM mem[0][384]=2'b11.
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][384];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][384];
     if (verbose != 0)
       $display(
         "[INFO] rt_ctr_row13d_tst: post T0[0][384]=2b%02b",
@@ -5172,16 +5179,16 @@ module tb;
 
     // Step 1: Pre-load.
     // T1 bank=0 row=480: TAG=0x00 EPC=0 USE=01 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][480]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][480]
       = 16'h001B;
     // T0 bank=0 row=480: CTR=2b01 (weakly not-taken).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][480] = 2'b01;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][480] = 2'b01;
     // T2-T4 bank=0 row=480: USE=01 VALID=0, blocks alloc.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][480]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][480]
       = 16'h0010;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][480]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][480]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][480]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][480]
       = 16'h0010;
     if (verbose != 0) begin
       $display(
@@ -5279,8 +5286,8 @@ module tb;
     // T1: CTR 101->100 USE 01->00; entry=16h0009.
     // T0: unchanged 2b01.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][480];
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][480];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][480];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][480];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows14_15_tst: post T1[0][480]=0x%04h",
@@ -5373,10 +5380,10 @@ module tb;
 
     // Step 1: Pre-load.
     // T1 bank=0 row=576: TAG=0x01 EPC=0 USE=01 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][576]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][576]
       = 16'h011B;
     // T0 bank=0 row=576: CTR=2b01 (weakly not-taken).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][576] = 2'b01;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][576] = 2'b01;
     // T2-T4: no pre-load (cond_mispredict=0, no allocation).
     if (verbose != 0) begin
       $display(
@@ -5465,8 +5472,8 @@ module tb;
     // T1: CTR 101->110 USE 01->10; entry=16h012D.
     // T0: unchanged 2b01.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][576];
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][576];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][576];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][576];
     if (verbose != 0) begin
       $display(
         "[INFO] rt_ctr_rows16_17_tst: post T1[0][576]=0x%04h",
@@ -5556,15 +5563,15 @@ module tb;
     // uaon[0]=7 via hierarchical write.
     u_dut.u_tage_cntrl.uaon[0] = 4'h7;
     // T2 bank=0 row=704: TAG=0x01 EPC=0 USE=00 CTR=100 VAL=1.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][704]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][704]
       = 16'h0109;
     // T1 bank=0 row=704: TAG=0x01 EPC=0 USE=00 CTR=010 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][704]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][704]
       = 16'h0105;
     // T3/T4: USE=01 VALID=0 (allocation suppression).
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][704]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][704]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][704]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][704]
       = 16'h0010;
     if (verbose != 0) begin
       $display(
@@ -5657,9 +5664,9 @@ module tb;
     // Step 5: Verify UAON and RAM.
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][704];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][704];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][704];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][704];
     if (verbose != 0) begin
       $display(
         "[INFO] uaon_threshold_cross_tst: pre uaon=0x%0h",
@@ -5768,10 +5775,10 @@ module tb;
     // results; BP-126 seeds them so this case does not depend on
     // TC-40 having run first (CLAUDE.md, no test order dependency).
     // Write T1[0][704]=16'h0109: CTR=100 (boundary taken).
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][704]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][704]
       = 16'h0107;
     u_dut.u_tage_cntrl.uaon[0] = 4'h8;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][704]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][704]
       = 16'h0109;
     if (verbose != 0) begin
       $display(
@@ -5780,7 +5787,7 @@ module tb;
       $display(
         "[INFO] uaon_dec_restore_tst: T2[0][704]=0x%04h",
         u_dut.gen_tage_tbl[2].u_tage_tbl
-          .u_ram_s0.mem[0][704]);
+          .g_slot[0].u_ram.mem[0][704]);
       $display(
         "[INFO] uaon_dec_restore_tst: wrote T1[0][704]=0109");
     end
@@ -5866,9 +5873,9 @@ module tb;
     // Step 5: Verify UAON and RAM.
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][704];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][704];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][704];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][704];
     if (verbose != 0) begin
       $display(
         "[INFO] uaon_dec_restore_tst: pre uaon=0x%0h",
@@ -5982,7 +5989,7 @@ module tb;
 
     // Step 1: Pre-load.
     // T0 bank=0 row=832: CTR=2'b10 (weakly taken, pred_tkn=1).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][832] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][832] = 2'b10;
     // T1-T4: no pre-load. FAST_INIT zeroes all entries.
     // VALID=0 -> no tag hit. USE=0 -> u_eff=0 -> alloc cand.
     if (verbose != 0) begin
@@ -6069,14 +6076,14 @@ module tb;
     // T0: CTR 10->01 (DEC, row 13c, RTL debt #34).
     // T2-T4: unchanged (zero from FAST_INIT).
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][832];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][832];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][832];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][832];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][832];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][832];
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][832];
-    rd_bim = u_dut.u_tage_bim.u_ram_s0.mem[0][832];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][832];
+    rd_bim = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][832];
 
     if (verbose != 0) begin
       $display(
@@ -6204,22 +6211,22 @@ module tb;
     // Step 1: Pre-load.
     // T1 bank=1 row=64: TAG=0x02 EPC=0 USE=0 CTR=101 VALID=1.
     // {TAG=0x02, EPC=00, USE=00, CTR=101, VALID=1}=0x020B.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][64]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][64]
       = 16'h020B;
     // T0 bank=1 row=64: CTR=2'b10 (CTR[1]=1).
     // T1 CTR[2]=1 == T0 CTR[1]=1 -> pred_diff=0.
     // Table 7 row 1 (pred_diff=0): no USE update.
-    u_dut.u_tage_bim.u_ram_s0.mem[1][64] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][64] = 2'b10;
     // T2-T4: explicit zero to ensure USE=0 u_eff=0.
     // bank=1 row=64 may be dirty from prior tests
     // (earlier PCs alias this location). Zeroing gives
     // VALID=0 USE=0 -> u_eff=0 -> T2 selected as alloc
     // target, T3 consecutive guard, T4 not reached.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][64]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][64]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][64]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][64]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][64]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][64]
       = 16'h0000;
     if (verbose != 0) begin
       $display(
@@ -6310,13 +6317,13 @@ module tb;
     // T3: unchanged (zero, consecutive guard confirmed).
     // T4: unchanged (zero, not reached).
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][64];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][64];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][64];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][64];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][64];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][64];
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][64];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][64];
 
     if (verbose != 0) begin
       $display(
@@ -6440,20 +6447,20 @@ module tb;
 
     // Step 1: Pre-load. PC=0x1300 bank=1 row=192 tag=0x02.
     // T1: TAG=0x02 EPC=00 USE=00 CTR=101 VALID=1 -> 0x020B.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][192]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][192]
       = 16'h020B;
     // T2: TAG=0x00 EPC=00 USE=10 CTR=000 VALID=0 -> 0x0020.
     // VALID=0: no tag hit. USE=10 EPC=00 used for u_eff scan.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][192]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][192]
       = 16'h0020;
     // T3, T4: explicit zero.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][192]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][192]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][192]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][192]
       = 16'h0000;
     // T0 at bank=1 row=192: seeded 2b00 (CTR[1]=0). It relied on the
     // reset value until T0 reset to 2b10 (TD#103, BP-126).
-    u_dut.u_tage_bim.u_ram_s0.mem[1][192] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][192] = 2'b00;
     // T1 CTR[2]=1, T0 CTR[1]=0 -> pred_diff=1.
     // Table 7 row 4 applies (pred_diff=1, using_prm=1,
     // mispredict=1): DEC prm USE. EPC updated to lcl_epoch.
@@ -6550,13 +6557,13 @@ module tb;
     // T2: unchanged 0x0020 (not candidate, u_eff=01).
     // T4: unchanged 0x0000 (not reached, T3 selected first).
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][192];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][192];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][192];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][192];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][192];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][192];
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][192];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][192];
 
     if (verbose != 0) begin
       $display(
@@ -6681,21 +6688,21 @@ module tb;
 
     // Step 1: Pre-load. PC=0x1500 bank=1 row=320 tag=0x02.
     // T1: TAG=0x02 EPC=00 USE=00 CTR=101 VALID=1 -> 0x020B.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][320]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][320]
       = 16'h020B;
     // T2: TAG=0x00 EPC=00 USE=10 CTR=000 VALID=0 -> 0x0020.
     // VALID=0: no tag hit. USE=10 EPC=00 used for u_eff scan.
     // age=(2-0)=2 -> u_eff=0: T2 IS a candidate.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][320]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][320]
       = 16'h0020;
     // T3, T4: explicit zero.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][320]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][320]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][320]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][320]
       = 16'h0000;
     // T0 at bank=1 row=320: seeded 2b00 (CTR[1]=0). It relied on the
     // reset value until T0 reset to 2b10 (TD#103, BP-126).
-    u_dut.u_tage_bim.u_ram_s0.mem[1][320] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][320] = 2'b00;
     // T1 CTR[2]=1, T0 CTR[1]=0 -> pred_diff=1.
     // Table 7 row 4 applies.
 
@@ -6791,13 +6798,13 @@ module tb;
     // T3: unchanged 0x0000 (T2 selected, scan stopped).
     // T4: unchanged 0x0000 (not reached).
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][320];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][320];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][320];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][320];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][320];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][320];
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][320];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][320];
 
     if (verbose != 0) begin
       $display(
@@ -6897,17 +6904,17 @@ module tb;
 
     // Address aliasing hygiene: zero T1-T4 at bank=1 row=128.
     // PC=0x1200 hashes to idx=11'h480 for T1-T4 (fh=0).
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0000;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0000;
 
     // Force T0 BIM RAM to min state: CTR=2'b00 (strongly NT).
-    u_dut.u_tage_bim.u_ram_s0.mem[1][128] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][128] = 2'b00;
     if (verbose != 0)
       $display(
         "[INFO] t0_dec_min_sat_tst: pre T0[1][128]=2b00");
@@ -6935,7 +6942,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
 
-    rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[1][128];
+    rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][128];
 
     // DEC from 00 must saturate at 00.
     if (rd_t0 !== 2'b00) begin
@@ -6970,8 +6977,8 @@ module tb;
     tage_pred_meta_t meta0, meta1;
     local_fails = 0;
 
-    u_dut.u_tage_bim.u_ram_s0.mem[0][640] = 2'b10;
-    u_dut.u_tage_bim.u_ram_s1.mem[0][640] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640] = 2'b10;
+    u_dut.u_tage_bim.g_slot[S1].u_ram.mem[0][640] = 2'b10;
     if (verbose != 0)
       $display("[INFO] arb_pred_only_tst: pre T0 s0/s1[0][640]=10");
 
@@ -6992,17 +6999,17 @@ module tb;
     @(posedge clk);
 
     meta0 = tage_pred_meta_p2[0];
-    meta1 = tage_pred_meta_p2[1];
+    meta1 = tage_pred_meta_p2[S1];
 
     if (tage_pred_rdy_p2[0] !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_pred_only_tst: slot0 rdy=%0b exp=1",
         tage_pred_rdy_p2[0]);
     end
-    if (tage_pred_rdy_p2[1] !== 1'b1) begin
+    if (tage_pred_rdy_p2[S1] !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_pred_only_tst: slot1 rdy=%0b exp=1",
-        tage_pred_rdy_p2[1]);
+        tage_pred_rdy_p2[S1]);
     end
     if (meta0.tage_prm_comp !== 3'd0) begin
       local_fails++;
@@ -7038,7 +7045,7 @@ module tb;
     logic [1:0]      rd_t0;
     local_fails = 0;
 
-    u_dut.u_tage_bim.u_ram_s0.mem[0][640] = 2'b01;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640] = 2'b01;
     if (verbose != 0)
       $display("[INFO] arb_upd_only_tst: pre T0 s0[0][640]=01");
 
@@ -7061,7 +7068,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
 
-    rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[0][640];
+    rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640];
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
       $display("[FAIL] arb_upd_only_tst: upd_rdy=%0b exp=1",
@@ -7210,7 +7217,7 @@ module tb;
     np0  = ts_n_pred; nu0 = ts_n_upd;
     // T0 rows written by the updates start at 2'b10 (seeded).
     for (int k = 0; k < 6; k++)
-      u_dut.u_tage_bim.u_ram_s0.mem[0][700 + k] = 2'b10;
+      u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][700 + k] = 2'b10;
     // Stimulus changes #1 after an edge, so the staging flops sample
     // it at the next edge without a race against this process.
     ts_clk();
@@ -7237,10 +7244,10 @@ module tb;
     ts_idle(); repeat (6) ts_clk();
     // Every update applied: INC 10 -> 11 (resolved taken).
     for (int k = 0; k < 6; k++)
-      if (u_dut.u_tage_bim.u_ram_s0.mem[0][700 + k] !== 2'b11) begin
+      if (u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][700 + k] !== 2'b11) begin
         local_fails++;
         $display("[FAIL] trx_stab_tst: T0 row %0d = %02b exp 11",
-                 700 + k, u_dut.u_tage_bim.u_ram_s0.mem[0][700 + k]);
+                 700 + k, u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][700 + k]);
       end
     if (ts_bad != bad0) local_fails++;
     if ((ts_n_pu == pu0) || (ts_n_up == up0)) begin
@@ -7271,8 +7278,8 @@ module tb;
   function automatic logic [2:0] cd_ctr(input int t, input int row);
     logic [15:0] v;
     case (t)
-      1: v = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row];
-      2: v = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row];
+      1: v = u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][row];
+      2: v = u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][row];
       default: v = '0;
     endcase
     return v[3:1];
@@ -7286,9 +7293,9 @@ module tb;
                          input logic [2:0] exp, inout int fails);
     tage_pred_meta_t m;
     tage_upd_inp_t   u;
-    if (prm_t == 1) u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row]
+    if (prm_t == 1) u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][row]
                       = {12'h000, prm_c, 1'b1};
-    if (alt_t == 2) u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row]
+    if (alt_t == 2) u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][row]
                       = {12'h000, alt_c, 1'b1};
     m                    = '0;
     m.tage_prm_idx       = 11'(row);
@@ -7377,14 +7384,22 @@ module tb;
     logic [15:0] v;
     v = '0;
     case ({t[2:0], s[0]})
-      4'b001_0: v = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row];
-      4'b001_1: v = u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][row];
-      4'b010_0: v = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row];
-      4'b010_1: v = u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][row];
-      4'b011_0: v = u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][row];
-      4'b011_1: v = u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[0][row];
-      4'b100_0: v = u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][row];
-      4'b100_1: v = u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[0][row];
+      4'b001_0: v =
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][row];
+      4'b001_1: v =
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][row];
+      4'b010_0: v =
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][row];
+      4'b010_1: v =
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][row];
+      4'b011_0: v =
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][row];
+      4'b011_1: v =
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[0][row];
+      4'b100_0: v =
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][row];
+      4'b100_1: v =
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[0][row];
       default:  v = '0;
     endcase
     return v;
@@ -7393,14 +7408,22 @@ module tb;
   task automatic cg_wr(input int t, input int s, input int row,
                        input logic [15:0] v);
     case ({t[2:0], s[0]})
-      4'b001_0: u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][row] = v;
-      4'b001_1: u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][row] = v;
-      4'b010_0: u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][row] = v;
-      4'b010_1: u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][row] = v;
-      4'b011_0: u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][row] = v;
-      4'b011_1: u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[0][row] = v;
-      4'b100_0: u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][row] = v;
-      4'b100_1: u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[0][row] = v;
+      4'b001_0:
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][row] = v;
+      4'b001_1:
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][row] = v;
+      4'b010_0:
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][row] = v;
+      4'b010_1:
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][row] = v;
+      4'b011_0:
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][row] = v;
+      4'b011_1:
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[0][row] = v;
+      4'b100_0:
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][row] = v;
+      4'b100_1:
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[0][row] = v;
       default: ;
     endcase
   endtask
@@ -7436,15 +7459,19 @@ module tb;
     logic [1:0]      ep_save0, ep_save1;
     local_fails = 0;
     ep_save0 = u_dut.u_tage_cntrl.lcl_epoch[0];
-    ep_save1 = u_dut.u_tage_cntrl.lcl_epoch[1];
+    ep_save1 = u_dut.u_tage_cntrl.lcl_epoch[S1];
     // Distinct epochs so the EPC written is attributable to the slot.
+    // BP-128: at one slot [S1] is slot 0, so only slot 0 is set; the
+    // slot 1 cases of A/B, and C and G, are skipped there.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b01;
-    u_dut.u_tage_cntrl.lcl_epoch[1] = 2'b10;
+    if (NUM_PRED_SLOTS > 1) u_dut.u_tage_cntrl.lcl_epoch[S1] = 2'b10;
+    else $display(
+      "SKIP cov_gap_tst A/B slot 1, C, G: needs NUM_PRED_SLOTS > 1");
     // A, B. Allocation: mispredict, primary T0 (< TAGE_MAX_TBL),
     // alc_comp = k. Entry {alc_tag, lcl_epoch, USE 00, CTR 100, 1}
     // (tage_cntrl_decisions.md: allocated entries init to 100).
     for (int k = 1; k <= 4; k++) begin
-      for (int sl = 0; sl < 2; sl++) begin
+      for (int sl = 0; sl < NUM_PRED_SLOTS; sl++) begin
         if ((sl == 0) && (k != 4)) continue;
         cg_wr(k, sl, 300 + k, 16'h0000);
         m              = '0;
@@ -7461,21 +7488,23 @@ module tb;
       end
     end
     // C. Slot 1 primary provides (alt T0), taken and right, pred_diff:
-    // CTR 100 -> 101, USE 01 -> 10, EPC = lcl_epoch[1].
-    for (int k = 1; k <= 4; k++) begin
-      cg_wr(k, 1, 320 + k, {8'h33, 2'b00, 2'b01, 3'b100, 1'b1});
-      m                    = '0;
-      m.tage_prm_idx       = 11'(320 + k);
-      m.tage_prm_comp      = 3'(k);
-      m.tage_prm_ctr       = 3'b100;
-      m.tage_prm_tkn       = 1'b1;
-      m.tage_alt_tkn       = 1'b0;
-      m.tage_prm_useful    = 2'b01;
-      m.tage_using_primary = 1'b1;
-      cg_upd(1, m, 1'b1, 1'b0);
-      cg_chk($sformatf("C prm CTR/USE/EPC T%0d slot 1", k),
-             cg_rd(k, 1, 320 + k),
-             {8'h33, 2'b10, 2'b10, 3'b101, 1'b1}, local_fails);
+    // CTR 100 -> 101, USE 01 -> 10, EPC = lcl_epoch[S1].
+    if (NUM_PRED_SLOTS > 1) begin // BP-128: slot 1 only
+      for (int k = 1; k <= 4; k++) begin
+        cg_wr(k, 1, 320 + k, {8'h33, 2'b00, 2'b01, 3'b100, 1'b1});
+        m                    = '0;
+        m.tage_prm_idx       = 11'(320 + k);
+        m.tage_prm_comp      = 3'(k);
+        m.tage_prm_ctr       = 3'b100;
+        m.tage_prm_tkn       = 1'b1;
+        m.tage_alt_tkn       = 1'b0;
+        m.tage_prm_useful    = 2'b01;
+        m.tage_using_primary = 1'b1;
+        cg_upd(1, m, 1'b1, 1'b0);
+        cg_chk($sformatf("C prm CTR/USE/EPC T%0d slot 1", k),
+               cg_rd(k, 1, 320 + k),
+               {8'h33, 2'b10, 2'b10, 3'b101, 1'b1}, local_fails);
+      end
     end
     // F. Slot 0 primary T4, the C case: CTR 100 -> 101, USE 01 -> 10,
     // EPC = lcl_epoch[0].
@@ -7494,21 +7523,23 @@ module tb;
     // G. Slot 1 alternate provides, Tk under primary T(k+1), taken and
     // right, no pred_diff: alt CTR 100 -> 101. T4 is never the
     // alternate (the alternate is a shorter history than the primary).
-    for (int k = 1; k <= 3; k++) begin
-      cg_wr(k, 1, 340 + k, {8'h55, 2'b00, 2'b00, 3'b100, 1'b1});
-      m                    = '0;
-      m.tage_prm_idx       = 11'd1900;
-      m.tage_alt_idx       = 11'(340 + k);
-      m.tage_prm_comp      = 3'(k + 1);
-      m.tage_alt_comp      = 3'(k);
-      m.tage_prm_ctr       = 3'b100;
-      m.tage_alt_ctr       = 3'b100;
-      m.tage_prm_tkn       = 1'b1;
-      m.tage_alt_tkn       = 1'b1;
-      m.tage_using_primary = 1'b0;
-      cg_upd(1, m, 1'b1, 1'b0);
-      cg_chk($sformatf("G alt CTR T%0d slot 1", k), cg_rd(k, 1, 340 + k),
-             {8'h55, 2'b00, 2'b00, 3'b101, 1'b1}, local_fails);
+    if (NUM_PRED_SLOTS > 1) begin // BP-128: slot 1 only
+      for (int k = 1; k <= 3; k++) begin
+        cg_wr(k, 1, 340 + k, {8'h55, 2'b00, 2'b00, 3'b100, 1'b1});
+        m                    = '0;
+        m.tage_prm_idx       = 11'd1900;
+        m.tage_alt_idx       = 11'(340 + k);
+        m.tage_prm_comp      = 3'(k + 1);
+        m.tage_alt_comp      = 3'(k);
+        m.tage_prm_ctr       = 3'b100;
+        m.tage_alt_ctr       = 3'b100;
+        m.tage_prm_tkn       = 1'b1;
+        m.tage_alt_tkn       = 1'b1;
+        m.tage_using_primary = 1'b0;
+        cg_upd(1, m, 1'b1, 1'b0);
+        cg_chk($sformatf("G alt CTR T%0d slot 1", k), cg_rd(k, 1, 340 + k),
+               {8'h55, 2'b00, 2'b00, 3'b101, 1'b1}, local_fails);
+      end
     end
     // D. Slot 0 primary T3, not-taken and right, no pred_diff: CTR
     // 011 -> 010 (toward the outcome), USE and EPC untouched.
@@ -7547,7 +7578,7 @@ module tb;
     tage_enable_aging   = 1'b0;
     tage_aging_interval = 32'd0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = ep_save0;
-    u_dut.u_tage_cntrl.lcl_epoch[1] = ep_save1;
+    u_dut.u_tage_cntrl.lcl_epoch[S1] = ep_save1;
     if (local_fails == 0)
       $display("[PASS] cov_gap_tst: 0 failures");
     else
@@ -7568,8 +7599,8 @@ module tb;
     tage_pred_meta_t upd_meta;
     local_fails = 0;
 
-    u_dut.u_tage_bim.u_ram_s0.mem[0][672] = 2'b11;
-    u_dut.u_tage_bim.u_ram_s0.mem[0][640] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][672] = 2'b11;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640] = 2'b10;
 
     inp           = '0;
     inp.pc        = VA_WIDTH'('hA80);
@@ -7637,7 +7668,7 @@ module tb;
     logic [1:0]      rd_t0;
     local_fails = 0;
 
-    u_dut.u_tage_bim.u_ram_s0.mem[0][640] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640] = 2'b10;
     if (verbose != 0)
       $display("[INFO] arb_concurrent_upd_wins_tst: T0[0][640]=10");
 
@@ -7670,7 +7701,7 @@ module tb;
     @(posedge clk);
     @(posedge clk);
 
-    rd_t0 = u_dut.u_tage_bim.u_ram_s0.mem[0][640];
+    rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640];
 
     if (tage_pred_rdy_p2[0] !== 1'b1) begin
       local_fails++;
@@ -7749,15 +7780,15 @@ module tb;
     @(posedge clk); // cycle A: bypass A fires
     // Cycle B: keep stg set; count rdy that fires from A bypass.
     @(posedge clk); // cycle B: rdy from A; bypass B fires
-    if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[1]) rdy_cnt++;
+    if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[S1]) rdy_cnt++;
     stg_upd_val0 = 1'b0;
     stg_upd_val1 = 1'b0;
     stg_upd_inp0 = '0;
     stg_upd_inp1 = '0;
     @(posedge clk); // cycle C: rdy from B
-    if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[1]) rdy_cnt++;
+    if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[S1]) rdy_cnt++;
     @(posedge clk); // cycle D: extra
-    if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[1]) rdy_cnt++;
+    if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[S1]) rdy_cnt++;
 
     if (rdy_cnt < 2) begin
       local_fails++;
@@ -7794,7 +7825,7 @@ module tb;
 
     // Pre-load T0 s0 row 700 bank 0 with CTR=2b11.
     // pc=0xAF0 -> bits[12:2]=0xAF0>>2=0x2BC, bank=0, row=700.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][700] = 2'b11;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][700] = 2'b11;
 
     // Issue pred 1 to fill first RB slot.
     stg_pred_inp0 = '0;
@@ -7874,7 +7905,7 @@ module tb;
 
     consumer_ready = 1'b0;
 
-    u_dut.u_tage_bim.u_ram_s0.mem[0][750] = 2'b11;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][750] = 2'b11;
     // pc=0xBB8 -> bits[12:2]=0xBB8>>2=0x2EE, bank=0, row=750.
 
     // Fill RB slot 1: pred takes 3 cycles p0->p2.
@@ -8098,10 +8129,16 @@ module tb;
       pred_rdy_timing_tst(verbose);
 
     // BP-010f slot 1 symmetry tests.
-    if (_slot1_pred_tst != 0)
-      slot1_pred_tst(verbose);
-    if (_slot1_upd_tst != 0)
-      slot1_upd_tst(verbose);
+    if (_slot1_pred_tst != 0) begin
+      // BP-128: a slot 1 test; skipped at one slot.
+      if (NUM_PRED_SLOTS > 1) slot1_pred_tst(verbose);
+      else $display("SKIP slot1_pred_tst: needs NUM_PRED_SLOTS > 1");
+    end
+    if (_slot1_upd_tst != 0) begin
+      // BP-128: a slot 1 test; skipped at one slot.
+      if (NUM_PRED_SLOTS > 1) slot1_upd_tst(verbose);
+      else $display("SKIP slot1_upd_tst: needs NUM_PRED_SLOTS > 1");
+    end
 
     // BP-011 round-trip tests.
     if (_rt_correct_t0_tst != 0)
@@ -8194,10 +8231,16 @@ module tb;
       cov_gap_tst(verbose);
 
     // BP-026 coverage gap tests (TC-55 through TC-60).
-    if (_slot1_t1_write_tst != 0)
-      slot1_t1_write_tst(verbose);
-    if (_slot1_t2_write_tst != 0)
-      slot1_t2_write_tst(verbose);
+    if (_slot1_t1_write_tst != 0) begin
+      // BP-128: a slot 1 test; skipped at one slot.
+      if (NUM_PRED_SLOTS > 1) slot1_t1_write_tst(verbose);
+      else $display("SKIP slot1_t1_write_tst: needs NUM_PRED_SLOTS > 1");
+    end
+    if (_slot1_t2_write_tst != 0) begin
+      // BP-128: a slot 1 test; skipped at one slot.
+      if (NUM_PRED_SLOTS > 1) slot1_t2_write_tst(verbose);
+      else $display("SKIP slot1_t2_write_tst: needs NUM_PRED_SLOTS > 1");
+    end
     if (_fh_sel_t3_t4_tst != 0)
       fh_sel_t3_t4_tst(verbose);
     if (_aging_active_tst != 0)
@@ -8357,7 +8400,7 @@ module tb;
     local_fails     = 0;
     norm_we_s1_seen = 1'b0;
 
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][80]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][80]
       = 16'h0007;
     if (verbose != 0)
       $display(
@@ -8386,13 +8429,13 @@ module tb;
     stg_upd_val1 = 1'b1;
     @(posedge clk);
     norm_we_s1_seen =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.norm_we_s1;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].norm_we;
     stg_upd_val1 = 1'b0;
     stg_upd_inp1 = '0;
     @(posedge clk);
 
     rd_s1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][80];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][80];
 
     if (verbose != 0) begin
       $display(
@@ -8440,7 +8483,7 @@ module tb;
     local_fails     = 0;
     norm_we_s1_seen = 1'b0;
 
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][90]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][90]
       = 16'h0007;
     if (verbose != 0)
       $display(
@@ -8466,13 +8509,13 @@ module tb;
     stg_upd_val1 = 1'b1;
     @(posedge clk);
     norm_we_s1_seen =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.norm_we_s1;
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].norm_we;
     stg_upd_val1 = 1'b0;
     stg_upd_inp1 = '0;
     @(posedge clk);
 
     rd_s1 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][90];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][90];
 
     if (verbose != 0) begin
       $display(
@@ -8512,8 +8555,8 @@ module tb;
   // ----------------------------------------------------------------
   task automatic fh_sel_t3_t4_tst(int verbose);
     int             local_fails;
-    tage_pred_inp_t inp;
-    logic [1:0]     rdy;
+    tage_pred_inp_t            inp;
+    logic [NUM_PRED_SLOTS-1:0] rdy; // BP-128: one bit per slot
 
     local_fails = 0;
 
@@ -8527,6 +8570,13 @@ module tb;
     if (verbose != 0)
       $display(
         "[INFO] fh_sel_t3_t4_tst: T3 fh=1AA T4 fh=155 set");
+
+    // BP-128: start on a clock edge. The rdy samples below are a fixed
+    // number of edges after the request, so they assumed the test was
+    // entered edge-aligned, as slot1_t2_write_tst leaves it. At one
+    // slot that test is skipped and cov_gap_tst leaves the process at
+    // edge + 1, one phase later.
+    @(posedge clk);
 
     // Prediction 1: pc=0xE00. T3/T4 idx/tag recomputed with
     // non-zero fh -> exercises fh_sel arms 3 and 4.
@@ -8601,10 +8651,10 @@ module tb;
 
     // Pre-load T1 s0 row=100 bank=0.
     // CTR=101 (taken, non-boundary), USE=01, EPC=00, TAG=00, VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][100]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][100]
       = 16'h001B;
     // T0 row=100: not-taken (CTR=00), so alt_tkn=0 -> pred_diff=1.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][100] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][100] = 2'b00;
     if (verbose != 0) begin
       $display(
         "[INFO] aging_active_tst: T1 s0 mem[0][100]=001B");
@@ -8686,7 +8736,7 @@ module tb;
 
     // Verify: CTR 101->100 USE 01->00 EPC->01 = 0x0049.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][100];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][100];
     if (verbose != 0)
       $display(
         "[INFO] aging_active_tst: T1 s0[0][100]=0x%04h",
@@ -8725,7 +8775,7 @@ module tb;
 
     local_fails = 0;
 
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][95]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][95]
       = 16'h0007;
     if (verbose != 0)
       $display(
@@ -8757,7 +8807,7 @@ module tb;
     @(posedge clk);
 
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][95];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][95];
     if (verbose != 0)
       $display(
         "[INFO] alt_ctr_s0_write_tst: T2 s0[0][95]=0x%04h",
@@ -8804,14 +8854,14 @@ module tb;
     u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
 
     // Pre-load: T0 weakly taken. T1-T4 all-zero (VAL=0 miss).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][976]         = 2'b10;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][976]
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][976]         = 2'b10;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][976]
       = 16'h0000;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][976]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][976]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][976]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][976]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][976]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][976]
       = 16'h0000;
     if (verbose != 0) begin
       $display(
@@ -8869,13 +8919,13 @@ module tb;
     stg_upd_val0            = 1'b1;
     @(posedge clk);
     alc_wr_seen =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
     @(posedge clk);
 
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][976];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][976];
     if (verbose != 0) begin
       $display(
         "[INFO] alc_end_to_end_tst: alc_wr_seen=%0b",
@@ -8929,7 +8979,7 @@ module tb;
 
     // Pre-load T2 s0 bank 0 row 256.
     // TAG=0x29 EPC=00 USE=00 CTR=101 VAL=1 -> 0x290B.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][256]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][256]
       = 16'h290B;
     if (verbose != 0)
       $display(
@@ -9014,7 +9064,7 @@ module tb;
 
     // Pre-load T3 s0 bank 0 row 128.
     // TAG=0x2C EPC=00 USE=00 CTR=101 VAL=1 -> 0x2C0B.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][128]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][128]
       = 16'h2C0B;
     if (verbose != 0)
       $display(
@@ -9095,7 +9145,7 @@ module tb;
 
     // Pre-load T1 slot 0 bank=0 row=640.
     // TAG=0x01 EPC=00 USE=01 CTR=111 VAL=1 -> 0x011F.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][640]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][640]
       = 16'h011F;
     if (verbose != 0)
       $display(
@@ -9151,7 +9201,7 @@ module tb;
 
     // Read back T1 entry. CTR bits[3:1] must remain 111.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][640];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][640];
     if (verbose != 0)
       $display(
         "[INFO] ctr_t1_max_sat_tst: post T1[0][640]=0x%04h",
@@ -9198,15 +9248,15 @@ module tb;
 
     // Pre-load T1 slot 0 bank=1 row=0.
     // TAG=0x02 EPC=00 USE=01 CTR=000 VAL=1 -> 0x0211.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][0]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][0]
       = 16'h0211;
     // T2-T4 bank=1 row=0: USE=01 VALID=0.
     // Ensures ueff=01 at predict, so alc_comp=0 at update.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][0]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][0]
       = 16'h0010;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][0]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][0]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][0]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][0]
       = 16'h0010;
     if (verbose != 0)
       $display(
@@ -9267,7 +9317,7 @@ module tb;
 
     // Read back T1 entry. CTR bits[3:1] must remain 000.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][0];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][0];
     if (verbose != 0)
       $display(
         "[INFO] ctr_t1_min_sat_tst: post T1[1][0]=0x%04h",
@@ -9309,11 +9359,11 @@ module tb;
 
     // Pre-load T1 slot 0 bank=0 row=896.
     // TAG=0x01 EPC=00 USE=11 CTR=111 VAL=1 -> 0x013F.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][896]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][896]
       = 16'h013F;
     // T0 bank=0 row=896: seeded 2b00 so alt_tkn=0 (pred_diff=1). It
     // relied on the reset value until T0 reset to 2b10 (TD#103).
-    u_dut.u_tage_bim.u_ram_s0.mem[0][896] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][896] = 2'b00;
     if (verbose != 0)
       $display(
         "[INFO] use_t1_max_sat_tst: T1 s0 mem[0][896]=013F");
@@ -9373,7 +9423,7 @@ module tb;
 
     // Read back T1 entry. USE bits[5:4] must remain 11.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][896];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][896];
     if (verbose != 0)
       $display(
         "[INFO] use_t1_max_sat_tst: post T1[0][896]=0x%04h",
@@ -9415,18 +9465,18 @@ module tb;
 
     // Pre-load T1 slot 0 bank=1 row=128.
     // TAG=0x02 EPC=00 USE=00 CTR=001 VAL=1 -> 0x0203.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0203;
     // T0 bank=1 row=128: CTR=10 (taken=1). Creates alt_tkn=1
     // so pred_diff=1 and USE DEC fires at update.
-    u_dut.u_tage_bim.u_ram_s0.mem[1][128] = 2'b10;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][128] = 2'b10;
     // T2-T4 bank=1 row=128: USE=01 VALID=0.
     // Ensures ueff=01 at predict, so alc_comp=0 at update.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0010;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][128]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][128]
       = 16'h0010;
     if (verbose != 0)
       $display(
@@ -9488,7 +9538,7 @@ module tb;
 
     // Read back T1 entry. USE bits[5:4] must remain 00.
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][128];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][128];
     if (verbose != 0)
       $display(
         "[INFO] use_t1_min_sat_tst: post T1[1][128]=0x%04h",
@@ -9538,16 +9588,16 @@ module tb;
 
     // T1 s0 bank=0 row=512: valid hit entry CTR=100 (taken).
     // TAG=05 EPC=00 USE=00 CTR=100 VAL=1 -> 0x0509.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h0509;
     // T0 BIM s0: CTR=00 not-taken. alt_tkn=0 -> pred_diff=1.
-    u_dut.u_tage_bim.u_ram_s0.mem[0][512] = 2'b00;
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][512] = 2'b00;
     // T2-T4 s0: USE=01 VAL=0 -> ueff=01>0. Block candidates.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h0010;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h0010;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h0010;
     if (verbose != 0)
       $display(
@@ -9597,10 +9647,10 @@ module tb;
     @(posedge clk);
     // Sample alc_we_s0 for all tables T1-T4.
     alc_wr_seen =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0
-      | u_dut.gen_tage_tbl[2].u_tage_tbl.alc_we_s0
-      | u_dut.gen_tage_tbl[3].u_tage_tbl.alc_we_s0
-      | u_dut.gen_tage_tbl[4].u_tage_tbl.alc_we_s0;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we
+      | u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].alc_we
+      | u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].alc_we
+      | u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
     @(posedge clk);
@@ -9678,11 +9728,11 @@ module tb;
     // Sample all write enables after update val propagates.
     // BIM ctr_we_s0 and T1-T4 norm_we_s0 must all be 0.
     any_we_seen =
-      u_dut.u_tage_bim.ctr_we_s0
-      | u_dut.gen_tage_tbl[1].u_tage_tbl.norm_we_s0
-      | u_dut.gen_tage_tbl[2].u_tage_tbl.norm_we_s0
-      | u_dut.gen_tage_tbl[3].u_tage_tbl.norm_we_s0
-      | u_dut.gen_tage_tbl[4].u_tage_tbl.norm_we_s0;
+      u_dut.u_tage_bim.g_slot[0].ctr_we
+      | u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].norm_we
+      | u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].norm_we
+      | u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].norm_we
+      | u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].norm_we;
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
     @(posedge clk);
@@ -9733,13 +9783,13 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2, rd_t3;
     local_fails = 0;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0717;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h071B;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h07D8;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0000;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
@@ -9775,11 +9825,11 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0)
       $display("[INFO] epc_prm_match_tst:  T2=0x%04h T1=0x%04h T3=0x%04h",
         rd_t2, rd_t1, rd_t3);
@@ -9822,13 +9872,13 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2, rd_t3;
     local_fails = 0;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0717;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h071B;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h07D8;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0000;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
@@ -9864,11 +9914,11 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0)
       $display("[INFO] epc_prm_misp_tst:  T2=0x%04h T1=0x%04h T3=0x%04h",
         rd_t2, rd_t1, rd_t3);
@@ -9910,13 +9960,13 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2, rd_t3;
     local_fails = 0;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0717;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h071B;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h07D8;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0000;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
@@ -9954,11 +10004,11 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0)
       $display("[INFO] epc_alt_match_tst:  T1=0x%04h T2=0x%04h T3=0x%04h",
         rd_t1, rd_t2, rd_t3);
@@ -9999,13 +10049,13 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2, rd_t3;
     local_fails = 0;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0717;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h071B;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h07D8;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0000;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
@@ -10043,11 +10093,11 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0)
       $display("[INFO] epc_alt_misp_tst:  T1=0x%04h T2=0x%04h T3=0x%04h",
         rd_t1, rd_t2, rd_t3);
@@ -10093,13 +10143,13 @@ module tb;
     logic [15:0]     rd_t1, rd_t2, rd_t3;
     local_fails = 0;
     // both T1 and T2 taken (CTR=101) to force pred_diff=0
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h071B;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h071B;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h07D8;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0000;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
@@ -10130,11 +10180,11 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0)
       $display("[INFO] epc_neg_tst:  T2=0x%04h T1=0x%04h T3=0x%04h",
         rd_t2, rd_t1, rd_t3);
@@ -10200,10 +10250,10 @@ module tb;
 
     // Seed T2 CTR=100 boundary, T1 as alt. Predict with uaon=0.
     // TAG=0x45 EPC=0 USE=0 CTR=100 VAL=1 = 0x4509.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4509;
     // T1 alt: TAG=0x45 EPC=0 USE=0 CTR=011 VAL=1 = 0x4507.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4507;
 
     inp           = '0;
@@ -10562,10 +10612,10 @@ module tb;
 
     // Part A: uaon=7 below threshold, CTR=100 boundary entry.
     // TAG=0x45 EPC=0 USE=0 CTR=100 VAL=1 = 0x4509.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4509;
     // T1 alt: TAG=0x45 EPC=0 USE=0 CTR=011 VAL=1 = 0x4507.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4507;
     u_dut.u_tage_cntrl.uaon[0] = 4'h7;
 
@@ -10621,7 +10671,7 @@ module tb;
     // Part C: uaon=0xF, CTR=111 strong (not boundary).
     // uaon_trig=0 so use_alt_on_na=0 despite uaon[3]=1.
     // TAG=0x45 EPC=0 USE=0 CTR=111 VAL=1 = 0x450F.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h450F;
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
 
@@ -10956,7 +11006,7 @@ module tb;
     tage_pred_meta_t meta;
     local_fails = 0;
     // Seed T1 s0 row=202 bank=0: USE=11 EPC=00 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][202]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][202]
       = 16'h003B;
     tage_enable_aging = 1'b0;
     inp               = '0;
@@ -11077,14 +11127,14 @@ module tb;
     tage_pred_meta_t meta;
     local_fails = 0;
     // T1: valid provider with USE=00 (T1 won't block alloc scan).
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][203]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][203]
       = 16'h000F;
     // T2-T4: USE=11 EPC=00 VAL=0 (drives u_eff in alloc scan).
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][203]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][203]
       = 16'h0030;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][203]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][203]
       = 16'h0030;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][203]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][203]
       = 16'h0030;
     tage_enable_aging = 1'b0;
     inp               = '0;
@@ -11163,7 +11213,7 @@ module tb;
     int              k;
     local_fails = 0;
     // Seed T1 s0 row=204: TAG=00 EPC=00 USE=10 CTR=101 VAL=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][204]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][204]
       = 16'h002B;
     tage_enable_aging = 1'b0;
     inp               = '0;
@@ -11248,13 +11298,13 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     // Sub-test A: mispredict -> allocation fires.
     // T1-T4 all-zero; prm=T0. alc_comp=T1 (USE=0).
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][522]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][522]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][522]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h828);
@@ -11277,7 +11327,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522];
     if (verbose != 0)
       $display(
         "[INFO] alc_trigger_gating_tst A: T1[0][522]=0x%04h",
@@ -11290,7 +11340,7 @@ module tb;
     end
     @(posedge clk);
     // Sub-test B: correct prediction -> no allocation.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h828);
@@ -11313,7 +11363,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522];
     if (verbose != 0)
       $display(
         "[INFO] alc_trig_gating_tst B: T1[0][522]=0x%04h exp=0x0000",
@@ -11327,7 +11377,7 @@ module tb;
     @(posedge clk);
     // Sub-test C: prm_comp=T4 (max table) -> prm<TAGE_MAX_TBL fails.
     // Force meta with prm_comp=4 to bypass prediction.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
     meta                    = '0;
     meta.tage_prm_comp      = 3'd4;
@@ -11346,7 +11396,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][522];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522];
     if (verbose != 0)
       $display(
         "[INFO] alc_trig_gating_tst C: T1[0][522]=0x%04h exp=0x0000",
@@ -11387,13 +11437,13 @@ module tb;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     // T1 USE=3 (non-alloc), miss. T2-T4 VAL=0 (alloc candidate).
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][40]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40]
       = 16'h0039;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][40]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][40]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][40]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][40]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][40]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][40]
       = 16'h0000;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h20A0);
@@ -11433,9 +11483,9 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][40];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][40];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][40];
     if (verbose != 0) begin
       $display(
         "[INFO] alc_which_table_tst: T1[0][40]=0x%04h",rd_t1);
@@ -11484,14 +11534,14 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][582]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][582]
       = 16'h0039;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][582]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][582]
       = 16'h0000;
     // T3 seeded to a distinct value to detect spurious write.
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][582]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][582]
       = 16'h000E;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][582]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][582]
       = 16'h0000;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h3918);
@@ -11524,9 +11574,9 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][582];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][582];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][582];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][582];
     if (verbose != 0) begin
       $display(
         "[INFO] alc_consec_skip_tst: T2[1][582]=0x%04h",rd_t2);
@@ -11573,13 +11623,13 @@ module tb;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     // T1-T4 USE=3 non-alloc (no candidate above T0).
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0039;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0039;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0039;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
       = 16'h0039;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h5800);
@@ -11613,13 +11663,13 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][512];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     if (verbose != 0) begin
       $display(
         "[INFO] alc_no_cand_tst: T1=%04h T2=%04h T3=%04h T4=%04h",
@@ -11660,16 +11710,16 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][80]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][80]
       = 16'h0000;
     // Decoy at adjacent row 81.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][81]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][81]
       = 16'h003F;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][80]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][80]
       = 16'h0039;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][80]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][80]
       = 16'h0039;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][80]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][80]
       = 16'h0039;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h4140);
@@ -11708,9 +11758,9 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1_tgt =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][80];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][80];
     rd_t1_dec =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][81];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][81];
     if (verbose != 0) begin
       $display(
         "[INFO] alc_pre_hashed_idx_tst: T1[0][80]=0x%04h",
@@ -11762,13 +11812,13 @@ module tb;
     tage_enable_aging = 1'b0;
     // Sub-test A: epoch=0.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
       = 16'h0000;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][542]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
       = 16'h0039;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][542]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
       = 16'h0039;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][542]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
       = 16'h0039;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h1878);
@@ -11791,7 +11841,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542];
     if (verbose != 0)
       $display(
         "[INFO] alc_contents_tst A (ep=0): T1[1][542]=0x%04h",
@@ -11805,7 +11855,7 @@ module tb;
     @(posedge clk);
     // Sub-test B: epoch=2 -> EPC=2'b10 in allocated entry.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
       = 16'h0000;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h1878);
@@ -11828,7 +11878,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][542];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542];
     if (verbose != 0)
       $display(
         "[INFO] alc_contents_tst B (ep=2): T1[1][542]=0x%04h",
@@ -11867,13 +11917,13 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][20]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0000;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[1][20]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0039;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[1][20]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0039;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[1][20]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0039;
     // Sub-test A: mispredict -> alc_we_s0=1 for T1.
     inp           = '0;
@@ -11894,7 +11944,7 @@ module tb;
     stg_upd_val0            = 1'b1;
     @(posedge clk);
     we_seen =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
     @(posedge clk);
@@ -11910,7 +11960,7 @@ module tb;
     end
     @(posedge clk);
     // Sub-test B: correct prediction -> alc_we_s0=0.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[1][20]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0000;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h1050);
@@ -11930,7 +11980,7 @@ module tb;
     stg_upd_val0            = 1'b1;
     @(posedge clk);
     we_seen =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
     @(posedge clk);
@@ -11966,7 +12016,7 @@ module tb;
     stg_upd_val0            = 1'b1;
     @(posedge clk);
     we_seen =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.alc_we_s0;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
     @(posedge clk);
@@ -12010,14 +12060,14 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][562]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][562]
       = 16'h0000;
     // T2 seeded to distinctive value to catch spurious write.
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][562]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][562]
       = 16'h003F;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][562]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][562]
       = 16'h0039;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][562]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][562]
       = 16'h0039;
     inp           = '0;
     inp.pc        = VA_WIDTH'('h28C8);
@@ -12056,9 +12106,9 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][562];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][562];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][562];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][562];
     if (verbose != 0) begin
       $display(
         "[INFO] alc_ram_isolate_tst: T1[0][562]=0x%04h",rd_t1);
@@ -12106,13 +12156,13 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][50]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][50]
       = 16'h200F;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][50]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][50]
       = 16'h2007;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][50]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][50]
       = 16'h200B;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][50]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][50]
       = 16'h0000;
     inp    = '0;
     inp.pc = VA_WIDTH'('h100C8);
@@ -12204,13 +12254,13 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][75]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][75]
       = 16'h240B;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][75]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][75]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][75]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][75]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][75]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][75]
       = 16'h0000;
     inp    = '0;
     inp.pc = VA_WIDTH'('h1212C);
@@ -12293,14 +12343,14 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.u_tage_bim.u_ram_s0.mem[0][125] = 2'b10;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][125]
+    u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][125] = 2'b10;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][125]
       = 16'h0000;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][125]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][125]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][125]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][125]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][125]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][125]
       = 16'h0000;
     inp    = '0;
     inp.pc = VA_WIDTH'('h141F4);
@@ -12369,13 +12419,13 @@ module tb;
     tage_pred_meta_t meta;
     local_fails = 0;
     tage_enable_aging = 1'b0;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][150]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][150]
       = 16'h2C09;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][150]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][150]
       = 16'h2C01;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][150]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][150]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][150]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][150]
       = 16'h0000;
     // Sub-test A: uaon below threshold -> using_primary=1.
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
@@ -12461,14 +12511,14 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][175]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][175]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][175]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h0000;
     // Sub-test A: CTR=111 (strong) -> pred_strong=1.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h300F;
     inp    = '0;
     inp.pc = VA_WIDTH'('h182BC);
@@ -12492,7 +12542,7 @@ module tb;
     end
     @(posedge clk);
     // Sub-test B: CTR=100 (weakest taken, boundary) -> pred_strong=0.
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h3009;
     inp    = '0;
     inp.pc = VA_WIDTH'('h182BC);
@@ -12539,13 +12589,13 @@ module tb;
     tage_pred_meta_t meta;
     local_fails = 0;
     tage_enable_aging = 1'b0;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h3409;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h3407;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][200]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h0000;
     // Sub-test A: using_primary=1 -> pred_tkn follows prm CTR MSB.
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
@@ -12631,13 +12681,13 @@ module tb;
     local_fails = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][225]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][225]
       = 16'h3C0F;
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][225]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][225]
       = 16'h0000;
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][225]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][225]
       = 16'h0000;
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][225]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][225]
       = 16'h0000;
     inp    = '0;
     inp.pc = VA_WIDTH'('h1E384);
@@ -12754,17 +12804,17 @@ module tb;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     // -- Step 1: seed all entries at bank=0 row=512 ----------
     // T2: CTR=010 USE=01 EPC=00 TAG=0x45 valid=1 -> 0x4515
-    u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h4515;
     // T1: CTR=101 USE=10 EPC=00 TAG=0x45 valid=1 -> 0x452B
-    u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h452B;
     // T3: invalid USE=0 -> u_eff=0 alloc candidate -> 0x0000
-    u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h0000;
     // T4: TAG=0x12 (wrong tag, no hit) interference ref
     // CTR=101 USE=11 EPC=01 TAG=0x12 valid=1 -> 0x127B
-    u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512]
+    u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][512]
       = 16'h127B;
     // Predict at PC=0x22800 (fh=0 -> idx=0x200 tag=0x45).
     inp           = '0;
@@ -12819,7 +12869,7 @@ module tb;
     stg_upd_inp0 = '0;
     @(posedge clk);
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     if (verbose != 0)
       $display("[INFO] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4523"
         , rd_t2);
@@ -12875,9 +12925,9 @@ module tb;
     @(posedge clk);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     if (verbose != 0) begin
       $display("[INFO] capstone_rt_tst step3: T1[0][512]=0x%04h exp=0x452D"
         , rd_t1);
@@ -12946,13 +12996,13 @@ module tb;
     @(posedge clk);
     // -- Step 5: final readback all touched entries ----------
     rd_t1 =
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     rd_t2 =
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     rd_t3 =
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     rd_t4 =
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][512];
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     if (verbose != 0) begin
       $display("[INFO] capstone_rt_tst step5: T1[0][512]=0x%04h exp=0x452F"
         , rd_t1);
@@ -13003,7 +13053,7 @@ module tb;
   // prediction slots.
   // PC=0x182BC: T1 is the sole tagged provider at row 175 (tag 0x30);
   // T2-T4 invalidated so alt falls back to T0 and using_primary=1.
-  // uaon[0]/uaon[1]=0 so no UAON override -> post-mux CTR = prm CTR.
+  // uaon[0]/uaon[S1]=0 so no UAON override -> post-mux CTR = prm CTR.
   // Start state per iteration is fully driven (RAM + uaon), so the
   // test does not depend on residue or iteration order.
   // TD#87 decode (post-mux CTR): 000 strong / 001 medium /
@@ -13028,7 +13078,7 @@ module tb;
     local_fails       = 0;
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.u_tage_cntrl.uaon[1] = 4'h0;
+    u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
 
     for (int ci = 0; ci < 8; ci++) begin
       cval  = 3'(ci);
@@ -13037,14 +13087,14 @@ module tb;
 
       // Drive start state for both slots: T1 sole provider, T2-T4
       // invalidated at the index under test.
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[0][175] = entry;
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[0][175] = 16'h0000;
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[0][175] = 16'h0000;
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[0][175] = 16'h0000;
-      u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[0][175] = entry;
-      u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[0][175] = 16'h0000;
-      u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[0][175] = 16'h0000;
-      u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][175] = entry;
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][175] = entry;
+      u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[0][175] = 16'h0000;
+      u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[0][175] = 16'h0000;
 
       // Expected TD#87 one-hot decode and TD#88 extended CTR, per row.
       // Sized signed literals keep the assignment width-clean.
@@ -13075,7 +13125,7 @@ module tb;
       @(posedge clk);
       @(posedge clk);
       meta0 = tage_pred_meta_p2[0];
-      meta1 = tage_pred_meta_p2[1];
+      meta1 = tage_pred_meta_p2[S1];
 
       // Sign-extend the 5b signed extd_ctr into int for clean %0d.
       gx0 = 32'(signed'(meta0.tage_extd_ctr));
@@ -13177,7 +13227,7 @@ module tb;
   //     RAMs, so T0 is the sole provider for any PC and no residue
   //     from an earlier test can alias either index under test;
   //   - the two T0 rows are located by READING the DUT's own
-  //     tage_bim address (u_ram_s0/s1 addr mux), never by replicating
+  //     tage_bim address (g_slot[0].u_ram/s1 addr mux), never by replicating
   //     the index hash, and the test FAILS if the two PCs collide on
   //     one row;
   //   - the pipeline is drained before each phase, so the response
@@ -13231,9 +13281,14 @@ module tb;
 
     local_fails       = 0;
     n_resp            = 0;
+    // BP-128: at one slot the slot 1 checks (the s1 branch_id and
+    // ctr/tkn of phase 1 and phase 2) are skipped; [S1] is slot 0.
+    if (NUM_PRED_SLOTS == 1)
+      $display(
+        "SKIP pred_branch_id_stage_tst slot 1: needs NUM_PRED_SLOTS > 1");
     tage_enable_aging = 1'b0;
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
-    u_dut.u_tage_cntrl.uaon[1] = 4'h0;
+    u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
 
     // -- Start state. Invalidate T1..T4 completely so T0 is the sole
     //    provider for any PC and no earlier test's residue can alias
@@ -13241,14 +13296,14 @@ module tb;
     re = (1 << TAGE_TBL_IDX[1]) / 2;
     for (int b = 0; b < 2; b++) begin
       for (int i = 0; i < re; i++) begin
-        u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[1].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[2].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[3].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s0.mem[b][i] = '0;
-        u_dut.gen_tage_tbl[4].u_tage_tbl.u_ram_s1.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
       end
     end
 
@@ -13306,13 +13361,13 @@ module tb;
 
     // -- Seed the two rows, both slot RAMs. bank = index MSB,
     //    row = the remaining bits, matching tage_bim's bw_ram map.
-    u_dut.u_tage_bim.u_ram_s0
+    u_dut.u_tage_bim.g_slot[0].u_ram
       .mem[ix_a[TAGE_TBL_IDX[0]-1]][ix_a[TAGE_TBL_IDX[0]-2:0]] = BIM_A;
-    u_dut.u_tage_bim.u_ram_s1
+    u_dut.u_tage_bim.g_slot[S1].u_ram
       .mem[ix_a[TAGE_TBL_IDX[0]-1]][ix_a[TAGE_TBL_IDX[0]-2:0]] = BIM_A;
-    u_dut.u_tage_bim.u_ram_s0
+    u_dut.u_tage_bim.g_slot[0].u_ram
       .mem[ix_b[TAGE_TBL_IDX[0]-1]][ix_b[TAGE_TBL_IDX[0]-2:0]] = BIM_B;
-    u_dut.u_tage_bim.u_ram_s1
+    u_dut.u_tage_bim.g_slot[S1].u_ram
       .mem[ix_b[TAGE_TBL_IDX[0]-1]][ix_b[TAGE_TBL_IDX[0]-2:0]] = BIM_B;
 
     // ==============================================================
@@ -13349,18 +13404,18 @@ module tb;
     #1;
 
     meta0 = tage_pred_meta_p2[0];
-    meta1 = tage_pred_meta_p2[1];
+    meta1 = tage_pred_meta_p2[S1];
     if (verbose != 0)
       $display(
         "[INFO] pred_branch_id_stage_tst: A s0 id=%0h ctr=%03b tkn=%0b",
         meta0.branch_id, meta0.tage_prm_ctr, meta0.tage_pred_tkn);
 
-    if (tage_pred_rdy_p2[0] !== 1'b1 || tage_pred_rdy_p2[1] !== 1'b1)
+    if (tage_pred_rdy_p2[0] !== 1'b1 || tage_pred_rdy_p2[S1] !== 1'b1)
     begin
       local_fails++;
       $display(
         "[FAIL] pred_branch_id_stage_tst: A rdy=%0b%0b exp=11",
-        tage_pred_rdy_p2[1], tage_pred_rdy_p2[0]);
+        tage_pred_rdy_p2[S1], tage_pred_rdy_p2[0]);
     end
     if (meta0.branch_id !== FTQ_IDX_BITS'(ID_A0)) begin
       local_fails++;
@@ -13368,7 +13423,8 @@ module tb;
         "[FAIL] pred_branch_id_stage_tst: A s0 branch_id=%0h exp=%0h",
         meta0.branch_id, FTQ_IDX_BITS'(ID_A0));
     end
-    if (meta1.branch_id !== FTQ_IDX_BITS'(ID_A1)) begin
+    if ((NUM_PRED_SLOTS > 1) && (meta1.branch_id !== FTQ_IDX_BITS'(ID_A1)))
+    begin
       local_fails++;
       $display(
         "[FAIL] pred_branch_id_stage_tst: A s1 branch_id=%0h exp=%0h",
@@ -13382,7 +13438,8 @@ module tb;
         "[FAIL] pred_branch_id_stage_tst: A s0 ctr=%03b tkn=%0b cmp=%0d",
         meta0.tage_prm_ctr, meta0.tage_pred_tkn, meta0.tage_prm_comp);
     end
-    if (meta1.tage_prm_ctr !== CTR_A || meta1.tage_pred_tkn !== 1'b1)
+    if ((NUM_PRED_SLOTS > 1)
+        && (meta1.tage_prm_ctr !== CTR_A || meta1.tage_pred_tkn !== 1'b1))
     begin
       local_fails++;
       $display(
@@ -13393,14 +13450,15 @@ module tb;
     @(posedge clk);                     // B on p2
     #1;
     meta0 = tage_pred_meta_p2[0];
-    meta1 = tage_pred_meta_p2[1];
+    meta1 = tage_pred_meta_p2[S1];
     if (meta0.branch_id !== FTQ_IDX_BITS'(ID_B0)) begin
       local_fails++;
       $display(
         "[FAIL] pred_branch_id_stage_tst: B s0 branch_id=%0h exp=%0h",
         meta0.branch_id, FTQ_IDX_BITS'(ID_B0));
     end
-    if (meta1.branch_id !== FTQ_IDX_BITS'(ID_B1)) begin
+    if ((NUM_PRED_SLOTS > 1) && (meta1.branch_id !== FTQ_IDX_BITS'(ID_B1)))
+    begin
       local_fails++;
       $display(
         "[FAIL] pred_branch_id_stage_tst: B s1 branch_id=%0h exp=%0h",
@@ -13452,7 +13510,7 @@ module tb;
         e_ctr = ((i - 2) % 2 == 0) ? CTR_A : CTR_B;
         e_tkn = ((i - 2) % 2 == 0) ? 1'b1  : 1'b0;
         meta0 = tage_pred_meta_p2[0];
-        meta1 = tage_pred_meta_p2[1];
+        meta1 = tage_pred_meta_p2[S1];
         n_resp++;
 
         if (tage_pred_rdy_p2[0] !== 1'b1) begin
@@ -13467,7 +13525,7 @@ module tb;
             "[FAIL] pred_branch_id_stage_tst: stream %0d s0 id=%0h exp=%0h",
             i - 2, meta0.branch_id, e_id0);
         end
-        if (meta1.branch_id !== e_id1) begin
+        if ((NUM_PRED_SLOTS > 1) && (meta1.branch_id !== e_id1)) begin
           local_fails++;
           $display(
             "[FAIL] pred_branch_id_stage_tst: stream %0d s1 id=%0h exp=%0h",
@@ -13483,8 +13541,9 @@ module tb;
             i - 2, meta0.tage_prm_ctr, e_ctr,
             meta0.tage_pred_tkn, e_tkn);
         end
-        if (meta1.tage_prm_ctr !== e_ctr
-            || meta1.tage_pred_tkn !== e_tkn) begin
+        if ((NUM_PRED_SLOTS > 1)
+            && (meta1.tage_prm_ctr !== e_ctr
+                || meta1.tage_pred_tkn !== e_tkn)) begin
           local_fails++;
           $display(
             "[FAIL] branch_id_stage: str %0d s1 ctr=%03b/%03b t=%0b/%0b",

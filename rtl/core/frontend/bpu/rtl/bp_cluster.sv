@@ -1769,12 +1769,12 @@ module bp_cluster (
 
   // ----------------------------------------------------------------
   // uBTB (p1). No request-valid port: it predicts every cycle.
-  // NUM_PRED_SLOTS defaults to 1 in ubtb.sv and is overridden here.
+  // Its slot count N_SLOTS is the package NUM_PRED_SLOTS (BP-128).
   // pred_p1 is the per-slot view of the matched entry; blk_p1 is the
   // entry-scoped sideband. Both are registered p0 -> p1 together.
   // ----------------------------------------------------------------
   ubtb #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
+    .N_SLOTS (NUM_PRED_SLOTS)
   ) u_ubtb (
     .clk        (clk),
     .rstn       (rstn),
@@ -1788,12 +1788,9 @@ module bp_cluster (
   // loop_pred (p1). Per slot after the TD#105 retrofit: one table
   // bank per slot, one prediction and one update channel per slot,
   // and the output renamed pred_p1 for the stage at which it is
-  // valid. NUM_PRED_SLOTS defaults to 1 in loop_pred.sv and is
-  // overridden here, the same way it is for ubtb.
+  // valid. Its slot count is the package NUM_PRED_SLOTS (BP-128).
   // ----------------------------------------------------------------
-  loop_pred #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_loop_pred (
+  loop_pred u_loop_pred (
     .clk           (clk),
     .rstn          (rstn),
     .pred_pc_p0    (w_lp_pred_pc_p0),
@@ -1867,9 +1864,7 @@ module bp_cluster (
   // ----------------------------------------------------------------
   // TAGE (p2). folded_hist takes bp_folded_hist_t whole.
   // ----------------------------------------------------------------
-  tage #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_tage (
+  tage u_tage (
     .clk                 (clk),
     .rstn                (rstn),
     .tage_pred_val_p0    (w_tage_pred_val_p0),
@@ -1919,9 +1914,7 @@ module bp_cluster (
   // p0, and bp_history advances whenever a branch is predicted, so
   // the live folds would describe newer history than that block.
   // ----------------------------------------------------------------
-  sc #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_sc (
+  sc u_sc (
     .clk               (clk),
     .rstn              (rstn),
     .tage_pred_rdy_p2  (w_tage_pred_rdy_p2),

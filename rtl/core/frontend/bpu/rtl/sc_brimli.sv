@@ -9,9 +9,9 @@
 // -------------------------------------------------------------------
 // Parameterized Statistical Corrector (SC) BrIMLI counter table (ST4).
 // Structurally identical to sc_table except the prediction index is
-// get_br_imli_idx instead of sc_idx_hash. Wraps two bw_ram instances
-// to support dual prediction slots (NUM_PRED_SLOTS=2). RAM0 -> slot 0,
-// RAM1 -> slot 1. Selection is structural. ST0-ST3 use sc_table.
+// get_br_imli_idx instead of sc_idx_hash. Wraps one bw_ram instance
+// per prediction slot, g_slot[s].u_ram for slot s (NUM_PRED_SLOTS, 1
+// or 2). Selection is structural. ST0-ST3 use sc_table.
 //
 // Entry layout:
 //   The SC entry is a single signed confidence counter of width
@@ -54,7 +54,6 @@ module sc_brimli #(
   parameter  int THIS_INDEX_BITS = SC_TBL_IDX[4],
   parameter  int THIS_CTR_WIDTH  = SC_TBL_CTR[4],
   parameter  int THIS_ENTRIES    = SC_TBL_ENTRIES[4],
-  parameter  int NUM_PRED_SLOTS  = bp_defines_pkg::NUM_PRED_SLOTS,
   // BrIMLI index mode is a compile-time selector (sc_decisions.md
   // section 12), propagated from sc.sv. Not a runtime port.
   parameter  br_imli_mode_e BR_IMLI_MODE = IDX_IMLI_PHR,
@@ -137,133 +136,88 @@ module sc_brimli #(
     end
   end
 
-  // Expose the index outputs (p2). Consumed by sc_cntrl to populate
-  // sc_upd_idx[4] in the prediction meta.
-  assign idx_hash_p2[0] = idx_hash[0];
-  assign idx_hash_p2[1] = idx_hash[1];
-
-  // Shared RAM-init write enable. Both slots see the same tbl_ri
+  // Shared RAM-init write enable. Every slot sees the same tbl_ri
   // signals. When active it overrides all normal write controls.
   logic ri_we;
   assign ri_we = tbl_ri_active & tbl_ri_wr;
 
-  // Fast init: write bw_ram mem arrays at time zero via hierarchical
-  // reference. Active only when +SC_FAST_INIT=1. bw_ram mem is 2D:
-  // mem[BANKS][ENTRIES]. Loop covers both banks.
-  initial begin
-    int fast_init;
-    fast_init = 0;
-    void'($value$plusargs("SC_FAST_INIT=%d", fast_init));
-    if (fast_init != 0) begin
-      for (int b = 0; b < NUM_BANKS; b++) begin
-        for (int i = 0; i < RAM_ENTRIES; i++) begin
-          u_ram_s0.mem[b][i] = ALLOC_DATA_WIDTH'(SC_SRAM_INIT_VALUE);
-          u_ram_s1.mem[b][i] = ALLOC_DATA_WIDTH'(SC_SRAM_INIT_VALUE);
+  // ============================================================
+  // One RAM per slot (BP-128: the slot 0 and slot 1 blocks were two
+  // copies; the loop follows NUM_PRED_SLOTS). g_slot[s].u_ram is slot
+  // s; before BP-128 it was u_ram_s0 / u_ram_s1.
+  // ============================================================
+  for (genvar s = 0; s < NUM_PRED_SLOTS; s++) begin : g_slot
+    logic [THIS_INDEX_BITS-1:0]  ram_addr;
+    logic [ALLOC_DATA_WIDTH-1:0] ram_din;
+    logic [ALLOC_DATA_WIDTH-1:0] ram_bweb_n;
+    logic                        ram_wen_n;
+    logic [ALLOC_DATA_WIDTH-1:0] ram_dout;
+    logic                        ctr_we;
+
+    // Fast init: write the bw_ram mem array at time zero via
+    // hierarchical reference. Active only when +SC_FAST_INIT=1. bw_ram
+    // mem is 2D: mem[BANKS][ENTRIES]. Loop covers both banks.
+    initial begin
+      int fast_init;
+      fast_init = 0;
+      void'($value$plusargs("SC_FAST_INIT=%d", fast_init));
+      if (fast_init != 0) begin
+        for (int b = 0; b < NUM_BANKS; b++) begin
+          for (int i = 0; i < RAM_ENTRIES; i++) begin
+            u_ram.mem[b][i] = ALLOC_DATA_WIDTH'(SC_SRAM_INIT_VALUE);
+          end
         end
       end
     end
+
+    // Expose the index output (p2). Consumed by sc_cntrl to populate
+    // sc_upd_idx[4] in the prediction meta.
+    assign idx_hash_p2[s] = idx_hash[s];
+
+    // Counter write enable: gated by update-valid and the counter
+    // strobe. No table-select gate here -- ctr_wr_u0 is gated by
+    // THIS_TABLE membership in sc_cntrl.
+    assign ctr_we    = sc_upd_val_u0[s] & ctr_wr_u0[s];
+    assign ram_wen_n = ~(ctr_we | ri_we);
+
+    always_comb begin : addr_mux
+      if (tbl_ri_active)
+        ram_addr = tbl_ri_wa;         // init overrides all
+      else if (ctr_we)
+        ram_addr = upd_index_u0[s];   // update write address
+      else
+        ram_addr = idx_hash[s];       // prediction read address
+    end
+
+    always_comb begin : din_mux
+      if (tbl_ri_active)
+        ram_din = tbl_ri_wd;
+      else
+        ram_din = ALLOC_DATA_WIDTH'(ctr_wd_u0[s]);
+    end
+
+    // The SC entry is a whole-word counter; every write is full-word.
+    // bweb_n all-zero enables all bits. wen_n controls whether the
+    // write commits.
+    assign ram_bweb_n = {ALLOC_DATA_WIDTH{1'b0}};
+
+    bw_ram #(
+      .ENTRIES(RAM_ENTRIES),
+      .WIDTH  (ALLOC_DATA_WIDTH),
+      .BANKS  (NUM_BANKS)
+    ) u_ram (
+      .clk      (clk),
+      .addr     (ram_addr[THIS_INDEX_BITS-2:0]),
+      .bank_addr(ram_addr[THIS_INDEX_BITS-1]),
+      .wen_n    (ram_wen_n),
+      .bweb_n   (ram_bweb_n),
+      .din      (ram_din),
+      .dout     (ram_dout)
+    );
+
+    // bw_ram read is one-cycle: address at p2, dout at p3.
+    assign ctr_p3[s] = ram_dout[THIS_CTR_WIDTH-1:0];
   end
-
-  // ============================================================
-  // Slot 0
-  // ============================================================
-  logic [THIS_INDEX_BITS-1:0]  ram_addr_s0;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_din_s0;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_bweb_n_s0;
-  logic                        ram_wen_n_s0;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_dout_s0;
-  logic                        ctr_we_s0;
-
-  // Counter write enable: gated by update-valid and the counter
-  // strobe. No table-select gate here -- ctr_wr_u0 is gated by
-  // THIS_TABLE membership in sc_cntrl.
-  assign ctr_we_s0 = sc_upd_val_u0[0] & ctr_wr_u0[0];
-  assign ram_wen_n_s0 = ~(ctr_we_s0 | ri_we);
-
-  always_comb begin : addr_mux_s0
-    if (tbl_ri_active)
-      ram_addr_s0 = tbl_ri_wa;         // init overrides all
-    else if (ctr_we_s0)
-      ram_addr_s0 = upd_index_u0[0];   // update write address
-    else
-      ram_addr_s0 = idx_hash[0];       // prediction read address
-  end
-
-  always_comb begin : din_mux_s0
-    if (tbl_ri_active)
-      ram_din_s0 = tbl_ri_wd;
-    else
-      ram_din_s0 = ALLOC_DATA_WIDTH'(ctr_wd_u0[0]);
-  end
-
-  // The SC entry is a whole-word counter; every write is full-word.
-  // bweb_n all-zero enables all bits. wen_n controls whether the
-  // write commits.
-  assign ram_bweb_n_s0 = {ALLOC_DATA_WIDTH{1'b0}};
-
-  bw_ram #(
-    .ENTRIES(RAM_ENTRIES),
-    .WIDTH  (ALLOC_DATA_WIDTH),
-    .BANKS  (NUM_BANKS)
-  ) u_ram_s0 (
-    .clk      (clk),
-    .addr     (ram_addr_s0[THIS_INDEX_BITS-2:0]),
-    .bank_addr(ram_addr_s0[THIS_INDEX_BITS-1]),
-    .wen_n    (ram_wen_n_s0),
-    .bweb_n   (ram_bweb_n_s0),
-    .din      (ram_din_s0),
-    .dout     (ram_dout_s0)
-  );
-
-  // bw_ram read is one-cycle: address at p2, dout at p3.
-  assign ctr_p3[0] = ram_dout_s0[THIS_CTR_WIDTH-1:0];
-
-  // ============================================================
-  // Slot 1
-  // ============================================================
-  logic [THIS_INDEX_BITS-1:0]  ram_addr_s1;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_din_s1;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_bweb_n_s1;
-  logic                        ram_wen_n_s1;
-  logic [ALLOC_DATA_WIDTH-1:0] ram_dout_s1;
-  logic                        ctr_we_s1;
-
-  assign ctr_we_s1 = sc_upd_val_u0[1] & ctr_wr_u0[1];
-  assign ram_wen_n_s1 = ~(ctr_we_s1 | ri_we);
-
-  always_comb begin : addr_mux_s1
-    if (tbl_ri_active)
-      ram_addr_s1 = tbl_ri_wa;
-    else if (ctr_we_s1)
-      ram_addr_s1 = upd_index_u0[1];
-    else
-      ram_addr_s1 = idx_hash[1];
-  end
-
-  always_comb begin : din_mux_s1
-    if (tbl_ri_active)
-      ram_din_s1 = tbl_ri_wd;
-    else
-      ram_din_s1 = ALLOC_DATA_WIDTH'(ctr_wd_u0[1]);
-  end
-
-  assign ram_bweb_n_s1 = {ALLOC_DATA_WIDTH{1'b0}};
-
-  bw_ram #(
-    .ENTRIES(RAM_ENTRIES),
-    .WIDTH  (ALLOC_DATA_WIDTH),
-    .BANKS  (NUM_BANKS)
-  ) u_ram_s1 (
-    .clk      (clk),
-    .addr     (ram_addr_s1[THIS_INDEX_BITS-2:0]),
-    .bank_addr(ram_addr_s1[THIS_INDEX_BITS-1]),
-    .wen_n    (ram_wen_n_s1),
-    .bweb_n   (ram_bweb_n_s1),
-    .din      (ram_din_s1),
-    .dout     (ram_dout_s1)
-  );
-
-  assign ctr_p3[1] = ram_dout_s1[THIS_CTR_WIDTH-1:0];
 
 endmodule : sc_brimli
 

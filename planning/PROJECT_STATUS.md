@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-11
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,41 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-078: TD scrub begun. TD#5, TD#16, TD#17 closed.
+
+No task was run and no RTL changed. Jeff is scrubbing the pending TDs
+(session_handoff-078, Job 1); the PA brings the facts for each row,
+read from the files the row depends on.
+
+CLOSED (Jeff):
+  TD#5  v_op_class_t is 8 bits since BP-124; values 1 (was VALU_INT)
+    and 2 (was VALU_FP) are unassigned and marked reserved in the
+    enum. Accepted as is: renumbering would move every VOP value.
+    Read: decode_pkg.sv.
+  TD#16 No instance of the padding exists. T0 is tage_bim.sv, not a
+    tage_table instance (Jeff), and T1-T4 have every THIS_ width
+    equal to its MAX. Read: tage_table.sv, tage_cntrl.sv,
+    bp_defines_pkg.sv, tage_table_entry_formats.md.
+  TD#17 The naming rule of tage_table_interfaces.md covers ports
+    only, and every tage_table port is array-indexed; alc_index_u0 is
+    THIS_INDEX_BITS wide; the T0 tag hash is moot. No RTL change.
+    Read: tage_table.sv, tage_table_interfaces.md.
+
+PA-DIRECT CORRECTION, session-078, tage_table_interfaces.md (Jeff,
+option 1). Read against tage_cntrl.sv, tage.sv and tage_table.sv:
+use_wr_u0 and epc_wr_u0 are opened on a prm or alt selector match,
+not prm alone; the useful-write note said prm_tbl_sel_u0 and
+upd_index_u0 carry the component Table 7 selects, which tage_cntrl
+never does; upd_index_u0 is the index tage.sv selects per table. The
+hardware is correct. ittage_table_interfaces.md carries the original
+note and has not been checked against the ITTAGE RTL.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, tage_table_interfaces.md.
+
+Next free: BP-128, INFRA-014, TOOLS-007, TD#179.
 
 ---
 ## Session-077, after BP-127: BP-127 recorded.
@@ -2408,6 +2443,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | one exception and defers to this |
 |                         |             |                   | row; changing it means changing  |
 |                         |             |                   | both.                            |
+|                         |             |                   | Session-078, PA-direct: use_wr,  |
+|                         |             |                   | epc_wr, the useful-write note    |
+|                         |             |                   | and upd_index_u0 corrected       |
+|                         |             |                   | against tage_cntrl.sv, tage.sv   |
+|                         |             |                   | and tage_table.sv.               |
 | tage_cntrl_use          | Complete    | --                | session-037/045.                 |
 | _update_rules.md        |             |                   |                                  |
 | tage_cntrl_uaon         | Complete    | --                | Session-060: reconciled to TD#87 |
@@ -3327,7 +3367,11 @@ assessment of each document. Correct any that are wrong.
 | 2  | Instruction fusion                    | Deferred to rename/dispatch     |
 | 3  | UOP expansion for RVV segments        | Policy TBD at vector execution  |
 | 4  | predecode.sv clk/rstn unused          | Resolve at pipeline stage assign|
-| 5  | ENUM hole at 7'd2 (VALU_FP)           | Minor, acceptable for now       |
+| 5  | v_op_class_t (decode_pkg.sv), 8 bits  | CLOSED session-078 (Jeff),      |
+|    | since BP-124. Values 1 (was VALU_INT, | accepted. Reserved in the type; |
+|    | DECODE-007) and 2 (was VALU_FP,       | renumbering moves every VOP     |
+|    | DECODE-006) unassigned, marked        | value for no gain. Was: ENUM    |
+|    | reserved in the enum.                 | hole at 7'd2 (VALU_FP).         |
 | 6  | vtype_hazard intra-bundle policy      | TBD at rename/dispatch          |
 | 7  | curs/curs_v rollback undefined.       | Resolve at bp_cluster impl or   |
 |    | Seznec uses SLIM structure. Inline    | migrate to SLIM-style external  |
@@ -3340,14 +3384,22 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | CLOSED by BP-122 (session-076): |
 |    |                                       | checkpoint per FTQ entry,       |
 |    |                                       | restore option A. TD#169.       |
-| 16 | ALLOC_DATA_WIDTH padding when         | Resolve at T0 implementation    |
-|    | THIS_ < MAX_ -- unused bits between   |                                 |
-|    | EPC and TAG fields.                   |                                 |
-| 17 | BP-007b signal naming nonconforming.  | BP-007c scope expanded to       |
-|    | _s0/_s1 suffixes used instead of      | include alc_index_u0 width fix  |
-|    | array indexing per                    |(MAX_IDX_WIDTH->THIS_INDEX_BITS) |
-|    | tage_table_interfaces.md.             | T0 tag hash compute-and-discard |
-|    | Prompt author error.                  | cleanup.                        |
+| 16 | ALLOC_DATA_WIDTH padding when         | CLOSED session-078 (Jeff). No   |
+|    | THIS_ < MAX_ -- unused bits between   | instance exists: T0 is          |
+|    | EPC and TAG fields.                   | tage_bim.sv, not a tage_table   |
+|    |                                       | instance, and T1-T4 have every  |
+|    |                                       | THIS_ width equal to its MAX.   |
+|    |                                       | Was: Resolve at T0              |
+|    |                                       | implementation.                 |
+| 17 | BP-007b signal naming nonconforming.  | CLOSED session-078 (Jeff). The  |
+|    | _s0/_s1 suffixes used instead of      | naming rule covers ports only   |
+|    | array indexing per                    | (tage_table_interfaces.md, Port |
+|    | tage_table_interfaces.md.             | Naming Convention); every       |
+|    | Prompt author error.                  | tage_table port is array-       |
+|    |                                       | indexed. alc_index_u0 is        |
+|    |                                       | THIS_INDEX_BITS wide. T0 is     |
+|    |                                       | tage_bim.sv, so the T0 tag hash |
+|    |                                       | is moot. Was: BP-007c scope.    |
 | 18 | Definition of T0 fields/behavior      | Prediction side closed          |
 |    |                                       | Update side pending T0          |
 |    |                                       | implementation                  |

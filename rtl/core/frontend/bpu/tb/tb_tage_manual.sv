@@ -27,7 +27,11 @@ module tb;
   // ----------------------------------------------------------------
   // Local parameters
   // ----------------------------------------------------------------
-  localparam int NUM_PRED_SLOTS = 2;
+  // The slot count is bp_defines_pkg::NUM_PRED_SLOTS (BP-128); the
+  // local of 2 that shadowed it is removed. S1 is the highest slot:
+  // slot 1 at two slots, slot 0 at one, where the *_s1 breakout
+  // wires below repeat slot 0.
+  localparam int S1 = NUM_PRED_SLOTS - 1;
 
   // ----------------------------------------------------------------
   // Test enable integers
@@ -64,22 +68,22 @@ module tb;
 
   //break out
   wire d_tage_pred_val_p0_s0 = tage_pred_val_p0[0];
-  wire d_tage_pred_val_p0_s1 = tage_pred_val_p0[1];
+  wire d_tage_pred_val_p0_s1 = tage_pred_val_p0[S1];
 
   wire d_tage_pred_rdy_p2_s0 = tage_pred_rdy_p2[0];
-  wire d_tage_pred_rdy_p2_s1 = tage_pred_rdy_p2[1];
+  wire d_tage_pred_rdy_p2_s1 = tage_pred_rdy_p2[S1];
 
   wire d_tage_upd_val_u0_s0 = tage_upd_val_u0[0];
-  wire d_tage_upd_val_u0_s1 = tage_upd_val_u0[1];
+  wire d_tage_upd_val_u0_s1 = tage_upd_val_u0[S1];
 
   wire d_tage_upd_rdy_u1_s0 = tage_upd_rdy_u1[0];
-  wire d_tage_upd_rdy_u1_s1 = tage_upd_rdy_u1[1];
+  wire d_tage_upd_rdy_u1_s1 = tage_upd_rdy_u1[S1];
 
 
   `define FTQ_RNG FTQ_IDX_BITS-1:0
   `define VA_RNG  VA_WIDTH-1:0
   wire [`VA_RNG]  d_pred_inp_p0_pc_s0        = tage_pred_inp_p0[0].pc;
-  wire [`VA_RNG]  d_pred_inp_p0_pc_s1        = tage_pred_inp_p0[1].pc;
+  wire [`VA_RNG]  d_pred_inp_p0_pc_s1        = tage_pred_inp_p0[S1].pc;
   wire [`FTQ_RNG] d_pred_inp_p0_branch_id_s0 = tage_pred_inp_p0[0].branch_id;
   wire [`FTQ_RNG] d_pred_inp_p0_branch_id_s1 = tage_pred_inp_p0[0].branch_id;
 
@@ -112,77 +116,78 @@ module tb;
   wire d_pred_meta_p2_pred_tkn_s0      = tage_pred_meta_p2[0].tage_pred_tkn;
   wire [`FTQ_RNG] d_pred_meta_p2_branch_id_s0 = tage_pred_meta_p2[0].branch_id;
   // --------------------------------------------------------------------------------
-  wire [`AW_RNG]   d_meta_p2_prm_idx_s1       = tage_pred_meta_p2[1].tage_prm_idx;
-  wire [`AW_RNG]   d_pred_meta_p2_alt_idx_s1  = tage_pred_meta_p2[1].tage_alt_idx;
-  wire [`TSEL_RNG] d_pred_meta_p2_prm_comp_s1 = tage_pred_meta_p2[1].tage_prm_comp;
-  wire [`TSEL_RNG] d_pred_meta_p2_alt_comp_s1 = tage_pred_meta_p2[1].tage_alt_comp;
+  wire [`AW_RNG]   d_meta_p2_prm_idx_s1       = tage_pred_meta_p2[S1].tage_prm_idx;
+  wire [`AW_RNG]   d_pred_meta_p2_alt_idx_s1  = tage_pred_meta_p2[S1].tage_alt_idx;
+  wire [`TSEL_RNG] d_pred_meta_p2_prm_comp_s1 = tage_pred_meta_p2[S1].tage_prm_comp;
+  wire [`TSEL_RNG] d_pred_meta_p2_alt_comp_s1 = tage_pred_meta_p2[S1].tage_alt_comp;
 
-  wire [`USE_RNG]  d_pred_meta_p2_prm_useful_s1 = tage_pred_meta_p2[1].tage_prm_useful;
-  wire [`USE_RNG]  d_pred_meta_p2_alt_useful_s1 = tage_pred_meta_p2[1].tage_alt_useful;
-  wire [`CTR_RNG]  d_pred_meta_p2_prm_ctr_s1    = tage_pred_meta_p2[1].tage_prm_ctr;
-  wire [`CTR_RNG]  d_pred_meta_p2_alt_ctr_s1    = tage_pred_meta_p2[1].tage_alt_ctr;
+  wire [`USE_RNG]  d_pred_meta_p2_prm_useful_s1 = tage_pred_meta_p2[S1].tage_prm_useful;
+  wire [`USE_RNG]  d_pred_meta_p2_alt_useful_s1 = tage_pred_meta_p2[S1].tage_alt_useful;
+  wire [`CTR_RNG]  d_pred_meta_p2_prm_ctr_s1    = tage_pred_meta_p2[S1].tage_prm_ctr;
+  wire [`CTR_RNG]  d_pred_meta_p2_alt_ctr_s1    = tage_pred_meta_p2[S1].tage_alt_ctr;
 
-  wire [`TSEL_RNG] d_pred_meta_p2_alc_comp_s1 = tage_pred_meta_p2[1].tage_alc_comp;
-  wire [`AW_RNG]   d_pred_meta_p2_alc_idx_s1  = tage_pred_meta_p2[1].tage_alc_idx;
-  wire [`DW_RNG]   d_pred_meta_p2_alc_tag_s1  = tage_pred_meta_p2[1].tage_alc_tag;
+  wire [`TSEL_RNG] d_pred_meta_p2_alc_comp_s1 = tage_pred_meta_p2[S1].tage_alc_comp;
+  wire [`AW_RNG]   d_pred_meta_p2_alc_idx_s1  = tage_pred_meta_p2[S1].tage_alc_idx;
+  wire [`DW_RNG]   d_pred_meta_p2_alc_tag_s1  = tage_pred_meta_p2[S1].tage_alc_tag;
 
-  wire d_pred_meta_p2_prm_tkn_s1 = tage_pred_meta_p2[1].tage_prm_tkn;
-  wire d_pred_meta_p2_alt_tkn_s1 = tage_pred_meta_p2[1].tage_alt_tkn;
+  wire d_pred_meta_p2_prm_tkn_s1 = tage_pred_meta_p2[S1].tage_prm_tkn;
+  wire d_pred_meta_p2_alt_tkn_s1 = tage_pred_meta_p2[S1].tage_alt_tkn;
 
-  wire d_pred_meta_p2_pred_strong_s1   = tage_pred_meta_p2[1].tage_pred_strong;
-  wire d_pred_meta_p2_use_alt_on_na_s1 = tage_pred_meta_p2[1].tage_use_alt_on_na;
-  wire d_pred_meta_p2_using_primary_s1 = tage_pred_meta_p2[1].tage_using_primary;
-  wire d_pred_meta_p2_pred_tkn_s1      = tage_pred_meta_p2[1].tage_pred_tkn;
-  wire [`FTQ_RNG] d_pred_meta_p2_branch_id_s1 = tage_pred_meta_p2[1].branch_id;
+  wire d_pred_meta_p2_pred_strong_s1   = tage_pred_meta_p2[S1].tage_pred_strong;
+  wire d_pred_meta_p2_use_alt_on_na_s1 = tage_pred_meta_p2[S1].tage_use_alt_on_na;
+  wire d_pred_meta_p2_using_primary_s1 = tage_pred_meta_p2[S1].tage_using_primary;
+  wire d_pred_meta_p2_pred_tkn_s1      = tage_pred_meta_p2[S1].tage_pred_tkn;
+  wire [`FTQ_RNG] d_pred_meta_p2_branch_id_s1 = tage_pred_meta_p2[S1].branch_id;
   // --------------------------------------------------------------------------------
 
   // tage_upd_inp_u0 -- top-level fields
   wire d_tage_upd_inp_u0_resolved_taken_s0  = tage_upd_inp_u0[0].resolved_taken;
-  wire d_tage_upd_inp_u0_resolved_taken_s1  = tage_upd_inp_u0[1].resolved_taken;
+  wire d_tage_upd_inp_u0_resolved_taken_s1  =
+    tage_upd_inp_u0[S1].resolved_taken;
   wire d_tage_upd_inp_u0_cond_mispredict_s0 = tage_upd_inp_u0[0].cond_mispredict;
-  wire d_tage_upd_inp_u0_cond_mispredict_s1 = tage_upd_inp_u0[1].cond_mispredict;
+  wire d_tage_upd_inp_u0_cond_mispredict_s1 = tage_upd_inp_u0[S1].cond_mispredict;
 
   `define UIN tage_upd_inp_u0
   `define TPM tage_pred_meta
   // tage_upd_inp_u0 -- tage_pred_meta fields (flattened)
   wire [`AW_RNG]   d_tage_upd_inp_u0_tage_prm_idx_s0    = `UIN[0].`TPM.tage_prm_idx;
-  wire [`AW_RNG]   d_tage_upd_inp_u0_tage_prm_idx_s1    = `UIN[1].`TPM.tage_prm_idx;
+  wire [`AW_RNG]   d_tage_upd_inp_u0_tage_prm_idx_s1    = `UIN[S1].`TPM.tage_prm_idx;
   wire [`AW_RNG]   d_tage_upd_inp_u0_tage_alt_idx_s0    = `UIN[0].`TPM.tage_alt_idx;
-  wire [`AW_RNG]   d_tage_upd_inp_u0_tage_alt_idx_s1    = `UIN[1].`TPM.tage_alt_idx;
+  wire [`AW_RNG]   d_tage_upd_inp_u0_tage_alt_idx_s1    = `UIN[S1].`TPM.tage_alt_idx;
   wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_prm_comp_s0   = `UIN[0].`TPM.tage_prm_comp;
-  wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_prm_comp_s1   = `UIN[1].`TPM.tage_prm_comp;
+  wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_prm_comp_s1   = `UIN[S1].`TPM.tage_prm_comp;
   wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_alt_comp_s0   = `UIN[0].`TPM.tage_alt_comp;
-  wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_alt_comp_s1   = `UIN[1].`TPM.tage_alt_comp;
+  wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_alt_comp_s1   = `UIN[S1].`TPM.tage_alt_comp;
   wire [`USE_RNG]  d_tage_upd_inp_u0_tage_prm_useful_s0 = `UIN[0].`TPM.tage_prm_useful;
-  wire [`USE_RNG]  d_tage_upd_inp_u0_tage_prm_useful_s1 = `UIN[1].`TPM.tage_prm_useful;
+  wire [`USE_RNG]  d_tage_upd_inp_u0_tage_prm_useful_s1 = `UIN[S1].`TPM.tage_prm_useful;
   wire [`USE_RNG]  d_tage_upd_inp_u0_tage_alt_useful_s0 = `UIN[0].`TPM.tage_alt_useful;
-  wire [`USE_RNG]  d_tage_upd_inp_u0_tage_alt_useful_s1 = `UIN[1].`TPM.tage_alt_useful;
+  wire [`USE_RNG]  d_tage_upd_inp_u0_tage_alt_useful_s1 = `UIN[S1].`TPM.tage_alt_useful;
   wire [`CTR_RNG]  d_tage_upd_inp_u0_tage_prm_ctr_s0    = `UIN[0].`TPM.tage_prm_ctr;
-  wire [`CTR_RNG]  d_tage_upd_inp_u0_tage_prm_ctr_s1    = `UIN[1].`TPM.tage_prm_ctr;
+  wire [`CTR_RNG]  d_tage_upd_inp_u0_tage_prm_ctr_s1    = `UIN[S1].`TPM.tage_prm_ctr;
   wire [`CTR_RNG]  d_tage_upd_inp_u0_tage_alt_ctr_s0    = `UIN[0].`TPM.tage_alt_ctr;
-  wire [`CTR_RNG]  d_tage_upd_inp_u0_tage_alt_ctr_s1    = `UIN[1].`TPM.tage_alt_ctr;
+  wire [`CTR_RNG]  d_tage_upd_inp_u0_tage_alt_ctr_s1    = `UIN[S1].`TPM.tage_alt_ctr;
   wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_alc_comp_s0   = `UIN[0].`TPM.tage_alc_comp;
-  wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_alc_comp_s1   = `UIN[1].`TPM.tage_alc_comp;
+  wire [`TSEL_RNG] d_tage_upd_inp_u0_tage_alc_comp_s1   = `UIN[S1].`TPM.tage_alc_comp;
   wire [`AW_RNG]   d_tage_upd_inp_u0_tage_alc_idx_s0    = `UIN[0].`TPM.tage_alc_idx;
-  wire [`AW_RNG]   d_tage_upd_inp_u0_tage_alc_idx_s1    = `UIN[1].`TPM.tage_alc_idx;
+  wire [`AW_RNG]   d_tage_upd_inp_u0_tage_alc_idx_s1    = `UIN[S1].`TPM.tage_alc_idx;
   wire [`DW_RNG]   d_tage_upd_inp_u0_tage_alc_tag_s0    = `UIN[0].`TPM.tage_alc_tag;
-  wire [`DW_RNG]   d_tage_upd_inp_u0_tage_alc_tag_s1    = `UIN[1].`TPM.tage_alc_tag;
+  wire [`DW_RNG]   d_tage_upd_inp_u0_tage_alc_tag_s1    = `UIN[S1].`TPM.tage_alc_tag;
 
   wire d_tage_upd_inp_u0_tage_prm_tkn_s0       = `UIN[0].`TPM.tage_prm_tkn;
-  wire d_tage_upd_inp_u0_tage_prm_tkn_s1       = `UIN[1].`TPM.tage_prm_tkn;
+  wire d_tage_upd_inp_u0_tage_prm_tkn_s1       = `UIN[S1].`TPM.tage_prm_tkn;
   wire d_tage_upd_inp_u0_tage_alt_tkn_s0       = `UIN[0].`TPM.tage_alt_tkn;
-  wire d_tage_upd_inp_u0_tage_alt_tkn_s1       = `UIN[1].`TPM.tage_alt_tkn;
+  wire d_tage_upd_inp_u0_tage_alt_tkn_s1       = `UIN[S1].`TPM.tage_alt_tkn;
   wire d_tage_upd_inp_u0_tage_pred_strong_s0   = `UIN[0].`TPM.tage_pred_strong;
-  wire d_tage_upd_inp_u0_tage_pred_strong_s1   = `UIN[1].`TPM.tage_pred_strong;
+  wire d_tage_upd_inp_u0_tage_pred_strong_s1   = `UIN[S1].`TPM.tage_pred_strong;
   wire d_tage_upd_inp_u0_tage_use_alt_on_na_s0 = `UIN[0].`TPM.tage_use_alt_on_na;
-  wire d_tage_upd_inp_u0_tage_use_alt_on_na_s1 = `UIN[1].`TPM.tage_use_alt_on_na;
+  wire d_tage_upd_inp_u0_tage_use_alt_on_na_s1 = `UIN[S1].`TPM.tage_use_alt_on_na;
   wire d_tage_upd_inp_u0_tage_using_primary_s0 = `UIN[0].`TPM.tage_using_primary;
-  wire d_tage_upd_inp_u0_tage_using_primary_s1 = `UIN[1].`TPM.tage_using_primary;
+  wire d_tage_upd_inp_u0_tage_using_primary_s1 = `UIN[S1].`TPM.tage_using_primary;
   wire d_tage_upd_inp_u0_tage_pred_tkn_s0      = `UIN[0].`TPM.tage_pred_tkn;
-  wire d_tage_upd_inp_u0_tage_pred_tkn_s1      = `UIN[1].`TPM.tage_pred_tkn;
+  wire d_tage_upd_inp_u0_tage_pred_tkn_s1      = `UIN[S1].`TPM.tage_pred_tkn;
 
   wire [`FTQ_RNG]  d_tage_upd_inp_u0_branch_id_s0 = `UIN[0].`TPM.branch_id;
-  wire [`FTQ_RNG]  d_tage_upd_inp_u0_branch_id_s1 = `UIN[1].`TPM.branch_id;
+  wire [`FTQ_RNG]  d_tage_upd_inp_u0_branch_id_s1 = `UIN[S1].`TPM.branch_id;
   // ----------------------------------------------------------------
   // Testbench variables
   // ----------------------------------------------------------------
@@ -211,11 +216,11 @@ module tb;
     folded_hist         = '0;
     consumer_ready      = 1'b1;
     stg_pred_val        = '0;
-    stg_pred_inp[0]     = '0;
-    stg_pred_inp[1]     = '0;
     stg_upd_val         = '0;
-    stg_upd_inp[0]      = '0;
-    stg_upd_inp[1]      = '0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      stg_pred_inp[s]   = '0;
+      stg_upd_inp[s]    = '0;
+    end
   end
 
   // ----------------------------------------------------------------
@@ -303,25 +308,23 @@ module tb;
   /* verilator lint_on BLKSEQ */
 
   always_ff @(posedge clk) begin : pred_stg_ff
-    tage_pred_val_p0[0] <= stg_pred_val[0];
-    tage_pred_val_p0[1] <= stg_pred_val[1];
-    tage_pred_inp_p0[0] <= stg_pred_inp[0];
-    tage_pred_inp_p0[1] <= stg_pred_inp[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      tage_pred_val_p0[s] <= stg_pred_val[s];
+      tage_pred_inp_p0[s] <= stg_pred_inp[s];
+    end
   end
 
   always_ff @(posedge clk) begin : upd_stg_ff
-    tage_upd_val_u0[0] <= stg_upd_val[0];
-    tage_upd_val_u0[1] <= stg_upd_val[1];
-    tage_upd_inp_u0[0] <= stg_upd_inp[0];
-    tage_upd_inp_u0[1] <= stg_upd_inp[1];
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      tage_upd_val_u0[s] <= stg_upd_val[s];
+      tage_upd_inp_u0[s] <= stg_upd_inp[s];
+    end
   end
 
   // ----------------------------------------------------------------
   // DUT instantiation
   // ----------------------------------------------------------------
-  tage #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_dut (
+  tage u_dut (
     .clk                 (clk),
     .rstn                (rstn),
     .tage_pred_val_p0    (tage_pred_val_p0),
@@ -346,9 +349,7 @@ module tb;
   // nothing, so tage_assert was never instantiated in this target.
   // Binding on the module name "tage" instantiates it, proven by
   // forcing an assertion to fail and observing exit 1.
-  bind tage tage_assert #(
-    .NUM_PRED_SLOTS (NUM_PRED_SLOTS)
-  ) u_tage_assert_tb (
+  bind tage tage_assert u_tage_assert_tb (
     .clk               (clk),
     .rstn              (rstn),
     .tage_pred_rdy_p2  (tage_pred_rdy_p2),
