@@ -6,10 +6,11 @@
 // FTQ slow-path metadata array (BP-107).
 //
 // Owns bp_ftq_meta_t [NUM_PRED_SLOTS-1:0] x FTQ_DEPTH,
-// ftq_entry_formats.md 3. 421 bits per slot, two slots per entry,
-// 53,888 bits. It is read ONCE, at resolution, which is the whole
-// reason it is a separate array from the fast path: the every-cycle
-// read must not carry the width of update-only metadata.
+// ftq_entry_formats.md 3. 425 bits per slot since BP-111 (421 before),
+// two slots per entry, 54,400 bits. It is read ONCE, at resolution,
+// which is the whole reason it is a separate array from the fast path:
+// the every-cycle read must not carry the width of update-only
+// metadata.
 //
 // THE UNPACKED FORM IS BUILT. ftq_entry_formats.md 3.1 defines a
 // two-arm union that takes the slot to 278 bits, and DEFERS it

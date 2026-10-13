@@ -295,7 +295,7 @@ module tb;
       skip("C6 both ports on one entry agree");
     end
 
-    // A write to one entry does not disturb the other. 421 bits per
+    // A write to one entry does not disturb the other. 425 bits per
     // slot and two slots per entry; a decode that ignored a bit of
     // the index would alias 2 and 50 only through a wider pattern,
     // so the whole array is swept in group D.

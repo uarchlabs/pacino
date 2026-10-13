@@ -9,7 +9,7 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-39. TC-01 .. TC-20 from BP-063; TC-21
+// Directed cases TC-01 .. TC-40. TC-01 .. TC-20 from BP-063; TC-21
 // (BP-064) pinned TD #78 (undo-pop did not reverse a recursion pop)
 // until BP-133 fixed it.
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
@@ -24,7 +24,8 @@
 // check that the undo restores the recursion count, and added TC-38
 // (the undo of a whole RETURN_CALL restores the counts it changed) and
 // TC-39 (TD #79: the commit stack keeps recursion depth as repeated
-// entries).
+// entries). BP-134 added TC-40 (the undo of a push that met a
+// saturated recursion count leaves the count saturated).
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -1250,7 +1251,8 @@ module tb;
     // depth is kept as repeated entries and the fallback reads it at
     // depth. Commit A then B three times (B calling itself), then pop
     // with the speculative stack empty: B, B, B, A, empty. The commit
-    // rctr field is written zero and read by nothing.
+    // rctr field, written zero and read by nothing, was removed in
+    // BP-134.
     // =============================================================
     do_reset();
     commit_op(DIRECT_CALL, ADDR_A, 4'd0);
@@ -1270,6 +1272,78 @@ module tb;
     commit_op(RETURN, '0, 4'd0);
     #1;
     check("TC-39 then empty", tos_valid_p0[0] == 1'b0);
+
+    // =============================================================
+    // TC-40 (BP-134): an undo-push reverses only what the push did. A
+    // push whose fall-through matches a top at the saturated count
+    // (RCTR_MAX_TB) takes the recursion arm and changes nothing, so
+    // its undo changes nothing. Before BP-134 the undo-push was
+    // st_retract, which decremented the saturated count: one recursion
+    // level lost.
+    // a. Plain push undone: seed A with rctr 15 through the push path
+    //    (one allocation, 15 recursion pushes). p2 pushes A again, p3
+    //    says no branch.
+    // =============================================================
+    do_reset();
+    for (int i = 0; i <= int'(RCTR_MAX_TB); i++)
+      push_one(ADDR_A);
+    check("TC-40a seeded rctr[1]==15 tosr 1 tosw 2",
+          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 4'd1) &&
+          (dut.tosw == 4'd2));
+    drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-40a pre-repair: the saturated push moved nothing",
+          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 4'd1) &&
+          (dut.tosw == 4'd2));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    // Before BP-134: rctr[1] 14.
+    check("TC-40a undo-push: rctr[1] still 15, tosr 1, tosw 2",
+          (dut.spec_rctr[1] == RCTR_MAX_TB) && (dut.tosr == 4'd1) &&
+          (dut.tosw == 4'd2));
+    // All 16 levels still pop as A, then the stack is empty.
+    for (int i = 0; i <= int'(RCTR_MAX_TB); i++) begin
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      check($sformatf("TC-40a pop %0d returns A", i + 1),
+            (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+      tick();
+    end
+    check("TC-40a then the speculative stack is empty",
+          dut.tosr == dut.bos);
+    // b. The push half of a RETURN_CALL undone (p3 RETURN): seed A at
+    //    rctr 15 and X above it. RETURN_CALL with fall-through A pops X
+    //    (TOSR follows the link to A) and its push meets A at 15. p3
+    //    keeps the pop and drops the push.
+    do_reset();
+    for (int i = 0; i <= int'(RCTR_MAX_TB); i++)
+      push_one(ADDR_A);
+    push_one(ADDR_X);
+    drive(1'b1, RETURN_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-40b pre-repair: tosr 1, rctr[1] held at 15",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b1, RETURN, 1'b0, NO_BRANCH);
+    tick();
+    // Before BP-134: rctr[1] 14.
+    check("TC-40b undo of the push half: tosr 1, rctr[1] still 15",
+          (dut.tosr == 4'd1) && (dut.spec_rctr[1] == RCTR_MAX_TB));
+    // c. Below saturation the undo-push still removes the level the
+    //    push added: A twice (rctr 1), push A (rctr 2), undo -> 1.
+    do_reset();
+    push_one(ADDR_A);
+    push_one(ADDR_A);
+    drive(1'b1, DIRECT_CALL, ADDR_A, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-40c pre-repair: rctr[1]==2",
+          (dut.spec_rctr[1] == 4'd2) && (dut.tosr == 4'd1));
+    drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+    force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+    tick();
+    check("TC-40c undo-push: rctr[1] back to 1, tosr 1",
+          (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
 
     // -------------------------------------------------------------
     $display("=================================================");

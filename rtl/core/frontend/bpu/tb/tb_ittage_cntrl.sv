@@ -218,7 +218,10 @@ module tb;
     end
   endtask
 
-  task automatic chk38(
+  // chk40 and chk59 are named for their widths, IT_MAX_TGT_WIDTH (40)
+  // and MADW (59). BP-134 renamed them from chk38 and chk57, the widths
+  // before BP-111.
+  task automatic chk40(
     input string nm, input logic [IT_MAX_TGT_WIDTH-1:0] act, exp
   );
     if (act === exp) begin
@@ -230,7 +233,7 @@ module tb;
     end
   endtask
 
-  task automatic chk57(
+  task automatic chk59(
     input string nm, input logic [MADW-1:0] act, exp
   );
     if (act === exp) begin
@@ -737,7 +740,7 @@ module tb;
     chk3("PRED02 prm_ctr",  m.ittage_prm_ctr,       3'b110);
     chk1("PRED02 strong",   m.ittage_pred_strong,   1'b1);
     chk1("PRED02 using_prm",m.ittage_using_primary, 1'b1);
-    chk38("PRED02 prm_tgt", m.ittage_prm_tgt,
+    chk40("PRED02 prm_tgt", m.ittage_prm_tgt,
           IT_MAX_TGT_WIDTH'('h0000_0000_1234));
   endtask
 
@@ -771,7 +774,7 @@ module tb;
     chk3("PRED03 prm_ctr",  m.ittage_prm_ctr,       3'b101);
     chk3("PRED03 alt_ctr",  m.ittage_alt_ctr,       3'b010);
     chk1("PRED03 using_prm",m.ittage_using_primary, 1'b1);
-    chk38("PRED03 prm_tgt", m.ittage_prm_tgt,
+    chk40("PRED03 prm_tgt", m.ittage_prm_tgt,
           IT_MAX_TGT_WIDTH'('h0000_0000_AAAA));
     chk1("PRED03 strong",   m.ittage_pred_strong,   1'b1);
   endtask
@@ -803,7 +806,7 @@ module tb;
     chk3("PRED04 alt_comp", m.ittage_alt_comp,       3'(1));
     chk1("PRED04 using_prm",m.ittage_using_primary,  1'b0);
     chk1("PRED04 uaon",     m.ittage_use_alt_on_na,  1'b1);
-    chk38("PRED04 alt_tgt", m.ittage_alt_tgt,
+    chk40("PRED04 alt_tgt", m.ittage_alt_tgt,
           IT_MAX_TGT_WIDTH'('h0000_0000_2222));
     chk1("PRED04 strong",   m.ittage_pred_strong,    1'b1);
   endtask
@@ -827,7 +830,7 @@ module tb;
     ptgt[3] = IT_MAX_TGT_WIDTH'('h0000_0000_1111);
     pred_s0(VA_WIDTH'('h0), 6'b00_1000, cb, ptgt, idx, tag, m, rdy);
     chk1("PRED05 using_prm", m.ittage_using_primary, 1'b1);
-    chk38("PRED05 prm_tgt",  m.ittage_prm_tgt,
+    chk40("PRED05 prm_tgt",  m.ittage_prm_tgt,
           IT_MAX_TGT_WIDTH'('h0000_0000_1111));
     chk1("PRED05 strong",    m.ittage_pred_strong,   1'b0);
   endtask
@@ -875,11 +878,11 @@ module tb;
     clr();
     chk3("PRED06 s0 prm_comp", m0.ittage_prm_comp,   3'(5));
     chk1("PRED06 s0 hit",      m0.ittage_hit,         1'b1);
-    chk38("PRED06 s0 prm_tgt", m0.ittage_prm_tgt,
+    chk40("PRED06 s0 prm_tgt", m0.ittage_prm_tgt,
           IT_MAX_TGT_WIDTH'('h0000_0000_CCCC));
     chk3("PRED06 s1 prm_comp", m1.ittage_prm_comp,   3'(2));
     chk1("PRED06 s1 hit",      m1.ittage_hit,         1'b1);
-    chk38("PRED06 s1 prm_tgt", m1.ittage_prm_tgt,
+    chk40("PRED06 s1 prm_tgt", m1.ittage_prm_tgt,
           IT_MAX_TGT_WIDTH'('h0000_0000_DDDD));
   endtask
 
@@ -999,7 +1002,7 @@ module tb;
     // prm_ctr=3'b000, mispredict: DEC saturates at 3'b000.
     // tgt_wr fires independently: mispredict + UP=1 + prm_ctr==0.
     chk1("UPD05 prm_tgt_wr", prm_tgt_wr_u0[0], 1'b1);
-    chk38("UPD05 tgt_wd",    tgt_wd_u0[0],     IT_MAX_TGT_WIDTH'('hBEEF));
+    chk40("UPD05 tgt_wd",    tgt_wd_u0[0],     IT_MAX_TGT_WIDTH'('hBEEF));
     chk1("UPD05 prm_ctr_wr", prm_ctr_wr_u0[0], 1'b1);
     chk1("UPD05 alt_ctr_wr", alt_ctr_wr_u0[0], 1'b0);
     chk3("UPD05 prm_ctr_wd", prm_ctr_wd_u0[0], 3'b000);
@@ -1039,7 +1042,7 @@ module tb;
          alc_tbl_sel_u0[0], 3'(4));
     chk9("UPD06 alc_index",
          alc_index_u0[0],   9'h044);
-    chk57("UPD06 alc_wd",
+    chk59("UPD06 alc_wd",
           alc_wd_u0[0],     exp_alc);
     @(posedge clk); #1;
     clr();
@@ -1582,7 +1585,7 @@ module tb;
     ittage_upd_inp_u0[0] = ui;
     #1;
     chk1("ALC10 alc_wr",  alc_wr_u0[0],  1'b1);
-    chk57("ALC10 alc_wd", alc_wd_u0[0],  exp_wd);
+    chk59("ALC10 alc_wd", alc_wd_u0[0],  exp_wd);
     @(posedge clk); #1;
     clr();
   endtask

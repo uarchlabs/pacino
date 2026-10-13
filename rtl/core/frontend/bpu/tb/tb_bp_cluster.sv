@@ -3746,14 +3746,18 @@ module tb;
         64'(it_pub_3) === 64'h180_0000_9AA0);
 
     // -- G3. SC. The five counter tables are seeded at -1 and the
-    //    TAGE bimodal at 2'b11, so the local SC sum is
-    //    5 * (2*(-1)+1) + tage_extd_ctr = -5 + (-1) = -6, NEGATIVE,
-    //    and SC predicts not taken while TAGE predicts taken -- the
-    //    general-differ arm, so SC overrides. Resolving TAKEN steps
+    //    TAGE bimodal at 2'b10 (weakly taken), so the local SC sum is
+    //    5 * (2*(-1)+1) + tage_extd_ctr = -5 + 1 = -4, NEGATIVE,
+    //    and SC predicts not taken while TAGE predicts taken, weak --
+    //    the general-differ arm, so SC overrides. Resolving TAKEN steps
     //    every consulted counter to 0, which moves the sum to
-    //    5 * 1 - 1 = +4, POSITIVE. The second prediction is therefore
+    //    5 * 1 + 1 = +6, POSITIVE. The second prediction is therefore
     //    taken and agrees with TAGE, so the override goes away. Both
     //    the direction and the override flag are read back.
+    //    BP-134 (TD#182): the bimodal was 2'b11, decoded as the 3b
+    //    counter 011 (weak, extd -1). It now reads as 111 (strong,
+    //    extd +7), which puts the first sum at +2 and the override
+    //    nowhere, so the seed is 2'b10 (3b form 100, extd +1).
     //
     //    The SIGN of the sum, not an exact value, is what is
     //    asserted. sc_cntrl.sv pred_form builds it as
@@ -3768,7 +3772,7 @@ module tb;
     do_reset();
     ftq_clear();
     clr_upd_chans();
-    tage_bim_fill(2'b11);
+    tage_bim_fill(2'b10);
     sc_fill(6'b111111);              // -1 in each consulted counter
     sc_enable = 1'b1;
     pc   = VA_WIDTH'('h00_0630_0000);

@@ -77,6 +77,10 @@
 //          reference all exercised together on overlapping
 //          entries at PC=0x22800 (idx=512 bank=0 row=512).
 //          All 103 tests pass under sim_tage_fast.
+// BP-134:  every test waits #1 after the edge (clk_step(), ts_clk() or
+//          its own #1), so no stimulus or read shares a time step with
+//          the edge that samples it. pred_t0_conf_tst: TD#182, confidence flags
+//          and tage_extd_ctr of a T0-provided prediction.
 // ===================================================================
 
 `default_nettype none
@@ -211,6 +215,8 @@ module tb;
   int _pred_conf_decode_tst     = 1;
   // -- BP-094 branch_id staged p0 -> p1 with the rest of meta_p1 --
   int _pred_branch_id_stage_tst = 1;
+  // -- BP-134 TD#182 T0 provider confidence decode + extended CTR --
+  int _pred_t0_conf_tst         = 1;
 
   // ----------------------------------------------------------------
   // Module-level failure accumulator
@@ -422,6 +428,20 @@ module tb;
   end
 
   // ----------------------------------------------------------------
+  // clk_step: advance one clock and return #1 after the edge (BP-134).
+  // Stimulus written and outputs read after it are ordered after that
+  // edge's flop updates, so the staging flops above sample it at the
+  // next edge and no result depends on the order of processes within
+  // the edge's time step. Before BP-134 the tests waited on a bare
+  // @(posedge clk) and wrote the staging variables, backdoor RAM rows
+  // and uaon in the same time step as the edge that samples them.
+  // ----------------------------------------------------------------
+  task automatic clk_step();
+    @(posedge clk);
+    #1;
+  endtask
+
+  // ----------------------------------------------------------------
   // tage_rdy_tst
   // a. Read +TAGE_FAST_INIT plusarg.
   // b. Record start_cycle (one sync posedge after rstn deasserts).
@@ -470,12 +490,12 @@ module tb;
 
     // Synchronize to first posedge after rstn deasserted.
     // sram_init transitions PENDING->INIT at this posedge.
-    @(posedge clk);
+    clk_step();
     start_cycle = cycle_cnt;
 
     // Spin until tage_rdy asserts or watchdog fires.
     while (!tage_rdy) begin
-      @(posedge clk);
+      clk_step();
       if ((cycle_cnt - start_cycle) > watchdog_lim) begin
         // BP-094: $finish(1) exits 0 under Verilator v5.048, so a
         // watchdog trip used to report green. $fatal(1) does not.
@@ -707,10 +727,10 @@ module tb;
     // bw_ram write fires at the second posedge (after NBA settle).
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_val = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][4];
 
@@ -777,10 +797,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_val = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][8];
 
@@ -851,10 +871,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_val =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][2];
@@ -937,10 +957,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][5];
@@ -1029,10 +1049,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_val =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][9];
@@ -1108,10 +1128,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_val =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][3];
@@ -1194,10 +1214,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_val =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][11];
@@ -1278,10 +1298,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][16];
@@ -1377,10 +1397,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t3 =
       u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[0][24];
@@ -1479,10 +1499,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
     rd_t1 =
@@ -1596,10 +1616,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
     rd_t1 =
@@ -1694,10 +1714,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40];
@@ -1734,10 +1754,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][40];
 
@@ -1809,10 +1829,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][42];
@@ -1849,10 +1869,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][42];
 
@@ -1932,10 +1952,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][48];
@@ -2005,11 +2025,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Read p2 outputs.
     meta = tage_pred_meta_p2[0];
@@ -2108,11 +2128,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Read p2 outputs.
     meta = tage_pred_meta_p2[0];
@@ -2215,11 +2235,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Read p2 outputs.
     meta = tage_pred_meta_p2[0];
@@ -2330,11 +2350,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Read p2 outputs.
     meta = tage_pred_meta_p2[0];
@@ -2434,11 +2454,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Read p2 outputs.
     meta = tage_pred_meta_p2[0];
@@ -2530,17 +2550,17 @@ module tb;
     //   @posedge N+3: pred_val_p2=0. rdy=0.
     stg_pred_val0 = 1'b1;
     stg_pred_inp0.pc = VA_WIDTH'('h0);
-    @(posedge clk);
+    clk_step();
     // After posedge N: val=1 via NBA. pred_val_p2 not yet 1.
     rdy_p1 = tage_pred_rdy_p2[0];
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     // After posedge N+1: val=0 via NBA. pred_val_p1=1. rdy still 0.
-    @(posedge clk);
+    clk_step();
     // After posedge N+2: pred_val_p2=1. rdy=1.
     rdy_p2 = tage_pred_rdy_p2[0];
-    @(posedge clk);
+    clk_step();
     // After posedge N+3: pred_val_p2=0. rdy=0.
     rdy_p3 = tage_pred_rdy_p2[0];
 
@@ -2617,11 +2637,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp1 = inp;
     stg_pred_val1 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val1 = 1'b0;
     stg_pred_inp1 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Read p2 outputs for slot 1.
     meta1 = tage_pred_meta_p2[S1];
@@ -2732,10 +2752,10 @@ module tb;
     // Drive slot 1. Slot 0 held at zero via staging.
     stg_upd_inp1 = upd_inp;
     stg_upd_val1 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val1 = 1'b0;
     stg_upd_inp1 = '0;
-    @(posedge clk);
+    clk_step();
 
     // After second posedge: upd_rdy_u1[S1]=1, RAM written.
     rd_s1 =
@@ -2821,11 +2841,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=0, pred_tkn=1.
     meta1 = tage_pred_meta_p2[0];
@@ -2856,10 +2876,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM: T0 CTR=2b11 (INC: 10->11, rule 13d).
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][120];
@@ -2877,11 +2897,11 @@ module tb;
     // Step 6: Re-predict at same PC. T0 CTR=2b11 -> prm_ctr=3b011.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -2953,11 +2973,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=1, using_primary=1,
     //         pred_tkn=1, preds_diff=1 (prm_tkn != alt_tkn).
@@ -3008,10 +3028,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: TAG=0x05 EPC=0 USE=10 CTR=110 VALID=1 = 0x052D.
@@ -3032,11 +3052,11 @@ module tb;
     // Step 6: Re-predict at same PC. T1 CTR=110 -> prm_ctr=3b110.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -3110,11 +3130,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=1, alc_comp=2.
     meta1 = tage_pred_meta_p2[0];
@@ -3145,10 +3165,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     rd_t1 =
@@ -3181,11 +3201,11 @@ module tb;
     // Step 6: Re-predict. T2 now VALID=1 wins (longer history).
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -3248,11 +3268,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=4.
     //         Primary criterion: alc_comp=0 (no alloc, last tbl).
@@ -3284,10 +3304,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     rd_t4 =
@@ -3336,11 +3356,11 @@ module tb;
     // Step 6: Re-predict. T4 CTR=011 (not-taken): prm=4 ctr=011.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -3416,11 +3436,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=2 alt_comp=1
     //         using_primary=1 pred_tkn=1 pred_diff=1.
@@ -3477,10 +3497,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T2: CTR 101->110 (prm INC), USE 00->01 (Table 7 r3).
@@ -3514,11 +3534,11 @@ module tb;
     // Step 6: Re-predict. T2 CTR=110 -> prm_ctr=3b110.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -3603,11 +3623,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=2 alt_comp=1
     //         using_primary=1 pred_tkn=1 pred_diff=1 alc=0.
@@ -3667,10 +3687,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T2: CTR 101->100 (prm DEC), USE 01->00 (Table 7 r4).
@@ -3704,11 +3724,11 @@ module tb;
     // Step 6: Re-predict. T2 CTR=100 -> prm_ctr=3b100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -3790,11 +3810,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=2 alt_comp=1
     //         using_primary=1 pred_tkn=1 pred_diff=0 alc=0.
@@ -3854,10 +3874,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T2: CTR 100->011 (prm DEC); USE unchanged (pred_diff=0).
@@ -3890,11 +3910,11 @@ module tb;
     // Step 6: Re-predict. T2 CTR=011 -> prm_ctr=3b011.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -3976,11 +3996,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=2 alt_comp=1
     //         using_primary=0 (UAON fires) pred_tkn=1.
@@ -4028,10 +4048,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: CTR 101->110 (alt INC, rows 7/8). USE unchanged.
@@ -4072,11 +4092,11 @@ module tb;
     // prm=T2 (comp=2), prm_ctr=3b100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -4172,11 +4192,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=2 alt_comp=1
     //         using_primary=0 (UAON fires) pred_tkn=1.
@@ -4225,10 +4245,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: CTR 100->011 USE 01->00 (alt DEC, rows 9/10).
@@ -4269,11 +4289,11 @@ module tb;
     // prm=T2 (comp=2), prm_ctr=3b100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -4373,11 +4393,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=2 alt_comp=1
     //         using_primary=0 (UAON fires) pred_tkn=1.
@@ -4426,10 +4446,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: CTR 100->011 USE 01 unchanged (pred_diff=0).
@@ -4469,11 +4489,11 @@ module tb;
     // prm=T2 (comp=2), prm_ctr=3b100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -4557,11 +4577,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=0 alt_comp=0
     //         using_primary=1 pred_tkn=0.
@@ -4611,10 +4631,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify T0 BIM RAM.
     // u_resolved=1 -> INC: 01->10. mem[0][100]=2'b10.
@@ -4634,11 +4654,11 @@ module tb;
     // Verify prm_comp=0, prm_ctr=3'b010.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -4721,11 +4741,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=0 alt_comp=0
     //         using_primary=1 pred_tkn=1.
@@ -4775,10 +4795,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify T0 BIM RAM.
     // CTR 10->01. BIM mem[0][200]=2'b01.
@@ -4798,11 +4818,11 @@ module tb;
     // Verify prm_comp=0, prm_ctr=3'b001.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -4878,11 +4898,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=0 alt_comp=0
     //         using_primary=1 pred_tkn=0.
@@ -4932,10 +4952,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify T0 BIM RAM.
     // u_resolved=0 -> DEC: 01->00. mem[0][288]=2'b00.
@@ -4955,11 +4975,11 @@ module tb;
     // Verify prm_comp=0, prm_ctr=3'b000.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -5034,11 +5054,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=0 alt_comp=0
     //         using_primary=1 pred_tkn=1.
@@ -5088,10 +5108,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify T0 BIM RAM.
     // CTR 10->11. BIM mem[0][384]=2'b11.
@@ -5111,11 +5131,11 @@ module tb;
     // Verify prm_comp=0, prm_ctr=3'b011.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -5205,11 +5225,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=1 alt_comp=0
     //         using_primary=1 pred_tkn=1 pred_diff=1 alc=0.
@@ -5277,10 +5297,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: CTR 101->100 USE 01->00; entry=16h0009.
@@ -5313,11 +5333,11 @@ module tb;
     // Verify prm_comp=1, prm_ctr=3b100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -5398,11 +5418,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta. Verify prm_comp=1 alt_comp=0
     //         using_primary=1 pred_tkn=1 pred_diff=1.
@@ -5463,10 +5483,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: CTR 101->110 USE 01->10; entry=16h012D.
@@ -5499,11 +5519,11 @@ module tb;
     // Verify prm_comp=1, prm_ctr=3b110.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -5591,11 +5611,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta1. Verify prm=2 alt=1
     //         using_prm=1 pred_tkn=1 pred_diff=1.
@@ -5656,10 +5676,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify UAON and RAM.
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
@@ -5706,11 +5726,11 @@ module tb;
     // Alt T1 CTR=011 says not-taken -> pred_tkn=0.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -5800,11 +5820,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta1. Verify prm=2 alt=1
     //         using_prm=0 pred_tkn=1 pred_diff=1.
@@ -5865,10 +5885,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify UAON and RAM.
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
@@ -5915,11 +5935,11 @@ module tb;
     // using_prm=1. T2 CTR=100 taken -> pred_tkn=1.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -6005,11 +6025,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta.
     // Verify prm_comp=0 alt_comp=0 alc_comp=1 alc_tag=0x01.
@@ -6066,10 +6086,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T1: allocated {tag=0x01, 8'h09}=0x0109.
@@ -6137,11 +6157,11 @@ module tb;
     // prm_comp=1, prm_ctr=3'b100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -6243,11 +6263,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 3: Capture meta.
     // Verify prm_comp=1 alt_comp=0 alc_comp=2 alc_tag=0x02.
@@ -6306,10 +6326,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Step 5: Verify RAM.
     // T2: allocated {tag=0x02, 8'h09}=0x0209.
@@ -6368,11 +6388,11 @@ module tb;
     // T1 also hits but T2 longer history: prm_comp=2 ctr=100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -6481,11 +6501,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 4: Capture meta.
     meta1 = tage_pred_meta_p2[0];
@@ -6543,10 +6563,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Restore lcl_epoch[0]=0 to avoid contaminating later tests.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
@@ -6607,11 +6627,11 @@ module tb;
     // Step 7: Re-predict. T3 valid tag hits: prm_comp=3 ctr=100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -6722,11 +6742,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // Step 4: Capture meta.
     meta1 = tage_pred_meta_p2[0];
@@ -6784,10 +6804,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Restore lcl_epoch[0]=0 to avoid contaminating later tests.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
@@ -6848,11 +6868,11 @@ module tb;
     // Step 7: Re-predict. T2 valid tag hits: prm_comp=2 ctr=100.
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta2 = tage_pred_meta_p2[0];
 
@@ -6937,10 +6957,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[1][128];
 
@@ -6990,13 +7010,13 @@ module tb;
     inp.branch_id = 6'h2;
     stg_pred_inp1 = inp;
     stg_pred_val1 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_val1 = 1'b0;
     stg_pred_inp0 = '0;
     stg_pred_inp1 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta0 = tage_pred_meta_p2[0];
     meta1 = tage_pred_meta_p2[S1];
@@ -7063,10 +7083,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640];
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
@@ -7623,13 +7643,13 @@ module tb;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
 
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_upd_val0  = 1'b0;
     stg_pred_inp0 = '0;
     stg_upd_inp0  = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     if (tage_pred_rdy_p2[0] !== 1'b1) begin
       local_fails++;
@@ -7693,13 +7713,13 @@ module tb;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
 
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_upd_val0  = 1'b0;
     stg_pred_inp0 = '0;
     stg_upd_inp0  = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     rd_t0 = u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][640];
 
@@ -7777,17 +7797,17 @@ module tb;
     stg_upd_inp1 = upd1;
     stg_upd_val0 = 1'b1;
     stg_upd_val1 = 1'b1;
-    @(posedge clk); // cycle A: bypass A fires
+    clk_step();     // cycle A: bypass A fires
     // Cycle B: keep stg set; count rdy that fires from A bypass.
-    @(posedge clk); // cycle B: rdy from A; bypass B fires
+    clk_step();     // cycle B: rdy from A; bypass B fires
     if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[S1]) rdy_cnt++;
     stg_upd_val0 = 1'b0;
     stg_upd_val1 = 1'b0;
     stg_upd_inp0 = '0;
     stg_upd_inp1 = '0;
-    @(posedge clk); // cycle C: rdy from B
+    clk_step();     // cycle C: rdy from B
     if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[S1]) rdy_cnt++;
-    @(posedge clk); // cycle D: extra
+    clk_step();     // cycle D: extra
     if (tage_upd_rdy_u1[0] || tage_upd_rdy_u1[S1]) rdy_cnt++;
 
     if (rdy_cnt < 2) begin
@@ -7831,21 +7851,21 @@ module tb;
     stg_pred_inp0 = '0;
     stg_pred_inp0.pc = VA_WIDTH'('hAF0);
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     // RB now has 1 entry (consumer_ready=0, no bypass/drain).
 
     // Issue pred 2 to fill second (last) RB slot.
     stg_pred_inp0.pc = VA_WIDTH'('hAF0);
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     // RB now full: resp_buf_full_w=1.
 
     if (verbose != 0)
@@ -7855,10 +7875,10 @@ module tb;
     // Hold pred stg for PQ_DEPTH+1 cycles to fill PQ.
     stg_pred_inp0.pc = VA_WIDTH'('hAF0);
     stg_pred_val0    = 1'b1;
-    repeat (TAGE_PQ_DEPTH + 1) @(posedge clk);
+    repeat (TAGE_PQ_DEPTH + 1) clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     if (u_dut.tage_pq_not_full !== 1'b0) begin
       local_fails++;
@@ -7872,7 +7892,7 @@ module tb;
     // then PQ drains.
     consumer_ready = 1'b1;
     drain_cyc = (TAGE_PQ_DEPTH + 2) * 4;
-    repeat (drain_cyc) @(posedge clk);
+    repeat (drain_cyc) clk_step();
 
     if (u_dut.tage_pq_not_full !== 1'b1) begin
       local_fails++;
@@ -7914,23 +7934,23 @@ module tb;
     stg_pred_inp0    = '0;
     stg_pred_inp0.pc = VA_WIDTH'('hBB8);
     stg_pred_val0    = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0    = 1'b0;
     stg_pred_inp0    = '0;
-    @(posedge clk);
-    @(posedge clk);
-    @(posedge clk); // extra: rb_ff sees pred_rdy=1 pre-NBA
+    clk_step();
+    clk_step();
+    clk_step();     // extra: rb_ff sees pred_rdy=1 pre-NBA
 
     // Fill RB slot 2 (same 4-cycle sequence).
     stg_pred_inp0    = '0;
     stg_pred_inp0.pc = VA_WIDTH'('hBB8);
     stg_pred_val0    = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0    = 1'b0;
     stg_pred_inp0    = '0;
-    @(posedge clk);
-    @(posedge clk);
-    @(posedge clk); // extra: rb enqueues slot 2
+    clk_step();
+    clk_step();
+    clk_step();     // extra: rb enqueues slot 2
     // RB full now.
 
     if (u_dut.u_tage_arb.resp_buf_full_w !== 1'b1) begin
@@ -7947,7 +7967,7 @@ module tb;
     stg_upd_inp0.tage_pred_meta.tage_prm_comp = 3'd0;
     stg_upd_inp0.tage_pred_meta.tage_using_primary = 1'b1;
     stg_upd_val0     = 1'b1;
-    @(posedge clk);
+    clk_step();
     // Verify grant_pred blocked, grant_upd asserted.
     if (u_dut.u_tage_arb.arb_grant_pred !== 1'b0) begin
       local_fails++;
@@ -7968,7 +7988,7 @@ module tb;
     stg_pred_inp0 = '0;
     stg_upd_inp0  = '0;
 
-    @(posedge clk);
+    clk_step();
     // tage_upd_rdy_u1 should assert one cycle later.
     if (tage_upd_rdy_u1[0] !== 1'b1) begin
       local_fails++;
@@ -7980,7 +8000,7 @@ module tb;
 
     // Clean up: drain RB.
     consumer_ready = 1'b1;
-    repeat (8) @(posedge clk);
+    repeat (8) clk_step();
 
     if (local_fails == 0)
       $display("[PASS] arb_pred_credits_reset_tst: 0 failures");
@@ -8021,9 +8041,10 @@ module tb;
     stg_upd_inp0.tage_pred_meta.tage_using_primary = 1'b1;
     stg_upd_val0      = 1'b1;
     stg_pred_val0     = 1'b1;
-    @(posedge clk);
+    clk_step();                 // cycle 0: the staging register presents both
     stg_upd_val0  = 1'b0;
     stg_upd_inp0  = '0;
+    clk_step();                 // end of cycle 0
 
     // Keep predicting until tage_pq_not_full deasserts, then stop, as the
     // FTQ does (its H1 hold). No update may be granted while a
@@ -8362,6 +8383,9 @@ module tb;
     // BP-094 branch_id staging across a varying-branch_id stream.
     if (_pred_branch_id_stage_tst != 0)
       pred_branch_id_stage_tst(verbose);
+    // BP-134 TD#182: T0-provided confidence flags and extd CTR.
+    if (_pred_t0_conf_tst != 0)
+      pred_t0_conf_tst(verbose);
 
     // Overall verdict.
     // BP-094: the failing exit was $finish(1), which Verilator
@@ -8424,16 +8448,16 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
 
     // Drain the one stale PQ entry left by arb_starve_tst.
-    @(posedge clk);
+    clk_step();
 
     stg_upd_inp1 = upd_inp;
     stg_upd_val1 = 1'b1;
-    @(posedge clk);
+    clk_step();
     norm_we_s1_seen =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].norm_we;
     stg_upd_val1 = 1'b0;
     stg_upd_inp1 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_s1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][80];
@@ -8508,12 +8532,12 @@ module tb;
 
     stg_upd_inp1 = upd_inp;
     stg_upd_val1 = 1'b1;
-    @(posedge clk);
+    clk_step();
     norm_we_s1_seen =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].norm_we;
     stg_upd_val1 = 1'b0;
     stg_upd_inp1 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_s1 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][90];
@@ -8577,7 +8601,7 @@ module tb;
     // entered edge-aligned, as slot1_t2_write_tst leaves it. At one
     // slot that test is skipped and cov_gap_tst leaves the process at
     // edge + 1, one phase later.
-    @(posedge clk);
+    clk_step();
 
     // Prediction 1: pc=0xE00. T3/T4 idx/tag recomputed with
     // non-zero fh -> exercises fh_sel arms 3 and 4.
@@ -8585,11 +8609,11 @@ module tb;
     inp.pc        = VA_WIDTH'('hE00);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     rdy = tage_pred_rdy_p2;
     if (verbose != 0)
@@ -8605,11 +8629,11 @@ module tb;
     inp.pc        = VA_WIDTH'('hC00);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     rdy = tage_pred_rdy_p2;
     if (verbose != 0)
@@ -8665,7 +8689,7 @@ module tb;
 
     // TC-57 leaves pred_rdy_p2=1; drain it with aging disabled
     // before resetting epoch to avoid a spurious aging increment.
-    @(posedge clk);
+    clk_step();
 
     // Reset epoch and interval to known state.
     u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b00;
@@ -8681,11 +8705,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h190);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     // tage_pred_rdy_p2 high after this posedge. Capture meta.
     meta1 = tage_pred_meta_p2[0];
@@ -8705,7 +8729,7 @@ module tb;
 
     // Posedge 4: aging_ff fires (tage_pred_rdy_p2 pre-edge=1).
     // After NBA: lcl_epoch[0] = 1.
-    @(posedge clk);
+    clk_step();
 
     if (verbose != 0)
       $display(
@@ -8726,10 +8750,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Restore aging control.
     tage_enable_aging   = 1'b0;
@@ -8802,10 +8826,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][95];
@@ -8877,11 +8901,11 @@ module tb;
     inp.pc        = VA_WIDTH'('hF40);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta1 = tage_pred_meta_p2[0];
     if (verbose != 0) begin
@@ -8918,12 +8942,12 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     alc_wr_seen =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][976];
@@ -8992,11 +9016,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9077,11 +9101,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9158,11 +9182,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9195,10 +9219,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Read back T1 entry. CTR bits[3:1] must remain 111.
     rd_t1 =
@@ -9269,11 +9293,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9311,10 +9335,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Read back T1 entry. CTR bits[3:1] must remain 000.
     rd_t1 =
@@ -9375,11 +9399,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9417,10 +9441,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Read back T1 entry. USE bits[5:4] must remain 11.
     rd_t1 =
@@ -9489,11 +9513,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9532,10 +9556,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     // Read back T1 entry. USE bits[5:4] must remain 00.
     rd_t1 =
@@ -9612,11 +9636,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -9645,7 +9669,7 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     // Sample alc_we_s0 for all tables T1-T4.
     alc_wr_seen =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we
@@ -9654,7 +9678,7 @@ module tb;
       | u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     if (verbose != 0)
       $display(
@@ -9725,7 +9749,7 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     // Sample all write enables after update val propagates.
     // BIM ctr_we_s0 and T1-T4 norm_we_s0 must all be 0.
     any_we_seen =
@@ -9736,7 +9760,7 @@ module tb;
       | u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].norm_we;
     stg_upd_val0            = 1'b0;
     stg_upd_inp0            = '0;
-    @(posedge clk);
+    clk_step();
 
     if (verbose != 0)
       $display(
@@ -9798,11 +9822,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (meta.tage_prm_comp !== 3'd2) begin
       local_fails++;
@@ -9821,10 +9845,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
@@ -9887,11 +9911,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (meta.tage_prm_comp !== 3'd2) begin
       local_fails++;
@@ -9910,10 +9934,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
@@ -9975,11 +9999,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (meta.tage_prm_comp !== 3'd2) begin
       local_fails++;
@@ -10000,10 +10024,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t2 =
@@ -10064,11 +10088,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (meta.tage_prm_comp !== 3'd2) begin
       local_fails++;
@@ -10089,10 +10113,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t2 =
@@ -10158,11 +10182,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h3800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (meta.tage_prm_comp !== 3'd2) begin
       local_fails++;
@@ -10176,10 +10200,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t1 =
@@ -10235,8 +10259,8 @@ module tb;
     uaon_post_rst = u_dut.u_tage_cntrl.uaon[0];
     rstn = 1'b1;
     // Wait for SRAM init: fast_init -> 1 cycle; slow init -> ~2048.
-    while (!tage_rdy) @(posedge clk);
-    @(posedge clk);
+    while (!tage_rdy) clk_step();
+    clk_step();
 
     if (verbose != 0)
       $display(
@@ -10262,11 +10286,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
 
     meta = tage_pred_meta_p2[0];
 
@@ -10325,10 +10349,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10386,10 +10410,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10447,10 +10471,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10508,10 +10532,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10569,10 +10593,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10625,11 +10649,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
 
     if (verbose != 0)
@@ -10651,11 +10675,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
 
     if (verbose != 0)
@@ -10681,11 +10705,11 @@ module tb;
     inp.branch_id = 6'h0;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
 
     if (verbose != 0)
@@ -10749,10 +10773,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10789,10 +10813,10 @@ module tb;
 
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
 
     uaon_post = u_dut.u_tage_cntrl.uaon[0];
 
@@ -10842,7 +10866,7 @@ module tb;
     tage_enable_aging   = 1'b1;
     tage_aging_interval = 32'h0000_005A;
     rstn                = 1'b0;
-    repeat(2) @(posedge clk);
+    repeat(2) clk_step();
     if (verbose != 0)
       $display(
         "[INFO] aging_reset_vals_tst: interval=%0h epoch=%0d",
@@ -10867,8 +10891,8 @@ module tb;
     // Wait for sram_init (noop on fast-init path, ~2048 cycles
     // on slow path). Ensures TC-83+ backdoor writes are not
     // overwritten by the restarted sram_init.
-    while (!tage_rdy) @(posedge clk);
-    repeat(4) @(posedge clk);
+    while (!tage_rdy) clk_step();
+    repeat(4) clk_step();
     if (local_fails == 0)
       $display("[PASS] aging_reset_vals_tst: 0 failures");
     else
@@ -10905,11 +10929,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h320);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);           // posedge A: stager drives p0
+    clk_step();               // posedge A: stager drives p0
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);           // posedge B: pred_val_p1
-    @(posedge clk);           // posedge C: pred_val_p2, rdy_p2=1
+    clk_step();               // posedge B: pred_val_p1
+    clk_step();               // posedge C: pred_val_p2, rdy_p2=1
     // Epoch must NOT advance at posedge C (N+1 timing proof).
     if (verbose != 0)
       $display(
@@ -10921,7 +10945,7 @@ module tb;
         "[FAIL] aging_interval_adv_tst: N+1 viol epoch=%0d",
         u_dut.u_tage_cntrl.lcl_epoch[0]);
     end
-    @(posedge clk);           // posedge D: aging_ff fires
+    clk_step();               // posedge D: aging_ff fires
     if (verbose != 0)
       $display(
         "[INFO] aging_interval_adv_tst: epoch post=%0d exp=1",
@@ -10963,12 +10987,12 @@ module tb;
     inp.pc        = VA_WIDTH'('h324);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);           // pred_rdy_p2 fires; epoch still 11
-    @(posedge clk);           // aging_ff fires: 11+01=00 (2-bit)
+    clk_step();
+    clk_step();               // pred_rdy_p2 fires; epoch still 11
+    clk_step();               // aging_ff fires: 11+01=00 (2-bit)
     if (verbose != 0)
       $display(
         "[INFO] aging_epoch_wrap_tst: epoch=%0d exp=0",
@@ -11016,11 +11040,11 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11032,16 +11056,16 @@ module tb;
         "[FAIL] aging_age_compare_tst age=0: useful=%02b exp=11",
         meta.tage_prm_useful);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test age=1: u_eff must equal USE>>1=01.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b01;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11053,16 +11077,16 @@ module tb;
         "[FAIL] aging_age_compare_tst age=1: useful=%02b exp=01",
         meta.tage_prm_useful);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test age=2: u_eff must be 0 (else branch, age>=2).
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11074,16 +11098,16 @@ module tb;
         "[FAIL] aging_age_compare_tst age=2: useful=%02b exp=00",
         meta.tage_prm_useful);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test age=3: u_eff must be 0 (else branch, age>=2).
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b11;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11095,7 +11119,7 @@ module tb;
         "[FAIL] aging_age_compare_tst age=3: useful=%02b exp=00",
         meta.tage_prm_useful);
     end
-    @(posedge clk);
+    clk_step();
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     if (local_fails == 0)
       $display("[PASS] aging_age_compare_tst: 0 failures");
@@ -11144,11 +11168,11 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11160,16 +11184,16 @@ module tb;
         "[FAIL] aging_use_reduce_tst fresh: alc=%0d exp=0",
         meta.tage_alc_comp);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: epoch=2, T2 age=2 u_eff=0, T2 selected.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11181,7 +11205,7 @@ module tb;
         "[FAIL] aging_use_reduce_tst aged: alc=%0d exp=2",
         meta.tage_alc_comp);
     end
-    @(posedge clk);
+    clk_step();
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     if (local_fails == 0)
       $display("[PASS] aging_use_reduce_tst: 0 failures");
@@ -11223,11 +11247,11 @@ module tb;
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11239,7 +11263,7 @@ module tb;
         "[FAIL] aging_enable_gate_tst A: useful=%02b exp=10",
         meta.tage_prm_useful);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: epoch frozen at 1 across 3 predictions.
     u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b01;
     u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
@@ -11247,12 +11271,12 @@ module tb;
     for (k = 0; k < 3; k++) begin
       stg_pred_inp0 = inp;
       stg_pred_val0 = 1'b1;
-      @(posedge clk);
+      clk_step();
       stg_pred_val0 = 1'b0;
       stg_pred_inp0 = '0;
-      @(posedge clk);
-      @(posedge clk);
-      @(posedge clk);
+      clk_step();
+      clk_step();
+      clk_step();
     end
     epoch_post = u_dut.u_tage_cntrl.lcl_epoch[0];
     if (verbose != 0)
@@ -11311,11 +11335,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h828);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta                    = tage_pred_meta_p2[0];
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11323,10 +11347,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522];
     if (verbose != 0)
@@ -11339,7 +11363,7 @@ module tb;
         "[FAIL] alc_trig_gating_tst A: T1[0][522]=0x%04h exp=0x0109",
         rd_t1);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: correct prediction -> no allocation.
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
       = 16'h0000;
@@ -11347,11 +11371,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h828);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta                    = tage_pred_meta_p2[0];
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11359,10 +11383,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522];
     if (verbose != 0)
@@ -11375,7 +11399,7 @@ module tb;
         "[FAIL] alc_trig_gating_tst B: T1[0][522]=0x%04h exp=0x0000",
         rd_t1);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test C: prm_comp=T4 (max table) -> prm<TAGE_MAX_TBL fails.
     // Force meta with prm_comp=4 to bypass prediction.
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522]
@@ -11392,10 +11416,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][522];
     if (verbose != 0)
@@ -11450,11 +11474,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h20A0);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11479,10 +11503,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40];
     rd_t2 =
@@ -11548,11 +11572,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h3918);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11570,10 +11594,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[1][582];
     rd_t3 =
@@ -11636,11 +11660,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h5800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11659,10 +11683,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512];
     rd_t2 =
@@ -11726,11 +11750,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h4140);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -11754,10 +11778,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1_tgt =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][80];
     rd_t1_dec =
@@ -11825,11 +11849,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h1878);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta                    = tage_pred_meta_p2[0];
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11837,10 +11861,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542];
     if (verbose != 0)
@@ -11853,7 +11877,7 @@ module tb;
         "[FAIL] alc_contents_tst A: T1[1][542]=0x%04h exp=0x0309",
         rd_t1);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: epoch=2 -> EPC=2'b10 in allocated entry.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b10;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
@@ -11862,11 +11886,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h1878);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta                    = tage_pred_meta_p2[0];
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11874,10 +11898,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542];
     if (verbose != 0)
@@ -11931,11 +11955,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h1050);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta                    = tage_pred_meta_p2[0];
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11943,12 +11967,12 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     we_seen =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     if (verbose != 0)
       $display(
         "[INFO] alc_we_gate_tst A: alc_we_s0=%0b exp=1",
@@ -11959,7 +11983,7 @@ module tb;
         "[FAIL] alc_we_gate_tst A: alc_we_s0=%0b exp=1",
         we_seen);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: correct prediction -> alc_we_s0=0.
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0000;
@@ -11967,11 +11991,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h1050);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta                    = tage_pred_meta_p2[0];
     upd_inp                 = '0;
     upd_inp.tage_pred_meta  = meta;
@@ -11979,12 +12003,12 @@ module tb;
     upd_inp.resolved_taken  = 1'b1;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     we_seen =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     if (verbose != 0)
       $display(
         "[INFO] alc_we_gate_tst B: alc_we_s0=%0b exp=0",
@@ -11995,7 +12019,7 @@ module tb;
         "[FAIL] alc_we_gate_tst B: alc_we_s0=%0b exp=0",
         we_seen);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test C: mispredict with alc_comp=0 -> alc_we_s0=0.
     // BP-096: using_primary must be 1 here. ADR-001 requires it
     // whenever prm_comp=0 and alt_comp=0, and ctr_update_rules row
@@ -12015,12 +12039,12 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     we_seen =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].alc_we;
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     if (verbose != 0)
       $display(
         "[INFO] alc_we_gate_tst C: alc_we_s0=%0b exp=0",
@@ -12074,11 +12098,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h28C8);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12102,10 +12126,10 @@ module tb;
     upd_inp.resolved_taken  = 1'b0;
     stg_upd_inp0            = upd_inp;
     stg_upd_val0            = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][562];
     rd_t2 =
@@ -12169,11 +12193,11 @@ module tb;
     inp.pc = VA_WIDTH'('h100C8);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0) begin
       $display(
@@ -12267,11 +12291,11 @@ module tb;
     inp.pc = VA_WIDTH'('h1212C);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0) begin
       $display(
@@ -12357,11 +12381,11 @@ module tb;
     inp.pc = VA_WIDTH'('h141F4);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0) begin
       $display(
@@ -12434,11 +12458,11 @@ module tb;
     inp.pc = VA_WIDTH'('h16258);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12456,18 +12480,18 @@ module tb;
         "[FAIL] pred_using_primary_tst A: pred_tkn=%0b exp=1",
         meta.tage_pred_tkn);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: uaon at/above threshold -> using_primary=0.
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
     inp    = '0;
     inp.pc = VA_WIDTH'('h16258);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12525,11 +12549,11 @@ module tb;
     inp.pc = VA_WIDTH'('h182BC);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12541,7 +12565,7 @@ module tb;
         "[FAIL] pred_strong_tst A: pred_strong=%0b exp=1 (ctr=111)",
         meta.tage_pred_strong);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: CTR=100 (weakest taken, boundary) -> pred_strong=0.
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h3009;
@@ -12549,11 +12573,11 @@ module tb;
     inp.pc = VA_WIDTH'('h182BC);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12604,11 +12628,11 @@ module tb;
     inp.pc = VA_WIDTH'('h1A320);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12626,18 +12650,18 @@ module tb;
         "[FAIL] pred_dir_mux_tst A: pred_tkn=%0b exp=1 (prm)",
         meta.tage_pred_tkn);
     end
-    @(posedge clk);
+    clk_step();
     // Sub-test B: using_primary=0 -> pred_tkn follows alt CTR MSB.
     u_dut.u_tage_cntrl.uaon[0] = 4'hF;
     inp    = '0;
     inp.pc = VA_WIDTH'('h1A320);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12694,14 +12718,14 @@ module tb;
     inp.pc = VA_WIDTH'('h1E384);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     // N+1: val=0 via NBA; pred_val_p1=1; p2 not yet latched.
     rdy_at_p1 = tage_pred_rdy_p2[0];
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     // N+2: pred_val_p2=1; all meta fields valid.
-    @(posedge clk);
+    clk_step();
     rdy_at_p2 = tage_pred_rdy_p2[0];
     meta_p2   = tage_pred_meta_p2[0];
     if (verbose != 0) begin
@@ -12822,11 +12846,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h22800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12853,7 +12877,7 @@ module tb;
       $display("[FAIL] capstone_rt_tst step1: using_primary=%0b exp=1",
         meta.tage_using_primary);
     end
-    @(posedge clk);
+    clk_step();
     // -- Step 2: CTR+EPC+USE update (rule 2.1, Table7 row3) --
     // T2 prm_tkn=0 (CTR=010 MSB=0), alt_tkn=1. DIFF=1.
     // resolved=0: correct. pACT=INC aACT=-. USE INC prm (row3).
@@ -12865,10 +12889,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     rd_t2 =
       u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
     if (verbose != 0)
@@ -12882,7 +12906,7 @@ module tb;
       $display("[FAIL] capstone_rt_tst step2: T2[0][512]=0x%04h exp=0x4523"
         , rd_t2);
     end
-    @(posedge clk);
+    clk_step();
     // -- Step 3: USE update via UAON (Table7 row5, row8.2) ---
     // T2 CTR=011 boundary. Force uaon[0]=0xF -> UAON fires.
     // Prediction: using_primary=0 (alt=T1 active provider).
@@ -12895,11 +12919,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h22800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12920,10 +12944,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b0;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
@@ -12951,7 +12975,7 @@ module tb;
       $display("[FAIL] capstone_rt_tst step3: T2[0][512]=0x%04h exp=0x4535"
         , rd_t2);
     end
-    @(posedge clk);
+    clk_step();
     // -- Step 4: alloc mispredict; prm_comp(T2)<T4 -> T3 alloc
     // uaon[0]=0: UAON suppressed -> using_prm=1.
     // T2 CTR=011 prm_tkn=0. resolved=1 -> misp=1.
@@ -12964,11 +12988,11 @@ module tb;
     inp.pc        = VA_WIDTH'('h22800);
     stg_pred_inp0 = inp;
     stg_pred_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_pred_val0 = 1'b0;
     stg_pred_inp0 = '0;
-    @(posedge clk);
-    @(posedge clk);
+    clk_step();
+    clk_step();
     meta = tage_pred_meta_p2[0];
     if (verbose != 0)
       $display(
@@ -12991,10 +13015,10 @@ module tb;
     upd_inp.cond_mispredict = 1'b1;
     stg_upd_inp0 = upd_inp;
     stg_upd_val0 = 1'b1;
-    @(posedge clk);
+    clk_step();
     stg_upd_val0 = 1'b0;
     stg_upd_inp0 = '0;
-    @(posedge clk);
+    clk_step();
     // -- Step 5: final readback all touched entries ----------
     rd_t1 =
       u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][512];
@@ -13118,13 +13142,13 @@ module tb;
       stg_pred_inp1 = inp;
       stg_pred_val0 = 1'b1;
       stg_pred_val1 = 1'b1;
-      @(posedge clk);
+      clk_step();
       stg_pred_val0 = 1'b0;
       stg_pred_val1 = 1'b0;
       stg_pred_inp0 = '0;
       stg_pred_inp1 = '0;
-      @(posedge clk);
-      @(posedge clk);
+      clk_step();
+      clk_step();
       meta0 = tage_pred_meta_p2[0];
       meta1 = tage_pred_meta_p2[S1];
 
@@ -13195,7 +13219,7 @@ module tb;
       end
 
       // Drain before next iteration.
-      @(posedge clk);
+      clk_step();
     end
 
     if (local_fails == 0)
@@ -13568,6 +13592,226 @@ module tb;
     else
       $display(
         "[FAIL] pred_branch_id_stage_tst: %0d failures", local_fails);
+    total_fails += local_fails;
+  endtask
+
+  // ---------------------------------------------------------------
+  // BP-134  pred_t0_conf_tst: TD#182. The confidence flags and
+  // tage_extd_ctr of a T0-provided prediction, all four T0 states,
+  // both prediction slots, on both paths by which T0 provides:
+  //   A. T0 is the primary: no tagged table hits (prm_comp 0).
+  //   B. T0 is the alternate chosen by use_alt_on_na: T1 is the
+  //      primary at the boundary CTR 100, alt_comp 0, uaon 8.
+  // T0 reads in its 3b form {ctr[1], ctr[0], ctr[0]} (TD#182):
+  //   00 -> 000 strong, extd -7    01 -> 011 weak, extd -1
+  //   10 -> 100 weak,   extd +1    11 -> 111 strong, extd +7
+  // The meta prm/alt CTR field keeps the zero-padded T0 form, which
+  // the update path reads; that is checked too. Before BP-134 the
+  // decode read the zero-padded form: 01 -> medium -5, 10 -> medium
+  // -3, 11 -> weak -1.
+  //
+  // Mechanisms the stimulus relies on, each driven or read here:
+  //   - aging disabled; uaon driven per path on both slots;
+  //   - T1..T4 invalidated in every row of both banks of both slot
+  //     RAMs, so no residue hits;
+  //   - the T0 row, and the T1 row and tag, of the PC are read from
+  //     the DUT's own registered p0 index and tag (t_idx_r1,
+  //     t_tag_r1), not derived from the hashes;
+  //   - each response is checked for the provider its path relies on
+  //     (prm_comp, alt_comp, using_primary) before the flags.
+  // ---------------------------------------------------------------
+  task automatic pred_t0_conf_tst(int verbose);
+    int              local_fails;
+    tage_pred_inp_t  inp;
+    tage_pred_meta_t meta;
+    int              re;
+    int              sl;
+    logic [TAGE_TBL_IDX[0]-1:0]    ix0;
+    logic [TAGE_TBL_IDX[1]-1:0]    ix1;
+    logic [TAGE_MAX_TAG_WIDTH-1:0] tg1;
+    logic [TAGE_TBL_CTR[0]-1:0]    c0;
+    logic                          es, em, ew;
+    logic signed [TAGE_MAX_CTR_WIDTH+1:0] ee;
+    int              gx;
+    int              eei;
+    localparam logic [VA_WIDTH-1:0] PC_T = VA_WIDTH'('h0_0003_0040);
+
+    local_fails       = 0;
+    tage_enable_aging = 1'b0;
+    u_dut.u_tage_cntrl.uaon[0]  = 4'h0;
+    u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
+
+    // -- Start state: T1..T4 invalid everywhere, both slots.
+    re = (1 << TAGE_TBL_IDX[1]) / 2;
+    for (int b = 0; b < 2; b++) begin
+      for (int i = 0; i < re; i++) begin
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[b][i] = '0;
+        u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[S1].u_ram.mem[b][i] = '0;
+      end
+    end
+
+    // -- Probe: read the T0 row and the T1 row and tag of PC_T from
+    //    the DUT's registered p0 index and tag, on both slots.
+    inp           = '0;
+    inp.pc        = PC_T;
+    stg_pred_inp0 = inp;
+    stg_pred_inp1 = inp;
+    stg_pred_val0 = 1'b1;
+    stg_pred_val1 = 1'b1;
+    clk_step();                 // PC_T on p0
+    stg_pred_val0 = 1'b0;
+    stg_pred_val1 = 1'b0;
+    stg_pred_inp0 = '0;
+    stg_pred_inp1 = '0;
+    clk_step();                 // PC_T's index and tag in r1
+    ix0 = u_dut.u_tage_cntrl.t_idx_r1[0][0][TAGE_TBL_IDX[0]-1:0];
+    ix1 = u_dut.u_tage_cntrl.t_idx_r1[1][0][TAGE_TBL_IDX[1]-1:0];
+    tg1 = u_dut.u_tage_cntrl.t_tag_r1[1][0];
+    if (u_dut.u_tage_cntrl.t_idx_r1[0][S1][TAGE_TBL_IDX[0]-1:0] !== ix0
+        || u_dut.u_tage_cntrl.t_idx_r1[1][S1][TAGE_TBL_IDX[1]-1:0] !== ix1
+        || u_dut.u_tage_cntrl.t_tag_r1[1][S1] !== tg1) begin
+      local_fails++;
+      $display("[FAIL] pred_t0_conf_tst: slot index/tag differ for one PC");
+    end
+    repeat (4) clk_step();      // drain the probe
+    if (verbose != 0)
+      $display("[INFO] pred_t0_conf_tst: T0 idx %0d, T1 idx %0d tag %02h",
+        ix0, ix1, tg1);
+
+    for (int path = 0; path < 2; path++) begin
+      for (int ci = 0; ci < 4; ci++) begin
+        c0 = TAGE_TBL_CTR[0]'(ci);
+        // T0 row under test, both slot RAMs. bank = index MSB.
+        u_dut.u_tage_bim.g_slot[0].u_ram
+          .mem[ix0[TAGE_TBL_IDX[0]-1]][ix0[TAGE_TBL_IDX[0]-2:0]] = c0;
+        u_dut.u_tage_bim.g_slot[S1].u_ram
+          .mem[ix0[TAGE_TBL_IDX[0]-1]][ix0[TAGE_TBL_IDX[0]-2:0]] = c0;
+        if (path == 0) begin
+          // A: no tagged hit, uaon 0.
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram
+            .mem[ix1[TAGE_TBL_IDX[1]-1]][ix1[TAGE_TBL_IDX[1]-2:0]] = '0;
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram
+            .mem[ix1[TAGE_TBL_IDX[1]-1]][ix1[TAGE_TBL_IDX[1]-2:0]] = '0;
+          u_dut.u_tage_cntrl.uaon[0]  = 4'h0;
+          u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
+        end else begin
+          // B: T1 hits at CTR 100, {TAG, EPC 00, USE 00, CTR, VAL 1};
+          // uaon 8 sets the MSB, so use_alt_on_na picks the T0 alt.
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram
+            .mem[ix1[TAGE_TBL_IDX[1]-1]][ix1[TAGE_TBL_IDX[1]-2:0]]
+            = {tg1, 2'b00, 2'b00, 3'b100, 1'b1};
+          u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram
+            .mem[ix1[TAGE_TBL_IDX[1]-1]][ix1[TAGE_TBL_IDX[1]-2:0]]
+            = {tg1, 2'b00, 2'b00, 3'b100, 1'b1};
+          u_dut.u_tage_cntrl.uaon[0]  = 4'h8;
+          u_dut.u_tage_cntrl.uaon[S1] = 4'h8;
+        end
+
+        // Expected decode of the 3b form, independent of the RTL.
+        case (ci)
+          0: begin es=1'b1; em=1'b0; ew=1'b0; ee=-5'sd7; end
+          1: begin es=1'b0; em=1'b0; ew=1'b1; ee=-5'sd1; end
+          2: begin es=1'b0; em=1'b0; ew=1'b1; ee= 5'sd1; end
+          3: begin es=1'b1; em=1'b0; ew=1'b0; ee= 5'sd7; end
+          default: begin es=1'b0; em=1'b0; ew=1'b0; ee=5'sd0; end
+        endcase
+        eei = 32'(signed'(ee));
+
+        inp           = '0;
+        inp.pc        = PC_T;
+        stg_pred_inp0 = inp;
+        stg_pred_inp1 = inp;
+        stg_pred_val0 = 1'b1;
+        stg_pred_val1 = 1'b1;
+        clk_step();             // on p0
+        stg_pred_val0 = 1'b0;
+        stg_pred_val1 = 1'b0;
+        stg_pred_inp0 = '0;
+        stg_pred_inp1 = '0;
+        clk_step();             // on p1
+        clk_step();             // on p2
+
+        for (int k = 0; k < 2; k++) begin
+          sl   = (k == 0) ? 0 : S1;
+          meta = tage_pred_meta_p2[sl];
+          gx   = 32'(signed'(meta.tage_extd_ctr));
+          if (verbose != 0)
+            $display(
+              "[INFO] pred_t0_conf_tst: %s t0=%02b s%0d smw=%0b%0b%0b extd=%0d",
+              (path == 0) ? "prm" : "alt", c0, sl, meta.tage_pred_strong,
+              meta.tage_pred_medium, meta.tage_pred_weak, gx);
+          if (tage_pred_rdy_p2[sl] !== 1'b1) begin
+            local_fails++;
+            $display("[FAIL] pred_t0_conf_tst: s%0d t0=%02b rdy=0", sl, c0);
+          end
+          // Provider path sanity.
+          if (path == 0) begin
+            if (meta.tage_prm_comp !== 3'd0
+                || meta.tage_using_primary !== 1'b1
+                || meta.tage_prm_ctr !== {1'b0, c0}) begin
+              local_fails++;
+              // slot, T0 CTR, prm_comp, using_primary, prm_ctr
+              $display(
+                "[FAIL] pred_t0_conf_tst: prm s%0d t0=%02b %0d %0b %03b",
+                sl, c0, meta.tage_prm_comp, meta.tage_using_primary,
+                meta.tage_prm_ctr);
+            end
+          end else begin
+            if (meta.tage_prm_comp !== 3'd1
+                || meta.tage_alt_comp !== 3'd0
+                || meta.tage_using_primary !== 1'b0
+                || meta.tage_use_alt_on_na !== 1'b1
+                || meta.tage_alt_ctr !== {1'b0, c0}) begin
+              local_fails++;
+              // slot, T0 CTR, prm_comp, alt_comp, using_primary, alt_ctr
+              $display(
+                "[FAIL] pred_t0_conf_tst: alt s%0d t0=%02b %0d %0d %0b %03b",
+                sl, c0, meta.tage_prm_comp, meta.tage_alt_comp,
+                meta.tage_using_primary, meta.tage_alt_ctr);
+            end
+          end
+          if (meta.tage_pred_tkn !== c0[1]) begin
+            local_fails++;
+            $display("[FAIL] pred_t0_conf_tst: s%0d t0=%02b tkn=%0b",
+              sl, c0, meta.tage_pred_tkn);
+          end
+          if (meta.tage_pred_strong !== es || meta.tage_pred_medium !== em
+              || meta.tage_pred_weak !== ew) begin
+            local_fails++;
+            $display(
+              "[FAIL] pred_t0_conf_tst: %s s%0d %02b smw=%0b%0b%0b e=%0b%0b%0b",
+              (path == 0) ? "prm" : "alt", sl, c0, meta.tage_pred_strong,
+              meta.tage_pred_medium, meta.tage_pred_weak, es, em, ew);
+          end
+          if (gx !== eei) begin
+            local_fails++;
+            $display(
+              "[FAIL] pred_t0_conf_tst: %s s%0d t0=%02b extd=%0d exp=%0d",
+              (path == 0) ? "prm" : "alt", sl, c0, gx, eei);
+          end
+        end
+        clk_step();             // drain
+      end
+    end
+
+    // Leave the T1 row invalid and uaon cleared.
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram
+      .mem[ix1[TAGE_TBL_IDX[1]-1]][ix1[TAGE_TBL_IDX[1]-2:0]] = '0;
+    u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram
+      .mem[ix1[TAGE_TBL_IDX[1]-1]][ix1[TAGE_TBL_IDX[1]-2:0]] = '0;
+    u_dut.u_tage_cntrl.uaon[0]  = 4'h0;
+    u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
+
+    if (local_fails == 0)
+      $display("[PASS] pred_t0_conf_tst: 0 failures");
+    else
+      $display("[FAIL] pred_t0_conf_tst: %0d failures", local_fails);
     total_fails += local_fails;
   endtask
 

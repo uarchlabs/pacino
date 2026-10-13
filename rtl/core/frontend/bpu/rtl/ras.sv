@@ -27,7 +27,8 @@
 //       pops then pushes in one slot (RAS-DS1, TD#152).
 //   p3: repair pass, inverse op when p3 FTB type disagrees with the
 //       registered p2 op (speculative stack only). An undo reverses the
-//       recursion counts the p2 op changed (BP-133, TD #78).
+//       recursion counts the p2 op changed (BP-133, TD #78), and only
+//       those: a push at a saturated count is not undone (BP-134).
 //
 // See planning/arch/ras_decisions.md and
 // planning/interfaces/ras_interfaces.md.
@@ -116,8 +117,10 @@ module ras (
   // stays three pointers (4.1).
   logic [RAS_PTR_BITS-1:0]   spec_nos      [0:RAS_SPEC_ENTRIES-1];
 
+  // No recursion count on the commit stack: each committed call is its
+  // own entry (BP-133, TD#79). The commit_rctr field, written zero and
+  // read by nothing, is removed (BP-134).
   logic [VA_WIDTH-1:0]       commit_ret_addr [0:RAS_COMMIT_ENTRIES-1];
-  logic [RAS_RCTR_WIDTH-1:0] commit_rctr     [0:RAS_COMMIT_ENTRIES-1];
 
   logic [RAS_PTR_BITS-1:0]        tosr; // top-of-stack read
   logic [RAS_PTR_BITS-1:0]        tosw; // top-of-stack write (free)
@@ -148,8 +151,13 @@ module ras (
   //   p3_push_inc_q the push incremented the count at p3_inc_ptr_q (the
   //                 TOSR the push found) instead of allocating. Not set
   //                 when the count was saturated and did not move.
+  //   p3_push_sat_q the push matched the top at a saturated count and
+  //                 changed nothing, so an undo of it changes nothing
+  //                 (BP-134; before BP-134 the undo decremented the
+  //                 count, losing one recursion level).
   logic                    p3_pop_dec_q  [0:NUM_PRED_SLOTS-1];
   logic                    p3_push_inc_q [0:NUM_PRED_SLOTS-1];
+  logic                    p3_push_sat_q [0:NUM_PRED_SLOTS-1];
   logic [RAS_PTR_BITS-1:0] p3_inc_ptr_q  [0:NUM_PRED_SLOTS-1];
 
   // -----------------------------------------------------------------
@@ -403,6 +411,7 @@ module ras (
   logic [RAS_PTR_BITS-1:0]   p2_pre_tosr [0:NUM_PRED_SLOTS-1];
   logic                      p2_pop_dec  [0:NUM_PRED_SLOTS-1];
   logic                      p2_push_inc [0:NUM_PRED_SLOTS-1];
+  logic                      p2_push_sat [0:NUM_PRED_SLOTS-1];
   logic [RAS_PTR_BITS-1:0]   p2_inc_ptr  [0:NUM_PRED_SLOTS-1];
 
   always_comb begin : scan
@@ -452,6 +461,7 @@ module ras (
       p2_pre_tosr[s]      = '0;
       p2_pop_dec[s]       = 1'b0;
       p2_push_inc[s]      = 1'b0;
+      p2_push_sat[s]      = 1'b0;
       p2_inc_ptr[s]       = '0;
     end
 
@@ -473,7 +483,9 @@ module ras (
     // TD #78; before BP-133 neither count was restored). An undo-pop
     // alone restores the same registered TOSR (st_restore) and puts
     // back a count its pop decremented; a missed pop and an undo-push
-    // follow the link or decrement a count (st_retract).
+    // follow the link or decrement a count (st_retract). An undo-push
+    // of a push that met a saturated count does nothing, as the push
+    // did nothing (BP-134).
     //
     // A RETURN_CALL PAIRED AT THE OTHER STAGE WITH A PLAIN PUSH OR POP
     // is not specified (ras_decisions.md 1). It takes the per-component
@@ -513,8 +525,10 @@ module ras (
           end
         end
       end else if (ras_rst_done) begin
-        // Undo a push the p3 type does not have.
-        if (q_push & ~s3_push) begin
+        // Undo a push the p3 type does not have. Skipped when the push
+        // met a saturated count and changed nothing: st_retract would
+        // decrement a count the push did not raise (BP-134).
+        if (q_push & ~s3_push & ~p3_push_sat_q[s]) begin
           w = st_retract(w);
           if (w.we) begin
             pi             = (s * RAS_WR_PER_SLOT) + n;
@@ -614,6 +628,9 @@ module ras (
         // The recursion arm of st_push, when it moves the count.
         p2_push_inc[s] = w.valid & (ras_fall_through_p2[s] == w.top_addr)
                        & (w.top_rctr != RCTR_MAX);
+        // The recursion arm at a saturated count: nothing moves.
+        p2_push_sat[s] = w.valid & (ras_fall_through_p2[s] == w.top_addr)
+                       & (w.top_rctr == RCTR_MAX);
         p2_inc_ptr[s]  = w.tosr;
         w = st_push(w, ras_fall_through_p2[s], 1'b1);
         pi             = ((NUM_PRED_SLOTS + s) * RAS_WR_PER_SLOT) + n;
@@ -690,7 +707,6 @@ module ras (
       end
       for (int i = 0; i < RAS_COMMIT_ENTRIES; i++) begin
         commit_ret_addr[i] <= '0;
-        commit_rctr[i]     <= '0;
       end
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         p3_op_q[s]       <= OP_NONE;
@@ -698,6 +714,7 @@ module ras (
         p3_pre_tosr_q[s] <= '0;
         p3_pop_dec_q[s]  <= 1'b0;
         p3_push_inc_q[s] <= 1'b0;
+        p3_push_sat_q[s] <= 1'b0;
         p3_inc_ptr_q[s]  <= '0;
       end
     end else begin
@@ -738,7 +755,6 @@ module ras (
       // ---- commit stack (independent of restore / p2) ------------
       if (c_push) begin
         commit_ret_addr[c_mid] <= ras_commit_ret_addr;
-        commit_rctr[c_mid]     <= '0;
       end
       csp   <= c_nxt;
       c_cnt <= c_cnt_nxt;
@@ -754,6 +770,7 @@ module ras (
         p3_pre_tosr_q[s] <= p2_pre_tosr[s];
         p3_pop_dec_q[s]  <= p2_pop_dec[s];
         p3_push_inc_q[s] <= p2_push_inc[s];
+        p3_push_sat_q[s] <= p2_push_sat[s];
         p3_inc_ptr_q[s]  <= p2_inc_ptr[s];
       end
     end

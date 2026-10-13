@@ -111,6 +111,11 @@
 // presented before every older instruction has committed or off the
 // path, that no uncached line is written into the L1I, and that an
 // uncached instruction is delivered alone.
+//
+// BP-134. Program rec_undo: a recursion whose return blocks put a
+// conditional before the ret, so SC reversing it at p3 undoes a pop
+// that decremented a recursion count (TD#78). It counts those undos
+// and checks each put the count back.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -824,6 +829,51 @@ module tb;
       end
       ret(link);
     endtask
+    // BP-134, rec_undo: f calls itself n deep from one call site, and
+    // every return of f is in a block with a conditional before it,
+    // whose outcome tk[] gives per return, innermost first:
+    //   f+0   mixed(2)        6 bytes
+    //   f+6   beq -> f+14     taken at the bottom of the recursion
+    //   f+10  jal x1, f       link f+14
+    //   f+14  bne -> f+64     the conditional of the return block
+    //   f+18  ret             not-taken path
+    //   f+64  c.addi          taken path, in another 32-byte region
+    //   f+66  ret
+    // The path a return does not take is written dry.
+    logic rc_tk [$];
+    task emit_rcx(input logic [VA_WIDTH-1:0] f, input int n,
+                  input logic [VA_WIDTH-1:0] link);
+      logic d;
+      logic t;
+      wp = f;
+      mixed(2);
+      bcc(n == 0, f + VA_WIDTH'(14));
+      if (n > 0) begin
+        jal(5'd1, f);
+        emit_rcx(f, n - 1, f + VA_WIDTH'(14));
+      end
+      t = rc_tk.pop_front();
+      bcc(t, f + VA_WIDTH'(64));
+      d   = dry;
+      dry = 1'b1;
+      if (t) begin
+        wp = f + VA_WIDTH'(18);
+        ret(link);
+        wp = f + VA_WIDTH'(64);
+        dry = d;
+        i16();
+        ret(link);
+      end else begin
+        dry = d;
+        ret(link);
+        dry = 1'b1;
+        wp  = f + VA_WIDTH'(64);
+        i16();
+        ret(link);
+        dry = d;
+        wp  = link;
+      end
+    endtask
     // A loop exit: a conditional, taken on the last pass, over a JAL
     // back to top. The JAL is written dry on the last pass.
     task exit_or_jal(input logic last,
@@ -1513,6 +1563,50 @@ module tb;
     if (meas && dut.u_ftq.w_arm_win[1] && dut.ras_restore_val &&
         p3_rep[dut.ftq_rollback_idx])
       n_rest_rep <= n_rest_rep + 1;
+  end
+
+  // BP-134: p3 undos of a pop that decremented a recursion count
+  // (TD#78), and whether each put the count back. An event is a slot
+  // whose registered p2 op (ras.sv p3_op_q) pops over a pop that held
+  // TOSR (p3_pop_dec_q), whose p3 view has no pop, in a cycle with no
+  // RAS restore (which drops the repair). The expected count is taken
+  // from the array before the undo's edge, plus one; it is compared
+  // after the edge. Only an undo in a cycle whose p2 pass is dropped
+  // (ras_p2_keep low, the p3 redirect the reversal makes) is compared,
+  // so no p2 write can touch the entry in the same edge.
+  int                        n_undo_rdec;
+  int                        n_undo_ok;
+  int                        n_undo_bad;
+  logic                      ud_pend [0:NUM_PRED_SLOTS-1];
+  logic [RAS_PTR_BITS-1:0]   ud_idx  [0:NUM_PRED_SLOTS-1];
+  logic [RAS_RCTR_WIDTH-1:0] ud_exp  [0:NUM_PRED_SLOTS-1];
+  always @(posedge clk) begin : undo_rdec_log
+`ifndef BASE_RTL
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (rstn && ud_pend[s]) begin
+        if (dut.u_bpu.u_ras.spec_rctr[ud_idx[s]] == ud_exp[s])
+          n_undo_ok <= n_undo_ok + 1;
+        else
+          n_undo_bad <= n_undo_bad + 1;
+      end
+      ud_pend[s] <= 1'b0;
+      if (meas && dut.u_bpu.u_ras.ras_rst_done &&
+          !dut.u_bpu.u_ras.ras_restore_val &&
+          dut.u_bpu.u_ras.p3_op_q[s][1] && dut.u_bpu.u_ras.p3_pop_dec_q[s] &&
+          !(dut.u_bpu.u_ras.ras_pred_val_p3[s] &&
+            (dut.u_bpu.u_ras.ras_br_type_p3[s] inside {RETURN, RETURN_CALL})))
+      begin
+        n_undo_rdec <= n_undo_rdec + 1;
+        if (!dut.u_bpu.u_ras.ras_p2_keep) begin
+          ud_pend[s] <= 1'b1;
+          ud_idx[s]  <= dut.u_bpu.u_ras.p3_pre_tosr_q[s];
+          ud_exp[s]  <= dut.u_bpu.u_ras.spec_rctr[
+                          dut.u_bpu.u_ras.p3_pre_tosr_q[s]]
+                        + RAS_RCTR_WIDTH'(1);
+        end
+      end
+    end
+`endif
   end
 
   // BP-122 (ruled by Jeff: the LP wins at p2 and p3): a slot whose p2
@@ -2579,6 +2673,10 @@ module tb;
     n_ras_sq     = 0;
     n_p3_no_p2   = 0;
     n_p3_rep     = 0;
+    n_undo_rdec  = 0;
+    n_undo_ok    = 0;
+    n_undo_bad   = 0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) ud_pend[s] = 1'b0;
     n_rest_rep   = 0;
     n_own_ok     = 0;
     n_own_bad    = 0;
@@ -3466,6 +3564,72 @@ module tb;
     end
     W.mixed(3);
     end_prog(80000);
+  endtask
+
+  // -----------------------------------------------------------------
+  // rec_undo (BP-134): an undo of a pop that decremented a recursion
+  // count (TD#78, BP-133 Problem 2). f calls itself six deep from one
+  // call site (as recur), so the return address f+14 is pushed once and
+  // its recursion count raised five times; each return but the
+  // outermost pops by decrementing it, TOSR held. Every return of f is
+  // in the block [bne][ret] at f+14 (two slots of one FTB entry), and
+  // the bne's outcome is pseudo-random, so TAGE stays weak and SC can
+  // reverse it at p3: when p2 predicted not taken (the ret reachable,
+  // popped) and p3 predicts taken, the ret is not reachable at p3 and
+  // the p3 pass undoes the pop. When that pop decremented the count,
+  // the undo must put it back, or the stack is one level short and a
+  // later return of the recursion pops to the caller's address.
+  // -----------------------------------------------------------------
+  localparam int RU_ITERS = 48;
+  localparam int RU_WARM  = 8;
+  localparam int RU_DEPTH = 6;
+
+  task automatic p_rec_undo();
+    logic [VA_WIDTH-1:0] top;
+    logic [VA_WIDTH-1:0] f;
+    logic [VA_WIDTH-1:0] l;
+    begin_prog("rec_undo");
+    // Seed chosen from a sweep of eight, each of which reached the case
+    // at two slots (2 to 10 times in 48 iterations); this one 10.
+    W.lfsr = 16'h3039;
+    f = RESET_VECTOR + VA_WIDTH'('h800);
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < RU_ITERS; it++) begin
+      if (it == RU_WARM) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      l = W.wp + VA_WIDTH'(4);
+      // The return blocks' bne, innermost return first: taken with
+      // probability 1/4 (two LFSR bits both set). At 1/2 the backend
+      // mispredicts it so often that wrong-path pops wear the recursion
+      // count down and the undos land on link pops instead.
+      W.rc_tk.delete();
+      for (int k = 0; k <= RU_DEPTH; k++)
+        W.rc_tk.push_back(W.lfsr_bit() & W.lfsr_bit());
+      W.jal(5'd1, f);
+      W.emit_rcx(f, RU_DEPTH, l);
+      W.mixed(1);
+      W.bcc(it != RU_ITERS - 1, top);
+    end
+    W.mixed(3);
+    end_prog(120000);
+    $display("   UNDO %s undo-pops over a recursion pop %0d, compared %0d,",
+             tname, n_undo_rdec, n_undo_ok + n_undo_bad);
+    $display("   UNDO %s count put back %0d, not put back %0d", tname,
+             n_undo_ok, n_undo_bad);
+`ifndef BASE_RTL
+    // The case is the program's purpose at two slots. At one slot an FTB
+    // entry has one slot, so no return shares a block with a branch
+    // before it, p3 reachability is constant, and the case does not
+    // arise; the count is reported, not checked.
+    if (NUM_PRED_SLOTS > 1)
+      chk($sformatf("rec_undo: an undo-pop over a recursion pop ran (%0d)",
+                    n_undo_rdec), n_undo_ok + n_undo_bad > 0);
+    chk($sformatf({"rec_undo: each undo put the recursion count back ",
+                   "(%0d ok, %0d not)"}, n_undo_ok, n_undo_bad),
+        n_undo_bad == 0);
+`endif
   endtask
 
   // -----------------------------------------------------------------
@@ -4841,6 +5005,7 @@ module tb;
       "ftbonly":    p_ftbonly();
       "nest":       p_nest();
       "recur":      p_recur();
+      "rec_undo":   p_rec_undo();
       "deep":       p_deep();
       "indir":      p_indir();
       "region":     p_region();
@@ -4873,9 +5038,9 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:35] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:36] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
-                              "recur", "deep", "indir", "region",
+                              "recur", "rec_undo", "deep", "indir", "region",
                               "multistart", "cross", "rvc", "misp_call",
                               "jals", "fencei", "cboinval", "uc_nc",
                               "uc_io", "pt_faults_s", "pt_faults_h",

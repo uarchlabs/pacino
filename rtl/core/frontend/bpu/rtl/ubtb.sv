@@ -8,8 +8,10 @@
 // CONTACT: Jeff Nye
 // -------------------------------------------------------------------
 // Micro Branch Target Buffer: 256-entry, 4-way set-associative.
-// First predictor in the BP cluster pipeline (p1 output).
-// Combinational prediction from the registered entry array.
+// First predictor in the BP cluster pipeline. Its outputs carry the p1
+// suffix of the stage that registers them; they are combinational from
+// pred_pc_p0 and valid within the p0 cycle (mem is a flop array read
+// combinationally, see uBTB timing below).
 // Synchronous update on clk posedge when upd_u0[u].valid.
 //
 // Entry model (BP-086, ubtb_interfaces.md, ftb_decisions.md 4):

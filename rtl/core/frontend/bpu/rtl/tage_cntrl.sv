@@ -170,6 +170,14 @@ module tage_cntrl #(
   logic [TAGE_MAX_CTR_WIDTH-1:0]
     post_mux_ctr_p1[NUM_PRED_SLOTS-1:0];
 
+  // T0 CTR in its equivalent 3b form, {ctr[1], ctr[0], ctr[0]}: 00 -> 000,
+  // 01 -> 011, 10 -> 100, 11 -> 111 (TD#182, BP-134). Read only by the
+  // confidence decode and tage_extd_ctr when T0 is the post-mux provider.
+  // The meta prm/alt CTR fields keep the zero-padded form, which the
+  // update path reads (tage_cntrl_decisions.md, T0 Behavior).
+  logic [TAGE_MAX_CTR_WIDTH-1:0]
+    t0_cnf_ctr_p1[NUM_PRED_SLOTS-1:0];
+
   // Allocation candidate (p1, combinational, per slot)
   logic [TAGE_TBL_SEL_WIDTH-1:0]
     alc_comp_p1[NUM_PRED_SLOTS-1:0];
@@ -448,6 +456,7 @@ module tage_cntrl #(
   // Alt scan: T1->T(prm-1) ascending, last hit wins.
   // T0 fallback is the default when no tagged table hits.
   // T0 CTR is zero-padded to TAGE_MAX_CTR_WIDTH for storage in meta.
+  // The confidence decode and extd CTR read T0 in 3b form (TD#182).
   // UAON trigger: prm must be tagged AND CTR in {011,100}.
   // UAON mux: triggered and uaon MSB set -> use alt provider.
   // Alloc: scan T(prm+1)->T4, take first with ueff==0 (shortest).
@@ -482,6 +491,8 @@ module tage_cntrl #(
         extd_ctr_p1[s]     = '0;
         pre_mux_ctr_p1[s]  = '0;
         post_mux_ctr_p1[s] = '0;
+        t0_cnf_ctr_p1[s]   = {t_cntrl_bits_p1[0][s][TAGE_TBL_CTR[0]:1],
+          {(TAGE_MAX_CTR_WIDTH-TAGE_TBL_CTR[0]){t_cntrl_bits_p1[0][s][1]}}};
 
         // -- Primary provider: scan T1->T4.
         // Last assignment wins -> T4 has highest priority.
@@ -523,13 +534,17 @@ module tage_cntrl #(
 
         // -- UAON mux: triggered and uaon MSB set -> use alt.
         // uaon MSB set means uaon >= TAGE_UAON_THRES (8).
+        // A T0 provider (comp 0) presents its 3b form (TD#182), as the
+        // primary or as the alternate chosen by use_alt_on_na.
         if (uaon_trig_p1[s] && uaon[s][3]) begin
           using_prm_p1[s]     = 1'b0;
-          post_mux_ctr_p1[s]  = alt_ctr_p1[s];
+          post_mux_ctr_p1[s]  = (alt_comp_p1[s] == '0)
+                                  ? t0_cnf_ctr_p1[s] : alt_ctr_p1[s];
           pred_tkn_p1[s]      = alt_tkn_p1[s];
         end else begin
           using_prm_p1[s]     = 1'b1;
-          post_mux_ctr_p1[s]  = pre_mux_ctr_p1[s];
+          post_mux_ctr_p1[s]  = (prm_comp_p1[s] == '0)
+                                  ? t0_cnf_ctr_p1[s] : pre_mux_ctr_p1[s];
           pred_tkn_p1[s]      = prm_tkn_p1[s];
         end
 
@@ -546,7 +561,8 @@ module tage_cntrl #(
           !pred_strong_p1[s] && !pred_weak_p1[s];
 
         // -- Extended CTR (TD#88). provider_ctr is the post-mux CTR
-        // (tage_using_primary ? prm_ctr : alt_ctr); reuse it directly.
+        // (tage_using_primary ? prm_ctr : alt_ctr, a T0 CTR in its 3b
+        // form); reuse it directly.
         // The 6b concat's top bit is redundant sign extension given the
         // value range [-7, +7]; the assignment matches the signed 5b
         // struct field width [TAGE_MAX_CTR_WIDTH+1:0].
