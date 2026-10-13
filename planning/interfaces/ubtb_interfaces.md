@@ -75,8 +75,9 @@ reported.
   registered mem" and "valid at the start of p1, one cycle after
   pred_pc_p0". That conflates mem being state with the read being
   registered, and claims a cycle of latency the module does not
-  have. ubtb.sv's own header comment carries the same error and
-  is a comment-only fix for the next task that touches the file.
+  have. ubtb.sv's header comment carried the same error; its
+  timing paragraph was right before BP-134, and BP-134 corrected
+  its opening lines.
   Corrected session-070 against the RTL.
 
 ### Lookup
@@ -386,6 +387,9 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-10-12  session-079, after BP-134. Timing: the ubtb.sv header
+              comment corrected.
+
   2026-10-12  session-078, after BP-131. Allocation and field writes:
               one branch can fill both conditional fields, measured
               82 times at two slots; the block split is not built.

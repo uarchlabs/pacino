@@ -6,7 +6,7 @@
  FILE:    ras_interfaces.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -463,14 +463,16 @@ See ras_decisions.md section 1 (p2/p3 repair table).
 Repair semantics: the push/pop labels denote stack-height
 restoration of resident entries, not fresh allocation or array
 clear. Undo-pop (p2=pop, p3=no-op) and undo-push (p2=push,
-p3=no-op) move TOSR over still-resident entries with no array
-write (undo-push decrements an in-place recursion count when
-present). Since BP-120 undo-pop restores the pre-op TOSR, and
+p3=no-op) move TOSR over still-resident entries and write no
+return address; undo-push decrements an in-place recursion count
+when present, unless the push met a saturated count and changed
+nothing (BP-134). Since BP-120 undo-pop restores the pre-op TOSR, and
 undo-push and a missed pop follow the popped entry's next-on-stack
 link (ras_decisions.md 3.2). Only the missed-push case (p2=no-op,
-p3=push) allocates and writes a new frontier entry. Undo-pop does
-NOT reverse a recursion-decrement pop: the count is not recovered.
-See TD #78 and tb_ras TC-21. A return-call paired with a plain push
+p3=push) allocates and writes a new frontier entry. Undo-pop and
+the undo of a whole return-call restore the recursion counts the p2
+operation changed (BP-133, TD #78 closed); tb_ras TC-21,
+TC-38. A return-call paired with a plain push
 or pop: ras_decisions.md 1, as built, two of four wrong, unreachable
 by construction because ras_br_type_p3 is the registered p2 type
 (TD#165 closed session-076; ras_decisions.md 1 states what would
@@ -704,3 +706,8 @@ On rstn deassert (active low, synchronous):
               the port list; BP-126 removed it from ras.sv, tb_ras
               and bp_cluster (TD#101). It was declared and unread. 10:
               the commit-stack occupancy count resets with CSP.
+
+  2026-10-12  session-079, recording BP-133 and BP-134. IC-RAS-11:
+              the undo restores recursion counts (TD #78 closed); the
+              undo of a push that met a saturated count changes
+              nothing.

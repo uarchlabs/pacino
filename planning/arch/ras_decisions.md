@@ -6,7 +6,7 @@
  FILE:    ras_decisions.md
  SOURCE:  session-050
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -49,8 +49,9 @@ Note: push->pop and pop->push within one p2/p3 pair cannot occur.
 
 The two return-call rows were added after BP-119, which built them.
 The undo restores TOSR to its value before the p2 operation, held in
-a register (exact for the pointers by FE-11; a recursion count is
-not restored, the TD #78 limitation).
+a register (exact for the pointers by FE-11). A recursion count the
+pop decremented or the push incremented is restored by the undo
+(BP-133, TD #78 closed session-079).
 
 A return-call paired at the other stage with a plain push or pop is
 not specified. As built by BP-120 (tb_ras TC-33a..d):
@@ -83,22 +84,28 @@ allocation or array clear.
     still-resident frontier slot. If that slot carried a
     recursion count the count is decremented in place;
     otherwise TOSR moves back one slot. The array entry is
-    not cleared.
-  - p2=pop, p3=no-op (undo-pop): TOSR re-expose. TOSR moves
-    back up one slot to re-expose the still-resident entry the
-    pop uncovered. No array write, TOSW held.
+    not cleared. A push that met a saturated count (15)
+    changed nothing, and its undo changes nothing (BP-134;
+    before it the undo decremented the count).
+  - p2=pop, p3=no-op (undo-pop): TOSR re-expose. TOSR is
+    restored to its pre-op value (BP-120), re-exposing the
+    still-resident entry the pop uncovered, and a count the pop
+    decremented is incremented back (BP-133). No return address
+    is written, TOSW held.
   - p2=no-op, p3=pop (missed pop): same TOSR retract as
     undo-push.
   - p2=no-op, p3=push (missed push): the only case that
     allocates and writes. The registered fallthrough is
     written at the frontier and TOSW advances.
 
-Limitation (TD #78): undo-pop re-expose does NOT reverse a
-recursion-decrement pop. A pop that only decremented the
-recursion counter (TOSR held) leaves no recoverable pre-pop
-count; since BP-120 the undo-pop restores the TOSR the pop held, and
-the count is not restored. This read "the re-expose moves TOSR by a
-slot instead". Pinned by tb_ras TC-21. See PROJECT_STATUS TD #78.
+Undo-pop over a recursion-decrement pop (BP-133, TD #78 closed
+session-079): the pop held TOSR and decremented the count; the undo
+restores the pre-op TOSR and increments the count back. tb_ras TC-21
+(BP-064 pinned the non-reversing behavior until BP-133) and TC-38;
+tb_fe_top rec_undo (BP-134) reaches it end to end at two slots. At
+one slot it cannot occur: the p3 view of slot 0 always equals its p2
+operation (BP-134). This paragraph read "Limitation (TD #78):
+undo-pop re-expose does NOT reverse a recursion-decrement pop".
 
 RAS does not generate a redirect signal in the same sense as
 TAGE or SC. Its p0 TOS read is an input to the p1 prediction, which
@@ -149,9 +156,8 @@ p3_redirect: RAS p3 = p2 registered, qualified by p3
   p3 if p3 structural prediction disagrees with p2 (see repair
   table above). The repair restores stack height of resident
   entries; it does not allocate (except the missed-push case)
-  or clear the array. Undo-pop does not reverse a recursion-
-  decrement pop (TD #78). See the repair label semantics in
-  section 1.
+  or clear the array. Undo-pop reverses a recursion-decrement
+  pop (BP-133). See the repair label semantics in section 1.
 
 ---
 
@@ -399,7 +405,10 @@ Purpose:   Covers steady-state live call nest depth for
 
 Entry fields:
   ret_addr  : VA_WIDTH bits
-  rctr      : 4b
+
+The commit stack carries no recursion count: commit_rctr was written
+zero and read by nothing, and BP-134 removed it (section 5). This
+listed rctr : 4b.
 
 Pointer:
   CSP  -- Commit Stack Pointer: the NEXT FREE slot. The top is at
@@ -614,13 +623,12 @@ Match condition: incoming push address equals ret_addr at TOSR
 and the speculative stack is not empty (TOSR != BOS).
 
 Recursion detection applies to the speculative stack only. The commit stack
-rctr field is reserved and is currently written zero on every commit push; it
-is not read by any output path. Commit-stack recursion depth is therefore not
-preserved: a recursive call that commits reads back from the commit-stack
-fallback as a single entry, not at its true depth. This is a documented
-limitation, not a functional defect (the field is write-only). See TD #79.
-Resolution deferred to bp_cluster/FTQ integration, when a recursion-count
-source on the commit interface can be decided.
+has no recursion count: every committed call is its own entry, so recursion
+depth is kept as repeated entries and the commit-stack fallback reads it at
+depth, up to RAS_COMMIT_ENTRIES calls (BP-133, tb_ras TC-39). TD #79 closed
+session-079: the fallback is not degraded and no recursion-count source is
+needed on the commit interface. The commit_rctr field was removed by BP-134.
+This read that a recursive call that commits reads back as a single entry.
 
 ---
 
@@ -1024,4 +1032,12 @@ Commit stack pointer width:
               non-empty; a call on a full stack overwrites the
               oldest entry, a return on an empty one does nothing.
               TD#121 closed. 9: the count's width.
+
+  2026-10-12  session-079, recording BP-133 and BP-134 (rulings,
+              Jeff). 1: the undo restores the recursion counts the p2
+              operation changed (TD #78 closed); the undo of a push
+              that met a saturated count changes nothing (BP-134). 3.3
+              and 5: the commit stack has no recursion count and keeps
+              depth as repeated entries; commit_rctr removed (TD #79
+              closed).
 ```

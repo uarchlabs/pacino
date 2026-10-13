@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -135,9 +135,10 @@ See bp_structs_pkg.sv for the authoritative definition.
 ### sc_upd_inp_t
 
 Update input bundle. Carries the sc_pred_meta_t captured at predict
-time, the resolved direction, the mispredict flag, and the FTB-
-supplied backwards_branch flag and branch_range PC slice used for
-BrIMLI maintenance.
+time, the resolved direction, the mispredict flag, and the
+backwards_branch flag and branch_range PC slice used for BrIMLI
+maintenance, formed by ftq_upd_conv (BP-119; TD#89, TD#90 closed by
+BP-133). This read "the FTB-supplied backwards_branch flag".
 See bp_structs_pkg.sv for the authoritative definition.
 
 ---
@@ -333,8 +334,10 @@ the update path; the update does not re-read the tables.
 - Must provide resolved_taken from execute, not speculative.
 - Must pass the sc_pred_meta_t captured at predict time unmodified
   into sc_upd_inp_u0[s].
-- Must supply branch_range and backwards_branch from FTB (or other
-  external logic) per sc_upd_inp_t.
+- Must supply branch_range (branch PC 15:6) and backwards_branch
+  (taken target below the branch PC) per sc_upd_inp_t; ftq_upd_conv
+  forms both from the FTQ entry and the resolution (BP-133). This
+  read "from FTB (or other external logic)".
 
 ---
 
@@ -503,4 +506,8 @@ conditional branches.
               readies (TD#123, P-3). Arbitration Model: the UQ
               built. RAM Init Interface: an update before sc_ready
               is refused and held.
+
+  2026-10-12  session-079, recording BP-133. sc_upd_inp_t and
+              Producer obligations: branch_range and backwards_branch
+              come from ftq_upd_conv, not the FTB (TD#89, TD#90).
 ```

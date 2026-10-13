@@ -389,6 +389,17 @@ tage_extd_ctr (TD#88) is a signed extended-range version of
 the same post-mux provider CTR, consumed by SC. See
 tage_pred_meta_t in bp_structs_pkg.sv.
 
+When T0 is the post-mux provider (prm_comp 0 with using_primary 1,
+or alt_comp 0 with using_primary 0), the decode and tage_extd_ctr
+read the T0 2b counter in its equivalent 3b form {ctr[1], ctr[0],
+ctr[0]}: 00 -> 000, 01 -> 011, 10 -> 100, 11 -> 111 (TD#182, BP-134,
+ruled session-079). A T0 provider is therefore strong (00, 11) or
+weak (01, 10), never medium, and tage_extd_ctr is -7, -1, +1 or +7.
+tage_prm_ctr and tage_alt_ctr keep the zero-padded T0 form
+(tage_cntrl_decisions.md, T0 Behavior); only the decode reads the 3b
+form. Before BP-134 the decode read the zero-padded form, so a T0
+predicting taken gave SC a not-taken term.
+
 The definitive operation of CTR updates is found in
 tage_cntrl_ctr_update_rules.md.
 

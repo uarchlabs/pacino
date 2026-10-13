@@ -6,7 +6,7 @@
  FILE:    sc_decisions.md
  SOURCE:  manual and PA sessions
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -619,13 +619,17 @@ last backward conditional branch seen by the SC.
 `bb_hist` is the backwards branch path register, cleared on reset
 
 sc_upd_inp.branch_range[9:0] is PC[15:6] of the branch being 
-predicted/updated.  This value is populated by the FTB or other external logic.
+predicted/updated. It is formed by ftq_upd_conv at the update from the FTQ
+entry: the block PC plus the slot's position (BP-119; TD#89 closed without FTB
+storage, BP-133). This read "populated by the FTB or other external logic".
 
 sc_upd_inp.branch_range is the BrIMLI `region` of the predicted branch.
 
-sc_upd_inp.backwards_branch is a flag populated by the FTB or other external
-logic indicating the PC target of this branch is less than the PC of the
-branch, i.e. it is a backward branch. 
+sc_upd_inp.backwards_branch is a flag formed by ftq_upd_conv indicating the
+resolved taken target of this branch is less than the PC of the branch, i.e.
+it is a backward branch. The backend carries the taken target of a
+conditional whatever its direction (ftb_decisions.md 5.5), and the flag is
+read only on a taken resolution (TD#90 closed without FTB storage, BP-133).
 
 ```
 logic [9:0]  br_imli;
@@ -834,3 +838,7 @@ the number of index bits or number of entries in this table instance.
 
   2026-09-20  session-072. D34: sram_init.sv is rtl/lib/rtl/, reverting
               this pass's components/rtl/ change.
+
+  2026-10-12  session-079, recording BP-133. 12: branch_range and
+              backwards_branch are formed by ftq_upd_conv, not the FTB
+              (TD#89, TD#90 closed).

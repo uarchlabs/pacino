@@ -12,7 +12,7 @@ copyright: "Copyright 2026 Jeff Nye"
  FILE:    ras_theory_of_operation.md
  SOURCE:  derived from session-050 / BP-062..BP-064
  STATUS:  DRAFT
- UPDATED: 2026-06-25
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 -->
@@ -281,9 +281,9 @@ them:
 For two simultaneous same-address pushes, the two increments are
 applied in slot order and clamped at 15; two pushes of a new address
 allocate once with `rctr = 1`. Recursion detection is speculative only.
-The commit stack's `rctr` field is reserved and is currently written
-zero on every commit push, which is a known limitation (Section 3.10,
-TD #79).
+The commit stack has no recursion count: every committed call is its
+own entry, so depth is kept as repeated entries (TD #79 closed by
+BP-133; the unused `rctr` field was removed by BP-134).
 
 ### 3.6 Snapshot and pointer-only restore
 
@@ -387,20 +387,15 @@ re-evaluates after the flop updates.
 
 Three items are documented and tracked; they are not latent defects:
 
-- **TD #78 -- undo-pop does not reverse a recursion-decrement pop.** The
-  s3 undo-pop re-exposes a TOSR-moving pop correctly, but a pop that
-  only decremented `rctr` (TOSR held) leaves no recoverable pre-pop
-  count, so the re-expose moves TOSR by one slot instead. `tb_ras`
-  TC-21 verifies the current, non-reversing behavior. This will be
-  re-evaluated only if an s2/s3 repair over a recursion pop is required.
-- **TD #79 -- commit-stack recursion depth is not preserved.** The
-  commit interface carries only a bare return address, so `commit_rctr`
-  is written zero and never read. A recursive call that commits is read
-  back from the commit fallback as a single entry rather than at its
-  true depth. Because the field is write-only, an incorrect value
-  cannot affect correctness; it can only degrade a fallback prediction.
-  A complete fix requires a recursion-count source on the commit
-  interface and is deferred to bp_cluster/FTQ integration.
+- **TD #78 -- closed by BP-133.** An undo-pop over a pop that only
+  decremented `rctr` restores the pre-op TOSR and increments the count
+  back; the undo of a whole return-call restores the counts its pop and
+  push changed. `tb_ras` TC-21 and TC-38 check it, and `tb_fe_top`
+  `rec_undo` (BP-134) reaches it end to end.
+- **TD #79 -- closed by BP-133, not a defect.** The commit stack has no
+  recursion compression: every committed call is its own entry, so the
+  commit fallback reads recursion at its true depth (`tb_ras` TC-39).
+  `commit_rctr` was written zero and never read; BP-134 removed it.
 - **TD #101 -- `ras_pc_p2` is declared and never read.** The branch PC
   is on the port list and `bp_cluster` drives it from the staged s2 PC,
   but nothing inside `ras.sv` consumes it: the pushed return address
@@ -554,11 +549,6 @@ its matching return in slot 1 are resolved in one cycle.
 - **Commit-stack wrap** -- CSP encodes empty as `CSP == 0`, so a full
   commit stack reads as empty after the 32nd push (Section 3.7).
   Candidate for a tech-debt entry and for rebalancing the 16/32 split.
-- **TD #78** -- s3 reversal of a recursion-decrement pop; to be
-  re-evaluated if a repair over a recursion pop is required.
-- **TD #79** -- commit-stack recursion depth; requires a recursion-count
-  source on the commit interface; to be resolved at bp_cluster/FTQ
-  integration.
 - **Depth validation** -- confirm the 16/32 split against SPEC
   wrong-path corruption and commit-overflow measurements at cluster
   integration. The linked-structure and unified-pool decisions are both

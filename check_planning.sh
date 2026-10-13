@@ -66,7 +66,11 @@
 # ubtb_interfaces.md), and the files updated after BP-132
 # (PROJECT_STATUS.md, tage_interfaces.md, ittage_interfaces.md,
 # bp_arb_spec.md), and the file updated in session-079
-# (PROJECT_STATUS.md).
+# (PROJECT_STATUS.md), and the files updated in session-079 after
+# BP-134 (PROJECT_STATUS.md, tage_cntrl_ctr_update_rules.md,
+# tage_cntrl_decisions.md, tage_interfaces.md, ras_decisions.md,
+# ras_interfaces.md, sc_decisions.md, sc_interfaces.md,
+# ubtb_interfaces.md, ras_theory_of_operation.md (new, location MISC)).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -79,13 +83,14 @@ ARCH="planning/arch"
 INTF="planning/interfaces"
 TEST="planning/testbenches"
 VERF="planning/verification"
+MISC="misc"
 UNKN="."
 
 # One file per line: <location> <file> <md5 prefix, 12 chars>
-# <location> is one of PLAN ARCH INTF TEST VERF UNKN. Blank lines and # are ignored.
+# <location> is one of PLAN ARCH INTF TEST VERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 7034237dd6b6
+PLAN  PROJECT_STATUS.md                 50a03ef86e3f
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -105,13 +110,13 @@ ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
 ARCH  mmu_decisions.md                  73c0fd5a76e5
-ARCH  ras_decisions.md                  42cdff8708f4
-ARCH  sc_decisions.md                   d264a4ba07ed
+ARCH  ras_decisions.md                  d28627b187ed
+ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
 ARCH  sram_init.md                      d6cefefe7fc5
 ARCH  tage_cntrl_uaon_update_rules.md   be55531dd5c0
 ARCH  tage_cntrl_alloc_rules.md         3a22df5e85f3
-ARCH  tage_cntrl_decisions.md           e3a2fc69279b
+ARCH  tage_cntrl_decisions.md           e75047b88350
 ARCH  tage_table_entry_formats.md       bfd6ee8f1d3d
 ARCH  tage_table_hash_rules.md          d829daf22e1c
 ARCH  ittage_table_hash_rules.md        e9d7d77217dc
@@ -119,7 +124,7 @@ ARCH  ittage_table_hash_rules.md        e9d7d77217dc
 ARCH  ittage_cntrl_alloc_rules.md       a61a19c81fa5
 ARCH  ittage_cntrl_use_update_rules.md  b729da8f6a79
 ARCH  ittage_table_entry_formats.md  abee67476ca8
-ARCH  tage_cntrl_ctr_update_rules.md    167b3434ac09
+ARCH  tage_cntrl_ctr_update_rules.md    da3e4ab414b6
 ARCH  tage_cntrl_use_update_rules.md    d1dc910897a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
@@ -144,12 +149,13 @@ INTF  ptw_mem_interfaces.md            053eb7faf457
 INTF  ittage_interfaces.md              14f901826cca
 INTF  l1i_ifu_interfaces.md             85f362d1da4d
 INTF  loop_pred_interfaces.md           f1eb16c7ce58
-INTF  ras_interfaces.md                 a3029b6fb4e6
-INTF  sc_interfaces.md                  66e1eefd2866
+INTF  ras_interfaces.md                 63affca67938
+INTF  sc_interfaces.md                  8c7c5b2851ff
 INTF  sc_table_interfaces.md            b442b10dab0f
-INTF  tage_interfaces.md                615b4bcc5243
-INTF  ubtb_interfaces.md          bc467c5fe340
+INTF  tage_interfaces.md                8c352e5411ea
+INTF  ubtb_interfaces.md          7f692dd5a124
 
+MISC  ras_theory_of_operation.md      f1b6221b3071
 
 EOF
 
@@ -160,7 +166,7 @@ while read -r loc file want; do
   total=$((total + 1))
 
   case "$loc" in
-    PLAN|ARCH|INTF|TEST|VERF|UNKN) rel="${!loc}/$file" ;;
+    PLAN|ARCH|INTF|TEST|VERF|MISC|UNKN) rel="${!loc}/$file" ;;
     *) printf 'BADLOC   %s  (location "%s")\n' "$file" "$loc"
        bad=$((bad + 1)); continue ;;
   esac

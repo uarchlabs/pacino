@@ -16,6 +16,94 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-079, after BP-134: BP-133 and BP-134 recorded.
+
+BP-133 RUN, COMPLETE (Jeff). 46m. regress.sh 265 targets PASS. Every
+tb_fe_top program's figures equal the baseline at 2 and 1 slots;
+neither new path occurs in any program. Counts: sim_ras 177 -> 196
+(1 slot 152 -> 171), sim_ftq_upd_conv 186 -> 192 (103 -> 106).
+  TD#18: one T0 update case was undefined, T0 as the provider through
+    use_alt_on_na over a tagged primary; the RTL never wrote T0
+    there. Built: T0 steps toward the outcome through a second write
+    path on tage_bim's alt bus, rows 19.1-19.8, which fail 6 checks
+    on the old RTL.
+  TD#78: reachable since BP-121 (the p3 view uses the SC direction);
+    the undo left a recursion count one level short. Built: ras.sv
+    records which counts each p2 operation changed and reverses them.
+    BP-064's TC-21 pin changed; TC-38a-d added.
+  TD#79: not a defect. The commit stack keeps depth as repeated
+    entries (TC-39); commit_rctr was dead storage.
+  TD#89, TD#90: ftq_upd_conv has formed both SC inputs since BP-119.
+    No FTB bits; the entry stays 114 bits (113 stored).
+  Found: TD#182 (below).
+  Process: the IA edited RTL while its first baseline run was running,
+    stopped and reverted it, and reran the baseline on a scratch copy
+    (no git sha). Disclosed.
+
+RULED after BP-133 (Jeff): TD#18 KEEP, TD#78 KEEP, TD#79 CLOSE
+(remove commit_rctr later; done by BP-134), TD#89 and TD#90 CLOSE.
+TD#182 OPENED: the T0 counter maps to its equivalent 3b value
+{ctr[1], ctr[0], ctr[0]}. misc/ras_theory_of_operation.md is drafted
+by the PA and checked by check_planning.sh (location MISC).
+
+BP-134 RUN, COMPLETE (Jeff: "Accepted"). 1h47m. regress.sh 267 targets
+PASS (was 265: sim_fe_top_rec_undo and its _1slot twin).
+  TD#182 built: the decode and tage_extd_ctr read a T0 provider as
+    {ctr[1], ctr[0], ctr[0]}, as primary and as the use_alt_on_na
+    alternate. The decode boundaries were as assumed. tb_tage
+    pred_t0_conf_tst fails 24 checks on the starting tree.
+  The tb_tage sampling race (BP-126 Deferred Work): 102 of 117 tasks
+    and 2 mixed ones acted in the time step of the sampling edge; all
+    now wait through clk_step() (@(posedge clk); #1). 109 pass before
+    and after; two logged counters explained (one a test-order
+    dependence the race caused).
+  RAS: commit_rctr removed. The undo of a push at a saturated count
+    lost a level; fixed with a registered flag. TC-40 fails 3 checks
+    on the starting tree.
+  rec_undo, a new tb_fe_top program: 10 undo-pops over a recursion
+    pop at 2 slots, every count put back; its check fails 10 of 10
+    with the TD#78 fix removed. Unreachable at 1 slot: the p3 view of
+    slot 0 always equals its p2 operation.
+  Comments: ftq_meta.sv and tb_ftq_meta.sv 421 -> 425 bits;
+    tb_ittage_cntrl chk38/chk57 -> chk40/chk59; ubtb.sv header opening
+    lines. The ftq_ifu.sv and ftq_ptr.sv flush comments were already
+    correct.
+  Figures: every change is from TD#182; a RAS-only run equalled the
+    baseline. 10 programs change at 2 slots, 9 at 1. hist 22 -> 31
+    mispredicts at 2 slots, 42 -> 50 at 1; ftbonly 11 -> 9, indir
+    24 -> 22, loops 14 -> 12 at 2 slots.
+  Counts: sim_tage and _fast 108 -> 109 (1 slot 104 -> 105), cov_tage
+    216 -> 218, cov_bpu 31405 -> 31407, sim_ras 196 -> 220 (171 ->
+    195), sim_bp_cluster, _init and cov_bp_cluster 2011 -> 1995 (1
+    slot 1431 -> 1415; E2d's tie checks, 58 -> 50 ties), sim_fe_top
+    714 -> 734 (712 -> 731). Checked by the PA against both summaries.
+  Outside the manifest, within the grant: tb_bp_cluster G3 seeded T0
+    at 2'b11 expecting the defect; reseeded at 2'b10.
+  Process: the same baseline incident as BP-133, disclosed.
+  Provisional choices D1 to D3, ACCEPTED with the task (Jeff,
+    "Accepted"): D1 the stored tage_prm_ctr / tage_alt_ctr stay
+    zero-padded, so the mapping adds a 3-bit select per mux arm; D2
+    the race fix is a #1 after every edge; D3 the saturated undo-push
+    uses a registered flag.
+
+Noted, no TD opened: the RAS loses recursion levels on wrong paths
+regardless of TD#78, because a restore is pointer-only and leaves the
+counts decremented (BP-134 Other Notes 3). ubtb.sv body line 336
+still reads "combinational from registered mem" (BP-134 Deferred
+Work).
+
+CLOSED: TD#18, TD#78, TD#79, TD#89, TD#90, TD#182.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, tage_cntrl_ctr_update_rules.md (rows
+19.1-19.8), tage_cntrl_decisions.md, tage_interfaces.md,
+ras_decisions.md, ras_interfaces.md, sc_decisions.md,
+sc_interfaces.md, ubtb_interfaces.md, misc/ras_theory_of_operation.md
+(added to check_planning.sh).
+
+Next free: BP-135, INFRA-014, TOOLS-007, TD#183.
+
+---
 ## Session-079: closed TD rows reordered. Documents only.
 
 PA-DIRECT CORRECTION, session-079 (Jeff). Twelve Technical Debt rows
@@ -2642,6 +2730,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Port names carry stage suffixes. |
 |                         |             |                   | UI2 (carry consumer) and UI3     |
 |                         |             |                   | (both channels one entry) remain.|
+|                         |             |                   | Session-079: Timing, the ubtb.sv |
+|                         |             |                   | header comment corrected         |
+|                         |             |                   | (BP-134).                        |
 | loop_pred.sv            | Complete    | tb_loop_pred      | BP-004c-f complete.              |
 |                         |             |                   | SESSION-064 BP-091: TD#105       |
 |                         |             |                   | CLOSED. Per-slot on pred_pc_p0,  |
@@ -2697,6 +2788,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | branch_id included, describes the|
 |                         |             |                   | request that produced it and is  |
 |                         |             |                   | staged to p2 together.           |
+|                         |             |                   | Session-079: the T0 provider's   |
+|                         |             |                   | 3b form for the decode and       |
+|                         |             |                   | tage_extd_ctr (TD#182).          |
 | tage_table_interfaces.md| Draft       | --                | Created session-016.             |
 |                         |             |                   | "Updates pending" since then,    |
 |                         |             |                   | naming nothing. The only         |
@@ -2719,6 +2813,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | tage_cntrl_uaon         | Complete    | --                | Session-060: reconciled to TD#87 |
 | _update_rules.md        |             |                   | (UAON gate on tage_pred_weak).   |
 | tage_cntrl              | Complete    | --                | session-044/045.                 |
+|                         |             |                   | Session-079: rows 19.1-19.8, T0  |
+|                         |             |                   | as the use_alt_on_na provider    |
+|                         |             |                   | (BP-133, TD#18).                 |
 | _ctr_update_rules.md    |             |                   |                                  |
 | tage_cntrl_decisions.md | Complete    | --                | Session-061 (INFRA-009): T0 RAM  |
 |                         |             |                   | index pc[11:1] -> pc[12:2]; T0   |
@@ -2728,6 +2825,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | TD#103 closed by BP-126; the T0  |
 |                         |             |                   | init line is PD-1, applied       |
 |                         |             |                   | session-077.                     |
+|                         |             |                   | Session-079: T0 trains as the    |
+|                         |             |                   | use_alt_on_na provider (TD#18);  |
+|                         |             |                   | the decode reads a T0 provider   |
+|                         |             |                   | in 3b form (TD#182).             |
 | bw_ram / sat_alu        | Complete    | tb_components     | COMP-001 PASS                    |
 | dual_lm1                | Complete    | tb_components     | COMP-002 now uses generate       |
 | sram_init.sv            | Complete    | tb_components     | COMP-003. The RTL module. The    |
@@ -2741,6 +2842,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | tage_bim.sv             | Complete    | --                | BP-009b complete.                |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | BP-133: a second write path on   |
+|                         |             |                   | the alt update bus, for T0 as    |
+|                         |             |                   | the use_alt_on_na provider       |
+|                         |             |                   | (TD#18).                         |
 | tage_cntrl.sv           | Complete    | --                | BP-008a/b, BP-012, BP-045.       |
 |                         |             |                   | BUG-003 fixed BP-057.            |
 |                         |             |                   | Session-060 BP-081: TD#87 decode |
@@ -2760,6 +2865,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | correctness.                     |
 |                         |             |                   | BP-128: elaborates and passes at |
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
+|                         |             |                   | BP-133: T0 steps toward the      |
+|                         |             |                   | outcome when use_alt_on_na       |
+|                         |             |                   | chooses it (rows 19.x, TD#18).   |
+|                         |             |                   | BP-134: the decode and           |
+|                         |             |                   | tage_extd_ctr read a T0 provider |
+|                         |             |                   | as {ctr[1], ctr[0], ctr[0]}      |
+|                         |             |                   | (TD#182). sim_tage 109/0.        |
 | tage.sv                 | Complete    | tb_tage           | BP-056 through BP-061 complete.  |
 |                         |             |                   | Session-060 BP-081: FIFOs retyped|
 |                         |             |                   | off cond_pred_*.                 |
@@ -2885,8 +2997,16 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | ras_decisions.md        | Draft       | --                | Created session-050. G5/G6/G8/G17|
 |                         |             |                   | recorded. Session-061:           |
 |                         |             |                   | RAS_COMMIT_PTR_BITS correction.  |
+|                         |             |                   | Session-079: the undo restores   |
+|                         |             |                   | recursion counts (TD#78 closed); |
+|                         |             |                   | the commit stack keeps depth as  |
+|                         |             |                   | repeated entries, commit_rctr    |
+|                         |             |                   | removed (TD#79 closed).          |
 | ras_interfaces.md       | Draft       | --                | Created session-050. Session-061:|
 |                         |             |                   | ras_pc_p2 documented (TD#101).   |
+|                         |             |                   | Session-079: IC-RAS-11, the undo |
+|                         |             |                   | restores recursion counts        |
+|                         |             |                   | (TD#78).                         |
 | ras.sv                  | Complete    | tb_ras            | RTL BP-062, tb BP-063.           |
 |                         |             |                   | sim_ras 87/0.                    |
 |                         |             |                   | TD #78 pinned, TD #79 deferred.  |
@@ -2919,6 +3039,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | full commit stack reads          |
 |                         |             |                   | non-empty (TD#121). sim_ras      |
 |                         |             |                   | 177/0.                           |
+|                         |             |                   | BP-133: the undo restores the    |
+|                         |             |                   | recursion counts the p2          |
+|                         |             |                   | operation changed (TD#78);       |
+|                         |             |                   | sim_ras 196/0. BP-134:           |
+|                         |             |                   | commit_rctr removed; the undo of |
+|                         |             |                   | a push that met a saturated      |
+|                         |             |                   | count changes nothing; sim_ras   |
+|                         |             |                   | 220/0, 195/0 at 1 slot.          |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -2950,6 +3078,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | sc_decisions.md         | Draft       | --                | Created session-056. Corrected   |
 |                         |             |                   | 057. s12 br_imli_mode parameter  |
 |                         |             |                   | (059).                           |
+|                         |             |                   | Session-079: 12, branch_range    |
+|                         |             |                   | and backwards_branch formed by   |
+|                         |             |                   | ftq_upd_conv (TD#89, TD#90       |
+|                         |             |                   | closed).                         |
 | sc_table.sv             | Complete    | tb_sc_table       | ST0-ST3. sim_sc_table 6/0.       |
 |                         |             |                   | BP-127: index PC term PC[9:1],   |
 |                         |             |                   | no PC_HASH_SHIFT (PD-17); ST0    |
@@ -2986,6 +3118,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | NUM_PRED_SLOTS 1 and 2.          |
 | sc_interfaces.md        | Complete    | --                | Written session-058. Session-061:|
 |                         |             |                   | Arbitration Model corrected.     |
+|                         |             |                   | Session-079: branch_range and    |
+|                         |             |                   | backwards_branch from            |
+|                         |             |                   | ftq_upd_conv, not the FTB.       |
 | sc_table_interfaces.md  | Complete    | --                | Written session-058.             |
 | sc_table_hash_rules.md  | Complete    | --                | Written session-058.             |
 | sc_tb_decisions.md      | Complete    | --                | Session-061: ST0 tb coverage gap |
@@ -2996,6 +3131,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | prereqs: #89/#90 open; #87/#88   |
 |                         |             |                   | CLOSED BP-081; #91/#92 CLOSED    |
 |                         |             |                   | session-063.                     |
+|                         |             |                   | Session-079: #89/#90 CLOSED by   |
+|                         |             |                   | BP-133, without FTB storage.     |
 | tb_bp_pkg.sv            | Complete    | sim               | BP-083: retrofitted to the       |
 |                         |             |                   | dual-slot entry, 16 -> 23 checks,|
 |                         |             |                   | mutation tested (4 defects).     |
@@ -3648,6 +3785,10 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | targets), retiring exactly; 712   |
 |                         |             |                   | checks at 1. One-slot figures     |
 |                         |             |                   | after BP-130 are TD#179's.        |
+|                         |             |                   | BP-134: rec_undo, 37 programs;    |
+|                         |             |                   | sim_fe_top 734 checks at 2 slots, |
+|                         |             |                   | 731 at 1. TD#182 changed 10       |
+|                         |             |                   | programs at 2 slots and 9 at 1.   |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -3744,9 +3885,19 @@ assessment of each document. Correct any that are wrong.
 |    |                                       | THIS_INDEX_BITS wide. T0 is     |
 |    |                                       | tage_bim.sv, so the T0 tag hash |
 |    |                                       | is moot. Was: BP-007c scope.    |
-| 18 | Definition of T0 fields/behavior      | Prediction side closed          |
-|    |                                       | Update side pending T0          |
-|    |                                       | implementation                  |
+| 18 | Definition of T0 fields/behavior      | CLOSED by BP-133 (session-079,  |
+|    |                                       | Jeff). T0 trains when           |
+|    |                                       | use_alt_on_na chooses it as the |
+|    |                                       | provider over a tagged primary: |
+|    |                                       | it steps toward the resolved    |
+|    |                                       | direction through a second      |
+|    |                                       | write path on tage_bim's alt    |
+|    |                                       | update bus                      |
+|    |                                       | (tage_cntrl_ctr_update_rules.md |
+|    |                                       | rows 19.1-19.8). The primary    |
+|    |                                       | keeps the rows 9/10 rule. Was:  |
+|    |                                       | Prediction side closed. Update  |
+|    |                                       | side pending T0 implementation. |
 | 37 | trx_type forwarded combinationally    | CLOSED by BP-126 (session-077), |
 |    | from arb_grant_upd instead of from    | negative result: trx_type is    |
 |    | registered arb_trx_r.trx_type.        | used only at entry (pred_val_p1 |
@@ -3937,17 +4088,35 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | Was:                            |
 |    |                                        | Not a design TD; tools and infra|
 |    |                                        | task, possibly manual.          |
-| 78 | RAS p3 undo-pop does not reverse a   | LEAVE AS-IS. BP-064 pins the   |
-|    | recursion pop.                       | current non-reversing behavior. |
-|    |                                      | Revisit at bp_cluster           |
+| 78 | RAS p3 undo-pop does not reverse a   | CLOSED by BP-133 (session-079,  |
+|    | recursion pop.                       | Jeff). The undo-pop, and the    |
+|    |                                      | undo of a whole RETURN_CALL,    |
+|    |                                      | restore the recursion counts    |
+|    |                                      | the p2 operation changed        |
+|    |                                      | (ras_decisions.md 1). Reachable |
+|    |                                      | since BP-121, when SC reverses  |
+|    |                                      | a direction at p3. tb_ras TC-21 |
+|    |                                      | (BP-064's pin, changed), TC-38; |
+|    |                                      | tb_fe_top rec_undo (BP-134).    |
+|    |                                      | Was: LEAVE AS-IS. BP-064 pins   |
+|    |                                      | the current non-reversing       |
+|    |                                      | behavior. Revisit at bp_cluster |
 |    |                                      | integration if a p2/p3 repair   |
 |    |                                      | over a recursion pop is ever    |
 |    |                                      | required. Related: #79.         |
-| 79 | RAS commit-stack recursion depth not | DEFER. The field is write-only  |
-|    | preserved.                           | and never read by any output    |
-|    |                                      | path, so a wrong value degrades |
-|    |                                      | the fallback prediction only.   |
-|    |                                      | Real fix needs a recursion-count|
+| 79 | RAS commit-stack recursion depth not | CLOSED by BP-133 (session-079,  |
+|    | preserved.                           | Jeff), not a defect. The commit |
+|    |                                      | stack has no recursion          |
+|    |                                      | compression: every committed    |
+|    |                                      | call is its own entry, so depth |
+|    |                                      | is kept as repeated entries     |
+|    |                                      | (tb_ras TC-39). commit_rctr     |
+|    |                                      | removed by BP-134. Was: DEFER.  |
+|    |                                      | The field is write-only and     |
+|    |                                      | never read by any output path,  |
+|    |                                      | so a wrong value degrades the   |
+|    |                                      | fallback prediction only. Real  |
+|    |                                      | fix needs a recursion-count     |
 |    |                                      | source on the commit interface. |
 |    |                                      | Decide at FTQ integration.      |
 | 81 | tb_ftb coverage skews to br0.        | CLOSED by BP-126 (session-077): |
@@ -3989,14 +4158,24 @@ assessment of each document. Correct any that are wrong.
 |    |                                      | Tasked in BP-126 (session-077). |
 | 87 | tage strong/medium/weak decode       | CLOSED BP-081 (session-060).    |
 | 88 | tage_extd_ctr generation             | CLOSED BP-081 (session-060).    |
-| 89 | ftb       | Change the FTB definition to store 20 additional bits.   |
-|    |           | These are PC bits [15:6] of branch location              |
-|    |           | These will be supplied to sc_upd_inp.branch_range        |
-| 90 | ftb       | Change the FTB to store 2 additional bits. The signs of  |
+| 89 | ftb       | CLOSED by BP-133 (session-079, Jeff), without FTB        |
+|    |           | storage. ftq_upd_conv has formed sc_upd_inp.branch_range |
+|    |           | at the update since BP-119: bits 15:6 of the branch PC,  |
+|    |           | the FTQ entry's block start plus the slot position, at   |
+|    |           | either slot count. Was: Change the FTB definition to     |
+|    |           | store 20 additional bits. These are PC bits [15:6] of    |
+|    |           | branch location. These will be supplied to               |
+|    |           | sc_upd_inp.branch_range.                                 |
+| 90 | ftb       | CLOSED by BP-133 (session-079, Jeff), without FTB        |
+|    |           | storage. ftq_upd_conv has formed                         |
+|    |           | sc_upd_inp.backwards_branch at the update since BP-119:  |
+|    |           | the resolved taken target below the branch PC, per slot; |
+|    |           | sc_cntrl reads it only on a taken resolution. Was:       |
+|    |           | Change the FTB to store 2 additional bits. The signs of  |
 |    |           | the branch targets for conditional branch 0/1 should be  |
-|    |           | stored as backwards_branch0/1.                           |
-|    |           | These will be supplied to sc_upd_inp.backwards_branch.   |
-|    |           | Two bits, one per prediction slot.                       |
+|    |           | stored as backwards_branch0/1. These will be supplied to |
+|    |           | sc_upd_inp.backwards_branch. Two bits, one per           |
+|    |           | prediction slot.                                         |
 | 91 | bpc       | CLOSED session-063.                                      |
 | 92 | bpc/sc    | CLOSED session-063 for the PC and phr; the three SC      |
 |    |           | index folds were staged BP-090 and bp_arb_spec.md 6.1    |
@@ -4902,6 +5081,18 @@ assessment of each document. Correct any that are wrong.
 |     |          | Whether it also covers FE-20's csr group (V, privilege,  |
 |     |          | satp, vsatp, hgatp, pmpcfg, pmpaddr) is decided when it  |
 |     |          | is tasked. Implemented after BP-126 (Jeff, session-077). |
+| 182 | tage     | CLOSED by BP-134 (session-079). Opened session-079       |
+|     |          | (Jeff) from BP-133's report. When T0 provided the TAGE   |
+|     |          | prediction, its 2-bit counter reached the confidence     |
+|     |          | decode and tage_extd_ctr zero-padded, {0, ctr}, and was  |
+|     |          | read as a 3-bit tagged counter: a T0 predicting taken    |
+|     |          | gave SC a not-taken term and a strongly taken T0 read    |
+|     |          | weak. The decode and tage_extd_ctr now read a T0         |
+|     |          | provider as {ctr[1], ctr[0], ctr[0]}: 00 -> 000, 01 ->   |
+|     |          | 011, 10 -> 100, 11 -> 111 (ruled, Jeff). The stored      |
+|     |          | tage_prm_ctr and tage_alt_ctr stay zero-padded (BP-134   |
+|     |          | D1). tb_tage pred_t0_conf_tst; tb_bp_cluster G3 had      |
+|     |          | encoded the defect and was reseeded.                     |
 
 ---
 
@@ -5788,7 +5979,7 @@ unless noted.
 - RTL: ras.sv complete (BP-062), tb_ras.sv complete (BP-063),
   sim_ras 87/0.
 - TD #78 pinned, TD #79 deferred, TD #101 open. TD#101 closed
-  by BP-126.
+  by BP-126. TD#78 and TD#79 closed by BP-133 (session-079).
 - Session-064: FE-11 proven end to end in tb_bp_cluster E4.
   The p1 snapshot is the state that block starts from at p2,
   checked one cycle apart against the RAS pointer registers.
@@ -5803,7 +5994,8 @@ unless noted.
   ftb_fastpath_en
   source (G25).
 - SC-facing additions deferred: TD#89 branch PC[15:6], TD#90
-  per-slot backwards-branch sign.
+  per-slot backwards-branch sign. CLOSED by BP-133 without FTB
+  storage: ftq_upd_conv forms both.
 - Session-064: the carried writeWay path (IC-FTB-10) is
   verified end to end -- BP-093 F1 checks hit, way and
   jmp_pos in the p2 metadata, and BP-094 G5 drives a closed
@@ -5816,7 +6008,7 @@ unless noted.
     - #87 / #88 CLOSED BP-081.
     - #91 / #92 CLOSED (PC, phr and the three index folds all
       staged p0->p2).
-    - #89 / #90 still open.
+    - #89 / #90 CLOSED by BP-133, without FTB storage.
     - #84 CLOSED by BP-126 (FOLD monitor). Was: still open -- group G drives a
       closed SC loop but does not trace a fold through the
       index hash.

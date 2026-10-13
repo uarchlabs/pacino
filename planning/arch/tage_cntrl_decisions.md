@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -80,7 +80,9 @@ which the next paragraph, the Alternate provider section and the
 CTR table all contradict. Session-072.
 
 When use_alt_on_na fires and the alternate is T0, the direction
-comes from T0 CTR MSB (bit 1).
+comes from T0 CTR MSB (bit 1). T0 is then the provider; it steps
+toward the outcome and is written through tage_bim's alt update bus
+(tage_cntrl_ctr_update_rules.md rows 19.1-19.8, BP-133, TD#18).
 
 
 T0 direction is always taken from the taken_p1[s] port output
@@ -92,6 +94,13 @@ tage_table_interfaces.md as the MSB of the T0 entry, which
 is CTR[1]. tage_prm_ctr stores the T0 2b CTR zero-padded
 to 3b when T0 is provider. tage_prm_ctr[2] is always zero
 for T0 and must never be used as the direction signal.
+
+The confidence decode (tage_pred_strong, tage_pred_medium,
+tage_pred_weak) and tage_extd_ctr do not read this padded form. For a
+T0 provider they read the equivalent 3b value {ctr[1], ctr[0],
+ctr[0]}: 00 -> 000, 01 -> 011, 10 -> 100, 11 -> 111 (TD#182, BP-134,
+ruled session-079). The stored tage_prm_ctr and tage_alt_ctr keep the
+zero-padded form, which the update path reads.
 tage_prm_tkn captures the correct direction from
 t_taken_p1[0][s] at predict time and is the authoritative
 direction field for both prediction output and update-time
@@ -253,8 +262,11 @@ Summary:
 - prm_comp == 0 and alt_comp == 0: both are T0. T0 CTR
   updated per rows 13a-13d.
 - prm_comp > 0 and alt_comp == 0: primary is tagged, alt
-  is T0. Only primary CTR updated per rows 14-17.
-  T0 not updated in these cases.
+  is T0. With tage_using_primary 1, only the primary CTR is
+  updated (rows 14-17); T0 is not. With tage_using_primary 0
+  (use_alt_on_na chose T0), T0 steps toward the outcome and the
+  primary steps if pred_diff and it was right (rows 19.1-19.8,
+  BP-133, TD#18, ruled session-079).
 - prm_comp == 0 and alt_comp > 0: architecturally impossible
   (T0 as primary is the unconditional fallback; row 18 in
   tage_cntrl_ctr_update_rules.md is an ASSERT/invalid case,

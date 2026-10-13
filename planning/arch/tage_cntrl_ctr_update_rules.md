@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_ctr_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-10
+ UPDATED: 2026-10-12
  CONTACT: Jeff Nye
 ```
 
@@ -111,6 +111,23 @@ diff  = `tage_prm_tkn` != `tage_alt_tkn`
 | 17.1  | 1  | 0  | 0  | 0    | 0  | 0  | >0   | 0    | INC  | --    | n/a   | Alt=BIM, primary predicted NT, resolved NT, correct, alt same |
 | 17.2  | 1  | 0  | 0  | 1    | 0  | 1  | >0   | 0    | INC  | --    | n/a   | Alt=BIM, primary predicted NT, resolved NT, correct, alt opposite |
 | 18    | x  | x  | x  | x    | x  | x  | 0    | >0   |ASSERT|ASSERT|ASSERT | invalid condition pCMP=0 aCMP>0, handled by assert|
+| 19.1  | 0  | 1  | 1  | 1    | 0  | 1  | >0   | 0    | --   | n/a  | INC   | Alt=BIM chosen by UAON, BIM right, primary wrong |
+| 19.2  | 0  | 1  | 1  | 0    | 1  | 1  | >0   | 0    | --   | n/a  | INC   | Alt=BIM chosen by UAON, BIM right, primary same |
+| 19.3  | 0  | 0  | 0  | 0    | 0  | 0  | >0   | 0    | --   | n/a  | DEC   | Alt=BIM chosen by UAON, BIM right, primary same |
+| 19.4  | 0  | 0  | 0  | 1    | 1  | 0  | >0   | 0    | --   | n/a  | DEC   | Alt=BIM chosen by UAON, BIM right, primary wrong |
+| 19.5  | 0  | 1  | 0  | 1    | 0  | 1  | >0   | 0    | INC  | n/a  | DEC   | Alt=BIM chosen by UAON, BIM wrong, primary right |
+| 19.6  | 0  | 0  | 1  | 1    | 1  | 0  | >0   | 0    | INC  | n/a  | INC   | Alt=BIM chosen by UAON, BIM wrong, primary right |
+| 19.7  | 0  | 1  | 0  | 0    | 1  | 1  | >0   | 0    | --   | n/a  | DEC   | Alt=BIM chosen by UAON, BIM wrong, primary same |
+| 19.8  | 0  | 0  | 1  | 0    | 0  | 0  | >0   | 0    | --   | n/a  | INC   | Alt=BIM chosen by UAON, BIM wrong, primary same |
+
+Rows 19.1-19.8 were added by BP-133 (TD#18), ruled session-079
+(Jeff). The primary is tagged, the alternate is T0 and use_alt_on_na
+chose it (UP=0), so T0 is the provider and steps toward RT (t0ACT,
+numeric, as in rows 13a-13d). The primary steps per rows 9 and 10:
+only when pred_diff is set and the primary was right (pACT, under its
+legend). No USE update; T0 has none. T0 is written through tage_bim's
+alt update bus. Before BP-133 no row covered this case and the RTL
+left T0 untouched.
 
 
 ## ADR
