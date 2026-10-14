@@ -20,10 +20,17 @@
 //   H  hgatp: unsupported MODE keeps MODE and writes VMID and PPN; PPN
 //      1:0 read 0 in Sv39x4 and not in Bare; bits 59:58 read 0
 //   E  menvcfg, henvcfg: only PBMTE and ADUE; henvcfg.ADUE reads 0
-//      while menvcfg.ADUE is 0
+//      while menvcfg.ADUE is 0; henvcfg.PBMTE reads 0 while
+//      menvcfg.PBMTE is 0 (SYS-002), each in csr_read and pack_ptw_csr,
+//      the stored bit kept and the two rules independent
 //   P  pmpcfg: reserved bits read 0; NA4 stored as NAPOT; a locked
 //      entry and its pmpaddr are not written, its unlocked neighbours
-//      are; pmpcfg2 holds entries 8-15; csr_reset clears a lock
+//      are; pmpcfg2 holds entries 8-15; csr_reset clears a lock;
+//      R = 0 with W = 1 is stored with W = 0, other R/W pairs as
+//      written (SYS-002)
+//   T  pmpaddr k is not written while entry k+1 is locked TOR, and is
+//      while entry k+1 is locked NAPOT or unlocked TOR; across the
+//      pmpcfg0/pmpcfg2 boundary; pmpaddr15 has no next entry (SYS-002)
 //   A  pmpaddr read-back: NAPOT bits 8:0 read 1, OFF and TOR bits 9:0
 //      read 0, bits 63:34 read 0; set_pmp_g at G = 0 and G = 2
 //   C  0x7C0 and 0x7C1: reserved bits; every named setter alone
@@ -160,12 +167,40 @@ module tb;
     gp = csr_tb_pkg::pack_ptw_csr();
     chk("E4 ptw henvcfg_adue 0", 64'(gp.henvcfg_adue), 64'd0);
     chk("E5 ptw menvcfg_adue 0", 64'(gp.menvcfg_adue), 64'd0);
-    // The rule is a read rule: menvcfg.ADUE set again shows it.
+    // The rule is a read rule: menvcfg.ADUE set again shows it. SYS-002:
+    // menvcfg.PBMTE is 0 in this write, so henvcfg.PBMTE (stored 1)
+    // reads 0; until SYS-002 this check expected 0x6000_0000_0000_0000.
     csr_tb_pkg::csr_write(12'h30A, 64'h2000_0000_0000_0000);
-    chk("E6 henvcfg.ADUE visible again", csr_tb_pkg::csr_read(12'h60A),
-        64'h6000_0000_0000_0000);
+    chk("E6 henvcfg.ADUE visible again, PBMTE read 0",
+        csr_tb_pkg::csr_read(12'h60A), 64'h2000_0000_0000_0000);
     chk("E7 menvcfg PBMTE 0 ADUE 1", csr_tb_pkg::csr_read(12'h30A),
         64'h2000_0000_0000_0000);
+    // henvcfg.PBMTE (SYS-002). menvcfg.PBMTE 0: henvcfg.PBMTE written 1
+    // reads 0 in csr_read and in pack_ptw_csr; ADUE is unaffected.
+    csr_tb_pkg::csr_reset();
+    csr_tb_pkg::csr_write(12'h30A, 64'h2000_0000_0000_0000);  // PBMTE 0
+    csr_tb_pkg::csr_write(12'h60A, 64'h6000_0000_0000_0000);  // both 1
+    chk("E8 henvcfg.PBMTE read 0 under menvcfg.PBMTE 0",
+        csr_tb_pkg::csr_read(12'h60A), 64'h2000_0000_0000_0000);
+    gp = csr_tb_pkg::pack_ptw_csr();
+    chk("E9 ptw henvcfg_pbmte 0",  64'(gp.henvcfg_pbmte), 64'd0);
+    chk("E10 ptw henvcfg_adue 1",  64'(gp.henvcfg_adue),  64'd1);
+    chk("E11 ptw menvcfg_pbmte 0", 64'(gp.menvcfg_pbmte), 64'd0);
+    // The stored bit is kept: menvcfg.PBMTE set again shows it.
+    csr_tb_pkg::csr_write(12'h30A, 64'h6000_0000_0000_0000);
+    chk("E12 henvcfg.PBMTE visible again", csr_tb_pkg::csr_read(12'h60A),
+        64'h6000_0000_0000_0000);
+    gp = csr_tb_pkg::pack_ptw_csr();
+    chk("E13 ptw henvcfg_pbmte 1", 64'(gp.henvcfg_pbmte), 64'd1);
+    // Both read rules at once: menvcfg 0 hides both henvcfg bits.
+    csr_tb_pkg::csr_write(12'h30A, 64'h0);
+    chk("E14 menvcfg 0: henvcfg reads 0", csr_tb_pkg::csr_read(12'h60A),
+        64'h0);
+    // henvcfg.PBMTE written 0 stays 0 whatever menvcfg holds.
+    csr_tb_pkg::csr_write(12'h30A, 64'h6000_0000_0000_0000);
+    csr_tb_pkg::csr_write(12'h60A, 64'h2000_0000_0000_0000);
+    chk("E15 henvcfg.PBMTE written 0 reads 0",
+        csr_tb_pkg::csr_read(12'h60A), 64'h2000_0000_0000_0000);
 
     // ---- P: pmpcfg --------------------------------------------------
     csr_tb_pkg::csr_reset();
@@ -202,6 +237,59 @@ module tb;
     csr_tb_pkg::csr_reset();
     csr_tb_pkg::csr_write(12'h3A0, 64'h0000_0000_0000_0000);
     chk("P10 reset clears the lock", csr_tb_pkg::csr_read(12'h3A0), 64'h0);
+    // R = 0 with W = 1 is stored with W = 0 (SYS-002). Bytes, entry 0
+    // first: 02 W -> 00; 06 W X -> 04; 1A NAPOT W -> 18; 8E L TOR W X
+    // -> 8C (the lock written with it); 03 R W kept; 01 R kept;
+    // 1F kept; 0B TOR R W kept.
+    csr_tb_pkg::csr_reset();
+    csr_tb_pkg::csr_write(12'h3A0, 64'h0B1F_0103_8E1A_0602);
+    chk("P11 R0 W1 stored W0", csr_tb_pkg::csr_read(12'h3A0),
+        64'h0B1F_0103_8C18_0400);
+    csr_tb_pkg::csr_write(12'h3A2, 64'h0000_0000_0000_9A00);
+    chk("P12 R0 W1 in pmpcfg2", csr_tb_pkg::csr_read(12'h3A2),
+        64'h0000_0000_0000_9800);
+    gf = csr_tb_pkg::pack_fe_csr();
+    chk("P13 entry 2 in pack, W clear", 64'(gf.pmpcfg[2]), 64'h18);
+    chk("P14 entry 4 in pack, R W kept", 64'(gf.pmpcfg[4]), 64'h03);
+
+    // ---- T: pmpaddr under a locked TOR next entry (SYS-002) --------
+    csr_tb_pkg::csr_reset();
+    csr_tb_pkg::csr_write(12'h3A0, 64'h0);                   // all OFF
+    for (int k = 0; k < 16; k++)
+      csr_tb_pkg::csr_write(pa_addr(k), 64'h0000_0000_0000_1000);
+    // Entry 2 locked TOR, entry 4 locked NAPOT, entry 6 TOR unlocked;
+    // pmpcfg2: entry 8 locked TOR, entry 15 locked TOR.
+    csr_tb_pkg::csr_write(12'h3A0, 64'h0008_0098_0088_0000);
+    csr_tb_pkg::csr_write(12'h3A2, 64'h8800_0000_0000_0088);
+    for (int k = 0; k < 16; k++)
+      csr_tb_pkg::csr_write(pa_addr(k), 64'h0000_0000_0000_2000);
+    // Read-back of a 0x1000 or 0x2000 value: OFF and TOR clear 9:0,
+    // NAPOT sets 8:0.
+    chk("T1 pmpaddr1 kept, entry 2 locked TOR",
+        csr_tb_pkg::csr_read(pa_addr(1)), 64'h1000);
+    chk("T2 pmpaddr2 kept, entry 2 itself locked",
+        csr_tb_pkg::csr_read(pa_addr(2)), 64'h1000);
+    chk("T3 pmpaddr0 written", csr_tb_pkg::csr_read(pa_addr(0)), 64'h2000);
+    chk("T4 pmpaddr3 written, entry 4 locked NAPOT",
+        csr_tb_pkg::csr_read(pa_addr(3)), 64'h2000);
+    chk("T5 pmpaddr5 written, entry 6 TOR unlocked",
+        csr_tb_pkg::csr_read(pa_addr(5)), 64'h2000);
+    chk("T6 pmpaddr7 kept, entry 8 locked TOR (pmpcfg2)",
+        csr_tb_pkg::csr_read(pa_addr(7)), 64'h1000);
+    chk("T7 pmpaddr13 written", csr_tb_pkg::csr_read(pa_addr(13)), 64'h2000);
+    chk("T8 pmpaddr14 kept, entry 15 locked TOR",
+        csr_tb_pkg::csr_read(pa_addr(14)), 64'h1000);
+    chk("T9 pmpaddr15 kept, its own lock",
+        csr_tb_pkg::csr_read(pa_addr(15)), 64'h1000);
+    gf = csr_tb_pkg::pack_fe_csr();
+    chk("T10 pack pmpaddr1 kept", 64'(gf.pmpaddr[1]), 64'h1000);
+    chk("T11 pack pmpaddr7 kept", 64'(gf.pmpaddr[7]), 64'h1000);
+    // pmpaddr15 has no next entry: unlocked, it is written.
+    csr_tb_pkg::csr_reset();
+    csr_tb_pkg::csr_write(12'h3A2, 64'h0800_0000_0000_0000); // e15 TOR
+    csr_tb_pkg::csr_write(pa_addr(15), 64'h0000_0000_0000_3000);
+    chk("T12 pmpaddr15 written, no next entry",
+        csr_tb_pkg::csr_read(pa_addr(15)), 64'h3000);
 
     // ---- A: pmpaddr read-back ---------------------------------------
     csr_tb_pkg::csr_reset();

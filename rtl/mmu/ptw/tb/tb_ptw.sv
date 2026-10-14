@@ -1046,8 +1046,13 @@ module tb;
     walk(1'b1, 29'(VA), ACC_X);
     exp_flt("VS PBMT with henvcfg.PBMTE clear", 12);
 
+    // menvcfg.PBMTE clear. henvcfg.PBMTE stays written 1 but reads 0
+    // while menvcfg.PBMTE is 0 (csr_decisions.md CSR-5, SYS-002), so
+    // the walker sees both clear; until SYS-002 it was given henvcfg's
+    // 1. The VS leaf's PBMT is 0, so the result is the same either way.
     setup2("h_g_pbmte");
-    cs_menvcfg_pbmte(1'b0);                    // henvcfg's stays set
+    cs_menvcfg_pbmte(1'b0);
+    chk("g pbmte: henvcfg.PBMTE reads 0", ptw_csr.henvcfg_pbmte == 1'b0);
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte_x(44'(SP_CODE), F_URXA, 2'd2, 1'b0));
     walk(1'b1, 29'(VA), ACC_X);

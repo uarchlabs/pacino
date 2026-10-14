@@ -29,7 +29,12 @@
 // pmpaddr as software reads it: G5 (TOR) gets bits 9:0 already clear,
 // G6-G7b (NA4 at G = 10) get NAPOT with bits 8:0 set, and G8-G8b
 // (an 8-byte NAPOT) get bits 8:0 set. Each still checks the matched
-// range; none checks the checker's own low-bit handling any more.
+// range; none checks the checker's own low-bit handling.
+// SYS-002 restores that coverage in group G2: the entries are written
+// and packed with csr_tb_pkg at G = 0, where no read-back bit is
+// forced and NA4 is stored as NA4, so the pmpaddr and pmpcfg u16 (G =
+// 10) receives are the values as written. u16 must then clear the low
+// TOR bits and widen NA4 and a small NAPOT to its granule itself.
 // E4 to E6 rewrote a locked entry, which csr_write ignores (CSR-5):
 // they start from csr_reset and write the locked entry afresh.
 //
@@ -42,6 +47,8 @@
 //   F  entry count 0 and 4
 //   G  the granule: NA4 exact at G = 0, widened at G = 10, TOR low
 //      bits cleared at G = 10
+//   G2 the same at G = 10 with the low bits and NA4 as written, so
+//      the checker's own masking decides (SYS-002)
 //   H  the MMU-15a region table at both ends of main memory
 //   I  effective type with PBMT, MMU-U6
 //   J  a two-region table
@@ -193,16 +200,25 @@ module tb;
     acc   = AX;
   endtask
 
-  // Drive one access and compare one instance's outputs.
+  // Drive one access and compare one instance's outputs. chk packs the
+  // registers at the instance's grain; chk_at at grain g (SYS-002,
+  // group G2).
   task automatic chk(input string nm, input int inst,
                      input logic [PA_WIDTH-1:0] a, input logic [1:0] p,
                      input logic e_ok, input logic e_f,
                      input logic [3:0] e_pma);
+    chk_at(nm, inst, (inst == 1) ? 0 : CSR_PMP_G, a, p, e_ok, e_f, e_pma);
+  endtask
+
+  task automatic chk_at(input string nm, input int inst, input int g,
+                        input logic [PA_WIDTH-1:0] a, input logic [1:0] p,
+                        input logic e_ok, input logic e_f,
+                        input logic [3:0] e_pma);
     logic g_ok, g_f;
     logic [3:0] g_pma;
     pa  = a;
-    // the instance's grain for the read-back, and the privilege
-    csr_tb_pkg::set_pmp_g((inst == 1) ? 0 : CSR_PMP_G);
+    // the grain for the read-back, and the privilege
+    csr_tb_pkg::set_pmp_g(g);
     csr_tb_pkg::set_priv(p);
     sync();
     #1;
@@ -347,6 +363,38 @@ module tb;
     wr_adr(0, napot(36'h0_8000_0008, 64'd8));
     chk("G8 G10 NAPOT8 granule",  16, 36'h0_8000_0000, PS, 1, 0, MM);
     chk("G8b G10 NAPOT8 gran end",16, 36'h0_8000_0FF0, PS, 1, 0, MM);
+
+    // ---- G2: u16's own masking at G = 10 (SYS-002) -------------------
+    // Written and packed at G = 0, so u16 gets pmpaddr and A as written.
+    clr();
+    // TOR top 0x1000_0800: u16 clears bits 9:0, so 0x1000_0000 is the
+    // top and excluded.
+    wr_cfg_g0(0, TOR | X);
+    wr_adr_g0(0, tora(36'h0_1000_0800));
+    chk_at("G9 G10 own TOR top clear", 16, 0, 36'h0_1000_0000, PS, 0, 1, NO);
+    chk_at("G9b G10 own TOR below top",16, 0, 36'h0_0FFF_F000, PS, 1, 1, NO);
+    // TOR base 0x8000_0800 (entry 0 OFF), top 0x8000_2000 (entry 1):
+    // u16 clears the base's bits 9:0, so 0x8000_0000 is inside.
+    clr();
+    wr_adr_g0(0, tora(36'h0_8000_0800));
+    wr_cfg_g0(1, TOR | X);
+    wr_adr_g0(1, tora(36'h0_8000_2000));
+    chk_at("G10 G10 own TOR base clear",16, 0, 36'h0_8000_0000, PS, 1, 0, MM);
+    chk_at("G10b G10 own TOR top excl",16, 0, 36'h0_8000_2000, PS, 0, 1, MM);
+    // NA4 at 0x8000_0004, stored as NA4: u16 widens it to the granule.
+    clr();
+    wr_cfg_g0(0, NA4 | X);
+    wr_adr_g0(0, tora(36'h0_8000_0004));
+    chk_at("G11 G10 own NA4 granule", 16, 0, 36'h0_8000_0000, PS, 1, 0, MM);
+    chk_at("G11b G10 own NA4 gran end",16, 0, 36'h0_8000_0FFC, PS, 1, 0, MM);
+    chk_at("G11c G10 own NA4 next pg",16, 0, 36'h0_8000_1000, PS, 0, 1, MM);
+    // An 8-byte NAPOT at 0x8000_0008, bits 8:0 as written: u16 widens
+    // it to the granule.
+    wr_cfg_g0(0, NAP | X);
+    wr_adr_g0(0, napot(36'h0_8000_0008, 64'd8));
+    chk_at("G12 G10 own NAPOT8 gran", 16, 0, 36'h0_8000_0000, PS, 1, 0, MM);
+    chk_at("G12b G10 own NAPOT8 end", 16, 0, 36'h0_8000_0FF0, PS, 1, 0, MM);
+    chk_at("G12c G10 own NAPOT8 next",16, 0, 36'h0_8000_1000, PS, 0, 1, MM);
 
     // ---- H: the MMU-15a region table ---------------------------------
     // PMP allows everything; only the PMA decides.

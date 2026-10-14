@@ -35,6 +35,9 @@
 //   hgatp    unsupported MODE (not Bare or Sv39x4): MODE unchanged,
 //            VMID and PPN written
 //   pmpcfg   locked entry (L = 1): entry and its pmpaddr not written
+//            R = 0 with W = 1 written: stored with W = 0 (SYS-002)
+//   pmpaddr  not written when the next entry is locked with A = TOR;
+//            pmpaddr15 has no next entry (SYS-002)
 //   all      unimplemented bits read 0: they are never stored
 // and by csr_read, since they depend on other state at read time:
 //   pmpaddr  NAPOT entry: bits 8:0 read 1; OFF or TOR entry: bits 9:0
@@ -42,6 +45,7 @@
 //            G)
 //   hgatp    PPN 1:0 read 0 when MODE is Sv39x4 (section 3)
 //   henvcfg  ADUE reads 0 when menvcfg.ADUE is 0 (section 3)
+//            PBMTE reads 0 when menvcfg.PBMTE is 0 (SYS-002)
 // A pmpcfg write of A = NA4 stores NAPOT: NA4 is not selectable at
 // G = 10 (section 3; at any G >= 1), and the WARL result is not given
 // there; spike maps it the same way (riscv/csrs.cc
@@ -116,14 +120,26 @@ package csr_tb_pkg;
       return v;
     endfunction
 
-    // One pmpcfg byte as stored: reserved bits 0, and NA4 taken as NAPOT
-    // when NA4 is not selectable (G >= 1).
+    // One pmpcfg byte as stored: reserved bits 0, NA4 taken as NAPOT
+    // when NA4 is not selectable (G >= 1), and the reserved R = 0, W = 1
+    // combination stored with W = 0 (CSR-5, SYS-002).
     static function pmpcfg_ent_t pmpcfg_legal(input logic [7:0] b);
       pmpcfg_ent_t e;
       e      = pmpcfg_ent_t'(b);
       e.rsvd = '0;
       if ((e.a == CSR_PMP_A_NA4) && (r_pmp_g >= 1)) e.a = CSR_PMP_A_NAPOT;
+      if (!e.r && e.w) e.w = 1'b0;
       return e;
+    endfunction
+
+    // pmpaddr k is writable unless entry k is locked, or entry k+1 is
+    // locked with A = TOR, since entry k+1's TOR range is bounded below
+    // by pmpaddr k (CSR-5, SYS-002). pmpaddr15 has no next entry.
+    static function logic pmpaddr_wr_ok(input int k);
+      if (r_pmpcfg[k].l) return 1'b0;
+      if ((k < CSR_PMP_ENTRIES - 1) && r_pmpcfg[k+1].l &&
+          (r_pmpcfg[k+1].a == CSR_PMP_A_TOR)) return 1'b0;
+      return 1'b1;
     endfunction
 
     // The PMP grain G (SYS-001 addition, provisional). csr_pkg's is 10,
@@ -170,7 +186,7 @@ package csr_tb_pkg;
       mode = value[63:60];
       if (is_pmpaddr(addr)) begin
         k = int'(addr[3:0]);
-        if (!r_pmpcfg[k].l) r_pmpaddr[k] = value[CSR_PMPADDR_W-1:0];
+        if (pmpaddr_wr_ok(k)) r_pmpaddr[k] = value[CSR_PMPADDR_W-1:0];
         return;
       end
       case (addr)
@@ -260,7 +276,8 @@ package csr_tb_pkg;
         CSR_MENVCFG_ADDR: v = 64'(r_menvcfg);
         CSR_HENVCFG_ADDR: begin
           he = r_henvcfg;
-          if (!r_menvcfg.adue) he.adue = 1'b0;
+          if (!r_menvcfg.adue)  he.adue  = 1'b0;
+          if (!r_menvcfg.pbmte) he.pbmte = 1'b0;
           v = 64'(he);
         end
         CSR_PMPCFG0_ADDR, CSR_PMPCFG2_ADDR: begin

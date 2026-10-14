@@ -74,7 +74,9 @@
 # and the file added in session-079 for TD#178 (csr_decisions.md),
 # and the files updated in session-079 after SYS-001
 # (PROJECT_STATUS.md, csr_decisions.md, mmu_decisions.md,
-# l1i_ifu_interfaces.md, ras_theory_of_operation.md).
+# l1i_ifu_interfaces.md, ras_theory_of_operation.md), and the files
+# updated in session-080 after SYS-002 (PROJECT_STATUS.md,
+# csr_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -94,7 +96,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 253c6997b061
+PLAN  PROJECT_STATUS.md                 c0f8a743b62e
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -102,7 +104,7 @@ ARCH  bp_arb_spec.md                    2c98a9d4f798
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
-ARCH  csr_decisions.md                  1504051434a5
+ARCH  csr_decisions.md                  1df550fedc68
 ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   0ec67f83aa96
 ARCH  ftb_decisions.md            5872deda6dc9

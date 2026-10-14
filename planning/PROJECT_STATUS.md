@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,53 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## Session-080, after SYS-002: the CSR-5 rules complete.
+
+SYS-002 RUN, COMPLETE (Jeff; the IA's choices accepted). 31m. regress.sh
+270 targets PASS. Every tb_fe_top program's figures equal the baseline
+at 2 and 1 slots. Checked by the PA against both summaries.
+  Built in csr_tb_pkg: henvcfg.PBMTE reads 0 when menvcfg.PBMTE is 0;
+    a pmpcfg entry written R = 0, W = 1 is stored W = 0; pmpaddr k is
+    not written while entry k+1 is locked TOR. csr_pkg unchanged.
+    Each rule shown to fail its checks when removed.
+  No test changed result but tb_csr_tb_pkg E6: pt_rsv_h and h_g_pbmte
+    walk under menvcfg.PBMTE 0 only with a VS leaf PBMT of 0, so the
+    VS-stage PBMTE decision does not arise. h_g_pbmte gains a check
+    that the walker sees henvcfg.PBMTE 0.
+  PMP checker coverage restored: tb_pmp_pma_chk G9-G12c feed the G = 10
+    instance values written and packed at grain 0, so the checker
+    applies its own masks; removing them fails 6 checks. At G = 10 NA4
+    and NAPOT take the same mask, so the NA4 path is checked at G = 0
+    only.
+  The kind-10 guest-page fault (a G-stage leaf without W under a VS
+    Svadu update) is reached by tb_ptw h_gpf_write and lc_g_no_w_update
+    and tb_fe_top pt_faults_h and pt_ad_h case 2; no case added.
+  Counts: sim_csr_tb_pkg 126 -> 150, sim_pmp_pma_chk 60 -> 70, sim_ptw
+    806 -> 807. Regression 2103 s: a csr_tb_pkg edit rebuilds every
+    testbench that compiles it.
+  Provisional choices ACCEPTED (Jeff): the grain-0 pack for the PMP
+    checks, no csr_tb_pkg function added; the h_g_pbmte check;
+    pmpaddr_wr_ok a class helper.
+
+PA ERROR, mine: the SYS-002 Hypothesis predicted pt_rsv_h and h_g_pbmte
+would change, and its Background implied no test reached kind 10 once
+the ADUE rule was in. Neither was checked against ptw.sv or tb_ptw.
+
+Noted, no TD opened: the csr_pkg.sv henvcfg_t comment names only the
+ADUE read rule.
+
+BP-135 WRITTEN (Jeff: all seven items), not yet issued: sim_tage_manual's
+count, the TAGE rows 19.x seeding, a tb_fe_top program for T0 as the
+use_alt_on_na provider, the ubtb.sv body comment, Open Item 13, the
+ittage_table_interfaces.md write-enable note, and TD#74.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, csr_decisions.md (CSR-5: the closing
+sentence naming SYS-002 removed).
+
+Next free: BP-136, SYS-003, INFRA-014, TOOLS-007, TD#185.
 
 ---
 ## Session-079, after SYS-001: TD#178 closed; the SYS series begun.
@@ -3848,8 +3895,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | pmpcfg_ent_t/pmpaddr_imp_t        |
 |                         |             |                   | arrays. Coverage of its own G =   |
 |                         |             |                   | 10 low-bit masking lost in        |
-|                         |             |                   | tb_pmp_pma_chk G5-G8b; restored   |
-|                         |             |                   | by SYS-002.                       |
+|                         |             |                   | tb_pmp_pma_chk G5-G8b. SYS-002:   |
+|                         |             |                   | G9-G12c restore it; 70 checks.    |
 | page table walker       | Working     | tb_ptw            | Built BP-123, rtl/mmu/ptw,        |
 |                         |             |                   | outside the front end top;        |
 |                         |             |                   | tb_fe_top instantiates it beside  |
@@ -3866,12 +3913,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 12 properties. Was Not started.   |
 |                         |             |                   | SYS-001: takes ptw_csr_t          |
 |                         |             |                   | (ptw_csr). tb_ptw 806 checks.     |
+|                         |             |                   | SYS-002: 807 checks (h_g_pbmte).  |
 | csr (unit)              | Working     | tb_csr_tb_pkg     | Built SYS-001, rtl/core/csr:      |
 |                         |             |                   | csr_pkg.sv, tb/csr_tb_pkg.sv.     |
 |                         |             |                   | lint_csr_pkg, lint_csr_tb_pkg,    |
 |                         |             |                   | sim_csr_tb_pkg 126/0. SYS-002     |
-|                         |             |                   | adds three write rules and        |
-|                         |             |                   | restores PMP checker coverage.    |
+|                         |             |                   | built the last three CSR-5 rules; |
+|                         |             |                   | sim_csr_tb_pkg 150/0.             |
 | frontend top            | Working     | tb_fe_top         | Built BP-118. 36 programs since   |
 |                         |             |                   | BP-124 (19 before BP-123), each   |
 |                         |             |                   | its own regression target         |

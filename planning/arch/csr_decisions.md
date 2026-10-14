@@ -129,8 +129,7 @@ CSR-5  csr_write rules:
 ```
 
        Read-0 rules apply at csr_read and in the pack functions; the
-       stored bit is kept. The R = 0/W = 1, next-entry TOR lock and
-       henvcfg.PBMTE rules are implemented by SYS-002.
+       stored bit is kept.
 
 ---
 
@@ -232,4 +231,5 @@ CSR-U2 Hardware delivery of CSR state to the groups, and ordering
               (NA4, R=0/W=1, next-entry TOR lock, henvcfg.PBMTE),
               CSR-6 port shapes and walker sampling, CSR-7 reset
               values.
+  2026-10-14  session-080, after SYS-002. CSR-5: every rule built.
 ```
