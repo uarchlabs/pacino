@@ -6,7 +6,7 @@
  FILE:    tage_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-11
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
  
@@ -519,8 +519,9 @@ component Table 7 selects, and use_wr_u0 and epc_wr_u0 above read
 as gated on prm_tbl_sel_u0 alone. tage_cntrl drives prm_tbl_sel_u0
 and its index bus from the primary in every case. Corrected against
 tage_cntrl.sv, tage.sv and tage_table.sv, session-078.
-ittage_table_interfaces.md carries the original note; it has not
-been checked against the ITTAGE RTL.
+ittage_table_interfaces.md states the ITTAGE rule: there the useful
+write opens with the provider's CTR strobe, not on either selector
+alone.
 
 alc_wr_u0[s]       this is the write signal for an entry allocation. This is
                 gated by THIS_TABLE compared to alc_tbl_sel_u0.

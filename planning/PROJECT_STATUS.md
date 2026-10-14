@@ -16,6 +16,55 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after BP-135: the front-end clean-up batch recorded.
+
+BP-135 RUN, COMPLETE (Jeff). 1h24m. regress.sh 272 targets PASS (270
+plus sim_fe_top_t0_uaon and its _1slot twin). Every earlier tb_fe_top
+program's figures equal the baseline at 2 and 1 slots. Checked by the
+PA against SYS-002's final summary: six counts changed, as reported.
+  sim_tage_manual: the testbench prints PASS=/FAIL=, which regress.sh
+    reads; 472/0 at both slot counts. regress.sh unchanged.
+  Rows 19.x: every test seeded the primary at 010, which use_alt_on_na
+    cannot fire on. Reseeded to states a prediction produces; all
+    eight now fail with the BP-133 T0 path removed (six did).
+  t0_uaon, a new tb_fe_top program: the 19.x case occurs 17 times at 2
+    slots, 16 at 1, each T0 write checked; at 2 slots only on slot 0.
+    1510 retired, 1277 cycles, 52 mispredicts at 2 slots; 3567 and 240
+    at 1.
+  ubtb.sv line 336 comment corrected.
+  Open Item 13: the guard (bp_cluster.sv sc_arb_comb, w_sc_grant_pred =
+    w_sc_pred_req & sc_ready) is reached from the ports by tb_bp_cluster
+    H2b in sim_bp_cluster_init.
+  ittage_table_interfaces.md: four of seven statements of the use/EPC
+    write-enable note were false; the RTL is right.
+  TD#74: the TAGE tagged tables on slot 1 are checked. Removing every
+    slot-1 T0 write, or every ITTAGE slot-1 write, passes the
+    regression; only figures move (indir 22 -> 70 mispredicts).
+  Counts: sim_tage_manual and _1slot -/0 -> 472/0; sim_fe_top 734 ->
+    754, sim_fe_top_1slot 731 -> 751; sim_fe_top_t0_uaon and _1slot
+    20/0, new.
+
+RULED after BP-135 (Jeff): Open Item 13 CLOSED. TD#74 KEPT, narrowed to
+the paths BP-135 lists. The IA's provisional choices P-1 to P-5
+ACCEPTED. BP-136 takes TD#74 and BP-135's Other Notes.
+
+PA ERROR, mine: Problem 7 of BP-135 was report-only, so the TD#74 gaps
+it found could not be closed in the run. BP-136 says fix what you
+find.
+
+BP-136 WRITTEN, not yet issued: slot-1 TAGE and ITTAGE update checks
+(TD#74), the tb_tage_manual labels and its unused tage_check_pred_meta,
+two tb_tage failure messages, the bp_cluster.sv sc_ready comment.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ittage_table_interfaces.md (use_wr_u0,
+epc_wr_u0, upd_index_u0, the target width 40), tage_table_interfaces.md
+(the ITTAGE sentence), tage_cntrl_ctr_update_rules.md (rows 19.x
+tests), bp_arb_spec.md (4.5: H2b from the ports).
+
+Next free: BP-137, SYS-003, INFRA-014, TOOLS-007, TD#185.
+
+---
 ## Session-080, after SYS-002: the CSR-5 rules complete.
 
 SYS-002 RUN, COMPLETE (Jeff; the IA's choices accepted). 31m. regress.sh
@@ -60,7 +109,8 @@ Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, csr_decisions.md (CSR-5: the closing
 sentence naming SYS-002 removed).
 
-Next free: BP-136, SYS-003, INFRA-014, TOOLS-007, TD#185.
+Next free: BP-136, SYS-003, INFRA-014, TOOLS-007, TD#185. (Superseded
+above.)
 
 ---
 ## Session-079, after SYS-001: TD#178 closed; the SYS series begun.
@@ -3061,6 +3111,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | it reports is "RESULTS: 0        |
 |                         |             |                   | error(s)". It counts errors, not |
 |                         |             |                   | checks. Watchdog #5000 BP-096.   |
+|                         |             |                   | BP-135: prints PASS=/FAIL=,      |
+|                         |             |                   | 472/0; rows 19.x reseeded.       |
 | ittage_interfaces.md    | Draft       | --                | Session-061 (INFRA-010):         |
 |                         |             |                   | indirect-CALL ownership and IT5  |
 |                         |             |                   | corrections. SESSION-064 BP-094: |
@@ -3948,6 +4000,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | csr_tb_pkg. pt_ad_h 1435 -> 1395  |
 |                         |             |                   | cycles (henvcfg.ADUE read-0       |
 |                         |             |                   | rule).                            |
+|                         |             |                   | BP-135: t0_uaon, 38 programs;     |
+|                         |             |                   | sim_fe_top 754 checks at 2 slots, |
+|                         |             |                   | 751 at 1.                         |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -4233,10 +4288,17 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | G only for the loop it drives.  |
 |    |                                        | Reduction work in #1.           |
 |    |                                        | Session-079 (Jeff): folded into |
-|    |                                        | BP-135. The IA reports what     |
-|    |                                        | covers the slot-1 TAGE and      |
-|    |                                        | ITTAGE update path; closed or   |
-|    |                                        | kept on that report.            |
+|    |                                        | BP-135. KEPT after it (Jeff),   |
+|    |                                        | narrowed. Unchecked on slot 1:  |
+|    |                                        | TAGE T0 writes (rows 13a-13d,   |
+|    |                                        | 19.x); alt USE/EPC (Table 7     |
+|    |                                        | rows 5-6); the pred_diff steps  |
+|    |                                        | (rows 3, 4, 9, 10); uaon[1];    |
+|    |                                        | bim_upd_idx_u0[1]; every ITTAGE |
+|    |                                        | slot-1 update through           |
+|    |                                        | ittage_cntrl. Removing T0 or    |
+|    |                                        | ITTAGE slot-1 writes passes     |
+|    |                                        | regress.sh. BP-136.             |
 | 75 | ittage has no fast versions of the     | CLOSED by BP-126 (session-077): |
 |    | ittage sim targets.                    | sim_ittage_fast,                |
 |    |                                        | +ITTAGE_FAST_INIT=1, 223/0.     |
@@ -5496,11 +5558,11 @@ numbers are issued from one sequence across both tables.
 |          | count watchdog does NOT satisfy this.   | $finish(1) both     |
 |          | Prove a watchdog by STOPPING THE CLOCK, | exit 0 under        |
 |          | not by shortening the limit.            | v5.048. See TD#111. |
-| 13       | sc_ready is strapped constant under     | NEW session-064.    |
-|          | +SC_FAST_INIT, so the SC arbiter        | A plusarg running a |
-|          | rule-1 guard is unreachable from the    | SHORT init walk     |
-|          | ports. BP-094 H2b clears the strap      | would fix this and  |
-|          | for one case.                           | help TD#67/#68.     |
+| 13       | sc_ready is strapped constant under     | CLOSED BP-135       |
+|          | +SC_FAST_INIT, so the SC arbiter        | (Jeff): H2b reaches |
+|          | rule-1 guard is unreachable from the    | the guard from the  |
+|          | ports. BP-094 H2b clears the strap      | ports in            |
+|          | for one case.                           | sim_bp_cluster_init.|
 | 14       | terminate() in tb/utils.svh is a bare   | NEW session-066.    |
 |          | $finish, reached only on the clean      | Not a false green   |
 |          | path of tb_tage_manual.sv. Invisible    | today. Any new      |

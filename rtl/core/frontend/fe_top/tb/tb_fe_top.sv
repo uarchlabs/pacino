@@ -116,6 +116,11 @@
 // conditional before the ret, so SC reversing it at p3 undoes a pop
 // that decremented a recursion count (TD#78). It counts those undos
 // and checks each put the count back.
+//
+// BP-135. Program t0_uaon: T0 chosen as the TAGE provider by
+// use_alt_on_na over a tagged primary, and then updated (CTR rows
+// 19.1-19.8, BP-133). It counts those updates by row and checks each
+// T0 write.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -1584,6 +1589,93 @@ module tb;
 `endif
   end
 
+  // BP-135: TAGE updates of T0 as the provider through use_alt_on_na
+  // (tage_cntrl_ctr_update_rules.md rows 19.1-19.8, BP-133). An event
+  // is an update tage_cntrl applies (its update valid in a cycle the
+  // arbiter grants to updates, trx_type) whose meta has a tagged
+  // primary, the alternate T0 and tage_using_primary 0. The T0 entry
+  // it writes is slot s's copy of the T0 RAM (tage_bim keeps one per
+  // slot) at the meta's alternate index. The expected value is derived
+  // here from the meta: its T0 counter (tage_alt_ctr, the 2b value
+  // zero-padded) stepped toward resolved_taken, saturating. It is
+  // compared after the edge; one T0 write per slot per edge, so no
+  // other write can touch the entry in that edge. Also counted: the p2
+  // predictions that selected T0 this way, the row of each update, and
+  // the highest use_alt_on_na counter value per slot.
+  int                         n_t0u_pred;
+  int                         n_t0u_upd;
+  int                         n_t0u_ok;
+  int                         n_t0u_bad;
+  int                         n_t0u_row [1:8];
+  int                         uaon_max  [0:NUM_PRED_SLOTS-1];
+  logic                       t0u_pend  [0:NUM_PRED_SLOTS-1];
+  logic [TAGE_TBL_IDX[0]-1:0] t0u_idx   [0:NUM_PRED_SLOTS-1];
+  logic [TAGE_TBL_CTR[0]-1:0] t0u_exp   [0:NUM_PRED_SLOTS-1];
+
+  // The row of rows 19.1-19.8 an update is, from its meta and outcome.
+  // UP is 0 and PT is aT in all eight; pT, aT and RT name the row.
+  function automatic int t0u_row_of(input logic pt, input logic at,
+                                    input logic rt);
+    case ({pt, at, rt})
+      3'b011:  return 1;
+      3'b111:  return 2;
+      3'b000:  return 3;
+      3'b100:  return 4;
+      3'b010:  return 5;
+      3'b101:  return 6;
+      3'b110:  return 7;
+      default: return 8;   // 3'b001
+    endcase
+  endfunction
+
+  always @(posedge clk) begin : t0_uaon_log
+    logic [TAGE_TBL_CTR[0]-1:0] t0u_old;
+    logic [TAGE_TBL_CTR[0]-1:0] t0u_got;
+    tage_upd_inp_t              t0u_u;
+    tage_pred_meta_t            t0u_m;
+`ifndef BASE_RTL
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      if (rstn && t0u_pend[s]) begin
+        t0u_got = (s == 0)
+          ? dut.u_bpu.u_tage.u_tage_bim.g_slot[0].u_ram.mem
+              [t0u_idx[s][TAGE_TBL_IDX[0]-1]][t0u_idx[s][TAGE_TBL_IDX[0]-2:0]]
+          : dut.u_bpu.u_tage.u_tage_bim.g_slot[NUM_PRED_SLOTS-1].u_ram.mem
+              [t0u_idx[s][TAGE_TBL_IDX[0]-1]][t0u_idx[s][TAGE_TBL_IDX[0]-2:0]];
+        if (t0u_got == t0u_exp[s]) n_t0u_ok  <= n_t0u_ok + 1;
+        else                       n_t0u_bad <= n_t0u_bad + 1;
+      end
+      t0u_pend[s] <= 1'b0;
+      if (meas && int'(dut.u_bpu.u_tage.u_tage_cntrl.uaon[s]) > uaon_max[s])
+        uaon_max[s] <= int'(dut.u_bpu.u_tage.u_tage_cntrl.uaon[s]);
+      t0u_m = dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2[s];
+      if (meas && dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_rdy_p2[s] &&
+          !t0u_m.tage_using_primary && (t0u_m.tage_prm_comp != '0) &&
+          (t0u_m.tage_alt_comp == '0))
+        n_t0u_pred <= n_t0u_pred + 1;
+      t0u_u = dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0[s];
+      if (meas && dut.u_bpu.u_tage.u_tage_cntrl.trx_type &&
+          dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0[s] &&
+          !t0u_u.tage_pred_meta.tage_using_primary &&
+          (t0u_u.tage_pred_meta.tage_prm_comp != '0) &&
+          (t0u_u.tage_pred_meta.tage_alt_comp == '0)) begin
+        n_t0u_upd <= n_t0u_upd + 1;
+        n_t0u_row[t0u_row_of(t0u_u.tage_pred_meta.tage_prm_tkn,
+                             t0u_u.tage_pred_meta.tage_alt_tkn,
+                             t0u_u.resolved_taken)] <=
+          n_t0u_row[t0u_row_of(t0u_u.tage_pred_meta.tage_prm_tkn,
+                               t0u_u.tage_pred_meta.tage_alt_tkn,
+                               t0u_u.resolved_taken)] + 1;
+        t0u_old     = t0u_u.tage_pred_meta.tage_alt_ctr[TAGE_TBL_CTR[0]-1:0];
+        t0u_pend[s] <= 1'b1;
+        t0u_idx[s]  <= t0u_u.tage_pred_meta.tage_alt_idx[TAGE_TBL_IDX[0]-1:0];
+        t0u_exp[s]  <= t0u_u.resolved_taken
+          ? ((t0u_old == '1) ? t0u_old : t0u_old + 1'b1)
+          : ((t0u_old == '0) ? t0u_old : t0u_old - 1'b1);
+      end
+    end
+`endif
+  end
+
   // BP-122 (ruled by Jeff: the LP wins at p2 and p3): a slot whose p2
   // direction the loop predictor supplied keeps it at p3. Per index,
   // the LP slots of the p2 group the FTQ accepted and their direction;
@@ -2764,6 +2856,15 @@ module tb;
     n_undo_ok    = 0;
     n_undo_bad   = 0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) ud_pend[s] = 1'b0;
+    n_t0u_pred   = 0;
+    n_t0u_upd    = 0;
+    n_t0u_ok     = 0;
+    n_t0u_bad    = 0;
+    for (int r = 1; r <= 8; r++) n_t0u_row[r] = 0;
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      t0u_pend[s] = 1'b0;
+      uaon_max[s] = 0;
+    end
     n_rest_rep   = 0;
     n_own_ok     = 0;
     n_own_bad    = 0;
@@ -3689,6 +3790,63 @@ module tb;
     chk($sformatf({"rec_undo: each undo put the recursion count back ",
                    "(%0d ok, %0d not)"}, n_undo_ok, n_undo_bad),
         n_undo_bad == 0);
+`endif
+  endtask
+
+  // -----------------------------------------------------------------
+  // t0_uaon (BP-135): T0 as the TAGE provider through use_alt_on_na,
+  // then updated (CTR rows 19.1-19.8, BP-133). One block per
+  // iteration: mixed(2), a conditional B taken with probability 1/8
+  // (three LFSR bits all set) that skips one instruction, mixed(1) and
+  // the loop branch. B is slot 0 of its block.
+  // How the case arises. A taken B mispredicts and allocates a tagged
+  // entry above its provider, at 100 (weakly taken). The next visit in
+  // the same history context is usually not taken: that entry is the
+  // primary, weak and wrong, with a tagged alternate that is right, so
+  // the slot's use_alt_on_na counter rises (tage_cntrl uaon_upd_ff).
+  // Once its MSB is set, a weak primary in T1, whose alternate is T0,
+  // hands the prediction to T0 (pred_logic), and the update of that
+  // prediction is the 19.x case.
+  // Seed and length from a sweep of eight seeds at 128 and 256
+  // iterations at both slot counts: at 256 every seed but two reached
+  // the case at two slots and six of eight at one; this seed gave the
+  // most at one slot.
+  // -----------------------------------------------------------------
+  localparam int TU_ITERS = 256;
+  localparam int TU_WARM  = 8;
+
+  task automatic p_t0_uaon();
+    logic [VA_WIDTH-1:0] top;
+    logic                tk;
+    begin_prog("t0_uaon");
+    W.lfsr = 16'hACE1;
+    W.mixed(3);
+    top = W.wp;
+    for (int it = 0; it < TU_ITERS; it++) begin
+      if (it == TU_WARM) warm_e = W.ne;
+      W.wp = top;
+      W.mixed(2);
+      tk = W.lfsr_bit() & W.lfsr_bit() & W.lfsr_bit();
+      W.cskip(tk, 1);                         // B
+      W.mixed(1);
+      W.bcc(it != TU_ITERS - 1, top);
+    end
+    W.mixed(3);
+    end_prog(200000);
+    $display("%s", $sformatf({"   T0UAON %s predictions %0d, updates %0d, ",
+             "T0 write ok %0d not ok %0d; uaon max s0 %0d s%0d %0d"}, tname,
+             n_t0u_pred, n_t0u_upd, n_t0u_ok, n_t0u_bad, uaon_max[0],
+             NUM_PRED_SLOTS - 1, uaon_max[NUM_PRED_SLOTS-1]));
+    $display("%s", $sformatf({"   T0UAON %s rows 19.1 %0d 19.2 %0d 19.3 %0d ",
+             "19.4 %0d 19.5 %0d 19.6 %0d 19.7 %0d 19.8 %0d"}, tname,
+             n_t0u_row[1], n_t0u_row[2], n_t0u_row[3], n_t0u_row[4],
+             n_t0u_row[5], n_t0u_row[6], n_t0u_row[7], n_t0u_row[8]));
+`ifndef BASE_RTL
+    chk($sformatf("t0_uaon: T0 was updated as the use_alt_on_na provider (%0d)",
+                  n_t0u_upd), n_t0u_upd > 0);
+    chk($sformatf("t0_uaon: each such update wrote T0 (%0d ok, %0d not)",
+                  n_t0u_ok, n_t0u_bad),
+        (n_t0u_bad == 0) && (n_t0u_ok == n_t0u_upd));
 `endif
   endtask
 
@@ -5064,6 +5222,7 @@ module tb;
       "nest":       p_nest();
       "recur":      p_recur();
       "rec_undo":   p_rec_undo();
+      "t0_uaon":    p_t0_uaon();
       "deep":       p_deep();
       "indir":      p_indir();
       "region":     p_region();
@@ -5096,9 +5255,10 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:36] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:37] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
-                              "recur", "rec_undo", "deep", "indir", "region",
+                              "recur", "rec_undo", "t0_uaon", "deep",
+                              "indir", "region",
                               "multistart", "cross", "rvc", "misp_call",
                               "jals", "fencei", "cboinval", "uc_nc",
                               "uc_io", "pt_faults_s", "pt_faults_h",

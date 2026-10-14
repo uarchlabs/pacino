@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_ctr_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -128,6 +128,10 @@ only when pred_diff is set and the primary was right (pACT, under its
 legend). No USE update; T0 has none. T0 is written through tage_bim's
 alt update bus. Before BP-133 no row covered this case and the RTL
 left T0 untouched.
+
+The tb_tage_manual tests of rows 19.x seed a state a prediction
+produces: primary CTR 011 or 100, T0 direction aT, use_alt_on_na set.
+tb_fe_top program t0_uaon reaches the rows end to end (BP-135).
 
 
 ## ADR

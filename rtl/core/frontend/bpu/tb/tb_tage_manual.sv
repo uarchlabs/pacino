@@ -210,6 +210,11 @@ module tb;
   logic  rstn;
 
   int    tb_errs = 0;
+  // BP-135: every comparison of an RTL value with an expected one
+  // counts here (tb_tage_manual_tasks.svh, tb_checks++ before each);
+  // each failing comparison adds one to errs, so the checks passed are
+  // tb_checks - tb_errs.
+  int    tb_checks = 0;
   string test_name = "";
 
   // Staging registers: NBA propagation for struct-typed array ports.
@@ -292,6 +297,9 @@ module tb;
     // exits through $fatal(1), the only non-zero exit under the
     // v5.048 simulator.
     $display("RESULTS: %0d error(s)", tb_errs);
+    // BP-135: the count tools/regress.sh reads (PASS=<n> FAIL=<n>).
+    $display("tb_tage_manual: checks %0d PASS=%0d FAIL=%0d", tb_checks,
+             tb_checks - tb_errs, tb_errs);
     if (tb_errs != 0)
       $fatal(1, "tb_tage_manual: %0d error(s)", tb_errs);
     else

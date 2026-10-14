@@ -333,7 +333,7 @@ module ubtb #(
   endfunction
 
   // ----------------------------------------------------------------
-  // Prediction path (combinational from registered mem)
+  // Prediction path (combinational in p0, from pred_pc_p0 and mem)
   // ----------------------------------------------------------------
   // One index, one tag, one way search. The matched entry supplies
   // every prediction slot. The block reads mem (a flop array), so it

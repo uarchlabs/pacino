@@ -76,7 +76,10 @@
 # (PROJECT_STATUS.md, csr_decisions.md, mmu_decisions.md,
 # l1i_ifu_interfaces.md, ras_theory_of_operation.md), and the files
 # updated in session-080 after SYS-002 (PROJECT_STATUS.md,
-# csr_decisions.md).
+# csr_decisions.md), and the files updated in session-080 after
+# BP-135 (PROJECT_STATUS.md, ittage_table_interfaces.md,
+# tage_table_interfaces.md, tage_cntrl_ctr_update_rules.md,
+# bp_arb_spec.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -96,11 +99,11 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 c0f8a743b62e
+PLAN  PROJECT_STATUS.md                 25e81dbb417d
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
-ARCH  bp_arb_spec.md                    2c98a9d4f798
+ARCH  bp_arb_spec.md                    667b1c205dff
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
@@ -131,7 +134,7 @@ ARCH  ittage_table_hash_rules.md        e9d7d77217dc
 ARCH  ittage_cntrl_alloc_rules.md       a61a19c81fa5
 ARCH  ittage_cntrl_use_update_rules.md  b729da8f6a79
 ARCH  ittage_table_entry_formats.md  abee67476ca8
-ARCH  tage_cntrl_ctr_update_rules.md    da3e4ab414b6
+ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    d1dc910897a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
@@ -141,8 +144,8 @@ TEST  sc_tb_decisions.md                85577a58ad65
 TEST  manual_tb_decisions.md            9ac8ad00f83e
 VERF  tage_coverage_plan.md             497bc9a790a3
 
-INTF  ittage_table_interfaces.md        152940fce590
-INTF  tage_table_interfaces.md          adfbd02af482
+INTF  ittage_table_interfaces.md        88cbd8a65226
+INTF  tage_table_interfaces.md          44e1ccc8e73b
 INTF  bp_history_interfaces.md          b7cb5aa4c164
 INTF  bpu_port_inventory.md             d6d9e24420b3
 INTF  ftb_interfaces.md           12d47fb5ddbc

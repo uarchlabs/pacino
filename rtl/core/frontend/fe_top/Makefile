@@ -215,8 +215,10 @@ FE_PLUSARGS := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 # BP-123 added fencei to pt_inv: maintenance, uncached fetch and the
 # page table walker in RTL. BP-124 added pt_upriv (MMU-8c, ITLB-10b).
 # BP-134 added rec_undo (an undo-pop over a recursion pop, TD#78).
+# BP-135 added t0_uaon (T0 updated as the use_alt_on_na provider, CTR
+# rows 19.1-19.8).
 FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
-            recur rec_undo deep indir region multistart cross rvc \
+            recur rec_undo t0_uaon deep indir region multistart cross rvc \
             misp_call jals fencei cboinval uc_nc uc_io pt_faults_s \
             pt_faults_h \
             pt_napot_s pt_napot_h pt_rsv_s pt_rsv_h pt_ad_s pt_ad_h pt_inv \

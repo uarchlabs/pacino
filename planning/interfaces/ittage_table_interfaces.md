@@ -6,7 +6,7 @@
  FILE:    ittage_table_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -343,7 +343,7 @@ folded_hist             bp_folded_hist_t output of bp_history,
 hit_p1[s]               result of tag compare gated with valid
                         bit. One bit per slot.
 
-pred_tgt_p1[s]          38-bit target address read from the
+pred_tgt_p1[s]          40-bit target address read from the
                         matching entry. Valid only when
                         hit_p1[s]=1.
 
@@ -384,7 +384,7 @@ use_wd_u0[s]           USE field write data.
 epc_wd_u0[s]           EPC field write data.
                        Produced by ittage_cntrl.
 
-tgt_wd_u0[s]           38-bit target write data. Written only on
+tgt_wd_u0[s]           40-bit target write data. Written only on
                        misprediction when provider CTR was null.
                        Produced by ittage_cntrl.
 
@@ -400,28 +400,32 @@ alt_ctr_wr_u0[s]       write enable for alternate provider CTR.
                        Gated by THIS_TABLE vs alt_tbl_sel_u0.
                        Mutually exclusive with prm_ctr_wr_u0.
 
-use_wr_u0[s]           write enable for USE field. Gated by
-                       THIS_TABLE vs prm_tbl_sel_u0.
+use_wr_u0[s]           write enable for USE field. Opens on
+                       THIS_TABLE vs prm_tbl_sel_u0 with
+                       prm_ctr_wr_u0, or THIS_TABLE vs
+                       alt_tbl_sel_u0 with alt_ctr_wr_u0.
 
-epc_wr_u0[s]           write enable for EPC field. Gated by
-                       THIS_TABLE vs prm_tbl_sel_u0.
+epc_wr_u0[s]           write enable for EPC field. Gated as
+                       use_wr_u0 is.
 
-                       THE ONE GATE AND TABLE 7's PRM/ALT SELECT
-                       ARE THE SAME WRITE.
+                       THE USEFUL AND EPOCH WRITE GOES TO THE
+                       PROVIDER, the component
                        ittage_cntrl_use_update_rules.md Table 7
-                       sends the useful write to the ALT component
-                       when ittage_using_primary is 0; there is no
-                       second gate because ittage_cntrl drives
-                       prm_tbl_sel_u0 and upd_index_u0 with the
-                       component and index Table 7 selects.
-                       prm_ctr_wr_u0 is not asserted in that case
-                       -- the CTR write is alt_ctr_wr_u0 on
-                       alt_tbl_sel_u0 -- so the primary selector is
-                       free to carry the alternate for the USE and
-                       EPC write. Neither document supersedes the
-                       other. Session-072;
-                       tage_table_interfaces.md carries the same
-                       note.
+                       selects: the primary when
+                       ittage_using_primary is 1, the alternate
+                       when it is 0. ittage_cntrl raises use_wr_u0
+                       and epc_wr_u0 without a table select of their
+                       own; the table opens them with the CTR strobe
+                       of the provider, prm_ctr_wr_u0 on
+                       prm_tbl_sel_u0 or alt_ctr_wr_u0 on
+                       alt_tbl_sel_u0, which ittage_cntrl raises for
+                       the provider only. ittage_cntrl drives
+                       prm_tbl_sel_u0 from the primary and
+                       alt_tbl_sel_u0 from the alternate in every
+                       case. The address is upd_index_u0 (below).
+                       Every Table 7 write row (3-6) has a hit and a
+                       tagged provider, so the provider's CTR strobe
+                       is always raised with it.
 
 prm_tgt_wr_u0[s]       write enable for target field via the
                        primary provider. Asserted only on
@@ -444,8 +448,12 @@ alt_tbl_sel_u0[s]      alternate provider table index. Used to
                        gate alt_ctr write enable.
                        Produced by ittage_cntrl.
 
-upd_index_u0[s]        RAM address for update writes.
-                       Produced by ittage_cntrl.
+upd_index_u0[s]        RAM address for update writes. ittage_cntrl
+                       produces the primary index and the alternate
+                       index on separate buses; ittage.sv selects one
+                       for each table instance: the primary when
+                       THIS_TABLE equals prm_tbl_sel_u0[s], the
+                       alternate otherwise.
 
 alc_tbl_sel_u0[s]      table index for allocation.
                        Produced by ittage_cntrl.

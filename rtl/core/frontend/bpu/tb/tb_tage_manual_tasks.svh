@@ -10,7 +10,8 @@
 // TAGE-specific tasks for tb_tage_manual.sv.
 // Included inside module tb. References module-scope signals:
 // clk, rstn, stg_pred_val, stg_pred_inp, stg_upd_val, stg_upd_inp,
-// tage_pred_rdy_p2, tage_pred_meta_p2, tage_upd_rdy_u1, u_dut.
+// tage_pred_rdy_p2, tage_pred_meta_p2, tage_upd_rdy_u1, u_dut, and
+// tb_checks, raised before every comparison of an RTL value (BP-135).
 // ===================================================================
 
 // -------------------------------------------------------------------
@@ -1034,40 +1035,50 @@ task automatic tage_ctr_test(
   check_ctr_row("R17.2",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
-// ROWS 19.1-19.8 (BP-133, TD#18, provisional; not in
-// tage_cntrl_ctr_update_rules.md). Primary tagged (T4), alternate T0,
-// use_alt_on_na chose T0 (UP=0). T0 is the provider and steps toward
-// RT by the 2b rule of rows 13a-d; the primary steps toward RT only on
-// pred_diff with the primary right (the rows 9/10 rule). T0 at aidx is
-// the T0 written; T0 at pidx is seeded 2'b11 and must not change (the
-// tage.sv index mux picks the alt index for T0 here).
+// ROWS 19.1-19.8 (BP-133, TD#18; tage_cntrl_ctr_update_rules.md, ruled
+// session-079). Primary tagged (T4), alternate T0, use_alt_on_na chose
+// T0 (UP=0). T0 is the provider and steps toward RT by the 2b rule of
+// rows 13a-d; the primary steps toward RT only on pred_diff with the
+// primary right (the rows 9/10 rule). T0 at aidx is the T0 written;
+// T0 at pidx is seeded 2'b11 and must not change (the tage.sv index
+// mux picks the alt index for T0 here).
+// BP-135: each row is seeded in a state a prediction can produce
+// (tage_cntrl.sv pred_logic). use_alt_on_na picks the alternate only
+// when the tagged primary CTR is 011 or 100, so PCTR is 011 (pT 0) or
+// 100 (pT 1); T0's direction is its CTR MSB, so T0 is 1x when aT is 1
+// and 0x when aT is 0; PT is aT. The meta carries the same CTRs, the
+// use_alt_on_na bit and the confidence flags of T0's 3b form. BP-133
+// seeded PCTR 010 (no trigger) and, in 19.1, 19.5 and 19.8, a T0 whose
+// direction was not aT. No row saturates T0, so every row needs the
+// T0 write.
 // ROW  UP PT RT dif pT aT pCMP aCMP pACT aACT t0ACT  T0       PCTR
-// 19.1 0  1  1  1   0  1  >0   0    --   n/a  INC    01->10   2->2
-// 19.2 0  1  1  0   1  1  >0   0    --   n/a  INC    11->11   2->2
-// 19.3 0  0  0  0   0  0  >0   0    --   n/a  DEC    01->00   2->2
-// 19.4 0  0  0  1   1  0  >0   0    --   n/a  DEC    00->00   2->2
-// 19.5 0  1  0  1   0  1  >0   0    INC  n/a  DEC    01->00   2->1
-// 19.6 0  0  1  1   1  0  >0   0    INC  n/a  INC    01->10   2->3
-// 19.7 0  1  0  0   1  1  >0   0    --   n/a  DEC    10->01   2->2
-// 19.8 0  0  1  0   0  0  >0   0    --   n/a  INC    10->11   2->2
+// 19.1 0  1  1  1   0  1  >0   0    --   n/a  INC    10->11   011->011
+// 19.2 0  1  1  0   1  1  >0   0    --   n/a  INC    10->11   100->100
+// 19.3 0  0  0  0   0  0  >0   0    --   n/a  DEC    01->00   011->011
+// 19.4 0  0  0  1   1  0  >0   0    --   n/a  DEC    01->00   100->100
+// 19.5 0  1  0  1   0  1  >0   0    INC  n/a  DEC    11->10   011->010
+// 19.6 0  0  1  1   1  0  >0   0    INC  n/a  INC    00->01   100->101
+// 19.7 0  1  0  0   1  1  >0   0    --   n/a  DEC    10->01   100->100
+// 19.8 0  0  1  0   0  0  >0   0    --   n/a  INC    01->10   011->011
 // pACT INC is the strengthen of the legend: toward RT.
 // -------------------------------------------------------------
-  t0_alt_row("R19.1",1,1,0,1,2'b01,2'b10,3'b010,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.2",1,1,1,1,2'b11,2'b11,3'b010,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.3",0,0,0,0,2'b01,2'b00,3'b010,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.4",0,0,1,0,2'b00,2'b00,3'b010,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.5",1,0,0,1,2'b01,2'b00,3'b001,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.6",0,1,1,0,2'b01,2'b10,3'b011,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.7",1,0,1,1,2'b10,2'b01,3'b010,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
-  t0_alt_row("R19.8",0,1,0,0,2'b10,2'b11,3'b010,pcomp,pidx,aidx,pentry,
-             pred_meta,upd_data,errs,v);
+  //         label   PT RT pT aT PCTR    T0     T0 exp PCTR exp
+  t0_alt_row("R19.1",1, 1, 0, 1, 3'b011,2'b10,2'b11,3'b011,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.2",1, 1, 1, 1, 3'b100,2'b10,2'b11,3'b100,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.3",0, 0, 0, 0, 3'b011,2'b01,2'b00,3'b011,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.4",0, 0, 1, 0, 3'b100,2'b01,2'b00,3'b100,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.5",1, 0, 0, 1, 3'b011,2'b11,2'b10,3'b010,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.6",0, 1, 1, 0, 3'b100,2'b00,2'b01,3'b101,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.7",1, 0, 1, 1, 3'b100,2'b10,2'b01,3'b100,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
+  t0_alt_row("R19.8",0, 1, 0, 0, 3'b011,2'b01,2'b10,3'b011,pcomp,pidx,
+             aidx,pentry,pred_meta,upd_data,errs,v);
 
   // END
   stop_test(this_test,errs);
@@ -1099,10 +1110,13 @@ task automatic check_ctr_row_t0(
 endtask
 // -------------------------------------------------------------------
 // t0_alt_row: one of rows 19.1-19.8 (BP-133). Seeds the primary entry
-// at pidx, T0 at aidx (t0_init) and T0 at pidx (2'b11), sends one
-// update with UP=0, alt_comp=0 and the T0 counter in tage_alt_ctr, then
-// checks the primary CTR, T0 at aidx (t0_exp) and T0 at pidx
-// (unchanged).
+// at pidx with CTR pctr_init, T0 at aidx (t0_init) and T0 at pidx
+// (2'b11), sends one update with UP=0, alt_comp=0, the primary CTR in
+// tage_prm_ctr and the T0 counter in tage_alt_ctr, then checks the
+// primary CTR, T0 at aidx (t0_exp) and T0 at pidx (unchanged).
+// BP-135: the seed must be one a prediction can produce (see the rows
+// 19.x comment block); a row that is not stops the run before its
+// update, as a testbench error, not an RTL check.
 // -------------------------------------------------------------------
 task automatic t0_alt_row(
   input string           label,
@@ -1110,6 +1124,7 @@ task automatic t0_alt_row(
   input logic            resolved_taken,
   input logic            prm_tkn,
   input logic            alt_tkn,
+  input logic [2:0]      pctr_init,
   input logic [1:0]      t0_init,
   input logic [1:0]      t0_exp,
   input logic [2:0]      pctr_exp,
@@ -1120,24 +1135,44 @@ task automatic t0_alt_row(
   inout int              errs,
   input int              v
 );
-  tage_ram_entry_t t0e, r, pexp;
-  logic [TAGE_MAX_CTR_WIDTH-1:0] actr_save;
+  tage_ram_entry_t t0e, r, pseed, pexp;
+  tage_pred_meta_t meta_save;
+  logic [TAGE_MAX_CTR_WIDTH-1:0] t0_cnf;
 
   tb_info({"CTR ROW ", label});
-  tage_ram_write(pcomp, pidx, pentry);
+  // A state pred_logic can produce: a weak tagged primary (the
+  // use_alt_on_na trigger), pT its MSB, aT T0's MSB, PT the alternate.
+  if (!((pctr_init == 3'b011) || (pctr_init == 3'b100)) ||
+      (prm_tkn != pctr_init[2]) || (alt_tkn != t0_init[1]) ||
+      (pred_tkn != alt_tkn))
+    $fatal(1, "%s: seed is not a state a prediction produces", label);
+
+  pseed     = pentry;
+  pseed.ctr = pctr_init;
+  tage_ram_write(pcomp, pidx, pseed);
   t0e     = '0;
   t0e.ctr = TAGE_MAX_CTR_WIDTH'(t0_init);
   reset_t0_entry(aidx, t0e);
   t0e.ctr = 3'b011;
   reset_t0_entry(pidx, t0e);
 
-  actr_save          = meta.tage_alt_ctr;
-  meta.tage_alt_ctr  = TAGE_MAX_CTR_WIDTH'(t0_init);
+  // The meta pred_logic writes for this selection: the primary and T0
+  // CTRs as read, use_alt_on_na set, and the confidence flags and extd
+  // CTR of the provider, T0 in its 3b form {c[1], c[0], c[1]}.
+  meta_save               = meta;
+  t0_cnf                  = {t0_init, t0_init[1]};
+  meta.tage_prm_ctr       = pctr_init;
+  meta.tage_alt_ctr       = TAGE_MAX_CTR_WIDTH'(t0_init);
+  meta.tage_use_alt_on_na = 1'b1;
+  meta.tage_pred_strong   = (t0_cnf == 3'b000) || (t0_cnf == 3'b111);
+  meta.tage_pred_weak     = (t0_cnf == 3'b011) || (t0_cnf == 3'b100);
+  meta.tage_pred_medium   = !meta.tage_pred_strong && !meta.tage_pred_weak;
+  meta.tage_extd_ctr      = $signed({2'b00, t0_cnf, 1'b0}) - 5'sd7;
   //                   UP PT        RT              pT       aT
   set_ctr_row(meta, upd, 0, pred_tkn, resolved_taken, prm_tkn, alt_tkn,
               pcomp, 0);
   tage_update('{default: upd}, NUM_PRED_SLOTS'(1), errs);
-  meta.tage_alt_ctr  = actr_save;
+  meta                    = meta_save;
 
   pexp        = pentry;
   pexp.ctr    = pctr_exp;
@@ -1326,6 +1361,7 @@ task automatic tage_cmp_ram_entry_t0(
   inout int              errs,
   input int              v
 );
+  tb_checks++;
   if(exp.ctr !== act.ctr) begin
     $write("-E: %s : CTR mismatch, T0 idx=0x%04x",which,idx);
     $write(" exp: %02x",exp.ctr);
@@ -1350,6 +1386,7 @@ task automatic tage_cmp_ram_entry(
   input int v=0
 );
   int lerrs = 0;
+  tb_checks++;
   if(exp.tag !== act.tag) begin
     $write("-E: %s : TAG mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
     $write(" exp: %02x",exp.tag);
@@ -1361,6 +1398,7 @@ task automatic tage_cmp_ram_entry(
     $write(" act: %02x\n",act.tag);
   end
 
+  tb_checks++;
   if(exp.epc !== act.epc) begin
     $write("-E: %s : EPC mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
     $write(" exp: %02x",exp.epc);
@@ -1372,6 +1410,7 @@ task automatic tage_cmp_ram_entry(
     $write(" act: %02x\n",act.epc);
   end
 
+  tb_checks++;
   if(exp.useful !== act.useful) begin
     $write("-E: %s : USE mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
     $write(" exp: %02x",exp.useful);
@@ -1385,6 +1424,7 @@ task automatic tage_cmp_ram_entry(
     $write(" act: %02x\n",act.useful);
   end
 
+  tb_checks++;
   if(exp.ctr !== act.ctr) begin
     $write("-E: %s : CTR mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
     $write(" exp: %02x",exp.ctr);
@@ -1396,6 +1436,7 @@ task automatic tage_cmp_ram_entry(
     $write(" act: %02x\n",act.ctr);
   end
 
+  tb_checks++;
   if(exp.valid !== act.valid) begin
     $write("-E: %s : VAL mismatch, tbl %0d idx=0x%04x",which,tbl,idx);
     $write(" exp: %02x",exp.valid);
@@ -1459,6 +1500,7 @@ task automatic tage_predict(
     @(posedge clk);
     timeout++;
   end
+  tb_checks++;
   if (!(|tage_pred_rdy_p2)) begin
     tb_error("tage_predict: timeout waiting for rdy_p2");
     errs++;
@@ -1487,6 +1529,7 @@ task automatic tage_update(
     @(posedge clk);
     timeout++;
   end
+  tb_checks++;
   if (!(|(tage_upd_rdy_u1 & val))) begin
     tb_error("tage_update: timeout waiting for upd_rdy_u1");
     errs++;
@@ -1508,74 +1551,92 @@ task automatic tage_check_pred_meta(
 );
   for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
     if (!mask[s]) continue;
+    tb_checks++;
     if (got[s].tage_prm_idx !== exp[s].tage_prm_idx) begin
       tb_error($sformatf("%s s%0d: prm_idx", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alt_idx !== exp[s].tage_alt_idx) begin
       tb_error($sformatf("%s s%0d: alt_idx", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_prm_comp !== exp[s].tage_prm_comp) begin
       tb_error($sformatf("%s s%0d: prm_comp", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alt_comp !== exp[s].tage_alt_comp) begin
       tb_error($sformatf("%s s%0d: alt_comp", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_prm_useful !== exp[s].tage_prm_useful) begin
       tb_error($sformatf("%s s%0d: prm_useful", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alt_useful !== exp[s].tage_alt_useful) begin
       tb_error($sformatf("%s s%0d: alt_useful", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_prm_ctr !== exp[s].tage_prm_ctr) begin
       tb_error($sformatf("%s s%0d: prm_ctr", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alt_ctr !== exp[s].tage_alt_ctr) begin
       tb_error($sformatf("%s s%0d: alt_ctr", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alc_comp !== exp[s].tage_alc_comp) begin
       tb_error($sformatf("%s s%0d: alc_comp", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alc_idx !== exp[s].tage_alc_idx) begin
       tb_error($sformatf("%s s%0d: alc_idx", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alc_tag !== exp[s].tage_alc_tag) begin
       tb_error($sformatf("%s s%0d: alc_tag", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_prm_tkn !== exp[s].tage_prm_tkn) begin
       tb_error($sformatf("%s s%0d: prm_tkn", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_alt_tkn !== exp[s].tage_alt_tkn) begin
       tb_error($sformatf("%s s%0d: alt_tkn", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_pred_strong !== exp[s].tage_pred_strong) begin
       tb_error($sformatf("%s s%0d: pred_strong", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_use_alt_on_na !== exp[s].tage_use_alt_on_na) begin
       tb_error($sformatf("%s s%0d: use_alt_on_na", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_using_primary !== exp[s].tage_using_primary) begin
       tb_error($sformatf("%s s%0d: using_primary", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].tage_pred_tkn !== exp[s].tage_pred_tkn) begin
       tb_error($sformatf("%s s%0d: pred_tkn", label, s));
       errs++;
     end
+    tb_checks++;
     if (got[s].branch_id !== exp[s].branch_id) begin
       tb_error($sformatf("%s s%0d: branch_id", label, s));
       errs++;
@@ -1628,22 +1689,27 @@ task automatic tage_round_trip_sanity(
   // Step 3: read back and verify every field.
   // Do not proceed past this step if any field mismatches.
   tage_ram_read(TEST_TBL, TEST_IDX, rd_entry);
+  tb_checks++;
   if (rd_entry.valid !== wr_entry.valid) begin
     tb_error({this_test,": valid mismatch"});
     errs++;
   end
+  tb_checks++;
   if (rd_entry.ctr !== wr_entry.ctr) begin
     tb_error({this_test,": ctr mismatch"});
     errs++;
   end
+  tb_checks++;
   if (rd_entry.useful !== wr_entry.useful) begin
     tb_error({this_test,": useful mismatch"});
     errs++;
   end
+  tb_checks++;
   if (rd_entry.epc !== wr_entry.epc) begin
     tb_error({this_test,": epc mismatch"});
     errs++;
   end
+  tb_checks++;
   if (rd_entry.tag !== wr_entry.tag) begin
     tb_error({this_test,": tag mismatch"});
     errs++;
@@ -1665,6 +1731,7 @@ task automatic tage_round_trip_sanity(
   tage_predict(pred_inp, NUM_PRED_SLOTS'(1), meta1, rdy, errs);
 
   // Step 5: verify rdy[0] asserted.
+  tb_checks++;
   if (!rdy[0]) begin
     tb_error("round_trip_sanity: pred1 rdy[0] not asserted");
     errs++;
@@ -1679,6 +1746,7 @@ task automatic tage_round_trip_sanity(
 
   // Steps 8-9: second prediction and verify rdy.
   tage_predict(pred_inp, NUM_PRED_SLOTS'(1), meta2, rdy, errs);
+  tb_checks++;
   if (!rdy[0]) begin
     tb_error("round_trip_sanity: pred2 rdy[0] not asserted");
     errs++;

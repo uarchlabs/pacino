@@ -6,7 +6,7 @@
  FILE:    bp_arb_spec.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 ## 0. Caveat
@@ -364,7 +364,9 @@ TESTED as replaced: tb_tage TC-54 (arb_starve_tst) and the
 concurrent tests, and tb_bp_cluster group H rewritten (H1 no grant,
 H2 prediction granted, H2b sc_ready guard, H3 update alone granted,
 H4 prediction wins every cycle and the update is granted after the
-one-cycle hold). The concurrent pred+upd residual of TD#73 is covered
+one-cycle hold). sim_bp_cluster_init reaches H2b from the ports, with
+no fast-init strap; sim_bp_cluster reaches it by clearing the strap
+(BP-135). The concurrent pred+upd residual of TD#73 is covered
 for TAGE by tb_tage's concurrent tests; BP-121 does not say whether
 ITTAGE has its own.
 
@@ -1003,3 +1005,6 @@ task file, not here.
 
   2026-10-12  session-078, TD#97 closed (Jeff). 8.2 and 11.D: the
               shared upstream PQ is not built and not needed.
+
+  2026-10-14  session-080, after BP-135. 4.5: sim_bp_cluster_init
+              reaches H2b from the ports.
