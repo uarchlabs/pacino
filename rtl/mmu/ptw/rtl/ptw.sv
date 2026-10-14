@@ -150,6 +150,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module ptw #(
   parameter int PMP_ENTRIES  = 16,                      // MMU-11
@@ -198,20 +199,11 @@ module ptw #(
   input  logic                     mem_ptw_rsp_err,
 
   // ---- CSR input group, MMU-24a, MMU-24b, MMU-11a --------------------
-  input  logic [3:0]               csr_ptw_satp_mode,
-  input  logic [PPN_WIDTH-1:0]     csr_ptw_satp_ppn,
-  input  logic [3:0]               csr_ptw_vsatp_mode,
-  input  logic [GPA_WIDTH-13:0]    csr_ptw_vsatp_ppn,
-  input  logic [3:0]               csr_ptw_hgatp_mode,
-  input  logic [PPN_WIDTH-1:0]     csr_ptw_hgatp_ppn,
-  input  logic                     csr_ptw_menvcfg_adue,
-  input  logic                     csr_ptw_henvcfg_adue,
-  input  logic                     csr_ptw_menvcfg_pbmte,
-  input  logic                     csr_ptw_henvcfg_pbmte,
-  input  logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][7:0]
-                                   csr_ptw_pmpcfg,
-  input  logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][PA_WIDTH-3:0]
-                                   csr_ptw_pmpaddr
+  // csr_pkg ptw_csr_t, the whole group (csr_decisions.md CSR-6;
+  // SYS-001): the satp, vsatp and hgatp MODE and PPN, the menvcfg and
+  // henvcfg ADUE and PBMTE, and the PMP registers. Entries 0 to
+  // PMP_ENTRIES-1 of its pmpcfg and pmpaddr go to the checker.
+  input  ptw_csr_t                 ptw_csr
 );
 
   // -----------------------------------------------------------------
@@ -221,6 +213,13 @@ module ptw #(
   localparam int GPW  = GPA_WIDTH - 12;       // 29, a guest page
   localparam int PTEP = 44;                   // PTE PPN field, 53:10
   localparam int FGW  = FAULT_GPA_WIDTH;      // 56, a faulting GPA
+  // The checker's entries, taken from ptw_csr (SYS-001).
+  localparam int PMP_N = (PMP_ENTRIES > 0) ? PMP_ENTRIES : 1;
+
+  initial begin
+    if (PMP_ENTRIES > CSR_PMP_ENTRIES)
+      $error("ptw: PMP_ENTRIES above the ptw_csr_t entries");
+  end
 
   // l2t_itlb_status, IL-4.
   localparam logic [1:0] ST_HIT   = 2'b00;
@@ -400,8 +399,8 @@ module ptw #(
     .chk_acc    ((r_m_op == OP_CAS) ? ACC_W : ACC_R),
     .chk_priv   (PRV_S),
     .chk_pbmt   (2'b00),
-    .pmp_cfg    (csr_ptw_pmpcfg),
-    .pmp_addr   (csr_ptw_pmpaddr),
+    .pmp_cfg    (ptw_csr.pmpcfg[PMP_N-1:0]),
+    .pmp_addr   (ptw_csr.pmpaddr[PMP_N-1:0]),
     .chk_pmp_ok (w_chk_pmp_ok),
     .chk_pma    (w_chk_pma),
     .chk_fault  (w_chk_fault)
@@ -745,19 +744,19 @@ module ptw #(
             r_tag       <= itlb_l2t_tag;
             r_acc       <= itlb_l2t_acc;
             r_priv      <= itlb_l2t_priv;
-            r_satp_ppn  <= csr_ptw_satp_ppn;
-            r_vsatp_ppn <= csr_ptw_vsatp_ppn;
-            r_hgatp_ppn <= csr_ptw_hgatp_ppn;
-            r_s_on      <= itlb_l2t_v ? (csr_ptw_vsatp_mode != MODE_BARE)
-                                      : (csr_ptw_satp_mode  != MODE_BARE);
-            r_g_on      <= itlb_l2t_v && (csr_ptw_hgatp_mode != MODE_BARE);
+            r_satp_ppn  <= ptw_csr.satp_ppn;
+            r_vsatp_ppn <= ptw_csr.vsatp_ppn;
+            r_hgatp_ppn <= ptw_csr.hgatp_ppn;
+            r_s_on      <= itlb_l2t_v ? (ptw_csr.vsatp_mode != MODE_BARE)
+                                      : (ptw_csr.satp_mode  != MODE_BARE);
+            r_g_on      <= itlb_l2t_v && (ptw_csr.hgatp_mode != MODE_BARE);
             // MMU-7, MMU-7a; the PBMTE pair the same way.
-            r_s_adue    <= itlb_l2t_v ? csr_ptw_henvcfg_adue
-                                      : csr_ptw_menvcfg_adue;
-            r_g_adue    <= csr_ptw_menvcfg_adue;
-            r_s_pbmte   <= itlb_l2t_v ? csr_ptw_henvcfg_pbmte
-                                      : csr_ptw_menvcfg_pbmte;
-            r_g_pbmte   <= csr_ptw_menvcfg_pbmte;
+            r_s_adue    <= itlb_l2t_v ? ptw_csr.henvcfg_adue
+                                      : ptw_csr.menvcfg_adue;
+            r_g_adue    <= ptw_csr.menvcfg_adue;
+            r_s_pbmte   <= itlb_l2t_v ? ptw_csr.henvcfg_pbmte
+                                      : ptw_csr.menvcfg_pbmte;
+            r_g_pbmte   <= ptw_csr.menvcfg_pbmte;
             r_st        <= S_START;
           end
         end

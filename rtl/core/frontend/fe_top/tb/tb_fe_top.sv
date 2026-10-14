@@ -120,6 +120,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 import decode_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -192,23 +193,10 @@ module tb;
   logic                        l1i_mem_d_denied;
   logic [255:0]                l1i_mem_d_data;
   logic                        l1i_mem_d_corrupt;
-  logic                        csr_itlb_v;
-  logic [1:0]                  csr_itlb_priv;
-  logic [3:0]                  csr_itlb_satp_mode;
-  logic [ASID_WIDTH-1:0]       csr_itlb_satp_asid;
-  logic [3:0]                  csr_itlb_vsatp_mode;
-  logic [ASID_WIDTH-1:0]       csr_itlb_vsatp_asid;
-  logic [3:0]                  csr_itlb_hgatp_mode;
-  logic [VMID_WIDTH-1:0]       csr_itlb_hgatp_vmid;
-  logic [15:0][7:0]            csr_itlb_pmpcfg;
-  logic [15:0][PA_WIDTH-3:0]   csr_itlb_pmpaddr;
-  logic                        sc_enable;
-  logic                        ftb_fastpath_en;
-  logic                        tage_enable_aging;
-  logic [31:0]                 tage_aging_interval;
-  logic                        ittage_enable_aging;
-  logic [31:0]                 ittage_aging_interval;
-  ext_enable_t                 ext_enable;
+  // The CSR groups (SYS-001, csr_decisions.md CSR-2), driven only by
+  // csr_sync() from the csr_tb_pkg pack functions.
+  fe_csr_t                     fe_csr;
+  fe_cfg_t                     fe_cfg;
   logic                        bkend_itlb_inv_val;
   logic [1:0]                  bkend_itlb_inv_op;
   logic                        bkend_itlb_inv_rs1_nz;
@@ -235,25 +223,12 @@ module tb;
   logic                        mem_ptw_rsp_val;
   logic [63:0]                 mem_ptw_rsp_data;
   logic                        mem_ptw_rsp_err;
-  logic [3:0]                  csr_ptw_satp_mode;
-  logic [PPN_WIDTH-1:0]        csr_ptw_satp_ppn;
-  logic [3:0]                  csr_ptw_vsatp_mode;
-  logic [GPA_WIDTH-13:0]       csr_ptw_vsatp_ppn;
-  logic [3:0]                  csr_ptw_hgatp_mode;
-  logic [PPN_WIDTH-1:0]        csr_ptw_hgatp_ppn;
-  logic                        csr_ptw_menvcfg_adue;
-  logic                        csr_ptw_henvcfg_adue;
-  logic                        csr_ptw_menvcfg_pbmte;
-  logic                        csr_ptw_henvcfg_pbmte;
-  logic [15:0][7:0]            csr_ptw_pmpcfg;
-  logic [15:0][PA_WIDTH-3:0]   csr_ptw_pmpaddr;
-
-  ptw u_ptw (.*);
+  ptw_csr_t                    ptw_csr;
 
   // The walker reads the same PMP registers the ITLB does: one CSR
-  // file, two inputs (MMU-11a, MMU-24a).
-  assign csr_ptw_pmpcfg  = csr_itlb_pmpcfg;
-  assign csr_ptw_pmpaddr = csr_itlb_pmpaddr;
+  // file, two inputs (MMU-11a, MMU-24a). Since SYS-001 both groups are
+  // packed from the one csr_tb_pkg shadow.
+  ptw u_ptw (.*);
 
   // ---- bookkeeping ----------------------------------------------------
   int    pass_cnt;
@@ -560,7 +535,7 @@ module tb;
 
     // BP-124. sret to tgt at privilege p (sepc and sstatus.SPP as the
     // program needs them; no register file is modelled). The backend
-    // takes it like a trap: at retirement it sets csr_itlb_priv and
+    // takes it like a trap: at retirement it sets the privilege (csr_priv) and
     // redirects to tgt. The front end sees a non-CFI and runs on
     // sequentially until then.
     task sret_to(input logic [VA_WIDTH-1:0] tgt, input logic [1:0] p);
@@ -2446,7 +2421,7 @@ module tb;
             n_trap++;
             stop = 1'b1;
             // BP-124: a trap taken to S (pt_upriv).
-            if (W.ex[ep].npriv >= 0) csr_itlb_priv = 2'(W.ex[ep].npriv);
+            if (W.ex[ep].npriv >= 0) csr_priv(2'(W.ex[ep].npriv));
             redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
             ep++;
             continue;
@@ -2462,7 +2437,7 @@ module tb;
             n_trap++;
             stop = 1'b1;
             // BP-124: an ecall to S or an sret to U (pt_upriv).
-            if (W.ex[ep].npriv >= 0) csr_itlb_priv = 2'(W.ex[ep].npriv);
+            if (W.ex[ep].npriv >= 0) csr_priv(2'(W.ex[ep].npriv));
             redirect(s.ftq_idx, s.pos, W.ex[ep].target, 1'b1, RC_TRAP);
             ep++;
             continue;
@@ -2480,10 +2455,9 @@ module tb;
           // (l1i_ifu_interfaces.md 11, A1).
           if (W.ex[ep].maint == 3) begin
             // A CSR write: the new envcfg bits, then the restart.
-            csr_ptw_menvcfg_adue  = W.act_madue[W.ex[ep].p0];
-            csr_ptw_henvcfg_adue  = W.act_hadue[W.ex[ep].p0];
-            csr_ptw_menvcfg_pbmte = W.act_mpbmte[W.ex[ep].p0];
-            csr_ptw_henvcfg_pbmte = W.act_hpbmte[W.ex[ep].p0];
+            csr_envcfg(W.act_madue[W.ex[ep].p0], W.act_hadue[W.ex[ep].p0],
+                       W.act_mpbmte[W.ex[ep].p0],
+                       W.act_hpbmte[W.ex[ep].p0]);
             n_csrw++;
             stop = 1'b1;
             redirect(s.ftq_idx, s.pos, W.ex[ep].pc + VA_WIDTH'(4), 1'b1,
@@ -2615,6 +2589,119 @@ module tb;
   // =================================================================
   // Scaffolding.
   // =================================================================
+  // ---- the CSR groups (SYS-001, csr_decisions.md CSR-2) -----------------
+  // Every member of fe_cfg, fe_csr and ptw_csr comes from csr_tb_pkg: a
+  // change is a csr_write (or set_priv, set_v), under the CSR-5 write
+  // rules, and csr_sync drives the three groups from the pack functions
+  // in the same time step, as the direct drive it replaced did. Every
+  // helper below ends in csr_sync.
+  task automatic csr_sync();
+    fe_cfg  = csr_tb_pkg::pack_fe_cfg();
+    fe_csr  = csr_tb_pkg::pack_fe_csr();
+    ptw_csr = csr_tb_pkg::pack_ptw_csr();
+  endtask
+
+  task automatic csr_priv(input logic [1:0] p);
+    csr_tb_pkg::set_priv(p);
+    csr_sync();
+  endtask
+
+  task automatic csr_wr_satp(input logic [3:0] mode,
+                             input logic [ASID_WIDTH-1:0] asid,
+                             input logic [43:0] ppn);
+    csr_tb_pkg::csr_write(CSR_SATP_ADDR, {mode, 16'(asid), ppn});
+    csr_sync();
+  endtask
+
+  task automatic csr_wr_vsatp(input logic [3:0] mode,
+                              input logic [ASID_WIDTH-1:0] asid,
+                              input logic [43:0] ppn);
+    csr_tb_pkg::csr_write(CSR_VSATP_ADDR, {mode, 16'(asid), ppn});
+    csr_sync();
+  endtask
+
+  task automatic csr_wr_hgatp(input logic [3:0] mode,
+                              input logic [VMID_WIDTH-1:0] vmid,
+                              input logic [43:0] ppn);
+    csr_tb_pkg::csr_write(CSR_HGATP_ADDR, {mode, 2'b00, 14'(vmid), ppn});
+    csr_sync();
+  endtask
+
+  // MODE alone, the other fields as they read.
+  task automatic csr_satp_mode(input logic [3:0] mode);
+    satp_t r;
+    r      = satp_t'(csr_tb_pkg::csr_read(CSR_SATP_ADDR));
+    r.mode = mode;
+    csr_tb_pkg::csr_write(CSR_SATP_ADDR, 64'(r));
+    csr_sync();
+  endtask
+
+  task automatic csr_vsatp_mode(input logic [3:0] mode);
+    vsatp_t r;
+    r      = vsatp_t'(csr_tb_pkg::csr_read(CSR_VSATP_ADDR));
+    r.mode = mode;
+    csr_tb_pkg::csr_write(CSR_VSATP_ADDR, 64'(r));
+    csr_sync();
+  endtask
+
+  task automatic csr_hgatp_mode_vmid(input logic [3:0] mode,
+                                     input logic [VMID_WIDTH-1:0] vmid);
+    hgatp_t r;
+    r      = hgatp_t'(csr_tb_pkg::csr_read(CSR_HGATP_ADDR));
+    r.mode = mode;
+    r.vmid = 14'(vmid);
+    csr_tb_pkg::csr_write(CSR_HGATP_ADDR, 64'(r));
+    csr_sync();
+  endtask
+
+  // menvcfg.ADUE or henvcfg.ADUE alone.
+  task automatic csr_menv_adue(input logic b);
+    menvcfg_t r;
+    r      = menvcfg_t'(csr_tb_pkg::csr_read(CSR_MENVCFG_ADDR));
+    r.adue = b;
+    csr_tb_pkg::csr_write(CSR_MENVCFG_ADDR, 64'(r));
+    csr_sync();
+  endtask
+
+  task automatic csr_henv_adue(input logic b);
+    henvcfg_t r;
+    r      = henvcfg_t'(csr_tb_pkg::csr_read(CSR_HENVCFG_ADDR));
+    r.adue = b;
+    csr_tb_pkg::csr_write(CSR_HENVCFG_ADDR, 64'(r));
+    csr_sync();
+  endtask
+
+  // The program's envcfg CSR write (W.csr_env): menvcfg, then henvcfg,
+  // so henvcfg.ADUE reads under the new menvcfg.ADUE (CSR-5).
+  task automatic csr_envcfg(input logic madue, input logic hadue,
+                            input logic mpbmte, input logic hpbmte);
+    menvcfg_t m;
+    henvcfg_t h;
+    m       = '0;
+    m.adue  = madue;
+    m.pbmte = mpbmte;
+    h       = '0;
+    h.adue  = hadue;
+    h.pbmte = hpbmte;
+    csr_tb_pkg::csr_write(CSR_MENVCFG_ADDR, 64'(m));
+    csr_tb_pkg::csr_write(CSR_HENVCFG_ADDR, 64'(h));
+    csr_sync();
+  endtask
+
+  // PMP entry k: its pmpaddr, then its pmpcfg byte by read-modify-write
+  // of pmpcfg0 or pmpcfg2.
+  task automatic csr_pmp(input int k, input logic [7:0] cfg,
+                         input logic [63:0] addr);
+    logic [11:0] ca;
+    pmpcfg_t     c;
+    ca = (k < 8) ? CSR_PMPCFG0_ADDR : CSR_PMPCFG2_ADDR;
+    csr_tb_pkg::csr_write(CSR_PMPADDR0_ADDR + 12'(k), addr);
+    c            = pmpcfg_t'(csr_tb_pkg::csr_read(ca));
+    c.ent[k % 8] = pmpcfg_ent_t'(cfg);
+    csr_tb_pkg::csr_write(ca, 64'(c));
+    csr_sync();
+  endtask
+
   task automatic reset_all(input logic use_sv39);
     rstn         = 1'b0;
     run_be       = 1'b0;
@@ -2765,40 +2852,20 @@ module tb;
     W.pt_next      = PA_WIDTH'('h0_8F00_1000);
     for (int i = 0; i < 512; i++) W.wr64(W.satp_root + PA_WIDTH'(8 * i), '0);
     for (int i = 0; i < FTQ_DEPTH; i++) fstart[i] = '0;
-    // csr. Bare runs in M-mode; Sv39 runs in S-mode with ASID 1. PMP
-    // entry 0 is NAPOT over all of memory with R, W and X, so S-mode
-    // fetch is not denied by the no-match rule.
-    csr_itlb_v          = 1'b0;
-    csr_itlb_priv       = use_sv39 ? 2'd1 : 2'd3;
-    csr_itlb_satp_mode  = use_sv39 ? 4'd8 : 4'd0;
-    csr_itlb_satp_asid  = use_sv39 ? ASID_WIDTH'(1) : '0;
-    csr_itlb_vsatp_mode = '0;
-    csr_itlb_vsatp_asid = '0;
-    csr_itlb_hgatp_mode = '0;
-    csr_itlb_hgatp_vmid = '0;
-    csr_itlb_pmpcfg     = '0;
-    csr_itlb_pmpaddr    = '0;
-    csr_itlb_pmpcfg[0]  = 8'h1F;
-    csr_itlb_pmpaddr[0] = '1;
-    // The walker's CSR group (MMU-24a), BP-123: the same regime.
-    csr_ptw_satp_mode     = csr_itlb_satp_mode;
-    csr_ptw_satp_ppn      = PPN_WIDTH'(W.satp_root >> 12);
-    csr_ptw_vsatp_mode    = '0;
-    csr_ptw_vsatp_ppn     = '0;
-    csr_ptw_hgatp_mode    = '0;
-    csr_ptw_hgatp_ppn     = '0;
-    csr_ptw_menvcfg_adue  = 1'b0;
-    csr_ptw_henvcfg_adue  = 1'b0;
-    csr_ptw_menvcfg_pbmte = 1'b1;
-    csr_ptw_henvcfg_pbmte = 1'b1;
-    // config
-    sc_enable             = 1'b1;
-    ftb_fastpath_en       = 1'b0;
-    tage_enable_aging     = 1'b0;
-    tage_aging_interval   = '0;
-    ittage_enable_aging   = 1'b0;
-    ittage_aging_interval = '0;
-    ext_enable            = RVA23_ENABLE;
+    // csr (SYS-001, csr_tb_pkg). Bare runs in M-mode; Sv39 runs in
+    // S-mode with ASID 1. csr_reset gives the rest, the csr_pkg reset
+    // values (CSR-7), which are this testbench's settings: V 0, vsatp
+    // and hgatp 0, PMP entry 0 NAPOT over all of memory with R, W and
+    // X (so S-mode fetch is not denied by the no-match rule) and every
+    // other entry OFF, menvcfg and henvcfg PBMTE 1 and ADUE 0, and the
+    // config group: sc_enable 1, the FTB fast path and both agings
+    // off, intervals 0, ext_enable RVA23_ENABLE. The walker's group
+    // (MMU-24a, BP-123) is packed from the same CSRs.
+    csr_tb_pkg::csr_reset();
+    csr_tb_pkg::set_priv(use_sv39 ? CSR_PRV_S : CSR_PRV_M);
+    csr_wr_satp(use_sv39 ? CSR_SATP_MODE_SV39 : CSR_SATP_MODE_BARE,
+                use_sv39 ? ASID_WIDTH'(1) : '0,
+                44'(W.satp_root >> 12));
     // maintenance
     bkend_itlb_inv_val    = 1'b0;
     bkend_itlb_inv_op     = '0;
@@ -2819,18 +2886,13 @@ module tb;
     for (int i = 0; i < 2048; i++) W.wr64(W.hg_root + PA_WIDTH'(8 * i), '0);
     W.gpt_next = GPA_WIDTH'('h0_C000_0000);
     W.vs_root  = W.vs_alloc();
-    csr_itlb_v            = 1'b1;
-    csr_itlb_priv         = 2'd1;
-    csr_itlb_satp_mode    = 4'd0;
-    csr_itlb_vsatp_mode   = 4'd8;
-    csr_itlb_vsatp_asid   = ASID_WIDTH'(1);
-    csr_itlb_hgatp_mode   = 4'd8;
-    csr_itlb_hgatp_vmid   = VMID_WIDTH'(3);
-    csr_ptw_satp_mode     = 4'd0;
-    csr_ptw_vsatp_mode    = 4'd8;
-    csr_ptw_vsatp_ppn     = (GPA_WIDTH-12)'(W.vs_root >> 12);
-    csr_ptw_hgatp_mode    = 4'd8;
-    csr_ptw_hgatp_ppn     = PPN_WIDTH'(W.hg_root >> 12);
+    csr_tb_pkg::set_v(1'b1);
+    csr_tb_pkg::set_priv(CSR_PRV_S);
+    csr_satp_mode(CSR_SATP_MODE_BARE);
+    csr_wr_vsatp(CSR_SATP_MODE_SV39, ASID_WIDTH'(1),
+                 44'(W.vs_root >> 12));
+    csr_wr_hgatp(CSR_HGATP_MODE_SV39X4, VMID_WIDTH'(3),
+                 44'(W.hg_root >> 12));
     W.h_map4k(RESET_VECTOR, GPA_WIDTH'(RESET_VECTOR), PA_WIDTH'(RESET_VECTOR));
   endtask
 
@@ -2838,16 +2900,14 @@ module tb;
   // permission bits given (R 1, W 2, X 4). Lower entries win.
   task automatic pmp_page(input int k, input logic [PA_WIDTH-1:0] pa,
                           input logic [2:0] rwx);
-    csr_itlb_pmpcfg[k]  = {5'b00011, rwx};           // A = NAPOT
-    csr_itlb_pmpaddr[k] = (PA_WIDTH-2)'(pa >> 2) | (PA_WIDTH-2)'('h1FF);
+    csr_pmp(k, {5'b00011, rwx},                      // A = NAPOT
+            64'((PA_WIDTH-2)'(pa >> 2) | (PA_WIDTH-2)'('h1FF)));
   endtask
 
   // The last PMP entry an S-mode fetch and walk may use: everything.
   task automatic pmp_all(input int k);
-    csr_itlb_pmpcfg[0]  = 8'h00;
-    csr_itlb_pmpaddr[0] = '0;
-    csr_itlb_pmpcfg[k]  = 8'h1F;
-    csr_itlb_pmpaddr[k] = '1;
+    csr_pmp(0, 8'h00, 64'h0);
+    csr_pmp(k, 8'h1F, 64'(pmpaddr_imp_t'('1)));
   endtask
 
   task automatic release_reset();
@@ -4177,7 +4237,7 @@ module tb;
     tname = "pt_faults_s";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    csr_ptw_menvcfg_adue = 1'b1;
+    csr_menv_adue(1'b1);
     pmp_all(2);
     map_ch();
     // 0 cause 12: nothing mapped.
@@ -4235,8 +4295,8 @@ module tb;
     $display("-- %s --", tname);
     reset_all(1'b1);
     set_h2();
-    csr_ptw_menvcfg_adue = 1'b1;
-    csr_ptw_henvcfg_adue = 1'b1;
+    csr_menv_adue(1'b1);
+    csr_henv_adue(1'b1);
     pmp_all(2);
     map_ch();
     // 0 kind 00: the final GPA is not mapped by the G-stage.
@@ -4611,8 +4671,8 @@ module tb;
     $display("-- %s --", tname);
     reset_all(1'b1);
     set_h2();
-    csr_ptw_menvcfg_adue = 1'b1;
-    csr_ptw_henvcfg_adue = 1'b1;
+    csr_menv_adue(1'b1);
+    csr_henv_adue(1'b1);
     map_ch();
     // 1 (h 1, m 1): the VS update writes through the G-stage and sets
     // the G-stage D of the VS table page (MMU-8a), then executes.
@@ -4638,8 +4698,13 @@ module tb;
                 FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(2)[20:12])),
                 2'b10, hnd(2));
     W.mixed(1);
-    // 3 (h 1, m 0): the VS-stage is Svadu, the G-stage Svade: the G D
-    // the update needs faults, kind 10.
+    // 3 (h 1 written, m 0). SYS-001: henvcfg.ADUE reads 0 while
+    // menvcfg.ADUE is 0 (csr_decisions.md CSR-5), so both stages are
+    // Svade and the VS leaf's clear A is a page fault, 12. Until SYS-001
+    // the walker was given henvcfg.ADUE 1 here (a VS-stage Svadu over a
+    // G-stage Svade, which no CSR write can produce) and the case
+    // expected the G-stage D fault of the VS update, kind 10. The G leaf
+    // of the VS table page is still written with D clear.
     W.csr_env(1'b0, 1'b1, 1'b1, 1'b1);
     W.mixed(1);
     g = GPA_WIDTH'('h0_2400_0000);
@@ -4649,9 +4714,7 @@ module tb;
     tg = vs_l0_gpa(tgt(3));
     W.wr64(W.g_slot(tg[GPA_WIDTH-1:12], 0),
            W.mk_pte(44'(W.g2s(tg) >> 12), 8'h5F, 2'b00, 1'b0));       // D clear
-    W.jr_gfault(tgt(3),
-                FAULT_GPA_WIDTH'(tg + GPA_WIDTH'(8 * tgt(3)[20:12])),
-                2'b10, hnd(3));
+    W.jr_fault(tgt(3), IFU_FAULT_PAGE, hnd(3));
     W.mixed(1);
     // 4, 5 (h 0, m 1): the VS-stage is Svade, the G-stage Svadu.
     W.csr_env(1'b1, 1'b0, 1'b1, 1'b1);
@@ -4826,8 +4889,7 @@ module tb;
     $display("-- %s --", tname);
     reset_all(1'b1);
     set_h2();
-    csr_itlb_vsatp_mode = 4'd0;
-    csr_ptw_vsatp_mode  = 4'd0;
+    csr_vsatp_mode(CSR_SATP_MODE_BARE);
     W.vmap.delete();
 
     W.g_map(RESET_VECTOR[VA_WIDTH-1:12], PA_WIDTH'(RESET_VECTOR),
@@ -4869,17 +4931,13 @@ module tb;
     W.h2     = 1'b1;
     W.g_bare = 1'b1;
     W.vs_root = W.vs_alloc();
-    csr_itlb_v            = 1'b1;
-    csr_itlb_priv         = 2'd1;
-    csr_itlb_satp_mode    = 4'd0;
-    csr_itlb_vsatp_mode   = 4'd8;
-    csr_itlb_vsatp_asid   = ASID_WIDTH'(1);
-    csr_itlb_hgatp_mode   = 4'd0;
-    csr_itlb_hgatp_vmid   = VMID_WIDTH'(3);
-    csr_ptw_satp_mode     = 4'd0;
-    csr_ptw_vsatp_mode    = 4'd8;
-    csr_ptw_vsatp_ppn     = (GPA_WIDTH-12)'(W.vs_root >> 12);
-    csr_ptw_hgatp_mode    = 4'd0;
+    csr_tb_pkg::set_v(1'b1);
+    csr_tb_pkg::set_priv(CSR_PRV_S);
+    csr_satp_mode(CSR_SATP_MODE_BARE);
+    csr_wr_vsatp(CSR_SATP_MODE_SV39, ASID_WIDTH'(1),
+                 44'(W.vs_root >> 12));
+    // hgatp Bare with VMID 3; its PPN is left as it was (0).
+    csr_hgatp_mode_vmid(CSR_HGATP_MODE_BARE, VMID_WIDTH'(3));
 
     W.wr64(W.vs_slot(RESET_VECTOR, 0),
            W.mk_pte(44'(RESET_VECTOR >> 12), PTE_LEAF, 2'b00, 1'b0));
@@ -4936,7 +4994,7 @@ module tb;
     tname = "pt_upriv";
     $display("-- %s --", tname);
     reset_all(1'b1);
-    csr_ptw_menvcfg_adue = 1'b1;                     // Svadu
+    csr_menv_adue(1'b1);                             // Svadu
     map_ch();
     W.wr64(W.s_slot(PC_U, 0), W.mk_pte(44'(PA_U >> 12), PTE_LEAF | 8'h10,
                                        2'b00, 1'b0));

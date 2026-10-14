@@ -14,6 +14,7 @@
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -32,8 +33,21 @@ module tb;
   logic [NPS-1:0]        ittage_upd_rdy_u1;
   logic                  ittage_pq_not_full;
   logic [NPS-1:0]        ittage_uq_not_full;
-  logic                  ittage_enable_aging;
-  logic [31:0]           ittage_aging_interval;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_ittage_enable_aging(input logic v);
+    csr_tb_pkg::set_ittage_enable_aging(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_ittage_aging_interval(input logic [31:0] v);
+    csr_tb_pkg::set_ittage_aging_interval(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
   bp_folded_hist_t       folded_hist;
   logic                  ittage_rdy;
 
@@ -52,8 +66,8 @@ module tb;
     .ittage_upd_rdy_u1    (ittage_upd_rdy_u1),
     .ittage_pq_not_full   (ittage_pq_not_full),
     .ittage_uq_not_full   (ittage_uq_not_full),
-    .ittage_enable_aging  (ittage_enable_aging),
-    .ittage_aging_interval(ittage_aging_interval),
+    .ittage_enable_aging  (fe_cfg.ittage_enable_aging),
+    .ittage_aging_interval(fe_cfg.ittage_aging_interval),
     .folded_hist          (folded_hist),
     .ittage_rdy           (ittage_rdy)
   );
@@ -130,8 +144,9 @@ module tb;
   task automatic clr();
     ittage_pred_val_p0    = '0;
     ittage_upd_val_u0     = '0;
-    ittage_enable_aging   = 1'b0;
-    ittage_aging_interval = 32'hFFFF_FFFF;
+    csr_tb_pkg::csr_reset();
+    cfg_ittage_enable_aging(1'b0);
+    cfg_ittage_aging_interval(32'hFFFF_FFFF);
     folded_hist           = '0;
     for (int s = 0; s < NPS; s++) begin
       ittage_pred_inp_p0[s] = '0;

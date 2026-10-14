@@ -75,6 +75,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -199,12 +200,37 @@ module tb;
   logic [GHR_WIDTH-1:0]      ghr_buf;
   logic [PHR_WIDTH-1:0]      phr_buf;
 
-  logic        tage_enable_aging;
-  logic [31:0] tage_aging_interval;
-  logic        ittage_enable_aging;
-  logic [31:0] ittage_aging_interval;
-  logic        sc_enable;
-  logic        ftb_fastpath_en;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_tage_enable_aging(input logic v);
+    csr_tb_pkg::set_tage_enable_aging(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_tage_aging_interval(input logic [31:0] v);
+    csr_tb_pkg::set_tage_aging_interval(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_ittage_enable_aging(input logic v);
+    csr_tb_pkg::set_ittage_enable_aging(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_ittage_aging_interval(input logic [31:0] v);
+    csr_tb_pkg::set_ittage_aging_interval(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_sc_enable(input logic v);
+    csr_tb_pkg::set_sc_enable(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_ftb_fastpath_en(input logic v);
+    csr_tb_pkg::set_ftb_fastpath_en(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
 
   logic                      tage_rdy;
   logic                      ittage_rdy;
@@ -304,12 +330,12 @@ module tb;
     .ckpt_phist_ptr        (ckpt_phist_ptr),
     .ghr_buf               (ghr_buf),
     .phr_buf               (phr_buf),
-    .tage_enable_aging     (tage_enable_aging),
-    .tage_aging_interval   (tage_aging_interval),
-    .ittage_enable_aging   (ittage_enable_aging),
-    .ittage_aging_interval (ittage_aging_interval),
-    .sc_enable             (sc_enable),
-    .ftb_fastpath_en       (ftb_fastpath_en),
+    .tage_enable_aging     (fe_cfg.tage_enable_aging),
+    .tage_aging_interval   (fe_cfg.tage_aging_interval),
+    .ittage_enable_aging   (fe_cfg.ittage_enable_aging),
+    .ittage_aging_interval (fe_cfg.ittage_aging_interval),
+    .sc_enable             (fe_cfg.sc_enable),
+    .ftb_fastpath_en       (fe_cfg.ftb_fastpath_en),
     .tage_rdy              (tage_rdy),
     .ittage_rdy            (ittage_rdy),
     .sc_ready              (sc_ready),
@@ -601,12 +627,13 @@ module tb;
     ftq_rollback_pbit     = '0;
     ftq_rollback_slot_ex  = '0;
     ftq_rollback_slot_tkn = '0;
-    tage_enable_aging     = 1'b0;
-    tage_aging_interval   = 32'd0;
-    ittage_enable_aging   = 1'b0;
-    ittage_aging_interval = 32'd0;
-    sc_enable             = 1'b0;
-    ftb_fastpath_en       = 1'b0;
+    csr_tb_pkg::csr_reset();
+    cfg_tage_enable_aging(1'b0);
+    cfg_tage_aging_interval(32'd0);
+    cfg_ittage_enable_aging(1'b0);
+    cfg_ittage_aging_interval(32'd0);
+    cfg_sc_enable(1'b0);
+    cfg_ftb_fastpath_en(1'b0);
   endtask
 
   // The ITTAGE tables live in bw_ram, which has no reset: rstn does
@@ -1784,7 +1811,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);              // SC_CTR_MIN, strongly not taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0190_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -1846,7 +1873,7 @@ module tb;
       $display("INFO: C4 unstalled stream p2=%0d p3=%0d stalls=%0d",
                p2_seen, p3_seen, stall_seen);
     end
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
 
     $display("---- GROUP C done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
@@ -1875,7 +1902,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);              // SC_CTR_MIN, strongly not taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0200_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -1910,7 +1937,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);              // SC_CTR_MAX, strongly taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0210_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -1937,7 +1964,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     pc   = VA_WIDTH'('h00_0220_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -2000,7 +2027,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     // Structural bits only: is_br makes the cluster classify update
     // channel 0 as COND so the SC update request stands. The uBTB
     // update itself stays inactive (valid low).
@@ -2082,7 +2109,7 @@ module tb;
     chk("D2 queue status: full only for the SC starvation hold",
         qstat_bad == 0);
 
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     $display("---- GROUP D done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
   endtask
@@ -2406,7 +2433,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
 
     pc   = VA_WIDTH'('h00_0400_0000);
     base = blk_base(pc);
@@ -2449,7 +2476,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b00);
     sc_fill(6'b011111);
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0430_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -2475,7 +2502,7 @@ module tb;
     //    on its p2 arm.
     do_reset();
     tage_bim_fill(2'b00);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     ftb_alloc_cond(VA_WIDTH'('h00_0420_0000), 2'd0, 1'b0, 1'b0,
                    VA_WIDTH'('h00_0420_0300), 4'd1,
                    VA_WIDTH'('h00_0420_0018), 1'b0);
@@ -2511,7 +2538,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     for (int b = 0; b < 8; b++) begin
       pc   = VA_WIDTH'('h00_0440_0000) + VA_WIDTH'(b * 32);
       base = blk_base(pc);
@@ -2546,7 +2573,7 @@ module tb;
     norq();
     sc_upd_val_u0 = '0;
     ubtb_upd_u0   = '0;
-    sc_enable     = 1'b0;
+    cfg_sc_enable(1'b0);
     chk("E2d a same-cycle tie with distinct indices was reached",
         tie_seen > 0);
     $display("INFO: E2d distinct-index ties observed: %0d", tie_seen);
@@ -2607,7 +2634,7 @@ module tb;
 
       do_reset();
       tage_bim_fill(2'b00);
-      sc_enable = 1'b0;
+      cfg_sc_enable(1'b0);
 
       // Two committed return addresses, so the RETURN blocks pop a
       // real address rather than falling back to the FTB target.
@@ -2794,7 +2821,7 @@ module tb;
     do_reset();
     tage_bim_fill(2'b11);
     sc_fill(6'b011111);
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     ftb_alloc_cond(pc, 2'd1, 1'b0, 1'b1, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     ubtb_clear_set(pc);
@@ -2808,7 +2835,7 @@ module tb;
         bpu_meta_val_p3 === 1'b1);
     chk("F2 sc slot0 branch_id is this entry",
         bpu_meta_sc_p3[0].branch_id === 6'h2D);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
 
     // -- F3. The two groups write DISJOINT members of bp_ftq_meta_t.
     //    Assemble the struct the way the FTQ would and show that the
@@ -2990,7 +3017,7 @@ module tb;
     //    fields SC cannot change must survive the p2 -> p3 register.
     do_reset();
     tage_bim_fill(2'b11);            // TAGE taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     sc_fill({SC_MAX_CTR_WIDTH{1'b0}});
     pc   = VA_WIDTH'('h00_07C0_0000);
     base = blk_base(pc);
@@ -3015,7 +3042,7 @@ module tb;
         bpu_slot_p3[0].pos === 4'd2);
     chk_eq("I4 target survives the p2 -> p3 register",
            bpu_slot_p3[0].target, base + VA_WIDTH'('h1C0));
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
 
     $display("---- GROUP I done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
@@ -3051,7 +3078,7 @@ module tb;
     do_reset();
     tage_clear_all();
     tage_bim_fill(2'b00);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
   endtask
 
   // Allocate one FTQ entry carrying nbr conditional branches, in a
@@ -3200,7 +3227,7 @@ module tb;
 
     tage_bim_fill(2'b11);           // TAGE taken
     sc_fill(6'b100000);             // SC reverses it at p3
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
 
     pc   = VA_WIDTH'('h00_0960_0000);
     base = blk_base(pc);
@@ -3243,7 +3270,7 @@ module tb;
     ftq_rollback_idx = 6'h0B;
     tick();
     ftq_rollback_val = 1'b0;
-    sc_enable        = 1'b0;
+    cfg_sc_enable(1'b0);
     chk("J3 ghist restored from the FTQ checkpoint, not the p3 one",
         ghist_ptr === dut.u_bp_history.ckpt_gptr[6'h0B]);
 
@@ -3476,7 +3503,7 @@ module tb;
     do_reset();
     ftq_clear();
     clr_upd_chans();
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc = VA_WIDTH'('h00_0600_0000);
 
     // NO_BRANCH: forms NO update anywhere, even with valid high.
@@ -3583,7 +3610,7 @@ module tb;
         dut.w_upd_type_u0[0] === COND);
 
     clr_upd_chans();
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     tick();
 
     // -- G1. TAGE. Bimodal seeded weak NOT taken (2'b01), so the
@@ -3774,7 +3801,7 @@ module tb;
     clr_upd_chans();
     tage_bim_fill(2'b10);
     sc_fill(6'b111111);              // -1 in each consulted counter
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0630_0000);
     base = blk_base(pc);
     pft  = base + BLK_SZ;
@@ -3828,7 +3855,7 @@ module tb;
         sc_sum_2 > sc_sum_1);
     chk("G3 SC now agrees with TAGE, so no override",
         ftq_sc[6'h0D][0].sc_override === 1'b0);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
 
     // -- G4. uBTB. A cold set predicts nothing at p1. Resolve a taken
     //    conditional through the uBTB update channel and the second
@@ -4086,7 +4113,7 @@ module tb;
     lp_clear_both(pc);
 
     // -- H1. Neither request: no grant, the starve counter holds.
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     norq();
     repeat (4) tick();
     #1;
@@ -4104,7 +4131,7 @@ module tb;
     // -- H2. Prediction only: granted.
     do_reset();
     clr_upd_chans();
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     req(pc, 6'h20);
     tick();
     norq();
@@ -4133,7 +4160,7 @@ module tb;
     init_inputs();
     repeat (4) tick();
     rstn      = 1'b1;
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     req(pc, 6'h21);
     tick();
     norq();
@@ -4150,7 +4177,7 @@ module tb;
     chk("H2b consumer_ready drops while SC cannot take a result",
         dut.w_tage_consumer_ready === 1'b0);
     dut.u_sc.fast_init_r = h2b_fi_save;   // BP-126: the run's own mode
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     do_reset();
     clr_upd_chans();
     tage_bim_fill(2'b11);
@@ -4162,7 +4189,7 @@ module tb;
         sc_ready === 1'b1);
 
     // -- H3. Update only (no block at p2): granted at once.
-    sc_enable        = 1'b1;
+    cfg_sc_enable(1'b1);
     ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     sc_upd_val_u0[0] = 1'b1;
     norq();
@@ -4192,7 +4219,7 @@ module tb;
     sc_fill(6'b011111);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
-    sc_enable        = 1'b1;
+    cfg_sc_enable(1'b1);
     ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     sc_upd_val_u0[0] = 1'b1;
     req(pc, 6'h22);
@@ -4246,13 +4273,13 @@ module tb;
 
     // -- H7. consumer_ready, every arm of
     //      ~sc_enable | (sc_ready & ~w_sc_grant_upd)
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     #1;
     chk("H7 consumer_ready is high whenever SC is disabled",
         dut.w_tage_consumer_ready === 1'b1);
     chk("H7 a disabled SC raises no requests",
         (dut.w_sc_pred_req === 1'b0) && (dut.w_sc_upd_req === 1'b0));
-    sc_enable        = 1'b1;
+    cfg_sc_enable(1'b1);
     ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     sc_upd_val_u0[0] = 1'b1;
     #1;
@@ -4277,7 +4304,7 @@ module tb;
     sc_fill(6'b011111);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
-    sc_enable        = 1'b1;
+    cfg_sc_enable(1'b1);
     ubtb_upd_u0[0]   = mk_upd(COND, 1'b0, pc);
     h8_acc = 0;
     for (int i = 0; i < SC_UQ_DEPTH + 6; i++) begin
@@ -4307,7 +4334,7 @@ module tb;
     chk("H8 drained: sc_uq_not_full and sc_upd_rdy high again",
         sc_uq_not_full && sc_upd_rdy[0] && !dut.w_sc_uq_has_data);
 
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     clr_upd_chans();
     norq();
     repeat (2) tick();
@@ -4504,7 +4531,7 @@ module tb;
     //    cluster's update decode now names RETURN_CALL before RETURN.
     do_reset();
     clr_upd_chans();
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc = VA_WIDTH'('h00_0950_0000);
     ubtb_upd_u0[0]    = mk_upd(RETURN_CALL, 1'b1, pc);
     tage_upd_val_u0   = NUM_PRED_SLOTS'(1); // slot 0 (BP-128)
@@ -4533,7 +4560,7 @@ module tb;
     ras_commit_val     = 1'b0;
     ras_commit_br_type = NO_BRANCH;
     clr_upd_chans();
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     tick();
 
     $display("---- GROUP L done (pass %0d fail %0d) ----",
@@ -4563,7 +4590,7 @@ module tb;
     clr_upd_chans();
     tage_bim_fill(2'b11);            // TAGE taken
     sc_fill(6'b100000);              // SC strongly not taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0a10_0000);
     base = blk_base(pc);
     pft  = base + VA_WIDTH'('d12);   // the call at pos 4 ends the block
@@ -4603,7 +4630,7 @@ module tb;
     clr_upd_chans();
     tage_bim_fill(2'b00);            // TAGE not taken
     sc_fill(6'b011111);              // SC strongly taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0a20_0000);
     base = blk_base(pc);
     pft  = base + VA_WIDTH'('d12);
@@ -4629,7 +4656,7 @@ module tb;
     chk("N2 the push was undone: the RAS is empty again",
         dut.u_ras.tosr === dut.u_ras.bos);
 
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
     clr_upd_chans();
     norq();
     repeat (2) tick();
@@ -4699,7 +4726,7 @@ module tb;
     clr_upd_chans();
     tage_bim_fill(2'b11);            // TAGE taken
     sc_fill(6'b100000);              // SC strongly not taken
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0b20_0000);
     base = blk_base(pc);
     pft  = base + VA_WIDTH'('d32);
@@ -4720,7 +4747,7 @@ module tb;
     chk("O2 p3: no p3 redirect", dut.w_any_redir_p3 === 1'b0);
     chk("O2 p3: the slot keeps the LP as its source",
         bpu_slot_p3[0].pred_src === PRED_LOOP);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
 
     // -- O3. The trusted exit over a taken TAGE.
     do_reset();
@@ -4797,7 +4824,7 @@ module tb;
     clr_upd_chans();
     tage_bim_fill(2'b11);
     sc_fill(6'b100000);
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     pc   = VA_WIDTH'('h00_0b50_0000);
     base = blk_base(pc);
     pft  = base + VA_WIDTH'('d32);
@@ -4822,7 +4849,7 @@ module tb;
     chk("O5 the p3 restore: from the checkpoint (2), not taken: 0, known",
         (dut.u_loop_pred.g_slot[0].mem[li][0].curs === 14'd0) &&
         dut.u_loop_pred.g_slot[0].mem[li][0].curs_v);
-    sc_enable = 1'b0;
+    cfg_sc_enable(1'b0);
 
     clr_upd_chans();
     norq();

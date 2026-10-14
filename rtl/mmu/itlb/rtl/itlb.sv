@@ -154,6 +154,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module itlb #(
   parameter int ITLB_ENTRIES = 64,                      // ITLB-1
@@ -207,18 +208,11 @@ module itlb #(
   input  logic [1:0]               l2t_itlb_gpa_imp, // IL-11b
 
   // ---- CSR input group, ITLB-17, MMU-11a, fe_decisions.md FE-20 ----
-  input  logic                     csr_itlb_v,
-  input  logic [1:0]               csr_itlb_priv,     // 0 U, 1 S, 3 M
-  input  logic [3:0]               csr_itlb_satp_mode,
-  input  logic [ASID_WIDTH-1:0]    csr_itlb_satp_asid,
-  input  logic [3:0]               csr_itlb_vsatp_mode,
-  input  logic [ASID_WIDTH-1:0]    csr_itlb_vsatp_asid,
-  input  logic [3:0]               csr_itlb_hgatp_mode,
-  input  logic [VMID_WIDTH-1:0]    csr_itlb_hgatp_vmid,
-  input  logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][7:0]
-                                   csr_itlb_pmpcfg,
-  input  logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][PA_WIDTH-3:0]
-                                   csr_itlb_pmpaddr,
+  // csr_pkg fe_csr_t, the whole group (csr_decisions.md CSR-6;
+  // SYS-001): V, priv (0 U, 1 S, 3 M), the satp, vsatp and hgatp
+  // fields and the PMP registers. Entries 0 to PMP_ENTRIES-1 of its
+  // pmpcfg and pmpaddr go to the checker.
+  input  fe_csr_t                  fe_csr,
 
   // ---- invalidate port, ITLB-14 ------------------------------------
   input  logic                     bkend_itlb_inv_val,
@@ -236,6 +230,8 @@ module itlb #(
   localparam int VW     = VA_WIDTH - 12;                  // 29
   localparam int EI     = (ITLB_ENTRIES > 1) ? $clog2(ITLB_ENTRIES) : 1;
   localparam int TI     = 2;                              // IL-1
+  // The checker's entries, taken from fe_csr (SYS-001).
+  localparam int PMP_N  = (PMP_ENTRIES > 0) ? PMP_ENTRIES : 1;
 
   // itlb_ifu_status, IT-4.
   localparam logic [1:0] ST_HIT   = 2'b00;
@@ -289,6 +285,8 @@ module itlb #(
       $error("itlb: WALK_DEPTH must be 1 to 4 (IL-1 two-bit tag)");
     if (PMP_GRAN_LG2 < 12)
       $error("itlb: PMP grain below one page; a page check is inexact");
+    if (PMP_ENTRIES > CSR_PMP_ENTRIES)
+      $error("itlb: PMP_ENTRIES above the fe_csr_t entries");
   end
 
   typedef struct packed {
@@ -388,21 +386,21 @@ module itlb #(
   // -----------------------------------------------------------------
   always_comb begin : lookup
     logic sel;
-    w_phys = (csr_itlb_priv == PRV_M) ||
-             (!csr_itlb_v && (csr_itlb_satp_mode == MODE_BARE)) ||
-             (csr_itlb_v && (csr_itlb_vsatp_mode == MODE_BARE) &&
-              (csr_itlb_hgatp_mode == MODE_BARE));
+    w_phys = (fe_csr.priv == PRV_M) ||
+             (!fe_csr.v && (fe_csr.satp_mode == MODE_BARE)) ||
+             (fe_csr.v && (fe_csr.vsatp_mode == MODE_BARE) &&
+              (fe_csr.hgatp_mode == MODE_BARE));
     w_sv39 = !w_phys &&
-             (!csr_itlb_v || (csr_itlb_vsatp_mode != MODE_BARE));
-    w_asid = csr_itlb_v ? csr_itlb_vsatp_asid : csr_itlb_satp_asid;
+             (!fe_csr.v || (fe_csr.vsatp_mode != MODE_BARE));
+    w_asid = fe_csr.v ? fe_csr.vsatp_asid : fe_csr.satp_asid;
 
     w_hit     = 1'b0;
     w_hit_idx = '0;
     w_hit_ent = '0;
     for (int i = 0; i < ITLB_ENTRIES; i++) begin
       sel = r_rq_val && r_ent[i].val &&
-            (r_ent[i].v == csr_itlb_v) &&
-            (!csr_itlb_v || (r_ent[i].vmid == csr_itlb_hgatp_vmid)) &&
+            (r_ent[i].v == fe_csr.v) &&
+            (!fe_csr.v || (r_ent[i].vmid == fe_csr.hgatp_vmid)) &&
             (r_ent[i].g || (r_ent[i].asid == w_asid)) &&
             covers(r_ent[i], r_rq_vpn);
       if (sel && !w_hit) begin
@@ -433,10 +431,10 @@ module itlb #(
   ) u_chk (
     .chk_pa     (w_chk_pa),
     .chk_acc    (2'd2),                // execute
-    .chk_priv   (csr_itlb_priv),
+    .chk_priv   (fe_csr.priv),
     .chk_pbmt   (w_chk_pbmt),
-    .pmp_cfg    (csr_itlb_pmpcfg),
-    .pmp_addr   (csr_itlb_pmpaddr),
+    .pmp_cfg    (fe_csr.pmpcfg[PMP_N-1:0]),
+    .pmp_addr   (fe_csr.pmpaddr[PMP_N-1:0]),
     .chk_pmp_ok (w_chk_pmp_ok),
     .chk_pma    (w_chk_pma),
     .chk_fault  (w_chk_fault)
@@ -457,24 +455,24 @@ module itlb #(
     w_flt_idx  = '0;
     w_flt_drop = '0;
     for (int t = 0; t < WALK_DEPTH; t++) begin
-      live = (r_trk[t].v == csr_itlb_v) &&
+      live = (r_trk[t].v == fe_csr.v) &&
              (r_trk[t].asid == w_asid) &&
-             (r_trk[t].vmid == csr_itlb_hgatp_vmid) &&
+             (r_trk[t].vmid == fe_csr.hgatp_vmid) &&
              (r_trk[t].vpn == r_rq_vpn);
       if (live && !r_trk[t].kill &&
           ((r_trk[t].st == T_REQ) || (r_trk[t].st == T_OUT)))
         w_inflight = 1'b1;
       // ITLB-10b: a held fault answers only at its own privilege and V.
       if (live && (r_trk[t].st == T_FLT) &&
-          (r_trk[t].priv == csr_itlb_priv) && !w_flt_hit) begin
+          (r_trk[t].priv == fe_csr.priv) && !w_flt_hit) begin
         w_flt_hit = 1'b1;
         w_flt_idx = TI'(t);
       end
       // A held fault of this page at another privilege or V is dropped
       // when the page is re-requested and walks again (ITLB-10b).
       if ((r_trk[t].st == T_FLT) && (r_trk[t].vpn == r_rq_vpn) &&
-          ((r_trk[t].v != csr_itlb_v) ||
-           (r_trk[t].priv != csr_itlb_priv)))
+          ((r_trk[t].v != fe_csr.v) ||
+           (r_trk[t].priv != fe_csr.priv)))
         w_flt_drop[t] = 1'b1;
     end
 
@@ -482,8 +480,8 @@ module itlb #(
     // ITLB-16 needs a single-stage or VS-stage leaf (see the header).
     perm_bad = w_sv39 &&
                (!w_hit_ent.perm[P_X] ||
-                ((csr_itlb_priv == PRV_U) && !w_hit_ent.perm[P_U]) ||
-                ((csr_itlb_priv == PRV_S) &&  w_hit_ent.perm[P_U]));
+                ((fe_csr.priv == PRV_U) && !w_hit_ent.perm[P_U]) ||
+                ((fe_csr.priv == PRV_S) &&  w_hit_ent.perm[P_U]));
     sx_bad   = w_sv39 &&
                (r_rq_vpn[VW-1:VW-2] != {2{r_rq_vpn[VW-3]}});
     pa_bad   = |r_rq_vpn[VW-1:PA_HI];
@@ -713,10 +711,10 @@ module itlb #(
       if (w_alloc) begin
         r_trk[w_alloc_idx].st    <= T_REQ;
         r_trk[w_alloc_idx].kill  <= 1'b0;
-        r_trk[w_alloc_idx].v     <= csr_itlb_v;
-        r_trk[w_alloc_idx].priv  <= csr_itlb_priv;
+        r_trk[w_alloc_idx].v     <= fe_csr.v;
+        r_trk[w_alloc_idx].priv  <= fe_csr.priv;
         r_trk[w_alloc_idx].asid  <= w_asid;
-        r_trk[w_alloc_idx].vmid  <= csr_itlb_hgatp_vmid;
+        r_trk[w_alloc_idx].vmid  <= fe_csr.hgatp_vmid;
         r_trk[w_alloc_idx].vpn   <= r_rq_vpn;
         r_trk[w_alloc_idx].cause <= '0;
         r_trk[w_alloc_idx].gpa   <= '0;

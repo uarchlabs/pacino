@@ -87,6 +87,7 @@
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -256,8 +257,21 @@ module tb;
   logic [NUM_PRED_SLOTS-1:0]      tage_upd_rdy_u1;
 
   // Aging control (tied to 0 in BP-010b)
-  logic                           tage_enable_aging;
-  logic [31:0]                    tage_aging_interval;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_tage_enable_aging(input logic v);
+    csr_tb_pkg::set_tage_enable_aging(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_tage_aging_interval(input logic [31:0] v);
+    csr_tb_pkg::set_tage_aging_interval(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
 
   // Folded history (tied to 0 in BP-010b)
   bp_folded_hist_t                folded_hist;
@@ -286,8 +300,8 @@ module tb;
     .tage_upd_val_u0     (tage_upd_val_u0),
     .tage_upd_inp_u0     (tage_upd_inp_u0),
     .tage_upd_rdy_u1     (tage_upd_rdy_u1),
-    .tage_enable_aging   (tage_enable_aging),
-    .tage_aging_interval (tage_aging_interval),
+    .tage_enable_aging   (fe_cfg.tage_enable_aging),
+    .tage_aging_interval (fe_cfg.tage_aging_interval),
     .consumer_ready      (consumer_ready),
     .folded_hist         (folded_hist),
     .tage_rdy            (tage_rdy)
@@ -359,8 +373,9 @@ module tb;
   // Update inputs driven from stg_upd_val0/stg_upd_inp0 below.
   // ----------------------------------------------------------------
   initial begin
-    tage_enable_aging   = '0;
-    tage_aging_interval = '0;
+    csr_tb_pkg::csr_reset();
+    cfg_tage_enable_aging('0);
+    cfg_tage_aging_interval('0);
     folded_hist         = '0;
   end
 
@@ -7577,8 +7592,8 @@ module tb;
     // (tage_cntrl aging_ff; coverage plan CE-09).
     u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b00;
     u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'd2;
-    tage_aging_interval = 32'd2;
-    tage_enable_aging   = 1'b1;
+    cfg_tage_aging_interval(32'd2);
+    cfg_tage_enable_aging(1'b1);
     for (int n = 1; n <= 3; n++) begin
       ts_pred(VA_WIDTH'('h3400 + 4 * n), 6'(n)); ts_clk();
       ts_idle(); repeat (4) ts_clk();
@@ -7595,8 +7610,8 @@ module tb;
                  u_dut.u_tage_cntrl.lcl_epoch[0]);
       end
     end
-    tage_enable_aging   = 1'b0;
-    tage_aging_interval = 32'd0;
+    cfg_tage_enable_aging(1'b0);
+    cfg_tage_aging_interval(32'd0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = ep_save0;
     u_dut.u_tage_cntrl.lcl_epoch[S1] = ep_save1;
     if (local_fails == 0)
@@ -8697,8 +8712,8 @@ module tb;
 
     // Enable aging: interval=0 so first pred_rdy_p2 increments
     // lcl_epoch from 0 to 1.
-    tage_enable_aging   = 1'b1;
-    tage_aging_interval = 32'h0;
+    cfg_tage_enable_aging(1'b1);
+    cfg_tage_aging_interval(32'h0);
 
     // Predict PC=0x190: T1 idx=100 bank=0 tag=0x00 -> T1 hit.
     inp           = '0;
@@ -8756,8 +8771,8 @@ module tb;
     clk_step();
 
     // Restore aging control.
-    tage_enable_aging   = 1'b0;
-    tage_aging_interval = 32'h0;
+    cfg_tage_enable_aging(1'b0);
+    cfg_tage_aging_interval(32'h0);
 
     // Verify: CTR 101->100 USE 01->00 EPC->01 = 0x0049.
     rd_t1 =
@@ -10863,8 +10878,8 @@ module tb;
     stg_pred_inp0       = '0;
     stg_upd_val0        = 1'b0;
     stg_upd_inp0        = '0;
-    tage_enable_aging   = 1'b1;
-    tage_aging_interval = 32'h0000_005A;
+    cfg_tage_enable_aging(1'b1);
+    cfg_tage_aging_interval(32'h0000_005A);
     rstn                = 1'b0;
     repeat(2) clk_step();
     if (verbose != 0)
@@ -10886,8 +10901,8 @@ module tb;
         u_dut.u_tage_cntrl.lcl_epoch[0]);
     end
     rstn                = 1'b1;
-    tage_enable_aging   = 1'b0;
-    tage_aging_interval = 32'h0;
+    cfg_tage_enable_aging(1'b0);
+    cfg_tage_aging_interval(32'h0);
     // Wait for sram_init (noop on fast-init path, ~2048 cycles
     // on slow path). Ensures TC-83+ backdoor writes are not
     // overwritten by the restarted sram_init.
@@ -10923,8 +10938,8 @@ module tb;
     local_fails = 0;
     u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
     u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b00;
-    tage_enable_aging   = 1'b1;
-    tage_aging_interval = 32'h0;
+    cfg_tage_enable_aging(1'b1);
+    cfg_tage_aging_interval(32'h0);
     inp           = '0;
     inp.pc        = VA_WIDTH'('h320);
     stg_pred_inp0 = inp;
@@ -10956,7 +10971,7 @@ module tb;
         "[FAIL] aging_interval_adv_tst: epoch=%0d exp=1",
         u_dut.u_tage_cntrl.lcl_epoch[0]);
     end
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     if (local_fails == 0)
       $display("[PASS] aging_interval_adv_tst: 0 failures");
@@ -10981,8 +10996,8 @@ module tb;
     local_fails = 0;
     u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
     u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b11;
-    tage_enable_aging   = 1'b1;
-    tage_aging_interval = 32'h0;
+    cfg_tage_enable_aging(1'b1);
+    cfg_tage_aging_interval(32'h0);
     inp           = '0;
     inp.pc        = VA_WIDTH'('h324);
     stg_pred_inp0 = inp;
@@ -11003,7 +11018,7 @@ module tb;
         "[FAIL] aging_epoch_wrap_tst: epoch=%0d exp=0",
         u_dut.u_tage_cntrl.lcl_epoch[0]);
     end
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     if (local_fails == 0)
       $display("[PASS] aging_epoch_wrap_tst: 0 failures");
@@ -11033,7 +11048,7 @@ module tb;
     // Seed T1 s0 row=202 bank=0: USE=11 EPC=00 CTR=101 VAL=1.
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][202]
       = 16'h003B;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     inp               = '0;
     inp.pc            = VA_WIDTH'('h328);
     // Sub-test age=0: u_eff must equal USE=11.
@@ -11161,7 +11176,7 @@ module tb;
       = 16'h0030;
     u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][203]
       = 16'h0030;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     inp               = '0;
     inp.pc            = VA_WIDTH'('h32C);
     // Sub-test A: epoch=0, T2 u_eff=11, no candidate above T1.
@@ -11240,7 +11255,7 @@ module tb;
     // Seed T1 s0 row=204: TAG=00 EPC=00 USE=10 CTR=101 VAL=1.
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][204]
       = 16'h002B;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     inp               = '0;
     inp.pc            = VA_WIDTH'('h330);
     // Sub-test A: lcl_epoch=0. u_eff=USE=10 (aging disabled).
@@ -11267,7 +11282,7 @@ module tb;
     // Sub-test B: epoch frozen at 1 across 3 predictions.
     u_dut.u_tage_cntrl.lcl_epoch[0]          = 2'b01;
     u_dut.u_tage_cntrl.lcl_aging_interval[0] = 32'h0;
-    tage_aging_interval                       = 32'h0;
+    cfg_tage_aging_interval(32'h0);
     for (k = 0; k < 3; k++) begin
       stg_pred_inp0 = inp;
       stg_pred_val0 = 1'b1;
@@ -11290,7 +11305,7 @@ module tb;
         epoch_post);
     end
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
-    tage_aging_interval              = 32'h0;
+    cfg_tage_aging_interval(32'h0);
     if (local_fails == 0)
       $display("[PASS] aging_enable_gate_tst: 0 failures");
     else
@@ -11319,7 +11334,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     // Sub-test A: mispredict -> allocation fires.
     // T1-T4 all-zero; prm=T0. alc_comp=T1 (USE=0).
@@ -11459,7 +11474,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     // T1 USE=3 (non-alloc), miss. T2-T4 VAL=0 (alloc candidate).
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][40]
@@ -11557,7 +11572,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t2, rd_t3;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][582]
       = 16'h0039;
@@ -11645,7 +11660,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2, rd_t3, rd_t4;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     // T1-T4 USE=3 non-alloc (no candidate above T0).
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][512]
@@ -11733,7 +11748,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1_tgt, rd_t1_dec;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][80]
       = 16'h0000;
@@ -11834,7 +11849,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     // Sub-test A: epoch=0.
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][542]
@@ -11940,7 +11955,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic            we_seen;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[1][20]
       = 16'h0000;
@@ -12083,7 +12098,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][562]
       = 16'h0000;
@@ -12179,7 +12194,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[0][50]
       = 16'h200F;
@@ -12277,7 +12292,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][75]
       = 16'h240B;
@@ -12366,7 +12381,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.u_tage_bim.g_slot[0].u_ram.mem[0][125] = 2'b10;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][125]
@@ -12443,7 +12458,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][150]
       = 16'h2C09;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][150]
@@ -12534,7 +12549,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][175]
       = 16'h0000;
@@ -12613,7 +12628,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
       = 16'h3409;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][200]
@@ -12704,7 +12719,7 @@ module tb;
     tage_pred_inp_t  inp;
     tage_pred_meta_t meta_p2;
     local_fails = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[0][225]
       = 16'h3C0F;
@@ -12824,7 +12839,7 @@ module tb;
     tage_upd_inp_t   upd_inp;
     logic [15:0]     rd_t1, rd_t2, rd_t3, rd_t4;
     local_fails        = 0;
-    tage_enable_aging  = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.lcl_epoch[0] = 2'b00;
     u_dut.u_tage_cntrl.uaon[0]      = 4'h0;
     // -- Step 1: seed all entries at bank=0 row=512 ----------
@@ -13101,7 +13116,7 @@ module tb;
     int              eei;  // expected extd_ctr, sign-extended
 
     local_fails       = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
 
@@ -13311,7 +13326,7 @@ module tb;
     if (NUM_PRED_SLOTS == 1)
       $display(
         "SKIP pred_branch_id_stage_tst slot 1: needs NUM_PRED_SLOTS > 1");
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0] = 4'h0;
     u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
 
@@ -13637,7 +13652,7 @@ module tb;
     localparam logic [VA_WIDTH-1:0] PC_T = VA_WIDTH'('h0_0003_0040);
 
     local_fails       = 0;
-    tage_enable_aging = 1'b0;
+    cfg_tage_enable_aging(1'b0);
     u_dut.u_tage_cntrl.uaon[0]  = 4'h0;
     u_dut.u_tage_cntrl.uaon[S1] = 4'h0;
 

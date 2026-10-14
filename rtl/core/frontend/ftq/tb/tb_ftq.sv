@@ -45,6 +45,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -107,7 +108,17 @@ module tb;
   bp_ras_snapshot_t         ras_commit_snapshot;
   // Section 8 per-predictor update ports (BP-119, TD#151). The
   // readies are the cluster's per-slot queue readies, held high here.
-  logic                     sc_enable;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_sc_enable(input logic v);
+    csr_tb_pkg::set_sc_enable(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
   ubtb_upd_t [NUM_PRED_SLOTS-1:0] ubtb_upd_u0;
   logic [NUM_PRED_SLOTS-1:0] lp_upd_valid_p0;
   lp_upd_t                  lp_upd_p0         [0:NUM_PRED_SLOTS-1];
@@ -237,7 +248,7 @@ module tb;
     .ras_commit_br_type    (ras_commit_br_type),
     .ras_commit_ret_addr   (ras_commit_ret_addr),
     .ras_commit_snapshot   (ras_commit_snapshot),
-    .sc_enable             (sc_enable),
+    .sc_enable             (fe_cfg.sc_enable),
     .ubtb_upd_u0           (ubtb_upd_u0),
     .lp_upd_valid_p0       (lp_upd_valid_p0),
     .lp_upd_p0             (lp_upd_p0),
@@ -465,7 +476,8 @@ module tb;
     bpu_meta_idx_p2       = '0;
     bpu_meta_val_p3       = 1'b0;
     bpu_meta_idx_p3       = '0;
-    sc_enable             = 1'b1;
+    csr_tb_pkg::csr_reset();
+    cfg_sc_enable(1'b1);
     tage_upd_rdy          = '1;
     ittage_upd_rdy        = '1;
     sc_upd_rdy            = '1;

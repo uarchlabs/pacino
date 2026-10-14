@@ -391,12 +391,14 @@ bind ptw ptw_assert #(
   .ptw_mem_req_cmp   (ptw_mem_req_cmp),
   .ptw_mem_req_swap  (ptw_mem_req_swap),
   .mem_ptw_rsp_val   (mem_ptw_rsp_val),
-  .csr_ptw_menvcfg_pbmte (csr_ptw_menvcfg_pbmte),
-  .csr_ptw_henvcfg_pbmte (csr_ptw_henvcfg_pbmte),
+  // The walker's ptw_csr_t members (SYS-001); this module's ports
+  // keep their names.
+  .csr_ptw_menvcfg_pbmte (ptw_csr.menvcfg_pbmte),
+  .csr_ptw_henvcfg_pbmte (ptw_csr.henvcfg_pbmte),
   .w_s_lvl           (r_s_lvl),
   .w_g_lvl           (r_g_lvl),
   .w_m_ret           (r_m_ret),
   .w_g_acc           (r_g_acc),
-  .csr_ptw_pmpcfg    (csr_ptw_pmpcfg),
-  .csr_ptw_pmpaddr   (csr_ptw_pmpaddr)
+  .csr_ptw_pmpcfg    (ptw_csr.pmpcfg[PMP_N-1:0]),
+  .csr_ptw_pmpaddr   (ptw_csr.pmpaddr[PMP_N-1:0])
 );

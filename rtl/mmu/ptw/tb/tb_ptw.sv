@@ -37,6 +37,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -74,18 +75,10 @@ module tb;
   logic                     mem_ptw_rsp_val;
   logic [63:0]              mem_ptw_rsp_data;
   logic                     mem_ptw_rsp_err;
-  logic [3:0]               csr_ptw_satp_mode;
-  logic [PPN_WIDTH-1:0]     csr_ptw_satp_ppn;
-  logic [3:0]               csr_ptw_vsatp_mode;
-  logic [GPA_WIDTH-13:0]    csr_ptw_vsatp_ppn;
-  logic [3:0]               csr_ptw_hgatp_mode;
-  logic [PPN_WIDTH-1:0]     csr_ptw_hgatp_ppn;
-  logic                     csr_ptw_menvcfg_adue;
-  logic                     csr_ptw_henvcfg_adue;
-  logic                     csr_ptw_menvcfg_pbmte;
-  logic                     csr_ptw_henvcfg_pbmte;
-  logic [15:0][7:0]         csr_ptw_pmpcfg;
-  logic [15:0][PA_WIDTH-3:0] csr_ptw_pmpaddr;
+  // The CSR group (SYS-001, csr_decisions.md CSR-2): driven only by
+  // cs_sync() from csr_tb_pkg pack_ptw_csr. The cs_* tasks change one
+  // field through csr_tb_pkg and drive the group again.
+  ptw_csr_t                 ptw_csr;
 
   ptw dut (.*);
 
@@ -299,6 +292,76 @@ module tb;
   // =================================================================
   // Reset to a known state, and one walk.
   // =================================================================
+  // ---- the CSR group (SYS-001) ------------------------------------------
+  // Each task changes one field by a read-modify-write through
+  // csr_tb_pkg (the CSR-5 rules apply) and drives ptw_csr again.
+  task automatic cs_sync();
+    ptw_csr = csr_tb_pkg::pack_ptw_csr();
+  endtask
+  task automatic cs_satp_mode(input logic [3:0] m);
+    satp_t r;
+    r = satp_t'(csr_tb_pkg::csr_read(CSR_SATP_ADDR)); r.mode = m;
+    csr_tb_pkg::csr_write(CSR_SATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_satp_ppn(input logic [PPN_WIDTH-1:0] n);
+    satp_t r;
+    r = satp_t'(csr_tb_pkg::csr_read(CSR_SATP_ADDR)); r.ppn = 44'(n);
+    csr_tb_pkg::csr_write(CSR_SATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_vsatp_mode(input logic [3:0] m);
+    vsatp_t r;
+    r = vsatp_t'(csr_tb_pkg::csr_read(CSR_VSATP_ADDR)); r.mode = m;
+    csr_tb_pkg::csr_write(CSR_VSATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_vsatp_ppn(input logic [GPA_WIDTH-13:0] n);
+    vsatp_t r;
+    r = vsatp_t'(csr_tb_pkg::csr_read(CSR_VSATP_ADDR)); r.ppn = 44'(n);
+    csr_tb_pkg::csr_write(CSR_VSATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  // hgatp.MODE: MODE_SV39 (8) is Sv39x4 in hgatp.
+  task automatic cs_hgatp_mode(input logic [3:0] m);
+    hgatp_t r;
+    r = hgatp_t'(csr_tb_pkg::csr_read(CSR_HGATP_ADDR)); r.mode = m;
+    csr_tb_pkg::csr_write(CSR_HGATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_hgatp_ppn(input logic [PPN_WIDTH-1:0] n);
+    hgatp_t r;
+    r = hgatp_t'(csr_tb_pkg::csr_read(CSR_HGATP_ADDR)); r.ppn = 44'(n);
+    csr_tb_pkg::csr_write(CSR_HGATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_menvcfg_adue(input logic b);
+    menvcfg_t r;
+    r = menvcfg_t'(csr_tb_pkg::csr_read(CSR_MENVCFG_ADDR)); r.adue = b;
+    csr_tb_pkg::csr_write(CSR_MENVCFG_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_menvcfg_pbmte(input logic b);
+    menvcfg_t r;
+    r = menvcfg_t'(csr_tb_pkg::csr_read(CSR_MENVCFG_ADDR)); r.pbmte = b;
+    csr_tb_pkg::csr_write(CSR_MENVCFG_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_henvcfg_adue(input logic b);
+    henvcfg_t r;
+    r = henvcfg_t'(csr_tb_pkg::csr_read(CSR_HENVCFG_ADDR)); r.adue = b;
+    csr_tb_pkg::csr_write(CSR_HENVCFG_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_henvcfg_pbmte(input logic b);
+    henvcfg_t r;
+    r = henvcfg_t'(csr_tb_pkg::csr_read(CSR_HENVCFG_ADDR)); r.pbmte = b;
+    csr_tb_pkg::csr_write(CSR_HENVCFG_ADDR, 64'(r)); cs_sync();
+  endtask
+  // pmpcfg byte k, by read-modify-write of pmpcfg0 or pmpcfg2.
+  task automatic cs_pmpcfg(input int k, input logic [7:0] b);
+    logic [11:0] ca;
+    pmpcfg_t     c;
+    ca = (k < 8) ? CSR_PMPCFG0_ADDR : CSR_PMPCFG2_ADDR;
+    c  = pmpcfg_t'(csr_tb_pkg::csr_read(ca));
+    c.ent[k % 8] = pmpcfg_ent_t'(b);
+    csr_tb_pkg::csr_write(ca, 64'(c)); cs_sync();
+  endtask
+  task automatic cs_pmpaddr(input int k, input pmpaddr_imp_t a);
+    csr_tb_pkg::csr_write(CSR_PMPADDR0_ADDR + 12'(k), 64'(a)); cs_sync();
+  endtask
+
   task automatic setup(input string nm);
     tname = nm;
     rstn  = 1'b0;
@@ -321,21 +384,13 @@ module tb;
     n_acc   = 0;
     n_cas   = 0;
     n_mem_err = 0;
-    csr_ptw_satp_mode     = MODE_SV39;
-    csr_ptw_satp_ppn      = PPN_WIDTH'(36'h0_8100_0000 >> 12);
-    csr_ptw_vsatp_mode    = MODE_BARE;
-    csr_ptw_vsatp_ppn     = '0;
-    csr_ptw_hgatp_mode    = MODE_BARE;
-    csr_ptw_hgatp_ppn     = '0;
-    csr_ptw_menvcfg_adue  = 1'b0;
-    csr_ptw_henvcfg_adue  = 1'b0;
-    csr_ptw_menvcfg_pbmte = 1'b1;
-    csr_ptw_henvcfg_pbmte = 1'b1;
-    // PMP entry 0: NAPOT over everything, R W X, so S-mode is allowed.
-    csr_ptw_pmpcfg        = '0;
-    csr_ptw_pmpaddr       = '0;
-    csr_ptw_pmpcfg[0]     = 8'h1F;
-    csr_ptw_pmpaddr[0]    = '1;
+    // CSRs from the csr_pkg reset values (CSR-7): vsatp and hgatp
+    // Bare, menvcfg and henvcfg PBMTE 1 and ADUE 0, and PMP entry 0
+    // NAPOT over everything, R W X, so S-mode is allowed. Then this
+    // testbench's satp: Sv39, root 0x8100_0000.
+    csr_tb_pkg::csr_reset();
+    cs_satp_mode(MODE_SV39);
+    cs_satp_ppn(PPN_WIDTH'(36'h0_8100_0000 >> 12));
     repeat (3) @(posedge clk);
     #1;
     rstn = 1'b1;
@@ -512,12 +567,12 @@ module tb;
     walk(1'b0, 29'(VA), ACC_X);
     exp_flt("PBMT 3", 12);
     setup("s_pbmte_clear");
-    csr_ptw_menvcfg_pbmte = 1'b0;
+    cs_menvcfg_pbmte(1'b0);
     path3(T2, T1, T0, VA, pte_x(44'h8_2345, F_RXAD, 2'd1, 1'b0));
     walk(1'b0, 29'(VA), ACC_X);
     exp_flt("PBMT with menvcfg.PBMTE clear", 12);
     setup("s_pbmte_clear_zero");
-    csr_ptw_menvcfg_pbmte = 1'b0;
+    cs_menvcfg_pbmte(1'b0);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RXAD));
     walk(1'b0, 29'(VA), ACC_X);
     exp_hit("PBMT 0 with PBMTE clear", 24'h8_2345, SZ_4K, 2'd0);
@@ -566,7 +621,7 @@ module tb;
     chk("Svade: PTE unchanged", rdw(la) == pte(44'h8_2345, F_RX));
 
     setup("s_svadu");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RX));
     walk(1'b0, 29'(VA), ACC_X);
     exp_hit("Svadu", 24'h8_2345, SZ_4K, 2'd0);
@@ -577,13 +632,13 @@ module tb;
     chk("Svadu: the response perm has A", r_perm == F_RXA);
 
     setup("s_svadu_store");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RWX));
     walk(1'b0, 29'(VA), ACC_W);
     exp_hit("store", 24'h8_2345, SZ_4K, 2'd0);
     chk("store: A and D set in memory", rdw(la) == pte(44'h8_2345, 8'hCF));
     setup("s_svadu_store_dset");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RWXA));
     walk(1'b0, 29'(VA), ACC_W);
     exp_hit("store, D only", 24'h8_2345, SZ_4K, 2'd0);
@@ -593,7 +648,7 @@ module tb;
     walk(1'b0, 29'(VA), ACC_W);
     exp_flt("Svade store, D clear", 15);         // MMU-24c
     setup("s_store_no_w");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RX));
     walk(1'b0, 29'(VA), ACC_W);
     exp_flt("store to a page without W", 15);    // MMU-24c
@@ -602,7 +657,7 @@ module tb;
     // WM-11: memory changes the PTE before the CAS; the walk restarts
     // and reads the new PTE.
     setup("s_cas_mismatch");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RX));
     chg_at  = 0;
     chg_val = pte(44'h8_6789, F_RXAD);
@@ -620,27 +675,27 @@ module tb;
     // entry 1 everything else.
     setup("s_pmp_read");
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RXAD));
-    csr_ptw_pmpcfg[0]  = 8'h18;                      // NAPOT, no R W X
-    csr_ptw_pmpaddr[0] = 34'((T0 >> 2) | 36'h1FF);
-    csr_ptw_pmpcfg[1]  = 8'h1F;
-    csr_ptw_pmpaddr[1] = '1;
+    cs_pmpcfg(0, 8'h18);                      // NAPOT, no R W X
+    cs_pmpaddr(0, 34'((T0 >> 2) | 36'h1FF));
+    cs_pmpcfg(1, 8'h1F);
+    cs_pmpaddr(1, '1);
     walk(1'b0, 29'(VA), ACC_X);
     exp_flt("PMP on a PTE read", 1);
     chk("PMP read: the denied read is never presented", n_acc == 2);
 
     setup("s_pmp_cas");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RX));
-    csr_ptw_pmpcfg[0]  = 8'h19;                      // NAPOT, R only
-    csr_ptw_pmpaddr[0] = 34'((T0 >> 2) | 36'h1FF);
-    csr_ptw_pmpcfg[1]  = 8'h1F;
-    csr_ptw_pmpaddr[1] = '1;
+    cs_pmpcfg(0, 8'h19);                      // NAPOT, R only
+    cs_pmpaddr(0, 34'((T0 >> 2) | 36'h1FF));
+    cs_pmpcfg(1, 8'h1F);
+    cs_pmpaddr(1, '1);
     walk(1'b0, 29'(VA), ACC_X);
     exp_flt("PMP on the Svadu write", 1);
     chk("PMP write: no CAS presented", (n_cas == 0) && (n_acc == 3));
 
     setup("s_pt_not_cc");
-    csr_ptw_satp_ppn = PPN_WIDTH'(36'h0_4000_0000 >> 12);
+    cs_satp_ppn(PPN_WIDTH'(36'h0_4000_0000 >> 12));
     walk(1'b0, 29'(VA), ACC_X);
     exp_flt("page table outside cacheable coherent memory", 1);
     chk("not cacheable: nothing presented", n_acc == 0);
@@ -664,7 +719,7 @@ module tb;
     chk("read error: the walk stops", n_acc == 2);
 
     setup("s_err_cas");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_RX));
     err_at = 3;
     walk(1'b0, 29'(VA), ACC_X);
@@ -745,11 +800,11 @@ module tb;
 
   task automatic setup2(input string nm);
     setup(nm);
-    csr_ptw_satp_mode  = MODE_BARE;
-    csr_ptw_vsatp_mode = MODE_SV39;
-    csr_ptw_vsatp_ppn  = GP_VT2;
-    csr_ptw_hgatp_mode = MODE_SV39;            // Sv39x4
-    csr_ptw_hgatp_ppn  = PPN_WIDTH'(G2 >> 12);
+    cs_satp_mode(MODE_BARE);
+    cs_vsatp_mode(MODE_SV39);
+    cs_vsatp_ppn(GP_VT2);
+    cs_hgatp_mode(MODE_SV39);            // Sv39x4
+    cs_hgatp_ppn(PPN_WIDTH'(G2 >> 12));
     gt_next            = 36'h0_8201_0000;
     // The G-stage maps the three VS table pages (one level-0 table:
     // they share GPA bits 40:21) and the code page.
@@ -805,7 +860,7 @@ module tb;
 
     // G-stage only: vsatp Bare, the request page is the GPA.
     setup2("h_g_only");
-    csr_ptw_vsatp_mode = MODE_BARE;
+    cs_vsatp_mode(MODE_BARE);
     walk(1'b1, 29'(GP_CODE), ACC_X);
     exp_hit("G only", SP_CODE, SZ_4K, 2'd0);
     chk("G only: perm is the G leaf's without G", r_perm == (F_URWXAD & 8'hDF));
@@ -813,8 +868,8 @@ module tb;
 
     // VS-stage only: hgatp Bare, GPA = SPA.
     setup2("h_vs_only");
-    csr_ptw_hgatp_mode = MODE_BARE;
-    csr_ptw_vsatp_ppn  = 29'(SP_VT2 >> 12);
+    cs_hgatp_mode(MODE_BARE);
+    cs_vsatp_ppn(29'(SP_VT2 >> 12));
     wrw(SP_VT2 + 36'(8 * VA[26:18]), pte(44'(SP_VT1 >> 12), F_PTR));
     wrw(SP_VT1 + 36'(8 * VA[17:9]),  pte(44'(SP_VT0 >> 12), F_PTR));
     wrw(SP_VT0 + 36'(8 * VA[8:0]),   pte(44'(SP_CODE), F_RXAD));
@@ -824,7 +879,7 @@ module tb;
 
     // The G-only regime with a GPA using bits 40:39 (FE-19).
     setup2("h_g_only_high");
-    csr_ptw_vsatp_mode = MODE_BARE;
+    cs_vsatp_mode(MODE_BARE);
     gmap(29'h1FF_0123, pte(44'h8_4444, F_URXA));
     walk(1'b1, 29'h1FF_0123, ACC_X);
     exp_hit("G only, GPA bit 40", 24'h8_4444, SZ_4K, 2'd0);
@@ -922,8 +977,8 @@ module tb;
             41'(8 * VA[17:9]), 2'b01);
 
     setup2("h_gpf_write");
-    csr_ptw_henvcfg_adue = 1'b1;
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RX));                 // VS A clear
     wrw(G0 + 36'(8 * GP_VT0[8:0]), pte(44'(SP_VT0 >> 12), F_URXA)); // no W
     walk(1'b1, 29'(VA), ACC_X);
@@ -986,13 +1041,13 @@ module tb;
     exp_flt("G leaf PPN above bit 23", 1);
 
     setup2("h_vs_pbmte");
-    csr_ptw_henvcfg_pbmte = 1'b0;                    // menvcfg's stays set
+    cs_henvcfg_pbmte(1'b0);                    // menvcfg's stays set
     vspath(pte_x(44'(GP_CODE), F_RXAD, 2'd1, 1'b0));
     walk(1'b1, 29'(VA), ACC_X);
     exp_flt("VS PBMT with henvcfg.PBMTE clear", 12);
 
     setup2("h_g_pbmte");
-    csr_ptw_menvcfg_pbmte = 1'b0;                    // henvcfg's stays set
+    cs_menvcfg_pbmte(1'b0);                    // henvcfg's stays set
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte_x(44'(SP_CODE), F_URXA, 2'd2, 1'b0));
     walk(1'b1, 29'(VA), ACC_X);
@@ -1032,8 +1087,8 @@ module tb;
     // henvcfg.ADUE set, menvcfg.ADUE set: the VS update writes through
     // the G-stage and sets the G leaf's D.
     setup2("h_vs_upd_sets_g_d");
-    csr_ptw_henvcfg_adue = 1'b1;
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RX));
     wrw(gl, pte(44'(SP_VT0 >> 12), F_URWXA));        // D clear
     walk(1'b1, 29'(VA), ACC_X);
@@ -1043,23 +1098,28 @@ module tb;
         rdw(gl) == pte(44'(SP_VT0 >> 12), F_URWXAD));
     chk("two CAS", n_cas == 2);
 
-    // henvcfg.ADUE set, menvcfg.ADUE clear: the VS-stage is Svadu, the
-    // G-stage Svade, so the G D needed for the VS update faults.
+    // henvcfg.ADUE written 1, menvcfg.ADUE clear. SYS-001: henvcfg.ADUE
+    // reads 0 while menvcfg.ADUE is 0 (csr_decisions.md CSR-5, the
+    // privileged rule), so the walker sees both stages Svade and the VS
+    // leaf's clear A is a page fault. Until SYS-001 the walker was given
+    // henvcfg.ADUE 1 here, a VS-stage Svadu over a G-stage Svade that no
+    // CSR write can produce, and the case expected the G-stage D fault
+    // of the VS update (cause 20, kind 10).
     setup2("h_h1_m0");
-    csr_ptw_henvcfg_adue = 1'b1;
-    csr_ptw_menvcfg_adue = 1'b0;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b0);
+    chk("h1 m0: henvcfg.ADUE reads 0", ptw_csr.henvcfg_adue == 1'b0);
     vspath(pte(44'(GP_CODE), F_RX));
     wrw(gl, pte(44'(SP_VT0 >> 12), F_URWXA));
     walk(1'b1, 29'(VA), ACC_X);
-    exp_gpf41("Svade at G for the VS update", {GP_VT0, 12'h000} +
-            41'(8 * VA[8:0]), 2'b10);
+    exp_flt("Svade at VS, henvcfg.ADUE read 0", 12);
     chk("h1 m0: no CAS", n_cas == 0);
 
     // henvcfg.ADUE clear, menvcfg.ADUE set: VS Svade faults on A, while
     // the G-stage updates its own A on the way.
     setup2("h_h0_m1");
-    csr_ptw_henvcfg_adue = 1'b0;
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_henvcfg_adue(1'b0);
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RX));
     wrw(G0 + 36'(8 * GP_VT2[8:0]), pte(44'(SP_VT2 >> 12), F_URWX)); // A clear
     walk(1'b1, 29'(VA), ACC_X);
@@ -1076,7 +1136,7 @@ module tb;
 
     // Svadu at the G-stage for the fetch's own GPA, with a mismatch.
     setup2("h_g_svadu_mismatch");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_CODE[8:0]), pte(44'(SP_CODE), F_URX));
     chg_at  = 0;
@@ -1087,8 +1147,8 @@ module tb;
 
     // VS mismatch: the whole translation restarts.
     setup2("h_vs_mismatch");
-    csr_ptw_henvcfg_adue = 1'b1;
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RX));
     chg_at  = 0;
     chg_val = pte(44'(GP_CODE), F_RXAD);
@@ -1113,8 +1173,8 @@ module tb;
                       input int cause);
     logic [PA_WIDTH-1:0] la;
     setup(nm);
-    csr_ptw_menvcfg_adue  = 1'b1;
-    csr_ptw_menvcfg_pbmte = pbmte;
+    cs_menvcfg_adue(1'b1);
+    cs_menvcfg_pbmte(pbmte);
     req_priv = priv;
     if (lvl == 2'd0) begin
       path3(T2, T1, T0, VA, leaf);
@@ -1139,9 +1199,9 @@ module tb;
                        input int cause);
     logic [PA_WIDTH-1:0] la;
     setup2(nm);
-    csr_ptw_henvcfg_adue  = 1'b1;
-    csr_ptw_menvcfg_adue  = 1'b1;
-    csr_ptw_henvcfg_pbmte = pbmte;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
+    cs_henvcfg_pbmte(pbmte);
     req_priv = priv;
     if (lvl == 2'd0) begin
       vspath(leaf);
@@ -1166,8 +1226,8 @@ module tb;
     logic [PA_WIDTH-1:0]        la;
     logic [28:0]                gp;
     setup2(nm);
-    csr_ptw_menvcfg_adue  = 1'b1;
-    csr_ptw_menvcfg_pbmte = pbmte;
+    cs_menvcfg_adue(1'b1);
+    cs_menvcfg_pbmte(pbmte);
     if (lvl == 2'd0) begin
       gp = GP_CODE;
       vspath(pte(44'(GP_CODE), F_RXAD));
@@ -1192,10 +1252,10 @@ module tb;
       // store.
       setup(a == 0 ? "c_pmp_read_r" : "c_pmp_read_w");
       path3(T2, T1, T0, VA, pte(44'h8_2345, 8'hCF));  // D A X W R V
-      csr_ptw_pmpcfg[0]  = 8'h18;
-      csr_ptw_pmpaddr[0] = 34'((T0 >> 2) | 36'h1FF);
-      csr_ptw_pmpcfg[1]  = 8'h1F;
-      csr_ptw_pmpaddr[1] = '1;
+      cs_pmpcfg(0, 8'h18);
+      cs_pmpaddr(0, 34'((T0 >> 2) | 36'h1FF));
+      cs_pmpcfg(1, 8'h1F);
+      cs_pmpaddr(1, '1);
       walk(1'b0, 29'(VA), a == 0 ? ACC_R : ACC_W);
       exp_flt(tname, a == 0 ? 5 : 7);
       // The final GPA is unmapped by the G-stage: 21 for a read, 23
@@ -1227,7 +1287,7 @@ module tb;
     // The permitted cases, so the U rule is not "always fault": a U
     // fetch from a U leaf and an S fetch from a non-U leaf update A.
     setup("lc_s_u_fetch_uset_ok");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     req_priv = PRV_U;
     path3(T2, T1, T0, VA, pte(44'h8_2345, F_URX_NA));
     walk(1'b0, 29'(VA), ACC_X);
@@ -1235,8 +1295,8 @@ module tb;
     chk("U fetch from a U leaf: A set by one CAS", (n_cas == 1) &&
         (rdw(T0 + 36'(8 * VA[8:0])) == pte(44'h8_2345, F_URXA)));
     setup2("lc_vs_vu_fetch_uset_ok");
-    csr_ptw_henvcfg_adue = 1'b1;
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
     req_priv = PRV_U;
     vspath(pte(44'(GP_CODE), F_URX_NA));
     walk(1'b1, 29'(VA), ACC_X);
@@ -1259,7 +1319,7 @@ module tb;
     // A G leaf without R for the implicit read of a VS table page:
     // kind 01, and nothing is updated.
     setup2("lc_g_no_r_implicit");
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RXAD));
     wrw(G0 + 36'(8 * GP_VT1[8:0]), pte(44'(SP_VT1 >> 12), 8'h19)); // U X
     walk(1'b1, 29'(VA), ACC_X);
@@ -1272,8 +1332,8 @@ module tb;
     // granted, A set, so no update for the read); the write needs W
     // and D: neither is set and nothing is stored.
     setup2("lc_g_no_w_update");
-    csr_ptw_henvcfg_adue = 1'b1;
-    csr_ptw_menvcfg_adue = 1'b1;
+    cs_henvcfg_adue(1'b1);
+    cs_menvcfg_adue(1'b1);
     vspath(pte(44'(GP_CODE), F_RX));                 // VS A clear
     wrw(G0 + 36'(8 * GP_VT0[8:0]), pte(44'(SP_VT0 >> 12), F_URXA));
     walk(1'b1, 29'(VA), ACC_X);

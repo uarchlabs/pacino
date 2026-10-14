@@ -52,6 +52,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb #(
   parameter int WALK_DEPTH = 1
@@ -119,13 +120,10 @@ module tb #(
   logic [1:0]              l2_rsp_imp;
   logic [1:0]              rsp_imp;
 
-  logic                    c_v;
-  logic [1:0]              c_priv;
-  logic [3:0]              c_satp_mode, c_vsatp_mode, c_hgatp_mode;
-  logic [ASID_WIDTH-1:0]   c_satp_asid, c_vsatp_asid;
-  logic [VMID_WIDTH-1:0]   c_vmid;
-  logic [15:0][7:0]        c_pmpcfg;
-  logic [15:0][PA_WIDTH-3:0] c_pmpaddr;
+  // The CSR group (SYS-001, csr_decisions.md CSR-2): driven only by
+  // cs_sync() from csr_tb_pkg pack_fe_csr. The cs_* tasks below change
+  // one field through csr_tb_pkg and drive the group again.
+  fe_csr_t                 fe_csr;
 
   logic                    inv_val;
   logic [1:0]              inv_op;
@@ -168,16 +166,7 @@ module tb #(
     .l2t_itlb_cause        (l2_rsp_cause),
     .l2t_itlb_gpa          (l2_rsp_gpa),
     .l2t_itlb_gpa_imp      (l2_rsp_imp),
-    .csr_itlb_v            (c_v),
-    .csr_itlb_priv         (c_priv),
-    .csr_itlb_satp_mode    (c_satp_mode),
-    .csr_itlb_satp_asid    (c_satp_asid),
-    .csr_itlb_vsatp_mode   (c_vsatp_mode),
-    .csr_itlb_vsatp_asid   (c_vsatp_asid),
-    .csr_itlb_hgatp_mode   (c_hgatp_mode),
-    .csr_itlb_hgatp_vmid   (c_vmid),
-    .csr_itlb_pmpcfg       (c_pmpcfg),
-    .csr_itlb_pmpaddr      (c_pmpaddr),
+    .fe_csr                (fe_csr),
     .bkend_itlb_inv_val    (inv_val | inv_auto),
     .bkend_itlb_inv_op     (inv_op),
     .bkend_itlb_inv_rs1_nz (inv_rs1),
@@ -272,8 +261,8 @@ module tb #(
                            input logic [FAULT_GPA_WIDTH-1:0] ga,
                            input int lat);
     map_t m;
-    m.v = c_v; m.vmid = c_vmid;
-    m.asid = c_v ? c_vsatp_asid : c_satp_asid;
+    m.v = fe_csr.v; m.vmid = fe_csr.hgatp_vmid;
+    m.asid = fe_csr.v ? fe_csr.vsatp_asid : fe_csr.satp_asid;
     m.vbase = vb; m.size = SZ4K; m.st = st; m.ppn = '0; m.perm = 8'h00;
     m.pbmt = '0; m.cause = cs; m.gpa = ga; m.imp = 2'b00; m.lat = lat;
     m.retries = 0;
@@ -388,18 +377,74 @@ module tb #(
     end
   endtask
 
+  // ---- the CSR group (SYS-001) ------------------------------------
+  task automatic cs_sync();
+    fe_csr = csr_tb_pkg::pack_fe_csr();
+  endtask
+  task automatic cs_v(input logic b);
+    csr_tb_pkg::set_v(b); cs_sync();
+  endtask
+  task automatic cs_priv(input logic [1:0] p);
+    csr_tb_pkg::set_priv(p); cs_sync();
+  endtask
+  task automatic cs_satp_mode(input logic [3:0] m);
+    satp_t r;
+    r = satp_t'(csr_tb_pkg::csr_read(CSR_SATP_ADDR)); r.mode = m;
+    csr_tb_pkg::csr_write(CSR_SATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_satp_asid(input logic [ASID_WIDTH-1:0] a);
+    satp_t r;
+    r = satp_t'(csr_tb_pkg::csr_read(CSR_SATP_ADDR)); r.asid = 16'(a);
+    csr_tb_pkg::csr_write(CSR_SATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_vsatp_mode(input logic [3:0] m);
+    vsatp_t r;
+    r = vsatp_t'(csr_tb_pkg::csr_read(CSR_VSATP_ADDR)); r.mode = m;
+    csr_tb_pkg::csr_write(CSR_VSATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_vsatp_asid(input logic [ASID_WIDTH-1:0] a);
+    vsatp_t r;
+    r = vsatp_t'(csr_tb_pkg::csr_read(CSR_VSATP_ADDR)); r.asid = 16'(a);
+    csr_tb_pkg::csr_write(CSR_VSATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  // hgatp.MODE: SV39 (8) is Sv39x4 in hgatp.
+  task automatic cs_hgatp_mode(input logic [3:0] m);
+    hgatp_t r;
+    r = hgatp_t'(csr_tb_pkg::csr_read(CSR_HGATP_ADDR)); r.mode = m;
+    csr_tb_pkg::csr_write(CSR_HGATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  task automatic cs_vmid(input logic [VMID_WIDTH-1:0] v);
+    hgatp_t r;
+    r = hgatp_t'(csr_tb_pkg::csr_read(CSR_HGATP_ADDR)); r.vmid = 14'(v);
+    csr_tb_pkg::csr_write(CSR_HGATP_ADDR, 64'(r)); cs_sync();
+  endtask
+  // pmpcfg byte k, by read-modify-write of pmpcfg0 or pmpcfg2.
+  task automatic cs_pmpcfg(input int k, input logic [7:0] b);
+    logic [11:0] ca;
+    pmpcfg_t     c;
+    ca = (k < 8) ? CSR_PMPCFG0_ADDR : CSR_PMPCFG2_ADDR;
+    c  = pmpcfg_t'(csr_tb_pkg::csr_read(ca));
+    c.ent[k % 8] = pmpcfg_ent_t'(b);
+    csr_tb_pkg::csr_write(ca, 64'(c)); cs_sync();
+  endtask
+  task automatic cs_pmpaddr(input int k, input pmpaddr_imp_t a);
+    csr_tb_pkg::csr_write(CSR_PMPADDR0_ADDR + 12'(k), 64'(a)); cs_sync();
+  endtask
+
   task automatic reset_all();
     rstn         = 1'b0;
     req_val      = 1'b0; req_vpn = '0; req_tag = 1'b0;
     l2_req_rdy   = 1'b1;
-    c_v          = 1'b0; c_priv = PS;
-    c_satp_mode  = SV39; c_satp_asid = 16'd5;
-    c_vsatp_mode = SV39; c_vsatp_asid = 16'd5;
-    c_hgatp_mode = SV39; c_vmid = 14'd3;
-    // PMP entry 0: NAPOT over the whole space, RWX, so the PMP
-    // passes unless a test says otherwise.
-    c_pmpcfg     = '0; c_pmpaddr = '0;
-    c_pmpcfg[0]  = 8'h1F; c_pmpaddr[0] = '1;
+    // CSRs from the csr_pkg reset values (CSR-7), then this
+    // testbench's: V 0 in S-mode, satp and vsatp Sv39 with ASID 5,
+    // hgatp Sv39x4 with VMID 3. PMP entry 0 (the reset value): NAPOT
+    // over the whole space, RWX, so the PMP passes unless a test says
+    // otherwise; every other entry OFF.
+    csr_tb_pkg::csr_reset();
+    cs_v(1'b0); cs_priv(PS);
+    cs_satp_mode(SV39); cs_satp_asid(16'd5);
+    cs_vsatp_mode(SV39); cs_vsatp_asid(16'd5);
+    cs_hgatp_mode(SV39); cs_vmid(14'd3);
     inv_val = 1'b0; inv_op = '0; inv_rs1 = 1'b0; inv_rs2 = 1'b0;
     inv_vpn = '0; inv_asid = '0; inv_vmid = '0;
     maps.delete();
@@ -494,7 +539,7 @@ module tb #(
 
     // ---- A: physical regimes ------------------------------------------
     reset_all();
-    c_satp_mode = BARE;
+    cs_satp_mode(BARE);
     look(29'h0080000);
     ok("A1 Bare main memory base", g_st == ST_HIT &&
        g_ppn == 24'h080000 && g_pma == MM);
@@ -508,19 +553,19 @@ module tb #(
     ok("A4 Bare above pa_bits", g_st == ST_FAULT && g_cause == 5'd1);
     look(29'h1008_0000);
     ok("A5 Bare bit 40 set", g_st == ST_FAULT && g_cause == 5'd1);
-    c_satp_mode = SV39;
-    c_priv = PM;
+    cs_satp_mode(SV39);
+    cs_priv(PM);
     look(29'h0080123);
     ok("A6 M-mode untranslated", g_st == ST_HIT && g_ppn == 24'h080123);
-    c_priv = PS;
-    c_v = 1'b1; c_vsatp_mode = BARE; c_hgatp_mode = BARE;
+    cs_priv(PS);
+    cs_v(1'b1); cs_vsatp_mode(BARE); cs_hgatp_mode(BARE);
     look(29'h0090000);
     ok("A7 V=1 Bare/Bare physical", g_st == ST_HIT && g_ppn == 24'h090000);
-    c_v = 1'b0; c_satp_mode = BARE;
-    c_pmpcfg[0] = 8'h00;                    // PMP entry OFF
+    cs_v(1'b0); cs_satp_mode(BARE);
+    cs_pmpcfg(0, 8'h00);                    // PMP entry OFF
     look(29'h0080000);
     ok("A8 Bare S no PMP match", g_st == ST_FAULT && g_cause == 5'd1);
-    c_priv = PM;
+    cs_priv(PM);
     look(29'h0080000);
     ok("A9 Bare M no PMP match", g_st == ST_HIT);
     ok("A10 no walk in any physical regime", l2_reqs == 0);
@@ -599,7 +644,7 @@ module tb #(
     ok("F3 the next lookup walks again", l2_reqs == n0 + 1);
     idle(6);
     reset_all();
-    c_v = 1'b1;
+    cs_v(1'b1);
     // MMU-23 (BP-124): a GPA above bit 40 passes through whole.
     add_fault(VA_B, L2_FAULT, 5'd20, 56'h80_0001_2345_6789, 3);
     xlate(VA_B, m0);
@@ -610,7 +655,7 @@ module tb #(
     // BP-123, IT-6c, ITLB-10a: the held fault keeps the GPA's kind.
     for (int k = 0; k < 3; k++) begin
       reset_all();
-      c_v = 1'b1;
+      cs_v(1'b1);
       add_fault(VA_B, L2_FAULT, 5'd20, 56'h0_0004_2AB8 | (56'(k) << 50),
                 3);
       maps[maps.size()-1].imp = 2'(k);
@@ -675,13 +720,13 @@ module tb #(
     add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PXG, 2'd0, 2);
     install(VA_A);
     install(VA_B);
-    c_satp_asid = 16'd6;
+    cs_satp_asid(16'd6);
     expect_miss("H1 other ASID misses", VA_A);
     expect_hit("H2 global ignores ASID", VA_B, 24'h080020);
-    c_satp_asid = 16'd5;
+    cs_satp_asid(16'd5);
     expect_hit("H3 own ASID hits", VA_A, 24'h080010);
     // V: the V=0 entries do not serve V=1.
-    c_v = 1'b1;
+    cs_v(1'b1);
     look(VA_A);
     ok("H4 V=1 misses a V=0 entry", g_st == ST_MISS);
     idle(2);
@@ -689,21 +734,21 @@ module tb #(
        last_asid == 16'd5);
     idle(4);
     reset_all();
-    c_v = 1'b1;
+    cs_v(1'b1);
     add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080110, PX,  2'd0, 2);
     add_map(1'b1, 14'd3, 16'd5, VA_B, SZ4K, 24'h080120, PXG, 2'd0, 2);
     install(VA_A);
     install(VA_B);
     expect_hit("H6 V=1 VMID 3 hit", VA_A, 24'h080110);
-    c_vmid = 14'd4;
+    cs_vmid(14'd4);
     expect_miss("H7 other VMID misses", VA_A);
     expect_miss("H8 global is per VMID", VA_B);
-    c_vmid = 14'd3;
-    c_vsatp_asid = 16'd9;
+    cs_vmid(14'd3);
+    cs_vsatp_asid(16'd9);
     expect_hit("H9 V=1 global ignores ASID", VA_B, 24'h080120);
     expect_miss("H10 V=1 other ASID misses", VA_A);
-    c_vsatp_asid = 16'd5;
-    c_v = 1'b0;
+    cs_vsatp_asid(16'd5);
+    cs_v(1'b0);
     expect_miss("H11 V=0 misses a V=1 entry", VA_A);
 
     // ---- I: ITLB-16 ------------------------------------------------------
@@ -712,30 +757,30 @@ module tb #(
     add_map(1'b0, '0, 16'd5, VA_B, SZ4K, 24'h080020, PXU, 2'd0, 2);
     add_map(1'b0, '0, 16'd5, VA_C, SZ4K, 24'h080030, PR,  2'd0, 2);
     install(VA_A);
-    c_priv = PU;
+    cs_priv(PU);
     install(VA_B);
-    c_priv = PS;
+    cs_priv(PS);
     n0 = l2_reqs;
     expect_hit("I1 S, U clear: legal", VA_A, 24'h080010);
-    c_priv = PU;
+    cs_priv(PU);
     look(VA_A);
     ok("I2 U, U clear: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
-    c_priv = PS;
+    cs_priv(PS);
     expect_hit("I3 back to S, no fence", VA_A, 24'h080010);
     look(VA_B);
     ok("I4 S, U set: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
-    c_priv = PU;
+    cs_priv(PU);
     expect_hit("I5 U, U set: legal", VA_B, 24'h080020);
     ok("I6 no walk for a permission change", l2_reqs == n0);
-    c_priv = PS;
+    cs_priv(PS);
     xlate(VA_C, m0);
     ok("I7 X clear: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
     // VU and VS for a V=1 entry.
     reset_all();
-    c_v = 1'b1;
+    cs_v(1'b1);
     add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080110, PX, 2'd0, 2);
     install(VA_A);
-    c_priv = PU;
+    cs_priv(PU);
     look(VA_A);
     ok("I8 VU, U clear: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
 
@@ -753,15 +798,15 @@ module tb #(
        g_cause == 5'd1);
     // PMP: entry 0 covers PA 0x8001_0000 4 KiB with no X, so VA_A's
     // page is denied; entry 1 still grants the rest.
-    c_pmpcfg[1]  = 8'h1F; c_pmpaddr[1] = '1;
-    c_pmpcfg[0]  = 8'h1B;                              // NAPOT R W
-    c_pmpaddr[0] = 34'(36'h0_8001_0000 >> 2) | 34'h1FF;
+    cs_pmpcfg(1, 8'h1F); cs_pmpaddr(1, '1);
+    cs_pmpcfg(0, 8'h1B);                              // NAPOT R W
+    cs_pmpaddr(0, 34'(36'h0_8001_0000 >> 2) | 34'h1FF);
     look(VA_A);
     ok("J4 PMP denies X: cause 1", g_st == ST_FAULT && g_cause == 5'd1);
     look(VA_B);
     ok("J5 PMP other page allowed", g_st == ST_HIT);
     // ITLB-16 outranks the PMP: a translation fault comes first.
-    c_priv = PU;
+    cs_priv(PU);
     look(VA_A);
     ok("J6 permission fault before PMP", g_st == ST_FAULT &&
        g_cause == 5'd12);
@@ -780,12 +825,12 @@ module tb #(
       // a 2 MiB V=0 entry for the superpage address form
       add_map(1'b0, '0, 16'd5, 29'h0000200, SZ2M, 24'h080200, PX, 2'd0, 2);
       install(VA_A); install(VA_B);
-      c_satp_asid = 16'd6; install(VA_C); c_satp_asid = 16'd5;
+      cs_satp_asid(16'd6); install(VA_C); cs_satp_asid(16'd5);
       install(29'h0000210);
-      c_v = 1'b1;
+      cs_v(1'b1);
       install(VA_A); install(VA_B);
-      c_vmid = 14'd4; install(VA_A); c_vmid = 14'd3;
-      c_v = 1'b0;
+      cs_vmid(14'd4); install(VA_A); cs_vmid(14'd3);
+      cs_v(1'b0);
       case (f)
         0:  inval(OP_VMA,  0, 0, '0,   '0,    '0);
         1:  inval(OP_VMA,  0, 1, '0,   16'd5, '0);
@@ -824,17 +869,17 @@ module tb #(
         // got[6:0] is E1..E7 in the order of exp.
         n0 = l2_reqs;
         look(29'h0000210); got[0] = (g_st == ST_HIT); idle(4);
-        c_satp_asid = 16'd6;
+        cs_satp_asid(16'd6);
         look(VA_C);        got[4] = (g_st == ST_HIT); idle(4);
-        c_satp_asid = 16'd5;
+        cs_satp_asid(16'd5);
         look(VA_B);        got[5] = (g_st == ST_HIT); idle(4);
         look(VA_A);        got[6] = (g_st == ST_HIT); idle(4);
-        c_v = 1'b1;
+        cs_v(1'b1);
         look(VA_A);        got[3] = (g_st == ST_HIT); idle(4);
         look(VA_B);        got[1] = (g_st == ST_HIT); idle(4);
-        c_vmid = 14'd4;
+        cs_vmid(14'd4);
         look(VA_A);        got[2] = (g_st == ST_HIT); idle(4);
-        c_vmid = 14'd3; c_v = 1'b0;
+        cs_vmid(14'd3); cs_v(1'b0);
         if (got == exp) pass_cnt++;
         else begin
           fail_cnt++;
@@ -942,7 +987,7 @@ module tb #(
     // Same privilege: answered from the hold, no new walk. The walk was
     // presented at U, the privilege of the miss.
     reset_all();
-    c_priv = PU;
+    cs_priv(PU);
     add_fault(VA_A, L2_FAULT, 5'd12, '0, 2);
     look(VA_A);
     idle(6);
@@ -955,11 +1000,11 @@ module tb #(
     ok("Q3 same privilege: no new walk", l2_reqs == n0);
     // Another privilege: the held fault is dropped, a new walk at S.
     reset_all();
-    c_priv = PU;
+    cs_priv(PU);
     add_fault(VA_A, L2_FAULT, 5'd12, '0, 2);
     look(VA_A);
     idle(6);
-    c_priv = PS;
+    cs_priv(PS);
     n0 = l2_reqs;
     look(VA_A);
     ok("Q4 other privilege: not answered from the hold", g_st == ST_MISS);
@@ -972,7 +1017,7 @@ module tb #(
     // Let the last S request drain before the privilege changes, so no
     // request is answered at U except Q8's own.
     idle(2);
-    c_priv = PU;
+    cs_priv(PU);
     n0 = l2_reqs;
     look(VA_A);
     ok("Q8 the U fault was dropped, not kept", g_st == ST_MISS);
@@ -982,11 +1027,11 @@ module tb #(
     // Another V: dropped too. A guest-page fault held at V=1 is not the
     // answer at V=0.
     reset_all();
-    c_v = 1'b1;
+    cs_v(1'b1);
     add_fault(VA_B, L2_FAULT, 5'd20, 56'h0_0004_2000, 2);
     look(VA_B);
     idle(6);
-    c_v = 1'b0;
+    cs_v(1'b0);
     n0 = l2_reqs;
     look(VA_B);
     ok("Q10 other V: not answered from the hold", g_st == ST_MISS);
@@ -1002,7 +1047,7 @@ module tb #(
        g_cause == 5'd12);
     look(29'h1000_0000);            // VA bit 40 set only
     ok("P2 bit 40 alone: cause 12", g_st == ST_FAULT && g_cause == 5'd12);
-    c_v = 1'b1; c_vsatp_mode = BARE;
+    cs_v(1'b1); cs_vsatp_mode(BARE);
     add_map(1'b1, 14'd3, 16'd5, 29'h1000_0000, SZ4K, 24'h080500, PX,
             2'd0, 2);
     xlate(29'h1000_0000, m0);
@@ -1015,17 +1060,17 @@ module tb #(
     // ITLB-16's VS-level rule must not apply. Before BP-123 every
     // VS-mode fetch through such an entry faulted cause 12.
     reset_all();
-    c_v = 1'b1; c_vsatp_mode = BARE; c_priv = 2'd1;          // VS-mode
+    cs_v(1'b1); cs_vsatp_mode(BARE); cs_priv(2'd1);          // VS-mode
     add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080600, PXU, 2'd0, 2);
     xlate(VA_A, m0);
     ok("P6 G-only entry, U set, hits in VS-mode", g_st == ST_HIT &&
        g_ppn == 24'h080600);
-    c_priv = 2'd0;                                            // VU-mode
+    cs_priv(2'd0);                                            // VU-mode
     look(VA_A);
     ok("P7 and in VU-mode", g_st == ST_HIT && g_ppn == 24'h080600);
     // With a VS-stage the rule applies: a U page faults in VS-mode.
     reset_all();
-    c_v = 1'b1; c_priv = 2'd1;
+    cs_v(1'b1); cs_priv(2'd1);
     add_map(1'b1, 14'd3, 16'd5, VA_A, SZ4K, 24'h080600, PXU, 2'd0, 2);
     xlate(VA_A, m0);
     ok("P8 with vsatp Sv39 a U page faults in VS-mode", g_st == ST_FAULT &&

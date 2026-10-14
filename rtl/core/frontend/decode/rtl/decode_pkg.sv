@@ -591,10 +591,14 @@ typedef enum logic [7:0] {
 } v_op_class_t;
 
 // Extension enable/disable control.
-// Driven from misa fields by the CSR unit; decoder sees only the
-// current enable state. Dependency enforcement (D requires F, etc.)
-// is a software/driver responsibility - not checked in RTL.
-// All bits are 1 at reset for the RVA23 profile.
+// Not a CSR and not driven from misa (csr_decisions.md CSR-4): the
+// ext_enable member of csr_pkg fe_cfg_t, with no address, set only
+// through csr_tb_pkg set_ext_enable; decoder sees only the current
+// enable state. Clearing a bit makes decode treat that extension as
+// illegal; such a configuration is not RVA23. Dependency enforcement
+// (D requires F, etc.) is a software/driver responsibility - not
+// checked in RTL.
+// All bits are 1 at reset for the RVA23 profile (RVA23_ENABLE).
 // C and Zcb have no enable: they are always enabled (dcd_decisions.md
 // DCD-20). The IFU expands every compressed instruction before the
 // ibuf, so decode cannot tell a compressed origin and nothing read

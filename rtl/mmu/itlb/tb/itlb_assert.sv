@@ -251,13 +251,15 @@ bind itlb itlb_assert u_assert (
   .l2t_itlb_status    (l2t_itlb_status),
   .l2t_itlb_size      (l2t_itlb_size),
   .ifu_itlb_vpn       (ifu_itlb_vpn),
-  .csr_itlb_v         (csr_itlb_v),
-  .csr_itlb_priv      (csr_itlb_priv),
-  .csr_itlb_satp_mode (csr_itlb_satp_mode),
-  .csr_itlb_satp_asid (csr_itlb_satp_asid),
-  .csr_itlb_vsatp_mode (csr_itlb_vsatp_mode),
-  .csr_itlb_vsatp_asid (csr_itlb_vsatp_asid),
-  .csr_itlb_hgatp_mode (csr_itlb_hgatp_mode),
-  .csr_itlb_hgatp_vmid (csr_itlb_hgatp_vmid),
+  // The ITLB's fe_csr_t members (SYS-001); this module's ports keep
+  // their names.
+  .csr_itlb_v          (fe_csr.v),
+  .csr_itlb_priv       (fe_csr.priv),
+  .csr_itlb_satp_mode  (fe_csr.satp_mode),
+  .csr_itlb_satp_asid  (fe_csr.satp_asid),
+  .csr_itlb_vsatp_mode (fe_csr.vsatp_mode),
+  .csr_itlb_vsatp_asid (fe_csr.vsatp_asid),
+  .csr_itlb_hgatp_mode (fe_csr.hgatp_mode),
+  .csr_itlb_hgatp_vmid (fe_csr.hgatp_vmid),
   .bkend_itlb_inv_val (bkend_itlb_inv_val)
 );

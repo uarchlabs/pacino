@@ -32,6 +32,11 @@ FST ?= 0
 RTL_DIR  := rtl
 TB_DIR   := tb
 COMP_DIR := ../../../lib/rtl
+# SYS-001: the testbenches of modules with config ports (sc, ittage,
+# ittage_cntrl, tage, ftb, bp_cluster) drive them from csr_tb_pkg
+# (csr_decisions.md CSR-2), over csr_pkg and the decode_pkg it uses.
+CSR_TB_SRCS := ../decode/rtl/decode_pkg.sv ../../csr/rtl/csr_pkg.sv \
+               ../../csr/tb/csr_tb_pkg.sv
 VER_OUT  := obj
 
 # -- Slot count (BP-128, TD#1) -------------------------------------
@@ -343,6 +348,7 @@ sim_sc:
 	  $(RTL_DIR)/sc_brimli.sv \
 	  $(RTL_DIR)/sc_cntrl.sv \
 	  $(RTL_DIR)/sc.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_sc.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_sc/Vtb"
 	$(Q)./$(VER_OUT)_sc/Vtb
@@ -362,6 +368,7 @@ sim_sc_fast:
 	  $(RTL_DIR)/sc_brimli.sv \
 	  $(RTL_DIR)/sc_cntrl.sv \
 	  $(RTL_DIR)/sc.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_sc.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_sc_fast/Vtb"
 	$(Q)./$(VER_OUT)_sc_fast/Vtb +SC_FAST_INIT=1
@@ -409,6 +416,7 @@ sim_ittage_cntrl:
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
 	  $(RTL_DIR)/ittage_cntrl.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_ittage_cntrl.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ittage_cntrl/Vtb"
 	$(Q)./$(VER_OUT)_ittage_cntrl/Vtb
@@ -458,6 +466,7 @@ sim_ittage:
 	  $(RTL_DIR)/ittage_arb.sv \
 	  $(RTL_DIR)/ittage.sv \
 	  $(TB_DIR)/ittage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ittage/Vtb"
 	$(Q)./$(VER_OUT)_ittage/Vtb
@@ -478,6 +487,7 @@ sim_ittage_fast:
 	  $(RTL_DIR)/ittage_arb.sv \
 	  $(RTL_DIR)/ittage.sv \
 	  $(TB_DIR)/ittage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_ittage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ittage_fast/Vtb"
 	$(Q)./$(VER_OUT)_ittage_fast/Vtb +ITTAGE_FAST_INIT=1
@@ -524,6 +534,7 @@ lint_tage:
 	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 
 lint_ras:
@@ -669,6 +680,7 @@ sim_bp_cluster:
 	  --Mdir $(VER_OUT)_bp_cluster \
 	  $(BP_CLUSTER_SRCS) \
 	  $(BP_CLUSTER_ASSERT) \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_bp_cluster/Vtb"
 	$(Q)./$(VER_OUT)_bp_cluster/Vtb $(BP_CLUSTER_PLUSARGS)
@@ -688,6 +700,7 @@ sim_bp_cluster_init:
 	  --Mdir $(VER_OUT)_bp_cluster_init \
 	  $(BP_CLUSTER_SRCS) \
 	  $(BP_CLUSTER_ASSERT) \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_bp_cluster_init/Vtb"
 	$(Q)./$(VER_OUT)_bp_cluster_init/Vtb
@@ -719,6 +732,7 @@ sim_ftb:
 	  $(RTL_DIR)/ftb_plru.sv \
 	  $(RTL_DIR)/ftb_cntrl.sv \
 	  $(RTL_DIR)/ftb.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_ftb.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ftb/Vtb"
 	$(Q)./$(VER_OUT)_ftb/Vtb
@@ -746,6 +760,7 @@ sim_tage:
 	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage/Vtb"
 	$(Q)./$(VER_OUT)_tage/Vtb
@@ -773,6 +788,7 @@ sim_tage_fast:
 	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_fast/Vtb"
 	$(Q)./$(VER_OUT)_tage_fast/Vtb +TAGE_FAST_INIT=1
@@ -797,6 +813,7 @@ sim_tage_tasks:
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
 	  $(TB_DIR)/tage_assert_bind.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_tage_tasks.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_tasks/Vtb"
 	$(Q)./$(VER_OUT)_tage_tasks/Vtb +TAGE_FAST_INIT=1
@@ -824,6 +841,7 @@ sim_tage_manual:
 	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_tage_manual.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_tage_manual/Vtb"
 	$(Q)./$(VER_OUT)_tage_manual/Vtb +TAGE_FAST_INIT=1 +EN_FST=$(FST)
@@ -1006,6 +1024,7 @@ cov_tage:
 	  $(RTL_DIR)/tage_arb.sv \
 	  $(RTL_DIR)/tage.sv \
 	  $(TB_DIR)/tage_assert.sv \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_tage.sv $(VSILENCE)
 	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_tage/Vtb__main.cpp
@@ -1039,6 +1058,7 @@ cov_bp_cluster:
 	  --top-module tb \
 	  --Mdir obj_dir_cov_bp_cluster \
 	  $(BP_CLUSTER_SRCS) \
+	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_bp_cluster.sv $(VSILENCE)
 	$(Q)sed -i '/topp->final/a\    contextp->coveragep()->write("coverage.dat");' \
 	  obj_dir_cov_bp_cluster/Vtb__main.cpp

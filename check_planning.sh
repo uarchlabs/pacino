@@ -70,7 +70,8 @@
 # BP-134 (PROJECT_STATUS.md, tage_cntrl_ctr_update_rules.md,
 # tage_cntrl_decisions.md, tage_interfaces.md, ras_decisions.md,
 # ras_interfaces.md, sc_decisions.md, sc_interfaces.md,
-# ubtb_interfaces.md, ras_theory_of_operation.md (new, location MISC)).
+# ubtb_interfaces.md, ras_theory_of_operation.md (new, location MISC)),
+# and the file added in session-079 for TD#178 (csr_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -98,6 +99,7 @@ ARCH  bp_arb_spec.md                    2c98a9d4f798
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
+ARCH  csr_decisions.md                  de95e8325d79
 ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   0ec67f83aa96
 ARCH  ftb_decisions.md            5872deda6dc9
@@ -155,7 +157,7 @@ INTF  sc_table_interfaces.md            b442b10dab0f
 INTF  tage_interfaces.md                8c352e5411ea
 INTF  ubtb_interfaces.md          7f692dd5a124
 
-MISC  ras_theory_of_operation.md      f1b6221b3071
+MISC  ras_theory_of_operation.md      70934d94b58a
 
 EOF
 

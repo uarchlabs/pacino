@@ -61,6 +61,10 @@ BP_PKG          = $(BPU_DIR)/bp_defines_pkg.sv $(BPU_DIR)/bp_structs_pkg.sv
 PKG             = rtl/decode_pkg.sv
 RTL_DEC         = rtl/instr_decoder.sv
 TB_DEC          = tb/tb_instr_decoder.sv
+# SYS-001: tb_instr_decoder drives ext_enable from csr_tb_pkg
+# (csr_decisions.md CSR-2), over csr_pkg.
+CSR_DIR         = ../../csr
+CSR_TB_PKG      = $(CSR_DIR)/rtl/csr_pkg.sv $(CSR_DIR)/tb/csr_tb_pkg.sv
 SIM_MAIN_DEC    = verilator/sim_main.cpp
 OBJ_DEC         = obj_dir_dec
 # BP-124: the oracle sweep and the directed-word check.
@@ -91,7 +95,7 @@ sim_dec:
 	$(Q)$(VERILATOR) $(VERILATOR_FLAGS) $(DEC_WFLAGS) \
 	    --top-module tb \
 	    --Mdir $(OBJ_DEC) \
-	    $(BP_PKG) $(PKG) $(TB_DEC) $(RTL_DEC) \
+	    $(BP_PKG) $(PKG) $(CSR_TB_PKG) $(TB_DEC) $(RTL_DEC) \
 	    $(SIM_MAIN_DEC) \
 	    -o sim_dec
 	@echo "[simulating] $(OBJ_DEC)/sim_dec"
@@ -109,7 +113,7 @@ sim_dec_sweep:
 	$(Q)$(VERILATOR) $(VERILATOR_FLAGS) $(DEC_WFLAGS) \
 	    --top-module tb \
 	    --Mdir $(OBJ_SWEEP) \
-	    $(BP_PKG) $(PKG) $(TB_DEC) $(RTL_DEC) \
+	    $(BP_PKG) $(PKG) $(CSR_TB_PKG) $(TB_DEC) $(RTL_DEC) \
 	    $(SIM_MAIN_DEC) \
 	    -o sim_dec
 	@echo "[simulating] $(OBJ_SWEEP)/sim_dec +SWEEP"

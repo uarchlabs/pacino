@@ -73,6 +73,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module pmp_pma_chk #(
   parameter int PMP_ENTRIES  = 16,                      // MMU-11
@@ -92,12 +93,17 @@ module pmp_pma_chk #(
   input  logic [1:0]            chk_pbmt,  // 0 PMA, 1 NC, 2 IO
 
   // ---- MMU-11a, the PMP registers ----------------------------------
-  // pmpaddr holds PA[PA_WIDTH-1:2]; higher pmpaddr bits are WARL zero
-  // at PA_WIDTH 36. One entry is declared when PMP_ENTRIES is 0 so
-  // the ports keep a legal shape; it is never read.
-  input  logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][7:0]
+  // The pmpcfg and pmpaddr members of the CSR groups (csr_pkg fe_csr_t
+  // and ptw_csr_t, csr_decisions.md CSR-6; SYS-001), entries 0 to
+  // PMP_ENTRIES-1 of them: the checker takes the members it uses, not
+  // a group, because its two sites are fed from different groups and
+  // the walker's site checks at a fixed privilege. pmpaddr holds
+  // PA[PA_WIDTH-1:2]; higher pmpaddr bits are WARL zero at PA_WIDTH
+  // 36. One entry is declared when PMP_ENTRIES is 0 so the ports keep
+  // a legal shape; it is never read.
+  input  pmpcfg_ent_t  [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0]
                                 pmp_cfg,
-  input  logic [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0][PA_WIDTH-3:0]
+  input  pmpaddr_imp_t [((PMP_ENTRIES > 0) ? PMP_ENTRIES : 1)-1:0]
                                 pmp_addr,
 
   // ---- results ------------------------------------------------------
@@ -140,6 +146,9 @@ module pmp_pma_chk #(
 
   initial begin
     if (PMP_GRAN_LG2 < 2) $error("pmp_pma_chk: PMP_GRAN_LG2 below 2");
+    // The CSR groups carry CSR_PMP_ENTRIES entries (SYS-001).
+    if (PMP_ENTRIES > CSR_PMP_ENTRIES)
+      $error("pmp_pma_chk: PMP_ENTRIES above CSR_PMP_ENTRIES");
   end
 
   // MMU-15b: an elaboration-time rejection, one generate branch per

@@ -57,6 +57,7 @@
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -100,7 +101,17 @@ module tb;
   logic                        sc_uq_has_data;
   logic                        sc_uq_rd_en;
 
-  logic                        sc_enable;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_sc_enable(input logic v);
+    csr_tb_pkg::set_sc_enable(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
   logic                        sc_ready;
 
   // ----------------------------------------------------------------
@@ -125,7 +136,7 @@ module tb;
     .sc_upd_rdy      (sc_upd_rdy),
     .sc_uq_has_data  (sc_uq_has_data),
     .sc_uq_rd_en     (sc_uq_rd_en),
-    .sc_enable       (sc_enable),
+    .sc_enable       (fe_cfg.sc_enable),
     .sc_ready        (sc_ready)
   );
 
@@ -331,7 +342,8 @@ module tb;
     sc_t1_idx_fh_p2 = '0;
     sc_t2_idx_fh_p2 = '0;
     sc_t3_idx_fh_p2 = '0;
-    sc_enable       = 1'b1;
+    csr_tb_pkg::csr_reset();
+    cfg_sc_enable(1'b1);
     sc_uq_rd_en     = 1'b1;
   endtask
 

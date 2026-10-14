@@ -47,10 +47,16 @@
 //                ifu_cmt_maint_ack (l1i_ifu_interfaces.md 11, FE-17,
 //                BP-123)
 //   csr          V, privilege, satp / vsatp / hgatp fields, pmpcfg
-//                and pmpaddr, into the ITLB (FE-20, ITLB-17)
+//                and pmpaddr, into the ITLB (FE-20, ITLB-17): the
+//                csr_pkg group fe_csr_t, passed to the ITLB whole
 //   config       the cluster's configuration inputs, and decode's
 //                extension enables (FE-20; see Results Capture for
-//                the ones FE-20 does not list)
+//                the ones FE-20 does not list): the csr_pkg group
+//                fe_cfg_t, whose members drive the existing ports of
+//                the cluster, the FTQ and decode
+//                The two groups are csr_decisions.md CSR-6 (SYS-001).
+//                A connection to a group member is a member select,
+//                not an expression (FE-15).
 //   maintenance  the ITLB invalidate port (FE-20, ITLB-14)
 //
 // THE UPDATE PATHS ARE ALL CONNECTED (BP-119, TD#151, TD#150). The
@@ -79,6 +85,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 import decode_pkg::*;
+import csr_pkg::*;
 
 module fe_top (
   input  logic                        clk,
@@ -173,31 +180,17 @@ module fe_top (
   input  logic                        l1i_mem_d_corrupt,
 
   // =================================================================
-  // csr (FE-20, ITLB-17, MMU-11a)
+  // csr (FE-20, ITLB-17, MMU-11a): csr_pkg fe_csr_t (CSR-6, SYS-001),
+  // V, priv, the satp, vsatp and hgatp fields, pmpcfg and pmpaddr
   // =================================================================
-  input  logic                        csr_itlb_v,
-  input  logic [1:0]                  csr_itlb_priv,
-  input  logic [3:0]                  csr_itlb_satp_mode,
-  input  logic [ASID_WIDTH-1:0]       csr_itlb_satp_asid,
-  input  logic [3:0]                  csr_itlb_vsatp_mode,
-  input  logic [ASID_WIDTH-1:0]       csr_itlb_vsatp_asid,
-  input  logic [3:0]                  csr_itlb_hgatp_mode,
-  input  logic [VMID_WIDTH-1:0]       csr_itlb_hgatp_vmid,
-  input  logic [15:0][7:0]            csr_itlb_pmpcfg,
-  input  logic [15:0][PA_WIDTH-3:0]   csr_itlb_pmpaddr,
+  input  fe_csr_t                     fe_csr,
 
   // =================================================================
-  // config (FE-20)
+  // config (FE-20): csr_pkg fe_cfg_t (CSR-6, SYS-001), 0x7C0, 0x7C1
+  // and ext_enable. ext_enable is decode_pkg ext_enable_t; no C or Zcb
+  // enable since BP-120 (TD#155, DCD-20).
   // =================================================================
-  input  logic                        sc_enable,
-  input  logic                        ftb_fastpath_en,
-  input  logic                        tage_enable_aging,
-  input  logic [31:0]                 tage_aging_interval,
-  input  logic                        ittage_enable_aging,
-  input  logic [31:0]                 ittage_aging_interval,
-  // decode_pkg ext_enable_t. No C or Zcb enable since BP-120 (TD#155,
-  // DCD-20): two bits narrower.
-  input  ext_enable_t                 ext_enable,
+  input  fe_cfg_t                     fe_cfg,
 
   // =================================================================
   // maintenance: the ITLB invalidate port (FE-20, ITLB-14)
@@ -478,12 +471,12 @@ module fe_top (
     .ckpt_phist_ptr        (ckpt_phist_ptr),
     .ghr_buf               (bpu_ghr_buf),
     .phr_buf               (bpu_phr_buf),
-    .tage_enable_aging     (tage_enable_aging),
-    .tage_aging_interval   (tage_aging_interval),
-    .ittage_enable_aging   (ittage_enable_aging),
-    .ittage_aging_interval (ittage_aging_interval),
-    .sc_enable             (sc_enable),
-    .ftb_fastpath_en       (ftb_fastpath_en),
+    .tage_enable_aging     (fe_cfg.tage_enable_aging),
+    .tage_aging_interval   (fe_cfg.tage_aging_interval),
+    .ittage_enable_aging   (fe_cfg.ittage_enable_aging),
+    .ittage_aging_interval (fe_cfg.ittage_aging_interval),
+    .sc_enable             (fe_cfg.sc_enable),
+    .ftb_fastpath_en       (fe_cfg.ftb_fastpath_en),
     .tage_rdy              (bpu_tage_rdy),
     .ittage_rdy            (bpu_ittage_rdy),
     .sc_ready              (bpu_sc_ready),
@@ -554,7 +547,7 @@ module fe_top (
     .ras_commit_br_type    (ras_commit_br_type),
     .ras_commit_ret_addr   (ras_commit_ret_addr),
     .ras_commit_snapshot   (ras_commit_snapshot),
-    .sc_enable             (sc_enable),
+    .sc_enable             (fe_cfg.sc_enable),
     .ubtb_upd_u0           (ubtb_upd_u0),
     .lp_upd_valid_p0       (lp_upd_valid_p0),
     .lp_upd_p0             (lp_upd_p0),
@@ -781,16 +774,7 @@ module fe_top (
     .l2t_itlb_cause        (l2t_itlb_cause),
     .l2t_itlb_gpa          (l2t_itlb_gpa),
     .l2t_itlb_gpa_imp      (l2t_itlb_gpa_imp),
-    .csr_itlb_v            (csr_itlb_v),
-    .csr_itlb_priv         (csr_itlb_priv),
-    .csr_itlb_satp_mode    (csr_itlb_satp_mode),
-    .csr_itlb_satp_asid    (csr_itlb_satp_asid),
-    .csr_itlb_vsatp_mode   (csr_itlb_vsatp_mode),
-    .csr_itlb_vsatp_asid   (csr_itlb_vsatp_asid),
-    .csr_itlb_hgatp_mode   (csr_itlb_hgatp_mode),
-    .csr_itlb_hgatp_vmid   (csr_itlb_hgatp_vmid),
-    .csr_itlb_pmpcfg       (csr_itlb_pmpcfg),
-    .csr_itlb_pmpaddr      (csr_itlb_pmpaddr),
+    .fe_csr                (fe_csr),
     .bkend_itlb_inv_val    (bkend_itlb_inv_val),
     .bkend_itlb_inv_op     (bkend_itlb_inv_op),
     .bkend_itlb_inv_rs1_nz (bkend_itlb_inv_rs1_nz),
@@ -820,7 +804,7 @@ module fe_top (
   // Decode, on the ibuf read port
   // -----------------------------------------------------------------
   instr_decoder u_dec (
-    .ext_enable        (ext_enable),
+    .ext_enable        (fe_cfg.ext_enable),
     .pd_bundle         (ibuf_dec_slot),
     .decode_bundle     (decode_bundle),
     .vec_decode_bundle (vec_decode_bundle),

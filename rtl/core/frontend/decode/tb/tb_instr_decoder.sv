@@ -25,6 +25,7 @@
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
 import decode_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -40,7 +41,22 @@ always #5 clk = ~clk;
 // ---------------------------------------------------------------------------
 // DUT ports
 // ---------------------------------------------------------------------------
-ext_enable_t     ext_enable;
+// The config group's ext_enable (SYS-001, csr_decisions.md CSR-2,
+// CSR-4): the decoder's port is driven from fe_cfg, which only the
+// ext_* tasks below write, from csr_tb_pkg pack_fe_cfg after
+// set_ext_enable.
+fe_cfg_t         fe_cfg;
+
+// ext_enable as given.
+task automatic ext_set(input ext_enable_t v);
+    csr_tb_pkg::set_ext_enable(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+endtask
+
+// The current ext_enable with every bit clear in keep cleared.
+task automatic ext_clear(input ext_enable_t keep);
+    ext_set(fe_cfg.ext_enable & keep);
+endtask
 ifu_pd_pkt_t                 pd_bundle [0:SLOTS-1];
 decode_pkt_t     [SLOTS-1:0] decode_bundle;
 /* verilator lint_off UNUSEDSIGNAL */
@@ -54,7 +70,7 @@ logic            [SLOTS-1:0] vtype_hazard;
 // DUT instantiation
 // ---------------------------------------------------------------------------
 instr_decoder dut (
-    .ext_enable        (ext_enable),
+    .ext_enable        (fe_cfg.ext_enable),
     .pd_bundle         (pd_bundle),
     .decode_bundle     (decode_bundle),
     .vec_decode_bundle (vec_decode_bundle),
@@ -531,7 +547,7 @@ task automatic run_sweep(input string fn);
     n_bad = 0;
     n_ill = 0;
     n_leg = 0;
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     while ((n < SW_MAX) && (sw_mem[n] != '1)) begin
         int k;
         clear_all();
@@ -593,7 +609,8 @@ initial begin
     string sw_file;
     pass_count   = 0;
     fail_count   = 0;
-    ext_enable   = RVA23_ENABLE; // all extensions enabled by default
+    csr_tb_pkg::csr_reset();
+    ext_set(RVA23_ENABLE); // all extensions enabled by default
     pd_bundle    = '{default: '0};
 
     if ($value$plusargs("SWEEP=%s", sw_file)) begin
@@ -2106,55 +2123,55 @@ initial begin
     // -----------------------------------------------------------------------
     // T61: en_m=0 -- MULW x1,x2,x3 (OP-32, f7=0000001) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_m  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_m: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_r(7'b0000001, 5'd3, 5'd2, 3'b000, 5'd1, OPREG32));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T61_mulw_en_m0")
     // regression: en_m=1, MULW must not be ILLEGAL
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T61_mulw_reg")
 
     // -----------------------------------------------------------------------
     // T62: en_a=0 -- LR.W (OP-AMO, f7=0001000) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_a  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_a: 1'b0, default: 1'b1});
     clear_all();
     // LR.W: f7=0001000, rs2=0, rs1=x2, f3=010, rd=x1, op=AMO
     drive(0, enc_r(7'b0001000, 5'd0, 5'd2, 3'b010, 5'd1,
                    7'b0101111));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T62_lrw_en_a0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T62_lrw_reg")
 
     // -----------------------------------------------------------------------
     // T63: en_f=0 -- FLW x1,4(x2) (OP_LOAD_FP, f3=010) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_f  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_f: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_i(12'd4, 5'd2, 3'b010, 5'd1, OPLOADFP));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T63_flw_en_f0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T63_flw_reg")
 
     // -----------------------------------------------------------------------
     // T64: en_d=0, en_f=1 -- FLD x1,8(x2) (OP_LOAD_FP, f3=011) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_d  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_d: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_i(12'd8, 5'd2, 3'b011, 5'd1, OPLOADFP));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T64_fld_en_d0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T64_fld_reg")
 
@@ -2167,7 +2184,7 @@ initial begin
     //   checked that a zero enable had no effect; there is no enable to
     //   zero. The RVA23_ENABLE regression stays.
     // -----------------------------------------------------------------------
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     clear_all();
     // ADDI x1, x1, 1 (expanded c.addi x1, 1)
     drive(0, enc_i(12'd1, 5'd1, 3'b000, 5'd1, OPIMM));
@@ -2177,26 +2194,26 @@ initial begin
     // -----------------------------------------------------------------------
     // T67: en_v=0 -- vadd.vv (OP_VECTOR) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_v  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_v: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_vadd_vv(5'd1, 5'd2, 5'd3, 1'b1));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T67_vadd_en_v0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T67_vadd_reg")
 
     // -----------------------------------------------------------------------
     // T68: en_v=0 -- vle32.v (OP_LOAD_FP vector) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable       = RVA23_ENABLE;
-    ext_enable.en_v  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_v: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_vle32v(5'd1, 5'd2, 1'b1));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T68_vle32_en_v0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T68_vle32_reg")
 
@@ -2204,13 +2221,13 @@ initial begin
     // T69: en_zicsr=0 -- CSRRW x1, mstatus, x2 -> ILLEGAL
     //   OP_SYSTEM, f3=001, csr=0x300 (mstatus)
     // -----------------------------------------------------------------------
-    ext_enable           = RVA23_ENABLE;
-    ext_enable.en_zicsr  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_zicsr: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_i(12'h300, 5'd2, 3'b001, 5'd1, OPSYSTEM));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T69_csr_en_zicsr0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T69_csr_reg")
 
@@ -2218,28 +2235,28 @@ initial begin
     // T70: en_zicbom=0 -- cbo.clean (OP_MISC_MEM, f3=010, rs2=1) -> ILLEGAL
     //   inst = {7'b0, 5'b00001, rs1, 3'b010, 5'b0, 7'b0001111}
     // -----------------------------------------------------------------------
-    ext_enable            = RVA23_ENABLE;
-    ext_enable.en_zicbom  = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_zicbom: 1'b0, default: 1'b1});
     clear_all();
     // cbo.clean: imm12={7'b0, 5'b00001}=12'h001, rs1=x2, f3=010, rd=0
     drive(0, enc_i(12'h001, 5'd2, 3'b010, 5'd0,
                    7'b0001111));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T70_cbo_clean_en_zicbom0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T70_cbo_clean_reg")
 
     // -----------------------------------------------------------------------
     // T71: en_zba=0 -- sh1add x1,x2,x3 (f7=0010000, f3=010) -> ILLEGAL
     // -----------------------------------------------------------------------
-    ext_enable           = RVA23_ENABLE;
-    ext_enable.en_zba    = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_zba: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_r(7'b0010000, 5'd3, 5'd2, 3'b010, 5'd1, OPREG));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T71_sh1add_en_zba0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T71_sh1add_reg")
 
@@ -2250,13 +2267,13 @@ initial begin
     //   chapter; LLVM assembles hfence.vvma a0, a1 as 0x22b50073) is
     //   0010001. 0100001 is not an instruction and is illegal.
     // -----------------------------------------------------------------------
-    ext_enable        = RVA23_ENABLE;
-    ext_enable.en_h   = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_h: 1'b0, default: 1'b1});
     clear_all();
     drive(0, enc_r(7'b0010001, 5'd1, 5'd2, 3'b000, 5'd0, OPSYSTEM));
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b1, "T72_hfence_en_h0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
     @(posedge clk);
     `CHECK_FIELD(0, is_illegal, 1'b0, "T72_hfence_reg")
     drive(0, enc_r(7'b0100001, 5'd1, 5'd2, 3'b000, 5'd0, OPSYSTEM));
@@ -2267,7 +2284,7 @@ initial begin
     // T73: DCD-17, vtype_hazard computed in decode, per 8-slot bundle.
     //   Each case starts from a cleared bundle; nothing carries over.
     // -----------------------------------------------------------------------
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
 
     // T73a: vsetvli and a vtype user in ONE bundle. Slot 0 vsetvli,
     //   slot 1 vadd.vv, slot 2 ADDI, slot 5 vle32.v. Hazard on 1 and 5
@@ -2380,11 +2397,11 @@ initial begin
         pass_count++;
     // T74b: the same faulting slot with en_v cleared and a vector
     //   encoding: still not illegal (the fault outranks the gate).
-    ext_enable      = RVA23_ENABLE;
-    ext_enable.en_v = 1'b0;
+    ext_set(RVA23_ENABLE);
+    ext_clear('{en_v: 1'b0, default: 1'b1});
     @(posedge clk);
     `CHECK_FIELD(4, is_illegal, 1'b0, "T74b_fault_vadd_en_v0")
-    ext_enable = RVA23_ENABLE;
+    ext_set(RVA23_ENABLE);
 
     // -----------------------------------------------------------------------
     // T75: DCD-18, every ifu_pd_pkt_t field reaches pd_out unchanged,
@@ -2520,7 +2537,7 @@ initial begin
         t.push_back('{32'h00059507, ALU_FLOAD,      5, "flh"});
         t.push_back('{32'h00a59027, ALU_FSTORE,      5, "fsh"});
         foreach (t[k]) begin
-            ext_enable = RVA23_ENABLE;
+            ext_set(RVA23_ENABLE);
             clear_all();
             drive(0, t[k].w);
             @(posedge clk);
@@ -2528,11 +2545,11 @@ initial begin
             `CHECK_FIELD(0, alu_op, t[k].op, {"T76_op_", t[k].nm})
             if (t[k].gate != 0) begin
                 case (t[k].gate)
-                    1: ext_enable.en_zba    = 1'b0;
-                    2: ext_enable.en_zbb    = 1'b0;
-                    3: ext_enable.en_zbs    = 1'b0;
-                    4: ext_enable.en_h      = 1'b0;
-                    default: ext_enable.en_zfhmin = 1'b0;
+                    1: ext_clear('{en_zba: 1'b0, default: 1'b1});
+                    2: ext_clear('{en_zbb: 1'b0, default: 1'b1});
+                    3: ext_clear('{en_zbs: 1'b0, default: 1'b1});
+                    4: ext_clear('{en_h: 1'b0, default: 1'b1});
+                    default: ext_clear('{en_zfhmin: 1'b0, default: 1'b1});
                 endcase
                 @(posedge clk);
                 `CHECK_FIELD(0, is_illegal, 1'b1, {"T76_gated_", t[k].nm})
@@ -2540,7 +2557,7 @@ initial begin
         end
         // Zimop writes rd and reads nothing; the unary bitmanip forms
         // read rs1 only.
-        ext_enable = RVA23_ENABLE;
+        ext_set(RVA23_ENABLE);
         clear_all();
         drive(0, 32'hcec5c573);                         // mop.rr.7 a0
         @(posedge clk);
@@ -2552,11 +2569,11 @@ initial begin
         @(posedge clk);
         `CHECK_FIELD(0, uses_rs2, 1'b0, "T76_sextb_no_rs2")
         // Zicbop off: prefetch.i is still the ORI HINT, legal.
-        ext_enable.en_zicbop = 1'b0;
+        ext_clear('{en_zicbop: 1'b0, default: 1'b1});
         drive(0, 32'h0405e013);
         @(posedge clk);
         `CHECK_FIELD(0, is_illegal, 1'b0, "T76_prefetch_i_zicbop_off")
-        ext_enable = RVA23_ENABLE;
+        ext_set(RVA23_ENABLE);
     end
 
     // -----------------------------------------------------------------------
@@ -3596,7 +3613,7 @@ initial begin
             w   = tw[k].w;
             nm  = $sformatf("T77 %08h %s", w, tw[k].a);
             ill = (tw[k].op == ALU_ILL);
-            ext_enable = RVA23_ENABLE;
+            ext_set(RVA23_ENABLE);
             clear_all();
             drive(0, w);
             #1;
@@ -3638,8 +3655,8 @@ initial begin
             // The gates: each enable cleared alone makes it illegal.
             for (int i = 0; i < 16; i++) begin
                 if (tw[k].g[i]) begin
-                    ext_enable = RVA23_ENABLE;
-                    ext_enable[15 - i] = 1'b0;
+                    ext_set(RVA23_ENABLE);
+                    ext_clear(~ext_enable_t'(16'd1 << (15 - i)));
                     #1;
                     if (!decode_bundle[0].is_illegal ||
                         (decode_bundle[0].alu_op != ALU_ILL) ||
@@ -3653,7 +3670,7 @@ initial begin
                 end
             end
         end
-        ext_enable = RVA23_ENABLE;
+        ext_set(RVA23_ENABLE);
         @(posedge clk);
     end
 

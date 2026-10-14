@@ -18,6 +18,7 @@
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -60,8 +61,21 @@ module tb;
   logic [NUM_PRED_SLOTS-1:0] tage_upd_rdy_u1;
   logic                      tage_pq_not_full;
   logic [NUM_PRED_SLOTS-1:0] tage_uq_not_full;
-  logic                      tage_enable_aging;
-  logic [31:0]               tage_aging_interval;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_tage_enable_aging(input logic v);
+    csr_tb_pkg::set_tage_enable_aging(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_tage_aging_interval(input logic [31:0] v);
+    csr_tb_pkg::set_tage_aging_interval(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
   logic                      consumer_ready;
   bp_folded_hist_t           folded_hist;
   logic                      tage_rdy;
@@ -211,8 +225,9 @@ module tb;
   // ----------------------------------------------------------------
   initial begin
     test_name = "";
-    tage_enable_aging   = 1'b0;
-    tage_aging_interval = 32'b0;
+    csr_tb_pkg::csr_reset();
+    cfg_tage_enable_aging(1'b0);
+    cfg_tage_aging_interval(32'b0);
     folded_hist         = '0;
     consumer_ready      = 1'b1;
     stg_pred_val        = '0;
@@ -336,8 +351,8 @@ module tb;
     .tage_upd_rdy_u1     (tage_upd_rdy_u1),
     .tage_pq_not_full    (tage_pq_not_full),
     .tage_uq_not_full    (tage_uq_not_full),
-    .tage_enable_aging   (tage_enable_aging),
-    .tage_aging_interval (tage_aging_interval),
+    .tage_enable_aging   (fe_cfg.tage_enable_aging),
+    .tage_aging_interval (fe_cfg.tage_aging_interval),
     .consumer_ready      (consumer_ready),
     .folded_hist         (folded_hist),
     .tage_rdy            (tage_rdy)

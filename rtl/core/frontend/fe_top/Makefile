@@ -59,6 +59,7 @@ PTW_DIR  := $(RVA_ROOT)/rtl/mmu/ptw/rtl
 PTW_TB   := $(RVA_ROOT)/rtl/mmu/ptw/tb
 L1I_DIR  := $(FE_DIR)/icache/rtl
 L1I_TB   := $(FE_DIR)/icache/tb
+CSR_DIR  := $(RVA_ROOT)/rtl/core/csr
 VER_OUT  := obj
 
 # -- Slot count (BP-128, TD#1) -------------------------------------
@@ -87,10 +88,16 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 # --assert so the bound properties are elaborated (TD#109).
 COMMON := -Wno-VARHIDDEN -Wno-SYNCASYNCNET --assert
 
+# csr_pkg (SYS-001): fe_top, the ITLB, its checker and the walker take
+# the CSR groups as csr_pkg types; tb_fe_top drives them from
+# csr_tb_pkg (csr_decisions.md CSR-2).
 PKG_SRCS := \
   $(BPU_DIR)/bp_defines_pkg.sv \
   $(BPU_DIR)/bp_structs_pkg.sv \
-  $(DEC_DIR)/decode_pkg.sv
+  $(DEC_DIR)/decode_pkg.sv \
+  $(CSR_DIR)/rtl/csr_pkg.sv
+
+TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv
 
 # The L1I, in the order of the emitted filelist (l1i.f), with the
 # BP-123 maintenance control. cgen_tl_pkg is the one shared emitted
@@ -230,7 +237,8 @@ build_fe_top:
 	@echo "[compiling]  tb_fe_top"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_fe_top \
-	  $(SIM_SRCS) $(TB_DIR)/tb_fe_top.sv $(VSILENCE)
+	  $(SIM_SRCS) $(TB_PKG_SRCS) $(TB_DIR)/tb_fe_top.sv \
+	  $(VSILENCE)
 
 # Every program in its own simulation (BP-121): in one simulation the
 # predictor tables carry from one program into the next, so a program's

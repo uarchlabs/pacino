@@ -12,7 +12,7 @@ copyright: "Copyright 2026 Jeff Nye"
  FILE:    ras_theory_of_operation.md
  SOURCE:  derived from session-050 / BP-062..BP-064
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-13
  CONTACT: Jeff Nye
 ```
 -->
@@ -323,15 +323,12 @@ described in Section 3.6. Commit is registered: it takes effect the
 cycle after `ras_commit_val` and does not interact combinationally with
 the s2 push/pop path.
 
-CSP is a free pointer: the top entry is at `CSP-1` and empty is
-`CSP == 0`. That encoding has a consequence at capacity. On the 32nd
-consecutive commit push CSP wraps to 0, so a *full* commit stack
-reads as empty, `commit_top_valid` deasserts, and both the s0 read
-and the empty-pop fallback lose their commit source until CSP
-advances again. Returns are a prediction and not a correctness
-requirement, so this is accepted rather than guarded; it is a
-candidate for rebalancing the 16/32 split if commit overflow is
-measured at cluster integration.
+CSP is a free pointer: the top entry is at `CSP-1`. An occupancy
+count beside it, 0 to 32, says whether the stack is empty (BP-126,
+TD#121). A call committed on a full stack overwrites the oldest entry
+and the count holds at 32, so a full stack still reads non-empty and
+the s0 read and the empty-pop fallback keep their source. A return
+committed on an empty stack does nothing (TC-36, TC-37).
 
 When the speculative stack is empty and a pop is requested, the
 commit-stack top is presented as the result and is not consumed
@@ -385,7 +382,7 @@ re-evaluates after the flop updates.
 
 ### 3.10 Known limitations in the current design
 
-Three items are documented and tracked; they are not latent defects:
+Three items were tracked here; all are closed:
 
 - **TD #78 -- closed by BP-133.** An undo-pop over a pop that only
   decremented `rctr` restores the pre-op TOSR and increments the count
@@ -396,12 +393,10 @@ Three items are documented and tracked; they are not latent defects:
   recursion compression: every committed call is its own entry, so the
   commit fallback reads recursion at its true depth (`tb_ras` TC-39).
   `commit_rctr` was written zero and never read; BP-134 removed it.
-- **TD #101 -- `ras_pc_p2` is declared and never read.** The branch PC
-  is on the port list and `bp_cluster` drives it from the staged s2 PC,
-  but nothing inside `ras.sv` consumes it: the pushed return address
-  comes from `ras_fall_through_p2`, and the RAS does not compute PC+2
-  or PC+4 itself (`ras_decisions.md` section 8). The port is either
-  confirmed for a future use or removed from `ras.sv` and `tb_ras.sv`.
+- **TD #101 -- closed by BP-126.** `ras_pc_p2` was declared and never
+  read; it was removed from `ras.sv`, `tb_ras` and `bp_cluster`. The
+  pushed return address comes from `ras_fall_through_p2`
+  (`ras_decisions.md` section 8).
 
 One interface item remains open: **RAS-1**, the predecode early-push
 hint, which is an optimization over the s2 authoritative push that is
@@ -544,11 +539,6 @@ its matching return in slot 1 are resolved in one cycle.
 - **RAS-1** -- predecode early-push hint as an optimization over the s2
   authoritative push. To be closed when RTL analysis confirms that s2
   timing is sufficient for all call/return interleavings.
-- **TD #101** -- `ras_pc_p2` declared on `ras.sv` and read by nothing;
-  confirm a use or remove it from the module and the testbench.
-- **Commit-stack wrap** -- CSP encodes empty as `CSP == 0`, so a full
-  commit stack reads as empty after the 32nd push (Section 3.7).
-  Candidate for a tech-debt entry and for rebalancing the 16/32 split.
 - **Depth validation** -- confirm the 16/32 split against SPEC
   wrong-path corruption and commit-overflow measurements at cluster
   integration. The linked-structure and unified-pool decisions are both

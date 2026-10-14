@@ -212,6 +212,7 @@ rtl/core/frontend/ftq/obj_1slot_labels_ftq_shadow/
 rtl/core/frontend/ftq/obj_1slot_labels_ftq_status/
 rtl/core/frontend/ftq/obj_1slot_labels_ftq_upd_conv/
 
+rtl/core/csr/obj_csr_tb_pkg/
 
 # --------------------------------------------------------------------
 # docs

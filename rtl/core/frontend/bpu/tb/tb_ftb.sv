@@ -36,6 +36,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -81,7 +82,17 @@ module tb;
   logic [VA_WIDTH-1:0]        ftb_pft_addr_p2;
 
   logic [1:0]                 ftb_fastpath_p2;
-  logic                       ftb_fastpath_en;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_ftb_fastpath_en(input logic v);
+    csr_tb_pkg::set_ftb_fastpath_en(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
 
   logic                       ftb_upd_valid_u0;
   logic [VA_WIDTH-1:0]        ftb_upd_pc_u0;
@@ -135,7 +146,7 @@ module tb;
     .ftb_jmp_rvc_p2        (ftb_jmp_rvc_p2),
     .ftb_pft_addr_p2       (ftb_pft_addr_p2),
     .ftb_fastpath_p2       (ftb_fastpath_p2),
-    .ftb_fastpath_en       (ftb_fastpath_en),
+    .ftb_fastpath_en       (fe_cfg.ftb_fastpath_en),
     .ftb_upd_valid_u0      (ftb_upd_valid_u0),
     .ftb_upd_pc_u0         (ftb_upd_pc_u0),
     .ftb_upd_hit_u0        (ftb_upd_hit_u0),
@@ -339,7 +350,8 @@ module tb;
     rstn            = 1'b0;
     pred_valid_p0   = 1'b0;
     pred_pc_p0      = '0;
-    ftb_fastpath_en = 1'b0;
+    csr_tb_pkg::csr_reset();
+    cfg_ftb_fastpath_en(1'b0);
     ftb_flush_px    = 1'b0;
     jrvc_next       = 1'b0;
     upd_idle();
@@ -672,7 +684,7 @@ module tb;
     // (override doc 7). en=1 to prove the unsaturated entry holds.
     // =============================================================
     do_reset();
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     pc  = make_pc(26'h000224, 9'd70);
     tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // taken alloc
@@ -689,7 +701,7 @@ module tb;
     check("D3 ntkn init MSB=0",
           ftb_br0_conf_p2[FTB_CONF_WIDTH-1] == 1'b0);
     check("D3 fresh ntkn does NOT fast-path", ftb_fastpath_p2[0] == 1'b0);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // =============================================================
     // D4: self-correction -- saturate to 111 (fast-path eligible);
@@ -701,7 +713,7 @@ module tb;
     tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("D4 saturated conf==111", ftb_br0_conf_p2 == CONF_SAT_T);
     check("D4 fast-path fires at 111", ftb_fastpath_p2[0] == 1'b1);
@@ -713,7 +725,7 @@ module tb;
     predict(pc);
     check("D4 re-saturates to 111", ftb_br0_conf_p2 == CONF_SAT_T);
     check("D4 fast-path fires again", ftb_fastpath_p2[0] == 1'b1);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // =============================================================
     // D5: reallocation resets conf -- saturate a field, then evict
@@ -747,16 +759,16 @@ module tb;
     tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("FP1 valid+br0_valid+sat+en", ftb_valid_p2 && ftb_br0_valid_p2 &&
-          (ftb_br0_conf_p2 == CONF_SAT_T) && ftb_fastpath_en);
+          (ftb_br0_conf_p2 == CONF_SAT_T) && fe_cfg.ftb_fastpath_en);
     check("FP1 fast-path[0] fires", ftb_fastpath_p2[0] == 1'b1);
 
     // =============================================================
     // FP2: does NOT fire at en=0, even at saturated conf.
     // =============================================================
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
     predict(pc);
     check("FP2 conf still saturated",  ftb_br0_conf_p2 == CONF_SAT_T);
     check("FP2 no fire at en=0",       ftb_fastpath_p2[0] == 1'b0);
@@ -768,17 +780,17 @@ module tb;
     pc  = make_pc(26'h000402, 9'd101);
     tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc); // conf=4 (unsat)
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("FP3 conf unsaturated (==4)", ftb_br0_conf_p2 == FTB_CONF_INIT_TKN);
     check("FP3 no fire when unsaturated", ftb_fastpath_p2[0] == 1'b0);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // =============================================================
     // FP4: does NOT fire on an FTB miss or an empty conditional field.
     // =============================================================
     do_reset();
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(make_pc(26'h0009FF, 9'd102));            // unallocated -> miss
     check("FP4 miss: not valid",       ftb_valid_p2 == 1'b0);
     check("FP4 miss: no fast-path",    ftb_fastpath_p2 == 2'b00);
@@ -787,7 +799,7 @@ module tb;
     predict(pc);                                     // jmp only, no br0
     check("FP4 empty br0 field invalid", ftb_br0_valid_p2 == 1'b0);
     check("FP4 empty field: br0 no fast-path", ftb_fastpath_p2[0] == 1'b0);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // =============================================================
     // FP5: fast-path is direction-only -- at a saturated conf the
@@ -800,14 +812,14 @@ module tb;
     tgt  = base + VA_WIDTH'('h300);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // ->7
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("FP5 fast-path fires", ftb_fastpath_p2[0] == 1'b1);
     check("FP5 target intact under fast-path",
           ftb_br0_target_p2 == exp_br_tgt(tgt, base));
     check("FP5 target == true (in-range, direction-only)",
           ftb_br0_target_p2 == tgt);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // =============================================================
     // P1: position round-trip -- drive ftb_upd_pos_u0 on fills for
@@ -1326,7 +1338,7 @@ module tb;
     // B1-D3: br1 taken alloc -> INIT_TKN; a fresh br1 does not fast-path
     // (both directions, en=1).
     do_reset();
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     pc   = make_pc(26'h000B13, 9'd204);
     b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
     b1_setup(pc, 2'd0, 1'b1, b1pc + VA_WIDTH'('h40));
@@ -1343,7 +1355,7 @@ module tb;
           ftb_br1_conf_p2 == FTB_CONF_INIT_NTK);
     check("B1-D3 fresh ntkn br1 does NOT fast-path",
           ftb_fastpath_p2[1] == 1'b0);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // B1-D4: br1 self-correction: 111 fires, 110 stops, 111 again.
     do_reset();
@@ -1352,7 +1364,7 @@ module tb;
     tgt  = b1pc + VA_WIDTH'('h40);
     b1_setup(pc, 2'd0, 1'b1, tgt);
     train_br(pc, 2'd0, 1'b1, 1'b1, 3, tgt, B1_POS, pc); // -> 7
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("B1-D4 br1 saturated, fast-path[1] fires",
           (ftb_br1_conf_p2 == CONF_SAT_T) && (ftb_fastpath_p2[1] == 1'b1));
@@ -1364,7 +1376,7 @@ module tb;
     predict(pc);
     check("B1-D4 re-saturates, fast-path[1] fires again",
           (ftb_br1_conf_p2 == CONF_SAT_T) && (ftb_fastpath_p2[1] == 1'b1));
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // B1-D5: reallocation resets br1 conf to the new weak init.
     do_reset();
@@ -1392,7 +1404,7 @@ module tb;
     b1pc = pc + VA_WIDTH'(B1_POS << POS_OFFSET_BITS);
     tgt  = b1pc + VA_WIDTH'('h300);
     b1_setup(pc, 2'd0, 1'b1, tgt);
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("B1-FP3 no fire when br1 unsaturated (==4)",
           (ftb_br1_conf_p2 == FTB_CONF_INIT_TKN) && !ftb_fastpath_p2[1]);
@@ -1405,7 +1417,7 @@ module tb;
           ftb_fastpath_p2[0] == 1'b0);
     check("B1-FP5 br1 target intact under fast-path",
           ftb_br1_target_p2 == tgt);
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
     predict(pc);
     check("B1-FP2 no fire at en=0, br1 still saturated",
           (ftb_br1_conf_p2 == CONF_SAT_T) && !ftb_fastpath_p2[1]);
@@ -1417,12 +1429,12 @@ module tb;
     tgt = pc + VA_WIDTH'('h40);
     upd_br(pc, 1'b0, 2'd0, 1'b0, 1'b1, tgt, 4'd0, pc);
     train_br(pc, 2'd0, 1'b0, 1'b1, 3, tgt, 4'd0, pc);  // br0 -> 7
-    ftb_fastpath_en = 1'b1;
+    cfg_ftb_fastpath_en(1'b1);
     predict(pc);
     check("B1-FP4 empty br1 field invalid", ftb_br1_valid_p2 == 1'b0);
     check("B1-FP4 empty br1: fast-path[1] clear, br0 fires",
           (ftb_fastpath_p2[1] == 1'b0) && (ftb_fastpath_p2[0] == 1'b1));
-    ftb_fastpath_en = 1'b0;
+    cfg_ftb_fastpath_en(1'b0);
 
     // -------------------------------------------------------------
     $display("=================================================");

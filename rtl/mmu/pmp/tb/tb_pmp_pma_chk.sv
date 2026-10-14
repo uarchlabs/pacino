@@ -17,6 +17,22 @@
 // are formed from the privileged encoding (byte address >> 2, NAPOT
 // size in the trailing ones), which is independent of the RTL.
 //
+// THE PMP REGISTERS AND THE PRIVILEGE COME FROM csr_tb_pkg (SYS-001,
+// csr_decisions.md CSR-2): an entry is written with csr_write, under
+// the CSR-5 rules, and every instance's pmp_cfg and pmp_addr are the
+// first entries of pack_fe_csr's pmpcfg and pmpaddr; chk_priv is its
+// priv, set by set_priv. One shadow feeds all five instances, so an
+// instance sees the entries written for another; every check reads
+// one instance. The read-back rules depend on the grain: ug0 (G = 0)
+// is written and checked with csr_tb_pkg set_pmp_g(0), every other
+// instance with G = 10. Since SYS-001 the checker therefore sees
+// pmpaddr as software reads it: G5 (TOR) gets bits 9:0 already clear,
+// G6-G7b (NA4 at G = 10) get NAPOT with bits 8:0 set, and G8-G8b
+// (an 8-byte NAPOT) get bits 8:0 set. Each still checks the matched
+// range; none checks the checker's own low-bit handling any more.
+// E4 to E6 rewrote a locked entry, which csr_write ignores (CSR-5):
+// they start from csr_reset and write the locked entry afresh.
+//
 // Groups:
 //   A  PMP no-match: M allowed, S and U denied when implemented
 //   B  NAPOT match across its range, both ends and just outside
@@ -33,6 +49,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -120,10 +137,58 @@ module tb;
     return AW'(a >> 2);
   endfunction
 
+  // ---- the PMP registers, from csr_tb_pkg (SYS-001) ----------------
+  // Drive every instance's registers and the privilege from the pack.
+  task automatic sync();
+    fe_csr_t g;
+    g     = csr_tb_pkg::pack_fe_csr();
+    cfg16 = g.pmpcfg;            adr16 = g.pmpaddr;
+    cfg4  = g.pmpcfg[3:0];       adr4  = g.pmpaddr[3:0];
+    cfg0  = g.pmpcfg[0:0];       adr0  = g.pmpaddr[0:0];
+    cfgg  = g.pmpcfg[3:0];       adrg  = g.pmpaddr[3:0];
+    cfg2  = g.pmpcfg;            adr2  = g.pmpaddr;
+    prv   = g.priv;
+  endtask
+
+  // pmpcfg byte k, by read-modify-write of pmpcfg0 or pmpcfg2, at grain
+  // G (10 for every instance but ug0, 0 for ug0).
+  task automatic wr_cfg_at(input int g, input int k, input logic [7:0] b);
+    logic [11:0] ca;
+    pmpcfg_t     c;
+    csr_tb_pkg::set_pmp_g(g);
+    ca = (k < 8) ? CSR_PMPCFG0_ADDR : CSR_PMPCFG2_ADDR;
+    c  = pmpcfg_t'(csr_tb_pkg::csr_read(ca));
+    c.ent[k % 8] = pmpcfg_ent_t'(b);
+    csr_tb_pkg::csr_write(ca, 64'(c));
+    sync();
+  endtask
+
+  task automatic wr_adr_at(input int g, input int k, input logic [AW-1:0] a);
+    csr_tb_pkg::set_pmp_g(g);
+    csr_tb_pkg::csr_write(CSR_PMPADDR0_ADDR + 12'(k), 64'(a));
+    sync();
+  endtask
+
+  task automatic wr_cfg(input int k, input logic [7:0] b);
+    wr_cfg_at(CSR_PMP_G, k, b);
+  endtask
+  task automatic wr_adr(input int k, input logic [AW-1:0] a);
+    wr_adr_at(CSR_PMP_G, k, a);
+  endtask
+  task automatic wr_cfg_g0(input int k, input logic [7:0] b);
+    wr_cfg_at(0, k, b);
+  endtask
+  task automatic wr_adr_g0(input int k, input logic [AW-1:0] a);
+    wr_adr_at(0, k, a);
+  endtask
+
+  // Every entry OFF with pmpaddr 0 (csr_reset, then entry 0 cleared:
+  // the reset value of entry 0 is NAPOT over all of memory).
   task automatic clr();
-    cfg16 = '0; adr16 = '0; cfg4 = '0; adr4 = '0;
-    cfg0  = '0; adr0  = '0; cfgg = '0; adrg = '0;
-    cfg2  = '0; adr2  = '0;
+    csr_tb_pkg::csr_reset();
+    csr_tb_pkg::csr_write(CSR_PMPCFG0_ADDR, 64'h0);
+    csr_tb_pkg::csr_write(CSR_PMPADDR0_ADDR, 64'h0);
+    sync();
     pbmt  = 2'd0;
     acc   = AX;
   endtask
@@ -136,7 +201,10 @@ module tb;
     logic g_ok, g_f;
     logic [3:0] g_pma;
     pa  = a;
-    prv = p;
+    // the instance's grain for the read-back, and the privilege
+    csr_tb_pkg::set_pmp_g((inst == 1) ? 0 : CSR_PMP_G);
+    csr_tb_pkg::set_priv(p);
+    sync();
     #1;
     case (inst)
       16:      begin g_ok = ok16; g_f = f16; g_pma = a16; end
@@ -168,8 +236,8 @@ module tb;
     chk("A3 U no match denied",   16, 36'h0_8000_0000, PU, 0, 1, MM);
 
     // ---- B: NAPOT 64 KiB at 0x8000_0000, X only --------------------
-    cfg16[0] = NAP | X;
-    adr16[0] = napot(36'h0_8000_0000, 64'h1_0000);
+    wr_cfg(0, NAP | X);
+    wr_adr(0, napot(36'h0_8000_0000, 64'h1_0000));
     chk("B1 NAPOT low end",       16, 36'h0_8000_0000, PS, 1, 0, MM);
     chk("B2 NAPOT high page",     16, 36'h0_8000_F000, PS, 1, 0, MM);
     chk("B3 NAPOT just above",    16, 36'h0_8001_0000, PS, 0, 1, MM);
@@ -179,60 +247,63 @@ module tb;
     chk("B6 NAPOT read, R clear", 16, 36'h0_8000_0000, PS, 0, 1, MM);
     acc = AX;
     // the whole space: every pmpaddr bit set
-    adr16[0] = '1;
-    cfg16[0] = NAP | R | W | X;
+    wr_adr(0, '1);
+    wr_cfg(0, NAP | R | W | X);
     chk("B7 NAPOT all, bottom",   16, 36'h0_0000_0000, PS, 1, 1, NO);
     chk("B8 NAPOT all, top",      16, 36'hF_FFFF_F000, PS, 1, 0, MM);
 
     // ---- C: TOR -------------------------------------------------------
     clr();
-    cfg16[0] = TOR | X;
-    adr16[0] = tora(36'h0_9000_0000);
+    wr_cfg(0, TOR | X);
+    wr_adr(0, tora(36'h0_9000_0000));
     chk("C1 TOR e0 base 0",       16, 36'h0_0000_0000, PS, 1, 1, NO);
     chk("C2 TOR e0 last page",    16, 36'h0_8FFF_F000, PS, 1, 0, MM);
     chk("C3 TOR e0 top excl",     16, 36'h0_9000_0000, PS, 0, 1, MM);
     clr();
     // entry 0 OFF still supplies entry 1's base
-    adr16[0] = tora(36'h0_8000_2000);
-    cfg16[1] = TOR | X;
-    adr16[1] = tora(36'h0_8000_4000);
+    wr_adr(0, tora(36'h0_8000_2000));
+    wr_cfg(1, TOR | X);
+    wr_adr(1, tora(36'h0_8000_4000));
     chk("C4 TOR e1 base incl",    16, 36'h0_8000_2000, PS, 1, 0, MM);
     chk("C5 TOR e1 last page",    16, 36'h0_8000_3000, PS, 1, 0, MM);
     chk("C6 TOR e1 below base",   16, 36'h0_8000_1000, PS, 0, 1, MM);
     chk("C7 TOR e1 top excl",     16, 36'h0_8000_4000, PS, 0, 1, MM);
     // top <= base matches nothing
-    adr16[1] = tora(36'h0_8000_1000);
+    wr_adr(1, tora(36'h0_8000_1000));
     chk("C8 TOR empty range",     16, 36'h0_8000_1000, PS, 0, 1, MM);
 
     // ---- D: priority --------------------------------------------------
     clr();
-    cfg16[0] = NAP;                              // no permission
-    adr16[0] = napot(36'h0_8000_0000, 64'h1000);
-    cfg16[1] = NAP | R | W | X;
-    adr16[1] = '1;
+    wr_cfg(0, NAP);                              // no permission
+    wr_adr(0, napot(36'h0_8000_0000, 64'h1000));
+    wr_cfg(1, NAP | R | W | X);
+    wr_adr(1, '1);
     chk("D1 e0 decides, denies",  16, 36'h0_8000_0000, PS, 0, 1, MM);
     chk("D2 e1 decides outside",  16, 36'h0_8000_1000, PS, 1, 0, MM);
     clr();
-    cfg16[0] = NAP | R | W | X;
-    adr16[0] = '1;
-    cfg16[1] = NAP;
-    adr16[1] = napot(36'h0_8000_0000, 64'h1000);
+    wr_cfg(0, NAP | R | W | X);
+    wr_adr(0, '1);
+    wr_cfg(1, NAP);
+    wr_adr(1, napot(36'h0_8000_0000, 64'h1000));
     chk("D3 e0 decides, allows",  16, 36'h0_8000_0000, PS, 1, 0, MM);
     clr();
     // the match is at entry 15, the last implemented
-    cfg16[15] = NAP | X;
-    adr16[15] = napot(36'h0_8000_0000, 64'h1000);
+    wr_cfg(15, NAP | X);
+    wr_adr(15, napot(36'h0_8000_0000, 64'h1000));
     chk("D4 entry 15 matches",    16, 36'h0_8000_0000, PS, 1, 0, MM);
 
     // ---- E: the L bit -------------------------------------------------
     clr();
-    cfg16[0] = NAP | R;                          // X clear
-    adr16[0] = napot(36'h0_8000_0000, 64'h1000);
+    wr_cfg(0, NAP | R);                          // X clear
+    wr_adr(0, napot(36'h0_8000_0000, 64'h1000));
     chk("E1 L clear, M bypass",   16, 36'h0_8000_0000, PM, 1, 0, MM);
     chk("E2 L clear, S denied",   16, 36'h0_8000_0000, PS, 0, 1, MM);
-    cfg16[0] = L | NAP | R;
+    wr_cfg(0, L | NAP | R);
     chk("E3 L set, M denied",     16, 36'h0_8000_0000, PM, 0, 1, MM);
-    cfg16[0] = L | NAP | X;
+    // A locked entry is not written (CSR-5): reset, then lock it with X.
+    clr();
+    wr_adr(0, napot(36'h0_8000_0000, 64'h1000));
+    wr_cfg(0, L | NAP | X);
     chk("E4 L set X, M allowed",  16, 36'h0_8000_0000, PM, 1, 0, MM);
     chk("E5 L set X, S allowed",  16, 36'h0_8000_0000, PS, 1, 0, MM);
     // a locked entry that does not match leaves M no-match allowed
@@ -243,45 +314,45 @@ module tb;
     chk("F1 none impl, S ok",      0, 36'h0_8000_0000, PS, 1, 0, MM);
     chk("F2 none impl, U ok",      0, 36'h0_0000_0000, PU, 1, 1, NO);
     chk("F3 four impl, S denied",  4, 36'h0_8000_0000, PS, 0, 1, MM);
-    cfg4[3] = NAP | X;
-    adr4[3] = napot(36'h0_8000_0000, 64'h1000);
+    wr_cfg(3, NAP | X);
+    wr_adr(3, napot(36'h0_8000_0000, 64'h1000));
     chk("F4 four impl, e3",        4, 36'h0_8000_0000, PS, 1, 0, MM);
 
     // ---- G: the granule -----------------------------------------------
     clr();
     // G = 0: NA4 is exact.
-    cfgg[0] = NA4 | X;
-    adrg[0] = tora(36'h0_8000_0004);
+    wr_cfg_g0(0, NA4 | X);
+    wr_adr_g0(0, tora(36'h0_8000_0004));
     chk("G1 NA4 exact hit",        1, 36'h0_8000_0004, PS, 1, 0, MM);
     chk("G2 NA4 below",            1, 36'h0_8000_0000, PS, 0, 1, MM);
     chk("G3 NA4 above",            1, 36'h0_8000_0008, PS, 0, 1, MM);
     // G = 0: a TOR top keeps its low bits.
-    cfgg[0] = TOR | X;
-    adrg[0] = tora(36'h0_1000_0800);
+    wr_cfg_g0(0, TOR | X);
+    wr_adr_g0(0, tora(36'h0_1000_0800));
     chk("G4 G0 TOR top exact",     1, 36'h0_1000_0000, PS, 1, 1, NO);
     // G = 10: the same TOR top loses bits below 4 KiB, so 0x1000_0000
     // is at the top and excluded.
-    cfg16[0] = TOR | X;
-    adr16[0] = tora(36'h0_1000_0800);
+    wr_cfg(0, TOR | X);
+    wr_adr(0, tora(36'h0_1000_0800));
     chk("G5 G10 TOR top cleared", 16, 36'h0_1000_0000, PS, 0, 1, NO);
     // G = 10: NA4 widens to one 4 KiB granule.
-    cfg16[0] = NA4 | X;
-    adr16[0] = tora(36'h0_8000_0004);
+    wr_cfg(0, NA4 | X);
+    wr_adr(0, tora(36'h0_8000_0004));
     chk("G6 G10 NA4 granule",     16, 36'h0_8000_0000, PS, 1, 0, MM);
     chk("G7 G10 NA4 next page",   16, 36'h0_8000_1000, PS, 0, 1, MM);
     // the granule's last word: not matched by an exact 4-byte NA4
     chk("G7b G10 NA4 granule end",16, 36'h0_8000_0FFC, PS, 1, 0, MM);
     // G = 10: an 8-byte NAPOT widens to the granule as well.
-    cfg16[0] = NAP | X;
-    adr16[0] = napot(36'h0_8000_0008, 64'd8);
+    wr_cfg(0, NAP | X);
+    wr_adr(0, napot(36'h0_8000_0008, 64'd8));
     chk("G8 G10 NAPOT8 granule",  16, 36'h0_8000_0000, PS, 1, 0, MM);
     chk("G8b G10 NAPOT8 gran end",16, 36'h0_8000_0FF0, PS, 1, 0, MM);
 
     // ---- H: the MMU-15a region table ---------------------------------
     // PMP allows everything; only the PMA decides.
     clr();
-    cfg16[0] = NAP | R | W | X;
-    adr16[0] = '1;
+    wr_cfg(0, NAP | R | W | X);
+    wr_adr(0, '1);
     chk("H1 below main memory",   16, 36'h0_7FFF_F000, PS, 1, 1, NO);
     chk("H2 main memory base",    16, 36'h0_8000_0000, PS, 1, 0, MM);
     chk("H3 main memory top pg",  16, 36'hF_FFFF_F000, PS, 1, 0, MM);
@@ -301,8 +372,8 @@ module tb;
     pbmt = 2'd0;
 
     // ---- J: a two-region table ---------------------------------------
-    cfg2[0] = NAP | R | W | X;
-    adr2[0] = '1;
+    wr_cfg(0, NAP | R | W | X);
+    wr_adr(0, '1);
     chk("J1 device base",          2, 36'h0_1000_0000, PS, 1, 0, 4'b1100);
     chk("J2 device top byte",      2, 36'h0_1000_0FFF, PS, 1, 0, 4'b1100);
     chk("J3 above device",         2, 36'h0_1000_1000, PS, 1, 1, NO);
@@ -314,7 +385,7 @@ module tb;
     chk("K1 read non-exec region",16, 36'h0_0000_0000, PS, 1, 0, NO);
     acc = AWR;
     chk("K2 write non-exec",      16, 36'h0_0000_0000, PS, 1, 0, NO);
-    cfg16[0] = NAP | R;
+    wr_cfg(0, NAP | R);
     chk("K3 write, W clear",      16, 36'h0_8000_0000, PS, 0, 1, MM);
     acc = AX;
 

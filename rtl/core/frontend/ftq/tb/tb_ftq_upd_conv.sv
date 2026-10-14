@@ -39,6 +39,7 @@
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -48,7 +49,17 @@ module tb;
   initial clk = 1'b0;
   always #5 clk = ~clk;
 
-  logic                          sc_enable;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_sc_enable(input logic v);
+    csr_tb_pkg::set_sc_enable(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
   bp_update_t                    upd       [0:NUM_PRED_SLOTS-1];
   bp_ftq_meta_t                  upd_meta  [0:NUM_PRED_SLOTS-1];
   bp_ftq_entry_t                 upd_entry [0:NUM_PRED_SLOTS-1];
@@ -74,7 +85,7 @@ module tb;
   ftq_upd_conv dut (
     .clk               (clk),
     .rstn              (rstn),
-    .sc_enable         (sc_enable),
+    .sc_enable         (fe_cfg.sc_enable),
     .upd               (upd),
     .upd_meta          (upd_meta),
     .upd_entry         (upd_entry),
@@ -109,7 +120,7 @@ module tb;
 
   always_comb begin : sc_rdy_model
     sc_upd_rdy = m_sc_rdy_int
-               & {NUM_PRED_SLOTS{m_sc_grant & sc_enable
+               & {NUM_PRED_SLOTS{m_sc_grant & fe_cfg.sc_enable
                                  & (|sc_upd_val_u0)}};
   end
 
@@ -226,7 +237,8 @@ module tb;
 
   task automatic do_reset();
     rstn      = 1'b0;
-    sc_enable = 1'b1;
+    csr_tb_pkg::csr_reset();
+    cfg_sc_enable(1'b1);
     for (int s = 0; s < NUM_PRED_SLOTS; s++) clr_slot(s);
     all_rdy();
     repeat (3) @(posedge clk);
@@ -605,7 +617,7 @@ module tb;
     do_reset();
     present(0, COND, PC0, FTB_BR_POS_BITS'(3), 1'b1,
             VA_WIDTH'('h00_8000_0040), PC0 + VA_WIDTH'(8), PAT_A);
-    sc_enable  = 1'b0;
+    cfg_sc_enable(1'b0);
     m_sc_grant = 1'b0;
     settle();
     chk("S1 no SC update is formed", sc_upd_val_u0[0] === 1'b0);
@@ -614,7 +626,7 @@ module tb;
     chk("S3 TAGE, LP and the uBTB take the conditional",
         (tage_upd_val_u0[0] === 1'b1) && (lp_upd_valid_p0[0] === 1'b1)
      && (ubtb_upd_u0[0].valid === 1'b1));
-    sc_enable = 1'b1;
+    cfg_sc_enable(1'b1);
     settle();
     chk("S4 SC re-enabled, no grant: the slot waits again",
         (sc_upd_val_u0[0] === 1'b1) && (upd_acc[0] === 1'b0));

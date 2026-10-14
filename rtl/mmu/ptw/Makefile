@@ -31,6 +31,8 @@ endif
 RTL_DIR  := rtl
 TB_DIR   := tb
 BPU_DIR  := ../../core/frontend/bpu/rtl
+DEC_DIR  := ../../core/frontend/decode/rtl
+CSR_DIR  := ../../core/csr
 PMP_DIR  := ../pmp/rtl
 VER_OUT  := obj
 
@@ -41,9 +43,16 @@ SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 # --assert so the concurrent SVA is elaborated.
 COMMON := -Wno-SYNCASYNCNET --assert
 
+# decode_pkg and csr_pkg (SYS-001): the CSR group ports are csr_pkg
+# types, and csr_pkg's fe_cfg_t holds decode_pkg's ext_enable_t. The
+# testbench drives them from csr_tb_pkg (csr_decisions.md CSR-2).
 PKG_SRCS := \
   $(BPU_DIR)/bp_defines_pkg.sv \
-  $(BPU_DIR)/bp_structs_pkg.sv
+  $(BPU_DIR)/bp_structs_pkg.sv \
+  $(DEC_DIR)/decode_pkg.sv \
+  $(CSR_DIR)/rtl/csr_pkg.sv
+
+TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv
 
 PTW_SRCS := $(PKG_SRCS) $(PMP_DIR)/pmp_pma_chk.sv $(RTL_DIR)/ptw.sv
 SIM_SRCS := $(PTW_SRCS) $(TB_DIR)/ptw_assert.sv
@@ -61,7 +70,7 @@ sim_ptw:
 	@echo "[compiling]  tb_ptw"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_ptw \
-	  $(SIM_SRCS) $(TB_DIR)/tb_ptw.sv $(VSILENCE)
+	  $(SIM_SRCS) $(TB_PKG_SRCS) $(TB_DIR)/tb_ptw.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ptw/Vtb"
 	$(Q)./$(VER_OUT)_ptw/Vtb
 

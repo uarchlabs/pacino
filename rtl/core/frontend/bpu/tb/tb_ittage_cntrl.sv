@@ -13,6 +13,7 @@
 
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
+import csr_pkg::*;
 
 module tb;
 
@@ -39,8 +40,21 @@ module tb;
   logic [NPS-1:0]              ittage_upd_val_u0;
   ittage_upd_inp_t             ittage_upd_inp_u0[0:NPS-1];
   logic [NPS-1:0]              ittage_upd_rdy_u1;
-  logic                        ittage_enable_aging;
-  logic [31:0]                 ittage_aging_interval;
+  // The config group (SYS-001, csr_decisions.md CSR-2): the
+  // DUT's config ports are driven from the members of fe_cfg,
+  // which only the cfg_* tasks below write, from csr_tb_pkg
+  // pack_fe_cfg after a csr_tb_pkg setter.
+  fe_cfg_t fe_cfg;
+
+  task automatic cfg_ittage_enable_aging(input logic v);
+    csr_tb_pkg::set_ittage_enable_aging(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+  task automatic cfg_ittage_aging_interval(input logic [31:0] v);
+    csr_tb_pkg::set_ittage_aging_interval(v);
+    fe_cfg = csr_tb_pkg::pack_fe_cfg();
+  endtask
+
   logic                        trx_type_tb = 1'b0;
   logic [NPS-1:0]              tbl_hit_p1[0:NTS-1];
   logic [IT_MAX_TGT_WIDTH-1:0]
@@ -84,8 +98,8 @@ module tb;
     .ittage_upd_val_u0    (ittage_upd_val_u0),
     .ittage_upd_inp_u0    (ittage_upd_inp_u0),
     .ittage_upd_rdy_u1    (ittage_upd_rdy_u1),
-    .ittage_enable_aging  (ittage_enable_aging),
-    .ittage_aging_interval(ittage_aging_interval),
+    .ittage_enable_aging  (fe_cfg.ittage_enable_aging),
+    .ittage_aging_interval(fe_cfg.ittage_aging_interval),
     .trx_type             (trx_type_tb),
     .t_hit_p1             (tbl_hit_p1),
     .t_pred_tgt_p1        (tbl_pred_tgt_p1),
@@ -150,8 +164,9 @@ module tb;
   task automatic clr();
     ittage_pred_val_p0    = '0;
     ittage_upd_val_u0     = '0;
-    ittage_enable_aging   = 1'b0;
-    ittage_aging_interval = 32'hFFFF_FFFF;
+    csr_tb_pkg::csr_reset();
+    cfg_ittage_enable_aging(1'b0);
+    cfg_ittage_aging_interval(32'hFFFF_FFFF);
     for (int s = 0; s < NPS; s++) begin
       ittage_pred_inp_p0[s] = '0;
       ittage_upd_inp_u0[s]  = '0;
@@ -432,8 +447,8 @@ module tb;
     input logic        enable
   );
     clr();
-    ittage_aging_interval = interval;
-    ittage_enable_aging   = enable;
+    cfg_ittage_aging_interval(interval);
+    cfg_ittage_enable_aging(enable);
     rstn = 1'b0;
     repeat(2) @(posedge clk);
     @(negedge clk);

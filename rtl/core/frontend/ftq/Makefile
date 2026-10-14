@@ -38,6 +38,11 @@ endif
 RTL_DIR  := rtl
 TB_DIR   := tb
 BPU_DIR  := ../bpu/rtl
+# SYS-001: tb_ftq and tb_ftq_upd_conv drive sc_enable from csr_tb_pkg
+# (csr_decisions.md CSR-2), over csr_pkg and the decode_pkg it uses.
+# Testbench builds only: csr_tb_pkg is testbench code.
+CSR_TB_SRCS := ../decode/rtl/decode_pkg.sv ../../csr/rtl/csr_pkg.sv \
+               ../../csr/tb/csr_tb_pkg.sv
 VER_OUT  := obj
 
 # -- Slot count (BP-128, TD#1) -------------------------------------
@@ -360,7 +365,8 @@ sim_ftq_upd_conv:
 	@echo "[compiling]  tb_ftq_upd_conv"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_ftq_upd_conv \
-	  $(UPD_CONV_SRCS) $(TB_DIR)/tb_ftq_upd_conv.sv $(VSILENCE)
+	  $(UPD_CONV_SRCS) $(CSR_TB_SRCS) $(TB_DIR)/tb_ftq_upd_conv.sv \
+	  $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ftq_upd_conv/Vtb"
 	$(Q)./$(VER_OUT)_ftq_upd_conv/Vtb
 
@@ -378,7 +384,7 @@ sim_ftq:
 	@echo "[compiling]  tb_ftq"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_ftq \
-	  $(FTQ_SRCS) $(TB_DIR)/tb_ftq.sv $(VSILENCE)
+	  $(FTQ_SRCS) $(CSR_TB_SRCS) $(TB_DIR)/tb_ftq.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ftq/Vtb"
 	$(Q)./$(VER_OUT)_ftq/Vtb
 
@@ -408,8 +414,8 @@ LABEL_SRCS_ftq_shadow    := $(SHADOW_SRCS)
 LABEL_SRCS_ftq_npc       := $(NPC_SRCS)
 LABEL_SRCS_ftq_ifu       := $(IFU_TB_SRCS)
 LABEL_SRCS_ftq_resolve   := $(RESOLVE_SRCS)
-LABEL_SRCS_ftq_upd_conv  := $(UPD_CONV_SRCS)
-LABEL_SRCS_ftq           := $(FTQ_SRCS)
+LABEL_SRCS_ftq_upd_conv  := $(UPD_CONV_SRCS) $(CSR_TB_SRCS)
+LABEL_SRCS_ftq           := $(FTQ_SRCS) $(CSR_TB_SRCS)
 
 LABEL_ASSERT_FILES := $(sort $(wildcard $(TB_DIR)/*_assert.sv))
 LABEL_UNCOMPILED   := $(filter-out \

@@ -33,14 +33,23 @@ endif
 RTL_DIR  := rtl
 TB_DIR   := tb
 BPU_DIR  := ../../core/frontend/bpu/rtl
+DEC_DIR  := ../../core/frontend/decode/rtl
+CSR_DIR  := ../../core/csr
 VER_OUT  := obj
 
 VER_FLAGS       := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR --timing
 SIM_EXTRA_FLAGS := -Wno-DECLFILENAME
 
+# decode_pkg and csr_pkg (SYS-001): the CSR group ports are csr_pkg
+# types, and csr_pkg's fe_cfg_t holds decode_pkg's ext_enable_t. The
+# testbench drives them from csr_tb_pkg (csr_decisions.md CSR-2).
 PKG_SRCS := \
   $(BPU_DIR)/bp_defines_pkg.sv \
-  $(BPU_DIR)/bp_structs_pkg.sv
+  $(BPU_DIR)/bp_structs_pkg.sv \
+  $(DEC_DIR)/decode_pkg.sv \
+  $(CSR_DIR)/rtl/csr_pkg.sv
+
+TB_PKG_SRCS := $(CSR_DIR)/tb/csr_tb_pkg.sv
 
 CHK_SRCS := $(PKG_SRCS) $(RTL_DIR)/pmp_pma_chk.sv
 
@@ -58,7 +67,7 @@ sim_pmp_pma_chk:
 	@echo "[compiling]  tb_pmp_pma_chk"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb --Mdir $(VER_OUT)_pmp_pma_chk \
-	  $(CHK_SRCS) $(TB_DIR)/tb_pmp_pma_chk.sv $(VSILENCE)
+	  $(CHK_SRCS) $(TB_PKG_SRCS) $(TB_DIR)/tb_pmp_pma_chk.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_pmp_pma_chk/Vtb"
 	$(Q)./$(VER_OUT)_pmp_pma_chk/Vtb
 
