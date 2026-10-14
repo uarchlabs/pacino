@@ -16,6 +16,81 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-079, after SYS-001: TD#178 closed; the SYS series begun.
+
+TD#178, THE CSR DEFINITION (Jeff). planning/arch/csr_decisions.md
+created: the CSR packages through which the RTL takes its
+configuration and CSR inputs and through which testbenches set them.
+  Custom CSRs, machine-level read/write: 0x7C0 holds sc_enable,
+    ftb_fastpath_en, tage_enable_aging, ittage_enable_aging (bits 0-3);
+    0x7C1 holds tage_aging_interval (31:0) and ittage_aging_interval
+    (63:32). Names open (CSR-U1).
+  ext_enable is a member of fe_cfg_t, not a CSR; a test control,
+    reset RVA23_ENABLE; any other value is not RVA23.
+  Implemented standard subset: satp/vsatp Bare and Sv39, hgatp Bare
+    and Sv39x4, ASID 16, VMID 14, menvcfg/henvcfg ADUE and PBMTE, 16
+    PMP entries OFF/TOR/NAPOT at G = 10. Bit positions checked
+    against Spike's encoding.h.
+  CSR-3 (the sc_enable rule, which would close FE-U6) and the vsatp
+    write rule remain PROPOSED.
+  misc/ras_theory_of_operation.md: TD#101 and the commit-stack wrap
+    marked closed (BP-126).
+
+NEW TASK SERIES: SYS (Jeff). System-level work outside the front end:
+CSRs, traps and interrupts, timers, counters, debug, platform. SYS-001
+was the first; BP numbering continues for front-end work.
+
+SYS-001 RUN, COMPLETE (Jeff). 1h25m. regress.sh 270 targets PASS (267
++ the three rtl/core/csr targets). Checked by the PA against both
+summaries: sim_ptw 807 -> 806, csr 126/0, nothing else changed.
+  csr_pkg (rtl/core/csr/rtl) and csr_tb_pkg (rtl/core/csr/tb), the
+    latter a class with static members behind package functions (plain
+    package functions made the tb_fe_top C++ compile run past 5
+    minutes).
+  Struct ports: fe_top fe_cfg and fe_csr, ITLB fe_csr, walker ptw_csr;
+    the PMP checker takes pmpcfg/pmpaddr arrays. decode_pkg.sv comment
+    corrected. All 15 testbenches that drove a group member go through
+    csr_tb_pkg.
+  pt_ad_h 1435 -> 1395 cycles at both slot counts, ACCEPTED (Jeff):
+    its case 3 and tb_ptw h_h1_m0 set henvcfg.ADUE 1 with menvcfg.ADUE
+    0, which no CSR write can produce; under the read-0 rule the VS
+    stage is Svade and takes a page fault instead of a G-stage
+    guest-page fault. Every other program identical at 2 and 1.
+  Provisional choices ACCEPTED (Jeff): csr_reset, set_priv, set_v,
+    set_pmp_g added; NA4 stored as NAPOT; unknown address $fatal; the
+    class shadow; the PMP checker takes members; assertion modules
+    keep their ports.
+  Coverage lost: tb_pmp_pma_chk G5-G8b no longer exercise the
+    checker's own low-bit masking at G = 10.
+  Regression time 836 s -> 1404 s: two cold tb_fe_top builds (about 4
+    minutes each); cached builds about 6 s.
+
+RULED after SYS-001 (Jeff): three [PRIV] rules added to csr_decisions.md
+CSR-5 and implemented by SYS-002: henvcfg.PBMTE reads 0 when
+menvcfg.PBMTE is 0; pmpcfg R = 0 with W = 1 is stored with W = 0; an
+entry's pmpaddr is not written when the next entry is locked TOR.
+csr_decisions.md also takes SYS-001's proposed text: CSR-2 setters,
+CSR-6 port shapes and walker sampling, CSR-7 reset values.
+
+OTHER RULINGS (Jeff):
+  MMU-24a (the walker holds its CSR group for a walk), IF-30 (fetch
+    refused through the invalidate's done cycle) and IF-36 (the IFU
+    clears its previous-request register after done) CONFIRMED.
+  TD#74 folded into BP-135.
+  TD#183 (hist mispredicts after TD#182) and TD#184 (RAS recursion
+    counts lost on wrong paths) opened in Performance / Verification
+    Debt.
+  rtl/core/frontend/decode/obj_dir_pre dropped from .gitignore (done).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, csr_decisions.md (new),
+mmu_decisions.md, l1i_ifu_interfaces.md,
+misc/ras_theory_of_operation.md.
+
+Next free: BP-135, SYS-002, INFRA-014, TOOLS-007, TD#185.
+
+---
+
 ## Session-079, after BP-134: BP-133 and BP-134 recorded.
 
 BP-133 RUN, COMPLETE (Jeff). 46m. regress.sh 265 targets PASS. Every
@@ -3256,6 +3331,15 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Session-078: 9 bp_history and    |
 |                         |             |                   | correction widths (BP-129,       |
 |                         |             |                   | BP-130); 10 item 13 closed.      |
+| csr_decisions.md        | Draft       | --                | Created session-079 (TD#178).    |
+|                         |             |                   | CSR packages, custom CSRs 0x7C0  |
+|                         |             |                   | and 0x7C1, implemented standard  |
+|                         |             |                   | CSR subset, group structs, reset |
+|                         |             |                   | values. CSR-3 (sc_enable rule)   |
+|                         |             |                   | and the vsatp write rule         |
+|                         |             |                   | PROPOSED; CSR-U1 (custom CSR     |
+|                         |             |                   | names), CSR-U2 (hardware         |
+|                         |             |                   | delivery) open.                  |
 | fe_decisions.md         | Draft       | --                | Created session-062. Front-end   |
 |                         |             |                   | theory of operation. SESSION-064:|
 |                         |             |                   | RAS top of stack corrected to p0 |
@@ -3576,6 +3660,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | 11, the maintenance ports, and    |
 |                         |             |                   | IF-44 built by BP-123 in the      |
 |                         |             |                   | pacino copy; not emitted (CG-5).  |
+|                         |             |                   | Session-079: IF-30 and IF-36      |
+|                         |             |                   | confirmed.                        |
 | l1i (cachegen node)     | Emitted     | l1i_tb            | TOOLS-004 and TOOLS-005. Not      |
 |                         |             |                   | hand-written RTL: emitted by      |
 |                         |             |                   | tools/cachegen from               |
@@ -3679,6 +3765,7 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | BP-123: the faulting GPA is 56    |
 |                         |             |                   | bits (MMU-23); U is checked       |
 |                         |             |                   | before A is set (MMU-8c).         |
+|                         |             |                   | Session-079: MMU-24a confirmed.   |
 | ifu_ibuf_interfaces.md  | Draft       | --                | Created session-069. IB-1..13.    |
 |                         |             |                   | IB-U1 CLOSED as IB-12 -- this row |
 |                         |             |                   | listed it open while the Shared   |
@@ -3745,6 +3832,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | BP-124: drives itlb_l2t_acc and   |
 |                         |             |                   | itlb_l2t_priv, tags held faults   |
 |                         |             |                   | (ITLB-10b); 147 and 150 checks.   |
+|                         |             |                   | SYS-001: takes fe_csr_t (fe_csr)  |
+|                         |             |                   | for its CSR group.                |
 | pmp_pma_chk             | Working     | tb_pmp_pma_chk    | Built BP-118, rtl/mmu/pmp. The    |
 |                         |             |                   | one checker of MMU-10a: 16 PMP    |
 |                         |             |                   | entries, TOR and NAPOT, 4 KiB     |
@@ -3754,6 +3843,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | is not idempotent is rejected at  |
 |                         |             |                   | elaboration (MMU-15b), shown by   |
 |                         |             |                   | lint_neg_pma, lint_neg_pma_dflt.  |
+|                         |             |                   | SYS-001: pmp_cfg/pmp_addr are     |
+|                         |             |                   | csr_pkg                           |
+|                         |             |                   | pmpcfg_ent_t/pmpaddr_imp_t        |
+|                         |             |                   | arrays. Coverage of its own G =   |
+|                         |             |                   | 10 low-bit masking lost in        |
+|                         |             |                   | tb_pmp_pma_chk G5-G8b; restored   |
+|                         |             |                   | by SYS-002.                       |
 | page table walker       | Working     | tb_ptw            | Built BP-123, rtl/mmu/ptw,        |
 |                         |             |                   | outside the front end top;        |
 |                         |             |                   | tb_fe_top instantiates it beside  |
@@ -3768,6 +3864,14 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | (MMU-8c), causes by access type   |
 |                         |             |                   | and the 56-bit GPA: 807 checks,   |
 |                         |             |                   | 12 properties. Was Not started.   |
+|                         |             |                   | SYS-001: takes ptw_csr_t          |
+|                         |             |                   | (ptw_csr). tb_ptw 806 checks.     |
+| csr (unit)              | Working     | tb_csr_tb_pkg     | Built SYS-001, rtl/core/csr:      |
+|                         |             |                   | csr_pkg.sv, tb/csr_tb_pkg.sv.     |
+|                         |             |                   | lint_csr_pkg, lint_csr_tb_pkg,    |
+|                         |             |                   | sim_csr_tb_pkg 126/0. SYS-002     |
+|                         |             |                   | adds three write rules and        |
+|                         |             |                   | restores PMP checker coverage.    |
 | frontend top            | Working     | tb_fe_top         | Built BP-118. 36 programs since   |
 |                         |             |                   | BP-124 (19 before BP-123), each   |
 |                         |             |                   | its own regression target         |
@@ -3789,6 +3893,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | sim_fe_top 734 checks at 2 slots, |
 |                         |             |                   | 731 at 1. TD#182 changed 10       |
 |                         |             |                   | programs at 2 slots and 9 at 1.   |
+|                         |             |                   | SYS-001: config and csr groups    |
+|                         |             |                   | are the struct ports fe_cfg and   |
+|                         |             |                   | fe_csr (csr_decisions.md CSR-6);  |
+|                         |             |                   | tb_fe_top sets them through       |
+|                         |             |                   | csr_tb_pkg. pt_ad_h 1435 -> 1395  |
+|                         |             |                   | cycles (henvcfg.ADUE read-0       |
+|                         |             |                   | rule).                            |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |
@@ -4073,6 +4184,11 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | TAGE/ITTAGE is covered by group |
 |    |                                        | G only for the loop it drives.  |
 |    |                                        | Reduction work in #1.           |
+|    |                                        | Session-079 (Jeff): folded into |
+|    |                                        | BP-135. The IA reports what     |
+|    |                                        | covers the slot-1 TAGE and      |
+|    |                                        | ITTAGE update path; closed or   |
+|    |                                        | kept on that report.            |
 | 75 | ittage has no fast versions of the     | CLOSED by BP-126 (session-077): |
 |    | ittage sim targets.                    | sim_ittage_fast,                |
 |    |                                        | +ITTAGE_FAST_INIT=1, 223/0.     |
@@ -5070,17 +5186,24 @@ assessment of each document. Correct any that are wrong.
 |     |          | failed: no test has an access to the set between a       |
 |     |          | cacheable miss's lookup and its fill. Needs that test.   |
 |     |          | BP-125 Deferred Work 2; ruled a TD session-077 (Jeff).   |
-| 178 | csr      | OPEN, definition. A CSR definition, in a new planning    |
-|     |          | file csr_decisions.md, which will own the enable and     |
-|     |          | configuration bits that now stand in for a CSR file that |
-|     |          | does not exist: FE-20's config group (sc_enable,         |
-|     |          | ftb_fastpath_en (G25), tage_enable_aging,                |
-|     |          | tage_aging_interval, ittage_enable_aging,                |
-|     |          | ittage_aging_interval and decode's ext_enable) and       |
-|     |          | FE-U6, the SC enable's behaviour (bp_arb_spec.md 0).     |
-|     |          | Whether it also covers FE-20's csr group (V, privilege,  |
-|     |          | satp, vsatp, hgatp, pmpcfg, pmpaddr) is decided when it  |
-|     |          | is tasked. Implemented after BP-126 (Jeff, session-077). |
+| 178 | csr      | CLOSED by SYS-001 (session-079).                         |
+|     |          | planning/arch/csr_decisions.md defines the CSR packages; |
+|     |          | csr_pkg and csr_tb_pkg built under rtl/core/csr; the     |
+|     |          | config and csr groups are struct ports (fe_cfg_t,        |
+|     |          | fe_csr_t, ptw_csr_t); every testbench sets them through  |
+|     |          | csr_tb_pkg. Custom CSRs at 0x7C0 (enables) and 0x7C1     |
+|     |          | (aging intervals). FE-20's csr group is covered. Was: A  |
+|     |          | CSR definition, in a new planning file csr_decisions.md, |
+|     |          | which will own the enable and configuration bits that    |
+|     |          | now stand in for a CSR file that does not exist: FE-20's |
+|     |          | config group (sc_enable, ftb_fastpath_en (G25),          |
+|     |          | tage_enable_aging, tage_aging_interval,                  |
+|     |          | ittage_enable_aging, ittage_aging_interval and decode's  |
+|     |          | ext_enable) and FE-U6, the SC enable's behaviour         |
+|     |          | (bp_arb_spec.md 0). Whether it also covers FE-20's csr   |
+|     |          | group (V, privilege, satp, vsatp, hgatp, pmpcfg,         |
+|     |          | pmpaddr) is decided when it is tasked. Implemented after |
+|     |          | BP-126 (Jeff, session-077).                              |
 | 182 | tage     | CLOSED by BP-134 (session-079). Opened session-079       |
 |     |          | (Jeff) from BP-133's report. When T0 provided the TAGE   |
 |     |          | prediction, its 2-bit counter reached the confidence     |
@@ -5248,6 +5371,22 @@ numbers are issued from one sequence across both tables.
 |     |          | Makefile, which changes the coverage reports. Found by   |
 |     |          | BP-132 (Deferred Work 2). For the formal verification    |
 |     |          | coverage exercise (Jeff, session-078).                   |
+| 183 | tage, sc | OPEN, PERFORMANCE. The TD#182 fix (BP-134, the T0        |
+|     |          | counter read as its 3-bit equivalent) raised hist        |
+|     |          | mispredicts 22 -> 31 at 2 slots and 42 -> 50 at 1;       |
+|     |          | ftbonly, indir and loops improved at 2 slots. SC now     |
+|     |          | overrides T0 in different cases. Related: TD#86 (TAGE    |
+|     |          | term weight in the SC sum), TD#93 (SC tuning). For the   |
+|     |          | benchmark analysis (Jeff, session-079).                  |
+| 184 | ras      | OPEN, PERFORMANCE. The RAS loses recursion levels on     |
+|     |          | wrong paths: a wrong-path pop that decremented a         |
+|     |          | recursion count leaves it decremented, because a restore |
+|     |          | reloads TOSR, TOSW and BOS only and the counts live in   |
+|     |          | the entries (BP-134 Other Notes 3; recur, rec_undo).     |
+|     |          | Options: snapshot the top entry's count (4 bits per FTQ  |
+|     |          | entry), snapshot every count (64 bits), or no recursion  |
+|     |          | compression on the speculative stack. Measure first      |
+|     |          | (Jeff, session-079).                                     |
 
 ---
 

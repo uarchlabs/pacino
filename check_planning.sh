@@ -71,7 +71,10 @@
 # tage_cntrl_decisions.md, tage_interfaces.md, ras_decisions.md,
 # ras_interfaces.md, sc_decisions.md, sc_interfaces.md,
 # ubtb_interfaces.md, ras_theory_of_operation.md (new, location MISC)),
-# and the file added in session-079 for TD#178 (csr_decisions.md).
+# and the file added in session-079 for TD#178 (csr_decisions.md),
+# and the files updated in session-079 after SYS-001
+# (PROJECT_STATUS.md, csr_decisions.md, mmu_decisions.md,
+# l1i_ifu_interfaces.md, ras_theory_of_operation.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -91,7 +94,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 50a03ef86e3f
+PLAN  PROJECT_STATUS.md                 253c6997b061
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -99,7 +102,7 @@ ARCH  bp_arb_spec.md                    2c98a9d4f798
 ARCH  bp_cluster.md                     187952e94e30
 ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
-ARCH  csr_decisions.md                  de95e8325d79
+ARCH  csr_decisions.md                  1504051434a5
 ARCH  dcd_decisions.md                  1134f749b0d9
 ARCH  fe_decisions.md                   0ec67f83aa96
 ARCH  ftb_decisions.md            5872deda6dc9
@@ -111,7 +114,7 @@ ARCH  ifu_decisions.md            23b78769459f
 ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  73c0fd5a76e5
+ARCH  mmu_decisions.md                  549749154c67
 ARCH  ras_decisions.md                  d28627b187ed
 ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
@@ -149,7 +152,7 @@ INTF  itlb_ifu_interfaces.md            ab489f6db489
 INTF  itlb_l2tlb_interfaces.md          bed8d1ddacae
 INTF  ptw_mem_interfaces.md            053eb7faf457
 INTF  ittage_interfaces.md              14f901826cca
-INTF  l1i_ifu_interfaces.md             85f362d1da4d
+INTF  l1i_ifu_interfaces.md             3fb484b495e3
 INTF  loop_pred_interfaces.md           f1eb16c7ce58
 INTF  ras_interfaces.md                 63affca67938
 INTF  sc_interfaces.md                  8c7c5b2851ff

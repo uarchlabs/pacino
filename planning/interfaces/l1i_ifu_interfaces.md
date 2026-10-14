@@ -7,7 +7,7 @@
  SOURCE:  icache_decisions.md, ftq_ifu_interfaces.md, INFRA-012,
           TOOLS-003, tools/cachegen schema and testcases/pacino
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -621,7 +621,7 @@ the names above. Built by BP-123, accepted session-077 (Jeff).
          ifu_l1i_req_rdy low and accepts no new request. The range
          is INCLUSIVE of the done cycle: ready may rise the cycle
          after done. As BP-123 built it (its Assumption 3);
-         recorded session-077 for Jeff to confirm.
+         CONFIRMED session-079 (Jeff).
 
   IF-31  l1i_ifu_inv_done IS NOT ASSERTED UNTIL EVERY FILL THE
          INVALIDATE MUST DEFEAT HAS LANDED OR BEEN DISCARDED, and
@@ -747,7 +747,7 @@ commit can.
          After FENCE.I the restart flushes them (ifu_decisions.md
          IFU-28); after cbo.inval software has no fetch-coherence
          guarantee (13.2). As BP-123 built it (its Assumption 2);
-         recorded session-077 for Jeff to confirm.
+         CONFIRMED session-079 (Jeff).
 
   IF-37  cmt_ifu_maint_val and the fetch request path are
          independent at this boundary. The IFU may still be holding
@@ -1337,4 +1337,6 @@ sees a 2-byte boundary.
 
   2026-10-10  session-077, after BP-125. IF-44a: a merged cacheable
               fill updates the replacement state (L1I-24).
+
+  2026-10-14  session-079. IF-30 and IF-36 confirmed (Jeff).
 ```

@@ -6,7 +6,7 @@
  FILE:    mmu_decisions.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -221,8 +221,11 @@ MMU-24a THE WALKER'S CSR INPUTS ARE ITS OWN INPUT GROUP. The
         it for that walk: a walk that began under one regime may
         complete under it (supervisor chapter, satp: translations
         that began while satp was active need not terminate when it
-        changes). Built by BP-123 (its Assumption 7); recorded
-        session-077 for Jeff to confirm.
+        changes). Built by BP-123 (its Assumption 7); CONFIRMED
+        session-079 (Jeff). The sampled members are MODE, PPN, ADUE
+        and PBMTE; the walker's PMP checker reads the PMP registers
+        every cycle. Since SYS-001 the group is the ptw_csr_t port
+        (csr_decisions.md CSR-6).
 
 MMU-24c THE REQUEST CARRIES THE ACCESS TYPE AND THE PRIVILEGE.
         `itlb_l2t_acc [1:0]` (0 read, 1 write, 2 execute, 3
@@ -1033,4 +1036,7 @@ TD#118    No longer bounds the walker, which has its own port
   2026-10-10  session-077, after BP-124 (Jeff). MMU-8c, MMU-23,
               MMU-24c and MMU-30's removal built; MMU-26a: R for a
               read is checked now, MXR clear (BP-124 D1, accepted).
+
+  2026-10-14  session-079. MMU-24a confirmed (Jeff); the sampled
+              members named; the group is ptw_csr_t (SYS-001).
 ```
