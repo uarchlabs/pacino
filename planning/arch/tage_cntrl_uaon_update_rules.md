@@ -6,11 +6,14 @@
  FILE:    tage_cntrl_uaon_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
 Changelog:
+- 2026-10-14 (session-080, BP-136, Jeff): uaon_N is updated only when
+  the alternative is a tagged table; with T0 as the alternative it is
+  unchanged, as tage_cntrl.sv uaon_upd_ff is built.
 - 2026-09-20 (session-072): the alternative component definition
   admitted only tagged tables, so it excluded T0, which
   tage_cntrl_decisions.md and tage_cntrl_ctr_update_rules.md rows
@@ -107,6 +110,10 @@ final provider CTR; tage_pred_strong reflects strictly
 ## UAON Modification During Update
 
 These rules apply independently to uaon_0 and uaon_1.
+
+They apply only when the primary and the alternative are both tagged
+tables (tage_prm_comp != 0 and tage_alt_comp != 0). With T0 as the
+alternative, uaon_N is unchanged.
 
 ### Signal names
 

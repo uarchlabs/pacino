@@ -1487,8 +1487,8 @@ module bp_cluster (
   // p2 held the TAGE result a cycle and left every later TAGE and SC
   // result late for the cluster's fixed p2 / p3 reads (branch_id
   // mismatch); before BP-121 most p2 blocks saw a late result.
-  //   pred    a block is at p2 and the SC RAMs are ready (rule 1
-  //           above): grant the prediction
+  //   pred    a block is at p2 and the SC RAMs are ready (sc_ready,
+  //           the SC RAM-init ready): grant the prediction
   //   upd     otherwise an update is presented: grant it
   //   hold    an update that has waited SC_STARVE_THRESH cycles
   //           deasserts sc_uq_not_full for ONE cycle; the FTQ withholds

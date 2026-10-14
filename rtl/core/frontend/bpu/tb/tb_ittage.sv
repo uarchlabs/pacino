@@ -86,12 +86,14 @@ module tb;
   // BP-126: without +ITTAGE_FAST_INIT every reset (the initial one and
   // the do_reset calls, 20 in all) waits for the sram_init walk; the
   // limit grows by 24 walks of 10-unit cycles.
+  // BP-136: the slot-update tests add three resets (27 walks) and run
+  // to 8395 units with fast init; 4x rounded up -> 34000.
   initial begin
     int fi;
     fi = 0;
     void'($value$plusargs("ITTAGE_FAST_INIT=%d", fi));
-    if (fi != 0) #30000;
-    else         #(30000 + 24 * ((1 << IT_MAX_IDX_WIDTH) + 16) * 10);
+    if (fi != 0) #34000;
+    else         #(34000 + 27 * ((1 << IT_MAX_IDX_WIDTH) + 16) * 10);
     $fatal(1, "tb_ittage: TIMEOUT watchdog expired");
   end
 
@@ -104,6 +106,15 @@ module tb;
   longint  mon_u1_0_cnt;
   logic mon_saw_pq_full;
   logic mon_saw_uq_full;
+
+  // BP-136: cycles with an update held in the ittage_arb UQ (the
+  // queued path, not the empty-queue bypass). Never reset; a test
+  // compares two samples. Zero at time 0 (the first reset), as the
+  // counters below are.
+  longint  mon_uq_busy_cnt;
+  initial  mon_uq_busy_cnt = 0;
+  always_ff @(posedge clk)
+    if (!dut.u_ittage_arb.uq_empty) mon_uq_busy_cnt <= mon_uq_busy_cnt + 1;
 
   always_ff @(posedge clk or negedge rstn) begin
     if (!rstn) begin
@@ -2571,6 +2582,442 @@ module tb;
   endtask
 
   // ================================================================
+  // BP-136 (TD#74): updates on a given slot, driven at the ittage
+  // ports, so each passes ittage_arb (the slot's UQ lane or its
+  // bypass), ittage_cntrl (ctr_upd, use_epc_upd, tgt_upd, alc_upd for
+  // that slot), the ittage.sv per-table index select (upd_idx_s) and
+  // the slot's ittage_table RAM. Every check reads a RAM entry back
+  // whole (backdoor) and compares it with an entry the testbench builds
+  // from the rule documents:
+  //   ittage_cntrl_ctr_update_rules.md   CTR rows
+  //   ittage_cntrl_use_update_rules.md   Table 7, the EPC write
+  //   ittage_cntrl_alloc_rules.md        trigger, entry init
+  //   ittage_interfaces.md Target Write Gating (provider, CTR null,
+  //     mispredict), as ittage_cntrl_ctr_update_rules.md cites it
+  // The meta is built in the testbench, in a state a prediction
+  // produces (UP=0 only with a null primary; hit with a tagged
+  // provider), as tb_tage_manual does for TAGE. The update path reads
+  // only the meta, so no index or tag hash is assumed.
+  //
+  // Geometry (IT_TBL_IDX: IT1/IT2 8 bits, IT3-IT5 9 bits; the RAM bank
+  // is the index MSB and the entry the bits below it):
+  //   primary   IT2 at S_P  (0x0A5)    alternate IT1 at S_A (0x05A)
+  //   alloc     IT4 at S_L4 (0x1C3)    alloc     IT3 at S_L3 (0x0E7)
+  // Sentinels catch a write at the wrong index: IT2 at S_A, IT1 at
+  // S_P, IT4 and IT3 at S_P. Every entry is seeded in both slot RAMs;
+  // the slot not under test must keep its seed.
+  //
+  // EPC: it_epoch_set leaves lcl_epoch[slot] at slot + 1 and the other
+  // slot's at 0. Entries are seeded EPC 3, so a USE write that does not
+  // write the slot's epoch is seen. With EPC 3 the age is 2 or 3 and
+  // u_eff is 0 (Effective Useful Computation), so the meta useful
+  // fields are 0, as a prediction would give.
+  // ================================================================
+  localparam logic [IT_MAX_IDX_WIDTH-1:0] S_P  = 9'h0A5;
+  localparam logic [IT_MAX_IDX_WIDTH-1:0] S_A  = 9'h05A;
+  localparam logic [IT_MAX_IDX_WIDTH-1:0] S_L4 = 9'h1C3;
+  localparam logic [IT_MAX_IDX_WIDTH-1:0] S_L3 = 9'h0E7;
+  localparam logic [1:0]                  S_EPC_SEED = 2'h3;
+
+  // Bank and entry of a table index (ittage_table addr: bank = index
+  // MSB, entry = the bits below it).
+  function automatic int it_bank(input int tbl,
+                                 input logic [IT_MAX_IDX_WIDTH-1:0] idx);
+    it_bank = (int'(idx) >> (IT_TBL_IDX[tbl] - 1)) & 1;
+  endfunction
+  function automatic int it_ent(input int tbl,
+                                input logic [IT_MAX_IDX_WIDTH-1:0] idx);
+    it_ent = int'(idx) & ((1 << (IT_TBL_IDX[tbl] - 1)) - 1);
+  endfunction
+
+  // An entry in the backdoor layout of bw_write, TAG cut to the table's
+  // width (the RAM is that wide; bw_read zero-extends).
+  function automatic logic [E_W5-1:0] it_mk(
+    input int                          tbl,
+    input logic                        val,
+    input logic [IT_MAX_CTR_WIDTH-1:0] ctr,
+    input logic [IT_MAX_USE_WIDTH-1:0] use_fld,
+    input logic [IT_MAX_EPC_WIDTH-1:0] epc,
+    input logic [IT_MAX_TGT_WIDTH-1:0] tgt,
+    input logic [IT_MAX_TAG_WIDTH-1:0] tag
+  );
+    logic [E_W5-1:0] d;
+    d        = '0;
+    d[0]     = val;
+    d[3:1]   = ctr;
+    d[5:4]   = use_fld;
+    d[7:6]   = epc;
+    d[E_TGT_HI:E_TGT_LO] = tgt;
+    d[E_W5-1:E_TAG_LO]   =
+      IT_MAX_TAG_WIDTH'(tag & ((1 << IT_TBL_TAG[tbl]) - 1));
+    it_mk = d;
+  endfunction
+
+  // Backdoor read of slot's RAM copy, zero-extended to E_W5.
+  function automatic logic [E_W5-1:0] bw_read(input int tbl,
+      input int slot, input int bank, input int ent);
+    if (slot != 0) return g_s1.rd(tbl, bank, ent);
+    case (tbl)
+      1: return E_W5'(dut.gen_ittage_tables[1].gen_active.u_table
+                        .g_slot[0].u_ram.mem[bank][ent]);
+      2: return E_W5'(dut.gen_ittage_tables[2].gen_active.u_table
+                        .g_slot[0].u_ram.mem[bank][ent]);
+      3: return E_W5'(dut.gen_ittage_tables[3].gen_active.u_table
+                        .g_slot[0].u_ram.mem[bank][ent]);
+      4: return E_W5'(dut.gen_ittage_tables[4].gen_active.u_table
+                        .g_slot[0].u_ram.mem[bank][ent]);
+      5: return E_W5'(dut.gen_ittage_tables[5].gen_active.u_table
+                        .g_slot[0].u_ram.mem[bank][ent]);
+      default: return '0;
+    endcase
+  endfunction
+
+  // Seed one entry in every slot RAM.
+  task automatic it_seed(input int tbl,
+                         input logic [IT_MAX_IDX_WIDTH-1:0] idx,
+                         input logic [E_W5-1:0] d);
+    for (int s = 0; s < NPS; s++)
+      bw_write(tbl, s, it_bank(tbl, idx), it_ent(tbl, idx), d[0],
+               d[3:1], d[5:4], d[7:6], d[E_TGT_HI:E_TGT_LO],
+               IT_MAX_TAG_WIDTH'(d[E_W5-1:E_TAG_LO]));
+  endtask
+
+  // Entry {tbl, idx} of slot's RAM equals exp; and, at two slots, the
+  // other slot's copy still equals its seed.
+  task automatic it_chk(input string nm, input int tbl,
+                        input logic [IT_MAX_IDX_WIDTH-1:0] idx,
+                        input int slot, input logic [E_W5-1:0] exp,
+                        input logic [E_W5-1:0] seed);
+    chk($sformatf("%s s%0d IT%0d[%03h]", nm, slot, tbl, idx),
+        64'(bw_read(tbl, slot, it_bank(tbl, idx), it_ent(tbl, idx))),
+        64'(exp));
+    if (NPS > 1)
+      chk($sformatf("%s s%0d IT%0d[%03h] other slot keeps seed", nm,
+                    slot, tbl, idx),
+          64'(bw_read(tbl, (slot == 0) ? NPS - 1 : 0, it_bank(tbl, idx),
+                      it_ent(tbl, idx))),
+          64'(seed));
+  endtask
+
+  // Saturating 3b CTR and 2b USE steps (CTR Semantics; Table 7).
+  function automatic logic [IT_MAX_CTR_WIDTH-1:0] it_ctr_step(
+    input logic [IT_MAX_CTR_WIDTH-1:0] c, input logic inc);
+    if (inc) it_ctr_step = (c == '1) ? c : c + 1'b1;
+    else     it_ctr_step = (c == '0) ? c : c - 1'b1;
+  endfunction
+  function automatic logic [IT_MAX_USE_WIDTH-1:0] it_use_step(
+    input logic [IT_MAX_USE_WIDTH-1:0] u, input logic inc);
+    if (inc) it_use_step = (u == '1) ? u : u + 1'b1;
+    else     it_use_step = (u == '0) ? u : u - 1'b1;
+  endfunction
+
+  // it_epoch_set: from reset, with ittage_aging_interval 0 loaded by
+  // the reset (Interval and Epoch Operation), each ittage_pred_rdy_p2
+  // [slot] under ittage_enable_aging increments lcl_epoch[slot]; n
+  // predictions on slot leave it at n mod 4 and the other slot's at 0.
+  // Aging is off on return. Without +ITTAGE_FAST_INIT the reset reruns
+  // the init walk, which clears the tables; the tests seed after it.
+  task automatic it_epoch_set(input int slot, input int n);
+    automatic int t = 0;
+    clr();
+    cfg_ittage_aging_interval(32'h0);
+    rstn = 1'b0;
+    repeat(3) @(posedge clk);
+    rstn = 1'b1;
+    @(posedge clk);
+    while (!ittage_rdy && t < IT_RDY_WAIT) begin
+      @(posedge clk); t++;
+    end
+    if (!ittage_rdy)
+      $fatal(1, "tb_ittage: ittage_rdy never asserted after reset");
+    repeat(2) @(posedge clk);
+    cfg_ittage_enable_aging(1'b1);
+    for (int i = 0; i < n; i++) begin
+      do_pred(VA_WIDTH'('h0000_7000), 6'h30, slot);
+      wait_prdy(slot);
+    end
+    repeat(2) @(posedge clk);
+    cfg_ittage_enable_aging(1'b0);
+  endtask
+
+  // tc_slot_upd: cases S1-S5 on slot. slot is 0 or NPS-1.
+  task automatic tc_slot_upd(input int slot);
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] TG_P  = 11'h012;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] TG_A  = 11'h034;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] TG_L4 = 11'h1AB;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] TG_L3 = 11'h0CD;
+    logic [IT_MAX_TGT_WIDTH-1:0] tp, ta, tn, tj;
+    logic [E_W5-1:0]   sp, sa, sl4, sl3, j2, j1, j4, j3, e;
+    logic [1:0]        ep;
+    ittage_pred_meta_t m;
+    ittage_upd_inp_t   upd;
+    string             c;
+    longint            uq0;
+
+    $display("-- TC-SLOT-UPD slot %0d (BP-136, TD#74)", slot);
+    ep = 2'(slot + 1);
+    it_epoch_set(slot, slot + 1);
+    tp = it_tgt_enc(VA_WIDTH'('h0000_4000));
+    ta = it_tgt_enc(VA_WIDTH'('h0000_5000));
+    tn = it_tgt_enc(VA_WIDTH'('h0000_6000));
+    tj = it_tgt_enc(VA_WIDTH'('h0000_7700));
+    // Seeds: primary, alternate, two alloc targets (non-zero junk, so
+    // the whole-entry alloc write is seen), and the sentinels.
+    sp  = it_mk(2, 1'b1, 3'h3, 2'h2, S_EPC_SEED, tp, TG_P);
+    sa  = it_mk(1, 1'b1, 3'h2, 2'h2, S_EPC_SEED, ta, TG_A);
+    sl4 = it_mk(4, 1'b1, 3'h5, 2'h3, S_EPC_SEED, tj, 11'h0EE);
+    sl3 = it_mk(3, 1'b1, 3'h5, 2'h3, S_EPC_SEED, tj, 11'h0DD);
+    j2  = it_mk(2, 1'b1, 3'h6, 2'h1, 2'h1, tj, 11'h077);
+    j1  = it_mk(1, 1'b1, 3'h6, 2'h1, 2'h1, tj, 11'h066);
+    j4  = it_mk(4, 1'b1, 3'h6, 2'h1, 2'h1, tj, 11'h055);
+    j3  = it_mk(3, 1'b1, 3'h6, 2'h1, 2'h1, tj, 11'h044);
+
+    // ---- S1: UP=1, correct, DIFF=1. CTR row 19 (INC); Table 7 row 3
+    // (INC prm u_eff, EPC <- lcl_epoch). No target write (MIS=0), no
+    // alloc (MIS=0).
+    c = "S1 row19/T7r3";
+    s_seed(sp, sa, sl4, sl3, j2, j1, j4, j3);
+    m = s_meta(1'b1, 3'h3, 3'h2, tp, ta, 0, '0, '0);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = tp;
+    upd.indir_mispredict = 1'b0;
+    do_upd(upd, slot);
+    @(posedge clk);
+    e = it_mk(2, 1'b1, it_ctr_step(3'h3, 1'b1), it_use_step(2'h0, 1'b1),
+              ep, tp, TG_P);
+    it_chk({c, " prm"}, 2, S_P, slot, e, sp);
+    s_chk_rest(c, slot, sa, sl4, sl3, j2, j1, j4, j3, 1, 1, 1, 1);
+
+    // ---- S2: UP=1, mispredict, CTR 3 not null. CTR row 23 (DEC);
+    // Table 7 row 4 (DEC prm u_eff 0 stays 0, EPC written). Target kept
+    // (CTR not null). Alloc: MIS=1, prm IT2 < IT5, alc IT4 -> IT4 at
+    // S_L4 = {alc_tag, RT, lcl_epoch, USE 0, CTR 0, VAL 1}.
+    c = "S2 row23/T7r4/alloc";
+    s_seed(sp, sa, sl4, sl3, j2, j1, j4, j3);
+    m = s_meta(1'b1, 3'h3, 3'h2, tp, ta, 4, S_L4, TG_L4);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = tn;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, slot);
+    @(posedge clk);
+    e = it_mk(2, 1'b1, it_ctr_step(3'h3, 1'b0), it_use_step(2'h0, 1'b0),
+              ep, tp, TG_P);
+    it_chk({c, " prm"}, 2, S_P, slot, e, sp);
+    e = it_mk(4, 1'b1, 3'h0, 2'h0, ep, tn, TG_L4);
+    it_chk({c, " alc"}, 4, S_L4, slot, e, sl4);
+    s_chk_rest(c, slot, sa, sl4, sl3, j2, j1, j4, j3, 1, 0, 1, 1);
+
+    // ---- S3: UP=1, mispredict, CTR null. CTR row 22 (DEC saturates at
+    // 0); target <- RT (provider, CTR null, MIS). DIFF=0 (the alternate
+    // holds the same target): Table 7 row 1, no USE or EPC write. No
+    // alloc candidate (alc_comp 0).
+    c = "S3 row22/tgt/T7r1";
+    s_seed(it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P), sa, sl4,
+           sl3, j2, j1, j4, j3);
+    m = s_meta(1'b1, 3'h0, 3'h2, tp, tp, 0, '0, '0);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = tn;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, slot);
+    @(posedge clk);
+    e = it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tn, TG_P);
+    it_chk({c, " prm"}, 2, S_P, slot, e,
+           it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P));
+    s_chk_rest(c, slot, sa, sl4, sl3, j2, j1, j4, j3, 1, 1, 1, 1);
+
+    // ---- S4: UP=0 (null primary), correct, DIFF=1. CTR row 5 (alt
+    // INC; the primary is not written); Table 7 row 5 (INC alt u_eff,
+    // EPC). Sent in the same cycle as a prediction on slot 0, which
+    // ittage_arb grants first (arb_comb: prediction priority), so the
+    // update is held in the UQ and leaves it the next cycle.
+    c = "S4 row5/T7r5 via UQ";
+    s_seed(it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P), sa, sl4,
+           sl3, j2, j1, j4, j3);
+    m = s_meta(1'b0, 3'h0, 3'h2, tp, ta, 0, '0, '0);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = ta;
+    upd.indir_mispredict = 1'b0;
+    while (!ittage_uq_not_full[slot] || !ittage_pq_not_full)
+      @(posedge clk);
+    uq0 = mon_uq_busy_cnt;
+    @(posedge clk);
+    ittage_pred_val_p0        = NPS'(1);
+    ittage_pred_inp_p0[0].pc  = VA_WIDTH'('h0000_7000);
+    ittage_upd_val_u0         = NPS'(1 << slot);
+    ittage_upd_inp_u0[slot]   = upd;
+    @(posedge clk);
+    ittage_pred_val_p0      = '0;
+    ittage_pred_inp_p0[0]   = '0;
+    ittage_upd_val_u0       = '0;
+    ittage_upd_inp_u0[slot] = '0;
+    wait_u1(slot);
+    chk($sformatf("%s s%0d update held in the UQ", c, slot),
+        64'(mon_uq_busy_cnt != uq0), 64'h1);
+    @(posedge clk);
+    e = it_mk(1, 1'b1, it_ctr_step(3'h2, 1'b1), it_use_step(2'h0, 1'b1),
+              ep, ta, TG_A);
+    it_chk({c, " alt"}, 1, S_A, slot, e, sa);
+    it_chk({c, " prm"}, 2, S_P, slot,
+           it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P),
+           it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P));
+    s_chk_rest(c, slot, sa, sl4, sl3, j2, j1, j4, j3, 0, 1, 1, 1);
+
+    // ---- S5: UP=0, mispredict, alt CTR null. CTR row 7 (alt DEC
+    // saturates at 0); target <- RT in the alternate (provider);
+    // Table 7 row 6 (DEC alt u_eff, EPC). Alloc: prm IT2 < IT5, alc
+    // IT3 -> IT3 at S_L3.
+    c = "S5 row7/tgt/T7r6/alloc";
+    s_seed(it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P),
+           it_mk(1, 1'b1, 3'h0, 2'h2, S_EPC_SEED, ta, TG_A), sl4, sl3,
+           j2, j1, j4, j3);
+    m = s_meta(1'b0, 3'h0, 3'h0, tp, ta, 3, S_L3, TG_L3);
+    upd = '0;
+    upd.ittage_pred_meta = m;
+    upd.resolved_target  = tn;
+    upd.indir_mispredict = 1'b1;
+    do_upd(upd, slot);
+    @(posedge clk);
+    e = it_mk(1, 1'b1, 3'h0, it_use_step(2'h0, 1'b0), ep, tn, TG_A);
+    it_chk({c, " alt"}, 1, S_A, slot, e,
+           it_mk(1, 1'b1, 3'h0, 2'h2, S_EPC_SEED, ta, TG_A));
+    it_chk({c, " prm"}, 2, S_P, slot,
+           it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P),
+           it_mk(2, 1'b1, 3'h0, 2'h2, S_EPC_SEED, tp, TG_P));
+    e = it_mk(3, 1'b1, 3'h0, 2'h0, ep, tn, TG_L3);
+    it_chk({c, " alc"}, 3, S_L3, slot, e, sl3);
+    s_chk_rest(c, slot, sa, sl4, sl3, j2, j1, j4, j3, 0, 1, 0, 1);
+    @(posedge clk);
+  endtask
+
+  // Seed the primary, alternate, alloc targets and sentinels.
+  task automatic s_seed(input logic [E_W5-1:0] sp, sa, sl4, sl3, j2, j1,
+                        j4, j3);
+    it_seed(2, S_P,  sp);
+    it_seed(1, S_A,  sa);
+    it_seed(4, S_L4, sl4);
+    it_seed(3, S_L3, sl3);
+    it_seed(2, S_A,  j2);   // sentinel: IT2 at the alt index
+    it_seed(1, S_P,  j1);   // sentinel: IT1 at the prm index
+    it_seed(4, S_P,  j4);   // sentinel: IT4 at the prm index
+    it_seed(3, S_P,  j3);   // sentinel: IT3 at the prm index
+  endtask
+
+  // Primary IT2 at S_P, alternate IT1 at S_A, hit, meta useful 0
+  // (u_eff with EPC 3), alloc candidate alc (0: none).
+  function automatic ittage_pred_meta_t s_meta(
+    input logic                          up,
+    input logic [IT_MAX_CTR_WIDTH-1:0]   pctr,
+    input logic [IT_MAX_CTR_WIDTH-1:0]   actr,
+    input logic [IT_MAX_TGT_WIDTH-1:0]   ptgt,
+    input logic [IT_MAX_TGT_WIDTH-1:0]   atgt,
+    input int                            alc,
+    input logic [IT_MAX_IDX_WIDTH-1:0]   alc_idx,
+    input logic [IT_MAX_TAG_WIDTH-1:0]   alc_tag
+  );
+    ittage_pred_meta_t m;
+    m                      = '0;
+    m.ittage_prm_comp      = IT_TBL_SEL_WIDTH'(2);
+    m.ittage_prm_idx       = S_P;
+    m.ittage_prm_ctr       = pctr;
+    m.ittage_prm_tgt       = ptgt;
+    m.ittage_alt_comp      = IT_TBL_SEL_WIDTH'(1);
+    m.ittage_alt_idx       = S_A;
+    m.ittage_alt_ctr       = actr;
+    m.ittage_alt_tgt       = atgt;
+    m.ittage_alc_comp      = IT_TBL_SEL_WIDTH'(alc);
+    m.ittage_alc_idx       = alc_idx;
+    m.ittage_alc_tag       = alc_tag;
+    m.ittage_hit           = 1'b1;
+    m.ittage_using_primary = up;
+    m.ittage_use_alt_on_na = !up;
+    m.ittage_pred_strong   = up ? (pctr != '0 && pctr != '1)
+                                : (actr != '0 && actr != '1);
+    m.branch_id            = 6'h31;
+    s_meta = m;
+  endfunction
+
+  // The entries a case must not write keep their seeds: the
+  // alternate (ka), the alloc targets (k4, k3) and the four sentinels
+  // (ks). Each flag 1 checks that group.
+  task automatic s_chk_rest(input string c, input int slot,
+                            input logic [E_W5-1:0] sa, sl4, sl3, j2, j1,
+                            j4, j3, input bit ka, k4, k3, ks);
+    if (ka) it_chk({c, " alt kept"},  1, S_A,  slot, sa,  sa);
+    if (k4) it_chk({c, " IT4 kept"},  4, S_L4, slot, sl4, sl4);
+    if (k3) it_chk({c, " IT3 kept"},  3, S_L3, slot, sl3, sl3);
+    if (ks) begin
+      it_chk({c, " sentinel"}, 2, S_A, slot, j2, j2);
+      it_chk({c, " sentinel"}, 1, S_P, slot, j1, j1);
+      it_chk({c, " sentinel"}, 4, S_P, slot, j4, j4);
+      it_chk({c, " sentinel"}, 3, S_P, slot, j3, j3);
+    end
+  endtask
+
+  // tc_slot_dual: at two slots, one update on each slot in the same
+  // cycle: slot 0 as S1 (primary IT2 INC, Table 7 row 3), slot 1 as
+  // S4 (alternate IT1 INC, Table 7 row 5). Each slot's entry steps in
+  // its own RAM; neither writes the other's. Epochs: slot 0 at 1,
+  // slot 1 at 2 (it_epoch_set twice would reset; one reset, then one
+  // prediction on slot 0 and two on slot 1).
+  task automatic tc_slot_dual();
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] TG_P = 11'h012;
+    localparam logic [IT_MAX_TAG_WIDTH-1:0] TG_A = 11'h034;
+    logic [IT_MAX_TGT_WIDTH-1:0] tp, ta;
+    logic [E_W5-1:0]   sp, sa, e;
+    ittage_upd_inp_t   u0, u1;
+    $display("-- TC-SLOT-DUAL updates on both slots in one cycle");
+    it_epoch_set(0, 1);
+    cfg_ittage_enable_aging(1'b1);
+    for (int i = 0; i < 2; i++) begin
+      do_pred(VA_WIDTH'('h0000_7000), 6'h32, NPS - 1);
+      wait_prdy(NPS - 1);
+    end
+    repeat(2) @(posedge clk);
+    cfg_ittage_enable_aging(1'b0);
+    tp = it_tgt_enc(VA_WIDTH'('h0000_4000));
+    ta = it_tgt_enc(VA_WIDTH'('h0000_5000));
+    sp = it_mk(2, 1'b1, 3'h3, 2'h2, S_EPC_SEED, tp, TG_P);
+    sa = it_mk(1, 1'b1, 3'h2, 2'h2, S_EPC_SEED, ta, TG_A);
+    it_seed(2, S_P, sp);
+    it_seed(1, S_A, sa);
+    u0 = '0;
+    u0.ittage_pred_meta = s_meta(1'b1, 3'h3, 3'h2, tp, ta, 0, '0, '0);
+    u0.resolved_target  = tp;
+    u1 = '0;
+    u1.ittage_pred_meta = s_meta(1'b0, 3'h0, 3'h2, tp, ta, 0, '0, '0);
+    u1.resolved_target  = ta;
+    while (!ittage_uq_not_full[0]) @(posedge clk);
+    @(posedge clk);
+    ittage_upd_val_u0        = '1;
+    ittage_upd_inp_u0[0]     = u0;
+    ittage_upd_inp_u0[NPS-1] = u1;
+    @(posedge clk);
+    ittage_upd_val_u0        = '0;
+    ittage_upd_inp_u0[0]     = '0;
+    ittage_upd_inp_u0[NPS-1] = '0;
+    wait_u1(NPS - 1);
+    @(posedge clk);
+    // Slot 0: primary INC, USE 0 -> 1, EPC 1; alternate kept.
+    e = it_mk(2, 1'b1, 3'h4, 2'h1, 2'h1, tp, TG_P);
+    chk("DUAL s0 IT2 prm", 64'(bw_read(2, 0, it_bank(2, S_P),
+        it_ent(2, S_P))), 64'(e));
+    chk("DUAL s0 IT1 alt kept", 64'(bw_read(1, 0, it_bank(1, S_A),
+        it_ent(1, S_A))), 64'(sa));
+    // Slot 1: alternate INC, USE 0 -> 1, EPC 2; primary CTR 3 kept
+    // (UP=0 writes only the alternate).
+    e = it_mk(1, 1'b1, 3'h3, 2'h1, 2'h2, ta, TG_A);
+    chk("DUAL s1 IT1 alt", 64'(bw_read(1, NPS - 1, it_bank(1, S_A),
+        it_ent(1, S_A))), 64'(e));
+    chk("DUAL s1 IT2 prm kept", 64'(bw_read(2, NPS - 1, it_bank(2, S_P),
+        it_ent(2, S_P))), 64'(sp));
+    @(posedge clk);
+  endtask
+
+  // ================================================================
   // Main simulation
   // ================================================================
   initial begin
@@ -2660,6 +3107,12 @@ module tb;
     // BP-055: capstone round-trip test (self-contained).
     tc_rt01_capstone();
     tc_tgt40();
+
+    // BP-136 (TD#74): updates through ittage on each slot, then both
+    // slots in one cycle. Each starts from its own reset.
+    for (int s = 0; s < NPS; s++) tc_slot_upd(s);
+    if (NPS > 1) tc_slot_dual();
+    else $display("SKIP TC-SLOT-DUAL: needs NUM_PRED_SLOTS > 1");
 
     repeat(5) @(posedge clk);
 

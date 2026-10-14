@@ -40,6 +40,7 @@ module tb;
   int en_round_trip = 1;
   int en_ctr_test   = 1;
   int en_use_test   = 1;
+  int en_uaon_test  = 1;
 
   // ----------------------------------------------------------------
   // Per-test error counters
@@ -217,6 +218,18 @@ module tb;
   int    tb_checks = 0;
   string test_name = "";
 
+  // BP-136 (TD#74): the slot the row tests drive. tage_update sends on
+  // this slot only (tb_slot_mask) and tage_ram_read reads this slot's
+  // RAM copy. run_tests runs every test on slot 0, then again on slot
+  // NUM_PRED_SLOTS-1 when there are two slots.
+  int    tb_slot = 0;
+
+  // BP-136: the value tage_ram_write last seeded at {tbl, idx}. Seeds
+  // go to every slot copy and an update on tb_slot writes only that
+  // slot's copy (tage_bim.sv, tage_table.sv g_slot), so the other copy
+  // must still hold its seed when a row is checked.
+  tage_ram_entry_t seed_map[int];
+
   // Staging registers: NBA propagation for struct-typed array ports.
   // Tasks write to staging; always_ff propagates to DUT ports so
   // tage.sv always_comb blocks see FF outputs (nba_sequent).
@@ -250,13 +263,23 @@ module tb;
   int TOE  = 0; //terminate on error, not typically used
 
   task automatic run_tests();
-    if (en_ctr_test)   tage_ctr_test(.tb_errs(tb_errs),
-                                     .verb(VERB),
-                                     .toe(TOE));
+    // BP-136: the CTR, USE and UAON tests run once per slot.
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      tb_slot = s;
+      tb_info($sformatf("ROW TESTS ON SLOT %0d", tb_slot));
+      if (en_ctr_test)  tage_ctr_test(.tb_errs(tb_errs),
+                                      .verb(VERB),
+                                      .toe(TOE));
 
-    if (en_use_test)   tage_use_test(.tb_errs(tb_errs),
-                                     .verb(VERB),
-                                     .toe(TOE));
+      if (en_use_test)  tage_use_test(.tb_errs(tb_errs),
+                                      .verb(VERB),
+                                      .toe(TOE));
+
+      if (en_uaon_test) tage_uaon_test(.tb_errs(tb_errs),
+                                       .verb(VERB),
+                                       .toe(TOE));
+    end
+    tb_slot = 0;
 
     if (en_round_trip) tage_round_trip_sanity(.tb_errs(tb_errs),
                                      .verb(VERB),
@@ -320,8 +343,11 @@ module tb;
   // that exits through $fatal(1), never $finish.
   // Limit: normal completion measured at 1175 time units (117 cycles
   // at the 10-unit period) in this session. 4x rounded up -> 5000.
+  // BP-136: every row test now runs once per slot and the UAON test is
+  // added; completion measured at 6255 units at two slots. 4x rounded
+  // up -> 26000.
   initial begin
-    #5000;
+    #26000;
     $fatal(1, "tb_tage_manual: TIMEOUT watchdog expired");
   end
 

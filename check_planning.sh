@@ -79,7 +79,9 @@
 # csr_decisions.md), and the files updated in session-080 after
 # BP-135 (PROJECT_STATUS.md, ittage_table_interfaces.md,
 # tage_table_interfaces.md, tage_cntrl_ctr_update_rules.md,
-# bp_arb_spec.md).
+# bp_arb_spec.md), and the files updated in session-080 after BP-136
+# (PROJECT_STATUS.md, tage_cntrl_uaon_update_rules.md,
+# tage_cntrl_use_update_rules.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -99,7 +101,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 25e81dbb417d
+PLAN  PROJECT_STATUS.md                 0efc43453b66
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -124,7 +126,7 @@ ARCH  ras_decisions.md                  d28627b187ed
 ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
 ARCH  sram_init.md                      d6cefefe7fc5
-ARCH  tage_cntrl_uaon_update_rules.md   be55531dd5c0
+ARCH  tage_cntrl_uaon_update_rules.md   cbc6672c5f25
 ARCH  tage_cntrl_alloc_rules.md         3a22df5e85f3
 ARCH  tage_cntrl_decisions.md           e75047b88350
 ARCH  tage_table_entry_formats.md       bfd6ee8f1d3d
@@ -135,7 +137,7 @@ ARCH  ittage_cntrl_alloc_rules.md       a61a19c81fa5
 ARCH  ittage_cntrl_use_update_rules.md  b729da8f6a79
 ARCH  ittage_table_entry_formats.md  abee67476ca8
 ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
-ARCH  tage_cntrl_use_update_rules.md    d1dc910897a2
+ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
 TEST  tage_tb_decisions.md              ae2979a6d9f0

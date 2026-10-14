@@ -6,7 +6,7 @@
  FILE:    tage_cntrl_use_update_rules.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-09-20
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -251,4 +251,8 @@ Since the lcl_epoch_0/1 register is used to form the EFFECTIVE
 USEFUL value, the simple action of incrementing TG_AGE_EPOCH
 effectively ages all entries in all tables without the need to
 update each entry individually.
+
+tb_tage_manual checks the EPC write on each slot with lcl_epoch set to
+a value different from the seed and from the other slot's epoch
+(BP-136).
 

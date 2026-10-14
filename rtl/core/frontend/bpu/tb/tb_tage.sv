@@ -8436,9 +8436,11 @@ module tb;
     tage_upd_inp_t   upd_inp;
     tage_pred_meta_t meta;
     logic [15:0]     rd_s1;
+    logic [15:0]     exp_s1;
 
     local_fails     = 0;
     norm_we_s1_seen = 1'b0;
+    exp_s1          = 16'h0005;  // CTR 010, VAL 1
 
     u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[S1].u_ram.mem[0][80]
       = 16'h0007;
@@ -8491,11 +8493,12 @@ module tb;
         "[FAIL] slot1_t1_write_tst: norm_we_s1=0 exp=1");
     end
     // BP-126: CTR steps toward the outcome (NT): 011->010.
-    if (rd_s1 !== 16'h0005) begin
+    // BP-136: the message prints the value compared (it read 0009).
+    if (rd_s1 !== exp_s1) begin
       local_fails++;
       $display(
-        "[FAIL] slot1_t1_write_tst: s1[0][80]=0x%04h exp=0009",
-        rd_s1);
+        "[FAIL] slot1_t1_write_tst: s1[0][80]=0x%04h exp=0x%04h",
+        rd_s1, exp_s1);
     end
 
     if (local_fails == 0)
@@ -8519,9 +8522,11 @@ module tb;
     tage_upd_inp_t   upd_inp;
     tage_pred_meta_t meta;
     logic [15:0]     rd_s1;
+    logic [15:0]     exp_s1;
 
     local_fails     = 0;
     norm_we_s1_seen = 1'b0;
+    exp_s1          = 16'h0005;  // CTR 010, VAL 1
 
     u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[S1].u_ram.mem[0][90]
       = 16'h0007;
@@ -8571,11 +8576,12 @@ module tb;
         "[FAIL] slot1_t2_write_tst: norm_we_s1=0 exp=1");
     end
     // BP-126: CTR steps toward the outcome (NT): 011->010.
-    if (rd_s1 !== 16'h0005) begin
+    // BP-136: the message prints the value compared (it read 0009).
+    if (rd_s1 !== exp_s1) begin
       local_fails++;
       $display(
-        "[FAIL] slot1_t2_write_tst: s1[0][90]=0x%04h exp=0009",
-        rd_s1);
+        "[FAIL] slot1_t2_write_tst: s1[0][90]=0x%04h exp=0x%04h",
+        rd_s1, exp_s1);
     end
 
     if (local_fails == 0)

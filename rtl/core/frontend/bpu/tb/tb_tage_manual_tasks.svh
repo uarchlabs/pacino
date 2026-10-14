@@ -12,6 +12,8 @@
 // clk, rstn, stg_pred_val, stg_pred_inp, stg_upd_val, stg_upd_inp,
 // tage_pred_rdy_p2, tage_pred_meta_p2, tage_upd_rdy_u1, u_dut, and
 // tb_checks, raised before every comparison of an RTL value (BP-135).
+// BP-136: also tb_slot (the slot the row tests drive and read),
+// seed_map, tage_rdy and cfg_tage_enable_aging.
 // ===================================================================
 
 // -------------------------------------------------------------------
@@ -56,12 +58,26 @@ task automatic tage_use_test(
   tage_ram_entry_t pentry,aentry,rentry,pexp_entry,aexp_entry;
   tage_pred_meta_t pred_meta; //attached to upd_data
   tage_upd_inp_t   upd_data;  //sent during update
+  logic [TAGE_MAX_EPC_WIDTH-1:0] epc_seed,epc_exp;
 
   v = 1;
   this_test = "tage_use_test";
   errs = 0;
 
   start_test(this_test);
+
+  // BP-136: the EPC write. The rule (tage_cntrl_use_update_rules.md,
+  // Effective USEFUL Calculation) writes the slot's lcl_epoch to the
+  // EPC field with every USE write (rows 3-6). With the epoch at 0 and
+  // EPC seeded 0 that write could not be seen. tage_epoch_set leaves
+  // lcl_epoch[tb_slot] at epc_exp (1 on slot 0, 2 on slot 1) and the
+  // other slot's at 0; entries are seeded EPC 3, so a missing write or
+  // a write of the other slot's epoch fails.
+  // The update reads u_eff from the meta (puse, ause), not from the
+  // RAM EPC, so the seed does not change the USE values.
+  epc_seed = 2'h3;
+  epc_exp  = TAGE_MAX_EPC_WIDTH'(tb_slot + 1);
+  tage_epoch_set(tb_slot, tb_slot + 1, errs);
 
   //Set initial conditions
   pc    = VA_WIDTH'('h1000);
@@ -82,8 +98,8 @@ task automatic tage_use_test(
   pentry.tag    = 8'hEF;
   aentry.tag    = 8'hDF;
 
-  pentry.epc    = 2'h0;
-  aentry.epc    = 2'h0;
+  pentry.epc    = epc_seed;
+  aentry.epc    = epc_seed;
 
   pentry.useful = puse;
   aentry.useful = ause;
@@ -149,7 +165,7 @@ task automatic tage_use_test(
   // --------------------------------------------------
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 1,pcomp,acomp,puse,ause);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -170,7 +186,7 @@ task automatic tage_use_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT pCMP aCMP pUSE aUSE
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0, 0,   0,   puse,ause);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -193,12 +209,13 @@ task automatic tage_use_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0, pcomp,acomp,puse,ause);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
   pexp_entry.ctr    = 3; pexp_entry.useful = 2;
   aexp_entry.ctr    = 1; aexp_entry.useful = 2;
+  pexp_entry.epc    = epc_exp;  // BP-136: the EPC write
   check_ctr_row("UR3",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -216,13 +233,14 @@ task automatic tage_use_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
   set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 1, pcomp,acomp,puse,ause);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
   // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 3; pexp_entry.useful = 0;
   aexp_entry.ctr    = 2; aexp_entry.useful = 2;
+  pexp_entry.epc    = epc_exp;  // BP-136: the EPC write
   check_ctr_row("UR4",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -240,12 +258,13 @@ task automatic tage_use_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
   set_ctr_row(pred_meta,upd_data,0, 1, 1, 0, 1, pcomp,acomp,puse,ause);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
   pexp_entry.ctr    = 2; pexp_entry.useful = 1;
   aexp_entry.ctr    = 2; aexp_entry.useful = 3;
+  aexp_entry.epc    = epc_exp;  // BP-136: the EPC write
   check_ctr_row("UR5",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
@@ -263,14 +282,18 @@ task automatic tage_use_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT pCMP  aCMP  pUSE aUSE
   set_ctr_row(pred_meta,upd_data,0, 1, 0, 0, 1, pcomp,acomp,puse,ause);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   pexp_entry        = pentry;
   aexp_entry        = aentry;
   // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 1; pexp_entry.useful = 1;
   aexp_entry.ctr    = 0; aexp_entry.useful = 1;
+  aexp_entry.epc    = epc_exp;  // BP-136: the EPC write
   check_ctr_row("UR6",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+
+  // BP-136: back to reset state, both epochs 0, for the tests after.
+  tage_epoch_set(tb_slot, 0, errs);
 
   // END
   stop_test(this_test,errs);
@@ -425,7 +448,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry; //these are the expected ram contents for prm
   aexp_entry        = aentry;
@@ -446,7 +469,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -467,7 +490,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -489,7 +512,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -511,7 +534,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -533,7 +556,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -555,7 +578,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -576,7 +599,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -598,7 +621,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 1, 1, 0, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -619,7 +642,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 1, 1, 1, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -640,7 +663,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 0, 0, 0, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -662,7 +685,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 0, 0, 1, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -684,14 +707,14 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 1, 0, 0, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
   // BP-126: CTRs step toward the resolved direction (RT).
   pexp_entry.ctr    = 1; pexp_entry.useful = 0; //POSSIBLE ERROR
   aexp_entry.ctr    = 0; aexp_entry.useful = 0; //POSSIBLE ERROR
-  check_ctr_row("RX",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row("R9",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
 
 // -------------------------------------------------------------
 // ROW 10
@@ -706,7 +729,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 0, 1, 1, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -728,7 +751,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 1, 0, 1, 1,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -749,7 +772,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,0, 0, 1, 0, 0,pcomp,acomp);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -773,7 +796,7 @@ task automatic tage_ctr_test(
   reset_t0_entry(pidx,pentry);
   //                             UP PT RT pT aT pcomp acomp
   set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0, 0,    0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   t0exp_entry       = t0entry;
   pexp_entry        = pentry;
@@ -799,7 +822,7 @@ task automatic tage_ctr_test(
   reset_t0_entry(pidx,pentry);
   //                             UP PT RT pT aT pcomp acomp
   set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 0, 0,    0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   t0exp_entry       = t0entry;
   pexp_entry        = pentry;
@@ -825,7 +848,7 @@ task automatic tage_ctr_test(
   reset_t0_entry(pidx,pentry);
   //                             UP PT RT pT aT pcomp acomp
   set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 1, 0,    0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   t0exp_entry       = t0entry;
   pexp_entry        = pentry;
@@ -851,7 +874,7 @@ task automatic tage_ctr_test(
   reset_t0_entry(pidx,pentry);
   //                             UP PT RT pT aT pcomp acomp
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 1, 0,    0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
 
   t0exp_entry       = t0entry;
   pexp_entry        = pentry;
@@ -859,8 +882,8 @@ task automatic tage_ctr_test(
   t0exp_entry.ctr   = 3; 
   pexp_entry.ctr    = 2; pexp_entry.useful = 0;
   aexp_entry.ctr    = 1; aexp_entry.useful = 0;
-  check_ctr_row   ("R13c",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
-  check_ctr_row_t0("R13c",pidx,t0exp_entry,errs,v);
+  check_ctr_row   ("R13d",pcomp,pidx,acomp,aidx,pexp_entry,aexp_entry,errs,v);
+  check_ctr_row_t0("R13d",pidx,t0exp_entry,errs,v);
 
 // -------------------------------------------------------------
 // ROW 14.1
@@ -875,7 +898,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 1,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -896,7 +919,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 0, 1, 0,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -917,7 +940,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 0,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -939,7 +962,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 1, 0, 1,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -961,7 +984,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 1,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -982,7 +1005,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 1, 1, 1, 0,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -1003,7 +1026,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 0,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -1025,7 +1048,7 @@ task automatic tage_ctr_test(
   reset_ctr_entries(pcomp,pidx,acomp,aidx,pentry,aentry);
   //                             UP PT RT pT aT
   set_ctr_row(pred_meta,upd_data,1, 0, 0, 0, 1,pcomp,0);
-  tage_update('{default: upd_data}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd_data}, tb_slot_mask(), errs);
                  
   pexp_entry        = pentry;
   aexp_entry        = aentry;
@@ -1107,6 +1130,7 @@ task automatic check_ctr_row_t0(
   tage_ram_entry_t r;
   tage_ram_read(0, t0idx, r);
   tage_cmp_ram_entry_t0({label," T0   "}, t0idx, t0exp, r, errs, v);
+  check_other_slot({label," T0   "}, 0, t0idx, errs, v);  // BP-136
 endtask
 // -------------------------------------------------------------------
 // t0_alt_row: one of rows 19.1-19.8 (BP-133). Seeds the primary entry
@@ -1171,7 +1195,7 @@ task automatic t0_alt_row(
   //                   UP PT        RT              pT       aT
   set_ctr_row(meta, upd, 0, pred_tkn, resolved_taken, prm_tkn, alt_tkn,
               pcomp, 0);
-  tage_update('{default: upd}, NUM_PRED_SLOTS'(1), errs);
+  tage_update('{default: upd}, tb_slot_mask(), errs);
   meta                    = meta_save;
 
   pexp        = pentry;
@@ -1179,6 +1203,7 @@ task automatic t0_alt_row(
   pexp.useful = 0;
   tage_ram_read(pcomp, pidx, r);
   tage_cmp_ram_entry({label," PCOMP"}, pcomp, pidx, pexp, r, errs, v);
+  check_other_slot({label," PCOMP"}, pcomp, pidx, errs, v);  // BP-136
   t0e.ctr = TAGE_MAX_CTR_WIDTH'(t0_exp);
   check_ctr_row_t0({label," alt"}, aidx, t0e, errs, v);
   t0e.ctr = 3'b011;
@@ -1250,6 +1275,8 @@ task automatic check_ctr_row(
 //$display("DBG: I : errors %0d",errs);
   tage_cmp_ram_entry({label," ACOMP"}, acomp, aidx, aexp, r, errs, v);
 //$display("DBG: J : errors %0d",errs);
+  check_other_slot({label," PCOMP"}, pcomp, pidx, errs, v);  // BP-136
+  check_other_slot({label," ACOMP"}, acomp, aidx, errs, v);
 endtask
 // -------------------------------------------------------------------
 // -------------------------------------------------------------------
@@ -1267,6 +1294,7 @@ endtask
 // T0 (tage_bim): writes ctr[1:0] to every slot RAM, g_slot[0] and
 // g_slot[NUM_PRED_SLOTS-1] (BP-128; at one slot both are slot 0).
 // T1-T4: writes the full 16-bit entry to the same RAMs.
+// BP-136: the entry is also kept in seed_map for check_other_slot.
 // -------------------------------------------------------------------
 task automatic tage_ram_write(
   input int              tbl,
@@ -1281,6 +1309,7 @@ task automatic tage_ram_write(
   row     = idx & 1023;
   bim_raw = entry.ctr[1:0];
   tbl_raw = {entry.tag, entry.epc, entry.useful, entry.ctr, entry.valid};
+  seed_map[(tbl << 16) | idx] = entry;  // BP-136, check_other_slot
   case (tbl)
     0: begin
       u_dut.u_tage_bim.g_slot[0].u_ram.mem[bank][row] = bim_raw;
@@ -1312,43 +1341,100 @@ task automatic tage_ram_write(
 endtask
 
 // -------------------------------------------------------------------
-// tage_ram_read: read one entry from a table RAM (reads g_slot[0].u_ram).
+// tage_ram_read: read one entry from a table RAM, slot tb_slot's copy
+// (g_slot[0] or g_slot[NUM_PRED_SLOTS-1]). BP-136: it read g_slot[0]
+// only, so no row test could see a slot-1 write.
 // -------------------------------------------------------------------
 task automatic tage_ram_read(
   input  int              tbl,
   input  int              idx,
   output tage_ram_entry_t entry
 );
+  tage_ram_read_slot(tbl, idx, tb_slot, entry);
+endtask
+
+// -------------------------------------------------------------------
+// tage_ram_read_slot: read one entry from slot s's copy of a table RAM.
+// s is 0 or NUM_PRED_SLOTS-1 (the only copies there are).
+// -------------------------------------------------------------------
+`define TMR_TBL(T, S) \
+  u_dut.gen_tage_tbl[T].u_tage_tbl.g_slot[S].u_ram.mem[bank][row]
+task automatic tage_ram_read_slot(
+  input  int              tbl,
+  input  int              idx,
+  input  int              s,
+  output tage_ram_entry_t entry
+);
   int          bank;
   int          row;
   logic [1:0]  bim_raw;
   logic [15:0] tbl_raw;
-  bank  = (idx >> 10) & 1;
-  row   = idx & 1023;
-  entry = '0;
-  case (tbl)
-    0: begin
-      bim_raw        = u_dut.u_tage_bim.g_slot[0].u_ram.mem[bank][row];
-      entry.ctr[1:0] = bim_raw;
-    end
-    1: begin
-      tbl_raw = u_dut.gen_tage_tbl[1].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
-      entry   = tage_ram_entry_t'(tbl_raw);
-    end
-    2: begin
-      tbl_raw = u_dut.gen_tage_tbl[2].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
-      entry   = tage_ram_entry_t'(tbl_raw);
-    end
-    3: begin
-      tbl_raw = u_dut.gen_tage_tbl[3].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
-      entry   = tage_ram_entry_t'(tbl_raw);
-    end
-    4: begin
-      tbl_raw = u_dut.gen_tage_tbl[4].u_tage_tbl.g_slot[0].u_ram.mem[bank][row];
-      entry   = tage_ram_entry_t'(tbl_raw);
-    end
-    default: ;
-  endcase
+  bank    = (idx >> 10) & 1;
+  row     = idx & 1023;
+  entry   = '0;
+  bim_raw = '0;
+  tbl_raw = '0;
+  if (s == 0) begin
+    case (tbl)
+      0: bim_raw = u_dut.u_tage_bim.g_slot[0].u_ram.mem[bank][row];
+      1: tbl_raw = `TMR_TBL(1, 0);
+      2: tbl_raw = `TMR_TBL(2, 0);
+      3: tbl_raw = `TMR_TBL(3, 0);
+      4: tbl_raw = `TMR_TBL(4, 0);
+      default: ;
+    endcase
+  end else begin
+    case (tbl)
+      0: bim_raw =
+           u_dut.u_tage_bim.g_slot[NUM_PRED_SLOTS-1].u_ram.mem[bank][row];
+      1: tbl_raw = `TMR_TBL(1, NUM_PRED_SLOTS-1);
+      2: tbl_raw = `TMR_TBL(2, NUM_PRED_SLOTS-1);
+      3: tbl_raw = `TMR_TBL(3, NUM_PRED_SLOTS-1);
+      4: tbl_raw = `TMR_TBL(4, NUM_PRED_SLOTS-1);
+      default: ;
+    endcase
+  end
+  if (tbl == 0) entry.ctr[1:0] = bim_raw;
+  else          entry          = tage_ram_entry_t'(tbl_raw);
+endtask
+`undef TMR_TBL
+
+// -------------------------------------------------------------------
+// check_other_slot (BP-136): the copy of {tbl, idx} in the slot that
+// is not tb_slot still holds the value tage_ram_write seeded (whole
+// entry for T1-T4, the 2b CTR for T0). An update on tb_slot must not
+// write it. One check; skipped at one slot, where there is no other
+// copy.
+// -------------------------------------------------------------------
+task automatic check_other_slot(
+  input string label,
+  input int    tbl,
+  input int    idx,
+  inout int    errs,
+  input int    v
+);
+  tage_ram_entry_t r, sd, sd0;
+  int              os;
+  if (NUM_PRED_SLOTS < 2) return;
+  os = (tb_slot == 0) ? NUM_PRED_SLOTS-1 : 0;
+  sd = seed_map.exists((tbl << 16) | idx) ? seed_map[(tbl << 16) | idx]
+                                          : '0;
+  if (tbl == 0) begin
+    sd0          = '0;
+    sd0.ctr[1:0] = sd.ctr[1:0];
+    sd           = sd0;
+  end
+  tage_ram_read_slot(tbl, idx, os, r);
+  tb_checks++;
+  if (r !== sd) begin
+    $write("-E: %s : other slot %0d changed, tbl %0d idx=0x%04x", label,
+           os, tbl, idx);
+    $write(" seed: %04x act: %04x **\n", sd, r);
+    ++errs;
+  end else if (v) begin
+    $write("-I: %s : other slot %0d unchanged, tbl %0d idx=0x%04x\n",
+           label, os, tbl, idx);
+  end
 endtask
 
 // -------------------------------------------------------------------
@@ -1538,111 +1624,173 @@ task automatic tage_update(
 endtask
 
 // -------------------------------------------------------------------
-// tage_check_pred_meta: compare tage_pred_meta_t got vs exp field by
-// field for each slot where mask[s]=1. Calls tb_error on each
-// mismatch. label identifies the calling test in error output.
+// tb_slot_mask (BP-136): the update valid for slot tb_slot only.
 // -------------------------------------------------------------------
-task automatic tage_check_pred_meta(
-  input tage_pred_meta_t           got[0:NUM_PRED_SLOTS-1],
-  input tage_pred_meta_t           exp[0:NUM_PRED_SLOTS-1],
-  input logic [NUM_PRED_SLOTS-1:0] mask,
-  input string           label,
-  inout integer          errs
+function automatic logic [NUM_PRED_SLOTS-1:0] tb_slot_mask();
+  return NUM_PRED_SLOTS'(1) << tb_slot;
+endfunction
+
+// -------------------------------------------------------------------
+// tage_epoch_set (BP-136): leave lcl_epoch[s] at n and the other
+// slot's epoch at 0, from reset, by the aging rules of
+// tage_cntrl_use_update_rules.md:
+// - reset loads the interval counters with tage_aging_interval, 0
+//   here (tb_tage_manual.sv drives 0 and nothing changes it), and
+//   clears both epochs;
+// - with aging enabled, each tage_pred_rdy_p2[s] at interval 0
+//   increments lcl_epoch[s] and reloads 0.
+// So n predictions on slot s give lcl_epoch[s] = n mod 4. Aging is
+// off again on return, so the epochs hold. The RAMs keep their
+// contents through the reset (+TAGE_FAST_INIT=1: the init walk is
+// bypassed). The reset also clears both uaon counters.
+// -------------------------------------------------------------------
+task automatic tage_epoch_set(
+  input int     s,
+  input int     n,
+  inout integer errs
 );
-  for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-    if (!mask[s]) continue;
-    tb_checks++;
-    if (got[s].tage_prm_idx !== exp[s].tage_prm_idx) begin
-      tb_error($sformatf("%s s%0d: prm_idx", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alt_idx !== exp[s].tage_alt_idx) begin
-      tb_error($sformatf("%s s%0d: alt_idx", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_prm_comp !== exp[s].tage_prm_comp) begin
-      tb_error($sformatf("%s s%0d: prm_comp", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alt_comp !== exp[s].tage_alt_comp) begin
-      tb_error($sformatf("%s s%0d: alt_comp", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_prm_useful !== exp[s].tage_prm_useful) begin
-      tb_error($sformatf("%s s%0d: prm_useful", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alt_useful !== exp[s].tage_alt_useful) begin
-      tb_error($sformatf("%s s%0d: alt_useful", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_prm_ctr !== exp[s].tage_prm_ctr) begin
-      tb_error($sformatf("%s s%0d: prm_ctr", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alt_ctr !== exp[s].tage_alt_ctr) begin
-      tb_error($sformatf("%s s%0d: alt_ctr", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alc_comp !== exp[s].tage_alc_comp) begin
-      tb_error($sformatf("%s s%0d: alc_comp", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alc_idx !== exp[s].tage_alc_idx) begin
-      tb_error($sformatf("%s s%0d: alc_idx", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alc_tag !== exp[s].tage_alc_tag) begin
-      tb_error($sformatf("%s s%0d: alc_tag", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_prm_tkn !== exp[s].tage_prm_tkn) begin
-      tb_error($sformatf("%s s%0d: prm_tkn", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_alt_tkn !== exp[s].tage_alt_tkn) begin
-      tb_error($sformatf("%s s%0d: alt_tkn", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_pred_strong !== exp[s].tage_pred_strong) begin
-      tb_error($sformatf("%s s%0d: pred_strong", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_use_alt_on_na !== exp[s].tage_use_alt_on_na) begin
-      tb_error($sformatf("%s s%0d: use_alt_on_na", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_using_primary !== exp[s].tage_using_primary) begin
-      tb_error($sformatf("%s s%0d: using_primary", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].tage_pred_tkn !== exp[s].tage_pred_tkn) begin
-      tb_error($sformatf("%s s%0d: pred_tkn", label, s));
-      errs++;
-    end
-    tb_checks++;
-    if (got[s].branch_id !== exp[s].branch_id) begin
-      tb_error($sformatf("%s s%0d: branch_id", label, s));
-      errs++;
-    end
+  tage_pred_inp_t            inp[0:NUM_PRED_SLOTS-1];
+  tage_pred_meta_t           meta[0:NUM_PRED_SLOTS-1];
+  logic [NUM_PRED_SLOTS-1:0] rdy;
+  assert_reset(4);
+  while (!tage_rdy) @(posedge clk);
+  @(posedge clk);
+  for (int i = 0; i < NUM_PRED_SLOTS; i++) inp[i] = '0;
+  inp[s].pc = VA_WIDTH'('h0000_2000);
+  cfg_tage_enable_aging(1'b1);
+  for (int i = 0; i < n; i++)
+    tage_predict(inp, NUM_PRED_SLOTS'(1) << s, meta, rdy, errs);
+  repeat (2) @(posedge clk);
+  cfg_tage_enable_aging(1'b0);
+endtask
+
+// -------------------------------------------------------------------
+// tage_uaon_test (BP-136, TD#74): the use_alt_on_na counter of slot
+// tb_slot, tage_cntrl_uaon_update_rules.md "UAON Modification During
+// Update" and its truth table. Every update has a tagged primary (T4)
+// and a tagged alternate (T2), so TTM is 0. Each check compares
+// uaon[tb_slot] with the count the testbench derives from the rule; a
+// second check per step compares the other slot's counter with its
+// value before the test (the rules: no cross-slot interaction).
+//   INC   weak, prm wrong, alt right   +1, saturate at 4'hF
+//   DEC   weak, prm right, alt wrong   -1, saturate at 0
+//   NW    not weak, prm wrong, alt right   no change
+//   BW    weak, both wrong                 no change
+//   BR    weak, both right                 no change
+// The start state is made by 16 DECs, which reach 0 from any 4b value.
+// The test ends at 0, the reset value, so no later test sees its state.
+// The updates write T4 / T2 at 0x3F0 / 0x3E0, which no other test
+// reads.
+// -------------------------------------------------------------------
+task automatic tage_uaon_test(
+  inout int tb_errs,
+  input int verb = 0,
+  input int toe  = 0
+);
+  string           this_test;
+  int              errs, os, exp_u;
+  logic [3:0]      other0;
+  tage_pred_meta_t meta;
+  tage_upd_inp_t   upd;
+
+  this_test = $sformatf("tage_uaon_test slot %0d", tb_slot);
+  errs      = 0;
+  start_test(this_test);
+  os        = (tb_slot == 0) ? NUM_PRED_SLOTS-1 : 0;
+  other0    = u_dut.u_tage_cntrl.uaon[os];
+
+  meta                  = '0;
+  meta.tage_prm_comp    = 4;
+  meta.tage_alt_comp    = 2;
+  meta.tage_prm_idx     = TAGE_MAX_IDX_WIDTH'('h3F0);
+  meta.tage_alt_idx     = TAGE_MAX_IDX_WIDTH'('h3E0);
+  meta.tage_prm_ctr     = 3'b011;
+  meta.tage_alt_ctr     = 3'b110;
+  meta.tage_using_primary = 1'b1;
+  meta.branch_id        = 5;
+  upd                   = '0;
+  upd.resolved_taken    = 1'b1;
+
+  exp_u = 0;
+  for (int i = 0; i < 16; i++) uaon_step("DEC", 1, 1, 0, meta, upd, errs);
+  uaon_chk("16 DEC from any start", exp_u, os, other0, errs, verb);
+  for (int i = 0; i < 3; i++) uaon_step("INC", 1, 0, 1, meta, upd, errs);
+  exp_u = 3;
+  uaon_chk("3 INC", exp_u, os, other0, errs, verb);
+  uaon_step("NW", 0, 0, 1, meta, upd, errs);
+  uaon_chk("not weak", exp_u, os, other0, errs, verb);
+  uaon_step("BW", 1, 0, 0, meta, upd, errs);
+  uaon_chk("weak, both wrong", exp_u, os, other0, errs, verb);
+  uaon_step("BR", 1, 1, 1, meta, upd, errs);
+  uaon_chk("weak, both right", exp_u, os, other0, errs, verb);
+  uaon_step("DEC", 1, 1, 0, meta, upd, errs);
+  exp_u = 2;
+  uaon_chk("DEC", exp_u, os, other0, errs, verb);
+  for (int i = 0; i < 14; i++) uaon_step("INC", 1, 0, 1, meta, upd, errs);
+  exp_u = 15;
+  uaon_chk("14 INC saturate at 4'hF", exp_u, os, other0, errs, verb);
+  for (int i = 0; i < 16; i++) uaon_step("DEC", 1, 1, 0, meta, upd, errs);
+  exp_u = 0;
+  uaon_chk("16 DEC saturate at 0", exp_u, os, other0, errs, verb);
+
+  stop_test(this_test, errs);
+  tb_pf(this_test, errs);
+  tb_errs += errs;
+endtask
+
+// One update on tb_slot: pred_weak and the two directions, RT = 1.
+task automatic uaon_step(
+  input string           label,
+  input logic            is_weak,
+  input logic            prm_tkn,
+  input logic            alt_tkn,
+  inout tage_pred_meta_t meta,
+  inout tage_upd_inp_t   upd,
+  inout int              errs
+);
+  meta.tage_pred_weak   = is_weak;
+  meta.tage_pred_medium = !is_weak;
+  meta.tage_prm_tkn     = prm_tkn;
+  meta.tage_alt_tkn     = alt_tkn;
+  meta.tage_pred_tkn    = prm_tkn;
+  upd.tage_pred_meta    = meta;
+  upd.cond_mispredict   = (prm_tkn != upd.resolved_taken);
+  tage_update('{default: upd}, tb_slot_mask(), errs);
+endtask
+
+// uaon[tb_slot] against exp, and the other slot's counter against its
+// value at the start of the test (other0). The second is skipped at one
+// slot.
+task automatic uaon_chk(
+  input string  label,
+  input int     exp_u,
+  input int     os,
+  input logic [3:0] other0,
+  inout int     errs,
+  input int     v
+);
+  logic [3:0] act;
+  act = u_dut.u_tage_cntrl.uaon[tb_slot];
+  tb_checks++;
+  if (act !== 4'(exp_u)) begin
+    $write("-E: UAON s%0d %s : exp: %0d act: %0d **\n", tb_slot, label,
+           exp_u, act);
+    ++errs;
+  end else if (v) begin
+    $write("-I: UAON s%0d %s : exp: %0d act: %0d\n", tb_slot, label,
+           exp_u, act);
+  end
+  if (NUM_PRED_SLOTS < 2) return;
+  act = u_dut.u_tage_cntrl.uaon[os];
+  tb_checks++;
+  if (act !== other0) begin
+    $write("-E: UAON s%0d %s : other slot %0d moved, exp: %0d act: %0d",
+           tb_slot, label, os, other0, act);
+    $write(" **\n");
+    ++errs;
   end
 endtask
+
 
 // -------------------------------------------------------------------
 // tage_round_trip_sanity: throwaway infrastructure check.

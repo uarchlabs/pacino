@@ -16,6 +16,42 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after BP-136: TD#74 closed.
+
+BP-136 RUN, COMPLETE (Jeff). 51m. regress.sh 272 targets PASS. Every
+tb_fe_top program's figures equal the baseline at 2 and 1 slots.
+Checked by the PA against BP-135's final summary: six counts changed,
+as reported. No defect found; the only RTL edit is a bp_cluster.sv
+comment.
+  TAGE: tb_tage_manual runs its CTR, USE/EPC and new UAON tests on each
+    slot, reads the driven slot's RAM copy and checks the other slot's
+    copy keeps its seed; each slot's epoch is set to a different value
+    so the EPC write is visible.
+  ITTAGE: tb_ittage TC-SLOT-UPD (five cases per slot, one through the
+    ittage_arb UQ) and TC-SLOT-DUAL (both slots in one cycle).
+  Mutations: 7 TAGE and 17 ITTAGE per-path mutations each fail. The
+    BP-135 mutations m_t0_s1 and m_ittage_s1, which passed regress.sh,
+    now fail it; m_tage_s1 fails 5 targets.
+  Small items: the tb_tage_manual R9 and R13d labels; tage_check_pred_meta
+    removed (no callers); two tb_tage messages print the compared value;
+    the bp_cluster.sv comment names sc_ready.
+  Counts: sim_tage_manual 472 -> 1267, _1slot 472 -> 534; sim_ittage and
+    _fast 223 -> 389, the _1slot twins 217 -> 258.
+  Not covered: ITTAGE uaon[1]; prediction-side effects of the slot-1
+    counters. No TD opened.
+
+RULED after BP-136 (Jeff): TD#74 CLOSED. The TAGE uaon update applies
+only when the alternate is tagged, as the RTL is built; the rule
+document follows the RTL. The IA's planning proposals ACCEPTED.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, tage_cntrl_uaon_update_rules.md (the
+update applies only with a tagged alternate),
+tage_cntrl_use_update_rules.md (the EPC test).
+
+Next free: BP-137, SYS-003, INFRA-014, TOOLS-007, TD#185.
+
+---
 ## Session-080, after BP-135: the front-end clean-up batch recorded.
 
 BP-135 RUN, COMPLETE (Jeff). 1h24m. regress.sh 272 targets PASS (270
@@ -62,7 +98,8 @@ epc_wr_u0, upd_index_u0, the target width 40), tage_table_interfaces.md
 (the ITTAGE sentence), tage_cntrl_ctr_update_rules.md (rows 19.x
 tests), bp_arb_spec.md (4.5: H2b from the ports).
 
-Next free: BP-137, SYS-003, INFRA-014, TOOLS-007, TD#185.
+Next free: BP-137, SYS-003, INFRA-014, TOOLS-007, TD#185. (Superseded
+above.)
 
 ---
 ## Session-080, after SYS-002: the CSR-5 rules complete.
@@ -3113,6 +3150,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | checks. Watchdog #5000 BP-096.   |
 |                         |             |                   | BP-135: prints PASS=/FAIL=,      |
 |                         |             |                   | 472/0; rows 19.x reseeded.       |
+|                         |             |                   | BP-136: every row test on both   |
+|                         |             |                   | slots, UAON test; 1267/0, 534/0  |
+|                         |             |                   | at 1 slot.                       |
 | ittage_interfaces.md    | Draft       | --                | Session-061 (INFRA-010):         |
 |                         |             |                   | indirect-CALL ownership and IT5  |
 |                         |             |                   | corrections. SESSION-064 BP-094: |
@@ -3163,6 +3203,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | ittage_pq_not_full /             |
 |                         |             |                   | ittage_uq_not_full (TD#49,       |
 |                         |             |                   | TD#52).                          |
+|                         |             |                   | BP-136: slot-1 update tests      |
+|                         |             |                   | TC-SLOT-UPD, TC-SLOT-DUAL;       |
+|                         |             |                   | 389/0, 258/0 at 1 slot.          |
 | ittage_arb.sv           | Complete    | lint_ittage_arb   | BP-132 (TD#52). ITTAGE PQ, UQ,   |
 |                         |             |                   | arbiter and starvation count; no |
 |                         |             |                   | response buffer (BP-038b).       |
@@ -4278,7 +4321,18 @@ assessment of each document. Correct any that are wrong.
 |    |                                        | a parameter decision, and       |
 |    |                                        | concurrent pred+upd for TAGE and|
 |    |                                        | ITTAGE (not SC) is untouched.   |
-| 74 | Dual-slot (NUM_PRED_SLOTS=2) test.     | bp_history part CLOSED          |
+| 74 | Dual-slot (NUM_PRED_SLOTS=2) test.     | CLOSED by BP-136 (session-080,  |
+|    |                                        | Jeff). Every slot-1 path BP-135 |
+|    |                                        | listed is checked against a     |
+|    |                                        | rule-derived value: TAGE in     |
+|    |                                        | tb_tage_manual (CTR, USE/EPC,   |
+|    |                                        | UAON tests per slot), ITTAGE in |
+|    |                                        | tb_ittage TC-SLOT-UPD and       |
+|    |                                        | TC-SLOT-DUAL. m_t0_s1 and       |
+|    |                                        | m_ittage_s1 now fail. Not       |
+|    |                                        | covered: ITTAGE uaon[1], slot-1 |
+|    |                                        | prediction-side effects. Was:   |
+|    |                                        | bp_history part CLOSED          |
 |    | bp_history dual-slot fold equivalence  | (BP-072), externally anchored   |
 |    | proven; broader cluster dual-slot      | BP-073. SESSION-064: both slots |
 |    | still partly deferred.                 | are now exercised together in   |
