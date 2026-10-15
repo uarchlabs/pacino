@@ -122,6 +122,11 @@
 // 19.1-19.8, BP-133). It counts those updates by row and checks each
 // T0 write.
 //
+// BP-137. Program init_walk: the loops stream run without the fast-init
+// plusargs (its own target), so the TAGE, ITTAGE and SC init walks run.
+// It checks that the first p0 request follows the last init ready and
+// that no predictor answers or trains before its own ready.
+//
 // DOC-001. The models -- the DUT and walker hookup, the program
 // writer, the memory model, the backend and the CSR setup -- are in
 // models/ (fe_demo_tb_decisions.md FDT-4), shared with the
@@ -1279,16 +1284,15 @@ module tb;
                   tname, br_pc, n, "after warm-up (at most 1)"), n <= 1);
   endtask
 
-  task automatic p_loops();
+  // BP-137: the stream and the checks after it are tasks of their own,
+  // so init_walk runs this same stream without fast init.
+  task automatic loops_write();
     logic [VA_WIDTH-1:0] otop;
     logic [VA_WIDTH-1:0] itop;
     logic [VA_WIDTH-1:0] fn;
     logic [VA_WIDTH-1:0] link;
     int                  eo;
     int                  ei;
-    tname = "loops";
-    $display("-- %s --", tname);
-    reset_all(1'b0);
     W.wp = RESET_VECTOR;
     W.mixed(4);
     fn   = RESET_VECTOR + VA_WIDTH'('h800);
@@ -1321,8 +1325,9 @@ module tb;
     warm_e = eo + LOOPS_WARM * ((W.ne - eo) / LOOPS_OUTER);
     W.mixed(3);
     W.halt();
-    release_reset();
-    run_and_check(60000);
+  endtask
+
+  task automatic loops_checks();
     chk($sformatf("the uBTB received updates (%0d)", n_u_ubtb), n_u_ubtb > 0);
     chk($sformatf("the LP received updates (%0d)", n_u_lp), n_u_lp > 0);
     chk($sformatf("TAGE received updates (%0d)", n_u_tage), n_u_tage > 0);
@@ -1346,6 +1351,157 @@ module tb;
       $display("SKIP %s: the loop exit mispredicted at most once: %s",
                tname, "needs NUM_PRED_SLOTS > 1");
     end
+  endtask
+
+  task automatic p_loops();
+    tname = "loops";
+    $display("-- %s --", tname);
+    reset_all(1'b0);
+    loops_write();
+    release_reset();
+    run_and_check(60000);
+    loops_checks();
+  endtask
+
+  // =================================================================
+  // BP-137. init_walk: the loops stream with the real SRAM init walks.
+  // =================================================================
+  // Run WITHOUT the fast-init plusargs (its own target,
+  // sim_fe_top_init_walk), so TAGE, ITTAGE and SC walk their tables
+  // after reset and their readies rise at the end of the walk. The FTQ
+  // must present no p0 request until all three are high (the RAM Init
+  // Interface sections of tage_, ittage_ and sc_interfaces.md, ruled
+  // session-080), and no predictor may answer a prediction or take an
+  // update before its own ready. The stream must then retire exactly,
+  // with the loops program's checks.
+  //
+  // The monitor records, in cycles after reset (cyc), when each ready
+  // was first seen high, whether it was seen low first, the first p0
+  // request, the first accepted p1 prediction, and the first response
+  // and first update of each queued predictor; and counts the cycles
+  // with a p0 request while any ready was low. The count is the
+  // testbench's own check of the hold, independent of fe_top_assert I1.
+  int   ini_tage_rdy;
+  int   ini_it_rdy;
+  int   ini_sc_rdy;
+  logic ini_tage_lo;
+  logic ini_it_lo;
+  logic ini_sc_lo;
+  int   ini_p0;
+  int   ini_p1;
+  int   ini_tage_rsp;
+  int   ini_it_rsp;
+  int   ini_sc_rsp;
+  int   ini_tage_upd;
+  int   ini_it_upd;
+  int   ini_sc_upd;
+  int   ini_p0_early;
+
+  task automatic init_mon_reset();
+    ini_tage_rdy = -1;
+    ini_it_rdy   = -1;
+    ini_sc_rdy   = -1;
+    ini_tage_lo  = 1'b0;
+    ini_it_lo    = 1'b0;
+    ini_sc_lo    = 1'b0;
+    ini_p0       = -1;
+    ini_p1       = -1;
+    ini_tage_rsp = -1;
+    ini_it_rsp   = -1;
+    ini_sc_rsp   = -1;
+    ini_tage_upd = -1;
+    ini_it_upd   = -1;
+    ini_sc_upd   = -1;
+    ini_p0_early = 0;
+  endtask
+
+  initial init_mon_reset();
+
+  always @(posedge clk) begin : init_mon
+    if (rstn) begin
+      if (!dut.bpu_tage_rdy)   ini_tage_lo <= 1'b1;
+      if (!dut.bpu_ittage_rdy) ini_it_lo   <= 1'b1;
+      if (!dut.bpu_sc_ready)   ini_sc_lo   <= 1'b1;
+      if (dut.bpu_tage_rdy   && (ini_tage_rdy < 0)) ini_tage_rdy <= cyc;
+      if (dut.bpu_ittage_rdy && (ini_it_rdy   < 0)) ini_it_rdy   <= cyc;
+      if (dut.bpu_sc_ready   && (ini_sc_rdy   < 0)) ini_sc_rdy   <= cyc;
+      if (dut.ftq_pred_val_p0 && (ini_p0 < 0))      ini_p0       <= cyc;
+      if (dut.ftq_pred_val_p0 &&
+          !(dut.bpu_tage_rdy && dut.bpu_ittage_rdy && dut.bpu_sc_ready))
+        ini_p0_early <= ini_p0_early + 1;
+      if (dut.u_ftq.w_ok_pred_p1 && (ini_p1 < 0))   ini_p1       <= cyc;
+      if ((dut.u_bpu.w_tage_pred_rdy_p2 != '0) && (ini_tage_rsp < 0))
+        ini_tage_rsp <= cyc;
+      if ((dut.u_bpu.w_ittage_pred_rdy_p2 != '0) && (ini_it_rsp < 0))
+        ini_it_rsp <= cyc;
+      if ((dut.u_bpu.w_sc_pred_rdy_p3 != '0) && (ini_sc_rsp < 0))
+        ini_sc_rsp <= cyc;
+      if ((dut.u_bpu.w_tage_upd_val_u0 != '0) && (ini_tage_upd < 0))
+        ini_tage_upd <= cyc;
+      if ((dut.u_bpu.w_ittage_upd_val_u0 != '0) && (ini_it_upd < 0))
+        ini_it_upd <= cyc;
+      if ((dut.u_bpu.w_sc_upd_val_u0 != '0) && (ini_sc_upd < 0))
+        ini_sc_upd <= cyc;
+    end
+  end
+
+  // An event at cycle ev is no earlier than a ready that rose at rdy:
+  // it did not happen (-1), or the ready had risen and ev is not before
+  // it. A ready that never rose (-1) fails any event that did happen.
+  function automatic logic ini_after(input int ev, input int rdy);
+    return (ev < 0) || ((rdy >= 0) && (ev >= rdy));
+  endfunction
+
+  task automatic p_init_walk();
+    int last;
+    tname = "init_walk";
+    $display("-- %s --", tname);
+    reset_all(1'b0);
+    init_mon_reset();
+    loops_write();
+    release_reset();
+    run_and_check(60000);
+    loops_checks();
+    last = ini_tage_rdy;
+    if (ini_it_rdy > last) last = ini_it_rdy;
+    if (ini_sc_rdy > last) last = ini_sc_rdy;
+    $display("%s", $sformatf(
+      {"   INIT %s ready rose TAGE %0d ITTAGE %0d SC %0d ",
+       "(seen low %0d%0d%0d); ",
+       "first p0 %0d, first accepted p1 %0d; first response TAGE %0d ",
+       "ITTAGE %0d SC %0d; first update TAGE %0d ITTAGE %0d SC %0d; ",
+       "early p0 cycles %0d"}, tname, ini_tage_rdy, ini_it_rdy, ini_sc_rdy,
+      ini_tage_lo, ini_it_lo, ini_sc_lo, ini_p0, ini_p1, ini_tage_rsp,
+      ini_it_rsp, ini_sc_rsp, ini_tage_upd, ini_it_upd, ini_sc_upd,
+      ini_p0_early));
+    // The walks ran: each ready was low after reset and then rose. Run
+    // with the fast-init plusargs, these fail.
+    chk("init_walk: each init ready was seen low after reset",
+        ini_tage_lo && ini_it_lo && ini_sc_lo);
+    chk("init_walk: each init ready rose",
+        (ini_tage_rdy >= 0) && (ini_it_rdy >= 0) && (ini_sc_rdy >= 0));
+    chk($sformatf({"init_walk: the first p0 request (%0d) follows the ",
+                   "last ready (%0d)"}, ini_p0, last),
+        (ini_p0 >= 0) && ini_after(ini_p0, ini_tage_rdy) &&
+        ini_after(ini_p0, ini_it_rdy) && ini_after(ini_p0, ini_sc_rdy));
+    chk($sformatf("init_walk: no p0 request while a ready was low (%0d)",
+                  ini_p0_early), ini_p0_early == 0);
+    chk("init_walk: no p1 prediction accepted before the last ready",
+        (ini_p1 >= 0) && ini_after(ini_p1, ini_tage_rdy) &&
+        ini_after(ini_p1, ini_it_rdy) && ini_after(ini_p1, ini_sc_rdy));
+    chk("init_walk: no TAGE, ITTAGE or SC response before its ready",
+        ini_after(ini_tage_rsp, ini_tage_rdy) &&
+        ini_after(ini_it_rsp, ini_it_rdy) &&
+        ini_after(ini_sc_rsp, ini_sc_rdy));
+    chk("init_walk: no TAGE, ITTAGE or SC update before its ready",
+        ini_after(ini_tage_upd, ini_tage_rdy) &&
+        ini_after(ini_it_upd, ini_it_rdy) &&
+        ini_after(ini_sc_upd, ini_sc_rdy));
+    // The predictors answered and trained after the walks, so the two
+    // checks above are not met by nothing happening.
+    chk("init_walk: TAGE, ITTAGE and SC each responded and were updated",
+        (ini_tage_rsp >= 0) && (ini_it_rsp >= 0) && (ini_sc_rsp >= 0) &&
+        (ini_tage_upd >= 0) && (ini_it_upd >= 0) && (ini_sc_upd >= 0));
   endtask
 
   // =================================================================
@@ -3229,6 +3385,7 @@ module tb;
       "pt_gonly":   p_pt_gonly();
       "pt_vsonly":  p_pt_vsonly();
       "pt_upriv":   p_pt_upriv();
+      "init_walk":  p_init_walk();
       default: begin
         fail_cnt++;
         $display("FAIL: unknown program %s", nm);
@@ -3236,7 +3393,7 @@ module tb;
     endcase
   endtask
 
-  string all_progs [0:37] = '{"bare", "sv39", "loops", "coro", "calls",
+  string all_progs [0:38] = '{"bare", "sv39", "loops", "coro", "calls",
                               "lp", "hist", "twocond", "ftbonly", "nest",
                               "recur", "rec_undo", "t0_uaon", "deep",
                               "indir", "region",
@@ -3246,7 +3403,7 @@ module tb;
                               "pt_napot_s", "pt_napot_h", "pt_rsv_s",
                               "pt_rsv_h", "pt_ad_s", "pt_ad_h", "pt_inv",
                               "zstar", "pt_gonly", "pt_vsonly",
-                              "pt_upriv"};
+                              "pt_upriv", "init_walk"};
 
   // =================================================================
   initial begin

@@ -214,6 +214,9 @@ rtl/core/frontend/ftq/obj_1slot_labels_ftq_upd_conv/
 
 rtl/core/csr/obj_csr_tb_pkg/
 
+examples/fe_demo/obj_fe_demo/
+examples/fe_demo/out/
+
 # --------------------------------------------------------------------
 # docs
 site/

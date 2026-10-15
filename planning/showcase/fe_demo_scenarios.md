@@ -50,10 +50,6 @@ FD-1   Reset and SRAM initialization
   waveform  sram_init, TAGE, ITTAGE, SC readies, first p0 request
   proof     every ready rises; the first prediction the FTQ accepts
             follows the last ready
-  status    not met until BP-137: the FTQ predicts from the first
-            cycle after reset and nothing reads tage_rdy, ittage_rdy
-            or sc_ready; ITTAGE and TAGE answer before their walks end
-            (DOC-001)
 
 FD-2   Steady-state prediction and fetch
   shows     one block per cycle: p0 request, uBTB answer at p1, FTQ
@@ -238,4 +234,6 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
   2026-10-14  session-080. Created.
   2026-10-14  session-080, after DOC-001. FD-1 status, FD-13 program,
               FD-14 note, FD-0b trace entries; FD-U1, FD-U2 closed.
+  2026-10-15  session-080, after BP-137. FD-1 met; its status line
+              removed.
 ```

@@ -87,6 +87,15 @@ module ftq (
   input  logic                        ittage_pq_not_full,
   input  logic                        sc_uq_not_full,
 
+  // ---- the RAM init readies (BP-137) -------------------------------
+  // tage_rdy, ittage_rdy and sc_ready, from the cluster. The RAM Init
+  // Interface sections of the predictor interface documents make the
+  // upstream logic hold its requests until each is high; ftq_npc
+  // holds the p0 request on them.
+  input  logic                        tage_rdy,
+  input  logic                        ittage_rdy,
+  input  logic                        sc_ready,
+
   // ---- 4. initial prediction, p1 -----------------------------------
   input  logic                        bpu_pred_val_p1,
   input  logic [FTQ_IDX_BITS-1:0]     bpu_pred_idx_p1,
@@ -481,6 +490,9 @@ module ftq (
     .h2_ftq_full        (ftq_full),
     .r1_fault_hold      (w_fault_hold),
     .h3_ftb_upd         (w_sched_issue_next),
+    .tage_rdy           (tage_rdy),
+    .ittage_rdy         (ittage_rdy),
+    .sc_ready           (sc_ready),
     .ftq_pred_val_p0    (ftq_pred_val_p0),
     .ftq_pred_pc_p0     (ftq_pred_pc_p0),
     .pred_pc_p1         (w_pred_pc_p1),

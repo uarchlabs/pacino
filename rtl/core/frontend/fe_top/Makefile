@@ -15,6 +15,11 @@
 #   sim_fe_top_<p>  one program (+PROG=<p>), one per program of
 #                   FE_PROGS (BP-121): each is its own regression
 #                   target
+#   sim_fe_top_init_walk
+#                   program init_walk WITHOUT the fast-init plusargs
+#                   (BP-137): the TAGE, ITTAGE and SC init walks run,
+#                   and the first p0 request must follow the last
+#                   ready. Not in FE_PROGS, which run with fast init
 #   assert_labels   every property label of every assertion file the
 #                   sim model compiles is present in it
 #   <t>_1slot       target <t> at NUM_PRED_SLOTS = 1, one per target
@@ -205,7 +210,8 @@ ASSERT_SRCS := \
   $(ITLB_TB)/itlb_assert.sv \
   $(L1I_TB)/l1i_assert.sv \
   $(L1I_TB)/l1i_mshr_assert.sv \
-  $(PTW_TB)/ptw_assert.sv
+  $(PTW_TB)/ptw_assert.sv \
+  $(TB_DIR)/fe_top_assert.sv
 
 SIM_SRCS := $(TOP_SRCS) $(PTW_SRCS) $(ASSERT_SRCS)
 
@@ -226,7 +232,7 @@ FE_PROGS := bare sv39 loops coro calls lp hist twocond ftbonly nest \
 FE_PROG_TGTS := $(addprefix sim_fe_top_,$(FE_PROGS))
 
 .PHONY: all clean assert_labels lint_fe_top sim_fe_top build_fe_top \
-        $(FE_PROG_TGTS)
+        $(FE_PROG_TGTS) sim_fe_top_init_walk
 
 all: lint_fe_top sim_fe_top assert_labels
 
@@ -272,6 +278,12 @@ $(FE_PROG_TGTS): sim_fe_top_%: build_fe_top
 	@echo "[simulating] $(VER_OUT)_fe_top/Vtb +PROG=$*"
 	$(Q)./$(VER_OUT)_fe_top/Vtb $(FE_PLUSARGS) +PROG=$*
 
+# BP-137: the one program run without FE_PLUSARGS, so the predictor
+# tables are initialised by their sram_init walks.
+sim_fe_top_init_walk: build_fe_top
+	@echo "[simulating] $(VER_OUT)_fe_top/Vtb +PROG=init_walk, no fast init"
+	$(Q)./$(VER_OUT)_fe_top/Vtb +PROG=init_walk
+
 # Every label of every compiled assertion file must appear in the
 # generated model (the ifu Makefile's method, BP-116).
 LABEL_RE := ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*:
@@ -313,7 +325,8 @@ clean:
 # One per target of REGRESS_TARGETS, named <target>_1slot: the same
 # recipe at NUM_PRED_SLOTS = 1 (see SLOT1_DEFS at the top of the file).
 # sim_fe_top_<p>_1slot is program <p> at one slot.
-SLOT1_BASE := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS)
+SLOT1_BASE := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
+              sim_fe_top_init_walk
 SLOT1_TGTS := $(addsuffix _1slot,$(SLOT1_BASE))
 
 .PHONY: $(SLOT1_TGTS)
@@ -328,7 +341,7 @@ $(SLOT1_TGTS): %_1slot:
 #   build_fe_top        - the compile step the sim targets run first.
 #   clean, regress_list - housekeeping and this plumbing.
 REGRESS_TARGETS := lint_fe_top sim_fe_top assert_labels $(FE_PROG_TGTS) \
-                   $(SLOT1_TGTS)
+                   sim_fe_top_init_walk $(SLOT1_TGTS)
 REGRESS_EXCLUDE := all build_fe_top clean regress_list
 
 .PHONY: regress_list

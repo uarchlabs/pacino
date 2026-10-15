@@ -6,7 +6,7 @@
  FILE:    ittage_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -378,13 +378,16 @@ Both channels processed independently in the same cycle.
 ## RAM Init Interface
 
 Output ittage_rdy indicates that the RAM initialization cycles
-have completed. This would tied to the .ready output of
-the sram_init module.
+have completed. It ties to the ready output of the sram_init module.
 
-No prediction or update cycles should begin before ittage_rdy
-has been asserted. ITTAGE should ignore prediction and update
-requests when ittage_rdy is not asserted. It is the
-responsibility of upstream logic to comprehend this condition.
+No prediction or update cycles begin before ittage_rdy has been
+asserted. ITTAGE does not gate requests on ittage_rdy; the upstream
+logic does. The upstream logic is the FTQ: ftq_npc holds
+ftq_pred_val_p0 low until tage_rdy, ittage_rdy and sc_ready are all
+high (ftq_decisions.md 4.5 H5; ruled session-080, built by BP-137).
+No FTQ entry, so no update, exists before the first request. This
+read that ITTAGE ignores prediction and update requests before
+ittage_rdy; it does not. Session-080.
 
 ---
 

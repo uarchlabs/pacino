@@ -62,6 +62,10 @@ module tb;
   logic                     tage_pq_not_full;
   logic                     ittage_pq_not_full;
   logic                     sc_uq_not_full;
+  // BP-137: the init readies, high from reset as fast init makes them.
+  logic                     tage_rdy;
+  logic                     ittage_rdy;
+  logic                     sc_ready;
   logic                     bpu_pred_val_p1;
   logic [FTQ_IDX_BITS-1:0]  bpu_pred_idx_p1;
   bp_ftq_slot_t             bpu_pred_slot_p1 [0:NUM_PRED_SLOTS-1];
@@ -204,6 +208,9 @@ module tb;
     .tage_pq_not_full      (tage_pq_not_full),
     .ittage_pq_not_full    (ittage_pq_not_full),
     .sc_uq_not_full        (sc_uq_not_full),
+    .tage_rdy              (tage_rdy),
+    .ittage_rdy            (ittage_rdy),
+    .sc_ready              (sc_ready),
     .bpu_pred_val_p1       (bpu_pred_val_p1),
     .bpu_pred_idx_p1       (bpu_pred_idx_p1),
     .bpu_pred_slot_p1      (bpu_pred_slot_p1),
@@ -463,6 +470,9 @@ module tb;
     tage_pq_not_full      = 1'b1;
     ittage_pq_not_full    = 1'b1;
     sc_uq_not_full        = 1'b1;
+    tage_rdy              = 1'b1;
+    ittage_rdy            = 1'b1;
+    sc_ready              = 1'b1;
     ckpt_ghist_ptr        = '0;
     ckpt_phist_ptr        = '0;
     bpu_pred_ras_p1       = '0;

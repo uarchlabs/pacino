@@ -71,6 +71,12 @@
 // held inactive, the FTQ's bp_update_t outputs ended on wires, and its
 // three scalar readies were held high.
 //
+// THE INIT READIES ARE CONNECTED (BP-137). The cluster's tage_rdy,
+// ittage_rdy and sc_ready go to the FTQ, which presents no p0 request
+// until all three are high (the RAM Init Interface sections of
+// tage_, ittage_ and sc_interfaces.md). Until BP-137 they ended on
+// unread wires and the FTQ requested from the first cycle after reset.
+//
 // NOT CONNECTED, AND WHY (each is a disagreement between units):
 //   - the cluster's tage_upd_rdy_u1, ittage_upd_rdy_u1 and
 //     sc_upd_rdy_u1 end on wires. Each is the registered update valid
@@ -293,7 +299,9 @@ module fe_top (
   logic [NUM_PRED_SLOTS-1:0]  sc_upd_val_u0;
   sc_upd_inp_t                sc_upd_inp_u0     [0:NUM_PRED_SLOTS-1];
 
-  // The cluster's unread outputs, and its per-slot queue readies.
+  // The cluster's unread outputs, its RAM init readies and its
+  // per-slot queue readies. The init readies go to the FTQ, which
+  // holds its p0 request until all three are high (BP-137).
   logic [GHIST_PTR_BITS-1:0]  bpu_ghist_ptr;
   logic [PHIST_PTR_BITS-1:0]  bpu_phist_ptr;
   logic [GHR_WIDTH-1:0]       bpu_ghr_buf;
@@ -503,6 +511,9 @@ module fe_top (
     .tage_pq_not_full      (tage_pq_not_full),
     .ittage_pq_not_full    (ittage_pq_not_full),
     .sc_uq_not_full        (sc_uq_not_full),
+    .tage_rdy              (bpu_tage_rdy),
+    .ittage_rdy            (bpu_ittage_rdy),
+    .sc_ready              (bpu_sc_ready),
     .bpu_pred_val_p1       (bpu_pred_val_p1),
     .bpu_pred_idx_p1       (bpu_pred_idx_p1),
     .bpu_pred_slot_p1      (bpu_pred_slot_p1),

@@ -6,7 +6,7 @@
  FILE:    sc_interfaces.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -387,8 +387,10 @@ No prediction or update cycles begin before sc_ready is asserted. SC
 ignores prediction requests when sc_ready is deasserted. An update
 presented before sc_ready is refused (sc_upd_rdy low) and held by the
 producer, since BP-126; this read that SC ignores update requests
-too. Upstream logic must comprehend this condition. See
-sc_decisions.md section 13.
+too. Upstream logic must comprehend this condition. The upstream
+logic is the FTQ, which holds its p0 request until tage_rdy,
+ittage_rdy and sc_ready are all high (ftq_decisions.md 4.5 H5,
+BP-137). See sc_decisions.md section 13.
 
 ---
 
@@ -510,4 +512,7 @@ conditional branches.
   2026-10-12  session-079, recording BP-133. sc_upd_inp_t and
               Producer obligations: branch_range and backwards_branch
               come from ftq_upd_conv, not the FTB (TD#89, TD#90).
+
+  2026-10-15  session-080, after BP-137. RAM Init Interface: the FTQ
+              is the upstream logic.
 ```

@@ -16,6 +16,38 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after BP-137: the init readies honoured.
+
+BP-137 COMPLETE. The FTQ holds its p0 request until tage_rdy,
+ittage_rdy and sc_ready are all high (ftq_decisions.md 4.5 H5, ruled
+session-080). The readies are new inputs of ftq and ftq_npc, wired in
+fe_top from bp_cluster. TAGE and ITTAGE do not gate on their own
+readies. fe_top_assert.sv binds I1 (no request) and I2 (no update)
+before the readies. tb_fe_top program init_walk runs the real walks:
+readies at ITTAGE 513, SC 1025, TAGE 2049; first p0 2049; 554 of 554
+retired. DOC-001 FD-1: DEMO PASS. Regression: 274 targets, PASS; every
+existing figure identical; check counts changed only in sim_ftq_npc
+(+11), fe_top assert_labels (+2) and the new init_walk pair.
+  Provisional choices accepted (PA): the port names, the property at
+    fe_top in a new file, I2, the loops stream, init_walk outside
+    FE_PROGS, no tb_ftq check.
+  The IA's proposed planning text applied, the sc_interfaces.md
+    "unaffected" sentence dropped and H5 trimmed: tage_interfaces.md
+    and ittage_interfaces.md RAM Init Interface (the FTQ is the
+    upstream logic; the predictor does not gate), sc_interfaces.md
+    RAM Init Interface, ftq_bpu_interfaces.md 3, ftq_decisions.md
+    4.5 H5, 4.7, 7.5. fe_demo_scenarios.md FD-1 status line removed.
+    fe_decisions.md and bpu_port_inventory.md unchanged: neither
+    lists the readies' consumers.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, tage_interfaces.md, ittage_interfaces.md,
+sc_interfaces.md, ftq_bpu_interfaces.md, ftq_decisions.md,
+fe_demo_scenarios.md.
+
+Next free: BP-138, SYS-003, DOC-002, INFRA-014, TOOLS-007, TD#185.
+
+---
 ## Session-080, after DOC-001: the demonstration built; BP-137 written.
 
 DOC-001 COMPLETE. tb_fe_top's testbench models factored into
@@ -38,15 +70,16 @@ check count identical to the baseline.
   FOR JEFF: .gitignore entries proposed by the IA, accepted:
       examples/fe_demo/out/
       examples/fe_demo/obj_fe_demo/
-  BP-137 WRITTEN, not yet issued: the FTQ init-ready hold, a tb_ftq_npc
-    check, a bound property, a tb_fe_top program without fast init, and
-    a rerun of FD-1.
+  BP-137 WRITTEN (complete, above): the FTQ init-ready hold, a
+    tb_ftq_npc check, a bound property, a tb_fe_top program without
+    fast init, and a rerun of FD-1.
 
 Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, fe_demo_scenarios.md,
 fe_demo_tb_decisions.md.
 
 Next free: BP-138, SYS-003, DOC-002, INFRA-014, TOOLS-007, TD#185.
+(Superseded above.)
 
 ---
 ## Session-080: the showcase planning begun. Documents only.
@@ -3707,6 +3740,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | group K, the p2 and p3 redirect  |
 |                         |             |                   | latency, 1 cycle measured:       |
 |                         |             |                   | sim_ftq 149/0.                   |
+|                         |             |                   | BP-137: three inputs, the RAM    |
+|                         |             |                   | init readies, passed to ftq_npc. |
 | ftq_ptr.sv              | Complete    | tb_ftq_ptr        | BP-106, retrofitted BP-107.      |
 |                         |             |                   | alloc_ptr and fetch_ptr. NO      |
 |                         |             |                   | xlate_ptr: ftq_decisions.md 5.1  |
@@ -3759,6 +3794,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | then the named branch).          |
 |                         |             |                   | sim_ftq_npc 73/0 at 2, 69/0 at   |
 |                         |             |                   | 1.                               |
+|                         |             |                   | BP-137: holds p0 until tage_rdy, |
+|                         |             |                   | ittage_rdy and sc_ready are all  |
+|                         |             |                   | high (ftq_decisions.md 4.5 H5);  |
+|                         |             |                   | group G. sim_ftq_npc 84/0 at 2,  |
+|                         |             |                   | 80/0 at 1.                       |
 | ftq_entry.sv            | Complete    | tb_ftq_entry      | BP-107. Fast path, 224b x 64 as  |
 |                         |             |                   | built; 228b under TD#122.        |
 |                         |             |                   | FOUR write ports in FE-3 order,  |
@@ -4118,6 +4158,18 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | BP-135: t0_uaon, 38 programs;     |
 |                         |             |                   | sim_fe_top 754 checks at 2 slots, |
 |                         |             |                   | 751 at 1.                         |
+|                         |             |                   | DOC-001: the testbench models     |
+|                         |             |                   | factored into fe_top/tb/models/,  |
+|                         |             |                   | shared with examples/fe_demo;     |
+|                         |             |                   | figures unchanged. BP-137:        |
+|                         |             |                   | init_walk, the loops stream       |
+|                         |             |                   | without fast init, its own target |
+|                         |             |                   | pair, first p0 at 2049;           |
+|                         |             |                   | fe_top_assert.sv, the first       |
+|                         |             |                   | fe_top assertion file (I1 no      |
+|                         |             |                   | request, I2 no update, before the |
+|                         |             |                   | init readies). sim_fe_top 754/751 |
+|                         |             |                   | unchanged.                        |
 | bp_arb_spec.md          | Draft       | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Sections 9 and 10 say "Section    |
 |                         |             |                   | removed", not stubs; TD#94 is     |

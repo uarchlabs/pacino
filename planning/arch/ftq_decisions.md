@@ -6,7 +6,7 @@
  FILE:    ftq_decisions.md
  SOURCE:  fe_decisions.md sections 4.3, 5 and 6
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -335,6 +335,12 @@ holds:
       in ftq_npc.sv is h3_ftb_upd; the H numbers here are this
       document's, not the RTL's. Costs one p0 bubble per FTB
       update.
+  H5  a predictor's RAM init walk has not finished: any of
+      tage_rdy, ittage_rdy or sc_ready low. The RAM Init Interface
+      sections of tage_, ittage_ and sc_interfaces.md leave this to
+      upstream logic; the FTQ is that logic, and TAGE and ITTAGE do
+      not gate on their own readies. RULED session-080 (Jeff),
+      BUILT by BP-137. Holds only until the slowest walk ends.
 ```
 
 H1 INCLUDES sc_uq_NOT_FULL SINCE BP-121 (read from the RTL by
@@ -342,7 +348,8 @@ BP-122). The starvation hold of bp_arb_spec.md 4.5 drops
 tage_pq_not_full, ittage_pq_not_full or, for SC, sc_uq_not_full for
 one cycle, and ftq_npc holds on all three: w_hold =
 ~tage_pq_not_full | ~ittage_pq_not_full | ~sc_uq_not_full |
-h2_ftq_full | r1_fault_hold | h3_ftb_upd. Withholding that p0
+h2_ftq_full | r1_fault_hold | h3_ftb_upd | ~tage_rdy | ~ittage_rdy |
+~sc_ready, the last three H5 (BP-137). Withholding that p0
 request leaves no block at p2 two cycles later, and the SC arbiter
 grants the waiting update. H1's text above, which excludes
 sc_uq_not_full because sc.sv ties it to 1'b1, describes sc.sv; at
@@ -396,6 +403,10 @@ defined. 0x8000_0000 is the RISC-V convention for the base of main
 memory and the target of the Spike boot ROM; the tree carries no
 memory map of its own, so the convention stands. Override it at
 elaboration for a different map.
+
+The first request presents the reset vector in the cycle the last of
+tage_rdy, ittage_rdy and sc_ready rises (4.5 H5). With the fast-init
+plusargs that is the first cycle after reset.
 
 It must be FTB_BLOCK_BYTES aligned. 0x8000_0000 satisfies this and the
 parameter comment records the requirement.
@@ -1295,6 +1306,13 @@ BP-123 added one more, from ifu_decisions.md IFU-23b:
                              (BP-124)
 ```
 
+BP-137 added three inputs, from 4.5 H5:
+
+```
+  (cluster)   -> ftq.sv      tage_rdy, ittage_rdy, sc_ready, the RAM
+              -> ftq_npc     init readies, held on as 4.5 H5
+```
+
 Section 1 counts six, since session-074.
 
 ## 8. Document History
@@ -1542,4 +1560,8 @@ Section 1 counts six, since session-074.
 
   2026-10-10  session-077, after BP-125. 5.1: the p2, p3 row is
               measured, 1 cycle. 7.1: ftq.sv's OLD lines removed.
+
+  2026-10-15  session-080, after BP-137. 4.5: H5, the init hold; the
+              w_hold equation. 4.7: when the first request goes out.
+              7.5: the three init readies.
 ```

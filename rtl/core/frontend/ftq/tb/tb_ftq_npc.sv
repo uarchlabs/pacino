@@ -16,6 +16,10 @@
 //   the p1 successor is combinational
 //                              -> group B, and see below
 //
+// BP-137 adds group G: no p0 request is presented while any of the
+// three init readies (tage_rdy, ittage_rdy, sc_ready) is low, and the
+// request begins once all three are high.
+//
 // HOW THE COMBINATIONAL PATH IS CONFIRMED, and it is the point of
 // this file. Group B drives the p1 group and reads ftq_pred_pc_p0
 // WITHOUT AN INTERVENING CLOCK EDGE. The stimulus changes at some
@@ -80,6 +84,9 @@ module tb;
   logic                    h2_ftq_full;
   logic                    r1_fault_hold;
   logic                    h3_ftb_upd;     // BP-121, TD#162
+  logic                    tage_rdy;       // BP-137, the init readies
+  logic                    ittage_rdy;
+  logic                    sc_ready;
   logic                    ftq_pred_val_p0;
   logic [VA_WIDTH-1:0]     ftq_pred_pc_p0;
   logic [VA_WIDTH-1:0]     pred_pc_p1;
@@ -120,6 +127,9 @@ module tb;
     .h2_ftq_full        (h2_ftq_full),
     .r1_fault_hold      (r1_fault_hold),
     .h3_ftb_upd         (h3_ftb_upd),
+    .tage_rdy           (tage_rdy),
+    .ittage_rdy         (ittage_rdy),
+    .sc_ready           (sc_ready),
     .ftq_pred_val_p0    (ftq_pred_val_p0),
     .ftq_pred_pc_p0     (ftq_pred_pc_p0),
     .pred_pc_p1         (pred_pc_p1),
@@ -209,6 +219,9 @@ module tb;
     h2_ftq_full        = 1'b0;
     r1_fault_hold      = 1'b0;
     h3_ftb_upd         = 1'b0;
+    tage_rdy           = 1'b1;
+    ittage_rdy         = 1'b1;
+    sc_ready           = 1'b1;
   endtask
 
   task automatic do_reset();
@@ -731,6 +744,61 @@ module tb;
     clr();
   endtask
 
+
+  // -----------------------------------------------------------------
+  // G. The init hold (BP-137).
+  // -----------------------------------------------------------------
+  // ACCEPTANCE: no p0 request is presented while any of tage_rdy,
+  // ittage_rdy and sc_ready is low, and requests begin once all three
+  // are high. Reset is taken with all three low, as the sram_init walks
+  // leave them, and every other hold is clear throughout, so the init
+  // readies are the only thing that can withhold the request.
+  task automatic group_g();
+    logic [2:0] r;
+    $display("-- G: the init hold --");
+    rstn = 1'b0;
+    clr();
+    no_hold();
+    tage_rdy   = 1'b0;
+    ittage_rdy = 1'b0;
+    sc_ready   = 1'b0;
+    repeat (4) tick();
+    rstn = 1'b1;
+
+    // Every combination with at least one ready low, each presented
+    // across a clock edge. r is {sc, ittage, tage}.
+    for (int k = 0; k < 7; k++) begin
+      r          = 3'(k);
+      tage_rdy   = r[0];
+      ittage_rdy = r[1];
+      sc_ready   = r[2];
+      settle();
+      chk($sformatf("G%0d readies tage %0d ittage %0d sc %0d: no request",
+                    k + 1, r[0], r[1], r[2]), !ftq_pred_val_p0);
+    end
+    chk_va("G8 the reset vector is retained while held",
+           ftq_pred_pc_p0, RESET_VECTOR);
+
+    // The walks end in the order FD-1 recorded them: ITTAGE, SC, TAGE.
+    // The request is withheld until the last of them.
+    tage_rdy   = 1'b0;
+    ittage_rdy = 1'b0;
+    sc_ready   = 1'b0;
+    settle();
+    ittage_rdy = 1'b1;
+    settle();
+    sc_ready   = 1'b1;
+    settle();
+    chk("G9 held until the last ready", !ftq_pred_val_p0);
+    tage_rdy   = 1'b1;
+    settle();
+    chk   ("G10 the request begins once all three are high",
+           ftq_pred_val_p0);
+    chk_va("G11 and the first request is the reset vector",
+           ftq_pred_pc_p0, RESET_VECTOR);
+    clr();
+  endtask
+
   // -----------------------------------------------------------------
   // Run
   // -----------------------------------------------------------------
@@ -748,6 +816,7 @@ module tb;
     group_d();
     group_e();
     group_f();
+    group_g();
 
     $display("tb_ftq_npc: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

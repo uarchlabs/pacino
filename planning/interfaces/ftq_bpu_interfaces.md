@@ -7,7 +7,7 @@
  SOURCE:  fe_decisions.md, bpu_port_inventory.md (INFRA-011),
           bp_structs_pkg.sv, bp_cluster.sv
  STATUS:  DRAFT
- UPDATED: 2026-10-12
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -96,6 +96,17 @@ of the queued predictors before presenting it to any of them, so all
 eight stay in lockstep and no prediction is dropped. The FTQ must
 not present a request while a `pq_not_full` output is low; the
 cluster has no request-ready output.
+
+Nor may the FTQ present a request while any of the cluster's RAM init
+readies is low (the RAM Init Interface sections of tage_, ittage_ and
+sc_interfaces.md; ftq_decisions.md 4.5 H5). They are inputs of the
+FTQ, built by BP-137:
+
+```
+  tage_rdy      from bp_cluster (tage)
+  ittage_rdy    from bp_cluster (ittage)
+  sc_ready      from bp_cluster (sc)
+```
 
 Cluster routing of the request:
 
@@ -1399,4 +1410,7 @@ match it and to match this specification.
               RB_CORR_BITS and the correction at most two bits at
               either slot count (ruled, built by BP-130). 10 item 13
               closed.
+
+  2026-10-15  session-080, after BP-137. 3: the FTQ holds its
+              request on the three RAM init readies.
 ```

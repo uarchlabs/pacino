@@ -135,6 +135,17 @@ module ftq_npc (
   // borrows the single read port and the lookup is dropped; it is
   // withheld instead, one cycle per FTB update.
   input  logic                     h3_ftb_upd,
+  // INIT (BP-137, ruled by Jeff session-080): the RAM init readies of
+  // the three predictors with an sram_init walk, from bp_cluster. No
+  // prediction or update cycle may begin before each is high, and the
+  // RAM Init Interface sections of tage_, ittage_ and sc_interfaces.md
+  // make that the obligation of upstream logic. The FTQ is that logic:
+  // no request is presented until all three are high. Nothing is
+  // allocated before the first request, so no entry commits and no
+  // update is formed before them either.
+  input  logic                     tage_rdy,
+  input  logic                     ittage_rdy,
+  input  logic                     sc_ready,
 
   // ---- the p0 request, to bp_cluster -------------------------------
   output logic                     ftq_pred_val_p0,
@@ -294,7 +305,8 @@ module ftq_npc (
     // what it captured either way.
     w_hold = ~tage_pq_not_full | ~ittage_pq_not_full |
              ~sc_uq_not_full    |  h2_ftq_full | r1_fault_hold |
-             h3_ftb_upd;
+             h3_ftb_upd         | ~tage_rdy    | ~ittage_rdy   |
+             ~sc_ready;
 
     arm_win     = '0;
     redir_val   = 1'b0;
@@ -448,8 +460,11 @@ module ftq_npc (
   // -----------------------------------------------------------------
   // RESET_VECTOR is bp_defines_pkg's, VA_WIDTH wide, block aligned,
   // 0x00_8000_0000 by default (4.7). It is ISSUED, not merely
-  // held: with no hold asserted the first thing the front end does
-  // is request it, in the first cycle out of reset.
+  // held: the first thing the front end does is request it, in the
+  // first cycle out of reset with no hold asserted. Since BP-137 that
+  // is the cycle the last of the three init readies rises; with the
+  // fast-init plusargs the readies are high from time 0 and it is
+  // still the first cycle out of reset.
   //
   // The capture is UNCONDITIONAL. It has to be: a request presented
   // and not accepted -- H1 or H2 -- must still be retained, and the
