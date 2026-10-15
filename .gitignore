@@ -217,6 +217,7 @@ rtl/core/csr/obj_csr_tb_pkg/
 examples/fe_demo/obj_fe_demo/
 examples/fe_demo/out/
 
+examples/fe_demo/waves/__pycache__/
 # --------------------------------------------------------------------
 # docs
 site/

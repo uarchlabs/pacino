@@ -60,6 +60,16 @@ tb.dut.u_ftq.w_pd_redir_val
 @1000200
 -ifu_f3
 @800200
+-ifu_f3_straddle
+@28
+tb.dut.u_ifu.u_f3.r_strad_val
+@22
+tb.dut.u_ifu.u_f3.r_strad_pc[40:0]
+@24
+tb.dut.u_ifu.u_f3.r_strad_idx[5:0]
+@1000200
+-ifu_f3_straddle
+@800200
 -ibuf
 @28
 tb.dut.ifu_ibuf_val

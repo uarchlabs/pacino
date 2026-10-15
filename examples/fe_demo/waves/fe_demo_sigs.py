@@ -7,6 +7,12 @@
 # Surfer command files, FDT-12a), so the two viewers show the same
 # signals in the same groups (fe_demo_tb_decisions.md FDT-1). DOC-001
 # wrote the lists in mk_gtkw.py; DOC-002 moved them here unchanged.
+# Every scenario's first group, clock, holds the cycle counter tb.cyc
+# (FDT-12b). DOC-003 added the signals the descriptions cite that the
+# lists lacked: LP_PRED (fd06), F3_STRAD (fd17), FETCH_UC (fd18),
+# mt_busy_line and u_maint.r_st in MAINT (fd19), u_ibuf.r_count in
+# IBUF_OCC (fd02, fd20), and the fd09 groups TAGE_UPD, UPD_PC and
+# BE_REDIR.
 #
 # fst_names(fst) reads an FST's names; S is the scenarios and their
 # groups; radix() is the display format of one signal.
@@ -154,8 +160,20 @@ TAGE_P2 = [B + '.w_tage_pred_rdy_p2'] + \
      for f in ('tage_prm_comp', 'tage_alt_comp', 'tage_using_primary',
                'tage_prm_ctr', 'tage_pred_tkn')]
 TAGE_UPD = [TC + '.trx_type', TC + '.tage_upd_val_u0'] + \
+    ['%s.tage_upd_inp_u0.[%d].%s' % (TC, s, f) for s in range(2)
+     for f in ('cond_mispredict', 'resolved_taken',
+               'tage_pred_meta.tage_prm_comp', 'tage_pred_meta.tage_alt_comp',
+               'tage_pred_meta.tage_pred_weak', 'tage_pred_meta.tage_prm_tkn',
+               'tage_pred_meta.tage_alt_tkn')] + \
     ['%s.u_alc_wr.u_alc_wr[%d]' % (TC, s) for s in range(2)] + \
+    ['%s.u_alc_comp.u_alc_comp[%d]' % (TC, s) for s in range(2)] + \
     ['%s.uaon.uaon[%d]' % (TC, s) for s in range(2)]
+# The address of the branch each update slot carries. The TAGE update
+# input has no address; ftq_upd_conv forms every predictor's update from
+# one record in the same cycle, and the loop predictor's copy carries it.
+UPD_PC = ['%s.u_upd_conv.lp_upd_p0.[%d].pc' % (Q, s) for s in range(2)]
+BE_REDIR = ['tb.bkend_ftq_redir_val', 'tb.bkend_ftq_redir_pc',
+            'tb.bkend_ftq_redir_cause']
 SC_P3 = [B + '.w_sc_pred_rdy_p3'] + \
     ['%s.w_sc_hit_p3.w_sc_hit_p3[%d]' % (B, s) for s in range(2)] + \
     ['%s.w_taken_p3.w_taken_p3[%d]' % (B, s) for s in range(2)]
@@ -197,8 +215,8 @@ FAULT = [D + '.ifu_ftq_fault_val', D + '.ifu_ftq_fault_pos']
 MAINT = ['tb.cmt_ifu_maint_val', 'tb.cmt_ifu_maint_rdy', 'tb.cmt_ifu_maint_op',
          'tb.cmt_ifu_maint_paddr', I + '.u_maint.r_st',
          D + '.ifu_l1i_inv_val', D + '.ifu_l1i_inv_rdy', D + '.ifu_l1i_inv_all',
-         D + '.ifu_l1i_inv_paddr', L + '.mt_busy_any', D + '.l1i_ifu_inv_done',
-         'tb.ifu_cmt_maint_ack']
+         D + '.ifu_l1i_inv_paddr', L + '.u_maint.r_st', L + '.mt_busy_any',
+         L + '.mt_busy_line', D + '.l1i_ifu_inv_done', 'tb.ifu_cmt_maint_ack']
 INIT = [B + '.u_tage.u_sram_init.state', B + '.u_tage.u_sram_init.waddr',
         D + '.bpu_tage_rdy', B + '.u_ittage.u_sram_init.state',
         B + '.u_ittage.u_sram_init.waddr', D + '.bpu_ittage_rdy',
@@ -209,7 +227,19 @@ FIRST = [D + '.ftq_pred_val_p0', D + '.bpu_pred_val_p1', Q + '.w_ok_pred_p1',
          B + '.w_sc_pred_rdy_p3']
 FTQ_PTR = [Q + '.w_commit_ptr', D + '.ftq_full', D + '.ftq_empty',
            D + '.ftq_pred_idx_p0', D + '.ftq_ifu_idx']
-IBUF_OCC = IBUF + [D + '.u_ibuf.w_n_pres', D + '.u_ibuf.w_n_pop']
+IBUF_OCC = IBUF + [D + '.u_ibuf.r_count', D + '.u_ibuf.w_n_pres',
+                  D + '.u_ibuf.w_n_pop']
+# The loop predictor's per-slot answer at p1 and p2.
+LP_PRED = ['%s.w_lp_pred_%s.[%d].%s' % (B, p, s, f) for p in ('p1', 'p2')
+           for s in range(2)
+           for f in ('lp_hit', 'lp_pred_is_loop', 'lp_pred_taken', 'lp_conf',
+                     'lp_past_itr', 'lp_curs')]
+# F3's straddle register: the first half of a 32-bit instruction that
+# ends a block, held for the next block.
+F3_STRAD = [I + '.u_f3.r_strad_val', I + '.u_f3.r_strad_pc',
+            I + '.u_f3.r_strad_idx']
+# ifu_fetch's commit gate on an uncached block.
+FETCH_UC = [I + '.u_fetch.xq_uc', I + '.u_fetch.w_uc_gate']
 
 # ---------------------------------------------------------------------
 # The scenarios: (name, [(group, signals), ...]) in pipeline order.
@@ -231,6 +261,7 @@ S = [
                           ('bp_cluster_p2', BPU_P2), ('sc_p3', SC_P3),
                           ('bp_cluster_p3', BPU_P3), ('ftq', FTQ)]),
     ('fd06_loop_pred', [('clock', CLK), ('bp_cluster_p1', BPU_P1),
+                        ('loop_pred_p1_p2', LP_PRED),
                         ('bp_cluster_p2', BPU_P2), ('ftq', FTQ),
                         ('loop_pred_update', [B + '.w_lp_upd_val_p0']),
                         ('decode', DEC0)]),
@@ -240,7 +271,8 @@ S = [
     ('fd08_indirect', [('clock', CLK), ('ittage_p2', ITT_P2),
                        ('bp_cluster_p2', BPU_P2), ('ftq', FTQ)]),
     ('fd09_tage', [('clock', CLK), ('tage_p2', TAGE_P2),
-                   ('bp_cluster_p2', BPU_P2), ('tage_update', TAGE_UPD)]),
+                   ('bp_cluster_p2', BPU_P2), ('backend', BE_REDIR),
+                   ('ftq_upd_conv', UPD_PC), ('tage_update', TAGE_UPD)]),
     ('fd10_pd_redirect', [('clock', CLK), ('ftq_ifu', FTQ_IFU),
                           ('ifu_f3', IFU_F3), ('ftq', FTQ),
                           ('bp_cluster_p0', BPU_P0)]),
@@ -263,13 +295,14 @@ S = [
                          ('ifu_xlate', XQ), ('itlb', ITLB),
                          ('ifu_l1i', IFU_L1I), ('decode', DEC0)]),
     ('fd17_rvc', [('clock', CLK), ('ftq_ifu', FTQ_IFU), ('ifu_f3', IFU_F3),
-                  ('ibuf', IBUF),
+                  ('ifu_f3_straddle', F3_STRAD), ('ibuf', IBUF),
                   ('decode', DEC0 + ['tb.pd_out.[%d].%s' % (i, f)
                                      for i in range(1, 8)
                                      for f in ('valid', 'start_pc',
                                                'is_rvc')])]),
     ('fd18_uncached', [('clock', CLK), ('ftq_ifu', FTQ_IFU),
-                       ('ifu_xlate', XQ), ('ifu_l1i', IFU_L1I), ('l1i', L1I),
+                       ('ifu_xlate', XQ), ('ifu_fetch', FETCH_UC),
+                       ('ifu_l1i', IFU_L1I), ('l1i', L1I),
                        ('backend', BACKEND), ('decode', DEC0)]),
     ('fd19_fencei_cbo', [('clock', CLK), ('backend', BACKEND),
                          ('maintenance', MAINT), ('ftq_ifu', FTQ_IFU),

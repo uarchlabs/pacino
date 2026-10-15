@@ -4,140 +4,277 @@
 # fd09_tage: TAGE Provider, Allocation and use_alt_on_na
 ```
  FILE:    fd09_tage.md
- SOURCE:  DOC-001, DOC-002
+ SOURCE:  DOC-001, DOC-002, DOC-003, session-080
  STATUS:  WORKING
  UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
-`fd09_tage` is the FD-9 demonstration scenario. It is a demo, not a
-verification test. It runs a loop around one conditional branch that the
-predictors cannot learn. That branch causes TAGE to allocate entries, and
-the allocated entries train the `uaon` counter until use_alt_on_na hands
-the prediction to T0. The run passes if both events happen at least once.
+## 1. What the scenario shows
 
-A recorded run (DOC-002, after the monitor fix):
+`fd09_tage` is the FD-9 scenario of the front-end demonstration. It
+shows three behaviours of the pacino TAGE predictor: a prediction
+supplied by a tagged table, the allocation of a new tagged entry after
+a misprediction, and the use_alt_on_na mechanism handing a prediction
+from a weak tagged entry to the base table T0. The scenario runs a
+loop whose body contains a conditional branch with a random direction.
+The predictors cannot learn that branch, so it mispredicts often, and
+the mispredictions drive the allocations and the use_alt_on_na
+counter. demo_explainer.md describes how a scenario is built and run,
+and defines the terms used here.
+
+When the scenario passes, it prints one line. This is the line from a
+run on 2026-10-15, the run the cyc values below come from:
 
 ```
-DEMO PASS fd09_tage: tagged-provider predictions 216; allocations 65;
-T0 by use_alt_on_na 37 (cycles 1277)
+-I: fd09_tage: PASS, tagged-provider predictions 216, allocations 65,
+    T0 by use_alt_on_na 37, cyc 1277
 ```
+
+The testbench monitor, `tb/fe_demo_mon.svh` lines 409 to 433, samples
+both prediction slots on every cycle and keeps the three counts in the
+line:
+
+- tagged-provider predictions, the monitor variable `n_tage_prov`: TAGE
+  predictions at p2 whose provider is a tagged table;
+- allocations, `n_tage_alc`: new tagged entries written to the TAGE
+  tables;
+- T0 by use_alt_on_na, `n_t0_uaon`: TAGE predictions at p2 that come
+  from T0 because use_alt_on_na passed over a weak tagged provider.
+
+The scenario passes when the allocation count and the T0 count are
+both greater than zero (`tb/fe_demo_proofs.svh` line 89), and every
+instruction the testbench expects retires without error. The count of
+tagged-provider predictions is reported for information only. The run
+took 1277 cycles.
 
 ---
 
-## 1. The program
+## 2. The program
 
-Source: `programs/fd09_tage.svh`, task `prog_fd09`.
+The program is written by the task `prog_fd09` in
+`programs/fd09_tage.svh`. It has a short prologue, a loop that runs
+256 times, and a short epilogue. The loop body holds two conditional
+branches. The first, labelled B below, has a random direction. The
+second is the loop's back edge. The program runs in machine mode with
+translation off, so the addresses are physical; it starts at the
+reset vector, `RESET_VECTOR` = 0x8000_0000 (`bp_defines_pkg.sv`), and
+the loop's first instruction, top, is at 0x8000_0008.
 
 ```
-RESET_VECTOR+0   mixed(3)           c.addi, addi, c.addi        8 bytes
-top = +8         mixed(2)           c.addi, addi                6 bytes
-top+6    B:      bne x6,x0,top+12   taken when tk               (cskip)
-top+10           c.addi             skipped when B is taken
-top+12           bne x6,x0,top      back edge: taken on passes 0..254
-top+16           mixed(3)
-top+24           jal x0,0           halt (demo_go -> W.halt)
+Address      Label  Instruction              Purpose
+0x8000_0000         c.addi a0, 1             prologue filler
+0x8000_0002         addi t0, t0, 1           prologue filler
+0x8000_0006         c.addi a0, 1             prologue filler
+0x8000_0008  top:   c.addi a0, 1             loop body filler
+0x8000_000A         addi t0, t0, 1           loop body filler
+0x8000_000E  B:     bne x6, x0, 0x8000_0014  random direction, see below
+0x8000_0012         c.addi a0, 1             executed only when B is
+                                             not taken
+0x8000_0014         c.addi a0, 1             loop body filler
+0x8000_0016         bne x6, x0, 0x8000_0008  back edge to top
+0x8000_001A         c.addi a0, 1             epilogue filler
+0x8000_001C         addi t0, t0, 1           epilogue filler
+0x8000_0020         c.addi a0, 1             epilogue filler
+0x8000_0022         jal x0, 0                jump to itself; the run
+                                             ends here
 ```
 
-- Fixed code. Each pass resets `W.wp = top` and writes the same bytes
-  again, so the code never changes between passes. Only the expected
-  stream does.
-  - When B is taken, `cskip` still writes the skipped `c.addi`, but in
-    dry mode, so it is not added to the expected stream.
-  - B's encoded target is `top+12` either way.
-- Outcomes come from the writer, not x6. `bcc` emits `bne x6, x0` with
-  direction `tk` already decided. The backend retires against the
-  writer's expected stream, so the value in x6 does not matter.
-- B is random. Its direction is the AND of three LFSR bits
-  (`tk = W.lfsr_bit() & W.lfsr_bit() & W.lfsr_bit()`), a 16-bit Galois
-  LFSR with taps 0xB400 and seed 0xACE1. Taken probability is 1/8.
-  Simulating this seed outside the testbench gives 33 taken out of 256;
-  the first taken passes are 9, 16, 19, 22, 30, 31.
-- Back edge. It is a second conditional that history can predict: taken
-  255 times, not taken once at the exit.
+The filler instructions do no useful work. They make the code a mix of
+16-bit and 32-bit instructions, so the branches are not at the start
+of their fetch block: in the block that starts at top, B is at
+halfword position 3 and the back edge at position 7.
+
+The program writer writes the loop body into memory once for each
+iteration, at the same addresses and with the same bytes, so the code
+in memory is identical on every iteration. What changes from one
+iteration to the next is the list of instructions the testbench
+expects to retire. When B is taken, the `c.addi` at 0x8000_0012 is
+still present in memory, and the program writer leaves it out of the
+expected list, because it does not execute on that iteration
+(`W.cskip` in `rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh`
+writes it in dry mode).
+
+The direction of each branch is decided by the program writer when it
+writes the iteration, and is recorded in the expected list. The
+backend model of the testbench resolves each branch with the recorded
+direction (demo_explainer.md, the backend model). The value in
+register x6 is never used. The branch instructions compare x6 with x0
+only because a branch instruction needs two operands.
+
+Branch B is taken on a given iteration when three bits drawn from the
+program writer's pseudo-random generator are all 1. The generator is
+a 16-bit Galois linear-feedback shift register with taps 0xB400 and
+seed 0xACE1 (`W.lfsr` and `W.lfsr_bit` in `fe_tb_writer.svh`; the seed
+is set in `prog_fd09`). The local variable `tk` in `prog_fd09` holds
+the result. Each draw is close to an even chance, so B is taken on
+about one iteration in eight. With this seed B is taken on 33 of the
+256 iterations. Numbered from 0, the first taken iterations are 9, 16,
+19, 22, 30 and 31.
+
+The back edge is taken on iterations 0 to 254 and falls through on
+iteration 255, so its pattern is regular and the predictors learn it.
 
 ---
 
-## 2. Why a random branch produces both events
+## 3. Walkthrough
 
-1. Allocation. B is mostly not taken, so T0 learns not taken. Each taken
-   B is a conditional mispredict.
-   - `alc_upd_comb` (`rtl/core/frontend/bpu/rtl/tage_cntrl.sv:853`)
-     fires on a mispredict when `prm_comp < TAGE_MAX_TBL` and a
-     candidate exists (`alc_comp != 0`).
-   - It writes the new entry at CTR `3'b100`, which is weak taken.
-2. Training `uaon`. History is random, so new entries keep being hit
-   under histories they did not learn from.
-   - The new entries are weak, so they meet the trigger condition (CTR
-     `3'b011` or `3'b100`).
-   - They predict taken on a branch that is 7/8 not taken, so the
-     primary is usually wrong while the alternate is right.
-   - Each such update increments `uaon` (`uaon_upd_ff`, line 380).
-3. T0 through use_alt_on_na. Once `uaon[3]` is set (count of 8 or more),
-   a weak tagged primary hands the prediction to the alternate (line
-   539). When no tagged alternate exists (`alt_comp == 0`), that
-   alternate is T0.
+Pacino's TAGE has a base table, T0, and four tagged tables, T1 to T4,
+with increasing history lengths (8, 13, 32 and 119 branch outcomes).
+T0 holds a 2-bit counter per entry and always produces a prediction. A
+tagged table produces a prediction only when its tag matches. Each
+tagged entry holds a 3-bit direction counter, CTR. The provider is the
+tagged table with the longest history that matches. The alternate is
+the next longest matching table, or T0 when no other tagged table
+matches.
 
-`uaon` only updates when both the primary and the alternate are tagged
-(`u_prm_tagged && u_alt_tagged`, line 383). Step 2 therefore depends on
-cases where B hits in two tagged tables, while step 3 counts cases where
-the alternate is T0. The counter that lets T0 win is never trained on
-cases where T0 was the alternate. That matches the comment at line 699,
-so it looks intended.
+The front end predicts up to two branches in each fetch block, one in
+each of two prediction slots, and TAGE keeps separate state for each
+slot. A prediction moves through four stages, p0 to p3. The FTQ
+presents the request at p0, and TAGE delivers its prediction at p2.
+In this program B is the first branch of the block that starts at top,
+so B is always predicted and updated in slot 0.
+
+### 3.1 Allocation
+
+TAGE trains on its own prediction, whatever direction the front end
+finally used. When a conditional branch resolves, the FTQ's update
+conversion compares the TAGE direction carried with the branch with
+the resolved direction, and marks a TAGE misprediction when they
+differ. On a TAGE misprediction, when the provider is not T4, TAGE
+writes a new entry for the branch in a table with a longer history
+than the provider's. The table was chosen when the branch was
+predicted: the first longer-history table whose entry at the branch's
+index has an aged useful counter of 0. The new entry holds the
+branch's tag and starts at CTR 3'b100, the weakest taken value.
+
+T0's entries start at 2'b10, weakly taken, so until T0 has learned B,
+TAGE predicts B taken. The first allocation is at cyc 19, for B on
+iteration 0: B was not taken and T0 had predicted it taken. The front
+end's final prediction for B was not taken, so the backend saw no
+misprediction there; the allocation comes from TAGE's misprediction
+alone.
+
+Over the run TAGE mispredicted B on 64 of the 256 iterations: on 31 of
+the 33 iterations on which B was taken, and on 33 of the 223 on which
+it was not. Each of the 64 wrote an allocation: 16 into T1, 14 into
+T2, 25 into T3 and 9 into T4. The 65th allocation of the result line
+is for the back edge, which TAGE mispredicted once, when it fell
+through on iteration 255.
+
+The first taken B is on iteration 9. In the waveform, the backend
+resolves it at cyc 52: `tb.bkend_ftq_redir_val` is 1 and
+`tb.bkend_ftq_redir_pc` is 0x8000_0014, B's target, because the front
+end fetched the fall-through. The allocation write follows at cyc 60,
+in the `tage_update` group:
+
+- `tb.dut.u_bpu.u_tage.u_tage_cntrl.trx_type` is 1 and bit 0 of
+  `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0` is 1: the TAGE
+  tables take a slot 0 update this cycle;
+- `tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[0].pc` is 0x8000_000E, B's
+  address (the TAGE update input has no address; the update
+  conversion forms every predictor's update from one record, and the
+  loop predictor's copy carries it);
+- `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].cond_mispredict`
+  is 1 and `.resolved_taken` is 1; `.tage_pred_meta.tage_prm_comp` is
+  0, so T0 was the provider;
+- `tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.u_alc_wr[0]` is 1 and
+  `tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.u_alc_comp[0]` is 1:
+  the new entry is written into T1.
+
+RTL: the TAGE misprediction is `cond_mispredict`, set in
+`rtl/core/frontend/ftq/rtl/ftq_upd_conv.sv` line 218. The candidate
+table is chosen at p1 in `pred_logic`,
+`rtl/core/frontend/bpu/rtl/tage_cntrl.sv` lines 574 to 585. The
+allocation is formed by `alc_upd_comb` in `tage_cntrl.sv` line 853,
+signal `u_alc_wr`. T0's starting value is `TAGE_T0_SRAM_INIT_VALUE`,
+`rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv` line 400.
+
+### 3.2 Training the use_alt_on_na counter
+
+TAGE keeps a 4-bit counter, `uaon`, for each prediction slot,
+`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.uaon[0]` and
+`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.uaon[1]`. It measures whether,
+when the provider's CTR is weak, the alternate has been more accurate
+than the provider. The rules are in
+`planning/arch/tage_cntrl_uaon_update_rules.md`: on an update whose
+prediction was weak, the counter increments when the provider was
+wrong and the alternate right, and decrements when the provider was
+right and the alternate wrong. It starts at 0.
+
+`uaon` is updated only when both the provider and the alternate are
+tagged tables. When the alternate is T0, `uaon` is unchanged. The
+counter is therefore trained on predictions where two tagged tables
+matched B. Since B is always in slot 0, only `uaon.uaon[0]` changes in
+this run; `uaon.uaon[1]` stays 0.
+
+The history leading up to B is random, so the entries allocated for B
+are later matched under histories they were not trained on. Those
+entries are still weak, at CTR 3'b011 or 3'b100, and some predict
+taken for a branch taken only one time in eight. In this run 34
+updates of B had a tagged provider, a tagged alternate and a weak
+prediction: 20 with T2 as the provider and T1 as the alternate, 14
+with T3 and T2. On 21 of them the provider predicted taken, B was not
+taken, and the alternate was right, so `uaon` incremented. On 3 the
+provider was right and the alternate wrong, so it decremented. On the
+other 10 the two predicted the same direction, and it was unchanged.
+The update inputs are in the `tage_update` group:
+`tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_comp`, `.tage_alt_comp`,
+`.tage_pred_weak`, `.tage_prm_tkn` and `.tage_alt_tkn` under
+`tb.dut.u_bpu.u_tage.u_tage_cntrl`.
+
+In the waveform, `uaon.uaon[0]` first increments at cyc 221, reading
+1 after the update of cyc 220; it falls back to 0 at cyc 238, and
+reaches 8 at cyc 447. It reaches 15, its maximum, at cyc 620.
+
+RTL: the update is `uaon_upd_ff` in `tage_cntrl.sv` line 380, and the
+condition that both tables are tagged is at lines 383 and 384
+(`u_prm_tagged` and `u_alt_tagged`, defined at lines 670 and 671).
+
+### 3.3 T0 provides through use_alt_on_na
+
+When `uaon` reaches 8, its top bit is set. From then on, a prediction
+whose provider is a tagged table with a weak CTR uses the alternate
+instead of the provider. When no second tagged table matched, the
+alternate is T0, and the prediction comes from T0.
+
+The counter that allows T0 to provide is trained only on predictions
+where the alternate was a tagged table, as section 3.2 describes. It
+then governs predictions where the alternate is T0. This follows the
+update rule in tage_cntrl_uaon_update_rules.md.
+
+In the waveform, the first prediction from T0 through use_alt_on_na
+is at cyc 460, in slot 0. In the `tage_p2` group,
+`tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp`
+is 1 (T1 matched B) and `.tage_prm_ctr` is 3'b100, weak;
+`.tage_using_primary` is 0 and `.tage_alt_comp` is 0, so the
+prediction is T0's. All 37 such predictions in the run are in slot 0
+with T1 as the provider.
+
+RTL: the selection is in `pred_logic` in `tage_cntrl.sv`: the trigger,
+a tagged provider with a weak CTR, at lines 529 to 533, and the choice
+of the alternate when the trigger is set and `uaon[s][3]` is 1 at line
+539. The result is registered into `tage_pred_meta_p2` by
+`meta_p2_ff` at line 364.
 
 ---
 
-## 3. What the monitor counts
+## 4. Events
 
-The counts come from `tb/fe_demo_mon.svh:401-425`, sampled every cycle
-on each slot. Each is a count of slot events: the loop sums the slots of
-a cycle into a local (`a`, `n_prov`, `n_uaon`) and the counter adds the
-sum once.
-
-```
-n_tage_alc    trx_type && tage_upd_val_u0[s] && u_alc_wr[s]
-              an allocation write that the arbiter granted
-n_tage_prov   p2 ready, tage_using_primary && tage_prm_comp != 0
-              the provider is a tagged table
-n_t0_uaon     p2 ready, !tage_using_primary && tage_prm_comp != 0
-              && tage_alt_comp == 0
-              primary tagged, prediction from T0
-```
-
-The proof (`tb/fe_demo_proofs.svh:74`) is
-`n_tage_alc > 0 && n_t0_uaon > 0`. `n_tage_prov` is only reported.
-`tb_fe_demo.sv` also requires the whole stream to retire with no errors
-before it accepts the proof.
-
----
-
-## 4. Reading the numbers
-
-- The three figures are counts of slot events. DOC-001's monitor
-  counted `n_tage_prov` and `n_t0_uaon` with `<= x + 1` inside the slot
-  loop, so a cycle where both slots qualified counted once. DOC-002
-  sums the slots first, as `n_tage_alc` always did.
-- The fix does not change this scenario's figures. A count of every
-  slot event, made independently in a scratch copy of the testbench,
-  found no cycle in this run where both slots qualify for either
-  counter. The same check found the undercount in fd05_p3_override
-  (`n_tage_prov` 60 before the fix, 85 after), where that figure is
-  not reported.
-- `tagged-provider predictions` counts p2 predictions (each
-  `tage_pred_rdy_p2` slot), not retired branches.
-- The program is FD-9's as `planning/showcase/fe_demo_scenarios.md`
-  now gives it: the t0_uaon program of tb_fe_top, a branch taken 1 in
-  8 from the writer's LFSR.
-
----
-
-## 5. Waveform
-
-The saved view is `waves/fd09_tage.gtkw`. Look at:
-
-- `tage_pred_meta_p2`: `tage_prm_comp` non-zero with
-  `tage_using_primary` set is a tagged provider; `tage_using_primary`
-  low with `tage_alt_comp` 0 is T0 by use_alt_on_na.
-- `uaon`: rises as weak tagged primaries are wrong and tagged alternates
-  are right.
-- `trx_type` with `u_alc_wr` set: an allocation.
+| cyc  | Event                                          | Other            |
+|------|------------------------------------------------|------------------|
+| 19   | first allocation write, B not taken, predicted | table T1, slot 0 |
+|      | taken by T0                                    | iteration 0      |
+| 20   | first backend misprediction, back edge;        | iteration 0      |
+|      | redirect to 0x8000_0008                        |                  |
+| 52   | first taken B resolved, a misprediction;       | iteration 9      |
+|      | redirect to 0x8000_0014                        |                  |
+| 60   | allocation for that B                          | table T1, slot 0 |
+| 97   | first prediction from a tagged table           | table T1, slot 0 |
+| 221  | `uaon` first increments, 0 to 1                | slot 0           |
+| 447  | `uaon` reaches 8                               | slot 0           |
+| 460  | first prediction from T0, by use_alt_on_na     | provider T1,     |
+|      |                                                | slot 0           |
+| 1266 | back edge falls through, a misprediction;      | iteration 255    |
+|      | redirect to 0x8000_001A                        |                  |
+| 1277 | the run ends                                   |                  |

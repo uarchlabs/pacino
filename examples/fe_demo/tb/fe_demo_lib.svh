@@ -15,12 +15,48 @@
   // Cycles from the release of reset to the last retirement.
   int cyc_run;
 
+  // =================================================================
+  // The message format (fe_demo_tb_decisions.md FDT-10a). Every line
+  // the testbench prints is "-<sev>: <name>: <body>", sev I, W or E, at
+  // most MSG_COLS columns. body is items separated by ", ". A line
+  // that would pass MSG_COLS breaks after a comma; the rest goes on
+  // continuation lines indented four spaces, with no prefix. An item
+  // too long for a line of its own is printed whole on one line.
+  // =================================================================
+  localparam int MSG_COLS = 80;
+
+  function automatic void say(input string sev, input string nm,
+                              input string body);
+    string ln;
+    string item;
+    int    st;
+    ln = $sformatf("-%s: %s:", sev, nm);
+    st = 0;
+    for (int i = 0; i < body.len(); i++) begin
+      // An item ends at a comma that is followed by a space, or at the
+      // end of the body; the comma stays with its item.
+      if (((body[i] == ",") && (i + 1 < body.len()) &&
+           (body[i+1] == " ")) || (i == body.len() - 1)) begin
+        item = body.substr(st, i);
+        if (ln.len() + 1 + item.len() > MSG_COLS) begin
+          $display("%s", ln);
+          ln = {"    ", item};
+        end else begin
+          ln = {ln, " ", item};
+        end
+        st = i + 2;
+        i  = i + 1;
+      end
+    end
+    $display("%s", ln);
+  endfunction
+
   // Every model and monitor to its start; the program is written at
   // the reset vector next. use_sv39: S-mode under satp Sv39, else
   // M-mode, bare.
   task automatic begin_scen(input string nm, input logic use_sv39);
     tname = nm;
-    $display("-- %s --", tname);
+    say("I", tname, "start");
     models_reset(use_sv39);
     mon_reset();
     W.wp = RESET_VECTOR;

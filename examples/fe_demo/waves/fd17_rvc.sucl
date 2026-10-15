@@ -58,11 +58,22 @@ item_set_format Hexadecimal
 variable_add tb.dut.u_ftq.w_pd_redir_val
 item_set_format Binary
 item_unfocus
+# group ifu_f3_straddle
+variable_add tb.dut.u_ifu.u_f3.r_strad_val
+item_focus bi
+group_marked ifu_f3_straddle
+item_focus bj
+item_set_format Binary
+variable_add tb.dut.u_ifu.u_f3.r_strad_pc
+item_set_format Hexadecimal
+variable_add tb.dut.u_ifu.u_f3.r_strad_idx
+item_set_format Unsigned
+item_unfocus
 # group ibuf
 variable_add tb.dut.ifu_ibuf_val
-item_focus bi
+item_focus bm
 group_marked ibuf
-item_focus bj
+item_focus bn
 item_set_format Binary
 variable_add tb.dut.ifu_ibuf_en
 item_set_format Hexadecimal
@@ -71,9 +82,9 @@ item_set_format Binary
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus bm
+item_focus ca
 group_marked decode
-item_focus bn
+item_focus cb
 item_set_format Binary
 variable_add tb.pd_out.[0].valid
 item_set_format Binary

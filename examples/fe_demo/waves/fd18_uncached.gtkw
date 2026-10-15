@@ -64,6 +64,14 @@ tb.dut.u_ifu.u_xlate.xq_uc
 @1000200
 -ifu_xlate
 @800200
+-ifu_fetch
+@28
+tb.dut.u_ifu.u_fetch.xq_uc
+@28
+tb.dut.u_ifu.u_fetch.w_uc_gate
+@1000200
+-ifu_fetch
+@800200
 -ifu_l1i
 @28
 tb.dut.ifu_l1i_req_val

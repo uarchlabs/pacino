@@ -62,11 +62,20 @@ item_set_format Unsigned
 variable_add tb.dut.u_ifu.u_xlate.xq_uc
 item_set_format Binary
 item_unfocus
+# group ifu_fetch
+variable_add tb.dut.u_ifu.u_fetch.xq_uc
+item_focus bk
+group_marked ifu_fetch
+item_focus bl
+item_set_format Binary
+variable_add tb.dut.u_ifu.u_fetch.w_uc_gate
+item_set_format Binary
+item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus bk
+item_focus bn
 group_marked ifu_l1i
-item_focus bl
+item_focus bo
 item_set_format Binary
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Binary
@@ -83,9 +92,9 @@ item_set_format Unsigned
 item_unfocus
 # group l1i
 variable_add tb.dut.u_l1i.b_rsp_valid.[0]
-item_focus cc
+item_focus cf
 group_marked l1i
-item_focus cd
+item_focus cg
 item_set_format Binary
 variable_add tb.dut.u_l1i.b_rsp_valid.[1]
 item_set_format Binary
@@ -128,9 +137,9 @@ item_set_format Binary
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus dh
+item_focus dk
 group_marked backend
-item_focus di
+item_focus dl
 item_set_format Binary
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
@@ -149,9 +158,9 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus ea
+item_focus ed
 group_marked decode
-item_focus eb
+item_focus ee
 item_set_format Binary
 variable_add tb.pd_out.[0].valid
 item_set_format Binary

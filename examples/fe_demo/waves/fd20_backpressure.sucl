@@ -75,6 +75,8 @@ variable_add tb.dut.ifu_ibuf_en
 item_set_format Hexadecimal
 variable_add tb.dut.ibuf_ifu_rdy
 item_set_format Binary
+variable_add tb.dut.u_ibuf.r_count
+item_set_format Unsigned
 variable_add tb.dut.u_ibuf.w_n_pres
 item_set_format Unsigned
 variable_add tb.dut.u_ibuf.w_n_pop
@@ -82,9 +84,9 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus ca
-group_marked decode
 item_focus cb
+group_marked decode
+item_focus cc
 item_set_format Binary
 variable_add tb.pd_out.[0].valid
 item_set_format Binary

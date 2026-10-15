@@ -112,7 +112,8 @@
   int n_xq_cross;         // blocks translated twice (page crossing)
   int n_straddle;         // 32-bit instructions at block position 15
   int n_rvc;              // 16-bit instructions retired
-  int n_uc_req;           // uncached L1I requests
+  int n_uc_req_nc;        // uncached L1I requests to an NC page
+  int n_uc_req_io;        // ... to an IO page (a PPN in io_ppn)
   int n_uc_alloc;         // uncached lines written into the L1I
   int n_inv_all;          // L1I invalidates taken: all, one line
   int n_inv_line;
@@ -134,6 +135,11 @@
   logic [FTQ_PTR_BITS-1:0]        pv_commit;
   logic [RAS_COMMIT_PTR_BITS-1:0] pv_csp;
   logic [VA_WIDTH-1:0]            pv_ctop;
+
+  // The PPNs of the pages the program mapped with PBMT IO (FD-18). The
+  // program writer's W.uc_ppn holds every uncached page, NC and IO
+  // alike; this splits the uncached requests between the two.
+  logic io_ppn [logic [PPN_WIDTH-1:0]];
 
   // Entries whose trap starts the two-stage regime (FD-14, FD-15):
   // the backend's trap hook applies it as the entry retires.
@@ -203,7 +209,8 @@
     n_xq_cross    = 0;
     n_straddle    = 0;
     n_rvc         = 0;
-    n_uc_req      = 0;
+    n_uc_req_nc   = 0;
+    n_uc_req_io   = 0;
     n_uc_alloc    = 0;
     n_inv_all     = 0;
     n_inv_line    = 0;
@@ -219,6 +226,7 @@
     n_commit_adv  = 0;
     n_csp_chg     = 0;
     to_h2.delete();
+    io_ppn.delete();
   endtask
 
   // =================================================================
@@ -499,10 +507,15 @@
           dut.u_ifu.u_xlate.xq_cross &&
           (dut.u_ifu.u_xlate.xq_ppn0 != dut.u_ifu.u_xlate.xq_ppn1))
         n_xq_cross <= n_xq_cross + 1;
-      // FD-18. Uncached requests the L1I took; uncached lines filled.
+      // FD-18. Uncached requests the L1I took, by the memory type of the
+      // page; uncached lines filled.
       if (dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
-          dut.ifu_l1i_req_uncached)
-        n_uc_req <= n_uc_req + 1;
+          dut.ifu_l1i_req_uncached) begin
+        if (io_ppn.exists(dut.ifu_l1i_req_paddr[PA_WIDTH-1:12]))
+          n_uc_req_io <= n_uc_req_io + 1;
+        else
+          n_uc_req_nc <= n_uc_req_nc + 1;
+      end
       n_ucal = 0;
       for (int b = 0; b < 2; b++)
         if (dut.u_l1i.u_mshr.b_fil_valid[b] &&

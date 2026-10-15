@@ -86,18 +86,70 @@ item_set_format Hexadecimal
 variable_add tb.dut.bpu_redir_idx_p2
 item_set_format Unsigned
 item_unfocus
+# group backend
+variable_add tb.bkend_ftq_redir_val
+item_focus cg
+group_marked backend
+item_focus ch
+item_set_format Binary
+variable_add tb.bkend_ftq_redir_pc
+item_set_format Hexadecimal
+variable_add tb.bkend_ftq_redir_cause
+item_set_format Unsigned
+item_unfocus
+# group ftq_upd_conv
+variable_add tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[0].pc
+item_focus ck
+group_marked ftq_upd_conv
+item_focus cl
+item_set_format Hexadecimal
+variable_add tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[1].pc
+item_set_format Hexadecimal
+item_unfocus
 # group tage_update
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.trx_type
-item_focus cg
+item_focus cn
 group_marked tage_update
-item_focus ch
+item_focus co
 item_set_format Binary
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0
 item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].cond_mispredict
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].resolved_taken
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_comp
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_comp
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_pred_weak
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_tkn
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_tkn
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].cond_mispredict
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].resolved_taken
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_prm_comp
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_alt_comp
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_pred_weak
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_prm_tkn
+item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_alt_tkn
+item_set_format Binary
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.[0]
 item_set_format Binary
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.[1]
 item_set_format Binary
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[0]
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[1]
+item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[1]

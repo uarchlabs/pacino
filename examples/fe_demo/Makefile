@@ -9,11 +9,11 @@
 #
 #   fdNN_<name>   one scenario (FDT-8): builds if needed, runs it, and
 #                 writes out/fdNN_<name>/fdNN_<name>.fst (the waveform)
-#                 and .log (the run's output, ending in its DEMO line).
-#                 Exits non-zero on DEMO FAIL. The names are SCENARIOS
-#                 below, in FD order
+#                 and .log (the run's output, ending in its result line,
+#                 FDT-10). Exits non-zero on a FAIL. The names are
+#                 SCENARIOS below, in FD order
 #   scenarios     every scenario in FD order (FDT-9); stops at the
-#                 first DEMO FAIL. make -k scenarios runs them all
+#                 first FAIL. make -k scenarios runs them all
 #   build         the simulation model only
 #   clean         the model and out/
 #   view S=<scenario>
@@ -142,6 +142,8 @@ RTL_SRCS := $(PKG_SRCS) $(L1I_SRCS) $(BPU_SRCS) $(FTQ_SRCS) $(IFU_SRCS) \
             $(FE_TOP)/rtl/fe_top.sv $(PTW_DIR)/ptw.sv
 
 TB_TOP   := tb/tb_fe_demo.sv
+# The runtime's $finish without its message (FDT-10a): see the file.
+TB_CPP   := tb/fe_demo_finish.cpp
 TB_INCS  := $(wildcard tb/*.svh) $(wildcard programs/*.svh) \
             $(wildcard $(MODELS)/*.svh)
 
@@ -151,14 +153,17 @@ TB_INCS  := $(wildcard tb/*.svh) $(wildcard programs/*.svh) \
 # loop_pred.sv parameters, SYNCASYNCNET for sram_init. NUM_PRED_SLOTS
 # is 2, the package default; there is no 1-slot build (FDT-5).
 # --trace-fst for the waveform (FDT-11), --trace-structs so struct
-# members appear by name.
+# members appear by name. VL_USER_FINISH: the runtime's vl_finish is
+# replaced by tb/fe_demo_finish.cpp's, which prints nothing (FDT-10a).
 VER_FLAGS := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR -Wno-DECLFILENAME \
              -Wno-VARHIDDEN -Wno-SYNCASYNCNET --timing \
-             --trace-fst --trace-structs
+             --trace-fst --trace-structs -CFLAGS -DVL_USER_FINISH
 OBJ       := obj_fe_demo
 VTB       := $(OBJ)/Vtb
 
 FAST_INIT := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
+# The runtime's end-of-run report off (FDT-10a).
+QUIET     := +verilator+quiet
 
 # The scenarios in FD order (fe_demo_scenarios.md FD-1 to FD-21).
 SCENARIOS := fd01_reset_init fd02_steady fd03_two_branch \
@@ -192,23 +197,26 @@ help:
 
 build: $(VTB)
 
-$(VTB): $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(TB_INCS)
+$(VTB): $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(TB_INCS) $(TB_CPP)
 	@echo "[compiling]  tb_fe_demo"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) --top-module tb --Mdir $(OBJ) \
 	  +incdir+$(MODELS) +incdir+tb +incdir+programs \
-	  $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(VSILENCE)
+	  $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(abspath $(TB_CPP)) $(VSILENCE)
 
-# One scenario. The log keeps the run's whole output; the DEMO line is
-# also printed here. The exit status is the simulation's.
+# One scenario. The log keeps the run's whole output; the result line
+# (FDT-10), with its continuation lines, is also printed here. The exit
+# status is the simulation's.
 $(SCENARIOS): $(VTB)
 	@echo "[running]    $@"
 	$(Q)mkdir -p out/$@
-	$(Q)./$(VTB) $(call plusargs,$@) +SCEN=$@ +FST=out/$@/$@.fst \
-	  > out/$@/$@.log 2>&1; rc=$$?; grep "^DEMO " out/$@/$@.log; \
+	$(Q)./$(VTB) $(QUIET) $(call plusargs,$@) +SCEN=$@ \
+	  +FST=out/$@/$@.fst > out/$@/$@.log 2>&1; rc=$$?; \
+	  awk '/^-[IE]: $@: (PASS|FAIL),/ {p = 1; print; next} \
+	       p && /^    / {print; next} {p = 0}' out/$@/$@.log; \
 	  exit $$rc
 
 # The scenarios are its prerequisites, run in FD order; make stops at
-# the first DEMO FAIL, and make -k scenarios runs every one.
+# the first FAIL, and make -k scenarios runs every one.
 scenarios: $(SCENARIOS)
 
 clean:
@@ -221,10 +229,10 @@ clean:
 # with the command file, which sets every name type Global (FDT-12a).
 # Both check S, bring the model up to date, run the scenario when its
 # FST is missing or older than the model, then open the viewer. A run
-# that ends in DEMO FAIL still writes its FST, so the viewer opens on it
+# that ends in a FAIL still writes its FST, so the viewer opens on it
 # with a note.
 GTKWAVE ?= gtkwave
-SURFER  ?= surfer
+SURFER   = surfer
 
 view_fst = out/$(S)/$(S).fst
 

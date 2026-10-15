@@ -55,7 +55,11 @@ variable_add tb.dut.ifu_l1i_inv_all
 item_set_format Binary
 variable_add tb.dut.ifu_l1i_inv_paddr
 item_set_format Hexadecimal
+variable_add tb.dut.u_l1i.u_maint.r_st
+item_set_format Unsigned
 variable_add tb.dut.u_l1i.mt_busy_any
+item_set_format Binary
+variable_add tb.dut.u_l1i.mt_busy_line
 item_set_format Binary
 variable_add tb.dut.l1i_ifu_inv_done
 item_set_format Binary
@@ -64,9 +68,9 @@ item_set_format Binary
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus bk
+item_focus bm
 group_marked ftq_ifu
-item_focus bl
+item_focus bn
 item_set_format Binary
 variable_add tb.dut.ftq_ifu_req_rdy
 item_set_format Binary
@@ -89,9 +93,9 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus cf
+item_focus ch
 group_marked ifu_l1i
-item_focus cg
+item_focus ci
 item_set_format Binary
 variable_add tb.dut.ifu_l1i_req_rdy
 item_set_format Binary

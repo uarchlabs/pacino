@@ -97,6 +97,11 @@
 # Updated for the files changed in session-080 after DOC-002
 # (PROJECT_STATUS.md, fe_demo_tb_decisions.md, fe_demo_scenarios.md,
 # ftq_bpu_interfaces.md, fe_decisions.md).
+# Updated for the files changed in session-080 when DOC-003 was
+# written (PROJECT_STATUS.md, itlb_l2tlb_interfaces.md,
+# fe_demo_scenarios.md, fe_demo_tb_decisions.md).
+# Updated for the files changed in session-080 after DOC-003
+# (PROJECT_STATUS.md, fe_demo_tb_decisions.md, fe_demo_scenarios.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -119,7 +124,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   646e5476eb50
-PLAN  PROJECT_STATUS.md                 566008c390d3
+PLAN  PROJECT_STATUS.md                 a5b65ecae383
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -158,7 +163,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
-TEST  fe_demo_tb_decisions.md           5dae7004e44b
+TEST  fe_demo_tb_decisions.md           b51f506d674b
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
@@ -175,7 +180,7 @@ INTF  ftq_bpu_interfaces.md       3f345983e11c
 INTF  ftq_ifu_interfaces.md       2cecf4e55ced
 INTF  ifu_ibuf_interfaces.md      ab4d4051748b
 INTF  itlb_ifu_interfaces.md            ab489f6db489
-INTF  itlb_l2tlb_interfaces.md          bed8d1ddacae
+INTF  itlb_l2tlb_interfaces.md          31ca2847e5a3
 INTF  ptw_mem_interfaces.md            053eb7faf457
 INTF  ittage_interfaces.md              9217c9322080
 INTF  l1i_ifu_interfaces.md             3fb484b495e3
@@ -187,7 +192,7 @@ INTF  tage_interfaces.md                80e89e517207
 INTF  ubtb_interfaces.md          7f692dd5a124
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
-SHOW  fe_demo_scenarios.md            62c022bf6a00
+SHOW  fe_demo_scenarios.md            ce92825a4a5b
 
 MISC  ras_theory_of_operation.md      70934d94b58a
 

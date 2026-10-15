@@ -195,10 +195,13 @@ FD-17  Compressed and unaligned code
   proof     a straddling instruction delivered whole
 
 FD-18  Uncached fetch
-  shows     fetch from an NC or IO page, one instruction per FTQ entry
-  program   a short sequence on a page whose PTE PBMT is NC or IO
+  shows     fetch from an NC page and from an IO page, one instruction
+            per FTQ entry
+  program   a short sequence on a page whose PTE PBMT is NC, then one
+            on a page whose PTE PBMT is IO
   waveform  IFU uncached path, L1I uncached request, commit gate
-  proof     uncached requests; no L1I allocation
+  proof     uncached requests from each page, counted separately; no
+            L1I allocation
 
 FD-19  FENCE.I and cbo.inval
   shows     the drain, the invalidate and the restart
@@ -248,5 +251,7 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
               removed.
   2026-10-15  session-080. FD-9 program as built (docs/fd09_tage.md).
   2026-10-15  session-080, after DOC-002. FD-1, 3, 4, 5, 7, 8, 11, 12
-              programs and FD-2, 7, 12, 14 proofs as built.
+              programs and FD-2, 7, 12, 14 proofs as built. FD-18
+              covers IO as well as NC (Jeff).
+  2026-10-15  session-080, after DOC-003. FD-18 proof as built.
 ```

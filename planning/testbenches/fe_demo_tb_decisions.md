@@ -33,12 +33,13 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
                       loads each command file in Surfer and compares
                       it with the save file; fe_demo.gtkwaverc, the rc
                       file of make view
-         docs/        one description per scenario, and the fe_top
-                      connectivity inventory
+         docs/        one description per scenario,
+                      demo_explainer.md, and the fe_top connectivity
+                      inventory
          README.md    the scenario list, how to run one, what to look
                       for
-       tb/ holds tb_fe_demo.sv, fe_demo_mon.svh, fe_demo_lib.svh and
-       fe_demo_proofs.svh.
+       tb/ holds tb_fe_demo.sv, fe_demo_mon.svh, fe_demo_lib.svh,
+       fe_demo_proofs.svh and fe_demo_finish.cpp.
        Run output goes to examples/fe_demo/out/<scenario>/, which is
        not committed.
 FDT-2  examples/ is not scanned by tools/regress.sh and has no
@@ -96,8 +97,15 @@ FDT-10a Every line the testbench prints is at most 80 columns. A line
        cycle count is cyc <n>. A line longer than 80 columns breaks
        after a comma, and each continuation line is indented four
        spaces with no prefix:
-         -I: fd09_tage: PASS, predictions 216, allocations 65,
-             T0 by use_alt_on_na 37, cyc 1277
+         -I: fd09_tage: PASS, tagged-provider predictions 216,
+             allocations 65, T0 by use_alt_on_na 37, cyc 1277
+       A passing run prints no other line: the simulator's $finish
+       message is replaced (tb/fe_demo_finish.cpp, VL_USER_FINISH)
+       and its end-of-run report is off (+verilator+quiet). After a
+       failing result line the simulator prints the lines of $fatal,
+       which are outside this format. The shared models'
+       (rtl/core/frontend/fe_top/tb/models/) ERROR: and +TRACE lines
+       keep tb_fe_top's format.
 
 ---
 
@@ -142,7 +150,8 @@ FDT-13a The descriptions are written in full sentences, with no jargon
        defined; a design term is explained at first use or in
        docs/demo_explainer.md. The words "lands" and "shape" are not
        used, nor the framing "X but not Y". Each description is
-       checked with tickfinder before it is complete.
+       checked with tools/ticfinder/tools/ticfinder.py before it is
+       complete.
 FDT-13b docs/demo_explainer.md explains, once, how a scenario is built
        and run: the program writer, the list of instructions the
        testbench expects to retire, the backend model, the result
@@ -177,4 +186,6 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               FDT-9a failing runs; FDT-10 and FDT-10a, the result line
               and message format (Jeff); FDT-12a, FDT-12b; FDT-13 the
               five-section form, FDT-13a, FDT-13b (Jeff).
+  2026-10-15  session-080, after DOC-003. FDT-1 tb/ and docs/ as
+              built; FDT-10a the lines outside the format.
 ```

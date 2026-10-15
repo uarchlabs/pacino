@@ -6,7 +6,7 @@
  FILE:    itlb_l2tlb_interfaces.md
  SOURCE:  session-069
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -41,27 +41,30 @@ instantiated twice.
 ## 2. The groups
 
 ```
-  itlb_l2t_req_val                        ITLB  -> L2TLB
-  itlb_l2t_req_rdy                        L2TLB -> ITLB
-  itlb_l2t_vpn   [VA_WIDTH-13:0]          ITLB  -> L2TLB
-  itlb_l2t_asid  [ASID_WIDTH-1:0]         ITLB  -> L2TLB
-  itlb_l2t_vmid  [VMID_WIDTH-1:0]         ITLB  -> L2TLB
-  itlb_l2t_v                              ITLB  -> L2TLB
-  itlb_l2t_tag   [1:0]                    ITLB  -> L2TLB
-  itlb_l2t_acc   [1:0]                    ITLB  -> L2TLB
-  itlb_l2t_priv  [1:0]                    ITLB  -> L2TLB
+  itlb_l2t_req_val                        ITLB   -> walker
+  itlb_l2t_req_rdy                        walker -> ITLB
+  itlb_l2t_vpn   [VA_WIDTH-13:0]          ITLB   -> walker
+  itlb_l2t_asid  [ASID_WIDTH-1:0]         ITLB   -> walker
+  itlb_l2t_vmid  [VMID_WIDTH-1:0]         ITLB   -> walker
+  itlb_l2t_v                              ITLB   -> walker
+  itlb_l2t_tag   [1:0]                    ITLB   -> walker
+  itlb_l2t_acc   [1:0]                    ITLB   -> walker
+  itlb_l2t_priv  [1:0]                    ITLB   -> walker
 
-  l2t_itlb_rsp_val                        L2TLB -> ITLB
-  l2t_itlb_tag   [1:0]                    L2TLB -> ITLB
-  l2t_itlb_status [1:0]                   L2TLB -> ITLB
-  l2t_itlb_ppn   [PPN_WIDTH-1:0]          L2TLB -> ITLB
-  l2t_itlb_size  [2:0]                    L2TLB -> ITLB
-  l2t_itlb_perm  [PERM_WIDTH-1:0]         L2TLB -> ITLB
-  l2t_itlb_pbmt  [1:0]                    L2TLB -> ITLB
-  l2t_itlb_cause [CAUSE_WIDTH-1:0]        L2TLB -> ITLB
-  l2t_itlb_gpa   [FAULT_GPA_WIDTH-1:0]    L2TLB -> ITLB
-  l2t_itlb_gpa_imp [1:0]                  L2TLB -> ITLB
+  l2t_itlb_rsp_val                        walker -> ITLB
+  l2t_itlb_tag   [1:0]                    walker -> ITLB
+  l2t_itlb_status [1:0]                   walker -> ITLB
+  l2t_itlb_ppn   [PPN_WIDTH-1:0]          walker -> ITLB
+  l2t_itlb_size  [2:0]                    walker -> ITLB
+  l2t_itlb_perm  [PERM_WIDTH-1:0]         walker -> ITLB
+  l2t_itlb_pbmt  [1:0]                    walker -> ITLB
+  l2t_itlb_cause [CAUSE_WIDTH-1:0]        walker -> ITLB
+  l2t_itlb_gpa   [FAULT_GPA_WIDTH-1:0]    walker -> ITLB
+  l2t_itlb_gpa_imp [1:0]                  walker -> ITLB
 ```
+
+The far end is the page table walker (section 1). This list read
+L2TLB at the far end (DOC-002, D9). Session-080.
 
 IL-1a `itlb_l2t_vpn` is VA_WIDTH - 12 = 29 bits, for the reason
       itlb_ifu_interfaces.md IT-16 gives for the IFU side: with V=1
@@ -355,4 +358,7 @@ MMU-31    The G-stage-only permission byte, IL-8.
               permission byte.
 
   2026-10-10  session-077, after BP-124. IL-3d and IL-11a built.
+
+  2026-10-15  session-080, after DOC-002. Section 2: the far end is
+              the walker.
 ```

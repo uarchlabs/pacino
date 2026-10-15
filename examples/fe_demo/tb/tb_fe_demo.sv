@@ -17,9 +17,18 @@
 // program's executed stream, so a run whose stream does not retire is
 // reported, but nothing else is checked: each run ends by evaluating
 // its scenario's proof, a condition on RTL signals that shows the
-// behaviour occurred, and prints one line,
-//   DEMO PASS <scenario>: <what the proof read> (cycles <n>)
-// or DEMO FAIL, which exits non-zero (FDT-10).
+// behaviour occurred, and prints one result line (FDT-10),
+//   -I: <scenario>: PASS, <what the proof read>, cyc <n>
+// or -E: <scenario>: FAIL, ..., which exits non-zero. Every line this
+// testbench prints is in the format of FDT-10a (say(), fe_demo_lib.svh).
+//
+// THE SIMULATOR'S OWN LINES. tb/fe_demo_finish.cpp replaces the
+// runtime's $finish message with nothing, and the Makefile passes
+// +verilator+quiet, which drops its end-of-run report, so a passing run
+// prints only lines of the FDT-10a format. On a failure $fatal(1) still
+// prints the runtime's %Fatal and %Error lines after the result line.
+// The shared models (models/) print ERROR: lines and the +TRACE lines
+// in tb_fe_top's format.
 //
 // PLUSARGS
 //   +SCEN=<name>   the scenario (fdNN_<name>, the make target names)
@@ -131,9 +140,9 @@ module tb;
     logic  ok;
     logic  ran;
     if (!$value$plusargs("SCEN=%s", scen) || !known(scen)) begin
-      $display("tb_fe_demo: +SCEN=<name> is required; scenarios:");
-      foreach (scens[i]) $display("  %s", scens[i]);
-      $fatal(1, "DEMO FAIL: no scenario");
+      say("E", "tb_fe_demo", "+SCEN=<name> is required, the scenarios:");
+      foreach (scens[i]) $display("    %s", scens[i]);
+      $fatal(1);
     end
     if ($value$plusargs("FST=%s", fst)) begin
       $dumpfile(fst);
@@ -144,20 +153,22 @@ module tb;
     ran = (ep == W.ne) && (n_err == 0) && (n_retired == W.ne);
     ok  = proof(scen, msg);
     if (!ran)
-      msg = $sformatf("the stream did not retire (%0d of %0d, %0d errors); %s",
-                      ep, W.ne, n_err, msg);
+      msg = $sformatf({"stream not retired, retired %0d of %0d, ",
+                       "stream errors %0d, %s"}, ep, W.ne, n_err, msg);
     if (ran && ok) begin
-      $display("DEMO PASS %s: %s (cycles %0d)", scen, msg, cyc_run);
+      say("I", scen, $sformatf("PASS, %s, cyc %0d", msg, cyc_run));
       $finish;
     end else begin
-      $display("DEMO FAIL %s: %s (cycles %0d)", scen, msg, cyc_run);
-      $fatal(1, "DEMO FAIL %s", scen);
+      say("E", scen, $sformatf("FAIL, %s, cyc %0d", msg, cyc_run));
+      $fatal(1);
     end
   end
 
   initial begin
     #30000000;
-    $fatal(1, "DEMO FAIL: timeout");
+    say("E", (tname == "") ? "tb_fe_demo" : tname,
+        "FAIL, timeout, the run did not end");
+    $fatal(1);
   end
 
 endmodule : tb

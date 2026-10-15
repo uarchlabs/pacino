@@ -4,7 +4,7 @@
 # Front-End Demonstration Testbench
 ```
  FILE:    README.md
- SOURCE:  DOC-001, DOC-002
+ SOURCE:  DOC-001, DOC-002, DOC-003
  STATUS:  WORKING
  UPDATED: 2026-10-15
  CONTACT: Jeff Nye
@@ -38,14 +38,28 @@ rtl/core/frontend/fe_top/tb/models/:
 The backend still compares every retired instruction with the
 program's executed stream, so a run whose stream does not retire says
 so. Each run then checks its scenario's proof from RTL signals and
-prints one line:
+prints one result line (FDT-10):
 
 ```
-  DEMO PASS fd04_p2_override: p2 redirects 38 (cycles 488)
+  -I: fd04_p2_override: PASS, p2 redirects 38, cyc 488
 ```
 
-or `DEMO FAIL ...`, which exits non-zero. The cycle count runs from the
-release of reset to the last retirement.
+or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
+is the cycle count from the release of reset to the last retirement.
+Every line the testbench prints begins with `-I:`, `-W:` or `-E:` and
+the scenario name, and is at most 80 columns; a longer message breaks
+after a comma and continues on lines indented four spaces (FDT-10a):
+
+```
+  -I: fd09_tage: PASS, tagged-provider predictions 216, allocations 65,
+      T0 by use_alt_on_na 37, cyc 1277
+```
+
+A passing run prints nothing else. The shared models print their own
+`ERROR:` lines on a stream error, and the simulator prints its `$fatal`
+lines after a FAIL. docs/demo_explainer.md explains the program
+writer, the expected stream, the backend model, the result line and
+`cyc`.
 
 Files here:
 
@@ -55,6 +69,7 @@ Files here:
   tb/fe_demo_mon.svh       the monitors the proofs read
   tb/fe_demo_lib.svh       start and end of a run, address map, helpers
   tb/fe_demo_proofs.svh    the proofs
+  tb/fe_demo_finish.cpp    the simulator's $finish without its message
   programs/fdNN_*.svh      one program per scenario; its header holds
                            its shows / program / waveform / trace /
                            proof entry (FD-0b)
@@ -67,6 +82,8 @@ Files here:
   waves/chk_sucl.py        loads each command file in Surfer and
                            compares what it shows with the save file
   waves/fe_demo.gtkwaverc  GTKWave rc file of make view: full names
+  docs/demo_explainer.md   how a scenario is built and run, and the
+                           glossary of the descriptions
   docs/fdNN_*.md           one description per scenario
   docs/fe_top_connectivity.md
                            the fe_top connectivity inventory
@@ -82,7 +99,7 @@ From examples/fe_demo:
 ```
   make fd04_p2_override     build if needed, run one scenario
   make scenarios            every scenario in FD order, stopping at
-                            the first DEMO FAIL
+                            the first FAIL
   make -k scenarios         every scenario, whatever fails
   make build                the model only (about 4 minutes)
   make clean                the model and out/
@@ -112,7 +129,9 @@ signal and SST pane widths have no Surfer equivalent.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
-options, which the Makefile passes to every scenario but FD-1.
+options, which the Makefile passes to every scenario but FD-1. The
+Makefile also passes `+verilator+quiet`, which drops the simulator's
+end-of-run report.
 
 After a change to the RTL that renames a signal, regenerate the save
 files and the Surfer command files from any run's FST, and check the
@@ -132,7 +151,8 @@ Both generators stop on a signal the FST does not have.
 
 Each scenario has a description in docs/<scenario>.md: the program,
 why it produces the behaviour, what the monitor counts, how to read the
-DEMO line and what to look at in the waveform.
+result line and what to look at in the waveform. docs/fd09_tage.md is
+in the five-section form of FDT-13; the other twenty predate it.
 
 ```
 fd01_reset_init      FD-1  Reset and SRAM initialization
@@ -238,9 +258,11 @@ pages' PPNs (0x81000 and 0x81205).
 the block that starts before it, at `pos` 15, with `is_rvc` 0; in the
 loop, 16-bit control transfers appear expanded in `pd_out.instr`.
 
-**fd18_uncached.** `ifu_l1i_req_uncached` requests one at a time, each
-after `ftq_ifu_commit_ptr` has reached its block; `xq_uc` marks the
-page; no `b_fil_valid` for the NC line installs it.
+**fd18_uncached.** Fetch from a page with PBMT NC, then from one with
+PBMT IO. `ifu_l1i_req_uncached` requests one at a time, each after
+`ftq_ifu_commit_ptr` has reached its block (`w_uc_gate`); `xq_uc` marks
+the page; no `b_fil_valid` for either page's lines installs them. The
+result line counts the requests from each page.
 
 **fd19_fencei_cbo.** `cmt_ifu_maint_val`, the IFU maintenance `r_st`,
 `ifu_l1i_inv_val` (all for FENCE.I, one line for cbo.inval), the L1I's

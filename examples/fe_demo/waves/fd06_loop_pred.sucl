@@ -49,11 +49,64 @@ item_set_format Hexadecimal
 variable_add tb.dut.bpu_pred_slot_p1.[1].pred_src
 item_set_format Unsigned
 item_unfocus
+# group loop_pred_p1_p2
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[0].lp_hit
+item_focus bf
+group_marked loop_pred_p1_p2
+item_focus bg
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[0].lp_pred_is_loop
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[0].lp_pred_taken
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[0].lp_conf
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[0].lp_past_itr
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[0].lp_curs
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[1].lp_hit
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[1].lp_pred_is_loop
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[1].lp_pred_taken
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[1].lp_conf
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[1].lp_past_itr
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p1.[1].lp_curs
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[0].lp_hit
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[0].lp_pred_is_loop
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[0].lp_pred_taken
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[0].lp_conf
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[0].lp_past_itr
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[0].lp_curs
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[1].lp_hit
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[1].lp_pred_is_loop
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[1].lp_pred_taken
+item_set_format Binary
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[1].lp_conf
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[1].lp_past_itr
+item_set_format Hexadecimal
+variable_add tb.dut.u_bpu.w_lp_pred_p2.[1].lp_curs
+item_set_format Hexadecimal
+item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus bf
+item_focus co
 group_marked bp_cluster_p2
-item_focus bg
+item_focus cp
 item_set_format Binary
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Binary
@@ -98,9 +151,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus cl
+item_focus ee
 group_marked ftq
-item_focus cm
+item_focus ef
 item_set_format Binary
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Binary
@@ -123,16 +176,16 @@ item_set_format Binary
 item_unfocus
 # group loop_pred_update
 variable_add tb.dut.u_bpu.w_lp_upd_val_p0
-item_focus dg
+item_focus ep
 group_marked loop_pred_update
-item_focus dh
+item_focus fa
 item_set_format Hexadecimal
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus di
+item_focus fb
 group_marked decode
-item_focus dj
+item_focus fc
 item_set_format Binary
 variable_add tb.pd_out.[0].valid
 item_set_format Binary

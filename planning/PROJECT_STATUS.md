@@ -16,6 +16,63 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after DOC-003: the message format and fd09_tage.md.
+
+DOC-003 COMPLETE. Every line a passing scenario prints is in the
+FDT-10 / FDT-10a format (0 bad lines over 21 logs; 126 before); the
+simulator's own lines are removed by tb/fe_demo_finish.cpp and
++verilator+quiet. cyc was already in every view; the missing signals
+are added for fd02, fd06, fd09, fd17, fd18, fd19, fd20, and
+chk_sucl.py is 21 of 21 clean. FD-18 adds an IO page: NC 28, IO 10
+requests, cyc 798; the proof fails with the IO part removed.
+docs/demo_explainer.md written, with a 44-entry glossary.
+docs/fd09_tage.md completed from the PA draft and checked against the
+FST. 21 of 21 scenarios pass. Regression: 274 targets, PASS,
+identical to DOC-002's.
+  PA ERRORS in the fd09 draft, corrected by the IA: the listing left
+    out the loop-body c.addi at 0x8000_0014, so the back edge is at
+    0x8000_0016; and section 3.1 said T0 learns not taken and TAGE
+    allocates on the taken iterations. T0 starts weakly taken, and
+    TAGE allocates on its own mispredictions: 64 of the 65 allocations
+    are for B, 33 of them on iterations where B was not taken.
+  The descriptions are not yet at a usable standard (Jeff). How the
+    other 20 are produced is under discussion; no task written.
+  The IA's proposed planning text applied: fe_demo_tb_decisions.md
+    FDT-1 (fe_demo_finish.cpp, demo_explainer.md) and FDT-10a (the
+    lines outside the format; the example as built);
+    fe_demo_scenarios.md FD-18 proof.
+  For later: the shared models in rtl/core/frontend/fe_top/tb/models/
+    print ERROR: and tb_fe_top: lines outside the demonstration's
+    format; changing them touches tb_fe_top.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+fe_demo_scenarios.md.
+
+Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#186.
+
+---
+## Session-080: DOC-003 written. Documents only.
+
+RULED (Jeff): FD-18 covers IO pages as well as NC. The description
+  check is tools/ticfinder/tools/ticfinder.py (FDT-13a).
+itlb_l2tlb_interfaces.md section 2: the far end is the walker (D9).
+fd09_tage.md redrafted by the PA in the five-section form, cyc values
+  and line numbers left for the IA. Jeff places it at
+  examples/fe_demo/docs/fd09_tage.md before DOC-003 is issued.
+DOC-003 WRITTEN, not yet issued: the message format, cyc and the
+  missing signals in every view, FD-18 with an IO page,
+  demo_explainer.md, fd09_tage.md completed. It stops for Jeff's
+  approval; the other 20 descriptions are DOC-004.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, itlb_l2tlb_interfaces.md,
+fe_demo_scenarios.md, fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#186.
+(Superseded above.)
+
+---
 ## Session-080, after DOC-002: the demonstration's viewers and docs.
 
 DOC-002 COMPLETE. make view and make sview S=<scenario>; a Surfer
@@ -61,6 +118,7 @@ checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
 fe_demo_scenarios.md, ftq_bpu_interfaces.md, fe_decisions.md.
 
 Next free: BP-138, SYS-003, DOC-003, INFRA-014, TOOLS-007, TD#186.
+(Superseded above.)
 
 ---
 ## Session-080: DOC-002 written. Documents only.

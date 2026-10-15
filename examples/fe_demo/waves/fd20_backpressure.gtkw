@@ -74,6 +74,8 @@ tb.dut.ifu_ibuf_en[15:0]
 @28
 tb.dut.ibuf_ifu_rdy
 @24
+tb.dut.u_ibuf.r_count[6:0]
+@24
 tb.dut.u_ibuf.w_n_pres[3:0]
 @24
 tb.dut.u_ibuf.w_n_pop[3:0]
