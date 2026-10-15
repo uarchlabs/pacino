@@ -81,7 +81,10 @@
 # tage_table_interfaces.md, tage_cntrl_ctr_update_rules.md,
 # bp_arb_spec.md), and the files updated in session-080 after BP-136
 # (PROJECT_STATUS.md, tage_cntrl_uaon_update_rules.md,
-# tage_cntrl_use_update_rules.md).
+# tage_cntrl_use_update_rules.md), and the files updated in session-080
+# for the showcase (PROJECT_STATUS.md, PROJECT_CORE.md,
+# fe_demo_scenarios.md (new, location SHOW), fe_trace_decisions.md
+# (new, location OBSV)).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -94,14 +97,17 @@ ARCH="planning/arch"
 INTF="planning/interfaces"
 TEST="planning/testbenches"
 VERF="planning/verification"
+SHOW="planning/showcase"
+OBSV="planning/observ"
+PDOC="planning/docs"
 MISC="misc"
 UNKN="."
 
 # One file per line: <location> <file> <md5 prefix, 12 chars>
-# <location> is one of PLAN ARCH INTF TEST VERF MISC UNKN. Blank lines and # are ignored.
+# <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   6ad2291625f2
-PLAN  PROJECT_STATUS.md                 0efc43453b66
+PLAN  PROJECT_CORE.md                   944a4a8be3e0
+PLAN  PROJECT_STATUS.md                 c971c58e6548
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -167,6 +173,9 @@ INTF  sc_table_interfaces.md            b442b10dab0f
 INTF  tage_interfaces.md                8c352e5411ea
 INTF  ubtb_interfaces.md          7f692dd5a124
 
+OBSV  fe_trace_decisions.md           5ec595a73e62
+SHOW  fe_demo_scenarios.md            93187f3a4b41
+
 MISC  ras_theory_of_operation.md      70934d94b58a
 
 EOF
@@ -178,7 +187,7 @@ while read -r loc file want; do
   total=$((total + 1))
 
   case "$loc" in
-    PLAN|ARCH|INTF|TEST|VERF|MISC|UNKN) rel="${!loc}/$file" ;;
+    PLAN|ARCH|INTF|TEST|VERF|SHOW|OBSV|PDOC|MISC|UNKN) rel="${!loc}/$file" ;;
     *) printf 'BADLOC   %s  (location "%s")\n' "$file" "$loc"
        bad=$((bad + 1)); continue ;;
   esac

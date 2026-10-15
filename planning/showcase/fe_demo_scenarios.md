@@ -1,0 +1,224 @@
+<!-- SPDX-License-Identifier: Apache-2.0                        -->
+<!-- Copyright (c) 2026 Jeff Nye, uarchlabs.com                 -->
+<!-- SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com> -->
+# Front-End Demonstration Scenarios
+```
+ FILE:    fe_demo_scenarios.md
+ SOURCE:  session-080
+ STATUS:  DRAFT
+ UPDATED: 2026-10-14
+ CONTACT: Jeff Nye
+```
+
+Owns the FD-N and FD-UN registries.
+
+The scenarios the front-end demonstration testbench runs. Each scenario
+is one program that makes one behaviour of fe_top visible in the
+waveform and the trace. The testbench is
+planning/testbenches/fe_demo_tb_decisions.md; the trace is
+planning/observ/fe_trace_decisions.md.
+
+---
+
+## 1. Common rules
+
+FD-0a  Every scenario runs on fe_top with the walker beside it,
+       NUM_PRED_SLOTS = 2, and the in-order backend of tb_fe_top.
+FD-0b  Each scenario has, in its program or its README entry:
+         shows     the behaviour, in one sentence
+         program   the code shape that produces it
+         waveform  the units whose signals make up its saved group
+         trace     the events it must produce
+         proof     the condition that shows the behaviour occurred
+FD-0c  A scenario's proof is checked at the end of its run. A run whose
+       proof fails reports it; it is a broken demonstration, not a test
+       failure.
+FD-0d  CSR state is set through csr_tb_pkg. A scenario that needs a
+       non-reset value names it.
+
+---
+
+## 2. Prediction
+
+```
+FD-1   Reset and SRAM initialization
+  shows     the full init walk of the predictor tables, ending with
+            every predictor ready
+  program   none; reset without the fast-init options
+  waveform  sram_init, TAGE, ITTAGE, SC readies, first p0 request
+  proof     every ready rises; the first prediction follows
+
+FD-2   Steady-state prediction and fetch
+  shows     one block per cycle: p0 request, uBTB answer at p1, FTQ
+            allocation, the next p0 the cycle after
+  program   straight-line code with no branches, longer than one line
+  waveform  bp_cluster p0/p1, FTQ pointers, IFU F0-F3, IBUF, decode
+  proof     consecutive allocations; 8 instructions decoded per cycle
+            once the IBUF is filled
+
+FD-3   Two branches in one block
+  shows     both prediction slots used by one block
+  program   two conditional branches within one 32-byte block, in a
+            loop
+  waveform  uBTB and FTB slot outputs, both slots
+  proof     a block predicted with both slots valid
+
+FD-4   p2 override
+  shows     the FTB disagreeing with the uBTB and the p2 redirect
+  program   a branch whose uBTB entry is stale while its FTB entry is
+            current
+  waveform  uBTB p1, FTB p2, bpu_redir_p2, FTQ rewrite
+  proof     a p2 redirect
+
+FD-5   p3 override
+  shows     SC reversing the TAGE direction and the p3 redirect
+  program   a branch TAGE predicts weakly and SC corrects
+  waveform  TAGE p2, SC p3, bpu_redir_p3
+  proof     a p3 redirect from an SC reversal
+
+FD-6   Loop predictor
+  shows     the loop predictor taking over a loop and predicting its
+            exit
+  program   a counted inner loop with a fixed trip count, run enough
+            times for the entry to become trusted
+  waveform  loop predictor entry, p1 mux, loop exit
+  proof     a loop exit predicted correctly by the loop predictor
+
+FD-7   Calls and returns
+  shows     RAS push and pop, a return predicted from the stack,
+            recursion compression, a return-call
+  program   nested calls, a recursive call, a tail return-call
+  waveform  RAS pointers and top of stack, p2 operations, commit stack
+  proof     returns predicted from the RAS; a recursion count above 1
+
+FD-8   Indirect jump
+  shows     ITTAGE predicting an indirect target
+  program   an indirect jump through a table with a repeating target
+            pattern
+  waveform  ITTAGE p2, FTB target, p2 target selection
+  proof     an indirect target predicted by an ITTAGE hit
+
+FD-9   TAGE provider, allocation and use_alt_on_na
+  shows     a tagged provider hit, an allocation after a mispredict,
+            use_alt_on_na choosing T0
+  program   a branch whose outcome depends on recent history
+  waveform  TAGE p2 provider, update path, allocation, uaon
+  proof     an allocation; a prediction by T0 through use_alt_on_na
+```
+
+---
+
+## 3. Recovery
+
+```
+FD-10  Predecode redirect
+  shows     a JAL the predictors did not report, found at F3
+  program   a JAL in code not yet seen by the uBTB or FTB
+  waveform  IFU F3, predecode writeback, FTQ redirect, IFU flush
+  proof     a predecode redirect
+
+FD-11  Backend mispredict
+  shows     the backend redirect: FTQ squash, IFU flush, history
+            rollback and correction, RAS restore
+  program   a data-dependent branch the predictors get wrong
+  waveform  backend resolution, FTQ squash, bp_history, RAS restore
+  proof     a backend redirect followed by fetch at the corrected PC
+
+FD-12  Training
+  shows     a resolution through ftq_upd_conv into the update queues,
+            the FTB update and its p0 bubble, the uBTB fill
+  program   any branch, first execution and the next
+  waveform  ftq_resolve, ftq_upd_conv, the update queues, FTB update
+  proof     an update reaches each predictor; an FTB update bubble
+```
+
+---
+
+## 4. Fetch and memory
+
+```
+FD-13  L1I hit and miss
+  shows     a 2-cycle hit returning a full line; a miss with an MSHR
+            fill; a second request merged onto the miss
+  program   a loop that fits one line, then a jump to a cold line
+            with a second block on the same line
+  waveform  L1I request and response, MSHR, fill
+  proof     a hit, a miss, a merge
+
+FD-14  Translation
+  shows     an ITLB miss and an Sv39 walk; a nested Sv39x4 walk; a
+            Svadu A-bit update by compare-and-swap
+  program   fetch at S-mode under Sv39; fetch at VS-mode under
+            two-stage translation; a leaf with A clear and ADUE set
+  waveform  ITLB, walker, walker memory port
+  proof     a walk of each kind; one compare-and-swap
+
+FD-15  Faults
+  shows     a page fault, a guest-page fault and an access fault
+            carried into ifu_pd_pkt_t
+  program   fetch from an unmapped page, a G-stage miss, a PMP-denied
+            region
+  waveform  ITLB response, IFU fault path, IBUF packet
+  proof     each cause reaches decode on its packet
+
+FD-16  Page-crossing block
+  shows     a block crossing a page, with two translations
+  program   a block that starts within 32 bytes of a page end
+  waveform  IFU translation queue, two ITLB lookups
+  proof     one block with two translations
+
+FD-17  Compressed and unaligned code
+  shows     a 34-byte block, and a 32-bit instruction straddling two
+            blocks
+  program   mixed 16- and 32-bit instructions, unaligned block starts
+  waveform  IFU expansion, predecode, IBUF slots
+  proof     a straddling instruction delivered whole
+
+FD-18  Uncached fetch
+  shows     fetch from an NC or IO page, one instruction per FTQ entry
+  program   a short sequence on a page whose PTE PBMT is NC or IO
+  waveform  IFU uncached path, L1I uncached request, commit gate
+  proof     uncached requests; no L1I allocation
+
+FD-19  FENCE.I and cbo.inval
+  shows     the drain, the invalidate and the restart
+  program   code modified then FENCE.I; a cbo.inval of a code line
+  waveform  IFU maintenance, L1I invalidate, done, restart
+  proof     the invalidate completes and fetch restarts
+```
+
+---
+
+## 5. Flow control
+
+```
+FD-20  Backpressure
+  shows     IBUF full, FTQ full and a stalled decode, and where each
+            stall starts
+  program   a long run with the backend accepting slowly
+  waveform  IBUF occupancy, FTQ pointers, p0 request ready
+  proof     each stall occurs
+
+FD-21  Commit
+  shows     the commit pointer advancing and the RAS commit stack
+  program   calls and returns retiring in order
+  waveform  FTQ commit pointer, RAS commit stack
+  proof     commits advance; the commit stack changes
+```
+
+---
+
+## 6. Open
+
+FD-U1  Which scenarios each program combines, and the order in which
+       they are presented.
+FD-U2  How FD-20 slows the in-order backend's acceptance, if the
+       backend has no such setting.
+
+---
+
+## 7. Document History
+
+```
+  2026-10-14  session-080. Created.
+```

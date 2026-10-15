@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-14
  CONTACT: Jeff Nye
 ```
 
@@ -49,7 +49,7 @@ nowhere else.
         ia_context/ia_handoffs/.
 ```
 
-Task IDs use four prefixes:
+Task IDs use six prefixes:
 
 ```
   BP-NNN     a BPU or front-end task, RTL or specification
@@ -58,6 +58,11 @@ Task IDs use four prefixes:
   TOOLS-NNN  a tools task: cachegen, the regression, build
              infrastructure (cachegen tasks since session-068,
              tools/regress.sh as TOOLS-006)
+  SYS-NNN    system-level work outside the front end: CSRs, traps
+             and interrupts, timers, counters, debug, platform
+             (since session-079)
+  DOC-NNN    demonstration and documentation: examples/, the
+             showcase, generated documentation (since session-080)
 ```
 
 A PA-direct edit -- a planning document the PA drafts and Jeff
@@ -366,7 +371,7 @@ Claude Code proposes (subject to Jeff review):
 ```
   planning/       specification and decision record. See below.
   prompts/        one file per task, BP-NNN.md / INFRA-NNN.md /
-                  TOOLS-NNN.md
+                  TOOLS-NNN.md / SYS-NNN.md / DOC-NNN.md
   templates/      TASK_TEMPLATE.md
   pa_handoffs/    session_handoff-NNN.md, PA to next PA session
   ia_context/
@@ -374,7 +379,9 @@ Claude Code proposes (subject to Jeff review):
     background/   reference translations, e.g. xs_ifu_ftq.md,
                   fe_qaa.md
   docs/           sessions.json, decomposition logs, backend
-                  stubs
+                  stubs; generated documentation
+  examples/       demonstration testbenches, outside the
+                  regression: fe_demo/
   rtl/            see Project Structure in CLAUDE.md
   tools/          tools/bin install dir, riscv-opcodes submodule
 ```
@@ -394,6 +401,12 @@ Claude Code proposes (subject to Jeff review):
                         ports; the RTL is the reference.
   planning/testbenches/ testbench decisions
   planning/verification/coverage and validation plans
+  planning/showcase/    demonstration scenarios and the plan for
+                        what they show. Not design decisions
+  planning/observ/      observability: trace events and the trace
+                        format
+  planning/docs/        planning for the generated documentation,
+                        which is written to docs/
 ```
 
 A decision goes in arch/. A port list goes in interfaces/. When
@@ -555,6 +568,13 @@ planning/
   verification/
     tage_coverage_plan.md
     sc_coverage_plan.md      not yet written
+  showcase/
+    fe_demo_scenarios.md     front-end demonstration scenarios.
+                             Owns FD-N, FD-UN
+  observ/
+    fe_trace_decisions.md    trace events, operation identity and
+                             the text format. Owns TR-N, TR-UN
+  docs/                      empty
 ```
 
 A REGISTRY RANGE IN THIS LIST IS NAVIGATIONAL. The owning

@@ -16,6 +16,36 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080: the showcase planning begun. Documents only.
+
+PA-DIRECT CORRECTION, session-080 (Jeff). A front-end showcase is
+planned: a demonstration testbench in a new top-level examples/
+directory, outside the regression, NUM_PRED_SLOTS = 2, the tb_fe_top
+in-order backend, tb_fe_top's testbench models factored out for reuse,
+FST waveforms, and a plain-text trace that follows an operation through
+the pipeline, for a later pipeline viewer. No counters in the RTL; the
+trace is emitted by the testbench. The end product is show-and-tell
+material toward a theory of operation.
+  New task series DOC-NNN. New planning directories: showcase/
+    (demonstration), observ/ (trace events and format), docs/ (planning
+    for the generated documentation, which goes in docs/).
+  planning/showcase/fe_demo_scenarios.md drafted: FD-1 to FD-21.
+  planning/observ/fe_trace_decisions.md drafted: block and instruction
+    operations with trace ids, lifecycle records, the event catalogue,
+    the text format; TR-U1 to TR-U4 open.
+  RULED (Jeff): tb_fe_top's testbench models are factored into a shared
+    directory under rtl/core/frontend/fe_top/tb/.
+  To come: planning/testbenches/fe_demo_tb_decisions.md, then DOC-001.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md (SYS-NNN and DOC-NNN
+prefixes, examples/, the three planning directories),
+fe_demo_scenarios.md (new, location SHOW), fe_trace_decisions.md (new,
+location OBSV).
+
+Next free: BP-137, SYS-003, DOC-001, INFRA-014, TOOLS-007, TD#185.
+
+---
 ## Session-080, after BP-136: TD#74 closed.
 
 BP-136 RUN, COMPLETE (Jeff). 51m. regress.sh 272 targets PASS. Every
@@ -49,7 +79,8 @@ checksum: PROJECT_STATUS.md, tage_cntrl_uaon_update_rules.md (the
 update applies only with a tagged alternate),
 tage_cntrl_use_update_rules.md (the EPC test).
 
-Next free: BP-137, SYS-003, INFRA-014, TOOLS-007, TD#185.
+Next free: BP-137, SYS-003, INFRA-014, TOOLS-007, TD#185. (Superseded
+above.)
 
 ---
 ## Session-080, after BP-135: the front-end clean-up batch recorded.
@@ -4073,6 +4104,12 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | tage_coverage_plan.md   | Complete    | --                | ADDED 2026-09-17. Had no row.     |
 |                         |             |                   | Open Items 5 records the TAGE     |
 |                         |             |                   | validation plan Complete.         |
+| fe_demo_scenarios.md    | Draft       | --                | Created session-080,              |
+|                         |             |                   | planning/showcase. FD-1 to FD-21: |
+|                         |             |                   | the front-end demonstration.      |
+| fe_trace_decisions.md   | Draft       | --                | Created session-080,              |
+|                         |             |                   | planning/observ. TR-1 to TR-10;   |
+|                         |             |                   | TR-U1 to TR-U4 open.              |
 
 THE NINE ROWS MARKED "ADDED 2026-09-17" carry a status DERIVED
 from statements already in this file, not from a fresh
