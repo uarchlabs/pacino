@@ -46,7 +46,8 @@ FD-0d  CSR state is set through csr_tb_pkg. A scenario that needs a
 FD-1   Reset and SRAM initialization
   shows     the full init walk of the predictor tables, ending with
             every predictor ready
-  program   none; reset without the fast-init options
+  program   a loop of 3000 passes over 7 instructions; reset without
+            the fast-init options
   waveform  sram_init, TAGE, ITTAGE, SC readies, first p0 request
   proof     every ready rises; the first prediction the FTQ accepts
             follows the last ready
@@ -56,26 +57,27 @@ FD-2   Steady-state prediction and fetch
             allocation, the next p0 the cycle after
   program   straight-line code with no branches, longer than one line
   waveform  bp_cluster p0/p1, FTQ pointers, IFU F0-F3, IBUF, decode
-  proof     consecutive allocations; 8 instructions decoded per cycle
-            once the IBUF is filled
+  proof     at least 4 consecutive allocations; at least 4
+            consecutive cycles of 8 instructions decoded
 
 FD-3   Two branches in one block
   shows     both prediction slots used by one block
-  program   two conditional branches within one 32-byte block, in a
-            loop
+  program   two blocks, each with two conditionals in one 32-byte
+            region, in a loop of 24
   waveform  uBTB and FTB slot outputs, both slots
   proof     a block predicted with both slots valid
 
 FD-4   p2 override
   shows     the FTB disagreeing with the uBTB and the p2 redirect
-  program   a branch whose uBTB entry is stale while its FTB entry is
-            current
+  program   eight blocks 0x800 apart chained by taken conditionals,
+            sharing one 4-way uBTB set; the FTB holds all eight
   waveform  uBTB p1, FTB p2, bpu_redir_p2, FTQ rewrite
   proof     a p2 redirect
 
 FD-5   p3 override
   shows     SC reversing the TAGE direction and the p3 redirect
-  program   a branch TAGE predicts weakly and SC corrects
+  program   two conditionals whose outcomes depend on history
+            (periods 2 and 3), 96 passes
   waveform  TAGE p2, SC p3, bpu_redir_p3
   proof     a p3 redirect from an SC reversal
 
@@ -90,21 +92,25 @@ FD-6   Loop predictor
 FD-7   Calls and returns
   shows     RAS push and pop, a return predicted from the stack,
             recursion compression, a return-call
-  program   nested calls, a recursive call, a tail return-call
+  program   nested calls, a recursive call four deep, two coroutines
+            switching by return-call
   waveform  RAS pointers and top of stack, p2 operations, commit stack
-  proof     returns predicted from the RAS; a recursion count above 1
+  proof     returns predicted from the RAS; a recursion count above
+            1; a p2 RETURN_CALL
 
 FD-8   Indirect jump
   shows     ITTAGE predicting an indirect target
-  program   an indirect jump through a table with a repeating target
-            pattern
+  program   an indirect jump and an indirect call whose targets
+            alternate, each after an alternating conditional, 40 passes
   waveform  ITTAGE p2, FTB target, p2 target selection
   proof     an indirect target predicted by an ITTAGE hit
 
 FD-9   TAGE provider, allocation and use_alt_on_na
   shows     a tagged provider hit, an allocation after a mispredict,
             use_alt_on_na choosing T0
-  program   a branch whose outcome depends on recent history
+  program   a loop around one conditional branch taken at random
+            (1 in 8, from the program writer's LFSR), with a back edge;
+            the t0_uaon program of tb_fe_top
   waveform  TAGE p2 provider, update path, allocation, uaon
   proof     an allocation; a prediction by T0 through use_alt_on_na
 ```
@@ -123,16 +129,19 @@ FD-10  Predecode redirect
 FD-11  Backend mispredict
   shows     the backend redirect: FTQ squash, IFU flush, history
             rollback and correction, RAS restore
-  program   a data-dependent branch the predictors get wrong
+  program   a conditional with a pseudo-random outcome (the program
+            writer's LFSR), then a call and its return, 32 passes
   waveform  backend resolution, FTQ squash, bp_history, RAS restore
   proof     a backend redirect followed by fetch at the corrected PC
 
 FD-12  Training
   shows     a resolution through ftq_upd_conv into the update queues,
             the FTB update and its p0 bubble, the uBTB fill
-  program   any branch, first execution and the next
+  program   nested counted loops with an always-taken conditional,
+            an indirect jump and an indirect call
   waveform  ftq_resolve, ftq_upd_conv, the update queues, FTB update
-  proof     an update reaches each predictor; an FTB update bubble
+  proof     an update reaches each predictor and the RAS commit; an
+            FTB update bubble
 ```
 
 ---
@@ -161,7 +170,8 @@ FD-14  Translation
             The change to VS-mode rides on the trap of an ecall: the
             testbench applies V=1 and the VS CSRs as it retires
   waveform  ITLB, walker, walker memory port
-  proof     a walk of each kind; one compare-and-swap
+  proof     a walk of each kind with G-stage PTE evaluations; one
+            compare-and-swap
 
 FD-15  Faults
   shows     a page fault, a guest-page fault and an access fault
@@ -236,4 +246,7 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
               FD-14 note, FD-0b trace entries; FD-U1, FD-U2 closed.
   2026-10-15  session-080, after BP-137. FD-1 met; its status line
               removed.
+  2026-10-15  session-080. FD-9 program as built (docs/fd09_tage.md).
+  2026-10-15  session-080, after DOC-002. FD-1, 3, 4, 5, 7, 8, 11, 12
+              programs and FD-2, 7, 12, 14 proofs as built.
 ```

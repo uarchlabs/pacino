@@ -338,6 +338,20 @@
   always @(posedge clk) begin : mon_main
     int   nv;
     int   a;
+    // Per-cycle sums of the counters taken per slot or per bank. Each
+    // loop adds into one of these and the counter takes the sum once:
+    // a nonblocking x <= x + 1 inside the loop reads the same x on
+    // every iteration, so two slots in one cycle would count once
+    // (DOC-002).
+    int   n_prov;
+    int   n_uaon;
+    int   n_push;
+    int   n_pop;
+    int   n_rc;
+    int   n_ubtb;
+    int   n_hit;
+    int   n_miss;
+    int   n_ucal;
     logic r2;
     logic r3;
     logic r3sc;
@@ -388,7 +402,9 @@
       // cycle to updates, trx_type); a p2 prediction whose provider is
       // a tagged table; one whose primary is tagged but whose
       // prediction is T0's, chosen by use_alt_on_na.
-      a = 0;
+      a      = 0;
+      n_prov = 0;
+      n_uaon = 0;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         tage_pred_meta_t m;
         if (dut.u_bpu.u_tage.u_tage_cntrl.trx_type &&
@@ -398,26 +414,34 @@
         m = dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2[s];
         if (dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_rdy_p2[s]) begin
           if (m.tage_using_primary && (m.tage_prm_comp != '0))
-            n_tage_prov <= n_tage_prov + 1;
+            n_prov++;
           if (!m.tage_using_primary && (m.tage_prm_comp != '0) &&
               (m.tage_alt_comp == '0))
-            n_t0_uaon <= n_t0_uaon + 1;
+            n_uaon++;
         end
       end
-      n_tage_alc <= n_tage_alc + a;
+      n_tage_alc  <= n_tage_alc + a;
+      n_tage_prov <= n_tage_prov + n_prov;
+      n_t0_uaon   <= n_t0_uaon + n_uaon;
       // FD-7. The p2 RAS operations, and the highest recursion count
       // in the speculative stack.
+      n_push = 0;
+      n_pop  = 0;
+      n_rc   = 0;
       for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
         if (dut.u_bpu.w_ras_pred_val_p2[s]) begin
           if (dut.u_bpu.w_br_type_p2[s] inside {DIRECT_CALL, INDIRECT_CALL,
                                                 RETURN_CALL})
-            n_ras_push <= n_ras_push + 1;
+            n_push++;
           if (dut.u_bpu.w_br_type_p2[s] inside {RETURN, RETURN_CALL})
-            n_ras_pop <= n_ras_pop + 1;
+            n_pop++;
           if (dut.u_bpu.w_br_type_p2[s] == RETURN_CALL)
-            n_rc_p2 <= n_rc_p2 + 1;
+            n_rc++;
         end
       end
+      n_ras_push <= n_ras_push + n_push;
+      n_ras_pop  <= n_ras_pop + n_pop;
+      n_rc_p2    <= n_rc_p2 + n_rc;
       mx = '0;
       for (int i = 0; i < RAS_SPEC_ENTRIES; i++)
         if (dut.u_bpu.u_ras.spec_rctr[i] > mx)
@@ -439,8 +463,10 @@
       if (dut.ras_restore_val)  n_ras_rest <= n_ras_rest + 1;
       // FD-12. Updates each predictor accepted (the valids after the
       // cluster's gates), and the FTB update's p0 hold (ftq_npc H3).
+      n_ubtb = 0;
       for (int s = 0; s < NUM_PRED_SLOTS; s++)
-        if (dut.u_bpu.w_ubtb_upd_u0[s].valid) n_upd_ubtb <= n_upd_ubtb + 1;
+        if (dut.u_bpu.w_ubtb_upd_u0[s].valid) n_ubtb++;
+      n_upd_ubtb <= n_upd_ubtb + n_ubtb;
       if (dut.u_bpu.w_lp_upd_val_p0 != '0)     n_upd_lp   <= n_upd_lp + 1;
       if (dut.u_bpu.w_tage_upd_val_u0 != '0)   n_upd_tage <= n_upd_tage + 1;
       if (dut.u_bpu.w_ittage_upd_val_u0 != '0) n_upd_itt  <= n_upd_itt + 1;
@@ -450,10 +476,14 @@
       if (dut.u_ftq.u_npc.h3_ftb_upd)          n_ftb_bub  <= n_ftb_bub + 1;
       // FD-13. A hit answered by a bank, a miss reported by a bank, a
       // request merged onto a register already fetching its line.
+      n_hit  = 0;
+      n_miss = 0;
       for (int b = 0; b < 2; b++) begin
-        if (dut.u_l1i.b_rsp_valid[b]) n_l1i_hit  <= n_l1i_hit + 1;
-        if (dut.u_l1i.b_mis_valid[b]) n_l1i_miss <= n_l1i_miss + 1;
+        if (dut.u_l1i.b_rsp_valid[b]) n_hit++;
+        if (dut.u_l1i.b_mis_valid[b]) n_miss++;
       end
+      n_l1i_hit  <= n_l1i_hit + n_hit;
+      n_l1i_miss <= n_l1i_miss + n_miss;
       if (dut.u_l1i.u_mshr.accept && dut.u_l1i.u_mshr.mrg_hit)
         n_l1i_merge <= n_l1i_merge + 1;
       // FD-14. Walks by kind, the G-stage evaluations, and CAS.
@@ -473,10 +503,12 @@
       if (dut.ifu_l1i_req_val && dut.ifu_l1i_req_rdy &&
           dut.ifu_l1i_req_uncached)
         n_uc_req <= n_uc_req + 1;
+      n_ucal = 0;
       for (int b = 0; b < 2; b++)
         if (dut.u_l1i.u_mshr.b_fil_valid[b] &&
             W.uc_ppn.exists(dut.u_l1i.u_mshr.b_fil_line[b][PA_WIDTH-1:12]))
-          n_uc_alloc <= n_uc_alloc + 1;
+          n_ucal++;
+      n_uc_alloc <= n_uc_alloc + n_ucal;
       // FD-19. The L1I invalidates, their done, the IFU's ack, and the
       // first fetch after the ack.
       if (dut.ifu_l1i_inv_val && dut.ifu_l1i_inv_rdy) begin

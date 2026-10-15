@@ -16,10 +16,16 @@
 #                 first DEMO FAIL. make -k scenarios runs them all
 #   build         the simulation model only
 #   clean         the model and out/
+#   view S=<scenario>
+#                 the scenario's waveform in GTKWave with its save file
+#                 waves/<scenario>.gtkw (FDT-9a, FDT-12), full names
+#   sview S=<scenario>
+#                 the same in Surfer with its command file
+#                 waves/<scenario>.sucl (FDT-9a, FDT-12a), full names
 #
-# To look at a run's waveform with its saved signal groups (FDT-12):
-#   gtkwave out/fd04_p2_override/fd04_p2_override.fst \
-#           waves/fd04_p2_override.gtkw
+# view and sview run the scenario first when its FST is missing or older
+# than the model. The viewers are GTKWAVE and SURFER (defaults gtkwave,
+# surfer); for example make sview S=fd09_tage SURFER=~/.cargo/bin/surfer.
 #
 # NOT A REGRESSION (FDT-2): tools/regress.sh scans rtl/ only, and
 # nothing here is in it.
@@ -166,7 +172,7 @@ SCENARIOS := fd01_reset_init fd02_steady fd03_two_branch \
 # init.
 plusargs = $(if $(filter fd01_reset_init,$(1)),,$(FAST_INIT))
 
-.PHONY: help build scenarios clean $(SCENARIOS)
+.PHONY: help build scenarios clean view sview $(SCENARIOS)
 
 help:
 	@echo "make <scenario>   run one scenario; out/<scenario>/ holds its"
@@ -174,6 +180,13 @@ help:
 	@echo "make scenarios    run all of them in FD order"
 	@echo "make build        build the model only"
 	@echo "make clean        remove the model and out/"
+	@echo "make view S=<scenario>"
+	@echo "                  open the scenario's waveform in GTKWave"
+	@echo "make sview S=<scenario>"
+	@echo "                  open it in Surfer"
+	@echo "                  (both run the scenario first if its FST is"
+	@echo "                  missing or older than the model; viewers"
+	@echo "                  GTKWAVE=$(GTKWAVE) SURFER=$(SURFER))"
 	@echo "scenarios:"
 	@for s in $(SCENARIOS); do echo "  $$s"; done
 
@@ -201,3 +214,44 @@ scenarios: $(SCENARIOS)
 clean:
 	@echo "[cleaning]   fe_demo"
 	$(Q)rm -rf $(OBJ) out
+
+# -- Viewers (FDT-9a) ---------------------------------------------------
+# view opens GTKWave with the save file and waves/fe_demo.gtkwaverc,
+# whose hier_max_level 0 shows every name in full. sview opens Surfer
+# with the command file, which sets every name type Global (FDT-12a).
+# Both check S, bring the model up to date, run the scenario when its
+# FST is missing or older than the model, then open the viewer. A run
+# that ends in DEMO FAIL still writes its FST, so the viewer opens on it
+# with a note.
+GTKWAVE ?= gtkwave
+SURFER  ?= surfer
+
+view_fst = out/$(S)/$(S).fst
+
+define view_prep
+	@if [ -z "$(S)" ]; then \
+	  echo "usage: make $@ S=<scenario>   (make help lists the scenarios)"; \
+	  exit 1; \
+	fi
+	@if [ "$(words $(S))" != 1 ] || [ -z "$(filter $(S),$(SCENARIOS))" ]; \
+	then \
+	  echo "$(S) is not a scenario; the scenarios are:"; \
+	  for s in $(SCENARIOS); do echo "  $$s"; done; \
+	  exit 1; \
+	fi
+	$(Q)$(MAKE) build
+	@if [ ! -f $(view_fst) ] || [ $(view_fst) -ot $(VTB) ]; then \
+	  $(MAKE) $(S) || echo "[note]       $(S) did not pass; opening its FST"; \
+	fi
+	@test -f $(view_fst) || { echo "no waveform $(view_fst)"; exit 1; }
+endef
+
+view:
+	$(view_prep)
+	@echo "[viewing]    $(S) in $(GTKWAVE)"
+	$(Q)$(GTKWAVE) -r waves/fe_demo.gtkwaverc $(view_fst) waves/$(S).gtkw
+
+sview:
+	$(view_prep)
+	@echo "[viewing]    $(S) in $(SURFER)"
+	$(Q)$(SURFER) $(view_fst) -c waves/$(S).sucl

@@ -6,7 +6,7 @@
  FILE:    fe_demo_tb_decisions.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -26,12 +26,19 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
          tb/          the testbench top and its scenario code
          programs/    one program per scenario, or per group of
                       scenarios (fe_demo_scenarios.md FD-U1)
-         waves/       one GTKWave save file per scenario
+         waves/       one GTKWave save file and one Surfer command
+                      file per scenario; fe_demo_sigs.py, the signal
+                      lists both are written from; mk_gtkw.py and
+                      mk_sucl.py, the generators; chk_sucl.py, which
+                      loads each command file in Surfer and compares
+                      it with the save file; fe_demo.gtkwaverc, the rc
+                      file of make view
+         docs/        one description per scenario, and the fe_top
+                      connectivity inventory
          README.md    the scenario list, how to run one, what to look
                       for
        tb/ holds tb_fe_demo.sv, fe_demo_mon.svh, fe_demo_lib.svh and
-       fe_demo_proofs.svh. waves/mk_gtkw.py writes the save files from
-       a run's FST.
+       fe_demo_proofs.svh.
        Run output goes to examples/fe_demo/out/<scenario>/, which is
        not committed.
 FDT-2  examples/ is not scanned by tools/regress.sh and has no
@@ -69,10 +76,28 @@ FDT-8  One make target per scenario, named by its FD number and a short
        runs the scenario and writes its waveform and log. Names are
        fdNN_<name>; output is out/<name>/<name>.fst and .log.
 FDT-9  A make target, scenarios, runs every scenario in FD order. It
-       stops at the first DEMO FAIL; make -k scenarios runs all.
+       stops at the first failing scenario; make -k scenarios runs all.
+FDT-9a make view S=<scenario> opens the scenario in GTKWave; make sview
+       S=<scenario> opens it in Surfer. <scenario> is the target name
+       of FDT-8 (fd02_steady). Each runs the scenario first when its
+       FST is missing or older than the model. A missing S prints the
+       usage and fails; an S that is not a scenario lists the valid
+       names and fails. The viewers are the variables GTKWAVE and
+       SURFER, defaults gtkwave and surfer. view shows full
+       hierarchical names (rc variable hier_max_level 0). A failing
+       run still writes its FST, and the viewer opens on it.
 FDT-10 Each run ends by checking the scenario's proof (FD-0b). It
-       prints one line, DEMO PASS or DEMO FAIL with the scenario name,
-       and exits non-zero on DEMO FAIL so make stops.
+       prints one result line and exits non-zero on a failure so make
+       stops. A pass is -I: <scenario>: PASS, then the figures; a
+       failure is -E: <scenario>: FAIL, then the figures.
+FDT-10a Every line the testbench prints is at most 80 columns. A line
+       begins with -I:, -W: or -E:, then the scenario name and a colon.
+       Items are separated by commas and named in full words; the
+       cycle count is cyc <n>. A line longer than 80 columns breaks
+       after a comma, and each continuation line is indented four
+       spaces with no prefix:
+         -I: fd09_tage: PASS, predictions 216, allocations 65,
+             T0 by use_alt_on_na 37, cyc 1277
 
 ---
 
@@ -82,20 +107,74 @@ FDT-11 Each run writes an FST waveform to its output directory.
 FDT-12 waves/<scenario>.gtkw opens it in GTKWave with the signal groups
        of the scenario's waveform entry, in pipeline order, the groups
        named by unit, the clock first.
+FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
+       the scenario's save file, in the same order and groups where
+       Surfer has groups, every name shown in full (name type Global).
+       make sview loads it with the FST. Surfer takes the save file's
+       groups and radix; the save file's pane widths have no Surfer
+       equivalent and are not set.
+FDT-12b Every save file and Surfer file shows the testbench cycle
+       counter cyc, which counts cycles from the release of reset.
 
 ---
 
-## 5. Open
+## 5. Descriptions
+
+FDT-13 docs/<scenario>.md describes one scenario. Its reader is
+       skilled in decoupled front ends and branch prediction and is
+       working out how the pacino front end works. After the header
+       block it has five sections:
+         1  What the scenario shows: the behaviour, the result line
+            the run prints, and what must happen for it to pass.
+         2  The program: the listing, every instruction written out
+            with its address and purpose, and an explanation of it.
+         3  Walkthrough: the theory of operation of each behaviour,
+            and where to see it in the waveform, by the value of cyc;
+            each point ends with the RTL file and signal that
+            implement it.
+         4  Events: a table, column 0 cyc, column 1 description,
+            column 2 other details where needed.
+         5  Notes: present only when there is something the reader
+            must act on, and it says what to do.
+FDT-13a The descriptions are written in full sentences, with no jargon
+       and no abbreviation the text has not introduced. A testbench
+       variable, task or file is named explicitly with where it is
+       defined; a design term is explained at first use or in
+       docs/demo_explainer.md. The words "lands" and "shape" are not
+       used, nor the framing "X but not Y". Each description is
+       checked with tickfinder before it is complete.
+FDT-13b docs/demo_explainer.md explains, once, how a scenario is built
+       and run: the program writer, the list of instructions the
+       testbench expects to retire, the backend model, the result
+       line and the proof, and cyc. It ends with a glossary of the
+       front-end terms the descriptions use.
+FDT-14 docs/fe_top_connectivity.md is the connectivity inventory of
+       fe_top as built: the instances, the connections between them
+       grouped by interface, the ports that cross the fe_top boundary
+       grouped as fe_decisions.md FE-17 and FE-20 group them, and one
+       level inside bp_cluster. Every entry cites file and line. The
+       front-end block diagram, docs/fe_block.svg, is drawn from it.
+
+---
+
+## 6. Open
 
 FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
-       added by a later task, DOC-002.
+       added by a later DOC task, not DOC-002 (Jeff, session-080).
 
 ---
 
-## 6. Document History
+## 7. Document History
 
 ```
   2026-10-14  session-080. Created.
   2026-10-14  session-080, after DOC-001. FDT-1, FDT-4, FDT-8, FDT-9,
               FDT-12 as built.
+  2026-10-15  session-080. FDT-1 docs/ and the Surfer files; FDT-9a
+              view and sview; FDT-12a; section 5, FDT-13 and FDT-14;
+              FDT-U1 moved past DOC-002.
+  2026-10-15  session-080, after DOC-002. FDT-1 waves/ as built;
+              FDT-9a failing runs; FDT-10 and FDT-10a, the result line
+              and message format (Jeff); FDT-12a, FDT-12b; FDT-13 the
+              five-section form, FDT-13a, FDT-13b (Jeff).
 ```

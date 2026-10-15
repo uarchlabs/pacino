@@ -1,0 +1,124 @@
+# fd03_two_branch, examples/fe_demo (DOC-002); written by waves/mk_sucl.py
+# surfer out/fd03_two_branch/fd03_two_branch.fst -c waves/fd03_two_branch.sucl
+variable_force_name_type Global
+# group clock
+variable_add tb.clk
+item_focus a
+group_marked clock
+item_focus b
+item_set_format Binary
+variable_add tb.rstn
+item_set_format Binary
+variable_add tb.cyc
+item_set_format Hexadecimal
+item_unfocus
+# group bp_cluster_p1_ubtb
+variable_add tb.dut.bpu_pred_val_p1
+item_focus e
+group_marked bp_cluster_p1_ubtb
+item_focus f
+item_set_format Binary
+variable_add tb.dut.bpu_pred_idx_p1
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.r_ubtb_blk_p1.hit
+item_set_format Binary
+variable_add tb.dut.bpu_pred_pft_p1
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_slot_p1.[0].slot_valid
+item_set_format Binary
+variable_add tb.dut.bpu_pred_slot_p1.[0].br_type
+item_set_format Unsigned
+variable_add tb.dut.bpu_pred_slot_p1.[0].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_pred_slot_p1.[0].taken
+item_set_format Binary
+variable_add tb.dut.bpu_pred_slot_p1.[0].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_slot_p1.[0].pred_src
+item_set_format Unsigned
+variable_add tb.dut.bpu_pred_slot_p1.[1].slot_valid
+item_set_format Binary
+variable_add tb.dut.bpu_pred_slot_p1.[1].br_type
+item_set_format Unsigned
+variable_add tb.dut.bpu_pred_slot_p1.[1].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_pred_slot_p1.[1].taken
+item_set_format Binary
+variable_add tb.dut.bpu_pred_slot_p1.[1].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_pred_slot_p1.[1].pred_src
+item_set_format Unsigned
+item_unfocus
+# group bp_cluster_p2_ftb
+variable_add tb.dut.u_bpu.r_val_p2
+item_focus bf
+group_marked bp_cluster_p2_ftb
+item_focus bg
+item_set_format Binary
+variable_add tb.dut.bpu_slot_val_p2
+item_set_format Binary
+variable_add tb.dut.bpu_slot_idx_p2
+item_set_format Unsigned
+variable_add tb.dut.u_bpu.w_ftb_valid_p2
+item_set_format Binary
+variable_add tb.dut.bpu_slot_p2.[0].slot_valid
+item_set_format Binary
+variable_add tb.dut.bpu_slot_p2.[0].br_type
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p2.[0].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p2.[0].taken
+item_set_format Binary
+variable_add tb.dut.bpu_slot_p2.[0].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_slot_p2.[0].pred_src
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p2.[1].slot_valid
+item_set_format Binary
+variable_add tb.dut.bpu_slot_p2.[1].br_type
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p2.[1].pos
+item_set_format Unsigned
+variable_add tb.dut.bpu_slot_p2.[1].taken
+item_set_format Binary
+variable_add tb.dut.bpu_slot_p2.[1].target
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_slot_p2.[1].pred_src
+item_set_format Unsigned
+variable_add tb.dut.bpu_redir_p2.[0].valid
+item_set_format Binary
+variable_add tb.dut.bpu_redir_p2.[0].target_pc
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_redir_p2.[1].valid
+item_set_format Binary
+variable_add tb.dut.bpu_redir_p2.[1].target_pc
+item_set_format Hexadecimal
+variable_add tb.dut.bpu_redir_idx_p2
+item_set_format Unsigned
+item_unfocus
+# group ftq
+variable_add tb.dut.u_ftq.w_ok_pred_p1
+item_focus cl
+group_marked ftq
+item_focus cm
+item_set_format Binary
+variable_add tb.dut.u_ftq.w_ok_slot_p2
+item_set_format Binary
+variable_add tb.dut.u_ftq.w_ok_slot_p3
+item_set_format Binary
+variable_add tb.dut.u_ftq.w_ok_redir_p2
+item_set_format Binary
+variable_add tb.dut.u_ftq.w_ok_redir_p3
+item_set_format Binary
+variable_add tb.dut.u_ftq.w_redir_val
+item_set_format Binary
+variable_add tb.dut.u_ftq.w_redir_idx
+item_set_format Unsigned
+variable_add tb.dut.u_ftq.w_commit_ptr
+item_set_format Unsigned
+variable_add tb.dut.ftq_full
+item_set_format Binary
+variable_add tb.dut.ftq_empty
+item_set_format Binary
+item_unfocus
+zoom_fit

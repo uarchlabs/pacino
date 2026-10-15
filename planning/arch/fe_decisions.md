@@ -5,7 +5,7 @@
  FILE:    fe_decisions.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-09
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -1416,6 +1416,11 @@ front end connection.
                            BP-123, accepted session-077).
 ```
 
+fe_top has outputs that no group above names: ftq_full and ftq_empty,
+and decode_bundle, vec_decode_bundle and pd_out. They are listed in
+examples/fe_demo/docs/fe_top_connectivity.md (DOC-002, D5 and D6).
+Which group each belongs to is open. Session-080.
+
 The backend group is two unrelated paths that happen to share a
 direction. Decode hands instructions forward. The FTQ exchanges
 control with the backend and is not in the instruction path at
@@ -1773,4 +1778,7 @@ create one.
               by CG-D1. The front-end units list no longer calls the
               L1I emitted rather than written. 15.2 and FE-17 name
               the L1I's l2-side port `mem` (FE-21), not up_i.
+
+  2026-10-15  session-080, after DOC-002. FE-17: the fe_top outputs
+              no group names.
 ```

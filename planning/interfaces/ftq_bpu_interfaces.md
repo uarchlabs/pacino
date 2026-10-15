@@ -878,17 +878,20 @@ had been stepping the FTB confidence extra times.
 
 | Predictor | Valid port        | Payload port    | Ready port      |
 |-----------|-------------------|-----------------|-----------------|
-| ubtb      | in ubtb_upd_t     | upd_u0          | none            |
+| ubtb      | in ubtb_upd_t     | ubtb_upd_u0     | none            |
 | loop_pred | upd_valid_p0      | upd_p0          | none            |
 | ftb       | ftb_upd_valid_u0  | 15 flat ports   | none            |
 | tage      | tage_upd_val_u0   | tage_upd_inp_u0 | tage_upd_rdy    |
-| ittage    | ittage_upd_val_u0 | ittage_upd_inp  | ittage_upd_rdy  |
+| ittage    | ittage_upd_val_u0 | ittage_upd_inp_u0 | ittage_upd_rdy |
 | sc        | sc_upd_val_u0     | sc_upd_inp_u0   | sc_upd_rdy      |
 | ras       | ras_commit_val    | 3 commit ports  | none            |
 
 Notes:
 - ubtb carries the valid inside `ubtb_upd_t.valid`; it has no
-  separate valid port.
+  separate valid port. The cluster port is ubtb_upd_u0; the ubtb
+  module port it drives is upd_u0. This row read upd_u0 (DOC-002, D4).
+- The ittage payload port is ittage_upd_inp_u0. This row read
+  ittage_upd_inp (DOC-002, D2).
 - loop_pred update ports carry a p0 suffix, not u0. They are
   per-slot as of BP-091, at both the module and the cluster
   boundary (`lp_upd_valid_p0`, `lp_upd_p0`).
@@ -944,16 +947,13 @@ Since BP-126 the cluster's `sc_uq_not_full` is the SC update queue's
 room with the one-cycle starvation hold, and `sc_upd_rdy` the queue's
 room (bp_arb_spec.md 4.5).
 
-tage and ittage declare `pq_not_full` and `upd_rdy` with no
-predictor prefix. The cluster boundary adds the prefix so the two
-groups are distinguishable, which is why the rows above read
-tage_upd_rdy and ittage_upd_rdy while the SC row reads
-sc_uq_not_full: sc.sv declares the prefixed names already.
-
-THESE ARE THE CURRENT NAMES, NOT THE TD#49 TARGETS. TD#49 renames
-pq_not_full to <pred>_pq_not_full and upd_rdy to
-<pred>_uq_not_full, so these two rows become tage_uq_not_full and
-ittage_uq_not_full when it is applied. Session-072.
+tage.sv and ittage.sv declare <pred>_pq_not_full and
+<pred>_uq_not_full since BP-132 applied TD#49. bp_cluster connects
+<pred>_uq_not_full to its own ports tage_upd_rdy and ittage_upd_rdy,
+which keep those names (ruled, Jeff, session-078), so the rows above
+are the cluster's names. This paragraph read that tage and ittage
+declare unprefixed pq_not_full and upd_rdy, with TD#49 not applied
+(DOC-002, D3). Session-080.
 
 RAS restore, driven on redirect from the snapshot in the entry being
 corrected:
@@ -1413,4 +1413,8 @@ match it and to match this specification.
 
   2026-10-15  session-080, after BP-137. 3: the FTQ holds its
               request on the three RAM init readies.
+
+  2026-10-15  session-080, after DOC-002. 8: ubtb_upd_u0 and
+              ittage_upd_inp_u0 in the update table; the queue status
+              names as BP-132 built them.
 ```

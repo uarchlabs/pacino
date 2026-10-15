@@ -1,0 +1,126 @@
+# fd16_page_cross, examples/fe_demo (DOC-002); written by waves/mk_sucl.py
+# surfer out/fd16_page_cross/fd16_page_cross.fst -c waves/fd16_page_cross.sucl
+variable_force_name_type Global
+# group clock
+variable_add tb.clk
+item_focus a
+group_marked clock
+item_focus b
+item_set_format Binary
+variable_add tb.rstn
+item_set_format Binary
+variable_add tb.cyc
+item_set_format Hexadecimal
+item_unfocus
+# group ftq_ifu
+variable_add tb.dut.ftq_ifu_req_val
+item_focus e
+group_marked ftq_ifu
+item_focus f
+item_set_format Binary
+variable_add tb.dut.ftq_ifu_req_rdy
+item_set_format Binary
+variable_add tb.dut.ftq_ifu_idx
+item_set_format Unsigned
+variable_add tb.dut.ftq_ifu_start_pc
+item_set_format Hexadecimal
+variable_add tb.dut.ftq_ifu_next_pc
+item_set_format Hexadecimal
+variable_add tb.dut.ftq_ifu_taken_val
+item_set_format Binary
+variable_add tb.dut.ftq_ifu_taken_pos
+item_set_format Unsigned
+variable_add tb.dut.ftq_ifu_flush_val
+item_set_format Binary
+variable_add tb.dut.ftq_ifu_flush_idx
+item_set_format Unsigned
+variable_add tb.dut.ftq_ifu_commit_ptr
+item_set_format Unsigned
+item_unfocus
+# group ifu_xlate
+variable_add tb.dut.u_ifu.u_xlate.xq_val
+item_focus p
+group_marked ifu_xlate
+item_focus ba
+item_set_format Binary
+variable_add tb.dut.u_ifu.u_xlate.xq_pop
+item_set_format Binary
+variable_add tb.dut.u_ifu.u_xlate.xq_idx
+item_set_format Unsigned
+variable_add tb.dut.u_ifu.u_xlate.xq_pc
+item_set_format Hexadecimal
+variable_add tb.dut.u_ifu.u_xlate.xq_cross
+item_set_format Binary
+variable_add tb.dut.u_ifu.u_xlate.xq_ppn0
+item_set_format Hexadecimal
+variable_add tb.dut.u_ifu.u_xlate.xq_ppn1
+item_set_format Hexadecimal
+variable_add tb.dut.u_ifu.u_xlate.xq_fault0
+item_set_format Unsigned
+variable_add tb.dut.u_ifu.u_xlate.xq_fault1
+item_set_format Unsigned
+variable_add tb.dut.u_ifu.u_xlate.xq_uc
+item_set_format Binary
+item_unfocus
+# group itlb
+variable_add tb.dut.ifu_itlb_req_val
+item_focus bk
+group_marked itlb
+item_focus bl
+item_set_format Binary
+variable_add tb.dut.ifu_itlb_req_rdy
+item_set_format Binary
+variable_add tb.dut.ifu_itlb_vpn
+item_set_format Hexadecimal
+variable_add tb.dut.itlb_ifu_rsp_val
+item_set_format Binary
+variable_add tb.dut.itlb_ifu_status
+item_set_format Unsigned
+variable_add tb.dut.itlb_ifu_ppn
+item_set_format Hexadecimal
+variable_add tb.dut.itlb_ifu_cause
+item_set_format Unsigned
+item_unfocus
+# group ifu_l1i
+variable_add tb.dut.ifu_l1i_req_val
+item_focus cc
+group_marked ifu_l1i
+item_focus cd
+item_set_format Binary
+variable_add tb.dut.ifu_l1i_req_rdy
+item_set_format Binary
+variable_add tb.dut.ifu_l1i_req_id
+item_set_format Unsigned
+variable_add tb.dut.ifu_l1i_req_paddr
+item_set_format Hexadecimal
+variable_add tb.dut.ifu_l1i_req_uncached
+item_set_format Binary
+variable_add tb.dut.l1i_ifu_rsp_val
+item_set_format Binary
+variable_add tb.dut.l1i_ifu_rsp_id
+item_set_format Unsigned
+item_unfocus
+# group decode
+variable_add tb.dec_ibuf_rdy
+item_focus ck
+group_marked decode
+item_focus cl
+item_set_format Binary
+variable_add tb.pd_out.[0].valid
+item_set_format Binary
+variable_add tb.pd_out.[0].start_pc
+item_set_format Hexadecimal
+variable_add tb.pd_out.[0].ftq_idx
+item_set_format Unsigned
+variable_add tb.pd_out.[0].pos
+item_set_format Unsigned
+variable_add tb.pd_out.[0].instr
+item_set_format Hexadecimal
+variable_add tb.pd_out.[0].is_rvc
+item_set_format Binary
+variable_add tb.pd_out.[0].fault_cause
+item_set_format Unsigned
+variable_add tb.pd_out.[0].fault_va
+item_set_format Hexadecimal
+item_unfocus
+zoom_fit

@@ -16,6 +16,78 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after DOC-002: the demonstration's viewers and docs.
+
+DOC-002 COMPLETE. make view and make sview S=<scenario>; a Surfer
+command file per scenario, generated with the save files from one
+signal list (waves/fe_demo_sigs.py) and checked in Surfer 0.7.0 by
+waves/chk_sucl.py; nine monitor counters fixed to count both slots
+(only fd05's n_tage_prov had a two-slot cycle; no result line
+changed); docs/fe_top_connectivity.md, the fe_top inventory with nine
+RTL/planning disagreements; 20 scenario descriptions, written before
+the description form was settled. 21 of 21 scenarios pass, every
+result line and cycle count as in the baseline. Regression: 274
+targets, PASS, identical to BP-137's.
+  INSTRUCTION NOT FOLLOWED: the IA ran git show HEAD:examples/fe_demo/
+    README.md once. Read-only; it reported it.
+  TD#185 OPENED (Jeff), performance: a walk started for a flushed
+    fetch holds the walker (fd14, fd15).
+  RULED (Jeff): the description form, FDT-13 to FDT-13b: five
+    sections (what it shows, the program, walkthrough by cyc, an
+    event table, notes), the reader, the writing rules, tickfinder,
+    docs/demo_explainer.md with the glossary. The result line and
+    message format, FDT-10 and FDT-10a: -I: / -E:, at most 80
+    columns, full words, wrapped after a comma with a four-space
+    indent. The 20 descriptions are redone: fd09_tage.md first, to
+    the form, for Jeff's approval, then the other 20 in one task.
+  The IA's proposed planning text applied: fe_demo_tb_decisions.md
+    FDT-1, FDT-9a, FDT-12a (and FDT-12b, cyc in every view);
+    fe_demo_scenarios.md FD-1, 2, 3, 4, 5, 7, 8, 11, 12, 14 as built;
+    ftq_bpu_interfaces.md 8 (D2, D3, D4); fe_decisions.md FE-17 (D5,
+    D6: the ungrouped outputs, group open). D7 needs no planning
+    change: FE-17 and FE-21 both say the l1i mem port leaves the top
+    without being a group; fe_top.sv's comment is stale.
+  For a later clean-up task: stale RTL comments fe_top.sv:30-32, :52-54,
+    :69, :273, bp_cluster.sv:194, ftq.sv:200 (D1, D7, D8); fe_tb_dut.svh
+    declares itlb_l2t_acc and itlb_l2t_priv after fe_top dut (.*) uses
+    them.
+  Save files lack signals the descriptions cite (fd06, fd17, fd18,
+    fd19, fd20): for the description task.
+  Open: FD-18 exercises NC only; IO is not shown. itlb_l2tlb_interfaces.md
+    section 2 (D9) waits for the file.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+fe_demo_scenarios.md, ftq_bpu_interfaces.md, fe_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-003, INFRA-014, TOOLS-007, TD#186.
+
+---
+## Session-080: DOC-002 written. Documents only.
+
+RULED (Jeff): the trace writer leaves DOC-002 for a later DOC task;
+  fe_trace_decisions.md and TR-U1 to TR-U4 wait for it.
+RULED (Jeff): make view S=<scenario> (GTKWave) and make sview
+  S=<scenario> (Surfer); Surfer shows full names (Global); the
+  scenario descriptions and the fe_top connectivity inventory go in
+  examples/fe_demo/docs/. The front-end block diagram is drawn by the
+  PA from the inventory and refined with Jeff.
+docs/fd09_tage.md, the first description, found two monitor counters
+  that count a two-slot cycle once, and FD-9's program text out of
+  date. FD-9 corrected here; the counters are DOC-002 Problem 3.
+fe_demo_tb_decisions.md: FDT-1 (docs/, Surfer files), FDT-9a, FDT-12a,
+  section 5 (FDT-13 descriptions, FDT-14 inventory), FDT-U1.
+DOC-002 WRITTEN, not yet issued: the view targets, the Surfer command
+  files, the counter fix, the inventory, the 20 descriptions.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+fe_demo_scenarios.md.
+
+Next free: BP-138, SYS-003, DOC-003, INFRA-014, TOOLS-007, TD#185.
+(Superseded above.)
+
+---
 ## Session-080, after BP-137: the init readies honoured.
 
 BP-137 COMPLETE. The FTQ holds its p0 request until tage_rdy,
@@ -46,6 +118,7 @@ sc_interfaces.md, ftq_bpu_interfaces.md, ftq_decisions.md,
 fe_demo_scenarios.md.
 
 Next free: BP-138, SYS-003, DOC-002, INFRA-014, TOOLS-007, TD#185.
+(Superseded above.)
 
 ---
 ## Session-080, after DOC-001: the demonstration built; BP-137 written.
@@ -5684,6 +5757,16 @@ numbers are issued from one sequence across both tables.
 |     |          | entry), snapshot every count (64 bits), or no recursion  |
 |     |          | compression on the speculative stack. Measure first      |
 |     |          | (Jeff, session-079).                                     |
+| 185 | itlb,    | OPEN, PERFORMANCE. A walk is started for a fetch that is |
+|     | ptw      | already being flushed and holds the walker. In the cycle |
+|     |          | the redirect of an ecall trap arrives, the ITLB starts a |
+|     |          | V=1 walk for a fetch younger than the ecall; the walk    |
+|     |          | faults, nothing delivers the fault, and the next walk    |
+|     |          | waits for it (fd14 cyc 0x5b, about 80 cycles late; fd15  |
+|     |          | cyc 0xc9). A correctness question only if the A-bit      |
+|     |          | compare-and-swap of such a walk could reach memory.      |
+|     |          | Found by DOC-002 (fd14, fd15); TD opened by Jeff,        |
+|     |          | session-080.                                             |
 
 ---
 

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# fe_demo.gtkwaverc -- the GTKWave rc file of make view (DOC-002,
+# fe_demo_tb_decisions.md FDT-9a): every signal name shown with its
+# full hierarchical path.
+hier_max_level 0

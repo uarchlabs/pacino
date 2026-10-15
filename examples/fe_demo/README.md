@@ -4,9 +4,9 @@
 # Front-End Demonstration Testbench
 ```
  FILE:    README.md
- SOURCE:  DOC-001
+ SOURCE:  DOC-001, DOC-002
  STATUS:  WORKING
- UPDATED: 2026-10-14
+ UPDATED: 2026-10-15
  CONTACT: Jeff Nye
 ```
 
@@ -59,7 +59,17 @@ Files here:
                            its shows / program / waveform / trace /
                            proof entry (FD-0b)
   waves/fdNN_*.gtkw        one GTKWave save file per scenario
+  waves/fdNN_*.sucl        one Surfer command file per scenario, the
+                           same signals and groups
+  waves/fe_demo_sigs.py    the signal lists of both
   waves/mk_gtkw.py         writes the save files from an FST
+  waves/mk_sucl.py         writes the Surfer command files from an FST
+  waves/chk_sucl.py        loads each command file in Surfer and
+                           compares what it shows with the save file
+  waves/fe_demo.gtkwaverc  GTKWave rc file of make view: full names
+  docs/fdNN_*.md           one description per scenario
+  docs/fe_top_connectivity.md
+                           the fe_top connectivity inventory
   out/<scenario>/          run output, not committed
 ```
 
@@ -76,35 +86,53 @@ From examples/fe_demo:
   make -k scenarios         every scenario, whatever fails
   make build                the model only (about 4 minutes)
   make clean                the model and out/
-  make                      the list of scenarios
+  make view S=fd04_p2_override
+                            open the run in GTKWave
+  make sview S=fd04_p2_override
+                            open the run in Surfer
+  make                      the targets and the list of scenarios
 ```
 
-A run writes out/<scenario>/<scenario>.fst and .log. To view it:
+A run writes out/<scenario>/<scenario>.fst and .log. make view and
+make sview run the scenario first when its FST is missing or older
+than the model, then open it: GTKWave with waves/<scenario>.gtkw, or
+Surfer with waves/<scenario>.sucl. Both show every signal by its full
+hierarchical name. The viewers are the variables GTKWAVE and SURFER,
+defaults gtkwave and surfer:
 
 ```
-  gtkwave out/fd04_p2_override/fd04_p2_override.fst \
-          waves/fd04_p2_override.gtkw
+  make sview S=fd09_tage SURFER=~/.cargo/bin/surfer
 ```
 
-The save file's signals are grouped by unit, in pipeline order, the
-clock group first. Plusargs, if running the model directly:
+S missing prints the usage; an S that is not a scenario lists the
+names. Either fails. The signals are grouped by unit, in pipeline
+order, the clock group first. Surfer shows the same groups and order
+as GTKWave, and the same radix (binary, hex, decimal); GTKWave's
+signal and SST pane widths have no Surfer equivalent.
+
+Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
 options, which the Makefile passes to every scenario but FD-1.
 
 After a change to the RTL that renames a signal, regenerate the save
-files from any run's FST:
+files and the Surfer command files from any run's FST, and check the
+command files in Surfer (it opens a window per scenario):
 
 ```
   python3 waves/mk_gtkw.py out/fd02_steady/fd02_steady.fst
+  python3 waves/mk_sucl.py out/fd02_steady/fd02_steady.fst
+  SURFER=~/.cargo/bin/surfer python3 waves/chk_sucl.py
 ```
 
-It stops on a signal the FST does not have.
+Both generators stop on a signal the FST does not have.
 
 ---
 
 ## 3. The scenarios and what to look for
 
-FD-1 does not pass on this design; see its entry.
+Each scenario has a description in docs/<scenario>.md: the program,
+why it produces the behaviour, what the monitor counts, how to read the
+DEMO line and what to look at in the waveform.
 
 ```
 fd01_reset_init      FD-1  Reset and SRAM initialization
@@ -132,10 +160,9 @@ fd21_commit          FD-21 Commit
 
 **fd01_reset_init.** The three sram_init state machines step through
 INIT, waddr counting, and each ready rises when its walk ends (ITTAGE
-at cycle 513, SC 1025, TAGE 2049). Compare `ftq_pred_val_p0` and
-`w_ok_pred_p1`, active from cycle 1, and `w_ittage_pred_rdy_p2`, active
-from cycle 2: prediction does not wait for the readies, which is why
-this scenario reports DEMO FAIL.
+at cycle 513, SC 1025, TAGE 2049). `ftq_pred_val_p0` stays low until
+the last of them (BP-137): the first p0 request is at cycle 2049 and
+the first `w_ok_pred_p1` at 2050.
 
 **fd02_steady.** Once the first lines are in, `w_ok_pred_p1` stays high
 cycle after cycle while `ftq_pred_idx_p0` counts up by one, and all
@@ -215,11 +242,15 @@ loop, 16-bit control transfers appear expanded in `pd_out.instr`.
 after `ftq_ifu_commit_ptr` has reached its block; `xq_uc` marks the
 page; no `b_fil_valid` for the NC line installs it.
 
-**fd19_fencei_cbo.** `cmt_ifu_maint_val`, the IFU maintenance `r_st`, the
-L1I's `mt_busy_any` (fills in flight) clearing, `ifu_l1i_inv_val`
-(all for FENCE.I,
-one line for cbo.inval), `l1i_ifu_inv_done`, `ifu_cmt_maint_ack`, then
-the backend's redirect and a fetch at the next instruction.
+**fd19_fencei_cbo.** `cmt_ifu_maint_val`, the IFU maintenance `r_st`,
+`ifu_l1i_inv_val` (all for FENCE.I, one line for cbo.inval), the L1I's
+drain (FENCE.I waits for `mt_busy_any`, every fill in flight, to clear;
+cbo.inval only for `mt_busy_line`, a fill of its own line:
+l1i_maint.sv M_DRAIN), `l1i_ifu_inv_done`, `ifu_cmt_maint_ack`, then
+the backend's redirect and a fetch at the next instruction. In this
+run neither drain waits: no fill is in flight at the FENCE.I, and the
+fills in flight at the cbo.inval are of other lines
+(docs/fd19_fencei_cbo.md).
 
 **fd20_backpressure.** `dec_ibuf_rdy` is high one cycle in four. The
 stall starts at decode (`pd_out.[0].valid` waiting), reaches the ibuf
