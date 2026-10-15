@@ -16,6 +16,39 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after DOC-001: the demonstration built; BP-137 written.
+
+DOC-001 COMPLETE. tb_fe_top's testbench models factored into
+rtl/core/frontend/fe_top/tb/models/ (six include fragments); tb_fe_top's
+output identical to the baseline, every program, both slot counts.
+examples/fe_demo built: one make target per scenario, make scenarios,
+FST and a GTKWave save file per scenario, README.md. FD-2 to FD-21 DEMO
+PASS. FD-1 DEMO FAIL, a design defect: the FTQ predicts from the first
+cycle after reset and nothing reads tage_rdy, ittage_rdy or sc_ready;
+ITTAGE and TAGE answer predictions, and TAGE accepts updates, before
+their init walks end. Regression: 272 targets, PASS, every figure and
+check count identical to the baseline.
+  RULED (Jeff): the fix is upstream. The FTQ holds its p0 request until
+    tage_rdy, ittage_rdy and sc_ready are all high. The predictors are
+    not changed.
+  The IA's proposed planning text accepted (Jeff) and applied:
+    fe_demo_scenarios.md FD-0b, FD-1 status, FD-13, FD-14, FD-U1 and
+    FD-U2 closed; fe_demo_tb_decisions.md FDT-1, FDT-4, FDT-8, FDT-9,
+    FDT-12.
+  FOR JEFF: .gitignore entries proposed by the IA, accepted:
+      examples/fe_demo/out/
+      examples/fe_demo/obj_fe_demo/
+  BP-137 WRITTEN, not yet issued: the FTQ init-ready hold, a tb_ftq_npc
+    check, a bound property, a tb_fe_top program without fast init, and
+    a rerun of FD-1.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_scenarios.md,
+fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-002, INFRA-014, TOOLS-007, TD#185.
+
+---
 ## Session-080: the showcase planning begun. Documents only.
 
 PA-DIRECT CORRECTION, session-080 (Jeff). A front-end showcase is
@@ -35,15 +68,23 @@ material toward a theory of operation.
     the text format; TR-U1 to TR-U4 open.
   RULED (Jeff): tb_fe_top's testbench models are factored into a shared
     directory under rtl/core/frontend/fe_top/tb/.
-  To come: planning/testbenches/fe_demo_tb_decisions.md, then DOC-001.
+  planning/testbenches/fe_demo_tb_decisions.md drafted: examples/fe_demo,
+    the shared models, NUM_PRED_SLOTS = 2, one make target per scenario,
+    FST with a GTKWave save file per scenario, a DEMO PASS/FAIL line.
+  The three drafts are not yet reviewed by Jeff; DOC-001 is written
+    against them and reports what is wrong.
+  DOC-001 WRITTEN, not yet issued (Jeff): the shared models, the
+    testbench and scenarios FD-1 to FD-21. DOC-002, the trace writer,
+    follows; the open trace items TR-U1 to TR-U4 wait for it.
 
 Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, PROJECT_CORE.md (SYS-NNN and DOC-NNN
 prefixes, examples/, the three planning directories),
 fe_demo_scenarios.md (new, location SHOW), fe_trace_decisions.md (new,
-location OBSV).
+location OBSV), fe_demo_tb_decisions.md (new, location TEST).
 
-Next free: BP-137, SYS-003, DOC-001, INFRA-014, TOOLS-007, TD#185.
+Next free: BP-137, SYS-003, DOC-002, INFRA-014, TOOLS-007, TD#185.
+(Superseded above.)
 
 ---
 ## Session-080, after BP-136: TD#74 closed.
@@ -4110,6 +4151,9 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 | fe_trace_decisions.md   | Draft       | --                | Created session-080,              |
 |                         |             |                   | planning/observ. TR-1 to TR-10;   |
 |                         |             |                   | TR-U1 to TR-U4 open.              |
+| fe_demo_tb_decisions.md | Draft       | --                | Created session-080,              |
+|                         |             |                   | planning/testbenches. FDT-1 to    |
+|                         |             |                   | FDT-12.                           |
 
 THE NINE ROWS MARKED "ADDED 2026-09-17" carry a status DERIVED
 from statements already in this file, not from a fresh

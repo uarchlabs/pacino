@@ -30,6 +30,8 @@ FD-0b  Each scenario has, in its program or its README entry:
          waveform  the units whose signals make up its saved group
          trace     the events it must produce
          proof     the condition that shows the behaviour occurred
+       Each program file's header carries the entry; its trace line
+       lists the events the proof counts.
 FD-0c  A scenario's proof is checked at the end of its run. A run whose
        proof fails reports it; it is a broken demonstration, not a test
        failure.
@@ -46,7 +48,12 @@ FD-1   Reset and SRAM initialization
             every predictor ready
   program   none; reset without the fast-init options
   waveform  sram_init, TAGE, ITTAGE, SC readies, first p0 request
-  proof     every ready rises; the first prediction follows
+  proof     every ready rises; the first prediction the FTQ accepts
+            follows the last ready
+  status    not met until BP-137: the FTQ predicts from the first
+            cycle after reset and nothing reads tage_rdy, ittage_rdy
+            or sc_ready; ITTAGE and TAGE answer before their walks end
+            (DOC-001)
 
 FD-2   Steady-state prediction and fetch
   shows     one block per cycle: p0 request, uBTB answer at p1, FTQ
@@ -140,8 +147,13 @@ FD-12  Training
 FD-13  L1I hit and miss
   shows     a 2-cycle hit returning a full line; a miss with an MSHR
             fill; a second request merged onto the miss
-  program   a loop that fits one line, then a jump to a cold line
-            with a second block on the same line
+  program   a loop within one line (hits); a call to the upper half
+            of a line X whose JAL returns to X, trained, then run
+            again after FENCE.I: the block at X+0x30 requests X and
+            X+1 (IFU-7) and the predicted block at X requests X while
+            that miss is in flight. A second block on the same line
+            never merges: the IFU reuses the previous request's line
+            (TD-IFU-8)
   waveform  L1I request and response, MSHR, fill
   proof     a hit, a miss, a merge
 
@@ -149,7 +161,9 @@ FD-14  Translation
   shows     an ITLB miss and an Sv39 walk; a nested Sv39x4 walk; a
             Svadu A-bit update by compare-and-swap
   program   fetch at S-mode under Sv39; fetch at VS-mode under
-            two-stage translation; a leaf with A clear and ADUE set
+            two-stage translation; a leaf with A clear and ADUE set.
+            The change to VS-mode rides on the trap of an ecall: the
+            testbench applies V=1 and the VS CSRs as it retires
   waveform  ITLB, walker, walker memory port
   proof     a walk of each kind; one compare-and-swap
 
@@ -210,10 +224,11 @@ FD-21  Commit
 
 ## 6. Open
 
-FD-U1  Which scenarios each program combines, and the order in which
-       they are presented.
-FD-U2  How FD-20 slows the in-order backend's acceptance, if the
-       backend has no such setting.
+FD-U1  CLOSED, DOC-001: one program per scenario, none combined,
+       presented in FD order.
+FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
+       one cycle in N (0 = every cycle, the reset value); FD-20 uses
+       N = 4.
 
 ---
 
@@ -221,4 +236,6 @@ FD-U2  How FD-20 slows the in-order backend's acceptance, if the
 
 ```
   2026-10-14  session-080. Created.
+  2026-10-14  session-080, after DOC-001. FD-1 status, FD-13 program,
+              FD-14 note, FD-0b trace entries; FD-U1, FD-U2 closed.
 ```

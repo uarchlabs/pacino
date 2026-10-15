@@ -561,6 +561,8 @@ planning/
     ptw_mem_interfaces.md    walker to memory, session-077.
                              Owns WM-N
   testbenches/
+    fe_demo_tb_decisions.md  the front-end demonstration testbench.
+                             Owns FDT-N, FDT-UN
     manual_tb_decisions.md
     sc_tb_decisions.md
     tage_tb_decisions.md

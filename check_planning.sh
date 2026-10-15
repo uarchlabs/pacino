@@ -84,7 +84,9 @@
 # tage_cntrl_use_update_rules.md), and the files updated in session-080
 # for the showcase (PROJECT_STATUS.md, PROJECT_CORE.md,
 # fe_demo_scenarios.md (new, location SHOW), fe_trace_decisions.md
-# (new, location OBSV)).
+# (new, location OBSV), fe_demo_tb_decisions.md (new, location TEST)).
+# Updated for the files changed in session-080 after DOC-001
+# (PROJECT_STATUS.md, fe_demo_scenarios.md, fe_demo_tb_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -106,8 +108,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   944a4a8be3e0
-PLAN  PROJECT_STATUS.md                 c971c58e6548
+PLAN  PROJECT_CORE.md                   646e5476eb50
+PLAN  PROJECT_STATUS.md                 600176c589bb
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -146,6 +148,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
+TEST  fe_demo_tb_decisions.md           5d87507370a1
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
@@ -174,7 +177,7 @@ INTF  tage_interfaces.md                8c352e5411ea
 INTF  ubtb_interfaces.md          7f692dd5a124
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
-SHOW  fe_demo_scenarios.md            93187f3a4b41
+SHOW  fe_demo_scenarios.md            8714c9bb3f4b
 
 MISC  ras_theory_of_operation.md      70934d94b58a
 

@@ -235,10 +235,15 @@ lint_fe_top:
 	$(Q)$(VERILATOR) --lint-only $(VER_FLAGS) $(COMMON) \
 	  --top-module fe_top $(TOP_SRCS) $(VSILENCE)
 
+# DOC-001: tb_fe_top includes its models from tb/models (FDT-4), the
+# directory examples/fe_demo shares.
+TB_MODELS := $(TB_DIR)/models
+
 build_fe_top:
 	@echo "[compiling]  tb_fe_top"
 	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  $(COMMON) --top-module tb --Mdir $(VER_OUT)_fe_top \
+	  +incdir+$(TB_MODELS) \
 	  $(SIM_SRCS) $(TB_PKG_SRCS) $(TB_DIR)/tb_fe_top.sv \
 	  $(VSILENCE)
 
