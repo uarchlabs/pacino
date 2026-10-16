@@ -87,6 +87,11 @@ FDT-9a make view S=<scenario> opens the scenario in GTKWave; make sview
        SURFER, defaults gtkwave and surfer. view shows full
        hierarchical names (rc variable hier_max_level 0). A failing
        run still writes its FST, and the viewer opens on it.
+       sview runs Surfer with RUST_LOG set from the variable
+       SURFER_LOG, default warn: Surfer's default level prints INFO
+       lines on every start, and warn keeps its warnings, such as a
+       .sucl command it does not understand. SURFER_LOG=info gives
+       the full output.
 FDT-10 Each run ends by checking the scenario's proof (FD-0b). It
        prints one result line and exits non-zero on a failure so make
        stops. A pass is -I: <scenario>: PASS, then the figures; a
@@ -106,6 +111,14 @@ FDT-10a Every line the testbench prints is at most 80 columns. A line
        which are outside this format. The shared models'
        (rtl/core/frontend/fe_top/tb/models/) ERROR: and +TRACE lines
        keep tb_fe_top's format.
+FDT-10b The monitor counts, from the cycle the three init readies are
+       all high: the cycles the p0 request is withheld, in total and
+       by cause as ftq_decisions.md 4.5 numbers them (H1 per
+       predictor, split into queue full and starvation hold; H2; H3;
+       H4); and the FTB updates in total, missed, and written back
+       unchanged on a hit, each by conditional and jump. Each run
+       prints them in the FDT-10a format after the result line.
+       TD#188; not yet built.
 
 ---
 
@@ -188,4 +201,8 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               five-section form, FDT-13a, FDT-13b (Jeff).
   2026-10-15  session-080, after DOC-003. FDT-1 tb/ and docs/ as
               built; FDT-10a the lines outside the format.
+  2026-10-16  session-080. FDT-10b, the p0 hold and FTB update
+              counters (TD#188), drafted.
+  2026-10-16  session-080. FDT-9a: Surfer's log level, SURFER_LOG
+              (Jeff, Makefile edited by hand).
 ```

@@ -263,10 +263,20 @@ of the alternate when the trigger is set and `uaon[s][3]` is 1 at line
 
 | cyc  | Event                                          | Other            |
 |------|------------------------------------------------|------------------|
+| 0    | reset released (`tb.rstn`); the FTQ requests   | readies already  |
+|      | 0x8000_0000 the same cycle                     | high, fast init  |
+| 2    | first TAGE response at p2: `r_val_p2` and      | unused: FTB miss |
+|      | `w_tage_pred_rdy_p2`                           |                  |
 | 19   | first allocation write, B not taken, predicted | table T1, slot 0 |
 |      | taken by T0                                    | iteration 0      |
 | 20   | first backend misprediction, back edge;        | iteration 0      |
 |      | redirect to 0x8000_0008                        |                  |
+| 23   | first FTB hit at p2, the block at 0x8000_0008: | slot 0 B, slot 1 |
+|      | TAGE's direction first used, B predicted taken | back edge        |
+|      | (`pred_src` PRED_TAGE)                         | iteration 1      |
+| 34   | that prediction wrong: B not taken; first      | iteration 1      |
+|      | backend misprediction of B; redirect to        |                  |
+|      | 0x8000_0012                                    |                  |
 | 52   | first taken B resolved, a misprediction;       | iteration 9      |
 |      | redirect to 0x8000_0014                        |                  |
 | 60   | allocation for that B                          | table T1, slot 0 |

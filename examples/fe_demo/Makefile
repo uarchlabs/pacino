@@ -232,7 +232,14 @@ clean:
 # that ends in a FAIL still writes its FST, so the viewer opens on it
 # with a note.
 GTKWAVE ?= gtkwave
-SURFER   = surfer
+SURFER  ?= surfer
+
+# Surfer's log level, through RUST_LOG. Its default prints INFO lines
+# (decoder and mapping search paths) on every start; warn keeps the
+# warnings, e.g. a command in the .sucl it does not understand. Set
+# SURFER_LOG=info for the full output.
+SURFER_LOG ?= warn
+SLOG        = RUST_LOG=$(SURFER_LOG)
 
 view_fst = out/$(S)/$(S).fst
 
@@ -262,4 +269,4 @@ view:
 sview:
 	$(view_prep)
 	@echo "[viewing]    $(S) in $(SURFER)"
-	$(Q)$(SURFER) $(view_fst) -c waves/$(S).sucl
+	$(Q)$(SLOG) $(SURFER) $(view_fst) -c waves/$(S).sucl

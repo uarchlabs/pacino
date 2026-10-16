@@ -16,6 +16,58 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080: Surfer's log level. Documents only.
+
+examples/fe_demo/Makefile edited by Jeff: make sview runs Surfer with
+RUST_LOG=$(SURFER_LOG), default warn, to drop Surfer's INFO lines and
+keep its warnings. Recorded in fe_demo_tb_decisions.md FDT-9a.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#189.
+
+---
+## Session-080: TD#187 and TD#188 opened. Documents only.
+
+TD#187 OPENED (Jeff), performance: FTB updates that change nothing
+  still cost a p0 bubble (H4). Measured on the 21 fe_demo runs with a
+  scratch counter: 4300 of 5322 FTB updates wrote back the entry
+  already stored. The skip must be decided in the FTQ before issue;
+  the FTQ lacks the conf it would need.
+TD#188 OPENED (Jeff), verification: the p0 hold and FTB write
+  counters in fe_demo_mon.svh, the measurement support for TD#186 and
+  TD#187. fe_demo_tb_decisions.md FDT-10b drafted for it.
+TD#186: the interaction with TD#187 added: H1 was 0 in all 21 runs,
+  probably because the FTB-update bubbles drain the predictor update
+  queues first; measure TD#186 with TD#187 in place, or both together.
+Drafted by the IA; the PA corrected TD#188's hold numbers to
+  ftq_decisions.md 4.5's (H3 fault, H4 FTB update) and TD#187's
+  relation to TD#186.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
+
+---
+## Session-080: TD#186 opened. Documents only.
+
+TD#186 OPENED (Jeff), performance: one p0 hold for every predictor.
+  Any predictor's not-full, the starvation holds and the FTB update
+  hold stop the request to all of them. Measure p0 hold cycles by
+  each w_hold term on compiled benchmarks before choosing. Drafted by
+  the IA; the PA corrected the hold's terms, the FTB timing, a
+  citation, and the training cost of the skip option.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md.
+
+Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#187.
+(Superseded above.)
+
+---
 ## Session-080, after DOC-003: the message format and fd09_tage.md.
 
 DOC-003 COMPLETE. Every line a passing scenario prints is in the
@@ -50,6 +102,7 @@ checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
 fe_demo_scenarios.md.
 
 Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#186.
+(Superseded above.)
 
 ---
 ## Session-080: DOC-003 written. Documents only.
@@ -5825,6 +5878,147 @@ numbers are issued from one sequence across both tables.
 |     |          | compare-and-swap of such a walk could reach memory.      |
 |     |          | Found by DOC-002 (fd14, fd15); TD opened by Jeff,        |
 |     |          | session-080.                                             |
+| 186 | bpu, ftq | OPEN, PERFORMANCE. ONE HOLD FOR ALL PREDICTORS AT p0.    |
+|     |          | The FTQ withholds the p0 request when any predictor      |
+|     |          | deasserts its not-full or an FTB update needs the FTB    |
+|     |          | read port: w_hold in ftq_npc ORs ~tage_pq_not_full,      |
+|     |          | ~ittage_pq_not_full, ~sc_uq_not_full and h3_ftb_upd with |
+|     |          | the FTQ and init terms, and bp_cluster ANDs the two PQ   |
+|     |          | not-fulls into w_req_val_p0 (bp_cluster.sv 620-621).     |
+|     |          | Every p0 predictor sees every request in the same cycle  |
+|     |          | (SC is driven from TAGE's p2 result); nothing is dropped |
+|     |          | and responses match by FTQ index (branch_id,             |
+|     |          | tage_interfaces.md; the FTQ shadow, ftq_decisions.md 4.6 |
+|     |          | and 5.6).                                                |
+|     |          |                                                          |
+|     |          | The cost: tage_arb and ittage_arb grant a prediction     |
+|     |          | ahead of an update every cycle (BP-121), so an update    |
+|     |          | gets the RAM port only in a cycle with no request. An    |
+|     |          | update that has waited the starvation threshold          |
+|     |          | (TAGE_STARVE_THRESH 8, ITTAGE_STARVE_THRESH 2) deasserts |
+|     |          | that predictor's pq_not_full for one cycle; the SC       |
+|     |          | update queue does the same through sc_uq_not_full. An    |
+|     |          | FTB update holds p0 for one cycle every time             |
+|     |          | (h3_ftb_upd, ftq_decisions.md 4.5 H4). Each such cycle   |
+|     |          | is a p0 bubble for every predictor, including blocks     |
+|     |          | that need no result from the one being updated. The      |
+|     |          | bubble rate follows the update rate, which follows the   |
+|     |          | committed branch mix. Whether pq_full itself is          |
+|     |          | reachable (TAGE through its response buffer and          |
+|     |          | consumer_ready) is not checked. The routing is not known |
+|     |          | at p0: the request is a PC, and the FTB result that says |
+|     |          | what the block holds is valid at p2 (fe_decisions.md 1); |
+|     |          | the uBTB's p1 prediction is the earliest, and weaker,    |
+|     |          | source.                                                  |
+|     |          |                                                          |
+|     |          | Options, none ruled:                                     |
+|     |          |   - keep the shared hold                                 |
+|     |          |   - per-predictor skip: only the starving predictor      |
+|     |          |     misses the request and its slot takes the FTB        |
+|     |          |     direction (the branch_id match and the fallback      |
+|     |          |     exist); the others proceed. The skipped block has no |
+|     |          |     metadata for that predictor, which the update        |
+|     |          |     requires (tage_interfaces.md), so it does not train  |
+|     |          |     that predictor                                       |
+|     |          |   - skip only for a block known not to need that         |
+|     |          |     predictor, from a destination mask carried one block |
+|     |          |     ahead in the FTB or FTQ entry; speculative, a wrong  |
+|     |          |     mask costs one hold or one fallback                  |
+|     |          |   - route on the uBTB's p1 prediction, or on the FTB     |
+|     |          |     result at p2; TAGE and ITTAGE start one or two       |
+|     |          |     stages later on every override                       |
+|     |          |   - a separate update port or banked arrays, so updates  |
+|     |          |     do not compete with predictions; area                |
+|     |          |                                                          |
+|     |          | Interaction with TD#187: H1 was 0 in all 21 fe_demo runs |
+|     |          | (session-080). Unverified reason: each resolved branch   |
+|     |          | also issues an FTB update, and its H4 bubble is a cycle  |
+|     |          | with no request in which the predictor update queues     |
+|     |          | drain before starving. Skipping unchanged FTB updates    |
+|     |          | (TD#187) removes most of those bubbles and makes H1 the  |
+|     |          | mechanism that drains the queues; measure TD#186 with    |
+|     |          | TD#187 in place, or both together.                       |
+|     |          |                                                          |
+|     |          | Measure first: p0 hold cycles by each term of w_hold,    |
+|     |          | per predictor, on compiled benchmarks. The fe_demo and   |
+|     |          | tb_fe_top programs are not representative enough to      |
+|     |          | decide it (Jeff). They show the scale: fd12_training     |
+|     |          | holds p0 for an FTB update on 154 of 449 cycles;         |
+|     |          | fd20_backpressure has 7 such cycles in 331 without a p0  |
+|     |          | request. Same harness as TD#128. Related: TD#150 (the    |
+|     |          | same coupling on the update side), TD#179. Counters:     |
+|     |          | TD#188. Opened session-080 (Jeff).                       |
+| 187 | ftq, bpu | OPEN, PERFORMANCE. FTB UPDATES THAT CHANGE NOTHING STILL |
+|     |          | COST A p0 BUBBLE. Every accepted resolution with br_type |
+|     |          | not NO_BRANCH is sent to the FTB (ftq_resolve.sv         |
+|     |          | ftb_update), including a hit that predicted correctly    |
+|     |          | (LOW, ftq_decisions.md 5.7.2). ftq_ftb_sched issues it   |
+|     |          | whenever the one-deep skid has room, and each issue      |
+|     |          | withholds one p0 request (ftq_decisions.md 4.5 H4, RTL   |
+|     |          | h3_ftb_upd, TD#162). The bubble comes from the update's  |
+|     |          | read of the carried way, so suppressing the write inside |
+|     |          | ftb_cntrl removes nothing; the skip has to be decided in |
+|     |          | the FTQ, before issue.                                   |
+|     |          |                                                          |
+|     |          | MEASURED, session-080, scratch counter on the 21 fe_demo |
+|     |          | runs (upd_new == upd_old on a hit, and upd_plru_next ==  |
+|     |          | plru_rd_plru): 4300 of 5322 FTB updates wrote back the   |
+|     |          | entry already stored, PLRU unchanged in every one; 1305  |
+|     |          | of 2322 without fd01. fd01: 3000 updates, 2995 unchanged |
+|     |          | (one allocate, three conf steps 100 -> 111, one exit),   |
+|     |          | 3000 bubbles in 6136 cycles. For a branch already stored |
+|     |          | in the entry, the write changes only its conf until it   |
+|     |          | saturates, an indirect jump's target when the resolved   |
+|     |          | target differs, or a changed block end.                  |
+|     |          |                                                          |
+|     |          | The FTQ cannot decide the skip today: ftb_pred_meta_t    |
+|     |          | carries hit, way and jmp_pos, not conf.                  |
+|     |          |                                                          |
+|     |          | Options, none ruled:                                     |
+|     |          |   - carry the predicted conf per slot (FTB_CONF_WIDTH, 3 |
+|     |          |     bits) in ftb_pred_meta_t; skip a conditional update  |
+|     |          |     that hit in place with conf saturated in the         |
+|     |          |     resolved direction and an unchanged block end        |
+|     |          |   - skip a direct jump update on a hit with the same     |
+|     |          |     position and type; an indirect jump is always        |
+|     |          |     written, or carries its stored target                |
+|     |          |   - a second FTB read port for updates; area             |
+|     |          |                                                          |
+|     |          | The hold of TD#162 is unchanged by any of these; they    |
+|     |          | issue fewer updates. The fe_demo programs are not        |
+|     |          | representative (Jeff); the fraction on compiled          |
+|     |          | benchmarks decides the value. Counters: TD#188. Related: |
+|     |          | TD#186 (the shared p0 hold; this is its H4 term, and its |
+|     |          | separate-update-port option is this one's third), TD#80  |
+|     |          | (FTB conf tuning), TD#179. Opened session-080 (Jeff).    |
+| 188 | fe_demo  | OPEN, VERIFICATION. THE p0 HOLD AND FTB WRITE COUNTERS   |
+|     |          | IN fe_demo_mon.svh. Measurement support for TD#186 and   |
+|     |          | TD#187; a session-080 scratch copy built them outside    |
+|     |          | the tree. Counted after the three init readies are high. |
+|     |          | Hold numbers are ftq_decisions.md 4.5's, which differ    |
+|     |          | from the RTL signal names:                               |
+|     |          |   - p0 held cycles, and per cause: H1 per predictor      |
+|     |          |     (TAGE and ITTAGE split pq_full vs starvation, SC     |
+|     |          |     split uq_full vs w_sc_hold), H2 FTQ full             |
+|     |          |     (h2_ftq_full), H3 fault hold (r1_fault_hold), H4 FTB |
+|     |          |     update (h3_ftb_upd), and H1 with no other cause      |
+|     |          |   - FTB updates: total, miss, written back unchanged on  |
+|     |          |     a hit (upd_new == upd_old), PLRU unchanged, each by  |
+|     |          |     conditional and jump                                 |
+|     |          | The scratch values to reproduce: H1 0 in all 21 runs;    |
+|     |          | FTB unchanged 4300 of 5322, fd01 2995 of 3000.           |
+|     |          |                                                          |
+|     |          | Constraints: printed through say() in the FDT-10a format |
+|     |          | (DOC-003), not $display; the scratch counter printed     |
+|     |          | from a final block outside the format. No blocking       |
+|     |          | assignment in a clocked block (the scratch copy          |
+|     |          | suppressed BLKSEQ). The H1 split and the FTB compare     |
+|     |          | read internals by hierarchical reference (u_tage_arb,    |
+|     |          | u_ittage_arb pq_full; u_bpu w_sc_hold,                   |
+|     |          | w_sc_uq_not_full_int; u_ftb_cntrl upd_new, upd_old,      |
+|     |          | upd_plru_next, plru_rd_plru). n_ftb_bub already counts   |
+|     |          | H4. fe_demo_tb_decisions.md FDT-10b, drafted by the PA.  |
+|     |          | Opened session-080 (Jeff).                               |
 
 ---
 

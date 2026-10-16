@@ -102,6 +102,11 @@
 # fe_demo_scenarios.md, fe_demo_tb_decisions.md).
 # Updated for the files changed in session-080 after DOC-003
 # (PROJECT_STATUS.md, fe_demo_tb_decisions.md, fe_demo_scenarios.md).
+# Updated for TD#186, session-080 (PROJECT_STATUS.md).
+# Updated for TD#187 and TD#188, session-080 (PROJECT_STATUS.md,
+# fe_demo_tb_decisions.md).
+# Updated for SURFER_LOG, session-080 (PROJECT_STATUS.md,
+# fe_demo_tb_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -124,7 +129,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   646e5476eb50
-PLAN  PROJECT_STATUS.md                 a5b65ecae383
+PLAN  PROJECT_STATUS.md                 c3c1ab154808
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -163,7 +168,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
-TEST  fe_demo_tb_decisions.md           b51f506d674b
+TEST  fe_demo_tb_decisions.md           e6297a58520f
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
