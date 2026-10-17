@@ -16,6 +16,27 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080: GTKWave dropped; DOC-004 written. Documents only.
+
+RULED (Jeff): Surfer is the one supported viewer; GTKWave is dropped.
+  Jeff removes the GTKWave files from the repository himself; the IA
+  lists them and deletes nothing.
+fe_demo_tb_decisions.md: FDT-1 waves/; FDT-9a make view opens Surfer;
+  FDT-12 Surfer only; FDT-12a name type Unique and the clk, rstn, cyc
+  and enum formats; FDT-12c event markers from the description's
+  table, with an unreadable table an error; FDT-13 item 4, the first
+  row cyc 0 and every row a marker. From the IA's recommendations,
+  with GTKWave removed.
+DOC-004 WRITTEN, not yet issued: one viewer, the names and formats,
+  the event markers, chk_sucl.py against fe_demo_sigs.py. docs/ is not
+  edited; the IA proposes text for it.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-005, INFRA-014, TOOLS-007, TD#189.
+
+---
 ## Session-080: Surfer's log level. Documents only.
 
 examples/fe_demo/Makefile edited by Jeff: make sview runs Surfer with
@@ -26,6 +47,7 @@ Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
 
 Next free: BP-138, SYS-003, DOC-004, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
 
 ---
 ## Session-080: TD#187 and TD#188 opened. Documents only.

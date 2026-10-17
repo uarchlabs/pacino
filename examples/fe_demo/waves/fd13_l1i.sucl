@@ -1,16 +1,16 @@
-# fd13_l1i, examples/fe_demo (DOC-002); written by waves/mk_sucl.py
+# fd13_l1i, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
 # surfer out/fd13_l1i/fd13_l1i.fst -c waves/fd13_l1i.sucl
-variable_force_name_type Global
+variable_force_name_type Unique
 # group clock
 variable_add tb.clk
 item_focus a
 group_marked clock
 item_focus b
-item_set_format Binary
+item_set_format Clock
 variable_add tb.rstn
-item_set_format Binary
+item_set_format Bit
 variable_add tb.cyc
-item_set_format Hexadecimal
+item_set_format Unsigned
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val

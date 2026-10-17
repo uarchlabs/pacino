@@ -6,7 +6,7 @@
  FILE:    fe_demo_tb_decisions.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-16
  CONTACT: Jeff Nye
 ```
 
@@ -26,13 +26,12 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
          tb/          the testbench top and its scenario code
          programs/    one program per scenario, or per group of
                       scenarios (fe_demo_scenarios.md FD-U1)
-         waves/       one GTKWave save file and one Surfer command
-                      file per scenario; fe_demo_sigs.py, the signal
-                      lists both are written from; mk_gtkw.py and
-                      mk_sucl.py, the generators; chk_sucl.py, which
-                      loads each command file in Surfer and compares
-                      it with the save file; fe_demo.gtkwaverc, the rc
-                      file of make view
+         waves/       one Surfer command file per scenario;
+                      fe_demo_sigs.py, the signal lists and formats
+                      they are written from; mk_sucl.py, the
+                      generator; chk_sucl.py, which loads each command
+                      file in Surfer and checks it against
+                      fe_demo_sigs.py and FDT-12a
          docs/        one description per scenario,
                       demo_explainer.md, and the fe_top connectivity
                       inventory
@@ -78,16 +77,15 @@ FDT-8  One make target per scenario, named by its FD number and a short
        fdNN_<name>; output is out/<name>/<name>.fst and .log.
 FDT-9  A make target, scenarios, runs every scenario in FD order. It
        stops at the first failing scenario; make -k scenarios runs all.
-FDT-9a make view S=<scenario> opens the scenario in GTKWave; make sview
-       S=<scenario> opens it in Surfer. <scenario> is the target name
-       of FDT-8 (fd02_steady). Each runs the scenario first when its
-       FST is missing or older than the model. A missing S prints the
-       usage and fails; an S that is not a scenario lists the valid
-       names and fails. The viewers are the variables GTKWAVE and
-       SURFER, defaults gtkwave and surfer. view shows full
-       hierarchical names (rc variable hier_max_level 0). A failing
-       run still writes its FST, and the viewer opens on it.
-       sview runs Surfer with RUST_LOG set from the variable
+FDT-9a make view S=<scenario> opens the scenario in Surfer with its
+       command file. <scenario> is the target name of FDT-8
+       (fd02_steady). It runs the scenario first when its FST is
+       missing or older than the model. A missing S prints the usage
+       and fails; an S that is not a scenario lists the valid names
+       and fails. The viewer is the variable SURFER, default surfer,
+       which the command line or the environment may override. A
+       failing run still writes its FST, and the viewer opens on it.
+       view runs Surfer with RUST_LOG set from the variable
        SURFER_LOG, default warn: Surfer's default level prints INFO
        lines on every start, and warn keeps its warnings, such as a
        .sucl command it does not understand. SURFER_LOG=info gives
@@ -125,17 +123,34 @@ FDT-10b The monitor counts, from the cycle the three init readies are
 ## 4. Waveforms
 
 FDT-11 Each run writes an FST waveform to its output directory.
-FDT-12 waves/<scenario>.gtkw opens it in GTKWave with the signal groups
-       of the scenario's waveform entry, in pipeline order, the groups
-       named by unit, the clock first.
+FDT-12 Surfer is the one supported viewer. GTKWave is not supported:
+       no save files, no rc file and no make target for it (Jeff,
+       session-080). The FST opens in any viewer that reads FST.
 FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
-       the scenario's save file, in the same order and groups where
-       Surfer has groups, every name shown in full (name type Global).
-       make sview loads it with the FST. Surfer takes the save file's
-       groups and radix; the save file's pane widths have no Surfer
-       equivalent and are not set.
-FDT-12b Every save file and Surfer file shows the testbench cycle
-       counter cyc, which counts cycles from the release of reset.
+       the scenario's waveform entry (fe_demo_scenarios.md FD-0b), in
+       pipeline order, in groups named by unit, the clock first. Names
+       are shown with name type Unique, the shortest suffix of the
+       path that identifies the signal. make view loads it with the
+       FST. Formats:
+         clk                 Clock
+         rstn                Bit
+         cyc                 Unsigned
+         an enum-typed field Enum, the value names Verilator writes
+                             into the FST
+         every other signal  the format fe_demo_sigs.py gives it:
+                             Binary, Hexadecimal or Unsigned
+FDT-12b Every Surfer file shows the testbench cycle counter cyc, which
+       counts cycles from the release of reset.
+FDT-12c A Surfer file places one marker per row of the scenario's event
+       table (FDT-13 section 4), at the cycle where cyc equals the
+       row's value, and opens with the view at the first marker. The
+       table in docs/<scenario>.md is the source: mk_sucl.py reads it,
+       a row with a cyc value starts an event and a row with an empty
+       cyc continues the one above. A marker is named c<cyc> with a
+       short label from the description. A scenario with no
+       description in the FDT-13 form has no markers. A description in
+       that form whose table mk_sucl.py cannot read stops the
+       generator with an error naming the file and row.
 
 ---
 
@@ -154,7 +169,9 @@ FDT-13 docs/<scenario>.md describes one scenario. Its reader is
             each point ends with the RTL file and signal that
             implement it.
          4  Events: a table, column 0 cyc, column 1 description,
-            column 2 other details where needed.
+            column 2 other details where needed. The first row is cyc
+            0, the release of reset. Each row is a marker in the
+            Surfer file (FDT-12c).
          5  Notes: present only when there is something the reader
             must act on, and it says what to do.
 FDT-13a The descriptions are written in full sentences, with no jargon
@@ -205,4 +222,10 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               counters (TD#188), drafted.
   2026-10-16  session-080. FDT-9a: Surfer's log level, SURFER_LOG
               (Jeff, Makefile edited by hand).
+  2026-10-16  session-080. GTKWave dropped (Jeff): FDT-1 waves/,
+              FDT-9a make view opens Surfer, FDT-12. FDT-12a name type
+              Unique and the formats; FDT-12b; FDT-12c the event
+              markers from the description's table; FDT-13 item 4.
+  2026-10-16  session-080. FDT-12c: only FDT-13-form descriptions
+              give markers; an unreadable table is an error.
 ```

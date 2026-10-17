@@ -2,71 +2,130 @@
 # Copyright (c) 2026 Jeff Nye, uarchlabs.com
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 #
-# fe_demo_sigs.py -- the signal lists of the scenario waveforms, shared
-# by mk_gtkw.py (the GTKWave save files, FDT-12) and mk_sucl.py (the
-# Surfer command files, FDT-12a), so the two viewers show the same
-# signals in the same groups (fe_demo_tb_decisions.md FDT-1). DOC-001
-# wrote the lists in mk_gtkw.py; DOC-002 moved them here unchanged.
-# Every scenario's first group, clock, holds the cycle counter tb.cyc
-# (FDT-12b). DOC-003 added the signals the descriptions cite that the
-# lists lacked: LP_PRED (fd06), F3_STRAD (fd17), FETCH_UC (fd18),
-# mt_busy_line and u_maint.r_st in MAINT (fd19), u_ibuf.r_count in
-# IBUF_OCC (fd02, fd20), and the fd09 groups TAGE_UPD, UPD_PC and
-# BE_REDIR.
+# fe_demo_sigs.py -- the signal lists of the scenario waveforms, read by
+# mk_sucl.py, which writes the Surfer command files (FDT-12a), and
+# chk_sucl.py, which checks them (fe_demo_tb_decisions.md FDT-1).
+# DOC-001 wrote the lists in mk_gtkw.py; DOC-002 moved them here
+# unchanged. Every scenario's first group, clock, holds the cycle
+# counter tb.cyc (FDT-12b). DOC-003 added the signals the descriptions
+# cite that the lists lacked: LP_PRED (fd06), F3_STRAD (fd17), FETCH_UC
+# (fd18), mt_busy_line and u_maint.r_st in MAINT (fd19), u_ibuf.r_count
+# in IBUF_OCC (fd02, fd20), and the fd09 groups TAGE_UPD, UPD_PC and
+# BE_REDIR. DOC-004 dropped GTKWave (FDT-12): fst_names no longer forms
+# GTKWave's names and gives each signal's enum type; fst_values reads
+# the value changes the event markers are placed from (FDT-12c).
 #
-# fst_names(fst) reads an FST's names; S is the scenarios and their
-# groups; radix() is the display format of one signal.
+# fst_names(fst) reads an FST's names; fst_values(fst, paths) the value
+# changes of a few signals; S is the scenarios and their groups; radix()
+# is the display format of one signal.
 import re
 import subprocess
 
 
 # ---------------------------------------------------------------------
-# The FST's names: path without range -> (GTKWave name, width, Surfer
-# name).
+# The FST's names: path without range -> (width, Surfer name, enum
+# type).
 #
-# The names are read from the FST header (fst2vcd, from the GTKWave
-# distribution). GTKWave forms them as the scope path joined by '.', a
-# struct of an array as '.[i].', and a vector's range appended; the
-# path without the range is the key used in the lists below.
+# The names are read from the FST header (fst2vcd -e, from the GTKWave
+# distribution; -e keeps the FST extensions, among them the enum
+# tables). The path is the scope path joined by '.', without the range;
+# it is the key used in the lists below.
 #
-# Surfer (wellen) forms the same path, without the range, except for an
-# element of an unpacked array: Verilator writes it as a scope named
-# after the array holding variables <array>[i], and wellen names each
-# variable [i], so GTKWave's a.a[0] is Surfer's a.[0].
+# Surfer (wellen) forms the same path, except for an element of an
+# unpacked array: Verilator writes it as a scope named after the array
+# holding variables <array>[i], and wellen names each variable [i], so
+# the path a.a[0] is Surfer's a.[0].
+#
+# The enum type is None for a signal that is not enum-typed. Verilator
+# declares each enum type once, as a table at the top of the header
+#   $attrbegin misc 07 <type> <n> <n names> <n values> <table> $end
+# and writes '$attrbegin misc 07 "" <table> $end' before the $var of
+# each signal of that type. Surfer shows such a signal's value names
+# with the format Enum (FDT-12a).
 # ---------------------------------------------------------------------
-def fst_names(fst):
-    hdr = subprocess.run(['fst2vcd', '-f', fst], capture_output=True,
+def fst_header(fst):
+    hdr = subprocess.run(['fst2vcd', '-e', '-f', fst], capture_output=True,
                          text=True, check=True).stdout
-    hdr = hdr[:hdr.index('$enddefinitions')]
+    return hdr[:hdr.index('$enddefinitions')]
+
+
+def fst_names(fst):
     names = {}
     scope = []
-    for line in hdr.split('\n'):
+    tables = {}
+    enum = None
+    for line in fst_header(fst).split('\n'):
         w = line.split()
         if not w:
             continue
-        if w[0] == '$scope':
+        if w[0] == '$attrbegin' and w[1:3] == ['misc', '07']:
+            if w[3] == '""':
+                enum = tables[w[4]]
+            else:
+                tables[w[-2]] = w[3]
+        elif w[0] == '$scope':
             scope.append(w[2])
         elif w[0] == '$upscope':
             scope.pop()
         elif w[0] == '$var':
-            width = int(w[2])
-            nm = w[4]
-            rng = w[5] if w[5] != '$end' else ''
-            if width > 1 and not rng:
-                rng = '[%d:0]' % (width - 1)
-            # GTKWave names a 1-bit signal and an int or integer without
-            # a range.
-            if width == 1 or w[1] in ('int', 'integer'):
-                rng = ''
-            base = '.'.join(scope + [nm])
-            snm = nm
+            snm = w[4]
             if scope:
-                m = re.fullmatch(re.escape(scope[-1]) + r'(\[\d+\])', nm)
+                m = re.fullmatch(re.escape(scope[-1]) + r'(\[\d+\])', snm)
                 if m:
                     snm = m.group(1)
-            names.setdefault(base, (base + rng, width,
-                                    '.'.join(scope + [snm])))
+            names.setdefault('.'.join(scope + [w[4]]),
+                             (int(w[2]), '.'.join(scope + [snm]), enum))
+            enum = None
     return names
+
+
+# ---------------------------------------------------------------------
+# The value changes of a few signals: path -> [(time, value)] in time
+# order, the value an int, None while it has an x or z bit. Read from
+# the whole dump (fst2vcd), keeping only the given paths.
+# ---------------------------------------------------------------------
+def fst_values(fst, paths):
+    want = set(paths)
+    code = {}
+    seen = set()
+    scope = []
+    vals = {p: [] for p in paths}
+    t = 0
+    with subprocess.Popen(['fst2vcd', '-f', fst], stdout=subprocess.PIPE,
+                          text=True) as proc:
+        for line in proc.stdout:
+            w = line.split()
+            if not w:
+                continue
+            if w[0] == '$scope':
+                scope.append(w[2])
+            elif w[0] == '$upscope':
+                scope.pop()
+            elif w[0] == '$var':
+                p = '.'.join(scope + [w[4]])
+                if p in want and p not in seen:
+                    seen.add(p)
+                    code.setdefault(w[3], []).append(p)
+            elif w[0] == '$enddefinitions':
+                break
+        for line in proc.stdout:
+            if line[0] == '#':
+                t = int(line[1:])
+                continue
+            if line[0] in 'bB':
+                v, c = line[1:].split()
+            elif line[0] in '01xzXZ':
+                v, c = line[0], line[1:].strip()
+            else:
+                continue
+            if c in code:
+                n = None if re.search('[xzXZ]', v) else int(v, 2)
+                for p in code[c]:
+                    vals[p].append((t, n))
+    missing = want - seen
+    if missing:
+        raise KeyError('not in the FST: ' + ', '.join(sorted(missing)))
+    return vals
 
 
 # Display format: 1 bit binary; addresses, data and targets hex; small

@@ -17,19 +17,24 @@
 #   build         the simulation model only
 #   clean         the model and out/
 #   view S=<scenario>
-#                 the scenario's waveform in GTKWave with its save file
-#                 waves/<scenario>.gtkw (FDT-9a, FDT-12), full names
-#   sview S=<scenario>
-#                 the same in Surfer with its command file
-#                 waves/<scenario>.sucl (FDT-9a, FDT-12a), full names
+#                 the scenario's waveform in Surfer with its command file
+#                 waves/<scenario>.sucl (FDT-9a, FDT-12a): the signals in
+#                 groups by unit, names of name type Unique, and the
+#                 event markers of docs/<scenario>.md (FDT-12c)
 #
-# view and sview run the scenario first when its FST is missing or older
-# than the model. The viewers are GTKWAVE and SURFER (defaults gtkwave,
-# surfer); for example make sview S=fd09_tage SURFER=~/.cargo/bin/surfer.
+# view runs the scenario first when its FST is missing or older than the
+# model. Surfer is the one supported viewer (FDT-12). The variable SURFER
+# names it, default surfer, and the command line or the environment may
+# set it; for example make view S=fd09_tage SURFER=~/.cargo/bin/surfer.
+# SURFER_LOG, default warn, is Surfer's log level; SURFER_LOG=info gives
+# its full output.
 #
 # NOT A REGRESSION (FDT-2): tools/regress.sh scans rtl/ only, and
 # nothing here is in it.
 RVA_ROOT ?= $(abspath ../..)
+# The environment's SURFER, read before rtl/Vars.mk, whose plain = would
+# replace it (see the viewer section).
+SURFER_ENV := $(SURFER)
 include $(RVA_ROOT)/rtl/Vars.mk
 
 ifeq ($(VERBOSE),1)
@@ -177,7 +182,7 @@ SCENARIOS := fd01_reset_init fd02_steady fd03_two_branch \
 # init.
 plusargs = $(if $(filter fd01_reset_init,$(1)),,$(FAST_INIT))
 
-.PHONY: help build scenarios clean view sview $(SCENARIOS)
+.PHONY: help build scenarios clean view $(SCENARIOS)
 
 help:
 	@echo "make <scenario>   run one scenario; out/<scenario>/ holds its"
@@ -186,12 +191,10 @@ help:
 	@echo "make build        build the model only"
 	@echo "make clean        remove the model and out/"
 	@echo "make view S=<scenario>"
-	@echo "                  open the scenario's waveform in GTKWave"
-	@echo "make sview S=<scenario>"
-	@echo "                  open it in Surfer"
-	@echo "                  (both run the scenario first if its FST is"
-	@echo "                  missing or older than the model; viewers"
-	@echo "                  GTKWAVE=$(GTKWAVE) SURFER=$(SURFER))"
+	@echo "                  open the scenario's waveform in Surfer"
+	@echo "                  (runs the scenario first if its FST is"
+	@echo "                  missing or older than the model;"
+	@echo "                  SURFER=$(SURFER) SURFER_LOG=$(SURFER_LOG))"
 	@echo "scenarios:"
 	@for s in $(SCENARIOS); do echo "  $$s"; done
 
@@ -223,16 +226,17 @@ clean:
 	@echo "[cleaning]   fe_demo"
 	$(Q)rm -rf $(OBJ) out
 
-# -- Viewers (FDT-9a) ---------------------------------------------------
-# view opens GTKWave with the save file and waves/fe_demo.gtkwaverc,
-# whose hier_max_level 0 shows every name in full. sview opens Surfer
-# with the command file, which sets every name type Global (FDT-12a).
-# Both check S, bring the model up to date, run the scenario when its
-# FST is missing or older than the model, then open the viewer. A run
-# that ends in a FAIL still writes its FST, so the viewer opens on it
-# with a note.
-GTKWAVE ?= gtkwave
-SURFER  ?= surfer
+# -- Viewer (FDT-9a) ----------------------------------------------------
+# view opens Surfer with the command file (FDT-12a, FDT-12c). It checks
+# S, brings the model up to date, runs the scenario when its FST is
+# missing or older than the model, then opens Surfer. A run that ends in
+# a FAIL still writes its FST, so Surfer opens on it with a note.
+# SURFER is the environment's value, or surfer (FDT-9a); a value on the
+# command line overrides both. It is set with := here because
+# rtl/Vars.mk sets SURFER=$(USER)/.cargo/bin/surfer with a plain =,
+# which would hide the environment's value, and which names a relative
+# path. ?= lets the command line or the environment set SURFER_LOG.
+SURFER := $(or $(SURFER_ENV),surfer)
 
 # Surfer's log level, through RUST_LOG. Its default prints INFO lines
 # (decoder and mapping search paths) on every start; warn keeps the
@@ -243,7 +247,7 @@ SLOG        = RUST_LOG=$(SURFER_LOG)
 
 view_fst = out/$(S)/$(S).fst
 
-define view_prep
+view:
 	@if [ -z "$(S)" ]; then \
 	  echo "usage: make $@ S=<scenario>   (make help lists the scenarios)"; \
 	  exit 1; \
@@ -259,14 +263,5 @@ define view_prep
 	  $(MAKE) $(S) || echo "[note]       $(S) did not pass; opening its FST"; \
 	fi
 	@test -f $(view_fst) || { echo "no waveform $(view_fst)"; exit 1; }
-endef
-
-view:
-	$(view_prep)
-	@echo "[viewing]    $(S) in $(GTKWAVE)"
-	$(Q)$(GTKWAVE) -r waves/fe_demo.gtkwaverc $(view_fst) waves/$(S).gtkw
-
-sview:
-	$(view_prep)
 	@echo "[viewing]    $(S) in $(SURFER)"
 	$(Q)$(SLOG) $(SURFER) $(view_fst) -c waves/$(S).sucl

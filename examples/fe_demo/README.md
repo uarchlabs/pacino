@@ -73,15 +73,14 @@ Files here:
   programs/fdNN_*.svh      one program per scenario; its header holds
                            its shows / program / waveform / trace /
                            proof entry (FD-0b)
-  waves/fdNN_*.gtkw        one GTKWave save file per scenario
-  waves/fdNN_*.sucl        one Surfer command file per scenario, the
-                           same signals and groups
-  waves/fe_demo_sigs.py    the signal lists of both
-  waves/mk_gtkw.py         writes the save files from an FST
-  waves/mk_sucl.py         writes the Surfer command files from an FST
-  waves/chk_sucl.py        loads each command file in Surfer and
-                           compares what it shows with the save file
-  waves/fe_demo.gtkwaverc  GTKWave rc file of make view: full names
+  waves/fdNN_*.sucl        one Surfer command file per scenario
+  waves/fe_demo_sigs.py    the signal lists and formats of the command
+                           files, and the FST reader
+  waves/mk_sucl.py         writes the command files from the FSTs and
+                           the descriptions' event tables
+  waves/chk_sucl.py        loads each command file in Surfer and checks
+                           what it shows against fe_demo_sigs.py, FDT-12a
+                           and FDT-12c
   docs/demo_explainer.md   how a scenario is built and run, and the
                            glossary of the descriptions
   docs/fdNN_*.md           one description per scenario
@@ -104,28 +103,43 @@ From examples/fe_demo:
   make build                the model only (about 4 minutes)
   make clean                the model and out/
   make view S=fd04_p2_override
-                            open the run in GTKWave
-  make sview S=fd04_p2_override
                             open the run in Surfer
   make                      the targets and the list of scenarios
 ```
 
-A run writes out/<scenario>/<scenario>.fst and .log. make view and
-make sview run the scenario first when its FST is missing or older
-than the model, then open it: GTKWave with waves/<scenario>.gtkw, or
-Surfer with waves/<scenario>.sucl. Both show every signal by its full
-hierarchical name. The viewers are the variables GTKWAVE and SURFER,
-defaults gtkwave and surfer:
+A run writes out/<scenario>/<scenario>.fst and .log. make view runs
+the scenario first when its FST is missing or older than the model,
+then opens it in Surfer with waves/<scenario>.sucl. Surfer is the one
+supported viewer (FDT-12); the FST opens in any viewer that reads FST,
+without the command file. A run that fails still writes its FST, and
+make view opens it with a note. S missing prints the usage; an S that
+is not a scenario lists the names. Either fails.
+
+The viewer is the variable SURFER, default surfer, set on the command
+line or in the environment. SURFER_LOG, default warn, sets Surfer's
+log level (RUST_LOG): warn hides the INFO lines Surfer prints on every
+start and keeps its warnings and errors, such as a command in the
+.sucl it does not understand; SURFER_LOG=info gives the full output.
 
 ```
-  make sview S=fd09_tage SURFER=~/.cargo/bin/surfer
+  make view S=fd09_tage SURFER=~/.cargo/bin/surfer
+  SURFER=~/.cargo/bin/surfer make view S=fd09_tage
+  make view S=fd09_tage SURFER_LOG=info
 ```
 
-S missing prints the usage; an S that is not a scenario lists the
-names. Either fails. The signals are grouped by unit, in pipeline
-order, the clock group first. Surfer shows the same groups and order
-as GTKWave, and the same radix (binary, hex, decimal); GTKWave's
-signal and SST pane widths have no Surfer equivalent.
+The command file (FDT-12a) shows the signals grouped by unit, in
+pipeline order, the clock group first, with tb.cyc, the cycle count
+from the release of reset (FDT-12b). Names have Surfer's name type
+Unique: the shortest suffix of the path that tells the signal apart
+from the others shown. tb.clk is shown as a clock, tb.rstn as a bit,
+tb.cyc in decimal, an enum-typed signal by the value names Verilator
+writes into the FST (Surfer's Enum format), and every other signal in
+binary, hex or decimal as fe_demo_sigs.radix gives it.
+
+A scenario whose description is in the five-section form (FDT-13)
+also has one marker per event of its event table (a row with a cyc
+value), named c<cyc>_<label>, and opens with the view at the first marker (FDT-12c). Today that is
+fd09_tage. The other scenarios open on the whole run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
@@ -133,12 +147,14 @@ options, which the Makefile passes to every scenario but FD-1. The
 Makefile also passes `+verilator+quiet`, which drops the simulator's
 end-of-run report.
 
-After a change to the RTL that renames a signal, regenerate the save
-files and the Surfer command files from any run's FST, and check the
-command files in Surfer (it opens a window per scenario):
+After a change to the RTL that renames a signal, or to a
+description's event table, run the scenarios, regenerate the Surfer
+command files, and check them in Surfer (it opens a window per
+scenario). The FST given names the signals; the markers come from each
+scenario's own FST:
 
 ```
-  python3 waves/mk_gtkw.py out/fd02_steady/fd02_steady.fst
+  make -k scenarios
   python3 waves/mk_sucl.py out/fd02_steady/fd02_steady.fst
   SURFER=~/.cargo/bin/surfer python3 waves/chk_sucl.py
 ```

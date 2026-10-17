@@ -1,16 +1,16 @@
-# fd20_backpressure, examples/fe_demo (DOC-002); written by waves/mk_sucl.py
+# fd20_backpressure, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
 # surfer out/fd20_backpressure/fd20_backpressure.fst -c waves/fd20_backpressure.sucl
-variable_force_name_type Global
+variable_force_name_type Unique
 # group clock
 variable_add tb.clk
 item_focus a
 group_marked clock
 item_focus b
-item_set_format Binary
+item_set_format Clock
 variable_add tb.rstn
-item_set_format Binary
+item_set_format Bit
 variable_add tb.cyc
-item_set_format Hexadecimal
+item_set_format Unsigned
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
@@ -101,7 +101,7 @@ item_set_format Hexadecimal
 variable_add tb.pd_out.[0].is_rvc
 item_set_format Binary
 variable_add tb.pd_out.[0].fault_cause
-item_set_format Unsigned
+item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
 item_unfocus
