@@ -16,12 +16,41 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080, after DOC-005: SURFER from Vars.mk; docs/ free of GTKWave.
+
+DOC-005 COMPLETE. The Makefile's SURFER workaround is gone; make help
+shows the rtl/Vars.mk default, and an environment or command-line
+SURFER runs (stub). DOC-004's docs/ text applied: 27 replacements in
+22 files, every passage found as quoted. docs/, README and Makefile no
+longer name gtkw, sview, uaon.uaon or GTKWave. 21 of 21 scenarios pass
+with result lines identical to DOC-004's; the 21 command files
+regenerate byte-identical; chk_sucl.py 21 of 21 clean. No rtl/ file
+written, so no regression run. No git command run.
+  Follow-ons by Jeff in session: waves/chk_sucl.py defaults SURFER to
+    ~/.cargo/bin/surfer, and a missing or non-executable viewer ends
+    in one line and exit 1 instead of a traceback.
+  The viewer default is now written twice, rtl/Vars.mk and
+    chk_sucl.py; a change to one must be made to the other.
+  ticfinder: one TRICOLON in demo_explainer.md section 7 (DOC-004's
+    text); left for Jeff's hand edit.
+  DOC-004's proposed FDT-9a sentence (Vars.mk's plain =) is obsolete
+    and not applied.
+  Still open from DOC-004: mk_sucl.py silent when a description has
+    an event table outside the FDT-13 form; fd09_tage.md gives the end
+    of run as cyc 1277 while the FST runs to cyc 1377.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md.
+
+Next free: BP-138, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+
+---
 ## Session-080: Vars.mk fixed; DOC-005 written. Documents only.
 
 Jeff fixed rtl/Vars.mk: SURFER ?= $(HOME)/.cargo/bin/surfer. Jeff
 removed the 24 GTKWave files of DOC-004. FDT-9a: SURFER's default is
 rtl/Vars.mk's, and the Makefile does not set it.
-DOC-005 WRITTEN, not yet issued: remove the Makefile's SURFER
+DOC-005 WRITTEN (complete, above): remove the Makefile's SURFER
 workaround, which now replaces the Vars.mk default with plain surfer;
 apply DOC-004's replacement text to docs/ (20 descriptions,
 demo_explainer.md, fd09_tage.md) and nothing else there.
@@ -30,6 +59,7 @@ Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
 
 Next free: BP-138, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
 
 ---
 ## Session-080, after DOC-004: Surfer the one viewer.
@@ -84,7 +114,7 @@ fe_demo_tb_decisions.md: FDT-1 waves/; FDT-9a make view opens Surfer;
   table, with an unreadable table an error; FDT-13 item 4, the first
   row cyc 0 and every row a marker. From the IA's recommendations,
   with GTKWave removed.
-DOC-004 WRITTEN, not yet issued: one viewer, the names and formats,
+DOC-004 WRITTEN (complete, above): one viewer, the names and formats,
   the event markers, chk_sucl.py against fe_demo_sigs.py. docs/ is not
   edited; the IA proposes text for it.
 
@@ -193,7 +223,7 @@ itlb_l2tlb_interfaces.md section 2: the far end is the walker (D9).
 fd09_tage.md redrafted by the PA in the five-section form, cyc values
   and line numbers left for the IA. Jeff places it at
   examples/fe_demo/docs/fd09_tage.md before DOC-003 is issued.
-DOC-003 WRITTEN, not yet issued: the message format, cyc and the
+DOC-003 WRITTEN (complete, above): the message format, cyc and the
   missing signals in every view, FD-18 with an IO page,
   demo_explainer.md, fd09_tage.md completed. It stops for Jeff's
   approval; the other 20 descriptions are DOC-004.
@@ -268,7 +298,7 @@ docs/fd09_tage.md, the first description, found two monitor counters
   date. FD-9 corrected here; the counters are DOC-002 Problem 3.
 fe_demo_tb_decisions.md: FDT-1 (docs/, Surfer files), FDT-9a, FDT-12a,
   section 5 (FDT-13 descriptions, FDT-14 inventory), FDT-U1.
-DOC-002 WRITTEN, not yet issued: the view targets, the Surfer command
+DOC-002 WRITTEN (complete, above): the view targets, the Surfer command
   files, the counter fix, the inventory, the 20 descriptions.
 
 Documents changed, every one in check_planning.sh with its new
@@ -370,7 +400,7 @@ material toward a theory of operation.
     FST with a GTKWave save file per scenario, a DEMO PASS/FAIL line.
   The three drafts are not yet reviewed by Jeff; DOC-001 is written
     against them and reports what is wrong.
-  DOC-001 WRITTEN, not yet issued (Jeff): the shared models, the
+  DOC-001 WRITTEN (Jeff; complete, above): the shared models, the
     testbench and scenarios FD-1 to FD-21. DOC-002, the trace writer,
     follows; the open trace items TR-U1 to TR-U4 wait for it.
 
@@ -457,7 +487,7 @@ PA ERROR, mine: Problem 7 of BP-135 was report-only, so the TD#74 gaps
 it found could not be closed in the run. BP-136 says fix what you
 find.
 
-BP-136 WRITTEN, not yet issued: slot-1 TAGE and ITTAGE update checks
+BP-136 WRITTEN (complete, above): slot-1 TAGE and ITTAGE update checks
 (TD#74), the tb_tage_manual labels and its unused tage_check_pred_meta,
 two tb_tage failure messages, the bp_cluster.sv sc_ready comment.
 
@@ -506,7 +536,7 @@ the ADUE rule was in. Neither was checked against ptw.sv or tb_ptw.
 Noted, no TD opened: the csr_pkg.sv henvcfg_t comment names only the
 ADUE read rule.
 
-BP-135 WRITTEN (Jeff: all seven items), not yet issued: sim_tage_manual's
+BP-135 WRITTEN (Jeff: all seven items; complete, above): sim_tage_manual's
 count, the TAGE rows 19.x seeding, a tb_fe_top program for T0 as the
 use_alt_on_na provider, the ubtb.sv body comment, Open Item 13, the
 ittage_table_interfaces.md write-enable note, and TD#74.
