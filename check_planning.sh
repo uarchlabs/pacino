@@ -114,6 +114,8 @@
 # Updated when DOC-005 was written, session-080 (PROJECT_STATUS.md,
 # fe_demo_tb_decisions.md).
 # Updated after DOC-005, session-080 (PROJECT_STATUS.md).
+# Updated for the record corrections, session-081
+# (PROJECT_STATUS.md, PROJECT_CORE.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -135,8 +137,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   646e5476eb50
-PLAN  PROJECT_STATUS.md                 e9cf024bdd1c
+PLAN  PROJECT_CORE.md                   d1f9e222d77f
+PLAN  PROJECT_STATUS.md                 7c928ad47653
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 

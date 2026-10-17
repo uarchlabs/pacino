@@ -371,7 +371,8 @@ Claude Code proposes (subject to Jeff review):
 ```
   planning/       specification and decision record. See below.
   prompts/        one file per task, BP-NNN.md / INFRA-NNN.md /
-                  TOOLS-NNN.md / SYS-NNN.md / DOC-NNN.md
+                  COMP-NNN.md / TOOLS-NNN.md / SYS-NNN.md /
+                  DOC-NNN.md
   templates/      TASK_TEMPLATE.md
   pa_handoffs/    session_handoff-NNN.md, PA to next PA session
   ia_context/
@@ -465,7 +466,7 @@ have gone stale in any case.
 ### Current inventory
 Navigational only. PROJECT_STATUS.md Module Status is the
 authoritative list and carries each document's status.
-Regenerated from disk 2026-09-17.
+Checked against disk 2026-10-17.
 
 ```
 planning/
@@ -500,6 +501,9 @@ planning/
                              miss handling, maintenance,
                              prefetch. Owns L1I-N, TD-L1I-N,
                              L1I-UN
+    csr_decisions.md         the CSR packages, the custom CSRs
+                             and the implemented standard CSR
+                             subset. Owns CSR-N, CSR-UN
     cachegen_decisions.md    what pacino needs from cachegen
                              that it lacks. Owns CG-N, CG-GN,
                              CG-UN. Cited by every cachegen
@@ -627,15 +631,32 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |------------|--------------------------------|-----------------------------------|-------------------------------|
 | Verilator  | 5.048 2026-04-26 rev v5.048    | $(RVA_ROOT)/tools/bin/verilator   | Upgraded session-044.         |
 |            |                                |                                   | inout optimizer bug fixed.    |
-|            |                                |                                   | TD #38 partially addressed.   |
-|            |                                |                                   | Covergroup #7099 re-check     |
-|            |                                |                                   | still pending.                |
+|            |                                |                                   | Covergroups are ignored       |
+|            |                                |                                   | (COVERIGN) and record no      |
+|            |                                |                                   | coverage; TD#38 closed BP-126.|
 | Spike      | --                             | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
 |            |                                |                                   | issue.                        |
-| Surfer     | --                             | $(USER)/.cargo/bin/surfer         |                               |
+| Surfer     | --                             | $(HOME)/.cargo/bin/surfer         | The one waveform viewer.      |
+|            |                                |                                   | SURFER ?= in rtl/Vars.mk.     |
+|            |                                |                                   | examples/fe_demo/waves/       |
+|            |                                |                                   | chk_sucl.py has the same      |
+|            |                                |                                   | default; change both.         |
+| fst2vcd    | --                             | --                                | From the GTKWave distribution.|
+|            |                                |                                   | The FST reader of the         |
+|            |                                |                                   | examples/fe_demo/waves/       |
+|            |                                |                                   | scripts.                      |
+| RVA_EXT_   | --                             | rtl/Vars.mk, default              | Directory of needed tools not |
+| TOOLS      |                                | /usr/local/riscv-embecosm-        | in the repository: clang      |
+|            |                                | embedded-ubuntu2204-20250309/bin  | (asm_dec_words,               |
+|            |                                |                                   | oracle_ifu_rvc_exp) and       |
+|            |                                |                                   | llvm-objdump                  |
+|            |                                |                                   | (oracle_ifu_rvc_exp). BP-132. |
+| ticfinder  | --                             | tools/ticfinder/tools/            | The description writing-rule  |
+|            |                                | ticfinder.py                      | check (FDT-13a).              |
 | Vars.mk    | --                             | $(RVA_ROOT)/rtl/Vars.mk            | Common Makefile variables.    |
 |            |                                |                                   | VERILATOR, SPIKE, SURFER      |
-|            |                                |                                   | paths. All RTL Makefiles      |
+|            |                                |                                   | paths, RVA_EXT_TOOLS, all ?=. |
+|            |                                |                                   | All RTL Makefiles             |
 |            |                                |                                   | include this file.            |
 |check_rva23_coverage.py | --    | ./tools                  | Uses submodule: tools/riscv-opcodes |
 |                        |       |                          | make coverage: exits non-zero on MISSING |
