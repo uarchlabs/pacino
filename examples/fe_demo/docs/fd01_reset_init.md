@@ -140,9 +140,8 @@ the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd01_reset_init.gtkw` (GTKWave, `make view
-S=fd01_reset_init`) and `waves/fd01_reset_init.sucl` (Surfer, `make
-sview S=fd01_reset_init`). Look at:
+The saved view is `waves/fd01_reset_init.sucl`, which `make view
+S=fd01_reset_init` opens in Surfer. Look at:
 
 - group `sram_init`: `u_tage.u_sram_init.state` 2 (INIT) from cycle 1
   with `waddr` counting, then 3 (DONE) with `bpu_tage_rdy`; the same for

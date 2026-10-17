@@ -24,17 +24,15 @@
 #
 # view runs the scenario first when its FST is missing or older than the
 # model. Surfer is the one supported viewer (FDT-12). The variable SURFER
-# names it, default surfer, and the command line or the environment may
-# set it; for example make view S=fd09_tage SURFER=~/.cargo/bin/surfer.
+# names it, default $(HOME)/.cargo/bin/surfer from rtl/Vars.mk, and the
+# command line or the environment may set it; for example
+# make view S=fd09_tage SURFER=surfer takes the surfer on PATH.
 # SURFER_LOG, default warn, is Surfer's log level; SURFER_LOG=info gives
 # its full output.
 #
 # NOT A REGRESSION (FDT-2): tools/regress.sh scans rtl/ only, and
 # nothing here is in it.
 RVA_ROOT ?= $(abspath ../..)
-# The environment's SURFER, read before rtl/Vars.mk, whose plain = would
-# replace it (see the viewer section).
-SURFER_ENV := $(SURFER)
 include $(RVA_ROOT)/rtl/Vars.mk
 
 ifeq ($(VERBOSE),1)
@@ -231,17 +229,14 @@ clean:
 # S, brings the model up to date, runs the scenario when its FST is
 # missing or older than the model, then opens Surfer. A run that ends in
 # a FAIL still writes its FST, so Surfer opens on it with a note.
-# SURFER is the environment's value, or surfer (FDT-9a); a value on the
-# command line overrides both. It is set with := here because
-# rtl/Vars.mk sets SURFER=$(USER)/.cargo/bin/surfer with a plain =,
-# which would hide the environment's value, and which names a relative
-# path. ?= lets the command line or the environment set SURFER_LOG.
-SURFER := $(or $(SURFER_ENV),surfer)
+# SURFER comes from rtl/Vars.mk, set there with ?= (FDT-9a); this
+# Makefile does not set it.
 
 # Surfer's log level, through RUST_LOG. Its default prints INFO lines
 # (decoder and mapping search paths) on every start; warn keeps the
 # warnings, e.g. a command in the .sucl it does not understand. Set
-# SURFER_LOG=info for the full output.
+# SURFER_LOG=info for the full output. ?= lets the command line or the
+# environment set it.
 SURFER_LOG ?= warn
 SLOG        = RUST_LOG=$(SURFER_LOG)
 

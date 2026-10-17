@@ -129,9 +129,8 @@ errors before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd06_loop_pred.gtkw` (GTKWave, `make view
-S=fd06_loop_pred`) and `waves/fd06_loop_pred.sucl` (Surfer, `make sview
-S=fd06_loop_pred`). Look at:
+The saved view is `waves/fd06_loop_pred.sucl`, which `make view
+S=fd06_loop_pred` opens in Surfer. Look at:
 
 - `bpu_pred_slot_p1.[s]` and `bpu_slot_p2.[s]`: `pred_src` 1
   (`PRED_LOOP`) on the slot of I from about cycle 192, with `taken`

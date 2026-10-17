@@ -147,8 +147,8 @@ whole stream to retire with no errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd18_uncached.gtkw` (GTKWave) and
-`waves/fd18_uncached.sucl` (Surfer). Look at:
+The saved view is `waves/fd18_uncached.sucl`, which `make view
+S=fd18_uncached` opens in Surfer. Look at:
 
 - `u_xlate.xq_uc` set for the blocks on page u.
 - `ftq_ifu_commit_ptr` reaching each uncached block's `ftq_ifu_idx`

@@ -124,9 +124,8 @@ errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd10_pd_redirect.gtkw` (`make view
-S=fd10_pd_redirect`) and `waves/fd10_pd_redirect.sucl` (`make sview
-S=fd10_pd_redirect`). Look at:
+The saved view is `waves/fd10_pd_redirect.sucl`, which `make view
+S=fd10_pd_redirect` opens in Surfer. Look at:
 
 - ifu_f3 group: `ifu_ftq_pdwb_val` with `ifu_ftq_mis_val` set,
   `ifu_ftq_mis_pos` the JAL's position and `ifu_ftq_target` its target.

@@ -158,9 +158,9 @@ with no errors, which here includes the new bodies of f and g.
 
 ## 5. Waveform
 
-The saved views are `waves/fd19_fencei_cbo.gtkw` (GTKWave) and
-`waves/fd19_fencei_cbo.sucl` (Surfer). Look at, around cycles 73-82
-and 202-211:
+The saved view is `waves/fd19_fencei_cbo.sucl`, which `make view
+S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 73-82 and
+202-211:
 
 - `cmt_ifu_maint_val`, `cmt_ifu_maint_op` (0 FENCE.I, 1 cbo.inval) and
   `cmt_ifu_maint_paddr`.

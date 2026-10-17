@@ -16,6 +16,63 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-080: Vars.mk fixed; DOC-005 written. Documents only.
+
+Jeff fixed rtl/Vars.mk: SURFER ?= $(HOME)/.cargo/bin/surfer. Jeff
+removed the 24 GTKWave files of DOC-004. FDT-9a: SURFER's default is
+rtl/Vars.mk's, and the Makefile does not set it.
+DOC-005 WRITTEN, not yet issued: remove the Makefile's SURFER
+workaround, which now replaces the Vars.mk default with plain surfer;
+apply DOC-004's replacement text to docs/ (20 descriptions,
+demo_explainer.md, fd09_tage.md) and nothing else there.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+
+---
+## Session-080, after DOC-004: Surfer the one viewer.
+
+DOC-004 COMPLETE. make view opens Surfer with the command file; sview
+and every GTKWave path are out of the Makefile and README. Command
+files use name type Unique and the FDT-12a formats; Surfer shows the
+FST's enum value names (bp_br_type_e, bp_pred_src_e and others).
+fd09_tage.sucl carries 14 event markers, each checked against cyc in
+the FST; Surfer 0.7 cannot goto_marker from a command file, so the
+view opens with zoom_to around the first marker. chk_sucl.py checks
+against fe_demo_sigs.py, FDT-12a and FDT-12c: 21 of 21 clean, 15
+negative cases fail. The flow runs with the GTKWave files removed.
+21 of 21 scenarios pass with result lines unchanged. Regression: 274
+targets, PASS, identical to DOC-003's.
+  INSTRUCTIONS NOT FOLLOWED: one read-only git diff --stat; and Surfer
+    source read outside the allowed set (a pacino.2 copy under
+    ~/Development/.../DeleteMe). Nothing written there. The second
+    task in session-080 to run a git command (DOC-002, DOC-004).
+  DEFECT FOUND, worked around: rtl/Vars.mk line 4 sets
+    SURFER=$(USER)/.cargo/bin/surfer, a relative path whose plain =
+    overrides the environment. The fe_demo Makefile reads the
+    environment before the include. FOR JEFF: change the line to
+    SURFER ?= $(HOME)/.cargo/bin/surfer or remove it; the workaround
+    and its FDT-9a sentence can then go.
+  FOR JEFF: 24 files to remove (git rm): the 21 waves/*.gtkw,
+    waves/mk_gtkw.py, waves/fe_demo.gtkwaverc, run_tc.sh.
+  FOR JEFF: proposed text for docs/ (the "saved views" sentence of 20
+    descriptions, demo_explainer.md lines 37-38 and section 7, the
+    GTKWave-form names in fd09_tage.md); prompts/DOC-004.md.
+  fst2vcd, from the GTKWave distribution, stays a dependency of the
+    waves/ scripts as their FST reader.
+  The IA's proposed planning text applied: fe_demo_tb_decisions.md
+    FDT-1, FDT-9a, FDT-12, FDT-12c, FDT-13 item 4 (which contradicted
+    FDT-12c on continuation rows).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
+
+Next free: BP-138, SYS-003, DOC-005, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
+
+---
 ## Session-080: GTKWave dropped; DOC-004 written. Documents only.
 
 RULED (Jeff): Surfer is the one supported viewer; GTKWave is dropped.
@@ -35,6 +92,7 @@ Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md.
 
 Next free: BP-138, SYS-003, DOC-005, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
 
 ---
 ## Session-080: Surfer's log level. Documents only.

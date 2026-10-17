@@ -128,9 +128,8 @@ errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd08_indirect.gtkw` (`make view
-S=fd08_indirect`) and `waves/fd08_indirect.sucl` (`make sview
-S=fd08_indirect`). Look at:
+The saved view is `waves/fd08_indirect.sucl`, which `make view
+S=fd08_indirect` opens in Surfer. Look at:
 
 - `w_ittage_pred_rdy_p2` with `w_ittage_pred_meta_p2.[s].ittage_hit`
   set and `ittage_prm_tgt` (VA[40:1]) alternating between the two

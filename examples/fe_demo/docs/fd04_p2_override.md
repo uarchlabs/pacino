@@ -140,9 +140,8 @@ before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd04_p2_override.gtkw` (GTKWave, `make view
-S=fd04_p2_override`) and `waves/fd04_p2_override.sucl` (Surfer, `make
-sview S=fd04_p2_override`). Look at:
+The saved view is `waves/fd04_p2_override.sucl`, which `make view
+S=fd04_p2_override` opens in Surfer. Look at:
 
 - group `bp_cluster_p1_ubtb`: a p1 block with `r_ubtb_blk_p1.hit` low
   and `bpu_pred_pft_p1` the lookup PC + 0x20.

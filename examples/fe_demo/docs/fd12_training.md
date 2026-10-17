@@ -151,10 +151,9 @@ stream to retire with no errors before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd12_training.gtkw` (GTKWave, `make view
-S=fd12_training`) and `waves/fd12_training.sucl` (Surfer, `make sview
-S=fd12_training`). Groups: clock, backend, ftq_upd_conv, ftb_update,
-bp_cluster_p0. Look at:
+The saved view is `waves/fd12_training.sucl`, which `make view
+S=fd12_training` opens in Surfer. Groups: clock, backend, ftq_upd_conv,
+ftb_update, bp_cluster_p0. Look at:
 
 - `bkend_ftq_rsv_val`: a resolution from the backend.
 - `w_ubtb_upd_u0.[s].valid`, `w_lp_upd_val_p0`, `w_tage_upd_val_u0`,

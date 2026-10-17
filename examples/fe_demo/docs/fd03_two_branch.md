@@ -142,9 +142,8 @@ stream to retire with no errors before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd03_two_branch.gtkw` (GTKWave, `make view
-S=fd03_two_branch`) and `waves/fd03_two_branch.sucl` (Surfer, `make
-sview S=fd03_two_branch`). Look at:
+The saved view is `waves/fd03_two_branch.sucl`, which `make view
+S=fd03_two_branch` opens in Surfer. Look at:
 
 - group `bp_cluster_p1_ubtb`: `r_ubtb_blk_p1.hit` with
   `bpu_pred_slot_p1.[0]` and `.[1]` both `slot_valid`, `pos` 1 and 4,

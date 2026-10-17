@@ -129,8 +129,8 @@ RAS commit against the retired call or return (the RAS commit check,
 
 ## 5. Waveform
 
-The saved views are `waves/fd21_commit.gtkw` (GTKWave) and
-`waves/fd21_commit.sucl` (Surfer). Look at:
+The saved view is `waves/fd21_commit.sucl`, which `make view
+S=fd21_commit` opens in Surfer. Look at:
 
 - backend group: `bkend_ftq_commit_val` and `bkend_ftq_commit_idx`, the
   watermark.

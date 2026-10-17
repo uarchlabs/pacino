@@ -113,10 +113,9 @@ before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd16_page_cross.gtkw` (GTKWave, `make view
-S=fd16_page_cross`) and `waves/fd16_page_cross.sucl` (Surfer, `make
-sview S=fd16_page_cross`). Groups: clock, ftq_ifu, ifu_xlate, itlb,
-ifu_l1i, decode. Look at:
+The saved view is `waves/fd16_page_cross.sucl`, which `make view
+S=fd16_page_cross` opens in Surfer. Groups: clock, ftq_ifu, ifu_xlate,
+itlb, ifu_l1i, decode. Look at:
 
 - `ftq_ifu_start_pc` 0x8001_0FF0: the crossing block.
 - `ifu_itlb_req_val` with `ifu_itlb_vpn` 0x80010 then 0x80011: the two

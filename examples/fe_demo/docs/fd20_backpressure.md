@@ -121,8 +121,8 @@ errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd20_backpressure.gtkw` (GTKWave) and
-`waves/fd20_backpressure.sucl` (Surfer). Look at:
+The saved view is `waves/fd20_backpressure.sucl`, which `make view
+S=fd20_backpressure` opens in Surfer. Look at:
 
 - decode group: `dec_ibuf_rdy` high one cycle in four and
   `pd_out.[0].valid` held, from cycle 18.

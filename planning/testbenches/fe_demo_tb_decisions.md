@@ -28,10 +28,12 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
                       scenarios (fe_demo_scenarios.md FD-U1)
          waves/       one Surfer command file per scenario;
                       fe_demo_sigs.py, the signal lists and formats
-                      they are written from; mk_sucl.py, the
-                      generator; chk_sucl.py, which loads each command
-                      file in Surfer and checks it against
-                      fe_demo_sigs.py and FDT-12a
+                      they are written from, and the FST reader;
+                      mk_sucl.py, the generator, which also reads the
+                      descriptions' event tables (FDT-12c);
+                      chk_sucl.py, which loads each command file in
+                      Surfer and checks it against fe_demo_sigs.py,
+                      FDT-12a and FDT-12c
          docs/        one description per scenario,
                       demo_explainer.md, and the fe_top connectivity
                       inventory
@@ -82,9 +84,11 @@ FDT-9a make view S=<scenario> opens the scenario in Surfer with its
        (fd02_steady). It runs the scenario first when its FST is
        missing or older than the model. A missing S prints the usage
        and fails; an S that is not a scenario lists the valid names
-       and fails. The viewer is the variable SURFER, default surfer,
-       which the command line or the environment may override. A
-       failing run still writes its FST, and the viewer opens on it.
+       and fails. The viewer is the variable SURFER, set in
+       rtl/Vars.mk to $(HOME)/.cargo/bin/surfer with ?=, so the
+       command line or the environment may override it; the
+       Makefile does not set it. A failing run still writes its FST,
+       and the viewer opens on it.
        view runs Surfer with RUST_LOG set from the variable
        SURFER_LOG, default warn: Surfer's default level prints INFO
        lines on every start, and warn keeps its warnings, such as a
@@ -126,6 +130,9 @@ FDT-11 Each run writes an FST waveform to its output directory.
 FDT-12 Surfer is the one supported viewer. GTKWave is not supported:
        no save files, no rc file and no make target for it (Jeff,
        session-080). The FST opens in any viewer that reads FST.
+       The scripts in waves/ read the FST with fst2vcd, from the
+       GTKWave distribution; that tool, not the viewer, stays a
+       dependency.
 FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
        the scenario's waveform entry (fe_demo_scenarios.md FD-0b), in
        pipeline order, in groups named by unit, the clock first. Names
@@ -141,16 +148,23 @@ FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
                              Binary, Hexadecimal or Unsigned
 FDT-12b Every Surfer file shows the testbench cycle counter cyc, which
        counts cycles from the release of reset.
-FDT-12c A Surfer file places one marker per row of the scenario's event
-       table (FDT-13 section 4), at the cycle where cyc equals the
-       row's value, and opens with the view at the first marker. The
-       table in docs/<scenario>.md is the source: mk_sucl.py reads it,
-       a row with a cyc value starts an event and a row with an empty
-       cyc continues the one above. A marker is named c<cyc> with a
-       short label from the description. A scenario with no
-       description in the FDT-13 form has no markers. A description in
-       that form whose table mk_sucl.py cannot read stops the
-       generator with an error naming the file and row.
+FDT-12c A Surfer file places one marker per event of the scenario's
+       event table (FDT-13 section 4), at the first time in the
+       scenario's FST at which cyc equals the event's value with rstn
+       high (for cyc 0, the release of reset). It opens with the view
+       from two cycles before the first marker to thirty after it;
+       Surfer 0.7 cannot open at a marker with goto_marker in a command
+       file, which it parses before it runs. The table in
+       docs/<scenario>.md is the source: mk_sucl.py reads it, a row
+       with a cyc value starts an event and a row with an empty cyc
+       continues the one above. A marker is named c<cyc>_<label>, the
+       label being the event text up to its first ';', ':', ',' or '(',
+       at most six words, joined by '_'. A description is in the
+       FDT-13 form when its level-2 headings are the five of FDT-13, in
+       order, section 5 optional. A scenario with no description in
+       that form has no markers. A description in that form whose
+       table mk_sucl.py cannot read stops the generator with an error
+       naming the file and row.
 
 ---
 
@@ -170,8 +184,9 @@ FDT-13 docs/<scenario>.md describes one scenario. Its reader is
             implement it.
          4  Events: a table, column 0 cyc, column 1 description,
             column 2 other details where needed. The first row is cyc
-            0, the release of reset. Each row is a marker in the
-            Surfer file (FDT-12c).
+            0, the release of reset. Each row with a cyc value starts
+            an event; a row with an empty cyc continues it. Each event
+            is a marker in the Surfer file (FDT-12c).
          5  Notes: present only when there is something the reader
             must act on, and it says what to do.
 FDT-13a The descriptions are written in full sentences, with no jargon
@@ -228,4 +243,9 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               markers from the description's table; FDT-13 item 4.
   2026-10-16  session-080. FDT-12c: only FDT-13-form descriptions
               give markers; an unreadable table is an error.
+  2026-10-16  session-080, after DOC-004. FDT-1 waves/, FDT-9a the
+              environment's SURFER, FDT-12 fst2vcd, FDT-12c as built,
+              FDT-13 item 4 events.
+  2026-10-16  session-080. FDT-9a: SURFER's default is rtl/Vars.mk's
+              (Jeff fixed Vars.mk); the Makefile workaround goes.
 ```

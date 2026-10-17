@@ -124,9 +124,8 @@ before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd13_l1i.gtkw` (GTKWave, `make view
-S=fd13_l1i`) and `waves/fd13_l1i.sucl` (Surfer, `make sview
-S=fd13_l1i`). Groups: clock, ftq_ifu, ifu_l1i, l1i. Look at:
+The saved view is `waves/fd13_l1i.sucl`, which `make view S=fd13_l1i`
+opens in Surfer. Groups: clock, ftq_ifu, ifu_l1i, l1i. Look at:
 
 - `ifu_l1i_req_val` with `ifu_l1i_req_paddr` and `ifu_l1i_req_id`, and
   `l1i_ifu_rsp_val` with `l1i_ifu_rsp_id` two cycles later: a hit.

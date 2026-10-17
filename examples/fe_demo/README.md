@@ -115,15 +115,17 @@ without the command file. A run that fails still writes its FST, and
 make view opens it with a note. S missing prints the usage; an S that
 is not a scenario lists the names. Either fails.
 
-The viewer is the variable SURFER, default surfer, set on the command
-line or in the environment. SURFER_LOG, default warn, sets Surfer's
-log level (RUST_LOG): warn hides the INFO lines Surfer prints on every
-start and keeps its warnings and errors, such as a command in the
-.sucl it does not understand; SURFER_LOG=info gives the full output.
+The viewer is the variable SURFER. Its default, set in rtl/Vars.mk, is
+$(HOME)/.cargo/bin/surfer; the command line or the environment may set
+it, for example SURFER=surfer for the one on PATH. SURFER_LOG, default
+warn, sets Surfer's log level (RUST_LOG): warn hides the INFO lines
+Surfer prints on every start and keeps its warnings and errors, such as
+a command in the .sucl it does not understand; SURFER_LOG=info gives
+the full output.
 
 ```
-  make view S=fd09_tage SURFER=~/.cargo/bin/surfer
-  SURFER=~/.cargo/bin/surfer make view S=fd09_tage
+  make view S=fd09_tage SURFER=surfer
+  SURFER=surfer make view S=fd09_tage
   make view S=fd09_tage SURFER_LOG=info
 ```
 
@@ -138,8 +140,9 @@ binary, hex or decimal as fe_demo_sigs.radix gives it.
 
 A scenario whose description is in the five-section form (FDT-13)
 also has one marker per event of its event table (a row with a cyc
-value), named c<cyc>_<label>, and opens with the view at the first marker (FDT-12c). Today that is
-fd09_tage. The other scenarios open on the whole run.
+value), named c<cyc>_<label>, and opens with the view at the first
+marker (FDT-12c). Today that is fd09_tage. The other scenarios open on
+the whole run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
@@ -151,12 +154,13 @@ After a change to the RTL that renames a signal, or to a
 description's event table, run the scenarios, regenerate the Surfer
 command files, and check them in Surfer (it opens a window per
 scenario). The FST given names the signals; the markers come from each
-scenario's own FST:
+scenario's own FST. chk_sucl.py takes SURFER from the environment,
+default ~/.cargo/bin/surfer as for make view:
 
 ```
   make -k scenarios
   python3 waves/mk_sucl.py out/fd02_steady/fd02_steady.fst
-  SURFER=~/.cargo/bin/surfer python3 waves/chk_sucl.py
+  python3 waves/chk_sucl.py
 ```
 
 Both generators stop on a signal the FST does not have.

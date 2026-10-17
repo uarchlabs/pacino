@@ -128,10 +128,9 @@ before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd14_translation.gtkw` (GTKWave, `make view
-S=fd14_translation`) and `waves/fd14_translation.sucl` (Surfer, `make
-sview S=fd14_translation`). Groups: clock, ifu_xlate, itlb, walker,
-walker_mem. Look at:
+The saved view is `waves/fd14_translation.sucl`, which `make view
+S=fd14_translation` opens in Surfer. Groups: clock, ifu_xlate, itlb,
+walker, walker_mem. Look at:
 
 - `itlb_l2t_req_val` with `itlb_l2t_vpn` and `itlb_l2t_v`: each walk
   and its kind.

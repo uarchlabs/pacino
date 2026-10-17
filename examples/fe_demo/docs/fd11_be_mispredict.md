@@ -136,9 +136,8 @@ errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd11_be_mispredict.gtkw` (`make view
-S=fd11_be_mispredict`) and `waves/fd11_be_mispredict.sucl` (`make sview
-S=fd11_be_mispredict`). Look at:
+The saved view is `waves/fd11_be_mispredict.sucl`, which `make view
+S=fd11_be_mispredict` opens in Surfer. Look at:
 
 - backend group: `bkend_ftq_redir_val` with `bkend_ftq_redir_cause` 0,
   `bkend_ftq_redir_idx` and `bkend_ftq_redir_pc`.

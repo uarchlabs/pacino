@@ -116,9 +116,8 @@ the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd02_steady.gtkw` (GTKWave, `make view
-S=fd02_steady`) and `waves/fd02_steady.sucl` (Surfer, `make sview
-S=fd02_steady`). Look at:
+The saved view is `waves/fd02_steady.sucl`, which `make view
+S=fd02_steady` opens in Surfer. Look at:
 
 - group `bp_cluster_p0`: `ftq_pred_val_p0` high and `ftq_pred_pc_p0`
   advancing by 0x20 per cycle; `ftq_pred_idx_p0` counting.

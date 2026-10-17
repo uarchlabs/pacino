@@ -147,10 +147,9 @@ retire with no errors before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd15_faults.gtkw` (GTKWave, `make view
-S=fd15_faults`) and `waves/fd15_faults.sucl` (Surfer, `make sview
-S=fd15_faults`). Groups: clock, itlb, walker, ifu_xlate, ifu_fault,
-decode, backend. Look at:
+The saved view is `waves/fd15_faults.sucl`, which `make view
+S=fd15_faults` opens in Surfer. Groups: clock, itlb, walker, ifu_xlate,
+ifu_fault, decode, backend. Look at:
 
 - `itlb_ifu_rsp_val` with `itlb_ifu_status` 2 (ST_FAULT,
   `itlb.sv:239`) and `itlb_ifu_cause`: the ITLB's fault answer.

@@ -34,8 +34,8 @@ files of its own:
 
 - `programs/fdNN_<name>.svh`, the task `prog_fdNN` that writes the
   program into the memory model and starts the run;
-- `waves/fdNN_<name>.gtkw` and `waves/fdNN_<name>.sucl`, the signal
-  lists for GTKWave and Surfer;
+- `waves/fdNN_<name>.sucl`, the Surfer command file: the signals,
+  their groups and formats, and the event markers;
 - `docs/fdNN_<name>.md`, its description.
 
 Every scenario runs the same simulation model. The testbench top is
@@ -232,18 +232,27 @@ from cyc N + 1.
 
 ## 7. Reading the waveforms
 
-`make view S=<scenario>` opens the scenario's waveform in GTKWave and
-`make sview S=<scenario>` in Surfer (`README.md`, section 2). Both show
-each signal by its full hierarchical name, grouped by unit in pipeline
-order, the clock group first.
+`make view S=<scenario>` opens the scenario's waveform in Surfer
+with its command file (`README.md`, section 2). The signals are
+grouped by unit in pipeline order, the clock group first. Surfer
+shows each name with its name type Unique: the shortest end part
+of the hierarchical path that tells the signal apart from the
+others shown, after an ellipsis when the path is shortened. For
+example `tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]` is shown as
+`...uaon.[0]` (the ellipsis is one character) and
+`tb.dut.u_bpu.r_val_p2` as `r_val_p2`.
 
-The two viewers name an element of an unpacked array differently.
-GTKWave writes the array name twice, for example
-`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.uaon[0]`; Surfer writes
-`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]`. A member of a structure
-in an array is written the same way in both, for example
+The descriptions give the full path in Surfer's form. Surfer
+names an element of an unpacked array by its index under the
+array, for example `tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]`,
+and a member of a structure in an array the same way, for example
 `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp`.
-The descriptions give the GTKWave form.
+
+A signal of an enumerated type is shown by its value names, for
+example PRED_TAGE or NO_BRANCH. `tb.clk` is drawn as a clock and
+`tb.cyc` is shown in decimal. A scenario whose description has an
+event table (section 4) opens with one marker per event, named
+c<cyc>_<label>, and the view at the first marker.
 
 ---
 

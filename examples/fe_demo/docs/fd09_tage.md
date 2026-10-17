@@ -178,8 +178,8 @@ in the `tage_update` group:
 - `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].cond_mispredict`
   is 1 and `.resolved_taken` is 1; `.tage_pred_meta.tage_prm_comp` is
   0, so T0 was the provider;
-- `tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.u_alc_wr[0]` is 1 and
-  `tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.u_alc_comp[0]` is 1:
+- `tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.[0]` is 1 and
+  `tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[0]` is 1:
   the new entry is written into T1.
 
 RTL: the TAGE misprediction is `cond_mispredict`, set in
@@ -193,8 +193,8 @@ signal `u_alc_wr`. T0's starting value is `TAGE_T0_SRAM_INIT_VALUE`,
 ### 3.2 Training the use_alt_on_na counter
 
 TAGE keeps a 4-bit counter, `uaon`, for each prediction slot,
-`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.uaon[0]` and
-`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.uaon[1]`. It measures whether,
+`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]` and
+`tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[1]`. It measures whether,
 when the provider's CTR is weak, the alternate has been more accurate
 than the provider. The rules are in
 `planning/arch/tage_cntrl_uaon_update_rules.md`: on an update whose
@@ -205,8 +205,8 @@ right and the alternate wrong. It starts at 0.
 `uaon` is updated only when both the provider and the alternate are
 tagged tables. When the alternate is T0, `uaon` is unchanged. The
 counter is therefore trained on predictions where two tagged tables
-matched B. Since B is always in slot 0, only `uaon.uaon[0]` changes in
-this run; `uaon.uaon[1]` stays 0.
+matched B. Since B is always in slot 0, only `uaon.[0]` changes in
+this run; `uaon.[1]` stays 0.
 
 The history leading up to B is random, so the entries allocated for B
 are later matched under histories they were not trained on. Those
@@ -223,7 +223,7 @@ The update inputs are in the `tage_update` group:
 `.tage_pred_weak`, `.tage_prm_tkn` and `.tage_alt_tkn` under
 `tb.dut.u_bpu.u_tage.u_tage_cntrl`.
 
-In the waveform, `uaon.uaon[0]` first increments at cyc 221, reading
+In the waveform, `uaon.[0]` first increments at cyc 221, reading
 1 after the update of cyc 220; it falls back to 0 at cyc 238, and
 reaches 8 at cyc 447. It reaches 15, its maximum, at cyc 620.
 

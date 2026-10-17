@@ -163,9 +163,8 @@ also requires the whole stream to retire with no errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd07_calls_returns.gtkw` (`make view
-S=fd07_calls_returns`) and `waves/fd07_calls_returns.sucl` (`make sview
-S=fd07_calls_returns`). Look at:
+The saved view is `waves/fd07_calls_returns.sucl`, which `make view
+S=fd07_calls_returns` opens in Surfer. Look at:
 
 - `u_ras.tosr`, `tosw`, `bos`: TOSR and TOSW step on each push, TOSR
   follows the link on a pop.

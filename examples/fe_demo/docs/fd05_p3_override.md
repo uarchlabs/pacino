@@ -142,9 +142,8 @@ before it accepts the proof.
 
 ## 5. Waveform
 
-The saved views are `waves/fd05_p3_override.gtkw` (GTKWave, `make view
-S=fd05_p3_override`) and `waves/fd05_p3_override.sucl` (Surfer, `make
-sview S=fd05_p3_override`). Look at:
+The saved view is `waves/fd05_p3_override.sucl`, which `make view
+S=fd05_p3_override` opens in Surfer. Look at:
 
 - group `tage_p2`: `w_tage_pred_rdy_p2` and `tage_pred_meta_p2.[s]`
   (`tage_prm_comp`, `tage_prm_ctr`, `tage_pred_tkn`) for the block.

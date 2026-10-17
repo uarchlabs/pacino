@@ -133,8 +133,8 @@ stream to retire with no errors.
 
 ## 5. Waveform
 
-The saved views are `waves/fd17_rvc.gtkw` (GTKWave) and
-`waves/fd17_rvc.sucl` (Surfer). Look at:
+The saved view is `waves/fd17_rvc.sucl`, which `make view S=fd17_rvc`
+opens in Surfer. Look at:
 
 - `ftq_ifu_start_pc` and `ftq_ifu_next_pc`: the blocks +0x20 to +0x40
   and +0x40 to +0x60 at the start of the run.

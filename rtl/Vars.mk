@@ -1,7 +1,7 @@
 
 VERILATOR ?=$(RVA_ROOT)/tools/bin/verilator
 SPIKE     ?=$(RVA_ROOT)/tools/bin/spike
-SURFER    ?=$(USER)/.cargo/bin/surfer
+SURFER    ?=$(HOME)/.cargo/bin/surfer
 
 # RVA_EXT_TOOLS (BP-132, TD#176, TD#147): the directory of the needed
 # tools that are not in the repository. Today that is the embecosm

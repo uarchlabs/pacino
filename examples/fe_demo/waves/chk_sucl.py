@@ -10,7 +10,9 @@
 # Usage, from examples/fe_demo, after the scenarios have run:
 #   python3 waves/chk_sucl.py [scenario ...]
 # With no names, every scenario that has an FST in out/. Needs a display:
-# Surfer opens a window for each file and closes it.
+# Surfer opens a window for each file and closes it. The viewer is the
+# environment's SURFER, else ~/.cargo/bin/surfer, the default rtl/Vars.mk
+# gives make view (FDT-9a).
 #
 # For each scenario, Surfer loads out/<s>/<s>.fst with a copy of the
 # command file that ends by saving Surfer's state and exiting. The check
@@ -38,6 +40,7 @@
 #     when there are no markers
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -46,7 +49,8 @@ from fe_demo_sigs import S, fst_header, fst_names, fst_values, radix
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, '..', 'docs')
-SURFER = os.environ.get('SURFER', 'surfer')
+SURFER = os.environ.get('SURFER',
+                        os.path.expanduser('~/.cargo/bin/surfer'))
 FMT = {'bin': 'Binary', 'hex': 'Hexadecimal', 'dec': 'Unsigned'}
 CLK_FMT = {'tb.clk': 'Clock', 'tb.rstn': 'Bit', 'tb.cyc': 'Unsigned'}
 FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
@@ -245,6 +249,12 @@ def check(scen, tmpdir):
     e, nm = check_markers(scen, fst, got, view)
     return errs + e, len(exp), sum(len(s) for _, s in exp), nm
 
+
+# The viewer must exist before any scenario is tried; otherwise every
+# run_surfer call would raise FileNotFoundError.
+if not shutil.which(SURFER):
+    sys.exit('chk_sucl.py: Surfer not found: SURFER=%s; set SURFER to the '
+             'surfer executable' % SURFER)
 
 scens = sys.argv[1:] or [s for s, _ in S
                          if os.path.exists(os.path.join('out', s, s + '.fst'))]
