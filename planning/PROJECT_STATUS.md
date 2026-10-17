@@ -16,6 +16,27 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-081: record corrections. Documents only.
+
+PA-DIRECT CORRECTION, session-081.
+  PROJECT_CORE.md Tools Status: Surfer at $(HOME)/.cargo/bin/surfer
+    with SURFER ?=; Verilator's covergroup note from TD#38; rows added
+    for fst2vcd, RVA_EXT_TOOLS and ticfinder; the Vars.mk row names
+    RVA_EXT_TOOLS.
+  PROJECT_CORE.md Repository Layout: COMP-NNN.md in prompts/.
+  PROJECT_CORE.md Current inventory: csr_decisions.md added; checked
+    against a listing of planning/ on 2026-10-17.
+  Module Status: fe_demo_tb_decisions.md row names its registries,
+    not a range.
+  Not in check_planning.sh: planning/arch/
+    ittage_cntrl_uaon_update_rules.md, a planning document on disk.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, PROJECT_CORE.md.
+
+Next free: BP-138, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+
+---
 ## Session-080, after DOC-005: SURFER from Vars.mk; docs/ free of GTKWave.
 
 DOC-005 COMPLETE. The Makefile's SURFER workaround is gone; make help
@@ -4498,8 +4519,8 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | planning/observ. TR-1 to TR-10;   |
 |                         |             |                   | TR-U1 to TR-U4 open.              |
 | fe_demo_tb_decisions.md | Draft       | --                | Created session-080,              |
-|                         |             |                   | planning/testbenches. FDT-1 to    |
-|                         |             |                   | FDT-12.                           |
+|                         |             |                   | planning/testbenches. Owns FDT-N  |
+|                         |             |                   | and FDT-UN.                       |
 
 THE NINE ROWS MARKED "ADDED 2026-09-17" carry a status DERIVED
 from statements already in this file, not from a fresh
