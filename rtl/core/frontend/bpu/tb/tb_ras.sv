@@ -9,7 +9,7 @@
 // -------------------------------------------------------------------
 // Self-checking testbench for ras.sv (BP-063, BP-064).
 //
-// Directed cases TC-01 .. TC-40. TC-01 .. TC-20 from BP-063; TC-21
+// Directed cases TC-01 .. TC-43. TC-01 .. TC-20 from BP-063; TC-21
 // (BP-064) pinned TD #78 (undo-pop did not reverse a recursion pop)
 // until BP-133 fixed it.
 // TC-22 .. TC-28 (BP-119, TD#152) are RETURN_CALL, the JALR that pops
@@ -25,14 +25,20 @@
 // (the undo of a whole RETURN_CALL restores the counts it changed) and
 // TC-39 (TD #79: the commit stack keeps recursion depth as repeated
 // entries). BP-134 added TC-40 (the undo of a push that met a
-// saturated recursion count leaves the count saturated).
+// saturated recursion count leaves the count saturated). BP-138 added
+// TC-41 (a commit moves BOS past an empty speculative stack: the next
+// pop takes the commit-stack fallback), TC-42 (the same across a
+// restore of a snapshot taken on either side of the BOS advance) and
+// TC-43 (a p3 undo of an operation that began on an empty stack after
+// a commit moved BOS).
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
 // Pointer model (post BP-063 fix): the BOS index is a sentinel. A
 // push that would allocate on BOS (cold-start, or full wrap) skips to
 // BOS+1, so a single live entry is distinguishable from empty
-// (empty is TOSR==BOS). TOSW is monotonic across pops so popped
+// (TOSR==BOS; BP-138 keeps that exact when a commit moves BOS, the
+// case TC-41 builds). TOSW is monotonic across pops so popped
 // entries survive for pointer-only mispredict restore. Since BP-120 a
 // push writes TOSR into the new entry's nos and a pop sets TOSR to
 // the popped entry's nos (it read TOSR-1).
@@ -1344,6 +1350,226 @@ module tb;
     tick();
     check("TC-40c undo-push: rctr[1] back to 1, tosr 1",
           (dut.spec_rctr[1] == 4'd1) && (dut.tosr == 4'd1));
+
+    // =============================================================
+    // TC-41 (BP-138, D2): a commit moves BOS while the speculative
+    // stack is empty. A call pushes A, its return pops A (TOSR back to
+    // BOS), then the call commits: BOS becomes A's slot. The stack is
+    // still empty, so the next pop takes the commit-stack fallback, the
+    // committed A. Before BP-138 TOSR stayed on the old BOS slot, the
+    // stack read non-empty (TOSR != BOS) and the pop returned that slot:
+    // a. the never-written sentinel (0, fd07's return to 0x0); b. a
+    // committed entry (X). c. an entry pushed onto the empty stack
+    // before the commit: its pop returns to BOS as the commit left it,
+    // not to the slot its link names.
+    // =============================================================
+    // a. The old BOS slot is the reset sentinel, index 0.
+    do_reset();
+    commit_op(DIRECT_CALL, ADDR_R, 4'd0);   // commit stack R, bos 0
+    push_one(ADDR_A);                       // idx1 (sentinel skip)
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-41a the return pops A from the speculative stack",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    check("TC-41a then the speculative stack is empty (tosr 0, bos 0)",
+          (dut.tosr == 4'd0) && (dut.bos == 4'd0));
+    commit_op(DIRECT_CALL, ADDR_A, 4'd1);   // the call commits
+    check("TC-41a the commit moved BOS to 1 and TOSR with it",
+          (dut.bos == 4'd1) && (dut.tosr == 4'd1));
+    check("TC-41a the commit-stack top is A",
+          (dut.c_cnt == 6'd2) && (dut.commit_ret_addr[1] == ADDR_A));
+    check("TC-41a the sentinel slot 0 was never written",
+          dut.spec_ret_addr[0] == '0);
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-41a p0 top of stack is the commit top A",
+          (tos_valid_p0[0] == 1'b1) && (tos_addr_p0[0] == ADDR_A));
+    check("TC-41a the pop takes the commit-stack fallback, A (not 0)",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    check("TC-41a the fallback is not consumed: tosr 1, tosw 2, csp 2",
+          (dut.tosr == 4'd1) && (dut.tosw == 4'd2) && (dut.csp == 5'd2));
+
+    // b. The old BOS slot is a committed entry, X (fd07's shape: BOS
+    //    was a real slot, so the stale pop returned a real address and
+    //    then followed X's link down the stack).
+    do_reset();
+    push_one(ADDR_X);                       // idx1
+    commit_op(DIRECT_CALL, ADDR_X, 4'd1);   // bos 1, commit top X
+    push_one(ADDR_A);                       // idx2, bottom
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-41b the return pops A",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    check("TC-41b then tosr 1 == bos 1, empty",
+          (dut.tosr == 4'd1) && (dut.bos == 4'd1));
+    commit_op(DIRECT_CALL, ADDR_A, 4'd2);   // bos 2, commit [X, A]
+    check("TC-41b the commit moved BOS to 2 and TOSR with it",
+          (dut.bos == 4'd2) && (dut.tosr == 4'd2));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-41b the pop takes the commit-stack fallback, A (not X)",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+    check("TC-41b the fallback moved nothing: tosr 2, tosw 3",
+          (dut.tosr == 4'd2) && (dut.tosw == 4'd3));
+
+    // c. A push onto the empty stack before the commit: B is pushed
+    //    after A's pop, links to slot 1 (BOS then) and is a bottom
+    //    entry. A's call then commits (BOS 2); TOSR is B, not BOS, so it
+    //    stays. B's pop goes to BOS as it is now, 2, empty, and the next
+    //    pop is the fallback A. Before BP-138 B's pop followed the link
+    //    to slot 1, which read non-empty, and the next pop returned X.
+    do_reset();
+    push_one(ADDR_X);                       // idx1
+    commit_op(DIRECT_CALL, ADDR_X, 4'd1);   // bos 1, commit top X
+    push_one(ADDR_A);                       // idx2
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();                                 // A popped, tosr 1
+    push_one(ADDR_B);                       // idx3, links to 1
+    check("TC-41c B is idx3, pushed onto the empty stack, linked to slot 1",
+          (dut.tosr == 4'd3) && (dut.spec_nos[3] == 4'd1));
+    commit_op(DIRECT_CALL, ADDR_A, 4'd2);   // A's call commits
+    check("TC-41c BOS 2, TOSR still B",
+          (dut.bos == 4'd2) && (dut.tosr == 4'd3));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-41c the pop returns B from the speculative stack",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_B));
+    tick();
+    check("TC-41c B's pop went to BOS as it is now (tosr 2), empty",
+          (dut.tosr == 4'd2) && (dut.bos == 4'd2));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-41c the next pop takes the fallback, A (not X)",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+    tick();
+
+    // =============================================================
+    // TC-42 (BP-138, D2): TC-41b and TC-41c across a restore. For each,
+    // one snapshot is taken before the commit moves BOS and one after.
+    // A wrong path pushes two entries, the snapshot is restored, and
+    // returns pop. TC-41b's snapshots are empty stacks (s1 tosr 1 bos
+    // 1; s2 tosr 2 bos 2, the commit having moved TOSR with BOS): the
+    // pop is the fallback A. TC-41c's hold B (s3 bos 1, s4 bos 2): the
+    // pop returns B and the next is the fallback A. Before BP-138 s2
+    // was tosr 1 bos 2 and its pop returned X, and after s4's B the pop
+    // followed B's link to slot 1 and returned X.
+    // =============================================================
+    begin
+      bp_ras_snapshot_t sn [0:3];
+      for (int q = 0; q < 2; q++) begin
+        // q 0: TC-41b's sequence, s1 and s2. q 1: TC-41c's, s3 and s4.
+        // Each restores only its own snapshots: a restore of the other
+        // sequence's TOSW would let the wrong path overwrite B.
+        do_reset();
+        push_one(ADDR_X);                   // idx1
+        commit_op(DIRECT_CALL, ADDR_X, 4'd1); // bos 1, commit top X
+        push_one(ADDR_A);                   // idx2
+        drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+        #1;
+        if (q == 0) sn[0] = snap_p2[NUM_PRED_SLOTS-1]; // s1: A popped
+        tick();
+        if (q == 1) begin
+          drive(1'b1, DIRECT_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+          #1;
+          sn[2] = snap_p2[NUM_PRED_SLOTS-1]; // s3: after B's push
+          tick();
+        end
+        commit_op(DIRECT_CALL, ADDR_A, 4'd2); // bos 2, commit [X, A]
+        drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+        #1;
+        sn[2*q+1] = snap_p2[NUM_PRED_SLOTS-1]; // s2 / s4: after
+        tick();
+        if (q == 0)
+          check("TC-42 snapshots s1 (1,3,1) s2 (2,3,2)",
+                (sn[0] == {4'd1, 4'd3, 4'd1}) &&
+                (sn[1] == {4'd2, 4'd3, 4'd2}));
+        else
+          check("TC-42 snapshots s3 (3,4,1) s4 (3,4,2)",
+                (sn[2] == {4'd3, 4'd4, 4'd1}) &&
+                (sn[3] == {4'd3, 4'd4, 4'd2}));
+        for (int k = 2 * q; k < 2 * q + 2; k++) begin
+          // Wrong path: two pushes, then restore snapshot k.
+          push_one(ADDR_C);
+          push_one(ADDR_C + VA_WIDTH'(4));
+          drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+          restore_val  = 1'b1;
+          restore_snap = sn[k];
+          tick();
+          restore_val  = 1'b0;
+          restore_snap = '0;
+          if (q == 1) begin
+            drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+            #1;
+            check($sformatf("TC-42 restore s%0d, the pop returns B", k + 1),
+                  (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_B));
+            tick();
+          end
+          drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+          #1;
+          check($sformatf("TC-42 restore s%0d, the pop is the fallback A",
+                          k + 1),
+                (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+          tick();
+          check($sformatf("TC-42 restore s%0d, then the stack is empty",
+                          k + 1), dut.tosr == dut.bos);
+        end
+      end
+    end
+
+    // =============================================================
+    // TC-43 (BP-138, D2): a p3 undo of an operation that began on an
+    // empty stack, with a commit between p2 and p3 that moves BOS. The
+    // undo restores TOSR to BOS as it is at the undo, not to the TOSR
+    // registered at p2, which is the old BOS slot. a. undo-pop: a p2
+    // return on the empty stack (the fallback, registered as a pop)
+    // that p3 does not have. b. undo of a whole RETURN_CALL. In both,
+    // A's call commits in the p2 cycle. Then a return pops: the stack
+    // is empty, the pop is the fallback A. Without the rule the undo put
+    // TOSR back on slot 1 with BOS 2 and the pop returned X.
+    // =============================================================
+    for (int v = 0; v < 2; v++) begin
+      do_reset();
+      push_one(ADDR_X);                     // idx1
+      commit_op(DIRECT_CALL, ADDR_X, 4'd1); // bos 1, commit top X
+      push_one(ADDR_A);                     // idx2
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      tick();                               // A popped: tosr 1 == bos
+      // p2: the operation on the empty stack, and A's call commits.
+      if (v == 0) drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      else        drive(1'b1, RETURN_CALL, ADDR_B, 1'b0, NO_BRANCH, '0);
+      commit_val       = 1'b1;
+      commit_br_type   = DIRECT_CALL;
+      commit_ret_addr  = ADDR_A;
+      commit_snap.tosr = 4'd2;
+      #1;
+      check($sformatf("TC-43%s p2 on the empty stack pops the fallback X",
+                      (v == 0) ? "a" : "b"),
+            (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_X));
+      tick();
+      commit_val       = 1'b0;
+      commit_br_type   = NO_BRANCH;
+      commit_ret_addr  = '0;
+      commit_snap      = '0;
+      check($sformatf("TC-43%s the commit moved BOS to 2",
+                      (v == 0) ? "a" : "b"), dut.bos == 4'd2);
+      // p3: the operation is not there; the repair undoes it.
+      drive(1'b0, NO_BRANCH, '0, 1'b0, NO_BRANCH, '0);
+      force_p3(1'b0, NO_BRANCH, 1'b0, NO_BRANCH);
+      tick();
+      check($sformatf("TC-43%s the undo left the stack empty (tosr 2)",
+                      (v == 0) ? "a" : "b"),
+            (dut.tosr == 4'd2) && (dut.bos == 4'd2));
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      #1;
+      check($sformatf("TC-43%s a return then pops the fallback A, not X",
+                      (v == 0) ? "a" : "b"),
+            (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
+      tick();
+    end
 
     // -------------------------------------------------------------
     $display("=================================================");

@@ -17,6 +17,10 @@ echo "The PA session hand off file path: " >> ho
 echo "- pa_handoffs/session_handoff-$1.md"     >> ho
 ## -------------------------------------------------------------
 echo "" >> ho
+echo "You are required to read every single line of the content" >> ho
+echo "No excuses. You are required acknowledge that you have complied." >> ho
+## -------------------------------------------------------------
+echo "" >> ho
 cat planning/PROJECT_CORE.md          >> ho
 cat planning/PROJECT_STATUS.md        >> ho
 cat CLAUDE.md                         >> ho

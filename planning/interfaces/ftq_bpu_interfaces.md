@@ -422,7 +422,9 @@ fall-through is the jump PC plus 2 or 4 (`w_jmp_ft_p2`), not the
 FTB's shared pftAddr (ftb_interfaces.md IC-FTB-03). The expression
 above is as BP-118 built it. AS BUILT by BP-121 (read by BP-122):
 `w_pft_p2` is `r_pft_p1_p2` when the FTB did not answer, else
-`w_jmp_ft_p2` when the FTB holds a jump visible from this start,
+the jump PC (`w_jmp_pc_p2`) when the FTB holds a jump and every slot
+holds a conditional (`w_jmp_cut_p2`, BP-138, fe_decisions.md 10),
+else `w_jmp_ft_p2` when the FTB holds a jump visible from this start,
 else `ftb_pft_addr_p2`; `w_jmp_ft_p2 = r_pc_p2 + (ftb_jmp_pos_p2 <<
 POS_OFFSET_BITS) + (ftb_jmp_rvc_p2 ? 2 : 4)`, which is also the RAS
 push address.
@@ -1417,4 +1419,7 @@ match it and to match this specification.
   2026-10-15  session-080, after DOC-002. 8: ubtb_upd_u0 and
               ittage_upd_inp_u0 in the update table; the queue status
               names as BP-132 built them.
+
+  2026-10-17  session-081, after BP-138. 4c: w_pft_p2 is the jump PC
+              when the jump is in no slot (D1).
 ```

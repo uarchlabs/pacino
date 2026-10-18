@@ -91,7 +91,9 @@ allocation or array clear.
     restored to its pre-op value (BP-120), re-exposing the
     still-resident entry the pop uncovered, and a count the pop
     decremented is incremented back (BP-133). No return address
-    is written, TOSW held.
+    is written, TOSW held. When the pop began on an empty stack,
+    TOSR is restored to BOS as it is at the undo (BP-138); the
+    same holds for the undo of a whole return-call.
   - p2=no-op, p3=pop (missed pop): same TOSR retract as
     undo-push.
   - p2=no-op, p3=push (missed push): the only case that
@@ -357,26 +359,43 @@ Entry fields:
   rctr      : 4b             -- recursion counter (see section 5)
   nos       : RAS_PTR_BITS   -- next on stack: the entry below this
                                 one (ruled session-075, BP-120)
+  bot       : 1b             -- bottom: pushed onto an empty stack
+                                or by the sentinel skip (BP-138)
 
 Pointers (all RAS_PTR_BITS wide, $clog2(RAS_SPEC_ENTRIES)=4b):
   TOSR  -- Top Of Stack Read: current top for predictions
   TOSW  -- Top Of Stack Write: next free allocation slot
   BOS   -- Bottom Of Stack: boundary of committed state
 
-Push: write ret_addr, rctr and nos = TOSR to the TOSW slot.
-      TOSR = TOSW.
+Push: write ret_addr, rctr and nos = TOSR to the TOSW slot,
+      with bot = 1 when the stack is empty or on the sentinel
+      skip. TOSR = TOSW.
       TOSW advances to next slot. The BOS index is a permanent
       sentinel: a push that would land TOSW on BOS allocates at
       BOS+1 instead. This occurs at cold-start after reset, or on
       a full circular wrap. The sentinel keeps a single live
       entry distinguishable from empty.
 Pop:  present TOSR entry as prediction. TOSR = that entry's
-      nos. No data overwritten on pop. This read "TOSR
+      nos, or BOS as it is then when the entry is bottom (BP-138).
+      No data overwritten on pop. This read "TOSR
       decrements", the TD#159 defect; session-075.
 
 Empty condition: TOSR == BOS. On pop when empty, fall through
 to commit stack top as prediction result. Commit stack entry
 is not consumed (read-only fallback).
+
+TOSR == BOS HOLDS EXACTLY WHEN THE STACK IS EMPTY, across commits
+(BP-138, D2). A commit moves BOS; three rules keep the test exact:
+  - the pop that removes a bottom entry sets TOSR to BOS as it is
+    then, not to nos;
+  - a commit that moves BOS while TOSR == BOS moves TOSR with it
+    (3.3);
+  - a p3 undo of an operation that began on an empty stack restores
+    TOSR to BOS as it is at the undo (section 1).
+A bottom entry's nos still names the BOS of its push. Cost 16 bits
+of bot, plus one register bit per slot for the undo. Rejected:
+empty = TOSR older than BOS in TOSW allocation order, which a
+sentinel skip breaks (BP-138).
 
 Usable speculative depth: RAS_SPEC_ENTRIES - 1 = 15 entries
 (16 physical). One slot is always reserved as the BOS sentinel
@@ -423,7 +442,8 @@ Update: when a call-containing prediction block commits from
 the FTQ, the return address is pushed onto the commit stack
 and CSP advances. BOS in the speculative stack advances to the
 committing entry's post-op TOSR (ras_commit_snapshot.tosr),
-marking the new committed boundary. A mispredict restore in the
+marking the new committed boundary. When TOSR == BOS, TOSR moves
+to the new BOS with it (BP-138, 3.2). A mispredict restore in the
 same cycle wins over commit for BOS (restore > commit > hold).
 
 On commit of a return: CSP decrements. The commit stack entry
@@ -595,7 +615,8 @@ EVENT, see 4.4.1 -- that work does not touch this section.
 
 On FTQ entry commit: the speculative entry is confirmed. BOS
 advances to the committing entry's post-op TOSR
-(ras_commit_snapshot.tosr). No speculative RAM write occurs.
+(ras_commit_snapshot.tosr); when TOSR == BOS, TOSR moves with it
+(BP-138). No speculative RAM write occurs.
 A mispredict restore in the same cycle wins over commit for BOS
 (restore > commit > hold). Commit stack is updated as described
 in section 3.3.
@@ -1040,4 +1061,9 @@ Commit stack pointer width:
               and 5: the commit stack has no recursion count and keeps
               depth as repeated entries; commit_rctr removed (TD #79
               closed).
+
+  2026-10-17  session-081, after BP-138. 3.2: a bottom bit per entry;
+              TOSR == BOS kept exact across commits by three rules.
+              1: the undo of an operation begun on an empty stack.
+              3.3, 4.5: TOSR moves with BOS when the stack is empty.
 ```

@@ -22,7 +22,7 @@
 //   D  p3 and supersession    D1 D2
 //   E  history                TC-A..TC-G, E1 E2 E3
 //   F  metadata               F1 F2 F3
-//   (G H I J K L M N O follow; see each group's header)
+//   (G H I J K L M N O P follow; see each group's header)
 //
 // BP-126 adds, across every group: the FOLD monitor (an independent
 // history model traced through every TAGE, ITTAGE and SC ST1-ST3
@@ -4859,6 +4859,157 @@ module tb;
   endtask
 
   // =================================================================
+  // GROUP P -- a jump no slot carries (BP-138, D1)
+  // =================================================================
+  //
+  // An FTB entry holds two conditionals and a jump (2+1); the cluster
+  // places the jump in the lowest slot with no conditional. When every
+  // slot holds a conditional the jump is in no slot. Before BP-138 the
+  // block's not-taken successor was still the jump's end, so the
+  // predicted path stepped over the jump: not predicted taken, not
+  // presented to the RAS. Since BP-138 that block ends at the jump PC
+  // and the block starting there places the jump in slot 0.
+  //
+  // P1 {conditional, call}, the conditional not taken: the D1 case at
+  //    one slot (fd07's block f). At two slots the call is placed in
+  //    slot 1 and P1 is the control.
+  // P2 {conditional, conditional, jump}, both not taken: the D1 case at
+  //    two slots (twocond's shape), and at one slot too.
+  // Each: no successor of the block steps over the jump -- it is the
+  // jump's target when a slot carries the jump, else no later than the
+  // jump PC -- and a placed call is pushed on the RAS. Every case
+  // starts from reset (the FTB valid bits clear), with TAGE's bimodal
+  // table not taken, SC off, and the uBTB set and both loop banks of
+  // every requested PC cleared. The entry is installed through the
+  // FTB update port and its fields are read back at p2 first.
+  task automatic group_p();
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] jpc;
+    logic [VA_WIDTH-1:0] tgt;
+    logic [VA_WIDTH-1:0] exp_succ;
+
+    $display("---- GROUP P: a jump no slot carries, BP-138 ----");
+
+    // -- P1. Region-aligned start, so the jump PC is in the same region
+    //    and its lookup reads the same entry with the conditional
+    //    before the start hidden (ftb_decisions.md 4.6 R-1).
+    j_reset();
+    clr_upd_chans();
+    pc  = VA_WIDTH'('h00_0b10_0000);
+    jpc = pc + VA_WIDTH'('d10);              // pos 5, a 32-bit jal x1
+    tgt = pc + VA_WIDTH'('h700);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pc + VA_WIDTH'('h300), 4'd3,
+                   jpc + VA_WIDTH'(4), 1'b0);
+    ftb_alloc_jmp(pc, 2'd0, tgt, 4'd5, 1'b1, 1'b0, 1'b0,
+                  jpc + VA_WIDTH'(4), 1'b1);
+    ubtb_clear_set(pc);
+    ubtb_clear_set(jpc);
+    lp_clear_both(pc);
+    lp_clear_both(jpc);
+    chk("P1 the RAS starts empty", dut.u_ras.tosr === dut.u_ras.bos);
+    req(pc, 6'h28);
+    tick();
+    norq();
+    tick();                                  // pc at p2
+    chk("P1 fixture: the FTB answers with br0 at pos 3 and a call at 5",
+        dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
+     && (dut.w_ftb_br0_pos_p2 === 4'd3) && dut.w_ftb_jmp_valid_p2
+     && (dut.w_ftb_jmp_pos_p2 === 4'd5) && dut.w_ftb_is_call_p2
+     && !dut.w_ftb_br1_valid_p2);
+    chk("P1 p2: slot 0 is the conditional, not taken",
+        (dut.w_br_type_p2[0] === COND) && (dut.w_taken_p2[0] === 1'b0));
+    if (NUM_PRED_SLOTS > 1) begin
+      // Control: the call is placed in slot 1, reached, and pushed.
+      chk("P1 two slots: the call is in slot 1, on the path",
+          (dut.w_br_type_p2[S1] === DIRECT_CALL)
+       && (dut.w_ras_pred_val_p2[S1] === 1'b1));
+      exp_succ = tgt;
+    end else begin
+      exp_succ = jpc;
+    end
+    chk_eq("P1 the block's successor does not step over the call",
+           dut.w_succ_p2[0], exp_succ);
+    chk("P1 and it is no later than the call PC unless the call is taken",
+        (dut.w_succ_p2[0] === tgt) || (dut.w_succ_p2[0] <= jpc));
+    if (NUM_PRED_SLOTS == 1) begin
+      chk_eq("P1 one slot: the entry's fall-through is the call PC",
+             dut.bpu_blk_pft_p2, jpc);
+      // The next block starts at the call: its window shows the call
+      // first, and slot 0 carries it.
+      tick();
+      req(jpc, 6'h29);
+      tick();
+      norq();
+      tick();                                // jpc at p2
+      chk("P1 one slot: the block at the call PC places it in slot 0",
+          (dut.w_br_type_p2[0] === DIRECT_CALL)
+       && (dut.w_taken_p2[0] === 1'b1));
+      chk("P1 one slot: and presents it to the RAS",
+          dut.w_ras_pred_val_p2[0] === 1'b1);
+      chk_eq("P1 one slot: its successor is the call target",
+             dut.w_succ_p2[0], tgt);
+    end
+    tick();
+    chk("P1 the call was pushed: one speculative entry",
+        dut.u_ras.tosr !== dut.u_ras.bos);
+    chk_eq("P1 holding the call's return address, the call PC + 4",
+           dut.u_ras.spec_ret_addr[dut.u_ras.tosr], jpc + VA_WIDTH'(4));
+
+    // -- P2. Two conditionals and a plain jump (jal x0). Every slot
+    //    holds a conditional at either slot count, so the jump is in no
+    //    slot at either.
+    j_reset();
+    clr_upd_chans();
+    pc  = VA_WIDTH'('h00_0b20_0000);
+    jpc = pc + VA_WIDTH'('d12);              // pos 6, a 32-bit jal x0
+    tgt = pc + VA_WIDTH'('h500);
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pc + VA_WIDTH'('h300), 4'd1,
+                   jpc + VA_WIDTH'(4), 1'b0);
+    ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, pc + VA_WIDTH'('h340), 4'd3,
+                   jpc + VA_WIDTH'(4), 1'b1);
+    ftb_alloc_jmp(pc, 2'd0, tgt, 4'd6, 1'b0, 1'b0, 1'b0,
+                  jpc + VA_WIDTH'(4), 1'b1);
+    ubtb_clear_set(pc);
+    ubtb_clear_set(jpc);
+    lp_clear_both(pc);
+    lp_clear_both(jpc);
+    req(pc, 6'h2a);
+    tick();
+    norq();
+    tick();                                  // pc at p2
+    chk("P2 fixture: the FTB answers br0 pos 1, br1 pos 3, jump pos 6",
+        dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
+     && (dut.w_ftb_br0_pos_p2 === 4'd1) && dut.w_ftb_br1_valid_p2
+     && (dut.w_ftb_br1_pos_p2 === 4'd3) && dut.w_ftb_jmp_valid_p2
+     && (dut.w_ftb_jmp_pos_p2 === 4'd6) && !dut.w_ftb_is_call_p2
+     && !dut.w_ftb_is_ret_p2 && !dut.w_ftb_is_jalr_p2);
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      chk($sformatf("P2 p2: slot %0d is a conditional, not taken", s),
+          (dut.w_br_type_p2[s] === COND) && (dut.w_taken_p2[s] === 1'b0));
+    end
+    for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+      chk_eq($sformatf("P2 slot %0d's successor is the jump PC", s),
+             dut.w_succ_p2[s], jpc);
+    end
+    chk_eq("P2 the entry's fall-through is the jump PC",
+           dut.bpu_blk_pft_p2, jpc);
+    tick();
+    req(jpc, 6'h2b);
+    tick();
+    norq();
+    tick();                                  // jpc at p2
+    chk("P2 the block at the jump PC places the jump in slot 0, taken",
+        (dut.w_br_type_p2[0] === DIRECT_UNC) && (dut.w_taken_p2[0] === 1'b1));
+    chk_eq("P2 and its successor is the jump target", dut.w_succ_p2[0], tgt);
+
+    clr_upd_chans();
+    norq();
+    repeat (2) tick();
+    $display("---- GROUP P done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
   // GROUP M -- RETURN_CALL (TD#152) and the uBTB jump slot (TD#154),
   // BP-119
   // =================================================================
@@ -5454,6 +5605,7 @@ module tb;
     group_m();
     group_n();
     group_o();
+    group_p();
 
     mon_report();
     $display("INFO: %0d resets", n_resets);

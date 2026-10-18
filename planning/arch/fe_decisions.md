@@ -668,6 +668,13 @@ slots; the `pred_pc_p0 + 32` slot-1 lookup is retired.
 runtime. It does not change the structure: the slots and the channels
 exist either way.
 
+A JUMP NO SLOT CARRIES (BP-138, D1, option b, PROVISIONAL, accepted
+by Jeff). When every slot holds a conditional, the FTB jump is placed
+in no slot and the block ends at the jump PC: the p2 fall-through,
+bpu_blk_pft_p2, is the jump PC. The next block starts at the jump and
+places it in slot 0. At one slot this is any block with a conditional
+before its jump; at two, any block with two conditionals before it.
+
 ---
 
 ## 11. Invariants
@@ -1781,4 +1788,7 @@ create one.
 
   2026-10-15  session-080, after DOC-002. FE-17: the fe_top outputs
               no group names.
+
+  2026-10-17  session-081, after BP-138. 10: a jump no slot carries
+              ends the block at the jump PC (D1, provisional).
 ```

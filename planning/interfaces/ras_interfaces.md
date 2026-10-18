@@ -386,6 +386,10 @@ is presented as the TOS value.
 If both speculative and commit stacks are empty,
 ras_pop_valid_p2[s] and ras_tos_valid_p0[s] deassert.
 
+TOSR == BOS holds exactly when the speculative stack is empty,
+across commits (ras_decisions.md 3.2, BP-138). A pop never presents
+a speculative entry the stack does not hold.
+
 ### IC-RAS-08: Snapshot timing
 
 ras_snapshot_p2[s] reflects post-operation pointer state
@@ -429,6 +433,9 @@ On ras_commit_val with RETURN_CALL:
     state the first leaves (ras_decisions.md 3.3, RAS-DS1).
   - BOS updated once, from ras_commit_snapshot.
 
+In every arm, if TOSR == BOS when the commit moves BOS, TOSR moves
+to the new BOS in the same update (ras_decisions.md 3.2, BP-138).
+
 RETURN_CALL was listed in the call arm, so CSP advanced, while this
 section said it commits as the net effect of its pop and push.
 ras_decisions.md 3.3 owns the rule. Session-072. Built by BP-119;
@@ -436,7 +443,8 @@ before it, ras.sv did nothing with a RETURN_CALL commit.
 
 Commit is registered (takes effect the cycle after
 ras_commit_val is asserted). Commit does not interact with
-p2 push/pop combinationally.
+p2 push/pop combinationally, except that the TOSR move above
+applies to the TOSR the p2 scan leaves (BP-138).
 
 One commit event per cycle. The FTQ retires one entry per
 cycle; dual-slot simultaneous commit does not occur.
@@ -472,7 +480,9 @@ link (ras_decisions.md 3.2). Only the missed-push case (p2=no-op,
 p3=push) allocates and writes a new frontier entry. Undo-pop and
 the undo of a whole return-call restore the recursion counts the p2
 operation changed (BP-133, TD #78 closed); tb_ras TC-21,
-TC-38. A return-call paired with a plain push
+TC-38. The undo of an operation that began on an empty stack
+restores TOSR to BOS as it is at the undo (BP-138, tb_ras TC-43).
+A return-call paired with a plain push
 or pop: ras_decisions.md 1, as built, two of four wrong, unreachable
 by construction because ras_br_type_p3 is the registered p2 type
 (TD#165 closed session-076; ras_decisions.md 1 states what would
@@ -711,3 +721,8 @@ On rstn deassert (active low, synchronous):
               the undo restores recursion counts (TD #78 closed); the
               undo of a push that met a saturated count changes
               nothing.
+
+  2026-10-17  session-081, after BP-138. IC-RAS-07: TOSR == BOS exact
+              across commits. IC-RAS-10: TOSR moves with BOS when
+              the stack is empty. IC-RAS-11: the undo of an
+              operation begun on an empty stack.

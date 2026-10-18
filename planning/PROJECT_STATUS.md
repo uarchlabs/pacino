@@ -16,7 +16,50 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
-## Session-081: record corrections. Documents only.
+## Session-081, after BP-138: the RAS empty test and the unplaced jump.
+
+BP-138 COMPLETE (Jeff). 1h26m. regress.sh 274 targets PASS before and
+after. Checked by the PA against the Deliverables: every item present.
+  D2, RAS: TOSR == BOS failed after a commit moved BOS under an empty
+    speculative stack; the next return popped the old BOS slot (fd07:
+    0x0). Fixed in ras.sv by three rules (ras_decisions.md 3.2): a
+    bottom bit per entry, TOSR moved with BOS on a commit when empty,
+    the undo of an empty-start operation to BOS. tb_ras TC-41 to
+    TC-43; properties RS2, RS3. A first fix by allocation order was
+    withdrawn in the run: a sentinel skip breaks it.
+  D1, bp_cluster: option b, PROVISIONAL, ACCEPTED (Jeff). A jump in no
+    slot ends the block at the jump PC (fe_decisions.md 10). No FTB,
+    uBTB, package or port change; TD#179 records it.
+  fd07: valid p2 pops below 0x8000_0000 4 -> 0 at 2 slots, 7 -> 0 at
+    1; the 1-slot scratch build passes, max_rctr 3.
+  tb_fe_top: every program retires its stream at both slot counts.
+    D1 cuts redirects and mispredicts at 1 slot (rec_undo 335 -> 206
+    mispredicts). D2 lengthens some wrong paths (calls +3, nest +22,
+    deep +14, region +30 cycles), mispredicts unchanged.
+  Counts: sim_ras 220 -> 258, _1slot 195 -> 233; sim_bp_cluster,
+    _init, cov_bp_cluster 1995 -> 2011; _1slot, _init_1slot 1415 ->
+    1432; fe_top assert_labels 152 -> 154, _1slot 144 -> 146.
+  RS3 cannot see fault I5 (TOSR moved on every commit); the directed
+    tests catch it.
+  READ OUTSIDE THE MANIFEST AND GRANT, reported: rtl/Vars.mk, a grep
+    of TD#179 over planning/ and docs/, directory listings. Not used
+    for a decision. Jeff: the IA should ask first.
+  For DOC-006 (Jeff): fd07_calls_returns.md figures (2 slots: pushes
+    75, pops 194, cycles 1405) and the bp_cluster.sv and ras.sv line
+    citations in the descriptions; the map is in BP-138 Other Notes.
+  Noted, no TD opened: the commit-stack fallback is not consumed, so
+    two returns past an empty speculative stack both predict the
+    commit top (BP-138 Deferred Work).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ras_decisions.md, ras_interfaces.md,
+misc/ras_theory_of_operation.md, fe_decisions.md, ftb_decisions.md,
+ftb_interfaces.md, ftq_bpu_interfaces.md.
+
+Next free: BP-139, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+
+---
+## Session-081: record corrections; BP-138 written. Documents only.
 
 PA-DIRECT CORRECTION, session-081.
   PROJECT_CORE.md Tools Status: Surfer at $(HOME)/.cargo/bin/surfer
@@ -28,13 +71,28 @@ PA-DIRECT CORRECTION, session-081.
     against a listing of planning/ on 2026-10-17.
   Module Status: fe_demo_tb_decisions.md row names its registries,
     not a range.
-  Not in check_planning.sh: planning/arch/
-    ittage_cntrl_uaon_update_rules.md, a planning document on disk.
+  check_planning.sh: planning/arch/ittage_cntrl_uaon_update_rules.md
+    added; it was on disk and unchecked. File unchanged.
+
+BP-138 WRITTEN, not yet issued: two defects the IA found in an
+interactive 1-slot fe_demo trial (tree ab80cfe).
+  D2: the RAS pops a speculative entry as valid after a commit moves
+    BOS past an empty speculative stack; both slot counts. fd07 at 2
+    slots predicts a return to 0x0 four times.
+  D1: with every slot holding a conditional, the FTB jump is placed
+    in no slot, yet the fall-through is the jump's end. fd07 fails at
+    1 slot. Overlaps TD#179 item 1.
+  RULED (Jeff): the IA chooses the D1 fix among three options (jump
+    in the last slot; block ends before an unplaced jump; FTB
+    allocation bounded by the slot count), provisional. Options that
+    change the entry or placement are permitted for BP-138 only;
+    TD#179 stays open.
 
 Documents changed, every one in check_planning.sh with its new
 checksum: PROJECT_STATUS.md, PROJECT_CORE.md.
 
-Next free: BP-138, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+Next free: BP-139, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
 
 ---
 ## Session-080, after DOC-005: SURFER from Vars.mk; docs/ free of GTKWave.
@@ -3639,11 +3697,15 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | the commit stack keeps depth as  |
 |                         |             |                   | repeated entries, commit_rctr    |
 |                         |             |                   | removed (TD#79 closed).          |
+|                         |             |                   | Session-081: TOSR == BOS kept    |
+|                         |             |                   | exact across commits (BP-138).   |
 | ras_interfaces.md       | Draft       | --                | Created session-050. Session-061:|
 |                         |             |                   | ras_pc_p2 documented (TD#101).   |
 |                         |             |                   | Session-079: IC-RAS-11, the undo |
 |                         |             |                   | restores recursion counts        |
 |                         |             |                   | (TD#78).                         |
+|                         |             |                   | Session-081: IC-RAS-07, 10, 11   |
+|                         |             |                   | (BP-138).                        |
 | ras.sv                  | Complete    | tb_ras            | RTL BP-062, tb BP-063.           |
 |                         |             |                   | sim_ras 87/0.                    |
 |                         |             |                   | TD #78 pinned, TD #79 deferred.  |
@@ -3684,6 +3746,13 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | a push that met a saturated      |
 |                         |             |                   | count changes nothing; sim_ras   |
 |                         |             |                   | 220/0, 195/0 at 1 slot.          |
+|                         |             |                   | BP-138: TOSR == BOS kept exact   |
+|                         |             |                   | across commits (D2): a bottom    |
+|                         |             |                   | bit per entry, TOSR moved with   |
+|                         |             |                   | BOS on a commit when empty, the  |
+|                         |             |                   | undo of an empty-start operation |
+|                         |             |                   | to BOS. Properties RS2, RS3.     |
+|                         |             |                   | sim_ras 258/0, 233/0 at 1 slot.  |
 | ftb_decisions.md        | Complete    | --                | Created session-051. Promoted    |
 |                         |             |                   | Complete session-053.            |
 | ftb_interfaces.md       | Complete    | --                | Created session-052. IC-FTB-12..15|
@@ -3844,6 +3913,11 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | history ports sized by           |
 |                         |             |                   | NUM_PRED_SLOTS. BP-130:          |
 |                         |             |                   | correction path two bits.        |
+|                         |             |                   | BP-138: a jump in no slot ends   |
+|                         |             |                   | the block at the jump PC (D1,    |
+|                         |             |                   | option b, provisional,           |
+|                         |             |                   | accepted). sim_bp_cluster        |
+|                         |             |                   | 2011/0, 1432/0 at 1 slot.        |
 | bpu_port_inventory.md   | Working     | --                | INFRA-011. 140 ports, 141 with   |
 |                         |             |                   | ubtb's blk_p1 (s-071), across the|
 |                         |             |                   | eight top-level modules, read    |
@@ -5969,6 +6043,16 @@ numbers are issued from one sequence across both tables.
 |     |          | commit (XiangShan: commit); wrong-path training not      |
 |     |          | measurable with tb_fe_top. The tb_fe_top programs are    |
 |     |          | not representative enough to decide these (Jeff).        |
+|     |          | BP-138 (session-081, D1, option b, provisional, accepted |
+|     |          | by Jeff): a jump behind as many conditionals as there    |
+|     |          | are slots ends the predicted block at the jump PC; the   |
+|     |          | next block, starting at the jump, places it in slot 0.   |
+|     |          | The entry shape, the placement, the FTB and the uBTB are |
+|     |          | unchanged. Still open here: at one slot a second         |
+|     |          | conditional is never reported (BP-128 D2); the split of  |
+|     |          | ftb_decisions.md 3 is not built; the choice among the    |
+|     |          | options against compiled benchmarks. No tb_fe_top        |
+|     |          | program is slower from D1 at either slot count.          |
 | 180 | tools    | OPEN, VERIFICATION. tools/cov_table.py's tage and bpu    |
 |     |          | rows list tage.sv only; since BP-132 the TAGE            |
 |     |          | arbitration lines are in tage_arb.sv, so TAGE coverage   |

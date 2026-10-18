@@ -204,11 +204,17 @@ pointer, because the data is not overwritten.
 
 Push, pop, empty, and overflow then reduce to the following:
 
-- **Push:** write `ret_addr`/`rctr` to the TOSW slot (skipping the BOS
-  sentinel), set `TOSR = alloc`, advance `TOSW = alloc+1`.
-- **Pop:** present TOSR; `TOSR--` (or decrement `rctr`, Section 3.5).
+- **Push:** write `ret_addr`/`rctr` and the next-on-stack link to
+  the TOSW slot (skipping the BOS sentinel), set `TOSR = alloc`,
+  advance `TOSW = alloc+1`. An entry pushed onto an empty stack, or
+  by the sentinel skip, is marked bottom (BP-138).
+- **Pop:** present TOSR; TOSR follows the entry's link, or goes to
+  BOS when the entry is bottom (BP-138); or decrement `rctr`
+  (Section 3.5).
 - **Empty (`TOSR == BOS`):** fall through to the commit-stack top as
-  the prediction; the commit entry is not consumed.
+  the prediction; the commit entry is not consumed. The test stays
+  exact across commits by the three rules of `ras_decisions.md` 3.2
+  (BP-138).
 - **Full (`TOSW+1 == BOS`):** 15 entries live, one push remaining.
 - **Overflow (wrap):** the next push finds `TOSW == BOS` and takes
   the sentinel skip, allocating at `BOS+1`. This is not the loss of
@@ -321,7 +327,8 @@ call, the return address is pushed to the commit stack and CSP advances
 (TC-13); on commit of a return, CSP decrements (TC-14); BOS advances as
 described in Section 3.6. Commit is registered: it takes effect the
 cycle after `ras_commit_val` and does not interact combinationally with
-the s2 push/pop path.
+the s2 push/pop path, except that when the s2 scan leaves
+`TOSR == BOS`, a commit that moves BOS moves TOSR with it (BP-138).
 
 CSP is a free pointer: the top entry is at `CSP-1`. An occupancy
 count beside it, 0 to 32, says whether the stack is empty (BP-126,
