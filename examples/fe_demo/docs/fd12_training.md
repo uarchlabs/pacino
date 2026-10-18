@@ -4,9 +4,9 @@
 # fd12_training: Predictor Training and the FTB Update Bubble
 ```
  FILE:    fd12_training.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -20,11 +20,13 @@ withholds one p0 request. The run passes if every predictor receives at
 least one update and at least one p0 request is withheld for an FTB
 update.
 
-A recorded run (DOC-002):
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+A recorded run:
 
 ```
-DEMO PASS fd12_training: update cycles uBTB 154 LP 112 FTB 154 TAGE 112
-SC 112 ITTAGE 28 RAS commit 28; FTB update p0 holds 154 (cycles 449)
+-I: fd12_training: PASS, update cycles uBTB 154, loop predictor 112, FTB 154,
+    TAGE 112, SC 112, ITTAGE 28, RAS commit 28, p0 holds for an FTB update 154,
+    cyc 541
 ```
 
 ---
@@ -83,17 +85,17 @@ that its update falls after the measurement window closes.
    29-36).
 2. The cluster's type gate. `bp_cluster` classifies each update
    channel from its uBTB payload (`upd_br_type`,
-   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1678-1685`) and fans it out
+   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1715-1722`) and fans it out
    by type (fe_decisions.md 7.2):
-   - uBTB: any type but NO_BRANCH (`bp_cluster.sv:1691-1692`)
-   - LP: conditionals (`:1617-1618`)
+   - uBTB: any type but NO_BRANCH (`bp_cluster.sv:1728-1729`)
+   - LP: conditionals (`:1654-1655`)
    - TAGE, SC: conditionals, each also gated by its queue ready, SC by
-     `sc_enable` (`:1737-1746`)
-   - ITTAGE: INDIRECT_NONRET and INDIRECT_CALL (`:1683-1685`,
-     `:1740-1742`)
-   - FTB: its own channel, a branch or a jump (`:1582-1583`)
+     `sc_enable` (`:1774-1783`)
+   - ITTAGE: INDIRECT_NONRET and INDIRECT_CALL (`:1720-1722`,
+     `:1777-1779`)
+   - FTB: its own channel, for a branch or a jump (`:1619-1620`)
    - RAS commit: DIRECT_CALL, INDIRECT_CALL, RETURN, RETURN_CALL
-     (`:1588-1592`)
+     (`:1625-1629`)
 3. The FTB update bubble. The FTB has one read port. When
    `ftq_ftb_sched` will issue an FTB update next cycle (`issue_next`,
    `rtl/core/frontend/ftq/rtl/ftq_ftb_sched.sv:327`, wired to
@@ -105,7 +107,7 @@ that its update falls after the measurement window closes.
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:464-476`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:498-510`, sampled every cycle
 while the stream is being measured (`meas`,
 `rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:416`). They read
 the valids after the cluster's gates.
@@ -122,7 +124,7 @@ n_upd_ras    cycles with w_ras_commit_val
 n_ftb_bub    cycles with u_ftq.u_npc.h3_ftb_upd
 ```
 
-The proof (`tb/fe_demo_proofs.svh:97-99`) requires every one of the
+The proof (`tb/fe_demo_proofs.svh:108-110`) requires every one of the
 eight counts to be non-zero. `tb_fe_demo.sv` also requires the whole
 stream to retire with no errors before it accepts the proof.
 
@@ -135,12 +137,11 @@ stream to retire with no errors before it accepts the proof.
   ITTAGE 28 (the indirect jump and call), RAS commit 28 (the call and
   the return). FTB update p0 holds 154: one per FTB update.
 - Except `n_upd_ubtb`, the counters count cycles with any slot valid,
-  not slot updates; the DEMO line says "update cycles" for that
-  reason. DOC-002 changed `n_upd_ubtb` to sum its slots. In this run
-  the counts equal the transfer counts, so no cycle carried an update
-  on both slots; a DOC-002 scratch check of `n_upd_ubtb` against an
-  independent per-slot count found no such cycle either, and the
-  figure is unchanged by the fix.
+  not slot updates; the result line says "update cycles" for that
+  reason. DOC-002 changed `n_upd_ubtb` to sum its slots. On this model
+  a cycle has one slot, so every count is of single-slot updates.
+- The run takes 541 cycles on this model and took 449 on the two-slot
+  model (DOC-002); the update counts are the same on both.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-12: the
   program there is "any branch, first execution and the next"; the
   program as built is tb_fe_top's `loops`, with every update type, so
@@ -156,7 +157,7 @@ S=fd12_training` opens in Surfer. Groups: clock, backend, ftq_upd_conv,
 ftb_update, bp_cluster_p0. Look at:
 
 - `bkend_ftq_rsv_val`: a resolution from the backend.
-- `w_ubtb_upd_u0.[s].valid`, `w_lp_upd_val_p0`, `w_tage_upd_val_u0`,
+- `w_ubtb_upd_u0.[0].valid`, `w_lp_upd_val_p0`, `w_tage_upd_val_u0`,
   `w_sc_upd_val_u0`, `w_ittage_upd_val_u0`, `w_ras_commit_val`: the
   updates after the cluster's gates, by type.
 - `ftb_upd_valid_u0` with `ftb_upd_pc_u0`: an FTB update; in the cycle

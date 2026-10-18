@@ -7,25 +7,31 @@
 #
 # TARGETS:
 #
-#   fdNN_<name>   one scenario (FDT-8): builds if needed, runs it, and
-#                 writes out/fdNN_<name>/fdNN_<name>.fst (the waveform)
-#                 and .log (the run's output, ending in its result line,
-#                 FDT-10). Exits non-zero on a FAIL. The names are
-#                 SCENARIOS below, in FD order
+#   fdNN_<name>   one scenario (FDT-8): builds its model if needed, runs
+#                 it, and writes out/fdNN_<name>/fdNN_<name>.fst (the
+#                 waveform) and .log (the run's output, ending in its
+#                 result line, FDT-10). Exits non-zero on a FAIL. The
+#                 names are SCENARIOS below, in FD order
 #   scenarios     every scenario in FD order (FDT-9); stops at the
 #                 first FAIL. make -k scenarios runs them all
-#   build         the simulation model only
-#   clean         the model and out/
+#   build         both simulation models only
+#   clean         the models and out/
 #   view S=<scenario>
 #                 the scenario's waveform in Surfer with its command file
 #                 waves/<scenario>.sucl (FDT-9a, FDT-12a): the signals in
 #                 groups by unit, names of name type Unique, and the
 #                 event markers of docs/<scenario>.md (FDT-12c)
 #
-# view runs the scenario first when its FST is missing or older than the
-# model. Surfer is the one supported viewer (FDT-12). The variable SURFER
-# names it, default $(HOME)/.cargo/bin/surfer from rtl/Vars.mk, and the
-# command line or the environment may set it; for example
+# TWO BUILDS (DOC-006, Jeff session-081). The default model, OBJ, is
+# built at NUM_PRED_SLOTS = 1; a second model, OBJ2, at the package
+# default of 2. Each scenario runs on one of them: SCEN_2S at 2 slots,
+# every other scenario at 1. A scenario's output is out/<scenario>/
+# whichever model runs it.
+#
+# view runs the scenario first when its FST is missing or older than
+# its model. Surfer is the one supported viewer (FDT-12). The variable
+# SURFER names it, default $(HOME)/.cargo/bin/surfer from rtl/Vars.mk,
+# and the command line or the environment may set it; for example
 # make view S=fd09_tage SURFER=surfer takes the surfer on PATH.
 # SURFER_LOG, default warn, is Surfer's log level; SURFER_LOG=info gives
 # its full output.
@@ -153,28 +159,45 @@ TB_INCS  := $(wildcard tb/*.svh) $(wildcard programs/*.svh) \
 # -- Flags --------------------------------------------------------------
 # As tb_fe_top's (rtl/core/frontend/fe_top/Makefile): -Wall less
 # UNUSED and IMPORTSTAR, DECLFILENAME for module tb, VARHIDDEN for the
-# loop_pred.sv parameters, SYNCASYNCNET for sram_init. NUM_PRED_SLOTS
-# is 2, the package default; there is no 1-slot build (FDT-5).
+# loop_pred.sv parameters, SYNCASYNCNET for sram_init.
 # --trace-fst for the waveform (FDT-11), --trace-structs so struct
 # members appear by name. VL_USER_FINISH: the runtime's vl_finish is
 # replaced by tb/fe_demo_finish.cpp's, which prints nothing (FDT-10a).
 VER_FLAGS := --sv -Wall -Wno-UNUSED -Wno-IMPORTSTAR -Wno-DECLFILENAME \
              -Wno-VARHIDDEN -Wno-SYNCASYNCNET --timing \
              --trace-fst --trace-structs -CFLAGS -DVL_USER_FINISH
+
+# The two models. OBJ, the default, at one prediction slot: the macros
+# tb_fe_top's _1slot targets pass (rtl/core/frontend/fe_top/Makefile);
+# BP_EXPECT_PRED_SLOTS makes bp_defines_pkg check the count it builds.
+# OBJ2 at two, the package default, with no macro.
+SLOT1_FLAGS := +define+BP_NUM_PRED_SLOTS=1 +define+BP_EXPECT_PRED_SLOTS=1
 OBJ       := obj_fe_demo
+OBJ2      := obj_fe_demo_2slot
 VTB       := $(OBJ)/Vtb
+VTB2      := $(OBJ2)/Vtb
 
 FAST_INIT := +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
 # The runtime's end-of-run report off (FDT-10a).
 QUIET     := +verilator+quiet
 
-# The scenarios in FD order (fe_demo_scenarios.md FD-1 to FD-21).
+# The scenarios in FD order (fe_demo_scenarios.md FD-1 to FD-24).
 SCENARIOS := fd01_reset_init fd02_steady fd03_two_branch \
              fd04_p2_override fd05_p3_override fd06_loop_pred \
              fd07_calls_returns fd08_indirect fd09_tage \
              fd10_pd_redirect fd11_be_mispredict fd12_training fd13_l1i \
              fd14_translation fd15_faults fd16_page_cross fd17_rvc \
-             fd18_uncached fd19_fencei_cbo fd20_backpressure fd21_commit
+             fd18_uncached fd19_fencei_cbo fd20_backpressure fd21_commit \
+             fd22_sc_slot1 fd23_jump_cut fd24_call_slot1
+
+# The scenarios that run on the 2-slot model, OBJ2 (Jeff, session-081):
+# FD-3 and the three dual-slot scenarios. Every other scenario runs on
+# OBJ, at one slot.
+SCEN_2S   := fd03_two_branch fd22_sc_slot1 fd23_jump_cut fd24_call_slot1
+SCEN_1S   := $(filter-out $(SCEN_2S),$(SCENARIOS))
+
+# The model of scenario $(1).
+vtb_of = $(if $(filter $(1),$(SCEN_2S)),$(VTB2),$(VTB))
 
 # FD-1 runs the full init walk (FDT-7); every other scenario the fast
 # init.
@@ -183,38 +206,58 @@ plusargs = $(if $(filter fd01_reset_init,$(1)),,$(FAST_INIT))
 .PHONY: help build scenarios clean view $(SCENARIOS)
 
 help:
-	@echo "make <scenario>   run one scenario; out/<scenario>/ holds its"
-	@echo "                  waveform (.fst) and log"
+	@echo "make <scenario>   run one scenario on its model; out/<scenario>/"
+	@echo "                  holds its waveform (.fst) and log"
 	@echo "make scenarios    run all of them in FD order"
-	@echo "make build        build the model only"
-	@echo "make clean        remove the model and out/"
+	@echo "make build        build both models only"
+	@echo "make clean        remove the models and out/"
 	@echo "make view S=<scenario>"
 	@echo "                  open the scenario's waveform in Surfer"
 	@echo "                  (runs the scenario first if its FST is"
-	@echo "                  missing or older than the model;"
+	@echo "                  missing or older than its model;"
 	@echo "                  SURFER=$(SURFER) SURFER_LOG=$(SURFER_LOG))"
-	@echo "scenarios:"
-	@for s in $(SCENARIOS); do echo "  $$s"; done
+	@echo "scenarios (slots of the model each runs on):"
+	@for s in $(SCENARIOS); do \
+	  case " $(SCEN_2S) " in *" $$s "*) n=2;; *) n=1;; esac; \
+	  printf "  %-20s %s\n" $$s $$n; done
 
-build: $(VTB)
+build: $(VTB) $(VTB2)
 
-$(VTB): $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(TB_INCS) $(TB_CPP)
-	@echo "[compiling]  tb_fe_demo"
-	$(Q)$(VERILATOR) --binary $(VER_FLAGS) --top-module tb --Mdir $(OBJ) \
+DEPS := $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(TB_INCS) $(TB_CPP)
+
+# One compile recipe for both models: $(1) the Mdir, $(2) the extra
+# flags, $(3) the slot count for the message.
+define compile
+	@echo "[compiling]  tb_fe_demo, $(3) prediction slot(s)"
+	$(Q)$(VERILATOR) --binary $(VER_FLAGS) $(2) --top-module tb --Mdir $(1) \
 	  +incdir+$(MODELS) +incdir+tb +incdir+programs \
 	  $(RTL_SRCS) $(TB_PKG_SRCS) $(TB_TOP) $(abspath $(TB_CPP)) $(VSILENCE)
+endef
 
-# One scenario. The log keeps the run's whole output; the result line
-# (FDT-10), with its continuation lines, is also printed here. The exit
-# status is the simulation's.
-$(SCENARIOS): $(VTB)
+$(VTB): $(DEPS)
+	$(call compile,$(OBJ),$(SLOT1_FLAGS),1)
+
+$(VTB2): $(DEPS)
+	$(call compile,$(OBJ2),,2)
+
+# One scenario, on its model. The log keeps the run's whole output; the
+# result line (FDT-10), with its continuation lines, is also printed
+# here. The exit status is the simulation's.
+define run_scen
 	@echo "[running]    $@"
 	$(Q)mkdir -p out/$@
-	$(Q)./$(VTB) $(QUIET) $(call plusargs,$@) +SCEN=$@ \
+	$(Q)./$(call vtb_of,$@) $(QUIET) $(call plusargs,$@) +SCEN=$@ \
 	  +FST=out/$@/$@.fst > out/$@/$@.log 2>&1; rc=$$?; \
 	  awk '/^-[IE]: $@: (PASS|FAIL),/ {p = 1; print; next} \
 	       p && /^    / {print; next} {p = 0}' out/$@/$@.log; \
 	  exit $$rc
+endef
+
+$(SCEN_1S): $(VTB)
+	$(run_scen)
+
+$(SCEN_2S): $(VTB2)
+	$(run_scen)
 
 # The scenarios are its prerequisites, run in FD order; make stops at
 # the first FAIL, and make -k scenarios runs every one.
@@ -222,12 +265,12 @@ scenarios: $(SCENARIOS)
 
 clean:
 	@echo "[cleaning]   fe_demo"
-	$(Q)rm -rf $(OBJ) out
+	$(Q)rm -rf $(OBJ) $(OBJ2) out
 
 # -- Viewer (FDT-9a) ----------------------------------------------------
 # view opens Surfer with the command file (FDT-12a, FDT-12c). It checks
-# S, brings the model up to date, runs the scenario when its FST is
-# missing or older than the model, then opens Surfer. A run that ends in
+# S, brings the scenario's model up to date, runs the scenario when its
+# FST is missing or older than that model, then opens Surfer. A run that ends in
 # a FAIL still writes its FST, so Surfer opens on it with a note.
 # SURFER comes from rtl/Vars.mk, set there with ?= (FDT-9a); this
 # Makefile does not set it.
@@ -241,6 +284,7 @@ SURFER_LOG ?= warn
 SLOG        = RUST_LOG=$(SURFER_LOG)
 
 view_fst = out/$(S)/$(S).fst
+view_vtb = $(call vtb_of,$(S))
 
 view:
 	@if [ -z "$(S)" ]; then \
@@ -253,8 +297,8 @@ view:
 	  for s in $(SCENARIOS); do echo "  $$s"; done; \
 	  exit 1; \
 	fi
-	$(Q)$(MAKE) build
-	@if [ ! -f $(view_fst) ] || [ $(view_fst) -ot $(VTB) ]; then \
+	$(Q)$(MAKE) $(view_vtb)
+	@if [ ! -f $(view_fst) ] || [ $(view_fst) -ot $(view_vtb) ]; then \
 	  $(MAKE) $(S) || echo "[note]       $(S) did not pass; opening its FST"; \
 	fi
 	@test -f $(view_fst) || { echo "no waveform $(view_fst)"; exit 1; }

@@ -508,4 +508,85 @@
 |        |                       | TOOLS-004                                   |
 |        |                       | TOOLS-005                                   |
 |        | I$ research           | output session_handoff-069                  |
+
+|        |                       |                                        |
+
+| 69     | planning doc audit    | input  session_handoff-069             |
+|        |                       |                                        |
+|        |                       | output session_handoff-070             |
+
+| 70     | planning doc audit    | input  session_handoff-070             |
+|        |                       |                                        |
+|        |                       | output session_handoff-071             |
+
+| 71     | planning doc audit    | input  session_handoff-071             |
+|        |                       |                                        |
+|        |                       | output session_handoff-072             |
+
+| 72     | planning doc audit    | input  session_handoff-072             |
+|        |                       |                                        |
+|        |                       | output session_handoff-073             |
+
+| 73     | ??                    | input  session_handoff-073             |
+|        |                       | BP-109                                 |
+|        |                       | BP-110                                 |
+|        |                       | BP-111                                 |
+|        |                       | BP-112                                 |
+|        |                       | BP-113                                 |
+|        |                       | BP-114                                 |
+|        |                       | TOOLS-006                              |
+|        |                       | output session_handoff-074             |
+
+| 74     | ??                    | input  session_handoff-074             |
+|        |                       | BP-115                                 |
+|        |                       | BP-116                                 |
+|        |                       | TOOLS-006                              |
+|        |                       | output session_handoff-075             |
+
+| 75     | ??                    | input  session_handoff-075             |
+|        |                       | BP-117                                 |
+|        |                       | BP-118                                 |
+|        |                       | BP-119                                 |
+|        |                       | BP-120                                 |
+|        |                       | BP-121                                 |
+|        |                       | output session_handoff-076             |
+
+| 76     | ??                    | input  session_handoff-076             |
+|        |                       | BP-122                                 |
+|        |                       | output session_handoff-077             |
+
+| 77     | ??                    | input  session_handoff-077             |
+|        |                       | BP-123                                 |
+|        |                       | BP-124                                 |
+|        |                       | BP-125                                 |
+|        |                       | BP-126                                 |
+|        |                       | BP-127                                 |
+|        |                       | output session_handoff-078             |
+
+| 78     | ??                    | input  session_handoff-078             |
+|        |                       | BP-128                                 |
+|        |                       | BP-129                                 |
+|        |                       | BP-130                                 |
+|        |                       | BP-131                                 |
+|        |                       | BP-132                                 |
+|        |                       | BP-133                                 |
+|        |                       | output session_handoff-079             |
+
+| 79     | ??                    | input  session_handoff-079             |
+|        |                       | BP-134                                 |
+|        |                       | SYS-001                                |
+|        |                       | output session_handoff-080             |
+
+| 80     | ??                    | input  session_handoff-080             |
+|        |                       | BP-135                                 |
+|        |                       | BP-136                                 |
+|        |                       | BP-137                                 |
+|        |                       | DOC-001                                |
+|        |                       | DOC-002                                |
+|        |                       | DOC-003                                |
+|        |                       | DOC-004                                |
+|        |                       | DOC-005                                |
+|        |                       | SYS-002                                |
+|        |                       | output session_handoff-081             |
+
 ```

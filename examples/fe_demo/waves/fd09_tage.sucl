@@ -1,4 +1,5 @@
-# fd09_tage, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd09_tage, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd09_tage/fd09_tage.fst, 1 prediction slot(s)
 # surfer out/fd09_tage/fd09_tage.fst -c waves/fd09_tage.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,81 +18,55 @@ variable_add tb.dut.u_bpu.w_tage_pred_rdy_p2
 item_focus e
 group_marked tage_p2
 item_focus f
-item_set_format Unsigned
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_alt_comp
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_using_primary
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_ctr
-item_set_format Unsigned
+item_set_format Binary
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_pred_tkn
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_prm_comp
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_alt_comp
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_using_primary
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_prm_ctr
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[1].tage_pred_tkn
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus ba
+item_focus l
 group_marked bp_cluster_p2
-item_focus bb
-item_set_format Binary
+item_focus m
+item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_idx_p2
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.w_ftb_valid_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_p2.[0].slot_valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_p2.[0].br_type
 item_set_format Enum
 variable_add tb.dut.bpu_slot_p2.[0].pos
 item_set_format Unsigned
 variable_add tb.dut.bpu_slot_p2.[0].taken
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_p2.[0].target
 item_set_format Hexadecimal
 variable_add tb.dut.bpu_slot_p2.[0].pred_src
 item_set_format Enum
-variable_add tb.dut.bpu_slot_p2.[1].slot_valid
-item_set_format Binary
-variable_add tb.dut.bpu_slot_p2.[1].br_type
-item_set_format Enum
-variable_add tb.dut.bpu_slot_p2.[1].pos
-item_set_format Unsigned
-variable_add tb.dut.bpu_slot_p2.[1].taken
-item_set_format Binary
-variable_add tb.dut.bpu_slot_p2.[1].target
-item_set_format Hexadecimal
-variable_add tb.dut.bpu_slot_p2.[1].pred_src
-item_set_format Enum
 variable_add tb.dut.bpu_redir_p2.[0].valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_redir_p2.[0].target_pc
-item_set_format Hexadecimal
-variable_add tb.dut.bpu_redir_p2.[1].valid
-item_set_format Binary
-variable_add tb.dut.bpu_redir_p2.[1].target_pc
 item_set_format Hexadecimal
 variable_add tb.dut.bpu_redir_idx_p2
 item_set_format Unsigned
 item_unfocus
 # group backend
 variable_add tb.bkend_ftq_redir_val
-item_focus cg
+item_focus bj
 group_marked backend
-item_focus ch
-item_set_format Binary
+item_focus bk
+item_set_format Bit
 variable_add tb.bkend_ftq_redir_pc
 item_set_format Hexadecimal
 variable_add tb.bkend_ftq_redir_cause
@@ -99,60 +74,38 @@ item_set_format Enum
 item_unfocus
 # group ftq_upd_conv
 variable_add tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[0].pc
-item_focus ck
+item_focus bn
 group_marked ftq_upd_conv
-item_focus cl
-item_set_format Hexadecimal
-variable_add tb.dut.u_ftq.u_upd_conv.lp_upd_p0.[1].pc
+item_focus bo
 item_set_format Hexadecimal
 item_unfocus
 # group tage_update
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.trx_type
-item_focus cn
+item_focus bp
 group_marked tage_update
-item_focus co
-item_set_format Binary
+item_focus ca
+item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].cond_mispredict
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].resolved_taken
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_comp
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_comp
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_pred_weak
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_tkn
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[0].tage_pred_meta.tage_alt_tkn
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].cond_mispredict
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].resolved_taken
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_prm_comp
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_alt_comp
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_pred_weak
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_prm_tkn
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_inp_u0.[1].tage_pred_meta.tage_alt_tkn
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.[0]
-item_set_format Binary
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_wr.[1]
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[0]
 item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.u_alc_comp.[1]
-item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[1]
 item_set_format Unsigned
 item_unfocus
 # markers, from docs/fd09_tage.md section 4
@@ -162,13 +115,12 @@ marker_set c19_first_allocation_write 225
 marker_set c20_first_backend_misprediction 235
 marker_set c23_first_FTB_hit_at_p2 265
 marker_set c34_that_prediction_wrong 375
-marker_set c52_first_taken_B_resolved 555
-marker_set c60_allocation_for_that_B 635
-marker_set c97_first_prediction_from_a_tagged_table 1005
-marker_set c221_uaon_first_increments 2245
-marker_set c447_uaon_reaches_8 4505
-marker_set c460_first_prediction_from_T0 4635
-marker_set c1266_back_edge_falls_through 12695
-marker_set c1277_the_run_ends 12805
+marker_set c119_first_prediction_from_a_tagged_table 1225
+marker_set c145_uaon_first_increments 1485
+marker_set c156_first_taken_B_resolved 1595
+marker_set c1364_uaon_reaches_8 13675
+marker_set c1392_first_prediction_from_T0 13955
+marker_set c3556_back_edge_falls_through 35595
+marker_set c3567_the_run_ends 35705
 item_unfocus
 zoom_to 16 336

@@ -1,4 +1,5 @@
-# fd11_be_mispredict, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd11_be_mispredict, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd11_be_mispredict/fd11_be_mispredict.fst, 1 prediction slot(s)
 # surfer out/fd11_be_mispredict/fd11_be_mispredict.fst -c waves/fd11_be_mispredict.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,9 +18,9 @@ variable_add tb.dec_ibuf_rdy
 item_focus e
 group_marked decode
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].start_pc
 item_set_format Hexadecimal
 variable_add tb.pd_out.[0].ftq_idx
@@ -29,7 +30,7 @@ item_set_format Unsigned
 variable_add tb.pd_out.[0].instr
 item_set_format Hexadecimal
 variable_add tb.pd_out.[0].is_rvc
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
@@ -40,7 +41,7 @@ variable_add tb.bkend_ftq_redir_val
 item_focus o
 group_marked backend
 item_focus p
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
 variable_add tb.bkend_ftq_redir_pc
@@ -48,11 +49,11 @@ item_set_format Hexadecimal
 variable_add tb.bkend_ftq_redir_cause
 item_set_format Enum
 variable_add tb.bkend_ftq_redir_self
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_rsv_val
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.bkend_ftq_commit_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
 item_unfocus
@@ -61,34 +62,34 @@ variable_add tb.dut.u_ftq.w_ok_pred_p1
 item_focus bh
 group_marked ftq
 item_focus bi
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_idx
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.w_commit_ptr
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_empty
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
 item_focus cc
 group_marked ftq_ifu
 item_focus cd
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_start_pc
@@ -96,11 +97,11 @@ item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_next_pc
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_taken_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_taken_pos
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_flush_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_flush_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
@@ -111,15 +112,15 @@ variable_add tb.dut.ftq_rollback_val
 item_focus cn
 group_marked bp_history_ras
 item_focus co
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_rollback_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_rollback_corr
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_ghist_ptr
 item_set_format Unsigned
 variable_add tb.dut.ras_restore_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ras_restore_snapshot.tosr
 item_set_format Unsigned
 variable_add tb.dut.ras_restore_snapshot.tosw
@@ -132,12 +133,12 @@ variable_add tb.dut.ftq_pred_val_p0
 item_focus dg
 group_marked bp_cluster_p0
 item_focus dh
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 zoom_fit

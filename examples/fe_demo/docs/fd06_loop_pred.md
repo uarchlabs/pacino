@@ -4,9 +4,9 @@
 # fd06_loop_pred: Loop Predictor
 ```
  FILE:    fd06_loop_pred.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -17,11 +17,11 @@ loop's trip count, reaches full confidence, and from then on supplies
 the inner loop branch's direction, including the not-taken exit. The run
 passes if at least one retired exit was predicted not taken by the LP.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd06_loop_pred: loop exits the LP predicted not taken 10
-(cycles 428)
+-I: fd06_loop_pred: PASS, loop exits predicted by the loop predictor 10, cyc 428
 ```
 
 ---
@@ -78,10 +78,10 @@ bank per slot.
    predicted not taken.
 4. Override. At p1, a trusted LP overrides the direction of a slot the
    uBTB supplied and the slot carries `pred_src = PRED_LOOP`
-   (`rtl/core/frontend/bpu/rtl/bp_cluster.sv:791-796`). At p2 the LP
+   (`rtl/core/frontend/bpu/rtl/bp_cluster.sv:797-802`). At p2 the LP
    takes priority over TAGE for a conditional (`w_lp_use_p2`,
-   `bp_cluster.sv:1015-1020`) and the slot again carries `PRED_LOOP`
-   (line 1100).
+   `bp_cluster.sv:1024-1029`) and the slot again carries `PRED_LOOP`
+   (line 1132).
 
 From the run (out/fd06_loop_pred/fd06_loop_pred.fst, slot 0 of
 `w_lp_pred_p2`): `lp_past_itr` reads 8 from cycle 120, `lp_conf` steps
@@ -94,7 +94,7 @@ backend redirects to 0x8000_001A at cycles 39, 89 and 114.
 ## 3. What the monitor counts
 
 The count is taken at retirement, in the backend's retire hook
-(`tb/fe_demo_mon.svh:264-267`):
+(`tb/fe_demo_mon.svh:298-301`):
 
 ```
 n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
@@ -103,11 +103,11 @@ n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
 ```
 
 The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:232-241`), found by position
-(`slot_at`, line 244).
+p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:266-275`), found by position
+(`slot_at`, line 278).
 
-The proof (`tb/fe_demo_proofs.svh:58`) is `n_lp_exit_ok > 0`.
-`tb_fe_demo.sv:144` also requires the whole stream to retire with no
+The proof (`tb/fe_demo_proofs.svh:72`) is `n_lp_exit_ok > 0`.
+`tb_fe_demo.sv:160` also requires the whole stream to retire with no
 errors before it accepts the proof.
 
 ---
@@ -120,10 +120,12 @@ errors before it accepts the proof.
 - The count is of retired exits, each counted once, so it cannot exceed
   16.
 - Spec and build agree on program and proof. The FD-6 waveform entry
-  names "loop predictor entry"; the save file shows the LP through the
-  slot outputs (`pred_src`, `taken`) and `w_lp_upd_val_p0`, not the
-  table entry. `w_lp_pred_p1` and `w_lp_pred_p2` (`lp_conf`,
-  `lp_past_itr`, `lp_curs`) are in the FST and can be added.
+  names "loop predictor entry". The command file shows the loop
+  predictor's per-slot answers in the group `loop_pred_p1_p2`, which
+  stand in for the table entry. The p1 answer shows its hit and its
+  direction. The p2 answer, which re-reads the same entry, also shows
+  the speculative count `lp_curs` and the learned trip count
+  `lp_past_itr` with its confidence `lp_conf` (DOC-006).
 
 ---
 
@@ -132,10 +134,12 @@ errors before it accepts the proof.
 The saved view is `waves/fd06_loop_pred.sucl`, which `make view
 S=fd06_loop_pred` opens in Surfer. Look at:
 
-- `bpu_pred_slot_p1.[s]` and `bpu_slot_p2.[s]`: `pred_src` 1
-  (`PRED_LOOP`) on the slot of I from about cycle 192, with `taken`
-  dropping on the tenth iteration.
+- `bpu_pred_slot_p1.[0]` and `bpu_slot_p2.[0]`: `pred_src` `PRED_LOOP`
+  on the slot of I from cyc 192, with `taken` dropping on the tenth
+  iteration.
+- `w_lp_pred_p2.[0]`: `lp_past_itr` 8 from cyc 120, `lp_conf` reaching
+  3 at cyc 190, `lp_pred_is_loop` first set at cyc 192.
 - `w_lp_upd_val_p0`: the LP updates as I resolves.
-- `bkend_ftq_redir_val` is absent from this save file; the three early
-  exit mispredicts show as `w_redir_val` in the ftq group.
+- `bkend_ftq_redir_val` is absent from this command file; the three
+  early exit mispredicts show as `w_redir_val` in the ftq group.
 - `pd_out.[0]`: the retirement stream at decode.

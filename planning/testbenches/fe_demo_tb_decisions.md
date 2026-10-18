@@ -27,10 +27,12 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
          programs/    one program per scenario, or per group of
                       scenarios (fe_demo_scenarios.md FD-U1)
          waves/       one Surfer command file per scenario;
-                      fe_demo_sigs.py, the signal lists and formats
-                      they are written from, and the FST reader;
-                      mk_sucl.py, the generator, which also reads the
-                      descriptions' event tables (FDT-12c);
+                      fe_demo_sigs.py, the signal lists, built for
+                      the slot count of the model that wrote each FST,
+                      the format table FORMATS, and the FST reader;
+                      mk_sucl.py, the generator, which writes each
+                      command file from its own scenario's FST and
+                      reads the descriptions' event tables (FDT-12c);
                       chk_sucl.py, which loads each command file in
                       Surfer and checks it against fe_demo_sigs.py,
                       FDT-12a and FDT-12c
@@ -42,7 +44,9 @@ FDT-1  The testbench is examples/fe_demo/, a top-level directory beside
        tb/ holds tb_fe_demo.sv, fe_demo_mon.svh, fe_demo_lib.svh,
        fe_demo_proofs.svh and fe_demo_finish.cpp.
        Run output goes to examples/fe_demo/out/<scenario>/, which is
-       not committed.
+       not committed. The two models are built into
+       examples/fe_demo/obj_fe_demo/ (one slot) and obj_fe_demo_2slot/
+       (two slots), not committed.
 FDT-2  examples/ is not scanned by tools/regress.sh and has no
        regression target.
 
@@ -64,7 +68,12 @@ FDT-4  The testbench models of tb_fe_top -- the memory model shared by
        fe_tb_backend and fe_tb_csr (.svh), include fragments of module
        tb. The including testbench defines be_retire_hook and
        be_trap_hook. The backend's be_rdy_pat is 0 for tb_fe_top.
-FDT-5  NUM_PRED_SLOTS = 2. No 1-slot build.
+FDT-5  Two builds (Jeff, session-081). The default model is built at
+       NUM_PRED_SLOTS = 1 (+define+BP_NUM_PRED_SLOTS=1
+       +define+BP_EXPECT_PRED_SLOTS=1), in obj_fe_demo/; a second at
+       2, the package default, in obj_fe_demo_2slot/. Each scenario
+       names the build it runs on (fe_demo_scenarios.md FD-0a); the
+       Makefile lists the 2-slot scenarios in SCEN_2S.
 FDT-6  CSR state comes from csr_tb_pkg (csr_decisions.md CSR-2).
 FDT-7  Every scenario runs with the fast SRAM init except FD-1, which
        runs the full init walk.
@@ -74,15 +83,17 @@ FDT-7  Every scenario runs with the fast SRAM init except FD-1, which
 ## 3. Running
 
 FDT-8  One make target per scenario, named by its FD number and a short
-       name (for example fd04_p2_override). A target builds if needed,
-       runs the scenario and writes its waveform and log. Names are
-       fdNN_<name>; output is out/<name>/<name>.fst and .log.
+       name (for example fd04_p2_override). A target builds the model
+       of its scenario's build if needed, runs the scenario and writes
+       its waveform and log. Names are fdNN_<name>; output is
+       out/<name>/<name>.fst and .log, for either build.
 FDT-9  A make target, scenarios, runs every scenario in FD order. It
        stops at the first failing scenario; make -k scenarios runs all.
 FDT-9a make view S=<scenario> opens the scenario in Surfer with its
        command file. <scenario> is the target name of FDT-8
-       (fd02_steady). It runs the scenario first when its FST is
-       missing or older than the model. A missing S prints the usage
+       (fd02_steady). It brings the scenario's model up to date and
+       runs the scenario first when its FST is missing or older than
+       that model. A missing S prints the usage
        and fails; an S that is not a scenario lists the valid names
        and fails. The viewer is the variable SURFER, set in
        rtl/Vars.mk to $(HOME)/.cargo/bin/surfer with ?=, so the
@@ -144,8 +155,22 @@ FDT-12a waves/<scenario>.sucl is a Surfer command file: the signals of
          cyc                 Unsigned
          an enum-typed field Enum, the value names Verilator writes
                              into the FST
-         every other signal  the format fe_demo_sigs.py gives it:
-                             Binary, Hexadecimal or Unsigned
+         every other signal  the format of the table FORMATS in
+                             fe_demo_sigs.py (Jeff, session-081)
+       The table's rules:
+         a 1-bit signal                     Bit
+         a per-slot or per-lane mask        Binary
+         a count or iteration number        Unsigned, at any width
+         the SRAM init write addresses      Unsigned
+         an address, target, PC or data     Hexadecimal
+         an encoded field                   Unsigned; its encoding is
+                                            given in the description
+                                            that shows it
+       The encoded fields are itlb_ifu_status, itlb_ifu_cause,
+       l2t_itlb_status, l2t_itlb_cause, itlb_l2t_priv and trx_type. At
+       one slot a per-slot mask is 1 bit, so Bit. A signal the table
+       does not match stops mk_sucl.py. The signals of a per-slot list
+       are those of the slot count of the model that wrote the FST.
 FDT-12b Every Surfer file shows the testbench cycle counter cyc, which
        counts cycles from the release of reset.
 FDT-12c A Surfer file places one marker per event of the scenario's
@@ -248,4 +273,7 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               FDT-13 item 4 events.
   2026-10-16  session-080. FDT-9a: SURFER's default is rtl/Vars.mk's
               (Jeff fixed Vars.mk); the Makefile workaround goes.
+  2026-10-18  session-081, after DOC-006. FDT-1 waves/ and the model
+              directories; FDT-5 two builds (Jeff); FDT-8, FDT-9a per
+              build; FDT-12a the format table (Jeff).
 ```

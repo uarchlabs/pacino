@@ -4,9 +4,9 @@
 # How a Demonstration Scenario Is Built and Run
 ```
  FILE:    demo_explainer.md
- SOURCE:  DOC-003, session-080
+ SOURCE:  DOC-003, session-080, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -28,7 +28,7 @@ Paths are relative to the repository root unless they begin with
 
 A scenario is one short program run on the pacino front end, `fe_top`,
 to make one behaviour visible in a waveform. The scenarios are listed
-in `planning/showcase/fe_demo_scenarios.md` as FD-1 to FD-21. Each has
+in `planning/showcase/fe_demo_scenarios.md` as FD-1 to FD-24. Each has
 a make target named `fdNN_<name>`, for example `fd09_tage`, and three
 files of its own:
 
@@ -38,11 +38,22 @@ files of its own:
   their groups and formats, and the event markers;
 - `docs/fdNN_<name>.md`, its description.
 
-Every scenario runs the same simulation model. The testbench top is
-`tb/tb_fe_demo.sv`, module `tb`. It instantiates `fe_top` as `tb.dut`
-and the page table walker beside it as `tb.u_ptw`, with two prediction
-slots per fetch block. The plusarg `+SCEN=<name>` selects the scenario;
+The testbench top is `tb/tb_fe_demo.sv`, module `tb`. It instantiates
+`fe_top` as `tb.dut` and the page table walker beside it as
+`tb.u_ptw`. The plusarg `+SCEN=<name>` selects the scenario;
 `run_scen` in `tb/tb_fe_demo.sv` calls its `prog_fdNN` task.
+
+The `Makefile` builds this top twice, as two simulation models that
+differ only in the number of prediction slots per fetch block,
+`NUM_PRED_SLOTS` (the glossary's prediction slot). The default model,
+in `obj_fe_demo/`, has one slot, so each fetch block predicts one
+branch. The second, in `obj_fe_demo_2slot/`, has two, the package
+default. A scenario runs on one of them. FD-3 and FD-22 to FD-24 need
+a second slot and run on the two-slot model (`SCEN_2S` in the
+`Makefile`); every other scenario runs on the one-slot model.
+Its description says which. `make fdNN_<name>` builds the scenario's
+model if needed and runs it; the output is `out/fdNN_<name>/` for
+either model.
 
 A run has four steps, all in `tb/fe_demo_lib.svh` or the program task:
 
@@ -192,8 +203,8 @@ continues on lines indented four spaces. The result line gives PASS or
 FAIL, then the counts the proof read, then the cycle count:
 
 ```
--I: fd09_tage: PASS, tagged-provider predictions 216, allocations 65,
-    T0 by use_alt_on_na 37, cyc 1277
+-I: fd09_tage: PASS, tagged-provider predictions 253, allocations 209,
+    T0 by use_alt_on_na 75, cyc 3567
 ```
 
 When the expected instructions did not all retire, the failing line
@@ -248,11 +259,29 @@ array, for example `tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]`,
 and a member of a structure in an array the same way, for example
 `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp`.
 
-A signal of an enumerated type is shown by its value names, for
-example PRED_TAGE or NO_BRANCH. `tb.clk` is drawn as a clock and
-`tb.cyc` is shown in decimal. A scenario whose description has an
-event table (section 4) opens with one marker per event, named
-c<cyc>_<label>, and the view at the first marker.
+Every signal's display format comes from one table, `FORMATS` in
+`waves/fe_demo_sigs.py` (DOC-006):
+
+- `tb.clk` is drawn as a clock; `tb.rstn` and every other 1-bit signal
+  as a bit;
+- a signal of an enumerated type is shown by its value names, for
+  example PRED_TAGE or NO_BRANCH;
+- a per-slot or per-lane mask, such as `w_tage_pred_rdy_p2` on the
+  two-slot model or `ifu_ibuf_en`, in binary; on the one-slot model a
+  per-slot mask is 1 bit and is shown as a bit;
+- a count or an iteration number in decimal at any width, as is
+  `tb.cyc`. Indices and pointers are shown in decimal as well, and so
+  are positions and table numbers;
+- an address or a data value in hexadecimal; a target or a PC is an
+  address;
+- an encoded field, such as `trx_type` or `itlb_ifu_status`, as its
+  number. The descriptions that show one give its encoding.
+
+The signal lists follow the slot count of the model: a one-slot
+waveform shows slot 0 of each per-slot signal, a two-slot waveform
+slots 0 and 1. A scenario whose description has an event table
+(section 4) opens with one marker per event, named c<cyc>_<label>, and
+the view at the first marker.
 
 ---
 
@@ -290,10 +319,13 @@ T0 always has a prediction. Its entries start at 2'b10, weakly taken.
 
 **block, fetch block.** The unit the predictors and the fetch unit
 work on: consecutive code starting at one address and covering at most
-32 bytes. A block ends at the first predicted-taken control transfer. A
-32-bit instruction that starts in the last two bytes is delivered with
-the block, which then spans 34 bytes. One FTQ entry describes one
-block.
+32 bytes. A block ends at the first predicted-taken control transfer.
+When every prediction slot holds a conditional and the FTB also holds a
+jump after them, the block ends at the jump's address, and the next
+block starts with the jump (`planning/arch/fe_decisions.md` section 10;
+`fd23_jump_cut`). A 32-bit instruction that starts in the last two
+bytes is delivered with the block, which then spans 34 bytes. One FTQ
+entry describes one block.
 
 **BPU, branch prediction unit.** `bp_cluster.sv`, instance
 `tb.dut.u_bpu`: the uBTB, FTB, TAGE, SC, ITTAGE, loop predictor and RAS,
@@ -379,10 +411,15 @@ tables, their counters and directions, the allocation candidate and
 whether use_alt_on_na was used. It travels with the FTQ entry and comes
 back with the update as `tage_upd_inp_u0[s].tage_pred_meta`.
 
-**prediction slot.** One of the positions in a block's prediction that
-each describe one branch. Pacino has two (`NUM_PRED_SLOTS`), so up to
-two branches in a block are predicted. TAGE keeps separate state for
-each slot, such as the use_alt_on_na counter.
+**prediction slot.** One of the positions in a block's prediction that each
+describe one branch (`bp_ftq_slot_t` in `bp_structs_pkg.sv`). `NUM_PRED_SLOTS`
+sets how many a block has, and so how many of its branches are predicted; the
+slots are the branch fields of one FTB entry, slot 0 the earliest branch
+(`planning/arch/fe_decisions.md` section 10). The demonstration builds one model
+with one slot and one with two (section 1). TAGE keeps separate state for each
+slot, such as the use_alt_on_na counter. A branch of a block that no slot holds
+is not predicted: fetch runs past it, and the backend corrects it if it is
+taken.
 
 **provider (TAGE).** The tagged table with the longest history whose
 entry matches the branch, or T0 when no tagged table matches. Its

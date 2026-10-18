@@ -4,9 +4,9 @@
 # fd19_fencei_cbo: FENCE.I and cbo.inval
 ```
  FILE:    fd19_fencei_cbo.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -19,11 +19,13 @@ the L1I drains and clears, the IFU acknowledges, and the backend
 restarts fetch at the next instruction. The run passes if both
 invalidates complete and fetch restarts after each.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd19_fencei_cbo: invalidates all 1, line 1; done 2; acks 2;
-restarts at the next instruction 2 (cycles 255)
+-I: fd19_fencei_cbo: PASS, whole-cache invalidates 1, line invalidates 1,
+    invalidates done 2, maintenance acknowledgements 2,
+    restarts at the next instruction 2, cyc 255
 ```
 
 ---
@@ -31,8 +33,8 @@ restarts at the next instruction 2 (cycles 255)
 ## 1. The program
 
 Source: `programs/fd19_fencei_cbo.svh`, task `prog_fd19`, with the
-self-modifying-code pieces `smc_fn`, `smc_store` and `smc_call_new`
-(`tb/fe_demo_lib.svh:118-151`, after tb_fe_top's `smc_*`). M-mode,
+self-modifying-code tasks `smc_*` (`tb/fe_demo_lib.svh:148-187`, after
+tb_fe_top's tasks of the same names). M-mode,
 bare. Offsets from RESET_VECTOR 0x8000_0000; f = +0x800, g = +0xC40.
 Addresses derived from the source.
 
@@ -113,7 +115,7 @@ cycle  FENCE.I                       cbo.inval
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:512-527`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:551-566`, sampled every cycle
 while `meas` is set.
 
 ```
@@ -127,7 +129,7 @@ n_restart    the first fetch the FTQ presents after the ack
              starts at mt_pc
 ```
 
-The proof (`tb/fe_demo_proofs.svh:134`) is `n_inv_all > 0 &&
+The proof (`tb/fe_demo_proofs.svh:152-153`) is `n_inv_all > 0 &&
 n_inv_line > 0 && n_inv_done >= 2 && n_restart >= 2`. `n_mt_ack` is
 only reported. `tb_fe_demo.sv` also requires the whole stream to retire
 with no errors, which here includes the new bodies of f and g.
@@ -136,9 +138,9 @@ with no errors, which here includes the new bodies of f and g.
 
 ## 4. Reading the numbers
 
-- One FENCE.I, one cbo.inval: `invalidates all 1, line 1`, a done and
-  an ack for each, and each followed by a fetch at the next
-  instruction.
+- One FENCE.I, one cbo.inval: `whole-cache invalidates 1, line
+  invalidates 1`, a done and an ack for each, and each followed by a
+  fetch at the next instruction.
 - The drains had nothing to wait for. At the FENCE.I take
   `mt_busy_any` was 0. At the cbo.inval take `mt_busy_any` was 1 (the
   fills of the code after it), but inv_line waits only for
@@ -164,11 +166,12 @@ S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 73-82 and
 
 - `cmt_ifu_maint_val`, `cmt_ifu_maint_op` (0 FENCE.I, 1 cbo.inval) and
   `cmt_ifu_maint_paddr`.
-- `u_maint.r_st` 1, 2, 3; `ifu_l1i_inv_val` with `ifu_l1i_inv_rdy`,
-  `ifu_l1i_inv_all` and `ifu_l1i_inv_paddr`.
+- the IFU's `u_maint.r_st` stepping from I_REQ to I_ACK, and
+  `ifu_l1i_inv_val` with `ifu_l1i_inv_rdy`. `ifu_l1i_inv_all` is set
+  for the FENCE.I; `ifu_l1i_inv_paddr` names the cbo.inval's line.
 - `mt_busy_any`, `l1i_ifu_inv_done`, `ifu_cmt_maint_ack`.
-- `bkend_ftq_redir_val` with `bkend_ftq_redir_cause` 2, then
+- `bkend_ftq_redir_val` with `bkend_ftq_redir_cause` RC_REPLAY, then
   `ftq_ifu_req_val` with `ftq_ifu_start_pc` at the next instruction.
 - `mt_busy_line`, which decides the cbo.inval drain, and the L1I's
-  `u_maint.r_st` are not in the save file; add them from
-  `tb.dut.u_l1i` if wanted.
+  `u_maint.r_st` (M_DRAIN, M_CLEAR, M_DONE), both in the maintenance
+  group.

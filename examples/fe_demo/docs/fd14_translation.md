@@ -4,9 +4,9 @@
 # fd14_translation: Sv39 Walk, Sv39x4 Nested Walk and Svadu CAS
 ```
  FILE:    fd14_translation.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -18,11 +18,12 @@ by compare-and-swap (Svadu). An ecall then moves execution to VS-mode
 stages. The run passes if a single-stage walk, a walk with V=1 that
 evaluates G-stage PTEs, and a CAS each happen at least once.
 
-A recorded run (DOC-002):
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+A recorded run:
 
 ```
-DEMO PASS fd14_translation: walks V=0 2, V=1 2 (G-stage PTE evaluations
-21); CAS 1 (cycles 285)
+-I: fd14_translation: PASS, single-stage walks 2, two-stage walks 2,
+    G-stage page table entry evaluations 21, compare-and-swaps 1, cyc 285
 ```
 
 ---
@@ -30,7 +31,7 @@ DEMO PASS fd14_translation: walks V=0 2, V=1 2 (G-stage PTE evaluations
 ## 1. The program
 
 Source: `programs/fd14_translation.svh`, task `prog_fd14`. The address
-map constants are in `tb/fe_demo_lib.svh:55-61`.
+map constants are in `tb/fe_demo_lib.svh:91-97`.
 
 ```
 setup   S-mode, satp Sv39, ASID 1, root 0x8F00_0000
@@ -51,8 +52,8 @@ V            mixed(8), jal x0,0           halt
   (`fe_tb_writer.svh:735`, `:743`): flags 0x8B (D, X, R, V; A and U
   clear) instead of `PTE_LEAF` 0xCB.
 - The regime change rides on the ecall's trap. `ecall_to_vs`
-  (`tb/fe_demo_lib.svh:97-100`) marks the entry; when it retires,
-  `be_trap_hook` (`tb/fe_demo_mon.svh:298-307`) sets V=1, privilege S
+  (`tb/fe_demo_lib.svh:133-136`) marks the entry; when it retires,
+  `be_trap_hook` (`tb/fe_demo_mon.svh:332-341`) sets V=1, privilege S
   (VS), vsatp Sv39 with ASID 1 and hgatp Sv39x4 with VMID 3. The
   backend's trap redirect then fetches V.
 
@@ -62,37 +63,37 @@ V            mixed(8), jal x0,0           halt
 
 1. Single-stage walks. The first fetch of the reset page and of C miss
    the ITLB and walk with V=0 (`itlb_l2t_v` 0). In the run: VPN 0x80000
-   at cyc 0x04, VPN 0x80010 at cyc 0x2e (cyc is `tb.cyc`,
+   at cyc 4, VPN 0x80010 at cyc 46 (cyc is `tb.cyc`,
    `fe_tb_dut.svh:129`). Each reads three PTEs from root 0x8F00_0000.
 2. The CAS. For C the leaf is valid and permitted but A is clear. The
    walker's leaf evaluation sets the update instead of a page fault
    when ADUE is set (`rtl/mmu/ptw/rtl/ptw.sv:535-537`; ADUE is
    menvcfg's for V=0, `:754-756`). `S_S_UPD` with no G-stage issues one
    CAS (`r_m_op <= OP_CAS`, `ptw.sv:940-955`): compare value the PTE it
-   read, swap value the PTE with A set. In the run, at cyc 0x43:
+   read, swap value the PTE with A set. In the run, at cyc 67:
    `ptw_mem_req_op` 1, `ptw_mem_req_paddr` 0x8F00_9080,
    `ptw_mem_req_cmp` 0x2040_008B, `ptw_mem_req_swap` 0x2040_00CB (A,
-   bit 6, set; PPN 0x81000). The walk answers PPN 0x81000 at cyc 0x49.
+   bit 6, set; PPN 0x81000). The walk answers PPN 0x81000 at cyc 73.
 3. Nested walks. After the ecall retires, a walk with V=1 enables the
    G-stage when hgatp is not Bare (`r_g_on`, `ptw.sv:752`). Every
    VS-stage PTE address is a GPA, translated through the G-stage
    (`S_G_START`, `S_G_ADDR`, `S_G_EVAL`; states at `ptw.sv:289-301`),
    and so is the final GPA. In the run there are two V=1 walks:
-   - cyc 0x5b, VPN 0x80010 (page C, the code after the ecall). The
+   - cyc 91, VPN 0x80010 (page C, the code after the ecall). The
      backend's trap redirect to V is in the same cycle; this walk is
      for a fetch younger than the ecall. C is not mapped in the
-     VS-stage, and the walk ends at cyc 0xa8 with status ST_FAULT
-     (`ptw.sv:225`) and cause 12. Nothing delivers it; the block was
+     VS-stage, and the walk ends at cyc 168 with status ST_FAULT
+     (`ptw.sv:226`) and cause 12. Nothing delivers it; the block was
      flushed.
-   - cyc 0xaa, VPN 0x80050 (page V). It answers PPN 0x81600 (PA_V) at
-     cyc 0x10b.
+   - cyc 170, VPN 0x80050 (page V). It answers PPN 0x81600 (PA_V) at
+     cyc 267.
    The first walk spends 9 cycles in `S_G_EVAL`, the second 12.
 
 ---
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:489-496`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:523-530`, sampled every cycle
 while the stream is being measured (`meas`).
 
 ```
@@ -102,7 +103,7 @@ n_g_eval   cycles with u_ptw.r_st == S_G_EVAL
 n_cas      ptw_mem_req_val && ptw_mem_req_rdy && ptw_mem_req_op
 ```
 
-The proof (`tb/fe_demo_proofs.svh:110-111`) is
+The proof (`tb/fe_demo_proofs.svh:122-123`) is
 `n_walk_s > 0 && n_walk_g > 0 && n_g_eval > 0 && n_cas > 0`.
 `tb_fe_demo.sv` also requires the whole stream to retire with no errors
 before it accepts the proof.
@@ -116,8 +117,8 @@ before it accepts the proof.
   proof's V=1 condition would be met by either.
 - `n_g_eval` counts cycles in `S_G_EVAL`, one per G-stage PTE
   evaluated: 21 = 9 + 12 over the two V=1 walks.
-- The wrong-path V=1 walk occupies the walker from cyc 0x5b to 0xa8,
-  so the walk for V starts at cyc 0xaa, about 80 cycles after the
+- The wrong-path V=1 walk occupies the walker from cyc 91 to 168,
+  so the walk for V starts at cyc 170, about 80 cycles after the
   redirect. This is reported for the design owner; the demonstration
   does not depend on it.
 - The program is FD-14's as `planning/showcase/fe_demo_scenarios.md`
@@ -134,11 +135,25 @@ walker, walker_mem. Look at:
 
 - `itlb_l2t_req_val` with `itlb_l2t_vpn` and `itlb_l2t_v`: each walk
   and its kind.
-- `u_ptw.r_st`: before cyc 0x5b (V=0) it takes S_START, the S_ states
-  (2 to 5) and the memory and response states (9 to 11), never 6 to 8;
-  with V=1 the G_ states (6 to 8) appear between them, and
-  `u_ptw.r_g_on` is set.
-- `ptw_mem_req_op` 1 at cyc 0x43, with `ptw_mem_req_cmp` and
+- `u_ptw.r_st`, shown by its state names. Before cyc 91 (V=0) the
+  walks pass through the single-stage states (S_S_ADDR to S_S_FINAL)
+  and the memory states (S_ISSUE to S_RSP) and through no G-stage
+  state. From the first V=1 walk the G-stage states (S_G_START to
+  S_G_EVAL) appear between them, and `u_ptw.r_g_on` is set.
+- `ptw_mem_req_op` 1 at cyc 67, with `ptw_mem_req_cmp` and
   `ptw_mem_req_swap` differing in bit 6: the CAS.
-- `l2t_itlb_rsp_val` with `l2t_itlb_status` and `l2t_itlb_ppn`: each
-  walk's answer.
+- `l2t_itlb_rsp_val` with each walk's answer: `l2t_itlb_status`, then
+  `l2t_itlb_ppn` on a hit or `l2t_itlb_cause` on a fault.
+- The encoded fields are shown as numbers (DOC-006):
+  - `l2t_itlb_status` (`planning/interfaces/itlb_l2tlb_interfaces.md`
+    IL-4): 0 hit, 1 fault, 2 retry, 3 reserved.
+  - `l2t_itlb_cause`, valid with a fault: the exception code of the
+    fault, 12 instruction page fault, 20 instruction guest-page fault
+    or 1 instruction access fault (IL-10, numbered as
+    `itlb_ifu_interfaces.md` IT-6 numbers them).
+  - `itlb_l2t_priv` (IL-3d): 0 U, 1 S; with `itlb_l2t_v` it is the
+    effective privilege. 2 (reserved) and 3 (M) are never presented.
+  - `itlb_ifu_status` (`itlb_ifu_interfaces.md` IT-4): 0 hit, 1 miss
+    (a walk has started), 2 fault, 3 reserved.
+  - `itlb_ifu_cause` (IT-6), valid with a fault: 1 instruction access
+    fault, 12 instruction page fault, 20 instruction guest-page fault.

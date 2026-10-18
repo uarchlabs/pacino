@@ -4,15 +4,22 @@
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 #
 # mk_sucl.py -- write waves/<scenario>.sucl, the Surfer command file of
-# each scenario (DOC-002, DOC-004, fe_demo_tb_decisions.md FDT-1,
-# FDT-12a, FDT-12c)
+# each scenario (DOC-002, DOC-004, DOC-006, fe_demo_tb_decisions.md
+# FDT-1, FDT-12a, FDT-12c)
 #
 # Usage, from examples/fe_demo, after the scenarios have run:
-#   python3 waves/mk_sucl.py out/fd02_steady/fd02_steady.fst
+#   python3 waves/mk_sucl.py [scenario ...]
+# With no names, every scenario of fe_demo_sigs.NAMES.
 #
-# The signals and groups are fe_demo_sigs.S; every scenario runs the
-# same model, so the FST given names them all. A name not in that FST
-# stops the script. make view S=<scenario> loads the file:
+# THE FST OF EACH SCENARIO (DOC-006). The scenarios run on two models,
+# at one and two prediction slots (Makefile SCEN_2S), whose FSTs name
+# different signals. Each command file is written from its own
+# scenario's FST, out/<scenario>/<scenario>.fst: its slot count
+# (fe_demo_sigs.nslots) builds the scenario's signal list
+# (fe_demo_sigs.scenarios), and its names give each signal's Surfer
+# name, width and enum type. A missing FST, or a listed signal the FST
+# does not have, stops the script before any file is written. make view
+# S=<scenario> loads the file:
 #   surfer out/<scenario>/<scenario>.fst -c waves/<scenario>.sucl
 #
 # HOW A GROUP IS BUILT. A Surfer command file has no command that adds
@@ -34,9 +41,10 @@
 #
 # NAMES AND FORMATS (FDT-12a). variable_force_name_type Unique shows
 # each name as the shortest suffix of its path that identifies it.
-# Formats: tb.clk Clock, tb.rstn Bit, tb.cyc Unsigned, an enum-typed
-# signal Enum (the value names of its FST enum table), every other
-# signal fe_demo_sigs.radix: Binary, Hexadecimal or Unsigned.
+# Every format is fe_demo_sigs.fmt's, from the table FORMATS (DOC-006):
+# among them tb.clk Clock, tb.rstn Bit, tb.cyc Unsigned and an
+# enum-typed signal Enum (the value names of its FST enum table). A
+# signal no row of the table matches stops the script.
 #
 # MARKERS (FDT-12c). A scenario whose description docs/<scenario>.md is
 # in the FDT-13 form gets one marker per event of its section 4 table.
@@ -63,14 +71,16 @@ import os
 import re
 import sys
 
-from fe_demo_sigs import S, fst_names, fst_values, radix
+from fe_demo_sigs import NAMES, fmt, fst_names, fst_values, nslots, scenarios
 
-if len(sys.argv) != 2:
-    sys.exit('usage: mk_sucl.py <fst>')
-FST = sys.argv[1]
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, '..', 'docs')
 OUT = os.path.join(HERE, '..', 'out')
+
+scens = sys.argv[1:] or NAMES
+bad = [s for s in scens if s not in NAMES]
+if bad:
+    sys.exit('mk_sucl.py: not a scenario: %s' % ' '.join(bad))
 
 LABEL_WORDS = 6
 VIEW_BEFORE = 2
@@ -81,13 +91,8 @@ FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
         '4. Events']
 NOTES = '5. Notes'
 
-names = fst_names(FST)
 missing = []
-
-# Surfer's translator of each format of fe_demo_sigs.radix().
-FMT = {'bin': 'Binary', 'hex': 'Hexadecimal', 'dec': 'Unsigned'}
-# The formats FDT-12a names for the clock group.
-CLK_FMT = {'tb.clk': 'Clock', 'tb.rstn': 'Bit', 'tb.cyc': 'Unsigned'}
+nofmt = []
 
 
 class TableError(Exception):
@@ -98,14 +103,6 @@ class TableError(Exception):
 # alpha_idx_to_uint_idx).
 def alpha(i):
     return ''.join(chr(ord('a') + int(c, 16)) for c in '%x' % i)
-
-
-def fmt(path, width, enum):
-    if path in CLK_FMT:
-        return CLK_FMT[path]
-    if enum:
-        return 'Enum'
-    return FMT[radix(width, path)]
 
 
 # The events of a description in the FDT-13 form: [(row, cyc, text)],
@@ -216,9 +213,21 @@ def markers(scen):
 
 out = {}
 nmark = {}
-for scen, groups in S:
-    lines = ['# %s, examples/fe_demo (DOC-002, DOC-004); written by '
-             'waves/mk_sucl.py' % scen,
+nslot = {}
+absent = [s for s in scens
+          if not os.path.exists(os.path.join(OUT, s, s + '.fst'))]
+if absent:
+    sys.exit('mk_sucl.py: no FST for %s (make -k scenarios)'
+             % ', '.join(absent))
+for scen in scens:
+    fst = os.path.join(OUT, scen, scen + '.fst')
+    names = fst_names(fst)
+    nslot[scen] = nslots(names)
+    groups = dict(scenarios(nslot[scen]))[scen]
+    lines = ['# %s, examples/fe_demo (DOC-002, DOC-004, DOC-006); written '
+             'by waves/mk_sucl.py' % scen,
+             '# from out/%s/%s.fst, %d prediction slot(s)'
+             % (scen, scen, nslot[scen]),
              '# surfer out/%s/%s.fst -c waves/%s.sucl' % (scen, scen, scen),
              'variable_force_name_type Unique']
     n = 0                                  # visible items so far
@@ -226,10 +235,13 @@ for scen, groups in S:
         rows = []
         for p in sigs:
             if p not in names:
-                missing.append(p)
+                missing.append('%s: %s' % (scen, p))
                 continue
             width, snm, enum = names[p]
-            rows.append((snm, fmt(p, width, enum)))
+            try:
+                rows.append((snm, fmt(p, width, enum)))
+            except KeyError as e:
+                nofmt.append(str(e.args[0]))
         if not rows:
             continue
         lines += ['# group ' + g,
@@ -242,7 +254,7 @@ for scen, groups in S:
             lines += ['variable_add ' + snm, 'item_set_format ' + f]
         lines += ['item_unfocus']
         n += 1 + len(rows)
-    if missing:
+    if missing or nofmt:
         continue
     mk, period = markers(scen)
     if mk:
@@ -257,13 +269,15 @@ for scen, groups in S:
         lines += ['zoom_fit']
     out[scen] = '\n'.join(lines) + '\n'
 
-if missing:
+if missing or nofmt:
     for m in sorted(set(missing)):
         print('not in the FST: ' + m, file=sys.stderr)
+    for m in sorted(set(nofmt)):
+        print(m, file=sys.stderr)
     sys.exit(1)
 for scen, text in out.items():
     with open(os.path.join(HERE, scen + '.sucl'), 'w') as f:
         f.write(text)
-print('wrote %d command files; markers in %s' %
-      (len(out), ', '.join('%s (%d)' % kv for kv in nmark.items()) or
-       'none'))
+print('wrote %d command files (%s at 2 slots); markers in %s' %
+      (len(out), ', '.join(s for s in out if nslot[s] == 2) or 'none',
+       ', '.join('%s (%d)' % kv for kv in nmark.items()) or 'none'))

@@ -22,8 +22,11 @@ planning/observ/fe_trace_decisions.md.
 
 ## 1. Common rules
 
-FD-0a  Every scenario runs on fe_top with the walker beside it,
-       NUM_PRED_SLOTS = 2, and the in-order backend of tb_fe_top.
+FD-0a  Every scenario runs on fe_top with the walker beside it and
+       the in-order backend of tb_fe_top, on the build its entry names
+       (fe_demo_tb_decisions.md FDT-5): NUM_PRED_SLOTS = 1, or 2 where
+       the entry says so. FD-3 and FD-22 to FD-24 run at 2; every
+       other scenario at 1 (Jeff, session-081).
 FD-0b  Each scenario has, in its program or its README entry:
          shows     the behaviour, in one sentence
          program   the code shape that produces it
@@ -61,6 +64,7 @@ FD-2   Steady-state prediction and fetch
             consecutive cycles of 8 instructions decoded
 
 FD-3   Two branches in one block
+  build     NUM_PRED_SLOTS = 2
   shows     both prediction slots used by one block
   program   two blocks, each with two conditionals in one 32-byte
             region, in a loop of 24
@@ -231,7 +235,48 @@ FD-21  Commit
 
 ---
 
-## 6. Open
+## 6. Dual slot
+
+```
+FD-22  SC reversing slot 1
+  build     NUM_PRED_SLOTS = 2
+  shows     two conditionals in one block, slot 0 predicted by TAGE
+            and slot 1 reversed by SC at p3
+  program   a loop of 48 passes; its first block holds A, never taken,
+            and B, taken on odd passes, whose target lies inside the
+            block; the back edge in the next block
+  waveform  TAGE p2, SC p3, p3 slots and redirect
+  proof     a p3 redirect from slot 1, SC-decided (PRED_SC), behind a
+            TAGE-predicted conditional in slot 0
+
+FD-23  A jump behind two conditionals
+  build     NUM_PRED_SLOTS = 2
+  shows     a block {conditional, conditional, jump} with both
+            conditionals not taken: the block ends at the jump PC and
+            the next block predicts the jump (fe_decisions.md 10,
+            BP-138)
+  program   a loop of 24 passes over two never-taken conditionals and
+            a jal to the block holding the back edge
+  waveform  FTB p2 fields, p2 slots, the block end
+  proof     a p2 group with two not-taken conditionals cut at the jump
+            PC; the next group at that PC with the jump in slot 0,
+            taken
+
+FD-24  A call in slot 1
+  build     NUM_PRED_SLOTS = 2
+  shows     a call in slot 1 behind a not-taken conditional in slot 0,
+            the RAS push made from slot 1
+  program   a loop of 24 passes; a never-taken conditional, then a call
+            to a function that returns to the back edge's block
+  waveform  p2 slots, RAS p2 operation and pointers, commit stack
+  proof     a p2 group with a not-taken conditional in slot 0 and a
+            call in slot 1 presented to the RAS; a return predicted by
+            the RAS
+```
+
+---
+
+## 7. Open
 
 FD-U1  CLOSED, DOC-001: one program per scenario, none combined,
        presented in FD order.
@@ -241,7 +286,7 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
 
 ---
 
-## 7. Document History
+## 8. Document History
 
 ```
   2026-10-14  session-080. Created.
@@ -254,4 +299,7 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
               programs and FD-2, 7, 12, 14 proofs as built. FD-18
               covers IO as well as NC (Jeff).
   2026-10-15  session-080, after DOC-003. FD-18 proof as built.
+  2026-10-18  session-081, after DOC-006. FD-0a builds (Jeff); FD-3
+              build; section 6, FD-22 to FD-24 (Jeff); Open and
+              History renumbered 7 and 8.
 ```

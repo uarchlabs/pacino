@@ -4,9 +4,9 @@
 # fd07_calls_returns: Calls and Returns
 ```
  FILE:    fd07_calls_returns.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -19,11 +19,12 @@ targets. The run passes if a retired return took its correct target
 from the RAS, a recursion count above 1 was seen, and a p2 RETURN_CALL
 operation occurred.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd07_calls_returns: returns predicted by the RAS 24; p2 pushes
-76 pops 226 return-calls 38; highest recursion count 8 (cycles 1404)
+-I: fd07_calls_returns: PASS, returns predicted by the RAS 24, p2 pushes 65,
+    p2 pops 198, p2 return-calls 38, highest recursion count 3, cyc 1428
 ```
 
 ---
@@ -76,38 +77,39 @@ A1+4   mixed(1); bne x6,x0,top          back edge, taken on passes 0..6
 The RAS is `rtl/core/frontend/bpu/rtl/ras.sv`.
 
 1. Push and pop at p2. A slot of the p2 group is presented to the RAS
-   when the block is valid, the slot holds a branch, and no earlier slot
-   of the block is taken (`w_ras_pred_val_p2`,
-   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1045-1047`). The RAS pushes
-   the fall-through on a call, pops on a return, and pops then pushes on
-   a RETURN_CALL (`ras.sv:24-27`, `ras.sv:242-244`).
+   when it holds a branch of a valid block and no earlier slot of the
+   block is taken (`w_ras_pred_val_p2` in
+   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1062-1064`). The RAS pushes
+   the fall-through on a call and pops on a return; a RETURN_CALL pops
+   and then pushes (`ras.sv:24-27`, `ras.sv:253-255`).
 2. Recursion compression. The p2 push is made with recursion allowed
-   (`st_push(..., 1'b1)`, `ras.sv:635`). When the pushed address equals
+   (`st_push(..., 1'b1)`, `ras.sv:695`). When the pushed address equals
    the current top, the top entry's count `spec_rctr` is incremented and
-   TOSR does not move (`ras.sv:360-367`); a pop of an entry with a
+   TOSR does not move (`ras.sv:403-411`); a pop of an entry with a
    non-zero count decrements the count and leaves TOSR (`st_retract`,
-   `ras.sv:288-296`). The recursive call at f+10 always pushes f+14, so
+   `ras.sv:325-333`). The recursive call at f+10 always pushes f+14, so
    every recursive call after the first matches the top.
 3. Return targets. At p1 a uBTB slot of type RETURN or RETURN_CALL with
    a valid top of stack takes the RAS address and `pred_src = PRED_RAS`
-   (`bp_cluster.sv:825-831`). At p2 a return slot takes
+   (`bp_cluster.sv:831-836`). At p2 a return slot takes
    `w_ras_pop_addr_p2` and `PRED_RAS` when the pop is valid
-   (`bp_cluster.sv:1104-1108`).
+   (`bp_cluster.sv:1135-1140`).
 4. The commit stack. Retired calls and returns update a separate commit
-   stack (`csp`, `commit_top_addr`; `ras.sv` header, lines 17-20), the
+   stack (`csp`, `commit_top_addr`; `ras.sv` header, lines 18-21), the
    fallback for a pop of an empty speculative stack.
 
 From the run (out/fd07_calls_returns/fd07_calls_returns.fst,
-`u_ras.spec_rctr`): the count of entry 1 climbs one per cycle from 1 to 8
-between cycles 111 and 118 and steps back to 0 by cycle 247; entry 3
-does the same between cycles 310 and 430. In the six later episodes
-(entries 5, 7, 9, 11, 13, 15) the count reaches only 1.
+`u_ras.spec_rctr`): the count of entry 1 reads 1 from cyc 115, 2 from
+cyc 118 and 3 from cyc 122, one step per recursive call, and holds 3
+until cyc 1410; entry 3 does the same from cyc 318 (2 at 321, 3 at 325)
+and holds 3 to the end of the run. In the six later episodes (entries
+5, 7, 9, 11, 13, 15) the count reaches only 1.
 
 ---
 
 ## 3. What the monitor counts
 
-At retirement (`tb/fe_demo_mon.svh:268-272`):
+At retirement (`tb/fe_demo_mon.svh:302-306`):
 
 ```
 n_ras_ret_ok   a retired RETURN or RETURN_CALL whose FTQ entry's final
@@ -115,7 +117,7 @@ n_ras_ret_ok   a retired RETURN or RETURN_CALL whose FTQ entry's final
                is taken, and has the expected target
 ```
 
-Every cycle at p2 (`tb/fe_demo_mon.svh:426-449`), summed over the slots:
+Every cycle at p2 (`tb/fe_demo_mon.svh:460-483`), summed over the slots:
 
 ```
 n_ras_push     w_ras_pred_val_p2[s] with w_br_type_p2[s] a call
@@ -125,8 +127,8 @@ n_rc_p2        w_ras_pred_val_p2[s] with RETURN_CALL
 max_rctr       the highest u_ras.spec_rctr[i] over all entries
 ```
 
-The proof (`tb/fe_demo_proofs.svh:63`) is
-`n_ras_ret_ok > 0 && max_rctr > 1 && n_rc_p2 > 0`. `tb_fe_demo.sv:144`
+The proof (`tb/fe_demo_proofs.svh:79`) is
+`n_ras_ret_ok > 0 && max_rctr > 1 && n_rc_p2 > 0`. `tb_fe_demo.sv:160`
 also requires the whole stream to retire with no errors.
 
 ---
@@ -138,22 +140,20 @@ also requires the whole stream to retire with no errors.
   slot.
 - `p2 pushes`, `pops` and `return-calls` count p2 operations presented
   to the RAS, not retired instructions. `w_ras_pred_val_p2` is not gated
-  by the squash (`ras_p2_keep`, `bp_cluster.sv:1340` and line 1966), so
+  by the squash (`ras_p2_keep`, `bp_cluster.sv:1377` and line 2003), so
   operations of blocks squashed in the same cycle and of predicted paths
   later redirected are included, and an operation is missing for a
   call or return the p2 group did not hold (before the FTB learned it).
-  Pops (226) far exceed the 80 retired returns plus return-calls;
-  pushes (76) are below the 80 retired calls plus return-calls.
-- The sums are per slot (DOC-002). DOC-001 counted with `<= x + 1`
-  inside the slot loop; an independent per-event count in a scratch copy
-  found no cycle in this run with two RAS operations, so the figures
-  are unchanged by the fix.
-- `highest recursion count 8` exceeds what the program's recursion can
-  produce on the correct path: four recursive calls give one allocation
-  and three increments, a count of 3. The 8 comes from the first two
-  episodes of section 2, where the count rises one per cycle on a
-  predicted path. The reason the later episodes stop at 1 was not
-  traced.
+  Pops (198) far exceed the 80 retired returns plus return-calls;
+  pushes (65) are below the 80 retired calls plus return-calls.
+- The sums are per slot (DOC-002). On the one-slot model a cycle holds
+  at most one RAS operation.
+- `highest recursion count 3` is what the program's recursion produces
+  on the correct path: four recursive calls give one allocation and
+  three increments. It is reached in the first two episodes of section
+  2. The reason the later episodes stop at 1 was not traced. On the
+  two-slot model the count reached 8 (BP-138), rising one per cycle on
+  a predicted path.
 - Departures from FD-7 in `planning/showcase/fe_demo_scenarios.md`: the
   spec's "a tail return-call" is built as a coroutine switch by two
   RETURN_CALLs (jalr x1,0(x5) and jalr x5,0(x1)), not a tail call. The
@@ -169,9 +169,9 @@ S=fd07_calls_returns` opens in Surfer. Look at:
 - `u_ras.tosr`, `tosw`, `bos`: TOSR and TOSW step on each push, TOSR
   follows the link on a pop.
 - `u_ras.spec_rctr.[i]` and `spec_ret_addr.[i]` (entries 0-3 in the
-  save file): the count of entry 1 rising to 8 at cycles 111-118.
-- `w_br_type_p2.[s]` 7 (`RETURN_CALL`) with `w_ras_pred_val_p2.[s]`:
-  the coroutine switches.
-- `bpu_slot_p2.[s].pred_src` 6 (`PRED_RAS`) on return slots.
+  command file): the count of entry 1 rising to 3 at cyc 115 to 122.
+- `w_br_type_p2.[0]` `RETURN_CALL` with `w_ras_pred_val_p2.[0]`: the
+  coroutine switches.
+- `bpu_slot_p2.[0].pred_src` `PRED_RAS` on return slots.
 - ras_commit group: `ras_commit_val`, `csp`, `commit_top_addr` change
   as calls and returns retire.

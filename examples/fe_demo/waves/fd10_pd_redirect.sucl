@@ -1,4 +1,5 @@
-# fd10_pd_redirect, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd10_pd_redirect, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd10_pd_redirect/fd10_pd_redirect.fst, 1 prediction slot(s)
 # surfer out/fd10_pd_redirect/fd10_pd_redirect.fst -c waves/fd10_pd_redirect.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,9 +18,9 @@ variable_add tb.dut.ftq_ifu_req_val
 item_focus e
 group_marked ftq_ifu
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_start_pc
@@ -27,11 +28,11 @@ item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_next_pc
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_taken_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_taken_pos
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_flush_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_flush_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
@@ -42,58 +43,58 @@ variable_add tb.dut.ifu_ftq_pdwb_val
 item_focus p
 group_marked ifu_f3
 item_focus ba
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_pdwb_idx
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_cfi_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_cfi_pos
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_mis_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_mis_pos
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_target
 item_set_format Hexadecimal
 variable_add tb.dut.u_ftq.w_pd_redir_val
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
 item_focus bi
 group_marked ftq
 item_focus bj
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_idx
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.w_commit_ptr
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_empty
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
 item_focus cd
 group_marked bp_cluster_p0
 item_focus ce
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 zoom_fit

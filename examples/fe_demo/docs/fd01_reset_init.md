@@ -4,9 +4,9 @@
 # fd01_reset_init: Reset and SRAM Initialization
 ```
  FILE:    fd01_reset_init.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -17,13 +17,16 @@ walks, and the FTQ presents no p0 request until all three readies are
 high. The run passes if each ready is seen low, then rises, and the first
 p1 prediction the FTQ accepts comes no earlier than the last of them.
 
-A recorded run (DOC-002):
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+A recorded run:
 
 ```
-DEMO PASS fd01_reset_init: ready rose at cycle TAGE 2049 ITTAGE 513
-SC 1025 (seen low 111), RAS 1; first p0 2049, first accepted p1 2050;
-first response TAGE 2051 ITTAGE 2051 SC 2052; first update TAGE 2069
-ITTAGE -1 SC 2069 (cycles 8085)
+-I: fd01_reset_init: PASS, TAGE ready at cyc 2049, ITTAGE ready at cyc 513,
+    SC ready at cyc 1025, readies seen low first 3 of 3, RAS ready at cyc 1,
+    first p0 request at cyc 2049, first accepted p1 prediction at cyc 2050,
+    first TAGE response at cyc 2051, first ITTAGE response at cyc 2051,
+    first SC response at cyc 2052, first TAGE update at cyc 2069,
+    first ITTAGE update none, first SC update at cyc 2069, cyc 8085
 ```
 
 ---
@@ -45,7 +48,7 @@ top+28           jal x0,0           halt (demo_go -> W.halt)
   3000 passes of 7 instructions keep the stream retiring past the end
   of the longest walk (TAGE, 2048 entries).
 - The Makefile omits `$(FAST_INIT)` for this scenario alone
-  (`plusargs`, `Makefile:173`), so `fast_init_r` is 0 in TAGE and SC and
+  (`plusargs`, `Makefile:204`), so `fast_init_r` is 0 in TAGE and SC and
   `fast_init` is 0 in ITTAGE.
 - The program is there only so that there is a first prediction to
   accept and a stream to retire; FD-1 names no program.
@@ -82,13 +85,14 @@ top+28           jal x0,0           halt (demo_go -> W.halt)
    answer at p3 (2052).
 5. ITTAGE is never updated. `ftq_resolve.sv:506-508` raises an ITTAGE
    update only for `INDIRECT_NONRET` and `INDIRECT_CALL`; the program
-   has no indirect jump, so `c_it_u` stays -1.
+   has no indirect jump, so `c_it_u` stays -1 and the line reads
+   `first ITTAGE update none`.
 
 ---
 
 ## 3. What the monitor counts
 
-The figures come from `tb/fe_demo_mon.svh:312-336` (`mon_init`). Unlike
+The figures come from `tb/fe_demo_mon.svh:346-370` (`mon_init`). Unlike
 every other count, they are taken from the release of reset, not inside
 the `meas` window.
 
@@ -97,7 +101,8 @@ c_tage_rdy, c_it_rdy, c_sc_rdy   first cycle bpu_tage_rdy,
                                  bpu_ittage_rdy, bpu_sc_ready is high
 lo_tage_rdy, lo_it_rdy, lo_sc_rdy
                                  the ready was seen low after reset
-                                 (printed as "seen low 111")
+                                 (printed as the count of the three,
+                                 "readies seen low first 3 of 3")
 c_ras_rdy                        first cycle u_ras.ras_rst_done
 c_p0                             first ftq_pred_val_p0
 c_p1                             first u_ftq.w_ok_pred_p1
@@ -107,9 +112,10 @@ c_tage_u, c_it_u, c_sc_u         first w_tage_upd_val_u0,
                                  w_ittage_upd_val_u0, w_sc_upd_val_u0
 ```
 
-Each is -1 until its event occurs (`mon_reset`, lines 143-157).
+Each is -1 until its event occurs (`mon_reset`, lines 165-176), and is
+printed as "none" while it is -1 (`at_cyc`, `tb/fe_demo_proofs.svh:17`).
 
-The proof (`tb/fe_demo_proofs.svh:16-37`) is all three `lo_*` set, all
+The proof (`tb/fe_demo_proofs.svh:23-48`) is all three `lo_*` set, all
 three readies seen (`> 0`), and `c_p1 >= last`, the latest of the three
 readies. The other figures are only reported. `tb_fe_demo.sv` also
 requires the whole stream to retire with no errors before it accepts
@@ -119,20 +125,22 @@ the proof.
 
 ## 4. Reading the numbers
 
-- `first p0 2049` equals `TAGE 2049`: the request waits for the last
-  ready and starts on the same cycle. `first accepted p1 2050` is one
-  cycle later, as the pipeline requires.
-- `RAS 1`: the RAS reset (`ras_rst_done`) is not one of the three RAM
-  Init readies and is not part of the proof.
-- `ITTAGE -1` is expected: there is no indirect branch to update it.
-- `cycles 8085` counts from the release of reset to the last
-  retirement, so it includes the 2049 cycles of the walk.
+- `first p0 request at cyc 2049` equals `TAGE ready at cyc 2049`: the
+  request waits for the last ready and starts on the same cycle. `first
+  accepted p1 prediction at cyc 2050` is one cycle later, as the
+  pipeline requires.
+- `RAS ready at cyc 1`: the RAS reset (`ras_rst_done`) is not one of
+  the three RAM Init readies and is not part of the proof.
+- `first ITTAGE update none` is expected: there is no indirect branch to
+  update it.
+- `cyc 8085` counts from the release of reset to the last retirement,
+  so it includes the 2049 cycles of the walk.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-1: its
   program line reads "none; reset without the fast-init options". As
   built, the scenario runs a 3000-pass loop so that a prediction exists
   to be accepted and the stream has work after the walk. The reset
   without the fast-init options is as specified. The proof is FD-1's.
-- Before BP-137 this scenario reported DEMO FAIL: the FTQ requested from
+- Before BP-137 this scenario failed: the FTQ requested from
   the first cycle after reset (DOC-001 Results Capture; BP-137 Results
   Capture, Problem 1).
 
@@ -143,13 +151,14 @@ the proof.
 The saved view is `waves/fd01_reset_init.sucl`, which `make view
 S=fd01_reset_init` opens in Surfer. Look at:
 
-- group `sram_init`: `u_tage.u_sram_init.state` 2 (INIT) from cycle 1
-  with `waddr` counting, then 3 (DONE) with `bpu_tage_rdy`; the same for
+- group `sram_init`: `u_tage.u_sram_init.state` INIT from cyc 1 with
+  `waddr` counting from 0 (0x7FF, 2047, at cyc 2048), then DONE with
+  `bpu_tage_rdy`; the same for
   `u_ittage.u_sram_init` with `bpu_ittage_rdy` and `u_sc.u_sram_init`
   with `bpu_sc_ready`; `u_ras.ras_rst_done`.
-- group `bp_cluster_first`: `ftq_pred_val_p0` low until cycle 2049,
+- group `bp_cluster_first`: `ftq_pred_val_p0` low until cyc 2049,
   then `bpu_pred_val_p1` and `u_ftq.w_ok_pred_p1`, then
   `w_tage_pred_rdy_p2`, `w_ittage_pred_rdy_p2` and `w_sc_pred_rdy_p3`.
 - group `bp_cluster_p0`: `ftq_pred_pc_p0` at `RESET_VECTOR`
-  (0x80000000) while held, and `u_npc.w_hold` high from cycle 1 to
+  (0x80000000) while held, and `u_npc.w_hold` high from cyc 0 to
   2048.

@@ -16,6 +16,47 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-081, after DOC-006: the demonstration at one slot.
+
+DOC-006 COMPLETE (Jeff; the IA's choices accepted). 1h59m, one
+compaction. regress.sh 274 targets PASS; no rtl/ file written.
+  Two builds (FDT-5): obj_fe_demo at NUM_PRED_SLOTS = 1, the default;
+    obj_fe_demo_2slot at 2 for fd03 and the new fd22_sc_slot1,
+    fd23_jump_cut, fd24_call_slot1 (FD-22 to FD-24). All 24 pass on
+    their build. At one slot the result line changes for fd04, fd05,
+    fd07, fd08, fd09, fd11, fd12 and fd17; fd03 needs two slots.
+  Signal lists follow the slot count of the FST; mk_sucl.py writes each
+    command file from its own scenario's FST. The format table FORMATS
+    replaces radix() (FDT-12a): 180 formats changed. chk_sucl.py 24 of
+    24 clean, and fails a format that differs from the table.
+  Each new proof fails on the 1-slot model and with its behaviour
+    removed from the program. All 21 existing descriptions brought to
+    their build, every citation checked against the tree; fd07 and fd21
+    take BP-138's changes; README.md and demo_explainer.md updated.
+  Provisional choices ACCEPTED (Jeff): the names; make build builds
+    both models; mk_sucl.py takes no FST argument; the slot count read
+    from the FST; tage_prm_ctr Binary; indices, pointers and positions
+    Unsigned; l2t_itlb_cause an encoded field; the row reductions.
+  Reported, outside examples/:
+    - at one slot a second conditional trains TAGE with the first
+      conditional's metadata (ftq_resolve.sv place_slot). This is
+      TD#179 item 4; no TD opened. fd09 at one slot is dominated by it.
+    - at one slot in fd04, the BP-138 cut costs a p2 redirect per pass:
+      the uBTB's p1 fall-through steps over the jump. Recorded under
+      TD#179.
+  READ OUTSIDE THE GRANTS WITHOUT ASKING: rtl/lib/rtl/sram_init.sv, a
+    few lines, reported. The first task under the ask-first rule.
+  Open, for Jeff: FD-9 at one slot shows the TD#179 item 4 training
+    more than TAGE; the options are FD-9 at two slots or the back edge
+    in its own block.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_tb_decisions.md,
+fe_demo_scenarios.md.
+
+Next free: BP-139, SYS-003, DOC-007, INFRA-014, TOOLS-007, TD#189.
+
+---
 ## Session-081, after BP-138: the RAS empty test and the unplaced jump.
 
 BP-138 COMPLETE (Jeff). 1h26m. regress.sh 274 targets PASS before and
@@ -57,6 +98,7 @@ misc/ras_theory_of_operation.md, fe_decisions.md, ftb_decisions.md,
 ftb_interfaces.md, ftq_bpu_interfaces.md.
 
 Next free: BP-139, SYS-003, DOC-006, INFRA-014, TOOLS-007, TD#189.
+(Superseded above.)
 
 ---
 ## Session-081: record corrections; BP-138 written. Documents only.
@@ -4587,7 +4629,7 @@ RESOLVED by BP-126 (session-077): T0 = 2'b10, TAGE_T0_SRAM_INIT_VALUE
 |                         |             |                   | Open Items 5 records the TAGE     |
 |                         |             |                   | validation plan Complete.         |
 | fe_demo_scenarios.md    | Draft       | --                | Created session-080,              |
-|                         |             |                   | planning/showcase. FD-1 to FD-21: |
+|                         |             |                   | planning/showcase. FD-1 to FD-24: |
 |                         |             |                   | the front-end demonstration.      |
 | fe_trace_decisions.md   | Draft       | --                | Created session-080,              |
 |                         |             |                   | planning/observ. TR-1 to TR-10;   |
@@ -6053,6 +6095,12 @@ numbers are issued from one sequence across both tables.
 |     |          | ftb_decisions.md 3 is not built; the choice among the    |
 |     |          | options against compiled benchmarks. No tb_fe_top        |
 |     |          | program is slower from D1 at either slot count.          |
+|     |          | DOC-006 (session-081), fe_demo at one slot: item 4 in    |
+|     |          | fd09, 101 of 256 back-edge updates carry B's index and   |
+|     |          | tag, and B's TAGE mispredicts rise from 64 (two slots)   |
+|     |          | to 144. The cost of option b in fd04: the uBTB's p1      |
+|     |          | fall-through steps over the cut jump, one p2 redirect    |
+|     |          | per pass (12).                                           |
 | 180 | tools    | OPEN, VERIFICATION. tools/cov_table.py's tage and bpu    |
 |     |          | rows list tage.sv only; since BP-132 the TAGE            |
 |     |          | arbitration lines are in tage_arb.sv, so TAGE coverage   |

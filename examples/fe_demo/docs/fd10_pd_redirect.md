@@ -4,9 +4,9 @@
 # fd10_pd_redirect: Predecode Redirect
 ```
  FILE:    fd10_pd_redirect.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -19,10 +19,11 @@ the FTQ redirects fetch to the JAL's target. The run passes if at least
 one predecode redirect occurred without a backend redirect in the same
 cycle.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd10_pd_redirect: predecode redirects 13 (cycles 247)
+-I: fd10_pd_redirect: PASS, predecode redirects 13, cyc 247
 ```
 
 ---
@@ -98,8 +99,8 @@ n_pd_redir   meas && u_ftq.w_pd_redir_val && !bkend_ftq_redir_val
 `meas` is the measurement window: out of reset, the backend running and
 the stream not yet fully retired (`fe_tb_backend.svh:416`).
 
-The proof (`tb/fe_demo_proofs.svh:80`) is `n_pd_redir > 0`.
-`tb_fe_demo.sv:144` also requires the whole stream to retire with no
+The proof (`tb/fe_demo_proofs.svh:93`) is `n_pd_redir > 0`.
+`tb_fe_demo.sv:160` also requires the whole stream to retire with no
 errors.
 
 ---

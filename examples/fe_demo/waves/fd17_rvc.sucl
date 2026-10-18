@@ -1,4 +1,5 @@
-# fd17_rvc, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd17_rvc, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd17_rvc/fd17_rvc.fst, 1 prediction slot(s)
 # surfer out/fd17_rvc/fd17_rvc.fst -c waves/fd17_rvc.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,9 +18,9 @@ variable_add tb.dut.ftq_ifu_req_val
 item_focus e
 group_marked ftq_ifu
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_start_pc
@@ -27,11 +28,11 @@ item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_next_pc
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_taken_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_taken_pos
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_flush_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_flush_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
@@ -42,28 +43,28 @@ variable_add tb.dut.ifu_ftq_pdwb_val
 item_focus p
 group_marked ifu_f3
 item_focus ba
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_pdwb_idx
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_cfi_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_cfi_pos
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_mis_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_mis_pos
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_target
 item_set_format Hexadecimal
 variable_add tb.dut.u_ftq.w_pd_redir_val
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ifu_f3_straddle
 variable_add tb.dut.u_ifu.u_f3.r_strad_val
 item_focus bi
 group_marked ifu_f3_straddle
 item_focus bj
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ifu.u_f3.r_strad_pc
 item_set_format Hexadecimal
 variable_add tb.dut.u_ifu.u_f3.r_strad_idx
@@ -74,20 +75,20 @@ variable_add tb.dut.ifu_ibuf_val
 item_focus bm
 group_marked ibuf
 item_focus bn
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ibuf_en
-item_set_format Hexadecimal
-variable_add tb.dut.ibuf_ifu_rdy
 item_set_format Binary
+variable_add tb.dut.ibuf_ifu_rdy
+item_set_format Bit
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
 item_focus ca
 group_marked decode
 item_focus cb
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].start_pc
 item_set_format Hexadecimal
 variable_add tb.pd_out.[0].ftq_idx
@@ -97,52 +98,30 @@ item_set_format Unsigned
 variable_add tb.pd_out.[0].instr
 item_set_format Hexadecimal
 variable_add tb.pd_out.[0].is_rvc
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va
 item_set_format Hexadecimal
-variable_add tb.pd_out.[1].valid
-item_set_format Binary
-variable_add tb.pd_out.[1].start_pc
-item_set_format Hexadecimal
-variable_add tb.pd_out.[1].is_rvc
-item_set_format Binary
-variable_add tb.pd_out.[2].valid
-item_set_format Binary
-variable_add tb.pd_out.[2].start_pc
-item_set_format Hexadecimal
-variable_add tb.pd_out.[2].is_rvc
-item_set_format Binary
-variable_add tb.pd_out.[3].valid
-item_set_format Binary
-variable_add tb.pd_out.[3].start_pc
-item_set_format Hexadecimal
-variable_add tb.pd_out.[3].is_rvc
-item_set_format Binary
 variable_add tb.pd_out.[4].valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[4].start_pc
 item_set_format Hexadecimal
+variable_add tb.pd_out.[4].pos
+item_set_format Unsigned
 variable_add tb.pd_out.[4].is_rvc
-item_set_format Binary
-variable_add tb.pd_out.[5].valid
-item_set_format Binary
-variable_add tb.pd_out.[5].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
+variable_add tb.pd_out.[1].is_rvc
+item_set_format Bit
+variable_add tb.pd_out.[2].is_rvc
+item_set_format Bit
+variable_add tb.pd_out.[3].is_rvc
+item_set_format Bit
 variable_add tb.pd_out.[5].is_rvc
-item_set_format Binary
-variable_add tb.pd_out.[6].valid
-item_set_format Binary
-variable_add tb.pd_out.[6].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[6].is_rvc
-item_set_format Binary
-variable_add tb.pd_out.[7].valid
-item_set_format Binary
-variable_add tb.pd_out.[7].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[7].is_rvc
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 zoom_fit

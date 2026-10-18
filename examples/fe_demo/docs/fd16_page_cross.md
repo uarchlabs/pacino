@@ -4,9 +4,9 @@
 # fd16_page_cross: A Fetch Block Crossing a Page
 ```
  FILE:    fd16_page_cross.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -19,10 +19,11 @@ translates it twice and requests one line from each physical page; a
 translation-queue entry is popped with two translations of different
 PPNs.
 
-A recorded run (DOC-002):
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+A recorded run:
 
 ```
-DEMO PASS fd16_page_cross: blocks translated twice 1 (cycles 112)
+-I: fd16_page_cross: PASS, blocks translated twice 1, cyc 112
 ```
 
 ---
@@ -64,15 +65,15 @@ b+0x1002     mixed(8), jal x0,0             halt
 2. Two ITLB lookups and two walks. In the run (cyc is `tb.cyc`,
    `fe_tb_dut.svh:129`) the ITLB lookups (`ifu_itlb_vpn`) go from VPN
    0x80010 to 0x80011, and both miss: walks for VPN 0x80010 at cyc
-   0x2e and VPN 0x80011 at cyc 0x46.
-3. The queue entry. At cyc 0x5e the entry for the block at
+   46 and VPN 0x80011 at cyc 70.
+3. The queue entry. At cyc 94 the entry for the block at
    0x8001_0FF0 is popped with `xq_cross` 1, `xq_ppn0` 0x81000 and
    `xq_ppn1` 0x81205.
 4. Two lines from two pages. A block starting in the upper half of a
    line needs a second line (IFU-7), and for a crossing block that line
    is the second page's first line (IFU-25,
    `rtl/core/frontend/ifu/rtl/ifu_fetch.sv:283-284`). The L1I requests
-   are 0x8100_0FC0 (cyc 0x5d) and 0x8120_5000 (cyc 0x5e).
+   are 0x8100_0FC0 (cyc 93) and 0x8120_5000 (cyc 94).
 
 The backend compares every retired instruction with the expected
 stream, so the 32-bit instruction at b+0xFFE retired with its expected
@@ -82,7 +83,7 @@ encoding.
 
 ## 3. What the monitor counts
 
-The count comes from `tb/fe_demo_mon.svh:497-501`, sampled every cycle
+The count comes from `tb/fe_demo_mon.svh:531-535`, sampled every cycle
 while the stream is being measured (`meas`).
 
 ```
@@ -92,7 +93,7 @@ n_xq_cross   u_ifu.u_xlate.xq_val && xq_pop && xq_cross
              of different physical pages
 ```
 
-The proof (`tb/fe_demo_proofs.svh:121`) is `n_xq_cross > 0`.
+The proof (`tb/fe_demo_proofs.svh:133`) is `n_xq_cross > 0`.
 `tb_fe_demo.sv` also requires the whole stream to retire with no errors
 before it accepts the proof.
 
@@ -120,6 +121,11 @@ itlb, ifu_l1i, decode. Look at:
 - `ftq_ifu_start_pc` 0x8001_0FF0: the crossing block.
 - `ifu_itlb_req_val` with `ifu_itlb_vpn` 0x80010 then 0x80011: the two
   lookups.
-- cyc 0x5e: `xq_pop` with `xq_cross` 1, `xq_ppn0` 0x81000 and `xq_ppn1`
+- cyc 94: `xq_pop` with `xq_cross` 1, `xq_ppn0` 0x81000 and `xq_ppn1`
   0x81205.
 - `ifu_l1i_req_paddr` 0x8100_0FC0 then 0x8120_5000.
+- In the itlb group the encoded fields are shown as numbers (DOC-006):
+  `itlb_ifu_status` (`planning/interfaces/itlb_ifu_interfaces.md`
+  IT-4) is 0 hit, 1 miss (a walk has started), 2 fault, 3 reserved;
+  `itlb_ifu_cause` (IT-6), valid with a fault, is 1 instruction access
+  fault, 12 instruction page fault, 20 instruction guest-page fault.

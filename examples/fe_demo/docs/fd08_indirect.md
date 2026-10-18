@@ -4,9 +4,9 @@
 # fd08_indirect: Indirect Jump
 ```
  FILE:    fd08_indirect.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -19,11 +19,11 @@ target per jump; ITTAGE learns both targets under their histories and
 supplies the right one at p2. The run passes if at least one retired
 indirect took its correct target from ITTAGE.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd08_indirect: indirect targets predicted by ITTAGE 67
-(cycles 1121)
+-I: fd08_indirect: PASS, indirect targets predicted by ITTAGE 58, cyc 1345
 ```
 
 ---
@@ -83,17 +83,17 @@ jn+18               jal x0,top         back to top on passes 0..38
 4. Selection at p2. For an `INDIRECT_NONRET` or `INDIRECT_CALL` slot the
    cluster takes the ITTAGE target when ITTAGE answered for this entry
    with a tagged hit (`it_hit`,
-   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1087-1089`), primary or
-   alternate target by `ittage_using_primary` (lines 1090-1092), and
+   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1119-1121`), primary or
+   alternate target by `ittage_using_primary` (lines 1122-1124), and
    records `pred_src = PRED_ITTAGE`; otherwise the FTB jump target and
-   `PRED_FTB` (lines 1110-1113). `ittage_hit` is the primary-table hit
+   `PRED_FTB` (lines 1142-1145). `ittage_hit` is the primary-table hit
    (`ittage_cntrl.sv:557`).
 
 ---
 
 ## 3. What the monitor counts
 
-At retirement (`tb/fe_demo_mon.svh:273-278`):
+At retirement (`tb/fe_demo_mon.svh:307-311`):
 
 ```
 n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
@@ -103,19 +103,20 @@ n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
 ```
 
 The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:232-241`).
+p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:266-275`).
 
-The proof (`tb/fe_demo_proofs.svh:70`) is `n_itt_ok > 0`.
-`tb_fe_demo.sv:144` also requires the whole stream to retire with no
+The proof (`tb/fe_demo_proofs.svh:83`) is `n_itt_ok > 0`.
+`tb_fe_demo.sv:160` also requires the whole stream to retire with no
 errors.
 
 ---
 
 ## 4. Reading the numbers
 
-- 67 of the 80 retired indirects had their right target from ITTAGE.
-  The other 13 include the first executions of each, before ITTAGE has
-  allocated; their sources were not traced one by one.
+- 58 of the 80 retired indirects had their right target from ITTAGE.
+  The other 22 include the first executions of each, before ITTAGE has
+  allocated; their sources were not traced one by one. On the two-slot
+  model the count was 67 (DOC-002).
 - A target from ITTAGE that is wrong is not counted, and neither is one
   that reached the entry's final slot from another predictor.
 - Departure from FD-8 in `planning/showcase/fe_demo_scenarios.md`: the
@@ -131,11 +132,11 @@ errors.
 The saved view is `waves/fd08_indirect.sucl`, which `make view
 S=fd08_indirect` opens in Surfer. Look at:
 
-- `w_ittage_pred_rdy_p2` with `w_ittage_pred_meta_p2.[s].ittage_hit`
+- `w_ittage_pred_rdy_p2` with `w_ittage_pred_meta_p2.[0].ittage_hit`
   set and `ittage_prm_tgt` (VA[40:1]) alternating between the two
   targets of the slot.
-- `bpu_slot_p2.[s]`: on the jump's slot, `pred_src` 5 (`PRED_ITTAGE`)
-  and `target` 0x8000_0400 / 0x8000_0480 for J, 0x8000_0600 /
-  0x8000_0680 for K.
-- `bpu_redir_p2.[s]` with `w_ok_redir_p2`: a p2 redirect, the p2
+- `bpu_slot_p2.[0]`: on the jump's slot, `pred_src` `PRED_ITTAGE` and
+  `target` 0x8000_0400 / 0x8000_0480 for J, 0x8000_0600 / 0x8000_0680
+  for K.
+- `bpu_redir_p2.[0]` with `w_ok_redir_p2`: a p2 redirect, the p2
   target differing from the block's p1 prediction.

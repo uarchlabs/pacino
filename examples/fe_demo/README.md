@@ -4,15 +4,15 @@
 # Front-End Demonstration Testbench
 ```
  FILE:    README.md
- SOURCE:  DOC-001, DOC-002, DOC-003
+ SOURCE:  DOC-001, DOC-002, DOC-003, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
-Twenty-one short programs, each making one behaviour of the front end
+Twenty-four short programs, each making one behaviour of the front end
 visible in a waveform. The scenarios are
-planning/showcase/fe_demo_scenarios.md (FD-1 to FD-21); the testbench is
+planning/showcase/fe_demo_scenarios.md (FD-1 to FD-24); the testbench is
 planning/testbenches/fe_demo_tb_decisions.md (FDT-N).
 
 This is a demonstration, not a verification testbench. It is not part
@@ -22,9 +22,8 @@ of tools/regress.sh.
 
 ## 1. What runs
 
-fe_top with the page table walker beside it, NUM_PRED_SLOTS = 2, on the
-models tb_fe_top uses, included from
-rtl/core/frontend/fe_top/tb/models/:
+fe_top with the page table walker beside it, on the models tb_fe_top
+uses, included from rtl/core/frontend/fe_top/tb/models/:
 
 ```
   fe_tb_dut.svh       clock, reset, fe_top, the walker hookup
@@ -35,13 +34,23 @@ rtl/core/frontend/fe_top/tb/models/:
   fe_tb_csr.svh       CSR setup through csr_tb_pkg
 ```
 
+Two simulation models are built from it (DOC-006). They differ only in
+NUM_PRED_SLOTS, the number of prediction slots per fetch block: the
+branches of one block that are predicted together, each slot one of
+the branch fields of the block's FTB entry, slot 0 the earliest
+(planning/arch/fe_decisions.md section 10). A branch no slot holds is
+not predicted. The default model, obj_fe_demo/, has one slot, and every
+scenario runs on it except four. FD-3 and FD-22 to FD-24 show what a
+second slot does and run on the two-slot model, obj_fe_demo_2slot/
+(the Makefile's SCEN_2S); on the one-slot model they fail.
+
 The backend still compares every retired instruction with the
 program's executed stream, so a run whose stream does not retire says
 so. Each run then checks its scenario's proof from RTL signals and
 prints one result line (FDT-10):
 
 ```
-  -I: fd04_p2_override: PASS, p2 redirects 38, cyc 488
+  -I: fd04_p2_override: PASS, p2 redirects 77, cyc 527
 ```
 
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
@@ -51,8 +60,8 @@ the scenario name, and is at most 80 columns; a longer message breaks
 after a comma and continues on lines indented four spaces (FDT-10a):
 
 ```
-  -I: fd09_tage: PASS, tagged-provider predictions 216, allocations 65,
-      T0 by use_alt_on_na 37, cyc 1277
+  -I: fd09_tage: PASS, tagged-provider predictions 253, allocations 209,
+      T0 by use_alt_on_na 75, cyc 3567
 ```
 
 A passing run prints nothing else. The shared models print their own
@@ -74,10 +83,11 @@ Files here:
                            its shows / program / waveform / trace /
                            proof entry (FD-0b)
   waves/fdNN_*.sucl        one Surfer command file per scenario
-  waves/fe_demo_sigs.py    the signal lists and formats of the command
-                           files, and the FST reader
-  waves/mk_sucl.py         writes the command files from the FSTs and
-                           the descriptions' event tables
+  waves/fe_demo_sigs.py    the signal lists of the command files, built
+                           for the slot count of the FST, the format
+                           table, and the FST reader
+  waves/mk_sucl.py         writes the command files from each
+                           scenario's FST and description event table
   waves/chk_sucl.py        loads each command file in Surfer and checks
                            what it shows against fe_demo_sigs.py, FDT-12a
                            and FDT-12c
@@ -86,6 +96,8 @@ Files here:
   docs/fdNN_*.md           one description per scenario
   docs/fe_top_connectivity.md
                            the fe_top connectivity inventory
+  obj_fe_demo/             the one-slot model, not committed
+  obj_fe_demo_2slot/       the two-slot model, not committed
   out/<scenario>/          run output, not committed
 ```
 
@@ -96,20 +108,22 @@ Files here:
 From examples/fe_demo:
 
 ```
-  make fd04_p2_override     build if needed, run one scenario
+  make fd04_p2_override     build its model if needed, run one scenario
   make scenarios            every scenario in FD order, stopping at
                             the first FAIL
   make -k scenarios         every scenario, whatever fails
-  make build                the model only (about 4 minutes)
-  make clean                the model and out/
+  make build                both models only (about 4 minutes each)
+  make clean                the models and out/
   make view S=fd04_p2_override
                             open the run in Surfer
-  make                      the targets and the list of scenarios
+  make                      the targets, the scenarios and the slot
+                            count of the model each runs on
 ```
 
-A run writes out/<scenario>/<scenario>.fst and .log. make view runs
-the scenario first when its FST is missing or older than the model,
-then opens it in Surfer with waves/<scenario>.sucl. Surfer is the one
+A run writes out/<scenario>/<scenario>.fst and .log, whichever model
+runs it. make view builds the scenario's model if needed and runs the
+scenario first when its FST is missing or older than that model. It
+then opens the FST in Surfer with waves/<scenario>.sucl. Surfer is the one
 supported viewer (FDT-12); the FST opens in any viewer that reads FST,
 without the command file. A run that fails still writes its FST, and
 make view opens it with a note. S missing prints the usage; an S that
@@ -133,16 +147,35 @@ The command file (FDT-12a) shows the signals grouped by unit, in
 pipeline order, the clock group first, with tb.cyc, the cycle count
 from the release of reset (FDT-12b). Names have Surfer's name type
 Unique: the shortest suffix of the path that tells the signal apart
-from the others shown. tb.clk is shown as a clock, tb.rstn as a bit,
-tb.cyc in decimal, an enum-typed signal by the value names Verilator
-writes into the FST (Surfer's Enum format), and every other signal in
-binary, hex or decimal as fe_demo_sigs.radix gives it.
+from the others shown. The per-slot signals are those of the model
+that wrote the FST: slot 0 only on the one-slot model, and both slots
+on the two-slot model.
+
+Every format comes from the table FORMATS in waves/fe_demo_sigs.py
+(DOC-006), in Surfer's format names:
+
+```
+  tb.clk                                    Clock
+  a 1-bit signal, tb.rstn included          Bit
+  an enum-typed signal                      Enum, the value names
+                                            Verilator writes into the FST
+  a per-slot or per-lane mask               Binary (a per-slot mask is
+                                            1 bit, so Bit, at one slot)
+  a count or iteration number, tb.cyc,      Unsigned, at any width
+  an SRAM init write address, an index,
+  pointer, position or table number
+  an address, target, PC or data            Hexadecimal
+  an encoded field: trx_type, the ITLB      Unsigned; the description
+  and walker status, cause and privilege    gives the encoding
+```
+
+A signal the table does not match stops waves/mk_sucl.py.
 
 A scenario whose description is in the five-section form (FDT-13)
 also has one marker per event of its event table (a row with a cyc
 value), named c<cyc>_<label>, and opens with the view at the first
-marker (FDT-12c). Today that is fd09_tage. The other scenarios open on
-the whole run.
+marker (FDT-12c). Today those are fd09_tage and the three scenarios
+of FD-22 to FD-24. The other scenarios open on the whole run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
@@ -153,17 +186,22 @@ end-of-run report.
 After a change to the RTL that renames a signal, or to a
 description's event table, run the scenarios, regenerate the Surfer
 command files, and check them in Surfer (it opens a window per
-scenario). The FST given names the signals; the markers come from each
-scenario's own FST. chk_sucl.py takes SURFER from the environment,
-default ~/.cargo/bin/surfer as for make view:
+scenario). Each command file is written from its own scenario's FST.
+The FST gives the slot count and the signal names, and the markers are
+placed from it. Either
+script takes scenario names; with none it does every scenario.
+chk_sucl.py takes SURFER from the environment, default
+~/.cargo/bin/surfer as for make view:
 
 ```
   make -k scenarios
-  python3 waves/mk_sucl.py out/fd02_steady/fd02_steady.fst
+  python3 waves/mk_sucl.py
   python3 waves/chk_sucl.py
 ```
 
-Both generators stop on a signal the FST does not have.
+On a missing FST or a signal the FST does not have, mk_sucl.py stops
+and writes no file. chk_sucl.py fails a file whose contents differ from
+what it derives itself from fe_demo_sigs.py and the FST.
 
 ---
 
@@ -171,31 +209,38 @@ Both generators stop on a signal the FST does not have.
 
 Each scenario has a description in docs/<scenario>.md: the program,
 why it produces the behaviour, what the monitor counts, how to read the
-result line and what to look at in the waveform. docs/fd09_tage.md is
-in the five-section form of FDT-13; the other twenty predate it.
+result line and what to look at in the waveform. docs/fd09_tage.md and
+the descriptions of FD-22 to FD-24 are in the five-section form of
+FDT-13; the other twenty predate it. The slots column is the model the
+scenario runs on.
 
 ```
-fd01_reset_init      FD-1  Reset and SRAM initialization
-fd02_steady          FD-2  Steady-state prediction and fetch
-fd03_two_branch      FD-3  Two branches in one block
-fd04_p2_override     FD-4  p2 override
-fd05_p3_override     FD-5  p3 override
-fd06_loop_pred       FD-6  Loop predictor
-fd07_calls_returns   FD-7  Calls and returns
-fd08_indirect        FD-8  Indirect jump
-fd09_tage            FD-9  TAGE provider, allocation, use_alt_on_na
-fd10_pd_redirect     FD-10 Predecode redirect
-fd11_be_mispredict   FD-11 Backend mispredict
-fd12_training        FD-12 Training
-fd13_l1i             FD-13 L1I hit and miss
-fd14_translation     FD-14 Translation
-fd15_faults          FD-15 Faults
-fd16_page_cross      FD-16 Page-crossing block
-fd17_rvc             FD-17 Compressed and unaligned code
-fd18_uncached        FD-18 Uncached fetch
-fd19_fencei_cbo      FD-19 FENCE.I and cbo.inval
-fd20_backpressure    FD-20 Backpressure
-fd21_commit          FD-21 Commit
+scenario             FD     slots  title
+
+fd01_reset_init      FD-1   1      Reset and SRAM initialization
+fd02_steady          FD-2   1      Steady-state prediction and fetch
+fd03_two_branch      FD-3   2      Two branches in one block
+fd04_p2_override     FD-4   1      p2 override
+fd05_p3_override     FD-5   1      p3 override
+fd06_loop_pred       FD-6   1      Loop predictor
+fd07_calls_returns   FD-7   1      Calls and returns
+fd08_indirect        FD-8   1      Indirect jump
+fd09_tage            FD-9   1      TAGE provider, allocation, use_alt_on_na
+fd10_pd_redirect     FD-10  1      Predecode redirect
+fd11_be_mispredict   FD-11  1      Backend mispredict
+fd12_training        FD-12  1      Training
+fd13_l1i             FD-13  1      L1I hit and miss
+fd14_translation     FD-14  1      Translation
+fd15_faults          FD-15  1      Faults
+fd16_page_cross      FD-16  1      Page-crossing block
+fd17_rvc             FD-17  1      Compressed and unaligned code
+fd18_uncached        FD-18  1      Uncached fetch
+fd19_fencei_cbo      FD-19  1      FENCE.I and cbo.inval
+fd20_backpressure    FD-20  1      Backpressure
+fd21_commit          FD-21  1      Commit
+fd22_sc_slot1        FD-22  2      SC reversing slot 1
+fd23_jump_cut        FD-23  2      A jump behind two conditionals
+fd24_call_slot1      FD-24  2      A call in slot 1
 ```
 
 **fd01_reset_init.** The three sram_init state machines step through
@@ -215,25 +260,27 @@ conditional at its own `pos`.
 **fd04_p2_override.** A p1 block with `r_ubtb_blk_p1.hit` low (or a
 stale slot) is followed two cycles later by `w_ftb_valid_p2` and a
 `bpu_redir_p2` valid with `w_ok_redir_p2`; the next `ftq_pred_pc_p0` is
-the redirect target.
+the redirect target. At one slot the last block of the chain, a
+conditional before a jump, also redirects at p2 to the jump's own
+address (the cut of FD-23).
 
 **fd05_p3_override.** At p3, `w_sc_hit_p3` with `w_taken_p3` opposite
-to the p2 slot's `taken`, the slot's `pred_src` 4 (PRED_SC), and a
-`bpu_redir_p3` valid that `w_ok_redir_p3` accepts.
+to the p2 slot's `taken`. The slot's `pred_src` is PRED_SC.
+`w_ok_redir_p3` accepts the slot's `bpu_redir_p3`.
 
 **fd06_loop_pred.** After the warm-up passes, the inner loop branch's
-slot carries `pred_src` 1 (PRED_LOOP) at p1 and p2; on the tenth pass
+slot carries `pred_src` PRED_LOOP at p1 and p2; on the tenth pass
 its `taken` drops and the retired branch is not followed by a backend
 redirect.
 
 **fd07_calls_returns.** `tosw` and `tosr` move up on each call and down
 on each return; during the recursion `spec_rctr` of the top entry
-climbs above 1 instead of the pointers moving. `w_br_type_p2` 7
-(RETURN_CALL) marks the coroutine switches.
+climbs above 1 instead of the pointers moving. `w_br_type_p2`
+RETURN_CALL marks the coroutine switches.
 
 **fd08_indirect.** `w_ittage_pred_rdy_p2` with
 `w_ittage_pred_meta_p2.[s].ittage_hit` set, and the p2 slot of the jump
-taking `pred_src` 5 (PRED_ITTAGE) with the alternating target.
+taking `pred_src` PRED_ITTAGE with the alternating target.
 
 **fd09_tage.** In `tage_pred_meta_p2`, `tage_prm_comp` non-zero with
 `tage_using_primary` set is a tagged provider; `tage_using_primary` low
@@ -245,9 +292,9 @@ allocation is `trx_type` with `u_alc_wr` set.
 `w_pd_redir_val` follows and `ftq_ifu_flush_val` drops the younger
 blocks.
 
-**fd11_be_mispredict.** `bkend_ftq_redir_val` with cause 0
-(RC_MISPREDICT), then `ftq_ifu_flush_val`, `ftq_rollback_val` with
-`bpu_ghist_ptr` stepping back and `ras_restore_val`; the next
+**fd11_be_mispredict.** `bkend_ftq_redir_val` with cause
+RC_MISPREDICT, then `ftq_ifu_flush_val`. `ftq_rollback_val` steps
+`bpu_ghist_ptr` back and comes with `ras_restore_val`. The next
 `ftq_ifu_req_val` starts at `bkend_ftq_redir_pc`.
 
 **fd12_training.** `bkend_ftq_rsv_val` resolutions, then the per
@@ -265,9 +312,10 @@ fetching X.
 `itlb_l2t_v` 1 (after the ecall) it alternates through the S_G states.
 The CAS is `ptw_mem_req_op` 1 on the leaf's address.
 
-**fd15_faults.** `itlb_ifu_status` fault with `itlb_ifu_cause`, the
-translation queue's `xq_fault0`, and the faulting packet at decode with
-`pd_out.[0].fault_cause` 2 (page), 1 (access) and 3 (guest page).
+**fd15_faults.** The ITLB answers `itlb_ifu_status` 2 (fault) with
+`itlb_ifu_cause` 12, then 1, then 20, and the translation queue marks
+`xq_fault0`. Each faulting packet reaches decode with the matching
+`pd_out.[0].fault_cause` (`IFU_FAULT_*`).
 
 **fd16_page_cross.** The block at the page's last 16 bytes: two
 `ifu_itlb_req_val` lookups for adjacent VPNs, and its translation queue
@@ -304,3 +352,17 @@ FTB update holds, not backpressure.
 **fd21_commit.** `bkend_ftq_commit_val` moves `w_commit_ptr`; each
 `ras_commit_val` call pushes the commit stack (`csp`,
 `commit_top_addr`) and each return pops it.
+
+**fd22_sc_slot1.** Two slots: in the block at 0x8000_0008,
+`bpu_slot_p3.[1].pred_src` PRED_SC behind a slot 0 with PRED_TAGE, and
+`bpu_redir_p3.[1].valid` with `w_ok_redir_p3`; from cyc 95.
+
+**fd23_jump_cut.** Two slots: a p2 group with two not-taken
+conditionals and `w_jmp_cut_p2`, `bpu_blk_pft_p2` the jump's address
+0x8000_0016; the next group, at 0x8000_0016, with the jump in slot 0;
+from cyc 89.
+
+**fd24_call_slot1.** Two slots: a not-taken conditional in
+`bpu_slot_p2.[0]` and the call in `.[1]`, with
+`w_ras_pred_val_p2.[1]`; `u_ras.tosr` and `tosw` move and the return
+address 0x8000_0014 is written; from cyc 73.

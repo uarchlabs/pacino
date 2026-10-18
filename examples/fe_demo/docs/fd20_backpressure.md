@@ -4,9 +4,9 @@
 # fd20_backpressure: Backpressure
 ```
  FILE:    fd20_backpressure.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -16,11 +16,12 @@ four. Decode stalls first, the ibuf fills and refuses the IFU, the
 IFU stops draining the FTQ, the FTQ fills, and the FTQ stops issuing
 p0 requests. The run passes if each of the four stalls occurs.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd20_backpressure: stall cycles: ibuf full 378, FTQ full 324,
-decode held 368, no p0 request 331 (cycles 537)
+-I: fd20_backpressure: PASS, stall cycles with the instruction buffer full 378,
+    FTQ full 324, decode held 368, no p0 request 331, cyc 537
 ```
 
 ---
@@ -78,7 +79,7 @@ top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:528-533`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:567-572`, sampled every cycle
 while `meas` is set. All four are counts of CYCLES in which the
 condition holds, not of stall events.
 
@@ -92,7 +93,7 @@ n_dec_stall  pd_out[0].valid && !dec_ibuf_rdy
 n_p0_held    !ftq_pred_val_p0                for any hold reason
 ```
 
-The proof (`tb/fe_demo_proofs.svh:142`) is that each count is above
+The proof (`tb/fe_demo_proofs.svh:160-161`) is that each count is above
 zero. `tb_fe_demo.sv` also requires the whole stream to retire with no
 errors.
 
@@ -100,7 +101,7 @@ errors.
 
 ## 4. Reading the numbers
 
-- `(cycles 537)` is the measured window, so the stall counts are
+- `cyc 537` is the measured window, so the stall counts are
   fractions of it: the ibuf refuses the IFU in 378 of 537 cycles, the
   FTQ is full in 324, decode holds a bundle in 368.
 - `no p0 request 331` counts every hold, not only backpressure. From
@@ -132,5 +133,5 @@ S=fd20_backpressure` opens in Surfer. Look at:
   `ftq_pred_idx_p0` and `ftq_ifu_idx`.
 - bp_cluster_p0 group: `ftq_pred_val_p0` low while `ftq_full` is set;
   `u_npc.w_hold` high with it.
-- `u_ibuf.r_count`, the occupancy the ready is computed from, is not
-  in the save file; add it from `tb.dut.u_ibuf` if wanted.
+- `u_ibuf.r_count` in the ibuf group, the occupancy the ready is
+  computed from: 52 at cyc 71, when `ibuf_ifu_rdy` first refuses.

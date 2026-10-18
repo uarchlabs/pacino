@@ -4,9 +4,9 @@
 # fe_top Connectivity Inventory
 ```
  FILE:    fe_top_connectivity.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -28,7 +28,9 @@ the RTL. The disagreements are listed in section 8.
 
 - RTL: `rtl/core/frontend/fe_top/rtl/fe_top.sv` (827 lines) and
   `rtl/core/frontend/bpu/rtl/bp_cluster.sv` (1978 lines), read to the
-  last line. Each instance's port declarations were read from its own
+  last line. BP-138 lengthened bp_cluster.sv to 2015 lines; the
+  bp_cluster.sv citations it moved are given at their current lines
+  (DOC-006). Each instance's port declarations were read from its own
   module file for direction and declaration line.
 - Widths are the elaborated widths. The fe_top source list of
   examples/fe_demo/Makefile (less ptw.sv) was elaborated with
@@ -37,8 +39,11 @@ the RTL. The disagreements are listed in section 8.
   the elaborated type table. Every net's width equals the width of
   each port it is bound to; no binding changes width.
 - Configuration: NUM_PRED_SLOTS = 2, the package default
-  (bp_defines_pkg.sv:65, `BP_NUM_PRED_SLOTS`), the only build of the
-  demonstration (FDT-5).
+  (bp_defines_pkg.sv:65, `BP_NUM_PRED_SLOTS`), the demonstration's
+  two-slot model. Since DOC-006 the demonstration's default model is
+  built with one slot (Makefile `SLOT1_FLAGS`); in that build every
+  width and element count that NUM_PRED_SLOTS sets is the one-slot
+  value. The instances and the nets are the same.
 - Notation. `W bits` is the packed width. `N x W bits` is an unpacked
   array of N elements of W bits each. `from` is the instance output
   that drives the net, `to` the instance input that reads it. File
@@ -1153,7 +1158,7 @@ the same reason (FE-14).
 The cluster is a four-stage pipeline (p0 to p3) with an update stage
 u0 and its write u1 (bp_cluster.sv:55-61). The FTQ-facing ports are
 grouped in the port list as follows; the predictor instances are at
-bp_cluster.sv:1754-1974.
+bp_cluster.sv:1791-2011.
 
 ### 6.1 bp_cluster port groups
 
@@ -1195,18 +1200,18 @@ u_ras          ras         1952  p0 top-of-stack read, p2 push/pop,
 ```
 
 Stages are bp_cluster.sv:55-61 and the comments above each instance
-(bp_cluster.sv:1778, 1795, 1821, 1872, 1894, 1916, 1948). `ubtb` is
-instantiated with `N_SLOTS = NUM_PRED_SLOTS` (bp_cluster.sv:1783-1785).
+(bp_cluster.sv:1815, 1832, 1858, 1909, 1931, 1953, 1985). `ubtb` is
+instantiated with `N_SLOTS = NUM_PRED_SLOTS` (bp_cluster.sv:1820-1822).
 
 ### 6.3 Which cluster port groups each predictor serves
 
 ```
 u_bp_history
   RB  rollback_valid, _ckpt_idx, _corr, _n, _tkn, _pbit
-      (bp_cluster.sv:1762-1767; formed at 1324, 1342, rb_corr_mux 1352)
+      (bp_cluster.sv:1799-1804; formed at 1361, 1379, rb_corr_mux 1389)
   HI  ghist_ptr, phist_ptr, ckpt_ghist_ptr, ckpt_phist_ptr, ghr_buf,
-      phr_buf, bound straight to the cluster ports (1768-1773)
-  P1  ckpt_wr_en / ckpt_wr_idx = r_val_p1 / r_idx_p1 (950)
+      phr_buf, bound straight to the cluster ports (1805-1810)
+  P1  ckpt_wr_en / ckpt_wr_idx = r_val_p1 / r_idx_p1 (956)
   internal: folded -> u_tage, u_ittage; sliced folds -> u_sc
 u_ubtb
   P0  pred_pc_p0 = ftq_pred_pc_p0 (1788)
@@ -1271,10 +1276,10 @@ u_ras
 
 The p0 request reaches the table predictors only when both TAGE and
 ITTAGE prediction queues can accept it: `w_req_val_p0 =
-ftq_pred_val_p0 & tage_pq_not_full & ittage_pq_not_full`
-(bp_cluster.sv:620-621). The update fan-out by resolved branch type
-is rederived from the uBTB payload of each channel (bp_cluster.sv:1678,
-upd_br_type at 1548-1557).
+ftq_pred_val_p0 & w_pq_rdy_p0`, with `w_pq_rdy_p0 = tage_pq_not_full &
+ittage_pq_not_full` (bp_cluster.sv:626-627). The update fan-out by
+resolved branch type is rederived from the uBTB payload of each
+channel (bp_cluster.sv:1715, upd_br_type at 1585-1594).
 
 ---
 
@@ -1340,7 +1345,7 @@ D2  ITTAGE update payload name.
 
 D3  TAGE and ITTAGE queue status port names (TD#49).
     RTL: tage.sv:47-48 and ittage.sv:46-47 declare <p>_pq_not_full and
-    <p>_uq_not_full; bp_cluster.sv:1884-1885 and 1907-1908 bind them;
+    <p>_uq_not_full; bp_cluster.sv:1921-1922 and 1944-1945 bind them;
     bp_cluster.sv:286-288 says TD#49 was applied by BP-132.
     Plan: ftq_bpu_interfaces.md 8, lines 947-956, says tage and
     ittage declare pq_not_full and upd_rdy without prefix and that

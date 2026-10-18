@@ -1,4 +1,5 @@
-# fd08_indirect, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd08_indirect, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd08_indirect/fd08_indirect.fst, 1 prediction slot(s)
 # surfer out/fd08_indirect/fd08_indirect.fst -c waves/fd08_indirect.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,90 +18,68 @@ variable_add tb.dut.u_bpu.w_ittage_pred_rdy_p2
 item_focus e
 group_marked ittage_p2
 item_focus f
-item_set_format Unsigned
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[0].ittage_hit
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[0].ittage_prm_comp
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[0].ittage_prm_tgt
 item_set_format Hexadecimal
-variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[1].ittage_hit
-item_set_format Binary
-variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[1].ittage_prm_comp
-item_set_format Unsigned
-variable_add tb.dut.u_bpu.w_ittage_pred_meta_p2.[1].ittage_prm_tgt
-item_set_format Hexadecimal
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus m
+item_focus j
 group_marked bp_cluster_p2
-item_focus n
-item_set_format Binary
+item_focus k
+item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_idx_p2
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.w_ftb_valid_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_p2.[0].slot_valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_p2.[0].br_type
 item_set_format Enum
 variable_add tb.dut.bpu_slot_p2.[0].pos
 item_set_format Unsigned
 variable_add tb.dut.bpu_slot_p2.[0].taken
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_slot_p2.[0].target
 item_set_format Hexadecimal
 variable_add tb.dut.bpu_slot_p2.[0].pred_src
 item_set_format Enum
-variable_add tb.dut.bpu_slot_p2.[1].slot_valid
-item_set_format Binary
-variable_add tb.dut.bpu_slot_p2.[1].br_type
-item_set_format Enum
-variable_add tb.dut.bpu_slot_p2.[1].pos
-item_set_format Unsigned
-variable_add tb.dut.bpu_slot_p2.[1].taken
-item_set_format Binary
-variable_add tb.dut.bpu_slot_p2.[1].target
-item_set_format Hexadecimal
-variable_add tb.dut.bpu_slot_p2.[1].pred_src
-item_set_format Enum
 variable_add tb.dut.bpu_redir_p2.[0].valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_redir_p2.[0].target_pc
-item_set_format Hexadecimal
-variable_add tb.dut.bpu_redir_p2.[1].valid
-item_set_format Binary
-variable_add tb.dut.bpu_redir_p2.[1].target_pc
 item_set_format Hexadecimal
 variable_add tb.dut.bpu_redir_idx_p2
 item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus cc
+item_focus bh
 group_marked ftq
-item_focus cd
-item_set_format Binary
+item_focus bi
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_idx
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.w_commit_ptr
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_empty
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 zoom_fit

@@ -1,4 +1,5 @@
-# fd21_commit, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd21_commit, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd21_commit/fd21_commit.fst, 1 prediction slot(s)
 # surfer out/fd21_commit/fd21_commit.fst -c waves/fd21_commit.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,7 +18,7 @@ variable_add tb.bkend_ftq_redir_val
 item_focus e
 group_marked backend
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
 variable_add tb.bkend_ftq_redir_pc
@@ -25,11 +26,11 @@ item_set_format Hexadecimal
 variable_add tb.bkend_ftq_redir_cause
 item_set_format Enum
 variable_add tb.bkend_ftq_redir_self
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_rsv_val
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.bkend_ftq_commit_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
 item_unfocus
@@ -40,9 +41,9 @@ group_marked ftq
 item_focus o
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_empty
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_idx
@@ -53,7 +54,7 @@ variable_add tb.dut.ras_commit_val
 item_focus bd
 group_marked ras_commit
 item_focus be
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ras_commit_br_type
 item_set_format Enum
 variable_add tb.dut.ras_commit_ret_addr
@@ -61,7 +62,7 @@ item_set_format Hexadecimal
 variable_add tb.dut.u_bpu.u_ras.csp
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.commit_top_valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_ras.commit_top_addr
 item_set_format Hexadecimal
 item_unfocus
@@ -76,14 +77,10 @@ item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.bos
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.u_ras.ras_rst_done
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_ras_pred_val_p2.[0]
-item_set_format Binary
-variable_add tb.dut.u_bpu.w_ras_pred_val_p2.[1]
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_br_type_p2.[0]
-item_set_format Enum
-variable_add tb.dut.u_bpu.w_br_type_p2.[1]
 item_set_format Enum
 variable_add tb.dut.u_bpu.u_ras.spec_ret_addr.[0]
 item_set_format Hexadecimal

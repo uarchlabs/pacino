@@ -1,4 +1,5 @@
-# fd02_steady, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd02_steady, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd02_steady/fd02_steady.fst, 1 prediction slot(s)
 # surfer out/fd02_steady/fd02_steady.fst -c waves/fd02_steady.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,84 +18,72 @@ variable_add tb.dut.ftq_pred_val_p0
 item_focus e
 group_marked bp_cluster_p0
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group bp_cluster_p1
 variable_add tb.dut.bpu_pred_val_p1
 item_focus j
 group_marked bp_cluster_p1
 item_focus k
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_pred_idx_p1
 item_set_format Unsigned
 variable_add tb.dut.u_bpu.r_ubtb_blk_p1.hit
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_pred_pft_p1
 item_set_format Hexadecimal
 variable_add tb.dut.bpu_pred_slot_p1.[0].slot_valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_pred_slot_p1.[0].br_type
 item_set_format Enum
 variable_add tb.dut.bpu_pred_slot_p1.[0].pos
 item_set_format Unsigned
 variable_add tb.dut.bpu_pred_slot_p1.[0].taken
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_pred_slot_p1.[0].target
 item_set_format Hexadecimal
 variable_add tb.dut.bpu_pred_slot_p1.[0].pred_src
 item_set_format Enum
-variable_add tb.dut.bpu_pred_slot_p1.[1].slot_valid
-item_set_format Binary
-variable_add tb.dut.bpu_pred_slot_p1.[1].br_type
-item_set_format Enum
-variable_add tb.dut.bpu_pred_slot_p1.[1].pos
-item_set_format Unsigned
-variable_add tb.dut.bpu_pred_slot_p1.[1].taken
-item_set_format Binary
-variable_add tb.dut.bpu_pred_slot_p1.[1].target
-item_set_format Hexadecimal
-variable_add tb.dut.bpu_pred_slot_p1.[1].pred_src
-item_set_format Enum
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus bk
+item_focus be
 group_marked ftq
-item_focus bl
-item_set_format Binary
+item_focus bf
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p2
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_redir_p3
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_redir_idx
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.w_commit_ptr
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_empty
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
-item_focus cf
+item_focus bp
 group_marked ftq_ifu
-item_focus cg
-item_set_format Binary
+item_focus ca
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_start_pc
@@ -102,11 +91,11 @@ item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_next_pc
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_taken_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_taken_pos
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_flush_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_flush_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
@@ -114,54 +103,54 @@ item_set_format Unsigned
 item_unfocus
 # group ifu_l1i
 variable_add tb.dut.ifu_l1i_req_val
-item_focus da
+item_focus ck
 group_marked ifu_l1i
-item_focus db
-item_set_format Binary
+item_focus cl
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_id
 item_set_format Unsigned
 variable_add tb.dut.ifu_l1i_req_paddr
 item_set_format Hexadecimal
 variable_add tb.dut.ifu_l1i_req_uncached
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.l1i_ifu_rsp_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.l1i_ifu_rsp_id
 item_set_format Unsigned
 item_unfocus
 # group ifu_f3
 variable_add tb.dut.ifu_ftq_pdwb_val
-item_focus di
+item_focus dc
 group_marked ifu_f3
-item_focus dj
-item_set_format Binary
+item_focus dd
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_pdwb_idx
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_cfi_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_cfi_pos
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_mis_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ftq_mis_pos
 item_set_format Unsigned
 variable_add tb.dut.ifu_ftq_target
 item_set_format Hexadecimal
 variable_add tb.dut.u_ftq.w_pd_redir_val
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ibuf
 variable_add tb.dut.ifu_ibuf_val
-item_focus eb
+item_focus dl
 group_marked ibuf
-item_focus ec
-item_set_format Binary
+item_focus dm
+item_set_format Bit
 variable_add tb.dut.ifu_ibuf_en
-item_set_format Hexadecimal
-variable_add tb.dut.ibuf_ifu_rdy
 item_set_format Binary
+variable_add tb.dut.ibuf_ifu_rdy
+item_set_format Bit
 variable_add tb.dut.u_ibuf.r_count
 item_set_format Unsigned
 variable_add tb.dut.u_ibuf.w_n_pres
@@ -171,41 +160,27 @@ item_set_format Unsigned
 item_unfocus
 # group decode
 variable_add tb.dec_ibuf_rdy
-item_focus ei
+item_focus ec
 group_marked decode
-item_focus ej
-item_set_format Binary
-variable_add tb.pd_out.[0].valid
-item_set_format Binary
+item_focus ed
+item_set_format Bit
 variable_add tb.pd_out.[0].start_pc
 item_set_format Hexadecimal
+variable_add tb.pd_out.[0].valid
+item_set_format Bit
 variable_add tb.pd_out.[1].valid
-item_set_format Binary
-variable_add tb.pd_out.[1].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[2].valid
-item_set_format Binary
-variable_add tb.pd_out.[2].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[3].valid
-item_set_format Binary
-variable_add tb.pd_out.[3].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[4].valid
-item_set_format Binary
-variable_add tb.pd_out.[4].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[5].valid
-item_set_format Binary
-variable_add tb.pd_out.[5].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[6].valid
-item_set_format Binary
-variable_add tb.pd_out.[6].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.pd_out.[7].valid
-item_set_format Binary
-variable_add tb.pd_out.[7].start_pc
-item_set_format Hexadecimal
+item_set_format Bit
 item_unfocus
 zoom_fit

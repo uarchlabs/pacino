@@ -1,4 +1,5 @@
-# fd20_backpressure, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd20_backpressure, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd20_backpressure/fd20_backpressure.fst, 1 prediction slot(s)
 # surfer out/fd20_backpressure/fd20_backpressure.fst -c waves/fd20_backpressure.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,13 +18,13 @@ variable_add tb.dut.ftq_pred_val_p0
 item_focus e
 group_marked bp_cluster_p0
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_commit_ptr
@@ -32,9 +33,9 @@ group_marked ftq
 item_focus k
 item_set_format Unsigned
 variable_add tb.dut.ftq_full
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_empty
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_idx
@@ -45,9 +46,9 @@ variable_add tb.dut.ftq_ifu_req_val
 item_focus p
 group_marked ftq_ifu
 item_focus ba
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_start_pc
@@ -55,11 +56,11 @@ item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_next_pc
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_taken_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_taken_pos
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_flush_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_flush_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
@@ -70,11 +71,11 @@ variable_add tb.dut.ifu_ibuf_val
 item_focus bk
 group_marked ibuf
 item_focus bl
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_ibuf_en
-item_set_format Hexadecimal
-variable_add tb.dut.ibuf_ifu_rdy
 item_set_format Binary
+variable_add tb.dut.ibuf_ifu_rdy
+item_set_format Bit
 variable_add tb.dut.u_ibuf.r_count
 item_set_format Unsigned
 variable_add tb.dut.u_ibuf.w_n_pres
@@ -87,9 +88,9 @@ variable_add tb.dec_ibuf_rdy
 item_focus cb
 group_marked decode
 item_focus cc
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].valid
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].start_pc
 item_set_format Hexadecimal
 variable_add tb.pd_out.[0].ftq_idx
@@ -99,7 +100,7 @@ item_set_format Unsigned
 variable_add tb.pd_out.[0].instr
 item_set_format Hexadecimal
 variable_add tb.pd_out.[0].is_rvc
-item_set_format Binary
+item_set_format Bit
 variable_add tb.pd_out.[0].fault_cause
 item_set_format Enum
 variable_add tb.pd_out.[0].fault_va

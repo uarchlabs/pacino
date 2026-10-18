@@ -14,7 +14,10 @@ echo "" >> ho
 echo "This the session hand off file name is: " >> ho
 echo "- blog_handoffs/blog_handoff-$1.md"       >> ho
 # -------------------------------------------------------------
-
+echo "" >> ho
+echo "You are required to read every single line of the content" >> ho
+echo "No excuses. You are required acknowledge that you have complied." >> ho
+# -------------------------------------------------------------
 echo "# Separator ---------------------------------------------------" >> ho
 cat planning/PROJECT_CORE.md >> ho
 echo "# Separator ---------------------------------------------------" >> ho

@@ -5,7 +5,7 @@
 #
 # chk_sucl.py -- check that each waves/<scenario>.sucl loads in Surfer
 # and shows what fe_demo_sigs.py, FDT-12a and FDT-12c call for (DOC-002,
-# DOC-004)
+# DOC-004, DOC-006)
 #
 # Usage, from examples/fe_demo, after the scenarios have run:
 #   python3 waves/chk_sucl.py [scenario ...]
@@ -25,12 +25,14 @@
 #     markers with their times, and the view
 # and compares them with what this script derives itself, without
 # reading the command file or mk_sucl.py:
-#   - signals, groups and order: fe_demo_sigs.S, each path as Surfer
-#     names it in the FST (fe_demo_sigs.fst_names)
+#   - signals, groups and order: fe_demo_sigs.scenarios(n) for the
+#     slot count n of the model that wrote the scenario's FST
+#     (fe_demo_sigs.nslots, DOC-006), each path as Surfer names it in
+#     the FST (fe_demo_sigs.fst_names)
 #   - name type: Unique on every variable (FDT-12a)
-#   - formats: tb.clk Clock, tb.rstn Bit, tb.cyc Unsigned, a signal the
-#     FST marks enum-typed Enum, every other signal fe_demo_sigs.radix
-#     (FDT-12a); the enum marks are read here from the FST header
+#   - formats: fe_demo_sigs.fmt, the table FORMATS (DOC-006), given the
+#     enum marks read here from the FST header; a signal no row
+#     matches fails the file
 #   - markers: one per event of docs/<s>.md section 4 when the
 #     description is in the FDT-13 form, none otherwise; in table order,
 #     each named c<cyc>_<label>, at a time where the FST has tb.cyc equal
@@ -45,14 +47,13 @@ import subprocess
 import sys
 import tempfile
 
-from fe_demo_sigs import S, fst_header, fst_names, fst_values, radix
+from fe_demo_sigs import (NAMES, fmt, fst_header, fst_names, fst_values,
+                          nslots, scenarios)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, '..', 'docs')
 SURFER = os.environ.get('SURFER',
                         os.path.expanduser('~/.cargo/bin/surfer'))
-FMT = {'bin': 'Binary', 'hex': 'Hexadecimal', 'dec': 'Unsigned'}
-CLK_FMT = {'tb.clk': 'Clock', 'tb.rstn': 'Bit', 'tb.cyc': 'Unsigned'}
 FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
         '4. Events']
 ANSI = re.compile(r'\x1b\[[0-9;]*m')
@@ -214,7 +215,7 @@ def check(scen, tmpdir):
         return ['no FST %s' % fst], 0, 0, 0
     names = fst_names(fst)
     enums = enum_paths(fst)
-    exp = dict(S)[scen]
+    exp = dict(scenarios(nslots(names)))[scen]
     ron = os.path.join(tmpdir, scen + '.ron')
     log = run_surfer(fst, open(os.path.join(HERE, scen + '.sucl')).read(),
                      ron)
@@ -229,9 +230,15 @@ def check(scen, tmpdir):
     for g, sigs in exp:
         want.append((0, 'Group', g, None, None))
         for p in sigs:
+            if p not in names:
+                errs.append('not in the FST: ' + p)
+                continue
             width, snm, _ = names[p]
-            f = CLK_FMT.get(p) or ('Enum' if p in enums else
-                                   FMT[radix(width, p)])
+            try:
+                f = fmt(p, width, p in enums)
+            except KeyError as e:
+                errs.append(str(e.args[0]))
+                f = None
             want.append((1, 'Variable', snm, 'Some("%s")' % f, 'Unique'))
     vars_got = [it for it in got if it[1] != 'Marker']
     if vars_got != want:
@@ -256,7 +263,7 @@ if not shutil.which(SURFER):
     sys.exit('chk_sucl.py: Surfer not found: SURFER=%s; set SURFER to the '
              'surfer executable' % SURFER)
 
-scens = sys.argv[1:] or [s for s, _ in S
+scens = sys.argv[1:] or [s for s in NAMES
                          if os.path.exists(os.path.join('out', s, s + '.fst'))]
 bad = 0
 with tempfile.TemporaryDirectory() as tmpdir:

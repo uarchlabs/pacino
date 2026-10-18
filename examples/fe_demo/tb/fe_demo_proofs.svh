@@ -166,6 +166,24 @@
                         n_csp_chg);
         return (n_commit_adv >= 16) && (n_csp_chg > 0);
       end
+      "fd22_sc_slot1": begin
+        msg = $sformatf({"p3 redirects from slot 1 reversed by SC behind a ",
+                         "TAGE slot 0 %0d, from slot 0 reversed by SC %0d"},
+                        n_sc_s1, n_sc_s0);
+        return n_sc_s1 > 0;
+      end
+      "fd23_jump_cut": begin
+        msg = $sformatf({"blocks cut at the jump %0d, the jump predicted ",
+                         "in slot 0 of the next block %0d"}, n_jmp_cut,
+                        n_jmp_next);
+        return (n_jmp_cut > 0) && (n_jmp_next > 0);
+      end
+      "fd24_call_slot1": begin
+        msg = $sformatf({"RAS pushes from slot 1 behind a not-taken ",
+                         "conditional %0d, returns predicted by the RAS %0d"},
+                        n_push_s1, n_ras_ret_ok);
+        return (n_push_s1 > 0) && (n_ras_ret_ok > 0);
+      end
       default: begin
         msg = "no such scenario";
         return 1'b0;

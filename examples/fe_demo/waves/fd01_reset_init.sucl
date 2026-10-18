@@ -1,4 +1,5 @@
-# fd01_reset_init, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd01_reset_init, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd01_reset_init/fd01_reset_init.fst, 1 prediction slot(s)
 # surfer out/fd01_reset_init/fd01_reset_init.fst -c waves/fd01_reset_init.sucl
 variable_force_name_type Unique
 # group clock
@@ -19,52 +20,52 @@ group_marked sram_init
 item_focus f
 item_set_format Enum
 variable_add tb.dut.u_bpu.u_tage.u_sram_init.waddr
-item_set_format Hexadecimal
+item_set_format Unsigned
 variable_add tb.dut.bpu_tage_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_ittage.u_sram_init.state
 item_set_format Enum
 variable_add tb.dut.u_bpu.u_ittage.u_sram_init.waddr
-item_set_format Hexadecimal
+item_set_format Unsigned
 variable_add tb.dut.bpu_ittage_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_sc.u_sram_init.state
 item_set_format Enum
 variable_add tb.dut.u_bpu.u_sc.u_sram_init.waddr
-item_set_format Hexadecimal
+item_set_format Unsigned
 variable_add tb.dut.bpu_sc_ready
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.u_ras.ras_rst_done
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group bp_cluster_first
 variable_add tb.dut.ftq_pred_val_p0
 item_focus p
 group_marked bp_cluster_first
 item_focus ba
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.bpu_pred_val_p1
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_tage_pred_rdy_p2
-item_set_format Unsigned
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_ittage_pred_rdy_p2
-item_set_format Unsigned
+item_set_format Bit
 variable_add tb.dut.u_bpu.w_sc_pred_rdy_p3
-item_set_format Unsigned
+item_set_format Bit
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
 item_focus bg
 group_marked bp_cluster_p0
 item_focus bh
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_pred_idx_p0
 item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 zoom_fit

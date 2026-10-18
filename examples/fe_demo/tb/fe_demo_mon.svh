@@ -136,6 +136,22 @@
   logic [RAS_COMMIT_PTR_BITS-1:0] pv_csp;
   logic [VA_WIDTH-1:0]            pv_ctop;
 
+  // =================================================================
+  // FD-22 to FD-24: the dual-slot scenarios (DOC-006). Each count needs
+  // a second slot; on the one-slot model it stays 0.
+  // =================================================================
+  int n_sc_s1;            // p3 redirects: SC reversed slot 1, slot 0 a
+                          // conditional TAGE predicted
+  int n_sc_s0;            // p3 redirects: SC reversed slot 0
+  int n_jmp_cut;          // p2 groups: two conditionals not taken and the
+                          // block cut at the FTB jump's PC
+  int n_jmp_next;         // ... the next p2 group, at that PC, with the
+                          // jump in slot 0 and taken
+  logic                cut_wait;
+  logic [VA_WIDTH-1:0] cut_pc;
+  int n_push_s1;          // p2 groups: a call in slot 1 behind a not-taken
+                          // conditional in slot 0, presented to the RAS
+
   // The PPNs of the pages the program mapped with PBMT IO (FD-18). The
   // program writer's W.uc_ppn holds every uncached page, NC and IO
   // alike; this splits the uncached requests between the two.
@@ -225,6 +241,13 @@
     n_p0_held     = 0;
     n_commit_adv  = 0;
     n_csp_chg     = 0;
+    n_sc_s1       = 0;
+    n_sc_s0       = 0;
+    n_jmp_cut     = 0;
+    n_jmp_next    = 0;
+    cut_wait      = 1'b0;
+    cut_pc        = '0;
+    n_push_s1     = 0;
     to_h2.delete();
     io_ppn.delete();
   endtask
@@ -236,6 +259,9 @@
   // position.
   // =================================================================
   bp_ftq_slot_t fin_slot [0:FTQ_DEPTH-1][0:NUM_PRED_SLOTS-1];
+
+  // The last slot: slot 1 on the two-slot model (FD-22 to FD-24).
+  localparam int S1 = NUM_PRED_SLOTS - 1;
 
   always @(posedge clk) begin : fin_log
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
@@ -550,6 +576,56 @@
       if ((dut.u_bpu.u_ras.csp != pv_csp) ||
           (dut.u_bpu.u_ras.commit_top_addr != pv_ctop))
         n_csp_chg <= n_csp_chg + 1;
+      // FD-22 to FD-24. S1 is the last slot, slot 1 on the two-slot
+      // model; every condition also needs NUM_PRED_SLOTS > 1, so on the
+      // one-slot model, where S1 is slot 0, nothing is counted.
+      if ((NUM_PRED_SLOTS > 1) && dut.u_ftq.w_ok_redir_p3 &&
+          dut.bpu_slot_val_p3 &&
+          (dut.bpu_slot_idx_p3 == dut.bpu_redir_idx_p3)) begin
+        // FD-22. SC reversed the slot (pred_src PRED_SC, p3_slot_comb)
+        // and the slot's own p3 redirect is raised.
+        if (dut.bpu_redir_p3[S1].valid && dut.bpu_slot_p3[S1].slot_valid &&
+            (dut.bpu_slot_p3[S1].br_type == COND) &&
+            (dut.bpu_slot_p3[S1].pred_src == PRED_SC) &&
+            dut.bpu_slot_p3[0].slot_valid &&
+            (dut.bpu_slot_p3[0].br_type == COND) &&
+            (dut.bpu_slot_p3[0].pred_src == PRED_TAGE))
+          n_sc_s1 <= n_sc_s1 + 1;
+        if (dut.bpu_redir_p3[0].valid && dut.bpu_slot_p3[0].slot_valid &&
+            (dut.bpu_slot_p3[0].pred_src == PRED_SC))
+          n_sc_s0 <= n_sc_s0 + 1;
+      end
+      // FD-23. The cut (w_jmp_cut_p2, bp_cluster p2_class_comb): both
+      // slots conditionals, neither taken, the block's end the jump PC.
+      // The next accepted p2 group whose block starts at that PC
+      // should carry the jump in slot 0, at position 0, taken.
+      if ((NUM_PRED_SLOTS > 1) && dut.u_ftq.w_ok_slot_p2 &&
+          dut.bpu_slot_val_p2) begin
+        if (dut.u_bpu.w_jmp_cut_p2 &&
+            dut.bpu_slot_p2[0].slot_valid && !dut.bpu_slot_p2[0].taken &&
+            (dut.bpu_slot_p2[0].br_type == COND) &&
+            dut.bpu_slot_p2[S1].slot_valid && !dut.bpu_slot_p2[S1].taken &&
+            (dut.bpu_slot_p2[S1].br_type == COND)) begin
+          n_jmp_cut <= n_jmp_cut + 1;
+          cut_wait  <= 1'b1;
+          cut_pc    <= dut.bpu_blk_pft_p2;
+        end else if (cut_wait && (dut.u_bpu.r_pc_p2 == cut_pc)) begin
+          cut_wait <= 1'b0;
+          if (dut.bpu_slot_p2[0].slot_valid && dut.bpu_slot_p2[0].taken &&
+              (dut.bpu_slot_p2[0].br_type == DIRECT_UNC) &&
+              (dut.bpu_slot_p2[0].pos == '0))
+            n_jmp_next <= n_jmp_next + 1;
+        end
+      end
+      // FD-24. The p2 RAS presentation of slot 1 (w_ras_pred_val_p2,
+      // bp_cluster p2_class_comb: reachable because slot 0 is not
+      // taken), a call, in a p2 group the FTQ accepted.
+      if ((NUM_PRED_SLOTS > 1) && dut.u_ftq.w_ok_slot_p2 &&
+          dut.bpu_slot_val_p2 && dut.u_bpu.w_ras_pred_val_p2[S1] &&
+          (dut.u_bpu.w_br_type_p2[S1] inside {DIRECT_CALL, INDIRECT_CALL}) &&
+          dut.bpu_slot_p2[0].slot_valid && !dut.bpu_slot_p2[0].taken &&
+          (dut.bpu_slot_p2[0].br_type == COND))
+        n_push_s1 <= n_push_s1 + 1;
     end
     pv_commit <= dut.u_ftq.w_commit_ptr;
     pv_csp    <= dut.u_bpu.u_ras.csp;

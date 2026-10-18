@@ -84,11 +84,14 @@ module tb;
   `include "fd19_fencei_cbo.svh"
   `include "fd20_backpressure.svh"
   `include "fd21_commit.svh"
+  `include "fd22_sc_slot1.svh"
+  `include "fd23_jump_cut.svh"
+  `include "fd24_call_slot1.svh"
 
   `include "fe_demo_proofs.svh"
 
   // The scenarios, in FD order (FDT-9).
-  string scens [0:20] = '{"fd01_reset_init", "fd02_steady",
+  string scens [0:23] = '{"fd01_reset_init", "fd02_steady",
                           "fd03_two_branch", "fd04_p2_override",
                           "fd05_p3_override", "fd06_loop_pred",
                           "fd07_calls_returns", "fd08_indirect",
@@ -97,7 +100,8 @@ module tb;
                           "fd13_l1i", "fd14_translation", "fd15_faults",
                           "fd16_page_cross", "fd17_rvc", "fd18_uncached",
                           "fd19_fencei_cbo", "fd20_backpressure",
-                          "fd21_commit"};
+                          "fd21_commit", "fd22_sc_slot1", "fd23_jump_cut",
+                          "fd24_call_slot1"};
 
   // Build and run one scenario's program. 0 for an unknown name.
   function automatic logic known(input string nm);
@@ -128,6 +132,9 @@ module tb;
       "fd19_fencei_cbo":    prog_fd19();
       "fd20_backpressure":  prog_fd20();
       "fd21_commit":        prog_fd21();
+      "fd22_sc_slot1":      prog_fd22();
+      "fd23_jump_cut":      prog_fd23();
+      "fd24_call_slot1":    prog_fd24();
       default: ;
     endcase
   endtask

@@ -1,4 +1,5 @@
-# fd19_fencei_cbo, examples/fe_demo (DOC-002, DOC-004); written by waves/mk_sucl.py
+# fd19_fencei_cbo, examples/fe_demo (DOC-002, DOC-004, DOC-006); written by waves/mk_sucl.py
+# from out/fd19_fencei_cbo/fd19_fencei_cbo.fst, 1 prediction slot(s)
 # surfer out/fd19_fencei_cbo/fd19_fencei_cbo.fst -c waves/fd19_fencei_cbo.sucl
 variable_force_name_type Unique
 # group clock
@@ -17,7 +18,7 @@ variable_add tb.bkend_ftq_redir_val
 item_focus e
 group_marked backend
 item_focus f
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_redir_idx
 item_set_format Unsigned
 variable_add tb.bkend_ftq_redir_pc
@@ -25,11 +26,11 @@ item_set_format Hexadecimal
 variable_add tb.bkend_ftq_redir_cause
 item_set_format Enum
 variable_add tb.bkend_ftq_redir_self
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_rsv_val
-item_set_format Hexadecimal
+item_set_format Bit
 variable_add tb.bkend_ftq_commit_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.bkend_ftq_commit_idx
 item_set_format Unsigned
 item_unfocus
@@ -38,42 +39,42 @@ variable_add tb.cmt_ifu_maint_val
 item_focus n
 group_marked maintenance
 item_focus o
-item_set_format Binary
+item_set_format Bit
 variable_add tb.cmt_ifu_maint_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.cmt_ifu_maint_op
-item_set_format Binary
+item_set_format Bit
 variable_add tb.cmt_ifu_maint_paddr
 item_set_format Hexadecimal
 variable_add tb.dut.u_ifu.u_maint.r_st
 item_set_format Enum
 variable_add tb.dut.ifu_l1i_inv_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_inv_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_inv_all
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_inv_paddr
 item_set_format Hexadecimal
 variable_add tb.dut.u_l1i.u_maint.r_st
 item_set_format Enum
 variable_add tb.dut.u_l1i.mt_busy_any
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.u_l1i.mt_busy_line
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.l1i_ifu_inv_done
-item_set_format Binary
+item_set_format Bit
 variable_add tb.ifu_cmt_maint_ack
-item_set_format Binary
+item_set_format Bit
 item_unfocus
 # group ftq_ifu
 variable_add tb.dut.ftq_ifu_req_val
 item_focus bm
 group_marked ftq_ifu
 item_focus bn
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_start_pc
@@ -81,11 +82,11 @@ item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_next_pc
 item_set_format Hexadecimal
 variable_add tb.dut.ftq_ifu_taken_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_taken_pos
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_flush_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ftq_ifu_flush_idx
 item_set_format Unsigned
 variable_add tb.dut.ftq_ifu_commit_ptr
@@ -96,17 +97,17 @@ variable_add tb.dut.ifu_l1i_req_val
 item_focus ch
 group_marked ifu_l1i
 item_focus ci
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_rdy
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.ifu_l1i_req_id
 item_set_format Unsigned
 variable_add tb.dut.ifu_l1i_req_paddr
 item_set_format Hexadecimal
 variable_add tb.dut.ifu_l1i_req_uncached
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.l1i_ifu_rsp_val
-item_set_format Binary
+item_set_format Bit
 variable_add tb.dut.l1i_ifu_rsp_id
 item_set_format Unsigned
 item_unfocus

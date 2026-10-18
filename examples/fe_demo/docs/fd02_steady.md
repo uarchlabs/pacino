@@ -4,9 +4,9 @@
 # fd02_steady: Steady-State Prediction and Fetch
 ```
  FILE:    fd02_steady.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -18,11 +18,12 @@ zero-bubble path. Once the IBUF is filled, decode delivers eight
 instructions per cycle. The run passes if both happen for at least four
 consecutive cycles.
 
-A recorded run (DOC-002):
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
+A recorded run:
 
 ```
-DEMO PASS fd02_steady: 83 allocations, longest run 83; 64 full decode
-bundles, longest run 63 (cycles 84)
+-I: fd02_steady: PASS, allocations 83, longest allocation run 83,
+    full decode bundles 64, longest bundle run 63, cyc 84
 ```
 
 ---
@@ -47,7 +48,7 @@ RESET_VECTOR+0x800   jal x0,0           halt (demo_go -> W.halt)
 ## 2. Why the program produces one block per cycle
 
 1. p1 prediction on a uBTB miss. `rtl/core/frontend/bpu/rtl/
-   bp_cluster.sv:862-864`: `w_pft_p1` is `r_ubtb_blk_p1.pft_addr` on a
+   bp_cluster.sv:868-870`: `w_pft_p1` is `r_ubtb_blk_p1.pft_addr` on a
    hit and `r_pc_p1 + FTB_BLOCK_BYTES` on a miss. With no branch in the
    code no lookup hits (`r_ubtb_blk_p1.hit` is low on cycles 1 to 84 in
    the FST), so each p1 prediction names the next 32-byte block and
@@ -74,7 +75,7 @@ delivers the halt block, one instruction.
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:360-376`, taken only inside
+The counts come from `tb/fe_demo_mon.svh:394-410`, taken only inside
 the `meas` window (out of reset, the backend taking decode's output,
 the stream not yet retired).
 
@@ -85,7 +86,7 @@ n_dec8          cycles with dec_ibuf_rdy and all SLOTS pd_out[i].valid
 max_run_dec8    the longest run of consecutive such cycles
 ```
 
-The proof (`tb/fe_demo_proofs.svh:38-43`) is
+The proof (`tb/fe_demo_proofs.svh:49-54`) is
 `max_run_alloc >= 4 && max_run_dec8 >= 4`. `tb_fe_demo.sv` also
 requires the whole stream to retire with no errors before it accepts
 the proof.
@@ -94,17 +95,17 @@ the proof.
 
 ## 4. Reading the numbers
 
-- `64 full decode bundles`: every instruction of the 64 code blocks was
-  delivered in a full bundle. `longest run 63`: the one break is cycle
-  19, after the first bundle (from the FST).
-- `83 allocations, longest run 83`: an allocation on every measured
-  cycle but one. 83 is more than the 65 blocks of the program (64 plus
-  the halt block): the FTQ goes on predicting fall-through blocks past
-  0x80000800 (0x80000820 onward) until the halt JAL is found, and at
-  cycle 84 `ftq_pred_pc_p0` returns to 0x80000800 (from the FST). Those
-  entries are counted as allocations although they are not on the
-  retired path.
-- `cycles 84`: from the release of reset to the last retirement.
+- `full decode bundles 64`: every instruction of the 64 code blocks was
+  delivered in a full bundle. `longest bundle run 63`: the one break is
+  cyc 19, after the first bundle (from the FST).
+- `allocations 83, longest allocation run 83`: an allocation on every
+  measured cycle but one. The program has 65 blocks: the 64 of code and
+  the halt block. The other allocations are fall-through blocks past 0x80000800
+  (0x80000820 onward), which the FTQ goes on predicting until the halt
+  JAL is found; at cyc 84 `ftq_pred_pc_p0` returns to 0x80000800 (from
+  the FST). Those entries are counted as allocations although they are
+  not on the retired path.
+- `cyc 84`: from the release of reset to the last retirement.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-2: its
   proof reads "consecutive allocations; 8 instructions decoded per cycle
   once the IBUF is filled". As built, the proof is a threshold, four
@@ -123,9 +124,11 @@ S=fd02_steady` opens in Surfer. Look at:
   advancing by 0x20 per cycle; `ftq_pred_idx_p0` counting.
 - group `bp_cluster_p1`: `bpu_pred_val_p1` every cycle,
   `r_ubtb_blk_p1.hit` low, `bpu_pred_pft_p1` the lookup PC + 0x20,
-  both `bpu_pred_slot_p1` slots with `slot_valid` low.
+  the one slot, `bpu_pred_slot_p1.[0]`, with `slot_valid` low.
 - group `ftq`: `w_ok_pred_p1` high cycle after cycle.
 - groups `ftq_ifu`, `ifu_l1i`, `ifu_f3`, `ibuf`: the blocks moving
   through the IFU and the IBUF occupancy (`u_ibuf.w_n_pres`).
 - group `decode`: all eight `pd_out.[i].valid` high together with
-  `dec_ibuf_rdy` from cycle 20.
+  `dec_ibuf_rdy` from cyc 20, and `pd_out.[0].start_pc` stepping by 0x20,
+  one block per bundle. The group shows the first lane's PC only
+  (DOC-006).

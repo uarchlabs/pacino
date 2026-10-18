@@ -4,9 +4,9 @@
 # fd17_rvc: Compressed and Unaligned Code
 ```
  FILE:    fd17_rvc.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -19,11 +19,12 @@ transfers then runs from block starts that are not 32-byte aligned. The
 run passes if the straddling instruction reaches retirement whole and
 16-bit instructions retire.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd17_rvc: 32-bit instructions at block position 15 delivered
-whole 1; 16-bit instructions 98 (cycles 270)
+-I: fd17_rvc: PASS, straddling 32-bit instructions delivered whole 1,
+    16-bit instructions 98, cyc 267
 ```
 
 ---
@@ -93,7 +94,7 @@ loop, 8 passes (it = 0..7), from top = +0x4E:
 
 ## 3. What the monitor counts
 
-Both counts are taken in `be_retire_hook` (`tb/fe_demo_mon.svh:286-291`)
+Both counts are taken in `be_retire_hook` (`tb/fe_demo_mon.svh:320-325`)
 as each expected instruction retires, while `meas` is set.
 
 ```
@@ -103,7 +104,7 @@ n_straddle   no fault, !is_rvc, pos == 15, and the packet's instr equals
 n_rvc        no fault, is_rvc: a 16-bit instruction retired
 ```
 
-The proof (`tb/fe_demo_proofs.svh:123`) is
+The proof (`tb/fe_demo_proofs.svh:138`) is
 `n_straddle > 0 && n_rvc > 0`. `tb_fe_demo.sv` also requires the whole
 stream to retire with no errors.
 
@@ -111,8 +112,8 @@ stream to retire with no errors.
 
 ## 4. Reading the numbers
 
-- `delivered whole 1` is the instruction at +0x3E (seen at cycle 21,
-  section 2).
+- `straddling 32-bit instructions delivered whole 1` is the
+  instruction at +0x3E (seen at cycle 21, section 2).
 - `16-bit instructions 98` matches the program (derived from the
   source): 13 c.addi in mixed(20), 4 c.addi to +0x3E, 3 in mixed(5);
   9 per odd pass and 10 per even pass (the c.addi at +0x52), 76 over
@@ -142,6 +143,9 @@ opens in Surfer. Look at:
   the ibuf.
 - `pd_out.[4]` at cycle 21: start_pc 0x8000_003E, pos 15, is_rvc 0.
 - In the loop, `pd_out.[i].is_rvc` set on the compressed transfers and
-  `pd_out.[0].instr` holding their expansions (jal, beq/bne, jalr).
-- The straddle register (`u_ifu.u_f3.r_strad_val`, `r_strad_pc`) is not
-  in the save file; add it from the hierarchy if wanted.
+  `pd_out.[0].instr` holding their expansions (jal, beq/bne, jalr). The
+  decode group shows the first lane in full and the `is_rvc` of every
+  lane; of lane 4 it also shows the PC and position (DOC-006).
+- The straddle register, group `ifu_f3_straddle`
+  (`u_ifu.u_f3.r_strad_val`, `r_strad_pc`, `r_strad_idx`): set at
+  cycle 21 with `r_strad_pc` 0x8000_0040.

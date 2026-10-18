@@ -4,9 +4,9 @@
 # fd21_commit: Commit
 ```
  FILE:    fd21_commit.md
- SOURCE:  DOC-002
+ SOURCE:  DOC-002, DOC-006
  STATUS:  WORKING
- UPDATED: 2026-10-15
+ UPDATED: 2026-10-17
  CONTACT: Jeff Nye
 ```
 
@@ -18,11 +18,12 @@ return pushes or pops the RAS commit stack. The run passes if the
 commit pointer moves in at least 16 cycles and the commit stack
 changes.
 
+The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
-DEMO PASS fd21_commit: cycles the commit pointer moved 42; cycles the
-RAS commit stack changed 36 (cycles 202)
+-I: fd21_commit: PASS, cycles the commit pointer moved 42,
+    cycles the RAS commit stack changed 36, cyc 205
 ```
 
 ---
@@ -55,7 +56,7 @@ f+0x42 ret                 f returns to main
 
 - Each pass makes three calls and three returns; the deepest point is
   main -> f -> g (or h), two return addresses on the stack.
-- `loop_br` and `rep_iter` (`fe_tb_writer.svh:352-382`, in
+- `loop_br` and `rep_iter` (`fe_tb_writer.svh:352-383`, in
   `rtl/core/frontend/fe_top/tb/models/`) write the body once and
   append its other five executions to the expected stream.
 
@@ -79,19 +80,19 @@ f+0x42 ret                 f returns to main
    (`rtl/core/frontend/ftq/rtl/ftq_entry.sv:275-285`). In the RAS a
    pop moves `csp` down and a push writes `commit_ret_addr` and moves
    `csp` up (`c_pop`, `c_push`, `c_nxt`,
-   `rtl/core/frontend/bpu/rtl/ras.sv:671-681`; registered at
-   `:756-759`). `commit_top_addr` is the entry below `csp`
-   (`ras.sv:174-176`).
+   `rtl/core/frontend/bpu/rtl/ras.sv:737-746`; registered at
+   `:828-831`). `commit_top_addr` is the entry below `csp`
+   (`ras.sv:185-187`).
 4. Seen in the run (fst2vcd on `out/fd21_commit/fd21_commit.fst`,
    while `meas` is set): `w_commit_ptr` changes in 42 cycles;
-   `ras_commit_val` is high in 36 cycles, 18 with br_type 1
-   (DIRECT_CALL) and 18 with br_type 3 (RETURN); `csp` reaches 2.
+   `ras_commit_val` is high in 36 cycles, 18 with `ras_commit_br_type`
+   DIRECT_CALL and 18 with RETURN; `csp` reaches 2.
 
 ---
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:534-543`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:573-578`, sampled every cycle
 while `meas` is set. Both are counts of CYCLES.
 
 ```
@@ -102,9 +103,9 @@ n_csp_chg     u_bpu.u_ras.csp or u_ras.commit_top_addr differs from
 ```
 
 `pv_commit`, `pv_csp` and `pv_ctop` are updated every cycle, inside or
-outside the measured window (`fe_demo_mon.svh:541-543`).
+outside the measured window (`fe_demo_mon.svh:630-632`).
 
-The proof (`tb/fe_demo_proofs.svh:149`) is
+The proof (`tb/fe_demo_proofs.svh:167`) is
 `n_commit_adv >= 16 && n_csp_chg > 0`. `tb_fe_demo.sv` also requires
 the whole stream to retire with no errors, and the backend checks every
 RAS commit against the retired call or return (the RAS commit check,
@@ -136,8 +137,8 @@ S=fd21_commit` opens in Surfer. Look at:
   watermark.
 - ftq group: `w_commit_ptr` stepping by one per cycle up to the
   watermark.
-- ras_commit group: `ras_commit_val` with `ras_commit_br_type` 1 or 3
-  and `ras_commit_ret_addr`; `u_ras.csp` moving between 0 and 2;
+- ras_commit group: `ras_commit_val` with `ras_commit_br_type` DIRECT_CALL or
+  RETURN and `ras_commit_ret_addr`; `u_ras.csp` moving between 0 and 2;
   `commit_top_valid` and `commit_top_addr` (+0x20, f+0x20, f+0x40).
 - ras group: the speculative pointers `tosr` and `tosw`, which move at
   prediction time, ahead of the commit stack.
