@@ -501,15 +501,13 @@
 |        |                       | BP-108                                      |
 |        |                       | output session_handoff-068                  |
 | 68     | cache gen             | input session_handoff-068                   |
-|        | BLOG tools TBD        | icache decisions                            |
+|        | BLOG_tools_1          | icache decisions                            |
 |        |                       | l1i ifu interface                           |
 |        |                       | INFRA-012 overlap numbering                 |
 |        |                       | TOOLS-003                                   |
 |        |                       | TOOLS-004                                   |
 |        |                       | TOOLS-005                                   |
 |        | I$ research           | output session_handoff-069                  |
-
-|        |                       |                                        |
 
 | 69     | planning doc audit    | input  session_handoff-069             |
 |        |                       |                                        |
@@ -527,35 +525,34 @@
 |        |                       |                                        |
 |        |                       | output session_handoff-073             |
 
-| 73     | ??                    | input  session_handoff-073             |
-|        |                       | BP-109                                 |
-|        |                       | BP-110                                 |
-|        |                       | BP-111                                 |
-|        |                       | BP-112                                 |
-|        |                       | BP-113                                 |
-|        |                       | BP-114                                 |
-|        |                       | TOOLS-006                              |
+| 73     | TD fixes              | input  session_handoff-073             |
+|        | 122                   | BP-109                                 |
+|        | 124 & 125             | BP-110                                 |
+|        | 132 & 137             | BP-111                                 |
+|        | 126 & 127             | BP-112                                 |
+|        | 139                   | BP-113                                 |
+|        | 140/1/2, IFU-22       | BP-114                                 |
+|        | regression hook       | TOOLS-006                              |
 |        |                       | output session_handoff-074             |
 
-| 74     | ??                    | input  session_handoff-074             |
-|        |                       | BP-115                                 |
-|        |                       | BP-116                                 |
-|        |                       | TOOLS-006                              |
+| 74     | ifu                   | input  session_handoff-074             |
+|        | pkg clean up          | BP-115                                 |
+|        | TD 144, ifu rtl       | BP-116                                 |
 |        |                       | output session_handoff-075             |
 
-| 75     | ??                    | input  session_handoff-075             |
-|        |                       | BP-117                                 |
-|        |                       | BP-118                                 |
-|        |                       | BP-119                                 |
-|        |                       | BP-120                                 |
-|        |                       | BP-121                                 |
+| 75     | ifu                   | input  session_handoff-075             |
+|        | TD 146 fix            | BP-117                                 |
+|        | ifu integration prep  | BP-118                                 |
+|        | training fix #1       | BP-119                                 |
+|        | training fix #2       | BP-120                                 |
+|        | ifu functionality     | BP-121                                 |
 |        |                       | output session_handoff-076             |
 
 | 76     | ??                    | input  session_handoff-076             |
-|        |                       | BP-122                                 |
+|        | loop pred training    | BP-122                                 |
 |        |                       | output session_handoff-077             |
 
-| 77     | ??                    | input  session_handoff-077             |
+| 77     | ifu/page tbl walk     | input  session_handoff-077             |
 |        |                       | BP-123                                 |
 |        |                       | BP-124                                 |
 |        |                       | BP-125                                 |
@@ -563,7 +560,7 @@
 |        |                       | BP-127                                 |
 |        |                       | output session_handoff-078             |
 
-| 78     | ??                    | input  session_handoff-078             |
+| 78     | NUM_PRED_SLOT 1/2     | input  session_handoff-078             |
 |        |                       | BP-128                                 |
 |        |                       | BP-129                                 |
 |        |                       | BP-130                                 |
@@ -572,12 +569,12 @@
 |        |                       | BP-133                                 |
 |        |                       | output session_handoff-079             |
 
-| 79     | ??                    | input  session_handoff-079             |
-|        |                       | BP-134                                 |
-|        |                       | SYS-001                                |
+| 79     | misc                  | input  session_handoff-079             |
+|        | tage t0 fix           | BP-134                                 |
+|        | begin csr impl        | SYS-001                                |
 |        |                       | output session_handoff-080             |
 
-| 80     | ??                    | input  session_handoff-080             |
+| 80     | fe clean up           | input  session_handoff-080             |
 |        |                       | BP-135                                 |
 |        |                       | BP-136                                 |
 |        |                       | BP-137                                 |

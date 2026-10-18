@@ -10,146 +10,196 @@
  CONTACT: Jeff Nye
 ```
 
-## 1. What the scenario shows
+## 0. Introduction
 
-`fd09_tage` is the FD-9 scenario of the front-end demonstration. It
-shows three behaviours of the pacino TAGE predictor: a prediction
-supplied by a tagged table, the allocation of a new tagged entry after
-a misprediction, and the use_alt_on_na mechanism handing a prediction
-from a weak tagged entry to the base table T0. The scenario runs a
-loop whose body contains a conditional branch with a random direction.
-The predictors cannot learn that branch, so it mispredicts often, and
-the mispredictions drive the allocations and the use_alt_on_na
-counter. demo_explainer.md describes how a scenario is built and run,
-and defines the terms used here.
+To reduce the volume of text the discussion below assumes a grasp of the
+concepts used in branch prediction and decoupled front ends. These are
+well-researched topics; some of the seminal papers include [1] [2] [3] [4].
 
-The scenario runs on the one-slot model, built with one prediction
-slot per fetch block (`SCEN_2S` in the `Makefile`). When the scenario
-passes, it prints one line. This is the line from a run on 2026-10-17,
-the run the cyc values below come from:
+Pacino terminology labels the prediction operation stages as p0/p1/etc and the
+branch predictor update operation stages u0/u1/etc.
+
+`examples/fe_demo/docs/demo_explainer.md` describes how each scenario is built
+and run. This includes:
+
+- test program generation, known as "the program writer" below.
+- the list of instructions the testbench expects to retire
+- the modeled backend abstraction
+- the result line
+- the cycle counter `cyc`
+
+The scenario is executed and the waveform viewer is opened with these commands:
+
+```
+cd examples/fe_demo
+make fd09_tage
+make view S=fd09_tage
+```
+
+Example console output is shown below listing the number of predictions,
+allocations and cycle count:
 
 ```
 -I: fd09_tage: PASS, tagged-provider predictions 253, allocations 209,
     T0 by use_alt_on_na 75, cyc 3567
 ```
 
-The testbench monitor, `tb/fe_demo_mon.svh` lines 435 to 459, samples
-every prediction slot on every cycle and keeps the three counts in the
-line:
+The Pacino branch predictors supports up to two predictions per fetch block.
+This is controlled by a compile time parameter, NUM_PRED_SLOTS=1 or 2. To
+reduce the volume of signal data and improve clarity, this scenario uses
+NUM_PRED_SLOTS=1.
 
-- tagged-provider predictions, the monitor variable `n_tage_prov`: TAGE
-  predictions at p2 whose provider is a tagged table;
-- allocations, `n_tage_alc`: new tagged entries written to the TAGE
-  tables;
-- T0 by use_alt_on_na, `n_t0_uaon`: TAGE predictions at p2 that come
-  from T0 because use_alt_on_na passed over a weak tagged provider.
+For reference there are two views of frontend structures: 
 
-The scenario passes when the allocation count and the T0 count are
-both greater than zero (`tb/fe_demo_proofs.svh` line 89), and every
-instruction the testbench expects retires without error. The count of
-tagged-provider predictions is reported for information only. The run
-took 3567 cycles.
+```
+examples/fe_demo/docs/fe_block.svg   block connectivity
+examples/fe_demo/docs/fe_pipe.svg    pipeline view
+```
+
+## 1. What the scenario shows
+
+`fd09_tage` (FD-9) shows three behaviors of the Pacino TAGE predictor in
+response to FTQ prediction requests at p0 and FTQ updates at u0:
+
+1. a prediction supplied by a tagged table
+2. the allocation of a new tagged entry after a misprediction
+3. the use_alt_on_na mechanism handing a prediction from a weak tagged
+   entry to the base table T0.
+
+FD-9 runs a loop whose body contains a conditional branch with a random
+direction. The random direction is chosen by the program writer and resolved by
+the modeled backend.  With the random direction the predictor cannot learn the
+branch behavior and therefore mispredicts often. These mispredictions result in
+allocations and eventual trigger of the use_alt_on_na (UAON) counter.
+Eventually the UAON counter causes the prediction to use the base table T0 as
+the prediction source.
+
+The testbench monitor, `tb/fe_demo_mon.svh`, supplies statistical counts for
+FD-9. These are reported in the console output, shown above:
+
+- tagged-provider predictions 
+    - `n_tage_prov` in `tb/fe_demo_mon.svh`
+    - TAGE predictions at p2 whose provider is a tagged table
+- allocations
+    - `n_tage_alc` in `tb/fe_demo_mon.svh`
+    - newly allocated tagged table entries written to the TAGE tables
+- T0 by use_alt_on_na
+    - `n_t0_uaon` in `tb/fe_demo_mon.svh`
+    - TAGE predictions at p2 that come from T0 because use_alt_on_na
+      replaced the weak tagged provider.
 
 ---
 
 ## 2. The program
 
-The program is written by the task `prog_fd09` in
-`programs/fd09_tage.svh`. It has a short prologue, a loop that runs
-256 times, and a short epilogue. The loop body holds two conditional
-branches. The first, labelled B below, has a random direction. The
-second is the loop's back edge. The program runs in machine mode with
-translation off, so the addresses are physical; it starts at the
-reset vector, `RESET_VECTOR` = 0x8000_0000 (`bp_defines_pkg.sv`), and
-the loop's first instruction, top, is at 0x8000_0008.
+The program is written by the task `prog_fd09` in `programs/fd09_tage.svh`. The
+structure consists of a short prologue, a loop that runs 256 times, and a short
+epilogue.
+
+The loop body holds two conditional branches.  The bne branch at 0x8000_000E has a randomized direction.  The bne branch at 0x8000_0016 returns to label top. This is the loop's
+back edge
+
+The program runs in machine mode with translation off, the addresses are
+physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
+(`bp_defines_pkg.sv`), and the loop's first instruction, top, is at
+0x8000_0008.
 
 ```
-Address      Label  Instruction              Purpose
-0x8000_0000         c.addi a0, 1             prologue filler
-0x8000_0002         addi t0, t0, 1           prologue filler
-0x8000_0006         c.addi a0, 1             prologue filler
-0x8000_0008  top:   c.addi a0, 1             loop body filler
-0x8000_000A         addi t0, t0, 1           loop body filler
-0x8000_000E  B:     bne x6, x0, 0x8000_0014  random direction, see below
-0x8000_0012         c.addi a0, 1             executed only when B is
-                                             not taken
-0x8000_0014         c.addi a0, 1             loop body filler
-0x8000_0016         bne x6, x0, 0x8000_0008  back edge to top
-0x8000_001A         c.addi a0, 1             epilogue filler
-0x8000_001C         addi t0, t0, 1           epilogue filler
-0x8000_0020         c.addi a0, 1             epilogue filler
-0x8000_0022         jal x0, 0                jump to itself; the run
-                                             ends here
+Address      Label  Instruction                Purpose
+0x8000_0000         c.addi a0, 1               ; prologue, 16b instr
+0x8000_0002         addi   t0, t0, 1           ; prologue
+0x8000_0006         c.addi a0, 1               ; prologue, 16b
+
+0x8000_0008  top:   c.addi a0, 1               ; loop body, 16b
+0x8000_000A         addi   t0, t0, 1           ; loop body
+0x8000_000E  B:     bne    x6, x0, 0x8000_0014 ; randomized taken/not taken
+
+0x8000_0012         c.addi a0, 1               ; executed when B is not taken
+
+0x8000_0014         c.addi a0, 1               ; loop body, 16b
+
+0x8000_0016         bne    x6, x0, 0x8000_0008 ; back edge to top
+
+0x8000_001A         c.addi a0, 1               ; epilogue
+0x8000_001C         addi   t0, t0, 1           ; epilogue
+0x8000_0020         c.addi a0, 1               ; epilogue
+
+0x8000_0022         jal x0, 0                jump to itself, termination
 ```
 
-The filler instructions do no useful work. They make the code a mix of
-16-bit and 32-bit instructions, so the branches are not at the start
-of their fetch block: in the block that starts at top, B is at
-halfword position 3 and the back edge at position 7.
+The c.addi and addi instructions do no useful work. They mix 16-bit and
+32-bit instructions so that neither branch is at the start of its fetch
+block: in the block that starts at top, B is at halfword position 3 and the
+back edge at position 7.
 
-The program writer writes the loop body into memory once for each
-iteration, at the same addresses and with the same bytes, so the code
-in memory is identical on every iteration. What changes from one
-iteration to the next is the list of instructions the testbench
-expects to retire. When B is taken, the `c.addi` at 0x8000_0012 is
-still present in memory, and the program writer leaves it out of the
-expected list, because it does not execute on that iteration
-(`W.cskip` in `rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh`
-writes it in dry mode).
+B's direction is random so that no predictor can learn it. B mispredicts
+often, and those mispredictions drive the TAGE allocations and the
+use_alt_on_na counter. The direction of each branch is chosen by the program
+writer and resolved by the modeled backend; the register operands play no
+part. B is taken on about one iteration in eight, 33 of the 256 in this run.
+Numbered from 0, the first taken iterations are 9, 16, 19, 22, 30 and 31.
+When B is taken, the c.addi at 0x8000_0012 is skipped.
 
-The direction of each branch is decided by the program writer when it
-writes the iteration, and is recorded in the expected list. The
-backend model of the testbench resolves each branch with the recorded
-direction (demo_explainer.md, the backend model). The value in
-register x6 is never used. The branch instructions compare x6 with x0
-only because a branch instruction needs two operands.
-
-Branch B is taken on a given iteration when three bits drawn from the
-program writer's pseudo-random generator are all 1. The generator is
-a 16-bit Galois linear-feedback shift register with taps 0xB400 and
-seed 0xACE1 (`W.lfsr` and `W.lfsr_bit` in `fe_tb_writer.svh`; the seed
-is set in `prog_fd09`). The local variable `tk` in `prog_fd09` holds
-the result. Each draw is close to an even chance, so B is taken on
-about one iteration in eight. With this seed B is taken on 33 of the
-256 iterations. Numbered from 0, the first taken iterations are 9, 16,
-19, 22, 30 and 31.
-
-The back edge is taken on iterations 0 to 254 and falls through on
-iteration 255, so its pattern is regular and the predictors learn it.
+The back edge is taken on iterations 0 to 254 and falls through on iteration
+255. Its pattern is regular, and the predictors learn it.
 
 ---
 
 ## 3. Walkthrough
 
-Pacino's TAGE has a base table, T0, and four tagged tables, T1 to T4,
-with increasing history lengths (8, 13, 32 and 119 branch outcomes).
-T0 holds a 2-bit counter per entry and always produces a prediction. A
-tagged table produces a prediction only when its tag matches. Each
-tagged entry holds a 3-bit direction counter, CTR. The provider is the
-tagged table with the longest history that matches. The alternate is
-the next longest matching table, or T0 when no other tagged table
-matches.
+Pacino's TAGE implementation uses 5 tables, T0-T4. T0 is the base predictor
+which is untagged. T1 to T4 are tagged and use direction history in their
+access address generation and entry matching. The tagged tables use
+increasing number of history bits (length), 8, 13, 32 and 119, respectively.
 
-The front end predicts one branch in each prediction slot of a fetch
-block, and TAGE keeps separate state for each slot. This model has one
-slot. A prediction moves through four stages, p0 to p3. The FTQ
-presents the request at p0, and TAGE delivers its prediction at p2.
-In this program B is the first branch of the block that starts at top,
-so B is always predicted and updated in slot 0.
+T0 holds a 2-bit counter per entry and always produces a prediction.
 
-The back edge is the second conditional of that block, and with one
-slot the block has no place for it. When TAGE predicts B not taken and
-B is not taken, fetch runs on past the back edge, and the backend
-resolves the back edge as a misprediction (a redirect to 0x8000_0008).
-The back edge has no slot of its own in that FTQ entry. The FTQ places
-its resolution in slot 0, B's slot, and trains TAGE from B's metadata
-(`place_slot`, `rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 279 to
-293). This happens on 101 of the 256 iterations. On those iterations
-the back edge's update carries B's table index and tag, and its
-direction, taken, is written into B's entries. On the other iterations
-a redirect starts a new block before the back edge. The back edge is
-then the first branch of its block and is updated with its own
-metadata, still in slot 0.
+A tagged table produces a prediction only when its tag matches. Each tagged
+entry holds a 3-bit prediction counter, CTR, which encodes a predicted
+direction in its MSB and a confidence value in the lower bits.
+
+For the tagged table two predictions are possible, a 'primary' and an
+'alternative' prediction. The table with the longest history that matches
+the tag produces the primary prediction, the next longest matching table
+is the alternative prediction or T0 when no other tagged table matches.
+
+A prediction moves through four stages, p0 to p3. The FTQ presents the request
+at p0, and TAGE delivers its prediction at p2. p3 is used when the statistical
+corrector (SC) is enabled. In this scenario the SC is not enabled.
+
+Each fetch block has NUM_PRED_SLOTS prediction slots. A slot holds one
+conditional branch of the block, and TAGE predicts, updates and keeps its
+use_alt_on_na counter separately for each slot. This scenario is built with
+NUM_PRED_SLOTS = 1: every block has one slot, slot 0, and the per-slot TAGE
+signals below are indexed [0].
+
+The block that starts at top holds two conditional branches, B at halfword
+position 3 and the back edge at position 7. B is the first, so it is always
+in slot 0. The back edge has no slot in that block. What happens to it
+depends on where the block at top ends:
+
+- B predicted not taken and not taken, 101 of the 256 iterations. Nothing in
+  the block predicts the back edge, so fetch continues past it and the
+  backend resolves it as a misprediction, a redirect to 0x8000_0008. The FTQ
+  entry has no slot for the back edge, so the FTQ places its resolution in
+  slot 0 (`place_slot`, `rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 279
+  to 293). That slot holds B's metadata, so the update carries B's table
+  index and tag, and the back edge's direction, taken, is trained into B's
+  TAGE entries.
+- Every other iteration. Fetch restarts after B, at 0x8000_0012 or
+  0x8000_0014, either because B was predicted taken or because the backend
+  redirected on B. The back edge is then the first branch of the new block,
+  is placed in that block's slot 0, and is trained with its own metadata.
+
+The updates of the first case are the "back edge" rows in the tables of 3.1
+and 3.2. They train the same entries and the same use_alt_on_na counter as
+B.
+
+The first case is a known gap in the one-slot build. A branch that no slot
+carries should end the block, so that it is predicted in the next block, as
+an unslotted jump already does (BP-138). TD#179 records the fix. When it is
+made, the back edge rows and the figures in this section and in section 4
+change.
 
 ### 3.1 Allocation
 
@@ -185,10 +235,9 @@ B            14   26   69   35     144
 back edge    10   12   28   15      65
 ```
 
-On the two-slot model, where the back edge
-has a slot of its own in B's block, TAGE mispredicted B on 64
-iterations and the back edge once, for 65 allocations (the figures
-this description gave before DOC-006).
+With NUM_PRED_SLOTS = 2 the back edge has its own slot in the block at top
+and is always trained with its own metadata. The same program then gives 64
+TAGE mispredictions of B and one of the back edge, 65 allocations in all.
 
 The first taken B is on iteration 9. In the waveform, the backend
 resolves it at cyc 156: `tb.bkend_ftq_redir_val` is 1 and
@@ -198,7 +247,7 @@ cycle, in the `tage_update` group:
 
 - `tb.dut.u_bpu.u_tage.u_tage_cntrl.trx_type` is 1 and
   `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0` is 1: the TAGE
-  tables take a slot 0 update this cycle. `trx_type` is an encoded
+  tables take an update this cycle. `trx_type` is an encoded
   field, 0 for a prediction cycle and 1 for an update cycle: it is the
   arbiter's grant (`tage_arb.sv` line 76), an input of `tage_cntrl.sv`
   (line 58), and the encoding is stated at
@@ -224,21 +273,20 @@ signal `u_alc_wr`. T0's starting value is `TAGE_T0_SRAM_INIT_VALUE`,
 
 ### 3.2 Training the use_alt_on_na counter
 
-TAGE keeps a 4-bit counter, `uaon`, for each prediction slot; on this
-model there is one, `tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]`. It
-measures whether,
-when the provider's CTR is weak, the alternate has been more accurate
-than the provider. The rules are in
+TAGE keeps a 4-bit counter, `uaon`, for each prediction slot. With one slot
+there is one counter, `tb.dut.u_bpu.u_tage.u_tage_cntrl.uaon.[0]`. It
+measures whether, when the provider's CTR is weak, the alternate has been
+more accurate than the provider. The rules are in
 `planning/arch/tage_cntrl_uaon_update_rules.md`: on an update whose
-prediction was weak, the counter increments when the provider was
-wrong and the alternate right, and decrements when the provider was
-right and the alternate wrong. It starts at 0.
+prediction was weak, the counter increments when the provider was wrong and
+the alternate right, and decrements when the provider was right and the
+alternate wrong. It starts at 0.
 
 `uaon` is updated only when both the provider and the alternate are
 tagged tables. When the alternate is T0, `uaon` is unchanged. The
 counter is therefore trained on predictions where two tagged tables
-matched. B's updates and the back edge's are all slot 0 updates, so
-both train `uaon.[0]`.
+matched. B and the back edge both update slot 0, so both train the one
+counter.
 
 The history leading up to B is random, so the entries allocated for B
 are later matched under histories they were not trained on. Those
@@ -334,3 +382,20 @@ of the alternate when the trigger is set and `uaon[s][3]` is 1 at line
 | 3556 | back edge falls through, a misprediction;      | iteration 255    |
 |      | redirect to 0x8000_001A                        |                  |
 | 3567 | the run ends                                   |                  |
+
+# References
+
+[1] Seznec, André, and Pierre Michaud. "A case for (partially) tagged geometric
+history length branch prediction." The Journal of Instruction-Level Parallelism
+8 (2006): 23.
+
+[2] Seznec, André. "Tage-sc-l branch predictors." JILP-Championship Branch
+Prediction. 2014.
+
+[3] Reinman, Glenn, Todd Austin, and Brad Calder. "A scalable front-end
+architecture for fast instruction delivery." ACM SIGARCH Computer Architecture
+News 27.2 (1999): 234-245.
+
+[4] Reinman, Glenn, Brad Calder, and Todd Austin. "Fetch directed instruction
+prefetching." MICRO-32. Proceedings of the 32nd Annual ACM/IEEE International
+Symposium on Microarchitecture. IEEE, 1999.

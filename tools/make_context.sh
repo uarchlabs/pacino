@@ -7,18 +7,21 @@
 
 ARCH=planning/arch
 INTF=planning/interfaces
-
+HOFF=pa_handoffs
 DEST=~/Downloads/context
 mkdir -p ~/Downloads/context
 #rm -f ~/Downloads/context/*
 
-cp pa_handoffs/session_handoff-068.md $DEST
-cp pa_handoffs/session_handoff-069.md $DEST
-cp prompts/INFRA-012.md $DEST
-cp prompts/TOOLS-003.md $DEST
-cp prompts/TOOLS-004.md $DEST
-cp prompts/TOOLS-005.md $DEST
-cp pa_handoffs/session_handoff-070.md $DEST
-cp pa_handoffs/session_handoff-071.md $DEST
-cp pa_handoffs/session_handoff-072.md $DEST
-cp pa_handoffs/session_handoff-073.md $DEST
+cp $HOFF/session_handoff-068.md $DEST
+cp $HOFF/session_handoff-069.md $DEST
+cp $HOFF/session_handoff-070.md $DEST
+cp $HOFF/session_handoff-071.md $DEST
+cp $HOFF/session_handoff-072.md $DEST
+cp $HOFF/session_handoff-073.md $DEST
+cp $HOFF/session_handoff-074.md $DEST
+cp $HOFF/session_handoff-075.md $DEST
+cp $HOFF/session_handoff-076.md $DEST
+cp $HOFF/session_handoff-077.md $DEST
+cp $HOFF/session_handoff-078.md $DEST
+cp $HOFF/session_handoff-079.md $DEST
+cp $HOFF/session_handoff-080.md $DEST
