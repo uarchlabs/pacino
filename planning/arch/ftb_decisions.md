@@ -220,13 +220,16 @@ ftb_cntrl.sv, with both conditional fields holding other branches,
 REPLACES a field (5.5 field mapping, cases 3 and 4), and the block
 end written is the update's, not one ending at the held branches.
 The uBTB fills the field the update names. Nothing shortens the
-block. The rule above also does not count the jump. A jump behind
-as many conditionals as there are slots is stored and reported by
-the FTB, but no prediction slot carries it; since BP-138 (D1, option
-b, provisional) the cluster ends that block at the jump PC and the
-next lookup, from the jump, reports it in port slot 0
-(fe_decisions.md 10). The FTB is unchanged. At NUM_PRED_SLOTS = 1 a
-second conditional is still never reported (BP-128 D2).
+block. The rule above also does not count the jump. The FTB can
+report a branch that no prediction slot carries: at one slot
+br1 and a jump behind br0, at two slots a jump behind two
+conditionals. Since BP-139 (option A, ruled by Jeff,
+2026-10-18; it generalizes BP-138 D1 option b) the cluster
+ends the block at the PC of the first such branch, and the
+next lookup, from that PC, reports it in port slot 0
+(fe_decisions.md 10). The FTB is unchanged. A third
+conditional at two slots is never stored, so no cut can
+reach it; it is BP-140's split.
 
 MEASURED by BP-131 (session-078, tb_fe_top, 36 programs): blocks with
 more branches than slots, 9 at two slots (all twocond, two
@@ -1449,4 +1452,7 @@ region end, plus a full block, plus a straddling halfword pair:
 
   2026-10-17  session-081, after BP-138. 3: a jump behind as many
               conditionals as slots ends the block at the jump PC.
+
+  2026-10-19  session-081, after BP-139. 3: the cut for any branch the
+              FTB reports and no slot carries (option A).
 ```

@@ -67,7 +67,9 @@ write is last in ftq_entry's write order, so it overrides a predecode
 write to the same entry in the same cycle.
 
 SINCE BP-121 (D2) ftq_resolve writes EVERY resolved slot, mapped or
-placed (`rsv_wr_val`), and ftq_entry clears the slots above a
+placed (`rsv_wr_val`; since BP-139 a placement into an occupied
+slot only as section 3.1 ITEM C says), and ftq_entry clears the
+slots above a
 resolved end, the position of a taken or mispredicted resolution
 (`rsv_wr_end`). The entry then holds what executed rather than what
 was predicted, which the commit walk relies on (ftq_decisions.md
@@ -325,6 +327,24 @@ to a placed branch. The placed slot is written into the entry only
 when the resolution is accepted, so a held resolution is placed
 again when presented again. Before this ruling the unmapped
 resolution formed no update at all.
+
+ITEM C, A PLACEMENT INTO AN OCCUPIED SLOT (ruled by Jeff
+2026-10-18, built by BP-139; it replaces the BP-119 ruling for
+this case, at both slot counts). When the slot a resolution is
+placed in holds a valid branch (at another position, since the
+resolution did not map), the slot's metadata describes that
+other branch: form the uBTB and FTB updates only and suppress
+TAGE, SC, LP and ITTAGE, as R2 does. A placement into a free
+slot trains as above. ftq_resolve reports it on rsv_plc_occ.
+
+THE WRITE (BP-139, PROVISIONAL). A placement into an occupied
+slot is written into the entry only when the placed branch is
+a taken call, return or return-call (the commit walk must see
+it), or when it ends the executed block (taken or
+mispredicted) and the occupant is at a later position (the
+occupant is then off the path). Otherwise the occupant keeps
+its slot and maps when it resolves later. An occupant earlier
+than a placed taken call or return loses its slot.
 
 ---
 
@@ -612,5 +632,9 @@ path touches none of those.
               slots above a resolved end are cleared (D2); pft_addr
               is rewritten at the resolution of a taken jump (D3,
               TD#164); the aligned-base note brought to BP-110;
-              the "IS A p1 VALUE" heading brought to BP-118.
+                            the "IS A p1 VALUE" heading brought to BP-118.
+
+  2026-10-19  session-081, after BP-139. Section 2: an occupied
+              placement is written only as 3.1 says. 3.1: item C
+              and the placed-slot write (provisional).
 ```

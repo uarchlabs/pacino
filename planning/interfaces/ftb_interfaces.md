@@ -697,9 +697,11 @@ IC-FTB-16 (2026-08-19, amended session-073):
   conditional sat in br1 would place the jump in slot 0, ahead of an
   earlier branch.
 
-  When no slot is free (every slot holds a conditional) the jump is
-  in no slot, and the cluster ends the block at the jump PC
-  (fe_decisions.md 10, BP-138).
+  When no slot reads a reported field (br1 at one slot; the
+jump when every slot holds a conditional) that branch is in
+no slot, and the cluster ends the block at the PC of the first
+such branch (fe_decisions.md 10, BP-139 option A; BP-138 cut
+the jump only).
 
   Position is still required. It locates the branch in the fetch
   bundle (IC-FTB-15), forms the branch PC reported to bp_history
@@ -859,5 +861,9 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
   2026-10-10  session-077, after BP-126. 2.4: ftb_fastpath_en's
               source is G25, its CSR TD#178.
 
-  2026-10-17  session-081, after BP-138. IC-FTB-16: a jump in no slot
+    2026-10-17  session-081, after BP-138. IC-FTB-16: a jump in no slot
               ends the block at the jump PC.
+
+  2026-10-19  session-081, after BP-139. IC-FTB-16: any branch in no
+              slot ends the block at its PC (option A).
+

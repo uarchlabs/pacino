@@ -660,11 +660,13 @@ BP_CLUSTER_SRCS := \
   $(RTL_DIR)/bp_cluster.sv
 
 # The property files of the cluster's leaves that have one (BP-122,
-# TD#170), elaborated by sim_bp_cluster with --assert.
+# TD#170), elaborated by sim_bp_cluster with --assert, and since BP-139
+# the cluster's own (bp_cluster_assert.sv, CL1).
 BP_CLUSTER_ASSERT := \
   $(TB_DIR)/bp_history_assert.sv \
   $(TB_DIR)/loop_pred_assert.sv \
-  $(TB_DIR)/ras_assert.sv
+  $(TB_DIR)/ras_assert.sv \
+  $(TB_DIR)/bp_cluster_assert.sv
 
 BP_CLUSTER_PLUSARGS := \
   +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1

@@ -16,6 +16,49 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-081, after BP-139: every reported branch predicted.
+
+BP-139 COMPLETE (Jeff: acceptable). Task file written by the IA.
+2h42m. regress.sh 274 targets PASS before and after.
+  RULED (Jeff, 2026-10-18, in the task): every branch is predicted at
+    every slot count (BP-128 D2's hold lifted); option A, the cluster
+    cut; item C at both slot counts; training stays at resolve.
+  D1, option A (bp_cluster.sv): a block ends at the PC of the first
+    branch the FTB reports at p2 that no slot carries (w_cut_p2,
+    w_cut_pos_p2); BP-138's jump cut is its jump case. w_jmp_cut_p2
+    kept as an observation net only (the fe_demo FD-23 monitor reads
+    it). Property CL1 (new bp_cluster_assert.sv).
+  D2, item C (ftq_resolve.sv): a placement into an occupied slot
+    trains the uBTB and FTB only (rsv_plc_occ). Properties R22 to R23b.
+  PROVISIONAL, the IA's: an occupied placement is written into the
+    entry only for a taken call, return or return-call, or when it
+    ends the block ahead of a later occupant
+    (ftq_entry_formats.md 3.1).
+  fd09 at one slot: back-edge trainings through B's slot 101 -> 0;
+    allocations 209 -> 62; T0 by use_alt_on_na 75 -> 16; cycles 3567
+    -> 1727. At two slots every change is item C.
+  fd04 at one slot: 77 p2 redirects unchanged. TRACED: the update
+    writes the cut end, then the jump's own block in the same region
+    overwrites the shared pftAddr every pass (TD#168). BP-140 input.
+  rec_undo seed 16'h3039 -> 16'hacef: after item C the old seed no
+    longer reached the undo case at two slots.
+  For Jeff: item C withholds correct training at one slot when
+    predecode rewrote the slot after p2 (recur 17 of 18, rec_undo 92
+    of 130, indir 38 of 55; recur mispredicts 23 -> 30). Refine
+    item C on the p2-recorded position (a package change), or leave
+    it to BP-140's per-start entries.
+  fe_demo descriptions: figures and citations change (BP-139 Other
+    Notes); not applied.
+  Next: BP-140, per-start FTB and uBTB entries and the split at
+    update.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ftb_decisions.md, fe_decisions.md,
+ftq_bpu_interfaces.md, ftb_interfaces.md, ftq_entry_formats.md.
+
+Next free: BP-140, SYS-003, DOC-007, INFRA-014, TOOLS-007, TD#189.
+
+---
 ## Session-081, after DOC-006: the demonstration at one slot.
 
 DOC-006 COMPLETE (Jeff; the IA's choices accepted). 1h59m, one
@@ -6101,6 +6144,24 @@ numbers are issued from one sequence across both tables.
 |     |          | to 144. The cost of option b in fd04: the uBTB's p1      |
 |     |          | fall-through steps over the cut jump, one p2 redirect    |
 |     |          | per pass (12).                                           |
+|     |          | BP-139 (session-081): option A built. A branch the FTB   |
+|     |          | reports and no slot carries ends the block at its PC     |
+|     |          | (w_cut_p2); BP-138's jump cut is its jump case. At one   |
+|     |          | slot a br1 conditional is predicted (fd09: back-edge     |
+|     |          | mispredicts 102 -> 2, cycles 3567 -> 1727). Item C built |
+|     |          | at both slot counts: a placement into an occupied slot   |
+|     |          | trains the uBTB and the FTB only. Placed-slot write into |
+|     |          | an occupied slot: provisional rule (ftq_entry_formats.md |
+|     |          | 3.1). Still open under TD#179 / BP-140: per-start FTB    |
+|     |          | and uBTB entries, the split, the third conditional at    |
+|     |          | two slots, the uBTB learning the cut end (fd04: 12 p2    |
+|     |          | redirects in 16 passes, the shared pftAddr, traced), and |
+|     |          | item C against predecode W1 at one slot. BP-119 ruling   |
+|     |          | as amended: a position naming no slot is placed in       |
+|     |          | program order and trains every predictor of its row from |
+|     |          | the placed slot's metadata only when that slot is free;  |
+|     |          | into an occupied slot it trains the uBTB and FTB only    |
+|     |          | (item C).                                                |
 | 180 | tools    | OPEN, VERIFICATION. tools/cov_table.py's tage and bpu    |
 |     |          | rows list tage.sv only; since BP-132 the TAGE            |
 |     |          | arbitration lines are in tage_arb.sv, so TAGE coverage   |

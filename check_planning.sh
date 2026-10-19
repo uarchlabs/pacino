@@ -124,6 +124,9 @@
 # ftq_bpu_interfaces.md).
 # Updated after DOC-006, session-081 (PROJECT_STATUS.md,
 # fe_demo_tb_decisions.md, fe_demo_scenarios.md).
+# Updated after BP-139, session-081 (PROJECT_STATUS.md,
+# ftb_decisions.md, fe_decisions.md, ftq_bpu_interfaces.md,
+# ftb_interfaces.md, ftq_entry_formats.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -146,7 +149,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   d1f9e222d77f
-PLAN  PROJECT_STATUS.md                 ea0bae49a700
+PLAN  PROJECT_STATUS.md                 72b0fe5df79e
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -156,10 +159,10 @@ ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  csr_decisions.md                  1df550fedc68
 ARCH  dcd_decisions.md                  1134f749b0d9
-ARCH  fe_decisions.md                   b11403c61a22
-ARCH  ftb_decisions.md            cf1ea1c98854
+ARCH  fe_decisions.md                   bfb0a98e1fcb
+ARCH  ftb_decisions.md            6e46f0bd401e
 ARCH  ftq_decisions.md            1e4af7d2487e
-ARCH  ftq_entry_formats.md        2301dd3f97e2
+ARCH  ftq_entry_formats.md        49182a82e3c6
 ARCH  ibuf_decisions.md                 34f9eb23bd4f
 ARCH  icache_decisions.md               29d94d35d776
 ARCH  ifu_decisions.md            23b78769459f
@@ -197,9 +200,9 @@ INTF  ittage_table_interfaces.md        88cbd8a65226
 INTF  tage_table_interfaces.md          44e1ccc8e73b
 INTF  bp_history_interfaces.md          b7cb5aa4c164
 INTF  bpu_port_inventory.md             d6d9e24420b3
-INTF  ftb_interfaces.md           63c0a3a7671a
+INTF  ftb_interfaces.md           43b0d81c2b39
 INTF  ftq_backend_interfaces.md   1c425156a6e7
-INTF  ftq_bpu_interfaces.md       b52ae97159b6
+INTF  ftq_bpu_interfaces.md       ec5b5e653a4e
 INTF  ftq_ifu_interfaces.md       2cecf4e55ced
 INTF  ifu_ibuf_interfaces.md      ab4d4051748b
 INTF  itlb_ifu_interfaces.md            ab489f6db489

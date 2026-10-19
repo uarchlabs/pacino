@@ -203,6 +203,7 @@ ASSERT_SRCS := \
   $(BPU_TB)/bp_history_assert.sv \
   $(BPU_TB)/loop_pred_assert.sv \
   $(BPU_TB)/ras_assert.sv \
+  $(BPU_TB)/bp_cluster_assert.sv \
   $(IFU_TB)/ifu_xlate_assert.sv \
   $(IFU_TB)/ifu_f3_assert.sv \
   $(IFU_TB)/ifu_assert.sv \

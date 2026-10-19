@@ -29,6 +29,12 @@
 // placements of one entry take two slots). Group J also plays
 // ftq_entry's placement write port (tick_wr), so a placed slot is in
 // the modelled entry the next cycle.
+//
+// BP-139 adds group K: item C (a resolution placed in a slot that holds
+// another branch trains the uBTB and the FTB only) and the placement
+// write rule that keeps an earlier occupant in its slot, at both slot
+// counts. C5, C5b, C5d, C5e and J2b change with it; each OLD note
+// gives the expectation before BP-139.
 // ===================================================================
 import bp_defines_pkg::*;
 import bp_structs_pkg::*;
@@ -69,6 +75,7 @@ module tb;
   logic [NUM_RESOLVE_PORTS-1:0] rsv_nomap;
   logic [NUM_RESOLVE_PORTS-1:0] rsv_drop_sq;
   logic [NUM_RESOLVE_PORTS-1:0] rsv_type_dis;
+  logic [NUM_RESOLVE_PORTS-1:0] rsv_plc_occ;                    // BP-139
   logic [NUM_RESOLVE_PORTS-1:0] rsv_accept;
   logic [TRX_SLOT_BITS-1:0] rsv_slot [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] rsv_wr_val;
@@ -106,6 +113,7 @@ module tb;
     .rsv_nomap         (rsv_nomap),
     .rsv_drop_sq       (rsv_drop_sq),
     .rsv_type_dis      (rsv_type_dis),
+    .rsv_plc_occ       (rsv_plc_occ),
     .rsv_accept        (rsv_accept),
     .rsv_slot          (rsv_slot),
     .rsv_wr_val        (rsv_wr_val),
@@ -456,22 +464,33 @@ module tb;
         (ftb_upd[0].br_idx == 1'(HS)) &&
         (ftb_upd[0].pos == FTB_BR_POS_BITS'(7)));
     // OLD (BP-107): every predictor valid 0, "no predictor update".
-    chk($sformatf("C5 and trains slot %0d: uBTB, TAGE, SC and the LP",
+    // OLD (BP-119): uBTB, TAGE, SC and LP all trained on slot HS. Slot
+    // HS holds a branch at another position (11 at two slots, 3 at
+    // one), so since BP-139 (item C) only the uBTB and the FTB form.
+    chk($sformatf("C5 and trains slot %0d's uBTB only (item C, BP-139)",
                   HS),
-        (upd_ubtb_val == HS_ONEHOT) && (upd_tage_val == HS_ONEHOT) &&
-        (upd_sc_val == HS_ONEHOT) && (upd_lp_val == HS_ONEHOT) &&
-        (upd_ittage_val == '0) && !rsv_type_dis[0]);
+        (upd_ubtb_val == HS_ONEHOT) && (upd_tage_val == '0) &&
+        (upd_sc_val == '0) && (upd_lp_val == '0) &&
+        (upd_ittage_val == '0) && !rsv_type_dis[0] && rsv_plc_occ[0]);
     chk($sformatf("C5a from slot %0d's metadata, with the placed position",
                   HS),
         (upd_meta[HS].sc.branch_id == FTQ_IDX_BITS'(9 + HS)) &&
         (upd_entry[HS].slot[HS].pos == FTB_BR_POS_BITS'(7)) &&
         (upd_entry[HS].slot[HS].br_type == COND));
-    chk("C5b the placement is written into the entry on acceptance",
-        rsv_wr_val[0] && (rsv_wr_idx[0] == 6'd9) &&
-        (rsv_wr_sel[0] == TRX_SLOT_BITS'(HS)) &&
-        rsv_wr_slot[0].slot_valid &&
-        (rsv_wr_slot[0].pos == FTB_BR_POS_BITS'(7)) &&
-        (rsv_wr_slot[0].br_type == COND) && rsv_wr_slot[0].taken);
+    // BP-139: written over an occupant at a LATER position when the
+    // branch ends the block (taken here): at two slots the occupant is
+    // at 11. At one slot it is at 3, earlier, on the path, and keeps
+    // its slot. OLD (BP-119): written at both slot counts.
+    if (NUM_PRED_SLOTS > 1)
+      chk("C5b the placement is written into the entry on acceptance",
+          rsv_wr_val[0] && (rsv_wr_idx[0] == 6'd9) &&
+          (rsv_wr_sel[0] == TRX_SLOT_BITS'(HS)) &&
+          rsv_wr_slot[0].slot_valid &&
+          (rsv_wr_slot[0].pos == FTB_BR_POS_BITS'(7)) &&
+          (rsv_wr_slot[0].br_type == COND) && rsv_wr_slot[0].taken);
+    else
+      chk("C5b one slot: the earlier occupant keeps its slot, no write",
+          ftq_bkend_rsv_rdy[0] && !rsv_wr_val[0]);
     upd_acc = ~HS_ONEHOT;
     settle();
     chk($sformatf("C5c not accepted (slot %0d not ready): %s", HS,
@@ -485,16 +504,20 @@ module tb;
     present(0, 9, FTB_BR_POS_BITS'(1), COND, 1'b0,
             VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
+    // OLD (BP-119): upd_tage_val 2'b01. Slot 0 holds position 3, so
+    // since BP-139 (item C) no table trains.
     chk("C5d a branch before both stored ones is placed in slot 0",
-        rsv_nomap[0] && (rsv_slot[0] == 1'b0) &&
-        (upd_tage_val == NUM_PRED_SLOTS'(2'b01)));
+        rsv_nomap[0] && (rsv_slot[0] == 1'b0) && rsv_plc_occ[0] &&
+        (upd_tage_val == '0) && (upd_ubtb_val == NUM_PRED_SLOTS'(2'b01)));
     // Position 13, after both: the last slot.
     present(0, 9, FTB_BR_POS_BITS'(13), COND, 1'b0,
             VA_WIDTH'('h00_9400_0000), 1'b0);
     settle();
+    // OLD (BP-119): upd_tage_val HS_ONEHOT. Item C, as C5d (BP-139).
     chk("C5e a branch after both stored ones takes the last slot",
         rsv_nomap[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)) &&
-        (upd_tage_val == HS_ONEHOT));
+        rsv_plc_occ[0] && (upd_tage_val == '0) &&
+        (upd_ubtb_val == HS_ONEHOT));
 
     // AN ENTRY WITH NO VALID SLOTS AT ALL. Allocation is
     // unconditional (5.2), so an entry exists for a block the p1
@@ -1012,6 +1035,193 @@ module tb;
     settle();
   endtask
 
+  // Apply the placement writes presented this cycle to the modelled
+  // entries at the edge, as ftq_entry does.
+  task automatic tick_wr();
+    logic [NUM_RESOLVE_PORTS-1:0] v;
+    logic [FTQ_IDX_BITS-1:0]  ix [0:NUM_RESOLVE_PORTS-1];
+    logic [TRX_SLOT_BITS-1:0] sl [0:NUM_RESOLVE_PORTS-1];
+    bp_ftq_slot_t             sd [0:NUM_RESOLVE_PORTS-1];
+    #1;
+    v = rsv_wr_val;
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      ix[p] = rsv_wr_idx[p];
+      sl[p] = rsv_wr_sel[p];
+      sd[p] = rsv_wr_slot[p];
+    end
+    @(posedge clk);
+    for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
+      if (v[p]) m_entry[ix[p]].slot[sl[p]] = sd[p];
+    end
+    #1;
+  endtask
+
+  // -----------------------------------------------------------------
+  // K. BP-139: item C and the placement write into an occupied slot.
+  // -----------------------------------------------------------------
+  // Every case: do_reset(), then an entry written by put_entry with
+  // the occupant in slot HS (the last slot, slot 0 at one slot) and,
+  // at two slots, an earlier branch in slot 0, so a position after
+  // both is placed in slot HS by the program-order rule. tick_wr plays
+  // ftq_entry's placement write, so a write is in the modelled entry
+  // the next cycle.
+  task automatic k_entry(input int idx);
+    put_entry(idx,
+      mk_slot(1'b1, VA_WIDTH'('h00_9a00_0000), COND,
+              FTB_BR_POS_BITS'((NUM_PRED_SLOTS > 1) ? 1 : 3)),
+      mk_slot(1'b1, VA_WIDTH'('h00_9a10_0000), COND, FTB_BR_POS_BITS'(3)),
+      1'b1, 2);
+    // The occupant's own metadata, distinct per slot.
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      m_meta[idx][s].tage.tage_prm_idx = TAGE_MAX_AWIDTH'(16'h0a50 + s);
+  endtask
+
+  task automatic group_k();
+    bp_br_type_e kt [0:2];
+    $display("-- K: item C and the occupied-slot write, BP-139 --");
+
+    // K1. One case per branch type that trains a table predictor. The
+    //     position (9) names no slot and is placed in slot HS, which
+    //     holds the occupant at position 3: the uBTB and FTB updates
+    //     form, TAGE, SC, LP and ITTAGE stay low.
+    kt[0] = COND;
+    kt[1] = INDIRECT_NONRET;
+    kt[2] = INDIRECT_CALL;
+    for (int k = 0; k < 3; k++) begin
+      do_reset();
+      k_entry(30);
+      present(0, 30, FTB_BR_POS_BITS'(9), kt[k], 1'b1,
+              VA_WIDTH'('h00_9a40_0000), 1'b1);
+      settle();
+      chk($sformatf("K1.%0d %s placed in the occupied slot %0d", k,
+                    kt[k].name(), HS),
+          rsv_nomap[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)) &&
+          rsv_plc_occ[0] && ftq_bkend_rsv_rdy[0]);
+      chk($sformatf("K1.%0d %s forms the FTB and uBTB updates", k,
+                    kt[k].name()),
+          ftb_upd_val[0] && (ftb_upd[0].pos == FTB_BR_POS_BITS'(9)) &&
+          (upd_ubtb_val == HS_ONEHOT));
+      chk($sformatf("K1.%0d %s: TAGE, SC, LP and ITTAGE valids low", k,
+                    kt[k].name()),
+          (upd_tage_val == '0) && (upd_sc_val == '0) &&
+          (upd_lp_val == '0) && (upd_ittage_val == '0));
+      clr();
+    end
+
+    // K2. Control: the same resolutions placed in a FREE slot train
+    //     their table predictors, as BP-119 rules. The entry holds no
+    //     branch at one slot; at two, slot 0 holds position 1 and slot
+    //     1 is free.
+    for (int k = 0; k < 3; k++) begin
+      do_reset();
+      put_entry(31,
+        mk_slot(NUM_PRED_SLOTS > 1, VA_WIDTH'('h00_9a00_0000), COND,
+                FTB_BR_POS_BITS'(1)),
+        mk_slot(1'b0, '0, NO_BRANCH, '0), 1'b1, 2);
+      present(0, 31, FTB_BR_POS_BITS'(9), kt[k], 1'b1,
+              VA_WIDTH'('h00_9a40_0000), 1'b1);
+      settle();
+      chk($sformatf("K2.%0d %s placed in the free slot %0d trains its table",
+                    k, kt[k].name(), HS),
+          rsv_nomap[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)) &&
+          !rsv_plc_occ[0] && (upd_ubtb_val == HS_ONEHOT) &&
+          ((kt[k] == COND)
+             ? ((upd_tage_val == HS_ONEHOT) && (upd_sc_val == HS_ONEHOT) &&
+                (upd_lp_val == HS_ONEHOT) && (upd_ittage_val == '0))
+             : ((upd_ittage_val == HS_ONEHOT) && (upd_tage_val == '0))));
+      chk($sformatf("K2.%0d and is written into the free slot", k),
+          rsv_wr_val[0] && (rsv_wr_sel[0] == TRX_SLOT_BITS'(HS)));
+      clr();
+    end
+
+    // K3. The occupant resolves AFTER the placed branch (the backend
+    //     resolves out of order). The placed branch, a mispredicted
+    //     taken conditional at 9, is placed over the occupant at 3;
+    //     then the occupant resolves. It maps to its own slot and trains
+    //     TAGE with its own metadata. Before BP-139 the placement
+    //     replaced the occupant, which then resolved unmapped.
+    do_reset();
+    k_entry(32);
+    present(0, 32, FTB_BR_POS_BITS'(9), COND, 1'b1,
+            VA_WIDTH'('h00_9a40_0000), 1'b1);
+    settle();
+    chk("K3 the placed branch is accepted, item C",
+        ftq_bkend_rsv_rdy[0] && rsv_plc_occ[0] && (upd_tage_val == '0));
+    chk("K3 and does not replace the earlier occupant", !rsv_wr_val[0]);
+    tick_wr();
+    clr();
+    #1;
+    chk("K3 the entry still holds the occupant at position 3",
+        m_entry[32].slot[HS].slot_valid &&
+        (m_entry[32].slot[HS].pos == FTB_BR_POS_BITS'(3)) &&
+        (m_entry[32].slot[HS].br_type == COND));
+    present(0, 32, FTB_BR_POS_BITS'(3), COND, 1'b0,
+            VA_WIDTH'('h00_9a10_0000), 1'b0);
+    settle();
+    chk("K3 the occupant then maps to its own slot",
+        !rsv_nomap[0] && (rsv_slot[0] == TRX_SLOT_BITS'(HS)) &&
+        !rsv_plc_occ[0]);
+    chk("K3 and trains TAGE, SC and the LP with its own metadata",
+        (upd_tage_val == HS_ONEHOT) && (upd_sc_val == HS_ONEHOT) &&
+        (upd_lp_val == HS_ONEHOT) &&
+        (upd_meta[HS].tage.tage_prm_idx == TAGE_MAX_AWIDTH'(16'h0a50 + HS)) &&
+        (upd_entry[HS].slot[HS].pos == FTB_BR_POS_BITS'(3)));
+    clr();
+
+    // K4. A taken return placed over the earlier occupant is written:
+    //     the commit walk commits the RAS operation it finds in the
+    //     slots (ftq_entry 5.4). The occupant loses its slot; resolving
+    //     after it, it is placed with item C (the provisional rule's
+    //     cost, see ftq_resolve.sv).
+    do_reset();
+    k_entry(33);
+    present(0, 33, FTB_BR_POS_BITS'(9), RETURN, 1'b1,
+            VA_WIDTH'('h00_9a60_0000), 1'b1);
+    settle();
+    chk("K4 a taken return over an earlier occupant is written",
+        ftq_bkend_rsv_rdy[0] && rsv_plc_occ[0] && rsv_wr_val[0] &&
+        (rsv_wr_sel[0] == TRX_SLOT_BITS'(HS)) &&
+        (rsv_wr_slot[0].br_type == RETURN) && rsv_wr_slot[0].taken);
+    tick_wr();
+    clr();
+    present(0, 33, FTB_BR_POS_BITS'(3), COND, 1'b0,
+            VA_WIDTH'('h00_9a10_0000), 1'b0);
+    settle();
+    chk("K4 the occupant then resolves unmapped, uBTB and FTB only",
+        rsv_nomap[0] && rsv_plc_occ[0] && ftb_upd_val[0] &&
+        (upd_tage_val == '0) && (upd_ubtb_val == HS_ONEHOT));
+    chk("K4 and does not replace the return (not a RAS operation)",
+        !rsv_wr_val[0]);
+    clr();
+
+    // K5. An occupant at a LATER position. A branch at 1 is placed in
+    //     the slot holding 3 (slot 0 at one slot; at two the entry is
+    //     slot 0 at 3, slot 1 at 5). Ending the block (mispredicted
+    //     taken), it replaces the occupant, which is then off the path.
+    //     Not ending it (not taken, no mispredict), it does not.
+    for (int e = 0; e < 2; e++) begin
+      do_reset();
+      put_entry(34,
+        mk_slot(1'b1, VA_WIDTH'('h00_9a10_0000), COND, FTB_BR_POS_BITS'(3)),
+        mk_slot(1'b1, VA_WIDTH'('h00_9a20_0000), COND, FTB_BR_POS_BITS'(5)),
+        1'b1, 2);
+      present(0, 34, FTB_BR_POS_BITS'(1), COND, e == 0,
+              VA_WIDTH'('h00_9a70_0000), e == 0);
+      settle();
+      if (e == 0)
+        chk("K5 ending the block, it replaces the later occupant",
+            rsv_nomap[0] && (rsv_slot[0] == 1'b0) && rsv_plc_occ[0] &&
+            rsv_wr_val[0] && (rsv_wr_sel[0] == 1'b0) &&
+            (upd_tage_val == '0));
+      else
+        chk("K5 not ending it, the later occupant keeps its slot",
+            rsv_nomap[0] && (rsv_slot[0] == 1'b0) && rsv_plc_occ[0] &&
+            ftq_bkend_rsv_rdy[0] && !rsv_wr_val[0] &&
+            (upd_tage_val == '0));
+      clr();
+    end
+  endtask
+
   // -----------------------------------------------------------------
   // BP-128. The checks that resolve slot 1 or drive both channels at
   // once: F7 to F18 and group J. They are unchanged, moved into tasks
@@ -1095,26 +1305,8 @@ module tb;
     // J. TD#158, BP-120: two resolutions, one slot. Both channels are
     //    driven. tick_wr plays ftq_entry's placement write port.
     // -----------------------------------------------------------------
-    // Apply the placement writes presented this cycle to the modelled
-    // entries at the edge, as ftq_entry does.
-    task automatic tick_wr();
-      logic [NUM_RESOLVE_PORTS-1:0] v;
-      logic [FTQ_IDX_BITS-1:0]  ix [0:NUM_RESOLVE_PORTS-1];
-      logic [TRX_SLOT_BITS-1:0] sl [0:NUM_RESOLVE_PORTS-1];
-      bp_ftq_slot_t             sd [0:NUM_RESOLVE_PORTS-1];
-      #1;
-      v = rsv_wr_val;
-      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
-        ix[p] = rsv_wr_idx[p];
-        sl[p] = rsv_wr_sel[p];
-        sd[p] = rsv_wr_slot[p];
-      end
-      @(posedge clk);
-      for (int p = 0; p < NUM_RESOLVE_PORTS; p++) begin
-        if (v[p]) m_entry[ix[p]].slot[sl[p]] = sd[p];
-      end
-      #1;
-    endtask
+    // tick_wr (the placement write model) is at module scope since
+    // BP-139, so group K uses it at one slot too.
 
     task automatic group_j();
       int n10;
@@ -1242,8 +1434,12 @@ module tb;
       tick_wr();
       clr_ch(0);
       #1;
+      // OLD (BP-120): && rsv_wr_val[1]. Slot 1 now holds the older's
+      // position 3, earlier than 5, so since BP-139 the younger trains
+      // the uBTB and the FTB only (item C) and the older keeps its slot.
       chk("J2b next cycle the younger is served alone",
-          ftq_bkend_rsv_rdy[1] && rsv_wr_val[1] && ftb_upd_val[1]);
+          ftq_bkend_rsv_rdy[1] && !rsv_wr_val[1] && ftb_upd_val[1] &&
+          rsv_plc_occ[1] && !upd_tage_val[1] && upd_ubtb_val[1]);
       clr();
 
       // J3. Unchanged: two ports, two entries, DIFFERENT slots, both
@@ -1327,6 +1523,7 @@ module tb;
     group_h();
     group_i();
     g_two.group_j();
+    group_k();
 
     $display("tb_ftq_resolve: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

@@ -523,6 +523,16 @@ this ruling such a resolution formed no update, so the FTB never
 learned the branch and TAGE, SC, LP and ITTAGE never trained
 (ftq_entry_formats.md 3.1).
 
+ITEM C (Jeff, 2026-10-18; built by BP-139). A placed
+resolution whose slot holds another valid branch trains the
+uBTB and the FTB only: the slot's prediction-time metadata is
+the other branch's (TAGE is indexed by block start per slot),
+so TAGE, SC, LP and ITTAGE are suppressed, as R2 does for a
+type disagreement (ftq_entry_formats.md 3.1). It replaces the
+paragraph above for that case only. fd09 at one slot: the back
+edge trained into B's TAGE entries on 101 of 256 iterations
+before BP-139, 0 after.
+
 TAGE and SC predict direction and are updated only for conditional
 branches. ITTAGE is updated only for indirect branches. RAS IS
 UPDATED BY BOTH: a return pops it and a call pushes it, and
@@ -668,12 +678,17 @@ slots; the `pred_pc_p0 + 32` slot-1 lookup is retired.
 runtime. It does not change the structure: the slots and the channels
 exist either way.
 
-A JUMP NO SLOT CARRIES (BP-138, D1, option b, PROVISIONAL, accepted
-by Jeff). When every slot holds a conditional, the FTB jump is placed
-in no slot and the block ends at the jump PC: the p2 fall-through,
-bpu_blk_pft_p2, is the jump PC. The next block starts at the jump and
-places it in slot 0. At one slot this is any block with a conditional
-before its jump; at two, any block with two conditionals before it.
+A BRANCH NO SLOT CARRIES (BP-139, option A, ruled by Jeff
+2026-10-18; BP-138 D1 option b was the jump case). Slot 0
+carries the FTB's br0, a higher slot br1, and the jump the
+lowest slot with no conditional. When the FTB reports a branch
+that no slot carries, the block ends at the PC of the first
+such branch: the p2 fall-through, bpu_blk_pft_p2, is that PC
+(w_cut_p2, w_cut_pos_p2). The next block starts there and
+places the branch in slot 0. At one slot this is br1, or the
+jump behind br0 when there is no br1; at two slots, a jump
+behind two conditionals. Every branch the FTB reports is
+predicted at every slot count.
 
 ---
 
@@ -1791,4 +1806,7 @@ create one.
 
   2026-10-17  session-081, after BP-138. 10: a jump no slot carries
               ends the block at the jump PC (D1, provisional).
+
+  2026-10-19  session-081, after BP-139. 10: a branch no slot carries
+              ends the block at its PC (option A). 7.2: item C.
 ```

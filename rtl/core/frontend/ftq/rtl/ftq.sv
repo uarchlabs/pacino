@@ -376,6 +376,7 @@ module ftq (
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_nomap;
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_drop_sq;
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_type_dis;
+  logic [NUM_RESOLVE_PORTS-1:0] w_rsv_plc_occ;     // BP-139, item C
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_accept;
   logic [TRX_SLOT_BITS-1:0] w_rsv_slot [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_rsv_wr_val;
@@ -779,6 +780,7 @@ module ftq (
     .rsv_nomap         (w_rsv_nomap),
     .rsv_drop_sq       (w_rsv_drop_sq),
     .rsv_type_dis      (w_rsv_type_dis),
+    .rsv_plc_occ       (w_rsv_plc_occ),
     .rsv_accept        (w_rsv_accept),
     .rsv_slot          (w_rsv_slot),
     .rsv_wr_val        (w_rsv_wr_val),
@@ -885,6 +887,7 @@ module ftq (
                     |w_wb_rcvd_vec   | |w_fault_vec  | |w_gen_vec |
                     |w_rsv_nomap     | |w_rsv_drop_sq |
                     |w_rsv_type_dis  | |w_rsv_accept |
+                    |w_rsv_plc_occ   |
                     w_sched_from_skid | w_sched_skid_val |
                     w_sched_skid_wr   | w_sched_skid_issue |
                     w_sched_drop_val  | w_sched_drop_high |

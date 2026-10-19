@@ -308,6 +308,11 @@ module bp_cluster (
   // credit counters.
   localparam int SC_STARVE_W    = $clog2(SC_STARVE_THRESH + 3);
 
+  // A prediction slot reads the FTB br1 field (BP-139). Slot 0 reads
+  // br0 and every higher slot br1 (interfaces 5.1), so at one slot no
+  // slot carries br1 and it is cut (p2_class_comb).
+  localparam bit   BR1_SLOTTED    = (NUM_PRED_SLOTS > 1);
+
   // No block alignment is formed here. The uBTB and the FTB convert
   // their stored region-relative positions to START-relative at their
   // own ports (ftb_decisions.md 4.6 R-2), so the cluster works from the
@@ -402,9 +407,6 @@ module bp_cluster (
   // address the RAS pushes, and the block end when the jump is in the
   // block.
   logic [VA_WIDTH-1:0]        w_jmp_ft_p2;
-  // The PC of the block's jump: the block end when no slot can carry
-  // the jump (BP-138, see p2_succ_comb).
-  logic [VA_WIDTH-1:0]        w_jmp_pc_p2;
   logic [VA_WIDTH-1:0]        w_ftb_pft_addr_p2;
   logic [1:0]                 w_ftb_fastpath_p2;
 
@@ -558,9 +560,15 @@ module bp_cluster (
   // bpu_blk_pft_p2, so the entry and the redirect comparison cannot
   // disagree (4c, "One source for both").
   logic [VA_WIDTH-1:0] w_pft_p2;
-  // The FTB answered with a jump and every slot holds one of its
-  // conditionals, so no slot carries the jump (BP-138).
-  logic                w_jmp_cut_p2;
+  // THE CUT (BP-139, option A): the FTB reports a branch that no slot
+  // carries, and w_cut_pos_p2 is the start-relative position of the
+  // first such branch. The block ends at that branch's PC
+  // (p2_succ_comb). w_jmp_cut_p2 says the cut branch is the jump field;
+  // it is an observation of the same cut, read by the fe_demo FD-23
+  // monitor, and no logic reads it.
+  logic                       w_cut_p2;
+  logic [FTB_BR_POS_BITS-1:0] w_cut_pos_p2;
+  logic                       w_jmp_cut_p2;
   logic [VA_WIDTH-1:0] w_succ_p2    [0:NUM_PRED_SLOTS-1];
   bp_redirect_t        w_redir_p2   [0:NUM_PRED_SLOTS-1];
 
@@ -972,13 +980,12 @@ module bp_cluster (
   // valid, else the block's single jump field, which is placed in the
   // lowest slot that carries no conditional branch. The jump field is
   // the block-terminating branch, so lowest-free-slot placement is
-  // program order. When every slot holds a conditional the jump is not
-  // placed (at one slot, any block with a conditional before its jump;
-  // at two, two conditionals before it): w_jmp_cut_p2, and the block
-  // ends before the jump (p2_succ_comb, BP-138).
+  // program order. A branch the FTB reports that no slot carries is
+  // CUT (w_cut_p2, BP-139): the block ends at its PC (p2_succ_comb).
   always_comb begin : p2_class_comb
     bp_br_type_e jmp_type;
     logic        jmp_placed;
+    logic        jmp_free;
     logic        blk_val;
 
     blk_val = r_val_p2 & w_ftb_valid_p2;
@@ -1038,12 +1045,32 @@ module bp_cluster (
       end
     end
 
-    // The jump is cut when the FTB holds it and no slot is free of a
-    // conditional. Formed from the FTB fields alone, the same test the
-    // placement loop above makes for a valid block.
-    w_jmp_cut_p2 = w_ftb_valid_p2 & w_ftb_jmp_valid_p2;
+    // THE CUT (BP-139, option A; it replaces the BP-138 jump-only cut).
+    // The FTB reports at most br0, br1 and the jump, in ascending
+    // position: storage is in region position order and the read packs
+    // the visible fields (4.6 O-3a, O-3b), and R-1 hides a conditional
+    // past the visible jump. Slot 0 carries br0, a higher slot br1
+    // (w_ftb_br_valid_p2), and the jump goes to the lowest slot that
+    // holds no conditional. So the first reported branch no slot
+    // carries is br1 when no slot reads it (one slot), else the jump
+    // when every slot holds a conditional. Before BP-139 only the jump
+    // was cut, so at one slot a br1 conditional was in no slot, never
+    // predicted, and the not-taken path ran past it. Formed from the
+    // FTB fields alone, the same terms the placement loop above reads.
+    jmp_free = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      if (!w_ftb_br_valid_p2[s]) w_jmp_cut_p2 = 1'b0;
+      if (!w_ftb_br_valid_p2[s]) jmp_free = 1'b1;
+    end
+    w_cut_p2     = 1'b0;
+    w_jmp_cut_p2 = 1'b0;
+    w_cut_pos_p2 = '0;
+    if (w_ftb_valid_p2 && w_ftb_br1_valid_p2 && !BR1_SLOTTED) begin
+      w_cut_p2     = 1'b1;
+      w_cut_pos_p2 = w_ftb_br1_pos_p2;
+    end else if (w_ftb_valid_p2 && w_ftb_jmp_valid_p2 && !jmp_free) begin
+      w_cut_p2     = 1'b1;
+      w_jmp_cut_p2 = 1'b1;
+      w_cut_pos_p2 = w_ftb_jmp_pos_p2;
     end
 
     // Reachability: a taken branch ends the block, so a later slot is
@@ -1081,6 +1108,7 @@ module bp_cluster (
     logic [VA_WIDTH-1:0] it_tgt;
     logic                it_hit;
     logic [VA_WIDTH-1:0] p1_succ;
+    logic [VA_WIDTH-1:0] cut_pc;
 
     // The block fall-through at p2. When the FTB did not answer,
     // ftb_pft_addr_p2 is not qualified (ftb_cntrl drives it from the
@@ -1090,22 +1118,23 @@ module bp_cluster (
     // the region's stored pftAddr, which every start of the region
     // shares and the last updating start wrote (BP-121, TD#164).
     //
-    // A JUMP NO SLOT CARRIES ENDS THE BLOCK AT ITS OWN PC (BP-138, D1,
-    // option b, provisional). With every slot holding a conditional
-    // the jump is in no slot, so it is neither predicted taken nor
-    // presented to the RAS; the jump's end as the not-taken term made
-    // the predicted path step over it, and fetch ran on past the jump
-    // until predecode redirected (fd07 at one slot: the call to f never
-    // pushed). The block now ends at the jump: the next block starts at
-    // the jump PC, the FTB window of that start sees the jump first
-    // (ftb_decisions.md 4.6 R-1, O-3b), and it is placed in slot 0.
-    // The conditionals lie before the jump (R-1 hides a field past the
-    // visible jump), so the end is after every placed slot and after
-    // the start.
+    // A BRANCH NO SLOT CARRIES ENDS THE BLOCK AT ITS OWN PC (BP-139,
+    // option A, ruled by Jeff; BP-138 made the same cut for the jump
+    // alone). A reported branch in no slot is neither predicted nor
+    // presented to the RAS, so a not-taken term past it made the
+    // predicted path step over it (fd09 at one slot: the back edge in
+    // br1 was never predicted; fd07: the call to f never pushed). The
+    // block now ends at the cut branch: the next block starts at its
+    // PC, the FTB window of that start reports it first
+    // (ftb_decisions.md 4.6 R-1, O-3b), and it is placed in slot 0. The
+    // cut branch is the first one no slot carries and every slot before
+    // it holds an earlier branch, so the end is after every placed slot
+    // and after the start.
+    cut_pc = r_pc_p2 + (VA_WIDTH'(w_cut_pos_p2) << POS_OFFSET_BITS);
     if (!w_ftb_valid_p2)
       w_pft_p2 = r_pft_p1_p2;
-    else if (w_jmp_cut_p2)
-      w_pft_p2 = w_jmp_pc_p2;
+    else if (w_cut_p2)
+      w_pft_p2 = cut_pc;
     else if (w_ftb_jmp_valid_p2)
       w_pft_p2 = w_jmp_ft_p2;
     else
@@ -1195,11 +1224,6 @@ module bp_cluster (
   assign w_jmp_ft_p2 = r_pc_p2
                      + (VA_WIDTH'(w_ftb_jmp_pos_p2) << POS_OFFSET_BITS)
                      + (w_ftb_jmp_rvc_p2 ? VA_WIDTH'(2) : VA_WIDTH'(4));
-
-  // The jump PC (BP-138): the start PC plus the jump's start-relative
-  // position. Not formed from w_jmp_ft_p2, so no assign chain.
-  assign w_jmp_pc_p2 = r_pc_p2
-                     + (VA_WIDTH'(w_ftb_jmp_pos_p2) << POS_OFFSET_BITS);
 
   // ================================================================
   // p2: slot correction (TD-FE-6)

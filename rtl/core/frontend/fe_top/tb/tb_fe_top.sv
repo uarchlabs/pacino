@@ -180,6 +180,8 @@ module tb;
   int n_redir_p2;
   int n_redir_p3;
   int n_nomap;
+  int n_plc_occ;
+  int n_plc_tbl;
   int n_jmp_swap;
   // BP-121: predictions the FTQ used, per predictor. Each counts the
   // slots (or blocks) of a group the FTQ accepted (the shadow's ok_*,
@@ -737,6 +739,8 @@ module tb;
   always @(posedge clk) begin : upd_log
     // Per-slot terms over every slot (BP-128: slots 0 and 1 written out).
     int   nub;
+    int   nic;
+    int   nit;
     logic r2;
     logic r3;
     nub = 0;
@@ -769,9 +773,35 @@ module tb;
       if (dut.u_ftq.w_ok_redir_p3 && r3)
         n_redir_p3 <= n_redir_p3 + 1;
       // A resolution whose position names no slot of its entry
-      // (ftq_resolve rsv_nomap): it forms no update of any kind.
+      // (ftq_resolve rsv_nomap): placed in a slot and trained since
+      // BP-119. Channel 0 is the one the backend model drives.
       if (dut.u_ftq.w_rsv_nomap[0] && ftq_bkend_rsv_rdy[0])
         n_nomap <= n_nomap + 1;
+      // BP-139, item C. An accepted resolution placed in a slot that
+      // holds a valid branch at another position: its position names no
+      // slot, and the slot ftq_resolve placed it in is valid in the
+      // entry it read. n_plc_tbl counts those whose slot trained TAGE,
+      // SC, LP or ITTAGE in that cycle, the training through another
+      // branch's metadata that item C stops. Formed from the entry and
+      // the chosen slot, not from the item C term, so the same count
+      // runs on a tree without item C.
+      nic = 0;
+      nit = 0;
+      for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
+        if (dut.u_ftq.w_rsv_nomap[c] && ftq_bkend_rsv_rdy[c] &&
+            (bkend_ftq_rsv[c].br_type != NO_BRANCH) &&
+            dut.u_ftq.w_rsv_entry[c].slot[dut.u_ftq.w_rsv_slot[c]]
+              .slot_valid) begin
+          nic++;
+          if (dut.u_ftq.w_upd_tage_val[dut.u_ftq.w_rsv_slot[c]] ||
+              dut.u_ftq.w_upd_sc_val[dut.u_ftq.w_rsv_slot[c]]   ||
+              dut.u_ftq.w_upd_lp_val[dut.u_ftq.w_rsv_slot[c]]   ||
+              dut.u_ftq.w_upd_ittage_val[dut.u_ftq.w_rsv_slot[c]])
+            nit++;
+        end
+      end
+      n_plc_occ <= n_plc_occ + nic;
+      n_plc_tbl <= n_plc_tbl + nit;
       // BP-120, TD#156: an FTB jump update that hits an entry whose
       // jump field holds a jump at a different region position. Since
       // BP-120 the field is replaced; before, it kept the stored
@@ -991,6 +1021,8 @@ module tb;
     n_redir_p2   = 0;
     n_redir_p3   = 0;
     n_nomap      = 0;
+    n_plc_occ    = 0;
+    n_plc_tbl    = 0;
     up_vpn        = '1;
     up_wval       = 1'b0;
     up_wpriv      = '0;
@@ -1066,6 +1098,11 @@ module tb;
              {"   %s: RAS mispredicts %0d; FTB jump field trained by a ",
               "jump at another position %0d"}, tname, n_mis_ras,
              n_jmp_swap));
+    // BP-139: item C occasions, and those that trained a table predictor.
+    $display("%s", $sformatf(
+             {"   ITEMC %s placed in an occupied slot %0d, of them ",
+              "trained TAGE/SC/LP/ITTAGE %0d"}, tname, n_plc_occ,
+             n_plc_tbl));
     // BP-121.
     chk($sformatf("every RAS commit is the retired stream's (%0d ok, %0d bad)",
                   n_ras_ok, n_ras_bad), n_ras_bad == 0);
@@ -1889,7 +1926,11 @@ module tb;
     begin_prog("rec_undo");
     // Seed chosen from a sweep of eight, each of which reached the case
     // at two slots (2 to 10 times in 48 iterations); this one 10.
-    W.lfsr = 16'h3039;
+    // BP-139: re-chosen. With item C the first execution of f's bne
+    // (placed in the slot predecode gave the jal) no longer trains TAGE,
+    // and 16'h3039 reached the case 0 times. Of 16 seeds swept on the
+    // BP-139 tree 12 reach it (1 to 5 times); this one 5.
+    W.lfsr = 16'hacef;
     f = RESET_VECTOR + VA_WIDTH'('h800);
     W.mixed(3);
     top = W.wp;

@@ -422,8 +422,10 @@ fall-through is the jump PC plus 2 or 4 (`w_jmp_ft_p2`), not the
 FTB's shared pftAddr (ftb_interfaces.md IC-FTB-03). The expression
 above is as BP-118 built it. AS BUILT by BP-121 (read by BP-122):
 `w_pft_p2` is `r_pft_p1_p2` when the FTB did not answer, else
-the jump PC (`w_jmp_pc_p2`) when the FTB holds a jump and every slot
-holds a conditional (`w_jmp_cut_p2`, BP-138, fe_decisions.md 10),
+the PC of the first branch the FTB reports that no slot
+carries, `r_pc_p2 + (w_cut_pos_p2 << POS_OFFSET_BITS)`
+(`w_cut_p2`, BP-139 option A, fe_decisions.md 10; BP-138's
+`w_jmp_cut_p2` was the jump case),
 else `w_jmp_ft_p2` when the FTB holds a jump visible from this start,
 else `ftb_pft_addr_p2`; `w_jmp_ft_p2 = r_pc_p2 + (ftb_jmp_pos_p2 <<
 POS_OFFSET_BITS) + (ftb_jmp_rvc_p2 ? 2 : 4)`, which is also the RAS
@@ -1096,8 +1098,10 @@ session-078; built by BP-130): at most one not-taken bit for a slot
 of the entry before the named position, then the named branch's
 bit. RB_CORR_BITS = 2 and RB_CNT_BITS = 2 are bp_defines_pkg's,
 fixed, not derived from NUM_PRED_SLOTS. At one slot a backend
-mispredict of a branch held in no slot (BP-128 D2) carries slot 0's
-not-taken bit and its own. The cluster's p2 / p3 corrections are at
+mispredict of a branch held in no slot carries slot 0's
+not-taken bit and its own. Since BP-139 such a branch is one
+the FTB did not report at p2 (a reported one ends the block,
+option A). The cluster's p2 / p3 corrections are at
 most NUM_PRED_SLOTS bits and are zero-extended to RB_CORR_BITS in
 its mux. ftq_rollback_slot_ex / _slot_tkn stay NUM_PRED_SLOTS. BP-129
 had sized the three bundle ports by NUM_PRED_SLOTS and limited the
@@ -1422,4 +1426,8 @@ match it and to match this specification.
 
   2026-10-17  session-081, after BP-138. 4c: w_pft_p2 is the jump PC
               when the jump is in no slot (D1).
+
+  2026-10-19  session-081, after BP-139. 4c: w_pft_p2 is the PC of the
+              first branch no slot carries (option A). 9: the
+              unslotted branch is one the FTB did not report.
 ```

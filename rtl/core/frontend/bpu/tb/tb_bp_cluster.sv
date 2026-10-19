@@ -4957,7 +4957,10 @@ module tb;
 
     // -- P2. Two conditionals and a plain jump (jal x0). Every slot
     //    holds a conditional at either slot count, so the jump is in no
-    //    slot at either.
+    //    slot at either. At one slot the second conditional is in no
+    //    slot either and comes first, so since BP-139 (option A) the
+    //    block ends at its PC, not at the jump PC; group Q follows that
+    //    case through. At two slots the end is the jump PC (BP-138).
     j_reset();
     clr_upd_chans();
     pc  = VA_WIDTH'('h00_0b20_0000);
@@ -4987,12 +4990,13 @@ module tb;
       chk($sformatf("P2 p2: slot %0d is a conditional, not taken", s),
           (dut.w_br_type_p2[s] === COND) && (dut.w_taken_p2[s] === 1'b0));
     end
+    exp_succ = (NUM_PRED_SLOTS > 1) ? jpc : (pc + VA_WIDTH'('d6));
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
-      chk_eq($sformatf("P2 slot %0d's successor is the jump PC", s),
-             dut.w_succ_p2[s], jpc);
+      chk_eq($sformatf("P2 slot %0d's successor is the first unslotted PC",
+                       s), dut.w_succ_p2[s], exp_succ);
     end
-    chk_eq("P2 the entry's fall-through is the jump PC",
-           dut.bpu_blk_pft_p2, jpc);
+    chk_eq("P2 the entry's fall-through is the first unslotted PC",
+           dut.bpu_blk_pft_p2, exp_succ);
     tick();
     req(jpc, 6'h2b);
     tick();
@@ -5006,6 +5010,159 @@ module tb;
     norq();
     repeat (2) tick();
     $display("---- GROUP P done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
+  // GROUP Q -- a conditional no slot carries (BP-139, D1, option A)
+  // =================================================================
+  //
+  // The FTB reports up to two conditionals and a jump. Slot 0 carries
+  // br0 and a higher slot br1, so at one slot br1 is in no slot. Before
+  // BP-139 only an unslotted jump ended the block (BP-138); a br1
+  // conditional did not, so the not-taken path ran past it and it was
+  // never predicted (fd09: the back edge). Since BP-139 the block ends
+  // at the PC of the first reported branch no slot carries, and the
+  // block that starts there reports it first and places it in slot 0.
+  //
+  // Q1 {conditional pos 1, conditional pos 3}, the first not taken. One
+  //    slot: the block ends at the second's PC; a request at that PC
+  //    places it in slot 0 as COND, its direction TAGE's answer for
+  //    that request (the bimodal table is set taken between the two
+  //    requests, so it differs from the first block's not-taken). Two
+  //    slots (control): the second is in slot 1 and the block ends at
+  //    the FTB's stored end, before and after BP-139.
+  // Q2 one slot {conditional pos 1, conditional pos 3, jump pos 6}, both
+  //    not taken: the block ends at the second conditional, not at the
+  //    jump; the block at that PC carries the conditional in slot 0 and
+  //    ends at the jump PC. (At two slots this shape is P2.)
+  // Every case starts from j_reset() (reset clears the FTB valid bits,
+  // TAGE tagged tables cleared, bimodal not taken, SC off), installs the
+  // entry through the FTB update port, clears the uBTB set and both
+  // loop banks of every PC it requests, and reads the FTB fields back
+  // at p2 before any check.
+  task automatic group_q();
+    logic [VA_WIDTH-1:0] pc;
+    logic [VA_WIDTH-1:0] c2pc;
+    logic [VA_WIDTH-1:0] jpc;
+    logic [VA_WIDTH-1:0] t1;
+    logic [VA_WIDTH-1:0] t2;
+    logic [VA_WIDTH-1:0] tgt;
+    logic [VA_WIDTH-1:0] pft;
+
+    $display("---- GROUP Q: a conditional no slot carries, BP-139 ----");
+
+    // -- Q1.
+    j_reset();
+    clr_upd_chans();
+    pc   = VA_WIDTH'('h00_0b30_0000);
+    c2pc = pc + VA_WIDTH'('d6);              // pos 3
+    t1   = pc + VA_WIDTH'('h300);
+    t2   = pc + VA_WIDTH'('h340);
+    pft  = pc + VA_WIDTH'('h20);             // the stored end
+    ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, t1, 4'd1, pft, 1'b0);
+    ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, t2, 4'd3, pft, 1'b1);
+    ubtb_clear_set(pc);
+    ubtb_clear_set(c2pc);
+    lp_clear_both(pc);
+    lp_clear_both(c2pc);
+    req(pc, 6'h2c);
+    tick();
+    norq();
+    tick();                                  // pc at p2
+    chk("Q1 fixture: the FTB answers br0 pos 1, br1 pos 3, no jump",
+        dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
+     && (dut.w_ftb_br0_pos_p2 === 4'd1) && dut.w_ftb_br1_valid_p2
+     && (dut.w_ftb_br1_pos_p2 === 4'd3) && !dut.w_ftb_jmp_valid_p2);
+    chk("Q1 p2: slot 0 is the first conditional, not taken",
+        (dut.w_br_type_p2[0] === COND) && (dut.w_pos_p2[0] === 4'd1)
+     && (dut.w_taken_p2[0] === 1'b0));
+    if (NUM_PRED_SLOTS > 1) begin
+      chk("Q1 two slots: slot 1 is the second conditional, not taken",
+          (dut.w_br_type_p2[S1] === COND) && (dut.w_pos_p2[S1] === 4'd3)
+       && (dut.w_taken_p2[S1] === 1'b0));
+      chk_eq("Q1 two slots: the block ends at the stored end",
+             dut.bpu_blk_pft_p2, pft);
+      chk_eq("Q1 two slots: slot 0's successor is the stored end",
+             dut.w_succ_p2[0], pft);
+    end else begin
+      chk_eq("Q1 one slot: the block ends at the second conditional's PC",
+             dut.bpu_blk_pft_p2, c2pc);
+      chk_eq("Q1 one slot: slot 0's successor is that PC",
+             dut.w_succ_p2[0], c2pc);
+      // The next block, at the second conditional's PC. Its window
+      // shows that conditional first (br0, start-relative pos 0).
+      tick();
+      tage_bim_fill(2'b11);
+      req(c2pc, 6'h2d);
+      tick();
+      norq();
+      tick();                                // c2pc at p2
+      chk("Q1 one slot: the FTB at that PC reports it in br0 at pos 0",
+          dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
+       && (dut.w_ftb_br0_pos_p2 === 4'd0) && !dut.w_ftb_br1_valid_p2);
+      chk("Q1 one slot: slot 0 carries it as COND at pos 0",
+          (dut.w_br_type_p2[0] === COND) && (dut.w_pos_p2[0] === 4'd0)
+       && (dut.bpu_slot_p2[0].slot_valid === 1'b1));
+      chk("Q1 one slot: its direction is TAGE's answer for this request",
+          dut.w_tage_hit_p2[0]
+       && (dut.w_tage_pred_meta_p2[0].branch_id === 6'h2d)
+       && (dut.w_taken_p2[0] === dut.w_tage_pred_meta_p2[0].tage_pred_tkn)
+       && (dut.bpu_slot_p2[0].pred_src === PRED_TAGE));
+      chk("Q1 one slot: which is taken (the bimodal table set taken)",
+          dut.w_taken_p2[0] === 1'b1);
+      chk_eq("Q1 one slot: so its successor is its own target",
+             dut.w_succ_p2[0], t2);
+    end
+
+    // -- Q2. One slot only; at two slots this shape is P2.
+    if (NUM_PRED_SLOTS == 1) begin
+      j_reset();
+      clr_upd_chans();
+      pc   = VA_WIDTH'('h00_0b40_0000);
+      c2pc = pc + VA_WIDTH'('d6);            // pos 3
+      jpc  = pc + VA_WIDTH'('d12);           // pos 6, a 32-bit jal x0
+      tgt  = pc + VA_WIDTH'('h500);
+      ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, pc + VA_WIDTH'('h300), 4'd1,
+                     jpc + VA_WIDTH'(4), 1'b0);
+      ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, pc + VA_WIDTH'('h340), 4'd3,
+                     jpc + VA_WIDTH'(4), 1'b1);
+      ftb_alloc_jmp(pc, 2'd0, tgt, 4'd6, 1'b0, 1'b0, 1'b0,
+                    jpc + VA_WIDTH'(4), 1'b1);
+      ubtb_clear_set(pc);
+      ubtb_clear_set(c2pc);
+      lp_clear_both(pc);
+      lp_clear_both(c2pc);
+      req(pc, 6'h2e);
+      tick();
+      norq();
+      tick();                                // pc at p2
+      chk("Q2 fixture: the FTB answers br0 pos 1, br1 pos 3, jump pos 6",
+          dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
+       && (dut.w_ftb_br0_pos_p2 === 4'd1) && dut.w_ftb_br1_valid_p2
+       && (dut.w_ftb_br1_pos_p2 === 4'd3) && dut.w_ftb_jmp_valid_p2
+       && (dut.w_ftb_jmp_pos_p2 === 4'd6));
+      chk("Q2 p2: slot 0 is the first conditional, not taken",
+          (dut.w_br_type_p2[0] === COND) && (dut.w_taken_p2[0] === 1'b0));
+      chk_eq("Q2 the block ends at the second conditional, not the jump",
+             dut.bpu_blk_pft_p2, c2pc);
+      chk_eq("Q2 slot 0's successor is that PC", dut.w_succ_p2[0], c2pc);
+      tick();
+      req(c2pc, 6'h2f);
+      tick();
+      norq();
+      tick();                                // c2pc at p2
+      chk("Q2 the block at that PC carries it in slot 0, not taken",
+          (dut.w_br_type_p2[0] === COND) && (dut.w_pos_p2[0] === 4'd0)
+       && (dut.w_taken_p2[0] === 1'b0));
+      chk_eq("Q2 and that block ends at the jump PC (BP-138's cut)",
+             dut.bpu_blk_pft_p2, jpc);
+    end
+
+    clr_upd_chans();
+    norq();
+    repeat (2) tick();
+    $display("---- GROUP Q done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
   endtask
 
@@ -5606,6 +5763,7 @@ module tb;
     group_n();
     group_o();
     group_p();
+    group_q();
 
     mon_report();
     $display("INFO: %0d resets", n_resets);

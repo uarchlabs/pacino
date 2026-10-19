@@ -36,6 +36,8 @@
 //   K  BP-125: a p2 and a p3 redirect, and the cycles from the
 //      redirect to the first translation request for the flush index
 //      F = K (ftq_decisions.md 5.1, whose p2, p3 row was inferred)
+//   L  BP-139: item C and the occupied-slot placement write at the FTQ
+//      boundary, through ftq_entry, ftq_resolve and ftq_upd_conv
 //
 // THE CLUSTER IS MODELLED, because it has to be: the loop closes
 // through bp_cluster and ftq.sv does not instantiate it (7.1). The
@@ -344,6 +346,9 @@ module tb;
   logic                mdl_tkn_en;
   logic [VA_WIDTH-1:0] mdl_tkn_tgt;
   bp_br_type_e         mdl_tkn_type;
+  // BP-139, group L: every slot a not-taken conditional, slot s at
+  // position L_POS0 + 3 * s, so the entry has no free slot.
+  logic                mdl_occ_en;
 
   // THE 4c GROUP (ftq_bpu_interfaces.md 4c, BP-118). Like the real
   // cluster, the model presents it for EVERY valid p2 block, one
@@ -400,6 +405,15 @@ module tb;
         bpu_pred_slot_p1[s]            <= '0;
         bpu_pred_slot_p1[s].br_type    <= NO_BRANCH;
         bpu_pred_slot_p1[s].pred_src   <= PRED_NONE;
+      end
+      if (mdl_occ_en) begin
+        for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
+          bpu_pred_slot_p1[s].slot_valid <= 1'b1;
+          bpu_pred_slot_p1[s].taken      <= 1'b0;
+          bpu_pred_slot_p1[s].br_type    <= COND;
+          bpu_pred_slot_p1[s].target     <= VA_WIDTH'('h00_9b00_0000);
+          bpu_pred_slot_p1[s].pos        <= FTB_BR_POS_BITS'(L_POS0 + 3 * s);
+        end
       end
       if (mdl_tkn_en) begin
         bpu_pred_slot_p1[0].slot_valid <= 1'b1;
@@ -520,6 +534,7 @@ module tb;
     mdl_tkn_en            = 1'b0;
     mdl_tkn_tgt           = '0;
     mdl_tkn_type          = COND;
+    mdl_occ_en            = 1'b0;
     mdl_blk_ovr           = 1'b0;
     mdl_blk_idx           = '0;
     mdl_blk_pft           = '0;
@@ -1563,6 +1578,102 @@ module tb;
   endtask
 
   // -----------------------------------------------------------------
+  // L. BP-139: item C and the occupied-slot write at the FTQ boundary.
+  // -----------------------------------------------------------------
+  // Entry 0 is allocated with every slot a not-taken conditional (the
+  // model's mdl_occ_en), the last slot LS at position L_OCC. A branch
+  // at position 9 names no slot and is placed in slot LS, which holds
+  // the occupant at an earlier position. Checked at the FTQ's update
+  // ports: the uBTB and FTB updates are presented and the TAGE, SC, LP
+  // and ITTAGE valids are low (item C); the occupant keeps its slot of
+  // ftq_entry and, resolving after the placed branch, maps to it and
+  // trains TAGE from it. L3 is the free-slot control. Before BP-139 the
+  // placed branch trained the four tables from LS and replaced the
+  // occupant, which then resolved unmapped.
+  localparam int L_POS0 = 2;
+  localparam int LS     = NUM_PRED_SLOTS - 1;
+  localparam int L_OCC  = L_POS0 + 3 * LS;
+
+  task automatic l_resolve(input logic [FTB_BR_POS_BITS-1:0] pos,
+                           input bp_br_type_e bt, input logic tkn,
+                           input logic mis);
+    bkend_ftq_rsv_val           = NUM_RESOLVE_PORTS'(2'b01);
+    bkend_ftq_rsv[0]            = '0;
+    bkend_ftq_rsv[0].ftq_idx    = 6'd0;
+    bkend_ftq_rsv[0].pos        = pos;
+    bkend_ftq_rsv[0].taken      = tkn;
+    bkend_ftq_rsv[0].target     = VA_WIDTH'('h00_9c00_0000);
+    bkend_ftq_rsv[0].br_type    = bt;
+    bkend_ftq_rsv[0].mispredict = mis;
+    #1;
+  endtask
+
+  task automatic l_alloc(input logic occ);
+    do_reset();
+    ftq_ifu_req_rdy = 1'b0;               // entry 0 stays live
+    mdl_occ_en      = occ;
+    tick();
+    mdl_occ_en      = 1'b0;
+    repeat (4) tick();
+  endtask
+
+  task automatic group_l();
+    $display("-- L: item C and the occupied-slot write, BP-139 --");
+
+    // L1. A conditional placed in the occupied slot, then the occupant.
+    l_alloc(1'b1);
+    chk("L1 fixture: entry 0's last slot holds the occupant",
+        dut.u_entry.r_arr[0].slot[LS].slot_valid &&
+        (dut.u_entry.r_arr[0].slot[LS].pos == FTB_BR_POS_BITS'(L_OCC)) &&
+        (dut.u_entry.r_arr[0].slot[LS].br_type == COND));
+    l_resolve(FTB_BR_POS_BITS'(9), COND, 1'b1, 1'b1);
+    chk("L1 the placed conditional is accepted", ftq_bkend_rsv_rdy[0]);
+    chk("L1 its uBTB and FTB updates are presented",
+        ubtb_upd_u0[LS].valid && ubtb_upd_u0[LS].is_br &&
+        (ubtb_upd_u0[LS].pos == UBTB_BR_POS_BITS'(9)) &&
+        dut.w_ftb_upd_val[0] && (dut.w_ftb_upd[0].pos == 4'd9));
+    chk("L1 and no TAGE, SC, LP or ITTAGE update (item C)",
+        (tage_upd_val_u0 == '0) && (sc_upd_val_u0 == '0) &&
+        (lp_upd_valid_p0 == '0) && (ittage_upd_val_u0 == '0));
+    tick();
+    bkend_ftq_rsv_val = '0;
+    #1;
+    chk("L1 the occupant keeps its slot of the entry",
+        dut.u_entry.r_arr[0].slot[LS].slot_valid &&
+        (dut.u_entry.r_arr[0].slot[LS].pos == FTB_BR_POS_BITS'(L_OCC)));
+    l_resolve(FTB_BR_POS_BITS'(L_OCC), COND, 1'b0, 1'b0);
+    chk("L1 the occupant, resolving after it, maps to its own slot",
+        !dut.w_rsv_nomap[0] && (dut.w_rsv_slot[0] == TRX_SLOT_BITS'(LS))
+     && ftq_bkend_rsv_rdy[0]);
+    chk("L1 and trains TAGE and the LP from that slot, at its own PC",
+        tage_upd_val_u0[LS] && lp_upd_valid_p0[LS] &&
+        (lp_upd_p0[LS].pc == VA_WIDTH'(RESET_VECTOR + 2 * L_OCC)));
+    tick();
+    bkend_ftq_rsv_val = '0;
+
+    // L2. An indirect placed in the occupied slot: no ITTAGE update.
+    l_alloc(1'b1);
+    l_resolve(FTB_BR_POS_BITS'(9), INDIRECT_NONRET, 1'b1, 1'b1);
+    chk("L2 a placed indirect forms the uBTB and FTB updates only",
+        ftq_bkend_rsv_rdy[0] && ubtb_upd_u0[LS].valid &&
+        ubtb_upd_u0[LS].is_jalr && dut.w_ftb_upd_val[0] &&
+        (ittage_upd_val_u0 == '0) && (tage_upd_val_u0 == '0));
+    tick();
+    bkend_ftq_rsv_val = '0;
+
+    // L3. Control: the same conditional in an entry with no branch, so
+    //     the slot is free; it trains TAGE as BP-119 rules.
+    l_alloc(1'b0);
+    l_resolve(FTB_BR_POS_BITS'(9), COND, 1'b1, 1'b1);
+    chk("L3 placed in a free slot, it trains TAGE, SC and the LP",
+        ftq_bkend_rsv_rdy[0] && tage_upd_val_u0[0] && sc_upd_val_u0[0] &&
+        lp_upd_valid_p0[0] && ubtb_upd_u0[0].valid);
+    tick();
+    bkend_ftq_rsv_val = '0;
+    ftq_ifu_req_rdy   = 1'b1;
+  endtask
+
+  // -----------------------------------------------------------------
   // K. A p2 and a p3 redirect (BP-125). ftq_decisions.md 5.1 counts
   //    from the redirect cycle to the first cycle the translation
   //    request for the flush index F is presented, and gives p2 and p3
@@ -1691,6 +1802,7 @@ module tb;
     group_i();
     group_j();
     group_k();
+    group_l();
 
     $display("tb_ftq: PASS=%0d FAIL=%0d", pass_cnt, fail_cnt);
     if (fail_cnt != 0) begin

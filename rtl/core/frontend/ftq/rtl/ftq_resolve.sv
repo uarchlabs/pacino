@@ -43,6 +43,36 @@
 // commit walk sees a call or return it holds (ftq_entry 5.4).
 // rsv_nomap still reports the condition, per channel.
 //
+// ITEM C, A PLACEMENT INTO AN OCCUPIED SLOT (BP-139, ruled by Jeff;
+// it replaces the BP-119 ruling for this case). When the slot a branch
+// is placed in holds a valid branch at another position, that slot's
+// metadata describes the other branch: TAGE is indexed by the block
+// start per slot, so its table index, tag and counters, and the SC,
+// LP and ITTAGE state with them, are the occupant's. Training through
+// them wrote one branch's outcome into another's entries (fd09 at one
+// slot: the back edge, in no slot, trained into B's TAGE entries on
+// 101 of 256 iterations). As R2 does for a type disagreement, the
+// uBTB and FTB updates form and TAGE, SC, LP and ITTAGE are
+// suppressed. rsv_plc_occ reports it, per channel. A placement into a
+// FREE slot is unchanged and trains as above.
+//
+// THE PLACED-SLOT WRITE INTO AN OCCUPIED SLOT (BP-139, PROVISIONAL,
+// the IA's choice). The write replaced the occupant, so an occupant
+// that resolved later (the backend resolves out of order) no longer
+// mapped, was placed in turn, and with item C would have lost its own
+// training. The write is now made only where the commit walk needs it
+// or the occupant is off the executed path:
+//   - the placed branch is a taken call, return or return-call, the
+//     RAS operation the commit walk commits (ftq_entry 5.4); or
+//   - it ends the executed block (taken or mispredicted, rsv_wr_end)
+//     and the occupant is at a later position, so the occupant is on
+//     the wrong path and must not reach the commit walk.
+// Otherwise the occupant keeps its slot and maps when it resolves. The
+// cost: an occupant at an EARLIER position than a placed taken call or
+// return loses its slot and, resolving after it, is placed with item C
+// (no table training). That needs the first execution of a call or
+// return the FTB does not yet hold behind every slot's conditional.
+//
 // WHAT R2 OF ftq_entry_formats.md 3.1 DOES. When the entry's stored
 // br_type for the mapped slot DISAGREES with the resolved br_type,
 // the metadata describes a different predictor set than the branch
@@ -124,8 +154,9 @@
 // presented. The flag names the branch it was set for (its entry index
 // and position, registered with it) and applies only while that branch
 // is presented: A4 says the backend can hold a resolution, not that it
-// cannot replace one, and a replacement must train the FTB. A LOW update the scheduler takes and drops (FE-5a) counts
-// as taken, as it did when it was presented once.
+// cannot replace one, and a replacement must train the FTB. A LOW
+// update the scheduler takes and drops (FE-5a) counts as taken, as it
+// did when it was presented once.
 //
 // TWO RESOLUTIONS, ONE SLOT (BP-120, TD#158). Two channels are never
 // given the same update slot in one cycle: the YOUNGER is held (its
@@ -211,9 +242,12 @@ module ftq_resolve (
   // not dropped silently -- see the header.
   // rsv_drop_sq: dropped by R3, the live-window test.
   // rsv_type_dis: R2 of ftq_entry_formats.md 3.1 fired.
+  // rsv_plc_occ: item C fired, a placement into an occupied slot
+  // (BP-139, header).
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_nomap,
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_drop_sq,
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_type_dis,
+  output logic [NUM_RESOLVE_PORTS-1:0] rsv_plc_occ,
   output logic [NUM_RESOLVE_PORTS-1:0] rsv_accept,
   output logic [TRX_SLOT_BITS-1:0] rsv_slot [0:NUM_RESOLVE_PORTS-1],
 
@@ -243,6 +277,10 @@ module ftq_resolve (
   logic [TRX_SLOT_BITS-1:0] w_map_slot [0:NUM_RESOLVE_PORTS-1];
   logic [TRX_SLOT_BITS-1:0] w_plc_slot [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_plc_val;
+  // BP-139 (header). The placement write into an occupied slot is
+  // made: the placed branch is a taken RAS operation, or it ends the
+  // block and the occupant is at a later position.
+  logic [NUM_RESOLVE_PORTS-1:0] w_occ_wr;
   bp_ftq_slot_t             w_new_slot [0:NUM_RESOLVE_PORTS-1];
   logic [NUM_RESOLVE_PORTS-1:0] w_rdy_pred;
   // w_older[c][o]: channel o is presented, live and older than c.
@@ -397,6 +435,23 @@ module ftq_resolve (
       // ruling trains the table predictors on it.
       rsv_type_dis[c] = rsv_accept[c] && w_slot_hit[c] &&
         (rsv_entry[c].slot[rsv_slot[c]].br_type != bkend_rsv[c].br_type);
+
+      // Item C (BP-139, header). The placed slot holds a valid branch;
+      // its position is another one, or the resolution would have
+      // mapped. An older channel's placement into the same slot this
+      // cycle holds this channel (w_lose), so the entry as read decides.
+      rsv_plc_occ[c] = w_plc_val[c] &&
+                       rsv_entry[c].slot[w_plc_slot[c]].slot_valid;
+
+      // The placement write into an occupied slot (BP-139, header).
+      w_occ_wr[c] =
+        (bkend_rsv[c].taken &&
+         ((bkend_rsv[c].br_type == DIRECT_CALL)   ||
+          (bkend_rsv[c].br_type == INDIRECT_CALL) ||
+          (bkend_rsv[c].br_type == RETURN)        ||
+          (bkend_rsv[c].br_type == RETURN_CALL))) ||
+        ((bkend_rsv[c].taken || bkend_rsv[c].mispredict) &&
+         (rsv_entry[c].slot[w_plc_slot[c]].pos > bkend_rsv[c].pos));
     end
 
     // One slot, one channel (TD#158): a channel loses when an older
@@ -493,13 +548,13 @@ module ftq_resolve (
         upd_ubtb_val[rsv_slot[c]] =
           (bkend_rsv[c].br_type != NO_BRANCH);
 
-        // The four suppressed by R2. Each is additionally gated by
-        // its own branch type: TAGE, SC and LP train only on
-        // conditionals, ITTAGE only on indirects, and INDIRECT_CALL
-        // is an indirect for this purpose because it updates ITTAGE
-        // for the target (FE-U9, session-061). RETURN_CALL is not:
-        // its target is the RAS pop (7.2).
-        if (!rsv_type_dis[c]) begin
+        // The four suppressed by R2, and by item C (BP-139). Each is
+        // additionally gated by its own branch type: TAGE, SC and LP
+        // train only on conditionals, ITTAGE only on indirects, and
+        // INDIRECT_CALL is an indirect for this purpose because it
+        // updates ITTAGE for the target (FE-U9, session-061).
+        // RETURN_CALL is not: its target is the RAS pop (7.2).
+        if (!rsv_type_dis[c] && !rsv_plc_occ[c]) begin
           upd_tage_val[rsv_slot[c]] = (bkend_rsv[c].br_type == COND);
           upd_sc_val[rsv_slot[c]]   = (bkend_rsv[c].br_type == COND);
           upd_lp_val[rsv_slot[c]]   = (bkend_rsv[c].br_type == COND);
@@ -597,10 +652,14 @@ module ftq_resolve (
   // The resolution is the executed fact, so it replaces the slot; with
   // the taken clear in ftq_entry, the slots of a committing entry are
   // the executed block. Found by the BP-121 RAS commit check.
+  //
+  // A PLACEMENT INTO AN OCCUPIED SLOT WRITES ONLY UNDER w_occ_wr
+  // (BP-139, PROVISIONAL, header): otherwise the occupant keeps its
+  // slot, so it still maps when it resolves after the placed branch.
   // -----------------------------------------------------------------
   always_comb begin : place_write
     for (int c = 0; c < NUM_RESOLVE_PORTS; c++) begin
-      rsv_wr_val[c]  = (w_plc_val[c] |
+      rsv_wr_val[c]  = ((w_plc_val[c] & (~rsv_plc_occ[c] | w_occ_wr[c])) |
                         (rsv_accept[c] & w_slot_hit[c] &
                          (bkend_rsv[c].br_type != NO_BRANCH))) &
                        ftq_bkend_rsv_rdy[c];

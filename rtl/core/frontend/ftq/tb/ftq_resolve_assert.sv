@@ -398,10 +398,15 @@ module ftq_resolve_assert (
       //     PREDICTION and the commit walk committed what the front
       //     end guessed, not what executed. Stated from the resolution
       //     and the acceptance, not from the write enable's terms.
+      //     BP-139: a placement into a slot that holds another branch is
+      //     R23's, not R20's; R20 reads "every accepted resolution"
+      //     before BP-139.
       property p_every_resolved_slot_written;
         @(posedge clk) disable iff (!rstn)
           (rsv_accept[gw] && ftq_bkend_rsv_rdy[gw] &&
-           (bkend_rsv[gw].br_type != NO_BRANCH)) |->
+           (bkend_rsv[gw].br_type != NO_BRANCH) &&
+           !(rsv_nomap[gw] &&
+             rsv_entry[gw].slot[rsv_slot[gw]].slot_valid)) |->
             rsv_wr_val[gw] &&
             (rsv_wr_idx[gw] == bkend_rsv[gw].ftq_idx) &&
             (rsv_wr_sel[gw] == rsv_slot[gw]);
@@ -431,6 +436,91 @@ module ftq_resolve_assert (
       a_jump_ft_is_jump_end: assert property (p_jump_ft_is_jump_end)
         else $error("R21 a taken jump trained the FTB with another end");
 
+    end
+  endgenerate
+
+  // R22, R23 (BP-139): item C and the placement write into a slot that
+  // holds another branch. Each is stated from the entry the module read
+  // (the placed slot's valid bit and position) and the resolution, not
+  // from rsv_plc_occ or the write enable's terms.
+  genvar gk;
+  generate
+    for (gk = 0; gk < NUM_RESOLVE_PORTS; gk++) begin : g_bp139
+      logic w_occ;      // placed in a slot holding a valid branch
+      logic w_occ_lo;   // ... at an earlier position
+      logic w_ras_tkn;  // the resolution is a taken RAS operation
+      logic w_ends;     // the resolution ends the executed block
+      always_comb begin
+        w_occ     = rsv_accept[gk] && rsv_nomap[gk] &&
+                    (bkend_rsv[gk].br_type != NO_BRANCH) &&
+                    rsv_entry[gk].slot[rsv_slot[gk]].slot_valid;
+        w_occ_lo  = w_occ &&
+                    (rsv_entry[gk].slot[rsv_slot[gk]].pos < bkend_rsv[gk].pos);
+        w_ras_tkn = bkend_rsv[gk].taken &&
+                    ((bkend_rsv[gk].br_type == DIRECT_CALL)   ||
+                     (bkend_rsv[gk].br_type == INDIRECT_CALL) ||
+                     (bkend_rsv[gk].br_type == RETURN)        ||
+                     (bkend_rsv[gk].br_type == RETURN_CALL));
+        w_ends    = bkend_rsv[gk].taken || bkend_rsv[gk].mispredict;
+      end
+
+      // R22 BP-139, item C. A resolution placed in a slot that holds a
+      //     valid branch at another position trains no table predictor
+      //     from that slot: its metadata is the occupant's. Before
+      //     BP-139 (BP-119) TAGE, SC, LP and ITTAGE were trained from it
+      //     (fd09 at one slot: the back edge through B's entries).
+      property p_occ_no_tables;
+        @(posedge clk) disable iff (!rstn)
+          w_occ |->
+            !upd_tage_val[rsv_slot[gk]] && !upd_sc_val[rsv_slot[gk]] &&
+            !upd_lp_val[rsv_slot[gk]]   && !upd_ittage_val[rsv_slot[gk]];
+      endproperty
+      a_occ_no_tables: assert property (p_occ_no_tables)
+        else $error("R22 a placement into an occupied slot trained a table");
+
+      // R22a BP-139, item C. And it still forms the uBTB update, in the
+      //     cycle its channel is ready.
+      property p_occ_ubtb;
+        @(posedge clk) disable iff (!rstn)
+          (w_occ && ftq_bkend_rsv_rdy[gk]) |-> upd_ubtb_val[rsv_slot[gk]];
+      endproperty
+      a_occ_ubtb: assert property (p_occ_ubtb)
+        else $error("R22a a placement into an occupied slot formed no uBTB");
+
+      // R23 BP-139 (provisional rule). An occupant at an EARLIER
+      //     position is on the executed path and keeps its slot, so it
+      //     maps when it resolves after this branch: no write, unless
+      //     this branch is a taken call, return or return-call, which
+      //     the commit walk must see. Before BP-139 every placement
+      //     wrote, and the occupant then resolved unmapped.
+      property p_occ_lo_kept;
+        @(posedge clk) disable iff (!rstn)
+          (w_occ_lo && !w_ras_tkn) |-> !rsv_wr_val[gk];
+      endproperty
+      a_occ_lo_kept: assert property (p_occ_lo_kept)
+        else $error("R23 the placement replaced an earlier occupant");
+
+      // R23a A taken RAS operation placed in an occupied slot is
+      //     written, so the commit walk commits it (ftq_entry 5.4).
+      property p_occ_ras_written;
+        @(posedge clk) disable iff (!rstn)
+          (w_occ && w_ras_tkn && ftq_bkend_rsv_rdy[gk]) |->
+            rsv_wr_val[gk] && (rsv_wr_sel[gk] == rsv_slot[gk]);
+      endproperty
+      a_occ_ras_written: assert property (p_occ_ras_written)
+        else $error("R23a a placed RAS operation was not written");
+
+      // R23b An occupant at a LATER position than a branch that ends the
+      //     executed block is on the wrong path: it is replaced, so the
+      //     commit walk does not see it. One at a later position than a
+      //     branch that does not end the block is on the path and kept.
+      property p_occ_hi;
+        @(posedge clk) disable iff (!rstn)
+          (w_occ && !w_occ_lo && ftq_bkend_rsv_rdy[gk]) |->
+            ((w_ends || w_ras_tkn) ? rsv_wr_val[gk] : !rsv_wr_val[gk]);
+      endproperty
+      a_occ_hi: assert property (p_occ_hi)
+        else $error("R23b a later occupant was kept off the path, or lost");
     end
   endgenerate
 
