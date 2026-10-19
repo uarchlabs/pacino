@@ -106,10 +106,9 @@ fields of the one indexed entry, not two slots.
                         -- br0 in-block position: which 2-BYTE SLOT
                            (0..15) within the 32-byte block this
                            branch occupies, counted from the BLOCK
-                           START. ftb_cntrl stores it region-relative
-                           and converts at the read, suppressing a
-                           field outside this block's window
-                           (ftb_decisions.md 4.6, session-071).
+                           START, and stored so since BP-140
+                           (one entry per start; region-relative
+                           with a read window from session-071).
                            Used by the cluster/FTQ
                            to locate the taken branch in the bundle.
                            NOT to order br0 against br1 -- br0 is
@@ -190,8 +189,8 @@ fields of the one indexed entry, not two slots.
   output logic [VA_WIDTH-1:0]   ftb_pft_addr_p2
                         -- predicted fallthrough address, full width,
                            reconstructed by ftb_cntrl from the stored
-                           partial pftAddr -- six bits from the
-                           aligned region base, NO CARRY BIT
+                           partial pftAddr -- five bits from the
+                           block start (BP-140), NO CARRY BIT
                            (ftb_decisions.md 5.5, ruled session-070,
                            BUILT by BP-110). Bounds checked per
                            ftb_decisions.md 4.5: an end not above
@@ -268,22 +267,11 @@ IC-FTB-05).
   input  logic                  ftb_upd_is_br_u0
                         -- 1 = this resolve is a conditional branch.
   input  logic                  ftb_upd_br_idx_u0
-                        -- which conditional PORT SLOT, 0 or 1, as
-                           the update's own block start saw it.
-                           RATIFIED session-073: it names a slot,
-                           not a storage field. Under the O-3b read
-                           compaction the FTQ only ever sees port
-                           slots, so this is the only reading under
-                           which the producer needs no knowledge of
-                           the region window. ftb_cntrl maps the
-                           slot back to a storage field through the
-                           same window: a slot mapping to a visible
-                           field is an in-place update; otherwise
-                           the branch fills an empty field, else a
-                           field hidden from this start. For an
-                           aligned start with nothing hidden the
-                           mapping is the identity. Built by
-                           BP-110.
+                        -- NOT READ by ftb_cntrl since BP-140: the
+                           resolving branch's position names its
+                           field (ftb_decisions.md 5.5). The port
+                           stays (ports unchanged). RESERVED, as the
+                           flush port is (Jeff, session-081).
   input  logic                  ftb_upd_taken_u0
                         -- resolved direction. 1 = taken. Drives the
                            bimodal conf step (increment toward 111 on
@@ -299,17 +287,12 @@ IC-FTB-05).
                         -- in-block position of the resolving branch
                            (0..15), = (branch_pc - block_start) >>
                            POS_OFFSET_BITS, supplied by the FTQ/resolve
-                           side. START-relative; ftb_cntrl adds the
-                           update PC's region offset before storing
-                           it (ftb_decisions.md 4.6 R-2). Written to
-                           the selected field's pos at
-                           allocate / free-field fill (the conditional
-                           chosen by ftb_upd_br_idx_u0, or the jump when
-                           ftb_upd_is_jmp_u0). Not rewritten when the
-                           same branch (same region position)
-                           resolves; an update at a different position
-                           is a different branch (IC-FTB-15,
-                           ftb_decisions.md 5.5).
+                           side. START-relative, stored as given
+                           (BP-140). It names the field: the same
+                           position is the same branch; a new
+                           position joins the held branches in
+                           position order, subject to the split
+                           (ftb_decisions.md 3, 5.5).
 
   (No ftb_upd_ftb_dir_u0 -- conf trains bimodally on the resolved
    OUTCOME, not on FTB-prediction correctness, so FTB's original
@@ -643,10 +626,10 @@ IC-FTB-14 (session-053):
 
 IC-FTB-15 (session-053, FTB-4 resolved):
   In-block position is sourced and sunk. Each stored position field
-  (br0, br1, jump; FTB_BR_RPOS_BITS each, stored region-relative,
-  ftb_decisions.md 4.6) has a producer and a consumer:
-  written from ftb_upd_pos_u0 (2.5) at allocate / free-field fill,
-  routed to the field selected by ftb_upd_br_idx_u0 or ftb_upd_is_jmp_u0;
+  (br0, br1, jump; FTB_BR_POS_BITS each, start-relative since
+  BP-140) has a producer and a consumer:
+  written from ftb_upd_pos_u0 (2.5), the field named by the position
+  and the kind (ftb_upd_is_br_u0 / ftb_upd_is_jmp_u0);
   read out on ftb_br0_pos_p2 / ftb_br1_pos_p2 / ftb_jmp_pos_p2 (2.3).
   Position is static while the SAME branch holds the field -- not
   rewritten when an update at the stored region position steps conf
@@ -661,25 +644,12 @@ IC-FTB-15 (session-053, FTB-4 resolved):
   "settled" until it has a named producer and consumer.
 
 IC-FTB-16 (2026-08-19, amended session-073):
-  br0 holds the earlier branch. STORAGE IS IN ASCENDING REGION
-  POSITION (ftb_decisions.md 4.6 O-3a): br0 holds the lower stored
-  position and br1 the higher, whatever start wrote them. A start
-  that fills one conditional into an empty entry fills br0.
-
-  THE FTB REORDERS AND CHECKS. This invariant previously made the
-  FTQ responsible and said the FTB did neither; O-3 moved both
-  inside ftb_cntrl, which swaps storage into ascending order at the
-  write and compacts the window-surviving fields onto the ports at
-  the read (O-3b). Built by BP-110.
-
-  ON THE PORTS, program order is per START. Under the read window of
-  ftb_decisions.md 4.6 br0 can be suppressed while br1 is visible;
-  compaction then reports br1 on PORT SLOT 0, so slot 0 is always
-  the first branch at or after the looked-up start. "br0 maps to
-  slot 0" holds only when br0 is visible. In storage program order
-  is per REGION.
-
-  ftb_upd_br_idx_u0 (2.5) names a port slot in the same terms.
+  br0 holds the earlier branch. STORAGE IS IN ASCENDING POSITION
+  per start (BP-140, one entry per start): br0 holds the lower
+  position, br1 the higher, the jump is after both. ftb_cntrl sorts
+  at the write; the read reports the fields as stored, br1 only with
+  br0. The read window and compaction of session-073 are gone with
+  the region entry (ftb_decisions.md 4.6 replaced).
 
   Two consequences follow.
 
@@ -701,7 +671,10 @@ IC-FTB-16 (2026-08-19, amended session-073):
 jump when every slot holds a conditional) that branch is in
 no slot, and the cluster ends the block at the PC of the first
 such branch (fe_decisions.md 10, BP-139 option A; BP-138 cut
-the jump only).
+the jump only). Since BP-140 an entry holds at most
+NUM_PRED_SLOTS branches (the split, ftb_decisions.md 3), so the FTB
+reports no such branch from an entry it wrote; the cut is a
+backstop (0 events in tb_fe_top).
 
   Position is still required. It locates the branch in the fetch
   bundle (IC-FTB-15), forms the branch PC reported to bp_history
@@ -721,7 +694,8 @@ arithmetic-not-restated block and IC-FTB-08 in section 4 both say. The names thi
   FTB_WAY_BITS, FTB_BLOCK_BYTES, FTB_OFFSET_BITS, FTB_TAG_BITS,
   PLRU_BITS, PFTADDR_BITS, TAR_STAT_BITS, FTB_BR_POS_BITS
   (the width of every position PORT, start-relative),
-  FTB_BR_RPOS_BITS (the STORED position, region-relative),
+  FTB_RTAG_BITS (the region tag), FTB_SOFF_SHIFT (the index
+  fold; both BP-140),
   FTB_BR_TGT_BITS, FTB_JMP_TGT_BITS, FTB_CONF_WIDTH,
   FTB_CONF_INIT_TKN, FTB_CONF_INIT_NTK, and the entry arithmetic
   FTB_ENTRY_WIDTH / FTB_SET_WIDTH (logical, including the valid bit)
@@ -866,4 +840,9 @@ L1I line the IFU reads, by the FTQ. Do not collapse the two
 
   2026-10-19  session-081, after BP-139. IC-FTB-16: any branch in no
               slot ends the block at its PC (option A).
+
+  2026-10-19  session-081, after BP-140. Per-start entries and the
+              split: the lookup, the position, end and update fields,
+              IC-FTB-16. ftb_upd_br_idx_u0 is no longer read and is
+              kept reserved (Jeff).
 

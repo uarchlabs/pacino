@@ -269,6 +269,16 @@ module ras (
   //     the push (3.2), which is the same slot while BOS has not moved.
   //   - a commit that moves BOS while TOSR == BOS moves TOSR with it
   //     (the sequential block below).
+  //   - a RETURN commit whose snapshot shows the stack empty after its
+  //     block (snapshot TOSR == snapshot BOS) leaves BOS where it is
+  //     (BP-140, PROVISIONAL, c_bos). That snapshot TOSR is the BOS of
+  //     the cycle the return popped a bottom entry, an index the
+  //     commits of the older blocks have since moved BOS off, so the
+  //     allocation may have reused it (the sentinel skip protects only
+  //     the current BOS). Moving BOS back to it left BOS on a slot a
+  //     younger push held (tb_fe_top region after BP-140: TOSR 4 below
+  //     BOS 5, RS2). The current BOS is the entry that return popped,
+  //     committed by its call, so the stack it leaves is empty there.
   //   - an undo of an operation that began on an empty stack restores
   //     TOSR to BOS as it is at the undo (p3_pre_empty_q).
   // A push onto a non-empty stack links to TOSR as before. The entries
@@ -732,6 +742,9 @@ module ras (
   // (BP-138): the stack is empty at the BOS the commit replaces.
   logic [RAS_PTR_BITS-1:0]        scan_tosr;
   logic                           c_drag;
+  // The commit moves BOS (BP-140): a push does; a pop does unless its
+  // snapshot is an empty stack (THE BOTTOM).
+  logic                           c_bos;
 
   always_comb begin : commit_arms
     c_pop  = ras_commit_val &
@@ -750,7 +763,9 @@ module ras (
                  (c_cnt_mid != RAS_COMMIT_CNT_BITS'(RAS_COMMIT_ENTRIES)))
                   ? (c_cnt_mid + RAS_COMMIT_CNT_BITS'(1)) : c_cnt_mid;
     scan_tosr = ras_p2_keep ? nxt_tosr : rep_tosr;
-    c_drag    = (c_pop | c_push) & (scan_tosr == bos);
+    c_bos     = c_push |
+                (c_pop & (ras_commit_snapshot.tosr != ras_commit_snapshot.bos));
+    c_drag    = c_bos & (scan_tosr == bos);
   end
 
   // -----------------------------------------------------------------
@@ -818,9 +833,10 @@ module ras (
       // ---- committed boundary (BOS): restore > commit > hold -----
       if (ras_restore_val) begin
         bos <= ras_restore_snapshot.bos;
-      end else if (c_pop | c_push) begin
+      end else if (c_bos) begin
         // Committing entry's post-op TOSR is the new boundary. Once
-        // for a RETURN_CALL (IC-RAS-10).
+        // for a RETURN_CALL (IC-RAS-10). Not for a RETURN whose
+        // snapshot is an empty stack (BP-140, THE BOTTOM).
         bos <= ras_commit_snapshot.tosr;
       end
 

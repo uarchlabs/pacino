@@ -851,13 +851,13 @@ module bp_cluster (
     end
 
     // -- Program order across the slots (FE-10, IC-FTB-16; BP-121).
-    //    The uBTB masks out-of-window fields but does not reorder them
-    //    (ubtb_interfaces.md, ruled session-073), so its slot 1 can hold
-    //    the earlier branch. The successor selection here and in the
-    //    FTQ takes the lowest taken slot as the first, so the two are
-    //    put in position order: before BP-121 a block whose taken
-    //    branch sat in slot 1 below a slot 0 branch was predicted to
-    //    the later branch's target (twocond).
+    //    Until BP-140 the uBTB did not reorder its fields, so its slot 1
+    //    could hold the earlier branch; it now stores in position order
+    //    and this swap does not fire for its entries. The successor
+    //    selection here and in the FTQ takes the lowest taken slot as
+    //    the first, so the two are put in position order: before BP-121
+    //    a block whose taken branch sat in slot 1 below a slot 0 branch
+    //    was predicted to the later branch's target (twocond).
     if ((NUM_PRED_SLOTS == 2) && w_slot_p1[0].slot_valid
         && w_slot_p1[NUM_PRED_SLOTS-1].slot_valid
         && (w_slot_p1[NUM_PRED_SLOTS-1].pos < w_slot_p1[0].pos)) begin
@@ -1047,16 +1047,16 @@ module bp_cluster (
 
     // THE CUT (BP-139, option A; it replaces the BP-138 jump-only cut).
     // The FTB reports at most br0, br1 and the jump, in ascending
-    // position: storage is in region position order and the read packs
-    // the visible fields (4.6 O-3a, O-3b), and R-1 hides a conditional
-    // past the visible jump. Slot 0 carries br0, a higher slot br1
+    // position (ftb_cntrl stores them in position order). Since BP-140
+    // an entry holds at most NUM_PRED_SLOTS branches (the split at
+    // update), so the cut is a backstop that an entry the FTB writes
+    // never reaches. Slot 0 carries br0, a higher slot br1
     // (w_ftb_br_valid_p2), and the jump goes to the lowest slot that
     // holds no conditional. So the first reported branch no slot
     // carries is br1 when no slot reads it (one slot), else the jump
     // when every slot holds a conditional. Before BP-139 only the jump
-    // was cut, so at one slot a br1 conditional was in no slot, never
-    // predicted, and the not-taken path ran past it. Formed from the
-    // FTB fields alone, the same terms the placement loop above reads.
+    // was cut, so at one slot a br1 conditional was in no slot. Formed
+    // from the FTB fields alone, the terms the placement loop reads.
     jmp_free = 1'b0;
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       if (!w_ftb_br_valid_p2[s]) jmp_free = 1'b1;
@@ -1113,10 +1113,10 @@ module bp_cluster (
     // The block fall-through at p2. When the FTB did not answer,
     // ftb_pft_addr_p2 is not qualified (ftb_cntrl drives it from the
     // unmatched way), so the p1 value carried in r_pft_p1_p2 stands.
-    // When the FTB holds a jump visible from this start the block ends
-    // at that jump, and its fall-through is the jump's own end, not
-    // the region's stored pftAddr, which every start of the region
-    // shares and the last updating start wrote (BP-121, TD#164).
+    // When the FTB holds a jump the block ends at that jump, and its
+    // fall-through is the jump's own end (BP-121, TD#164). Until
+    // BP-140 the stored pftAddr was the region's, shared by every
+    // start of the region and written by the last to update.
     //
     // A BRANCH NO SLOT CARRIES ENDS THE BLOCK AT ITS OWN PC (BP-139,
     // option A, ruled by Jeff; BP-138 made the same cut for the jump
@@ -1124,12 +1124,12 @@ module bp_cluster (
     // presented to the RAS, so a not-taken term past it made the
     // predicted path step over it (fd09 at one slot: the back edge in
     // br1 was never predicted; fd07: the call to f never pushed). The
-    // block now ends at the cut branch: the next block starts at its
-    // PC, the FTB window of that start reports it first
-    // (ftb_decisions.md 4.6 R-1, O-3b), and it is placed in slot 0. The
-    // cut branch is the first one no slot carries and every slot before
-    // it holds an earlier branch, so the end is after every placed slot
-    // and after the start.
+    // block then ends at the cut branch: the next block starts at its
+    // PC and places it in slot 0. Since BP-140 the FTB ends its entry
+    // at that PC itself (the split at update) and reports no such
+    // branch, so the cut is a backstop. The cut branch is the first
+    // one no slot carries and every slot before it holds an earlier
+    // branch, so the end is after every placed slot and the start.
     cut_pc = r_pc_p2 + (VA_WIDTH'(w_cut_pos_p2) << POS_OFFSET_BITS);
     if (!w_ftb_valid_p2)
       w_pft_p2 = r_pft_p1_p2;

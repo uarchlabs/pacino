@@ -85,42 +85,28 @@ reported.
 One index and one tag are derived from pred_pc_p0. One way search
 over UBTB_WAYS. The matched entry supplies every slot.
 
-  index : pred_pc_p0[UBTB_IDX_BITS+UBTB_OFFSET_BITS-1
-                        : UBTB_OFFSET_BITS]
-  tag   : the upper VA bits above the index
+  index : pred_pc_p0[10:5] XOR (pred_pc_p0[4:1] << UBTB_SOFF_SHIFT)
+  tag   : {pred_pc_p0[30:11], pred_pc_p0[4:1]}, UBTB_TAG_BITS = 24
+ONE ENTRY PER START PC (BP-140, ruled by Jeff 2026-10-18; PROVISIONAL
+index fold), within the partial tag: aliasing above pc[30] is
+allowed, as before.
 
 Slot 0 is built from the entry's br0 field. Slot 1 from br1. A slot
 carrying the block-terminating jump reports the jump field's type
 and target.
 
-THE uBTB DIVERGES FROM THE FTB AND THE DIVERGENCE IS RULED
-(session-073, Jeff; ftb_decisions.md 4.6). Under the read window the
-uBTB MASKS ONLY: a field whose stored position lies outside this
-block's window reports invalid, and the surviving fields are NOT
-compacted onto the slots and NOT reordered in storage. Slot 0 stays
-br0. The FTB does compact (4.6 O-3b); the uBTB does not.
-
-Three consequences, accepted when ruled (session-073); BP-121
-found the second was not harmless (below):
-  - with br0 hidden and br1 visible, slot 0 is EMPTY and slot 1
-    carries the block's first branch.
-  - a visible jump takes slot 0 ahead of br1, so the p1 slot order
-    can invert. The FTB corrects the order at p2, and FE-3 already
-    has a later stage supersede the whole p1 prediction.
-    NOT HARMLESS, found by BP-121 (D12): a uBTB slot 1 below slot 0
-    sent the block to the later branch's target (twocond). bp_cluster
-    now swaps the two p1 slots into position order
-    (fe_decisions.md FE-10). The uBTB itself is unchanged.
-  - br_idx on the update port names the STORAGE field, not a port
-    slot as ftb_upd_br_idx_u0 does. A field hidden from the update's
-    start is refilled with that start's branch rather than kept.
-
-The uBTB is a p1 guess that p2 replaces, so slot-order inversion
-was expected to cost accuracy for one cycle and nothing else. BP-121
-showed it could send a block to the wrong target, and the cluster
-now restores the order at p1 (above). Compaction would have
-bought consistency with the FTB at the price of a second set of
-window rules in a module whose output is always superseded.
+Since BP-140 the entry is one start's block, stored start-relative
+and in ascending position (br0 below br1, the jump after both), so
+there is no read window and nothing to compact or reorder; slot 0 is
+br0 and the first branch. The divergences of session-073 (mask
+without compaction, br_idx naming a storage field, a hidden field
+refilled) are gone with the region entry. The bp_cluster p1 swap
+(FE-10, BP-121 D12) stays and no longer fires for a uBTB entry.
+REMAINING DIVERGENCES FROM THE FTB: targets are displacements from
+the block start, not from the branch and jump PCs; the jump field
+has no rvc bit (a jump's end comes from the update's pft_addr); the
+fall-through is not bounds checked at the read (blk_p1 below); the
+tag is partial; replacement is round-robin.
 
 ### Semantics
 
@@ -175,11 +161,9 @@ the stream to alignment.
              the consumer must ignore it for non-COND.
 
   pos      : in-block instruction position, 0..15, of this branch,
-             counted from the BLOCK START. The entry stores it
-             region-relative, UBTB_BR_POS_BITS + 1 wide, and ubtb.sv
-             converts at the read, reporting a slot whose stored
-             position lies outside this block's window as invalid
-             (ftb_decisions.md 4.6, session-071, TD#125).
+             counted from the BLOCK START, stored in the same form
+             (UBTB_BR_POS_BITS; region-relative and windowed from
+             session-071 to BP-140).
              The cluster uses it to locate the branch in the fetch
              bundle. NOT to order br0 against br1: br0 is always
              the earlier branch by fill order
@@ -209,14 +193,10 @@ the stream to alignment.
   hit      : entry valid and tag matched.
 
   pft_addr : the block end, reconstructed to full width from the
-             stored partial pftAddr. BUILT by BP-110: six bits
-             measured from the 32-byte ALIGNED REGION BASE, NO
-             CARRY BIT. Before that it was a four-bit slice in a
-             five-bit field plus a carry, which could not represent
-             an end more than 62 bytes above the region base while
-             an unaligned block reaches 64. ftb_decisions.md 5.5,
-             8.1. Authoritative for the cluster when no slot is
-             taken.
+             stored partial pftAddr: five bits measured from the
+             BLOCK START (BP-140; six from the aligned region base
+             before it), no carry bit. ftb_decisions.md 5.5, 8.1.
+             Authoritative for the cluster when no slot is taken.
 
              IT IS NOT BOUNDS CHECKED. Ruled session-073 (Jeff).
              This entry previously required the FTB-G1 rule of
@@ -271,76 +251,53 @@ same entry; they write different fields of it.
   pc         : block start PC of the entry being updated. Derives
                the set index and tag for the write.
   is_br      : this resolve is a conditional branch.
-  br_idx     : which conditional STORAGE field, 0 or 1. Unlike
-               ftb_upd_br_idx_u0, which names a port slot
-               (ftb_interfaces.md 2.5), this names the field
-               directly, because the uBTB does not compact. A field
-               hidden from this update's start is REFILLED with
-               this start's branch and a fresh conf. Ruled
-               session-073.
+  br_idx     : NOT READ since BP-140. A conditional's field is named
+               by its position (Allocation and field writes); the
+               member stays in ubtb_upd_t (ports unchanged).
+               RESERVED (Jeff, session-081).
   br_taken   : resolved direction. Drives the bimodal conf step, and
                at fill the weak conf init direction.
   target     : resolved taken target, full width. ubtb.sv converts
                to the stored displacement form.
   pos        : in-block position of the resolving branch, 0..15,
-               START-relative. ubtb.sv adds the update PC's region
-               offset before storing it (ftb_decisions.md 4.6 R-2).
-               Written at fill; static while the same branch holds
-               the field (Allocation and field writes below).
+               START-relative, stored as given (BP-140). Names the
+               field: the same position is the same branch.
   is_jmp     : this resolve is a jump.
   jmp_target : resolved jump target, full width. Written on every
                jump resolve.
   is_call    : jump type.
   is_ret     : jump type.
   is_jalr    : jump type.
-  pft_addr   : resolved block end, full width. ubtb.sv reduces it to
-               six bits from the aligned region base, no carry
-               (blk_p1 field semantics above, ftb_decisions.md 5.5).
-               Built by BP-110, TD#124 closed; this read "partial
-               pftAddr plus carry ... not built".
+  pft_addr   : resolved block end, full width. Written only for a
+               jump (the FTQ's resolved end of the taken jump,
+               TD#164), reduced to five bits from the block start;
+               for a conditional it is the block's predicted end and
+               is not written (BP-140, PROVISIONAL, as the FTB).
 
 ### Allocation and field writes
 
-  Tag hit, field already filled,
-  same position                 : train conf toward the resolved
-                                  outcome; rewrite the target if it
-                                  differs; keep pos.
-  Tag hit, field already filled,
-  different position            : a different branch of the region
-                                  (ftb_decisions.md 5.5, ruled
-                                  session-075). Jump field: rewrite
-                                  the whole field. Conditional
-                                  field: fill it as a new branch, as
-                                  the free-field row. Built by
-                                  BP-120 (TD#156). The uBTB compares
-                                  only the field br_idx names; it
-                                  does not search the other field.
-  Tag hit, field free           : fill it. conf starts weak in the
-                                  resolved direction
-                                  (UBTB_CONF_INIT_TKN /
-                                  UBTB_CONF_INIT_NTK). pos written.
-  Tag miss                      : allocate. The evicted way is the
-                                  round-robin write pointer.
-
-ONE BRANCH CAN BE STORED IN BOTH CONDITIONAL FIELDS. A consequence
-of comparing only the field br_idx names: a branch updated once
-through slot 0 and once through slot 1 fills both. MEASURED by BP-131
-(session-078): 82 times at NUM_PRED_SLOTS = 2 (hist 54, twocond 15,
-multistart 13). Not a fault against this rule; a cost of it. Deferred
-to TD#179 (Jeff).
-
-The jump target is rewritten on every resolve of that jump, whether
-or not ITTAGE or RAS supplies the runtime target.
-
-pftAddr is recomputed on any update that moves the block boundary.
-There is no carry (BP-110, TD#124 closed).
-
-A block containing a third conditional branch ends at the second
-conditional. The third branch becomes the first branch of the next
-block and gets its own entry on a separate lookup. Branches are
-never dropped; the block is split. The uBTB stores whatever boundary
-the update path supplies in pft_addr. NOT BUILT: no update path
-supplies a split boundary (ftb_decisions.md 3, TD#179).
+The uBTB applies the FTB's update rule (ftb_decisions.md 3 and 5.5
+as restated by BP-140; ubtb.sv apply_upd):
+  same position, same kind      : a conditional trains conf toward
+                                  the outcome and rewrites its target;
+                                  a jump rewrites the jump field.
+  same position, other kind     : replaces that field.
+  at or after the end, or after
+  the stored jump               : no change (a stale resolution).
+  new branch                    : joins the held ones in position
+                                  order, weak conf; a new jump removes
+                                  the conditionals after it.
+  more than N_SLOTS branches    : THE SPLIT. The lowest N_SLOTS kept;
+                                  the end is the PC of the first not
+                                  kept; a jump not kept is cleared.
+  Tag miss                      : allocate, end start + 32. The
+                                  evicted way is the round-robin
+                                  write pointer.
+A branch cannot fill both conditional fields (BP-131 measured 82 at
+two slots before BP-140; the position now names the field). Two
+channels landing on one entry in one cycle are applied in order and
+give the same entry in either order (tb_ubtb TC21). The jump target
+is rewritten on every resolve of that jump.
 
 ### Read-during-write contract
 
@@ -387,6 +344,13 @@ communicate miss reason or miss type externally.
 ## Document History
 
 ```
+  2026-10-19  session-081, after BP-140. Per-start entries and the
+              split at update, the rule the FTB uses; the region
+              window, the masking and the field named by br_idx are
+              gone. One branch can no longer fill both conditional
+              fields. br_idx is no longer read and is kept reserved
+              (Jeff).
+
   2026-10-12  session-079, after BP-134. Timing: the ubtb.sv header
               comment corrected.
 

@@ -426,7 +426,9 @@ On ras_commit_val with DIRECT_CALL or INDIRECT_CALL:
 
 On ras_commit_val with RETURN:
   - CSP decrements.
-  - BOS updated accordingly.
+  - BOS updated from ras_commit_snapshot, unless the snapshot is an
+    empty stack (tosr == bos), when BOS stays (ras_decisions.md 3.2,
+    BP-140).
 
 On ras_commit_val with RETURN_CALL:
   - The RETURN arm, then the call arm, the second applied to the
@@ -726,3 +728,6 @@ On rstn deassert (active low, synchronous):
               across commits. IC-RAS-10: TOSR moves with BOS when
               the stack is empty. IC-RAS-11: the undo of an
               operation begun on an empty stack.
+
+  2026-10-19  session-081, after BP-140. IC-RAS-10: a RETURN commit
+              whose snapshot is an empty stack leaves BOS.

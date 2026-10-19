@@ -30,7 +30,9 @@
 // pop takes the commit-stack fallback), TC-42 (the same across a
 // restore of a snapshot taken on either side of the BOS advance) and
 // TC-43 (a p3 undo of an operation that began on an empty stack after
-// a commit moved BOS).
+// a commit moved BOS). BP-140 added TC-44 (a RETURN commit whose
+// snapshot is an empty stack leaves BOS on the entry the return popped,
+// not on the reused slot its snapshot names).
 // Each case is self-contained: it resets, seeds any required state
 // explicitly, and does not rely on state left by a prior case.
 //
@@ -1570,6 +1572,48 @@ module tb;
             (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_A));
       tick();
     end
+
+    // =============================================================
+    // TC-44 (BP-140, Problem 4): a RETURN commit whose snapshot is an
+    // empty stack leaves BOS where it is. A call pushes A (idx 1) and
+    // its return pops it, emptying the stack: the return's snapshot is
+    // tosr 0 bos 0, the BOS of that cycle. The call commits (BOS 1,
+    // TOSR dragged to 1). Speculation then allocates every slot once
+    // (push/pop pairs over idx 2..15) and B is pushed into idx 0, the
+    // old BOS slot, which the sentinel skip no longer protects. Then
+    // the return commits. Before BP-140 it moved BOS back to 0, B's
+    // slot: TOSR == BOS read empty and the pop took the commit stack
+    // (empty after the return committed) instead of B (tb_fe_top
+    // region: RS2, TOSR 4 below BOS 5). Now BOS stays 1 and the pop
+    // returns B.
+    // =============================================================
+    do_reset();
+    push_one(ADDR_A);                       // idx1 (sentinel skip)
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    tick();
+    check("TC-44 the return emptied the stack (tosr 0, bos 0)",
+          (dut.tosr == 4'd0) && (dut.bos == 4'd0));
+    commit_op(DIRECT_CALL, ADDR_A, 4'd1);   // the call commits
+    check("TC-44 the call commit moved BOS to 1, TOSR with it",
+          (dut.bos == 4'd1) && (dut.tosr == 4'd1));
+    for (int i = 2; i < RAS_SPEC_ENTRIES; i++) begin
+      push_one(fill_addr[i]);
+      drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+      tick();
+    end
+    check("TC-44 TOSW wrapped to the old BOS slot 0",
+          (dut.tosw == 4'd0) && (dut.tosr == 4'd1));
+    push_one(ADDR_B);
+    check("TC-44 B is pushed into idx 0", (dut.tosr == 4'd0)
+          && (dut.spec_ret_addr[0] == ADDR_B));
+    commit_op(RETURN, '0, 4'd0);            // the return commits
+    check("TC-44 the empty-snapshot return commit keeps BOS 1",
+          (dut.bos == 4'd1) && (dut.tosr == 4'd0));
+    drive(1'b1, RETURN, '0, 1'b0, NO_BRANCH, '0);
+    #1;
+    check("TC-44 the pop returns B from the speculative stack",
+          (pop_valid_p2[0] == 1'b1) && (pop_addr_p2[0] == ADDR_B));
+    tick();
 
     // -------------------------------------------------------------
     $display("=================================================");

@@ -385,13 +385,22 @@ to commit stack top as prediction result. Commit stack entry
 is not consumed (read-only fallback).
 
 TOSR == BOS HOLDS EXACTLY WHEN THE STACK IS EMPTY, across commits
-(BP-138, D2). A commit moves BOS; three rules keep the test exact:
+(BP-138, D2). A commit moves BOS; four rules keep the test exact:
   - the pop that removes a bottom entry sets TOSR to BOS as it is
     then, not to nos;
   - a commit that moves BOS while TOSR == BOS moves TOSR with it
     (3.3);
   - a p3 undo of an operation that began on an empty stack restores
     TOSR to BOS as it is at the undo (section 1).
+  - a RETURN commit whose snapshot is an empty stack (snapshot
+    TOSR == snapshot BOS) does not move BOS (BP-140, PROVISIONAL).
+    That snapshot TOSR is the BOS of the cycle the return popped a
+    bottom entry; the commits of the older blocks have since moved
+    BOS off it, and the sentinel skip protects only the current BOS,
+    so the slot may hold a younger push. Moving BOS to it made
+    TOSR != BOS read a slot the stack did not hold, or TOSR == BOS
+    read empty over a held one (tb_ras TC-44; tb_fe_top region after
+    BP-140, RS2).
 A bottom entry's nos still names the BOS of its push. Cost 16 bits
 of bot, plus one register bit per slot for the undo. Rejected:
 empty = TOSR older than BOS in TOSW allocation order, which a
@@ -448,7 +457,9 @@ same cycle wins over commit for BOS (restore > commit > hold).
 
 On commit of a return: CSP decrements. The commit stack entry
 is consumed. BOS likewise advances to the committing entry's
-post-op TOSR (ras_commit_snapshot.tosr).
+post-op TOSR (ras_commit_snapshot.tosr), except when that snapshot
+is an empty stack (snapshot TOSR == snapshot BOS): BOS then stays
+(3.2, BP-140).
 
 On commit of a RETURN_CALL: the return rule above, then the push
 rule, applied to the state the return leaves (RAS-DS1: pop first,
@@ -615,8 +626,9 @@ EVENT, see 4.4.1 -- that work does not touch this section.
 
 On FTQ entry commit: the speculative entry is confirmed. BOS
 advances to the committing entry's post-op TOSR
-(ras_commit_snapshot.tosr); when TOSR == BOS, TOSR moves with it
-(BP-138). No speculative RAM write occurs.
+(ras_commit_snapshot.tosr), except for a RETURN whose snapshot is an
+empty stack, which leaves BOS (3.2, BP-140); when TOSR == BOS and BOS
+moves, TOSR moves with it (BP-138). No speculative RAM write occurs.
 A mispredict restore in the same cycle wins over commit for BOS
 (restore > commit > hold). Commit stack is updated as described
 in section 3.3.
@@ -1066,4 +1078,8 @@ Commit stack pointer width:
               TOSR == BOS kept exact across commits by three rules.
               1: the undo of an operation begun on an empty stack.
               3.3, 4.5: TOSR moves with BOS when the stack is empty.
+
+  2026-10-19  session-081, after BP-140. 3.2, 3.3, 4.5: a RETURN
+              commit whose snapshot is an empty stack leaves BOS
+              (provisional, accepted by Jeff). 3.2: four rules.
 ```

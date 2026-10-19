@@ -159,9 +159,11 @@ package bp_defines_pkg;
   // :FTB parameters:
   // ================================================================
   // Single FTB array. One PC indexes one set per cycle; the indexed
-  // entry describes the whole 32-byte prediction block (2 conditional
-  // fields + 1 jump field). Stage: s2 output. Authoritative target for
-  // direct branches. See ftb_decisions.md / ftb_interfaces.md.
+  // entry describes the prediction block from ONE start PC (2
+  // conditional fields + 1 jump field; BP-140, one entry per start,
+  // replacing the 32-byte-region entry of ftb_decisions.md 4.6). Stage:
+  // s2 output. Authoritative target for direct branches. See
+  // ftb_decisions.md / ftb_interfaces.md.
   //
   // FTB_BLOCK_BYTES (32) is the FTB prediction block. It is distinct
   // from the global FETCH_BLOCK_BYTES (64) fetch width and must not be
@@ -174,28 +176,41 @@ package bp_defines_pkg;
   localparam int FTB_IDX_BITS    = $clog2(FTB_SETS);       // = 9
   localparam int FTB_WAY_BITS    = $clog2(FTB_WAYS);       // = 2
   localparam int FTB_OFFSET_BITS = $clog2(FTB_BLOCK_BYTES);// = 5
-  // FTB_TAG_BITS: PINNED at 26, NOT derived from VA_WIDTH. TD#122,
-  // ruled session-070 (ftb_decisions.md 4.1, 8). The tag spans
-  // VA[39:14]; VA bit 40 aliases. Predictor storage may alias, an
-  // architectural address may not (FE-19): an alias is caught by
-  // predecode and a wrong target by the mispredict redirect.
-  localparam int FTB_TAG_BITS    = 26;
   localparam int PLRU_BITS       = FTB_WAYS - 1; // tree-PLRU,     = 3
   // In-block instruction position. 2-BYTE granularity: RVA23 mandates
   // the C extension, so a branch may begin at any 2-byte boundary and
   // a 4-byte position could not tell two RVC branches in one aligned
-  // word apart. 16 positions per 32-byte block.
+  // word apart. 16 positions per 32-byte block. Since BP-140 it is also
+  // the width of a start's halfword offset in its 32-byte region,
+  // PC[FTB_OFFSET_BITS-1:1], which the entry identity carries.
   localparam int FTB_BR_POS_BITS = $clog2(FTB_BLOCK_BYTES / 2); // = 4
-  // STORED position, REGION-relative (ftb_decisions.md 4.6 R-1, 8). A
-  // block starting at halfword offset k of its 32-byte region covers
-  // region positions k to k+15, so the largest is 30. Every position
-  // PORT stays FTB_BR_POS_BITS, start-relative (4.6 R-2); ftb_cntrl
-  // converts. TD#125.
-  localparam int FTB_BR_RPOS_BITS = FTB_BR_POS_BITS + 1;       // = 5
-  // Partial fall-through address (ftb_decisions.md 8.1). The block end
-  // as a 2-byte-granular offset from the ALIGNED REGION BASE, reaching
-  // 2 * FTB_BLOCK_BYTES. There is no carry bit (5.5). TD#124.
-  localparam int PFTADDR_BITS    = $clog2(FTB_BLOCK_BYTES) + 1; // = 6
+  // FTB_RTAG_BITS: PINNED at 26, NOT derived from VA_WIDTH. TD#122,
+  // ruled session-070 (ftb_decisions.md 4.1, 8). This region tag spans
+  // VA[39:14]; VA bit 40 aliases. Predictor storage may alias, an
+  // architectural address may not (FE-19): an alias is caught by
+  // predecode and a wrong target by the mispredict redirect. It was
+  // FTB_TAG_BITS until BP-140.
+  localparam int FTB_RTAG_BITS   = 26;
+  // FTB_TAG_BITS: the stored tag, the region tag VA[39:14] plus the
+  // start's halfword offset VA[4:1] (BP-140, PROVISIONAL, ruled by Jeff
+  // 2026-10-18: one entry per start PC at 2-byte granularity). With the
+  // index below, two starts that differ anywhere in VA[39:1] have
+  // different (index, tag) pairs; bit 40 stays outside (4.1, TD#122).
+  localparam int FTB_TAG_BITS    = FTB_RTAG_BITS + FTB_BR_POS_BITS; // 30
+  // FTB_SOFF_SHIFT: the index is VA[13:5] XOR (VA[4:1] << FTB_SOFF_SHIFT)
+  // (BP-140, PROVISIONAL). The starts of one 32-byte region then index
+  // different sets instead of competing for one set's ways, and two
+  // starts at different offsets share a set only when their regions
+  // differ in VA[13:10], 1 KB or more apart, never in adjacent regions
+  // (which a fold into the low index bits would give).
+  // Requires FTB_IDX_BITS >= FTB_BR_POS_BITS.
+  localparam int FTB_SOFF_SHIFT  = FTB_IDX_BITS - FTB_BR_POS_BITS; // = 5
+  // Partial fall-through address (ftb_decisions.md 8.1). Since BP-140
+  // the block end as a 2-byte-granular offset from the BLOCK START (it
+  // was from the aligned region base, 4.6). An end lies in (start,
+  // start + FTB_BLOCK_BYTES + 2], at most 17 positions, so one bit more
+  // than a position reaches it. There is no carry bit (5.5). TD#124.
+  localparam int PFTADDR_BITS    = FTB_BR_POS_BITS + 1;       // = 5
 
   // POS_OFFSET_BITS: log2 of the byte size of ONE in-block position
   // slot. Derived, so it can never disagree with the position width:
@@ -245,14 +260,16 @@ package bp_defines_pkg;
 
   // Per-way entry layout. The arithmetic and its resolved values live
   // in ftb_decisions.md 8, the sole home; the terms below are the
-  // section 8 terms. Stored positions are FTB_BR_RPOS_BITS (4.6) and
-  // pftAddr has no carry bit (5.5).
+  // section 8 terms. Since BP-140 stored positions are start-relative,
+  // FTB_BR_POS_BITS (they were FTB_BR_RPOS_BITS, region-relative, 4.6),
+  // the tag carries the start offset, and pftAddr is from the start
+  // with no carry bit (5.5).
   localparam int FTB_ENTRY_WIDTH =
         1                                                // valid
       + FTB_TAG_BITS                                     // tag
-      + 2 * (1 + FTB_BR_RPOS_BITS + FTB_BR_TGT_BITS
+      + 2 * (1 + FTB_BR_POS_BITS + FTB_BR_TGT_BITS
                + TAR_STAT_BITS + FTB_CONF_WIDTH)         // br0 + br1
-      + (1 + FTB_BR_RPOS_BITS + FTB_JMP_TGT_BITS
+      + (1 + FTB_BR_POS_BITS + FTB_JMP_TGT_BITS
                + TAR_STAT_BITS + 4)                      // jump
       + PFTADDR_BITS;                                    // pftAddr
   // The jump term's 4 type bits are isCall, isRet, isJalr and, since
@@ -303,26 +320,27 @@ package bp_defines_pkg;
 
   localparam int UBTB_SETS     = UBTB_ENTRIES / UBTB_WAYS; // = 64
   localparam int UBTB_IDX_BITS = $clog2(UBTB_SETS);        // = 6
-  // The uBTB indexes at BLOCK granularity, the same way the FTB does,
-  // not at retired-instruction granularity:
-  //   index = pc[UBTB_IDX_BITS+UBTB_OFFSET_BITS-1 : UBTB_OFFSET_BITS]
-  //   tag   = the UBTB_TAG_BITS bits immediately above the index
-  // Resolved at the values below (block 32B; independent of VA_WIDTH):
-  //   UBTB_OFFSET_BITS 5, UBTB_IDX_BITS 6, UBTB_TAG_BITS 20
-  //   index = pc[10:5]     tag = pc[30:11]
-  localparam int UBTB_TAG_BITS = 20;                       // pc[30:11]
-
   localparam int UBTB_OFFSET_BITS = $clog2(UBTB_BLOCK_BYTES); // = 5
   // In-block instruction position, 2-byte granularity. Mirrors
-  // FTB_BR_POS_BITS; the uBTB entry mirrors the FTB entry.
+  // FTB_BR_POS_BITS; the uBTB entry mirrors the FTB entry. Since BP-140
+  // also the width of a start's halfword offset in its region.
   localparam int UBTB_BR_POS_BITS = $clog2(UBTB_BLOCK_BYTES / 2); // 4
-  // STORED position, region-relative, same derivation as
-  // FTB_BR_RPOS_BITS (ftb_decisions.md 4.6, ubtb_interfaces.md pos).
-  // Ports stay UBTB_BR_POS_BITS, start-relative; ubtb.sv converts.
-  localparam int UBTB_BR_RPOS_BITS = UBTB_BR_POS_BITS + 1;      // 5
+  // The uBTB indexes at block granularity with the start's halfword
+  // offset folded in, as the FTB does (BP-140, PROVISIONAL), so one
+  // entry per start PC within its partial tag:
+  //   index = pc[10:5] ^ (pc[4:1] << UBTB_SOFF_SHIFT)
+  //   tag   = {pc[30:11], pc[4:1]}
+  // UBTB_RTAG_BITS is the region part, the bits immediately above the
+  // index (it was UBTB_TAG_BITS until BP-140). Partial-tag aliasing
+  // above pc[30] is allowed, as before.
+  localparam int UBTB_RTAG_BITS  = 20;                     // pc[30:11]
+  localparam int UBTB_TAG_BITS   = UBTB_RTAG_BITS + UBTB_BR_POS_BITS; // 24
+  localparam int UBTB_SOFF_SHIFT = UBTB_IDX_BITS - UBTB_BR_POS_BITS;  // 2
+  // Stored positions are start-relative, UBTB_BR_POS_BITS, since BP-140
+  // (they were region-relative, ftb_decisions.md 4.6).
   // Partial fall-through address, same derivation as PFTADDR_BITS
-  // (ftb_decisions.md 8.1). No carry bit. TD#124.
-  localparam int UBTB_PFTADDR_BITS = $clog2(UBTB_BLOCK_BYTES) + 1; // 6
+  // (ftb_decisions.md 8.1): from the block start, no carry bit. TD#124.
+  localparam int UBTB_PFTADDR_BITS = UBTB_BR_POS_BITS + 1;      // 5
 
   // uBTB position slot size, same derivation as POS_OFFSET_BITS.
   localparam int UBTB_POS_OFFSET_BITS =
@@ -339,14 +357,14 @@ package bp_defines_pkg;
   localparam logic [UBTB_CONF_WIDTH-1:0] UBTB_CONF_INIT_NTK = 3'b011;
 
   // Per-way entry layout, mirroring the FTB entry (ftb_decisions.md 8)
-  // with the uBTB tag. Stored positions are UBTB_BR_RPOS_BITS and
-  // pftAddr has no carry bit.
+  // with the uBTB tag. Stored positions are UBTB_BR_POS_BITS,
+  // start-relative (BP-140), and pftAddr has no carry bit.
   localparam int UBTB_ENTRY_WIDTH =
         1                                                // valid
       + UBTB_TAG_BITS                                    // tag
-      + 2 * (1 + UBTB_BR_RPOS_BITS + UBTB_BR_TGT_BITS
+      + 2 * (1 + UBTB_BR_POS_BITS + UBTB_BR_TGT_BITS
                + TAR_STAT_BITS + UBTB_CONF_WIDTH)        // br0 + br1
-      + (1 + UBTB_BR_RPOS_BITS + UBTB_JMP_TGT_BITS
+      + (1 + UBTB_BR_POS_BITS + UBTB_JMP_TGT_BITS
                + TAR_STAT_BITS + 3)                      // jump
       + UBTB_PFTADDR_BITS;                               // pftAddr
   localparam int UBTB_SET_WIDTH = UBTB_WAYS * UBTB_ENTRY_WIDTH;

@@ -23,18 +23,27 @@
 // 8, 8.1; ftb_confidence_override_rules.md):
 //   - prediction read + way-match (ftb_plru valid AND ftb_array tag)
 //   - branch-type classification (call/ret/jalr)
-//   - region-relative stored positions: the write adds the update
-//     PC's region offset k, the read keeps fields in [k, k+16),
-//     subtracts k and packs the survivors onto the ports in ascending
-//     position; storage is kept in ascending region position order
-//     (ftb_decisions.md 4.6 R-1, R-2, O-3)
+//   - ONE ENTRY PER START PC (BP-140, ruled by Jeff 2026-10-18; it
+//     replaces the region-shared entry of 4.6). The tag carries the
+//     start's halfword offset VA[4:1] above the region tag VA[39:14],
+//     and the index folds the offset into its top bits (ftb_idx,
+//     ftb_tag; PROVISIONAL). Positions, targets and pftAddr are stored
+//     start-relative, so the region window, the region offset k and
+//     the read compaction of 4.6 R-1, R-2, O-3b are gone (PROVISIONAL)
+//   - storage in ascending position: br0 below br1, the jump last
+//     (O-3a, kept)
+//   - THE SPLIT AT UPDATE (BP-140, ruled by Jeff): an entry never holds
+//     more than NUM_PRED_SLOTS branches. When an update would make it
+//     hold more, the lowest positions are kept and the block end
+//     becomes the PC of the lowest-position branch not kept; a jump not
+//     kept clears the jump field. See the update decode below
 //   - target encode/reconstruct: every target is a displacement from
 //     its own instruction: a conditional target from the BRANCH PC
 //     (4.6 O-1), a jump target from the JUMP PC (4.2, TD#137); both
-//     PCs are the region base plus the field's stored position
-//   - fallthrough reduce/reconstruct: pftAddr from the aligned region
-//     base, no carry (5.5), bounds checked by FTB-G1 and FTB-G3 with
-//     the FTB-G2 fallback (4.5, 4.6 O-2)
+//     PCs are the start plus the field's stored position
+//   - fallthrough reduce/reconstruct: pftAddr from the block start, no
+//     carry (5.5), bounds checked by FTB-G1 and FTB-G3 with the FTB-G2
+//     fallback (4.5, 4.6 O-2)
 //   - carried-writeWay allocate/evict with tree-PLRU
 //   - update field writes (target / conf / pft)
 //   - confidence training and saturated-endpoint fast-path
@@ -47,6 +56,8 @@
 //     including the entry-valid held in ftb_plru
 //   - RAM entry (FTB_RAM_ENTRY_WIDTH):        113 bits per way, the
 //     entry minus the entry-valid; what ftb_array stores
+// BP-140 left both widths unchanged: the tag grew by FTB_BR_POS_BITS
+// (4) and the three positions and pftAddr each lost one bit.
 // The elaboration check below holds $bits(ftb_entry_t) to the second.
 //   tag
 //   br0{valid,pos,tgt,stat,conf}
@@ -186,13 +197,14 @@ module ftb_cntrl (
   // the only external contract with ftb_array is the way slice
   // [w*FTB_RAM_ENTRY_WIDTH +: FTB_RAM_ENTRY_WIDTH].
   //
-  // pos is the STORED region position, 0..30 (4.6 R-1). br0 always
-  // holds the lower region position of the two conditional fields
-  // (4.6 O-3a).
+  // pos is the start-relative position, 0..15 (BP-140; it was the
+  // region position, 4.6 R-1). br0 always holds the lower position of
+  // the two conditional fields and the jump is after both (4.6 O-3a):
+  // a jump ends the block, so no branch of the block follows it.
   // ----------------------------------------------------------------
   typedef struct packed {
     logic                          valid;        // field valid
-    logic [FTB_BR_RPOS_BITS-1:0]   pos;          // region position
+    logic [FTB_BR_POS_BITS-1:0]    pos;          // start position
     logic [FTB_BR_TGT_BITS-1:0]    tgt;          // target displacement
     logic [TAR_STAT_BITS-1:0]      stat;         // fit/ovf/udf
     logic [FTB_CONF_WIDTH-1:0]     conf;         // bimodal direction
@@ -200,7 +212,7 @@ module ftb_cntrl (
 
   typedef struct packed {
     logic                          valid;        // field valid
-    logic [FTB_BR_RPOS_BITS-1:0]   pos;          // region position
+    logic [FTB_BR_POS_BITS-1:0]    pos;          // start position
     logic [FTB_JMP_TGT_BITS-1:0]   tgt;          // jump displacement
     logic [TAR_STAT_BITS-1:0]      stat;         // fit/ovf/udf
     logic                          is_call;
@@ -216,21 +228,27 @@ module ftb_cntrl (
     ftb_cond_t                     br0;
     ftb_cond_t                     br1;
     ftb_jmp_t                      jmp;
-    logic [PFTADDR_BITS-1:0]       pft;          // end from region base
+    logic [PFTADDR_BITS-1:0]       pft;          // end from the start
   } ftb_entry_t;
 
   // ----------------------------------------------------------------
   // Local constants
   // ----------------------------------------------------------------
-  // Width of a region position minus a region offset, one bit wider
-  // than a stored position so the difference carries a sign.
-  localparam int RDIFF_BITS = FTB_BR_RPOS_BITS + 1;
-
   // FTB-G3 bound (ftb_decisions.md 4.6 O-2): the furthest legal block
   // end is one prediction block plus one straddling halfword position
   // above the start.
   localparam logic [VA_WIDTH-1:0] PFT_MAX_SPAN =
     VA_WIDTH'(FTB_BLOCK_BYTES) + (VA_WIDTH'(1) << POS_OFFSET_BITS);
+
+  // The end of a block that holds no jump and was never split: one
+  // prediction block above the start, in positions (the FTB-G2 value,
+  // and the cluster's p1 end on a uBTB miss). BP-140.
+  localparam logic [PFTADDR_BITS-1:0] PFT_NAT =
+    PFTADDR_BITS'(FTB_BLOCK_BYTES >> POS_OFFSET_BITS);       // = 16
+
+  // Conditional candidates the split orders: the two stored fields and
+  // the resolving branch.
+  localparam int N_CAND = 3;
 
   // ----------------------------------------------------------------
   // Functions (combinational helpers). Declared before first use.
@@ -295,33 +313,53 @@ module ftb_cntrl (
     else                                                 jmp_stat = 2'b01;
   endfunction
 
-  // Region window test (4.6 R-1). A stored region position is visible
-  // to a start at region offset k when it lies in [k, k+16).
-  function automatic logic in_window(
-      input logic [FTB_BR_RPOS_BITS-1:0] rpos,
-      input logic [FTB_BR_POS_BITS-1:0]  k);
-    logic [RDIFF_BITS-1:0] d;
-    d         = RDIFF_BITS'(rpos) - RDIFF_BITS'(k);
-    in_window = (d[RDIFF_BITS-1:FTB_BR_POS_BITS] == '0);
+  // The start's halfword offset in its 32-byte region, VA[4:1].
+  function automatic logic [FTB_BR_POS_BITS-1:0] start_off(
+      input logic [VA_WIDTH-1:0] pc);
+    start_off = pc[FTB_OFFSET_BITS-1:POS_OFFSET_BITS];
   endfunction
 
-  // Stored region position -> start-relative port position (4.6 R-2).
-  // Meaningful only when in_window() holds.
-  function automatic logic [FTB_BR_POS_BITS-1:0] to_start_pos(
-      input logic [FTB_BR_RPOS_BITS-1:0] rpos,
-      input logic [FTB_BR_POS_BITS-1:0]  k);
-    logic [FTB_BR_RPOS_BITS-1:0] d;
-    d            = rpos - FTB_BR_RPOS_BITS'(k);
-    to_start_pos = d[FTB_BR_POS_BITS-1:0];
+  // Entry identity (BP-140, PROVISIONAL; bp_defines_pkg FTB_TAG_BITS,
+  // FTB_SOFF_SHIFT). Index: the region index VA[13:5] with the start
+  // offset XORed into its top bits, so the starts of one region index
+  // different sets. Tag: the region tag VA[39:14] and the start offset,
+  // so (index, tag) is unique for every VA[39:1].
+  function automatic logic [FTB_IDX_BITS-1:0] ftb_idx(
+      input logic [VA_WIDTH-1:0] pc);
+    ftb_idx = pc[FTB_OFFSET_BITS +: FTB_IDX_BITS]
+            ^ (FTB_IDX_BITS'(start_off(pc)) << FTB_SOFF_SHIFT);
   endfunction
 
-  // Instruction PC from the aligned region base and a stored region
-  // position: the branch PC of a conditional field (4.6 O-1) and the
-  // jump PC of the jump field (4.2, TD#137).
+  function automatic logic [FTB_TAG_BITS-1:0] ftb_tag(
+      input logic [VA_WIDTH-1:0] pc);
+    ftb_tag = {pc[FTB_OFFSET_BITS+FTB_IDX_BITS +: FTB_RTAG_BITS],
+               start_off(pc)};
+  endfunction
+
+  // Instruction PC from the block start and a stored position: the
+  // branch PC of a conditional field (4.6 O-1) and the jump PC of the
+  // jump field (4.2, TD#137).
   function automatic logic [VA_WIDTH-1:0] branch_pc(
-      input logic [VA_WIDTH-1:0]         base,
-      input logic [FTB_BR_RPOS_BITS-1:0] rpos);
-    branch_pc = base + (VA_WIDTH'(rpos) << POS_OFFSET_BITS);
+      input logic [VA_WIDTH-1:0]        start,
+      input logic [FTB_BR_POS_BITS-1:0] pos);
+    branch_pc = start + (VA_WIDTH'(pos) << POS_OFFSET_BITS);
+  endfunction
+
+  // The end the read reports, in positions from the start: pftAddr,
+  // or PFT_NAT when pftAddr fails FTB-G1 (at the start) or FTB-G3
+  // (beyond start + FTB_BLOCK_BYTES + one halfword), the FTB-G2
+  // fallback. The update's past-the-end test uses the same end.
+  function automatic logic [PFTADDR_BITS-1:0] eff_end(
+      input logic [PFTADDR_BITS-1:0] pft);
+    eff_end = ((pft == '0) || (pft > PFT_NAT + PFTADDR_BITS'(1)))
+            ? PFT_NAT : pft;
+  endfunction
+
+  // Sort key of a conditional candidate: an empty field sorts after
+  // every filled one, filled fields by ascending position.
+  function automatic logic [FTB_BR_POS_BITS:0] cand_key(
+      input ftb_cond_t c);
+    cand_key = {~c.valid, c.pos};
   endfunction
 
   // Saturating bimodal step (3-bit, 0..7). up = resolved taken ->
@@ -378,31 +416,38 @@ module ftb_cntrl (
 
   // ----------------------------------------------------------------
   // Update-side combinational decode (u0). Produces the write-back
-  // entry, the update set index/tag/base, and the readback of the
-  // carried way (for read-modify-write of conf / target / pft on a
-  // hit). No tag re-lookup (IC-FTB-10).
+  // entry, the update set index/tag, and the readback of the carried
+  // way (for read-modify-write of conf / target / pft on a hit). No tag
+  // re-lookup (IC-FTB-10).
   // ----------------------------------------------------------------
-  logic [FTB_IDX_BITS-1:0]  upd_set_idx;
-  logic [FTB_TAG_BITS-1:0]  upd_tag;
-  logic [VA_WIDTH-1:0]      upd_base;
-  logic [VA_WIDTH-1:0]      upd_off;
-  logic [FTB_BR_POS_BITS-1:0]  upd_k;
-  logic [FTB_BR_RPOS_BITS-1:0] upd_rpos;
-  ftb_entry_t               upd_old;
-  ftb_entry_t               upd_new;
-  ftb_cond_t                fld_old;
-  ftb_cond_t                fld_new;
-  ftb_cond_t                fld_tmp;
-  logic                     upd_v0;
-  logic                     upd_v1;
-  logic                     upd_m0;
-  logic                     upd_m1;
-  logic                     slot_vis;
-  logic                     slot_fld;
-  logic                     inplace;
-  logic                     fld_idx;
-  logic                     fresh;
-  logic                     upd_active;
+  logic [FTB_IDX_BITS-1:0]    upd_set_idx;
+  logic [FTB_TAG_BITS-1:0]    upd_tag;
+  logic [VA_WIDTH-1:0]        upd_off;
+  logic [FTB_BR_POS_BITS-1:0] upd_pos;
+  ftb_entry_t                 upd_old;
+  ftb_entry_t                 upd_cur;
+  ftb_entry_t                 upd_new;
+  ftb_cond_t                  fld_old;
+  ftb_cond_t                  fld_new;
+  ftb_cond_t                  fld_tmp;
+  ftb_jmp_t                   jmp_new;
+  // The conditional candidates in ascending position (cand[0] lowest),
+  // empty ones last, and the jump candidate.
+  ftb_cond_t                  cand [N_CAND];
+  ftb_jmp_t                   jcand;
+  logic                       upd_m0;
+  logic                       upd_m1;
+  logic                       upd_mj;
+  logic                       upd_past;
+  logic                       upd_isb;
+  logic                       upd_isj;
+  logic                       inplace;
+  logic [$clog2(N_CAND+2)-1:0] n_cand;
+  // The update makes the entry hold more than NUM_PRED_SLOTS branches:
+  // the split (BP-140), and the position of the first branch not kept.
+  logic                       upd_split;
+  logic [FTB_BR_POS_BITS-1:0] upd_cut_pos;
+  logic                       upd_active;
   // The carried way as it is NOW (BP-121, TD#163, ruled by Jeff): valid
   // with the update's tag. The update reads that way anyway for its
   // read-modify-write; checking its tag is not an associative re-lookup
@@ -410,27 +455,49 @@ module ftb_cntrl (
   // way another update has since allocated with this tag merges into
   // it instead of re-allocating over it (which discarded its other
   // fields), and a carried hit whose way was since evicted and reused
-  // by another region allocates instead of writing this region's
-  // fields under the other region's tag.
-  logic                     upd_hit;
+  // by another start allocates instead of writing this start's fields
+  // under the other start's tag.
+  logic                       upd_hit;
 
   assign upd_active = ftb_upd_valid_u0;
 
+  // THE UPDATE (BP-140; ftb_decisions.md 5.5 field mapping, ruled by
+  // Jeff 2026-10-18). The entry is the block from one start, so every
+  // field it holds is a branch of that block, in position order.
+  //   1. THE SAME BRANCH IS THE SAME POSITION (5.5, TD#156). A
+  //      conditional at a stored conditional's position updates it in
+  //      place (conf step, target rewritten). A jump at the stored
+  //      jump's position rewrites the jump field. A resolution of the
+  //      other kind at a stored position replaces that field (the
+  //      stored classification was wrong).
+  //   2. PAST THE END. A resolution at or after the end the read
+  //      reports (eff_end), or after the stored jump, is not in this
+  //      block as the entry now
+  //      describes it (it came from a block predicted before the entry
+  //      was shortened) and changes nothing.
+  //   3. A NEW BRANCH joins the held ones. A new jump also removes every
+  //      conditional after it: a jump ends the block.
+  //   4. THE SPLIT. If the entry would then hold more than
+  //      NUM_PRED_SLOTS branches, the lowest NUM_PRED_SLOTS positions
+  //      are kept, and the block end becomes the PC of the lowest
+  //      position not kept. A jump not kept clears the jump field.
+  //   5. THE END otherwise: a written jump's own end (the update's
+  //      pftAddr, the resolved fall-through of the taken jump, TD#164);
+  //      else the stored end, or on an allocation one prediction block
+  //      above the start (PFT_NAT). The update's pftAddr for a
+  //      conditional is the PREDICTED end of the block it resolved in
+  //      and is not written: an end only moves down, to a branch or a
+  //      jump the entry has seen, so the result does not depend on the
+  //      order in which the branches of a block resolve (PROVISIONAL).
+  // The end positions of 2 and 4 make every held branch lie below the
+  // end, and every branch resolved from this start and not held lie at
+  // or above it (ftb_assert.sv FA1).
   always_comb begin
     fld_tmp     = '0;
-    upd_set_idx = ftb_upd_pc_u0[FTB_OFFSET_BITS +: FTB_IDX_BITS];
-    upd_tag     = ftb_upd_pc_u0[FTB_OFFSET_BITS+FTB_IDX_BITS
-                                  +: FTB_TAG_BITS];
-    upd_base    = {ftb_upd_pc_u0[VA_WIDTH-1:FTB_OFFSET_BITS],
-                   {FTB_OFFSET_BITS{1'b0}}};
-    upd_off     = ftb_upd_pft_addr_u0 - upd_base;
-
-    // Region offset of the update block start, in positions, and the
-    // resolving branch's REGION position: the write adds k to the
-    // start-relative ftb_upd_pos_u0 (4.6 R-2).
-    upd_k    = ftb_upd_pc_u0[FTB_OFFSET_BITS-1:POS_OFFSET_BITS];
-    upd_rpos = FTB_BR_RPOS_BITS'(ftb_upd_pos_u0)
-             + FTB_BR_RPOS_BITS'(upd_k);
+    upd_set_idx = ftb_idx(ftb_upd_pc_u0);
+    upd_tag     = ftb_tag(ftb_upd_pc_u0);
+    upd_pos     = ftb_upd_pos_u0;
+    upd_off     = ftb_upd_pft_addr_u0 - ftb_upd_pc_u0;
 
     // Readback of the carried way (read-old-on-collision in ftb_array
     // gives the pre-write contents for the RMW).
@@ -441,123 +508,110 @@ module ftb_cntrl (
     // The carried way's current state decides hit or allocate (TD#163).
     upd_hit = plru_rd_valid[ftb_upd_way_u0] & (upd_old.tag == upd_tag);
 
-    // Base entry: keep the old entry on a hit (preserve untouched
-    // fields), or a fresh zero entry on a miss-allocate (5.4).
-    upd_new       = upd_hit ? upd_old : '0;
-    upd_new.tag   = upd_tag;
-
-    // Fallthrough reduce (5.5, 8.1): pftAddr is the resolved end as a
-    // position offset from the aligned region base,
-    // off[POS_OFFSET_BITS +: PFTADDR_BITS]. No carry. Rewritten on
-    // every update; rewriting an unchanged boundary stores the same
-    // value (harmless).
-    upd_new.pft   = upd_off[POS_OFFSET_BITS +: PFTADDR_BITS];
-
-    // Conditional field selection (5.5, ruled session-075, TD#156).
-    // THE SAME BRANCH IS THE SAME REGION POSITION. The update maps to
-    // a storage field in this order:
-    //   1. a filled field whose stored region position equals the
-    //      update's is the same branch: updated in place (conf step,
-    //      target rewritten, position kept)
-    //   2. otherwise the update is a new branch of the region. It
-    //      fills an empty field first, br0 then br1
-    //   3. with both fields filled by other branches, it replaces the
-    //      field its port slot names. ftb_upd_br_idx_u0 names a PORT
-    //      slot as the update start saw it: the fields visible from
-    //      that start, packed in ascending position (4.6 O-3b), so it
-    //      maps back through the same window the read applies. A slot
-    //      naming no visible field replaces one this start cannot see
-    //      (it belongs to another start in the region)
-    // Cases 2 and 3 are a fill: position, weak conf and target are
-    // written, and the swap below restores the 5.4a order.
-    // Before BP-120 a slot that mapped to a visible field was updated
-    // in place whatever its stored position, so a different branch
-    // of the region stepped another branch's conf at the other's
-    // position.
-    upd_v0 = upd_new.br0.valid & in_window(upd_new.br0.pos, upd_k);
-    upd_v1 = upd_new.br1.valid & in_window(upd_new.br1.pos, upd_k);
-    upd_m0 = upd_new.br0.valid & (upd_new.br0.pos == upd_rpos);
-    upd_m1 = upd_new.br1.valid & (upd_new.br1.pos == upd_rpos);
-
-    // The field the port slot names, if any (case 3).
-    if (ftb_upd_br_idx_u0 == 1'b0) begin
-      slot_vis = upd_v0 | upd_v1;
-      slot_fld = ~upd_v0;
+    // Base entry: the old entry on a hit (preserve untouched fields), or
+    // a fresh empty entry ending one block above the start (5.4).
+    if (upd_hit) begin
+      upd_cur = upd_old;
     end else begin
-      slot_vis = upd_v0 & upd_v1;
-      slot_fld = 1'b1;
+      upd_cur     = '0;
+      upd_cur.pft = PFT_NAT;
     end
+    upd_cur.tag = upd_tag;
 
-    inplace = upd_m0 | upd_m1;
-    if      (inplace)            fld_idx = ~upd_m0;
-    else if (!upd_new.br0.valid) fld_idx = 1'b0;
-    else if (!upd_new.br1.valid) fld_idx = 1'b1;
-    else if (slot_vis)           fld_idx = slot_fld;
-    else                         fld_idx = upd_v0;
+    // 1 and 2.
+    upd_m0   = upd_cur.br0.valid & (upd_cur.br0.pos == upd_pos);
+    upd_m1   = upd_cur.br1.valid & (upd_cur.br1.pos == upd_pos);
+    upd_mj   = upd_cur.jmp.valid & (upd_cur.jmp.pos == upd_pos);
+    upd_past = (PFTADDR_BITS'(upd_pos) >= eff_end(upd_cur.pft))
+             | (upd_cur.jmp.valid & (upd_cur.jmp.pos < upd_pos));
+    upd_isb  = ftb_upd_is_br_u0 & ~upd_past;
+    upd_isj  = ftb_upd_is_jmp_u0 & ~ftb_upd_is_br_u0 & ~upd_past;
+    inplace  = upd_m0 | upd_m1;
 
-    // The same branch trains the bimodal conf toward the resolved
-    // outcome. A fill (miss-allocate, free field, or a field another
-    // branch held) takes the weak init in the observed direction
-    // (TKN -> 100, NTK -> 011) (5.4, conf section 3.2 / 7).
-    fld_old   = fld_idx ? upd_new.br1 : upd_new.br0;
-    fresh     = ~inplace;
-
+    // The conditional field the update writes. The same branch trains
+    // the bimodal conf toward the resolved outcome; a new branch takes
+    // the weak init in the observed direction (TKN -> 100, NTK -> 011)
+    // (5.4, conf section 3.2 / 7). The target base is the branch PC
+    // (4.6 O-1).
+    fld_old       = upd_m0 ? upd_cur.br0 : upd_cur.br1;
     fld_new.valid = 1'b1;
-    // The update's region position. In place it equals the stored
-    // one (case 1), so the position of a filled field is static while
-    // the same branch holds it; a fill writes it (5.4, 5.5).
-    fld_new.pos   = upd_rpos;
-    // Target base is the branch PC, region base plus the stored
-    // position (4.6 O-1), so every start sharing the entry
-    // reconstructs the same target.
+    fld_new.pos   = upd_pos;
     fld_new.tgt   = enc_br_disp(ftb_upd_target_u0,
-                                branch_pc(upd_base, fld_new.pos));
+                                branch_pc(ftb_upd_pc_u0, upd_pos));
     fld_new.stat  = br_stat(ftb_upd_target_u0,
-                            branch_pc(upd_base, fld_new.pos));
-    fld_new.conf  = fresh
-                  ? (ftb_upd_taken_u0 ? FTB_CONF_INIT_TKN
-                                      : FTB_CONF_INIT_NTK)
-                  : conf_step(fld_old.conf, ftb_upd_taken_u0);
+                            branch_pc(ftb_upd_pc_u0, upd_pos));
+    fld_new.conf  = inplace
+                  ? conf_step(fld_old.conf, ftb_upd_taken_u0)
+                  : (ftb_upd_taken_u0 ? FTB_CONF_INIT_TKN
+                                      : FTB_CONF_INIT_NTK);
 
-    if (ftb_upd_is_br_u0) begin
-      if (fld_idx == 1'b0) upd_new.br0 = fld_new;
-      else                 upd_new.br1 = fld_new;
+    // The jump field the update writes, whole (5.5, IC-FTB-01): a
+    // resolve of the stored jump writes the position it holds; the
+    // target base is the jump PC (4.2, TD#137).
+    jmp_new.valid   = 1'b1;
+    jmp_new.pos     = upd_pos;
+    jmp_new.tgt     = enc_jmp_disp(ftb_upd_jmp_target_u0,
+                                   branch_pc(ftb_upd_pc_u0, upd_pos));
+    jmp_new.stat    = jmp_stat(ftb_upd_jmp_target_u0,
+                               branch_pc(ftb_upd_pc_u0, upd_pos));
+    jmp_new.is_call = ftb_upd_is_call_u0;
+    jmp_new.is_ret  = ftb_upd_is_ret_u0;
+    jmp_new.is_jalr = ftb_upd_is_jalr_u0;
+    jmp_new.is_rvc  = ftb_upd_jmp_rvc_u0;
+
+    // 1 and 3: the candidates. The stored fields, less the one this
+    // resolution replaces, and the resolving branch.
+    cand[0] = upd_cur.br0;
+    cand[1] = upd_cur.br1;
+    cand[2] = '0;
+    jcand   = upd_cur.jmp;
+    if (upd_isb) begin
+      if (upd_m0) cand[0] = '0;
+      if (upd_m1) cand[1] = '0;
+      cand[2] = fld_new;
+      if (upd_mj) jcand = '0;
+    end else if (upd_isj) begin
+      // A jump ends the block: a conditional at or after it is not in
+      // the block. It replaces any stored jump, which is after it (2).
+      if (upd_cur.br0.valid && (upd_cur.br0.pos >= upd_pos)) cand[0] = '0;
+      if (upd_cur.br1.valid && (upd_cur.br1.pos >= upd_pos)) cand[1] = '0;
+      jcand = jmp_new;
     end
 
-    // Storage order (4.6 O-3a): br0 holds the lower region position.
-    // A fill can land above or below the field it joins, so restore
-    // the order here, whatever start wrote the fields.
-    if (upd_new.br0.valid && upd_new.br1.valid
-        && (upd_new.br0.pos > upd_new.br1.pos)) begin
-      fld_tmp     = upd_new.br0;
-      upd_new.br0 = upd_new.br1;
-      upd_new.br1 = fld_tmp;
+    // Ascending position, empty last: a three-element sorting network.
+    if (cand_key(cand[1]) < cand_key(cand[0])) begin
+      fld_tmp = cand[0]; cand[0] = cand[1]; cand[1] = fld_tmp;
+    end
+    if (cand_key(cand[2]) < cand_key(cand[1])) begin
+      fld_tmp = cand[1]; cand[1] = cand[2]; cand[2] = fld_tmp;
+    end
+    if (cand_key(cand[1]) < cand_key(cand[0])) begin
+      fld_tmp = cand[0]; cand[0] = cand[1]; cand[1] = fld_tmp;
     end
 
-    // Jump field. The field holds ONE jump (5.5, IC-FTB-01, ruled
-    // session-075, TD#156). Every jump resolve writes the whole field
-    // from the update: position, target (unconditionally, 5.5) and the
-    // type bits. A resolve of the stored jump (same region position)
-    // writes the position it already holds, so the position is static
-    // while that jump holds the field; a resolve of a different jump
-    // of the region replaces it. Before BP-120 the stored position
-    // was preserved whenever the stored jump was visible from the
-    // update's start, so two jumps of one region produced a field
-    // with one jump's type and target at the other's position.
-    if (ftb_upd_is_jmp_u0) begin
-      upd_new.jmp.valid   = 1'b1;
-      upd_new.jmp.pos     = upd_rpos;
-      // Target base is the jump PC, region base plus the stored jump
-      // position just settled above (4.2, TD#137).
-      upd_new.jmp.tgt     = enc_jmp_disp(ftb_upd_jmp_target_u0,
-                                         branch_pc(upd_base, upd_new.jmp.pos));
-      upd_new.jmp.stat    = jmp_stat(ftb_upd_jmp_target_u0,
-                                     branch_pc(upd_base, upd_new.jmp.pos));
-      upd_new.jmp.is_call = ftb_upd_is_call_u0;
-      upd_new.jmp.is_ret  = ftb_upd_is_ret_u0;
-      upd_new.jmp.is_jalr = ftb_upd_is_jalr_u0;
-      upd_new.jmp.is_rvc  = ftb_upd_jmp_rvc_u0;
+    // 4. The split. The branches in program order are the conditional
+    // candidates then the jump. The first not kept is cand[N] when more
+    // than NUM_PRED_SLOTS conditionals remain, else the jump.
+    n_cand = '0;
+    for (int i = 0; i < N_CAND; i++) begin
+      if (cand[i].valid) n_cand = n_cand + 1'b1;
     end
+    upd_split   = (int'(n_cand) + int'(jcand.valid)) > NUM_PRED_SLOTS;
+    upd_cut_pos = (int'(n_cand) > NUM_PRED_SLOTS)
+                ? cand[NUM_PRED_SLOTS].pos : jcand.pos;
+
+    upd_new     = upd_cur;
+    upd_new.br0 = cand[0];
+    upd_new.br1 = (NUM_PRED_SLOTS > 1) ? cand[1] : '0;
+    upd_new.jmp = (int'(n_cand) < NUM_PRED_SLOTS) ? jcand : '0;
+
+    // 4 and 5. The end.
+    if (upd_split)
+      upd_new.pft = PFTADDR_BITS'(upd_cut_pos);
+    else if (upd_isj)
+      upd_new.pft = upd_off[POS_OFFSET_BITS +: PFTADDR_BITS];
+    else
+      upd_new.pft = upd_cur.pft;
   end
 
   // ----------------------------------------------------------------
@@ -566,17 +620,10 @@ module ftb_cntrl (
   // ----------------------------------------------------------------
   logic [FTB_IDX_BITS-1:0]    pred_set_idx_p1;
   logic [FTB_TAG_BITS-1:0]    pred_tag_p1;
-  logic [VA_WIDTH-1:0]        base_p1;
-  logic [FTB_BR_POS_BITS-1:0] k_p1;
 
-  // base_p1 is the 32-byte-aligned region base; k_p1 is the lookup
-  // PC's region offset in positions (4.6 R-2).
-  assign pred_set_idx_p1 = pc_p1[FTB_OFFSET_BITS +: FTB_IDX_BITS];
-  assign pred_tag_p1     = pc_p1[FTB_OFFSET_BITS+FTB_IDX_BITS
-                                   +: FTB_TAG_BITS];
-  assign base_p1         = {pc_p1[VA_WIDTH-1:FTB_OFFSET_BITS],
-                            {FTB_OFFSET_BITS{1'b0}}};
-  assign k_p1            = pc_p1[FTB_OFFSET_BITS-1:POS_OFFSET_BITS];
+  // The lookup PC's set and tag (ftb_idx, ftb_tag, BP-140).
+  assign pred_set_idx_p1 = ftb_idx(pc_p1);
+  assign pred_tag_p1     = ftb_tag(pc_p1);
 
   assign array_rd_en_n = ~(upd_active | valid_p1);
   assign array_rd_addr = upd_active ? upd_set_idx : pred_set_idx_p1;
@@ -597,8 +644,6 @@ module ftb_cntrl (
   ftb_entry_t              sel_entry;
   logic                    hit_any;
   logic                    pred_grant_p1;
-  logic                    vis_br0, vis_br1, vis_jmp;
-  ftb_cond_t               slot0_fld;
   logic [VA_WIDTH-1:0]     pft_full;
 
   // p1 -> p2 next values
@@ -628,7 +673,7 @@ module ftb_cntrl (
       hit_vec[w] = plru_rd_valid[w]
                    && (way_entry[w].tag == pred_tag_p1);
     end
-    // Full 26-bit tag -> at most one way hits (no aliasing).
+    // Full tag -> at most one way hits (no aliasing below VA bit 40).
     for (int unsigned w = 0; w < FTB_WAYS; w++) begin
       if (hit_vec[w]) hit_way = FTB_WAY_BITS'(w);
     end
@@ -643,68 +688,49 @@ module ftb_cntrl (
     n_hit_p2   = pred_grant_p1 & hit_any;
     n_way_p2   = sel_way;             // hit way, or tree-PLRU victim
 
-    // Region window (4.6 R-1): a stored field is reported only when
-    // its region position lies in [k, k+16) of this lookup PC. That
-    // hides branches before the start and branches past this block's
-    // end that another start in the region recorded.
-    vis_jmp = sel_entry.jmp.valid & in_window(sel_entry.jmp.pos, k_p1);
-    // A visible jump ENDS this start's block (it is always taken), so a
-    // conditional stored at a later region position is past this
-    // block's end: another start of the region recorded it, and R-1
-    // hides branches past the block's end. Before BP-121 only the
-    // window hid them, so a start whose block ends at a jump could
-    // report a later start's conditional in slot 0 and the jump in
-    // slot 1, out of program order (IC-FTB-16), and the cluster took
-    // the block's successor from a branch after the jump: a stream
-    // error (misp_call).
-    vis_br0 = sel_entry.br0.valid & in_window(sel_entry.br0.pos, k_p1)
-            & ~(vis_jmp & (sel_entry.br0.pos > sel_entry.jmp.pos));
-    vis_br1 = sel_entry.br1.valid & in_window(sel_entry.br1.pos, k_p1)
-            & ~(vis_jmp & (sel_entry.br1.pos > sel_entry.jmp.pos));
+    // The entry is this start's block (BP-140), stored start-relative
+    // in ascending position, so its fields go to the ports as stored:
+    // br0 to port br0, br1 to port br1, the jump to the jump port. The
+    // region window, the hiding of a conditional past the jump and the
+    // compaction of 4.6 R-1 and O-3b had other starts' fields to remove
+    // and are gone. br1 is reported only with br0, the compaction
+    // invariant the cluster relies on (IC-FTB-16).
+    // FTB direction is the bimodal conf MSB, qualified by field valid
+    // (conf section 3.1). Targets reconstruct from the branch PC (4.6
+    // O-1) and the jump PC (4.2).
+    n_br0_valid = n_valid_p2 & sel_entry.br0.valid;
+    n_br0_taken = n_br0_valid & sel_entry.br0.conf[FTB_CONF_WIDTH-1];
+    n_br0_pos   = sel_entry.br0.pos;
+    n_br0_conf  = sel_entry.br0.conf;
+    n_br0_tgt   = recon_br(sel_entry.br0.tgt,
+                           branch_pc(pc_p1, sel_entry.br0.pos));
 
-    // Compaction (4.6 O-3b). Storage is in ascending region position
-    // (O-3a), so packing the visible fields in storage order puts the
-    // first branch at or after the start in port slot 0. br1 reaches
-    // slot 0 only when br0 is hidden.
-    slot0_fld = vis_br0 ? sel_entry.br0 : sel_entry.br1;
-
-    // br0 / br1 ports. FTB direction is the bimodal conf MSB, qualified
-    // by field valid (conf section 3.1): a valid conditional is
-    // predicted taken when its conf MSB is 1, not-taken when 0.
-    // Positions leave start-relative: the read subtracts k (4.6 R-2).
-    // Targets reconstruct from the branch PC (4.6 O-1).
-    n_br0_valid = n_valid_p2 & (vis_br0 | vis_br1);
-    n_br0_taken = n_br0_valid & slot0_fld.conf[FTB_CONF_WIDTH-1];
-    n_br0_pos   = to_start_pos(slot0_fld.pos, k_p1);
-    n_br0_conf  = slot0_fld.conf;
-    n_br0_tgt   = recon_br(slot0_fld.tgt,
-                           branch_pc(base_p1, slot0_fld.pos));
-
-    n_br1_valid = n_valid_p2 & vis_br0 & vis_br1;
+    n_br1_valid = n_br0_valid & sel_entry.br1.valid;
     n_br1_taken = n_br1_valid & sel_entry.br1.conf[FTB_CONF_WIDTH-1];
-    n_br1_pos   = to_start_pos(sel_entry.br1.pos, k_p1);
+    n_br1_pos   = sel_entry.br1.pos;
     n_br1_conf  = sel_entry.br1.conf;
     n_br1_tgt   = recon_br(sel_entry.br1.tgt,
-                           branch_pc(base_p1, sel_entry.br1.pos));
+                           branch_pc(pc_p1, sel_entry.br1.pos));
 
     // jump field + branch-type classification (3-way JALR split).
-    n_jmp_valid = n_valid_p2 & vis_jmp;
-    n_jmp_pos   = to_start_pos(sel_entry.jmp.pos, k_p1);
+    n_jmp_valid = n_valid_p2 & sel_entry.jmp.valid;
+    n_jmp_pos   = sel_entry.jmp.pos;
     n_jmp_tgt   = recon_jmp(sel_entry.jmp.tgt,
-                            branch_pc(base_p1, sel_entry.jmp.pos));
+                            branch_pc(pc_p1, sel_entry.jmp.pos));
     n_is_call   = n_jmp_valid & sel_entry.jmp.is_call;
     n_is_ret    = n_jmp_valid & sel_entry.jmp.is_ret;
     n_is_jalr   = n_jmp_valid & sel_entry.jmp.is_jalr;
     n_jmp_rvc   = n_jmp_valid & sel_entry.jmp.is_rvc;
 
-    // Fallthrough reconstruct (4.5, 5.5): aligned region base plus
-    // pftAddr in positions, no carry. Bounds checked against the
-    // lookup PC:
+    // Fallthrough reconstruct (4.5, 5.5): the start plus pftAddr in
+    // positions, no carry (BP-140; it was the aligned region base).
+    // Bounds checked against the lookup PC:
     //   FTB-G1  an end at or below the start
     //   FTB-G3  an end beyond start + FTB_BLOCK_BYTES + one halfword
     // both take the FTB-G2 fallback, start + FTB_BLOCK_BYTES (one
-    // prediction block, never FETCH_BLOCK_BYTES).
-    pft_full = base_p1
+    // prediction block, never FETCH_BLOCK_BYTES). The update writes an
+    // end in bounds unless a jump's resolved end is out of them.
+    pft_full = pc_p1
       + (VA_WIDTH'(sel_entry.pft) << POS_OFFSET_BITS);
     if ((pft_full <= pc_p1) || (pft_full > pc_p1 + PFT_MAX_SPAN))
       n_pft = pc_p1 + VA_WIDTH'(FTB_BLOCK_BYTES);
@@ -905,6 +931,14 @@ module ftb_cntrl (
     // width the package derives from ftb_decisions.md 8.
     if ($bits(ftb_entry_t) != FTB_RAM_ENTRY_WIDTH)
       $error("ftb_entry_t width differs from FTB_RAM_ENTRY_WIDTH");
+    // The index folds the start offset into its top bits (BP-140), and
+    // the split orders the two conditional fields and one new branch,
+    // so it keeps at most two (NUM_PRED_SLOTS 1 or 2, ruled
+    // session-078).
+    if (FTB_SOFF_SHIFT < 0)
+      $error("FTB_IDX_BITS is narrower than FTB_BR_POS_BITS");
+    if (NUM_PRED_SLOTS >= N_CAND)
+      $error("the split keeps at most N_CAND-1 conditionals");
   end
 
 endmodule : ftb_cntrl

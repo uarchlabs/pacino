@@ -94,6 +94,9 @@
 // +define+BASE_RTL compiles this file against the tree as BP-121
 // received it (no ftq_resolve_t.is_rvc, no ftb_cntrl upd_hit, no
 // corrected-history nets), for the before column of its measurements.
+// +define+PRE_BP140 compiles it against a tree whose FTB stores region
+// positions (ftb_cntrl upd_rpos, before BP-140's per-start entries),
+// for BP-140's before column and its one-change-only builds.
 //
 // BP-123. Programs for maintenance (fencei, cboinval), uncached fetch
 // (uc_nc, uc_io), the walker (pt_*) and the RVA23 extensions that reach
@@ -816,14 +819,173 @@ module tb;
 `endif
           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_old.jmp.valid &&
           (dut.u_bpu.u_ftb.u_ftb_cntrl.upd_old.jmp.pos !=
+`ifdef PRE_BP140
            dut.u_bpu.u_ftb.u_ftb_cntrl.upd_rpos))
+`else
+           dut.u_bpu.u_ftb.u_ftb_cntrl.upd_pos))
+`endif
         n_jmp_swap <= n_jmp_swap + 1;
     end
   end
 
+  // =================================================================
+  // BP-140. Capacity, the BP-139 cut, and the BP-131 contention count.
+  // Formed from nets both the starting tree and BP-140's have (FTB
+  // update decode upd_hit, upd_set_idx; uBTB u_wr, u_hit, u_idx,
+  // u_way; the cluster's w_cut_p2), so one testbench measures both.
+  //   n_ftb_ev   FTB updates that allocate (upd_hit 0) over a valid way
+  //   n_ubtb_ev  uBTB writes that allocate (u_hit 0) over a valid way
+  //   n_cut_blk  p2 groups the FTQ accepted in which the cut fired
+  //   n_cut_rd   p2 redirects the FTQ accepted from such a group
+  //   n_ovr      executed blocks with more branches than slots: a run
+  //              of retired instructions of one FTQ entry (BP-131
+  //              P1(a)); jumps, calls and returns count as branches
+  //   n_ovr_oth  of those, the FTB entry instance holding the block's
+  //              start (allocation to next allocation of its way) has
+  //              an end recorded by another start (BP-131 P3 "oth")
+  //   n_ovr_conf of those, some such end differs from the split end,
+  //              which BP-131 defines as the PC plus length of the
+  //              block's NUM_PRED_SLOTS-th branch (P3 "conf")
+  // A recorded end is the ftb_upd_pft_addr_u0 a start's last update
+  // wrote since the instance's allocation. An instance's starts are
+  // kept by their halfword offset in the region (at most 16).
+  // =================================================================
+  localparam int C131_K = FTB_BLOCK_BYTES >> POS_OFFSET_BITS;
+  int n_ftb_ev;
+  int n_ubtb_ev;
+  int n_cut_blk;
+  int n_cut_rd;
+  int n_ovr;
+  int n_ovr_oth;
+  int n_ovr_conf;
+  logic                            c131_v   [FTB_SETS][FTB_WAYS][C131_K];
+  logic [VA_WIDTH-1:0]             c131_end [FTB_SETS][FTB_WAYS][C131_K];
+  logic [VA_WIDTH-1:FTB_OFFSET_BITS] c131_reg [FTB_SETS][FTB_WAYS];
+  int                              c131_loc [logic [VA_WIDTH-1:0]];
+  // The open run of retired instructions: its FTQ entry, its start,
+  // its branches so far, and the split end.
+  logic                    rn_v;
+  logic [FTQ_IDX_BITS-1:0] rn_idx;
+  logic [VA_WIDTH-1:0]     rn_start;
+  logic [VA_WIDTH-1:0]     rn_send;
+  int                      rn_nbr;
+
+  task automatic c131_reset();
+    for (int i = 0; i < FTB_SETS; i++)
+      for (int w = 0; w < FTB_WAYS; w++) begin
+        c131_reg[i][w] = '0;
+        for (int k = 0; k < C131_K; k++) c131_v[i][w][k] = 1'b0;
+      end
+    c131_loc.delete();
+    rn_v       = 1'b0;
+    rn_nbr     = 0;
+    n_ftb_ev   = 0;
+    n_ubtb_ev  = 0;
+    n_cut_blk  = 0;
+    n_cut_rd   = 0;
+    n_ovr      = 0;
+    n_ovr_oth  = 0;
+    n_ovr_conf = 0;
+  endtask
+
+  // An initial/forever process, not always @(posedge clk): it keeps
+  // tables with blocking writes (BLKSEQ), as uc_checks does.
+  initial begin : bp140_log
+    int                  st;
+    int                  wy;
+    int                  k;
+    logic                r2;
+    logic [VA_WIDTH-1:0] upc;
+    forever begin
+    @(posedge clk);
+    if (rstn) begin
+      if (dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_valid_u0) begin
+        upc = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_pc_u0;
+        st  = int'(dut.u_bpu.u_ftb.u_ftb_cntrl.upd_set_idx);
+        wy  = int'(dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_way_u0);
+        k   = int'(upc[FTB_OFFSET_BITS-1:POS_OFFSET_BITS]);
+        if (!dut.u_bpu.u_ftb.u_ftb_cntrl.upd_hit) begin
+          if (meas && dut.u_bpu.u_ftb.u_ftb_cntrl.plru_rd_valid[wy])
+            n_ftb_ev++;
+          for (int i = 0; i < C131_K; i++) c131_v[st][wy][i] = 1'b0;
+          c131_reg[st][wy] = upc[VA_WIDTH-1:FTB_OFFSET_BITS];
+        end
+        c131_v[st][wy][k]   = 1'b1;
+        c131_end[st][wy][k] = dut.u_bpu.u_ftb.u_ftb_cntrl.ftb_upd_pft_addr_u0;
+        c131_loc[upc]       = st * FTB_WAYS + wy;
+      end
+      for (int u = 0; u < NUM_PRED_SLOTS; u++) begin
+        if (meas && dut.u_bpu.u_ubtb.u_wr[u] && !dut.u_bpu.u_ubtb.u_hit[u] &&
+            dut.u_bpu.u_ubtb.mem[dut.u_bpu.u_ubtb.u_idx[u]]
+                                [dut.u_bpu.u_ubtb.u_way[u]].valid)
+          n_ubtb_ev++;
+      end
+      r2 = 1'b0;
+      for (int s = 0; s < NUM_PRED_SLOTS; s++)
+        r2 = r2 || dut.bpu_redir_p2[s].valid;
+      if (meas && dut.u_bpu.r_val_p2 && dut.u_bpu.w_ftb_valid_p2 &&
+          dut.u_ftq.w_ok_slot_p2 && dut.u_bpu.w_cut_p2)
+        n_cut_blk++;
+      if (meas && dut.u_ftq.w_ok_redir_p2 && r2 && dut.u_bpu.w_cut_p2)
+        n_cut_rd++;
+    end
+    end
+  end
+
+  // Close the open run: count it when it held more branches than slots.
+  task automatic c131_close();
+    int st;
+    int wy;
+    int k;
+    int loc;
+    logic oth;
+    logic conf;
+    if (rn_v && meas && (rn_nbr > NUM_PRED_SLOTS)) begin
+      n_ovr++;
+      oth  = 1'b0;
+      conf = 1'b0;
+      if (c131_loc.exists(rn_start)) begin
+        loc = c131_loc[rn_start];
+        st  = loc / FTB_WAYS;
+        wy  = loc % FTB_WAYS;
+        k   = int'(rn_start[FTB_OFFSET_BITS-1:POS_OFFSET_BITS]);
+        if ((c131_reg[st][wy] == rn_start[VA_WIDTH-1:FTB_OFFSET_BITS]) &&
+            c131_v[st][wy][k]) begin
+          for (int i = 0; i < C131_K; i++) begin
+            if ((i != k) && c131_v[st][wy][i]) begin
+              oth = 1'b1;
+              if (c131_end[st][wy][i] != rn_send) conf = 1'b1;
+            end
+          end
+        end
+      end
+      if (oth)  n_ovr_oth++;
+      if (conf) n_ovr_conf++;
+    end
+  endtask
+
+  // One retired instruction (be_retire_hook): a new FTQ entry closes
+  // the open run and opens another.
+  task automatic c131_retire(input ifu_pd_pkt_t s, input int e);
+    if (!rn_v || (s.ftq_idx != rn_idx)) begin
+      c131_close();
+      rn_v     = 1'b1;
+      rn_idx   = s.ftq_idx;
+      rn_nbr   = 0;
+      rn_start = s.start_pc - (VA_WIDTH'(s.pos) << POS_OFFSET_BITS);
+      rn_send  = '0;
+    end
+    if (W.ex[e].btype != NO_BRANCH) begin
+      rn_nbr++;
+      if (rn_nbr == NUM_PRED_SLOTS)
+        rn_send = W.ex[e].pc + (W.ex[e].rvc ? VA_WIDTH'(2) : VA_WIDTH'(4));
+    end
+  endtask
+
   // The backend's hooks (models/fe_tb_backend.svh). Retirement: the
   // WBR line of the cycle trace, a conditional of the watched block.
   task automatic be_retire_hook(input ifu_pd_pkt_t s, input int e);
+    c131_retire(s, e);
     if (trace && (W.ex[e].btype == COND) &&
         (fstart[s.ftq_idx][15:0] == watch16))
       $display({"%0d WBR pc %0h act %0d tage %0d sc %b prm %0d/%0h",
@@ -1023,6 +1185,7 @@ module tb;
     n_nomap      = 0;
     n_plc_occ    = 0;
     n_plc_tbl    = 0;
+    c131_reset();
     up_vpn        = '1;
     up_wval       = 1'b0;
     up_wpriv      = '0;
@@ -1103,6 +1266,28 @@ module tb;
              {"   ITEMC %s placed in an occupied slot %0d, of them ",
               "trained TAGE/SC/LP/ITTAGE %0d"}, tname, n_plc_occ,
              n_plc_tbl));
+    // BP-140: capacity, the cut and the BP-131 contention count. The
+    // valid entries are counted at the end of the run.
+    c131_close();
+    rn_v = 1'b0;
+    begin
+      int nfv;
+      int nuv;
+      nfv = 0;
+      nuv = 0;
+      for (int i = 0; i < FTB_SETS; i++)
+        for (int w = 0; w < FTB_WAYS; w++)
+          if (dut.u_bpu.u_ftb.u_ftb_plru.valid_mem[i][w]) nfv++;
+      for (int i = 0; i < UBTB_SETS; i++)
+        for (int w = 0; w < UBTB_WAYS; w++)
+          if (dut.u_bpu.u_ubtb.mem[i][w].valid) nuv++;
+      $display("%s", $sformatf(
+               {"   BP140 %s: FTB valid %0d evict %0d; uBTB valid %0d ",
+                "evict %0d; cut blocks %0d, cut p2 redirects %0d; over ",
+                "%0d, other start %0d, split end differs %0d; jump swap %0d"},
+               tname, nfv, n_ftb_ev, nuv, n_ubtb_ev, n_cut_blk, n_cut_rd,
+               n_ovr, n_ovr_oth, n_ovr_conf, n_jmp_swap));
+    end
     // BP-121.
     chk($sformatf("every RAS commit is the retired stream's (%0d ok, %0d bad)",
                   n_ras_ok, n_ras_bad), n_ras_bad == 0);

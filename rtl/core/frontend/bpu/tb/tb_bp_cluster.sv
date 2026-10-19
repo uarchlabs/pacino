@@ -22,7 +22,7 @@
 //   D  p3 and supersession    D1 D2
 //   E  history                TC-A..TC-G, E1 E2 E3
 //   F  metadata               F1 F2 F3
-//   (G H I J K L M N O P follow; see each group's header)
+//   (G H I J K L M N O P Q S follow; see each group's header)
 //
 // BP-126 adds, across every group: the FOLD monitor (an independent
 // history model traced through every TAGE, ITTAGE and SC ST1-ST3
@@ -470,6 +470,11 @@ module tb;
   endfunction
 
   // uBTB index / tag / base, replicating ubtb.sv get_idx / get_tag.
+  // Since BP-140 the start's halfword offset pc[4:1] is in the tag and
+  // folded into the top of the index (one entry per start PC).
+  // +define+PRE_BP140 compiles the starting tree's derivation, for the
+  // BP-140 runs of this file against the tree before it.
+`ifdef PRE_BP140
   function automatic logic [UBTB_IDX_BITS-1:0]
       ub_idx(input logic [VA_WIDTH-1:0] pc);
     return pc[UBTB_OFFSET_BITS +: UBTB_IDX_BITS];
@@ -479,6 +484,21 @@ module tb;
       ub_tag(input logic [VA_WIDTH-1:0] pc);
     return pc[UBTB_OFFSET_BITS+UBTB_IDX_BITS +: UBTB_TAG_BITS];
   endfunction
+`else
+  function automatic logic [UBTB_IDX_BITS-1:0]
+      ub_idx(input logic [VA_WIDTH-1:0] pc);
+    logic [UBTB_IDX_BITS-1:0] off;
+    off = UBTB_IDX_BITS'(pc[UBTB_OFFSET_BITS-1:1]);
+    return pc[UBTB_OFFSET_BITS +: UBTB_IDX_BITS]
+         ^ (off << (UBTB_IDX_BITS - UBTB_BR_POS_BITS));
+  endfunction
+
+  function automatic logic [UBTB_TAG_BITS-1:0]
+      ub_tag(input logic [VA_WIDTH-1:0] pc);
+    return {pc[UBTB_OFFSET_BITS+UBTB_IDX_BITS +: UBTB_RTAG_BITS],
+            pc[UBTB_OFFSET_BITS-1:1]};
+  endfunction
+`endif
 
   // loop_pred index / tag, replicating loop_pred.sv idx_of / tag_of.
   function automatic logic [LP_IDX_BITS-1:0]
@@ -496,7 +516,9 @@ module tb;
   endfunction
 
   // uBTB stored partial fall-through for a wanted address: the offset
-  // from the aligned region base in positions, no carry bit (TD#124).
+  // from the block start in positions, no carry bit (TD#124; from the
+  // aligned region base until BP-140, the same value for the
+  // region-aligned starts this file installs).
   function automatic logic [UBTB_PFTADDR_BITS-1:0]
       ub_pft_field(input logic [VA_WIDTH-1:0] want,
                    input logic [VA_WIDTH-1:0] base);
@@ -507,10 +529,10 @@ module tb;
 
   // One uBTB conditional field. conf is the weak init in the wanted
   // direction; its MSB is the direction ubtb.sv reports on br_taken.
-  // The stored position is region-relative (ftb_decisions.md 4.6).
-  // Every table-written entry in this file is installed for a
-  // region-aligned lookup PC, where the region position equals the
-  // start-relative pos, so pos is widened unchanged.
+  // The stored position is start-relative since BP-140 (it was
+  // region-relative, ftb_decisions.md 4.6; every table-written entry in
+  // this file is installed for a region-aligned lookup PC, where the
+  // two are equal).
   function automatic ubtb_cond_t
       mk_cond(input logic v, input logic [UBTB_BR_POS_BITS-1:0] pos,
               input logic [VA_WIDTH-1:0] tgt,
@@ -1730,12 +1752,15 @@ module tb;
 
     // -- C2. Two not-taken views compare equal and raise NO redirect.
     //    The uBTB and the FTB agree on the block end and neither slot
-    //    is taken.
+    //    is taken. BP-140: the FTB end is one block above the start (a
+    //    conditional's update end is not written; the end comes from a
+    //    jump or the split). OLD: both ends base + 0x18, the FTB's
+    //    written by the conditional's update.
     do_reset();
     tage_bim_fill(2'b00);
     pc   = VA_WIDTH'('h00_0160_0000);
     base = blk_base(pc);
-    pft  = base + VA_WIDTH'('h18);
+    pft  = base + BLK_SZ;
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     e       = '0;
@@ -1760,11 +1785,13 @@ module tb;
     //    The p1 operand is formed from the p1 view only, so this
     //    redirects at p2 where a shared-FTB operand would have hidden
     //    it.
+    //    BP-140: the FTB end is one block above the start, as in C2.
+    //    OLD: the FTB end base + 0x18 written by the update.
     do_reset();
     tage_bim_fill(2'b00);
     pc   = VA_WIDTH'('h00_0170_0000);
     base = blk_base(pc);
-    pft  = base + VA_WIDTH'('h18);                       // FTB block end
+    pft  = base + BLK_SZ;                                // FTB block end
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h300), 4'd1, pft,
                    1'b0);
     e       = '0;
@@ -2209,24 +2236,28 @@ module tb;
     chk("TC-A2 ghist pointer advanced by 1",
         ghist_ptr === GHIST_PTR_BITS'(g0 + 1));
 
-    // -- TC-B. Same entry, unaligned request PC 0x101C, region offset
-    //    28 bytes. The entry is shared by every PC in the 32-byte
-    //    region, and TC-A's two branches sit at region offsets 2 and
-    //    4, BEFORE this start. They must not be reported
-    //    (ftb_decisions.md 4.6 R-1, TD#125), so no branch PC reaches
-    //    bp_history. BP-110: this read "byte-for-byte the same
-    //    reported PCs as TC-A", which is the TD#125 defect, and probed
-    //    dut.w_blk_base_p1, which R-2 removes.
+    // -- TC-B. TC-A's entry at the region-aligned start 0x1000, and a
+    //    request from the unaligned PC 0x101C of the same region.
+    //    TC-A's two branches sit at region offsets 2 and 4, BEFORE this
+    //    start, so no branch PC may reach bp_history. Since BP-140 the
+    //    entry is per start (one entry per start PC, ruled by Jeff
+    //    2026-10-18): the unaligned start does not hit TC-A's entry at
+    //    all. OLD (BP-110 to BP-140): "the unaligned start hits the
+    //    shared entry", r_ubtb_blk_p1.hit 1, with the two branches hidden
+    //    by the region window (ftb_decisions.md 4.6 R-1, TD#125). Before
+    //    BP-110 it read "byte-for-byte the same reported PCs as TC-A",
+    //    the TD#125 defect.
     do_reset();
+    ubtb_install(VA_WIDTH'('h00_0000_1000), e);
     pc   = VA_WIDTH'('h00_0000_101C);
     base = blk_base(pc);
-    ubtb_install(pc, e);
+    ubtb_clear_set(pc);
     lp_clear_both(pc);
     req(pc, 6'h31);
     tick();
     norq();
-    chk("TC-B the unaligned start hits the shared entry",
-        dut.r_ubtb_blk_p1.hit === 1'b1);
+    chk("TC-B the unaligned start misses: no shared entry",
+        dut.r_ubtb_blk_p1.hit === 1'b0);
     chk_eq("TC-B slot_pc[0] zero, branch before the start",
            dut.w_slot_pc_p1[0], VA_WIDTH'('h0));
     chk2_eq("TC-B slot_pc[1] zero, branch before the start",
@@ -2772,8 +2803,10 @@ module tb;
     // ftb member: scalar within the entry, same value in every slot
     chk("F1 ftb hit slot0",  bpu_meta_ftb_p2[0].hit === 1'b1);
     chk("F1 ftb way slot0",  bpu_meta_ftb_p2[0].way === 2'd2);
+    // BP-140: at one slot the jump is the second branch and is split
+    // off (the jump field cleared, its position 0). OLD: 6 at both.
     chk("F1 ftb jmp_pos slot0",
-        bpu_meta_ftb_p2[0].jmp_pos === 4'd6);
+        bpu_meta_ftb_p2[0].jmp_pos === ((NUM_PRED_SLOTS > 1) ? 4'd6 : 4'd0));
     chk2("F1 ftb member replicated into slot1",
          bpu_meta_ftb_p2[S1] === bpu_meta_ftb_p2[0]);
 
@@ -4426,11 +4459,20 @@ module tb;
     //    one block. The FTB holds a not-taken conditional at pos 1 and
     //    a block end at pc + 8. The corrected fall-through is pc + 8,
     //    and it is the same value the p2 redirect fetches next.
+    //    BP-140: the end at pc + 8 is the split's: a not-taken
+    //    conditional at pos 4 (pc + 8) beyond NUM_PRED_SLOTS held ones
+    //    (pos 1, and pos 2 at two slots). OLD: one conditional whose
+    //    update carried the end pc + 8 (no longer written).
     j_reset();
     pc   = VA_WIDTH'('h00_0910_0000);
     base = blk_base(pc);
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, base + VA_WIDTH'('h400), 4'd1,
-                   pc + VA_WIDTH'(8), 1'b0);
+                   pc + BLK_SZ, 1'b0);
+    if (NUM_PRED_SLOTS > 1)
+      ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, base + VA_WIDTH'('h440), 4'd2,
+                     pc + BLK_SZ, 1'b1);
+    ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, base + VA_WIDTH'('h480), 4'd4,
+                   pc + BLK_SZ, 1'b1);
     ubtb_clear_set(pc);
     lp_clear_both(pc);
     req(pc, 6'h21);
@@ -4890,9 +4932,14 @@ module tb;
 
     $display("---- GROUP P: a jump no slot carries, BP-138 ----");
 
-    // -- P1. Region-aligned start, so the jump PC is in the same region
-    //    and its lookup reads the same entry with the conditional
-    //    before the start hidden (ftb_decisions.md 4.6 R-1).
+    // -- P1. Region-aligned start; the jump PC is in the same region.
+    //    Since BP-140 entries are per start: at one slot the call is
+    //    split off the start's entry (its end is the call PC), and the
+    //    call, resolving in the block from its own PC, has its own entry
+    //    there (installed below). OLD (until BP-140): the call PC's
+    //    lookup read the same shared entry with the conditional before
+    //    the start hidden (ftb_decisions.md 4.6 R-1), and the FTB
+    //    answered br0 and the call at both slot counts.
     j_reset();
     clr_upd_chans();
     pc  = VA_WIDTH'('h00_0b10_0000);
@@ -4902,6 +4949,8 @@ module tb;
                    jpc + VA_WIDTH'(4), 1'b0);
     ftb_alloc_jmp(pc, 2'd0, tgt, 4'd5, 1'b1, 1'b0, 1'b0,
                   jpc + VA_WIDTH'(4), 1'b1);
+    ftb_alloc_jmp(jpc, 2'd0, tgt, 4'd0, 1'b1, 1'b0, 1'b0,
+                  jpc + VA_WIDTH'(4), 1'b0);
     ubtb_clear_set(pc);
     ubtb_clear_set(jpc);
     lp_clear_both(pc);
@@ -4911,11 +4960,14 @@ module tb;
     tick();
     norq();
     tick();                                  // pc at p2
-    chk("P1 fixture: the FTB answers with br0 at pos 3 and a call at 5",
+    chk("P1 fixture: the FTB answers with br0 at pos 3",
         dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
-     && (dut.w_ftb_br0_pos_p2 === 4'd3) && dut.w_ftb_jmp_valid_p2
-     && (dut.w_ftb_jmp_pos_p2 === 4'd5) && dut.w_ftb_is_call_p2
-     && !dut.w_ftb_br1_valid_p2);
+     && (dut.w_ftb_br0_pos_p2 === 4'd3) && !dut.w_ftb_br1_valid_p2);
+    chk("P1 fixture: and the call at 5 at two slots, none at one",
+        (NUM_PRED_SLOTS > 1)
+          ? (dut.w_ftb_jmp_valid_p2 && (dut.w_ftb_jmp_pos_p2 === 4'd5)
+             && dut.w_ftb_is_call_p2)
+          : !dut.w_ftb_jmp_valid_p2);
     chk("P1 p2: slot 0 is the conditional, not taken",
         (dut.w_br_type_p2[0] === COND) && (dut.w_taken_p2[0] === 1'b0));
     if (NUM_PRED_SLOTS > 1) begin
@@ -4958,9 +5010,19 @@ module tb;
     // -- P2. Two conditionals and a plain jump (jal x0). Every slot
     //    holds a conditional at either slot count, so the jump is in no
     //    slot at either. At one slot the second conditional is in no
-    //    slot either and comes first, so since BP-139 (option A) the
-    //    block ends at its PC, not at the jump PC; group Q follows that
-    //    case through. At two slots the end is the jump PC (BP-138).
+    //    slot either and comes first, so the block ends at its PC, not
+    //    at the jump PC; group Q follows that case through. At two slots
+    //    the end is the jump PC. Since BP-140 the FTB stores that end
+    //    itself (the split at update: the entry keeps NUM_PRED_SLOTS
+    //    branches, the end is the first one not kept) and reports no
+    //    branch beyond it, so the cluster cut (BP-138, BP-139 option A)
+    //    does not fire here; it is the backstop for a stale entry. The
+    //    jump, resolving in the block from its own PC, has its own
+    //    entry there (BP-140, per-start entries).
+    //    OLD (BP-138 to BP-140): the FTB answered br0 1, br1 3 and the
+    //    jump 6 (the shared entry's 2 + 1 fields), the cut ended the
+    //    block, and the block at the jump PC read the jump from the
+    //    region's shared entry.
     j_reset();
     clr_upd_chans();
     pc  = VA_WIDTH'('h00_0b20_0000);
@@ -4972,6 +5034,8 @@ module tb;
                    jpc + VA_WIDTH'(4), 1'b1);
     ftb_alloc_jmp(pc, 2'd0, tgt, 4'd6, 1'b0, 1'b0, 1'b0,
                   jpc + VA_WIDTH'(4), 1'b1);
+    ftb_alloc_jmp(jpc, 2'd0, tgt, 4'd0, 1'b0, 1'b0, 1'b0,
+                  jpc + VA_WIDTH'(4), 1'b0);
     ubtb_clear_set(pc);
     ubtb_clear_set(jpc);
     lp_clear_both(pc);
@@ -4980,12 +5044,15 @@ module tb;
     tick();
     norq();
     tick();                                  // pc at p2
-    chk("P2 fixture: the FTB answers br0 pos 1, br1 pos 3, jump pos 6",
+    chk("P2 fixture: the FTB answers br0 pos 1, no jump (split off)",
         dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
-     && (dut.w_ftb_br0_pos_p2 === 4'd1) && dut.w_ftb_br1_valid_p2
-     && (dut.w_ftb_br1_pos_p2 === 4'd3) && dut.w_ftb_jmp_valid_p2
-     && (dut.w_ftb_jmp_pos_p2 === 4'd6) && !dut.w_ftb_is_call_p2
-     && !dut.w_ftb_is_ret_p2 && !dut.w_ftb_is_jalr_p2);
+     && (dut.w_ftb_br0_pos_p2 === 4'd1) && !dut.w_ftb_jmp_valid_p2);
+    chk("P2 fixture: br1 pos 3 at two slots, none at one",
+        (NUM_PRED_SLOTS > 1)
+          ? (dut.w_ftb_br1_valid_p2 && (dut.w_ftb_br1_pos_p2 === 4'd3))
+          : !dut.w_ftb_br1_valid_p2);
+    chk("P2 the cut does not fire: the FTB reports no unslotted branch",
+        dut.w_cut_p2 === 1'b0);
     for (int s = 0; s < NUM_PRED_SLOTS; s++) begin
       chk($sformatf("P2 p2: slot %0d is a conditional, not taken", s),
           (dut.w_br_type_p2[s] === COND) && (dut.w_taken_p2[s] === 1'b0));
@@ -5041,6 +5108,15 @@ module tb;
   // entry through the FTB update port, clears the uBTB set and both
   // loop banks of every PC it requests, and reads the FTB fields back
   // at p2 before any check.
+  // BP-140: the FTB stores at most NUM_PRED_SLOTS branches and ends the
+  // entry at the first one it does not keep (the split), so at one slot
+  // it answers br0 alone with the end at the second conditional's PC;
+  // the block ends at the same PC and the cut does not fire. The block
+  // at that PC reads the entry of its own start, installed by the
+  // conditional (and in Q2 the jump) resolving from there. OLD (BP-139
+  // to BP-140): the fixtures read br0, br1 (and the jump) at one slot,
+  // the cut ended the block, and the next block read the region's
+  // shared entry.
   task automatic group_q();
     logic [VA_WIDTH-1:0] pc;
     logic [VA_WIDTH-1:0] c2pc;
@@ -5062,6 +5138,8 @@ module tb;
     pft  = pc + VA_WIDTH'('h20);             // the stored end
     ftb_alloc_cond(pc, 2'd0, 1'b0, 1'b0, t1, 4'd1, pft, 1'b0);
     ftb_alloc_cond(pc, 2'd0, 1'b1, 1'b0, t2, 4'd3, pft, 1'b1);
+    if (NUM_PRED_SLOTS == 1)
+      ftb_alloc_cond(c2pc, 2'd0, 1'b0, 1'b0, t2, 4'd0, c2pc + BLK_SZ, 1'b0);
     ubtb_clear_set(pc);
     ubtb_clear_set(c2pc);
     lp_clear_both(pc);
@@ -5070,10 +5148,13 @@ module tb;
     tick();
     norq();
     tick();                                  // pc at p2
-    chk("Q1 fixture: the FTB answers br0 pos 1, br1 pos 3, no jump",
+    chk("Q1 fixture: the FTB answers br0 pos 1, no jump",
         dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
-     && (dut.w_ftb_br0_pos_p2 === 4'd1) && dut.w_ftb_br1_valid_p2
-     && (dut.w_ftb_br1_pos_p2 === 4'd3) && !dut.w_ftb_jmp_valid_p2);
+     && (dut.w_ftb_br0_pos_p2 === 4'd1) && !dut.w_ftb_jmp_valid_p2);
+    chk("Q1 fixture: br1 pos 3 at two slots, none at one (split off)",
+        (NUM_PRED_SLOTS > 1)
+          ? (dut.w_ftb_br1_valid_p2 && (dut.w_ftb_br1_pos_p2 === 4'd3))
+          : !dut.w_ftb_br1_valid_p2);
     chk("Q1 p2: slot 0 is the first conditional, not taken",
         (dut.w_br_type_p2[0] === COND) && (dut.w_pos_p2[0] === 4'd1)
      && (dut.w_taken_p2[0] === 1'b0));
@@ -5129,6 +5210,13 @@ module tb;
                      jpc + VA_WIDTH'(4), 1'b1);
       ftb_alloc_jmp(pc, 2'd0, tgt, 4'd6, 1'b0, 1'b0, 1'b0,
                     jpc + VA_WIDTH'(4), 1'b1);
+      // The block from the second conditional's PC: the conditional at
+      // its pos 0 and the jump at its pos 3, which the split ends the
+      // entry at (one slot).
+      ftb_alloc_cond(c2pc, 2'd0, 1'b0, 1'b0, pc + VA_WIDTH'('h340), 4'd0,
+                     c2pc + BLK_SZ, 1'b0);
+      ftb_alloc_jmp(c2pc, 2'd0, tgt, 4'd3, 1'b0, 1'b0, 1'b0,
+                    jpc + VA_WIDTH'(4), 1'b1);
       ubtb_clear_set(pc);
       ubtb_clear_set(c2pc);
       lp_clear_both(pc);
@@ -5137,11 +5225,10 @@ module tb;
       tick();
       norq();
       tick();                                // pc at p2
-      chk("Q2 fixture: the FTB answers br0 pos 1, br1 pos 3, jump pos 6",
+      chk("Q2 fixture: the FTB answers br0 pos 1 alone (split at 3)",
           dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
-       && (dut.w_ftb_br0_pos_p2 === 4'd1) && dut.w_ftb_br1_valid_p2
-       && (dut.w_ftb_br1_pos_p2 === 4'd3) && dut.w_ftb_jmp_valid_p2
-       && (dut.w_ftb_jmp_pos_p2 === 4'd6));
+       && (dut.w_ftb_br0_pos_p2 === 4'd1) && !dut.w_ftb_br1_valid_p2
+       && !dut.w_ftb_jmp_valid_p2);
       chk("Q2 p2: slot 0 is the first conditional, not taken",
           (dut.w_br_type_p2[0] === COND) && (dut.w_taken_p2[0] === 1'b0));
       chk_eq("Q2 the block ends at the second conditional, not the jump",
@@ -5155,7 +5242,7 @@ module tb;
       chk("Q2 the block at that PC carries it in slot 0, not taken",
           (dut.w_br_type_p2[0] === COND) && (dut.w_pos_p2[0] === 4'd0)
        && (dut.w_taken_p2[0] === 1'b0));
-      chk_eq("Q2 and that block ends at the jump PC (BP-138's cut)",
+      chk_eq("Q2 and that block ends at the jump PC (the split)",
              dut.bpu_blk_pft_p2, jpc);
     end
 
@@ -5163,6 +5250,125 @@ module tb;
     norq();
     repeat (2) tick();
     $display("---- GROUP Q done (pass %0d fail %0d) ----",
+             pass_cnt, fail_cnt);
+  endtask
+
+  // =================================================================
+  // GROUP S -- the split at update, at the cluster (BP-140, Problem 2)
+  // =================================================================
+  //
+  // The uBTB and the FTB are trained through their own update ports,
+  // as ftq_upd_conv and ftq_ftb_sched present a resolution: one start
+  // S with NUM_PRED_SLOTS + 1 not-taken conditionals (pos 1, 3 and at
+  // two slots 5), resolved in order. Both split the entry: they keep
+  // the lowest NUM_PRED_SLOTS and end it at the PC of the last, B. The
+  // branch that fell out then resolves in the block from its own PC
+  // (pos 0) and trains both there.
+  // S1 the block at S: the uBTB p1 end and the FTB p2 end are both PC(B)
+  //    (one entry per start: no other start rewrites either end), so no
+  //    slot raises a p2 redirect and the cut does not fire.
+  // S2 the block at PC(B): B is reported in slot 0 at pos 0 by both,
+  //    not taken, and again no p2 redirect.
+  // Fails on the starting tree: at one slot the shared uBTB entry ends
+  // at S + 32 and the FTB cut ends the block at PC(B), so p2 redirects;
+  // at two slots neither stores the third conditional.
+  // Every case starts from j_reset() with the bimodal table not taken,
+  // the uBTB sets and both loop banks of S and PC(B) cleared.
+
+  // Train the uBTB and the FTB with one resolved, not-taken conditional
+  // of the block at start, at position pos. The FTB carried hit is the
+  // caller's (the current-state check decides, TD#163).
+  task automatic s_train(input logic [VA_WIDTH-1:0] start,
+                         input logic [FTB_BR_POS_BITS-1:0] pos,
+                         input logic [VA_WIDTH-1:0] tgt,
+                         input logic hit);
+    ubtb_upd_t u;
+    u          = mk_upd(COND, 1'b1, start);
+    u.br_taken = 1'b0;
+    u.target   = tgt;
+    u.pos      = pos;
+    u.pft_addr = start + BLK_SZ;
+    ubtb_upd_u0[0] = u;
+    tick();
+    ubtb_upd_u0[0] = '0;
+    ftb_alloc_cond(start, 2'd0, 1'b0, 1'b0, tgt, pos, start + BLK_SZ, hit);
+  endtask
+
+  task automatic group_s();
+    logic [VA_WIDTH-1:0]        pc;
+    logic [VA_WIDTH-1:0]        bpc;
+    logic [FTB_BR_POS_BITS-1:0] bpos;
+
+    $display("---- GROUP S: the split at update, BP-140 ----");
+    j_reset();
+    clr_upd_chans();
+    tage_bim_fill(2'b00);
+    pc   = VA_WIDTH'('h00_0b50_0000);
+    bpos = (NUM_PRED_SLOTS > 1) ? 4'd5 : 4'd3;
+    bpc  = pc + (VA_WIDTH'(bpos) << POS_OFFSET_BITS);
+    ubtb_clear_set(pc);
+    ubtb_clear_set(bpc);
+    lp_clear_both(pc);
+    lp_clear_both(bpc);
+    s_train(pc, 4'd1, pc + VA_WIDTH'('h300), 1'b0);
+    s_train(pc, 4'd3, pc + VA_WIDTH'('h340), 1'b1);
+    if (NUM_PRED_SLOTS > 1)
+      s_train(pc, 4'd5, pc + VA_WIDTH'('h380), 1'b1);
+    // B resolving in the block from its own PC.
+    s_train(bpc, 4'd0, bpc + VA_WIDTH'('h200), 1'b0);
+
+    // -- S1.
+    req(pc, 6'h31);
+    tick();
+    norq();
+    chk("S1 the uBTB hits the start's entry", dut.r_ubtb_blk_p1.hit === 1'b1);
+    chk_eq("S1 the uBTB p1 end is PC(B)", bpu_pred_pft_p1, bpc);
+    chk("S1 the uBTB slot 0 is pos 1, not taken",
+        (dut.r_ubtb_pred_p1[0].pos === 4'd1)
+     && (dut.r_ubtb_pred_p1[0].br_taken === 1'b0));
+    tick();
+    chk("S1 the FTB answers", dut.w_ftb_valid_p2 === 1'b1);
+    chk("S1 the FTB holds NUM_PRED_SLOTS branches, no jump",
+        dut.w_ftb_br0_valid_p2 && (dut.w_ftb_br0_pos_p2 === 4'd1)
+     && ((NUM_PRED_SLOTS > 1)
+           ? (dut.w_ftb_br1_valid_p2 && (dut.w_ftb_br1_pos_p2 === 4'd3))
+           : !dut.w_ftb_br1_valid_p2)
+     && !dut.w_ftb_jmp_valid_p2);
+    chk_eq("S1 the FTB p2 end is PC(B), the p1 end", dut.bpu_blk_pft_p2,
+           bpc);
+    chk("S1 the cut does not fire", dut.w_cut_p2 === 1'b0);
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      chk($sformatf("S1 slot %0d raises no p2 redirect", s),
+          bpu_redir_p2[s].valid === 1'b0);
+    chk_eq("S1 slot 0's successor is PC(B)", dut.w_succ_p2[0], bpc);
+
+    // -- S2.
+    tick();
+    req(bpc, 6'h32);
+    tick();
+    norq();
+    chk("S2 the uBTB hits B's own entry", dut.r_ubtb_blk_p1.hit === 1'b1);
+    chk("S2 the uBTB slot 0 is B at pos 0, not taken",
+        dut.r_ubtb_pred_p1[0].valid && (dut.r_ubtb_pred_p1[0].pos === 4'd0)
+     && (dut.r_ubtb_pred_p1[0].br_type === COND)
+     && (dut.r_ubtb_pred_p1[0].br_taken === 1'b0));
+    tick();
+    chk("S2 the FTB reports B in br0 at pos 0",
+        dut.w_ftb_valid_p2 && dut.w_ftb_br0_valid_p2
+     && (dut.w_ftb_br0_pos_p2 === 4'd0));
+    chk("S2 slot 0 carries B as COND at pos 0, not taken",
+        (dut.w_br_type_p2[0] === COND) && (dut.w_pos_p2[0] === 4'd0)
+     && (dut.w_taken_p2[0] === 1'b0) && (dut.bpu_slot_p2[0].slot_valid));
+    chk_eq("S2 the p2 end equals the p1 end", dut.bpu_blk_pft_p2,
+           dut.r_pft_p1_p2);
+    for (int s = 0; s < NUM_PRED_SLOTS; s++)
+      chk($sformatf("S2 slot %0d raises no p2 redirect", s),
+          bpu_redir_p2[s].valid === 1'b0);
+
+    clr_upd_chans();
+    norq();
+    repeat (2) tick();
+    $display("---- GROUP S done (pass %0d fail %0d) ----",
              pass_cnt, fail_cnt);
   endtask
 
@@ -5764,6 +5970,7 @@ module tb;
     group_o();
     group_p();
     group_q();
+    group_s();
 
     mon_report();
     $display("INFO: %0d resets", n_resets);

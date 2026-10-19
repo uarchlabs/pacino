@@ -16,6 +16,48 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-081, after BP-140: per-start entries and the split.
+
+BP-140 COMPLETE (Jeff). Task file written by the IA. 4h12m.
+regress.sh 274 targets PASS before and after.
+  RULED (Jeff, 2026-10-18, in the task): ftb_decisions.md 4.6
+    reopened; FTB and uBTB entries per block start PC; the split at
+    update; the BP-139 cut kept as a backstop; training at resolve.
+  Built: tag {VA[39:14], VA[4:1]}, index VA[13:5] XOR (VA[4:1] << 5),
+    the uBTB the same in its partial tag; start-relative storage, the
+    region window and read compaction removed; the split keeps the
+    lowest NUM_PRED_SLOTS branches and ends the entry at the first
+    not kept. Entry widths unchanged (FTB 114/113, uBTB 107). FA1
+    (new ftb_assert.sv). The uBTB duplicate fill is closed.
+  PROVISIONAL, ACCEPTED (Jeff): the index fold; start-relative
+    storage; the window and compaction removed; a conditional's
+    predicted end is never written, so the end only moves down; the
+    other-kind replacement rule; the bounded end in the past-the-end
+    test; the RAS fix (TD#189).
+  Measured, tb_fe_top: cycles 36095 -> 30840 (two slots), 38381 ->
+    31697 (one); mispredicts 885 -> 688, 928 -> 738; p2 redirects
+    2873 -> 1210, 4329 -> 1066. Most from per-start entries; the
+    split alone is worse than the base. BP-131 contention 0; the
+    cut 0; coro 32 -> 5 mispredicts (TD#168 CLOSED). Evictions FTB
+    15 -> 14, uBTB 133 -> 129; occupancy on compiled code not shown.
+  Found and fixed: a RETURN commit with an empty-stack snapshot moved
+    BOS onto a reused slot (ras.sv c_bos, tb_ras TC-44).
+  fe_demo: fd04, fd07, fd09 pass at both slot counts. fd13_l1i (its
+    MSHR merge, a timing change) and fd23_jump_cut (the cut no longer
+    fires) fail: both to the next DOC task (Jeff).
+  ftb_upd_br_idx_u0 and ubtb_upd_t.br_idx are no longer read: kept
+    RESERVED, as the flush ports (Jeff).
+  OPENED (Jeff): TD#189 to TD#192.
+  Not covered by the IA's entries: ras_theory_of_operation.md.
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, ftb_decisions.md, fe_decisions.md,
+ftb_interfaces.md, ubtb_interfaces.md, ras_decisions.md,
+ras_interfaces.md.
+
+Next free: BP-141, SYS-003, DOC-007, INFRA-014, TOOLS-007, TD#193.
+
+---
 ## Session-081, after BP-139: every reported branch predicted.
 
 BP-139 COMPLETE (Jeff: acceptable). Task file written by the IA.
@@ -6090,10 +6132,11 @@ numbers are issued from one sequence across both tables.
 |     |          | the other's does not. Fix if measured: accept each slot  |
 |     |          | independently, which needs ftq_resolve to hold a partly  |
 |     |          | accepted resolution pair. Ruled session-075 (Jeff).      |
-| 168 | bpu      | KEPT by ruling (Jeff, session-075, BP-121 decision 7:    |
-|     |          | keep ftb_decisions.md 4.6). NOT OPEN WORK. Every start   |
-|     |          | in a region shares one FTB entry with one jump field, so |
-|     |          | two jumps of one region take turns. MEASURED (BP-121 and |
+| 168 | bpu      | CLOSED by BP-140 (session-081), see below. Was KEPT by   |
+|     |          | ruling (Jeff, session-075, BP-121 decision 7: keep       |
+|     |          | ftb_decisions.md 4.6). Every start in a region shared    |
+|     |          | one FTB entry with one jump field, so two jumps of one   |
+|     |          | region took turns. MEASURED (BP-121 and |
 |     |          | BP-122, unchanged, mispredicts after warm-up / total):   |
 |     |          | deep 91/146, nest 41/62, region 25/37, coro 25/32, recur |
 |     |          | 21/33, nearly all returns. Also not open work:           |
@@ -6104,6 +6147,12 @@ numbers are issued from one sequence across both tables.
 |     |          | entries used by more than one start; 92% of block-end    |
 |     |          | changes made by another start; 608 jump replacements.    |
 |     |          | Revisited with TD#179 (Jeff).                            |
+|     |          | CLOSED by BP-140 (2026-10-19): one entry per start PC    |
+|     |          | (Jeff reopened ftb_decisions.md 4.6). coro's two jumps   |
+|     |          | of the 0x600 region now have an entry each: mispredicts  |
+|     |          | 32 -> 5 at both slot counts (BP-121 measured 39 on its   |
+|     |          | tree), jump-field turn-taking 38 -> 0 in coro and 703 -> |
+|     |          | 0 over the tb_fe_top programs.                           |
 | 179 | bpu, ftq | OPEN, DEFERRED (Jeff, session-078) to the performance    |
 |     |          | analysis against compiled benchmarks; holds every        |
 |     |          | remaining one- and two-slot change. Opened as the        |
@@ -6162,6 +6211,22 @@ numbers are issued from one sequence across both tables.
 |     |          | the placed slot's metadata only when that slot is free;  |
 |     |          | into an occupied slot it trains the uBTB and FTB only    |
 |     |          | (item C).                                                |
+|     |          | BP-140 (2026-10-19): per-start FTB and uBTB entries and  |
+|     |          | the split at update built (Jeff's rulings of 2026-10-18; |
+|     |          | provisional choices accepted). An entry is the block     |
+|     |          | from one start PC; it holds at most NUM_PRED_SLOTS       |
+|     |          | branches; the end is the PC of the first branch not      |
+|     |          | kept. The uBTB and FTB store the same end, so the cut    |
+|     |          | block's p2 redirect is gone (fd04: 12 -> 0) and the      |
+|     |          | BP-139 cut is a backstop (0 events in tb_fe_top).        |
+|     |          | tb_fe_top cycles 36095 -> 30840 (two slots), 38381 ->    |
+|     |          | 31697 (one). The uBTB duplicate fill is closed (fields   |
+|     |          | named by position). STILL OPEN under TD#179: the entry   |
+|     |          | shape (2 + 1 leaves one field unused at two slots and    |
+|     |          | two at one, 47,104 / 94,208 bits of the FTB); training   |
+|     |          | at resolve or commit; per-start occupancy on compiled    |
+|     |          | benchmarks. fe_demo FD-13 and FD-23 proofs fail on the   |
+|     |          | BP-140 tree: the next DOC task (Jeff).                   |
 | 180 | tools    | OPEN, VERIFICATION. tools/cov_table.py's tage and bpu    |
 |     |          | rows list tage.sv only; since BP-132 the TAGE            |
 |     |          | arbitration lines are in tage_arb.sv, so TAGE coverage   |
@@ -6343,6 +6408,49 @@ numbers are issued from one sequence across both tables.
 |     |          | upd_plru_next, plru_rd_plru). n_ftb_bub already counts   |
 |     |          | H4. fe_demo_tb_decisions.md FDT-10b, drafted by the PA.  |
 |     |          | Opened session-080 (Jeff).                               |
+| 189 | bpu      | OPEN, CORRECTNESS RISK. RAS BOS ON A POP COMMIT. BP-140  |
+|     |          | Problem 4: a RETURN commit whose snapshot is an empty    |
+|     |          | stack moved BOS onto a slot the allocator had reused     |
+|     |          | (RS2 in tb_fe_top region on the BP-140 tree). Fixed      |
+|     |          | PROVISIONAL in ras.sv (c_bos: such a commit leaves BOS), |
+|     |          | accepted (Jeff); tb_ras TC-44. Still open: a pop commit  |
+|     |          | with a non-empty snapshot can in principle reach a       |
+|     |          | reused slot the same way after a full TOSW wrap (15      |
+|     |          | allocations between the snapshot and the commit); not    |
+|     |          | seen, not fixed. Opened session-081 (Jeff).              |
+| 190 | bpu      | OPEN, PERFORMANCE. TRACK EVERY BRANCH VS TAKEN-ONLY      |
+|     |          | INSERTION. Jeff reopens (2026-10-19) the BP-140 binding  |
+|     |          | decision "Track every branch, taken or not               |
+|     |          | (ftb_decisions.md 5.2)" for measurement. Pacino stores   |
+|     |          | every resolved conditional, taken or not; XiangShan      |
+|     |          | (FTBEntryGen, NewFtq.scala) inserts a conditional only   |
+|     |          | once it is taken, so a never-taken branch takes no slot  |
+|     |          | and causes no split. Measure the performance merit of    |
+|     |          | each scheme at both slot counts: cycles, mispredicts, p2 |
+|     |          | redirects, FTQ entries per retired instruction, and      |
+|     |          | splits caused by a branch never resolved taken.          |
+|     |          | Independent of the entry shape (TD#179). Opened          |
+|     |          | session-081 (Jeff).                                      |
+| 191 | bpu      | OPEN, PERFORMANCE. uBTB ORGANISATION VS XIANGSHAN'S      |
+|     |          | FauFTB. The uBTB is 256 entries, 64 sets x 4 ways, a     |
+|     |          | 24-bit partial tag, round-robin replacement. FauFTB      |
+|     |          | (FauFTB.scala) is 32 entries, fully associative, a       |
+|     |          | 16-bit partial tag pc[16:1], PLRU. Pacino holds more     |
+|     |          | entries but can lose them to set conflicts (tb_fe_top    |
+|     |          | uBTB evictions of a valid entry: 129 on the BP-140 tree; |
+|     |          | fd04's eight blocks share one uBTB set, and its two-slot |
+|     |          | p2 redirects rose 38 -> 48 with BP-140's index). Measure |
+|     |          | the performance merit of each organisation; not scoped   |
+|     |          | by any task. Opened session-081 (Jeff).                  |
+| 192 | ftq, bpu | OPEN, PERFORMANCE. A SPLIT UPDATE CAN BE DROPPED.        |
+|     |          | ftq_ftb_sched (ftq_decisions.md 5.7) may drop a LOW-     |
+|     |          | value FTB update, one whose prediction hit and was       |
+|     |          | correct, under a two-update cycle. An update that would  |
+|     |          | split an entry (a not-taken branch the entry did not     |
+|     |          | hold) is classed LOW, so the split can wait for the      |
+|     |          | branch's next resolution. Not measured (BP-140 Deferred  |
+|     |          | Work). Decide whether a split-causing update is high     |
+|     |          | value. Opened session-081 (Jeff).                        |
 
 ---
 

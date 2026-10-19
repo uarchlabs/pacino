@@ -690,6 +690,15 @@ jump behind br0 when there is no br1; at two slots, a jump
 behind two conditionals. Every branch the FTB reports is
 predicted at every slot count.
 
+A BACKSTOP SINCE BP-140. The FTB stores at most NUM_PRED_SLOTS
+branches per entry and ends the entry at the first branch it does not
+keep (the split at update, ftb_decisions.md 3), so from an entry it
+wrote it never reports a branch no slot carries, and the block ends
+at that PC by the stored end. The cut stays, unchanged, for an entry
+that reports more (none in tb_fe_top: 0 cut groups at both slot
+counts, 280 / 2409 before). FD-23 of examples/fe_demo, which
+demonstrates the cut firing, no longer shows it.
+
 ---
 
 ## 11. Invariants
@@ -1809,4 +1818,6 @@ create one.
 
   2026-10-19  session-081, after BP-139. 10: a branch no slot carries
               ends the block at its PC (option A). 7.2: item C.
+
+  2026-10-19  session-081, after BP-140. 10: the cut is a backstop.
 ```

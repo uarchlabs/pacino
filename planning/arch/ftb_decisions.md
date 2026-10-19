@@ -203,33 +203,38 @@ same block) is handled by the next cycle's lookup re-indexing at the
 branch target. It is NOT handled by predicting two blocks in one
 cycle. Each cycle is one block prediction from one entry.
 
-A block can contain more branches than the entry can hold (section 4:
-two conditional + one jump). When a block has a third conditional
-branch with no field for it, the block ENDS at the second conditional.
-The fallthrough points just after that second branch. The third
-branch becomes the first branch of the next prediction block and gets its
-own entry on a separate lookup. Branches are never dropped; the block
-is split.
+A block can contain more branches than NUM_PRED_SLOTS. THE SPLIT
+(BP-140, ruled by Jeff 2026-10-18): an entry never holds more than
+NUM_PRED_SLOTS branches. When an update would make it hold more, the
+lowest positions are kept and the block end becomes the PC of the
+lowest-position branch not kept; a jump not kept clears the jump
+field and the end stops before it. At one slot an entry holds one
+branch, conditional or jump; at two, two in any mix. The branch that
+falls out becomes the first branch of the next block, which starts at
+its PC, and gets its own entry (4.6) when it resolves in a block from
+that start. Branches are never dropped; the block is split. The
+result is the same whatever order the branches of a block resolve
+in.
 
 Cost of the split: that block becomes two prediction blocks, two lookups
 instead of one, on that path. This only happens with three or more
 conditional branches in one 32-byte block, which is rare.
 
-THE SPLIT IS NOT BUILT, at either slot count (found session-078).
-ftb_cntrl.sv, with both conditional fields holding other branches,
-REPLACES a field (5.5 field mapping, cases 3 and 4), and the block
-end written is the update's, not one ending at the held branches.
-The uBTB fills the field the update names. Nothing shortens the
-block. The rule above also does not count the jump. The FTB can
-report a branch that no prediction slot carries: at one slot
-br1 and a jump behind br0, at two slots a jump behind two
-conditionals. Since BP-139 (option A, ruled by Jeff,
-2026-10-18; it generalizes BP-138 D1 option b) the cluster
-ends the block at the PC of the first such branch, and the
-next lookup, from that PC, reports it in port slot 0
-(fe_decisions.md 10). The FTB is unchanged. A third
-conditional at two slots is never stored, so no cut can
-reach it; it is BP-140's split.
+THE SPLIT IS BUILT, in the FTB and the uBTB, at both slot counts
+(BP-140). Before it, ftb_cntrl.sv replaced a conditional field when
+both held other branches (5.5 cases 3 and 4) and wrote the update's
+end, and the cluster cut (fe_decisions.md 10, BP-139 option A) ended
+the block at the first branch the FTB reported and no slot carried.
+Since BP-140 the FTB reports no such branch from an entry it wrote,
+and the cut is a backstop: 0 events in every tb_fe_top program at
+both slot counts (2409 at one slot before).
+THE END AT UPDATE (BP-140, PROVISIONAL). The update's end for a
+conditional, its block's predicted end, is not written. An entry's
+end is the start plus FTB_BLOCK_BYTES on allocation, a written jump's
+resolved end (5.5), or a split point, and it only moves down; a
+resolution at or after the end, or after the stored jump, changes
+nothing (it came from a block predicted before the entry was
+shortened).
 
 MEASURED by BP-131 (session-078, tb_fe_top, 36 programs): blocks with
 more branches than slots, 9 at two slots (all twocond, two
@@ -245,6 +250,13 @@ or NUM_PRED_SLOTS fields with a shared last field as XiangShan), the
 region sharing of TD#168 and the training point, until the
 performance analysis against compiled benchmarks.
 
+MEASURED by BP-140 (tb_fe_top, 38 programs, base -> final): cycles
+36095 -> 30840 at two slots and 38381 -> 31697 at one; the split's
+contention with other starts (BP-131's count) 0 / 197 -> 0 / 0. The
+split on the shared region entry, without per-start entries, was
+measured worse than the starting tree (one slot 42573 cycles, 502
+contention events).
+
 ---
 
 ## 4. Entry Format
@@ -258,7 +270,8 @@ only):
 
   valid                  -- entry valid. Held in ftb_plru (flops),
                             NOT in ftb_array (section 2.4, 8).
-  tag                    -- FTB_TAG_BITS, VA[39:14]; bit 40 is
+  tag                    -- FTB_TAG_BITS, VA[39:14] and the start's
+                            halfword offset VA[4:1]; bit 40 is
                             NOT covered (4.1, TD#122)
   conditional branch 0   -- valid, position, target, conf[2:0]
   conditional branch 1   -- valid, position, target, conf[2:0]
@@ -266,20 +279,19 @@ only):
                             VA_WIDTH from a stored displacement, 4.2),
                             isCall, isRet, isJalr, rvc (the jump is a
                             compressed instruction; 5.5, BP-121)
-  fallthrough            -- pftAddr (6 bits, no carry; 5.5, 8)
+  fallthrough            -- pftAddr (5 bits from the block start, no
+                            carry; 5.5, 8)
 
-position is STORED region-relative in FTB_BR_RPOS_BITS, 5 bits, and
-PRESENTED start-relative in FTB_BR_POS_BITS, 4 bits, the in-block
-instruction slot (0..15) the branch occupies (4.6). It is distinct
-from the TARGET offset of 4.2 (an earlier draft called this field
-"offset", which collided with the target-offset term -- it is
-renamed "position" here). It is sourced
-from ftb_upd_pos_u0 and read out on ftb_brI_pos_p2 / ftb_jmp_pos_p2
-(ftb_interfaces.md 2.3/2.5, IC-FTB-15); the cluster/FTQ uses it to
-locate the taken branch in the fetch bundle. It NO LONGER orders br0
-against br1: IC-FTB-16 (2026-08-19) requires the update path to fill
-the conditional fields in program order, so br0 is by construction
-the earlier branch.
+position is the in-block instruction slot (0..15) the branch
+occupies, counted from the BLOCK START, FTB_BR_POS_BITS = 4, stored
+and presented in the same form since BP-140 (one entry per start,
+4.6; it was stored region-relative in FTB_BR_RPOS_BITS = 5). It is
+distinct from the TARGET offset of 4.2 (an earlier draft called this
+field "offset", which collided with the target-offset term -- it is
+renamed "position" here). It is sourced from ftb_upd_pos_u0 and read
+out on ftb_brI_pos_p2 / ftb_jmp_pos_p2 (ftb_interfaces.md 2.3/2.5,
+IC-FTB-15). Storage is in ascending position: br0 below br1, the
+jump after both; the update keeps that order (5.4a).
 
 conf is a bimodal DIRECTION counter, not a separate confidence-only
 field: its MSB is FTB's predicted direction for that conditional. There
@@ -307,9 +319,21 @@ tradeoff: simpler format, simpler update, no field-sharing decode.
 Project stance is to trade area for performance; do not optimize the
 entry toward minimum area at the expense of capability.
 
+UNUSED FIELDS UNDER THE SPLIT (BP-140). An entry holds at most
+NUM_PRED_SLOTS branches, so at two slots at least one of the three
+fields is always empty (the jump, 32 bits, in {cond, cond}; br1, 23
+bits, in {cond, jump}) and at one slot at least two (46 or 55 bits).
+Over 2048 entries that is at least 47,104 bits at two slots and
+94,208 at one; in the uBTB 5,888 and 11,776. A NUM_PRED_SLOTS-field
+entry with a shared last field (XiangShan) would recover it; it is an
+area change only, out of BP-140's scope (TD#179).
+
 ### 4.1  Tag
 
-  FTB_TAG_BITS = 26   PINNED, not derived (TD#122, FE-19).
+  FTB_RTAG_BITS = 26  PINNED, not derived (TD#122, FE-19); the
+                      region tag, VA[39:14]. It was FTB_TAG_BITS.
+  FTB_TAG_BITS  = 30  FTB_RTAG_BITS + FTB_BR_POS_BITS: the region tag
+                      and the start's offset VA[4:1] (BP-140).
 
 It was VA_WIDTH - FTB_IDX_BITS - FTB_OFFSET_BITS = 40 - 9 - 5.
 VA_WIDTH is now 41, and the tag is PINNED AT 26 rather than widened
@@ -337,14 +361,16 @@ block end and the mispredict redirect catches a wrong target. This
 is the cost of pinning rather than widening to 27, and it is a
 consequence worth re-reading before TD#122 reaches RTL.
 
-WITHIN one 32-byte region the tag does not separate. FTB_OFFSET_BITS
-of 5 are in neither the index nor the tag, so PC[4:0] does not reach
-the comparator. Prediction blocks are NOT aligned -- a block begins at
-the lookup PC, which is a taken branch target and so any 2-byte
-address (ftq_decisions.md 4.7, and section 3 here). Two lookup PCs in
-one 32-byte region therefore hit the same entry, and the entry's
-position and pftAddr fields are measured from whichever block start
-filled it.
+WITHIN one 32-byte region the tag separates since BP-140. Until
+then FTB_OFFSET_BITS of 5 were in neither the index nor the tag, and
+two lookup PCs in one region hit the same entry (4.6). BP-140 (ruled
+by Jeff 2026-10-18) puts the start's halfword offset VA[4:1] in the
+tag and XORs it into the top of the index: index VA[13:5] XOR
+(VA[4:1] << FTB_SOFF_SHIFT), FTB_SOFF_SHIFT = FTB_IDX_BITS -
+FTB_BR_POS_BITS = 5 (PROVISIONAL). Two starts that differ anywhere in
+VA[39:1] have different (index, tag) pairs. The starts of one region
+index 16 different sets, and two starts at different offsets share a
+set only when their regions differ in VA[13:10], 1 KB or more apart.
 
 This is why 4.5 carries a fall-through bounds check. An earlier
 revision of this section said two different PCs can never alias and
@@ -479,8 +505,9 @@ ruled" with both TDs open against the format.
 ### 4.5  Fallthrough reconstruction: bounds checked
 
 pftAddr is stored partial (8.1). The full fallthrough is reconstructed
-as the aligned region base plus pftAddr shifted by POS_OFFSET_BITS.
-No carry term: 5.5 deleted the carry bit session-070.
+as the block start plus pftAddr shifted by POS_OFFSET_BITS (BP-140;
+it was the aligned region base). No carry term: 5.5 deleted the carry
+bit session-070.
 
   FTB-G1  The reconstructed end is compared against the looked-up
           block start. If the end is not above the start, pftAddr is
@@ -519,12 +546,27 @@ aliased pftAddr is measured from a different block start. Pacino
 reaches Xiangshan's failure by a different route and needs the same
 guard. Session-069.
 
-The alternative considered and not taken was widening the tag to cover
-PC[4:0]. That removes the aliasing at its source but costs five bits
-per entry across the array, against one comparator and one mux for the
-guard.
+The alternative considered and not taken at session-069, widening
+the tag to cover the start offset, was TAKEN by BP-140 (Jeff reopened
+4.6 for it, 2026-10-18): the tag carries VA[4:1] (4.1). The guards
+stay. A stored end is in bounds unless a jump's resolved end is out
+of them, and the update's past-the-end test uses the bounded end
+(ftb_cntrl.sv eff_end), so an out-of-bounds end does not freeze the
+entry.
 
 ### 4.6  Stored positions are region-relative
+
+REPLACED BY BP-140 (Jeff reopened 4.6 for it, 2026-10-18). The
+entry is identified by its block start PC (4.1), so no entry is
+shared by two starts and nothing in it needs a region-relative form.
+Positions, targets and pftAddr are stored start-relative; the window
+of R-1 (and the hiding of a field past the visible jump), the region
+offset of R-2 and the read compaction of O-3b are removed
+(PROVISIONAL). O-1 stands (a target is a displacement from its own
+instruction, now the start plus the position), O-2 stands (FTB-G3),
+O-3a stands as ascending position order per start. The ports were and
+are start-relative (R-2). What follows records the region design as
+built from BP-110 to BP-139.
 
 RULED session-071 (Jeff), option (R). An entry is shared by every
 lookup PC in its 32-byte region (4.1, 4.5), so every in-block
@@ -617,11 +659,13 @@ UNDER TD#125, each a consequence of (R):
        Ruled session-073; ubtb_interfaces.md states each
        divergence and is the home for it.
 
-       KEPT, session-075 (Jeff, BP-121 decision 7). Sharing one
-       entry, and so one jump field, among every start in a region
-       makes two jumps of one region take turns in that field.
-       BP-121 measured the cost and Jeff kept 4.6; TD#168 holds the
-       numbers. Not to be reopened unless Jeff reopens it.
+       KEPT, session-075 (Jeff, BP-121 decision 7), and REOPENED
+       by Jeff for BP-140 (2026-10-18). Sharing one entry, and so
+       one jump field, among every start in a region made two jumps
+       of one region take turns in that field (TD#168). Per-start
+       entries ended it: jump-field turn-taking 703 -> 0 events over
+       the tb_fe_top programs, coro 32 -> 5 mispredicts at both slot
+       counts (BP-121 measured 39).
 
 ---
 
@@ -734,10 +778,12 @@ vector from ftb_plru to implement it; it is not specified now.)
   target (jump): the resolved jump target, as a 21-bit displacement
                 (FTB_JMP_TGT_BITS) with fit/overflow/underflow status.
   isCall / isRet / isJalr: from the resolved jump's type.
-  fallthrough (pftAddr): reduced by ftb_cntrl from the resolved
-                block end address relative to THE ALIGNED REGION
-                BASE, not to the block start (5.5). Six bits, no
-                carry.
+  fallthrough (pftAddr): the block start plus FTB_BLOCK_BYTES, as a
+                position offset from the BLOCK START, or a jump's
+                resolved end when the allocating update is a jump, or
+                the split point (section 3). Five bits, no carry. The
+                update's end for a conditional is not written
+                (BP-140, PROVISIONAL).
 
 ### 5.4a  Which conditional field a branch fills
 
@@ -751,16 +797,11 @@ first branch of the block, and it makes the jump field's
 lowest-free-slot placement program order in every case rather than
 only the common one. Full statement in ftb_interfaces.md IC-FTB-16.
 
-RESTATED ON REGION POSITION, 4.6 O-3c, ruled session-073. For starts
-that share an entry, "program order" is order of REGION position: br0
-holds the lower stored position and br1 the higher, whatever start
-wrote them (O-3a). The FTB, not only the FTQ, now enforces it:
-ftb_cntrl swaps storage into ascending order at the write and compacts
-the window-surviving fields onto the ports at the read (O-3b), so port
-slot 0 is the first branch at or after the start. IC-FTB-16's "the FTB
-does not reorder and does not check" is retired. ftb_upd_br_idx_u0
-names a PORT slot as the update's start saw it; ftb_cntrl maps it back
-to a storage field through the same window. Built by BP-110.
+PER START AGAIN since BP-140 (4.6 replaced). br0 holds the lower
+position and br1 the higher, and the jump is after both, in every
+entry. ftb_cntrl sorts the held branches and the resolving one by
+position at the update. ftb_upd_br_idx_u0 is no longer read: the
+resolving branch's position names its field (5.5).
 
 ### 5.5  Field writes when an existing branch resolves
 
@@ -808,6 +849,15 @@ to a storage field through the same window. Built by BP-110.
                 times) and both still mispredict, 39 before and
                 after. Fixing that reopens 4.6, the sharing of one
                 entry by every start in a region: TD#168.
+                BP-140 (per-start entries, the split) restated
+                the mapping on the start's own branches: a
+                conditional at a stored conditional's position is
+                updated in place; a jump at the stored jump's
+                position rewrites the field; the other kind at a
+                stored position replaces it; a new branch joins the
+                held ones in position order, and a new jump removes
+                the conditionals after it; then the split (section
+                3). Cases 3 and 4 above no longer exist.
   conditional target: rewrite if the resolved taken target differs
                 from the stored offset.
   jump target:  rewrite on EVERY resolve of that jump, including when
@@ -830,19 +880,11 @@ to a storage field through the same window. Built by BP-110.
                 whichever start's block end was written last, so it
                 is not this jump's return address. The bit is a
                 package change (section 8).
-  fallthrough (pftAddr): recomputed on any update that MOVES
-                the block boundary -- a branch added to a free field,
-                the terminating branch changing, or block truncation
-                (section 3) moving the end. Computed from the resolved
-                block end relative to THE ALIGNED REGION BASE (5.5),
-                at the same write as the other fields. Not rewritten
-                when the boundary is unchanged.
-                The block end on the update port is the RESOLVED
-                one: the FTQ rewrites the entry's pft_addr at the
-                resolution of a taken jump (ftq_entry_formats.md 2).
-                Before BP-121 (D3) the update carried the predicted
-                fall-through, so the FTB was trained with its own
-                prediction.
+  fallthrough (pftAddr): written by a jump update (its resolved
+                end, the FTQ's pc + 2 or 4 of the taken jump,
+                TD#164) and by the split (the PC of the first branch
+                not kept, section 3); otherwise kept. It only moves
+                down. Stored from the BLOCK START (BP-140).
 
 All of the above are writes into the ftb_array entry (the carried way).
 The entry-valid in ftb_plru is unchanged on an in-place update -- it
@@ -852,39 +894,14 @@ BP-105), and ftb_interfaces.md IC-FTB-07 and G24 are closed on that
 basis. This read "(and on flush, when that protocol exists)".
 Session-070.
 
-Full-to-partial reduction (ftb_cntrl): the update port delivers the
-resolved block end as a full VA (ftb_upd_pft_addr_u0). ftb_cntrl
-reduces it to the stored partial form:
-RULED session-070, BUILT by BP-110 (session-073). TD#124 closed.
-
-  pftAddr = off[FTB_OFFSET_BITS+1 : POS_OFFSET_BITS]
-            where off = end - base and base is the 32-byte-ALIGNED
-            region containing the block start. Six bits
-            (PFTADDR_BITS = 6, 8.1), covering 0 to 126 bytes above
-            the region base at 2-byte granularity.
-  carry   = DELETED. Not needed at six bits.
-
-The reconstruction at read inverts this: base ++ 0, plus pftAddr
-shifted by POS_OFFSET_BITS. Bounds checked (4.5).
-
-WHY. The encoding is REGION-relative, not start-relative: the entry
-is shared by every PC in the 32-byte region, since FTB_OFFSET_BITS
-are in neither index nor tag (4.1), so a start-relative end would
-reconstruct to a different address for each PC that hits the entry.
-Blocks are unaligned, so with a start at region offset k <= 30, a
-32-byte block and a straddling 32-bit final instruction, off reaches
-(FTB_BLOCK_BYTES - 2) + FTB_BLOCK_BYTES + 2 = 64 bytes. Six bits
-cover that; four bits plus one carry bit do not.
-
-AS BUILT BEFORE BP-110 the reduction was off[4:1] zero-extended into
-a five-bit field with carry = |off[VA_WIDTH-1:5]. Two defects. The
-fifth bit is dead -- a four-bit slice cannot reach 16, so section
-6's "0 to 16" is unreachable. And at off = 64 the reconstruction
-gives pftAddr = 0 with carry set, which is base+32, wrong by 32
-bytes, and 4.5's bounds check does not catch it because base+32 is
-still above the start. Storage is unchanged either way: 5 + 1 carry
-becomes 6 + no carry. BP-110 pinned the off = 64 case (tb_ftb R1,
-tb_ubtb TC16) failing before the fix.
+Full-to-partial reduction (ftb_cntrl), BP-140: pftAddr =
+off[POS_OFFSET_BITS +: PFTADDR_BITS] where off = end - block start;
+five bits (PFTADDR_BITS = FTB_BR_POS_BITS + 1, 8.1). An end lies in
+(start, start + FTB_BLOCK_BYTES + 2], 17 positions at most. The
+reconstruction adds pftAddr << POS_OFFSET_BITS to the lookup PC,
+bounds checked (4.5). The region-relative six-bit form of
+session-070 (BP-110) is retired with 4.6; tb_ftb R1 and tb_ubtb TC16
+still pin the straddling end, now from a jump.
 
 ---
 
@@ -986,48 +1003,53 @@ Defined in bp_defines_pkg.sv. Do not use numeric literals for these.
                               writeWay (5.1).
   FTB_BLOCK_BYTES   = 32      FTB prediction block (16 positions).
   FTB_OFFSET_BITS   = 5       $clog2(FTB_BLOCK_BYTES).
-  FTB_TAG_BITS      = 26      PINNED, NOT DERIVED (4.1, TD#122).
-                              It was VA_WIDTH - FTB_IDX_BITS -
-                              FTB_OFFSET_BITS; at VA_WIDTH 41 that
-                              gives 27. Held at 26: the tag spans
-                              VA[39:14] and bit 40 aliases, which
-                              is a misprediction, not a fault.
+  FTB_RTAG_BITS     = 26      PINNED, NOT DERIVED (4.1, TD#122).
+                              The region tag VA[39:14]; bit 40
+                              aliases, a misprediction, not a fault.
+                              It was FTB_TAG_BITS until BP-140.
+  FTB_TAG_BITS      = 30      FTB_RTAG_BITS + FTB_BR_POS_BITS: the
+                              region tag and the start offset VA[4:1]
+                              (BP-140, 4.1).
+  FTB_SOFF_SHIFT    = 5       FTB_IDX_BITS - FTB_BR_POS_BITS. The
+                              index is VA[13:5] XOR (VA[4:1] <<
+                              FTB_SOFF_SHIFT) (BP-140, PROVISIONAL).
   PLRU_BITS         = 3       FTB_WAYS - 1 (tree-PLRU). Stored in
                               ftb_plru.
   FTB_BR_POS_BITS   = 4       $clog2(FTB_BLOCK_BYTES/2). In-block
                               position, sixteen 2-byte positions
                               (BP-099, 2026-08-19). START-relative;
                               the width of every position PORT.
-  FTB_BR_RPOS_BITS  = 5       FTB_BR_POS_BITS + 1. The STORED
-                              position, region-relative, 0 to 30
-                              (4.6). Session-071, BUILT by BP-110.
   FTB_BR_TGT_BITS   = 13      conditional target displacement. B-type
                               +/-4 KB original -> +/-8 KB expanded.
   FTB_JMP_TGT_BITS  = 21      jump target displacement. J-type
                               +/-1 MB original -> +/-2 MB expanded.
   TAR_STAT_BITS     = 2       fit / overflow / underflow status,
                               shared by conditional and jump targets.
-  PFTADDR_BITS      = 6       $clog2(FTB_BLOCK_BYTES) + 1. The
-                              stored block end as a 2-byte-granular
-                              offset from the ALIGNED REGION BASE,
-                              covering 0 to 126 bytes (5.5). THERE
-                              IS NO CARRY BIT: it was 5 + 1 carry
-                              and is now 6, so the entry width is
-                              unchanged. Ruled session-070, BUILT
-                              by BP-110.
+  PFTADDR_BITS      = 5       FTB_BR_POS_BITS + 1. The stored block
+                              end as a 2-byte-granular offset from the
+                              BLOCK START, covering 0 to 62 bytes
+                              (an end needs at most 34) (5.5, 8.1).
+                              No carry bit. Six bits from the region
+                              base until BP-140.
 
 Logical entry width (the full per-way entry, including the entry-valid
 held in ftb_plru):
 
   FTB_ENTRY_WIDTH (logical, per way) = 114 bits:
     1   valid          -- held in ftb_plru (flops), not ftb_array
-  + 26  tag
-  + 2 * (1 + 5 + 13 + 2 + 3)       = 48   br0 + br1 (valid,pos,tgt,
+  + 30  tag            -- 26 region tag + 4 start offset
+  + 2 * (1 + 4 + 13 + 2 + 3)       = 46   br0 + br1 (valid,pos,tgt,
                                           stat,conf -- no always_taken)
-  + (1 + 5 + 21 + 2 + 3 + 1)       = 33   jump (valid,pos,tgt,stat,type,
+  + (1 + 4 + 21 + 2 + 3 + 1)       = 32   jump (valid,pos,tgt,stat,type,
                                           rvc)
-  + 6                              =  6   pftAddr (no carry bit)
+  + 5                              =  5   pftAddr (from the start, no
+                                          carry bit)
     FTB_SET_WIDTH = FTB_WAYS * FTB_ENTRY_WIDTH = 456 bits (logical).
+
+THE BP-140 DELTA IS ZERO, 114 to 114: the tag gains the four start-
+offset bits and the three positions and pftAddr each lose one (no
+region form, 4.6). FTB_RAM_ENTRY_WIDTH stays 113; the elaboration
+check in ftb_cntrl holds.
 
 THE BP-121 DELTA IS ONE BIT, 113 to 114: the jump field's rvc bit
 (5.5, TD#164). In bp_defines_pkg.sv the jump term went from
@@ -1091,24 +1113,17 @@ Control polarity: ftb_array and ftb_plru enables are active low
 
 ## 8.1 Partial fall-through address derivation
 
-pftAddr = partial fall-through address. It is the block's end stored
-as a short 2-byte-granular offset from the 32-BYTE-ALIGNED REGION
-BASE rather than a full VA. The full fall-through reconstructs from
-that base plus pftAddr shifted by POS_OFFSET_BITS, and the result is
-bounds checked; see 4.5.
+pftAddr = partial fall-through address. It is the block's end
+stored as a short 2-byte-granular offset from the BLOCK START (since
+BP-140; the 32-byte-aligned region base before it). The full
+fall-through reconstructs from the start plus pftAddr shifted by
+POS_OFFSET_BITS, and the result is bounds checked; see 4.5.
 
-AN EARLIER REVISION described it as "a short offset from the block
-start ... with carry as the overflow bit" reconstructing from
-"block-start + pftAddr + carry". Both halves were wrong: the
-encoding is region-relative, not start-relative, and session-070
-deleted the carry bit. See 5.5 for why. Built by BP-110.
+  PFTADDR_BITS      = FTB_BR_POS_BITS + 1
 
-  PFTADDR_BITS      = $clog2(FTB_BLOCK_BYTES) + 1
-
-The maximum it must represent is one region offset short of the
-region end, plus a full block, plus a straddling halfword pair:
-(FTB_BLOCK_BYTES - 2) + FTB_BLOCK_BYTES + 2 = 2 * FTB_BLOCK_BYTES
-= 64 bytes = 32 positions.
+The maximum it must represent is a full block plus a straddling
+halfword: FTB_BLOCK_BYTES + 2 = 34 bytes = 17 positions, which five
+bits hold.
 
 ---
 
@@ -1144,6 +1159,15 @@ region end, plus a full block, plus a straddling halfword pair:
          and is_rvc in the backend resolution; the RAS push and the
          fall-through of a block ending at its jump are the jump PC
          plus 2 or 4 (5.5, section 8). As the PA recommended.
+
+  FTB-6: TD#179, BP-140 (2026-10-19). Built: per-start FTB and
+         uBTB entries (4.1, 4.6 replaced) and the split at update
+         (section 3), the uBTB on the same rule. Open: the entry
+         shape (2 + 1 leaves fields unused under the split, section
+         4); training at resolve against commit; per-start occupancy
+         on compiled benchmarks (tb_fe_top uses at most 38 FTB
+         entries per program); the index fold and the end rule are
+         PROVISIONAL.
 
   FTB-2: Confidence-override interaction with the TAGE update/meta
          path. Flagged, not yet analyzed. Resolve at bp_cluster
@@ -1196,7 +1220,8 @@ region end, plus a full block, plus a straddling halfword pair:
 
   bp_defines_pkg.sv   -- FTB_WAYS, FTB_ENTRIES, FTB_SETS, FTB_IDX_BITS,
                          FTB_WAY_BITS, FTB_BLOCK_BYTES, FTB_OFFSET_BITS,
-                         FTB_TAG_BITS, PLRU_BITS, FTB_ENTRY_WIDTH and
+                         FTB_RTAG_BITS, FTB_TAG_BITS, FTB_SOFF_SHIFT,
+                         PFTADDR_BITS, PLRU_BITS, FTB_ENTRY_WIDTH and
                          FTB_SET_WIDTH (logical), FTB_RAM_ENTRY_WIDTH
                          and FTB_RAM_SET_WIDTH (ftb_array),
                          FTB_CONF_WIDTH, FTB_CONF_INIT_TKN,
@@ -1455,4 +1480,12 @@ region end, plus a full block, plus a straddling halfword pair:
 
   2026-10-19  session-081, after BP-139. 3: the cut for any branch the
               FTB reports and no slot carries (option A).
+
+  2026-10-19  session-081, after BP-140. 3: the split at update, built.
+              4: unused fields under the split. 4.1: the tag
+              identifies the block start. 4.5, 4.6: the per-start
+              entry replaces region sharing (Jeff reopened 4.6).
+              5.4a, 5.5: the field mapping and the end under the
+              split. 8: parameters. 9: FTB-6. Provisional choices
+              accepted (Jeff).
 ```

@@ -661,12 +661,14 @@ BP_CLUSTER_SRCS := \
 
 # The property files of the cluster's leaves that have one (BP-122,
 # TD#170), elaborated by sim_bp_cluster with --assert, and since BP-139
-# the cluster's own (bp_cluster_assert.sv, CL1).
+# the cluster's own (bp_cluster_assert.sv, CL1); since BP-140 the FTB's
+# (ftb_assert.sv, FA1).
 BP_CLUSTER_ASSERT := \
   $(TB_DIR)/bp_history_assert.sv \
   $(TB_DIR)/loop_pred_assert.sv \
   $(TB_DIR)/ras_assert.sv \
-  $(TB_DIR)/bp_cluster_assert.sv
+  $(TB_DIR)/bp_cluster_assert.sv \
+  $(TB_DIR)/ftb_assert.sv
 
 BP_CLUSTER_PLUSARGS := \
   +TAGE_FAST_INIT=1 +ITTAGE_FAST_INIT=1 +SC_FAST_INIT=1
@@ -722,11 +724,14 @@ sim_ras:
 	@echo "[simulating] $(VER_OUT)_ras/Vtb"
 	$(Q)./$(VER_OUT)_ras/Vtb
 
+# BP-140: with --assert and the FTB's bound property file (FA1, the
+# split at update).
 sim_ftb:
 	@echo "[compiling]  tb_ftb"
 	$(Q)$(VERILATOR) --binary \
 	  $(VER_FLAGS) $(SIM_EXTRA_FLAGS) \
 	  --top-module tb \
+	  --assert \
 	  --Mdir $(VER_OUT)_ftb \
 	  $(RTL_DIR)/bp_defines_pkg.sv \
 	  $(RTL_DIR)/bp_structs_pkg.sv \
@@ -734,6 +739,7 @@ sim_ftb:
 	  $(RTL_DIR)/ftb_plru.sv \
 	  $(RTL_DIR)/ftb_cntrl.sv \
 	  $(RTL_DIR)/ftb.sv \
+	  $(TB_DIR)/ftb_assert.sv \
 	  $(CSR_TB_SRCS) \
 	  $(TB_DIR)/tb_ftb.sv $(VSILENCE)
 	@echo "[simulating] $(VER_OUT)_ftb/Vtb"

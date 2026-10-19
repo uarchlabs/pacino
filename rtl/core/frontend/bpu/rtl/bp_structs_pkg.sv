@@ -615,30 +615,30 @@ package bp_structs_pkg;
   // ----------------------------------------------------------------
   // The uBTB entry mirrors the FTB entry (ftb_decisions.md 4): two
   // conditional fields, one jump field, and a partial fallthrough,
-  // describing one UBTB_BLOCK_BYTES block. One lookup supplies both
+  // describing the block from ONE start PC (BP-140; it was shared by
+  // every start of a 32-byte region, 4.6). One lookup supplies both
   // prediction slots.
   //
   // Targets are stored as displacements from block start with a
   // fit/overflow/underflow status (ftb_decisions.md 4.2). The
   // encoding is lossless when the branch is in reach.
 
-  // One conditional branch field. pos is STORED region-relative, one
-  // bit wider than the start-relative port position (ftb_decisions.md
-  // 4.6); ubtb.sv converts at the read and the write.
+  // One conditional branch field. pos is the start-relative position,
+  // the port width (BP-140; it was stored region-relative).
   typedef struct packed {
     logic                          valid;  // field occupied
-    logic [UBTB_BR_RPOS_BITS-1:0]  pos;    // region position 0..30
+    logic [UBTB_BR_POS_BITS-1:0]   pos;    // start position 0..15
     logic [UBTB_BR_TGT_BITS-1:0]   tgt;    // target displacement
     logic [TAR_STAT_BITS-1:0]      stat;   // fit / ovf / udf
     logic [UBTB_CONF_WIDTH-1:0]    conf;   // bimodal direction; MSB
                                            // is the direction
   } ubtb_cond_t;
 
-  // The block-terminating jump field. pos is stored region-relative,
-  // as in ubtb_cond_t.
+  // The block-terminating jump field. pos is start-relative, as in
+  // ubtb_cond_t.
   typedef struct packed {
     logic                          valid;    // field occupied
-    logic [UBTB_BR_RPOS_BITS-1:0]  pos;      // region position 0..30
+    logic [UBTB_BR_POS_BITS-1:0]   pos;      // start position 0..15
     logic [UBTB_JMP_TGT_BITS-1:0]  tgt;      // jump displacement
     logic [TAR_STAT_BITS-1:0]      stat;     // fit / ovf / udf
     logic                          is_call;
@@ -647,25 +647,25 @@ package bp_structs_pkg;
   } ubtb_jmp_t;
 
   // One uBTB storage entry (one way of one set), UBTB_ENTRY_WIDTH bits.
-  // The tag is the UBTB_TAG_BITS VA bits immediately above the
-  // block-granularity index, not a retired-instruction-granularity
-  // field: index = pc[10:5], tag = pc[30:11] with a 32-byte block,
-  // at any VA_WIDTH. See bp_defines_pkg.sv, UBTB_TAG_BITS.
+  // The tag is the UBTB_RTAG_BITS VA bits immediately above the
+  // block-granularity index plus the start's halfword offset: index =
+  // pc[10:5] ^ (pc[4:1] << 2), tag = {pc[30:11], pc[4:1]} with a
+  // 32-byte block, at any VA_WIDTH. See bp_defines_pkg.sv,
+  // UBTB_TAG_BITS.
   typedef struct packed {
     logic                          valid;  // entry valid
-    logic [UBTB_TAG_BITS-1:0]      tag;    // pc[30:11]
+    logic [UBTB_TAG_BITS-1:0]      tag;    // {pc[30:11], pc[4:1]}
     ubtb_cond_t                    br0;    // conditional field 0
     ubtb_cond_t                    br1;    // conditional field 1
     ubtb_jmp_t                     jmp;    // terminal jump field
-    logic [UBTB_PFTADDR_BITS-1:0]  pft;    // block end from the aligned
-                                           // region base, no carry
+    logic [UBTB_PFTADDR_BITS-1:0]  pft;    // block end from the start,
+                                           // in positions, no carry
   } ubtb_entry_t;
 
   // Prediction output for one prediction slot. Slot 0 is built from
-  // the entry br0 field, slot 1 from br1, each only when its stored
-  // region position is visible from the lookup PC
-  // (ftb_decisions.md 4.6). A slot carrying the block-terminating
-  // jump reports that jump type and target.
+  // the entry br0 field, slot 1 from br1; storage is in ascending
+  // position (BP-140). A slot carrying the block-terminating jump
+  // reports that jump type and target.
   // Targets are reconstructed to full width by ubtb.sv.
   typedef struct packed {
     logic                          valid;    // slot carries a branch

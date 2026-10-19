@@ -12,11 +12,16 @@
 // The uBTB now performs ONE lookup per cycle against a reshaped entry
 // that describes ONE UBTB_BLOCK_BYTES block: two conditional fields
 // (br0, br1), one block-terminating jump field, and a partial
-// fall-through with no carry bit (TD#124, BP-110). Positions are
-// stored region-relative and reported start-relative; the conditional
-// fields visible from the lookup PC are packed onto the slots in
-// ascending position, and the jump is reported in the lowest slot
-// carrying no conditional field (ftb_decisions.md 4.6).
+// fall-through with no carry bit (TD#124, BP-110). Since BP-140 the
+// entry is the block from ONE start PC (the start offset is in the
+// tag and folded into the index), positions and the end are stored
+// start-relative in ascending position, and an entry holds at most
+// N_SLOTS branches: an update that would make it hold more keeps the
+// lowest positions and ends the block at the first one not kept (the
+// split). The jump is reported in the lowest slot carrying no
+// conditional field. A conditional's update end is the predicted end
+// of its block and is not written; an end comes from a jump or the
+// split.
 //
 // BP-110 deleted ubtb_pred_t.carry. Each check that read it now
 // checks the same boundary fact on blk_p1.pft_addr, one for one.
@@ -43,8 +48,11 @@
 // TC14 round-robin replacement across UBTB_WAYS
 // TC15 read-during-write: prediction sees the pre-update state
 // TC16 TD#124: a block end 64 bytes above the region base
-// TC17 TD#125: two starts in one region sharing an entry
+// TC17 BP-140: two starts in one region keep separate entries
 // TC18 TD#156: the same branch is the same position (BP-120)
+// TC19 BP-140: the split at update, both slot counts, every order
+// TC20 BP-140: starts of one region in different sets
+// TC21 BP-140: two channels splitting one entry in one cycle
 // ===================================================================
 
 import bp_defines_pkg::*;
@@ -139,15 +147,28 @@ module tb;
   endfunction
 
   // Independent restatement of the module's index/tag/base split
-  // (ubtb_interfaces.md, Lookup).
+  // (ubtb_interfaces.md, Lookup; BP-140): index pc[10:5] XOR (pc[4:1]
+  // << 2), tag {pc[30:11], pc[4:1]}.
   function automatic logic [UBTB_IDX_BITS-1:0] pc_idx(
       input logic [VA_WIDTH-1:0] pc);
-    pc_idx = pc[UBTB_OFFSET_BITS +: UBTB_IDX_BITS];
+    logic [UBTB_IDX_BITS-1:0] off;
+    off    = UBTB_IDX_BITS'(pc[UBTB_OFFSET_BITS-1:1]);
+    pc_idx = pc[UBTB_OFFSET_BITS +: UBTB_IDX_BITS]
+           ^ (off << (UBTB_IDX_BITS - UBTB_BR_POS_BITS));
   endfunction
 
   function automatic logic [UBTB_TAG_BITS-1:0] pc_tag(
       input logic [VA_WIDTH-1:0] pc);
-    pc_tag = pc[UBTB_OFFSET_BITS+UBTB_IDX_BITS +: UBTB_TAG_BITS];
+    pc_tag = {pc[UBTB_OFFSET_BITS+UBTB_IDX_BITS +: UBTB_TAG_BITS
+                 - UBTB_BR_POS_BITS],
+              pc[UBTB_OFFSET_BITS-1:1]};
+  endfunction
+
+  // The PC of in-block position pos of the block starting at start.
+  function automatic logic [VA_WIDTH-1:0] pos_pc(
+      input logic [VA_WIDTH-1:0]         start,
+      input logic [UBTB_BR_POS_BITS-1:0] pos);
+    pos_pc = start + (VA_WIDTH'(pos) << UBTB_POS_OFFSET_BITS);
   endfunction
 
   function automatic logic [VA_WIDTH-1:0] pc_base(
@@ -374,13 +395,15 @@ module tb;
       wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd2, blk_a + VA_WIDTH'('d12));
       look2(blk_a);
 
+      // BP-140: a conditional's update end (+12, its block's predicted
+      // end) is not written; the end is one block above the start.
+      // OLD: "pft_addr" == blk_a + 12 and "end stays in the block".
       check("TC03: hit",       blk2.hit == 1'b1);
-      check("TC03: pft_addr",  blk2.pft_addr == blk_a + VA_WIDTH'('d12));
+      check("TC03: pft_addr is start + 32, not the update's +12",
+            blk2.pft_addr == blk_a + VA_WIDTH'(UBTB_BLOCK_BYTES));
       check("TC03: s0 valid",  pred2[0].valid  == 1'b1);
       check("TC03: s0 target", pred2[0].target == tgt_a);
       check("TC03: s0 pos",    pred2[0].pos    == 4'd2);
-      check("TC03: end stays in the block",
-            pc_base(blk2.pft_addr) == blk_a);
       // br1 free and no jump present -> slot 1 fully zero.
       check("TC03: s1 zero",   pred2[1] == '0);
     end
@@ -398,8 +421,11 @@ module tb;
       commit();
       look2(blk_a);
 
+      // BP-140: no branch, so the end is one block above the start, not
+      // the +20 the update carries. OLD: "pft_addr" == blk_a + 20.
       check("TC04: hit",      blk2.hit == 1'b1);
-      check("TC04: pft_addr", blk2.pft_addr == blk_a + VA_WIDTH'('d20));
+      check("TC04: pft_addr", blk2.pft_addr
+                              == blk_a + VA_WIDTH'(UBTB_BLOCK_BYTES));
       check("TC04: s0 zero",  pred2[0] == '0);
       check("TC04: s1 zero",  pred2[1] == '0);
     end
@@ -524,6 +550,10 @@ module tb;
       check("TC07b: s1 is COND", pred2[1].br_type == COND);
       check("TC07b: s0 target",  pred2[0].target  == tgt_a);
       check("TC07b: s1 target",  pred2[1].target  == tgt_b);
+      // BP-140: the jump is the third branch; it is split off and the
+      // block ends at its PC.
+      check("TC07b: the block ends at the jump PC",
+            blk2.pft_addr == pos_pc(blk_a, 4'd7));
     end
     tc_close("TC07");
 
@@ -678,16 +708,21 @@ module tb;
             (pc_idx(blk_a) != pc_idx(blk_b))
             && (pc_idx(blk_b) != pc_idx(blk_c)));
 
-      // end is 28 bytes into the block.
-      wr_cond(blk_a, 1'b0, 1'b1, blk_a + VA_WIDTH'('d16), 4'd6,
-              blk_a + VA_WIDTH'('d28));
-      // end is exactly the next block start. The partial pftAddr
-      // reaches it on its own; there is no carry bit.
-      wr_cond(blk_b, 1'b0, 1'b1, blk_b + VA_WIDTH'('d16), 4'd7,
-              blk_b + VA_WIDTH'('d32));
-      // end past the boundary with a non-zero in-block offset.
-      wr_cond(blk_c, 1'b0, 1'b1, blk_c + VA_WIDTH'('d16), 4'd2,
-              blk_c + VA_WIDTH'('d40));
+      // Since BP-140 an end comes from a jump (its resolved end) or the
+      // split; a conditional's update end is not written (TC03). The
+      // three ends below are jumps' ends.
+      // OLD (until BP-140): conditionals at pos 6, 7 and 2 carrying the
+      // ends +28, +32 and +40, and (TC10d) a later +8 rewriting +32.
+      // end is 28 bytes into the block: a 32-bit jump at pos 12.
+      wr_jmp(blk_a, 1'b0, 1'b0, 1'b0, blk_a + VA_WIDTH'('d64), 4'd12,
+             blk_a + VA_WIDTH'('d28));
+      // end is exactly the next block start: a 32-bit jump at pos 14.
+      // The partial pftAddr reaches it on its own; there is no carry.
+      wr_jmp(blk_b, 1'b0, 1'b0, 1'b0, blk_b + VA_WIDTH'('d64), 4'd14,
+             blk_b + VA_WIDTH'('d32));
+      // end past the boundary: a 32-bit jump at pos 15, straddling.
+      wr_jmp(blk_c, 1'b0, 1'b0, 1'b0, blk_c + VA_WIDTH'('d64), 4'd15,
+             blk_c + VA_WIDTH'('d34));
 
       look2(blk_a);
       check("TC10a: hit",       blk2.hit == 1'b1);
@@ -695,29 +730,26 @@ module tb;
       check("TC10a: end below the block boundary",
             blk2.pft_addr - blk_a < VA_WIDTH'(UBTB_BLOCK_BYTES));
       check("TC10a: end stays in block",
-            pc_idx(blk2.pft_addr) == pc_idx(blk_a));
+            pc_base(blk2.pft_addr) == blk_a);
 
       look2(blk_b);
       check("TC10b: hit",       blk2.hit == 1'b1);
       check("TC10b: pft_addr",  blk2.pft_addr == blk_b + VA_WIDTH'('d32));
       check("TC10b: end at or past the block boundary",
             blk2.pft_addr - blk_b >= VA_WIDTH'(UBTB_BLOCK_BYTES));
-      check("TC10b: end crosses the boundary",
-            pc_idx(blk2.pft_addr) != pc_idx(blk_b));
       check("TC10b: end is the next block base",
             pc_base(blk2.pft_addr) == blk_b + VA_WIDTH'('d32));
 
       look2(blk_c);
       check("TC10c: hit",       blk2.hit == 1'b1);
-      check("TC10c: pft_addr",  blk2.pft_addr == blk_c + VA_WIDTH'('d40));
+      check("TC10c: pft_addr",  blk2.pft_addr == blk_c + VA_WIDTH'('d34));
       check("TC10c: end at or past the block boundary",
             blk2.pft_addr - blk_c >= VA_WIDTH'(UBTB_BLOCK_BYTES));
-      check("TC10c: end crosses the boundary",
-            pc_idx(blk2.pft_addr) != pc_idx(blk_c));
 
-      // The block boundary is rewritten on a later update.
-      wr_cond(blk_b, 1'b0, 1'b1, blk_b + VA_WIDTH'('d16), 4'd7,
-              blk_b + VA_WIDTH'('d8));
+      // The block boundary moves down when a jump before the stored one
+      // resolves (an earlier first jump of the block).
+      wr_jmp(blk_b, 1'b0, 1'b0, 1'b0, blk_b + VA_WIDTH'('d64), 4'd2,
+             blk_b + VA_WIDTH'('d8));
       look2(blk_b);
       check("TC10d: boundary moved back into the block",
             blk2.pft_addr == blk_b + VA_WIDTH'('d8));
@@ -828,8 +860,12 @@ module tb;
       commit();
       look1(blk_a);
 
+      // BP-140: one slot holds one branch. The pos 5 branch is split
+      // off and the block ends at its PC. OLD: pft_addr blk_a + 32 (both
+      // fields stored, br1 not reported).
       check("TC12a: hit",       blk1.hit == 1'b1);
-      check("TC12a: pft_addr",  blk1.pft_addr == blk_a + VA_WIDTH'('d32));
+      check("TC12a: pft_addr is the pos 5 branch PC",
+            blk1.pft_addr == pos_pc(blk_a, 4'd5));
       check("TC12a: slot valid",  pred1[0].valid   == 1'b1);
       check("TC12a: slot is br0", pred1[0].target  == tgt_a);
       check("TC12a: slot pos",    pred1[0].pos     == 4'd1);
@@ -960,10 +996,13 @@ module tb;
     tc_close("TC15");
 
     // ==============================================================
-    // TC16 -- TD#124. A block starting at region offset 30 with a
-    //         straddling 32-bit final instruction ends 64 bytes above
-    //         the region base. The end must reconstruct exactly; as
-    //         built it read back as base+32.
+    // TC16 -- TD#124. A block starting at region offset 30 whose 32-bit
+    //         jump at pos 15 straddles the next block ends 64 bytes
+    //         above the region base, start + 34. The end must
+    //         reconstruct exactly; as built before TD#124 it read back
+    //         as base+32.
+    //         OLD (until BP-140): a conditional at pos 3 carrying the
+    //         end; a conditional's update end is no longer written.
     // ==============================================================
     tc_open("TC16 TD#124 end at region offset 64");
     begin
@@ -971,7 +1010,7 @@ module tb;
       blk_a = mk_pc(51, TAG_BASE);                // region base
       blk_b = blk_a + VA_WIDTH'('d30);            // block start
       tgt_a = blk_b + VA_WIDTH'('d64);
-      wr_cond(blk_b, 1'b0, 1'b1, tgt_a, 4'd3, blk_a + VA_WIDTH'('d64));
+      wr_jmp(blk_b, 1'b0, 1'b0, 1'b0, tgt_a, 4'd15, blk_a + VA_WIDTH'('d64));
       look2(blk_b);
       $display("TC16 pft got %h exp %h", blk2.pft_addr,
                blk_a + VA_WIDTH'('d64));
@@ -979,22 +1018,24 @@ module tb;
       check("TC16: hit",        blk2.hit == 1'b1);
       check("TC16: end at region offset 64",
             blk2.pft_addr == blk_a + VA_WIDTH'('d64));
-      check("TC16: s0 pos start-relative", pred2[0].pos == 4'd3);
+      check("TC16: s0 pos start-relative", pred2[0].pos == 4'd15);
       check("TC16: s0 target",  pred2[0].target == tgt_a);
     end
     tc_close("TC16");
 
     // ==============================================================
-    // TC17 -- TD#125. Two starts in one region share an entry. A at
-    //         region offset 0 records a branch at pos 2; B at offset 10
-    //         must not see it, and B's own branch must read back at
-    //         B's start-relative position. The uBTB maps br_idx to the
-    //         field directly (ubtb_interfaces.md) and does not pack or
-    //         reorder, so B's fill REPLACES the field A's branch held,
-    //         with a fresh conf, and A then sees B's branch at region
-    //         position 8 (ftb_decisions.md 4.6 R-1, R-2).
+    // TC17 -- BP-140, Problem 1. Two starts in one region keep separate
+    //         entries (one entry per start PC, ruled by Jeff
+    //         2026-10-18). A at region offset 0 records a conditional at
+    //         pos 2; B at offset 10 misses until it writes, then holds
+    //         only its own jump, and A's fields, end and hit are
+    //         unchanged by B's updates (and B's by A's). Fails on the
+    //         starting tree, where the two share one entry.
+    //         OLD (TD#125, BP-110 to BP-140): the shared entry; B's fill
+    //         replaced the field A's branch held and A then saw B's
+    //         branch at region position 8.
     // ==============================================================
-    tc_open("TC17 TD#125 shared entry, two starts");
+    tc_open("TC17 BP-140 separate entries, two starts");
     begin
       do_reset();
       blk_a = mk_pc(53, TAG_BASE);                // start A, offset 0
@@ -1004,26 +1045,39 @@ module tb;
 
       wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd2, blk_a + VA_WIDTH'('d32));
       look2(blk_b);
-      check("TC17: B hits the shared entry", blk2.hit == 1'b1);
-      check("TC17: A's branch below B's start not reported",
-            pred2[0].valid == 1'b0);
-      check("TC17: B slot1 empty", pred2[1].valid == 1'b0);
+      check("TC17: B misses before it writes", blk2.hit == 1'b0);
 
-      // B's first branch, start-relative pos 3 (branch PC blk_a+16).
-      wr_cond(blk_b, 1'b0, 1'b1, tgt_b, 4'd3, blk_a + VA_WIDTH'('d32));
+      // B's jump, start-relative pos 3 (jump PC blk_a+16), end +20.
+      wr_jmp(blk_b, 1'b1, 1'b0, 1'b0, tgt_b, 4'd3, blk_a + VA_WIDTH'('d20));
       look2(blk_b);
-      check("TC17: B s0 valid",  pred2[0].valid  == 1'b1);
-      check("TC17: B s0 pos 3",  pred2[0].pos    == 4'd3);
-      check("TC17: B s0 target", pred2[0].target == tgt_b);
+      check("TC17: B hits",      blk2.hit == 1'b1);
+      check("TC17: B s0 is its jump, pos 3, its target",
+            pred2[0].valid && (pred2[0].br_type == DIRECT_CALL)
+            && (pred2[0].pos == 4'd3) && (pred2[0].target == tgt_b));
       check("TC17: B s1 empty",  pred2[1].valid  == 1'b0);
+      check("TC17: B end is its jump's end",
+            blk2.pft_addr == blk_a + VA_WIDTH'('d20));
 
       look2(blk_a);
-      check("TC17: A s0 is B's branch, pos 8",
-            pred2[0].valid && pred2[0].pos == 4'd8);
-      check("TC17: A s0 target is B's", pred2[0].target == tgt_b);
-      check("TC17: hidden field refilled, not trained",
-            pred2[0].conf == UBTB_CONF_INIT_TKN);
-      check("TC17: A s1 empty", pred2[1].valid == 1'b0);
+      check("TC17: A hits",      blk2.hit == 1'b1);
+      check("TC17: A s0 is A's branch, pos 2, weak taken",
+            pred2[0].valid && (pred2[0].br_type == COND)
+            && (pred2[0].pos == 4'd2) && (pred2[0].target == tgt_a)
+            && (pred2[0].conf == UBTB_CONF_INIT_TKN));
+      check("TC17: A s1 empty (no jump of B's)", pred2[1].valid == 1'b0);
+      check("TC17: A end unchanged",
+            blk2.pft_addr == blk_a + VA_WIDTH'(UBTB_BLOCK_BYTES));
+
+      // A trains; B is unchanged.
+      wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd2, blk_a + VA_WIDTH'('d32));
+      look2(blk_b);
+      check("TC17: after A trains, B unchanged",
+            blk2.hit && pred2[0].valid && (pred2[0].pos == 4'd3)
+            && (pred2[0].br_type == DIRECT_CALL)
+            && (blk2.pft_addr == blk_a + VA_WIDTH'('d20)));
+      look2(blk_a);
+      check("TC17: A conf stepped",
+            pred2[0].conf == gold_step(UBTB_CONF_INIT_TKN, 1'b1));
     end
     tc_close("TC17");
 
@@ -1031,16 +1085,18 @@ module tb;
     // TC18 -- TD#156 (ubtb_interfaces.md Allocation and field writes,
     //         ftb_decisions.md 5.5, ruled session-075). A filled field
     //         keeps its position only for an update at the stored
-    //         region position. Every case is from one start at region
-    //         offset 0, so every stored field is visible to it; before
-    //         BP-120 a visible stored position was kept for any update.
+    //         position; since BP-140 storage is in position order, so
+    //         the position names the field, not br_idx.
     // ==============================================================
     tc_open("TC18 TD#156 the same branch is the same position");
     begin
-      // a: two jumps of one region. J1 a RETURN_CALL at pos 4, J2 a
-      //    RETURN at pos 9 (the coro shape). After J2 the field is
-      //    J2's, position, type and target together; after J1 again,
-      //    J1's. The block end follows the jump that trained.
+      // a: two jumps of one start. J1 a RETURN_CALL at pos 4, J2 a
+      //    RETURN at pos 9 (the coro shape). The block ends at its first
+      //    jump, so J2 after J1 is past it and changes nothing; J2 at
+      //    pos 2, before J1, replaces it with its type, target and end.
+      //    OLD (BP-120 to BP-140): J2 at pos 9 replaced J1 and J1 again
+      //    replaced J2 (one shared field per region; in coro the two
+      //    jumps are two starts', now two entries, TC17).
       do_reset();
       blk_a = mk_pc(57, TAG_BASE);
       tgt_a = blk_a + VA_WIDTH'('h1200);
@@ -1052,27 +1108,26 @@ module tb;
             && (pred2[0].pos == 4'd4));
       wr_jmp(blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 4'd9, blk_a + VA_WIDTH'('d22));
       look2(blk_a);
-      check("TC18a: after J2 the position is J2's (9)",
-            pred2[0].valid && (pred2[0].pos == 4'd9));
-      check("TC18a: after J2 the type is J2's (RETURN)",
-            pred2[0].br_type == RETURN);
-      check("TC18a: after J2 the target is J2's",
-            pred2[0].target == tgt_b);
-      check("TC18a: after J2 the block end is J2's",
-            blk2.pft_addr == blk_a + VA_WIDTH'('d22));
-      wr_jmp(blk_a, 1'b1, 1'b1, 1'b1, tgt_a, 4'd4, blk_a + VA_WIDTH'('d12));
-      look2(blk_a);
-      check("TC18a: after J1 again: RETURN_CALL at pos 4, J1's target",
+      check("TC18a: J2 after J1 is past the block: J1 kept",
             pred2[0].valid && (pred2[0].br_type == RETURN_CALL)
             && (pred2[0].pos == 4'd4) && (pred2[0].target == tgt_a));
-      check("TC18a: after J1 again the block end is J1's",
+      check("TC18a: and the end is J1's",
             blk2.pft_addr == blk_a + VA_WIDTH'('d12));
+      wr_jmp(blk_a, 1'b0, 1'b1, 1'b1, tgt_b, 4'd2, blk_a + VA_WIDTH'('d8));
+      look2(blk_a);
+      check("TC18a: a jump before J1 replaces it: RETURN at pos 2",
+            pred2[0].valid && (pred2[0].br_type == RETURN)
+            && (pred2[0].pos == 4'd2) && (pred2[0].target == tgt_b));
+      check("TC18a: the block end is the new jump's",
+            blk2.pft_addr == blk_a + VA_WIDTH'('d8));
 
-      // b: a conditional at a new position updating a filled field.
-      //    br0 holds pos 3, trained taken to conf 6; a branch at pos 9
-      //    resolves not taken into br0. It is a new branch: pos 9,
-      //    weak not-taken conf, its own target. The uBTB does not
-      //    reorder (ubtb_interfaces.md). Before BP-120: pos 3 kept,
+      // b: a conditional at a new position with a filled field. br0
+      //    holds pos 3, trained taken twice; a branch at pos 9 resolves
+      //    not taken, naming br0. It is a new branch: it is stored in
+      //    position order beside pos 3 (s1: pos 9, weak not-taken, its
+      //    target) and pos 3 keeps its conf.
+      //    OLD (BP-120 to BP-140): the field br_idx named was refilled
+      //    with pos 9, discarding pos 3. Before BP-120: pos 3 kept,
       //    conf stepped 6 -> 5.
       do_reset();
       blk_a = mk_pc(58, TAG_BASE);
@@ -1088,24 +1143,314 @@ module tb;
                                                      1'b1), 1'b1)));
       wr_cond(blk_a, 1'b0, 1'b0, tgt_b, 4'd9, blk_a + VA_WIDTH'('d32));
       look2(blk_a);
-      check("TC18b: the new branch's position is written (9)",
-            pred2[0].valid && (pred2[0].pos == 4'd9));
+      check("TC18b: pos 3 kept in slot 0 with its conf",
+            pred2[0].valid && (pred2[0].pos == 4'd3)
+            && (pred2[0].conf == gold_step(gold_step(UBTB_CONF_INIT_TKN,
+                                                     1'b1), 1'b1)));
+      check("TC18b: the new branch's position is written (9) in slot 1",
+            pred2[1].valid && (pred2[1].pos == 4'd9));
       check("TC18b: conf weak in the resolved direction",
-            pred2[0].conf == UBTB_CONF_INIT_NTK);
-      check("TC18b: its target is written", pred2[0].target == tgt_b);
+            pred2[1].conf == UBTB_CONF_INIT_NTK);
+      check("TC18b: its target is written", pred2[1].target == tgt_b);
 
-      // c: the same branch resolving again: conf steps, the target is
-      //    rewritten when it differs, the position is kept.
+      // c: the same branch resolving again, naming br0 (a stale slot):
+      //    the position names the field, so slot 1's conf steps, the
+      //    target is rewritten when it differs, the position is kept.
       wr_cond(blk_a, 1'b0, 1'b1, tgt_a, 4'd9, blk_a + VA_WIDTH'('d32));
       look2(blk_a);
       check("TC18c: same branch: conf steps",
-            pred2[0].conf == gold_step(UBTB_CONF_INIT_NTK, 1'b1));
+            pred2[1].conf == gold_step(UBTB_CONF_INIT_NTK, 1'b1));
       check("TC18c: same branch: target rewritten",
-            pred2[0].target == tgt_a);
+            pred2[1].target == tgt_a);
       check("TC18c: same branch: position kept (9)",
-            pred2[0].valid && (pred2[0].pos == 4'd9));
+            pred2[1].valid && (pred2[1].pos == 4'd9));
+      check("TC18c: and slot 0 is untouched (pos 3)",
+            pred2[0].valid && (pred2[0].pos == 4'd3));
     end
     tc_close("TC18");
+
+    // ==============================================================
+    // TC19 -- BP-140, Problem 2. THE SPLIT AT UPDATE, both slot counts
+    //         (dut1 N_SLOTS 1, dut2 N_SLOTS 2), every resolution order.
+    //         An entry never holds more than N_SLOTS branches; the
+    //         lowest positions are kept and the end is the PC of the
+    //         first one not kept; a jump not kept clears the field.
+    //         Each order is reset plus its updates; the entries the
+    //         orders leave are compared slot by slot. Fails on the
+    //         starting tree, which stores 2 + 1 at both counts and
+    //         writes each update's end.
+    // ==============================================================
+    tc_open("TC19 BP-140 split at update");
+    begin
+      int                          perm [6][3];
+      logic [UBTB_BR_POS_BITS-1:0] cpos [3];
+      logic                        cdir [3];
+      logic [VA_WIDTH-1:0]         ctgt [3];
+      ubtb_pred_t [1:0]            r2;
+      ubtb_blk_t                   rb2;
+      ubtb_pred_t [0:0]            r1;
+      ubtb_blk_t                   rb1;
+      perm[0] = '{0, 1, 2}; perm[1] = '{0, 2, 1}; perm[2] = '{1, 0, 2};
+      perm[3] = '{1, 2, 0}; perm[4] = '{2, 0, 1}; perm[5] = '{2, 1, 0};
+      blk_a   = mk_pc(61, TAG_BASE);
+      cpos[0] = 4'd1;  cdir[0] = 1'b1; ctgt[0] = blk_a + VA_WIDTH'('h100);
+      cpos[1] = 4'd4;  cdir[1] = 1'b0; ctgt[1] = blk_a + VA_WIDTH'('h200);
+      cpos[2] = 4'd11; cdir[2] = 1'b1; ctgt[2] = blk_a + VA_WIDTH'('h300);
+
+      // a: one slot, {a} then b > a, and the reverse: keep a, end PC(b).
+      do_reset();
+      upd1[0] = mk_cond(blk_a, 1'b0, cdir[0], ctgt[0], cpos[0],
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      upd1[0] = mk_cond(blk_a, 1'b0, cdir[1], ctgt[1], cpos[1],
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look1(blk_a);
+      r1 = pred1; rb1 = blk1;
+      check("TC19a: one slot keeps a (pos 1), end PC(b)",
+            pred1[0].valid && (pred1[0].pos == 4'd1)
+            && (blk1.pft_addr == pos_pc(blk_a, 4'd4)));
+      do_reset();
+      upd1[0] = mk_cond(blk_a, 1'b0, cdir[1], ctgt[1], cpos[1],
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      upd1[0] = mk_cond(blk_a, 1'b0, cdir[0], ctgt[0], cpos[0],
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look1(blk_a);
+      check("TC19a: one slot, reverse order: the same entry",
+            (pred1 == r1) && (blk1 == rb1));
+
+      // b: one slot, {conditional 1, jump 9} in both orders: keep the
+      //    conditional, clear the jump, end at the jump PC.
+      do_reset();
+      upd1[0] = mk_cond(blk_a, 1'b0, cdir[0], ctgt[0], cpos[0],
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      upd1[0] = mk_jmp(blk_a, 1'b1, 1'b0, 1'b0, blk_a + VA_WIDTH'('h900),
+                       4'd9, pos_pc(blk_a, 4'd9) + VA_WIDTH'('d4));
+      commit();
+      look1(blk_a);
+      r1 = pred1; rb1 = blk1;
+      check("TC19b: one slot, cond then jump: the conditional, end PC(j)",
+            pred1[0].valid && (pred1[0].br_type == COND)
+            && (blk1.pft_addr == pos_pc(blk_a, 4'd9)));
+      do_reset();
+      upd1[0] = mk_jmp(blk_a, 1'b1, 1'b0, 1'b0, blk_a + VA_WIDTH'('h900),
+                       4'd9, pos_pc(blk_a, 4'd9) + VA_WIDTH'('d4));
+      commit();
+      upd1[0] = mk_cond(blk_a, 1'b0, cdir[0], ctgt[0], cpos[0],
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look1(blk_a);
+      check("TC19b: one slot, jump then cond: the same entry",
+            (pred1 == r1) && (blk1 == rb1));
+
+      // c: two slots, three conditionals, every order: keep pos 1 and
+      //    4, end PC(11).
+      for (int o = 0; o < 6; o++) begin
+        do_reset();
+        for (int i = 0; i < 3; i++) begin
+          upd2[0] = mk_cond(blk_a, 1'b0, cdir[perm[o][i]], ctgt[perm[o][i]],
+                            cpos[perm[o][i]], blk_a + VA_WIDTH'('d32));
+          commit();
+        end
+        look2(blk_a);
+        if (o == 0) begin
+          r2 = pred2; rb2 = blk2;
+          check("TC19c: two slots keep pos 1 (s0) and 4 (s1)",
+                pred2[0].valid && (pred2[0].pos == 4'd1)
+                && (pred2[0].target == ctgt[0])
+                && pred2[1].valid && (pred2[1].pos == 4'd4)
+                && (pred2[1].target == ctgt[1]));
+          check("TC19c: the end is the PC of pos 11",
+                blk2.pft_addr == pos_pc(blk_a, 4'd11));
+        end else begin
+          check($sformatf("TC19c: order %0d%0d%0d: the same entry",
+                          perm[o][0], perm[o][1], perm[o][2]),
+                (pred2 == r2) && (blk2 == rb2));
+        end
+      end
+
+      // d: two slots, {conditional 1, conditional 4, jump 9}, every
+      //    order: the end is the jump PC and no slot carries the jump.
+      cpos[2] = 4'd9;
+      for (int o = 0; o < 6; o++) begin
+        do_reset();
+        for (int i = 0; i < 3; i++) begin
+          if (perm[o][i] == 2)
+            upd2[0] = mk_jmp(blk_a, 1'b0, 1'b0, 1'b0,
+                             blk_a + VA_WIDTH'('h900), 4'd9,
+                             pos_pc(blk_a, 4'd9) + VA_WIDTH'('d4));
+          else
+            upd2[0] = mk_cond(blk_a, 1'b0, cdir[perm[o][i]],
+                              ctgt[perm[o][i]], cpos[perm[o][i]],
+                              blk_a + VA_WIDTH'('d32));
+          commit();
+        end
+        look2(blk_a);
+        if (o == 0) begin
+          r2 = pred2; rb2 = blk2;
+          check("TC19d: both slots conditional (1, 4), no jump",
+                (pred2[0].br_type == COND) && (pred2[1].br_type == COND)
+                && (pred2[0].pos == 4'd1) && (pred2[1].pos == 4'd4));
+          check("TC19d: the end is the jump PC",
+                blk2.pft_addr == pos_pc(blk_a, 4'd9));
+        end else begin
+          check($sformatf("TC19d: order %0d%0d%0d: the same entry",
+                          perm[o][0], perm[o][1], perm[o][2]),
+                (pred2 == r2) && (blk2 == rb2));
+        end
+      end
+
+      // e: both slot counts, a new branch below every held one with the
+      //    entry full: it is kept, the highest held branch falls out and
+      //    the end moves down to its PC. Two slots {4, 11} + 1: keep 1,
+      //    4, end PC(11) -> then {1, 4} + 0: keep 0, 1, end PC(4). One
+      //    slot {4} + 1: keep 1, end PC(4).
+      do_reset();
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, ctgt[1], 4'd4,
+                        blk_a + VA_WIDTH'('d32));
+      upd1[0] = mk_cond(blk_a, 1'b0, 1'b1, ctgt[1], 4'd4,
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, ctgt[2], 4'd11,
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b0, ctgt[0], 4'd1,
+                        blk_a + VA_WIDTH'('d32));
+      upd1[0] = mk_cond(blk_a, 1'b0, 1'b0, ctgt[0], 4'd1,
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look2(blk_a);
+      look1(blk_a);
+      check("TC19e: two slots: the new pos 1 kept, end PC(11)",
+            (pred2[0].pos == 4'd1) && (pred2[1].pos == 4'd4)
+            && (blk2.pft_addr == pos_pc(blk_a, 4'd11)));
+      check("TC19e: one slot: the new pos 1 kept, end moved down to PC(4)",
+            pred1[0].valid && (pred1[0].pos == 4'd1)
+            && (blk1.pft_addr == pos_pc(blk_a, 4'd4)));
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, ctgt[0], 4'd0,
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look2(blk_a);
+      check("TC19e: two slots: pos 0 kept, pos 4 fell out, end PC(4)",
+            (pred2[0].pos == 4'd0) && (pred2[1].pos == 4'd1)
+            && (blk2.pft_addr == pos_pc(blk_a, 4'd4)));
+
+      // f: past the end. The fallen-out pos 4 resolving again from this
+      //    start, and a kept branch with a longer predicted end, leave
+      //    the entry as it is. On the starting tree each rewrote the end.
+      r2 = pred2; rb2 = blk2;
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, ctgt[1], 4'd4,
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look2(blk_a);
+      check("TC19f: the fallen-out branch again: no change",
+            (pred2 == r2) && (blk2 == rb2));
+      upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, ctgt[0], 4'd1,
+                        blk_a + VA_WIDTH'('d32));
+      commit();
+      look2(blk_a);
+      check("TC19f: a kept branch with a longer predicted end: end kept",
+            blk2.pft_addr == pos_pc(blk_a, 4'd4));
+
+      // g: the fallen-out branch, resolving in a block from its own
+      //    start, allocates there at pos 0 and is predicted from it.
+      blk_b = pos_pc(blk_a, 4'd4);
+      upd2[0] = mk_cond(blk_b, 1'b0, 1'b1, ctgt[1], 4'd0,
+                        blk_b + VA_WIDTH'('d32));
+      commit();
+      look2(blk_b);
+      check("TC19g: its own entry at its PC, pos 0, its target",
+            blk2.hit && pred2[0].valid && (pred2[0].pos == 4'd0)
+            && (pred2[0].target == ctgt[1]));
+      look2(blk_a);
+      check("TC19g: the first start's entry unchanged",
+            (pred2[0].pos == 4'd0) && (pred2[1].pos == 4'd1)
+            && (blk2.pft_addr == pos_pc(blk_a, 4'd4)));
+    end
+    tc_close("TC19");
+
+    // ==============================================================
+    // TC20 -- BP-140, Problem 1. Starts of one region in different
+    //         sets. Under the starting index pc[10:5] every start of a
+    //         region indexes one set; the BP-140 index folds pc[4:1]
+    //         into its top bits. Five starts of one region (offsets 0,
+    //         2, 6, 10, 30) plus UBTB_WAYS-1 other regions' starts in
+    //         the offset-0 start's set: all stay resident. With one set
+    //         the five would compete for its four ways.
+    // ==============================================================
+    tc_open("TC20 BP-140 starts in different sets");
+    begin
+      logic [VA_WIDTH-1:0] st [5];
+      do_reset();
+      blk_a = mk_pc(62, TAG_BASE);
+      st[0] = blk_a;
+      st[1] = blk_a + VA_WIDTH'('d2);
+      st[2] = blk_a + VA_WIDTH'('d6);
+      st[3] = blk_a + VA_WIDTH'('d10);
+      st[4] = blk_a + VA_WIDTH'('d30);
+      for (int i = 0; i < 5; i++) begin
+        $display("TC20 start %h: starting set %0d, BP-140 set %0d", st[i],
+                 st[i][UBTB_OFFSET_BITS +: UBTB_IDX_BITS], pc_idx(st[i]));
+        check($sformatf("TC20 start %0d: one set under the starting index",
+                        i), st[i][UBTB_OFFSET_BITS +: UBTB_IDX_BITS]
+                            == st[0][UBTB_OFFSET_BITS +: UBTB_IDX_BITS]);
+        for (int j = 0; j < i; j++)
+          check($sformatf("TC20 starts %0d, %0d: different sets", j, i),
+                pc_idx(st[i]) != pc_idx(st[j]));
+      end
+      for (int i = 0; i < 5; i++)
+        wr_cond(st[i], 1'b0, 1'b1, st[i] + VA_WIDTH'('h100), 4'd1,
+                st[i] + VA_WIDTH'('d32));
+      for (int i = 1; i < UBTB_WAYS; i++)
+        wr_cond(mk_pc(62, TAG_BASE + i), 1'b0, 1'b1,
+                blk_a + VA_WIDTH'('h400), 4'd1, blk_a + VA_WIDTH'('d32));
+      for (int i = 0; i < 5; i++) begin
+        look2(st[i]);
+        check($sformatf("TC20 start %0d resident with its own branch", i),
+              blk2.hit && pred2[0].valid && (pred2[0].pos == 4'd1)
+              && (pred2[0].target == st[i] + VA_WIDTH'('h100)));
+      end
+    end
+    tc_close("TC20");
+
+    // ==============================================================
+    // TC21 -- BP-140. Two channels resolving branches of one block in
+    //         one cycle (the merge of pass 2): three conditionals at
+    //         two slots, the third arriving with the second in one
+    //         cycle, in both channel orders. The split gives the same
+    //         entry as one channel at a time (TC19c).
+    // ==============================================================
+    tc_open("TC21 BP-140 two-channel split");
+    begin
+      ubtb_pred_t [1:0] r2;
+      ubtb_blk_t        rb2;
+      blk_a = mk_pc(63, TAG_BASE);
+      for (int o = 0; o < 2; o++) begin
+        do_reset();
+        upd2[0] = mk_cond(blk_a, 1'b0, 1'b1, blk_a + VA_WIDTH'('h100), 4'd4,
+                          blk_a + VA_WIDTH'('d32));
+        commit();
+        upd2[o]     = mk_cond(blk_a, 1'b0, 1'b0, blk_a + VA_WIDTH'('h200),
+                              4'd1, blk_a + VA_WIDTH'('d32));
+        upd2[1 - o] = mk_cond(blk_a, 1'b1, 1'b1, blk_a + VA_WIDTH'('h300),
+                              4'd11, blk_a + VA_WIDTH'('d32));
+        commit();
+        look2(blk_a);
+        if (o == 0) begin
+          r2 = pred2; rb2 = blk2;
+          check("TC21: keeps 1 and 4, end PC(11)",
+                (pred2[0].pos == 4'd1) && (pred2[1].pos == 4'd4)
+                && (blk2.pft_addr == pos_pc(blk_a, 4'd11)));
+        end else begin
+          check("TC21: the other channel order: the same entry",
+                (pred2 == r2) && (blk2 == rb2));
+        end
+      end
+    end
+    tc_close("TC21");
 
     // ==============================================================
     // Verdict
