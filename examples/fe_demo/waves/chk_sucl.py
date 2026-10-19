@@ -90,6 +90,10 @@ def event_cycs(scen):
         return []
     text = open(path).read()
     heads = re.findall(r'^## (.*?)\s*$', text, re.M)
+    # A leading 0. Introduction is allowed (DOC-007, PROVISIONAL; as
+    # mk_sucl.py).
+    if heads[:1] == ['0. Introduction']:
+        heads = heads[1:]
     if heads not in (FORM, FORM + ['5. Notes']):
         return []
     sec = text.split('\n## 4. Events')[1].split('\n## ')[0]

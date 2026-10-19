@@ -4,9 +4,9 @@
 # How a Demonstration Scenario Is Built and Run
 ```
  FILE:    demo_explainer.md
- SOURCE:  DOC-003, session-080, DOC-006
+ SOURCE:  DOC-003, session-080, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -203,8 +203,8 @@ continues on lines indented four spaces. The result line gives PASS or
 FAIL, then the counts the proof read, then the cycle count:
 
 ```
--I: fd09_tage: PASS, tagged-provider predictions 253, allocations 209,
-    T0 by use_alt_on_na 75, cyc 3567
+-I: fd09_tage: PASS, tagged-provider predictions 188, allocations 59,
+    T0 by use_alt_on_na 22, cyc 1364
 ```
 
 When the expected instructions did not all retire, the failing line
@@ -320,12 +320,13 @@ T0 always has a prediction. Its entries start at 2'b10, weakly taken.
 **block, fetch block.** The unit the predictors and the fetch unit
 work on: consecutive code starting at one address and covering at most
 32 bytes. A block ends at the first predicted-taken control transfer.
-When every prediction slot holds a conditional and the FTB also holds a
-jump after them, the block ends at the jump's address, and the next
-block starts with the jump (`planning/arch/fe_decisions.md` section 10;
-`fd23_jump_cut`). A 32-bit instruction that starts in the last two
-bytes is delivered with the block, which then spans 34 bytes. One FTQ
-entry describes one block.
+The FTB keeps one entry per block start, and an entry holds at most
+one branch per prediction slot. When a block holds more branches, its
+entry ends the block at the first branch it does not hold, and the
+next block starts with that branch (the split at update,
+`planning/arch/ftb_decisions.md` section 3; `fd23_jump_cut`). A 32-bit
+instruction that starts in the last two bytes is delivered with the
+block, which then spans 34 bytes. One FTQ entry describes one block.
 
 **BPU, branch prediction unit.** `bp_cluster.sv`, instance
 `tb.dut.u_bpu`: the uBTB, FTB, TAGE, SC, ITTAGE, loop predictor and RAS,
@@ -417,9 +418,8 @@ sets how many a block has, and so how many of its branches are predicted; the
 slots are the branch fields of one FTB entry, slot 0 the earliest branch
 (`planning/arch/fe_decisions.md` section 10). The demonstration builds one model
 with one slot and one with two (section 1). TAGE keeps separate state for each
-slot, such as the use_alt_on_na counter. A branch of a block that no slot holds
-is not predicted: fetch runs past it, and the backend corrects it if it is
-taken.
+slot, such as the use_alt_on_na counter. Every branch the FTB holds is in a
+slot: a branch beyond the slots starts a block of its own (block, above).
 
 **provider (TAGE).** The tagged table with the longest history whose
 entry matches the branch, or T0 when no tagged table matches. Its

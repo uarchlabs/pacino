@@ -4,9 +4,9 @@
 # fd19_fencei_cbo: FENCE.I and cbo.inval
 ```
  FILE:    fd19_fencei_cbo.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -25,7 +25,7 @@ A recorded run:
 ```
 -I: fd19_fencei_cbo: PASS, whole-cache invalidates 1, line invalidates 1,
     invalidates done 2, maintenance acknowledgements 2,
-    restarts at the next instruction 2, cyc 255
+    restarts at the next instruction 2, cyc 235
 ```
 
 ---
@@ -97,25 +97,25 @@ Addresses derived from the source.
 
 ```
 cycle  FENCE.I                       cbo.inval
-73     cmt_ifu_maint_val             202  cmt_ifu_maint_val (op 1)
-74     L1I takes inv_all             203  L1I takes the line,
+71     cmt_ifu_maint_val (op 0);     184  cmt_ifu_maint_val (op 1);
+       L1I takes inv_all                  L1I takes the line,
        (mt_busy_any 0)                    mt_busy_any 1, mt_busy_line 0
-75-76  M_DRAIN, M_CLEAR              204-205  M_DRAIN, M_CLEAR
-77     l1i_ifu_inv_done              206  l1i_ifu_inv_done
-78     ifu_cmt_maint_ack             207  ifu_cmt_maint_ack
-79     redirect to +0x24, cause 2    208  redirect to +0x4A, cause 2
-82     fetch starts at +0x24         211  fetch starts at +0x4A
+72-73  M_DRAIN, M_CLEAR              185-186  M_DRAIN, M_CLEAR
+74     l1i_ifu_inv_done              187  l1i_ifu_inv_done
+75     ifu_cmt_maint_ack             188  ifu_cmt_maint_ack
+77     redirect to +0x24, cause 2    190  redirect to +0x4A, cause 2
+79     fetch starts at +0x24         192  fetch starts at +0x4A
 ```
 
   RC_REPLAY is 2'b10 (`rtl/core/frontend/bpu/rtl/bp_structs_pkg.sv:128`).
   The taken branch at +0x40 is resolved as a mispredict: a backend
-  redirect to +0x46 with cause 0 at cycle 192.
+  redirect to +0x46 with cause 0 at cycle 174.
 
 ---
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:551-566`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:555-570`, sampled every cycle
 while `meas` is set.
 
 ```
@@ -161,8 +161,8 @@ with no errors, which here includes the new bodies of f and g.
 ## 5. Waveform
 
 The saved view is `waves/fd19_fencei_cbo.sucl`, which `make view
-S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 73-82 and
-202-211:
+S=fd19_fencei_cbo` opens in Surfer. Look at, around cycles 71-79 and
+184-192:
 
 - `cmt_ifu_maint_val`, `cmt_ifu_maint_op` (0 FENCE.I, 1 cbo.inval) and
   `cmt_ifu_maint_paddr`.

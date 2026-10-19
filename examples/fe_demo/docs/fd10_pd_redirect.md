@@ -4,9 +4,9 @@
 # fd10_pd_redirect: Predecode Redirect
 ```
  FILE:    fd10_pd_redirect.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -23,7 +23,7 @@ The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
--I: fd10_pd_redirect: PASS, predecode redirects 13, cyc 247
+-I: fd10_pd_redirect: PASS, predecode redirects 14, cyc 255
 ```
 
 ---
@@ -72,7 +72,7 @@ top+0x100 = 0x8000_0108
    for the entry, with the corrected successor as `pd_redir_pc`
    (`rtl/core/frontend/ftq/rtl/ftq_ifu.sv:548-550`). In the p0 arbiter
    it is arm 2, below a backend redirect and above p3 and p2
-   (`rtl/core/frontend/ftq/rtl/ftq_npc.sv:329-336`).
+   (`rtl/core/frontend/ftq/rtl/ftq_npc.sv:329-337`).
 4. Flush. Any redirect raises `ftq_ifu_flush_val`
    (`ftq_ifu.sv:352`), which drops the blocks younger than the
    redirected entry in the IFU, and the redirect rolls back history
@@ -81,9 +81,15 @@ top+0x100 = 0x8000_0108
 From the run (out/fd10_pd_redirect/fd10_pd_redirect.fst): `w_pd_redir_val`
 pulses 13 times between cycles 19 and 165, with `w_pd_redir_pc` the
 chain targets 0x8000_0200 to 0x8000_0620 in order and then 0x8000_0108.
-At cycle 175 it pulses together with a backend redirect (the back edge,
-cold, resolved taken) and is not counted. Passes 2 and 3 have no
-predecode redirect.
+At cycle 175 it pulses for the halt's `jal` at 0x8000_0116, fetched
+past the cold back edge, as the backend raises its redirect for the
+back edge (`bkend_ftq_redir_val`, high in cycle 176, to 0x8000_0008);
+the counter sees both at the end of cycle 175 and does not count it.
+At cycle 186 it pulses for the `jal` at top+2, with `w_pd_redir_pc`
+0x8000_0200. The backend redirect restarted fetch at top. The
+predictors have not seen this block start, since each block start has
+its own entry (BP-140). The `jal` in it is found at F3 again. The third
+pass has no predecode redirect.
 
 ---
 
@@ -107,13 +113,15 @@ errors.
 
 ## 4. Reading the numbers
 
-- 13 is exactly the JALs of the first pass. After their first
-  retirement the uBTB and FTB predict them, so the second and third
-  passes add none.
+- 14 is the 13 JALs of the first pass and the `jal` at top+2 once more,
+  in the block that starts at top after the back edge's backend
+  redirect (cycle 186). After their first retirement from a block the
+  uBTB and FTB predict them from that block's start, so the rest of the
+  second pass and the third add none.
 - A predecode redirect in the same cycle as a backend redirect is lost
   to the backend redirect in the arbiter and is not counted (cycle
   175).
-- After the run ends (cycle 247) `w_pd_redir_val` keeps pulsing about
+- After the run ends (cycle 255) `w_pd_redir_val` keeps pulsing about
   every 9 cycles while the front end runs on during the drain; the
   monitor does not count the drain.
 - Spec and build agree. FD-10's program is "a JAL in code not yet seen
@@ -135,5 +143,5 @@ S=fd10_pd_redirect` opens in Surfer. Look at:
 - ftq_ifu group: `ftq_ifu_flush_val` with `ftq_ifu_flush_idx`, then
   `ftq_ifu_req_val` with `ftq_ifu_start_pc` the target.
 - Compare cycles 19-165 (first pass) with the second pass, where the
-  same blocks are predicted taken and no writeback carries
+  chain's blocks are predicted taken and no writeback for them carries
   `ifu_ftq_mis_val`.

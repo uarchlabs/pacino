@@ -16,6 +16,44 @@ along with the latest session_handoff-NNN.md and CLAUDE.md.
 Paste PROJECT_CORE.md only when methodology is under discussion.
 
 ---
+## Session-081, after DOC-007: fe_demo brought to BP-139 and BP-140.
+
+DOC-007 COMPLETE (Jeff; everything accepted). 1h00m. Task file
+written by the PA. All 24 fe_demo scenarios pass on their builds (22
+before). No rtl/ file changed; regress.sh run in the tree (Jeff's
+choice): 274 targets PASS.
+  FD-23 re-pointed at the split: counts blocks the FTB ends at the
+    jump (23) and the next block predicting it (21), against the jump
+    PC the program records; reports the cluster cut, 0. Fails on the
+    1-slot build and without the second conditional. Name kept,
+    fd23_jump_cut (PA).
+  FD-13 re-timed: 24 filler instructions after the FENCE.I (12 the
+    measured minimum); merges 1. The mechanism of BP-140's failure
+    corrected: the fourth call's own block fetched X past the FENCE.I.
+  Descriptions, README.md, demo_explainer.md and fe_top_connectivity.md
+    brought to the run and tree: about 1570 line citations checked,
+    188 wrong and 1 signal name fixed; fd09 rewritten from its 1-slot
+    run; fd09, fd14, fd15, fd18 errors fixed.
+  mk_sucl.py and chk_sucl.py accept a leading "0. Introduction" and
+    find the event table by its heading (Jeff's request): fd09 has 15
+    markers. FDT-12c, FDT-13 amended.
+  PROVISIONAL, ACCEPTED (Jeff): FD-23 reports the cut count without
+    requiring 0; FD13_FILL 24; the FORMATS position row takes _u0.
+  w_jmp_cut_p2 is now read by nothing (bp_cluster.sv 563-568, a stale
+    comment): removed by the next BP task that edits bp_cluster.sv.
+  OPENED (Jeff): TD#193, the uBTB re-allocation of a split entry.
+  Reads outside the grants, reported: a memory note under ~/.claude;
+    Surfer; the in-tree regression (Jeff's permission).
+  Noted: line-number citations in the descriptions go stale with
+    every RTL task (188 after BP-139 and BP-140).
+
+Documents changed, every one in check_planning.sh with its new
+checksum: PROJECT_STATUS.md, fe_demo_scenarios.md,
+fe_demo_tb_decisions.md, fe_decisions.md.
+
+Next free: BP-141, SYS-003, DOC-008, INFRA-014, TOOLS-007, TD#194.
+
+---
 ## Session-081, after BP-140: per-start entries and the split.
 
 BP-140 COMPLETE (Jeff). Task file written by the IA. 4h12m.
@@ -6451,6 +6489,19 @@ numbers are issued from one sequence across both tables.
 |     |          | branch's next resolution. Not measured (BP-140 Deferred  |
 |     |          | Work). Decide whether a split-causing update is high     |
 |     |          | value. Opened session-081 (Jeff).                        |
+| 193 | bpu      | OPEN, PERFORMANCE. THE uBTB RE-ALLOCATES A SPLIT ENTRY   |
+|     |          | WITH THE FULL-BLOCK END. Found by DOC-007 in fd04 at one |
+|     |          | slot: the FTB and uBTB both split b[7] at cyc 193;       |
+|     |          | round-robin replacement evicts b[7] from the uBTB, and a |
+|     |          | conditional's update re-allocates it with end b[7] +     |
+|     |          | 0x20. The jump now resolves in its own block, so no      |
+|     |          | update from b[7] splits the uBTB entry again; the FTB    |
+|     |          | keeps its split. One p2 redirect per pass (11). A uBTB   |
+|     |          | allocation from a conditional's update cannot know a     |
+|     |          | branch the FTB entry has split off. BP-140 recorded      |
+|     |          | these as uBTB misses; they are hits with the allocation  |
+|     |          | end. Separate from TD#191, the uBTB organisation. Opened |
+|     |          | session-081 (Jeff).                                      |
 
 ---
 

@@ -4,9 +4,9 @@
 # fd15_faults: Page, Access and Guest-Page Fetch Faults
 ```
  FILE:    fd15_faults.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -66,7 +66,7 @@ V+0x1000     mixed(4), jal x0,0                     halt
 - The access-fault page has a valid Sv39 leaf (`mk_pte` with
   `PTE_LEAF`), so translation succeeds and only PMP refuses it.
 - The VS-mode switch is FD-14's: `ecall_to_vs` and `be_trap_hook`
-  (`tb/fe_demo_mon.svh:332-341`).
+  (`tb/fe_demo_mon.svh:336-345`).
 
 ---
 
@@ -88,7 +88,7 @@ redirects to the target; its fetch then faults. In the run (cyc is
    access cause (`itlb.sv:517-519`). PMP entry 0 matches first and has
    X clear.
 3. Guest-page fault. After the ecall retires (redirect to V at cyc
-   201), walk for VPN 0x80800 with V=1 at cyc 399. The VS-stage leaf
+   202), walk for VPN 0x80800 with V=1 at cyc 399. The VS-stage leaf
    gives GPA 0x2000_0000, which the G-stage does not map. The walker
    answers ST_FAULT cause 20 (0x14) at cyc 490. A
    G-stage page fault is a guest-page fault (`ptw.sv:79`, MMU-22).
@@ -97,7 +97,7 @@ redirects to the target; its fetch then faults. In the run (cyc is
    `rtl/core/frontend/ifu/rtl/ifu_xlate.sv:316`); `ifu_fetch` requests
    no line on a faulting page (`ifu_fetch.sv:24`, same directory); F3
    assigns each position its fault, cause and VA
-   (`rtl/core/frontend/ifu/rtl/ifu_f3.sv:252-265`) and writes them
+   (`rtl/core/frontend/ifu/rtl/ifu_f3.sv:252-279`) and writes them
    into the packet (`fault_cause`, `fault_va`, `ifu_f3.sv:391-392`).
    Decode sees, at `pd_out[0]`:
    - cyc 108, `start_pc` 0x8040_0010, `fault_cause` IFU_FAULT_PAGE
@@ -112,7 +112,7 @@ redirects to the target; its fetch then faults. In the run (cyc is
 ## 3. What the monitor counts
 
 The counts come from the backend's retirement hook,
-`tb/fe_demo_mon.svh:313-319`, called for every retired expected entry
+`tb/fe_demo_mon.svh:317-323`, called for every retired expected entry
 while the stream is being measured.
 
 ```
@@ -139,8 +139,8 @@ retire with no errors before it accepts the proof.
   fault. The run does not show which lookup starts the second walk;
   faults are not installed (section 2, step 1), so any later lookup of
   the page walks again.
-- A V=1 walk for VPN 0x80020 (page H) starts at cyc 201, in the cycle
-  of the redirect to V, for a fetch younger than the ecall; it answers
+- A V=1 walk for VPN 0x80020 (page H) starts at cyc 201, the cycle
+  before the redirect to V, for a fetch younger than the ecall; it answers
   a fault at cyc 278 that nothing delivers. FD-14 shows the same.
 - The program is FD-15's as `planning/showcase/fe_demo_scenarios.md`
   gives it. The proof as built also checks each packet's VA.

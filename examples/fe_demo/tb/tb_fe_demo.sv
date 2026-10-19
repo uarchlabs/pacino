@@ -4,7 +4,7 @@
 // SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 // ===================================================================
 // The front-end demonstration testbench (DOC-001). Each run is one
-// scenario of planning/showcase/fe_demo_scenarios.md, FD-1 to FD-21,
+// scenario of planning/showcase/fe_demo_scenarios.md, FD-1 to FD-24,
 // named by +SCEN=<name>; the testbench is
 // planning/testbenches/fe_demo_tb_decisions.md.
 //

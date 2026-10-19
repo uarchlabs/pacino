@@ -25,18 +25,16 @@ variable_add tb.dut.u_bpu.w_ftb_br_valid_p2.[1]
 item_set_format Bit
 variable_add tb.dut.u_bpu.w_ftb_jmp_valid_p2
 item_set_format Bit
-variable_add tb.dut.u_bpu.w_jmp_pc_p2
-item_set_format Hexadecimal
-variable_add tb.dut.u_bpu.w_jmp_cut_p2
+variable_add tb.dut.u_bpu.w_cut_p2
 item_set_format Bit
 variable_add tb.dut.bpu_blk_pft_p2
 item_set_format Hexadecimal
 item_unfocus
 # group bp_cluster_p2
 variable_add tb.dut.u_bpu.r_val_p2
-item_focus m
+item_focus l
 group_marked bp_cluster_p2
-item_focus n
+item_focus m
 item_set_format Bit
 variable_add tb.dut.bpu_slot_val_p2
 item_set_format Bit
@@ -81,9 +79,9 @@ item_set_format Unsigned
 item_unfocus
 # group ftq
 variable_add tb.dut.u_ftq.w_ok_pred_p1
-item_focus cc
+item_focus cb
 group_marked ftq
-item_focus cd
+item_focus cc
 item_set_format Bit
 variable_add tb.dut.u_ftq.w_ok_slot_p2
 item_set_format Bit
@@ -106,9 +104,9 @@ item_set_format Bit
 item_unfocus
 # group bp_cluster_p0
 variable_add tb.dut.ftq_pred_val_p0
-item_focus cn
+item_focus cm
 group_marked bp_cluster_p0
-item_focus co
+item_focus cn
 item_set_format Bit
 variable_add tb.dut.ftq_pred_pc_p0
 item_set_format Hexadecimal
@@ -117,17 +115,39 @@ item_set_format Unsigned
 variable_add tb.dut.u_ftq.u_npc.w_hold
 item_set_format Bit
 item_unfocus
+# group ftb_update
+variable_add tb.dut.ftb_upd_valid_u0
+item_focus db
+group_marked ftb_update
+item_focus dc
+item_set_format Bit
+variable_add tb.dut.ftb_upd_pc_u0
+item_set_format Hexadecimal
+variable_add tb.dut.ftb_upd_pos_u0
+item_set_format Unsigned
+variable_add tb.dut.ftb_upd_is_br_u0
+item_set_format Bit
+variable_add tb.dut.ftb_upd_is_jmp_u0
+item_set_format Bit
+variable_add tb.dut.ftb_upd_hit_u0
+item_set_format Bit
+variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_split
+item_set_format Bit
+variable_add tb.dut.u_bpu.u_ftb.u_ftb_cntrl.upd_cut_pos
+item_set_format Unsigned
+item_unfocus
 # markers, from docs/fd23_jump_cut.md section 4
 marker_set c0_reset_released 36
 marker_set c19_predecode_redirect_to_0x8000_0400 225
-marker_set c40_first_backend_misprediction 435
-marker_set c44_first_cut_at_p2 475
-marker_set c48_first_p2_group_at_0x8000_0016 515
-marker_set c55_C1_mispredicted_taken 585
-marker_set c61_first_p1_prediction_for_top_ending 645
-marker_set c89_first_cut_with_C1_and_C2 925
-marker_set c90_the_next_block 935
-marker_set c243_back_edge_falls_through 2465
-marker_set c253_the_run_ends 2565
+marker_set c41_first_backend_misprediction 445
+marker_set c52_FTB_entry_for_top_allocated_with 555
+marker_set c56_first_p2_group_for_top 595
+marker_set c57_SC_reverses_both_at_p3 605
+marker_set c65_J_resolved_from_top 685
+marker_set c71_first_p2_group_for_top_ending 745
+marker_set c91_FTB_entry_for_0x8000_0016_allocated_with 945
+marker_set c98_the_block_at_0x8000_0016_predicts_J 1015
+marker_set c234_back_edge_falls_through 2375
+marker_set c244_the_run_ends 2475
 item_unfocus
 zoom_to 16 336

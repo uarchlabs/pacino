@@ -186,10 +186,11 @@ FDT-12c A Surfer file places one marker per event of the scenario's
        label being the event text up to its first ';', ':', ',' or '(',
        at most six words, joined by '_'. A description is in the
        FDT-13 form when its level-2 headings are the five of FDT-13, in
-       order, section 5 optional. A scenario with no description in
-       that form has no markers. A description in that form whose
-       table mk_sucl.py cannot read stops the generator with an error
-       naming the file and row.
+       order, section 5 optional, after an optional leading
+       "0. Introduction" (Jeff, session-081, DOC-007). A scenario with
+       no description in that form has no markers. A description in
+       that form whose table mk_sucl.py cannot read stops the generator
+       with an error naming the file and row.
 
 ---
 
@@ -198,7 +199,8 @@ FDT-12c A Surfer file places one marker per event of the scenario's
 FDT-13 docs/<scenario>.md describes one scenario. Its reader is
        skilled in decoupled front ends and branch prediction and is
        working out how the pacino front end works. After the header
-       block it has five sections:
+       block it has five sections, which may follow an introduction,
+       section 0 (Jeff, session-081, DOC-007):
          1  What the scenario shows: the behaviour, the result line
             the run prints, and what must happen for it to pass.
          2  The program: the listing, every instruction written out
@@ -276,4 +278,6 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
   2026-10-18  session-081, after DOC-006. FDT-1 waves/ and the model
               directories; FDT-5 two builds (Jeff); FDT-8, FDT-9a per
               build; FDT-12a the format table (Jeff).
+  2026-10-19  session-081, after DOC-007. FDT-12c, FDT-13: a leading
+              0. Introduction section is allowed (Jeff).
 ```

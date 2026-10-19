@@ -28,10 +28,11 @@ the RTL. The disagreements are listed in section 8.
 
 - RTL: `rtl/core/frontend/fe_top/rtl/fe_top.sv` (827 lines) and
   `rtl/core/frontend/bpu/rtl/bp_cluster.sv` (1978 lines), read to the
-  last line. BP-138 lengthened bp_cluster.sv to 2015 lines; the
-  bp_cluster.sv citations it moved are given at their current lines
-  (DOC-006). Each instance's port declarations were read from its own
-  module file for direction and declaration line.
+  last line. BP-138, BP-139 and BP-140 lengthened bp_cluster.sv to
+  2039 lines; the bp_cluster.sv citations they moved are given at
+  their current lines (DOC-006, DOC-007). Each instance's port
+  declarations were read from its own module file for direction and
+  declaration line.
 - Widths are the elaborated widths. The fe_top source list of
   examples/fe_demo/Makefile (less ptw.sv) was elaborated with
   tools/bin/verilator (5.048) `--json-only --top-module fe_top`, and
@@ -89,32 +90,32 @@ FE-15 (planning/arch/fe_decisions.md:1333) names the same seven units.
 
 ```
 VA_WIDTH         41   bp_defines_pkg.sv:25
-PA_WIDTH         36   bp_defines_pkg.sv:555
+PA_WIDTH         36   bp_defines_pkg.sv:573
 FTQ_DEPTH        64   bp_defines_pkg.sv:30
 FTQ_IDX_BITS      6   bp_defines_pkg.sv:113   $clog2(FTQ_DEPTH)
 FTQ_PTR_BITS      7   bp_defines_pkg.sv:118   FTQ_IDX_BITS + 1
 NUM_PRED_SLOTS    2   bp_defines_pkg.sv:65
 NUM_RESOLVE_PORTS 2   bp_defines_pkg.sv:128   = NUM_PRED_SLOTS
 SLOTS             8   decode_pkg.sv:21        decode width
-FTB_BR_POS_BITS   4   bp_defines_pkg.sv:188
-FTB_WAY_BITS      2   bp_defines_pkg.sv:175
-FTQ_PD_WIDTH     16   bp_defines_pkg.sv:222   halfwords per block
-FTQ_PD_POS_BITS   4   bp_defines_pkg.sv:227
+FTB_BR_POS_BITS   4   bp_defines_pkg.sv:186
+FTB_WAY_BITS      2   bp_defines_pkg.sv:177
+FTQ_PD_WIDTH     16   bp_defines_pkg.sv:237   halfwords per block
+FTQ_PD_POS_BITS   4   bp_defines_pkg.sv:242
 RB_CORR_BITS      2   bp_defines_pkg.sv:108
 RB_CNT_BITS       2   bp_defines_pkg.sv:109
 GHR_WIDTH       256   bp_defines_pkg.sv:26
 PHR_WIDTH        32   bp_defines_pkg.sv:27
 GHIST_PTR_BITS    8   bp_defines_pkg.sv:28
 PHIST_PTR_BITS    5   bp_defines_pkg.sv:29
-REQ_ID_BITS       4   bp_defines_pkg.sv:560
-L1I_LINE_BITS   512   bp_defines_pkg.sv:557
-ASID_WIDTH       16   bp_defines_pkg.sv:583
-VMID_WIDTH       14   bp_defines_pkg.sv:584
-PPN_WIDTH        24   bp_defines_pkg.sv:582   PA_WIDTH - 12
-PERM_WIDTH        8   bp_defines_pkg.sv:585
-CAUSE_WIDTH       5   bp_defines_pkg.sv:586
-FAULT_GPA_WIDTH  56   bp_defines_pkg.sv:579
-PMA_WIDTH         4   bp_defines_pkg.sv:587
+REQ_ID_BITS       4   bp_defines_pkg.sv:578
+L1I_LINE_BITS   512   bp_defines_pkg.sv:575
+ASID_WIDTH       16   bp_defines_pkg.sv:601
+VMID_WIDTH       14   bp_defines_pkg.sv:602
+PPN_WIDTH        24   bp_defines_pkg.sv:600   PA_WIDTH - 12
+PERM_WIDTH        8   bp_defines_pkg.sv:603
+CAUSE_WIDTH       5   bp_defines_pkg.sv:604
+FAULT_GPA_WIDTH  56   bp_defines_pkg.sv:597
+PMA_WIDTH         4   bp_defines_pkg.sv:605
 ```
 
 bp_defines_pkg.sv and bp_structs_pkg.sv are in
@@ -1158,7 +1159,7 @@ the same reason (FE-14).
 The cluster is a four-stage pipeline (p0 to p3) with an update stage
 u0 and its write u1 (bp_cluster.sv:55-61). The FTQ-facing ports are
 grouped in the port list as follows; the predictor instances are at
-bp_cluster.sv:1791-2011.
+bp_cluster.sv:1812-2035.
 
 ### 6.1 bp_cluster port groups
 
@@ -1186,100 +1187,101 @@ ST  status: init readies, queue status      :281-300   ftq_bpu 3, 8
 
 ```
 inst           module      line  stage
-u_bp_history   bp_history  1754  p1 checkpoint write; history
+u_bp_history   bp_history  1815  p1 checkpoint write; history
                                  advance per predicted branch
-u_ubtb         ubtb        1783  p1 (combinational from the p0 PC,
+u_ubtb         ubtb        1844  p1 (combinational from the p0 PC,
                                  registered into p1 by the cluster)
-u_loop_pred    loop_pred   1800  p1, and the p2 re-read (BP-122)
-u_ftb          ftb         1824  p2
-u_tage         tage        1874  p2
-u_ittage       ittage      1897  p2
-u_sc           sc          1924  p3 (indexes at p2, answers at p3)
-u_ras          ras         1952  p0 top-of-stack read, p2 push/pop,
+u_loop_pred    loop_pred   1861  p1, and the p2 re-read (BP-122)
+u_ftb          ftb         1885  p2
+u_tage         tage        1935  p2
+u_ittage       ittage      1958  p2
+u_sc           sc          1985  p3 (indexes at p2, answers at p3)
+u_ras          ras         2013  p0 top-of-stack read, p2 push/pop,
                                  p3 repair
 ```
 
 Stages are bp_cluster.sv:55-61 and the comments above each instance
-(bp_cluster.sv:1815, 1832, 1858, 1909, 1931, 1953, 1985). `ubtb` is
-instantiated with `N_SLOTS = NUM_PRED_SLOTS` (bp_cluster.sv:1820-1822).
+(bp_cluster.sv:1813, 1839, 1856, 1882, 1933, 1955, 1977, 2009). `ubtb`
+is instantiated with `N_SLOTS = NUM_PRED_SLOTS`
+(bp_cluster.sv:1844-1846).
 
 ### 6.3 Which cluster port groups each predictor serves
 
 ```
 u_bp_history
   RB  rollback_valid, _ckpt_idx, _corr, _n, _tkn, _pbit
-      (bp_cluster.sv:1799-1804; formed at 1361, 1379, rb_corr_mux 1389)
+      (bp_cluster.sv:1823-1828; formed at 1370, 1385, rb_corr_mux 1413)
   HI  ghist_ptr, phist_ptr, ckpt_ghist_ptr, ckpt_phist_ptr, ghr_buf,
-      phr_buf, bound straight to the cluster ports (1805-1810)
-  P1  ckpt_wr_en / ckpt_wr_idx = r_val_p1 / r_idx_p1 (956)
+      phr_buf, bound straight to the cluster ports (1829-1834)
+  P1  ckpt_wr_en / ckpt_wr_idx = r_val_p1 / r_idx_p1 (964-965)
   internal: folded -> u_tage, u_ittage; sliced folds -> u_sc
 u_ubtb
-  P0  pred_pc_p0 = ftq_pred_pc_p0 (1788)
-  P1  pred_p1, blk_p1 -> p1_form_comb (765) -> bpu_pred_slot_p1
-      (1638), bpu_pred_pft_p1 (939)
+  P0  pred_pc_p0 = ftq_pred_pc_p0 (1849)
+  P1  pred_p1, blk_p1 -> p1_form_comb (779) -> bpu_pred_slot_p1
+      (1699), bpu_pred_pft_p1 (953)
   UP  upd_u0 = ubtb_upd_u0 with valid qualified by the resolved type
-      (1691-1704)
+      (1748-1765)
 u_loop_pred
-  P0  pred_pc_p0 / pred_valid_p0 (1614, 628)
-  P1  pred_p1 -> p1_form_comb (765)
-  M2  pred_p2 -> bpu_meta_lp_p2 (1718)
+  P0  pred_pc_p0 / pred_valid_p0 (1675, 642)
+  P1  pred_p1 -> p1_form_comb (779)
+  M2  pred_p2 -> bpu_meta_lp_p2 (1779)
   UP  upd_p0 = lp_upd_p0, upd_valid_p0 = lp_upd_valid_p0 & COND
-      (1816-1817, 1617)
+      (1877-1878, 1678-1679)
   RB  rst_val / rst_idx / rst_ex / rst_tkn / inv_val from the
-      rollback (lp_rst_comb 1385; ftq_rollback_slot_ex/_tkn 1401-1402)
+      rollback (lp_rst_comb 1446; ftq_rollback_slot_ex/_tkn 1462-1463)
 u_ftb
-  P0  pred_valid_p0 = w_req_val_p0 (621, 1827), pred_pc_p0 (1828)
-  SL  p2 slot fields -> p2_class_comb (970), p2_slot_comb (1180),
-      bpu_slot_val_p2 (1200)
-  RD  p2 redirect -> p2_succ_comb (1063)
-  BK  ftb_pft_addr_p2 -> bpu_blk_pft_p2 (1214)
-  M2  hit, way, jmp_pos -> bpu_meta_ftb_p2 (1715-1717)
-  UP  ftb_upd_* bound by name, valid gated by is_br | is_jmp (1582)
-  CF  ftb_fastpath_en (1851)
+  P0  pred_valid_p0 = w_req_val_p0 (635, 1888), pred_pc_p0 (1889)
+  SL  p2 slot fields -> p2_class_comb (985), p2_slot_comb (1241),
+      bpu_slot_val_p2 (1261)
+  RD  p2 redirect -> p2_succ_comb (1107)
+  BK  ftb_pft_addr_p2 -> bpu_blk_pft_p2 (1275)
+  M2  hit, way, jmp_pos -> bpu_meta_ftb_p2 (1776-1778)
+  UP  ftb_upd_* bound by name, valid gated by is_br | is_jmp (1643-1644)
+  CF  ftb_fastpath_en (1912)
 u_tage
-  P0  tage_pred_val_p0 (626), tage_pred_inp_p0 (1605-1606)
-  SL/RD  tage_pred_meta_p2 -> p2 direction (p2_class_comb 970)
-  M2  tage_pred_meta_p2 -> bpu_meta_tage_p2 (1713)
-  UP  tage_upd_val_u0 & COND & tage_upd_rdy (1737), tage_upd_inp_u0
-  ST  tage_rdy (1890), tage_pq_not_full, tage_uq_not_full ->
-      tage_upd_rdy, tage_upd_rdy_u1 (1883-1885); consumer_ready from
-      SC (1524)
-  CF  tage_enable_aging, tage_aging_interval (1886-1887)
+  P0  tage_pred_val_p0 (640), tage_pred_inp_p0 (1666-1667)
+  SL/RD  tage_pred_meta_p2 -> p2 direction (p2_class_comb 985)
+  M2  tage_pred_meta_p2 -> bpu_meta_tage_p2 (1774)
+  UP  tage_upd_val_u0 & COND & tage_upd_rdy (1798-1800), tage_upd_inp_u0
+  ST  tage_rdy (1951), tage_pq_not_full, tage_uq_not_full ->
+      tage_upd_rdy, tage_upd_rdy_u1 (1944-1946); consumer_ready from
+      SC (1585-1586)
+  CF  tage_enable_aging, tage_aging_interval (1947-1948)
 u_ittage
-  P0  ittage_pred_val_p0 (627), ittage_pred_inp_p0 (1607-1608)
-  RD  ittage target -> p2_succ_comb (1063)
-  M2  ittage_pred_meta_p2 -> bpu_meta_ittage_p2 (1714)
-  UP  ittage_upd_val_u0 & indirect & ittage_upd_rdy (1740)
-  ST  ittage_rdy (1912), ittage_pq_not_full, ittage_uq_not_full ->
-      ittage_upd_rdy, ittage_upd_rdy_u1 (1906-1908)
-  CF  ittage_enable_aging, ittage_aging_interval (1909-1910)
+  P0  ittage_pred_val_p0 (641), ittage_pred_inp_p0 (1668-1669)
+  RD  ittage target -> p2_succ_comb (1107)
+  M2  ittage_pred_meta_p2 -> bpu_meta_ittage_p2 (1775)
+  UP  ittage_upd_val_u0 & indirect & ittage_upd_rdy (1801-1803)
+  ST  ittage_rdy (1973), ittage_pq_not_full, ittage_uq_not_full ->
+      ittage_upd_rdy, ittage_upd_rdy_u1 (1967-1969)
+  CF  ittage_enable_aging, ittage_aging_interval (1970-1971)
 u_sc
-  takes the TAGE p2 result (1927-1928), PC and folds staged to p2
-  SL  p3 direction -> p3_slot_comb (1279), bpu_slot_val_p3 (1299)
-  RD  p3 redirect -> p3_redir_comb (1228)
-  M3  sc_pred_meta_p3 -> bpu_meta_sc_p3 (1730)
-  UP  sc_upd_val_u0 & COND & queue room & sc_enable (1743),
-      sc_upd_inp_u0; arbiter sc_arb_comb (1498)
-  ST  sc_ready (1944); sc_uq_not_full and sc_upd_rdy formed at
-      1533-1534 from 1939-1940; sc_upd_rdy_u1 (1938)
-  CF  sc_enable (1943)
+  takes the TAGE p2 result (1988-1989), PC and folds staged to p2
+  SL  p3 direction -> p3_slot_comb (1340), bpu_slot_val_p3 (1360)
+  RD  p3 redirect -> p3_redir_comb (1289)
+  M3  sc_pred_meta_p3 -> bpu_meta_sc_p3 (1791)
+  UP  sc_upd_val_u0 & COND & queue room & sc_enable (1804-1807),
+      sc_upd_inp_u0; arbiter sc_arb_comb (1559)
+  ST  sc_ready (2005); sc_uq_not_full and sc_upd_rdy formed at
+      1594-1596 from 2000-2001; sc_upd_rdy_u1 (1999)
+  CF  sc_enable (2004)
 u_ras
   P1  top of stack at p0 -> p1 target of a return (p1_form_comb);
-      bpu_pred_ras_p1 = the p2 snapshot of the last slot (947)
-  BK  bpu_blk_ras_p2 (1213)
-  RD  p2 pop address -> p2_succ_comb (1063); p3 repair (1667)
-  RS  ras_restore_val gated by the cluster's own redirect (1341),
+      bpu_pred_ras_p1 = the p2 snapshot of the last slot (961)
+  BK  bpu_blk_ras_p2 (1274)
+  RD  p2 pop address -> p2_succ_comb (1107); p3 repair (1728-1730)
+  RS  ras_restore_val gated by the cluster's own redirect (1402),
       ras_restore_snapshot, ras_commit_val gated by call/return type
-      (1588), commit br_type / ret_addr / snapshot, flush
-      (1965-1973)
+      (1649-1653), commit br_type / ret_addr / snapshot, flush
+      (2026-2034)
 ```
 
 The p0 request reaches the table predictors only when both TAGE and
 ITTAGE prediction queues can accept it: `w_req_val_p0 =
 ftq_pred_val_p0 & w_pq_rdy_p0`, with `w_pq_rdy_p0 = tage_pq_not_full &
-ittage_pq_not_full` (bp_cluster.sv:626-627). The update fan-out by
+ittage_pq_not_full` (bp_cluster.sv:634-635). The update fan-out by
 resolved branch type is rederived from the uBTB payload of each
-channel (bp_cluster.sv:1715, upd_br_type at 1585-1594).
+channel (bp_cluster.sv:1732-1746, upd_br_type at 1609-1618).
 
 ---
 
@@ -1288,7 +1290,7 @@ channel (bp_cluster.sv:1715, upd_br_type at 1585-1594).
 `fe_top` has no walker; the testbench instantiates one beside it
 (FE-17 translation, planning/arch/fe_decisions.md:1391; MMU-1a). The
 shared model rtl/core/frontend/fe_top/tb/models/fe_tb_dut.svh holds
-both, included in module tb by examples/fe_demo/tb/tb_fe_demo.sv:48
+both, included in module tb by examples/fe_demo/tb/tb_fe_demo.sv:57
 and by tb_fe_top.
 
 ```
@@ -1314,7 +1316,7 @@ walker CSR group (MMU-24a)
   ptw_csr  fe_tb_dut.svh:117 -> u_ptw.ptw_csr ptw.sv:206
   driven by csr_sync, fe_tb_csr.svh:29 (csr_tb_pkg::pack_ptw_csr)
 the L1I mem link (section 4.8)
-  answered by the same memory model, fe_tb_mem.svh:35-100
+  answered by the same memory model, fe_tb_mem.svh:35-103
   (a_ready at 35, the D-channel responder initial tl_mem at 37)
 ```
 
@@ -1345,7 +1347,7 @@ D2  ITTAGE update payload name.
 
 D3  TAGE and ITTAGE queue status port names (TD#49).
     RTL: tage.sv:47-48 and ittage.sv:46-47 declare <p>_pq_not_full and
-    <p>_uq_not_full; bp_cluster.sv:1921-1922 and 1944-1945 bind them;
+    <p>_uq_not_full; bp_cluster.sv:1945-1946 and 1968-1969 bind them;
     bp_cluster.sv:286-288 says TD#49 was applied by BP-132.
     Plan: ftq_bpu_interfaces.md 8, lines 947-956, says tage and
     ittage declare pq_not_full and upd_rdy without prefix and that

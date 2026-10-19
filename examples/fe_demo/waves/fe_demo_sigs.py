@@ -18,6 +18,8 @@
 # SCEN_2S). The lists are built for the slot count of the model that
 # wrote the FST (scenarios(n), n from nslots), and every format comes
 # from one table, FORMATS, through fmt(); radix() is gone.
+# DOC-007: fd23's groups show the split at update, not the BP-139 cut;
+# the position row of FORMATS takes an update-stage suffix (_u0).
 #
 # fst_names(fst) reads an FST's names; fst_values(fst, paths) the value
 # changes of a few signals; nslots(names) the slot count of the model
@@ -187,8 +189,8 @@ FORMATS = [
      r'lp_curs', 'Unsigned', 'a count or iteration number'),
     (r'waddr', 'Unsigned', 'an SRAM init write address'),
     # PROVISIONAL: indices, pointers, positions, ids and table numbers.
-    (r'.*_idx(_p\d)?|.*_ptr|(.*_)?pos|tosr|tosw|bos|csp|.*_id|.*_source|'
-     r'.*_comp', 'Unsigned', 'an index, pointer, position or table '
+    (r'.*_idx(_p\d)?|.*_ptr|(.*_)?pos(_u\d)?|tosr|tosw|bos|csp|.*_id|'
+     r'.*_source|.*_comp', 'Unsigned', 'an index, pointer, position or table '
      'number, PROVISIONAL'),
     # Addresses, targets, PCs and data.
     (r'(.*_)?pc(_[pu]\d)?|.*_pft_p\d|(.*_)?(target|tgt)|.*addr(ess)?|'
@@ -421,11 +423,18 @@ def scenarios(n):
                 I + '.u_f3.r_strad_idx']
     # ifu_fetch's commit gate on an uncached block.
     fetch_uc = [I + '.u_fetch.xq_uc', I + '.u_fetch.w_uc_gate']
-    # fd23: the p2 block's start, the FTB's jump field, the cut and the
-    # block's end (bp_cluster p2_class_comb, p2_succ_comb).
-    jmp_cut = [B + '.r_pc_p2'] + bits(B, 'w_ftb_br_valid_p2') + \
-        [B + '.w_ftb_jmp_valid_p2', B + '.w_jmp_pc_p2', B + '.w_jmp_cut_p2',
-         D + '.bpu_blk_pft_p2']
+    # fd23: the p2 block's start, the FTB's branch fields, the cluster's
+    # cut and the block's end (bp_cluster p2_class_comb, p2_succ_comb);
+    # and the FTB update that splits the entry (ftb_cntrl THE UPDATE).
+    # DOC-007: the split replaced the cut, so w_jmp_pc_p2 and
+    # w_jmp_cut_p2 are no longer listed and w_cut_p2 shows the cut clear.
+    jmp_end = [B + '.r_pc_p2'] + bits(B, 'w_ftb_br_valid_p2') + \
+        [B + '.w_ftb_jmp_valid_p2', B + '.w_cut_p2', D + '.bpu_blk_pft_p2']
+    FC = B + '.u_ftb.u_ftb_cntrl'
+    ftb_split = [D + '.ftb_upd_valid_u0', D + '.ftb_upd_pc_u0',
+                 D + '.ftb_upd_pos_u0', D + '.ftb_upd_is_br_u0',
+                 D + '.ftb_upd_is_jmp_u0', D + '.ftb_upd_hit_u0',
+                 FC + '.upd_split', FC + '.upd_cut_pos']
 
     return [
         ('fd01_reset_init', [('clock', clk), ('sram_init', init),
@@ -499,9 +508,10 @@ def scenarios(n):
         ('fd22_sc_slot1', [('clock', clk), ('tage_p2', tage_p2),
                            ('bp_cluster_p2', bpu_p2), ('sc_p3', sc_p3),
                            ('bp_cluster_p3', bpu_p3), ('ftq', ftq)]),
-        ('fd23_jump_cut', [('clock', clk), ('bp_cluster_p2_ftb', jmp_cut),
+        ('fd23_jump_cut', [('clock', clk), ('bp_cluster_p2_ftb', jmp_end),
                            ('bp_cluster_p2', bpu_p2), ('ftq', ftq),
-                           ('bp_cluster_p0', bpu_p0)]),
+                           ('bp_cluster_p0', bpu_p0),
+                           ('ftb_update', ftb_split)]),
         ('fd24_call_slot1', [('clock', clk), ('bp_cluster_p2', bpu_p2),
                              ('ras', ras), ('ftq', ftq),
                              ('ras_commit', ras_cmt)]),

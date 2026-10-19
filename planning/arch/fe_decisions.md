@@ -696,8 +696,9 @@ keep (the split at update, ftb_decisions.md 3), so from an entry it
 wrote it never reports a branch no slot carries, and the block ends
 at that PC by the stored end. The cut stays, unchanged, for an entry
 that reports more (none in tb_fe_top: 0 cut groups at both slot
-counts, 280 / 2409 before). FD-23 of examples/fe_demo, which
-demonstrates the cut firing, no longer shows it.
+counts, 280 / 2409 before). FD-23 of examples/fe_demo, written for
+the cut, was re-pointed at the split by DOC-007; it reports the cut
+count, 0. w_jmp_cut_p2 is now read by nothing.
 
 ---
 
@@ -1820,4 +1821,7 @@ create one.
               ends the block at its PC (option A). 7.2: item C.
 
   2026-10-19  session-081, after BP-140. 10: the cut is a backstop.
+
+  2026-10-19  session-081, after DOC-007. 10: FD-23 re-pointed at the
+              split; w_jmp_cut_p2 is read by nothing.
 ```

@@ -4,9 +4,9 @@
 # fd02_steady: Steady-State Prediction and Fetch
 ```
  FILE:    fd02_steady.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -39,7 +39,7 @@ RESET_VECTOR+0x800   jal x0,0           halt (demo_go -> W.halt)
 
 - `W.i32(ADDI_T0)` 512 times: 512 32-bit instructions, 2 KiB, 32 L1I
   lines of 64 bytes, 64 FTB blocks of 32 bytes (`FTB_BLOCK_BYTES = 32`,
-  `bp_defines_pkg.sv:171`), 8 instructions per block.
+  `bp_defines_pkg.sv:173`), 8 instructions per block.
 - There is no branch until the halt JAL at `RESET_VECTOR + 0x800`
   (0x80000800).
 
@@ -48,7 +48,7 @@ RESET_VECTOR+0x800   jal x0,0           halt (demo_go -> W.halt)
 ## 2. Why the program produces one block per cycle
 
 1. p1 prediction on a uBTB miss. `rtl/core/frontend/bpu/rtl/
-   bp_cluster.sv:868-870`: `w_pft_p1` is `r_ubtb_blk_p1.pft_addr` on a
+   bp_cluster.sv:876-878`: `w_pft_p1` is `r_ubtb_blk_p1.pft_addr` on a
    hit and `r_pc_p1 + FTB_BLOCK_BYTES` on a miss. With no branch in the
    code no lookup hits (`r_ubtb_blk_p1.hit` is low on cycles 1 to 84 in
    the FST), so each p1 prediction names the next 32-byte block and
@@ -75,7 +75,7 @@ delivers the halt block, one instruction.
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:394-410`, taken only inside
+The counts come from `tb/fe_demo_mon.svh:398-414`, taken only inside
 the `meas` window (out of reset, the backend taking decode's output,
 the stream not yet retired).
 

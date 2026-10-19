@@ -4,9 +4,9 @@
 # fd04_p2_override: p2 Override
 ```
  FILE:    fd04_p2_override.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -22,7 +22,7 @@ The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
--I: fd04_p2_override: PASS, p2 redirects 77, cyc 527
+-I: fd04_p2_override: PASS, p2 redirects 49, cyc 522
 ```
 
 ---
@@ -52,28 +52,30 @@ b[7]+18          jal x0,0             halt (demo_go -> W.halt)
   last, b[7]'s conditional exits and `d_jal_fill`
   (`fe_tb_writer.svh:530-541`) writes the back-edge JAL in dry mode so
   the bytes stay the same but it is not in the expected stream.
-- Outcomes come from the writer (`bcc`, `fe_tb_writer.svh:412-421`).
+- Outcomes come from the writer (`bcc`, `fe_tb_writer.svh:412-419`).
 
 ---
 
 ## 2. Why the program produces p2 redirects
 
-1. One uBTB set. The uBTB index is `pc[10:5]`
-   (`rtl/core/frontend/bpu/rtl/ubtb.sv:110-114`, `UBTB_IDX_BITS = 6`,
-   `UBTB_OFFSET_BITS = 5`, `bp_defines_pkg.sv:305, 315`). Every b[k] is
-   a multiple of 0x800, so all eight map to set 0, which has
-   `UBTB_WAYS = 4` (`bp_defines_pkg.sv:298`). An update that misses
+1. One uBTB set. The uBTB index is `pc[10:5]` XOR (`pc[4:1]` << 2),
+   the block start's halfword offset folded into the top index bits
+   (`get_idx`, `rtl/core/frontend/bpu/rtl/ubtb.sv:135-140`;
+   `UBTB_IDX_BITS = 6`, `UBTB_OFFSET_BITS = 5`,
+   `bp_defines_pkg.sv:322, 323`). Every b[k] is a multiple of 0x800, so
+   its offset is 0 and all eight map to set 0, which has
+   `UBTB_WAYS = 4` (`bp_defines_pkg.sv:315`). An update that misses
    takes the way named by the set's round-robin `wr_ptr`
-   (`ubtb.sv:460-462`), so at most four of the eight blocks are held
+   (`ubtb.sv:478-481`), so at most four of the eight blocks are held
    at a time.
-2. Eight FTB sets. The FTB set index is `pc[13:5]`
-   (`ftb_cntrl.sv:574`, `FTB_IDX_BITS = 9`, `bp_defines_pkg.sv:174`).
-   The eight blocks fall in sets 0x080, 0x0C0, 0x100, 0x140, 0x180,
-   0x1C0, 0x000 and 0x040 (derived from the addresses), so the FTB
-   holds all of them.
+2. Eight FTB sets. The FTB set index is `pc[13:5]` XOR (`pc[4:1]` << 5)
+   (`ftb_idx`, `ftb_cntrl.sv:327-331`; `FTB_IDX_BITS = 9`,
+   `bp_defines_pkg.sv:176`). With offset 0 the eight blocks fall in
+   sets 0x080, 0x0C0, 0x100, 0x140, 0x180, 0x1C0, 0x000 and 0x040
+   (derived from the addresses), so the FTB holds all of them.
 3. p1 on a uBTB miss predicts fall-through: `w_pft_p1` is the lookup PC
-   plus 32 (`bp_cluster.sv:868-870`).
-4. p2 comparison. `bp_cluster.sv:1185-1187`: a reachable slot s
+   plus 32 (`bp_cluster.sv:876-878`).
+4. p2 comparison. `bp_cluster.sv:1213-1217`: a reachable slot s
    redirects when the FTB answered (`w_ftb_valid_p2`) and its p2
    successor `w_succ_p2[s]` differs from the p1 successor carried in
    `r_succ_p1_p2[s]`. For b[k] the FTB successor is b[k+1] and the p1
@@ -83,41 +85,49 @@ b[7]+18          jal x0,0             halt (demo_go -> W.halt)
    pointer match; `ftq_npc.sv:349-355` (arm 4) then takes the p2
    redirect PC as the next p0 request.
 
-From the FST, the 77 accepted p2 redirects, by block and target:
+From the FST, the 49 accepted p2 redirects, by block and target:
 
 ```
 block        target       count   uBTB at p1
-0x80001000   0x80001800   16      miss
-0x80001800   0x80002000   15      miss
-0x80002000   0x80002800   15      miss
+0x80001000   0x80001800    2      miss
+0x80001800   0x80002000    3      miss
+0x80002000   0x80002800    3      miss
 0x80002800   0x80003000   14      miss
-0x80004800   0x80004806   12      hit
-0x80004800   0x8000480A    1      hit
-0x80004806   0x80001000    1      hit
-0x8000480A   0x8000482A    3      hit
+0x80003000   0x80003800   12      miss
+0x80004800   0x80004806   11      hit, end b[7] + 0x20
+0x80004800   0x8000480A    4      hit, end b[7] + 0x20
 ```
 
-60 follow a uBTB miss; 17 follow a uBTB hit whose successor the FTB
-answer differs from (b[7] and the blocks after it). "uBTB at p1" is
-`r_ubtb_blk_p1.hit` the cycle before, for the same lookup PC. b[4] to
+34 follow a uBTB miss; 15 follow a uBTB hit for b[7]. "uBTB at p1" is
+`r_ubtb_blk_p1.hit` the cycle before, for the same lookup PC. b[5] and
 b[6] raise no p2 redirect in this run.
 
-The 12 redirects from b[7] to 0x8000_4806 are the cut of
-`fe_decisions.md` 10 (BP-138). b[7] holds a conditional at position 1
-and the jal at position 3; with one slot, the slot holds the
-conditional and the jump is in no slot. The FTB answer then ends the
-block at the jump's PC, `bpu_blk_pft_p2` 0x8000_4806 with
-`w_jmp_cut_p2` set (`bp_cluster.sv` lines 1044 to 1047 and 1107 to
-1108). The uBTB's p1 answer for b[7] has the conditional not taken and
-the fall-through 0x8000_480A, past the jump, so the two successors
-differ and p2 redirects to the jump's PC. The next block starts at the
-jump and predicts it in slot 0.
+b[7] holds a conditional at position 1 and the jal at position 3. On
+this model an FTB entry holds one branch, so when the jal first
+resolved in a block from b[7] the FTB split the entry: it keeps the
+conditional and ends at the jal's PC, 0x8000_4806 (the split at
+update, `planning/arch/ftb_decisions.md` section 3; `ftb_cntrl.sv`,
+THE UPDATE, lines 464 to 615). The FTB answer for b[7] therefore ends
+the block at 0x8000_4806 (`bpu_blk_pft_p2`). The next block starts at
+the jal and predicts it in slot 0. The uBTB entry for b[7] was split
+the same way at cyc 193. The set's round-robin replacement then wrote
+that way for b[3] at cyc 199. At cyc 203 the conditional's update
+allocated b[7] again, with the end of a new entry, b[7] + 0x20. From
+then on the jal resolves in the block that starts at 0x8000_4806, so
+no update from b[7] carries it, and the uBTB entry for b[7] keeps that
+end. Its p1 answer is the conditional not taken with the fall-through
+0x8000_4820, past the jal. The FTB's fall-through is 0x8000_4806, so
+p2 redirects to the jal's PC; this happens 11 times. The 4 redirects
+to 0x8000_480A are the conditional predicted taken at p2 against the
+uBTB's not taken. None of the 49 has the cluster's cut set
+(`w_cut_p2`, `fe_decisions.md` 10): the FTB entry never reports a
+branch no slot carries.
 
 ---
 
 ## 3. What the monitor counts
 
-The count comes from `tb/fe_demo_mon.svh:420-431`, taken inside the
+The count comes from `tb/fe_demo_mon.svh:424-435`, taken inside the
 `meas` window.
 
 ```
@@ -134,19 +144,19 @@ before it accepts the proof.
 
 ## 4. Reading the numbers
 
-- `p2 redirects 77` counts cycles in which the FTQ accepted a p2
+- `p2 redirects 49` counts cycles in which the FTQ accepted a p2
   redirect. On the two-slot model a cycle with both slots redirecting
   counts once; on this model a cycle has one slot.
-- The miss counts are uneven across the chain (16, 15, 15, 14 for b[0]
-  to b[3], none for b[4] to b[6]): which four blocks the set holds at a
-  given time depends on the round-robin pointer and the order of
+- The miss counts are uneven across the chain (2, 3, 3, 14 and 12 for
+  b[0] to b[4], none for b[5] and b[6]): which four blocks the set holds
+  at a given time depends on the round-robin pointer and the order of
   updates. The figures are from this run.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-4: its
   program is "a branch whose uBTB entry is stale while its FTB entry is
   current". As built, the mechanism is uBTB capacity: eight blocks in
   one four-way set, so most redirects follow a uBTB miss, not a stale
-  hit. 17 of the 77 do follow a hit, 12 of them the cut at b[7]. The
-  proof is FD-4's.
+  hit. 15 of the 49 do follow a hit, all of them b[7]'s, whose uBTB
+  entry keeps an end the FTB entry has split. The proof is FD-4's.
 
 ---
 

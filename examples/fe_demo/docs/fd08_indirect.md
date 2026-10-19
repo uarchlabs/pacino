@@ -4,9 +4,9 @@
 # fd08_indirect: Indirect Jump
 ```
  FILE:    fd08_indirect.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -23,7 +23,7 @@ The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
--I: fd08_indirect: PASS, indirect targets predicted by ITTAGE 58, cyc 1345
+-I: fd08_indirect: PASS, indirect targets predicted by ITTAGE 50, cyc 1147
 ```
 
 ---
@@ -69,7 +69,7 @@ jn+18               jal x0,top         back to top on passes 0..38
 
 1. The FTB jump slot holds one target per jump (`jmp.tgt`, written from
    `ftb_upd_jmp_target_u0`,
-   `rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:552`). A target that changes
+   `rtl/core/frontend/bpu/rtl/ftb_cntrl.sv:553-554`). A target that changes
    every pass is wrong at p2 whenever the FTB target is the one used.
 2. ITTAGE takes the folded global history (`folded_hist`,
    `rtl/core/frontend/bpu/rtl/ittage.sv:53-54`). A and C alternate
@@ -83,17 +83,17 @@ jn+18               jal x0,top         back to top on passes 0..38
 4. Selection at p2. For an `INDIRECT_NONRET` or `INDIRECT_CALL` slot the
    cluster takes the ITTAGE target when ITTAGE answered for this entry
    with a tagged hit (`it_hit`,
-   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1119-1121`), primary or
-   alternate target by `ittage_using_primary` (lines 1122-1124), and
+   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1148-1150`), primary or
+   alternate target by `ittage_using_primary` (lines 1151-1153), and
    records `pred_src = PRED_ITTAGE`; otherwise the FTB jump target and
-   `PRED_FTB` (lines 1142-1145). `ittage_hit` is the primary-table hit
+   `PRED_FTB` (lines 1171-1174). `ittage_hit` is the primary-table hit
    (`ittage_cntrl.sv:557`).
 
 ---
 
 ## 3. What the monitor counts
 
-At retirement (`tb/fe_demo_mon.svh:307-311`):
+At retirement (`tb/fe_demo_mon.svh:311-316`):
 
 ```
 n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
@@ -103,7 +103,7 @@ n_itt_ok   a retired INDIRECT_NONRET or INDIRECT_CALL whose FTQ entry's
 ```
 
 The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:266-275`).
+p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:270-279`).
 
 The proof (`tb/fe_demo_proofs.svh:83`) is `n_itt_ok > 0`.
 `tb_fe_demo.sv:160` also requires the whole stream to retire with no
@@ -113,10 +113,10 @@ errors.
 
 ## 4. Reading the numbers
 
-- 58 of the 80 retired indirects had their right target from ITTAGE.
-  The other 22 include the first executions of each, before ITTAGE has
+- 50 of the 80 retired indirects had their right target from ITTAGE.
+  The other 30 include the first executions of each, before ITTAGE has
   allocated; their sources were not traced one by one. On the two-slot
-  model the count was 67 (DOC-002).
+  model the same program gives 58 (DOC-007 run).
 - A target from ITTAGE that is wrong is not counted, and neither is one
   that reached the entry's final slot from another predictor.
 - Departure from FD-8 in `planning/showcase/fe_demo_scenarios.md`: the

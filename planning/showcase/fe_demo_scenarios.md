@@ -158,11 +158,13 @@ FD-13  L1I hit and miss
             fill; a second request merged onto the miss
   program   a loop within one line (hits); a call to the upper half
             of a line X whose JAL returns to X, trained, then run
-            again after FENCE.I: the block at X+0x30 requests X and
-            X+1 (IFU-7) and the predicted block at X requests X while
-            that miss is in flight. A second block on the same line
-            never merges: the IFU reuses the previous request's line
-            (TD-IFU-8)
+            again after FENCE.I and one line of filler instructions:
+            the block at X+0x30 requests X and X+1 (IFU-7) and the
+            predicted block at X requests X while that miss is in
+            flight. A second block on the same line never merges: the
+            IFU reuses the previous request's line (TD-IFU-8). The
+            filler keeps the fetch that runs past the FENCE.I from
+            requesting X before the restart (DOC-007)
   waveform  L1I request and response, MSHR, fill
   proof     a hit, a miss, a merge
 
@@ -252,15 +254,19 @@ FD-22  SC reversing slot 1
 FD-23  A jump behind two conditionals
   build     NUM_PRED_SLOTS = 2
   shows     a block {conditional, conditional, jump} with both
-            conditionals not taken: the block ends at the jump PC and
-            the next block predicts the jump (fe_decisions.md 10,
-            BP-138)
+            conditionals not taken: the FTB entry holds the two
+            conditionals and ends at the jump PC (the split at update,
+            ftb_decisions.md 3, BP-140), and the next block predicts
+            the jump. Re-pointed from the BP-138/BP-139 cut by DOC-007
   program   a loop of 24 passes over two never-taken conditionals and
-            a jal to the block holding the back edge
-  waveform  FTB p2 fields, p2 slots, the block end
-  proof     a p2 group with two not-taken conditionals cut at the jump
-            PC; the next group at that PC with the jump in slot 0,
-            taken
+            a jal to the block holding the back edge; the program
+            records the jal's PC for the proof
+  waveform  FTB p2 fields, p2 slots, the cut, the block end, the FTB
+            update that splits the entry
+  proof     a p2 group with two not-taken conditionals ending at the
+            jump PC by the FTB's end (bpu_blk_pft_p2 at the jump PC,
+            the cut clear); the next group at that PC with the jump in
+            slot 0, taken
 
 FD-24  A call in slot 1
   build     NUM_PRED_SLOTS = 2
@@ -302,4 +308,6 @@ FD-U2  CLOSED, DOC-001: the shared backend's be_rdy_pat; decode accepts
   2026-10-18  session-081, after DOC-006. FD-0a builds (Jeff); FD-3
               build; section 6, FD-22 to FD-24 (Jeff); Open and
               History renumbered 7 and 8.
+  2026-10-19  session-081, after DOC-007. FD-13 program re-timed (the
+              filler after FENCE.I); FD-23 re-pointed at the split.
 ```

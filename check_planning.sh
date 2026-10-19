@@ -130,6 +130,8 @@
 # Updated after BP-140, session-081 (PROJECT_STATUS.md,
 # ftb_decisions.md, fe_decisions.md, ftb_interfaces.md,
 # ubtb_interfaces.md, ras_decisions.md, ras_interfaces.md).
+# Updated after DOC-007, session-081 (PROJECT_STATUS.md,
+# fe_demo_scenarios.md, fe_demo_tb_decisions.md, fe_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -152,7 +154,7 @@ UNKN="."
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   d1f9e222d77f
-PLAN  PROJECT_STATUS.md                 25d22f80d345
+PLAN  PROJECT_STATUS.md                 e215b34bea77
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -162,7 +164,7 @@ ARCH  bp_history_decisions.md           cf35b25e9dfb
 ARCH  cachegen_decisions.md             de8bfe4e9845
 ARCH  csr_decisions.md                  1df550fedc68
 ARCH  dcd_decisions.md                  1134f749b0d9
-ARCH  fe_decisions.md                   372ef4c199c5
+ARCH  fe_decisions.md                   cc3722d8f782
 ARCH  ftb_decisions.md            816c0461bf7d
 ARCH  ftq_decisions.md            1e4af7d2487e
 ARCH  ftq_entry_formats.md        49182a82e3c6
@@ -192,7 +194,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
-TEST  fe_demo_tb_decisions.md           736a3c00e64e
+TEST  fe_demo_tb_decisions.md           6dc17b90d009
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
@@ -221,7 +223,7 @@ INTF  tage_interfaces.md                80e89e517207
 INTF  ubtb_interfaces.md          a8e591bbeda2
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
-SHOW  fe_demo_scenarios.md            59f749a27b41
+SHOW  fe_demo_scenarios.md            7a55ae56d56a
 
 MISC  ras_theory_of_operation.md      d4e71726f007
 

@@ -174,15 +174,14 @@ item_set_format Bit
 item_unfocus
 # markers, from docs/fd22_sc_slot1.md section 4
 marker_set c0_reset_released 36
-marker_set c21_first_backend_misprediction 245
-marker_set c24_first_p2_group_for_the_block 275
-marker_set c36_A_mispredicted 395
-marker_set c44_first_p3_redirect 475
-marker_set c95_first_p3_redirect_from_slot_1 985
-marker_set c100_SC_reverses_B_from_taken_to 1035
-marker_set c125_last_backend_misprediction_of_B 1285
-marker_set c136_SC_corrects_TAGEs_taken_for_B 1395
-marker_set c375_back_edge_falls_through 3785
-marker_set c386_the_run_ends 3895
+marker_set c22_first_backend_misprediction 255
+marker_set c45_first_p2_group_for_the_block 485
+marker_set c46_first_p3_redirect 495
+marker_set c56_A_mispredicted 595
+marker_set c110_first_p3_redirect_from_slot_1 1135
+marker_set c114_SC_corrects_TAGEs_taken_for_B 1175
+marker_set c204_last_backend_misprediction_of_B 2075
+marker_set c358_back_edge_falls_through 3615
+marker_set c368_the_run_ends 3715
 item_unfocus
 zoom_to 16 336

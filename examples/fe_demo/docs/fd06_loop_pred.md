@@ -4,9 +4,9 @@
 # fd06_loop_pred: Loop Predictor
 ```
  FILE:    fd06_loop_pred.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -21,7 +21,7 @@ The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
--I: fd06_loop_pred: PASS, loop exits predicted by the loop predictor 10, cyc 428
+-I: fd06_loop_pred: PASS, loop exits predicted by the loop predictor 8, cyc 439
 ```
 
 ---
@@ -74,27 +74,29 @@ bank per slot.
    `cnf == {LP_CNF_BITS{1'b1}}` (`loop_pred.sv:269-271`, p1;
    lines 305-306, the p2 re-read). `LP_CNF_BITS` is 2, so the level
    is 3 (`LP_CONF_LEVEL`, line 82). The direction is taken while the
-   count is below the trip count (line 272, line 307), so the exit is
-   predicted not taken.
+   count is below the trip count (lines 272 and 273, lines 307 and
+   308), so the exit is predicted not taken.
 4. Override. At p1, a trusted LP overrides the direction of a slot the
    uBTB supplied and the slot carries `pred_src = PRED_LOOP`
-   (`rtl/core/frontend/bpu/rtl/bp_cluster.sv:797-802`). At p2 the LP
+   (`rtl/core/frontend/bpu/rtl/bp_cluster.sv:805-810`). At p2 the LP
    takes priority over TAGE for a conditional (`w_lp_use_p2`,
-   `bp_cluster.sv:1024-1029`) and the slot again carries `PRED_LOOP`
-   (line 1132).
+   `bp_cluster.sv:1031-1036`) and the slot again carries `PRED_LOOP`
+   (lines 1161 and 1162).
 
 From the run (out/fd06_loop_pred/fd06_loop_pred.fst, slot 0 of
-`w_lp_pred_p2`): `lp_past_itr` reads 8 from cycle 120, `lp_conf` steps
-1, 2, 3 and reaches 3 at cycle 190, and `lp_pred_is_loop` is first set
-at cycle 192. Before that, the inner exit was mispredicted three times:
-backend redirects to 0x8000_001A at cycles 39, 89 and 114.
+`w_lp_pred_p2`): `lp_past_itr` first reads 8 at cycle 116, `lp_conf`
+steps 1, 2, 3 and reaches 3 at cycle 248, and `lp_pred_is_loop` is
+first set at cycle 257. Before that, the inner exit was mispredicted
+four times: backend redirects to 0x8000_001A at cycles 49, 88, 112 and
+140. The p2 answer describes the inner loop's branch only in the cycles
+its block is at p2; in other cycles it reads 0.
 
 ---
 
 ## 3. What the monitor counts
 
 The count is taken at retirement, in the backend's retire hook
-(`tb/fe_demo_mon.svh:298-301`):
+(`tb/fe_demo_mon.svh:302-305`):
 
 ```
 n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
@@ -103,8 +105,8 @@ n_lp_exit_ok   a retired COND, not taken in the expected stream, whose
 ```
 
 The final slot is the last group the FTQ accepted for the entry, p1 then
-p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:266-275`), found by position
-(`slot_at`, line 278).
+p2 then p3 (`fin_log`, `tb/fe_demo_mon.svh:270-279`), found by position
+(`slot_at`, line 282).
 
 The proof (`tb/fe_demo_proofs.svh:72`) is `n_lp_exit_ok > 0`.
 `tb_fe_demo.sv:160` also requires the whole stream to retire with no
@@ -114,9 +116,9 @@ errors before it accepts the proof.
 
 ## 4. Reading the numbers
 
-- 10 of the 16 inner exits were predicted not taken by the LP. Of the
-  other 6, three were mispredicted (the backend redirects of section
-  2); for the other three, the slot that predicted them was not traced.
+- 8 of the 16 inner exits were predicted not taken by the LP. Of the
+  other 8, four were mispredicted (the backend redirects of section
+  2); for the other four, the slot that predicted them was not traced.
 - The count is of retired exits, each counted once, so it cannot exceed
   16.
 - Spec and build agree on program and proof. The FD-6 waveform entry
@@ -135,10 +137,10 @@ The saved view is `waves/fd06_loop_pred.sucl`, which `make view
 S=fd06_loop_pred` opens in Surfer. Look at:
 
 - `bpu_pred_slot_p1.[0]` and `bpu_slot_p2.[0]`: `pred_src` `PRED_LOOP`
-  on the slot of I from cyc 192, with `taken` dropping on the tenth
-  iteration.
-- `w_lp_pred_p2.[0]`: `lp_past_itr` 8 from cyc 120, `lp_conf` reaching
-  3 at cyc 190, `lp_pred_is_loop` first set at cyc 192.
+  on the slot of I from cyc 256 at p1 and 257 at p2, with `taken`
+  dropping on the tenth iteration (first at cyc 259).
+- `w_lp_pred_p2.[0]`: `lp_past_itr` 8 from cyc 116, `lp_conf` reaching
+  3 at cyc 248, `lp_pred_is_loop` first set at cyc 257.
 - `w_lp_upd_val_p0`: the LP updates as I resolves.
 - `bkend_ftq_redir_val` is absent from this command file; the three
   early exit mispredicts show as `w_redir_val` in the ftq group.

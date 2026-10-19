@@ -4,9 +4,9 @@
 # fd12_training: Predictor Training and the FTB Update Bubble
 ```
  FILE:    fd12_training.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -24,9 +24,9 @@ The scenario runs on the one-slot model (Makefile `SCEN_2S`, DOC-006).
 A recorded run:
 
 ```
--I: fd12_training: PASS, update cycles uBTB 154, loop predictor 112, FTB 154,
-    TAGE 112, SC 112, ITTAGE 28, RAS commit 28, p0 holds for an FTB update 154,
-    cyc 541
+-I: fd12_training: PASS, update cycles uBTB 154, loop predictor 111, FTB 154,
+    TAGE 111, SC 111, ITTAGE 28, RAS commit 28, p0 holds for an FTB update 154,
+    cyc 454
 ```
 
 ---
@@ -82,24 +82,24 @@ that its update falls after the measurement window closes.
    slot's predictor valids are presented only when the slot is
    accepted by every predictor it trains (`upd_acc`, lines 136-138
    and 171; the handshake is described in the file header, lines
-   29-36).
+   29-37).
 2. The cluster's type gate. `bp_cluster` classifies each update
    channel from its uBTB payload (`upd_br_type`,
-   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1715-1722`) and fans it out
+   `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1739-1746`) and fans it out
    by type (fe_decisions.md 7.2):
-   - uBTB: any type but NO_BRANCH (`bp_cluster.sv:1728-1729`)
-   - LP: conditionals (`:1654-1655`)
+   - uBTB: any type but NO_BRANCH (`bp_cluster.sv:1752-1753`)
+   - LP: conditionals (`:1678-1679`)
    - TAGE, SC: conditionals, each also gated by its queue ready, SC by
-     `sc_enable` (`:1774-1783`)
-   - ITTAGE: INDIRECT_NONRET and INDIRECT_CALL (`:1720-1722`,
-     `:1777-1779`)
-   - FTB: its own channel, for a branch or a jump (`:1619-1620`)
+     `sc_enable` (`:1798-1807`)
+   - ITTAGE: INDIRECT_NONRET and INDIRECT_CALL (`:1744-1746`,
+     `:1801-1803`)
+   - FTB: its own channel, for a branch or a jump (`:1643-1644`)
    - RAS commit: DIRECT_CALL, INDIRECT_CALL, RETURN, RETURN_CALL
-     (`:1625-1629`)
+     (`:1649-1653`)
 3. The FTB update bubble. The FTB has one read port. When
    `ftq_ftb_sched` will issue an FTB update next cycle (`issue_next`,
    `rtl/core/frontend/ftq/rtl/ftq_ftb_sched.sv:327`, wired to
-   `h3_ftb_upd` at `ftq.sv:492`), `ftq_npc` holds its p0 request
+   `h3_ftb_upd` at `ftq.sv:493`), `ftq_npc` holds its p0 request
    (hold term H3 in `w_hold`, `ftq_npc.sv:307-309`; rationale at
    `ftq_npc.sv:132-137`). One p0 request is withheld per FTB update.
 
@@ -107,7 +107,7 @@ that its update falls after the measurement window closes.
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:498-510`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:502-514`, sampled every cycle
 while the stream is being measured (`meas`,
 `rtl/core/frontend/fe_top/tb/models/fe_tb_backend.svh:416`). They read
 the valids after the cluster's gates.
@@ -132,16 +132,26 @@ stream to retire with no errors before it accepts the proof.
 
 ## 4. Reading the numbers
 
-- The figures match the program's control transfers exactly: uBTB and
-  FTB 154 (every transfer), LP, TAGE and SC 112 (the conditionals),
-  ITTAGE 28 (the indirect jump and call), RAS commit 28 (the call and
-  the return). FTB update p0 holds 154: one per FTB update.
+- The figures match the program's control transfers but for one: uBTB
+  and FTB 154 (every transfer), LP, TAGE and SC 111 (the conditionals,
+  less one), ITTAGE 28 (the indirect jump and call), RAS commit 28 (the
+  call and the return). FTB update p0 holds 154: one per FTB update.
+- The conditional left out is the always-taken `beq` at +0x1C,
+  resolved at cyc 168 in a block from +0x10 whose one slot holds the
+  inner loop branch at position 4. The FTQ places its resolution in
+  that occupied slot, whose prediction metadata describes the other
+  branch, so the uBTB and FTB updates form and the LP, TAGE and SC
+  updates are suppressed (item C, BP-139,
+  `rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 46 to 57). The
+  condition is `rsv_plc_occ` (line 443), which gates the updates at
+  lines 551 to 560. It is the only such resolution in the run.
 - Except `n_upd_ubtb`, the counters count cycles with any slot valid,
   not slot updates; the result line says "update cycles" for that
   reason. DOC-002 changed `n_upd_ubtb` to sum its slots. On this model
   a cycle has one slot, so every count is of single-slot updates.
-- The run takes 541 cycles on this model and took 449 on the two-slot
-  model (DOC-002); the update counts are the same on both.
+- The run takes 454 cycles on this model and 459 on the two-slot model
+  (DOC-007 run). On the two-slot model the LP, TAGE and SC counts are
+  112, since the `beq` has a slot of its own.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-12: the
   program there is "any branch, first execution and the next"; the
   program as built is tb_fe_top's `loops`, with every update type, so

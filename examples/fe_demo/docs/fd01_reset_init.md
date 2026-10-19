@@ -4,9 +4,9 @@
 # fd01_reset_init: Reset and SRAM Initialization
 ```
  FILE:    fd01_reset_init.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -26,7 +26,7 @@ A recorded run:
     first p0 request at cyc 2049, first accepted p1 prediction at cyc 2050,
     first TAGE response at cyc 2051, first ITTAGE response at cyc 2051,
     first SC response at cyc 2052, first TAGE update at cyc 2069,
-    first ITTAGE update none, first SC update at cyc 2069, cyc 8085
+    first ITTAGE update none, first SC update at cyc 2069, cyc 8086
 ```
 
 ---
@@ -64,9 +64,9 @@ top+28           jal x0,0           halt (demo_go -> W.halt)
    DONE and sets `ready` (lines 68-71).
    - TAGE: `NUM_ENTRIES (1 << TAGE_MAX_IDX_WIDTH)`
      (`rtl/core/frontend/bpu/rtl/tage.sv:313-319`), 2048
-     (`bp_defines_pkg.sv:386`, `TAGE_MAX_IDX_WIDTH = 11`).
+     (`bp_defines_pkg.sv:404`, `TAGE_MAX_IDX_WIDTH = 11`).
    - ITTAGE: `IT_MAX_NUM_ENTRIES` (`ittage.sv:72`, `:101-106`), 512
-     (`IT_MAX_IDX_WIDTH = 9`, `bp_defines_pkg.sv:498`).
+     (`IT_MAX_IDX_WIDTH = 9`, `bp_defines_pkg.sv:516`).
    - SC: `RI_ENTRIES = SC_TBL_ENTRIES[ST4]`, 1024 (`sc.sv:120`).
 2. The cycle numbers. `cyc` counts edges with `rstn` high
    (`rtl/core/frontend/fe_top/tb/models/fe_tb_dut.svh:129`). The FST
@@ -83,7 +83,7 @@ top+28           jal x0,0           halt (demo_go -> W.halt)
    the cycle the last ready rises, 2049; its p1 prediction is accepted
    at 2050, its TAGE and ITTAGE answers come at p2 (2051) and its SC
    answer at p3 (2052).
-5. ITTAGE is never updated. `ftq_resolve.sv:506-508` raises an ITTAGE
+5. ITTAGE is never updated. `ftq_resolve.sv:561-563` raises an ITTAGE
    update only for `INDIRECT_NONRET` and `INDIRECT_CALL`; the program
    has no indirect jump, so `c_it_u` stays -1 and the line reads
    `first ITTAGE update none`.
@@ -92,7 +92,7 @@ top+28           jal x0,0           halt (demo_go -> W.halt)
 
 ## 3. What the monitor counts
 
-The figures come from `tb/fe_demo_mon.svh:346-370` (`mon_init`). Unlike
+The figures come from `tb/fe_demo_mon.svh:350-374` (`mon_init`). Unlike
 every other count, they are taken from the release of reset, not inside
 the `meas` window.
 
@@ -112,7 +112,7 @@ c_tage_u, c_it_u, c_sc_u         first w_tage_upd_val_u0,
                                  w_ittage_upd_val_u0, w_sc_upd_val_u0
 ```
 
-Each is -1 until its event occurs (`mon_reset`, lines 165-176), and is
+Each is -1 until its event occurs (`mon_reset`, lines 167-178), and is
 printed as "none" while it is -1 (`at_cyc`, `tb/fe_demo_proofs.svh:17`).
 
 The proof (`tb/fe_demo_proofs.svh:23-48`) is all three `lo_*` set, all
@@ -133,7 +133,7 @@ the proof.
   the three RAM Init readies and is not part of the proof.
 - `first ITTAGE update none` is expected: there is no indirect branch to
   update it.
-- `cyc 8085` counts from the release of reset to the last retirement,
+- `cyc 8086` counts from the release of reset to the last retirement,
   so it includes the 2049 cycles of the walk.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-1: its
   program line reads "none; reset without the fast-init options". As

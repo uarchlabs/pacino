@@ -4,9 +4,9 @@
 # fd20_backpressure: Backpressure
 ```
  FILE:    fd20_backpressure.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -56,7 +56,7 @@ top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
    (`rtl/core/frontend/ibuf/rtl/ibuf.sv:114`). DEPTH is 64
    (`ibuf.sv:57`; fe_top instantiates it without an override,
    `rtl/core/frontend/fe_top/rtl/fe_top.sv:802`) and FTQ_PD_WIDTH 16
-   (`rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:222`), so it refuses
+   (`rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv:237`), so it refuses
    above 48 slots.
 3. The IFU. F3 holds its block, payload and all, while `ibuf_ifu_rdy`
    is low (`rtl/core/frontend/ifu/rtl/ifu_f3.sv:56-57`, IB-7). Fetch
@@ -79,7 +79,7 @@ top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:567-572`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:571-576`, sampled every cycle
 while `meas` is set. All four are counts of CYCLES in which the
 condition holds, not of stall events.
 

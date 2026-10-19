@@ -142,14 +142,12 @@ item_unfocus
 # markers, from docs/fd24_call_slot1.md section 4
 marker_set c0_reset_released 36
 marker_set c19_predecode_redirect_to_0x8000_0400 225
-marker_set c39_first_return_mispredicted 425
+marker_set c40_first_return_mispredicted 435
 marker_set c51_back_edge_mispredicted 545
-marker_set c54_first_p2_group_for_top_with 575
-marker_set c57_first_return_predicted_from_the_RAS 605
-marker_set c65_C_mispredicted_taken 685
-marker_set c73_first_RAS_push_from_slot_1 765
-marker_set c74_TOSR_2 775
-marker_set c275_back_edge_falls_through 2785
-marker_set c285_the_run_ends 2885
+marker_set c76_C_mispredicted_taken 795
+marker_set c90_first_RAS_push_from_slot_1 935
+marker_set c91_TOSR_1 945
+marker_set c261_back_edge_falls_through 2645
+marker_set c270_the_run_ends 2735
 item_unfocus
 zoom_to 16 336

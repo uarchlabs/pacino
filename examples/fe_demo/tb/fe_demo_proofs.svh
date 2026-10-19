@@ -173,10 +173,11 @@
         return n_sc_s1 > 0;
       end
       "fd23_jump_cut": begin
-        msg = $sformatf({"blocks cut at the jump %0d, the jump predicted ",
-                         "in slot 0 of the next block %0d"}, n_jmp_cut,
-                        n_jmp_next);
-        return (n_jmp_cut > 0) && (n_jmp_next > 0);
+        msg = $sformatf({"blocks the FTB ends at the jump %0d, the jump ",
+                         "predicted in slot 0 of the next block %0d, ",
+                         "blocks cut by the cluster %0d"}, n_jmp_end,
+                        n_jmp_next, n_cut);
+        return (n_jmp_end > 0) && (n_jmp_next > 0);
       end
       "fd24_call_slot1": begin
         msg = $sformatf({"RAS pushes from slot 1 behind a not-taken ",

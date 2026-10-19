@@ -50,7 +50,9 @@
 # in the FDT-13 form gets one marker per event of its section 4 table.
 # The description is in that form when its level-2 headings are, in
 # order, 1. What the scenario shows, 2. The program, 3. Walkthrough,
-# 4. Events, and optionally 5. Notes. The table's rows are | cyc |
+# 4. Events, and optionally 5. Notes; a leading 0. Introduction is
+# allowed (DOC-007, PROVISIONAL: fd09_tage.md has one, a hand edit, and
+# its table is still the section 4 one). The table's rows are | cyc |
 # event | other |; a row with a cyc value starts an event and a row
 # with an empty cyc continues the one above. Each event is a marker
 #   marker_set c<cyc>_<label> <time>
@@ -90,6 +92,7 @@ VIEW_AFTER = 30
 FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
         '4. Events']
 NOTES = '5. Notes'
+INTRO = '0. Introduction'
 
 missing = []
 nofmt = []
@@ -115,6 +118,9 @@ def events(path):
     heads = [(n, ln[3:].strip()) for n, ln in enumerate(lines, 1)
              if ln.startswith('## ')]
     titles = [t for _, t in heads]
+    if titles[:1] == [INTRO]:
+        titles = titles[1:]
+        heads = heads[1:]
     if titles not in (FORM, FORM + [NOTES]):
         return None
     start = heads[3][0]

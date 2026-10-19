@@ -4,9 +4,9 @@
 # fd16_page_cross: A Fetch Block Crossing a Page
 ```
  FILE:    fd16_page_cross.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -47,8 +47,8 @@ b+0x1002     mixed(8), jal x0,0             halt
 - `map4k` (`rtl/core/frontend/fe_top/tb/models/fe_tb_writer.svh:142`)
   writes each Sv39 leaf and records the VA page in `vmap`, which
   `put_hw` uses to place each halfword at its physical address, so the
-  32-bit instruction's two halfwords land in different physical pages
-  (0x8100_0FFE and 0x8120_5000).
+  32-bit instruction's two halfwords are written to different physical
+  pages (0x8100_0FFE and 0x8120_5000).
 - The jump target is 16 bytes before the page end; FD-16 asks for a
   block starting within 32 bytes of it.
 
@@ -83,7 +83,7 @@ encoding.
 
 ## 3. What the monitor counts
 
-The count comes from `tb/fe_demo_mon.svh:531-535`, sampled every cycle
+The count comes from `tb/fe_demo_mon.svh:535-539`, sampled every cycle
 while the stream is being measured (`meas`).
 
 ```

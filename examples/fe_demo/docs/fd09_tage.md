@@ -4,9 +4,9 @@
 # fd09_tage: TAGE Provider, Allocation and use_alt_on_na
 ```
  FILE:    fd09_tage.md
- SOURCE:  DOC-001, DOC-002, DOC-003, session-080, DOC-006
+ SOURCE:  DOC-001, DOC-002, DOC-003, session-080, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -40,8 +40,8 @@ Example console output is shown below listing the number of predictions,
 allocations and cycle count:
 
 ```
--I: fd09_tage: PASS, tagged-provider predictions 253, allocations 209,
-    T0 by use_alt_on_na 75, cyc 3567
+-I: fd09_tage: PASS, tagged-provider predictions 188, allocations 59,
+    T0 by use_alt_on_na 22, cyc 1364
 ```
 
 The Pacino branch predictors supports up to two predictions per fetch block.
@@ -96,8 +96,9 @@ The program is written by the task `prog_fd09` in `programs/fd09_tage.svh`. The
 structure consists of a short prologue, a loop that runs 256 times, and a short
 epilogue.
 
-The loop body holds two conditional branches.  The bne branch at 0x8000_000E has a randomized direction.  The bne branch at 0x8000_0016 returns to label top. This is the loop's
-back edge
+The loop body holds two conditional branches.  The bne branch at
+0x8000_000E has a randomized direction.  The bne branch at 0x8000_0016
+returns to label top. This is the loop's back edge
 
 The program runs in machine mode with translation off, the addresses are
 physical. The program starts at the reset vector, `RESET_VECTOR` = 0x8000_0000
@@ -165,7 +166,10 @@ is the alternative prediction or T0 when no other tagged table matches.
 
 A prediction moves through four stages, p0 to p3. The FTQ presents the request
 at p0, and TAGE delivers its prediction at p2. p3 is used when the statistical
-corrector (SC) is enabled. In this scenario the SC is not enabled.
+corrector (SC) is enabled. SC is enabled in every scenario (the configuration
+the backend model drives, `fe_tb_backend.svh`); in this run it reverses TAGE's
+direction at p3 36 times. The monitor reads TAGE's own prediction and update
+signals, so SC changes none of the counts below.
 
 Each fetch block has NUM_PRED_SLOTS prediction slots. A slot holds one
 conditional branch of the block, and TAGE predicts, updates and keeps its
@@ -173,33 +177,25 @@ use_alt_on_na counter separately for each slot. This scenario is built with
 NUM_PRED_SLOTS = 1: every block has one slot, slot 0, and the per-slot TAGE
 signals below are indexed [0].
 
-The block that starts at top holds two conditional branches, B at halfword
-position 3 and the back edge at position 7. B is the first, so it is always
-in slot 0. The back edge has no slot in that block. What happens to it
-depends on where the block at top ends:
+With one slot an FTB entry holds one branch. When the back edge first resolves
+in a block from top, the FTB splits the entry for top: it keeps B and ends the
+block at the back edge's address, 0x8000_0016 (the split at update,
+`planning/arch/ftb_decisions.md` section 3, at cyc 32). From then on the block
+at top ends there, and the back edge is the first branch of the next block,
+which starts at 0x8000_0016 and has its own FTB entry (allocated at cyc 43).
+After B is taken, fetch continues at 0x8000_0014; after a backend redirect
+for B not taken, at 0x8000_0012. The back edge is then the first branch of
+that block. Either way the back edge is in slot 0 of a block of its own and is
+predicted and trained with its own metadata. TAGE indexes its tables with the
+block's start address, so B's entries and the back edge's are separate. Both
+are in slot 0, so both train the one use_alt_on_na counter.
 
-- B predicted not taken and not taken, 101 of the 256 iterations. Nothing in
-  the block predicts the back edge, so fetch continues past it and the
-  backend resolves it as a misprediction, a redirect to 0x8000_0008. The FTQ
-  entry has no slot for the back edge, so the FTQ places its resolution in
-  slot 0 (`place_slot`, `rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 279
-  to 293). That slot holds B's metadata, so the update carries B's table
-  index and tag, and the back edge's direction, taken, is trained into B's
-  TAGE entries.
-- Every other iteration. Fetch restarts after B, at 0x8000_0012 or
-  0x8000_0014, either because B was predicted taken or because the backend
-  redirected on B. The back edge is then the first branch of the new block,
-  is placed in that block's slot 0, and is trained with its own metadata.
-
-The updates of the first case are the "back edge" rows in the tables of 3.1
-and 3.2. They train the same entries and the same use_alt_on_na counter as
-B.
-
-The first case is a known gap in the one-slot build. A branch that no slot
-carries should end the block, so that it is predicted in the next block, as
-an unslotted jump already does (BP-138). TD#179 records the fix. When it is
-made, the back edge rows and the figures in this section and in section 4
-change.
+The back edge's first two resolutions, at cyc 21 and 32, came before the split
+took effect. Each was in a block whose one slot held another branch, so its
+TAGE update was suppressed (`rsv_plc_occ`,
+`rtl/core/frontend/ftq/rtl/ftq_resolve.sv` lines 46 to 57 and 443). TAGE takes
+254 updates for the back edge, one for each of its other resolutions, and 256
+for B.
 
 ### 3.1 Allocation
 
@@ -215,35 +211,28 @@ index has an aged useful counter of 0. The new entry holds the
 branch's tag and starts at CTR 3'b100, the weakest taken value.
 
 T0's entries start at 2'b10, weakly taken, so until T0 has learned B,
-TAGE predicts B taken. The first allocation is at cyc 19, for B on
-iteration 0: B was not taken and T0 had predicted it taken. The front
-end's final prediction for B was not taken, so the backend saw no
-misprediction there; the allocation comes from TAGE's misprediction
-alone.
+TAGE predicts B taken. The first allocation is at cyc 20, for B on
+iteration 0: B was not taken and T0 had predicted it taken. The
+allocation comes from TAGE's misprediction alone; the backend's first
+misprediction, at cyc 21, is the back edge's.
 
-Over the run TAGE mispredicted B on 144 of the 256 iterations: on 15
-of the 33 iterations on which B was taken, and on 129 of the 223 on
-which it was not. Each of the 144 wrote an allocation. The other 65
-allocations of the result line come from the back edge's updates. TAGE
-mispredicted the back edge 64 times when it was taken and once when it
-fell through on iteration 255. Each of these 65 wrote an allocation.
-The allocations by table:
+Over the run TAGE mispredicted B on 58 of the 256 iterations: on 31
+of the 33 iterations on which B was taken, and on 27 of the 223 on
+which it was not. Each of the 58 wrote an allocation. TAGE mispredicted
+the back edge once, when it fell through on iteration 255, and that
+wrote the 59th allocation. The allocations by table:
 
 ```
              T1   T2   T3   T4   total
-B            14   26   69   35     144
-back edge    10   12   28   15      65
+B            11   12   28    7      58
+back edge     1    0    0    0       1
 ```
 
-With NUM_PRED_SLOTS = 2 the back edge has its own slot in the block at top
-and is always trained with its own metadata. The same program then gives 64
-TAGE mispredictions of B and one of the back edge, 65 allocations in all.
-
 The first taken B is on iteration 9. In the waveform, the backend
-resolves it at cyc 156: `tb.bkend_ftq_redir_val` is 1 and
+resolves it at cyc 72: `tb.bkend_ftq_redir_val` is 1 and
 `tb.bkend_ftq_redir_pc` is 0x8000_0014, B's target, because the front
-end fetched the fall-through. The allocation write is in the same
-cycle, in the `tage_update` group:
+end fetched the fall-through. The allocation write is the next cycle,
+cyc 73, in the `tage_update` group:
 
 - `tb.dut.u_bpu.u_tage.u_tage_cntrl.trx_type` is 1 and
   `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_upd_val_u0` is 1: the TAGE
@@ -269,7 +258,7 @@ table is chosen at p1 in `pred_logic`,
 `rtl/core/frontend/bpu/rtl/tage_cntrl.sv` lines 574 to 585. The
 allocation is formed by `alc_upd_comb` in `tage_cntrl.sv` line 853,
 signal `u_alc_wr`. T0's starting value is `TAGE_T0_SRAM_INIT_VALUE`,
-`rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv` line 400.
+`rtl/core/frontend/bpu/rtl/bp_defines_pkg.sv` line 418.
 
 ### 3.2 Training the use_alt_on_na counter
 
@@ -285,8 +274,10 @@ alternate wrong. It starts at 0.
 `uaon` is updated only when both the provider and the alternate are
 tagged tables. When the alternate is T0, `uaon` is unchanged. The
 counter is therefore trained on predictions where two tagged tables
-matched. B and the back edge both update slot 0, so both train the one
-counter.
+matched. B and the back edge both update slot 0, so both could train
+the one counter; in this run only B's updates do. The back edge's
+predictions come from T0 until its single allocation on the last
+iteration, so none of its updates has a tagged provider.
 
 The history leading up to B is random, so the entries allocated for B
 are later matched under histories they were not trained on. Those
@@ -301,21 +292,20 @@ direction.
 
 ```
              T2 over T1   T3 over T2   increment   decrement   unchanged
-B                    45           20          32           5          28
-back edge            20           10           1          18          11
+B                    16            6          13           0           9
+back edge             0            0           0           0           0
 ```
 The update inputs are in the `tage_update` group:
 `tage_upd_inp_u0.[0].tage_pred_meta.tage_prm_comp`, `.tage_alt_comp`,
 `.tage_pred_weak`, `.tage_prm_tkn` and `.tage_alt_tkn` under
 `tb.dut.u_bpu.u_tage.u_tage_cntrl`.
 
-In the waveform, `uaon.[0]` first increments at cyc 145, reading 1
-after B's update of cyc 144. The back edge's update of cyc 145 is made
-with B's metadata. Its provider, T2, predicts taken. Its alternate, T1,
-predicts not taken. The back edge was taken, so the provider was
-right, and `uaon` reads 0 again at cyc 146. It reaches 8 at cyc 1364.
-Its highest value in the run is 12, first at cyc 3320, below the
-counter's maximum of 15.
+In the waveform, `uaon.[0]` first reads 1 at cyc 225, the cycle of
+B's update with provider T2, predicting taken, and alternate T1,
+predicting not taken, weak; B was not taken, so the provider was wrong
+and the alternate right. No update decrements it. It reaches 8 at cyc
+441 and its highest value, 13, at cyc 1031, below the counter's
+maximum of 15.
 
 RTL: the update is `uaon_upd_ff` in `tage_cntrl.sv` line 380, and the
 condition that both tables are tagged is at lines 383 and 384
@@ -334,15 +324,16 @@ then governs predictions where the alternate is T0. This follows the
 update rule in tage_cntrl_uaon_update_rules.md.
 
 In the waveform, the first prediction from T0 through use_alt_on_na
-is at cyc 1392, in slot 0, for the block at top. In the `tage_p2`
+is at cyc 460, in slot 0, for the block at top. In the `tage_p2`
 group,
 `tb.dut.u_bpu.u_tage.u_tage_cntrl.tage_pred_meta_p2.[0].tage_prm_comp`
 is 1 (T1 matched B) and `.tage_prm_ctr` is 3'b100, weak;
 `.tage_using_primary` is 0 and `.tage_alt_comp` is 0, so the
-prediction is T0's. Of the 75 such predictions in the run, 70 have T1
-as the provider. Of the other five, four have T3 and one T4. 63 are
-for the block at top; the others are TAGE answers for blocks on a
-wrong path, which the monitor counts as well.
+prediction is T0's, not taken. All 22 such predictions in the run
+have T1 as the provider, and all are TAGE answers for the block at
+top. The monitor counts TAGE answers whether or not the FTQ accepts
+the group, so a count can include an answer for a block on a wrong
+path.
 
 RTL: the selection is in `pred_logic` in `tage_cntrl.sv`: the trigger,
 a tagged provider with a weak CTR, at lines 529 to 533, and the choice
@@ -360,28 +351,29 @@ of the alternate when the trigger is set and `uaon[s][3]` is 1 at line
 |      | 0x8000_0000 the same cycle                     | high, fast init  |
 | 2    | first TAGE response at p2: `r_val_p2` and      | unused: FTB miss |
 |      | `w_tage_pred_rdy_p2`                           |                  |
-| 19   | first allocation write, B not taken, predicted | table T1, slot 0 |
+| 20   | first allocation write, B not taken, predicted | table T1, slot 0 |
 |      | taken by T0                                    | iteration 0      |
-| 20   | first backend misprediction, back edge;        | iteration 0      |
+| 21   | first backend misprediction, back edge;        | iteration 0      |
 |      | redirect to 0x8000_0008                        |                  |
-| 23   | first FTB hit at p2, the block at 0x8000_0008: | slot 0 B; the    |
-|      | TAGE's direction first used, B predicted taken | back edge in no  |
-|      | (`pred_src` PRED_TAGE)                         | slot, iteration 1|
-| 34   | that prediction wrong: B not taken; first      | iteration 1      |
-|      | backend misprediction of B; redirect to        |                  |
-|      | 0x8000_0012                                    |                  |
-| 119  | first prediction from a tagged table           | table T1, slot 0 |
-| 145  | `uaon` first increments, 0 to 1; the back      | slot 0           |
-|      | edge's update, with B's metadata, takes it     |                  |
-|      | back to 0 at cyc 146                           |                  |
-| 156  | first taken B resolved, a misprediction;       | iteration 9      |
-|      | redirect to 0x8000_0014; its allocation write  | table T1, slot 0 |
-| 1364 | `uaon` reaches 8                               | slot 0           |
-| 1392 | first prediction from T0, by use_alt_on_na     | provider T1,     |
+| 32   | the back edge resolved from top: the FTB entry | the split        |
+|      | for top ends at 0x8000_0016                    |                  |
+| 34   | first FTB hit at p2, the block at 0x8000_0008: | slot 0 B,        |
+|      | TAGE's direction first used, B predicted not   | `pred_src`       |
+|      | taken                                          | PRED_TAGE        |
+| 46   | first p2 group at 0x8000_0016: the back edge   | slot 0           |
+|      | in slot 0, predicted taken by TAGE             |                  |
+| 72   | first taken B resolved, a misprediction;       | iteration 9      |
+|      | redirect to 0x8000_0014                        |                  |
+| 73   | its allocation write                           | table T1, slot 0 |
+| 115  | first prediction from a tagged table           | table T1, slot 0 |
+| 225  | `uaon` first increments, 0 to 1                | provider T2,     |
+|      |                                                | alternate T1     |
+| 441  | `uaon` reaches 8                               | slot 0           |
+| 460  | first prediction from T0, by use_alt_on_na     | provider T1,     |
 |      |                                                | slot 0           |
-| 3556 | back edge falls through, a misprediction;      | iteration 255    |
+| 1355 | back edge falls through, a misprediction;      | iteration 255    |
 |      | redirect to 0x8000_001A                        |                  |
-| 3567 | the run ends                                   |                  |
+| 1364 | the run ends                                   |                  |
 
 # References
 

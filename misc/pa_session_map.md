@@ -509,23 +509,32 @@
 |        |                       | TOOLS-005                                   |
 |        | I$ research           | output session_handoff-069                  |
 
-| 69     | planning doc audit    | input  session_handoff-069             |
-|        |                       |                                        |
+| 69     | fe I-side spec        | input  session_handoff-069             |
+|        | BLOG_fetch_3          |                                        |
+|        |                       | itlb, mmu, ifu, ibuf, dcd decisions    |
+|        |                       | ifu_ibuf, itlb_ifu, itlb_l2tlb intf    |
+|        |                       | fe_decisions 15, front end top         |
+|        |                       | planning doc audit begun (parallel)    |
 |        |                       | output session_handoff-070             |
 
 | 70     | planning doc audit    | input  session_handoff-070             |
-|        |                       |                                        |
+|        | BLOG_fetch_3          |                                        |
+|        |                       | VA_WIDTH 41, pftAddr, direction chain  |
 |        |                       | output session_handoff-071             |
 
 | 71     | planning doc audit    | input  session_handoff-071             |
-|        |                       |                                        |
+|        | BLOG_fetch_3          |                                        |
+|        |                       | fetch vs prediction block, region pos  |
+|        |                       | MMU-U6/U7/U8 ruled                     |
 |        |                       | output session_handoff-072             |
 
 | 72     | planning doc audit    | input  session_handoff-072             |
-|        |                       |                                        |
+|        | BLOG_fetch_3          |                                        |
+|        |                       | audit closed, ifu_notes.md             |
 |        |                       | output session_handoff-073             |
 
 | 73     | TD fixes              | input  session_handoff-073             |
+|        | BLOG_fetch_3          |                                        |
 |        | 122                   | BP-109                                 |
 |        | 124 & 125             | BP-110                                 |
 |        | 132 & 137             | BP-111                                 |
@@ -537,41 +546,45 @@
 
 | 74     | ifu                   | input  session_handoff-074             |
 |        | pkg clean up          | BP-115                                 |
+|        | ftq assert census     | INFRA-013                              |
 |        | TD 144, ifu rtl       | BP-116                                 |
 |        |                       | output session_handoff-075             |
 
 | 75     | ifu                   | input  session_handoff-075             |
 |        | TD 146 fix            | BP-117                                 |
-|        | ifu integration prep  | BP-118                                 |
+|        | ibuf, itlb, fe_top    | BP-118                                 |
 |        | training fix #1       | BP-119                                 |
 |        | training fix #2       | BP-120                                 |
-|        | ifu functionality     | BP-121                                 |
+|        | end-state task        | BP-121                                 |
 |        |                       | output session_handoff-076             |
 
-| 76     | ??                    | input  session_handoff-076             |
+| 76     | BP-121 recorded       | input  session_handoff-076             |
 |        | loop pred training    | BP-122                                 |
 |        |                       | output session_handoff-077             |
 
 | 77     | ifu/page tbl walk     | input  session_handoff-077             |
-|        |                       | BP-123                                 |
-|        |                       | BP-124                                 |
-|        |                       | BP-125                                 |
-|        |                       | BP-126                                 |
-|        |                       | BP-127                                 |
+|        | ifu, walker, Z*       | BP-123                                 |
+|        | decode legality       | BP-124                                 |
+|        | W1, rsv vector, L1I   | BP-125                                 |
+|        | predictor TDs         | BP-126                                 |
+|        | SC index PC[9:1]      | BP-127                                 |
 |        |                       | output session_handoff-078             |
 
 | 78     | NUM_PRED_SLOT 1/2     | input  session_handoff-078             |
+|        |                       | TD scrub                               |
 |        |                       | BP-128                                 |
 |        |                       | BP-129                                 |
 |        |                       | BP-130                                 |
-|        |                       | BP-131                                 |
-|        |                       | BP-132                                 |
-|        |                       | BP-133                                 |
+|        | slot measurement      | BP-131                                 |
+|        | fe clean up batch     | BP-132                                 |
+|        |                       | BP-133 written                         |
 |        |                       | output session_handoff-079             |
 
 | 79     | misc                  | input  session_handoff-079             |
+|        |                       | BP-133 run                             |
 |        | tage t0 fix           | BP-134                                 |
-|        | begin csr impl        | SYS-001                                |
+|        |                       | csr_decisions.md                       |
+|        | csr pkgs built        | SYS-001                                |
 |        |                       | output session_handoff-080             |
 
 | 80     | fe clean up           | input  session_handoff-080             |
@@ -585,5 +598,9 @@
 |        |                       | DOC-005                                |
 |        |                       | SYS-002                                |
 |        |                       | output session_handoff-081             |
+
+| 81     | fe demo defects       | input  session_handoff-081             |
+|        |                       | BP-138                                 |
+|        |                       | output ?                               |
 
 ```

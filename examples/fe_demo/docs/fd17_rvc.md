@@ -4,9 +4,9 @@
 # fd17_rvc: Compressed and Unaligned Code
 ```
  FILE:    fd17_rvc.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -24,7 +24,7 @@ A recorded run:
 
 ```
 -I: fd17_rvc: PASS, straddling 32-bit instructions delivered whole 1,
-    16-bit instructions 98, cyc 267
+    16-bit instructions 98, cyc 198
 ```
 
 ---
@@ -70,7 +70,7 @@ loop, 8 passes (it = 0..7), from top = +0x4E:
 ## 2. Why the program produces the behaviour
 
 1. The 17-halfword window. F2 selects 17 halfwords from the block
-   offset (`rtl/core/frontend/ifu/rtl/ifu_fetch.sv:445`), from the two
+   offset (`rtl/core/frontend/ifu/rtl/ifu_fetch.sv:445-448`), from the two
    lines `{rd_data1, rd_data0}`. A 32-bit instruction that starts at
    position 15 of a 32-byte block therefore completes inside the block.
    A block in the upper half of its line asks for the next line as
@@ -94,7 +94,7 @@ loop, 8 passes (it = 0..7), from top = +0x4E:
 
 ## 3. What the monitor counts
 
-Both counts are taken in `be_retire_hook` (`tb/fe_demo_mon.svh:320-325`)
+Both counts are taken in `be_retire_hook` (`tb/fe_demo_mon.svh:324-329`)
 as each expected instruction retires, while `meas` is set.
 
 ```

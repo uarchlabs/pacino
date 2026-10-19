@@ -143,12 +143,14 @@
   int n_sc_s1;            // p3 redirects: SC reversed slot 1, slot 0 a
                           // conditional TAGE predicted
   int n_sc_s0;            // p3 redirects: SC reversed slot 0
-  int n_jmp_cut;          // p2 groups: two conditionals not taken and the
-                          // block cut at the FTB jump's PC
+  int n_jmp_end;          // p2 groups: two conditionals not taken and the
+                          // FTB's own end at the jump's PC (FD-23)
   int n_jmp_next;         // ... the next p2 group, at that PC, with the
                           // jump in slot 0 and taken
-  logic                cut_wait;
-  logic [VA_WIDTH-1:0] cut_pc;
+  int n_cut;              // p2 groups the cluster cut (w_cut_p2)
+  logic                end_wait;
+  logic [VA_WIDTH-1:0] end_pc;
+  logic [VA_WIDTH-1:0] jmp_pc;    // FD-23: the jump's PC, set by the program
   int n_push_s1;          // p2 groups: a call in slot 1 behind a not-taken
                           // conditional in slot 0, presented to the RAS
 
@@ -243,10 +245,12 @@
     n_csp_chg     = 0;
     n_sc_s1       = 0;
     n_sc_s0       = 0;
-    n_jmp_cut     = 0;
+    n_jmp_end     = 0;
     n_jmp_next    = 0;
-    cut_wait      = 1'b0;
-    cut_pc        = '0;
+    n_cut         = 0;
+    end_wait      = 1'b0;
+    end_pc        = '0;
+    jmp_pc        = '0;
     n_push_s1     = 0;
     to_h2.delete();
     io_ppn.delete();
@@ -595,22 +599,27 @@
             (dut.bpu_slot_p3[0].pred_src == PRED_SC))
           n_sc_s0 <= n_sc_s0 + 1;
       end
-      // FD-23. The cut (w_jmp_cut_p2, bp_cluster p2_class_comb): both
-      // slots conditionals, neither taken, the block's end the jump PC.
-      // The next accepted p2 group whose block starts at that PC
-      // should carry the jump in slot 0, at position 0, taken.
+      // FD-23. The split at update (ftb_cntrl.sv, BP-140): the FTB entry
+      // of the block holds the two conditionals and its stored end is
+      // the jump's PC, so the block ends there with the cluster's cut
+      // (w_cut_p2, bp_cluster p2_class_comb) clear. The end is compared
+      // with the jump's PC the program recorded, jmp_pc. The next
+      // accepted p2 group whose block starts at that PC should carry
+      // the jump in slot 0, at position 0, taken. n_cut counts the
+      // groups the cut ended, for the result line.
       if ((NUM_PRED_SLOTS > 1) && dut.u_ftq.w_ok_slot_p2 &&
           dut.bpu_slot_val_p2) begin
-        if (dut.u_bpu.w_jmp_cut_p2 &&
+        if (dut.u_bpu.w_cut_p2) n_cut <= n_cut + 1;
+        if (!dut.u_bpu.w_cut_p2 && (dut.bpu_blk_pft_p2 == jmp_pc) &&
             dut.bpu_slot_p2[0].slot_valid && !dut.bpu_slot_p2[0].taken &&
             (dut.bpu_slot_p2[0].br_type == COND) &&
             dut.bpu_slot_p2[S1].slot_valid && !dut.bpu_slot_p2[S1].taken &&
             (dut.bpu_slot_p2[S1].br_type == COND)) begin
-          n_jmp_cut <= n_jmp_cut + 1;
-          cut_wait  <= 1'b1;
-          cut_pc    <= dut.bpu_blk_pft_p2;
-        end else if (cut_wait && (dut.u_bpu.r_pc_p2 == cut_pc)) begin
-          cut_wait <= 1'b0;
+          n_jmp_end <= n_jmp_end + 1;
+          end_wait  <= 1'b1;
+          end_pc    <= dut.bpu_blk_pft_p2;
+        end else if (end_wait && (dut.u_bpu.r_pc_p2 == end_pc)) begin
+          end_wait <= 1'b0;
           if (dut.bpu_slot_p2[0].slot_valid && dut.bpu_slot_p2[0].taken &&
               (dut.bpu_slot_p2[0].br_type == DIRECT_UNC) &&
               (dut.bpu_slot_p2[0].pos == '0))

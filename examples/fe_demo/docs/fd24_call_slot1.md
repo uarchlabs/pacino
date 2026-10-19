@@ -4,9 +4,9 @@
 # fd24_call_slot1: A Call in Slot 1
 ```
  FILE:    fd24_call_slot1.md
- SOURCE:  DOC-006
+ SOURCE:  DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -23,29 +23,29 @@ predicted from the stack. The scenario runs on the two-slot model
 scenario is built and run, and defines the terms used here.
 
 When the scenario passes, it prints one line. This is the line from a
-run on 2026-10-17, the run the cyc values below come from:
+run on 2026-10-19, the run the cyc values below come from:
 
 ```
 -I: fd24_call_slot1: PASS,
-    RAS pushes from slot 1 behind a not-taken conditional 25,
-    returns predicted by the RAS 23, cyc 285
+    RAS pushes from slot 1 behind a not-taken conditional 24,
+    returns predicted by the RAS 21, cyc 270
 ```
 
 The two counts are:
 
 - RAS pushes from slot 1 behind a not-taken conditional, the monitor
-  variable `n_push_s1` (`tb/fe_demo_mon.svh` lines 620 to 628): p2
+  variable `n_push_s1` (`tb/fe_demo_mon.svh` lines 629 to 637): p2
   groups the FTQ accepted (`tb.dut.u_ftq.w_ok_slot_p2`) in which slot
   0 is a conditional predicted not taken and slot 1, a call, is
   presented to the RAS (`tb.dut.u_bpu.w_ras_pred_val_p2.[1]`);
-- returns predicted by the RAS, `n_ras_ret_ok` (lines 302 to 306): a
+- returns predicted by the RAS, `n_ras_ret_ok` (lines 306 to 310): a
   retired return whose block's final slot for it has `pred_src`
   PRED_RAS and the right target.
 
 The scenario passes when both counts are greater than zero
-(`tb/fe_demo_proofs.svh` line 185) and every instruction the testbench
+(`tb/fe_demo_proofs.svh` line 186) and every instruction the testbench
 expects retires without error. On the one-slot model the first count
-is 0 and the scenario fails. The run took 285 cycles.
+is 0 and the scenario fails. The run took 270 cycles.
 
 ---
 
@@ -100,50 +100,57 @@ is taken on passes 0 to 22 and falls through on pass 23.
 The FTB entry for the block at top holds C in its first conditional field and
 the call in its jump field. At p2 the cluster places C in slot 0. The call goes
 to the lowest slot that holds no conditional, which is slot 1 (`p2_class_comb`
-in `rtl/core/frontend/bpu/rtl/bp_cluster.sv` lines 1015 to 1038). A taken branch
-ends the block, so a slot is on the predicted path only when no earlier slot is
-predicted taken (`w_reach_p2`, lines 1049 to 1058).
+in `rtl/core/frontend/bpu/rtl/bp_cluster.sv` lines 1010 to 1046, the jump at
+lines 1037 to 1045). A taken branch ends the block, so a slot is on the
+predicted path only when no earlier slot is predicted taken (`w_reach_p2`,
+lines 1076 to 1084).
 
 ### 3.2 The RAS operation of slot 1
 
 At p2 a slot of a valid block is presented to the RAS when it holds a
-branch on the predicted path (`w_ras_pred_val_p2` at lines 1062 to
-1064). The RAS performs the slots' operations in order, slot 0
-first, so a call in slot 1 pushes its return address after slot 0's
-operation (`rtl/core/frontend/bpu/rtl/ras.sv` lines 24 to 27). A push
-allocates an entry at the write pointer TOSW, and the read pointer TOSR
-moves to it (`st_push` at `ras.sv` lines 396 to 411; the p2 push at
-line 695).
+branch on the predicted path (`w_ras_pred_val_p2`, lines 1086 to 1091).
+The RAS performs the slots' operations in order, slot 0 first, so a
+call in slot 1 pushes its return address after slot 0's operation
+(`rtl/core/frontend/bpu/rtl/ras.sv` lines 24 to 27). A push allocates
+an entry at the write pointer TOSW, and the read pointer TOSR moves to
+it (`st_push` at `ras.sv` lines 406 to 454; the p2 push at lines 696
+to 705).
 
-In the waveform, the first counted push is at cyc 73. In the
-`bp_cluster_p2` group, `tb.dut.bpu_slot_p2.[0]` is C, a COND at `pos`
-1, not taken, `pred_src` PRED_TAGE. `tb.dut.bpu_slot_p2.[1]` is the
-call, DIRECT_CALL at `pos` 4, taken, with `target` 0x8000_0400 and
+In the waveform, the first counted push is at cyc 90. It is also the
+first p2 group for top with both slots valid. In the `bp_cluster_p2`
+group, `tb.dut.bpu_slot_p2.[0]` is C, a COND at `pos` 1, not taken,
+`pred_src` PRED_TAGE. `tb.dut.bpu_slot_p2.[1]` is the call,
+DIRECT_CALL at `pos` 4, taken, with `target` 0x8000_0400 and
 `pred_src` PRED_FTB. In the `ras` group
 `tb.dut.u_bpu.w_ras_pred_val_p2.[1]` is 1 with `w_br_type_p2.[1]`
 DIRECT_CALL, and `w_ras_pred_val_p2.[0]` is 1 for C, a conditional,
-which the RAS does not act on. At cyc 74 `tb.dut.u_bpu.u_ras.tosr` has
-moved from 0 to 2 and `tosw` from 2 to 3. `spec_ret_addr.[2]` holds
+which the RAS does not act on. At cyc 91 `tb.dut.u_bpu.u_ras.tosr` has
+moved from 0 to 1 and `tosw` from 0 to 2. `spec_ret_addr.[1]` holds
 0x8000_0014, the call's return address.
 
 ### 3.3 The return predicted from the stack
 
 The block at f holds the return. At p2 a return slot takes the RAS's
 pop address as its target when the pop is valid, with `pred_src`
-PRED_RAS (`bp_cluster.sv` lines 1135 to 1140). Of the 28 accepted p2
-groups for the block at 0x8000_0400, 27 predict the return from the
-RAS with target 0x8000_0014. The first is at cyc 57, before the first
-counted push. Its call was pushed at cyc 56 from slot 0 of the block
-that starts at the call, 0x8000_0010. C's target is the call's
-address, so while C is predicted taken the call starts a block of its
-own.
+PRED_RAS (`bp_cluster.sv` lines 1164 to 1170). Of the 25 accepted p2
+groups for the block at 0x8000_0400, 23 predict the return from the
+RAS with target 0x8000_0014. The first is at cyc 91, the cycle after
+the first counted push.
+
+Before cyc 90 the call is found four times by predecode, each time in a
+block whose start has no FTB entry holding it yet; each block start
+has its own entry (BP-140). Predecode redirects to 0x8000_0400 at cyc
+19 (the block at 0x8000_0000, pass 0), 60 (top, after the back edge's
+first backend redirect), 75 (0x8000_0010, C's target, while C is
+predicted taken) and 85 (0x8000_000E, C's fall-through, after the
+backend corrects C).
 
 When the call and the return retire, the commit stack follows them
 (`tb.dut.ras_commit_val` with `u_ras.csp`). The run has 48 commits: a
 push and a pop for each of the 24 passes.
 
 RTL: the slot-1 presentation is `w_ras_pred_val_p2[1]` in
-`bp_cluster.sv`; the monitor is `tb/fe_demo_mon.svh` lines 620 to 628.
+`bp_cluster.sv`; the monitor is `tb/fe_demo_mon.svh` lines 629 to 637.
 
 ---
 
@@ -155,16 +162,15 @@ RTL: the slot-1 presentation is `w_ras_pred_val_p2[1]` in
 |     | 0x8000_0000 the same cycle                      |                  |
 | 19  | predecode redirect to 0x8000_0400: the call     | pass 0           |
 |     | found at F3, not yet known to the predictors    |                  |
-| 39  | first return mispredicted, cold; redirect to    | backend          |
+| 40  | first return mispredicted, cold; redirect to    | backend          |
 |     | 0x8000_0014                                     |                  |
 | 51  | back edge mispredicted, cold; redirect to       | backend          |
 |     | 0x8000_0008                                     |                  |
-| 54  | first p2 group for top with both slots: C in    | C predicted      |
-|     | slot 0, the call in slot 1                      | taken            |
-| 57  | first return predicted from the RAS             | PRED_RAS         |
-| 65  | C mispredicted taken; redirect to 0x8000_000E   | backend          |
-| 73  | first RAS push from slot 1, behind C not taken  | counted          |
-| 74  | TOSR 2, TOSW 3; entry 2 holds 0x8000_0014       | after the push   |
-| 275 | back edge falls through, a misprediction;       | pass 23          |
+| 76  | C mispredicted taken; redirect to 0x8000_000E   | backend          |
+| 90  | first RAS push from slot 1, behind C not taken; | counted          |
+|     | the first p2 group for top with both slots      |                  |
+| 91  | TOSR 1, TOSW 2; entry 1 holds 0x8000_0014;      | PRED_RAS         |
+|     | first return predicted from the RAS             |                  |
+| 261 | back edge falls through, a misprediction;       | pass 23          |
 |     | redirect to 0x8000_001E                         |                  |
-| 285 | the run ends                                    |                  |
+| 270 | the run ends                                    |                  |

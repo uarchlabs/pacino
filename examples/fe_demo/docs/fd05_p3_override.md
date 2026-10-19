@@ -4,9 +4,9 @@
 # fd05_p3_override: p3 Override
 ```
  FILE:    fd05_p3_override.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -23,8 +23,8 @@ FD-22 (`docs/fd22_sc_slot1.md`) shows SC reversing the second slot of a
 block on the two-slot model. A recorded run:
 
 ```
--I: fd05_p3_override: PASS, p3 redirects 56, SC reversals among them 56,
-    cyc 1138
+-I: fd05_p3_override: PASS, p3 redirects 33, SC reversals among them 33,
+    cyc 975
 ```
 
 ---
@@ -49,63 +49,70 @@ top+42           jal x0,0             halt (demo_go -> W.halt)
 ```
 
 - 96 passes. Each pass resets `W.wp = top` and writes the same bytes;
-  `cskip(tk, 2)` (`fe_tb_writer.svh:502-521`) writes the skipped
+  `cskip(tk, 2)` (`fe_tb_writer.svh:502-519`) writes the skipped
   `mixed(2)` in dry mode when taken, so the code is fixed and only the
   expected stream changes.
 - A has period 2, B period 3. Outcomes come from the writer (`bcc`,
-  `fe_tb_writer.svh:412-421`), not from x6.
+  `fe_tb_writer.svh:412-419`), not from x6.
 - Lookup blocks that hold A or B, and the position (halfwords from the
-  lookup PC) of each: `top` (0x80000008), A at 3 and B at 9;
-  `top+10` (0x80000012, after A falls through on a redirect), B at 4;
-  `top+16` (0x80000018, A's target), B at 1. On this model each block
-  has one slot, so in the block at `top` the slot holds A and B is in
-  no slot.
+  lookup PC) of each: `top` (0x80000008), A at 3; `top+10`
+  (0x80000012, after A falls through on a redirect), B at 4; `top+16`
+  (0x80000018, A's target), B at 1; `top+18` (0x8000001A), B at 0. On
+  this model an FTB entry holds one branch. The entry for `top` holds
+  A. Its end is B's PC, top+18 (the split at update,
+  `planning/arch/ftb_decisions.md` section 3). B is predicted in the
+  block that starts there.
 
 ---
 
 ## 2. Why the program produces SC reversals
 
-1. SC answers at p3. `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1272-
-   1273`: `w_sc_hit_p3[s]` is the SC response for slot s
+1. SC answers at p3. `rtl/core/frontend/bpu/rtl/bp_cluster.sv:1296-
+   1297`: `w_sc_hit_p3[s]` is the SC response for slot s
    (`w_sc_pred_rdy_p3`), with `sc_enable` (`fe_cfg.sc_enable`,
    `fe_top.sv:486`) and a `branch_id` matching the entry at p3.
-2. The direction. Lines 1277-1280: for a conditional slot with an SC
+2. The direction. Lines 1301-1304: for a conditional slot with an SC
    hit, and no loop-predictor direction at p2 (`~r_lp_use_p3`), the p3
    direction is `sc_pred_tkn`; otherwise the p2 direction.
-3. The redirect. Lines 1284-1301: the p3 successors are chained from
+3. The redirect. Lines 1307-1325: the p3 successors are chained from
    the highest slot down, as at p2, and slot s redirects when it is
    reachable and its p3 successor differs from its p2 successor. A
    p3 redirect therefore fires only where SC changed a direction, or
    where a later slot's change moves an earlier not-taken slot's
    successor.
-4. The slot record. Lines 1316-1329 (`p3_slot_comb`): the p3 slot takes
+4. The slot record. Lines 1340-1352 (`p3_slot_comb`): the p3 slot takes
    `sc_pred_tkn`, and `pred_src` becomes `PRED_SC` when that differs
    from the p2 `taken`.
 5. FTQ acceptance and the new request: `ok_redir_p3`
    (`rtl/core/frontend/ftq/rtl/ftq_shadow.sv:220-221`); `ftq_npc.sv:
    338-348` (arm 3) takes the p3 PC, ahead of any p2 redirect.
 
-From the FST, the 56 accepted p3 redirects, by the slot SC reversed
+From the FST, the 33 accepted p3 redirects, by the slot SC reversed
 (slot 0 in every one):
 
 ```
-block        branch  pos  p2 pred_src   p3 taken   count
-0x80000008   A       3    PRED_TAGE     0          21
-0x80000008   A       3    PRED_TAGE     1           7
-0x80000012   B       4    PRED_TAGE     0 or 1      5
-0x80000018   B       1    PRED_TAGE     0           2
-0x80000018   B       1    PRED_TAGE     1          21
+block        branch  pos  p2 pred_src   p3 taken   target       count
+0x80000008   A       3    PRED_TAGE     0          0x8000001A      17
+0x80000008   A       3    PRED_TAGE     0          0x80000028       2
+0x80000008   A       3    PRED_TAGE     1          0x80000018       2
+0x80000012   B       4    PRED_TAGE     1          0x80000024       2
+0x80000018   B       1    PRED_TAGE     1          0x80000024       7
+0x8000001A   B       0    PRED_TAGE     1          0x80000024       3
 ```
 
 In every one the p2 direction came from TAGE (`r_slot_p3[0].pred_src`
-PRED_TAGE). The redirects fall between cyc 46 and 1117 of the
-1138-cycle run.
+PRED_TAGE). A reversed to not taken redirects to the end of the block
+at `top`. Once the FTB entry has been split, that end is B's PC,
+0x8000001A; the split is an update for B at position 9 from `top`, at
+cyc 261. In the two cases before it the end is `top` + 0x20,
+0x80000028. The redirects fall
+between cyc 47 and 822 of the 975-cycle run.
 
 ---
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:420-434`, taken inside the
+The counts come from `tb/fe_demo_mon.svh:424-438`, taken inside the
 `meas` window.
 
 ```
@@ -124,12 +131,12 @@ before it accepts the proof.
 
 ## 4. Reading the numbers
 
-- `p3 redirects 56, SC reversals among them 56`: every accepted p3
+- `p3 redirects 33, SC reversals among them 33`: every accepted p3
   redirect in this run had an SC-decided slot. The p3 direction differs
   from the p2 one only through SC (section 2, item 2), which is why
   the two figures agree here.
 - Both are counts of cycles, not slots.
-- The p2 direction that SC reversed was TAGE's in all 56 (from the FST).
+- The p2 direction that SC reversed was TAGE's in all 33 (from the FST).
   The monitor does not check that; it checks only `pred_src ==
   PRED_SC` on the p3 slot.
 - `n_tage_prov` is not in this scenario's result line. DOC-002 changed

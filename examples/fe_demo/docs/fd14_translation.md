@@ -4,9 +4,9 @@
 # fd14_translation: Sv39 Walk, Sv39x4 Nested Walk and Svadu CAS
 ```
  FILE:    fd14_translation.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -53,7 +53,7 @@ V            mixed(8), jal x0,0           halt
   clear) instead of `PTE_LEAF` 0xCB.
 - The regime change rides on the ecall's trap. `ecall_to_vs`
   (`tb/fe_demo_lib.svh:133-136`) marks the entry; when it retires,
-  `be_trap_hook` (`tb/fe_demo_mon.svh:332-341`) sets V=1, privilege S
+  `be_trap_hook` (`tb/fe_demo_mon.svh:336-345`) sets V=1, privilege S
   (VS), vsatp Sv39 with ASID 1 and hgatp Sv39x4 with VMID 3. The
   backend's trap redirect then fetches V.
 
@@ -80,7 +80,7 @@ V            mixed(8), jal x0,0           halt
    (`S_G_START`, `S_G_ADDR`, `S_G_EVAL`; states at `ptw.sv:289-301`),
    and so is the final GPA. In the run there are two V=1 walks:
    - cyc 91, VPN 0x80010 (page C, the code after the ecall). The
-     backend's trap redirect to V is in the same cycle; this walk is
+     backend's trap redirect to V follows at cyc 92; this walk is
      for a fetch younger than the ecall. C is not mapped in the
      VS-stage, and the walk ends at cyc 168 with status ST_FAULT
      (`ptw.sv:226`) and cause 12. Nothing delivers it; the block was
@@ -93,7 +93,7 @@ V            mixed(8), jal x0,0           halt
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:523-530`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:527-534`, sampled every cycle
 while the stream is being measured (`meas`).
 
 ```

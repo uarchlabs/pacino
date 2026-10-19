@@ -4,9 +4,9 @@
 # fd18_uncached: Uncached Fetch
 ```
  FILE:    fd18_uncached.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -24,7 +24,7 @@ A recorded run:
 
 ```
 -I: fd18_uncached: PASS, uncached requests from the NC page 28,
-    from the IO page 10, uncached lines filled 0, cyc 798
+    from the IO page 10, uncached lines filled 0, cyc 797
 ```
 
 ---
@@ -67,7 +67,7 @@ c+0x300 mixed(2), then jal x0,0 (halt)
   u+0x10..u+0x2E, 12 at u+0x200..u+0x210, 3 at u+0x400..u+0x406. 7
   execute on page io, at io+0x10..io+0x28.
 - The program records the IO page's PPN in `io_ppn`
-  (`tb/fe_demo_mon.svh` line 158), which the monitor uses to split the
+  (`tb/fe_demo_mon.svh` line 160), which the monitor uses to split the
   uncached requests between the two pages.
 - `map4k_pbmt` with a non-zero PBMT also records the PA and VA pages in
   `uc_ppn` and `uc_vpn` (`fe_tb_writer.svh:774-776`), which the
@@ -97,20 +97,21 @@ c+0x300 mixed(2), then jal x0,0 (halt)
    instruction; when more would follow (`w_uc_cut`), it ends the block
    there with `mis_val` and `ifu_ftq_uc_end`, so the FTQ redirects to
    the next sequential instruction, a new entry
-   (`rtl/core/frontend/ifu/rtl/ifu_f3.sv:371-373`; the rule is described
-   at `ifu_f3.sv:94-114`). A JALR is delivered alone with no redirect.
+   (`rtl/core/frontend/ifu/rtl/ifu_f3.sv:368-373`, the writeback at
+   lines 421 to 431; the rule is described at `ifu_f3.sv:94-114`). A
+   JALR is delivered alone with no redirect.
 4. No allocation. An uncached lookup is a miss whatever the tags hold
    (`rtl/core/frontend/icache/rtl/l1i_ctrl.sv:229-230`, L1I-24). A free
    MSHR register taken by an uncached request is marked not to
    allocate (`e_alloc <= !req_uncached`,
    `rtl/core/frontend/icache/rtl/l1i_mshr.sv:486`), and a fill is
-   installed only when `fil_alloc` is set (`l1i_mshr.sv:350-358`).
+   installed only when `fil_alloc` is set (`l1i_mshr.sv:350-360`).
 
 ---
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:536-550`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:540-554`, sampled every cycle
 while `meas` is set.
 
 ```
@@ -152,7 +153,7 @@ errors.
 - `from the IO page 10`: the 7 instructions at io+0x10..io+0x28. The 4
   in the lower half of the line request PA 0x8120_4000 alone; the 3 in
   the upper half (io+0x22 onward) request 0x8120_4000 and 0x8120_4040
-  (IFU-7). The first is at cyc 648.
+  (IFU-7). The first is at cyc 647.
 - The requests are about 19 to 25 cycles apart (cycles 111, 130, 149,
   168, ... in the run): each waits at F0 for the previous entry to
   commit.
@@ -173,8 +174,10 @@ S=fd18_uncached` opens in Surfer. Look at:
   commit gate `u_fetch.w_uc_gate` opening for each block.
 - `ftq_ifu_commit_ptr` reaching each uncached block's `ftq_ifu_idx`
   before its `ifu_l1i_req_val` with `ifu_l1i_req_uncached`.
-- `ifu_ftq_mis_val` closing each uncached block after one instruction,
-  and the next block starting at the next instruction.
+- each uncached block closing after one instruction, and the next block
+  starting at the next instruction (`ftq_ifu_start_pc`). The writeback
+  that closes it, `ifu_ftq_mis_val`, is not in this command file;
+  `waves/fd10_pd_redirect.sucl` shows it.
 - In the l1i group: `b_mis_valid` for each uncached request, an MSHR
   `e_val`, `l1i_mem_a_valid` and `l1i_mem_d_valid`, and no
   `b_fil_valid` for the 0x8120_3xxx or 0x8120_4xxx lines.

@@ -4,9 +4,9 @@
 # fd03_two_branch: Two Branches in One Block
 ```
  FILE:    fd03_two_branch.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -23,8 +23,8 @@ The scenario needs two prediction slots and runs on the two-slot model
 and it fails. A recorded run:
 
 ```
--I: fd03_two_branch: PASS, blocks with both slots valid at p1 132, at p2 91,
-    cyc 537
+-I: fd03_two_branch: PASS, blocks with both slots valid at p1 78, at p2 74,
+    cyc 539
 ```
 
 ---
@@ -64,7 +64,7 @@ Y+16             jal x0,back                                 pos 8
 - 24 passes. Each pass resets `W.wp = top` and writes the same bytes;
   `cskip(tk, 1)` writes the skipped `c.addi` in dry mode when taken, so
   the code is fixed and only the expected stream changes.
-- Outcomes come from the writer (`bcc`, `fe_tb_writer.svh:412-421`), not
+- Outcomes come from the writer (`bcc`, `fe_tb_writer.svh:412-419`), not
   from x6: the backend retires against the expected stream.
 - `pos` is the halfword position from the lookup PC (X or Y, both
   32-byte aligned).
@@ -75,38 +75,47 @@ Y+16             jal x0,back                                 pos 8
 
 1. Two branch fields per entry. On the two-slot model a prediction
    block has `NUM_PRED_SLOTS` = 2 slots (`bp_defines_pkg.sv:65`), each a
-   `bp_ftq_slot_t` (`bp_structs_pkg.sv:405-418`). The FTB update fills
-   `br0` when it is free, else `br1` (`rtl/core/frontend/bpu/rtl/
-   ftb_cntrl.sv:492-496`); the uBTB fills the field `br_idx` names
-   (`ubtb.sv:305-318`).
+   `bp_ftq_slot_t` (`bp_structs_pkg.sv:405-418`). The FTB and the uBTB
+   store a block's branches in position order, `br0` the lower: the
+   update sorts the stored fields and the resolving branch by position
+   (`rtl/core/frontend/bpu/rtl/ftb_cntrl.sv`, THE UPDATE, lines 464 to
+   615; `ubtb.sv`, `apply_upd`, lines 291 to 376).
 2. Both conditionals of X and of Y are on the path in every pass: X.c1
    is never taken, so X.c2 is reached; Y.c1 when not taken falls into
    Y.c2, and when taken jumps to Y+8, which is Y.c2. The FST shows
    both in the block's two slots (below).
-3. Slot order. `bp_cluster.sv:853-859` swaps the two p1 slots when slot
+3. Slot order. `bp_cluster.sv:861-867` swaps the two p1 slots when slot
    1's `pos` is below slot 0's, so slot 0 is always the earlier branch.
+   Since the uBTB stores in position order the swap does not fire for
+   its entries (the comment at lines 853 to 860).
 
 From the FST, the accepted two-slot p2 groups, by block:
 
 ```
 block        slot 0              slot 1              groups
-X            pos 1 COND nt  TAGE pos 4 COND tk  TAGE  33
-Y            pos 1 COND nt  TAGE pos 4 COND nt  TAGE  14
-Y            pos 1 COND tk  TAGE pos 4 COND nt  TAGE  17
-Y+8          pos 0 COND     TAGE pos 4 JAL  tk  FTB   22
-Y+6, X+6/8   COND and JAL                              5
+X            pos 1 COND nt  TAGE pos 4 COND tk  TAGE  26
+X            pos 1 COND tk  TAGE pos 4 COND tk  TAGE   1
+Y            pos 1 COND nt  TAGE pos 4 COND nt  TAGE   5
+Y            pos 1 COND nt  TAGE pos 4 COND tk  TAGE   1
+Y            pos 1 COND tk  TAGE pos 4 COND nt  TAGE   7
+Y            pos 1 COND tk  TAGE pos 4 COND tk  TAGE  13
+Y+6          pos 1 COND nt  TAGE pos 5 JAL  tk  FTB    3
+Y+8          pos 0 COND nt  TAGE pos 4 JAL  tk  FTB   15
+Y+8          pos 0 COND tk  TAGE pos 4 JAL  tk  FTB    3
 ```
 
 (COND is `br_type` COND, JAL `DIRECT_UNC`; TAGE and FTB are
-`pred_src` PRED_TAGE and PRED_FTB, which the waveform shows by name.)
-Y+8 is the block fetched after Y.c1 is taken: Y.c2 at its position 0
-and the JAL to back at position 4.
+`pred_src` PRED_TAGE and PRED_FTB, which the waveform shows by name;
+nt and tk are `taken` 0 and 1.) Y+8 is the block fetched after Y.c1 is
+taken: Y.c2 at its position 0 and the JAL to back at position 4. Y+6
+is the block fetched after the backend corrects a Y.c1 predicted
+taken: Y.c2 at its position 1 and the JAL at position 5.
 
 ---
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:411-419`, taken inside the
+The counts come from `tb/fe_demo_mon.svh:415-423`, taken inside the
 `meas` window.
 
 ```
@@ -127,20 +136,18 @@ stream to retire with no errors before it accepts the proof.
 ## 4. Reading the numbers
 
 - The counts are of groups the FTQ accepted. X is executed once per
-  pass, 24 times, and shows 33 two-slot p2 groups; the count includes
+  pass, 24 times, and shows 27 two-slot p2 groups; the count includes
   repeated predictions of the same block.
-- The counters do not check the slot types. Of the 132 p1 groups (FST),
-  33 are X, 32 are Y and 24 are Y+8; 38 are the top block at
-  `top` (0x80000008), whose uBTB answer holds the JAL at position 1 and
-  a conditional at position 4; the other 5 are at Y+6, X+6 and X+8. No
-  accepted p2 group for the top block has two slots; at p2 its FTB
-  answer has one.
+- The counters do not check the slot types. Of the 78 p1 groups (FST),
+  27 are X, 27 are Y, 21 are Y+8 and 3 are Y+6. The block at `top`
+  (0x80000008) holds only the JAL, and its entry, which is its own
+  since each block start has one (BP-140), has one slot.
 - Departure from `planning/showcase/fe_demo_scenarios.md` FD-3: the
   program is "two conditional branches within one 32-byte block, in a
   loop"; as built there are two such blocks, X (not taken, then taken)
   and Y (alternating, then not taken). The proof "a block predicted
   with both slots valid" is met by any two valid slots, including a
-  JAL in one of them, as the top-block and Y+8 counts show.
+  JAL in one of them, as the Y+6 and Y+8 counts show.
 
 ---
 

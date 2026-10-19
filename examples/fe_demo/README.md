@@ -4,9 +4,9 @@
 # Front-End Demonstration Testbench
 ```
  FILE:    README.md
- SOURCE:  DOC-001, DOC-002, DOC-003, DOC-006
+ SOURCE:  DOC-001, DOC-002, DOC-003, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -38,8 +38,11 @@ Two simulation models are built from it (DOC-006). They differ only in
 NUM_PRED_SLOTS, the number of prediction slots per fetch block: the
 branches of one block that are predicted together, each slot one of
 the branch fields of the block's FTB entry, slot 0 the earliest
-(planning/arch/fe_decisions.md section 10). A branch no slot holds is
-not predicted. The default model, obj_fe_demo/, has one slot, and every
+(planning/arch/fe_decisions.md section 10). An FTB entry holds at most
+one branch per slot. A block with more branches ends at the first one
+its entry does not hold, and the next block starts with that branch
+(the split at update, planning/arch/ftb_decisions.md section 3,
+BP-140). The default model, obj_fe_demo/, has one slot, and every
 scenario runs on it except four. FD-3 and FD-22 to FD-24 show what a
 second slot does and run on the two-slot model, obj_fe_demo_2slot/
 (the Makefile's SCEN_2S); on the one-slot model they fail.
@@ -50,7 +53,7 @@ so. Each run then checks its scenario's proof from RTL signals and
 prints one result line (FDT-10):
 
 ```
-  -I: fd04_p2_override: PASS, p2 redirects 77, cyc 527
+  -I: fd04_p2_override: PASS, p2 redirects 49, cyc 522
 ```
 
 or `-E: <scenario>: FAIL, ...`, which exits non-zero. The final `cyc`
@@ -60,8 +63,8 @@ the scenario name, and is at most 80 columns; a longer message breaks
 after a comma and continues on lines indented four spaces (FDT-10a):
 
 ```
-  -I: fd09_tage: PASS, tagged-provider predictions 253, allocations 209,
-      T0 by use_alt_on_na 75, cyc 3567
+  -I: fd09_tage: PASS, tagged-provider predictions 188, allocations 59,
+      T0 by use_alt_on_na 22, cyc 1364
 ```
 
 A passing run prints nothing else. The shared models print their own
@@ -175,7 +178,9 @@ A scenario whose description is in the five-section form (FDT-13)
 also has one marker per event of its event table (a row with a cyc
 value), named c<cyc>_<label>, and opens with the view at the first
 marker (FDT-12c). Today those are fd09_tage and the three scenarios
-of FD-22 to FD-24. The other scenarios open on the whole run.
+of FD-22 to FD-24; docs/fd09_tage.md has an introduction section ahead
+of the five, which the scripts allow. The other scenarios open on the
+whole run.
 
 Plusargs, if running the model directly:
 `+SCEN=<name>`, `+FST=<file>`, `+TRACE`, and the three `*_FAST_INIT=1`
@@ -209,9 +214,10 @@ what it derives itself from fe_demo_sigs.py and the FST.
 
 Each scenario has a description in docs/<scenario>.md: the program,
 why it produces the behaviour, what the monitor counts, how to read the
-result line and what to look at in the waveform. docs/fd09_tage.md and
-the descriptions of FD-22 to FD-24 are in the five-section form of
-FDT-13; the other twenty predate it. The slots column is the model the
+result line and what to look at in the waveform. The descriptions of
+FD-22 to FD-24 are in the five-section form of FDT-13, and
+docs/fd09_tage.md is too, with an introduction ahead of the sections;
+the other twenty predate the form. The slots column is the model the
 scenario runs on.
 
 ```
@@ -262,7 +268,8 @@ stale slot) is followed two cycles later by `w_ftb_valid_p2` and a
 `bpu_redir_p2` valid with `w_ok_redir_p2`; the next `ftq_pred_pc_p0` is
 the redirect target. At one slot the last block of the chain, a
 conditional before a jump, also redirects at p2 to the jump's own
-address (the cut of FD-23).
+address: its FTB entry holds the conditional and ends at the jump (the
+split at update), while its uBTB entry ends past the jump.
 
 **fd05_p3_override.** At p3, `w_sc_hit_p3` with `w_taken_p3` opposite
 to the p2 slot's `taken`. The slot's `pred_src` is PRED_SC.
@@ -305,7 +312,7 @@ predictor update valids of `u_bpu`; each `ftb_upd_valid_u0` comes with
 `ifu_l1i_req_val`; at the cold line, `b_mis_valid`, an MSHR `e_val`,
 `l1i_mem_a_valid`, two `l1i_mem_d_valid` beats and the fill. The block
 back at line X raises `mrg_hit`: it joins the register already
-fetching X.
+fetching X (cyc 183, after the FENCE.I and its line of fillers).
 
 **fd14_translation.** `itlb_l2t_req_val` for each new page; with
 `itlb_l2t_v` 0 the walker's `r_st` runs the S_S states only, with
@@ -343,9 +350,9 @@ fills in flight at the cbo.inval are of other lines
 (docs/fd19_fencei_cbo.md).
 
 **fd20_backpressure.** `dec_ibuf_rdy` is high one cycle in four. The
-stall starts at decode (`pd_out.[0].valid` waiting), reaches the ibuf
-(`ibuf_ifu_rdy` low, about 70 cycles after reset) and then the FTQ
-(`ftq_full`, about 137), after which `ftq_pred_val_p0` is low while the
+stall starts at decode (`pd_out.[0].valid` waiting, from cyc 18),
+reaches the ibuf (`ibuf_ifu_rdy` low, from cyc 71) and then the FTQ
+(`ftq_full`, from cyc 138), after which `ftq_pred_val_p0` is low while the
 FTQ is full. The earlier single-cycle drops of `ftq_pred_val_p0` are
 FTB update holds, not backpressure.
 
@@ -355,14 +362,15 @@ FTB update holds, not backpressure.
 
 **fd22_sc_slot1.** Two slots: in the block at 0x8000_0008,
 `bpu_slot_p3.[1].pred_src` PRED_SC behind a slot 0 with PRED_TAGE, and
-`bpu_redir_p3.[1].valid` with `w_ok_redir_p3`; from cyc 95.
+`bpu_redir_p3.[1].valid` with `w_ok_redir_p3`; from cyc 110.
 
-**fd23_jump_cut.** Two slots: a p2 group with two not-taken
-conditionals and `w_jmp_cut_p2`, `bpu_blk_pft_p2` the jump's address
-0x8000_0016; the next group, at 0x8000_0016, with the jump in slot 0;
-from cyc 89.
+**fd23_jump_cut.** Two slots: the FTB update that splits the entry for
+the block at 0x8000_0008 (`upd_split`, cyc 65); then a p2 group with two
+not-taken conditionals, `w_cut_p2` clear and `bpu_blk_pft_p2` the
+jump's address 0x8000_0016, the FTB's stored end, from cyc 71; the next
+group, at 0x8000_0016, with the jump in slot 0, from cyc 98.
 
 **fd24_call_slot1.** Two slots: a not-taken conditional in
 `bpu_slot_p2.[0]` and the call in `.[1]`, with
 `w_ras_pred_val_p2.[1]`; `u_ras.tosr` and `tosw` move and the return
-address 0x8000_0014 is written; from cyc 73.
+address 0x8000_0014 is written; from cyc 90.

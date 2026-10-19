@@ -4,9 +4,9 @@
 # fd21_commit: Commit
 ```
  FILE:    fd21_commit.md
- SOURCE:  DOC-002, DOC-006
+ SOURCE:  DOC-002, DOC-006, DOC-007
  STATUS:  WORKING
- UPDATED: 2026-10-17
+ UPDATED: 2026-10-19
  CONTACT: Jeff Nye
 ```
 
@@ -23,7 +23,7 @@ A recorded run:
 
 ```
 -I: fd21_commit: PASS, cycles the commit pointer moved 42,
-    cycles the RAS commit stack changed 36, cyc 205
+    cycles the RAS commit stack changed 36, cyc 214
 ```
 
 ---
@@ -80,8 +80,8 @@ f+0x42 ret                 f returns to main
    (`rtl/core/frontend/ftq/rtl/ftq_entry.sv:275-285`). In the RAS a
    pop moves `csp` down and a push writes `commit_ret_addr` and moves
    `csp` up (`c_pop`, `c_push`, `c_nxt`,
-   `rtl/core/frontend/bpu/rtl/ras.sv:737-746`; registered at
-   `:828-831`). `commit_top_addr` is the entry below `csp`
+   `rtl/core/frontend/bpu/rtl/ras.sv:749-759`; registered at
+   `:844-848`). `commit_top_addr` is the entry below `csp`
    (`ras.sv:185-187`).
 4. Seen in the run (fst2vcd on `out/fd21_commit/fd21_commit.fst`,
    while `meas` is set): `w_commit_ptr` changes in 42 cycles;
@@ -92,7 +92,7 @@ f+0x42 ret                 f returns to main
 
 ## 3. What the monitor counts
 
-The counts come from `tb/fe_demo_mon.svh:573-578`, sampled every cycle
+The counts come from `tb/fe_demo_mon.svh:577-582`, sampled every cycle
 while `meas` is set. Both are counts of CYCLES.
 
 ```
@@ -103,7 +103,7 @@ n_csp_chg     u_bpu.u_ras.csp or u_ras.commit_top_addr differs from
 ```
 
 `pv_commit`, `pv_csp` and `pv_ctop` are updated every cycle, inside or
-outside the measured window (`fe_demo_mon.svh:630-632`).
+outside the measured window (`fe_demo_mon.svh:639-641`).
 
 The proof (`tb/fe_demo_proofs.svh:167`) is
 `n_commit_adv >= 16 && n_csp_chg > 0`. `tb_fe_demo.sv` also requires
