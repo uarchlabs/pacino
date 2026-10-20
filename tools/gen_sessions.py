@@ -26,7 +26,7 @@ from pathlib import Path
 PROMPTS_DIR = Path("prompts")
 OUTPUT_FILE  = Path("docs/sessions.json")
 
-KNOWN_CATEGORIES = {"BP", "COMP", "DECODE", "INFRA", "TB", "TOOLS"}
+KNOWN_CATEGORIES = {"BP", "COMP", "DECODE", "INFRA", "TB", "TOOLS", "DOC", "SYS" }
 
 TASK_TYPES  = ["experiment", "implementation", "debug",
                "cleanup", "testbench", "verification"]
@@ -105,7 +105,10 @@ class W:
 # at the end of the run so this table does not rot.
 #
 WAIVERS = {
+  "DOC-001" : [W.VOICES_MERGED],
+  "INFRA-013" : [W.VOICES_MERGED],
   "TOOLS-006" : [W.VOICES_MERGED],
+  "BP-118" : [W.VOICES_MERGED],
   "BP-112" : [W.VOICES_MERGED],
   "BP-109" : [W.VOICES_MERGED],
   "BP-107" : [W.VOICES_MERGED],
