@@ -1,0 +1,118 @@
+{
+  "generated_by": "ticfinder",
+  "source": "blogs/BLOG_bpu_20_cluster_simulation.md",
+  "waivers": {
+    "f18add": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 46,
+      "enabled": true,
+      "text": "exit codes, unbound assertions and watchdogs"
+    },
+    "0016a2": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 70,
+      "enabled": true,
+      "text": "rather than"
+    },
+    "3aaf36": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 82,
+      "enabled": true,
+      "text": ", removing the original shared loop predictor type  bp_loop_meta_t , in favor of  lp_pred_t"
+    },
+    "feaea5": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 110,
+      "enabled": true,
+      "text": "The value feeds  bp_history 's path history, and through it the TAGE, ITTAGE and SC hashes"
+    },
+    "b0cc5b": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 122,
+      "enabled": true,
+      "text": "p1 prediction, p2 redirect, p3 and supersession, history, and metadata"
+    },
+    "a05cf2": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 171,
+      "enabled": true,
+      "text": "The testbench acts as the FTQ: it stores the p2 and p3 metadata and returns it on the update ports a"
+    },
+    "50063e": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_coordinated",
+      "line_when_waived": 204,
+      "enabled": true,
+      "text": "Verilator 5.048 accepts this without a warning but instantiates nothing"
+    },
+    "0c3099": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 212,
+      "enabled": true,
+      "text": "Seven had none, and the one in  tb_bp_cluster  counted clock cycles, so it could not fire if the clo"
+    },
+    "404d79": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 269,
+      "enabled": true,
+      "text": "the stride while correcting a comment, the missing  branch_id  register in the first cluster simulat"
+    },
+    "7725fa": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 288,
+      "enabled": true,
+      "text": "bp_history_interfaces.md ,  ftq_bpu_interfaces.md ,  fe_decisions.md  and  bp_arb_spec.md"
+    },
+    "70e393": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 295,
+      "enabled": true,
+      "text": "BP-094, BP-096 and BP-097 used that form, and each repair happened in the run that found the defect"
+    },
+    "090fd7": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 305,
+      "enabled": true,
+      "text": "The file was dead and the deletion stands, recorded in TD #110 as not a precedent, and BP-097 carrie"
+    },
+    "1f648c": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 309,
+      "enabled": true,
+      "text": "an IA task reports what a planning document should say, the planning assistant drafts it, and I appl"
+    },
+    "197e52": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 313,
+      "enabled": true,
+      "text": "to be broken, run and recorded in both directions for every testbench"
+    },
+    "b5bfa6": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 324,
+      "enabled": true,
+      "text": "I identified the constraints in BP-092 and BP-093 that blocked the IA's fixes, returned the update p"
+    },
+    "d73123": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 332,
+      "enabled": true,
+      "text": ": a failure exit returning 0, a bind instantiating nothing, a watchdog waiting on a stopped clock, a"
+    }
+  }
+}
