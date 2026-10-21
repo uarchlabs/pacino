@@ -20,14 +20,17 @@ RTL is in SystemVerilog, simulation with Verilator 5.048
 ---
 # TOC
 
-1. [Quick start](quick-start)
-1. [Optional tools](optional-tools)
-1. [Directory Structure](directory-structure)
-1. [Constants](constants)
-1. [Tools](tools)
-1. [Workflow](workflow)
-1. [Naming Conventions](naming-conventions)
-1. [Further Reading](further-reading)
+1. [Quick start](#quick-start)
+1. [Project Status](#project-status)
+1. [Optional tools](#optional-tools)
+1. [Directory Structure](#directory-structure)
+1. [Constants](#constants)
+1. [Tools](#tools)
+1. [Workflow](#workflow)
+1. [Periodically](#periodically)
+1. [Naming Conventions](#naming-conventions)
+1. [Further Reading](#further-reading)
+1. [License](#license)
 
 ---
 # Quick start
@@ -141,35 +144,14 @@ firefox $RVA_ROOT/rtl/core/frontend/bpu/coverage/bpu/html/index.html
 
 # Project Status
 
-## Run basic checks
-
-```bash
-make -C $RVA_ROOT/rtl all
-```
-
-## Run code coverage
-
-To measure code coverage
-
-```bash
-make -C $RVA_ROOT/rtl cov
-```
-
-To view BPU coverage reports
-
-```bash
-firefox $RVA_ROOT/rtl/core/frontend/bpu/coverage/bpu/html/index.html
-```
-
-# Project Status
-
 Summary:
 
-| Module   | Status   | Discussion  |
-|----------|----------|-------------|
-| Decoder  | Complete | Available   |
-| BPU      | Active   | In progress |
-| IFU/I$   | Planned  | n/a         |
+| Cluster       | Units                                         | Status   | Discussion |
+|---------------|-----------------------------------------------|----------|------------|
+| Front end     | BPU, FTQ, IFU, L1I, ITLB, PTW, ibuf, decode   | Complete | Available  |
+| Midcore       | rename, dispatch, ROB                         | Planned  | n/a        |
+| Backend       | execute, LSU                                  | Planned  | n/a        |
+| Memory system | L2, L3, DTLB, L2 TLB                          | Planned  | n/a        |
 
 See [PROJECT_STATUS.md](planning/PROJECT_STATUS.md) for detailed status tables.
 
@@ -181,7 +163,7 @@ See also uarchlabs [FAQ](https://uarchlabs.com/faq.html)
 
 ---
 # Optional tools
-I have started using surfer to replace Gtkwaves.
+I have replaced Gtkwave with Surfer.
 
 ## Surfer - Install Rust
 
@@ -226,21 +208,28 @@ $RVA_ROOT/
 |   |   |-- run.md             execute prompt from task file
 |   |-- statusline.sh          Custom status line, captures context usage, etc
 |
+|-- blog_handoffs/             blog session handoffs
+|
 |-- blogs/                     project discussion in blog form
 |
 |-- CLAUDE.md                  project baseline for Claude Code sessions
 |
 |-- docs/                      mkdocs source
-|   |-- README.md              out of date merge with this readme
-
-|-- misc/
-|   |-- ai_pairings            alternatives to c.ai+c.code
-|   |-- observations.md        prompt detail risks
-|   |-- pa_session_map.md      named PA sessions linked to task files
+|
+|-- examples/
+|   |-- fe_demo                front-end demo
+|
+|-- ia_context/                IA (Claude Code) background, handoffs, exports
+|
+|-- LICENSES/                  license files
+|
+|-- misc/                      notes, sometimes out of date
+|
+|-- NOTICE                     attribution notice
+|
+|-- overrides/                 mkdocs theme override
 |
 |-- pa_handoffs/               PA (c.ai) session handoffs
-|
-|-- pa_sessions/               downloaded c.ai chat logs
 |
 |-- planning                   development planning and methodology files
 |   |-- ANTIPATTERNS.md
@@ -252,6 +241,10 @@ $RVA_ROOT/
 |   |   |-- <various>
 |   |-- interfaces             interface contracts in md
 |   |   |-- <various>
+|   |-- observ                 tracing rules in md
+|   |   |-- <various>
+|   |-- showcase               guidance for demo generation
+|   |   |-- <various>
 |   |-- testbenches            testbench rules in md
 |   |   |-- <various>
 |   |-- verification           verification rules in md
@@ -259,11 +252,13 @@ $RVA_ROOT/
 |
 |-- pm_handoffs/               postmortem session handoffs
 |
-|-- postmortem/                analysis md files, deprecated for blogs
+|-- postmortem/                analysis md files, deprecated, see blogs
 |
 |-- prompts/                   experiment/task prompts
 |
-|-- README.md                  this file
+|-- README.md                  ...
+|
+|-- reports/                   temporary generated reports (not committed)
 |
 |-- rtl
 |   |-- core
@@ -333,38 +328,26 @@ $RVA_ROOT/
 |   |   |-- itlb
 |   |   |-- dtlb
 |   |   |-- l2tlb
+|   |   |-- pmp                PMP and PMA checker
 |   |   |-- ptw
 |   |
 |   |-- prot/                  phy mem protection/attributes
-|   |   |-- tb
-|   |   |-- pma
-|   |   |-- pmp
-|   |
-|   |-- uncore
-|   |   |-- tb                 subsystem tb
-|       |-- tilelink
+|       |-- tb
 |
 |-- templates/
+|   |-- BLOG_HANDOFF.md        blog generation handoff template
+|   |-- COPYRIGHT.md           copyright headers/boiler plate
 |   |-- SESSION_HANDOFF.md     PA session handoff template
 |   |-- TASK_TEMPLATE.md       IA prompt template
 |
-|-- tools/
-|   |-- bin/                     installed verilator and spike binaries (not committed)
-|   |-- check_rva23_coverage.py  verify against riscv-opcodes and spike-dasm
-|   |-- check_spike_decode.py
-|   |-- cov_table.py
-|   |-- gen_spike_oracle.py
-|   |-- handoff.sh
-|   |-- make_context.sh
-|   |-- Makefile
-|   |-- mk_pkg.sh
-|   |-- prereqs.sh               install system prerequisites
-|   |-- riscv-opcodes/           git submodule
-|   |-- rva23_ext_test.c
-|   |-- rva23_insn_ref.c
-|   |-- spike/                   git submodule (riscv-isa-sim)
-|   |   |-- build/               spike build directory (not committed)
-|   |-- validate_and_extract.py
+|-- tools/                     this changes frequently
+|   |-- bin/                   installed verilator, spike, elf utils etc
+|   |-- <submodules>           useful submodules
+|   |-- cachegen               uarchlabs cache generation tool
+|   |-- ticfinder              uarchlabs linguistic-based (spacy) text analysis
+|   |-- <various>              includes scripts, 3rd party submodules, etc.
+|
+|-- waivers/                   ticfinder waivers for blogs
 
 ```
 
@@ -374,7 +357,7 @@ $RVA_ROOT/
 
 | Property          | Value                                              |
 |-------------------|----------------------------------------------------|
-| Architecture      | RISC-V RVA23 profile                               |
+| Architecture      | RISC-V RVA23S64 profile                            |
 | Microarchitecture | 8-issue out-of-order                               |
 | RTL language      | SystemVerilog                                      |
 | Simulator         | Verilator 5.048 (tools/bin/verilator)              |
@@ -384,49 +367,7 @@ $RVA_ROOT/
 
 # Tools
 
-| Name                    | Location             | Purpose                                 |
-|-------------------------|----------------------|-----------------------------------------|
-| check_rva23_coverage.py | tools/               | RVA23 instruction coverage gap analysis |
-| riscv-opcodes           | tools/riscv-opcodes/ | Machine-readable RISC-V opcode database |
-| spike (riscv-isa-sim)   | tools/spike/         | RISC-V ISA simulator and disassembler   |
-
-## check_rva23_coverage.py
-
-Parses `tools/riscv-opcodes/` extension files and checks coverage against the RTL in
-`frontend/decoder/rtl/`. Produces a per-extension report with COVERED, ROUTED, and
-MISSING categories.
-
-```bash
-cd frontend/decoder
-make coverage    # exits non-zero if any MISSING instructions found
-make sim_all     # runs all testbenches then coverage
-```
-
-Known limitations are documented in the script's `KNOWN_SHARED_ENCODINGS` and
-`KNOWN_OPCODES_FILE_GAPS` tables.
-
-## riscv-opcodes
-
-Git submodule at `tools/riscv-opcodes/`. Enumerates standard RISC-V instruction
-opcodes and CSRs. Used as ground truth for coverage checking and decoder validation.
-
-## spike
-
-Git submodule at `tools/spike/`. Functional ISA simulator; `spike-dasm` is
-used as an independent disassembler (TOOLS-002). Installed to `tools/bin/`
-(see "Compile and install spike").
-
-spike-dasm input format uses `DASM(hex)` tokens, not raw hex values.
-Extensions must be enumerated; there is no `G` shortcut beyond `rv64g`.
-The full RVA23 string is `ISA` in `tools/check_spike_decode.py`.
-
-```bash
-# disassemble a NOP
-echo "DASM(00000013)" | tools/bin/spike-dasm
-
-# disassemble a vector instruction
-echo "DASM(00000057)" | tools/bin/spike-dasm --isa rv64gcv
-```
+Descriptions have moved to tools/README.md
 
 ---
 
@@ -455,10 +396,10 @@ A domain expert directs both agents - the PA for architectural planning, the IA 
 
 1. In claude.ai: discuss the next experiment, agree on hypothesis and scope
 
-2. In claude.ai: generate the session prompt following `prompts/REPORT_TEMPLATE.md`
-   — reference existing experiment files in `prompts/frontend/decoder/` for examples
+2. In claude.ai: generate the session prompt following `templates/TASK_TEMPLATE.md`
+   — reference existing experiment files in `prompts/` for examples
 
-3. claude.ai creates a `<NAME>-<SEQID>.md` file from `REPORT_TEMPLATE.md`.
+3. claude.ai creates a `<NAME>-<SEQID>.md` file from `TASK_TEMPLATE.md`.
    Copy this file into `./prompts/<path>` — this is the *experiment file*
 
 4. Validate the experiment file format:
@@ -479,16 +420,16 @@ A domain expert directs both agents - the PA for architectural planning, the IA 
 
    Assumes `RVA_ROOT` has been set to the top of the pacino repo. 
 
-	 Note: protections can be relaxed using `--dangerously-skip-permissions`. 
+   Note: protections can be relaxed using `--dangerously-skip-permissions`. 
    This choice depends on your preferred interaction/risk tradeoff.
 
-   **It has been shown that simply telling Claude not to do something is not sufficent to constrain its behavior.**
+   **It has been shown that simply telling Claude not to do something is not sufficient to constrain its behavior.**
 
-	 **Security note:** Claude Code with relaxed permissions has broad filesystem
-and shell access. Regardless of permissions, consider running Claude Code in a
-restricted environment — a dedicated user account with limited sudo, a
-container, or a VM — particularly when using `--auto-accept-edits` or
-`--dangerously-skip-permissions`. 
+   **Security note:** Claude Code with relaxed permissions has broad filesystem
+   and shell access. Regardless of permissions, consider running Claude Code in a
+   restricted environment — a dedicated user account with limited sudo, a
+   container, or a VM — particularly when using `--auto-accept-edits` or
+   `--dangerously-skip-permissions`.
 
 
 6. Tell Claude Code to read and execute the file:
@@ -497,12 +438,12 @@ container, or a VM — particularly when using `--auto-accept-edits` or
    /run <task id>
    ```
 
-  `/run` is a custom slash command defined in `.claude/commands/`. For
+   `/run` is a custom slash command defined in `.claude/commands/`. For
    the specified task id, the command locates the task file, validates the 
    format, extracts the prompt section, and executes the instructions 
    in the prompt.
 
-	 If task id is BP-001, the run command looks in ./prompts for a task file
+   If task id is BP-001, the run command looks in ./prompts for a task file
    called BP-001.md.
 
 7. Let Claude Code run. Approve file writes and shell commands as prompted.
@@ -511,12 +452,12 @@ container, or a VM — particularly when using `--auto-accept-edits` or
 8. Claude Code fills in the RESULTS CAPTURE section of the experiment file
    with the console output summary.
 
-9 Add the console output to the Results Discussion section.
+9. Add the console output to the Results Discussion section.
 
-9.1 Tell IA '/context'
-9.2 Tell IA 'how much context was used'
-9.3 Tell IA 'write context usage to new file context-report.md'
-    copy the content of this file to Context Report section of task file.
+   1. Tell IA '/context'
+   2. Tell IA 'how much context was used'
+   3. Tell IA 'write context usage to new file context-report.md'
+      copy the content of this file to Context Report section of task file.
 
 10. Discuss results with claude.ai as needed. Record decisions in Results Discussion.
 
@@ -550,11 +491,11 @@ claude.ai sessions have a context limit. Over a long project, guidance quality
 degrades as the context fills. When this happens, start a new claude.ai session
 using the handoff process below.
 
-Handoff documents are stored in `handoffs/` and numbered sequentially:
+Handoff documents are stored in `pa_handoffs/` and numbered sequentially:
 
 ```
-handoffs/session_handoff-001.md
-handoffs/session_handoff-002.md
+pa_handoffs/session_handoff-001.md
+pa_handoffs/session_handoff-002.md
 ```
 
 ### Signs that a handoff is needed
@@ -578,7 +519,7 @@ a `session_handoff-NNN.md` capturing:
 Commit the handoff document:
 
 ```bash
-git add handoffs/session_handoff-NNN.md
+git add pa_handoffs/session_handoff-NNN.md
 git commit -m "docs: session handoff NNN"
 git push
 ```
@@ -587,7 +528,7 @@ git push
 
 1. Open a new claude.ai chat
 
-2. Update `handoffs/PROJECT_STATUS.md` and `CLAUDE.md` as needed
+2. Update `planning/PROJECT_STATUS.md` and `CLAUDE.md` as needed
 
 3. Run the handoff script against the latest session handoff file:
 
@@ -601,12 +542,12 @@ git push
 
 6. The new session now has full context and can begin
 
-> **Note:** Paste `handoffs/PROJECT_CORE.md` when discussing methodology changes.
+> **Note:** Paste `planning/PROJECT_CORE.md` when discussing methodology changes.
 >
 > **Note:** Claude Code does not need the handoff document — it reads `CLAUDE.md`
 > from disk automatically at the start of each session.
 >
-> **Note:** When asking claude.ai to generate a prompt, supply `prompts/REPORT_TEMPLATE.md`
+> **Note:** When asking claude.ai to generate a prompt, supply `templates/TASK_TEMPLATE.md`
 > to prevent format drift.
 
 ### What the handoff covers
@@ -615,8 +556,8 @@ The repo itself covers:
 - Project constants and baseline (`CLAUDE.md`)
 - Experiment history and results (`prompts/`)
 - RTL decisions encoded in the code
-- Status tables (`PROJECT_STATUS.md`)
-- Methodology notes (`docs/observations/`)
+- Status tables (`planning/PROJECT_STATUS.md`)
+- Methodology notes (`misc/observations.md`)
 
 The handoff document adds:
 - Reasoning behind architectural decisions
@@ -642,7 +583,7 @@ commit docs/sessions.json
 ## Update news
 
 ```
-edit docs/index.html RECENT section
+edit docs/index.md RECENT section
 ```
 
 ---
@@ -665,12 +606,26 @@ edit docs/index.html RECENT section
 
 - [FAQ](https://uarchlabs.com/faq.html) - pacino focused uarchlabs FAQ
 - `CLAUDE.md` - full project baseline and current scope
-- `handoffs/PROJECT_*.md` - implementation status
-- `handoffs/session_handoff-*.md` - claude.ai session handoff documents
-- `prompts/README.md` - experiment naming and workflow details
-- `prompts/REPORT_TEMPLATE.md` - experiment file format
-- `docs/observations/` - methodology notes (dated)
-- `docs/decision_guide.md` - next steps and design decision guide (dated)
+- `planning/PROJECT_CORE.md` - workflow, roles, structures and files
+- `planning/PROJECT_STATUS.md` - implementation status
+- `pa_handoffs/session_handoff-*.md` - claude.ai session handoff documents
+- `templates/TASK_TEMPLATE.md` - experiment file format
+- `misc/observations.md` - methodology notes
+
+## License
+
+Copyright (c) 2026 Jeff Nye, uarchlabs.com
+
+Pacino is dual licensed:
+
+- Documentation, blogs and articles, including the contents of `docs/`
+  and `blogs/`, are licensed under the Creative Commons Attribution 4.0
+  International License (CC BY 4.0). See
+[LICENSE-CC-BY-4.0](LICENSES/CC-BY-4.0.txt).
+- All other material is licensed under the Apache License, Version 2.0.
+  See [LICENSE](LICENSES/Apache-2.0.txt).
+
+See [NOTICE](NOTICE) for attribution requirements.
 
 ---
 
