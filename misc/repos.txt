@@ -13,6 +13,5 @@ https://github.com/jeffnye-gh/majordomo
 https://github.com/jeffnye-gh/riscv-isa-sim
 https://github.com/jeffnye-gh/performance-modeling
 https://github.com/jeffnye-gh/gdb-server
-https://github.com/jeffnye-gh/cachegen
 https://github.com/jeffnye-gh/testbench
 

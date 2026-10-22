@@ -624,11 +624,9 @@ def parse_session_file(path):
         return session, warnings, waived
 
     # -- Header ----------------------------------------------------------------
-    # Header uses extract_between (not wsection) -- a missing HEADER:END
-    # is caught implicitly: overview and discussion extraction will both
-    # fail, producing their own warnings.
-    header_text = extract_between(
-        text, ':: HEADER:START ::', ':: HEADER:END ::')
+    # Header uses wsection 
+    header_text = wsection(
+        text, ':: HEADER:START ::', ':: HEADER:END ::', 'HEADER')
     if not header_text:
         warn(W.MISSING_FIELD,
              "Header markers found but header content is empty.")

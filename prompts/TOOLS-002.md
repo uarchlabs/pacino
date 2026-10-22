@@ -28,7 +28,7 @@ ISA implementation verification
 
 2026-05-30: This task file has been retro-fitted with the 
 now standard section markers.
-:: HEADER:END :
+:: HEADER:END ::
 =============================================================
 :: DISCUSSION:START ::
 

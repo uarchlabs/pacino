@@ -449,7 +449,7 @@ title: ""
         <p style="font-family:monospace;font-size:12px;line-height:2;color:var(--muted);">
           <span style="color:var(--accent);">●</span>&nbsp; Frontend RTL complete: BPU, FTQ, IFU, I-cache, ITLB, PTW, decode<br>
           <span style="color:var(--accent);">●</span>&nbsp; Frontend demo: 24 scenarios, waveforms and write-ups, see examples/fe_demo<br>
-          <span style="color:var(--accent);">●</span>&nbsp; BP-139/BP-140: every FTB branch predicted at any slot count, see Sessions tab<br>
+          <span style="color:var(--accent);">●</span>&nbsp; BP-139/BP-140: every FTB branch predicted at any slot count, see IA Tasks tab<br>
           <span style="color:var(--accent);">●</span>&nbsp; BP-138: two prediction defects found by running the demo, see Sessions tab<br>
           <span style="color:var(--accent);">●</span>&nbsp; BPC testbench: 973 checks, full line coverage, mutation-tested, see Blog<br>
         </p>

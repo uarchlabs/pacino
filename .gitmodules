@@ -10,7 +10,7 @@
   branch = v5.048
 [submodule "tools/cachegen"]
 	path = tools/cachegen
-	url = git@github.com:jeffnye-gh/cachegen.git
+	url = git@github.com:uarchlabs/cachegen.git
 [submodule "tools/ticfinder"]
 	path = tools/ticfinder
 	url = git@github.com:uarchlabs/ticfinder.git

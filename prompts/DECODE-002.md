@@ -28,7 +28,7 @@ RVA23 coverage gap analysis
 2026.05.30: This file was retrofit to conform to the current section
 marker syntax for automated processing.
 
-:: HEADER:END :
+:: HEADER:END ::
 =============================================================
 :: DISCUSSION:START ::
 

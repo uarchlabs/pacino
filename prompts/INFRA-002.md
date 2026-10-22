@@ -25,7 +25,7 @@ Status: [ ] in-progress [x] complete        [ ] abandoned
 
 The task intended for INFRA-002 was turned into a manual task
 
-:: HEADER:END :
+:: HEADER:END ::
 =============================================================
 :: DISCUSSION:START ::
 

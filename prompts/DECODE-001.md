@@ -33,7 +33,7 @@ module is to simplify downstream logic.
 
 Additionally this task file has been retro-fitted with the now standard
 section markers.
-:: HEADER:END :
+:: HEADER:END ::
 =============================================================
 :: DISCUSSION:START ::
 

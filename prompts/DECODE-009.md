@@ -28,7 +28,7 @@ Vector segment ld/sts, whole-register move disambiguation
 2026-05-30: This task file has been retrofit with the 
 now standard section markers.
 
-:: HEADER:END :
+:: HEADER:END ::
 =============================================================
 :: DISCUSSION:START ::
 

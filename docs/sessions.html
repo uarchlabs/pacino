@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pacino — Co-design sessions</title>
+  <title>Pacino — IA task browser</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -83,14 +83,14 @@
       font-family: var(--mono);
       font-size: 11px;
       background: var(--bg2);
-      border: 0.5px solid var(--border);
+      border: 1px solid #448aff;
       border-radius: 4px;
       color: var(--text);
       padding: 5px 9px;
       width: 180px;
       outline: none;
     }
-    .filter-search:focus { border-color: var(--border2); }
+    .filter-search:focus { box-shadow: 0 0 0 2px rgba(68,138,255,0.35); }
     .filter-search::placeholder { color: var(--dim); }
 
     .filter-sep {
@@ -104,7 +104,7 @@
       font-size: 10px;
       padding: 3px 9px;
       border-radius: 3px;
-      border: 0.5px solid var(--border);
+      border: 1px solid #448aff;   /* same blue as the docs' note border */
       background: transparent;
       color: var(--muted);
       cursor: pointer;
@@ -112,12 +112,31 @@
       letter-spacing: 0.04em;
       user-select: none;
     }
-    .pill:hover { border-color: var(--border2); color: var(--text); }
+    .pill:hover { background: rgba(68,138,255,0.12); color: var(--text); }
     .pill.active {
-      background: var(--bg3);
-      color: var(--text);
-      border-color: var(--border2);
+      background: #448aff;
+      color: #0f1720;
+      border-color: #448aff;
     }
+
+    .sortbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .sort-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    .sort-order {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .pill .arrow { margin-left: 4px; }
 
     .filter-count {
       font-family: var(--mono);
@@ -463,6 +482,20 @@
       transition: transform 0.15s;
     }
     .coll-chevron.open { transform: rotate(180deg); }
+    .coll-hint, .voice-hint {
+      margin-left: auto;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: #a3aebb;            /* open: quiet gray, 5:1 on the bar */
+      white-space: nowrap;
+    }
+    .coll-hint.closed, .voice-hint.closed {
+      color: #ec9068;            /* closed: accent orange, 4.7:1+ */
+    }
+    .coll-hint + .coll-chevron,
+    .voice-hint + .voice-chevron { margin-left: 8px; }
+    .coll-header:hover .coll-hint,
+    .voice-header:hover .voice-hint { text-decoration: underline; }
     .coll-body {
       padding: 14px 16px;
       background: var(--bg4);
@@ -656,25 +689,36 @@
 
 <!-- Top bar -->
 <div class="topbar">
-  <div class="topbar-title">pacino &middot; co-design sessions</div>
+  <div class="topbar-title">pacino &middot; IA task browser</div>
   <div class="filters" id="filters">
     <input class="filter-search" id="search" type="text"
-           placeholder="search id, module, overview&hellip;">
+           placeholder="search id, module, overview&hellip;"
+           aria-label="Search IA tasks"
+           title="Search by task ID, module name or overview text. The list updates as you type.">
     <div class="filter-sep"></div>
     <span id="cat-pills"></span>
     <div class="filter-sep"></div>
     <span id="status-pills"></span>
-    <div class="filter-count" id="count"></div>
+    <div class="filter-count" id="count"
+         title="IA tasks shown by the current filters / all IA tasks"></div>
+  </div>
+  <div class="sortbar" id="sortbar">
+    <span class="sort-label">sort</span>
+    <span id="sort-pills"></span>
+    <div class="filter-sep"></div>
+    <button class="pill" id="sort-reset" onclick="resetSort()"
+            title="Return to the default order: newest date first, then newest PA session, then task ID">reset</button>
+    <span class="sort-order" id="sort-order"></span>
   </div>
 </div>
 
 <!-- Two-column layout -->
 <div class="layout">
   <div class="session-list" id="session-list">
-    <div class="loading">loading sessions&hellip;</div>
+    <div class="loading">loading IA tasks&hellip;</div>
   </div>
   <div class="detail-panel" id="detail-panel">
-    <div class="detail-empty">// select a session</div>
+    <div class="detail-empty">// select an IA task</div>
   </div>
 </div>
 
@@ -782,15 +826,138 @@ function sessionMatchesFilters(s) {
 
 // -- List rendering -----------------------------------------------------------
 
+// -- Sorting --------------------------------------------------------------------
+//
+// The default order is date (newest first), then PA session (newest first),
+// then task ID (BP-003, BP-003a, BP-003-FIX-1, BP-004 ...). Choosing another
+// key makes it the primary key; the default order still breaks ties.
+
+function sortDate(s) {
+  // '2026.07.02' or '2026-07-02' -> 20260702; missing -> null
+  const m = String(s.date || '').match(/(\d{4})\D(\d{2})\D(\d{2})/);
+  return m ? Number(m[1] + m[2] + m[3]) : null;
+}
+
+function sortPa(s) {
+  // '060' -> 60. Non-numeric values such as 'IA-012' or '???' -> null,
+  // so they sort after the numbered PA sessions.
+  const v = String(s.pa_session || '');
+  return /^\d+$/.test(v) ? Number(v) : null;
+}
+
+function sortRuntime(s) {
+  // '1h.23m.45s', '12m.3s', '12m' -> seconds; 'n/a', 'None' -> null
+  const v = String(s.run_time || '');
+  const h = v.match(/(\d+)h/), m = v.match(/(\d+)m/), sec = v.match(/(\d+)s/);
+  if (!h && !m && !sec) return null;
+  return (h ? +h[1] * 3600 : 0) + (m ? +m[1] * 60 : 0) + (sec ? +sec[1] : 0);
+}
+
+function sortCtx(s) {
+  const v = Number(s.ctx_pct);
+  return (s.ctx_pct === null || s.ctx_pct === undefined || isNaN(v)) ? null : v;
+}
+
+// Task ID in natural order: category, number, letter suffix, then any
+// further suffix such as -FIX-1. A bare ID sorts before its suffixed forms.
+function idKey(id) {
+  const m = String(id).match(/^([A-Za-z]+)-(\d+)([a-z]?)(.*)$/);
+  if (!m) return [String(id), Infinity, '', ''];
+  return [m[1], Number(m[2]), m[3], m[4]];
+}
+function cmpId(a, b) {
+  const x = idKey(a.id), y = idKey(b.id);
+  for (let i = 0; i < 4; i++) {
+    if (x[i] < y[i]) return -1;
+    if (x[i] > y[i]) return  1;
+  }
+  return 0;
+}
+
+// Compare two numeric keys; missing values always sort last.
+function cmpNum(x, y, dir) {
+  if (x === null && y === null) return 0;
+  if (x === null) return 1;
+  if (y === null) return -1;
+  return dir * (x - y);
+}
+
+const SORT_KEYS = {
+  date:    { label: 'date',       get: sortDate,    dir: -1,
+             tip: 'Sort by date' },
+  pa:      { label: 'PA session', get: sortPa,      dir: -1,
+             tip: 'Sort by the PA session that issued the task' },
+  id:      { label: 'task ID',    get: null,        dir:  1,
+             tip: 'Sort by task ID: BP-003, BP-003a, BP-003-FIX-1, BP-004' },
+  runtime: { label: 'runtime',    get: sortRuntime, dir: -1,
+             tip: 'Sort by how long the IA ran' },
+  ctx:     { label: 'context',    get: sortCtx,     dir: -1,
+             tip: 'Sort by the share of the context window the IA used' },
+};
+
+let sortKey = 'date';
+let sortDir = -1;     // -1 = descending, 1 = ascending
+
+function defaultCompare(a, b) {
+  return cmpNum(sortDate(a), sortDate(b), -1) ||
+         cmpNum(sortPa(a),   sortPa(b),   -1) ||
+         cmpId(a, b);
+}
+
+function compareSessions(a, b) {
+  const k = SORT_KEYS[sortKey];
+  const primary = sortKey === 'id'
+    ? sortDir * cmpId(a, b)
+    : cmpNum(k.get(a), k.get(b), sortDir);
+  return primary || defaultCompare(a, b);
+}
+
+function buildSortPills() {
+  const el = document.getElementById('sort-pills');
+  el.innerHTML = Object.entries(SORT_KEYS).map(([key, k]) => {
+    const active = key === sortKey;
+    const arrow  = active ? (sortDir < 0 ? '&#8595;' : '&#8593;') : '';
+    const tip = k.tip + '. Click again to reverse the order. ' +
+      'Ties are broken by date, PA session, then task ID.';
+    return `<button class="pill${active ? ' active' : ''}" data-sort="${key}"
+              title="${esc(tip)}" aria-pressed="${active}"
+              onclick="setSort('${key}')">${k.label}` +
+           `<span class="arrow">${arrow}</span></button>`;
+  }).join(' ');
+  const dirWord = sortDir < 0 ? 'descending' : 'ascending';
+  document.getElementById('sort-order').textContent =
+    (sortKey === 'date' && sortDir < 0) ? 'default order'
+                                         : `${SORT_KEYS[sortKey].label}, ${dirWord}`;
+}
+
+function setSort(key) {
+  if (key === sortKey) {
+    sortDir = -sortDir;
+  } else {
+    sortKey = key;
+    sortDir = SORT_KEYS[key].dir;
+  }
+  buildSortPills();
+  renderList();
+}
+
+function resetSort() {
+  sortKey = 'date';
+  sortDir = -1;
+  buildSortPills();
+  renderList();
+}
+
 function renderList() {
   const el      = document.getElementById('session-list');
   const countEl = document.getElementById('count');
-  const visible = allSessions.filter(sessionMatchesFilters);
+  const visible = allSessions.filter(sessionMatchesFilters)
+                             .sort(compareSessions);
   countEl.textContent = `${visible.length} / ${allSessions.length}`;
 
   if (!visible.length) {
     el.innerHTML =
-      '<div class="loading">no sessions match filters</div>';
+      '<div class="loading">no IA tasks match filters</div>';
     return;
   }
 
@@ -851,7 +1018,7 @@ function renderDetail(s) {
     s.model      && `model: ${s.model}`,
     s.resume_sha && `sha: ${s.resume_sha.slice(0,8)}&hellip;`,
     s.pa_session && s.pa_session !== '???' &&
-      `pa_session: ${s.pa_session}`,
+      `PA session: ${s.pa_session}`,
   ].filter(Boolean).join('  &middot;  ');
 
   // Mode badge(s) for detail header
@@ -893,10 +1060,12 @@ function renderDetail(s) {
   const voicePanels = s.has_markers
     ? buildVoices(s)
     : `<div class="voice-panel">
-         <div class="voice-header" onclick="toggleVoice(this)">
+         <div class="voice-header" onclick="toggleVoice(this)"
+              role="button" tabindex="0" aria-expanded="true">
            <span class="voice-accent"
                  style="background:var(--border2)"></span>
-           <span class="voice-name">full session text</span>
+           <span class="voice-name">full task file text</span>
+           <span class="voice-hint">${hintText(true)}</span>
            <span class="voice-chevron open">&#9660;</span>
          </div>
          <div class="voice-body">
@@ -906,9 +1075,9 @@ function renderDetail(s) {
 
   // Prompt + Results collapsibles
   const promptColl  = s.prompt_raw
-    ? collapsible('// prompt', s.prompt_raw, /*open=*/false) : '';
+    ? collapsible('prompt', s.prompt_raw, /*open=*/false) : '';
   const resultsColl = s.results_raw
-    ? collapsible('// results', s.results_raw, /*open=*/false) : '';
+    ? collapsible('results', s.results_raw, /*open=*/false) : '';
 
   // Files modified
   const filesHtml = buildFilesModified(s);
@@ -968,9 +1137,11 @@ function buildVoices(s) {
         `${label.toLowerCase()} recorded</div></div>`;
 
     return `<div class="voice-panel">
-      <div class="voice-header" onclick="toggleVoice(this)">
+      <div class="voice-header" onclick="toggleVoice(this)"
+           role="button" tabindex="0" aria-expanded="true">
         <span class="voice-accent" style="background:${color}"></span>
         <span class="voice-name">${label}</span>
+        <span class="voice-hint">${hintText(true)}</span>
         <span class="voice-chevron open">&#9660;</span>
       </div>
       ${bodyHtml}
@@ -978,12 +1149,28 @@ function buildVoices(s) {
   }).join('');
 }
 
+// State hint shown on every collapsible bar. size (optional) is shown
+// only while collapsed, so a reader knows what is behind the bar.
+function hintText(open, size) {
+  if (open) return 'click to collapse';
+  return size ? `${size} \u00b7 click to expand` : 'click to expand';
+}
+
+function sizeLabel(text) {
+  if (!text) return '';
+  const lines = text.split('\n').length;
+  return `${lines.toLocaleString()} lines`;
+}
+
 function collapsible(title, text, open) {
   const openClass = open ? ' open' : '';
   const chevClass = open ? ' open' : '';
   return `<div class="collapsible">
-    <div class="coll-header" onclick="toggleColl(this)">
+    <div class="coll-header" onclick="toggleColl(this)"
+         data-size="${sizeLabel(text)}" role="button" tabindex="0"
+         aria-expanded="${open ? 'true' : 'false'}">
       <span class="coll-title">${title}</span>
+      <span class="coll-hint${open ? '' : ' closed'}">${hintText(open, sizeLabel(text))}</span>
       <span class="coll-chevron${chevClass}">&#9660;</span>
     </div>
     <div class="coll-body${openClass}">
@@ -1001,9 +1188,11 @@ function buildFilesModified(s) {
 
   return `<div class="section-label">// files modified</div>
     <div class="collapsible">
-      <div class="coll-header" onclick="toggleColl(this)">
+      <div class="coll-header" onclick="toggleColl(this)"
+           role="button" tabindex="0" aria-expanded="true">
         <span class="coll-title">` +
         `${files.length} file${files.length !== 1 ? 's' : ''}</span>
+        <span class="coll-hint">${hintText(true)}</span>
         <span class="coll-chevron open">&#9660;</span>
       </div>
       <div class="coll-body open">
@@ -1017,17 +1206,39 @@ function buildFilesModified(s) {
 function toggleVoice(header) {
   const body    = header.nextElementSibling;
   const chevron = header.querySelector('.voice-chevron');
+  const hint    = header.querySelector('.voice-hint');
   const isOpen  = body.style.display !== 'none';
   body.style.display = isOpen ? 'none' : '';
   chevron.classList.toggle('open', !isOpen);
+  if (hint) {
+    hint.textContent = hintText(!isOpen);
+    hint.classList.toggle('closed', isOpen);
+  }
+  header.setAttribute('aria-expanded', String(!isOpen));
 }
 
 function toggleColl(header) {
   const body    = header.nextElementSibling;
   const chevron = header.querySelector('.coll-chevron');
+  const hint    = header.querySelector('.coll-hint');
   body.classList.toggle('open');
-  chevron.classList.toggle('open', body.classList.contains('open'));
+  const open = body.classList.contains('open');
+  chevron.classList.toggle('open', open);
+  if (hint) {
+    hint.textContent = hintText(open, header.dataset.size);
+    hint.classList.toggle('closed', !open);
+  }
+  header.setAttribute('aria-expanded', String(open));
 }
+
+// Keyboard: Enter or Space on a focused bar toggles it.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const h = e.target.closest && e.target.closest('.coll-header, .voice-header');
+  if (!h) return;
+  e.preventDefault();
+  h.classList.contains('coll-header') ? toggleColl(h) : toggleVoice(h);
+});
 
 // -- Session selection --------------------------------------------------------
 
@@ -1037,10 +1248,29 @@ function selectSession(id) {
   renderList();
   if (s) renderDetail(s);
   else document.getElementById('detail-panel').innerHTML =
-    '<div class="detail-empty">session not found</div>';
+    '<div class="detail-empty">IA task not found</div>';
 }
 
 // -- Filter pills -------------------------------------------------------------
+
+// Tooltip text for the filter buttons in the top row.
+const CAT_TIPS = {
+  BP:     'Branch prediction: the BPU predictors, the prediction cluster and their testbenches',
+  COMP:   'Components: shared library primitives, such as SRAM wrappers and SRAM initialization',
+  DECODE: 'Instruction decode: scalar, compressed (RVC) and vector decode, and pre-decode',
+  DOC:    'Documentation and demonstrations, such as the frontend demo in examples/fe_demo',
+  INFRA:  'Infrastructure: repository structure, build and regression setup',
+  SYS:    'System: CSR packages and their rules',
+  TB:     'Testbench infrastructure, including the manual testbenches',
+  TOOLS:  'Tools and scripts, such as coverage checks and the spike-dasm oracle',
+};
+const STATUS_TIPS = {
+  'complete':    'Completed IA tasks',
+  'in-progress': 'IA tasks that are still in progress',
+  'abandoned':   'Abandoned IA tasks. They are kept as part of the record',
+};
+const PILL_HOW = 'Click to show only these; click again to remove. ' +
+  'Several categories or statuses can be selected together.';
 
 function buildFilterPills() {
   const cats    = [...new Set(
@@ -1049,14 +1279,14 @@ function buildFilterPills() {
   const statusEl = document.getElementById('status-pills');
 
   catEl.innerHTML = cats.map(cat => {
-    const color = catColor(cat);
-    return `<button class="pill" data-cat="${cat}"
-              style="border-color:${color}22"
+    const tip = (CAT_TIPS[cat] || `${cat} tasks`) + '. ' + PILL_HOW;
+    return `<button class="pill" data-cat="${cat}" title="${esc(tip)}"
               onclick="toggleCatFilter('${cat}', this)">${cat}</button>`;
   }).join(' ');
 
   statusEl.innerHTML = ['complete','in-progress','abandoned'].map(st =>
     `<button class="pill" data-status="${st}"
+       title="${esc(STATUS_TIPS[st] + '. ' + PILL_HOW)}"
        onclick="toggleStatusFilter('${st}', this)">${st}</button>`
   ).join(' ');
 }
@@ -1088,6 +1318,7 @@ async function init() {
     const data = await res.json();
     allSessions = data.sessions || [];
     buildFilterPills();
+    buildSortPills();
     renderList();
     document.getElementById('count').textContent =
       `${allSessions.length} / ${allSessions.length}`;

@@ -28,7 +28,7 @@ Vector memory instruction disambiguation (opcodes 0x07/0x27)
 
 2026-05-30: This task file has been retro-fitted with the 
 now standard section markers.
-:: HEADER:END :
+:: HEADER:END ::
 =============================================================
 :: DISCUSSION:START ::
 
