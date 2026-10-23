@@ -78,6 +78,7 @@ production-quality outputs.
                 Add clk/rstn only as needed. Combinatorial-only
                 modules do not require these ports.
                 Declare ports on one line when they fit within 80 cols
+- Spelling:     American English in all prose, comments and identifiers.
 
 ## Combinatorial Logic Style
 
