@@ -612,6 +612,15 @@ edit docs/index.md RECENT section
 - `templates/TASK_TEMPLATE.md` - experiment file format
 - `misc/observations.md` - methodology notes
 
+# Viewing a development version of the html
+
+A reminder for me
+
+```
+mkdocs serve
+http://127.0.0.1:8000
+```
+
 ## License
 
 Copyright (c) 2026 Jeff Nye, uarchlabs.com

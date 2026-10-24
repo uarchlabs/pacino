@@ -93,8 +93,8 @@ greater than one.
 
 | Parameter               | l1i | l1d | l2 |
 |-------------------------|-----|-----|----|
-| mshrs                   | 4   | 8   | 16 |
-| mshr_targets            | 2   | 4   | 4  |
+| mshrs                   | 16  | 8   | 16 |
+| mshr_targets            | 4   | 4   | 4  |
 | victim_buffer_entries   | 0   | 0   | 0  |
 | fill_buffer_entries     | 0   | 0   | 0  |
 
