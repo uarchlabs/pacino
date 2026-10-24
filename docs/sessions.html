@@ -289,6 +289,14 @@
       border-radius: 2px;
     }
 
+    .not-found-note {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      border-left: 2px solid var(--border2);
+      padding: 4px 10px;
+      margin-bottom: 14px;
+    }
     .detail-empty {
       display: flex;
       align-items: center;
@@ -1242,13 +1250,72 @@ document.addEventListener('keydown', e => {
 
 // -- Session selection --------------------------------------------------------
 
-function selectSession(id) {
+// The task ID lives in the URL fragment: on the parent page when the browser
+// is framed by sessions.md (same origin), on this page when opened directly.
+function urlWindow() {
+  try {
+    if (window.parent !== window && window.parent.location.href)
+      return window.parent;
+  } catch (e) { /* cross-origin parent: use this page */ }
+  return window;
+}
+
+function hashId() {
+  const h = urlWindow().location.hash.replace(/^#/, '');
+  try { return decodeURIComponent(h).trim(); } catch (e) { return h.trim(); }
+}
+
+// replaceState adds no history entry and does not scroll.
+function writeHash(id) {
+  const w = urlWindow();
+  const l = w.location;
+  w.history.replaceState(w.history.state, '',
+    l.pathname + l.search + '#' + encodeURIComponent(id));
+}
+
+// Scroll only the list. Element.scrollIntoView would also scroll the parent
+// page when framed.
+function scrollCardIntoView(id) {
+  const list = document.getElementById('session-list');
+  const card = [...list.querySelectorAll('.session-card')]
+    .find(c => c.dataset.id === id);
+  if (!card) return;
+  const lr = list.getBoundingClientRect();
+  const cr = card.getBoundingClientRect();
+  if (cr.top < lr.top)            list.scrollTop += cr.top - lr.top;
+  else if (cr.bottom > lr.bottom) list.scrollTop += cr.bottom - lr.bottom;
+}
+
+function selectSession(id, updateUrl = true) {
   activeId = id;
   const s  = allSessions.find(x => x.id === id);
   renderList();
+  scrollCardIntoView(id);
   if (s) renderDetail(s);
   else document.getElementById('detail-panel').innerHTML =
     '<div class="detail-empty">IA task not found</div>';
+  if (s && updateUrl) writeHash(s.id);
+}
+
+// Select the task named by the fragment, matched case-insensitively. With no
+// fragment, or one that names no task, select the first task in the default
+// order; an unknown ID also gets a notice in the detail panel.
+function selectFromHash() {
+  const want = hashId();
+  const hit  = want && allSessions.find(
+    s => s.id.toLowerCase() === want.toLowerCase());
+  if (hit) {
+    if (hit.id !== activeId) selectSession(hit.id, hit.id !== want);
+    return;
+  }
+  const latest = [...allSessions].sort(defaultCompare)[0];
+  if (!latest) return;
+  selectSession(latest.id, false);
+  if (want) {
+    document.getElementById('detail-panel').insertAdjacentHTML('afterbegin',
+      `<div class="not-found-note">IA task <code>${esc(want)}</code> ` +
+      `not found; showing the latest task.</div>`);
+  }
 }
 
 // -- Filter pills -------------------------------------------------------------
@@ -1323,17 +1390,10 @@ async function init() {
     document.getElementById('count').textContent =
       `${allSessions.length} / ${allSessions.length}`;
 
-//    if (allSessions.length > 0) {
-//      selectSession(allSessions[allSessions.length - 1].id);
-//    }
-
-    const DEFAULT_SESSION = 'BP-081';
-    const defaultId = allSessions.find(s => s.id === DEFAULT_SESSION)
-                      ? DEFAULT_SESSION
-                      : allSessions.length > 0
-                        ? allSessions[allSessions.length - 1].id
-                        : null;
-    if (defaultId) selectSession(defaultId);
+    selectFromHash();
+    window.addEventListener('hashchange', selectFromHash);
+    if (urlWindow() !== window)
+      urlWindow().addEventListener('hashchange', selectFromHash);
   } catch (err) {
     document.getElementById('session-list').innerHTML =
       `<div class="loading" style="color:var(--accent2)">` +

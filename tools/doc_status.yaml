@@ -1,0 +1,782 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# Status of the unwritten doc pages. tools/gen_doc_placeholders.py reads
+# this table and writes a placeholder block into each listed page.
+#
+# Key: path under docs/.
+#   rtl:    done | active | planned | not-in-design
+#   docs:   planned | active
+#   covers: one line, completing "This page will cover ..."
+#   see:    optional list, each item one of
+#             - blog: <post slug>         with title: <post title>
+#             - tasks: [<IA task ID>, ...]
+#             - demo: <examples/fe_demo/docs file name, no .md>
+#   guess:  true where the entry is not settled by evidence in the repo
+#
+# Evidence: rtl/, planning/arch/, docs/sessions.json, examples/fe_demo/,
+# the README status table and directory tree, and the blog's _posts/.
+
+# -- Frontend: branch prediction -------------------------------------------
+
+frontend/bpu/overview.md:
+  rtl: done
+  docs: planned
+  covers: the branch prediction cluster, its seven predictors, the p1, p2 and p3 override order, and how predictions reach the FTQ.
+  see:
+    - blog: branch-prediction-cluster-organization
+      title: Branch Prediction Cluster Organization
+    - blog: branch-prediction-cluster-build
+      title: Branch Prediction Cluster Build
+    - blog: branch-prediction-cluster-simulation-and-mutation-based-verification
+      title: Branch Prediction Cluster Simulation and Mutation-based Verification
+    - tasks: [BP-084, BP-101, BP-138]
+    - demo: fd02_steady
+
+frontend/bpu/dual_prediction.md:
+  rtl: done
+  docs: planned
+  covers: the two branch slots, br0 and br1, predicted from one 32-byte block lookup, and how a taken branch ends the block.
+  see:
+    - tasks: [BP-128]
+    - demo: fd03_two_branch
+    - demo: fd22_sc_slot1
+    - demo: fd24_call_slot1
+  guess: true
+
+frontend/bpu/ftb.md:
+  rtl: done
+  docs: planned
+  covers: the fetch target buffer, its entry format, PLRU replacement and the confidence override at p2.
+  see:
+    - blog: the-ras-and-the-ftb-design-choices-at-p2
+      title: "The RAS and the FTB: Design Choices at p2"
+    - tasks: [BP-065, BP-066, BP-067]
+    - demo: fd04_p2_override
+    - demo: fd12_training
+
+frontend/bpu/history_module.md:
+  rtl: done
+  docs: planned
+  covers: the branch history the predictors index with, its speculative update, and its correction after a redirect.
+  see:
+    - blog: branch-history-and-the-first-prediction
+      title: Branch History and the First Prediction
+    - tasks: [BP-069, BP-074, BP-130]
+
+frontend/bpu/ittage.md:
+  rtl: done
+  docs: planned
+  covers: the ITTAGE indirect target predictor, its tables, allocation and update rules.
+  see:
+    - blog: ittage-design-and-planning
+      title: ITTAGE Design and Planning
+    - blog: ittage-table-controller-wrapper-and-first-integrated-testbench
+      title: ITTAGE -- Table, Controller, Wrapper, and First Integrated Testbench
+    - tasks: [BP-034, BP-050, BP-055]
+    - demo: fd08_indirect
+
+frontend/bpu/loop_predictor.md:
+  rtl: done
+  docs: planned
+  covers: the loop predictor, how it counts iterations at p1 and when its prediction is trusted over the other predictors.
+  see:
+    - blog: iteration-counting-at-s1-the-loop-predictor
+      title: "Iteration Counting at s1: The Loop Predictor"
+    - tasks: [BP-004, BP-091]
+    - demo: fd06_loop_pred
+
+frontend/bpu/ras.md:
+  rtl: done
+  docs: planned
+  covers: the return address stack, its push and pop on calls and returns, and its repair after a redirect.
+  see:
+    - blog: the-ras-and-the-ftb-design-choices-at-p2
+      title: "The RAS and the FTB: Design Choices at p2"
+    - tasks: [BP-062, BP-063, BP-064]
+    - demo: fd07_calls_returns
+
+frontend/bpu/sc.md:
+  rtl: done
+  docs: planned
+  covers: the statistical corrector, its tables and thresholds, and when it reverses the TAGE direction at p3.
+  see:
+    - blog: the-statistical-corrector-design-choices-at-p3
+      title: "The Statistical Corrector: Design Choices at p3"
+    - tasks: [BP-075, BP-078, BP-079]
+    - demo: fd05_p3_override
+    - demo: fd22_sc_slot1
+
+frontend/bpu/tage.md:
+  rtl: done
+  docs: planned
+  covers: the TAGE direction predictor, its tagged tables, provider selection, allocation and use_alt_on_na.
+  see:
+    - blog: tage-architecture-and-the-decomposition-problem
+      title: TAGE -- Architecture and the Decomposition Problem
+    - blog: tage-implementation
+      title: TAGE Implementation
+    - blog: tage-verification
+      title: TAGE Verification
+    - blog: tage-arbitration-and-integration
+      title: TAGE Arbitration and Integration
+    - blog: tage-coverage-completion
+      title: TAGE Coverage Methodology and Closure
+    - tasks: [BP-056, BP-081]
+    - demo: fd09_tage
+
+frontend/bpu/ubtb.md:
+  rtl: done
+  docs: planned
+  covers: the micro BTB, the single-cycle p1 predictor that starts fetch before the slower predictors respond.
+  see:
+    - tasks: [BP-003, BP-018, BP-086]
+    - demo: fd02_steady
+
+# -- Frontend: decode ------------------------------------------------------
+
+frontend/decode/overview.md:
+  rtl: done
+  docs: planned
+  covers: the instruction decoder, how fetched instructions become decoded packets for rename, and its RVA23 coverage.
+  see:
+    - blog: what-rva23-actually-asks-of-a-decoder
+      title: What RVA23 Actually Asks of a Decoder
+    - tasks: [DECODE-002, DECODE-010, DECODE-011]
+
+frontend/decode/float_decode.md:
+  rtl: done
+  docs: planned
+  covers: decode of the scalar floating-point instructions, including the fused multiply-add forms.
+  see:
+    - blog: what-rva23-actually-asks-of-a-decoder
+      title: What RVA23 Actually Asks of a Decoder
+
+frontend/decode/fusion_combiner.md:
+  rtl: not-in-design
+  docs: planned
+  covers: macro-op fusion, combining adjacent instructions into one operation; no fusion logic is in the current decoder.
+  guess: true
+
+frontend/decode/integer_decode.md:
+  rtl: done
+  docs: planned
+  covers: decode of the scalar integer instructions and the RVA23 integer extensions.
+  see:
+    - blog: what-rva23-actually-asks-of-a-decoder
+      title: What RVA23 Actually Asks of a Decoder
+    - blog: scalar-foundation-to-vector-alu
+      title: Scalar Foundation to Vector ALU
+
+frontend/decode/rvc_expander.md:
+  rtl: done
+  docs: planned
+  covers: expansion of compressed (RVC) instructions, including Zcb, to their 32-bit forms; the expander sits in the IFU.
+  see:
+    - tasks: [DECODE-003]
+    - demo: fd17_rvc
+
+frontend/decode/vector_decode.md:
+  rtl: done
+  docs: planned
+  covers: decode of the RVV vector instructions and the vsetvl dependency information passed to rename.
+  see:
+    - blog: scalar-foundation-to-vector-alu
+      title: Scalar Foundation to Vector ALU
+
+# -- Frontend: fetch -------------------------------------------------------
+
+frontend/fetch/overview.md:
+  rtl: done
+  docs: planned
+  covers: the instruction fetch unit, how it takes FTQ entries, reads the L1I, translates through the ITLB and writes the instruction buffer.
+  see:
+    - tasks: [BP-116, BP-123, BP-125]
+    - demo: fd13_l1i
+    - demo: fd16_page_cross
+    - demo: fd20_backpressure
+
+frontend/fetch/branch_detector.md:
+  rtl: done
+  docs: planned
+  covers: predecode in the IFU, which finds the branches in a fetch block and redirects fetch when the prediction missed one.
+  see:
+    - blog: memory-disambiguation-and-pre-decode
+      title: Memory disambiguation and pre-decode
+    - tasks: [DECODE-001]
+    - demo: fd10_pd_redirect
+  guess: true
+
+frontend/fetch/ftq.md:
+  rtl: done
+  docs: planned
+  covers: the fetch target queue, its pointers, redirect and rollback, and how it trains the predictors at commit.
+  see:
+    - tasks: [BP-107, BP-112, BP-117, BP-139]
+    - demo: fd11_be_mispredict
+    - demo: fd21_commit
+
+frontend/fetch/prefusion_detector.md:
+  rtl: not-in-design
+  docs: planned
+  covers: detection of fusible instruction pairs before decode; no fusion logic is in the current frontend.
+  guess: true
+
+# -- Frontend: instruction cache -------------------------------------------
+
+frontend/icache/overview.md:
+  rtl: done
+  docs: planned
+  covers: the L1 instruction cache generated by cachegen, its organization, hit and miss paths, and maintenance operations.
+  see:
+    - tasks: [TOOLS-004, TOOLS-005, BP-123]
+    - demo: fd13_l1i
+    - demo: fd19_fencei_cbo
+
+frontend/icache/data_arrays.md:
+  rtl: done
+  docs: planned
+  covers: the L1I data arrays, their banking and how a fetch block is read.
+  see:
+    - tasks: [TOOLS-004]
+
+frontend/icache/il2_interface.md:
+  rtl: done
+  docs: planned
+  covers: the L1I memory-side port, the TileLink requests it sends on a miss and how fills return.
+  see:
+    - tasks: [TOOLS-004]
+    - demo: fd13_l1i
+  guess: true
+
+frontend/icache/itlb.md:
+  rtl: done
+  docs: planned
+  covers: the instruction TLB, its lookup, permission checks and refill from the page table walker.
+  see:
+    - tasks: [BP-118, BP-124]
+    - demo: fd14_translation
+    - demo: fd15_faults
+
+frontend/icache/mshrs.md:
+  rtl: done
+  docs: planned
+  covers: the L1I miss status holding registers, miss merging, and the reserve kept for demand misses.
+  see:
+    - tasks: [TOOLS-004]
+    - demo: fd13_l1i
+
+frontend/icache/plru.md:
+  rtl: done
+  docs: planned
+  covers: tree pseudo-LRU replacement in the L1I and how a victim way is chosen.
+  see:
+    - tasks: [TOOLS-004]
+
+frontend/icache/prefetcher.md:
+  rtl: planned
+  docs: planned
+  covers: instruction prefetch; the L1I has no prefetcher, prefetch requests are to come from the IFU, and they are deferred (IFU-U6).
+
+frontend/icache/tags.md:
+  rtl: done
+  docs: planned
+  covers: the L1I tag and metadata arrays and the hit check.
+  see:
+    - tasks: [TOOLS-004]
+    - demo: fd13_l1i
+
+frontend/icache/victim_buffer.md:
+  rtl: not-in-design
+  docs: planned
+  covers: why the L1I has no victim buffer and no separate fill buffer (L1I-17).
+
+# -- Backend ---------------------------------------------------------------
+
+backend/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the out-of-order backend, from rename and dispatch through issue, execute and writeback to the reorder buffer.
+
+backend/dispatch_rob/overview.md:
+  rtl: planned
+  docs: planned
+  covers: dispatch and the reorder buffer, and how instructions enter and leave the out-of-order window.
+
+backend/dispatch_rob/dispatch.md:
+  rtl: planned
+  docs: planned
+  covers: dispatch of renamed instructions to the issue queues and the reorder buffer.
+
+backend/dispatch_rob/rob.md:
+  rtl: planned
+  docs: planned
+  covers: the reorder buffer, in-order commit, and recovery from exceptions and mispredictions.
+
+backend/execute/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the execution units and how they connect to issue and writeback.
+
+backend/execute/float_fu.md:
+  rtl: planned
+  docs: planned
+  covers: the floating-point functional units.
+
+backend/execute/integer_fu.md:
+  rtl: planned
+  docs: planned
+  covers: the integer functional units, including branch resolution.
+
+backend/execute/matrix_fu.md:
+  rtl: planned
+  docs: planned
+  covers: the matrix functional units and the tile register file.
+
+backend/execute/vector_fu.md:
+  rtl: planned
+  docs: planned
+  covers: the vector functional units.
+
+backend/issue/overview.md:
+  rtl: planned
+  docs: planned
+  covers: scheduling and issue, from operands becoming ready to an instruction leaving its queue.
+
+backend/issue/issue_queues.md:
+  rtl: planned
+  docs: planned
+  covers: the issue queues and how they are split by functional unit type.
+  guess: true
+
+backend/issue/issue_select.md:
+  rtl: planned
+  docs: planned
+  covers: the select logic that picks ready instructions to issue each cycle.
+  guess: true
+
+backend/issue/reservation_stations.md:
+  rtl: planned
+  docs: planned
+  covers: the reservation stations for integer, floating-point, vector, load/store and matrix instructions.
+
+backend/issue/scheduler.md:
+  rtl: planned
+  docs: planned
+  covers: the scheduler that coordinates wakeup, select and issue across the queues.
+  guess: true
+
+backend/issue/scoreboard.md:
+  rtl: planned
+  docs: planned
+  covers: tracking of physical register readiness.
+  guess: true
+
+backend/issue/speculative_issue.md:
+  rtl: planned
+  docs: planned
+  covers: issuing dependents before a load is known to hit, and replay when it misses.
+  guess: true
+
+backend/issue/wakeup.md:
+  rtl: planned
+  docs: planned
+  covers: wakeup of waiting instructions when their source operands are produced.
+  guess: true
+
+backend/regfile/bypass_network.md:
+  rtl: planned
+  docs: planned
+  covers: the bypass network that forwards results to dependent instructions.
+  guess: true
+
+backend/regfile/physical_register_files.md:
+  rtl: planned
+  docs: planned
+  covers: the physical register files for integer, floating-point, vector and matrix state.
+
+backend/regfile/register_read.md:
+  rtl: planned
+  docs: planned
+  covers: the register read stage and its ports.
+  guess: true
+
+backend/regfile/writeback.md:
+  rtl: planned
+  docs: planned
+  covers: the writeback data path from the functional units to the register files.
+  guess: true
+
+backend/rename/overview.md:
+  rtl: planned
+  docs: planned
+  covers: register renaming and recovery of the rename state after a misprediction.
+
+backend/rename/armt.md:
+  rtl: planned
+  docs: planned
+  covers: the architectural register map table, the committed mapping used for recovery.
+
+backend/rename/free_list.md:
+  rtl: planned
+  docs: planned
+  covers: the free list of physical registers.
+
+backend/rename/rat.md:
+  rtl: planned
+  docs: planned
+  covers: the register alias table, the speculative mapping from architectural to physical registers.
+
+# -- Memory: load/store queue ----------------------------------------------
+
+memory/lsq/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the load and store queues and how they order memory operations.
+
+memory/lsq/exception_buffer.md:
+  rtl: planned
+  docs: planned
+  covers: the buffer that holds the oldest memory exception until commit.
+
+memory/lsq/load_queue.md:
+  rtl: planned
+  docs: planned
+  covers: the load queue and the checks it makes against older stores.
+
+memory/lsq/memory_ordering.md:
+  rtl: planned
+  docs: planned
+  covers: memory ordering, memory disambiguation and store-to-load forwarding.
+  see:
+    - blog: memory-disambiguation-and-pre-decode
+      title: Memory disambiguation and pre-decode
+
+memory/lsq/store_buffer.md:
+  rtl: planned
+  docs: planned
+  covers: the store buffer that holds committed stores until they are written to the data cache.
+
+memory/lsq/store_queue.md:
+  rtl: planned
+  docs: planned
+  covers: the store queue for stores not yet committed.
+
+memory/lsq/uncache_buffer.md:
+  rtl: planned
+  docs: planned
+  covers: the buffer for uncached and MMIO accesses.
+
+# -- Memory: load/store unit -----------------------------------------------
+
+memory/lsu/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the load/store unit pipelines and how they use the TLB, the data cache and the queues.
+
+memory/lsu/agu.md:
+  rtl: planned
+  docs: planned
+  covers: address generation for loads and stores.
+
+memory/lsu/atomic_unit.md:
+  rtl: planned
+  docs: planned
+  covers: execution of atomic memory operations and LR/SC.
+
+memory/lsu/load_unit.md:
+  rtl: planned
+  docs: planned
+  covers: the load pipeline.
+  guess: true
+
+memory/lsu/misaligned_unit.md:
+  rtl: planned
+  docs: planned
+  covers: handling of scalar misaligned accesses.
+  guess: true
+
+memory/lsu/store_address_unit.md:
+  rtl: planned
+  docs: planned
+  covers: the store address pipeline.
+  guess: true
+
+memory/lsu/store_data_unit.md:
+  rtl: planned
+  docs: planned
+  covers: the store data pipeline.
+  guess: true
+
+memory/lsu/uncached_access.md:
+  rtl: planned
+  docs: planned
+  covers: uncached and MMIO loads and stores.
+  guess: true
+
+# -- Memory: vector load/store unit ----------------------------------------
+
+memory/vlsu/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the vector load/store unit and how vector memory instructions are split into element accesses.
+
+memory/vlsu/fof_buffer.md:
+  rtl: planned
+  docs: planned
+  covers: the buffer for vector fault-only-first loads.
+
+memory/vlsu/misalign_buffer.md:
+  rtl: planned
+  docs: planned
+  covers: handling of misaligned vector accesses.
+
+memory/vlsu/segment_unit.md:
+  rtl: planned
+  docs: planned
+  covers: vector segment loads and stores.
+
+memory/vlsu/vmerge.md:
+  rtl: planned
+  docs: planned
+  covers: merging of returned element data into vector registers.
+
+memory/vlsu/vsplit.md:
+  rtl: planned
+  docs: planned
+  covers: splitting vector memory instructions into cache-line accesses.
+
+# -- MMU -------------------------------------------------------------------
+
+mmu/overview.md:
+  rtl: done
+  docs: planned
+  covers: the MMU as built so far, the ITLB, the shared page table walker and the PMP and PMA checker, and the planned DTLB and L2 TLB.
+  see:
+    - tasks: [BP-123, BP-124, SYS-001]
+    - demo: fd14_translation
+  guess: true
+
+mmu/l1_tlb.md:
+  rtl: done
+  docs: planned
+  covers: the first-level TLBs; the ITLB is built, the DTLB is planned.
+  see:
+    - tasks: [BP-118, BP-124]
+    - demo: fd14_translation
+  guess: true
+
+mmu/pma.md:
+  rtl: done
+  docs: planned
+  covers: physical memory attribute checks on fetch, including uncached and non-idempotent regions.
+  see:
+    - tasks: [BP-118]
+    - demo: fd15_faults
+    - demo: fd18_uncached
+
+mmu/pmp.md:
+  rtl: done
+  docs: planned
+  covers: physical memory protection checks and the access faults they raise.
+  see:
+    - tasks: [BP-118, SYS-002]
+    - demo: fd15_faults
+
+mmu/l2tlb/hypervisor_ptw.md:
+  rtl: done
+  docs: planned
+  covers: two-stage translation for the hypervisor extension, Sv39 over Sv39x4; the nested walk is done by the one page table walker.
+  see:
+    - tasks: [BP-124]
+    - demo: fd14_translation
+  guess: true
+
+mmu/l2tlb/ll_ptw.md:
+  rtl: not-in-design
+  docs: planned
+  covers: a separate last-level page table walker; the current design has one walker that serves the ITLB directly.
+  guess: true
+
+mmu/l2tlb/miss_queue.md:
+  rtl: planned
+  docs: planned
+  covers: the L2 TLB miss queue; there is no L2 TLB now, and one is a later performance step (MMU-1).
+  guess: true
+
+mmu/l2tlb/page_cache.md:
+  rtl: planned
+  docs: planned
+  covers: caching of non-leaf page table entries in the L2 TLB; there is no L2 TLB now (MMU-1).
+  guess: true
+
+mmu/l2tlb/prefetcher.md:
+  rtl: planned
+  docs: planned
+  covers: L2 TLB prefetch; there is no L2 TLB now (MMU-1).
+  guess: true
+
+mmu/l2tlb/ptw.md:
+  rtl: done
+  docs: planned
+  covers: the page table walker, Sv39 and nested Sv39x4 walks, hardware A/D updates (Svadu), and one walk at a time.
+  see:
+    - tasks: [BP-123, BP-124]
+    - demo: fd14_translation
+    - demo: fd15_faults
+
+# -- Cache subsystem: data cache -------------------------------------------
+
+cache/dcache/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the L1 data cache, its organization and pipelines.
+
+cache/dcache/coherency.md:
+  rtl: planned
+  docs: planned
+  covers: the coherency logic of the L1 data cache.
+  guess: true
+
+cache/dcache/data_arrays.md:
+  rtl: planned
+  docs: planned
+  covers: the L1D data arrays and their banking.
+  guess: true
+
+cache/dcache/error_handling.md:
+  rtl: planned
+  docs: planned
+  covers: error detection and handling in the L1D.
+  guess: true
+
+cache/dcache/load_pipeline.md:
+  rtl: planned
+  docs: planned
+  covers: the L1D load pipeline.
+  guess: true
+
+cache/dcache/main_pipeline.md:
+  rtl: planned
+  docs: planned
+  covers: the L1D main pipeline for stores, refills and probes.
+  guess: true
+
+cache/dcache/mshr.md:
+  rtl: planned
+  docs: planned
+  covers: the L1D miss queue and miss merging.
+
+cache/dcache/probe_queue.md:
+  rtl: planned
+  docs: planned
+  covers: the queue for coherence probes from the L2.
+  guess: true
+
+cache/dcache/tags.md:
+  rtl: planned
+  docs: planned
+  covers: the L1D tag arrays and the hit check.
+  guess: true
+
+cache/dcache/victim_queue.md:
+  rtl: planned
+  docs: planned
+  covers: the queue for lines evicted from the L1D.
+  guess: true
+
+cache/dcache/writeback_queue.md:
+  rtl: planned
+  docs: planned
+  covers: the queue that writes dirty lines back to the L2.
+
+# -- Cache subsystem: L2 ---------------------------------------------------
+
+cache/l2/overview.md:
+  rtl: planned
+  docs: planned
+  covers: the unified L2 cache, its banking and its place between the L1 caches and memory.
+
+cache/l2/chi.md:
+  rtl: planned
+  docs: planned
+  covers: the downstream channels from the L2 to the next level.
+  guess: true
+
+cache/l2/data_sram.md:
+  rtl: planned
+  docs: planned
+  covers: the L2 data SRAM.
+  guess: true
+
+cache/l2/directory.md:
+  rtl: planned
+  docs: planned
+  covers: the L2 directory and how it tracks the L1 copies of each line.
+  guess: true
+
+cache/l2/error_handling.md:
+  rtl: planned
+  docs: planned
+  covers: error detection and handling in the L2.
+  guess: true
+
+cache/l2/main_pipeline.md:
+  rtl: planned
+  docs: planned
+  covers: the L2 request arbiter and main pipeline.
+  guess: true
+
+cache/l2/mmio_bridge.md:
+  rtl: planned
+  docs: planned
+  covers: the path for MMIO requests through the L2.
+  guess: true
+
+cache/l2/mshr.md:
+  rtl: planned
+  docs: planned
+  covers: the L2 miss status holding registers.
+  guess: true
+
+cache/l2/request_buffer.md:
+  rtl: planned
+  docs: planned
+  covers: the buffer for incoming requests from the L1 caches.
+  guess: true
+
+cache/l2/tilelink.md:
+  rtl: planned
+  docs: planned
+  covers: the upstream TileLink channels between the L1 caches and the L2.
+  guess: true
+
+# -- System ----------------------------------------------------------------
+
+system/csr.md:
+  rtl: planned
+  docs: planned
+  covers: the control and status registers; the CSR layouts and group structs are in csr_pkg, the CSR file itself is not built yet.
+  see:
+    - tasks: [SYS-001, SYS-002]
+  guess: true
+
+system/debug.md:
+  rtl: planned
+  docs: planned
+  covers: the debug module.
+  guess: true
+
+system/hpm.md:
+  rtl: planned
+  docs: planned
+  covers: the hardware performance monitor and its event counters.
+
+system/exceptions.md:
+  rtl: planned
+  docs: planned
+  covers: exceptions and traps; the frontend raises fetch faults today, and trap handling is not built yet.
+  see:
+    - demo: fd15_faults
+  guess: true
