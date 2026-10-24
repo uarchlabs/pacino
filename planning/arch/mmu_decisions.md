@@ -622,7 +622,9 @@ MMU-U6 CLOSED session-071 (Jeff). THE EFFECTIVE MEMORY TYPE IS
 
 ## 6a. Svnapot
 
-MMU-U7 SVNAPOT IS MANDATORY AND IS NOWHERE IN THIS TREE.
+MMU-U7 SVNAPOT IS MANDATORY. Ruled session-071 for the L1 TLB and
+       the walker; until session-070 it was absent from every
+       document in this tree.
        `rva23-profile.adoc` lists Svnapot, NAPOT translation
        contiguity, among the new mandatory privileged extensions
        in RVA23S64. It was optional in RVA22 and is not.
@@ -823,7 +825,9 @@ MMU-18 The L2 TLB's invalidate port, when it is added, is a
 MMU-17 and MMU-17a name three instructions; the five Svinval
 instructions are handled by MMU-U8 below. Session-071.
 
-MMU-U8 SVINVAL IS MANDATORY AND IS NOT IN MMU-17 OR MMU-17a.
+MMU-U8 SVINVAL IS MANDATORY. Adopted session-071 as the fence
+       equivalents, below; until then it was not in MMU-17 or
+       MMU-17a.
        `rva23-profile.adoc` lists Svinval, fine-grained
        address-translation cache invalidation, among the privileged
        extensions mandatory in RVA23S64 and carried from RVA22S64.
@@ -900,13 +904,6 @@ TD#118    No longer bounds the walker, which has its own port
 ## 11. Document History
 
 ```
-  2026-09-22  session-073. MMU-U9 raised from TD#122: with
-              PPN_WIDTH ruled at 24 against a 44-bit PTE PPN
-              field, nothing faults a PTE that names a physical
-              address this implementation cannot form. The cause
-              and the stage are not ruled, and the specification
-              has not been checked.
-
   2026-09-17  session-070 audit. MMU-U4 and MMU-U5 both turned on
               the same unread list. The ratified
               rva23-profile.adoc was fetched and the RVA23S64
@@ -977,6 +974,13 @@ TD#118    No longer bounds the walker, which has its own port
   2026-09-20  session-072. D30: Sstvala's requirement stated as the
               profile defines it; cause 20 is Shtvala and
               Shvstvala, not Sstvala.
+
+  2026-09-22  session-073. MMU-U9 raised from TD#122: with
+              PPN_WIDTH ruled at 24 against a 44-bit PTE PPN
+              field, nothing faults a PTE that names a physical
+              address this implementation cannot form. The cause
+              and the stage are not ruled, and the specification
+              has not been checked.
 
   2026-10-01  session-074. MMU-13 fixes the PMA bit positions as
               BP-116 built them. MMU-23 no longer says the widths
