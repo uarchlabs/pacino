@@ -9,7 +9,7 @@
 
 !!! note "Not written yet"
 
-    **Status:** Not in the current design. Documentation planned.
+    **Status:** RTL planned. Documentation planned.
 
     This page will cover detection of fusible instruction pairs before decode; no fusion logic is in the current frontend.
 

@@ -9,7 +9,7 @@
 
 !!! note "Not written yet"
 
-    **Status:** Not in the current design. Documentation planned.
+    **Status:** RTL planned. Documentation planned.
 
     This page will cover macro-op fusion, combining adjacent instructions into one operation; no fusion logic is in the current decoder.
 

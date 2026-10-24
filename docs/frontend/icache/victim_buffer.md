@@ -11,6 +11,6 @@
 
     **Status:** Not in the current design. Documentation planned.
 
-    This page will cover why the L1I has no victim buffer and no separate fill buffer (L1I-17).
+    This page will cover why pacino does not implement a victim buffer for the L1I (L1I-17).
 
 <!-- placeholder:end -->

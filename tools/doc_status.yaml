@@ -154,7 +154,7 @@ frontend/decode/float_decode.md:
       title: What RVA23 Actually Asks of a Decoder
 
 frontend/decode/fusion_combiner.md:
-  rtl: not-in-design
+  rtl: planned
   docs: planned
   covers: macro-op fusion, combining adjacent instructions into one operation; no fusion logic is in the current decoder.
   guess: true
@@ -218,7 +218,7 @@ frontend/fetch/ftq.md:
     - demo: fd21_commit
 
 frontend/fetch/prefusion_detector.md:
-  rtl: not-in-design
+  rtl: planned
   docs: planned
   covers: detection of fusible instruction pairs before decode; no fusion logic is in the current frontend.
   guess: true
@@ -290,7 +290,7 @@ frontend/icache/tags.md:
 frontend/icache/victim_buffer.md:
   rtl: not-in-design
   docs: planned
-  covers: why the L1I has no victim buffer and no separate fill buffer (L1I-17).
+  covers: why pacino does not implement a victim buffer for the L1I (L1I-17).
 
 # -- Backend ---------------------------------------------------------------
 
@@ -594,7 +594,7 @@ mmu/l2tlb/hypervisor_ptw.md:
   guess: true
 
 mmu/l2tlb/ll_ptw.md:
-  rtl: not-in-design
+  rtl: planned
   docs: planned
   covers: a separate last-level page table walker; the current design has one walker that serves the ITLB directly.
   guess: true
@@ -757,7 +757,7 @@ cache/l2/tilelink.md:
 system/csr.md:
   rtl: planned
   docs: planned
-  covers: the control and status registers; the CSR layouts and group structs are in csr_pkg, the CSR file itself is not built yet.
+  covers: the control and status registers; the CSR layouts and group structs are in csr_pkg
   see:
     - tasks: [SYS-001, SYS-002]
   guess: true
@@ -776,7 +776,7 @@ system/hpm.md:
 system/exceptions.md:
   rtl: planned
   docs: planned
-  covers: exceptions and traps; the frontend raises fetch faults today, and trap handling is not built yet.
+  covers: exceptions and traps; the frontend raises fetch faults today, and trap handling
   see:
     - demo: fd15_faults
   guess: true

@@ -9,7 +9,7 @@
 
 !!! note "Not written yet"
 
-    **Status:** Not in the current design. Documentation planned.
+    **Status:** RTL planned. Documentation planned.
 
     This page will cover a separate last-level page table walker; the current design has one walker that serves the ITLB directly.
 
