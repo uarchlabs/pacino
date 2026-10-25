@@ -33,6 +33,9 @@ markdown_extensions:
   - pymdownx.details
   - pymdownx.superfences
 
+hooks:
+  - tools/mkdocs_showcase.py
+
 nav:
   - Home: index.md
   - Overview: overview.md
@@ -72,6 +75,36 @@ nav:
       - Return Address Stack: frontend/bpu/ras.md
       - History Module: frontend/bpu/history_module.md
       - Dual Prediction: frontend/bpu/dual_prediction.md
+
+  - Showcase:
+    - showcase/index.md
+    - Frontend Demo:
+      - How a Scenario Is Built and Run: showcase/fe_demo/demo_explainer.md
+      - FD-1 Reset and SRAM Initialization: showcase/fe_demo/fd01_reset_init.md
+      - FD-2 Steady-State Prediction and Fetch: showcase/fe_demo/fd02_steady.md
+      - FD-3 Two Branches in One Block: showcase/fe_demo/fd03_two_branch.md
+      - FD-4 p2 Override: showcase/fe_demo/fd04_p2_override.md
+      - FD-5 p3 Override: showcase/fe_demo/fd05_p3_override.md
+      - FD-6 Loop Predictor: showcase/fe_demo/fd06_loop_pred.md
+      - FD-7 Calls and Returns: showcase/fe_demo/fd07_calls_returns.md
+      - FD-8 Indirect Jump: showcase/fe_demo/fd08_indirect.md
+      - FD-9 TAGE Provider and Allocation: showcase/fe_demo/fd09_tage.md
+      - FD-10 Predecode Redirect: showcase/fe_demo/fd10_pd_redirect.md
+      - FD-11 Backend Mispredict: showcase/fe_demo/fd11_be_mispredict.md
+      - FD-12 Predictor Training: showcase/fe_demo/fd12_training.md
+      - FD-13 L1I Hit, Miss and MSHR Merge: showcase/fe_demo/fd13_l1i.md
+      - FD-14 Sv39, Sv39x4 and Svadu: showcase/fe_demo/fd14_translation.md
+      - FD-15 Fetch Faults: showcase/fe_demo/fd15_faults.md
+      - FD-16 Fetch Block Crossing a Page: showcase/fe_demo/fd16_page_cross.md
+      - FD-17 Compressed and Unaligned Code: showcase/fe_demo/fd17_rvc.md
+      - FD-18 Uncached Fetch: showcase/fe_demo/fd18_uncached.md
+      - FD-19 FENCE.I and cbo.inval: showcase/fe_demo/fd19_fencei_cbo.md
+      - FD-20 Backpressure: showcase/fe_demo/fd20_backpressure.md
+      - FD-21 Commit: showcase/fe_demo/fd21_commit.md
+      - FD-22 SC Reversing Slot 1: showcase/fe_demo/fd22_sc_slot1.md
+      - FD-23 A Jump Behind Two Conditionals: showcase/fe_demo/fd23_jump_cut.md
+      - FD-24 A Call in Slot 1: showcase/fe_demo/fd24_call_slot1.md
+      - fe_top Connectivity Inventory: showcase/fe_demo/fe_top_connectivity.md
 
   - Backend:
     - Overview: backend/overview.md
