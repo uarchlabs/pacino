@@ -70,7 +70,7 @@ V+0x1000     mixed(4), jal x0,0                     halt
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 Each `jalr` is first mispredicted (no target known), so the backend
 redirects to the target; its fetch then faults. In the run (cyc is

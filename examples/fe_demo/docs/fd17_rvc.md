@@ -67,7 +67,7 @@ loop, 8 passes (it = 0..7), from top = +0x4E:
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. The 17-halfword window. F2 selects 17 halfwords from the block
    offset (`rtl/core/frontend/ifu/rtl/ifu_fetch.sv:445-448`), from the two

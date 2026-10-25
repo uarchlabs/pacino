@@ -72,7 +72,7 @@ Addresses derived from the source.
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. The backend. When a maintenance entry retires it stops taking
    decode's output (`mt_pend`) and raises `cmt_ifu_maint_val` with the

@@ -90,7 +90,7 @@ sub-modules:
 There are two views of the FE.
 
 The **block view** shows these units and the interfaces.  The annotations on the
-signals refer to sections of the [connectivity inventory](https://github.com/uarchlabs/pacino/blob/main/examples/fe_demo/docs/fe_top_connectivity.md), which lists each signal.
+signals refer to sections of the [connectivity inventory](../showcase/fe_demo/fe_top_connectivity.md), which lists each signal.
 
 [![Block view of the Pacino frontend](fe_block.svg)](fe_block.svg)
 
@@ -321,7 +321,7 @@ include a markdown write up, FST waves, Surfer configuration files and a make
 based build environment.
 
 You can find this information at [frontend
-demonstration](https://github.com/uarchlabs/pacino/tree/main/examples/fe_demo).
+demonstration](../showcase/index.md).
 
 ## <span style="color: var(--md-accent-fg-color)">References</span>
 

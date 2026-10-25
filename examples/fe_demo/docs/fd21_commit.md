@@ -62,7 +62,7 @@ f+0x42 ret                 f returns to main
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. The watermark. The backend raises `bkend_ftq_commit_val` with
    `bkend_ftq_commit_idx` the newest FTQ entry all of whose

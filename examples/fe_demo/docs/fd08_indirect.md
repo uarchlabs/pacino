@@ -65,7 +65,7 @@ jn+18               jal x0,top         back to top on passes 0..38
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. The FTB jump slot holds one target per jump (`jmp.tgt`, written from
    `ftb_upd_jmp_target_u0`,

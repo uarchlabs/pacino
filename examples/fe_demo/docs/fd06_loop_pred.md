@@ -54,7 +54,7 @@ itop = 0x8000_000E   mixed(3)                                    8 bytes
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 The loop predictor is `rtl/core/frontend/bpu/rtl/loop_pred.sv`, one
 bank per slot.

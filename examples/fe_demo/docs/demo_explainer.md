@@ -27,7 +27,7 @@ Paths are relative to the repository root unless they begin with
 ## 1. What a scenario is
 
 A scenario is one short program run on the pacino front end, `fe_top`,
-to make one behaviour visible in a waveform. The scenarios are listed
+to make one behavior visible in a waveform. The scenarios are listed
 in `planning/showcase/fe_demo_scenarios.md` as FD-1 to FD-24. Each has
 a make target named `fdNN_<name>`, for example `fd09_tage`, and three
 files of its own:
@@ -182,7 +182,7 @@ lines are for debugging and do not follow the result-line format.
 ## 5. The result line and the proof
 
 Each scenario has a proof: a condition on counts taken from the design
-during the run, which shows that the behaviour occurred. The counts are
+during the run, which shows that the behavior occurred. The counts are
 kept by the monitors in `tb/fe_demo_mon.svh`, which sample design
 signals at every rising clock edge while the measurement window,
 `tb.meas`, is open. The window opens at the release of reset and

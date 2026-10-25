@@ -56,7 +56,7 @@ top+0x100 = 0x8000_0108
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. No prediction on the first pass. The uBTB and FTB are trained from
    resolved branches (FD-12), so before a JAL first retires the block

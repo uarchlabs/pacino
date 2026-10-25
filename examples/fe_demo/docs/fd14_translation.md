@@ -59,7 +59,7 @@ V            mixed(8), jal x0,0           halt
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. Single-stage walks. The first fetch of the reset page and of C miss
    the ITLB and walk with V=0 (`itlb_l2t_v` 0). In the run: VPN 0x80000

@@ -80,7 +80,7 @@ c+0x300 mixed(2), then jal x0,0 (halt)
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. Uncached marking. On an ITLB hit the IFU translation queue marks
    the page uncached when its effective attributes are not both

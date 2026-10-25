@@ -47,7 +47,7 @@ top+62 bne x6,x0,top      taken on passes 0..38, 40 passes
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. Decode. With `dec_ibuf_rdy` low three cycles in four, the ibuf's
    read port presents a bundle that is not taken.

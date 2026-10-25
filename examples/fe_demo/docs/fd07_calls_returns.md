@@ -72,7 +72,7 @@ A1+4   mixed(1); bne x6,x0,top          back edge, taken on passes 0..6
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 The RAS is `rtl/core/frontend/bpu/rtl/ras.sv`.
 

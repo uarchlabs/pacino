@@ -8,6 +8,7 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'examples/fe_demo/docs/**'
+      - 'tools/mkdocs_showcase.py'
 
 permissions:
   contents: write

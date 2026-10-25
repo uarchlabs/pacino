@@ -65,7 +65,7 @@ then mixed(3), jal x0,0                   halt, at +0x7E
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. Hits. `L1iReadLatency` is 2
    (`rtl/core/frontend/icache/rtl/l1i_pkg.sv:122`). A hit leaves the

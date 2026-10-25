@@ -74,7 +74,7 @@ that its update falls after the measurement window closes.
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. Resolution and conversion. `ftq_upd_conv`
    (`rtl/core/frontend/ftq/rtl/ftq_upd_conv.sv`) forms the per-slot

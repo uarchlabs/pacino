@@ -54,7 +54,7 @@ b+0x1002     mixed(8), jal x0,0             halt
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. The block crosses. `ifu_xlate` marks a block as crossing when its
    start PC's page offset is at least `CROSS_FROM` 0xFE0, 32 bytes

@@ -627,12 +627,13 @@ Copyright (c) 2026 Jeff Nye, uarchlabs.com
 
 Pacino is dual licensed:
 
-- Documentation, blogs and articles, including the contents of `docs/`
-  and `blogs/`, are licensed under the Creative Commons Attribution 4.0
-  International License (CC BY 4.0). See
-[LICENSE-CC-BY-4.0](LICENSES/CC-BY-4.0.txt).
-- All other material is licensed under the Apache License, Version 2.0.
-  See [LICENSE](LICENSES/Apache-2.0.txt).
+- Documentation, blogs and articles, including the contents of `docs/`,
+  `blogs/` and `examples/*/docs/`, are licensed under the Creative Commons
+  Attribution 4.0 International License (CC BY 4.0). See
+  [LICENSE-CC-BY-4.0](LICENSES/CC-BY-4.0.txt).
+- All other material, including the RTL, tools, planning documents, task
+  files, handoffs and READMEs, is licensed under the Apache License,
+  Version 2.0. See [LICENSE](LICENSES/Apache-2.0.txt).
 
 See [NOTICE](NOTICE) for attribution requirements.
 

@@ -61,7 +61,7 @@ fn = 0x8000_0400     mixed(2); ret           return to 0x8000_0014
 
 ---
 
-## 2. Why the program produces the behaviour
+## 2. Why the program produces the behavior
 
 1. The backend redirect. The in-order backend resolves each branch
    against the FTQ's prediction and on a difference raises
@@ -131,7 +131,7 @@ errors.
 - Departure from FD-11 in `planning/showcase/fe_demo_scenarios.md`: the
   spec's program is "a data-dependent branch the predictors get wrong".
   The build's branch has a pseudo-random outcome chosen by the writer
-  (tb_fe_top `misp_call`); no data dependence is modelled. The proof
+  (tb_fe_top `misp_call`); no data dependence is modeled. The proof
   matches the spec.
 
 ---
