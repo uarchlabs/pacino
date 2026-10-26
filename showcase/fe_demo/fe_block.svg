@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1820" height="1060" viewBox="0 0 1820 1060">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2328"/></marker><style>.sans{font-family:Helvetica,Arial,sans-serif}.mono{font-family:Menlo,Consolas,monospace}</style></defs>
+<rect width="1820" height="1060" fill="#ffffff"/>
+<text x="30" y="40" class="sans" font-size="22" text-anchor="start" font-weight="bold" fill="#1f2328">pacino front end: fe_top</text>
+<text x="30" y="62" class="sans" font-size="12" text-anchor="start" font-weight="normal" fill="#59636e">Blocks and interfaces as built. Numbers are sections of examples/fe_demo/docs/fe_top_connectivity.md. NUM_PRED_SLOTS = 2.</text>
+<rect x="200" y="110" width="1310" height="790" rx="10" fill="none" stroke="#8c959f" stroke-width="2" stroke-dasharray="6 4"/>
+<text x="215" y="132" class="sans" font-size="15" text-anchor="start" font-weight="bold" fill="#59636e">fe_top</text>
+<text x="1495" y="890" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#59636e" font-style="italic">in: clk, rstn (4.1)</text>
+<rect x="230" y="200" width="240" height="640" rx="6" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1.5"/>
+<text x="350.0" y="220" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">bp_cluster</text>
+<text x="350.0" y="236" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_bpu</text>
+<text x="244" y="283" class="sans" font-size="12" text-anchor="start" font-weight="bold" fill="#3b6ea5">p1</text>
+<rect x="276" y="260" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="319.0" y="282.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">uBTB</text>
+<rect x="370" y="260" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="413.0" y="282.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">loop_pred</text>
+<text x="244" y="343" class="sans" font-size="12" text-anchor="start" font-weight="bold" fill="#3b6ea5">p2</text>
+<rect x="276" y="320" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="319.0" y="342.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">FTB</text>
+<rect x="370" y="320" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="413.0" y="342.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">TAGE</text>
+<rect x="276" y="368" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="319.0" y="390.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">ITTAGE</text>
+<rect x="370" y="368" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="413.0" y="390.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">RAS</text>
+<text x="244" y="451" class="sans" font-size="12" text-anchor="start" font-weight="bold" fill="#3b6ea5">p3</text>
+<rect x="276" y="428" width="86" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="319.0" y="450.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">SC</text>
+<rect x="276" y="496" width="180" height="36" rx="4" fill="#ffffff" stroke="#3b6ea5" stroke-width="1"/>
+<text x="366.0" y="518.0" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#1f2328">bp_history</text>
+<text x="244" y="519" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#3b6ea5">hist</text>
+<text x="242" y="572" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#59636e">p0 request in; p1 to p3</text>
+<text x="242" y="586" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#59636e">predictions out; updates</text>
+<text x="242" y="600" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#59636e">at u0, applied at u1</text>
+<text x="242" y="630" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#59636e">RAS top of stack read at p0</text>
+<text x="242" y="800" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#59636e" font-style="italic">in: fe_cfg aging, sc_enable,</text>
+<text x="242" y="814" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#59636e" font-style="italic">ftb_fastpath_en (4.10)</text>
+<rect x="700" y="200" width="160" height="640" rx="6" fill="#f7ead2" stroke="#a0702a" stroke-width="1.5"/>
+<text x="780.0" y="220" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">FTQ</text>
+<text x="780.0" y="236" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_ftq</text>
+<text x="780.0" y="814" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e" font-style="italic">in: fe_cfg.sc_enable</text>
+<path d="M 470 250 L 700 250" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="244" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">p0 prediction request  3.1</text>
+<path d="M 700 300 L 470 300" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="294" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">p1 initial prediction  3.4</text>
+<path d="M 700 350 L 470 350" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="344" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">p2, p3 slot correction  3.5</text>
+<path d="M 700 400 L 470 400" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="394" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">p2 block correction  3.6</text>
+<path d="M 700 450 L 470 450" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="444" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">p2, p3 redirects  3.7</text>
+<path d="M 700 500 L 470 500" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="494" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">p2, p3 metadata  3.8</text>
+<path d="M 700 550 L 470 550" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="544" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">RAM init readies  3.2</text>
+<path d="M 700 600 L 470 600" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="594" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">queue status  3.3</text>
+<path d="M 470 650 L 700 650" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="644" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">updates u0, per predictor  3.9</text>
+<path d="M 470 700 L 700 700" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="694" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">FTB update u0  3.10</text>
+<path d="M 470 750 L 700 750" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="744" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">RAS commit, restore  3.11</text>
+<path d="M 470 800 L 700 800" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="794" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">history rollback  3.12</text>
+<path d="M 470 818 L 700 818" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="585.0" y="834" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">checkpoint pointers (to FTQ)  3.12</text>
+<rect x="1010" y="280" width="160" height="320" rx="6" fill="#dcefdc" stroke="#3f7f45" stroke-width="1.5"/>
+<text x="1090.0" y="300" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">IFU</text>
+<text x="1090.0" y="316" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_ifu</text>
+<text x="1090.0" y="350" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#59636e">F0 to F3</text>
+<text x="1090.0" y="366" class="sans" font-size="12" text-anchor="middle" font-weight="normal" fill="#59636e">predecode</text>
+<rect x="900" y="700" width="160" height="100" rx="6" fill="#ebe0f5" stroke="#6f4f99" stroke-width="1.5"/>
+<text x="980.0" y="720" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">ITLB</text>
+<text x="980.0" y="736" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_itlb, with PMP/PMA</text>
+<text x="980.0" y="762" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e" font-style="italic">in: fe_csr (4.9),</text>
+<text x="980.0" y="776" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e" font-style="italic">ITLB invalidate (4.11)</text>
+<rect x="1110" y="700" width="150" height="100" rx="6" fill="#dcefdc" stroke="#3f7f45" stroke-width="1.5"/>
+<text x="1185.0" y="720" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">L1I</text>
+<text x="1185.0" y="736" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_l1i</text>
+<rect x="1265" y="360" width="100" height="160" rx="6" fill="#dcefdc" stroke="#3f7f45" stroke-width="1.5"/>
+<text x="1315.0" y="380" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">ibuf</text>
+<text x="1315.0" y="396" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_ibuf</text>
+<rect x="1400" y="360" width="90" height="160" rx="6" fill="#dcefdc" stroke="#3f7f45" stroke-width="1.5"/>
+<text x="1445.0" y="380" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">decode</text>
+<text x="1445.0" y="396" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_dec</text>
+<text x="1445.0" y="506" class="sans" font-size="10" text-anchor="middle" font-weight="normal" fill="#59636e" font-style="italic">in: ext_enable</text>
+<path d="M 860 330 L 1010 330" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="935.0" y="312" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">translation request</text>
+<text x="935.0" y="325" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">3.13</text>
+<path d="M 860 400 L 1010 400" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="935.0" y="393" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">fetch request  3.14</text>
+<path d="M 860 450 L 1010 450" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="935.0" y="443" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">flush  3.15</text>
+<path d="M 1010 540 L 860 540" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="935.0" y="515" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">predecode</text>
+<text x="935.0" y="528" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">writeback  3.16</text>
+<path d="M 1030 600 L 1030 700" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1050 700 L 1050 600" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1020" y="640" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#1f2328">↓ translate VPN</text>
+<text x="1020" y="654" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#1f2328">↑ PPN or fault</text>
+<text x="1020" y="668" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#1f2328">3.20</text>
+<path d="M 1120 600 L 1120 700" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1140 600 L 1140 700" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1160 700 L 1160 600" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1172" y="628" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">↓ fetch request  3.17</text>
+<text x="1172" y="642" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">↓ invalidate  3.19</text>
+<text x="1172" y="656" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">↑ 64-byte line  3.18</text>
+<path d="M 1170 410 L 1265 410" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1217.5" y="403" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">16 slots</text>
+<text x="1217.5" y="425" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">3.21</text>
+<path d="M 1265 470 L 1170 470" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1217.5" y="463" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">ready</text>
+<path d="M 1365 440 L 1400 440" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1382.5" y="433" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">8</text>
+<text x="1382.5" y="455" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">3.22</text>
+<rect x="1590" y="160" width="200" height="700" rx="6" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1690.0" y="180" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">backend</text>
+<text x="1690.0" y="196" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">testbench in-order model</text>
+<text x="1690.0" y="224" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">rename and dispatch,</text>
+<text x="1690.0" y="238" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">execute, commit</text>
+<path d="M 1490 420 L 1590 420" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1540" y="400" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">decoded bundle</text>
+<text x="1540" y="413" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">4.2</text>
+<path d="M 1590 545 L 1315 545 L 1315 520" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1450" y="538" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">decode ready  4.2</text>
+<path d="M 1590 575 L 1170 575" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<text x="1380" y="568" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">FENCE.I, cbo.inval  4.6</text>
+<path d="M 730 200 L 730 132 L 1575 132 L 1575 210 L 1590 210" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1590 230 L 1560 230 L 1560 150 L 760 150 L 760 200" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1590 250 L 1545 250 L 1545 168 L 790 168 L 790 200" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1590 270 L 1530 270 L 1530 186 L 820 186 L 820 200" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1180" y="128" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">resolution ready  4.3</text>
+<text x="1180" y="146" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">resolution  4.3</text>
+<text x="1180" y="164" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">redirect  4.4</text>
+<text x="1180" y="182" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">commit  4.5</text>
+<path d="M 1300 168 L 1300 360" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1306" y="300" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">redirect</text>
+<text x="1306" y="314" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">clears ibuf</text>
+<rect x="880" y="950" width="180" height="80" rx="6" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="970.0" y="970" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">page table walker</text>
+<text x="970.0" y="986" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">u_ptw, testbench</text>
+<rect x="1130" y="950" width="190" height="80" rx="6" fill="#f2f3f5" stroke="#8c959f" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="1225.0" y="970" class="sans" font-size="14" text-anchor="middle" font-weight="bold" fill="#1f2328">memory model</text>
+<text x="1225.0" y="986" class="mono" font-size="11" text-anchor="middle" font-weight="normal" fill="#59636e">testbench, one image</text>
+<path d="M 940 800 L 940 950" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 980 950 L 980 800" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="932" y="866" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#1f2328">↓ walk request</text>
+<text x="932" y="880" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#1f2328">↑ result  4.7</text>
+<path d="M 1150 800 L 1150 950" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<path d="M 1200 950 L 1200 800" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="1210" y="866" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">↓ line request (A)</text>
+<text x="1210" y="880" class="sans" font-size="11" text-anchor="start" font-weight="normal" fill="#1f2328">↑ line data (D)  4.8</text>
+<path d="M 1060 990 L 1130 990" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)" marker-start="url(#ah)"/>
+<text x="1095.0" y="984" class="sans" font-size="11" text-anchor="middle" font-weight="normal" fill="#1f2328">PTE</text>
+<path d="M 780 840 L 780 900" fill="none" stroke="#1f2328" stroke-width="1.6" marker-end="url(#ah)"/>
+<text x="772" y="892" class="sans" font-size="11" text-anchor="end" font-weight="normal" fill="#1f2328">ftq_full, ftq_empty  4.12</text>
+<rect x="230" y="940" width="22" height="14" rx="3" fill="#dbe9f7" stroke="#3b6ea5" stroke-width="1"/>
+<text x="260" y="952" class="sans" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">RTL instance inside fe_top</text>
+<rect x="230" y="964" width="22" height="14" rx="3" fill="#f2f3f5" stroke="#8c959f" stroke-width="1" stroke-dasharray="6 4"/>
+<text x="260" y="976" class="sans" font-size="12" text-anchor="start" font-weight="normal" fill="#1f2328">testbench model outside fe_top</text>
+<text x="230" y="1002" class="sans" font-size="12" text-anchor="start" font-weight="normal" fill="#59636e" font-style="italic">in: ... marks a fe_top input wired to that block</text>
+</svg>
