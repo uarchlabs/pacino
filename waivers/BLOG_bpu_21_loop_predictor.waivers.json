@@ -1,0 +1,111 @@
+{
+  "generated_by": "ticfinder",
+  "source": "blogs/BLOG_bpu_21_loop_predictor.md",
+  "waivers": {
+    "03bf31": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 22,
+      "enabled": true,
+      "text": "LP, TAGE and SC"
+    },
+    "447932": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 88,
+      "enabled": true,
+      "text": ", covering the read before write"
+    },
+    "b6f6f6": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 114,
+      "enabled": true,
+      "text": "H2, the  bp_history  checkpoint rewrite, was never shown firing on its own: the mutation that remove"
+    },
+    "7931fa": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 130,
+      "enabled": true,
+      "text": ", carrying predictor tables between programs"
+    },
+    "8c65a4": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_negated_apposition",
+      "line_when_waived": 160,
+      "enabled": true,
+      "text": "a target confidence, not a direction"
+    },
+    "d7d2c3": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_parallel_sibling",
+      "line_when_waived": 166,
+      "enabled": true,
+      "text": "from the cluster nets that feed  bp_history , not from  bp_history 's state"
+    },
+    "e21208": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_negated_apposition",
+      "line_when_waived": 207,
+      "enabled": true,
+      "text": "blocks, not branches"
+    },
+    "568d65": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 209,
+      "enabled": true,
+      "text": "rather than"
+    },
+    "2fd63c": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 254,
+      "enabled": true,
+      "text": "instead of reverting the fix"
+    },
+    "99fa5c": {
+      "construction": "CORRECTIVE_CONTRAST",
+      "pattern": "cc_coordinated",
+      "line_when_waived": 272,
+      "enabled": true,
+      "text": "BP-121's task asked for package changes but not for port declarations"
+    },
+    "0591a5": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 274,
+      "enabled": true,
+      "text": "added, removed or changed to be reported with its declaration"
+    },
+    "7d5e40": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 280,
+      "enabled": true,
+      "text": "While writing BP-127, it took an answer I had given about a different item as approval, opened a tec"
+    },
+    "6429d2": {
+      "construction": "PARTICIPIAL_TAIL",
+      "pattern": "participial_tail",
+      "line_when_waived": 288,
+      "enabled": true,
+      "text": ", reversing my earlier ruling to leave it as specified"
+    },
+    "187284": {
+      "construction": "TRICOLON",
+      "pattern": "tricolon",
+      "line_when_waived": 295,
+      "enabled": true,
+      "text": "I set BP-126's scope, confirmed its three provisional choices, ruled PD-17 for the prose and for the"
+    },
+    "c7398d": {
+      "construction": "ALTERNATIVE_FRAMING",
+      "pattern": "af_rather_instead",
+      "line_when_waived": 305,
+      "enabled": true,
+      "text": "rather than from the RTL"
+    }
+  }
+}
