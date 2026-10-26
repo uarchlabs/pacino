@@ -78,8 +78,8 @@ nav:
 
   - Showcase:
     - showcase/index.md
-    - Frontend Demo:
-      - How a Scenario Is Built and Run: showcase/fe_demo/demo_explainer.md
+    - Frontend Demos:
+      - Scenario Common Description: showcase/fe_demo/demo_explainer.md
       - FD-1 Reset and SRAM Initialization: showcase/fe_demo/fd01_reset_init.md
       - FD-2 Steady-State Prediction and Fetch: showcase/fe_demo/fd02_steady.md
       - FD-3 Two Branches in One Block: showcase/fe_demo/fd03_two_branch.md
