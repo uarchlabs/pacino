@@ -22,7 +22,6 @@ RTL is in SystemVerilog, simulation with Verilator 5.048
 
 1. [Quick start](#quick-start)
 1. [Project Status](#project-status)
-1. [Optional tools](#optional-tools)
 1. [Directory Structure](#directory-structure)
 1. [Constants](#constants)
 1. [Tools](#tools)
@@ -38,7 +37,7 @@ RTL is in SystemVerilog, simulation with Verilator 5.048
 - Clone pacino
 - Install the Ubuntu prereqs
 - Set the Pacino environment variables
-- Compile the submodules
+- Build the tools
 - Run basic checks
 - Run code coverage
 
@@ -56,9 +55,29 @@ git submodule update --init --recursive
 
 ## Install system prerequisites
 
+The Debian/Ubuntu packages are listed in `tools/apt-requirements.txt`,
+grouped by the tool that needs them. No project script installs
+packages; install them all with:
+
 ```bash
-cd pacino 
-bash tools/prereqs.sh
+cd pacino
+sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)
+```
+
+Surfer, the waveform viewer, is built with Rust. Install Rust with
+rustup (this edits your `.bashrc` and `.profile`):
+
+```bash
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+```
+
+The Python packages for the scripts, the docs site and ticfinder are
+listed in `tools/requirements.txt` (on Ubuntu 24.04 and later, install
+them into a virtual environment instead of with `--user`):
+
+```bash
+python3 -m pip install --user -r tools/requirements.txt
 ```
 
 ## Set the environment 
@@ -69,57 +88,59 @@ cd pacino
 . tools/setup.sh
 ```
 
-## Compile the submodules
-
-### Compile and install spike
-
-Spike is the `tools/spike` submodule (riscv-isa-sim, version 1.1.1-dev,
-submodule commit 20feb9c2). Requires `tools/prereqs.sh` to have been run
-and `RVA_ROOT` set by `tools/setup.sh`.
+## Build the tools
 
 ```bash
 cd $RVA_ROOT
-git submodule update --init tools/spike   # if not cloned recursively
-cd tools/spike
-mkdir -p build
-cd build
-../configure --prefix=$RVA_ROOT/tools
-make -j$(nproc)
-make install
+tools/build_tools.sh
 ```
 
-`--prefix=$RVA_ROOT/tools` installs to `$RVA_ROOT/tools/bin`:
-`spike`, `spike-dasm`, `spike-log-parser`, `elf2hex`, `xspike`,
-`termios-xspike`. This is the path `rtl/Vars.mk` (`SPIKE`) and
-`tools/check_spike_decode.py` expect. Do not use a different prefix.
+This builds the three project tools into `$RVA_ROOT/tools/bin`, the
+paths `rtl/Vars.mk` expects (`VERILATOR`, `SPIKE`, `SURFER`):
 
-Spike's build dependencies are installed by the `#Spike` block of
-`tools/prereqs.sh`, among them `device-tree-compiler`,
-`build-essential`, `libboost-regex-dev` and `libboost-system-dev`.
+| Tool      | Version    | Source                                         |
+|-----------|------------|------------------------------------------------|
+| Verilator | 5.048      | `tools/verilator` submodule                    |
+| Spike     | 1.1.1-dev  | `tools/spike` submodule (commit 20feb9c2)      |
+| Surfer    | v0.7.0     | gitlab.com/surfer-project/surfer, cloned into `tools/surfer` |
 
-Check the install:
+It also checks the Embecosm RISC-V toolchain
+(`riscv-embecosm-embedded-ubuntu2204-20250309`: GCC 15.0.1, Clang 21) in
+`RVA_EXT_TOOLS` (`rtl/Vars.mk`, default
+`/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin`). That is a
+2.3 GB prebuilt release and is not built; when it is missing the script
+prints these commands:
 
 ```bash
-$RVA_ROOT/tools/bin/spike --help | head -1    # Spike RISC-V ISA Simulator 1.1.1-dev
-echo "DASM(0505)" | $RVA_ROOT/tools/bin/spike-dasm --isa=rv64gc   # c.addi a0, 1
+curl -LO https://buildbot.embecosm.com/job/riscv-embedded-ubuntu2204/76/artifact/riscv-embecosm-embedded-ubuntu2204-20250309.tar.gz
+sudo tar -xzf riscv-embecosm-embedded-ubuntu2204-20250309.tar.gz -C /usr/local
 ```
 
-Run the spike-dasm decode check (needs the Embecosm toolchain at
+A tool already installed at the right version is not rebuilt. A missing
+submodule is initialized. If a package or Rust is missing, the script
+prints the command to install it and does not build that tool. Each
+tool is attempted even if an earlier one fails; the summary lists
+which failed and the exit status is non-zero.
+
+```bash
+tools/build_tools.sh --check         # report only, build nothing
+tools/build_tools.sh verilator spike # named tools only, e.g. no Surfer
+JOBS=4 tools/build_tools.sh          # make parallelism; default nproc,
+                                     # capped at one job per 2 GB
+```
+
+Each tool also has its own script, `tools/check_<tool>.sh [--build]`,
+which `build_tools.sh` runs.
+
+Spike installs `spike`, `spike-dasm`, `spike-log-parser`, `elf2hex`,
+`xspike` and `termios-xspike`. `tools/check_spike_decode.py` also
+expects them in `tools/bin`. Run the spike-dasm decode check (needs the
+Embecosm toolchain at
 `/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309`, see Constants):
 
 ```bash
 make -C $RVA_ROOT/tools            # builds rva23_insn_ref.disasm
 make -C $RVA_ROOT/tools spike_all  # spike_oracle.csv, then check_spike_decode.py
-```
-
-### Compile and install verilator
-
-```bash
-cd $RVA_ROOT/tools/verilator
-autoconf
-./configure --prefix=$RVA_ROOT/tools
-make -j4
-make install
 ```
 
 ## Run basic checks
@@ -162,41 +183,6 @@ Interactive status is this [diagram](https://uarchlabs.github.io/pacino/overview
 See also uarchlabs [FAQ](https://uarchlabs.com/faq.html)
 
 ---
-# Optional tools
-I have replaced Gtkwave with Surfer.
-
-## Surfer - Install Rust
-
-NOTE: This install modifies your .bashrc.
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs
-source $HOME/.cargo/env
-```
-
-## Surfer - Install system dependencies
-```
-sudo apt update
-sudo apt install -y build-essential pkg-config libssl-dev \
-  libgtk-3-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev
-```
-
-## Surfer - Clone and build 
-
-Note: This has rust's characteristic long link times. It can be lengthy.
-
-```bash
-# presumes you have run pacino/tools/setup.sh
-cd $RVA_ROOT/tools
-
-git clone https://gitlab.com/surfer-project/surfer.git
-cd surfer
-git submodule update --init --recursive
-cargo build --release
-cargo install --path surfer
-surfer --version # verify
-```
-
 # Directory Structure
 
 `$RVA_ROOT` is an environment variable pointing to the current top of the tree.

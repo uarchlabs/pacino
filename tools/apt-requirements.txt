@@ -1,0 +1,78 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# tools/apt-requirements.txt -- Debian/Ubuntu packages needed to build and
+# run the project tools. One package per line. A line "# [tool]" starts
+# the group for tools/check_<tool>.sh; a package may appear in several
+# groups. Everything after # is a comment.
+#
+# The scripts never install packages. Install all of them with:
+#   sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)
+
+# [verilator]
+# From the Verilator install guide. g++, make and perl are also needed
+# to build every model Verilator generates.
+git
+help2man
+perl
+python3
+make
+autoconf
+g++
+flex
+bison
+libfl2
+libfl-dev
+zlib1g
+zlib1g-dev
+
+# [spike]
+# device-tree-compiler is needed at run time: spike calls dtc.
+build-essential
+autoconf
+git
+device-tree-compiler
+libboost-regex-dev
+libboost-system-dev
+
+# [surfer]
+# Rust is not a package here; it comes from rustup, see check_surfer.sh.
+build-essential
+pkg-config
+libssl-dev
+git
+curl
+libgtk-3-dev
+libxcb-render0-dev
+libxcb-shape0-dev
+libxcb-xfixes0-dev
+
+# [fe_demo]
+# gtkwave is not the viewer (Surfer is). It is the only Ubuntu package
+# that provides fst2vcd, which examples/fe_demo/waves/fe_demo_sigs.py
+# runs to read each FST header. No check script reads this group.
+gtkwave
+
+# [other]
+# Carried over from the former tools/prereqs.sh, less the packages in the
+# groups above. No check script reads this group. lcov is used by the
+# coverage targets (make cov). Most of the rest are the
+# riscv-gnu-toolchain build prerequisites; why each is needed here, and
+# why jq and zenity are, is not recorded.
+gcc
+automake
+autotools-dev
+libmpc-dev
+libmpfr-dev
+libgmp-dev
+gawk
+jq
+texinfo
+gperf
+libtool
+patchutils
+bc
+libexpat-dev
+lcov
+zenity

@@ -133,8 +133,9 @@ make view opens it with a note. S missing prints the usage; an S that
 is not a scenario lists the names. Either fails.
 
 The viewer is the variable SURFER. Its default, set in rtl/Vars.mk, is
-$(HOME)/.cargo/bin/surfer; the command line or the environment may set
-it, for example SURFER=surfer for the one on PATH. SURFER_LOG, default
+$(RVA_ROOT)/tools/bin/surfer, built by tools/build_tools.sh; the command
+line or the environment may set it, for example SURFER=surfer for the
+one on PATH. SURFER_LOG, default
 warn, sets Surfer's log level (RUST_LOG): warn hides the INFO lines
 Surfer prints on every start and keeps its warnings and errors, such as
 a command in the .sucl it does not understand; SURFER_LOG=info gives
@@ -196,7 +197,7 @@ The FST gives the slot count and the signal names, and the markers are
 placed from it. Either
 script takes scenario names; with none it does every scenario.
 chk_sucl.py takes SURFER from the environment, default
-~/.cargo/bin/surfer as for make view:
+$RVA_ROOT/tools/bin/surfer as for make view:
 
 ```
   make -k scenarios

@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Jeff Nye, uarchlabs.com
+# SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
+#
+# tools/requirements.txt -- Python packages for the project scripts and
+# the docs site. Versions are the ones in use when this file was written.
+#
+# Install with:
+#   python3 -m pip install --user -r tools/requirements.txt
+# On Ubuntu 24.04 and later pip refuses --user installs into the system
+# Python (PEP 668); use a virtual environment instead.
+
+# The docs site: mkdocs.yml, theme material with pymdownx extensions
+mkdocs==1.6.1
+mkdocs-material==9.7.6
+pymdown-extensions==10.21.2
+
+# tools/gen_doc_placeholders.py reads tools/doc_status.yaml
+PyYAML>=5.4
+
+# tools/ticfinder, the description writing-rule check, and its English
+# model
+spacy==3.8.16
+en_core_web_md @ https://github.com/explosion/spacy-models/releases/\
+download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl

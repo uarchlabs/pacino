@@ -636,7 +636,8 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |            |                                |                                   | coverage; TD#38 closed BP-126.|
 | Spike      | --                             | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
 |            |                                |                                   | issue.                        |
-| Surfer     | --                             | $(HOME)/.cargo/bin/surfer         | The one waveform viewer.      |
+| Surfer     | v0.7.0                         | $(RVA_ROOT)/tools/bin/surfer      | The one waveform viewer.      |
+|            |                                |                                   | Built by build_tools.sh.      |
 |            |                                |                                   | SURFER ?= in rtl/Vars.mk.     |
 |            |                                |                                   | examples/fe_demo/waves/       |
 |            |                                |                                   | chk_sucl.py has the same      |

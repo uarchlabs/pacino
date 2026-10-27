@@ -11,8 +11,9 @@
 #   python3 waves/chk_sucl.py [scenario ...]
 # With no names, every scenario that has an FST in out/. Needs a display:
 # Surfer opens a window for each file and closes it. The viewer is the
-# environment's SURFER, else ~/.cargo/bin/surfer, the default rtl/Vars.mk
-# gives make view (FDT-9a).
+# environment's SURFER, else $RVA_ROOT/tools/bin/surfer, the default
+# rtl/Vars.mk gives make view (FDT-9a). RVA_ROOT defaults to the repo
+# holding this file.
 #
 # For each scenario, Surfer loads out/<s>/<s>.fst with a copy of the
 # command file that ends by saving Surfer's state and exiting. The check
@@ -52,8 +53,10 @@ from fe_demo_sigs import (NAMES, fmt, fst_header, fst_names, fst_values,
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DOCS = os.path.join(HERE, '..', 'docs')
+RVA_ROOT = os.environ.get('RVA_ROOT',
+                          os.path.join(HERE, '..', '..', '..'))
 SURFER = os.environ.get('SURFER',
-                        os.path.expanduser('~/.cargo/bin/surfer'))
+                        os.path.join(RVA_ROOT, 'tools', 'bin', 'surfer'))
 FORM = ['1. What the scenario shows', '2. The program', '3. Walkthrough',
         '4. Events']
 ANSI = re.compile(r'\x1b\[[0-9;]*m')

@@ -1,9 +1,10 @@
 # riscv-codesign/tools/Makefile
 .PHONY: default clean
 
-RV_TOOLS=/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309
-RCC=$(RV_TOOLS)/bin/riscv64-unknown-elf-gcc
-ROBJD=$(RV_TOOLS)/bin/riscv64-unknown-elf-objdump
+# RVA_EXT_TOOLS, the Embecosm toolchain bin directory, is set in Vars.mk
+include $(RVA_ROOT)/rtl/Vars.mk
+RCC=$(RVA_EXT_TOOLS)/riscv64-unknown-elf-gcc
+ROBJD=$(RVA_EXT_TOOLS)/riscv64-unknown-elf-objdump
 
 #OTHER=zicbop_zcb_zvkb
 MARCH=-march=rv64imafdc_v_h_sscofpmf_sstc_svinval_svnapot_svpbmt_zawrs_zba_zbb_zbc_zbs_zfa_zfh_zfhmin_zicbom_zicboz_zicntr_zifencei_zicond_zihintntl_zihintpause_zihpm_zkt_zk_zkn_zknd_zkne_zknh_zbkb_zbkc_zbkx_zicbop_zcb_zvkb
@@ -35,8 +36,6 @@ clean:
 # ------------------------------------------------------------------
 # spike-dasm oracle regression targets
 # ------------------------------------------------------------------
-SPIKE_DASM=spike/install/bin/spike-dasm
-
 .PHONY: spike_oracle spike_check spike_all
 
 spike_oracle:

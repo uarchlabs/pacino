@@ -30,7 +30,7 @@
 #
 # view runs the scenario first when its FST is missing or older than
 # its model. Surfer is the one supported viewer (FDT-12). The variable
-# SURFER names it, default $(HOME)/.cargo/bin/surfer from rtl/Vars.mk,
+# SURFER names it, default $(RVA_ROOT)/tools/bin/surfer from rtl/Vars.mk,
 # and the command line or the environment may set it; for example
 # make view S=fd09_tage SURFER=surfer takes the surfer on PATH.
 # SURFER_LOG, default warn, is Surfer's log level; SURFER_LOG=info gives

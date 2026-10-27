@@ -6,8 +6,8 @@
 TITLE:     "Closing Predictor Technical Debt in LP, TAGE and SC"
 FILE:      BLOG_bpu_21_loop_predictor.md
 AUTHOR:    Jeff Nye
-DATE:      2026-10-19
-STATUS:    REVIEW BEFORE POSTING
+DATE:      2026-10-26
+STATUS:    COMPLETE
 COPYRIGHT: "Copyright 2026 Jeff Nye"
 ```
 
@@ -378,4 +378,7 @@ virtualization. He is the author of Pacino and the uarchlabs methodology
 documented here.*
 
 *Connect on [LinkedIn](https://www.linkedin.com/in/jeff-nye-21353926).*
+
+*Updated w/ ticfinder.*
+
 <!-- ticfinder_on -->

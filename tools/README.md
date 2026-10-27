@@ -6,13 +6,20 @@
 ```
 | Name | Description |
 |------|-------------|
+| apt-requirements.txt    | required packages, grouped by tool |
 | backfill_prompts.py     | automate maintenance on prompts |
 | bin                     | tools install |
 | blog_handoff.sh         | automate handoff transfer for blogs |
+| build_tools.sh          | check and build verilator, spike, surfer; check embecosm |
 | cachegen                | uarchlabs cachegen tool |
+| check_embecosm.sh       | check embecosm RISC-V toolchain |
+| check_lib.sh            | shared code for check_<tool>.sh |
 | check_rva23_coverage.py | RVA23 gap analysis |
 | check_spdx.py           | license header check |
+| check_spike.sh          | check/build spike |
 | check_spike_decode.py   | use spike_oracle.csv check for decode support |
+| check_surfer.sh         | check/build surfer |
+| check_verilator.sh      | check/build verilator |
 | cov_table.py            | emits BPU coverage tables |
 | create_docs_stubs.sh    | populate empty doc tree |
 | gen_sessions.py         | create the sessions.json, err checking |
@@ -26,9 +33,9 @@
 | make_context.sh         | disposable |
 | Makefile                | spike build |
 | mk_pkg.sh               | disposable |
-| prereqs.sh              | required packages |
 | README.md               | ... |
 | regress.sh              | git hook regression script |
+| requirements.txt        | required Python packages (pip) |
 | rename_mcf.py           | disposable |
 | riscv-opcodes           | submodule |
 | run_tf.sh               | ticfinder util |
@@ -43,12 +50,28 @@
 | share                   | tools install share |
 | spike                   | simulator |
 | spike_oracle.csv        | see above |
+| surfer                  | waveform viewer source, cloned by check_surfer.sh |
 | ticfinder               | uarchlabs spacy based text analysis |
 | validate_and_extract.py | pre-run task file checker |
 | verilator               | rtl simulator |
 
 
 ## Usage
+
+## build_tools.sh
+
+Checks Verilator 5.048, Spike 1.1.1-dev and Surfer v0.7.0 in `tools/bin`
+and builds any that is missing or at the wrong version. It also checks
+the Embecosm toolchain in `RVA_EXT_TOOLS`, which it does not build. It installs no
+system packages; when one is missing it prints the `apt install`
+command. See "Build the tools" in the top-level README.md.
+
+```bash
+tools/build_tools.sh                  # check, build what is needed
+tools/build_tools.sh --check          # report only
+tools/build_tools.sh spike            # one tool
+tools/check_spike.sh [--build]        # the per-tool script it runs
+```
 
 ## check_rva23_coverage.py
 
@@ -74,7 +97,7 @@ opcodes and CSRs. Used as ground truth for coverage checking and decoder validat
 
 Git submodule at `tools/spike/`. Functional ISA simulator; `spike-dasm` is
 used as an independent disassembler (TOOLS-002). Installed to `tools/bin/`
-(see "Compile and install spike").
+by `build_tools.sh` (see "Build the tools" in the top-level README.md).
 
 spike-dasm input format uses `DASM(hex)` tokens, not raw hex values.
 Extensions must be enumerated; there is no `G` shortcut beyond `rv64g`.
