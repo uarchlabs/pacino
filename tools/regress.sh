@@ -30,6 +30,13 @@
 # target still fails, no listed line is malformed, and no Makefile has
 # a regression-set error.
 # Logs are kept in a temp directory whose path is printed at the end.
+#
+# Pass record: a passing run writes the full HEAD sha to
+# .git/regress_pass, which tools/hooks/pre-push checks. It is written only
+# when the run tested exactly that commit: at both the start and the end
+# of the run, no tracked file differs from HEAD (changes inside submodule
+# work trees, such as build output, are ignored) and rtl/ holds no
+# untracked file. A failing run removes the record.
 
 set -u
 
@@ -59,6 +66,18 @@ else
   GIT_SHA=n/a
   GIT_STATE="not a git tree"
 fi
+
+# -- pass record. Prints the full HEAD sha when the tree is exactly that
+# commit as far as the regression can see; prints nothing otherwise.
+tested_commit() {
+  git -C "$ROOT" rev-parse --git-dir > /dev/null 2>&1 || return 0
+  git -C "$ROOT" diff --quiet --ignore-submodules=dirty HEAD 2>/dev/null \
+    || return 0
+  [ -z "$(git -C "$ROOT" status --porcelain -- rtl 2>/dev/null)" ] \
+    || return 0
+  git -C "$ROOT" rev-parse HEAD 2>/dev/null
+}
+PASS_SHA0=$(tested_commit)
 
 # -- known failures: key "<dir> <target>" -> TD field
 declare -A KNOWN_TD=()
@@ -302,11 +321,30 @@ for x in "${NOW_PASSES[@]}";  do echo "KNOWN FAILURE NOW PASSES: $x"; done
 for x in "${STALE_KNOWN[@]}"; do echo "STALE KNOWN-FAILURE ENTRY: $x"; done
 echo "logs: $LOG_DIR"
 
+PASS_FILE=""
+if git -C "$ROOT" rev-parse --git-dir > /dev/null 2>&1; then
+  PASS_FILE=$(cd "$ROOT" && realpath -m "$(git rev-parse --git-path \
+    regress_pass)")
+fi
+
 if [ ${#SET_ERRORS[@]} -ne 0 ] || [ ${#FAIL_NEW[@]} -ne 0 ] || \
    [ ${#NOW_PASSES[@]} -ne 0 ] || [ ${#STALE_KNOWN[@]} -ne 0 ] || \
    [ ${#BAD_KNOWN[@]} -ne 0 ]; then
+  [ -n "$PASS_FILE" ] && rm -f "$PASS_FILE"
   echo "RESULT: FAIL"
   exit 1
+fi
+
+# Record the pass only if the tree was the same clean commit throughout
+PASS_SHA1=$(tested_commit)
+if [ -n "$PASS_FILE" ] && [ -n "$PASS_SHA0" ] && \
+   [ "$PASS_SHA0" = "$PASS_SHA1" ]; then
+  echo "$PASS_SHA0" > "$PASS_FILE"
+  echo "pass recorded for $PASS_SHA0 (push allowed)"
+elif [ -n "$PASS_FILE" ]; then
+  rm -f "$PASS_FILE"
+  echo "pass NOT recorded: tracked changes or untracked rtl/ files, or" \
+       "HEAD moved during the run (push will be refused)"
 fi
 echo "RESULT: PASS"
 exit 0
