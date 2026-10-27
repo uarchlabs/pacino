@@ -3,52 +3,72 @@
 # Copyright (c) 2026 Jeff Nye, uarchlabs.com
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 #
-# tools/hooks/pre-push -- refuse a push of any commit without a passing
-# regression
+# tools/hooks/pre-push -- run the regression and refuse a push of any
+# commit without a passing one
 #
-# The regression is not run here. git opens the connection to the remote
-# before it runs this hook, and a regression long enough to leave that
-# connection idle made the push fail after the regression passed. Run
-# it first:
-#   ./tools/regress.sh
-# A passing run on a clean tree writes the commit's sha to
-# .git/regress_pass (see tools/regress.sh). This hook allows the push only
-# when every commit being pushed is that commit. It takes no measurable
-# time.
+# A passing ./tools/regress.sh run on a clean tree writes the commit's sha
+# to .git/regress_pass (see tools/regress.sh). A push of that commit is
+# allowed at once. For any other commit this hook runs the regression,
+# which tests the working tree, so the commit pushed must be HEAD.
 #
-# This file is not installed by the project tooling. To install, from the
-# repo root:
+# git opens the connection to the remote before it runs this hook. A
+# regression long enough to leave that connection idle lets GitHub drop
+# it, and the push fails after the regression passes. tools/setup.sh sets
+# core.sshCommand with SSH keepalives to prevent that.
+#
+# tools/setup.sh installs this hook:
 #   git config core.hooksPath tools/hooks
 # git then runs hooks from tools/hooks/ instead of .git/hooks/.
 # git passes the refs being pushed on stdin, one line each:
 #   <local ref> <local sha> <remote ref> <remote sha>
 
 ZERO=0000000000000000000000000000000000000000
+ROOT=$(git rev-parse --show-toplevel) || exit 1
 PASS_FILE=$(git rev-parse --git-path regress_pass) || exit 1
-pass_sha=""
-[ -f "$PASS_FILE" ] && pass_sha=$(cat "$PASS_FILE")
+HEAD_SHA=$(git rev-parse HEAD) || exit 1
 
-refused=0
-checked=0
+read_pass() {
+  pass_sha=""
+  [ -f "$PASS_FILE" ] && pass_sha=$(cat "$PASS_FILE")
+}
+
+# Read every ref first; the regression must not consume git's stdin
+refs=()
 while read -r local_ref local_sha _remote_ref _remote_sha; do
   # A branch deletion pushes no commit
   [ "$local_sha" = "$ZERO" ] && continue
-  checked=1
-  if [ "$local_sha" != "$pass_sha" ]; then
-    echo "pre-push: $local_ref ($local_sha) has no passing regression."
-    refused=1
+  refs+=("$local_ref $local_sha")
+done
+[ ${#refs[@]} -eq 0 ] && exit 0
+
+# Run the regression unless every commit pushed already passed
+read_pass
+need_run=0
+for r in "${refs[@]}"; do
+  sha=${r##* }
+  [ "$sha" = "$pass_sha" ] && continue
+  if [ "$sha" != "$HEAD_SHA" ]; then
+    echo "pre-push: ${r% *} ($sha) is not HEAD; the regression tests HEAD."
+    echo "pre-push: check it out, run ./tools/regress.sh, then push again."
+    echo "pre-push: Push refused."
+    exit 1
   fi
+  need_run=1
 done
 
-if [ $refused -ne 0 ]; then
-  if [ -n "$pass_sha" ]; then
-    echo "pre-push: the last passing regression was on $pass_sha."
-  else
-    echo "pre-push: no passing regression is recorded."
+if [ $need_run -ne 0 ]; then
+  echo "pre-push: running ./tools/regress.sh on $HEAD_SHA"
+  if ! (cd "$ROOT" && ./tools/regress.sh) </dev/null; then
+    echo "pre-push: regression FAILED. Push refused."
+    exit 1
   fi
-  echo "pre-push: check out the commit, run ./tools/regress.sh on a clean"
-  echo "pre-push: tree, then push again. Push refused."
-  exit 1
+  read_pass
+  if [ "$pass_sha" != "$HEAD_SHA" ]; then
+    echo "pre-push: regression passed but no pass was recorded for"
+    echo "pre-push: $HEAD_SHA (see the 'pass NOT recorded' reason above)."
+    echo "pre-push: Push refused."
+    exit 1
+  fi
 fi
-[ $checked -ne 0 ] && echo "pre-push: regression passed on $pass_sha."
+echo "pre-push: regression passed on $pass_sha."
 exit 0
