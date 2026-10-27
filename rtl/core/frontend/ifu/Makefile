@@ -133,7 +133,7 @@ $(eval $(call sim_rule,ifu))
 #    differs from the checked-in file, so the vectors stay what the
 #    toolchain says and are not a one-off. The regenerated copy goes in
 #    the expander's sim directory, $(VER_OUT)_ifu_rvc_exp. The generator
-#    runs llvm-objdump and clang from $(RVA_EXT_TOOLS) (rtl/Vars.mk,
+#    runs llvm-objdump and clang from $(EMBECOSM_BIN) (rtl/Vars.mk,
 #    BP-132, TD#176); the target fails, naming the variable, if either
 #    is absent. BP-132 dropped riscv64-unknown-elf-objcopy: clang now
 #    builds the input object, and the result is byte-identical.
@@ -144,7 +144,7 @@ oracle_ifu_rvc_exp:
 	$(Q)$(call need_ext_tool,oracle_ifu_rvc_exp,llvm-objdump)
 	$(Q)$(call need_ext_tool,oracle_ifu_rvc_exp,clang)
 	$(Q)mkdir -p $(VER_OUT)_ifu_rvc_exp
-	$(Q)python3 -I $(TB_DIR)/gen_ifu_rvc_exp_oracle.py $(RVA_EXT_TOOLS) \
+	$(Q)python3 -I $(TB_DIR)/gen_ifu_rvc_exp_oracle.py $(EMBECOSM_BIN) \
 	  $(VER_OUT)_ifu_rvc_exp/oracle_regen.hex
 	$(Q)cmp $(ORACLE_HEX) $(VER_OUT)_ifu_rvc_exp/oracle_regen.hex
 	@echo "oracle_ifu_rvc_exp: PASS, $(ORACLE_HEX) matches the toolchain"

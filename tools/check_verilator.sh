@@ -49,6 +49,8 @@ if [ -n "$MISSING_PKGS" ]; then
 fi
 
 # --- Build --------------------------------------------------------------
+# The subshell stands alone and $? is tested after: set -e is ignored in a
+# subshell tested by || or if, so a failed step would not stop the build.
 (
   set -e
   [ -f "$SRC/configure.ac" ] || \
@@ -63,6 +65,10 @@ fi
   ./configure --prefix="$RVA_ROOT/tools"
   make -j"$JOBS"
   make install
-) || { echo "FAILED  verilator build"; exit 1; }
+)
+if [ $? -ne 0 ]; then
+  echo "FAILED  verilator build"
+  exit 1
+fi
 
 verify_verilator

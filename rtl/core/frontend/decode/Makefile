@@ -129,14 +129,14 @@ oracle_dec_sweep:
 	@echo "oracle_dec_sweep: PASS, $(SWEEP_ORACLE) matches spike-dasm"
 
 # -- the directed test words, assembled and disassembled (BP-124).
-#    clang is the one out-of-repo tool, from $(RVA_EXT_TOOLS)
+#    clang is the one out-of-repo tool, from $(EMBECOSM_BIN)
 #    (rtl/Vars.mk, BP-132, TD#176); the target fails naming the
 #    variable if it is absent.
 asm_dec_words:
 	@echo "[assembling] tb_instr_decoder directed words"
 	$(Q)$(call need_ext_tool,asm_dec_words,clang)
 	$(Q)mkdir -p $(OBJ_WORDS)
-	$(Q)python3 -I -B tb/chk_dec_words.py $(RVA_EXT_TOOLS)/clang \
+	$(Q)python3 -I -B tb/chk_dec_words.py $(EMBECOSM_BIN)/clang \
 	    $(SPIKE_DASM) \
 	    $(TB_DEC) $(OBJ_WORDS)
 

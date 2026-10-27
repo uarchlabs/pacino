@@ -3,16 +3,22 @@ VERILATOR ?=$(RVA_ROOT)/tools/bin/verilator
 SPIKE     ?=$(RVA_ROOT)/tools/bin/spike
 SURFER    ?=$(RVA_ROOT)/tools/bin/surfer
 
-# RVA_EXT_TOOLS (BP-132, TD#176, TD#147): the directory of the needed
-# tools that are not in the repository. Today that is the embecosm
-# RISC-V toolchain, which is too large to be in it: clang for
-# asm_dec_words (decode) and oracle_ifu_rvc_exp (ifu), and llvm-objdump
-# for oracle_ifu_rvc_exp. Set it in the environment or on the make
-# command line to use another directory.
-RVA_EXT_TOOLS ?= /usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin
+# EMBECOSM_BIN (BP-132, TD#176, TD#147): the bin directory of the
+# Embecosm RISC-V toolchain, EMBECOSM_RELEASE, which is too large to be in
+# the repository: clang for asm_dec_words (decode) and oracle_ifu_rvc_exp
+# (ifu), llvm-objdump for oracle_ifu_rvc_exp, riscv64-unknown-elf-gcc and
+# riscv64-unknown-elf-objdump for tools/Makefile.
+# tools/check_embecosm.sh --build asks for the path of an existing install
+# or installs the release into tools/, and saves the answer in
+# tools/local.mk (not tracked). Without that file the default is the
+# install in tools/. The environment or the make command line overrides
+# both.
+EMBECOSM_RELEASE := riscv-embecosm-embedded-ubuntu2204-20250309
+-include $(RVA_ROOT)/tools/local.mk
+EMBECOSM_BIN ?= $(RVA_ROOT)/tools/$(EMBECOSM_RELEASE)/bin
 
 # $(call need_ext_tool,<target>,<tool>): a recipe line that fails, naming
-# RVA_EXT_TOOLS, when <tool> is not an executable in that directory.
-need_ext_tool = test -x $(RVA_EXT_TOOLS)/$(2) || { echo "$(1): $(2) not \
-found in RVA_EXT_TOOLS=$(RVA_EXT_TOOLS); set RVA_EXT_TOOLS (rtl/Vars.mk) \
-to the directory that holds it" >&2; exit 1; }
+# EMBECOSM_BIN, when <tool> is not an executable in that directory.
+need_ext_tool = test -x $(EMBECOSM_BIN)/$(2) || { echo "$(1): $(2) not \
+found in EMBECOSM_BIN=$(EMBECOSM_BIN); run tools/check_embecosm.sh \
+--build" >&2; exit 1; }

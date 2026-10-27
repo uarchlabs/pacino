@@ -10,8 +10,8 @@
 # that order. Each runs tools/check_<TOOL>.sh --build, or without --build
 # when --check is given (report only, nothing is built). Verilator, Spike
 # and Surfer install to $RVA_ROOT/tools/bin. The Embecosm toolchain is a
-# prebuilt release and is only checked; when it is missing the script
-# prints the download and install commands.
+# prebuilt release; when it is missing check_embecosm.sh asks for the
+# path of an existing install or installs it into $RVA_ROOT/tools/.
 #
 # No system package is installed. Install them first with:
 #   sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)

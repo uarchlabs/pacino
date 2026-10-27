@@ -23,7 +23,7 @@
 #      object's .text by the ELF reader below.
 #
 # THE TOOLS ARE llvm-objdump AND clang, from the directory given as the
-# first argument (the ifu Makefile passes $(RVA_EXT_TOOLS), rtl/Vars.mk,
+# first argument (the ifu Makefile passes $(EMBECOSM_BIN), rtl/Vars.mk,
 # BP-132, TD#176). Nothing else outside the repository is run.
 #
 # Neither step reads ifu_rvc_exp, the module under test, or
@@ -196,7 +196,7 @@ def main():
     for t in ("llvm-objdump", "clang"):
         if not os.access(os.path.join(tc, t), os.X_OK):
             sys.exit("oracle: " + t + " not found in " + tc +
-                     " (RVA_EXT_TOOLS, rtl/Vars.mk)")
+                     " (EMBECOSM_BIN, rtl/Vars.mk)")
 
     encs = [c for c in range(65536) if (c & 3) != 3]
     work = tempfile.mkdtemp(prefix="rvc_oracle.")

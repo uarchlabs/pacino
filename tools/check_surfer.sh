@@ -76,6 +76,8 @@ fi
 # --- Build --------------------------------------------------------------
 # The link step is slow. --no-track keeps cargo's .crates.toml and
 # .crates2.json out of tools/; --force then replaces a wrong binary.
+# The subshell stands alone and $? is tested after: set -e is ignored in a
+# subshell tested by || or if, so a failed step would not stop the build.
 (
   set -e
   [ -d "$SRC/.git" ] || git clone "$SURFER_URL" "$SRC"
@@ -86,6 +88,10 @@ fi
   git -C "$SRC" submodule update --init --recursive
   cargo install --locked --no-track --force --jobs "$JOBS" \
     --root "$RVA_ROOT/tools" --path "$SRC/surfer"
-) || { echo "FAILED  surfer build"; exit 1; }
+)
+if [ $? -ne 0 ]; then
+  echo "FAILED  surfer build"
+  exit 1
+fi
 
 verify_surfer

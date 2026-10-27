@@ -646,8 +646,8 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |            |                                |                                   | The FST reader of the         |
 |            |                                |                                   | examples/fe_demo/waves/       |
 |            |                                |                                   | scripts.                      |
-| RVA_EXT_   | --                             | rtl/Vars.mk, default              | Directory of needed tools not |
-| TOOLS      |                                | /usr/local/riscv-embecosm-        | in the repository: clang      |
+|EMBECOSM_BIN| --                             | rtl/Vars.mk, default              | Directory of needed tools not |
+|            |                                | /usr/local/riscv-embecosm-        | in the repository: clang      |
 |            |                                | embedded-ubuntu2204-20250309/bin  | (asm_dec_words,               |
 |            |                                |                                   | oracle_ifu_rvc_exp) and       |
 |            |                                |                                   | llvm-objdump                  |
@@ -656,7 +656,7 @@ ascend, [0:NUM_PRED_SLOTS-1].
 |            |                                | ticfinder.py                      | check (FDT-13a).              |
 | Vars.mk    | --                             | $(RVA_ROOT)/rtl/Vars.mk            | Common Makefile variables.    |
 |            |                                |                                   | VERILATOR, SPIKE, SURFER      |
-|            |                                |                                   | paths, RVA_EXT_TOOLS, all ?=. |
+|            |                                |                                   | paths, EMBECOSM_BIN, all ?=. |
 |            |                                |                                   | All RTL Makefiles             |
 |            |                                |                                   | include this file.            |
 |check_rva23_coverage.py | --    | ./tools                  | Uses submodule: tools/riscv-opcodes |

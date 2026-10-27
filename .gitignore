@@ -50,6 +50,10 @@ tools/include/
 tools/lib/
 tools/share/
 tools/__pycache__/
+tools/local.mk
+tools/riscv-embecosm-*/
+tools/.riscv-embecosm-*.tmp/
+tools/riscv-embecosm-*.tar.gz
 
 tools/rva23_ext_test
 tools/rva23_ext_test.disasm

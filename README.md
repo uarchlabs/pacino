@@ -105,16 +105,20 @@ paths `rtl/Vars.mk` expects (`VERILATOR`, `SPIKE`, `SURFER`):
 | Surfer    | v0.7.0     | gitlab.com/surfer-project/surfer, cloned into `tools/surfer` |
 
 It also checks the Embecosm RISC-V toolchain
-(`riscv-embecosm-embedded-ubuntu2204-20250309`: GCC 15.0.1, Clang 21) in
-`RVA_EXT_TOOLS` (`rtl/Vars.mk`, default
-`/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin`). That is a
-2.3 GB prebuilt release and is not built; when it is missing the script
-prints these commands:
+(`riscv-embecosm-embedded-ubuntu2204-20250309`: GCC 15.0.1, Clang 21), a
+prebuilt release, in `EMBECOSM_BIN` (`rtl/Vars.mk`). When it is not found
+the script asks for one of:
 
-```bash
-curl -LO https://buildbot.embecosm.com/job/riscv-embedded-ubuntu2204/76/artifact/riscv-embecosm-embedded-ubuntu2204-20250309.tar.gz
-sudo tar -xzf riscv-embecosm-embedded-ubuntu2204-20250309.tar.gz -C /usr/local
-```
+1. the bin directory of an existing install, e.g.
+   `/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin`
+2. a download (2.3 GB, 7.1 GB unpacked) and install into `tools/`, no
+   sudo
+3. skip
+
+The answer is saved in `tools/local.mk` (not tracked), which
+`rtl/Vars.mk` reads, so it is asked once. An `EMBECOSM_BIN` in the
+environment overrides it. Without a terminal the script prints the
+equivalent commands instead of asking.
 
 A tool already installed at the right version is not rebuilt. A missing
 submodule is initialized. If a package or Rust is missing, the script
@@ -135,8 +139,7 @@ which `build_tools.sh` runs.
 Spike installs `spike`, `spike-dasm`, `spike-log-parser`, `elf2hex`,
 `xspike` and `termios-xspike`. `tools/check_spike_decode.py` also
 expects them in `tools/bin`. Run the spike-dasm decode check (needs the
-Embecosm toolchain at
-`/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309`, see Constants):
+Embecosm toolchain in `EMBECOSM_BIN`, see above):
 
 ```bash
 make -C $RVA_ROOT/tools            # builds rva23_insn_ref.disasm

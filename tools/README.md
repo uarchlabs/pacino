@@ -10,9 +10,9 @@
 | backfill_prompts.py     | automate maintenance on prompts |
 | bin                     | tools install |
 | blog_handoff.sh         | automate handoff transfer for blogs |
-| build_tools.sh          | check and build verilator, spike, surfer; check embecosm |
+| build_tools.sh          | check and build verilator, spike, surfer; locate or install embecosm |
 | cachegen                | uarchlabs cachegen tool |
-| check_embecosm.sh       | check embecosm RISC-V toolchain |
+| check_embecosm.sh       | check/locate/install embecosm RISC-V toolchain |
 | check_lib.sh            | shared code for check_<tool>.sh |
 | check_rva23_coverage.py | RVA23 gap analysis |
 | check_spdx.py           | license header check |
@@ -30,6 +30,7 @@
 | include                 | install headers |
 | known_failures.txt      | deprecated |
 | lib                     | tools library |
+| local.mk                | not tracked; EMBECOSM_BIN saved by check_embecosm.sh |
 | make_context.sh         | disposable |
 | Makefile                | spike build |
 | mk_pkg.sh               | disposable |
@@ -62,9 +63,12 @@
 
 Checks Verilator 5.048, Spike 1.1.1-dev and Surfer v0.7.0 in `tools/bin`
 and builds any that is missing or at the wrong version. It also checks
-the Embecosm toolchain in `RVA_EXT_TOOLS`, which it does not build. It installs no
-system packages; when one is missing it prints the `apt install`
-command. See "Build the tools" in the top-level README.md.
+the Embecosm toolchain in `EMBECOSM_BIN` (`rtl/Vars.mk`). When that is
+missing it asks for the bin directory of an existing install, or
+downloads the release into `tools/`, and saves the answer in
+`tools/local.mk`. It installs no system packages; when one is missing it
+prints the `apt install` command. See "Build the tools" in the top-level
+README.md.
 
 ```bash
 tools/build_tools.sh                  # check, build what is needed
