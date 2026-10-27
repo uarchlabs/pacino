@@ -48,31 +48,14 @@ libxcb-render0-dev
 libxcb-shape0-dev
 libxcb-xfixes0-dev
 
-# [fe_demo]
-# gtkwave is not the viewer (Surfer is). It is the only Ubuntu package
-# that provides fst2vcd, which examples/fe_demo/waves/fe_demo_sigs.py
-# runs to read each FST header. No check script reads this group.
-gtkwave
+# [lcov]
+# lcov 1.x is Perl scripts, installed with make; nothing is compiled.
+git
+make
+perl
 
-# [other]
-# Carried over from the former tools/prereqs.sh, less the packages in the
-# groups above. No check script reads this group. lcov is used by the
-# coverage targets (make cov). Most of the rest are the
-# riscv-gnu-toolchain build prerequisites; why each is needed here, and
-# why jq and zenity are, is not recorded.
-gcc
-automake
-autotools-dev
-libmpc-dev
-libmpfr-dev
-libgmp-dev
-gawk
-jq
-texinfo
-gperf
-libtool
-patchutils
-bc
-libexpat-dev
-lcov
-zenity
+# [fst2vcd]
+# fst2vcd and the FST library it uses, compiled with gcc against zlib.
+build-essential
+git
+zlib1g-dev

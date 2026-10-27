@@ -914,10 +914,10 @@ cov_history:
 	$(Q)mkdir -p $(COV_DIR)/history/html
 	@echo "[simulating] cov_history"
 	$(Q)cd $(COV_DIR)/history && $(CURDIR)/obj_dir_cov_history/Vtb
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/history/coverage.info \
 	  $(COV_DIR)/history/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/history/html \
 	  $(COV_DIR)/history/coverage.info
 	@echo "[coverage]   history HTML at $(COV_DIR)/history/html/index.html"
@@ -939,10 +939,10 @@ cov_ubtb:
 	$(Q)mkdir -p $(COV_DIR)/ubtb/html
 	@echo "[simulating] cov_ubtb"
 	$(Q)cd $(COV_DIR)/ubtb && $(CURDIR)/obj_dir_cov_ubtb/Vtb
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/ubtb/coverage.info \
 	  $(COV_DIR)/ubtb/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/ubtb/html \
 	  $(COV_DIR)/ubtb/coverage.info
 	@echo "[coverage]   ubtb HTML at $(COV_DIR)/ubtb/html/index.html"
@@ -970,10 +970,10 @@ cov_loop_pred:
 	$(Q)mkdir -p $(COV_DIR)/loop_pred/html
 	@echo "[simulating] cov_loop_pred"
 	$(Q)cd $(COV_DIR)/loop_pred && $(CURDIR)/obj_dir_cov_loop_pred/Vtb
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/loop_pred/coverage.info \
 	  $(COV_DIR)/loop_pred/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/loop_pred/html \
 	  $(COV_DIR)/loop_pred/coverage.info
 	@echo "[coverage]   loop_pred HTML at $(COV_DIR)/loop_pred/html/index.html"
@@ -997,10 +997,10 @@ cov_tage_table:
 	@echo "[simulating] cov_tage_table"
 	$(Q)cd $(COV_DIR)/tage_table && \
 	  $(CURDIR)/obj_dir_cov_tage_table/Vtb +TAGE_FAST_INIT=1
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/tage_table/coverage.info \
 	  $(COV_DIR)/tage_table/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/tage_table/html \
 	  $(COV_DIR)/tage_table/coverage.info
 	@echo "[coverage]   tage_table HTML at $(COV_DIR)/tage_table/html/index.html"
@@ -1043,12 +1043,12 @@ cov_tage:
 	$(Q)cd $(COV_DIR)/tage/walk && $(CURDIR)/obj_dir_cov_tage/Vtb
 	$(Q)cd $(COV_DIR)/tage/fast && \
 	  $(CURDIR)/obj_dir_cov_tage/Vtb +TAGE_FAST_INIT=1
-	$(Q)verilator_coverage --write $(COV_DIR)/tage/coverage.dat \
+	$(Q)$(VERILATOR_COVERAGE) --write $(COV_DIR)/tage/coverage.dat \
 	  $(COV_DIR)/tage/walk/coverage.dat $(COV_DIR)/tage/fast/coverage.dat
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/tage/coverage.info \
 	  $(COV_DIR)/tage/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/tage/html \
 	  $(COV_DIR)/tage/coverage.info
 	@echo "[coverage]   tage HTML at $(COV_DIR)/tage/html/index.html"
@@ -1075,27 +1075,27 @@ cov_bp_cluster:
 	@echo "[simulating] cov_bp_cluster"
 	$(Q)cd $(COV_DIR)/bp_cluster && \
 	  $(CURDIR)/obj_dir_cov_bp_cluster/Vtb $(BP_CLUSTER_PLUSARGS)
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/bp_cluster/coverage.info \
 	  $(COV_DIR)/bp_cluster/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/bp_cluster/html \
 	  $(COV_DIR)/bp_cluster/coverage.info
 	@echo "[coverage]   bp_cluster HTML at $(COV_DIR)/bp_cluster/html/index.html"
 
 cov_bpu: cov_tage cov_tage_table cov_loop_pred cov_history cov_ubtb
 	$(Q)mkdir -p $(COV_DIR)/bpu/html
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write $(COV_DIR)/bpu/coverage.dat \
 	  $(COV_DIR)/tage/coverage.dat \
 	  $(COV_DIR)/tage_table/coverage.dat \
 	  $(COV_DIR)/loop_pred/coverage.dat \
 	  $(COV_DIR)/history/coverage.dat \
 	  $(COV_DIR)/ubtb/coverage.dat
-	$(Q)verilator_coverage \
+	$(Q)$(VERILATOR_COVERAGE) \
 	  --write-info $(COV_DIR)/bpu/coverage.info \
 	  $(COV_DIR)/bpu/coverage.dat
-	$(Q)genhtml --prefix $(RVA_ROOT) \
+	$(Q)$(GENHTML) --prefix $(RVA_ROOT) \
 	  --output-directory $(COV_DIR)/bpu/html \
 	  $(COV_DIR)/bpu/coverage.info
 	@echo "[coverage]   bpu merged HTML at $(COV_DIR)/bpu/html/index.html"

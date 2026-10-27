@@ -25,8 +25,28 @@
 # changes of a few signals; nslots(names) the slot count of the model
 # that wrote it; scenarios(n) the scenarios and their groups at n slots;
 # fmt() the display format of one signal, from FORMATS.
+import os
 import re
 import subprocess
+
+
+# ---------------------------------------------------------------------
+# FST2VCD, the fst2vcd to run, as rtl/Vars.mk names it. An FST2VCD in the
+# environment overrides it, as for make. RVA_ROOT defaults to the repo
+# holding this file.
+# ---------------------------------------------------------------------
+def _vars_mk(name):
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.abspath(os.environ.get(
+        'RVA_ROOT', os.path.join(here, '..', '..', '..')))
+    out = subprocess.run(
+        ['make', '-s', '-f', os.path.join(root, 'rtl', 'Vars.mk'),
+         'RVA_ROOT=' + root, '--eval', '_print_var: ; @echo $(%s)' % name,
+         '_print_var'], stdout=subprocess.PIPE, text=True, check=True)
+    return out.stdout.strip()
+
+
+FST2VCD = _vars_mk('FST2VCD')
 
 
 # ---------------------------------------------------------------------
@@ -54,7 +74,7 @@ import subprocess
 # left to write the whole dump (DOC-006).
 def fst_header(fst):
     lines = []
-    with subprocess.Popen(['fst2vcd', '-e', '-f', fst], stdout=subprocess.PIPE,
+    with subprocess.Popen([FST2VCD, '-e', '-f', fst], stdout=subprocess.PIPE,
                           text=True) as proc:
         for line in proc.stdout:
             if line.startswith('$enddefinitions'):
@@ -108,7 +128,7 @@ def fst_values(fst, paths):
     scope = []
     vals = {p: [] for p in paths}
     t = 0
-    with subprocess.Popen(['fst2vcd', '-f', fst], stdout=subprocess.PIPE,
+    with subprocess.Popen([FST2VCD, '-f', fst], stdout=subprocess.PIPE,
                           text=True) as proc:
         for line in proc.stdout:
             w = line.split()

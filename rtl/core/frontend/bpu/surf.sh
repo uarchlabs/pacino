@@ -3,5 +3,8 @@
 # Copyright (c) 2026 Jeff Nye, uarchlabs.com
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 # ==============================================================
-$RVA_ROOT/tools/surfer/target/release/surfer \
-    --state-file waves.surf.ron waves.fst
+# Open waves.fst (make sim_tage_manual) in Surfer. SURFER is read from
+# rtl/Vars.mk; a SURFER in the environment overrides it, as for make.
+SURFER=$(make -s -f "$RVA_ROOT/rtl/Vars.mk" \
+           --eval '_print_var: ; @echo $(SURFER)' _print_var) || exit 1
+"$SURFER" --state-file waves.surf.ron waves.fst

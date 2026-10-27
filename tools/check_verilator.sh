@@ -20,18 +20,21 @@ source "$(dirname "$0")/check_lib.sh" "$@"
 SRC="$RVA_ROOT/tools/verilator"
 VERILATOR_VERSION="5.048"
 
+# verilator_coverage is installed with verilator; rtl/Vars.mk names both
 verify_verilator() {
-  if [ ! -x "$BIN/verilator" ]; then
-    echo "MISSING verilator at $BIN/verilator"
-    return 1
-  fi
-  local version
-  version=$("$BIN/verilator" --version 2>&1 || true)
-  if [[ "$version" != "Verilator $VERILATOR_VERSION "* ]]; then
-    echo "BROKEN  verilator: expected $VERILATOR_VERSION, got: $version"
-    return 1
-  fi
-  echo "OK      verilator: $version at $BIN/verilator"
+  local t version
+  for t in verilator verilator_coverage; do
+    if [ ! -x "$BIN/$t" ]; then
+      echo "MISSING $t at $BIN/$t"
+      return 1
+    fi
+    version=$("$BIN/$t" --version 2>&1 || true)
+    if [[ "$version" != "Verilator $VERILATOR_VERSION "* ]]; then
+      echo "BROKEN  $t: expected $VERILATOR_VERSION, got: $version"
+      return 1
+    fi
+    echo "OK      $t: $version at $BIN/$t"
+  done
 }
 
 check_pkgs verilator

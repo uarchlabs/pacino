@@ -1,7 +1,17 @@
 
-VERILATOR ?=$(RVA_ROOT)/tools/bin/verilator
-SPIKE     ?=$(RVA_ROOT)/tools/bin/spike
-SURFER    ?=$(RVA_ROOT)/tools/bin/surfer
+# Every tool a Makefile or script runs is named here, not found on PATH.
+# The project tools are built into tools/bin by tools/build_tools.sh.
+# - GENHTML: lcov v1.15, the bpu coverage HTML reports. It reads the
+#   lcovrc installed with it, not ~/.lcovrc or /etc/lcovrc.
+# - FST2VCD: from GTKWave v3.3.104, run by
+#   examples/fe_demo/waves/fe_demo_sigs.py.
+VERILATOR          ?=$(RVA_ROOT)/tools/bin/verilator
+VERILATOR_COVERAGE ?=$(RVA_ROOT)/tools/bin/verilator_coverage
+SPIKE              ?=$(RVA_ROOT)/tools/bin/spike
+SURFER             ?=$(RVA_ROOT)/tools/bin/surfer
+GENHTML            ?=$(RVA_ROOT)/tools/bin/genhtml \
+                     --config-file $(RVA_ROOT)/tools/etc/lcovrc
+FST2VCD            ?=$(RVA_ROOT)/tools/bin/fst2vcd
 
 # EMBECOSM_BIN (BP-132, TD#176, TD#147): the bin directory of the
 # Embecosm RISC-V toolchain, EMBECOSM_RELEASE, which is too large to be in

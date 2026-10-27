@@ -10,9 +10,11 @@
 | backfill_prompts.py     | automate maintenance on prompts |
 | bin                     | tools install |
 | blog_handoff.sh         | automate handoff transfer for blogs |
-| build_tools.sh          | check and build verilator, spike, surfer; locate or install embecosm |
+| build_tools.sh          | check and build verilator, spike, surfer, lcov, fst2vcd; locate or install embecosm |
 | cachegen                | uarchlabs cachegen tool |
 | check_embecosm.sh       | check/locate/install embecosm RISC-V toolchain |
+| check_fst2vcd.sh        | check/build fst2vcd (GTKWave helper only) |
+| check_lcov.sh           | check/install lcov (genhtml) |
 | check_lib.sh            | shared code for check_<tool>.sh |
 | check_rva23_coverage.py | RVA23 gap analysis |
 | check_spdx.py           | license header check |
@@ -22,13 +24,16 @@
 | check_verilator.sh      | check/build verilator |
 | cov_table.py            | emits BPU coverage tables |
 | create_docs_stubs.sh    | populate empty doc tree |
+| etc                     | tools install etc (lcovrc) |
 | gen_sessions.py         | create the sessions.json, err checking |
 | gen_spike_oracle.py     | emits spike_oracle.csv |
 | get_cntx.sh             | disposable |
+| gtkwave                 | GTKWave source, cloned by check_fst2vcd.sh |
 | handoff.sh              | cat handoff files |
 | hooks                   | git hooks |
 | include                 | install headers |
 | known_failures.txt      | deprecated |
+| lcov                    | lcov source, cloned by check_lcov.sh |
 | lib                     | tools library |
 | local.mk                | not tracked; EMBECOSM_BIN saved by check_embecosm.sh |
 | make_context.sh         | disposable |
@@ -61,7 +66,8 @@
 
 ## build_tools.sh
 
-Checks Verilator 5.048, Spike 1.1.1-dev and Surfer v0.7.0 in `tools/bin`
+Checks Verilator 5.048, Spike 1.1.1-dev, Surfer v0.7.0, lcov v1.15 and
+fst2vcd (GTKWave v3.3.104) in `tools/bin`
 and builds any that is missing or at the wrong version. It also checks
 the Embecosm toolchain in `EMBECOSM_BIN` (`rtl/Vars.mk`). When that is
 missing it asks for the bin directory of an existing install, or
@@ -69,6 +75,11 @@ downloads the release into `tools/`, and saves the answer in
 `tools/local.mk`. It installs no system packages; when one is missing it
 prints the `apt install` command. See "Build the tools" in the top-level
 README.md.
+
+Every run is logged to `logs/pacino_setup_YYYY-MM-DD_N.log` (N counts
+the runs that day): a header with the date, user, host, OS, git branch
+and commit and the options, then all the output. `logs/` is not
+tracked.
 
 ```bash
 tools/build_tools.sh                  # check, build what is needed

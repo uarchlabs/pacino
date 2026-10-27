@@ -36,10 +36,11 @@ RTL is in SystemVerilog, simulation with Verilator 5.048
 
 - Clone pacino
 - Install the Ubuntu prereqs
-- Set the Pacino environment variables
+- Set the Pacino environment
 - Build the tools
-- Run basic checks
+- Run the regression
 - Run code coverage
+- Push
 
 ## Clone pacino
 Clone with submodules
@@ -80,13 +81,26 @@ them into a virtual environment instead of with `--user`):
 python3 -m pip install --user -r tools/requirements.txt
 ```
 
-## Set the environment 
-This sets variables `RVA_ROOT` and `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+## Set the environment
+
+Run this from the repo root, in every new terminal:
 
 ```bash
 cd pacino
 . tools/setup.sh
 ```
+
+It sets:
+
+- `RVA_ROOT`, the repo root, taken from the current directory
+- `CLAUDE_CODE_MAX_OUTPUT_TOKENS`
+- `core.hooksPath tools/hooks`, git config for this clone: installs the
+  pre-push hook that runs the regression (see Push)
+- `core.sshCommand` with SSH keepalives, git config for this clone: GitHub
+  does not drop the push connection while the hook runs the regression
+
+A clone does not inherit git config, so these are set here rather than
+committed. Setting them again is harmless.
 
 ## Build the tools
 
@@ -95,14 +109,18 @@ cd $RVA_ROOT
 tools/build_tools.sh
 ```
 
-This builds the three project tools into `$RVA_ROOT/tools/bin`, the
-paths `rtl/Vars.mk` expects (`VERILATOR`, `SPIKE`, `SURFER`):
+This builds the project tools into `$RVA_ROOT/tools/bin`, the paths
+`rtl/Vars.mk` expects (`VERILATOR`, `VERILATOR_COVERAGE`, `SPIKE`,
+`SURFER`, `GENHTML`, `FST2VCD`). No Makefile or script finds a tool on
+`PATH`:
 
 | Tool      | Version    | Source                                         |
 |-----------|------------|------------------------------------------------|
 | Verilator | 5.048      | `tools/verilator` submodule                    |
 | Spike     | 1.1.1-dev  | `tools/spike` submodule (commit 20feb9c2)      |
 | Surfer    | v0.7.0     | gitlab.com/surfer-project/surfer, cloned into `tools/surfer` |
+| lcov      | v1.15      | github.com/linux-test-project/lcov, cloned into `tools/lcov`; `genhtml` for the coverage reports |
+| fst2vcd   | GTKWave v3.3.104 | github.com/gtkwave/gtkwave, cloned into `tools/gtkwave`; only `fst2vcd` is built |
 
 It also checks the Embecosm RISC-V toolchain
 (`riscv-embecosm-embedded-ubuntu2204-20250309`: GCC 15.0.1, Clang 21), a
@@ -124,7 +142,9 @@ A tool already installed at the right version is not rebuilt. A missing
 submodule is initialized. If a package or Rust is missing, the script
 prints the command to install it and does not build that tool. Each
 tool is attempted even if an earlier one fails; the summary lists
-which failed and the exit status is non-zero.
+which failed and the exit status is non-zero. Each run is logged to
+`logs/pacino_setup_YYYY-MM-DD_N.log`; the last line printed names it.
+Send that file when reporting a setup problem.
 
 ```bash
 tools/build_tools.sh --check         # report only, build nothing
@@ -146,18 +166,32 @@ make -C $RVA_ROOT/tools            # builds rva23_insn_ref.disasm
 make -C $RVA_ROOT/tools spike_all  # spike_oracle.csv, then check_spike_decode.py
 ```
 
-## Run basic checks
+## Run the regression
+
+From the repo root:
 
 ```bash
-make -C $RVA_ROOT/rtl all
+./tools/regress.sh
 ```
+
+It finds every Makefile under `rtl/` and runs every test target in each,
+one make call per target, coverage targets included (about 15 minutes).
+It prints a summary block (git sha, one line per target, totals) and
+exits non-zero on any failure not listed in `tools/known_failures.txt`.
+`make -C rtl all` and `make -C rtl cov` are retired; they print this
+command and exit 1.
+
+A passing run on a clean tree records the commit in `.git/regress_pass`
+(see Push). The run prints `pass NOT recorded` when a tracked file
+differs from HEAD, `rtl/` has untracked files, or HEAD moved during the
+run.
 
 ## Run code coverage
 
-To measure code coverage
+The regression runs the BPU coverage targets. To run them alone:
 
 ```bash
-make -C $RVA_ROOT/rtl cov
+make -C $RVA_ROOT/rtl/core/frontend/bpu cov_bpu
 ```
 
 To view BPU coverage reports
@@ -165,6 +199,20 @@ To view BPU coverage reports
 ```bash
 firefox $RVA_ROOT/rtl/core/frontend/bpu/coverage/bpu/html/index.html
 ```
+
+## Push
+
+`git push` runs the regression through the pre-push hook
+(`tools/hooks/pre-push`, installed by `tools/setup.sh`):
+
+- a commit that already has a recorded pass is pushed at once;
+- otherwise the hook runs `./tools/regress.sh` on HEAD, and pushes on
+  PASS;
+- the push is refused when the regression fails, when no pass could be
+  recorded (see above), or when the commit pushed is not HEAD.
+
+To skip the wait at push time, run `./tools/regress.sh` first; a clean
+pass is recorded and the push then does not run it again.
 
 # Project Status
 
