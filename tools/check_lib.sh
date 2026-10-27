@@ -55,7 +55,9 @@ pkgs_for() {
 }
 
 # Report the packages of group TOOL; set MISSING_PKGS to those absent.
-# A removed package whose config files remain is not installed.
+# A removed package whose config files remain is not installed. When
+# PACINO_MISSING_PKGS names a file (tools/build_tools.sh sets it), each
+# absent package is also appended to it as "<tool> <package>".
 check_pkgs() {
   MISSING_PKGS=""
   if ! command -v dpkg-query >/dev/null 2>&1; then
@@ -71,6 +73,8 @@ check_pkgs() {
     else
       echo "MISSING pkg:    $p"
       MISSING_PKGS="$MISSING_PKGS $p"
+      [ -n "${PACINO_MISSING_PKGS:-}" ] && \
+        echo "$1 $p" >> "$PACINO_MISSING_PKGS"
     fi
   done
 }

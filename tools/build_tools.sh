@@ -60,7 +60,12 @@ LOG="$LOG_DIR/pacino_setup_$(date +%F)_$n.log"
 # so its last lines are written before the shell prompt returns.
 exec > >(tee -a "$LOG") 2>&1
 TEE_PID=$!
-trap 'exec >&- 2>&-; wait "$TEE_PID"' EXIT
+
+# The check scripts append each missing package here (check_lib.sh
+# check_pkgs); the summary ends with one apt command for all of them.
+PACINO_MISSING_PKGS=$(mktemp) || exit 1
+export PACINO_MISSING_PKGS
+trap 'rm -f "$PACINO_MISSING_PKGS"; exec >&- 2>&-; wait "$TEE_PID"' EXIT
 
 os=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME")
 echo "=== pacino setup log"
@@ -90,5 +95,12 @@ for t in $tools; do
     *)        echo "OK      $t" ;;
   esac
 done
+if [ -s "$PACINO_MISSING_PKGS" ]; then
+  need=$(awk '{ print $1 }' "$PACINO_MISSING_PKGS" | sort -u | xargs)
+  pkgs=$(awk '{ print $2 }' "$PACINO_MISSING_PKGS" | sort -u | xargs)
+  echo "Missing packages ($need):"
+  echo "  sudo apt install $pkgs"
+  echo "then run tools/build_tools.sh again."
+fi
 echo "log: $LOG"
 [ -z "$failed" ]

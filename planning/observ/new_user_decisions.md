@@ -30,13 +30,16 @@ NU-1   No Makefile or script finds a project tool on PATH. rtl/Vars.mk
          make -s -f $RVA_ROOT/rtl/Vars.mk --eval '_print_var: ; \
            @echo $(NAME)' _print_var
        Base system programs (bash, make, gcc/g++, python3, perl, git)
-       still come from PATH; Verilator itself runs g++ and make.
+       still come from PATH; Verilator itself runs g++ and make. Spike
+       runs dtc from PATH, but only to simulate; the project runs only
+       spike-dasm, which does not.
 NU-2   Every tool is installed per clone under $RVA_ROOT/tools (bin, etc,
        share, lib, include), with no sudo. The one exception is the
        Embecosm toolchain, which may be a shared install (NU-14).
 NU-3   The scripts never run sudo and never install a system package.
        When a package is missing they print the apt command and stop
-       before building. Users are assumed to have sudo to run that
+       before building that tool (build_tools.sh also gathers them into
+       one command, NU-10). Users are assumed to have sudo to run that
        command (decided 2026-10-27).
 NU-4   Each tool is pinned to one version, and each check script tests
        the installed tool against that pin, before and after a build.
@@ -99,6 +102,10 @@ Users of each tool:
   clang and llvm-objdump), tools/Makefile (riscv64-unknown-elf-gcc and
   -objdump).
 
+The regression (tools/regress.sh) needs Verilator, verilator_coverage,
+spike-dasm, genhtml and the Embecosm toolchain. Surfer and fst2vcd are
+not in it; a missing Surfer or fst2vcd does not block a push.
+
 Prerequisites outside tools/:
 
 - apt packages: tools/apt-requirements.txt, one group per check script
@@ -141,7 +148,12 @@ NU-9   A build runs in a subshell with set -e that stands alone, with $?
 NU-10  tools/build_tools.sh [--check] [TOOL...] runs check_<tool>.sh for
        verilator, spike, surfer, lcov, fst2vcd and embecosm, in that
        order, continuing past a failure, then prints an OK/FAIL summary
-       and exits non-zero if any failed.
+       and exits non-zero if any failed. A check script's own apt
+       command is easy to miss in a long run, so build_tools.sh exports
+       PACINO_MISSING_PKGS, a temporary file to which check_pkgs
+       (check_lib.sh) appends "<tool> <package>" for each package
+       missing. After the summary it prints one sudo apt install command
+       for all of them, without duplicates, and the tools that need them.
 NU-11  Every build_tools.sh run is logged to
        $RVA_ROOT/logs/pacino_setup_YYYY-MM-DD_N.log, N the lowest number
        unused that day: a header (date, user, host, OS, git branch and
@@ -259,7 +271,9 @@ New user (README.md Quick start):
   2. sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)
   3. rustup; pip install --user -r tools/requirements.txt
   4. . tools/setup.sh                 (repo root, every terminal)
-  5. tools/build_tools.sh             (answer the Embecosm prompt)
+  5. tools/build_tools.sh             (answer the Embecosm prompt; on a
+                                       missing package run the apt
+                                       command it ends with, then again)
   6. ./tools/regress.sh
   7. git push                         (runs the regression unless step 6
                                        recorded a pass for HEAD)
