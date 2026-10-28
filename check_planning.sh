@@ -229,6 +229,7 @@ INTF  tage_interfaces.md                80e89e517207
 INTF  ubtb_interfaces.md          a8e591bbeda2
 
 OBSV  fe_trace_decisions.md           5ec595a73e62
+OBSV  new_user_decisions.md           eb362050ebef
 SHOW  fe_demo_scenarios.md            7a55ae56d56a
 
 MISC  ras_theory_of_operation.md      d4e71726f007
