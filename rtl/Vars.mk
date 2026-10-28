@@ -16,8 +16,12 @@ FST2VCD            ?=$(RVA_ROOT)/tools/bin/fst2vcd
 # EMBECOSM_BIN (BP-132, TD#176, TD#147): the bin directory of the
 # Embecosm RISC-V toolchain, EMBECOSM_RELEASE, which is too large to be in
 # the repository: clang for asm_dec_words (decode) and oracle_ifu_rvc_exp
-# (ifu), llvm-objdump for oracle_ifu_rvc_exp, riscv64-unknown-elf-gcc and
-# riscv64-unknown-elf-objdump for tools/Makefile.
+# (ifu), llvm-objdump for oracle_ifu_rvc_exp, riscv32-unknown-elf-gcc and
+# riscv32-unknown-elf-objdump for tools/Makefile.
+# NOTE: the riscv32- tools build and read RV64 code. The release ships only
+# the riscv32- names; its gcc has RV64 multilibs, selected by -march=rv64...
+# -mabi=lp64d. Do not add riscv64- links; a user's install will not have
+# them.
 # tools/check_embecosm.sh --build asks for the path of an existing install
 # or installs the release into tools/, and saves the answer in
 # tools/local.mk (not tracked). Without that file the default is the

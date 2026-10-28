@@ -2,9 +2,12 @@
 .PHONY: default clean
 
 # EMBECOSM_BIN, the Embecosm toolchain bin directory, is set in Vars.mk
+# NOTE: riscv32-unknown-elf-gcc and -objdump build and read RV64 code. The
+# Embecosm release ships only the riscv32- names; its gcc has RV64
+# multilibs, and MARCH/MABI below select RV64 (rv64..., lp64d).
 include $(RVA_ROOT)/rtl/Vars.mk
-RCC=$(EMBECOSM_BIN)/riscv64-unknown-elf-gcc
-ROBJD=$(EMBECOSM_BIN)/riscv64-unknown-elf-objdump
+RCC=$(EMBECOSM_BIN)/riscv32-unknown-elf-gcc
+ROBJD=$(EMBECOSM_BIN)/riscv32-unknown-elf-objdump
 
 #OTHER=zicbop_zcb_zvkb
 MARCH=-march=rv64imafdc_v_h_sscofpmf_sstc_svinval_svnapot_svpbmt_zawrs_zba_zbb_zbc_zbs_zfa_zfh_zfhmin_zicbom_zicboz_zicntr_zifencei_zicond_zihintntl_zihintpause_zihpm_zkt_zk_zkn_zknd_zkne_zknh_zbkb_zbkc_zbkx_zicbop_zcb_zvkb

@@ -42,6 +42,23 @@ RTL is in SystemVerilog, simulation with Verilator 5.048
 - Run code coverage
 - Push
 
+Short path: the prerequisites step can be skipped. `build_tools.sh`
+finds what is missing and prints the command to install it:
+
+```bash
+git clone --recurse-submodules https://github.com/uarchlabs/pacino
+cd pacino
+. tools/setup.sh
+tools/build_tools.sh    # ends with any sudo apt install or rustup command
+                        # needed; run it, then run build_tools.sh again
+./tools/regress.sh
+```
+
+A tool whose packages are missing is not built; the others are. Rust is
+needed only for Surfer. The Python packages in `tools/requirements.txt`
+are not checked by any script; they are needed only for the docs site,
+`tools/gen_doc_placeholders.py` and ticfinder.
+
 ## Clone pacino
 Clone with submodules
 ```bash
@@ -132,6 +149,13 @@ the script asks for one of:
 2. a download (2.3 GB, 7.1 GB unpacked) and install into `tools/`, no
    sudo
 3. skip
+
+> **Note: the `riscv32-unknown-elf-*` tools are RV64 tools too.** The
+> Embecosm release names its GCC tools `riscv32-unknown-elf-gcc`,
+> `riscv32-unknown-elf-objdump` and so on; there are no `riscv64-` names.
+> The same GCC has RV64 multilibs and builds RV64 code when given
+> `-march=rv64...` and `-mabi=lp64d`, as `tools/Makefile` does. The
+> project uses the `riscv32-` names; do not add `riscv64-` links.
 
 The answer is saved in `tools/local.mk` (not tracked), which
 `rtl/Vars.mk` reads, so it is asked once. An `EMBECOSM_BIN` in the

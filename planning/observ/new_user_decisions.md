@@ -99,8 +99,8 @@ Users of each tool:
 - FST2VCD: examples/fe_demo/waves/fe_demo_sigs.py (and through it
   mk_sucl.py, chk_sucl.py). Not in the regression.
 - EMBECOSM_BIN: asm_dec_words (decode, clang), oracle_ifu_rvc_exp (ifu,
-  clang and llvm-objdump), tools/Makefile (riscv64-unknown-elf-gcc and
-  -objdump).
+  clang and llvm-objdump), tools/Makefile (riscv32-unknown-elf-gcc and
+  -objdump, which build and read RV64 code; NU-14).
 
 The regression (tools/regress.sh) needs Verilator, verilator_coverage,
 spike-dasm, genhtml and the Embecosm toolchain. Surfer and fst2vcd are
@@ -193,11 +193,18 @@ NU-14  Embecosm toolchain.
        - Rejected: a default of /usr/local/<release> (not a standard
          location); searching PATH for the compiler (the toolchain need
          not be on PATH).
-       - It is correct when clang, llvm-objdump, riscv64-unknown-elf-gcc
-         and riscv64-unknown-elf-objdump are executable and gcc and
-         clang name the release in --version. Embecosm names its 32- and
-         64-bit capable compilers riscv32-unknown-elf; the install has
-         both name sets.
+       - It is correct when clang, llvm-objdump, riscv32-unknown-elf-gcc
+         and riscv32-unknown-elf-objdump are executable and gcc and
+         clang name the release in --version.
+       - The riscv32- tools are RV64 tools too. The release ships only
+         riscv32- names; its gcc has RV64 multilibs and builds RV64 code
+         with -march=rv64... -mabi=lp64d, as tools/Makefile does. The
+         project uses the riscv32- names and adds no riscv64- links, so
+         an existing install the user names (option 1) needs no change.
+         Decided 2026-10-27, after the new-user test: the check had
+         required riscv64- names, which existed only as links added by
+         hand to one shared install, so a fresh download failed it.
+         Output with the riscv32- names is byte-identical.
 NU-15  lcov. v1.15, installed per clone. GENHTML passes --config-file
        tools/etc/lcovrc, so genhtml ignores ~/.lcovrc and /etc/lcovrc.
        Compared with the Ubuntu 22.04 package (whose genhtml reports
@@ -277,6 +284,21 @@ New user (README.md Quick start):
   6. ./tools/regress.sh
   7. git push                         (runs the regression unless step 6
                                        recorded a pass for HEAD)
+
+Short path (README.md Quick start, decided 2026-10-27): steps 2 and 3
+can be skipped. build_tools.sh finds what is missing and prints the
+command to install it (NU-3, NU-10):
+  1. git clone --recurse-submodules https://github.com/uarchlabs/pacino
+  2. . tools/setup.sh
+  3. tools/build_tools.sh             (run any sudo apt install or rustup
+                                       command it prints, then again)
+  4. ./tools/regress.sh
+A tool whose packages are missing is not built; the others are. Rust is
+needed only for Surfer, and the regression does not use Surfer. The
+pip packages (tools/requirements.txt) are checked by no script and are
+needed only for the docs site, tools/gen_doc_placeholders.py and
+ticfinder; nothing under rtl/, examples/ or tools/regress.sh imports
+them. A user who skips them is not told when they are later needed.
 
 Adding a tool:
   - a pin and a [tool] group in tools/apt-requirements.txt for its build

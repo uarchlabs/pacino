@@ -51,6 +51,7 @@ tools/lib/
 tools/share/
 tools/etc/
 tools/lcov/
+tools/surfer/
 tools/gtkwave/
 tools/__pycache__/
 tools/local.mk

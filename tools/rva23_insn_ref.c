@@ -12,7 +12,8 @@
  *
  * Toolchain and flags are the Makefile's RCC, MARCH, MABI and RCC_OPTS:
  *   /usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin/
- *     riscv64-unknown-elf-gcc -c -march=<MARCH> -mabi=lp64d
+ *     riscv32-unknown-elf-gcc -c -march=<MARCH> -mabi=lp64d
+ * (the riscv32- name builds RV64 code; MARCH and MABI select RV64)
  *     -DTEST_ALL -O0 -static
  * MARCH does not include zimop or zcmop, so the Zimop and Zcmop lines
  * below are written as .insn encodings (mop.r.0 = 0x81c140f3,

@@ -13,8 +13,9 @@
 # tools the project uses:
 #   - clang, llvm-objdump     asm_dec_words (decode), oracle_ifu_rvc_exp
 #                             (ifu)
-#   - riscv64-unknown-elf-gcc, riscv64-unknown-elf-objdump
-#                             tools/Makefile
+#   - riscv32-unknown-elf-gcc, riscv32-unknown-elf-objdump
+#                             tools/Makefile. These build and read RV64
+#                             code; the release has only riscv32- names.
 # It is correct when each is executable and gcc and clang name
 # EMBECOSM_RELEASE in their version.
 #
@@ -33,7 +34,7 @@ set -uo pipefail
 source "$(dirname "$0")/check_lib.sh" "$@"
 
 LOCAL_MK="$RVA_ROOT/tools/local.mk"
-TOOLS="clang llvm-objdump riscv64-unknown-elf-gcc riscv64-unknown-elf-objdump"
+TOOLS="clang llvm-objdump riscv32-unknown-elf-gcc riscv32-unknown-elf-objdump"
 
 # A variable as rtl/Vars.mk sets it
 vars_mk() {
@@ -58,7 +59,7 @@ verify_embecosm() {
     fi
   done
   [ "$ok" = 1 ] || return 1
-  for t in riscv64-unknown-elf-gcc clang; do
+  for t in riscv32-unknown-elf-gcc clang; do
     version=$("$dir/$t" --version 2>&1 | head -1 || true)
     if [[ "$version" != *"$EMBECOSM_RELEASE"* ]]; then
       echo "BROKEN  embecosm: $t is not $EMBECOSM_RELEASE: $version"
