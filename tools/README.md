@@ -74,8 +74,9 @@ missing it asks for the bin directory of an existing install, or
 downloads the release into `tools/`, and saves the answer in
 `tools/local.mk`. It checks everything and asks that one question
 first, in a few seconds, then builds unattended. It installs no system
-packages: when an apt package or Rust is missing it stops before any
-build and prints one command for all of them. See "Build the tools" in
+packages: when one is missing it stops before any build and prints one
+apt command for all of them. Rust, for Surfer, it installs into
+`tools/rust`. See "Build the tools" in
 the top-level README.md.
 
 Every run is logged to `logs/pacino_setup_YYYY-MM-DD_N.log` (N counts

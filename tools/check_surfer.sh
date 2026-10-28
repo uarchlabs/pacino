@@ -13,9 +13,11 @@
 # ("git: v0.7.0)", not a later commit such as v0.7.0-35-g010b840); the
 # version is checked again after a build.
 #
-# Rust is needed to build only. It comes from rustup and is never
-# installed here; when Surfer must be built and Rust is missing, the
-# script prints the rustup command and exits 1 without building.
+# Rust is needed to build only. --build installs it per clone, at
+# RUST_VERSION, into $RVA_ROOT/tools/rust (RUSTUP_HOME and CARGO_HOME
+# there) with rustup's --no-modify-path, so no shell profile is edited
+# and a Rust the user has in ~/.cargo is neither used nor changed. Rust
+# is never a prerequisite the user installs.
 #
 # Packages: the [surfer] group of tools/apt-requirements.txt. Options,
 # exit status, RVA_ROOT and JOBS: see tools/check_lib.sh.
@@ -25,6 +27,24 @@ source "$(dirname "$0")/check_lib.sh" "$@"
 SRC="$RVA_ROOT/tools/surfer"
 SURFER_URL="https://gitlab.com/surfer-project/surfer.git"
 SURFER_REF="v0.7.0"
+
+# Rust 1.95.0 built the Surfer v0.7.0 in use on 2026-10-27; Surfer
+# v0.7.0 needs 1.92 or later (rust-version in its Cargo.toml).
+RUST_VERSION="1.95.0"
+RUST_DIR="$RVA_ROOT/tools/rust"
+export RUSTUP_HOME="$RUST_DIR/rustup" CARGO_HOME="$RUST_DIR/cargo"
+export RUSTUP_TOOLCHAIN="$RUST_VERSION"
+
+verify_rust() {
+  local version
+  version=$("$CARGO_HOME/bin/rustc" --version 2>/dev/null || true)
+  if [[ "$version" == "rustc $RUST_VERSION "* ]]; then
+    echo "OK      rust:   $version at $RUST_DIR"
+    return 0
+  fi
+  echo "MISSING rust $RUST_VERSION at $RUST_DIR (--build installs it)"
+  return 1
+}
 
 verify_surfer() {
   if [ ! -x "$BIN/surfer" ]; then
@@ -46,36 +66,18 @@ verify_surfer() {
   echo "OK      surfer: $version at $BIN/surfer"
 }
 
-[ -f "$HOME/.cargo/env" ] && source "$HOME/.cargo/env"
-if command -v cargo >/dev/null 2>&1; then
-  echo "OK      rust:   $(rustc --version)"
-  have_rust=1
-else
-  echo "MISSING rust (needed to build only)"
-  have_rust=0
-fi
-
 check_pkgs surfer
 verify_surfer; tool_ok=$?
 [ -z "$MISSING_PKGS" ] && [ "$tool_ok" = 0 ] && exit 0
 [ -n "$MISSING_PKGS" ] && apt_hint
 [ "$tool_ok" = 0 ] && exit 1
-# Rust is needed now that Surfer must be built. tools/build_tools.sh sets
-# PACINO_MISSING_RUST and prints the rustup command itself.
-if [ "$have_rust" = 0 ]; then
-  if [ -n "${PACINO_MISSING_RUST:-}" ]; then
-    echo surfer >> "$PACINO_MISSING_RUST"
-  else
-    echo "Install Rust with (it edits ~/.bashrc and ~/.profile):"
-    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-  fi
-fi
+verify_rust; rust_ok=$?
 if [ "$BUILD" = 0 ]; then
   build_hint "Build Surfer"
   exit 1
 fi
-if [ -n "$MISSING_PKGS" ] || [ "$have_rust" = 0 ]; then
-  echo "NOT BUILT surfer: install the prerequisites first"
+if [ -n "$MISSING_PKGS" ]; then
+  echo "NOT BUILT surfer: install the packages first"
   exit 1
 fi
 
@@ -86,6 +88,14 @@ fi
 # subshell tested by || or if, so a failed step would not stop the build.
 (
   set -e
+  if [ "$rust_ok" != 0 ]; then
+    # rustup-init: minimal profile (rustc, cargo, rust-std); -y answers
+    # its questions. Run again it installs or selects RUST_VERSION.
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+      sh -s -- -y --no-modify-path --profile minimal \
+        --default-toolchain "$RUST_VERSION"
+  fi
+  export PATH="$CARGO_HOME/bin:$PATH"
   [ -d "$SRC/.git" ] || git clone "$SURFER_URL" "$SRC"
   if ! git -C "$SRC" checkout --quiet "$SURFER_REF" 2>/dev/null; then
     git -C "$SRC" fetch --tags origin

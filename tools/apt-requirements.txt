@@ -37,7 +37,7 @@ libboost-regex-dev
 libboost-system-dev
 
 # [surfer]
-# Rust is not a package here; it comes from rustup, see check_surfer.sh.
+# Rust is not a package here; check_surfer.sh installs it into tools/rust.
 build-essential
 pkg-config
 libssl-dev

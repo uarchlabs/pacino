@@ -16,8 +16,9 @@
 #   1. Check (seconds). Each tools/check_<TOOL>.sh runs report-only. When
 #      the Embecosm toolchain is not found, check_embecosm.sh --ask asks
 #      for an existing install or a download, and saves the answer. When
-#      any apt package or Rust is missing, the run stops here, nothing
-#      built, and prints one command for all of them.
+#      any apt package is missing, the run stops here, nothing built, and
+#      prints one apt command for all of them. (Rust, for Surfer, is not
+#      a prerequisite: check_surfer.sh installs it into tools/rust.)
 #   2. Build. Each tool not OK in phase 1 runs check_<TOOL>.sh --build
 #      (Embecosm: --install, when the download was chosen). A tool is
 #      built even if an earlier one fails.
@@ -68,13 +69,10 @@ exec > >(tee -a "$LOG") 2>&1
 TEE_PID=$!
 
 # The check scripts append each missing package here (check_lib.sh
-# check_pkgs), and check_surfer.sh "surfer" when Rust is missing; the
-# summary ends with one command for all of them.
+# check_pkgs); the summary ends with one apt command for all of them.
 PACINO_MISSING_PKGS=$(mktemp) || exit 1
-PACINO_MISSING_RUST=$(mktemp) || exit 1
-export PACINO_MISSING_PKGS PACINO_MISSING_RUST
-trap 'rm -f "$PACINO_MISSING_PKGS" "$PACINO_MISSING_RUST"
-      exec >&- 2>&-; wait "$TEE_PID"' EXIT
+export PACINO_MISSING_PKGS
+trap 'rm -f "$PACINO_MISSING_PKGS"; exec >&- 2>&-; wait "$TEE_PID"' EXIT
 
 os=$(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME")
 echo "=== pacino setup log"
@@ -115,7 +113,7 @@ for t in $tools; do
 done
 
 blocked=0
-[ -s "$PACINO_MISSING_PKGS" ] || [ -s "$PACINO_MISSING_RUST" ] && blocked=1
+[ -s "$PACINO_MISSING_PKGS" ] && blocked=1
 
 # --- Phase 2: build, unattended ----------------------------------------
 if [ -n "$build_opt" ] && [ "$blocked" = 0 ]; then
@@ -146,11 +144,6 @@ if [ -s "$PACINO_MISSING_PKGS" ]; then
   pkgs=$(awk '{ print $2 }' "$PACINO_MISSING_PKGS" | sort -u | xargs)
   echo "Missing packages ($need):"
   echo "  sudo apt install $pkgs"
-fi
-if [ -s "$PACINO_MISSING_RUST" ]; then
-  echo "Missing Rust (surfer); it edits ~/.bashrc and ~/.profile:"
-  echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
-  echo "  source \$HOME/.cargo/env"
 fi
 if [ "$blocked" = 1 ] && [ -n "$build_opt" ]; then
   echo "Nothing was built. Install the above, then run tools/build_tools.sh"

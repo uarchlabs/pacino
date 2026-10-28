@@ -36,11 +36,12 @@ NU-1   No Makefile or script finds a project tool on PATH. rtl/Vars.mk
 NU-2   Every tool is installed per clone under $RVA_ROOT/tools (bin, etc,
        share, lib, include), with no sudo. The one exception is the
        Embecosm toolchain, which may be a shared install (NU-14).
-NU-3   The scripts never run sudo and never install a system package
-       or Rust. Under build_tools.sh a missing apt package or Rust stops
-       the run before any tool is built, with one command for all of
-       them (NU-10). A check script run alone prints its own apt or
-       rustup command and does not build its tool. Users are assumed to
+NU-3   The scripts never run sudo and never install a system package.
+       Under build_tools.sh a missing apt package stops the run before
+       any tool is built, with one apt command for all of them (NU-10).
+       A check script run alone prints its own apt command and does not
+       build its tool. Rust is not a prerequisite: it needs no sudo, so
+       check_surfer.sh installs it per clone (NU-17). Users are assumed to
        have sudo to run that command (decided 2026-10-27).
 NU-4   Each tool is pinned to one version, and each check script tests
        the installed tool against that pin, before and after a build.
@@ -76,7 +77,8 @@ Source and check, per tool:
   tools in tools/spike/build. Correct when the banner names 1.1.1-dev
   and spike-dasm decodes DASM(0505) as c.addi a0, 1.
 - Surfer: gitlab.com/surfer-project/surfer at the tag, cloned into
-  tools/surfer; cargo install --root tools --no-track --force --locked.
+  tools/surfer; cargo install --root tools --no-track --force --locked,
+  with Rust 1.95.0 from tools/rust (NU-17).
   Correct when every library resolves (ldd) and --version names the tag
   exactly ("git: v0.7.0)").
 - lcov: github.com/linux-test-project/lcov at the tag, shallow clone in
@@ -111,9 +113,6 @@ Prerequisites outside tools/:
 
 - apt packages: tools/apt-requirements.txt, one group per check script
   (NU-6).
-- Rust: rustup, per user, in ~/.cargo; needed to build Surfer only.
-  Never installed by a script; check_surfer.sh prints the rustup
-  command.
 - Python packages: tools/requirements.txt (pip --user, or a virtual
   environment on Ubuntu 24.04 and later): mkdocs and its theme for the
   docs site, PyYAML, spacy and its English model for ticfinder. None is
@@ -151,17 +150,15 @@ NU-10  tools/build_tools.sh [--check] [TOOL...] covers verilator, spike,
        so the user answers any question in the first seconds and the
        builds then run unattended (decided 2026-10-27; before, each tool
        was checked and built in turn, so the Embecosm question and a
-       missing package or Rust were found only after about 30 minutes
+       missing package were found only after about 30 minutes
        of builds):
        1. Check. Each check_<tool>.sh runs report-only, with PACINO_PLAN
           set so it omits its "Build X with" hint (check_lib.sh
           build_hint). check_embecosm.sh runs with --ask (NU-14). Each
           missing apt package is appended as "<tool> <package>" to the
-          temporary file PACINO_MISSING_PKGS (check_pkgs, check_lib.sh),
-          and check_surfer.sh appends "surfer" to PACINO_MISSING_RUST
-          when Surfer must be built and Rust is missing; with these set,
-          the scripts print no apt or rustup command of their own. If
-          either file is non-empty the run stops here, nothing built
+          temporary file PACINO_MISSING_PKGS (check_pkgs, check_lib.sh);
+          with it set, the scripts print no apt command of their own. If
+          the file is non-empty the run stops here, nothing built
           (option (a); the rejected option (b) built the tools that
           were not blocked, which needs a second run later for the
           rest).
@@ -170,9 +167,9 @@ NU-10  tools/build_tools.sh [--check] [TOOL...] covers verilator, spike,
           with stdin from /dev/null, continuing past a failure.
        The summary lists each tool as OK, MISSING (--check), NOT BUILT
        (stopped in phase 1) or FAIL, then one sudo apt install command
-       for all missing packages, without duplicates, and the rustup
-       command. The exit status is non-zero unless all are OK. --check
-       runs phase 1 only and asks nothing.
+       for all missing packages, without duplicates. The exit status
+       is non-zero unless all are OK. --check runs phase 1 only and asks
+       nothing.
 NU-11  Every build_tools.sh run is logged to
        $RVA_ROOT/logs/pacino_setup_YYYY-MM-DD_N.log, N the lowest number
        unused that day: a header (date, user, host, OS, git branch and
@@ -180,9 +177,9 @@ NU-11  Every build_tools.sh run is logged to
        last line printed names the log. logs/ is not tracked. A user
        reporting a setup problem sends this file.
 NU-12  Source clones and build output in tools/ are not tracked
-       (.gitignore): bin, include, lib, share, etc, surfer, lcov, gtkwave,
-       local.mk, the Embecosm directory, tarball and temporary unpack
-       directory.
+       (.gitignore): bin, include, lib, share, etc, surfer, rust, lcov,
+       gtkwave, local.mk, the Embecosm directory, tarball and temporary
+       unpack directory.
 NU-13  The cachegen and ticfinder submodules use https URLs, so a clone
        needs no GitHub SSH key.
 
@@ -259,6 +256,17 @@ NU-16  fst2vcd. Only fst2vcd is built, not GTKWave: fst2vcd.c and the
 NU-17  Surfer is installed as tools/bin/surfer. rtl/core/frontend/bpu/
        surf.sh read tools/surfer/target/release/surfer; it now reads
        SURFER from Vars.mk.
+       Rust, needed only to build Surfer, is installed per clone by
+       check_surfer.sh --build: rustup-init with RUSTUP_HOME and
+       CARGO_HOME in tools/rust, --no-modify-path, --profile minimal,
+       pinned at RUST_VERSION 1.95.0 (it built the Surfer in use;
+       Surfer v0.7.0 needs 1.92 or later). RUSTUP_TOOLCHAIN pins the
+       build to that version. No shell profile is edited, and a Rust in
+       ~/.cargo is neither used nor changed. Decided 2026-10-27: Rust
+       had been a user-installed prerequisite (rustup into ~/.cargo,
+       editing ~/.bashrc and ~/.profile), so a user without it was
+       stopped (NU-10) for something that needs no sudo. tools/rust is
+       not tracked.
 
 ---
 
@@ -310,13 +318,13 @@ NU-21  Why the SSH keepalive. git opens the connection to the remote
 New user (README.md Quick start):
   1. git clone --recurse-submodules https://github.com/uarchlabs/pacino
   2. sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)
-  3. rustup; pip install --user -r tools/requirements.txt
+  3. pip install --user -r tools/requirements.txt
   4. . tools/setup.sh                 (repo root, every terminal)
   5. tools/build_tools.sh             (answer the Embecosm prompt in the
                                        first seconds; the builds then
                                        run unattended. On a missing
-                                       package or Rust it stops before
-                                       building: run the command it
+                                       package it stops before
+                                       building: run the apt command it
                                        ends with, then again)
   6. ./tools/regress.sh
   7. git push                         (runs the regression unless step 6
@@ -327,12 +335,12 @@ can be skipped. build_tools.sh finds what is missing and prints the
 command to install it (NU-3, NU-10):
   1. git clone --recurse-submodules https://github.com/uarchlabs/pacino
   2. . tools/setup.sh
-  3. tools/build_tools.sh             (run any sudo apt install or rustup
-                                       command it prints, then again)
+  3. tools/build_tools.sh             (run any sudo apt install command
+                                       it prints, then again)
   4. ./tools/regress.sh
-When a package or Rust is missing the run stops in seconds, before any
-build, and the Embecosm answer is kept for the second run. Rust is
-needed only for Surfer, and the regression does not use Surfer. The
+When a package is missing the run stops in seconds, before any build,
+and the Embecosm answer is kept for the second run. Rust is installed
+by the script (NU-17). The
 pip packages (tools/requirements.txt) are checked by no script and are
 needed only for the docs site, tools/gen_doc_placeholders.py and
 ticfinder; nothing under rtl/, examples/ or tools/regress.sh imports
@@ -389,7 +397,8 @@ NU-UN-4  The new-user test on a fresh account (new_user.md, account
          found: the check required riscv64- names the release does not
          have (fixed, NU-14); the Embecosm question and missing Rust
          came only after the long builds (fixed, NU-10); the server
-         closed the download after 34 MB (retry added, NU-14). Those
+         closed the download after 34 MB (retry added, NU-14); Rust was
+       a user prerequisite (now installed per clone, NU-17). Those
          runs used the scripts as pushed before the fixes; the test is
          to be repeated from a new account.
 NU-UN-5  The full regression has not been run since VERILATOR_COVERAGE,

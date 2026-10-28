@@ -49,15 +49,15 @@ finds what is missing and prints the command to install it:
 git clone --recurse-submodules https://github.com/uarchlabs/pacino
 cd pacino
 . tools/setup.sh
-tools/build_tools.sh    # if an apt package or Rust is missing it stops
-                        # in seconds and prints one command; run it, then
-                        # run build_tools.sh again
+tools/build_tools.sh    # if an apt package is missing it stops in
+                        # seconds and prints one apt command; run it,
+                        # then run build_tools.sh again
 ./tools/regress.sh
 ```
 
 The only question, about the Embecosm toolchain, comes in the first
-seconds; the builds then run without input. Rust is needed only for
-Surfer. The Python packages in `tools/requirements.txt`
+seconds; the builds then run without input. Rust, for Surfer, is
+installed by the script into `tools/rust`. The Python packages in `tools/requirements.txt`
 are not checked by any script; they are needed only for the docs site,
 `tools/gen_doc_placeholders.py` and ticfinder.
 
@@ -84,13 +84,10 @@ cd pacino
 sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)
 ```
 
-Surfer, the waveform viewer, is built with Rust. Install Rust with
-rustup (this edits your `.bashrc` and `.profile`):
-
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-```
+Rust is not a prerequisite. Surfer, the waveform viewer, is built with
+Rust 1.95.0, which `tools/build_tools.sh` installs into `tools/rust`
+with rustup. It edits no shell profile, and any Rust you have in
+`~/.cargo` is neither used nor changed.
 
 The Python packages for the scripts, the docs site and ticfinder are
 listed in `tools/requirements.txt` (on Ubuntu 24.04 and later, install
@@ -168,11 +165,11 @@ equivalent commands instead of asking.
 
 The script runs in two phases, so that it can be started and left:
 
-1. Check, a few seconds: every tool, its apt packages and Rust are
-   checked, and the Embecosm question is asked. If any apt package or
-   Rust is missing, the script stops here and builds nothing; the
-   summary ends with one command that installs all of them. Run it,
-   then run `tools/build_tools.sh` again; the Embecosm answer is kept.
+1. Check, a few seconds: every tool and its apt packages are checked,
+   and the Embecosm question is asked. If any apt package is missing,
+   the script stops here and builds nothing; the summary ends with one
+   command that installs all of them. Run it, then run
+   `tools/build_tools.sh` again; the Embecosm answer is kept.
 2. Build, unattended: each tool that is missing or at the wrong version
    is built, and the Embecosm download, if chosen, is installed. A
    missing submodule is initialized. Each tool is attempted even if an
