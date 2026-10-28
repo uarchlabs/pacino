@@ -3,8 +3,8 @@
 # Copyright (c) 2026 Jeff Nye, uarchlabs.com
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 #
-# tools/check_embecosm.sh [--build] -- check the Embecosm RISC-V
-# toolchain, and locate or install it
+# tools/check_embecosm.sh [--build | --ask | --install] -- check the
+# Embecosm RISC-V toolchain, and locate or install it
 #
 # The toolchain is a prebuilt release, EMBECOSM_RELEASE, from Embecosm's
 # RISC-V Embedded top-of-tree builds (GCC and Clang). It is too large for
@@ -25,13 +25,30 @@
 #   2) a download (2.3 GB) and install into $RVA_ROOT/tools/ (7.1 GB
 #      unpacked), no sudo
 #   3) skip
-# The chosen path is saved in tools/local.mk, which rtl/Vars.mk reads.
-# Without a terminal, or without --build, it prints the commands for 1)
+# The chosen path is saved in tools/local.mk, which rtl/Vars.mk reads;
+# for 2) that is the path in tools/, saved when chosen, so a later run
+# installs without asking again (rm tools/local.mk to choose again).
+# Without a terminal, or with no option, it prints the commands for 1)
 # and 2) and exits 1. An EMBECOSM_BIN in the environment is never
 # replaced: when it is wrong the script says so and exits 1. RVA_ROOT:
 # see tools/check_lib.sh.
+#
+# tools/build_tools.sh asks in its check phase and installs in its build
+# phase, so the question comes before the long builds:
+#   --ask      as --build, but 2) only checks the free space, saves the
+#              choice and exits INSTALL_CHOSEN (3); nothing is downloaded
+#   --install  install into tools/ when the toolchain is not found,
+#              without asking
 set -uo pipefail
-source "$(dirname "$0")/check_lib.sh" "$@"
+MODE="${1:-}"
+case "$MODE" in
+  "" | --build)     source "$(dirname "$0")/check_lib.sh" "$@" ;;
+  # "" so check_lib.sh does not see this script's $1 (source passes it)
+  --ask | --install) source "$(dirname "$0")/check_lib.sh" "" ;;
+  *) echo "usage: $(basename "$0") [--build | --ask | --install]" >&2
+     exit 2 ;;
+esac
+INSTALL_CHOSEN=3
 
 LOCAL_MK="$RVA_ROOT/tools/local.mk"
 TOOLS="clang llvm-objdump riscv32-unknown-elf-gcc riscv32-unknown-elf-objdump"
@@ -45,6 +62,8 @@ EMBECOSM_RELEASE=$(vars_mk EMBECOSM_RELEASE)
 EMBECOSM_URL="https://buildbot.embecosm.com/job/riscv-embedded-ubuntu2204/76\
 /artifact/$EMBECOSM_RELEASE.tar.gz"
 EMBECOSM_GB=10    # free space the install needs: tarball plus unpacked
+EMBECOSM_TRIES=5  # download attempts, each resuming the last
+EMBECOSM_RETRY_WAIT=10  # seconds between attempts
 LOCAL_BIN="$RVA_ROOT/tools/$EMBECOSM_RELEASE/bin"
 
 # Check the toolchain in bin directory $1; return 0 when it is correct
@@ -77,12 +96,8 @@ save_path() {
   echo "Saved EMBECOSM_BIN=$1 in $LOCAL_MK"
 }
 
-# Download and unpack into tools/. The unpack goes to a temporary
-# directory that is renamed when complete, so an interrupted install
-# leaves no partial toolchain at the final path.
-install_local() {
-  local tarball="$RVA_ROOT/tools/$EMBECOSM_RELEASE.tar.gz"
-  local tmp="$RVA_ROOT/tools/.$EMBECOSM_RELEASE.tmp"
+# Return 0 when tools/ has the free space the install needs
+check_space() {
   local free_gb
   free_gb=$(df -P -BG "$RVA_ROOT/tools" | awk 'NR == 2 { print $4 + 0 }')
   if [ "$free_gb" -lt "$EMBECOSM_GB" ]; then
@@ -90,11 +105,42 @@ install_local() {
     echo "  the install needs about $EMBECOSM_GB GB."
     return 1
   fi
-  # -C - resumes an interrupted download, so a partial tarball is kept
-  if ! curl -fL -C - -o "$tarball" "$EMBECOSM_URL"; then
-    echo "NOT INSTALLED embecosm: the download failed; run again to resume"
-    return 1
-  fi
+}
+
+# Download and unpack into tools/. The unpack goes to a temporary
+# directory that is renamed when complete, so an interrupted install
+# leaves no partial toolchain at the final path.
+install_local() {
+  local tarball="$RVA_ROOT/tools/$EMBECOSM_RELEASE.tar.gz"
+  local tmp="$RVA_ROOT/tools/.$EMBECOSM_RELEASE.tmp"
+  check_space || return 1
+  # -C - resumes an interrupted download, so a partial tarball is kept and
+  # each try continues it. The server can close a long transfer early
+  # (curl exit 18, seen 2026-10-27), and a transfer under 1 KB/s for 60 s
+  # is abandoned (exit 28); either is tried again after a pause, up to
+  # EMBECOSM_TRIES times in all. An HTTP error (exit 22, e.g. 404) is not:
+  # trying again would not change it.
+  local try=1 rc
+  while true; do
+    curl -fL -C - --speed-limit 1024 --speed-time 60 \
+      -o "$tarball" "$EMBECOSM_URL"
+    rc=$?
+    [ "$rc" = 0 ] && break
+    if [ "$rc" = 22 ]; then
+      echo "NOT INSTALLED embecosm: the server returned an HTTP error for"
+      echo "  $EMBECOSM_URL"
+      return 1
+    fi
+    if [ "$try" -ge "$EMBECOSM_TRIES" ]; then
+      echo "NOT INSTALLED embecosm: the download failed (curl exit $rc," \
+        "try $try of $EMBECOSM_TRIES); run again to resume"
+      return 1
+    fi
+    try=$((try + 1))
+    echo "Download interrupted (curl exit $rc); resuming in" \
+      "$EMBECOSM_RETRY_WAIT s, try $try of $EMBECOSM_TRIES"
+    sleep "$EMBECOSM_RETRY_WAIT"
+  done
   # One && chain: set -e is ignored in a subshell tested by || or if.
   # A tarball that does not unpack is removed so the next run downloads
   # it again.
@@ -132,7 +178,20 @@ if [ -n "${EMBECOSM_BIN:-}" ]; then
   echo "the toolchain. Correct it or unset it."
   exit 1
 fi
-if [ "$BUILD" = 0 ] || [ ! -t 0 ]; then
+# Install into tools/ chosen earlier: local.mk names the path in tools/
+if [ -f "$LOCAL_MK" ] && [ "$EXT" = "$LOCAL_BIN" ]; then
+  echo "Install into tools/ was chosen ($LOCAL_MK); not installed yet."
+  case "$MODE" in
+    --ask)              exit $INSTALL_CHOSEN ;;
+    --build | --install) install_local; exit $? ;;
+    *) echo "Install it with: $0 --build"; exit 1 ;;
+  esac
+fi
+if [ "$MODE" = --install ]; then
+  install_local
+  exit $?
+fi
+if [ -z "$MODE" ] || [ ! -t 0 ]; then
   print_options
   exit 1
 fi
@@ -156,6 +215,13 @@ while true; do
       echo "That is not $EMBECOSM_RELEASE; try again."
       ;;
     2)
+      # Saved first, so an interrupted install resumes without asking
+      check_space || exit 1
+      save_path "$LOCAL_BIN"
+      if [ "$MODE" = --ask ]; then
+        echo "The download and install run after the checks."
+        exit $INSTALL_CHOSEN
+      fi
       install_local
       exit $?
       ;;

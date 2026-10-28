@@ -49,13 +49,15 @@ finds what is missing and prints the command to install it:
 git clone --recurse-submodules https://github.com/uarchlabs/pacino
 cd pacino
 . tools/setup.sh
-tools/build_tools.sh    # ends with any sudo apt install or rustup command
-                        # needed; run it, then run build_tools.sh again
+tools/build_tools.sh    # if an apt package or Rust is missing it stops
+                        # in seconds and prints one command; run it, then
+                        # run build_tools.sh again
 ./tools/regress.sh
 ```
 
-A tool whose packages are missing is not built; the others are. Rust is
-needed only for Surfer. The Python packages in `tools/requirements.txt`
+The only question, about the Embecosm toolchain, comes in the first
+seconds; the builds then run without input. Rust is needed only for
+Surfer. The Python packages in `tools/requirements.txt`
 are not checked by any script; they are needed only for the docs site,
 `tools/gen_doc_placeholders.py` and ticfinder.
 
@@ -142,12 +144,14 @@ This builds the project tools into `$RVA_ROOT/tools/bin`, the paths
 It also checks the Embecosm RISC-V toolchain
 (`riscv-embecosm-embedded-ubuntu2204-20250309`: GCC 15.0.1, Clang 21), a
 prebuilt release, in `EMBECOSM_BIN` (`rtl/Vars.mk`). When it is not found
-the script asks for one of:
+the script asks, before any build, for one of:
 
 1. the bin directory of an existing install, e.g.
    `/usr/local/riscv-embecosm-embedded-ubuntu2204-20250309/bin`
 2. a download (2.3 GB, 7.1 GB unpacked) and install into `tools/`, no
-   sudo
+   sudo; it runs with the builds, after the questions. An interrupted
+   download resumes by itself, up to 5 attempts; after that the next run
+   resumes it
 3. skip
 
 > **Note: the `riscv32-unknown-elf-*` tools are RV64 tools too.** The
@@ -162,16 +166,26 @@ The answer is saved in `tools/local.mk` (not tracked), which
 environment overrides it. Without a terminal the script prints the
 equivalent commands instead of asking.
 
-A tool already installed at the right version is not rebuilt. A missing
-submodule is initialized. If a package or Rust is missing, the script
-prints the command to install it and does not build that tool. Each
-tool is attempted even if an earlier one fails; the summary lists
-which failed and the exit status is non-zero. Each run is logged to
+The script runs in two phases, so that it can be started and left:
+
+1. Check, a few seconds: every tool, its apt packages and Rust are
+   checked, and the Embecosm question is asked. If any apt package or
+   Rust is missing, the script stops here and builds nothing; the
+   summary ends with one command that installs all of them. Run it,
+   then run `tools/build_tools.sh` again; the Embecosm answer is kept.
+2. Build, unattended: each tool that is missing or at the wrong version
+   is built, and the Embecosm download, if chosen, is installed. A
+   missing submodule is initialized. Each tool is attempted even if an
+   earlier one fails.
+
+A tool already installed at the right version is not rebuilt. The
+summary lists each tool as OK, MISSING, NOT BUILT or FAIL, and the exit
+status is non-zero unless all are OK. Each run is logged to
 `logs/pacino_setup_YYYY-MM-DD_N.log`; the last line printed names it.
 Send that file when reporting a setup problem.
 
 ```bash
-tools/build_tools.sh --check         # report only, build nothing
+tools/build_tools.sh --check         # phase 1 only, asks nothing
 tools/build_tools.sh verilator spike # named tools only, e.g. no Surfer
 JOBS=4 tools/build_tools.sh          # make parallelism; default nproc,
                                      # capped at one job per 2 GB

@@ -43,7 +43,7 @@ verify_verilator; tool_ok=$?
 [ -n "$MISSING_PKGS" ] && apt_hint
 [ "$tool_ok" = 0 ] && exit 1
 if [ "$BUILD" = 0 ]; then
-  echo "Build Verilator with: $0 --build"
+  build_hint "Build Verilator"
   exit 1
 fi
 if [ -n "$MISSING_PKGS" ]; then

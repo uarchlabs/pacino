@@ -36,11 +36,12 @@ NU-1   No Makefile or script finds a project tool on PATH. rtl/Vars.mk
 NU-2   Every tool is installed per clone under $RVA_ROOT/tools (bin, etc,
        share, lib, include), with no sudo. The one exception is the
        Embecosm toolchain, which may be a shared install (NU-14).
-NU-3   The scripts never run sudo and never install a system package.
-       When a package is missing they print the apt command and stop
-       before building that tool (build_tools.sh also gathers them into
-       one command, NU-10). Users are assumed to have sudo to run that
-       command (decided 2026-10-27).
+NU-3   The scripts never run sudo and never install a system package
+       or Rust. Under build_tools.sh a missing apt package or Rust stops
+       the run before any tool is built, with one command for all of
+       them (NU-10). A check script run alone prints its own apt or
+       rustup command and does not build its tool. Users are assumed to
+       have sudo to run that command (decided 2026-10-27).
 NU-4   Each tool is pinned to one version, and each check script tests
        the installed tool against that pin, before and after a build.
        A tool at the right version is not rebuilt.
@@ -145,15 +146,33 @@ NU-9   A build runs in a subshell with set -e that stands alone, with $?
        tested after it. set -e is ignored in a subshell tested by || or
        if, so the earlier form "( set -e ... ) || fail" ran every step
        after a failed one (found 2026-10-27; fixed in all scripts).
-NU-10  tools/build_tools.sh [--check] [TOOL...] runs check_<tool>.sh for
-       verilator, spike, surfer, lcov, fst2vcd and embecosm, in that
-       order, continuing past a failure, then prints an OK/FAIL summary
-       and exits non-zero if any failed. A check script's own apt
-       command is easy to miss in a long run, so build_tools.sh exports
-       PACINO_MISSING_PKGS, a temporary file to which check_pkgs
-       (check_lib.sh) appends "<tool> <package>" for each package
-       missing. After the summary it prints one sudo apt install command
-       for all of them, without duplicates, and the tools that need them.
+NU-10  tools/build_tools.sh [--check] [TOOL...] covers verilator, spike,
+       surfer, lcov, fst2vcd and embecosm, in that order, in two phases,
+       so the user answers any question in the first seconds and the
+       builds then run unattended (decided 2026-10-27; before, each tool
+       was checked and built in turn, so the Embecosm question and a
+       missing package or Rust were found only after about 30 minutes
+       of builds):
+       1. Check. Each check_<tool>.sh runs report-only, with PACINO_PLAN
+          set so it omits its "Build X with" hint (check_lib.sh
+          build_hint). check_embecosm.sh runs with --ask (NU-14). Each
+          missing apt package is appended as "<tool> <package>" to the
+          temporary file PACINO_MISSING_PKGS (check_pkgs, check_lib.sh),
+          and check_surfer.sh appends "surfer" to PACINO_MISSING_RUST
+          when Surfer must be built and Rust is missing; with these set,
+          the scripts print no apt or rustup command of their own. If
+          either file is non-empty the run stops here, nothing built
+          (option (a); the rejected option (b) built the tools that
+          were not blocked, which needs a second run later for the
+          rest).
+       2. Build. Each tool not OK in phase 1 runs check_<tool>.sh
+          --build (Embecosm: --install, when the download was chosen),
+          with stdin from /dev/null, continuing past a failure.
+       The summary lists each tool as OK, MISSING (--check), NOT BUILT
+       (stopped in phase 1) or FAIL, then one sudo apt install command
+       for all missing packages, without duplicates, and the rustup
+       command. The exit status is non-zero unless all are OK. --check
+       runs phase 1 only and asks nothing.
 NU-11  Every build_tools.sh run is logged to
        $RVA_ROOT/logs/pacino_setup_YYYY-MM-DD_N.log, N the lowest number
        unused that day: a header (date, user, host, OS, git branch and
@@ -183,10 +202,25 @@ NU-14  Embecosm toolchain.
          tools/ (7.1 GB unpacked; about 10 GB free is checked first);
          3) skip. The answer is written to tools/local.mk as
          "EMBECOSM_BIN ?= <path>", so it is asked once per clone and the
-         environment still wins.
+         environment still wins. For 2) the path in tools/ is saved when
+         chosen, before the download, so a stopped or failed install is
+         resumed by the next run without asking (rm tools/local.mk to
+         choose again).
+       - build_tools.sh splits this (NU-10): --ask asks and saves only,
+         and for 2) checks the free space and exits 3 (INSTALL_CHOSEN);
+         --install installs into tools/ without asking. So the question
+         comes in phase 1 and the download runs in phase 2.
        - The install unpacks into a temporary directory and renames it
-         when complete. A failed download is kept and resumed (curl
-         -C -); a tarball that does not unpack is deleted.
+         when complete; a tarball that does not unpack is deleted.
+       - The download resumes (curl -C -), so a partial tarball is kept
+         and each attempt continues it. Up to EMBECOSM_TRIES (5)
+         attempts, EMBECOSM_RETRY_WAIT (10 s) apart, are made when the
+         transfer ends early: the server closed a transfer after 34 MB
+         in the new-user test (curl exit 18, 2026-10-27), while three
+         later full downloads completed. A transfer under 1 KB/s for
+         60 s is abandoned and tried again (exit 28). An HTTP error
+         (exit 22, e.g. 404) is reported at once, not retried. After the
+         last attempt the partial tarball is kept for the next run.
        - Without a terminal, or without --build, it prints the
          equivalent commands. An EMBECOSM_BIN set in the environment is
          never replaced; when it is wrong the script says so and stops.
@@ -278,9 +312,12 @@ New user (README.md Quick start):
   2. sudo apt install $(sed 's/#.*//' tools/apt-requirements.txt)
   3. rustup; pip install --user -r tools/requirements.txt
   4. . tools/setup.sh                 (repo root, every terminal)
-  5. tools/build_tools.sh             (answer the Embecosm prompt; on a
-                                       missing package run the apt
-                                       command it ends with, then again)
+  5. tools/build_tools.sh             (answer the Embecosm prompt in the
+                                       first seconds; the builds then
+                                       run unattended. On a missing
+                                       package or Rust it stops before
+                                       building: run the command it
+                                       ends with, then again)
   6. ./tools/regress.sh
   7. git push                         (runs the regression unless step 6
                                        recorded a pass for HEAD)
@@ -293,7 +330,8 @@ command to install it (NU-3, NU-10):
   3. tools/build_tools.sh             (run any sudo apt install or rustup
                                        command it prints, then again)
   4. ./tools/regress.sh
-A tool whose packages are missing is not built; the others are. Rust is
+When a package or Rust is missing the run stops in seconds, before any
+build, and the Embecosm answer is kept for the second run. Rust is
 needed only for Surfer, and the regression does not use Surfer. The
 pip packages (tools/requirements.txt) are checked by no script and are
 needed only for the docs site, tools/gen_doc_placeholders.py and
@@ -324,16 +362,46 @@ Files:
 
 ## 7. Open items
 
-NU-UN-1  planning/PROJECT_CORE.md still names RVA_EXT_TOOLS; it should
-         say EMBECOSM_BIN (NU-14). docs/sessions.json and a blog post
-         also mention the old name, as history.
+NU-UN-1  planning/PROJECT_CORE.md, Tools Status, for the PA (the file is
+         checked by check_planning.sh, so the IA does not edit it). It
+         names EMBECOSM_BIN now, but these rows are stale (checked
+         2026-10-27):
+         - EMBECOSM_BIN: the default is $(RVA_ROOT)/tools/<release>/bin,
+           or the path in tools/local.mk (NU-14), not /usr/local/...;
+           it also holds riscv32-unknown-elf-gcc and -objdump for
+           tools/Makefile, which build RV64 code (NU-14).
+         - fst2vcd: GTKWave v3.3.104, $(RVA_ROOT)/tools/bin/fst2vcd,
+           FST2VCD ?= in rtl/Vars.mk (NU-16).
+         - Spike: 1.1.1-dev (tools/spike submodule).
+         - No rows for lcov v1.15 (GENHTML, NU-15) or
+           verilator_coverage 5.048 (VERILATOR_COVERAGE).
+         - Vars.mk row: also VERILATOR_COVERAGE, GENHTML, FST2VCD.
+         - Surfer and the others: built by build_tools.sh in two phases
+           (NU-10).
+         planning/PROJECT_STATUS.md mentions RVA_EXT_TOOLS only in
+         history entries; docs/sessions.json and a blog post likewise.
 NU-UN-2  The SSH keepalive (NU-21) is not yet proven on a push of
          15 minutes to GitHub.
 NU-UN-3  Surfer v0.7.0 has not been run against the fe_demo .sucl files
          (waves/chk_sucl.py).
 NU-UN-4  The new-user test on a fresh account (new_user.md, account
-         randy) has not been run to completion.
+         randy) has not been run to completion. The 2026-10-27 runs
+         found: the check required riscv64- names the release does not
+         have (fixed, NU-14); the Embecosm question and missing Rust
+         came only after the long builds (fixed, NU-10); the server
+         closed the download after 34 MB (retry added, NU-14). Those
+         runs used the scripts as pushed before the fixes; the test is
+         to be repeated from a new account.
 NU-UN-5  The full regression has not been run since VERILATOR_COVERAGE,
          GENHTML and FST2VCD moved to tools/bin. Coverage reports now
          come from verilator_coverage 5.048; they came from a 5.020 on
          PATH before, so figures may differ slightly from older reports.
+NU-UN-6  In the randy run (sudo -iu randy, in a gnome-terminal), keys
+         typed at the Embecosm prompt were not displayed, and after the
+         script ended the shell showed no typed keys, not even Enter;
+         Ctrl-C still showed. Not reproduced: on a pseudo-terminal every
+         key typed at the prompt and after the script was displayed,
+         and the script and tee change no terminal setting. Leading
+         suspect: sudo's own pseudo-terminal (use_pty) relaying input.
+         To be checked in the repeat of NU-UN-4; if it recurs, record
+         stty -a for randy's terminal before recovering it (stty sane).

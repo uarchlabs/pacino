@@ -14,8 +14,8 @@
 # version is checked again after a build.
 #
 # Rust is needed to build only. It comes from rustup and is never
-# installed here; when a build needs it and it is missing, the script
-# prints the rustup command and exits 1.
+# installed here; when Surfer must be built and Rust is missing, the
+# script prints the rustup command and exits 1 without building.
 #
 # Packages: the [surfer] group of tools/apt-requirements.txt. Options,
 # exit status, RVA_ROOT and JOBS: see tools/check_lib.sh.
@@ -60,13 +60,19 @@ verify_surfer; tool_ok=$?
 [ -z "$MISSING_PKGS" ] && [ "$tool_ok" = 0 ] && exit 0
 [ -n "$MISSING_PKGS" ] && apt_hint
 [ "$tool_ok" = 0 ] && exit 1
-if [ "$BUILD" = 0 ]; then
-  echo "Build Surfer with: $0 --build"
-  exit 1
-fi
+# Rust is needed now that Surfer must be built. tools/build_tools.sh sets
+# PACINO_MISSING_RUST and prints the rustup command itself.
 if [ "$have_rust" = 0 ]; then
-  echo "Install Rust with (it edits ~/.bashrc and ~/.profile):"
-  echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  if [ -n "${PACINO_MISSING_RUST:-}" ]; then
+    echo surfer >> "$PACINO_MISSING_RUST"
+  else
+    echo "Install Rust with (it edits ~/.bashrc and ~/.profile):"
+    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+  fi
+fi
+if [ "$BUILD" = 0 ]; then
+  build_hint "Build Surfer"
+  exit 1
 fi
 if [ -n "$MISSING_PKGS" ] || [ "$have_rust" = 0 ]; then
   echo "NOT BUILT surfer: install the prerequisites first"

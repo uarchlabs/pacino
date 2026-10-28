@@ -54,7 +54,7 @@ verify_fst2vcd; tool_ok=$?
 [ -n "$MISSING_PKGS" ] && apt_hint
 [ "$tool_ok" = 0 ] && exit 1
 if [ "$BUILD" = 0 ]; then
-  echo "Build fst2vcd with: $0 --build"
+  build_hint "Build fst2vcd"
   exit 1
 fi
 if [ -n "$MISSING_PKGS" ]; then

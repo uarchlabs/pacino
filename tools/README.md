@@ -72,9 +72,11 @@ and builds any that is missing or at the wrong version. It also checks
 the Embecosm toolchain in `EMBECOSM_BIN` (`rtl/Vars.mk`). When that is
 missing it asks for the bin directory of an existing install, or
 downloads the release into `tools/`, and saves the answer in
-`tools/local.mk`. It installs no system packages; when one is missing it
-prints the `apt install` command. See "Build the tools" in the top-level
-README.md.
+`tools/local.mk`. It checks everything and asks that one question
+first, in a few seconds, then builds unattended. It installs no system
+packages: when an apt package or Rust is missing it stops before any
+build and prints one command for all of them. See "Build the tools" in
+the top-level README.md.
 
 Every run is logged to `logs/pacino_setup_YYYY-MM-DD_N.log` (N counts
 the runs that day): a header with the date, user, host, OS, git branch
@@ -86,6 +88,8 @@ tools/build_tools.sh                  # check, build what is needed
 tools/build_tools.sh --check          # report only
 tools/build_tools.sh spike            # one tool
 tools/check_spike.sh [--build]        # the per-tool script it runs
+tools/check_embecosm.sh --ask         # ask and save only (phase 1)
+tools/check_embecosm.sh --install     # install without asking (phase 2)
 ```
 
 ## check_rva23_coverage.py

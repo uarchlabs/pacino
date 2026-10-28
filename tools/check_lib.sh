@@ -79,8 +79,19 @@ check_pkgs() {
   done
 }
 
-# Print the apt command for MISSING_PKGS
+# Print the apt command for MISSING_PKGS. Not printed under
+# tools/build_tools.sh (PACINO_MISSING_PKGS set), which prints one command
+# for every tool.
 apt_hint() {
+  [ -n "${PACINO_MISSING_PKGS:-}" ] && return
   echo "Install the missing packages with:"
   echo "  sudo apt install$MISSING_PKGS"
+}
+
+# Report only: print "$1 with: <script> --build". Not printed in the
+# check phase of tools/build_tools.sh (PACINO_PLAN set), which builds
+# afterwards itself.
+build_hint() {
+  [ -n "${PACINO_PLAN:-}" ] && return
+  echo "$1 with: $0 --build"
 }

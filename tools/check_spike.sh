@@ -47,7 +47,7 @@ verify_spike; tool_ok=$?
 [ -n "$MISSING_PKGS" ] && apt_hint
 [ "$tool_ok" = 0 ] && exit 1
 if [ "$BUILD" = 0 ]; then
-  echo "Build Spike with: $0 --build"
+  build_hint "Build Spike"
   exit 1
 fi
 if [ -n "$MISSING_PKGS" ]; then
