@@ -68,7 +68,7 @@
 
 ## build_tools.sh
 
-Checks Verilator 5.048, Spike 1.1.1-dev, Surfer v0.7.0, lcov v1.15 and
+Checks Verilator 5.048, Spike 1.1.1-dev, Surfer v0.7.0-35, lcov v1.15 and
 fst2vcd (GTKWave v3.3.104) in `tools/bin` and builds any that is missing
 or at the wrong version. It also checks the Embecosm toolchain in
 `EMBECOSM_BIN` (`rtl/Vars.mk`). When that is missing it asks for the bin

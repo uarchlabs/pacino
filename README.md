@@ -134,7 +134,7 @@ This builds the project tools into `$RVA_ROOT/tools/bin`, the paths
 |-----------|------------|------------------------------------------------|
 | Verilator | 5.048      | `tools/verilator` submodule                    |
 | Spike     | 1.1.1-dev  | `tools/spike` submodule (commit 20feb9c2)      |
-| Surfer    | v0.7.0     | gitlab.com/surfer-project/surfer, cloned into `tools/surfer`; built with Rust 1.95.0, which the script installs into `tools/rust` |
+| Surfer    | v0.7.0-35  | gitlab.com/surfer-project/surfer at commit 010b840 (2026-05-25), the build `examples/fe_demo` was checked with, cloned into `tools/surfer`; built with Rust 1.95.0, which the script installs into `tools/rust` |
 | lcov      | v1.15      | github.com/linux-test-project/lcov, cloned into `tools/lcov`; `genhtml` for the coverage reports |
 | fst2vcd   | GTKWave v3.3.104 | github.com/gtkwave/gtkwave, cloned into `tools/gtkwave`; only `fst2vcd` is built |
 

@@ -6,12 +6,19 @@
 # tools/check_surfer.sh [--build] -- report Surfer and its packages; with
 # --build, build Surfer when it is missing or the wrong version.
 #
-# Surfer is built from https://gitlab.com/surfer-project/surfer at tag
+# Surfer is built from https://gitlab.com/surfer-project/surfer at commit
 # SURFER_REF, cloned into $RVA_ROOT/tools/surfer, and installed to
 # $RVA_ROOT/tools/bin (cargo install --root). It is correct when every
-# shared library resolves (ldd) and --version names exactly SURFER_REF
-# ("git: v0.7.0)", not a later commit such as v0.7.0-35-g010b840); the
-# version is checked again after a build.
+# shared library resolves (ldd) and --version names exactly
+# SURFER_VERSION ("git: v0.7.0-35-g010b840)"); the version is checked
+# again after a build.
+#
+# The pin is a commit, not the v0.7.0 tag: examples/fe_demo's command
+# files were written and checked (DOC-004) with this build. The v0.7.0
+# tag has no zoom_to command, and its wellen (0.20.5) names an unpacked
+# array element a[i] as a.a.[i] or a.a, not a.[i] (wellen 0.21.0 here),
+# so fe_demo's files fail in it. Move the pin to a release tag once one
+# includes this commit.
 #
 # Rust is needed to build only. --build installs it per clone, at
 # RUST_VERSION, into $RVA_ROOT/tools/rust (RUSTUP_HOME and CARGO_HOME
@@ -26,10 +33,11 @@ source "$(dirname "$0")/check_lib.sh" "$@"
 
 SRC="$RVA_ROOT/tools/surfer"
 SURFER_URL="https://gitlab.com/surfer-project/surfer.git"
-SURFER_REF="v0.7.0"
+SURFER_REF="010b84085e7eb27546fce84ca8f02ca6b4797b6a"   # 2026-05-25
+SURFER_VERSION="v0.7.0-35-g010b840"   # what --version prints after git:
 
-# Rust 1.95.0 built the Surfer v0.7.0 in use on 2026-10-27; Surfer
-# v0.7.0 needs 1.92 or later (rust-version in its Cargo.toml).
+# Rust 1.95.0 built Surfer v0.7.0 on 2026-10-27; this commit needs 1.92
+# or later (rust-version in its Cargo.toml).
 RUST_VERSION="1.95.0"
 RUST_DIR="$RVA_ROOT/tools/rust"
 export RUSTUP_HOME="$RUST_DIR/rustup" CARGO_HOME="$RUST_DIR/cargo"
@@ -59,8 +67,8 @@ verify_surfer() {
     return 1
   fi
   version=$("$BIN/surfer" --version 2>&1 || true)
-  if [[ "$version" != *"git: $SURFER_REF)"* ]]; then
-    echo "BROKEN  surfer: expected $SURFER_REF, got: $version"
+  if [[ "$version" != *"git: $SURFER_VERSION)"* ]]; then
+    echo "BROKEN  surfer: expected $SURFER_VERSION, got: $version"
     return 1
   fi
   echo "OK      surfer: $version at $BIN/surfer"

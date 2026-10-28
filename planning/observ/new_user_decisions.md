@@ -63,7 +63,7 @@ Tool               Pin              Vars.mk             Script
 Verilator          5.048            VERILATOR           check_verilator.sh
 verilator_coverage 5.048            VERILATOR_COVERAGE  check_verilator.sh
 Spike, spike-dasm  1.1.1-dev        SPIKE               check_spike.sh
-Surfer             v0.7.0           SURFER              check_surfer.sh
+Surfer             010b840 (0.7.0+) SURFER              check_surfer.sh
 genhtml (lcov)     v1.15            GENHTML             check_lcov.sh
 fst2vcd            GTKWave v3.3.104 FST2VCD             check_fst2vcd.sh
 Embecosm GCC/Clang 20250309         EMBECOSM_BIN        check_embecosm.sh
@@ -77,11 +77,12 @@ Source and check, per tool:
 - Spike: submodule tools/spike (commit 20feb9c2); configure --prefix
   tools in tools/spike/build. Correct when the banner names 1.1.1-dev
   and spike-dasm decodes DASM(0505) as c.addi a0, 1.
-- Surfer: gitlab.com/surfer-project/surfer at the tag, cloned into
+- Surfer: gitlab.com/surfer-project/surfer at commit 010b840 (NU-17,
+  v0.7.0-35, 2026-05-25), cloned into
   tools/surfer; cargo install --root tools --no-track --force --locked,
   with Rust 1.95.0 from tools/rust (NU-17).
   Correct when every library resolves (ldd) and --version names the tag
-  exactly ("git: v0.7.0)").
+  exactly ("git: v0.7.0-35-g010b840)").
 - lcov: github.com/linux-test-project/lcov at the tag, shallow clone in
   tools/lcov; make install PREFIX=tools. Perl only. Correct when genhtml
   --version reports 1.15 and tools/etc/lcovrc exists.
@@ -261,15 +262,27 @@ NU-17  Surfer is installed as tools/bin/surfer. rtl/core/frontend/bpu/
        check_surfer.sh --build: rustup-init with RUSTUP_HOME and
        CARGO_HOME in tools/rust, --no-modify-path, --profile minimal,
        pinned at RUST_VERSION 1.95.0 (it built the Surfer in use;
-       Surfer v0.7.0 needs 1.92 or later). RUSTUP_TOOLCHAIN pins the
+       the Surfer commit needs 1.92 or later). RUSTUP_TOOLCHAIN pins the
        build to that version. No shell profile is edited, and a Rust in
        ~/.cargo is neither used nor changed. Decided 2026-10-27: Rust
        had been a user-installed prerequisite (rustup into ~/.cargo,
        editing ~/.bashrc and ~/.profile), so a user without it was
        stopped (NU-10) for something that needs no sudo. apt cannot
        supply it: Ubuntu 22.04's newest is 1.91 (rustc-1.91; rustc is
-       1.75), and Surfer v0.7.0 needs 1.92. tools/rust is not
-       tracked.
+       1.75), and Surfer needs 1.92. tools/rust is not tracked.
+       Surfer is pinned to commit 010b840 (2026-05-25; --version "git:
+       v0.7.0-35-g010b840"), not the v0.7.0 tag (decided 2026-10-28).
+       examples/fe_demo's command files were written and checked
+       (DOC-004, 21 of 21) with that build, then in ~/.cargo. The v0.7.0
+       tag fails them: it has no zoom_to command (4 of 24 files, FDT-12c's
+       opening view), and its wellen 0.20.5 names an unpacked array
+       element a[i] a.a.[i], or a.a with bit index i when 1 bit wide,
+       where fe_demo_sigs.py writes a.[i] as wellen 0.21.0 in the commit
+       does (71 of 1108 variable_add lines, in 9 files). make view
+       S=fd09_tage with the 010b840 build shows no error. Rejected:
+       changing fe_demo for the tag (the opening view would only
+       approximate FDT-12c's two cycles before to thirty after). Move
+       the pin to a release tag once one includes the commit.
 
 ---
 
@@ -406,28 +419,22 @@ Files:
 
 ## 7. Open items
 
-NU-UN-1  planning/PROJECT_CORE.md, Tools Status, for the PA (the file is
-         checked by check_planning.sh, so the IA does not edit it). It
-         names EMBECOSM_BIN now, but these rows are stale (checked
-         2026-10-27):
-         - EMBECOSM_BIN: the default is $(RVA_ROOT)/tools/<release>/bin,
-           or the path in tools/local.mk (NU-14), not /usr/local/...;
-           it also holds riscv32-unknown-elf-gcc and -objdump for
-           tools/Makefile, which build RV64 code (NU-14).
-         - fst2vcd: GTKWave v3.3.104, $(RVA_ROOT)/tools/bin/fst2vcd,
-           FST2VCD ?= in rtl/Vars.mk (NU-16).
-         - Spike: 1.1.1-dev (tools/spike submodule).
-         - No rows for lcov v1.15 (GENHTML, NU-15) or
-           verilator_coverage 5.048 (VERILATOR_COVERAGE).
-         - Vars.mk row: also VERILATOR_COVERAGE, GENHTML, FST2VCD.
-         - Surfer and the others: built by build_tools.sh in two phases
-           (NU-10).
-         planning/PROJECT_STATUS.md mentions RVA_EXT_TOOLS only in
-         history entries; docs/sessions.json and a blog post likewise.
-NU-UN-2  The SSH keepalive (NU-21) is not yet proven on a push of
-         15 minutes to GitHub.
-NU-UN-3  Surfer v0.7.0 has not been run against the fe_demo .sucl files
-         (waves/chk_sucl.py).
+NU-UN-1  Resolved 2026-10-28 (the IA, Jeff's authorization):
+         planning/PROJECT_CORE.md Tools Status brought to NU-1, NU-14 to
+         NU-17 (Verilator and verilator_coverage, Spike 1.1.1-dev,
+         Surfer 010b840, lcov, fst2vcd, EMBECOSM_BIN, Vars.mk);
+         fe_demo_tb_decisions.md FDT-9a SURFER default; a
+         PROJECT_STATUS.md entry; check_planning.sh checksums for the
+         three. planning/PROJECT_STATUS.md, docs/sessions.json and a
+         blog post still name RVA_EXT_TOOLS and ~/.cargo/bin/surfer, in
+         history entries only.
+NU-UN-2  The SSH keepalive (NU-21) is not yet proven on a push to
+         GitHub whose regression runs for minutes (about 10 at the
+         default jobs, NU-22; 15 to 18 before).
+NU-UN-3  waves/chk_sucl.py has not been run with the Surfer that
+         check_surfer.sh builds (commit 010b840, NU-17). make view
+         S=fd09_tage was clean with the same commit built earlier into
+         ~/.cargo (2026-10-28).
 NU-UN-4  The new-user test on a fresh account (new_user.md, account
          randy) has not been run to completion. The 2026-10-27 runs
          found: the check required riscv64- names the release does not

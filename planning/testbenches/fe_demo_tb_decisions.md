@@ -6,7 +6,7 @@
  FILE:    fe_demo_tb_decisions.md
  SOURCE:  session-080
  STATUS:  DRAFT
- UPDATED: 2026-10-16
+ UPDATED: 2026-10-28
  CONTACT: Jeff Nye
 ```
 
@@ -96,7 +96,7 @@ FDT-9a make view S=<scenario> opens the scenario in Surfer with its
        that model. A missing S prints the usage
        and fails; an S that is not a scenario lists the valid names
        and fails. The viewer is the variable SURFER, set in
-       rtl/Vars.mk to $(HOME)/.cargo/bin/surfer with ?=, so the
+       rtl/Vars.mk to $(RVA_ROOT)/tools/bin/surfer with ?=, so the
        command line or the environment may override it; the
        Makefile does not set it. A failing run still writes its FST,
        and the viewer opens on it.
@@ -280,4 +280,10 @@ FDT-U1 The trace writer (planning/observ/fe_trace_decisions.md) is
               build; FDT-12a the format table (Jeff).
   2026-10-19  session-081, after DOC-007. FDT-12c, FDT-13: a leading
               0. Introduction section is allowed (Jeff).
+  2026-10-28  interactive session, branch install_scripts (IA, Jeff's
+              authorization). FDT-9a: SURFER's default is
+              $(RVA_ROOT)/tools/bin/surfer, built by
+              tools/build_tools.sh at commit 010b840, the build these
+              command files were checked with
+              (new_user_decisions.md NU-17).
 ```

@@ -6,7 +6,7 @@
  FILE:    PROJECT_STATUS.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-10-28
  CONTACT: Jeff Nye
 ```
 
@@ -14,6 +14,36 @@ Updated every session. Paste into Claude.ai at session start,
 along with the latest session_handoff-NNN.md and CLAUDE.md.
 
 Paste PROJECT_CORE.md only when methodology is under discussion.
+
+---
+## 2026-10-28, interactive session, branch install_scripts: new-user setup.
+
+Not a PA session: the IA with Jeff; planning edits by Jeff's
+authorization. Decisions and open items: planning/observ/
+new_user_decisions.md (NU-1 to NU-22, NU-UN-1 to NU-UN-7).
+  Tools per clone in tools/, named in rtl/Vars.mk, none from PATH
+    (NU-1): Verilator and verilator_coverage 5.048, Spike 1.1.1-dev,
+    Surfer commit 010b840 (NU-17), lcov v1.15 (NU-15), fst2vcd from
+    GTKWave v3.3.104 (NU-16); Rust 1.95.0 into tools/rust for Surfer.
+    RVA_EXT_TOOLS is now EMBECOSM_BIN, asked for or installed by
+    check_embecosm.sh and kept in tools/local.mk (NU-14).
+  tools/build_tools.sh checks and asks first, then builds unattended;
+    a missing apt package stops it before any build (NU-10). Each run
+    is logged to logs/ (NU-11).
+  The Embecosm GCC is used by its riscv32-unknown-elf names, which
+    build RV64 code; the release has no riscv64- names (NU-14).
+  tools/regress.sh runs Makefiles in parallel, -j N or REGRESS_JOBS,
+    each make at nice 10 (NU-22): 274 targets PASS in 569 s at 15
+    jobs, against 1066 s one at a time (scratch copy of the working
+    tree, 2026-10-28).
+  git push runs the regression (pre-push hook); tools/setup.sh sets
+    core.hooksPath and an SSH keepalive (NU-18 to NU-21).
+  PROJECT_CORE.md Tools Status and fe_demo_tb_decisions.md FDT-9a
+    brought to the above.
+  Open: NU-UN-2 keepalive on a real push; NU-UN-3 chk_sucl.py with the
+    built Surfer; NU-UN-4 the new-user test repeated; NU-UN-6 lost
+    terminal echo under sudo -iu; NU-UN-7 fe_top sets the regression
+    length.
 
 ---
 ## Session-081, after DOC-007: fe_demo brought to BP-139 and BP-140.

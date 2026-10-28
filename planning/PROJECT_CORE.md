@@ -6,7 +6,7 @@
  FILE:    PROJECT_CORE.md
  SOURCE:  various
  STATUS:  DRAFT
- UPDATED: 2026-10-14
+ UPDATED: 2026-10-28
  CONTACT: Jeff Nye
 ```
 
@@ -629,36 +629,57 @@ ascend, [0:NUM_PRED_SLOTS-1].
 
 | Tool       | Version                        | Location                          | Notes                         |
 |------------|--------------------------------|-----------------------------------|-------------------------------|
-| Verilator  | 5.048 2026-04-26 rev v5.048    | $(RVA_ROOT)/tools/bin/verilator   | Upgraded session-044.         |
-|            |                                |                                   | inout optimizer bug fixed.    |
+| Verilator  | 5.048 2026-04-26 rev v5.048    | $(RVA_ROOT)/tools/bin/verilator   | Upgraded session-044. inout   |
+|            |                                |                                   | optimizer bug fixed.          |
 |            |                                |                                   | Covergroups are ignored       |
 |            |                                |                                   | (COVERIGN) and record no      |
 |            |                                |                                   | coverage; TD#38 closed BP-126.|
-| Spike      | --                             | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
-|            |                                |                                   | issue.                        |
-| Surfer     | v0.7.0                         | $(RVA_ROOT)/tools/bin/surfer      | The one waveform viewer.      |
-|            |                                |                                   | Built by build_tools.sh.      |
-|            |                                |                                   | SURFER ?= in rtl/Vars.mk.     |
+|            |                                |                                   | verilator_coverage, same      |
+|            |                                |                                   | version, beside it            |
+|            |                                |                                   | (VERILATOR_COVERAGE).         |
+| Spike      | 1.1.1-dev (tools/spike         | $(RVA_ROOT)/tools/bin/spike       | See TOOLS-002 for ISA string  |
+|            | submodule)                     |                                   | issue.                        |
+| Surfer     | v0.7.0-35 (commit 010b840)     | $(RVA_ROOT)/tools/bin/surfer      | The one waveform viewer. Built|
+|            |                                |                                   | by build_tools.sh with Rust   |
+|            |                                |                                   | 1.95.0 in tools/rust. The     |
+|            |                                |                                   | commit fe_demo was checked    |
+|            |                                |                                   | with; the v0.7.0 tag fails    |
+|            |                                |                                   | fe_demo's command files       |
+|            |                                |                                   | (NU-17). SURFER ?= in         |
+|            |                                |                                   | rtl/Vars.mk.                  |
 |            |                                |                                   | examples/fe_demo/waves/       |
 |            |                                |                                   | chk_sucl.py has the same      |
 |            |                                |                                   | default; change both.         |
-| fst2vcd    | --                             | --                                | From the GTKWave distribution.|
-|            |                                |                                   | The FST reader of the         |
+| lcov       | v1.15                          | $(RVA_ROOT)/tools/bin/genhtml     | GENHTML in rtl/Vars.mk, with  |
+|            |                                |                                   | --config-file                 |
+|            |                                |                                   | tools/etc/lcovrc. The bpu     |
+|            |                                |                                   | cov_* reports (NU-15).        |
+| fst2vcd    | GTKWave v3.3.104               | $(RVA_ROOT)/tools/bin/fst2vcd     | Only fst2vcd is built (NU-16).|
+|            |                                |                                   | FST2VCD in rtl/Vars.mk. The   |
+|            |                                |                                   | FST reader of the             |
 |            |                                |                                   | examples/fe_demo/waves/       |
 |            |                                |                                   | scripts.                      |
-|EMBECOSM_BIN| --                             | rtl/Vars.mk, default              | Directory of needed tools not |
-|            |                                | /usr/local/riscv-embecosm-        | in the repository: clang      |
-|            |                                | embedded-ubuntu2204-20250309/bin  | (asm_dec_words,               |
-|            |                                |                                   | oracle_ifu_rvc_exp) and       |
+|EMBECOSM_BIN| riscv-embecosm-embedded-       | rtl/Vars.mk: tools/local.mk if    | Directory of needed tools not |
+|            | ubuntu2204-20250309            | present, else $(RVA_ROOT)/tools/  | in the repository: clang      |
+|            |                                | <release>/bin                     | (asm_dec_words,               |
+|            |                                |                                   | oracle_ifu_rvc_exp),          |
 |            |                                |                                   | llvm-objdump                  |
-|            |                                |                                   | (oracle_ifu_rvc_exp). BP-132. |
+|            |                                |                                   | (oracle_ifu_rvc_exp),         |
+|            |                                |                                   | riscv32-unknown-elf-gcc and   |
+|            |                                |                                   | -objdump (tools/Makefile; they|
+|            |                                |                                   | build RV64 code). BP-132.     |
+|            |                                |                                   | Located or installed by       |
+|            |                                |                                   | check_embecosm.sh (NU-14).    |
 | ticfinder  | --                             | tools/ticfinder/tools/            | The description writing-rule  |
 |            |                                | ticfinder.py                      | check (FDT-13a).              |
-| Vars.mk    | --                             | $(RVA_ROOT)/rtl/Vars.mk            | Common Makefile variables.    |
-|            |                                |                                   | VERILATOR, SPIKE, SURFER      |
-|            |                                |                                   | paths, EMBECOSM_BIN, all ?=. |
-|            |                                |                                   | All RTL Makefiles             |
-|            |                                |                                   | include this file.            |
+| Vars.mk    | --                             | $(RVA_ROOT)/rtl/Vars.mk           | Common Makefile variables:    |
+|            |                                |                                   | VERILATOR, VERILATOR_COVERAGE,|
+|            |                                |                                   | SPIKE, SURFER, GENHTML,       |
+|            |                                |                                   | FST2VCD, EMBECOSM_BIN, all ?=.|
+|            |                                |                                   | All RTL Makefiles include this|
+|            |                                |                                   | file. No tool comes from PATH.|
+|            |                                |                                   | Setup: new_user_decisions.md  |
+|            |                                |                                   | in planning/observ/.          |
 |check_rva23_coverage.py | --    | ./tools                  | Uses submodule: tools/riscv-opcodes |
 |                        |       |                          | make coverage: exits non-zero on MISSING |
 |                        |       |                          | --strict flag: treats ROUTED as MISSING (off by default) |

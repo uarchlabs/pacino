@@ -132,6 +132,9 @@
 # ubtb_interfaces.md, ras_decisions.md, ras_interfaces.md).
 # Updated after DOC-007, session-081 (PROJECT_STATUS.md,
 # fe_demo_scenarios.md, fe_demo_tb_decisions.md, fe_decisions.md).
+# Updated 2026-10-28, interactive session on branch install_scripts, by
+# the IA with Jeff's authorization (PROJECT_CORE.md, PROJECT_STATUS.md,
+# fe_demo_tb_decisions.md).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -153,8 +156,8 @@ UNKN="."
 # One file per line: <location> <file> <md5 prefix, 12 chars>
 # <location> is one of PLAN ARCH INTF TEST VERF SHOW OBSV PDOC MISC UNKN. Blank lines and # are ignored.
 read -r -d '' FILES <<'EOF'
-PLAN  PROJECT_CORE.md                   d1f9e222d77f
-PLAN  PROJECT_STATUS.md                 e215b34bea77
+PLAN  PROJECT_CORE.md                   51e7d50c7ac0
+PLAN  PROJECT_STATUS.md                 8960f2eb5885
 
 UNKN  CLAUDE.md                         21a3681a7f6f
 
@@ -194,7 +197,7 @@ ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
 ARCH  pacino_cache.md                   f871e6288ecf
-TEST  fe_demo_tb_decisions.md           6dc17b90d009
+TEST  fe_demo_tb_decisions.md           1ca7d46e1c27
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
 TEST  sc_tb_decisions.md                85577a58ad65
