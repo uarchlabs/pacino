@@ -210,9 +210,27 @@ From the repo root:
 ```
 
 It finds every Makefile under `rtl/` and runs every test target in each,
-one make call per target, coverage targets included (about 15 minutes).
-It prints a summary block (git sha, one line per target, totals) and
-exits non-zero on any failure not listed in `tools/known_failures.txt`.
+one make call per target, coverage targets included. It prints a summary
+block (git sha, one line per target, totals) and exits non-zero on any
+failure not listed in `tools/known_failures.txt`.
+
+Makefiles run in parallel; the targets of one Makefile run in turn,
+since they can share an object directory. The number of Makefiles run
+at once is, first that is set:
+
+```bash
+./tools/regress.sh -j 4          # this run
+REGRESS_JOBS=4 git push          # the environment; also for the hook
+./tools/regress.sh               # default: half the CPU threads, at
+                                 # most one job per 2 GB of memory
+```
+
+On a 32-thread machine the default run takes about 10 minutes; fe_top's
+targets, in one job, set the length. `-j 1` runs one target at a time,
+about 18 minutes. Every make runs under `nice -n 10`
+and `ionice -c 3`, so other work on the machine comes first and the
+regression uses what is left; `REGRESS_NICE=0` turns that off. The
+summary header shows the job count and the priority.
 `make -C rtl all` and `make -C rtl cov` are retired; they print this
 command and exit 1.
 

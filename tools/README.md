@@ -40,7 +40,7 @@
 | Makefile                | rva23_insn_ref/rva23_ext_test with Embecosm riscv32 gcc; spike_all decode check |
 | mk_pkg.sh               | disposable |
 | README.md               | ... |
-| regress.sh              | git hook regression script |
+| regress.sh              | the RTL regression, also run by the pre-push hook |
 | requirements.txt        | required Python packages (pip) |
 | rename_mcf.py           | disposable |
 | riscv-embecosm-embedded-ubuntu2204-20250309 | not tracked; Embecosm toolchain, when installed into tools/ |
@@ -92,6 +92,20 @@ tools/build_tools.sh spike            # one tool
 tools/check_spike.sh [--build]        # the per-tool script it runs
 tools/check_embecosm.sh --ask         # ask and save only (phase 1)
 tools/check_embecosm.sh --install     # install without asking (phase 2)
+```
+
+## regress.sh
+
+Runs every `REGRESS_TARGETS` entry of every Makefile under `rtl/` and
+prints a summary; see "Run the regression" in the top-level README.md.
+Makefiles run in parallel, the targets of one Makefile in turn.
+
+```bash
+./tools/regress.sh                    # default jobs: half the threads,
+                                      # at most one per 2 GB of memory
+./tools/regress.sh -j 4               # at most 4 Makefiles at once
+REGRESS_JOBS=4 git push               # the same, for the pre-push hook
+REGRESS_NICE=0 ./tools/regress.sh     # without nice/ionice
 ```
 
 ## check_rva23_coverage.py

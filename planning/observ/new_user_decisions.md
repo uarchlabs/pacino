@@ -314,6 +314,39 @@ NU-21  Why the SSH keepalive. git opens the connection to the remote
          cancelling the original (git prints "error: failed to push some
          refs", not acceptable); pushing over HTTPS.
 
+NU-22  tools/regress.sh runs Makefiles in parallel and the targets of one
+       Makefile in turn (decided 2026-10-28; before, every target ran in
+       turn, one compile job each, about 18 minutes on a 32-thread
+       machine with most cores idle).
+       - Why per Makefile: on 2026-10-28 each of the 274 targets was run
+         once in a scratch copy and the files it wrote were recorded.
+         838 of 6299 files were written by more than one target, all
+         within one Makefile: fe_top obj_fe_top/ (sim_fe_top,
+         assert_labels and the 38 sim_fe_top_<program> targets) and
+         obj_1slot_fe_top/ (the 41 _1slot targets); bpu
+         obj_dir_cov_<x>/ and coverage/<x>/ (cov_bpu and cov_<x>, for
+         history, loop_pred, tage, tage_table, ubtb); icache obj_l1i/
+         and ptw obj_ptw/ (sim_<x> and assert_labels). No target wrote
+         under another Makefile's directory, or under tools/.
+       - Jobs, first that is set: -j N; REGRESS_JOBS=N (the pre-push
+         hook passes no arguments, so this sets it for a push); the
+         default, half the CPU threads, at most one job per 2 GB of
+         memory (the JOBS cap of NU-7), at least 1. -j 1 is the former
+         serial run. Makefiles with the most targets start first.
+       - Every make runs under nice -n 10, and ionice -c 3 when
+         available, so other work on the machine comes first; the job
+         cap limits the total, nice decides who wins when the machine
+         is busy. REGRESS_NICE=0 turns it off.
+       - The summary is in path order whatever the finish order, and
+         its header shows the job count, its source and the priority.
+       - Measured 2026-10-28, 32 threads, 31 GB: the default (15 jobs)
+         ran all 274 targets, all PASS, in 569 s; fe_top, in one job,
+         took 561 s of it. The same targets one at a time: 1066 s.
+       - Rejected: grouping only the measured sharing targets (a
+         hand-kept list; a new target that shares an object directory,
+         e.g. a new fe_top program, would not be in it and would race).
+         Finer grouping is NU-UN-7.
+
 ---
 
 ## 6. Operations
@@ -404,10 +437,12 @@ NU-UN-4  The new-user test on a fresh account (new_user.md, account
          a user prerequisite (now installed per clone, NU-17). Those
          runs used the scripts as pushed before the fixes; the test is
          to be repeated from a new account.
-NU-UN-5  The full regression has not been run since VERILATOR_COVERAGE,
-         GENHTML and FST2VCD moved to tools/bin. Coverage reports now
-         come from verilator_coverage 5.048; they came from a 5.020 on
-         PATH before, so figures may differ slightly from older reports.
+NU-UN-5  Coverage reports now come from verilator_coverage 5.048 in
+         tools/bin; they came from a 5.020 on PATH before, so figures
+         may differ slightly from older reports. The full regression has
+         passed with the tools/bin tools (2026-10-28, 274 targets, all
+         PASS, in a scratch copy of the working tree, NU-22); it has not
+         yet run on a commit through the pre-push hook.
 NU-UN-6  In the randy run (sudo -iu randy, in a gnome-terminal), keys
          typed at the Embecosm prompt were not displayed, and after the
          script ended the shell showed no typed keys, not even Enter;
@@ -417,3 +452,9 @@ NU-UN-6  In the randy run (sudo -iu randy, in a gnome-terminal), keys
          suspect: sudo's own pseudo-terminal (use_pty) relaying input.
          To be checked in the repeat of NU-UN-4; if it recurs, record
          stty -a for randy's terminal before recovering it (stty sane).
+NU-UN-7  fe_top's 84 targets, in one job (NU-22), set the regression's
+         length. Each sim_fe_top_<program> target rebuilds the same model
+         (-B) and runs one program, about 6 s each. Building each model
+         once and running the programs in parallel would shorten the
+         run several-fold; it changes the fe_top Makefile and how
+         regress.sh groups targets.

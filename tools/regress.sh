@@ -3,10 +3,24 @@
 # Copyright (c) 2026 Jeff Nye, uarchlabs.com
 # SPDX-FileCopyrightText: 2026 Jeff Nye <jeff@uarchlabs.com>
 #
-# tools/regress.sh [ROOT] -- run every test target in every rtl/ Makefile
+# tools/regress.sh [-j N] [ROOT] -- run every test target in every rtl/
+# Makefile
 #
 # ROOT defaults to the repo root (the parent of this script's directory).
 # Pass a path to run against a scratch copy of the tree.
+#
+# Jobs: the targets of one Makefile run one after another in one job, so
+# targets that share an object directory never run together; Makefiles
+# run in parallel, at most N at once. Measured on 2026-10-28, no target
+# writes a file under another Makefile's directory. N is, in order:
+#   -j N            on the command line
+#   REGRESS_JOBS=N  in the environment (the pre-push hook passes no
+#                   arguments, so this is how to set it for a push)
+#   the default     half the CPU threads, at most one job per 2 GB of
+#                   memory, at least 1
+# -j 1 runs every target in turn, as before. Each make runs under
+# nice -n 10, and ionice -c 3 when available, so other work on the
+# machine comes first; REGRESS_NICE=0 turns that off.
 #
 # For each Makefile found under ROOT/rtl:
 #   - read its defined targets from make's rule database (make -pRrq)
@@ -16,7 +30,8 @@
 #     not defined, or if a name is in both lists. A target added to a
 #     Makefile cannot be left out of the regression without this failing.
 #   - run each REGRESS_TARGETS entry with its own `make -B -C <dir> <t>`,
-#     continuing past failures
+#     continuing past failures. The summary lists Makefiles and targets in
+#     path order, whatever order they finished in.
 #
 # A target FAILS when make exits non-zero or its log holds any Verilator
 # %Warning line. Failures are compared with ROOT/tools/known_failures.txt
@@ -40,6 +55,53 @@
 
 set -u
 
+usage() {
+  echo "usage: tools/regress.sh [-j N] [ROOT]" >&2
+  exit 2
+}
+
+# -- jobs: -j N, then REGRESS_JOBS, then the default
+JOBS_ARG=""
+if [ "${1:-}" = "-j" ]; then
+  JOBS_ARG=${2:-}
+  shift 2 || usage
+elif [[ "${1:-}" == -j* ]]; then
+  JOBS_ARG=${1#-j}
+  shift
+fi
+N_THREADS=$(nproc)
+MEM_GB=$(awk '/^MemTotal:/ { print int($2 / 1048576) }' /proc/meminfo)
+if [ -n "$JOBS_ARG" ]; then
+  N_JOBS=$JOBS_ARG
+  JOBS_FROM="-j"
+elif [ -n "${REGRESS_JOBS:-}" ]; then
+  N_JOBS=$REGRESS_JOBS
+  JOBS_FROM="REGRESS_JOBS"
+else
+  N_JOBS=$(( N_THREADS / 2 ))
+  [ "$N_JOBS" -gt $(( MEM_GB / 2 )) ] && N_JOBS=$(( MEM_GB / 2 ))
+  [ "$N_JOBS" -lt 1 ] && N_JOBS=1
+  JOBS_FROM="default: $N_THREADS threads / 2, $MEM_GB GB / 2"
+fi
+if ! [[ "$N_JOBS" =~ ^[1-9][0-9]*$ ]]; then
+  echo "regress: jobs must be a positive integer, got '$N_JOBS'" >&2
+  usage
+fi
+
+# -- priority: nice, and ionice when present, unless REGRESS_NICE=0
+NICE=()
+NICE_STATE=off
+if [ "${REGRESS_NICE:-1}" != 0 ]; then
+  NICE=(nice -n 10)
+  NICE_STATE="nice -n 10"
+  if command -v ionice > /dev/null 2>&1 && ionice -c 3 true 2>/dev/null
+  then
+    NICE+=(ionice -c 3)
+    NICE_STATE+=", ionice -c 3"
+  fi
+fi
+
+[ $# -le 1 ] || usage
 ROOT=${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}
 if [ ! -d "$ROOT/rtl" ]; then
   echo "regress: no rtl/ directory under '$ROOT'" >&2
@@ -206,58 +268,94 @@ SET_ERRORS=()   # regression-set errors
 N_RUN=0
 T_ALL0=$(date +%s)
 
+# -- 1. regression-set checks, one Makefile at a time (fast). Per Makefile
+# i: MF_REL, MF_TAG, MF_DIR, MF_TESTS (space separated) and MF_HEAD (its
+# summary lines before the targets, newline separated).
+MF_REL=(); MF_TAG=(); MF_DIR=(); MF_TESTS=(); MF_HEAD=()
 for mf in "${MAKEFILES[@]}"; do
   dir=$(dirname "$mf")
   rel=${dir#$ROOT/}
-  tag=${rel//\//_}
-  T_MF0=$(date +%s)
-  SUMMARY+=("== $rel")
+  head=""
 
   mapfile -t defined < <(defined_targets "$dir")
   list_out=$(make -s --no-print-directory -C "$dir" regress_list 2>&1)
   if [ $? -ne 0 ]; then
     SET_ERRORS+=("$rel: no regress_list target (regression plumbing missing)")
-    SUMMARY+=("  REGRESS-SET ERROR  no regress_list target")
-    SUMMARY+=("  time $(( $(date +%s) - T_MF0 ))s")
-    continue
+    head+="  REGRESS-SET ERROR  no regress_list target"$'\n'
+    tests=()
+  else
+    read -r -a tests   <<< "$(sed -n 's/^test://p'    <<< "$list_out")"
+    read -r -a exclude <<< "$(sed -n 's/^exclude://p' <<< "$list_out")"
+
+    declare -A IN_T=() IN_X=() IS_DEF=()
+    for t in "${tests[@]}";   do IN_T[$t]=1; done
+    for t in "${exclude[@]}"; do IN_X[$t]=1; done
+    for t in "${defined[@]}"; do IS_DEF[$t]=1; done
+
+    for t in "${defined[@]}"; do
+      if [ -z "${IN_T[$t]:-}" ] && [ -z "${IN_X[$t]:-}" ]; then
+        msg="$rel: target '$t' is in neither REGRESS_TARGETS"
+        SET_ERRORS+=("$msg nor REGRESS_EXCLUDE")
+        head+="  REGRESS-SET ERROR  $t: defined, not in the regression set"$'\n'
+      fi
+    done
+    for t in "${tests[@]}" "${exclude[@]}"; do
+      if [ -z "${IS_DEF[$t]:-}" ]; then
+        SET_ERRORS+=("$rel: '$t' is listed but not defined")
+        head+="  REGRESS-SET ERROR  $t: listed but not defined"$'\n'
+      fi
+    done
+    for t in "${tests[@]}"; do
+      if [ -n "${IN_X[$t]:-}" ]; then
+        msg="$rel: '$t' is in both REGRESS_TARGETS"
+        SET_ERRORS+=("$msg and REGRESS_EXCLUDE")
+        head+="  REGRESS-SET ERROR  $t: in both lists"$'\n'
+      fi
+    done
+    unset IN_T IN_X IS_DEF
   fi
-  read -r -a tests   <<< "$(sed -n 's/^test://p'    <<< "$list_out")"
-  read -r -a exclude <<< "$(sed -n 's/^exclude://p' <<< "$list_out")"
+  MF_REL+=("$rel"); MF_TAG+=("${rel//\//_}"); MF_DIR+=("$dir")
+  MF_TESTS+=("${tests[*]}"); MF_HEAD+=("$head")
+done
 
-  declare -A IN_T=() IN_X=() IS_DEF=()
-  for t in "${tests[@]}";   do IN_T[$t]=1; done
-  for t in "${exclude[@]}"; do IN_X[$t]=1; done
-  for t in "${defined[@]}"; do IS_DEF[$t]=1; done
-
-  for t in "${defined[@]}"; do
-    if [ -z "${IN_T[$t]:-}" ] && [ -z "${IN_X[$t]:-}" ]; then
-      msg="$rel: target '$t' is in neither REGRESS_TARGETS"
-      SET_ERRORS+=("$msg nor REGRESS_EXCLUDE")
-      SUMMARY+=("  REGRESS-SET ERROR  $t: defined, not in the regression set")
-    fi
-  done
-  for t in "${tests[@]}" "${exclude[@]}"; do
-    if [ -z "${IS_DEF[$t]:-}" ]; then
-      SET_ERRORS+=("$rel: '$t' is listed but not defined")
-      SUMMARY+=("  REGRESS-SET ERROR  $t: listed but not defined")
-    fi
-  done
-  for t in "${tests[@]}"; do
-    if [ -n "${IN_X[$t]:-}" ]; then
-      msg="$rel: '$t' is in both REGRESS_TARGETS"
-      SET_ERRORS+=("$msg and REGRESS_EXCLUDE")
-      SUMMARY+=("  REGRESS-SET ERROR  $t: in both lists")
-    fi
-  done
-  unset IN_T IN_X IS_DEF
-
-  for t in "${tests[@]}"; do
-    log=$LOG_DIR/$tag.$t.log
-    echo "[regress] $rel $t"
+# -- 2. run. One job per Makefile runs its targets in turn and writes, per
+# target, "<rc> <seconds>" to <tag>.<target>.res and its total time to
+# <tag>.time. Jobs with the most targets start first, so the longest
+# run is not left until last.
+run_makefile() {
+  local i=$1 t rc T0 T_MF0
+  T_MF0=$(date +%s)
+  for t in ${MF_TESTS[$i]}; do
+    echo "[regress] ${MF_REL[$i]} $t"
     T0=$(date +%s)
-    make -B -C "$dir" "$t" > "$log" 2>&1
+    "${NICE[@]}" make -B -C "${MF_DIR[$i]}" "$t" \
+      > "$LOG_DIR/${MF_TAG[$i]}.$t.log" 2>&1
     rc=$?
-    secs=$(( $(date +%s) - T0 ))
+    echo "$rc $(( $(date +%s) - T0 ))" > "$LOG_DIR/${MF_TAG[$i]}.$t.res"
+  done
+  echo $(( $(date +%s) - T_MF0 )) > "$LOG_DIR/${MF_TAG[$i]}.time"
+}
+
+echo "regress: $N_JOBS job(s) at once ($JOBS_FROM); priority: $NICE_STATE"
+mapfile -t ORDER < <(for i in "${!MF_TESTS[@]}"; do
+  set -- ${MF_TESTS[$i]}; echo "$# $i"; done | sort -k1,1nr | cut -d' ' -f2)
+for i in "${ORDER[@]}"; do
+  [ -n "${MF_TESTS[$i]}" ] || continue
+  while [ "$(jobs -rp | wc -l)" -ge "$N_JOBS" ]; do wait -n; done
+  run_makefile "$i" &
+done
+wait
+
+# -- 3. results, in path order
+for i in "${!MF_REL[@]}"; do
+  rel=${MF_REL[$i]}
+  SUMMARY+=("== $rel")
+  while IFS= read -r line; do
+    [ -n "$line" ] && SUMMARY+=("$line")
+  done <<< "${MF_HEAD[$i]}"
+  for t in ${MF_TESTS[$i]}; do
+    log=$LOG_DIR/${MF_TAG[$i]}.$t.log
+    read -r rc secs < "$LOG_DIR/${MF_TAG[$i]}.$t.res"
     warns=$(grep -c '^%Warning' "$log")
     errs=$(grep -c '^%Error' "$log")
     checks=$(check_counts "$log")
@@ -290,7 +388,10 @@ for mf in "${MAKEFILES[@]}"; do
       "$result" "$t" "$rc" "$warns" "$errs" "$checks" "$secs")")
     [ -n "$subs" ] && SUMMARY+=("             sum of sub-runs:$subs")
   done
-  SUMMARY+=("  time $(( $(date +%s) - T_MF0 ))s")
+  mf_time=0
+  [ -f "$LOG_DIR/${MF_TAG[$i]}.time" ] && \
+    mf_time=$(cat "$LOG_DIR/${MF_TAG[$i]}.time")
+  SUMMARY+=("  time ${mf_time}s")
 done
 
 # A listed entry whose target was never run is stale as well.
@@ -306,6 +407,7 @@ echo
 echo "=================================================================="
 echo "REGRESSION SUMMARY  git $GIT_SHA ($GIT_STATE)"
 echo "root $ROOT"
+echo "jobs $N_JOBS ($JOBS_FROM); priority: $NICE_STATE"
 echo "=================================================================="
 for line in "${SUMMARY[@]}"; do echo "$line"; done
 echo "------------------------------------------------------------------"
