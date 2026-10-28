@@ -134,7 +134,10 @@
 # fe_demo_scenarios.md, fe_demo_tb_decisions.md, fe_decisions.md).
 # Updated 2026-10-28, interactive session on branch install_scripts, by
 # the IA with Jeff's authorization (PROJECT_CORE.md, PROJECT_STATUS.md,
-# fe_demo_tb_decisions.md).
+# fe_demo_tb_decisions.md), and for CLAUDE.md as Jeff committed it on
+# 2026-10-23 (the American English spelling rule), and for
+# mmu_decisions.md and pacino_cache.md as Jeff committed them on
+# 2026-10-24 (MMU-U7/U8 wording; L1I mshrs 16, mshr_targets 4).
 # CLAUDE.md is checked from the repo root (UNKN) since session-074.
 # Usage: ./check_planning.sh [root]   (default: current directory)
 #   root is the repo root, the directory that contains planning/.
@@ -159,7 +162,7 @@ read -r -d '' FILES <<'EOF'
 PLAN  PROJECT_CORE.md                   51e7d50c7ac0
 PLAN  PROJECT_STATUS.md                 8960f2eb5885
 
-UNKN  CLAUDE.md                         21a3681a7f6f
+UNKN  CLAUDE.md                         004ccebd0cba
 
 ARCH  bp_arb_spec.md                    667b1c205dff
 ARCH  bp_cluster.md                     187952e94e30
@@ -177,7 +180,7 @@ ARCH  ifu_decisions.md            23b78769459f
 ARCH  itlb_decisions.md                 165b7936bf55
 ARCH  ittage_cntrl_ctr_update_rules.md  1c49fda9242e
 ARCH  ittage_cntrl_decisions.md         28a3b83f2f34
-ARCH  mmu_decisions.md                  549749154c67
+ARCH  mmu_decisions.md                  1edb8b57f003
 ARCH  ras_decisions.md                  cbb679faf964
 ARCH  sc_decisions.md                   16f40a258f62
 ARCH  sc_table_hash_rules.md            3954fc46bace
@@ -196,7 +199,7 @@ ARCH  ittage_table_entry_formats.md  abee67476ca8
 ARCH  tage_cntrl_ctr_update_rules.md    784755f5cc93
 ARCH  tage_cntrl_use_update_rules.md    7f4e0d0e82a2
 ARCH  ftb_confidence_override_rules.md  34362cfb6dd7
-ARCH  pacino_cache.md                   f871e6288ecf
+ARCH  pacino_cache.md                   f90a7b3ce267
 TEST  fe_demo_tb_decisions.md           1ca7d46e1c27
 TEST  tage_tb_decisions.md              ae2979a6d9f0
 TEST  tage_mtb_decisions.md             33a02ac0df2c
